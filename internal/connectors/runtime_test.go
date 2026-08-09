@@ -2933,8 +2933,8 @@ func TestConnectorRuntimeInteractiveConfirmRestoresPersistedIntakeState(t *testi
 	if errorValue != nil {
 		t.Fatalf("expected first event to process: %v", errorValue)
 	}
-	if !connectorTaskEventsContain(connectorRuntime, firstResult.TaskRunID, "agent.intake", `"estimatedMinutes":7`) {
-		t.Fatalf("expected persisted intake with nonzero estimated minutes, events: %+v", connectorRuntime.taskRunService.ListTaskEvent(firstResult.TaskRunID))
+	if !connectorTaskEventsContain(connectorRuntime, firstResult.TaskRunID, "agent.intake", `"taskShape":"approval_gated_task"`) {
+		t.Fatalf("the approval turn restores what intake decided, and a task that forgets its shape asks to be approved again: %+v", connectorRuntime.taskRunService.ListTaskEvent(firstResult.TaskRunID))
 	}
 
 	secondEvent := testInboundEvent("message-2")
