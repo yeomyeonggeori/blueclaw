@@ -74,7 +74,6 @@ func TestLoadRuntimeConfigurationIncludesFirecrackerAndBridge(t *testing.T) {
       "executionMode": "auto"
     },
     "defaultTaskLevel": "low",
-    "toolResultMaxBytes": 32768,
     "generationOptions": {
       "seed": 41,
       "temperature": 0
@@ -235,9 +234,6 @@ func TestLoadRuntimeConfigurationIncludesFirecrackerAndBridge(t *testing.T) {
 	}
 	if runtimeConfiguration.Agent.DefaultTaskLevel != "low" {
 		t.Fatalf("expected agent default task level to match, got %q", runtimeConfiguration.Agent.DefaultTaskLevel)
-	}
-	if runtimeConfiguration.Agent.ToolResultMaxBytes != 32768 {
-		t.Fatalf("expected agent tool result limit to match, got %d", runtimeConfiguration.Agent.ToolResultMaxBytes)
 	}
 	if runtimeConfiguration.Agent.GenerationOptions.Seed == nil || *runtimeConfiguration.Agent.GenerationOptions.Seed != 41 {
 		t.Fatalf("expected agent generation seed to load, got %+v", runtimeConfiguration.Agent.GenerationOptions)

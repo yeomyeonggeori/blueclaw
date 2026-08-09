@@ -2635,7 +2635,6 @@ func scenarioApprovalRouterResponse(approval string) string {
 		"classification":   "bounded_task",
 		"taskShape":        "maintenance_task",
 		"level":            "low",
-		"estimatedMinutes": 1,
 		"approval":         strings.TrimSpace(approval),
 		"responseLanguage": "ko",
 		"reason":           "scripted approval reply classification",
@@ -2681,7 +2680,6 @@ func scenarioTurnRouterResponse(scenario VirtualSessionScenario, virtualTurn Vir
 		"classification":         classification,
 		"taskShape":              taskShape,
 		"level":                  string(taskLevel),
-		"estimatedMinutes":       10,
 		"requestedOutputFormats": nil,
 		"expectedResults":        []any{},
 		"siteRequestEvidence":    siteEvidence,
@@ -2696,7 +2694,7 @@ func scenarioTurnRouterResponse(scenario VirtualSessionScenario, virtualTurn Vir
 	}
 	encodedDocument, errorValue := json.Marshal(routerDocument)
 	if errorValue != nil {
-		return `{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"low","estimatedMinutes":10,"requestedOutputFormats":null,"expectedResults":[],"requiredEvidence":[],"siteRequestEvidence":"","responseLanguage":"ko","reason":"scripted scenario default","userFacingReply":"","initialToolNames":[],"priorTaskReference":"none"}`
+		return `{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"low","requestedOutputFormats":null,"expectedResults":[],"requiredEvidence":[],"siteRequestEvidence":"","responseLanguage":"ko","reason":"scripted scenario default","userFacingReply":"","initialToolNames":[],"priorTaskReference":"none"}`
 	}
 	return string(encodedDocument)
 }

@@ -490,7 +490,7 @@ func (taskLauncher *TaskLauncher) completeLaunchFailure(ctx context.Context, req
 }
 
 func (taskLauncher *TaskLauncher) agentTurnRequestForLaunch(request TaskLaunchRequest, profileName string, memoryFacts []memory.MemoryFact, toolSet *toolcontract.ToolSet, conversationScope ConversationResourceScope) agentcontract.AgentTurnRequest {
-	return agentcontract.AgentTurnRequest{
+	turnRequest := agentcontract.AgentTurnRequest{
 		ArtifactManifest:           request.ArtifactManifest,
 		TurnStartedAt:              request.TurnStartedAt,
 		RequesterPersonID:          request.RequesterPersonID,
@@ -531,6 +531,8 @@ func (taskLauncher *TaskLauncher) agentTurnRequestForLaunch(request TaskLaunchRe
 		AgentIdentity:              taskLauncher.agentIdentity(),
 		CheckpointSender:           request.CheckpointSender,
 	}
+	turnRequest.HostInstruction = hostInstructionForRequest(turnRequest)
+	return turnRequest
 }
 
 // A missing artifact service must reach the harness as an absent store, not as a

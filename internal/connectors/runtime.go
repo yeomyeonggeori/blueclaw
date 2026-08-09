@@ -1858,7 +1858,6 @@ func ambiguousTaskWaitTurnDecision(taskWaitTokens []task.TaskWaitToken, response
 		Classification:         agentcontract.IntakeClassificationNeedsConfirmation,
 		TaskShape:              agentcontract.TaskShapeApprovalGatedTask,
 		TaskLevel:              agentcontract.TaskLevelLow,
-		EstimatedMinutes:       1,
 		ResponseLanguage:       responseLanguage,
 		Reason:                 "ambiguous_wait_resolution",
 		ClarificationOptions:   taskWaitClarificationOptions(taskWaitTokens),

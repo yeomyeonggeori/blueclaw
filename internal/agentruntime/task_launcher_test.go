@@ -936,7 +936,7 @@ func useRuntimeTestLanguageModel(agentKernel *loop.AgentKernel, content string) 
 }
 
 func runtimeTestTurnRouterResponse() string {
-	return `{"route":"answer_question","classification":"quick_reply","taskShape":"immediate_reply","level":"xlow","estimatedMinutes":1,"requestedOutputFormats":null,"responseLanguage":"ko","reason":"task launcher test default","userFacingReply":""}`
+	return `{"route":"answer_question","classification":"quick_reply","taskShape":"immediate_reply","level":"xlow","requestedOutputFormats":null,"responseLanguage":"ko","reason":"task launcher test default","userFacingReply":""}`
 }
 
 type staticHistoryProvider struct{}
