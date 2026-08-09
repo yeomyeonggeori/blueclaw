@@ -244,7 +244,7 @@ func (client OpenRouterClient) sendOnce(ctx context.Context, request openRouterR
 		return openRouterResponse{}, errors.New("openrouter response did not include choices: " + openRouterHTTPErrorMessage(httpResponse.StatusCode, responseDocument))
 	}
 	if strings.TrimSpace(response.Choices[0].Message.Content) == "" {
-		return openRouterResponse{}, errors.New("openrouter response content was empty")
+		return openRouterResponse{}, errors.New("openrouter returned an answer with no content, finish reason " + strconv.Quote(response.Choices[0].FinishReason) + "; the model was asked for " + strconv.Quote(request.ResponseFormatName()) + " and produced none")
 	}
 	return response, nil
 }
@@ -508,4 +508,11 @@ func truncateOpenRouterErrorBody(value string) string {
 		return trimmedValue
 	}
 	return string([]rune(trimmedValue)[:openRouterErrorBodyMaximumCharacters]) + "..."
+}
+
+func (request openRouterRequest) ResponseFormatName() string {
+	if request.ResponseFormat == nil {
+		return ""
+	}
+	return request.ResponseFormat.JSONSchema.Name
 }
