@@ -39,7 +39,6 @@ func deriveTurnOptions(runtimeConfiguration config.RuntimeConfiguration) agentco
 		MaxElapsedSecond:    int(taskLevelProfile.Duration.Seconds()),
 		ContextWindowTokens: runtimeConfiguration.LanguageModel.Capability.ContextWindowTokens,
 		TaskLevel:           taskLevelProfile.TaskLevel,
-		ToolResultMaxBytes:  runtimeConfiguration.Agent.ToolResultMaxBytes,
 		GenerationOptions: llm.GenerationOptions{
 			Seed:        runtimeConfiguration.Agent.GenerationOptions.Seed,
 			Temperature: runtimeConfiguration.Agent.GenerationOptions.Temperature,

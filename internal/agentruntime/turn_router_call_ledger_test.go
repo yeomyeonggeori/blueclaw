@@ -60,7 +60,6 @@ func TestTaskLauncherPersistsTurnRouterLLMCall(t *testing.T) {
 			Classification:   agentcontract.IntakeClassificationQuickReply,
 			TaskShape:        agentcontract.TaskShapeImmediateReply,
 			TaskLevel:        agentcontract.TaskLevelXLow,
-			EstimatedMinutes: 1,
 			ResponseLanguage: "ko",
 			Reason:           "direct answer",
 		},

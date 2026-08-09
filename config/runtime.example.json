@@ -153,7 +153,6 @@
       "executionMode": "auto"
     },
     "defaultTaskLevel": "low",
-    "toolResultMaxBytes": 32768,
     "failureRecovery": {
       "failureDebtFinalizationGate": true,
       "attemptFingerprint": "tool_input_error_code",

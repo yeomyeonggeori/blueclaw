@@ -145,7 +145,6 @@ func (taskRunHandler TaskRunHandler) resolveTaskDecisionPreset(preset string) (*
 		Classification:     agentcontract.IntakeClassificationQuickReply,
 		TaskShape:          agentcontract.TaskShapeImmediateReply,
 		TaskLevel:          agentcontract.TaskLevelXLow,
-		EstimatedMinutes:   1,
 		PriorTaskReference: agentcontract.PriorTaskReferenceNone,
 		Reason:             "llmd topology diagnostic",
 	}, 0, nil
