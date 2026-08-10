@@ -72,7 +72,7 @@ func ExecutionIdentityForPersonAccess(personAccess policy.PersonAccess, workspac
 		UserName:                userName,
 		GroupName:               userName,
 		SupplementaryGroupNames: uniqueStrings(groupNames),
-		HomeDirectoryPath:       workspaceRootPath + "/private/people/" + personID,
+		HomeDirectoryPath:       PersonHomeDirectoryPath(workspaceRootPath, personID),
 	}
 }
 
@@ -126,17 +126,17 @@ func applyPOSIXEnvironment(environmentVariables map[string]string, identity Exec
 	}
 	if strings.TrimSpace(identity.HomeDirectoryPath) != "" {
 		result["HOME"] = identity.HomeDirectoryPath
-		setDefaultEnvironmentValue(result, "BLUECLAW_REQUESTER_TMP", identity.HomeDirectoryPath+"/tmp")
-		setDefaultEnvironmentValue(result, "BLUECLAW_TASK_TMP", identity.HomeDirectoryPath+"/tmp")
+		setDefaultEnvironmentValue(result, "BLUECLAW_REQUESTER_TMP", RequesterTemporaryDirectoryPath(identity.HomeDirectoryPath))
 		setDefaultEnvironmentValue(result, "BLUECLAW_REQUESTER_ARTIFACTS", identity.HomeDirectoryPath+"/artifacts")
 	}
-	taskTmpPath := firstNonEmptyString(result["BLUECLAW_TASK_TMP"], identity.HomeDirectoryPath+"/tmp")
-	runtimeRootPath := taskTmpPath + "/.runtime"
+	requesterTmpPath := firstNonEmptyString(result["BLUECLAW_REQUESTER_TMP"], identity.HomeDirectoryPath+"/tmp")
+	runtimeRootPath := requesterTmpPath + "/.runtime"
+	scratchRootPath := firstNonEmptyString(result["BLUECLAW_TASK_TMP"], runtimeRootPath)
 	dependencyCachePath := "/workspace/shared/cache/dependencies"
 	setDefaultEnvironmentValue(result, "BLUECLAW_DEPENDENCY_CACHE", dependencyCachePath)
-	setDefaultEnvironmentValue(result, "TMPDIR", runtimeRootPath+"/tmp")
-	setDefaultEnvironmentValue(result, "TMP", runtimeRootPath+"/tmp")
-	setDefaultEnvironmentValue(result, "TEMP", runtimeRootPath+"/tmp")
+	setDefaultEnvironmentValue(result, "TMPDIR", scratchRootPath+"/tmp")
+	setDefaultEnvironmentValue(result, "TMP", scratchRootPath+"/tmp")
+	setDefaultEnvironmentValue(result, "TEMP", scratchRootPath+"/tmp")
 	setDefaultEnvironmentValue(result, "XDG_CACHE_HOME", runtimeRootPath+"/cache")
 	setDefaultEnvironmentValue(result, "XDG_CONFIG_HOME", runtimeRootPath+"/config")
 	setDefaultEnvironmentValue(result, "XDG_RUNTIME_DIR", runtimeRootPath+"/runtime")
@@ -213,24 +213,24 @@ func POSIXStateForPolicy(policyDocument policy.PolicyDocument, workspaceRootPath
 		state.Groups = append(state.Groups, POSIXGroup{Name: userName})
 		state.Users = append(state.Users, POSIXUser{
 			Name:      userName,
-			HomePath:  workspaceRootPath + "/private/people/" + personID,
+			HomePath:  PersonHomeDirectoryPath(workspaceRootPath, personID),
 			GroupName: userName,
 			Groups:    uniqueStrings(groupNames),
 		})
 		state.Directories = append(state.Directories, POSIXDirectory{
-			Path:     workspaceRootPath + "/private/people/" + personID,
+			Path:     PersonHomeDirectoryPath(workspaceRootPath, personID),
 			Owner:    userName,
 			Group:    userName,
 			ModeText: "0700",
 		})
 		state.Directories = append(state.Directories, POSIXDirectory{
-			Path:     workspaceRootPath + "/private/people/" + personID + "/tmp",
+			Path:     RequesterTemporaryDirectoryPath(PersonHomeDirectoryPath(workspaceRootPath, personID)),
 			Owner:    userName,
 			Group:    userName,
 			ModeText: "0700",
 		})
 		state.Directories = append(state.Directories, POSIXDirectory{
-			Path:     workspaceRootPath + "/private/people/" + personID + "/artifacts",
+			Path:     PersonHomeDirectoryPath(workspaceRootPath, personID) + "/artifacts",
 			Owner:    userName,
 			Group:    userName,
 			ModeText: "0700",

@@ -150,6 +150,8 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 	taskStepService := task.NewTaskStepService()
 	taskArtifactService := task.NewTaskArtifactService()
 	taskRunService := task.NewTaskRunService(taskEventService)
+	taskTemporaryDirectoryReclaimer := task.NewTaskTemporaryDirectoryReclaimer(runtimeConfiguration.Terminal.WorkspaceRootPath, logger)
+	taskRunService.RegisterTaskRunTransitionObserver(taskTemporaryDirectoryReclaimer.Observe)
 	var taskScheduleRepository task.TaskScheduleRepository
 	var taskScheduleSummaryRepository adminapi.TaskScheduleSummaryRepository
 	var taskScheduleListRepository adminapi.TaskScheduleListRepository

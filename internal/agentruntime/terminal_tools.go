@@ -58,8 +58,9 @@ func (toolCatalogBuilder *ToolCatalogBuilder) runTerminalTool(toolContext contex
 		return toolcontract.ToolFailureResult(toolcontract.FailureDependencyUnavailable, toolcontract.FailureCodes.Unavailable, "terminal_run", "terminal service is unavailable"), nil
 	}
 	requesterHomePath := toolCatalogBuilder.requesterHomePath(handlerContext.request)
+	taskRunID := toolcontract.TaskRunIDFromContext(toolContext)
 	input.Command = toolCatalogBuilder.resolveAgentWorkspaceReferences(input.Command)
-	input.EnvironmentVariables = toolCatalogBuilder.terminalEnvironmentVariables(input.EnvironmentVariables, requesterHomePath)
+	input.EnvironmentVariables = toolCatalogBuilder.terminalEnvironmentVariables(input.EnvironmentVariables, requesterHomePath, taskRunID)
 	input.WorkingDirectoryPath = toolCatalogBuilder.terminalWorkingDirectoryPath(input.WorkingDirectoryPath, handlerContext.request, requesterHomePath)
 	actorStartedAt := time.Now()
 	workspaceActor, actorFailure := toolCatalogBuilder.workspaceActorForRequest(toolContext, handlerContext.request)
@@ -216,8 +217,8 @@ func (toolCatalogBuilder *ToolCatalogBuilder) terminalWorkingDirectoryPath(value
 	return toolCatalogBuilder.nativeRequesterPath(request, value)
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) terminalEnvironmentVariables(environmentVariables map[string]string, requesterHomePath string) map[string]string {
-	mergedEnvironmentVariables := mergeWorkspaceEnvironment(environmentVariables, requesterWorkspaceEnvironment(requesterHomePath, toolCatalogBuilder.workspaceRootPath))
+func (toolCatalogBuilder *ToolCatalogBuilder) terminalEnvironmentVariables(environmentVariables map[string]string, requesterHomePath string, taskRunID string) map[string]string {
+	mergedEnvironmentVariables := mergeWorkspaceEnvironment(environmentVariables, requesterWorkspaceEnvironment(requesterHomePath, toolCatalogBuilder.workspaceRootPath, taskRunID))
 	if builtinSkillsPythonPath := strings.TrimSpace(os.Getenv("BLUECLAW_BUILTIN_SKILLS_PYTHON")); builtinSkillsPythonPath != "" {
 		mergedEnvironmentVariables["BLUECLAW_BUILTIN_SKILLS_PYTHON"] = builtinSkillsPythonPath
 	}
@@ -227,21 +228,22 @@ func (toolCatalogBuilder *ToolCatalogBuilder) terminalEnvironmentVariables(envir
 	return toolCatalogBuilder.resolveAgentWorkspaceEnvironment(mergedEnvironmentVariables)
 }
 
-func requesterWorkspaceEnvironment(requesterHomePath string, workspaceRootPath string) map[string]string {
-	requesterTmpPath := filepath.Join(requesterHomePath, "tmp")
+func requesterWorkspaceEnvironment(requesterHomePath string, workspaceRootPath string, taskRunID string) map[string]string {
+	requesterTmpPath := security.RequesterTemporaryDirectoryPath(requesterHomePath)
 	runtimeRootPath := filepath.Join(requesterTmpPath, ".runtime")
 	bunRuntimeRootPath := filepath.Join(runtimeRootPath, "bun")
 	dependencyCachePath := filepath.Join(workspaceRootPath, "shared", "cache", "dependencies")
-	return map[string]string{
+	taskTmpPath := security.TaskTemporaryDirectoryPath(requesterHomePath, taskRunID)
+	scratchRootPath := firstNonEmptyString(taskTmpPath, runtimeRootPath)
+	environmentVariables := map[string]string{
 		"BLUECLAW_REQUESTER_TMP":       requesterTmpPath,
-		"BLUECLAW_TASK_TMP":            requesterTmpPath,
 		"BLUECLAW_REQUESTER_ARTIFACTS": filepath.Join(requesterHomePath, "artifacts"),
 		"BLUECLAW_DEPENDENCY_CACHE":    dependencyCachePath,
 		"HOME":                         requesterHomePath,
 		"PATH":                         security.CanonicalRuntimePATH,
-		"TMPDIR":                       filepath.Join(runtimeRootPath, "tmp"),
-		"TMP":                          filepath.Join(runtimeRootPath, "tmp"),
-		"TEMP":                         filepath.Join(runtimeRootPath, "tmp"),
+		"TMPDIR":                       filepath.Join(scratchRootPath, "tmp"),
+		"TMP":                          filepath.Join(scratchRootPath, "tmp"),
+		"TEMP":                         filepath.Join(scratchRootPath, "tmp"),
 		"XDG_CACHE_HOME":               filepath.Join(runtimeRootPath, "cache"),
 		"XDG_CONFIG_HOME":              filepath.Join(runtimeRootPath, "config"),
 		"XDG_RUNTIME_DIR":              filepath.Join(runtimeRootPath, "runtime"),
@@ -250,6 +252,10 @@ func requesterWorkspaceEnvironment(requesterHomePath string, workspaceRootPath s
 		"BUN_INSTALL_CACHE_DIR":        filepath.Join(dependencyCachePath, "bun"),
 		"npm_config_cache":             filepath.Join(runtimeRootPath, "npm"),
 	}
+	if taskTmpPath != "" {
+		environmentVariables["BLUECLAW_TASK_TMP"] = taskTmpPath
+	}
+	return environmentVariables
 }
 
 func materializeTerminalRuntimeDirectories(ctx context.Context, workspaceActor security.WorkspaceActor, requesterHomePath string, environmentVariables map[string]string) *toolcontract.ToolResult {
@@ -266,6 +272,7 @@ func terminalRuntimeDirectories(requesterHomePath string, environmentVariables m
 	seenDirectoryPaths := map[string]bool{}
 	var directoryPaths []string
 	for _, name := range []string{
+		"BLUECLAW_TASK_TMP",
 		"TMPDIR",
 		"TMP",
 		"TEMP",
