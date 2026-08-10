@@ -3,6 +3,7 @@ package agentruntime
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
@@ -465,11 +466,22 @@ func (step runTurnLaunchStep) Run(ctx context.Context, execution *taskLaunchExec
 }
 
 func runLaunchStep[T any](ctx context.Context, execution *taskLaunchExecution, step taskLaunchStep[T]) (T, launchStepRecord) {
-	result, errorValue := step.Run(ctx, execution)
+	result, errorValue := runLaunchStepRecoveringFromPanic(ctx, execution, step)
 	if errorValue != nil {
 		return result, launchStepRecord{StepName: step.Name(), Status: "error", Error: errorValue.Error()}
 	}
 	return result, launchStepRecord{StepName: step.Name(), Status: "result"}
+}
+
+func runLaunchStepRecoveringFromPanic[T any](ctx context.Context, execution *taskLaunchExecution, step taskLaunchStep[T]) (result T, errorValue error) {
+	defer func() {
+		panicValue := recover()
+		if panicValue == nil {
+			return
+		}
+		errorValue = fmt.Errorf("%s panicked: %v", step.Name(), panicValue)
+	}()
+	return step.Run(ctx, execution)
 }
 
 func errorFromStepRecord(record launchStepRecord) error {
