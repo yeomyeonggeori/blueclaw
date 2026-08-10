@@ -111,6 +111,46 @@ describe("person capabilities", () => {
 		expect(seen).toHaveLength(0);
 	});
 
+	test("a direct conversation names the two people in it", async () => {
+		recordFetches((url) => {
+			if (url.endsWith("/users/me/teams")) return [{ id: "team-1" }];
+			if (url.includes("/channels")) {
+				return [
+					{ id: "channel-1", display_name: "", name: "person-a__person-b", type: "D" },
+					{ id: "channel-2", display_name: "Announcements", name: "announcements", type: "O" },
+				];
+			}
+			return [];
+		});
+
+		const answer = await (
+			await call("person.conversations.list", {
+				actor: { kind: "mattermost-token", secret: "the-person-token" },
+			})
+		).json();
+
+		const direct = answer.conversations.find((conversation: { id: string }) => conversation.id === "channel-1");
+		expect(direct.participantExternalIDs).toEqual(["person-a", "person-b"]);
+	});
+
+	test("a channel that is not direct names nobody, because its name already says what it is", async () => {
+		recordFetches((url) => {
+			if (url.endsWith("/users/me/teams")) return [{ id: "team-1" }];
+			if (url.includes("/channels")) {
+				return [{ id: "channel-2", display_name: "Announcements", name: "announcements", type: "O" }];
+			}
+			return [];
+		});
+
+		const answer = await (
+			await call("person.conversations.list", {
+				actor: { kind: "mattermost-token", secret: "the-person-token" },
+			})
+		).json();
+
+		expect(answer.conversations[0].participantExternalIDs).toBeUndefined();
+	});
+
 	test("a platform with no gateway cannot act as a person", async () => {
 		const handler = createOutboundHandler(adapters, configuration, {});
 		const response = await handler(

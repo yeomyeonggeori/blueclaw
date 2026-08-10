@@ -176,11 +176,18 @@ function displayNameOf(user: MattermostUser): string {
 	return [user.first_name, user.last_name].filter(Boolean).join(" ") || user.username;
 }
 
+function directParticipantsOf(channel: MattermostChannel): string[] | undefined {
+	if (channel.type !== "D") return undefined;
+	const everyone = channel.name.split("__").filter(Boolean);
+	return everyone.length === 2 ? everyone : undefined;
+}
+
 function asConversation(channel: MattermostChannel): PersonalConversation {
 	return {
 		id: channel.id,
 		name: channel.display_name || channel.name,
 		kind: channel.type === "D" || channel.type === "G" ? "dm" : "group",
+		participantExternalIDs: directParticipantsOf(channel),
 	};
 }
 
