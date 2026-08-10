@@ -67,8 +67,8 @@ func TestCommandPlanUsesPOSIXHelperForExecutionIdentity(t *testing.T) {
 	if commandPlan.EnvironmentVariables["BLUECLAW_REQUESTER_TMP"] != workspaceRootPath+"/tmp" {
 		t.Fatalf("expected requester tmp environment, got %+v", commandPlan.EnvironmentVariables)
 	}
-	if commandPlan.EnvironmentVariables["BLUECLAW_TASK_TMP"] != workspaceRootPath+"/tmp" {
-		t.Fatalf("expected task tmp environment, got %+v", commandPlan.EnvironmentVariables)
+	if _, isPresent := commandPlan.EnvironmentVariables["BLUECLAW_TASK_TMP"]; isPresent {
+		t.Fatalf("expected no task tmp environment outside a task run, got %+v", commandPlan.EnvironmentVariables)
 	}
 	if commandPlan.EnvironmentVariables["BLUECLAW_REQUESTER_ARTIFACTS"] != workspaceRootPath+"/artifacts" {
 		t.Fatalf("expected requester artifacts environment, got %+v", commandPlan.EnvironmentVariables)
