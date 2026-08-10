@@ -140,8 +140,39 @@ func (fakeServer *fakeOpenRouterServer) handleRequest(responseWriter http.Respon
 		return
 	}
 	responseWriter.Header().Set("Content-Type", "application/json")
+	if toolName := nativeToolNameFromOpenRouterDocument(requestDocument); toolName != "" {
+		_, _ = responseWriter.Write([]byte(openRouterToolCallAnswer(toolName)))
+		return
+	}
 	encodedContent, _ := json.Marshal(openRouterContentForSchema(schemaName))
 	_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":` + string(encodedContent) + `}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`))
+}
+
+func nativeToolNameFromOpenRouterDocument(requestDocument map[string]any) string {
+	tools, isFound := requestDocument["tools"].([]any)
+	if !isFound || len(tools) == 0 {
+		return ""
+	}
+	for _, offered := range tools {
+		tool, isTool := offered.(map[string]any)
+		if !isTool {
+			continue
+		}
+		function, isFunction := tool["function"].(map[string]any)
+		if !isFunction {
+			continue
+		}
+		if name, _ := function["name"].(string); strings.TrimSpace(name) == "finish" {
+			return "finish"
+		}
+	}
+	return ""
+}
+
+func openRouterToolCallAnswer(toolName string) string {
+	arguments, _ := json.Marshal(openRouterContentForSchema("bluecollar_agent_turn_action"))
+	call := `{"id":"call-1","type":"function","function":{"name":"` + toolName + `","arguments":` + string(arguments) + `}}`
+	return `{"choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","tool_calls":[` + call + `]}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`
 }
 
 func openRouterRequestDocument(request *http.Request) map[string]any {
@@ -154,6 +185,9 @@ func openRouterRequestDocument(request *http.Request) map[string]any {
 }
 
 func schemaNameFromOpenRouterDocument(requestDocument map[string]any) string {
+	if nativeToolNameFromOpenRouterDocument(requestDocument) != "" {
+		return "bluecollar_agent_turn_action"
+	}
 	responseFormat, isFound := requestDocument["response_format"].(map[string]any)
 	if !isFound {
 		return ""

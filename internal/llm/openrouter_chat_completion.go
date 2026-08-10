@@ -32,9 +32,8 @@ func (client OpenRouterClient) GenerateChatCompletion(responseContext context.Co
 	if len(request.ToolChoice) > 0 {
 		requestDocument["tool_choice"] = json.RawMessage(request.ToolChoice)
 	}
-	if request.GenerationOptions.MaxTokens != nil {
-		requestDocument["max_tokens"] = *request.GenerationOptions.MaxTokens
-	}
+	generationOptions := mergeGenerationOptions(client.GenerationOptions, request.GenerationOptions)
+	addOpenRouterGenerationOptions(requestDocument, generationOptions)
 	responseDocument, errorValue := client.postChatCompletion(responseContext, requestDocument)
 	if errorValue != nil {
 		return ChatCompletionResponse{}, errorValue
@@ -133,4 +132,16 @@ func (client OpenRouterClient) postChatCompletion(responseContext context.Contex
 		return nil, errors.New(openRouterHTTPErrorMessage(httpResponse.StatusCode, responseDocument))
 	}
 	return responseDocument, nil
+}
+
+func addOpenRouterGenerationOptions(requestDocument map[string]any, generationOptions GenerationOptions) {
+	if generationOptions.MaxTokens != nil {
+		requestDocument["max_tokens"] = *generationOptions.MaxTokens
+	}
+	if generationOptions.Seed != nil {
+		requestDocument["seed"] = *generationOptions.Seed
+	}
+	if generationOptions.Temperature != nil {
+		requestDocument["temperature"] = *generationOptions.Temperature
+	}
 }
