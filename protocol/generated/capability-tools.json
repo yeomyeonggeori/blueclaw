@@ -70,7 +70,7 @@
             "type": "string"
           },
           "title": {
-            "description": "Concise task title. Preserve the user's exact title when they provide one; otherwise derive it directly from their request.",
+            "description": "Concise noun-phrase title for the work itself, in the user's language. Keep the user's exact title when they give one; otherwise write one rather than reusing their sentence. People belong in the person fields, not the title.",
             "type": "string"
           }
         },
@@ -128,7 +128,7 @@
             "type": "string"
           },
           "title": {
-            "description": "Concise task title. Preserve the user's exact title when they provide one; otherwise derive it directly from their request.",
+            "description": "Concise noun-phrase title for the work itself, in the user's language. Keep the user's exact title when they give one; otherwise write one rather than reusing their sentence. People belong in the person fields, not the title.",
             "type": "string"
           }
         },
@@ -427,6 +427,42 @@
           "ownerID": {
             "type": "string"
           },
+          "registeredLabels": {
+            "additionalProperties": false,
+            "properties": {
+              "businesses": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "sizes": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "statuses": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "types": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "businesses",
+              "types",
+              "sizes",
+              "statuses"
+            ],
+            "type": "object"
+          },
           "scope": {
             "type": "string"
           },
@@ -547,7 +583,8 @@
         "required": [
           "tasks",
           "count",
-          "scope"
+          "scope",
+          "registeredLabels"
         ],
         "type": "object"
       },
@@ -568,6 +605,42 @@
             },
             "ownerID": {
               "type": "string"
+            },
+            "registeredLabels": {
+              "additionalProperties": false,
+              "properties": {
+                "businesses": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "sizes": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "statuses": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "types": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "businesses",
+                "types",
+                "sizes",
+                "statuses"
+              ],
+              "type": "object"
             },
             "scope": {
               "type": "string"
@@ -689,7 +762,8 @@
           "required": [
             "tasks",
             "count",
-            "scope"
+            "scope",
+            "registeredLabels"
           ],
           "type": "object"
         }
@@ -703,177 +777,13 @@
       "availability": {
         "state": "ok"
       },
-      "canonicalName": "task_definitions",
-      "description": "List the values a task field accepts in this workspace: businesses, task types, sizes, and statuses. Call this before task_add or task_update when the business or type is not already known to be registered, and before importing records from another system, because a value outside these lists is rejected.",
-      "estimatedLatency": "low",
-      "idempotency": {
-        "required": false,
-        "scope": "operation",
-        "supported": false
-      },
-      "inputIntentSchema": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "additionalProperties": false,
-        "properties": {},
-        "type": "object"
-      },
-      "inputSchema": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "additionalProperties": false,
-        "properties": {},
-        "type": "object"
-      },
-      "inputSchemaStrict": true,
-      "modelName": "task_definitions",
-      "modelVisibility": "visible",
-      "modelVisible": true,
-      "name": "task_definitions",
-      "namespace": "task",
-      "outputSchema": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "additionalProperties": false,
-        "properties": {
-          "businesses": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "color": {
-                  "type": "string"
-                },
-                "value": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "value"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "sizes": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "statuses": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "types": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "color": {
-                  "type": "string"
-                },
-                "value": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "value"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "businesses",
-          "types",
-          "sizes",
-          "statuses"
-        ],
-        "type": "object"
-      },
-      "outputSchemaStrict": true,
-      "policyResource": "tool:task_definitions",
-      "privacyClass": "workspace_task",
-      "requiresUserPresence": false,
-      "resultContract": {
-        "effects": [],
-        "schema": {
-          "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "additionalProperties": false,
-          "properties": {
-            "businesses": {
-              "items": {
-                "additionalProperties": false,
-                "properties": {
-                  "color": {
-                    "type": "string"
-                  },
-                  "value": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "value"
-                ],
-                "type": "object"
-              },
-              "type": "array"
-            },
-            "sizes": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "statuses": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "types": {
-              "items": {
-                "additionalProperties": false,
-                "properties": {
-                  "color": {
-                    "type": "string"
-                  },
-                  "value": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "value"
-                ],
-                "type": "object"
-              },
-              "type": "array"
-            }
-          },
-          "required": [
-            "businesses",
-            "types",
-            "sizes",
-            "statuses"
-          ],
-          "type": "object"
-        }
-      },
-      "sideEffect": "read",
-      "sideEffectClass": "read",
-      "version": "1",
-      "worksOffline": false
-    },
-    {
-      "availability": {
-        "state": "ok"
-      },
       "canonicalName": "task_update",
       "completionEvidence": {
         "action": "write_task",
         "mode": "success",
         "targetKind": "task"
       },
-      "description": "Update explicit fields on an existing task. taskHint is the exact task ID or exact task title from a task_list result, resolved server-side to the canonical task; use task_list first when neither is known. At least one mutable field is required.",
+      "description": "Update explicit fields on an existing task, including who takes part in it. taskHint is the exact task ID or exact task title from a task_list result, resolved server-side to the canonical task; use task_list first when neither is known. At least one mutable field is required.",
       "estimatedLatency": "medium",
       "idempotency": {
         "required": false,
@@ -885,31 +795,34 @@
         "additionalProperties": false,
         "properties": {
           "category": {
-            "description": "Business category label for the task. Omit to leave unchanged.",
+            "description": "Business category label, taken from registeredLabels.businesses in a task_list result.",
             "type": "string"
           },
           "decisionReason": {
-            "description": "Reason for the approval or rejection decision. Omit to leave unchanged.",
+            "description": "Reason for the approval or rejection decision.",
             "type": "string"
           },
           "endDate": {
-            "description": "Due date in yyyy-mm-dd format. Omit to leave unchanged.",
+            "description": "Due date in yyyy-mm-dd format.",
             "type": "string"
-          },
-          "flag": {
-            "description": "Numeric flag bitmask for internal task classification. Omit to leave unchanged.",
-            "type": "number"
           },
           "goal": {
-            "description": "Definition of done or success criterion for this task. Omit to leave unchanged.",
+            "description": "Definition of done or success criterion for this task.",
             "type": "string"
           },
+          "participantPersonHints": {
+            "description": "Names, @handles, or emails of everyone taking part, replacing the current participants. Send the whole set, not just additions.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "requestReason": {
-            "description": "Reason for requesting this task. Omit to leave unchanged.",
+            "description": "Reason for requesting this task.",
             "type": "string"
           },
           "size": {
-            "description": "Effort size estimate. Omit to leave unchanged.",
+            "description": "Effort size estimate.",
             "enum": [
               "XS",
               "S",
@@ -921,11 +834,11 @@
             "type": "string"
           },
           "startDate": {
-            "description": "Date in YYYY-MM-DD format. Omit to leave unchanged.",
+            "description": "Date in YYYY-MM-DD format.",
             "type": "string"
           },
           "status": {
-            "description": "New task status. Omit to leave unchanged.",
+            "description": "New task status.",
             "enum": [
               "planned",
               "in_progress",
@@ -938,11 +851,11 @@
             "type": "string"
           },
           "title": {
-            "description": "New task title. Omit to leave the title unchanged.",
+            "description": "New task title.",
             "type": "string"
           },
           "type": {
-            "description": "Task type classification, e.g. 'task', 'milestone'. Omit to leave unchanged.",
+            "description": "Task type label, taken from registeredLabels.types in a task_list result.",
             "type": "string"
           }
         },
@@ -954,31 +867,34 @@
         "minProperties": 2,
         "properties": {
           "category": {
-            "description": "Business category label for the task. Omit to leave unchanged.",
+            "description": "Business category label, taken from registeredLabels.businesses in a task_list result.",
             "type": "string"
           },
           "decisionReason": {
-            "description": "Reason for the approval or rejection decision. Omit to leave unchanged.",
+            "description": "Reason for the approval or rejection decision.",
             "type": "string"
           },
           "endDate": {
-            "description": "Due date in yyyy-mm-dd format. Omit to leave unchanged.",
+            "description": "Due date in yyyy-mm-dd format.",
             "type": "string"
-          },
-          "flag": {
-            "description": "Numeric flag bitmask for internal task classification. Omit to leave unchanged.",
-            "type": "number"
           },
           "goal": {
-            "description": "Definition of done or success criterion for this task. Omit to leave unchanged.",
+            "description": "Definition of done or success criterion for this task.",
             "type": "string"
           },
+          "participantPersonHints": {
+            "description": "Names, @handles, or emails of everyone taking part, replacing the current participants. Send the whole set, not just additions.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "requestReason": {
-            "description": "Reason for requesting this task. Omit to leave unchanged.",
+            "description": "Reason for requesting this task.",
             "type": "string"
           },
           "size": {
-            "description": "Effort size estimate. Omit to leave unchanged.",
+            "description": "Effort size estimate.",
             "enum": [
               "XS",
               "S",
@@ -990,11 +906,11 @@
             "type": "string"
           },
           "startDate": {
-            "description": "Date in YYYY-MM-DD format. Omit to leave unchanged.",
+            "description": "Date in YYYY-MM-DD format.",
             "type": "string"
           },
           "status": {
-            "description": "New task status. Omit to leave unchanged.",
+            "description": "New task status.",
             "enum": [
               "planned",
               "in_progress",
@@ -1013,11 +929,11 @@
             "type": "string"
           },
           "title": {
-            "description": "New task title. Omit to leave the title unchanged.",
+            "description": "New task title.",
             "type": "string"
           },
           "type": {
-            "description": "Task type classification, e.g. 'task', 'milestone'. Omit to leave unchanged.",
+            "description": "Task type label, taken from registeredLabels.types in a task_list result.",
             "type": "string"
           }
         },
@@ -2071,7 +1987,7 @@
         "additionalProperties": false,
         "properties": {
           "color": {
-            "description": "New provider-supported color label. Omit to leave unchanged.",
+            "description": "New provider-supported color label.",
             "type": "string"
           },
           "description": {
@@ -2079,7 +1995,7 @@
             "type": "string"
           },
           "endISO": {
-            "description": "New event end as ISO 8601 with timezone. Omit to leave unchanged.",
+            "description": "New event end as ISO 8601 with timezone.",
             "type": "string"
           },
           "includeRequester": {
@@ -2087,7 +2003,7 @@
             "type": "boolean"
           },
           "isAllDay": {
-            "description": "Whether the event is all day. Omit to leave unchanged.",
+            "description": "Whether the event is all day.",
             "type": "boolean"
           },
           "location": {
@@ -2102,19 +2018,19 @@
             "type": "array"
           },
           "reminderLeadHours": {
-            "description": "Reminder lead time in hours: 1, 2, 3, 6, 12, 24, or 48. Omit to leave unchanged.",
+            "description": "Reminder lead time in hours: 1, 2, 3, 6, 12, 24, or 48.",
             "type": "number"
           },
           "startISO": {
-            "description": "New event start as ISO 8601 with timezone. Omit to leave unchanged.",
+            "description": "New event start as ISO 8601 with timezone.",
             "type": "string"
           },
           "timeZone": {
-            "description": "New IANA timezone identifier. Omit to leave unchanged.",
+            "description": "New IANA timezone identifier.",
             "type": "string"
           },
           "title": {
-            "description": "New event title. Omit to leave unchanged.",
+            "description": "New event title.",
             "type": "string"
           }
         },
@@ -2126,7 +2042,7 @@
         "minProperties": 2,
         "properties": {
           "color": {
-            "description": "New provider-supported color label. Omit to leave unchanged.",
+            "description": "New provider-supported color label.",
             "type": "string"
           },
           "description": {
@@ -2134,7 +2050,7 @@
             "type": "string"
           },
           "endISO": {
-            "description": "New event end as ISO 8601 with timezone. Omit to leave unchanged.",
+            "description": "New event end as ISO 8601 with timezone.",
             "type": "string"
           },
           "eventHint": {
@@ -2148,7 +2064,7 @@
             "type": "boolean"
           },
           "isAllDay": {
-            "description": "Whether the event is all day. Omit to leave unchanged.",
+            "description": "Whether the event is all day.",
             "type": "boolean"
           },
           "location": {
@@ -2163,19 +2079,19 @@
             "type": "array"
           },
           "reminderLeadHours": {
-            "description": "Reminder lead time in hours: 1, 2, 3, 6, 12, 24, or 48. Omit to leave unchanged.",
+            "description": "Reminder lead time in hours: 1, 2, 3, 6, 12, 24, or 48.",
             "type": "number"
           },
           "startISO": {
-            "description": "New event start as ISO 8601 with timezone. Omit to leave unchanged.",
+            "description": "New event start as ISO 8601 with timezone.",
             "type": "string"
           },
           "timeZone": {
-            "description": "New IANA timezone identifier. Omit to leave unchanged.",
+            "description": "New IANA timezone identifier.",
             "type": "string"
           },
           "title": {
-            "description": "New event title. Omit to leave unchanged.",
+            "description": "New event title.",
             "type": "string"
           }
         },

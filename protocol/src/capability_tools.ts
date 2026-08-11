@@ -233,7 +233,7 @@ export const taskResultSchema = z.strictObject({
 
 export const taskAddInputSchema = z.strictObject({
   title: z.string().describe(
-    "Concise task title. Preserve the user's exact title when they provide one; otherwise derive it directly from their request.",
+    "Concise noun-phrase title for the work itself, in the user's language. Keep the user's exact title when they give one; otherwise write one rather than reusing their sentence. People belong in the person fields, not the title.",
   ),
   goal: z.string().describe('Definition of done or desired outcome. Omit when the title already states the complete outcome.').optional(),
   size: workspaceTaskSizeSchema
@@ -278,17 +278,19 @@ const taskHintSchema = z.string().min(1).max(256).describe(
 
 const taskUpdateObjectSchema = z.strictObject({
   taskHint: taskHintSchema,
-  title: z.string().describe('New task title. Omit to leave the title unchanged.').optional(),
-  goal: z.string().describe('Definition of done or success criterion for this task. Omit to leave unchanged.').optional(),
-  status: workspaceTaskStatusSchema.describe('New task status. Omit to leave unchanged.').optional(),
-  size: workspaceTaskSizeSchema.describe('Effort size estimate. Omit to leave unchanged.').optional(),
-  category: z.string().describe('Business category label for the task. Omit to leave unchanged.').optional(),
-  type: z.string().describe("Task type classification, e.g. 'task', 'milestone'. Omit to leave unchanged.").optional(),
-  startDate: z.string().describe(`${dateDescription} Omit to leave unchanged.`).optional(),
-  endDate: z.string().describe(`Due ${dateDescription.toLowerCase()} Omit to leave unchanged.`).optional(),
-  flag: z.number().describe('Numeric flag bitmask for internal task classification. Omit to leave unchanged.').optional(),
-  requestReason: z.string().describe('Reason for requesting this task. Omit to leave unchanged.').optional(),
-  decisionReason: z.string().describe('Reason for the approval or rejection decision. Omit to leave unchanged.').optional(),
+  title: z.string().describe('New task title.').optional(),
+  goal: z.string().describe('Definition of done or success criterion for this task.').optional(),
+  status: workspaceTaskStatusSchema.describe('New task status.').optional(),
+  size: workspaceTaskSizeSchema.describe('Effort size estimate.').optional(),
+  category: z.string().describe('Business category label, taken from registeredLabels.businesses in a task_list result.').optional(),
+  type: z.string().describe('Task type label, taken from registeredLabels.types in a task_list result.').optional(),
+  startDate: z.string().describe(dateDescription).optional(),
+  endDate: z.string().describe(`Due ${dateDescription.toLowerCase()}`).optional(),
+  requestReason: z.string().describe('Reason for requesting this task.').optional(),
+  decisionReason: z.string().describe('Reason for the approval or rejection decision.').optional(),
+  participantPersonHints: z.array(z.string())
+    .describe('Names, @handles, or emails of everyone taking part, replacing the current participants. Send the whole set, not just additions.')
+    .optional(),
 });
 
 export const taskUpdateInputSchema = taskUpdateObjectSchema
@@ -303,6 +305,13 @@ export const taskDeleteInputSchema = z.strictObject({
 
 export const taskDeleteInputIntentSchema = z.strictObject({});
 
+const taskLabelVocabularySchema = z.strictObject({
+  businesses: z.array(z.string()),
+  types: z.array(z.string()),
+  sizes: z.array(z.string()),
+  statuses: z.array(z.string()),
+});
+
 export const taskListResultSchema = z.strictObject({
   tasks: z.array(taskResultSchema),
   count: z.number().int(),
@@ -311,27 +320,12 @@ export const taskListResultSchema = z.strictObject({
   weekTo: z.number().int().optional(),
   statusFilter: z.string().optional(),
   ownerID: z.string().optional(),
+  registeredLabels: taskLabelVocabularySchema,
 });
 
 export const taskDeleteResultSchema = z.strictObject({
   taskID: resourceIDSchema,
   deleted: z.literal(true),
-});
-
-export const taskDefinitionsInputSchema = z.strictObject({});
-
-export const taskDefinitionsInputIntentSchema = z.strictObject({});
-
-const taskDefinitionLabelSchema = z.strictObject({
-  value: z.string(),
-  color: z.string().optional(),
-});
-
-export const taskDefinitionsResultSchema = z.strictObject({
-  businesses: z.array(taskDefinitionLabelSchema),
-  types: z.array(taskDefinitionLabelSchema),
-  sizes: z.array(z.string()),
-  statuses: z.array(z.string()),
 });
 
 export const personListInputSchema = z.strictObject({});
@@ -374,17 +368,17 @@ export const calendarEventResultSchema = z.strictObject({
 });
 
 const calendarMutableFields = {
-  title: z.string().describe('New event title. Omit to leave unchanged.').optional(),
+  title: z.string().describe('New event title.').optional(),
   description: z.string().describe('New event notes or agenda. Use an empty string to clear them.').optional(),
   location: z.string().describe('New physical or virtual location. Use an empty string to clear it.').optional(),
-  startISO: z.string().describe('New event start as ISO 8601 with timezone. Omit to leave unchanged.').optional(),
-  endISO: z.string().describe('New event end as ISO 8601 with timezone. Omit to leave unchanged.').optional(),
-  timeZone: z.string().describe('New IANA timezone identifier. Omit to leave unchanged.').optional(),
-  isAllDay: z.boolean().describe('Whether the event is all day. Omit to leave unchanged.').optional(),
-  color: z.string().describe('New provider-supported color label. Omit to leave unchanged.').optional(),
+  startISO: z.string().describe('New event start as ISO 8601 with timezone.').optional(),
+  endISO: z.string().describe('New event end as ISO 8601 with timezone.').optional(),
+  timeZone: z.string().describe('New IANA timezone identifier.').optional(),
+  isAllDay: z.boolean().describe('Whether the event is all day.').optional(),
+  color: z.string().describe('New provider-supported color label.').optional(),
   people: z.array(z.string()).describe('Replacement attendee hints such as names, @handles, or emails.').optional(),
   includeRequester: z.boolean().describe('Whether the requester should be included as an attendee.').optional(),
-  reminderLeadHours: calendarReminderLeadHoursSchema.describe('Reminder lead time in hours: 1, 2, 3, 6, 12, 24, or 48. Omit to leave unchanged.').optional(),
+  reminderLeadHours: calendarReminderLeadHoursSchema.describe('Reminder lead time in hours: 1, 2, 3, 6, 12, 24, or 48.').optional(),
 };
 
 export const calendarAddInputSchema = z.strictObject({
@@ -860,24 +854,11 @@ const taskToolDefinitions: CapabilityToolDefinition[] = [
     sideEffect: CapabilitySideEffect.Read,
   },
   {
-    name: 'task_definitions',
-    namespace: 'task',
-    privacyClass: 'workspace_task',
-    policyResource: 'tool:task_definitions',
-    description: 'List the values a task field accepts in this workspace: businesses, task types, sizes, and statuses. Call this before task_add or task_update when the business or type is not already known to be registered, and before importing records from another system, because a value outside these lists is rejected.',
-    version: '1',
-    estimatedLatency: CapabilityEstimatedLatency.Low,
-    inputSchema: taskDefinitionsInputSchema,
-    inputIntentSchema: taskDefinitionsInputIntentSchema,
-    result: { schema: taskDefinitionsResultSchema, effects: [] },
-    sideEffect: CapabilitySideEffect.Read,
-  },
-  {
     name: 'task_update',
     namespace: 'task',
     privacyClass: 'workspace_task',
     policyResource: 'tool:task_update',
-    description: 'Update explicit fields on an existing task. taskHint is the exact task ID or exact task title from a task_list result, resolved server-side to the canonical task; use task_list first when neither is known. At least one mutable field is required.',
+    description: 'Update explicit fields on an existing task, including who takes part in it. taskHint is the exact task ID or exact task title from a task_list result, resolved server-side to the canonical task; use task_list first when neither is known. At least one mutable field is required.',
     version: '3',
     estimatedLatency: CapabilityEstimatedLatency.Medium,
     inputSchema: taskUpdateInputSchema,
