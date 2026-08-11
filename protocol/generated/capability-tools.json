@@ -1356,6 +1356,134 @@
       "availability": {
         "state": "ok"
       },
+      "canonicalName": "person_list",
+      "description": "List the people in this workspace with their exact name, email, @handle, and mention. Call this to answer who a person is, and whenever a message names someone partly or by a given name alone, so the exact name can be passed instead of the fragment. Person hints on the task tools resolve against exactly this list.",
+      "estimatedLatency": "low",
+      "idempotency": {
+        "required": false,
+        "scope": "operation",
+        "supported": false
+      },
+      "inputIntentSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "inputSchemaStrict": true,
+      "modelName": "person_list",
+      "modelVisibility": "visible",
+      "modelVisible": true,
+      "name": "person_list",
+      "namespace": "person",
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "type": "number"
+          },
+          "people": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "email": {
+                  "type": "string"
+                },
+                "mattermostUsername": {
+                  "type": "string"
+                },
+                "mention": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "personID": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "personID",
+                "name",
+                "email"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "people"
+        ],
+        "type": "object"
+      },
+      "outputSchemaStrict": true,
+      "policyResource": "tool:person_list",
+      "privacyClass": "workspace_task",
+      "requiresUserPresence": false,
+      "resultContract": {
+        "effects": [],
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "count": {
+              "type": "number"
+            },
+            "people": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  },
+                  "mattermostUsername": {
+                    "type": "string"
+                  },
+                  "mention": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "personID": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "personID",
+                  "name",
+                  "email"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "count",
+            "people"
+          ],
+          "type": "object"
+        }
+      },
+      "sideEffect": "read",
+      "sideEffectClass": "read",
+      "version": "1",
+      "worksOffline": false
+    },
+    {
+      "availability": {
+        "state": "ok"
+      },
       "canonicalName": "calendar_add",
       "completionEvidence": {
         "action": "write_calendar",

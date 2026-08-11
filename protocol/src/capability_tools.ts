@@ -334,6 +334,23 @@ export const taskDefinitionsResultSchema = z.strictObject({
   statuses: z.array(z.string()),
 });
 
+export const personListInputSchema = z.strictObject({});
+
+export const personListInputIntentSchema = z.strictObject({});
+
+const personResultSchema = z.strictObject({
+  personID: z.string(),
+  name: z.string(),
+  email: z.string(),
+  mattermostUsername: z.string().optional(),
+  mention: z.string().optional(),
+});
+
+export const personListResultSchema = z.strictObject({
+  count: z.number(),
+  people: z.array(personResultSchema),
+});
+
 const calendarParticipantResultSchema = z.strictObject({
   personID: z.string().optional(),
   name: z.string(),
@@ -899,6 +916,19 @@ const taskToolDefinitions: CapabilityToolDefinition[] = [
     sideEffect: CapabilitySideEffect.Destructive,
     requiresApproval: true,
     completionEvidence: { mode: 'success', action: 'delete_task', targetKind: 'task' },
+  },
+  {
+    name: 'person_list',
+    namespace: 'person',
+    privacyClass: 'workspace_task',
+    policyResource: 'tool:person_list',
+    description: 'List the people in this workspace with their exact name, email, @handle, and mention. Call this to answer who a person is, and whenever a message names someone partly or by a given name alone, so the exact name can be passed instead of the fragment. Person hints on the task tools resolve against exactly this list.',
+    version: '1',
+    estimatedLatency: CapabilityEstimatedLatency.Low,
+    inputSchema: personListInputSchema,
+    inputIntentSchema: personListInputIntentSchema,
+    result: { schema: personListResultSchema, effects: [] },
+    sideEffect: CapabilitySideEffect.Read,
   },
 ];
 

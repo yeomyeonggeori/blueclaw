@@ -23,6 +23,7 @@ describe('protocol artifacts', () => {
       'task_definitions',
       'task_update',
       'task_delete',
+      'person_list',
       'calendar_add',
       'calendar_list',
       'calendar_update',
