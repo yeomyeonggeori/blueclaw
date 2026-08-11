@@ -76,6 +76,44 @@ func (actor DirectWorkspaceActor) WriteFile(ctx context.Context, path string, co
 	return nil
 }
 
+func (actor DirectWorkspaceActor) ReadFile(ctx context.Context, path string, maximumBytes int64) ([]byte, error) {
+	_ = ctx
+	fileInformation, errorValue := os.Stat(path)
+	if errorValue != nil {
+		return nil, actor.actorError("read_file", "direct", path, errorValue)
+	}
+	if maximumBytes > 0 && fileInformation.Size() > maximumBytes {
+		return nil, actor.actorError("read_file", "direct", path, errors.New("file is too large"))
+	}
+	content, errorValue := os.ReadFile(path)
+	if errorValue != nil {
+		return nil, actor.actorError("read_file", "direct", path, errorValue)
+	}
+	return content, nil
+}
+
+func (actor DirectWorkspaceActor) ListDirectory(ctx context.Context, path string) ([]WorkspaceActorDirectoryEntry, error) {
+	_ = ctx
+	directoryEntries, errorValue := os.ReadDir(path)
+	if errorValue != nil {
+		return nil, actor.actorError("list_directory", "direct", path, errorValue)
+	}
+	entries := []WorkspaceActorDirectoryEntry{}
+	for _, directoryEntry := range directoryEntries {
+		fileInformation, errorValue := os.Stat(filepath.Join(path, directoryEntry.Name()))
+		if errorValue != nil {
+			continue
+		}
+		entries = append(entries, WorkspaceActorDirectoryEntry{
+			Name:           directoryEntry.Name(),
+			IsDirectory:    fileInformation.IsDir(),
+			SizeBytes:      fileInformation.Size(),
+			ModifiedAtUnix: fileInformation.ModTime().Unix(),
+		})
+	}
+	return entries, nil
+}
+
 func (actor DirectWorkspaceActor) BundleDirectory(ctx context.Context, path string, options WorkspaceActorBundleOptions) (WorkspaceActorBundle, error) {
 	_ = ctx
 	document, errorValue := actor.bundleDirectoryDocument(path, options)
@@ -166,11 +204,12 @@ func (actor DirectWorkspaceActor) Stat(ctx context.Context, path string) (Worksp
 		return WorkspaceActorStat{}, actor.actorError("stat", "direct", path, errorValue)
 	}
 	return WorkspaceActorStat{
-		Path:        path,
-		IsRegular:   fileInformation.Mode().IsRegular(),
-		IsDirectory: fileInformation.IsDir(),
-		SizeBytes:   fileInformation.Size(),
-		Mode:        fileInformation.Mode(),
+		Path:           path,
+		IsRegular:      fileInformation.Mode().IsRegular(),
+		IsDirectory:    fileInformation.IsDir(),
+		SizeBytes:      fileInformation.Size(),
+		ModifiedAtUnix: fileInformation.ModTime().Unix(),
+		Mode:           fileInformation.Mode(),
 	}, nil
 }
 

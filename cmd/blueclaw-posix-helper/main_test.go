@@ -260,3 +260,53 @@ func TestLoadIdentityAllocationTableToleratesEmptyDocument(t *testing.T) {
 		}
 	}
 }
+
+func TestPerformFSOperationListsDirectoryEntries(t *testing.T) {
+	rootPath := t.TempDir()
+	if errorValue := os.MkdirAll(filepath.Join(rootPath, "artifacts"), 0755); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := os.WriteFile(filepath.Join(rootPath, "notes.md"), []byte("hello"), 0600); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	response := captureFSOperationResponse(t, fsOperationRequest{Operation: "list_directory", Path: rootPath})
+	if len(response.Entries) != 2 {
+		t.Fatalf("expected two entries, got %+v", response.Entries)
+	}
+	entryByName := map[string]security.WorkspaceActorDirectoryEntry{}
+	for _, entry := range response.Entries {
+		entryByName[entry.Name] = entry
+	}
+	if !entryByName["artifacts"].IsDirectory || entryByName["notes.md"].SizeBytes != 5 || entryByName["notes.md"].ModifiedAtUnix == 0 {
+		t.Fatalf("expected a directory and a five byte file with a modification time, got %+v", response.Entries)
+	}
+}
+
+func TestPerformFSOperationListDirectoryRequiresAnExistingPath(t *testing.T) {
+	if errorValue := performFSOperation(fsOperationRequest{Operation: "list_directory", Path: filepath.Join(t.TempDir(), "absent")}); errorValue == nil {
+		t.Fatal("expected list_directory on a missing path to fail")
+	}
+}
+
+func captureFSOperationResponse(t *testing.T, request fsOperationRequest) fsOperationResponse {
+	t.Helper()
+	originalStdout := os.Stdout
+	readEnd, writeEnd, errorValue := os.Pipe()
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	os.Stdout = writeEnd
+	operationError := performFSOperation(request)
+	os.Stdout = originalStdout
+	if errorValue := writeEnd.Close(); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if operationError != nil {
+		t.Fatal(operationError)
+	}
+	var response fsOperationResponse
+	if errorValue := json.NewDecoder(readEnd).Decode(&response); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	return response
+}

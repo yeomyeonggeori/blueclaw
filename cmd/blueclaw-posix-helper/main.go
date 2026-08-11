@@ -240,13 +240,15 @@ type fsOperationRequest struct {
 }
 
 type fsOperationResponse struct {
-	Path          string      `json:"path,omitempty"`
-	IsRegular     bool        `json:"isRegular,omitempty"`
-	IsDirectory   bool        `json:"isDirectory,omitempty"`
-	SizeBytes     int64       `json:"sizeBytes,omitempty"`
-	Mode          os.FileMode `json:"mode,omitempty"`
-	ContentBase64 string      `json:"contentBase64,omitempty"`
-	Format        string      `json:"format,omitempty"`
+	Path           string                                  `json:"path,omitempty"`
+	IsRegular      bool                                    `json:"isRegular,omitempty"`
+	IsDirectory    bool                                    `json:"isDirectory,omitempty"`
+	SizeBytes      int64                                   `json:"sizeBytes,omitempty"`
+	ModifiedAtUnix int64                                   `json:"modifiedAtUnix,omitempty"`
+	Mode           os.FileMode                             `json:"mode,omitempty"`
+	ContentBase64  string                                  `json:"contentBase64,omitempty"`
+	Format         string                                  `json:"format,omitempty"`
+	Entries        []security.WorkspaceActorDirectoryEntry `json:"entries,omitempty"`
 }
 
 func performFSOperation(request fsOperationRequest) error {
@@ -263,6 +265,8 @@ func performFSOperation(request fsOperationRequest) error {
 		return bundleDirectory(request.Path, request.MaxBytes, request.ExcludeNames)
 	case "stat":
 		return statPath(request.Path)
+	case "list_directory":
+		return listDirectory(request.Path)
 	default:
 		return errors.New("unsupported fs operation")
 	}
@@ -387,12 +391,37 @@ func statPath(path string) error {
 		return errorValue
 	}
 	return json.NewEncoder(os.Stdout).Encode(fsOperationResponse{
-		Path:        path,
-		IsRegular:   fileInformation.Mode().IsRegular(),
-		IsDirectory: fileInformation.IsDir(),
-		SizeBytes:   fileInformation.Size(),
-		Mode:        fileInformation.Mode(),
+		Path:           path,
+		IsRegular:      fileInformation.Mode().IsRegular(),
+		IsDirectory:    fileInformation.IsDir(),
+		SizeBytes:      fileInformation.Size(),
+		ModifiedAtUnix: fileInformation.ModTime().Unix(),
+		Mode:           fileInformation.Mode(),
 	})
+}
+
+func listDirectory(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return errors.New("path is required")
+	}
+	directoryEntries, errorValue := os.ReadDir(path)
+	if errorValue != nil {
+		return errorValue
+	}
+	entries := []security.WorkspaceActorDirectoryEntry{}
+	for _, directoryEntry := range directoryEntries {
+		fileInformation, errorValue := os.Stat(filepath.Join(path, directoryEntry.Name()))
+		if errorValue != nil {
+			continue
+		}
+		entries = append(entries, security.WorkspaceActorDirectoryEntry{
+			Name:           directoryEntry.Name(),
+			IsDirectory:    fileInformation.IsDir(),
+			SizeBytes:      fileInformation.Size(),
+			ModifiedAtUnix: fileInformation.ModTime().Unix(),
+		})
+	}
+	return json.NewEncoder(os.Stdout).Encode(fsOperationResponse{Path: path, Entries: entries})
 }
 
 func bundleDirectory(path string, maxBytes int64, excludeNames []string) error {
