@@ -13,6 +13,7 @@ export type PersonalConversation = {
 	name: string;
 	kind: "dm" | "group";
 	avatarURL?: string;
+	participantExternalIDs?: string[];
 };
 
 export type PersonalPerson = {
