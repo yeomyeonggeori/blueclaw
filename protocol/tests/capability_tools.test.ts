@@ -87,6 +87,7 @@ describe('canonical capability tools', () => {
       'task_definitions',
       'task_update',
       'task_delete',
+      'person_list',
       CalendarToolName.Add,
       CalendarToolName.List,
       CalendarToolName.Update,
