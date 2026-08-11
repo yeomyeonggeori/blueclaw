@@ -656,3 +656,28 @@ func TestCapabilityCatalogParametersListsRequiredAndOptional(t *testing.T) {
 		t.Fatal("nil schema should yield no parameters")
 	}
 }
+
+func TestCapabilityRecoveryHintsCarryTheToolNamesTheCapabilityNamed(t *testing.T) {
+	hints := capabilityRecoveryHints(json.RawMessage(`{"errorCode":"flow_owner_ambiguous","recoveryHints":[{"action":"ask_the_user_to_choose_a_candidate","toolNames":["ask_input"],"reason":"only the user can say which person they meant"}]}`))
+
+	if len(hints) != 1 || len(hints[0].ToolNames) != 1 || hints[0].ToolNames[0] != "ask_input" {
+		t.Fatalf("hints = %+v", hints)
+	}
+	if hints[0].Action != "ask_the_user_to_choose_a_candidate" {
+		t.Fatalf("hints = %+v", hints)
+	}
+}
+
+func TestCapabilityRecoveryHintsKeepTheLegacyRecoveryAction(t *testing.T) {
+	hints := capabilityRecoveryHints(json.RawMessage(`{"recovery":{"kind":"companion_connect","delivery":"direct_message"}}`))
+
+	if len(hints) != 1 || hints[0].Action != "companion_connect" {
+		t.Fatalf("hints = %+v", hints)
+	}
+}
+
+func TestCapabilityRecoveryHintsIgnoreAnEmptyHint(t *testing.T) {
+	if hints := capabilityRecoveryHints(json.RawMessage(`{"recoveryHints":[{"reason":"no action, no tools"}]}`)); len(hints) != 0 {
+		t.Fatalf("hints = %+v", hints)
+	}
+}
