@@ -38,6 +38,10 @@ func firstTerminalService(terminalServices []*TerminalSessionService) *TerminalS
 	return terminalServices[0]
 }
 
+func (factory DirectWorkspaceActorFactory) CanListDirectory(context.Context) bool {
+	return true
+}
+
 func (factory DirectWorkspaceActorFactory) Requester(ctx context.Context, request WorkspaceActorRequest) (WorkspaceActor, error) {
 	_ = ctx
 	personAccess := request.PersonAccess

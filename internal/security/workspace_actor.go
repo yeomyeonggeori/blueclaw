@@ -46,6 +46,7 @@ type WorkspaceActor interface {
 
 type WorkspaceActorFactory interface {
 	Requester(context.Context, WorkspaceActorRequest) (WorkspaceActor, error)
+	CanListDirectory(context.Context) bool
 }
 
 type WorkspaceActorRequest struct {
@@ -122,6 +123,10 @@ func (terminalSessionService *TerminalSessionService) WorkspaceActorFactory() Wo
 		terminalService:       terminalSessionService,
 		terminalConfiguration: terminalSessionService.commandGuardrailService.terminalConfiguration,
 	}
+}
+
+func (factory POSIXWorkspaceActorFactory) CanListDirectory(ctx context.Context) bool {
+	return HelperCanListDirectory(ctx, factory.terminalConfiguration.POSIXHelperPath)
 }
 
 func (factory POSIXWorkspaceActorFactory) Requester(ctx context.Context, request WorkspaceActorRequest) (WorkspaceActor, error) {
@@ -403,6 +408,36 @@ func actorErrorCodeForDetail(detail string) string {
 	default:
 		return ActorErrorCodeOperationFailed
 	}
+}
+
+// A helper built before an operation existed still reports the fs capability,
+// so asking it to do that operation fails halfway through a request. Naming the
+// operation lets a caller find out first and choose something it can do.
+func HelperCanListDirectory(ctx context.Context, helperPath string) bool {
+	return helperAdvertises(ctx, helperPath, "fs.list_directory")
+}
+
+var advertisedCapabilitiesByHelperPath sync.Map
+
+func helperAdvertises(ctx context.Context, helperPath string, capability string) bool {
+	if strings.TrimSpace(helperPath) == "" {
+		return false
+	}
+	if advertised, isKnown := advertisedCapabilitiesByHelperPath.Load(helperPath); isKnown {
+		return containsCapability(advertised.([]string), capability)
+	}
+	executionContext, cancelFunction := context.WithTimeout(ctx, 15*time.Second)
+	defer cancelFunction()
+	output, errorValue := exec.CommandContext(executionContext, helperPath, "capabilities").CombinedOutput()
+	if errorValue != nil {
+		return false
+	}
+	var capabilities helperCapabilities
+	if errorValue := json.Unmarshal(output, &capabilities); errorValue != nil {
+		return false
+	}
+	advertisedCapabilitiesByHelperPath.Store(helperPath, capabilities.Capabilities)
+	return containsCapability(capabilities.Capabilities, capability)
 }
 
 func IsActorNotFoundError(errorValue error) bool {

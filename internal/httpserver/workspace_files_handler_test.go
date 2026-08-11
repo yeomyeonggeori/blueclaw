@@ -20,13 +20,18 @@ type recordedWorkspaceActorRequest struct {
 }
 
 type stubWorkspaceActorFactory struct {
-	entries          []security.WorkspaceActorDirectoryEntry
-	fileContent      []byte
-	recordedRequests []recordedWorkspaceActorRequest
+	cannotListDirectory bool
+	entries             []security.WorkspaceActorDirectoryEntry
+	fileContent         []byte
+	recordedRequests    []recordedWorkspaceActorRequest
 }
 
 type stubWorkspaceActor struct {
 	factory *stubWorkspaceActorFactory
+}
+
+func (factory *stubWorkspaceActorFactory) CanListDirectory(context.Context) bool {
+	return !factory.cannotListDirectory
 }
 
 func (factory *stubWorkspaceActorFactory) Requester(_ context.Context, request security.WorkspaceActorRequest) (security.WorkspaceActor, error) {
@@ -196,5 +201,48 @@ func TestWorkspaceFilesHandlerRejectsPathEscape(t *testing.T) {
 	handler.HandleList(recorder, httptest.NewRequest(http.MethodGet, "/admin/api/workspace/list?personID=person-1&path=/workspace/../../etc", nil))
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected a path escape to be rejected, got status %d", recorder.Code)
+	}
+}
+
+func TestAHelperTooOldToActForPeopleStillServesWhatTheServiceCanRead(t *testing.T) {
+	rootPath := t.TempDir()
+	sharedPath := filepath.Join(rootPath, "shared", "public")
+	if errorValue := os.MkdirAll(filepath.Join(sharedPath, "handbook"), 0o755); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := os.WriteFile(filepath.Join(sharedPath, "notice.txt"), []byte("hello"), 0o644); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	factory := &stubWorkspaceActorFactory{cannotListDirectory: true}
+	handler := newWorkspaceFilesTestHandler(factory, rootPath)
+
+	recorder := httptest.NewRecorder()
+	handler.HandleList(recorder, httptest.NewRequest(http.MethodGet, "/admin/api/workspace/list?personID=person-1&path=/workspace/shared/public", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("a shared directory stopped answering: status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+
+	entries := decodeWorkspaceListEntries(t, recorder)
+	if len(entries) != 2 || entries[0].Name != "handbook" || !entries[0].IsDirectory || entries[1].Name != "notice.txt" {
+		t.Fatalf("expected the service listing with directories first, got %+v", entries)
+	}
+}
+
+func TestAHelperTooOldToActForPeopleLeavesAPrivateHomeToTheKernel(t *testing.T) {
+	rootPath := t.TempDir()
+	privateHomePath := filepath.Join(rootPath, "private", "people", "person-1")
+	if errorValue := os.MkdirAll(privateHomePath, 0o755); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	makeUnreadableByTheServingProcess(t, privateHomePath)
+
+	factory := &stubWorkspaceActorFactory{cannotListDirectory: true}
+	handler := newWorkspaceFilesTestHandler(factory, rootPath)
+
+	recorder := httptest.NewRecorder()
+	handler.HandleList(recorder, httptest.NewRequest(http.MethodGet, "/admin/api/workspace/list?personID=person-1&path=/workspace/private/people/person-1", nil))
+	if recorder.Code == http.StatusOK {
+		t.Fatalf("an old helper handed out a private home the service may not read: %s", recorder.Body.String())
 	}
 }
