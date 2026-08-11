@@ -716,18 +716,31 @@ func capabilityRecoveryActions(result json.RawMessage) []toolcontract.RecoveryAc
 
 func capabilityRecoveryHints(result json.RawMessage) []toolcontract.RecoveryHint {
 	var document struct {
-		Recovery *toolcontract.RecoveryAction `json:"recovery"`
+		RecoveryHints []toolcontract.RecoveryHint  `json:"recoveryHints"`
+		Recovery      *toolcontract.RecoveryAction `json:"recovery"`
 	}
-	if json.Unmarshal(result, &document) != nil || document.Recovery == nil {
+	if json.Unmarshal(result, &document) != nil {
 		return nil
 	}
-	if strings.TrimSpace(document.Recovery.Kind) == "" {
-		return nil
+	hints := statedCapabilityRecoveryHints(document.RecoveryHints)
+	if document.Recovery == nil || strings.TrimSpace(document.Recovery.Kind) == "" {
+		return hints
 	}
-	return []toolcontract.RecoveryHint{{
+	return append(hints, toolcontract.RecoveryHint{
 		Action: strings.TrimSpace(document.Recovery.Kind),
 		Reason: "Capability returned a user-visible recovery action.",
-	}}
+	})
+}
+
+func statedCapabilityRecoveryHints(hints []toolcontract.RecoveryHint) []toolcontract.RecoveryHint {
+	var statedHints []toolcontract.RecoveryHint
+	for _, hint := range hints {
+		if strings.TrimSpace(hint.Action) == "" && len(hint.ToolNames) == 0 {
+			continue
+		}
+		statedHints = append(statedHints, hint)
+	}
+	return statedHints
 }
 
 func capabilityResultString(result json.RawMessage, fieldName string) string {
