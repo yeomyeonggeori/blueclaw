@@ -3,6 +3,7 @@ package security
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -37,7 +38,9 @@ type WorkspaceActor interface {
 	Run(context.Context, CommandRequest) (CommandResult, error)
 	MkdirAll(context.Context, string) error
 	WriteFile(context.Context, string, []byte) error
+	ReadFile(context.Context, string, int64) ([]byte, error)
 	BundleDirectory(context.Context, string, WorkspaceActorBundleOptions) (WorkspaceActorBundle, error)
+	ListDirectory(context.Context, string) ([]WorkspaceActorDirectoryEntry, error)
 	Stat(context.Context, string) (WorkspaceActorStat, error)
 }
 
@@ -60,11 +63,19 @@ type WorkspaceActorError struct {
 }
 
 type WorkspaceActorStat struct {
-	Path        string      `json:"path"`
-	IsRegular   bool        `json:"isRegular"`
-	IsDirectory bool        `json:"isDirectory"`
-	SizeBytes   int64       `json:"sizeBytes"`
-	Mode        os.FileMode `json:"mode"`
+	Path           string      `json:"path"`
+	IsRegular      bool        `json:"isRegular"`
+	IsDirectory    bool        `json:"isDirectory"`
+	SizeBytes      int64       `json:"sizeBytes"`
+	ModifiedAtUnix int64       `json:"modifiedAtUnix"`
+	Mode           os.FileMode `json:"mode"`
+}
+
+type WorkspaceActorDirectoryEntry struct {
+	Name           string `json:"name"`
+	IsDirectory    bool   `json:"isDirectory"`
+	SizeBytes      int64  `json:"sizeBytes"`
+	ModifiedAtUnix int64  `json:"modifiedAtUnix"`
 }
 
 type WorkspaceActorBundleOptions struct {
@@ -197,6 +208,28 @@ func (actor POSIXHelperWorkspaceActor) WriteFile(ctx context.Context, path strin
 	return actor.executeFS(ctx, "write_file", path, fsRequest{Path: path, Mode: actorFileCreateMode}, bytes.NewReader(content))
 }
 
+func (actor POSIXHelperWorkspaceActor) ReadFile(ctx context.Context, path string, maximumBytes int64) ([]byte, error) {
+	var response fsResponse
+	errorValue := actor.executeFSWithResponse(ctx, "read_file", path, fsRequest{Path: path, MaxBytes: maximumBytes}, nil, &response)
+	if errorValue != nil {
+		return nil, errorValue
+	}
+	content, errorValue := base64.StdEncoding.DecodeString(response.ContentBase64)
+	if errorValue != nil {
+		return nil, actorError("read_file", "decode", actor.executionIdentity, path, ActorErrorCodeOperationFailed, errorValue.Error())
+	}
+	return content, nil
+}
+
+func (actor POSIXHelperWorkspaceActor) ListDirectory(ctx context.Context, path string) ([]WorkspaceActorDirectoryEntry, error) {
+	var response fsResponse
+	errorValue := actor.executeFSWithResponse(ctx, "list_directory", path, fsRequest{Path: path}, nil, &response)
+	if errorValue != nil {
+		return nil, errorValue
+	}
+	return response.Entries, nil
+}
+
 func (actor POSIXHelperWorkspaceActor) BundleDirectory(ctx context.Context, path string, options WorkspaceActorBundleOptions) (WorkspaceActorBundle, error) {
 	var response fsResponse
 	errorValue := actor.executeFSWithResponse(ctx, "bundle_directory", path, fsRequest{
@@ -221,11 +254,12 @@ func (actor POSIXHelperWorkspaceActor) Stat(ctx context.Context, path string) (W
 		return WorkspaceActorStat{}, errorValue
 	}
 	return WorkspaceActorStat{
-		Path:        path,
-		IsRegular:   response.IsRegular,
-		IsDirectory: response.IsDirectory,
-		SizeBytes:   response.SizeBytes,
-		Mode:        response.Mode,
+		Path:           path,
+		IsRegular:      response.IsRegular,
+		IsDirectory:    response.IsDirectory,
+		SizeBytes:      response.SizeBytes,
+		ModifiedAtUnix: response.ModifiedAtUnix,
+		Mode:           response.Mode,
 	}, nil
 }
 
@@ -298,12 +332,14 @@ type fsRequest struct {
 }
 
 type fsResponse struct {
-	IsRegular     bool        `json:"isRegular"`
-	IsDirectory   bool        `json:"isDirectory"`
-	SizeBytes     int64       `json:"sizeBytes"`
-	Mode          os.FileMode `json:"mode"`
-	ContentBase64 string      `json:"contentBase64"`
-	Format        string      `json:"format"`
+	IsRegular      bool                           `json:"isRegular"`
+	IsDirectory    bool                           `json:"isDirectory"`
+	SizeBytes      int64                          `json:"sizeBytes"`
+	ModifiedAtUnix int64                          `json:"modifiedAtUnix"`
+	Mode           os.FileMode                    `json:"mode"`
+	ContentBase64  string                         `json:"contentBase64"`
+	Format         string                         `json:"format"`
+	Entries        []WorkspaceActorDirectoryEntry `json:"entries"`
 }
 
 func fsHelperOperationTimeout(operation string) time.Duration {

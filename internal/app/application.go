@@ -405,7 +405,9 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 			ProtocolIdentityExpected: protocolIdentityExpected,
 		},
 		WorkspaceFilesHandler: httpserver.WorkspaceFilesHandler{
-			WorkspaceRootPath: runtimeConfiguration.Terminal.WorkspaceRootPath,
+			WorkspaceRootPath:     runtimeConfiguration.Terminal.WorkspaceRootPath,
+			WorkspaceActorFactory: terminalService.WorkspaceActorFactory(),
+			PersonAccessResolver:  identityService,
 		},
 		ToolCatalogHandler: toolCatalogHandler,
 		PolicyHandler: adminapi.PolicyHandler{

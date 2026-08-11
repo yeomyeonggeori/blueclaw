@@ -1,23 +1,36 @@
 package httpserver
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/yeomyeonggeori/blueclaw/internal/policy"
+	"github.com/yeomyeonggeori/blueclaw/internal/security"
 )
+
+const workspaceDownloadMaximumBytes int64 = 64 * 1024 * 1024
 
 // WorkspaceFilesHandler serves read-only listings and downloads of the guest's
 // live workspace filesystem. The workspace lives inside the Firecracker guest
 // image, so a host-side file browser cannot read it; admind proxies here to show
-// a person their own workspace. Access control is the caller's (admind
-// authorizes the web actor before proxying); this handler only reads within the
-// workspace root and never writes.
+// a person their own workspace. Every read runs as the person named by the
+// caller, because a private home is owned by that person's POSIX user and the
+// blueclaw service cannot read it.
 type WorkspaceFilesHandler struct {
-	WorkspaceRootPath string
+	WorkspaceRootPath     string
+	WorkspaceActorFactory security.WorkspaceActorFactory
+	PersonAccessResolver  PersonAccessResolver
+}
+
+type PersonAccessResolver interface {
+	ResolvePersonAccess(personID string) policy.PersonAccess
 }
 
 type workspaceFileEntry struct {
@@ -28,34 +41,90 @@ type workspaceFileEntry struct {
 }
 
 func (handler WorkspaceFilesHandler) HandleList(responseWriter http.ResponseWriter, request *http.Request) {
-	hostPath, ok := handler.resolveHostPath(request.URL.Query().Get("path"))
-	if !ok {
-		http.Error(responseWriter, "invalid workspace path", http.StatusBadRequest)
+	actor, hostPath, isResolved := handler.resolveActorAndPath(responseWriter, request)
+	if !isResolved {
 		return
 	}
-	directoryEntries, errorValue := os.ReadDir(hostPath)
+	directoryEntries, errorValue := actor.ListDirectory(request.Context(), hostPath)
 	if errorValue != nil {
-		if os.IsNotExist(errorValue) {
+		if security.IsActorNotFoundError(errorValue) {
 			writeJSON(responseWriter, map[string]any{"entries": []workspaceFileEntry{}})
 			return
 		}
-		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
+		writeWorkspaceActorError(responseWriter, errorValue)
 		return
 	}
+	writeJSON(responseWriter, map[string]any{"entries": visibleWorkspaceEntries(directoryEntries)})
+}
+
+func (handler WorkspaceFilesHandler) HandleDownload(responseWriter http.ResponseWriter, request *http.Request) {
+	actor, hostPath, isResolved := handler.resolveActorAndPath(responseWriter, request)
+	if !isResolved {
+		return
+	}
+	stat, errorValue := actor.Stat(request.Context(), hostPath)
+	if isPermissionDeniedActorError(errorValue) {
+		writeWorkspaceActorError(responseWriter, errorValue)
+		return
+	}
+	if errorValue != nil || stat.IsDirectory {
+		http.Error(responseWriter, "file not found", http.StatusNotFound)
+		return
+	}
+	if stat.SizeBytes > workspaceDownloadMaximumBytes {
+		http.Error(responseWriter, "file is too large to download through the workspace browser", http.StatusRequestEntityTooLarge)
+		return
+	}
+	content, errorValue := actor.ReadFile(request.Context(), hostPath, workspaceDownloadMaximumBytes)
+	if errorValue != nil {
+		writeWorkspaceActorError(responseWriter, errorValue)
+		return
+	}
+	fileName := filepath.Base(hostPath)
+	responseWriter.Header().Set("Content-Disposition", "attachment; filename=\""+fileName+"\"")
+	http.ServeContent(responseWriter, request, fileName, time.Unix(stat.ModifiedAtUnix, 0), bytes.NewReader(content))
+}
+
+func (handler WorkspaceFilesHandler) resolveActorAndPath(responseWriter http.ResponseWriter, request *http.Request) (security.WorkspaceActor, string, bool) {
+	personID := strings.TrimSpace(request.URL.Query().Get("personID"))
+	if personID == "" {
+		http.Error(responseWriter, "personID is required", http.StatusBadRequest)
+		return nil, "", false
+	}
+	hostPath, isWithinWorkspace := handler.resolveHostPath(request.URL.Query().Get("path"))
+	if !isWithinWorkspace {
+		http.Error(responseWriter, "invalid workspace path", http.StatusBadRequest)
+		return nil, "", false
+	}
+	actor, errorValue := handler.requesterActor(request.Context(), personID)
+	if errorValue != nil {
+		writeWorkspaceActorError(responseWriter, errorValue)
+		return nil, "", false
+	}
+	return actor, hostPath, true
+}
+
+func (handler WorkspaceFilesHandler) requesterActor(ctx context.Context, personID string) (security.WorkspaceActor, error) {
+	if handler.WorkspaceActorFactory == nil || handler.PersonAccessResolver == nil {
+		return nil, errors.New("workspace reads require a requester actor factory")
+	}
+	return handler.WorkspaceActorFactory.Requester(ctx, security.WorkspaceActorRequest{
+		PersonAccess:      handler.PersonAccessResolver.ResolvePersonAccess(personID),
+		WorkspaceRootPath: firstNonEmptyWorkspaceRoot(handler.WorkspaceRootPath),
+	})
+}
+
+func visibleWorkspaceEntries(directoryEntries []security.WorkspaceActorDirectoryEntry) []workspaceFileEntry {
 	entries := []workspaceFileEntry{}
 	for _, directoryEntry := range directoryEntries {
-		if directoryEntry.Name() == ".blueclaw" {
-			continue
-		}
-		information, errorValue := os.Stat(filepath.Join(hostPath, directoryEntry.Name()))
-		if errorValue != nil {
+		if directoryEntry.Name == ".blueclaw" {
 			continue
 		}
 		entries = append(entries, workspaceFileEntry{
-			Name:        directoryEntry.Name(),
-			IsDirectory: information.IsDir(),
-			Size:        information.Size(),
-			ModifiedAt:  information.ModTime().UTC().Format(time.RFC3339),
+			Name:        directoryEntry.Name,
+			IsDirectory: directoryEntry.IsDirectory,
+			Size:        directoryEntry.SizeBytes,
+			ModifiedAt:  time.Unix(directoryEntry.ModifiedAtUnix, 0).UTC().Format(time.RFC3339),
 		})
 	}
 	sort.Slice(entries, func(first int, second int) bool {
@@ -64,28 +133,20 @@ func (handler WorkspaceFilesHandler) HandleList(responseWriter http.ResponseWrit
 		}
 		return strings.ToLower(entries[first].Name) < strings.ToLower(entries[second].Name)
 	})
-	writeJSON(responseWriter, map[string]any{"entries": entries})
+	return entries
 }
 
-func (handler WorkspaceFilesHandler) HandleDownload(responseWriter http.ResponseWriter, request *http.Request) {
-	hostPath, ok := handler.resolveHostPath(request.URL.Query().Get("path"))
-	if !ok {
-		http.Error(responseWriter, "invalid workspace path", http.StatusBadRequest)
+func isPermissionDeniedActorError(errorValue error) bool {
+	var actorError security.WorkspaceActorError
+	return errors.As(errorValue, &actorError) && actorError.Code == security.ActorErrorCodePermissionDenied
+}
+
+func writeWorkspaceActorError(responseWriter http.ResponseWriter, errorValue error) {
+	if isPermissionDeniedActorError(errorValue) {
+		http.Error(responseWriter, errorValue.Error(), http.StatusForbidden)
 		return
 	}
-	information, errorValue := os.Stat(hostPath)
-	if errorValue != nil || information.IsDir() {
-		http.Error(responseWriter, "file not found", http.StatusNotFound)
-		return
-	}
-	file, errorValue := os.Open(hostPath)
-	if errorValue != nil {
-		http.Error(responseWriter, "file not readable", http.StatusInternalServerError)
-		return
-	}
-	defer file.Close()
-	responseWriter.Header().Set("Content-Disposition", "attachment; filename=\""+filepath.Base(hostPath)+"\"")
-	http.ServeContent(responseWriter, request, filepath.Base(hostPath), information.ModTime(), file)
+	http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
 }
 
 func (handler WorkspaceFilesHandler) resolveHostPath(requestedPath string) (string, bool) {
