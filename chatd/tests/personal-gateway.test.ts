@@ -133,6 +133,34 @@ describe("person capabilities", () => {
 		expect(direct.participantExternalIDs).toEqual(["person-a", "person-b"]);
 	});
 
+	test("a conversation carries the link that opens it in mattermost", async () => {
+		recordFetches((url) => {
+			if (url.endsWith("/users/me/teams")) return [{ id: "team-1", name: "internkim" }];
+			if (url.includes("/channels")) {
+				return [
+					{ id: "channel-1", display_name: "", name: "person-a__person-b", type: "D" },
+					{ id: "channel-2", display_name: "Announcements", name: "announcements", type: "O" },
+				];
+			}
+			return [];
+		});
+
+		const answer = await (
+			await call("person.conversations.list", {
+				actor: { kind: "mattermost-token", secret: "the-person-token" },
+			})
+		).json();
+
+		const linkOf = new Map<string, string>(
+			answer.conversations.map((conversation: { id: string; webURL: string }) => [
+				conversation.id,
+				conversation.webURL,
+			]),
+		);
+		expect(linkOf.get("channel-2")).toBe(`${baseURL}/internkim/channels/announcements`);
+		expect(linkOf.get("channel-1")).toBe(`${baseURL}/internkim/channels/person-a__person-b`);
+	});
+
 	test("a channel that is not direct names nobody, because its name already says what it is", async () => {
 		recordFetches((url) => {
 			if (url.endsWith("/users/me/teams")) return [{ id: "team-1" }];

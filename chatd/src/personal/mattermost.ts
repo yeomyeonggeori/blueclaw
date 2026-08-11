@@ -11,6 +11,7 @@ import {
 } from "./gateway.ts";
 
 type MattermostChannel = { id: string; display_name: string; name: string; type: string };
+type MattermostTeam = { id: string; name: string };
 type MattermostUser = { id: string; username: string; first_name: string; last_name: string };
 type MattermostReaction = { user_id: string; post_id: string; emoji_name: string };
 type MattermostPost = {
@@ -42,14 +43,19 @@ class MattermostPersonalGateway implements PersonalGateway {
 	}
 
 	async listConversations(actor: ActorCredential): Promise<PersonalConversation[]> {
-		const teams = await this.ask<{ id: string }[]>(actor, "GET", "/users/me/teams");
-		const channels: MattermostChannel[] = [];
+		const teams = await this.ask<MattermostTeam[]>(actor, "GET", "/users/me/teams");
+		const conversations: PersonalConversation[] = [];
 		for (const team of teams) {
-			channels.push(
-				...(await this.ask<MattermostChannel[]>(actor, "GET", `/users/me/teams/${team.id}/channels`)),
+			const channels = await this.ask<MattermostChannel[]>(
+				actor,
+				"GET",
+				`/users/me/teams/${team.id}/channels`,
+			);
+			conversations.push(
+				...channels.map((channel) => asConversation(channel, this.webURLOf(team, channel))),
 			);
 		}
-		return channels.map(asConversation).sort(directLast);
+		return conversations.sort(directLast);
 	}
 
 	async listPeople(actor: ActorCredential): Promise<PersonalPerson[]> {
@@ -65,7 +71,13 @@ class MattermostPersonalGateway implements PersonalGateway {
 		const everyone = [...new Set([me.externalID, ...counterpartExternalIDs])];
 		const path = everyone.length === 2 ? "/channels/direct" : "/channels/group";
 		const channel = await this.ask<MattermostChannel>(actor, "POST", path, everyone);
-		return { id: channel.id, name: channel.display_name || channel.name, kind: "dm" };
+		const [team] = await this.ask<MattermostTeam[]>(actor, "GET", "/users/me/teams");
+		return {
+			id: channel.id,
+			name: channel.display_name || channel.name,
+			kind: "dm",
+			webURL: team ? this.webURLOf(team, channel) : undefined,
+		};
 	}
 
 	async listMessages(
@@ -149,6 +161,10 @@ class MattermostPersonalGateway implements PersonalGateway {
 		);
 	}
 
+	private webURLOf(team: MattermostTeam, channel: MattermostChannel): string {
+		return `${this.baseURL}/${encodeURIComponent(team.name)}/channels/${encodeURIComponent(channel.name)}`;
+	}
+
 	private async ask<Value>(
 		actor: ActorCredential,
 		method: string,
@@ -182,12 +198,13 @@ function directParticipantsOf(channel: MattermostChannel): string[] | undefined 
 	return everyone.length === 2 ? everyone : undefined;
 }
 
-function asConversation(channel: MattermostChannel): PersonalConversation {
+function asConversation(channel: MattermostChannel, webURL: string): PersonalConversation {
 	return {
 		id: channel.id,
 		name: channel.display_name || channel.name,
 		kind: channel.type === "D" || channel.type === "G" ? "dm" : "group",
 		participantExternalIDs: directParticipantsOf(channel),
+		webURL,
 	};
 }
 
