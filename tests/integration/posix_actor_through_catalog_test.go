@@ -23,6 +23,10 @@ type recordingWorkspaceActorFactory struct {
 	commandsExecuted []security.CommandRequest
 }
 
+func (factory *recordingWorkspaceActorFactory) CanListDirectory(context.Context) bool {
+	return true
+}
+
 func (factory *recordingWorkspaceActorFactory) Requester(_ context.Context, request security.WorkspaceActorRequest) (security.WorkspaceActor, error) {
 	factory.mutex.Lock()
 	factory.requestedActors = append(factory.requestedActors, request)

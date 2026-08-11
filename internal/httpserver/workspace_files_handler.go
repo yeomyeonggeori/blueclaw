@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -41,6 +42,10 @@ type workspaceFileEntry struct {
 }
 
 func (handler WorkspaceFilesHandler) HandleList(responseWriter http.ResponseWriter, request *http.Request) {
+	if handler.WorkspaceActorFactory == nil || !handler.WorkspaceActorFactory.CanListDirectory(request.Context()) {
+		handler.listAsTheService(responseWriter, request)
+		return
+	}
 	actor, hostPath, isResolved := handler.resolveActorAndPath(responseWriter, request)
 	if !isResolved {
 		return
@@ -83,6 +88,42 @@ func (handler WorkspaceFilesHandler) HandleDownload(responseWriter http.Response
 	fileName := filepath.Base(hostPath)
 	responseWriter.Header().Set("Content-Disposition", "attachment; filename=\""+fileName+"\"")
 	http.ServeContent(responseWriter, request, fileName, time.Unix(stat.ModifiedAtUnix, 0), bytes.NewReader(content))
+}
+
+// A helper too old to list a directory as its owner leaves the service read,
+// which is what this endpoint always did. It grants nothing: a private home is
+// owned by its person and mode 0700, so the kernel refuses the service there
+// exactly as it did before, and starts answering the moment a helper that can
+// act for people arrives.
+func (handler WorkspaceFilesHandler) listAsTheService(responseWriter http.ResponseWriter, request *http.Request) {
+	hostPath, isWithinWorkspace := handler.resolveHostPath(request.URL.Query().Get("path"))
+	if !isWithinWorkspace {
+		http.Error(responseWriter, "invalid workspace path", http.StatusBadRequest)
+		return
+	}
+	directoryEntries, errorValue := os.ReadDir(hostPath)
+	if errorValue != nil {
+		if os.IsNotExist(errorValue) {
+			writeJSON(responseWriter, map[string]any{"entries": []workspaceFileEntry{}})
+			return
+		}
+		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
+		return
+	}
+	entries := []security.WorkspaceActorDirectoryEntry{}
+	for _, directoryEntry := range directoryEntries {
+		information, errorValue := os.Stat(filepath.Join(hostPath, directoryEntry.Name()))
+		if errorValue != nil {
+			continue
+		}
+		entries = append(entries, security.WorkspaceActorDirectoryEntry{
+			Name:           directoryEntry.Name(),
+			IsDirectory:    information.IsDir(),
+			SizeBytes:      information.Size(),
+			ModifiedAtUnix: information.ModTime().Unix(),
+		})
+	}
+	writeJSON(responseWriter, map[string]any{"entries": visibleWorkspaceEntries(entries)})
 }
 
 func (handler WorkspaceFilesHandler) resolveActorAndPath(responseWriter http.ResponseWriter, request *http.Request) (security.WorkspaceActor, string, bool) {

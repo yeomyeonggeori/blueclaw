@@ -57,7 +57,7 @@ func runAuthorized(run func([]string) error, arguments []string) error {
 func runCapabilities() error {
 	return json.NewEncoder(os.Stdout).Encode(map[string]any{
 		"version":      3,
-		"capabilities": []string{"exec", "fs", "reconcile-home", "state-sync"},
+		"capabilities": []string{"exec", "fs", "fs.list_directory", "reconcile-home", "state-sync"},
 	})
 }
 
