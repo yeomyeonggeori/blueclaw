@@ -1324,7 +1324,8 @@ func (application *Application) Start() error {
 		return application.startupError
 	}
 	if errorValue := application.checkProtocolIdentity(); errorValue != nil {
-		return errorValue
+		application.runtimeLogger.Logger.Error("application.protocol_identity_rejected", "error", errorValue.Error())
+		return application.serveWithoutStartingWork()
 	}
 	if application.refreshSkillIndex != nil {
 		go application.refreshSkillIndex(context.Background())
@@ -1364,6 +1365,23 @@ func (application *Application) Start() error {
 		application.runtimeLogger.DirectoryPath(),
 	)
 	application.startInterruptedTaskAutoResume()
+	return application.httpServer.Serve(listener)
+}
+
+// A contract this build does not share would have the agent call tool names
+// the other side never registered, so no work may run. Exiting instead leaves
+// the supervisor restarting every few seconds, which also takes down the one
+// endpoint where the disagreement is visible to the host.
+func (application *Application) serveWithoutStartingWork() error {
+	listener, errorValue := net.Listen("tcp", application.httpServer.Addr)
+	if errorValue != nil {
+		return errorValue
+	}
+	application.runtimeLogger.Logger.Info(
+		"application.serving_health_only",
+		"listenAddress",
+		application.httpServer.Addr,
+	)
 	return application.httpServer.Serve(listener)
 }
 

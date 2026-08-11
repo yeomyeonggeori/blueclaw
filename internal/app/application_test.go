@@ -864,3 +864,40 @@ func TestCapabilityEffectWhenConditionSurvivesConfigLineage(t *testing.T) {
 		t.Fatalf("the when condition was dropped in config conversion: %#v", converted.Effects[0])
 	}
 }
+
+func TestApplicationServesHealthWhenProtocolIdentityDisagrees(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"status":"ok","protocolVersion":"0.4.0","aggregateProtocolHash":"b4b5c630888e6de30e52ec88809c9356cf2fb42d7e1189215d3de0d44e60c775"}`))
+	}))
+	defer server.Close()
+
+	runtimeConfiguration := config.RuntimeConfiguration{}
+	runtimeConfiguration.Logging.DirectoryPath = t.TempDir()
+	runtimeConfiguration.Capabilities.Endpoint = server.URL
+	runtimeConfiguration.LanguageModel.LLMD.Endpoint = server.URL
+	application := NewApplication(runtimeConfiguration, "", bluecollarharness.New)
+	application.httpServer.Addr = "127.0.0.1:0"
+	application.protocolIdentityExpected = protocolidentity.Identity{
+		ProtocolVersion:       "0.4.0",
+		AggregateProtocolHash: "fccec45c4b3fc539159b3a293d61275ed2fc4ae738f371ec9122c1546b32a42f",
+	}
+	application.protocolIdentityChecker = protocolidentity.NewChecker(protocolidentity.Configuration{
+		CapabilityEndpoint: server.URL,
+		LLMDBridgeEndpoint: server.URL,
+		HTTPClient:         server.Client(),
+	})
+
+	serveError := make(chan error, 1)
+	go func() { serveError <- application.Start() }()
+	t.Cleanup(func() { _ = application.httpServer.Close() })
+
+	select {
+	case errorValue := <-serveError:
+		t.Fatalf("a rejected protocol identity must not end the process: %v", errorValue)
+	case <-time.After(500 * time.Millisecond):
+	}
+	if application.protocolIdentityStatus.Passed {
+		t.Fatal("expected the stored protocol identity result to record the disagreement")
+	}
+}
