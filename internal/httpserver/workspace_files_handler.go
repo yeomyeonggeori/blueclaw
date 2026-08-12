@@ -18,6 +18,11 @@ import (
 
 const workspaceDownloadMaximumBytes int64 = 64 * 1024 * 1024
 
+// A private home is owned by that person's POSIX user, so only a helper that can
+// act for people reads it. Saying the device needs a newer helper is the whole
+// diagnosis; the raw "permission denied" this replaces reads as broken ownership.
+const tooOldToReadAsThePerson = "this device's workspace helper cannot read a private home; it needs one that can act for a person"
+
 // WorkspaceFilesHandler serves read-only listings and downloads of the guest's
 // live workspace filesystem. The workspace lives inside the Firecracker guest
 // image, so a host-side file browser cannot read it; admind proxies here to show
@@ -105,6 +110,10 @@ func (handler WorkspaceFilesHandler) listAsTheService(responseWriter http.Respon
 	if errorValue != nil {
 		if os.IsNotExist(errorValue) {
 			writeJSON(responseWriter, map[string]any{"entries": []workspaceFileEntry{}})
+			return
+		}
+		if os.IsPermission(errorValue) {
+			http.Error(responseWriter, tooOldToReadAsThePerson, http.StatusNotImplemented)
 			return
 		}
 		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
