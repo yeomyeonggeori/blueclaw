@@ -14,6 +14,7 @@ export type PersonalConversation = {
 	kind: "dm" | "group";
 	avatarURL?: string;
 	participantExternalIDs?: string[];
+	webURL?: string;
 };
 
 export type PersonalPerson = {
