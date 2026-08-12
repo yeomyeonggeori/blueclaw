@@ -798,10 +798,6 @@
             "description": "Business category label, taken from registeredLabels.businesses in a task_list result.",
             "type": "string"
           },
-          "decisionReason": {
-            "description": "Reason for the approval or rejection decision.",
-            "type": "string"
-          },
           "endDate": {
             "description": "Due date in yyyy-mm-dd format.",
             "type": "string"
@@ -816,10 +812,6 @@
               "type": "string"
             },
             "type": "array"
-          },
-          "requestReason": {
-            "description": "Reason for requesting this task.",
-            "type": "string"
           },
           "size": {
             "description": "Effort size estimate.",
@@ -870,10 +862,6 @@
             "description": "Business category label, taken from registeredLabels.businesses in a task_list result.",
             "type": "string"
           },
-          "decisionReason": {
-            "description": "Reason for the approval or rejection decision.",
-            "type": "string"
-          },
           "endDate": {
             "description": "Due date in yyyy-mm-dd format.",
             "type": "string"
@@ -888,10 +876,6 @@
               "type": "string"
             },
             "type": "array"
-          },
-          "requestReason": {
-            "description": "Reason for requesting this task.",
-            "type": "string"
           },
           "size": {
             "description": "Effort size estimate.",
