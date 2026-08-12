@@ -20,7 +20,6 @@ describe('protocol artifacts', () => {
     expect(capabilityToolCatalog.catalog.tools.map(tool => tool.name)).toEqual([
       'task_add',
       'task_list',
-      'task_definitions',
       'task_update',
       'task_delete',
       'person_list',
