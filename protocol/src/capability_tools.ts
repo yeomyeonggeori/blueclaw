@@ -286,8 +286,6 @@ const taskUpdateObjectSchema = z.strictObject({
   type: z.string().describe('Task type label, taken from registeredLabels.types in a task_list result.').optional(),
   startDate: z.string().describe(dateDescription).optional(),
   endDate: z.string().describe(`Due ${dateDescription.toLowerCase()}`).optional(),
-  requestReason: z.string().describe('Reason for requesting this task.').optional(),
-  decisionReason: z.string().describe('Reason for the approval or rejection decision.').optional(),
   participantPersonHints: z.array(z.string())
     .describe('Names, @handles, or emails of everyone taking part, replacing the current participants. Send the whole set, not just additions.')
     .optional(),
