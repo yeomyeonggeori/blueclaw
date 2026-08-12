@@ -2,8 +2,10 @@ import {
 	requireMatchingCredential,
 	type ActorCredential,
 	type PersonalConversation,
+	type PersonalEmoji,
 	type PersonalGateway,
 	type PersonalIdentity,
+	type PersonalImage,
 	type PersonalMessage,
 	type PersonalMessagePage,
 	type PersonalPerson,
@@ -165,6 +167,57 @@ class MattermostPersonalGateway implements PersonalGateway {
 
 	private webURLOf(team: MattermostTeam, channel: MattermostChannel): string {
 		return `${this.baseURL}/${encodeURIComponent(team.name)}/channels/${encodeURIComponent(channel.name)}`;
+	}
+
+	async listCustomEmoji(actor: ActorCredential): Promise<PersonalEmoji[]> {
+		const listed = await this.ask<{ name: string }[]>(actor, "GET", "/emoji?per_page=200");
+		return listed.map((emoji) => ({ name: emoji.name }));
+	}
+
+	async readCustomEmojiImage(
+		actor: ActorCredential,
+		name: string,
+		largestBytes: number,
+	): Promise<PersonalImage | null> {
+		const emojiID = await this.emojiIDOf(actor, name);
+		if (!emojiID) return null;
+		return this.readImage(actor, `/emoji/${encodeURIComponent(emojiID)}/image`, largestBytes);
+	}
+
+	private async emojiIDOf(actor: ActorCredential, name: string): Promise<string | null> {
+		const response = await this.readAsPerson(actor, `/emoji/name/${encodeURIComponent(name)}`);
+		if (!response) return null;
+		const emoji = (await response.json()) as { id?: string };
+		return emoji.id ?? null;
+	}
+
+	async readProfilePicture(
+		actor: ActorCredential,
+		externalID: string,
+		largestBytes: number,
+	): Promise<PersonalImage | null> {
+		return this.readImage(actor, `/users/${encodeURIComponent(externalID)}/image`, largestBytes);
+	}
+
+	private async readAsPerson(actor: ActorCredential, path: string): Promise<Response | null> {
+		requireMatchingCredential(this, actor);
+		const response = await fetch(`${this.baseURL}/api/v4${path}`, {
+			headers: { Authorization: `Bearer ${actor.secret}` },
+		});
+		return response.ok ? response : null;
+	}
+
+	private async readImage(
+		actor: ActorCredential,
+		path: string,
+		largestBytes: number,
+	): Promise<PersonalImage | null> {
+		const response = await this.readAsPerson(actor, path);
+		if (!response) return null;
+		const type = response.headers.get("content-type") ?? "image/png";
+		const bytes = new Uint8Array(await response.arrayBuffer());
+		if (bytes.length === 0 || bytes.length > largestBytes) return null;
+		return { dataURL: `data:${type};base64,${Buffer.from(bytes).toString("base64")}` };
 	}
 
 	private async ask<Value>(
