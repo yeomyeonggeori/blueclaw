@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
@@ -244,5 +245,28 @@ func TestAHelperTooOldToActForPeopleLeavesAPrivateHomeToTheKernel(t *testing.T) 
 	handler.HandleList(recorder, httptest.NewRequest(http.MethodGet, "/admin/api/workspace/list?personID=person-1&path=/workspace/private/people/person-1", nil))
 	if recorder.Code == http.StatusOK {
 		t.Fatalf("an old helper handed out a private home the service may not read: %s", recorder.Body.String())
+	}
+}
+
+func TestWorkspaceFilesHandlerSaysAnOlderHelperCannotReadAPrivateHome(t *testing.T) {
+	workspaceRootPath := t.TempDir()
+	privateHome := filepath.Join(workspaceRootPath, "private", "people", "person-1")
+	if errorValue := os.MkdirAll(privateHome, 0o700); errorValue != nil {
+		t.Fatalf("make the private home: %v", errorValue)
+	}
+	if errorValue := os.Chmod(privateHome, 0o000); errorValue != nil {
+		t.Fatalf("close the private home: %v", errorValue)
+	}
+	t.Cleanup(func() { os.Chmod(privateHome, 0o700) })
+
+	handler := newWorkspaceFilesTestHandler(&stubWorkspaceActorFactory{cannotListDirectory: true}, workspaceRootPath)
+	recorder := httptest.NewRecorder()
+	handler.HandleList(recorder, httptest.NewRequest(http.MethodGet, "/admin/api/workspace/list?personID=person-1&path=/workspace/private/people/person-1", nil))
+
+	if recorder.Code != http.StatusNotImplemented {
+		t.Fatalf("status = %d body = %q", recorder.Code, recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), workspaceRootPath) {
+		t.Fatalf("the answer named a guest path: %q", recorder.Body.String())
 	}
 }
