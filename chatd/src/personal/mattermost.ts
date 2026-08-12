@@ -9,6 +9,7 @@ import {
 	type PersonalPerson,
 	type PersonalReaction,
 } from "./gateway.ts";
+import { withinBudget } from "./page-budget.ts";
 
 type MattermostChannel = { id: string; display_name: string; name: string; type: string };
 type MattermostUser = { id: string; username: string; first_name: string; last_name: string };
@@ -79,12 +80,13 @@ class MattermostPersonalGateway implements PersonalGateway {
 			"GET",
 			`/channels/${conversationID}/posts?per_page=${pageSize}${query}`,
 		);
-		const messages = page.order
+		const oldestFirst = page.order
 			.map((id) => page.posts[id])
 			.filter((post): post is MattermostPost => post !== undefined)
 			.reverse()
 			.map(asMessage);
-		return { messages, hasMoreBefore: page.order.length >= pageSize };
+		const { kept, hasOlder } = withinBudget(oldestFirst);
+		return { messages: kept, hasMoreBefore: hasOlder || page.order.length >= pageSize };
 	}
 
 	async sendMessage(
