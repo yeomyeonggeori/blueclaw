@@ -45,6 +45,16 @@ export function parsePersonRequest(value: unknown): PersonRequest {
 	};
 }
 
+export function parseCredentialAnswers(value: unknown): Record<string, string> {
+	const given = asRecord(value).answers;
+	if (given === undefined) throw missing("answers");
+	const answers: Record<string, string> = {};
+	for (const [field, answer] of Object.entries(asRecord(given))) {
+		if (typeof answer === "string") answers[field] = answer;
+	}
+	return answers;
+}
+
 export function parseActor(record: Record<string, unknown>): ActorCredential {
 	const given = record.actor;
 	if (given !== undefined) {

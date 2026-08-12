@@ -9,12 +9,15 @@ import {
 	sendChannelMessageAsUser,
 } from "../adapters/buzz/user-session.ts";
 import {
+	CredentialRefused,
 	UnsupportedByPlatform,
 	requireMatchingCredential,
 	type ActorCredential,
+	type CredentialRequirement,
 	type PersonalConversation,
 	type PersonalEmoji,
 	type PersonalGateway,
+	type IssuedCredential,
 	type PersonalIdentity,
 	type PersonalImage,
 	type PersonalMessage,
@@ -42,6 +45,20 @@ class BuzzPersonalGateway implements PersonalGateway {
 		private readonly adapter: BuzzAdapter,
 		private readonly settings: BuzzPersonalSettings,
 	) {}
+
+	credentialRequirement(): CredentialRequirement {
+		return {
+			kind: "secret",
+			fields: [{ name: "secret", label: "Your Buzz secret key", isSecret: true }],
+		};
+	}
+
+	async issueCredential(answers: Record<string, string>): Promise<IssuedCredential> {
+		const secret = answers.secret ?? "";
+		if (!secret) throw new CredentialRefused("a Buzz identity needs its secret key");
+		const credential = { kind: this.credentialKind, secret };
+		return { credential, identity: await this.identity(credential) };
+	}
 
 	async identity(actor: ActorCredential): Promise<PersonalIdentity> {
 		this.require(actor);

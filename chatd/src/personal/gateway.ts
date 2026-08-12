@@ -44,6 +44,30 @@ export type PersonalMessagePage = {
 	hasMoreBefore: boolean;
 };
 
+export type CredentialField = {
+	name: string;
+	label: string;
+	isSecret: boolean;
+};
+
+export type CredentialRequirement = {
+	kind: "sign-in" | "secret" | "redirect";
+	fields: CredentialField[];
+	redirectURL?: string;
+};
+
+export type IssuedCredential = {
+	credential: ActorCredential;
+	identity: PersonalIdentity;
+};
+
+export class CredentialRefused extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "CredentialRefused";
+	}
+}
+
 export type PersonalEmoji = {
 	name: string;
 };
@@ -55,6 +79,9 @@ export type PersonalImage = {
 export interface PersonalGateway {
 	readonly platform: string;
 	readonly credentialKind: string;
+
+	credentialRequirement(): CredentialRequirement;
+	issueCredential(answers: Record<string, string>): Promise<IssuedCredential>;
 
 	identity(actor: ActorCredential): Promise<PersonalIdentity>;
 	listConversations(actor: ActorCredential): Promise<PersonalConversation[]>;
