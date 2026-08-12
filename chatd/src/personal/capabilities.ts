@@ -1,6 +1,7 @@
 import type { PersonalGateway } from "./gateway.ts";
 import {
 	MalformedRequest,
+	parseCredentialAnswers,
 	parsePersonRequest,
 	requireConversation,
 	requireExternalID,
@@ -12,6 +13,9 @@ import {
 export type PersonCapability = (gateway: PersonalGateway, requestBody: unknown) => Promise<object>;
 
 export const personCapabilities: Record<string, PersonCapability> = {
+	"person.credential.requirement": async (gateway) => gateway.credentialRequirement(),
+	"person.credential.issue": async (gateway, body) =>
+		await gateway.issueCredential(parseCredentialAnswers(body)),
 	"person.identity": async (gateway, body) => {
 		const request = parsePersonRequest(body);
 		return await gateway.identity(request.actor);

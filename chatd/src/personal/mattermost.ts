@@ -1,8 +1,11 @@
 import {
+	CredentialRefused,
 	requireMatchingCredential,
 	type ActorCredential,
+	type CredentialRequirement,
 	type PersonalConversation,
 	type PersonalEmoji,
+	type IssuedCredential,
 	type PersonalGateway,
 	type PersonalIdentity,
 	type PersonalImage,
@@ -13,6 +16,7 @@ import {
 } from "./gateway.ts";
 import { withinBudget } from "./page-budget.ts";
 
+type MattermostSession = { token: string; userID: string };
 type MattermostChannel = { id: string; display_name: string; name: string; type: string };
 type MattermostTeam = { id: string; name: string };
 type MattermostUser = { id: string; username: string; first_name: string; last_name: string };
@@ -39,6 +43,59 @@ class MattermostPersonalGateway implements PersonalGateway {
 	readonly credentialKind = "mattermost-token";
 
 	constructor(private readonly baseURL: string) {}
+
+	credentialRequirement(): CredentialRequirement {
+		return {
+			kind: "sign-in",
+			fields: [
+				{ name: "loginID", label: "Email or username", isSecret: false },
+				{ name: "password", label: "Password", isSecret: true },
+			],
+		};
+	}
+
+	async issueCredential(answers: Record<string, string>): Promise<IssuedCredential> {
+		const session = await this.signIn(answers.loginID ?? "", answers.password ?? "");
+		const durable = await this.mintOwnAccessToken(session);
+		const credential = { kind: this.credentialKind, secret: durable };
+		return { credential, identity: await this.identity(credential) };
+	}
+
+	private async signIn(loginID: string, password: string): Promise<MattermostSession> {
+		const response = await fetch(`${this.baseURL}/api/v4/users/login`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ login_id: loginID, password }),
+		});
+		if (response.status === 401 || response.status === 403) {
+			throw new CredentialRefused("the messenger did not accept that sign-in");
+		}
+		if (!response.ok) {
+			throw new Error(`mattermost login returned ${response.status}`);
+		}
+		const token = response.headers.get("token");
+		const account = (await response.json()) as { id?: string };
+		if (!token || !account.id) throw new Error("mattermost signed in without returning a session");
+		return { token, userID: account.id };
+	}
+
+	private async mintOwnAccessToken(session: MattermostSession): Promise<string> {
+		const response = await fetch(`${this.baseURL}/api/v4/users/${session.userID}/tokens`, {
+			method: "POST",
+			headers: { Authorization: `Bearer ${session.token}`, "Content-Type": "application/json" },
+			body: JSON.stringify({ description: "internkim" }),
+		});
+		if (response.status === 403) {
+			throw new CredentialRefused(
+				"this messenger does not let a person mint their own access token; an administrator has to enable personal access tokens",
+			);
+		}
+		const minted = (await response.json().catch(() => null)) as { token?: string } | null;
+		if (!response.ok || !minted?.token) {
+			throw new Error(`mattermost refused an access token (${response.status})`);
+		}
+		return minted.token;
+	}
 
 	async identity(actor: ActorCredential): Promise<PersonalIdentity> {
 		const user = await this.ask<MattermostUser>(actor, "GET", "/users/me");
