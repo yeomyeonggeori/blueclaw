@@ -13,8 +13,10 @@ import {
 	requireMatchingCredential,
 	type ActorCredential,
 	type PersonalConversation,
+	type PersonalEmoji,
 	type PersonalGateway,
 	type PersonalIdentity,
+	type PersonalImage,
 	type PersonalMessage,
 	type PersonalMessagePage,
 	type PersonalPerson,
@@ -178,6 +180,21 @@ class BuzzPersonalGateway implements PersonalGateway {
 	async removeReaction(actor: ActorCredential): Promise<void> {
 		this.require(actor);
 		throw new UnsupportedByPlatform(this.platform, "take a reaction back");
+	}
+
+	async listCustomEmoji(actor: ActorCredential): Promise<PersonalEmoji[]> {
+		this.require(actor);
+		return [];
+	}
+
+	async readCustomEmojiImage(actor: ActorCredential): Promise<PersonalImage | null> {
+		this.require(actor);
+		return null;
+	}
+
+	async readProfilePicture(actor: ActorCredential): Promise<PersonalImage | null> {
+		this.require(actor);
+		return null;
 	}
 
 	private require(actor: ActorCredential): void {

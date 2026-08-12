@@ -19,6 +19,9 @@ export type PersonRequest = {
 	parentID?: string;
 	emoji?: string;
 	before?: string;
+	name?: string;
+	externalID?: string;
+	largestBytes?: number;
 	counterpartExternalIDs: string[];
 };
 
@@ -35,6 +38,9 @@ export function parsePersonRequest(value: unknown): PersonRequest {
 		parentID: optionalText(record, "parentID"),
 		emoji: optionalText(record, "emoji"),
 		before: optionalText(record, "before"),
+		name: optionalText(record, "name"),
+		externalID: optionalText(record, "externalID"),
+		largestBytes: optionalCount(record, "largestBytes"),
 		counterpartExternalIDs: parseCounterparts(record),
 	};
 }
@@ -58,6 +64,21 @@ export function requireConversation(request: PersonRequest): string {
 export function requireMessage(request: PersonRequest): string {
 	if (!request.messageID) throw missing("messageID");
 	return request.messageID;
+}
+
+export function requireName(request: PersonRequest): string {
+	if (!request.name) throw missing("name");
+	return request.name;
+}
+
+export function requireExternalID(request: PersonRequest): string {
+	if (!request.externalID) throw missing("externalID");
+	return request.externalID;
+}
+
+export function requireLargestBytes(request: PersonRequest): number {
+	if (!request.largestBytes) throw missing("largestBytes");
+	return request.largestBytes;
 }
 
 function parseCounterparts(record: Record<string, unknown>): string[] {
@@ -85,4 +106,9 @@ function requireText(record: Record<string, unknown>, field: string): string {
 function optionalText(record: Record<string, unknown>, field: string): string | undefined {
 	const value = record[field];
 	return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function optionalCount(record: Record<string, unknown>, field: string): number | undefined {
+	const value = record[field];
+	return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
 }

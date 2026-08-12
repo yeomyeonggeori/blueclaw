@@ -3,7 +3,10 @@ import {
 	MalformedRequest,
 	parsePersonRequest,
 	requireConversation,
+	requireExternalID,
+	requireLargestBytes,
 	requireMessage,
+	requireName,
 } from "./parse.ts";
 
 export type PersonCapability = (gateway: PersonalGateway, requestBody: unknown) => Promise<object>;
@@ -71,6 +74,30 @@ export const personCapabilities: Record<string, PersonCapability> = {
 			requireEmoji(request.emoji),
 		);
 		return {};
+	},
+	"person.emoji.list": async (gateway, body) => {
+		const request = parsePersonRequest(body);
+		return { emoji: await gateway.listCustomEmoji(request.actor) };
+	},
+	"person.emoji.image": async (gateway, body) => {
+		const request = parsePersonRequest(body);
+		return {
+			image: await gateway.readCustomEmojiImage(
+				request.actor,
+				requireName(request),
+				requireLargestBytes(request),
+			),
+		};
+	},
+	"person.picture": async (gateway, body) => {
+		const request = parsePersonRequest(body);
+		return {
+			image: await gateway.readProfilePicture(
+				request.actor,
+				requireExternalID(request),
+				requireLargestBytes(request),
+			),
+		};
 	},
 };
 

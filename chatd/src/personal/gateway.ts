@@ -44,6 +44,14 @@ export type PersonalMessagePage = {
 	hasMoreBefore: boolean;
 };
 
+export type PersonalEmoji = {
+	name: string;
+};
+
+export type PersonalImage = {
+	dataURL: string;
+};
+
 export interface PersonalGateway {
 	readonly platform: string;
 	readonly credentialKind: string;
@@ -85,6 +93,17 @@ export interface PersonalGateway {
 		messageID: string,
 		emoji: string,
 	): Promise<void>;
+	listCustomEmoji(actor: ActorCredential): Promise<PersonalEmoji[]>;
+	readCustomEmojiImage(
+		actor: ActorCredential,
+		name: string,
+		largestBytes: number,
+	): Promise<PersonalImage | null>;
+	readProfilePicture(
+		actor: ActorCredential,
+		externalID: string,
+		largestBytes: number,
+	): Promise<PersonalImage | null>;
 }
 
 export class UnsupportedByPlatform extends Error {
