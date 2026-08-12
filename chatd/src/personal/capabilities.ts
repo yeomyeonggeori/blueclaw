@@ -43,6 +43,7 @@ export const personCapabilities: Record<string, PersonCapability> = {
 			requireConversation(request),
 			request.body ?? "",
 			request.parentID,
+			request.attachments,
 		);
 	},
 	"person.message.edit": async (gateway, body) => {
@@ -99,6 +100,16 @@ export const personCapabilities: Record<string, PersonCapability> = {
 			image: await gateway.readProfilePicture(
 				request.actor,
 				requireExternalID(request),
+				requireLargestBytes(request),
+			),
+		};
+	},
+	"person.message.attachment": async (gateway, body) => {
+		const request = parsePersonRequest(body);
+		return {
+			file: await gateway.readAttachment(
+				request.actor,
+				requireMessage(request),
 				requireLargestBytes(request),
 			),
 		};

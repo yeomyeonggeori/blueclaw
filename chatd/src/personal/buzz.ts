@@ -19,6 +19,7 @@ import {
 	type PersonalGateway,
 	type IssuedCredential,
 	type PersonalIdentity,
+	type PersonalFile,
 	type PersonalImage,
 	type PersonalMessage,
 	type PersonalMessagePage,
@@ -133,6 +134,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 			body,
 			postedAt: new Date().toISOString(),
 			reactions: [],
+			attachments: [],
 		};
 	}
 
@@ -159,6 +161,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 			postedAt: new Date().toISOString(),
 			editedAt: new Date().toISOString(),
 			reactions: [],
+			attachments: [],
 		};
 	}
 
@@ -210,6 +213,11 @@ class BuzzPersonalGateway implements PersonalGateway {
 	}
 
 	async readProfilePicture(actor: ActorCredential): Promise<PersonalImage | null> {
+		this.require(actor);
+		return null;
+	}
+
+	async readAttachment(actor: ActorCredential): Promise<PersonalFile | null> {
 		this.require(actor);
 		return null;
 	}

@@ -10,7 +10,10 @@ import {
 	type PersonalIdentity,
 	type PersonalImage,
 	type PersonalMessage,
+	type PersonalAttachment,
+	type PersonalFile,
 	type PersonalMessagePage,
+	type PersonalOutgoingAttachment,
 	type PersonalPerson,
 	type PersonalReaction,
 } from "./gateway.ts";
@@ -29,7 +32,14 @@ type MattermostPost = {
 	message: string;
 	create_at: number;
 	edit_at: number;
-	metadata?: { reactions?: MattermostReaction[] };
+	metadata?: { reactions?: MattermostReaction[]; files?: MattermostFileInfo[] };
+};
+
+type MattermostFileInfo = {
+	id: string;
+	name: string;
+	mime_type: string;
+	size: number;
 };
 
 const pageSize = 50;
@@ -165,13 +175,75 @@ class MattermostPersonalGateway implements PersonalGateway {
 		conversationID: string,
 		body: string,
 		parentID?: string,
+		attachments: PersonalOutgoingAttachment[] = [],
 	): Promise<PersonalMessage> {
+		const fileIDs = await this.uploadAll(actor, conversationID, attachments);
 		const post = await this.ask<MattermostPost>(actor, "POST", "/posts", {
 			channel_id: conversationID,
 			message: body,
 			root_id: parentID ?? "",
+			file_ids: fileIDs,
 		});
 		return asMessage(post);
+	}
+
+	private async uploadAll(
+		actor: ActorCredential,
+		conversationID: string,
+		attachments: PersonalOutgoingAttachment[],
+	): Promise<string[]> {
+		const fileIDs: string[] = [];
+		for (const attachment of attachments) {
+			fileIDs.push(await this.upload(actor, conversationID, attachment));
+		}
+		return fileIDs;
+	}
+
+	private async upload(
+		actor: ActorCredential,
+		conversationID: string,
+		attachment: PersonalOutgoingAttachment,
+	): Promise<string> {
+		requireMatchingCredential(this, actor);
+		const form = new FormData();
+		form.append("channel_id", conversationID);
+		form.append(
+			"files",
+			new Blob([Buffer.from(attachment.contentBase64, "base64")], { type: attachment.contentType }),
+			attachment.filename,
+		);
+		const response = await fetch(`${this.baseURL}/api/v4/files`, {
+			method: "POST",
+			headers: { Authorization: `Bearer ${actor.secret}` },
+			body: form,
+		});
+		if (!response.ok) {
+			throw new Error(`mattermost refused ${attachment.filename} (${response.status})`);
+		}
+		const uploaded = (await response.json()) as { file_infos?: { id?: string }[] };
+		const fileID = uploaded.file_infos?.[0]?.id;
+		if (!fileID) throw new Error(`mattermost stored ${attachment.filename} without naming it`);
+		return fileID;
+	}
+
+	async readAttachment(
+		actor: ActorCredential,
+		attachmentID: string,
+		largestBytes: number,
+	): Promise<PersonalFile | null> {
+		const described = await this.readAsPerson(actor, `/files/${encodeURIComponent(attachmentID)}/info`);
+		if (!described) return null;
+		const info = (await described.json()) as MattermostFileInfo;
+		if (info.size > largestBytes) return null;
+		const response = await this.readAsPerson(actor, `/files/${encodeURIComponent(attachmentID)}`);
+		if (!response) return null;
+		const bytes = new Uint8Array(await response.arrayBuffer());
+		if (bytes.length === 0 || bytes.length > largestBytes) return null;
+		return {
+			filename: info.name,
+			contentType: info.mime_type,
+			contentBase64: Buffer.from(bytes).toString("base64"),
+		};
 	}
 
 	async editMessage(
@@ -335,6 +407,16 @@ function asMessage(post: MattermostPost): PersonalMessage {
 		postedAt: new Date(post.create_at).toISOString(),
 		editedAt: post.edit_at ? new Date(post.edit_at).toISOString() : undefined,
 		reactions: groupReactions(post.metadata?.reactions ?? []),
+		attachments: (post.metadata?.files ?? []).map(asAttachment),
+	};
+}
+
+function asAttachment(file: MattermostFileInfo): PersonalAttachment {
+	return {
+		id: file.id,
+		filename: file.name,
+		contentType: file.mime_type,
+		sizeBytes: file.size,
 	};
 }
 

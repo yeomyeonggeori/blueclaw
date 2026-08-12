@@ -1,4 +1,4 @@
-import type { ActorCredential } from "./gateway.ts";
+import type { ActorCredential, PersonalOutgoingAttachment } from "./gateway.ts";
 
 export class MalformedRequest extends Error {
 	constructor(message: string) {
@@ -23,6 +23,7 @@ export type PersonRequest = {
 	externalID?: string;
 	largestBytes?: number;
 	counterpartExternalIDs: string[];
+	attachments: PersonalOutgoingAttachment[];
 };
 
 const legacyBuzzSecretField = "userSecretHex";
@@ -42,7 +43,28 @@ export function parsePersonRequest(value: unknown): PersonRequest {
 		externalID: optionalText(record, "externalID"),
 		largestBytes: optionalCount(record, "largestBytes"),
 		counterpartExternalIDs: parseCounterparts(record),
+		attachments: parseAttachments(record),
 	};
+}
+
+function parseAttachments(record: Record<string, unknown>): PersonalOutgoingAttachment[] {
+	const given = record.attachments;
+	if (given === undefined) return [];
+	if (!Array.isArray(given)) throw new MalformedRequest("attachments must be a list");
+	return given.map((entry) => {
+		const attachment = asRecord(entry);
+		return {
+			filename: requiredText(attachment, "filename"),
+			contentType: requiredText(attachment, "contentType"),
+			contentBase64: requiredText(attachment, "contentBase64"),
+		};
+	});
+}
+
+function requiredText(record: Record<string, unknown>, field: string): string {
+	const value = record[field];
+	if (typeof value !== "string" || value.trim() === "") throw missing(field);
+	return value;
 }
 
 export function parseCredentialAnswers(value: unknown): Record<string, string> {

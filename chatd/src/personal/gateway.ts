@@ -28,6 +28,19 @@ export type PersonalReaction = {
 	byExternalIDs: string[];
 };
 
+export type PersonalOutgoingAttachment = {
+	filename: string;
+	contentType: string;
+	contentBase64: string;
+};
+
+export type PersonalAttachment = {
+	id: string;
+	filename: string;
+	contentType: string;
+	sizeBytes: number;
+};
+
 export type PersonalMessage = {
 	id: string;
 	conversationID: string;
@@ -37,6 +50,7 @@ export type PersonalMessage = {
 	postedAt: string;
 	editedAt?: string;
 	reactions: PersonalReaction[];
+	attachments: PersonalAttachment[];
 };
 
 export type PersonalMessagePage = {
@@ -76,6 +90,12 @@ export type PersonalImage = {
 	dataURL: string;
 };
 
+export type PersonalFile = {
+	filename: string;
+	contentType: string;
+	contentBase64: string;
+};
+
 export interface PersonalGateway {
 	readonly platform: string;
 	readonly credentialKind: string;
@@ -100,7 +120,13 @@ export interface PersonalGateway {
 		conversationID: string,
 		body: string,
 		parentID?: string,
+		attachments?: PersonalOutgoingAttachment[],
 	): Promise<PersonalMessage>;
+	readAttachment(
+		actor: ActorCredential,
+		attachmentID: string,
+		largestBytes: number,
+	): Promise<PersonalFile | null>;
 	editMessage(
 		actor: ActorCredential,
 		conversationID: string,
