@@ -305,3 +305,41 @@ func containsFactID(memoryFacts []MemoryFact, factID string) bool {
 	}
 	return false
 }
+
+type answeringGraphStore struct{}
+
+func (answeringGraphStore) AddEpisode(context.Context, MemoryEpisode) (MemoryIngestionResult, error) {
+	return MemoryIngestionResult{}, nil
+}
+
+func (answeringGraphStore) SearchFacts(context.Context, MemorySearchRequest) ([]MemoryFact, error) {
+	return nil, nil
+}
+
+func (answeringGraphStore) CheckHealth(context.Context) error {
+	return nil
+}
+
+func TestMemoryHealthReportsTheCapabilityRatherThanTheDaemon(t *testing.T) {
+	memoryService := &MemoryService{store: answeringGraphStore{}}
+
+	health := memoryService.Health(context.Background())
+	if !health.Reachable || health.Error != "" {
+		t.Fatalf("a store answering its health check must be reachable, got %+v", health)
+	}
+
+	const searchFailure = "AttributeError: 'CapabilityLLMClient' object has no attribute 'set_tracer'"
+	memoryService.recordSearchError(searchFailure)
+	health = memoryService.Health(context.Background())
+	if health.Reachable {
+		t.Fatalf("memory whose every search fails must not report itself reachable, got %+v", health)
+	}
+	if health.Error != searchFailure {
+		t.Fatalf("the search failure must be the reported error, got %q", health.Error)
+	}
+
+	memoryService.recordSearchError("")
+	if health := memoryService.Health(context.Background()); !health.Reachable || health.Error != "" {
+		t.Fatalf("a later successful search must clear the health error, got %+v", health)
+	}
+}

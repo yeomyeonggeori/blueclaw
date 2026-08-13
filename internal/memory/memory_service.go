@@ -450,13 +450,16 @@ func (memoryService *MemoryService) Health(ctx context.Context) MemoryHealth {
 		LastSearchError:    lastSearchError,
 		LastIngestionError: lastIngestionError,
 	}
-	healthChecker, hasHealthChecker := store.(GraphMemoryHealthChecker)
-	if !hasHealthChecker {
-		return health
+	if healthChecker, hasHealthChecker := store.(GraphMemoryHealthChecker); hasHealthChecker {
+		if errorValue := healthChecker.CheckHealth(ctx); errorValue != nil {
+			health.Reachable = false
+			health.Error = errorValue.Error()
+			return health
+		}
 	}
-	if errorValue := healthChecker.CheckHealth(ctx); errorValue != nil {
+	if lastSearchError != "" {
 		health.Reachable = false
-		health.Error = errorValue.Error()
+		health.Error = lastSearchError
 	}
 	return health
 }
