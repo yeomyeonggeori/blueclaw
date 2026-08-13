@@ -109,6 +109,20 @@ export async function listUserConversations(
 	}
 }
 
+// A person replies only to a thread's root from here, and NIP-10 marks a direct
+// reply with the root it answers; the reply marker names the parent of a reply
+// to a reply, which this has no way to express.
+export function channelMessageTags(
+	channelID: string,
+	mediaTags: string[][],
+	extraTags: string[][] | undefined,
+	replyToRootId: string | undefined,
+): string[][] {
+	const tags: string[][] = [["h", channelID], ...mediaTags, ...(extraTags ?? [])];
+	if (replyToRootId) tags.push(["e", replyToRootId, "", "root"]);
+	return tags;
+}
+
 export async function sendChannelMessageAsUser(request: {
 	relayURL: string;
 	userSecretHex: string;
@@ -123,9 +137,11 @@ export async function sendChannelMessageAsUser(request: {
 	const relay = createBuzzRelayClient(request.relayURL, request.userSecretHex, request.authTagJSON);
 	try {
 		await relay.connect();
-		const tags: string[][] = [["h", request.channelID], ...mediaTags, ...(request.extraTags ?? [])];
-		if (request.replyToRootId) tags.push(["e", request.replyToRootId, "", "reply"]);
-		const event = await relay.publish(STREAM_MESSAGE_KIND, body, tags);
+		const event = await relay.publish(
+			STREAM_MESSAGE_KIND,
+			body,
+			channelMessageTags(request.channelID, mediaTags, request.extraTags, request.replyToRootId),
+		);
 		return event.id;
 	} finally {
 		relay.disconnect();
