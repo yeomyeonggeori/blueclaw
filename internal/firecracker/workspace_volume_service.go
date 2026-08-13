@@ -138,19 +138,40 @@ func ensureWorkspaceImageCopyCapacity(workspaceImagePath string) error {
 	return nil
 }
 
+const workspaceImageLockWaitLimit = 45 * time.Minute
+const workspaceImageLockPollInterval = 2 * time.Second
+
 func acquireWorkspaceImageLock(workspaceImagePath string) (func(), error) {
 	lockFile, errorValue := os.OpenFile(workspaceImagePath+".lock", os.O_CREATE|os.O_RDWR, 0o600)
 	if errorValue != nil {
 		return nil, errorValue
 	}
-	if errorValue := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); errorValue != nil {
+	if errorValue := waitForWorkspaceImageLock(lockFile); errorValue != nil {
 		_ = lockFile.Close()
-		return nil, errors.New("workspace image sync is already running")
+		return nil, errorValue
 	}
 	return func() {
 		_ = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
 		_ = lockFile.Close()
 	}, nil
+}
+
+func waitForWorkspaceImageLock(lockFile *os.File) error {
+	deadline := time.Now().Add(workspaceImageLockWaitLimit)
+	hasReportedWait := false
+	for {
+		if errorValue := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); errorValue == nil {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("workspace image sync was still running after %s", workspaceImageLockWaitLimit)
+		}
+		if !hasReportedWait {
+			fmt.Fprintln(os.Stderr, "waiting for the workspace image sync already in progress")
+			hasReportedWait = true
+		}
+		time.Sleep(workspaceImageLockPollInterval)
+	}
 }
 
 func ensureWorkspaceImageIsInactive(workspaceImagePath string) error {
