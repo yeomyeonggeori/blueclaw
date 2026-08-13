@@ -52,10 +52,11 @@ func newDirectProvider(runtimeConfiguration config.RuntimeConfiguration, modelNa
 	if errorValue != nil {
 		return nil, errorValue
 	}
-	chosenModel := strings.TrimSpace(modelName)
-	if chosenModel == "" {
-		chosenModel = strings.TrimSpace(directConfiguration.Model)
-	}
+	chosenModel := firstNonEmptyModelName(
+		modelName,
+		directConfiguration.Model,
+		ResolveModelTierNames(runtimeConfiguration).Medium,
+	)
 	if chosenModel == "" {
 		return nil, errors.New("the direct language model provider has no model")
 	}

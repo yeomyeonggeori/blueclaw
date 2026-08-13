@@ -56,6 +56,19 @@ func TestDirectProviderRefusesAnEmptyKeyRatherThanCallingUnauthenticated(t *test
 	}
 }
 
+func TestDirectProviderFallsBackToATierModelRatherThanNoProvider(t *testing.T) {
+	runtimeConfiguration := directRuntimeConfiguration(t, "a-key")
+	runtimeConfiguration.LanguageModel.Direct.Model = ""
+
+	languageModelProvider, errorValue := NewConfiguredLanguageModelProvider(runtimeConfiguration)
+	if errorValue != nil {
+		t.Fatalf("expected a configured model to be found: %v", errorValue)
+	}
+	if _, isDirectProvider := languageModelProvider.(*openaicompatible.Provider); !isDirectProvider {
+		t.Fatalf("expected bluecollar's openai-compatible provider, got %T", languageModelProvider)
+	}
+}
+
 func TestDirectProviderRefusesAMissingEndpoint(t *testing.T) {
 	runtimeConfiguration := directRuntimeConfiguration(t, "a-key")
 	runtimeConfiguration.LanguageModel.Direct.Endpoint = "  "
