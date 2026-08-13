@@ -207,6 +207,13 @@ type LanguageModelConfiguration struct {
 	FallbackProvider string                               `json:"fallbackProvider"`
 	Capability       LanguageModelCapabilityConfiguration `json:"capability"`
 	LLMD             LanguageModelLLMDConfiguration       `json:"llmd"`
+	Direct           LanguageModelDirectConfiguration     `json:"direct"`
+}
+
+type LanguageModelDirectConfiguration struct {
+	Endpoint   string `json:"endpoint"`
+	APIKeyPath string `json:"apiKeyPath"`
+	Model      string `json:"model"`
 }
 
 type LanguageModelLLMDConfiguration struct {

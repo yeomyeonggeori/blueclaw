@@ -20,6 +20,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/lab"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
+	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
 )
 
 type PrintingCommandRunner struct{}
@@ -172,7 +173,7 @@ func parseVirtualSessionArguments(arguments []string, defaultScenarioName string
 	artifactDirectoryPath := flagSet.String("artifact-dir", defaultArtifactDirectoryPath, "virtual session artifact directory")
 	languageModelEndpoint := flagSet.String("llm-endpoint", os.Getenv("BLUECLAW_E2E_LLM_ENDPOINT"), "live LLM capability or LLMD endpoint")
 	languageModelSocket := flagSet.String("llm-unix-socket", os.Getenv("BLUECLAW_E2E_LLM_UNIX_SOCKET"), "live LLM capability unix socket path")
-	languageModelProvider := flagSet.String("llm-provider", firstNonEmptyString(os.Getenv("BLUECLAW_E2E_LLM_PROVIDER"), "openrouter"), "live LLM provider: openrouter, capability, or llmd")
+	languageModelProvider := flagSet.String("llm-provider", firstNonEmptyString(os.Getenv("BLUECLAW_E2E_LLM_PROVIDER"), "openrouter"), "live LLM provider: openrouter, direct, capability, or llmd")
 	languageModelAuthKeyPath := flagSet.String("llm-auth-key-path", os.Getenv("BLUECLAW_E2E_LLM_AUTH_KEY_PATH"), "llmd installation auth key path")
 	languageModelName := flagSet.String("llm-model", os.Getenv("BLUECLAW_E2E_LLM_MODEL"), "live LLM model override")
 	embeddingEndpoint := flagSet.String("embedding-endpoint", os.Getenv("BLUECLAW_E2E_EMBEDDING_ENDPOINT"), "local OpenAI-compatible embedding endpoint")
@@ -673,6 +674,8 @@ func loadVirtualSessionScenario(arguments virtualSessionArguments) (e2e.VirtualS
 	return e2e.BuiltinScenario(arguments.ScenarioName, arguments.ArtifactDirectoryPath)
 }
 
+const defaultOpenRouterBaseURL = "https://openrouter.ai/api/v1"
+
 func createLiveLanguageModel(arguments virtualSessionArguments) (llm.LanguageModelProvider, error) {
 	generationOptions := llm.GenerationOptions{Seed: arguments.Seed, Temperature: arguments.Temperature}
 	modelName := liveLanguageModelName(arguments.LanguageModelName)
@@ -690,6 +693,16 @@ func createLiveLanguageModel(arguments virtualSessionArguments) (llm.LanguageMod
 			InitialBackoff:    750 * time.Millisecond,
 			GenerationOptions: generationOptions,
 		}, nil
+	case "direct":
+		openRouterAPIKey, errorValue := resolveOpenRouterAPIKey()
+		if errorValue != nil {
+			return nil, errorValue
+		}
+		return openaicompatible.NewProvider(
+			firstNonEmptyString(os.Getenv("OPENROUTER_BASE_URL"), defaultOpenRouterBaseURL),
+			openRouterAPIKey,
+			modelName,
+		), nil
 	case "capability":
 		return llm.CapabilityLLMClient{
 			CapabilityClient: capability.NewClient(capability.Configuration{
@@ -717,7 +730,7 @@ func createLiveLanguageModel(arguments virtualSessionArguments) (llm.LanguageMod
 			StructuredSchemaNames:      llmdStructuredSchemaNames("llmd"),
 		}), nil
 	default:
-		return nil, errors.New("live LLM provider must be openrouter, capability, or llmd")
+		return nil, errors.New("live LLM provider must be openrouter, direct, capability, or llmd")
 	}
 }
 
