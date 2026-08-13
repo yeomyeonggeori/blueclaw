@@ -9,6 +9,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
+	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
 )
 
 func NewConfiguredLanguageModelProvider(runtimeConfiguration config.RuntimeConfiguration) (LanguageModelProvider, error) {
@@ -34,9 +35,47 @@ func providerByName(providerName string, runtimeConfiguration config.RuntimeConf
 		return NewCapabilityLLMClientForModel(runtimeConfiguration, modelName), nil
 	case "llmd":
 		return newLLMDClient(runtimeConfiguration, modelName)
+	case "direct":
+		return newDirectProvider(runtimeConfiguration, modelName)
 	default:
 		return nil, errors.New("language model provider is not supported")
 	}
+}
+
+func newDirectProvider(runtimeConfiguration config.RuntimeConfiguration, modelName string) (LanguageModelProvider, error) {
+	directConfiguration := runtimeConfiguration.LanguageModel.Direct
+	endpoint := strings.TrimSpace(directConfiguration.Endpoint)
+	if endpoint == "" {
+		return nil, errors.New("the direct language model provider has no endpoint")
+	}
+	apiKey, errorValue := readAPIKey(directConfiguration.APIKeyPath)
+	if errorValue != nil {
+		return nil, errorValue
+	}
+	chosenModel := strings.TrimSpace(modelName)
+	if chosenModel == "" {
+		chosenModel = strings.TrimSpace(directConfiguration.Model)
+	}
+	if chosenModel == "" {
+		return nil, errors.New("the direct language model provider has no model")
+	}
+	return openaicompatible.NewProvider(endpoint, apiKey, chosenModel), nil
+}
+
+func readAPIKey(apiKeyPath string) (string, error) {
+	trimmedPath := strings.TrimSpace(apiKeyPath)
+	if trimmedPath == "" {
+		return "", errors.New("the direct language model provider has no api key path")
+	}
+	keyDocument, errorValue := os.ReadFile(trimmedPath)
+	if errorValue != nil {
+		return "", errorValue
+	}
+	apiKey := strings.TrimSpace(string(keyDocument))
+	if apiKey == "" {
+		return "", errors.New("the direct language model provider's api key file is empty")
+	}
+	return apiKey, nil
 }
 
 func newLLMDClient(runtimeConfiguration config.RuntimeConfiguration, modelName string) (LLMDClient, error) {
