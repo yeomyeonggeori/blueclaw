@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRequireWorkspaceImageReturnsMetadataForExistingExt4(t *testing.T) {
@@ -138,15 +139,36 @@ func TestWorkspaceImageCopyArgumentsPreserveSparseState(t *testing.T) {
 	}
 }
 
-func TestAcquireWorkspaceImageLockRejectsConcurrentSync(t *testing.T) {
+func TestAcquireWorkspaceImageLockWaitsForTheSyncInProgress(t *testing.T) {
 	workspaceImagePath := filepath.Join(t.TempDir(), "workspace.ext4")
 	releaseLock, errorValue := acquireWorkspaceImageLock(workspaceImagePath)
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	defer releaseLock()
-	if _, errorValue := acquireWorkspaceImageLock(workspaceImagePath); errorValue == nil {
-		t.Fatal("concurrent workspace sync acquired the same lock")
+
+	secondAcquisition := make(chan error, 1)
+	go func() {
+		releaseSecondLock, secondError := acquireWorkspaceImageLock(workspaceImagePath)
+		if releaseSecondLock != nil {
+			releaseSecondLock()
+		}
+		secondAcquisition <- secondError
+	}()
+
+	select {
+	case <-secondAcquisition:
+		t.Fatal("a second sync took the lock while the first still held it")
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	releaseLock()
+	select {
+	case secondError := <-secondAcquisition:
+		if secondError != nil {
+			t.Fatalf("a waiting sync must proceed once the lock is free, got %v", secondError)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("a waiting sync never took the released lock")
 	}
 }
 
