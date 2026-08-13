@@ -14,15 +14,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 import requests_unixsocket
+from graphiti_core.llm_client.client import LLMClient
+from graphiti_core.llm_client.config import LLMConfig
 
 
-class CapabilityLLMClient:
+class CapabilityLLMClient(LLMClient):
     def __init__(self, endpoint: str, model: str):
-        from graphiti_core.llm_client.config import LLMConfig
-
-        self.config = LLMConfig(api_key="capability", model=model, small_model=model)
+        super().__init__(LLMConfig(api_key="capability", model=model, small_model=model))
         self.endpoint = endpoint.rstrip("/")
-        self.model_name = model
 
     async def _generate_response(
         self,
@@ -34,7 +33,7 @@ class CapabilityLLMClient:
         schema = response_model.model_json_schema() if response_model else None
         schema_name = getattr(response_model, "__name__", "graphiti_response") if response_model else "graphiti_response"
         request_document = {
-            "model": self.model_name,
+            "model": self.model,
             "executionMode": os.environ.get("BLUECLAW_GRAPHITI_EXECUTION_MODE", "auto"),
             "messages": [dump_message(message) for message in messages],
             "structuredOutputSchema": {
