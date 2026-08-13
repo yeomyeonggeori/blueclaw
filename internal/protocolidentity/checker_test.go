@@ -2,6 +2,7 @@ package protocolidentity
 
 import (
 	"context"
+	"encoding/json"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -154,5 +155,37 @@ func TestCheckerRejectsNonHealthyLLMDStatus(t *testing.T) {
 
 	if result.Passed || !result.Capabilityd.Passed || result.LLMD.Passed || result.LLMD.Status != "unhealthy" {
 		t.Fatalf("expected non-healthy LLMD status rejection, got %+v", result)
+	}
+}
+
+func TestAbsentLLMDDegradesWhileCapabilitydStillHalts(t *testing.T) {
+	identity := Identity{ProtocolVersion: testProtocolVersion, AggregateProtocolHash: testAggregateProtocolHash}
+	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(responseWriter).Encode(map[string]string{
+			"status":                "ok",
+			"protocolVersion":       testProtocolVersion,
+			"aggregateProtocolHash": testAggregateProtocolHash,
+		})
+	}))
+	defer server.Close()
+
+	result := NewChecker(Configuration{
+		CapabilityEndpoint: server.URL,
+		LLMDBridgeEndpoint: "http://127.0.0.1:1",
+	}).Check(context.Background(), identity)
+
+	if !result.Passed {
+		t.Fatalf("expected an unreachable llmd to degrade rather than halt, got %+v", result)
+	}
+	if result.LLMD.Status != "unavailable" {
+		t.Fatalf("expected the absence to stay visible, got %q", result.LLMD.Status)
+	}
+
+	halted := NewChecker(Configuration{
+		CapabilityEndpoint: "http://127.0.0.1:1",
+		LLMDBridgeEndpoint: server.URL,
+	}).Check(context.Background(), identity)
+	if halted.Passed {
+		t.Fatalf("expected an unreachable capabilityd to still halt, got %+v", halted)
 	}
 }

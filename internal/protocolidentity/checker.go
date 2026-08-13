@@ -114,7 +114,7 @@ func (checker Checker) Check(ctx context.Context, expected Identity) Result {
 	requestContext, cancel := context.WithTimeout(ctx, checker.timeout)
 	defer cancel()
 	result.Capabilityd = checker.checkOptionalEndpoint(requestContext, checker.capabilityEndpoint, "/v1/capabilities", expected, "", checker.capabilityHTTPClient)
-	result.LLMD = checker.checkOptionalEndpoint(requestContext, checker.llmdEndpoint, "/health", expected, "ok", checker.llmdHTTPClient)
+	result.LLMD = checker.checkDegradableEndpoint(requestContext, checker.llmdEndpoint, "/health", expected, "ok", checker.llmdHTTPClient)
 	result.FailureReasons = append(result.FailureReasons, endpointFailureReason("capabilityd", result.Capabilityd))
 	result.FailureReasons = append(result.FailureReasons, endpointFailureReason("llmd", result.LLMD))
 	result.FailureReasons = compactFailureReasons(result.FailureReasons)
@@ -129,6 +129,14 @@ func (checker Checker) checkOptionalEndpoint(ctx context.Context, endpoint strin
 		return EndpointStatus{Status: "not_configured", Passed: true}
 	}
 	return checker.checkEndpoint(ctx, endpoint, path, expected, requiredStatus, httpClient)
+}
+
+func (checker Checker) checkDegradableEndpoint(ctx context.Context, endpoint string, path string, expected Identity, requiredStatus string, httpClient HTTPDoer) EndpointStatus {
+	status := checker.checkOptionalEndpoint(ctx, endpoint, path, expected, requiredStatus, httpClient)
+	if status.Status == "unavailable" {
+		status.Passed = true
+	}
+	return status
 }
 
 func (checker Checker) checkEndpoint(ctx context.Context, endpoint string, path string, expected Identity, requiredStatus string, httpClient HTTPDoer) EndpointStatus {
