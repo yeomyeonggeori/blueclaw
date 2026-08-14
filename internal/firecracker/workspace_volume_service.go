@@ -15,7 +15,6 @@ import (
 )
 
 type WorkspaceVolumeService struct {
-	ImageCopyPath    string
 	MountPath        string
 	UnmountPath      string
 	SyncPath         string
@@ -50,15 +49,15 @@ func (workspaceVolumeService WorkspaceVolumeService) MountWorkspaceMetadata(work
 	}
 }
 
-func (workspaceVolumeService WorkspaceVolumeService) SyncWorkspaceDirectoryAtomically(workspaceImagePath string, sourceDirectoryPath string, relativeTargetPath string) error {
-	return workspaceVolumeService.syncWorkspaceDirectoryAtomically(workspaceImagePath, sourceDirectoryPath, relativeTargetPath, false)
+func (workspaceVolumeService WorkspaceVolumeService) SyncWorkspaceDirectory(workspaceImagePath string, sourceDirectoryPath string, relativeTargetPath string) error {
+	return workspaceVolumeService.syncWorkspaceDirectoryIntoImage(workspaceImagePath, sourceDirectoryPath, relativeTargetPath, false)
 }
 
-func (workspaceVolumeService WorkspaceVolumeService) SyncWorkspaceDirectoryPreservingGuestStateAtomically(workspaceImagePath string, sourceDirectoryPath string) error {
-	return workspaceVolumeService.syncWorkspaceDirectoryAtomically(workspaceImagePath, sourceDirectoryPath, "", true)
+func (workspaceVolumeService WorkspaceVolumeService) SyncWorkspaceDirectoryPreservingGuestState(workspaceImagePath string, sourceDirectoryPath string) error {
+	return workspaceVolumeService.syncWorkspaceDirectoryIntoImage(workspaceImagePath, sourceDirectoryPath, "", true)
 }
 
-func (workspaceVolumeService WorkspaceVolumeService) syncWorkspaceDirectoryAtomically(workspaceImagePath string, sourceDirectoryPath string, relativeTargetPath string, preserveGuestState bool) error {
+func (workspaceVolumeService WorkspaceVolumeService) syncWorkspaceDirectoryIntoImage(workspaceImagePath string, sourceDirectoryPath string, relativeTargetPath string, preserveGuestState bool) error {
 	if _, errorValue := workspaceVolumeService.RequireWorkspaceImage(workspaceImagePath); errorValue != nil {
 		return errorValue
 	}
@@ -70,72 +69,7 @@ func (workspaceVolumeService WorkspaceVolumeService) syncWorkspaceDirectoryAtomi
 	if errorValue := ensureWorkspaceImageIsInactive(workspaceImagePath); errorValue != nil {
 		return errorValue
 	}
-	if errorValue := pruneFailedWorkspaceImages(workspaceImagePath); errorValue != nil {
-		return errorValue
-	}
-	if errorValue := ensureWorkspaceImageCopyCapacity(workspaceImagePath); errorValue != nil {
-		return errorValue
-	}
-	workspaceImageCopyPath, errorValue := workspaceVolumeService.copyWorkspaceImage(workspaceImagePath)
-	if errorValue != nil {
-		return errorValue
-	}
-	shouldRemoveWorkspaceImageCopy := true
-	defer func() {
-		if shouldRemoveWorkspaceImageCopy {
-			_ = os.Remove(workspaceImageCopyPath)
-		}
-	}()
-
-	if errorValue := workspaceVolumeService.syncWorkspaceDirectory(workspaceImageCopyPath, sourceDirectoryPath, relativeTargetPath, preserveGuestState); errorValue != nil {
-		var unmountError *workspaceUnmountError
-		if errors.As(errorValue, &unmountError) {
-			shouldRemoveWorkspaceImageCopy = false
-			return fmt.Errorf("%w; workspace copy retained at %s", errorValue, workspaceImageCopyPath)
-		}
-		return errorValue
-	}
-	if !workspaceImageIsExt4(workspaceImageCopyPath) {
-		return errors.New("workspace image copy is not ext4 after sync")
-	}
-	return replaceWorkspaceImageWithBackup(workspaceImagePath, workspaceImageCopyPath)
-}
-
-func pruneFailedWorkspaceImages(workspaceImagePath string) error {
-	failedWorkspaceImagePaths, errorValue := filepath.Glob(workspaceImagePath + ".failed-*")
-	if errorValue != nil {
-		return errorValue
-	}
-	for _, failedWorkspaceImagePath := range failedWorkspaceImagePaths {
-		if errorValue := os.Remove(failedWorkspaceImagePath); errorValue != nil {
-			return errorValue
-		}
-	}
-	if len(failedWorkspaceImagePaths) > 0 {
-		return syncWorkspaceImageDirectory(workspaceImagePath)
-	}
-	return nil
-}
-
-func ensureWorkspaceImageCopyCapacity(workspaceImagePath string) error {
-	workspaceInformation, errorValue := os.Stat(workspaceImagePath)
-	if errorValue != nil {
-		return errorValue
-	}
-	workspaceStat, isWorkspaceStat := workspaceInformation.Sys().(*syscall.Stat_t)
-	if !isWorkspaceStat {
-		return errors.New("workspace image allocation metadata is unavailable")
-	}
-	var filesystemStat syscall.Statfs_t
-	if errorValue := syscall.Statfs(filepath.Dir(workspaceImagePath), &filesystemStat); errorValue != nil {
-		return errorValue
-	}
-	requiredBytes := int64(workspaceStat.Blocks)*512 + 64*1024*1024
-	availableBytes := int64(filesystemStat.Bavail) * int64(filesystemStat.Bsize)
-	if availableBytes < requiredBytes {
-		return fmt.Errorf("workspace image copy requires %d bytes but only %d bytes are available", requiredBytes, availableBytes)
-	}
-	return nil
+	return workspaceVolumeService.writeWorkspaceDirectoryThroughMount(workspaceImagePath, sourceDirectoryPath, relativeTargetPath, preserveGuestState)
 }
 
 const workspaceImageLockWaitLimit = 45 * time.Minute
@@ -205,7 +139,7 @@ func ensureWorkspaceImageIsInactive(workspaceImagePath string) error {
 	return nil
 }
 
-func (workspaceVolumeService WorkspaceVolumeService) syncWorkspaceDirectory(workspaceImagePath string, sourceDirectoryPath string, relativeTargetPath string, preserveGuestConfig bool) (returnError error) {
+func (workspaceVolumeService WorkspaceVolumeService) writeWorkspaceDirectoryThroughMount(workspaceImagePath string, sourceDirectoryPath string, relativeTargetPath string, preserveGuestConfig bool) (returnError error) {
 	if sourceDirectoryPath == "" {
 		return nil
 	}
@@ -430,94 +364,6 @@ func resolveWorkspaceRelativeTargetPath(relativeTargetPath string) (string, erro
 	return cleanPath, nil
 }
 
-func (workspaceVolumeService WorkspaceVolumeService) copyWorkspaceImage(workspaceImagePath string) (string, error) {
-	temporaryFile, errorValue := os.CreateTemp(filepath.Dir(workspaceImagePath), "."+filepath.Base(workspaceImagePath)+".sync-*")
-	if errorValue != nil {
-		return "", errorValue
-	}
-	workspaceImageCopyPath := temporaryFile.Name()
-	if errorValue := temporaryFile.Close(); errorValue != nil {
-		_ = os.Remove(workspaceImageCopyPath)
-		return "", errorValue
-	}
-	if errorValue := os.Remove(workspaceImageCopyPath); errorValue != nil {
-		return "", errorValue
-	}
-
-	imageCopyPath := workspaceVolumeService.ImageCopyPath
-	if imageCopyPath == "" {
-		imageCopyPath = "cp"
-	}
-	copyCommand := exec.Command(imageCopyPath, workspaceImageCopyArguments(workspaceImagePath, workspaceImageCopyPath)...)
-	if output, errorValue := copyCommand.CombinedOutput(); errorValue != nil {
-		_ = os.Remove(workspaceImageCopyPath)
-		return "", errors.New("copy workspace image: " + string(output))
-	}
-	if !workspaceImageIsExt4(workspaceImageCopyPath) {
-		_ = os.Remove(workspaceImageCopyPath)
-		return "", errors.New("workspace image copy is not ext4")
-	}
-	return workspaceImageCopyPath, nil
-}
-
-func workspaceImageCopyArguments(workspaceImagePath string, workspaceImageCopyPath string) []string {
-	return []string{
-		"--reflink=auto",
-		"--sparse=always",
-		"--preserve=mode,ownership,timestamps",
-		"--",
-		workspaceImagePath,
-		workspaceImageCopyPath,
-	}
-}
-
-func replaceWorkspaceImageWithBackup(workspaceImagePath string, workspaceImageCopyPath string) error {
-	if errorValue := syncWorkspaceImageFile(workspaceImageCopyPath); errorValue != nil {
-		return errorValue
-	}
-	backupPath := workspaceImagePath + ".previous"
-	temporaryBackupPath := backupPath + ".new"
-	_ = os.Remove(temporaryBackupPath)
-	if errorValue := os.Link(workspaceImagePath, temporaryBackupPath); errorValue != nil {
-		return errorValue
-	}
-	if errorValue := os.Rename(temporaryBackupPath, backupPath); errorValue != nil {
-		_ = os.Remove(temporaryBackupPath)
-		return errorValue
-	}
-	if errorValue := syncWorkspaceImageDirectory(workspaceImagePath); errorValue != nil {
-		return errorValue
-	}
-	if errorValue := os.Rename(workspaceImageCopyPath, workspaceImagePath); errorValue != nil {
-		return errorValue
-	}
-	return syncWorkspaceImageDirectory(workspaceImagePath)
-}
-
-func (workspaceVolumeService WorkspaceVolumeService) RestorePreviousWorkspaceImage(workspaceImagePath string) error {
-	releaseLock, errorValue := acquireWorkspaceImageLock(workspaceImagePath)
-	if errorValue != nil {
-		return errorValue
-	}
-	defer releaseLock()
-	if errorValue := ensureWorkspaceImageIsInactive(workspaceImagePath); errorValue != nil {
-		return errorValue
-	}
-	previousWorkspaceImagePath := workspaceImagePath + ".previous"
-	if _, errorValue := workspaceVolumeService.RequireWorkspaceImage(previousWorkspaceImagePath); errorValue != nil {
-		return errorValue
-	}
-	failedWorkspaceImagePath := fmt.Sprintf("%s.failed-%d", workspaceImagePath, time.Now().UnixNano())
-	if errorValue := os.Rename(workspaceImagePath, failedWorkspaceImagePath); errorValue != nil {
-		return errorValue
-	}
-	if errorValue := os.Rename(previousWorkspaceImagePath, workspaceImagePath); errorValue != nil {
-		_ = os.Rename(failedWorkspaceImagePath, workspaceImagePath)
-		return errorValue
-	}
-	return syncWorkspaceImageDirectory(workspaceImagePath)
-}
-
 func syncWorkspaceImageFile(workspaceImagePath string) error {
 	file, errorValue := os.OpenFile(workspaceImagePath, os.O_RDWR, 0)
 	if errorValue != nil {
@@ -525,19 +371,6 @@ func syncWorkspaceImageFile(workspaceImagePath string) error {
 	}
 	syncError := file.Sync()
 	closeError := file.Close()
-	if syncError != nil {
-		return syncError
-	}
-	return closeError
-}
-
-func syncWorkspaceImageDirectory(workspaceImagePath string) error {
-	directory, errorValue := os.Open(filepath.Dir(workspaceImagePath))
-	if errorValue != nil {
-		return errorValue
-	}
-	syncError := directory.Sync()
-	closeError := directory.Close()
 	if syncError != nil {
 		return syncError
 	}
