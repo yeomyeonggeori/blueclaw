@@ -391,11 +391,13 @@ export async function listChannelMessagesAsUser(request: {
 					attachments: attachmentsOf(event),
 				};
 			});
-		const reacted = await reactionsTo(
-			relay,
-			read.map((message) => message.id),
-		);
-		return read.map((message) => ({ ...message, reactions: reacted.get(message.id) ?? [] }));
+		const messageIDs = read.map((message) => message.id);
+		const [reacted, edited] = await Promise.all([reactionsTo(relay, messageIDs), editsTo(relay, messageIDs)]);
+		return read.map((message) => ({
+			...message,
+			body: edited.get(message.id) ?? message.body,
+			reactions: reacted.get(message.id) ?? [],
+		}));
 	} finally {
 		relay.disconnect();
 	}
@@ -489,3 +491,24 @@ function reactionOf(event: BuzzEvent): UserMessageReaction {
 	if (!named) return { emoji: event.content, byPubkeyHexes: [] };
 	return { emoji: named[1] as string, imageURL: named[2], byPubkeyHexes: [] };
 }
+
+// A message that was edited still reads as the event that created it, so the
+// latest edit is what the author last meant to say. An agent narrating its work
+// edits one message many times before it holds the answer.
+async function editsTo(
+	relay: { query: (filter: object) => Promise<BuzzEvent[]> },
+	messageIDs: string[],
+): Promise<Map<string, string>> {
+	if (messageIDs.length === 0) return new Map();
+	const events = await relay.query({ kinds: [EDIT_MESSAGE_KIND], "#e": messageIDs, limit: messageIDs.length * mostEditsReadPerMessage });
+	const latest = new Map<string, BuzzEvent>();
+	for (const event of events) {
+		const messageID = firstTagValue(event, "e");
+		if (!messageID) continue;
+		const known = latest.get(messageID);
+		if (!known || known.created_at < event.created_at) latest.set(messageID, event);
+	}
+	return new Map([...latest].map(([messageID, event]) => [messageID, event.content]));
+}
+
+const mostEditsReadPerMessage = 32;

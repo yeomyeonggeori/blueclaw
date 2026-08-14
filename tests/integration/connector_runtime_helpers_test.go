@@ -26,6 +26,6 @@ func newIntegrationConnectorRuntime(identityService *identity.IdentityService) *
 	agentKernel := loop.NewAgentKernel(taskRunService, task.NewTaskStepService())
 	agentKernel.UseLanguageModelProvider(integrationLanguageModel{})
 
-	connectorRuntime := connectors.NewConnectorRuntime(identityService, agentKernel, taskRunService, nil)
+	connectorRuntime := connectors.NewConnectorRuntime(identityService, agentKernel, taskRunService, taskEventService, nil)
 	return connectorRuntime
 }

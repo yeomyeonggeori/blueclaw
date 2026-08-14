@@ -351,6 +351,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 		identityService,
 		harness,
 		taskRunService,
+		taskEventService,
 		logger,
 	)
 	launchFailureCompleter := launchfailure.NewCompleter(taskRunService, languageModelProvider)
@@ -378,9 +379,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 	connectorRuntime.RegisterAdapter(newPlatformAdapter("signal", runtimeConfiguration, capabilityClient, chatdClient))
 	agentReplyStore := apiconnector.NewReplyStore()
 	connectorRuntime.RegisterAdapter(apiconnector.NewAdapter(identityService, agentReplyStore))
-	if runtimeConfiguration.Connectors.Buzz.Enabled {
-		connectorRuntime.RegisterAdapter(connectors.NewChatdPlatformAdapter("buzz", chatdClient))
-	}
+	connectorRuntime.RegisterAdapter(connectors.NewChatdPlatformAdapter("buzz", chatdClient))
 	connectorEventHandler := httpserver.NewConnectorEventHandler(connectorRuntime)
 
 	logger.Info("application.initializing", "stage", "router")
@@ -507,9 +506,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 		connectors.NewHTTPWebhookTransport("mattermost-internal-ingress", "mattermost"),
 		connectors.NewHTTPWebhookTransport("slack-internal-ingress", "slack"),
 		connectors.NewHTTPWebhookTransport("signal-internal-ingress", "signal"),
-	}
-	if runtimeConfiguration.Connectors.Buzz.Enabled {
-		connectorTransports = append(connectorTransports, connectors.NewHTTPWebhookTransport("buzz-internal-ingress", "buzz"))
+		connectors.NewHTTPWebhookTransport("buzz-internal-ingress", "buzz"),
 	}
 
 	logger.Info("application.initializing", "stage", "ready")
