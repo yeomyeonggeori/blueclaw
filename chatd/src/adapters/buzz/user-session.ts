@@ -325,6 +325,13 @@ export type UserMessage = {
 	body: string;
 	postedAt: string;
 	attachments: UserMessageAttachment[];
+	reactions: UserMessageReaction[];
+};
+
+export type UserMessageReaction = {
+	emoji: string;
+	imageURL?: string;
+	byPubkeyHexes: string[];
 };
 
 export type UserMessageAttachment = {
@@ -354,7 +361,7 @@ export async function listChannelMessagesAsUser(request: {
 		};
 		if (request.before) filter.until = Math.floor(Number(request.before) / 1000);
 		const events = await relay.query(filter);
-		return events
+		const read = events
 			.sort((first, second) => first.created_at - second.created_at)
 			.map((event) => {
 				const thread = threadTagsOf(event);
@@ -368,6 +375,11 @@ export async function listChannelMessagesAsUser(request: {
 					attachments: attachmentsOf(event),
 				};
 			});
+		const reacted = await reactionsTo(
+			relay,
+			read.map((message) => message.id),
+		);
+		return read.map((message) => ({ ...message, reactions: reacted.get(message.id) ?? [] }));
 	} finally {
 		relay.disconnect();
 	}
@@ -424,4 +436,40 @@ export function attachmentsOf(event: BuzzEvent): UserMessageAttachment[] {
 		});
 	}
 	return attachments;
+}
+
+const mostReactionsReadPerMessage = 64;
+
+// A reaction points at the message it is about, so the messages just read are
+// what to ask for.
+async function reactionsTo(
+	relay: { query: (filter: object) => Promise<BuzzEvent[]> },
+	messageIDs: string[],
+): Promise<Map<string, UserMessageReaction[]>> {
+	if (messageIDs.length === 0) return new Map();
+	const events = await relay.query({
+		kinds: [REACTION_KIND],
+		"#e": messageIDs,
+		limit: messageIDs.length * mostReactionsReadPerMessage,
+	});
+	const byMessage = new Map<string, Map<string, UserMessageReaction>>();
+	for (const event of events) {
+		const messageID = firstTagValue(event, "e");
+		if (!messageID) continue;
+		const grouped = byMessage.get(messageID) ?? new Map<string, UserMessageReaction>();
+		const reaction = reactionOf(event);
+		const already = grouped.get(reaction.emoji) ?? { ...reaction, byPubkeyHexes: [] };
+		if (!already.byPubkeyHexes.includes(event.pubkey)) already.byPubkeyHexes.push(event.pubkey);
+		grouped.set(reaction.emoji, already);
+		byMessage.set(messageID, grouped);
+	}
+	return new Map([...byMessage].map(([messageID, grouped]) => [messageID, [...grouped.values()]]));
+}
+
+// A custom emoji names itself on an emoji tag and points at its own picture,
+// where an ordinary one is the content and nothing else.
+function reactionOf(event: BuzzEvent): UserMessageReaction {
+	const named = event.tags.find((tag) => tag[0] === "emoji" && typeof tag[1] === "string");
+	if (!named) return { emoji: event.content, byPubkeyHexes: [] };
+	return { emoji: named[1] as string, imageURL: named[2], byPubkeyHexes: [] };
 }

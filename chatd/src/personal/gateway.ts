@@ -23,8 +23,12 @@ export type PersonalPerson = {
 	avatarURL?: string;
 };
 
+// A platform that keeps its custom emoji in a registry leaves the picture out
+// and answers for the name separately; one that puts it on the reaction says so
+// here.
 export type PersonalReaction = {
 	emoji: string;
+	imageURL?: string;
 	byExternalIDs: string[];
 };
 

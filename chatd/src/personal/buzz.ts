@@ -131,7 +131,11 @@ class BuzzPersonalGateway implements PersonalGateway {
 				authorExternalID: message.authorPubkeyHex,
 				body: message.body,
 				postedAt: message.postedAt,
-				reactions: [],
+				reactions: message.reactions.map((reaction) => ({
+					emoji: reaction.emoji,
+					imageURL: reaction.imageURL,
+					byExternalIDs: reaction.byPubkeyHexes,
+				})),
 				attachments: message.attachments.map((attachment) => ({
 					id: attachment.url,
 					filename: attachment.filename,
