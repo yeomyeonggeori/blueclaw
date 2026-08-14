@@ -32,7 +32,7 @@ func channelMentionEvent() PlatformInboundEvent {
 
 func TestAddressingClassificationCarriesConfiguredAgentIdentity(t *testing.T) {
 	recorder := &addressingRequestRecorder{}
-	connectorRuntime := NewConnectorRuntime(nil, nil, nil, nil)
+	connectorRuntime := NewConnectorRuntime(nil, nil, nil, nil, nil)
 	connectorRuntime.UseIntakeClassifier(recorder)
 	connectorRuntime.UseAgentIdentityProvider(func() agentcontract.AgentIdentity {
 		return agentcontract.AgentIdentity{Name: "김인턴", Handle: "internkim"}
@@ -47,7 +47,7 @@ func TestAddressingClassificationCarriesConfiguredAgentIdentity(t *testing.T) {
 
 func TestAddressingClassificationWithoutIdentityProviderStaysEmpty(t *testing.T) {
 	recorder := &addressingRequestRecorder{}
-	connectorRuntime := NewConnectorRuntime(nil, nil, nil, nil)
+	connectorRuntime := NewConnectorRuntime(nil, nil, nil, nil, nil)
 	connectorRuntime.UseIntakeClassifier(recorder)
 
 	connectorRuntime.resolveInboundEngagement(context.Background(), "mattermost", channelMentionEvent())

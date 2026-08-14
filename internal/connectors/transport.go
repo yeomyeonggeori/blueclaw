@@ -23,3 +23,9 @@ func (transport HTTPWebhookTransport) Platform() string {
 }
 
 func (transport HTTPWebhookTransport) Start(context.Context) {}
+
+type capabilityMessageEditRequest struct {
+	ReplyTargetID string `json:"replyTargetID"`
+	MessageID     string `json:"messageID"`
+	Message       string `json:"message"`
+}

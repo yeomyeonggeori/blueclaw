@@ -106,6 +106,14 @@ func (adapter ChatdPlatformAdapter) SendReply(ctx context.Context, replyTarget R
 	return strings.TrimSpace(response.DispatchID), nil
 }
 
+func (adapter ChatdPlatformAdapter) EditReply(ctx context.Context, replyTarget ReplyTarget, messageID string, message string) error {
+	return adapter.post(ctx, "message.edit", capabilityMessageEditRequest{
+		ReplyTargetID: replyTarget.ReplyTargetID,
+		MessageID:     messageID,
+		Message:       message,
+	}, nil)
+}
+
 func (adapter ChatdPlatformAdapter) ResolveInteraction(ctx context.Context, resolution InteractionResolution) error {
 	return adapter.post(ctx, "interaction.resolve", map[string]string{
 		"dispatchID": resolution.DispatchID,

@@ -1186,9 +1186,10 @@ func TestConnectorRuntimeRequesterEmailFallsBackToVisibleSenderEmail(t *testing.
 			"person-1": {PersonID: "person-1"},
 		},
 	})
-	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	taskEventService := task.NewTaskEventService()
+	taskRunService := task.NewTaskRunService(taskEventService)
 	connectorRuntimeHarness := harnesstest.New(taskRunService)
-	connectorRuntime := NewConnectorRuntime(identityService, connectorRuntimeHarness, taskRunService, nil)
+	connectorRuntime := NewConnectorRuntime(identityService, connectorRuntimeHarness, taskRunService, taskEventService, nil)
 	connectorRuntime.UseIntakeClassifier(connectorRuntimeHarness)
 	connectorRuntime.UseReplyGenerator(connectorRuntimeHarness)
 	event := testInboundEvent("message-1")
@@ -1208,9 +1209,10 @@ func TestConnectorRuntimeRequesterEmailPrefersPolicyPrimaryEmail(t *testing.T) {
 			"person-1": {PersonID: "person-1"},
 		},
 	})
-	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	taskEventService := task.NewTaskEventService()
+	taskRunService := task.NewTaskRunService(taskEventService)
 	connectorRuntimeHarness := harnesstest.New(taskRunService)
-	connectorRuntime := NewConnectorRuntime(identityService, connectorRuntimeHarness, taskRunService, nil)
+	connectorRuntime := NewConnectorRuntime(identityService, connectorRuntimeHarness, taskRunService, taskEventService, nil)
 	connectorRuntime.UseIntakeClassifier(connectorRuntimeHarness)
 	connectorRuntime.UseReplyGenerator(connectorRuntimeHarness)
 	event := testInboundEvent("message-1")
@@ -4175,7 +4177,7 @@ func newStubbedTestConnectorRuntime(t *testing.T) (*ConnectorRuntime, *testAdapt
 func connectorRuntimeForHarness(t *testing.T, harness agentcontract.Harness, intakeClassifier IntakeClassifier, replyGenerator ReplyGenerator, turnRouter TurnRouter, taskRunService *task.TaskRunService, languageModel llm.LanguageModelProvider) (*ConnectorRuntime, *testAdapter) {
 	t.Helper()
 
-	connectorRuntime := NewConnectorRuntime(testConnectorIdentityService(), harness, taskRunService, nil)
+	connectorRuntime := NewConnectorRuntime(testConnectorIdentityService(), harness, taskRunService, task.NewTaskEventService(), nil)
 	connectorRuntime.UseIntakeClassifier(intakeClassifier)
 	connectorRuntime.UseReplyGenerator(replyGenerator)
 	connectorRuntime.UseTaskRunService(taskRunService)

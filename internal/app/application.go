@@ -351,6 +351,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 		identityService,
 		harness,
 		taskRunService,
+		taskEventService,
 		logger,
 	)
 	launchFailureCompleter := launchfailure.NewCompleter(taskRunService, languageModelProvider)

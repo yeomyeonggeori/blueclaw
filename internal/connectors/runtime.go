@@ -297,6 +297,13 @@ type PlatformAdapter interface {
 	FetchHistory(context.Context, string, int) (VisibleContext, error)
 }
 
+// A platform that can change a message it already sent lets one message carry a
+// turn from start to finish: what the agent is doing while it works, and its
+// answer when it is done.
+type ReplyEditingAdapter interface {
+	EditReply(context.Context, ReplyTarget, string, string) error
+}
+
 type InteractionResolvingAdapter interface {
 	ResolveInteraction(context.Context, InteractionResolution) error
 }
@@ -358,6 +365,7 @@ type ConnectorRuntime struct {
 	replyGenerator         ReplyGenerator
 	launchFailureCompleter LaunchFailureCompleter
 	taskRunService         *taskstate.TaskRunService
+	taskEventService       *taskstate.TaskEventService
 	taskLauncher           *agentruntime.TaskLauncher
 	approvalGate           *approvalgate.Gate
 	toolCatalogBuilder     *agentruntime.ToolCatalogBuilder
@@ -414,7 +422,7 @@ type inboundTaskWaitResolution struct {
 	Reason             string
 }
 
-func NewConnectorRuntime(identityService *identity.IdentityService, harness agentcontract.Harness, taskRunService *taskstate.TaskRunService, logger *slog.Logger) *ConnectorRuntime {
+func NewConnectorRuntime(identityService *identity.IdentityService, harness agentcontract.Harness, taskRunService *taskstate.TaskRunService, taskEventService *taskstate.TaskEventService, logger *slog.Logger) *ConnectorRuntime {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -425,6 +433,7 @@ func NewConnectorRuntime(identityService *identity.IdentityService, harness agen
 		identityService:       identityService,
 		harness:               harness,
 		taskRunService:        taskRunService,
+		taskEventService:      taskEventService,
 		toolCatalogBuilder:    toolCatalogBuilder,
 		logger:                logger,
 		adapterByPlatform:     map[string]PlatformAdapter{},
@@ -1130,6 +1139,9 @@ func (connectorRuntime *ConnectorRuntime) processInboundEventWithReplySender(ctx
 		AccessibleConversationIDs: []string{event.ConversationID},
 		IsBlockedContinuation:     activeGoal.Status == agentcontract.ActiveGoalStatusBlocked && hasActiveGoal,
 	}
+	narrator := connectorRuntime.startNarrating(ctx, adapter, replyTarget)
+	defer narrator.stop()
+	sendReply = narrator.takeOverSending(sendReply)
 	launchResult, errorValue := connectorRuntime.currentTaskLauncher().Launch(ctx, connectorRuntime.buildTaskLaunchRequest(conversationTurn))
 	if errorValue != nil {
 		connectorRuntime.logger.Error("connector."+platform+".agent.failed", slog.String("messageID", event.MessageID), slog.String("error", errorValue.Error()))
@@ -3446,6 +3458,21 @@ func (connectorRuntime *ConnectorRuntime) buildReplyTarget(ctx context.Context, 
 		ReplyTargetID:  event.ReplyTargetID,
 		DedupeKey:      event.DedupeKey(),
 	}, nil
+}
+
+// While a turn runs, what it is doing is written into one message the person can
+// watch. Nothing is registered when the platform cannot change a message it
+// already sent, because a line per tool call would be a line per message.
+func (connectorRuntime *ConnectorRuntime) startNarrating(ctx context.Context, adapter PlatformAdapter, replyTarget ReplyTarget) *turnNarrator {
+	narrator := newTurnNarrator(adapter, replyTarget)
+	if narrator == nil || connectorRuntime.taskEventService == nil {
+		return nil
+	}
+	stopObserving := connectorRuntime.taskEventService.RegisterTurnObserver(func(rawTurnEvent taskstate.RawTurnEvent) {
+		narrator.observe(ctx, rawTurnEvent)
+	})
+	narrator.stopObserving = stopObserving
+	return narrator
 }
 
 func (connectorRuntime *ConnectorRuntime) startProgress(ctx context.Context, adapter PlatformAdapter, replyTarget ReplyTarget) func() {

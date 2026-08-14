@@ -16,9 +16,10 @@ import (
 
 func TestCompletedTaskReplyCarriesModelWordingAndNativeAttachments(t *testing.T) {
 	identityService := identity.NewIdentityService(policy.PolicyProjection{})
-	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	taskEventService := task.NewTaskEventService()
+	taskRunService := task.NewTaskRunService(taskEventService)
 	connectorRuntimeHarness := harnesstest.New(taskRunService)
-	connectorRuntime := NewConnectorRuntime(identityService, connectorRuntimeHarness, taskRunService, slog.Default())
+	connectorRuntime := NewConnectorRuntime(identityService, connectorRuntimeHarness, taskRunService, taskEventService, slog.Default())
 	connectorRuntime.UseIntakeClassifier(connectorRuntimeHarness)
 	connectorRuntime.UseReplyGenerator(connectorRuntimeHarness)
 
@@ -47,11 +48,13 @@ func TestCompletedTaskReplyCarriesModelWordingAndNativeAttachments(t *testing.T)
 }
 
 func TestFailedTaskReplyPreservesModelWording(t *testing.T) {
-	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	taskEventService := task.NewTaskEventService()
+	taskRunService := task.NewTaskRunService(taskEventService)
 	connectorRuntime := NewConnectorRuntime(
 		identity.NewIdentityService(policy.PolicyProjection{}),
 		harnesstest.New(taskRunService),
 		taskRunService,
+		taskEventService,
 		slog.Default(),
 	)
 	message := "The failure details were read from file:///tmp/report.txt."
