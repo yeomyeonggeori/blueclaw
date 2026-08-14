@@ -82,7 +82,7 @@ the harness arrives as a factory chosen at startup by `agent.harness.name`
 
 ## Deployment shape
 
-- InternKim is a headless computer the customer owns, reachable through a Cloudflare Tunnel.
+- InternKim is a headless computer the customer owns. It accepts no inbound connection; how an operator reaches it is their own network's business.
 - Blueclaw runs inside a long-lived Firecracker guest with an immutable root filesystem.
 - The host mounts exactly one writable path into the guest: `workspace`.
 - Persistent application data lives under `workspace/.blueclaw`.
@@ -97,7 +97,6 @@ the harness arrives as a factory chosen at startup by `agent.harness.name`
   +-----------------------------------+
   | InternKim hardware                |
   |                                   |
-  |  Cloudflare Tunnel                |
   |  headless host OS                 |
   |    - tiny supervisor              |
   |    - capability sidecars          |
