@@ -138,7 +138,7 @@ export async function sendChannelMessageAsUser(request: {
 	replyToRootId?: string;
 	extraTags?: string[][];
 	authTagJSON?: string;
-}): Promise<string> {
+}): Promise<{ id: string; body: string; attachments: UserMessageAttachment[] }> {
 	const { body, mediaTags } = await buildMessageBody(request);
 	const relay = createBuzzRelayClient(request.relayURL, request.userSecretHex, request.authTagJSON);
 	try {
@@ -148,7 +148,7 @@ export async function sendChannelMessageAsUser(request: {
 			body,
 			channelMessageTags(request.channelID, mediaTags, request.extraTags, request.replyToRootId),
 		);
-		return event.id;
+		return { id: event.id, body, attachments: attachmentsOfTags(mediaTags) };
 	} finally {
 		relay.disconnect();
 	}
@@ -285,7 +285,7 @@ async function buildMessageBody(request: {
 		const blob = await uploadBlob(request.relayURL, request.userSecretHex, content, attachment.contentType);
 		const label = attachment.filename.trim() || (isImageType(attachment.contentType) ? "image" : "file");
 		bodyParts.push(isImageType(attachment.contentType) ? `![${label}](${blob.url})` : `[${label}](${blob.url})`);
-		mediaTags.push(imetaTag(blob));
+		mediaTags.push(imetaTag(blob, attachment.filename));
 	}
 	return { body: bodyParts.join("\n"), mediaTags };
 }
@@ -435,8 +435,12 @@ export async function profilePictureURLAsUser(
 // A buzz message describes each file it carries on an imeta tag, whose entries
 // are "name value" strings rather than positions, so the tag is read by name.
 export function attachmentsOf(event: BuzzEvent): UserMessageAttachment[] {
+	return attachmentsOfTags(event.tags);
+}
+
+export function attachmentsOfTags(tags: string[][]): UserMessageAttachment[] {
 	const attachments: UserMessageAttachment[] = [];
-	for (const tag of event.tags) {
+	for (const tag of tags) {
 		if (tag[0] !== "imeta") continue;
 		const described = new Map<string, string>();
 		for (const entry of tag.slice(1)) {
@@ -450,7 +454,7 @@ export function attachmentsOf(event: BuzzEvent): UserMessageAttachment[] {
 			url,
 			contentType: described.get("m") ?? "application/octet-stream",
 			sizeBytes: Number(described.get("size") ?? 0) || 0,
-			filename: url.slice(url.lastIndexOf("/") + 1),
+			filename: described.get("filename")?.trim() || url.slice(url.lastIndexOf("/") + 1),
 		});
 	}
 	return attachments;

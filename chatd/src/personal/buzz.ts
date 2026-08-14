@@ -25,6 +25,7 @@ import {
 	type PersonalImage,
 	type PersonalMessage,
 	type PersonalMessagePage,
+	type PersonalOutgoingAttachment,
 	type PersonalPerson,
 } from "./gateway.ts";
 
@@ -152,25 +153,32 @@ class BuzzPersonalGateway implements PersonalGateway {
 		conversationID: string,
 		body: string,
 		parentID?: string,
+		attachments: PersonalOutgoingAttachment[] = [],
 	): Promise<PersonalMessage> {
 		this.require(actor);
-		const messageID = await sendChannelMessageAsUser({
+		const sent = await sendChannelMessageAsUser({
 			relayURL: this.settings.relayURL,
 			userSecretHex: actor.secret,
 			channelID: conversationID,
 			message: body,
+			attachments,
 			replyToRootId: parentID,
 			authTagJSON: this.settings.authTagJSON,
 		});
 		return {
-			id: messageID,
+			id: sent.id,
 			conversationID,
 			parentID,
 			authorExternalID: pubkeyFromSecret(actor.secret),
-			body,
+			body: sent.body,
 			postedAt: new Date().toISOString(),
 			reactions: [],
-			attachments: [],
+			attachments: sent.attachments.map((attachment) => ({
+				id: attachment.url,
+				filename: attachment.filename,
+				contentType: attachment.contentType,
+				sizeBytes: attachment.sizeBytes,
+			})),
 		};
 	}
 

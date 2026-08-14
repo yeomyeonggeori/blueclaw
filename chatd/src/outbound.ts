@@ -358,7 +358,7 @@ async function handleDirectMessageSend(
 		contentType: attachment.contentType ?? "application/octet-stream",
 	}));
 	if (requestDocument.channelId) {
-		const messageID = await sendChannelMessageAsUser({
+		const sent = await sendChannelMessageAsUser({
 			relayURL,
 			userSecretHex: requestDocument.userSecretHex,
 			channelID: requestDocument.channelId,
@@ -369,7 +369,7 @@ async function handleDirectMessageSend(
 		return {
 			channelID: requestDocument.channelId,
 			replyTargetID: buzzAdapter.encodeThreadId({ channelId: requestDocument.channelId }),
-			messageID,
+			messageID: sent.id,
 		};
 	}
 	const channel = await ensureUserDirectMessageChannel(

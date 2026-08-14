@@ -31,7 +31,7 @@ export function createBuzzGateway(
 ): BuzzGateway {
 	return {
 		async publish(publish: BuzzPublish): Promise<{ eventId: string }> {
-			const eventId = await session.send({
+			const sent = await session.send({
 				relayURL,
 				authTagJSON,
 				userSecretHex: publish.userSecretHex,
@@ -40,7 +40,7 @@ export function createBuzzGateway(
 				replyToRootId: publish.replyToBuzzEventId,
 				extraTags: [originTag(publish.origin)],
 			});
-			return { eventId };
+			return { eventId: sent.id };
 		},
 		async edit(edit: BuzzEdit): Promise<void> {
 			await session.edit({
