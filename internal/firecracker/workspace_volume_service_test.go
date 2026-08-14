@@ -62,83 +62,6 @@ func TestRequireWorkspaceImageRefusesEveryExistingMalformedFile(t *testing.T) {
 	}
 }
 
-func TestReplaceWorkspaceImageRetainsPreviousImage(t *testing.T) {
-	workspacePath := t.TempDir()
-	workspaceImagePath := filepath.Join(workspacePath, "workspace.ext4")
-	workspaceImageCopyPath := filepath.Join(workspacePath, "workspace.ext4.copy")
-	if errorValue := os.WriteFile(workspaceImagePath, []byte("database-before-deploy"), 0o600); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if errorValue := os.WriteFile(workspaceImageCopyPath, []byte("database-after-deploy"), 0o600); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-
-	if errorValue := replaceWorkspaceImageWithBackup(workspaceImagePath, workspaceImageCopyPath); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if document, _ := os.ReadFile(workspaceImagePath); string(document) != "database-after-deploy" {
-		t.Fatalf("current image = %q", string(document))
-	}
-	if document, _ := os.ReadFile(workspaceImagePath + ".previous"); string(document) != "database-before-deploy" {
-		t.Fatalf("previous image = %q", string(document))
-	}
-}
-
-func TestRestorePreviousWorkspaceImageKeepsFailedImage(t *testing.T) {
-	workspacePath := t.TempDir()
-	workspaceImagePath := writeFakeExt4WorkspaceImage(t, workspacePath)
-	if file, errorValue := os.OpenFile(workspaceImagePath, os.O_APPEND|os.O_WRONLY, 0); errorValue != nil {
-		t.Fatal(errorValue)
-	} else {
-		_, _ = file.WriteString("failed-deploy")
-		_ = file.Close()
-	}
-	previousWorkspaceImagePath := workspaceImagePath + ".previous"
-	previousDocument := make([]byte, 4096)
-	previousDocument[1080] = 0x53
-	previousDocument[1081] = 0xef
-	previousDocument = append(previousDocument, []byte("database-before-deploy")...)
-	if errorValue := os.WriteFile(previousWorkspaceImagePath, previousDocument, 0o600); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-
-	if errorValue := (WorkspaceVolumeService{}).RestorePreviousWorkspaceImage(workspaceImagePath); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if document, _ := os.ReadFile(workspaceImagePath); !slices.Equal(document, previousDocument) {
-		t.Fatal("previous workspace image was not restored")
-	}
-	failedImages, errorValue := filepath.Glob(workspaceImagePath + ".failed-*")
-	if errorValue != nil || len(failedImages) != 1 {
-		t.Fatalf("failed images = %+v error=%v", failedImages, errorValue)
-	}
-}
-
-func TestRestorePreviousWorkspaceImagePreservesCurrentWhenBackupIsMissing(t *testing.T) {
-	workspacePath := t.TempDir()
-	workspaceImagePath := writeFakeExt4WorkspaceImage(t, workspacePath)
-	originalDocument, errorValue := os.ReadFile(workspaceImagePath)
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if errorValue := (WorkspaceVolumeService{}).RestorePreviousWorkspaceImage(workspaceImagePath); errorValue == nil {
-		t.Fatal("missing previous image was accepted")
-	}
-	currentDocument, errorValue := os.ReadFile(workspaceImagePath)
-	if errorValue != nil || !slices.Equal(currentDocument, originalDocument) {
-		t.Fatalf("current image changed, error=%v", errorValue)
-	}
-}
-
-func TestWorkspaceImageCopyArgumentsPreserveSparseState(t *testing.T) {
-	arguments := workspaceImageCopyArguments("/state/workspace.ext4", "/state/workspace.ext4.copy")
-	for _, expectedArgument := range []string{"--reflink=auto", "--sparse=always", "--preserve=mode,ownership,timestamps"} {
-		if !slices.Contains(arguments, expectedArgument) {
-			t.Fatalf("expected copy argument %q in %+v", expectedArgument, arguments)
-		}
-	}
-}
-
 func TestAcquireWorkspaceImageLockWaitsForTheSyncInProgress(t *testing.T) {
 	workspaceImagePath := filepath.Join(t.TempDir(), "workspace.ext4")
 	releaseLock, errorValue := acquireWorkspaceImageLock(workspaceImagePath)
@@ -187,13 +110,11 @@ func TestEnsureWorkspaceImageIsInactiveFindsOpenDescriptor(t *testing.T) {
 	}
 }
 
-func TestSyncWorkspaceDirectoryAtomicallyPreservesPreviousImage(t *testing.T) {
+func TestSyncWorkspaceDirectoryWritesTheImageItselfAndLeavesNoCopy(t *testing.T) {
 	workspacePath := t.TempDir()
-	workspaceImagePath := filepath.Join(workspacePath, "workspace.ext4")
-	originalDocument := make([]byte, 4096)
-	originalDocument[1080] = 0x53
-	originalDocument[1081] = 0xef
-	if errorValue := os.WriteFile(workspaceImagePath, originalDocument, 0o600); errorValue != nil {
+	workspaceImagePath := writeFakeExt4WorkspaceImage(t, workspacePath)
+	originalDocument, errorValue := os.ReadFile(workspaceImagePath)
+	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	sourceDirectoryPath := filepath.Join(workspacePath, "source-skills")
@@ -201,13 +122,6 @@ func TestSyncWorkspaceDirectoryAtomicallyPreservesPreviousImage(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 
-	imageCopyPath := writeFakeWorkspaceCommand(t, workspacePath, "copy-image", `
-arguments=("$@")
-argument_count="${#arguments[@]}"
-source_path="${arguments[$((argument_count - 2))]}"
-target_path="${arguments[$((argument_count - 1))]}"
-cp "$source_path" "$target_path"
-`)
 	mountPath := writeFakeWorkspaceCommand(t, workspacePath, "mount-image", `
 image_path="$3"
 mount_path="$4"
@@ -225,29 +139,37 @@ printf overlay >> "$workspace_root/.image"
 `)
 	unmountPath := writeFakeWorkspaceCommand(t, workspacePath, "unmount-image", "exit 0")
 	workspaceVolumeService := WorkspaceVolumeService{
-		ImageCopyPath:    imageCopyPath,
 		MountPath:        mountPath,
 		SyncPath:         syncPath,
 		UnmountPath:      unmountPath,
 		TemporaryRootDir: workspacePath,
 	}
 
-	if errorValue := workspaceVolumeService.SyncWorkspaceDirectoryAtomically(workspaceImagePath, sourceDirectoryPath, "skills"); errorValue != nil {
+	if errorValue := workspaceVolumeService.SyncWorkspaceDirectory(workspaceImagePath, sourceDirectoryPath, "skills"); errorValue != nil {
 		t.Fatal(errorValue)
 	}
+
 	currentDocument, errorValue := os.ReadFile(workspaceImagePath)
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	previousDocument, errorValue := os.ReadFile(workspaceImagePath + ".previous")
+	if !strings.HasSuffix(string(currentDocument), "overlay") {
+		t.Fatal("the sync did not write into the workspace image itself")
+	}
+	if !strings.HasPrefix(string(currentDocument), string(originalDocument)) {
+		t.Fatal("the sync replaced the workspace image instead of writing into it")
+	}
+	if _, errorValue := os.Stat(workspaceImagePath + ".previous"); !os.IsNotExist(errorValue) {
+		t.Fatal("a 64 GB copy is the cost this removes; the sync must not leave one behind")
+	}
+	entries, errorValue := os.ReadDir(filepath.Dir(workspaceImagePath))
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if !strings.HasSuffix(string(currentDocument), "overlay") {
-		t.Fatal("atomic copy did not receive the workspace overlay")
-	}
-	if !slices.Equal(previousDocument, originalDocument) {
-		t.Fatal("previous workspace image did not preserve the original bytes")
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "workspace.ext4.sync-") {
+			t.Fatalf("the sync left a copy at %s", entry.Name())
+		}
 	}
 }
 
@@ -272,20 +194,14 @@ printf history > "$mount_path/.blueclaw/postgres/data/base"
 `)
 	syncPath := writeFakeWorkspaceCommand(t, workspacePath, "sync-malformed-postgres", "touch "+syncMarkerPath)
 	unmountPath := writeFakeWorkspaceCommand(t, workspacePath, "unmount-malformed-postgres", "exit 0")
-	imageCopyPath := writeFakeWorkspaceCommand(t, workspacePath, "copy-malformed-postgres", `
-arguments=("$@")
-argument_count="${#arguments[@]}"
-cp "${arguments[$((argument_count - 2))]}" "${arguments[$((argument_count - 1))]}"
-`)
 	workspaceVolumeService := WorkspaceVolumeService{
-		ImageCopyPath:    imageCopyPath,
 		MountPath:        mountPath,
 		SyncPath:         syncPath,
 		UnmountPath:      unmountPath,
 		TemporaryRootDir: workspacePath,
 	}
 
-	errorValue := workspaceVolumeService.SyncWorkspaceDirectoryPreservingGuestStateAtomically(workspaceImagePath, sourceDirectoryPath)
+	errorValue := workspaceVolumeService.SyncWorkspaceDirectoryPreservingGuestState(workspaceImagePath, sourceDirectoryPath)
 	if errorValue == nil || !strings.Contains(errorValue.Error(), "nonempty without a valid PG_VERSION") {
 		t.Fatalf("expected malformed postgres data to fail closed, got %v", errorValue)
 	}
@@ -314,11 +230,6 @@ func TestSyncWorkspaceDirectoryRetainsCopyWhenUnmountFails(t *testing.T) {
 	if errorValue := os.MkdirAll(sourceDirectoryPath, 0o755); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	imageCopyPath := writeFakeWorkspaceCommand(t, workspacePath, "copy-unmount-failure", `
-arguments=("$@")
-argument_count="${#arguments[@]}"
-cp "${arguments[$((argument_count - 2))]}" "${arguments[$((argument_count - 1))]}"
-`)
 	mountPath := writeFakeWorkspaceCommand(t, workspacePath, "mount-unmount-failure", `
 mount_path="$4"
 mkdir -p "$mount_path/.blueclaw/postgres/data"
@@ -327,23 +238,15 @@ printf '16\n' > "$mount_path/.blueclaw/postgres/data/PG_VERSION"
 	syncPath := writeFakeWorkspaceCommand(t, workspacePath, "sync-unmount-failure", "exit 0")
 	unmountPath := writeFakeWorkspaceCommand(t, workspacePath, "unmount-failure", "printf busy\nexit 1")
 	workspaceVolumeService := WorkspaceVolumeService{
-		ImageCopyPath:    imageCopyPath,
 		MountPath:        mountPath,
 		SyncPath:         syncPath,
 		UnmountPath:      unmountPath,
 		TemporaryRootDir: workspacePath,
 	}
 
-	errorValue := workspaceVolumeService.SyncWorkspaceDirectoryAtomically(workspaceImagePath, sourceDirectoryPath, "skills")
-	if errorValue == nil || !strings.Contains(errorValue.Error(), "workspace copy retained") {
-		t.Fatalf("expected retained-copy unmount failure, got %v", errorValue)
-	}
-	retainedCopies, globError := filepath.Glob(filepath.Join(workspacePath, ".workspace.ext4.sync-*"))
-	if globError != nil || len(retainedCopies) != 1 {
-		t.Fatalf("retained copies = %+v error=%v", retainedCopies, globError)
-	}
-	if _, errorValue := os.Stat(workspaceImagePath + ".previous"); !os.IsNotExist(errorValue) {
-		t.Fatalf("failed unmount must not swap the image, got %v", errorValue)
+	errorValue := workspaceVolumeService.SyncWorkspaceDirectory(workspaceImagePath, sourceDirectoryPath, "skills")
+	if errorValue == nil || !strings.Contains(errorValue.Error(), "busy") {
+		t.Fatalf("an image left mounted is how this repository corrupted a workspace before; the failure must be reported, got %v", errorValue)
 	}
 }
 
@@ -358,11 +261,6 @@ func TestSyncWorkspaceDirectoryRejectsInitializedPostgresRemoval(t *testing.T) {
 	if errorValue := os.MkdirAll(filepath.Join(sourceDirectoryPath, ".blueclaw"), 0o755); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	imageCopyPath := writeFakeWorkspaceCommand(t, workspacePath, "copy-postgres-removal", `
-arguments=("$@")
-argument_count="${#arguments[@]}"
-cp "${arguments[$((argument_count - 2))]}" "${arguments[$((argument_count - 1))]}"
-`)
 	mountPath := writeFakeWorkspaceCommand(t, workspacePath, "mount-postgres-removal", `
 mount_path="$4"
 mkdir -p "$mount_path/.blueclaw/postgres/data"
@@ -375,14 +273,13 @@ rm -rf "$target_path/.blueclaw/postgres/data"
 `)
 	unmountPath := writeFakeWorkspaceCommand(t, workspacePath, "unmount-postgres-removal", "exit 0")
 	workspaceVolumeService := WorkspaceVolumeService{
-		ImageCopyPath:    imageCopyPath,
 		MountPath:        mountPath,
 		SyncPath:         syncPath,
 		UnmountPath:      unmountPath,
 		TemporaryRootDir: workspacePath,
 	}
 
-	errorValue = workspaceVolumeService.SyncWorkspaceDirectoryPreservingGuestStateAtomically(workspaceImagePath, sourceDirectoryPath)
+	errorValue = workspaceVolumeService.SyncWorkspaceDirectoryPreservingGuestState(workspaceImagePath, sourceDirectoryPath)
 	if errorValue == nil || !strings.Contains(errorValue.Error(), "changed initialized Postgres state") {
 		t.Fatalf("expected Postgres preservation failure, got %v", errorValue)
 	}

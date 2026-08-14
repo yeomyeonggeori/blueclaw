@@ -26,12 +26,6 @@ func main() {
 		}
 		return
 	}
-	if len(os.Args) > 1 && os.Args[1] == "restore-workspace" {
-		if errorValue := restoreWorkspace(os.Args[2:]); errorValue != nil {
-			log.Fatal(errorValue)
-		}
-		return
-	}
 
 	runtimeConfigurationPath := flag.String("runtime", "config/runtime.example.json", "runtime configuration path")
 	flag.Parse()
@@ -115,18 +109,6 @@ func main() {
 	}
 }
 
-func restoreWorkspace(arguments []string) error {
-	flagSet := flag.NewFlagSet("restore-workspace", flag.ContinueOnError)
-	workspaceImagePath := flagSet.String("workspace-image", "", "workspace image path")
-	if errorValue := flagSet.Parse(arguments); errorValue != nil {
-		return errorValue
-	}
-	if *workspaceImagePath == "" {
-		return fmt.Errorf("workspace image path is required")
-	}
-	return (firecracker.WorkspaceVolumeService{}).RestorePreviousWorkspaceImage(*workspaceImagePath)
-}
-
 func prepareGuestShutdown(hostHTTPListenAddress string) {
 	if hostHTTPListenAddress == "" {
 		return
@@ -183,7 +165,7 @@ func syncWorkspace(arguments []string) error {
 		if *relativeTargetPath != "" {
 			return fmt.Errorf("--preserve-guest-state cannot be combined with --relative-target")
 		}
-		return workspaceVolumeService.SyncWorkspaceDirectoryPreservingGuestStateAtomically(resolvedWorkspaceImagePath, *sourceDirectoryPath)
+		return workspaceVolumeService.SyncWorkspaceDirectoryPreservingGuestState(resolvedWorkspaceImagePath, *sourceDirectoryPath)
 	}
-	return workspaceVolumeService.SyncWorkspaceDirectoryAtomically(resolvedWorkspaceImagePath, *sourceDirectoryPath, *relativeTargetPath)
+	return workspaceVolumeService.SyncWorkspaceDirectory(resolvedWorkspaceImagePath, *sourceDirectoryPath, *relativeTargetPath)
 }
