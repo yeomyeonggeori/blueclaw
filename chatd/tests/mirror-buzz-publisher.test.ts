@@ -13,7 +13,7 @@ describe('buzz gateway', () => {
 		const gateway = createBuzzGateway('wss://relay', 'auth-json', {
 			send: async (request) => {
 				calls.push(request as unknown as Record<string, unknown>);
-				return 'event-1';
+				return { id: 'event-1', body: request.message, attachments: [] };
 			},
 			...noopSession,
 		});

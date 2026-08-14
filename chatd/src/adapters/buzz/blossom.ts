@@ -13,14 +13,17 @@ export function blossomBaseURL(relayURL: string): string {
 	return relayURL;
 }
 
-export function imetaTag(blob: BlossomBlob): string[] {
-	return [
+export function imetaTag(blob: BlossomBlob, filename?: string): string[] {
+	const tag = [
 		"imeta",
 		"url " + blob.url,
 		"m " + blob.mimeType,
 		"x " + blob.sha256,
 		"size " + String(blob.size),
 	];
+	const named = (filename ?? "").trim();
+	if (named !== "") tag.push("filename " + named);
+	return tag;
 }
 
 export async function uploadBlob(
