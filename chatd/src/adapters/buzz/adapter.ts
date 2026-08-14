@@ -158,6 +158,13 @@ class BuzzFormatConverter extends BaseFormatConverter {
 	}
 }
 
+// A relay subscription hands each event to a callback that cannot await it, so a
+// failure here has nowhere to go but the process. One message the agent could
+// not take is not a reason to stop taking the rest.
+function reportBuzzFailure(doing: string, reason: unknown): void {
+	console.error(`[buzz] ${doing} failed:`, reason instanceof Error ? reason.message : reason);
+}
+
 export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	readonly name = BUZZ_ADAPTER_NAME;
 	readonly userName: string;
@@ -286,7 +293,9 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 				},
 			],
 			() => {
-				void this.refreshChannels().then(() => this.subscribeToChannels());
+				void this.refreshChannels()
+					.then(() => this.subscribeToChannels())
+					.catch((reason) => reportBuzzFailure("refreshing channels", reason));
 			},
 		);
 	}
@@ -333,7 +342,9 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 			this.relay.subscribe(
 				[{ kinds: [STREAM_MESSAGE_KIND], "#h": [channelId], since: Math.floor(Date.now() / 1000) }],
 				(event) => {
-					void this.dispatchIncomingEvent(event);
+					void this.dispatchIncomingEvent(event).catch((reason) =>
+						reportBuzzFailure(`handling message ${event.id}`, reason),
+					);
 				},
 			);
 			if (this.config.mirror) {
