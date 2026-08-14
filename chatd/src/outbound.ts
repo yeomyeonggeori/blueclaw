@@ -328,7 +328,7 @@ async function handleConversationsList(
 			id: conversation.channelID,
 			name: conversation.name,
 			kind: conversation.isDM ? "dm" : "group",
-			avatarURL: conversation.avatarURL,
+			participantExternalIDs: conversation.participantPubkeyHexes,
 		})),
 	};
 }
