@@ -10,32 +10,79 @@ import (
 )
 
 const narrationEventPrefix = "tool."
-const narrationEventSuffix = ".requested"
+const narrationRequestedSuffix = ".requested"
+const narrationResultSuffix = ".result"
 const narrationSubjectLimit = 48
 const narrationLineLimit = 6
+
+// A call the agent is making, and how it turned out once it has. A person
+// watching three lines needs to know which of them broke.
+type narratedCall struct {
+	callID  string
+	label   string
+	outcome string
+}
+
+const narrationOutcomeDone = " ✓"
+const narrationOutcomeFailed = " ✗"
+
+func (call narratedCall) String() string {
+	return call.label + call.outcome
+}
 
 // A tool call reads as the tool's own name and the thing it was pointed at, the
 // way a coding agent shows Read(main.go). The name comes from the catalog and
 // the argument from the call, so no list of phrases has to be kept beside the
 // list of tools.
-func narrationOfTurnEvent(rawTurnEvent taskstate.RawTurnEvent) string {
-	toolName, isRequest := toolNameOfNarrationEvent(rawTurnEvent.Name)
+func narrationOfTurnEvent(rawTurnEvent taskstate.RawTurnEvent) (narratedCall, bool) {
+	toolName, isRequest := toolNameOfNarrationEvent(rawTurnEvent.Name, narrationRequestedSuffix)
 	if !isRequest {
-		return ""
+		return narratedCall{}, false
 	}
-	subject := narrationSubject(rawTurnEvent.Body)
-	if subject == "" {
-		return toolName
+	label := toolName
+	if subject := narrationSubject(rawTurnEvent.Body); subject != "" {
+		label = toolName + "(" + subject + ")"
 	}
-	return toolName + "(" + subject + ")"
+	return narratedCall{callID: narrationCallID(rawTurnEvent.Body), label: label}, true
 }
 
-func toolNameOfNarrationEvent(eventName string) (string, bool) {
-	if !strings.HasPrefix(eventName, narrationEventPrefix) || !strings.HasSuffix(eventName, narrationEventSuffix) {
+type narratedOutcome struct {
+	callID  string
+	outcome string
+}
+
+func narrationOutcomeOfTurnEvent(rawTurnEvent taskstate.RawTurnEvent) (narratedOutcome, bool) {
+	if _, isResult := toolNameOfNarrationEvent(rawTurnEvent.Name, narrationResultSuffix); !isResult {
+		return narratedOutcome{}, false
+	}
+	outcome := narrationOutcomeDone
+	if narrationCallFailed(rawTurnEvent.Body) {
+		outcome = narrationOutcomeFailed
+	}
+	return narratedOutcome{callID: narrationCallID(rawTurnEvent.Body), outcome: outcome}, true
+}
+
+func toolNameOfNarrationEvent(eventName string, suffix string) (string, bool) {
+	if !strings.HasPrefix(eventName, narrationEventPrefix) || !strings.HasSuffix(eventName, suffix) {
 		return "", false
 	}
-	toolName := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(eventName, narrationEventPrefix), narrationEventSuffix))
+	toolName := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(eventName, narrationEventPrefix), suffix))
 	return toolName, toolName != ""
+}
+
+func narrationCallID(body string) string {
+	decoded := struct {
+		ObservationID string `json:"observationID"`
+	}{}
+	json.Unmarshal([]byte(body), &decoded)
+	return strings.TrimSpace(decoded.ObservationID)
+}
+
+func narrationCallFailed(body string) bool {
+	decoded := struct {
+		Failure *json.RawMessage `json:"failure"`
+	}{}
+	return json.Unmarshal([]byte(body), &decoded) == nil && decoded.Failure != nil
 }
 
 // Every tool names its subject differently, and a call may carry a dozen fields
@@ -72,15 +119,19 @@ func narrationText(value any) string {
 
 // The lines a person watches are the last few: a turn that called forty tools is
 // not something anyone reads from the top.
-func narrationMessage(lines []string) string {
-	if len(lines) == 0 {
+func narrationMessage(calls []narratedCall) string {
+	if len(calls) == 0 {
 		return ""
 	}
-	shown := lines
+	shown := calls
 	if len(shown) > narrationLineLimit {
 		shown = shown[len(shown)-narrationLineLimit:]
 	}
-	return "_" + strings.Join(shown, "_\n_") + "_"
+	lines := make([]string, 0, len(shown))
+	for _, call := range shown {
+		lines = append(lines, call.String())
+	}
+	return "_" + strings.Join(lines, "_\n_") + "_"
 }
 
 // turnNarrator keeps one message saying what the agent is doing, and hands it
@@ -92,7 +143,7 @@ type turnNarrator struct {
 	replyTarget ReplyTarget
 
 	mutex         sync.Mutex
-	lines         []string
+	calls         []narratedCall
 	messageID     string
 	isHandedOver  bool
 	stopObserving func()
@@ -117,25 +168,43 @@ func (narrator *turnNarrator) observe(ctx context.Context, rawTurnEvent taskstat
 	if narrator == nil {
 		return
 	}
-	line := narrationOfTurnEvent(rawTurnEvent)
-	if line == "" {
+	message, messageID, hasNews := narrator.record(rawTurnEvent)
+	if !hasNews {
 		return
 	}
-	narrator.mutex.Lock()
-	if narrator.isHandedOver {
-		narrator.mutex.Unlock()
-		return
-	}
-	narrator.lines = append(narrator.lines, line)
-	message := narrationMessage(narrator.lines)
-	messageID := narrator.messageID
-	narrator.mutex.Unlock()
-
 	if messageID == "" {
 		narrator.startSaying(ctx, message)
 		return
 	}
 	narrator.editor.EditReply(ctx, narrator.replyTarget, messageID, message)
+}
+
+func (narrator *turnNarrator) record(rawTurnEvent taskstate.RawTurnEvent) (string, string, bool) {
+	narrator.mutex.Lock()
+	defer narrator.mutex.Unlock()
+	if narrator.isHandedOver || !narrator.take(rawTurnEvent) {
+		return "", "", false
+	}
+	return narrationMessage(narrator.calls), narrator.messageID, true
+}
+
+func (narrator *turnNarrator) take(rawTurnEvent taskstate.RawTurnEvent) bool {
+	if call, isCall := narrationOfTurnEvent(rawTurnEvent); isCall {
+		narrator.calls = append(narrator.calls, call)
+		return true
+	}
+	result, isOutcome := narrationOutcomeOfTurnEvent(rawTurnEvent)
+	if !isOutcome || result.callID == "" {
+		return false
+	}
+	for index := range narrator.calls {
+		if narrator.calls[index].callID != result.callID {
+			continue
+		}
+		narrator.calls[index].outcome = result.outcome
+		return true
+	}
+	return false
 }
 
 func (narrator *turnNarrator) startSaying(ctx context.Context, message string) {

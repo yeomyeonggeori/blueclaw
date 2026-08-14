@@ -80,10 +80,11 @@ func newScheduledDeliveryConnectorRuntime(languageModel staticScheduleLanguageMo
 			"person-1": {PersonID: "person-1", SecurityLevelRank: 100, GrantedClasses: []string{"internal"}},
 		},
 	})
-	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	taskEventService := task.NewTaskEventService()
+	taskRunService := task.NewTaskRunService(taskEventService)
 	agentKernel := loop.NewAgentKernel(taskRunService, task.NewTaskStepService())
 	useScheduleTestLanguageModel(agentKernel, languageModel)
-	connectorRuntime := connectors.NewConnectorRuntime(identityService, agentKernel, taskRunService, nil)
+	connectorRuntime := connectors.NewConnectorRuntime(identityService, agentKernel, taskRunService, taskEventService, nil)
 	turnRouter := intake.NewTurnRouter(languageModel, agentcontract.IntakeOptions{IsEnabled: true})
 	launchFailureCompleter := launchfailure.NewCompleter(taskRunService, languageModel)
 	connectorRuntime.UseTurnRouter(turnRouter)
@@ -99,7 +100,8 @@ func newScheduledDeliveryConnectorRuntime(languageModel staticScheduleLanguageMo
 }
 
 func newScheduledDeliveryPoller(languageModel staticScheduleLanguageModel, repository *scheduledDeliveryRepository) scheduler.TaskSchedulePoller {
-	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	taskEventService := task.NewTaskEventService()
+	taskRunService := task.NewTaskRunService(taskEventService)
 	agentKernel := loop.NewAgentKernel(taskRunService, task.NewTaskStepService())
 	useScheduleTestLanguageModel(agentKernel, languageModel)
 	toolCatalogBuilder := agentruntime.NewToolCatalogBuilder()

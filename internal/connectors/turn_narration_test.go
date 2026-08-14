@@ -41,16 +41,23 @@ func TestNarrationNamesTheToolAndWhatItWasPointedAt(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			if narration := narrationOfTurnEvent(testCase.event); narration != testCase.expected {
-				t.Fatalf("narration = %q, want %q", narration, testCase.expected)
+			call, isCall := narrationOfTurnEvent(testCase.event)
+			if !isCall {
+				call = narratedCall{}
+			}
+			if call.label != testCase.expected {
+				t.Fatalf("narration = %q, want %q", call.label, testCase.expected)
 			}
 		})
 	}
 }
 
 func TestNarrationShowsOnlyTheLastLines(t *testing.T) {
-	lines := []string{"a", "b", "c", "d", "e", "f", "g", "h"}
-	message := narrationMessage(lines)
+	calls := []narratedCall{}
+	for _, label := range []string{"a", "b", "c", "d", "e", "f", "g", "h"} {
+		calls = append(calls, narratedCall{label: label})
+	}
+	message := narrationMessage(calls)
 	if want := "_c_\n_d_\n_e_\n_f_\n_g_\n_h_"; message != want {
 		t.Fatalf("message = %q, want %q", message, want)
 	}
@@ -147,5 +154,46 @@ func TestNarrationStopsOnceTheAnswerHasTakenTheMessage(t *testing.T) {
 	}
 	if len(adapter.sentMessages) != 1 {
 		t.Fatalf("a late tool call started a new message")
+	}
+}
+
+func TestALineSaysHowTheCallTurnedOut(t *testing.T) {
+	adapter := &recordingNarrationAdapter{sentID: "message-1"}
+	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"})
+
+	narrator.observe(context.Background(), taskstate.RawTurnEvent{
+		Name: "tool.file_read.requested",
+		Body: `{"observationID":"call-1","input":{"path":"/a"}}`,
+	})
+	narrator.observe(context.Background(), taskstate.RawTurnEvent{
+		Name: "tool.terminal_run.requested",
+		Body: `{"observationID":"call-2","input":{"command":"ls"}}`,
+	})
+	narrator.observe(context.Background(), taskstate.RawTurnEvent{
+		Name: "tool.file_read.result",
+		Body: `{"observationID":"call-1"}`,
+	})
+	narrator.observe(context.Background(), taskstate.RawTurnEvent{
+		Name: "tool.terminal_run.result",
+		Body: `{"observationID":"call-2","failure":{"reason":"exit 1"}}`,
+	})
+
+	last := adapter.editedMessages[len(adapter.editedMessages)-1]
+	if want := "_file_read(/a) ✓_\n_terminal_run(ls) ✗_"; last != want {
+		t.Fatalf("narration reads %q, want %q", last, want)
+	}
+}
+
+func TestAResultForACallNobodyNarratedChangesNothing(t *testing.T) {
+	adapter := &recordingNarrationAdapter{sentID: "message-1"}
+	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"})
+
+	narrator.observe(context.Background(), taskstate.RawTurnEvent{
+		Name: "tool.file_read.result",
+		Body: `{"observationID":"call-9"}`,
+	})
+
+	if len(adapter.sentMessages) != 0 || len(adapter.editedMessages) != 0 {
+		t.Fatal("a result on its own started a narration")
 	}
 }
