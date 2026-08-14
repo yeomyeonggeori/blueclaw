@@ -87,14 +87,14 @@ func TestTaskRunHandlerLaunchIgnoresClientCancellation(t *testing.T) {
 
 func TestTaskRunHandlerUsesLLMDTopologyPresetWithoutIntakeCall(t *testing.T) {
 	handler, taskRunService, taskEventService, languageModel := newPresetTaskRunHandler(true)
-	presetDecision, _, errorValue := handler.resolveTaskDecisionPreset(llmdTopologyTaskDecisionPreset)
+	presetDecision, _, errorValue := handler.resolveTaskDecisionPreset(modelPathTaskDecisionPreset)
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	if presetDecision.TaskLevel != agentcontract.TaskLevelXLow {
 		t.Fatalf("expected xlow diagnostic task level, got %s", presetDecision.TaskLevel)
 	}
-	request := httptest.NewRequest(http.MethodPost, "/admin/api/task/run", strings.NewReader(`{"requesterPersonID":"person-1","prompt":"reply exactly","taskDecisionPreset":"llmd_topology"}`))
+	request := httptest.NewRequest(http.MethodPost, "/admin/api/task/run", strings.NewReader(`{"requesterPersonID":"person-1","prompt":"reply exactly","taskDecisionPreset":"model_path"}`))
 	responseRecorder := httptest.NewRecorder()
 
 	handler.HandleRunTask(responseRecorder, request)
@@ -131,7 +131,7 @@ func TestTaskRunHandlerRejectsTaskDecisionPresetOverrides(t *testing.T) {
 	for _, override := range overrides {
 		t.Run(override, func(t *testing.T) {
 			handler, taskRunService := newStubbedPresetTaskRunHandler(true)
-			body := `{"requesterPersonID":"person-1","prompt":"reply exactly","taskDecisionPreset":"llmd_topology",` + override + `}`
+			body := `{"requesterPersonID":"person-1","prompt":"reply exactly","taskDecisionPreset":"model_path",` + override + `}`
 			request := httptest.NewRequest(http.MethodPost, "/admin/api/task/run", strings.NewReader(body))
 			responseRecorder := httptest.NewRecorder()
 
@@ -149,7 +149,7 @@ func TestTaskRunHandlerRejectsTaskDecisionPresetOverrides(t *testing.T) {
 
 func TestTaskRunHandlerRejectsDisabledTaskDecisionPresetBeforeLaunch(t *testing.T) {
 	handler, taskRunService := newStubbedPresetTaskRunHandler(false)
-	request := httptest.NewRequest(http.MethodPost, "/admin/api/task/run", strings.NewReader(`{"requesterPersonID":"person-1","prompt":"reply exactly","taskDecisionPreset":"llmd_topology"}`))
+	request := httptest.NewRequest(http.MethodPost, "/admin/api/task/run", strings.NewReader(`{"requesterPersonID":"person-1","prompt":"reply exactly","taskDecisionPreset":"model_path"}`))
 	responseRecorder := httptest.NewRecorder()
 
 	handler.HandleRunTask(responseRecorder, request)
@@ -270,7 +270,7 @@ func newStubbedPresetTaskRunHandler(isPresetAllowed bool) (TaskRunHandler, *task
 func presetTaskRunHandler(harness agentcontract.Harness, taskRunService *task.TaskRunService, isPresetAllowed bool) TaskRunHandler {
 	toolCatalogBuilder := agentruntime.NewToolCatalogBuilder()
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{
-		llmdTopologyDiagnosticProfileName: {"llmd.diagnostic.no_tools"},
+		modelPathDiagnosticProfileName: {"model_path.diagnostic.no_tools"},
 	}, nil)
 	identityService := identity.NewIdentityService(policy.PolicyProjection{
 		PersonAccessByPersonID: map[string]policy.PersonAccess{

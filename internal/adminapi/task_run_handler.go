@@ -39,8 +39,8 @@ type taskRunRequest struct {
 }
 
 const (
-	llmdTopologyTaskDecisionPreset    = "llmd_topology"
-	llmdTopologyDiagnosticProfileName = "llmd-diagnostic"
+	modelPathTaskDecisionPreset    = "model_path"
+	modelPathDiagnosticProfileName = "model-path-diagnostic"
 )
 
 type taskRunCancelRequest struct {
@@ -87,7 +87,7 @@ func (taskRunHandler TaskRunHandler) HandleRunTask(responseWriter http.ResponseW
 			http.Error(responseWriter, "task decision preset does not accept profile, tool, or skill overrides", http.StatusBadRequest)
 			return
 		}
-		runRequest.ProfileName = llmdTopologyDiagnosticProfileName
+		runRequest.ProfileName = modelPathDiagnosticProfileName
 	}
 	personAccess := taskRunHandler.IdentityService.ResolvePersonAccess(runRequest.RequesterPersonID)
 	conversationID := firstNonEmptyAdminString(runRequest.ConversationID, "admin:"+runRequest.RequesterPersonID)
@@ -137,7 +137,7 @@ func (taskRunHandler TaskRunHandler) resolveTaskDecisionPreset(preset string) (*
 	if !taskRunHandler.AllowTaskDecisionPreset {
 		return nil, http.StatusForbidden, errors.New("task decision presets are disabled")
 	}
-	if normalizedPreset != llmdTopologyTaskDecisionPreset {
+	if normalizedPreset != modelPathTaskDecisionPreset {
 		return nil, http.StatusBadRequest, errors.New("task decision preset is unsupported")
 	}
 	return &agentcontract.TurnDecision{
@@ -146,7 +146,7 @@ func (taskRunHandler TaskRunHandler) resolveTaskDecisionPreset(preset string) (*
 		TaskShape:          agentcontract.TaskShapeImmediateReply,
 		TaskLevel:          agentcontract.TaskLevelXLow,
 		PriorTaskReference: agentcontract.PriorTaskReferenceNone,
-		Reason:             "llmd topology diagnostic",
+		Reason:             "model path diagnostic",
 	}, 0, nil
 }
 
