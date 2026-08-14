@@ -2,14 +2,12 @@ package firecracker
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +20,7 @@ type SupervisorService struct {
 	WorkspaceVolumeService   WorkspaceVolumeService
 	GuestHealthClient        GuestHealthClient
 	OutboundNetworkService   OutboundNetworkService
+	VirtualMachineMonitor    VirtualMachineMonitor
 	HealthCheckInterval      time.Duration
 
 	mutex               sync.RWMutex
@@ -60,15 +59,10 @@ func (supervisorService *SupervisorService) BootGuest(bootContext context.Contex
 		return GuestInstance{}, errorValue
 	}
 
-	errorValue = supervisorService.writeConfigurationDocument(bootSpecification)
-	if errorValue != nil {
-		return GuestInstance{}, errorValue
-	}
-
 	standardOutputFile, errorValue := os.OpenFile(filepath.Join(bootSpecification.LogDirectoryPath, "stdout.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if errorValue != nil {
 		_ = supervisorService.cleanupOutboundNetwork(bootSpecification.OutboundNetwork)
-		_ = removeGuestJailerDirectory(bootSpecification)
+		_ = removeGuestInstanceDirectory(bootSpecification)
 		return GuestInstance{}, errorValue
 	}
 
@@ -76,11 +70,11 @@ func (supervisorService *SupervisorService) BootGuest(bootContext context.Contex
 	if errorValue != nil {
 		_ = standardOutputFile.Close()
 		_ = supervisorService.cleanupOutboundNetwork(bootSpecification.OutboundNetwork)
-		_ = removeGuestJailerDirectory(bootSpecification)
+		_ = removeGuestInstanceDirectory(bootSpecification)
 		return GuestInstance{}, errorValue
 	}
 
-	command := exec.CommandContext(bootContext, supervisorService.FirecrackerConfiguration.JailerPath, bootSpecification.JailerArguments...)
+	command := exec.CommandContext(bootContext, bootSpecification.LaunchExecutablePath, bootSpecification.LaunchArguments...)
 	command.Stdout = standardOutputFile
 	command.Stderr = standardErrorFile
 
@@ -89,7 +83,7 @@ func (supervisorService *SupervisorService) BootGuest(bootContext context.Contex
 	_ = standardErrorFile.Close()
 	if errorValue != nil {
 		_ = supervisorService.cleanupOutboundNetwork(bootSpecification.OutboundNetwork)
-		_ = removeGuestJailerDirectory(bootSpecification)
+		_ = removeGuestInstanceDirectory(bootSpecification)
 		return GuestInstance{}, errorValue
 	}
 
@@ -138,7 +132,7 @@ func (supervisorService *SupervisorService) StopGuest(guestInstance GuestInstanc
 		stopError = cleanupError
 	}
 
-	if cleanupError := removeGuestJailerDirectory(guestInstance.BootSpecification); cleanupError != nil && stopError == nil {
+	if cleanupError := removeGuestInstanceDirectory(guestInstance.BootSpecification); cleanupError != nil && stopError == nil {
 		stopError = cleanupError
 	}
 	return stopError
@@ -232,6 +226,11 @@ func (supervisorService *SupervisorService) buildBootSpecification() (BootSpecif
 		return BootSpecification{}, errorValue
 	}
 
+	virtualMachineMonitor, errorValue := supervisorService.resolveVirtualMachineMonitor()
+	if errorValue != nil {
+		return BootSpecification{}, errorValue
+	}
+
 	workspaceVolumeMetadata, errorValue := supervisorService.WorkspaceVolumeService.RequireWorkspaceImage(supervisorService.FirecrackerConfiguration.WorkspaceImagePath)
 	if errorValue != nil {
 		return BootSpecification{}, errorValue
@@ -244,117 +243,66 @@ func (supervisorService *SupervisorService) buildBootSpecification() (BootSpecif
 		return BootSpecification{}, errorValue
 	}
 
-	chrootBaseDirectoryPath := supervisorService.runtimeDirectoryPath()
-	errorValue = os.MkdirAll(chrootBaseDirectoryPath, 0o755)
+	runtimeDirectoryPath := supervisorService.runtimeDirectoryPath()
+	errorValue = os.MkdirAll(runtimeDirectoryPath, 0o755)
 	if errorValue != nil {
 		return BootSpecification{}, errorValue
 	}
-	if errorValue := supervisorService.removeInactiveJailerDirectories(chrootBaseDirectoryPath); errorValue != nil {
+	if errorValue := supervisorService.removeInactiveInstanceDirectories(runtimeDirectoryPath, virtualMachineMonitor.Name()); errorValue != nil {
 		return BootSpecification{}, errorValue
 	}
 
-	jailerRootPath := buildJailerRootPath(chrootBaseDirectoryPath, instanceID)
-	apiUnixSocketPath := filepath.Join(jailerRootPath, "firecracker-api.socket")
-	vsockUnixSocketPath := filepath.Join(jailerRootPath, "firecracker-vsock.socket")
-	configurationFilePath := filepath.Join(jailerRootPath, "firecracker-config.json")
-
-	kernelImagePath := "/vmlinux.bin"
-	rootfsImagePath := "/rootfs.ext4"
-	workspaceImagePath := "/workspace.ext4"
-	apiGuestSocketPath := "/firecracker-api.socket"
-	vsockGuestSocketPath := "/firecracker-vsock.socket"
-
-	errorValue = supervisorService.prepareJailerRootAssets(
-		jailerRootPath,
-		workspaceVolumeMetadata.HostImagePath,
-	)
+	outboundNetwork, networkInterfaces, errorValue := supervisorService.prepareOutboundNetwork(instanceID)
 	if errorValue != nil {
 		return BootSpecification{}, errorValue
 	}
 
-	outboundNetwork, networkConfigurations, errorValue := supervisorService.prepareOutboundNetwork(instanceID)
+	guestLaunch, errorValue := virtualMachineMonitor.PrepareGuestLaunch(GuestLaunchRequest{
+		InstanceID:              instanceID,
+		KernelImagePath:         supervisorService.FirecrackerConfiguration.KernelImagePath,
+		RootFilesystemImagePath: supervisorService.FirecrackerConfiguration.RootfsImagePath,
+		WorkspaceImagePath:      workspaceVolumeMetadata.HostImagePath,
+		RuntimeDirectoryPath:    runtimeDirectoryPath,
+		VCPUCount:               supervisorService.FirecrackerConfiguration.VCPUCount,
+		MemoryMiB:               supervisorService.FirecrackerConfiguration.MemoryMiB,
+		VSockCID:                supervisorService.FirecrackerConfiguration.VSockCID,
+		NetworkInterfaces:       networkInterfaces,
+	})
 	if errorValue != nil {
+		_ = supervisorService.cleanupOutboundNetwork(outboundNetwork)
 		return BootSpecification{}, errorValue
-	}
-
-	configurationDocument := ConfigurationDocument{
-		BootSource: BootSourceConfiguration{
-			KernelImagePath: kernelImagePath,
-			BootArguments:   "console=ttyS0 reboot=k panic=1 pci=off rw",
-		},
-		DriveConfigurations: []DriveConfiguration{
-			{
-				DriveID:      "rootfs",
-				PathOnHost:   rootfsImagePath,
-				IsRootDevice: true,
-				IsReadOnly:   false,
-			},
-			{
-				DriveID:      "workspace",
-				PathOnHost:   workspaceImagePath,
-				IsRootDevice: false,
-				IsReadOnly:   false,
-			},
-		},
-		MachineConfiguration: MachineConfiguration{
-			VCPUCount: supervisorService.FirecrackerConfiguration.VCPUCount,
-			MemoryMiB: supervisorService.FirecrackerConfiguration.MemoryMiB,
-		},
-		VSockConfiguration: VSockConfiguration{
-			GuestCID:       supervisorService.FirecrackerConfiguration.VSockCID,
-			UnixSocketPath: vsockGuestSocketPath,
-		},
-		NetworkConfigurations: networkConfigurations,
 	}
 
 	return BootSpecification{
 		InstanceID:              instanceID,
+		MonitorName:             virtualMachineMonitor.Name(),
 		LogDirectoryPath:        logDirectoryPath,
-		JailerRootPath:          jailerRootPath,
-		ConfigurationFilePath:   configurationFilePath,
-		APIUnixSocketPath:       apiUnixSocketPath,
-		VSockUnixSocketPath:     vsockUnixSocketPath,
+		InstanceRootPath:        guestLaunch.InstanceRootPath,
+		LaunchExecutablePath:    guestLaunch.ExecutablePath,
+		LaunchArguments:         guestLaunch.Arguments,
+		VSockUnixSocketPath:     guestLaunch.VSockUnixSocketPath,
 		OutboundNetwork:         outboundNetwork,
 		HealthPortOrService:     supervisorService.FirecrackerConfiguration.HealthPortOrService,
 		VSockCID:                supervisorService.FirecrackerConfiguration.VSockCID,
 		WorkspaceVolumeMetadata: workspaceVolumeMetadata,
-		ConfigurationDocument:   configurationDocument,
-		JailerArguments: []string{
-			"--id", instanceID,
-			"--exec-file", supervisorService.FirecrackerConfiguration.FirecrackerPath,
-			"--uid", strconv.Itoa(os.Getuid()),
-			"--gid", strconv.Itoa(os.Getgid()),
-			"--chroot-base-dir", chrootBaseDirectoryPath,
-			"--",
-			"--api-sock", apiGuestSocketPath,
-			"--config-file", "/firecracker-config.json",
-		},
 	}, nil
 }
 
-func (supervisorService *SupervisorService) prepareJailerRootAssets(
-	jailerRootPath string,
-	workspaceImagePath string,
-) error {
-	if errorValue := os.MkdirAll(jailerRootPath, 0o700); errorValue != nil {
-		return errorValue
+func (supervisorService *SupervisorService) resolveVirtualMachineMonitor() (VirtualMachineMonitor, error) {
+	if supervisorService.VirtualMachineMonitor != nil {
+		return supervisorService.VirtualMachineMonitor, nil
 	}
-
-	assetLinks := map[string]string{
-		supervisorService.FirecrackerConfiguration.KernelImagePath: filepath.Join(jailerRootPath, "vmlinux.bin"),
-		supervisorService.FirecrackerConfiguration.RootfsImagePath: filepath.Join(jailerRootPath, "rootfs.ext4"),
-		workspaceImagePath: filepath.Join(jailerRootPath, "workspace.ext4"),
-	}
-	for sourcePath, destinationPath := range assetLinks {
-		if errorValue := replaceHardLink(sourcePath, destinationPath); errorValue != nil {
-			return errorValue
-		}
-	}
-
-	return nil
+	return SelectVirtualMachineMonitor(
+		supervisorService.FirecrackerConfiguration.VirtualMachineMonitor,
+		MonitorBinaryPaths{
+			FirecrackerPath:     supervisorService.FirecrackerConfiguration.FirecrackerPath,
+			JailerPath:          supervisorService.FirecrackerConfiguration.JailerPath,
+			CloudHypervisorPath: supervisorService.FirecrackerConfiguration.CloudHypervisorPath,
+		},
+	)
 }
 
-func (supervisorService *SupervisorService) prepareOutboundNetwork(instanceID string) (OutboundNetwork, []NetworkInterfaceConfiguration, error) {
+func (supervisorService *SupervisorService) prepareOutboundNetwork(instanceID string) (OutboundNetwork, []GuestNetworkInterface, error) {
 	networkConfiguration := resolvedOutboundNetworkConfiguration(supervisorService.FirecrackerConfiguration.OutboundNetwork, instanceID)
 	if !networkConfiguration.Enabled {
 		return OutboundNetwork{}, nil, nil
@@ -374,7 +322,7 @@ func (supervisorService *SupervisorService) prepareOutboundNetwork(instanceID st
 		return OutboundNetwork{}, nil, errorValue
 	}
 
-	return outboundNetwork, []NetworkInterfaceConfiguration{{
+	return outboundNetwork, []GuestNetworkInterface{{
 		InterfaceID:     "eth0",
 		GuestMACAddress: networkConfiguration.GuestMACAddress,
 		HostDeviceName:  networkConfiguration.HostDeviceName,
@@ -428,31 +376,16 @@ func outboundNetworkDeviceName(instanceID string) string {
 	return "bctap" + trimmedInstanceID
 }
 
-func replaceHardLink(sourcePath string, destinationPath string) error {
-	if errorValue := os.Remove(destinationPath); errorValue != nil && !os.IsNotExist(errorValue) {
-		return errorValue
-	}
-	if errorValue := os.Link(sourcePath, destinationPath); errorValue != nil {
-		return fmt.Errorf("link %q into jail root at %q: %w", sourcePath, destinationPath, errorValue)
-	}
-
-	return nil
-}
-
-func buildJailerRootPath(instanceDirectoryPath string, instanceID string) string {
-	return filepath.Join(instanceDirectoryPath, "firecracker", instanceID, "root")
-}
-
-func removeGuestJailerDirectory(bootSpecification BootSpecification) error {
-	if bootSpecification.JailerRootPath == "" {
+func removeGuestInstanceDirectory(bootSpecification BootSpecification) error {
+	if bootSpecification.InstanceRootPath == "" {
 		return nil
 	}
-	return os.RemoveAll(filepath.Dir(bootSpecification.JailerRootPath))
+	return os.RemoveAll(filepath.Dir(bootSpecification.InstanceRootPath))
 }
 
-func (supervisorService *SupervisorService) removeInactiveJailerDirectories(instanceDirectoryPath string) error {
-	firecrackerDirectoryPath := filepath.Join(instanceDirectoryPath, "firecracker")
-	entries, errorValue := os.ReadDir(firecrackerDirectoryPath)
+func (supervisorService *SupervisorService) removeInactiveInstanceDirectories(runtimeDirectoryPath string, monitorName string) error {
+	monitorDirectoryPath := filepath.Join(runtimeDirectoryPath, monitorName)
+	entries, errorValue := os.ReadDir(monitorDirectoryPath)
 	if os.IsNotExist(errorValue) {
 		return nil
 	}
@@ -465,7 +398,7 @@ func (supervisorService *SupervisorService) removeInactiveJailerDirectories(inst
 		if !entry.IsDir() || activeInstanceIDs[entry.Name()] {
 			continue
 		}
-		if removeError := os.RemoveAll(filepath.Join(firecrackerDirectoryPath, entry.Name())); removeError != nil {
+		if removeError := os.RemoveAll(filepath.Join(monitorDirectoryPath, entry.Name())); removeError != nil {
 			return removeError
 		}
 	}
@@ -491,15 +424,6 @@ func (supervisorService *SupervisorService) runtimeDirectoryPath() string {
 		return "/var/lib/bc"
 	}
 	return filepath.Join(os.TempDir(), "blueclaw-firecracker")
-}
-
-func (supervisorService *SupervisorService) writeConfigurationDocument(bootSpecification BootSpecification) error {
-	configurationDocument, errorValue := json.MarshalIndent(bootSpecification.ConfigurationDocument, "", "  ")
-	if errorValue != nil {
-		return errorValue
-	}
-
-	return os.WriteFile(bootSpecification.ConfigurationFilePath, configurationDocument, 0o600)
 }
 
 func (supervisorService *SupervisorService) validateConfiguration() error {
