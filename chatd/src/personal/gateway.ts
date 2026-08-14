@@ -3,9 +3,12 @@ export type ActorCredential = {
 	secret: string;
 };
 
+// A person signing into the messenger app itself needs the address to sign in
+// at, which the company's server knows and the browser does not.
 export type PersonalIdentity = {
 	externalID: string;
 	name?: string;
+	serverURL?: string;
 };
 
 export type PersonalConversation = {

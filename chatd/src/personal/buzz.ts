@@ -67,7 +67,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 		this.require(actor);
 		const externalID = pubkeyFromSecret(actor.secret);
 		const user = await this.adapter.getUser(externalID).catch(() => null);
-		return { externalID, name: user?.fullName };
+		return { externalID, name: user?.fullName, serverURL: this.settings.relayURL };
 	}
 
 	async listConversations(actor: ActorCredential): Promise<PersonalConversation[]> {

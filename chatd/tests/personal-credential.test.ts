@@ -85,7 +85,7 @@ describe("a sign-in becomes something durable, and the password is not kept", ()
 
 		expect(await answer.json()).toEqual({
 			credential: { kind: "mattermost-token", secret: "a-durable-token" },
-			identity: { externalID: "U1", name: "이 샘플" },
+			identity: { externalID: "U1", name: "이 샘플", serverURL: baseURL },
 		});
 		const carriedThePassword = seen.filter((request) => request.body?.includes("a-password"));
 		expect(carriedThePassword.map((request) => new URL(request.url).pathname)).toEqual([
