@@ -109,7 +109,7 @@ class MattermostPersonalGateway implements PersonalGateway {
 
 	async identity(actor: ActorCredential): Promise<PersonalIdentity> {
 		const user = await this.ask<MattermostUser>(actor, "GET", "/users/me");
-		return { externalID: user.id, name: displayNameOf(user) };
+		return { externalID: user.id, name: displayNameOf(user), serverURL: this.baseURL };
 	}
 
 	async listConversations(actor: ActorCredential): Promise<PersonalConversation[]> {

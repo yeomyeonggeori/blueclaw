@@ -4,7 +4,9 @@ import {
 	deleteChannelMessageAsUser,
 	editChannelMessageAsUser,
 	ensureUserDirectMessageChannel,
+	listChannelMessagesAsUser,
 	listUserConversations,
+	profilePictureURLAsUser,
 	pubkeyFromSecret,
 	sendChannelMessageAsUser,
 } from "../adapters/buzz/user-session.ts";
@@ -65,7 +67,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 		this.require(actor);
 		const externalID = pubkeyFromSecret(actor.secret);
 		const user = await this.adapter.getUser(externalID).catch(() => null);
-		return { externalID, name: user?.fullName };
+		return { externalID, name: user?.fullName, serverURL: this.settings.relayURL };
 	}
 
 	async listConversations(actor: ActorCredential): Promise<PersonalConversation[]> {
@@ -75,7 +77,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 			id: conversation.channelID,
 			name: conversation.name,
 			kind: conversation.isDM ? "dm" : "group",
-			avatarURL: conversation.avatarURL,
+			participantExternalIDs: conversation.participantPubkeyHexes,
 		}));
 	}
 
@@ -106,9 +108,43 @@ class BuzzPersonalGateway implements PersonalGateway {
 		return { id: channel.channelID, name: "", kind: "dm" };
 	}
 
-	async listMessages(actor: ActorCredential): Promise<PersonalMessagePage> {
+	async listMessages(
+		actor: ActorCredential,
+		conversationID: string,
+		before?: string,
+	): Promise<PersonalMessagePage> {
 		this.require(actor);
-		throw new UnsupportedByPlatform(this.platform, "read messages");
+		const wanted = 50;
+		const read = await listChannelMessagesAsUser({
+			relayURL: this.settings.relayURL,
+			userSecretHex: actor.secret,
+			channelID: conversationID,
+			limit: wanted,
+			before,
+			authTagJSON: this.settings.authTagJSON,
+		});
+		return {
+			messages: read.map((message) => ({
+				id: message.id,
+				conversationID: message.conversationID,
+				parentID: message.parentID,
+				authorExternalID: message.authorPubkeyHex,
+				body: message.body,
+				postedAt: message.postedAt,
+				reactions: message.reactions.map((reaction) => ({
+					emoji: reaction.emoji,
+					imageURL: reaction.imageURL,
+					byExternalIDs: reaction.byPubkeyHexes,
+				})),
+				attachments: message.attachments.map((attachment) => ({
+					id: attachment.url,
+					filename: attachment.filename,
+					contentType: attachment.contentType,
+					sizeBytes: attachment.sizeBytes,
+				})),
+			})),
+			hasMoreBefore: read.length >= wanted,
+		};
 	}
 
 	async sendMessage(
@@ -212,17 +248,61 @@ class BuzzPersonalGateway implements PersonalGateway {
 		return null;
 	}
 
-	async readProfilePicture(actor: ActorCredential): Promise<PersonalImage | null> {
+	// A buzz profile names a picture by url rather than carrying it, and the
+	// caller wants the bytes.
+	async readProfilePicture(
+		actor: ActorCredential,
+		externalID: string,
+		largestBytes: number,
+	): Promise<PersonalImage | null> {
 		this.require(actor);
-		return null;
+		const pictureURL = await profilePictureURLAsUser(this.settings.relayURL, actor.secret, externalID);
+		if (!pictureURL) return null;
+		const held = await readWithinLimit(pictureURL, largestBytes, "image/png");
+		if (!held) return null;
+		return { dataURL: `data:${held.contentType};base64,${held.contentBase64}` };
 	}
 
-	async readAttachment(actor: ActorCredential): Promise<PersonalFile | null> {
+	// An attachment's id is the url the message named it by, so reading one is
+	// fetching what the message already points at rather than looking it up.
+	async readAttachment(
+		actor: ActorCredential,
+		attachmentID: string,
+		largestBytes: number,
+	): Promise<PersonalFile | null> {
 		this.require(actor);
-		return null;
+		if (!attachmentID.startsWith(this.mediaBaseURL())) return null;
+		const held = await readWithinLimit(attachmentID, largestBytes, "application/octet-stream");
+		if (!held) return null;
+		return {
+			filename: attachmentID.slice(attachmentID.lastIndexOf("/") + 1),
+			contentType: held.contentType,
+			contentBase64: held.contentBase64,
+		};
+	}
+
+	private mediaBaseURL(): string {
+		return this.settings.relayURL.replace(/^ws/, "http").replace(/\/+$/, "");
 	}
 
 	private require(actor: ActorCredential): void {
 		requireMatchingCredential(this, actor);
 	}
+}
+
+// A file too big for the caller is not an error to raise, it is a file they do
+// not get; the same is true of one the relay will not serve.
+async function readWithinLimit(
+	url: string,
+	largestBytes: number,
+	fallbackContentType: string,
+): Promise<{ contentType: string; contentBase64: string } | null> {
+	const response = await fetch(url);
+	if (!response.ok) return null;
+	const bytes = new Uint8Array(await response.arrayBuffer());
+	if (bytes.byteLength > largestBytes) return null;
+	return {
+		contentType: response.headers.get("content-type") ?? fallbackContentType,
+		contentBase64: Buffer.from(bytes).toString("base64"),
+	};
 }
