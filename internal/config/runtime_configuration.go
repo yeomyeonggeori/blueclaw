@@ -240,8 +240,10 @@ type LanguageModelCapabilityConfiguration struct {
 }
 
 type FirecrackerConfiguration struct {
+	VirtualMachineMonitor  string                            `json:"virtualMachineMonitor"`
 	FirecrackerPath        string                            `json:"firecrackerPath"`
 	JailerPath             string                            `json:"jailerPath"`
+	CloudHypervisorPath    string                            `json:"cloudHypervisorPath"`
 	KernelImagePath        string                            `json:"kernelImagePath"`
 	RootfsImagePath        string                            `json:"rootfsImagePath"`
 	WorkspaceImagePath     string                            `json:"workspaceImagePath"`

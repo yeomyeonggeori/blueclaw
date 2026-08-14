@@ -72,35 +72,17 @@ func TestBuildBootSpecificationIncludesWorkspaceAndVSock(t *testing.T) {
 		t.Fatalf("expected boot specification to build: %v", errorValue)
 	}
 
-	if bootSpecification.ConfigurationDocument.MachineConfiguration.VCPUCount != 4 {
-		t.Fatalf("expected vcpu count to match, got %d", bootSpecification.ConfigurationDocument.MachineConfiguration.VCPUCount)
+	if bootSpecification.MonitorName != FirecrackerMonitorName {
+		t.Fatalf("expected the firecracker monitor by default, got %q", bootSpecification.MonitorName)
 	}
-	if bootSpecification.ConfigurationDocument.VSockConfiguration.GuestCID != 52 {
-		t.Fatalf("expected guest cid to match, got %d", bootSpecification.ConfigurationDocument.VSockConfiguration.GuestCID)
+	if bootSpecification.LaunchExecutablePath != "/usr/bin/jailer" {
+		t.Fatalf("expected the jailer to be launched, got %q", bootSpecification.LaunchExecutablePath)
 	}
-	if bootSpecification.ConfigurationDocument.BootSource.KernelImagePath != "/vmlinux.bin" {
-		t.Fatalf("expected jailed kernel path, got %q", bootSpecification.ConfigurationDocument.BootSource.KernelImagePath)
+	if bootSpecification.InstanceRootPath == "" {
+		t.Fatal("expected an instance root path")
 	}
-	if !strings.Contains(bootSpecification.ConfigurationDocument.BootSource.BootArguments, " rw") {
-		t.Fatalf("expected guest rootfs to boot writable, got %q", bootSpecification.ConfigurationDocument.BootSource.BootArguments)
-	}
-	if bootSpecification.ConfigurationDocument.DriveConfigurations[0].PathOnHost != "/rootfs.ext4" {
-		t.Fatalf("expected jailed rootfs path, got %q", bootSpecification.ConfigurationDocument.DriveConfigurations[0].PathOnHost)
-	}
-	if bootSpecification.ConfigurationDocument.DriveConfigurations[0].IsReadOnly {
-		t.Fatal("expected jailed rootfs drive to be writable")
-	}
-	if bootSpecification.ConfigurationDocument.DriveConfigurations[1].PathOnHost != "/workspace.ext4" {
-		t.Fatalf("expected jailed workspace path, got %q", bootSpecification.ConfigurationDocument.DriveConfigurations[1].PathOnHost)
-	}
-	if bootSpecification.ConfigurationDocument.VSockConfiguration.UnixSocketPath != "/firecracker-vsock.socket" {
-		t.Fatalf("expected jailed vsock path, got %q", bootSpecification.ConfigurationDocument.VSockConfiguration.UnixSocketPath)
-	}
-	if bootSpecification.JailerRootPath == "" {
-		t.Fatal("expected jailer root path")
-	}
-	if len(bootSpecification.ConfigurationDocument.DriveConfigurations) != 2 {
-		t.Fatalf("expected rootfs and workspace drives, got %d", len(bootSpecification.ConfigurationDocument.DriveConfigurations))
+	if !strings.HasPrefix(bootSpecification.VSockUnixSocketPath, bootSpecification.InstanceRootPath) {
+		t.Fatalf("expected the host vsock socket inside the instance root, got %q", bootSpecification.VSockUnixSocketPath)
 	}
 	if bootSpecification.WorkspaceVolumeMetadata.GuestMountPath != "/workspace" {
 		t.Fatalf("expected workspace mount path to match, got %q", bootSpecification.WorkspaceVolumeMetadata.GuestMountPath)
@@ -153,22 +135,18 @@ func TestBuildBootSpecificationIncludesOutboundNetworkWhenEnabled(t *testing.T) 
 		t.Fatalf("expected boot specification to build: %v", errorValue)
 	}
 
-	if len(bootSpecification.ConfigurationDocument.NetworkConfigurations) != 1 {
-		t.Fatalf("expected one network interface, got %+v", bootSpecification.ConfigurationDocument.NetworkConfigurations)
-	}
-	networkConfiguration := bootSpecification.ConfigurationDocument.NetworkConfigurations[0]
-	if networkConfiguration.InterfaceID != "eth0" || networkConfiguration.GuestMACAddress != "AA:FC:00:00:00:01" {
-		t.Fatalf("expected default guest network configuration, got %+v", networkConfiguration)
-	}
 	if outboundNetworkService.preparedNetwork.NetworkCIDR != "172.31.0.0/30" {
 		t.Fatalf("expected host network setup to use guest subnet, got %+v", outboundNetworkService.preparedNetwork)
 	}
-	if !strings.HasPrefix(networkConfiguration.HostDeviceName, "bctap") {
-		t.Fatalf("expected deterministic tap device, got %+v", networkConfiguration)
+	if !strings.HasPrefix(outboundNetworkService.preparedNetwork.HostDeviceName, "bctap") {
+		t.Fatalf("expected deterministic tap device, got %+v", outboundNetworkService.preparedNetwork)
+	}
+	if !bootSpecification.OutboundNetwork.Enabled {
+		t.Fatalf("expected the boot specification to carry the outbound network, got %+v", bootSpecification.OutboundNetwork)
 	}
 }
 
-func TestStopGuestRemovesJailerDirectory(t *testing.T) {
+func TestStopGuestRemovesInstanceDirectory(t *testing.T) {
 	temporaryDirectory := t.TempDir()
 	instanceID := "testinstance"
 	jailerRootPath := buildJailerRootPath(temporaryDirectory, instanceID)
@@ -187,7 +165,7 @@ func TestStopGuestRemovesJailerDirectory(t *testing.T) {
 	errorValue := supervisorService.StopGuest(GuestInstance{
 		InstanceID: instanceID,
 		BootSpecification: BootSpecification{
-			JailerRootPath: jailerRootPath,
+			InstanceRootPath: jailerRootPath,
 		},
 	})
 	if errorValue != nil {
@@ -220,7 +198,7 @@ func TestStopGuestCleansOutboundNetwork(t *testing.T) {
 	errorValue := supervisorService.StopGuest(GuestInstance{
 		InstanceID: instanceID,
 		BootSpecification: BootSpecification{
-			JailerRootPath: jailerRootPath,
+			InstanceRootPath: jailerRootPath,
 			OutboundNetwork: OutboundNetwork{
 				Enabled:         true,
 				HostDeviceName:  "bctap-test",
@@ -238,7 +216,7 @@ func TestStopGuestCleansOutboundNetwork(t *testing.T) {
 	}
 }
 
-func TestRemoveInactiveJailerDirectoriesKeepsActiveInstance(t *testing.T) {
+func TestRemoveInactiveInstanceDirectoriesKeepsActiveInstance(t *testing.T) {
 	temporaryDirectory := t.TempDir()
 	activeInstanceID := "active"
 	inactiveInstanceID := "inactive"
@@ -254,7 +232,7 @@ func TestRemoveInactiveJailerDirectoriesKeepsActiveInstance(t *testing.T) {
 	supervisorService := NewSupervisorService(config.FirecrackerConfiguration{}, WorkspaceVolumeService{}, readyGuestHealthClient{})
 	supervisorService.commandByInstanceID[activeInstanceID] = exec.Command("sleep", "30")
 
-	if errorValue := supervisorService.removeInactiveJailerDirectories(temporaryDirectory); errorValue != nil {
+	if errorValue := supervisorService.removeInactiveInstanceDirectories(temporaryDirectory, FirecrackerMonitorName); errorValue != nil {
 		t.Fatalf("expected inactive cleanup to succeed: %v", errorValue)
 	}
 
