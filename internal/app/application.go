@@ -583,7 +583,7 @@ func loadAgentInstructionBundle(runtimeConfiguration config.RuntimeConfiguration
 			parts = append(parts, instructionDocument)
 			sources = append(sources, instructionSource)
 		}
-		discoveredSkillInstructions := readSkillInstructions(rootPath)
+		discoveredSkillInstructions := readSkillInstructions(rootPath, agentruntime.BundledSkillRootPath(rootPath))
 		for _, skillInstruction := range discoveredSkillInstructions {
 			if strings.TrimSpace(skillInstruction.Name) != "" {
 				includedSkillByName[skillInstruction.Name] = true
@@ -678,11 +678,11 @@ func readLegacyInstructionDocument(rootPath string) (string, agentcontract.Instr
 	return "", agentcontract.InstructionSource{}
 }
 
-func readSkillInstructions(rootPath string) []agentcontract.SkillInstruction {
+func readSkillInstructions(rootPath string, bundledSkillsPath string) []agentcontract.SkillInstruction {
 	skillInstructions := []agentcontract.SkillInstruction{}
 	skillRegistry := skill.NewSkillRegistry()
-	for _, relativePath := range []string{filepath.Join(".agents", "skills"), "skills"} {
-		discoveredSkillBundles, errorValue := skillRegistry.DiscoverSkill(filepath.Join(rootPath, relativePath))
+	for _, skillRoot := range []string{filepath.Join(rootPath, ".agents", "skills"), bundledSkillsPath} {
+		discoveredSkillBundles, errorValue := skillRegistry.DiscoverSkill(skillRoot)
 		if errorValue == nil {
 			for _, skillBundle := range discoveredSkillBundles {
 				document, readError := os.ReadFile(filepath.Join(skillBundle.DirectoryPath, "SKILL.md"))
