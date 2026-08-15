@@ -1,4 +1,5 @@
 import type { BuzzAdapter } from "../adapters/buzz/adapter.ts";
+import { isServedByTheRelay } from "../adapters/buzz/blossom.ts";
 import type { OutgoingAttachment } from "../outgoing-attachment.ts";
 import {
 	addReactionAsUser,
@@ -281,7 +282,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 		largestBytes: number,
 	): Promise<PersonalFile | null> {
 		this.require(actor);
-		if (!attachmentID.startsWith(this.mediaBaseURL())) return null;
+		if (!isServedByTheRelay(attachmentID, this.settings.relayURL)) return null;
 		const held = await readWithinLimit(attachmentID, largestBytes, "application/octet-stream");
 		if (!held) return null;
 		return {
@@ -289,10 +290,6 @@ class BuzzPersonalGateway implements PersonalGateway {
 			contentType: held.contentType,
 			contentBase64: held.contentBase64,
 		};
-	}
-
-	private mediaBaseURL(): string {
-		return this.settings.relayURL.replace(/^ws/, "http").replace(/\/+$/, "");
 	}
 
 	private require(actor: ActorCredential): void {

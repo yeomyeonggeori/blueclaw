@@ -27,6 +27,33 @@ export function blossomBaseURL(relayURL: string): string {
 	return relayURL;
 }
 
+// A message spells the relay's host the way whoever uploaded the file reached
+// it. An import run against localhost:3000 writes that, while the connector was
+// told 127.0.0.1:3000, and the two are the same machine serving the same file.
+// The question is whether the relay this session talks to is the one holding
+// the file, not whether two strings match.
+export function isServedByTheRelay(address: string, relayURL: string): boolean {
+	const file = parsedURL(address);
+	const relay = parsedURL(blossomBaseURL(relayURL));
+	if (!file || !relay) return false;
+	if (file.protocol !== relay.protocol || file.port !== relay.port) return false;
+	if (file.hostname === relay.hostname) return true;
+	return isLoopback(file.hostname) && isLoopback(relay.hostname);
+}
+
+function parsedURL(value: string): URL | null {
+	try {
+		return new URL(value);
+	} catch {
+		return null;
+	}
+}
+
+function isLoopback(hostname: string): boolean {
+	const name = hostname.replace(/^\[|\]$/g, "");
+	return name === "localhost" || name === "::1" || /^127\./.test(name);
+}
+
 export function imetaTag(blob: BlossomBlob, filename?: string): string[] {
 	const tag = [
 		"imeta",
