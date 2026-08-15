@@ -24,9 +24,10 @@ type SupervisorService struct {
 	VirtualMachineMonitor    VirtualMachineMonitor
 	HealthCheckInterval      time.Duration
 
-	mutex               sync.RWMutex
-	commandByInstanceID map[string]*exec.Cmd
-	exitByInstanceID    map[string]*guestExitState
+	mutex                sync.RWMutex
+	commandByInstanceID  map[string]*exec.Cmd
+	exitByInstanceID     map[string]*guestExitState
+	sidecarsByInstanceID map[string][]*exec.Cmd
 }
 
 type guestExitState struct {
@@ -51,6 +52,7 @@ func NewSupervisorService(
 		OutboundNetworkService:   HostOutboundNetworkService{},
 		commandByInstanceID:      map[string]*exec.Cmd{},
 		exitByInstanceID:         map[string]*guestExitState{},
+		sidecarsByInstanceID:     map[string][]*exec.Cmd{},
 	}
 }
 
@@ -75,6 +77,15 @@ func (supervisorService *SupervisorService) BootGuest(bootContext context.Contex
 		return GuestInstance{}, errorValue
 	}
 
+	sidecarCommands, errorValue := startSidecars(bootContext, bootSpecification)
+	if errorValue != nil {
+		_ = standardOutputFile.Close()
+		_ = standardErrorFile.Close()
+		_ = supervisorService.cleanupOutboundNetwork(bootSpecification.OutboundNetwork)
+		_ = removeGuestInstanceDirectory(bootSpecification)
+		return GuestInstance{}, errorValue
+	}
+
 	command := exec.CommandContext(bootContext, bootSpecification.LaunchExecutablePath, bootSpecification.LaunchArguments...)
 	command.Stdout = standardOutputFile
 	command.Stderr = standardErrorFile
@@ -83,10 +94,15 @@ func (supervisorService *SupervisorService) BootGuest(bootContext context.Contex
 	_ = standardOutputFile.Close()
 	_ = standardErrorFile.Close()
 	if errorValue != nil {
+		stopSidecars(sidecarCommands)
 		_ = supervisorService.cleanupOutboundNetwork(bootSpecification.OutboundNetwork)
 		_ = removeGuestInstanceDirectory(bootSpecification)
 		return GuestInstance{}, errorValue
 	}
+
+	supervisorService.mutex.Lock()
+	supervisorService.sidecarsByInstanceID[bootSpecification.InstanceID] = sidecarCommands
+	supervisorService.mutex.Unlock()
 
 	exitState := &guestExitState{exited: make(chan struct{})}
 	go func() {
@@ -113,8 +129,10 @@ func (supervisorService *SupervisorService) StopGuest(guestInstance GuestInstanc
 		return errors.New("guest instance was not found")
 	}
 	exitState := supervisorService.exitByInstanceID[guestInstance.InstanceID]
+	sidecarCommands := supervisorService.sidecarsByInstanceID[guestInstance.InstanceID]
 	delete(supervisorService.commandByInstanceID, guestInstance.InstanceID)
 	delete(supervisorService.exitByInstanceID, guestInstance.InstanceID)
+	delete(supervisorService.sidecarsByInstanceID, guestInstance.InstanceID)
 	supervisorService.mutex.Unlock()
 
 	var stopError error
@@ -128,6 +146,8 @@ func (supervisorService *SupervisorService) StopGuest(guestInstance GuestInstanc
 			_ = command.Wait()
 		}
 	}
+
+	stopSidecars(sidecarCommands)
 
 	if cleanupError := supervisorService.cleanupOutboundNetwork(guestInstance.BootSpecification.OutboundNetwork); cleanupError != nil && stopError == nil {
 		stopError = cleanupError
@@ -270,6 +290,7 @@ func (supervisorService *SupervisorService) buildBootSpecification() (BootSpecif
 		HostDialedGuestVSockPorts: supervisorService.hostDialedGuestVSockPorts(),
 		GuestDialedHostVSockPorts: supervisorService.guestDialedHostVSockPorts(),
 		NetworkInterfaces:         networkInterfaces,
+		DeliveryDirectoryPath:     supervisorService.FirecrackerConfiguration.DeliveryDirectoryPath,
 	})
 	if errorValue != nil {
 		_ = supervisorService.cleanupOutboundNetwork(outboundNetwork)
@@ -285,6 +306,7 @@ func (supervisorService *SupervisorService) buildBootSpecification() (BootSpecif
 		LaunchArguments:           guestLaunch.Arguments,
 		VSockUnixSocketPath:       guestLaunch.VSockUnixSocketPath,
 		VSockUnixSocketPathByPort: guestLaunch.VSockUnixSocketPathByPort,
+		Sidecars:                  guestLaunch.Sidecars,
 		OutboundNetwork:           outboundNetwork,
 		HealthPortOrService:       supervisorService.FirecrackerConfiguration.HealthPortOrService,
 		VSockCID:                  supervisorService.FirecrackerConfiguration.VSockCID,
@@ -322,6 +344,7 @@ func (supervisorService *SupervisorService) resolveVirtualMachineMonitor() (Virt
 			JailerPath:          supervisorService.FirecrackerConfiguration.JailerPath,
 			CloudHypervisorPath: supervisorService.FirecrackerConfiguration.CloudHypervisorPath,
 			VfkitPath:           supervisorService.FirecrackerConfiguration.VfkitPath,
+			VirtiofsdPath:       supervisorService.FirecrackerConfiguration.VirtiofsdPath,
 		},
 	)
 }
@@ -489,4 +512,40 @@ func (supervisorService *SupervisorService) validateConfiguration() error {
 	}
 
 	return nil
+}
+
+func startSidecars(bootContext context.Context, bootSpecification BootSpecification) ([]*exec.Cmd, error) {
+	started := []*exec.Cmd{}
+	for _, sidecar := range bootSpecification.Sidecars {
+		command := exec.CommandContext(bootContext, sidecar.ExecutablePath, sidecar.Arguments...)
+		logFile, errorValue := os.OpenFile(
+			filepath.Join(bootSpecification.LogDirectoryPath, sidecar.Name+".log"),
+			os.O_CREATE|os.O_WRONLY|os.O_APPEND,
+			0o600,
+		)
+		if errorValue != nil {
+			stopSidecars(started)
+			return nil, errorValue
+		}
+		command.Stdout = logFile
+		command.Stderr = logFile
+		errorValue = command.Start()
+		_ = logFile.Close()
+		if errorValue != nil {
+			stopSidecars(started)
+			return nil, fmt.Errorf("start %s: %w", sidecar.Name, errorValue)
+		}
+		started = append(started, command)
+	}
+	return started, nil
+}
+
+func stopSidecars(sidecarCommands []*exec.Cmd) {
+	for _, command := range sidecarCommands {
+		if command.Process == nil {
+			continue
+		}
+		_ = command.Process.Kill()
+		_ = command.Wait()
+	}
 }

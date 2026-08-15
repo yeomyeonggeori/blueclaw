@@ -245,6 +245,8 @@ type FirecrackerConfiguration struct {
 	JailerPath             string                            `json:"jailerPath"`
 	CloudHypervisorPath    string                            `json:"cloudHypervisorPath"`
 	VfkitPath              string                            `json:"vfkitPath"`
+	VirtiofsdPath          string                            `json:"virtiofsdPath"`
+	DeliveryDirectoryPath  string                            `json:"deliveryDirectoryPath"`
 	KernelImagePath        string                            `json:"kernelImagePath"`
 	RootfsImagePath        string                            `json:"rootfsImagePath"`
 	WorkspaceImagePath     string                            `json:"workspaceImagePath"`

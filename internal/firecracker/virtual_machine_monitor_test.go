@@ -275,3 +275,77 @@ func shortRuntimeDirectory(t *testing.T) string {
 	t.Cleanup(func() { _ = os.RemoveAll(directory) })
 	return directory
 }
+
+func TestCloudHypervisorMonitorServesTheDeliveryShare(t *testing.T) {
+	request := guestLaunchRequestFixture(t)
+	request.DeliveryDirectoryPath = "/var/lib/blueclaw/delivery"
+	monitor := CloudHypervisorMonitor{
+		CloudHypervisorPath: "/usr/local/bin/cloud-hypervisor",
+		VirtiofsdPath:       "/usr/libexec/virtiofsd",
+	}
+
+	guestLaunch, errorValue := monitor.PrepareGuestLaunch(request)
+	if errorValue != nil {
+		t.Fatalf("expected launch to prepare: %v", errorValue)
+	}
+
+	if !containsArgument(guestLaunch.Arguments, "size=8192M,shared=on") {
+		t.Fatalf("virtio-fs reaches guest memory directly, so the mapping must be shared, got %v", guestLaunch.Arguments)
+	}
+	if len(guestLaunch.Sidecars) != 1 || guestLaunch.Sidecars[0].ExecutablePath != "/usr/libexec/virtiofsd" {
+		t.Fatalf("expected virtiofsd beside the guest, got %+v", guestLaunch.Sidecars)
+	}
+	if !containsArgument(guestLaunch.Arguments, "tag="+DeliveryMountTag+",socket="+filepath.Join(guestLaunch.InstanceRootPath, "virtiofsd-delivery.socket")) {
+		t.Fatalf("expected the share to be offered on the socket virtiofsd binds, got %v", guestLaunch.Arguments)
+	}
+	if !containsArgument(guestLaunch.Sidecars[0].Arguments, "--shared-dir=/var/lib/blueclaw/delivery") {
+		t.Fatalf("expected virtiofsd to serve the delivery directory, got %v", guestLaunch.Sidecars[0].Arguments)
+	}
+}
+
+func TestCloudHypervisorMonitorAsksForNoShareWhenNoneIsGiven(t *testing.T) {
+	request := guestLaunchRequestFixture(t)
+	monitor := CloudHypervisorMonitor{CloudHypervisorPath: "/usr/local/bin/cloud-hypervisor"}
+
+	guestLaunch, errorValue := monitor.PrepareGuestLaunch(request)
+	if errorValue != nil {
+		t.Fatalf("expected launch to prepare: %v", errorValue)
+	}
+
+	if len(guestLaunch.Sidecars) != 0 {
+		t.Fatalf("a guest with no delivery directory needs no daemon beside it, got %+v", guestLaunch.Sidecars)
+	}
+	if containsArgument(guestLaunch.Arguments, "size=8192M,shared=on") {
+		t.Fatal("a shared mapping is what virtio-fs needs, so it should not be asked for without one")
+	}
+}
+
+func TestCloudHypervisorMonitorRefusesAShareItCannotServe(t *testing.T) {
+	request := guestLaunchRequestFixture(t)
+	request.DeliveryDirectoryPath = "/var/lib/blueclaw/delivery"
+	monitor := CloudHypervisorMonitor{CloudHypervisorPath: "/usr/local/bin/cloud-hypervisor"}
+
+	if _, errorValue := monitor.PrepareGuestLaunch(request); errorValue == nil {
+		t.Fatal("expected a delivery directory with no virtiofsd to be refused rather than silently dropped")
+	}
+}
+
+func TestVfkitMonitorServesTheDeliveryShareItself(t *testing.T) {
+	request := guestLaunchRequestFixture(t)
+	request.RuntimeDirectoryPath = shortRuntimeDirectory(t)
+	request.HostDialedGuestVSockPorts = []uint32{8082}
+	request.DeliveryDirectoryPath = "/var/lib/blueclaw/delivery"
+	monitor := VfkitMonitor{VfkitPath: "/usr/local/bin/vfkit"}
+
+	guestLaunch, errorValue := monitor.PrepareGuestLaunch(request)
+	if errorValue != nil {
+		t.Fatalf("expected launch to prepare: %v", errorValue)
+	}
+
+	if len(guestLaunch.Sidecars) != 0 {
+		t.Fatalf("Virtualization.framework serves the share itself, so nothing runs beside the VM, got %+v", guestLaunch.Sidecars)
+	}
+	if !containsArgument(guestLaunch.Arguments, "virtio-fs,sharedDir=/var/lib/blueclaw/delivery,mountTag="+DeliveryMountTag) {
+		t.Fatalf("expected the share to carry the tag the guest mounts, got %v", guestLaunch.Arguments)
+	}
+}

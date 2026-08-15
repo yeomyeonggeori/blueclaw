@@ -21,6 +21,7 @@ type GuestLaunchRequest struct {
 	HostDialedGuestVSockPorts []uint32
 	GuestDialedHostVSockPorts []uint32
 	NetworkInterfaces         []GuestNetworkInterface
+	DeliveryDirectoryPath     string
 }
 
 type GuestNetworkInterface struct {
@@ -39,12 +40,26 @@ type GuestLaunch struct {
 	// stream straight away, so a monitor fills in one of these and never both.
 	VSockUnixSocketPath       string
 	VSockUnixSocketPathByPort map[uint32]string
+
+	// A monitor that reaches the delivery directory through a separate daemon names it
+	// here. The supervisor starts it before the guest and stops it after, because the
+	// daemon serves a single client and exits with it.
+	Sidecars []SidecarCommand
+}
+
+type SidecarCommand struct {
+	Name           string
+	ExecutablePath string
+	Arguments      []string
 }
 
 const (
 	FirecrackerMonitorName     = "firecracker"
 	CloudHypervisorMonitorName = "cloudHypervisor"
 	VfkitMonitorName           = "vfkit"
+
+	// The guest mounts the delivery share by this tag, so it is one name in two repositories.
+	DeliveryMountTag = "delivery"
 )
 
 func SelectVirtualMachineMonitor(monitorName string, configuration MonitorBinaryPaths) (VirtualMachineMonitor, error) {
@@ -55,7 +70,10 @@ func SelectVirtualMachineMonitor(monitorName string, configuration MonitorBinary
 			JailerPath:      configuration.JailerPath,
 		}, nil
 	case CloudHypervisorMonitorName:
-		return CloudHypervisorMonitor{CloudHypervisorPath: configuration.CloudHypervisorPath}, nil
+		return CloudHypervisorMonitor{
+			CloudHypervisorPath: configuration.CloudHypervisorPath,
+			VirtiofsdPath:       configuration.VirtiofsdPath,
+		}, nil
 	case VfkitMonitorName:
 		return VfkitMonitor{VfkitPath: configuration.VfkitPath}, nil
 	}
@@ -67,4 +85,5 @@ type MonitorBinaryPaths struct {
 	JailerPath          string
 	CloudHypervisorPath string
 	VfkitPath           string
+	VirtiofsdPath       string
 }
