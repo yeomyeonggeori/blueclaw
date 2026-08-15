@@ -65,14 +65,13 @@ run_as_root systemctl stop blueclaw
 before_pg_version="$(run_as_root debugfs -R 'cat /.blueclaw/postgres/data/PG_VERSION' "$workspace_image" 2>/dev/null | tr -d '\r\n')"
 test -n "$before_pg_version"
 
-run_as_root /usr/local/bin/blueclaw-supervisor sync-workspace --atomic \
-  --workspace-image "$workspace_image" --source "$host_workspace/skills" --relative-target skills
-run_as_root /usr/local/bin/blueclaw-supervisor sync-workspace --atomic --preserve-guest-state \
-  --workspace-image "$workspace_image" --source "$host_workspace"
+run_as_root mkdir -p /var/lib/blueclaw/delivery/runtime/current /var/lib/blueclaw/delivery/skills
+run_as_root rsync -a --delete "$host_workspace/.blueclaw/runtime/current/" /var/lib/blueclaw/delivery/runtime/current/
+run_as_root rsync -a --delete "$host_workspace/skills/" /var/lib/blueclaw/delivery/skills/
 
 after_sync_pg_version="$(run_as_root debugfs -R 'cat /.blueclaw/postgres/data/PG_VERSION' "$workspace_image" 2>/dev/null | tr -d '\r\n')"
 if [ "$after_sync_pg_version" != "$before_pg_version" ]; then
-  echo "PG_VERSION changed across workspace sync: before=$before_pg_version after=$after_sync_pg_version" >&2
+  echo "PG_VERSION changed across a delivery refresh: before=$before_pg_version after=$after_sync_pg_version" >&2
   exit 1
 fi
 

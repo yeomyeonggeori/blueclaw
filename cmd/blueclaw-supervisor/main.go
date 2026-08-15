@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -20,13 +19,6 @@ import (
 const guestHealthTimeout = 300 * time.Second
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "sync-workspace" {
-		if errorValue := syncWorkspace(os.Args[2:]); errorValue != nil {
-			log.Fatal(errorValue)
-		}
-		return
-	}
-
 	runtimeConfigurationPath := flag.String("runtime", "config/runtime.example.json", "runtime configuration path")
 	flag.Parse()
 
@@ -128,44 +120,4 @@ func prepareGuestShutdown(hostHTTPListenAddress string) {
 	defer response.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
 	log.Printf("guest prepare-shutdown status=%d body=%s", response.StatusCode, strings.TrimSpace(string(body)))
-}
-
-func syncWorkspace(arguments []string) error {
-	flagSet := flag.NewFlagSet("sync-workspace", flag.ContinueOnError)
-	runtimeConfigurationPath := flagSet.String("runtime", "", "runtime configuration path")
-	workspaceImagePath := flagSet.String("workspace-image", "", "workspace image path")
-	sourceDirectoryPath := flagSet.String("source", "", "source directory path")
-	relativeTargetPath := flagSet.String("relative-target", "", "workspace-relative target directory")
-	isAtomic := flagSet.Bool("atomic", false, "copy and atomically replace the workspace image")
-	preserveGuestState := flagSet.Bool("preserve-guest-state", false, "preserve guest-owned workspace state")
-	if errorValue := flagSet.Parse(arguments); errorValue != nil {
-		return errorValue
-	}
-	if *sourceDirectoryPath == "" {
-		return fmt.Errorf("source directory path is required")
-	}
-	if !*isAtomic {
-		return fmt.Errorf("sync-workspace requires --atomic")
-	}
-
-	resolvedWorkspaceImagePath := *workspaceImagePath
-	if resolvedWorkspaceImagePath == "" {
-		if *runtimeConfigurationPath == "" {
-			return fmt.Errorf("workspace image path or runtime configuration path is required")
-		}
-		runtimeConfiguration, errorValue := config.LoadRuntimeConfiguration(*runtimeConfigurationPath)
-		if errorValue != nil {
-			return errorValue
-		}
-		resolvedWorkspaceImagePath = runtimeConfiguration.Firecracker.WorkspaceImagePath
-	}
-
-	workspaceVolumeService := firecracker.WorkspaceVolumeService{}
-	if *preserveGuestState {
-		if *relativeTargetPath != "" {
-			return fmt.Errorf("--preserve-guest-state cannot be combined with --relative-target")
-		}
-		return workspaceVolumeService.SyncWorkspaceDirectoryPreservingGuestState(resolvedWorkspaceImagePath, *sourceDirectoryPath)
-	}
-	return workspaceVolumeService.SyncWorkspaceDirectory(resolvedWorkspaceImagePath, *sourceDirectoryPath, *relativeTargetPath)
 }
