@@ -16,8 +16,11 @@ type GuestLaunchRequest struct {
 	VCPUCount               int
 	MemoryMiB               int
 	VSockCID                uint32
-	GuestVSockPorts         []uint32
-	NetworkInterfaces       []GuestNetworkInterface
+	// vfkit binds each direction differently, so they are named apart: the host opens a
+	// connection to a guest listener on the first, and listens for the guest on the second.
+	HostDialedGuestVSockPorts []uint32
+	GuestDialedHostVSockPorts []uint32
+	NetworkInterfaces         []GuestNetworkInterface
 }
 
 type GuestNetworkInterface struct {

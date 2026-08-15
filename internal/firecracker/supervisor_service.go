@@ -259,16 +259,17 @@ func (supervisorService *SupervisorService) buildBootSpecification() (BootSpecif
 	}
 
 	guestLaunch, errorValue := virtualMachineMonitor.PrepareGuestLaunch(GuestLaunchRequest{
-		InstanceID:              instanceID,
-		KernelImagePath:         supervisorService.FirecrackerConfiguration.KernelImagePath,
-		RootFilesystemImagePath: supervisorService.FirecrackerConfiguration.RootfsImagePath,
-		WorkspaceImagePath:      workspaceVolumeMetadata.HostImagePath,
-		RuntimeDirectoryPath:    runtimeDirectoryPath,
-		VCPUCount:               supervisorService.FirecrackerConfiguration.VCPUCount,
-		MemoryMiB:               supervisorService.FirecrackerConfiguration.MemoryMiB,
-		VSockCID:                supervisorService.FirecrackerConfiguration.VSockCID,
-		GuestVSockPorts:         supervisorService.guestVSockPorts(),
-		NetworkInterfaces:       networkInterfaces,
+		InstanceID:                instanceID,
+		KernelImagePath:           supervisorService.FirecrackerConfiguration.KernelImagePath,
+		RootFilesystemImagePath:   supervisorService.FirecrackerConfiguration.RootfsImagePath,
+		WorkspaceImagePath:        workspaceVolumeMetadata.HostImagePath,
+		RuntimeDirectoryPath:      runtimeDirectoryPath,
+		VCPUCount:                 supervisorService.FirecrackerConfiguration.VCPUCount,
+		MemoryMiB:                 supervisorService.FirecrackerConfiguration.MemoryMiB,
+		VSockCID:                  supervisorService.FirecrackerConfiguration.VSockCID,
+		HostDialedGuestVSockPorts: supervisorService.hostDialedGuestVSockPorts(),
+		GuestDialedHostVSockPorts: supervisorService.guestDialedHostVSockPorts(),
+		NetworkInterfaces:         networkInterfaces,
 	})
 	if errorValue != nil {
 		_ = supervisorService.cleanupOutboundNetwork(outboundNetwork)
@@ -291,7 +292,7 @@ func (supervisorService *SupervisorService) buildBootSpecification() (BootSpecif
 	}, nil
 }
 
-func (supervisorService *SupervisorService) guestVSockPorts() []uint32 {
+func (supervisorService *SupervisorService) hostDialedGuestVSockPorts() []uint32 {
 	configuration := supervisorService.FirecrackerConfiguration
 	ports := []uint32{}
 	for _, portOrService := range []string{configuration.HealthPortOrService, configuration.GuestHTTPPortOrService} {
@@ -299,7 +300,12 @@ func (supervisorService *SupervisorService) guestVSockPorts() []uint32 {
 			ports = append(ports, uint32(port))
 		}
 	}
-	for _, listenerProxy := range configuration.GuestListenerProxies {
+	return ports
+}
+
+func (supervisorService *SupervisorService) guestDialedHostVSockPorts() []uint32 {
+	ports := []uint32{}
+	for _, listenerProxy := range supervisorService.FirecrackerConfiguration.GuestListenerProxies {
 		ports = append(ports, listenerProxy.GuestPort)
 	}
 	return ports

@@ -21,8 +21,8 @@ func (monitor VfkitMonitor) PrepareGuestLaunch(request GuestLaunchRequest) (Gues
 	if monitor.VfkitPath == "" {
 		return GuestLaunch{}, errors.New("vfkitPath is required")
 	}
-	if len(request.GuestVSockPorts) == 0 {
-		return GuestLaunch{}, errors.New("vfkit binds one socket per guest port, so the ports must be named")
+	if len(request.HostDialedGuestVSockPorts) == 0 {
+		return GuestLaunch{}, errors.New("vfkit binds one socket per guest port, so the ports the host dials must be named")
 	}
 
 	instanceRootPath := buildVfkitInstanceRootPath(request.RuntimeDirectoryPath, request.InstanceID)
@@ -51,11 +51,19 @@ func (monitor VfkitMonitor) PrepareGuestLaunch(request GuestLaunchRequest) (Gues
 		"--device", "virtio-rng",
 	}
 
+	// A vsock device listens by default, meaning vfkit waits for the guest to dial out and
+	// connects to a socket the host already holds. Reaching a listener inside the guest is
+	// the other direction and needs connect, or the socket is never bound and the health
+	// check waits on a path nothing creates.
 	vsockUnixSocketPathByPort := map[uint32]string{}
-	for _, guestPort := range request.GuestVSockPorts {
+	for _, guestPort := range request.HostDialedGuestVSockPorts {
 		socketPath := filepath.Join(instanceRootPath, fmt.Sprintf("vfkit-vsock-%d.socket", guestPort))
 		vsockUnixSocketPathByPort[guestPort] = socketPath
-		arguments = append(arguments, "--device", fmt.Sprintf("virtio-vsock,port=%d,socketURL=%s", guestPort, socketPath))
+		arguments = append(arguments, "--device", fmt.Sprintf("virtio-vsock,port=%d,socketURL=%s,connect", guestPort, socketPath))
+	}
+	for _, hostPort := range request.GuestDialedHostVSockPorts {
+		socketPath := fmt.Sprintf("%s_%d", filepath.Join(instanceRootPath, "vfkit-vsock.socket"), hostPort)
+		arguments = append(arguments, "--device", fmt.Sprintf("virtio-vsock,port=%d,socketURL=%s", hostPort, socketPath))
 	}
 
 	for _, networkInterface := range request.NetworkInterfaces {
