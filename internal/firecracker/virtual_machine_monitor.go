@@ -16,6 +16,7 @@ type GuestLaunchRequest struct {
 	VCPUCount               int
 	MemoryMiB               int
 	VSockCID                uint32
+	GuestVSockPorts         []uint32
 	NetworkInterfaces       []GuestNetworkInterface
 }
 
@@ -26,15 +27,21 @@ type GuestNetworkInterface struct {
 }
 
 type GuestLaunch struct {
-	ExecutablePath      string
-	Arguments           []string
-	InstanceRootPath    string
-	VSockUnixSocketPath string
+	ExecutablePath   string
+	Arguments        []string
+	InstanceRootPath string
+
+	// Firecracker and Cloud Hypervisor multiplex every guest port over one socket and
+	// open a port with a CONNECT line. vfkit binds a socket per port and speaks the
+	// stream straight away, so a monitor fills in one of these and never both.
+	VSockUnixSocketPath       string
+	VSockUnixSocketPathByPort map[uint32]string
 }
 
 const (
 	FirecrackerMonitorName     = "firecracker"
 	CloudHypervisorMonitorName = "cloudHypervisor"
+	VfkitMonitorName           = "vfkit"
 )
 
 func SelectVirtualMachineMonitor(monitorName string, configuration MonitorBinaryPaths) (VirtualMachineMonitor, error) {
@@ -46,6 +53,8 @@ func SelectVirtualMachineMonitor(monitorName string, configuration MonitorBinary
 		}, nil
 	case CloudHypervisorMonitorName:
 		return CloudHypervisorMonitor{CloudHypervisorPath: configuration.CloudHypervisorPath}, nil
+	case VfkitMonitorName:
+		return VfkitMonitor{VfkitPath: configuration.VfkitPath}, nil
 	}
 	return nil, fmt.Errorf("unknown virtual machine monitor %q", monitorName)
 }
@@ -54,4 +63,5 @@ type MonitorBinaryPaths struct {
 	FirecrackerPath     string
 	JailerPath          string
 	CloudHypervisorPath string
+	VfkitPath           string
 }

@@ -1,17 +1,18 @@
 package firecracker
 
 type BootSpecification struct {
-	InstanceID              string
-	MonitorName             string
-	LogDirectoryPath        string
-	InstanceRootPath        string
-	LaunchExecutablePath    string
-	LaunchArguments         []string
-	VSockUnixSocketPath     string
-	OutboundNetwork         OutboundNetwork
-	HealthPortOrService     string
-	VSockCID                uint32
-	WorkspaceVolumeMetadata WorkspaceVolumeMetadata
+	InstanceID                string
+	MonitorName               string
+	LogDirectoryPath          string
+	InstanceRootPath          string
+	LaunchExecutablePath      string
+	LaunchArguments           []string
+	VSockUnixSocketPath       string
+	VSockUnixSocketPathByPort map[uint32]string
+	OutboundNetwork           OutboundNetwork
+	HealthPortOrService       string
+	VSockCID                  uint32
+	WorkspaceVolumeMetadata   WorkspaceVolumeMetadata
 }
 
 type ConfigurationDocument struct {

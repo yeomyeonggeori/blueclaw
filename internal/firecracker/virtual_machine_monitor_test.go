@@ -2,6 +2,7 @@ package firecracker
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -175,4 +176,88 @@ func containsArgument(arguments []string, expected string) bool {
 		}
 	}
 	return false
+}
+
+func TestVfkitMonitorBootsWithoutAnInitialRamdiskOfItsOwn(t *testing.T) {
+	request := guestLaunchRequestFixture(t)
+	request.RuntimeDirectoryPath = shortRuntimeDirectory(t)
+	request.GuestVSockPorts = []uint32{8080, 8081}
+	monitor := VfkitMonitor{VfkitPath: "/usr/local/bin/vfkit"}
+
+	guestLaunch, errorValue := monitor.PrepareGuestLaunch(request)
+	if errorValue != nil {
+		t.Fatalf("expected launch to prepare: %v", errorValue)
+	}
+
+	commandLine := strings.Join(guestLaunch.Arguments, " ")
+	if !strings.Contains(commandLine, "console=hvc0") {
+		t.Fatalf("expected the virtio console Virtualization.framework offers, got %q", commandLine)
+	}
+	if !strings.Contains(commandLine, "root=/dev/vda") {
+		t.Fatalf("expected the root device to be named, got %q", commandLine)
+	}
+
+	initialRamdiskPath := filepath.Join(guestLaunch.InstanceRootPath, "empty.initrd")
+	document, errorValue := os.ReadFile(initialRamdiskPath)
+	if errorValue != nil {
+		t.Fatalf("vfkit stats the initrd whether or not the guest needs one: %v", errorValue)
+	}
+	if !strings.Contains(string(document), "TRAILER!!!") {
+		t.Fatal("expected an archive that unpacks to nothing so the kernel falls through to the root device")
+	}
+}
+
+func TestVfkitMonitorBindsASocketPerGuestPort(t *testing.T) {
+	request := guestLaunchRequestFixture(t)
+	request.RuntimeDirectoryPath = shortRuntimeDirectory(t)
+	request.GuestVSockPorts = []uint32{8080, 8081}
+	monitor := VfkitMonitor{VfkitPath: "/usr/local/bin/vfkit"}
+
+	guestLaunch, errorValue := monitor.PrepareGuestLaunch(request)
+	if errorValue != nil {
+		t.Fatalf("expected launch to prepare: %v", errorValue)
+	}
+
+	if guestLaunch.VSockUnixSocketPath != "" {
+		t.Fatal("vfkit multiplexes nothing, so a single socket would be dialled with a CONNECT line it never answers")
+	}
+	for _, guestPort := range request.GuestVSockPorts {
+		socketPath := guestLaunch.VSockUnixSocketPathByPort[guestPort]
+		if socketPath == "" {
+			t.Fatalf("expected a socket bound for guest port %d", guestPort)
+		}
+		if !containsArgument(guestLaunch.Arguments, fmt.Sprintf("virtio-vsock,port=%d,socketURL=%s", guestPort, socketPath)) {
+			t.Fatalf("expected the device for guest port %d to match the reported socket", guestPort)
+		}
+	}
+
+	if _, errorValue := monitor.PrepareGuestLaunch(GuestLaunchRequest{
+		InstanceID:           "noports",
+		RuntimeDirectoryPath: shortRuntimeDirectory(t),
+	}); errorValue == nil {
+		t.Fatal("expected a launch with no guest ports to be refused, since nothing could reach the guest")
+	}
+}
+
+func TestVfkitMonitorRefusesASocketPathMacOSCannotBind(t *testing.T) {
+	request := guestLaunchRequestFixture(t)
+	request.RuntimeDirectoryPath = filepath.Join(shortRuntimeDirectory(t), strings.Repeat("deep", 30))
+	request.GuestVSockPorts = []uint32{8080}
+	monitor := VfkitMonitor{VfkitPath: "/usr/local/bin/vfkit"}
+
+	if _, errorValue := monitor.PrepareGuestLaunch(request); errorValue == nil {
+		t.Fatal("expected an over-long socket path to be named here rather than reported by vfkit as an invalid URI")
+	}
+}
+
+// macOS temporary directories are long enough on their own to trip the socket path
+// limit, which is the point of the guard but not the subject of these tests.
+func shortRuntimeDirectory(t *testing.T) string {
+	t.Helper()
+	directory, errorValue := os.MkdirTemp("/tmp", "vk")
+	if errorValue != nil {
+		t.Fatalf("expected a short runtime directory: %v", errorValue)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(directory) })
+	return directory
 }
