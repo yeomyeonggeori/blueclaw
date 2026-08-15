@@ -1,4 +1,5 @@
-import type { ActorCredential, PersonalOutgoingAttachment } from "./gateway.ts";
+import type { ActorCredential } from "./gateway.ts";
+import type { OutgoingAttachment } from "../outgoing-attachment.ts";
 
 export class MalformedRequest extends Error {
 	constructor(message: string) {
@@ -23,7 +24,7 @@ export type PersonRequest = {
 	externalID?: string;
 	largestBytes?: number;
 	counterpartExternalIDs: string[];
-	attachments: PersonalOutgoingAttachment[];
+	attachments: OutgoingAttachment[];
 };
 
 const legacyBuzzSecretField = "userSecretHex";
@@ -47,18 +48,33 @@ export function parsePersonRequest(value: unknown): PersonRequest {
 	};
 }
 
-function parseAttachments(record: Record<string, unknown>): PersonalOutgoingAttachment[] {
+function parseAttachments(record: Record<string, unknown>): OutgoingAttachment[] {
 	const given = record.attachments;
 	if (given === undefined) return [];
 	if (!Array.isArray(given)) throw new MalformedRequest("attachments must be a list");
-	return given.map((entry) => {
-		const attachment = asRecord(entry);
-		return {
-			filename: requiredText(attachment, "filename"),
-			contentType: requiredText(attachment, "contentType"),
-			contentBase64: requiredText(attachment, "contentBase64"),
-		};
-	});
+	return given.map((entry) => parseAttachment(asRecord(entry)));
+}
+
+function parseAttachment(attachment: Record<string, unknown>): OutgoingAttachment {
+	const named = {
+		filename: requiredText(attachment, "filename"),
+		contentType: requiredText(attachment, "contentType"),
+	};
+	if (attachment.address === undefined) {
+		return { ...named, contentBase64: requiredText(attachment, "contentBase64") };
+	}
+	return {
+		...named,
+		address: requiredText(attachment, "address"),
+		sizeBytes: requiredCount(attachment, "sizeBytes"),
+		digest: requiredText(attachment, "digest"),
+	};
+}
+
+function requiredCount(record: Record<string, unknown>, field: string): number {
+	const value = optionalCount(record, field);
+	if (value === undefined) throw missing(field);
+	return value;
 }
 
 function requiredText(record: Record<string, unknown>, field: string): string {

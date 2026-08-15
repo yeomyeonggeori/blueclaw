@@ -1,6 +1,8 @@
+import { isAlreadyKept, type OutgoingAttachment } from "../outgoing-attachment.ts";
 import {
 	CredentialRefused,
 	requireMatchingCredential,
+	UnsupportedByPlatform,
 	type ActorCredential,
 	type CredentialRequirement,
 	type PersonalConversation,
@@ -13,7 +15,6 @@ import {
 	type PersonalAttachment,
 	type PersonalFile,
 	type PersonalMessagePage,
-	type PersonalOutgoingAttachment,
 	type PersonalPerson,
 	type PersonalReaction,
 } from "./gateway.ts";
@@ -175,7 +176,7 @@ class MattermostPersonalGateway implements PersonalGateway {
 		conversationID: string,
 		body: string,
 		parentID?: string,
-		attachments: PersonalOutgoingAttachment[] = [],
+		attachments: OutgoingAttachment[] = [],
 	): Promise<PersonalMessage> {
 		const fileIDs = await this.uploadAll(actor, conversationID, attachments);
 		const post = await this.ask<MattermostPost>(actor, "POST", "/posts", {
@@ -190,7 +191,7 @@ class MattermostPersonalGateway implements PersonalGateway {
 	private async uploadAll(
 		actor: ActorCredential,
 		conversationID: string,
-		attachments: PersonalOutgoingAttachment[],
+		attachments: OutgoingAttachment[],
 	): Promise<string[]> {
 		const fileIDs: string[] = [];
 		for (const attachment of attachments) {
@@ -202,9 +203,12 @@ class MattermostPersonalGateway implements PersonalGateway {
 	private async upload(
 		actor: ActorCredential,
 		conversationID: string,
-		attachment: PersonalOutgoingAttachment,
+		attachment: OutgoingAttachment,
 	): Promise<string> {
 		requireMatchingCredential(this, actor);
+		if (isAlreadyKept(attachment)) {
+			throw new UnsupportedByPlatform(this.platform, "post a file it has not been handed");
+		}
 		const form = new FormData();
 		form.append("channel_id", conversationID);
 		form.append(

@@ -1,4 +1,5 @@
 import type { BuzzAdapter } from "../adapters/buzz/adapter.ts";
+import type { OutgoingAttachment } from "../outgoing-attachment.ts";
 import {
 	addReactionAsUser,
 	deleteChannelMessageAsUser,
@@ -25,7 +26,6 @@ import {
 	type PersonalImage,
 	type PersonalMessage,
 	type PersonalMessagePage,
-	type PersonalOutgoingAttachment,
 	type PersonalPerson,
 } from "./gateway.ts";
 
@@ -153,7 +153,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 		conversationID: string,
 		body: string,
 		parentID?: string,
-		attachments: PersonalOutgoingAttachment[] = [],
+		attachments: OutgoingAttachment[] = [],
 	): Promise<PersonalMessage> {
 		this.require(actor);
 		const sent = await sendChannelMessageAsUser({

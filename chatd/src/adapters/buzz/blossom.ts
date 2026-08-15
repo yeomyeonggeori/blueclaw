@@ -7,6 +7,20 @@ export type BlossomBlob = {
 	mimeType: string;
 };
 
+export class BlobRefused extends Error {
+	constructor(
+		readonly status: number,
+		readonly reason: string,
+	) {
+		super(`blossom upload returned ${status}: ${reason}`);
+		this.name = "BlobRefused";
+	}
+
+	get willRefuseAgain(): boolean {
+		return this.status < 500 && this.status !== 429;
+	}
+}
+
 export function blossomBaseURL(relayURL: string): string {
 	if (relayURL.startsWith("wss://")) return "https://" + relayURL.slice("wss://".length);
 	if (relayURL.startsWith("ws://")) return "http://" + relayURL.slice("ws://".length);
@@ -60,8 +74,7 @@ export async function uploadBlob(
 		body,
 	});
 	if (!response.ok) {
-		const body = await response.text();
-		throw new Error(`blossom upload returned ${response.status}: ${body.trim()}`);
+		throw new BlobRefused(response.status, (await response.text()).trim());
 	}
 	const blob = parseBlobResponse(await response.json());
 	return {

@@ -1,13 +1,13 @@
 import { getPublicKey } from "nostr-tools/pure";
 import { createBuzzRelayClient } from "./relay-client.ts";
-import { imetaTag, uploadBlob } from "./blossom.ts";
+import { BlobRefused, imetaTag, uploadBlob, type BlossomBlob } from "./blossom.ts";
 import { firstTagValue, threadTagsOf, type BuzzEvent } from "./types.ts";
-
-export type UserDirectMessageAttachment = {
-	contentBase64: string;
-	filename: string;
-	contentType: string;
-};
+import {
+	AttachmentRefused,
+	isAlreadyKept,
+	type AttachmentRefusal,
+	type OutgoingAttachment,
+} from "../../outgoing-attachment.ts";
 
 const STREAM_MESSAGE_KIND = 9;
 const EDIT_MESSAGE_KIND = 40003;
@@ -134,7 +134,7 @@ export async function sendChannelMessageAsUser(request: {
 	userSecretHex: string;
 	channelID: string;
 	message: string;
-	attachments?: UserDirectMessageAttachment[];
+	attachments?: OutgoingAttachment[];
 	replyToRootId?: string;
 	extraTags?: string[][];
 	authTagJSON?: string;
@@ -216,7 +216,7 @@ export type UserDirectMessageSend = {
 	userSecretHex: string;
 	counterpartPubkeyHex: string;
 	message: string;
-	attachments?: UserDirectMessageAttachment[];
+	attachments?: OutgoingAttachment[];
 };
 
 export type UserDirectMessageChannel = {
@@ -270,24 +270,53 @@ export async function sendDirectMessageAsUser(request: UserDirectMessageSend): P
 	}
 }
 
-async function buildMessageBody(request: {
+export async function buildMessageBody(request: {
 	relayURL: string;
 	userSecretHex: string;
 	message: string;
-	attachments?: UserDirectMessageAttachment[];
+	attachments?: OutgoingAttachment[];
 }): Promise<{ body: string; mediaTags: string[][] }> {
 	const attachments = request.attachments ?? [];
 	if (attachments.length === 0) return { body: request.message, mediaTags: [] };
 	const mediaTags: string[][] = [];
 	const bodyParts: string[] = request.message.trim() === "" ? [] : [request.message];
-	for (const attachment of attachments) {
-		const content = new Uint8Array(Buffer.from(attachment.contentBase64, "base64"));
-		const blob = await uploadBlob(request.relayURL, request.userSecretHex, content, attachment.contentType);
-		const label = attachment.filename.trim() || (isImageType(attachment.contentType) ? "image" : "file");
-		bodyParts.push(isImageType(attachment.contentType) ? `![${label}](${blob.url})` : `[${label}](${blob.url})`);
+	const refusals: AttachmentRefusal[] = [];
+	for (const [index, attachment] of attachments.entries()) {
+		const blob = await blobOf(request.relayURL, request.userSecretHex, attachment).catch((error: unknown) => {
+			if (error instanceof BlobRefused && error.willRefuseAgain) {
+				refusals.push({ index, filename: attachment.filename, status: error.status, reason: error.reason });
+				return null;
+			}
+			throw error;
+		});
+		if (!blob) continue;
+		bodyParts.push(linkToBlob(blob, attachment));
 		mediaTags.push(imetaTag(blob, attachment.filename));
 	}
+	if (refusals.length > 0) throw new AttachmentRefused(refusals);
 	return { body: bodyParts.join("\n"), mediaTags };
+}
+
+async function blobOf(
+	relayURL: string,
+	userSecretHex: string,
+	attachment: OutgoingAttachment,
+): Promise<BlossomBlob> {
+	if (isAlreadyKept(attachment)) {
+		return {
+			url: attachment.address,
+			sha256: attachment.digest,
+			size: attachment.sizeBytes,
+			mimeType: attachment.contentType,
+		};
+	}
+	const content = new Uint8Array(Buffer.from(attachment.contentBase64, "base64"));
+	return uploadBlob(relayURL, userSecretHex, content, attachment.contentType);
+}
+
+function linkToBlob(blob: BlossomBlob, attachment: OutgoingAttachment): string {
+	const label = attachment.filename.trim() || (isImageType(attachment.contentType) ? "image" : "file");
+	return isImageType(attachment.contentType) ? `![${label}](${blob.url})` : `[${label}](${blob.url})`;
 }
 
 function isImageType(contentType: string): boolean {
