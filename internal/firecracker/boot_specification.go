@@ -9,6 +9,7 @@ type BootSpecification struct {
 	LaunchArguments           []string
 	VSockUnixSocketPath       string
 	VSockUnixSocketPathByPort map[uint32]string
+	Sidecars                  []SidecarCommand
 	OutboundNetwork           OutboundNetwork
 	HealthPortOrService       string
 	VSockCID                  uint32

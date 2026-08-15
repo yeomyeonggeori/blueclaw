@@ -10,6 +10,7 @@ import (
 
 type CloudHypervisorMonitor struct {
 	CloudHypervisorPath string
+	VirtiofsdPath       string
 }
 
 func (monitor CloudHypervisorMonitor) Name() string {
@@ -35,7 +36,7 @@ func (monitor CloudHypervisorMonitor) PrepareGuestLaunch(request GuestLaunchRequ
 		cloudHypervisorDiskArgument(request.RootFilesystemImagePath),
 		cloudHypervisorDiskArgument(request.WorkspaceImagePath),
 		"--cpus", "boot=" + strconv.Itoa(request.VCPUCount),
-		"--memory", "size=" + strconv.Itoa(request.MemoryMiB) + "M",
+		"--memory", cloudHypervisorMemoryArgument(request),
 		"--vsock", "cid=" + strconv.FormatUint(uint64(request.VSockCID), 10) + ",socket=" + vsockUnixSocketPath,
 		"--serial", "tty",
 		"--console", "off",
@@ -43,12 +44,41 @@ func (monitor CloudHypervisorMonitor) PrepareGuestLaunch(request GuestLaunchRequ
 	}
 	arguments = append(arguments, cloudHypervisorNetworkArguments(request.NetworkInterfaces)...)
 
+	sidecars := []SidecarCommand{}
+	if request.DeliveryDirectoryPath != "" {
+		if monitor.VirtiofsdPath == "" {
+			return GuestLaunch{}, errors.New("virtiofsdPath is required to serve the delivery directory")
+		}
+		deliverySocketPath := filepath.Join(instanceRootPath, "virtiofsd-delivery.socket")
+		arguments = append(arguments, "--fs", "tag="+DeliveryMountTag+",socket="+deliverySocketPath)
+		sidecars = append(sidecars, SidecarCommand{
+			Name:           "virtiofsd-delivery",
+			ExecutablePath: monitor.VirtiofsdPath,
+			Arguments: []string{
+				"--socket-path=" + deliverySocketPath,
+				"--shared-dir=" + request.DeliveryDirectoryPath,
+				"--sandbox", "namespace",
+			},
+		})
+	}
+
 	return GuestLaunch{
 		ExecutablePath:      monitor.CloudHypervisorPath,
 		Arguments:           arguments,
 		InstanceRootPath:    instanceRootPath,
 		VSockUnixSocketPath: vsockUnixSocketPath,
+		Sidecars:            sidecars,
 	}, nil
+}
+
+// virtio-fs reaches guest memory directly, which Cloud Hypervisor only allows when the
+// guest is backed by a shared mapping rather than an anonymous one.
+func cloudHypervisorMemoryArgument(request GuestLaunchRequest) string {
+	memoryArgument := "size=" + strconv.Itoa(request.MemoryMiB) + "M"
+	if request.DeliveryDirectoryPath == "" {
+		return memoryArgument
+	}
+	return memoryArgument + ",shared=on"
 }
 
 // Cloud Hypervisor guards its image-format autodetection by refusing writes to sector 0

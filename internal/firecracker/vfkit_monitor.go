@@ -70,6 +70,12 @@ func (monitor VfkitMonitor) PrepareGuestLaunch(request GuestLaunchRequest) (Gues
 		arguments = append(arguments, "--device", "virtio-net,nat,mac="+networkInterface.GuestMACAddress)
 	}
 
+	// Virtualization.framework serves the share itself, so there is no daemon to run
+	// beside the VM and no shared memory to ask for.
+	if request.DeliveryDirectoryPath != "" {
+		arguments = append(arguments, "--device", fmt.Sprintf("virtio-fs,sharedDir=%s,mountTag=%s", request.DeliveryDirectoryPath, DeliveryMountTag))
+	}
+
 	for _, socketPath := range append([]string{restfulSocketPath}, sortedSocketPaths(vsockUnixSocketPathByPort)...) {
 		if errorValue := assertUnixSocketPathFits(socketPath); errorValue != nil {
 			return GuestLaunch{}, errorValue
