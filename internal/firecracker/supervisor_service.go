@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -266,6 +267,7 @@ func (supervisorService *SupervisorService) buildBootSpecification() (BootSpecif
 		VCPUCount:               supervisorService.FirecrackerConfiguration.VCPUCount,
 		MemoryMiB:               supervisorService.FirecrackerConfiguration.MemoryMiB,
 		VSockCID:                supervisorService.FirecrackerConfiguration.VSockCID,
+		GuestVSockPorts:         supervisorService.guestVSockPorts(),
 		NetworkInterfaces:       networkInterfaces,
 	})
 	if errorValue != nil {
@@ -274,18 +276,33 @@ func (supervisorService *SupervisorService) buildBootSpecification() (BootSpecif
 	}
 
 	return BootSpecification{
-		InstanceID:              instanceID,
-		MonitorName:             virtualMachineMonitor.Name(),
-		LogDirectoryPath:        logDirectoryPath,
-		InstanceRootPath:        guestLaunch.InstanceRootPath,
-		LaunchExecutablePath:    guestLaunch.ExecutablePath,
-		LaunchArguments:         guestLaunch.Arguments,
-		VSockUnixSocketPath:     guestLaunch.VSockUnixSocketPath,
-		OutboundNetwork:         outboundNetwork,
-		HealthPortOrService:     supervisorService.FirecrackerConfiguration.HealthPortOrService,
-		VSockCID:                supervisorService.FirecrackerConfiguration.VSockCID,
-		WorkspaceVolumeMetadata: workspaceVolumeMetadata,
+		InstanceID:                instanceID,
+		MonitorName:               virtualMachineMonitor.Name(),
+		LogDirectoryPath:          logDirectoryPath,
+		InstanceRootPath:          guestLaunch.InstanceRootPath,
+		LaunchExecutablePath:      guestLaunch.ExecutablePath,
+		LaunchArguments:           guestLaunch.Arguments,
+		VSockUnixSocketPath:       guestLaunch.VSockUnixSocketPath,
+		VSockUnixSocketPathByPort: guestLaunch.VSockUnixSocketPathByPort,
+		OutboundNetwork:           outboundNetwork,
+		HealthPortOrService:       supervisorService.FirecrackerConfiguration.HealthPortOrService,
+		VSockCID:                  supervisorService.FirecrackerConfiguration.VSockCID,
+		WorkspaceVolumeMetadata:   workspaceVolumeMetadata,
 	}, nil
+}
+
+func (supervisorService *SupervisorService) guestVSockPorts() []uint32 {
+	configuration := supervisorService.FirecrackerConfiguration
+	ports := []uint32{}
+	for _, portOrService := range []string{configuration.HealthPortOrService, configuration.GuestHTTPPortOrService} {
+		if port, errorValue := strconv.ParseUint(portOrService, 10, 32); errorValue == nil {
+			ports = append(ports, uint32(port))
+		}
+	}
+	for _, listenerProxy := range configuration.GuestListenerProxies {
+		ports = append(ports, listenerProxy.GuestPort)
+	}
+	return ports
 }
 
 func (supervisorService *SupervisorService) resolveVirtualMachineMonitor() (VirtualMachineMonitor, error) {
@@ -298,6 +315,7 @@ func (supervisorService *SupervisorService) resolveVirtualMachineMonitor() (Virt
 			FirecrackerPath:     supervisorService.FirecrackerConfiguration.FirecrackerPath,
 			JailerPath:          supervisorService.FirecrackerConfiguration.JailerPath,
 			CloudHypervisorPath: supervisorService.FirecrackerConfiguration.CloudHypervisorPath,
+			VfkitPath:           supervisorService.FirecrackerConfiguration.VfkitPath,
 		},
 	)
 }

@@ -87,7 +87,7 @@ func TestSupervisorBootGuestWithFakeJailer(t *testing.T) {
 		t.Fatalf("expected guest health to succeed: %v", errorValue)
 	}
 
-	configurationDocument, errorValue := os.ReadFile(guestInstance.BootSpecification.ConfigurationFilePath)
+	configurationDocument, errorValue := os.ReadFile(filepath.Join(guestInstance.BootSpecification.InstanceRootPath, "firecracker-config.json"))
 	if errorValue != nil {
 		t.Fatalf("expected configuration document to be readable: %v", errorValue)
 	}
