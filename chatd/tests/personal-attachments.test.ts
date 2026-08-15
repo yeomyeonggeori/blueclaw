@@ -102,10 +102,10 @@ describe("sending a message that carries a file", () => {
 		});
 
 		const message = (await response.json()) as {
-			attachments: { id: string; filename: string; contentType: string; sizeBytes: number }[];
+			attachments: { id: string; filename: string; contentType: string; sizeBytes: number; digest: string }[];
 		};
 		expect(message.attachments).toEqual([
-			{ id: "file-1", filename: "evidence.png", contentType: "image/png", sizeBytes: 11 },
+			{ id: "file-1", filename: "evidence.png", contentType: "image/png", sizeBytes: 11, digest: "" },
 		]);
 	});
 });

@@ -384,6 +384,7 @@ export type UserMessageAttachment = {
 	contentType: string;
 	sizeBytes: number;
 	filename: string;
+	digest: string;
 };
 
 // A person reads their own conversation with their own key, the same way they
@@ -484,6 +485,7 @@ export function attachmentsOfTags(tags: string[][]): UserMessageAttachment[] {
 			contentType: described.get("m") ?? "application/octet-stream",
 			sizeBytes: Number(described.get("size") ?? 0) || 0,
 			filename: described.get("filename")?.trim() || url.slice(url.lastIndexOf("/") + 1),
+			digest: described.get("x")?.trim() ?? "",
 		});
 	}
 	return attachments;

@@ -40,6 +40,7 @@ describe("the name a file was sent under survives the tag", () => {
 				contentType: "application/pdf",
 				sizeBytes: 2048,
 				filename: "2026 예산.pdf",
+				digest: "9f2c",
 			},
 		]);
 	});
@@ -50,5 +51,10 @@ describe("the name a file was sent under survives the tag", () => {
 
 	test("a tag that names no address describes nothing", () => {
 		expect(attachmentsOfTags([["imeta", "m image/png"]])).toEqual([]);
+	});
+
+	test("a tag that names no hash describes a file no copy can be recognised of", () => {
+		const unhashed = ["imeta", "url http://localhost:3000/a.pdf", "m application/pdf"];
+		expect(attachmentsOfTags([unhashed]).map((file) => file.digest)).toEqual([""]);
 	});
 });
