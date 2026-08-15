@@ -170,7 +170,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) userManagedSkillDirectoryPath(skil
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) isBundledSkillName(skillName string) bool {
-	_, errorValue := os.Stat(filepath.Join(toolCatalogBuilder.workspaceRootPath, "skills", skillName, "SKILL.md"))
+	_, errorValue := os.Stat(filepath.Join(toolCatalogBuilder.bundledSkillRootPath(), skillName, "SKILL.md"))
 	return errorValue == nil
 }
 
@@ -380,4 +380,18 @@ func resourcePathPrefixes(resourcePaths []string) map[string]bool {
 
 func normalizedSkillDocument(content string) []byte {
 	return []byte(strings.TrimSpace(content) + "\n")
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) bundledSkillRootPath() string {
+	return BundledSkillRootPath(toolCatalogBuilder.workspaceRootPath)
+}
+
+// Bundled skills come from the host and the agent may not create, overwrite or remove
+// one, so they can sit on a read-only share. The skills the agent writes stay in its own
+// workspace. guest-init names the delivered path when the monitor offers a share.
+func BundledSkillRootPath(workspaceRootPath string) string {
+	if deliveredPath := strings.TrimSpace(os.Getenv("BLUECLAW_BUNDLED_SKILLS_PATH")); deliveredPath != "" {
+		return deliveredPath
+	}
+	return filepath.Join(workspaceRootPath, "skills")
 }
