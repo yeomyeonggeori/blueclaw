@@ -142,6 +142,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 					filename: attachment.filename,
 					contentType: attachment.contentType,
 					sizeBytes: attachment.sizeBytes,
+					digest: attachment.digest,
 				})),
 			})),
 			hasMoreBefore: read.length >= wanted,
@@ -178,6 +179,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 				filename: attachment.filename,
 				contentType: attachment.contentType,
 				sizeBytes: attachment.sizeBytes,
+				digest: attachment.digest,
 			})),
 		};
 	}

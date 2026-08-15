@@ -37,11 +37,15 @@ export type PersonalReaction = {
 	byExternalIDs: string[];
 };
 
+// A store that addresses a file by the hash of its contents says so here, so a
+// reader that keeps its own copy can tell it already has these bytes without
+// fetching them again. Empty when the platform names files some other way.
 export type PersonalAttachment = {
 	id: string;
 	filename: string;
 	contentType: string;
 	sizeBytes: number;
+	digest: string;
 };
 
 export type PersonalMessage = {

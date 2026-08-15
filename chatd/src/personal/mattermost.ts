@@ -421,6 +421,7 @@ function asAttachment(file: MattermostFileInfo): PersonalAttachment {
 		filename: file.name,
 		contentType: file.mime_type,
 		sizeBytes: file.size,
+		digest: "",
 	};
 }
 
