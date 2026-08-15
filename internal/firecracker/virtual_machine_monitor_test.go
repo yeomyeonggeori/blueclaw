@@ -181,7 +181,7 @@ func containsArgument(arguments []string, expected string) bool {
 func TestVfkitMonitorBootsWithoutAnInitialRamdiskOfItsOwn(t *testing.T) {
 	request := guestLaunchRequestFixture(t)
 	request.RuntimeDirectoryPath = shortRuntimeDirectory(t)
-	request.GuestVSockPorts = []uint32{8080, 8081}
+	request.HostDialedGuestVSockPorts = []uint32{8080, 8081}
 	monitor := VfkitMonitor{VfkitPath: "/usr/local/bin/vfkit"}
 
 	guestLaunch, errorValue := monitor.PrepareGuestLaunch(request)
@@ -210,7 +210,7 @@ func TestVfkitMonitorBootsWithoutAnInitialRamdiskOfItsOwn(t *testing.T) {
 func TestVfkitMonitorBindsASocketPerGuestPort(t *testing.T) {
 	request := guestLaunchRequestFixture(t)
 	request.RuntimeDirectoryPath = shortRuntimeDirectory(t)
-	request.GuestVSockPorts = []uint32{8080, 8081}
+	request.HostDialedGuestVSockPorts = []uint32{8080, 8081}
 	monitor := VfkitMonitor{VfkitPath: "/usr/local/bin/vfkit"}
 
 	guestLaunch, errorValue := monitor.PrepareGuestLaunch(request)
@@ -221,13 +221,13 @@ func TestVfkitMonitorBindsASocketPerGuestPort(t *testing.T) {
 	if guestLaunch.VSockUnixSocketPath != "" {
 		t.Fatal("vfkit multiplexes nothing, so a single socket would be dialled with a CONNECT line it never answers")
 	}
-	for _, guestPort := range request.GuestVSockPorts {
+	for _, guestPort := range request.HostDialedGuestVSockPorts {
 		socketPath := guestLaunch.VSockUnixSocketPathByPort[guestPort]
 		if socketPath == "" {
 			t.Fatalf("expected a socket bound for guest port %d", guestPort)
 		}
-		if !containsArgument(guestLaunch.Arguments, fmt.Sprintf("virtio-vsock,port=%d,socketURL=%s", guestPort, socketPath)) {
-			t.Fatalf("expected the device for guest port %d to match the reported socket", guestPort)
+		if !containsArgument(guestLaunch.Arguments, fmt.Sprintf("virtio-vsock,port=%d,socketURL=%s,connect", guestPort, socketPath)) {
+			t.Fatalf("a port the host dials needs connect, or vfkit waits for the guest and binds nothing: %d", guestPort)
 		}
 	}
 
@@ -237,12 +237,26 @@ func TestVfkitMonitorBindsASocketPerGuestPort(t *testing.T) {
 	}); errorValue == nil {
 		t.Fatal("expected a launch with no guest ports to be refused, since nothing could reach the guest")
 	}
+
+	guestDialed := guestLaunchRequestFixture(t)
+	guestDialed.RuntimeDirectoryPath = shortRuntimeDirectory(t)
+	guestDialed.HostDialedGuestVSockPorts = []uint32{8082}
+	guestDialed.GuestDialedHostVSockPorts = []uint32{7000}
+	launchWithBothDirections, errorValue := monitor.PrepareGuestLaunch(guestDialed)
+	if errorValue != nil {
+		t.Fatalf("expected launch to prepare: %v", errorValue)
+	}
+	for _, argument := range launchWithBothDirections.Arguments {
+		if strings.HasPrefix(argument, "virtio-vsock,port=7000") && strings.HasSuffix(argument, ",connect") {
+			t.Fatal("a port the guest dials must stay in listen mode, or the host never receives the connection")
+		}
+	}
 }
 
 func TestVfkitMonitorRefusesASocketPathMacOSCannotBind(t *testing.T) {
 	request := guestLaunchRequestFixture(t)
 	request.RuntimeDirectoryPath = filepath.Join(shortRuntimeDirectory(t), strings.Repeat("deep", 30))
-	request.GuestVSockPorts = []uint32{8080}
+	request.HostDialedGuestVSockPorts = []uint32{8080}
 	monitor := VfkitMonitor{VfkitPath: "/usr/local/bin/vfkit"}
 
 	if _, errorValue := monitor.PrepareGuestLaunch(request); errorValue == nil {
