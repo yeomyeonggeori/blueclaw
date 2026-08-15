@@ -32,6 +32,7 @@ import {
 import { personCapabilities, type PersonCapability } from "./personal/capabilities.ts";
 import { MalformedRequest } from "./personal/parse.ts";
 import { CredentialRefused, type PersonalGateway } from "./personal/gateway.ts";
+import { AttachmentRefused } from "./outgoing-attachment.ts";
 import type {
 	AgentPartDocument,
 	AttachmentImportResponse,
@@ -144,6 +145,9 @@ async function answerAsPerson(
 		}
 		if (error instanceof CredentialRefused) {
 			return jsonResponse(401, { error: error.message });
+		}
+		if (error instanceof AttachmentRefused) {
+			return jsonResponse(415, { error: error.message, refusedAttachments: error.refusals });
 		}
 		return jsonResponse(502, { error: error instanceof Error ? error.message : String(error) });
 	}

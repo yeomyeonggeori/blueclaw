@@ -1,3 +1,5 @@
+import type { OutgoingAttachment } from "../outgoing-attachment.ts";
+
 export type ActorCredential = {
 	kind: string;
 	secret: string;
@@ -33,12 +35,6 @@ export type PersonalReaction = {
 	emoji: string;
 	imageURL?: string;
 	byExternalIDs: string[];
-};
-
-export type PersonalOutgoingAttachment = {
-	filename: string;
-	contentType: string;
-	contentBase64: string;
 };
 
 export type PersonalAttachment = {
@@ -127,7 +123,7 @@ export interface PersonalGateway {
 		conversationID: string,
 		body: string,
 		parentID?: string,
-		attachments?: PersonalOutgoingAttachment[],
+		attachments?: OutgoingAttachment[],
 	): Promise<PersonalMessage>;
 	readAttachment(
 		actor: ActorCredential,
