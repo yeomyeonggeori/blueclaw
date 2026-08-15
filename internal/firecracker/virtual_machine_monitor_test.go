@@ -349,3 +349,21 @@ func TestVfkitMonitorServesTheDeliveryShareItself(t *testing.T) {
 		t.Fatalf("expected the share to carry the tag the guest mounts, got %v", guestLaunch.Arguments)
 	}
 }
+
+func TestVfkitBindsTheGuestDialedPortsWhereTheProxyListens(t *testing.T) {
+	request := guestLaunchRequestFixture(t)
+	request.RuntimeDirectoryPath = shortRuntimeDirectory(t)
+	request.HostDialedGuestVSockPorts = []uint32{8082}
+	request.GuestDialedHostVSockPorts = []uint32{7000}
+	monitor := VfkitMonitor{VfkitPath: "/usr/local/bin/vfkit"}
+
+	guestLaunch, errorValue := monitor.PrepareGuestLaunch(request)
+	if errorValue != nil {
+		t.Fatalf("expected launch to prepare: %v", errorValue)
+	}
+
+	expectedProxyPath := filepath.Join(guestLaunch.InstanceRootPath, "vfkit-vsock.socket") + "_7000"
+	if !containsArgument(guestLaunch.Arguments, fmt.Sprintf("virtio-vsock,port=7000,socketURL=%s", expectedProxyPath)) {
+		t.Fatalf("GuestListenerProxy listens on <socket>_<port>, so vfkit has to connect there, got %v", guestLaunch.Arguments)
+	}
+}
