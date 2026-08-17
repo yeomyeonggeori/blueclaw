@@ -133,6 +133,29 @@ describe("person capabilities", () => {
 		expect(direct.participantExternalIDs).toEqual(["person-a", "person-b"]);
 	});
 
+	test("a direct conversation is called after the person on the other side", async () => {
+		recordFetches((url) => {
+			if (url.endsWith("/users/me")) return { id: "person-a", username: "lee", first_name: "", last_name: "" };
+			if (url.endsWith("/users/me/teams")) return [{ id: "team-1" }];
+			if (url.endsWith("/users/ids")) {
+				return [{ id: "person-b", username: "sample", first_name: "예시", last_name: "박" }];
+			}
+			if (url.includes("/channels")) {
+				return [{ id: "channel-1", display_name: "", name: "person-a__person-b", type: "D" }];
+			}
+			return [];
+		});
+
+		const answer = await (
+			await call("person.conversations.list", {
+				actor: { kind: "mattermost-token", secret: "the-person-token" },
+			})
+		).json();
+
+		const direct = answer.conversations.find((conversation: { id: string }) => conversation.id === "channel-1");
+		expect(direct.name).toBe("예시 박");
+	});
+
 	test("a conversation carries the link that opens it in mattermost", async () => {
 		recordFetches((url) => {
 			if (url.endsWith("/users/me/teams")) return [{ id: "team-1", name: "internkim" }];

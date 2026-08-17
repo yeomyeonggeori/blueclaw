@@ -126,7 +126,35 @@ class MattermostPersonalGateway implements PersonalGateway {
 				...channels.map((channel) => asConversation(channel, this.webURLOf(team, channel))),
 			);
 		}
-		return conversations.sort(directLast);
+		return (await this.namedAfterTheOtherPerson(actor, conversations)).sort(directLast);
+	}
+
+	// A direct channel carries no name of its own: Mattermost puts the two
+	// people's ids there, joined by a double underscore. Anyone showing the
+	// conversation would otherwise have to know that and resolve it, so the
+	// person on the other side is named here, once, for every client.
+	private async namedAfterTheOtherPerson(
+		actor: ActorCredential,
+		conversations: PersonalConversation[],
+	): Promise<PersonalConversation[]> {
+		const me = await this.identity(actor);
+		const counterparts = new Set<string>();
+		for (const conversation of conversations) {
+			for (const externalID of conversation.participantExternalIDs ?? []) {
+				if (externalID !== me.externalID) counterparts.add(externalID);
+			}
+		}
+		if (counterparts.size === 0) return conversations;
+
+		const users = await this.ask<MattermostUser[]>(actor, "POST", "/users/ids", [...counterparts]);
+		const nameOf = new Map(users.map((user) => [user.id, displayNameOf(user)]));
+		return conversations.map((conversation) => {
+			const others = (conversation.participantExternalIDs ?? [])
+				.filter((externalID) => externalID !== me.externalID)
+				.map((externalID) => nameOf.get(externalID))
+				.filter((name): name is string => Boolean(name));
+			return others.length > 0 ? { ...conversation, name: others.join(", ") } : conversation;
+		});
 	}
 
 	async listPeople(actor: ActorCredential): Promise<PersonalPerson[]> {
