@@ -23,6 +23,16 @@ const (
 	jailedConfigurationPath  = "/firecracker-config.json"
 )
 
+func (monitor FirecrackerMonitor) ValidateBinaryPaths() error {
+	if monitor.FirecrackerPath == "" {
+		return errors.New("firecrackerPath is required")
+	}
+	if monitor.JailerPath == "" {
+		return errors.New("jailerPath is required")
+	}
+	return nil
+}
+
 func (monitor FirecrackerMonitor) Name() string {
 	return FirecrackerMonitorName
 }

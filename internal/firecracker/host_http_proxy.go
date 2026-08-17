@@ -18,7 +18,7 @@ func (hostHTTPProxy HostHTTPProxy) Serve(ctx context.Context) error {
 	if hostHTTPProxy.ListenAddress == "" {
 		return errors.New("host HTTP listen address is required")
 	}
-	if hostHTTPProxy.VSockUnixSocketPath == "" {
+	if hostHTTPProxy.VSockUnixSocketPath == "" && hostHTTPProxy.DialGuestConnection == nil {
 		return errors.New("vsock unix socket path is required")
 	}
 	if hostHTTPProxy.GuestPortOrService == "" {

@@ -13,12 +13,12 @@ import (
 
 type fakeGuestHealthClient struct{}
 
-func (fakeGuestHealthClient) CheckHealth(healthContext context.Context, vsockUnixSocketPath string, healthPortOrService string) error {
+func (fakeGuestHealthClient) CheckHealth(healthContext context.Context, bootSpecification firecracker.BootSpecification) error {
 	_ = healthContext
-	if vsockUnixSocketPath == "" {
+	if bootSpecification.VSockUnixSocketPath == "" {
 		return os.ErrInvalid
 	}
-	if healthPortOrService != "8080" {
+	if bootSpecification.HealthPortOrService != "8080" {
 		return os.ErrInvalid
 	}
 	return nil

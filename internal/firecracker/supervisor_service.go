@@ -204,11 +204,7 @@ func (supervisorService *SupervisorService) WaitForGuestHealth(healthContext con
 			}
 		}
 
-		errorValue := supervisorService.GuestHealthClient.CheckHealth(
-			healthContext,
-			guestInstance.BootSpecification.VSockUnixSocketPath,
-			guestInstance.BootSpecification.HealthPortOrService,
-		)
+		errorValue := supervisorService.GuestHealthClient.CheckHealth(healthContext, guestInstance.BootSpecification)
 		if errorValue == nil {
 			return nil
 		}
@@ -291,6 +287,7 @@ func (supervisorService *SupervisorService) buildBootSpecification() (BootSpecif
 		GuestDialedHostVSockPorts: supervisorService.guestDialedHostVSockPorts(),
 		NetworkInterfaces:         networkInterfaces,
 		DeliveryDirectoryPath:     supervisorService.FirecrackerConfiguration.DeliveryDirectoryPath,
+		LogDirectoryPath:          logDirectoryPath,
 	})
 	if errorValue != nil {
 		_ = supervisorService.cleanupOutboundNetwork(outboundNetwork)
@@ -474,11 +471,12 @@ func (supervisorService *SupervisorService) runtimeDirectoryPath() string {
 }
 
 func (supervisorService *SupervisorService) validateConfiguration() error {
-	if supervisorService.FirecrackerConfiguration.FirecrackerPath == "" {
-		return errors.New("firecrackerPath is required")
+	monitor, errorValue := supervisorService.resolveVirtualMachineMonitor()
+	if errorValue != nil {
+		return errorValue
 	}
-	if supervisorService.FirecrackerConfiguration.JailerPath == "" {
-		return errors.New("jailerPath is required")
+	if errorValue := monitor.ValidateBinaryPaths(); errorValue != nil {
+		return errorValue
 	}
 	if supervisorService.FirecrackerConfiguration.KernelImagePath == "" {
 		return errors.New("kernelImagePath is required")

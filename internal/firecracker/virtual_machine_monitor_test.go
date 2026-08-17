@@ -367,3 +367,35 @@ func TestVfkitBindsTheGuestDialedPortsWhereTheProxyListens(t *testing.T) {
 		t.Fatalf("GuestListenerProxy listens on <socket>_<port>, so vfkit has to connect there, got %v", guestLaunch.Arguments)
 	}
 }
+
+func TestAMonitorIsNeverAskedForBinariesItDoesNotRun(t *testing.T) {
+	testCases := []struct {
+		monitorName   string
+		paths         MonitorBinaryPaths
+		expectedError string
+	}{
+		{VfkitMonitorName, MonitorBinaryPaths{VfkitPath: "/usr/local/bin/vfkit"}, ""},
+		{VfkitMonitorName, MonitorBinaryPaths{}, "vfkitPath is required"},
+		{CloudHypervisorMonitorName, MonitorBinaryPaths{CloudHypervisorPath: "/usr/local/bin/cloud-hypervisor"}, ""},
+		{CloudHypervisorMonitorName, MonitorBinaryPaths{}, "cloudHypervisorPath is required"},
+		{FirecrackerMonitorName, MonitorBinaryPaths{FirecrackerPath: "/f", JailerPath: "/j"}, ""},
+		{FirecrackerMonitorName, MonitorBinaryPaths{FirecrackerPath: "/f"}, "jailerPath is required"},
+	}
+
+	for _, testCase := range testCases {
+		monitor, errorValue := SelectVirtualMachineMonitor(testCase.monitorName, testCase.paths)
+		if errorValue != nil {
+			t.Fatalf("expected %s to be selectable: %v", testCase.monitorName, errorValue)
+		}
+		validationError := monitor.ValidateBinaryPaths()
+		if testCase.expectedError == "" {
+			if validationError != nil {
+				t.Fatalf("a Mac has no firecracker and no jailer, so %s must not ask for them: %v", testCase.monitorName, validationError)
+			}
+			continue
+		}
+		if validationError == nil || validationError.Error() != testCase.expectedError {
+			t.Fatalf("expected %q from %s, got %v", testCase.expectedError, testCase.monitorName, validationError)
+		}
+	}
+}

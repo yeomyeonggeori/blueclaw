@@ -74,6 +74,7 @@ func main() {
 			ListenAddress:       runtimeConfiguration.Firecracker.HostHTTPListenAddress,
 			VSockUnixSocketPath: guestInstance.BootSpecification.VSockUnixSocketPath,
 			GuestPortOrService:  runtimeConfiguration.Firecracker.GuestHTTPPortOrService,
+			DialGuestConnection: firecracker.GuestConnectionDialerFor(guestInstance.BootSpecification.VSockUnixSocketPathByPort),
 		}.Serve(proxyContext)
 	}()
 

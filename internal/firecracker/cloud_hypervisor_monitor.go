@@ -13,6 +13,13 @@ type CloudHypervisorMonitor struct {
 	VirtiofsdPath       string
 }
 
+func (monitor CloudHypervisorMonitor) ValidateBinaryPaths() error {
+	if monitor.CloudHypervisorPath == "" {
+		return errors.New("cloudHypervisorPath is required")
+	}
+	return nil
+}
+
 func (monitor CloudHypervisorMonitor) Name() string {
 	return CloudHypervisorMonitorName
 }
