@@ -4,6 +4,7 @@ import "fmt"
 
 type VirtualMachineMonitor interface {
 	Name() string
+	ValidateBinaryPaths() error
 	PrepareGuestLaunch(GuestLaunchRequest) (GuestLaunch, error)
 }
 
@@ -22,6 +23,7 @@ type GuestLaunchRequest struct {
 	GuestDialedHostVSockPorts []uint32
 	NetworkInterfaces         []GuestNetworkInterface
 	DeliveryDirectoryPath     string
+	LogDirectoryPath          string
 }
 
 type GuestNetworkInterface struct {

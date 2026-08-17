@@ -37,7 +37,7 @@ func TestVSockGuestHealthClientChecksHealth(t *testing.T) {
 		},
 	}
 
-	errorValue := guestHealthClient.CheckHealth(context.Background(), "/tmp/firecracker-vsock.socket", "8080")
+	errorValue := guestHealthClient.CheckHealth(context.Background(), BootSpecification{VSockUnixSocketPath: "/tmp/firecracker-vsock.socket", HealthPortOrService: "8080"})
 	if errorValue != nil {
 		t.Fatalf("expected health check to succeed: %v", errorValue)
 	}
@@ -53,7 +53,7 @@ func TestVSockGuestHealthClientFailsOnUnexpectedHealth(t *testing.T) {
 		},
 	}
 
-	errorValue := guestHealthClient.CheckHealth(context.Background(), "/tmp/firecracker-vsock.socket", "8080")
+	errorValue := guestHealthClient.CheckHealth(context.Background(), BootSpecification{VSockUnixSocketPath: "/tmp/firecracker-vsock.socket", HealthPortOrService: "8080"})
 	if errorValue == nil {
 		t.Fatal("expected unexpected health response to fail")
 	}

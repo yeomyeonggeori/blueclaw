@@ -13,6 +13,13 @@ type VfkitMonitor struct {
 	VfkitPath string
 }
 
+func (monitor VfkitMonitor) ValidateBinaryPaths() error {
+	if monitor.VfkitPath == "" {
+		return errors.New("vfkitPath is required")
+	}
+	return nil
+}
+
 func (monitor VfkitMonitor) Name() string {
 	return VfkitMonitorName
 }
@@ -47,7 +54,7 @@ func (monitor VfkitMonitor) PrepareGuestLaunch(request GuestLaunchRequest) (Gues
 		"--memory", strconv.Itoa(request.MemoryMiB),
 		"--device", "virtio-blk,path=" + request.RootFilesystemImagePath,
 		"--device", "virtio-blk,path=" + request.WorkspaceImagePath,
-		"--device", "virtio-serial,logFilePath=" + filepath.Join(instanceRootPath, "console.log"),
+		"--device", "virtio-serial,logFilePath=" + vfkitConsoleLogPath(request, instanceRootPath),
 		"--device", "virtio-rng",
 	}
 
@@ -122,4 +129,11 @@ func sortedSocketPaths(socketPathByPort map[uint32]string) []string {
 
 func buildVfkitInstanceRootPath(runtimeDirectoryPath string, instanceID string) string {
 	return filepath.Join(runtimeDirectoryPath, "vfkit", instanceID, "root")
+}
+
+func vfkitConsoleLogPath(request GuestLaunchRequest, instanceRootPath string) string {
+	if request.LogDirectoryPath != "" {
+		return filepath.Join(request.LogDirectoryPath, "console.log")
+	}
+	return filepath.Join(instanceRootPath, "console.log")
 }

@@ -15,10 +15,9 @@ import (
 
 type readyGuestHealthClient struct{}
 
-func (readyGuestHealthClient) CheckHealth(healthContext context.Context, vsockUnixSocketPath string, healthPortOrService string) error {
+func (readyGuestHealthClient) CheckHealth(healthContext context.Context, bootSpecification BootSpecification) error {
 	_ = healthContext
-	_ = vsockUnixSocketPath
-	_ = healthPortOrService
+	_ = bootSpecification
 	return nil
 }
 
@@ -246,10 +245,9 @@ func TestRemoveInactiveInstanceDirectoriesKeepsActiveInstance(t *testing.T) {
 
 type neverReadyGuestHealthClient struct{}
 
-func (neverReadyGuestHealthClient) CheckHealth(healthContext context.Context, vsockUnixSocketPath string, healthPortOrService string) error {
+func (neverReadyGuestHealthClient) CheckHealth(healthContext context.Context, bootSpecification BootSpecification) error {
 	_ = healthContext
-	_ = vsockUnixSocketPath
-	_ = healthPortOrService
+	_ = bootSpecification
 	return errors.New("vsock not ready")
 }
 

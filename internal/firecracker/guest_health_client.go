@@ -14,18 +14,20 @@ type GuestConnection interface {
 type GuestConnectionDialer func(context.Context, string, string) (GuestConnection, error)
 
 type GuestHealthClient interface {
-	CheckHealth(context.Context, string, string) error
+	CheckHealth(context.Context, BootSpecification) error
 }
 
 type VSockGuestHealthClient struct {
 	DialGuestConnection GuestConnectionDialer
 }
 
-func (vsockGuestHealthClient VSockGuestHealthClient) CheckHealth(healthContext context.Context, vsockUnixSocketPath string, healthPortOrService string) error {
+func (vsockGuestHealthClient VSockGuestHealthClient) CheckHealth(healthContext context.Context, bootSpecification BootSpecification) error {
 	dialGuestConnection := vsockGuestHealthClient.DialGuestConnection
 	if dialGuestConnection == nil {
-		dialGuestConnection = DefaultGuestConnectionDialer
+		dialGuestConnection = GuestConnectionDialerFor(bootSpecification.VSockUnixSocketPathByPort)
 	}
+	vsockUnixSocketPath := bootSpecification.VSockUnixSocketPath
+	healthPortOrService := bootSpecification.HealthPortOrService
 
 	attemptContext, cancelAttempt := context.WithTimeout(healthContext, firecrackerVSockOperationTimeout)
 	defer cancelAttempt()
