@@ -248,7 +248,10 @@ func (supervisorService *SupervisorService) buildBootSpecification() (BootSpecif
 		return BootSpecification{}, errorValue
 	}
 
-	workspaceVolumeMetadata, errorValue := supervisorService.WorkspaceVolumeService.RequireWorkspaceImage(supervisorService.FirecrackerConfiguration.WorkspaceImagePath)
+	workspaceVolumeMetadata, errorValue := supervisorService.WorkspaceVolumeService.EnsureWorkspaceImage(
+		supervisorService.FirecrackerConfiguration.WorkspaceImagePath,
+		supervisorService.FirecrackerConfiguration.WorkspaceMinimumBytes,
+	)
 	if errorValue != nil {
 		return BootSpecification{}, errorValue
 	}
