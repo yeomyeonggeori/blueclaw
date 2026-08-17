@@ -1175,8 +1175,22 @@ func TestConnectorRuntimeRejectsUninvitedUserWithoutTask(t *testing.T) {
 	if result.ReplyDispatchID != "dispatch-1" {
 		t.Fatalf("expected rejection dispatch id, got %q", result.ReplyDispatchID)
 	}
-	if adapter.sentReplies[0].message != NotInvitedReply {
-		t.Fatalf("expected not invited reply, got %q", adapter.sentReplies[0].message)
+	refusal := adapter.sentReplies[0].message
+	if !strings.Contains(refusal, "outside@example.com") {
+		t.Fatalf("a refusal that does not name the address it could not match leaves everyone guessing, got %q", refusal)
+	}
+	for _, registeredAddress := range []string{"person-1", "alice@example.com"} {
+		if strings.Contains(refusal, registeredAddress) {
+			t.Fatalf("whoever is asking may be from outside the company, so the roster stays unsaid, got %q", refusal)
+		}
+	}
+}
+
+func TestARefusalWithNoAddressSaysThatIsTheProblem(t *testing.T) {
+	refusal := notInvitedReplyFor("   ")
+
+	if !strings.Contains(refusal, "no email address") {
+		t.Fatalf("an account with no address matches nothing, and saying so is the whole diagnosis: %q", refusal)
 	}
 }
 

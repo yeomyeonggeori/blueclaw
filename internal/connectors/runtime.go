@@ -286,6 +286,16 @@ type ConnectorRuntimeResult struct {
 
 const NotInvitedReply = "This Intern Kim has not invited your account yet. Ask the administrator for access."
 
+// The sender already knows their own address, so naming it discloses nothing to them and
+// turns an unanswerable message into one an administrator can act on. Nothing about who is
+// registered is said, because whoever is asking may be from outside the company.
+func notInvitedReplyFor(platformAccountEmail string) string {
+	if strings.TrimSpace(platformAccountEmail) == "" {
+		return NotInvitedReply + " Your account presents no email address, and that is what this Intern Kim matches on."
+	}
+	return fmt.Sprintf("%s Your account presents %s, and no person here is registered with that address.", NotInvitedReply, strings.TrimSpace(platformAccountEmail))
+}
+
 type PlatformAdapter interface {
 	Name() string
 	ParseHTTPEvent(context.Context, *http.Request) (HTTPParseResult, error)
@@ -974,7 +984,7 @@ func (connectorRuntime *ConnectorRuntime) processInboundEventWithReplySender(ctx
 	if errorValue != nil {
 		return ConnectorRuntimeResult{}, errorValue
 	}
-	personID, isAllowed, errorValue := connectorRuntime.authorizeSender(ctx, adapter, event)
+	personID, isAllowed, platformAccountEmail, errorValue := connectorRuntime.authorizeSender(ctx, adapter, event)
 	if errorValue != nil {
 		connectorRuntime.logger.Error("connector."+platform+".auth.failed", slog.String("messageID", event.MessageID), slog.String("error", errorValue.Error()))
 		return ConnectorRuntimeResult{}, errorValue
@@ -984,8 +994,12 @@ func (connectorRuntime *ConnectorRuntime) processInboundEventWithReplySender(ctx
 			connectorRuntime.logger.Info("connector."+platform+".ingress.ignored", slog.String("messageID", event.MessageID), slog.String("reason", "not_addressed_to_bot"))
 			return ConnectorRuntimeResult{Handled: true, Platform: platform, Ignored: true, Reason: "not_addressed_to_bot"}, nil
 		}
-		connectorRuntime.logger.Info("connector."+platform+".auth.rejected", slog.String("messageID", event.MessageID), slog.String("reason", "not_invited"))
-		dispatchID, sendError := sendReply(ctx, replyTarget, OutboundReply{Message: NotInvitedReply, ReplyKind: connectorReplyKindPermissionNotice})
+		connectorRuntime.logger.Info("connector."+platform+".auth.rejected",
+			slog.String("messageID", event.MessageID),
+			slog.String("reason", "not_invited"),
+			slog.String("senderID", event.SenderID),
+			slog.String("platformAccountEmail", platformAccountEmail))
+		dispatchID, sendError := sendReply(ctx, replyTarget, OutboundReply{Message: notInvitedReplyFor(platformAccountEmail), ReplyKind: connectorReplyKindPermissionNotice})
 		if sendError != nil {
 			connectorRuntime.logger.Error("connector."+platform+".outbound.failed", slog.String("messageID", event.MessageID), slog.String("error", sendError.Error()))
 			return ConnectorRuntimeResult{Handled: true, Platform: platform, Reason: "not_invited"}, nil
@@ -3431,22 +3445,22 @@ func isPrivateConversationID(conversationID string) bool {
 	return strings.HasPrefix(strings.TrimSpace(conversationID), "dm:")
 }
 
-func (connectorRuntime *ConnectorRuntime) authorizeSender(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (string, bool, error) {
+func (connectorRuntime *ConnectorRuntime) authorizeSender(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (string, bool, string, error) {
 	personID, isFound := connectorRuntime.identityService.ResolvePersonIDByPlatformAccount(adapter.Name(), event.SenderID)
 	if isFound {
-		return personID, true, nil
+		return personID, true, "", nil
 	}
 
 	platformAccountIdentity, errorValue := adapter.ResolveIdentity(ctx, event.SenderID)
 	if errorValue != nil {
-		return "", false, errorValue
+		return "", false, "", errorValue
 	}
 	platformAccountIdentity.Platform = adapter.Name()
 	platformAccountIdentity.ExternalUserID = event.SenderID
 	connectorRuntime.identityService.RememberPlatformAccount(platformAccountIdentity)
 
 	personID, isFound = connectorRuntime.identityService.ResolvePersonIDByPlatformAccount(adapter.Name(), event.SenderID)
-	return personID, isFound, nil
+	return personID, isFound, platformAccountIdentity.Email, nil
 }
 
 func (connectorRuntime *ConnectorRuntime) buildReplyTarget(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (ReplyTarget, error) {
