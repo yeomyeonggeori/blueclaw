@@ -250,6 +250,7 @@ type FirecrackerConfiguration struct {
 	KernelImagePath        string                            `json:"kernelImagePath"`
 	RootfsImagePath        string                            `json:"rootfsImagePath"`
 	WorkspaceImagePath     string                            `json:"workspaceImagePath"`
+	WorkspaceMinimumBytes  int64                             `json:"workspaceMinimumBytes"`
 	HostWorkspacePath      string                            `json:"hostWorkspacePath"`
 	VCPUCount              int                               `json:"vcpuCount"`
 	MemoryMiB              int                               `json:"memoryMiB"`
