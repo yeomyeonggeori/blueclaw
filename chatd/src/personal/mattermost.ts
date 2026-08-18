@@ -40,6 +40,7 @@ type MattermostFileInfo = {
 	id: string;
 	name: string;
 	mime_type: string;
+	extension?: string;
 	size: number;
 };
 
@@ -447,10 +448,38 @@ function asAttachment(file: MattermostFileInfo): PersonalAttachment {
 	return {
 		id: file.id,
 		filename: file.name,
-		contentType: file.mime_type,
+		contentType: file.mime_type || mediaTypeOfName(file.extension || file.name),
 		sizeBytes: file.size,
 		digest: "",
 	};
+}
+
+// Mattermost stores a file with no media type when whatever uploaded it sent
+// none, and a reader shown "no type" draws a document card for a photograph.
+// The name still says what it is: this is the file extension's own vocabulary,
+// not a guess about the contents.
+const mediaTypeOfExtension: Record<string, string> = {
+	png: "image/png",
+	jpg: "image/jpeg",
+	jpeg: "image/jpeg",
+	gif: "image/gif",
+	webp: "image/webp",
+	heic: "image/heic",
+	heif: "image/heif",
+	bmp: "image/bmp",
+	svg: "image/svg+xml",
+	pdf: "application/pdf",
+	mp4: "video/mp4",
+	mov: "video/quicktime",
+	webm: "video/webm",
+	mp3: "audio/mpeg",
+	wav: "audio/wav",
+	m4a: "audio/mp4",
+};
+
+function mediaTypeOfName(nameOrExtension: string): string {
+	const extension = nameOrExtension.split(".").pop()?.toLowerCase() ?? "";
+	return mediaTypeOfExtension[extension] ?? "";
 }
 
 function groupReactions(reactions: MattermostReaction[]): PersonalReaction[] {

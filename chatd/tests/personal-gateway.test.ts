@@ -251,3 +251,43 @@ describe("the conversation with the agent", () => {
 		expect(conversationOf("with-a-colleague").isWithTheAgent).toBe(false);
 	});
 });
+
+describe("an attachment the messenger gave no media type", () => {
+	test("is still known by what its name says it is", async () => {
+		recordFetches((url) => {
+			if (url.endsWith("/users/me")) return { id: "person-a", username: "lee", first_name: "", last_name: "" };
+			if (url.includes("/posts")) {
+				return {
+					order: ["post-1"],
+					posts: {
+						"post-1": {
+							id: "post-1",
+							channel_id: "channel-1",
+							user_id: "person-a",
+							message: "here",
+							create_at: 1,
+							metadata: {
+								files: [
+									{ id: "file-1", name: "1CC4A632-8B7E.PNG", mime_type: "", extension: "png", size: 213000 },
+									{ id: "file-2", name: "notes", mime_type: "", size: 10 },
+								],
+							},
+						},
+					},
+				};
+			}
+			return [];
+		});
+
+		const answer = await (
+			await call("person.messages.list", {
+				actor: { kind: "mattermost-token", secret: "the-person-token" },
+				conversationID: "channel-1",
+			})
+		).json();
+
+		const attachments = answer.messages[0].attachments;
+		expect(attachments[0].contentType).toBe("image/png");
+		expect(attachments[1].contentType).toBe("");
+	});
+});
