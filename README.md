@@ -504,6 +504,33 @@ requester's own `$HOME` (`requesterShellScript`), so tilde expansion, globs, and
 relative paths carry native POSIX semantics instead of a hand-written path
 vocabulary.
 
+### The environment a command runs with
+
+A command never inherits the daemon's environment. `sanitizeEnvironmentVariables`
+(`internal/security/command_guardrail_service.go`) starts from an empty map, sets
+`HOME`, `TERM` and `LANG`, then copies allowed names out of the environment the
+tool call itself requested. `os.Environ()` is not one of its inputs.
+`applyPOSIXEnvironment` (`internal/security/posix_identity.go`) derives the rest
+from the resolved identity: `HOME` from that person's home directory, `TMPDIR`
+and the `XDG_*` paths from that person's task temporary directory. The spawn then
+sets `command.Env` to exactly that map, and a non-nil `Env` is what stops Go from
+handing the child the parent's environment.
+
+A credential the daemon holds therefore has no path into a task's shell, and
+there is no list of sensitive variable names to keep current: a variable nothing
+derived does not exist in the child. The environment boundary and the file
+permission boundary are computed from the same resolved identity, so a
+deployment where one holds and the other leaks is not expressible.
+
+An external agent CLI runs under the same rule. A turn that drives Claude Code or
+Codex goes through `runAsRequester` (`internal/cliharness/harness.go`), which
+builds its process through that same `security.CommandRequest` path, and
+`commandHarnessFactory` (`internal/harnessselection/selection.go`) refuses to
+construct a CLI harness at all without a requester process boundary. Inheriting
+this machine's environment is possible only by naming it at the call site
+through `AgentCommand.Environment`, which is how the real-agent tests run a
+developer's own CLI against their own credentials.
+
 ### What the guardrail actually enforces
 
 `TerminalConfiguration` (`internal/config/runtime_configuration.go`) has 9
@@ -515,7 +542,7 @@ them is a list of commands or paths. What the guardrail does is structural:
 |---|---|
 | refuses to execute at all when the daemon is effectively root | `BuildCommandPlan` |
 | resolves the working directory against the workspace root | `resolveWorkingDirectoryPath` |
-| replaces the environment with a fixed allowlist of variable *names* (not values) and forces a canonical `PATH` | `sanitizeEnvironmentVariables` |
+| constructs the environment from the resolved identity and forces a canonical `PATH` | `sanitizeEnvironmentVariables`, `applyPOSIXEnvironment` |
 | caps the timeout | `timeoutSecond` |
 | requires bubblewrap when `terminal.mode` is `sandbox` | `BuildCommandPlan` |
 

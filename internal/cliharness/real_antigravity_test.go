@@ -29,7 +29,7 @@ func TestRealAntigravityCallsADaemonTool(t *testing.T) {
 	t.Cleanup(catalogServer.Close)
 	publisher := &catalogPublisher{endpointURL: catalogServer.URL, resolver: resolver}
 
-	harness := New(AntigravityAgentCommand(commandPath), publisher, nil)
+	harness := New(runningAsTheDeveloper(AntigravityAgentCommand(commandPath)), publisher, nil)
 
 	turnContext, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
