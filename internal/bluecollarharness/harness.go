@@ -1,6 +1,10 @@
 package bluecollarharness
 
 import (
+	"context"
+	"errors"
+
+	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/harnessdriver"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
@@ -11,6 +15,7 @@ import (
 func New(dependencies harnessdriver.Dependencies) (agentcontract.Harness, agentcontract.SkillRetriever) {
 	agentKernel := loop.NewAgentKernel(dependencies.TaskRunStore, dependencies.TaskStepStore)
 	agentKernel.UseTaskArtifactService(dependencies.TaskArtifactStore)
+	agentKernel.UseToolResultSpillStore(toolResultSpillStoreAdapter{store: dependencies.ToolResultSpillStore})
 	agentKernel.UseTurnOptions(turnOptionsWithOverrides(deriveTurnOptions(dependencies.RuntimeConfiguration), dependencies.TurnOptionOverrides))
 	agentKernel.UseIntakeOptions(intakeOptionsOrDerived(dependencies))
 	agentKernel.UseInstructionBundleLoader(dependencies.InstructionBundleLoader)
@@ -91,4 +96,33 @@ func turnOptionsWithOverrides(turnOptions agentcontract.TurnOptions, overrides a
 		turnOptions.RecoveryBudget = overrides.RecoveryBudget
 	}
 	return turnOptions
+}
+
+// The loop's spill port and the store that implements it are deliberately different
+// types: naming the port outside this package would link the agent loop into a build
+// that excludes it, which cmd/blueclaw's nobundledharness test rejects.
+type toolResultSpillStoreAdapter struct {
+	store agentruntime.ToolResultSpillStore
+}
+
+func (adapter toolResultSpillStoreAdapter) SaveToolResultSpill(ctx context.Context, spill loop.ToolResultSpill) (loop.ToolResultSpillRef, error) {
+	if adapter.store == nil {
+		return loop.ToolResultSpillRef{}, errors.New("no tool result spill store is configured")
+	}
+	spillRef, errorValue := adapter.store.SaveToolResultSpill(ctx, agentruntime.ToolResultSpill{
+		TaskRunID:         spill.TaskRunID,
+		ObservationID:     spill.ObservationID,
+		ToolName:          spill.ToolName,
+		WorkspaceRootPath: spill.WorkspaceRootPath,
+		SuggestedName:     spill.SuggestedName,
+		Content:           spill.Content,
+	})
+	if errorValue != nil {
+		return loop.ToolResultSpillRef{}, errorValue
+	}
+	return loop.ToolResultSpillRef{
+		Locator:       spillRef.Locator,
+		Bytes:         spillRef.Bytes,
+		RetrievalHint: spillRef.RetrievalHint,
+	}, nil
 }

@@ -239,6 +239,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 		TaskRunStore:            taskRunService,
 		TaskStepStore:           taskStepService,
 		TaskArtifactStore:       taskArtifactService,
+		ToolResultSpillStore:    agentruntime.NewRequesterToolResultSpillStore(terminalService.WorkspaceActorFactory(), taskRunService),
 		InstructionBundleLoader: instructionBundleLoader,
 		CompanyProvider: func() agentcontract.CompanyContext {
 			company := policyWatcher.CurrentPolicyDocument().Company

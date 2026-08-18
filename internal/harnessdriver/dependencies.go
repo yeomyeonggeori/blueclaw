@@ -1,6 +1,7 @@
 package harnessdriver
 
 import (
+	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -12,6 +13,7 @@ type Dependencies struct {
 	TaskRunStore                taskstate.TaskRunStore
 	TaskStepStore               taskstate.TaskStepStore
 	TaskArtifactStore           taskstate.TaskArtifactStore
+	ToolResultSpillStore        agentruntime.ToolResultSpillStore
 	InstructionBundleLoader     func() agentcontract.InstructionBundle
 	CompanyProvider             func() agentcontract.CompanyContext
 	EmbeddingProvider           model.EmbeddingProvider
