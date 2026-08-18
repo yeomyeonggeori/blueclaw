@@ -6,7 +6,7 @@ import type { ChatdConfiguration } from "../src/configuration.ts";
 
 const baseURL = "https://mattermost.test";
 const configuration = {} as ChatdConfiguration;
-const adapters = { mattermost: {} } as never;
+const adapters = { mattermost: { botUserId: "bot-1" } } as never;
 const gateways = { mattermost: createMattermostPersonalGateway(baseURL) };
 const realFetch = globalThis.fetch;
 
@@ -213,5 +213,41 @@ describe("person capabilities", () => {
 
 		expect(response.status).toBe(404);
 		expect((await response.json()).error).toContain("cannot act as a person");
+	});
+});
+
+
+describe("the conversation with the agent", () => {
+	function listing() {
+		return call("person.conversations.list", {
+			actor: { kind: "mattermost-token", secret: "the-person-token" },
+		});
+	}
+
+	test("is marked, so a client can call the product by its own name", async () => {
+		recordFetches((url) => {
+			if (url.endsWith("/users/me")) return { id: "person-a", username: "lee", first_name: "", last_name: "" };
+			if (url.endsWith("/users/me/teams")) return [{ id: "team-1" }];
+			if (url.endsWith("/users/ids")) {
+				return [
+					{ id: "bot-1", username: "internkim", first_name: "Intern", last_name: "Kim" },
+					{ id: "person-b", username: "sample", first_name: "예시", last_name: "박" },
+				];
+			}
+			if (url.includes("/channels")) {
+				return [
+					{ id: "with-the-agent", display_name: "", name: "person-a__bot-1", type: "D" },
+					{ id: "with-a-colleague", display_name: "", name: "person-a__person-b", type: "D" },
+				];
+			}
+			return [];
+		});
+
+		const answer = await (await listing()).json();
+		const conversationOf = (id: string) =>
+			answer.conversations.find((conversation: { id: string }) => conversation.id === id);
+
+		expect(conversationOf("with-the-agent").isWithTheAgent).toBe(true);
+		expect(conversationOf("with-a-colleague").isWithTheAgent).toBe(false);
 	});
 });
