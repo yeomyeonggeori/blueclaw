@@ -90,7 +90,7 @@ func TestRealClaudeCodeCallsADaemonTool(t *testing.T) {
 	t.Cleanup(catalogServer.Close)
 	publisher := &catalogPublisher{endpointURL: catalogServer.URL, resolver: resolver}
 
-	harness := New(ClaudeCodeAgentCommand(commandPath), publisher, nil)
+	harness := New(runningAsTheDeveloper(ClaudeCodeAgentCommand(commandPath)), publisher, nil)
 
 	turnContext, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
@@ -131,7 +131,7 @@ func TestRealCodexCallsADaemonTool(t *testing.T) {
 	t.Cleanup(catalogServer.Close)
 	publisher := &catalogPublisher{endpointURL: catalogServer.URL, resolver: resolver}
 
-	harness := New(CodexAgentCommand(commandPath), publisher, nil)
+	harness := New(runningAsTheDeveloper(CodexAgentCommand(commandPath)), publisher, nil)
 
 	turnContext, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
@@ -150,4 +150,13 @@ func TestRealCodexCallsADaemonTool(t *testing.T) {
 	if !strings.Contains(turnResult.FinishMessage, "갈매기시계") {
 		t.Fatalf("expected the daemon tool's output to reach the reply, got %q", turnResult.FinishMessage)
 	}
+}
+
+// runningAsTheDeveloper hands the agent CLI this machine's own environment, which is
+// how a developer runs Claude Code or Codex against their own credentials. A turn that
+// runs inside the requester's POSIX identity builds its environment from that identity
+// instead and never passes through here.
+func runningAsTheDeveloper(agentCommand AgentCommand) AgentCommand {
+	agentCommand.Environment = os.Environ()
+	return agentCommand
 }

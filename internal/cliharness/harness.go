@@ -378,11 +378,11 @@ func parseCodexAgentOutput(standardOutput string) (string, string) {
 	return finishMessage, capturedSessionIdentity
 }
 
+// A turn that runs inside the requester's POSIX identity never reaches here: that path
+// builds its environment from the resolved identity like every other workspace command.
+// This one is for a developer running a real agent CLI against their own credentials.
 func (harness *Harness) commandEnvironment() []string {
-	if len(harness.agentCommand.Environment) > 0 {
-		return append([]string{}, harness.agentCommand.Environment...)
-	}
-	return os.Environ()
+	return append([]string{}, harness.agentCommand.Environment...)
 }
 
 func (harness *Harness) harnessSessionForTurn(request agentcontract.AgentTurnRequest, identityKey string) mcpserver.HarnessSession {
