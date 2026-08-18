@@ -116,7 +116,7 @@ export function createOutboundHandler(
 		}
 
 		if (personCapability) {
-			return answerAsPerson(personCapability, personalGateways[platform], platform, requestDocument);
+			return answerAsPerson(personCapability, personalGateways[platform], platform, requestDocument, agentExternalIDOf(adapter));
 		}
 
 		try {
@@ -128,17 +128,24 @@ export function createOutboundHandler(
 	};
 }
 
+function agentExternalIDOf(adapter: PlatformChatAdapter): string | undefined {
+	if ("botUserId" in adapter && typeof adapter.botUserId === "string") return adapter.botUserId;
+	if ("botPubkey" in adapter && typeof adapter.botPubkey === "string") return adapter.botPubkey;
+	return undefined;
+}
+
 async function answerAsPerson(
 	capability: PersonCapability,
 	gateway: PersonalGateway | undefined,
 	platform: string,
 	requestDocument: unknown,
+	agentExternalID?: string,
 ): Promise<Response> {
 	if (!gateway) {
 		return jsonResponse(404, { error: `${platform} cannot act as a person` });
 	}
 	try {
-		return jsonResponse(200, await capability(gateway, requestDocument));
+		return jsonResponse(200, await capability(gateway, requestDocument, agentExternalID));
 	} catch (error) {
 		if (error instanceof MalformedRequest) {
 			return jsonResponse(400, { error: error.message });

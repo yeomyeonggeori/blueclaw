@@ -10,7 +10,14 @@ import {
 	requireName,
 } from "./parse.ts";
 
-export type PersonCapability = (gateway: PersonalGateway, requestBody: unknown) => Promise<object>;
+// The agent's own account on the messenger, when the platform knows it. A
+// direct conversation with the agent is a conversation with the product, and
+// only the product knows which account that is.
+export type PersonCapability = (
+	gateway: PersonalGateway,
+	requestBody: unknown,
+	agentExternalID?: string,
+) => Promise<object>;
 
 export const personCapabilities: Record<string, PersonCapability> = {
 	"person.credential.requirement": async (gateway) => gateway.credentialRequirement(),
@@ -20,9 +27,17 @@ export const personCapabilities: Record<string, PersonCapability> = {
 		const request = parsePersonRequest(body);
 		return await gateway.identity(request.actor);
 	},
-	"person.conversations.list": async (gateway, body) => {
+	"person.conversations.list": async (gateway, body, agentExternalID) => {
 		const request = parsePersonRequest(body);
-		return { conversations: await gateway.listConversations(request.actor) };
+		const conversations = await gateway.listConversations(request.actor);
+		return {
+			conversations: conversations.map((conversation) => ({
+				...conversation,
+				isWithTheAgent: Boolean(
+					agentExternalID && (conversation.participantExternalIDs ?? []).includes(agentExternalID),
+				),
+			})),
+		};
 	},
 	"person.people.list": async (gateway, body) => {
 		const request = parsePersonRequest(body);
