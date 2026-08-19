@@ -46,6 +46,8 @@ export type PersonalAttachment = {
 	contentType: string;
 	sizeBytes: number;
 	digest: string;
+	widthPixels?: number;
+	heightPixels?: number;
 };
 
 export type PersonalMessage = {
