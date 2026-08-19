@@ -16,7 +16,7 @@ const realFetch = globalThis.fetch;
 
 type Seen = { url: string; method: string; body: unknown };
 
-function serveMattermost(fileBytes: number): Seen[] {
+function serveMattermost(fileBytes: number, shape?: { width: number; height: number }): Seen[] {
 	const seen: Seen[] = [];
 	globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 		const url = String(input);
@@ -27,7 +27,7 @@ function serveMattermost(fileBytes: number): Seen[] {
 			return Response.json({ file_infos: [{ id: "file-1" }] });
 		}
 		if (url.endsWith("/files/file-1/info")) {
-			return Response.json({ id: "file-1", name: "evidence.png", mime_type: "image/png", size: fileBytes });
+			return Response.json({ id: "file-1", name: "evidence.png", mime_type: "image/png", size: fileBytes, ...shape });
 		}
 		if (url.endsWith("/files/file-1")) {
 			return new Response(new Uint8Array(fileBytes), { headers: { "content-type": "image/png" } });
@@ -41,7 +41,9 @@ function serveMattermost(fileBytes: number): Seen[] {
 			message: "here it is",
 			create_at: 0,
 			edit_at: 0,
-			metadata: { files: [{ id: "file-1", name: "evidence.png", mime_type: "image/png", size: fileBytes }] },
+			metadata: {
+				files: [{ id: "file-1", name: "evidence.png", mime_type: "image/png", size: fileBytes, ...shape }],
+			},
 		});
 	}) as typeof fetch;
 	return seen;
@@ -106,6 +108,24 @@ describe("sending a message that carries a file", () => {
 		};
 		expect(message.attachments).toEqual([
 			{ id: "file-1", filename: "evidence.png", contentType: "image/png", sizeBytes: 11, digest: "" },
+		]);
+	});
+
+	test("an image carries the proportions the messenger reported", async () => {
+		serveMattermost(11, { width: 1200, height: 1600 });
+
+		const response = await call("mattermost", "person.message.send", {
+			actor,
+			conversationID: "channel-1",
+			body: "here it is",
+			attachments: [{ filename: "evidence.png", contentType: "image/png", contentBase64: "AAAA" }],
+		});
+
+		const message = (await response.json()) as {
+			attachments: { widthPixels?: number; heightPixels?: number }[];
+		};
+		expect(message.attachments.map((attachment) => [attachment.widthPixels, attachment.heightPixels])).toEqual([
+			[1200, 1600],
 		]);
 	});
 });

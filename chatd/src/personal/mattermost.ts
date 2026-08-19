@@ -42,6 +42,8 @@ type MattermostFileInfo = {
 	mime_type: string;
 	extension?: string;
 	size: number;
+	width?: number;
+	height?: number;
 };
 
 const pageSize = 50;
@@ -274,7 +276,7 @@ class MattermostPersonalGateway implements PersonalGateway {
 		if (bytes.length === 0 || bytes.length > largestBytes) return null;
 		return {
 			filename: info.name,
-			contentType: info.mime_type,
+			contentType: info.mime_type || mediaTypeOfName(info.extension || info.name),
 			contentBase64: Buffer.from(bytes).toString("base64"),
 		};
 	}
@@ -451,6 +453,9 @@ function asAttachment(file: MattermostFileInfo): PersonalAttachment {
 		contentType: file.mime_type || mediaTypeOfName(file.extension || file.name),
 		sizeBytes: file.size,
 		digest: "",
+		...(file.width && file.height
+			? { widthPixels: file.width, heightPixels: file.height }
+			: {}),
 	};
 }
 
