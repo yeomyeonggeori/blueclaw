@@ -124,8 +124,9 @@ describe("sending a message that carries a file", () => {
 		const message = (await response.json()) as {
 			attachments: { widthPixels?: number; heightPixels?: number }[];
 		};
-		expect(message.attachments[0].widthPixels).toBe(1200);
-		expect(message.attachments[0].heightPixels).toBe(1600);
+		expect(message.attachments.map((attachment) => [attachment.widthPixels, attachment.heightPixels])).toEqual([
+			[1200, 1600],
+		]);
 	});
 });
 
