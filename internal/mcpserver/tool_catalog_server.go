@@ -94,7 +94,8 @@ func leavesEnvironmentUnchanged(sideEffectClass string) bool {
 
 func invokeThroughToolSet(requesterToolSet RequesterToolSet, toolDescriptor toolcontract.ToolDescriptor, hasOutputSchema bool) mcp.ToolHandler {
 	return func(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		toolResult, errorValue := requesterToolSet.ToolSet.Invoke(ctx, toolcontract.ToolInvocation{
+		invocationContext := toolcontract.WithTaskRunID(ctx, strings.TrimSpace(requesterToolSet.TaskRunID))
+		toolResult, errorValue := requesterToolSet.ToolSet.Invoke(invocationContext, toolcontract.ToolInvocation{
 			ToolName: toolDescriptor.Name,
 			Input:    request.Params.Arguments,
 		})

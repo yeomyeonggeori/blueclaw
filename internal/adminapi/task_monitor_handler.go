@@ -24,9 +24,10 @@ const maxDailyCostTaskRunLimit = 1000
 
 type taskRunListItem struct {
 	task.TaskRun
-	RequesterDisplayName string  `json:"requesterDisplayName,omitempty"`
-	LLMCostUSD           float64 `json:"llmCostUSD,omitempty"`
-	LLMCallCount         int     `json:"llmCallCount,omitempty"`
+	RequesterDisplayName   string  `json:"requesterDisplayName,omitempty"`
+	LLMCostUSD             float64 `json:"llmCostUSD,omitempty"`
+	LLMCallCount           int     `json:"llmCallCount,omitempty"`
+	HasUndeliveredQuestion bool    `json:"hasUndeliveredQuestion,omitempty"`
 }
 
 type taskRunCostSummary struct {
@@ -192,11 +193,35 @@ func (taskMonitorHandler TaskMonitorHandler) decorateTaskRun(taskRun task.TaskRu
 
 func (taskMonitorHandler TaskMonitorHandler) decorateTaskRunWithCost(taskRun task.TaskRun, costSummary taskRunCostSummary) taskRunListItem {
 	return taskRunListItem{
-		TaskRun:              taskRun,
-		RequesterDisplayName: taskMonitorHandler.resolveRequesterDisplayName(taskRun.RequesterPersonID),
-		LLMCostUSD:           costSummary.CostUSD,
-		LLMCallCount:         costSummary.LLMCallCount,
+		TaskRun:                taskRun,
+		RequesterDisplayName:   taskMonitorHandler.resolveRequesterDisplayName(taskRun.RequesterPersonID),
+		LLMCostUSD:             costSummary.CostUSD,
+		LLMCallCount:           costSummary.LLMCallCount,
+		HasUndeliveredQuestion: taskMonitorHandler.hasUndeliveredQuestion(taskRun),
 	}
+}
+
+func (taskMonitorHandler TaskMonitorHandler) hasUndeliveredQuestion(taskRun task.TaskRun) bool {
+	if taskMonitorHandler.TaskEventService == nil || !isTaskRunWaitingForTheRequester(taskRun.Status) {
+		return false
+	}
+	return taskRunHasUndeliveredQuestion(taskMonitorHandler.TaskEventService.ListTaskEvent(taskRun.TaskRunID))
+}
+
+func isTaskRunWaitingForTheRequester(status task.TaskStatus) bool {
+	return status == task.TaskStatusWaitingApproval || status == task.TaskStatusWaitingUserInput
+}
+
+func taskRunHasUndeliveredQuestion(taskEvents []task.TaskEvent) bool {
+	for index := len(taskEvents) - 1; index >= 0; index-- {
+		switch taskEvents[index].Name {
+		case "connector.reply.sent":
+			return false
+		case "ask.requested":
+			return true
+		}
+	}
+	return false
 }
 
 func (taskMonitorHandler TaskMonitorHandler) taskRunCostSummaries(taskRuns []task.TaskRun) map[string]taskRunCostSummary {
