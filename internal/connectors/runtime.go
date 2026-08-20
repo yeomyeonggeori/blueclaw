@@ -284,16 +284,32 @@ type ConnectorRuntimeResult struct {
 	ReplyDispatchID string `json:"replyDispatchID,omitempty"`
 }
 
-const NotInvitedReply = "This Intern Kim has not invited your account yet. Ask the administrator for access."
+// This runtime matches an inbound account against the people this device carries. Whether
+// someone was invited is decided elsewhere — the account directory the device is projected
+// from — so a refusal here states the match that failed and stops there. Saying "not invited"
+// asserts a fact this process cannot read, and it was wrong for the ordinary case: a person
+// who is invited, whose messenger account presents an address their record does not carry.
+const UnmatchedAccountReply = "This Intern Kim could not match your account to anyone it knows about. Ask the administrator to check it."
 
 // The sender already knows their own address, so naming it discloses nothing to them and
-// turns an unanswerable message into one an administrator can act on. Nothing about who is
-// registered is said, because whoever is asking may be from outside the company.
-func notInvitedReplyFor(platformAccountEmail string) string {
-	if strings.TrimSpace(platformAccountEmail) == "" {
-		return NotInvitedReply + " Your account presents no email address, and that is what this Intern Kim matches on."
+// turns an unanswerable message into one an administrator can act on. Which people this
+// device carries stays unsaid, because whoever is asking may be from outside the company.
+func unmatchedAccountReplyFor(authorization senderAuthorization) string {
+	platformAccountEmail := strings.TrimSpace(authorization.PlatformAccountEmail)
+	if platformAccountEmail == "" {
+		return UnmatchedAccountReply + " Your account presents no email address, and that is what this Intern Kim matches on."
 	}
-	return fmt.Sprintf("%s Your account presents %s, and no person here is registered with that address.", NotInvitedReply, strings.TrimSpace(platformAccountEmail))
+	return fmt.Sprintf("%s Your account presents %s, and no one here is on file under that address — either it is recorded under a different one, or this %s account has not reached this Intern Kim yet.",
+		UnmatchedAccountReply, platformAccountEmail, strings.TrimSpace(authorization.Platform))
+}
+
+// senderAuthorization is what the runtime actually established about an inbound sender, so a
+// refusal can state that and nothing further.
+type senderAuthorization struct {
+	PersonID             string
+	IsAllowed            bool
+	Platform             string
+	PlatformAccountEmail string
 }
 
 type PlatformAdapter interface {
@@ -989,28 +1005,29 @@ func (connectorRuntime *ConnectorRuntime) processInboundEventWithReplySender(ctx
 	if errorValue != nil {
 		return ConnectorRuntimeResult{}, errorValue
 	}
-	personID, isAllowed, platformAccountEmail, errorValue := connectorRuntime.authorizeSender(ctx, adapter, event)
+	authorization, errorValue := connectorRuntime.authorizeSender(ctx, adapter, event)
 	if errorValue != nil {
 		connectorRuntime.logger.Error("connector."+platform+".auth.failed", slog.String("messageID", event.MessageID), slog.String("error", errorValue.Error()))
 		return ConnectorRuntimeResult{}, errorValue
 	}
-	if !isAllowed {
+	personID := authorization.PersonID
+	if !authorization.IsAllowed {
 		if shouldIgnoreUninvitedAddressing(event) {
 			connectorRuntime.logger.Info("connector."+platform+".ingress.ignored", slog.String("messageID", event.MessageID), slog.String("reason", "not_addressed_to_bot"))
 			return ConnectorRuntimeResult{Handled: true, Platform: platform, Ignored: true, Reason: "not_addressed_to_bot"}, nil
 		}
 		connectorRuntime.logger.Info("connector."+platform+".auth.rejected",
 			slog.String("messageID", event.MessageID),
-			slog.String("reason", "not_invited"),
+			slog.String("reason", "unmatched_account"),
 			slog.String("senderID", event.SenderID),
-			slog.String("platformAccountEmail", platformAccountEmail))
-		dispatchID, sendError := sendReply(ctx, replyTarget, OutboundReply{Message: notInvitedReplyFor(platformAccountEmail), ReplyKind: connectorReplyKindPermissionNotice})
+			slog.String("platformAccountEmail", authorization.PlatformAccountEmail))
+		dispatchID, sendError := sendReply(ctx, replyTarget, OutboundReply{Message: unmatchedAccountReplyFor(authorization), ReplyKind: connectorReplyKindPermissionNotice})
 		if sendError != nil {
 			connectorRuntime.logger.Error("connector."+platform+".outbound.failed", slog.String("messageID", event.MessageID), slog.String("error", sendError.Error()))
-			return ConnectorRuntimeResult{Handled: true, Platform: platform, Reason: "not_invited"}, nil
+			return ConnectorRuntimeResult{Handled: true, Platform: platform, Reason: "unmatched_account"}, nil
 		}
 		connectorRuntime.logger.Info("connector."+platform+".outbound.sent", slog.String("messageID", event.MessageID), slog.String("replyDispatchID", dispatchID))
-		return ConnectorRuntimeResult{Handled: true, Platform: platform, Reason: "not_invited", ReplyDispatchID: dispatchID}, nil
+		return ConnectorRuntimeResult{Handled: true, Platform: platform, Reason: "unmatched_account", ReplyDispatchID: dispatchID}, nil
 	}
 
 	connectorRuntime.logger.Info("connector."+platform+".auth.allowed", slog.String("messageID", event.MessageID), slog.String("personID", personID))
@@ -3450,15 +3467,15 @@ func isPrivateConversationID(conversationID string) bool {
 	return strings.HasPrefix(strings.TrimSpace(conversationID), "dm:")
 }
 
-func (connectorRuntime *ConnectorRuntime) authorizeSender(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (string, bool, string, error) {
+func (connectorRuntime *ConnectorRuntime) authorizeSender(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (senderAuthorization, error) {
 	personID, isFound := connectorRuntime.identityService.ResolvePersonIDByPlatformAccount(adapter.Name(), event.SenderID)
 	if isFound {
-		return personID, true, "", nil
+		return senderAuthorization{PersonID: personID, IsAllowed: true, Platform: adapter.Name()}, nil
 	}
 
 	platformAccountIdentity, errorValue := adapter.ResolveIdentity(ctx, event.SenderID)
 	if errorValue != nil {
-		return "", false, "", errorValue
+		return senderAuthorization{Platform: adapter.Name()}, errorValue
 	}
 	platformAccountIdentity.Platform = adapter.Name()
 	platformAccountIdentity.ExternalUserID = event.SenderID
@@ -3468,7 +3485,12 @@ func (connectorRuntime *ConnectorRuntime) authorizeSender(ctx context.Context, a
 	if !isFound {
 		personID, isFound = connectorRuntime.askTheHostAboutUnknownAccount(ctx, adapter.Name(), event.SenderID, event.MessageID, platformAccountIdentity)
 	}
-	return personID, isFound, platformAccountIdentity.Email, nil
+	return senderAuthorization{
+		PersonID:             personID,
+		IsAllowed:            isFound,
+		Platform:             adapter.Name(),
+		PlatformAccountEmail: platformAccountIdentity.Email,
+	}, nil
 }
 
 // askTheHostAboutUnknownAccount runs while a person waits on the answer, so a host that

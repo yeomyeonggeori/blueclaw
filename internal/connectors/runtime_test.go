@@ -1187,7 +1187,7 @@ func TestConnectorRuntimeRejectsUninvitedUserWithoutTask(t *testing.T) {
 }
 
 func TestARefusalWithNoAddressSaysThatIsTheProblem(t *testing.T) {
-	refusal := notInvitedReplyFor("   ")
+	refusal := unmatchedAccountReplyFor(senderAuthorization{Platform: "mattermost", PlatformAccountEmail: "   "})
 
 	if !strings.Contains(refusal, "no email address") {
 		t.Fatalf("an account with no address matches nothing, and saying so is the whole diagnosis: %q", refusal)
