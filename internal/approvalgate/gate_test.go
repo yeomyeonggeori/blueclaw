@@ -109,7 +109,7 @@ func TestAnApprovalThatDoesNotArriveInTimeFallsBackToTheDurableHold(t *testing.T
 	}
 }
 
-func TestACallWithNoTaskRunToAnswerOnIsHeldRatherThanRun(t *testing.T) {
+func TestACallWithNoTaskRunToAnswerOnIsUnanswerableRatherThanHeld(t *testing.T) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	gate := New(taskRunService)
 
@@ -117,8 +117,8 @@ func TestACallWithNoTaskRunToAnswerOnIsHeldRatherThanRun(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected the gate to answer: %v", errorValue)
 	}
-	if outcome.Decision != mcpserver.ApprovalDecisionHeld {
-		t.Fatalf("expected a call the requester cannot be asked about to be held, got %+v", outcome)
+	if outcome.Decision != mcpserver.ApprovalDecisionUnanswerable {
+		t.Fatalf("a call nobody can be asked about is not waiting for an answer, got %+v", outcome)
 	}
 }
 
@@ -379,7 +379,7 @@ func TestACallCarryingNoTaskRunParksNothingAtAll(t *testing.T) {
 	}
 }
 
-func TestAGateThatCannotParkTheTaskDoesNotLeaveItSilentlyWaiting(t *testing.T) {
+func TestARunThatCannotBeParkedIsNeverToldItWasAsked(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
 	if _, errorValue := taskRunService.CompleteTaskRun(taskRun.TaskRunID, "done"); errorValue != nil {
 		t.Fatalf("expected the fixture run to complete: %v", errorValue)
@@ -390,17 +390,13 @@ func TestAGateThatCannotParkTheTaskDoesNotLeaveItSilentlyWaiting(t *testing.T) {
 		t.Fatalf("expected the gate to answer: %v", errorValue)
 	}
 
-	if outcome.Decision != mcpserver.ApprovalDecisionHeld {
-		t.Fatalf("expected a call nobody can be asked about to be held rather than run, got %+v", outcome)
+	if outcome.Decision != mcpserver.ApprovalDecisionUnanswerable {
+		t.Fatalf("a call nobody can be asked about is not waiting for an answer, got %+v", outcome)
 	}
-	undeliverableBody := heldCallEventBodyNamed(t, taskRunService, taskRun.TaskRunID, "approval.question_undeliverable")
-	for _, expectedFragment := range []string{"calendar_delete", "reason"} {
-		if !strings.Contains(undeliverableBody, expectedFragment) {
-			t.Fatalf("expected the refused park to name what could not be asked, expected %q in %s", expectedFragment, undeliverableBody)
+	for _, questionEventName := range []string{"approval.pending_call", "confirmation.requested", "ask.requested"} {
+		if hasTaskEventNamed(taskRunService, taskRun.TaskRunID, questionEventName) {
+			t.Fatalf("a question that was never asked leaves no record saying it was, got %+v", taskEventNames(taskRunService, taskRun.TaskRunID))
 		}
-	}
-	if strings.TrimSpace(outcome.Notice) == "" || strings.Contains(outcome.Notice, "illegal") {
-		t.Fatalf("expected the model to be told the call did not run and the requester was not asked, got %q", outcome.Notice)
 	}
 	unparkedTaskRun, _ := taskRunService.FindTaskRun(taskRun.TaskRunID)
 	if unparkedTaskRun.Status == task.TaskStatusWaitingApproval {

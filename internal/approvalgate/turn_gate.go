@@ -33,7 +33,7 @@ func (turnGate turnToolCallGate) ReviewToolCall(ctx context.Context, toolInvocat
 		return toolcontract.ToolCallReview{MayProceed: true}, nil
 	}
 	if turnGate.gate == nil {
-		return toolcontract.ToolCallReview{Result: HeldCallResult("this tool needs approval and this turn has no approval gate configured, so it will not run")}, nil
+		return toolcontract.ToolCallReview{Result: unanswerableCallResult()}, nil
 	}
 	outcome, errorValue := turnGate.gate.AwaitApproval(ctx, mcpserver.ApprovalRequest{
 		RequesterPersonID: turnGate.turnContext.RequesterPersonID,
@@ -55,6 +55,8 @@ func (turnGate turnToolCallGate) ReviewToolCall(ctx context.Context, toolInvocat
 		return toolcontract.ToolCallReview{MayProceed: true}, nil
 	case mcpserver.ApprovalDecisionRejected:
 		return toolcontract.ToolCallReview{Result: rejectedCallResult(outcome.Notice)}, nil
+	case mcpserver.ApprovalDecisionUnanswerable:
+		return toolcontract.ToolCallReview{Result: unanswerableCallResult()}, nil
 	}
 	return toolcontract.ToolCallReview{Result: HeldCallResult(outcome.Notice)}, nil
 }
@@ -101,6 +103,10 @@ func HeldCallResult(notice string) toolcontract.ToolResult {
 	result := toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.InteractionRequired, "approval", heldNotice)
 	result.Failure.RequiresApproval = true
 	return result
+}
+
+func unanswerableCallResult() toolcontract.ToolResult {
+	return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.PolicyBlocked, "approval", "This call needs the requester's approval and there is no conversation they can answer on, so it can never run. Do not wait for an approval; take another route or tell them what you could not do.")
 }
 
 func rejectedCallResult(notice string) toolcontract.ToolResult {
