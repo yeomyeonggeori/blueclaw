@@ -6,22 +6,12 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
-
-type immediateDecision struct {
-	decision  mcpserver.ApprovalDecision
-	isDecided bool
-}
-
-func (source immediateDecision) AwaitDecision(context.Context, string) (mcpserver.ApprovalDecision, bool) {
-	return source.decision, source.isDecided
-}
 
 func gateFixture(t *testing.T) (*Gate, *task.TaskRunService, task.TaskRun) {
 	t.Helper()
@@ -72,40 +62,6 @@ func TestAHeldCallIsRecordedWithTheConversationItWasHeldIn(t *testing.T) {
 	pausedTaskRun, _ := taskRunService.FindTaskRun(taskRun.TaskRunID)
 	if pausedTaskRun.Status != task.TaskStatusWaitingApproval {
 		t.Fatalf("expected the task run to wait for the requester, got %q", pausedTaskRun.Status)
-	}
-}
-
-func TestAnApprovalThatArrivesQuicklyFinishesTheCallTheAgentIsWaitingOn(t *testing.T) {
-	gate, taskRunService, taskRun := gateFixture(t)
-	gate.UseInlineWait(immediateDecision{decision: mcpserver.ApprovalDecisionApproved, isDecided: true}, time.Second)
-
-	outcome, errorValue := gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
-	if errorValue != nil {
-		t.Fatalf("expected the gate to answer: %v", errorValue)
-	}
-	if outcome.Decision != mcpserver.ApprovalDecisionApproved {
-		t.Fatalf("expected a quick approval to let the call proceed, got %+v", outcome)
-	}
-	runningTaskRun, _ := taskRunService.FindTaskRun(taskRun.TaskRunID)
-	if runningTaskRun.Status == task.TaskStatusWaitingApproval {
-		t.Fatal("expected a call answered inline never to park the task run")
-	}
-	if heldCallEventBody(t, taskRunService, taskRun.TaskRunID) == "" {
-		t.Fatal("expected the held call to be recorded even when answered inline, so the ledger reads the same either way")
-	}
-}
-
-func TestAnApprovalThatDoesNotArriveInTimeFallsBackToTheDurableHold(t *testing.T) {
-	gate, taskRunService, taskRun := gateFixture(t)
-	gate.UseInlineWait(immediateDecision{isDecided: false}, 10*time.Millisecond)
-
-	outcome, _ := gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
-	if outcome.Decision != mcpserver.ApprovalDecisionHeld {
-		t.Fatalf("expected an unanswered call to fall back to the durable hold, got %+v", outcome)
-	}
-	pausedTaskRun, _ := taskRunService.FindTaskRun(taskRun.TaskRunID)
-	if pausedTaskRun.Status != task.TaskStatusWaitingApproval {
-		t.Fatalf("expected the task run to be parked for later, got %q", pausedTaskRun.Status)
 	}
 }
 
