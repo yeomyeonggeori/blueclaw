@@ -55,27 +55,17 @@ func (gate *Gate) AwaitApproval(ctx context.Context, approvalRequest mcpserver.A
 		}
 		return mcpserver.ApprovalOutcome{Decision: decision}, nil
 	}
-	if !gate.canBeAnsweredOn(taskRunID) {
-		slog.Warn("approvalgate.call_is_unanswerable", "taskRunID", taskRunID, "toolName", strings.TrimSpace(approvalRequest.ToolName))
-		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionUnanswerable}, nil
-	}
 	confirmation := gate.confirmationWording(ctx, approvalRequest)
-	gate.recordHeldCall(taskRunID, approvalRequest, confirmation)
 	if decision, isDecided := gate.awaitInlineDecision(ctx, taskRunID); isDecided {
+		gate.recordHeldCall(taskRunID, approvalRequest, confirmation)
 		return mcpserver.ApprovalOutcome{Decision: decision, Notice: confirmation}, nil
 	}
 	if _, errorValue := gate.taskRunService.PauseTaskRun(taskRunID, taskstate.TaskStatusWaitingApproval, confirmation); errorValue != nil {
-		return mcpserver.ApprovalOutcome{}, errorValue
+		slog.Warn("approvalgate.call_is_unanswerable", "taskRunID", taskRunID, "toolName", strings.TrimSpace(approvalRequest.ToolName), "reason", errorValue.Error())
+		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionUnanswerable}, nil
 	}
+	gate.recordHeldCall(taskRunID, approvalRequest, confirmation)
 	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionHeld, Notice: confirmation}, nil
-}
-
-func (gate *Gate) canBeAnsweredOn(taskRunID string) bool {
-	if taskRunID == "" {
-		return false
-	}
-	taskRun, isFound := gate.taskRunService.FindTaskRun(taskRunID)
-	return isFound && taskstate.CanPauseTaskRun(taskRun.Status)
 }
 
 func (gate *Gate) approvedOutcome(taskRunID string, toolName string) mcpserver.ApprovalOutcome {
