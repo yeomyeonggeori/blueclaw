@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"strings"
-	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -20,14 +19,8 @@ type heldCallRecord struct {
 	HarnessSession mcpserver.HarnessSession `json:"harnessSession"`
 }
 
-type DecisionSource interface {
-	AwaitDecision(context.Context, string) (mcpserver.ApprovalDecision, bool)
-}
-
 type Gate struct {
 	taskRunService taskstate.TaskRunStore
-	decisionSource DecisionSource
-	inlineWait     time.Duration
 	languageModel  model.LanguageModelProvider
 }
 
@@ -37,11 +30,6 @@ func (gate *Gate) UseLanguageModel(languageModel model.LanguageModelProvider) {
 
 func New(taskRunService taskstate.TaskRunStore) *Gate {
 	return &Gate{taskRunService: taskRunService}
-}
-
-func (gate *Gate) UseInlineWait(decisionSource DecisionSource, inlineWait time.Duration) {
-	gate.decisionSource = decisionSource
-	gate.inlineWait = inlineWait
 }
 
 func (gate *Gate) AwaitApproval(ctx context.Context, approvalRequest mcpserver.ApprovalRequest) (mcpserver.ApprovalOutcome, error) {
@@ -56,10 +44,6 @@ func (gate *Gate) AwaitApproval(ctx context.Context, approvalRequest mcpserver.A
 		return mcpserver.ApprovalOutcome{Decision: decision}, nil
 	}
 	confirmation := gate.confirmationWording(ctx, approvalRequest)
-	if decision, isDecided := gate.awaitInlineDecision(ctx, taskRunID); isDecided {
-		gate.recordHeldCall(taskRunID, approvalRequest, confirmation)
-		return mcpserver.ApprovalOutcome{Decision: decision, Notice: confirmation}, nil
-	}
 	if _, errorValue := gate.taskRunService.PauseTaskRun(taskRunID, taskstate.TaskStatusWaitingApproval, confirmation); errorValue != nil {
 		slog.Warn("approvalgate.call_is_unanswerable", "taskRunID", taskRunID, "toolName", strings.TrimSpace(approvalRequest.ToolName), "reason", errorValue.Error())
 		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionUnanswerable}, nil
@@ -169,15 +153,6 @@ func executedToolName(body string) string {
 	}{}
 	json.Unmarshal([]byte(body), &executedBody)
 	return strings.TrimSpace(executedBody.ToolName)
-}
-
-func (gate *Gate) awaitInlineDecision(ctx context.Context, taskRunID string) (mcpserver.ApprovalDecision, bool) {
-	if gate.decisionSource == nil || gate.inlineWait <= 0 {
-		return "", false
-	}
-	waitContext, cancel := context.WithTimeout(ctx, gate.inlineWait)
-	defer cancel()
-	return gate.decisionSource.AwaitDecision(waitContext, taskRunID)
 }
 
 func (gate *Gate) recordHeldCall(taskRunID string, approvalRequest mcpserver.ApprovalRequest, confirmation string) {
