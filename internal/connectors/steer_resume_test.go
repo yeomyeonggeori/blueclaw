@@ -9,7 +9,7 @@ import (
 )
 
 func TestUserSteerTaskProfileSourceReferenceResolvesRealPlatform(t *testing.T) {
-	profile := userSteerTaskProfile("mattermost", "task-1")
+	profile := userSteerTaskProfile("mattermost", "task-1", "")
 	if platformFromSourceReference(profile.sourceReference) != "mattermost" {
 		t.Fatalf("steer source reference must resolve the real platform, got %q", profile.sourceReference)
 	}
@@ -67,5 +67,26 @@ func TestInterruptedTaskTurnDecisionDefaultsToStandardEffort(t *testing.T) {
 	decision := interruptedTaskTurnDecision([]task.TaskEvent{{Name: "agent.intake", Body: "not-json"}}, "ko")
 	if decision.TaskLevel != agentcontract.TaskLevelLow {
 		t.Fatalf("resumed task without recorded task level must default to low, got %q", decision.TaskLevel)
+	}
+}
+
+func TestAnAnswerReplacesTheObjectiveTheTaskStoppedOn(t *testing.T) {
+	stoppedToAsk := []task.TaskEvent{{Name: "agent.goal.waiting_user_input", Body: `{"goalID":"task-1","currentObjective":"the request lacks detail, so it has to be confirmed","status":"waiting_user_input"}`}}
+	answered := "register the 18 August Shanghai edatec meeting as a completed task"
+
+	activeGoal := interruptedTaskActiveGoalWithInstruction(task.TaskRun{TaskRunID: "task-1", Prompt: "해줘"}, stoppedToAsk, "note", answered)
+
+	if activeGoal.CurrentObjective != answered {
+		t.Fatalf("a task that stopped to ask keeps asking until the answer becomes its objective, got %q", activeGoal.CurrentObjective)
+	}
+}
+
+func TestARestartCarriesNoAnswerAndKeepsTheObjective(t *testing.T) {
+	inProgress := []task.TaskEvent{{Name: "agent.goal.waiting_user_input", Body: `{"goalID":"task-1","currentObjective":"draft the quarterly report","status":"active"}`}}
+
+	activeGoal := interruptedTaskActiveGoalWithInstruction(task.TaskRun{TaskRunID: "task-1", Prompt: "해줘"}, inProgress, "note", "")
+
+	if activeGoal.CurrentObjective != "draft the quarterly report" {
+		t.Fatalf("a restart said nothing new, so the work in flight stands, got %q", activeGoal.CurrentObjective)
 	}
 }
