@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 )
@@ -52,5 +53,25 @@ func TestAReloadThatCannotReadTheFileLeavesTheRosterAlone(t *testing.T) {
 	}
 	if len(watcher.CurrentPolicyDocument().People) != 1 {
 		t.Fatal("a failed reload must leave the roster it already had, because emptying it refuses everyone")
+	}
+}
+
+func TestAReloadReadsAgainWhenItCatchesTheFileMidWrite(t *testing.T) {
+	watcher := &policy.PolicyWatcher{}
+	policyPath := deliveredPolicyFile(t, `{"people":[{"personID":"person-1","emails":["이샘플@example.com"]}`)
+	handler := PolicyHandler{PolicyPath: policyPath, PolicyWatcher: watcher}
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		_ = os.WriteFile(policyPath, []byte(`{"people":[{"personID":"person-1","emails":["이샘플@example.com"]}]}`), 0o600)
+	}()
+
+	recorder := httptest.NewRecorder()
+	handler.HandleReloadPolicy(recorder, reloadRequest())
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("a file caught mid-write settles, and refusing on that window leaves the agent on its old roster: %d %s", recorder.Code, recorder.Body.String())
+	}
+	if len(watcher.CurrentPolicyDocument().People) != 1 {
+		t.Fatal("the second read has to be the one that lands")
 	}
 }

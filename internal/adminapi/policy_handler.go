@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
@@ -106,8 +107,25 @@ func (policyHandler PolicyHandler) HandleSavePolicy(responseWriter http.Response
 // Where that file comes from is the host's business: on a device it arrives on a delivery
 // share the guest cannot write, which is why an agent that must never author its own roster
 // still has to be told when the roster changed.
-func (policyHandler PolicyHandler) HandleReloadPolicy(responseWriter http.ResponseWriter, request *http.Request) {
+// loadPolicySettled reads the roster, and reads it again if the first attempt caught the
+// file mid-write. The host rewrites this file in place so the guest sees the change at all,
+// which leaves a window where a reader sees half of it. Refusing on that window would leave
+// the agent on its previous roster until somebody asked again.
+func (policyHandler PolicyHandler) loadPolicySettled() (policy.PolicyDocument, error) {
 	policyDocument, errorValue := policyHandler.PolicyLoader.LoadPolicyDocument(policyHandler.PolicyPath)
+	if errorValue == nil {
+		return policyDocument, nil
+	}
+	time.Sleep(policyWriteSettleDelay)
+	return policyHandler.PolicyLoader.LoadPolicyDocument(policyHandler.PolicyPath)
+}
+
+// policyWriteSettleDelay is how long a torn read waits before looking again. One rewrite of
+// a small file finishes far inside it, and a reload is never on a hot path.
+const policyWriteSettleDelay = 150 * time.Millisecond
+
+func (policyHandler PolicyHandler) HandleReloadPolicy(responseWriter http.ResponseWriter, request *http.Request) {
+	policyDocument, errorValue := policyHandler.loadPolicySettled()
 	if errorValue != nil {
 		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
 		return
