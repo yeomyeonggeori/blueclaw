@@ -47,6 +47,7 @@ func NewRouter(routerDependencies RouterDependencies) http.Handler {
 	multiplexer.HandleFunc("GET /admin/api/policy", routerDependencies.PolicyHandler.HandleGetPolicy)
 	multiplexer.HandleFunc("POST /admin/api/policy/validate", routerDependencies.PolicyHandler.HandleValidatePolicy)
 	multiplexer.HandleFunc("POST /admin/api/policy/save", routerDependencies.PolicyHandler.HandleSavePolicy)
+	multiplexer.HandleFunc("POST /admin/api/policy/reload", routerDependencies.PolicyHandler.HandleReloadPolicy)
 	multiplexer.HandleFunc("POST /admin/api/people/invite", routerDependencies.PolicyHandler.HandleInvitePerson)
 	multiplexer.HandleFunc("DELETE /admin/api/people", routerDependencies.PolicyHandler.HandleRemovePerson)
 	multiplexer.HandleFunc("POST /admin/api/people/canonicalize-references", routerDependencies.PolicyHandler.HandleCanonicalizePersonReferences)

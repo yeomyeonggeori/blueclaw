@@ -102,6 +102,22 @@ func (policyHandler PolicyHandler) HandleSavePolicy(responseWriter http.Response
 	writeJSON(responseWriter, http.StatusOK, map[string]string{"backupPath": backupPath})
 }
 
+// HandleReloadPolicy re-reads the policy file this agent was given and makes it current.
+// Where that file comes from is the host's business: on a device it arrives on a delivery
+// share the guest cannot write, which is why an agent that must never author its own roster
+// still has to be told when the roster changed.
+func (policyHandler PolicyHandler) HandleReloadPolicy(responseWriter http.ResponseWriter, request *http.Request) {
+	policyDocument, errorValue := policyHandler.PolicyLoader.LoadPolicyDocument(policyHandler.PolicyPath)
+	if errorValue != nil {
+		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	policyHandler.PolicyWatcher.ReloadPolicyDocument(policyDocument)
+	policyHandler.notifyPolicyReload(policyDocument)
+	writeJSON(responseWriter, http.StatusOK, map[string]int{"people": len(policyDocument.People)})
+}
+
 func (policyHandler PolicyHandler) HandleInvitePerson(responseWriter http.ResponseWriter, request *http.Request) {
 	var inviteRequest invitePersonRequest
 	errorValue := json.NewDecoder(request.Body).Decode(&inviteRequest)
