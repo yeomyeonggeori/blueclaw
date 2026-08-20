@@ -1,4 +1,12 @@
 import { createBuzzGateway } from './buzz-publisher.ts';
+import {
+	MIRROR_SUMMARY_INTERVAL_MILLISECONDS,
+	MirrorTally,
+	describeMirrorFailure,
+	subjectOfBuzzEvent,
+	subjectOfPlatformEvent,
+	type MirrorSubject,
+} from './failure.ts';
 import type { BuzzMirrorSink, PlatformMirrorSink } from './inbound.ts';
 import { MappingStore } from './mapping-store.ts';
 import { createMattermostGateway } from './mattermost-puppet.ts';
@@ -18,6 +26,7 @@ export function createMirror(options: {
 	buzz: { relayURL: string; authTagJSON?: string };
 	mattermost?: { baseURL: string; adminToken: string };
 	onError?: (context: string, detail: unknown) => void;
+	onSummary?: (summary: string) => void;
 }): MirrorWiring {
 	const mapping = new MappingStore(options.admindBaseURL);
 	const platforms: Record<string, PlatformGateway> = {};
@@ -31,16 +40,30 @@ export function createMirror(options: {
 		platforms,
 		mapping,
 	);
-	const run = (context: string, work: Promise<void>): void => {
-		void work.catch((error) => options.onError?.(context, error));
+	const tally = new MirrorTally();
+	const run = (context: string, subject: MirrorSubject, work: Promise<void>): void => {
+		void work.then(
+			() => tally.succeeded(context),
+			(error) => {
+				tally.failed(context);
+				options.onError?.(`${context} failed`, describeMirrorFailure(subject, error));
+			},
+		);
 	};
 	const skip = (context: string, detail: unknown): void => options.onError?.(context, detail);
+	if (options.onSummary) {
+		const report = options.onSummary;
+		setInterval(() => {
+			const summary = tally.take();
+			if (summary) report(summary);
+		}, MIRROR_SUMMARY_INTERVAL_MILLISECONDS).unref?.();
+	}
 
 	return {
 		mattermost: {
 			message(inbound) {
 				if (!inbound.senderEmail) return skip('mattermost message skipped: no linked email', inbound.externalId);
-				run('mattermost -> buzz message failed', orchestrator.onPlatformMessage({
+				run('mattermost -> buzz message', subjectOfPlatformEvent(inbound), orchestrator.onPlatformMessage({
 					platform: 'mattermost',
 					externalId: inbound.externalId,
 					externalChannelId: inbound.externalChannelId,
@@ -51,7 +74,7 @@ export function createMirror(options: {
 			},
 			edit(inbound) {
 				if (!inbound.senderEmail) return skip('mattermost edit skipped: no linked email', inbound.externalId);
-				run('mattermost -> buzz edit failed', orchestrator.onPlatformEdit({
+				run('mattermost -> buzz edit', subjectOfPlatformEvent(inbound), orchestrator.onPlatformEdit({
 					platform: 'mattermost',
 					externalId: inbound.externalId,
 					externalChannelId: inbound.externalChannelId,
@@ -61,7 +84,7 @@ export function createMirror(options: {
 			},
 			remove(inbound) {
 				if (!inbound.senderEmail) return skip('mattermost delete skipped: no linked email', inbound.externalId);
-				run('mattermost -> buzz delete failed', orchestrator.onPlatformDelete({
+				run('mattermost -> buzz delete', subjectOfPlatformEvent(inbound), orchestrator.onPlatformDelete({
 					platform: 'mattermost',
 					externalId: inbound.externalId,
 					externalChannelId: inbound.externalChannelId,
@@ -70,7 +93,7 @@ export function createMirror(options: {
 			},
 			react(inbound) {
 				if (!inbound.senderEmail) return skip('mattermost reaction skipped: no linked email', inbound.externalId);
-				run('mattermost -> buzz reaction failed', orchestrator.onPlatformReaction({
+				run('mattermost -> buzz reaction', subjectOfPlatformEvent(inbound), orchestrator.onPlatformReaction({
 					platform: 'mattermost',
 					externalId: inbound.externalId,
 					externalChannelId: inbound.externalChannelId,
@@ -81,16 +104,16 @@ export function createMirror(options: {
 		},
 		buzz: {
 			message(inbound) {
-				run('buzz -> platforms message failed', orchestrator.onBuzzMessage(inbound));
+				run('buzz -> platforms message', subjectOfBuzzEvent(inbound), orchestrator.onBuzzMessage(inbound));
 			},
 			edit(inbound) {
-				run('buzz -> platforms edit failed', orchestrator.onBuzzEdit(inbound));
+				run('buzz -> platforms edit', subjectOfBuzzEvent(inbound), orchestrator.onBuzzEdit(inbound));
 			},
 			remove(inbound) {
-				run('buzz -> platforms delete failed', orchestrator.onBuzzDelete(inbound));
+				run('buzz -> platforms delete', subjectOfBuzzEvent(inbound), orchestrator.onBuzzDelete(inbound));
 			},
 			react(inbound) {
-				run('buzz -> platforms reaction failed', orchestrator.onBuzzReaction(inbound));
+				run('buzz -> platforms reaction', subjectOfBuzzEvent(inbound), orchestrator.onBuzzReaction(inbound));
 			},
 		},
 	};

@@ -28,6 +28,7 @@ if (configuration.admindBaseURL && configuration.buzz) {
         ? { baseURL: configuration.mattermost.baseURL, adminToken: configuration.mattermost.adminToken }
         : undefined,
     onError: (context, detail) => console.error('[mirror]', context, detail),
+    onSummary: (summary) => console.log('[mirror]', summary),
   });
 }
 
