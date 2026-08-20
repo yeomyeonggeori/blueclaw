@@ -887,6 +887,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	virtualTaskLauncher := agentruntime.NewTaskLauncher(agentHarness, taskRunService, toolCatalogBuilder)
 	virtualApprovalGate := approvalgate.New(taskRunService)
 	virtualApprovalGate.UseLanguageModel(highLanguageModel)
+	virtualApprovalGate.UseApprovalTargetResolver(agentruntime.NewCapabilityApprovalTargetResolver(capabilityClient))
 	virtualTaskLauncher.UseApprovalGate(virtualApprovalGate)
 	virtualTaskLauncher.UseTurnRouter(intake.NewTurnRouter(firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel), agentcontract.IntakeOptions{IsEnabled: true, DefaultTaskLevel: agentcontract.TaskLevelLow}))
 	virtualTaskLauncher.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, highLanguageModel))
@@ -1399,17 +1400,51 @@ func (service *virtualCapabilityService) handleRequest(responseWriter http.Respo
 		_, _ = responseWriter.Write([]byte(virtualCapabilityCatalogResponse(service.toolNameByName)))
 		return
 	}
-	if request.Method != http.MethodPost || !strings.HasPrefix(request.URL.Path, "/v1/tools/") || !strings.HasSuffix(request.URL.Path, "/invoke") {
+	if request.Method != http.MethodPost || !strings.HasPrefix(request.URL.Path, "/v1/tools/") {
 		http.Error(responseWriter, "unsupported virtual capability endpoint", http.StatusNotFound)
 		return
 	}
-	toolName := strings.TrimSuffix(strings.TrimPrefix(request.URL.Path, "/v1/tools/"), "/invoke")
-	if !service.toolNameByName[toolName] {
+	toolName, endpoint, hasEndpoint := strings.Cut(strings.TrimPrefix(request.URL.Path, "/v1/tools/"), "/")
+	if !hasEndpoint || !service.toolNameByName[toolName] {
 		http.Error(responseWriter, "unknown virtual capability tool", http.StatusNotFound)
 		return
 	}
 	requestBody, _ := io.ReadAll(request.Body)
-	_, _ = responseWriter.Write([]byte(service.response(toolName, requestBody)))
+	switch endpoint {
+	case "invoke":
+		_, _ = responseWriter.Write([]byte(service.response(toolName, requestBody)))
+	case "target.resolve":
+		_, _ = responseWriter.Write([]byte(service.targetResolveResponse(toolName, requestBody)))
+	default:
+		http.Error(responseWriter, "unsupported virtual capability endpoint", http.StatusNotFound)
+	}
+}
+
+func (service *virtualCapabilityService) targetResolveResponse(toolName string, requestBody []byte) string {
+	service.mutex.Lock()
+	defer service.mutex.Unlock()
+	input := virtualCapabilityInput(requestBody)
+	switch toolName {
+	case "task_delete":
+		return virtualCapabilityTargetResponse(toolName, service.tasks, input, "taskHint", "content", "task")
+	case "calendar_delete":
+		return virtualCapabilityTargetResponse(toolName, service.events, input, "eventHint", "title", "calendar event")
+	}
+	return virtualCapabilitySuccess(toolName, "no virtual target to resolve", map[string]any{})
+}
+
+func virtualCapabilityTargetResponse(toolName string, records []virtualCapabilityRecord, input map[string]any, hintFieldName string, titleFieldName string, resourceName string) string {
+	index := virtualCapabilityRecordIndexByHint(records, input, hintFieldName, titleFieldName)
+	if index < 0 {
+		return virtualCapabilityNotFound(toolName, resourceName)
+	}
+	record := records[index]
+	return virtualCapabilitySuccess(toolName, "resolved virtual "+resourceName, map[string]any{
+		"inputField": hintFieldName,
+		"id":         record.ID,
+		"title":      stringValue(record.Values[titleFieldName]),
+		"startsAt":   stringValue(record.Values["startISO"]),
+	})
 }
 
 func virtualCapabilityCatalogResponse(toolNameByName map[string]bool) string {

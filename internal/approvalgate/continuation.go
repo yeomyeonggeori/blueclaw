@@ -44,7 +44,7 @@ func ApprovedPendingCall(taskEvents []taskstate.TaskEvent) (ApprovedCall, bool) 
 	if heldCall.ToolName == "" || !isApprovingDecision(decision) {
 		return ApprovedCall{}, false
 	}
-	return ApprovedCall{ToolName: heldCall.ToolName, ToolInput: heldCall.ToolInput}, true
+	return ApprovedCall{ToolName: heldCall.ToolName, ToolInput: heldCall.approvedInput()}, true
 }
 
 func DeclinedCallNote(taskEvents []taskstate.TaskEvent) string {
