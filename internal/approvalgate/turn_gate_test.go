@@ -74,10 +74,15 @@ func approvalToolSet(t *testing.T, executed *[]string) *toolcontract.ToolSet {
 
 func invokeThroughGate(t *testing.T, toolCallGate toolcontract.ToolCallGate, toolName string) (*[]string, toolcontract.ToolResult) {
 	t.Helper()
+	return invokeThroughGateInContext(t, context.Background(), toolCallGate, toolName)
+}
+
+func invokeThroughGateInContext(t *testing.T, invocationContext context.Context, toolCallGate toolcontract.ToolCallGate, toolName string) (*[]string, toolcontract.ToolResult) {
+	t.Helper()
 	executed := []string{}
 	toolSet := approvalToolSet(t, &executed)
 	toolSet.UseToolCallGate(toolCallGate)
-	result, errorValue := toolSet.Invoke(context.Background(), toolcontract.ToolInvocation{
+	result, errorValue := toolSet.Invoke(invocationContext, toolcontract.ToolInvocation{
 		ToolName: toolName,
 		Input:    json.RawMessage(`{"path":"~/notes.md"}`),
 	})

@@ -3,6 +3,7 @@ package approvalgate
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -18,6 +19,8 @@ type heldCallRecord struct {
 	Confirmation   string                   `json:"confirmation"`
 	HarnessSession mcpserver.HarnessSession `json:"harnessSession"`
 }
+
+const undeliverableQuestionNotice = "This call did not run and the requester was never asked: the task run holding the question could not be parked to wait for an answer, so no answer can arrive on it."
 
 type DecisionSource interface {
 	AwaitDecision(context.Context, string) (mcpserver.ApprovalDecision, bool)
@@ -65,10 +68,25 @@ func (gate *Gate) AwaitApproval(ctx context.Context, approvalRequest mcpserver.A
 	if decision, isDecided := gate.awaitInlineDecision(ctx, taskRunID); isDecided {
 		return mcpserver.ApprovalOutcome{Decision: decision, Notice: confirmation}, nil
 	}
-	if _, errorValue := gate.taskRunService.PauseTaskRun(taskRunID, taskstate.TaskStatusWaitingApproval, confirmation); errorValue != nil {
-		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionHeld, Notice: errorValue.Error()}, nil
+	return gate.parkForApproval(taskRunID, approvalRequest, confirmation), nil
+}
+
+func (gate *Gate) parkForApproval(taskRunID string, approvalRequest mcpserver.ApprovalRequest, confirmation string) mcpserver.ApprovalOutcome {
+	_, errorValue := gate.taskRunService.PauseTaskRun(taskRunID, taskstate.TaskStatusWaitingApproval, confirmation)
+	if errorValue == nil {
+		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionHeld, Notice: confirmation}
 	}
-	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionHeld, Notice: confirmation}, nil
+	gate.recordUndeliverableQuestion(taskRunID, approvalRequest, errorValue.Error())
+	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionHeld, Notice: undeliverableQuestionNotice}
+}
+
+func (gate *Gate) recordUndeliverableQuestion(taskRunID string, approvalRequest mcpserver.ApprovalRequest, reason string) {
+	toolName := strings.TrimSpace(approvalRequest.ToolName)
+	gate.taskRunService.AppendTaskEvent(taskRunID, "approval.question_undeliverable", marshalEventBody(map[string]string{
+		"toolName": toolName,
+		"reason":   reason,
+	}))
+	slog.Warn("approvalgate.park_refused", "taskRunID", taskRunID, "toolName", toolName, "reason", reason)
 }
 
 func (gate *Gate) approvedOutcome(taskRunID string, toolName string) mcpserver.ApprovalOutcome {

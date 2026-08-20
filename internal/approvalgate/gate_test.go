@@ -11,6 +11,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 type immediateDecision struct {
@@ -320,4 +321,89 @@ func marshalRequestMessages(request model.StructuredResponseRequest) string {
 		messages = append(messages, message.Content)
 	}
 	return strings.Join(messages, "\n")
+}
+
+func taskEventNames(taskRunService *task.TaskRunService, taskRunID string) []string {
+	names := []string{}
+	for _, taskEvent := range taskRunService.ListTaskEvent(taskRunID) {
+		names = append(names, taskEvent.Name)
+	}
+	return names
+}
+
+func hasTaskEventNamed(taskRunService *task.TaskRunService, taskRunID string, eventName string) bool {
+	for _, name := range taskEventNames(taskRunService, taskRunID) {
+		if name == eventName {
+			return true
+		}
+	}
+	return false
+}
+
+func TestAHeldCallIsRecordedOnTheTaskRunTheCallIsRunningIn(t *testing.T) {
+	gate, taskRunService, abandonedTaskRun := gateFixture(t)
+	runningTaskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "다시 해봐")
+	turnGate := gate.TurnGate(TurnContext{RequesterPersonID: "person-1"})
+
+	invokeThroughGateInContext(t, toolcontract.WithTaskRunID(context.Background(), runningTaskRun.TaskRunID), turnGate, "file_delete")
+
+	for _, expectedEventName := range []string{"approval.pending_call", "confirmation.requested", "ask.requested"} {
+		if !hasTaskEventNamed(taskRunService, runningTaskRun.TaskRunID, expectedEventName) {
+			t.Fatalf("expected %q on the run the call is executing in, got %+v", expectedEventName, taskEventNames(taskRunService, runningTaskRun.TaskRunID))
+		}
+		if hasTaskEventNamed(taskRunService, abandonedTaskRun.TaskRunID, expectedEventName) {
+			t.Fatalf("expected %q never to reach the run the turn left behind, got %+v", expectedEventName, taskEventNames(taskRunService, abandonedTaskRun.TaskRunID))
+		}
+	}
+	parkedTaskRun, _ := taskRunService.FindTaskRun(runningTaskRun.TaskRunID)
+	if parkedTaskRun.Status != task.TaskStatusWaitingApproval {
+		t.Fatalf("expected the run the call is executing in to be the one parked, got %q", parkedTaskRun.Status)
+	}
+	untouchedTaskRun, _ := taskRunService.FindTaskRun(abandonedTaskRun.TaskRunID)
+	if untouchedTaskRun.Status == task.TaskStatusWaitingApproval {
+		t.Fatal("expected the run the turn left behind never to be parked, since nothing will ever deliver its question")
+	}
+}
+
+func TestACallCarryingNoTaskRunParksNothingAtAll(t *testing.T) {
+	gate, taskRunService, taskRun := gateFixture(t)
+	turnGate := gate.TurnGate(TurnContext{RequesterPersonID: "person-1"})
+
+	executed, result := invokeThroughGateInContext(t, context.Background(), turnGate, "file_delete")
+
+	if len(*executed) != 0 || !result.Failed() {
+		t.Fatalf("expected a call nobody can be asked about never to run, got executed=%+v result=%+v", *executed, result)
+	}
+	if hasTaskEventNamed(taskRunService, taskRun.TaskRunID, "approval.pending_call") {
+		t.Fatalf("expected a call with no run of its own to reach no run at all, got %+v", taskEventNames(taskRunService, taskRun.TaskRunID))
+	}
+}
+
+func TestAGateThatCannotParkTheTaskDoesNotLeaveItSilentlyWaiting(t *testing.T) {
+	gate, taskRunService, taskRun := gateFixture(t)
+	if _, errorValue := taskRunService.CompleteTaskRun(taskRun.TaskRunID, "done"); errorValue != nil {
+		t.Fatalf("expected the fixture run to complete: %v", errorValue)
+	}
+
+	outcome, errorValue := gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
+	if errorValue != nil {
+		t.Fatalf("expected the gate to answer: %v", errorValue)
+	}
+
+	if outcome.Decision != mcpserver.ApprovalDecisionHeld {
+		t.Fatalf("expected a call nobody can be asked about to be held rather than run, got %+v", outcome)
+	}
+	undeliverableBody := heldCallEventBodyNamed(t, taskRunService, taskRun.TaskRunID, "approval.question_undeliverable")
+	for _, expectedFragment := range []string{"calendar_delete", "reason"} {
+		if !strings.Contains(undeliverableBody, expectedFragment) {
+			t.Fatalf("expected the refused park to name what could not be asked, expected %q in %s", expectedFragment, undeliverableBody)
+		}
+	}
+	if strings.TrimSpace(outcome.Notice) == "" || strings.Contains(outcome.Notice, "illegal") {
+		t.Fatalf("expected the model to be told the call did not run and the requester was not asked, got %q", outcome.Notice)
+	}
+	unparkedTaskRun, _ := taskRunService.FindTaskRun(taskRun.TaskRunID)
+	if unparkedTaskRun.Status == task.TaskStatusWaitingApproval {
+		t.Fatalf("expected a run that could not be parked never to report waiting, got %q", unparkedTaskRun.Status)
+	}
 }

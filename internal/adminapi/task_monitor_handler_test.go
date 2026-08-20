@@ -347,3 +347,44 @@ func TestTaskMonitorHandlerRejectsRunningTaskRunDelete(t *testing.T) {
 		t.Fatal("running task run should remain")
 	}
 }
+
+func parkedTaskRunAwaitingApproval(t *testing.T, taskRunService *task.TaskRunService, prompt string) task.TaskRun {
+	t.Helper()
+	taskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", prompt)
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, "ask.requested", `{"kind":"ask_confirm","message":"삭제할까요?"}`)
+	if _, errorValue := taskRunService.PauseTaskRun(taskRun.TaskRunID, task.TaskStatusWaitingApproval, "삭제할까요?"); errorValue != nil {
+		t.Fatalf("expected the run to park: %v", errorValue)
+	}
+	return taskRun
+}
+
+func TestARunWaitingWithAQuestionNobodySentIsReportedAsUndelivered(t *testing.T) {
+	taskEventService := task.NewTaskEventService()
+	taskRunService := task.NewTaskRunService(taskEventService)
+	askedTaskRun := parkedTaskRunAwaitingApproval(t, taskRunService, "asked task")
+	taskRunService.AppendTaskEvent(askedTaskRun.TaskRunID, "connector.reply.sent", `{"replyKind":"user_notice","dispatchID":"dispatch-1"}`)
+	unaskedTaskRun := parkedTaskRunAwaitingApproval(t, taskRunService, "unasked task")
+	handler := TaskMonitorHandler{TaskRunService: taskRunService, TaskEventService: taskEventService}
+	request := httptest.NewRequest(http.MethodGet, "/admin/api/task?status=waiting_approval", nil)
+	responseRecorder := httptest.NewRecorder()
+
+	handler.HandleListTaskRun(responseRecorder, request)
+
+	listedTaskRuns := []struct {
+		TaskRunID              string `json:"taskRunID"`
+		HasUndeliveredQuestion bool   `json:"hasUndeliveredQuestion"`
+	}{}
+	if errorValue := json.Unmarshal(responseRecorder.Body.Bytes(), &listedTaskRuns); errorValue != nil {
+		t.Fatalf("expected a task run list: %v (%s)", errorValue, responseRecorder.Body.String())
+	}
+	undeliveredByTaskRunID := map[string]bool{}
+	for _, listedTaskRun := range listedTaskRuns {
+		undeliveredByTaskRunID[listedTaskRun.TaskRunID] = listedTaskRun.HasUndeliveredQuestion
+	}
+	if !undeliveredByTaskRunID[unaskedTaskRun.TaskRunID] {
+		t.Fatalf("expected a run whose question never went out to say so, got %s", responseRecorder.Body.String())
+	}
+	if undeliveredByTaskRunID[askedTaskRun.TaskRunID] {
+		t.Fatalf("expected a run whose question was delivered not to be flagged, got %s", responseRecorder.Body.String())
+	}
+}

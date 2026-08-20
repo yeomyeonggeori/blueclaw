@@ -98,7 +98,6 @@ type sessionTokenPublisher struct {
 func (publisher sessionTokenPublisher) PublishToolCatalog(requesterToolSet mcpserver.RequesterToolSet) (string, string, func(), error) {
 	requesterToolSet.ToolSet.UseToolCallGate(publisher.approvalGate.TurnGate(approvalgate.TurnContext{
 		RequesterPersonID: requesterToolSet.RequesterPersonID,
-		TaskRunID:         requesterToolSet.TaskRunID,
 		ResponseLanguage:  requesterToolSet.ResponseLanguage,
 		Prompt:            requesterToolSet.Prompt,
 		HarnessSession:    requesterToolSet.HarnessSession,

@@ -128,3 +128,31 @@ func TestToolCatalogServerDoesNotPublishToolsTheRequesterMayNotUse(t *testing.T)
 		}
 	}
 }
+
+type taskRunRecordingGate struct {
+	invocationTaskRunID string
+}
+
+func (gate *taskRunRecordingGate) ReviewToolCall(ctx context.Context, _ toolcontract.ToolInvocation, _ toolcontract.ToolDefinition) (toolcontract.ToolCallReview, error) {
+	gate.invocationTaskRunID = toolcontract.TaskRunIDFromContext(ctx)
+	return toolcontract.ToolCallReview{MayProceed: true}, nil
+}
+
+func TestToolCatalogServerTellsTheGateWhichTaskRunTheCallBelongsTo(t *testing.T) {
+	invokedTool := ""
+	toolSet := testToolSet(t, &invokedTool)
+	gate := &taskRunRecordingGate{}
+	toolSet.UseToolCallGate(gate)
+	clientSession := connectedCatalogSession(t, RequesterToolSet{RequesterPersonID: "person-1", TaskRunID: "task-run-1", ToolSet: toolSet})
+
+	if _, errorValue := clientSession.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "calendar_add",
+		Arguments: map[string]any{"note": "내일 회의"},
+	}); errorValue != nil {
+		t.Fatalf("expected the tool call to reach the daemon: %v", errorValue)
+	}
+
+	if gate.invocationTaskRunID != "task-run-1" {
+		t.Fatalf("expected an out-of-process call to carry its task run the same way the bundled loop does, got %q", gate.invocationTaskRunID)
+	}
+}
