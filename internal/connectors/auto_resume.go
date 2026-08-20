@@ -140,7 +140,7 @@ func (connectorRuntime *ConnectorRuntime) interruptedTaskLaunchRequest(taskRun t
 		Prompt:                     taskRun.Prompt,
 		ResponseLanguage:           event.Context.ResponseLanguage,
 		VisibleContext:             event.Context.ToAgentVisibleContext(),
-		ActiveGoal:                 interruptedTaskActiveGoal(taskRun, taskEvents, profile.guidanceNote),
+		ActiveGoal:                 interruptedTaskActiveGoalWithInstruction(taskRun, taskEvents, profile.guidanceNote, profile.instruction),
 		PrecomputedTurnDecision:    interruptedTaskTurnDecision(taskEvents, event.Context.ResponseLanguage),
 		PersonAccess:               personAccess,
 		MemoryNamespaces:           connectorRuntime.accessibleNamespaces(taskRun.RequesterPersonID, personAccess, event),
@@ -194,10 +194,22 @@ func interruptedTaskResumeEvent(taskRun task.TaskRun, launchContext interruptedT
 }
 
 func interruptedTaskActiveGoal(taskRun task.TaskRun, taskEvents []task.TaskEvent, guidanceNote string) agentcontract.ActiveGoal {
+	return interruptedTaskActiveGoalWithInstruction(taskRun, taskEvents, guidanceNote, "")
+}
+
+// interruptedTaskActiveGoalWithInstruction lets a new instruction replace the objective the
+// task was carrying. A task that stopped to ask something keeps "I need to ask" as its
+// objective, so without this the answer arrives, the objective does not move, and the same
+// question is asked again — a trap a person cannot talk their way out of.
+func interruptedTaskActiveGoalWithInstruction(taskRun task.TaskRun, taskEvents []task.TaskEvent, guidanceNote string, instruction string) agentcontract.ActiveGoal {
 	activeGoal := latestActiveGoal(taskEvents)
 	activeGoal.GoalID = firstNonEmptyString(activeGoal.GoalID, taskRun.TaskRunID)
 	activeGoal.TaskRunID = firstNonEmptyString(activeGoal.TaskRunID, taskRun.TaskRunID)
 	activeGoal.OriginalInstruction = firstNonEmptyString(activeGoal.OriginalInstruction, taskRun.Prompt)
+	trimmedInstruction := strings.TrimSpace(instruction)
+	if trimmedInstruction != "" {
+		activeGoal.CurrentObjective = trimmedInstruction
+	}
 	activeGoal.CurrentObjective = firstNonEmptyString(activeGoal.CurrentObjective, taskRun.Prompt)
 	activeGoal.KnownContext = append(activeGoal.KnownContext, guidanceNote)
 	activeGoal.Status = agentcontract.ActiveGoalStatusActive
@@ -207,6 +219,9 @@ func interruptedTaskActiveGoal(taskRun task.TaskRun, taskEvents []task.TaskEvent
 type taskResumeProfile struct {
 	sourceReference string
 	guidanceNote    string
+	// instruction replaces the objective the task stopped on. A restart carries none,
+	// because nothing new was said; a steer carries what the person just asked for.
+	instruction string
 }
 
 func autoResumeTaskProfile(taskRunID string) taskResumeProfile {
@@ -216,10 +231,11 @@ func autoResumeTaskProfile(taskRunID string) taskResumeProfile {
 	}
 }
 
-func userSteerTaskProfile(platform string, taskRunID string) taskResumeProfile {
+func userSteerTaskProfile(platform string, taskRunID string, instruction string) taskResumeProfile {
 	return taskResumeProfile{
 		sourceReference: platform + ":steer:" + taskRunID,
 		guidanceNote:    "The user asked to continue this paused task. Assess prior progress from the task event ledger and restored observations, follow the latest steering instruction, and finish only the work that is still missing.",
+		instruction:     instruction,
 	}
 }
 
