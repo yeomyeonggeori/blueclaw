@@ -14,6 +14,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 import requests_unixsocket
+from graphiti_core.cross_encoder.client import CrossEncoderClient
+from graphiti_core.embedder.client import EmbedderClient, EmbedderConfig
 from graphiti_core.llm_client.client import LLMClient
 from graphiti_core.llm_client.config import LLMConfig
 
@@ -56,10 +58,8 @@ class CapabilityLLMClient(LLMClient):
         return {"content": str(content)}
 
 
-class CapabilityEmbedder:
+class CapabilityEmbedder(EmbedderClient):
     def __init__(self, endpoint: str):
-        from graphiti_core.embedder.client import EmbedderConfig
-
         self.endpoint = endpoint.rstrip("/")
         self.config = EmbedderConfig()
 
@@ -94,7 +94,7 @@ class CapabilityEmbedder:
         return [[float(value) for value in embedding] for embedding in embeddings]
 
 
-class CapabilityReranker:
+class CapabilityReranker(CrossEncoderClient):
     def __init__(self, endpoint: str):
         self.endpoint = endpoint.rstrip("/")
 
