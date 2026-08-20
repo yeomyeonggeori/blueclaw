@@ -369,6 +369,7 @@ const connectorReplyKindPermissionNotice = "permission_notice"
 
 type ConnectorRuntime struct {
 	identityService        *identity.IdentityService
+	unknownAccountResolver UnknownAccountResolver
 	harness                agentcontract.Harness
 	intakeClassifier       IntakeClassifier
 	turnRouter             TurnRouter
@@ -458,6 +459,10 @@ func (connectorRuntime *ConnectorRuntime) RegisterAdapter(adapter PlatformAdapte
 	defer connectorRuntime.mutex.Unlock()
 
 	connectorRuntime.adapterByPlatform[adapter.Name()] = adapter
+}
+
+func (connectorRuntime *ConnectorRuntime) UseUnknownAccountResolver(unknownAccountResolver UnknownAccountResolver) {
+	connectorRuntime.unknownAccountResolver = unknownAccountResolver
 }
 
 func (connectorRuntime *ConnectorRuntime) UseMemoryService(memoryService *memory.MemoryService) {
@@ -3460,7 +3465,35 @@ func (connectorRuntime *ConnectorRuntime) authorizeSender(ctx context.Context, a
 	connectorRuntime.identityService.RememberPlatformAccount(platformAccountIdentity)
 
 	personID, isFound = connectorRuntime.identityService.ResolvePersonIDByPlatformAccount(adapter.Name(), event.SenderID)
+	if !isFound {
+		personID, isFound = connectorRuntime.askTheHostAboutUnknownAccount(ctx, adapter.Name(), event.SenderID, event.MessageID, platformAccountIdentity)
+	}
 	return personID, isFound, platformAccountIdentity.Email, nil
+}
+
+// askTheHostAboutUnknownAccount runs while a person waits on the answer, so a host that
+// cannot say leaves this agent exactly as it was: the account stays unmatched and the
+// refusal is the one it would have sent anyway.
+//
+// This sits at the one place a match fails rather than on each platform adapter. Whether
+// a message arrived through chatd or through a capability is a routing detail, and an
+// answer that depends on which door it came through is the same fact kept twice.
+func (connectorRuntime *ConnectorRuntime) askTheHostAboutUnknownAccount(ctx context.Context, platform string, externalUserID string, messageID string, platformAccountIdentity identity.PlatformAccountIdentity) (string, bool) {
+	if connectorRuntime.unknownAccountResolver == nil {
+		return "", false
+	}
+	isKnown, errorValue := connectorRuntime.unknownAccountResolver.ResolveUnknownAccount(ctx, platform, externalUserID, platformAccountIdentity.Email)
+	if errorValue != nil {
+		connectorRuntime.logger.Error("connector."+platform+".directory.unreachable",
+			slog.String("messageID", messageID),
+			slog.String("error", errorValue.Error()))
+		return "", false
+	}
+	if !isKnown {
+		return "", false
+	}
+	connectorRuntime.identityService.RememberPlatformAccount(platformAccountIdentity)
+	return connectorRuntime.identityService.ResolvePersonIDByPlatformAccount(platform, externalUserID)
 }
 
 func (connectorRuntime *ConnectorRuntime) buildReplyTarget(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (ReplyTarget, error) {

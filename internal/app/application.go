@@ -356,6 +356,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 		logger,
 	)
 	launchFailureCompleter := launchfailure.NewCompleter(taskRunService, languageModelProvider)
+	connectorRuntime.UseUnknownAccountResolver(connectors.NewCapabilityUnknownAccountResolver(capabilityClient))
 	connectorRuntime.UseLaunchFailureCompleter(launchFailureCompleter)
 	replyGenerator := reply.NewGenerator(languageModelProvider, instructionBundleLoader)
 	replyGenerator.UseAgentIdentityProvider(agentIdentityProvider)
