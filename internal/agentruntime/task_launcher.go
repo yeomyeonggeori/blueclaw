@@ -63,6 +63,7 @@ type TaskLaunchRequest struct {
 	IsApprovalContinuation     bool
 	IsRuntimeRestartResume     bool
 	ExistingTaskRunID          string
+	IsTaskRunOpenedForThisTurn bool
 	OriginReplyTargetID        string
 	OriginIsThread             bool
 	ProfileName                string
@@ -220,16 +221,38 @@ func (taskLauncher *TaskLauncher) Launch(ctx context.Context, request TaskLaunch
 	return launchResult, errorValue
 }
 
-func (taskLauncher *TaskLauncher) taskRunIDForLaunch(request TaskLaunchRequest) string {
+type launchTaskRun struct {
+	TaskRunID      string
+	IsOpenedByHost bool
+}
+
+func (taskLauncher *TaskLauncher) openTaskRunForLaunch(request TaskLaunchRequest) launchTaskRun {
 	if existingTaskRunID := strings.TrimSpace(request.ExistingTaskRunID); existingTaskRunID != "" {
-		return existingTaskRunID
+		return launchTaskRun{TaskRunID: existingTaskRunID}
 	}
 	taskRun := taskLauncher.taskRunService.CreateTaskRunWithOrigin(request.RequesterPersonID, taskstate.TaskRunOrigin{
 		ConversationID: request.ConversationID,
 		ReplyTargetID:  request.OriginReplyTargetID,
 		IsThread:       request.OriginIsThread,
 	}, request.Prompt)
-	return taskRun.TaskRunID
+	return launchTaskRun{TaskRunID: taskRun.TaskRunID, IsOpenedByHost: true}
+}
+
+func (taskLauncher *TaskLauncher) closeAbandonedLaunchTaskRun(openedTaskRun launchTaskRun, turnTaskRunID string, requesterPersonID string) {
+	if !openedTaskRun.IsOpenedByHost {
+		return
+	}
+	usedTaskRunID := strings.TrimSpace(turnTaskRunID)
+	if usedTaskRunID == "" || usedTaskRunID == openedTaskRun.TaskRunID {
+		return
+	}
+	if _, isFound := taskLauncher.taskRunService.FindTaskRun(openedTaskRun.TaskRunID); !isFound {
+		return
+	}
+	taskLauncher.taskRunService.AppendTaskEvent(openedTaskRun.TaskRunID, "task.abandoned_by_turn", marshalToolResult(map[string]string{
+		"turnTaskRunID": usedTaskRunID,
+	}))
+	taskLauncher.taskRunService.CancelTaskRunWithReason(openedTaskRun.TaskRunID, requesterPersonID, "the turn ran on task run "+usedTaskRunID)
 }
 
 func (taskLauncher *TaskLauncher) appendTurnRouterCallRecords(taskRunID string, callRecords []agentcontract.LLMCallRecord) {
@@ -270,7 +293,9 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 		}, routerCallRecords, nil
 	}
 	request.PrecomputedTurnDecision = turnDecision
-	request.ExistingTaskRunID = taskLauncher.taskRunIDForLaunch(request)
+	openedTaskRun := taskLauncher.openTaskRunForLaunch(request)
+	request.ExistingTaskRunID = openedTaskRun.TaskRunID
+	request.IsTaskRunOpenedForThisTurn = openedTaskRun.IsOpenedByHost
 	request.VisibleContext = taskLauncher.visibleContextWithArtifactManifest(request.VisibleContext, request.ArtifactManifest)
 	execution := &taskLaunchExecution{
 		Launcher:              taskLauncher,
@@ -309,6 +334,7 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 		CarriedOutCalls:   carriedOutCalls,
 	})
 	launchRecords = append(launchRecords, record)
+	taskLauncher.closeAbandonedLaunchTaskRun(openedTaskRun, turnResult.TaskRun.TaskRunID, request.RequesterPersonID)
 	if record.Error != "" {
 		if taskRunID := strings.TrimSpace(turnResult.TaskRun.TaskRunID); taskRunID != "" {
 			request.ExistingTaskRunID = taskRunID
@@ -513,6 +539,7 @@ func (taskLauncher *TaskLauncher) agentTurnRequestForLaunch(request TaskLaunchRe
 		IsApprovalContinuation:     request.IsApprovalContinuation,
 		IsRuntimeRestartResume:     request.IsRuntimeRestartResume,
 		ExistingTaskRunID:          request.ExistingTaskRunID,
+		IsTaskRunOpenedForThisTurn: request.IsTaskRunOpenedForThisTurn,
 		OriginReplyTargetID:        request.OriginReplyTargetID,
 		OriginIsThread:             request.OriginIsThread,
 		Platform:                   request.Platform,
