@@ -20,8 +20,6 @@ type heldCallRecord struct {
 	HarnessSession mcpserver.HarnessSession `json:"harnessSession"`
 }
 
-const undeliverableQuestionNotice = "This call did not run and the requester was never asked: the task run holding the question could not be parked to wait for an answer, so no answer can arrive on it."
-
 type DecisionSource interface {
 	AwaitDecision(context.Context, string) (mcpserver.ApprovalDecision, bool)
 }
@@ -57,36 +55,27 @@ func (gate *Gate) AwaitApproval(ctx context.Context, approvalRequest mcpserver.A
 		}
 		return mcpserver.ApprovalOutcome{Decision: decision}, nil
 	}
-	if taskRunID == "" {
-		return mcpserver.ApprovalOutcome{
-			Decision: mcpserver.ApprovalDecisionHeld,
-			Notice:   "This call needs the requester's approval, but it is not attached to a task run they can answer on, so it will not run.",
-		}, nil
+	if !gate.canBeAnsweredOn(taskRunID) {
+		slog.Warn("approvalgate.call_is_unanswerable", "taskRunID", taskRunID, "toolName", strings.TrimSpace(approvalRequest.ToolName))
+		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionUnanswerable}, nil
 	}
 	confirmation := gate.confirmationWording(ctx, approvalRequest)
 	gate.recordHeldCall(taskRunID, approvalRequest, confirmation)
 	if decision, isDecided := gate.awaitInlineDecision(ctx, taskRunID); isDecided {
 		return mcpserver.ApprovalOutcome{Decision: decision, Notice: confirmation}, nil
 	}
-	return gate.parkForApproval(taskRunID, approvalRequest, confirmation), nil
-}
-
-func (gate *Gate) parkForApproval(taskRunID string, approvalRequest mcpserver.ApprovalRequest, confirmation string) mcpserver.ApprovalOutcome {
-	_, errorValue := gate.taskRunService.PauseTaskRun(taskRunID, taskstate.TaskStatusWaitingApproval, confirmation)
-	if errorValue == nil {
-		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionHeld, Notice: confirmation}
+	if _, errorValue := gate.taskRunService.PauseTaskRun(taskRunID, taskstate.TaskStatusWaitingApproval, confirmation); errorValue != nil {
+		return mcpserver.ApprovalOutcome{}, errorValue
 	}
-	gate.recordUndeliverableQuestion(taskRunID, approvalRequest, errorValue.Error())
-	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionHeld, Notice: undeliverableQuestionNotice}
+	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionHeld, Notice: confirmation}, nil
 }
 
-func (gate *Gate) recordUndeliverableQuestion(taskRunID string, approvalRequest mcpserver.ApprovalRequest, reason string) {
-	toolName := strings.TrimSpace(approvalRequest.ToolName)
-	gate.taskRunService.AppendTaskEvent(taskRunID, "approval.question_undeliverable", marshalEventBody(map[string]string{
-		"toolName": toolName,
-		"reason":   reason,
-	}))
-	slog.Warn("approvalgate.park_refused", "taskRunID", taskRunID, "toolName", toolName, "reason", reason)
+func (gate *Gate) canBeAnsweredOn(taskRunID string) bool {
+	if taskRunID == "" {
+		return false
+	}
+	taskRun, isFound := gate.taskRunService.FindTaskRun(taskRunID)
+	return isFound && taskstate.CanPauseTaskRun(taskRun.Status)
 }
 
 func (gate *Gate) approvedOutcome(taskRunID string, toolName string) mcpserver.ApprovalOutcome {

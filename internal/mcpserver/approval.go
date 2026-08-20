@@ -5,9 +5,10 @@ import "encoding/json"
 type ApprovalDecision string
 
 const (
-	ApprovalDecisionApproved ApprovalDecision = "approved"
-	ApprovalDecisionHeld     ApprovalDecision = "held"
-	ApprovalDecisionRejected ApprovalDecision = "rejected"
+	ApprovalDecisionApproved     ApprovalDecision = "approved"
+	ApprovalDecisionHeld         ApprovalDecision = "held"
+	ApprovalDecisionRejected     ApprovalDecision = "rejected"
+	ApprovalDecisionUnanswerable ApprovalDecision = "unanswerable"
 )
 
 type ApprovalRequest struct {
