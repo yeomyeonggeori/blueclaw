@@ -632,6 +632,7 @@ func (taskLauncher *TaskLauncher) toolCatalogRequestForLaunch(request TaskLaunch
 		Prompt:      request.Prompt,
 		ToolCallGate: taskLauncher.approvalGate.TurnGate(approvalgate.TurnContext{
 			RequesterPersonID: request.RequesterPersonID,
+			RequesterEmail:    request.RequesterEmail,
 			ResponseLanguage:  request.ResponseLanguage,
 			Prompt:            request.Prompt,
 		}),

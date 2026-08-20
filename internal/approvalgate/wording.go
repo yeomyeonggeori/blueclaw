@@ -41,15 +41,15 @@ type approvalQuestionInput struct {
 	TargetPath     string   `json:"targetPath"`
 }
 
-func (gate *Gate) confirmationWording(ctx context.Context, approvalRequest mcpserver.ApprovalRequest) string {
-	question, errorValue := gate.generateConfirmationWording(ctx, approvalRequest)
+func (gate *Gate) confirmationWording(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, target ApprovalTarget) string {
+	question, errorValue := gate.generateConfirmationWording(ctx, approvalRequest, target)
 	if errorValue == nil {
 		return question
 	}
-	return rawApprovalSummary(approvalRequest)
+	return rawApprovalSummary(approvalRequest, target)
 }
 
-func (gate *Gate) generateConfirmationWording(ctx context.Context, approvalRequest mcpserver.ApprovalRequest) (string, error) {
+func (gate *Gate) generateConfirmationWording(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, target ApprovalTarget) (string, error) {
 	if gate.languageModel == nil {
 		return "", errors.New("approval wording needs a language model provider and none is configured")
 	}
@@ -58,7 +58,7 @@ func (gate *Gate) generateConfirmationWording(ctx context.Context, approvalReque
 		OriginalRequest:  strings.TrimSpace(approvalRequest.Prompt),
 		ModelDraft:       strings.TrimSpace(approvalRequest.ModelDraft),
 		Operation:        strings.TrimSpace(approvalRequest.ToolName),
-		ActionDetails:    approvalQuestionActionDetails(approvalRequest.ToolInput),
+		ActionDetails:    approvalQuestionActionDetails(approvalRequest.ToolInput, target),
 	})
 	if errorValue != nil {
 		return "", errorValue
@@ -69,6 +69,7 @@ func (gate *Gate) generateConfirmationWording(ctx context.Context, approvalReque
 				"Write exactly one concise user-facing approval question.",
 				"The question asks whether to perform the pending action.",
 				"Use the original request and action details to phrase the target, content, file, event, or site naturally.",
+				"When the action details name a resolved target, name that target and never repeat a search phrase the caller typed.",
 				"Include consequential details when present so the user can approve a concrete action.",
 				"Do not mention internal tool names, operation identifiers, JSON, schemas, approval gates, runtime, or implementation details.",
 				"Do not answer the question, report status, or explain the policy.",
@@ -98,8 +99,11 @@ func (gate *Gate) generateConfirmationWording(ctx context.Context, approvalReque
 	return question, nil
 }
 
-func rawApprovalSummary(approvalRequest mcpserver.ApprovalRequest) string {
+func rawApprovalSummary(approvalRequest mcpserver.ApprovalRequest, target ApprovalTarget) string {
 	summary := strings.TrimSpace(approvalRequest.ToolName)
+	if target.isResolved() {
+		return strings.TrimSpace(summary + " " + firstNonEmpty(target.Title, target.ID))
+	}
 	if toolInput := strings.TrimSpace(string(approvalRequest.ToolInput)); toolInput != "" && toolInput != "{}" {
 		summary += " " + toolInput
 	}
@@ -113,7 +117,7 @@ func responseLanguageInstruction(responseLanguage string) string {
 	return "Write in Korean."
 }
 
-func approvalQuestionActionDetails(toolInput json.RawMessage) map[string]string {
+func approvalQuestionActionDetails(toolInput json.RawMessage, target ApprovalTarget) map[string]string {
 	if len(toolInput) == 0 {
 		return nil
 	}
@@ -138,9 +142,20 @@ func approvalQuestionActionDetails(toolInput json.RawMessage) map[string]string 
 	if strings.TrimSpace(filePath) != "" {
 		setApprovalQuestionDetail(details, "fileName", filepath.Base(filePath))
 	}
+	details = detailsNamingTheResolvedTarget(details, target)
 	if len(details) == 0 {
 		return nil
 	}
+	return details
+}
+
+func detailsNamingTheResolvedTarget(details map[string]string, target ApprovalTarget) map[string]string {
+	if !target.isResolved() {
+		return details
+	}
+	delete(details, strings.TrimSpace(target.InputField))
+	setApprovalQuestionDetail(details, "resolvedTarget", target.Title)
+	setApprovalQuestionDetail(details, "resolvedTargetStartsAt", target.StartsAt)
 	return details
 }
 

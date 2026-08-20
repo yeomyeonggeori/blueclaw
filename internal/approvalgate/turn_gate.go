@@ -11,6 +11,7 @@ import (
 
 type TurnContext struct {
 	RequesterPersonID string
+	RequesterEmail    string
 	ResponseLanguage  string
 	Prompt            string
 	HarnessSession    mcpserver.HarnessSession
@@ -37,6 +38,7 @@ func (turnGate turnToolCallGate) ReviewToolCall(ctx context.Context, toolInvocat
 	}
 	outcome, errorValue := turnGate.gate.AwaitApproval(ctx, mcpserver.ApprovalRequest{
 		RequesterPersonID: turnGate.turnContext.RequesterPersonID,
+		RequesterEmail:    turnGate.turnContext.RequesterEmail,
 		TaskRunID:         taskRunIDForCall(ctx),
 		ResponseLanguage:  turnGate.turnContext.ResponseLanguage,
 		Prompt:            turnGate.turnContext.Prompt,
@@ -57,6 +59,8 @@ func (turnGate turnToolCallGate) ReviewToolCall(ctx context.Context, toolInvocat
 		return toolcontract.ToolCallReview{Result: rejectedCallResult(outcome.Notice)}, nil
 	case mcpserver.ApprovalDecisionUnanswerable:
 		return toolcontract.ToolCallReview{Result: unanswerableCallResult()}, nil
+	case mcpserver.ApprovalDecisionUnresolvedTarget:
+		return toolcontract.ToolCallReview{Result: outcome.Failure}, nil
 	}
 	return toolcontract.ToolCallReview{Result: HeldCallResult(outcome.Notice)}, nil
 }
