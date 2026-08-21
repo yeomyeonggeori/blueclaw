@@ -27,8 +27,8 @@ function recordFetches(reply: (url: string) => unknown): Seen[] {
 	return seen;
 }
 
-function call(capability: string, body: unknown): Promise<Response> {
-	const handler = createOutboundHandler(adapters, configuration, gateways);
+function call(capability: string, body: unknown, through = gateways): Promise<Response> {
+	const handler = createOutboundHandler(adapters, configuration, through);
 	return handler(
 		new Request(`http://127.0.0.1/v1/platform/mattermost/${capability}`, {
 			method: "POST",
@@ -182,6 +182,30 @@ describe("person capabilities", () => {
 		);
 		expect(linkOf.get("channel-2")).toBe(`${baseURL}/internkim/channels/announcements`);
 		expect(linkOf.get("channel-1")).toBe(`${baseURL}/internkim/channels/person-a__person-b`);
+	});
+
+	test("the link opens the address a browser can reach, not the loopback chatd calls", async () => {
+		const loopback = "http://127.0.0.1:8065";
+		recordFetches((url) => {
+			if (url.includes("/config/client")) return { SiteURL: "https://company.example.test/" };
+			if (url.endsWith("/users/me/teams")) return [{ id: "team-1", name: "internkim" }];
+			if (url.includes("/channels")) {
+				return [{ id: "channel-2", display_name: "Announcements", name: "announcements", type: "O" }];
+			}
+			return [];
+		});
+
+		const answer = await (
+			await call(
+				"person.conversations.list",
+				{ actor: { kind: "mattermost-token", secret: "the-person-token" } },
+				{ mattermost: createMattermostPersonalGateway(loopback) },
+			)
+		).json();
+
+		expect(answer.conversations[0].webURL).toBe(
+			"https://company.example.test/internkim/channels/announcements",
+		);
 	});
 
 	test("a channel that is not direct names nobody, because its name already says what it is", async () => {
