@@ -56,7 +56,22 @@ class MattermostPersonalGateway implements PersonalGateway {
 	readonly platform = "mattermost";
 	readonly credentialKind = "mattermost-token";
 
+	private siteURL: string | undefined;
+
 	constructor(private readonly baseURL: string) {}
+
+	// baseURL reaches Mattermost from this host and is usually loopback; the
+	// address someone else's browser can reach is the one Mattermost publishes.
+	private async browserBaseURL(): Promise<string> {
+		if (this.siteURL) return this.siteURL;
+		const response = await fetch(`${this.baseURL}/api/v4/config/client?format=old`);
+		if (!response.ok) return this.baseURL;
+		const published = (await response.json()) as { SiteURL?: string };
+		const siteURL = trimTrailingSlash(published.SiteURL ?? "");
+		if (!siteURL) return this.baseURL;
+		this.siteURL = siteURL;
+		return siteURL;
+	}
 
 	credentialRequirement(): CredentialRequirement {
 		return {
@@ -118,6 +133,7 @@ class MattermostPersonalGateway implements PersonalGateway {
 
 	async listConversations(actor: ActorCredential): Promise<PersonalConversation[]> {
 		const teams = await this.ask<MattermostTeam[]>(actor, "GET", "/users/me/teams");
+		const browserBaseURL = await this.browserBaseURL();
 		const conversations: PersonalConversation[] = [];
 		for (const team of teams) {
 			const channels = await this.ask<MattermostChannel[]>(
@@ -126,7 +142,7 @@ class MattermostPersonalGateway implements PersonalGateway {
 				`/users/me/teams/${team.id}/channels`,
 			);
 			conversations.push(
-				...channels.map((channel) => asConversation(channel, this.webURLOf(team, channel))),
+				...channels.map((channel) => asConversation(channel, webURLOf(browserBaseURL, team, channel))),
 			);
 		}
 		return (await this.namedAfterTheOtherPerson(actor, conversations)).sort(directLast);
@@ -178,7 +194,7 @@ class MattermostPersonalGateway implements PersonalGateway {
 			id: channel.id,
 			name: channel.display_name || channel.name,
 			kind: "dm",
-			webURL: team ? this.webURLOf(team, channel) : undefined,
+			webURL: team ? webURLOf(await this.browserBaseURL(), team, channel) : undefined,
 		};
 	}
 
@@ -329,10 +345,6 @@ class MattermostPersonalGateway implements PersonalGateway {
 		);
 	}
 
-	private webURLOf(team: MattermostTeam, channel: MattermostChannel): string {
-		return `${this.baseURL}/${encodeURIComponent(team.name)}/channels/${encodeURIComponent(channel.name)}`;
-	}
-
 	async listCustomEmoji(actor: ActorCredential): Promise<PersonalEmoji[]> {
 		const listed = await this.ask<{ name: string }[]>(actor, "GET", "/emoji?per_page=200");
 		return listed.map((emoji) => ({ name: emoji.name }));
@@ -415,6 +427,14 @@ function directParticipantsOf(channel: MattermostChannel): string[] | undefined 
 	if (channel.type !== "D") return undefined;
 	const everyone = channel.name.split("__").filter(Boolean);
 	return everyone.length === 2 ? everyone : undefined;
+}
+
+function webURLOf(browserBaseURL: string, team: MattermostTeam, channel: MattermostChannel): string {
+	return `${browserBaseURL}/${encodeURIComponent(team.name)}/channels/${encodeURIComponent(channel.name)}`;
+}
+
+function trimTrailingSlash(value: string): string {
+	return value.trim().replace(/\/+$/, "");
 }
 
 function asConversation(channel: MattermostChannel, webURL: string): PersonalConversation {
