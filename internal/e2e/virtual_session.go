@@ -1610,15 +1610,12 @@ func (service *virtualCapabilityService) response(toolName string, requestBody [
 		result := map[string]any{"messageIDs": []string{messageID}, "deliveryStatus": "sent"}
 		return virtualCapabilityMessageSuccess(toolName, "sent", []string{messageID}, "sent virtual platform message "+messageID, result)
 	case "message_update":
-		if virtualCapabilityRequestNeedsApproval(requestBody) {
-			return virtualCapabilityApprovalRequired(toolName)
-		}
 		input := virtualCapabilityInput(requestBody)
 		messageID := stringValue(input["messageID"])
 		result := map[string]any{
 			"messageID":      messageID,
 			"deliveryStatus": "updated",
-			"messageUpdated": strings.TrimSpace(stringValue(input["message"])) != "",
+			"messageUpdated": strings.TrimSpace(stringValue(input["oldText"])) != "",
 		}
 		if isPinned, isFound := input["isPinned"].(bool); isFound {
 			result["isPinned"] = isPinned
@@ -1673,23 +1670,30 @@ func virtualMessageSearchResult(requestBody []byte) map[string]any {
 	scope := firstVirtualString(stringValue(input["scope"]), "currentChannel")
 	authoredBy := firstVirtualString(stringValue(input["authoredBy"]), "anyone")
 	messageID := "virtual-platform-message-001"
+	candidate := map[string]any{
+		"messageID":  messageID,
+		"channelID":  "virtual-channel-1",
+		"userID":     "virtual-bot-user",
+		"authoredBy": "assistant",
+		"createdAt":  1,
+		"deletable":  true,
+	}
+	if len(stringSliceValue(input["messageIDs"])) > 0 {
+		candidate["text"] = virtualPlatformMessageText
+	} else {
+		candidate["preview"] = "virtual Mattermost message"
+	}
 	return map[string]any{
 		"scope":      scope,
 		"queries":    stringSliceValue(input["queries"]),
 		"authoredBy": authoredBy,
 		"messageIDs": []string{messageID},
-		"candidates": []map[string]any{{
-			"messageID":  messageID,
-			"channelID":  "virtual-channel-1",
-			"userID":     "virtual-bot-user",
-			"authoredBy": "assistant",
-			"createdAt":  1,
-			"preview":    "virtual Mattermost message",
-			"deletable":  true,
-		}},
-		"hasMore": false,
+		"candidates": []map[string]any{candidate},
+		"hasMore":    false,
 	}
 }
+
+const virtualPlatformMessageText = "공지: 오늘 오후 5시에 전체 공지 회의가 있습니다. 회의실은 3층입니다."
 
 func (service *virtualCapabilityService) hasVirtualSiteReference(requestBody []byte) bool {
 	if service.site == nil {

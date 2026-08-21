@@ -804,6 +804,12 @@ func TestVirtualMessageToolsUseGeneratedCanonicalContracts(t *testing.T) {
 		"message_delete":  {"messageIDs", "deliveryStatus"},
 		"channel_update":  {"channelID", "updated"},
 	}
+	approvalGatedToolNames := map[string]bool{
+		"message_send":   true,
+		"message_update": false,
+		"message_delete": true,
+		"channel_update": true,
+	}
 	expectedEffects := map[string]agentruntime.CapabilityResourceEffectContract{
 		"message_send":   {ObjectType: "message", Effect: "sent", ResultField: "messageIDs", EffectIdentity: "id"},
 		"message_update": {ObjectType: "message", Effect: "updated", ResultField: "messageID", EffectIdentity: "id"},
@@ -835,7 +841,10 @@ func TestVirtualMessageToolsUseGeneratedCanonicalContracts(t *testing.T) {
 		if len(descriptor.InputIntentSchema) == 0 {
 			t.Fatalf("expected canonical %s input intent schema", toolName)
 		}
-		if !descriptor.RequiresApproval || len(descriptor.ResultContract.Effects) != 1 || descriptor.ResultContract.Effects[0] != expectedEffect {
+		if descriptor.RequiresApproval != approvalGatedToolNames[toolName] {
+			t.Fatalf("expected %s approval gate to be %v, got %+v", toolName, approvalGatedToolNames[toolName], descriptor)
+		}
+		if len(descriptor.ResultContract.Effects) != 1 || descriptor.ResultContract.Effects[0] != expectedEffect {
 			t.Fatalf("expected canonical %s mutation contract, got %+v", toolName, descriptor)
 		}
 	}
@@ -1391,21 +1400,24 @@ func TestPlatformMessageEditAcceptance(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected platform message edit acceptance scenario to pass: %v", errorValue)
 	}
-	if len(result.TurnResults) != 2 {
-		t.Fatalf("expected approval and execution turns, got %+v", result)
+	if len(result.TurnResults) != 1 {
+		t.Fatalf("expected the edit to finish in one turn, got %+v", result)
 	}
-	if !eventsContain(result.TurnResults[0].Events, "approval.pending_call", `"message_update"`) {
-		t.Fatalf("expected message update approval; events: %s", summarizeEvents(result.TurnResults[0].Events))
+	turnResult := result.TurnResults[0]
+	if eventsContain(turnResult.Events, "approval.pending_call", `"message_update"`) {
+		t.Fatalf("expected no approval hold on an edit of the assistant's own message; events: %s", summarizeEvents(turnResult.Events))
 	}
-	turnResult := result.TurnResults[1]
 	if countEventsWithFragment(turnResult.Events, "tool.message_update.result", `"deliveryStatus":"updated"`) != 1 {
 		t.Fatalf("expected exactly one edit to reach the platform; events: %s", summarizeEvents(turnResult.Events))
 	}
 	if !eventsContain(turnResult.Events, "tool.message_update.requested", `"messageID":"virtual-platform-message-001"`) {
 		t.Fatalf("expected message ID in update input; events: %s", summarizeEvents(turnResult.Events))
 	}
-	if !eventsContain(turnResult.Events, "tool.message_update.requested", `"message":"오늘 오후 6시에 전체 공지 회의가 있습니다."`) {
-		t.Fatalf("expected new text in update input; events: %s", summarizeEvents(turnResult.Events))
+	if !eventsContain(turnResult.Events, "tool.message_update.requested", `"oldText":"오후 5시"`) {
+		t.Fatalf("expected the quoted span in update input; events: %s", summarizeEvents(turnResult.Events))
+	}
+	if !eventsContain(turnResult.Events, "tool.message_update.requested", `"newText":"오후 6시"`) {
+		t.Fatalf("expected the replacement span in update input; events: %s", summarizeEvents(turnResult.Events))
 	}
 	if !eventsContain(turnResult.Events, "tool.message_update.result", `"messageUpdated":true`) {
 		t.Fatalf("expected canonical update result; events: %s", summarizeEvents(turnResult.Events))

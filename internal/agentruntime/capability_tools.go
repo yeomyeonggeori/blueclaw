@@ -458,7 +458,7 @@ func defaultCapabilityToolDescription(toolName string) string {
 	case "message_send":
 		return "Send a platform message to a direct message, current thread, current channel, or named channel. Recipient resolution and ambiguity are handled by this tool."
 	case "message_update":
-		return "Update an assistant bot message text or pin state. Use only for platform messages that should be edited or pinned."
+		return "Replace one exact span of text inside an assistant bot message, or change its pin state. oldText must occur exactly once in that message."
 	default:
 		return "Workspace capability tool"
 	}
@@ -528,13 +528,6 @@ func capabilityFailureKind(errorCode string) toolcontract.FailureKind {
 	default:
 		return toolcontract.FailureExternalService
 	}
-}
-
-func isApprovalExemptCapabilityTool(toolName string, request ToolCatalogRequest) bool {
-	if strings.TrimSpace(toolName) != "message_send" {
-		return false
-	}
-	return request.IsScheduledRun || request.IsApprovalContinuation
 }
 
 type preparedCapabilityToolPayload struct {
