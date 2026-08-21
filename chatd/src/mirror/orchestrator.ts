@@ -1,3 +1,4 @@
+import { EditTargetLost } from '../adapters/buzz/user-session.ts';
 import { EchoSuppressor } from './echo-suppressor.ts';
 import type { ChannelMapping, MessageMapping } from './mapping-store.ts';
 import { mirrorTargets, type MessageOrigin } from './origin.ts';
@@ -12,6 +13,7 @@ export interface MappingStoreLike {
 	recordMessage(mapping: MessageMapping): Promise<void>;
 	messageByExternal(platform: string, externalId: string): Promise<MessageMapping | null>;
 	messageByEvent(buzzEventId: string, platform: string): Promise<MessageMapping | null>;
+	forgetMessage(platform: string, externalId: string): Promise<void>;
 	channelByBuzz(buzzChannelId: string, platform: string): Promise<ChannelMapping | null>;
 }
 
@@ -216,13 +218,18 @@ export class MirrorOrchestrator {
 		if (this.echo.consume(['platform', edit.platform, edit.externalId, 'edit', edit.text])) return;
 		const mapping = await this.mapping.messageByExternal(edit.platform, edit.externalId);
 		if (!mapping) return;
-		await this.buzz.edit({
-			userSecretHex: await this.identity.secretForEmail(edit.sender.email),
-			buzzChannelId: await this.identity.buzzChannelForExternal(edit.platform, edit.externalChannelId),
-			targetEventId: mapping.buzzEventId,
-			text: edit.text,
-			origin: { platform: edit.platform, externalId: edit.externalId },
-		});
+		try {
+			await this.buzz.edit({
+				userSecretHex: await this.identity.secretForEmail(edit.sender.email),
+				buzzChannelId: await this.identity.buzzChannelForExternal(edit.platform, edit.externalChannelId),
+				targetEventId: mapping.buzzEventId,
+				text: edit.text,
+				origin: { platform: edit.platform, externalId: edit.externalId },
+			});
+		} catch (error) {
+			if (!(error instanceof EditTargetLost)) throw error;
+			await this.mapping.forgetMessage(edit.platform, edit.externalId);
+		}
 	}
 
 	async onPlatformDelete(remove: InboundPlatformDelete): Promise<void> {

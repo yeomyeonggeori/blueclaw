@@ -15,6 +15,7 @@ import {
 	type PlatformPost,
 	type PlatformReaction,
 } from '../src/mirror/orchestrator.ts';
+import { EditTargetLost } from '../src/adapters/buzz/user-session.ts';
 
 class FakeMappingStore implements MappingStoreLike {
 	messages: MessageMapping[] = [];
@@ -27,6 +28,9 @@ class FakeMappingStore implements MappingStoreLike {
 	}
 	async messageByEvent(buzzEventId: string, platform: string): Promise<MessageMapping | null> {
 		return this.messages.find((m) => m.buzzEventId === buzzEventId && m.platform === platform) ?? null;
+	}
+	async forgetMessage(platform: string, externalId: string): Promise<void> {
+		this.messages = this.messages.filter((m) => !(m.platform === platform && m.externalId === externalId));
 	}
 	async recordChannel(mapping: ChannelMapping): Promise<void> {
 		this.channels.push(mapping);
@@ -47,7 +51,9 @@ class FakeBuzzGateway implements BuzzGateway {
 		this.serial += 1;
 		return { eventId: `event-${this.serial}` };
 	}
+	lostTargets = new Set<string>();
 	async edit(edit: BuzzEdit): Promise<void> {
+		if (this.lostTargets.has(edit.targetEventId)) throw new EditTargetLost(edit.targetEventId);
 		this.edits.push(edit);
 	}
 	async remove(remove: BuzzDelete): Promise<void> {
@@ -135,6 +141,40 @@ describe('platform -> Buzz', () => {
 		expect(buzz.edits).toHaveLength(1);
 		expect(buzz.edits[0]?.targetEventId).toBe('event-1');
 		expect(buzz.edits[0]?.text).toBe('edited');
+	});
+
+	test('forgets a mapping the relay has lost instead of retrying it forever', async () => {
+		await store.recordMessage({ buzzEventId: 'event-gone', platform: 'mattermost', externalId: 'post-1', externalChannelId: 'mm-chan' });
+		buzz.lostTargets.add('event-gone');
+		const edit = {
+			platform: 'mattermost',
+			externalId: 'post-1',
+			externalChannelId: 'mm-chan',
+			text: 'edited',
+			sender: { platform: 'mattermost', platformUserId: 'u1', email: 'a@example.com' },
+		};
+
+		await orchestrator.onPlatformEdit(edit);
+
+		expect(await store.messageByExternal('mattermost', 'post-1')).toBeNull();
+		await orchestrator.onPlatformEdit({ ...edit, text: 'edited again' });
+		expect(buzz.edits).toHaveLength(0);
+	});
+
+	test('a refusal that is not a lost target still surfaces', async () => {
+		await store.recordMessage({ buzzEventId: 'event-1', platform: 'mattermost', externalId: 'post-2', externalChannelId: 'mm-chan' });
+		buzz.edit = async () => {
+			throw new Error('restricted: not a channel member');
+		};
+
+		await expect(orchestrator.onPlatformEdit({
+			platform: 'mattermost',
+			externalId: 'post-2',
+			externalChannelId: 'mm-chan',
+			text: 'edited',
+			sender: { platform: 'mattermost', platformUserId: 'u1', email: 'a@example.com' },
+		})).rejects.toThrow('restricted');
+		expect(await store.messageByExternal('mattermost', 'post-2')).not.toBeNull();
 	});
 
 	test('drops an edit with no mapping', async () => {

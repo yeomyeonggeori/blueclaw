@@ -34,6 +34,10 @@ export class MappingStore {
 		return this.lookupMessage({ platform, buzzEventId });
 	}
 
+	async forgetMessage(platform: string, externalId: string): Promise<void> {
+		await this.remove('/bridge/api/message', { platform, externalId });
+	}
+
 	async recordChannel(mapping: ChannelMapping): Promise<void> {
 		await this.post('/bridge/api/channel', mapping);
 	}
@@ -67,6 +71,14 @@ export class MappingStore {
 	private async lookupChannel(params: Record<string, string>): Promise<ChannelMapping | null> {
 		const document = await this.get<{ found: boolean; mapping: ChannelMapping }>('/bridge/api/channel', params);
 		return document.found ? document.mapping : null;
+	}
+
+	private async remove(path: string, params: Record<string, string>): Promise<void> {
+		const query = new URLSearchParams(params).toString();
+		const response = await this.fetchImpl(`${this.baseURL}${path}?${query}`, { method: 'DELETE' });
+		if (!response.ok) {
+			throw new Error(`bridge map ${path} returned ${response.status}`);
+		}
 	}
 
 	private async post(path: string, body: unknown): Promise<void> {

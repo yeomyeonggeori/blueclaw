@@ -154,6 +154,15 @@ export async function sendChannelMessageAsUser(request: {
 	}
 }
 
+// Separating an edit that can never succeed from one worth retrying would
+// otherwise mean reading the relay's rejection text.
+export class EditTargetLost extends Error {
+	constructor(readonly targetEventId: string) {
+		super(`the relay has no event ${targetEventId} to edit`);
+		this.name = "EditTargetLost";
+	}
+}
+
 export async function editChannelMessageAsUser(request: {
 	relayURL: string;
 	userSecretHex: string;
@@ -166,6 +175,8 @@ export async function editChannelMessageAsUser(request: {
 	const relay = createBuzzRelayClient(request.relayURL, request.userSecretHex, request.authTagJSON);
 	try {
 		await relay.connect();
+		const target = await relay.query({ ids: [request.targetEventId] });
+		if (target.length === 0) throw new EditTargetLost(request.targetEventId);
 		const tags: string[][] = [["h", request.channelID], ["e", request.targetEventId], ...(request.extraTags ?? [])];
 		const event = await relay.publish(EDIT_MESSAGE_KIND, request.message, tags);
 		return event.id;
