@@ -125,7 +125,10 @@ export function channelMessageTags(
 	replyToRootId: string | undefined,
 ): string[][] {
 	const tags: string[][] = [["h", channelID], ...mediaTags, ...(extraTags ?? [])];
-	if (replyToRootId) tags.push(["e", replyToRootId, "", "root"]);
+	// The relay reads NIP-10 ancestry from the pair: resolve_nip10_thread_meta
+	// gives no thread metadata to an event that names a root and no reply, so the
+	// message hangs off nothing and the thread opens empty.
+	if (replyToRootId) tags.push(["e", replyToRootId, "", "root"], ["e", replyToRootId, "", "reply"]);
 	return tags;
 }
 
