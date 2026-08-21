@@ -447,6 +447,7 @@ const uniqueMessageIDArraySchema = z.array(resourceIDSchema)
 export const messageContextInputSchema = z.strictObject({});
 
 export const messageSearchInputSchema = z.strictObject({
+  messageIDs: uniqueMessageIDArraySchema.describe('Exact message IDs to read in full instead of searching. Returns each message\'s complete text rather than a preview. Use this before rewriting a long message.').optional(),
   scope: z.enum(MessageSearchScope)
     .describe('Where to search. Current conversation scopes use the active Mattermost context.')
     .optional(),
@@ -474,11 +475,13 @@ export const messageSendInputIntentSchema = messageSendInputSchema.partial();
 
 const messageUpdateObjectSchema = z.strictObject({
   messageID: resourceIDSchema.describe('Exact message ID from message_search or message.send.'),
-  message: z.string().min(1).regex(/\S/, 'Message must contain a non-whitespace character.').optional(),
+  oldText: z.string().min(1).regex(/\S/, 'oldText must contain a non-whitespace character.').describe('Exact text as it currently appears in that message, copied verbatim from a message_search preview or from the message you sent. Must occur exactly once in the message. Quote only the span that changes, never the whole message.').optional(),
+  newText: z.string().describe('Text that replaces oldText. Empty string removes the span.').optional(),
   isPinned: z.boolean().describe('Whether the message should be pinned.').optional(),
 });
 
 export const messageUpdateInputSchema = messageUpdateObjectSchema
+  .refine(hasPairedMessageEdit, 'oldText and newText must be given together.')
   .refine(hasMutationField, 'At least one message field must be updated.')
   .meta({ minProperties: 2 });
 
@@ -497,7 +500,8 @@ const messageSearchCandidateSchema = z.strictObject({
   userID: resourceIDSchema,
   authoredBy: z.enum(MessageAuthor),
   createdAt: z.number().int().nonnegative(),
-  preview: z.string(),
+  text: z.string().optional(),
+  preview: z.string().optional(),
   deletable: z.boolean(),
   protectedReason: z.string().optional(),
 });
@@ -781,6 +785,10 @@ function hasMutationField(document: object): boolean {
   return Object.keys(document).length > 1;
 }
 
+function hasPairedMessageEdit(document: { oldText?: string | undefined; newText?: string | undefined }): boolean {
+  return (document.oldText === undefined) === (document.newText === undefined);
+}
+
 function hasAnyField(document: object): boolean {
   return Object.keys(document).length > 0;
 }
@@ -1011,7 +1019,7 @@ const messageToolDefinitions: CapabilityToolDefinition[] = [
     namespace: 'message',
     privacyClass: 'platform_message',
     policyResource: 'tool:message_search',
-    description: 'Search Mattermost messages in an exact conversation scope and return message IDs for later update or delete operations.',
+    description: 'Find messages in an exact conversation scope, or read known ones in full. Searching by queries returns message IDs with a short preview around the match. Passing messageIDs instead returns those messages complete, which is what you need before rewriting or summarising a long message rather than a phrase inside it.',
     version: '2',
     estimatedLatency: CapabilityEstimatedLatency.Low,
     inputSchema: messageSearchInputSchema,
@@ -1047,7 +1055,7 @@ const messageToolDefinitions: CapabilityToolDefinition[] = [
     namespace: 'message',
     privacyClass: 'platform_message',
     policyResource: 'tool:message_update',
-    description: 'Update the text or pinned state of the exact Mattermost message ID after approval.',
+    description: 'Replace one exact span of text inside your own earlier Mattermost message, leaving the rest of it untouched. oldText must appear exactly once in that message; copy it verbatim from a message_search preview or from the message you sent. This is the tool for every correction to something you already posted — when the user points out a mistake, fix that message instead of posting a correction as a new one. It runs immediately without asking the user to confirm, because it can only change text you quoted. If oldText does not match, the call fails without changing anything and returns the message as it currently reads, so retry with a span copied from that. To rewrite a long message wholesale, read it in full first with message_search messageIDs and quote what you read.',
     version: '2',
     estimatedLatency: CapabilityEstimatedLatency.Medium,
     inputSchema: messageUpdateInputSchema,
@@ -1062,7 +1070,7 @@ const messageToolDefinitions: CapabilityToolDefinition[] = [
       }],
     },
     sideEffect: CapabilitySideEffect.ExternalWrite,
-    requiresApproval: true,
+    requiresApproval: false,
     completionEvidence: { mode: 'success', action: 'update_message', targetKind: 'message' },
   },
   {

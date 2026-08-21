@@ -360,7 +360,8 @@ describe('canonical capability tools', () => {
     }).success).toBe(true);
     expect(messageUpdateInputSchema.safeParse({
       messageID: 'message-1',
-      message: 'this is the updated quarterly settlement notice.',
+      oldText: 'quarterly settlement material',
+      newText: 'quarterly settlement notice',
     }).success).toBe(true);
     expect(messageDeleteInputSchema.safeParse({
       messageIDs: ['message-1', 'message-2'],
@@ -482,7 +483,7 @@ describe('canonical capability tools', () => {
     expect(contextTool?.requiresApproval).toBeUndefined();
     expect(searchTool?.requiresApproval).toBeUndefined();
     expect(sendTool?.requiresApproval).toBe(true);
-    expect(updateTool?.requiresApproval).toBe(true);
+    expect(updateTool?.requiresApproval).toBe(false);
     expect(deleteTool?.requiresApproval).toBe(true);
     expect(channelTool?.requiresApproval).toBe(true);
     expect(sendTool?.idempotency).toEqual({ supported: true, required: false, scope: 'operation' });

@@ -2545,7 +2545,7 @@
         "state": "ok"
       },
       "canonicalName": "message_search",
-      "description": "Search Mattermost messages in an exact conversation scope and return message IDs for later update or delete operations.",
+      "description": "Find messages in an exact conversation scope, or read known ones in full. Searching by queries returns message IDs with a short preview around the match. Passing messageIDs instead returns those messages complete, which is what you need before rewriting or summarising a long message rather than a phrase inside it.",
       "estimatedLatency": "low",
       "idempotency": {
         "required": false,
@@ -2584,6 +2584,18 @@
             "maximum": 25,
             "minimum": 1,
             "type": "integer"
+          },
+          "messageIDs": {
+            "description": "Exact message IDs to read in full instead of searching. Returns each message's complete text rather than a preview. Use this before rewriting a long message.",
+            "items": {
+              "minLength": 1,
+              "pattern": "^\\S(?:.*\\S)?$",
+              "type": "string"
+            },
+            "maxItems": 25,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
           },
           "personHint": {
             "description": "Exact name, @handle, or email of the direct-message counterpart.",
@@ -2669,6 +2681,9 @@
                   "pattern": "^\\S(?:.*\\S)?$",
                   "type": "string"
                 },
+                "text": {
+                  "type": "string"
+                },
                 "userID": {
                   "minLength": 1,
                   "pattern": "^\\S(?:.*\\S)?$",
@@ -2681,7 +2696,6 @@
                 "userID",
                 "authoredBy",
                 "createdAt",
-                "preview",
                 "deletable"
               ],
               "type": "object"
@@ -2787,6 +2801,9 @@
                     "pattern": "^\\S(?:.*\\S)?$",
                     "type": "string"
                   },
+                  "text": {
+                    "type": "string"
+                  },
                   "userID": {
                     "minLength": 1,
                     "pattern": "^\\S(?:.*\\S)?$",
@@ -2799,7 +2816,6 @@
                   "userID",
                   "authoredBy",
                   "createdAt",
-                  "preview",
                   "deletable"
                 ],
                 "type": "object"
@@ -3121,7 +3137,7 @@
         "mode": "success",
         "targetKind": "message"
       },
-      "description": "Update the text or pinned state of the exact Mattermost message ID after approval.",
+      "description": "Replace one exact span of text inside your own earlier Mattermost message, leaving the rest of it untouched. oldText must appear exactly once in that message; copy it verbatim from a message_search preview or from the message you sent. This is the tool for every correction to something you already posted — when the user points out a mistake, fix that message instead of posting a correction as a new one. It runs immediately without asking the user to confirm, because it can only change text you quoted. If oldText does not match, the call fails without changing anything and returns the message as it currently reads, so retry with a span copied from that. To rewrite a long message wholesale, read it in full first with message_search messageIDs and quote what you read.",
       "estimatedLatency": "medium",
       "idempotency": {
         "required": false,
@@ -3136,15 +3152,20 @@
             "description": "Whether the message should be pinned.",
             "type": "boolean"
           },
-          "message": {
-            "minLength": 1,
-            "pattern": "\\S",
-            "type": "string"
-          },
           "messageID": {
             "description": "Exact message ID from message_search or message.send.",
             "minLength": 1,
             "pattern": "^\\S(?:.*\\S)?$",
+            "type": "string"
+          },
+          "newText": {
+            "description": "Text that replaces oldText. Empty string removes the span.",
+            "type": "string"
+          },
+          "oldText": {
+            "description": "Exact text as it currently appears in that message, copied verbatim from a message_search preview or from the message you sent. Must occur exactly once in the message. Quote only the span that changes, never the whole message.",
+            "minLength": 1,
+            "pattern": "\\S",
             "type": "string"
           }
         },
@@ -3159,15 +3180,20 @@
             "description": "Whether the message should be pinned.",
             "type": "boolean"
           },
-          "message": {
-            "minLength": 1,
-            "pattern": "\\S",
-            "type": "string"
-          },
           "messageID": {
             "description": "Exact message ID from message_search or message.send.",
             "minLength": 1,
             "pattern": "^\\S(?:.*\\S)?$",
+            "type": "string"
+          },
+          "newText": {
+            "description": "Text that replaces oldText. Empty string removes the span.",
+            "type": "string"
+          },
+          "oldText": {
+            "description": "Exact text as it currently appears in that message, copied verbatim from a message_search preview or from the message you sent. Must occur exactly once in the message. Quote only the span that changes, never the whole message.",
+            "minLength": 1,
+            "pattern": "\\S",
             "type": "string"
           }
         },
@@ -3212,7 +3238,7 @@
       "outputSchemaStrict": true,
       "policyResource": "tool:message_update",
       "privacyClass": "platform_message",
-      "requiresApproval": true,
+      "requiresApproval": false,
       "requiresUserPresence": false,
       "resultContract": {
         "effects": [
