@@ -27,12 +27,26 @@ type ConversationTurn struct {
 	IsBlockedContinuation     bool
 }
 
-func promptForTurn(turn ConversationTurn) string {
+func ambientDutyForTurn(turn ConversationTurn) (agentcontract.StandingDuty, bool) {
 	duty, isKnownDuty := agentcontract.StandingDutyByName(turn.AmbientDuty.Name)
-	if !turn.AmbientDuty.IsMatch || !isKnownDuty {
+	return duty, turn.AmbientDuty.IsMatch && isKnownDuty
+}
+
+func promptForTurn(turn ConversationTurn) string {
+	duty, isAmbientDuty := ambientDutyForTurn(turn)
+	if !isAmbientDuty {
 		return turn.Event.Prompt
 	}
 	return agentcontract.AmbientDutyInstructionPrompt(duty, turn.Event.Prompt, turn.Event.Context.Sender.Name)
+}
+
+func turnDecisionForTurn(turn ConversationTurn) *agentcontract.TurnDecision {
+	duty, isAmbientDuty := ambientDutyForTurn(turn)
+	if !isAmbientDuty || turn.PrecomputedTurnDecision != nil {
+		return turn.PrecomputedTurnDecision
+	}
+	turnDecision := agentcontract.AmbientDutyTurnDecision(duty, responseLanguageForEvent(turn.Event))
+	return &turnDecision
 }
 
 func (connectorRuntime *ConnectorRuntime) buildTaskLaunchRequest(turn ConversationTurn) agentruntime.TaskLaunchRequest {
@@ -74,7 +88,7 @@ func (connectorRuntime *ConnectorRuntime) buildTaskLaunchRequest(turn Conversati
 		VisibleContext:             event.Context.ToAgentVisibleContext(),
 		ActiveGoal:                 activeGoalForLaunch(turn.ActiveGoal, turn.HasActiveGoal),
 		PriorTask:                  turn.PriorTask,
-		PrecomputedTurnDecision:    turn.PrecomputedTurnDecision,
+		PrecomputedTurnDecision:    turnDecisionForTurn(turn),
 		AmbientDuty:                turn.AmbientDuty,
 		HistoryProvider:            connectorHistoryProvider{adapter: turn.Adapter},
 		AttachmentMaterialResolver: attachmentMaterialResolver,

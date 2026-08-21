@@ -703,8 +703,7 @@ func AmbientDutyCalendarAcceptanceScenario(artifactDirectoryPath string) Virtual
 			},
 			ExpectedModelContexts: []string{
 				"Ambient duty context",
-				"not addressed to you",
-				"Never send a text reply",
+				"Overheard message from",
 			},
 		}},
 	}
@@ -740,12 +739,36 @@ func AmbientDutyAnnouncementNoEchoScenario(artifactDirectoryPath string) Virtual
 			ForbiddenModelContexts:   []string{"message_send"},
 			ExpectedModelContexts: []string{
 				"Ambient duty context",
-				"not addressed to you",
-				"Never send a text reply",
+				"Overheard message from",
 			},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: "agent.ambient_duty_launch", BodyFragment: `"dutyName":"calendar_upkeep"`, Count: 1},
 			},
+		}},
+	}
+}
+
+func AmbientDutyNothingToRecordScenario(artifactDirectoryPath string) VirtualSessionScenario {
+	return VirtualSessionScenario{
+		Name:                  "ambient_duty_nothing_to_record",
+		ArtifactDirectoryPath: artifactDirectoryPath,
+		AddressingResponse:    `{"target":"human","shouldRespond":false,"dutyMatch":true,"dutyName":"calendar_upkeep","dutyConfidence":0.71}`,
+		Skills:                []agentcontract.SkillInstruction{calendarSkill()},
+		AllowedTools:          []string{"conversation_history", "memory_search", "calendar_add"},
+		CapabilityToolNames:   []string{"calendar_add"},
+		Turns: []VirtualTurn{{
+			Prompt:           "라운지 커피머신 원두 바뀐 거 아세요? 훨씬 낫네요",
+			ExpectedResponse: VirtualResponseBackgroundAction,
+			ConversationType: "channel",
+			ChannelID:        "town-square",
+			ChannelName:      "town-square",
+			ReplyTargetID:    "virtual-message-001",
+			Addressing:       connectors.AddressingMetadata{},
+			ActionResponses: []string{
+				actionFinishMessage("기록할 일정이 없습니다."),
+			},
+			ExpectedToolCallCounts: map[string]int{"calendar_add": 0},
+			ExpectedTaskStatus:     task.TaskStatusCompleted,
 		}},
 	}
 }
@@ -791,8 +814,7 @@ func AmbientTaskCaptureAcceptanceScenario(artifactDirectoryPath string) VirtualS
 			ExpectedTaskStatus: task.TaskStatusCompleted,
 			ExpectedModelContexts: []string{
 				"Ambient duty context",
-				"not addressed to you",
-				"Never send a text reply",
+				"Overheard message from",
 			},
 			ForbiddenEvents: []string{"tool.terminal_run.requested"},
 		}, {
