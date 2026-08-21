@@ -392,22 +392,9 @@ func (buildToolSetLaunchStep) Run(_ context.Context, execution *taskLaunchExecut
 	if execution.Request.UseEmptyToolCatalog {
 		return toolcontract.NewToolSet(nil), nil
 	}
-	toolSet := execution.Launcher.toolCatalogBuilder.BuildToolSet(
+	return execution.Launcher.toolCatalogBuilder.BuildToolSet(
 		execution.Launcher.toolCatalogRequestForLaunch(execution.Request, execution.NormalizedProfileName),
-	)
-	if execution.Request.AmbientDuty.IsMatch {
-		return toolSet.WithAllowedToolNames(ambientCaptureAllowedToolNames()), nil
-	}
-	return toolSet, nil
-}
-
-func ambientCaptureAllowedToolNames() []string {
-	return []string{
-		"task_add", "task_list", "task_update",
-		"calendar_add", "calendar_update", "calendar_list",
-		"ask_input",
-		"conversation_history",
-	}
+	), nil
 }
 
 type auditToolRegistryLaunchStep struct {
@@ -559,7 +546,6 @@ func (taskLauncher *TaskLauncher) agentTurnRequestForLaunch(request TaskLaunchRe
 		PrecomputedTurnDecision:    request.PrecomputedTurnDecision,
 		IsPrecomputedDecisionExact: request.IsPrecomputedDecisionExact,
 		SkipSkillSelection:         request.SkipSkillSelection,
-		AmbientDuty:                request.AmbientDuty,
 		MemoryFacts:                bluecollarMemoryFacts(memoryFacts),
 		ToolSet:                    toolSet,
 		PinnedToolNames:            append([]string{}, request.PinnedToolNames...),
@@ -660,7 +646,16 @@ func (taskLauncher *TaskLauncher) toolCatalogRequestForLaunch(request TaskLaunch
 		AccessibleConversationIDs:  request.AccessibleConversationIDs,
 		InputParts:                 append([]agentcontract.AgentPart{}, request.InputParts...),
 		ScheduledRun:               request.ScheduledRun,
+		RegisteredToolNameCeiling:  registeredToolNameCeilingForLaunch(request),
 	}
+}
+
+func registeredToolNameCeilingForLaunch(request TaskLaunchRequest) []string {
+	duty, isKnownDuty := agentcontract.StandingDutyByName(request.AmbientDuty.Name)
+	if !request.AmbientDuty.IsMatch || !isKnownDuty {
+		return nil
+	}
+	return duty.ToolNames
 }
 
 func requesterPersonAccessForTaskLaunch(request TaskLaunchRequest) policy.PersonAccess {

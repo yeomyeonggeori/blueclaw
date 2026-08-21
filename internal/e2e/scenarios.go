@@ -710,6 +710,46 @@ func AmbientDutyCalendarAcceptanceScenario(artifactDirectoryPath string) Virtual
 	}
 }
 
+func AmbientDutyAnnouncementNoEchoScenario(artifactDirectoryPath string) VirtualSessionScenario {
+	announcement := "[라운지 이용 안내]\n\n안녕하세요. 이샘플 연구원입니다.\n\n9월 2일(수) 오전 7시부터 10시까지 라운지에서 촬영이 진행될 예정입니다.\n\n양해와 협조 부탁드립니다."
+	return VirtualSessionScenario{
+		Name:                   "ambient_duty_announcement_no_echo",
+		ArtifactDirectoryPath:  artifactDirectoryPath,
+		RouterRequiredEvidence: []string{"calendar_add"},
+		AddressingResponse:     `{"target":"human","shouldRespond":false,"dutyMatch":true,"dutyName":"calendar_upkeep","dutyConfidence":0.92}`,
+		Skills:                 []agentcontract.SkillInstruction{calendarSkill(), mattermostSkill()},
+		AllowedTools:           []string{"conversation_history", "memory_search", "calendar_add", "message_send"},
+		CapabilityToolNames:    []string{"calendar_add", "message_send"},
+		InitialToolNames:       []string{"calendar_add"},
+		Turns: []VirtualTurn{{
+			Prompt:           announcement,
+			ExpectedResponse: VirtualResponseBackgroundAction,
+			ConversationType: "channel",
+			ChannelID:        "town-square",
+			ChannelName:      "town-square",
+			ReplyTargetID:    "virtual-message-001",
+			Addressing:       connectors.AddressingMetadata{},
+			ActionResponses: []string{
+				actionInvokeCapabilityTool("calendar_add", `{"title":"라운지 촬영","startISO":"2026-09-02T07:00:00+09:00","endISO":"2026-09-02T10:00:00+09:00","timeZone":"Asia/Seoul"}`),
+				actionFinishMessage("촬영 일정을 캘린더에 기록했습니다.", "obs-001:calendar_add:0"),
+			},
+			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
+			ExpectedToolCalls:        []string{"calendar_add"},
+			ExpectedToolCallCounts:   map[string]int{"message_send": 0},
+			ForbiddenEvents:          []string{"tool.message_send.requested"},
+			ForbiddenModelContexts:   []string{"message_send"},
+			ExpectedModelContexts: []string{
+				"Ambient duty context",
+				"not addressed to you",
+				"Never send a text reply",
+			},
+			ExpectedEventCounts: []VirtualEventCount{
+				{Name: "agent.ambient_duty_launch", BodyFragment: `"dutyName":"calendar_upkeep"`, Count: 1},
+			},
+		}},
+	}
+}
+
 func flowTaskSkill() agentcontract.SkillInstruction {
 	return workspaceSkillInstruction("internkim-flow")
 }
@@ -1052,6 +1092,10 @@ Organize notes into concise memos with action items and owners.`
 
 func calendarSkill() agentcontract.SkillInstruction {
 	return workspaceSkillInstruction("calendar")
+}
+
+func mattermostSkill() agentcontract.SkillInstruction {
+	return workspaceSkillInstruction("mattermost")
 }
 
 func scheduledTaskSkill() agentcontract.SkillInstruction {
