@@ -3,10 +3,14 @@ import { imetaTag } from "../src/adapters/buzz/blossom.ts";
 import { attachmentsOfTags, channelMessageTags } from "../src/adapters/buzz/user-session.ts";
 
 describe("channelMessageTags", () => {
-	test("a reply names the root it answers", () => {
+	// resolve_nip10_thread_meta reads the root and reply markers as a pair and
+	// returns nothing for an event that carries only one, which leaves the message
+	// out of the thread it answers.
+	test("a reply names the root as both its root and its parent", () => {
 		expect(channelMessageTags("channel-1", [], undefined, "root-1")).toEqual([
 			["h", "channel-1"],
 			["e", "root-1", "", "root"],
+			["e", "root-1", "", "reply"],
 		]);
 	});
 
