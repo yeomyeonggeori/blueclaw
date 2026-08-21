@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
@@ -26,6 +27,8 @@ type approvalQuestionInput struct {
 	To             []string `json:"to"`
 	People         []string `json:"people"`
 	TargetType     string   `json:"targetType"`
+	MessageID      string   `json:"messageID"`
+	MessageIDs     []string `json:"messageIDs"`
 	Message        string   `json:"message"`
 	Subject        string   `json:"subject"`
 	Body           string   `json:"body"`
@@ -70,6 +73,7 @@ func (gate *Gate) generateConfirmationWording(ctx context.Context, approvalReque
 				"The question asks whether to perform the pending action.",
 				"Use the original request and action details to phrase the target, content, file, event, or site naturally.",
 				"Include consequential details when present so the user can approve a concrete action.",
+				"When the action changes or removes something that already exists, say what it affects, and never describe a whole-item replacement as if it only touched a part of it.",
 				"Do not mention internal tool names, operation identifiers, JSON, schemas, approval gates, runtime, or implementation details.",
 				"Do not answer the question, report status, or explain the policy.",
 			}, "\n")},
@@ -124,6 +128,8 @@ func approvalQuestionActionDetails(toolInput json.RawMessage) map[string]string 
 	details := map[string]string{}
 	setApprovalQuestionDetail(details, "target", firstNonEmpty(document.PersonHint, document.ChannelName, strings.Join(document.To, ", "), strings.Join(document.People, ", ")))
 	setApprovalQuestionDetail(details, "deliveryTargetType", document.TargetType)
+	setApprovalQuestionDetail(details, "targetMessageIDs", firstNonEmpty(document.MessageID, strings.Join(document.MessageIDs, ", ")))
+	setApprovalQuestionDetail(details, "targetMessageCount", approvalQuestionMessageCount(document))
 	setApprovalQuestionDetail(details, "content", firstNonEmpty(document.Message, document.Subject, document.Body, document.Title, document.Summary, document.ApprovalReason, document.Reason))
 	setApprovalQuestionDetail(details, "message", document.Message)
 	setApprovalQuestionDetail(details, "subject", document.Subject)
@@ -142,6 +148,13 @@ func approvalQuestionActionDetails(toolInput json.RawMessage) map[string]string 
 		return nil
 	}
 	return details
+}
+
+func approvalQuestionMessageCount(document approvalQuestionInput) string {
+	if len(document.MessageIDs) == 0 {
+		return ""
+	}
+	return strconv.Itoa(len(document.MessageIDs))
 }
 
 func setApprovalQuestionDetail(details map[string]string, key string, value string) {
