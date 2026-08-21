@@ -54,7 +54,7 @@ func (connectorRuntime *ConnectorRuntime) resolveInboundEngagement(ctx context.C
 	}
 	return inboundEngagementDecision{
 		ShouldLaunch:  shouldLaunch,
-		SuppressReply: ambientDuty.IsMatch && !addressingDecision.ShouldRespond,
+		SuppressReply: AmbientDutyLaunchesWithoutReply(addressingDecision),
 		ReactionEmoji: addressingDecision.ReactionEmoji,
 		AmbientDuty:   ambientDuty,
 	}
@@ -70,6 +70,10 @@ func isMultiPersonConversation(event PlatformInboundEvent) bool {
 		return false
 	}
 	return true
+}
+
+func AmbientDutyLaunchesWithoutReply(decision agentcontract.AddressingDecision) bool {
+	return !decision.ShouldRespond && ambientDutyContextFromAddressingDecision(decision).IsMatch
 }
 
 func ambientDutyContextFromAddressingDecision(decision agentcontract.AddressingDecision) agentcontract.AmbientDutyContext {

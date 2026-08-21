@@ -704,6 +704,8 @@ func BuiltinScenario(name string, artifactDirectoryPath string) (VirtualSessionS
 		return CalendarFalseFinishRecoveryAcceptanceScenario(artifactDirectoryPath), nil
 	case "ambient_duty_calendar_acceptance":
 		return AmbientDutyCalendarAcceptanceScenario(artifactDirectoryPath), nil
+	case "ambient_duty_nothing_to_record":
+		return AmbientDutyNothingToRecordScenario(artifactDirectoryPath), nil
 	case "ambient_duty_announcement_no_echo":
 		return AmbientDutyAnnouncementNoEchoScenario(artifactDirectoryPath), nil
 	case "ambient_task_capture_acceptance":
@@ -2618,13 +2620,21 @@ func scenarioSkillSearchQueriesResponse(queryDescriptions []string) string {
 }
 
 func scenarioRouterResponsesForTurn(scenario VirtualSessionScenario, virtualTurn VirtualTurn) []string {
-	if !virtualTurnReachesRouter(virtualTurn) {
+	if !virtualTurnReachesRouter(virtualTurn) || scenarioLaunchesAmbientDuty(scenario) {
 		return nil
 	}
 	if strings.TrimSpace(virtualTurn.RouterApproval) != "" {
 		return []string{scenarioApprovalRouterResponse(virtualTurn.RouterApproval)}
 	}
 	return []string{scenarioTurnRouterResponse(scenario, virtualTurn)}
+}
+
+func scenarioLaunchesAmbientDuty(scenario VirtualSessionScenario) bool {
+	var decision agentcontract.AddressingDecision
+	if json.Unmarshal([]byte(scenario.AddressingResponse), &decision) != nil {
+		return false
+	}
+	return connectors.AmbientDutyLaunchesWithoutReply(decision)
 }
 
 func virtualTurnReachesRouter(virtualTurn VirtualTurn) bool {
