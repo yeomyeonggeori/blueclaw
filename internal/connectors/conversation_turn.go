@@ -27,6 +27,14 @@ type ConversationTurn struct {
 	IsBlockedContinuation     bool
 }
 
+func promptForTurn(turn ConversationTurn) string {
+	duty, isKnownDuty := agentcontract.StandingDutyByName(turn.AmbientDuty.Name)
+	if !turn.AmbientDuty.IsMatch || !isKnownDuty {
+		return turn.Event.Prompt
+	}
+	return agentcontract.AmbientDutyInstructionPrompt(duty, turn.Event.Prompt, turn.Event.Context.Sender.Name)
+}
+
 func (connectorRuntime *ConnectorRuntime) buildTaskLaunchRequest(turn ConversationTurn) agentruntime.TaskLaunchRequest {
 	event := turn.Event
 	checkpointSender := turn.CheckpointSender
@@ -60,7 +68,7 @@ func (connectorRuntime *ConnectorRuntime) buildTaskLaunchRequest(turn Conversati
 		ConversationChannelID:      event.Context.ChannelID,
 		ConversationChannelName:    event.Context.ChannelName,
 		ReplyTargetID:              event.ReplyTargetID,
-		Prompt:                     event.Prompt,
+		Prompt:                     promptForTurn(turn),
 		InputParts:                 append([]agentcontract.AgentPart{}, event.InputParts...),
 		ResponseLanguage:           responseLanguageForEvent(event),
 		VisibleContext:             event.Context.ToAgentVisibleContext(),

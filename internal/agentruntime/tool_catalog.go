@@ -91,6 +91,7 @@ type ToolCatalogRequest struct {
 	AccessibleConversationIDs  []string
 	InputParts                 []agentcontract.AgentPart
 	ScheduledRun               agentcontract.ScheduledRunContext
+	RegisteredToolNameCeiling  []string
 }
 
 type CapabilityToolDescriptor struct {
@@ -261,7 +262,14 @@ func (toolCatalogBuilder *ToolCatalogBuilder) BuildToolSet(request ToolCatalogRe
 	toolCatalogBuilder.registerCapabilityTools(toolSet, request)
 	toolCatalogBuilder.registerMCPTools(toolSet, request)
 	toolSet.UseToolCallGate(request.ToolCallGate)
-	return toolSet
+	return toolSetWithinRegisteredToolNameCeiling(toolSet, request.RegisteredToolNameCeiling)
+}
+
+func toolSetWithinRegisteredToolNameCeiling(toolSet *toolcontract.ToolSet, ceilingToolNames []string) *toolcontract.ToolSet {
+	if len(ceilingToolNames) == 0 {
+		return toolSet
+	}
+	return toolSet.WithRegisteredToolNamesLimitedTo(ceilingToolNames)
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) allowedToolNames(profileName string) []string {
