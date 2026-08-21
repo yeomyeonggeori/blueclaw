@@ -785,7 +785,7 @@ function hasMutationField(document: object): boolean {
   return Object.keys(document).length > 1;
 }
 
-function hasPairedMessageEdit(document: { oldText?: string; newText?: string }): boolean {
+function hasPairedMessageEdit(document: { oldText?: string | undefined; newText?: string | undefined }): boolean {
   return (document.oldText === undefined) === (document.newText === undefined);
 }
 
