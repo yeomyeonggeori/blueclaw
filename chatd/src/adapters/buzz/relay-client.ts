@@ -13,6 +13,8 @@ export type BuzzRelayClient = {
 	publishForAcknowledgement: (kind: number, content: string, tags: string[][]) => Promise<string>;
 };
 
+const authGraceMilliseconds = 3_000;
+
 export function createBuzzRelayClient(relayURL: string, privateKeyHex: string, authTagJSON?: string): BuzzRelayClient {
 	const secretKey = hexToBytes(privateKeyHex);
 	const pubkeyHex = getPublicKey(secretKey);
@@ -26,6 +28,7 @@ export function createBuzzRelayClient(relayURL: string, privateKeyHex: string, a
 	const pendingQueries = new Map<string, { events: BuzzEvent[]; resolve: (events: BuzzEvent[]) => void }>();
 	const pendingPublishes = new Map<string, { resolve: (message: string) => void; reject: (error: Error) => void }>();
 	let openWaiters: Array<() => void> = [];
+	let authWaiters: Array<(reason?: Error) => void> = [];
 
 	function signEvent(kind: number, content: string, tags: string[][]): BuzzEvent {
 		return finalizeEvent(
@@ -85,8 +88,23 @@ export function createBuzzRelayClient(relayURL: string, privateKeyHex: string, a
 					void 0;
 				}
 			}
-			send(["AUTH", signEvent(22242, "", authTags)]);
-			isAuthed = true;
+			const authEvent = signEvent(22242, "", authTags);
+			// The relay answers an AUTH with an OK carrying its id, the same way it
+			// answers a publish. Having written the frame is not the same as having
+			// been let in.
+			pendingPublishes.set(authEvent.id, {
+				resolve: () => {
+					isAuthed = true;
+					for (const waiter of authWaiters) waiter();
+					authWaiters = [];
+				},
+				reject: (reason) => {
+					isAuthed = false;
+					for (const waiter of authWaiters) waiter(reason);
+					authWaiters = [];
+				},
+			});
+			send(["AUTH", authEvent]);
 			for (const [subscriptionID, subscription] of liveSubscriptions) {
 				send(["REQ", subscriptionID, ...subscription.filters]);
 			}
@@ -117,6 +135,21 @@ export function createBuzzRelayClient(relayURL: string, privateKeyHex: string, a
 		}
 	}
 
+	// A relay that never challenges is one that does not require auth, and a wait
+	// with no end would hold every message behind a handshake that is not coming.
+	async function waitForAuth(): Promise<void> {
+		if (isAuthed) return;
+		await new Promise<void>((resolve, reject) => {
+			const settle = setTimeout(resolve, authGraceMilliseconds);
+			settle.unref?.();
+			authWaiters.push((reason) => {
+				clearTimeout(settle);
+				if (reason) reject(reason);
+				else resolve();
+			});
+		});
+	}
+
 	async function waitForOpen(): Promise<void> {
 		if (websocket?.readyState === WebSocket.OPEN) return;
 		await new Promise<void>((resolve) => openWaiters.push(resolve));
@@ -128,8 +161,7 @@ export function createBuzzRelayClient(relayURL: string, privateKeyHex: string, a
 			shouldReconnect = true;
 			openSocket();
 			await waitForOpen();
-			await Bun.sleep(300);
-			void isAuthed;
+			await waitForAuth();
 		},
 		disconnect() {
 			shouldReconnect = false;

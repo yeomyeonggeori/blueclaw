@@ -1,5 +1,5 @@
 import { getPublicKey } from "nostr-tools/pure";
-import { createBuzzRelayClient } from "./relay-client.ts";
+import { withRelayAs } from "./relay-pool.ts";
 import { BlobRefused, imetaTag, uploadBlob, type BlossomBlob } from "./blossom.ts";
 import { firstTagValue, threadTagsOf, type BuzzEvent } from "./types.ts";
 import {
@@ -60,59 +60,55 @@ export async function listUserConversations(
 	relayURL: string,
 	userSecretHex: string,
 ): Promise<UserConversation[]> {
-	const relay = createBuzzRelayClient(relayURL, userSecretHex);
-	try {
-		await relay.connect();
-		const userPubkeyHex = relay.pubkeyHex;
-		const memberships = await relay.query({ kinds: [GROUP_MEMBERS_KIND], "#p": [userPubkeyHex] });
-		const channelIDs = [
-			...new Set(
-				memberships.map((event) => firstTagValue(event, "d")).filter((id): id is string => Boolean(id)),
-			),
-		];
-		if (channelIDs.length === 0) return [];
-		const metadataEvents = await relay.query({ kinds: [GROUP_METADATA_KIND], "#d": channelIDs });
-		const membershipsByChannel = new Map<string, BuzzEvent>();
-		for (const event of memberships) {
-			const channelID = firstTagValue(event, "d");
-			if (!channelID) continue;
-			const known = membershipsByChannel.get(channelID);
-			if (!known || event.created_at > known.created_at) membershipsByChannel.set(channelID, event);
-		}
-		const latestMetadata = new Map<string, BuzzEvent>();
-		for (const event of metadataEvents) {
-			const channelID = firstTagValue(event, "d");
-			if (!channelID) continue;
-			const known = latestMetadata.get(channelID);
-			if (!known || event.created_at > known.created_at) latestMetadata.set(channelID, event);
-		}
-		const conversations: UserConversation[] = [];
-		for (const channelID of channelIDs) {
-			const metadata = latestMetadata.get(channelID);
-			const isDM = metadata ? firstTagValue(metadata, "t") === "dm" : false;
-			if (isDM) {
-				const participants = participantsOf(metadata, membershipsByChannel.get(channelID));
-				const counterpart = participants.find((pubkey) => pubkey !== userPubkeyHex);
-				const profile = counterpart ? await fetchProfileAsUser(relay, counterpart) : {};
-				conversations.push({
-					channelID,
-					name: profile.name ?? counterpart?.slice(0, 8) ?? "",
-					isDM: true,
-					participantPubkeyHexes: participants,
-				});
-			} else {
-				conversations.push({
-					channelID,
-					name: metadata ? (firstTagValue(metadata, "name") ?? "") : "",
-					isDM: false,
-					participantPubkeyHexes: participantsOf(metadata, membershipsByChannel.get(channelID)),
-				});
+	return withRelayAs(relayURL, userSecretHex, undefined, async (relay) => {
+			const userPubkeyHex = relay.pubkeyHex;
+			const memberships = await relay.query({ kinds: [GROUP_MEMBERS_KIND], "#p": [userPubkeyHex] });
+			const channelIDs = [
+				...new Set(
+					memberships.map((event) => firstTagValue(event, "d")).filter((id): id is string => Boolean(id)),
+				),
+			];
+			if (channelIDs.length === 0) return [];
+			const metadataEvents = await relay.query({ kinds: [GROUP_METADATA_KIND], "#d": channelIDs });
+			const membershipsByChannel = new Map<string, BuzzEvent>();
+			for (const event of memberships) {
+				const channelID = firstTagValue(event, "d");
+				if (!channelID) continue;
+				const known = membershipsByChannel.get(channelID);
+				if (!known || event.created_at > known.created_at) membershipsByChannel.set(channelID, event);
 			}
-		}
-		return conversations;
-	} finally {
-		relay.disconnect();
-	}
+			const latestMetadata = new Map<string, BuzzEvent>();
+			for (const event of metadataEvents) {
+				const channelID = firstTagValue(event, "d");
+				if (!channelID) continue;
+				const known = latestMetadata.get(channelID);
+				if (!known || event.created_at > known.created_at) latestMetadata.set(channelID, event);
+			}
+			const conversations: UserConversation[] = [];
+			for (const channelID of channelIDs) {
+				const metadata = latestMetadata.get(channelID);
+				const isDM = metadata ? firstTagValue(metadata, "t") === "dm" : false;
+				if (isDM) {
+					const participants = participantsOf(metadata, membershipsByChannel.get(channelID));
+					const counterpart = participants.find((pubkey) => pubkey !== userPubkeyHex);
+					const profile = counterpart ? await fetchProfileAsUser(relay, counterpart) : {};
+					conversations.push({
+						channelID,
+						name: profile.name ?? counterpart?.slice(0, 8) ?? "",
+						isDM: true,
+						participantPubkeyHexes: participants,
+					});
+				} else {
+					conversations.push({
+						channelID,
+						name: metadata ? (firstTagValue(metadata, "name") ?? "") : "",
+						isDM: false,
+						participantPubkeyHexes: participantsOf(metadata, membershipsByChannel.get(channelID)),
+					});
+				}
+			}
+			return conversations;
+	});
 }
 
 // A person replies only to a thread's root from here, and NIP-10 marks a direct
@@ -143,18 +139,14 @@ export async function sendChannelMessageAsUser(request: {
 	authTagJSON?: string;
 }): Promise<{ id: string; body: string; attachments: UserMessageAttachment[] }> {
 	const { body, mediaTags } = await buildMessageBody(request);
-	const relay = createBuzzRelayClient(request.relayURL, request.userSecretHex, request.authTagJSON);
-	try {
-		await relay.connect();
-		const event = await relay.publish(
-			STREAM_MESSAGE_KIND,
-			body,
-			channelMessageTags(request.channelID, mediaTags, request.extraTags, request.replyToRootId),
-		);
-		return { id: event.id, body, attachments: attachmentsOfTags(mediaTags) };
-	} finally {
-		relay.disconnect();
-	}
+	return withRelayAs(request.relayURL, request.userSecretHex, request.authTagJSON, async (relay) => {
+			const event = await relay.publish(
+				STREAM_MESSAGE_KIND,
+				body,
+				channelMessageTags(request.channelID, mediaTags, request.extraTags, request.replyToRootId),
+			);
+			return { id: event.id, body, attachments: attachmentsOfTags(mediaTags) };
+	});
 }
 
 // Separating an edit that can never succeed from one worth retrying would
@@ -175,17 +167,13 @@ export async function editChannelMessageAsUser(request: {
 	extraTags?: string[][];
 	authTagJSON?: string;
 }): Promise<string> {
-	const relay = createBuzzRelayClient(request.relayURL, request.userSecretHex, request.authTagJSON);
-	try {
-		await relay.connect();
-		const target = await relay.query({ ids: [request.targetEventId] });
-		if (target.length === 0) throw new EditTargetLost(request.targetEventId);
-		const tags: string[][] = [["h", request.channelID], ["e", request.targetEventId], ...(request.extraTags ?? [])];
-		const event = await relay.publish(EDIT_MESSAGE_KIND, request.message, tags);
-		return event.id;
-	} finally {
-		relay.disconnect();
-	}
+	return withRelayAs(request.relayURL, request.userSecretHex, request.authTagJSON, async (relay) => {
+			const target = await relay.query({ ids: [request.targetEventId] });
+			if (target.length === 0) throw new EditTargetLost(request.targetEventId);
+			const tags: string[][] = [["h", request.channelID], ["e", request.targetEventId], ...(request.extraTags ?? [])];
+			const event = await relay.publish(EDIT_MESSAGE_KIND, request.message, tags);
+			return event.id;
+	});
 }
 
 export async function deleteChannelMessageAsUser(request: {
@@ -196,14 +184,10 @@ export async function deleteChannelMessageAsUser(request: {
 	extraTags?: string[][];
 	authTagJSON?: string;
 }): Promise<void> {
-	const relay = createBuzzRelayClient(request.relayURL, request.userSecretHex, request.authTagJSON);
-	try {
-		await relay.connect();
-		const tags: string[][] = [["h", request.channelID], ["e", request.targetEventId], ...(request.extraTags ?? [])];
-		await relay.publish(DELETE_MESSAGE_KIND, "", tags);
-	} finally {
-		relay.disconnect();
-	}
+	return withRelayAs(request.relayURL, request.userSecretHex, request.authTagJSON, async (relay) => {
+			const tags: string[][] = [["h", request.channelID], ["e", request.targetEventId], ...(request.extraTags ?? [])];
+			await relay.publish(DELETE_MESSAGE_KIND, "", tags);
+	});
 }
 
 export async function addReactionAsUser(request: {
@@ -215,14 +199,10 @@ export async function addReactionAsUser(request: {
 	extraTags?: string[][];
 	authTagJSON?: string;
 }): Promise<void> {
-	const relay = createBuzzRelayClient(request.relayURL, request.userSecretHex, request.authTagJSON);
-	try {
-		await relay.connect();
-		const tags: string[][] = [["e", request.targetEventId], ["h", request.channelID], ...(request.extraTags ?? [])];
-		await relay.publish(REACTION_KIND, request.emoji, tags);
-	} finally {
-		relay.disconnect();
-	}
+	return withRelayAs(request.relayURL, request.userSecretHex, request.authTagJSON, async (relay) => {
+			const tags: string[][] = [["e", request.targetEventId], ["h", request.channelID], ...(request.extraTags ?? [])];
+			await relay.publish(REACTION_KIND, request.emoji, tags);
+	});
 }
 
 export type UserDirectMessageSend = {
@@ -243,24 +223,20 @@ export async function ensureUserDirectMessageChannel(
 	userSecretHex: string,
 	counterpartPubkeyHex: string,
 ): Promise<UserDirectMessageChannel> {
-	const relay = createBuzzRelayClient(relayURL, userSecretHex);
-	try {
-		await relay.connect();
-		const existingChannelID = await findDirectMessageChannelID(relay, relay.pubkeyHex, counterpartPubkeyHex);
-		if (existingChannelID) {
-			return { channelID: existingChannelID, userPubkeyHex: relay.pubkeyHex };
-		}
-		const acknowledgement = await relay.publishForAcknowledgement(DM_OPEN_KIND, "", [
-			["p", counterpartPubkeyHex],
-		]);
-		const openedChannelID = channelIDFromAcknowledgement(acknowledgement);
-		if (!openedChannelID) {
-			throw new Error("relay did not return a direct message channel");
-		}
-		return { channelID: openedChannelID, userPubkeyHex: relay.pubkeyHex };
-	} finally {
-		relay.disconnect();
-	}
+	return withRelayAs(relayURL, userSecretHex, undefined, async (relay) => {
+			const existingChannelID = await findDirectMessageChannelID(relay, relay.pubkeyHex, counterpartPubkeyHex);
+			if (existingChannelID) {
+				return { channelID: existingChannelID, userPubkeyHex: relay.pubkeyHex };
+			}
+			const acknowledgement = await relay.publishForAcknowledgement(DM_OPEN_KIND, "", [
+				["p", counterpartPubkeyHex],
+			]);
+			const openedChannelID = channelIDFromAcknowledgement(acknowledgement);
+			if (!openedChannelID) {
+				throw new Error("relay did not return a direct message channel");
+			}
+			return { channelID: openedChannelID, userPubkeyHex: relay.pubkeyHex };
+	});
 }
 
 export async function sendDirectMessageAsUser(request: UserDirectMessageSend): Promise<string> {
@@ -270,18 +246,14 @@ export async function sendDirectMessageAsUser(request: UserDirectMessageSend): P
 		request.counterpartPubkeyHex,
 	);
 	const { body, mediaTags } = await buildMessageBody(request);
-	const relay = createBuzzRelayClient(request.relayURL, request.userSecretHex);
-	try {
-		await relay.connect();
-		const event = await relay.publish(STREAM_MESSAGE_KIND, body, [
-			["h", channel.channelID],
-			["p", request.counterpartPubkeyHex],
-			...mediaTags,
-		]);
-		return event.id;
-	} finally {
-		relay.disconnect();
-	}
+	return withRelayAs(request.relayURL, request.userSecretHex, undefined, async (relay) => {
+			const event = await relay.publish(STREAM_MESSAGE_KIND, body, [
+				["h", channel.channelID],
+				["p", request.counterpartPubkeyHex],
+				...mediaTags,
+			]);
+			return event.id;
+	});
 }
 
 export async function buildMessageBody(request: {
@@ -411,40 +383,36 @@ export async function listChannelMessagesAsUser(request: {
 	before?: string;
 	authTagJSON?: string;
 }): Promise<UserMessage[]> {
-	const relay = createBuzzRelayClient(request.relayURL, request.userSecretHex, request.authTagJSON);
-	try {
-		await relay.connect();
-		const filter: Record<string, unknown> = {
-			kinds: [STREAM_MESSAGE_KIND],
-			"#h": [request.channelID],
-			limit: request.limit,
-		};
-		if (request.before) filter.until = Math.floor(Number(request.before) / 1000);
-		const events = await relay.query(filter);
-		const read = events
-			.sort((first, second) => first.created_at - second.created_at)
-			.map((event) => {
-				const thread = threadTagsOf(event);
-				return {
-					id: event.id,
-					conversationID: request.channelID,
-					parentID: thread.rootEventId,
-					authorPubkeyHex: event.pubkey,
-					body: event.content,
-					postedAt: new Date(event.created_at * 1000).toISOString(),
-					attachments: attachmentsOf(event),
-				};
-			});
-		const messageIDs = read.map((message) => message.id);
-		const [reacted, edited] = await Promise.all([reactionsTo(relay, messageIDs), editsTo(relay, messageIDs)]);
-		return read.map((message) => ({
-			...message,
-			body: edited.get(message.id) ?? message.body,
-			reactions: reacted.get(message.id) ?? [],
-		}));
-	} finally {
-		relay.disconnect();
-	}
+	return withRelayAs(request.relayURL, request.userSecretHex, request.authTagJSON, async (relay) => {
+			const filter: Record<string, unknown> = {
+				kinds: [STREAM_MESSAGE_KIND],
+				"#h": [request.channelID],
+				limit: request.limit,
+			};
+			if (request.before) filter.until = Math.floor(Number(request.before) / 1000);
+			const events = await relay.query(filter);
+			const read = events
+				.sort((first, second) => first.created_at - second.created_at)
+				.map((event) => {
+					const thread = threadTagsOf(event);
+					return {
+						id: event.id,
+						conversationID: request.channelID,
+						parentID: thread.rootEventId,
+						authorPubkeyHex: event.pubkey,
+						body: event.content,
+						postedAt: new Date(event.created_at * 1000).toISOString(),
+						attachments: attachmentsOf(event),
+					};
+				});
+			const messageIDs = read.map((message) => message.id);
+			const [reacted, edited] = await Promise.all([reactionsTo(relay, messageIDs), editsTo(relay, messageIDs)]);
+			return read.map((message) => ({
+				...message,
+				body: edited.get(message.id) ?? message.body,
+				reactions: reacted.get(message.id) ?? [],
+			}));
+	});
 }
 
 // A conversation the relay created names its participants on the metadata; one
@@ -466,14 +434,10 @@ export async function profilePictureURLAsUser(
 	userSecretHex: string,
 	subjectPubkeyHex: string,
 ): Promise<string | undefined> {
-	const relay = createBuzzRelayClient(relayURL, userSecretHex);
-	try {
-		await relay.connect();
-		const profile = await fetchProfileAsUser(relay, subjectPubkeyHex);
-		return profile.picture;
-	} finally {
-		relay.disconnect();
-	}
+	return withRelayAs(relayURL, userSecretHex, undefined, async (relay) => {
+			const profile = await fetchProfileAsUser(relay, subjectPubkeyHex);
+			return profile.picture;
+	});
 }
 
 // A buzz message describes each file it carries on an imeta tag, whose entries
