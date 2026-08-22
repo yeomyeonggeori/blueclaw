@@ -140,6 +140,18 @@ language the reviewers share; the repository's permanent record is English.
   test` runs one. Never run bare `bun test` at the repository root — it
   blends isolated package processes into one and reports false failures.
 
+- A guard is proven by watching it fail. Write the test, break the thing it
+  claims to protect, watch it go red, put the thing back. A test that was
+  never seen to fail is an assumption with a green checkmark on it, and the
+  ones that matter most here are exactly the shape that can pass for the
+  wrong reason. `TestOverheardMessageNeverBecomesTheInstruction` guards the
+  behaviour that once had the bot reposting somebody else's announcement as
+  its own instruction, and it is worth nothing unless it actually goes red
+  when the overheard text reaches the prompt again.
+- The pull request says what was broken to prove it. One line, naming the
+  edit or the revision, is enough. Anyone reading the guard later can redo
+  it from that line, which is the point.
+
 ## LLM-First Runtime Policy
 
 - User-facing answers, failure explanations, approval wording, and recovery direction must go through the LLM.
