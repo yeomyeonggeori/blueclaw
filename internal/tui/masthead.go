@@ -2,16 +2,16 @@ package tui
 
 import (
 	"fmt"
-	"runtime/debug"
 	"strings"
 
 	lipgloss "charm.land/lipgloss/v2"
+
+	"github.com/yeomyeonggeori/blueclaw/internal/buildrevision"
 )
 
 const (
 	mastheadGapWidth   = 4
 	mastheadLabelWidth = 11
-	revisionLength     = 8
 )
 
 var statusesWorthCounting = []string{
@@ -22,36 +22,8 @@ var statusesWorthCounting = []string{
 	TaskStatusFailed,
 }
 
-var injectedRevision string
-
 func clientRevision() string {
-	if injectedRevision != "" {
-		return shortenRevision(injectedRevision, false)
-	}
-	buildInfo, isAvailable := debug.ReadBuildInfo()
-	if !isAvailable {
-		return ""
-	}
-	revision, isModified := "", false
-	for _, setting := range buildInfo.Settings {
-		switch setting.Key {
-		case "vcs.revision":
-			revision = setting.Value
-		case "vcs.modified":
-			isModified = setting.Value == "true"
-		}
-	}
-	return shortenRevision(revision, isModified)
-}
-
-func shortenRevision(revision string, isModified bool) string {
-	if len(revision) > revisionLength {
-		revision = revision[:revisionLength]
-	}
-	if isModified {
-		return revision + "+"
-	}
-	return revision
+	return buildrevision.Short()
 }
 
 func renderOverviewField(label string, value string) string {

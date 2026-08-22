@@ -152,6 +152,23 @@ language the reviewers share; the repository's permanent record is English.
   edit or the revision, is enough. Anyone reading the guard later can redo
   it from that line, which is the point.
 
+## Which revision a binary is
+
+`blueclaw --version` answers it and `GET /admin/api/harness` carries it, so a
+deploy can read back what landed instead of trusting a green exit code.
+
+The answer comes from `-ldflags`, and it has to, because this repository is
+usually built as a submodule of the host: its `.git` is a gitdir file pointing
+outside the tree, so the Go toolchain records no VCS information at all and
+`debug.ReadBuildInfo` has nothing to report. A build that wants an answer passes
+
+```
+-ldflags "-X github.com/yeomyeonggeori/blueclaw/internal/buildrevision.injected=$(git rev-parse HEAD)"
+```
+
+A build that passes nothing reports `unknown`, which is the honest answer and
+the one a deploy check should refuse.
+
 ## LLM-First Runtime Policy
 
 - User-facing answers, failure explanations, approval wording, and recovery direction must go through the LLM.

@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/app"
+	"github.com/yeomyeonggeori/blueclaw/internal/buildrevision"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/enrollment"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
@@ -21,7 +23,13 @@ func main() {
 	home := enrollment.ResolveHome()
 	runtimeConfigurationPath := flag.String("runtime", home.RuntimeConfigurationPath(), "runtime configuration path")
 	policyPath := flag.String("policy", home.PolicyPath(), "policy document path")
+	shouldPrintRevision := flag.Bool("version", false, "print the revision this binary was built from and exit")
 	flag.Parse()
+
+	if *shouldPrintRevision {
+		fmt.Println(revisionLine())
+		return
+	}
 
 	runtimeConfiguration, errorValue := config.LoadRuntimeConfiguration(*runtimeConfigurationPath)
 	if errorValue != nil {
@@ -34,6 +42,13 @@ func main() {
 
 	application := app.NewApplication(runtimeConfiguration, *policyPath, bundledHarnessFactory())
 	log.Fatal(application.Start())
+}
+
+func revisionLine() string {
+	if revision := buildrevision.Revision(); revision != "" {
+		return revision
+	}
+	return "unknown"
 }
 
 func runToolCatalogBridge() {
