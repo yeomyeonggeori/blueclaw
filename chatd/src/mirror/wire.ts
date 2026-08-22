@@ -1,4 +1,5 @@
 import { createBuzzGateway } from './buzz-publisher.ts';
+import { EchoSuppressor } from './echo-suppressor.ts';
 import {
 	MIRROR_SUMMARY_INTERVAL_MILLISECONDS,
 	MirrorTally,
@@ -39,6 +40,8 @@ export function createMirror(options: {
 		createBuzzGateway(options.buzz.relayURL, options.buzz.authTagJSON),
 		platforms,
 		mapping,
+		new EchoSuppressor(),
+		(context, detail) => options.onError?.(context, detail),
 	);
 	const tally = new MirrorTally();
 	const run = (context: string, subject: MirrorSubject, work: Promise<void>): void => {

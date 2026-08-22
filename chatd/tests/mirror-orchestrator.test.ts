@@ -16,6 +16,7 @@ import {
 	type PlatformReaction,
 } from '../src/mirror/orchestrator.ts';
 import { EditTargetLost } from '../src/adapters/buzz/user-session.ts';
+import { EchoSuppressor } from '../src/mirror/echo-suppressor.ts';
 
 class FakeMappingStore implements MappingStoreLike {
 	messages: MessageMapping[] = [];
@@ -232,6 +233,27 @@ describe('Buzz -> platforms fan-out', () => {
 			senderName: 'Alice',
 		});
 		expect(slack.posts.map((p) => p.target)).toEqual(['slack']);
+	});
+
+	test('says so when a reply arrives as a new message because its parent never crossed', async () => {
+		const said: string[] = [];
+		const loud = new MirrorOrchestrator(store, ['mattermost', 'slack'], new FakeBuzzGateway(), {
+			slack: { post: slack.post.bind(slack), edit: slack.edit.bind(slack), remove: slack.remove.bind(slack), react: slack.react.bind(slack) },
+		}, new FakeIdentity(), new EchoSuppressor(), (context) => said.push(context));
+		await store.recordChannel({ buzzChannelId: 'bc', platform: 'slack', externalChannelId: 'slack-chan' });
+
+		await loud.onBuzzMessage({
+			buzzEventId: 'e2',
+			buzzChannelId: 'bc',
+			text: 'an answer',
+			origin: { platform: 'mattermost', externalId: 'post-1' },
+			senderName: 'Alice',
+			replyToBuzzEventId: 'e1',
+		});
+
+		expect(slack.posts).toHaveLength(1);
+		expect(slack.posts[0]?.replyToExternalId).toBeUndefined();
+		expect(said.join(' ')).toContain('arrives as a new message');
 	});
 
 	test('fans out edit/delete/reaction to the mapped message on other platforms', async () => {
