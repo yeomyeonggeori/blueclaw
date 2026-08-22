@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"log/slog"
@@ -56,6 +57,8 @@ import (
 
 const databaseInitializationTimeout = 240 * time.Second
 
+const backgroundLoopStopGrace = 10 * time.Second
+
 type Application struct {
 	httpServer                    *http.Server
 	connectorRuntime              *connectors.ConnectorRuntime
@@ -64,6 +67,7 @@ type Application struct {
 	interruptedTaskResumer        interruptedTaskResumer
 	runtimeLogger                 *runtimelogging.PersistentLogger
 	terminalService               *security.TerminalSessionService
+	backgroundLoops               sync.WaitGroup
 	database                      postgres.Database
 	startupError                  error
 	connectorRuntimeCancel        context.CancelFunc
@@ -1451,12 +1455,16 @@ func (application *Application) Shutdown(ctx context.Context) error {
 		application.memoryUpdateCancel()
 	}
 	errorValue := application.httpServer.Shutdown(ctx)
+	backgroundError := application.awaitBackgroundLoops(ctx)
 	terminalCloseError := application.closeTerminalSessions()
 	mcpCloseError := application.closeMCPRegistry()
 	closeErrorValue := application.runtimeLogger.Close()
 	databaseCloseError := application.database.Close()
 	if errorValue != nil {
 		return errorValue
+	}
+	if backgroundError != nil {
+		return backgroundError
 	}
 	if terminalCloseError != nil {
 		return terminalCloseError
@@ -1468,6 +1476,34 @@ func (application *Application) Shutdown(ctx context.Context) error {
 		return closeErrorValue
 	}
 	return databaseCloseError
+}
+
+// Cancelling a context asks a goroutine to stop. Nothing was waiting for one to have
+// stopped, so Shutdown closed the database while sweepers were still writing to it.
+func (application *Application) startBackgroundLoop(run func(context.Context)) context.CancelFunc {
+	ctx, cancel := context.WithCancel(context.Background())
+	application.backgroundLoops.Add(1)
+	go func() {
+		defer application.backgroundLoops.Done()
+		run(ctx)
+	}()
+	return cancel
+}
+
+func (application *Application) awaitBackgroundLoops(ctx context.Context) error {
+	stopped := make(chan struct{})
+	go func() {
+		application.backgroundLoops.Wait()
+		close(stopped)
+	}()
+	select {
+	case <-stopped:
+		return nil
+	case <-ctx.Done():
+		return errors.New("shutdown ran out of time before its background loops stopped")
+	case <-time.After(backgroundLoopStopGrace):
+		return errors.New("background loops did not stop within " + backgroundLoopStopGrace.String())
+	}
 }
 
 func (application *Application) closeTerminalSessions() error {
@@ -1509,7 +1545,11 @@ func (application *Application) startConnectorTransports() {
 			"platform",
 			transport.Platform(),
 		)
-		go transport.Start(ctx)
+		application.backgroundLoops.Add(1)
+		go func() {
+			defer application.backgroundLoops.Done()
+			transport.Start(ctx)
+		}()
 	}
 }
 
@@ -1526,52 +1566,51 @@ func (application *Application) startLogRetentionLoop() {
 		return
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	application.logRetentionCancel = cancel
-	go application.runtimeLogger.StartRetentionLoop(ctx)
+	application.logRetentionCancel = application.startBackgroundLoop(application.runtimeLogger.StartRetentionLoop)
 }
 
 func (application *Application) startTaskSchedulePoller() {
 	if application.taskSchedulePoller == nil || application.taskScheduleCancel != nil {
 		return
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	application.taskScheduleCancel = cancel
 	interval := time.Duration(application.taskSchedulePollIntervalSecond()) * time.Second
-	go application.taskSchedulePoller.Start(ctx, interval)
+	application.taskScheduleCancel = application.startBackgroundLoop(func(ctx context.Context) {
+		application.taskSchedulePoller.Start(ctx, interval)
+	})
 }
 
 func (application *Application) startTaskRetentionSweeper() {
 	if application.taskRetentionSweeper == nil || application.taskRetentionCancel != nil {
 		return
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	application.taskRetentionCancel = cancel
 	interval := time.Duration(application.taskRetentionIntervalMinuteOrDefault()) * time.Minute
-	go application.taskRetentionSweeper.Start(ctx, interval)
+	application.taskRetentionCancel = application.startBackgroundLoop(func(ctx context.Context) {
+		application.taskRetentionSweeper.Start(ctx, interval)
+	})
 }
 
 func (application *Application) startStaleTaskSweeper() {
 	if application.taskRunService == nil || application.staleTaskCancel != nil {
 		return
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	application.staleTaskCancel = cancel
 	sweeper := scheduler.StaleTaskSweeper{
 		TaskRunService: application.taskRunService,
 		Notifier:       application.interruptedTaskResumer,
 		Logger:         application.runtimeLogger.Logger,
 	}
-	go sweeper.Start(ctx, 30*time.Minute)
+	application.staleTaskCancel = application.startBackgroundLoop(func(ctx context.Context) {
+		sweeper.Start(ctx, 30*time.Minute)
+	})
 }
 
 func (application *Application) startInterruptedTaskAutoResume() {
 	if application.taskRunService == nil || application.interruptedTaskResumer == nil || application.interruptedTaskResumeCancel != nil {
 		return
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	application.interruptedTaskResumeCancel = cancel
-	go application.resumeInterruptedTaskRuns(ctx, time.Now())
+	resumeStartedAt := time.Now()
+	application.interruptedTaskResumeCancel = application.startBackgroundLoop(func(ctx context.Context) {
+		application.resumeInterruptedTaskRuns(ctx, resumeStartedAt)
+	})
 }
 
 func (application *Application) resumeInterruptedTaskRuns(ctx context.Context, now time.Time) {
