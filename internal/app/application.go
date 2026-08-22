@@ -62,6 +62,7 @@ type Application struct {
 	taskRunService                *task.TaskRunService
 	interruptedTaskResumer        interruptedTaskResumer
 	runtimeLogger                 *runtimelogging.PersistentLogger
+	terminalService               *security.TerminalSessionService
 	database                      postgres.Database
 	startupError                  error
 	connectorRuntimeCancel        context.CancelFunc
@@ -523,6 +524,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 		taskRunService:                taskRunService,
 		interruptedTaskResumer:        connectorRuntime,
 		runtimeLogger:                 runtimeLogger,
+		terminalService:               terminalService,
 		database:                      database,
 		startupError:                  startupError,
 		taskSchedulePoller:            taskSchedulePoller,
@@ -1447,11 +1449,15 @@ func (application *Application) Shutdown(ctx context.Context) error {
 		application.memoryUpdateCancel()
 	}
 	errorValue := application.httpServer.Shutdown(ctx)
+	terminalCloseError := application.closeTerminalSessions()
 	mcpCloseError := application.closeMCPRegistry()
 	closeErrorValue := application.runtimeLogger.Close()
 	databaseCloseError := application.database.Close()
 	if errorValue != nil {
 		return errorValue
+	}
+	if terminalCloseError != nil {
+		return terminalCloseError
 	}
 	if mcpCloseError != nil {
 		return mcpCloseError
@@ -1460,6 +1466,13 @@ func (application *Application) Shutdown(ctx context.Context) error {
 		return closeErrorValue
 	}
 	return databaseCloseError
+}
+
+func (application *Application) closeTerminalSessions() error {
+	if application.terminalService == nil {
+		return nil
+	}
+	return application.terminalService.CloseAllSessions()
 }
 
 func (application *Application) closeMCPRegistry() error {

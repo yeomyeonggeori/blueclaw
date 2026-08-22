@@ -336,3 +336,56 @@ func TestATimedOutCommandSaysHowItWasEnded(t *testing.T) {
 		t.Fatalf("a run cut short by us reads as an ordinary failure unless the result says a signal ended it: %+v", commandResult)
 	}
 }
+
+func TestClosingASessionWaitsForTheProcessToActuallyGo(t *testing.T) {
+	terminalSessionService := NewTerminalSessionService(testTerminalConfiguration(t))
+	sessionID, errorValue := terminalSessionService.StartInteractiveSession(CommandRequest{Command: "sleep 120"})
+	if errorValue != nil {
+		t.Fatalf("starting the session failed: %v", errorValue)
+	}
+	session, isFound := terminalSessionService.findSession(sessionID)
+	if !isFound {
+		t.Fatal("the session was not registered")
+	}
+
+	if errorValue := terminalSessionService.CloseSession(sessionID); errorValue != nil {
+		t.Fatalf("closing the session failed: %v", errorValue)
+	}
+
+	select {
+	case <-session.exited:
+	default:
+		t.Fatal("a teardown that returns before the process stops leaves an orphan holding the requester's workspace open")
+	}
+	if _, isStillRegistered := terminalSessionService.findSession(sessionID); isStillRegistered {
+		t.Fatal("a closed session is out of the registry, so nothing reads one in the middle of dying")
+	}
+	if errorValue := terminalSessionService.CloseSession(sessionID); errorValue == nil {
+		t.Fatal("closing it twice is a caller mistake and says so")
+	}
+}
+
+func TestShuttingDownClosesEverySessionItStarted(t *testing.T) {
+	terminalSessionService := NewTerminalSessionService(testTerminalConfiguration(t))
+	sessions := []*TerminalSession{}
+	for index := 0; index < 3; index++ {
+		sessionID, errorValue := terminalSessionService.StartInteractiveSession(CommandRequest{Command: "sleep 120"})
+		if errorValue != nil {
+			t.Fatalf("starting session %d failed: %v", index, errorValue)
+		}
+		session, _ := terminalSessionService.findSession(sessionID)
+		sessions = append(sessions, session)
+	}
+
+	if errorValue := terminalSessionService.CloseAllSessions(); errorValue != nil {
+		t.Fatalf("closing every session failed: %v", errorValue)
+	}
+
+	for index, session := range sessions {
+		select {
+		case <-session.exited:
+		default:
+			t.Fatalf("session %d survived the shutdown that was supposed to end it", index)
+		}
+	}
+}
