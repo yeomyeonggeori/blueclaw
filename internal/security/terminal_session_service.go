@@ -65,6 +65,7 @@ type TerminalSession struct {
 	isExited             bool
 	exitCode             int
 	exited               chan struct{}
+	processGroupID       int
 }
 
 type TerminalSessionService struct {
@@ -333,6 +334,7 @@ func (terminalSessionService *TerminalSessionService) StartInteractiveSession(co
 		cancelFunction()
 		return "", errorValue
 	}
+	terminalSession.rememberProcessGroup()
 	go terminalSession.wait()
 
 	terminalSessionService.mutex.Lock()
@@ -426,17 +428,39 @@ func (terminalSession *TerminalSession) closeAndAwaitExit() error {
 	if terminalSession.cancelFunction != nil {
 		terminalSession.cancelFunction()
 	}
-	if terminalSession.awaitExit(sessionCloseGrace) {
-		return nil
-	}
-	if terminalSession.command.Process != nil {
-		_ = terminalSession.command.Process.Kill()
-	}
-	if terminalSession.awaitExit(sessionKillGrace) {
+	hasExited := terminalSession.awaitExit(sessionCloseGrace)
+	terminalSession.killWhatItStarted()
+	if hasExited || terminalSession.awaitExit(sessionKillGrace) {
 		return nil
 	}
 	slog.Warn("terminal session did not exit after being killed", "sessionID", terminalSession.SessionID)
 	return errors.New("terminal session " + terminalSession.SessionID + " did not exit after it was killed")
+}
+
+// Read while the shell is alive, because a group cannot be found from a process that
+// has already gone and the children it left behind are exactly what has to be found.
+func (terminalSession *TerminalSession) rememberProcessGroup() {
+	if terminalSession.command.Process == nil {
+		return
+	}
+	processGroupID, errorValue := syscall.Getpgid(terminalSession.command.Process.Pid)
+	if errorValue != nil || processGroupID == syscall.Getpgrp() {
+		return
+	}
+	terminalSession.processGroupID = processGroupID
+}
+
+// Killing the shell leaves whatever the shell started, and a shell that ended on its
+// own leaves it too, so the group is signalled either way. A group with nothing left
+// in it is a no-op.
+func (terminalSession *TerminalSession) killWhatItStarted() {
+	if terminalSession.processGroupID != 0 {
+		_ = syscall.Kill(-terminalSession.processGroupID, syscall.SIGKILL)
+		return
+	}
+	if terminalSession.command.Process != nil {
+		_ = terminalSession.command.Process.Kill()
+	}
 }
 
 func (terminalSession *TerminalSession) awaitExit(grace time.Duration) bool {
@@ -449,6 +473,7 @@ func (terminalSession *TerminalSession) awaitExit(grace time.Duration) bool {
 }
 
 func (terminalSession *TerminalSession) startPipe(commandPlan CommandPlan) error {
+	terminalSession.command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	standardInputWriter, errorValue := terminalSession.command.StdinPipe()
 	if errorValue != nil {
 		return errorValue
