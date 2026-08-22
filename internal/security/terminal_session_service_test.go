@@ -4,7 +4,9 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -388,4 +390,38 @@ func TestShuttingDownClosesEverySessionItStarted(t *testing.T) {
 			t.Fatalf("session %d survived the shutdown that was supposed to end it", index)
 		}
 	}
+}
+
+func TestClosingASessionTakesItsChildrenWithIt(t *testing.T) {
+	terminalSessionService := NewTerminalSessionService(testTerminalConfiguration(t))
+	childMarkerPath := filepath.Join(t.TempDir(), "child.pid")
+	sessionID, errorValue := terminalSessionService.StartInteractiveSession(CommandRequest{
+		Command: "sh -c 'sleep 120 & echo $! > " + childMarkerPath + "; wait'",
+	})
+	if errorValue != nil {
+		t.Fatalf("starting the session failed: %v", errorValue)
+	}
+	childProcessID := 0
+	for attempt := 0; attempt < 100 && childProcessID == 0; attempt++ {
+		if content, readError := os.ReadFile(childMarkerPath); readError == nil {
+			childProcessID, _ = strconv.Atoi(strings.TrimSpace(string(content)))
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if childProcessID == 0 {
+		t.Skip("the session shell never reported a child; nothing to prove here")
+	}
+
+	if errorValue := terminalSessionService.CloseSession(sessionID); errorValue != nil {
+		t.Fatalf("closing the session failed: %v", errorValue)
+	}
+
+	for attempt := 0; attempt < 100; attempt++ {
+		if syscall.Kill(childProcessID, 0) != nil {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	_ = syscall.Kill(childProcessID, syscall.SIGKILL)
+	t.Fatalf("pid %d outlived the session that started it, still holding the requester's workspace open", childProcessID)
 }
