@@ -1,9 +1,13 @@
 # Blueclaw Architecture
 
+The ledger vocabulary and the model-facing tool catalog are generated from the
+code that owns them: [event catalog](event-catalog.md), [tool
+catalog](tool-catalog.md). Neither is edited here.
+
 This document describes the runtime as it is built today, for someone who wants
 to modify it. [`README.md`](../README.md) covers what Blueclaw is, how to run
 it, and the security claim; this file is the longer version of the layering and
-the boundary, with file and line citations.
+the boundary, citing the functions that hold each rule.
 
 Line numbers are accurate at the time of writing and drift with refactors; the
 function names beside them are the durable reference.
@@ -48,7 +52,7 @@ protocol; each supported CLI is a descriptor of flags and an output parser
 (`ClaudeCodeAgentCommand`, `CodexAgentCommand`, `AntigravityAgentCommand`), not
 a branch in the host.
 
-The port is `agentcontract.Harness` (`.dependency/bluecollar/agentcontract/harness.go:5`), a single
+The port is `agentcontract.Harness` (`.dependency/bluecollar/agentcontract/harness.go`), a single
 method:
 
 | Method | Called from |
@@ -69,7 +73,7 @@ completion — it takes from `taskstate.TaskRunService` directly. Those methods
 were removed from the kernel deliberately; do not reintroduce store passthrough
 on the harness.
 
-`.dependency/bluecollar/contract.go` is the alias shim. `:5` asserts
+`.dependency/bluecollar/contract.go` is the alias shim. It asserts
 `*AgentKernel` satisfies the port; the `type (...)` block re-exports the types
 that moved to `agentcontract` so the ~130 Go files naming `AgentTurnRequest`,
 `VisibleContext`, `InstructionBundle`, `MemoryFact` and their closure did not
@@ -134,20 +138,20 @@ and the tunnel; `cmd/blueclaw` is an ordinary process against Postgres and
 
 ## Boot sequence
 
-`app.NewApplication` (`internal/app/application.go:94`) runs, in order:
+`app.NewApplication` (`internal/app/application.go`) runs, in order:
 
-| Stage | Line | What it does |
-|---|---|---|
-| `open_database` | `:101` | opens Postgres; every repository below is skipped when `database.SQL` is nil, so the daemon boots without it |
-| `load_policy` | `:105` | reads the policy document from `--policy` |
-| `posix_synchronize` | `:108` | `security.POSIXSynchronizer.Synchronize` applies users, groups, and directory modes through the setuid helper |
-| `project_policy` | `:113` | upserts the read-only `person` projection |
-| `identity` | `:117` | builds the identity service and platform account links |
-| `agent_kernel` | `:165` | constructs the harness and injects instruction bundle, tiers, skills, company context |
-| `memory` | `:213` | terminal service, memory service, optional Graphiti graph store |
+| Stage | What it does |
+|---|---|
+| `open_database` | opens Postgres; every repository below is skipped when `database.SQL` is nil, so the daemon boots without it |
+| `load_policy` | reads the policy document from `--policy` |
+| `posix_synchronize` | `security.POSIXSynchronizer.Synchronize` applies users, groups, and directory modes through the setuid helper |
+| `project_policy` | upserts the read-only `person` projection |
+| `identity` | builds the identity service and platform account links |
+| `agent_kernel` | constructs the harness and injects instruction bundle, tiers, skills, company context |
+| `memory` | terminal service, memory service, optional Graphiti graph store |
 
 Migrations run from `database.migrationDirectoryPath`, default `migrations`
-(`internal/app/application.go:885-895`).
+(`internal/app/application.go-895`).
 
 ## Connectors
 
@@ -156,7 +160,7 @@ ingress, Slack Events API or Socket Mode, and Signal sessions, along with every
 platform token. They forward normalized events to
 `POST /connectors/{platform}/events`.
 
-Ingress routes are registered in `internal/httpserver/router.go:83-87`:
+Ingress routes are registered in `internal/httpserver/router.go-87`:
 `mattermost`, `slack`, `signal`, `api`, `buzz`.
 
 | Platform | Purpose |
@@ -173,14 +177,14 @@ A new platform is an adapter, not a new runtime. The three seams:
 
 | Seam | Type | Location |
 |---|---|---|
-| inbound normalization | `PlatformInboundEvent` | `internal/connectors/runtime.go:55` |
-| outbound delivery | `PlatformAdapter`, registered with `RegisterAdapter` | `internal/connectors/runtime.go:430` |
+| inbound normalization | `PlatformInboundEvent` | `internal/connectors/runtime.go` |
+| outbound delivery | `PlatformAdapter`, registered with `RegisterAdapter` | `internal/connectors/runtime.go` |
 | transport choice | capability call, or `chatd` HTTP | `internal/connectors/capability_platform_adapter.go`, `internal/connectors/chatd_platform_adapter.go` |
 
 Inbound events enter through `HandleHTTPEvent`
-(`internal/connectors/runtime.go:554`) or `HandleRealtimeEvent` (`:578`), both
-converging on `HandleInboundEvent` (`:598`), which either handles the event
-immediately (`:639`) or enqueues it (`:675`).
+(`internal/connectors/runtime.go`) or `HandleRealtimeEvent`, both
+converging on `HandleInboundEvent`, which either handles the event
+immediately or enqueues it.
 
 Minimal normalized event body:
 
@@ -246,7 +250,7 @@ vsock; a Unix socket is used only in non-guest development layouts.
 An inbound message becomes at most one task run. The path, end to end:
 
 1. **Ingress.** `ConnectorRuntime.HandleInboundEvent`
-   (`internal/connectors/runtime.go:598`) persists the raw event, resolves the
+   (`internal/connectors/runtime.go`) persists the raw event, resolves the
    sender to a policy person, and refuses uninvited accounts.
 2. **Addressing.** For channel messages the runtime asks its `IntakeClassifier`
    whether the bot was addressed at all — `ClassifyAddressing`
@@ -260,15 +264,15 @@ An inbound message becomes at most one task run. The path, end to end:
    task, replacing it, answering status, or starting a second one.
    `BusyRoute*` constants are in `.dependency/bluecollar/agentcontract/turn_decision.go`.
 4. **Launch.** `TaskLauncher.Launch`
-   (`internal/agentruntime/task_launcher.go:160`) runs an ordered pipeline of
+   (`internal/agentruntime/task_launcher.go`) runs an ordered pipeline of
    launch steps, each recorded as an event so a failure names its step:
-   `provisionRequesterWorkspaceLaunchStep` (`:243`) →
-   `buildToolSetLaunchStep` (`:257`) → `auditToolRegistryLaunchStep` (`:287`) →
-   `loadMemoryLaunchStep` (`:297`) → `runTurnLaunchStep` (`:347`).
+   `provisionRequesterWorkspaceLaunchStep` →
+   `buildToolSetLaunchStep` → `auditToolRegistryLaunchStep` →
+   `loadMemoryLaunchStep` → `runTurnLaunchStep`.
 5. **Turn.** `AgentKernel.RunTurn`
-   (`.dependency/bluecollar/agent_kernel.go:200`) plans the turn with the turn
+   (`.dependency/bluecollar/agent_kernel.go`) plans the turn with the turn
    router, then hands execution to `AgentTurnRunner.RunTurn`
-   (`.dependency/bluecollar/turn_runner.go:228`).
+   (`.dependency/bluecollar/turn_runner.go`).
 6. **Delivery.** The result enqueues into the connector outbox and is dispatched
    by `internal/connectors/task_reply_dispatch.go`.
 
@@ -280,7 +284,7 @@ An inbound message becomes at most one task run. The path, end to end:
 - **Final Step** runs no tool and must send the reply, failure reply, or reaction that closes the Task.
 
 The turn contract is a discriminated union of four actions, defined in
-`protocol/src/agent.ts:105-138`:
+`protocol/src/agent.ts-138`:
 
 | Action | Carries |
 |---|---|
@@ -296,12 +300,11 @@ its bearings without re-reading the whole observation stream. It replaced an
 earlier per-step plan object whose fields the model spent tokens filling and the
 runtime mostly ignored.
 
-`RunTurn` (`turn_runner.go:228`) sets up the turn: it injects requester identity
-into the model request context (`:234`), restores prior state from the task
-event ledger (`agentTaskStateForTurn:293`), registers a cancel function against
-the run (`:280`), wraps the language model so every call is recorded as an
-`llm.call` event (`:265-273`), and derives a work context from the effort budget
-(`:283`).
+`RunTurn` (`turn_runner.go`) sets up the turn: it injects requester identity
+into the model request context, restores prior state from the task
+event ledger (`agentTaskStateForTurn`), registers a cancel function against
+the run, wraps the language model so every call is recorded as an
+`llm.call` event (`:265-273`), and derives a work context from the effort budget.
 
 One structured action document per step is a deliberate divergence from native
 multi-step tool calling, and it is on the list to change: it forbids parallel
@@ -314,10 +317,10 @@ stay.
 
 Tool exposure is separate from all of this. Extension tool schemas offered to
 the model are capped at `maxExtensionCallableToolCount` (15, in
-`.dependency/bluecollar/tool_exposure.go:9`); kernel tools are added on top of that
+`.dependency/bluecollar/tool_exposure.go`); kernel tools are added on top of that
 cap (`toolSetForAgentTurnWithExposure:41-45`). Groups are ordered by priority —
 required interaction, recovery, pending working-set tool, required evidence,
-pinned, selected skills, evidence alternatives (`:36`) — and whatever does not
+pinned, selected skills, evidence alternatives — and whatever does not
 fit is reported as a dropped group in the exposure event rather than silently
 disappearing.
 
@@ -338,13 +341,13 @@ instruction. `.dependency/bluecollar/approval_gate.go`:
 
 | Concern | Function |
 |---|---|
-| does this call need approval | `toolCallRequiresRuntimeApproval:242`, `approvalScopeForTool:207` |
-| pause and ask | `requestHeldCallApproval:31`, wording generated by the model at `generateHeldCallConfirmationWording:322` |
-| resume | `executeApprovedHeldCall:79`, matched against the held call by `isApprovedHeldCallVerbatimMatch:265` |
-| task-scoped reuse | `taskAlreadyApprovedScope:215`, `taskApprovedScopes:223` |
+| does this call need approval | `toolCallRequiresRuntimeApproval`, `approvalScopeForTool` |
+| pause and ask | `requestHeldCallApproval`, wording generated by the model at `generateHeldCallConfirmationWording` |
+| resume | `executeApprovedHeldCall`, matched against the held call by `isApprovedHeldCallVerbatimMatch` |
+| task-scoped reuse | `taskAlreadyApprovedScope`, `taskApprovedScopes` |
 
 The scope comes from the tool descriptor's `ApprovalScope`
-(`.dependency/bluecollar/toolcontract/registry.go:35`), not from the tool's name. An approved call is
+(`.dependency/bluecollar/toolcontract/registry.go`), not from the tool's name. An approved call is
 re-executed exactly as it was held; a modified call is a new approval.
 
 `ask_input`, `ask_confirm`, and `ask_choice` are outside grant reuse — they are
@@ -356,37 +359,35 @@ questions, not grants.
 
 | Type | File |
 |---|---|
-| `TaskRunStore`, `TaskStepStore`, `TaskArtifactStore` interfaces | `.dependency/bluecollar/taskstate/store.go:7`, `:30`, `:34` |
+| `TaskRunStore`, `TaskStepStore`, `TaskArtifactStore` interfaces | `.dependency/bluecollar/taskstate/store.go`, ,  |
 | run lifecycle | `.dependency/bluecollar/taskstate/task_run_service.go` |
 | event ledger | `.dependency/bluecollar/taskstate/task_event_service.go` |
 | steps | `.dependency/bluecollar/taskstate/task_step_service.go` |
 | artifacts | `.dependency/bluecollar/taskstate/task_artifact_service.go` |
 
 Transitions go through one function, `TransitionTaskRun`
-(`task_run_service.go:247`), which records a transition event; `AdvanceTaskRun`
-(`:197`), `PauseTaskRun` (`:217`), `FailTaskRun` (`:232`), `ResumeTaskRun`
-(`:430`) and the cancel family are its callers. Restart recovery is explicit:
-`InterruptOrphanedRuntimeTaskRuns` (`:476`) runs at boot,
-`InterruptRuntimeTaskRunsForPlannedShutdown` (`:491`) before a deploy, and
-`SelectInterruptedTaskRunsForAutoResume` (`:544`) /
-`ClaimInterruptedTaskRunAutoResume` (`:558`) bring them back exactly once.
+(`task_run_service.go`), which records a transition event; `AdvanceTaskRun`, `PauseTaskRun`, `FailTaskRun`, `ResumeTaskRun` and the cancel family are its callers. Restart recovery is explicit:
+`InterruptOrphanedRuntimeTaskRuns` runs at boot,
+`InterruptRuntimeTaskRunsForPlannedShutdown` before a deploy, and
+`SelectInterruptedTaskRunsForAutoResume` /
+`ClaimInterruptedTaskRunAutoResume` bring them back exactly once.
 
 The event ledger is the autopsy surface. Every LLM call, tool call, approval,
 exposure decision, and launch step lands there, and
 `GET /admin/api/task/detail?taskRunID=<id>` returns it
-(`internal/httpserver/router.go:50`).
+(`internal/httpserver/router.go`).
 
 ## Tools
 
 ### Description
 
-A tool is a `toolcontract.ToolDescriptor` (`.dependency/bluecollar/toolcontract/registry.go:16`) bound
+A tool is a `toolcontract.ToolDescriptor` (`.dependency/bluecollar/toolcontract/registry.go`) bound
 to a handler. Behavior lives on the descriptor, never on the name:
 
 | Field | Decides |
 |---|---|
 | `Namespace`, `PolicyResource` | grouping and policy resource for access checks |
-| `SideEffectClass` | blast radius; the valid set is enumerated at `.dependency/bluecollar/toolcontract/provider.go:370-386` |
+| `SideEffectClass` | blast radius; the valid set is enumerated at `.dependency/bluecollar/toolcontract/provider.go-386` |
 | `RequiresApproval`, `ApprovalScope` | whether the runtime pauses, and what a grant covers |
 | `RequiresUserPresence`, `RequiresRequesterDevice` | routes execution to the user's own machine rather than the appliance |
 | `Visibility` | `visible` / `hidden` / `control` |
@@ -396,14 +397,13 @@ to a handler. Behavior lives on the descriptor, never on the name:
 
 Do not branch on a tool's name prefix or suffix. A rename silently kills that
 kind of dispatch; the descriptor fields survive it. Kernel tool names are
-constants in `.dependency/bluecollar/toolcontract/kernel_tools.go:5-21` and the full kernel set is
-`KernelToolNames()` (`:23`).
+constants in `.dependency/bluecollar/toolcontract/kernel_tools.go-21` and the full kernel set is
+`KernelToolNames()`.
 
 ### Registration and validation
 
 Tools arrive from providers implementing `toolcontract.ToolProvider`
-(`.dependency/bluecollar/toolcontract/provider.go:46`), registered through `RegisterProviders`
-(`:96`). Providers in this repository:
+(`.dependency/bluecollar/toolcontract/provider.go`), registered through `RegisterProviders`. Providers in this repository:
 
 | Provider | File |
 |---|---|
@@ -416,16 +416,16 @@ Trust is explicit. A `trusted` provider that fails to load fails the
 registration; an `external` provider that fails, or whose tool names or
 identifiers collide with anything already registered, is quarantined and
 reported rather than partially admitted (`:96-130`,
-`externalProviderCollisionReasons:168`).
+`externalProviderCollisionReasons`).
 
-`validateProviderTool` (`:338`) rejects a descriptor missing any of `id`,
+`validateProviderTool` rejects a descriptor missing any of `id`,
 `providerID`, `namespace`, `name`, `description`, `privacyClass`, `visibility`,
 `sideEffectClass`, `policyResource`, `completion.mode`, `idempotency`; a
-model-visible tool without a `resultContract` (`:367`); an object schema that
+model-visible tool without a `resultContract`; an object schema that
 does not set `additionalProperties: false`
-(`validateExplicitlyClosedProviderSchemaObjects:298`); or a result contract
+(`validateExplicitlyClosedProviderSchemaObjects`); or a result contract
 whose declared effect field is not a required string or non-empty unique string
-array in its own schema (`validateToolResultContract:455`).
+array in its own schema (`validateToolResultContract`).
 
 Tool input schemas stay shallow and provider-portable: string-only enums, no
 `const`, no `$ref`, no exotic formats. Enumerated numeric values go in the
@@ -435,10 +435,10 @@ orphaned `required` entry.
 
 ### Dispatch
 
-`ToolCatalogBuilder` (`internal/agentruntime/tool_catalog.go:31`) assembles the
+`ToolCatalogBuilder` (`internal/agentruntime/tool_catalog.go`) assembles the
 per-request tool set from the providers, the requester's `PersonAccess`, the
 active circle, and the profile's allowed tool names. `BuildToolSet` takes a
-`ToolCatalogRequest` (`:65`) — the prompt, requester, conversation, and circle —
+`ToolCatalogRequest` — the prompt, requester, conversation, and circle —
 so exposure is a property of the request, not global state.
 
 ## Workspace, tools, and the actor boundary
@@ -463,27 +463,27 @@ flowchart LR
 ### Deriving the identity
 
 `ExecutionIdentityForPersonAccess`
-(`internal/security/posix_identity.go:54`) turns a `policy.PersonAccess` into an
+(`internal/security/posix_identity.go`) turns a `policy.PersonAccess` into an
 `ExecutionIdentity`: user and primary group both `bc_person_<shortID>`
-(`LinuxPersonUserName:243`), supplementary groups `bc_shared` plus one
-`bc_circle_<circleID>` per circle (`:61-68`, `LinuxCircleGroupName:247`), and a
-home directory of `<workspace>/private/people/<personID>` (`:75`). The `admin`
-circle is deliberately not projected to a group (`:64`) — admin authority is a
+(`LinuxPersonUserName`), supplementary groups `bc_shared` plus one
+`bc_circle_<circleID>` per circle (`:61-68`, `LinuxCircleGroupName`), and a
+home directory of `<workspace>/private/people/<personID>`. The `admin`
+circle is deliberately not projected to a group — admin authority is a
 policy concept, not a filesystem one.
 
-`ResolveExecutionIdentity` (`:79`) turns those names into numeric IDs through
+`ResolveExecutionIdentity` turns those names into numeric IDs through
 `user.Lookup`/`user.LookupGroup`, and fails closed: an unknown user or group is
 an error, never a fallback to the daemon's own identity.
 
-`POSIXStateForPolicy` (`:161`) compiles the whole policy document into the
+`POSIXStateForPolicy` compiles the whole policy document into the
 users, groups, and directory modes listed in the README's boundary table.
-`POSIXSynchronizer.Synchronize` (`internal/security/posix_synchronizer.go:49`)
+`POSIXSynchronizer.Synchronize` (`internal/security/posix_synchronizer.go`)
 writes that state to a file and applies it through the helper's `sync` command;
-`SynchronizeRequester` (`:70`) does the same for one person on demand, which is
+`SynchronizeRequester` does the same for one person on demand, which is
 what `provisionRequesterWorkspaceLaunchStep` calls before a task runs.
 
 Numeric IDs come from a persisted allocation table starting at 100000
-(`cmd/blueclaw-posix-helper/main.go:515`), which also adopts any pre-existing
+(`cmd/blueclaw-posix-helper/main.go`), which also adopts any pre-existing
 `bc_`-prefixed group it finds in `/etc/group`
 (`reserveSystemIdentities:545-562`), so re-provisioning does not renumber
 existing owners.
@@ -491,55 +491,54 @@ existing owners.
 ### Applying the identity
 
 `CommandGuardrailService.BuildCommandPlan`
-(`internal/security/command_guardrail_service.go:23`) produces a `CommandPlan`;
-`applyPOSIXRunner` (`:101`) rewrites it into a helper invocation with
+(`internal/security/command_guardrail_service.go`) produces a `CommandPlan`;
+`applyPOSIXRunner` rewrites it into a helper invocation with
 `--uid/--gid/--groups/--cwd`, sets the working directory to the workspace root,
 and applies the POSIX environment (`applyPOSIXEnvironment`,
-`posix_identity.go:122`, which pins `HOME` and the requester's tmp and artifact
+`posix_identity.go`, which pins `HOME` and the requester's tmp and artifact
 paths).
 
 The helper (`cmd/blueclaw-posix-helper/main.go`) has five commands:
-`capabilities`, `sync`, `reconcile-home`, `exec`, `fs` (`main.go:31-41`). All
-but `capabilities` go through `runAuthorized` (`:50`), which accepts only a real
-UID of root or `blueclaw` (`authorizeHelperCaller:64`). `exec` drops privilege
-with `setgroups` → `setgid` → `setuid` (`applyIdentity:271`) and then
-`syscall.Exec`s (`:171`) with a canonical `PATH` (`canonicalExecEnvironment:174`).
-`fs` drops the same way before performing one filesystem operation (`:218`).
+`capabilities`, `sync`, `reconcile-home`, `exec`, `fs` (`main.go-41`). All
+but `capabilities` go through `runAuthorized`, which accepts only a real
+UID of root or `blueclaw` (`authorizeHelperCaller`). `exec` drops privilege
+with `setgroups` → `setgid` → `setuid` (`applyIdentity`) and then
+`syscall.Exec`s with a canonical `PATH` (`canonicalExecEnvironment`).
+`fs` drops the same way before performing one filesystem operation.
 
 ### File tools go through the shell
 
 `file_read`, `file_write`, `file_edit`, `file_preview`, `file_delete` and the
 rest are not a second code path. They build a shell command and run it through
-`runRequesterShell` (`internal/agentruntime/requester_shell.go:24`), whose
+`runRequesterShell` (`internal/agentruntime/requester_shell.go`), whose
 script starts by entering the requester's own `$HOME`
-(`requesterShellScript:45`). Tilde expansion, globs, and relative paths
+(`requesterShellScript`). Tilde expansion, globs, and relative paths
 therefore carry native POSIX semantics instead of a hand-written path
 vocabulary, and the Go path resolver that used to sit here is being deleted
 rather than extended.
 
-Two things there are not access decisions: `shellPathArgument:56` and
-`shellSingleQuoted` are argument serialization, and `failureCode:81` matches
+Two things there are not access decisions: `shellPathArgument` and
+`shellSingleQuoted` are argument serialization, and `failureCode` matches
 stderr to classify a command that has *already* failed into a diagnostic code.
 
 ### What is not enforced
 
 There is no executable allowlist, no denied-command list, and no denied-path
 prefix list. `TerminalConfiguration`
-(`internal/config/runtime_configuration.go:321`) carries only mode, sandbox
+(`internal/config/runtime_configuration.go`) carries only mode, sandbox
 provider, workspace root, helper path, timeout, output cap, session cap, and the
 network and interactive-shell switches. A command an actor may not run simply
 fails at execution.
 
 What `CommandGuardrailService` still enforces is narrow and structural: it
-refuses to run as root at all (`:24`), resolves the working directory against
-the workspace root (`:33`), sanitizes the environment down to an allowlist of
-variable *names* and forces the canonical `PATH` (`:219`), caps the timeout
-(`:140`), and in sandbox mode requires bubblewrap (`:61`).
+refuses to run as root at all, resolves the working directory against
+the workspace root, sanitizes the environment down to an allowlist of
+variable *names* and forces the canonical `PATH`, caps the timeout, and in sandbox mode requires bubblewrap.
 
-`internal/access/access.go:22` is a remaining Go-side ACL pre-check, consulted
-before exposing capability tools (`internal/agentruntime/capability_tools.go:92`,
-`:462`), MCP tools (`internal/agentruntime/mcp_tool_provider.go:72`), and memory
-reads (`internal/memory/memory_service.go:380`). It was described here as a
+`internal/access/access.go` is a remaining Go-side ACL pre-check, consulted
+before exposing capability tools (`internal/agentruntime/capability_tools.go`,
+), MCP tools (`internal/agentruntime/mcp_tool_provider.go`), and memory
+reads (`internal/memory/memory_service.go`). It was described here as a
 migration leftover awaiting the POSIX actor; that is wrong for what it guards.
 POSIX decides what a process may touch on this machine and cannot decide whether
 a person may send a company message or change a shared calendar — those run in
@@ -550,7 +549,7 @@ Do not delete it. The unfinished work is to move that decision behind the
 socket, into the service that performs the effect.
 
 `DirectWorkspaceActorFactory`
-(`internal/security/direct_workspace_actor.go:21`) is the deliberate opposite —
+(`internal/security/direct_workspace_actor.go`) is the deliberate opposite —
 it runs work as the process itself, with no projection. `cmd/bluecollar` uses it
 because a single-directory benchmark run has no second person to isolate from.
 An appliance must never use it.
@@ -577,7 +576,7 @@ Model access reaches Blueclaw through `llmd`, the AI SDK sidecar, over a private
 Unix socket. Provider keys live there rather than in the daemon, so Blueclaw
 never adds an `Authorization` header of its own; it sends `model`,
 `executionMode`, `messages`, and `structuredOutputSchema` to
-`POST /v1/llm/structured` or `POST /v1/llm/chat` (`llmd/src/handler.ts:41`).
+`POST /v1/llm/structured` or `POST /v1/llm/chat` (`llmd/src/handler.ts`).
 The Go client is `internal/llm/llmd_client.go`.
 
 A deployment may also declare a secretless provider named `capabilityLLM`, which
@@ -598,7 +597,7 @@ work in the middle, deep or extended effort at the top; failure and recovery
 wording deliberately stays cheap. On a tier failure the runtime ladders within
 the configured ceiling rather than pinning one model, so configuration names
 tiers, never a single model. Tier resolution is
-`resolveTaskTierLanguageModelProviders` (`internal/app/application.go:175`) over
+`resolveTaskTierLanguageModelProviders` (`internal/app/application.go`) over
 `internal/llm/provider_factory.go`.
 
 When `defaultProvider` is `llmd`, structured output is authoritative and
@@ -662,7 +661,7 @@ Optional on top of that is a temporal knowledge graph through the
 `graphiti-memoryd` sidecar, which owns episode ingestion, graph extraction, Kuzu
 persistence, and hybrid search. It is configured by `memory.graphitiEndpoint`
 and the runtime stays fully functional when that endpoint is unset — the graph
-is an enrichment, not a dependency (`internal/app/application.go:216-223`).
+is an enrichment, not a dependency (`internal/app/application.go-223`).
 
 - The sidecar runs from `tools/graphiti-memoryd` with `graphiti-core[kuzu]`.
 - Kuzu data defaults to `/workspace/.blueclaw/graphiti/kuzu`.
@@ -689,7 +688,7 @@ bun test
 A value list consumed by more than one language is defined once and derived
 everywhere else. Where a consumer cannot import the definition, a conformance
 test reads the canonical source and fails on drift —
-`chatd/tests/buzz-adapter.test.ts:113` reads
+`chatd/tests/buzz-adapter.test.ts` reads
 `.dependency/bluecollar/agentcontract/reaction_emoji.go` this way.
 
 ## Admin and task surfaces
@@ -706,11 +705,11 @@ test reads the canonical source and fails on drift —
 
 `GET /admin/api/health` returns database reachability and schema validity,
 connector runtime health, memory health, delivery backlog, and a
-`protocolIdentity` block (`internal/httpserver/health_handler.go:26-33`). That
+`protocolIdentity` block (`internal/httpserver/health_handler.go-33`). That
 block carries per-endpoint status for `capabilityd` and `llmd`
-(`internal/protocolidentity/checker.go:29-36`) and fails when the Go DTOs and
+(`internal/protocolidentity/checker.go-36`) and fails when the Go DTOs and
 the generated JSON Schema artifacts have drifted apart. An endpoint that is not
-configured reports `not_configured` and passes (`checker.go:129`), which is how
+configured reports `not_configured` and passes (`checker.go`), which is how
 a standalone deployment stays green without a capability service.
 
 ## Chat adapters
@@ -742,6 +741,6 @@ go run ./cmd/blueclaw-lab --configuration config/lab.example.json vm-down
 
 The same binary runs `virtual-session`, which drives the agent loop without any
 virtual machine at all; scenarios resolve through `e2e.BuiltinScenario`
-(`internal/e2e/virtual_session.go:674`) or from a JSON file with
+(`internal/e2e/virtual_session.go`) or from a JSON file with
 `--scenario-file`. The private appliance repository has its own fleet lane built
 on Apple `container`; it reuses `lab/scripts/` but none of the Tart setup above.
