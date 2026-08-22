@@ -185,6 +185,7 @@ export class MirrorOrchestrator {
 		private readonly platforms: Record<string, PlatformGateway>,
 		private readonly identity: MirrorIdentity,
 		private readonly echo: EchoSuppressor = new EchoSuppressor(),
+		private readonly report: (context: string, detail: unknown) => void = () => {},
 	) {}
 
 	async onPlatformMessage(message: InboundPlatformMessage): Promise<void> {
@@ -267,6 +268,14 @@ export class MirrorOrchestrator {
 			let replyToExternalId: string | undefined;
 			if (message.replyToBuzzEventId) {
 				const parent = await this.mapping.messageByEvent(message.replyToBuzzEventId, target);
+				// A reply whose parent never crossed arrives as something new, in a
+				// conversation that reads as if the answer came before the question.
+				if (!parent) {
+					this.report(
+						`buzz -> ${target} reply arrives as a new message`,
+						`the message it answers (${message.replyToBuzzEventId}) never crossed`,
+					);
+				}
 				replyToExternalId = parent?.externalId;
 			}
 			this.echo.expect(['platform', target, channel.externalChannelId, 'create', message.text]);
