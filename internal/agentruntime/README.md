@@ -26,11 +26,8 @@ Capability tools are the exception: their descriptors arrive from `capabilityd`
 at runtime, so their wording lives in that service and not in this source.
 Everything else is a string literal here.
 
-For the current catalog and what each description costs:
-
-```
-tools/model-surface
-```
+The current catalog and what each description costs is generated:
+[docs/tool-catalog.md](../../docs/tool-catalog.md).
 
 Two things about that surface are worth knowing before changing it. The
 descriptions are uneven, from 530 bytes for `schedule_create` down to 47 for
@@ -47,8 +44,8 @@ than it looks.
 - Capability tool wording cannot be reviewed from this repository. A descriptor
   that reaches the model badly worded is a `capabilityd` deploy away from being
   fixed and nothing here fails when it is.
-- `capability_tools.go` registers under a runtime name, so `tools/model-surface`
-  counts it as one row with no description. The real capability surface is
+- `capability_tools.go` registers under a runtime name, so the generated catalog
+  carries it as one row with no description. The real capability surface is
   whatever the device's catalog holds at the time.
 - The tool catalog is assembled per request from exposure rules that live
   upstream, so the list above is what may be exposed rather than what any single
