@@ -1,6 +1,7 @@
 package bluecollarharness
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
@@ -24,7 +25,7 @@ func TestAHostThatPinsATurnBudgetGetsTheBudgetItPinned(t *testing.T) {
 func TestAHostThatPinsNothingKeepsWhatTheConfigurationSaid(t *testing.T) {
 	derivedOptions := deriveTurnOptions(config.RuntimeConfiguration{})
 
-	if pinnedOptions := turnOptionsWithOverrides(derivedOptions, agentcontract.TurnOptions{}); pinnedOptions != derivedOptions {
+	if pinnedOptions := turnOptionsWithOverrides(derivedOptions, agentcontract.TurnOptions{}); !reflect.DeepEqual(pinnedOptions, derivedOptions) {
 		t.Fatalf("an empty override must leave the configured budget alone, got %+v against %+v", pinnedOptions, derivedOptions)
 	}
 }
