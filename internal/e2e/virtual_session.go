@@ -84,6 +84,7 @@ type VirtualSessionScenario struct {
 	ScriptedExecutionPlan     *agentcontract.ExecutionPlan
 	TurnOptions               agentcontract.TurnOptions
 	ProgressWriter            io.Writer
+	WritableWorkspacePaths    []string
 	Turns                     []VirtualTurn
 }
 
@@ -2529,6 +2530,10 @@ func (harness *VirtualSessionHarness) Run(ctx context.Context) (VirtualSessionRe
 		ScenarioName:          harness.scenario.Name,
 		ArtifactDirectoryPath: harness.artifactPath,
 	}
+	digestsBefore, errorValue := workspaceFileDigests(harness.workspacePath)
+	if errorValue != nil {
+		return result, errorValue
+	}
 	for index, virtualTurn := range harness.scenario.Turns {
 		if harness.scriptedModel != nil {
 			for _, routerResponse := range scenarioRouterResponsesForTurn(harness.scenario, virtualTurn) {
@@ -2559,7 +2564,22 @@ func (harness *VirtualSessionHarness) Run(ctx context.Context) (VirtualSessionRe
 		harness.rememberTurn(virtualTurn, turnResult)
 	}
 	result.TaskSchedules = harness.scheduleStore.TaskSchedules()
+	if errorValue := harness.assertWorkspaceFootprint(digestsBefore); errorValue != nil {
+		return result, errorValue
+	}
 	return result, nil
+}
+
+func (harness *VirtualSessionHarness) assertWorkspaceFootprint(digestsBefore map[string]string) error {
+	digestsAfter, errorValue := workspaceFileDigests(harness.workspacePath)
+	if errorValue != nil {
+		return errorValue
+	}
+	changes := changedFilesOutsideWritableScope(digestsBefore, digestsAfter, harness.scenario.WritableWorkspacePaths)
+	if len(changes) == 0 {
+		return nil
+	}
+	return fmt.Errorf("%s changed files it never claimed: %s. A scenario asserts what the agent produced and nothing asserted what it left behind, so declare these in WritableWorkspacePaths or find out who wrote them", harness.scenario.Name, strings.Join(changes, "; "))
 }
 
 func actionScriptedLanguageModelForScenario(scenario VirtualSessionScenario) *agenttest.ScriptedLanguageModel {
