@@ -3,8 +3,11 @@ import { type BuzzRelayClient, createBuzzRelayClient } from "./relay-client.ts";
 // Every send, edit, reaction and lookup used to open a websocket, authenticate,
 // do one thing and close. On the device that is a TLS handshake and a NIP-42
 // exchange per message, which is most of the two seconds a reply took to appear.
-// A person's connection is kept for as long as they keep using it.
-const idleMilliseconds = 60_000;
+//
+// The window is the length of a conversation, not of a request: a company is a
+// few dozen keys, and an idle socket each costs less than reconnecting between
+// one message and the next.
+const idleMilliseconds = 15 * 60_000;
 
 type PooledConnection = {
 	client: BuzzRelayClient;
