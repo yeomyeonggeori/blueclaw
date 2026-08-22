@@ -83,7 +83,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) runTerminalTool(toolContext contex
 	stopHeartbeat := toolCatalogBuilder.startTerminalRunHeartbeat(toolContext, input.Command)
 	commandResult, errorValue := workspaceActor.Run(toolContext, input)
 	stopHeartbeat()
-	slog.Info("terminal_run command completed", "durationMs", time.Since(runStartedAt).Milliseconds(), "exitCode", commandResult.ExitCode, "timedOut", commandResult.TimedOut)
+	slog.Info("terminal_run command completed", "durationMs", time.Since(runStartedAt).Milliseconds(), "exitCode", commandResult.ExitCode, "timedOut", commandResult.TimedOut, "signal", commandResult.Signal)
 	content := marshalToolResult(commandResult)
 	if errorValue != nil {
 		if runtimePathFailure := terminalRuntimePathFailure(input, commandResult, content); runtimePathFailure != nil {
@@ -106,6 +106,7 @@ func terminalCommandResult(commandResult security.CommandResult, isCompleted boo
 		Stdout:        commandResult.Stdout,
 		Stderr:        commandResult.Stderr,
 		TimedOut:      commandResult.TimedOut,
+		Signal:        commandResult.Signal,
 		OutputTrimmed: commandResult.OutputTrimmed,
 	}
 }

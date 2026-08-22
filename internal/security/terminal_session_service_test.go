@@ -297,3 +297,42 @@ func testTerminalConfiguration(t *testing.T) config.TerminalConfiguration {
 		SessionMaxCount:       4,
 	}
 }
+
+func TestRunCommandReportsTheSignalThatEndedItSeparatelyFromTheExitCode(t *testing.T) {
+	terminalSessionService := NewTerminalSessionService(testTerminalConfiguration(t))
+
+	killedResult, errorValue := terminalSessionService.RunCommand(context.Background(), CommandRequest{
+		Command: "kill -TERM $$",
+	})
+
+	if errorValue == nil {
+		t.Fatalf("a command the kernel took away did not fail: %+v", killedResult)
+	}
+	if killedResult.Signal != "terminated" {
+		t.Fatalf("the model has to be able to tell a process that was taken away from one that decided to fail, and an exit code alone cannot say which: %+v", killedResult)
+	}
+	if killedResult.TimedOut {
+		t.Fatalf("nothing timed out here, and folding one fact into another is how a cut-short run reads as something else: %+v", killedResult)
+	}
+
+	ordinaryFailure, _ := terminalSessionService.RunCommand(context.Background(), CommandRequest{Command: "exit 3"})
+	if ordinaryFailure.Signal != "" || ordinaryFailure.ExitCode != 3 {
+		t.Fatalf("a command that chose its own exit code was signalled by nobody: %+v", ordinaryFailure)
+	}
+}
+
+func TestATimedOutCommandSaysHowItWasEnded(t *testing.T) {
+	terminalSessionService := NewTerminalSessionService(testTerminalConfiguration(t))
+
+	commandResult, errorValue := terminalSessionService.RunCommand(context.Background(), CommandRequest{
+		Command:       "sleep 5",
+		TimeoutSecond: 1,
+	})
+
+	if errorValue == nil || !commandResult.TimedOut {
+		t.Fatalf("expected the timeout to be reported: result=%+v error=%v", commandResult, errorValue)
+	}
+	if commandResult.Signal == "" {
+		t.Fatalf("a run cut short by us reads as an ordinary failure unless the result says a signal ended it: %+v", commandResult)
+	}
+}
