@@ -32,6 +32,7 @@ var terminalRunResultSchema = json.RawMessage(`{
 		"stdout":{"type":"string"},
 		"stderr":{"type":"string"},
 		"timedOut":{"type":"boolean"},
+		"signal":{"type":"string"},
 		"outputTrimmed":{"type":"boolean"}
 	},
 	"required":["mode","completed","exitCode","stdout","stderr","timedOut","outputTrimmed"],
@@ -67,6 +68,7 @@ type terminalCommandResultDocument struct {
 	Stdout        string `json:"stdout"`
 	Stderr        string `json:"stderr"`
 	TimedOut      bool   `json:"timedOut"`
+	Signal        string `json:"signal,omitempty"`
 	OutputTrimmed bool   `json:"outputTrimmed"`
 }
 

@@ -34,6 +34,7 @@ type CommandResult struct {
 	Stdout        string `json:"stdout"`
 	Stderr        string `json:"stderr"`
 	TimedOut      bool   `json:"timedOut"`
+	Signal        string `json:"signal,omitempty"`
 	OutputTrimmed bool   `json:"outputTrimmed"`
 }
 
@@ -119,20 +120,22 @@ func (terminalSessionService *TerminalSessionService) RunCommand(ctx context.Con
 			OutputTrimmed: terminalOutputWasTrimmed(standardOutputBuffer, standardErrorBuffer),
 		}, errors.New("command timed out")
 	}
-	if ctx.Err() == context.DeadlineExceeded {
-		sweepEscapedCommandProcesses(scopeMarker)
-		return CommandResult{
-			ExitCode:      -1,
-			Stdout:        truncateString(standardOutputBuffer.String(), outputMaximumBytes),
-			Stderr:        truncateString(standardErrorBuffer.String(), outputMaximumBytes),
-			TimedOut:      true,
-			OutputTrimmed: terminalOutputWasTrimmed(standardOutputBuffer, standardErrorBuffer),
-		}, errors.New("command timed out")
-	}
-
 	exitCode := 0
 	if command.ProcessState != nil {
 		exitCode = command.ProcessState.ExitCode()
+	}
+	killingSignal := killingSignalName(command.ProcessState)
+
+	if ctx.Err() == context.DeadlineExceeded {
+		sweepEscapedCommandProcesses(scopeMarker)
+		return CommandResult{
+			ExitCode:      exitCode,
+			Stdout:        truncateString(standardOutputBuffer.String(), outputMaximumBytes),
+			Stderr:        truncateString(standardErrorBuffer.String(), outputMaximumBytes),
+			TimedOut:      true,
+			Signal:        killingSignal,
+			OutputTrimmed: terminalOutputWasTrimmed(standardOutputBuffer, standardErrorBuffer),
+		}, errors.New("command timed out")
 	}
 
 	if errorValue != nil {
@@ -144,6 +147,7 @@ func (terminalSessionService *TerminalSessionService) RunCommand(ctx context.Con
 			ExitCode:      exitCode,
 			Stdout:        truncateString(standardOutputBuffer.String(), outputMaximumBytes),
 			Stderr:        truncateString(standardError, outputMaximumBytes),
+			Signal:        killingSignal,
 			OutputTrimmed: terminalOutputWasTrimmed(standardOutputBuffer, standardErrorBuffer),
 		}, errorValue
 	}
@@ -152,8 +156,23 @@ func (terminalSessionService *TerminalSessionService) RunCommand(ctx context.Con
 		ExitCode:      exitCode,
 		Stdout:        truncateString(standardOutputBuffer.String(), outputMaximumBytes),
 		Stderr:        truncateString(standardErrorBuffer.String(), outputMaximumBytes),
+		Signal:        killingSignal,
 		OutputTrimmed: terminalOutputWasTrimmed(standardOutputBuffer, standardErrorBuffer),
 	}, nil
+}
+
+// The kernel taking a process away and the process deciding to fail are different
+// answers, and an exit code alone cannot tell them apart: a shell reports both as a
+// number, and a command that traps its signal exits 0 after being cut short.
+func killingSignalName(processState *os.ProcessState) string {
+	if processState == nil {
+		return ""
+	}
+	waitStatus, isWaitStatus := processState.Sys().(syscall.WaitStatus)
+	if !isWaitStatus || !waitStatus.Signaled() {
+		return ""
+	}
+	return waitStatus.Signal().String()
 }
 
 func terminalOutputWasTrimmed(standardOutputBuffer *outputRingBuffer, standardErrorBuffer *outputRingBuffer) bool {
