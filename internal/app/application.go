@@ -43,6 +43,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/runtimecontrol"
 	"github.com/yeomyeonggeori/blueclaw/internal/scheduler"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
+	"github.com/yeomyeonggeori/blueclaw/internal/sessionquery"
 	"github.com/yeomyeonggeori/blueclaw/internal/skill"
 	"github.com/yeomyeonggeori/blueclaw/internal/store/postgres"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
@@ -444,6 +445,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 			TaskEventService: taskEventService,
 			IdentityService:  identityService,
 		},
+		TaskSearchHandler: adminapi.TaskSearchHandler{SessionQuery: sessionquery.New(taskRunService)},
 		TaskRunHandler: adminapi.TaskRunHandler{
 			TaskLauncher:            taskLauncher,
 			IdentityService:         identityService,
