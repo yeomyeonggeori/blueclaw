@@ -25,6 +25,8 @@ import (
 const (
 	commandAbandonGrace   = 5 * time.Second
 	commandReaperInterval = 30 * time.Second
+	sessionCloseGrace     = 2 * time.Second
+	sessionKillGrace      = 3 * time.Second
 )
 
 var commandWaitHeartbeatInterval = 60 * time.Second
@@ -62,6 +64,7 @@ type TerminalSession struct {
 	mutex                sync.RWMutex
 	isExited             bool
 	exitCode             int
+	exited               chan struct{}
 }
 
 type TerminalSessionService struct {
@@ -319,6 +322,7 @@ func (terminalSessionService *TerminalSessionService) StartInteractiveSession(co
 		standardOutputBuffer: newOutputRingBuffer(terminalSessionService.outputMaxBytes()),
 		standardErrorBuffer:  newOutputRingBuffer(terminalSessionService.outputMaxBytes()),
 		exitCode:             -1,
+		exited:               make(chan struct{}),
 	}
 	if commandPlan.IsPTY {
 		errorValue = terminalSession.startPTY(commandPlan)
@@ -342,9 +346,7 @@ func (terminalSessionService *TerminalSessionService) StartInteractiveSession(co
 }
 
 func (terminalSessionService *TerminalSessionService) WriteSessionInput(sessionID string, input string) (TerminalSessionStatus, error) {
-	terminalSessionService.mutex.RLock()
-	terminalSession, isFound := terminalSessionService.terminalSessions[sessionID]
-	terminalSessionService.mutex.RUnlock()
+	terminalSession, isFound := terminalSessionService.findSession(sessionID)
 	if !isFound {
 		return TerminalSessionStatus{}, errors.New("terminal session not found")
 	}
@@ -359,9 +361,7 @@ func (terminalSessionService *TerminalSessionService) WriteSessionInput(sessionI
 }
 
 func (terminalSessionService *TerminalSessionService) StatusSession(sessionID string) (TerminalSessionStatus, error) {
-	terminalSessionService.mutex.RLock()
-	terminalSession, isFound := terminalSessionService.terminalSessions[sessionID]
-	terminalSessionService.mutex.RUnlock()
+	terminalSession, isFound := terminalSessionService.findSession(sessionID)
 	if !isFound {
 		return TerminalSessionStatus{}, errors.New("terminal session not found")
 	}
@@ -369,27 +369,83 @@ func (terminalSessionService *TerminalSessionService) StatusSession(sessionID st
 }
 
 func (terminalSessionService *TerminalSessionService) CloseSession(sessionID string) error {
-	terminalSessionService.mutex.Lock()
-	defer terminalSessionService.mutex.Unlock()
-
-	terminalSession, isFound := terminalSessionService.terminalSessions[sessionID]
+	terminalSession, isFound := terminalSessionService.takeSession(sessionID)
 	if !isFound {
 		return errors.New("terminal session not found")
 	}
+	return terminalSession.closeAndAwaitExit()
+}
 
+// Every live session, so a shutdown does not leave a shell behind holding the
+// requester's workspace open.
+func (terminalSessionService *TerminalSessionService) CloseAllSessions() error {
+	var firstError error
+	for _, sessionID := range terminalSessionService.sessionIdentifiers() {
+		if errorValue := terminalSessionService.CloseSession(sessionID); errorValue != nil && firstError == nil {
+			firstError = errorValue
+		}
+	}
+	return firstError
+}
+
+func (terminalSessionService *TerminalSessionService) sessionIdentifiers() []string {
+	terminalSessionService.mutex.RLock()
+	defer terminalSessionService.mutex.RUnlock()
+	sessionIdentifiers := make([]string, 0, len(terminalSessionService.terminalSessions))
+	for sessionID := range terminalSessionService.terminalSessions {
+		sessionIdentifiers = append(sessionIdentifiers, sessionID)
+	}
+	return sessionIdentifiers
+}
+
+// Taken out of the registry before anything is killed, so a status read never finds a
+// session in the middle of dying and the service lock is not held across the wait.
+func (terminalSessionService *TerminalSessionService) findSession(sessionID string) (*TerminalSession, bool) {
+	terminalSessionService.mutex.RLock()
+	defer terminalSessionService.mutex.RUnlock()
+	terminalSession, isFound := terminalSessionService.terminalSessions[sessionID]
+	return terminalSession, isFound
+}
+
+func (terminalSessionService *TerminalSessionService) takeSession(sessionID string) (*TerminalSession, bool) {
+	terminalSessionService.mutex.Lock()
+	defer terminalSessionService.mutex.Unlock()
+	terminalSession, isFound := terminalSessionService.terminalSessions[sessionID]
+	if !isFound {
+		return nil, false
+	}
+	delete(terminalSessionService.terminalSessions, sessionID)
+	return terminalSession, true
+}
+
+func (terminalSession *TerminalSession) closeAndAwaitExit() error {
 	_ = terminalSession.standardInputWriter.Close()
 	if terminalSession.ptyFile != nil {
 		_ = terminalSession.ptyFile.Close()
 	}
-	if terminalSession.command.Process != nil {
-		_ = terminalSession.command.Process.Kill()
-	}
 	if terminalSession.cancelFunction != nil {
 		terminalSession.cancelFunction()
 	}
+	if terminalSession.awaitExit(sessionCloseGrace) {
+		return nil
+	}
+	if terminalSession.command.Process != nil {
+		_ = terminalSession.command.Process.Kill()
+	}
+	if terminalSession.awaitExit(sessionKillGrace) {
+		return nil
+	}
+	slog.Warn("terminal session did not exit after being killed", "sessionID", terminalSession.SessionID)
+	return errors.New("terminal session " + terminalSession.SessionID + " did not exit after it was killed")
+}
 
-	delete(terminalSessionService.terminalSessions, sessionID)
-	return nil
+func (terminalSession *TerminalSession) awaitExit(grace time.Duration) bool {
+	select {
+	case <-terminalSession.exited:
+		return true
+	case <-time.After(grace):
+		return false
+	}
 }
 
 func (terminalSession *TerminalSession) startPipe(commandPlan CommandPlan) error {
@@ -438,6 +494,7 @@ func (terminalSession *TerminalSession) wait() {
 	terminalSession.exitCode = exitCode
 	terminalSession.isExited = true
 	terminalSession.mutex.Unlock()
+	close(terminalSession.exited)
 }
 
 func (terminalSession *TerminalSession) status() TerminalSessionStatus {
