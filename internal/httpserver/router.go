@@ -19,6 +19,7 @@ type RouterDependencies struct {
 	TaskRunHandler        adminapi.TaskRunHandler
 	TaskApprovalHandler   adminapi.TaskApprovalHandler
 	HarnessStatusHandler  adminapi.HarnessStatusHandler
+	TaskSearchHandler     adminapi.TaskSearchHandler
 	QuiesceHandler        adminapi.QuiesceHandler
 	TaskScheduleHandler   adminapi.TaskScheduleHandler
 	ConnectorDiagnostics  adminapi.ConnectorEventDiagnosticHandler
@@ -55,6 +56,7 @@ func NewRouter(routerDependencies RouterDependencies) http.Handler {
 	multiplexer.HandleFunc("GET /admin/api/audit", routerDependencies.AuditHandler.HandleListAudit)
 	multiplexer.HandleFunc("POST /admin/api/attention/run", routerDependencies.AttentionHandler.HandleRunAttention)
 	multiplexer.HandleFunc("GET /admin/api/task", routerDependencies.TaskMonitorHandler.HandleListTaskRun)
+	multiplexer.HandleFunc("GET /admin/api/task/search", routerDependencies.TaskSearchHandler.HandleSearchTaskRuns)
 	multiplexer.HandleFunc("GET /admin/api/task/detail", routerDependencies.TaskMonitorHandler.HandleGetTaskRun)
 	multiplexer.HandleFunc("POST /admin/api/task/delete", routerDependencies.TaskMonitorHandler.HandleDeleteTaskRun)
 	multiplexer.HandleFunc("POST /admin/api/task/run", routerDependencies.TaskRunHandler.HandleRunTask)
