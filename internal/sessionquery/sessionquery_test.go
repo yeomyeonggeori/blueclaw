@@ -109,3 +109,49 @@ func TestAConversationIsTheLineageThisProductHas(t *testing.T) {
 		t.Fatalf("a follow-up is a new run in the same conversation, so that is how a task's history is walked: %+v", result.Matches)
 	}
 }
+
+type countingLedger struct {
+	taskRuns  []task.TaskRun
+	readCount int
+}
+
+func (ledger *countingLedger) ListTaskRunByPersonID(string) []task.TaskRun { return ledger.taskRuns }
+
+func (ledger *countingLedger) ListTaskEvent(string) []task.TaskEvent {
+	ledger.readCount++
+	return nil
+}
+
+func TestOneSearchCannotIssueOneQueryPerTaskRunEverRecorded(t *testing.T) {
+	taskRuns := []task.TaskRun{}
+	for index := 0; index < 2000; index++ {
+		taskRuns = append(taskRuns, task.TaskRun{TaskRunID: "run", Prompt: "무언가"})
+	}
+	ledger := &countingLedger{taskRuns: taskRuns}
+
+	result, errorValue := New(ledger).Search(Request{RequesterPersonID: "person-1", Text: "회의록"})
+
+	if errorValue != nil {
+		t.Fatalf("searching failed: %v", errorValue)
+	}
+	if ledger.readCount > maximumScannedTaskRuns {
+		t.Fatalf("reading a run's events is a query per run against Postgres, so an unbounded scan is an unbounded query fan-out: %d reads", ledger.readCount)
+	}
+	if !result.DidStopScanning {
+		t.Fatal("a scan that stopped early has to say so, or a caller reads no matches as nothing happened")
+	}
+	if result.Scanned != maximumScannedTaskRuns {
+		t.Fatalf("expected the scan to stop at its ceiling, got %d", result.Scanned)
+	}
+}
+
+func TestASearchThatReachedTheEndSaysItDidNotStop(t *testing.T) {
+	result, errorValue := New(twoPeopleLedger()).Search(Request{RequesterPersonID: "person-1", Text: "회의록"})
+
+	if errorValue != nil {
+		t.Fatalf("searching failed: %v", errorValue)
+	}
+	if result.DidStopScanning {
+		t.Fatal("a ledger smaller than the ceiling was read whole, and saying otherwise sends the reader looking for pages that do not exist")
+	}
+}

@@ -17,6 +17,9 @@ import (
 const (
 	defaultLimit = 20
 	maximumLimit = 100
+	// Reading a run's events is a query per run, so the scan is bounded by how many
+	// queries one search may issue rather than by how much a person ever ran.
+	maximumScannedTaskRuns = 200
 )
 
 type Store interface {
@@ -41,10 +44,11 @@ type Match struct {
 }
 
 type Result struct {
-	Matches      []Match `json:"matches"`
-	TotalMatched int     `json:"totalMatched"`
-	Scanned      int     `json:"scanned"`
-	IsTruncated  bool    `json:"isTruncated"`
+	Matches         []Match `json:"matches"`
+	TotalMatched    int     `json:"totalMatched"`
+	Scanned         int     `json:"scanned"`
+	IsTruncated     bool    `json:"isTruncated"`
+	DidStopScanning bool    `json:"didStopScanning"`
 }
 
 type Service struct {
@@ -70,6 +74,10 @@ func (service Service) Search(request Request) (Result, error) {
 	for _, taskRun := range service.store.ListTaskRunByPersonID(personID) {
 		if !matchesConversation(taskRun, request.ConversationID) {
 			continue
+		}
+		if result.Scanned >= maximumScannedTaskRuns {
+			result.DidStopScanning = true
+			break
 		}
 		result.Scanned++
 		matchedIn := service.matchedFields(taskRun, request.Text)
