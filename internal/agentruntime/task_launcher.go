@@ -475,7 +475,9 @@ func (step runTurnLaunchStep) Run(ctx context.Context, execution *taskLaunchExec
 		step.ConversationScope,
 	)
 	turnRequest.CarriedOutCalls = step.CarriedOutCalls
-	return execution.Launcher.harness.RunTurn(ctx, turnRequest)
+	turnResult, errorValue := execution.Launcher.harness.RunTurn(ctx, turnRequest)
+	execution.Launcher.recordModelVisibleContext(turnResult.TaskRun.TaskRunID, turnRequest)
+	return turnResult, errorValue
 }
 
 func runLaunchStep[T any](ctx context.Context, execution *taskLaunchExecution, step taskLaunchStep[T]) (T, launchStepRecord) {
