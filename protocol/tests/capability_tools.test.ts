@@ -703,8 +703,8 @@ describe('canonical capability tools', () => {
       content: '# Report',
       warnings: [],
       truncated: false,
-      backend: 'markitdown',
-      model: 'no_ocr',
+      backend: 'anydoc',
+      model: '',
     };
     const imageResult = {
       status: 'ok',

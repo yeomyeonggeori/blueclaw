@@ -116,7 +116,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerFileTools(toolRegistry *to
 	toolcontract.RegisterToolFunction(toolRegistry, toolcontract.ToolFunction[filePreviewToolInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
 			Name:        "file_preview",
-			Description: "Preview an attached or workspace file path from the conversation attachment catalog using cached AgentPart markdownPreview when available, or the existing document_read MarkItDown provider for convertible documents.",
+			Description: "Preview an attached or workspace file path from the conversation attachment catalog using cached AgentPart markdownPreview when available, or the existing document_read anydoc provider for convertible documents.",
 			RecoveryCard: toolcontract.ToolRecoveryCard{
 				Does:       "Returns a document preview or file metadata without inventing content.",
 				Produces:   "Path, filename, content type, size, markdown preview, conversion status, and conversion message.",
@@ -920,7 +920,7 @@ func filePreviewFromShellContent(path string, contentType string, sizeBytes int6
 		content = content[:maximumFilePreviewBytes]
 	}
 	if !utf8.ValidString(content) || strings.IndexByte(content, 0) >= 0 {
-		return fileToolSuccess(filePreviewResult(path, contentType, sizeBytes, "", "unsupported", "file is not UTF-8 text and no MarkItDown preview is available"))
+		return fileToolSuccess(filePreviewResult(path, contentType, sizeBytes, "", "unsupported", "file is not UTF-8 text and no converted preview is available"))
 	}
 	windowedContent, isContentTruncated := truncateTextByBytes(content, maximumFilePreviewBytes)
 	conversionStatus := "converted"
