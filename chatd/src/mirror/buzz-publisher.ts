@@ -1,4 +1,3 @@
-import { reactionContentOf } from '../adapters/buzz/adapter.ts';
 import {
 	addReactionAsUser,
 	deleteChannelMessageAsUser,
@@ -64,7 +63,6 @@ export function createBuzzGateway(
 				extraTags: [originTag(remove.origin)],
 			});
 		},
-		// react.emoji arrives as the platform's name for it, not a character.
 		async react(react: BuzzReaction): Promise<void> {
 			await session.react({
 				relayURL,
@@ -72,7 +70,7 @@ export function createBuzzGateway(
 				userSecretHex: react.userSecretHex,
 				channelID: react.buzzChannelId,
 				targetEventId: react.targetEventId,
-				emoji: reactionContentOf(react.emoji),
+				emoji: react.emoji,
 				extraTags: [originTag(react.origin)],
 			});
 		},
