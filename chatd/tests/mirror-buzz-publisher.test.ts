@@ -38,3 +38,31 @@ describe('buzz gateway', () => {
 		});
 	});
 });
+
+describe('a reaction crossing into buzz', () => {
+	// Mattermost names a reaction; Buzz carries the character. Passing the name
+	// through makes the word itself the reaction, and everyone reading Buzz sees
+	// "white_check_mark" where a tick belongs.
+	test('carries the character, not the platform name', async () => {
+		const reactions: Array<Record<string, unknown>> = [];
+		const gateway = createBuzzGateway('wss://relay', undefined, {
+			send: async () => ({ id: 'event-1', body: '', attachments: [] }),
+			edit: async () => 'edit-event',
+			remove: async () => undefined,
+			react: async (request) => {
+				reactions.push(request as unknown as Record<string, unknown>);
+			},
+		});
+
+		await gateway.react({
+			userSecretHex: 'a'.repeat(64),
+			buzzChannelId: 'channel-1',
+			targetEventId: 'event-1',
+			emoji: 'white_check_mark',
+			origin: { platform: 'mattermost', externalId: 'post-1' },
+		});
+
+		expect(reactions).toHaveLength(1);
+		expect(reactions[0].emoji).toBe('✅');
+	});
+});
