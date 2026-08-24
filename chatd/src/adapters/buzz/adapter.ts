@@ -34,6 +34,7 @@ import {
 } from "./types.ts";
 import type { ReactionSummary } from "../../visible-context.ts";
 import { originOfTags } from "../../mirror/origin.ts";
+import { reactionContentOf } from "../../mirror/reaction-emoji.ts";
 
 const STREAM_MESSAGE_KIND = 9;
 const TYPING_INDICATOR_KIND = 20002;
@@ -59,19 +60,6 @@ const DELETE_MESSAGE_KIND = 9005;
 const MEMBER_ADDED_NOTIFICATION_KIND = 44100;
 const MEMBER_REMOVED_NOTIFICATION_KIND = 44101;
 
-const additionalReactionEmojiCharacters: Record<string, string> = {
-	clap: "\u{1F44F}",
-	mag: "\u{1F50D}",
-	sweat_smile: "\u{1F605}",
-	wave: "\u{1F44B}",
-	hourglass_flowing_sand: "\u{23F3}",
-};
-
-export function reactionContentOf(emojiName: string): string {
-	const additionalCharacter = additionalReactionEmojiCharacters[emojiName];
-	if (additionalCharacter) return additionalCharacter;
-	return defaultEmojiResolver.toGChat(defaultEmojiResolver.fromSlack(emojiName));
-}
 
 function attachmentsFromEvent(event: BuzzEvent): Attachment[] {
 	const filenamesByURL = filenamesFromBody(event.content);

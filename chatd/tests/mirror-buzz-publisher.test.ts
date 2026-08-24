@@ -40,10 +40,9 @@ describe('buzz gateway', () => {
 });
 
 describe('a reaction crossing into buzz', () => {
-	// Mattermost names a reaction; Buzz carries the character. Passing the name
-	// through makes the word itself the reaction, and everyone reading Buzz sees
-	// "white_check_mark" where a tick belongs.
-	test('carries the character, not the platform name', async () => {
+	// The mirror speaks characters and each adapter converts at its own edge, so
+	// what arrives here is already what Buzz carries.
+	test('publishes the character it was given', async () => {
 		const reactions: Array<Record<string, unknown>> = [];
 		const gateway = createBuzzGateway('wss://relay', undefined, {
 			send: async () => ({ id: 'event-1', body: '', attachments: [] }),
@@ -58,7 +57,7 @@ describe('a reaction crossing into buzz', () => {
 			userSecretHex: 'a'.repeat(64),
 			buzzChannelId: 'channel-1',
 			targetEventId: 'event-1',
-			emoji: 'white_check_mark',
+			emoji: '✅',
 			origin: { platform: 'mattermost', externalId: 'post-1' },
 		});
 

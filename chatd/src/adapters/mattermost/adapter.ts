@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { reactionContentOf } from "../../mirror/reaction-emoji.ts";
 import {
 	ConsoleLogger,
 	EmojiResolver,
@@ -1311,16 +1312,15 @@ export class MattermostAdapter implements Adapter<MattermostThreadId, Mattermost
 			this.setCachedValue(this.users, user.id, user, MAX_USER_CACHE_SIZE);
 		}
 
-		if (
-			added &&
-			this.config.mirror &&
-			post &&
-			!(this.botUserId && reaction.user_id === this.botUserId)
-		) {
+		// The agent reacts as itself and those reactions cross like its messages do.
+		// Its own are not filtered out here: what comes back from applying one is
+		// caught by the echo suppressor, which compares the character both sides
+		// carry rather than the name only this one uses.
+		if (added && this.config.mirror && post) {
 			this.config.mirror.react({
 				externalId: reaction.post_id,
 				externalChannelId: post.channel_id,
-				emoji: reaction.emoji_name,
+				emoji: reactionContentOf(reaction.emoji_name),
 				senderPlatformUserId: reaction.user_id,
 				senderEmail: user?.email,
 			});

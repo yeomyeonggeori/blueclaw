@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { BuzzAdapter, reactionContentOf } from "../src/adapters/buzz/adapter.ts";
+import { BuzzAdapter } from "../src/adapters/buzz/adapter.ts";
+import { reactionContentOf } from "../src/mirror/reaction-emoji.ts";
 import { firstTagValue, threadTagsOf, type BuzzEvent } from "../src/adapters/buzz/types.ts";
 
 const CHANNEL_UUID = "8f14e45f-ea3c-4c2d-9d4b-1a2b3c4d5e6f";
