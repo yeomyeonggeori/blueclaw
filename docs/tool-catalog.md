@@ -18,7 +18,7 @@ catalog, so they appear here as one row with no description.
 | `conversation_history` | 85 | `tool_catalog.go` |
 | `file_delete` | 326 | `file_tools.go` |
 | `file_edit` | 331 | `file_tools.go` |
-| `file_preview` | 215 | `file_tools.go` |
+| `file_preview` | 211 | `file_tools.go` |
 | `file_read` | 184 | `file_tools.go` |
 | `file_write` | 239 | `file_tools.go` |
 | `memory_remember` | 444 | `memory_tools.go` |
@@ -31,4 +31,4 @@ catalog, so they appear here as one row with no description.
 | `skill_remove` | 67 | `skill_management.go` |
 | `terminal_run` | 47 | `terminal_tools.go` |
 
-21 tools, 4563 bytes of description in total.
+21 tools, 4559 bytes of description in total.
