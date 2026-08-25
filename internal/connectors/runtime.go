@@ -400,6 +400,10 @@ const connectorProgressHeartbeatInterval = 5 * time.Second
 const connectorMaximumAttemptCount = 5
 const connectorReplyKindSuccess = "success"
 const connectorReplyKindCheckpoint = "checkpoint"
+
+// What a turn is doing while it does it. It is written for somebody watching,
+// and it is not something anyone said, so it is not read back as context.
+const ConnectorReplyKindProgress = "progress"
 const connectorReplyKindUserNotice = "user_notice"
 const connectorReplyKindPermissionNotice = "permission_notice"
 

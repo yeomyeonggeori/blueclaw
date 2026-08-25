@@ -13,7 +13,7 @@ function adapterAnswering(events: Record<number, unknown[]>): BuzzAdapter {
 		botDisplayName: "internkim",
 	});
 	(adapter as unknown as { relay: unknown }).relay = {
-		query: async (filter: { kinds: number[] }) => events[filter.kinds[0]] ?? [],
+		query: async (filter: { kinds?: number[] }) => events[filter.kinds?.[0] ?? 0] ?? [],
 	};
 	(adapter as unknown as { fetchProfile: unknown }).fetchProfile = async () => null;
 	return adapter;

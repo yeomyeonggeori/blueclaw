@@ -136,7 +136,9 @@ export async function buildVisibleContext(
 		options.senderId ? adapter.getUser(options.senderId).catch(() => null) : Promise.resolve(null),
 		adapter.fetchReactions?.(scopeThreadId).catch(() => null) ?? Promise.resolve(null),
 	]);
-	let previousMessages = messagesBefore(fetchResult.messages, options.beforeMessageId);
+	let previousMessages = messagesBefore(fetchResult.messages, options.beforeMessageId).filter(
+		(candidate) => !isProgressMessage(candidate.raw)
+	);
 	if (options.onlyExchangeOpenings) {
 		// What another exchange opened with says what it is about. What was said
 		// inside it belongs to whoever is in it, and read here it turns one
@@ -256,4 +258,14 @@ function toContextSender(platform: string, user: UserInfo): VisibleContextSender
 		email: user.email,
 		name: user.fullName || user.userName,
 	};
+}
+
+
+// A turn writes what it is doing into a message somebody can watch. It is not
+// something anyone said, so reading it back turns the agent's own working notes
+// into conversation.
+function isProgressMessage(raw: unknown): boolean {
+	const tags = (raw as { tags?: unknown[] })?.tags;
+	if (!Array.isArray(tags)) return false;
+	return tags.some((tag) => Array.isArray(tag) && tag[0] === "reply-kind" && tag[1] === "progress");
 }

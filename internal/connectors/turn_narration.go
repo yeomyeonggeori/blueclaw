@@ -208,7 +208,7 @@ func (narrator *turnNarrator) take(rawTurnEvent taskstate.RawTurnEvent) bool {
 }
 
 func (narrator *turnNarrator) startSaying(ctx context.Context, message string) {
-	messageID, errorValue := narrator.adapter.SendReply(ctx, narrator.replyTarget, OutboundReply{Message: message})
+	messageID, errorValue := narrator.adapter.SendReply(ctx, narrator.replyTarget, OutboundReply{Message: message, ReplyKind: ConnectorReplyKindProgress})
 	if errorValue != nil || strings.TrimSpace(messageID) == "" {
 		return
 	}
