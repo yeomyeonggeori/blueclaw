@@ -161,3 +161,28 @@ func containsToolReference(values []ToolReference, target ToolReference) bool {
 	}
 	return false
 }
+
+func TestSkillLoaderReadsToolReferencesFromTheMetadataMap(t *testing.T) {
+	directoryPath := t.TempDir()
+	document := `---
+name: calculator
+description: Calculate an expression.
+metadata:
+  kim.intern.tool-references: "terminal_run"
+---
+Use the evaluator.
+`
+	if errorValue := os.WriteFile(filepath.Join(directoryPath, "SKILL.md"), []byte(document), 0600); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	skillBundle, errorValue := (SkillLoader{}).LoadSkillBundle(directoryPath)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	toolNames := skillBundle.ReferencedToolNames()
+	if len(toolNames) != 1 || toolNames[0] != "terminal_run" {
+		t.Fatalf("a skill that has to satisfy the Agent Skills schema declares its tools here, got %+v", toolNames)
+	}
+}
