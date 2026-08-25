@@ -291,10 +291,18 @@ type ConnectorRuntimeResult struct {
 // who is invited, whose messenger account presents an address their record does not carry.
 const UnmatchedAccountReply = "This Intern Kim could not match your account to anyone it knows about. Ask the administrator to check it."
 
+// A lookup that never answered established nothing about the sender, so the reply says
+// that instead of that nobody knows them. Sending somebody to an administrator over a
+// lookup that failed wastes both their time on a record that is already correct.
+const DirectoryUnreachableReply = "This Intern Kim could not reach the directory just now, so it cannot tell whose account this is. As far as it knows there is nothing wrong with your account. Try again in a moment, and tell the administrator if it keeps happening."
+
 // The sender already knows their own address, so naming it discloses nothing to them and
 // turns an unanswerable message into one an administrator can act on. Which people this
 // device carries stays unsaid, because whoever is asking may be from outside the company.
 func unmatchedAccountReplyFor(authorization senderAuthorization) string {
+	if authorization.DirectoryUnreachable {
+		return DirectoryUnreachableReply
+	}
 	platformAccountEmail := strings.TrimSpace(authorization.PlatformAccountEmail)
 	if platformAccountEmail == "" {
 		return UnmatchedAccountReply + " Your account presents no email address, and that is what this Intern Kim matches on."
@@ -310,6 +318,11 @@ type senderAuthorization struct {
 	IsAllowed            bool
 	Platform             string
 	PlatformAccountEmail string
+	// DirectoryUnreachable separates a directory that said no from one that never
+	// answered. Told they are not on file, somebody goes to an administrator who
+	// finds their record exactly where it belongs, and nothing anywhere says the
+	// lookup is what failed.
+	DirectoryUnreachable bool
 }
 
 type PlatformAdapter interface {
@@ -1016,18 +1029,22 @@ func (connectorRuntime *ConnectorRuntime) processInboundEventWithReplySender(ctx
 			connectorRuntime.logger.Info("connector."+platform+".ingress.ignored", slog.String("messageID", event.MessageID), slog.String("reason", "not_addressed_to_bot"))
 			return ConnectorRuntimeResult{Handled: true, Platform: platform, Ignored: true, Reason: "not_addressed_to_bot"}, nil
 		}
+		refusalReason := "unmatched_account"
+		if authorization.DirectoryUnreachable {
+			refusalReason = "directory_unreachable"
+		}
 		connectorRuntime.logger.Info("connector."+platform+".auth.rejected",
 			slog.String("messageID", event.MessageID),
-			slog.String("reason", "unmatched_account"),
+			slog.String("reason", refusalReason),
 			slog.String("senderID", event.SenderID),
 			slog.String("platformAccountEmail", authorization.PlatformAccountEmail))
 		dispatchID, sendError := sendReply(ctx, replyTarget, OutboundReply{Message: unmatchedAccountReplyFor(authorization), ReplyKind: connectorReplyKindPermissionNotice})
 		if sendError != nil {
 			connectorRuntime.logger.Error("connector."+platform+".outbound.failed", slog.String("messageID", event.MessageID), slog.String("error", sendError.Error()))
-			return ConnectorRuntimeResult{Handled: true, Platform: platform, Reason: "unmatched_account"}, nil
+			return ConnectorRuntimeResult{Handled: true, Platform: platform, Reason: refusalReason}, nil
 		}
 		connectorRuntime.logger.Info("connector."+platform+".outbound.sent", slog.String("messageID", event.MessageID), slog.String("replyDispatchID", dispatchID))
-		return ConnectorRuntimeResult{Handled: true, Platform: platform, Reason: "unmatched_account", ReplyDispatchID: dispatchID}, nil
+		return ConnectorRuntimeResult{Handled: true, Platform: platform, Reason: refusalReason, ReplyDispatchID: dispatchID}, nil
 	}
 
 	connectorRuntime.logger.Info("connector."+platform+".auth.allowed", slog.String("messageID", event.MessageID), slog.String("personID", personID))
@@ -3481,15 +3498,17 @@ func (connectorRuntime *ConnectorRuntime) authorizeSender(ctx context.Context, a
 	platformAccountIdentity.ExternalUserID = event.SenderID
 	connectorRuntime.identityService.RememberPlatformAccount(platformAccountIdentity)
 
+	directoryUnreachable := false
 	personID, isFound = connectorRuntime.identityService.ResolvePersonIDByPlatformAccount(adapter.Name(), event.SenderID)
 	if !isFound {
-		personID, isFound = connectorRuntime.askTheHostAboutUnknownAccount(ctx, adapter.Name(), event.SenderID, event.MessageID, platformAccountIdentity)
+		personID, isFound, directoryUnreachable = connectorRuntime.askTheHostAboutUnknownAccount(ctx, adapter.Name(), event.SenderID, event.MessageID, platformAccountIdentity)
 	}
 	return senderAuthorization{
 		PersonID:             personID,
 		IsAllowed:            isFound,
 		Platform:             adapter.Name(),
 		PlatformAccountEmail: platformAccountIdentity.Email,
+		DirectoryUnreachable: directoryUnreachable,
 	}, nil
 }
 
@@ -3500,22 +3519,40 @@ func (connectorRuntime *ConnectorRuntime) authorizeSender(ctx context.Context, a
 // This sits at the one place a match fails rather than on each platform adapter. Whether
 // a message arrived through chatd or through a capability is a routing detail, and an
 // answer that depends on which door it came through is the same fact kept twice.
-func (connectorRuntime *ConnectorRuntime) askTheHostAboutUnknownAccount(ctx context.Context, platform string, externalUserID string, messageID string, platformAccountIdentity identity.PlatformAccountIdentity) (string, bool) {
+func (connectorRuntime *ConnectorRuntime) askTheHostAboutUnknownAccount(ctx context.Context, platform string, externalUserID string, messageID string, platformAccountIdentity identity.PlatformAccountIdentity) (string, bool, bool) {
+	// A deployment with no resolver has no directory to ask, which is not a lookup
+	// that failed. It refuses as it did before this existed.
 	if connectorRuntime.unknownAccountResolver == nil {
-		return "", false
+		return "", false, false
 	}
 	isKnown, errorValue := connectorRuntime.unknownAccountResolver.ResolveUnknownAccount(ctx, platform, externalUserID, platformAccountIdentity.Email)
 	if errorValue != nil {
 		connectorRuntime.logger.Error("connector."+platform+".directory.unreachable",
 			slog.String("messageID", messageID),
+			slog.String("email", platformAccountIdentity.Email),
 			slog.String("error", errorValue.Error()))
-		return "", false
+		return "", false, true
 	}
 	if !isKnown {
-		return "", false
+		connectorRuntime.logger.Info("connector."+platform+".directory.answered",
+			slog.String("messageID", messageID),
+			slog.String("email", platformAccountIdentity.Email),
+			slog.Bool("known", false))
+		return "", false, false
 	}
 	connectorRuntime.identityService.RememberPlatformAccount(platformAccountIdentity)
-	return connectorRuntime.identityService.ResolvePersonIDByPlatformAccount(platform, externalUserID)
+	personID, isFound := connectorRuntime.identityService.ResolvePersonIDByPlatformAccount(platform, externalUserID)
+	if !isFound {
+		// The directory carries the address and this agent still cannot place it,
+		// which is a projection that has not caught up rather than a stranger.
+		connectorRuntime.logger.Error("connector."+platform+".directory.answered",
+			slog.String("messageID", messageID),
+			slog.String("email", platformAccountIdentity.Email),
+			slog.Bool("known", true),
+			slog.String("error", "the host carries this address and this agent carries no person under it"))
+		return "", false, true
+	}
+	return personID, isFound, false
 }
 
 func (connectorRuntime *ConnectorRuntime) buildReplyTarget(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (ReplyTarget, error) {
