@@ -21,7 +21,7 @@ var modelVisibleRequestFields = []string{
 	"AgentIdentity", "ActivePaths", "HostInstruction", "InstructionPrompt", "InstructionSources",
 	"ContractToolWorkingSet", "RequiredEvidenceTools", "RequiredAttachmentSuffixes",
 	"OutcomeContract", "ActiveGoal", "PriorTask", "ScheduledRun", "TaskShape", "TaskLevel",
-	"TurnStartedAt", "CarriedOutCalls", "StepBudgetContext", "ArtifactManifest",
+	"TurnStartedAt", "EnvironmentNow", "CarriedOutCalls", "StepBudgetContext", "ArtifactManifest",
 	"PinnedToolNames", "PinnedSkillNames", "SkillQueries",
 }
 
@@ -70,6 +70,7 @@ func modelVisibleContextDocument(request agentcontract.AgentTurnRequest) string 
 		"taskShape":                  request.TaskShape,
 		"taskLevel":                  request.TaskLevel,
 		"turnStartedAt":              request.TurnStartedAt,
+		"environmentNow":             request.EnvironmentNow,
 		"carriedOutCalls":            request.CarriedOutCalls,
 		"stepBudgetContext":          request.StepBudgetContext,
 		"artifactManifest":           request.ArtifactManifest,

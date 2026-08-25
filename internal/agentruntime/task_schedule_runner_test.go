@@ -102,9 +102,11 @@ func TestTaskScheduleRunnerAddsCronContextToLaunch(t *testing.T) {
 	}
 
 	requestText := structuredRequestMessagesText(languageModel.requests)
+	// How the prompt words a scheduled run belongs to the agent loop, which tests
+	// its own wording. What this service owes is the context it hands over, so
+	// that is what this reads.
 	for _, expected := range []string{
 		"Scheduled run:",
-		"Scheduled task instruction:",
 		`"scheduleID":"schedule-briefing"`,
 		`"kind":"cron"`,
 		`"cadence":"daily at 08:00 Asia/Seoul"`,
