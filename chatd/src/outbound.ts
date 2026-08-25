@@ -175,10 +175,14 @@ async function handleReplySend(
 	const requestDocument = parseReplySendRequest(requestBody);
 	const fileUploads = await buildFileUploads(requestDocument.attachments ?? []);
 	const message = buildPostableMessage(requestDocument, fileUploads);
+	// The thread says where the reply belongs and the answered message says what it
+	// is a reply to. Without the second, somebody who wrote deep in a thread finds
+	// the answer at the top of it.
+	const answeringTags = answeringTagsFor(adapter, requestDocument.answeringMessageID);
 	const result =
 		requestDocument.isError && adapter instanceof BuzzAdapter
-			? await adapter.postMessage(requestDocument.replyTargetID, message, [["reply-kind", "error"]])
-			: await adapter.postMessage(requestDocument.replyTargetID, message);
+			? await adapter.postMessage(requestDocument.replyTargetID, message, [["reply-kind", "error"], ...answeringTags])
+			: await adapter.postMessage(requestDocument.replyTargetID, message, answeringTags);
 	return { dispatchID: result.id };
 }
 
@@ -547,4 +551,12 @@ async function handleIdentityResolve(
 		return {};
 	}
 	return { displayName: user.fullName, email: user.email };
+}
+
+// Only buzz carries a marked reply tag; the other adapters thread by the target
+// they were already given and take nothing here.
+function answeringTagsFor(adapter: unknown, answeringMessageID: string | undefined): string[][] {
+	const answered = answeringMessageID?.trim();
+	if (!answered || !(adapter instanceof BuzzAdapter)) return [];
+	return [["e", answered, "", "reply"]];
 }

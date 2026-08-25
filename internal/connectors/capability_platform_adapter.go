@@ -37,16 +37,17 @@ type capabilityReactionRequest struct {
 }
 
 type capabilityReplyRequest struct {
-	ReplyTargetID   string                        `json:"replyTargetID"`
-	Message         string                        `json:"message"`
-	TaskRunID       string                        `json:"taskRunID,omitempty"`
-	ReplyKind       string                        `json:"replyKind,omitempty"`
-	RawEventID      string                        `json:"rawEventID,omitempty"`
-	OutboxID        string                        `json:"outboxID,omitempty"`
-	Attachments     []capabilityReplyAttachment   `json:"attachments,omitempty"`
-	RecoveryActions []toolcontract.RecoveryAction `json:"recoveryActions,omitempty"`
-	FailureNotice   agentcontract.FailureNotice   `json:"failureNotice,omitempty"`
-	Interaction     *AskInteraction               `json:"interaction,omitempty"`
+	ReplyTargetID      string                        `json:"replyTargetID"`
+	AnsweringMessageID string                        `json:"answeringMessageID,omitempty"`
+	Message            string                        `json:"message"`
+	TaskRunID          string                        `json:"taskRunID,omitempty"`
+	ReplyKind          string                        `json:"replyKind,omitempty"`
+	RawEventID         string                        `json:"rawEventID,omitempty"`
+	OutboxID           string                        `json:"outboxID,omitempty"`
+	Attachments        []capabilityReplyAttachment   `json:"attachments,omitempty"`
+	RecoveryActions    []toolcontract.RecoveryAction `json:"recoveryActions,omitempty"`
+	FailureNotice      agentcontract.FailureNotice   `json:"failureNotice,omitempty"`
+	Interaction        *AskInteraction               `json:"interaction,omitempty"`
 }
 
 type capabilityReplyAttachment struct {

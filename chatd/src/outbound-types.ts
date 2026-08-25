@@ -29,6 +29,9 @@ export interface AskInteractionDocument {
 
 export interface ReplySendRequest {
 	replyTargetID: string;
+	// The message this reply answers, so a reply written deep in a thread is
+	// answered where it was written rather than at the top of the thread.
+	answeringMessageID?: string;
 	message: string;
 	taskRunID?: string;
 	replyKind?: string;

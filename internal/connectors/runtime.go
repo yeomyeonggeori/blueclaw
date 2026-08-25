@@ -71,7 +71,11 @@ type PlatformInboundEvent struct {
 type ReplyTarget struct {
 	ConversationID string `json:"conversationID"`
 	ReplyTargetID  string `json:"replyTargetID"`
-	DedupeKey      string `json:"dedupeKey"`
+	// AnsweringMessageID is the message this reply answers. The thread says where
+	// the reply belongs; this says what it is a reply to, so somebody who wrote
+	// deep in a thread does not find the answer at the top of it.
+	AnsweringMessageID string `json:"answeringMessageID,omitempty"`
+	DedupeKey          string `json:"dedupeKey"`
 }
 
 type ReactionTarget struct {
@@ -3560,9 +3564,10 @@ func (connectorRuntime *ConnectorRuntime) buildReplyTarget(ctx context.Context, 
 	_ = adapter
 
 	return ReplyTarget{
-		ConversationID: event.ConversationID,
-		ReplyTargetID:  event.ReplyTargetID,
-		DedupeKey:      event.DedupeKey(),
+		ConversationID:     event.ConversationID,
+		ReplyTargetID:      event.ReplyTargetID,
+		AnsweringMessageID: event.MessageID,
+		DedupeKey:          event.DedupeKey(),
 	}, nil
 }
 
