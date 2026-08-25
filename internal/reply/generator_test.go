@@ -136,7 +136,7 @@ func TestReplyGeneratorInjectsMemoryIntoChatReplyRequest(t *testing.T) {
 	if len(replyProvider.request.Messages) != 3 {
 		t.Fatalf("expected system, flattened context, user messages, got %d", len(replyProvider.request.Messages))
 	}
-	if !strings.Contains(body, "Runtime:") || !strings.Contains(body, "Current weekday:") {
+	if !strings.Contains(body, "Runtime:") || !strings.Contains(body, "This week:") {
 		t.Fatalf("expected runtime context to be injected, got %q", body)
 	}
 	if !strings.Contains(body, "debugging Mattermost DM replies") {
