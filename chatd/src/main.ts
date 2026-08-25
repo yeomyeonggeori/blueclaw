@@ -76,7 +76,7 @@ const outboundHandler = createOutboundHandler(adapters as never, configuration, 
 
 Bun.serve({
   port: configuration.listenPort,
-  hostname: '127.0.0.1',
+  hostname: configuration.listenHostname,
   fetch: async (request) => {
     const requestUrl = new URL(request.url);
     if (requestUrl.pathname === '/webhooks/mattermost' && adapters.mattermost) {
