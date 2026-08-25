@@ -83,13 +83,18 @@ func parseSkillFrontmatter(frontmatter string) skillMetadata {
 	return metadata
 }
 
+// Agent Skills keeps client-specific data under metadata, and allowed-tools
+// carries another harness's vocabulary rather than this one's, so a skill that
+// has to conform to the specification says which tools it needs here.
+const vendorToolReferencesKey = "kim.intern.tool-references"
+
 func setSkillMetadataValue(metadata skillMetadata, key string, value string) skillMetadata {
 	switch key {
 	case "name":
 		metadata.Name = cleanSkillScalar(value)
 	case "description":
 		metadata.Description = joinSkillDescription(metadata.Description, cleanSkillScalar(value))
-	case "tool-references":
+	case "tool-references", vendorToolReferencesKey:
 		metadata.ToolReferences = append(metadata.ToolReferences, parseSkillToolReferences(value)...)
 	}
 	return metadata
@@ -98,7 +103,7 @@ func setSkillMetadataValue(metadata skillMetadata, key string, value string) ski
 func appendSkillToolReference(metadata skillMetadata, section string, value string) skillMetadata {
 	toolReference := ToolReference(cleanSkillScalar(value))
 	switch section {
-	case "tool-references":
+	case "tool-references", vendorToolReferencesKey:
 		metadata.ToolReferences = append(metadata.ToolReferences, toolReference)
 	}
 	return metadata
