@@ -47,9 +47,11 @@ func findWorkspaceSkillDirectory(skillName string) string {
 	_, sourceFilePath, _, _ := runtime.Caller(0)
 	directoryPath := filepath.Dir(filepath.Dir(filepath.Dir(sourceFilePath)))
 	for range 5 {
-		candidatePath := filepath.Join(directoryPath, "assets", "blueclaw-workspace", "skills", skillName)
-		if information, errorValue := os.Stat(candidatePath); errorValue == nil && information.IsDir() {
-			return candidatePath
+		for _, skillRootPath := range consumerSkillRootPaths(directoryPath) {
+			candidatePath := filepath.Join(skillRootPath, skillName)
+			if isExistingDirectory(candidatePath) {
+				return candidatePath
+			}
 		}
 		parentPath := filepath.Dir(directoryPath)
 		if parentPath == directoryPath {
@@ -60,14 +62,55 @@ func findWorkspaceSkillDirectory(skillName string) string {
 	return ""
 }
 
+// A consumer keeps the skills that only it can serve in its own workspace
+// bundle and takes the portable ones from the agent plugins it vendors, so a
+// scenario skill can live under either root. A plugin is recognized by its
+// manifest rather than by name, which is what the plugin standard promises.
+func consumerSkillRootPaths(directoryPath string) []string {
+	skillRootPaths := []string{filepath.Join(directoryPath, "assets", "blueclaw-workspace", "skills")}
+	dependencyRootPath := filepath.Join(directoryPath, ".dependency")
+	dependencyEntries, errorValue := os.ReadDir(dependencyRootPath)
+	if errorValue != nil {
+		return skillRootPaths
+	}
+	for _, dependencyEntry := range dependencyEntries {
+		pluginPath := filepath.Join(dependencyRootPath, dependencyEntry.Name())
+		if !isExistingFile(filepath.Join(pluginPath, "plugin.json")) {
+			continue
+		}
+		skillRootPaths = append(skillRootPaths, filepath.Join(pluginPath, "skills"))
+	}
+	return skillRootPaths
+}
+
+func isExistingDirectory(path string) bool {
+	information, errorValue := os.Stat(path)
+	return errorValue == nil && information.IsDir()
+}
+
+func isExistingFile(path string) bool {
+	information, errorValue := os.Stat(path)
+	return errorValue == nil && information.Mode().IsRegular()
+}
+
 func MissingScenarioSkills() []string {
-	missing := []string{}
+	_, missingSkills := ScenarioSkillAvailability()
+	return missingSkills
+}
+
+// ScenarioSkillAvailability separates a standalone checkout, which finds none of
+// these bundles, from a consumer beside one that finds some and not the rest.
+func ScenarioSkillAvailability() (found []string, missing []string) {
+	found = []string{}
+	missing = []string{}
 	for _, skillName := range ScenarioSkillNames {
 		if findWorkspaceSkillDirectory(skillName) == "" {
 			missing = append(missing, skillName)
+			continue
 		}
+		found = append(found, skillName)
 	}
-	return missing
+	return found, missing
 }
 
 func completionJudgeSatisfiedResponse() string {
