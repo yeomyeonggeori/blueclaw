@@ -263,7 +263,10 @@ type VisibleContextMessage struct {
 	SpeakerHandle      string            `json:"speakerHandle,omitempty"`
 	Text               string            `json:"text"`
 	SentAt             time.Time         `json:"sentAt,omitempty"`
-	InputAttachments   []InputAttachment `json:"inputAttachments,omitempty"`
+	// ThreadRootID says which exchange the message belongs to, which is what
+	// keeps several of them sharing a place from reading as one.
+	ThreadRootID     string            `json:"threadRootID,omitempty"`
+	InputAttachments []InputAttachment `json:"inputAttachments,omitempty"`
 }
 
 type HTTPParseResult struct {
@@ -3823,6 +3826,7 @@ func (visibleContext VisibleContext) ToAgentVisibleContext() agentcontract.Visib
 			SpeakerHandle:      message.SpeakerHandle,
 			Text:               message.Text,
 			SentAt:             message.SentAt,
+			ThreadRootID:       message.ThreadRootID,
 			Materials:          agentVisibleContextMaterials(message.InputAttachments),
 		})
 	}

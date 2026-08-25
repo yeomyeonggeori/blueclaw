@@ -182,9 +182,13 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		return this.decodeThreadId(threadId).channelId;
 	}
 
+	// Somebody who writes under a root is answering that root, so what they wrote
+	// is read against it and not against whatever else the channel holds. A
+	// message that is its own root has no thread yet, and reads the channel.
+	// A direct conversation threads the same way a channel does.
 	historyScopeThreadId(threadId: string, messageId: string): string {
 		const decoded = this.decodeThreadId(threadId);
-		if (!decoded.rootEventId || decoded.rootEventId === messageId || this.isDM(threadId)) {
+		if (!decoded.rootEventId || decoded.rootEventId === messageId) {
 			return this.encodeThreadId({ channelId: decoded.channelId });
 		}
 		return threadId;
