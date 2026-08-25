@@ -89,16 +89,17 @@ func (adapter ChatdPlatformAdapter) RemoveReaction(ctx context.Context, target R
 func (adapter ChatdPlatformAdapter) SendReply(ctx context.Context, replyTarget ReplyTarget, reply OutboundReply) (string, error) {
 	var response capabilityReplyResponse
 	errorValue := adapter.post(ctx, "reply.send", capabilityReplyRequest{
-		ReplyTargetID:   replyTarget.ReplyTargetID,
-		Message:         reply.Message,
-		TaskRunID:       reply.TaskRunID,
-		ReplyKind:       reply.ReplyKind,
-		RawEventID:      reply.RawEventID,
-		OutboxID:        reply.OutboxID,
-		Attachments:     buildCapabilityReplyAttachments(reply.Attachments),
-		RecoveryActions: reply.RecoveryActions,
-		FailureNotice:   reply.FailureNotice,
-		Interaction:     reply.Interaction,
+		ReplyTargetID:      replyTarget.ReplyTargetID,
+		AnsweringMessageID: replyTarget.AnsweringMessageID,
+		Message:            reply.Message,
+		TaskRunID:          reply.TaskRunID,
+		ReplyKind:          reply.ReplyKind,
+		RawEventID:         reply.RawEventID,
+		OutboxID:           reply.OutboxID,
+		Attachments:        buildCapabilityReplyAttachments(reply.Attachments),
+		RecoveryActions:    reply.RecoveryActions,
+		FailureNotice:      reply.FailureNotice,
+		Interaction:        reply.Interaction,
 	}, &response)
 	if errorValue != nil {
 		return "", errorValue

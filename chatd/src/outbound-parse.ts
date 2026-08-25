@@ -90,6 +90,7 @@ export function parseReplySendRequest(value: unknown): ReplySendRequest {
 	const interactionValue = record.interaction;
 	return {
 		replyTargetID: requireString(record, "replyTargetID"),
+		answeringMessageID: optionalString(record, "answeringMessageID"),
 		message: requireString(record, "message"),
 		taskRunID: optionalString(record, "taskRunID"),
 		replyKind: optionalString(record, "replyKind"),
