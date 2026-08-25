@@ -179,6 +179,11 @@ async function handleReplySend(
 	// is a reply to. Without the second, somebody who wrote deep in a thread finds
 	// the answer at the top of it.
 	const answeringTags = answeringTagsFor(adapter, requestDocument.answeringMessageID);
+	if (requestDocument.replyKind === "progress" && adapter instanceof BuzzAdapter) {
+		return {
+			dispatchID: (await adapter.postMessage(requestDocument.replyTargetID, message, [["reply-kind", "progress"], ...answeringTags])).id
+		};
+	}
 	const result =
 		requestDocument.isError && adapter instanceof BuzzAdapter
 			? await adapter.postMessage(requestDocument.replyTargetID, message, [["reply-kind", "error"], ...answeringTags])
