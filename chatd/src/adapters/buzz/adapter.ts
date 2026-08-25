@@ -547,8 +547,13 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 			limit,
 		};
 		if (until !== undefined) filter.until = until;
-		const events = await this.relay.query(filter);
-		const chronological = events.sort((first, second) => first.created_at - second.created_at);
+		const [events, deleted] = await Promise.all([
+			this.relay.query(filter),
+			this.deletedMessageIds(decoded.channelId, limit),
+		]);
+		const chronological = events
+			.filter((event) => !deleted.has(event.id))
+			.sort((first, second) => first.created_at - second.created_at);
 		const messages: Message<BuzzEvent>[] = [];
 		for (const event of chronological) {
 			messages.push(this.buildMessage(event, await this.fetchProfile(event.pubkey)));
@@ -564,12 +569,17 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		rootEventId: string,
 		limit: number,
 	): Promise<FetchResult<BuzzEvent>> {
-		const events = await this.relay.query({
-			kinds: [STREAM_MESSAGE_KIND],
-			"#h": [channelId],
-			limit: Math.max(limit * 3, limit),
-		});
-		const chronological = events.sort((first, second) => first.created_at - second.created_at);
+		const [events, deleted] = await Promise.all([
+			this.relay.query({
+				kinds: [STREAM_MESSAGE_KIND],
+				"#h": [channelId],
+				limit: Math.max(limit * 3, limit),
+			}),
+			this.deletedMessageIds(channelId, Math.max(limit * 3, limit)),
+		]);
+		const chronological = events
+			.filter((event) => !deleted.has(event.id))
+			.sort((first, second) => first.created_at - second.created_at);
 		const relevant = chronological.filter((event) => {
 			const { rootEventId: eventRootId } = threadTagsOf(event);
 			return event.id === rootEventId || eventRootId === rootEventId;
@@ -579,6 +589,22 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 			messages.push(this.buildMessage(event, await this.fetchProfile(event.pubkey)));
 		}
 		return { messages, nextCursor: undefined };
+	}
+
+	// Somebody deletes a message to unsay it. The relay keeps what was said and
+	// records that it was taken back, so a reader that asks only for messages is
+	// handed words their author withdrew.
+	private async deletedMessageIds(channelId: string, limit: number): Promise<Set<string>> {
+		const events = await this.relay
+			.query({ kinds: [DELETE_MESSAGE_KIND], "#h": [channelId], limit: Math.max(limit * 3, limit) })
+			.catch(() => []);
+		const deleted = new Set<string>();
+		for (const event of events) {
+			for (const tag of event.tags) {
+				if (tag[0] === "e" && tag[1]) deleted.add(tag[1]);
+			}
+		}
+		return deleted;
 	}
 
 	async listPeople(excludePubkeyHex: string): Promise<{ id: string; name: string; avatarURL?: string }[]> {
