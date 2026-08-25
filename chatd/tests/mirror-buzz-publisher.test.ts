@@ -62,6 +62,6 @@ describe('a reaction crossing into buzz', () => {
 		});
 
 		expect(reactions).toHaveLength(1);
-		expect(reactions[0].emoji).toBe('✅');
+		expect(reactions[0]?.emoji).toBe('✅');
 	});
 });
