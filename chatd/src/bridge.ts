@@ -90,9 +90,15 @@ async function forwardNormalizedEvent(
   message: Message,
 ): Promise<void> {
   const scopeThreadId = adapter.historyScopeThreadId(thread.id, message.id);
+  // A message written under a root is read against that root and its replies. A
+  // message that starts its own exchange is read against the other exchanges
+  // this place holds, which is what they opened with and not what was said
+  // inside them.
+  const startsItsOwnExchange = scopeThreadId !== thread.id;
   const context = await buildVisibleContext(adapter, scopeThreadId, {
     beforeMessageId: message.id,
     senderId: message.author.userId,
+    onlyExchangeOpenings: startsItsOwnExchange,
   }).catch(() => emptyVisibleContext(scopeThreadId));
   const addressing = adapter.addressingOf(message.raw);
   const response = await fetch(`${configuration.blueclawBaseURL}/connectors/${platform}/events`, {
