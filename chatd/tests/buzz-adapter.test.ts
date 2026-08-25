@@ -106,6 +106,21 @@ describe("buzz history scope", () => {
 		const threadId = adapter.encodeThreadId({ channelId: CHANNEL_UUID, rootEventId: ROOT_EVENT_ID });
 		expect(adapter.historyScopeThreadId(threadId, "e".repeat(64))).toBe(threadId);
 	});
+
+	// A direct conversation threads the same way a channel does. Reading a reply
+	// against the whole conversation is how one request came to be answered with
+	// the subject of an older one that happened to share the channel.
+	test("a reply in a direct conversation keeps thread scope", () => {
+		const adapter = createAdapter();
+		(adapter as unknown as { channelsById: Map<string, unknown> }).channelsById.set(CHANNEL_UUID, {
+			channelId: CHANNEL_UUID,
+			name: 'direct',
+			isDM: true
+		});
+		const threadId = adapter.encodeThreadId({ channelId: CHANNEL_UUID, rootEventId: ROOT_EVENT_ID });
+
+		expect(adapter.historyScopeThreadId(threadId, "e".repeat(64))).toBe(threadId);
+	});
 });
 
 describe("buzz reactions", () => {

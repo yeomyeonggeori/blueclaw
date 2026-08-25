@@ -173,7 +173,10 @@ function toVisibleContextMessage(
 ): VisibleContextMessageDocument {
 	return {
 		id: message.id,
-		threadRootId: threadRootId && threadRootId !== message.id ? threadRootId : undefined,
+		// Which exchange the message belongs to, not who it answers. A message that
+		// starts one belongs to itself, and leaving that out would put a root and
+		// its own replies in different exchanges.
+		threadRootId: threadRootId ?? message.id,
 		speaker: message.author.fullName || message.author.userName,
 		speakerHandle: message.author.userName,
 		senderId: message.author.userId,
