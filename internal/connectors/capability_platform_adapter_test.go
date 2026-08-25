@@ -54,30 +54,6 @@ func TestCapabilityPlatformAdapterParsesNormalizedHTTPEvent(t *testing.T) {
 	}
 }
 
-func TestCapabilityPlatformAdapterParsesNormalizedAskAction(t *testing.T) {
-	adapter := NewCapabilityPlatformAdapter("mattermost", capability.Client{})
-	request := httptest.NewRequest(
-		http.MethodPost,
-		"/connectors/mattermost/events",
-		bytes.NewReader([]byte(`{"event":{"conversationID":"channel-1","messageID":"ask:post-1:ask_choice:interaction-1:B","senderID":"user-1","replyTargetID":"reply-target-1","prompt":"selected B","responseLanguage":"ko","context":{"channelID":"channel-1","conversationType":"direct"},"legacyFields":{"askAction":"choice","interactionID":"interaction-1","taskRunID":"task-1","choiceKey":"B","postID":"post-1"}}}`)),
-	)
-
-	parseResult, errorValue := adapter.ParseHTTPEvent(context.Background(), request)
-	if errorValue != nil {
-		t.Fatalf("expected normalized ask action to parse: %v", errorValue)
-	}
-
-	if !parseResult.HasEvent {
-		t.Fatal("expected parsed event")
-	}
-	if parseResult.Event.Prompt != "selected B" || parseResult.Event.ReplyTargetID != "reply-target-1" {
-		t.Fatalf("expected ask selection event, got %+v", parseResult.Event)
-	}
-	if parseResult.Event.LegacyFields["askAction"] != "choice" || parseResult.Event.LegacyFields["choiceKey"] != "B" || parseResult.Event.LegacyFields["postID"] != "post-1" {
-		t.Fatalf("expected ask legacy fields, got %+v", parseResult.Event.LegacyFields)
-	}
-}
-
 func TestCapabilityPlatformAdapterDoesNotParseMattermostRawAskAction(t *testing.T) {
 	adapter := NewCapabilityPlatformAdapter("mattermost", capability.Client{})
 	request := httptest.NewRequest(
@@ -92,30 +68,6 @@ func TestCapabilityPlatformAdapterDoesNotParseMattermostRawAskAction(t *testing.
 	}
 	if parseResult.HasEvent {
 		t.Fatalf("expected raw Mattermost payload to stay outside Blueclaw core, got %+v", parseResult.Event)
-	}
-}
-
-func TestCapabilityPlatformAdapterResolvesInteraction(t *testing.T) {
-	var receivedPath string
-	var receivedBody map[string]string
-	httpClient := fakeCapabilityHTTPClient{handler: func(request *http.Request) (*http.Response, error) {
-		receivedPath = request.URL.Path
-		if errorValue := json.NewDecoder(request.Body).Decode(&receivedBody); errorValue != nil {
-			t.Fatalf("expected request body to decode: %v", errorValue)
-		}
-		return jsonCapabilityResponse(http.StatusOK, `{}`), nil
-	}}
-	adapter := NewCapabilityPlatformAdapter("mattermost", capability.Client{
-		Endpoint:   "http://capability.test",
-		HTTPClient: httpClient,
-	})
-
-	errorValue := adapter.ResolveInteraction(context.Background(), InteractionResolution{DispatchID: "post-1"})
-	if errorValue != nil {
-		t.Fatalf("expected resolve interaction to succeed: %v", errorValue)
-	}
-	if receivedPath != "/v1/platform/mattermost/interaction.resolve" || receivedBody["dispatchID"] != "post-1" {
-		t.Fatalf("unexpected resolve request path=%q body=%+v", receivedPath, receivedBody)
 	}
 }
 

@@ -1,4 +1,4 @@
-import type { AdapterPostableMessage, CardElement, FileUpload } from "chat";
+import type { AdapterPostableMessage, FileUpload } from "chat";
 import { BuzzAdapter } from "./adapters/buzz/adapter.ts";
 import type { MattermostAdapter } from "./adapters/mattermost/adapter.ts";
 import type { ChatdConfiguration } from "./configuration.ts";
@@ -22,7 +22,6 @@ import {
 	parseDirectMessageSendRequest,
 	parseHistoryFetchRequest,
 	parseIdentityResolveRequest,
-	parseInteractionResolveRequest,
 	parseMessageDeleteRequest,
 	parseMessageEditRequest,
 	parseProgressRequest,
@@ -66,7 +65,6 @@ const capabilityHandlers: Record<string, CapabilityHandler> = {
 	"reaction.add": handleReactionAdd,
 	"reaction.remove": handleReactionRemove,
 	"history.fetch": handleHistoryFetch,
-	"interaction.resolve": handleInteractionResolve,
 	"attachments.import": handleAttachmentsImport,
 	"identity.resolve": handleIdentityResolve,
 	"channel.ensure": handleChannelEnsure,
@@ -195,38 +193,25 @@ function buildPostableMessage(
 	requestDocument: ReplySendRequest,
 	fileUploads: FileUpload[],
 ): AdapterPostableMessage {
-	const interactionOptions = requestDocument.interaction?.options ?? [];
-	if (interactionOptions.length > 0) {
-		return { card: buildInteractionCard(requestDocument), files: fileUploads };
-	}
+	const markdown = messageCarryingItsOptions(requestDocument);
 	if (fileUploads.length > 0) {
-		return { markdown: requestDocument.message, files: fileUploads };
+		return { markdown, files: fileUploads };
 	}
-	return requestDocument.message;
+	return markdown;
 }
 
-function buildInteractionCard(requestDocument: ReplySendRequest): CardElement {
-	const interaction = requestDocument.interaction;
-	const options = interaction?.options ?? [];
-	const introductionText = requestDocument.message.trim();
-	const children: CardElement["children"] = [];
-	if (introductionText) {
-		children.push({ type: "text", content: introductionText });
+function messageCarryingItsOptions(requestDocument: ReplySendRequest): string {
+	const options = requestDocument.interaction?.options ?? [];
+	if (options.length === 0) {
+		return requestDocument.message;
 	}
-	children.push({
-		type: "actions",
-		children: options.map((option) => ({
-			type: "button",
-			id: option.key,
-			label: option.label,
-			value: option.value,
-		})),
-	});
-	return {
-		type: "card",
-		title: interaction?.question || interaction?.message || undefined,
-		children,
-	};
+	const written = requestDocument.message.trim();
+	const question = (requestDocument.interaction?.question ?? "").trim();
+	const stillToAsk = written.includes(question) ? "" : question;
+	const numbered = options
+		.map((option, position) => `${position + 1}. ${option.label}`)
+		.join("\n");
+	return [written, stillToAsk, numbered].filter((part) => part !== "").join("\n\n");
 }
 
 async function buildFileUploads(attachments: ReplyAttachmentDocument[]): Promise<FileUpload[]> {
@@ -469,32 +454,6 @@ async function handleHistoryFetch(
 		channelName: context.channelName,
 		conversationType: context.conversationType,
 	};
-}
-
-async function handleInteractionResolve(
-	adapter: PlatformChatAdapter,
-	_configuration: ChatdConfiguration,
-	requestBody: unknown,
-): Promise<Record<string, never>> {
-	const requestDocument = parseInteractionResolveRequest(requestBody);
-	if (adapter instanceof BuzzAdapter || !adapter.fetchMessage) {
-		return {};
-	}
-	const existingMessage = await adapter.fetchMessage("", requestDocument.dispatchID);
-	if (!existingMessage) {
-		return {};
-	}
-
-	const threadId = adapter.encodeThreadId({
-		channelId: existingMessage.raw.channel_id,
-		rootPostId: existingMessage.raw.root_id || undefined,
-	});
-	const frozenCard: CardElement = {
-		type: "card",
-		children: existingMessage.text ? [{ type: "text", content: existingMessage.text }] : [],
-	};
-	await adapter.editMessage(threadId, requestDocument.dispatchID, { card: frozenCard });
-	return {};
 }
 
 async function handleAttachmentsImport(

@@ -152,10 +152,6 @@ export interface MessageDeleteRequest {
 	messageID: string;
 }
 
-export interface InteractionResolveRequest {
-	dispatchID: string;
-}
-
 export interface InputAttachmentDocument {
 	platform?: string;
 	fileID?: string;
