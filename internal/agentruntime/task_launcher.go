@@ -518,8 +518,12 @@ func (taskLauncher *TaskLauncher) completeLaunchFailure(ctx context.Context, req
 
 func (taskLauncher *TaskLauncher) agentTurnRequestForLaunch(request TaskLaunchRequest, profileName string, memoryFacts []memory.MemoryFact, toolSet *toolcontract.ToolSet, conversationScope ConversationResourceScope) agentcontract.AgentTurnRequest {
 	turnRequest := agentcontract.AgentTurnRequest{
-		ArtifactManifest:           request.ArtifactManifest,
-		TurnStartedAt:              request.TurnStartedAt,
+		ArtifactManifest: request.ArtifactManifest,
+		TurnStartedAt:    request.TurnStartedAt,
+		// The appliance keeps the clock of the company it runs for. Without it the
+		// agent is told the date is unknown and made to read a shell to find out,
+		// on every request that turns on what day it is.
+		EnvironmentNow:             request.TurnStartedAt,
 		RequesterPersonID:          request.RequesterPersonID,
 		RequesterEmail:             request.RequesterEmail,
 		RequesterName:              request.RequesterName,
