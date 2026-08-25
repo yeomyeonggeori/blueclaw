@@ -226,8 +226,11 @@ type VisibleContext struct {
 	ChannelName      string                  `json:"channelName,omitempty"`
 	Addressing       AddressingMetadata      `json:"addressing,omitempty"`
 	AttachmentsOnly  bool                    `json:"attachmentsOnly,omitempty"`
-	InputAttachments []InputAttachment       `json:"inputAttachments,omitempty"`
-	Materials        []InputAttachment       `json:"materials,omitempty"`
+	// MessagesOpenOtherExchanges says the messages are how other conversations in
+	// the same place opened, rather than the conversation being continued.
+	MessagesOpenOtherExchanges bool              `json:"messagesOpenOtherExchanges,omitempty"`
+	InputAttachments           []InputAttachment `json:"inputAttachments,omitempty"`
+	Materials                  []InputAttachment `json:"materials,omitempty"`
 }
 
 type InputAttachment struct {
@@ -263,10 +266,7 @@ type VisibleContextMessage struct {
 	SpeakerHandle      string            `json:"speakerHandle,omitempty"`
 	Text               string            `json:"text"`
 	SentAt             time.Time         `json:"sentAt,omitempty"`
-	// ThreadRootID says which exchange the message belongs to, which is what
-	// keeps several of them sharing a place from reading as one.
-	ThreadRootID     string            `json:"threadRootID,omitempty"`
-	InputAttachments []InputAttachment `json:"inputAttachments,omitempty"`
+	InputAttachments   []InputAttachment `json:"inputAttachments,omitempty"`
 }
 
 type HTTPParseResult struct {
@@ -3826,19 +3826,19 @@ func (visibleContext VisibleContext) ToAgentVisibleContext() agentcontract.Visib
 			SpeakerHandle:      message.SpeakerHandle,
 			Text:               message.Text,
 			SentAt:             message.SentAt,
-			ThreadRootID:       message.ThreadRootID,
 			Materials:          agentVisibleContextMaterials(message.InputAttachments),
 		})
 	}
 
 	currentMaterials := agentVisibleContextMaterials(visibleContext.InputAttachments)
 	return agentcontract.VisibleContext{
-		Messages:         messages,
-		CurrentMaterials: currentMaterials,
-		Materials:        agentPreviousVisibleContextMaterials(visibleContext.Materials, currentMaterials),
-		HasMoreBefore:    visibleContext.HasMoreBefore,
-		HistoryCursor:    visibleContext.HistoryCursor,
-		ResponseLanguage: visibleContext.ResponseLanguage,
+		Messages:                   messages,
+		MessagesOpenOtherExchanges: visibleContext.MessagesOpenOtherExchanges,
+		CurrentMaterials:           currentMaterials,
+		Materials:                  agentPreviousVisibleContextMaterials(visibleContext.Materials, currentMaterials),
+		HasMoreBefore:              visibleContext.HasMoreBefore,
+		HistoryCursor:              visibleContext.HistoryCursor,
+		ResponseLanguage:           visibleContext.ResponseLanguage,
 	}
 }
 

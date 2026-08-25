@@ -51,6 +51,9 @@ export type VisibleContextSenderDocument = {
 
 export type VisibleContextDocument = {
 	messages: VisibleContextMessageDocument[];
+	// Whether the messages are how other conversations in the same place opened,
+	// rather than the conversation being continued.
+	messagesOpenOtherExchanges: boolean;
 	hasMoreBefore: boolean;
 	historyCursor: string;
 	sender?: VisibleContextSenderDocument;
@@ -118,7 +121,13 @@ const DEFAULT_HISTORY_LIMIT = 20;
 export async function buildVisibleContext(
 	adapter: ContextCapableAdapter,
 	scopeThreadId: string,
-	options: { beforeMessageId?: string; senderId?: string; cursor?: string; limit?: number } = {},
+	options: {
+		beforeMessageId?: string;
+		senderId?: string;
+		cursor?: string;
+		limit?: number;
+		onlyExchangeOpenings?: boolean;
+	} = {},
 ): Promise<VisibleContextDocument> {
 	const limit = options.limit && options.limit > 0 ? options.limit : DEFAULT_HISTORY_LIMIT;
 	const [fetchResult, threadInfo, senderInfo, reactionsById] = await Promise.all([
@@ -128,11 +137,20 @@ export async function buildVisibleContext(
 		adapter.fetchReactions?.(scopeThreadId).catch(() => null) ?? Promise.resolve(null),
 	]);
 	let previousMessages = messagesBefore(fetchResult.messages, options.beforeMessageId);
+	if (options.onlyExchangeOpenings) {
+		// What another exchange opened with says what it is about. What was said
+		// inside it belongs to whoever is in it, and read here it turns one
+		// conversation into several that look like one.
+		previousMessages = previousMessages.filter(
+			(candidate) => (adapter.threadRootIdOf?.(candidate.raw) ?? candidate.id) === candidate.id
+		);
+	}
 	const hasMoreBefore = Boolean(fetchResult.nextCursor) || previousMessages.length > limit;
 	if (previousMessages.length > limit) {
 		previousMessages = previousMessages.slice(-limit);
 	}
 	return {
+		messagesOpenOtherExchanges: options.onlyExchangeOpenings === true,
 		messages: previousMessages.map((message) =>
 			toVisibleContextMessage(
 				message,
@@ -153,6 +171,7 @@ export async function buildVisibleContext(
 export function emptyVisibleContext(scopeThreadId: string): VisibleContextDocument {
 	return {
 		messages: [],
+		messagesOpenOtherExchanges: false,
 		hasMoreBefore: true,
 		historyCursor: encodeHistoryCursor({ threadId: scopeThreadId }),
 	};
