@@ -2176,7 +2176,7 @@ func TestConnectorRuntimeAddsDocumentAttachmentCatalog(t *testing.T) {
 			MessageID:   "message-1",
 			Filename:    "report.pdf",
 			ContentType: "application/pdf",
-			Path:        "/workspace/circles/staff/inbox/mattermost/direct-1/message-1/report.pdf",
+			Path:        "/workspace/circles/member/inbox/mattermost/direct-1/message-1/report.pdf",
 			IsAvailable: true,
 		}},
 	}
@@ -2188,7 +2188,7 @@ func TestConnectorRuntimeAddsDocumentAttachmentCatalog(t *testing.T) {
 		t.Fatalf("expected event to process: %v", errorValue)
 	}
 	body := joinConnectorMessageContent(languageModel.request.Messages)
-	for _, expected := range []string{"Current attachments", "materialID=mattermost:file-1", "path=/workspace/circles/staff/inbox/mattermost/direct-1/message-1/report.pdf", "availableTools=file_preview,file_read"} {
+	for _, expected := range []string{"Current attachments", "materialID=mattermost:file-1", "path=/workspace/circles/member/inbox/mattermost/direct-1/message-1/report.pdf", "availableTools=file_preview,file_read"} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("expected attachment catalog %q in model request, got %s", expected, body)
 		}
@@ -2213,7 +2213,7 @@ func TestConnectorRuntimeAddsUnavailableAttachmentCatalog(t *testing.T) {
 			MessageID:   "message-1",
 			Filename:    "archive.bin",
 			ContentType: "application/octet-stream",
-			Path:        "/workspace/circles/staff/inbox/mattermost/direct-1/message-1/archive.bin",
+			Path:        "/workspace/circles/member/inbox/mattermost/direct-1/message-1/archive.bin",
 			IsAvailable: false,
 			ErrorCode:   "download_failed",
 			Message:     "unsupported format",
@@ -2254,7 +2254,7 @@ func TestConnectorAttachmentMaterialResolverImportsHistoryMaterial(t *testing.T)
 				Filename:    "mascot.png",
 				ContentType: "image/png",
 				SizeBytes:   5,
-				Path:        "/workspace/circles/staff/inbox/mattermost/thread-1/mascot.png",
+				Path:        "/workspace/circles/member/inbox/mattermost/thread-1/mascot.png",
 				IsAvailable: true,
 			}},
 		},
@@ -2272,7 +2272,7 @@ func TestConnectorAttachmentMaterialResolverImportsHistoryMaterial(t *testing.T)
 	if errorValue != nil {
 		t.Fatalf("expected history material to resolve: %v", errorValue)
 	}
-	if material.MaterialID != "mattermost:file-1" || material.Path != "/workspace/circles/staff/inbox/mattermost/thread-1/mascot.png" {
+	if material.MaterialID != "mattermost:file-1" || material.Path != "/workspace/circles/member/inbox/mattermost/thread-1/mascot.png" {
 		t.Fatalf("expected imported history material, got %+v", material)
 	}
 	if len(adapter.historyCursors) != 1 || adapter.historyCursors[0] != "history-cursor" {

@@ -25,7 +25,7 @@ func TestPOSIXSynchronizerPassesComputedStateDocumentToHelper(t *testing.T) {
 	policyDocument := policy.PolicyDocument{
 		People: []policy.PersonPolicy{{
 			PersonID: "id_22120f1e_432e6dde",
-			Circles:  []string{policy.StaffCircleID},
+			Circles:  []string{policy.MemberCircleID},
 		}},
 	}
 	document, errorValue := json.Marshal(policyDocument)
@@ -52,8 +52,8 @@ func TestPOSIXSynchronizerPassesComputedStateDocumentToHelper(t *testing.T) {
 	if errorValue := json.Unmarshal(observedDocument, &state); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if !containsPOSIXDirectory(state, "/workspace/circles/staff/sites", "blueclaw", "bc_circle_staff", "2770") {
-		t.Fatalf("expected staff sites directory in state, got %+v", state.Directories)
+	if !containsPOSIXDirectory(state, "/workspace/circles/member/sites", "blueclaw", "bc_circle_member", "2770") {
+		t.Fatalf("expected member sites directory in state, got %+v", state.Directories)
 	}
 }
 
@@ -119,8 +119,8 @@ esac
 	if errorValue := json.Unmarshal(observedDocument, &state); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if !hasPOSIXUserGroup(state, "bc_person_person-1", "bc_circle_staff") {
-		t.Fatalf("expected requester to inherit staff group, got %+v", state.Users)
+	if !hasPOSIXUserGroup(state, "bc_person_person-1", "bc_circle_member") {
+		t.Fatalf("expected requester to inherit member group, got %+v", state.Users)
 	}
 	if !hasPOSIXUserGroup(state, "bc_person_person-1", "bc_circle_finance") {
 		t.Fatalf("expected requester finance circle group, got %+v", state.Users)
@@ -128,8 +128,8 @@ esac
 	if hasPOSIXUserGroup(state, "bc_person_person-1", "bc_circle_admin") {
 		t.Fatalf("expected requester POSIX identity to omit admin group, got %+v", state.Users)
 	}
-	if !containsPOSIXDirectory(state, "/workspace/circles/staff/sites", "blueclaw", "bc_circle_staff", "2770") {
-		t.Fatalf("expected staff sites directory, got %+v", state.Directories)
+	if !containsPOSIXDirectory(state, "/workspace/circles/member/sites", "blueclaw", "bc_circle_member", "2770") {
+		t.Fatalf("expected member sites directory, got %+v", state.Directories)
 	}
 	if !containsPOSIXDirectory(state, "/workspace/circles/finance", "blueclaw", "bc_circle_finance", "2770") {
 		t.Fatalf("expected requester circle directory, got %+v", state.Directories)

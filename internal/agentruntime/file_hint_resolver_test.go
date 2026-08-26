@@ -22,7 +22,7 @@ func TestFileReadResolvesAttachmentFileHint(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 		VisibleContext: agentcontract.VisibleContext{CurrentMaterials: []agentcontract.VisibleContextMaterial{{
 			FileHint:   "attachment:mattermost:file-1",
 			MaterialID: "mattermost:file-1",
@@ -53,7 +53,7 @@ func TestFilePreviewResolvesArtifactFileHint(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 		VisibleContext: agentcontract.VisibleContext{Materials: []agentcontract.VisibleContextMaterial{{
 			FileHint:    fileHint,
 			Path:        filepath.Join(workspacePath, filepath.FromSlash(relativePath)),
@@ -82,7 +82,7 @@ func TestFileHintRejectsUnknownAndForgedValues(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 	for _, fileHint := range []string{
 		"attachment:mattermost:forged",
@@ -113,7 +113,7 @@ func TestFileToolsPreserveExplicitPathResolutionAndAccess(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	readResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{

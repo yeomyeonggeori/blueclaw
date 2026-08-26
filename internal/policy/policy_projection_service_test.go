@@ -2,7 +2,7 @@ package policy
 
 import "testing"
 
-func TestPolicyProjectionGivesStaffToEveryPerson(t *testing.T) {
+func TestPolicyProjectionGivesMemberToEveryPerson(t *testing.T) {
 	policyProjection := PolicyProjectionService{}.ReplacePolicyProjectionTransactionally(PolicyDocument{
 		People: []PersonPolicy{
 			{
@@ -24,8 +24,8 @@ func TestPolicyProjectionGivesStaffToEveryPerson(t *testing.T) {
 
 	for _, personID := range []string{"person-1", "person-2", "admin-1"} {
 		personAccess := policyProjection.PersonAccessByPersonID[personID]
-		if !hasTestPolicyString(personAccess.Circles, "staff") {
-			t.Fatalf("expected %s to have staff circle, got %+v", personID, personAccess.Circles)
+		if !hasTestPolicyString(personAccess.Circles, "member") {
+			t.Fatalf("expected %s to have member circle, got %+v", personID, personAccess.Circles)
 		}
 	}
 }
@@ -41,8 +41,8 @@ func TestPolicyProjectionAddsAdminWithoutGrantingCLevel(t *testing.T) {
 	})
 
 	personAccess := policyProjection.PersonAccessByPersonID["admin-1"]
-	if !hasTestPolicyString(personAccess.Circles, "staff") || !hasTestPolicyString(personAccess.Circles, "admin") {
-		t.Fatalf("expected staff and admin circles, got %+v", personAccess.Circles)
+	if !hasTestPolicyString(personAccess.Circles, "member") || !hasTestPolicyString(personAccess.Circles, "admin") {
+		t.Fatalf("expected the member circle and admin circles, got %+v", personAccess.Circles)
 	}
 	if hasTestPolicyString(personAccess.Circles, "c-level") {
 		t.Fatalf("expected executive legacy class not to grant c-level, got %+v", personAccess.Circles)
@@ -58,12 +58,12 @@ func TestPolicyProjectionNormalizesExplicitCircles(t *testing.T) {
 		}},
 		People: []PersonPolicy{{
 			PersonID: "person-1",
-			Circles:  []string{" Staff ", "Finance", "finance"},
+			Circles:  []string{" Member ", "Finance", "finance"},
 		}},
 	})
 
 	personAccess := policyProjection.PersonAccessByPersonID["person-1"]
-	if len(personAccess.Circles) != 2 || personAccess.Circles[0] != "staff" || personAccess.Circles[1] != "finance" {
+	if len(personAccess.Circles) != 2 || personAccess.Circles[0] != "member" || personAccess.Circles[1] != "finance" {
 		t.Fatalf("expected normalized unique circles, got %+v", personAccess.Circles)
 	}
 	if len(personAccess.ResourceAccessRules) != 1 {
@@ -71,18 +71,18 @@ func TestPolicyProjectionNormalizesExplicitCircles(t *testing.T) {
 	}
 }
 
-func TestEnsureRequesterDefaultsPreservesStaffInvariant(t *testing.T) {
+func TestEnsureRequesterDefaultsPreservesMemberInvariant(t *testing.T) {
 	personAccess := EnsureRequesterDefaults(PersonAccess{
 		PersonID: "person-1",
-		Circles:  []string{" Finance ", "staff", "finance"},
+		Circles:  []string{" Finance ", "member", "finance"},
 	})
 
-	if len(personAccess.Circles) != 2 || personAccess.Circles[0] != "staff" || personAccess.Circles[1] != "finance" {
-		t.Fatalf("expected staff plus normalized explicit circles, got %+v", personAccess.Circles)
+	if len(personAccess.Circles) != 2 || personAccess.Circles[0] != "member" || personAccess.Circles[1] != "finance" {
+		t.Fatalf("expected the member circle plus normalized explicit circles, got %+v", personAccess.Circles)
 	}
 }
 
-func TestCanonicalizePolicyDocumentWritesStaffToEveryPersonAndCircleList(t *testing.T) {
+func TestCanonicalizePolicyDocumentWritesMemberToEveryPersonAndCircleList(t *testing.T) {
 	policyDocument := CanonicalizePolicyDocument(PolicyDocument{
 		People: []PersonPolicy{
 			{PersonID: "person-1", Emails: []string{"person@example.com"}, Circles: []string{"Finance"}},
@@ -91,12 +91,12 @@ func TestCanonicalizePolicyDocumentWritesStaffToEveryPersonAndCircleList(t *test
 		Circles: []CirclePolicy{{CircleID: "Finance", DisplayName: "Finance"}},
 	})
 
-	if !hasTestPolicyCircle(policyDocument.Circles, "staff") {
-		t.Fatalf("expected canonical policy to include staff circle, got %+v", policyDocument.Circles)
+	if !hasTestPolicyCircle(policyDocument.Circles, "member") {
+		t.Fatalf("expected canonical policy to include member circle, got %+v", policyDocument.Circles)
 	}
 	for _, personPolicy := range policyDocument.People {
-		if !hasTestPolicyString(personPolicy.Circles, "staff") {
-			t.Fatalf("expected %s to persist staff membership, got %+v", personPolicy.PersonID, personPolicy.Circles)
+		if !hasTestPolicyString(personPolicy.Circles, "member") {
+			t.Fatalf("expected %s to persist member membership, got %+v", personPolicy.PersonID, personPolicy.Circles)
 		}
 	}
 	if !hasTestPolicyString(policyDocument.People[1].Circles, "admin") {

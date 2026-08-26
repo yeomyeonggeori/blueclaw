@@ -3,8 +3,8 @@ package policy
 import "strings"
 
 const (
-	StaffCircleID = "staff"
-	AdminCircleID = "admin"
+	MemberCircleID = "member"
+	AdminCircleID  = "admin"
 )
 
 type PolicyProjection struct {
@@ -61,7 +61,7 @@ func (policyProjectionService PolicyProjectionService) ReplacePolicyProjectionTr
 }
 
 func effectivePersonCircles(personPolicy PersonPolicy) []string {
-	circles := append([]string{StaffCircleID}, personPolicy.Circles...)
+	circles := append([]string{MemberCircleID}, personPolicy.Circles...)
 	if personPolicy.IsAdmin {
 		circles = append(circles, AdminCircleID)
 	}
@@ -69,7 +69,7 @@ func effectivePersonCircles(personPolicy PersonPolicy) []string {
 }
 
 func EnsureRequesterDefaults(personAccess PersonAccess) PersonAccess {
-	personAccess.Circles = normalizePolicyStrings(append([]string{StaffCircleID}, personAccess.Circles...))
+	personAccess.Circles = normalizePolicyStrings(append([]string{MemberCircleID}, personAccess.Circles...))
 	return personAccess
 }
 
@@ -86,13 +86,13 @@ func canonicalCirclePolicies(circlePolicies []CirclePolicy) []CirclePolicy {
 	for index := range result {
 		result[index].CircleID = strings.ToLower(strings.TrimSpace(result[index].CircleID))
 	}
-	if hasCirclePolicy(result, StaffCircleID) {
+	if hasCirclePolicy(result, MemberCircleID) {
 		return result
 	}
 	return append([]CirclePolicy{{
-		CircleID:               StaffCircleID,
+		CircleID:               MemberCircleID,
 		DisplayName:            "Staff",
-		WorkspaceDirectoryPath: "/workspace/circles/" + StaffCircleID,
+		WorkspaceDirectoryPath: "/workspace/circles/" + MemberCircleID,
 	}}, result...)
 }
 

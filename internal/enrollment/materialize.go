@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/policy"
+
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 )
 
@@ -64,13 +66,13 @@ func policyDocumentFor(enrollment Enrollment) map[string]any {
 			"emails":            []string{enrollment.Operator.Email},
 			"securityLevelName": "admin",
 			"securityLevelRank": 100,
-			"circles":           []string{"staff"},
+			"circles":           []string{policy.MemberCircleID},
 			"isAdmin":           true,
 		}},
 		"circles": []map[string]any{{
-			"circleID":               "staff",
+			"circleID":               policy.MemberCircleID,
 			"displayName":            "Staff",
-			"workspaceDirectoryPath": filepath.Join(enrollment.WorkspaceRootPath, "circles", "staff"),
+			"workspaceDirectoryPath": filepath.Join(enrollment.WorkspaceRootPath, "circles", policy.MemberCircleID),
 		}},
 	}
 }

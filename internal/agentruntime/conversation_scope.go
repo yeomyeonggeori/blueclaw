@@ -3,6 +3,8 @@ package agentruntime
 import (
 	"path/filepath"
 	"strings"
+
+	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 )
 
 type ConversationResourceScope struct {
@@ -37,7 +39,7 @@ func ConversationScopeForRequest(workspaceRootPath string, request ToolCatalogRe
 	}
 	circleID := circleIDFromConversation(request)
 	if circleID == "" {
-		circleID = "staff"
+		circleID = policy.MemberCircleID
 	}
 	return ConversationResourceScope{
 		Kind:                 "circle",

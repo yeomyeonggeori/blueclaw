@@ -37,7 +37,7 @@ func TestVerifyCapabilitySocketInvariantPassesWhenGroupIsNotARequesterGroupAndMo
 		return "blueclaw", 0o660, nil
 	}
 	resolveRequesterGroups := func() ([]string, error) {
-		return []string{"bc_shared", "bc_circle_staff", "bc_person_abcd1234"}, nil
+		return []string{"bc_shared", "bc_circle_member", "bc_person_abcd1234"}, nil
 	}
 
 	result, verifyError := VerifyCapabilitySocketInvariant(socketPath, resolveGroup, resolveRequesterGroups)
@@ -78,7 +78,7 @@ func TestVerifyCapabilitySocketInvariantFailsWhenRequesterGroupOwnsSocket(t *tes
 		return "bc_shared", 0o660, nil
 	}
 	resolveRequesterGroups := func() ([]string, error) {
-		return []string{"bc_shared", "bc_circle_staff"}, nil
+		return []string{"bc_shared", "bc_circle_member"}, nil
 	}
 
 	_, verifyError := VerifyCapabilitySocketInvariant(socketPath, resolveGroup, resolveRequesterGroups)

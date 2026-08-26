@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"mime"
 	"path/filepath"
@@ -361,7 +362,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) isOptionalControlFilePath(path str
 
 func (toolCatalogBuilder *ToolCatalogBuilder) recommendedSiteControlWritePath(path string) string {
 	cleanPath := strings.Trim(filepath.ToSlash(strings.TrimSpace(path)), "/")
-	for _, prefix := range []string{"~/sites/", "home/sites/", "workspace/circles/staff/sites/"} {
+	for _, prefix := range []string{"~/sites/", "home/sites/", "workspace/circles/member/sites/"} {
 		if recommendedPath := toolCatalogBuilder.recommendedSiteControlWritePathForPrefix(cleanPath, prefix); recommendedPath != "" {
 			return recommendedPath
 		}
@@ -384,7 +385,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) recommendedSiteControlWritePathFor
 	if !toolCatalogBuilder.isOptionalControlFilePath(relativePath) {
 		return ""
 	}
-	return filepath.ToSlash(filepath.Join("/workspace", "circles", "staff", "sites", siteID, "draft", relativePath))
+	return filepath.ToSlash(filepath.Join("/workspace", "circles", policy.MemberCircleID, "sites", siteID, "draft", relativePath))
 }
 
 func fileReadResultMap(base map[string]any, readResult fileReadOutput) map[string]any {
