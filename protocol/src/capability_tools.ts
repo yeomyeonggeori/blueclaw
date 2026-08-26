@@ -13,6 +13,8 @@ import {
 import { jsonValueSchema } from './common.ts';
 
 const dateDescription = 'Date in YYYY-MM-DD format.';
+// A task and a calendar event are one row, so both are placed in time the same way.
+const momentDescription = 'ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day.';
 const resourceIDSchema = z.string()
   .min(1)
   .regex(/^\S(?:.*\S)?$/, 'Resource identity must not have leading or trailing whitespace.');
@@ -52,10 +54,10 @@ export enum WorkspaceTaskScope {
 }
 
 export enum CalendarToolName {
-  Add = 'calendar_add',
-  List = 'calendar_list',
-  Update = 'calendar_update',
-  Delete = 'calendar_delete',
+  Add = 'event_add',
+  List = 'event_list',
+  Update = 'event_update',
+  Delete = 'event_delete',
 }
 
 export enum MessageToolName {
@@ -186,20 +188,8 @@ export enum CalendarReminderLeadHours {
   FortyEight = 48,
 }
 
-const calendarReminderLeadHourValues: readonly number[] = [
-  CalendarReminderLeadHours.One,
-  CalendarReminderLeadHours.Two,
-  CalendarReminderLeadHours.Three,
-  CalendarReminderLeadHours.Six,
-  CalendarReminderLeadHours.Twelve,
-  CalendarReminderLeadHours.TwentyFour,
-  CalendarReminderLeadHours.FortyEight,
-];
-
 const workspaceTaskSizeSchema = z.enum(WorkspaceTaskSize);
 const workspaceTaskStatusSchema = z.enum(WorkspaceTaskStatus);
-const calendarReminderLeadHoursSchema = z.number()
-  .refine(value => calendarReminderLeadHourValues.includes(value));
 
 const taskParticipantSchema = z.strictObject({
   personID: z.string().optional(),
@@ -219,7 +209,6 @@ export const taskResultSchema = z.strictObject({
   business: z.string().optional(),
   type: z.string().optional(),
   content: z.string().optional(),
-  goal: z.string().optional(),
   size: z.string().optional(),
   status: z.string().optional(),
   startDate: z.string().optional(),
@@ -235,20 +224,16 @@ export const taskAddInputSchema = z.strictObject({
   title: z.string().describe(
     "Concise noun-phrase title for the work itself, in the user's language. Keep the user's exact title when they give one; otherwise write one rather than reusing their sentence. People belong in the person fields, not the title.",
   ),
-  goal: z.string().describe('Definition of done or desired outcome. Omit when the title already states the complete outcome.').optional(),
   size: workspaceTaskSizeSchema
     .describe('Effort size using the work-size rubric. Omit when the request does not support a useful estimate.')
     .optional(),
   status: z.enum(WorkspaceTaskInitialStatus)
     .describe('Initial task status. Defaults to planned. The runtime may change delegated tasks to requested.')
     .optional(),
-  startDate: z.string().describe(`${dateDescription} Resolve relative dates from the current date. Omit when the user did not specify one.`).optional(),
-  endDate: z.string().describe(`Due ${dateDescription.toLowerCase()} Resolve relative dates from the current date. Omit when the user did not specify one.`).optional(),
-  targetPersonHint: z.string()
-    .describe("Name or email of the person the task belongs to, e.g. 'Alice' or 'alice@example.com'. Leave empty to assign to the requester themselves.")
-    .optional(),
+  startsAt: z.string().describe(`When the work starts. ${momentDescription} Resolve relative dates from the current date. Omit when the user did not specify one.`).optional(),
+  endsAt: z.string().describe(`When the work is due. ${momentDescription} Resolve relative dates from the current date. Omit when the user did not specify one.`).optional(),
   participantPersonHints: z.array(z.string())
-    .describe('Names, @handles, or emails of additional participants explicitly named by the user. The owner is included automatically.')
+    .describe('Names, @handles, or emails of the people the task belongs to. Naming nobody makes it the requester\u2019s own.')
     .optional(),
 });
 
@@ -256,11 +241,11 @@ export const taskAddInputIntentSchema = taskAddInputSchema.partial();
 
 export const taskListInputSchema = z.strictObject({
   query: z.string()
-    .describe("Free-text keyword filter matched against task titles and content, e.g. 'budget'. Do not put dates, week codes, or person names here — use the dedicated fields instead.")
+    .describe("Free-text keyword filter matched against task titles and notes, e.g. 'budget'. Do not put dates, week codes, or person names here — use the dedicated fields instead.")
     .optional(),
-  targetPersonHint: z.string().describe('Name or email of a specific person whose tasks to list. Leave empty to use scope.').optional(),
+  participantPersonHint: z.string().describe('Name or email of a specific person whose tasks to list. Leave empty to use scope.').optional(),
   scope: z.enum(WorkspaceTaskScope)
-    .describe('Whose tasks to list when targetPersonHint is empty. Defaults to self. Use all only for an explicit workspace-wide request.')
+    .describe('Whose tasks to list when participantPersonHint is empty. Defaults to self. Use all only for an explicit workspace-wide request.')
     .optional(),
   weekFrom: z.number()
     .describe('Start of the week range as an offset from this week: 0 this week, -1 last week, 1 next week. Omit both weekFrom and weekTo to list the current week; widen the range for other periods.')
@@ -279,13 +264,12 @@ const taskHintSchema = z.string().min(1).max(256).describe(
 const taskUpdateObjectSchema = z.strictObject({
   taskHint: taskHintSchema,
   title: z.string().describe('New task title.').optional(),
-  goal: z.string().describe('Definition of done or success criterion for this task.').optional(),
   status: workspaceTaskStatusSchema.describe('New task status.').optional(),
   size: workspaceTaskSizeSchema.describe('Effort size estimate.').optional(),
-  category: z.string().describe('Business category label, taken from registeredLabels.businesses in a task_list result.').optional(),
+  business: z.string().describe('Business label, taken from registeredLabels.businesses in a task_list result.').optional(),
   type: z.string().describe('Task type label, taken from registeredLabels.types in a task_list result.').optional(),
-  startDate: z.string().describe(dateDescription).optional(),
-  endDate: z.string().describe(`Due ${dateDescription.toLowerCase()}`).optional(),
+  startsAt: z.string().describe(`When the work starts. ${momentDescription}`).optional(),
+  endsAt: z.string().describe(`When the work is due. ${momentDescription}`).optional(),
   participantPersonHints: z.array(z.string())
     .describe('Names, @handles, or emails of everyone taking part, replacing the current participants. Send the whole set, not just additions.')
     .optional(),
@@ -352,58 +336,57 @@ const calendarParticipantResultSchema = z.strictObject({
 export const calendarEventResultSchema = z.strictObject({
   eventID: resourceIDSchema,
   title: z.string(),
-  description: z.string(),
+  note: z.string(),
   location: z.string(),
-  startISO: z.string(),
-  endISO: z.string(),
-  timeZone: z.string(),
-  isAllDay: z.boolean(),
-  color: z.string(),
-  people: z.array(z.string()),
+  startsAt: z.string(),
+  endsAt: z.string(),
+  isWholeDay: z.boolean(),
   participants: z.array(calendarParticipantResultSchema),
-  reminderLeadHours: calendarReminderLeadHoursSchema,
+  notifyMinutesBefore: z.number().int().optional(),
   updatedAt: z.string(),
 });
 
 const calendarMutableFields = {
   title: z.string().describe('New event title.').optional(),
-  description: z.string().describe('New event notes or agenda. Use an empty string to clear them.').optional(),
+  note: z.string().describe('New event notes or agenda. Use an empty string to clear them.').optional(),
   location: z.string().describe('New physical or virtual location. Use an empty string to clear it.').optional(),
-  startISO: z.string().describe('New event start as ISO 8601 with timezone.').optional(),
-  endISO: z.string().describe('New event end as ISO 8601 with timezone.').optional(),
-  timeZone: z.string().describe('New IANA timezone identifier.').optional(),
-  isAllDay: z.boolean().describe('Whether the event is all day.').optional(),
-  color: z.string().describe('New provider-supported color label.').optional(),
-  people: z.array(z.string()).describe('Replacement attendee hints such as names, @handles, or emails.').optional(),
-  includeRequester: z.boolean().describe('Whether the requester should be included as an attendee.').optional(),
-  reminderLeadHours: calendarReminderLeadHoursSchema.describe('Reminder lead time in hours: 1, 2, 3, 6, 12, 24, or 48.').optional(),
+  startsAt: z.string().describe(`New event start. ${momentDescription}`).optional(),
+  endsAt: z.string().describe(`New event end. ${momentDescription}`).optional(),
+  isWholeDay: z.boolean().describe('Whether the event takes the whole day.').optional(),
+  participantPersonHints: z.array(z.string())
+    .describe('Names, @handles, or emails of everyone attending, replacing the current attendees. Send the whole set, not just additions.')
+    .optional(),
+  notifyMinutesBefore: z.number().int().positive().describe('Minutes before the start to notify attendees.').optional(),
 };
 
 export const calendarAddInputSchema = z.strictObject({
   title: z.string().describe('Event title shown in the calendar.'),
-  description: z.string().describe('Optional event notes or agenda visible to attendees.').optional(),
+  note: z.string().describe('Optional event notes or agenda visible to attendees.').optional(),
   location: z.string().describe('Optional physical or virtual location.').optional(),
-  startISO: z.string().describe('Event start as ISO 8601 with timezone. Resolve relative times before calling.'),
-  endISO: z.string().describe('Event end as ISO 8601 with timezone. It must be after startISO.'),
-  timeZone: z.string().describe('IANA timezone identifier. Defaults to the workspace timezone.').optional(),
-  isAllDay: z.boolean().describe('Set true for an all-day event.').optional(),
-  color: z.string().describe('Optional provider-supported color label.').optional(),
-  people: z.array(z.string()).describe('Attendee hints such as names, @handles, or emails.').optional(),
-  includeRequester: z.boolean().describe('Set false when the requester is not an attendee. Defaults to true.').optional(),
-  reminderLeadHours: calendarReminderLeadHoursSchema.describe('Reminder lead time in hours: 1, 2, 3, 6, 12, 24, or 48.').optional(),
+  startsAt: z.string().describe(`Event start. ${momentDescription}`),
+  endsAt: z.string().describe(`Event end. ${momentDescription} It must be after startsAt.`),
+  isWholeDay: z.boolean().describe('Set true for an event that takes the whole day.').optional(),
+  participantPersonHints: z.array(z.string())
+    .describe('Names, @handles, or emails of the people attending. Naming nobody makes the event the requester\u2019s own, naming colleagues makes it theirs, and naming everyone leaves it open to all.')
+    .optional(),
+  notifyMinutesBefore: z.number().int().positive().describe('Minutes before the start to notify attendees.').optional(),
 });
 
 export const calendarAddInputIntentSchema = calendarAddInputSchema.partial();
 
 export const calendarListInputSchema = z.strictObject({
-  startISO: z.string().describe('Inclusive start of the time window as ISO 8601 with timezone.').optional(),
-  endISO: z.string().describe('Exclusive end of the time window as ISO 8601 with timezone.').optional(),
-  query: z.string().describe('Optional free-text filter matched against event titles, descriptions, and locations.').optional(),
+  startsAt: z.string().describe(`Inclusive start of the window. ${momentDescription}`).optional(),
+  endsAt: z.string().describe(`Exclusive end of the window. ${momentDescription}`).optional(),
+  weekFrom: z.number().int()
+    .describe('Start of the week range as an offset from this week: 0 this week, -1 last week, 1 next week. Use instead of startsAt and endsAt when the user speaks in weeks.')
+    .optional(),
+  weekTo: z.number().int().describe('End of the week range as an offset from this week.').optional(),
+  query: z.string().describe('Optional free-text filter matched against event titles, notes, and locations.').optional(),
   limit: z.number().positive().refine(Number.isInteger, 'Limit must be a whole number.').describe('Maximum number of events to return.').optional(),
 });
 
 const calendarEventHintSchema = z.string().min(1).max(256).describe(
-  'Identifies the existing calendar event to act on: its exact event ID or its exact CURRENT title as it appears in a calendar_list result. Never a new or intended title. Resolved server-side; if it does not uniquely resolve, the call fails with a candidates list of matching events.',
+  'Identifies the existing calendar event to act on: its exact event ID or its exact CURRENT title as it appears in a event_list result. Never a new or intended title. Resolved server-side; if it does not uniquely resolve, the call fails with a candidates list of matching events.',
 );
 
 const calendarUpdateObjectSchema = z.strictObject({
@@ -924,8 +907,8 @@ const calendarToolDefinitions: CapabilityToolDefinition[] = [
     name: CalendarToolName.Add,
     namespace: 'calendar',
     privacyClass: 'workspace_calendar',
-    policyResource: 'tool:calendar_add',
-    description: 'Create a calendar event with a concrete time range. Resolve natural-language dates and times before calling. Use calendar_update for an existing event.',
+    policyResource: 'tool:event_add',
+    description: 'Create a calendar event with a concrete time range. Resolve natural-language dates and times before calling. Use event_update for an existing event.',
     version: '2',
     estimatedLatency: CapabilityEstimatedLatency.Medium,
     inputSchema: calendarAddInputSchema,
@@ -946,7 +929,7 @@ const calendarToolDefinitions: CapabilityToolDefinition[] = [
     name: CalendarToolName.List,
     namespace: 'calendar',
     privacyClass: 'workspace_calendar',
-    policyResource: 'tool:calendar_list',
+    policyResource: 'tool:event_list',
     description: 'List calendar events in a concrete time window, optionally filtered by title, description, or location. Resolve natural-language dates to startISO and endISO before calling.',
     version: '2',
     estimatedLatency: CapabilityEstimatedLatency.Low,
@@ -958,8 +941,8 @@ const calendarToolDefinitions: CapabilityToolDefinition[] = [
     name: CalendarToolName.Update,
     namespace: 'calendar',
     privacyClass: 'workspace_calendar',
-    policyResource: 'tool:calendar_update',
-    description: 'Update explicit fields on a calendar event. eventHint is the exact event ID or exact event title from a calendar_list result, resolved server-side to the canonical event; use calendar_list first when neither is known. At least one mutable field is required.',
+    policyResource: 'tool:event_update',
+    description: 'Update explicit fields on a calendar event. eventHint is the exact event ID or exact event title from a event_list result, resolved server-side to the canonical event; use event_list first when neither is known. At least one mutable field is required.',
     version: '3',
     estimatedLatency: CapabilityEstimatedLatency.Medium,
     inputSchema: calendarUpdateInputSchema,
@@ -980,8 +963,8 @@ const calendarToolDefinitions: CapabilityToolDefinition[] = [
     name: CalendarToolName.Delete,
     namespace: 'calendar',
     privacyClass: 'workspace_calendar',
-    policyResource: 'tool:calendar_delete',
-    description: 'Permanently delete a calendar event. eventHint is the exact event ID or exact event title from a calendar_list result, resolved server-side to the canonical event; use calendar_list first when neither is known. Requires approval; this action is irreversible.',
+    policyResource: 'tool:event_delete',
+    description: 'Permanently delete a calendar event. eventHint is the exact event ID or exact event title from a event_list result, resolved server-side to the canonical event; use event_list first when neither is known. Requires approval; this action is irreversible.',
     version: '2',
     estimatedLatency: CapabilityEstimatedLatency.Medium,
     inputSchema: calendarDeleteInputSchema,

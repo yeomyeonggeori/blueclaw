@@ -22,16 +22,12 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
-          "endDate": {
-            "description": "Due date in yyyy-mm-dd format. Resolve relative dates from the current date. Omit when the user did not specify one.",
-            "type": "string"
-          },
-          "goal": {
-            "description": "Definition of done or desired outcome. Omit when the title already states the complete outcome.",
+          "endsAt": {
+            "description": "When the work is due. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day. Resolve relative dates from the current date. Omit when the user did not specify one.",
             "type": "string"
           },
           "participantPersonHints": {
-            "description": "Names, @handles, or emails of additional participants explicitly named by the user. The owner is included automatically.",
+            "description": "Names, @handles, or emails of the people the task belongs to. Naming nobody makes it the requester’s own.",
             "items": {
               "type": "string"
             },
@@ -49,8 +45,8 @@
             ],
             "type": "string"
           },
-          "startDate": {
-            "description": "Date in YYYY-MM-DD format. Resolve relative dates from the current date. Omit when the user did not specify one.",
+          "startsAt": {
+            "description": "When the work starts. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day. Resolve relative dates from the current date. Omit when the user did not specify one.",
             "type": "string"
           },
           "status": {
@@ -63,10 +59,6 @@
               "rejected",
               "cancelled"
             ],
-            "type": "string"
-          },
-          "targetPersonHint": {
-            "description": "Name or email of the person the task belongs to, e.g. 'Alice' or 'alice@example.com'. Leave empty to assign to the requester themselves.",
             "type": "string"
           },
           "title": {
@@ -80,16 +72,12 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
-          "endDate": {
-            "description": "Due date in yyyy-mm-dd format. Resolve relative dates from the current date. Omit when the user did not specify one.",
-            "type": "string"
-          },
-          "goal": {
-            "description": "Definition of done or desired outcome. Omit when the title already states the complete outcome.",
+          "endsAt": {
+            "description": "When the work is due. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day. Resolve relative dates from the current date. Omit when the user did not specify one.",
             "type": "string"
           },
           "participantPersonHints": {
-            "description": "Names, @handles, or emails of additional participants explicitly named by the user. The owner is included automatically.",
+            "description": "Names, @handles, or emails of the people the task belongs to. Naming nobody makes it the requester’s own.",
             "items": {
               "type": "string"
             },
@@ -107,8 +95,8 @@
             ],
             "type": "string"
           },
-          "startDate": {
-            "description": "Date in YYYY-MM-DD format. Resolve relative dates from the current date. Omit when the user did not specify one.",
+          "startsAt": {
+            "description": "When the work starts. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day. Resolve relative dates from the current date. Omit when the user did not specify one.",
             "type": "string"
           },
           "status": {
@@ -121,10 +109,6 @@
               "rejected",
               "cancelled"
             ],
-            "type": "string"
-          },
-          "targetPersonHint": {
-            "description": "Name or email of the person the task belongs to, e.g. 'Alice' or 'alice@example.com'. Leave empty to assign to the requester themselves.",
             "type": "string"
           },
           "title": {
@@ -163,9 +147,6 @@
             "maximum": 9007199254740991,
             "minimum": -9007199254740991,
             "type": "integer"
-          },
-          "goal": {
-            "type": "string"
           },
           "mattermostPostID": {
             "type": "string"
@@ -275,9 +256,6 @@
               "minimum": -9007199254740991,
               "type": "integer"
             },
-            "goal": {
-              "type": "string"
-            },
             "mattermostPostID": {
               "type": "string"
             },
@@ -378,12 +356,16 @@
             "description": "Maximum number of tasks to return. Defaults to 50.",
             "type": "number"
           },
+          "participantPersonHint": {
+            "description": "Name or email of a specific person whose tasks to list. Leave empty to use scope.",
+            "type": "string"
+          },
           "query": {
-            "description": "Free-text keyword filter matched against task titles and content, e.g. 'budget'. Do not put dates, week codes, or person names here — use the dedicated fields instead.",
+            "description": "Free-text keyword filter matched against task titles and notes, e.g. 'budget'. Do not put dates, week codes, or person names here — use the dedicated fields instead.",
             "type": "string"
           },
           "scope": {
-            "description": "Whose tasks to list when targetPersonHint is empty. Defaults to self. Use all only for an explicit workspace-wide request.",
+            "description": "Whose tasks to list when participantPersonHint is empty. Defaults to self. Use all only for an explicit workspace-wide request.",
             "enum": [
               "self",
               "all"
@@ -392,10 +374,6 @@
           },
           "status": {
             "description": "Filter by task status. Accepted values: 'planned', 'in_progress', 'completed', 'requested', 'paused', 'rejected', 'cancelled'. Leave empty to return all statuses.",
-            "type": "string"
-          },
-          "targetPersonHint": {
-            "description": "Name or email of a specific person whose tasks to list. Leave empty to use scope.",
             "type": "string"
           },
           "weekFrom": {
@@ -489,9 +467,6 @@
                   "maximum": 9007199254740991,
                   "minimum": -9007199254740991,
                   "type": "integer"
-                },
-                "goal": {
-                  "type": "string"
                 },
                 "mattermostPostID": {
                   "type": "string"
@@ -669,9 +644,6 @@
                     "minimum": -9007199254740991,
                     "type": "integer"
                   },
-                  "goal": {
-                    "type": "string"
-                  },
                   "mattermostPostID": {
                     "type": "string"
                   },
@@ -794,16 +766,12 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
-          "category": {
-            "description": "Business category label, taken from registeredLabels.businesses in a task_list result.",
+          "business": {
+            "description": "Business label, taken from registeredLabels.businesses in a task_list result.",
             "type": "string"
           },
-          "endDate": {
-            "description": "Due date in yyyy-mm-dd format.",
-            "type": "string"
-          },
-          "goal": {
-            "description": "Definition of done or success criterion for this task.",
+          "endsAt": {
+            "description": "When the work is due. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day.",
             "type": "string"
           },
           "participantPersonHints": {
@@ -825,8 +793,8 @@
             ],
             "type": "string"
           },
-          "startDate": {
-            "description": "Date in YYYY-MM-DD format.",
+          "startsAt": {
+            "description": "When the work starts. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day.",
             "type": "string"
           },
           "status": {
@@ -858,16 +826,12 @@
         "additionalProperties": false,
         "minProperties": 2,
         "properties": {
-          "category": {
-            "description": "Business category label, taken from registeredLabels.businesses in a task_list result.",
+          "business": {
+            "description": "Business label, taken from registeredLabels.businesses in a task_list result.",
             "type": "string"
           },
-          "endDate": {
-            "description": "Due date in yyyy-mm-dd format.",
-            "type": "string"
-          },
-          "goal": {
-            "description": "Definition of done or success criterion for this task.",
+          "endsAt": {
+            "description": "When the work is due. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day.",
             "type": "string"
           },
           "participantPersonHints": {
@@ -889,8 +853,8 @@
             ],
             "type": "string"
           },
-          "startDate": {
-            "description": "Date in YYYY-MM-DD format.",
+          "startsAt": {
+            "description": "When the work starts. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day.",
             "type": "string"
           },
           "status": {
@@ -952,9 +916,6 @@
             "maximum": 9007199254740991,
             "minimum": -9007199254740991,
             "type": "integer"
-          },
-          "goal": {
-            "type": "string"
           },
           "mattermostPostID": {
             "type": "string"
@@ -1063,9 +1024,6 @@
               "maximum": 9007199254740991,
               "minimum": -9007199254740991,
               "type": "integer"
-            },
-            "goal": {
-              "type": "string"
             },
             "mattermostPostID": {
               "type": "string"
@@ -1384,13 +1342,13 @@
       "availability": {
         "state": "ok"
       },
-      "canonicalName": "calendar_add",
+      "canonicalName": "event_add",
       "completionEvidence": {
         "action": "write_calendar",
         "mode": "success",
         "targetKind": "calendar"
       },
-      "description": "Create a calendar event with a concrete time range. Resolve natural-language dates and times before calling. Use calendar_update for an existing event.",
+      "description": "Create a calendar event with a concrete time range. Resolve natural-language dates and times before calling. Use event_update for an existing event.",
       "estimatedLatency": "medium",
       "idempotency": {
         "required": false,
@@ -1401,47 +1359,37 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
-          "color": {
-            "description": "Optional provider-supported color label.",
+          "endsAt": {
+            "description": "Event end. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day. It must be after startsAt.",
             "type": "string"
           },
-          "description": {
-            "description": "Optional event notes or agenda visible to attendees.",
-            "type": "string"
-          },
-          "endISO": {
-            "description": "Event end as ISO 8601 with timezone. It must be after startISO.",
-            "type": "string"
-          },
-          "includeRequester": {
-            "description": "Set false when the requester is not an attendee. Defaults to true.",
-            "type": "boolean"
-          },
-          "isAllDay": {
-            "description": "Set true for an all-day event.",
+          "isWholeDay": {
+            "description": "Set true for an event that takes the whole day.",
             "type": "boolean"
           },
           "location": {
             "description": "Optional physical or virtual location.",
             "type": "string"
           },
-          "people": {
-            "description": "Attendee hints such as names, @handles, or emails.",
+          "note": {
+            "description": "Optional event notes or agenda visible to attendees.",
+            "type": "string"
+          },
+          "notifyMinutesBefore": {
+            "description": "Minutes before the start to notify attendees.",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "participantPersonHints": {
+            "description": "Names, @handles, or emails of the people attending. Naming nobody makes the event the requester’s own, naming colleagues makes it theirs, and naming everyone leaves it open to all.",
             "items": {
               "type": "string"
             },
             "type": "array"
           },
-          "reminderLeadHours": {
-            "description": "Reminder lead time in hours: 1, 2, 3, 6, 12, 24, or 48.",
-            "type": "number"
-          },
-          "startISO": {
-            "description": "Event start as ISO 8601 with timezone. Resolve relative times before calling.",
-            "type": "string"
-          },
-          "timeZone": {
-            "description": "IANA timezone identifier. Defaults to the workspace timezone.",
+          "startsAt": {
+            "description": "Event start. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day.",
             "type": "string"
           },
           "title": {
@@ -1455,47 +1403,37 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
-          "color": {
-            "description": "Optional provider-supported color label.",
+          "endsAt": {
+            "description": "Event end. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day. It must be after startsAt.",
             "type": "string"
           },
-          "description": {
-            "description": "Optional event notes or agenda visible to attendees.",
-            "type": "string"
-          },
-          "endISO": {
-            "description": "Event end as ISO 8601 with timezone. It must be after startISO.",
-            "type": "string"
-          },
-          "includeRequester": {
-            "description": "Set false when the requester is not an attendee. Defaults to true.",
-            "type": "boolean"
-          },
-          "isAllDay": {
-            "description": "Set true for an all-day event.",
+          "isWholeDay": {
+            "description": "Set true for an event that takes the whole day.",
             "type": "boolean"
           },
           "location": {
             "description": "Optional physical or virtual location.",
             "type": "string"
           },
-          "people": {
-            "description": "Attendee hints such as names, @handles, or emails.",
+          "note": {
+            "description": "Optional event notes or agenda visible to attendees.",
+            "type": "string"
+          },
+          "notifyMinutesBefore": {
+            "description": "Minutes before the start to notify attendees.",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "participantPersonHints": {
+            "description": "Names, @handles, or emails of the people attending. Naming nobody makes the event the requester’s own, naming colleagues makes it theirs, and naming everyone leaves it open to all.",
             "items": {
               "type": "string"
             },
             "type": "array"
           },
-          "reminderLeadHours": {
-            "description": "Reminder lead time in hours: 1, 2, 3, 6, 12, 24, or 48.",
-            "type": "number"
-          },
-          "startISO": {
-            "description": "Event start as ISO 8601 with timezone. Resolve relative times before calling.",
-            "type": "string"
-          },
-          "timeZone": {
-            "description": "IANA timezone identifier. Defaults to the workspace timezone.",
+          "startsAt": {
+            "description": "Event start. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day.",
             "type": "string"
           },
           "title": {
@@ -1505,28 +1443,22 @@
         },
         "required": [
           "title",
-          "startISO",
-          "endISO"
+          "startsAt",
+          "endsAt"
         ],
         "type": "object"
       },
       "inputSchemaStrict": true,
-      "modelName": "calendar_add",
+      "modelName": "event_add",
       "modelVisibility": "visible",
       "modelVisible": true,
-      "name": "calendar_add",
+      "name": "event_add",
       "namespace": "calendar",
       "outputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
-          "color": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "endISO": {
+          "endsAt": {
             "type": "string"
           },
           "eventID": {
@@ -1534,11 +1466,19 @@
             "pattern": "^\\S(?:.*\\S)?$",
             "type": "string"
           },
-          "isAllDay": {
+          "isWholeDay": {
             "type": "boolean"
           },
           "location": {
             "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "notifyMinutesBefore": {
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "type": "integer"
           },
           "participants": {
             "items": {
@@ -1561,19 +1501,7 @@
             },
             "type": "array"
           },
-          "people": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "reminderLeadHours": {
-            "type": "number"
-          },
-          "startISO": {
-            "type": "string"
-          },
-          "timeZone": {
+          "startsAt": {
             "type": "string"
           },
           "title": {
@@ -1586,22 +1514,18 @@
         "required": [
           "eventID",
           "title",
-          "description",
+          "note",
           "location",
-          "startISO",
-          "endISO",
-          "timeZone",
-          "isAllDay",
-          "color",
-          "people",
+          "startsAt",
+          "endsAt",
+          "isWholeDay",
           "participants",
-          "reminderLeadHours",
           "updatedAt"
         ],
         "type": "object"
       },
       "outputSchemaStrict": true,
-      "policyResource": "tool:calendar_add",
+      "policyResource": "tool:event_add",
       "privacyClass": "workspace_calendar",
       "requiresUserPresence": false,
       "resultContract": {
@@ -1617,13 +1541,7 @@
           "$schema": "https://json-schema.org/draft/2020-12/schema",
           "additionalProperties": false,
           "properties": {
-            "color": {
-              "type": "string"
-            },
-            "description": {
-              "type": "string"
-            },
-            "endISO": {
+            "endsAt": {
               "type": "string"
             },
             "eventID": {
@@ -1631,11 +1549,19 @@
               "pattern": "^\\S(?:.*\\S)?$",
               "type": "string"
             },
-            "isAllDay": {
+            "isWholeDay": {
               "type": "boolean"
             },
             "location": {
               "type": "string"
+            },
+            "note": {
+              "type": "string"
+            },
+            "notifyMinutesBefore": {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
             },
             "participants": {
               "items": {
@@ -1658,19 +1584,7 @@
               },
               "type": "array"
             },
-            "people": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "reminderLeadHours": {
-              "type": "number"
-            },
-            "startISO": {
-              "type": "string"
-            },
-            "timeZone": {
+            "startsAt": {
               "type": "string"
             },
             "title": {
@@ -1683,16 +1597,12 @@
           "required": [
             "eventID",
             "title",
-            "description",
+            "note",
             "location",
-            "startISO",
-            "endISO",
-            "timeZone",
-            "isAllDay",
-            "color",
-            "people",
+            "startsAt",
+            "endsAt",
+            "isWholeDay",
             "participants",
-            "reminderLeadHours",
             "updatedAt"
           ],
           "type": "object"
@@ -1707,7 +1617,7 @@
       "availability": {
         "state": "ok"
       },
-      "canonicalName": "calendar_list",
+      "canonicalName": "event_list",
       "description": "List calendar events in a concrete time window, optionally filtered by title, description, or location. Resolve natural-language dates to startISO and endISO before calling.",
       "estimatedLatency": "low",
       "idempotency": {
@@ -1719,8 +1629,8 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
-          "endISO": {
-            "description": "Exclusive end of the time window as ISO 8601 with timezone.",
+          "endsAt": {
+            "description": "Exclusive end of the window. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day.",
             "type": "string"
           },
           "limit": {
@@ -1729,21 +1639,33 @@
             "type": "number"
           },
           "query": {
-            "description": "Optional free-text filter matched against event titles, descriptions, and locations.",
+            "description": "Optional free-text filter matched against event titles, notes, and locations.",
             "type": "string"
           },
-          "startISO": {
-            "description": "Inclusive start of the time window as ISO 8601 with timezone.",
+          "startsAt": {
+            "description": "Inclusive start of the window. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day.",
             "type": "string"
+          },
+          "weekFrom": {
+            "description": "Start of the week range as an offset from this week: 0 this week, -1 last week, 1 next week. Use instead of startsAt and endsAt when the user speaks in weeks.",
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "type": "integer"
+          },
+          "weekTo": {
+            "description": "End of the week range as an offset from this week.",
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "type": "integer"
           }
         },
         "type": "object"
       },
       "inputSchemaStrict": true,
-      "modelName": "calendar_list",
+      "modelName": "event_list",
       "modelVisibility": "visible",
       "modelVisible": true,
-      "name": "calendar_list",
+      "name": "event_list",
       "namespace": "calendar",
       "outputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1753,13 +1675,7 @@
             "items": {
               "additionalProperties": false,
               "properties": {
-                "color": {
-                  "type": "string"
-                },
-                "description": {
-                  "type": "string"
-                },
-                "endISO": {
+                "endsAt": {
                   "type": "string"
                 },
                 "eventID": {
@@ -1767,11 +1683,19 @@
                   "pattern": "^\\S(?:.*\\S)?$",
                   "type": "string"
                 },
-                "isAllDay": {
+                "isWholeDay": {
                   "type": "boolean"
                 },
                 "location": {
                   "type": "string"
+                },
+                "note": {
+                  "type": "string"
+                },
+                "notifyMinutesBefore": {
+                  "maximum": 9007199254740991,
+                  "minimum": -9007199254740991,
+                  "type": "integer"
                 },
                 "participants": {
                   "items": {
@@ -1794,19 +1718,7 @@
                   },
                   "type": "array"
                 },
-                "people": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
-                "reminderLeadHours": {
-                  "type": "number"
-                },
-                "startISO": {
-                  "type": "string"
-                },
-                "timeZone": {
+                "startsAt": {
                   "type": "string"
                 },
                 "title": {
@@ -1819,16 +1731,12 @@
               "required": [
                 "eventID",
                 "title",
-                "description",
+                "note",
                 "location",
-                "startISO",
-                "endISO",
-                "timeZone",
-                "isAllDay",
-                "color",
-                "people",
+                "startsAt",
+                "endsAt",
+                "isWholeDay",
                 "participants",
-                "reminderLeadHours",
                 "updatedAt"
               ],
               "type": "object"
@@ -1842,7 +1750,7 @@
         "type": "object"
       },
       "outputSchemaStrict": true,
-      "policyResource": "tool:calendar_list",
+      "policyResource": "tool:event_list",
       "privacyClass": "workspace_calendar",
       "requiresUserPresence": false,
       "resultContract": {
@@ -1855,13 +1763,7 @@
               "items": {
                 "additionalProperties": false,
                 "properties": {
-                  "color": {
-                    "type": "string"
-                  },
-                  "description": {
-                    "type": "string"
-                  },
-                  "endISO": {
+                  "endsAt": {
                     "type": "string"
                   },
                   "eventID": {
@@ -1869,11 +1771,19 @@
                     "pattern": "^\\S(?:.*\\S)?$",
                     "type": "string"
                   },
-                  "isAllDay": {
+                  "isWholeDay": {
                     "type": "boolean"
                   },
                   "location": {
                     "type": "string"
+                  },
+                  "note": {
+                    "type": "string"
+                  },
+                  "notifyMinutesBefore": {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
                   },
                   "participants": {
                     "items": {
@@ -1896,19 +1806,7 @@
                     },
                     "type": "array"
                   },
-                  "people": {
-                    "items": {
-                      "type": "string"
-                    },
-                    "type": "array"
-                  },
-                  "reminderLeadHours": {
-                    "type": "number"
-                  },
-                  "startISO": {
-                    "type": "string"
-                  },
-                  "timeZone": {
+                  "startsAt": {
                     "type": "string"
                   },
                   "title": {
@@ -1921,16 +1819,12 @@
                 "required": [
                   "eventID",
                   "title",
-                  "description",
+                  "note",
                   "location",
-                  "startISO",
-                  "endISO",
-                  "timeZone",
-                  "isAllDay",
-                  "color",
-                  "people",
+                  "startsAt",
+                  "endsAt",
+                  "isWholeDay",
                   "participants",
-                  "reminderLeadHours",
                   "updatedAt"
                 ],
                 "type": "object"
@@ -1953,13 +1847,13 @@
       "availability": {
         "state": "ok"
       },
-      "canonicalName": "calendar_update",
+      "canonicalName": "event_update",
       "completionEvidence": {
         "action": "write_calendar",
         "mode": "success",
         "targetKind": "calendar"
       },
-      "description": "Update explicit fields on a calendar event. eventHint is the exact event ID or exact event title from a calendar_list result, resolved server-side to the canonical event; use calendar_list first when neither is known. At least one mutable field is required.",
+      "description": "Update explicit fields on a calendar event. eventHint is the exact event ID or exact event title from a event_list result, resolved server-side to the canonical event; use event_list first when neither is known. At least one mutable field is required.",
       "estimatedLatency": "medium",
       "idempotency": {
         "required": false,
@@ -1970,47 +1864,37 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
-          "color": {
-            "description": "New provider-supported color label.",
+          "endsAt": {
+            "description": "New event end. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day.",
             "type": "string"
           },
-          "description": {
-            "description": "New event notes or agenda. Use an empty string to clear them.",
-            "type": "string"
-          },
-          "endISO": {
-            "description": "New event end as ISO 8601 with timezone.",
-            "type": "string"
-          },
-          "includeRequester": {
-            "description": "Whether the requester should be included as an attendee.",
-            "type": "boolean"
-          },
-          "isAllDay": {
-            "description": "Whether the event is all day.",
+          "isWholeDay": {
+            "description": "Whether the event takes the whole day.",
             "type": "boolean"
           },
           "location": {
             "description": "New physical or virtual location. Use an empty string to clear it.",
             "type": "string"
           },
-          "people": {
-            "description": "Replacement attendee hints such as names, @handles, or emails.",
+          "note": {
+            "description": "New event notes or agenda. Use an empty string to clear them.",
+            "type": "string"
+          },
+          "notifyMinutesBefore": {
+            "description": "Minutes before the start to notify attendees.",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "participantPersonHints": {
+            "description": "Names, @handles, or emails of everyone attending, replacing the current attendees. Send the whole set, not just additions.",
             "items": {
               "type": "string"
             },
             "type": "array"
           },
-          "reminderLeadHours": {
-            "description": "Reminder lead time in hours: 1, 2, 3, 6, 12, 24, or 48.",
-            "type": "number"
-          },
-          "startISO": {
-            "description": "New event start as ISO 8601 with timezone.",
-            "type": "string"
-          },
-          "timeZone": {
-            "description": "New IANA timezone identifier.",
+          "startsAt": {
+            "description": "New event start. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day.",
             "type": "string"
           },
           "title": {
@@ -2025,53 +1909,43 @@
         "additionalProperties": false,
         "minProperties": 2,
         "properties": {
-          "color": {
-            "description": "New provider-supported color label.",
-            "type": "string"
-          },
-          "description": {
-            "description": "New event notes or agenda. Use an empty string to clear them.",
-            "type": "string"
-          },
-          "endISO": {
-            "description": "New event end as ISO 8601 with timezone.",
+          "endsAt": {
+            "description": "New event end. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day.",
             "type": "string"
           },
           "eventHint": {
-            "description": "Identifies the existing calendar event to act on: its exact event ID or its exact CURRENT title as it appears in a calendar_list result. Never a new or intended title. Resolved server-side; if it does not uniquely resolve, the call fails with a candidates list of matching events.",
+            "description": "Identifies the existing calendar event to act on: its exact event ID or its exact CURRENT title as it appears in a event_list result. Never a new or intended title. Resolved server-side; if it does not uniquely resolve, the call fails with a candidates list of matching events.",
             "maxLength": 256,
             "minLength": 1,
             "type": "string"
           },
-          "includeRequester": {
-            "description": "Whether the requester should be included as an attendee.",
-            "type": "boolean"
-          },
-          "isAllDay": {
-            "description": "Whether the event is all day.",
+          "isWholeDay": {
+            "description": "Whether the event takes the whole day.",
             "type": "boolean"
           },
           "location": {
             "description": "New physical or virtual location. Use an empty string to clear it.",
             "type": "string"
           },
-          "people": {
-            "description": "Replacement attendee hints such as names, @handles, or emails.",
+          "note": {
+            "description": "New event notes or agenda. Use an empty string to clear them.",
+            "type": "string"
+          },
+          "notifyMinutesBefore": {
+            "description": "Minutes before the start to notify attendees.",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "participantPersonHints": {
+            "description": "Names, @handles, or emails of everyone attending, replacing the current attendees. Send the whole set, not just additions.",
             "items": {
               "type": "string"
             },
             "type": "array"
           },
-          "reminderLeadHours": {
-            "description": "Reminder lead time in hours: 1, 2, 3, 6, 12, 24, or 48.",
-            "type": "number"
-          },
-          "startISO": {
-            "description": "New event start as ISO 8601 with timezone.",
-            "type": "string"
-          },
-          "timeZone": {
-            "description": "New IANA timezone identifier.",
+          "startsAt": {
+            "description": "New event start. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day.",
             "type": "string"
           },
           "title": {
@@ -2085,22 +1959,16 @@
         "type": "object"
       },
       "inputSchemaStrict": true,
-      "modelName": "calendar_update",
+      "modelName": "event_update",
       "modelVisibility": "visible",
       "modelVisible": true,
-      "name": "calendar_update",
+      "name": "event_update",
       "namespace": "calendar",
       "outputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
-          "color": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "endISO": {
+          "endsAt": {
             "type": "string"
           },
           "eventID": {
@@ -2108,11 +1976,19 @@
             "pattern": "^\\S(?:.*\\S)?$",
             "type": "string"
           },
-          "isAllDay": {
+          "isWholeDay": {
             "type": "boolean"
           },
           "location": {
             "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "notifyMinutesBefore": {
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "type": "integer"
           },
           "participants": {
             "items": {
@@ -2135,19 +2011,7 @@
             },
             "type": "array"
           },
-          "people": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "reminderLeadHours": {
-            "type": "number"
-          },
-          "startISO": {
-            "type": "string"
-          },
-          "timeZone": {
+          "startsAt": {
             "type": "string"
           },
           "title": {
@@ -2160,22 +2024,18 @@
         "required": [
           "eventID",
           "title",
-          "description",
+          "note",
           "location",
-          "startISO",
-          "endISO",
-          "timeZone",
-          "isAllDay",
-          "color",
-          "people",
+          "startsAt",
+          "endsAt",
+          "isWholeDay",
           "participants",
-          "reminderLeadHours",
           "updatedAt"
         ],
         "type": "object"
       },
       "outputSchemaStrict": true,
-      "policyResource": "tool:calendar_update",
+      "policyResource": "tool:event_update",
       "privacyClass": "workspace_calendar",
       "requiresUserPresence": false,
       "resultContract": {
@@ -2191,13 +2051,7 @@
           "$schema": "https://json-schema.org/draft/2020-12/schema",
           "additionalProperties": false,
           "properties": {
-            "color": {
-              "type": "string"
-            },
-            "description": {
-              "type": "string"
-            },
-            "endISO": {
+            "endsAt": {
               "type": "string"
             },
             "eventID": {
@@ -2205,11 +2059,19 @@
               "pattern": "^\\S(?:.*\\S)?$",
               "type": "string"
             },
-            "isAllDay": {
+            "isWholeDay": {
               "type": "boolean"
             },
             "location": {
               "type": "string"
+            },
+            "note": {
+              "type": "string"
+            },
+            "notifyMinutesBefore": {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
             },
             "participants": {
               "items": {
@@ -2232,19 +2094,7 @@
               },
               "type": "array"
             },
-            "people": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "reminderLeadHours": {
-              "type": "number"
-            },
-            "startISO": {
-              "type": "string"
-            },
-            "timeZone": {
+            "startsAt": {
               "type": "string"
             },
             "title": {
@@ -2257,16 +2107,12 @@
           "required": [
             "eventID",
             "title",
-            "description",
+            "note",
             "location",
-            "startISO",
-            "endISO",
-            "timeZone",
-            "isAllDay",
-            "color",
-            "people",
+            "startsAt",
+            "endsAt",
+            "isWholeDay",
             "participants",
-            "reminderLeadHours",
             "updatedAt"
           ],
           "type": "object"
@@ -2281,13 +2127,13 @@
       "availability": {
         "state": "ok"
       },
-      "canonicalName": "calendar_delete",
+      "canonicalName": "event_delete",
       "completionEvidence": {
         "action": "write_calendar",
         "mode": "success",
         "targetKind": "calendar"
       },
-      "description": "Permanently delete a calendar event. eventHint is the exact event ID or exact event title from a calendar_list result, resolved server-side to the canonical event; use calendar_list first when neither is known. Requires approval; this action is irreversible.",
+      "description": "Permanently delete a calendar event. eventHint is the exact event ID or exact event title from a event_list result, resolved server-side to the canonical event; use event_list first when neither is known. Requires approval; this action is irreversible.",
       "estimatedLatency": "medium",
       "idempotency": {
         "required": false,
@@ -2305,7 +2151,7 @@
         "additionalProperties": false,
         "properties": {
           "eventHint": {
-            "description": "Identifies the existing calendar event to act on: its exact event ID or its exact CURRENT title as it appears in a calendar_list result. Never a new or intended title. Resolved server-side; if it does not uniquely resolve, the call fails with a candidates list of matching events.",
+            "description": "Identifies the existing calendar event to act on: its exact event ID or its exact CURRENT title as it appears in a event_list result. Never a new or intended title. Resolved server-side; if it does not uniquely resolve, the call fails with a candidates list of matching events.",
             "maxLength": 256,
             "minLength": 1,
             "type": "string"
@@ -2317,10 +2163,10 @@
         "type": "object"
       },
       "inputSchemaStrict": true,
-      "modelName": "calendar_delete",
+      "modelName": "event_delete",
       "modelVisibility": "visible",
       "modelVisible": true,
-      "name": "calendar_delete",
+      "name": "event_delete",
       "namespace": "calendar",
       "outputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -2343,7 +2189,7 @@
         "type": "object"
       },
       "outputSchemaStrict": true,
-      "policyResource": "tool:calendar_delete",
+      "policyResource": "tool:event_delete",
       "privacyClass": "workspace_calendar",
       "requiresApproval": true,
       "requiresUserPresence": false,

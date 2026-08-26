@@ -17,7 +17,7 @@ func targetResolverFixture(responseBody string) (approvalgate.ApprovalTargetReso
 
 func calendarDeleteTargetRequest() approvalgate.ApprovalTargetRequest {
 	return approvalgate.ApprovalTargetRequest{
-		ToolName:          "calendar_delete",
+		ToolName:          "event_delete",
 		ToolInput:         json.RawMessage(`{"eventHint":"상하이 edatec 미팅"}`),
 		RequesterPersonID: "person-1",
 		RequesterEmail:    "staff@example.com",
@@ -25,14 +25,14 @@ func calendarDeleteTargetRequest() approvalgate.ApprovalTargetRequest {
 }
 
 func TestATargetIsResolvedOnTheToolsOwnResolutionEndpoint(t *testing.T) {
-	resolver, httpClient := targetResolverFixture(`{"provider":"internkim","selectedBackend":"device","toolName":"calendar_delete","outcome":"succeeded","status":"resolved","result":{"inputField":"eventHint","id":"event-1","title":"상하이 edatec 미팅","startsAt":"2026-08-18T14:00:00+09:00"}}`)
+	resolver, httpClient := targetResolverFixture(`{"provider":"internkim","selectedBackend":"device","toolName":"event_delete","outcome":"succeeded","status":"resolved","result":{"inputField":"eventHint","id":"event-1","title":"상하이 edatec 미팅","startsAt":"2026-08-18T14:00:00+09:00"}}`)
 
 	resolution, errorValue := resolver.ResolveApprovalTarget(context.Background(), calendarDeleteTargetRequest())
 	if errorValue != nil {
 		t.Fatalf("expected the resolution to answer: %v", errorValue)
 	}
 
-	if httpClient.requestPath != "/v1/tools/calendar_delete/target.resolve" {
+	if httpClient.requestPath != "/v1/tools/event_delete/target.resolve" {
 		t.Fatalf("target resolution has its own endpoint so it cannot execute anything, got %s", httpClient.requestPath)
 	}
 	if !strings.Contains(httpClient.requestBody, "staff@example.com") {
@@ -45,7 +45,7 @@ func TestATargetIsResolvedOnTheToolsOwnResolutionEndpoint(t *testing.T) {
 }
 
 func TestAToolThatResolvesNothingAheadComesBackWithNeitherATargetNorAFailure(t *testing.T) {
-	resolver, _ := targetResolverFixture(`{"provider":"internkim","selectedBackend":"device","toolName":"calendar_delete","outcome":"succeeded","status":"no_target","result":{}}`)
+	resolver, _ := targetResolverFixture(`{"provider":"internkim","selectedBackend":"device","toolName":"event_delete","outcome":"succeeded","status":"no_target","result":{}}`)
 
 	resolution, errorValue := resolver.ResolveApprovalTarget(context.Background(), calendarDeleteTargetRequest())
 	if errorValue != nil {
@@ -58,7 +58,7 @@ func TestAToolThatResolvesNothingAheadComesBackWithNeitherATargetNorAFailure(t *
 }
 
 func TestAnUnresolvedHintComesBackAsTheFailureTheInvokePathWouldHaveGiven(t *testing.T) {
-	resolver, _ := targetResolverFixture(`{"provider":"internkim","selectedBackend":"device","toolName":"calendar_delete","outcome":"failed","status":"error","isError":true,"message":"no calendar event matched eventHint","errorCode":"calendar_event_hint_unresolved","failureStage":"target_resolution","retryable":true,"safeRetry":true,"result":{"errorCode":"calendar_event_hint_unresolved","candidates":[{"eventID":"event-2","title":"주간 팀 회의"}]}}`)
+	resolver, _ := targetResolverFixture(`{"provider":"internkim","selectedBackend":"device","toolName":"event_delete","outcome":"failed","status":"error","isError":true,"message":"no calendar event matched eventHint","errorCode":"calendar_event_hint_unresolved","failureStage":"target_resolution","retryable":true,"safeRetry":true,"result":{"errorCode":"calendar_event_hint_unresolved","candidates":[{"eventID":"event-2","title":"주간 팀 회의"}]}}`)
 
 	resolution, errorValue := resolver.ResolveApprovalTarget(context.Background(), calendarDeleteTargetRequest())
 	if errorValue != nil {

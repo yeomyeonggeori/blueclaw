@@ -24,7 +24,7 @@ func approvalRequestFixture(taskRunID string) mcpserver.ApprovalRequest {
 	return mcpserver.ApprovalRequest{
 		RequesterPersonID: "person-1",
 		TaskRunID:         taskRunID,
-		ToolName:          "calendar_delete",
+		ToolName:          "event_delete",
 		ToolInput:         json.RawMessage(`{"eventID":"event-1"}`),
 		ApprovalScope:     "calendar",
 		HarnessSession:    mcpserver.HarnessSession{HarnessName: "claude-code", SessionID: "session-uuid", IsResumable: true},
@@ -54,7 +54,7 @@ func TestAHeldCallIsRecordedWithTheConversationItWasHeldIn(t *testing.T) {
 	}
 
 	body := heldCallEventBody(t, taskRunService, taskRun.TaskRunID)
-	for _, expectedFragment := range []string{"calendar_delete", "event-1", "calendar", "claude-code", "session-uuid"} {
+	for _, expectedFragment := range []string{"event_delete", "event-1", "calendar", "claude-code", "session-uuid"} {
 		if !strings.Contains(body, expectedFragment) {
 			t.Fatalf("expected the held call to carry %q so it can be resumed, got %s", expectedFragment, body)
 		}
@@ -249,7 +249,7 @@ func TestTheRequesterIsAskedInWordsTheModelChose(t *testing.T) {
 	if !strings.Contains(heldCallEventBodyNamed(t, taskRunService, taskRun.TaskRunID, "confirmation.requested"), "내일 팀 회의를 캘린더에서 지울까요?") {
 		t.Fatal("the requester has to be asked in words a model wrote, not in a sentence assembled from a tool name")
 	}
-	if !strings.Contains(marshalRequestMessages(languageModel.lastRequest), "calendar_delete") {
+	if !strings.Contains(marshalRequestMessages(languageModel.lastRequest), "event_delete") {
 		t.Fatalf("the model needs the pending call to word the question, got %s", marshalRequestMessages(languageModel.lastRequest))
 	}
 }
@@ -264,7 +264,7 @@ func TestAnUnwordableCallStillReachesTheRequesterAsTheCallItself(t *testing.T) {
 		t.Fatalf("a call nobody could word still has to be held rather than run, got %+v", heldOutcome)
 	}
 	confirmationBody := heldCallEventBodyNamed(t, taskRunService, taskRun.TaskRunID, "confirmation.requested")
-	for _, expectedFragment := range []string{"calendar_delete", "event-1"} {
+	for _, expectedFragment := range []string{"event_delete", "event-1"} {
 		if !strings.Contains(confirmationBody, expectedFragment) {
 			t.Fatalf("with no wording the requester gets the raw call, expected %q in %s", expectedFragment, confirmationBody)
 		}

@@ -46,10 +46,10 @@
   ],
   "capability-descriptor": [
     {
-      "name": "calendar_add",
-      "canonicalName": "calendar_add",
+      "name": "event_add",
+      "canonicalName": "event_add",
       "namespace": "calendar",
-      "modelName": "calendar_add",
+      "modelName": "event_add",
       "modelVisibility": "visible",
       "modelVisible": true,
       "description": "Create a new calendar event",
@@ -64,17 +64,17 @@
           "title": {
             "type": "string"
           },
-          "startISO": {
+          "startsAt": {
             "type": "string"
           },
-          "endISO": {
+          "endsAt": {
             "type": "string"
           }
         },
         "required": [
           "title",
-          "startISO",
-          "endISO"
+          "startsAt",
+          "endsAt"
         ],
         "additionalProperties": false
       },
@@ -84,10 +84,10 @@
           "title": {
             "type": "string"
           },
-          "startISO": {
+          "startsAt": {
             "type": "string"
           },
-          "endISO": {
+          "endsAt": {
             "type": "string"
           }
         },
@@ -100,7 +100,7 @@
       },
       "inputSchemaStrict": true,
       "outputSchemaStrict": true,
-      "policyResource": "tool:calendar_add",
+      "policyResource": "tool:event_add",
       "sideEffectClass": "workspace_write",
       "sideEffect": "workspace_write",
       "requiresApproval": false,
@@ -516,11 +516,11 @@
   ],
   "tool-invoke-request": [
     {
-      "toolName": "calendar_add",
+      "toolName": "event_add",
       "input": {
         "title": "Weekly sync",
-        "startISO": "2026-07-15T09:00:00+09:00",
-        "endISO": "2026-07-15T10:00:00+09:00"
+        "startsAt": "2026-07-15T09:00:00+09:00",
+        "endsAt": "2026-07-15T10:00:00+09:00"
       },
       "idempotencyKey": "task-1:turn-2:call-1",
       "context": {
@@ -553,7 +553,7 @@
     {
       "provider": "internkim",
       "selectedBackend": "device",
-      "toolName": "calendar_add",
+      "toolName": "event_add",
       "outcome": "succeeded",
       "effects": [
         {

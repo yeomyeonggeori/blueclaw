@@ -19,7 +19,7 @@ func heldCallTaskEvents(t *testing.T) []task.TaskEvent {
 	if _, errorValue := gate.AwaitApproval(context.Background(), mcpserver.ApprovalRequest{
 		RequesterPersonID: "person-1",
 		TaskRunID:         taskRun.TaskRunID,
-		ToolName:          "calendar_delete",
+		ToolName:          "event_delete",
 		ToolInput:         json.RawMessage(`{"eventID":"event-1"}`),
 		ApprovalScope:     "calendar",
 		SideEffectClass:   "external_send",

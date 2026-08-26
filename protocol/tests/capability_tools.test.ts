@@ -323,7 +323,7 @@ describe('canonical capability tools', () => {
     expect(addTool).toMatchObject({
       namespace: 'calendar',
       privacyClass: 'workspace_calendar',
-      policyResource: 'tool:calendar_add',
+      policyResource: 'tool:event_add',
     });
     expect(addTool?.resultContract?.effects).toEqual([
       { objectType: 'calendar', effect: 'created', resultField: 'eventID', effectIdentity: ResourceEffectIdentity.ID },
@@ -339,7 +339,7 @@ describe('canonical capability tools', () => {
   });
 
   test('keeps runtime calendar identities out of user intent', () => {
-    expect(calendarUpdateInputIntentSchema.safeParse({ startISO: '2026-07-24T15:00:00+09:00' }).success).toBe(true);
+    expect(calendarUpdateInputIntentSchema.safeParse({ startsAt: '2026-07-24T15:00:00+09:00' }).success).toBe(true);
     expect(calendarUpdateInputIntentSchema.safeParse({ eventHint: 'event-1' }).success).toBe(false);
     expect(calendarDeleteInputIntentSchema.safeParse({}).success).toBe(true);
     expect(calendarDeleteInputIntentSchema.safeParse({ eventHint: 'event-1' }).success).toBe(false);
@@ -500,12 +500,12 @@ describe('canonical capability tools', () => {
       title: 'customer support quarterly settlement gap check',
       size: WorkspaceTaskSize.Small,
       status: WorkspaceTaskInitialStatus.Planned,
-      endDate: '2026-07-24',
+      endsAt: '2026-07-24',
     })).toEqual({
       title: 'customer support quarterly settlement gap check',
       size: WorkspaceTaskSize.Small,
       status: WorkspaceTaskInitialStatus.Planned,
-      endDate: '2026-07-24',
+      endsAt: '2026-07-24',
     });
     expect(taskListInputSchema.safeParse({ query: 'settlement', scope: 'self' }).success).toBe(true);
     expect(taskUpdateInputSchema.safeParse({ taskHint: 'task-1', title: 'updated title' }).success).toBe(true);
@@ -520,13 +520,13 @@ describe('canonical capability tools', () => {
   test('validates calendar inputs with exact mutation identities', () => {
     expect(calendarAddInputSchema.safeParse({
       title: 'customer support weekly check',
-      startISO: '2026-07-24T14:00:00+09:00',
-      endISO: '2026-07-24T15:00:00+09:00',
-      people: ['support@example.com'],
+      startsAt: '2026-07-24T14:00:00+09:00',
+      endsAt: '2026-07-24T15:00:00+09:00',
+      participantPersonHints: ['support@example.com'],
     }).success).toBe(true);
     expect(calendarUpdateInputSchema.safeParse({
       eventHint: 'event-1',
-      startISO: '2026-07-24T15:00:00+09:00',
+      startsAt: '2026-07-24T15:00:00+09:00',
     }).success).toBe(true);
     expect(calendarDeleteInputSchema.safeParse({ eventHint: 'event-1' }).success).toBe(true);
     expect(calendarListInputSchema.safeParse({ limit: 2 }).success).toBe(true);
@@ -534,9 +534,9 @@ describe('canonical capability tools', () => {
     expect(calendarUpdateInputSchema.safeParse({ eventHint: 'event-1' }).success).toBe(false);
     expect(calendarAddInputSchema.safeParse({
       title: 'customer support weekly check',
-      startISO: '2026-07-24T14:00:00+09:00',
-      endISO: '2026-07-24T15:00:00+09:00',
-      reminderLeadHours: 4,
+      startsAt: '2026-07-24T14:00:00+09:00',
+      endsAt: '2026-07-24T15:00:00+09:00',
+      notifyMinutesBefore: 0,
     }).success).toBe(false);
     expect(calendarUpdateInputSchema.safeParse({ query: 'weekly check', title: 'change' }).success).toBe(false);
     expect(calendarDeleteInputSchema.safeParse({ query: 'weekly check' }).success).toBe(false);
@@ -553,12 +553,11 @@ describe('canonical capability tools', () => {
     expect(taskUpdateTool?.inputSchema).toMatchObject({ minProperties: 2 });
     expect(calendarAddTool?.inputSchema).toMatchObject({
       properties: {
-        reminderLeadHours: {
-          type: 'number',
+        notifyMinutesBefore: {
+          type: 'integer',
         },
       },
     });
-    expect(JSON.stringify(calendarAddTool?.inputSchema)).not.toContain('"enum":[1');
     expect(calendarUpdateTool?.inputSchema).toMatchObject({ minProperties: 2 });
   });
 
