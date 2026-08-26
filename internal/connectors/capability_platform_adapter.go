@@ -160,12 +160,6 @@ func (adapter CapabilityPlatformAdapter) SendReply(ctx context.Context, replyTar
 	return strings.TrimSpace(response.DispatchID), nil
 }
 
-func (adapter CapabilityPlatformAdapter) ResolveInteraction(ctx context.Context, resolution InteractionResolution) error {
-	return adapter.post(ctx, "interaction.resolve", map[string]string{
-		"dispatchID": resolution.DispatchID,
-	}, nil)
-}
-
 func buildCapabilityReplyAttachments(attachments []toolcontract.FileAttachment) []capabilityReplyAttachment {
 	replyAttachments := []capabilityReplyAttachment{}
 	for _, attachment := range attachments {

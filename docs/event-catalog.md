@@ -22,8 +22,6 @@ for those.
 | `approval.executed` | agentruntime, approvalgate |
 | `approval.pending_call` | approvalgate |
 | `approval.scope_granted` | adminapi, connectors |
-| `ask.interaction_resolve_failed` | connectors |
-| `ask.interaction_resolved` | connectors |
 | `ask.reply_classified` | connectors |
 | `ask.requested` | agentruntime, approvalgate |
 | `ask.resolved` | connectors |

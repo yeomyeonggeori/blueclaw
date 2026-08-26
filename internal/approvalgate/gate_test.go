@@ -181,7 +181,7 @@ func TestAScopedHeldCallOffersApprovingTheWholeTask(t *testing.T) {
 	gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
 
 	askBody := heldCallEventBodyNamed(t, taskRunService, taskRun.TaskRunID, "ask.requested")
-	for _, expectedFragment := range []string{`"approvalScope":"calendar"`, `"sessionApprovable":true`, "confirm_task"} {
+	for _, expectedFragment := range []string{`"approvalScope":"calendar"`, `"sessionApprovable":true`} {
 		if !strings.Contains(askBody, expectedFragment) {
 			t.Fatalf("confirm_task is resolved by reading the scope off this event, expected %q in %s", expectedFragment, askBody)
 		}

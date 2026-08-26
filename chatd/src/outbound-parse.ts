@@ -8,7 +8,6 @@ import type {
 	HistoryFetchRequest,
 	IdentityResolveRequest,
 	InputAttachmentDocument,
-	InteractionResolveRequest,
 	MessageDeleteRequest,
 	MessageEditRequest,
 	ProgressRequest,
@@ -130,11 +129,6 @@ export function parseHistoryFetchRequest(value: unknown): HistoryFetchRequest {
 		limit: optionalNumber(record, "limit"),
 		direction: optionalString(record, "direction"),
 	};
-}
-
-export function parseInteractionResolveRequest(value: unknown): InteractionResolveRequest {
-	const record = requireRecord(value, "interaction.resolve request");
-	return { dispatchID: requireString(record, "dispatchID") };
 }
 
 export function parseMessageEditRequest(value: unknown): MessageEditRequest {

@@ -206,7 +206,6 @@ func askRecord(approvalRequest mcpserver.ApprovalRequest, confirmation string) m
 	if approvalScope := strings.TrimSpace(approvalRequest.ApprovalScope); approvalScope != "" {
 		record["approvalScope"] = approvalScope
 		record["sessionApprovable"] = true
-		record["actions"] = []string{"confirm", "confirm_task", "cancel"}
 	}
 	return record
 }

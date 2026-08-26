@@ -139,7 +139,7 @@ describe("reply.send", () => {
 		expect(body.dispatchID).toBe("new-post-1");
 	});
 
-	it("renders interaction options as a card with buttons", async () => {
+	it("writes the options into the message so they can be answered in words", async () => {
 		const adapter = createAdapter(true);
 		let requestBody: Record<string, unknown> = {};
 		globalThis.fetch = mock(async (_input: unknown, init?: RequestInit) => {
@@ -163,12 +163,35 @@ describe("reply.send", () => {
 			}),
 		);
 
-		const attachments = requestBody.props as { attachments: Array<Record<string, unknown>> };
-		expect(attachments.attachments).toHaveLength(1);
-		expect(attachments.attachments[0]?.title).toBe("Approve deploy?");
-		const actions = attachments.attachments[0]?.actions as Array<Record<string, unknown>>;
-		expect(actions).toHaveLength(2);
-		expect(actions[0]?.id).toBe("approve");
+		expect(requestBody.props).toBeUndefined();
+		expect(requestBody.message).toBe("please choose\n\nApprove deploy?\n\n1. Approve\n2. Deny");
+	});
+
+	it("does not repeat a question the message already asks", async () => {
+		const adapter = createAdapter(true);
+		let requestBody: Record<string, unknown> = {};
+		globalThis.fetch = mock(async (_input: unknown, init?: RequestInit) => {
+			requestBody = JSON.parse(init?.body as string);
+			return jsonResponse(201, createPost({ id: "new-post-3", channel_id: "channel-1" }));
+		}) as never;
+		const handler = createOutboundHandler({ mattermost: adapter }, createConfiguration());
+
+		const threadId = adapter.encodeThreadId({ channelId: "channel-1" });
+		await handler(
+			outboundRequest("reply.send", {
+				replyTargetID: threadId,
+				message: "Approve deploy?",
+				interaction: {
+					question: "Approve deploy?",
+					options: [
+						{ key: "approve", label: "Approve" },
+						{ key: "deny", label: "Deny" },
+					],
+				},
+			}),
+		);
+
+		expect(requestBody.message).toBe("Approve deploy?\n\n1. Approve\n2. Deny");
 	});
 
 	it("uploads a base64 attachment as a file before posting", async () => {
@@ -288,38 +311,6 @@ describe("history.fetch", () => {
 		expect(body.messages).toHaveLength(1);
 		expect(body.messages[0]?.text).toBe("older message");
 		expect(body.conversationType).toBe("channel");
-	});
-});
-
-describe("interaction.resolve", () => {
-	it("freezes the dispatched message by removing its interactive actions", async () => {
-		const adapter = createAdapter(true);
-		const existingPost = createPost({
-			id: "post-10",
-			channel_id: "channel-1",
-			message: "Approve deploy?",
-			props: { attachments: [{ title: "Approve deploy?", actions: [{ id: "approve" }] }] },
-		});
-		let putBody: Record<string, unknown> = {};
-		globalThis.fetch = mock(async (input: unknown, init?: RequestInit) => {
-			const url = String(input);
-			if (init?.method === "PUT") {
-				putBody = JSON.parse(init.body as string);
-				return jsonResponse(200, { ...existingPost, ...putBody });
-			}
-			if (url.endsWith("/posts/post-10")) {
-				return jsonResponse(200, existingPost);
-			}
-			return jsonResponse(404, {});
-		}) as never;
-		const handler = createOutboundHandler({ mattermost: adapter }, createConfiguration());
-
-		const response = await handler(outboundRequest("interaction.resolve", { dispatchID: "post-10" }));
-
-		expect(response.status).toBe(200);
-		const attachments = (putBody.props as { attachments: Array<Record<string, unknown>> }).attachments;
-		expect(attachments).toHaveLength(1);
-		expect(attachments[0]?.actions).toBeUndefined();
 	});
 });
 

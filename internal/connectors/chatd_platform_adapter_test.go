@@ -38,30 +38,6 @@ func TestChatdPlatformAdapterParsesNormalizedHTTPEvent(t *testing.T) {
 	}
 }
 
-func TestChatdPlatformAdapterResolvesInteraction(t *testing.T) {
-	var receivedPath string
-	var receivedBody map[string]string
-	httpClient := fakeCapabilityHTTPClient{handler: func(request *http.Request) (*http.Response, error) {
-		receivedPath = request.URL.Path
-		if errorValue := json.NewDecoder(request.Body).Decode(&receivedBody); errorValue != nil {
-			t.Fatalf("expected request body to decode: %v", errorValue)
-		}
-		return jsonCapabilityResponse(http.StatusOK, `{}`), nil
-	}}
-	adapter := NewChatdPlatformAdapter("mattermost", capability.Client{
-		Endpoint:   "http://chatd.test",
-		HTTPClient: httpClient,
-	})
-
-	errorValue := adapter.ResolveInteraction(context.Background(), InteractionResolution{DispatchID: "post-1"})
-	if errorValue != nil {
-		t.Fatalf("expected resolve interaction to succeed: %v", errorValue)
-	}
-	if receivedPath != "/v1/platform/mattermost/interaction.resolve" || receivedBody["dispatchID"] != "post-1" {
-		t.Fatalf("unexpected resolve request path=%q body=%+v", receivedPath, receivedBody)
-	}
-}
-
 func TestChatdPlatformAdapterImportsInputAttachments(t *testing.T) {
 	var receivedPath string
 	var receivedBody InputAttachmentImportRequest

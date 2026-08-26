@@ -115,12 +115,6 @@ func (adapter ChatdPlatformAdapter) EditReply(ctx context.Context, replyTarget R
 	}, nil)
 }
 
-func (adapter ChatdPlatformAdapter) ResolveInteraction(ctx context.Context, resolution InteractionResolution) error {
-	return adapter.post(ctx, "interaction.resolve", map[string]string{
-		"dispatchID": resolution.DispatchID,
-	}, nil)
-}
-
 func (adapter ChatdPlatformAdapter) FetchHistory(ctx context.Context, historyCursor string, limit int) (VisibleContext, error) {
 	var response VisibleContext
 	errorValue := adapter.post(ctx, "history.fetch", capabilityHistoryRequest{
