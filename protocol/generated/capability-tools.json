@@ -2752,12 +2752,12 @@
         "additionalProperties": false,
         "properties": {
           "attachments": {
-            "description": "Workspace file paths to upload with the message, copied exactly from the attachment catalog or a file tool result. Use this to deliver an original file, such as an inbound image, to the target.",
+            "description": "Workspace file paths to upload with the message, copied exactly from the attachment catalog or a file tool result. Use this to deliver an original file, such as an inbound image, to the target. Mattermost accepts at most five files per message.",
             "items": {
               "minLength": 1,
               "type": "string"
             },
-            "maxItems": 10,
+            "maxItems": 5,
             "type": "array"
           },
           "channelID": {
@@ -2814,12 +2814,12 @@
         "additionalProperties": false,
         "properties": {
           "attachments": {
-            "description": "Workspace file paths to upload with the message, copied exactly from the attachment catalog or a file tool result. Use this to deliver an original file, such as an inbound image, to the target.",
+            "description": "Workspace file paths to upload with the message, copied exactly from the attachment catalog or a file tool result. Use this to deliver an original file, such as an inbound image, to the target. Mattermost accepts at most five files per message.",
             "items": {
               "minLength": 1,
               "type": "string"
             },
-            "maxItems": 10,
+            "maxItems": 5,
             "type": "array"
           },
           "channelID": {
