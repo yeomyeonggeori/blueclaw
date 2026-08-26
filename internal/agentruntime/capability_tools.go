@@ -557,6 +557,12 @@ func capabilityToolRequest(toolContext context.Context, descriptor CapabilityToo
 	if conflictResolution := toolcontract.ToolConflictResolutionFromContext(toolContext); conflictResolution != "" {
 		contextDocument["conflictResolution"] = conflictResolution
 	}
+	// A tool that hands a person's name back has to write it the way the answer
+	// will be read: a name recorded given name first is read family name first
+	// in Korean.
+	if responseLanguage := toolcontract.ResponseLanguageFromContext(toolContext); responseLanguage != "" {
+		contextDocument["responseLanguage"] = responseLanguage
+	}
 	requestDocument := map[string]any{
 		"toolName":       descriptor.CanonicalName,
 		"input":          payload.Input,
