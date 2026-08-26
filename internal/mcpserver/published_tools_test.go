@@ -10,7 +10,7 @@ import (
 
 func mixedToolSet(t *testing.T) *toolcontract.ToolSet {
 	t.Helper()
-	toolNames := []string{toolcontract.TerminalRunToolName, toolcontract.FileReadToolName, "event_add", toolcontract.AskConfirmToolName}
+	toolNames := []string{toolcontract.ShellToolName, toolcontract.FileReadToolName, "event_add", toolcontract.AskConfirmToolName}
 	toolSet := toolcontract.NewToolSet(toolNames)
 	toolSet.AllowTestReplacement()
 	for _, toolName := range toolNames {
@@ -48,7 +48,7 @@ func publishedToolNames(t *testing.T, audience ToolAudience) map[string]bool {
 func TestASelfEquippedHarnessIsNotHandedTheToolsItAlreadyHas(t *testing.T) {
 	published := publishedToolNames(t, ToolAudienceSelfEquipped)
 
-	for _, harnessOwned := range []string{toolcontract.TerminalRunToolName, toolcontract.FileReadToolName} {
+	for _, harnessOwned := range []string{toolcontract.ShellToolName, toolcontract.FileReadToolName} {
 		if published[harnessOwned] {
 			t.Fatalf("expected %q to be left to the harness, it was published", harnessOwned)
 		}
@@ -64,7 +64,7 @@ func TestASelfEquippedHarnessIsNotHandedTheToolsItAlreadyHas(t *testing.T) {
 func TestABareHarnessStillGetsEverything(t *testing.T) {
 	published := publishedToolNames(t, ToolAudienceBare)
 
-	for _, toolName := range []string{toolcontract.TerminalRunToolName, toolcontract.FileReadToolName, "event_add", toolcontract.AskConfirmToolName} {
+	for _, toolName := range []string{toolcontract.ShellToolName, toolcontract.FileReadToolName, "event_add", toolcontract.AskConfirmToolName} {
 		if !published[toolName] {
 			t.Fatalf("expected a harness with no tools of its own to receive %q", toolName)
 		}

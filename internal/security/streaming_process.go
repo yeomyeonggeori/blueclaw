@@ -16,12 +16,12 @@ type WorkspaceProcessStarter interface {
 	StartProcess(context.Context, CommandRequest) (StreamingProcess, error)
 }
 
-func (terminalSessionService *TerminalSessionService) StartStreamingCommand(ctx context.Context, commandRequest CommandRequest) (StreamingProcess, error) {
-	commandPlan, errorValue := terminalSessionService.commandGuardrailService.BuildCommandPlan(commandRequest)
+func (shellService *ShellService) StartStreamingCommand(ctx context.Context, commandRequest CommandRequest) (StreamingProcess, error) {
+	commandPlan, errorValue := shellService.commandGuardrailService.BuildCommandPlan(commandRequest)
 	if errorValue != nil {
 		return StreamingProcess{}, errorValue
 	}
-	if errorValue := terminalSessionService.prepareWorkingDirectory(commandPlan.WorkingDirectoryPath); errorValue != nil {
+	if errorValue := shellService.prepareWorkingDirectory(commandPlan.WorkingDirectoryPath); errorValue != nil {
 		return StreamingProcess{}, errorValue
 	}
 
@@ -59,7 +59,7 @@ func (actor DirectWorkspaceActor) StartProcess(ctx context.Context, commandReque
 	return startProcessWithIdentity(ctx, actor.terminalService, actor.identity, commandRequest)
 }
 
-func startProcessWithIdentity(ctx context.Context, terminalService *TerminalSessionService, identity ExecutionIdentity, commandRequest CommandRequest) (StreamingProcess, error) {
+func startProcessWithIdentity(ctx context.Context, terminalService *ShellService, identity ExecutionIdentity, commandRequest CommandRequest) (StreamingProcess, error) {
 	if terminalService == nil {
 		return StreamingProcess{}, actorError("start_process", "identity", identity, "", ActorErrorCodeIdentityMissing, ActorErrorCodeIdentityMissing)
 	}

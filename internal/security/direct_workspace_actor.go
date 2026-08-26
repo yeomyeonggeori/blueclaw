@@ -19,19 +19,19 @@ import (
 // what an appliance must never use, because there the whole point is that work
 // runs as whoever asked for it.
 type DirectWorkspaceActorFactory struct {
-	terminalService *TerminalSessionService
+	terminalService *ShellService
 }
 
 type DirectWorkspaceActor struct {
 	identity        ExecutionIdentity
-	terminalService *TerminalSessionService
+	terminalService *ShellService
 }
 
-func NewDirectWorkspaceActorFactory(terminalServices ...*TerminalSessionService) DirectWorkspaceActorFactory {
+func NewDirectWorkspaceActorFactory(terminalServices ...*ShellService) DirectWorkspaceActorFactory {
 	return DirectWorkspaceActorFactory{terminalService: firstTerminalService(terminalServices)}
 }
 
-func firstTerminalService(terminalServices []*TerminalSessionService) *TerminalSessionService {
+func firstTerminalService(terminalServices []*ShellService) *ShellService {
 	if len(terminalServices) == 0 {
 		return nil
 	}

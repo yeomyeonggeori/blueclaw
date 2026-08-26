@@ -14,9 +14,9 @@ import (
 )
 
 func TestRunCommandUsesBashStdinInFirecrackerGuestMode(t *testing.T) {
-	terminalSessionService := NewTerminalSessionService(testTerminalConfiguration(t))
+	shellService := NewShellService(testTerminalConfiguration(t))
 
-	commandResult, errorValue := terminalSessionService.RunCommand(context.Background(), CommandRequest{
+	commandResult, errorValue := shellService.RunCommand(context.Background(), CommandRequest{
 		Command: "printf 'blueclaw\\n'",
 	})
 
@@ -30,10 +30,10 @@ func TestRunCommandUsesBashStdinInFirecrackerGuestMode(t *testing.T) {
 
 func TestRunCommandRequiresPreparedWorkspaceWorkingDirectoryInFirecrackerGuestMode(t *testing.T) {
 	terminalConfiguration := testTerminalConfiguration(t)
-	terminalSessionService := NewTerminalSessionService(terminalConfiguration)
+	shellService := NewShellService(terminalConfiguration)
 	workingDirectoryPath := terminalConfiguration.WorkspaceRootPath + "/.blueclaw/tmp/slides"
 
-	commandResult, errorValue := terminalSessionService.RunCommand(context.Background(), CommandRequest{
+	commandResult, errorValue := shellService.RunCommand(context.Background(), CommandRequest{
 		Command:              "printf 'ready' > result.txt",
 		WorkingDirectoryPath: workingDirectoryPath,
 	})
@@ -47,9 +47,9 @@ func TestRunCommandRequiresPreparedWorkspaceWorkingDirectoryInFirecrackerGuestMo
 }
 
 func TestRunCommandReportsTimeout(t *testing.T) {
-	terminalSessionService := NewTerminalSessionService(testTerminalConfiguration(t))
+	shellService := NewShellService(testTerminalConfiguration(t))
 
-	commandResult, errorValue := terminalSessionService.RunCommand(context.Background(), CommandRequest{
+	commandResult, errorValue := shellService.RunCommand(context.Background(), CommandRequest{
 		Command:       "sleep 2",
 		TimeoutSecond: 1,
 	})
@@ -60,10 +60,10 @@ func TestRunCommandReportsTimeout(t *testing.T) {
 }
 
 func TestRunCommandTimeoutKillsChildProcesses(t *testing.T) {
-	terminalSessionService := NewTerminalSessionService(testTerminalConfiguration(t))
+	shellService := NewShellService(testTerminalConfiguration(t))
 	startedAt := time.Now()
 
-	commandResult, errorValue := terminalSessionService.RunCommand(context.Background(), CommandRequest{
+	commandResult, errorValue := shellService.RunCommand(context.Background(), CommandRequest{
 		Command:       "sh -c 'sleep 30 & wait'",
 		TimeoutSecond: 1,
 	})
@@ -94,9 +94,9 @@ func TestAwaitCommandCompletionAbandonsUnreapableCommand(t *testing.T) {
 }
 
 func TestRunCommandTimedOutResultIncludesPartialOutput(t *testing.T) {
-	terminalSessionService := NewTerminalSessionService(testTerminalConfiguration(t))
+	shellService := NewShellService(testTerminalConfiguration(t))
 
-	commandResult, errorValue := terminalSessionService.RunCommand(context.Background(), CommandRequest{
+	commandResult, errorValue := shellService.RunCommand(context.Background(), CommandRequest{
 		Command:       "sh -c 'printf partial; sleep 30'",
 		TimeoutSecond: 1,
 	})
@@ -136,9 +136,9 @@ func writeFakeProcessEnviron(t *testing.T, procRootPath string, processID string
 }
 
 func TestRunCommandIncludesProcessErrorWhenStderrIsEmpty(t *testing.T) {
-	terminalSessionService := NewTerminalSessionService(testTerminalConfiguration(t))
+	shellService := NewShellService(testTerminalConfiguration(t))
 
-	commandResult, errorValue := terminalSessionService.RunCommand(context.Background(), CommandRequest{
+	commandResult, errorValue := shellService.RunCommand(context.Background(), CommandRequest{
 		Command: "definitely_missing_blueclaw_binary",
 	})
 
@@ -153,9 +153,9 @@ func TestRunCommandIncludesProcessErrorWhenStderrIsEmpty(t *testing.T) {
 func TestRunCommandReportsTrimmedOutput(t *testing.T) {
 	terminalConfiguration := testTerminalConfiguration(t)
 	terminalConfiguration.OutputMaxBytes = 16
-	terminalSessionService := NewTerminalSessionService(terminalConfiguration)
+	shellService := NewShellService(terminalConfiguration)
 
-	commandResult, errorValue := terminalSessionService.RunCommand(context.Background(), CommandRequest{
+	commandResult, errorValue := shellService.RunCommand(context.Background(), CommandRequest{
 		Command: "printf 'abcdefghijklmnopqrstuvwxyz'",
 	})
 
@@ -168,19 +168,19 @@ func TestRunCommandReportsTrimmedOutput(t *testing.T) {
 }
 
 func TestTerminalSessionUsesPTYLifecycle(t *testing.T) {
-	terminalSessionService := NewTerminalSessionService(testTerminalConfiguration(t))
-	workspaceRootPath := terminalSessionService.commandGuardrailService.terminalConfiguration.WorkspaceRootPath
+	shellService := NewShellService(testTerminalConfiguration(t))
+	workspaceRootPath := shellService.commandGuardrailService.terminalConfiguration.WorkspaceRootPath
 
-	sessionID, errorValue := terminalSessionService.StartInteractiveSession(CommandRequest{
+	sessionID, errorValue := shellService.StartInteractiveSession(CommandRequest{
 		WorkingDirectoryPath: workspaceRootPath,
 		IsPTY:                true,
 	})
 	if errorValue != nil {
 		t.Fatalf("expected PTY session to start: %v", errorValue)
 	}
-	defer terminalSessionService.CloseSession(sessionID)
+	defer shellService.CloseSession(sessionID)
 
-	writeStatus, errorValue := terminalSessionService.WriteSessionInput(sessionID, "printf 'hello-pty\\n'\n")
+	writeStatus, errorValue := shellService.WriteSessionInput(sessionID, "printf 'hello-pty\\n'\n")
 	if errorValue != nil {
 		t.Fatalf("expected PTY write to succeed: %v", errorValue)
 	}
@@ -188,9 +188,9 @@ func TestTerminalSessionUsesPTYLifecycle(t *testing.T) {
 		t.Fatalf("expected PTY write to preserve session status, got %+v", writeStatus)
 	}
 
-	var sessionStatus TerminalSessionStatus
+	var sessionStatus ShellSessionStatus
 	for range 20 {
-		sessionStatus, errorValue = terminalSessionService.StatusSession(sessionID)
+		sessionStatus, errorValue = shellService.StatusSession(sessionID)
 		if errorValue != nil {
 			t.Fatalf("expected PTY status: %v", errorValue)
 		}
@@ -210,19 +210,19 @@ func TestTerminalSessionUsesPTYLifecycle(t *testing.T) {
 func TestTerminalSessionLimit(t *testing.T) {
 	terminalConfiguration := testTerminalConfiguration(t)
 	terminalConfiguration.SessionMaxCount = 1
-	terminalSessionService := NewTerminalSessionService(terminalConfiguration)
+	shellService := NewShellService(terminalConfiguration)
 	workspaceRootPath := terminalConfiguration.WorkspaceRootPath
 
-	sessionID, errorValue := terminalSessionService.StartInteractiveSession(CommandRequest{
+	sessionID, errorValue := shellService.StartInteractiveSession(CommandRequest{
 		WorkingDirectoryPath: workspaceRootPath,
 		IsPTY:                true,
 	})
 	if errorValue != nil {
 		t.Fatalf("expected first session to start: %v", errorValue)
 	}
-	defer terminalSessionService.CloseSession(sessionID)
+	defer shellService.CloseSession(sessionID)
 
-	_, errorValue = terminalSessionService.StartInteractiveSession(CommandRequest{
+	_, errorValue = shellService.StartInteractiveSession(CommandRequest{
 		WorkingDirectoryPath: workspaceRootPath,
 		IsPTY:                true,
 	})
@@ -232,10 +232,10 @@ func TestTerminalSessionLimit(t *testing.T) {
 }
 
 func TestRunCommandTimeoutReturnsFailureResultWithPartialOutput(t *testing.T) {
-	terminalSessionService := NewTerminalSessionService(testTerminalConfiguration(t))
+	shellService := NewShellService(testTerminalConfiguration(t))
 	startedAt := time.Now()
 
-	commandResult, errorValue := terminalSessionService.RunCommand(context.Background(), CommandRequest{
+	commandResult, errorValue := shellService.RunCommand(context.Background(), CommandRequest{
 		Command:       "echo before-stall; sleep 30",
 		TimeoutSecond: 1,
 	})
@@ -301,9 +301,9 @@ func testTerminalConfiguration(t *testing.T) config.TerminalConfiguration {
 }
 
 func TestRunCommandReportsTheSignalThatEndedItSeparatelyFromTheExitCode(t *testing.T) {
-	terminalSessionService := NewTerminalSessionService(testTerminalConfiguration(t))
+	shellService := NewShellService(testTerminalConfiguration(t))
 
-	killedResult, errorValue := terminalSessionService.RunCommand(context.Background(), CommandRequest{
+	killedResult, errorValue := shellService.RunCommand(context.Background(), CommandRequest{
 		Command: "kill -TERM $$",
 	})
 
@@ -317,16 +317,16 @@ func TestRunCommandReportsTheSignalThatEndedItSeparatelyFromTheExitCode(t *testi
 		t.Fatalf("nothing timed out here, and folding one fact into another is how a cut-short run reads as something else: %+v", killedResult)
 	}
 
-	ordinaryFailure, _ := terminalSessionService.RunCommand(context.Background(), CommandRequest{Command: "exit 3"})
+	ordinaryFailure, _ := shellService.RunCommand(context.Background(), CommandRequest{Command: "exit 3"})
 	if ordinaryFailure.Signal != "" || ordinaryFailure.ExitCode != 3 {
 		t.Fatalf("a command that chose its own exit code was signalled by nobody: %+v", ordinaryFailure)
 	}
 }
 
 func TestATimedOutCommandSaysHowItWasEnded(t *testing.T) {
-	terminalSessionService := NewTerminalSessionService(testTerminalConfiguration(t))
+	shellService := NewShellService(testTerminalConfiguration(t))
 
-	commandResult, errorValue := terminalSessionService.RunCommand(context.Background(), CommandRequest{
+	commandResult, errorValue := shellService.RunCommand(context.Background(), CommandRequest{
 		Command:       "sleep 5",
 		TimeoutSecond: 1,
 	})
@@ -340,17 +340,17 @@ func TestATimedOutCommandSaysHowItWasEnded(t *testing.T) {
 }
 
 func TestClosingASessionWaitsForTheProcessToActuallyGo(t *testing.T) {
-	terminalSessionService := NewTerminalSessionService(testTerminalConfiguration(t))
-	sessionID, errorValue := terminalSessionService.StartInteractiveSession(CommandRequest{Command: "sleep 120"})
+	shellService := NewShellService(testTerminalConfiguration(t))
+	sessionID, errorValue := shellService.StartInteractiveSession(CommandRequest{Command: "sleep 120"})
 	if errorValue != nil {
 		t.Fatalf("starting the session failed: %v", errorValue)
 	}
-	session, isFound := terminalSessionService.findSession(sessionID)
+	session, isFound := shellService.findSession(sessionID)
 	if !isFound {
 		t.Fatal("the session was not registered")
 	}
 
-	if errorValue := terminalSessionService.CloseSession(sessionID); errorValue != nil {
+	if errorValue := shellService.CloseSession(sessionID); errorValue != nil {
 		t.Fatalf("closing the session failed: %v", errorValue)
 	}
 
@@ -359,27 +359,27 @@ func TestClosingASessionWaitsForTheProcessToActuallyGo(t *testing.T) {
 	default:
 		t.Fatal("a teardown that returns before the process stops leaves an orphan holding the requester's workspace open")
 	}
-	if _, isStillRegistered := terminalSessionService.findSession(sessionID); isStillRegistered {
+	if _, isStillRegistered := shellService.findSession(sessionID); isStillRegistered {
 		t.Fatal("a closed session is out of the registry, so nothing reads one in the middle of dying")
 	}
-	if errorValue := terminalSessionService.CloseSession(sessionID); errorValue == nil {
+	if errorValue := shellService.CloseSession(sessionID); errorValue == nil {
 		t.Fatal("closing it twice is a caller mistake and says so")
 	}
 }
 
 func TestShuttingDownClosesEverySessionItStarted(t *testing.T) {
-	terminalSessionService := NewTerminalSessionService(testTerminalConfiguration(t))
+	shellService := NewShellService(testTerminalConfiguration(t))
 	sessions := []*TerminalSession{}
 	for index := 0; index < 3; index++ {
-		sessionID, errorValue := terminalSessionService.StartInteractiveSession(CommandRequest{Command: "sleep 120"})
+		sessionID, errorValue := shellService.StartInteractiveSession(CommandRequest{Command: "sleep 120"})
 		if errorValue != nil {
 			t.Fatalf("starting session %d failed: %v", index, errorValue)
 		}
-		session, _ := terminalSessionService.findSession(sessionID)
+		session, _ := shellService.findSession(sessionID)
 		sessions = append(sessions, session)
 	}
 
-	if errorValue := terminalSessionService.CloseAllSessions(); errorValue != nil {
+	if errorValue := shellService.CloseAllSessions(); errorValue != nil {
 		t.Fatalf("closing every session failed: %v", errorValue)
 	}
 
@@ -393,9 +393,9 @@ func TestShuttingDownClosesEverySessionItStarted(t *testing.T) {
 }
 
 func TestClosingASessionTakesItsChildrenWithIt(t *testing.T) {
-	terminalSessionService := NewTerminalSessionService(testTerminalConfiguration(t))
+	shellService := NewShellService(testTerminalConfiguration(t))
 	childMarkerPath := filepath.Join(t.TempDir(), "child.pid")
-	sessionID, errorValue := terminalSessionService.StartInteractiveSession(CommandRequest{
+	sessionID, errorValue := shellService.StartInteractiveSession(CommandRequest{
 		Command: "sh -c 'sleep 120 & echo $! > " + childMarkerPath + "; wait'",
 	})
 	if errorValue != nil {
@@ -412,7 +412,7 @@ func TestClosingASessionTakesItsChildrenWithIt(t *testing.T) {
 		t.Skip("the session shell never reported a child; nothing to prove here")
 	}
 
-	if errorValue := terminalSessionService.CloseSession(sessionID); errorValue != nil {
+	if errorValue := shellService.CloseSession(sessionID); errorValue != nil {
 		t.Fatalf("closing the session failed: %v", errorValue)
 	}
 

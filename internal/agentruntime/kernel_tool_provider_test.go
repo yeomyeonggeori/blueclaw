@@ -100,7 +100,7 @@ func TestKernelToolProviderPassesExplicitSchemaValidation(t *testing.T) {
 
 func TestLocalKernelToolNamesExcludeCapabilityBackedImageReader(t *testing.T) {
 	expectedKernelToolNames := []string{
-		toolcontract.TerminalRunToolName,
+		toolcontract.ShellToolName,
 		toolcontract.FileDeliverToolName,
 		toolcontract.SkillSearchToolName,
 		toolcontract.FileReadToolName,
@@ -134,7 +134,7 @@ func TestKernelToolsHaveCanonicalResultContracts(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	expectedEffectCounts := map[string]int{
-		toolcontract.TerminalRunToolName:         0,
+		toolcontract.ShellToolName:               0,
 		toolcontract.FileReadToolName:            0,
 		toolcontract.FileWriteToolName:           2,
 		toolcontract.FileDeleteToolName:          1,
@@ -173,7 +173,7 @@ func TestTerminalRunDescriptorUsesStrictCanonicalContract(t *testing.T) {
 	}
 	var definition toolcontract.ToolDefinition
 	for _, boundTool := range boundTools {
-		if boundTool.Definition.Name == toolcontract.TerminalRunToolName {
+		if boundTool.Definition.Name == toolcontract.ShellToolName {
 			definition = boundTool.Definition
 			break
 		}

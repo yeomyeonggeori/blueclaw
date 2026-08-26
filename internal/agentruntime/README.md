@@ -31,7 +31,7 @@ The current catalog and what each description costs is generated:
 
 Two things about that surface are worth knowing before changing it. The
 descriptions are uneven, from 530 bytes for `schedule_create` down to 47 for
-`terminal_run`, and the gap does not track how hard the tool is to use
+`shell`, and the gap does not track how hard the tool is to use
 correctly. And a wrong-tool call is corrected after the fact by recovery
 guidance, on every model, every time, so wording that prevents one is cheaper
 than it looks.

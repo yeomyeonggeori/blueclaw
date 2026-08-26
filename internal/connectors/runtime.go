@@ -509,7 +509,7 @@ func (connectorRuntime *ConnectorRuntime) UseWorkspaceRootPath(workspaceRootPath
 	connectorRuntime.toolCatalogBuilder.UseWorkspaceRootPath(workspaceRootPath)
 }
 
-func (connectorRuntime *ConnectorRuntime) UseTerminalService(terminalService *security.TerminalSessionService) {
+func (connectorRuntime *ConnectorRuntime) UseTerminalService(terminalService *security.ShellService) {
 	connectorRuntime.toolCatalogBuilder.UseTerminalService(terminalService)
 }
 
@@ -2044,10 +2044,10 @@ func outcomeContractRequiresFileAttachment(contract agentcontract.OutcomeContrac
 	if len(contract.RequiredAttachmentSuffixes) > 0 {
 		return true
 	}
-	if toolNamesContain(contract.RequiredEvidenceTools, "file.attach") {
+	if toolNamesContain(contract.RequiredEvidenceTools, "file_attach") {
 		return true
 	}
-	if toolNameGroupsContain(contract.RequiredEvidenceAnyOf, "file.attach") {
+	if toolNameGroupsContain(contract.RequiredEvidenceAnyOf, "file_attach") {
 		return true
 	}
 	for _, result := range contract.ExpectedResults {

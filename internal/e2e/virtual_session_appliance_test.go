@@ -58,7 +58,7 @@ func TestPresentationLocalMultiturnSuccessLive(t *testing.T) {
 		t.Fatalf("expected one turn result, got %d", len(result.TurnResults))
 	}
 	turnResult := result.TurnResults[0]
-	if !eventsContain(turnResult.Events, "tool.terminal_run.result", "exitCode") {
+	if !eventsContain(turnResult.Events, "tool.shell.result", "exitCode") {
 		t.Fatal("expected terminal build to succeed")
 	}
 }
@@ -136,8 +136,8 @@ func TestAmbientTaskCaptureAcceptance(t *testing.T) {
 	if !eventsContain(turnResult.Events, "agent.ambient_duty_launch", `"dutyName":"team_flow_update"`) {
 		t.Fatalf("expected ambient duty launch for an other-person-mentioned task assignment; events: %s", summarizeEvents(turnResult.Events))
 	}
-	if eventsContain(turnResult.Events, "tool.terminal_run.requested", "") {
-		t.Fatalf("ambient capture must not reach terminal_run; events: %s", summarizeEvents(turnResult.Events))
+	if eventsContain(turnResult.Events, "tool.shell.requested", "") {
+		t.Fatalf("ambient capture must not reach shell; events: %s", summarizeEvents(turnResult.Events))
 	}
 	reviseResult := result.TurnResults[1]
 	if !requestedToolCallPresent(reviseResult.Events, "task_update") {
@@ -315,8 +315,8 @@ func TestSiteEditRedeployAcceptance(t *testing.T) {
 	if secondTurnResult.TaskStatus != task.TaskStatusCompleted {
 		t.Fatalf("expected second turn success, got %s", secondTurnResult.TaskStatus)
 	}
-	if countEvents(secondTurnResult.Events, "tool.terminal_run.requested") != 0 {
-		t.Fatalf("expected no terminal_run for a content-only edit in turn two; events: %s", summarizeEvents(secondTurnResult.Events))
+	if countEvents(secondTurnResult.Events, "tool.shell.requested") != 0 {
+		t.Fatalf("expected no shell for a content-only edit in turn two; events: %s", summarizeEvents(secondTurnResult.Events))
 	}
 	if countEventsWithFragment(secondTurnResult.Events, "tool.file_write.requested", "site-content.json") == 0 {
 		t.Fatalf("expected a content-only site-content.json edit in turn two; events: %s", summarizeEvents(secondTurnResult.Events))
@@ -341,8 +341,8 @@ func TestSiteCustomStructureAcceptance(t *testing.T) {
 	if !eventsContain(turnResult.Events, "tool.site_serve.result", "app/dist") {
 		t.Fatalf("expected the first site_serve attempt to be rejected by the site owner for a missing build; events: %s", summarizeEvents(turnResult.Events))
 	}
-	if countEvents(turnResult.Events, "tool.terminal_run.requested") != 1 {
-		t.Fatalf("expected exactly one terminal_run build after the app/src change; events: %s", summarizeEvents(turnResult.Events))
+	if countEvents(turnResult.Events, "tool.shell.requested") != 1 {
+		t.Fatalf("expected exactly one shell build after the app/src change; events: %s", summarizeEvents(turnResult.Events))
 	}
 	if countEvents(turnResult.Events, "tool.site_serve.requested") != 2 {
 		t.Fatalf("expected site_serve to be attempted once before the build and once after; events: %s", summarizeEvents(turnResult.Events))

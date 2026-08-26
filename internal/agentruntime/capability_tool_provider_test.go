@@ -179,19 +179,19 @@ func TestCapabilityToolProviderRejectsModelVisibleDescriptorWithoutResultContrac
 }
 
 func TestCapabilityToolProviderAllowsHiddenDescriptorWithoutResultContract(t *testing.T) {
-	descriptor := completeTestCapabilityToolDescriptor(CapabilityToolDescriptor{Name: "task.history"})
+	descriptor := completeTestCapabilityToolDescriptor(CapabilityToolDescriptor{Name: "task_history"})
 	descriptor.ModelVisibility = toolcontract.ToolVisibilityInternal
 	descriptor.ResultContract = nil
 	provider := capabilityToolProvider{
 		toolCatalogBuilder: NewToolCatalogBuilder(),
 		descriptors:        []CapabilityToolDescriptor{descriptor},
 	}
-	toolSet := toolcontract.NewToolSet([]string{"task.history"})
+	toolSet := toolcontract.NewToolSet([]string{"task_history"})
 
 	if errorValue := toolSet.RegisterProvider(context.Background(), provider); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if toolSet.IsRegistered("task.history") {
+	if toolSet.IsRegistered("task_history") {
 		t.Fatal("expected hidden capability descriptor not to be registered as a model tool")
 	}
 }

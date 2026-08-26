@@ -70,7 +70,7 @@ func TestLocalToolProviderUsesTypedSkillMutationContracts(t *testing.T) {
 
 func TestDeadCompatibilityToolsAreNotRegistered(t *testing.T) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	deadToolNames := []string{"task.history", "browser_handoff.openURL", "db.sql"}
+	deadToolNames := []string{"task_history", "browser_handoff_openURL", "db_sql"}
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, deadToolNames)
 	toolSet := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{ProfileName: "default"})
 

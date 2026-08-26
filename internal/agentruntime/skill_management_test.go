@@ -261,7 +261,7 @@ func TestSkillAddRejectsMalformedOrCustomFrontmatter(t *testing.T) {
 		"---\nname: custom\nsummary: no\n---\nBody.",
 		"---\nname: custom\ntags: [one]\n---\nBody.",
 		"---\nname: custom\ntriggerHints: [one]\n---\nBody.",
-		"---\nname: custom\ncustomToolDependency: [terminal_run]\n---\nBody.",
+		"---\nname: custom\ncustomToolDependency: [shell]\n---\nBody.",
 		"---\nname: custom\nallowedProfiles: [default]\n---\nBody.",
 		"---\nname: custom\nwhen_to_use: Use for custom work.\n---\nBody.",
 		"---\nname: custom\nactivation: {}\n---\nBody.",

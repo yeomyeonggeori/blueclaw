@@ -28,8 +28,8 @@ func TestBuildTimelinePairsToolRequestedAndResult(testInstance *testing.T) {
 
 func TestBuildTimelineMarksFailedToolResult(testInstance *testing.T) {
 	taskEvents := []TaskEvent{
-		{Name: "tool.terminal_run.requested", Body: `{"toolName":"terminal_run"}`, CreatedAt: time.Unix(0, 0)},
-		{Name: "tool.terminal_run.result", Body: `{"failure":{"userSafeSummary":"permission denied","code":"operation_failed"}}`, CreatedAt: time.Unix(1, 0)},
+		{Name: "tool.shell.requested", Body: `{"toolName":"shell"}`, CreatedAt: time.Unix(0, 0)},
+		{Name: "tool.shell.result", Body: `{"failure":{"userSafeSummary":"permission denied","code":"operation_failed"}}`, CreatedAt: time.Unix(1, 0)},
 	}
 
 	timelineEntries := BuildTimeline(taskEvents)
@@ -77,7 +77,7 @@ func TestBuildTimelinePairsCallsInFIFOOrderPerToolName(testInstance *testing.T) 
 
 func TestBuildTimelineRendersCheckpointAndApprovalEvents(testInstance *testing.T) {
 	taskEvents := []TaskEvent{
-		{Name: "agent.checkpoint.sent", Body: `{"toolName":"terminal_run","message":"running the build"}`, CreatedAt: time.Unix(0, 0)},
+		{Name: "agent.checkpoint.sent", Body: `{"toolName":"shell","message":"running the build"}`, CreatedAt: time.Unix(0, 0)},
 		{Name: "approval.pending_call", Body: `{"toolName":"message_send","confirmation":"Send this message to the team?"}`, CreatedAt: time.Unix(1, 0)},
 		{Name: "approval.executed", Body: `{"toolName":"message_send"}`, CreatedAt: time.Unix(2, 0)},
 	}

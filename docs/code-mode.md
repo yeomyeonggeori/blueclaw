@@ -106,7 +106,7 @@ against the current shape.
 
 ## 5. Overlap with the terminal
 
-`terminal_run` already lets the model write a script and run it, as the
+`shell` already lets the model write a script and run it, as the
 requester, with a real machine underneath. What Code Mode adds is that the
 script can call *our* tools, with our identity resolution, our approval gate and
 our effect recording.

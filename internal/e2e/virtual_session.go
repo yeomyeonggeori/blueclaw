@@ -853,7 +853,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	runtime.UseWorkspaceID("e2e")
 	runtime.UseWorkspaceRootPath(workspacePath)
 	runtime.UseAllowedToolNames(allowedToolsOrDefault(scenario.AllowedTools))
-	terminalService := security.NewTerminalSessionService(terminalConfiguration(workspacePath))
+	terminalService := security.NewShellService(terminalConfiguration(workspacePath))
 	runtime.UseTerminalService(terminalService)
 	runtime.UseWorkspaceActorFactory(security.NewDirectWorkspaceActorFactory(terminalService))
 	runtime.UseTaskRunService(taskRunService)
@@ -956,7 +956,7 @@ func virtualToolCatalogBuilder(
 	workspacePath string,
 	taskRunService *task.TaskRunService,
 	scheduleStore *virtualTaskScheduleRepository,
-	terminalService *security.TerminalSessionService,
+	terminalService *security.ShellService,
 	memoryService *memory.MemoryService,
 	capabilityClient capability.Client,
 	skillRetriever agentcontract.SkillRetriever,
@@ -3676,7 +3676,7 @@ func allowedToolsOrDefault(allowedTools []string) []string {
 	if len(allowedTools) > 0 {
 		return append([]string{}, allowedTools...)
 	}
-	return []string{"conversation_history", "memory_search", "terminal_run", "ask_input", "file_read", "file_write", "file_edit", "file_deliver"}
+	return []string{"conversation_history", "memory_search", "shell", "ask_input", "file_read", "file_write", "file_edit", "file_deliver"}
 }
 
 func terminalConfiguration(workspacePath string) config.TerminalConfiguration {
@@ -4130,7 +4130,7 @@ func actionNoToolFallbackFinishMessage(reply string) string {
 }
 
 func actionFailMessage(reason string) string {
-	return `{"action":"fail","reason":` + quote(reason) + `,"goalStatus":"blocked","goalSatisfied":false,"remainingWork":"The requested task could not complete.","failureResolution":"failure_report","usedFailureFacts":{"attempts":[{"toolName":"terminal_run","inputSummary":"printf 'permission denied blocked_by_captcha' >&2; exit 126","errorCode":"operation_failed","failureStage":"terminal_run","message":"errorCode=operation_failed; failureStage=terminal_run; exitCode=126; stderrTail=permission denied blocked_by_captcha"}],"budgetState":"failure_report_required"},"executionStateUpdate":{}}`
+	return `{"action":"fail","reason":` + quote(reason) + `,"goalStatus":"blocked","goalSatisfied":false,"remainingWork":"The requested task could not complete.","failureResolution":"failure_report","usedFailureFacts":{"attempts":[{"toolName":"shell","inputSummary":"printf 'permission denied blocked_by_captcha' >&2; exit 126","errorCode":"operation_failed","failureStage":"shell","message":"errorCode=operation_failed; failureStage=shell; exitCode=126; stderrTail=permission denied blocked_by_captcha"}],"budgetState":"failure_report_required"},"executionStateUpdate":{}}`
 }
 
 func actionCallTool(toolName string, input string) string {

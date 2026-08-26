@@ -22,12 +22,12 @@ func TestArtifactManifestBoundsNewestFirstAndFiltersConversation(t *testing.T) {
 	for index := 0; index < 12; index++ {
 		artifactPath := createManifestTestArtifact(t, workspaceDefaultPath, "deck-"+twoDigitString(index), baseModifiedAt.Add(time.Duration(index)*time.Minute))
 		taskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "make deck")
-		taskRunService.AppendTaskEvent(taskRun.TaskRunID, "tool.file.promote.result", `{"path":"artifacts/deck-`+twoDigitString(index)+`/`+filepath.Base(artifactPath)+`"}`)
+		taskRunService.AppendTaskEvent(taskRun.TaskRunID, "tool.file_promote.result", `{"path":"artifacts/deck-`+twoDigitString(index)+`/`+filepath.Base(artifactPath)+`"}`)
 	}
 
 	createManifestTestArtifact(t, workspaceDefaultPath, "other", baseModifiedAt.Add(24*time.Hour))
 	otherTaskRun := taskRunService.CreateTaskRun("person-1", "conversation-2", "make other deck")
-	taskRunService.AppendTaskEvent(otherTaskRun.TaskRunID, "tool.file.promote.result", `{"path":"artifacts/other/other.pptx"}`)
+	taskRunService.AppendTaskEvent(otherTaskRun.TaskRunID, "tool.file_promote.result", `{"path":"artifacts/other/other.pptx"}`)
 
 	manifest := buildConversationArtifactManifest(agentcontract.AgentTurnRequest{
 		ConversationID:       "conversation-1",
@@ -62,7 +62,7 @@ func TestArtifactManifestIncludesTaskArtifactLedgerPath(t *testing.T) {
 	modifiedAt := time.Date(2026, time.June, 12, 2, 0, 0, 0, time.UTC)
 	createManifestTestArtifact(t, workspaceDefaultPath, "ledger", modifiedAt)
 	taskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "make deck")
-	taskArtifactService.AddTaskArtifactBody(taskRun.TaskRunID, "tool.file.promote.result", `{"path":"artifacts/ledger/ledger.pptx"}`)
+	taskArtifactService.AddTaskArtifactBody(taskRun.TaskRunID, "tool.file_promote.result", `{"path":"artifacts/ledger/ledger.pptx"}`)
 
 	manifest := buildConversationArtifactManifest(agentcontract.AgentTurnRequest{
 		ConversationID:       "conversation-1",
@@ -73,7 +73,7 @@ func TestArtifactManifestIncludesTaskArtifactLedgerPath(t *testing.T) {
 	if len(manifest) != 1 {
 		t.Fatalf("expected one ledger manifest entry, got %+v", manifest)
 	}
-	if manifest[0].ProducingTool != "file.promote" || !strings.Contains(manifest[0].RelativePath, "ledger.pptx") {
+	if manifest[0].ProducingTool != "file_promote" || !strings.Contains(manifest[0].RelativePath, "ledger.pptx") {
 		t.Fatalf("expected ledger artifact path and producing tool, got %+v", manifest)
 	}
 }

@@ -268,7 +268,7 @@ func assertTestFileContent(t *testing.T, path string, expectedContent string) {
 }
 
 func newFileToolTestCatalogBuilder(workspacePath string) *ToolCatalogBuilder {
-	terminalService := security.NewTerminalSessionService(config.TerminalConfiguration{
+	terminalService := security.NewShellService(config.TerminalConfiguration{
 		WorkspaceRootPath: workspacePath,
 		Mode:              "firecrackerGuest",
 		TimeoutSecond:     30,
@@ -281,7 +281,7 @@ func newFileToolTestCatalogBuilder(workspacePath string) *ToolCatalogBuilder {
 }
 
 func newTerminalToolTestCatalogBuilder(workspacePath string) *ToolCatalogBuilder {
-	terminalService := security.NewTerminalSessionService(config.TerminalConfiguration{
+	terminalService := security.NewShellService(config.TerminalConfiguration{
 		WorkspaceRootPath:     workspacePath,
 		Mode:                  "firecrackerGuest",
 		TimeoutSecond:         5,
@@ -310,7 +310,7 @@ func internalTestToolNames() []string {
 		"skill_add",
 		"skill_remove",
 		"skill_search",
-		"terminal_run",
+		"shell",
 	}
 }
 

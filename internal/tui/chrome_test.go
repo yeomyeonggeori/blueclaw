@@ -59,9 +59,9 @@ func TestATableThatFitsIsNotScrolled(testInstance *testing.T) {
 func TestEveryTimelineEntryHasTheSameShape(testInstance *testing.T) {
 	entryTime := time.Date(2026, 8, 5, 14, 3, 9, 0, time.UTC)
 	entries := []TimelineEntry{
-		{Kind: TimelineEntryToolCall, Time: entryTime, ToolName: "terminal_run"},
-		{Kind: TimelineEntryToolCall, Time: entryTime, ToolName: "terminal_run", HasResult: true, ResultSummary: "done"},
-		{Kind: TimelineEntryToolCall, Time: entryTime, ToolName: "terminal_run", HasResult: true, ResultIsFailure: true, ResultSummary: "exit 1"},
+		{Kind: TimelineEntryToolCall, Time: entryTime, ToolName: "shell"},
+		{Kind: TimelineEntryToolCall, Time: entryTime, ToolName: "shell", HasResult: true, ResultSummary: "done"},
+		{Kind: TimelineEntryToolCall, Time: entryTime, ToolName: "shell", HasResult: true, ResultIsFailure: true, ResultSummary: "exit 1"},
 		{Kind: TimelineEntryAgentMessage, Time: entryTime, Message: "reading the ledger"},
 		{Kind: TimelineEntryApprovalPending, Time: entryTime, Message: "send the summary"},
 		{Kind: TimelineEntryApprovalExecuted, Time: entryTime, ToolName: "message_send"},

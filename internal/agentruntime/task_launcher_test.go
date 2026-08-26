@@ -430,17 +430,17 @@ func TestToolCatalogProfileFiltersBuiltInTerminalTools(t *testing.T) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{
 		"planner":   {"memory_search"},
-		"developer": {"memory_search", "terminal_run"},
+		"developer": {"memory_search", "shell"},
 	}, nil)
 
 	plannerToolSet := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{ProfileName: "planner"})
 	developerToolSet := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{ProfileName: "developer"})
 
-	if containsString(plannerToolSet.ListToolNames(), "terminal_run") {
+	if containsString(plannerToolSet.ListToolNames(), "shell") {
 		t.Fatalf("expected planner terminal tools to be hidden, got %+v", plannerToolSet.ListToolNames())
 	}
-	if !containsString(developerToolSet.ListToolNames(), "terminal_run") || containsString(developerToolSet.ListToolNames(), "terminal.session") {
-		t.Fatalf("expected developer terminal_run only, got %+v", developerToolSet.ListToolNames())
+	if !containsString(developerToolSet.ListToolNames(), "shell") || containsString(developerToolSet.ListToolNames(), "shell_session") {
+		t.Fatalf("expected developer shell only, got %+v", developerToolSet.ListToolNames())
 	}
 }
 
