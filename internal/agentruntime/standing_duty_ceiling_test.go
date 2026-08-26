@@ -12,7 +12,7 @@ func TestStandingDutyToolNamesExcludeOutwardAndSystemTools(t *testing.T) {
 		for _, toolName := range duty.ToolNames {
 			allowed[toolName] = true
 		}
-		for _, forbiddenToolName := range []string{"message_send", "message_update", "terminal_run", "web_fetch", "file_write", "ask_input", "task_delete", "event_delete"} {
+		for _, forbiddenToolName := range []string{"message_send", "message_update", "shell", "web_fetch", "file_write", "ask_input", "task_delete", "event_delete"} {
 			if allowed[forbiddenToolName] {
 				t.Fatalf("standing duty %q must not allow %q", duty.Name, forbiddenToolName)
 			}

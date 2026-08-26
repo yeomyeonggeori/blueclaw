@@ -40,7 +40,7 @@ type CommandResult struct {
 	OutputTrimmed bool   `json:"outputTrimmed"`
 }
 
-type TerminalSessionStatus struct {
+type ShellSessionStatus struct {
 	SessionID     string `json:"sessionID"`
 	Status        string `json:"status"`
 	ExitCode      int    `json:"exitCode"`
@@ -68,25 +68,25 @@ type TerminalSession struct {
 	processGroupID       int
 }
 
-type TerminalSessionService struct {
+type ShellService struct {
 	commandGuardrailService CommandGuardrailService
 	mutex                   sync.RWMutex
 	terminalSessions        map[string]*TerminalSession
 }
 
-func NewTerminalSessionService(terminalConfiguration config.TerminalConfiguration) *TerminalSessionService {
-	return &TerminalSessionService{
+func NewShellService(terminalConfiguration config.TerminalConfiguration) *ShellService {
+	return &ShellService{
 		commandGuardrailService: NewCommandGuardrailService(terminalConfiguration),
 		terminalSessions:        map[string]*TerminalSession{},
 	}
 }
 
-func (terminalSessionService *TerminalSessionService) RunCommand(ctx context.Context, commandRequest CommandRequest) (CommandResult, error) {
-	commandPlan, errorValue := terminalSessionService.commandGuardrailService.BuildCommandPlan(commandRequest)
+func (shellService *ShellService) RunCommand(ctx context.Context, commandRequest CommandRequest) (CommandResult, error) {
+	commandPlan, errorValue := shellService.commandGuardrailService.BuildCommandPlan(commandRequest)
 	if errorValue != nil {
 		return CommandResult{ExitCode: -1, Stderr: errorValue.Error()}, errorValue
 	}
-	if errorValue := terminalSessionService.prepareWorkingDirectory(commandPlan.WorkingDirectoryPath); errorValue != nil {
+	if errorValue := shellService.prepareWorkingDirectory(commandPlan.WorkingDirectoryPath); errorValue != nil {
 		return CommandResult{Stderr: errorValue.Error()}, errorValue
 	}
 
@@ -102,7 +102,7 @@ func (terminalSessionService *TerminalSessionService) RunCommand(ctx context.Con
 		command.Stdin = strings.NewReader(commandPlan.Stdin)
 	}
 
-	outputMaximumBytes := terminalSessionService.commandOutputMaxBytes(commandPlan)
+	outputMaximumBytes := shellService.commandOutputMaxBytes(commandPlan)
 	standardOutputBuffer := newOutputRingBuffer(outputMaximumBytes)
 	standardErrorBuffer := newOutputRingBuffer(outputMaximumBytes)
 	command.Stdout = standardOutputBuffer
@@ -115,7 +115,7 @@ func (terminalSessionService *TerminalSessionService) RunCommand(ctx context.Con
 
 	errorValue, isAbandoned := awaitCommandCompletion(ctx, runResult, command.WaitDelay+commandAbandonGrace)
 	if isAbandoned {
-		terminalSessionService.abandonUnreapableProcessGroup(command, runResult, scopeMarker)
+		shellService.abandonUnreapableProcessGroup(command, runResult, scopeMarker)
 		return CommandResult{
 			ExitCode:      -1,
 			Stdout:        truncateString(standardOutputBuffer.String(), outputMaximumBytes),
@@ -203,7 +203,7 @@ func awaitCommandCompletion(ctx context.Context, runResult <-chan error, abandon
 		case errorValue = <-runResult:
 			return errorValue, false
 		case <-heartbeatTicker.C:
-			slog.Info("terminal_run command still running", "elapsedSeconds", int(time.Since(waitStartedAt).Seconds()))
+			slog.Info("shell command still running", "elapsedSeconds", int(time.Since(waitStartedAt).Seconds()))
 		case <-ctx.Done():
 			select {
 			case errorValue = <-runResult:
@@ -215,12 +215,12 @@ func awaitCommandCompletion(ctx context.Context, runResult <-chan error, abandon
 	}
 }
 
-func (terminalSessionService *TerminalSessionService) abandonUnreapableProcessGroup(command *exec.Cmd, runResult <-chan error, scopeMarker string) {
+func (shellService *ShellService) abandonUnreapableProcessGroup(command *exec.Cmd, runResult <-chan error, scopeMarker string) {
 	if command.Process == nil {
 		return
 	}
 	processGroupID := command.Process.Pid
-	slog.Warn("terminal_run abandoned unreapable process group", "pgid", processGroupID, "command", command.Path)
+	slog.Warn("shell abandoned unreapable process group", "pgid", processGroupID, "command", command.Path)
 	sweepEscapedCommandProcesses(scopeMarker)
 
 	go func() {
@@ -255,7 +255,7 @@ func sweepEscapedCommandProcesses(scopeMarker string) {
 		}
 	}
 	if killedCount > 0 {
-		slog.Warn("terminal_run killed escaped command processes", "count", killedCount, "scope", scopeMarker)
+		slog.Warn("shell killed escaped command processes", "count", killedCount, "scope", scopeMarker)
 	}
 }
 
@@ -283,8 +283,8 @@ func processIDsWithEnvironmentMarker(procRootPath string, scopeMarker string) []
 	return processIDs
 }
 
-func (terminalSessionService *TerminalSessionService) prepareWorkingDirectory(workingDirectoryPath string) error {
-	if terminalSessionService.commandGuardrailService.terminalConfiguration.Mode != "firecrackerGuest" {
+func (shellService *ShellService) prepareWorkingDirectory(workingDirectoryPath string) error {
+	if shellService.commandGuardrailService.terminalConfiguration.Mode != "firecrackerGuest" {
 		return nil
 	}
 	fileInformation, errorValue := os.Stat(workingDirectoryPath)
@@ -297,16 +297,16 @@ func (terminalSessionService *TerminalSessionService) prepareWorkingDirectory(wo
 	return nil
 }
 
-func (terminalSessionService *TerminalSessionService) StartInteractiveSession(commandRequest CommandRequest) (string, error) {
+func (shellService *ShellService) StartInteractiveSession(commandRequest CommandRequest) (string, error) {
 	commandRequest.IsInteractive = true
-	commandPlan, errorValue := terminalSessionService.commandGuardrailService.BuildCommandPlan(commandRequest)
+	commandPlan, errorValue := shellService.commandGuardrailService.BuildCommandPlan(commandRequest)
 	if errorValue != nil {
 		return "", errorValue
 	}
-	if terminalSessionService.sessionCount() >= terminalSessionService.sessionMaxCount() {
+	if shellService.sessionCount() >= shellService.sessionMaxCount() {
 		return "", errors.New("terminal session limit reached")
 	}
-	if errorValue := terminalSessionService.prepareWorkingDirectory(commandPlan.WorkingDirectoryPath); errorValue != nil {
+	if errorValue := shellService.prepareWorkingDirectory(commandPlan.WorkingDirectoryPath); errorValue != nil {
 		return "", errorValue
 	}
 
@@ -320,8 +320,8 @@ func (terminalSessionService *TerminalSessionService) StartInteractiveSession(co
 		SessionID:            sessionID,
 		command:              command,
 		cancelFunction:       cancelFunction,
-		standardOutputBuffer: newOutputRingBuffer(terminalSessionService.outputMaxBytes()),
-		standardErrorBuffer:  newOutputRingBuffer(terminalSessionService.outputMaxBytes()),
+		standardOutputBuffer: newOutputRingBuffer(shellService.outputMaxBytes()),
+		standardErrorBuffer:  newOutputRingBuffer(shellService.outputMaxBytes()),
 		exitCode:             -1,
 		exited:               make(chan struct{}),
 	}
@@ -337,9 +337,9 @@ func (terminalSessionService *TerminalSessionService) StartInteractiveSession(co
 	terminalSession.rememberProcessGroup()
 	go terminalSession.wait()
 
-	terminalSessionService.mutex.Lock()
-	terminalSessionService.terminalSessions[sessionID] = terminalSession
-	terminalSessionService.mutex.Unlock()
+	shellService.mutex.Lock()
+	shellService.terminalSessions[sessionID] = terminalSession
+	shellService.mutex.Unlock()
 
 	if strings.TrimSpace(commandPlan.Stdin) != "" {
 		_, _ = terminalSession.standardInputWriter.Write([]byte(commandPlan.Stdin + "\n"))
@@ -347,31 +347,31 @@ func (terminalSessionService *TerminalSessionService) StartInteractiveSession(co
 	return sessionID, nil
 }
 
-func (terminalSessionService *TerminalSessionService) WriteSessionInput(sessionID string, input string) (TerminalSessionStatus, error) {
-	terminalSession, isFound := terminalSessionService.findSession(sessionID)
+func (shellService *ShellService) WriteSessionInput(sessionID string, input string) (ShellSessionStatus, error) {
+	terminalSession, isFound := shellService.findSession(sessionID)
 	if !isFound {
-		return TerminalSessionStatus{}, errors.New("terminal session not found")
+		return ShellSessionStatus{}, errors.New("terminal session not found")
 	}
 
 	_, errorValue := terminalSession.standardInputWriter.Write([]byte(input))
 	if errorValue != nil {
-		return TerminalSessionStatus{}, errorValue
+		return ShellSessionStatus{}, errorValue
 	}
 
 	time.Sleep(50 * time.Millisecond)
 	return terminalSession.status(), nil
 }
 
-func (terminalSessionService *TerminalSessionService) StatusSession(sessionID string) (TerminalSessionStatus, error) {
-	terminalSession, isFound := terminalSessionService.findSession(sessionID)
+func (shellService *ShellService) StatusSession(sessionID string) (ShellSessionStatus, error) {
+	terminalSession, isFound := shellService.findSession(sessionID)
 	if !isFound {
-		return TerminalSessionStatus{}, errors.New("terminal session not found")
+		return ShellSessionStatus{}, errors.New("terminal session not found")
 	}
 	return terminalSession.status(), nil
 }
 
-func (terminalSessionService *TerminalSessionService) CloseSession(sessionID string) error {
-	terminalSession, isFound := terminalSessionService.takeSession(sessionID)
+func (shellService *ShellService) CloseSession(sessionID string) error {
+	terminalSession, isFound := shellService.takeSession(sessionID)
 	if !isFound {
 		return errors.New("terminal session not found")
 	}
@@ -380,21 +380,21 @@ func (terminalSessionService *TerminalSessionService) CloseSession(sessionID str
 
 // Every live session, so a shutdown does not leave a shell behind holding the
 // requester's workspace open.
-func (terminalSessionService *TerminalSessionService) CloseAllSessions() error {
+func (shellService *ShellService) CloseAllSessions() error {
 	var firstError error
-	for _, sessionID := range terminalSessionService.sessionIdentifiers() {
-		if errorValue := terminalSessionService.CloseSession(sessionID); errorValue != nil && firstError == nil {
+	for _, sessionID := range shellService.sessionIdentifiers() {
+		if errorValue := shellService.CloseSession(sessionID); errorValue != nil && firstError == nil {
 			firstError = errorValue
 		}
 	}
 	return firstError
 }
 
-func (terminalSessionService *TerminalSessionService) sessionIdentifiers() []string {
-	terminalSessionService.mutex.RLock()
-	defer terminalSessionService.mutex.RUnlock()
-	sessionIdentifiers := make([]string, 0, len(terminalSessionService.terminalSessions))
-	for sessionID := range terminalSessionService.terminalSessions {
+func (shellService *ShellService) sessionIdentifiers() []string {
+	shellService.mutex.RLock()
+	defer shellService.mutex.RUnlock()
+	sessionIdentifiers := make([]string, 0, len(shellService.terminalSessions))
+	for sessionID := range shellService.terminalSessions {
 		sessionIdentifiers = append(sessionIdentifiers, sessionID)
 	}
 	return sessionIdentifiers
@@ -402,21 +402,21 @@ func (terminalSessionService *TerminalSessionService) sessionIdentifiers() []str
 
 // Taken out of the registry before anything is killed, so a status read never finds a
 // session in the middle of dying and the service lock is not held across the wait.
-func (terminalSessionService *TerminalSessionService) findSession(sessionID string) (*TerminalSession, bool) {
-	terminalSessionService.mutex.RLock()
-	defer terminalSessionService.mutex.RUnlock()
-	terminalSession, isFound := terminalSessionService.terminalSessions[sessionID]
+func (shellService *ShellService) findSession(sessionID string) (*TerminalSession, bool) {
+	shellService.mutex.RLock()
+	defer shellService.mutex.RUnlock()
+	terminalSession, isFound := shellService.terminalSessions[sessionID]
 	return terminalSession, isFound
 }
 
-func (terminalSessionService *TerminalSessionService) takeSession(sessionID string) (*TerminalSession, bool) {
-	terminalSessionService.mutex.Lock()
-	defer terminalSessionService.mutex.Unlock()
-	terminalSession, isFound := terminalSessionService.terminalSessions[sessionID]
+func (shellService *ShellService) takeSession(sessionID string) (*TerminalSession, bool) {
+	shellService.mutex.Lock()
+	defer shellService.mutex.Unlock()
+	terminalSession, isFound := shellService.terminalSessions[sessionID]
 	if !isFound {
 		return nil, false
 	}
-	delete(terminalSessionService.terminalSessions, sessionID)
+	delete(shellService.terminalSessions, sessionID)
 	return terminalSession, true
 }
 
@@ -522,7 +522,7 @@ func (terminalSession *TerminalSession) wait() {
 	close(terminalSession.exited)
 }
 
-func (terminalSession *TerminalSession) status() TerminalSessionStatus {
+func (terminalSession *TerminalSession) status() ShellSessionStatus {
 	terminalSession.mutex.RLock()
 	isExited := terminalSession.isExited
 	exitCode := terminalSession.exitCode
@@ -533,7 +533,7 @@ func (terminalSession *TerminalSession) status() TerminalSessionStatus {
 	}
 	stdout := terminalSession.standardOutputBuffer.String()
 	stderr := terminalSession.standardErrorBuffer.String()
-	return TerminalSessionStatus{
+	return ShellSessionStatus{
 		SessionID:     terminalSession.SessionID,
 		Status:        status,
 		ExitCode:      exitCode,
@@ -544,31 +544,31 @@ func (terminalSession *TerminalSession) status() TerminalSessionStatus {
 	}
 }
 
-func (terminalSessionService *TerminalSessionService) sessionCount() int {
-	terminalSessionService.mutex.RLock()
-	defer terminalSessionService.mutex.RUnlock()
-	return len(terminalSessionService.terminalSessions)
+func (shellService *ShellService) sessionCount() int {
+	shellService.mutex.RLock()
+	defer shellService.mutex.RUnlock()
+	return len(shellService.terminalSessions)
 }
 
-func (terminalSessionService *TerminalSessionService) sessionMaxCount() int {
-	if terminalSessionService.commandGuardrailService.terminalConfiguration.SessionMaxCount <= 0 {
+func (shellService *ShellService) sessionMaxCount() int {
+	if shellService.commandGuardrailService.terminalConfiguration.SessionMaxCount <= 0 {
 		return 4
 	}
-	return terminalSessionService.commandGuardrailService.terminalConfiguration.SessionMaxCount
+	return shellService.commandGuardrailService.terminalConfiguration.SessionMaxCount
 }
 
-func (terminalSessionService *TerminalSessionService) outputMaxBytes() int {
-	if terminalSessionService.commandGuardrailService.terminalConfiguration.OutputMaxBytes <= 0 {
+func (shellService *ShellService) outputMaxBytes() int {
+	if shellService.commandGuardrailService.terminalConfiguration.OutputMaxBytes <= 0 {
 		return 32768
 	}
-	return terminalSessionService.commandGuardrailService.terminalConfiguration.OutputMaxBytes
+	return shellService.commandGuardrailService.terminalConfiguration.OutputMaxBytes
 }
 
-func (terminalSessionService *TerminalSessionService) commandOutputMaxBytes(commandPlan CommandPlan) int {
+func (shellService *ShellService) commandOutputMaxBytes(commandPlan CommandPlan) int {
 	if commandPlan.OutputMaximumBytes > 0 {
 		return commandPlan.OutputMaximumBytes
 	}
-	return terminalSessionService.outputMaxBytes()
+	return shellService.outputMaxBytes()
 }
 
 func mapEnvironmentVariables(environmentVariables map[string]string) []string {

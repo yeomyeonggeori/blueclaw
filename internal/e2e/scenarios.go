@@ -122,16 +122,16 @@ func PresentationLocalMultiturnSuccessScenario(artifactDirectoryPath string) Vir
 		Name:                  "presentation_local_multiturn_success",
 		ArtifactDirectoryPath: artifactDirectoryPath,
 		Skills:                []agentcontract.SkillInstruction{presentationSkill()},
-		AllowedTools:          []string{"conversation_history", "memory_search", "terminal_run", "file_write", "file_deliver"},
+		AllowedTools:          []string{"conversation_history", "memory_search", "shell", "file_write", "file_deliver"},
 		Turns: []VirtualTurn{{
 			Prompt:                 "너 뭐 할 수 있는지 8장 피피티 만들어서 보내줘봐",
 			ExpectedSelectedSkills: []string{"presentation"},
-			ExpectedToolCalls:      []string{"terminal_run", "file_deliver"},
+			ExpectedToolCalls:      []string{"shell", "file_deliver"},
 			ExpectedEventCounts: []VirtualEventCount{
-				{Name: "tool.terminal_run.requested", BodyFragment: "NAME=", Count: 1},
-				{Name: "tool.terminal_run.requested", BodyFragment: "/workspace/skills/presentation/scripts/build.sh", Count: 1},
-				{Name: "tool.terminal_run.result", BodyFragment: "Building requested formats", Count: 1},
-				{Name: "tool.terminal_run.result", BodyFragment: "Slide render review", Count: 1},
+				{Name: "tool.shell.requested", BodyFragment: "NAME=", Count: 1},
+				{Name: "tool.shell.requested", BodyFragment: "/workspace/skills/presentation/scripts/build.sh", Count: 1},
+				{Name: "tool.shell.result", BodyFragment: "Building requested formats", Count: 1},
+				{Name: "tool.shell.result", BodyFragment: "Slide render review", Count: 1},
 				{Name: "tool.file_deliver.result", BodyFragment: `"output"`, Count: 1},
 			},
 			ExpectedValidityReviewPassed: true,
@@ -286,13 +286,13 @@ func DocumentCreateAcceptanceScenario(artifactDirectoryPath string) VirtualSessi
 	return VirtualSessionScenario{
 		Name:                  "document_create_acceptance",
 		ArtifactDirectoryPath: artifactDirectoryPath,
-		AllowedTools:          []string{"conversation_history", "memory_search", "terminal_run", "document_read", "file_write", "file_deliver"},
+		AllowedTools:          []string{"conversation_history", "memory_search", "shell", "document_read", "file_write", "file_deliver"},
 		CapabilityToolNames:   []string{"document_read"},
-		InitialToolNames:      []string{"terminal_run", "document_read", "file_write", "file_deliver"},
+		InitialToolNames:      []string{"shell", "document_read", "file_write", "file_deliver"},
 		Turns: []VirtualTurn{{
 			Prompt:                 "운영팀과 재무팀이 함께 검토할 '분기 결산 운영 검토'라는 짧은 DOCX 문서를 작성해서 이 DM에 첨부해줘. 검토 목적과 다음 단계를 간단히 적고, 현재 상태는 초안, 담당은 운영팀이라고 표시해줘.",
 			ExpectedSelectedSkills: []string{"document"},
-			ExpectedToolCalls:      []string{"file_write", "terminal_run", "file_deliver"},
+			ExpectedToolCalls:      []string{"file_write", "shell", "file_deliver"},
 			ExpectedToolCallCounts: map[string]int{"file_deliver": 1},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: "tool.file_deliver.result", BodyFragment: ".docx", Count: 1},
@@ -319,7 +319,7 @@ func AttachmentMaterialReadScenario(artifactDirectoryPath string) VirtualSession
 	return VirtualSessionScenario{
 		Name:                  "attachment_material_read",
 		ArtifactDirectoryPath: artifactDirectoryPath,
-		AllowedTools:          []string{"conversation_history", "memory_search", "terminal_run", "image_read", "document_read"},
+		AllowedTools:          []string{"conversation_history", "memory_search", "shell", "image_read", "document_read"},
 		CapabilityToolNames:   []string{"image_read", "document_read"},
 		Turns: []VirtualTurn{{
 			Prompt:          "다시 이미지 내가 첨부한 거 봐봐",
@@ -337,7 +337,7 @@ func AttachmentMaterialReadScenario(artifactDirectoryPath string) VirtualSession
 				actionFinishMessage("이미지를 확인했습니다.", "obs-001:image_read:0"),
 			},
 			ExpectedToolCalls:      []string{"image_read"},
-			ExpectedToolCallCounts: map[string]int{"terminal_run": 0},
+			ExpectedToolCallCounts: map[string]int{"shell": 0},
 			ExpectedExposedTools:   []string{"image_read", "document_read"},
 			ExpectedModelContexts: []string{
 				"materialID=mattermost:file-1",
@@ -364,7 +364,7 @@ func AttachmentHTMLPreviewRecoveryScenario(artifactDirectoryPath string) Virtual
 	return VirtualSessionScenario{
 		Name:                  "attachment_html_preview_recovery",
 		ArtifactDirectoryPath: artifactDirectoryPath,
-		AllowedTools:          []string{"conversation_history", "memory_search", "terminal_run", "file_preview", "file_read", "image_read"},
+		AllowedTools:          []string{"conversation_history", "memory_search", "shell", "file_preview", "file_read", "image_read"},
 		Turns: []VirtualTurn{{
 			Prompt:           "이거 파일 내용 보고 어떻게 개선하면 좋을지 말해줘봐",
 			RouterTaskShape:  agentcontract.TaskShapeResearchTask,
@@ -375,8 +375,8 @@ func AttachmentHTMLPreviewRecoveryScenario(artifactDirectoryPath string) Virtual
 			},
 			ExpectedToolCalls: []string{"file_preview"},
 			ExpectedToolCallCounts: map[string]int{
-				"terminal_run": 0,
-				"file_read":    0,
+				"shell":     0,
+				"file_read": 0,
 			},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: "tool.file_preview.requested", BodyFragment: `"path":"home/inbox/mattermost/thread-1/kim-intern-automation.html"`, Count: 1},
@@ -403,7 +403,7 @@ func AttachmentHTMLPreviousPreviewRecoveryScenario(artifactDirectoryPath string)
 	return VirtualSessionScenario{
 		Name:                  "attachment_html_previous_preview_recovery",
 		ArtifactDirectoryPath: artifactDirectoryPath,
-		AllowedTools:          []string{"conversation_history", "memory_search", "terminal_run", "file_preview", "file_read", "image_read"},
+		AllowedTools:          []string{"conversation_history", "memory_search", "shell", "file_preview", "file_read", "image_read"},
 		Turns: []VirtualTurn{{
 			Prompt:          "다시",
 			RouterTaskShape: agentcontract.TaskShapeResearchTask,
@@ -421,8 +421,8 @@ func AttachmentHTMLPreviousPreviewRecoveryScenario(artifactDirectoryPath string)
 			},
 			ExpectedToolCalls: []string{"file_preview"},
 			ExpectedToolCallCounts: map[string]int{
-				"terminal_run": 0,
-				"file_read":    0,
+				"shell":     0,
+				"file_read": 0,
 			},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: "tool.file_preview.requested", BodyFragment: `"path":"home/inbox/mattermost/thread-1/kim-intern-automation.html"`, Count: 1},
@@ -451,7 +451,7 @@ func AttachmentCurrentImageInputScenario(artifactDirectoryPath string) VirtualSe
 	return VirtualSessionScenario{
 		Name:                  "attachment_current_image_input",
 		ArtifactDirectoryPath: artifactDirectoryPath,
-		AllowedTools:          []string{"conversation_history", "memory_search", "terminal_run", "image_read", "document_read"},
+		AllowedTools:          []string{"conversation_history", "memory_search", "shell", "image_read", "document_read"},
 		CapabilityToolNames:   []string{"image_read", "document_read"},
 		Turns: []VirtualTurn{{
 			Prompt:           "이거 보여? 묘사 좀 자세히 해봐.",
@@ -465,7 +465,7 @@ func AttachmentCurrentImageInputScenario(artifactDirectoryPath string) VirtualSe
 			},
 			ExpectedToolCallCounts: map[string]int{
 				"image_read":    0,
-				"terminal_run":  0,
+				"shell":         0,
 				"document_read": 0,
 			},
 			ExpectedModelContexts: []string{
@@ -517,7 +517,7 @@ func GWSDisabledScenario(artifactDirectoryPath string) VirtualSessionScenario {
 	return VirtualSessionScenario{
 		Name:                  "gws_disabled",
 		ArtifactDirectoryPath: artifactDirectoryPath,
-		AllowedTools:          []string{"memory_search", "terminal_run", "file_write"},
+		AllowedTools:          []string{"memory_search", "shell", "file_write"},
 		Turns: []VirtualTurn{{
 			Prompt:          "구글 드라이브에 파일 올릴 수 있는지 확인해줘",
 			RouterTaskShape: agentcontract.TaskShapeImmediateReply,
@@ -845,8 +845,8 @@ func AmbientTaskCaptureAcceptanceScenario(artifactDirectoryPath string) VirtualS
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 			ExpectedToolCalls:        []string{"task_add"},
 			ExpectedToolCallCounts: map[string]int{
-				"task_add":     1,
-				"terminal_run": 0,
+				"task_add": 1,
+				"shell":    0,
 			},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: "agent.ambient_duty_launch", BodyFragment: `"dutyName":"team_flow_update"`, Count: 1},
@@ -859,7 +859,7 @@ func AmbientTaskCaptureAcceptanceScenario(artifactDirectoryPath string) VirtualS
 				"Ambient duty context",
 				"Overheard message from",
 			},
-			ForbiddenEvents: []string{"tool.terminal_run.requested"},
+			ForbiddenEvents: []string{"tool.shell.requested"},
 		}, {
 			Prompt:                 "@박예시 님 그 작업 마감은 수요일로 변경해주세요",
 			ExpectedResponse:       VirtualResponseBackgroundAction,
@@ -1080,7 +1080,7 @@ func FailureExplanationAcceptanceScenario(artifactDirectoryPath string) VirtualS
 	return VirtualSessionScenario{
 		Name:                  "failure_explanation_acceptance",
 		ArtifactDirectoryPath: artifactDirectoryPath,
-		AllowedTools:          []string{"conversation_history", "memory_search", "terminal_run"},
+		AllowedTools:          []string{"conversation_history", "memory_search", "shell"},
 		TurnOptions: agentcontract.TurnOptions{
 			RecoveryBudget: agentcontract.RecoveryBudget{
 				CorrectedRetry: -1,
@@ -1092,14 +1092,14 @@ func FailureExplanationAcceptanceScenario(artifactDirectoryPath string) VirtualS
 		Turns: []VirtualTurn{
 			{
 				Prompt:                 "Run the analysis.",
-				RouterRequiredEvidence: []string{"terminal_run"},
+				RouterRequiredEvidence: []string{"shell"},
 				ActionResponses: []string{
-					actionCallTool("terminal_run", `{"command":"printf 'permission denied blocked_by_captcha' >&2; exit 126","workingDirectoryPath":"~","timeoutSecond":30}`),
-					actionFailMessage("terminal_run: permission denied"),
+					actionCallTool("shell", `{"command":"printf 'permission denied blocked_by_captcha' >&2; exit 126","workingDirectoryPath":"~","timeoutSecond":30}`),
+					actionFailMessage("shell: permission denied"),
 				},
-				ExpectedSequence: []string{"tool.terminal_run.requested", "tool.terminal_run.result"},
+				ExpectedSequence: []string{"tool.shell.requested", "tool.shell.result"},
 				ExpectedEventCounts: []VirtualEventCount{
-					{Name: "tool.terminal_run.result", BodyFragment: "permission denied", Count: 1},
+					{Name: "tool.shell.result", BodyFragment: "permission denied", Count: 1},
 				},
 				ExpectedTaskStatus: task.TaskStatusFailed,
 			},
@@ -1108,7 +1108,7 @@ func FailureExplanationAcceptanceScenario(artifactDirectoryPath string) VirtualS
 				RouterTaskShape: agentcontract.TaskShapeResearchTask,
 				ActionResponses: []string{
 					actionCallTool("conversation_history", `{"limit":20}`),
-					actionFinishMessage("terminal_run 실행이 permission denied 때문에 실패했습니다.", "obs-001:conversation_history:0"),
+					actionFinishMessage("shell 실행이 permission denied 때문에 실패했습니다.", "obs-001:conversation_history:0"),
 				},
 				ExpectedToolCalls: []string{"conversation_history"},
 				ExpectedEventCounts: []VirtualEventCount{
@@ -1187,7 +1187,7 @@ func SitePrototypeAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 			ExpectedSelectedSkills:   []string{"website"},
-			ExpectedToolCallCounts:   map[string]int{"terminal_run": 0},
+			ExpectedToolCallCounts:   map[string]int{"shell": 0},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: "tool.site_serve.requested", BodyFragment: "site_serve", Count: 1},
 				{Name: "tool.site_serve.result", BodyFragment: "device.example.test", Count: 1},
@@ -1228,7 +1228,7 @@ func SiteEditRedeployAcceptanceScenario(artifactDirectoryPath string) VirtualSes
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 				ExpectedSelectedSkills:   []string{"website"},
-				ExpectedToolCallCounts:   map[string]int{"terminal_run": 0},
+				ExpectedToolCallCounts:   map[string]int{"shell": 0},
 				ExpectedEventCounts: []VirtualEventCount{
 					{Name: "tool.site_serve.requested", BodyFragment: "site_serve", Count: 1},
 					{Name: "tool.site_serve.result", BodyFragment: "device.example.test", Count: 1},
@@ -1245,7 +1245,7 @@ func SiteEditRedeployAcceptanceScenario(artifactDirectoryPath string) VirtualSes
 					actionFinishMessage("Updated and redeployed the site: https://local-fleet-studio.device.example.test", "obs-002:file_write:0", "obs-003:site_serve:0"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-				ExpectedToolCallCounts:   map[string]int{"terminal_run": 0},
+				ExpectedToolCallCounts:   map[string]int{"shell": 0},
 				ExpectedEventCounts: []VirtualEventCount{
 					{Name: "tool.site_list.requested", BodyFragment: "site_list", Count: 1},
 					{Name: "tool.file_write.requested", BodyFragment: "Local Fleet Studio Updated", Count: 1},
@@ -1269,7 +1269,7 @@ func SiteCustomStructureAcceptanceScenario(artifactDirectoryPath string) Virtual
 		Skills:                 []agentcontract.SkillInstruction{sitePrototypeSkill()},
 		AllowedTools:           append(toolcontract.KernelToolNames(), sitePrototypeCapabilityToolNames()...),
 		CapabilityToolNames:    sitePrototypeCapabilityToolNames(),
-		InitialToolNames:       []string{"site_serve", "file_write", "terminal_run"},
+		InitialToolNames:       []string{"site_serve", "file_write", "shell"},
 		InitialSite: &VirtualSiteFixture{
 			SiteID:      "site-1",
 			Slug:        "demo",
@@ -1281,15 +1281,15 @@ func SiteCustomStructureAcceptanceScenario(artifactDirectoryPath string) Virtual
 			ActionResponses: []string{
 				actionCallTool("file_write", `{"path":"/workspace/circles/staff/sites/demo/draft/app/src/App.tsx","content":"export default function App() {\n  return <main className=\"custom-layout\"><section className=\"column\">Local Fleet Studio</section><section className=\"column\">Two-column custom layout</section></main>;\n}\n"}`),
 				actionCallTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/staff/sites/demo/draft","mode":"publish","siteReference":"demo"}`),
-				actionCallTool("terminal_run", `{"command":"mkdir -p dist && printf '<!doctype html><html><body><main class=\"custom-layout\"><section>Local Fleet Studio</section><section>Two-column custom layout</section></main></body></html>' > dist/index.html","workingDirectoryPath":"/workspace/circles/staff/sites/demo/draft/app","timeoutSecond":120}`),
+				actionCallTool("shell", `{"command":"mkdir -p dist && printf '<!doctype html><html><body><main class=\"custom-layout\"><section>Local Fleet Studio</section><section>Two-column custom layout</section></main></body></html>' > dist/index.html","workingDirectoryPath":"/workspace/circles/staff/sites/demo/draft/app","timeoutSecond":120}`),
 				actionCallTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/staff/sites/demo/draft","mode":"publish","siteReference":"demo"}`),
 				actionFinishMessage("커스텀 레이아웃을 빌드하고 다시 배포했습니다: https://demo.device.example.test", "obs-005:site_serve:0"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-			ExpectedToolCallCounts:   map[string]int{"terminal_run": 1, "file_write": 1, "site_serve": 1},
+			ExpectedToolCallCounts:   map[string]int{"shell": 1, "file_write": 1, "site_serve": 1},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: "tool.file_write.requested", BodyFragment: "custom-layout", Count: 1},
-				{Name: "tool.terminal_run.requested", BodyFragment: "dist/index.html", Count: 1},
+				{Name: "tool.shell.requested", BodyFragment: "dist/index.html", Count: 1},
 				{Name: "tool.site_serve.result", BodyFragment: "app/dist", Count: 1},
 				{Name: "tool.site_serve.result", BodyFragment: "device.example.test", Count: 1},
 			},
@@ -1315,7 +1315,7 @@ func SiteLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 		AllowedTools:              append(toolcontract.KernelToolNames(), sitePrototypeCapabilityToolNames()...),
 		CapabilityToolNames:       sitePrototypeCapabilityToolNames(),
 		CapabilityToolDescriptors: []agentruntime.CapabilityToolDescriptor{{Name: "site_unserve", RequiresApproval: true}},
-		InitialToolNames:          []string{"site_serve", "site_list", "site_unserve", "file_write", "terminal_run"},
+		InitialToolNames:          []string{"site_serve", "site_list", "site_unserve", "file_write", "shell"},
 		Turns: []VirtualTurn{
 			{
 				Prompt: "테스트용 'Local Fleet Studio' 단일 페이지 소개 웹사이트를 만들어서 배포해줘. 첫 화면 제목은 'Local Fleet Studio', 보조 문구는 '로컬 플릿 웹사이트 CRUD 테스트', 섹션은 서비스 소개, 장점 3개, 문의 CTA만 넣어줘. 추가 질문하지 말고 합리적인 기본값으로 진행해줘.",
@@ -1323,7 +1323,7 @@ func SiteLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 					"site_serve",
 				},
 				ActionResponses: []string{
-					actionCallTool("terminal_run", `{"command":"mkdir -p dist && printf '<!doctype html><html><body><main><h1>Local Fleet Studio</h1><p>로컬 플릿 웹사이트 CRUD 테스트</p></main></body></html>' > dist/index.html","workingDirectoryPath":"/workspace/circles/staff/sites/local-fleet-studio/draft/app","timeoutSecond":120}`),
+					actionCallTool("shell", `{"command":"mkdir -p dist && printf '<!doctype html><html><body><main><h1>Local Fleet Studio</h1><p>로컬 플릿 웹사이트 CRUD 테스트</p></main></body></html>' > dist/index.html","workingDirectoryPath":"/workspace/circles/staff/sites/local-fleet-studio/draft/app","timeoutSecond":120}`),
 					actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/staff/sites/local-fleet-studio/draft","mode":"publish"}`),
 					actionFinishMessage("Local Fleet Studio 웹사이트를 배포했습니다: https://local-fleet-studio.device.example.test", "obs-002:site_serve:0"),
 				},
@@ -1347,7 +1347,7 @@ func SiteLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 				ActionResponses: []string{
 					actionCallTool("site_list", `{}`),
 					actionCallTool("file_write", `{"path":"/workspace/circles/staff/sites/local-fleet-studio/draft/app/src/App.tsx","content":"export default function App() {\n  return <main><h1>Local Fleet Studio Updated</h1><p>재배포 검증 완료</p></main>;\n}\n"}`),
-					actionCallTool("terminal_run", `{"command":"mkdir -p dist && printf '<!doctype html><html><body><main><h1>Local Fleet Studio Updated</h1><p>재배포 검증 완료</p></main></body></html>' > dist/index.html","workingDirectoryPath":"/workspace/circles/staff/sites/local-fleet-studio/draft/app","timeoutSecond":120}`),
+					actionCallTool("shell", `{"command":"mkdir -p dist && printf '<!doctype html><html><body><main><h1>Local Fleet Studio Updated</h1><p>재배포 검증 완료</p></main></body></html>' > dist/index.html","workingDirectoryPath":"/workspace/circles/staff/sites/local-fleet-studio/draft/app","timeoutSecond":120}`),
 					actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/staff/sites/local-fleet-studio/draft","mode":"publish","siteReference":"local-fleet-studio"}`),
 					actionFinishMessage("Local Fleet Studio 웹사이트를 수정하고 다시 배포했습니다: https://local-fleet-studio.device.example.test", "obs-002:file_write:0", "obs-004:site_serve:0"),
 				},
@@ -1355,7 +1355,7 @@ func SiteLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 				ExpectedEventCounts: []VirtualEventCount{
 					{Name: "tool.site_list.requested", BodyFragment: "site_list", Count: 1},
 					{Name: "tool.file_write.requested", BodyFragment: "Local Fleet Studio Updated", Count: 1},
-					{Name: "tool.terminal_run.requested", BodyFragment: "dist/index.html", Count: 1},
+					{Name: "tool.shell.requested", BodyFragment: "dist/index.html", Count: 1},
 					{Name: "tool.site_serve.requested", BodyFragment: "site_serve", Count: 1},
 				},
 				ExpectedReplyFragments: []string{"https://local-fleet-studio.device.example.test"},
@@ -1573,7 +1573,7 @@ func sitePrototypeSkill() agentcontract.SkillInstruction {
 
 func sitePrototypeToolNames() []string {
 	return []string{
-		"terminal_run",
+		"shell",
 		"file_read",
 		"file_write",
 		"file_edit",

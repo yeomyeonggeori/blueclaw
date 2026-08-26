@@ -2,10 +2,10 @@ package connectors
 
 import (
 	"context"
-	"strings"
 	"errors"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"

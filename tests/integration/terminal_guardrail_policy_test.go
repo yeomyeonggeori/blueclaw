@@ -18,8 +18,8 @@ func TestTerminalGuardrailAllowsWorkspaceCommand(t *testing.T) {
 		AllowNetwork:      true,
 	}
 
-	terminalSessionService := security.NewTerminalSessionService(terminalConfiguration)
-	commandResult, errorValue := terminalSessionService.RunCommand(context.Background(), security.CommandRequest{
+	shellService := security.NewShellService(terminalConfiguration)
+	commandResult, errorValue := shellService.RunCommand(context.Background(), security.CommandRequest{
 		ExecutableName:       "echo",
 		Arguments:            []string{"blueclaw"},
 		WorkingDirectoryPath: workspaceRootPath,

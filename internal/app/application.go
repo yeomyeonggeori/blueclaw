@@ -66,7 +66,7 @@ type Application struct {
 	taskRunService                *task.TaskRunService
 	interruptedTaskResumer        interruptedTaskResumer
 	runtimeLogger                 *runtimelogging.PersistentLogger
-	terminalService               *security.TerminalSessionService
+	terminalService               *security.ShellService
 	backgroundLoops               sync.WaitGroup
 	database                      postgres.Database
 	startupError                  error
@@ -208,7 +208,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 		ExecutionMode:    firstNonEmptyString(runtimeConfiguration.LanguageModel.Capability.ExecutionMode, "auto"),
 	}
 	intakeLanguageModelProvider := resolveIntakeLanguageModelProvider(runtimeConfiguration, logger)
-	terminalService := security.NewTerminalSessionService(runtimeConfiguration.Terminal)
+	terminalService := security.NewShellService(runtimeConfiguration.Terminal)
 	toolCatalogResolver := mcpserver.NewSessionTokenRequesterResolver(newToolCatalogSessionToken)
 	toolCatalogHandler := mcpserver.NewToolCatalogHandler(toolCatalogResolver, "1")
 	toolCatalogApprovalGate := approvalgate.New(taskRunService)

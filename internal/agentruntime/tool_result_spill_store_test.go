@@ -77,9 +77,9 @@ func TestASpillIsWrittenAsThePersonWhoAskedForTheWork(t *testing.T) {
 	spillRef, errorValue := store.SaveToolResultSpill(context.Background(), ToolResultSpill{
 		TaskRunID:         taskRun.TaskRunID,
 		ObservationID:     "obs-4",
-		ToolName:          "terminal_run",
+		ToolName:          "shell",
 		WorkspaceRootPath: "/workspace",
-		SuggestedName:     "terminal_run.result.txt",
+		SuggestedName:     "shell.result.txt",
 		Content:           "the whole build log",
 	})
 
@@ -110,7 +110,7 @@ func TestASpillLivesInTheDirectoryTheTaskAlreadyCleansUp(t *testing.T) {
 		TaskRunID:         taskRun.TaskRunID,
 		ObservationID:     "obs-4",
 		WorkspaceRootPath: "/workspace",
-		SuggestedName:     "terminal_run.result.txt",
+		SuggestedName:     "shell.result.txt",
 		Content:           "output",
 	})
 

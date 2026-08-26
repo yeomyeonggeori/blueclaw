@@ -73,7 +73,7 @@ func callNeedsApproval(toolDefinition toolcontract.ToolDefinition, toolInput jso
 	if toolDefinition.RequiresApproval {
 		return true
 	}
-	if strings.TrimSpace(toolDefinition.Name) != toolcontract.TerminalRunToolName {
+	if strings.TrimSpace(toolDefinition.Name) != toolcontract.ShellToolName {
 		return false
 	}
 	var document struct {

@@ -40,12 +40,12 @@ func (virtualStructuredOutputCorrectionTestError) StructuredOutputCorrection() (
 
 func TestDefaultToolPaletteUsesCanonicalNames(t *testing.T) {
 	toolNames := allowedToolsOrDefault(nil)
-	for _, toolName := range []string{"terminal_run", "ask_input", "file_deliver"} {
+	for _, toolName := range []string{"shell", "ask_input", "file_deliver"} {
 		if !slices.Contains(toolNames, toolName) {
 			t.Fatalf("expected canonical tool %s, got %+v", toolName, toolNames)
 		}
 	}
-	for _, toolName := range []string{"terminal.session", "browser_handoff.openURL", "ask_choice", "file.promote", "file.attach", "task.history", "db.sql"} {
+	for _, toolName := range []string{"shell_session", "browser_handoff_openURL", "ask_choice", "file_promote", "file_attach", "task_history", "db_sql"} {
 		if slices.Contains(toolNames, toolName) {
 			t.Fatalf("expected dead tool %s to be absent, got %+v", toolName, toolNames)
 		}
@@ -766,7 +766,7 @@ func TestVirtualSiteToolsUseCanonicalThreeToolContracts(t *testing.T) {
 		}
 	}
 
-	for _, removedToolName := range []string{"site.create", "site.status", "site.preview", "site.publish", "site.delete", "site.history", "site.rollback", "site.repair"} {
+	for _, removedToolName := range []string{"site_create", "site_status", "site_preview", "site_publish", "site_delete", "site_history", "site_rollback", "site_repair"} {
 		if slices.Contains(sitePrototypeToolNames(), removedToolName) ||
 			slices.Contains(sitePrototypeCapabilityToolNames(), removedToolName) ||
 			virtualCapabilityToolResultContract(removedToolName) != nil {
@@ -1071,7 +1071,7 @@ func TestFileWriteAcceptance(t *testing.T) {
 	if countEvents(turnResult.Events, "tool.file_deliver.requested") != 1 {
 		t.Fatalf("expected one file_deliver request, got events: %s", summarizeEvents(turnResult.Events))
 	}
-	if countEvents(turnResult.Events, "tool.terminal_run.requested") != 0 {
+	if countEvents(turnResult.Events, "tool.shell.requested") != 0 {
 		t.Fatalf("file_write result contract must avoid redundant terminal verification, got events: %s", summarizeEvents(turnResult.Events))
 	}
 }
@@ -1433,7 +1433,7 @@ func TestAttachmentMaterialRead(t *testing.T) {
 	if !eventsContain(turnResult.Events, "tool.image_read.requested", `"path":"/workspace/circles/staff/inbox/virtual/virtual-conversation-1/virtual-message-001/mascot.png"`) {
 		t.Fatalf("expected image_read to use the exact workspace path; events: %s", summarizeEvents(turnResult.Events))
 	}
-	if eventsContain(turnResult.Events, "tool.terminal_run.requested", "terminal_run") {
+	if eventsContain(turnResult.Events, "tool.shell.requested", "shell") {
 		t.Fatalf("expected attachment read not to search the workspace; events: %s", summarizeEvents(turnResult.Events))
 	}
 	if turnResult.UserModelImagePartCount == 0 {
@@ -1450,7 +1450,7 @@ func TestAttachmentHTMLPreviewRecovery(t *testing.T) {
 		t.Fatalf("expected attachment html preview recovery scenario to pass: %v", errorValue)
 	}
 	turnResult := result.TurnResults[0]
-	if eventsContain(turnResult.Events, "tool.terminal_run.requested", "terminal_run") {
+	if eventsContain(turnResult.Events, "tool.shell.requested", "shell") {
 		t.Fatalf("expected html attachment preview not to search the workspace; events: %s", summarizeEvents(turnResult.Events))
 	}
 	if !eventsContain(turnResult.Events, "tool.file_preview.result", "Virtual HTML Title") {
@@ -1464,7 +1464,7 @@ func TestAttachmentHTMLPreviousPreviewRecovery(t *testing.T) {
 		t.Fatalf("expected previous attachment html preview recovery scenario to pass: %v", errorValue)
 	}
 	turnResult := result.TurnResults[0]
-	if eventsContain(turnResult.Events, "tool.terminal_run.requested", "terminal_run") {
+	if eventsContain(turnResult.Events, "tool.shell.requested", "shell") {
 		t.Fatalf("expected previous html attachment preview not to search the workspace; events: %s", summarizeEvents(turnResult.Events))
 	}
 	if !eventsContain(turnResult.Events, "tool.file_preview.result", "Virtual HTML Title") {
@@ -1487,7 +1487,7 @@ func TestAttachmentCurrentImageInput(t *testing.T) {
 	if eventsContain(turnResult.Events, "tool.image_read.requested", "image_read") {
 		t.Fatalf("expected current image input not to require image_read; events: %s", summarizeEvents(turnResult.Events))
 	}
-	if eventsContain(turnResult.Events, "tool.terminal_run.requested", "terminal_run") {
+	if eventsContain(turnResult.Events, "tool.shell.requested", "shell") {
 		t.Fatalf("expected current image input not to search the workspace; events: %s", summarizeEvents(turnResult.Events))
 	}
 	if len(turnResult.Attachments) != 0 {

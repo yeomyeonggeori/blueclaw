@@ -1347,7 +1347,7 @@ func TestFileDeliverResolvesSamePathSpellingsAsTerminalWrite(t *testing.T) {
 	})
 
 	runResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "terminal_run",
+		ToolName: "shell",
 		Input: toolcontract.MarshalToolInput(map[string]any{
 			"command": "mkdir -p ~/documents && printf docx-bytes > ~/documents/report.docx",
 		}),
@@ -1356,7 +1356,7 @@ func TestFileDeliverResolvesSamePathSpellingsAsTerminalWrite(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	if runResult.Failed() {
-		t.Fatalf("expected terminal_run success, got %s", runResult.ContentText())
+		t.Fatalf("expected shell success, got %s", runResult.ContentText())
 	}
 
 	expectedDevicePath := "/workspace/private/people/person-1/documents/report.docx"
@@ -1395,7 +1395,7 @@ func TestFileDeliverNotFoundIncludesCandidateFiles(t *testing.T) {
 	})
 
 	runResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "terminal_run",
+		ToolName: "shell",
 		Input: toolcontract.MarshalToolInput(map[string]any{
 			"command": "mkdir -p ~/documents && printf docx-bytes > ~/documents/'Han River Ops 2026 Q2 Operations Review.docx'",
 		}),
@@ -1404,7 +1404,7 @@ func TestFileDeliverNotFoundIncludesCandidateFiles(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	if runResult.Failed() {
-		t.Fatalf("expected terminal_run success, got %s", runResult.ContentText())
+		t.Fatalf("expected shell success, got %s", runResult.ContentText())
 	}
 
 	deliverResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -1560,14 +1560,14 @@ func TestFileWriteRespectsRequesterUmaskLikeTerminalRun(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	if directoryInformation.Mode().Perm() != 0750 {
-		t.Fatalf("expected umask 027 to yield directory mode 0750 exactly as terminal_run would, got mode %v", directoryInformation.Mode().Perm())
+		t.Fatalf("expected umask 027 to yield directory mode 0750 exactly as shell would, got mode %v", directoryInformation.Mode().Perm())
 	}
 	fileInformation, errorValue := os.Stat(filepath.Join(deckDirectoryPath, "input.txt"))
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	if fileInformation.Mode().Perm() != 0640 {
-		t.Fatalf("expected umask 027 to yield file mode 0640 exactly as terminal_run would, got mode %v", fileInformation.Mode().Perm())
+		t.Fatalf("expected umask 027 to yield file mode 0640 exactly as shell would, got mode %v", fileInformation.Mode().Perm())
 	}
 }
 
@@ -1599,7 +1599,7 @@ func TestFileWriteAndTerminalRunShareRequesterWorkspaceActorView(t *testing.T) {
 	}
 
 	runResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "terminal_run",
+		ToolName: "shell",
 		Input: toolcontract.MarshalToolInput(map[string]any{
 			"workingDirectoryPath": "tmp/deck",
 			"command":              "mkdir -p build && cat input.txt > build/output.txt",
@@ -1609,7 +1609,7 @@ func TestFileWriteAndTerminalRunShareRequesterWorkspaceActorView(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	if runResult.Failed() {
-		t.Fatalf("expected terminal_run success, got %s", runResult.ContentText())
+		t.Fatalf("expected shell success, got %s", runResult.ContentText())
 	}
 	outputPath := filepath.Join(workspacePath, "private", "people", "person-1", "tmp", "deck", "build", "output.txt")
 	document, errorValue := os.ReadFile(outputPath)

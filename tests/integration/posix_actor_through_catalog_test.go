@@ -77,7 +77,7 @@ func TestAToolCalledThroughTheCatalogReachesTheRequesterPOSIXActor(t *testing.T)
 	actorFactory := &recordingWorkspaceActorFactory{}
 	toolCatalogBuilder := agentruntime.NewToolCatalogBuilder()
 	toolCatalogBuilder.UseWorkspaceRootPath(workspaceRootPath)
-	toolCatalogBuilder.UseTerminalService(security.NewTerminalSessionService(config.TerminalConfiguration{
+	toolCatalogBuilder.UseTerminalService(security.NewShellService(config.TerminalConfiguration{
 		Mode:              "native",
 		WorkspaceRootPath: workspaceRootPath,
 		TimeoutSecond:     30,
@@ -86,7 +86,7 @@ func TestAToolCalledThroughTheCatalogReachesTheRequesterPOSIXActor(t *testing.T)
 	}))
 	toolCatalogBuilder.UseWorkspaceActorFactory(actorFactory)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{
-		"default": {toolcontract.TerminalRunToolName},
+		"default": {toolcontract.ShellToolName},
 	}, nil)
 
 	toolSet := toolCatalogBuilder.BuildToolSet(agentruntime.ToolCatalogRequest{
@@ -114,7 +114,7 @@ func TestAToolCalledThroughTheCatalogReachesTheRequesterPOSIXActor(t *testing.T)
 	t.Cleanup(func() { _ = clientSession.Close() })
 
 	callResult, errorValue := clientSession.CallTool(context.Background(), &mcp.CallToolParams{
-		Name:      toolcontract.TerminalRunToolName,
+		Name:      toolcontract.ShellToolName,
 		Arguments: map[string]any{"command": "ls"},
 	})
 	if errorValue != nil {

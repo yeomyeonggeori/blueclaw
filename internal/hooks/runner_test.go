@@ -18,7 +18,7 @@ func TestRunnerRunsHooksSequentially(t *testing.T) {
 
 	toolInput, errorValue := runner.Run(context.Background(), HookRequest{
 		EventName: EventPreToolUse,
-		ToolName:  "terminal_run",
+		ToolName:  "shell",
 		ToolInput: "start",
 	})
 
@@ -44,7 +44,7 @@ func TestRunnerStopsWhenHookBlocks(t *testing.T) {
 
 	toolInput, errorValue := runner.Run(context.Background(), HookRequest{
 		EventName: EventPreToolUse,
-		ToolName:  "terminal_run",
+		ToolName:  "shell",
 		ToolInput: "start",
 	})
 
@@ -64,7 +64,7 @@ func TestRunnerReturnsHookError(t *testing.T) {
 
 	_, errorValue := runner.Run(context.Background(), HookRequest{
 		EventName: EventPreToolUse,
-		ToolName:  "terminal_run",
+		ToolName:  "shell",
 		ToolInput: "start",
 	})
 

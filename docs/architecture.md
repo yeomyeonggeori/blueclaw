@@ -452,7 +452,7 @@ that requester instead.
 
 ```mermaid
 flowchart LR
-  Tool["file_write / file_read / terminal_run"] --> Catalog["ToolCatalogBuilder"]
+  Tool["file_write / file_read / shell"] --> Catalog["ToolCatalogBuilder"]
   Catalog --> Shell["requester shell command"]
   Shell --> Guardrail["CommandGuardrailService"]
   Guardrail --> Helper["blueclaw-posix-helper (root:root 4755)"]

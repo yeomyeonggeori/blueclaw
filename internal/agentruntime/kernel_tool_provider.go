@@ -143,11 +143,11 @@ var (
 
 var kernelToolDescriptorSpecs = []kernelToolDescriptorSpec{
 	{
-		Name:              toolcontract.TerminalRunToolName,
+		Name:              toolcontract.ShellToolName,
 		Namespace:         "terminal",
 		PrivacyClass:      "workspace",
 		Visibility:        toolcontract.ToolVisibilityModel,
-		PolicyResource:    "tool:terminal_run",
+		PolicyResource:    "tool:shell",
 		SideEffectClass:   toolcontract.ToolSideEffectWorkspaceWrite,
 		CompletionMode:    toolcontract.ToolCompletionObservation,
 		Idempotency:       toolcontract.ToolIdempotencyNone,

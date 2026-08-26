@@ -27,8 +27,8 @@ catalog, so they appear here as one row with no description.
 | `schedule_create` | 530 | `schedule_tool.go` |
 | `schedule_list` | 137 | `schedule_tool.go` |
 | `schedule_update` | 328 | `schedule_tool.go` |
+| `shell` | 47 | `shell_tools.go` |
 | `skill_add` | 80 | `skill_management.go` |
 | `skill_remove` | 67 | `skill_management.go` |
-| `terminal_run` | 47 | `terminal_tools.go` |
 
 21 tools, 4559 bytes of description in total.

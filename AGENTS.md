@@ -182,7 +182,7 @@ the one a deploy check should refuse.
 ## Code Style
 
 ### No Comments
-Code should be self-documenting through descriptive names and small functions.
+Code self-documents through descriptive names and small functions; write zero comments. The only comment that survives names a concrete external fact — an upstream bug with its number, a spec with its clause, a provider behavior with its documented source. Rationale is never that: a sentence explaining why the change was made, what the code is for, or what would break without it belongs in the commit message, never in the file.
 
 ### No Abbreviations
 Use full names: `response` not `res`, `error` not `err`, `configuration` not `config`

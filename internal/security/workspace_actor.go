@@ -92,12 +92,12 @@ type WorkspaceActorBundle struct {
 }
 
 type POSIXWorkspaceActorFactory struct {
-	terminalService       *TerminalSessionService
+	terminalService       *ShellService
 	terminalConfiguration config.TerminalConfiguration
 }
 
 type POSIXHelperWorkspaceActor struct {
-	terminalService       *TerminalSessionService
+	terminalService       *ShellService
 	terminalConfiguration config.TerminalConfiguration
 	executionIdentity     ExecutionIdentity
 }
@@ -118,10 +118,10 @@ func (actorError WorkspaceActorError) Error() string {
 	return fmt.Sprintf("actor.%s failed for %s as %s: %s", actorError.Operation, virtualPath, actorUser, detail)
 }
 
-func (terminalSessionService *TerminalSessionService) WorkspaceActorFactory() WorkspaceActorFactory {
+func (shellService *ShellService) WorkspaceActorFactory() WorkspaceActorFactory {
 	return POSIXWorkspaceActorFactory{
-		terminalService:       terminalSessionService,
-		terminalConfiguration: terminalSessionService.commandGuardrailService.terminalConfiguration,
+		terminalService:       shellService,
+		terminalConfiguration: shellService.commandGuardrailService.terminalConfiguration,
 	}
 }
 

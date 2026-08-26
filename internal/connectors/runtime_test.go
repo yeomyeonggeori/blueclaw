@@ -694,7 +694,7 @@ func TestConnectorRuntimeInterruptsInactiveRunningTaskAndStartsNewTask(t *testin
 	connectorRuntime, adapter, taskEventService, harness := newStubbedRepositoryBackedTestConnectorRuntime(t, taskRunRepository)
 	harness.TurnDecision = startTaskTurnDecision()
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "새 작업으로 처리했습니다."}
-	taskEventService.AppendTaskEvent(orphanedTaskRun.TaskRunID, "tool.site.build.requested", `{"observationID":"observation-1","toolName":"site.build"}`)
+	taskEventService.AppendTaskEvent(orphanedTaskRun.TaskRunID, "tool.site_build.requested", `{"observationID":"observation-1","toolName":"site_build"}`)
 	event := testInboundEvent("message-after-stale-task")
 	event.Prompt = "다시 해줘"
 
@@ -714,7 +714,7 @@ func TestConnectorRuntimeInterruptsInactiveRunningTaskAndStartsNewTask(t *testin
 	if taskAttempt.Status != task.TaskAttemptStatusInterrupted {
 		t.Fatalf("attempt status = %s, want interrupted", taskAttempt.Status)
 	}
-	if !connectorTaskEventsContain(connectorRuntime, orphanedTaskRun.TaskRunID, "tool.site.build.cancelled", "cancelled_by_attempt_end") {
+	if !connectorTaskEventsContain(connectorRuntime, orphanedTaskRun.TaskRunID, "tool.site_build.cancelled", "cancelled_by_attempt_end") {
 		t.Fatal("expected orphaned tool request to be cancelled")
 	}
 	if len(adapter.sentReplies) != 1 || adapter.sentReplies[0].message != "새 작업으로 처리했습니다." {
@@ -914,7 +914,7 @@ func TestConnectorRuntimeDoesNotContinueFailedRecoverableArtifactGoal(t *testing
 		OriginalInstruction: taskRun.Prompt,
 		Status:              agentcontract.ActiveGoalStatusBlocked,
 		OutcomeContract: agentcontract.OutcomeContract{
-			RequiredEvidenceTools:      []string{"file.attach"},
+			RequiredEvidenceTools:      []string{"file_attach"},
 			RequiredAttachmentSuffixes: []string{".docx"},
 			ExpectedResults: []agentcontract.ExpectedResult{{
 				ID:       "attached-file",
@@ -946,7 +946,7 @@ func TestConnectorRuntimeFindsPriorTaskContextForFailedArtifactGoal(t *testing.T
 		OriginalInstruction: taskRun.Prompt,
 		Status:              agentcontract.ActiveGoalStatusBlocked,
 		OutcomeContract: agentcontract.OutcomeContract{
-			RequiredEvidenceTools:      []string{"file.attach"},
+			RequiredEvidenceTools:      []string{"file_attach"},
 			RequiredAttachmentSuffixes: []string{".docx"},
 			ExpectedResults: []agentcontract.ExpectedResult{{
 				ID:          "attached-file",
@@ -981,7 +981,7 @@ func TestConnectorRuntimeFindsPriorTaskContextForFailedArtifactGoal(t *testing.T
 	if !agentcontract.OutcomeContractHasRequirements(priorTaskContext.OutcomeContract) {
 		t.Fatalf("expected recoverable outcome contract, got %+v", priorTaskContext.OutcomeContract)
 	}
-	if !slices.Contains(priorTaskContext.OutcomeContract.RequiredEvidenceTools, "file.attach") {
+	if !slices.Contains(priorTaskContext.OutcomeContract.RequiredEvidenceTools, "file_attach") {
 		t.Fatalf("expected file.attach requirement, got %+v", priorTaskContext.OutcomeContract.RequiredEvidenceTools)
 	}
 	if !slices.Contains(priorTaskContext.OutcomeContract.RequiredAttachmentSuffixes, ".docx") {
@@ -3299,7 +3299,7 @@ func TestConnectorRuntimeSendsCheckpointReplyKind(t *testing.T) {
 	errorValue := connectorRuntime.sendCheckpointReply(context.Background(), adapter.Name(), event, replyTarget, agentcontract.AgentCheckpoint{
 		TaskRunID: "task-1",
 		Message:   "작업 중입니다.",
-		ToolName:  "terminal_run",
+		ToolName:  "shell",
 	}, adapter.SendReply)
 	if errorValue != nil {
 		t.Fatalf("expected checkpoint reply to send: %v", errorValue)

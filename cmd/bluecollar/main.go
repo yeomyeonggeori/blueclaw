@@ -142,7 +142,7 @@ func runTask(options runOptions) (TaskResult, error) {
 	agentKernel.UseIntakeLanguageModelProvider(languageModel)
 	agentKernel.UseIntakeOptions(agentcontract.IntakeOptions{IsEnabled: true, DefaultTaskLevel: agentcontract.TaskLevelLow})
 
-	terminalService := security.NewTerminalSessionService(config.TerminalConfiguration{
+	terminalService := security.NewShellService(config.TerminalConfiguration{
 		Mode:                  "native",
 		WorkspaceRootPath:     options.WorkspacePath,
 		TimeoutSecond:         600,

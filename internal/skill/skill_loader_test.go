@@ -17,7 +17,7 @@ compatibility: Requires a POSIX shell.
 metadata:
   author: InternKim
 tool-references:
-  - terminal_run
+  - shell
   - file_write
 ---
 # Simple Slides
@@ -39,7 +39,7 @@ Build slides.
 	if skillBundle.Description != "Create presentation decks." {
 		t.Fatalf("expected description from frontmatter, got %q", skillBundle.Description)
 	}
-	if !containsToolReference(skillBundle.ToolReferences, "terminal_run") || !containsToolReference(skillBundle.ToolReferences, "file_write") {
+	if !containsToolReference(skillBundle.ToolReferences, "shell") || !containsToolReference(skillBundle.ToolReferences, "file_write") {
 		t.Fatalf("expected tool references, got %+v", skillBundle.ToolReferences)
 	}
 	if skillBundle.Instruction != "# Simple Slides\n\nBuild slides." {
@@ -129,7 +129,7 @@ func TestSkillLoaderIgnoresAllowedToolsWhenToolReferencesExist(t *testing.T) {
 name: file-work
 description: Work with files.
 tool-references: file_read file_write
-allowed-tools: terminal_run
+allowed-tools: shell
 ---
 Use files.
 `
@@ -168,7 +168,7 @@ func TestSkillLoaderReadsToolReferencesFromTheMetadataMap(t *testing.T) {
 name: calculator
 description: Calculate an expression.
 metadata:
-  kim.intern.tool-references: "terminal_run"
+  kim.intern.tool-references: "shell"
 ---
 Use the evaluator.
 `
@@ -182,7 +182,7 @@ Use the evaluator.
 	}
 
 	toolNames := skillBundle.ReferencedToolNames()
-	if len(toolNames) != 1 || toolNames[0] != "terminal_run" {
+	if len(toolNames) != 1 || toolNames[0] != "shell" {
 		t.Fatalf("a skill that has to satisfy the Agent Skills schema declares its tools here, got %+v", toolNames)
 	}
 }

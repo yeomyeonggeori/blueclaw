@@ -181,7 +181,7 @@ letting it run beside the gate.
 What remains outside is the tools an agent runs inside its own process: goose's
 shell, Claude Code's editor. Those are answered yes. The boundary there is
 POSIX — the agent runs as the requester's unprivileged user, and a shell call it
-makes itself can do no more than one made through `terminal_run`. The answer is
+makes itself can do no more than one made through `shell`. The answer is
 recorded: `harness.tool_permitted` and `harness.tool_refused`
 go to the event ledger, so reading a task afterwards shows the calls the catalog
 never saw.

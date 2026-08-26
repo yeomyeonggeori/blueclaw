@@ -105,7 +105,7 @@ func TestTaskRunHandlerUsesLLMDTopologyPresetWithoutIntakeCall(t *testing.T) {
 	if len(languageModel.schemaNames) != 1 || languageModel.schemaNames[0] != "bluecollar_agent_turn_action" {
 		t.Fatalf("expected only agent action schema, got %v", languageModel.schemaNames)
 	}
-	if languageModel.schemaDocumentContains("terminal_run") {
+	if languageModel.schemaDocumentContains("shell") {
 		t.Fatalf("expected diagnostic profile without tool schemas, got %+v", languageModel.schemaDocuments)
 	}
 	var responseDocument struct {
@@ -125,7 +125,7 @@ func TestTaskRunHandlerUsesLLMDTopologyPresetWithoutIntakeCall(t *testing.T) {
 func TestTaskRunHandlerRejectsTaskDecisionPresetOverrides(t *testing.T) {
 	overrides := []string{
 		`"profileName":"default"`,
-		`"pinnedToolNames":["terminal_run"]`,
+		`"pinnedToolNames":["shell"]`,
 		`"pinnedSkillNames":["mail"]`,
 	}
 	for _, override := range overrides {

@@ -84,7 +84,7 @@ func TestTheHarnessProcessItselfRunsAsTheRequester(t *testing.T) {
 	catalogServer := httptest.NewServer(mcpserver.NewToolCatalogHandler(resolver, "test"))
 	t.Cleanup(catalogServer.Close)
 
-	terminalService := security.NewTerminalSessionService(terminalConfiguration)
+	terminalService := security.NewShellService(terminalConfiguration)
 	harness := cliharness.New(cliharness.AgentCommand{
 		Path:            "/bin/sh",
 		PromptArguments: []string{"-c", "id -u"},

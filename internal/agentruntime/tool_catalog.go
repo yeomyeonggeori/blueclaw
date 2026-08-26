@@ -37,7 +37,7 @@ type ToolCatalogBuilder struct {
 	mcpRegistry                  *mcp.McpRegistry
 	capabilityClient             capability.Client
 	capabilityToolDescriptors    []CapabilityToolDescriptor
-	terminalService              *security.TerminalSessionService
+	terminalService              *security.ShellService
 	workspaceActorFactory        security.WorkspaceActorFactory
 	taskRunService               *task.TaskRunService
 	taskArtifactService          *task.TaskArtifactService
@@ -199,7 +199,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) UseCapabilityToolDescriptors(capab
 	toolCatalogBuilder.capabilityToolDescriptors = copyCapabilityToolDescriptors(toolDescriptors)
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) UseTerminalService(terminalService *security.TerminalSessionService) {
+func (toolCatalogBuilder *ToolCatalogBuilder) UseTerminalService(terminalService *security.ShellService) {
 	toolCatalogBuilder.terminalService = terminalService
 	if terminalService != nil && toolCatalogBuilder.workspaceActorFactory == nil {
 		toolCatalogBuilder.workspaceActorFactory = terminalService.WorkspaceActorFactory()

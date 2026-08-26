@@ -26,7 +26,7 @@ func (input terminalRunToolInput) commandRequest() security.CommandRequest {
 func (toolCatalogBuilder *ToolCatalogBuilder) registerTerminalTools(toolRegistry *toolcontract.ToolSet, handlerContext toolHandlerContext) {
 	toolcontract.RegisterToolFunction(toolRegistry, toolcontract.ToolFunction[terminalRunToolInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
-			Name:        "terminal_run",
+			Name:        "shell",
 			Description: "Run one command inside the requester workspace.",
 			RecoveryCard: toolcontract.ToolRecoveryCard{
 				Does:       "Runs workspace commands, build scripts, render checks, or tests.",
@@ -46,7 +46,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerTerminalTools(toolRegistry
 
 func (toolCatalogBuilder *ToolCatalogBuilder) runTerminalRunTool(toolContext context.Context, input terminalRunToolInput, handlerContext toolHandlerContext) (toolcontract.ToolResult, error) {
 	if errorValue := validateTerminalRunInput(input); errorValue != nil {
-		result := toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "terminal_run", errorValue.Error())
+		result := toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "shell", errorValue.Error())
 		return normalizedTerminalRunFailure(result), nil
 	}
 	result, errorValue := toolCatalogBuilder.runTerminalTool(toolContext, input.commandRequest(), handlerContext)
@@ -55,7 +55,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) runTerminalRunTool(toolContext con
 
 func (toolCatalogBuilder *ToolCatalogBuilder) runTerminalTool(toolContext context.Context, input security.CommandRequest, handlerContext toolHandlerContext) (toolcontract.ToolResult, error) {
 	if toolCatalogBuilder.terminalService == nil {
-		return toolcontract.ToolFailureResult(toolcontract.FailureDependencyUnavailable, toolcontract.FailureCodes.Unavailable, "terminal_run", "terminal service is unavailable"), nil
+		return toolcontract.ToolFailureResult(toolcontract.FailureDependencyUnavailable, toolcontract.FailureCodes.Unavailable, "shell", "terminal service is unavailable"), nil
 	}
 	requesterHomePath := toolCatalogBuilder.requesterHomePath(handlerContext.request)
 	taskRunID := toolcontract.TaskRunIDFromContext(toolContext)
@@ -67,23 +67,23 @@ func (toolCatalogBuilder *ToolCatalogBuilder) runTerminalTool(toolContext contex
 	if actorFailure != nil {
 		return *actorFailure, nil
 	}
-	slog.Info("terminal_run actor acquired", "durationMs", time.Since(actorStartedAt).Milliseconds())
+	slog.Info("shell actor acquired", "durationMs", time.Since(actorStartedAt).Milliseconds())
 	workingDirectoryStartedAt := time.Now()
 	if errorValue := workspaceActor.MkdirAll(toolContext, input.WorkingDirectoryPath); errorValue != nil {
-		return actorToolFailure("mkdir_all", "terminal_working_directory", input.WorkingDirectoryPath, errorValue), nil
+		return actorToolFailure("mkdir_all", "shell_working_directory", input.WorkingDirectoryPath, errorValue), nil
 	}
-	slog.Info("terminal_run working directory prepared", "durationMs", time.Since(workingDirectoryStartedAt).Milliseconds())
+	slog.Info("shell working directory prepared", "durationMs", time.Since(workingDirectoryStartedAt).Milliseconds())
 	materializeStartedAt := time.Now()
 	if toolFailure := materializeTerminalRuntimeDirectories(toolContext, workspaceActor, requesterHomePath, input.EnvironmentVariables); toolFailure != nil {
 		return *toolFailure, nil
 	}
-	slog.Info("terminal_run runtime directories materialized", "durationMs", time.Since(materializeStartedAt).Milliseconds())
+	slog.Info("shell runtime directories materialized", "durationMs", time.Since(materializeStartedAt).Milliseconds())
 	input.ExecutionIdentity = toolCatalogBuilder.executionIdentityForRequester(handlerContext.request)
 	runStartedAt := time.Now()
 	stopHeartbeat := toolCatalogBuilder.startTerminalRunHeartbeat(toolContext, input.Command)
 	commandResult, errorValue := workspaceActor.Run(toolContext, input)
 	stopHeartbeat()
-	slog.Info("terminal_run command completed", "durationMs", time.Since(runStartedAt).Milliseconds(), "exitCode", commandResult.ExitCode, "timedOut", commandResult.TimedOut, "signal", commandResult.Signal)
+	slog.Info("shell command completed", "durationMs", time.Since(runStartedAt).Milliseconds(), "exitCode", commandResult.ExitCode, "timedOut", commandResult.TimedOut, "signal", commandResult.Signal)
 	content := marshalToolResult(commandResult)
 	if errorValue != nil {
 		if runtimePathFailure := terminalRuntimePathFailure(input, commandResult, content); runtimePathFailure != nil {
@@ -91,7 +91,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) runTerminalTool(toolContext contex
 		}
 		document := terminalCommandResult(commandResult, false)
 		content = marshalToolResult(document)
-		return toolcontract.ToolFailureWithOutput(toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "terminal_run", content, json.RawMessage(content)), nil
+		return toolcontract.ToolFailureWithOutput(toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "shell", content, json.RawMessage(content)), nil
 	}
 	document := terminalCommandResult(commandResult, true)
 	content = marshalToolResult(document)
@@ -191,7 +191,7 @@ func terminalRuntimePathFailure(commandRequest security.CommandRequest, commandR
 		return nil
 	}
 	document := json.RawMessage(marshalToolResult(map[string]any{
-		"failureClass":      "terminal_runtime_path",
+		"failureClass":      "shell_runtime_path",
 		"command":           commandRequest.Command,
 		"actualPATH":        commandRequest.EnvironmentVariables["PATH"],
 		"canonicalPATH":     security.CanonicalRuntimePATH,
@@ -200,7 +200,7 @@ func terminalRuntimePathFailure(commandRequest security.CommandRequest, commandR
 		"commandResult":     commandResult,
 		"recommendedAction": "Fix Blueclaw runtime PATH propagation; do not change site source or ask the user to use external hosting.",
 	}))
-	result := toolcontract.ToolFailureWithOutput(toolcontract.FailureDependencyUnavailable, toolcontract.FailureCode("terminal_runtime_path"), "terminal_runtime_path", "terminal runtime PATH did not expose a managed executable", document)
+	result := toolcontract.ToolFailureWithOutput(toolcontract.FailureDependencyUnavailable, toolcontract.FailureCode("shell_runtime_path"), "shell_runtime_path", "terminal runtime PATH did not expose a managed executable", document)
 	result.Failure.Retryable = true
 	result.Failure.SafeRetry = false
 	return &result
@@ -262,7 +262,7 @@ func requesterWorkspaceEnvironment(requesterHomePath string, workspaceRootPath s
 func materializeTerminalRuntimeDirectories(ctx context.Context, workspaceActor security.WorkspaceActor, requesterHomePath string, environmentVariables map[string]string) *toolcontract.ToolResult {
 	for _, directoryPath := range terminalRuntimeDirectories(requesterHomePath, environmentVariables) {
 		if errorValue := workspaceActor.MkdirAll(ctx, directoryPath); errorValue != nil {
-			result := actorToolFailure("mkdir_all", "terminal_runtime_environment", directoryPath, errorValue)
+			result := actorToolFailure("mkdir_all", "shell_runtime_environment", directoryPath, errorValue)
 			return &result
 		}
 	}

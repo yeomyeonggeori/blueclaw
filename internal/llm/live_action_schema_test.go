@@ -14,9 +14,9 @@ import (
 
 func terminalRunProbeRequest(t *testing.T, prompt string) llm.StructuredResponseRequest {
 	t.Helper()
-	toolSet := toolcontract.NewToolSet([]string{toolcontract.TerminalRunToolName})
+	toolSet := toolcontract.NewToolSet([]string{toolcontract.ShellToolName})
 	definition := toolcontract.ToolDefinition{
-		Name:           toolcontract.TerminalRunToolName,
+		Name:           toolcontract.ShellToolName,
 		Description:    "Run a terminal command.",
 		Visibility:     toolcontract.ToolVisibilityModel,
 		InputSchema:    json.RawMessage(`{"type":"object","properties":{"command":{"type":"string"}},"required":["command"],"additionalProperties":false}`),
@@ -33,8 +33,8 @@ func terminalRunProbeRequest(t *testing.T, prompt string) llm.StructuredResponse
 
 func assertContinuedWithTerminalRun(t *testing.T, action loop.ProbedAgentAction) {
 	t.Helper()
-	if action.Action != "continue" || action.ToolName != toolcontract.TerminalRunToolName {
-		t.Fatalf("expected terminal_run continue action, got %+v", action)
+	if action.Action != "continue" || action.ToolName != toolcontract.ShellToolName {
+		t.Fatalf("expected shell continue action, got %+v", action)
 	}
 	var toolInput struct {
 		Command string `json:"command"`
@@ -53,7 +53,7 @@ func TestLLMDLiveXLowCurrentAgentActionSchemaFromEnv(t *testing.T) {
 	if socketPath == "" || authKey == "" {
 		t.Skip("BLUECLAW_LLMD_LIVE_SOCKET and BLUECLAW_LLMD_LIVE_AUTH_KEY are required")
 	}
-	request := terminalRunProbeRequest(t, "Do not finish. Choose continue, call terminal_run, and set command to printf llmd-schema-ok.")
+	request := terminalRunProbeRequest(t, "Do not finish. Choose continue, call shell, and set command to printf llmd-schema-ok.")
 	client := llm.NewLLMDClient(llm.LLMDClientConfiguration{
 		UnixSocketPath: socketPath,
 		AuthKey:        authKey,
@@ -79,7 +79,7 @@ func TestOpenRouterLiveLowTierCurrentAgentActionSchemaFromEnv(t *testing.T) {
 	if apiKey == "" {
 		t.Skip("OPENROUTER_API_KEY is required for the low-tier action schema test")
 	}
-	request := terminalRunProbeRequest(t, "Do not finish. Choose continue, call terminal_run, and set command to printf low-tier-schema-ok.")
+	request := terminalRunProbeRequest(t, "Do not finish. Choose continue, call shell, and set command to printf low-tier-schema-ok.")
 	client := llm.OpenRouterClient{
 		APIKey:       apiKey,
 		BaseURL:      llm.DefaultOpenRouterChatCompletionsURL,
