@@ -374,7 +374,7 @@ Transitions go through one function, `TransitionTaskRun`
 
 The event ledger is the autopsy surface. Every LLM call, tool call, approval,
 exposure decision, and launch step lands there, and
-`GET /admin/api/task/detail?taskRunID=<id>` returns it
+`GET /admin/api/run/detail?taskRunID=<id>` returns it
 (`internal/httpserver/router.go`).
 
 ## Tools

@@ -92,7 +92,7 @@ func NewClient(baseURL string, httpClient *http.Client) *Client {
 }
 
 func (client *Client) ListTaskRuns(ctx context.Context) ([]TaskRun, error) {
-	requestURL := client.baseURL + "/admin/api/task"
+	requestURL := client.baseURL + "/admin/api/run"
 	var taskRuns []TaskRun
 	if errorValue := client.getJSON(ctx, requestURL, &taskRuns); errorValue != nil {
 		return nil, errorValue
@@ -101,7 +101,7 @@ func (client *Client) ListTaskRuns(ctx context.Context) ([]TaskRun, error) {
 }
 
 func (client *Client) GetTaskRunDetail(ctx context.Context, taskRunID string) (TaskRunDetail, error) {
-	requestURL := client.baseURL + "/admin/api/task/detail?taskRunID=" + url.QueryEscape(taskRunID)
+	requestURL := client.baseURL + "/admin/api/run/detail?taskRunID=" + url.QueryEscape(taskRunID)
 	var detail TaskRunDetail
 	if errorValue := client.getJSON(ctx, requestURL, &detail); errorValue != nil {
 		return TaskRunDetail{}, errorValue
@@ -114,7 +114,7 @@ func (client *Client) SubmitApproval(ctx context.Context, taskRunID string, deci
 	if errorValue != nil {
 		return ApprovalResult{}, fmt.Errorf("encode approval request: %w", errorValue)
 	}
-	requestURL := client.baseURL + "/admin/api/task/approve"
+	requestURL := client.baseURL + "/admin/api/run/approve"
 	httpRequest, errorValue := http.NewRequestWithContext(ctx, http.MethodPost, requestURL, bytes.NewReader(requestBody))
 	if errorValue != nil {
 		return ApprovalResult{}, fmt.Errorf("build approval request: %w", errorValue)

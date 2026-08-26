@@ -25,7 +25,7 @@ func TestTaskScheduleHandlerReturnsSummary(t *testing.T) {
 			},
 		},
 	}
-	request := httptest.NewRequest(http.MethodGet, "/admin/api/task-schedules/summary", nil)
+	request := httptest.NewRequest(http.MethodGet, "/admin/api/schedule/summary", nil)
 	responseRecorder := httptest.NewRecorder()
 
 	handler.HandleSummary(responseRecorder, request)
@@ -66,7 +66,7 @@ func TestTaskScheduleHandlerListsActiveSchedules(t *testing.T) {
 		}},
 	}
 	handler := TaskScheduleHandler{ListRepository: repository}
-	request := httptest.NewRequest(http.MethodGet, "/admin/api/task-schedules?deliveryConversationID=channel-1&unboundedOnly=true&includeExpired=true&page=2&pageSize=5", nil)
+	request := httptest.NewRequest(http.MethodGet, "/admin/api/schedule?deliveryConversationID=channel-1&unboundedOnly=true&includeExpired=true&page=2&pageSize=5", nil)
 	responseRecorder := httptest.NewRecorder()
 
 	handler.HandleList(responseRecorder, request)
@@ -100,7 +100,7 @@ func TestTaskScheduleHandlerCancelsOwnedSchedule(t *testing.T) {
 		}},
 	}
 	handler := TaskScheduleHandler{ListRepository: repository}
-	request := httptest.NewRequest(http.MethodPost, "/admin/api/task-schedules/cancel", strings.NewReader(`{"taskScheduleID":"schedule-1","creatorPersonID":"person-1"}`))
+	request := httptest.NewRequest(http.MethodPost, "/admin/api/schedule/cancel", strings.NewReader(`{"taskScheduleID":"schedule-1","creatorPersonID":"person-1"}`))
 	responseRecorder := httptest.NewRecorder()
 
 	handler.HandleCancel(responseRecorder, request)
@@ -128,7 +128,7 @@ func TestTaskScheduleHandlerDeletesOwnedSchedule(t *testing.T) {
 		}},
 	}
 	handler := TaskScheduleHandler{ListRepository: repository}
-	request := httptest.NewRequest(http.MethodPost, "/admin/api/task-schedules/delete", strings.NewReader(`{"taskScheduleID":"schedule-1","creatorPersonID":"person-1"}`))
+	request := httptest.NewRequest(http.MethodPost, "/admin/api/schedule/delete", strings.NewReader(`{"taskScheduleID":"schedule-1","creatorPersonID":"person-1"}`))
 	responseRecorder := httptest.NewRecorder()
 
 	handler.HandleDelete(responseRecorder, request)
@@ -156,7 +156,7 @@ func TestTaskScheduleHandlerRejectsDeleteCreatorMismatch(t *testing.T) {
 		}},
 	}
 	handler := TaskScheduleHandler{ListRepository: repository}
-	request := httptest.NewRequest(http.MethodPost, "/admin/api/task-schedules/delete", strings.NewReader(`{"taskScheduleID":"schedule-1","creatorPersonID":"person-2"}`))
+	request := httptest.NewRequest(http.MethodPost, "/admin/api/schedule/delete", strings.NewReader(`{"taskScheduleID":"schedule-1","creatorPersonID":"person-2"}`))
 	responseRecorder := httptest.NewRecorder()
 
 	handler.HandleDelete(responseRecorder, request)
@@ -181,7 +181,7 @@ func TestTaskScheduleHandlerRejectsCancelCreatorMismatch(t *testing.T) {
 		}},
 	}
 	handler := TaskScheduleHandler{ListRepository: repository}
-	request := httptest.NewRequest(http.MethodPost, "/admin/api/task-schedules/cancel", strings.NewReader(`{"taskScheduleID":"schedule-1","creatorPersonID":"person-2"}`))
+	request := httptest.NewRequest(http.MethodPost, "/admin/api/schedule/cancel", strings.NewReader(`{"taskScheduleID":"schedule-1","creatorPersonID":"person-2"}`))
 	responseRecorder := httptest.NewRecorder()
 
 	handler.HandleCancel(responseRecorder, request)
@@ -196,7 +196,7 @@ func TestTaskScheduleHandlerRejectsCancelCreatorMismatch(t *testing.T) {
 
 func TestTaskScheduleHandlerReturnsNotFoundForMissingCancelSchedule(t *testing.T) {
 	handler := TaskScheduleHandler{ListRepository: &taskScheduleListRepositoryStub{}}
-	request := httptest.NewRequest(http.MethodPost, "/admin/api/task-schedules/cancel", strings.NewReader(`{"taskScheduleID":"missing","creatorPersonID":"person-1"}`))
+	request := httptest.NewRequest(http.MethodPost, "/admin/api/schedule/cancel", strings.NewReader(`{"taskScheduleID":"missing","creatorPersonID":"person-1"}`))
 	responseRecorder := httptest.NewRecorder()
 
 	handler.HandleCancel(responseRecorder, request)
@@ -224,7 +224,7 @@ func TestTaskScheduleHandlerUpdatesOwnedSchedule(t *testing.T) {
 		}},
 	}
 	handler := TaskScheduleHandler{ListRepository: repository}
-	request := httptest.NewRequest(http.MethodPost, "/admin/api/task-schedules/update", strings.NewReader(`{"taskScheduleID":"schedule-1","creatorPersonID":"person-1","name":"New name","intervalSecond":7200,"repeatPolicy":"unbounded"}`))
+	request := httptest.NewRequest(http.MethodPost, "/admin/api/schedule/update", strings.NewReader(`{"taskScheduleID":"schedule-1","creatorPersonID":"person-1","name":"New name","intervalSecond":7200,"repeatPolicy":"unbounded"}`))
 	responseRecorder := httptest.NewRecorder()
 
 	handler.HandleUpdate(responseRecorder, request)
@@ -256,7 +256,7 @@ func TestTaskScheduleHandlerRejectsUpdateCreatorMismatch(t *testing.T) {
 		}},
 	}
 	handler := TaskScheduleHandler{ListRepository: repository}
-	request := httptest.NewRequest(http.MethodPost, "/admin/api/task-schedules/update", strings.NewReader(`{"taskScheduleID":"schedule-1","creatorPersonID":"person-2","name":"New name"}`))
+	request := httptest.NewRequest(http.MethodPost, "/admin/api/schedule/update", strings.NewReader(`{"taskScheduleID":"schedule-1","creatorPersonID":"person-2","name":"New name"}`))
 	responseRecorder := httptest.NewRecorder()
 
 	handler.HandleUpdate(responseRecorder, request)

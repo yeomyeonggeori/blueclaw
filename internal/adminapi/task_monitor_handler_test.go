@@ -49,7 +49,7 @@ func TestTaskMonitorHandlerListsAllTaskRunsWithoutQuery(t *testing.T) {
 	taskRunService.CreateTaskRun("person-1", "conversation-1", "first task")
 	taskRunService.CreateTaskRun("person-1", "conversation-1", "second task")
 	handler := TaskMonitorHandler{TaskRunService: taskRunService}
-	request := httptest.NewRequest(http.MethodGet, "/admin/api/task", nil)
+	request := httptest.NewRequest(http.MethodGet, "/admin/api/run", nil)
 	responseRecorder := httptest.NewRecorder()
 
 	handler.HandleListTaskRun(responseRecorder, request)
@@ -210,7 +210,7 @@ func TestTaskMonitorHandlerWithoutIncludeTotalReturnsBareArray(t *testing.T) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	taskRunService.CreateTaskRun("person-1", "conversation-1", "only task")
 	handler := TaskMonitorHandler{TaskRunService: taskRunService}
-	request := httptest.NewRequest(http.MethodGet, "/admin/api/task", nil)
+	request := httptest.NewRequest(http.MethodGet, "/admin/api/run", nil)
 	responseRecorder := httptest.NewRecorder()
 
 	handler.HandleListTaskRun(responseRecorder, request)
@@ -301,7 +301,7 @@ func TestTaskMonitorHandlerDeletesScopedTerminalTaskRun(t *testing.T) {
 	}
 	handler := TaskMonitorHandler{TaskRunService: taskRunService, IdentityService: newTestIdentityService()}
 	body := `{"taskRunID":"` + bobTaskRun.TaskRunID + `","viewerEmail":"alice@example.com"}`
-	request := httptest.NewRequest(http.MethodPost, "/admin/api/task/delete", strings.NewReader(body))
+	request := httptest.NewRequest(http.MethodPost, "/admin/api/run/delete", strings.NewReader(body))
 	responseRecorder := httptest.NewRecorder()
 
 	handler.HandleDeleteTaskRun(responseRecorder, request)
@@ -314,7 +314,7 @@ func TestTaskMonitorHandlerDeletesScopedTerminalTaskRun(t *testing.T) {
 	}
 
 	body = `{"taskRunID":"` + aliceTaskRun.TaskRunID + `","viewerEmail":"alice@example.com"}`
-	request = httptest.NewRequest(http.MethodPost, "/admin/api/task/delete", strings.NewReader(body))
+	request = httptest.NewRequest(http.MethodPost, "/admin/api/run/delete", strings.NewReader(body))
 	responseRecorder = httptest.NewRecorder()
 
 	handler.HandleDeleteTaskRun(responseRecorder, request)
@@ -335,7 +335,7 @@ func TestTaskMonitorHandlerRejectsRunningTaskRunDelete(t *testing.T) {
 	}
 	handler := TaskMonitorHandler{TaskRunService: taskRunService, IdentityService: newTestIdentityService()}
 	body := `{"taskRunID":"` + taskRun.TaskRunID + `","viewerEmail":"alice@example.com"}`
-	request := httptest.NewRequest(http.MethodPost, "/admin/api/task/delete", strings.NewReader(body))
+	request := httptest.NewRequest(http.MethodPost, "/admin/api/run/delete", strings.NewReader(body))
 	responseRecorder := httptest.NewRecorder()
 
 	handler.HandleDeleteTaskRun(responseRecorder, request)

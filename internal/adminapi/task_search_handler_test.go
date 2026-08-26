@@ -25,7 +25,7 @@ func TestSearchingWithoutAPersonIsABadRequestRatherThanEveryonesLedger(t *testin
 	handler := TaskSearchHandler{SessionQuery: sessionquery.New(searchLedgerStub{})}
 	recorder := httptest.NewRecorder()
 
-	handler.HandleSearchTaskRuns(recorder, httptest.NewRequest(http.MethodGet, "/admin/api/task/search?q=회의록", nil))
+	handler.HandleSearchTaskRuns(recorder, httptest.NewRequest(http.MethodGet, "/admin/api/run/search?q=회의록", nil))
 
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("an operator who forgets the person must be told, never quietly served everything: %d %s", recorder.Code, recorder.Body.String())
@@ -36,7 +36,7 @@ func TestSearchingReturnsTheBoundedResultAsJSON(t *testing.T) {
 	handler := TaskSearchHandler{SessionQuery: sessionquery.New(searchLedgerStub{})}
 	recorder := httptest.NewRecorder()
 
-	handler.HandleSearchTaskRuns(recorder, httptest.NewRequest(http.MethodGet, "/admin/api/task/search?personID=person-1&q=회의록", nil))
+	handler.HandleSearchTaskRuns(recorder, httptest.NewRequest(http.MethodGet, "/admin/api/run/search?personID=person-1&q=회의록", nil))
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected the search to answer: %d %s", recorder.Code, recorder.Body.String())

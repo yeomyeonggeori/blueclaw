@@ -28,7 +28,7 @@ func configuredApprovalHandler(taskRunService *task.TaskRunService) TaskApproval
 func postApproval(t *testing.T, handler TaskApprovalHandler, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	responseRecorder := httptest.NewRecorder()
-	handler.HandleApproveTaskRun(responseRecorder, httptest.NewRequest(http.MethodPost, "/admin/api/task/approve", bytes.NewBufferString(body)))
+	handler.HandleApproveTaskRun(responseRecorder, httptest.NewRequest(http.MethodPost, "/admin/api/run/approve", bytes.NewBufferString(body)))
 	return responseRecorder
 }
 

@@ -37,7 +37,7 @@ func TestTaskRunHandlerLaunchesAdminTask(t *testing.T) {
 		IdentityService: identityService,
 		WorkspaceID:     "workspace-1",
 	}
-	request := httptest.NewRequest(http.MethodPost, "/admin/api/task/run", strings.NewReader(`{"requesterPersonID":"person-1","prompt":"run admin task","profileName":"admin"}`))
+	request := httptest.NewRequest(http.MethodPost, "/admin/api/run/start", strings.NewReader(`{"requesterPersonID":"person-1","prompt":"run admin task","profileName":"admin"}`))
 	responseRecorder := httptest.NewRecorder()
 
 	handler.HandleRunTask(responseRecorder, request)
@@ -69,7 +69,7 @@ func TestTaskRunHandlerLaunchIgnoresClientCancellation(t *testing.T) {
 		IdentityService: identityService,
 		WorkspaceID:     "workspace-1",
 	}
-	request := httptest.NewRequest(http.MethodPost, "/admin/api/task/run", strings.NewReader(`{"requesterPersonID":"person-1","prompt":"run admin task","profileName":"admin"}`))
+	request := httptest.NewRequest(http.MethodPost, "/admin/api/run/start", strings.NewReader(`{"requesterPersonID":"person-1","prompt":"run admin task","profileName":"admin"}`))
 	requestContext, cancelRequest := context.WithCancel(request.Context())
 	cancelRequest()
 	request = request.WithContext(requestContext)
@@ -94,7 +94,7 @@ func TestTaskRunHandlerUsesLLMDTopologyPresetWithoutIntakeCall(t *testing.T) {
 	if presetDecision.TaskLevel != agentcontract.TaskLevelXLow {
 		t.Fatalf("expected xlow diagnostic task level, got %s", presetDecision.TaskLevel)
 	}
-	request := httptest.NewRequest(http.MethodPost, "/admin/api/task/run", strings.NewReader(`{"requesterPersonID":"person-1","prompt":"reply exactly","taskDecisionPreset":"model_path"}`))
+	request := httptest.NewRequest(http.MethodPost, "/admin/api/run/start", strings.NewReader(`{"requesterPersonID":"person-1","prompt":"reply exactly","taskDecisionPreset":"model_path"}`))
 	responseRecorder := httptest.NewRecorder()
 
 	handler.HandleRunTask(responseRecorder, request)
@@ -132,7 +132,7 @@ func TestTaskRunHandlerRejectsTaskDecisionPresetOverrides(t *testing.T) {
 		t.Run(override, func(t *testing.T) {
 			handler, taskRunService := newStubbedPresetTaskRunHandler(true)
 			body := `{"requesterPersonID":"person-1","prompt":"reply exactly","taskDecisionPreset":"model_path",` + override + `}`
-			request := httptest.NewRequest(http.MethodPost, "/admin/api/task/run", strings.NewReader(body))
+			request := httptest.NewRequest(http.MethodPost, "/admin/api/run/start", strings.NewReader(body))
 			responseRecorder := httptest.NewRecorder()
 
 			handler.HandleRunTask(responseRecorder, request)
@@ -149,7 +149,7 @@ func TestTaskRunHandlerRejectsTaskDecisionPresetOverrides(t *testing.T) {
 
 func TestTaskRunHandlerRejectsDisabledTaskDecisionPresetBeforeLaunch(t *testing.T) {
 	handler, taskRunService := newStubbedPresetTaskRunHandler(false)
-	request := httptest.NewRequest(http.MethodPost, "/admin/api/task/run", strings.NewReader(`{"requesterPersonID":"person-1","prompt":"reply exactly","taskDecisionPreset":"model_path"}`))
+	request := httptest.NewRequest(http.MethodPost, "/admin/api/run/start", strings.NewReader(`{"requesterPersonID":"person-1","prompt":"reply exactly","taskDecisionPreset":"model_path"}`))
 	responseRecorder := httptest.NewRecorder()
 
 	handler.HandleRunTask(responseRecorder, request)
@@ -164,7 +164,7 @@ func TestTaskRunHandlerRejectsDisabledTaskDecisionPresetBeforeLaunch(t *testing.
 
 func TestTaskRunHandlerRejectsUnsupportedTaskDecisionPreset(t *testing.T) {
 	handler, taskRunService := newStubbedPresetTaskRunHandler(true)
-	request := httptest.NewRequest(http.MethodPost, "/admin/api/task/run", strings.NewReader(`{"requesterPersonID":"person-1","prompt":"reply exactly","taskDecisionPreset":"unsafe"}`))
+	request := httptest.NewRequest(http.MethodPost, "/admin/api/run/start", strings.NewReader(`{"requesterPersonID":"person-1","prompt":"reply exactly","taskDecisionPreset":"unsafe"}`))
 	responseRecorder := httptest.NewRecorder()
 
 	handler.HandleRunTask(responseRecorder, request)
@@ -184,7 +184,7 @@ func TestTaskRunHandlerCancelsActiveTaskRun(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	handler := TaskRunHandler{TaskRunService: taskRunService}
-	request := httptest.NewRequest(http.MethodPost, "/admin/api/task/cancel", strings.NewReader(`{"taskRunIDs":["`+taskRun.TaskRunID+`"],"reason":"cleanup"}`))
+	request := httptest.NewRequest(http.MethodPost, "/admin/api/run/cancel", strings.NewReader(`{"taskRunIDs":["`+taskRun.TaskRunID+`"],"reason":"cleanup"}`))
 	responseRecorder := httptest.NewRecorder()
 
 	handler.HandleCancelTaskRun(responseRecorder, request)
@@ -211,7 +211,7 @@ func TestTaskRunHandlerStopsRequesterTasksOnly(t *testing.T) {
 		}
 	}
 	handler := TaskRunHandler{TaskRunService: taskRunService}
-	request := httptest.NewRequest(http.MethodPost, "/admin/api/task/cancel", strings.NewReader(`{"mode":"stop_all","requesterPersonID":"person-1","reason":"slash stop-all"}`))
+	request := httptest.NewRequest(http.MethodPost, "/admin/api/run/cancel", strings.NewReader(`{"mode":"stop_all","requesterPersonID":"person-1","reason":"slash stop-all"}`))
 	responseRecorder := httptest.NewRecorder()
 
 	handler.HandleCancelTaskRun(responseRecorder, request)
