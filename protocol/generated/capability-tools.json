@@ -1363,6 +1363,10 @@
             "description": "Event end. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day. It must be after startsAt.",
             "type": "string"
           },
+          "everyoneAttends": {
+            "description": "Set true when the event is open to the whole company, which leaves it with no attendee list. Leave it out when named people attend, or when nobody is named and the event is the requester’s own.",
+            "type": "boolean"
+          },
           "isWholeDay": {
             "description": "Set true for an event that takes the whole day.",
             "type": "boolean"
@@ -1382,7 +1386,7 @@
             "type": "integer"
           },
           "participantPersonHints": {
-            "description": "Names, @handles, or emails of the people attending. Naming nobody makes the event the requester’s own, naming colleagues makes it theirs, and naming everyone leaves it open to all.",
+            "description": "Names, @handles, or emails of the people attending. Naming nobody makes the event the requester’s own.",
             "items": {
               "type": "string"
             },
@@ -1407,6 +1411,10 @@
             "description": "Event end. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day. It must be after startsAt.",
             "type": "string"
           },
+          "everyoneAttends": {
+            "description": "Set true when the event is open to the whole company, which leaves it with no attendee list. Leave it out when named people attend, or when nobody is named and the event is the requester’s own.",
+            "type": "boolean"
+          },
           "isWholeDay": {
             "description": "Set true for an event that takes the whole day.",
             "type": "boolean"
@@ -1426,7 +1434,7 @@
             "type": "integer"
           },
           "participantPersonHints": {
-            "description": "Names, @handles, or emails of the people attending. Naming nobody makes the event the requester’s own, naming colleagues makes it theirs, and naming everyone leaves it open to all.",
+            "description": "Names, @handles, or emails of the people attending. Naming nobody makes the event the requester’s own.",
             "items": {
               "type": "string"
             },
@@ -1868,6 +1876,10 @@
             "description": "New event end. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day.",
             "type": "string"
           },
+          "everyoneAttends": {
+            "description": "Set true when the event is open to the whole company, which leaves it with no attendee list. Leave it out when named people attend, or when nobody is named and the event is the requester’s own.",
+            "type": "boolean"
+          },
           "isWholeDay": {
             "description": "Whether the event takes the whole day.",
             "type": "boolean"
@@ -1918,6 +1930,10 @@
             "maxLength": 256,
             "minLength": 1,
             "type": "string"
+          },
+          "everyoneAttends": {
+            "description": "Set true when the event is open to the whole company, which leaves it with no attendee list. Leave it out when named people attend, or when nobody is named and the event is the requester’s own.",
+            "type": "boolean"
           },
           "isWholeDay": {
             "description": "Whether the event takes the whole day.",

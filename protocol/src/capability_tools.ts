@@ -356,6 +356,9 @@ const calendarMutableFields = {
   participantPersonHints: z.array(z.string())
     .describe('Names, @handles, or emails of everyone attending, replacing the current attendees. Send the whole set, not just additions.')
     .optional(),
+  everyoneAttends: z.boolean()
+    .describe('Set true when the event is open to the whole company, which leaves it with no attendee list. Leave it out when named people attend, or when nobody is named and the event is the requester\u2019s own.')
+    .optional(),
   notifyMinutesBefore: z.number().int().positive().describe('Minutes before the start to notify attendees.').optional(),
 };
 
@@ -367,7 +370,10 @@ export const calendarAddInputSchema = z.strictObject({
   endsAt: z.string().describe(`Event end. ${momentDescription} It must be after startsAt.`),
   isWholeDay: z.boolean().describe('Set true for an event that takes the whole day.').optional(),
   participantPersonHints: z.array(z.string())
-    .describe('Names, @handles, or emails of the people attending. Naming nobody makes the event the requester\u2019s own, naming colleagues makes it theirs, and naming everyone leaves it open to all.')
+    .describe('Names, @handles, or emails of the people attending. Naming nobody makes the event the requester\u2019s own.')
+    .optional(),
+  everyoneAttends: z.boolean()
+    .describe('Set true when the event is open to the whole company, which leaves it with no attendee list. Leave it out when named people attend, or when nobody is named and the event is the requester\u2019s own.')
     .optional(),
   notifyMinutesBefore: z.number().int().positive().describe('Minutes before the start to notify attendees.').optional(),
 });
