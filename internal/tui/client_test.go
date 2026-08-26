@@ -10,7 +10,7 @@ import (
 
 func TestClientListTaskRunsDecodesBareArray(testInstance *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/admin/api/task" {
+		if request.URL.Path != "/admin/api/run" {
 			testInstance.Fatalf("unexpected path %s", request.URL.Path)
 		}
 		responseWriter.Header().Set("Content-Type", "application/json")
@@ -96,7 +96,7 @@ func TestClientGetTaskRunDetailReturnsApplicationErrorOnNotFound(testInstance *t
 func TestClientSubmitApprovalSendsDecisionAndDecodesStatus(testInstance *testing.T) {
 	var capturedRequestBody approvalRequestBody
 	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/admin/api/task/approve" || request.Method != http.MethodPost {
+		if request.URL.Path != "/admin/api/run/approve" || request.Method != http.MethodPost {
 			testInstance.Fatalf("unexpected request %s %s", request.Method, request.URL.Path)
 		}
 		if errorValue := json.NewDecoder(request.Body).Decode(&capturedRequestBody); errorValue != nil {

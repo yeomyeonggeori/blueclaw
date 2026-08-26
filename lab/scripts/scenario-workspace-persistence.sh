@@ -35,7 +35,7 @@ wait_for_blueclaw() {
 requester_person_id="$(curl -fsS "$blueclaw_url/admin/api/policy" | jq -er '.people[0].personID')"
 task_response="$(curl -fsS --max-time 480 -H 'Content-Type: application/json' \
   -d "$(jq -nc --arg person "$requester_person_id" '{requesterPersonID:$person,requesterName:"Workspace Persistence Regression",conversationID:"regression:workspace-persistence",prompt:"Reply with exactly persistence-ok."}')" \
-  "$blueclaw_url/admin/api/task/run")"
+  "$blueclaw_url/admin/api/run/start")"
 task_run_id="$(jq -er '.taskRun.taskRunID' <<<"$task_response")"
 
 cleanup() {
@@ -43,11 +43,11 @@ cleanup() {
   wait_for_blueclaw >/dev/null 2>&1 || true
   curl -fsS -H 'Content-Type: application/json' \
     -d "$(jq -nc --arg task "$task_run_id" '{taskRunID:$task,viewerIsAdmin:true}')" \
-    "$blueclaw_url/admin/api/task/delete" >/dev/null 2>&1 || true
+    "$blueclaw_url/admin/api/run/delete" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
-before_detail="$(curl -fsS "$blueclaw_url/admin/api/task/detail?taskRunID=$task_run_id")"
+before_detail="$(curl -fsS "$blueclaw_url/admin/api/run/detail?taskRunID=$task_run_id")"
 jq -e '.taskRun.currentAttemptID | length > 0' <<<"$before_detail" >/dev/null
 jq -e '.taskEvents | length > 0' <<<"$before_detail" >/dev/null
 before_detail_digest="$(jq -S . <<<"$before_detail" | sha256sum | awk '{print $1}')"
@@ -55,7 +55,7 @@ before_task_run_row_count=1
 before_attempt_row_count="$(jq '[.taskRun.currentAttemptID | select(length > 0)] | length' <<<"$before_detail")"
 before_task_step_row_count="$(jq '.taskSteps | length' <<<"$before_detail")"
 before_task_event_row_count="$(jq '.taskEvents | length' <<<"$before_detail")"
-before_schedules="$(curl -fsS "$blueclaw_url/admin/api/task-schedules?includeExpired=true&pageSize=200")"
+before_schedules="$(curl -fsS "$blueclaw_url/admin/api/schedule?includeExpired=true&pageSize=200")"
 before_schedule_digest="$(jq -S 'del(.checkedAt)' <<<"$before_schedules" | sha256sum | awk '{print $1}')"
 before_schedule_row_count="$(jq '.totalCount' <<<"$before_schedules")"
 printf '%s\n' "$before_detail" >"$evidence_directory_path/task-detail-before.json"
@@ -77,13 +77,13 @@ fi
 
 run_as_root systemctl start blueclaw
 wait_for_blueclaw
-after_detail="$(curl -fsS "$blueclaw_url/admin/api/task/detail?taskRunID=$task_run_id")"
+after_detail="$(curl -fsS "$blueclaw_url/admin/api/run/detail?taskRunID=$task_run_id")"
 after_detail_digest="$(jq -S . <<<"$after_detail" | sha256sum | awk '{print $1}')"
 after_task_run_row_count=1
 after_attempt_row_count="$(jq '[.taskRun.currentAttemptID | select(length > 0)] | length' <<<"$after_detail")"
 after_task_step_row_count="$(jq '.taskSteps | length' <<<"$after_detail")"
 after_task_event_row_count="$(jq '.taskEvents | length' <<<"$after_detail")"
-after_schedules="$(curl -fsS "$blueclaw_url/admin/api/task-schedules?includeExpired=true&pageSize=200")"
+after_schedules="$(curl -fsS "$blueclaw_url/admin/api/schedule?includeExpired=true&pageSize=200")"
 after_schedule_digest="$(jq -S 'del(.checkedAt)' <<<"$after_schedules" | sha256sum | awk '{print $1}')"
 after_schedule_row_count="$(jq '.totalCount' <<<"$after_schedules")"
 printf '%s\n' "$after_detail" >"$evidence_directory_path/task-detail-after.json"

@@ -74,6 +74,6 @@ export async function loadAuditEntries(): Promise<Array<{ actionName: string; bo
 }
 
 export async function loadAdminTaskRuns(): Promise<Array<Record<string, unknown>>> {
-  const response = await fetch("/admin/api/task");
+  const response = await fetch("/admin/api/run");
   return response.json();
 }
