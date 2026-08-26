@@ -119,7 +119,7 @@ func (personRepository PersonRepository) canonicalizePersonReferences(legacyPers
 			return errorValue
 		}
 	}
-	return personRepository.canonicalizePersonCircles(legacyPersonID, personID)
+	return nil
 }
 
 func canonicalPersonReferenceUpdateStatements() []canonicalPersonReferenceUpdate {
@@ -144,21 +144,4 @@ func (personRepository PersonRepository) hasTable(tableName string) (bool, error
 	var hasTable bool
 	errorValue := row.Scan(&hasTable)
 	return hasTable, errorValue
-}
-
-func (personRepository PersonRepository) canonicalizePersonCircles(legacyPersonID string, personID string) error {
-	_, errorValue := personRepository.database.SQL.ExecContext(context.Background(), `
-INSERT INTO person_circle (person_circle_id, person_id, circle_id, source, created_at, updated_at)
-SELECT $2 || ':' || circle_id, $2, circle_id, source, created_at, updated_at
-FROM person_circle
-WHERE person_id = $1
-ON CONFLICT (person_id, circle_id) DO UPDATE SET
-  source = EXCLUDED.source,
-  updated_at = EXCLUDED.updated_at`, legacyPersonID, personID)
-	if errorValue != nil {
-		return errorValue
-	}
-	_, errorValue = personRepository.database.SQL.ExecContext(context.Background(), `
-DELETE FROM person_circle WHERE person_id = $1`, legacyPersonID)
-	return errorValue
 }
