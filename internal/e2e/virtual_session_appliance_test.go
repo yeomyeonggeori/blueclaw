@@ -205,22 +205,22 @@ func TestCalendarEventLifecycleAcceptance(t *testing.T) {
 	secondTurnResult := result.TurnResults[1]
 	thirdTurnResult := result.TurnResults[2]
 	approvalTurnResult := result.TurnResults[3]
-	if countEventsWithFragment(firstTurnResult.Events, "tool.calendar_add.requested", "calendar_add") != 1 {
+	if countEventsWithFragment(firstTurnResult.Events, "tool.event_add.requested", "event_add") != 1 {
 		t.Fatalf("expected one calendar add request; events: %s", summarizeEvents(firstTurnResult.Events))
 	}
-	if countEventsWithFragment(secondTurnResult.Events, "tool.calendar_update.requested", "calendar_update") != 1 {
+	if countEventsWithFragment(secondTurnResult.Events, "tool.event_update.requested", "event_update") != 1 {
 		t.Fatalf("expected one calendar update request; events: %s", summarizeEvents(secondTurnResult.Events))
 	}
-	if !eventsContain(secondTurnResult.Events, "tool.calendar_update.requested", "2026-06-13T14:00:00+09:00") {
+	if !eventsContain(secondTurnResult.Events, "tool.event_update.requested", "2026-06-13T14:00:00+09:00") {
 		t.Fatalf("expected updated time in calendar update input; events: %s", summarizeEvents(secondTurnResult.Events))
 	}
-	if !eventsContain(secondTurnResult.Events, "tool.calendar_update.result", "updated virtual calendar event") {
+	if !eventsContain(secondTurnResult.Events, "tool.event_update.result", "updated virtual calendar event") {
 		t.Fatalf("expected successful calendar update result; events: %s", summarizeEvents(secondTurnResult.Events))
 	}
-	if countEventsWithFragment(thirdTurnResult.Events, "tool.calendar_delete.requested", "calendar_delete") != 1 {
+	if countEventsWithFragment(thirdTurnResult.Events, "tool.event_delete.requested", "event_delete") != 1 {
 		t.Fatalf("expected one calendar delete request; events: %s", summarizeEvents(thirdTurnResult.Events))
 	}
-	if !eventsContain(approvalTurnResult.Events, "approval.executed", "calendar_delete") {
+	if !eventsContain(approvalTurnResult.Events, "approval.executed", "event_delete") {
 		t.Fatalf("expected approved calendar delete execution; events: %s", summarizeEvents(approvalTurnResult.Events))
 	}
 }
@@ -234,7 +234,7 @@ func TestAmbientDutyCalendarAcceptance(t *testing.T) {
 		t.Fatalf("expected one turn result, got %d", len(result.TurnResults))
 	}
 	turnResult := result.TurnResults[0]
-	if countRequestedToolCalls(turnResult.Events, "calendar_add") != 1 {
+	if countRequestedToolCalls(turnResult.Events, "event_add") != 1 {
 		t.Fatalf("expected one calendar add request; events: %s", summarizeEvents(turnResult.Events))
 	}
 	if !eventsContain(turnResult.Events, "agent.ambient_duty_launch", `"dutyName":"calendar_upkeep"`) {

@@ -212,7 +212,7 @@ func TestTheResolverIsAskedAsTheRequesterWhoseCallItIs(t *testing.T) {
 	if resolver.receivedRequest.RequesterEmail != "staff@example.com" {
 		t.Fatalf("resolution follows the same ownership tiebreak the call itself would, got %+v", resolver.receivedRequest)
 	}
-	if resolver.receivedRequest.ToolName != "calendar_delete" || string(resolver.receivedRequest.ToolInput) != `{"eventHint":"NVIDIA·젯슨 공급 미팅"}` {
+	if resolver.receivedRequest.ToolName != "event_delete" || string(resolver.receivedRequest.ToolInput) != `{"eventHint":"NVIDIA·젯슨 공급 미팅"}` {
 		t.Fatalf("the resolver is asked about the call the model made, got %+v", resolver.receivedRequest)
 	}
 }

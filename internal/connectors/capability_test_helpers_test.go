@@ -13,9 +13,9 @@ var connectorTestCapabilityClosedSchema = json.RawMessage(`{"type":"object","pro
 
 func connectorTestCapabilityInputSchemaForTool(toolName string) json.RawMessage {
 	switch toolName {
-	case "calendar_add":
+	case "event_add":
 		return json.RawMessage(`{"type":"object","properties":{"title":{"type":"string"},"startISO":{"type":"string"},"endISO":{"type":"string"},"isAllDay":{"type":"boolean"}},"additionalProperties":false}`)
-	case "calendar_delete":
+	case "event_delete":
 		return json.RawMessage(`{"type":"object","properties":{"eventHint":{"type":"string"},"userConfirmed":{"type":"boolean"}},"additionalProperties":false}`)
 	case "message_send":
 		return json.RawMessage(`{"type":"object","properties":{"targetType":{"type":"string"},"personHint":{"type":"string"},"message":{"type":"string"}},"additionalProperties":false}`)
@@ -26,7 +26,7 @@ func connectorTestCapabilityInputSchemaForTool(toolName string) json.RawMessage 
 
 func connectorTestCapabilityResultSchemaForTool(toolName string) json.RawMessage {
 	switch toolName {
-	case "calendar_add", "calendar_delete":
+	case "event_add", "event_delete":
 		return json.RawMessage(`{"type":"object","properties":{"eventID":{"type":"string"}},"additionalProperties":false}`)
 	case "message_send":
 		return json.RawMessage(`{"type":"object","properties":{"messageID":{"type":"string"}},"additionalProperties":false}`)
@@ -82,7 +82,7 @@ func connectorTestCapabilitySideEffect(toolName string) string {
 	switch toolName {
 	case "browser_snapshot":
 		return toolcontract.ToolSideEffectRead
-	case "calendar_delete":
+	case "event_delete":
 		return toolcontract.ToolSideEffectDestructive
 	case "message_send":
 		return toolcontract.ToolSideEffectExternalSend

@@ -1034,8 +1034,8 @@ func TestVirtualCapabilityCatalogUsesOperationSchemas(t *testing.T) {
 	if _, hasTitle := updateSchema["title"]; !hasTitle {
 		t.Fatal("task_update input schema must expose title")
 	}
-	if _, hasEndDate := updateSchema["endDate"]; !hasEndDate {
-		t.Fatal("task_update input schema must expose endDate")
+	if _, hasEndsAt := updateSchema["endsAt"]; !hasEndsAt {
+		t.Fatal("task_update input schema must expose endsAt")
 	}
 }
 
@@ -1120,7 +1120,7 @@ func TestGWSDisabled(t *testing.T) {
 
 func TestVirtualCalendarMutationUsesExactEventHint(t *testing.T) {
 	service := virtualCapabilityService{}
-	addResponse := service.calendarResponse("calendar_add", []byte(`{"input":{"title":"비용 테스트 일정","startISO":"2026-07-16T10:00:00+09:00","endISO":"2026-07-16T11:00:00+09:00","people":["지원팀"]},"context":{"requesterPersonID":"person-1","requesterName":"이수현","requesterEmail":"soohyun@example.com"}}`))
+	addResponse := service.calendarResponse("event_add", []byte(`{"input":{"title":"비용 테스트 일정","startISO":"2026-07-16T10:00:00+09:00","endISO":"2026-07-16T11:00:00+09:00","people":["지원팀"]},"context":{"requesterPersonID":"person-1","requesterName":"이수현","requesterEmail":"soohyun@example.com"}}`))
 	if !strings.Contains(addResponse, `"eventID":"calendar-event-001"`) ||
 		!strings.Contains(addResponse, `"objectType":"calendar"`) ||
 		!strings.Contains(addResponse, `"effect":"created"`) ||
@@ -1128,23 +1128,23 @@ func TestVirtualCalendarMutationUsesExactEventHint(t *testing.T) {
 		!strings.Contains(addResponse, `"name":"이수현"`) {
 		t.Fatalf("expected canonical created event and effect, got %s", addResponse)
 	}
-	updateResponse := service.calendarResponse("calendar_update", []byte(`{"input":{"eventHint":"calendar-event-001","startISO":"2026-07-16T14:00:00+09:00","endISO":"2026-07-16T15:00:00+09:00"}}`))
+	updateResponse := service.calendarResponse("event_update", []byte(`{"input":{"eventHint":"calendar-event-001","startISO":"2026-07-16T14:00:00+09:00","endISO":"2026-07-16T15:00:00+09:00"}}`))
 	if !strings.Contains(updateResponse, `"status":"ok"`) || !strings.Contains(updateResponse, `T14:00:00+09:00`) {
 		t.Fatalf("expected exact-ID hint update, got %s", updateResponse)
 	}
-	titleUpdateResponse := service.calendarResponse("calendar_update", []byte(`{"input":{"eventHint":"비용 테스트 일정","title":"비용 테스트 일정 완료"}}`))
+	titleUpdateResponse := service.calendarResponse("event_update", []byte(`{"input":{"eventHint":"비용 테스트 일정","title":"비용 테스트 일정 완료"}}`))
 	if !strings.Contains(titleUpdateResponse, `"status":"ok"`) || !strings.Contains(titleUpdateResponse, `"title":"비용 테스트 일정 완료"`) {
 		t.Fatalf("expected exact-title hint update, got %s", titleUpdateResponse)
 	}
-	noPatchResponse := service.calendarResponse("calendar_update", []byte(`{"input":{"eventHint":"calendar-event-001"}}`))
+	noPatchResponse := service.calendarResponse("event_update", []byte(`{"input":{"eventHint":"calendar-event-001"}}`))
 	if !strings.Contains(noPatchResponse, `"errorCode":"invalid_input"`) {
 		t.Fatalf("expected hint-only update to fail, got %s", noPatchResponse)
 	}
-	queryResponse := service.calendarResponse("calendar_update", []byte(`{"input":{"query":"비용 테스트","title":"새 일정 이름"}}`))
+	queryResponse := service.calendarResponse("event_update", []byte(`{"input":{"query":"비용 테스트","title":"새 일정 이름"}}`))
 	if !strings.Contains(queryResponse, `"status":"error"`) || !strings.Contains(queryResponse, `not found`) {
 		t.Fatalf("expected query update without eventHint to fail, got %s", queryResponse)
 	}
-	deleteResponse := service.calendarResponse("calendar_delete", []byte(`{"input":{"eventHint":"calendar-event-001"},"context":{"isApprovalContinuation":true}}`))
+	deleteResponse := service.calendarResponse("event_delete", []byte(`{"input":{"eventHint":"calendar-event-001"},"context":{"isApprovalContinuation":true}}`))
 	if !strings.Contains(deleteResponse, `"eventID":"calendar-event-001"`) ||
 		!strings.Contains(deleteResponse, `"deleted":true`) ||
 		!strings.Contains(deleteResponse, `"effect":"deleted"`) {
@@ -1159,9 +1159,9 @@ func TestVirtualCalendarListHonorsWindowQueryAndLimit(t *testing.T) {
 		`{"title":"채용 점검","startISO":"2026-07-16T12:00:00+09:00","endISO":"2026-07-16T13:00:00+09:00"}`,
 		`{"title":"비용 점검 B","startISO":"2026-07-17T10:00:00+09:00","endISO":"2026-07-17T11:00:00+09:00"}`,
 	} {
-		service.calendarResponse("calendar_add", []byte(`{"input":`+input+`}`))
+		service.calendarResponse("event_add", []byte(`{"input":`+input+`}`))
 	}
-	response := service.calendarResponse("calendar_list", []byte(`{"input":{"startISO":"2026-07-16T00:00:00+09:00","endISO":"2026-07-17T00:00:00+09:00","query":"비용","limit":1}}`))
+	response := service.calendarResponse("event_list", []byte(`{"input":{"startISO":"2026-07-16T00:00:00+09:00","endISO":"2026-07-17T00:00:00+09:00","query":"비용","limit":1}}`))
 	if !strings.Contains(response, `"eventID":"calendar-event-001"`) ||
 		strings.Contains(response, `"eventID":"calendar-event-002"`) ||
 		strings.Contains(response, `"eventID":"calendar-event-003"`) {
@@ -1171,7 +1171,7 @@ func TestVirtualCalendarListHonorsWindowQueryAndLimit(t *testing.T) {
 		`{"startISO":"2026-07-16T00:00:00+09:00"}`,
 		`{"limit":1.5}`,
 	} {
-		response = service.calendarResponse("calendar_list", []byte(`{"input":`+input+`}`))
+		response = service.calendarResponse("event_list", []byte(`{"input":`+input+`}`))
 		if !strings.Contains(response, `"errorCode":"invalid_input"`) {
 			t.Fatalf("expected invalid bounded listing for %s, got %s", input, response)
 		}
@@ -1196,9 +1196,9 @@ func TestVirtualCapabilityCatalogUsesRuntimeRegistryContract(t *testing.T) {
 		} `json:"deviceCapabilities"`
 	}
 	document := virtualCapabilityCatalogResponse(map[string]bool{
-		"calendar_list":   true,
-		"calendar_update": true,
-		"calendar_delete": true,
+		"event_list":   true,
+		"event_update": true,
+		"event_delete": true,
 	})
 	if errorValue := json.Unmarshal([]byte(document), &catalog); errorValue != nil {
 		t.Fatalf("expected valid capability catalog, got %v: %s", errorValue, document)

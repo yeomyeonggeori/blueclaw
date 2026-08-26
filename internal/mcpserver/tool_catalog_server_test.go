@@ -13,7 +13,7 @@ import (
 
 func testToolSet(t *testing.T, invokedAs *string) *toolcontract.ToolSet {
 	t.Helper()
-	toolSet := toolcontract.NewToolSet([]string{"calendar_add", "file_read"})
+	toolSet := toolcontract.NewToolSet([]string{"event_add", "file_read"})
 	toolSet.AllowTestReplacement()
 	register := func(name string, sideEffectClass string, approvalScope string) {
 		errorValue := toolSet.RegisterTool(toolcontract.ToolDefinition{
@@ -33,7 +33,7 @@ func testToolSet(t *testing.T, invokedAs *string) *toolcontract.ToolSet {
 			t.Fatalf("expected %s to register: %v", name, errorValue)
 		}
 	}
-	register("calendar_add", toolcontract.ToolSideEffectStateChange, "calendar")
+	register("event_add", toolcontract.ToolSideEffectStateChange, "calendar")
 	register("file_read", toolcontract.ToolSideEffectRead, "")
 	return toolSet
 }
@@ -79,14 +79,14 @@ func TestToolCatalogServerPublishesTheRequesterToolSetWithItsDescriptorAxes(t *t
 	for _, tool := range toolList.Tools {
 		publishedTools[tool.Name] = tool
 	}
-	if len(publishedTools) != 2 || publishedTools["calendar_add"] == nil || publishedTools["file_read"] == nil {
+	if len(publishedTools) != 2 || publishedTools["event_add"] == nil || publishedTools["file_read"] == nil {
 		t.Fatalf("expected the requester's catalog, got %+v", toolList.Tools)
 	}
-	if !publishedTools["file_read"].Annotations.ReadOnlyHint || publishedTools["calendar_add"].Annotations.ReadOnlyHint {
+	if !publishedTools["file_read"].Annotations.ReadOnlyHint || publishedTools["event_add"].Annotations.ReadOnlyHint {
 		t.Fatalf("expected the side effect class to reach the harness as a read-only hint, got %+v", publishedTools)
 	}
-	if publishedTools["calendar_add"].Meta["blueclaw/approvalScope"] != "calendar" {
-		t.Fatalf("expected the approval scope to survive as metadata, got %+v", publishedTools["calendar_add"].Meta)
+	if publishedTools["event_add"].Meta["blueclaw/approvalScope"] != "calendar" {
+		t.Fatalf("expected the approval scope to survive as metadata, got %+v", publishedTools["event_add"].Meta)
 	}
 }
 
@@ -95,20 +95,20 @@ func TestToolCatalogServerExecutesInsideTheDaemonAndReportsFailureAsAToolError(t
 	clientSession := connectedCatalogSession(t, RequesterToolSet{RequesterPersonID: "person-1", ToolSet: testToolSet(t, &invokedTool)})
 
 	callResult, errorValue := clientSession.CallTool(context.Background(), &mcp.CallToolParams{
-		Name:      "calendar_add",
+		Name:      "event_add",
 		Arguments: map[string]any{"note": "내일 회의"},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected the tool call to reach the daemon: %v", errorValue)
 	}
-	if invokedTool != "calendar_add" {
+	if invokedTool != "event_add" {
 		t.Fatalf("expected the daemon to run the tool, got %q", invokedTool)
 	}
 	if callResult.IsError {
 		t.Fatalf("expected a successful call, got %+v", callResult)
 	}
 	textContent, isText := callResult.Content[0].(*mcp.TextContent)
-	if !isText || !strings.Contains(textContent.Text, "executed calendar_add") {
+	if !isText || !strings.Contains(textContent.Text, "executed event_add") {
 		t.Fatalf("expected the tool output to reach the harness, got %+v", callResult.Content)
 	}
 }
@@ -123,8 +123,8 @@ func TestToolCatalogServerDoesNotPublishToolsTheRequesterMayNotUse(t *testing.T)
 		t.Fatalf("expected the harness to list tools: %v", errorValue)
 	}
 	for _, tool := range toolList.Tools {
-		if tool.Name == "calendar_add" {
-			t.Fatalf("expected a narrowed catalog to hide calendar_add, got %+v", toolList.Tools)
+		if tool.Name == "event_add" {
+			t.Fatalf("expected a narrowed catalog to hide event_add, got %+v", toolList.Tools)
 		}
 	}
 }
@@ -146,7 +146,7 @@ func TestToolCatalogServerTellsTheGateWhichTaskRunTheCallBelongsTo(t *testing.T)
 	clientSession := connectedCatalogSession(t, RequesterToolSet{RequesterPersonID: "person-1", TaskRunID: "task-run-1", ToolSet: toolSet})
 
 	if _, errorValue := clientSession.CallTool(context.Background(), &mcp.CallToolParams{
-		Name:      "calendar_add",
+		Name:      "event_add",
 		Arguments: map[string]any{"note": "내일 회의"},
 	}); errorValue != nil {
 		t.Fatalf("expected the tool call to reach the daemon: %v", errorValue)

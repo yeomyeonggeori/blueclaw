@@ -10,7 +10,7 @@ import (
 
 func mixedToolSet(t *testing.T) *toolcontract.ToolSet {
 	t.Helper()
-	toolNames := []string{toolcontract.TerminalRunToolName, toolcontract.FileReadToolName, "calendar_add", toolcontract.AskConfirmToolName}
+	toolNames := []string{toolcontract.TerminalRunToolName, toolcontract.FileReadToolName, "event_add", toolcontract.AskConfirmToolName}
 	toolSet := toolcontract.NewToolSet(toolNames)
 	toolSet.AllowTestReplacement()
 	for _, toolName := range toolNames {
@@ -53,7 +53,7 @@ func TestASelfEquippedHarnessIsNotHandedTheToolsItAlreadyHas(t *testing.T) {
 			t.Fatalf("expected %q to be left to the harness, it was published", harnessOwned)
 		}
 	}
-	if !published["calendar_add"] {
+	if !published["event_add"] {
 		t.Fatal("expected a domain operation to be published, since no harness can do it")
 	}
 	if !published[toolcontract.AskConfirmToolName] {
@@ -64,7 +64,7 @@ func TestASelfEquippedHarnessIsNotHandedTheToolsItAlreadyHas(t *testing.T) {
 func TestABareHarnessStillGetsEverything(t *testing.T) {
 	published := publishedToolNames(t, ToolAudienceBare)
 
-	for _, toolName := range []string{toolcontract.TerminalRunToolName, toolcontract.FileReadToolName, "calendar_add", toolcontract.AskConfirmToolName} {
+	for _, toolName := range []string{toolcontract.TerminalRunToolName, toolcontract.FileReadToolName, "event_add", toolcontract.AskConfirmToolName} {
 		if !published[toolName] {
 			t.Fatalf("expected a harness with no tools of its own to receive %q", toolName)
 		}

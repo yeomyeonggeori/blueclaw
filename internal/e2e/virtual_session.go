@@ -122,10 +122,10 @@ var virtualGeneratedResultContractToolNames = []string{
 	"task_list",
 	"task_update",
 	"task_delete",
-	"calendar_add",
-	"calendar_list",
-	"calendar_update",
-	"calendar_delete",
+	"event_add",
+	"event_list",
+	"event_update",
+	"event_delete",
 	"web_search",
 	"site_serve",
 	"site_list",
@@ -1100,9 +1100,9 @@ func mergeVirtualCapabilityToolDescriptor(base agentruntime.CapabilityToolDescri
 
 func virtualCapabilitySideEffectClass(toolName string) string {
 	switch toolName {
-	case "web_search", "image_read", "document_read", "task_list", "calendar_list", "site_list":
+	case "web_search", "image_read", "document_read", "task_list", "event_list", "site_list":
 		return toolcontract.ToolSideEffectRead
-	case "task_delete", "calendar_delete", "schedule_cancel", "site_unserve", "message_delete":
+	case "task_delete", "event_delete", "schedule_cancel", "site_unserve", "message_delete":
 		return toolcontract.ToolSideEffectDestructive
 	case "message_send":
 		return toolcontract.ToolSideEffectExternalSend
@@ -1432,7 +1432,7 @@ func (service *virtualCapabilityService) targetResolveResponse(toolName string, 
 	switch toolName {
 	case "task_delete":
 		return virtualCapabilityTargetResponse(toolName, service.tasks, input, "taskHint", "content", "task")
-	case "calendar_delete":
+	case "event_delete":
 		return virtualCapabilityTargetResponse(toolName, service.events, input, "eventHint", "title", "calendar event")
 	}
 	return virtualCapabilitySuccess(toolName, "no virtual target to resolve", map[string]any{})
@@ -1478,7 +1478,7 @@ func (service *virtualCapabilityService) response(toolName string, requestBody [
 	switch toolName {
 	case "task_add", "task_list", "task_update", "task_delete":
 		return service.taskResponse(toolName, requestBody)
-	case "calendar_add", "calendar_list", "calendar_update", "calendar_delete":
+	case "event_add", "event_list", "event_update", "event_delete":
 		return service.calendarResponse(toolName, requestBody)
 	case "site_serve":
 		input := virtualCapabilityInput(requestBody)
@@ -2025,18 +2025,18 @@ func (service *virtualCapabilityService) calendarResponse(toolName string, reque
 	input := virtualCapabilityInput(requestBody)
 	requester := virtualCapabilityRequesterFromRequest(requestBody)
 	switch toolName {
-	case "calendar_add":
+	case "event_add":
 		eventID := fmt.Sprintf("calendar-event-%03d", len(service.events)+1)
 		record := virtualCapabilityRecord{ID: eventID, Values: service.virtualCalendarEventValues(eventID, input, requester)}
 		service.events = append(service.events, record)
 		return virtualCapabilityCalendarSuccess(toolName, "created", record.ID, "created virtual calendar event", record.Values)
-	case "calendar_list":
+	case "event_list":
 		events, errorValue := virtualCalendarEventList(service.events, input)
 		if errorValue != nil {
 			return virtualCapabilityInvalidInput(toolName, errorValue.Error())
 		}
 		return virtualCapabilitySuccess(toolName, "listed virtual calendar events", map[string]any{"events": events})
-	case "calendar_update":
+	case "event_update":
 		if len(input) < 2 {
 			return virtualCapabilityInvalidInput(toolName, "at least one calendar event field must be updated")
 		}
