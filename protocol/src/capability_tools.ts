@@ -457,6 +457,7 @@ export const messageSendInputSchema = z.strictObject({
   personHint: z.string().describe('Name, @handle, or email of one direct-message recipient. Omit for a direct message to the requester themself.').optional(),
   personHints: z.array(z.string().min(1)).max(50).describe('Direct-message recipients for one fan-out send.').optional(),
   pin: z.boolean().describe('Whether to pin the created message. Defaults to false.').optional(),
+  attachments: z.array(z.string().min(1)).max(10).describe('Workspace file paths to upload with the message, copied exactly from the attachment catalog or a file tool result. Use this to deliver an original file, such as an inbound image, to the target.').optional(),
   reason: z.string().describe('Reason shown to the approver.').optional(),
 });
 
@@ -1020,8 +1021,8 @@ const messageToolDefinitions: CapabilityToolDefinition[] = [
     namespace: 'message',
     privacyClass: 'platform_message',
     policyResource: 'tool:message_send',
-    description: 'Send a Mattermost message to a direct message, channel, or the current conversation after approval.',
-    version: '2',
+    description: 'Send a Mattermost message to a direct message, channel, or the current conversation after approval. attachments uploads workspace files, such as an inbound image original, with the message.',
+    version: '3',
     estimatedLatency: CapabilityEstimatedLatency.Medium,
     inputSchema: messageSendInputSchema,
     inputIntentSchema: messageSendInputIntentSchema,
