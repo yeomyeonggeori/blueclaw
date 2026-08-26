@@ -210,6 +210,21 @@ type VirtualEventCount struct {
 	Name         string
 	BodyFragment string
 	Count        int
+	MinCount     int
+}
+
+func (expectedEventCount VirtualEventCount) isSatisfiedBy(actualCount int) bool {
+	if expectedEventCount.MinCount > 0 {
+		return actualCount >= expectedEventCount.MinCount
+	}
+	return actualCount == expectedEventCount.Count
+}
+
+func (expectedEventCount VirtualEventCount) describeAgainst(actualCount int) string {
+	if expectedEventCount.MinCount > 0 {
+		return fmt.Sprintf("expected>=%d actual=%d fragment=%q", expectedEventCount.MinCount, actualCount, expectedEventCount.BodyFragment)
+	}
+	return fmt.Sprintf("expected=%d actual=%d fragment=%q", expectedEventCount.Count, actualCount, expectedEventCount.BodyFragment)
 }
 
 type VirtualWorkspaceFileExpectation struct {
@@ -3043,8 +3058,8 @@ func informationalAssertionResults(virtualTurn VirtualTurn, turnResult VirtualTu
 		actualCount := countEventsWithFragment(turnResult.Events, expectedEventCount.Name, expectedEventCount.BodyFragment)
 		results = append(results, VirtualInformationalAssertion{
 			Name:      "expected event count " + expectedEventCount.Name,
-			Satisfied: actualCount == expectedEventCount.Count,
-			Detail:    fmt.Sprintf("expected=%d actual=%d fragment=%q", expectedEventCount.Count, actualCount, expectedEventCount.BodyFragment),
+			Satisfied: expectedEventCount.isSatisfiedBy(actualCount),
+			Detail:    expectedEventCount.describeAgainst(actualCount),
 		})
 	}
 	return results
@@ -3094,8 +3109,8 @@ func assertTurnResult(workspacePath string, virtualTurn VirtualTurn, turnResult 
 	}
 	for _, expectedEventCount := range virtualTurn.ExpectedEventCounts {
 		actualCount := countEventsWithFragment(turnResult.Events, expectedEventCount.Name, expectedEventCount.BodyFragment)
-		if actualCount != expectedEventCount.Count {
-			return fmt.Errorf("expected %d events %s containing %q, got %d; events: %s", expectedEventCount.Count, expectedEventCount.Name, expectedEventCount.BodyFragment, actualCount, summarizeEvents(turnResult.Events))
+		if !expectedEventCount.isSatisfiedBy(actualCount) {
+			return fmt.Errorf("event count %s: %s; events: %s", expectedEventCount.Name, expectedEventCount.describeAgainst(actualCount), summarizeEvents(turnResult.Events))
 		}
 	}
 	for _, suffix := range virtualTurn.ExpectedAttachments {

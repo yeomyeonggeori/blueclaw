@@ -68,7 +68,7 @@ func TestExpectedEventCountRejectsRepeatedReadResults(t *testing.T) {
 		},
 	}
 	errorValue := assertTurnResult(t.TempDir(), virtualTurn, turnResult)
-	if errorValue == nil || !strings.Contains(errorValue.Error(), "expected 1 events") {
+	if errorValue == nil || !strings.Contains(errorValue.Error(), "expected=1 actual=2") {
 		t.Fatalf("expected the exact event count assertion to reject the duplicate read, got %v", errorValue)
 	}
 	assertions := informationalAssertionResults(virtualTurn, turnResult)

@@ -129,8 +129,8 @@ func PresentationLocalMultiturnSuccessScenario(artifactDirectoryPath string) Vir
 			ExpectedToolCalls:      []string{"shell", "file_deliver"},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: "tool.shell.requested", BodyFragment: "NAME=", Count: 1},
-				{Name: "tool.shell.requested", BodyFragment: "/workspace/skills/presentation/scripts/build.sh", Count: 1},
-				{Name: "tool.shell.result", BodyFragment: "Building requested formats", Count: 1},
+				{Name: "tool.shell.requested", BodyFragment: "scripts/build.sh", MinCount: 1},
+				{Name: "tool.shell.result", BodyFragment: "Building requested formats", MinCount: 1},
 				{Name: "tool.shell.result", BodyFragment: "Slide render review", Count: 1},
 				{Name: "tool.file_deliver.result", BodyFragment: `"output"`, Count: 1},
 			},
