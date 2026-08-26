@@ -2740,7 +2740,7 @@
         "mode": "success",
         "targetKind": "message"
       },
-      "description": "Send a Mattermost message to a direct message, channel, or the current conversation after approval.",
+      "description": "Send a Mattermost message to a direct message, channel, or the current conversation after approval. attachments uploads workspace files, such as an inbound image original, with the message.",
       "estimatedLatency": "medium",
       "idempotency": {
         "required": false,
@@ -2751,6 +2751,15 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
+          "attachments": {
+            "description": "Workspace file paths to upload with the message, copied exactly from the attachment catalog or a file tool result. Use this to deliver an original file, such as an inbound image, to the target.",
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 10,
+            "type": "array"
+          },
           "channelID": {
             "description": "Exact channel ID from message_context or a prior result.",
             "minLength": 1,
@@ -2804,6 +2813,15 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
+          "attachments": {
+            "description": "Workspace file paths to upload with the message, copied exactly from the attachment catalog or a file tool result. Use this to deliver an original file, such as an inbound image, to the target.",
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 10,
+            "type": "array"
+          },
           "channelID": {
             "description": "Exact channel ID from message_context or a prior result.",
             "minLength": 1,
@@ -2986,7 +3004,7 @@
       },
       "sideEffect": "external_send",
       "sideEffectClass": "external_send",
-      "version": "2",
+      "version": "3",
       "worksOffline": false
     },
     {
