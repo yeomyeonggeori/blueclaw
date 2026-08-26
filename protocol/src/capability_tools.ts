@@ -389,7 +389,7 @@ export const calendarAddInputSchema = z.strictObject({
   isAllDay: z.boolean().describe('Set true for an all-day event.').optional(),
   color: z.string().describe('Optional provider-supported color label.').optional(),
   people: z.array(z.string()).describe('Attendee hints such as names, @handles, or emails.').optional(),
-  includeRequester: z.boolean().describe('Set false when the requester is not an attendee. Defaults to true.').optional(),
+  includeRequester: z.boolean().describe('Whether the person asking attends. Leave it out: naming nobody makes the event theirs, naming a colleague makes it that colleague\u2019s, and naming everyone leaves it open to all.').optional(),
   reminderLeadHours: calendarReminderLeadHoursSchema.describe('Reminder lead time in hours: 1, 2, 3, 6, 12, 24, or 48.').optional(),
 });
 

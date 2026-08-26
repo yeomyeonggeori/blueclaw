@@ -1414,7 +1414,7 @@
             "type": "string"
           },
           "includeRequester": {
-            "description": "Set false when the requester is not an attendee. Defaults to true.",
+            "description": "Whether the person asking attends. Leave it out: naming nobody makes the event theirs, naming a colleague makes it that colleague’s, and naming everyone leaves it open to all.",
             "type": "boolean"
           },
           "isAllDay": {
@@ -1468,7 +1468,7 @@
             "type": "string"
           },
           "includeRequester": {
-            "description": "Set false when the requester is not an attendee. Defaults to true.",
+            "description": "Whether the person asking attends. Leave it out: naming nobody makes the event theirs, naming a colleague makes it that colleague’s, and naming everyone leaves it open to all.",
             "type": "boolean"
           },
           "isAllDay": {
