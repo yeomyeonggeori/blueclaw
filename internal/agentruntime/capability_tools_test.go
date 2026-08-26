@@ -25,7 +25,7 @@ func TestToolCatalogHidesPolicyDeniedCapabilityTools(t *testing.T) {
 		ProfileName: "default",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff"},
+			Circles:  []string{"member"},
 			ResourceAccessRules: []policy.ResourceAccessPolicy{{
 				Resource: "tool:site_serve",
 				Actions:  []string{"execute"},
@@ -275,22 +275,22 @@ func TestCapabilityToolRequestSeparatesModelInputFromTransport(t *testing.T) {
 
 func TestImageReadUsesExactPathInput(t *testing.T) {
 	workspacePath := t.TempDir()
-	imagePath := filepath.Join(workspacePath, "circles", "staff", "inbox", "mattermost", "thread-1", "post-1", "mascot.png")
+	imagePath := filepath.Join(workspacePath, "circles", "member", "inbox", "mattermost", "thread-1", "post-1", "mascot.png")
 	writeTestFile(t, imagePath, "image")
-	httpClient := &recordingHTTPClient{responseBody: `{"provider":"internkim","selectedBackend":"device","toolName":"image_read","outcome":"succeeded","status":"ok","result":{"status":"ok","path":"/workspace/circles/staff/inbox/mattermost/thread-1/post-1/mascot.png","attachments":[{"devicePath":"/workspace/circles/staff/inbox/mattermost/thread-1/post-1/mascot.png","filename":"mascot.png","contentType":"image/png","sizeBytes":5,"contentBase64":"aW1hZ2U="}]}}`}
+	httpClient := &recordingHTTPClient{responseBody: `{"provider":"internkim","selectedBackend":"device","toolName":"image_read","outcome":"succeeded","status":"ok","result":{"status":"ok","path":"/workspace/circles/member/inbox/mattermost/thread-1/post-1/mascot.png","attachments":[{"devicePath":"/workspace/circles/member/inbox/mattermost/thread-1/post-1/mascot.png","filename":"mascot.png","contentType":"image/png","sizeBytes":5,"contentBase64":"aW1hZ2U="}]}}`}
 	toolCatalogBuilder := newFileToolTestCatalogBuilder(workspacePath)
 	toolCatalogBuilder.UseTestCapabilityToolDescriptors(capability.Client{Endpoint: "http://capability.local", HTTPClient: httpClient}, []CapabilityToolDescriptor{canonicalReadDescriptor("image_read")})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName: "default",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff"},
+			Circles:  []string{"member"},
 		},
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
 		ToolName: "image_read",
-		Input:    toolcontract.MarshalToolInput(map[string]string{"path": "/workspace/circles/staff/inbox/mattermost/thread-1/post-1/mascot.png"}),
+		Input:    toolcontract.MarshalToolInput(map[string]string{"path": "/workspace/circles/member/inbox/mattermost/thread-1/post-1/mascot.png"}),
 	})
 
 	if errorValue != nil {
@@ -299,7 +299,7 @@ func TestImageReadUsesExactPathInput(t *testing.T) {
 	if result.Failed() {
 		t.Fatalf("expected image_read success, got %s", result.ContentText())
 	}
-	if !strings.Contains(httpClient.requestBody, `/workspace/circles/staff/inbox/mattermost/thread-1/post-1/mascot.png`) {
+	if !strings.Contains(httpClient.requestBody, `/workspace/circles/member/inbox/mattermost/thread-1/post-1/mascot.png`) {
 		t.Fatalf("expected capability request to use exact path, got %s", httpClient.requestBody)
 	}
 }
@@ -314,7 +314,7 @@ func TestCanonicalReadRejectsMaterialIDInput(t *testing.T) {
 		ProfileName: "default",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff"},
+			Circles:  []string{"member"},
 		},
 	})
 
@@ -571,7 +571,7 @@ func TestImageGenerateSendsRequesterWorkspacePathToBridge(t *testing.T) {
 				RequesterPersonID: "person-1",
 				PersonAccess: policy.PersonAccess{
 					PersonID: "person-1",
-					Circles:  []string{"staff"},
+					Circles:  []string{"member"},
 				},
 			})
 

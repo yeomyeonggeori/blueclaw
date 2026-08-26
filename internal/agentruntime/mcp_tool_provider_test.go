@@ -107,7 +107,7 @@ func TestMCPToolProviderRejectsPolicyDeniedInvocation(t *testing.T) {
 		request: ToolCatalogRequest{
 			PersonAccess: policy.PersonAccess{
 				PersonID: "person-1",
-				Circles:  []string{"staff"},
+				Circles:  []string{"member"},
 				ResourceAccessRules: []policy.ResourceAccessPolicy{{
 					Resource: "tool:workspace_echo",
 					Actions:  []string{"execute"},

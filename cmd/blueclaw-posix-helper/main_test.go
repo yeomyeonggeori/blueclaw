@@ -48,9 +48,9 @@ func TestLoadPOSIXStatePrefersStateDocument(t *testing.T) {
 	statePath := filepath.Join(rootPath, "state.json")
 	stateDocument, errorValue := json.Marshal(security.POSIXState{
 		Directories: []security.POSIXDirectory{{
-			Path:     "/workspace/circles/staff/sites",
+			Path:     "/workspace/circles/member/sites",
 			Owner:    "blueclaw",
-			Group:    "bc_circle_staff",
+			Group:    "bc_circle_member",
 			ModeText: "2770",
 		}},
 	})
@@ -65,7 +65,7 @@ func TestLoadPOSIXStatePrefersStateDocument(t *testing.T) {
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if len(state.Directories) != 1 || state.Directories[0].Path != "/workspace/circles/staff/sites" {
+	if len(state.Directories) != 1 || state.Directories[0].Path != "/workspace/circles/member/sites" {
 		t.Fatalf("expected state document to be loaded, got %+v", state.Directories)
 	}
 }

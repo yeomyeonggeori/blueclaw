@@ -190,7 +190,7 @@ func POSIXStateForPolicy(policyDocument policy.PolicyDocument, workspaceRootPath
 			Group:    groupName,
 			ModeText: "2770",
 		})
-		if circleID == policy.StaffCircleID {
+		if circleID == policy.MemberCircleID {
 			state.Directories = append(state.Directories, POSIXDirectory{
 				Path:     strings.TrimRight(circleWorkspacePath, "/") + "/sites",
 				Owner:    blueclawServiceUserName,
@@ -319,7 +319,7 @@ func linuxNameValueWithSuffix(normalizedValue string, value string, maximumLengt
 }
 
 func effectivePersonCirclesForPOSIX(personPolicy policy.PersonPolicy) []string {
-	circles := append([]string{policy.StaffCircleID}, personPolicy.Circles...)
+	circles := append([]string{policy.MemberCircleID}, personPolicy.Circles...)
 	if personPolicy.IsAdmin {
 		circles = append(circles, policy.AdminCircleID)
 	}
@@ -330,15 +330,15 @@ func circlePoliciesWithStaffDefault(circlePolicies []policy.CirclePolicy, worksp
 	hasStaffCircle := false
 	result := append([]policy.CirclePolicy{}, circlePolicies...)
 	for _, circlePolicy := range circlePolicies {
-		if strings.ToLower(strings.TrimSpace(circlePolicy.CircleID)) == policy.StaffCircleID {
+		if strings.ToLower(strings.TrimSpace(circlePolicy.CircleID)) == policy.MemberCircleID {
 			hasStaffCircle = true
 			break
 		}
 	}
 	if !hasStaffCircle {
 		result = append(result, policy.CirclePolicy{
-			CircleID:               policy.StaffCircleID,
-			WorkspaceDirectoryPath: workspaceRootPath + "/circles/" + policy.StaffCircleID,
+			CircleID:               policy.MemberCircleID,
+			WorkspaceDirectoryPath: workspaceRootPath + "/circles/" + policy.MemberCircleID,
 		})
 	}
 	return result

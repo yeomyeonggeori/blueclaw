@@ -85,7 +85,7 @@ func TestIdentityServiceSkipsStalePlatformAccountWithoutPolicyEmail(t *testing.T
 	}
 }
 
-func TestIdentityServiceResolvesRequesterAccessWithStaff(t *testing.T) {
+func TestIdentityServiceResolvesRequesterAccessWithMember(t *testing.T) {
 	identityService := NewIdentityService(policy.PolicyProjection{
 		PersonAccessByPersonID: map[string]policy.PersonAccess{
 			"person-1": {PersonID: "person-1", Circles: []string{"finance"}},
@@ -94,8 +94,8 @@ func TestIdentityServiceResolvesRequesterAccessWithStaff(t *testing.T) {
 
 	personAccess := identityService.ResolvePersonAccess("person-1")
 
-	if !hasIdentityTestString(personAccess.Circles, "staff") || !hasIdentityTestString(personAccess.Circles, "finance") {
-		t.Fatalf("expected requester access to include staff and explicit circles, got %+v", personAccess.Circles)
+	if !hasIdentityTestString(personAccess.Circles, "member") || !hasIdentityTestString(personAccess.Circles, "finance") {
+		t.Fatalf("expected requester access to include the member circle and explicit circles, got %+v", personAccess.Circles)
 	}
 }
 

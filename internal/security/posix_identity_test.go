@@ -39,7 +39,7 @@ func TestLinuxIdentityNamesAvoidLossyNormalizationCollisions(t *testing.T) {
 func TestExecutionIdentityOmitsAdminGroupForRawTerminal(t *testing.T) {
 	identity := ExecutionIdentityForPersonAccess(policy.PersonAccess{
 		PersonID: "person-1",
-		Circles:  []string{"staff", "admin"},
+		Circles:  []string{"member", "admin"},
 	}, "/workspace")
 
 	if identity.UserName != "bc_person_person-1" {
@@ -52,13 +52,13 @@ func TestExecutionIdentityOmitsAdminGroupForRawTerminal(t *testing.T) {
 	}
 }
 
-func TestExecutionIdentityAddsStaffGroupForRequester(t *testing.T) {
+func TestExecutionIdentityAddsMemberGroupForRequester(t *testing.T) {
 	identity := ExecutionIdentityForPersonAccess(policy.PersonAccess{
 		PersonID: "person-1",
 	}, "/workspace")
 
-	if !hasTestString(identity.SupplementaryGroupNames, "bc_circle_staff") {
-		t.Fatalf("expected requester identity to include staff group, got %+v", identity.SupplementaryGroupNames)
+	if !hasTestString(identity.SupplementaryGroupNames, "bc_circle_member") {
+		t.Fatalf("expected requester identity to include member group, got %+v", identity.SupplementaryGroupNames)
 	}
 }
 
@@ -92,24 +92,24 @@ func TestPOSIXStateForPolicyProjectsWorkspaceDirectories(t *testing.T) {
 	if !hasPOSIXDirectory(state, "/workspace/circles", "blueclaw", "blueclaw", "0711") {
 		t.Fatalf("expected circles parent traversal directory, got %+v", state.Directories)
 	}
-	if !hasPOSIXDirectory(state, "/workspace/circles/staff", "blueclaw", "bc_circle_staff", "2770") {
-		t.Fatalf("expected default staff circle POSIX directory, got %+v", state.Directories)
+	if !hasPOSIXDirectory(state, "/workspace/circles/member", "blueclaw", "bc_circle_member", "2770") {
+		t.Fatalf("expected default member circle POSIX directory, got %+v", state.Directories)
 	}
-	if !hasPOSIXDirectory(state, "/workspace/circles/staff/sites", "blueclaw", "bc_circle_staff", "2770") {
-		t.Fatalf("expected staff site workspace directory, got %+v", state.Directories)
+	if !hasPOSIXDirectory(state, "/workspace/circles/member/sites", "blueclaw", "bc_circle_member", "2770") {
+		t.Fatalf("expected member site workspace directory, got %+v", state.Directories)
 	}
 	if !hasPOSIXDirectory(state, "/workspace/circles/finance", "blueclaw", "bc_circle_finance", "2770") {
 		t.Fatalf("expected circle POSIX directory, got %+v", state.Directories)
 	}
-	if !hasPOSIXGroup(state, "bc_circle_staff") {
-		t.Fatalf("expected staff circle group, got %+v", state.Groups)
+	if !hasPOSIXGroup(state, "bc_circle_member") {
+		t.Fatalf("expected member circle group, got %+v", state.Groups)
 	}
-	if !hasPOSIXUserGroup(state, "bc_person_person-1", "bc_circle_staff") {
-		t.Fatalf("expected every requester POSIX user to be staff member, got %+v", state.Users)
+	if !hasPOSIXUserGroup(state, "bc_person_person-1", "bc_circle_member") {
+		t.Fatalf("expected every requester POSIX user to be member member, got %+v", state.Users)
 	}
 }
 
-func TestPOSIXStateForPolicyGivesEveryPersonStaffAccess(t *testing.T) {
+func TestPOSIXStateForPolicyGivesEveryPersonMemberAccess(t *testing.T) {
 	state := POSIXStateForPolicy(policy.PolicyDocument{
 		People: []policy.PersonPolicy{
 			{PersonID: "person-1"},
@@ -118,18 +118,18 @@ func TestPOSIXStateForPolicyGivesEveryPersonStaffAccess(t *testing.T) {
 		},
 	}, "/workspace")
 
-	if !hasPOSIXDirectory(state, "/workspace/circles/staff", "blueclaw", "bc_circle_staff", "2770") {
-		t.Fatalf("expected default staff circle directory, got %+v", state.Directories)
+	if !hasPOSIXDirectory(state, "/workspace/circles/member", "blueclaw", "bc_circle_member", "2770") {
+		t.Fatalf("expected default member circle directory, got %+v", state.Directories)
 	}
-	if !hasPOSIXDirectory(state, "/workspace/circles/staff/sites", "blueclaw", "bc_circle_staff", "2770") {
-		t.Fatalf("expected default staff sites directory, got %+v", state.Directories)
+	if !hasPOSIXDirectory(state, "/workspace/circles/member/sites", "blueclaw", "bc_circle_member", "2770") {
+		t.Fatalf("expected default member sites directory, got %+v", state.Directories)
 	}
-	if !hasPOSIXGroup(state, "bc_circle_staff") {
-		t.Fatalf("expected staff circle group, got %+v", state.Groups)
+	if !hasPOSIXGroup(state, "bc_circle_member") {
+		t.Fatalf("expected member circle group, got %+v", state.Groups)
 	}
 	for _, userName := range []string{"bc_person_person-1", "bc_person_person-2", "bc_person_admin-1"} {
-		if !hasPOSIXUserGroup(state, userName, "bc_circle_staff") {
-			t.Fatalf("expected %s to be a staff group member, got %+v", userName, state.Users)
+		if !hasPOSIXUserGroup(state, userName, "bc_circle_member") {
+			t.Fatalf("expected %s to be a member group member, got %+v", userName, state.Users)
 		}
 	}
 }

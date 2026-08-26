@@ -146,9 +146,9 @@ func TestMemoryRememberToolRejectsInaccessibleActiveCircle(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{Circles: []string{"member"}},
 		ActiveCircleID:    "admin",
-		MemoryNamespaces:  []memory.MemoryNamespace{memory.CircleNamespace("default", "staff")},
+		MemoryNamespaces:  []memory.MemoryNamespace{memory.CircleNamespace("default", "member")},
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -175,7 +175,7 @@ func TestMemoryRememberToolEnqueuesCircleMemoryForActiveCircle(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{Circles: []string{"staff", "hr-compensation"}},
+		PersonAccess:      policy.PersonAccess{Circles: []string{"member", "hr-compensation"}},
 		ActiveCircleID:    "hr-compensation",
 		MemoryNamespaces:  []memory.MemoryNamespace{memory.CircleNamespace("default", "hr-compensation")},
 	})
@@ -209,7 +209,7 @@ func TestMemoryRememberToolRejectsMultipleActiveCircleCandidates(t *testing.T) {
 		RequesterPersonID:       "person-1",
 		Prompt:                  "@admin @hr-compensation remember this",
 		ConversationChannelName: "town-square",
-		PersonAccess:            policy.PersonAccess{Circles: []string{"staff", "admin", "hr-compensation"}},
+		PersonAccess:            policy.PersonAccess{Circles: []string{"member", "admin", "hr-compensation"}},
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -256,7 +256,7 @@ func TestMemorySearchUsesPersonAndActiveCircleNamespaces(t *testing.T) {
 		RequesterPersonID: "person-1",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff", "hr-compensation", "admin"},
+			Circles:  []string{"member", "hr-compensation", "admin"},
 		},
 		ActiveCircleID: "hr-compensation",
 		MemoryNamespaces: []memory.MemoryNamespace{
@@ -398,7 +398,7 @@ func TestMemorySearchReturnsRecoverableToolErrorWhenGraphitiFails(t *testing.T) 
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 		MemoryNamespaces:  []memory.MemoryNamespace{memory.UserNamespace("person-1")},
 	})
 
