@@ -16,6 +16,7 @@ func New(dependencies harnessdriver.Dependencies) (agentcontract.Harness, agentc
 	agentKernel := loop.NewAgentKernel(dependencies.TaskRunStore, dependencies.TaskStepStore)
 	agentKernel.UseTaskArtifactService(dependencies.TaskArtifactStore)
 	agentKernel.UseToolResultSpillStore(toolResultSpillStoreAdapter{store: dependencies.ToolResultSpillStore})
+	agentKernel.UseToolResultImageSource(toolResultImageSourceAdapter{source: dependencies.ToolResultImageSource})
 	agentKernel.UseTurnOptions(turnOptionsWithOverrides(deriveTurnOptions(dependencies.RuntimeConfiguration), dependencies.TurnOptionOverrides))
 	agentKernel.UseIntakeOptions(intakeOptionsOrDerived(dependencies))
 	agentKernel.UseInstructionBundleLoader(dependencies.InstructionBundleLoader)
@@ -125,4 +126,15 @@ func (adapter toolResultSpillStoreAdapter) SaveToolResultSpill(ctx context.Conte
 		Bytes:         spillRef.Bytes,
 		RetrievalHint: spillRef.RetrievalHint,
 	}, nil
+}
+
+type toolResultImageSourceAdapter struct {
+	source agentruntime.ToolResultImageSource
+}
+
+func (adapter toolResultImageSourceAdapter) LoadImageContentBase64(ctx context.Context, taskRunID string, devicePath string) (string, error) {
+	if adapter.source == nil {
+		return "", errors.New("no tool result image source is configured")
+	}
+	return adapter.source.LoadImageContentBase64(ctx, taskRunID, devicePath)
 }

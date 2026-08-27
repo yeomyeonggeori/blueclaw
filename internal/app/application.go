@@ -242,11 +242,16 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 		}
 	}
 	harness, skillRetriever := selectedHarnessFactory(harnessdriver.Dependencies{
-		RuntimeConfiguration:    runtimeConfiguration,
-		TaskRunStore:            taskRunService,
-		TaskStepStore:           taskStepService,
-		TaskArtifactStore:       taskArtifactService,
-		ToolResultSpillStore:    agentruntime.NewRequesterToolResultSpillStore(terminalService.WorkspaceActorFactory(), taskRunService),
+		RuntimeConfiguration: runtimeConfiguration,
+		TaskRunStore:         taskRunService,
+		TaskStepStore:        taskStepService,
+		TaskArtifactStore:    taskArtifactService,
+		ToolResultSpillStore: agentruntime.NewRequesterToolResultSpillStore(terminalService.WorkspaceActorFactory(), taskRunService),
+		ToolResultImageSource: agentruntime.NewRequesterToolResultImageSource(
+			terminalService.WorkspaceActorFactory(),
+			taskRunService,
+			runtimeConfiguration.Terminal.WorkspaceRootPath,
+		),
 		InstructionBundleLoader: instructionBundleLoader,
 		CompanyProvider: func() agentcontract.CompanyContext {
 			company := policyWatcher.CurrentPolicyDocument().Company
