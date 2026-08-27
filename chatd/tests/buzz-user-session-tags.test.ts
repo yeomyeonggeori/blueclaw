@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { imetaTag } from "../src/adapters/buzz/blossom.ts";
 import { attachmentsOfTags, channelMessageTags } from "../src/adapters/buzz/user-session.ts";
+import { carriesTag, type BuzzEvent } from "../src/adapters/buzz/types.ts";
 
 describe("channelMessageTags", () => {
 	// resolve_nip10_thread_meta reads the root and reply markers as a pair and
@@ -60,5 +61,21 @@ describe("the name a file was sent under survives the tag", () => {
 	test("a tag that names no hash describes a file no copy can be recognised of", () => {
 		const unhashed = ["imeta", "url http://localhost:3000/a.pdf", "m application/pdf"];
 		expect(attachmentsOfTags([unhashed]).map((file) => file.digest)).toEqual([""]);
+	});
+});
+
+// The relay marks a room's visibility with a bare tag on its kind 39000, so a
+// value lookup finds nothing where the tag is the whole fact.
+describe("a room's visibility is a tag with no value", () => {
+	function metadataTagged(tags: string[][]): BuzzEvent {
+		return { id: "e1", pubkey: "p1", created_at: 0, kind: 39000, tags, content: "", sig: "s" };
+	}
+
+	test("a private room carries the tag", () => {
+		expect(carriesTag(metadataTagged([["d", "c1"], ["name", "HR"], ["private"]]), "private")).toBe(true);
+	});
+
+	test("a public room does not", () => {
+		expect(carriesTag(metadataTagged([["d", "c1"], ["name", "광장"], ["public"]]), "private")).toBe(false);
 	});
 });
