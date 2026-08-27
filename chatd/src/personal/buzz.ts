@@ -54,6 +54,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 	credentialRequirement(): CredentialRequirement {
 		return {
 			kind: "secret",
+			credentialKind: this.credentialKind,
 			fields: [{ name: "secret", label: "Your Buzz secret key", isSecret: true }],
 		};
 	}

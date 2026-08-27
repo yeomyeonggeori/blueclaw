@@ -49,6 +49,7 @@ describe("what a person hands over is the platform's to say", () => {
 
 		expect(await answer.json()).toEqual({
 			kind: "sign-in",
+			credentialKind: "mattermost-token",
 			fields: [
 				{ name: "loginID", label: "Email or username", isSecret: false },
 				{ name: "password", label: "Password", isSecret: true },
@@ -58,9 +59,14 @@ describe("what a person hands over is the platform's to say", () => {
 
 	test("a keyed messenger asks for a secret instead", async () => {
 		const answer = await call("buzz", "person.credential.requirement", {});
-		const requirement = (await answer.json()) as { kind: string; fields: { name: string }[] };
+		const requirement = (await answer.json()) as {
+			kind: string;
+			credentialKind: string;
+			fields: { name: string }[];
+		};
 
 		expect(requirement.kind).toBe("secret");
+		expect(requirement.credentialKind).toBe("buzz-secret");
 		expect(requirement.fields.map((field) => field.name)).toEqual(["secret"]);
 	});
 

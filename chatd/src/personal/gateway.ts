@@ -75,6 +75,7 @@ export type CredentialField = {
 
 export type CredentialRequirement = {
 	kind: "sign-in" | "secret" | "redirect";
+	credentialKind: string;
 	fields: CredentialField[];
 	redirectURL?: string;
 };
