@@ -22,6 +22,7 @@ import {
 	type ManagedChannel,
 	type ManagedChannelSpec,
 } from "../../channels.ts";
+import { isServedByTheRelay } from "./blossom.ts";
 import { createBuzzRelayClient, type BuzzRelayClient } from "./relay-client.ts";
 import {
 	BUZZ_ADAPTER_NAME,
@@ -180,6 +181,18 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 
 	channelIdFromThreadId(threadId: string): string {
 		return this.decodeThreadId(threadId).channelId;
+	}
+
+	async channelIdByName(name: string): Promise<string | undefined> {
+		return this.findChannelIdByName(canonicalChannelName(name));
+	}
+
+	async fetchAttachment(attachment: { url?: string }): Promise<Response> {
+		const address = attachment.url ?? "";
+		if (!isServedByTheRelay(address, this.config.relayURL)) {
+			return new Response("attachment url is not served by this relay", { status: 400 });
+		}
+		return fetch(address);
 	}
 
 	// Somebody who writes under a root is answering that root, so what they wrote

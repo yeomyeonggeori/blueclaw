@@ -10,6 +10,7 @@ import type {
 	InputAttachmentDocument,
 	MessageDeleteRequest,
 	MessageEditRequest,
+	MessagePostRequest,
 	ProgressRequest,
 	ReactionRequest,
 	ReplyAttachmentDocument,
@@ -193,11 +194,27 @@ function parseInputAttachment(value: unknown): InputAttachmentDocument {
 	return {
 		platform: optionalString(record, "platform"),
 		fileID: optionalString(record, "fileID"),
+		url: optionalString(record, "url"),
 		messageID: optionalString(record, "messageID"),
 		filename: optionalString(record, "filename"),
 		contentType: optionalString(record, "contentType"),
 		sizeBytes: optionalNumber(record, "sizeBytes"),
 	};
+}
+
+export function parseMessagePostRequest(value: unknown): MessagePostRequest {
+	const record = requireRecord(value, "message.post request");
+	const request: MessagePostRequest = {
+		threadID: optionalString(record, "threadID"),
+		channelID: optionalString(record, "channelID"),
+		channelName: optionalString(record, "channelName"),
+		message: requireString(record, "message"),
+		attachments: optionalArray(record, "attachments").map(parseReplyAttachment),
+	};
+	if (!request.threadID && !request.channelID && !request.channelName) {
+		throw new Error("message.post requires threadID, channelID, or channelName");
+	}
+	return request;
 }
 
 export function parseAttachmentImportRequest(value: unknown): AttachmentImportRequest {

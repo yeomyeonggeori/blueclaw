@@ -425,6 +425,15 @@ export class MattermostAdapter implements Adapter<MattermostThreadId, Mattermost
 		};
 	}
 
+	async fetchAttachment(attachment: { fileID?: string }): Promise<Response> {
+		if (!attachment.fileID) {
+			return new Response("attachment has no fileID", { status: 400 });
+		}
+		return fetch(this.apiUrl(`/files/${attachment.fileID}`), {
+			headers: { Authorization: `Bearer ${this.config.botToken}` },
+		});
+	}
+
 	async fetchChannelInfo(channelId: string): Promise<ChannelInfo> {
 		const channel = await this.getChannel(channelId);
 
