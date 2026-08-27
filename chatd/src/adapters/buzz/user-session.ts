@@ -93,10 +93,11 @@ export async function listUserConversations(
 				if (isDM) {
 					const participants = participantsOf(metadata, membershipsByChannel.get(channelID));
 					const counterpart = participants.find((pubkey) => pubkey !== userPubkeyHex);
-					const profile = counterpart ? await fetchProfileAsUser(relay, counterpart) : {};
+					if (!counterpart) continue;
+					const profile = await fetchProfileAsUser(relay, counterpart);
 					conversations.push({
 						channelID,
-						name: profile.name ?? counterpart?.slice(0, 8) ?? "",
+						name: profile.name ?? counterpart.slice(0, 8),
 						isDM: true,
 						isPrivate: true,
 						participantPubkeyHexes: participants,
