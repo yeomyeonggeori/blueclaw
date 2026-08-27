@@ -14,6 +14,7 @@ type Dependencies struct {
 	TaskStepStore               taskstate.TaskStepStore
 	TaskArtifactStore           taskstate.TaskArtifactStore
 	ToolResultSpillStore        agentruntime.ToolResultSpillStore
+	ToolResultImageSource       agentruntime.ToolResultImageSource
 	InstructionBundleLoader     func() agentcontract.InstructionBundle
 	CompanyProvider             func() agentcontract.CompanyContext
 	EmbeddingProvider           model.EmbeddingProvider
