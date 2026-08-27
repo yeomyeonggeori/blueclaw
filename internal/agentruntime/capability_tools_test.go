@@ -3,14 +3,17 @@ package agentruntime
 import (
 	"context"
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
+	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
+	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/bluecollar/loop"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 func TestToolCatalogHidesPolicyDeniedCapabilityTools(t *testing.T) {
@@ -419,10 +422,14 @@ func TestCanonicalReadRejectsIdentityAndResultSchemaDrift(t *testing.T) {
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
 			httpClient := &recordingHTTPClient{responseBody: testCase.responseBody}
-			toolCatalogBuilder := NewToolCatalogBuilder()
+			toolCatalogBuilder := capabilityReadTestCatalogBuilder(t)
 			toolCatalogBuilder.UseTestCapabilityToolDescriptors(capability.Client{Endpoint: "http://capability.local", HTTPClient: httpClient}, []CapabilityToolDescriptor{canonicalReadDescriptor("document_read")})
 			toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"document_read"})
-			toolSet := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{ProfileName: "default"})
+			toolSet := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
+				ProfileName:       "default",
+				RequesterPersonID: "person-1",
+				PersonAccess:      policy.PersonAccess{PersonID: "person-1"},
+			})
 
 			result, errorValue := toolSet.Invoke(context.Background(), toolcontract.ToolInvocation{ToolName: "document_read", Input: json.RawMessage(`{"path":"/workspace/report.md"}`)})
 
@@ -438,10 +445,14 @@ func TestCanonicalReadRejectsIdentityAndResultSchemaDrift(t *testing.T) {
 
 func TestCanonicalReadRejectsEffects(t *testing.T) {
 	httpClient := &recordingHTTPClient{responseBody: `{"provider":"internkim","selectedBackend":"device","toolName":"document_read","outcome":"succeeded","status":"ok","result":{"status":"ok","path":"/workspace/report.md","format":"markdown","content":"report","warnings":[],"truncated":false},"effects":[{"objectType":"file","effect":"read","path":"/workspace/report.md"}]}`}
-	toolCatalogBuilder := NewToolCatalogBuilder()
+	toolCatalogBuilder := capabilityReadTestCatalogBuilder(t)
 	toolCatalogBuilder.UseTestCapabilityToolDescriptors(capability.Client{Endpoint: "http://capability.local", HTTPClient: httpClient}, []CapabilityToolDescriptor{canonicalReadDescriptor("document_read")})
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"document_read"})
-	toolSet := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{ProfileName: "default"})
+	toolSet := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
+		ProfileName:       "default",
+		RequesterPersonID: "person-1",
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1"},
+	})
 
 	result, errorValue := toolSet.Invoke(context.Background(), toolcontract.ToolInvocation{ToolName: "document_read", Input: json.RawMessage(`{"path":"/workspace/report.md"}`)})
 
@@ -680,4 +691,24 @@ func TestCapabilityRecoveryHintsIgnoreAnEmptyHint(t *testing.T) {
 	if hints := capabilityRecoveryHints(json.RawMessage(`{"recoveryHints":[{"reason":"no action, no tools"}]}`)); len(hints) != 0 {
 		t.Fatalf("hints = %+v", hints)
 	}
+}
+
+// A capability that reads a file is handed its content, read here as the person
+// who asked, so a test about what the capability answers still needs a file and
+// somebody to read it as.
+func capabilityReadTestCatalogBuilder(t *testing.T) *ToolCatalogBuilder {
+	t.Helper()
+	workspacePath := t.TempDir()
+	if errorValue := os.WriteFile(filepath.Join(workspacePath, "report.md"), []byte("report"), 0o600); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	terminalService := security.NewShellService(config.TerminalConfiguration{
+		WorkspaceRootPath: workspacePath,
+		Mode:              "firecrackerGuest",
+		TimeoutSecond:     30,
+	})
+	toolCatalogBuilder := NewToolCatalogBuilder()
+	toolCatalogBuilder.UseWorkspaceRootPath(workspacePath)
+	toolCatalogBuilder.UseWorkspaceActorFactory(security.NewDirectWorkspaceActorFactory(terminalService))
+	return toolCatalogBuilder
 }

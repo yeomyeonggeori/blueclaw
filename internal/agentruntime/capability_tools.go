@@ -3,14 +3,16 @@ package agentruntime
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"net/url"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/access"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
@@ -589,11 +591,107 @@ func (toolCatalogBuilder *ToolCatalogBuilder) prepareCapabilityToolInput(toolCon
 		transport, toolFailure, errorValue := toolCatalogBuilder.prepareSiteSourceBundle(toolContext, request, toolInput)
 		return preparedCapabilityToolPayload{Input: toolInput, Transport: transport}, toolFailure, errorValue
 	}
+	if capabilityToolReadsAWorkspaceFile(toolName) {
+		return toolCatalogBuilder.prepareWorkspaceFileRead(toolContext, toolName, request, toolInput)
+	}
+	if capabilityToolCarriesWorkspaceAttachments(toolName) {
+		return toolCatalogBuilder.prepareWorkspaceAttachments(toolContext, toolName, request, toolInput)
+	}
 	if capabilityToolNeedsWorkspacePath(toolName) {
 		input, errorValue := toolCatalogBuilder.resolveCapabilityWorkspacePathInput(toolContext, toolName, request, toolInput)
 		return preparedCapabilityToolPayload{Input: input}, nil, errorValue
 	}
 	return preparedCapabilityToolPayload{Input: toolInput}, nil, nil
+}
+
+// A capability reads a person's file by being handed its content, never by
+// being told where to find it: capabilityd runs as root beside the workspace and
+// has no identity to become, while the requester's own does — so the read
+// happens here, as them, and POSIX answers whether they may have it.
+func capabilityToolReadsAWorkspaceFile(toolName string) bool {
+	switch strings.TrimSpace(toolName) {
+	case "document_read", "image_read":
+		return true
+	default:
+		return false
+	}
+}
+
+const mostWorkspaceFileBytesCarried = 16 << 20
+
+// A file posted to a channel leaves the company, so who may send it is the
+// sharpest version of the same question, answered the same way: the requester
+// reads it or nobody does.
+func capabilityToolCarriesWorkspaceAttachments(toolName string) bool {
+	return strings.TrimSpace(toolName) == "message_send"
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) prepareWorkspaceAttachments(toolContext context.Context, toolName string, request ToolCatalogRequest, toolInput json.RawMessage) (preparedCapabilityToolPayload, *toolcontract.ToolResult, error) {
+	inputDocument := map[string]any{}
+	if len(toolInput) > 0 {
+		if errorValue := json.Unmarshal(toolInput, &inputDocument); errorValue != nil {
+			return preparedCapabilityToolPayload{}, nil, errorValue
+		}
+	}
+	namedPaths, _ := inputDocument["attachments"].([]any)
+	if len(namedPaths) == 0 {
+		return preparedCapabilityToolPayload{Input: toolInput}, nil, nil
+	}
+	workspaceActor, toolFailure := toolCatalogBuilder.workspaceActorForRequest(toolContext, request)
+	if toolFailure != nil {
+		return preparedCapabilityToolPayload{}, toolFailure, nil
+	}
+	carriedFiles := []map[string]any{}
+	for _, namedPath := range namedPaths {
+		path, _ := namedPath.(string)
+		if strings.TrimSpace(path) == "" {
+			continue
+		}
+		content, errorValue := workspaceActor.ReadFile(toolContext, toolCatalogBuilder.nativeRequesterPath(request, path), mostWorkspaceFileBytesCarried)
+		if errorValue != nil {
+			failure := actorToolFailure("read_file", toolName, path, errorValue)
+			return preparedCapabilityToolPayload{}, &failure, nil
+		}
+		digest := sha256.Sum256(content)
+		carriedFiles = append(carriedFiles, map[string]any{
+			"workspacePath": path,
+			"filename":      filepath.Base(path),
+			"contentBase64": base64.StdEncoding.EncodeToString(content),
+			"sha256":        hex.EncodeToString(digest[:]),
+		})
+	}
+	return preparedCapabilityToolPayload{
+		Input:     toolInput,
+		Transport: map[string]any{"workspaceFiles": carriedFiles},
+	}, nil, nil
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) prepareWorkspaceFileRead(toolContext context.Context, toolName string, request ToolCatalogRequest, toolInput json.RawMessage) (preparedCapabilityToolPayload, *toolcontract.ToolResult, error) {
+	input, agentPath, errorValue := toolCatalogBuilder.resolveCapabilityWorkspaceFilePath(toolContext, toolName, request, toolInput)
+	if errorValue != nil {
+		return preparedCapabilityToolPayload{}, nil, errorValue
+	}
+	workspaceActor, toolFailure := toolCatalogBuilder.workspaceActorForRequest(toolContext, request)
+	if toolFailure != nil {
+		return preparedCapabilityToolPayload{}, toolFailure, nil
+	}
+	content, errorValue := workspaceActor.ReadFile(toolContext, toolCatalogBuilder.nativeRequesterPath(request, agentPath), mostWorkspaceFileBytesCarried)
+	if errorValue != nil {
+		failure := actorToolFailure("read_file", toolName, agentPath, errorValue)
+		return preparedCapabilityToolPayload{}, &failure, nil
+	}
+	digest := sha256.Sum256(content)
+	return preparedCapabilityToolPayload{
+		Input: input,
+		Transport: map[string]any{
+			"workspaceFile": map[string]any{
+				"workspacePath": toolCatalogBuilder.capabilityBridgePath(request, agentPath),
+				"filename":      filepath.Base(agentPath),
+				"contentBase64": base64.StdEncoding.EncodeToString(content),
+				"sha256":        hex.EncodeToString(digest[:]),
+			},
+		},
+	}, nil, nil
 }
 
 func capabilityToolNeedsWorkspacePath(toolName string) bool {
@@ -606,29 +704,35 @@ func capabilityToolNeedsWorkspacePath(toolName string) bool {
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) resolveCapabilityWorkspacePathInput(toolContext context.Context, toolName string, request ToolCatalogRequest, toolInput json.RawMessage) (json.RawMessage, error) {
+	input, _, errorValue := toolCatalogBuilder.resolveCapabilityWorkspaceFilePath(toolContext, toolName, request, toolInput)
+	return input, errorValue
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) resolveCapabilityWorkspaceFilePath(toolContext context.Context, toolName string, request ToolCatalogRequest, toolInput json.RawMessage) (json.RawMessage, string, error) {
 	inputDocument := map[string]any{}
 	if len(toolInput) > 0 {
 		if errorValue := json.Unmarshal(toolInput, &inputDocument); errorValue != nil {
-			return nil, errorValue
+			return nil, "", errorValue
 		}
 	}
 	path, _ := inputDocument["path"].(string)
 	if materialID, _ := inputDocument["materialID"].(string); strings.TrimSpace(materialID) != "" {
 		material, errorValue := resolveReadableAttachmentMaterial(toolContext, request, materialID)
 		if errorValue != nil {
-			return nil, errorValue
+			return nil, "", errorValue
 		}
 		if errorValue := validateAttachmentMaterialTool(toolName, material); errorValue != nil {
-			return nil, errorValue
+			return nil, "", errorValue
 		}
 		path = material.Path
 		delete(inputDocument, "materialID")
 	}
 	if strings.TrimSpace(path) == "" {
-		return nil, errors.New("path is required")
+		return nil, "", errors.New("path is required")
 	}
 	inputDocument["path"] = toolCatalogBuilder.capabilityBridgePath(request, path)
-	return json.Marshal(inputDocument)
+	document, errorValue := json.Marshal(inputDocument)
+	return document, path, errorValue
 }
 
 func nativeBridgePath(path string, identity security.ExecutionIdentity) string {
