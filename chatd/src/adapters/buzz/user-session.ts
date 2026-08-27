@@ -409,12 +409,18 @@ export async function listChannelMessagesAsUser(request: {
 					};
 				});
 			const messageIDs = read.map((message) => message.id);
-			const [reacted, edited] = await Promise.all([reactionsTo(relay, messageIDs), editsTo(relay, messageIDs)]);
-			return read.map((message) => ({
-				...message,
-				body: edited.get(message.id) ?? message.body,
-				reactions: reacted.get(message.id) ?? [],
-			}));
+			const [reacted, edited, deleted] = await Promise.all([
+				reactionsTo(relay, messageIDs),
+				editsTo(relay, messageIDs),
+				deletionsTo(relay, messageIDs),
+			]);
+			return read
+				.filter((message) => !deleted.has(message.id))
+				.map((message) => ({
+					...message,
+					body: edited.get(message.id) ?? message.body,
+					reactions: reacted.get(message.id) ?? [],
+				}));
 	});
 }
 
@@ -528,3 +534,27 @@ async function editsTo(
 }
 
 const mostEditsReadPerMessage = 32;
+
+// A deleted message is still the event that created it, and the deletion is an
+// event of its own tagging what it took back. The agent's reader has always
+// listened for those; the reader a person's messenger screen uses had not, so a
+// message somebody deleted went on being shown to everybody.
+export async function deletionsTo(
+	relay: { query: (filter: object) => Promise<BuzzEvent[]> },
+	messageIDs: string[],
+): Promise<Set<string>> {
+	if (messageIDs.length === 0) return new Set();
+	const events = await relay.query({
+		kinds: [DELETE_MESSAGE_KIND],
+		"#e": messageIDs,
+		limit: messageIDs.length * mostDeletionsReadPerMessage,
+	});
+	const taken = new Set<string>();
+	for (const event of events) {
+		const messageID = firstTagValue(event, "e");
+		if (messageID) taken.add(messageID);
+	}
+	return taken;
+}
+
+const mostDeletionsReadPerMessage = 4;
