@@ -143,13 +143,28 @@ export async function sendChannelMessageAsUser(request: {
 }): Promise<{ id: string; body: string; attachments: UserMessageAttachment[] }> {
 	const { body, mediaTags } = await buildMessageBody(request);
 	return withRelayAs(request.relayURL, request.userSecretHex, request.authTagJSON, async (relay) => {
+			const replyToRootId = await threadRootOf(relay, request.replyToRootId);
 			const event = await relay.publish(
 				STREAM_MESSAGE_KIND,
 				body,
-				channelMessageTags(request.channelID, mediaTags, request.extraTags, request.replyToRootId),
+				channelMessageTags(request.channelID, mediaTags, request.extraTags, replyToRootId),
 			);
 			return { id: event.id, body, attachments: attachmentsOfTags(mediaTags) };
 	});
+}
+
+// A conversation is a message and the replies to it, and nothing deeper. Tags
+// name whatever they are given as the root, so answering a reply would open a
+// second conversation rooted inside the first one, and the screen would show a
+// thread hanging off a thread. Answering a reply answers what it replied to.
+export async function threadRootOf(
+	relay: { query: (filter: object) => Promise<BuzzEvent[]> },
+	replyToId: string | undefined,
+): Promise<string | undefined> {
+	if (!replyToId) return undefined;
+	const [target] = await relay.query({ ids: [replyToId], limit: 1 });
+	if (!target) return replyToId;
+	return threadTagsOf(target).rootEventId ?? replyToId;
 }
 
 // Separating an edit that can never succeed from one worth retrying would
