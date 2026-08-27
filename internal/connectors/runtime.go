@@ -236,6 +236,7 @@ type VisibleContext struct {
 type InputAttachment struct {
 	Platform    string `json:"platform,omitempty"`
 	FileID      string `json:"fileID,omitempty"`
+	URL         string `json:"url,omitempty"`
 	MessageID   string `json:"messageID,omitempty"`
 	Filename    string `json:"filename,omitempty"`
 	ContentType string `json:"contentType,omitempty"`
@@ -2874,6 +2875,9 @@ func connectorUniqueInputAttachments(attachments []InputAttachment) []InputAttac
 func connectorInputAttachmentKey(attachment InputAttachment) string {
 	if strings.TrimSpace(attachment.FileID) != "" {
 		return strings.TrimSpace(attachment.Platform) + ":" + strings.TrimSpace(attachment.FileID)
+	}
+	if strings.TrimSpace(attachment.URL) != "" {
+		return strings.TrimSpace(attachment.Platform) + ":" + strings.TrimSpace(attachment.URL)
 	}
 	if strings.TrimSpace(attachment.Path) != "" {
 		return strings.TrimSpace(attachment.Platform) + ":" + strings.TrimSpace(attachment.Path)

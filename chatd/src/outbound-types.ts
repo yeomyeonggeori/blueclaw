@@ -155,6 +155,7 @@ export interface MessageDeleteRequest {
 export interface InputAttachmentDocument {
 	platform?: string;
 	fileID?: string;
+	url?: string;
 	messageID?: string;
 	filename?: string;
 	contentType?: string;
@@ -200,6 +201,19 @@ export interface AgentPartDocument {
 export interface AttachmentImportResponse {
 	inputParts: AgentPartDocument[];
 	inputAttachments: InputAttachmentDocument[];
+}
+
+export interface MessagePostRequest {
+	threadID?: string;
+	channelID?: string;
+	channelName?: string;
+	message: string;
+	attachments?: ReplyAttachmentDocument[];
+}
+
+export interface MessagePostResponse {
+	messageID: string;
+	channelID?: string;
 }
 
 export interface IdentityResolveRequest {

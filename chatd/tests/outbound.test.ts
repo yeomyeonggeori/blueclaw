@@ -345,7 +345,7 @@ describe("attachments.import", () => {
 		}
 	});
 
-	it("reports unavailable attachments without a file id instead of failing the whole import", async () => {
+	it("reports unavailable attachments without a file reference instead of failing the whole import", async () => {
 		const adapter = createAdapter();
 		globalThis.fetch = mock(async () => new Response("unused", { status: 200 })) as never;
 		const targetDirectoryPath = await mkdtemp(path.join(tmpdir(), "chatd-outbound-"));
@@ -364,7 +364,7 @@ describe("attachments.import", () => {
 				inputAttachments: Array<{ isAvailable: boolean; errorCode: string }>;
 			};
 			expect(body.inputAttachments[0]?.isAvailable).toBe(false);
-			expect(body.inputAttachments[0]?.errorCode).toBe("missing_file_id");
+			expect(body.inputAttachments[0]?.errorCode).toBe("missing_file_reference");
 		} finally {
 			await rm(targetDirectoryPath, { recursive: true, force: true });
 		}

@@ -2,7 +2,7 @@ import type { AdapterPostableMessage, FileUpload } from "chat";
 import { BuzzAdapter } from "./adapters/buzz/adapter.ts";
 import type { MattermostAdapter } from "./adapters/mattermost/adapter.ts";
 import type { ChatdConfiguration } from "./configuration.ts";
-import { importAttachmentToDirectory } from "./outbound-attachments.ts";
+import { importAttachmentToDirectory, supportsAttachmentFetching } from "./outbound-attachments.ts";
 import { supportsChannelProvisioning } from "./channels.ts";
 import {
 	ensureUserDirectMessageChannel,
@@ -24,6 +24,7 @@ import {
 	parseIdentityResolveRequest,
 	parseMessageDeleteRequest,
 	parseMessageEditRequest,
+	parseMessagePostRequest,
 	parseProgressRequest,
 	parseReactionRequest,
 	parseReplySendRequest,
@@ -43,6 +44,8 @@ import type {
 	HistoryFetchResponse,
 	IdentityResolveResponse,
 	InputAttachmentDocument,
+	MessagePostRequest,
+	MessagePostResponse,
 	ReplyAttachmentDocument,
 	ReplySendRequest,
 	ReplySendResponse,
@@ -73,6 +76,7 @@ const capabilityHandlers: Record<string, CapabilityHandler> = {
 	"conversations.list": handleConversationsList,
 	"people.list": handlePeopleList,
 	"message.edit": handleMessageEdit,
+	"message.post": handleMessagePost,
 	"message_delete": handleMessageDelete,
 };
 
@@ -121,6 +125,9 @@ export function createOutboundHandler(
 			const responseDocument = await handler?.(adapter, configuration, requestDocument);
 			return jsonResponse(200, responseDocument ?? {});
 		} catch (error) {
+			if (error instanceof MalformedRequest) {
+				return jsonResponse(400, { error: error.message });
+			}
 			return jsonResponse(502, { error: error instanceof Error ? error.message : String(error) });
 		}
 	};
@@ -462,12 +469,21 @@ async function handleAttachmentsImport(
 	requestBody: unknown,
 ): Promise<AttachmentImportResponse> {
 	const requestDocument = parseAttachmentImportRequest(requestBody);
-	if (adapter instanceof BuzzAdapter) {
-		return { inputParts: [], inputAttachments: [] };
+	const platformName = adapter.name;
+	if (!supportsAttachmentFetching(adapter)) {
+		return {
+			inputParts: [],
+			inputAttachments: requestDocument.inputAttachments.map((attachment) => ({
+				...attachment,
+				isAvailable: false,
+				errorCode: "unsupported_platform",
+				message: `platform ${platformName} cannot fetch attachments`,
+			})),
+		};
 	}
 	const importedAttachments = await Promise.all(
 		requestDocument.inputAttachments.map((attachment) =>
-			importAttachmentToDirectory(configuration, requestDocument.targetDirectoryPath, attachment),
+			importAttachmentToDirectory(adapter, configuration, requestDocument.targetDirectoryPath, attachment),
 		),
 	);
 
@@ -475,13 +491,17 @@ async function handleAttachmentsImport(
 		inputAttachments: importedAttachments,
 		inputParts: importedAttachments
 			.filter((attachment) => attachment.isAvailable && attachment.path)
-			.map((attachment) => agentPartForAttachment(attachment, requestDocument.messageID)),
+			.map((attachment) => agentPartForAttachment(adapter.name, attachment, requestDocument.messageID)),
 	};
 }
 
-function agentPartForAttachment(attachment: InputAttachmentDocument, messageID: string): AgentPartDocument {
+function agentPartForAttachment(
+	platform: string,
+	attachment: InputAttachmentDocument,
+	messageID: string,
+): AgentPartDocument {
 	const isImage = (attachment.contentType ?? "").startsWith("image/");
-	const source = { platform: "mattermost", messageID, fileID: attachment.fileID };
+	const source = { platform: attachment.platform || platform, messageID, fileID: attachment.fileID };
 	if (isImage) {
 		return {
 			type: "image",
@@ -499,6 +519,50 @@ function agentPartForAttachment(attachment: InputAttachmentDocument, messageID: 
 		},
 		source,
 	};
+}
+
+type ChannelLookupAdapter = {
+	channelIdByName(name: string): Promise<string | undefined>;
+};
+
+function supportsChannelLookup(adapter: object): adapter is ChannelLookupAdapter {
+	return typeof (adapter as ChannelLookupAdapter).channelIdByName === "function";
+}
+
+async function handleMessagePost(
+	adapter: PlatformChatAdapter,
+	_configuration: ChatdConfiguration,
+	requestBody: unknown,
+): Promise<MessagePostResponse> {
+	const requestDocument = parseMessagePostRequest(requestBody);
+	const fileUploads = await buildFileUploads(requestDocument.attachments ?? []);
+	const message: AdapterPostableMessage =
+		fileUploads.length > 0 ? { markdown: requestDocument.message, files: fileUploads } : requestDocument.message;
+	if (requestDocument.threadID) {
+		const posted = await adapter.postMessage(requestDocument.threadID, message);
+		return { messageID: posted.id };
+	}
+	const channelID = await resolveMessagePostChannelID(adapter, requestDocument);
+	const posted = await adapter.postChannelMessage(channelID, message);
+	return { messageID: posted.id, channelID };
+}
+
+async function resolveMessagePostChannelID(
+	adapter: PlatformChatAdapter,
+	requestDocument: MessagePostRequest,
+): Promise<string> {
+	if (requestDocument.channelID) {
+		return requestDocument.channelID;
+	}
+	const channelName = requestDocument.channelName ?? "";
+	if (!supportsChannelLookup(adapter)) {
+		throw new MalformedRequest(`platform ${adapter.name} cannot resolve a channel by name; pass channelID`);
+	}
+	const channelID = await adapter.channelIdByName(channelName);
+	if (!channelID) {
+		throw new MalformedRequest(`no channel named ${JSON.stringify(channelName)} exists on ${adapter.name}`);
+	}
+	return channelID;
 }
 
 async function handleIdentityResolve(

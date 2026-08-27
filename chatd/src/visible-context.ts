@@ -12,11 +12,12 @@ export type ReactionSummary = {
 	imageURL?: string;
 };
 
-export type MessageAttachmentDocument = {
-	kind: "image" | "file";
+export type MessageInputAttachmentDocument = {
+	platform: string;
 	url: string;
+	messageID: string;
 	filename?: string;
-	mimeType?: string;
+	contentType?: string;
 	sizeBytes?: number;
 };
 
@@ -37,7 +38,7 @@ export type VisibleContextMessageDocument = {
 	isBot?: boolean;
 	isError?: boolean;
 	reactions?: ReactionSummary[];
-	attachments?: MessageAttachmentDocument[];
+	inputAttachments?: MessageInputAttachmentDocument[];
 	customEmoji?: CustomEmojiDocument[];
 };
 
@@ -155,6 +156,7 @@ export async function buildVisibleContext(
 		messagesOpenOtherExchanges: options.onlyExchangeOpenings === true,
 		messages: previousMessages.map((message) =>
 			toVisibleContextMessage(
+				adapter.name,
 				message,
 				reactionsById?.get(message.id),
 				adapter.threadRootIdOf?.(message.raw),
@@ -187,6 +189,7 @@ function messagesBefore(messages: ContextMessage[], beforeMessageId?: string): C
 }
 
 function toVisibleContextMessage(
+	platform: string,
 	message: ContextMessage,
 	reactions?: ReactionSummary[],
 	threadRootId?: string,
@@ -207,7 +210,7 @@ function toVisibleContextMessage(
 		isBot: message.author.isBot === true,
 		isError: isErrorMessage(message.raw),
 		reactions: reactions && reactions.length > 0 ? reactions : undefined,
-		attachments: attachmentsOf(message),
+		inputAttachments: inputAttachmentsOfMessage(platform, message),
 		customEmoji: customEmojiOf(message.raw),
 	};
 }
@@ -235,15 +238,19 @@ function isErrorMessage(raw: unknown): boolean {
 	return tags.some((tag) => Array.isArray(tag) && tag[0] === "reply-kind" && tag[1] === "error");
 }
 
-function attachmentsOf(message: ContextMessage): MessageAttachmentDocument[] | undefined {
-	const documents: MessageAttachmentDocument[] = [];
+export function inputAttachmentsOfMessage(
+	platform: string,
+	message: ContextMessage,
+): MessageInputAttachmentDocument[] | undefined {
+	const documents: MessageInputAttachmentDocument[] = [];
 	for (const attachment of message.attachments ?? []) {
 		if (!attachment.url) continue;
 		documents.push({
-			kind: attachment.type === "image" ? "image" : "file",
+			platform,
 			url: attachment.url,
+			messageID: message.id,
 			filename: attachment.name,
-			mimeType: attachment.mimeType,
+			contentType: attachment.mimeType,
 			sizeBytes: attachment.size,
 		});
 	}

@@ -3,6 +3,7 @@ import type { ChatdConfiguration } from './configuration.ts';
 import {
   buildVisibleContext,
   emptyVisibleContext,
+  inputAttachmentsOfMessage,
   type NormalizedPlatformAdapter,
 } from './visible-context.ts';
 
@@ -112,6 +113,7 @@ async function forwardNormalizedEvent(
       prompt: message.text,
       context: {
         ...context,
+        inputAttachments: inputAttachmentsOfMessage(platform, message) ?? [],
         addressing: {
           botMentioned: addressing.botMentioned || message.isMention === true,
           otherPersonMentioned: addressing.otherPersonMentioned,
