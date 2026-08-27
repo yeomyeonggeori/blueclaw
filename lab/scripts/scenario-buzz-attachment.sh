@@ -17,10 +17,7 @@ test -n "$sudo_password"
 
 blueclaw_url=http://127.0.0.1:8080
 chatd_url=http://172.31.0.1:18090
-timestamp="$(date +%s)"
-test_email="buzz-attachment-$timestamp@internkim.test"
-test_person_identifier="buzz-attachment-$timestamp"
-test_display_name="Buzz Attachment $timestamp"
+policy_path=/var/lib/blueclaw/delivery/config/policy.json
 prompt="이 그림에 적힌 글자를 그대로 알려줘."
 evidence_directory_path="$mount_directory_path/.artifacts/buzz-attachment"
 mkdir -p "$evidence_directory_path"
@@ -43,11 +40,6 @@ post_json() {
   curl --silent --show-error --fail-with-body -H 'Content-Type: application/json' -d "$body" "$url"
 }
 
-cleanup() {
-  curl --silent --show-error -X DELETE "$blueclaw_url/admin/api/people?email=$test_email" >/dev/null 2>&1 || true
-}
-trap cleanup EXIT
-
 phase "wait for blueclaw and chatd"
 for _ in $(seq 1 300); do
   if curl -fsS --max-time 3 "$blueclaw_url/admin/api/health" >/dev/null 2>&1; then break; fi
@@ -59,12 +51,16 @@ for _ in $(seq 1 120); do
   sleep 1
 done
 
-phase "invite the person who will send the picture"
-post_json "$blueclaw_url/admin/api/people/invite" "$(jq -cn \
-  --arg personID "$test_person_identifier" \
-  --arg email "$test_email" \
-  --arg displayName "$test_display_name" \
-  '{personID:$personID,email:$email,displayName:$displayName}')" >/dev/null
+# The guest reads its policy from a share the host holds read-only, so the agent
+# cannot invite anybody into it. The scenario is one of the people the device was
+# provisioned with instead of one it makes up.
+phase "take a person the device already has"
+person_document="$(run_as_root cat "$policy_path" | jq -c '[.people[] | select((.emails // []) | length > 0)] | .[0]')"
+test_person_identifier="$(printf '%s' "$person_document" | jq -r '.personID')"
+test_email="$(printf '%s' "$person_document" | jq -r '.emails[0]')"
+test -n "$test_person_identifier"
+test -n "$test_email"
+echo "sending as $test_email ($test_person_identifier)"
 
 # The same formula buzzidentity.Secret uses: a person's key is their email under
 # the device seed, so a scenario can be them without being handed a credential.
