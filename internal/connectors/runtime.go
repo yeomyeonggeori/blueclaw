@@ -242,9 +242,13 @@ type InputAttachment struct {
 	ContentType string `json:"contentType,omitempty"`
 	SizeBytes   int64  `json:"sizeBytes,omitempty"`
 	Path        string `json:"path,omitempty"`
-	IsAvailable bool   `json:"isAvailable,omitempty"`
-	ErrorCode   string `json:"errorCode,omitempty"`
-	Message     string `json:"message,omitempty"`
+	// ContentBase64 carries the fetched file from the bridge that could reach the
+	// platform to the workspace it belongs in. It lives only for that hop: the
+	// file is written here and the field is cleared before anything records it.
+	ContentBase64 string `json:"contentBase64,omitempty"`
+	IsAvailable   bool   `json:"isAvailable,omitempty"`
+	ErrorCode     string `json:"errorCode,omitempty"`
+	Message       string `json:"message,omitempty"`
 }
 
 type AddressingMetadata struct {
@@ -408,6 +412,7 @@ type ConnectorRuntime struct {
 	taskLauncher           *agentruntime.TaskLauncher
 	approvalGate           *approvalgate.Gate
 	toolCatalogBuilder     *agentruntime.ToolCatalogBuilder
+	workspaceActorFactory  security.WorkspaceActorFactory
 	memoryService          *memory.MemoryService
 	agentIdentityProvider  func() agentcontract.AgentIdentity
 	workspaceID            string
@@ -515,6 +520,7 @@ func (connectorRuntime *ConnectorRuntime) UseTerminalService(terminalService *se
 }
 
 func (connectorRuntime *ConnectorRuntime) UseWorkspaceActorFactory(workspaceActorFactory security.WorkspaceActorFactory) {
+	connectorRuntime.workspaceActorFactory = workspaceActorFactory
 	connectorRuntime.toolCatalogBuilder.UseWorkspaceActorFactory(workspaceActorFactory)
 }
 
@@ -2709,7 +2715,9 @@ func (connectorRuntime *ConnectorRuntime) withAttachmentMaterials(ctx context.Co
 		return event
 	}
 	if len(result.InputAttachments) > 0 {
-		importedAttachments := connectorReadableInputAttachments(result.InputAttachments, personID, scope)
+		writtenAttachments := connectorRuntime.attachmentWriterFor(personID).writeAll(ctx, result.InputAttachments)
+		result.InputParts = connectorInputPartsAtWrittenPaths(result.InputParts, writtenAttachments)
+		importedAttachments := connectorReadableInputAttachments(writtenAttachments, personID, scope)
 		event.Context.InputAttachments = connectorReplaceImportedInputAttachments(event.Context.InputAttachments, importedAttachments)
 		event.Context.Materials = connectorReplaceImportedInputAttachments(event.Context.Materials, importedAttachments)
 		event.Context.Messages = connectorReplaceImportedMessageAttachments(event.Context.Messages, importedAttachments)
@@ -2741,13 +2749,40 @@ const connectorAttachmentImportRefusedCode = "attachment_import_failed"
 func connectorRefusedInputAttachments(attachments []InputAttachment, errorValue error) []InputAttachment {
 	refused := make([]InputAttachment, 0, len(attachments))
 	for _, attachment := range attachments {
-		attachment.Path = ""
-		attachment.IsAvailable = false
-		attachment.ErrorCode = connectorAttachmentImportRefusedCode
-		attachment.Message = errorValue.Error()
-		refused = append(refused, attachment)
+		refused = append(refused, refusedInputAttachment(attachment, errorValue))
 	}
 	return refused
+}
+
+func (connectorRuntime *ConnectorRuntime) attachmentWriterFor(personID string) importedAttachmentWriter {
+	return importedAttachmentWriter{workspaceActorFactory: connectorRuntime.workspaceActorFactory, personID: personID}
+}
+
+// A part names the same file the attachment does. Whatever name the file ended
+// up under is the one the agent is told about.
+func connectorInputPartsAtWrittenPaths(parts []agentcontract.AgentPart, writtenAttachments []InputAttachment) []agentcontract.AgentPart {
+	pathByFilename := map[string]string{}
+	for _, attachment := range writtenAttachments {
+		if strings.TrimSpace(attachment.Path) == "" {
+			continue
+		}
+		pathByFilename[attachment.Filename] = attachment.Path
+	}
+	result := make([]agentcontract.AgentPart, 0, len(parts))
+	for _, part := range parts {
+		if part.File != nil {
+			file := *part.File
+			file.Path = firstNonEmptyString(pathByFilename[file.Filename], file.Path)
+			part.File = &file
+		}
+		if part.Image != nil {
+			image := *part.Image
+			image.Path = firstNonEmptyString(pathByFilename[image.Filename], image.Path)
+			part.Image = &image
+		}
+		result = append(result, part)
+	}
+	return result
 }
 
 func connectorReplaceImportedMessageAttachments(messages []VisibleContextMessage, importedAttachments []InputAttachment) []VisibleContextMessage {
@@ -2812,7 +2847,7 @@ func connectorIsCurrentInputPart(part agentcontract.AgentPart, event PlatformInb
 }
 
 func connectorInputAttachmentScope(personID string, event PlatformInboundEvent) agentruntime.ConversationResourceScope {
-	return agentruntime.ConversationScopeForRequest("/workspace", agentruntime.ToolCatalogRequest{
+	return agentruntime.ConversationScopeForRequest(connectorWorkspaceRootPath, agentruntime.ToolCatalogRequest{
 		RequesterPersonID:       personID,
 		ConversationID:          event.ConversationID,
 		ConversationType:        event.Context.ConversationType,
@@ -2908,10 +2943,11 @@ func connectorInputAttachmentKey(attachment InputAttachment) string {
 }
 
 type connectorAttachmentMaterialResolver struct {
-	adapter     PlatformAdapter
-	personID    string
-	event       PlatformInboundEvent
-	sentSources *sentAttachmentSourceStore
+	adapter          PlatformAdapter
+	personID         string
+	event            PlatformInboundEvent
+	sentSources      *sentAttachmentSourceStore
+	attachmentWriter importedAttachmentWriter
 }
 
 func (resolver connectorAttachmentMaterialResolver) ResolveAttachmentMaterial(ctx context.Context, materialID string) (agentcontract.VisibleContextMaterial, error) {
@@ -3019,7 +3055,9 @@ func (resolver connectorAttachmentMaterialResolver) importAttachmentWithAdapter(
 	if len(result.InputAttachments) == 0 {
 		return agentcontract.VisibleContextMaterial{}, errors.New("attachment import returned no material")
 	}
-	importedAttachment := connectorReadableInputAttachments(result.InputAttachments, resolver.personID, scope)[0]
+	writtenAttachments := resolver.attachmentWriter.writeAll(ctx, result.InputAttachments)
+	result.InputParts = connectorInputPartsAtWrittenPaths(result.InputParts, writtenAttachments)
+	importedAttachment := connectorReadableInputAttachments(writtenAttachments, resolver.personID, scope)[0]
 	if strings.TrimSpace(importedAttachment.Path) == "" {
 		return agentcontract.VisibleContextMaterial{}, errors.New("attachment import returned no readable path")
 	}
@@ -3202,7 +3240,7 @@ func (connectorRuntime *ConnectorRuntime) buildTurnToolSet(adapter PlatformAdapt
 		Platform:                   adapter.Name(),
 		HistoryCursor:              event.Context.HistoryCursor,
 		HistoryProvider:            connectorHistoryProvider{adapter: adapter},
-		AttachmentMaterialResolver: connectorAttachmentMaterialResolver{adapter: adapter, personID: personID, event: event, sentSources: connectorRuntime.sentAttachmentSources},
+		AttachmentMaterialResolver: connectorAttachmentMaterialResolver{adapter: adapter, personID: personID, event: event, sentSources: connectorRuntime.sentAttachmentSources, attachmentWriter: connectorRuntime.attachmentWriterFor(personID)},
 		PersonAccess:               personAccess,
 		MemoryNamespaces:           connectorRuntime.accessibleNamespaces(personID, personAccess, event),
 		AccessibleConversationIDs:  []string{event.ConversationID},

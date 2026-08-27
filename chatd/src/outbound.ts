@@ -2,7 +2,7 @@ import type { AdapterPostableMessage, FileUpload } from "chat";
 import { BuzzAdapter } from "./adapters/buzz/adapter.ts";
 import type { MattermostAdapter } from "./adapters/mattermost/adapter.ts";
 import type { ChatdConfiguration } from "./configuration.ts";
-import { importAttachmentToDirectory, supportsAttachmentFetching } from "./outbound-attachments.ts";
+import { fetchAttachmentForDirectory, supportsAttachmentFetching } from "./outbound-attachments.ts";
 import { supportsChannelProvisioning } from "./channels.ts";
 import {
 	ensureUserDirectMessageChannel,
@@ -465,7 +465,7 @@ async function handleHistoryFetch(
 
 async function handleAttachmentsImport(
 	adapter: PlatformChatAdapter,
-	configuration: ChatdConfiguration,
+	_configuration: ChatdConfiguration,
 	requestBody: unknown,
 ): Promise<AttachmentImportResponse> {
 	const requestDocument = parseAttachmentImportRequest(requestBody);
@@ -483,7 +483,7 @@ async function handleAttachmentsImport(
 	}
 	const importedAttachments = await Promise.all(
 		requestDocument.inputAttachments.map((attachment) =>
-			importAttachmentToDirectory(adapter, configuration, requestDocument.targetDirectoryPath, attachment),
+			fetchAttachmentForDirectory(adapter, requestDocument.targetDirectoryPath, attachment),
 		),
 	);
 

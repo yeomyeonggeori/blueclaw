@@ -19,7 +19,6 @@ export type ChatdConfiguration = {
   admindBaseURL: string | undefined;
   listenPort: number;
   listenHostname: string;
-  workspaceRootPath?: string;
   mattermost: MattermostConfiguration | undefined;
   buzz: BuzzConfiguration | undefined;
 };
@@ -36,7 +35,6 @@ export function loadConfiguration(environment: Record<string, string | undefined
     admindBaseURL: environment['CHATD_ADMIND_BASE_URL']?.trim() || undefined,
     listenPort: parseListenPort(environment['CHATD_LISTEN_PORT']),
     listenHostname: environment['CHATD_LISTEN_HOSTNAME']?.trim() || '127.0.0.1',
-    workspaceRootPath: environment['CHATD_WORKSPACE_ROOT']?.trim() || undefined,
     mattermost: loadMattermostConfiguration(environment),
     buzz: loadBuzzConfiguration(environment),
   };

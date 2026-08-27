@@ -146,7 +146,7 @@ func (connectorRuntime *ConnectorRuntime) interruptedTaskLaunchRequest(taskRun t
 		MemoryNamespaces:           connectorRuntime.accessibleNamespaces(taskRun.RequesterPersonID, personAccess, event),
 		AccessibleConversationIDs:  []string{conversationID},
 		HistoryProvider:            connectorHistoryProvider{adapter: adapter},
-		AttachmentMaterialResolver: connectorAttachmentMaterialResolver{adapter: adapter, personID: taskRun.RequesterPersonID, event: event, sentSources: connectorRuntime.sentAttachmentSources},
+		AttachmentMaterialResolver: connectorAttachmentMaterialResolver{adapter: adapter, personID: taskRun.RequesterPersonID, event: event, sentSources: connectorRuntime.sentAttachmentSources, attachmentWriter: connectorRuntime.attachmentWriterFor(taskRun.RequesterPersonID)},
 		CheckpointSender:           connectorRuntime.checkpointSenderForTurn(launchContext.Platform, event, ReplyTarget{ConversationID: conversationID, ReplyTargetID: event.ReplyTargetID, DedupeKey: event.DedupeKey()}, sendReply),
 	}
 }

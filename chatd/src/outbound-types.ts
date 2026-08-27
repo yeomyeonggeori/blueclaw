@@ -161,6 +161,7 @@ export interface InputAttachmentDocument {
 	contentType?: string;
 	sizeBytes?: number;
 	path?: string;
+	contentBase64?: string;
 	isAvailable?: boolean;
 	errorCode?: string;
 	message?: string;

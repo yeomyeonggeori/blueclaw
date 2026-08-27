@@ -315,34 +315,36 @@ describe("history.fetch", () => {
 });
 
 describe("attachments.import", () => {
-	it("downloads the attachment bytes into the target directory", async () => {
+	// This process cannot reach the workspace the agent reads, so it answers with
+	// the bytes and the path they belong at rather than a file it wrote itself.
+	it("answers with the attachment bytes and the path they belong at", async () => {
 		const adapter = createAdapter();
 		globalThis.fetch = mock(async () => new Response("file contents", { status: 200 })) as never;
-		const targetDirectoryPath = await mkdtemp(path.join(tmpdir(), "chatd-outbound-"));
 		const handler = createOutboundHandler({ mattermost: adapter }, createConfiguration());
 
-		try {
-			const response = await handler(
-				outboundRequest("attachments.import", {
-					messageID: "post-1",
-					targetDirectoryPath,
-					inputAttachments: [{ platform: "mattermost", fileID: "file-1", filename: "report.txt" }],
-				}),
-			);
+		const response = await handler(
+			outboundRequest("attachments.import", {
+				messageID: "post-1",
+				targetDirectoryPath: "/workspace/private/people/person-1/inbox/mattermost/post-1",
+				inputAttachments: [{ platform: "mattermost", fileID: "file-1", filename: "report.txt" }],
+			}),
+		);
 
-			expect(response.status).toBe(200);
-			const body = (await response.json()) as {
-				inputAttachments: Array<{ isAvailable: boolean; path: string }>;
-				inputParts: Array<{ type: string }>;
-			};
-			expect(body.inputAttachments[0]?.isAvailable).toBe(true);
-			const writtenPath = body.inputAttachments[0]?.path ?? "";
-			expect(await readFile(writtenPath, "utf8")).toBe("file contents");
-			expect(body.inputParts).toHaveLength(1);
-			expect(body.inputParts[0]?.type).toBe("file");
-		} finally {
-			await rm(targetDirectoryPath, { recursive: true, force: true });
-		}
+		expect(response.status).toBe(200);
+		const body = (await response.json()) as {
+			inputAttachments: Array<{ isAvailable: boolean; path: string; contentBase64: string }>;
+			inputParts: Array<{ type: string }>;
+		};
+		expect(body.inputAttachments[0]?.isAvailable).toBe(true);
+		expect(body.inputAttachments[0]?.path).toBe(
+			"/workspace/private/people/person-1/inbox/mattermost/post-1/report.txt",
+		);
+		expect(Buffer.from(body.inputAttachments[0]?.contentBase64 ?? "", "base64").toString("utf8")).toBe(
+			"file contents",
+		);
+		expect(await Bun.file(body.inputAttachments[0]?.path ?? "").exists()).toBe(false);
+		expect(body.inputParts).toHaveLength(1);
+		expect(body.inputParts[0]?.type).toBe("file");
 	});
 
 	it("reports unavailable attachments without a file reference instead of failing the whole import", async () => {
