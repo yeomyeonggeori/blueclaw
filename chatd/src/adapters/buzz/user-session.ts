@@ -24,6 +24,7 @@ export type UserConversation = {
 	isDM: boolean;
 	isPrivate: boolean;
 	participantPubkeyHexes: string[];
+	avatarURL?: string;
 };
 
 function hexToBytes(hex: string): Uint8Array {
@@ -99,6 +100,7 @@ export async function listUserConversations(
 						isDM: true,
 						isPrivate: true,
 						participantPubkeyHexes: participants,
+						avatarURL: profile.picture,
 					});
 				} else {
 					conversations.push({
