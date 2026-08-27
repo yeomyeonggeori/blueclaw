@@ -77,6 +77,8 @@ func (gate *Gate) generateConfirmationWording(ctx context.Context, approvalReque
 				"When the action changes or removes something that already exists, say what it affects, and never describe a whole-item replacement as if it only touched a part of it.",
 				"Do not mention internal tool names, operation identifiers, JSON, schemas, approval gates, runtime, or implementation details.",
 				"Do not answer the question, report status, or explain the policy.",
+				"The question covers this one action and nothing after it. The original request is there to name what the action touches, never to describe the work it is a step toward.",
+				"Never promise a later step this action does not perform. Approving it must not read as approving anything that has to happen afterwards.",
 			}, "\n")},
 			{Role: "system", Content: responseLanguageInstruction(approvalRequest.ResponseLanguage)},
 			{Role: "user", Content: string(questionContext)},
@@ -134,7 +136,7 @@ func approvalQuestionActionDetails(toolInput json.RawMessage, target ApprovalTar
 	setApprovalQuestionDetail(details, "deliveryTargetType", document.TargetType)
 	setApprovalQuestionDetail(details, "targetMessageIDs", firstNonEmpty(document.MessageID, strings.Join(document.MessageIDs, ", ")))
 	setApprovalQuestionDetail(details, "targetMessageCount", approvalQuestionMessageCount(document))
-	setApprovalQuestionDetail(details, "content", firstNonEmpty(document.Message, document.Subject, document.Body, document.Title, document.Summary, document.ApprovalReason, document.Reason))
+	setApprovalQuestionDetail(details, "content", firstNonEmpty(document.Message, document.Subject, document.Body, document.Title, document.Summary))
 	setApprovalQuestionDetail(details, "message", document.Message)
 	setApprovalQuestionDetail(details, "subject", document.Subject)
 	setApprovalQuestionDetail(details, "title", document.Title)
