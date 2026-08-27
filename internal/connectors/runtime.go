@@ -2702,7 +2702,10 @@ func (connectorRuntime *ConnectorRuntime) withAttachmentMaterials(ctx context.Co
 	})
 	if errorValue != nil {
 		connectorRuntime.logger.Warn("connector."+adapter.Name()+".attachments.import_failed", slog.String("messageID", event.MessageID), slog.String("error", errorValue.Error()))
-		event.Context.Materials = attachments
+		refused := connectorRefusedInputAttachments(attachments, errorValue)
+		event.Context.InputAttachments = refused
+		event.Context.Materials = refused
+		event.Context.Messages = connectorReplaceImportedMessageAttachments(event.Context.Messages, refused)
 		return event
 	}
 	if len(result.InputAttachments) > 0 {
@@ -2726,6 +2729,25 @@ func connectorVisibleInputAttachments(visibleContext VisibleContext) []InputAtta
 		attachments = append(attachments, message.InputAttachments...)
 	}
 	return connectorUniqueInputAttachments(attachments)
+}
+
+const connectorAttachmentImportRefusedCode = "attachment_import_failed"
+
+// An attachment that could not be brought in is still handed to the agent, and
+// without this it arrives looking ordinary: a file with a url the agent cannot
+// open. It would then ask whoever sent it to attach the file again, which is
+// the one thing they already did. It arrives refused, with the reason, so the
+// agent says what went wrong and the ledger holds it.
+func connectorRefusedInputAttachments(attachments []InputAttachment, errorValue error) []InputAttachment {
+	refused := make([]InputAttachment, 0, len(attachments))
+	for _, attachment := range attachments {
+		attachment.Path = ""
+		attachment.IsAvailable = false
+		attachment.ErrorCode = connectorAttachmentImportRefusedCode
+		attachment.Message = errorValue.Error()
+		refused = append(refused, attachment)
+	}
+	return refused
 }
 
 func connectorReplaceImportedMessageAttachments(messages []VisibleContextMessage, importedAttachments []InputAttachment) []VisibleContextMessage {
