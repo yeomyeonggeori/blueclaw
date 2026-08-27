@@ -81,6 +81,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 			name: conversation.name,
 			kind: conversation.isDM ? "dm" : "group",
 			isPrivate: conversation.isPrivate,
+			avatarURL: conversation.avatarURL,
 			participantExternalIDs: conversation.participantPubkeyHexes,
 		}));
 	}
