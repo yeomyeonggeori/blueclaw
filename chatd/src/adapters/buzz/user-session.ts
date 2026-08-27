@@ -1,7 +1,7 @@
 import { getPublicKey } from "nostr-tools/pure";
 import { withRelayAs } from "./relay-pool.ts";
 import { BlobRefused, imetaTag, uploadBlob, type BlossomBlob } from "./blossom.ts";
-import { firstTagValue, threadTagsOf, type BuzzEvent } from "./types.ts";
+import { carriesTag, firstTagValue, threadTagsOf, type BuzzEvent } from "./types.ts";
 import {
 	AttachmentRefused,
 	isAlreadyKept,
@@ -22,6 +22,7 @@ export type UserConversation = {
 	channelID: string;
 	name: string;
 	isDM: boolean;
+	isPrivate: boolean;
 	participantPubkeyHexes: string[];
 };
 
@@ -96,6 +97,7 @@ export async function listUserConversations(
 						channelID,
 						name: profile.name ?? counterpart?.slice(0, 8) ?? "",
 						isDM: true,
+						isPrivate: true,
 						participantPubkeyHexes: participants,
 					});
 				} else {
@@ -103,6 +105,7 @@ export async function listUserConversations(
 						channelID,
 						name: metadata ? (firstTagValue(metadata, "name") ?? "") : "",
 						isDM: false,
+						isPrivate: metadata ? carriesTag(metadata, "private") : false,
 						participantPubkeyHexes: participantsOf(metadata, membershipsByChannel.get(channelID)),
 					});
 				}

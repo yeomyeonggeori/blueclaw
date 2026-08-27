@@ -80,6 +80,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 			id: conversation.channelID,
 			name: conversation.name,
 			kind: conversation.isDM ? "dm" : "group",
+			isPrivate: conversation.isPrivate,
 			participantExternalIDs: conversation.participantPubkeyHexes,
 		}));
 	}
@@ -108,7 +109,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 			actor.secret,
 			counterpart,
 		);
-		return { id: channel.channelID, name: "", kind: "dm" };
+		return { id: channel.channelID, name: "", kind: "dm", isPrivate: true };
 	}
 
 	async listMessages(

@@ -34,6 +34,10 @@ export function firstTagValue(event: BuzzEvent, tagName: string): string | undef
 	return event.tags.find((tag) => tag[0] === tagName)?.[1];
 }
 
+export function carriesTag(event: BuzzEvent, tagName: string): boolean {
+	return event.tags.some((tag) => tag[0] === tagName);
+}
+
 export function threadTagsOf(event: BuzzEvent): { rootEventId?: string; parentEventId?: string } {
 	let rootEventId: string | undefined;
 	let parentEventId: string | undefined;

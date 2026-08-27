@@ -111,6 +111,37 @@ describe("person capabilities", () => {
 		expect(seen).toHaveLength(0);
 	});
 
+	test("a conversation says whether it is private, so a reader can be told", async () => {
+		recordFetches((url) => {
+			if (url.endsWith("/users/me/teams")) return [{ id: "team-1" }];
+			if (url.includes("/channels")) {
+				return [
+					{ id: "channel-1", display_name: "Town Square", name: "town-square", type: "O" },
+					{ id: "channel-2", display_name: "HR", name: "hr", type: "P" },
+					{ id: "channel-3", display_name: "", name: "person-a__person-b", type: "D" },
+				];
+			}
+			return [];
+		});
+
+		const answer = await (
+			await call("person.conversations.list", {
+				actor: { kind: "mattermost-token", secret: "the-person-token" },
+			})
+		).json();
+
+		const privacyOf = new Map<string, boolean>(
+			answer.conversations.map((conversation: { id: string; isPrivate: boolean }) => [
+				conversation.id,
+				conversation.isPrivate,
+			]),
+		);
+
+		expect(privacyOf.get("channel-1")).toBe(false);
+		expect(privacyOf.get("channel-2")).toBe(true);
+		expect(privacyOf.get("channel-3")).toBe(true);
+	});
+
 	test("a direct conversation names the two people in it", async () => {
 		recordFetches((url) => {
 			if (url.endsWith("/users/me/teams")) return [{ id: "team-1" }];

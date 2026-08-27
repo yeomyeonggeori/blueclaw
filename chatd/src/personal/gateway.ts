@@ -17,6 +17,7 @@ export type PersonalConversation = {
 	id: string;
 	name: string;
 	kind: "dm" | "group";
+	isPrivate: boolean;
 	avatarURL?: string;
 	participantExternalIDs?: string[];
 	webURL?: string;

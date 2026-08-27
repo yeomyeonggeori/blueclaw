@@ -195,6 +195,7 @@ class MattermostPersonalGateway implements PersonalGateway {
 			id: channel.id,
 			name: channel.display_name || channel.name,
 			kind: "dm",
+			isPrivate: true,
 			webURL: team ? webURLOf(await this.browserBaseURL(), team, channel) : undefined,
 		};
 	}
@@ -443,6 +444,7 @@ function asConversation(channel: MattermostChannel, webURL: string): PersonalCon
 		id: channel.id,
 		name: channel.display_name || channel.name,
 		kind: channel.type === "D" || channel.type === "G" ? "dm" : "group",
+		isPrivate: channel.type !== "O",
 		participantExternalIDs: directParticipantsOf(channel),
 		webURL,
 	};
