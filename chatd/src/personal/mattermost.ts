@@ -76,6 +76,7 @@ class MattermostPersonalGateway implements PersonalGateway {
 	credentialRequirement(): CredentialRequirement {
 		return {
 			kind: "sign-in",
+			credentialKind: this.credentialKind,
 			fields: [
 				{ name: "loginID", label: "Email or username", isSecret: false },
 				{ name: "password", label: "Password", isSecret: true },
