@@ -1,10 +1,7 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { BuzzAdapter } from "../src/adapters/buzz/adapter.ts";
 import type { ChatdConfiguration } from "../src/configuration.ts";
-import { importAttachmentToDirectory, workspaceWritePath } from "../src/outbound-attachments.ts";
+import { fetchAttachmentForDirectory } from "../src/outbound-attachments.ts";
 
 const AGENT_SECRET = "1".repeat(64);
 const originalFetch = globalThis.fetch;
@@ -40,22 +37,6 @@ function createBuzzAdapter(): BuzzAdapter {
 	});
 }
 
-describe("workspaceWritePath", () => {
-	it("maps the workspace vocabulary onto the configured host root", () => {
-		const configuration = createConfiguration({ workspaceRootPath: "/root/.blueclaw/workspace" });
-		expect(workspaceWritePath(configuration, "/workspace/inbox/buzz/잡담")).toBe(
-			"/root/.blueclaw/workspace/inbox/buzz/잡담",
-		);
-		expect(workspaceWritePath(configuration, "/workspace")).toBe("/root/.blueclaw/workspace");
-	});
-
-	it("writes verbatim when no root is configured or the path is not workspace-relative", () => {
-		expect(workspaceWritePath(createConfiguration(), "/workspace/inbox")).toBe("/workspace/inbox");
-		const configuration = createConfiguration({ workspaceRootPath: "/root/.blueclaw/workspace" });
-		expect(workspaceWritePath(configuration, "/tmp/elsewhere")).toBe("/tmp/elsewhere");
-	});
-});
-
 describe("buzz attachment fetch", () => {
 	it("refuses a url another host serves", async () => {
 		const adapter = createBuzzAdapter();
@@ -72,37 +53,50 @@ describe("buzz attachment fetch", () => {
 	});
 });
 
-describe("importAttachmentToDirectory", () => {
-	it("imports a buzz attachment into the workspace and answers in workspace vocabulary", async () => {
-		const hostRoot = await mkdtemp(path.join(tmpdir(), "chatd-workspace-"));
-		const configuration = createConfiguration({ workspaceRootPath: hostRoot });
+describe("fetchAttachmentForDirectory", () => {
+	// chatd cannot reach the workspace the agent reads: it hands over the bytes
+	// with the path they belong at, and whoever owns that workspace writes them.
+	it("answers with the file's bytes and the path they belong at", async () => {
 		const adapter = {
 			fetchAttachment: async () =>
 				new Response("image bytes", { status: 200, headers: { "Content-Type": "image/png" } }),
 		};
-		try {
-			const imported = await importAttachmentToDirectory(adapter, configuration, "/workspace/inbox/buzz/잡담", {
-				platform: "buzz",
-				url: "http://localhost:3000/media/187958fc.png",
-				filename: "지도.png",
-			});
-			expect(imported.isAvailable).toBe(true);
-			expect(imported.path).toBe("/workspace/inbox/buzz/잡담/지도.png");
-			expect(imported.contentType).toBe("image/png");
-			expect(await readFile(path.join(hostRoot, "inbox/buzz/잡담/지도.png"), "utf8")).toBe("image bytes");
-		} finally {
-			await rm(hostRoot, { recursive: true, force: true });
-		}
+
+		const fetched = await fetchAttachmentForDirectory(adapter, "/workspace/inbox/buzz/\uc7a1\ub2f4", {
+			platform: "buzz",
+			url: "http://localhost:3000/media/187958fc.png",
+			filename: "\uc9c0\ub3c4.png",
+		});
+
+		expect(fetched.isAvailable).toBe(true);
+		expect(fetched.path).toBe("/workspace/inbox/buzz/\uc7a1\ub2f4/\uc9c0\ub3c4.png");
+		expect(fetched.contentType).toBe("image/png");
+		expect(Buffer.from(fetched.contentBase64 ?? "", "base64").toString("utf8")).toBe("image bytes");
+	});
+
+	it("writes nothing of its own", async () => {
+		const adapter = {
+			fetchAttachment: async () => new Response("image bytes", { status: 200 }),
+		};
+
+		const fetched = await fetchAttachmentForDirectory(adapter, "/workspace/inbox/buzz/dm", {
+			platform: "buzz",
+			url: "http://localhost:3000/media/187958fc.png",
+			filename: "map.png",
+		});
+
+		expect(await Bun.file(fetched.path ?? "").exists()).toBe(false);
 	});
 
 	it("reports a failed download without failing the import call", async () => {
-		const configuration = createConfiguration();
 		const adapter = { fetchAttachment: async () => new Response("gone", { status: 404 }) };
-		const imported = await importAttachmentToDirectory(adapter, configuration, "/tmp/unused", {
+
+		const fetched = await fetchAttachmentForDirectory(adapter, "/workspace/inbox/buzz/dm", {
 			platform: "buzz",
 			url: "http://localhost:3000/media/gone.png",
 		});
-		expect(imported.isAvailable).toBe(false);
-		expect(imported.errorCode).toBe("download_failed");
+
+		expect(fetched.isAvailable).toBe(false);
+		expect(fetched.errorCode).toBe("download_failed");
 	});
 });

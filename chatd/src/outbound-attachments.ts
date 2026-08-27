@@ -1,6 +1,4 @@
-import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import type { ChatdConfiguration } from "./configuration.ts";
 import type { InputAttachmentDocument } from "./outbound-types.ts";
 
 export type AttachmentFetchingAdapter = {
@@ -11,9 +9,11 @@ export function supportsAttachmentFetching(adapter: object): adapter is Attachme
 	return typeof (adapter as AttachmentFetchingAdapter).fetchAttachment === "function";
 }
 
-export async function importAttachmentToDirectory(
+// This process runs beside the workspace, not inside it, so it fetches the file
+// and hands over the bytes with the path they belong at. Whoever owns that
+// workspace writes them there, as the person the message was sent to.
+export async function fetchAttachmentForDirectory(
 	adapter: AttachmentFetchingAdapter,
-	configuration: ChatdConfiguration,
 	targetDirectoryPath: string,
 	attachment: InputAttachmentDocument,
 ): Promise<InputAttachmentDocument> {
@@ -42,14 +42,12 @@ export async function importAttachmentToDirectory(
 
 	const fileBytes = new Uint8Array(await downloadResponse.arrayBuffer());
 	const filename = attachmentFilename(attachment);
-	const filePath = path.join(targetDirectoryPath, filename);
-	const writeDirectoryPath = workspaceWritePath(configuration, targetDirectoryPath);
-	await mkdir(writeDirectoryPath, { recursive: true });
-	await Bun.write(path.join(writeDirectoryPath, filename), fileBytes);
 
 	return {
 		...attachment,
-		path: filePath,
+		filename,
+		path: path.join(targetDirectoryPath, filename),
+		contentBase64: Buffer.from(fileBytes).toString("base64"),
 		isAvailable: true,
 		sizeBytes: fileBytes.byteLength,
 		contentType: attachment.contentType ?? downloadResponse.headers.get("content-type") ?? undefined,
@@ -65,17 +63,4 @@ function attachmentFilename(attachment: InputAttachmentDocument): string {
 		if (lastSegment) return lastSegment;
 	}
 	return "attachment";
-}
-
-// The import request names the directory in the workspace vocabulary the agent
-// reads it back by (/workspace/...), while chatd writes through the host mount
-// of that same tree.
-export function workspaceWritePath(configuration: ChatdConfiguration, workspacePath: string): string {
-	const rootPath = configuration.workspaceRootPath?.replace(/\/$/, "");
-	if (!rootPath) return workspacePath;
-	if (workspacePath === "/workspace") return rootPath;
-	if (workspacePath.startsWith("/workspace/")) {
-		return rootPath + workspacePath.slice("/workspace".length);
-	}
-	return workspacePath;
 }
