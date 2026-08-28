@@ -9,6 +9,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 func attachmentWriterForTest(t *testing.T, personID string) (importedAttachmentWriter, string) {
@@ -33,7 +34,7 @@ func TestAnAttachmentLandsWhereTheAgentWasToldItIs(t *testing.T) {
 	writer, workspacePath := attachmentWriterForTest(t, "person-1")
 	agentPath := filepath.Join(workspacePath, "private/people/person-1/inbox/buzz/dm/map.png")
 
-	written := writer.writeAll(context.Background(), []InputAttachment{{
+	written, _ := writer.writeAll(context.Background(), []InputAttachment{{
 		Platform:      "buzz",
 		Filename:      "map.png",
 		Path:          agentPath,
@@ -58,7 +59,7 @@ func TestAnAttachmentLandsWhereTheAgentWasToldItIs(t *testing.T) {
 func TestTheContentIsNotCarriedAnyFurtherThanTheWrite(t *testing.T) {
 	writer, workspacePath := attachmentWriterForTest(t, "person-1")
 
-	written := writer.writeAll(context.Background(), []InputAttachment{{
+	written, _ := writer.writeAll(context.Background(), []InputAttachment{{
 		Path:          filepath.Join(workspacePath, "private/people/person-1/inbox/buzz/dm/map.png"),
 		ContentBase64: base64.StdEncoding.EncodeToString([]byte("image bytes")),
 	}})
@@ -76,7 +77,7 @@ func TestTheSameFileTwiceIsOneFile(t *testing.T) {
 	sameFile := InputAttachment{Path: agentPath, ContentBase64: base64.StdEncoding.EncodeToString([]byte("image bytes"))}
 
 	writer.writeAll(context.Background(), []InputAttachment{sameFile})
-	written := writer.writeAll(context.Background(), []InputAttachment{sameFile})
+	written, _ := writer.writeAll(context.Background(), []InputAttachment{sameFile})
 
 	if written[0].Path != agentPath {
 		t.Fatalf("expected the same file to keep its name, got %q", written[0].Path)
@@ -91,7 +92,7 @@ func TestADifferentFileUnderATakenNameGetsItsOwn(t *testing.T) {
 	agentPath := filepath.Join(workspacePath, "private/people/person-1/inbox/buzz/dm/map.png")
 
 	writer.writeAll(context.Background(), []InputAttachment{{Path: agentPath, ContentBase64: base64.StdEncoding.EncodeToString([]byte("first"))}})
-	written := writer.writeAll(context.Background(), []InputAttachment{{Path: agentPath, ContentBase64: base64.StdEncoding.EncodeToString([]byte("second"))}})
+	written, _ := writer.writeAll(context.Background(), []InputAttachment{{Path: agentPath, ContentBase64: base64.StdEncoding.EncodeToString([]byte("second"))}})
 
 	if written[0].Path != filepath.Join(workspacePath, "private/people/person-1/inbox/buzz/dm/map-2.png") {
 		t.Fatalf("expected a name of its own, got %q", written[0].Path)
@@ -105,7 +106,7 @@ func TestADifferentFileUnderATakenNameGetsItsOwn(t *testing.T) {
 func TestAnAttachmentNobodyCanBeWrittenAsSaysSo(t *testing.T) {
 	writer := importedAttachmentWriter{}
 
-	written := writer.writeAll(context.Background(), []InputAttachment{{
+	written, _ := writer.writeAll(context.Background(), []InputAttachment{{
 		Path:          "/workspace/private/people/person-1/inbox/buzz/dm/map.png",
 		ContentBase64: base64.StdEncoding.EncodeToString([]byte("image bytes")),
 	}})
@@ -137,5 +138,42 @@ func TestARefusedAttachmentStaysInTheCatalog(t *testing.T) {
 	}
 	if materials[0].IsAvailable || materials[0].ErrorCode == "" {
 		t.Fatalf("expected the refusal to travel with it, got %+v", materials[0])
+	}
+}
+
+// A picture the message came with travels with the prompt, whatever messenger
+// it came over. This layer owns that; no platform import fills bytes itself.
+func TestAWrittenPictureIsShownWithTheMessage(t *testing.T) {
+	writer, workspacePath := attachmentWriterForTest(t, "person-1")
+	agentPath := filepath.Join(workspacePath, "private/people/person-1/inbox/buzz/dm/map.png")
+	written, contents := writer.writeAll(context.Background(), []InputAttachment{{
+		Path:          agentPath,
+		ContentBase64: base64.StdEncoding.EncodeToString([]byte("image bytes")),
+	}})
+
+	parts := connectorImagePartsShowingTheirBytes([]agentcontract.AgentPart{{
+		Type:  "image",
+		Image: &agentcontract.AgentImagePart{Path: written[0].Path, MimeType: "image/png"},
+	}}, contents)
+
+	if parts[0].Image.DataBase64 != base64.StdEncoding.EncodeToString([]byte("image bytes")) {
+		t.Fatalf("expected the picture to travel with the message, got %+v", parts[0].Image)
+	}
+}
+
+func TestARefusedPictureShowsNoBytes(t *testing.T) {
+	writer := importedAttachmentWriter{}
+	written, contents := writer.writeAll(context.Background(), []InputAttachment{{
+		Path:          "/workspace/private/people/person-1/inbox/buzz/dm/map.png",
+		ContentBase64: base64.StdEncoding.EncodeToString([]byte("image bytes")),
+	}})
+
+	parts := connectorImagePartsShowingTheirBytes([]agentcontract.AgentPart{{
+		Type:  "image",
+		Image: &agentcontract.AgentImagePart{Path: written[0].Path, MimeType: "image/png"},
+	}}, contents)
+
+	if parts[0].Image.DataBase64 != "" {
+		t.Fatal("expected a picture nobody could write to carry no bytes")
 	}
 }
