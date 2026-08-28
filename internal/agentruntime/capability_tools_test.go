@@ -712,3 +712,24 @@ func capabilityReadTestCatalogBuilder(t *testing.T) *ToolCatalogBuilder {
 	toolCatalogBuilder.UseWorkspaceActorFactory(security.NewDirectWorkspaceActorFactory(terminalService))
 	return toolCatalogBuilder
 }
+
+// Which tools carry workspace files is written in the contract: any capability
+// whose input schema declares the attachments field is served by the carry,
+// so message_update gained it the moment its schema did, with no list to keep.
+func TestAttachmentCarryingFollowsTheDescriptorSchema(testContext *testing.T) {
+	toolCatalogBuilder := NewToolCatalogBuilder()
+	toolCatalogBuilder.UseTestCapabilityToolDescriptors(capability.Client{}, []CapabilityToolDescriptor{
+		{Name: "message_update", InputSchema: json.RawMessage(`{"type":"object","properties":{"messageID":{"type":"string"},"attachments":{"type":"array","items":{"type":"string"}}}}`)},
+		{Name: "message_context", InputSchema: json.RawMessage(`{"type":"object","properties":{}}`)},
+	})
+
+	if !toolCatalogBuilder.capabilityToolCarriesWorkspaceAttachments("message_update") {
+		testContext.Fatal("a schema that declares attachments must have its files carried")
+	}
+	if toolCatalogBuilder.capabilityToolCarriesWorkspaceAttachments("message_context") {
+		testContext.Fatal("a schema without attachments must not trigger the carry")
+	}
+	if toolCatalogBuilder.capabilityToolCarriesWorkspaceAttachments("no_such_tool") {
+		testContext.Fatal("an unregistered tool must not trigger the carry")
+	}
+}
