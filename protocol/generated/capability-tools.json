@@ -54,11 +54,11 @@
             "type": "string"
           },
           "status": {
-            "description": "Initial task status. Defaults to todo. The runtime may change delegated tasks to requested.",
+            "description": "Initial task status. Defaults to planned. The runtime may change delegated tasks to requested.",
             "enum": [
-              "todo",
+              "planned",
               "in_progress",
-              "done",
+              "completed",
               "paused",
               "rejected",
               "cancelled"
@@ -112,11 +112,11 @@
             "type": "string"
           },
           "status": {
-            "description": "Initial task status. Defaults to todo. The runtime may change delegated tasks to requested.",
+            "description": "Initial task status. Defaults to planned. The runtime may change delegated tasks to requested.",
             "enum": [
-              "todo",
+              "planned",
               "in_progress",
-              "done",
+              "completed",
               "paused",
               "rejected",
               "cancelled"
@@ -349,7 +349,7 @@
       },
       "sideEffect": "workspace_write",
       "sideEffectClass": "workspace_write",
-      "version": "5",
+      "version": "4",
       "worksOffline": false
     },
     {
@@ -389,7 +389,7 @@
             "type": "string"
           },
           "status": {
-            "description": "Filter by task status. Accepted values: 'todo', 'in_progress', 'done', 'requested', 'paused', 'rejected', 'cancelled'. Leave empty to return all statuses.",
+            "description": "Filter by task status. Accepted values: 'planned', 'in_progress', 'completed', 'requested', 'paused', 'rejected', 'cancelled'. Leave empty to return all statuses.",
             "type": "string"
           },
           "weekFrom": {
@@ -758,7 +758,7 @@
       },
       "sideEffect": "read",
       "sideEffectClass": "read",
-      "version": "3",
+      "version": "2",
       "worksOffline": false
     },
     {
@@ -816,9 +816,9 @@
           "status": {
             "description": "New task status.",
             "enum": [
-              "todo",
+              "planned",
               "in_progress",
-              "done",
+              "completed",
               "requested",
               "paused",
               "rejected",
@@ -876,9 +876,9 @@
           "status": {
             "description": "New task status.",
             "enum": [
-              "todo",
+              "planned",
               "in_progress",
-              "done",
+              "completed",
               "requested",
               "paused",
               "rejected",
@@ -1118,7 +1118,7 @@
       },
       "sideEffect": "workspace_write",
       "sideEffectClass": "workspace_write",
-      "version": "4",
+      "version": "3",
       "worksOffline": false
     },
     {
