@@ -2740,7 +2740,7 @@
         "mode": "success",
         "targetKind": "message"
       },
-      "description": "Send a Mattermost message to a direct message, channel, or the current conversation after approval. attachments uploads workspace files, such as an inbound image original, with the message.",
+      "description": "Send a message to a direct message, channel, or the current conversation after approval. attachments uploads workspace files, such as an inbound image original, with the message. For targetType=channel, name the channel with channelName; only pass a channelID a tool result gave you, never one remembered from the conversation. To correct a message already sent, use message_update on it instead of sending again.",
       "estimatedLatency": "medium",
       "idempotency": {
         "required": false,
@@ -3017,7 +3017,7 @@
         "mode": "success",
         "targetKind": "message"
       },
-      "description": "Replace one exact span of text inside your own earlier Mattermost message, leaving the rest of it untouched. oldText must appear exactly once in that message; copy it verbatim from a message_search preview or from the message you sent. This is the tool for every correction to something you already posted — when the user points out a mistake, fix that message instead of posting a correction as a new one. It runs immediately without asking the user to confirm, because it can only change text you quoted. If oldText does not match, the call fails without changing anything and returns the message as it currently reads, so retry with a span copied from that. To rewrite a long message wholesale, read it in full first with message_search messageIDs and quote what you read.",
+      "description": "Replace one exact span of text inside your own earlier message, leaving the rest of it untouched. oldText must appear exactly once in that message; copy it verbatim from a message_search preview or from the message you sent. This is the tool for every correction to something you already posted — when the user points out a mistake, fix that message instead of posting a correction as a new one. It runs immediately without asking the user to confirm, because it can only change text you quoted. If oldText does not match, the call fails without changing anything and returns the message as it currently reads, so retry with a span copied from that. To rewrite a long message wholesale, read it in full first with message_search messageIDs and quote what you read.",
       "estimatedLatency": "medium",
       "idempotency": {
         "required": false,
