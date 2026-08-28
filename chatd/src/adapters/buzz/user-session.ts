@@ -330,28 +330,44 @@ function isImageType(contentType: string): boolean {
 	return contentType.startsWith("image/");
 }
 
-async function findDirectMessageChannelID(
+// A room is found the way it is listed: from the membership the person holds in
+// it. Asking the counterpart's metadata to name the room misses one they never
+// joined, so a fresh room was opened on every send and hundreds of one-member
+// rooms accumulated.
+export async function findDirectMessageChannelID(
 	relay: { query: (filter: object) => Promise<BuzzEvent[]> },
 	userPubkeyHex: string,
 	counterpartPubkeyHex: string,
 ): Promise<string | undefined> {
-	const metadataEvents = await relay.query({ kinds: [GROUP_METADATA_KIND], "#p": [counterpartPubkeyHex] });
-	const latestByChannel = new Map<string, BuzzEvent>();
-	for (const event of metadataEvents) {
-		const channelID = firstTagValue(event, "d");
-		if (!channelID) continue;
-		const known = latestByChannel.get(channelID);
-		if (!known || event.created_at > known.created_at) latestByChannel.set(channelID, event);
-	}
-	for (const [channelID, event] of latestByChannel) {
-		if (firstTagValue(event, "t") !== "dm") continue;
-		const participants = event.tags.filter((tag) => tag[0] === "p").map((tag) => tag[1]);
+	const memberships = latestByChannelID(
+		await relay.query({ kinds: [GROUP_MEMBERS_KIND], "#p": [userPubkeyHex] }),
+	);
+	const channelIDs = [...memberships.keys()];
+	if (channelIDs.length === 0) return undefined;
+	const metadataByChannel = latestByChannelID(
+		await relay.query({ kinds: [GROUP_METADATA_KIND], "#d": channelIDs }),
+	);
+	for (const channelID of channelIDs) {
+		const metadata = metadataByChannel.get(channelID);
+		if (!metadata || firstTagValue(metadata, "t") !== "dm") continue;
+		const participants = participantsOf(metadata, memberships.get(channelID));
 		if (participants.length !== 2) continue;
 		if (participants.includes(userPubkeyHex) && participants.includes(counterpartPubkeyHex)) {
 			return channelID;
 		}
 	}
 	return undefined;
+}
+
+function latestByChannelID(events: BuzzEvent[]): Map<string, BuzzEvent> {
+	const latest = new Map<string, BuzzEvent>();
+	for (const event of events) {
+		const channelID = firstTagValue(event, "d");
+		if (!channelID) continue;
+		const known = latest.get(channelID);
+		if (!known || event.created_at > known.created_at) latest.set(channelID, event);
+	}
+	return latest;
 }
 
 function channelIDFromAcknowledgement(acknowledgement: string): string | undefined {
