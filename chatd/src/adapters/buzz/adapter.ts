@@ -591,10 +591,9 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		messageId: string,
 		message: AdapterPostableMessage,
 	): Promise<RawMessage<BuzzEvent>> {
-		const decoded = this.decodeThreadId(threadId);
 		const text = this.converter.renderPostable(message);
 		const event = await this.relay.publish(EDIT_MESSAGE_KIND, text, [
-			["h", decoded.channelId],
+			["h", await this.channelOwningMessage(threadId, messageId)],
 			["e", messageId],
 		]);
 		return { id: messageId, threadId, raw: event };
@@ -602,9 +601,19 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 
 	async deleteMessage(threadId: string, messageId: string): Promise<void> {
 		await this.relay.publish(DELETE_MESSAGE_KIND, "", [
-			["h", this.decodeThreadId(threadId).channelId],
+			["h", await this.channelOwningMessage(threadId, messageId)],
 			["e", messageId],
 		]);
+	}
+
+	// An edit or a deletion belongs to the channel its target lives in, not to
+	// the conversation it was asked from: the relay rejects a control event
+	// whose channel tag names somewhere else, so "delete that 잡담 post" asked
+	// in a DM has to land in 잡담.
+	private async channelOwningMessage(threadId: string, messageId: string): Promise<string> {
+		const [target] = await this.relay.query({ ids: [messageId], limit: 1 });
+		const owningChannelId = target ? firstTagValue(target, "h") : undefined;
+		return owningChannelId ?? this.decodeThreadId(threadId).channelId;
 	}
 
 	async addReaction(threadId: string, messageId: string, emoji: string): Promise<void> {
