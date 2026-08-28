@@ -1,5 +1,5 @@
 import type { BuzzAdapter } from "../adapters/buzz/adapter.ts";
-import { isServedByTheRelay } from "../adapters/buzz/blossom.ts";
+import { isServedByTheRelay, readAuthorizationHeader } from "../adapters/buzz/blossom.ts";
 import type { OutgoingAttachment } from "../outgoing-attachment.ts";
 import {
 	addReactionAsUser,
@@ -272,7 +272,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 		this.require(actor);
 		const pictureURL = await profilePictureURLAsUser(this.settings.relayURL, actor.secret, externalID);
 		if (!pictureURL) return null;
-		const held = await readWithinLimit(pictureURL, largestBytes, "image/png");
+		const held = await readWithinLimit(pictureURL, largestBytes, "image/png", this.relayReadHeaders(actor, pictureURL));
 		if (!held) return null;
 		return { dataURL: `data:${held.contentType};base64,${held.contentBase64}` };
 	}
@@ -286,13 +286,18 @@ class BuzzPersonalGateway implements PersonalGateway {
 	): Promise<PersonalFile | null> {
 		this.require(actor);
 		if (!isServedByTheRelay(attachmentID, this.settings.relayURL)) return null;
-		const held = await readWithinLimit(attachmentID, largestBytes, "application/octet-stream");
+		const held = await readWithinLimit(attachmentID, largestBytes, "application/octet-stream", this.relayReadHeaders(actor, attachmentID));
 		if (!held) return null;
 		return {
 			filename: attachmentID.slice(attachmentID.lastIndexOf("/") + 1),
 			contentType: held.contentType,
 			contentBase64: held.contentBase64,
 		};
+	}
+
+	private relayReadHeaders(actor: ActorCredential, url: string): Record<string, string> {
+		if (!isServedByTheRelay(url, this.settings.relayURL)) return {};
+		return { Authorization: readAuthorizationHeader(actor.secret, url) };
 	}
 
 	private require(actor: ActorCredential): void {
@@ -306,8 +311,9 @@ async function readWithinLimit(
 	url: string,
 	largestBytes: number,
 	fallbackContentType: string,
+	headers: Record<string, string>,
 ): Promise<{ contentType: string; contentBase64: string } | null> {
-	const response = await fetch(url);
+	const response = await fetch(url, { headers });
 	if (!response.ok) return null;
 	const bytes = new Uint8Array(await response.arrayBuffer());
 	if (bytes.byteLength > largestBytes) return null;

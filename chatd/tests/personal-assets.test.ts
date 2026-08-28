@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { verifyEvent } from "nostr-tools/pure";
 import { createOutboundHandler } from "../src/outbound.ts";
 import { createBuzzPersonalGateway } from "../src/personal/buzz.ts";
 import { createMattermostPersonalGateway } from "../src/personal/mattermost.ts";
@@ -12,6 +13,7 @@ const gateways = {
 	buzz: createBuzzPersonalGateway({} as never, {} as never),
 };
 const actor = { kind: "mattermost-token", secret: "a-members-own-token" };
+const buzzSecretHex = "1".repeat(64);
 const realFetch = globalThis.fetch;
 
 type Seen = { url: string; authorization: string | null };
@@ -100,5 +102,46 @@ describe("a person's assets are read with that person's own credential", () => {
 		});
 
 		expect(await answer.json()).toEqual({ emoji: [] });
+	});
+
+	test("a relay-served attachment is read with a signed blossom get authorization", async () => {
+		const digest = "a".repeat(64);
+		const attachmentURL = `https://relay.test/media/${digest}.png`;
+		const seen: Seen[] = [];
+		globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+			seen.push({ url: String(input), authorization: new Headers(init?.headers).get("Authorization") });
+			return new Response(new Uint8Array(16), { headers: { "content-type": "image/png" } });
+		}) as typeof fetch;
+		const relayGateways = {
+			...gateways,
+			buzz: createBuzzPersonalGateway({} as never, { relayURL: "wss://relay.test" }),
+		};
+		const handler = createOutboundHandler(adapters, configuration, relayGateways);
+
+		const answer = await handler(
+			new Request("http://127.0.0.1/v1/platform/buzz/person.message.attachment", {
+				method: "POST",
+				body: JSON.stringify({
+					actor: { kind: "buzz-secret", secret: buzzSecretHex },
+					messageID: attachmentURL,
+					largestBytes: 100_000,
+				}),
+			}),
+		);
+
+		const { file } = (await answer.json()) as { file: { contentType: string } };
+		expect(file.contentType).toBe("image/png");
+		expect(seen).toHaveLength(1);
+		const authorization = seen[0]?.authorization ?? "";
+		expect(authorization.startsWith("Nostr ")).toBe(true);
+		const authEvent = JSON.parse(
+			Buffer.from(authorization.slice("Nostr ".length), "base64").toString(),
+		) as { kind: number; content: string; tags: string[][] };
+		expect(authEvent.kind).toBe(24242);
+		expect(authEvent.content).toBe("get");
+		expect(authEvent.tags).toContainEqual(["t", "get"]);
+		expect(authEvent.tags).toContainEqual(["x", digest]);
+		expect(authEvent.tags).toContainEqual(["server", "https://relay.test"]);
+		expect(verifyEvent(authEvent as never)).toBe(true);
 	});
 });
