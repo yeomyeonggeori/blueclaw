@@ -27,6 +27,9 @@ type ApprovalRequest struct {
 	SideEffectClass   string
 	ResponseLanguage  string
 	Prompt            string
+	Platform          string
+	ConversationID    string
+	ReplyTargetID     string
 	ModelDraft        string
 	HarnessSession    HarnessSession
 }

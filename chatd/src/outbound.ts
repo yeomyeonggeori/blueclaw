@@ -479,16 +479,19 @@ async function handleMessageSearch(
 	if (!(adapter instanceof BuzzAdapter)) {
 		throw new MalformedRequest(`platform ${adapter.name} does not serve message.search`);
 	}
-	const channelId = await resolveMessageSearchChannelId(adapter, requestDocument);
+	const hasMessageIDs = (requestDocument.messageIDs?.length ?? 0) > 0;
+	// An ID names one exact message wherever it lives, so reading by ID needs no
+	// channel; every other search reads a channel's record and must name one.
+	const channelId = hasMessageIDs ? "" : await resolveMessageSearchChannelId(adapter, requestDocument);
 	const candidates = await adapter.searchMessages({
 		channelId,
 		rootEventId: requestDocument.rootMessageID?.trim() || undefined,
-		messageIds: requestDocument.messageIDs?.length ? requestDocument.messageIDs : undefined,
+		messageIds: hasMessageIDs ? requestDocument.messageIDs : undefined,
 		authorPubkeyHex: messageSearchAuthorPubkey(adapter, requestDocument),
 		queries: requestDocument.queries ?? [],
 		limit: messageSearchLimit(requestDocument.limit),
 	});
-	return { channelID: channelId, candidates };
+	return { channelID: channelId || candidates[0]?.channelID || "", candidates };
 }
 
 function messageSearchLimit(limit: number | undefined): number {

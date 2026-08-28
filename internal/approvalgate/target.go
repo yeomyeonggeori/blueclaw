@@ -15,6 +15,9 @@ type ApprovalTarget struct {
 	ID         string `json:"id,omitempty"`
 	Title      string `json:"title,omitempty"`
 	StartsAt   string `json:"startsAt,omitempty"`
+	// What the action is about to touch, quoted for the approval question.
+	// A preview never narrows the replayed input the way a resolved ID does.
+	Preview string `json:"preview,omitempty"`
 }
 
 type ApprovalTargetResolution struct {
@@ -27,6 +30,9 @@ type ApprovalTargetRequest struct {
 	ToolInput         json.RawMessage
 	RequesterPersonID string
 	RequesterEmail    string
+	Platform          string
+	ConversationID    string
+	ReplyTargetID     string
 }
 
 type ApprovalTargetResolver interface {
@@ -54,6 +60,9 @@ func (gate *Gate) resolveApprovalTarget(ctx context.Context, approvalRequest mcp
 		ToolInput:         approvalRequest.ToolInput,
 		RequesterPersonID: approvalRequest.RequesterPersonID,
 		RequesterEmail:    approvalRequest.RequesterEmail,
+		Platform:          approvalRequest.Platform,
+		ConversationID:    approvalRequest.ConversationID,
+		ReplyTargetID:     approvalRequest.ReplyTargetID,
 	})
 	if errorValue == nil {
 		return resolution

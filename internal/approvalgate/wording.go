@@ -30,6 +30,8 @@ type approvalQuestionInput struct {
 	MessageID      string   `json:"messageID"`
 	MessageIDs     []string `json:"messageIDs"`
 	Message        string   `json:"message"`
+	OldText        string   `json:"oldText"`
+	NewText        string   `json:"newText"`
 	Subject        string   `json:"subject"`
 	Body           string   `json:"body"`
 	Title          string   `json:"title"`
@@ -69,12 +71,16 @@ func (gate *Gate) generateConfirmationWording(ctx context.Context, approvalReque
 	structuredResponse, errorValue := gate.languageModel.GenerateStructuredResponse(ctx, model.StructuredResponseRequest{
 		Messages: []model.Message{
 			{Role: "system", Content: strings.Join([]string{
-				"Write exactly one concise user-facing approval question.",
+				"Write exactly one user-facing approval question.",
 				"The question asks whether to perform the pending action.",
+				"The question is the user's only view of the action, so it must show exactly what will happen, never a category of thing that will happen: 'post this?' is worthless, 'post \"…\"?' is the question.",
+				"When the action sends or posts content, quote the content verbatim in the question (a blockquote under one asking sentence works). Never paraphrase, summarize, or shorten it — what the user approves is exactly what will appear.",
+				"When the action replaces a span of text, show the span being replaced and its replacement, both verbatim.",
+				"When the action removes something, quote what will be removed — its text or the given preview — so the user can tell it from everything it is not.",
 				"Use the original request and action details to phrase the target, content, file, event, or site naturally.",
-				"When the action details name a resolved target, name that target and never repeat a search phrase the caller typed.",
-				"Include consequential details when present so the user can approve a concrete action.",
+				"When the action details name a resolved target or carry a target preview, show that and never repeat a search phrase the caller typed.",
 				"When the action changes or removes something that already exists, say what it affects, and never describe a whole-item replacement as if it only touched a part of it.",
+				"Keep the asking sentence short; the quoted content is as long as it is.",
 				"Do not mention internal tool names, operation identifiers, JSON, schemas, approval gates, runtime, or implementation details.",
 				"Do not answer the question, report status, or explain the policy.",
 				"The question covers this one action and nothing after it. The original request is there to name what the action touches, never to describe the work it is a step toward.",
@@ -138,6 +144,8 @@ func approvalQuestionActionDetails(toolInput json.RawMessage, target ApprovalTar
 	setApprovalQuestionDetail(details, "targetMessageCount", approvalQuestionMessageCount(document))
 	setApprovalQuestionDetail(details, "content", firstNonEmpty(document.Message, document.Subject, document.Body, document.Title, document.Summary))
 	setApprovalQuestionDetail(details, "message", document.Message)
+	setApprovalQuestionDetail(details, "replacedText", document.OldText)
+	setApprovalQuestionDetail(details, "replacementText", document.NewText)
 	setApprovalQuestionDetail(details, "subject", document.Subject)
 	setApprovalQuestionDetail(details, "title", document.Title)
 	setApprovalQuestionDetail(details, "summary", document.Summary)
@@ -151,6 +159,7 @@ func approvalQuestionActionDetails(toolInput json.RawMessage, target ApprovalTar
 		setApprovalQuestionDetail(details, "fileName", filepath.Base(filePath))
 	}
 	details = detailsNamingTheResolvedTarget(details, target)
+	setApprovalQuestionDetail(details, "targetPreview", target.Preview)
 	if len(details) == 0 {
 		return nil
 	}

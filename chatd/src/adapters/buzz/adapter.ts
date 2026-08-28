@@ -171,6 +171,17 @@ class BuzzFormatConverter extends BaseFormatConverter {
 	}
 }
 
+function latestEditContentByTarget(editEvents: BuzzEvent[]): Map<string, string> {
+	const latest = new Map<string, BuzzEvent>();
+	for (const event of editEvents) {
+		const messageId = firstTagValue(event, "e");
+		if (!messageId) continue;
+		const known = latest.get(messageId);
+		if (!known || known.created_at < event.created_at) latest.set(messageId, event);
+	}
+	return new Map([...latest].map(([messageId, event]) => [messageId, event.content]));
+}
+
 // A relay subscription hands each event to a callback that cannot await it, so a
 // failure here has nowhere to go but the process. One message the agent could
 // not take is not a reason to stop taking the rest.
@@ -694,13 +705,12 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	// newest of the best matches first. The score only orders candidates; picking
 	// the message that was meant stays with the caller.
 	async searchMessages(request: BuzzMessageSearchRequest): Promise<BuzzMessageSearchCandidate[]> {
+		if (request.messageIds && request.messageIds.length > 0) {
+			return this.searchMessagesById(request, request.messageIds);
+		}
 		const scanLimit = Math.max(request.limit * 3, buzzMessageSearchScanLimit);
-		const filter: Record<string, unknown> =
-			request.messageIds && request.messageIds.length > 0
-				? { kinds: [STREAM_MESSAGE_KIND], ids: request.messageIds }
-				: { kinds: [STREAM_MESSAGE_KIND], "#h": [request.channelId], limit: scanLimit };
 		const [events, deleted, edits] = await Promise.all([
-			this.relay.query(filter),
+			this.relay.query({ kinds: [STREAM_MESSAGE_KIND], "#h": [request.channelId], limit: scanLimit }),
 			this.deletedMessageIds(request.channelId, scanLimit),
 			this.latestEditsIn(request.channelId, scanLimit),
 		]);
@@ -715,8 +725,38 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 			}
 			return true;
 		});
+		return this.rankedSearchCandidates(visible, request, edits);
+	}
+
+	// A message ID names one exact message wherever it lives, so reading by ID
+	// crosses channels: what a search in one channel found must be readable from
+	// the conversation the request came from.
+	private async searchMessagesById(
+		request: BuzzMessageSearchRequest,
+		messageIds: string[],
+	): Promise<BuzzMessageSearchCandidate[]> {
+		const [events, deletions, editEvents] = await Promise.all([
+			this.relay.query({ kinds: [STREAM_MESSAGE_KIND], ids: messageIds }),
+			this.relay.query({ kinds: [DELETE_MESSAGE_KIND], "#e": messageIds, limit: messageIds.length * 4 }).catch(() => []),
+			this.relay.query({ kinds: [EDIT_MESSAGE_KIND], "#e": messageIds, limit: messageIds.length * 32 }).catch(() => []),
+		]);
+		const deleted = new Set(deletions.map((event) => firstTagValue(event, "e")).filter(Boolean));
+		const edits = latestEditContentByTarget(editEvents);
+		const visible = events.filter(
+			(event) =>
+				!deleted.has(event.id) &&
+				(!request.authorPubkeyHex || event.pubkey === request.authorPubkeyHex),
+		);
+		return this.rankedSearchCandidates(visible, request, edits);
+	}
+
+	private rankedSearchCandidates(
+		events: BuzzEvent[],
+		request: BuzzMessageSearchRequest,
+		edits: Map<string, string>,
+	): BuzzMessageSearchCandidate[] {
 		const ranked = rankBySearchScore(
-			visible,
+			events,
 			request.queries,
 			(event) => edits.get(event.id) ?? event.content,
 			(event) => event.created_at,
@@ -724,7 +764,7 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		);
 		return ranked.map(({ candidate: event, score }) => ({
 			messageID: event.id,
-			channelID: request.channelId,
+			channelID: firstTagValue(event, "h") ?? request.channelId,
 			rootMessageID: threadTagsOf(event).rootEventId,
 			authorPubkeyHex: event.pubkey,
 			authoredByAssistant: event.pubkey === this.relay.pubkeyHex,
@@ -742,14 +782,7 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		const events = await this.relay
 			.query({ kinds: [EDIT_MESSAGE_KIND], "#h": [channelId], limit: Math.max(limit * 3, limit) })
 			.catch(() => []);
-		const latest = new Map<string, BuzzEvent>();
-		for (const event of events) {
-			const messageId = firstTagValue(event, "e");
-			if (!messageId) continue;
-			const known = latest.get(messageId);
-			if (!known || known.created_at < event.created_at) latest.set(messageId, event);
-		}
-		return new Map([...latest].map(([messageId, event]) => [messageId, event.content]));
+		return latestEditContentByTarget(events);
 	}
 
 	// Somebody deletes a message to unsay it. The relay keeps what was said and

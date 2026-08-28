@@ -55,6 +55,9 @@ func capabilityTargetResolveRequest(operation string, request approvalgate.Appro
 		"context": map[string]any{
 			"requesterPersonID": request.RequesterPersonID,
 			"requesterEmail":    request.RequesterEmail,
+			"platform":          request.Platform,
+			"conversationID":    request.ConversationID,
+			"replyTargetID":     request.ReplyTargetID,
 		},
 	}
 }

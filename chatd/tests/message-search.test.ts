@@ -135,3 +135,34 @@ test("message.search without a resolvable channel is refused", async () => {
 	);
 	expect(response.status).toBe(400);
 });
+
+test("reading by ID crosses channels and needs no channel named", async () => {
+	const adapter = adapterAnswering({ 9: [], 40003: [], 9005: [] });
+	const botPubkey = adapter.botPubkey;
+	const otherChannel = "71031c16-5569-8595-06ea-1e3caf3dd83f";
+	const targetID = "a".repeat(64);
+	const events: Record<number, unknown[]> = {
+		9: [{ id: targetID, pubkey: botPubkey, created_at: 100, kind: 9, tags: [["h", otherChannel]], content: "잡담에 올라간 글", sig: "" }],
+		40003: [],
+		9005: [],
+	};
+	(adapter as unknown as { relay: { query: unknown; pubkeyHex: string } }).relay = {
+		pubkeyHex: botPubkey,
+		query: async (filter: { kinds?: number[]; ids?: string[] }) =>
+			filter.ids ? events[9]! : events[filter.kinds?.[0] ?? 0] ?? [],
+	};
+
+	const handler = createOutboundHandler({ buzz: adapter }, {} as ChatdConfiguration);
+	const response = await handler(
+		new Request("http://chatd/v1/platform/buzz/message.search", {
+			method: "POST",
+			body: JSON.stringify({ messageIDs: [targetID] }),
+		}),
+	);
+
+	expect(response.status).toBe(200);
+	const body = (await response.json()) as { channelID: string; candidates: { messageID: string; channelID: string; text: string }[] };
+	expect(body.candidates[0]?.messageID).toBe(targetID);
+	expect(body.candidates[0]?.channelID).toBe(otherChannel);
+	expect(body.candidates[0]?.text).toBe("잡담에 올라간 글");
+});
