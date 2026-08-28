@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -88,5 +89,51 @@ func TestARestartCarriesNoAnswerAndKeepsTheObjective(t *testing.T) {
 
 	if activeGoal.CurrentObjective != "draft the quarterly report" {
 		t.Fatalf("a restart said nothing new, so the work in flight stands, got %q", activeGoal.CurrentObjective)
+	}
+}
+
+// The incident this guards: a task paused on "delete the duplicate post"
+// absorbed "edit the post and add the image instead" as a steer, kept its
+// precomputed continue_task routing with the old delete contract, and executed
+// a delete approved for the old objective. A steer that carries the person's
+// words must go back through intake with nothing precomputed and no approval
+// carried over.
+func TestASteerWithNewWordsLaunchesThroughIntakeAgain(t *testing.T) {
+	launchRequest := agentruntime.TaskLaunchRequest{
+		Prompt:                  "두 번째로 중복 올린 글 삭제해줘.",
+		IsApprovalContinuation:  true,
+		IsRuntimeRestartResume:  true,
+		PrecomputedTurnDecision: &agentcontract.TurnDecision{Route: agentcontract.TurnRouteContinueTask},
+	}
+	event := PlatformInboundEvent{Prompt: "삭제가 아니라 글을 수정해서 원본 이미지도 넣어줘"}
+
+	steered := steeredTaskLaunchRequest(launchRequest, event, "게시글 수정 및 원본 이미지 추가")
+
+	if steered.Prompt != "삭제가 아니라 글을 수정해서 원본 이미지도 넣어줘" {
+		t.Fatalf("the person's own words must drive the re-intake, got %q", steered.Prompt)
+	}
+	if steered.PrecomputedTurnDecision != nil {
+		t.Fatal("a steered launch must not carry a precomputed route; intake decides refine versus revise")
+	}
+	if steered.IsApprovalContinuation {
+		t.Fatal("a call approved for the old objective must not be carried out under the new one")
+	}
+	if steered.IsRuntimeRestartResume {
+		t.Fatal("a steered launch is a new ask, not a restart resume")
+	}
+}
+
+func TestASteerWithNothingNewKeepsTheResumeShape(t *testing.T) {
+	launchRequest := agentruntime.TaskLaunchRequest{
+		Prompt:                  "해줘",
+		IsApprovalContinuation:  true,
+		IsRuntimeRestartResume:  true,
+		PrecomputedTurnDecision: &agentcontract.TurnDecision{Route: agentcontract.TurnRouteContinueTask},
+	}
+
+	steered := steeredTaskLaunchRequest(launchRequest, PlatformInboundEvent{}, "")
+
+	if steered.PrecomputedTurnDecision == nil || !steered.IsApprovalContinuation || !steered.IsRuntimeRestartResume {
+		t.Fatal("a steer that says nothing new resumes the task as it was")
 	}
 }

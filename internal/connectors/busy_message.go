@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -167,6 +168,7 @@ func (connectorRuntime *ConnectorRuntime) resumePausedTaskForSteer(
 	}
 	connectorRuntime.appendSteerRequestedEvent(activeTaskRun.TaskRunID, event, instruction, decision)
 	launchRequest := connectorRuntime.interruptedTaskLaunchRequest(activeTaskRun, taskEvents, launchContext, event, adapter, userSteerTaskProfile(platform, activeTaskRun.TaskRunID, instruction), sendReply)
+	launchRequest = steeredTaskLaunchRequest(launchRequest, event, instruction)
 	launchResult, errorValue := connectorRuntime.currentTaskLauncher().Launch(ctx, launchRequest)
 	if errorValue != nil {
 		failureTurnResult := connectorRuntime.launchFailureCompleter.CompleteLaunchFailure(ctx, agentcontract.AgentTurnRequest{
@@ -188,6 +190,29 @@ func (connectorRuntime *ConnectorRuntime) resumePausedTaskForSteer(
 		return busyMessageResult{}, errorValue
 	}
 	return busyMessageResult{connectorResult: connectorResult, isHandled: true}, nil
+}
+
+// A steer that says something new is a new ask made against the same task, so
+// the contract the old objective derived — required evidence, expected results,
+// tool selection — must not outlive it. Launching with routing precomputed as
+// continue_task kept that stale contract binding: a task paused on "delete the
+// duplicate" absorbed "edit the post instead" into its objective while its
+// contract still demanded delete evidence, and the agent deleted. Let intake
+// run again on the person's own words, with the restored goal as context, so
+// the router decides whether the message refines the job or revises it, and
+// the contract is re-derived either way. Dropping the approval-continuation
+// flag also keeps a call approved for the old objective from being carried out
+// under the new one.
+func steeredTaskLaunchRequest(launchRequest agentruntime.TaskLaunchRequest, event PlatformInboundEvent, instruction string) agentruntime.TaskLaunchRequest {
+	steeredPrompt := firstNonEmptyString(strings.TrimSpace(event.Prompt), instruction)
+	if steeredPrompt == "" {
+		return launchRequest
+	}
+	launchRequest.Prompt = steeredPrompt
+	launchRequest.PrecomputedTurnDecision = nil
+	launchRequest.IsApprovalContinuation = false
+	launchRequest.IsRuntimeRestartResume = false
+	return launchRequest
 }
 
 func (connectorRuntime *ConnectorRuntime) replySteerResumeUnavailable(
