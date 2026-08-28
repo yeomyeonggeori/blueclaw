@@ -2,6 +2,7 @@ package connectors
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -2715,8 +2716,9 @@ func (connectorRuntime *ConnectorRuntime) withAttachmentMaterials(ctx context.Co
 		return event
 	}
 	if len(result.InputAttachments) > 0 {
-		writtenAttachments := connectorRuntime.attachmentWriterFor(personID).writeAll(ctx, result.InputAttachments)
+		writtenAttachments, writtenContents := connectorRuntime.attachmentWriterFor(personID).writeAll(ctx, result.InputAttachments)
 		result.InputParts = connectorInputPartsAtWrittenPaths(result.InputParts, writtenAttachments)
+		result.InputParts = connectorImagePartsShowingTheirBytes(result.InputParts, writtenContents)
 		importedAttachments := connectorReadableInputAttachments(writtenAttachments, personID, scope)
 		event.Context.InputAttachments = connectorReplaceImportedInputAttachments(event.Context.InputAttachments, importedAttachments)
 		event.Context.Materials = connectorReplaceImportedInputAttachments(event.Context.Materials, importedAttachments)
@@ -2756,6 +2758,28 @@ func connectorRefusedInputAttachments(attachments []InputAttachment, errorValue 
 
 func (connectorRuntime *ConnectorRuntime) attachmentWriterFor(personID string) importedAttachmentWriter {
 	return importedAttachmentWriter{workspaceActorFactory: connectorRuntime.workspaceActorFactory, personID: personID}
+}
+
+const mostInlineImageBytesShown = 8 << 20
+
+// An image the message came with is put in front of the model with the message,
+// whatever messenger it came over. This layer is the one owner of that: an
+// importing adapter hands back bytes, the writer puts them in the person's
+// workspace, and the picture travels with the prompt instead of costing a tool
+// call to look at what was just sent.
+func connectorImagePartsShowingTheirBytes(parts []agentcontract.AgentPart, contents writtenAttachmentContents) []agentcontract.AgentPart {
+	result := make([]agentcontract.AgentPart, 0, len(parts))
+	for _, part := range parts {
+		if part.Image != nil && strings.TrimSpace(part.Image.DataBase64) == "" {
+			if content, isHeld := contents[strings.TrimSpace(part.Image.Path)]; isHeld && len(content) <= mostInlineImageBytesShown {
+				image := *part.Image
+				image.DataBase64 = base64.StdEncoding.EncodeToString(content)
+				part.Image = &image
+			}
+		}
+		result = append(result, part)
+	}
+	return result
 }
 
 // A part names the same file the attachment does. Whatever name the file ended
@@ -3055,8 +3079,9 @@ func (resolver connectorAttachmentMaterialResolver) importAttachmentWithAdapter(
 	if len(result.InputAttachments) == 0 {
 		return agentcontract.VisibleContextMaterial{}, errors.New("attachment import returned no material")
 	}
-	writtenAttachments := resolver.attachmentWriter.writeAll(ctx, result.InputAttachments)
+	writtenAttachments, writtenContents := resolver.attachmentWriter.writeAll(ctx, result.InputAttachments)
 	result.InputParts = connectorInputPartsAtWrittenPaths(result.InputParts, writtenAttachments)
+	result.InputParts = connectorImagePartsShowingTheirBytes(result.InputParts, writtenContents)
 	importedAttachment := connectorReadableInputAttachments(writtenAttachments, resolver.personID, scope)[0]
 	if strings.TrimSpace(importedAttachment.Path) == "" {
 		return agentcontract.VisibleContextMaterial{}, errors.New("attachment import returned no readable path")

@@ -100,3 +100,37 @@ describe("fetchAttachmentForDirectory", () => {
 		expect(fetched.errorCode).toBe("download_failed");
 	});
 });
+
+describe("attachmentFilename via fetch", () => {
+	// The markdown alt text names buzz attachments "image", with no extension;
+	// the url ends in the blob's own hash and type. An inbox of files named
+	// image, image-2 answers nobody days later.
+	it("prefers the url's own segment over an extensionless alt text", async () => {
+		const adapter = {
+			fetchAttachment: async () => new Response("bytes", { status: 200, headers: { "Content-Type": "image/png" } }),
+		};
+
+		const fetched = await fetchAttachmentForDirectory(adapter, "/workspace/inbox/buzz/dm", {
+			platform: "buzz",
+			url: "http://localhost:3000/media/187958fc.png",
+			filename: "image",
+		});
+
+		expect(fetched.filename).toBe("187958fc.png");
+		expect(fetched.path).toBe("/workspace/inbox/buzz/dm/187958fc.png");
+	});
+
+	it("keeps a real filename the sender chose", async () => {
+		const adapter = {
+			fetchAttachment: async () => new Response("bytes", { status: 200 }),
+		};
+
+		const fetched = await fetchAttachmentForDirectory(adapter, "/workspace/inbox/buzz/dm", {
+			platform: "buzz",
+			url: "http://localhost:3000/media/187958fc.png",
+			filename: "지도.png",
+		});
+
+		expect(fetched.filename).toBe("지도.png");
+	});
+});

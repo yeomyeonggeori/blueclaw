@@ -26,37 +26,47 @@ type importedAttachmentWriter struct {
 	personID              string
 }
 
-func (writer importedAttachmentWriter) writeAll(ctx context.Context, attachments []InputAttachment) []InputAttachment {
+func (writer importedAttachmentWriter) writeAll(ctx context.Context, attachments []InputAttachment) ([]InputAttachment, writtenAttachmentContents) {
 	written := make([]InputAttachment, 0, len(attachments))
+	contents := writtenAttachmentContents{}
 	takenPaths := map[string]bool{}
 	for _, attachment := range attachments {
-		written = append(written, writer.write(ctx, attachment, takenPaths))
+		writtenAttachment, content := writer.write(ctx, attachment, takenPaths)
+		written = append(written, writtenAttachment)
+		if writtenAttachment.IsAvailable && len(content) > 0 {
+			contents[writtenAttachment.Path] = content
+		}
 	}
-	return written
+	return written, contents
 }
 
-func (writer importedAttachmentWriter) write(ctx context.Context, attachment InputAttachment, takenPaths map[string]bool) InputAttachment {
+// The bytes that were just written, kept for the one hop that puts a picture in
+// front of the model with the message it came on, instead of costing a tool
+// call to look at what was just sent.
+type writtenAttachmentContents map[string][]byte
+
+func (writer importedAttachmentWriter) write(ctx context.Context, attachment InputAttachment, takenPaths map[string]bool) (InputAttachment, []byte) {
 	content := strings.TrimSpace(attachment.ContentBase64)
 	attachment.ContentBase64 = ""
 	if content == "" {
-		return attachment
+		return attachment, nil
 	}
 	decoded, errorValue := base64.StdEncoding.DecodeString(content)
 	if errorValue != nil {
-		return refusedInputAttachment(attachment, errorValue)
+		return refusedInputAttachment(attachment, errorValue), nil
 	}
 	actor, errorValue := writer.requesterActor(ctx)
 	if errorValue != nil {
-		return refusedInputAttachment(attachment, errorValue)
+		return refusedInputAttachment(attachment, errorValue), nil
 	}
 	directoryPath := path.Dir(attachment.Path)
 	if errorValue := actor.MkdirAll(ctx, directoryPath); errorValue != nil {
-		return refusedInputAttachment(attachment, errorValue)
+		return refusedInputAttachment(attachment, errorValue), nil
 	}
 	filePath := freeAttachmentPath(ctx, actor, attachment.Path, decoded, takenPaths)
 	takenPaths[filePath] = true
 	if errorValue := actor.WriteFile(ctx, filePath, decoded); errorValue != nil {
-		return refusedInputAttachment(attachment, errorValue)
+		return refusedInputAttachment(attachment, errorValue), nil
 	}
 	attachment.Path = filePath
 	attachment.Filename = path.Base(filePath)
@@ -64,7 +74,7 @@ func (writer importedAttachmentWriter) write(ctx context.Context, attachment Inp
 	attachment.IsAvailable = true
 	attachment.ErrorCode = ""
 	attachment.Message = ""
-	return attachment
+	return attachment, decoded
 }
 
 func (writer importedAttachmentWriter) requesterActor(ctx context.Context) (security.WorkspaceActor, error) {

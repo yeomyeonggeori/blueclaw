@@ -54,13 +54,16 @@ export async function fetchAttachmentForDirectory(
 	};
 }
 
+// A buzz attachment arrives named by its markdown alt text — usually the word
+// "image", with no extension — while the url ends in the blob's own hash and
+// type. Days later a person asks for "that picture", and an inbox of files
+// named image, image-2, image-3 answers nobody; the url's segment does.
 function attachmentFilename(attachment: InputAttachmentDocument): string {
-	const named = attachment.filename?.trim();
-	if (named) return path.basename(named);
+	const named = path.basename(attachment.filename?.trim() ?? "");
+	if (named.includes(".")) return named;
+	const lastSegment = attachment.url?.split("?")[0]?.split("/").pop();
+	if (lastSegment?.includes(".")) return lastSegment;
+	if (named) return named;
 	if (attachment.fileID) return attachment.fileID;
-	if (attachment.url) {
-		const lastSegment = attachment.url.split("?")[0]?.split("/").pop();
-		if (lastSegment) return lastSegment;
-	}
-	return "attachment";
+	return lastSegment || "attachment";
 }
