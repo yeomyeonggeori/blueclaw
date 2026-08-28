@@ -560,11 +560,11 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		});
 	}
 
-	// The answer goes where the answered message is, and no deeper. A message
-	// inside a thread is answered inside that thread, flat at its root — never
-	// outside it, never as a thread of its own. A top-level message in a channel
-	// is answered in its thread; in a direct conversation the timeline is the
-	// conversation, so a top-level message is answered on the timeline.
+	// The answer lives in the answered message's thread, and no deeper. A
+	// question asked at the top level opens its own thread, so exchanges do not
+	// mix on the timeline; a message inside a thread is answered inside that
+	// thread, flat at its root — never back on the timeline, never as a thread
+	// of its own.
 	private async threadTags(
 		decoded: BuzzThreadId,
 		extraTags: string[][],
@@ -579,10 +579,7 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	private async threadRootFor(decoded: BuzzThreadId, answeredId: string | undefined): Promise<string | undefined> {
 		if (!answeredId) return decoded.rootEventId;
 		const [answered] = await this.relay.query({ ids: [answeredId], limit: 1 });
-		const rootOfAnswered = answered ? threadTagsOf(answered).rootEventId : undefined;
-		if (rootOfAnswered) return rootOfAnswered;
-		if (this.channelsById.get(decoded.channelId)?.isDM) return undefined;
-		return answeredId;
+		return (answered ? threadTagsOf(answered).rootEventId : undefined) ?? answeredId;
 	}
 
 	async postChannelMessage(channelId: string, message: AdapterPostableMessage): Promise<RawMessage<BuzzEvent>> {
