@@ -36,11 +36,33 @@ import {
 import type { ReactionSummary } from "../../visible-context.ts";
 import type { OutgoingAttachment } from "../../outgoing-attachment.ts";
 import { buildMessageBody, threadRootOf } from "./user-session.ts";
+import { rankBySearchScore } from "../../message-search.ts";
 import { originOfTags } from "../../mirror/origin.ts";
 import { reactionContentOf } from "../../mirror/reaction-emoji.ts";
 
 const STREAM_MESSAGE_KIND = 9;
 const TYPING_INDICATOR_KIND = 20002;
+const buzzMessageSearchScanLimit = 500;
+
+export type BuzzMessageSearchRequest = {
+	channelId: string;
+	rootEventId?: string;
+	messageIds?: string[];
+	authorPubkeyHex?: string;
+	queries: string[];
+	limit: number;
+};
+
+export type BuzzMessageSearchCandidate = {
+	messageID: string;
+	channelID: string;
+	rootMessageID?: string;
+	authorPubkeyHex: string;
+	authoredByAssistant: boolean;
+	createdAt: number;
+	text: string;
+	score: number;
+};
 
 function encodeCreatedAtCursor(createdAt: number): string {
 	return String(createdAt);
@@ -439,15 +461,17 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	private buildMessage(
 		event: BuzzEvent,
 		profile: { name?: string; nip05?: string } | undefined,
+		editedText?: string,
 	): Message<BuzzEvent> {
+		const text = editedText ?? event.content;
 		return new Message({
 			id: event.id,
 			threadId: this.threadIdForEvent(event),
-			text: event.content,
-			formatted: this.converter.toAst(event.content),
+			text,
+			formatted: this.converter.toAst(text),
 			raw: event,
 			author: this.authorForPubkey(event.pubkey, profile),
-			metadata: { dateSent: new Date(event.created_at * 1000), edited: false },
+			metadata: { dateSent: new Date(event.created_at * 1000), edited: editedText !== undefined },
 			attachments: attachmentsFromEvent(event),
 		});
 	}
@@ -609,16 +633,17 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 			limit,
 		};
 		if (until !== undefined) filter.until = until;
-		const [events, deleted] = await Promise.all([
+		const [events, deleted, edits] = await Promise.all([
 			this.relay.query(filter),
 			this.deletedMessageIds(decoded.channelId, limit),
+			this.latestEditsIn(decoded.channelId, limit),
 		]);
 		const chronological = events
 			.filter((event) => !deleted.has(event.id))
 			.sort((first, second) => first.created_at - second.created_at);
 		const messages: Message<BuzzEvent>[] = [];
 		for (const event of chronological) {
-			messages.push(this.buildMessage(event, await this.fetchProfile(event.pubkey)));
+			messages.push(this.buildMessage(event, await this.fetchProfile(event.pubkey), edits.get(event.id)));
 		}
 		const oldest = chronological[0];
 		const nextCursor =
@@ -631,13 +656,14 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		rootEventId: string,
 		limit: number,
 	): Promise<FetchResult<BuzzEvent>> {
-		const [events, deleted] = await Promise.all([
+		const [events, deleted, edits] = await Promise.all([
 			this.relay.query({
 				kinds: [STREAM_MESSAGE_KIND],
 				"#h": [channelId],
 				limit: Math.max(limit * 3, limit),
 			}),
 			this.deletedMessageIds(channelId, Math.max(limit * 3, limit)),
+			this.latestEditsIn(channelId, Math.max(limit * 3, limit)),
 		]);
 		const chronological = events
 			.filter((event) => !deleted.has(event.id))
@@ -648,9 +674,71 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		});
 		const messages: Message<BuzzEvent>[] = [];
 		for (const event of relevant.slice(-limit)) {
-			messages.push(this.buildMessage(event, await this.fetchProfile(event.pubkey)));
+			messages.push(this.buildMessage(event, await this.fetchProfile(event.pubkey), edits.get(event.id)));
 		}
 		return { messages, nextCursor: undefined };
+	}
+
+	// Search reads what a person would see: deletions removed, edits applied,
+	// newest of the best matches first. The score only orders candidates; picking
+	// the message that was meant stays with the caller.
+	async searchMessages(request: BuzzMessageSearchRequest): Promise<BuzzMessageSearchCandidate[]> {
+		const scanLimit = Math.max(request.limit * 3, buzzMessageSearchScanLimit);
+		const filter: Record<string, unknown> =
+			request.messageIds && request.messageIds.length > 0
+				? { kinds: [STREAM_MESSAGE_KIND], ids: request.messageIds }
+				: { kinds: [STREAM_MESSAGE_KIND], "#h": [request.channelId], limit: scanLimit };
+		const [events, deleted, edits] = await Promise.all([
+			this.relay.query(filter),
+			this.deletedMessageIds(request.channelId, scanLimit),
+			this.latestEditsIn(request.channelId, scanLimit),
+		]);
+		const visible = events.filter((event) => {
+			if (deleted.has(event.id)) return false;
+			if (firstTagValue(event, "h") !== request.channelId) return false;
+			if (request.authorPubkeyHex && event.pubkey !== request.authorPubkeyHex) return false;
+			if (request.rootEventId) {
+				const { rootEventId } = threadTagsOf(event);
+				const belongs = event.id === request.rootEventId || rootEventId === request.rootEventId;
+				if (!belongs) return false;
+			}
+			return true;
+		});
+		const ranked = rankBySearchScore(
+			visible,
+			request.queries,
+			(event) => edits.get(event.id) ?? event.content,
+			(event) => event.created_at,
+			request.limit,
+		);
+		return ranked.map(({ candidate: event, score }) => ({
+			messageID: event.id,
+			channelID: request.channelId,
+			rootMessageID: threadTagsOf(event).rootEventId,
+			authorPubkeyHex: event.pubkey,
+			authoredByAssistant: event.pubkey === this.relay.pubkeyHex,
+			createdAt: event.created_at * 1000,
+			text: edits.get(event.id) ?? event.content,
+			score,
+		}));
+	}
+
+	// An edited message is still the event that created it; the edit is an event
+	// of its own carrying what the author now means. The agent narrates its work
+	// by editing one message many times before it holds the answer, so a reader
+	// that ignores edits shows the first draft forever.
+	private async latestEditsIn(channelId: string, limit: number): Promise<Map<string, string>> {
+		const events = await this.relay
+			.query({ kinds: [EDIT_MESSAGE_KIND], "#h": [channelId], limit: Math.max(limit * 3, limit) })
+			.catch(() => []);
+		const latest = new Map<string, BuzzEvent>();
+		for (const event of events) {
+			const messageId = firstTagValue(event, "e");
+			if (!messageId) continue;
+			const known = latest.get(messageId);
+			if (!known || known.created_at < event.created_at) latest.set(messageId, event);
+		}
+		return new Map([...latest].map(([messageId, event]) => [messageId, event.content]));
 	}
 
 	// Somebody deletes a message to unsay it. The relay keeps what was said and

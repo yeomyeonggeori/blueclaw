@@ -2249,7 +2249,7 @@
         "state": "ok"
       },
       "canonicalName": "message_context",
-      "description": "Return the exact current Mattermost conversation, thread, requester, and bot identities.",
+      "description": "Return the exact current messenger conversation, thread, requester, and bot identities.",
       "estimatedLatency": "low",
       "idempotency": {
         "required": false,

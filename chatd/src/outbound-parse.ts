@@ -12,6 +12,7 @@ import type {
 	MessageDeleteRequest,
 	MessageEditRequest,
 	MessagePostRequest,
+	MessageSearchRequest,
 	ProgressRequest,
 	ReactionRequest,
 	ReplyAttachmentDocument,
@@ -155,6 +156,26 @@ export function parseMessageDeleteRequest(value: unknown): MessageDeleteRequest 
 		replyTargetID: requireString(record, "replyTargetID"),
 		messageID: requireString(record, "messageID"),
 	};
+}
+
+export function parseMessageSearchRequest(value: unknown): MessageSearchRequest {
+	const record = requireRecord(value, "message.search request");
+	const request: MessageSearchRequest = {
+		replyTargetID: optionalString(record, "replyTargetID"),
+		channelID: optionalString(record, "channelID"),
+		channelName: optionalString(record, "channelName"),
+		rootMessageID: optionalString(record, "rootMessageID"),
+		messageIDs: optionalArray(record, "messageIDs").filter(
+			(entry): entry is string => typeof entry === "string" && entry.trim() !== "",
+		),
+		authoredBy: optionalString(record, "authoredBy"),
+		requesterPubkeyHex: optionalString(record, "requesterPubkeyHex"),
+		queries: optionalArray(record, "queries").filter(
+			(entry): entry is string => typeof entry === "string" && entry.trim() !== "",
+		),
+		limit: optionalNumber(record, "limit"),
+	};
+	return request;
 }
 
 export function parseDirectMessageSendRequest(value: unknown): DirectMessageSendRequest {

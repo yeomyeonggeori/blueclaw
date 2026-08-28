@@ -997,7 +997,7 @@ const messageToolDefinitions: CapabilityToolDefinition[] = [
     namespace: 'message',
     privacyClass: 'platform_message',
     policyResource: 'tool:message_context',
-    description: 'Return the exact current Mattermost conversation, thread, requester, and bot identities.',
+    description: 'Return the exact current messenger conversation, thread, requester, and bot identities.',
     version: '2',
     estimatedLatency: CapabilityEstimatedLatency.Low,
     inputSchema: messageContextInputSchema,
