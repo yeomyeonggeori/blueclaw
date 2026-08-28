@@ -42,42 +42,75 @@ function eTags(tags: string[][]): string[][] {
 	return tags.filter((tag) => tag[0] === "e");
 }
 
-describe("agent thread tags", () => {
-	// A direct conversation is already a conversation. Threading inside it drew
-	// a thread hanging off a thread on the person's screen.
-	it("posts flat in a direct conversation", async () => {
-		const { adapter, relay } = buzzAdapterOverFakeRelay();
-		adapterInternals<{ channelsById: Map<string, object> }>(adapter).channelsById.set("dm-1", {
-			channelId: "dm-1",
-			name: "",
-			isDM: true,
-		});
+function insideThread(id: string, root: string): BuzzEvent {
+	return {
+		id,
+		kind: 9,
+		content: "이어서",
+		tags: [["e", root, "", "root"]],
+		pubkey: "person",
+		created_at: 0,
+		sig: "",
+	} as BuzzEvent;
+}
 
-		await adapter.postMessage(adapter.encodeThreadId({ channelId: "dm-1", rootEventId: "req-1" }), "안내", [
+function topLevel(id: string): BuzzEvent {
+	return { id, kind: 9, content: "ㅇ", tags: [], pubkey: "person", created_at: 0, sig: "" } as BuzzEvent;
+}
+
+function withChannel(adapter: BuzzAdapter, channelId: string, isDM: boolean): void {
+	adapterInternals<{ channelsById: Map<string, object> }>(adapter).channelsById.set(channelId, {
+		channelId,
+		name: isDM ? "" : "잡담",
+		isDM,
+	});
+}
+
+// The answer goes where the answered message is, and no deeper: never outside
+// the thread the person spoke in, never as a thread of its own inside it.
+describe("agent thread tags", () => {
+	it("answers inside the thread the person spoke in", async () => {
+		const { adapter, relay } = buzzAdapterOverFakeRelay({ "answered-1": insideThread("answered-1", "req-1") });
+		withChannel(adapter, "dm-1", true);
+
+		await adapter.postMessage(adapter.encodeThreadId({ channelId: "dm-1" }), "안내", [
+			["e", "answered-1", "", "reply"],
+		]);
+
+		expect(eTags(relay.published[0]?.tags ?? [])).toEqual([
+			["e", "req-1", "", "root"],
+			["e", "req-1", "", "reply"],
+		]);
+	});
+
+	it("answers a top-level direct message on the timeline", async () => {
+		const { adapter, relay } = buzzAdapterOverFakeRelay({ "answered-1": topLevel("answered-1") });
+		withChannel(adapter, "dm-1", true);
+
+		await adapter.postMessage(adapter.encodeThreadId({ channelId: "dm-1", rootEventId: "answered-1" }), "안내", [
 			["e", "answered-1", "", "reply"],
 		]);
 
 		expect(eTags(relay.published[0]?.tags ?? [])).toEqual([]);
 	});
 
-	// Answering a reply answers what it replied to: the root is the answered
-	// message's own root, so every answer lands flat under one conversation.
+	it("answers a top-level channel message in its thread", async () => {
+		const { adapter, relay } = buzzAdapterOverFakeRelay({ "answered-1": topLevel("answered-1") });
+		withChannel(adapter, "channel-1", false);
+
+		await adapter.postMessage(adapter.encodeThreadId({ channelId: "channel-1" }), "안내", [
+			["e", "answered-1", "", "reply"],
+		]);
+
+		expect(eTags(relay.published[0]?.tags ?? [])).toEqual([
+			["e", "answered-1", "", "root"],
+			["e", "answered-1", "", "reply"],
+		]);
+	});
+
 	it("collapses a channel answer to the thread root", async () => {
-		const answered: BuzzEvent = {
-			id: "answered-1",
-			kind: 9,
-			content: "ㅇ",
-			tags: [["e", "req-1", "", "root"]],
-			pubkey: "person",
-			created_at: 0,
-			sig: "",
-		} as BuzzEvent;
-		const { adapter, relay } = buzzAdapterOverFakeRelay({ "answered-1": answered });
-		adapterInternals<{ channelsById: Map<string, object> }>(adapter).channelsById.set("channel-1", {
-			channelId: "channel-1",
-			name: "잡담",
-			isDM: false,
-		});
+		const { adapter, relay } = buzzAdapterOverFakeRelay({ "answered-1": insideThread("answered-1", "req-1") });
+		withChannel(adapter, "channel-1", false);
 
 		await adapter.postMessage(adapter.encodeThreadId({ channelId: "channel-1" }), "안내", [
 			["e", "answered-1", "", "reply"],
