@@ -66,8 +66,8 @@ function withChannel(adapter: BuzzAdapter, channelId: string, isDM: boolean): vo
 	});
 }
 
-// The answer goes where the answered message is, and no deeper: never outside
-// the thread the person spoke in, never as a thread of its own inside it.
+// The answer lives in the answered message's thread: a top-level question opens
+// its own thread, a threaded message is answered flat at its thread's root.
 describe("agent thread tags", () => {
 	it("answers inside the thread the person spoke in", async () => {
 		const { adapter, relay } = buzzAdapterOverFakeRelay({ "answered-1": insideThread("answered-1", "req-1") });
@@ -83,7 +83,9 @@ describe("agent thread tags", () => {
 		]);
 	});
 
-	it("answers a top-level direct message on the timeline", async () => {
+	// A question asked at the top level of a direct conversation opens its own
+	// thread, so two requests never mix on the timeline.
+	it("answers a top-level direct message in a thread of its own", async () => {
 		const { adapter, relay } = buzzAdapterOverFakeRelay({ "answered-1": topLevel("answered-1") });
 		withChannel(adapter, "dm-1", true);
 
@@ -91,7 +93,10 @@ describe("agent thread tags", () => {
 			["e", "answered-1", "", "reply"],
 		]);
 
-		expect(eTags(relay.published[0]?.tags ?? [])).toEqual([]);
+		expect(eTags(relay.published[0]?.tags ?? [])).toEqual([
+			["e", "answered-1", "", "root"],
+			["e", "answered-1", "", "reply"],
+		]);
 	});
 
 	it("answers a top-level channel message in its thread", async () => {
