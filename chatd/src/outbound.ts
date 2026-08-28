@@ -446,13 +446,33 @@ async function handleMessageDelete(
 	return {};
 }
 
+// A caller that was never spoken to in a channel holds no cursor for it, so the
+// channel's own name is enough to start reading, the way message.post already
+// resolves one to post into.
+async function historyThreadIdForChannel(
+	adapter: PlatformChatAdapter,
+	requestDocument: { channelID?: string; channelName?: string },
+): Promise<string> {
+	const channelID = await resolveMessagePostChannelID(adapter, {
+		channelID: requestDocument.channelID,
+		channelName: requestDocument.channelName,
+		message: "",
+	});
+	return adapter.encodeThreadId({ channelId: channelID });
+}
+
 async function handleHistoryFetch(
 	adapter: PlatformChatAdapter,
 	_configuration: ChatdConfiguration,
 	requestBody: unknown,
 ): Promise<HistoryFetchResponse> {
 	const requestDocument = parseHistoryFetchRequest(requestBody);
-	const { threadId, cursor } = decodeHistoryCursor(requestDocument.historyCursor);
+	const { threadId, cursor } = requestDocument.historyCursor
+		? decodeHistoryCursor(requestDocument.historyCursor)
+		: {
+				threadId: requestDocument.threadID ?? (await historyThreadIdForChannel(adapter, requestDocument)),
+				cursor: undefined,
+			};
 	const context = await buildVisibleContext(adapter, threadId, { cursor, limit: requestDocument.limit });
 	return {
 		messages: context.messages,

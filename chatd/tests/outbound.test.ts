@@ -400,3 +400,34 @@ describe("identity.resolve", () => {
 		expect(body.displayName).toBeUndefined();
 	});
 });
+
+describe("history.fetch by channel", () => {
+	// A caller that was never spoken to in a channel holds no cursor for it, so
+	// the channel's own name has to be enough to start reading — the same way
+	// message.post already resolves one to post into.
+	it("reads a channel it is given without a cursor", async () => {
+		const adapter = createAdapter();
+		globalThis.fetch = mock(async () =>
+			jsonResponse(200, {
+				order: ["post-1"],
+				posts: { "post-1": createPost({ id: "post-1", message: "hello" }) },
+			}),
+		) as never;
+		const handler = createOutboundHandler({ mattermost: adapter }, createConfiguration());
+
+		const response = await handler(outboundRequest("history.fetch", { channelID: "channel-1", limit: 5 }));
+
+		expect(response.status).toBe(200);
+		const body = (await response.json()) as { messages: Array<{ id?: string }> };
+		expect(body.messages[0]?.id).toBe("post-1");
+	});
+
+	it("refuses a fetch that names nothing to read", async () => {
+		const adapter = createAdapter();
+		const handler = createOutboundHandler({ mattermost: adapter }, createConfiguration());
+
+		const response = await handler(outboundRequest("history.fetch", {}));
+
+		expect(response.status).toBe(400);
+	});
+});

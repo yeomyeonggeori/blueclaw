@@ -1,3 +1,5 @@
+import type { VisibleContextMessageDocument } from "./visible-context.ts";
+
 export interface ReplyAttachmentDocument {
 	devicePath?: string;
 	filename?: string;
@@ -58,17 +60,12 @@ export interface ReactionRequest {
 }
 
 export interface HistoryFetchRequest {
-	historyCursor: string;
+	historyCursor?: string;
+	threadID?: string;
+	channelID?: string;
+	channelName?: string;
 	limit?: number;
 	direction?: string;
-}
-
-export interface VisibleContextMessageDocument {
-	speaker: string;
-	speakerHandle?: string;
-	text: string;
-	sentAt?: string;
-	isBot?: boolean;
 }
 
 export interface HistoryFetchResponse {

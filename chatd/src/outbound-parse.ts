@@ -1,3 +1,4 @@
+import { MalformedRequest } from "./personal/parse.ts";
 import type {
 	AskChoiceOptionDocument,
 	AskInteractionDocument,
@@ -125,11 +126,18 @@ export function parseReactionRequest(value: unknown): ReactionRequest {
 
 export function parseHistoryFetchRequest(value: unknown): HistoryFetchRequest {
 	const record = requireRecord(value, "history.fetch request");
-	return {
-		historyCursor: requireString(record, "historyCursor"),
+	const request = {
+		historyCursor: optionalString(record, "historyCursor"),
+		threadID: optionalString(record, "threadID"),
+		channelID: optionalString(record, "channelID"),
+		channelName: optionalString(record, "channelName"),
 		limit: optionalNumber(record, "limit"),
 		direction: optionalString(record, "direction"),
 	};
+	if (!request.historyCursor && !request.threadID && !request.channelID && !request.channelName) {
+		throw new MalformedRequest("history.fetch needs a historyCursor, a threadID, a channelID, or a channelName");
+	}
+	return request;
 }
 
 export function parseMessageEditRequest(value: unknown): MessageEditRequest {

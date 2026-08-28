@@ -117,3 +117,25 @@ func TestAnAttachmentNobodyCanBeWrittenAsSaysSo(t *testing.T) {
 		t.Fatal("expected no path to a file that was never written")
 	}
 }
+
+// An attachment whose import was refused has no path and, on buzz, no fileID.
+// The catalog used to drop it for that, so the model was left with nothing but
+// the url in the message text and invented a workspace path from it.
+func TestARefusedAttachmentStaysInTheCatalog(t *testing.T) {
+	refused := InputAttachment{
+		Platform:  "buzz",
+		URL:       "https://relay.example.test/media/abc.png",
+		Filename:  "image",
+		ErrorCode: connectorAttachmentImportRefusedCode,
+		Message:   "no workspace identity to write an attachment as",
+	}
+
+	materials := agentVisibleContextMaterials([]InputAttachment{refused})
+
+	if len(materials) != 1 {
+		t.Fatalf("expected the refused attachment to stay visible, got %+v", materials)
+	}
+	if materials[0].IsAvailable || materials[0].ErrorCode == "" {
+		t.Fatalf("expected the refusal to travel with it, got %+v", materials[0])
+	}
+}
