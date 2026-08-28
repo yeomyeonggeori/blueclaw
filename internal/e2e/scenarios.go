@@ -30,7 +30,7 @@ func workspaceSkillInstruction(skillName string) agentcontract.SkillInstruction 
 // ships the ones that need nothing beyond its own kernel; the rest belong to the
 // appliance whose capability tools they call, so a standalone checkout can only
 // find some of them.
-var ScenarioSkillNames = []string{"presentation", "scheduled-task", "calendar", "internkim-flow", "website"}
+var ScenarioSkillNames = []string{"presentation", "scheduled-task", "calendar", "internkim-task", "website"}
 
 func rootWorkspaceSkillDirectoryPath(skillName string) string {
 	skillDirectoryPath := findWorkspaceSkillDirectory(skillName)
@@ -817,7 +817,7 @@ func AmbientDutyNothingToRecordScenario(artifactDirectoryPath string) VirtualSes
 }
 
 func flowTaskSkill() agentcontract.SkillInstruction {
-	return workspaceSkillInstruction("internkim-flow")
+	return workspaceSkillInstruction("internkim-task")
 }
 
 func AmbientTaskCaptureAcceptanceScenario(artifactDirectoryPath string) VirtualSessionScenario {
