@@ -382,6 +382,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 	connectorRuntime.UseMemoryService(memoryService)
 	connectorRuntime.UseWorkspaceID(runtimeConfiguration.Memory.WorkspaceID)
 	connectorRuntime.UseAdminTaskLinkBaseURL(runtimeConfiguration.Agent.AdminTaskLinkBaseURL)
+	connectorRuntime.UseWorkspaceActorFactory(terminalService.WorkspaceActorFactory())
 	connectorRuntime.UseIngressGate(backupCoordinator)
 	connectorRuntime.UseTaskIntakeGate(taskIntakeController)
 	if database.SQL != nil {

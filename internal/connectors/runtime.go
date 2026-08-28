@@ -3718,10 +3718,14 @@ func agentPreviousVisibleContextMaterials(attachments []InputAttachment, current
 	return materials
 }
 
+// An attachment that failed to come in stays in the catalog with its error, or
+// the model is left with nothing but the url in the message text and invents a
+// path from it. Only an attachment with no identity at all is dropped.
 func agentVisibleContextMaterials(attachments []InputAttachment) []agentcontract.VisibleContextMaterial {
 	materials := make([]agentcontract.VisibleContextMaterial, 0, len(attachments))
 	for _, attachment := range attachments {
-		if strings.TrimSpace(attachment.FileID) == "" && strings.TrimSpace(attachment.Path) == "" {
+		if strings.TrimSpace(attachment.FileID) == "" && strings.TrimSpace(attachment.Path) == "" &&
+			strings.TrimSpace(attachment.URL) == "" {
 			continue
 		}
 		materials = append(materials, agentcontract.VisibleContextMaterial{
@@ -3750,7 +3754,7 @@ func attachmentMaterialID(attachment InputAttachment) string {
 	if fileID != "" {
 		return firstNonEmptyString(strings.TrimSpace(attachment.Platform), "attachment") + ":" + fileID
 	}
-	return firstNonEmptyString(strings.TrimSpace(attachment.Platform), "attachment") + ":" + connectorSafePathSegment(attachment.Path)
+	return firstNonEmptyString(strings.TrimSpace(attachment.Platform), "attachment") + ":" + connectorSafePathSegment(firstNonEmptyString(attachment.Path, attachment.Filename, attachment.URL))
 }
 
 func responseLanguageForEvent(event PlatformInboundEvent) string {
