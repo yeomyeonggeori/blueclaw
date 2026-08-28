@@ -57,3 +57,28 @@ test("a target the relay no longer holds falls back to the asking conversation",
 
 	expect(channelTagOf(published[0]!)).toBe(ASKED_FROM);
 });
+
+// An edit that brings a file must carry it the way a post does: uploaded to
+// the media store, linked from the body, named in imeta tags. The plain
+// renderer quietly drops files, which is how "add the original image to that
+// post" used to publish an edit with no image.
+test("an edit carries its files into the edited body", async () => {
+	const { adapter, published } = adapterOver({
+		[TARGET]: { id: TARGET, kind: 9, tags: [["h", LIVES_IN]], content: "원문", pubkey: "b".repeat(64), created_at: 1, sig: "" },
+	});
+	const realFetch = globalThis.fetch;
+	globalThis.fetch = (async () =>
+		Response.json({ url: "http://relay.test/media/그림.png", sha256: "abc", size: 3, type: "image/png" })) as typeof fetch;
+	try {
+		await adapter.editMessage(adapter.encodeThreadId({ channelId: ASKED_FROM }), TARGET, {
+			markdown: "고친 글",
+			files: [{ data: Buffer.from("img"), filename: "그림.png", mimeType: "image/png" }],
+		});
+	} finally {
+		globalThis.fetch = realFetch;
+	}
+
+	const edit = published[0]!;
+	expect(channelTagOf(edit)).toBe(LIVES_IN);
+	expect(edit.tags.some((tag) => tag[0] === "imeta")).toBe(true);
+});

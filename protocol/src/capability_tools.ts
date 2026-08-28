@@ -474,6 +474,7 @@ const messageUpdateObjectSchema = z.strictObject({
   oldText: z.string().min(1).regex(/\S/, 'oldText must contain a non-whitespace character.').describe('Exact text as it currently appears in that message, copied verbatim from a message_search preview or from the message you sent. Must occur exactly once in the message. Quote only the span that changes, never the whole message.').optional(),
   newText: z.string().describe('Text that replaces oldText. Empty string removes the span.').optional(),
   isPinned: z.boolean().describe('Whether the message should be pinned.').optional(),
+  attachments: z.array(z.string().min(1)).max(5).describe('Workspace file paths to upload into the edited message, copied exactly from the attachment catalog or a file tool result. Use this to add an original file, such as an inbound image, to a message already sent. The message keeps its text when no oldText is given.').optional(),
 });
 
 export const messageUpdateInputSchema = messageUpdateObjectSchema
@@ -1051,7 +1052,7 @@ const messageToolDefinitions: CapabilityToolDefinition[] = [
     namespace: 'message',
     privacyClass: 'platform_message',
     policyResource: 'tool:message_update',
-    description: 'Replace one exact span of text inside your own earlier message, leaving the rest of it untouched. oldText must appear exactly once in that message; copy it verbatim from a message_search preview or from the message you sent. This is the tool for every correction to something you already posted — when the user points out a mistake, fix that message instead of posting a correction as a new one. It runs immediately without asking the user to confirm, because it can only change text you quoted. If oldText does not match, the call fails without changing anything and returns the message as it currently reads, so retry with a span copied from that. To rewrite a long message wholesale, read it in full first with message_search messageIDs and quote what you read.',
+    description: 'Replace one exact span of text inside your own earlier message, leaving the rest of it untouched. oldText must appear exactly once in that message; copy it verbatim from a message_search preview or from the message you sent. This is the tool for every correction to something you already posted — when the user points out a mistake, fix that message instead of posting a correction as a new one. It runs immediately without asking the user to confirm, because it can only change text you quoted. If oldText does not match, the call fails without changing anything and returns the message as it currently reads, so retry with a span copied from that. To rewrite a long message wholesale, read it in full first with message_search messageIDs and quote what you read. attachments uploads workspace files into the edited message; pass it alone to add a file, such as an inbound image original, without changing the text.',
     version: '2',
     estimatedLatency: CapabilityEstimatedLatency.Medium,
     inputSchema: messageUpdateInputSchema,

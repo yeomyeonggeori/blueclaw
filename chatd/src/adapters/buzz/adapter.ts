@@ -602,10 +602,11 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		messageId: string,
 		message: AdapterPostableMessage,
 	): Promise<RawMessage<BuzzEvent>> {
-		const text = this.converter.renderPostable(message);
-		const event = await this.relay.publish(EDIT_MESSAGE_KIND, text, [
+		const { body, mediaTags } = await this.renderPostableWithFiles(message);
+		const event = await this.relay.publish(EDIT_MESSAGE_KIND, body, [
 			["h", await this.channelOwningMessage(threadId, messageId)],
 			["e", messageId],
+			...mediaTags,
 		]);
 		return { id: messageId, threadId, raw: event };
 	}

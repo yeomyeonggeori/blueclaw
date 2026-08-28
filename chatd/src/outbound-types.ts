@@ -152,6 +152,7 @@ export interface MessageEditRequest {
 	replyTargetID: string;
 	messageID: string;
 	message: string;
+	attachments?: ReplyAttachmentDocument[];
 }
 
 export interface MessageDeleteRequest {
