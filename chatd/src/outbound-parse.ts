@@ -5,6 +5,7 @@ import type {
 	AttachmentImportRequest,
 	ChannelEnsureRequest,
 	DirectMessageEnsureRequest,
+	DirectMessagePostRequest,
 	DirectMessageSendRequest,
 	HistoryFetchRequest,
 	IdentityResolveRequest,
@@ -187,6 +188,15 @@ export function parseDirectMessageSendRequest(value: unknown): DirectMessageSend
 		channelId: optionalString(record, "channelId"),
 		replyToRootId: optionalString(record, "replyToRootId"),
 	};
+}
+
+export function parseDirectMessagePostRequest(value: unknown): DirectMessagePostRequest {
+	const record = requireRecord(value, "dm.post request");
+	const counterpartPubkeyHex = requireString(record, "counterpartPubkeyHex").toLowerCase();
+	if (!/^[0-9a-f]{64}$/.test(counterpartPubkeyHex)) {
+		throw new MalformedRequest("counterpartPubkeyHex must be 64 hex characters");
+	}
+	return { counterpartPubkeyHex, message: requireString(record, "message") };
 }
 
 export function parseDirectMessageEnsureRequest(value: unknown): DirectMessageEnsureRequest {

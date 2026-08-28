@@ -98,6 +98,16 @@ export interface DirectMessageSendRequest {
 	replyToRootId?: string;
 }
 
+export interface DirectMessagePostRequest {
+	counterpartPubkeyHex: string;
+	message: string;
+}
+
+export interface DirectMessagePostResponse {
+	channelID: string;
+	messageID: string;
+}
+
 export interface ConversationsListRequest {
 	userSecretHex: string;
 }

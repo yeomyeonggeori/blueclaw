@@ -17,6 +17,7 @@ import {
 	parseAttachmentImportRequest,
 	parseChannelEnsureRequest,
 	parseDirectMessageEnsureRequest,
+	parseDirectMessagePostRequest,
 	parseConversationsListRequest,
 	parsePeopleListRequest,
 	parseDirectMessageSendRequest,
@@ -39,6 +40,7 @@ import type {
 	AttachmentImportResponse,
 	ChannelEnsureResponse,
 	DirectMessageEnsureResponse,
+	DirectMessagePostResponse,
 	ConversationsListResponse,
 	PeopleListResponse,
 	DirectMessageSendResponse,
@@ -77,6 +79,7 @@ const capabilityHandlers: Record<string, CapabilityHandler> = {
 	"identity.self": handleIdentitySelf,
 	"channel.ensure": handleChannelEnsure,
 	"dm.ensure": handleDirectMessageEnsure,
+	"dm.post": handleDirectMessagePost,
 	"dm.send": handleDirectMessageSend,
 	"conversations.list": handleConversationsList,
 	"people.list": handlePeopleList,
@@ -361,6 +364,33 @@ async function handlePeopleList(
 	const buzzAdapter = requireBuzzAdapterForDirectMessages(adapter);
 	const people = await buzzAdapter.listPeople(pubkeyFromSecret(requestDocument.userSecretHex));
 	return { people };
+}
+
+// The agent's own DM to a member: chatd signs with the key it already answers
+// as, so no secret crosses this boundary — the caller supplies only the
+// member's public key.
+async function handleDirectMessagePost(
+	adapter: PlatformChatAdapter,
+	configuration: ChatdConfiguration,
+	requestBody: unknown,
+): Promise<DirectMessagePostResponse> {
+	const requestDocument = parseDirectMessagePostRequest(requestBody);
+	requireBuzzAdapterForDirectMessages(adapter);
+	const relayURL = requireBuzzRelayURL(configuration);
+	const agentSecretHex = configuration.buzz?.privateKeyHex;
+	if (!agentSecretHex) throw new Error("buzz agent key is not configured");
+	const channel = await ensureUserDirectMessageChannel(
+		relayURL,
+		agentSecretHex,
+		requestDocument.counterpartPubkeyHex,
+	);
+	const messageID = await sendDirectMessageAsUser({
+		relayURL,
+		userSecretHex: agentSecretHex,
+		counterpartPubkeyHex: requestDocument.counterpartPubkeyHex,
+		message: requestDocument.message,
+	});
+	return { channelID: channel.channelID, messageID };
 }
 
 async function handleDirectMessageSend(
