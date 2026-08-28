@@ -3033,7 +3033,7 @@
         "mode": "success",
         "targetKind": "message"
       },
-      "description": "Replace one exact span of text inside your own earlier message, leaving the rest of it untouched. oldText must appear exactly once in that message; copy it verbatim from a message_search preview or from the message you sent. This is the tool for every correction to something you already posted — when the user points out a mistake, fix that message instead of posting a correction as a new one. It runs immediately without asking the user to confirm, because it can only change text you quoted. If oldText does not match, the call fails without changing anything and returns the message as it currently reads, so retry with a span copied from that. To rewrite a long message wholesale, read it in full first with message_search messageIDs and quote what you read.",
+      "description": "Replace one exact span of text inside your own earlier message, leaving the rest of it untouched. oldText must appear exactly once in that message; copy it verbatim from a message_search preview or from the message you sent. This is the tool for every correction to something you already posted — when the user points out a mistake, fix that message instead of posting a correction as a new one. It runs immediately without asking the user to confirm, because it can only change text you quoted. If oldText does not match, the call fails without changing anything and returns the message as it currently reads, so retry with a span copied from that. To rewrite a long message wholesale, read it in full first with message_search messageIDs and quote what you read. attachments uploads workspace files into the edited message; pass it alone to add a file, such as an inbound image original, without changing the text.",
       "estimatedLatency": "medium",
       "idempotency": {
         "required": false,
@@ -3044,6 +3044,15 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
+          "attachments": {
+            "description": "Workspace file paths to upload into the edited message, copied exactly from the attachment catalog or a file tool result. Use this to add an original file, such as an inbound image, to a message already sent. The message keeps its text when no oldText is given.",
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
           "isPinned": {
             "description": "Whether the message should be pinned.",
             "type": "boolean"
@@ -3072,6 +3081,15 @@
         "additionalProperties": false,
         "minProperties": 2,
         "properties": {
+          "attachments": {
+            "description": "Workspace file paths to upload into the edited message, copied exactly from the attachment catalog or a file tool result. Use this to add an original file, such as an inbound image, to a message already sent. The message keeps its text when no oldText is given.",
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
           "isPinned": {
             "description": "Whether the message should be pinned.",
             "type": "boolean"

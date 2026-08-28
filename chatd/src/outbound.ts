@@ -464,11 +464,13 @@ async function handleMessageEdit(
 	requestBody: unknown,
 ): Promise<ReplySendResponse> {
 	const requestDocument = parseMessageEditRequest(requestBody);
-	const result = await adapter.editMessage(
-		requestDocument.replyTargetID,
-		requestDocument.messageID,
-		requestDocument.message,
-	);
+	const fileUploads = await buildFileUploads(requestDocument.attachments ?? []);
+	if (fileUploads.length > 0 && !(adapter instanceof BuzzAdapter)) {
+		throw new MalformedRequest(`platform ${adapter.name} cannot attach files to an edit`);
+	}
+	const message: AdapterPostableMessage =
+		fileUploads.length > 0 ? { markdown: requestDocument.message, files: fileUploads } : requestDocument.message;
+	const result = await adapter.editMessage(requestDocument.replyTargetID, requestDocument.messageID, message);
 	return { dispatchID: result.id };
 }
 

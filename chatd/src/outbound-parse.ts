@@ -148,6 +148,7 @@ export function parseMessageEditRequest(value: unknown): MessageEditRequest {
 		replyTargetID: requireString(record, "replyTargetID"),
 		messageID: requireString(record, "messageID"),
 		message: requireString(record, "message"),
+		attachments: optionalArray(record, "attachments").map(parseReplyAttachment),
 	};
 }
 
