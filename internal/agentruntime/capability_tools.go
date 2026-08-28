@@ -594,7 +594,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) prepareCapabilityToolInput(toolCon
 	if capabilityToolReadsAWorkspaceFile(toolName) {
 		return toolCatalogBuilder.prepareWorkspaceFileRead(toolContext, toolName, request, toolInput)
 	}
-	if capabilityToolCarriesWorkspaceAttachments(toolName) {
+	if toolCatalogBuilder.capabilityToolCarriesWorkspaceAttachments(toolName) {
 		return toolCatalogBuilder.prepareWorkspaceAttachments(toolContext, toolName, request, toolInput)
 	}
 	if capabilityToolNeedsWorkspacePath(toolName) {
@@ -621,9 +621,21 @@ const mostWorkspaceFileBytesCarried = 16 << 20
 
 // A file posted to a channel leaves the company, so who may send it is the
 // sharpest version of the same question, answered the same way: the requester
-// reads it or nobody does.
-func capabilityToolCarriesWorkspaceAttachments(toolName string) bool {
-	return strings.TrimSpace(toolName) == "message_send"
+// reads it or nobody does. Which tools carry files is written in the contract:
+// any capability whose input schema declares the attachments field of
+// workspace file paths has them read here, as the requester, and handed over
+// as content.
+func (toolCatalogBuilder *ToolCatalogBuilder) capabilityToolCarriesWorkspaceAttachments(toolName string) bool {
+	descriptor, isFound := toolCatalogBuilder.capabilityToolDescriptorByName(strings.TrimSpace(toolName))
+	if !isFound {
+		return false
+	}
+	var schema struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	json.Unmarshal(descriptor.InputSchema, &schema)
+	_, hasAttachments := schema.Properties["attachments"]
+	return hasAttachments
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) prepareWorkspaceAttachments(toolContext context.Context, toolName string, request ToolCatalogRequest, toolInput json.RawMessage) (preparedCapabilityToolPayload, *toolcontract.ToolResult, error) {
