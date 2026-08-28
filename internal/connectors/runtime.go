@@ -1356,11 +1356,23 @@ func (connectorRuntime *ConnectorRuntime) resolveConfirmationReply(ctx context.C
 	if errorValue != nil {
 		return pendingApproval{}, agentcontract.TurnDecision{}, false, errorValue
 	}
+	decision.Approval = approvalSignalSurvivingRoute(decision.Approval, decision.Route)
 	approvalgate.RecordRequesterDecision(connectorRuntime.taskRunService, approval.TaskRun.TaskRunID, decision.Approval, "chat_reply")
 	if decision.Approval != nil && *decision.Approval == agentcontract.ApprovalSignalApproveTask {
 		connectorRuntime.grantApprovalScopeForTask(approval.TaskRun.TaskRunID)
 	}
 	return approval, decision, true, nil
+}
+
+func approvalSignalSurvivingRoute(approvalSignal *agentcontract.ApprovalSignal, route agentcontract.TurnRoute) *agentcontract.ApprovalSignal {
+	if approvalSignal == nil || !agentcontract.IsApprovingSignal(*approvalSignal) {
+		return approvalSignal
+	}
+	if route != agentcontract.TurnRouteReviseTask && route != agentcontract.TurnRouteStartTask {
+		return approvalSignal
+	}
+	unclearSignal := agentcontract.ApprovalSignalUnclear
+	return &unclearSignal
 }
 
 func (connectorRuntime *ConnectorRuntime) classifiedConfirmationDecision(ctx context.Context, platform string, personID string, event PlatformInboundEvent, approval pendingApproval) (agentcontract.TurnDecision, error) {
