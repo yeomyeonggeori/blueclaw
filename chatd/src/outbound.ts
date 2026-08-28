@@ -25,6 +25,7 @@ import {
 	parseMessageDeleteRequest,
 	parseMessageEditRequest,
 	parseMessagePostRequest,
+	parseMessageSearchRequest,
 	parseProgressRequest,
 	parseReactionRequest,
 	parseReplySendRequest,
@@ -43,9 +44,12 @@ import type {
 	DirectMessageSendResponse,
 	HistoryFetchResponse,
 	IdentityResolveResponse,
+	IdentitySelfResponse,
 	InputAttachmentDocument,
 	MessagePostRequest,
 	MessagePostResponse,
+	MessageSearchRequest,
+	MessageSearchResponse,
 	ReplyAttachmentDocument,
 	ReplySendRequest,
 	ReplySendResponse,
@@ -70,6 +74,7 @@ const capabilityHandlers: Record<string, CapabilityHandler> = {
 	"history.fetch": handleHistoryFetch,
 	"attachments.import": handleAttachmentsImport,
 	"identity.resolve": handleIdentityResolve,
+	"identity.self": handleIdentitySelf,
 	"channel.ensure": handleChannelEnsure,
 	"dm.ensure": handleDirectMessageEnsure,
 	"dm.send": handleDirectMessageSend,
@@ -77,6 +82,7 @@ const capabilityHandlers: Record<string, CapabilityHandler> = {
 	"people.list": handlePeopleList,
 	"message.edit": handleMessageEdit,
 	"message.post": handleMessagePost,
+	"message.search": handleMessageSearch,
 	"message_delete": handleMessageDelete,
 };
 
@@ -461,6 +467,77 @@ async function historyThreadIdForChannel(
 	return adapter.encodeThreadId({ channelId: channelID });
 }
 
+const messageSearchDefaultLimit = 25;
+const messageSearchMostResults = 50;
+
+async function handleMessageSearch(
+	adapter: PlatformChatAdapter,
+	_configuration: ChatdConfiguration,
+	requestBody: unknown,
+): Promise<MessageSearchResponse> {
+	const requestDocument = parseMessageSearchRequest(requestBody);
+	if (!(adapter instanceof BuzzAdapter)) {
+		throw new MalformedRequest(`platform ${adapter.name} does not serve message.search`);
+	}
+	const channelId = await resolveMessageSearchChannelId(adapter, requestDocument);
+	const candidates = await adapter.searchMessages({
+		channelId,
+		rootEventId: requestDocument.rootMessageID?.trim() || undefined,
+		messageIds: requestDocument.messageIDs?.length ? requestDocument.messageIDs : undefined,
+		authorPubkeyHex: messageSearchAuthorPubkey(adapter, requestDocument),
+		queries: requestDocument.queries ?? [],
+		limit: messageSearchLimit(requestDocument.limit),
+	});
+	return { channelID: channelId, candidates };
+}
+
+function messageSearchLimit(limit: number | undefined): number {
+	if (!limit || limit <= 0) return messageSearchDefaultLimit;
+	return Math.min(limit, messageSearchMostResults);
+}
+
+function messageSearchAuthorPubkey(
+	adapter: BuzzAdapter,
+	requestDocument: MessageSearchRequest,
+): string | undefined {
+	switch (requestDocument.authoredBy?.trim() ?? "") {
+		case "assistant":
+			return adapter.botPubkey;
+		case "requester": {
+			const pubkey = requestDocument.requesterPubkeyHex?.trim();
+			if (!pubkey) {
+				throw new MalformedRequest("authoredBy=requester needs requesterPubkeyHex");
+			}
+			return pubkey;
+		}
+		default:
+			return undefined;
+	}
+}
+
+async function resolveMessageSearchChannelId(
+	adapter: BuzzAdapter,
+	requestDocument: MessageSearchRequest,
+): Promise<string> {
+	if (requestDocument.channelID?.trim()) {
+		return requestDocument.channelID.trim();
+	}
+	if (requestDocument.channelName?.trim()) {
+		const channelId = await adapter.channelIdByName(requestDocument.channelName);
+		if (!channelId) {
+			throw new MalformedRequest(
+				`no channel named ${JSON.stringify(requestDocument.channelName)} exists on ${adapter.name}`,
+			);
+		}
+		return channelId;
+	}
+	const replyTargetID = requestDocument.replyTargetID?.trim();
+	if (!replyTargetID) {
+		throw new MalformedRequest("message.search requires replyTargetID, channelID, or channelName");
+	}
+	return adapter.decodeThreadId(replyTargetID).channelId;
+}
+
 async function handleHistoryFetch(
 	adapter: PlatformChatAdapter,
 	_configuration: ChatdConfiguration,
@@ -612,6 +689,19 @@ async function handleIdentityResolve(
 		return {};
 	}
 	return { displayName: user.fullName, email: user.email };
+}
+
+// The agent's own platform identity lives with the adapter that signs as it,
+// so a caller that must name the bot asks here instead of deriving the key.
+async function handleIdentitySelf(
+	adapter: PlatformChatAdapter,
+	_configuration: ChatdConfiguration,
+	_requestBody: unknown,
+): Promise<IdentitySelfResponse> {
+	if (!(adapter instanceof BuzzAdapter)) {
+		throw new MalformedRequest(`platform ${adapter.name} does not serve identity.self`);
+	}
+	return { pubkeyHex: adapter.botPubkey, name: adapter.userName };
 }
 
 // Only buzz carries a marked reply tag; the other adapters thread by the target

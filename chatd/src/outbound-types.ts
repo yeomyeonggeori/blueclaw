@@ -149,6 +149,34 @@ export interface MessageDeleteRequest {
 	messageID: string;
 }
 
+export interface MessageSearchRequest {
+	replyTargetID?: string;
+	channelID?: string;
+	channelName?: string;
+	rootMessageID?: string;
+	messageIDs?: string[];
+	authoredBy?: string;
+	requesterPubkeyHex?: string;
+	queries?: string[];
+	limit?: number;
+}
+
+export interface MessageSearchCandidateDocument {
+	messageID: string;
+	channelID: string;
+	rootMessageID?: string;
+	authorPubkeyHex: string;
+	authoredByAssistant: boolean;
+	createdAt: number;
+	text: string;
+	score: number;
+}
+
+export interface MessageSearchResponse {
+	channelID: string;
+	candidates: MessageSearchCandidateDocument[];
+}
+
 export interface InputAttachmentDocument {
 	platform?: string;
 	fileID?: string;
@@ -216,6 +244,11 @@ export interface MessagePostResponse {
 
 export interface IdentityResolveRequest {
 	senderID: string;
+}
+
+export interface IdentitySelfResponse {
+	pubkeyHex: string;
+	name: string;
 }
 
 export interface IdentityResolveResponse {
