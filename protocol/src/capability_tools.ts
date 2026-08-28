@@ -230,6 +230,12 @@ export const taskAddInputSchema = z.strictObject({
   status: z.enum(WorkspaceTaskInitialStatus)
     .describe('Initial task status. Defaults to planned. The runtime may change delegated tasks to requested.')
     .optional(),
+  business: z.string()
+    .describe('Business label, taken from registeredLabels.businesses in a task_list result. Omit when the user names no business; the workspace default applies.')
+    .optional(),
+  type: z.string()
+    .describe('Task type label, taken from registeredLabels.types in a task_list result. Omit when unsure.')
+    .optional(),
   startsAt: z.string().describe(`When the work starts. ${momentDescription} Resolve relative dates from the current date. Omit when the user did not specify one.`).optional(),
   endsAt: z.string().describe(`When the work is due. ${momentDescription} Resolve relative dates from the current date. Omit when the user did not specify one.`).optional(),
   participantPersonHints: z.array(z.string())
@@ -821,7 +827,7 @@ const taskToolDefinitions: CapabilityToolDefinition[] = [
     privacyClass: 'workspace_task',
     policyResource: 'tool:task_add',
     description: 'Create a new workspace task with typed task fields. Use this to add a todo or assignment for the requester or another team member. Do not use this to update an existing task — use task.update.',
-    version: '3',
+    version: '4',
     estimatedLatency: CapabilityEstimatedLatency.Medium,
     inputSchema: taskAddInputSchema,
     inputIntentSchema: taskAddInputIntentSchema,

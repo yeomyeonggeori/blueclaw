@@ -22,6 +22,10 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
+          "business": {
+            "description": "Business label, taken from registeredLabels.businesses in a task_list result. Omit when the user names no business; the workspace default applies.",
+            "type": "string"
+          },
           "endsAt": {
             "description": "When the work is due. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day. Resolve relative dates from the current date. Omit when the user did not specify one.",
             "type": "string"
@@ -63,6 +67,10 @@
           },
           "title": {
             "description": "Concise noun-phrase title for the work itself, in the user's language. Keep the user's exact title when they give one; otherwise write one rather than reusing their sentence. People belong in the person fields, not the title.",
+            "type": "string"
+          },
+          "type": {
+            "description": "Task type label, taken from registeredLabels.types in a task_list result. Omit when unsure.",
             "type": "string"
           }
         },
@@ -72,6 +80,10 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
+          "business": {
+            "description": "Business label, taken from registeredLabels.businesses in a task_list result. Omit when the user names no business; the workspace default applies.",
+            "type": "string"
+          },
           "endsAt": {
             "description": "When the work is due. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day. Resolve relative dates from the current date. Omit when the user did not specify one.",
             "type": "string"
@@ -113,6 +125,10 @@
           },
           "title": {
             "description": "Concise noun-phrase title for the work itself, in the user's language. Keep the user's exact title when they give one; otherwise write one rather than reusing their sentence. People belong in the person fields, not the title.",
+            "type": "string"
+          },
+          "type": {
+            "description": "Task type label, taken from registeredLabels.types in a task_list result. Omit when unsure.",
             "type": "string"
           }
         },
@@ -333,7 +349,7 @@
       },
       "sideEffect": "workspace_write",
       "sideEffectClass": "workspace_write",
-      "version": "3",
+      "version": "4",
       "worksOffline": false
     },
     {
