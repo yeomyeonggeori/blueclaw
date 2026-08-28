@@ -61,7 +61,7 @@
               "completed",
               "paused",
               "rejected",
-              "cancelled"
+              "stopped"
             ],
             "type": "string"
           },
@@ -119,7 +119,7 @@
               "completed",
               "paused",
               "rejected",
-              "cancelled"
+              "stopped"
             ],
             "type": "string"
           },
@@ -349,7 +349,7 @@
       },
       "sideEffect": "workspace_write",
       "sideEffectClass": "workspace_write",
-      "version": "4",
+      "version": "5",
       "worksOffline": false
     },
     {
@@ -389,7 +389,7 @@
             "type": "string"
           },
           "status": {
-            "description": "Filter by task status. Accepted values: 'planned', 'in_progress', 'completed', 'requested', 'paused', 'rejected', 'cancelled'. Leave empty to return all statuses.",
+            "description": "Filter by task status. Accepted values: 'planned', 'in_progress', 'completed', 'requested', 'paused', 'rejected', 'stopped'. Leave empty to return all statuses.",
             "type": "string"
           },
           "weekFrom": {
@@ -758,7 +758,7 @@
       },
       "sideEffect": "read",
       "sideEffectClass": "read",
-      "version": "2",
+      "version": "3",
       "worksOffline": false
     },
     {
@@ -822,7 +822,7 @@
               "requested",
               "paused",
               "rejected",
-              "cancelled"
+              "stopped"
             ],
             "type": "string"
           },
@@ -882,7 +882,7 @@
               "requested",
               "paused",
               "rejected",
-              "cancelled"
+              "stopped"
             ],
             "type": "string"
           },
@@ -1118,7 +1118,7 @@
       },
       "sideEffect": "workspace_write",
       "sideEffectClass": "workspace_write",
-      "version": "3",
+      "version": "4",
       "worksOffline": false
     },
     {
