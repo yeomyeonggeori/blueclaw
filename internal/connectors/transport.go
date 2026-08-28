@@ -29,3 +29,8 @@ type capabilityMessageEditRequest struct {
 	MessageID     string `json:"messageID"`
 	Message       string `json:"message"`
 }
+
+type capabilityMessageDeleteRequest struct {
+	ReplyTargetID string `json:"replyTargetID"`
+	MessageID     string `json:"messageID"`
+}
