@@ -35,7 +35,7 @@ import {
 } from "./types.ts";
 import type { ReactionSummary } from "../../visible-context.ts";
 import type { OutgoingAttachment } from "../../outgoing-attachment.ts";
-import { buildMessageBody, threadRootOf } from "./user-session.ts";
+import { buildMessageBody } from "./user-session.ts";
 import { rankBySearchScore } from "../../message-search.ts";
 import { originOfTags } from "../../mirror/origin.ts";
 import { reactionContentOf } from "../../mirror/reaction-emoji.ts";
@@ -560,24 +560,29 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		});
 	}
 
-	// A conversation is a message and the replies to it, and nothing deeper.
-	// Answering a reply answers what it replied to, so every answer lands flat
-	// under one root instead of opening a thread inside a thread. A direct
-	// conversation is already a conversation: no thread tags at all.
+	// The answer goes where the answered message is, and no deeper. A message
+	// inside a thread is answered inside that thread, flat at its root — never
+	// outside it, never as a thread of its own. A top-level message in a channel
+	// is answered in its thread; in a direct conversation the timeline is the
+	// conversation, so a top-level message is answered on the timeline.
 	private async threadTags(
 		decoded: BuzzThreadId,
 		extraTags: string[][],
 	): Promise<string[][]> {
 		const plainTags = extraTags.filter((tag) => tag[0] !== "e");
-		if (this.channelsById.get(decoded.channelId)?.isDM) {
-			return plainTags;
-		}
 		const answeredId = extraTags.find((tag) => tag[0] === "e")?.[1];
-		const anchorId = decoded.rootEventId ?? answeredId;
-		if (!anchorId) return plainTags;
-		const rootId = await threadRootOf(this.relay, anchorId);
+		const rootId = await this.threadRootFor(decoded, answeredId);
 		if (!rootId) return plainTags;
 		return [...plainTags, ["e", rootId, "", "root"], ["e", rootId, "", "reply"]];
+	}
+
+	private async threadRootFor(decoded: BuzzThreadId, answeredId: string | undefined): Promise<string | undefined> {
+		if (!answeredId) return decoded.rootEventId;
+		const [answered] = await this.relay.query({ ids: [answeredId], limit: 1 });
+		const rootOfAnswered = answered ? threadTagsOf(answered).rootEventId : undefined;
+		if (rootOfAnswered) return rootOfAnswered;
+		if (this.channelsById.get(decoded.channelId)?.isDM) return undefined;
+		return answeredId;
 	}
 
 	async postChannelMessage(channelId: string, message: AdapterPostableMessage): Promise<RawMessage<BuzzEvent>> {
