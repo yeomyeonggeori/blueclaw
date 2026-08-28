@@ -14,6 +14,9 @@ type TurnContext struct {
 	RequesterEmail    string
 	ResponseLanguage  string
 	Prompt            string
+	Platform          string
+	ConversationID    string
+	ReplyTargetID     string
 	HarnessSession    mcpserver.HarnessSession
 }
 
@@ -42,6 +45,9 @@ func (turnGate turnToolCallGate) ReviewToolCall(ctx context.Context, toolInvocat
 		TaskRunID:         taskRunIDForCall(ctx),
 		ResponseLanguage:  turnGate.turnContext.ResponseLanguage,
 		Prompt:            turnGate.turnContext.Prompt,
+		Platform:          turnGate.turnContext.Platform,
+		ConversationID:    turnGate.turnContext.ConversationID,
+		ReplyTargetID:     turnGate.turnContext.ReplyTargetID,
 		ModelDraft:        toolcontract.UserFacingMessageFromContext(ctx),
 		HarnessSession:    turnGate.turnContext.HarnessSession,
 		ToolName:          toolDefinition.Name,
