@@ -54,6 +54,31 @@ function isLoopback(hostname: string): boolean {
 	return name === "localhost" || name === "::1" || /^127\./.test(name);
 }
 
+// The relay serves a blob only to a signed kind-24242 get event naming either
+// the blob's hash or the serving host (BUD-11), from a key it knows as a
+// member. The host is always named so one shape covers thumb variants too.
+export function readAuthorizationHeader(userSecretHex: string, url: string): string {
+	const nowSeconds = Math.floor(Date.now() / 1000);
+	const tags = [
+		["t", "get"],
+		["expiration", String(nowSeconds + 300)],
+		["server", new URL(url).origin],
+	];
+	const digestHex = blobDigestOf(url);
+	if (digestHex !== "") tags.push(["x", digestHex]);
+	const authEvent = finalizeEvent(
+		{ kind: 24242, content: "get", created_at: nowSeconds, tags },
+		hexToBytes(userSecretHex),
+	);
+	return "Nostr " + Buffer.from(JSON.stringify(authEvent)).toString("base64");
+}
+
+function blobDigestOf(url: string): string {
+	const lastSegment = new URL(url).pathname.split("/").at(-1) ?? "";
+	const beforeExtension = lastSegment.split(".")[0] ?? "";
+	return /^[a-f0-9]{64}$/.test(beforeExtension) ? beforeExtension : "";
+}
+
 export function imetaTag(blob: BlossomBlob, filename?: string): string[] {
 	const tag = [
 		"imeta",
