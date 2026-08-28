@@ -30,9 +30,9 @@ export enum WorkspaceTaskSize {
 }
 
 export enum WorkspaceTaskStatus {
-  Todo = 'todo',
+  Planned = 'planned',
   InProgress = 'in_progress',
-  Done = 'done',
+  Completed = 'completed',
   Requested = 'requested',
   Paused = 'paused',
   Rejected = 'rejected',
@@ -40,9 +40,9 @@ export enum WorkspaceTaskStatus {
 }
 
 export enum WorkspaceTaskInitialStatus {
-  Todo = WorkspaceTaskStatus.Todo,
+  Planned = WorkspaceTaskStatus.Planned,
   InProgress = WorkspaceTaskStatus.InProgress,
-  Done = WorkspaceTaskStatus.Done,
+  Completed = WorkspaceTaskStatus.Completed,
   Paused = WorkspaceTaskStatus.Paused,
   Rejected = WorkspaceTaskStatus.Rejected,
   Cancelled = WorkspaceTaskStatus.Cancelled,
@@ -228,7 +228,7 @@ export const taskAddInputSchema = z.strictObject({
     .describe('Effort size using the work-size rubric. Omit when the request does not support a useful estimate.')
     .optional(),
   status: z.enum(WorkspaceTaskInitialStatus)
-    .describe('Initial task status. Defaults to todo. The runtime may change delegated tasks to requested.')
+    .describe('Initial task status. Defaults to planned. The runtime may change delegated tasks to requested.')
     .optional(),
   business: z.string()
     .describe('Business label, taken from registeredLabels.businesses in a task_list result. Omit when the user names no business; the workspace default applies.')
@@ -258,7 +258,7 @@ export const taskListInputSchema = z.strictObject({
     .optional(),
   weekTo: z.number().describe('End of the week range as an offset from this week. Omit both weekFrom and weekTo to list the current week.').optional(),
   status: z.string()
-    .describe("Filter by task status. Accepted values: 'todo', 'in_progress', 'done', 'requested', 'paused', 'rejected', 'cancelled'. Leave empty to return all statuses.")
+    .describe("Filter by task status. Accepted values: 'planned', 'in_progress', 'completed', 'requested', 'paused', 'rejected', 'cancelled'. Leave empty to return all statuses.")
     .optional(),
   limit: z.number().describe('Maximum number of tasks to return. Defaults to 50.').optional(),
 });
@@ -827,7 +827,7 @@ const taskToolDefinitions: CapabilityToolDefinition[] = [
     privacyClass: 'workspace_task',
     policyResource: 'tool:task_add',
     description: 'Create a new workspace task with typed task fields. Use this to add a todo or assignment for the requester or another team member. Do not use this to update an existing task — use task.update.',
-    version: '5',
+    version: '4',
     estimatedLatency: CapabilityEstimatedLatency.Medium,
     inputSchema: taskAddInputSchema,
     inputIntentSchema: taskAddInputIntentSchema,
@@ -849,7 +849,7 @@ const taskToolDefinitions: CapabilityToolDefinition[] = [
     privacyClass: 'workspace_task',
     policyResource: 'tool:task_list',
     description: "List workspace tasks with optional filters. Use this to answer 'what tasks does X have', 'what is on my plate', or 'show incomplete items this week'. The default scope is the requester; set scope to all for the whole workspace.",
-    version: '3',
+    version: '2',
     estimatedLatency: CapabilityEstimatedLatency.Low,
     inputSchema: taskListInputSchema,
     result: { schema: taskListResultSchema, effects: [] },
@@ -861,7 +861,7 @@ const taskToolDefinitions: CapabilityToolDefinition[] = [
     privacyClass: 'workspace_task',
     policyResource: 'tool:task_update',
     description: 'Update explicit fields on an existing task, including who takes part in it. taskHint is the exact task ID or exact task title from a task_list result, resolved server-side to the canonical task; use task_list first when neither is known. At least one mutable field is required.',
-    version: '4',
+    version: '3',
     estimatedLatency: CapabilityEstimatedLatency.Medium,
     inputSchema: taskUpdateInputSchema,
     inputIntentSchema: taskUpdateInputIntentSchema,
