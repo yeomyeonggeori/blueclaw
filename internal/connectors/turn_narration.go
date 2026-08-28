@@ -139,6 +139,7 @@ func narrationMessage(calls []narratedCall) string {
 // rather than a silence followed by one.
 type turnNarrator struct {
 	editor      ReplyEditingAdapter
+	deleter     ReplyDeletingAdapter
 	adapter     PlatformAdapter
 	replyTarget ReplyTarget
 
@@ -161,7 +162,8 @@ func newTurnNarrator(adapter PlatformAdapter, replyTarget ReplyTarget) *turnNarr
 	if !canEdit {
 		return nil
 	}
-	return &turnNarrator{editor: editor, adapter: adapter, replyTarget: replyTarget}
+	deleter, _ := adapter.(ReplyDeletingAdapter)
+	return &turnNarrator{editor: editor, deleter: deleter, adapter: adapter, replyTarget: replyTarget}
 }
 
 func (narrator *turnNarrator) observe(ctx context.Context, rawTurnEvent taskstate.RawTurnEvent) {
@@ -219,10 +221,13 @@ func (narrator *turnNarrator) startSaying(ctx context.Context, message string) {
 	narrator.mutex.Unlock()
 }
 
-// The answer belongs where the person has been watching, so the first reply of
-// the turn replaces the narration instead of arriving under it. A reply that
-// carries more than words is sent whole, since editing cannot add an attachment
-// or a question to a message already on screen.
+// The narration is scaffolding: once the turn's first reply is delivered as a
+// message of its own, the scaffolding comes down. The answer used to arrive by
+// editing the narration in place, but an edit is an overlay every reader must
+// apply, and a reader that missed it showed the working notes as the answer
+// forever. A deletion is honored everywhere, so the answer is always sent
+// whole and the narration deleted; a platform that cannot delete keeps the
+// edit-in-place handover.
 func (narrator *turnNarrator) takeOverSending(
 	sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error),
 ) func(context.Context, ReplyTarget, OutboundReply) (string, error) {
@@ -231,13 +236,21 @@ func (narrator *turnNarrator) takeOverSending(
 	}
 	return func(ctx context.Context, replyTarget ReplyTarget, reply OutboundReply) (string, error) {
 		messageID := narrator.claimNarratedMessage()
-		if messageID == "" || !replyIsOnlyWords(reply) {
+		if messageID == "" {
 			return sendReply(ctx, replyTarget, reply)
 		}
-		if errorValue := narrator.editor.EditReply(ctx, replyTarget, messageID, reply.Message); errorValue != nil {
+		if narrator.deleter == nil {
+			if replyIsOnlyWords(reply) && narrator.editor.EditReply(ctx, replyTarget, messageID, reply.Message) == nil {
+				return messageID, nil
+			}
 			return sendReply(ctx, replyTarget, reply)
 		}
-		return messageID, nil
+		dispatchID, errorValue := sendReply(ctx, replyTarget, reply)
+		if errorValue != nil {
+			return dispatchID, errorValue
+		}
+		narrator.deleter.DeleteReply(ctx, replyTarget, messageID)
+		return dispatchID, nil
 	}
 }
 

@@ -115,6 +115,13 @@ func (adapter ChatdPlatformAdapter) EditReply(ctx context.Context, replyTarget R
 	}, nil)
 }
 
+func (adapter ChatdPlatformAdapter) DeleteReply(ctx context.Context, replyTarget ReplyTarget, messageID string) error {
+	return adapter.post(ctx, "message_delete", capabilityMessageDeleteRequest{
+		ReplyTargetID: replyTarget.ReplyTargetID,
+		MessageID:     messageID,
+	}, nil)
+}
+
 func (adapter ChatdPlatformAdapter) FetchHistory(ctx context.Context, historyCursor string, limit int) (VisibleContext, error) {
 	var response VisibleContext
 	errorValue := adapter.post(ctx, "history.fetch", capabilityHistoryRequest{

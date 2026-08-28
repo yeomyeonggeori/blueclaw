@@ -356,6 +356,12 @@ type ReplyEditingAdapter interface {
 	EditReply(context.Context, ReplyTarget, string, string) error
 }
 
+// A platform that can take back a message it already sent lets the narration be
+// scaffolding: it comes down once the answer stands as a message of its own.
+type ReplyDeletingAdapter interface {
+	DeleteReply(context.Context, ReplyTarget, string) error
+}
+
 type InputAttachmentImportingAdapter interface {
 	ImportInputAttachments(context.Context, InputAttachmentImportRequest) (InputAttachmentImportResult, error)
 }

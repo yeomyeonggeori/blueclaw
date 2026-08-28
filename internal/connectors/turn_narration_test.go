@@ -80,6 +80,57 @@ func (adapter *recordingNarrationAdapter) EditReply(_ context.Context, _ ReplyTa
 	return nil
 }
 
+type deletingNarrationAdapter struct {
+	recordingNarrationAdapter
+	deletedMessages []string
+}
+
+func (adapter *deletingNarrationAdapter) DeleteReply(_ context.Context, _ ReplyTarget, messageID string) error {
+	adapter.deletedMessages = append(adapter.deletedMessages, messageID)
+	return nil
+}
+
+// The answer must be a message every reader shows, not an overlay some readers
+// miss: a person's client kept reading "message_context" while the failure
+// notice lived only in an edit it never applied.
+func TestTheAnswerArrivesWholeAndTheNarrationComesDown(t *testing.T) {
+	adapter := &deletingNarrationAdapter{recordingNarrationAdapter: recordingNarrationAdapter{sentID: "narration-1"}}
+	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"})
+	narrator.observe(context.Background(), taskstate.RawTurnEvent{Name: "tool.file_read.requested", Body: `{"input":{"path":"/a"}}`})
+
+	sent := 0
+	sendReply := narrator.takeOverSending(func(context.Context, ReplyTarget, OutboundReply) (string, error) {
+		sent++
+		return "answer-1", nil
+	})
+	messageID, errorValue := sendReply(context.Background(), ReplyTarget{}, OutboundReply{Message: "done"})
+
+	if errorValue != nil {
+		t.Fatalf("sending the answer failed: %v", errorValue)
+	}
+	if messageID != "answer-1" || sent != 1 {
+		t.Fatalf("the answer landed in %q after %d sends, want its own message", messageID, sent)
+	}
+	if len(adapter.deletedMessages) != 1 || adapter.deletedMessages[0] != "narration-1" {
+		t.Fatalf("narration deletions = %v, want the narrated message taken down", adapter.deletedMessages)
+	}
+}
+
+func TestAFailedAnswerLeavesTheNarrationStanding(t *testing.T) {
+	adapter := &deletingNarrationAdapter{recordingNarrationAdapter: recordingNarrationAdapter{sentID: "narration-1"}}
+	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"})
+	narrator.observe(context.Background(), taskstate.RawTurnEvent{Name: "tool.file_read.requested", Body: `{"input":{"path":"/a"}}`})
+
+	sendReply := narrator.takeOverSending(func(context.Context, ReplyTarget, OutboundReply) (string, error) {
+		return "", context.Canceled
+	})
+	sendReply(context.Background(), ReplyTarget{}, OutboundReply{Message: "done"})
+
+	if len(adapter.deletedMessages) != 0 {
+		t.Fatal("an undelivered answer must not take the narration down with it")
+	}
+}
+
 func TestTheAnswerReplacesTheNarrationRatherThanFollowingIt(t *testing.T) {
 	adapter := &recordingNarrationAdapter{sentID: "message-1"}
 	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"})
