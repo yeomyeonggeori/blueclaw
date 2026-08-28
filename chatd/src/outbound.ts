@@ -572,6 +572,18 @@ async function resolveMessagePostChannelID(
 	adapter: PlatformChatAdapter,
 	requestDocument: MessagePostRequest,
 ): Promise<string> {
+	// A channelID arrives from a model that may have reused whatever id it last
+	// saw. When the caller also names the channel, the name is resolved and has
+	// to agree; a mismatch fails closed instead of posting into the wrong room.
+	if (requestDocument.channelID && requestDocument.channelName && supportsChannelLookup(adapter)) {
+		const resolvedID = await adapter.channelIdByName(requestDocument.channelName);
+		if (resolvedID && resolvedID !== requestDocument.channelID) {
+			throw new MalformedRequest(
+				`channelID ${requestDocument.channelID} is not the channel named ${JSON.stringify(requestDocument.channelName)} (${resolvedID}); pass one or the other`,
+			);
+		}
+		return resolvedID ?? requestDocument.channelID;
+	}
 	if (requestDocument.channelID) {
 		return requestDocument.channelID;
 	}

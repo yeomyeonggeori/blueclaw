@@ -34,6 +34,8 @@ import {
 	type BuzzThreadId,
 } from "./types.ts";
 import type { ReactionSummary } from "../../visible-context.ts";
+import type { OutgoingAttachment } from "../../outgoing-attachment.ts";
+import { buildMessageBody, threadRootOf } from "./user-session.ts";
 import { originOfTags } from "../../mirror/origin.ts";
 import { reactionContentOf } from "../../mirror/reaction-emoji.ts";
 
@@ -497,14 +499,61 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		extraTags: string[][] = [],
 	): Promise<RawMessage<BuzzEvent>> {
 		const decoded = this.decodeThreadId(threadId);
-		const text = this.converter.renderPostable(message);
-		const tags: string[][] = [["h", decoded.channelId]];
-		if (decoded.rootEventId) {
-			tags.push(["e", decoded.rootEventId, "", "root"]);
-		}
-		tags.push(...extraTags);
-		const event = await this.relay.publish(STREAM_MESSAGE_KIND, text, tags);
+		const { body, mediaTags } = await this.renderPostableWithFiles(message);
+		const tags: string[][] = [["h", decoded.channelId], ...mediaTags];
+		tags.push(...(await this.threadTags(decoded, extraTags)));
+		const event = await this.relay.publish(STREAM_MESSAGE_KIND, body, tags);
 		return { id: event.id, threadId, raw: event };
+	}
+
+	// The base renderer keeps a postable's text and quietly drops its files, so
+	// an attachment used to vanish behind a green "sent". Files travel the same
+	// way a person's do: uploaded to the relay's media store, linked from the
+	// body, named in imeta tags. A refused upload throws instead of shrinking
+	// the message.
+	private async renderPostableWithFiles(
+		message: AdapterPostableMessage,
+	): Promise<{ body: string; mediaTags: string[][] }> {
+		const files = typeof message === "object" && "files" in message ? (message.files ?? []) : [];
+		const text = this.converter.renderPostable(message);
+		if (files.length === 0) return { body: text, mediaTags: [] };
+		const attachments: OutgoingAttachment[] = [];
+		for (const file of files) {
+			attachments.push({
+				filename: file.filename,
+				contentType: file.mimeType ?? "application/octet-stream",
+				contentBase64: (file.data instanceof Buffer
+					? file.data
+					: Buffer.from(new Uint8Array(file.data instanceof Blob ? await file.data.arrayBuffer() : file.data))
+				).toString("base64"),
+			});
+		}
+		return await buildMessageBody({
+			relayURL: this.config.relayURL,
+			userSecretHex: this.config.privateKeyHex,
+			message: text,
+			attachments,
+		});
+	}
+
+	// A conversation is a message and the replies to it, and nothing deeper.
+	// Answering a reply answers what it replied to, so every answer lands flat
+	// under one root instead of opening a thread inside a thread. A direct
+	// conversation is already a conversation: no thread tags at all.
+	private async threadTags(
+		decoded: BuzzThreadId,
+		extraTags: string[][],
+	): Promise<string[][]> {
+		const plainTags = extraTags.filter((tag) => tag[0] !== "e");
+		if (this.channelsById.get(decoded.channelId)?.isDM) {
+			return plainTags;
+		}
+		const answeredId = extraTags.find((tag) => tag[0] === "e")?.[1];
+		const anchorId = decoded.rootEventId ?? answeredId;
+		if (!anchorId) return plainTags;
+		const rootId = await threadRootOf(this.relay, anchorId);
+		if (!rootId) return plainTags;
+		return [...plainTags, ["e", rootId, "", "root"], ["e", rootId, "", "reply"]];
 	}
 
 	async postChannelMessage(channelId: string, message: AdapterPostableMessage): Promise<RawMessage<BuzzEvent>> {

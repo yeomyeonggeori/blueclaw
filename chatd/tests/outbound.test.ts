@@ -431,3 +431,22 @@ describe("history.fetch by channel", () => {
 		expect(response.status).toBe(400);
 	});
 });
+
+describe("channel resolution guards", () => {
+	// A model passes whatever channelID it last saw. When it also names the
+	// channel, the name is resolved and has to agree.
+	it("refuses a channelID that is not the channel named", async () => {
+		const adapter = createAdapter();
+		adapterInternals<{ channelIdByName: (name: string) => Promise<string> }>(adapter).channelIdByName =
+			async () => "channel-real";
+		const handler = createOutboundHandler({ mattermost: adapter }, createConfiguration());
+
+		const response = await handler(
+			outboundRequest("message.post", { channelID: "channel-guessed", channelName: "잡담", message: "안내" }),
+		);
+
+		expect(response.status).toBe(400);
+		const body = (await response.json()) as { error: string };
+		expect(body.error).toContain("channel-real");
+	});
+});
