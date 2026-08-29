@@ -1,8 +1,5 @@
 import type { BuzzAdapter } from "./adapters/buzz/adapter.ts";
-import { firstTagValue } from "./adapters/buzz/types.ts";
-
-export const messageChangeMatrix =
-	"a message the assistant sent, your own, or anyone's if you hold the channel admin role";
+import { deriveBuzzSecret } from "./adapters/buzz/identity.ts";
 
 export class MessageChangeRefused extends Error {
 	constructor(message: string) {
@@ -11,33 +8,29 @@ export class MessageChangeRefused extends Error {
 	}
 }
 
-export function mayChangeMessage(
-	targetAuthorPubkeyHex: string,
-	actorPubkeyHex: string,
-	actorIsElevated: boolean,
-	botPubkeyHex: string,
-): boolean {
-	if (targetAuthorPubkeyHex === botPubkeyHex) return true;
-	if (actorPubkeyHex !== "" && targetAuthorPubkeyHex === actorPubkeyHex) return true;
-	return actorIsElevated;
-}
-
-export async function requireMessageChangeAllowed(
+// The relay accepts an edit or a deletion only from the key that authored the
+// event, which makes it the single judge of who may change what. chatd decides
+// nothing here: it picks the key to sign with. The assistant's own messages are
+// signed by the assistant; everything else is signed as the person who asked,
+// whose key this device derives from the same seed admind uses.
+export async function signerForMessageChange(
 	adapter: BuzzAdapter,
 	messageID: string,
-	requesterPubkeyHex: string | undefined,
-): Promise<void> {
+	requesterEmail: string | undefined,
+	keySeed: string | undefined,
+): Promise<string | undefined> {
 	const target = await adapter.readMessageEvent(messageID);
 	if (!target) {
+		throw new MessageChangeRefused(`message ${messageID} cannot be read from this relay, so it cannot be changed`);
+	}
+	if (target.pubkey === adapter.botPubkey) return undefined;
+	const email = (requesterEmail ?? "").trim();
+	if (!keySeed || email === "") {
 		throw new MessageChangeRefused(
-			`message ${messageID} cannot be read from this relay, so who may change it cannot be decided`,
+			`message ${messageID} was written by somebody else and this device cannot sign as the person who asked`,
 		);
 	}
-	const actorPubkeyHex = (requesterPubkeyHex ?? "").trim();
-	const channelID = firstTagValue(target, "h") ?? "";
-	const actorIsElevated = await isElevatedIn(adapter, channelID, actorPubkeyHex);
-	if (mayChangeMessage(target.pubkey, actorPubkeyHex, actorIsElevated, adapter.botPubkey)) return;
-	throw new MessageChangeRefused(`you may change ${messageChangeMatrix}, and message ${messageID} is none of those`);
+	return deriveBuzzSecret(keySeed, email);
 }
 
 export async function isElevatedIn(

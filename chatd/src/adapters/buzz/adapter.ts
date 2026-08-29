@@ -36,6 +36,7 @@ import {
 import type { ReactionSummary } from "../../visible-context.ts";
 import type { OutgoingAttachment } from "../../outgoing-attachment.ts";
 import { buildMessageBody } from "./user-session.ts";
+import { withRelayAs } from "./relay-pool.ts";
 import { rankBySearchScore } from "../../message-search.ts";
 import { originOfTags } from "../../mirror/origin.ts";
 import { reactionContentOf } from "../../mirror/reaction-emoji.ts";
@@ -578,6 +579,7 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	// the message.
 	private async renderPostableWithFiles(
 		message: AdapterPostableMessage,
+		signerSecretHex: string = this.config.privateKeyHex,
 	): Promise<{ body: string; mediaTags: string[][] }> {
 		const files = typeof message === "object" && "files" in message ? (message.files ?? []) : [];
 		const text = this.converter.renderPostable(message);
@@ -595,7 +597,7 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		}
 		return await buildMessageBody({
 			relayURL: this.config.relayURL,
-			userSecretHex: this.config.privateKeyHex,
+			userSecretHex: signerSecretHex,
 			message: text,
 			attachments,
 		});
@@ -631,9 +633,10 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		threadId: string,
 		messageId: string,
 		message: AdapterPostableMessage,
+		signerSecretHex?: string,
 	): Promise<RawMessage<BuzzEvent>> {
-		const { body, mediaTags } = await this.renderPostableWithFiles(message);
-		const event = await this.relay.publish(EDIT_MESSAGE_KIND, body, [
+		const { body, mediaTags } = await this.renderPostableWithFiles(message, signerSecretHex);
+		const event = await this.publishAs(signerSecretHex, EDIT_MESSAGE_KIND, body, [
 			["h", await this.channelOwningMessage(threadId, messageId)],
 			["e", messageId],
 			...mediaTags,
@@ -641,11 +644,26 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		return { id: messageId, threadId, raw: event };
 	}
 
-	async deleteMessage(threadId: string, messageId: string): Promise<void> {
-		await this.relay.publish(DELETE_MESSAGE_KIND, "", [
+	async deleteMessage(threadId: string, messageId: string, signerSecretHex?: string): Promise<void> {
+		await this.publishAs(signerSecretHex, DELETE_MESSAGE_KIND, "", [
 			["h", await this.channelOwningMessage(threadId, messageId)],
 			["e", messageId],
 		]);
+	}
+
+	// The relay accepts a change to a message only from the key that wrote it, so
+	// a change asked for by a person is signed with that person's key and the
+	// relay stays the only judge of whether it may happen.
+	private async publishAs(
+		signerSecretHex: string | undefined,
+		kind: number,
+		content: string,
+		tags: string[][],
+	): Promise<BuzzEvent> {
+		if (!signerSecretHex) return this.relay.publish(kind, content, tags);
+		return withRelayAs(this.config.relayURL, signerSecretHex, this.config.authTagJSON, (relay) =>
+			relay.publish(kind, content, tags),
+		);
 	}
 
 	// An edit or a deletion belongs to the channel its target lives in, not to

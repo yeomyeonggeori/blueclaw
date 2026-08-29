@@ -149,6 +149,7 @@ export function parseMessageEditRequest(value: unknown): MessageEditRequest {
 		messageID: requireString(record, "messageID"),
 		message: requireString(record, "message"),
 		requesterPubkeyHex: optionalString(record, "requesterPubkeyHex"),
+		requesterEmail: optionalString(record, "requesterEmail"),
 		attachments: optionalArray(record, "attachments").map(parseReplyAttachment),
 	};
 }
@@ -159,6 +160,7 @@ export function parseMessageDeleteRequest(value: unknown): MessageDeleteRequest 
 		replyTargetID: requireString(record, "replyTargetID"),
 		messageID: requireString(record, "messageID"),
 		requesterPubkeyHex: optionalString(record, "requesterPubkeyHex"),
+		requesterEmail: optionalString(record, "requesterEmail"),
 	};
 }
 

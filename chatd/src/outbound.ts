@@ -31,12 +31,7 @@ import {
 	parseReactionRequest,
 	parseReplySendRequest,
 } from "./outbound-parse.ts";
-import {
-	MessageChangeRefused,
-	isElevatedIn,
-	mayChangeMessage,
-	requireMessageChangeAllowed,
-} from "./message-ownership.ts";
+import { MessageChangeRefused, isElevatedIn, signerForMessageChange } from "./message-ownership.ts";
 import { personCapabilities, type PersonCapability } from "./personal/capabilities.ts";
 import { MalformedRequest } from "./personal/parse.ts";
 import { CredentialRefused, type PersonalGateway } from "./personal/gateway.ts";
@@ -470,7 +465,7 @@ async function handleChannelEnsure(
 
 async function handleMessageEdit(
 	adapter: PlatformChatAdapter,
-	_configuration: ChatdConfiguration,
+	configuration: ChatdConfiguration,
 	requestBody: unknown,
 ): Promise<ReplySendResponse> {
 	const requestDocument = parseMessageEditRequest(requestBody);
@@ -480,23 +475,40 @@ async function handleMessageEdit(
 	}
 	const message: AdapterPostableMessage =
 		fileUploads.length > 0 ? { markdown: requestDocument.message, files: fileUploads } : requestDocument.message;
-	if (adapter instanceof BuzzAdapter) {
-		await requireMessageChangeAllowed(adapter, requestDocument.messageID, requestDocument.requesterPubkeyHex);
-	}
-	const result = await adapter.editMessage(requestDocument.replyTargetID, requestDocument.messageID, message);
+	const signerSecretHex =
+		adapter instanceof BuzzAdapter
+			? await signerForMessageChange(
+					adapter,
+					requestDocument.messageID,
+					requestDocument.requesterEmail,
+					configuration.buzz?.keySeed,
+				)
+			: undefined;
+	const result = await adapter.editMessage(
+		requestDocument.replyTargetID,
+		requestDocument.messageID,
+		message,
+		signerSecretHex,
+	);
 	return { dispatchID: result.id };
 }
 
 async function handleMessageDelete(
 	adapter: PlatformChatAdapter,
-	_configuration: ChatdConfiguration,
+	configuration: ChatdConfiguration,
 	requestBody: unknown,
 ): Promise<Record<string, never>> {
 	const requestDocument = parseMessageDeleteRequest(requestBody);
-	if (adapter instanceof BuzzAdapter) {
-		await requireMessageChangeAllowed(adapter, requestDocument.messageID, requestDocument.requesterPubkeyHex);
-	}
-	await adapter.deleteMessage(requestDocument.replyTargetID, requestDocument.messageID);
+	const signerSecretHex =
+		adapter instanceof BuzzAdapter
+			? await signerForMessageChange(
+					adapter,
+					requestDocument.messageID,
+					requestDocument.requesterEmail,
+					configuration.buzz?.keySeed,
+				)
+			: undefined;
+	await adapter.deleteMessage(requestDocument.replyTargetID, requestDocument.messageID, signerSecretHex);
 	return {};
 }
 
@@ -545,9 +557,9 @@ async function handleMessageSearch(
 	};
 }
 
-// Whether a candidate may be edited or deleted is the same question the edit
-// and the delete ask, so the search answers it with the same judge rather than
-// leaving the caller to guess from who wrote it.
+// These flags are a hint the caller can plan with, not a permission: the relay
+// decides every change when it is asked for. An edit belongs to whoever wrote
+// the message, and a deletion also to whoever administers the channel.
 async function messageSearchCandidateDocuments(
 	adapter: BuzzAdapter,
 	candidates: BuzzMessageSearchCandidate[],
@@ -556,14 +568,11 @@ async function messageSearchCandidateDocuments(
 	const actorPubkeyHex = (requesterPubkeyHex ?? "").trim();
 	const documents: MessageSearchCandidateDocument[] = [];
 	for (const candidate of candidates) {
-		const actorIsElevated = await isElevatedIn(adapter, candidate.channelID, actorPubkeyHex);
-		const mayChange = mayChangeMessage(
-			candidate.authorPubkeyHex,
-			actorPubkeyHex,
-			actorIsElevated,
-			adapter.botPubkey,
-		);
-		documents.push({ ...candidate, editable: mayChange, deletable: mayChange });
+		const editable =
+			candidate.authorPubkeyHex === adapter.botPubkey ||
+			(actorPubkeyHex !== "" && candidate.authorPubkeyHex === actorPubkeyHex);
+		const deletable = editable || (await isElevatedIn(adapter, candidate.channelID, actorPubkeyHex));
+		documents.push({ ...candidate, editable, deletable });
 	}
 	return documents;
 }

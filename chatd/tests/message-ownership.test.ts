@@ -1,8 +1,5 @@
-import { describe, expect, test } from "bun:test";
-import { BuzzAdapter } from "../src/adapters/buzz/adapter.ts";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { BuzzEvent } from "../src/adapters/buzz/types.ts";
-import { mayChangeMessage } from "../src/message-ownership.ts";
-import { createOutboundHandler } from "../src/outbound.ts";
 import type { ChatdConfiguration } from "../src/configuration.ts";
 
 const CHANNEL = "6955ae67-a6d5-47c7-83b6-aea4902c20f0";
@@ -12,8 +9,39 @@ const STRANGER = "e".repeat(64);
 const BOT_MESSAGE = "a".repeat(64);
 const REQUESTER_MESSAGE = "b".repeat(64);
 const STRANGER_MESSAGE = "c".repeat(64);
+const KEY_SEED = "device-identity-seed";
+const REQUESTER_EMAIL = "Sample@Example.com";
 
 type Published = { kind: number; content: string; tags: string[][] };
+type PublishedByKey = Published & { secretHex: string };
+
+const publishedByAnotherKey: PublishedByKey[] = [];
+let relayRefusal: string | undefined;
+
+mock.module("../src/adapters/buzz/relay-client.ts", () => ({
+	createBuzzRelayClient: (_relayURL: string, secretHex: string) => ({
+		pubkeyHex: publicKeyOf(secretHex),
+		connect: async () => {},
+		disconnect: () => {},
+		subscribe: () => {},
+		query: async () => [],
+		publish: async (kind: number, content: string, tags: string[][]) => {
+			if (relayRefusal) throw new Error(relayRefusal);
+			publishedByAnotherKey.push({ secretHex, kind, content, tags });
+			return { id: "requester-event", pubkey: publicKeyOf(secretHex), created_at: 300, kind, tags, content, sig: "" };
+		},
+		publishForAcknowledgement: async () => "",
+	}),
+}));
+
+const { BuzzAdapter } = await import("../src/adapters/buzz/adapter.ts");
+const { deriveBuzzSecret } = await import("../src/adapters/buzz/identity.ts");
+const { pubkeyFromSecret } = await import("../src/adapters/buzz/user-session.ts");
+const { createOutboundHandler } = await import("../src/outbound.ts");
+
+function publicKeyOf(secretHex: string): string {
+	return pubkeyFromSecret(secretHex);
+}
 
 function messageEvent(id: string, pubkey: string): BuzzEvent {
 	return { id, pubkey, created_at: 100, kind: 9, tags: [["h", CHANNEL]], content: "먼저 쓴 글", sig: "" };
@@ -37,13 +65,13 @@ function withMessages(admins: BuzzEvent[] = []) {
 		privateKeyHex: BOT_SECRET,
 		botDisplayName: "internkim",
 	});
-	const botPubkey = adapter.botPubkey;
+	const botPubkey = pubkeyFromSecret(BOT_SECRET);
 	const messages = [
 		messageEvent(BOT_MESSAGE, botPubkey),
 		messageEvent(REQUESTER_MESSAGE, REQUESTER),
 		messageEvent(STRANGER_MESSAGE, STRANGER),
 	];
-	const published: Published[] = [];
+	const publishedAsTheBot: Published[] = [];
 	(adapter as unknown as { relay: unknown }).relay = {
 		pubkeyHex: botPubkey,
 		query: async (filter: { ids?: string[]; kinds?: number[] }) => {
@@ -53,136 +81,169 @@ function withMessages(admins: BuzzEvent[] = []) {
 			return [];
 		},
 		publish: async (kind: number, content: string, tags: string[][]) => {
-			published.push({ kind, content, tags });
+			publishedAsTheBot.push({ kind, content, tags });
 			return { id: "published", pubkey: botPubkey, created_at: 300, kind, tags, content, sig: "" };
 		},
 	};
-	return { adapter, botPubkey, published };
+	return { adapter, botPubkey, publishedAsTheBot };
 }
 
-function editRequest(messageID: string, requesterPubkeyHex?: string): Request {
+function configurationHoldingSeed(keySeed: string | undefined): ChatdConfiguration {
+	return {
+		botUserName: "internkim",
+		blueclawBaseURL: "http://127.0.0.1:8080",
+		blueclawIngressURL: undefined,
+		admindBaseURL: undefined,
+		listenPort: 18090,
+		listenHostname: "127.0.0.1",
+		mattermost: undefined,
+		buzz: {
+			relayURL: "ws://localhost:3000",
+			privateKeyHex: BOT_SECRET,
+			accountLinksPath: undefined,
+			authTagJSON: undefined,
+			keySeed,
+		},
+	};
+}
+
+function editRequest(messageID: string, requesterEmail?: string): Request {
 	return new Request("http://chatd/v1/platform/buzz/message.edit", {
 		method: "POST",
 		body: JSON.stringify({
 			replyTargetID: `buzz:${CHANNEL}`,
 			messageID,
 			message: "고친 글",
-			requesterPubkeyHex,
+			requesterPubkeyHex: REQUESTER,
+			requesterEmail,
 		}),
 	});
 }
 
-function deleteRequest(messageID: string, requesterPubkeyHex?: string): Request {
+function deleteRequest(messageID: string, requesterEmail?: string): Request {
 	return new Request("http://chatd/v1/platform/buzz/message_delete", {
 		method: "POST",
-		body: JSON.stringify({ replyTargetID: `buzz:${CHANNEL}`, messageID, requesterPubkeyHex }),
+		body: JSON.stringify({
+			replyTargetID: `buzz:${CHANNEL}`,
+			messageID,
+			requesterPubkeyHex: REQUESTER,
+			requesterEmail,
+		}),
 	});
 }
 
-describe("mayChangeMessage", () => {
-	test("the assistant's own message is always changeable", () => {
-		expect(mayChangeMessage("bot", "actor", false, "bot")).toBe(true);
-	});
-
-	test("a person may change what they wrote", () => {
-		expect(mayChangeMessage("actor", "actor", false, "bot")).toBe(true);
-	});
-
-	test("a channel administrator may change anyone's", () => {
-		expect(mayChangeMessage("stranger", "actor", true, "bot")).toBe(true);
-	});
-
-	test("nobody else may change a third person's message", () => {
-		expect(mayChangeMessage("stranger", "actor", false, "bot")).toBe(false);
-	});
+beforeEach(() => {
+	publishedByAnotherKey.length = 0;
+	relayRefusal = undefined;
 });
 
-describe("message.edit through the agent", () => {
-	test("edits the assistant's own message", async () => {
-		const { adapter, published } = withMessages();
-		const handler = createOutboundHandler({ buzz: adapter }, {} as ChatdConfiguration);
+describe("message.edit signs as the person it acts for", () => {
+	test("the assistant's own message is still edited by the assistant", async () => {
+		const { adapter, publishedAsTheBot } = withMessages();
+		const handler = createOutboundHandler({ buzz: adapter }, configurationHoldingSeed(KEY_SEED));
 
-		const response = await handler(editRequest(BOT_MESSAGE, REQUESTER));
-
-		expect(response.status).toBe(200);
-		expect(published[0]?.kind).toBe(40003);
-	});
-
-	test("edits the requester's own message", async () => {
-		const { adapter, published } = withMessages();
-		const handler = createOutboundHandler({ buzz: adapter }, {} as ChatdConfiguration);
-
-		const response = await handler(editRequest(REQUESTER_MESSAGE, REQUESTER));
+		const response = await handler(editRequest(BOT_MESSAGE, REQUESTER_EMAIL));
 
 		expect(response.status).toBe(200);
-		expect(published[0]?.kind).toBe(40003);
+		expect(publishedAsTheBot.map((event) => event.kind)).toEqual([40003]);
+		expect(publishedByAnotherKey).toEqual([]);
 	});
 
-	test("refuses a third person's message and says the matrix", async () => {
-		const { adapter, published } = withMessages();
-		const handler = createOutboundHandler({ buzz: adapter }, {} as ChatdConfiguration);
+	test("somebody else's message is edited under the requester's own derived key", async () => {
+		const { adapter, botPubkey, publishedAsTheBot } = withMessages();
+		const handler = createOutboundHandler({ buzz: adapter }, configurationHoldingSeed(KEY_SEED));
 
-		const response = await handler(editRequest(STRANGER_MESSAGE, REQUESTER));
-
-		expect(response.status).toBe(403);
-		expect(((await response.json()) as { error: string }).error).toContain("channel admin role");
-		expect(published).toEqual([]);
-	});
-
-	test("lets a channel administrator edit a third person's message", async () => {
-		const { adapter, published } = withMessages([adminListEvent([REQUESTER])]);
-		const handler = createOutboundHandler({ buzz: adapter }, {} as ChatdConfiguration);
-
-		const response = await handler(editRequest(STRANGER_MESSAGE, REQUESTER));
+		const response = await handler(editRequest(REQUESTER_MESSAGE, REQUESTER_EMAIL));
 
 		expect(response.status).toBe(200);
-		expect(published[0]?.kind).toBe(40003);
+		expect(publishedAsTheBot).toEqual([]);
+		expect(publishedByAnotherKey.map((event) => event.kind)).toEqual([40003]);
+		const signedBy = publishedByAnotherKey[0]?.secretHex ?? "";
+		expect(signedBy).toBe(deriveBuzzSecret(KEY_SEED, REQUESTER_EMAIL));
+		expect(pubkeyFromSecret(signedBy)).not.toBe(botPubkey);
+	});
+
+	test("a third person's message is signed as the requester and left to the relay", async () => {
+		const { adapter } = withMessages();
+		const handler = createOutboundHandler({ buzz: adapter }, configurationHoldingSeed(KEY_SEED));
+
+		const response = await handler(editRequest(STRANGER_MESSAGE, REQUESTER_EMAIL));
+
+		expect(response.status).toBe(200);
+		expect(publishedByAnotherKey[0]?.secretHex).toBe(deriveBuzzSecret(KEY_SEED, REQUESTER_EMAIL));
+	});
+
+	test("a refusal from the relay reaches the caller as it was written", async () => {
+		const { adapter } = withMessages();
+		const handler = createOutboundHandler({ buzz: adapter }, configurationHoldingSeed(KEY_SEED));
+		relayRefusal = "relay rejected event: invalid: must be event author to edit";
+
+		const response = await handler(editRequest(STRANGER_MESSAGE, REQUESTER_EMAIL));
+
+		expect(response.status).toBe(502);
+		expect(((await response.json()) as { error: string }).error).toContain("must be event author to edit");
 	});
 
 	test("a request naming no requester may still change the assistant's message", async () => {
-		const { adapter } = withMessages([adminListEvent([REQUESTER])]);
-		const handler = createOutboundHandler({ buzz: adapter }, {} as ChatdConfiguration);
+		const { adapter, publishedAsTheBot } = withMessages();
+		const handler = createOutboundHandler({ buzz: adapter }, configurationHoldingSeed(KEY_SEED));
 
 		expect((await handler(editRequest(BOT_MESSAGE))).status).toBe(200);
+		expect(publishedAsTheBot.map((event) => event.kind)).toEqual([40003]);
 	});
 
 	test("a request naming no requester may change nothing else", async () => {
-		const { adapter, published } = withMessages([adminListEvent([REQUESTER])]);
-		const handler = createOutboundHandler({ buzz: adapter }, {} as ChatdConfiguration);
+		const { adapter, publishedAsTheBot } = withMessages();
+		const handler = createOutboundHandler({ buzz: adapter }, configurationHoldingSeed(KEY_SEED));
 
 		const response = await handler(editRequest(REQUESTER_MESSAGE));
 
 		expect(response.status).toBe(403);
-		expect(published).toEqual([]);
+		expect(publishedAsTheBot).toEqual([]);
+		expect(publishedByAnotherKey).toEqual([]);
+	});
+
+	test("a device holding no seed may change nothing but the assistant's own", async () => {
+		const { adapter, publishedAsTheBot } = withMessages();
+		const handler = createOutboundHandler({ buzz: adapter }, configurationHoldingSeed(undefined));
+
+		const response = await handler(editRequest(REQUESTER_MESSAGE, REQUESTER_EMAIL));
+
+		expect(response.status).toBe(403);
+		expect(publishedAsTheBot).toEqual([]);
+		expect(publishedByAnotherKey).toEqual([]);
 	});
 });
 
-describe("message_delete through the agent", () => {
-	test("deletes the requester's own message", async () => {
-		const { adapter, published } = withMessages();
-		const handler = createOutboundHandler({ buzz: adapter }, {} as ChatdConfiguration);
+describe("message_delete signs as the person it acts for", () => {
+	test("the requester's own message is deleted under the requester's key", async () => {
+		const { adapter, publishedAsTheBot } = withMessages();
+		const handler = createOutboundHandler({ buzz: adapter }, configurationHoldingSeed(KEY_SEED));
 
-		const response = await handler(deleteRequest(REQUESTER_MESSAGE, REQUESTER));
+		const response = await handler(deleteRequest(REQUESTER_MESSAGE, REQUESTER_EMAIL));
 
 		expect(response.status).toBe(200);
-		expect(published[0]?.kind).toBe(9005);
+		expect(publishedAsTheBot).toEqual([]);
+		expect(publishedByAnotherKey.map((event) => event.kind)).toEqual([9005]);
+		expect(publishedByAnotherKey[0]?.secretHex).toBe(deriveBuzzSecret(KEY_SEED, REQUESTER_EMAIL));
 	});
 
-	test("refuses a third person's message", async () => {
-		const { adapter, published } = withMessages();
-		const handler = createOutboundHandler({ buzz: adapter }, {} as ChatdConfiguration);
+	test("the assistant's own message is deleted by the assistant", async () => {
+		const { adapter, publishedAsTheBot } = withMessages();
+		const handler = createOutboundHandler({ buzz: adapter }, configurationHoldingSeed(KEY_SEED));
 
-		const response = await handler(deleteRequest(STRANGER_MESSAGE, REQUESTER));
+		const response = await handler(deleteRequest(BOT_MESSAGE, REQUESTER_EMAIL));
 
-		expect(response.status).toBe(403);
-		expect(published).toEqual([]);
+		expect(response.status).toBe(200);
+		expect(publishedAsTheBot.map((event) => event.kind)).toEqual([9005]);
+		expect(publishedByAnotherKey).toEqual([]);
 	});
 });
 
 describe("message.search flags", () => {
-	test("names what the requester may change and what they may not", async () => {
+	test("names what the requester wrote and what the assistant wrote", async () => {
 		const { adapter, botPubkey } = withMessages();
-		const handler = createOutboundHandler({ buzz: adapter }, {} as ChatdConfiguration);
+		const handler = createOutboundHandler({ buzz: adapter }, configurationHoldingSeed(KEY_SEED));
 
 		const response = await handler(
 			new Request("http://chatd/v1/platform/buzz/message.search", {
@@ -193,19 +254,19 @@ describe("message.search flags", () => {
 
 		expect(response.status).toBe(200);
 		const body = (await response.json()) as {
-			candidates: { messageID: string; authorPubkeyHex: string; editable: boolean; deletable: boolean }[];
+			candidates: { authorPubkeyHex: string; editable: boolean; deletable: boolean }[];
 		};
-		const changeableByAuthor = new Map(
-			body.candidates.map((candidate) => [candidate.authorPubkeyHex, candidate.editable && candidate.deletable]),
+		const editableByAuthor = new Map(
+			body.candidates.map((candidate) => [candidate.authorPubkeyHex, candidate.editable]),
 		);
-		expect(changeableByAuthor.get(botPubkey)).toBe(true);
-		expect(changeableByAuthor.get(REQUESTER)).toBe(true);
-		expect(changeableByAuthor.get(STRANGER)).toBe(false);
+		expect(editableByAuthor.get(botPubkey)).toBe(true);
+		expect(editableByAuthor.get(REQUESTER)).toBe(true);
+		expect(editableByAuthor.get(STRANGER)).toBe(false);
 	});
 
-	test("a channel administrator may change every candidate", async () => {
+	test("a channel administrator may delete a third person's message but not edit it", async () => {
 		const { adapter } = withMessages([adminListEvent([REQUESTER])]);
-		const handler = createOutboundHandler({ buzz: adapter }, {} as ChatdConfiguration);
+		const handler = createOutboundHandler({ buzz: adapter }, configurationHoldingSeed(KEY_SEED));
 
 		const response = await handler(
 			new Request("http://chatd/v1/platform/buzz/message.search", {
@@ -214,8 +275,11 @@ describe("message.search flags", () => {
 			}),
 		);
 
-		const body = (await response.json()) as { candidates: { editable: boolean; deletable: boolean }[] };
-		expect(body.candidates).toHaveLength(3);
-		expect(body.candidates.every((candidate) => candidate.editable && candidate.deletable)).toBe(true);
+		const body = (await response.json()) as {
+			candidates: { authorPubkeyHex: string; editable: boolean; deletable: boolean }[];
+		};
+		const stranger = body.candidates.find((candidate) => candidate.authorPubkeyHex === STRANGER);
+		expect(stranger?.editable).toBe(false);
+		expect(stranger?.deletable).toBe(true);
 	});
 });
