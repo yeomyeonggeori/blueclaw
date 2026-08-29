@@ -195,6 +195,14 @@ class BuzzPersonalGateway implements PersonalGateway {
 		body: string,
 	): Promise<PersonalMessage> {
 		this.require(actor);
+		if (await this.isWrittenByTheAgent(messageID)) {
+			const edited = await this.adapter.editMessage(
+				this.adapter.encodeThreadId({ channelId: conversationID }),
+				messageID,
+				body,
+			);
+			return this.agentMessage(edited.id, conversationID, body);
+		}
 		const editID = await editChannelMessageAsUser({
 			relayURL: this.settings.relayURL,
 			userSecretHex: actor.secret,
@@ -221,6 +229,10 @@ class BuzzPersonalGateway implements PersonalGateway {
 		messageID: string,
 	): Promise<void> {
 		this.require(actor);
+		if (await this.isWrittenByTheAgent(messageID)) {
+			await this.adapter.deleteMessage(this.adapter.encodeThreadId({ channelId: conversationID }), messageID);
+			return;
+		}
 		await deleteChannelMessageAsUser({
 			relayURL: this.settings.relayURL,
 			userSecretHex: actor.secret,
@@ -298,6 +310,28 @@ class BuzzPersonalGateway implements PersonalGateway {
 	private relayReadHeaders(actor: ActorCredential, url: string): Record<string, string> {
 		if (!isServedByTheRelay(url, this.settings.relayURL)) return {};
 		return { Authorization: readAuthorizationHeader(actor.secret, url) };
+	}
+
+	// A person's own key cannot sign away the agent's message, so a change to
+	// one is published by the agent. Everything else stays the person's own
+	// event and the relay decides whether they may make it.
+	private async isWrittenByTheAgent(messageID: string): Promise<boolean> {
+		const target = await this.adapter.readMessageEvent(messageID);
+		return target?.pubkey === this.adapter.botPubkey;
+	}
+
+	private agentMessage(messageID: string, conversationID: string, body: string): PersonalMessage {
+		const now = new Date().toISOString();
+		return {
+			id: messageID,
+			conversationID,
+			authorExternalID: this.adapter.botPubkey,
+			body,
+			postedAt: now,
+			editedAt: now,
+			reactions: [],
+			attachments: [],
+		};
 	}
 
 	private require(actor: ActorCredential): void {

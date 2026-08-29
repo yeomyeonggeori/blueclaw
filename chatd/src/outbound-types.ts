@@ -152,12 +152,14 @@ export interface MessageEditRequest {
 	replyTargetID: string;
 	messageID: string;
 	message: string;
+	requesterPubkeyHex?: string;
 	attachments?: ReplyAttachmentDocument[];
 }
 
 export interface MessageDeleteRequest {
 	replyTargetID: string;
 	messageID: string;
+	requesterPubkeyHex?: string;
 }
 
 export interface MessageSearchRequest {
@@ -178,6 +180,8 @@ export interface MessageSearchCandidateDocument {
 	rootMessageID?: string;
 	authorPubkeyHex: string;
 	authoredByAssistant: boolean;
+	editable: boolean;
+	deletable: boolean;
 	createdAt: number;
 	text: string;
 	score: number;
