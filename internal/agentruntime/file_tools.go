@@ -29,7 +29,8 @@ const maximumFilePreviewBytes = 200 * 1024
 
 type fileReadToolInput struct {
 	Path           string `json:"path"`
-	MaterialID     string `json:"-"`
+	SourcePlatform string `json:"-"`
+	SourceFileID   string `json:"-"`
 	MaxOutputBytes int    `json:"maxOutputBytes"`
 	StartLine      int    `json:"startLine"`
 	LineCount      int    `json:"lineCount"`
@@ -37,8 +38,9 @@ type fileReadToolInput struct {
 }
 
 type filePreviewToolInput struct {
-	Path       string `json:"path"`
-	MaterialID string `json:"-"`
+	Path           string `json:"path"`
+	SourcePlatform string `json:"-"`
+	SourceFileID   string `json:"-"`
 }
 
 type fileWriteToolInput struct {
@@ -99,7 +101,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerFileTools(toolRegistry *to
 			Name:        "file_read",
 			Description: "Read exact UTF-8 workspace text or a real file line range with honest size and truncation metadata. path also takes an attachment's exact url copied from the conversation; never invent a filesystem path from a url. Use file_preview first for attached HTML, PDF, DOCX, PPTX, XLSX, or other documents.",
 			RecoveryCard: toolcontract.ToolRecoveryCard{
-				Does:       "Reads a text file or requested line range from the actual workspace file; attachment materialID falls back to cached preview text.",
+				Does:       "Reads a text file or requested line range from the actual workspace file; an attachment url falls back to cached preview text.",
 				Produces:   "Text content plus path, line range, original size, returned size, line count if known, and truncation metadata.",
 				SideEffect: "read",
 				UseWhen:    "You need current file content before file_edit or file.write.",
@@ -120,7 +122,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerFileTools(toolRegistry *to
 				Does:       "Returns a document preview or file metadata without inventing content.",
 				Produces:   "Path, filename, content type, size, markdown preview, conversion status, and conversion message.",
 				SideEffect: "read",
-				UseWhen:    "The attachment catalog lists a materialID or path for an HTML, PDF, DOCX, PPTX, XLSX, text, or data file and you need to understand it.",
+				UseWhen:    "The attachment catalog lists a url or path for an HTML, PDF, DOCX, PPTX, XLSX, text, or data file and you need to understand it.",
 				AvoidWhen:  "You need exact source lines for an edit; use file_read after previewing.",
 			},
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string","description":"Workspace file path, or an attachment's exact url copied verbatim from the conversation."}},"additionalProperties":false}`),
@@ -265,19 +267,18 @@ func (toolCatalogBuilder *ToolCatalogBuilder) deleteFileTool(toolContext context
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) readFileTool(toolContext context.Context, input fileReadToolInput, handlerContext toolHandlerContext) (toolcontract.ToolResult, error) {
-	path, materialID, failure := toolCatalogBuilder.resolveAttachmentReference(toolContext, handlerContext.request, "file_read", input.Path, input.MaterialID)
+	path, sourcePlatform, sourceFileID, failure := toolCatalogBuilder.resolveAttachmentReference(toolContext, handlerContext.request, "file_read", input.Path, input.SourcePlatform, input.SourceFileID)
 	if failure != nil {
 		return *failure, nil
 	}
 	input.Path = path
-	input.MaterialID = materialID
-	if materialID != "" {
-		if result, isCached := cachedFileReadResultByMaterialID(handlerContext.request.InputParts, materialID, input); isCached {
-			return result, nil
-		}
+	input.SourcePlatform = sourcePlatform
+	input.SourceFileID = sourceFileID
+	if result, isCached := cachedFileReadResultBySource(handlerContext.request.InputParts, sourcePlatform, sourceFileID, input); isCached {
+		return result, nil
 	}
 	if path == "" {
-		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "file_read", "path or materialID is required"), nil
+		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "file_read", "path is required"), nil
 	}
 	maxOutputBytes := input.MaxOutputBytes
 	if maxOutputBytes <= 0 || maxOutputBytes > maximumFileReadBytes {
@@ -406,8 +407,8 @@ func fileReadResultMap(base map[string]any, readResult fileReadOutput) map[strin
 	return base
 }
 
-func cachedFileReadResultByMaterialID(parts []agentcontract.AgentPart, materialID string, input fileReadToolInput) (toolcontract.ToolResult, bool) {
-	preview, isCached := cachedFilePreviewResultByMaterialID(parts, materialID)
+func cachedFileReadResultBySource(parts []agentcontract.AgentPart, platform string, fileID string, input fileReadToolInput) (toolcontract.ToolResult, bool) {
+	preview, isCached := cachedFilePreviewResultBySource(parts, platform, fileID)
 	if !isCached {
 		return toolcontract.ToolResult{}, false
 	}
@@ -461,7 +462,8 @@ func (toolCatalogBuilder *ToolCatalogBuilder) fileReadFallbackFromAttachmentMate
 	}
 	fallbackInput := input
 	fallbackInput.Path = fallbackPath
-	fallbackInput.MaterialID = ""
+	fallbackInput.SourcePlatform = ""
+	fallbackInput.SourceFileID = ""
 	result, readError := toolCatalogBuilder.readFileTool(toolContext, fallbackInput, handlerContext)
 	return result, readError, true
 }
@@ -617,15 +619,13 @@ func (toolCatalogBuilder *ToolCatalogBuilder) previewFileTool(toolContext contex
 			return fileToolSuccess(result), nil
 		}
 		input.Path = toolCatalogBuilder.resolveAgentWorkspacePath(material.Path)
-		input.MaterialID = strings.TrimSpace(material.MaterialID)
+		input.SourcePlatform = strings.TrimSpace(material.Platform)
+		input.SourceFileID = strings.TrimSpace(material.FileID)
 	}
 	if cachedPreview, isCached := cachedFilePreviewResultForInput(handlerContext.request.InputParts, input); isCached {
 		return fileToolSuccess(cachedPreview), nil
 	}
-	if materialPreview, isResolved := toolCatalogBuilder.filePreviewResolvedMaterial(toolContext, input, handlerContext.request); isResolved {
-		return materialPreview, nil
-	}
-	previewPath, materialFailure := toolCatalogBuilder.filePreviewPath(toolContext, input, handlerContext.request)
+	previewPath, materialFailure := filePreviewPath(input)
 	if materialFailure != nil {
 		return *materialFailure, nil
 	}
@@ -665,23 +665,6 @@ func (toolCatalogBuilder *ToolCatalogBuilder) previewFileTool(toolContext contex
 		}
 	}
 	return filePreviewFromShellContent(previewPath, contentType, sizeBytes, content), nil
-}
-
-func (toolCatalogBuilder *ToolCatalogBuilder) filePreviewResolvedMaterial(toolContext context.Context, input filePreviewToolInput, request ToolCatalogRequest) (toolcontract.ToolResult, bool) {
-	if strings.TrimSpace(input.Path) != "" || strings.TrimSpace(input.MaterialID) == "" {
-		return toolcontract.ToolResult{}, false
-	}
-	material, errorValue := resolveReadableAttachmentMaterial(toolContext, request, input.MaterialID)
-	if errorValue != nil {
-		return attachmentResolutionFailure("file_preview", errorValue), true
-	}
-	if attachmentMaterialLooksLikeImage(material) {
-		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "file_preview", "attachment material is an image; use image_read"), true
-	}
-	if result, hasPreview := filePreviewResultFromVisibleMaterial(material); hasPreview {
-		return fileToolSuccess(result), true
-	}
-	return toolcontract.ToolResult{}, false
 }
 
 func filePreviewResultFromVisibleMaterial(material agentcontract.VisibleContextMaterial) (map[string]any, bool) {
@@ -787,26 +770,13 @@ func visibleAttachmentMaterialWithFilename(materials []agentcontract.VisibleCont
 	return matches[0], true
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) filePreviewPath(toolContext context.Context, input filePreviewToolInput, request ToolCatalogRequest) (string, *toolcontract.ToolResult) {
+func filePreviewPath(input filePreviewToolInput) (string, *toolcontract.ToolResult) {
 	path := strings.TrimSpace(input.Path)
-	materialID := strings.TrimSpace(input.MaterialID)
-	if path != "" {
-		return path, nil
-	}
-	if materialID == "" {
-		result := toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "file_preview", "path or materialID is required")
+	if path == "" {
+		result := toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "file_preview", "path is required")
 		return "", &result
 	}
-	material, errorValue := resolveReadableAttachmentMaterial(toolContext, request, materialID)
-	if errorValue != nil {
-		result := attachmentResolutionFailure("file_preview", errorValue)
-		return "", &result
-	}
-	if attachmentMaterialLooksLikeImage(material) {
-		result := toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "file_preview", "attachment material is an image; use image_read")
-		return "", &result
-	}
-	return toolCatalogBuilder.resolveAgentWorkspacePath(material.Path), nil
+	return path, nil
 }
 
 func attachmentMaterialLooksLikeImage(material agentcontract.VisibleContextMaterial) bool {
@@ -823,16 +793,15 @@ func attachmentMaterialLooksLikeImage(material agentcontract.VisibleContextMater
 }
 
 func cachedFilePreviewResultForInput(parts []agentcontract.AgentPart, input filePreviewToolInput) (map[string]any, bool) {
-	if materialID := strings.TrimSpace(input.MaterialID); materialID != "" {
-		return cachedFilePreviewResultByMaterialID(parts, materialID)
+	if preview, isCached := cachedFilePreviewResultBySource(parts, input.SourcePlatform, input.SourceFileID); isCached {
+		return preview, true
 	}
 	return cachedFilePreviewResult(parts, strings.TrimSpace(input.Path))
 }
 
-func cachedFilePreviewResultByMaterialID(parts []agentcontract.AgentPart, materialID string) (map[string]any, bool) {
-	trimmedMaterialID := strings.TrimSpace(materialID)
+func cachedFilePreviewResultBySource(parts []agentcontract.AgentPart, platform string, fileID string) (map[string]any, bool) {
 	for _, part := range parts {
-		if agentPartMaterialID(part) != trimmedMaterialID {
+		if !agentPartMatchesSource(part, platform, fileID) {
 			continue
 		}
 		return cachedFilePreviewResultFromPart(part)
@@ -867,12 +836,13 @@ func cachedFilePreviewResultFromPart(part agentcontract.AgentPart) (map[string]a
 	), true
 }
 
-func agentPartMaterialID(part agentcontract.AgentPart) string {
-	fileID := strings.TrimSpace(part.Source.FileID)
-	if fileID == "" {
-		return ""
+func agentPartMatchesSource(part agentcontract.AgentPart, platform string, fileID string) bool {
+	trimmedFileID := strings.TrimSpace(fileID)
+	if trimmedFileID == "" {
+		return false
 	}
-	return firstNonEmptyString(strings.TrimSpace(part.Source.Platform), "attachment") + ":" + fileID
+	return strings.TrimSpace(part.Source.FileID) == trimmedFileID &&
+		strings.TrimSpace(part.Source.Platform) == strings.TrimSpace(platform)
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) convertFilePreviewWithCapability(toolContext context.Context, request ToolCatalogRequest, path string, bridgePath string, contentType string, sizeBytes int64) (toolcontract.ToolResult, bool) {
@@ -1563,15 +1533,15 @@ func isPersistableDocumentFilename(filename string) bool {
 // this conversation or its history, which is the access scope, and resolving
 // imports it — so the read proceeds on the imported workspace path. Nothing
 // else is interpreted: a path is a path.
-func (toolCatalogBuilder *ToolCatalogBuilder) resolveAttachmentReference(toolContext context.Context, request ToolCatalogRequest, stage string, reference string, materialID string) (string, string, *toolcontract.ToolResult) {
+func (toolCatalogBuilder *ToolCatalogBuilder) resolveAttachmentReference(toolContext context.Context, request ToolCatalogRequest, stage string, reference string, sourcePlatform string, sourceFileID string) (string, string, string, *toolcontract.ToolResult) {
 	material, failure, isURL := toolCatalogBuilder.resolveAttachmentURL(toolContext, request, stage, reference)
 	if failure != nil {
-		return "", "", failure
+		return "", "", "", failure
 	}
 	if !isURL {
-		return strings.TrimSpace(reference), strings.TrimSpace(materialID), nil
+		return strings.TrimSpace(reference), strings.TrimSpace(sourcePlatform), strings.TrimSpace(sourceFileID), nil
 	}
-	return toolCatalogBuilder.resolveAgentWorkspacePath(material.Path), strings.TrimSpace(material.MaterialID), nil
+	return toolCatalogBuilder.resolveAgentWorkspacePath(material.Path), strings.TrimSpace(material.Platform), strings.TrimSpace(material.FileID), nil
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) resolveAttachmentURL(toolContext context.Context, request ToolCatalogRequest, stage string, reference string) (agentcontract.VisibleContextMaterial, *toolcontract.ToolResult, bool) {

@@ -537,7 +537,8 @@ func TestFilePreviewUsesCachedAttachmentPreviewByURL(t *testing.T) {
 		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
 		AttachmentMaterialResolver: staticAttachmentMaterialResolver{
 			material: agentcontract.VisibleContextMaterial{
-				MaterialID:  "mattermost:file-1",
+				Platform:    "mattermost",
+				FileID:      "file-1",
 				URL:         "https://mattermost.local/api/v4/files/file-1",
 				Filename:    "report.html",
 				ContentType: "text/html",
@@ -575,6 +576,57 @@ func TestFilePreviewUsesCachedAttachmentPreviewByURL(t *testing.T) {
 	}
 	if !strings.Contains(previewResult.ContentText(), "# Cached material report") {
 		t.Fatalf("expected cached material preview, got %s", previewResult.ContentText())
+	}
+}
+
+func TestFilePreviewUsesCachedAttachmentPreviewBySourceBehindAStaleCatalogPath(t *testing.T) {
+	workspacePath := t.TempDir()
+	toolCatalogBuilder := newFileToolTestCatalogBuilder(workspacePath)
+	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
+		ProfileName:       "default",
+		RequesterPersonID: "person-1",
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		AttachmentMaterialResolver: staticAttachmentMaterialResolver{
+			material: agentcontract.VisibleContextMaterial{
+				Platform:    "mattermost",
+				FileID:      "file-1",
+				URL:         "https://mattermost.local/api/v4/files/file-1",
+				Filename:    "report.html",
+				ContentType: "text/html",
+				Path:        "home/inbox/mattermost/old/report.html",
+			},
+		},
+		InputParts: []agentcontract.AgentPart{{
+			Type: agentcontract.AgentPartTypeFile,
+			File: &agentcontract.AgentFilePart{
+				Path:             "home/inbox/mattermost/post-1/report.html",
+				Filename:         "report.html",
+				ContentType:      "text/html",
+				SizeBytes:        42,
+				MarkdownPreview:  "# Cached source report",
+				ConversionStatus: "converted",
+			},
+			Source: agentcontract.AgentPartSource{
+				Platform:  "mattermost",
+				MessageID: "post-1",
+				FileID:    "file-1",
+			},
+		}},
+	})
+
+	previewResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
+		ToolName: "file_preview",
+		Input:    toolcontract.MarshalToolInput(map[string]any{"path": "https://mattermost.local/api/v4/files/file-1"}),
+	})
+
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if previewResult.Failed() {
+		t.Fatalf("expected cached source preview success, got %s", previewResult.ContentText())
+	}
+	if !strings.Contains(previewResult.ContentText(), "# Cached source report") {
+		t.Fatalf("expected cached source preview, got %s", previewResult.ContentText())
 	}
 }
 
@@ -633,7 +685,8 @@ func TestFilePreviewResolvesAnAttachmentURL(t *testing.T) {
 		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
 		AttachmentMaterialResolver: staticAttachmentMaterialResolver{
 			material: agentcontract.VisibleContextMaterial{
-				MaterialID:  "mattermost:file-1",
+				Platform:    "mattermost",
+				FileID:      "file-1",
 				Filename:    "report.html",
 				ContentType: "text/html",
 				Path:        "inbox/mattermost/post-1/report.html",
@@ -676,7 +729,8 @@ func TestFilePreviewReadsTheCurrentFileBehindAStaleCatalogPath(t *testing.T) {
 		},
 		AttachmentMaterialResolver: staticAttachmentMaterialResolver{
 			material: agentcontract.VisibleContextMaterial{
-				MaterialID:  "mattermost:file-1",
+				Platform:    "mattermost",
+				FileID:      "file-1",
 				Filename:    "report.html",
 				ContentType: "text/html",
 				Path:        "inbox/mattermost/post-1/report.html",
@@ -719,7 +773,8 @@ func TestFileReadReadsTheCurrentFileBehindAStaleCatalogPath(t *testing.T) {
 		},
 		AttachmentMaterialResolver: staticAttachmentMaterialResolver{
 			material: agentcontract.VisibleContextMaterial{
-				MaterialID:  "mattermost:file-1",
+				Platform:    "mattermost",
+				FileID:      "file-1",
 				Filename:    "kim-intern-automation.html",
 				ContentType: "text/html",
 				Path:        "inbox/mattermost/post-1/kim-intern-automation.html",
@@ -760,7 +815,8 @@ func TestFileReadPointsAnImageURLAtImageRead(t *testing.T) {
 		},
 		AttachmentMaterialResolver: staticAttachmentMaterialResolver{
 			material: agentcontract.VisibleContextMaterial{
-				MaterialID:  "mattermost:file-1",
+				Platform:    "mattermost",
+				FileID:      "file-1",
 				Filename:    "mascot.png",
 				ContentType: "image/png",
 				Path:        "home/inbox/mattermost/post-1/mascot.png",
@@ -790,7 +846,8 @@ func TestFilePreviewUsesResolvedAttachmentPreviewWithoutWorkspaceStat(t *testing
 		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
 		AttachmentMaterialResolver: staticAttachmentMaterialResolver{
 			material: agentcontract.VisibleContextMaterial{
-				MaterialID:        "mattermost:file-1",
+				Platform:          "mattermost",
+				FileID:            "file-1",
 				Filename:          "report.html",
 				ContentType:       "text/html",
 				Path:              "home/inbox/mattermost/post-1/report.html",

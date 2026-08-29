@@ -3793,6 +3793,7 @@ func agentVisibleContextMaterials(attachments []InputAttachment) []agentcontract
 		materials = append(materials, agentcontract.VisibleContextMaterial{
 			MaterialID:  attachmentMaterialID(attachment),
 			URL:         strings.TrimSpace(attachment.URL),
+			FileID:      strings.TrimSpace(attachment.FileID),
 			Platform:    attachment.Platform,
 			MessageID:   attachment.MessageID,
 			Filename:    attachment.Filename,

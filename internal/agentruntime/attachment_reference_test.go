@@ -25,7 +25,8 @@ func TestFileReadResolvesAnAttachmentURL(t *testing.T) {
 		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
 		AttachmentMaterialResolver: staticAttachmentMaterialResolver{
 			material: agentcontract.VisibleContextMaterial{
-				MaterialID:  "buzz:report",
+				Platform:    "buzz",
+				FileID:      "report",
 				URL:         "https://relay.test/media/report.txt",
 				Path:        filepath.Join(workspacePath, filepath.FromSlash(relativePath)),
 				Filename:    "report.txt",
