@@ -1030,7 +1030,7 @@ const messageToolDefinitions: CapabilityToolDefinition[] = [
     namespace: 'message',
     privacyClass: 'platform_message',
     policyResource: 'tool:message_send',
-    description: 'Send a message to a direct message, channel, or the current conversation after approval. attachments uploads workspace files, such as an inbound image original, with the message. For targetType=channel, name the channel with channelName; only pass a channelID a tool result gave you, never one remembered from the conversation. To correct a message already sent, use message_update on it instead of sending again. Never use message_send to answer the person you are replying to — your final reply is delivered for you, and sending the same answer again posts a duplicate.',
+    description: 'Send a message to a direct message, channel, or the current conversation after approval. attachments uploads workspace files with the message. For targetType=channel, name the channel with channelName; only pass a channelID a tool result gave you. Never answer the person you are replying to with this tool — the final reply is delivered for you. To correct a sent message, use message_update.',
     version: '3',
     estimatedLatency: CapabilityEstimatedLatency.Medium,
     inputSchema: messageSendInputSchema,
