@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/access"
@@ -445,27 +446,6 @@ func capabilityInputSkeleton(inputSchema json.RawMessage, requiredFields []strin
 	return skeleton
 }
 
-func defaultCapabilityToolDescription(toolName string) string {
-	switch strings.TrimSpace(toolName) {
-	case "document_read":
-		return "Read a workspace document path as Markdown using the shared document conversion pipeline. Prefer file_preview for paths listed in the conversation attachment catalog."
-	case "image_read":
-		return "Load an image path from the conversation attachment catalog or workspace into the model as an image input. Use only when visual inspection is needed; do not call for PDFs or text documents."
-	case "message_context":
-		return "Read the current platform conversation, thread, channel, requester, and bot message context."
-	case "message_search":
-		return "Search platform messages by scope, author, and queries. queries is an OR list; use one item for a single keyword. Returns compact messageIDs before previews. Use before deleting or editing messages described in natural language."
-	case "message_delete":
-		return "Delete assistant bot messages by exact messageIDs returned from message.search. Deletes one selected page at a time and never searches internally."
-	case "message_send":
-		return "Send a platform message to a direct message, current thread, current channel, or named channel. Recipient resolution and ambiguity are handled by this tool."
-	case "message_update":
-		return "Replace one exact span of text inside an assistant bot message, or change its pin state. oldText must occur exactly once in that message."
-	default:
-		return "Workspace capability tool"
-	}
-}
-
 func (toolCatalogBuilder *ToolCatalogBuilder) capabilityToolDefinitions() []CapabilityToolDescriptor {
 	return copyCapabilityToolDescriptors(toolCatalogBuilder.capabilityToolDescriptors)
 }
@@ -687,9 +667,27 @@ func (toolCatalogBuilder *ToolCatalogBuilder) prepareWorkspaceFileRead(toolConte
 	if toolFailure != nil {
 		return preparedCapabilityToolPayload{}, toolFailure, nil
 	}
-	content, errorValue := workspaceActor.ReadFile(toolContext, toolCatalogBuilder.nativeRequesterPath(request, agentPath), mostWorkspaceFileBytesCarried)
-	if errorValue != nil {
-		failure := actorToolFailure("read_file", toolName, agentPath, errorValue)
+	content, readError := workspaceActor.ReadFile(toolContext, toolCatalogBuilder.nativeRequesterPath(request, agentPath), mostWorkspaceFileBytesCarried)
+	if readError != nil {
+		// The path the model gave is not a file the requester holds, but it may
+		// name an attachment: the catalog's fileHint, or the exact URL standing
+		// in a message's text. The resolver reads the conversation and its
+		// history and imports what it finds; a reference it cannot resolve
+		// keeps the original refusal, so a genuinely wrong path stays loud.
+		material, resolveError := toolCatalogBuilder.resolveCapabilityAttachmentReference(toolContext, toolName, request, agentPath)
+		if resolveError != nil {
+			failure := actorToolFailure("read_file", toolName, agentPath, readError)
+			return preparedCapabilityToolPayload{}, &failure, nil
+		}
+		agentPath = material.Path
+		input, errorValue = capabilityInputWithPath(input, toolCatalogBuilder.capabilityBridgePath(request, agentPath))
+		if errorValue != nil {
+			return preparedCapabilityToolPayload{}, nil, errorValue
+		}
+		content, readError = workspaceActor.ReadFile(toolContext, toolCatalogBuilder.nativeRequesterPath(request, agentPath), mostWorkspaceFileBytesCarried)
+	}
+	if readError != nil {
+		failure := actorToolFailure("read_file", toolName, agentPath, readError)
 		return preparedCapabilityToolPayload{}, &failure, nil
 	}
 	digest := sha256.Sum256(content)
@@ -704,6 +702,29 @@ func (toolCatalogBuilder *ToolCatalogBuilder) prepareWorkspaceFileRead(toolConte
 			},
 		},
 	}, nil, nil
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) resolveCapabilityAttachmentReference(toolContext context.Context, toolName string, request ToolCatalogRequest, reference string) (agentcontract.VisibleContextMaterial, error) {
+	resolvableReference := strings.TrimSpace(reference)
+	if material, isFound := visibleAttachmentMaterialForFileHint(request.VisibleContext, resolvableReference); isFound {
+		resolvableReference = firstNonEmptyString(strings.TrimSpace(material.MaterialID), resolvableReference)
+	}
+	material, errorValue := resolveReadableAttachmentMaterial(toolContext, request, resolvableReference)
+	if errorValue != nil {
+		return agentcontract.VisibleContextMaterial{}, errorValue
+	}
+	return material, validateAttachmentMaterialTool(toolName, material)
+}
+
+func capabilityInputWithPath(toolInput json.RawMessage, path string) (json.RawMessage, error) {
+	inputDocument := map[string]any{}
+	if len(toolInput) > 0 {
+		if errorValue := json.Unmarshal(toolInput, &inputDocument); errorValue != nil {
+			return nil, errorValue
+		}
+	}
+	inputDocument["path"] = path
+	return json.Marshal(inputDocument)
 }
 
 func capabilityToolNeedsWorkspacePath(toolName string) bool {

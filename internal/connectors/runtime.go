@@ -3040,10 +3040,19 @@ func (resolver connectorAttachmentMaterialResolver) findAttachmentMaterial(ctx c
 	return attachment, isFound, nil
 }
 
-func findAttachmentMaterialInContext(visibleContext VisibleContext, materialID string) (InputAttachment, bool) {
-	trimmedMaterialID := strings.TrimSpace(materialID)
+// A reference is a material ID, or the attachment's exact URL: the URL is the
+// one name the model always holds, because it stands in the message text
+// itself, long after the message has scrolled out of the visible window.
+func findAttachmentMaterialInContext(visibleContext VisibleContext, reference string) (InputAttachment, bool) {
+	trimmedReference := strings.TrimSpace(reference)
+	if trimmedReference == "" {
+		return InputAttachment{}, false
+	}
 	for _, attachment := range visibleContextAttachmentMaterials(visibleContext) {
-		if attachmentMaterialID(attachment) == trimmedMaterialID {
+		if attachmentMaterialID(attachment) == trimmedReference {
+			return attachment, true
+		}
+		if strings.TrimSpace(attachment.URL) == trimmedReference {
 			return attachment, true
 		}
 	}

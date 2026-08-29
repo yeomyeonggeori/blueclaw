@@ -4506,3 +4506,29 @@ func (connectorRuntime *ConnectorRuntime) routedTaskLauncherForTest(toolCatalogB
 	taskLauncher.UseLaunchFailureCompleter(connectorRuntime.launchFailureCompleter)
 	return taskLauncher
 }
+
+// The URL is the one name the model always holds for an old attachment: it
+// stands in the message text long after the message left the visible window.
+func TestAttachmentMaterialIsFoundByItsExactURL(t *testing.T) {
+	visibleContext := VisibleContext{Messages: []VisibleContextMessage{{
+		Text: "이렇게 주면? ![image](https://relay.test/media/abc.png)",
+		InputAttachments: []InputAttachment{{
+			Platform:    "buzz",
+			URL:         "https://relay.test/media/abc.png",
+			MessageID:   "root-1",
+			Filename:    "image",
+			ContentType: "image/png",
+		}},
+	}}}
+
+	attachment, isFound := findAttachmentMaterialInContext(visibleContext, "https://relay.test/media/abc.png")
+	if !isFound || attachment.MessageID != "root-1" {
+		t.Fatalf("an exact URL must name its attachment, got found=%v %+v", isFound, attachment)
+	}
+	if _, isFound := findAttachmentMaterialInContext(visibleContext, "https://relay.test/media/other.png"); isFound {
+		t.Fatal("a URL nothing carries must not resolve")
+	}
+	if _, isFound := findAttachmentMaterialInContext(visibleContext, ""); isFound {
+		t.Fatal("an empty reference must not resolve")
+	}
+}

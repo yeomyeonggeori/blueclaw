@@ -12,6 +12,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/loop"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
@@ -731,5 +732,63 @@ func TestAttachmentCarryingFollowsTheDescriptorSchema(testContext *testing.T) {
 	}
 	if toolCatalogBuilder.capabilityToolCarriesWorkspaceAttachments("no_such_tool") {
 		testContext.Fatal("an unregistered tool must not trigger the carry")
+	}
+}
+
+// The path the model gives a read capability may be a fileHint or the exact
+// URL it saw in a message's text; a POSIX miss falls back to the attachment
+// resolver, which imports the file and hands the read its workspace path. The
+// incident this guards: an image in a message outside the visible window was
+// reachable only as a URL, and the model invented a filesystem path from it.
+func TestCapabilityReadResolvesAnAttachmentReference(t *testing.T) {
+	httpClient := &recordingHTTPClient{responseBody: `{"provider":"internkim","selectedBackend":"device","toolName":"document_read","outcome":"succeeded","status":"ok","result":{"status":"ok","path":"/workspace/report.md","format":"markdown","content":"report","warnings":[],"truncated":false}}`}
+	toolCatalogBuilder := capabilityReadTestCatalogBuilder(t)
+	toolCatalogBuilder.UseTestCapabilityToolDescriptors(capability.Client{Endpoint: "http://capability.local", HTTPClient: httpClient}, []CapabilityToolDescriptor{canonicalReadDescriptor("document_read")})
+	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"document_read"})
+	toolSet := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
+		ProfileName:       "default",
+		RequesterPersonID: "person-1",
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1"},
+		AttachmentMaterialResolver: staticAttachmentMaterialResolver{
+			material: agentcontract.VisibleContextMaterial{
+				MaterialID:  "buzz:report",
+				Path:        "/workspace/report.md",
+				Filename:    "report.md",
+				ContentType: "text/markdown",
+				IsAvailable: true,
+			},
+		},
+	})
+
+	result, errorValue := toolSet.Invoke(context.Background(), toolcontract.ToolInvocation{ToolName: "document_read", Input: json.RawMessage(`{"path":"https://relay.test/media/report.md"}`)})
+
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if result.Failed() {
+		t.Fatalf("a URL reference the resolver serves must read, got %+v", result)
+	}
+	if !strings.Contains(httpClient.requestBody, `"path":"/workspace/report.md"`) {
+		t.Fatalf("expected the resolved workspace path to travel, got %s", httpClient.requestBody)
+	}
+}
+
+func TestCapabilityReadKeepsTheRefusalWhenNothingResolves(t *testing.T) {
+	toolCatalogBuilder := capabilityReadTestCatalogBuilder(t)
+	toolCatalogBuilder.UseTestCapabilityToolDescriptors(capability.Client{Endpoint: "http://capability.local", HTTPClient: &recordingHTTPClient{}}, []CapabilityToolDescriptor{canonicalReadDescriptor("document_read")})
+	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"document_read"})
+	toolSet := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
+		ProfileName:       "default",
+		RequesterPersonID: "person-1",
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1"},
+	})
+
+	result, errorValue := toolSet.Invoke(context.Background(), toolcontract.ToolInvocation{ToolName: "document_read", Input: json.RawMessage(`{"path":"/workspace/no-such-file.md"}`)})
+
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if !result.Failed() || result.FailureStage() != "document_read" {
+		t.Fatalf("a genuinely missing path must keep its refusal, got %+v", result)
 	}
 }
