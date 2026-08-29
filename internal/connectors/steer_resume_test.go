@@ -137,3 +137,41 @@ func TestASteerWithNothingNewKeepsTheResumeShape(t *testing.T) {
 		t.Fatal("a steer that says nothing new resumes the task as it was")
 	}
 }
+
+// The normal launch imports the conversation's attachments only after busy
+// routing declines; a steer resume launches from inside that routing, so it
+// must import them itself, or the resumed task sees an image only as a URL in
+// message text and invents a filesystem path from it.
+func TestResumePausedTaskForSteerImportsVisibleAttachments(t *testing.T) {
+	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
+	harness.Reply = "이어서 진행하겠습니다."
+	pausedTaskRun := seedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{ConversationID: "direct-1"}, "글 수정해줘")
+	connectorRuntime.taskRunService.AppendTaskEvent(pausedTaskRun.TaskRunID, "agent.task_launched",
+		`{"sourceReference":"test:thread:abc","platform":"test","conversationID":"direct-1","replyTargetID":"reply-target-1","requesterPersonID":"person-1"}`)
+	event := testInboundEvent("message-steer-attachments")
+	event.Context.Messages = []VisibleContextMessage{{
+		Speaker: "이동하",
+		Text:    "이렇게 주면? ![image](https://relay.test/media/abc.png)",
+		InputAttachments: []InputAttachment{{
+			Platform:    "test",
+			URL:         "https://relay.test/media/abc.png",
+			MessageID:   "root-1",
+			Filename:    "image",
+			ContentType: "image/png",
+		}},
+	}}
+	sendReply := func(context.Context, ReplyTarget, OutboundReply) (string, error) { return "dispatch-1", nil }
+
+	_, errorValue := connectorRuntime.resumePausedTaskForSteer(context.Background(), "test", event, ReplyTarget{}, pausedTaskRun, "원본 이미지를 넣어서 수정해줘", agentcontract.TurnDecision{}, sendReply)
+
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(adapter.inputAttachmentImportRequests) == 0 {
+		t.Fatal("a steered launch must import the conversation's visible attachments before launching")
+	}
+	imported := adapter.inputAttachmentImportRequests[0]
+	if len(imported.InputAttachments) != 1 || imported.InputAttachments[0].URL != "https://relay.test/media/abc.png" {
+		t.Fatalf("expected the message's attachment to be imported, got %+v", imported.InputAttachments)
+	}
+}

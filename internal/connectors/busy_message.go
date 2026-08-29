@@ -167,6 +167,11 @@ func (connectorRuntime *ConnectorRuntime) resumePausedTaskForSteer(
 		return connectorRuntime.replySteerResumeUnavailable(ctx, platform, event, replyTarget, activeTaskRun, decision, sendReply)
 	}
 	connectorRuntime.appendSteerRequestedEvent(activeTaskRun.TaskRunID, event, instruction, decision)
+	// The normal launch path imports the conversation's attachments into
+	// workspace materials only after busy routing has decided nothing; a steer
+	// resume launches from inside that routing, so without this the resumed
+	// task sees an image only as a URL in message text and invents a path.
+	event = connectorRuntime.withAttachmentMaterials(ctx, adapter, event, activeTaskRun.RequesterPersonID)
 	launchRequest := connectorRuntime.interruptedTaskLaunchRequest(activeTaskRun, taskEvents, launchContext, event, adapter, userSteerTaskProfile(platform, activeTaskRun.TaskRunID, instruction), sendReply)
 	launchRequest = steeredTaskLaunchRequest(launchRequest, event, instruction)
 	launchResult, errorValue := connectorRuntime.currentTaskLauncher().Launch(ctx, launchRequest)
