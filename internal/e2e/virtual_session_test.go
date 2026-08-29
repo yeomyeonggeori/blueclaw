@@ -1430,17 +1430,17 @@ func TestAttachmentMaterialRead(t *testing.T) {
 		t.Fatalf("expected attachment material read scenario to pass: %v", errorValue)
 	}
 	turnResult := result.TurnResults[0]
-	if !eventsContain(turnResult.Events, "tool.image_read.requested", `"path":"https://mattermost.local/api/v4/files/file-1"`) {
-		t.Fatalf("expected image_read to name the attachment by its url; events: %s", summarizeEvents(turnResult.Events))
+	if !eventsContain(turnResult.Events, "tool.read.requested", `"path":"https://mattermost.local/api/v4/files/file-1"`) {
+		t.Fatalf("expected read to name the attachment by its url; events: %s", summarizeEvents(turnResult.Events))
 	}
 	if eventsContain(turnResult.Events, "tool.shell.requested", "shell") {
 		t.Fatalf("expected attachment read not to search the workspace; events: %s", summarizeEvents(turnResult.Events))
 	}
 	if turnResult.UserModelImagePartCount == 0 {
-		t.Fatalf("expected image_read result to reach the model as a user image part; context: %s", turnResult.ModelContext)
+		t.Fatalf("expected the read result to reach the model as a user image part; context: %s", turnResult.ModelContext)
 	}
 	if len(turnResult.Attachments) != 0 {
-		t.Fatalf("expected image_read result not to be reattached, got %+v", turnResult.Attachments)
+		t.Fatalf("expected the read result not to be reattached, got %+v", turnResult.Attachments)
 	}
 }
 
@@ -1453,7 +1453,7 @@ func TestAttachmentHTMLPreviewRecovery(t *testing.T) {
 	if eventsContain(turnResult.Events, "tool.shell.requested", "shell") {
 		t.Fatalf("expected html attachment preview not to search the workspace; events: %s", summarizeEvents(turnResult.Events))
 	}
-	if !eventsContain(turnResult.Events, "tool.file_preview.result", "Virtual HTML Title") {
+	if !eventsContain(turnResult.Events, "tool.read.result", "Virtual HTML Title") {
 		t.Fatalf("expected html preview content in tool result; events: %s", summarizeEvents(turnResult.Events))
 	}
 }
@@ -1467,7 +1467,7 @@ func TestAttachmentHTMLPreviousPreviewRecovery(t *testing.T) {
 	if eventsContain(turnResult.Events, "tool.shell.requested", "shell") {
 		t.Fatalf("expected previous html attachment preview not to search the workspace; events: %s", summarizeEvents(turnResult.Events))
 	}
-	if !eventsContain(turnResult.Events, "tool.file_preview.result", "Virtual HTML Title") {
+	if !eventsContain(turnResult.Events, "tool.read.result", "Virtual HTML Title") {
 		t.Fatalf("expected previous html preview content in tool result; events: %s", summarizeEvents(turnResult.Events))
 	}
 }
@@ -1484,8 +1484,8 @@ func TestAttachmentCurrentImageInput(t *testing.T) {
 	if turnResult.UserModelImagePartCount == 0 {
 		t.Fatalf("expected current image attachment to reach the model as a user image part; context: %s", turnResult.ModelContext)
 	}
-	if eventsContain(turnResult.Events, "tool.image_read.requested", "image_read") {
-		t.Fatalf("expected current image input not to require image_read; events: %s", summarizeEvents(turnResult.Events))
+	if eventsContain(turnResult.Events, "tool.read.requested", "read") {
+		t.Fatalf("expected current image input not to require a read call; events: %s", summarizeEvents(turnResult.Events))
 	}
 	if eventsContain(turnResult.Events, "tool.shell.requested", "shell") {
 		t.Fatalf("expected current image input not to search the workspace; events: %s", summarizeEvents(turnResult.Events))

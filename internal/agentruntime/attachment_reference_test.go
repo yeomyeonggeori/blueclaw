@@ -95,8 +95,8 @@ func TestFileToolsPreserveExplicitPathResolutionAndAccess(t *testing.T) {
 // The invented locator vocabulary must not resurface in the schemas the model reads.
 func TestFileToolSchemasSpeakPathOrURLOnly(t *testing.T) {
 	toolRegistry := newFileToolTestCatalogBuilder(t.TempDir()).BuildToolSet(ToolCatalogRequest{ProfileName: "default"})
-	for _, toolName := range []string{"file_read", "file_preview"} {
-		toolDefinition, isFound := findToolDefinition(toolRegistry.ListToolDefinitions(), toolName)
+	for _, toolName := range []string{toolcontract.ReadToolName, "file_read", "file_preview"} {
+		toolDefinition, isFound := findToolDefinition(toolRegistry.ListRegisteredToolDefinitions(), toolName)
 		if !isFound {
 			t.Fatalf("expected %s definition", toolName)
 		}

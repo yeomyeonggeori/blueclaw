@@ -55,6 +55,56 @@ var (
 		"required":["path","content","startLine","endLine","totalLines","returnedBytes","startByte","endByte","nextByte","totalBytes","isEndOfFile","totalLinesKnown","originalSizeBytes","sizeBytes","isTruncated"],
 		"additionalProperties":false
 		}`)
+	readResultSchema = json.RawMessage(`{
+		"type":"object",
+		"properties":{
+			"path":{"type":"string"},
+			"content":{"type":"string"},
+			"startLine":{"type":"integer","minimum":0},
+			"endLine":{"type":"integer","minimum":0},
+			"totalLines":{"type":"integer","minimum":0},
+			"returnedBytes":{"type":"integer","minimum":0},
+			"startByte":{"type":"integer","minimum":0},
+			"endByte":{"type":"integer","minimum":0},
+			"nextByte":{"type":"integer","minimum":0},
+			"totalBytes":{"type":"integer","minimum":0},
+			"isEndOfFile":{"type":"boolean"},
+			"totalLinesKnown":{"type":"boolean"},
+			"originalSizeBytes":{"type":"integer","minimum":0},
+			"sizeBytes":{"type":"integer","minimum":0},
+			"isTruncated":{"type":"boolean"},
+			"exists":{"type":"boolean"},
+			"optional":{"type":"boolean"},
+			"recommendedWritePath":{"type":"string"},
+			"readHint":{"type":"string"},
+			"source":{"type":"string"},
+			"isExactFileRead":{"type":"boolean"},
+			"filename":{"type":"string"},
+			"contentType":{"type":"string"},
+			"previewFormat":{"type":"string","minLength":1},
+			"markdownPreview":{"type":"string"},
+			"conversionStatus":{"type":"string"},
+			"conversionMessage":{"type":"string"},
+			"status":{"type":"string"},
+			"attachments":{
+				"type":"array",
+				"items":{
+					"type":"object",
+					"properties":{
+						"devicePath":{"type":"string"},
+						"filename":{"type":"string"},
+						"contentType":{"type":"string"},
+						"sizeBytes":{"type":"integer","minimum":0},
+						"contentBase64":{"type":"string"}
+					},
+					"required":["devicePath","filename","contentType","sizeBytes","contentBase64"],
+					"additionalProperties":false
+				}
+			}
+		},
+		"required":["path"],
+		"additionalProperties":false
+		}`)
 	fileWriteResultSchema = json.RawMessage(`{
 		"type":"object",
 		"properties":{
@@ -197,10 +247,24 @@ var kernelToolDescriptorSpecs = []kernelToolDescriptorSpec{
 		},
 	},
 	{
-		Name:            toolcontract.FileReadToolName,
+		Name:            toolcontract.ReadToolName,
 		Namespace:       "file",
 		PrivacyClass:    "workspace",
 		Visibility:      toolcontract.ToolVisibilityModel,
+		PolicyResource:  "tool:read",
+		SideEffectClass: toolcontract.ToolSideEffectRead,
+		CompletionMode:  toolcontract.ToolCompletionNone,
+		Idempotency:     toolcontract.ToolIdempotencyNone,
+		OutputSchema:    readResultSchema,
+		ResultContract: &toolcontract.ToolResultContract{
+			Schema: readResultSchema,
+		},
+	},
+	{
+		Name:            toolcontract.FileReadToolName,
+		Namespace:       "file",
+		PrivacyClass:    "workspace",
+		Visibility:      toolcontract.ToolVisibilityInternal,
 		PolicyResource:  "tool:file_read",
 		SideEffectClass: toolcontract.ToolSideEffectRead,
 		CompletionMode:  toolcontract.ToolCompletionNone,
@@ -294,7 +358,7 @@ var kernelToolDescriptorSpecs = []kernelToolDescriptorSpec{
 		Name:            toolcontract.FilePreviewToolName,
 		Namespace:       "file",
 		PrivacyClass:    "workspace",
-		Visibility:      toolcontract.ToolVisibilityModel,
+		Visibility:      toolcontract.ToolVisibilityInternal,
 		PolicyResource:  "tool:file_preview",
 		SideEffectClass: toolcontract.ToolSideEffectRead,
 		CompletionMode:  toolcontract.ToolCompletionNone,

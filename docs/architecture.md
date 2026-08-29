@@ -452,7 +452,7 @@ that requester instead.
 
 ```mermaid
 flowchart LR
-  Tool["file_write / file_read / shell"] --> Catalog["ToolCatalogBuilder"]
+  Tool["file_write / read / shell"] --> Catalog["ToolCatalogBuilder"]
   Catalog --> Shell["requester shell command"]
   Shell --> Guardrail["CommandGuardrailService"]
   Guardrail --> Helper["blueclaw-posix-helper (root:root 4755)"]
@@ -508,7 +508,7 @@ with `setgroups` → `setgid` → `setuid` (`applyIdentity`) and then
 
 ### File tools go through the shell
 
-`file_read`, `file_write`, `file_edit`, `file_preview`, `file_delete` and the
+`read`, `file_write`, `file_edit`, `file_delete` and the
 rest are not a second code path. They build a shell command and run it through
 `runRequesterShell` (`internal/agentruntime/requester_shell.go`), whose
 script starts by entering the requester's own `$HOME`

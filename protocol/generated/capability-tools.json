@@ -4280,8 +4280,8 @@
       },
       "inputSchemaStrict": true,
       "modelName": "document_read",
-      "modelVisibility": "visible",
-      "modelVisible": true,
+      "modelVisibility": "hidden",
+      "modelVisible": false,
       "name": "document_read",
       "namespace": "document",
       "outputSchema": {
@@ -4418,8 +4418,8 @@
       },
       "inputSchemaStrict": true,
       "modelName": "image_read",
-      "modelVisibility": "visible",
-      "modelVisible": true,
+      "modelVisibility": "hidden",
+      "modelVisible": false,
       "name": "image_read",
       "namespace": "image",
       "outputSchema": {

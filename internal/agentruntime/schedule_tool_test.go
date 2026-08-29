@@ -445,7 +445,7 @@ func TestScheduledToolSetKeepsOnlyAskInputAvailable(t *testing.T) {
 	if toolRegistry.IsRegistered("ask_confirm") || toolRegistry.IsAllowed("ask_confirm") {
 		t.Fatalf("expected runtime-owned confirmation to stay hidden, got %+v", toolRegistry.ListToolNames())
 	}
-	if toolRegistry.IsRegistered("user_confirm") || toolRegistry.IsAllowed("user_confirm") {
+	if toolRegistry.CanExpose("user_confirm") || toolRegistry.IsAllowed("user_confirm") {
 		t.Fatalf("expected legacy user_confirm to stay hidden, got %+v", toolRegistry.ListToolNames())
 	}
 }

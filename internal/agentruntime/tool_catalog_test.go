@@ -300,6 +300,7 @@ func newTerminalToolTestCatalogBuilder(workspacePath string) *ToolCatalogBuilder
 func internalTestToolNames() []string {
 	return []string{
 		"conversation_history",
+		"read",
 		"document_read",
 		"file_deliver",
 		"file_edit",

@@ -164,9 +164,6 @@ func capabilityEvidenceCondition(condition *CapabilityEvidenceCondition) *toolco
 }
 
 func capabilityDescriptorIsRegistered(descriptor CapabilityToolDescriptor, request ToolCatalogRequest) bool {
-	if strings.TrimSpace(descriptor.ModelVisibility) != toolcontract.ToolVisibilityModel {
-		return false
-	}
 	return !request.IsScheduledRun || !descriptor.RequiresUserPresence
 }
 

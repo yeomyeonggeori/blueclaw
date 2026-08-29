@@ -186,6 +186,7 @@ type VirtualTurn struct {
 	ExpectedToolCalls            []string
 	ExpectedAnyToolCalls         []string
 	ExpectedExposedTools         []string
+	ForbiddenExposedTools        []string
 	ExpectedValidityReviewPassed bool
 	ExpectedEvents               []string
 	ExpectedToolCallCounts       map[string]int
@@ -3225,6 +3226,11 @@ func assertStructuralTurnExpectations(virtualTurn VirtualTurn, turnResult Virtua
 			return fmt.Errorf("expected exposed tool %q in agent.instructions_loaded; events: %s", toolName, summarizeEvents(turnResult.Events))
 		}
 	}
+	for _, toolName := range virtualTurn.ForbiddenExposedTools {
+		if exposedToolNamePresent(turnResult.Events, toolName) {
+			return fmt.Errorf("expected tool %q to stay out of agent.instructions_loaded; events: %s", toolName, summarizeEvents(turnResult.Events))
+		}
+	}
 	if virtualTurn.ExpectedValidityReviewPassed {
 		if errorValue := assertValidityReviewPassed(turnResult.Events); errorValue != nil {
 			return errorValue
@@ -3691,7 +3697,7 @@ func allowedToolsOrDefault(allowedTools []string) []string {
 	if len(allowedTools) > 0 {
 		return append([]string{}, allowedTools...)
 	}
-	return []string{"conversation_history", "memory_search", "shell", "ask_input", "file_read", "file_write", "file_edit", "file_deliver"}
+	return []string{"conversation_history", "memory_search", "shell", "ask_input", "read", "file_read", "file_write", "file_edit", "file_deliver"}
 }
 
 func terminalConfiguration(workspacePath string) config.TerminalConfiguration {
@@ -4154,6 +4160,7 @@ func actionCallTool(toolName string, input string) string {
 
 // Shell-native file tools resolve paths through the OS, so the harness rewrites the guest /workspace root onto its temporary host root.
 var shellNativeFileToolNames = map[string]bool{
+	"read":         true,
 	"file_write":   true,
 	"file_read":    true,
 	"file_edit":    true,
