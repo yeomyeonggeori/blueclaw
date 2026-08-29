@@ -2,7 +2,6 @@ package agentruntime
 
 import (
 	"encoding/json"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -213,17 +212,12 @@ func artifactManifestEntryForCandidate(request agentcontract.AgentTurnRequest, c
 	}
 	relativePath := relativeWorkspacePath(request.WorkspaceRootPath, concretePath)
 	return agentcontract.ArtifactManifestEntry{
-		FileHint:       artifactFileHint(candidate.taskRunID, relativePath),
 		TaskRunID:      candidate.taskRunID,
 		RelativePath:   filepath.ToSlash(relativePath),
 		ProducingTool:  strings.TrimSpace(candidate.producingTool),
 		ProducingSkill: strings.TrimSpace(candidate.producingSkill),
 		ModifiedAt:     fileInformation.ModTime(),
 	}, true
-}
-
-func artifactFileHint(taskRunID string, relativePath string) string {
-	return "artifact:" + url.PathEscape(strings.TrimSpace(taskRunID)) + ":" + url.QueryEscape(filepath.ToSlash(strings.TrimSpace(relativePath)))
 }
 
 func concreteArtifactManifestPath(request agentcontract.AgentTurnRequest, path string) string {

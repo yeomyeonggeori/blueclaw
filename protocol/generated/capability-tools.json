@@ -4243,7 +4243,7 @@
         "state": "ok"
       },
       "canonicalName": "document_read",
-      "description": "Read a workspace document and return Markdown content. path takes an exact /workspace path, a fileHint from the attachment catalog, or the exact file URL as it appears in a message text — a document attached to an earlier message is fetched by that URL. Use image_read for image files.",
+      "description": "Read a workspace document and return Markdown content. path takes an exact /workspace path, or an attachment's exact url copied verbatim from the conversation — a document attached to an earlier message is fetched by that url. Never invent a filesystem path from a url. Use image_read for image files.",
       "estimatedLatency": "high",
       "idempotency": {
         "required": false,
@@ -4393,7 +4393,7 @@
         "state": "ok"
       },
       "canonicalName": "image_read",
-      "description": "Read a workspace image and return a base64 attachment. path takes an exact /workspace path, a fileHint from the attachment catalog, or the exact media URL as it appears in a message text — an image attached to an earlier message is fetched by that URL, so never invent a filesystem path from a URL. Use document_read for document files.",
+      "description": "Read a workspace image and return a base64 attachment. path takes an exact /workspace path, or an attachment's exact url copied verbatim from the conversation — an image attached to an earlier message is fetched by that url. Never invent a filesystem path from a url. Use document_read for document files.",
       "estimatedLatency": "medium",
       "idempotency": {
         "required": false,

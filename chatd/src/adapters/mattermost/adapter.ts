@@ -425,13 +425,23 @@ export class MattermostAdapter implements Adapter<MattermostThreadId, Mattermost
 		};
 	}
 
-	async fetchAttachment(attachment: { fileID?: string }): Promise<Response> {
-		if (!attachment.fileID) {
+	async fetchAttachment(attachment: { fileID?: string; url?: string }): Promise<Response> {
+		const fileID = attachment.fileID || this.fileIdOfUrl(attachment.url ?? "");
+		if (!fileID) {
 			return new Response("attachment has no fileID", { status: 400 });
 		}
-		return fetch(this.apiUrl(`/files/${attachment.fileID}`), {
+		return fetch(this.apiUrl(`/files/${fileID}`), {
 			headers: { Authorization: `Bearer ${this.config.botToken}` },
 		});
+	}
+
+	// The adapter minted the url from the file identity; reading it back parses
+	// the adapter's own grammar, nothing looser.
+	private fileIdOfUrl(address: string): string {
+		const prefix = this.apiUrl("/files/");
+		if (!address.startsWith(prefix)) return "";
+		const fileID = address.slice(prefix.length);
+		return fileID.includes("/") ? "" : fileID;
 	}
 
 	async fetchChannelInfo(channelId: string): Promise<ChannelInfo> {

@@ -2708,8 +2708,13 @@ func (connectorRuntime *ConnectorRuntime) withInitialVisibleContext(ctx context.
 	return event
 }
 
+// Only the triggering message's attachments are imported eagerly: what the
+// person just handed over should be visible without a tool call. Everything
+// older stays where it is and is read on demand by the url standing in its
+// message — importing the whole visible window bought nothing but latency and
+// still missed every message that had scrolled past it.
 func (connectorRuntime *ConnectorRuntime) withAttachmentMaterials(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent, personID string) PlatformInboundEvent {
-	attachments := connectorVisibleInputAttachments(event.Context)
+	attachments := connectorUniqueInputAttachments(event.Context.InputAttachments)
 	if len(attachments) == 0 {
 		return event
 	}
@@ -2747,16 +2752,6 @@ func (connectorRuntime *ConnectorRuntime) withAttachmentMaterials(ctx context.Co
 		event.InputParts = append(event.InputParts, connectorCurrentInputParts(readableInputParts, event)...)
 	}
 	return event
-}
-
-func connectorVisibleInputAttachments(visibleContext VisibleContext) []InputAttachment {
-	attachments := []InputAttachment{}
-	attachments = append(attachments, visibleContext.Materials...)
-	attachments = append(attachments, visibleContext.InputAttachments...)
-	for _, message := range visibleContext.Messages {
-		attachments = append(attachments, message.InputAttachments...)
-	}
-	return connectorUniqueInputAttachments(attachments)
 }
 
 const connectorAttachmentImportRefusedCode = "attachment_import_failed"
@@ -3781,8 +3776,8 @@ func agentVisibleContextMaterials(attachments []InputAttachment) []agentcontract
 			continue
 		}
 		materials = append(materials, agentcontract.VisibleContextMaterial{
-			FileHint:    attachmentFileHint(attachment),
 			MaterialID:  attachmentMaterialID(attachment),
+			URL:         strings.TrimSpace(attachment.URL),
 			Platform:    attachment.Platform,
 			MessageID:   attachment.MessageID,
 			Filename:    attachment.Filename,
@@ -3795,10 +3790,6 @@ func agentVisibleContextMaterials(attachments []InputAttachment) []agentcontract
 		})
 	}
 	return materials
-}
-
-func attachmentFileHint(attachment InputAttachment) string {
-	return "attachment:" + attachmentMaterialID(attachment)
 }
 
 func attachmentMaterialID(attachment InputAttachment) string {

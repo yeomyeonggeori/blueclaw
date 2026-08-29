@@ -7,6 +7,7 @@ import (
 	"errors"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"mime"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -28,8 +29,7 @@ const maximumFilePreviewBytes = 200 * 1024
 
 type fileReadToolInput struct {
 	Path           string `json:"path"`
-	FileHint       string `json:"fileHint"`
-	MaterialID     string `json:"materialID"`
+	MaterialID     string `json:"-"`
 	MaxOutputBytes int    `json:"maxOutputBytes"`
 	StartLine      int    `json:"startLine"`
 	LineCount      int    `json:"lineCount"`
@@ -38,8 +38,7 @@ type fileReadToolInput struct {
 
 type filePreviewToolInput struct {
 	Path       string `json:"path"`
-	FileHint   string `json:"fileHint"`
-	MaterialID string `json:"materialID"`
+	MaterialID string `json:"-"`
 }
 
 type fileWriteToolInput struct {
@@ -98,7 +97,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerFileTools(toolRegistry *to
 	toolcontract.RegisterToolFunction(toolRegistry, toolcontract.ToolFunction[fileReadToolInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
 			Name:        "file_read",
-			Description: "Read exact UTF-8 workspace text or a real file line range with honest size and truncation metadata. Use file_preview first for attached HTML, PDF, DOCX, PPTX, XLSX, or other documents.",
+			Description: "Read exact UTF-8 workspace text or a real file line range with honest size and truncation metadata. path also takes an attachment's exact url copied from the conversation; never invent a filesystem path from a url. Use file_preview first for attached HTML, PDF, DOCX, PPTX, XLSX, or other documents.",
 			RecoveryCard: toolcontract.ToolRecoveryCard{
 				Does:       "Reads a text file or requested line range from the actual workspace file; attachment materialID falls back to cached preview text.",
 				Produces:   "Text content plus path, line range, original size, returned size, line count if known, and truncation metadata.",
@@ -106,7 +105,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerFileTools(toolRegistry *to
 				UseWhen:    "You need current file content before file_edit or file.write.",
 				AvoidWhen:  "The file is binary, an attached document needing conversion, or you already have the exact current text needed for an edit.",
 			},
-			InputSchema: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string","description":"Workspace text file path to read."},"fileHint":{"type":"string","description":"Exact fileHint from Current attachments or Previous attachments."},"materialID":{"type":"string","description":"Attachment materialID from Current attachments or Previous attachments. Use file_preview first; file_read returns cached preview text if no exact workspace file is available."},"startLine":{"type":"integer","description":"Optional 1-based first line to return. Avoid for minified or few-line files; use startByte instead."},"lineCount":{"type":"integer","description":"Optional number of lines to return from startLine."},"startByte":{"type":"integer","description":"Optional 0-based byte offset for byte-range reads. Use this for minified or single-line files; continue from the nextByte value of the previous read until isEndOfFile is true."}},"additionalProperties":false}`),
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string","description":"Workspace text file path, or an attachment's exact url copied verbatim from the conversation."},"startLine":{"type":"integer","description":"Optional 1-based first line to return. Avoid for minified or few-line files; use startByte instead."},"lineCount":{"type":"integer","description":"Optional number of lines to return from startLine."},"startByte":{"type":"integer","description":"Optional 0-based byte offset for byte-range reads. Use this for minified or single-line files; continue from the nextByte value of the previous read until isEndOfFile is true."}},"additionalProperties":false}`),
 		},
 		Handler: func(toolContext context.Context, input fileReadToolInput) (toolcontract.ToolResult, error) {
 			return toolCatalogBuilder.readFileTool(toolContext, input, handlerContext)
@@ -116,7 +115,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerFileTools(toolRegistry *to
 	toolcontract.RegisterToolFunction(toolRegistry, toolcontract.ToolFunction[filePreviewToolInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
 			Name:        "file_preview",
-			Description: "Preview an attached or workspace file path from the conversation attachment catalog using cached AgentPart markdownPreview when available, or the existing document_read anydoc provider for convertible documents.",
+			Description: "Preview an attached or workspace file using cached preview text when available, or the document conversion provider for convertible documents. path takes a workspace path or an attachment's exact url copied from the conversation.",
 			RecoveryCard: toolcontract.ToolRecoveryCard{
 				Does:       "Returns a document preview or file metadata without inventing content.",
 				Produces:   "Path, filename, content type, size, markdown preview, conversion status, and conversion message.",
@@ -124,7 +123,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerFileTools(toolRegistry *to
 				UseWhen:    "The attachment catalog lists a materialID or path for an HTML, PDF, DOCX, PPTX, XLSX, text, or data file and you need to understand it.",
 				AvoidWhen:  "You need exact source lines for an edit; use file_read after previewing.",
 			},
-			InputSchema: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string","description":"Workspace file path to preview. Use this when the attachment catalog has a readable path."},"fileHint":{"type":"string","description":"Exact fileHint from Current attachments or Previous attachments."},"materialID":{"type":"string","description":"Attachment materialID from Current attachments or Previous attachments. Use this when the catalog lists a materialID, especially if no readable path is available."}},"additionalProperties":false}`),
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string","description":"Workspace file path, or an attachment's exact url copied verbatim from the conversation."}},"additionalProperties":false}`),
 		},
 		Handler: func(toolContext context.Context, input filePreviewToolInput) (toolcontract.ToolResult, error) {
 			return toolCatalogBuilder.previewFileTool(toolContext, input, handlerContext)
@@ -266,9 +265,9 @@ func (toolCatalogBuilder *ToolCatalogBuilder) deleteFileTool(toolContext context
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) readFileTool(toolContext context.Context, input fileReadToolInput, handlerContext toolHandlerContext) (toolcontract.ToolResult, error) {
-	path, materialID, errorValue := resolveFileHintReference(handlerContext.request, input.Path, input.MaterialID, input.FileHint)
-	if errorValue != nil {
-		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "file_read", errorValue.Error()), nil
+	path, materialID, failure := toolCatalogBuilder.resolveAttachmentReference(toolContext, handlerContext.request, "file_read", input.Path, input.MaterialID)
+	if failure != nil {
+		return *failure, nil
 	}
 	input.Path = path
 	input.MaterialID = materialID
@@ -610,12 +609,16 @@ func splitFileLines(content string) []string {
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) previewFileTool(toolContext context.Context, input filePreviewToolInput, handlerContext toolHandlerContext) (toolcontract.ToolResult, error) {
-	path, materialID, errorValue := resolveFileHintReference(handlerContext.request, input.Path, input.MaterialID, input.FileHint)
-	if errorValue != nil {
-		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "file_preview", errorValue.Error()), nil
+	if material, failure, isURL := toolCatalogBuilder.resolveAttachmentURL(toolContext, handlerContext.request, "file_preview", input.Path); isURL {
+		if failure != nil {
+			return *failure, nil
+		}
+		if result, hasPreview := filePreviewResultFromVisibleMaterial(material); hasPreview {
+			return fileToolSuccess(result), nil
+		}
+		input.Path = toolCatalogBuilder.resolveAgentWorkspacePath(material.Path)
+		input.MaterialID = strings.TrimSpace(material.MaterialID)
 	}
-	input.Path = path
-	input.MaterialID = materialID
 	if cachedPreview, isCached := cachedFilePreviewResultForInput(handlerContext.request.InputParts, input); isCached {
 		return fileToolSuccess(cachedPreview), nil
 	}
@@ -718,11 +721,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) filePreviewFallbackPath(toolContex
 }
 
 func visibleAttachmentMaterialForPath(visibleContext agentcontract.VisibleContext, path string) (agentcontract.VisibleContextMaterial, bool) {
-	candidates := visibleAttachmentMaterials(visibleContext)
-	if material, isFound := visibleAttachmentMaterialWithExactPath(candidates, path); isFound {
-		return material, true
-	}
-	return visibleAttachmentMaterialWithFilename(candidates, filepath.Base(strings.TrimSpace(path)))
+	return visibleAttachmentMaterialWithExactPath(visibleAttachmentMaterials(visibleContext), path)
 }
 
 func visibleAttachmentMaterials(visibleContext agentcontract.VisibleContext) []agentcontract.VisibleContextMaterial {
@@ -1557,6 +1556,46 @@ func isPersistableDocumentFilename(filename string) bool {
 	default:
 		return false
 	}
+}
+
+// A tool reference is a workspace path or an attachment's url. A url resolves
+// through the conversation's own record — the attachment must be visible in
+// this conversation or its history, which is the access scope, and resolving
+// imports it — so the read proceeds on the imported workspace path. Nothing
+// else is interpreted: a path is a path.
+func (toolCatalogBuilder *ToolCatalogBuilder) resolveAttachmentReference(toolContext context.Context, request ToolCatalogRequest, stage string, reference string, materialID string) (string, string, *toolcontract.ToolResult) {
+	material, failure, isURL := toolCatalogBuilder.resolveAttachmentURL(toolContext, request, stage, reference)
+	if failure != nil {
+		return "", "", failure
+	}
+	if !isURL {
+		return strings.TrimSpace(reference), strings.TrimSpace(materialID), nil
+	}
+	return toolCatalogBuilder.resolveAgentWorkspacePath(material.Path), strings.TrimSpace(material.MaterialID), nil
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) resolveAttachmentURL(toolContext context.Context, request ToolCatalogRequest, stage string, reference string) (agentcontract.VisibleContextMaterial, *toolcontract.ToolResult, bool) {
+	if !isAttachmentURLReference(reference) {
+		return agentcontract.VisibleContextMaterial{}, nil, false
+	}
+	material, errorValue := resolveReadableAttachmentMaterial(toolContext, request, strings.TrimSpace(reference))
+	if errorValue != nil {
+		failure := attachmentResolutionFailure(stage, errorValue)
+		return agentcontract.VisibleContextMaterial{}, &failure, true
+	}
+	if attachmentMaterialLooksLikeImage(material) && stage != "image_read" {
+		failure := toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, stage, "attachment is an image; use image_read")
+		return agentcontract.VisibleContextMaterial{}, &failure, true
+	}
+	return material, nil, true
+}
+
+func isAttachmentURLReference(reference string) bool {
+	parsed, errorValue := url.Parse(strings.TrimSpace(reference))
+	if errorValue != nil {
+		return false
+	}
+	return (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != ""
 }
 
 func attachmentFilename(input fileAttachFileInput, resolvedPath string) string {

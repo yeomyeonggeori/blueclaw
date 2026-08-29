@@ -32,8 +32,8 @@ func TestConversationHistoryUsesTrustedCursorAndCanonicalProjection(t *testing.T
 				Text:               "check the previous file again",
 				SentAt:             time.Date(2026, 7, 19, 9, 30, 0, 0, time.UTC),
 				Materials: []agentcontract.VisibleContextMaterial{{
-					FileHint:          "quarterly-report",
 					MaterialID:        "internal-material-id",
+					URL:               "https://mattermost.local/api/v4/files/file-9",
 					Platform:          "mattermost",
 					MessageID:         "internal-message-id",
 					Filename:          "quarterly-report.docx",
@@ -80,7 +80,7 @@ func TestConversationHistoryUsesTrustedCursorAndCanonicalProjection(t *testing.T
 	assertExactKeys(t, message, "speaker", "speakerCallingName", "speakerHandle", "text", "sentAt", "materials")
 	materials := message["materials"].([]any)
 	material := materials[0].(map[string]any)
-	assertExactKeys(t, material, "fileHint", "filename", "contentType", "sizeBytes", "isAvailable", "markdownPreview", "conversionStatus", "conversionMessage")
+	assertExactKeys(t, material, "url", "filename", "contentType", "sizeBytes", "isAvailable", "markdownPreview", "conversionStatus", "conversionMessage")
 }
 
 func TestConversationHistoryNormalizesNilArrays(t *testing.T) {

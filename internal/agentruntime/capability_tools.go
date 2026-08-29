@@ -667,16 +667,14 @@ func (toolCatalogBuilder *ToolCatalogBuilder) prepareWorkspaceFileRead(toolConte
 	if toolFailure != nil {
 		return preparedCapabilityToolPayload{}, toolFailure, nil
 	}
-	content, readError := workspaceActor.ReadFile(toolContext, toolCatalogBuilder.nativeRequesterPath(request, agentPath), mostWorkspaceFileBytesCarried)
-	if readError != nil {
-		// The path the model gave is not a file the requester holds, but it may
-		// name an attachment: the catalog's fileHint, or the exact URL standing
-		// in a message's text. The resolver reads the conversation and its
-		// history and imports what it finds; a reference it cannot resolve
-		// keeps the original refusal, so a genuinely wrong path stays loud.
+	if isAttachmentURLReference(agentPath) {
+		// A url resolves through the conversation's own record: the attachment
+		// must be visible in this conversation or its history — that is the
+		// access scope — and resolving imports it, so the read proceeds on the
+		// imported workspace path.
 		material, resolveError := toolCatalogBuilder.resolveCapabilityAttachmentReference(toolContext, toolName, request, agentPath)
 		if resolveError != nil {
-			failure := actorToolFailure("read_file", toolName, agentPath, readError)
+			failure := attachmentResolutionFailure(toolName, resolveError)
 			return preparedCapabilityToolPayload{}, &failure, nil
 		}
 		agentPath = material.Path
@@ -684,8 +682,8 @@ func (toolCatalogBuilder *ToolCatalogBuilder) prepareWorkspaceFileRead(toolConte
 		if errorValue != nil {
 			return preparedCapabilityToolPayload{}, nil, errorValue
 		}
-		content, readError = workspaceActor.ReadFile(toolContext, toolCatalogBuilder.nativeRequesterPath(request, agentPath), mostWorkspaceFileBytesCarried)
 	}
+	content, readError := workspaceActor.ReadFile(toolContext, toolCatalogBuilder.nativeRequesterPath(request, agentPath), mostWorkspaceFileBytesCarried)
 	if readError != nil {
 		failure := actorToolFailure("read_file", toolName, agentPath, readError)
 		return preparedCapabilityToolPayload{}, &failure, nil
@@ -705,11 +703,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) prepareWorkspaceFileRead(toolConte
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) resolveCapabilityAttachmentReference(toolContext context.Context, toolName string, request ToolCatalogRequest, reference string) (agentcontract.VisibleContextMaterial, error) {
-	resolvableReference := strings.TrimSpace(reference)
-	if material, isFound := visibleAttachmentMaterialForFileHint(request.VisibleContext, resolvableReference); isFound {
-		resolvableReference = firstNonEmptyString(strings.TrimSpace(material.MaterialID), resolvableReference)
-	}
-	material, errorValue := resolveReadableAttachmentMaterial(toolContext, request, resolvableReference)
+	material, errorValue := resolveReadableAttachmentMaterial(toolContext, request, strings.TrimSpace(reference))
 	if errorValue != nil {
 		return agentcontract.VisibleContextMaterial{}, errorValue
 	}

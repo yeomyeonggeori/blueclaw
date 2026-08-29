@@ -138,10 +138,10 @@ func TestASteerWithNothingNewKeepsTheResumeShape(t *testing.T) {
 	}
 }
 
-// The normal launch imports the conversation's attachments only after busy
-// routing declines; a steer resume launches from inside that routing, so it
-// must import them itself, or the resumed task sees an image only as a URL in
-// message text and invents a filesystem path from it.
+// The normal launch imports the triggering message's attachments only after
+// busy routing declines; a steer resume launches from inside that routing, so
+// it must import them itself. Older attachments stay lazy: they are read on
+// demand by the url standing in their message.
 func TestResumePausedTaskForSteerImportsVisibleAttachments(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
 	harness.Reply = "이어서 진행하겠습니다."
@@ -149,16 +149,12 @@ func TestResumePausedTaskForSteerImportsVisibleAttachments(t *testing.T) {
 	connectorRuntime.taskRunService.AppendTaskEvent(pausedTaskRun.TaskRunID, "agent.task_launched",
 		`{"sourceReference":"test:thread:abc","platform":"test","conversationID":"direct-1","replyTargetID":"reply-target-1","requesterPersonID":"person-1"}`)
 	event := testInboundEvent("message-steer-attachments")
-	event.Context.Messages = []VisibleContextMessage{{
-		Speaker: "이동하",
-		Text:    "이렇게 주면? ![image](https://relay.test/media/abc.png)",
-		InputAttachments: []InputAttachment{{
-			Platform:    "test",
-			URL:         "https://relay.test/media/abc.png",
-			MessageID:   "root-1",
-			Filename:    "image",
-			ContentType: "image/png",
-		}},
+	event.Context.InputAttachments = []InputAttachment{{
+		Platform:    "test",
+		URL:         "https://relay.test/media/abc.png",
+		MessageID:   "message-steer-attachments",
+		Filename:    "image",
+		ContentType: "image/png",
 	}}
 	sendReply := func(context.Context, ReplyTarget, OutboundReply) (string, error) { return "dispatch-1", nil }
 

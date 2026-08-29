@@ -22,7 +22,7 @@ import {
 	type ManagedChannel,
 	type ManagedChannelSpec,
 } from "../../channels.ts";
-import { isServedByTheRelay } from "./blossom.ts";
+import { isServedByTheRelay, readAuthorizationHeader } from "./blossom.ts";
 import { createBuzzRelayClient, type BuzzRelayClient } from "./relay-client.ts";
 import {
 	BUZZ_ADAPTER_NAME,
@@ -227,7 +227,9 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		if (!isServedByTheRelay(address, this.config.relayURL)) {
 			return new Response("attachment url is not served by this relay", { status: 400 });
 		}
-		return fetch(address);
+		return fetch(address, {
+			headers: { Authorization: readAuthorizationHeader(this.config.privateKeyHex, address) },
+		});
 	}
 
 	// Somebody who writes under a root is answering that root, so what they wrote

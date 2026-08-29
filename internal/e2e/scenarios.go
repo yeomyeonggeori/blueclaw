@@ -311,6 +311,7 @@ func AttachmentMaterialReadScenario(artifactDirectoryPath string) VirtualSession
 	attachment := connectors.InputAttachment{
 		Platform:    "mattermost",
 		FileID:      "file-1",
+		URL:         "https://mattermost.local/api/v4/files/file-1",
 		MessageID:   "root-message",
 		Filename:    "mascot.png",
 		ContentType: "image/png",
@@ -333,14 +334,14 @@ func AttachmentMaterialReadScenario(artifactDirectoryPath string) VirtualSession
 			}},
 			ContextMaterials: []connectors.InputAttachment{attachment},
 			ActionResponses: []string{
-				actionCallTool("image_read", `{"path":"/workspace/circles/staff/inbox/virtual/virtual-conversation-1/virtual-message-001/mascot.png"}`),
+				actionCallTool("image_read", `{"path":"https://mattermost.local/api/v4/files/file-1"}`),
 				actionFinishMessage("이미지를 확인했습니다.", "obs-001:image_read:0"),
 			},
 			ExpectedToolCalls:      []string{"image_read"},
 			ExpectedToolCallCounts: map[string]int{"shell": 0},
 			ExpectedExposedTools:   []string{"image_read", "document_read"},
 			ExpectedModelContexts: []string{
-				"materialID=mattermost:file-1",
+				"url=https://mattermost.local/api/v4/files/file-1",
 				"mascot.png",
 			},
 			ForbiddenModelContexts: []string{
@@ -356,6 +357,7 @@ func AttachmentHTMLPreviewRecoveryScenario(artifactDirectoryPath string) Virtual
 	attachment := connectors.InputAttachment{
 		Platform:    "mattermost",
 		FileID:      "file-html",
+		URL:         "https://mattermost.local/api/v4/files/file-html",
 		MessageID:   "message-html",
 		Filename:    "kim-intern-automation.html",
 		ContentType: "text/html",
@@ -370,7 +372,7 @@ func AttachmentHTMLPreviewRecoveryScenario(artifactDirectoryPath string) Virtual
 			RouterTaskShape:  agentcontract.TaskShapeResearchTask,
 			InputAttachments: []connectors.InputAttachment{attachment},
 			ActionResponses: []string{
-				actionCallTool("file_preview", `{"path":"home/inbox/mattermost/thread-1/kim-intern-automation.html"}`),
+				actionCallTool("file_preview", `{"path":"https://mattermost.local/api/v4/files/file-html"}`),
 				actionFinishMessage("첨부 HTML을 확인했습니다. 자동화 섹션의 정보 구조와 CTA를 더 선명하게 다듬으면 좋겠습니다.", "obs-001:file_preview:0"),
 			},
 			ExpectedToolCalls: []string{"file_preview"},
@@ -379,11 +381,11 @@ func AttachmentHTMLPreviewRecoveryScenario(artifactDirectoryPath string) Virtual
 				"file_read": 0,
 			},
 			ExpectedEventCounts: []VirtualEventCount{
-				{Name: "tool.file_preview.requested", BodyFragment: `"path":"home/inbox/mattermost/thread-1/kim-intern-automation.html"`, Count: 1},
+				{Name: "tool.file_preview.requested", BodyFragment: `"path":"https://mattermost.local/api/v4/files/file-html"`, Count: 1},
 				{Name: "tool.file_preview.result", BodyFragment: "Virtual HTML Title", Count: 1},
 			},
 			ExpectedModelContexts: []string{
-				"materialID=mattermost:file-html",
+				"url=https://mattermost.local/api/v4/files/file-html",
 				"availableTools=file_preview,file_read",
 			},
 			ExpectedReplyFragments: []string{"첨부 HTML", "정보 구조"},
@@ -395,6 +397,7 @@ func AttachmentHTMLPreviousPreviewRecoveryScenario(artifactDirectoryPath string)
 	attachment := connectors.InputAttachment{
 		Platform:    "mattermost",
 		FileID:      "file-html",
+		URL:         "https://mattermost.local/api/v4/files/file-html",
 		MessageID:   "root-message",
 		Filename:    "kim-intern-automation.html",
 		ContentType: "text/html",
@@ -416,7 +419,7 @@ func AttachmentHTMLPreviousPreviewRecoveryScenario(artifactDirectoryPath string)
 			}},
 			ContextMaterials: []connectors.InputAttachment{attachment},
 			ActionResponses: []string{
-				actionCallTool("file_preview", `{"path":"home/inbox/mattermost/thread-1/kim-intern-automation.html"}`),
+				actionCallTool("file_preview", `{"path":"https://mattermost.local/api/v4/files/file-html"}`),
 				actionFinishMessage("이전 첨부 HTML을 확인했습니다. 자동화 흐름의 핵심 CTA와 섹션 우선순위를 더 명확히 잡으면 좋겠습니다.", "obs-001:file_preview:0"),
 			},
 			ExpectedToolCalls: []string{"file_preview"},
@@ -425,12 +428,12 @@ func AttachmentHTMLPreviousPreviewRecoveryScenario(artifactDirectoryPath string)
 				"file_read": 0,
 			},
 			ExpectedEventCounts: []VirtualEventCount{
-				{Name: "tool.file_preview.requested", BodyFragment: `"path":"home/inbox/mattermost/thread-1/kim-intern-automation.html"`, Count: 1},
+				{Name: "tool.file_preview.requested", BodyFragment: `"path":"https://mattermost.local/api/v4/files/file-html"`, Count: 1},
 				{Name: "tool.file_preview.result", BodyFragment: "Virtual HTML Title", Count: 1},
 			},
 			ExpectedModelContexts: []string{
 				"Previous attachments:",
-				"materialID=mattermost:file-html",
+				"url=https://mattermost.local/api/v4/files/file-html",
 				"availableTools=file_preview,file_read",
 			},
 			ForbiddenReplyFragments: []string{"파일을 찾을 수", "다시 확인", "직접 공유"},
@@ -443,6 +446,7 @@ func AttachmentCurrentImageInputScenario(artifactDirectoryPath string) VirtualSe
 	attachment := connectors.InputAttachment{
 		Platform:    "mattermost",
 		FileID:      "file-current",
+		URL:         "https://mattermost.local/api/v4/files/file-current",
 		MessageID:   "virtual-message-001",
 		Filename:    "mascot.png",
 		ContentType: "image/png",
@@ -469,7 +473,7 @@ func AttachmentCurrentImageInputScenario(artifactDirectoryPath string) VirtualSe
 				"document_read": 0,
 			},
 			ExpectedModelContexts: []string{
-				"materialID=mattermost:file-current",
+				"url=https://mattermost.local/api/v4/files/file-current",
 				"mascot.png",
 			},
 			ExpectedReplyFragments: []string{"흰색 고양이", "김인턴", "이름표"},
@@ -485,6 +489,7 @@ func XLowImageVisionFallbackScenario(artifactDirectoryPath string) VirtualSessio
 	attachment := connectors.InputAttachment{
 		Platform:    "mattermost",
 		FileID:      "file-code-shot",
+		URL:         "https://mattermost.local/api/v4/files/file-code-shot",
 		MessageID:   "virtual-message-001",
 		Filename:    "login_handler.png",
 		ContentType: "image/png",
@@ -503,7 +508,7 @@ func XLowImageVisionFallbackScenario(artifactDirectoryPath string) VirtualSessio
 				actionFinishMessage("스크린샷의 로그인 핸들러는 비밀번호를 평문 비교하고 에러를 한꺼번에 삼키고 있습니다. 비밀번호 검증은 상수 시간 해시 비교로 바꾸고, 인증 실패와 입력 검증 실패를 분리해 각각의 에러로 올려보내며, 토큰 발급 로직을 별도 함수로 추출해 핸들러는 흐름만 조율하도록 리팩터링하시길 권합니다."),
 			},
 			ExpectedModelContexts: []string{
-				"materialID=mattermost:file-code-shot",
+				"url=https://mattermost.local/api/v4/files/file-code-shot",
 				"login_handler.png",
 			},
 			ExpectedReplyFragments: []string{"리팩터링", "비밀번호"},

@@ -52,7 +52,7 @@ func TestLaunchedAgentTurnRequestCarriesHostAssembledContext(t *testing.T) {
 				{Speaker: "user", Text: "지난 분기 실적 자료 공유합니다"},
 			},
 			Materials: []agentcontract.VisibleContextMaterial{
-				{FileHint: "quarterly.pdf", Filename: "quarterly.pdf", Path: "/workspace/private/people/person-1/quarterly.pdf", IsAvailable: true},
+				{Filename: "quarterly.pdf", Path: "/workspace/private/people/person-1/quarterly.pdf", IsAvailable: true},
 			},
 		},
 		PersonAccess:              policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
@@ -73,7 +73,7 @@ func TestLaunchedAgentTurnRequestCarriesHostAssembledContext(t *testing.T) {
 	if len(turnRequest.VisibleContext.Messages) != 1 || turnRequest.VisibleContext.Messages[0].Text != "지난 분기 실적 자료 공유합니다" {
 		t.Fatalf("expected visible context messages on the turn request, got %+v", turnRequest.VisibleContext)
 	}
-	if len(turnRequest.VisibleContext.Materials) == 0 || turnRequest.VisibleContext.Materials[0].FileHint != "quarterly.pdf" {
+	if len(turnRequest.VisibleContext.Materials) == 0 || turnRequest.VisibleContext.Materials[0].Filename != "quarterly.pdf" {
 		t.Fatalf("expected attachment materials on the turn request, got %+v", turnRequest.VisibleContext.Materials)
 	}
 	if len(turnRequest.MemoryFacts) != 2 {

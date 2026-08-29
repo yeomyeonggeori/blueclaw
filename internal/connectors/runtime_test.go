@@ -2089,6 +2089,7 @@ func TestConnectorRuntimeAddsImportedImageAttachmentCatalog(t *testing.T) {
 		InputAttachments: []InputAttachment{{
 			Platform:    "mattermost",
 			FileID:      "file-1",
+			URL:         "https://mattermost.local/api/v4/files/file-1",
 			MessageID:   "message-1",
 			Filename:    "mascot.png",
 			ContentType: "image/png",
@@ -2098,7 +2099,7 @@ func TestConnectorRuntimeAddsImportedImageAttachmentCatalog(t *testing.T) {
 	}
 	event := testInboundEvent("message-1")
 	event.Context.ConversationType = "D"
-	event.Context.InputAttachments = []InputAttachment{{Platform: "mattermost", FileID: "file-1", MessageID: "message-1"}}
+	event.Context.InputAttachments = []InputAttachment{{Platform: "mattermost", FileID: "file-1", URL: "https://mattermost.local/api/v4/files/file-1", MessageID: "message-1"}}
 
 	_, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, event)
 	if errorValue != nil {
@@ -2108,7 +2109,7 @@ func TestConnectorRuntimeAddsImportedImageAttachmentCatalog(t *testing.T) {
 		t.Fatalf("expected one attachment import request, got %+v", adapter.inputAttachmentImportRequests)
 	}
 	body := joinConnectorMessageContent(languageModel.request.Messages)
-	for _, expected := range []string{"Current attachments", "materialID=mattermost:file-1", "path=~/inbox/mattermost/direct-1/message-1/mascot.png", "availableTools=image_read"} {
+	for _, expected := range []string{"Current attachments", "url=https://mattermost.local/api/v4/files/file-1", "path=~/inbox/mattermost/direct-1/message-1/mascot.png", "availableTools=image_read"} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("expected attachment catalog %q in model request, got %s", expected, body)
 		}
@@ -2146,6 +2147,7 @@ func TestConnectorRuntimeKeepsHistoryImageAttachmentCatalogOnly(t *testing.T) {
 	event.Context.Materials = []InputAttachment{{
 		Platform:    "mattermost",
 		FileID:      "file-1",
+		URL:         "https://mattermost.local/api/v4/files/file-1",
 		MessageID:   "message-1",
 		Filename:    "mascot.png",
 		ContentType: "image/png",
@@ -2158,8 +2160,8 @@ func TestConnectorRuntimeKeepsHistoryImageAttachmentCatalogOnly(t *testing.T) {
 		t.Fatalf("expected event to process: %v", errorValue)
 	}
 	body := joinConnectorMessageContent(languageModel.request.Messages)
-	if !strings.Contains(body, "materialID=mattermost:file-1") {
-		t.Fatalf("expected history attachment material id in model request, got %s", body)
+	if !strings.Contains(body, "url=https://mattermost.local/api/v4/files/file-1") {
+		t.Fatalf("expected the history attachment's url in model request, got %s", body)
 	}
 	if connectorMessagesContainImagePart(languageModel.request.Messages, "image/png", "aW1hZ2U=") {
 		t.Fatalf("expected history attachment catalog only, got %+v", languageModel.request.Messages)
@@ -2173,6 +2175,7 @@ func TestConnectorRuntimeAddsDocumentAttachmentCatalog(t *testing.T) {
 		InputAttachments: []InputAttachment{{
 			Platform:    "mattermost",
 			FileID:      "file-1",
+			URL:         "https://mattermost.local/api/v4/files/file-1",
 			MessageID:   "message-1",
 			Filename:    "report.pdf",
 			ContentType: "application/pdf",
@@ -2181,14 +2184,14 @@ func TestConnectorRuntimeAddsDocumentAttachmentCatalog(t *testing.T) {
 		}},
 	}
 	event := testInboundEvent("message-1")
-	event.Context.InputAttachments = []InputAttachment{{Platform: "mattermost", FileID: "file-1", MessageID: "message-1"}}
+	event.Context.InputAttachments = []InputAttachment{{Platform: "mattermost", FileID: "file-1", URL: "https://mattermost.local/api/v4/files/file-1", MessageID: "message-1"}}
 
 	_, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, event)
 	if errorValue != nil {
 		t.Fatalf("expected event to process: %v", errorValue)
 	}
 	body := joinConnectorMessageContent(languageModel.request.Messages)
-	for _, expected := range []string{"Current attachments", "materialID=mattermost:file-1", "path=/workspace/circles/staff/inbox/mattermost/direct-1/message-1/report.pdf", "availableTools=file_preview,file_read"} {
+	for _, expected := range []string{"Current attachments", "url=https://mattermost.local/api/v4/files/file-1", "path=/workspace/circles/staff/inbox/mattermost/direct-1/message-1/report.pdf", "availableTools=file_preview,file_read"} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("expected attachment catalog %q in model request, got %s", expected, body)
 		}
