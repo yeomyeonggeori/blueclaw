@@ -26,7 +26,6 @@ function createConfiguration(): ChatdConfiguration {
 			privateKeyHex: AGENT_KEY,
 			accountLinksPath: undefined,
 			authTagJSON: undefined,
-			keySeed: undefined,
 		},
 	};
 }

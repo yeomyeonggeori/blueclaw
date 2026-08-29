@@ -153,7 +153,6 @@ export interface MessageEditRequest {
 	messageID: string;
 	message: string;
 	requesterPubkeyHex?: string;
-	requesterEmail?: string;
 	attachments?: ReplyAttachmentDocument[];
 }
 
@@ -161,7 +160,6 @@ export interface MessageDeleteRequest {
 	replyTargetID: string;
 	messageID: string;
 	requesterPubkeyHex?: string;
-	requesterEmail?: string;
 }
 
 export interface MessageSearchRequest {
