@@ -751,7 +751,8 @@ func TestCapabilityReadResolvesAnAttachmentReference(t *testing.T) {
 		PersonAccess:      policy.PersonAccess{PersonID: "person-1"},
 		AttachmentMaterialResolver: staticAttachmentMaterialResolver{
 			material: agentcontract.VisibleContextMaterial{
-				MaterialID:  "buzz:report",
+				Platform:    "buzz",
+				FileID:      "report",
 				Path:        "/workspace/report.md",
 				Filename:    "report.md",
 				ContentType: "text/markdown",
