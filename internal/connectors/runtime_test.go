@@ -2293,6 +2293,114 @@ func TestConnectorAttachmentMaterialResolverImportsHistoryMaterial(t *testing.T)
 	}
 }
 
+func testAttachmentHistoryPage(nextHistoryCursor string, attachments ...InputAttachment) VisibleContext {
+	return VisibleContext{
+		Messages:      []VisibleContextMessage{{Speaker: "admin", Text: "older message"}},
+		Materials:     attachments,
+		HasMoreBefore: nextHistoryCursor != "",
+		HistoryCursor: nextHistoryCursor,
+	}
+}
+
+func TestConnectorAttachmentMaterialResolverPagesHistoryUntilTheAttachmentURLMatches(t *testing.T) {
+	adapter := &testAdapter{
+		historyPagesByCursor: map[string]VisibleContext{
+			"page-1": testAttachmentHistoryPage("page-2"),
+			"page-2": testAttachmentHistoryPage("page-3"),
+			"page-3": testAttachmentHistoryPage("", InputAttachment{
+				Platform:    "mattermost",
+				FileID:      "file-3",
+				MessageID:   "old-message",
+				Filename:    "mascot.png",
+				ContentType: "image/png",
+				SizeBytes:   5,
+				URL:         "https://mattermost.example.com/files/file-3",
+			}),
+		},
+		inputAttachmentImportResult: InputAttachmentImportResult{
+			InputAttachments: []InputAttachment{{
+				Platform:    "mattermost",
+				FileID:      "file-3",
+				MessageID:   "old-message",
+				Filename:    "mascot.png",
+				ContentType: "image/png",
+				SizeBytes:   5,
+				Path:        "/workspace/circles/staff/inbox/mattermost/thread-1/mascot.png",
+				IsAvailable: true,
+			}},
+		},
+	}
+	event := testInboundEvent("reply-message")
+	event.Platform = "mattermost"
+	event.ConversationID = "thread-1"
+	event.Context.HistoryCursor = "page-1"
+	event.Context.HasMoreBefore = true
+	event.Context.ConversationType = "O"
+	event.Context.ChannelID = "town-square"
+	resolver := connectorAttachmentMaterialResolver{adapter: adapter, personID: "person-1", event: event}
+
+	material, errorValue := resolver.ResolveAttachmentMaterial(context.Background(), "https://mattermost.example.com/files/file-3")
+
+	if errorValue != nil {
+		t.Fatalf("expected the third history page to resolve the attachment: %v", errorValue)
+	}
+	if material.Path != "/workspace/circles/staff/inbox/mattermost/thread-1/mascot.png" {
+		t.Fatalf("expected imported material from the third page, got %+v", material)
+	}
+	expectedCursors := []string{"page-1", "page-2", "page-3"}
+	if len(adapter.historyCursors) != len(expectedCursors) {
+		t.Fatalf("expected three history pages, got %+v", adapter.historyCursors)
+	}
+	for index, expectedCursor := range expectedCursors {
+		if adapter.historyCursors[index] != expectedCursor {
+			t.Fatalf("expected history cursors %+v, got %+v", expectedCursors, adapter.historyCursors)
+		}
+	}
+}
+
+func TestConnectorAttachmentMaterialResolverStopsWhenTheHistoryCursorDoesNotAdvance(t *testing.T) {
+	stalledPage := testAttachmentHistoryPage("page-1")
+	adapter := &testAdapter{historyPagesByCursor: map[string]VisibleContext{"page-1": stalledPage}}
+	event := testInboundEvent("reply-message")
+	event.Platform = "mattermost"
+	event.ConversationID = "thread-1"
+	event.Context.HistoryCursor = "page-1"
+	event.Context.HasMoreBefore = true
+	resolver := connectorAttachmentMaterialResolver{adapter: adapter, personID: "person-1", event: event}
+
+	_, errorValue := resolver.ResolveAttachmentMaterial(context.Background(), "https://mattermost.example.com/files/missing")
+
+	if errorValue == nil || !strings.Contains(errorValue.Error(), "not visible in this conversation") {
+		t.Fatalf("expected a not-found result, got %v", errorValue)
+	}
+	if len(adapter.historyCursors) != 1 {
+		t.Fatalf("expected the stalled cursor to stop the lookup after one page, got %+v", adapter.historyCursors)
+	}
+}
+
+func TestConnectorAttachmentMaterialResolverFailsWhenHistoryOutrunsThePageLimit(t *testing.T) {
+	pages := map[string]VisibleContext{}
+	for pageNumber := 1; pageNumber <= attachmentHistoryPageLimit+5; pageNumber++ {
+		pages["page-"+strconv.Itoa(pageNumber)] = testAttachmentHistoryPage("page-" + strconv.Itoa(pageNumber+1))
+	}
+	adapter := &testAdapter{historyPagesByCursor: pages}
+	event := testInboundEvent("reply-message")
+	event.Platform = "mattermost"
+	event.ConversationID = "thread-1"
+	event.Context.HistoryCursor = "page-1"
+	event.Context.HasMoreBefore = true
+	resolver := connectorAttachmentMaterialResolver{adapter: adapter, personID: "person-1", event: event}
+
+	_, errorValue := resolver.ResolveAttachmentMaterial(context.Background(), "https://mattermost.example.com/files/missing")
+
+	if errorValue == nil || !strings.Contains(errorValue.Error(), "attachment lookup stopped after 40 pages") {
+		t.Fatalf("expected an explicit page limit failure, got %v", errorValue)
+	}
+	if len(adapter.historyCursors) != attachmentHistoryPageLimit {
+		t.Fatalf("expected %d history pages, got %d", attachmentHistoryPageLimit, len(adapter.historyCursors))
+	}
+}
+
 func TestConnectorAttachmentMaterialResolverRefreshesStaleMaterialPath(t *testing.T) {
 	adapter := &testAdapter{
 		inputAttachmentImportResult: InputAttachmentImportResult{
@@ -3481,6 +3589,7 @@ type testAdapter struct {
 	inputAttachmentImportError    error
 	inputAttachmentImportRequests []InputAttachmentImportRequest
 	historyContext                VisibleContext
+	historyPagesByCursor          map[string]VisibleContext
 	sentReplies                   []testReply
 	reactions                     []ReactionTarget
 	removedReactions              []ReactionTarget
@@ -3709,6 +3818,9 @@ func (adapter *testAdapter) RemoveReaction(_ context.Context, target ReactionTar
 func (adapter *testAdapter) FetchHistory(_ context.Context, historyCursor string, _ int) (VisibleContext, error) {
 	adapter.operationNames = append(adapter.operationNames, "history.fetch")
 	adapter.historyCursors = append(adapter.historyCursors, historyCursor)
+	if page, isFound := adapter.historyPagesByCursor[historyCursor]; isFound {
+		return page, nil
+	}
 	if len(adapter.historyContext.Messages) > 0 || len(adapter.historyContext.Materials) > 0 || len(adapter.historyContext.InputAttachments) > 0 {
 		return adapter.historyContext, nil
 	}
