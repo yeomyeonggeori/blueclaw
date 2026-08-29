@@ -1,5 +1,5 @@
 import type { AdapterPostableMessage, FileUpload } from "chat";
-import { BuzzAdapter } from "./adapters/buzz/adapter.ts";
+import { BuzzAdapter, type BuzzMessageSearchCandidate } from "./adapters/buzz/adapter.ts";
 import type { MattermostAdapter } from "./adapters/mattermost/adapter.ts";
 import type { ChatdConfiguration } from "./configuration.ts";
 import { fetchAttachmentForDirectory, supportsAttachmentFetching } from "./outbound-attachments.ts";
@@ -31,6 +31,12 @@ import {
 	parseReactionRequest,
 	parseReplySendRequest,
 } from "./outbound-parse.ts";
+import {
+	MessageChangeRefused,
+	isElevatedIn,
+	mayChangeMessage,
+	requireMessageChangeAllowed,
+} from "./message-ownership.ts";
 import { personCapabilities, type PersonCapability } from "./personal/capabilities.ts";
 import { MalformedRequest } from "./personal/parse.ts";
 import { CredentialRefused, type PersonalGateway } from "./personal/gateway.ts";
@@ -50,6 +56,7 @@ import type {
 	InputAttachmentDocument,
 	MessagePostRequest,
 	MessagePostResponse,
+	MessageSearchCandidateDocument,
 	MessageSearchRequest,
 	MessageSearchResponse,
 	ReplyAttachmentDocument,
@@ -136,6 +143,9 @@ export function createOutboundHandler(
 		} catch (error) {
 			if (error instanceof MalformedRequest) {
 				return jsonResponse(400, { error: error.message });
+			}
+			if (error instanceof MessageChangeRefused) {
+				return jsonResponse(403, { error: error.message });
 			}
 			return jsonResponse(502, { error: error instanceof Error ? error.message : String(error) });
 		}
@@ -470,6 +480,9 @@ async function handleMessageEdit(
 	}
 	const message: AdapterPostableMessage =
 		fileUploads.length > 0 ? { markdown: requestDocument.message, files: fileUploads } : requestDocument.message;
+	if (adapter instanceof BuzzAdapter) {
+		await requireMessageChangeAllowed(adapter, requestDocument.messageID, requestDocument.requesterPubkeyHex);
+	}
 	const result = await adapter.editMessage(requestDocument.replyTargetID, requestDocument.messageID, message);
 	return { dispatchID: result.id };
 }
@@ -480,6 +493,9 @@ async function handleMessageDelete(
 	requestBody: unknown,
 ): Promise<Record<string, never>> {
 	const requestDocument = parseMessageDeleteRequest(requestBody);
+	if (adapter instanceof BuzzAdapter) {
+		await requireMessageChangeAllowed(adapter, requestDocument.messageID, requestDocument.requesterPubkeyHex);
+	}
 	await adapter.deleteMessage(requestDocument.replyTargetID, requestDocument.messageID);
 	return {};
 }
@@ -523,7 +539,33 @@ async function handleMessageSearch(
 		queries: requestDocument.queries ?? [],
 		limit: messageSearchLimit(requestDocument.limit),
 	});
-	return { channelID: channelId || candidates[0]?.channelID || "", candidates };
+	return {
+		channelID: channelId || candidates[0]?.channelID || "",
+		candidates: await messageSearchCandidateDocuments(adapter, candidates, requestDocument.requesterPubkeyHex),
+	};
+}
+
+// Whether a candidate may be edited or deleted is the same question the edit
+// and the delete ask, so the search answers it with the same judge rather than
+// leaving the caller to guess from who wrote it.
+async function messageSearchCandidateDocuments(
+	adapter: BuzzAdapter,
+	candidates: BuzzMessageSearchCandidate[],
+	requesterPubkeyHex: string | undefined,
+): Promise<MessageSearchCandidateDocument[]> {
+	const actorPubkeyHex = (requesterPubkeyHex ?? "").trim();
+	const documents: MessageSearchCandidateDocument[] = [];
+	for (const candidate of candidates) {
+		const actorIsElevated = await isElevatedIn(adapter, candidate.channelID, actorPubkeyHex);
+		const mayChange = mayChangeMessage(
+			candidate.authorPubkeyHex,
+			actorPubkeyHex,
+			actorIsElevated,
+			adapter.botPubkey,
+		);
+		documents.push({ ...candidate, editable: mayChange, deletable: mayChange });
+	}
+	return documents;
 }
 
 function messageSearchLimit(limit: number | undefined): number {

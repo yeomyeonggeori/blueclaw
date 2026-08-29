@@ -77,7 +77,9 @@ function decodeCreatedAtCursor(cursor?: string): number | undefined {
 const REACTION_KIND = 7;
 const PROFILE_KIND = 0;
 const GROUP_METADATA_KIND = 39000;
+const GROUP_ADMINS_KIND = 39001;
 const GROUP_MEMBERS_KIND = 39002;
+const elevatedChannelRoles = new Set(["owner", "admin"]);
 const CREATE_CHANNEL_KIND = 9007;
 const SET_TOPIC_KIND = 9002;
 const EDIT_MESSAGE_KIND = 40003;
@@ -171,6 +173,30 @@ class BuzzFormatConverter extends BaseFormatConverter {
 	}
 }
 
+function newestOf(events: BuzzEvent[]): BuzzEvent | undefined {
+	return events.reduce<BuzzEvent | undefined>(
+		(newest, event) => (!newest || event.created_at > newest.created_at ? event : newest),
+		undefined,
+	);
+}
+
+function elevatedPubkeysOf(adminList: BuzzEvent | undefined): Set<string> {
+	const elevated = new Set<string>();
+	for (const tag of adminList?.tags ?? []) {
+		const pubkey = tag[1];
+		if (tag[0] !== "p" || !pubkey) continue;
+		if (namesAnElevatedRole(tag.slice(2))) elevated.add(pubkey);
+	}
+	return elevated;
+}
+
+// A kind 39001 entry carries the role words the relay gave that administrator,
+// and an entry that names none is the bare listing of one.
+function namesAnElevatedRole(roles: string[]): boolean {
+	if (roles.length === 0) return true;
+	return roles.some((role) => elevatedChannelRoles.has(role.trim().toLowerCase()));
+}
+
 function latestEditContentByTarget(editEvents: BuzzEvent[]): Map<string, string> {
 	const latest = new Map<string, BuzzEvent>();
 	for (const event of editEvents) {
@@ -198,6 +224,7 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	private chat: ChatInstance | null = null;
 	private channelsById = new Map<string, BuzzChannel>();
 	private subscribedChannelIds = new Set<string>();
+	private elevatedPubkeysByChannel = new Map<string, Set<string>>();
 	private profileByPubkey = new Map<string, { name?: string; nip05?: string; picture?: string }>();
 
 	constructor(config: BuzzAdapterConfig) {
@@ -351,6 +378,7 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	}
 
 	private async refreshChannels(): Promise<void> {
+		this.elevatedPubkeysByChannel.clear();
 		const memberships = await this.relay.query({
 			kinds: [GROUP_MEMBERS_KIND],
 			"#p": [this.relay.pubkeyHex],
@@ -625,9 +653,28 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	// whose channel tag names somewhere else, so "delete that 잡담 post" asked
 	// in a DM has to land in 잡담.
 	private async channelOwningMessage(threadId: string, messageId: string): Promise<string> {
-		const [target] = await this.relay.query({ ids: [messageId], limit: 1 });
+		const target = await this.readMessageEvent(messageId);
 		const owningChannelId = target ? firstTagValue(target, "h") : undefined;
 		return owningChannelId ?? this.decodeThreadId(threadId).channelId;
+	}
+
+	async readMessageEvent(messageId: string): Promise<BuzzEvent | undefined> {
+		const [event] = await this.relay.query({ ids: [messageId], limit: 1 });
+		return event;
+	}
+
+	// The relay provisions a room's roles and publishes them as its kind 39001
+	// admin list, which makes the relay the record of who administers a channel
+	// and leaves chatd nothing to decide but what that record says.
+	async channelElevatedPubkeys(channelId: string): Promise<Set<string>> {
+		const known = this.elevatedPubkeysByChannel.get(channelId);
+		if (known) return known;
+		const events = await this.relay
+			.query({ kinds: [GROUP_ADMINS_KIND], "#d": [channelId] })
+			.catch(() => []);
+		const elevated = elevatedPubkeysOf(newestOf(events));
+		this.elevatedPubkeysByChannel.set(channelId, elevated);
+		return elevated;
 	}
 
 	async addReaction(threadId: string, messageId: string, emoji: string): Promise<void> {
