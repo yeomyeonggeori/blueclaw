@@ -3020,19 +3020,34 @@ func (resolver connectorAttachmentMaterialResolver) sentSourceMaterial(attachmen
 	return materials[0], true
 }
 
+const attachmentHistoryPageLimit = 40
+
 func (resolver connectorAttachmentMaterialResolver) findAttachmentMaterial(ctx context.Context, materialID string) (InputAttachment, bool, error) {
 	if attachment, isFound := findAttachmentMaterialInContext(resolver.event.Context, materialID); isFound {
 		return attachment, true, nil
 	}
-	if strings.TrimSpace(resolver.event.Context.HistoryCursor) == "" {
+	historyCursor := strings.TrimSpace(resolver.event.Context.HistoryCursor)
+	if historyCursor == "" {
 		return InputAttachment{}, false, nil
 	}
-	visibleContext, errorValue := resolver.adapter.FetchHistory(ctx, resolver.event.Context.HistoryCursor, 50)
-	if errorValue != nil {
-		return InputAttachment{}, false, errors.New("attachment history lookup failed: " + errorValue.Error())
+	for pageCount := 0; pageCount < attachmentHistoryPageLimit; pageCount++ {
+		visibleContext, errorValue := resolver.adapter.FetchHistory(ctx, historyCursor, 50)
+		if errorValue != nil {
+			return InputAttachment{}, false, errors.New("attachment history lookup failed: " + errorValue.Error())
+		}
+		if attachment, isFound := findAttachmentMaterialInContext(visibleContext, materialID); isFound {
+			return attachment, true, nil
+		}
+		if !visibleContext.HasMoreBefore {
+			return InputAttachment{}, false, nil
+		}
+		nextHistoryCursor := strings.TrimSpace(visibleContext.HistoryCursor)
+		if nextHistoryCursor == "" || nextHistoryCursor == historyCursor {
+			return InputAttachment{}, false, nil
+		}
+		historyCursor = nextHistoryCursor
 	}
-	attachment, isFound := findAttachmentMaterialInContext(visibleContext, materialID)
-	return attachment, isFound, nil
+	return InputAttachment{}, false, errors.New("attachment lookup stopped after " + strconv.Itoa(attachmentHistoryPageLimit) + " pages; the conversation is longer than the resolver reads")
 }
 
 // A reference is a material ID, or the attachment's exact URL: the URL is the
