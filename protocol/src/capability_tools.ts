@@ -807,6 +807,7 @@ type CapabilityToolDefinition = {
   description: string;
   version: string;
   estimatedLatency: CapabilityEstimatedLatency;
+  modelVisibility?: CapabilityModelVisibility;
   inputSchema: z.ZodType;
   inputIntentSchema?: z.ZodType;
   result: CapabilityResultDefinition;
@@ -1200,6 +1201,7 @@ const fileToolDefinitions: CapabilityToolDefinition[] = [
     description: 'Read a workspace document and return Markdown content. path takes an exact /workspace path, or an attachment\'s exact url copied verbatim from the conversation — a document attached to an earlier message is fetched by that url. Never invent a filesystem path from a url. Use image_read for image files.',
     version: '1',
     estimatedLatency: CapabilityEstimatedLatency.High,
+    modelVisibility: CapabilityModelVisibility.Hidden,
     inputSchema: documentReadInputSchema,
     result: { schema: documentReadResultSchema, effects: [] },
     sideEffect: CapabilitySideEffect.Read,
@@ -1212,6 +1214,7 @@ const fileToolDefinitions: CapabilityToolDefinition[] = [
     description: 'Read a workspace image and return a base64 attachment. path takes an exact /workspace path, or an attachment\'s exact url copied verbatim from the conversation — an image attached to an earlier message is fetched by that url. Never invent a filesystem path from a url. Use document_read for document files.',
     version: '1',
     estimatedLatency: CapabilityEstimatedLatency.Medium,
+    modelVisibility: CapabilityModelVisibility.Hidden,
     inputSchema: imageReadInputSchema,
     result: { schema: imageReadResultSchema, effects: [] },
     sideEffect: CapabilitySideEffect.Read,
@@ -1376,6 +1379,7 @@ export function buildCapabilityToolCatalog(protocolVersion: string): CapabilityT
 }
 
 function buildCapabilityDescriptor(definition: CapabilityToolDefinition): z.infer<typeof capabilityDescriptorSchema> {
+  const modelVisibility = definition.modelVisibility ?? CapabilityModelVisibility.Visible;
   const resultSchema = z.toJSONSchema(definition.result.schema);
   const resultContract = {
     schema: resultSchema,
@@ -1387,8 +1391,8 @@ function buildCapabilityDescriptor(definition: CapabilityToolDefinition): z.infe
     canonicalName: definition.name,
     namespace: definition.namespace,
     modelName: definition.name,
-    modelVisibility: CapabilityModelVisibility.Visible,
-    modelVisible: true,
+    modelVisibility,
+    modelVisible: modelVisibility === CapabilityModelVisibility.Visible,
     description: definition.description,
     version: definition.version,
     privacyClass: definition.privacyClass,

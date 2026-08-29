@@ -497,7 +497,7 @@ It authorizes only a real UID of `root` or `blueclaw`
 `setgid`, and `setuid` in that order (`applyIdentity`) before `syscall.Exec`.
 After that call the process is the requester and cannot regain privilege.
 
-File tools are not a separate code path. `file_read`, `file_write`, `file_edit`
+File tools are not a separate code path. `read`, `file_write`, `file_edit`
 and the rest build a shell command and run it through the same requester
 primitive (`internal/agentruntime/requester_shell.go`), starting in the
 requester's own `$HOME` (`requesterShellScript`), so tilde expansion, globs, and

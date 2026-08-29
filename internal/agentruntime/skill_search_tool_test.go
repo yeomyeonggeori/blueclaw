@@ -125,7 +125,7 @@ func TestSkillSearchNameModeReturnsCanonicalPromptMetadata(t *testing.T) {
 		Name:           "site-prototype",
 		Description:    "Create sites.",
 		Prompt:         longPrompt,
-		ToolReferences: []string{"file_read"},
+		ToolReferences: []string{"read"},
 		Source:         agentcontract.InstructionSource{Path: "/host/private/workspace/skills/site-prototype/SKILL.md"},
 	}})
 
@@ -179,7 +179,7 @@ func TestSkillSearchRejectsConflictingAndMalformedInputs(t *testing.T) {
 
 func TestSkillSearchFiltersUnavailableToolReferencesBeforeEveryMode(t *testing.T) {
 	instructions := []agentcontract.SkillInstruction{
-		{Name: "available", Description: "Available skill.", ToolReferences: []string{"file_read"}},
+		{Name: "available", Description: "Available skill.", ToolReferences: []string{"read"}},
 		{Name: "unavailable", Description: "Unavailable skill.", ToolReferences: []string{"missing.tool"}},
 	}
 	retriever := &recordingSkillSearchRetriever{candidates: []agentcontract.SkillCandidate{

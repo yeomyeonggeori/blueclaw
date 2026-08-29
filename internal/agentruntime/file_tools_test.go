@@ -346,7 +346,7 @@ func TestAttachmentResolutionFailureRedirectsToWorkspaceFile(t *testing.T) {
 	if result.Failure.RetryPolicy == "no_retry" || result.Failure.FailureClass == "permanent" {
 		t.Fatalf("attachment failure must stay recoverable so the model can open the workspace file, got policy=%q class=%q", result.Failure.RetryPolicy, result.Failure.FailureClass)
 	}
-	for _, expected := range []string{"workspace file", "file_read"} {
+	for _, expected := range []string{"workspace file", "read tool"} {
 		if !strings.Contains(result.Failure.UserSafeSummary, expected) {
 			t.Fatalf("expected recovery guidance %q in summary, got %q", expected, result.Failure.UserSafeSummary)
 		}
@@ -798,7 +798,7 @@ func TestFileReadReadsTheCurrentFileBehindAStaleCatalogPath(t *testing.T) {
 	}
 }
 
-func TestFileReadPointsAnImageURLAtImageRead(t *testing.T) {
+func TestFileReadPointsAnImageURLAtTheReadTool(t *testing.T) {
 	workspacePath := t.TempDir()
 	toolCatalogBuilder := newFileToolTestCatalogBuilder(workspacePath)
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
@@ -832,8 +832,8 @@ func TestFileReadPointsAnImageURLAtImageRead(t *testing.T) {
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if !readResult.Failed() || !strings.Contains(readResult.ContentText(), "use image_read") {
-		t.Fatalf("expected image attachment file_read fallback to point at image_read, got %s", readResult.ContentText())
+	if !readResult.Failed() || !strings.Contains(readResult.ContentText(), "read tool") {
+		t.Fatalf("expected image attachment file_read fallback to point at the read tool, got %s", readResult.ContentText())
 	}
 }
 

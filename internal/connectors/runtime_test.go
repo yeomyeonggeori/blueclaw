@@ -2109,7 +2109,7 @@ func TestConnectorRuntimeAddsImportedImageAttachmentCatalog(t *testing.T) {
 		t.Fatalf("expected one attachment import request, got %+v", adapter.inputAttachmentImportRequests)
 	}
 	body := joinConnectorMessageContent(languageModel.request.Messages)
-	for _, expected := range []string{"Current attachments", "url=https://mattermost.local/api/v4/files/file-1", "path=~/inbox/mattermost/direct-1/message-1/mascot.png", "availableTools=image_read"} {
+	for _, expected := range []string{"Current attachments", "url=https://mattermost.local/api/v4/files/file-1", "path=~/inbox/mattermost/direct-1/message-1/mascot.png", "availableTools=read"} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("expected attachment catalog %q in model request, got %s", expected, body)
 		}
@@ -2191,7 +2191,7 @@ func TestConnectorRuntimeAddsDocumentAttachmentCatalog(t *testing.T) {
 		t.Fatalf("expected event to process: %v", errorValue)
 	}
 	body := joinConnectorMessageContent(languageModel.request.Messages)
-	for _, expected := range []string{"Current attachments", "url=https://mattermost.local/api/v4/files/file-1", "path=/workspace/circles/staff/inbox/mattermost/direct-1/message-1/report.pdf", "availableTools=file_preview,file_read"} {
+	for _, expected := range []string{"Current attachments", "url=https://mattermost.local/api/v4/files/file-1", "path=/workspace/circles/staff/inbox/mattermost/direct-1/message-1/report.pdf", "availableTools=read"} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("expected attachment catalog %q in model request, got %s", expected, body)
 		}

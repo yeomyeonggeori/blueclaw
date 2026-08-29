@@ -69,7 +69,7 @@ func (store *RequesterToolResultSpillStore) SaveToolResultSpill(ctx context.Cont
 	return ToolResultSpillRef{
 		Locator:       spillFilePath,
 		Bytes:         len(spill.Content),
-		RetrievalHint: "Read it with file_read, or pull out just the part you need with grep or sed through shell.",
+		RetrievalHint: "Read it with the read tool, or pull out just the part you need with grep or sed through shell.",
 	}, nil
 }
 

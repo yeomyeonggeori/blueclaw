@@ -286,9 +286,9 @@ func DocumentCreateAcceptanceScenario(artifactDirectoryPath string) VirtualSessi
 	return VirtualSessionScenario{
 		Name:                  "document_create_acceptance",
 		ArtifactDirectoryPath: artifactDirectoryPath,
-		AllowedTools:          []string{"conversation_history", "memory_search", "shell", "document_read", "file_write", "file_deliver"},
+		AllowedTools:          []string{"conversation_history", "memory_search", "shell", "read", "document_read", "file_write", "file_deliver"},
 		CapabilityToolNames:   []string{"document_read"},
-		InitialToolNames:      []string{"shell", "document_read", "file_write", "file_deliver"},
+		InitialToolNames:      []string{"shell", "read", "file_write", "file_deliver"},
 		Turns: []VirtualTurn{{
 			Prompt:                 "운영팀과 재무팀이 함께 검토할 '분기 결산 운영 검토'라는 짧은 DOCX 문서를 작성해서 이 DM에 첨부해줘. 검토 목적과 다음 단계를 간단히 적고, 현재 상태는 초안, 담당은 운영팀이라고 표시해줘.",
 			ExpectedSelectedSkills: []string{"document"},
@@ -320,7 +320,7 @@ func AttachmentMaterialReadScenario(artifactDirectoryPath string) VirtualSession
 	return VirtualSessionScenario{
 		Name:                  "attachment_material_read",
 		ArtifactDirectoryPath: artifactDirectoryPath,
-		AllowedTools:          []string{"conversation_history", "memory_search", "shell", "image_read", "document_read"},
+		AllowedTools:          []string{"conversation_history", "memory_search", "shell", "read", "image_read", "document_read"},
 		CapabilityToolNames:   []string{"image_read", "document_read"},
 		Turns: []VirtualTurn{{
 			Prompt:          "다시 이미지 내가 첨부한 거 봐봐",
@@ -334,12 +334,13 @@ func AttachmentMaterialReadScenario(artifactDirectoryPath string) VirtualSession
 			}},
 			ContextMaterials: []connectors.InputAttachment{attachment},
 			ActionResponses: []string{
-				actionCallTool("image_read", `{"path":"https://mattermost.local/api/v4/files/file-1"}`),
-				actionFinishMessage("이미지를 확인했습니다.", "obs-001:image_read:0"),
+				actionCallTool("read", `{"path":"https://mattermost.local/api/v4/files/file-1"}`),
+				actionFinishMessage("이미지를 확인했습니다.", "obs-001:read:0"),
 			},
-			ExpectedToolCalls:      []string{"image_read"},
+			ExpectedToolCalls:      []string{"read"},
 			ExpectedToolCallCounts: map[string]int{"shell": 0},
-			ExpectedExposedTools:   []string{"image_read", "document_read"},
+			ExpectedExposedTools:   []string{"read"},
+			ForbiddenExposedTools:  []string{"file_read", "file_preview", "document_read", "image_read"},
 			ExpectedModelContexts: []string{
 				"url=https://mattermost.local/api/v4/files/file-1",
 				"mascot.png",
@@ -366,27 +367,27 @@ func AttachmentHTMLPreviewRecoveryScenario(artifactDirectoryPath string) Virtual
 	return VirtualSessionScenario{
 		Name:                  "attachment_html_preview_recovery",
 		ArtifactDirectoryPath: artifactDirectoryPath,
-		AllowedTools:          []string{"conversation_history", "memory_search", "shell", "file_preview", "file_read", "image_read"},
+		AllowedTools:          []string{"conversation_history", "memory_search", "shell", "read", "file_preview", "file_read", "image_read"},
 		Turns: []VirtualTurn{{
 			Prompt:           "이거 파일 내용 보고 어떻게 개선하면 좋을지 말해줘봐",
 			RouterTaskShape:  agentcontract.TaskShapeResearchTask,
 			InputAttachments: []connectors.InputAttachment{attachment},
 			ActionResponses: []string{
-				actionCallTool("file_preview", `{"path":"https://mattermost.local/api/v4/files/file-html"}`),
-				actionFinishMessage("첨부 HTML을 확인했습니다. 자동화 섹션의 정보 구조와 CTA를 더 선명하게 다듬으면 좋겠습니다.", "obs-001:file_preview:0"),
+				actionCallTool("read", `{"path":"https://mattermost.local/api/v4/files/file-html"}`),
+				actionFinishMessage("첨부 HTML을 확인했습니다. 자동화 섹션의 정보 구조와 CTA를 더 선명하게 다듬으면 좋겠습니다.", "obs-001:read:0"),
 			},
-			ExpectedToolCalls: []string{"file_preview"},
+			ExpectedToolCalls: []string{"read"},
 			ExpectedToolCallCounts: map[string]int{
 				"shell":     0,
 				"file_read": 0,
 			},
 			ExpectedEventCounts: []VirtualEventCount{
-				{Name: "tool.file_preview.requested", BodyFragment: `"path":"https://mattermost.local/api/v4/files/file-html"`, Count: 1},
-				{Name: "tool.file_preview.result", BodyFragment: "Virtual HTML Title", Count: 1},
+				{Name: "tool.read.requested", BodyFragment: `"path":"https://mattermost.local/api/v4/files/file-html"`, Count: 1},
+				{Name: "tool.read.result", BodyFragment: "Virtual HTML Title", Count: 1},
 			},
 			ExpectedModelContexts: []string{
 				"url=https://mattermost.local/api/v4/files/file-html",
-				"availableTools=file_preview,file_read",
+				"availableTools=read",
 			},
 			ExpectedReplyFragments: []string{"첨부 HTML", "정보 구조"},
 		}},
@@ -406,7 +407,7 @@ func AttachmentHTMLPreviousPreviewRecoveryScenario(artifactDirectoryPath string)
 	return VirtualSessionScenario{
 		Name:                  "attachment_html_previous_preview_recovery",
 		ArtifactDirectoryPath: artifactDirectoryPath,
-		AllowedTools:          []string{"conversation_history", "memory_search", "shell", "file_preview", "file_read", "image_read"},
+		AllowedTools:          []string{"conversation_history", "memory_search", "shell", "read", "file_preview", "file_read", "image_read"},
 		Turns: []VirtualTurn{{
 			Prompt:          "다시",
 			RouterTaskShape: agentcontract.TaskShapeResearchTask,
@@ -419,22 +420,22 @@ func AttachmentHTMLPreviousPreviewRecoveryScenario(artifactDirectoryPath string)
 			}},
 			ContextMaterials: []connectors.InputAttachment{attachment},
 			ActionResponses: []string{
-				actionCallTool("file_preview", `{"path":"https://mattermost.local/api/v4/files/file-html"}`),
-				actionFinishMessage("이전 첨부 HTML을 확인했습니다. 자동화 흐름의 핵심 CTA와 섹션 우선순위를 더 명확히 잡으면 좋겠습니다.", "obs-001:file_preview:0"),
+				actionCallTool("read", `{"path":"https://mattermost.local/api/v4/files/file-html"}`),
+				actionFinishMessage("이전 첨부 HTML을 확인했습니다. 자동화 흐름의 핵심 CTA와 섹션 우선순위를 더 명확히 잡으면 좋겠습니다.", "obs-001:read:0"),
 			},
-			ExpectedToolCalls: []string{"file_preview"},
+			ExpectedToolCalls: []string{"read"},
 			ExpectedToolCallCounts: map[string]int{
 				"shell":     0,
 				"file_read": 0,
 			},
 			ExpectedEventCounts: []VirtualEventCount{
-				{Name: "tool.file_preview.requested", BodyFragment: `"path":"https://mattermost.local/api/v4/files/file-html"`, Count: 1},
-				{Name: "tool.file_preview.result", BodyFragment: "Virtual HTML Title", Count: 1},
+				{Name: "tool.read.requested", BodyFragment: `"path":"https://mattermost.local/api/v4/files/file-html"`, Count: 1},
+				{Name: "tool.read.result", BodyFragment: "Virtual HTML Title", Count: 1},
 			},
 			ExpectedModelContexts: []string{
 				"Previous attachments:",
 				"url=https://mattermost.local/api/v4/files/file-html",
-				"availableTools=file_preview,file_read",
+				"availableTools=read",
 			},
 			ForbiddenReplyFragments: []string{"파일을 찾을 수", "다시 확인", "직접 공유"},
 			ExpectedReplyFragments:  []string{"이전 첨부 HTML", "CTA"},
@@ -455,7 +456,7 @@ func AttachmentCurrentImageInputScenario(artifactDirectoryPath string) VirtualSe
 	return VirtualSessionScenario{
 		Name:                  "attachment_current_image_input",
 		ArtifactDirectoryPath: artifactDirectoryPath,
-		AllowedTools:          []string{"conversation_history", "memory_search", "shell", "image_read", "document_read"},
+		AllowedTools:          []string{"conversation_history", "memory_search", "shell", "read", "image_read", "document_read"},
 		CapabilityToolNames:   []string{"image_read", "document_read"},
 		Turns: []VirtualTurn{{
 			Prompt:           "이거 보여? 묘사 좀 자세히 해봐.",
@@ -468,6 +469,7 @@ func AttachmentCurrentImageInputScenario(artifactDirectoryPath string) VirtualSe
 				),
 			},
 			ExpectedToolCallCounts: map[string]int{
+				"read":          0,
 				"image_read":    0,
 				"shell":         0,
 				"document_read": 0,
@@ -1579,7 +1581,7 @@ func sitePrototypeSkill() agentcontract.SkillInstruction {
 func sitePrototypeToolNames() []string {
 	return []string{
 		"shell",
-		"file_read",
+		"read",
 		"file_write",
 		"file_edit",
 		"site_serve",

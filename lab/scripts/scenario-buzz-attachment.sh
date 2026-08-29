@@ -113,7 +113,7 @@ detail_document="$(curl -fsS --max-time 15 "$blueclaw_url/admin/api/run/detail?t
 printf '%s' "$detail_document" > "$evidence_directory_path/run-detail.json"
 
 reads="$(printf '%s' "$detail_document" \
-  | jq -c '[.taskEvents[].body | select(type == "object") | select(.tool == "image_read" or .tool == "document_read" or .tool == "file_read")]')"
+  | jq -c '[.taskEvents[].body | select(type == "object") | select(.tool == "read")]')"
 if [ "$(printf '%s' "$reads" | jq 'length')" = "0" ]; then
   echo "✗ the agent never tried to open the picture it was sent"
   exit 1

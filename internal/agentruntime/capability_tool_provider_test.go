@@ -191,8 +191,11 @@ func TestCapabilityToolProviderAllowsHiddenDescriptorWithoutResultContract(t *te
 	if errorValue := toolSet.RegisterProvider(context.Background(), provider); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if toolSet.IsRegistered("task_history") {
-		t.Fatal("expected hidden capability descriptor not to be registered as a model tool")
+	if !toolSet.IsRegistered("task_history") {
+		t.Fatal("expected hidden capability descriptor to stay registered so recorded calls keep working")
+	}
+	if toolSet.CanExpose("task_history") {
+		t.Fatal("expected hidden capability descriptor to stay out of the model catalog")
 	}
 }
 
