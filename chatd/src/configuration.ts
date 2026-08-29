@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 export type MattermostConfiguration = {
   baseURL: string;
   botToken: string;
@@ -10,6 +12,7 @@ export type BuzzConfiguration = {
   privateKeyHex: string;
   accountLinksPath: string | undefined;
   authTagJSON: string | undefined;
+  keySeed: string | undefined;
 };
 
 export type ChatdConfiguration = {
@@ -70,7 +73,18 @@ function loadBuzzConfiguration(environment: Record<string, string | undefined>):
     privateKeyHex,
     accountLinksPath: environment['CHATD_BUZZ_ACCOUNT_LINKS_PATH']?.trim() || undefined,
     authTagJSON: environment['CHATD_BUZZ_AUTH_TAG']?.trim() || undefined,
+    keySeed: readKeySeed(environment['CHATD_BUZZ_KEY_SEED_PATH']?.trim()),
   };
+}
+
+function readKeySeed(keySeedPath: string | undefined): string | undefined {
+  if (!keySeedPath) return undefined;
+  try {
+    return readFileSync(keySeedPath, 'utf8').trim() || undefined;
+  } catch (error) {
+    console.error(`chatd cannot read the buzz key seed at ${keySeedPath}, so it can only change its own messages: ${String(error)}`);
+    return undefined;
+  }
 }
 
 function deriveBaseURL(ingressURL: string | undefined): string | undefined {

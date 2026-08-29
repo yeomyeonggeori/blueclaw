@@ -3039,7 +3039,7 @@
         "mode": "success",
         "targetKind": "message"
       },
-      "description": "Replace one exact span of text inside a message the assistant sent, your own, or anyone's if you hold the channel admin role, leaving the rest of it untouched. oldText must appear exactly once in that message; copy it verbatim from a message_search preview or from the message you sent. This is the tool for every correction to something you already posted — when the user points out a mistake, fix that message instead of posting a correction as a new one. It runs immediately without asking the user to confirm, because it can only change text you quoted. If oldText does not match, the call fails without changing anything and returns the message as it currently reads, so retry with a span copied from that. To rewrite a long message wholesale, read it in full first with message_search messageIDs and quote what you read. attachments uploads workspace files into the edited message; pass it alone to add a file, such as an inbound image original, without changing the text.",
+      "description": "Replace one exact span of text inside the assistant's messages or your own, leaving the rest of it untouched. oldText must appear exactly once in that message; copy it verbatim from a message_search preview or from the message you sent. This is the tool for every correction to something you already posted — when the user points out a mistake, fix that message instead of posting a correction as a new one. It runs immediately without asking the user to confirm, because it can only change text you quoted. If oldText does not match, the call fails without changing anything and returns the message as it currently reads, so retry with a span copied from that. To rewrite a long message wholesale, read it in full first with message_search messageIDs and quote what you read. attachments uploads workspace files into the edited message; pass it alone to add a file, such as an inbound image original, without changing the text.",
       "estimatedLatency": "medium",
       "idempotency": {
         "required": false,
@@ -3212,7 +3212,7 @@
         "mode": "success",
         "targetKind": "message"
       },
-      "description": "Permanently delete exact message IDs from message_search after approval. You may delete a message the assistant sent, your own, or anyone's if you hold the channel admin role. List only the exact messages the user asked to remove; when several search matches quote or mention the same text, pick the one message that is the target itself, never the whole match list.",
+      "description": "Permanently delete exact message IDs from message_search after approval. You may delete yours, the assistant's, or anyone's if you hold the channel admin role. List only the exact messages the user asked to remove; when several search matches quote or mention the same text, pick the one message that is the target itself, never the whole match list.",
       "estimatedLatency": "medium",
       "idempotency": {
         "required": false,
