@@ -480,8 +480,8 @@ async function handleMessageEdit(
 			? await signerForMessageChange(
 					adapter,
 					requestDocument.messageID,
-					requestDocument.requesterEmail,
-					configuration.buzz?.keySeed,
+					requestDocument.requesterPubkeyHex,
+					configuration.admindBaseURL,
 				)
 			: undefined;
 	const result = await adapter.editMessage(
@@ -504,8 +504,8 @@ async function handleMessageDelete(
 			? await signerForMessageChange(
 					adapter,
 					requestDocument.messageID,
-					requestDocument.requesterEmail,
-					configuration.buzz?.keySeed,
+					requestDocument.requesterPubkeyHex,
+					configuration.admindBaseURL,
 				)
 			: undefined;
 	await adapter.deleteMessage(requestDocument.replyTargetID, requestDocument.messageID, signerSecretHex);

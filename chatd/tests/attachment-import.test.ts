@@ -24,7 +24,6 @@ function createConfiguration(overrides: Partial<ChatdConfiguration> = {}): Chatd
 			privateKeyHex: AGENT_SECRET,
 			accountLinksPath: undefined,
 			authTagJSON: undefined,
-			keySeed: undefined,
 		},
 		...overrides,
 	};
