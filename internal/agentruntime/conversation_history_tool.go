@@ -35,7 +35,7 @@ var conversationHistoryResultSchema = json.RawMessage(`{
 						"items":{
 							"type":"object",
 							"properties":{
-								"fileHint":{"type":"string"},
+								"url":{"type":"string"},
 								"filename":{"type":"string"},
 								"contentType":{"type":"string"},
 								"sizeBytes":{"type":"integer","minimum":0},
@@ -46,7 +46,7 @@ var conversationHistoryResultSchema = json.RawMessage(`{
 								"conversionStatus":{"type":"string"},
 								"conversionMessage":{"type":"string"}
 							},
-							"required":["fileHint","sizeBytes","isAvailable"],
+							"required":["sizeBytes","isAvailable"],
 							"additionalProperties":false
 						}
 					}
@@ -78,7 +78,7 @@ type conversationHistoryMessage struct {
 }
 
 type conversationHistoryMaterial struct {
-	FileHint          string `json:"fileHint"`
+	URL               string `json:"url,omitempty"`
 	Filename          string `json:"filename,omitempty"`
 	ContentType       string `json:"contentType,omitempty"`
 	SizeBytes         int64  `json:"sizeBytes"`
@@ -119,7 +119,7 @@ func projectConversationHistoryMessage(message agentcontract.VisibleContextMessa
 
 func projectConversationHistoryMaterial(material agentcontract.VisibleContextMaterial) conversationHistoryMaterial {
 	return conversationHistoryMaterial{
-		FileHint:          material.FileHint,
+		URL:               material.URL,
 		Filename:          material.Filename,
 		ContentType:       material.ContentType,
 		SizeBytes:         max(0, material.SizeBytes),

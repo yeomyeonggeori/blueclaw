@@ -528,13 +528,22 @@ func TestFilePreviewUsesCachedAttachmentPreview(t *testing.T) {
 	}
 }
 
-func TestFilePreviewUsesCachedAttachmentPreviewByMaterialID(t *testing.T) {
+func TestFilePreviewUsesCachedAttachmentPreviewByURL(t *testing.T) {
 	workspacePath := t.TempDir()
 	toolCatalogBuilder := newFileToolTestCatalogBuilder(workspacePath)
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
 		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		AttachmentMaterialResolver: staticAttachmentMaterialResolver{
+			material: agentcontract.VisibleContextMaterial{
+				MaterialID:  "mattermost:file-1",
+				URL:         "https://mattermost.local/api/v4/files/file-1",
+				Filename:    "report.html",
+				ContentType: "text/html",
+				Path:        "home/inbox/mattermost/post-1/report.html",
+			},
+		},
 		InputParts: []agentcontract.AgentPart{{
 			Type: agentcontract.AgentPartTypeFile,
 			File: &agentcontract.AgentFilePart{
@@ -555,7 +564,7 @@ func TestFilePreviewUsesCachedAttachmentPreviewByMaterialID(t *testing.T) {
 
 	previewResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
 		ToolName: "file_preview",
-		Input:    toolcontract.MarshalToolInput(map[string]any{"materialID": "mattermost:file-1"}),
+		Input:    toolcontract.MarshalToolInput(map[string]any{"path": "https://mattermost.local/api/v4/files/file-1"}),
 	})
 
 	if errorValue != nil {
@@ -613,7 +622,7 @@ func TestFileReadUsesCachedAttachmentPreviewWhenMaterialFileIsNotMounted(t *test
 	}
 }
 
-func TestFilePreviewResolvesAttachmentMaterialID(t *testing.T) {
+func TestFilePreviewResolvesAnAttachmentURL(t *testing.T) {
 	workspacePath := t.TempDir()
 	filePath := filepath.Join(workspacePath, "private", "people", "person-1", "inbox", "mattermost", "post-1", "report.html")
 	writeTestFile(t, filePath, "<h1>Material Preview</h1>")
@@ -634,7 +643,7 @@ func TestFilePreviewResolvesAttachmentMaterialID(t *testing.T) {
 
 	previewResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
 		ToolName: "file_preview",
-		Input:    toolcontract.MarshalToolInput(map[string]any{"materialID": "mattermost:file-1"}),
+		Input:    toolcontract.MarshalToolInput(map[string]any{"path": "https://mattermost.local/api/v4/files/file-1"}),
 	})
 
 	if errorValue != nil {
@@ -648,7 +657,7 @@ func TestFilePreviewResolvesAttachmentMaterialID(t *testing.T) {
 	}
 }
 
-func TestFilePreviewFallsBackFromStaleAttachmentPathToMaterialID(t *testing.T) {
+func TestFilePreviewReadsTheCurrentFileBehindAStaleCatalogPath(t *testing.T) {
 	workspacePath := t.TempDir()
 	filePath := filepath.Join(workspacePath, "private", "people", "person-1", "inbox", "mattermost", "post-1", "report.html")
 	writeTestFile(t, filePath, "<h1>Recovered Preview</h1>")
@@ -677,7 +686,7 @@ func TestFilePreviewFallsBackFromStaleAttachmentPathToMaterialID(t *testing.T) {
 
 	previewResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
 		ToolName: "file_preview",
-		Input:    toolcontract.MarshalToolInput(map[string]any{"path": "inbox/mattermost/thread-1/post-1/report.html"}),
+		Input:    toolcontract.MarshalToolInput(map[string]any{"path": "https://mattermost.local/api/v4/files/file-1"}),
 	})
 
 	if errorValue != nil {
@@ -691,7 +700,7 @@ func TestFilePreviewFallsBackFromStaleAttachmentPathToMaterialID(t *testing.T) {
 	}
 }
 
-func TestFileReadFallsBackFromStaleAttachmentPathToMaterialID(t *testing.T) {
+func TestFileReadReadsTheCurrentFileBehindAStaleCatalogPath(t *testing.T) {
 	workspacePath := t.TempDir()
 	filePath := filepath.Join(workspacePath, "private", "people", "person-1", "inbox", "mattermost", "post-1", "kim-intern-automation.html")
 	writeTestFile(t, filePath, "<h1>Recovered Read</h1>\n<p>Body</p>")
@@ -720,7 +729,7 @@ func TestFileReadFallsBackFromStaleAttachmentPathToMaterialID(t *testing.T) {
 
 	readResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
 		ToolName: "file_read",
-		Input:    toolcontract.MarshalToolInput(map[string]any{"path": "inbox/mattermost/thread-1/post-1/kim-intern-automation.html"}),
+		Input:    toolcontract.MarshalToolInput(map[string]any{"path": "https://mattermost.local/api/v4/files/file-1"}),
 	})
 
 	if errorValue != nil {
@@ -734,7 +743,7 @@ func TestFileReadFallsBackFromStaleAttachmentPathToMaterialID(t *testing.T) {
 	}
 }
 
-func TestFileReadRejectsImageAttachmentMaterialFallback(t *testing.T) {
+func TestFileReadPointsAnImageURLAtImageRead(t *testing.T) {
 	workspacePath := t.TempDir()
 	toolCatalogBuilder := newFileToolTestCatalogBuilder(workspacePath)
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
@@ -761,7 +770,7 @@ func TestFileReadRejectsImageAttachmentMaterialFallback(t *testing.T) {
 
 	readResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
 		ToolName: "file_read",
-		Input:    toolcontract.MarshalToolInput(map[string]any{"path": "home/inbox/mattermost/thread-1/post-1/mascot.png"}),
+		Input:    toolcontract.MarshalToolInput(map[string]any{"path": "https://mattermost.local/api/v4/files/file-1"}),
 	})
 
 	if errorValue != nil {
@@ -794,7 +803,7 @@ func TestFilePreviewUsesResolvedAttachmentPreviewWithoutWorkspaceStat(t *testing
 
 	previewResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
 		ToolName: "file_preview",
-		Input:    toolcontract.MarshalToolInput(map[string]any{"materialID": "mattermost:file-1"}),
+		Input:    toolcontract.MarshalToolInput(map[string]any{"path": "https://mattermost.local/api/v4/files/file-1"}),
 	})
 
 	if errorValue != nil {

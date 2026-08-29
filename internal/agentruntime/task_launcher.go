@@ -591,7 +591,6 @@ func (taskLauncher *TaskLauncher) conversationArtifactManifest(request TaskLaunc
 func (taskLauncher *TaskLauncher) visibleContextWithArtifactManifest(visibleContext agentcontract.VisibleContext, manifest []agentcontract.ArtifactManifestEntry) agentcontract.VisibleContext {
 	for _, artifact := range manifest {
 		visibleContext.Materials = append(visibleContext.Materials, agentcontract.VisibleContextMaterial{
-			FileHint:    artifact.FileHint,
 			Filename:    filepath.Base(artifact.RelativePath),
 			Path:        filepath.ToSlash(filepath.Join(taskLauncher.toolCatalogBuilder.WorkspaceRootPath(), artifact.RelativePath)),
 			IsAvailable: true,

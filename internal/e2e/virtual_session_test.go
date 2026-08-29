@@ -1430,8 +1430,8 @@ func TestAttachmentMaterialRead(t *testing.T) {
 		t.Fatalf("expected attachment material read scenario to pass: %v", errorValue)
 	}
 	turnResult := result.TurnResults[0]
-	if !eventsContain(turnResult.Events, "tool.image_read.requested", `"path":"/workspace/circles/staff/inbox/virtual/virtual-conversation-1/virtual-message-001/mascot.png"`) {
-		t.Fatalf("expected image_read to use the exact workspace path; events: %s", summarizeEvents(turnResult.Events))
+	if !eventsContain(turnResult.Events, "tool.image_read.requested", `"path":"https://mattermost.local/api/v4/files/file-1"`) {
+		t.Fatalf("expected image_read to name the attachment by its url; events: %s", summarizeEvents(turnResult.Events))
 	}
 	if eventsContain(turnResult.Events, "tool.shell.requested", "shell") {
 		t.Fatalf("expected attachment read not to search the workspace; events: %s", summarizeEvents(turnResult.Events))
