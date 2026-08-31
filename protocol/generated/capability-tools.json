@@ -1240,7 +1240,7 @@
         "state": "ok"
       },
       "canonicalName": "person_list",
-      "description": "List the people in this workspace with their exact name, email, @handle, and mention. Call this to answer who a person is, and whenever a message names someone partly or by a given name alone, so the exact name can be passed instead of the fragment. Person hints on the task tools resolve against exactly this list.",
+      "description": "Everyone who works here, with their exact name, email, @handle, and mention. Call this when somebody asks who a person is or who works here, and when a person hint was refused with a list of candidates to choose between. Do not call it to turn a fragment into a name before another call: person hints take the fragment as it was written and the server resolves it, so a name given partly or by a given name alone is already enough.",
       "estimatedLatency": "low",
       "idempotency": {
         "required": false,
@@ -1360,7 +1360,7 @@
       },
       "sideEffect": "read",
       "sideEffectClass": "read",
-      "version": "1",
+      "version": "2",
       "worksOffline": false
     },
     {
