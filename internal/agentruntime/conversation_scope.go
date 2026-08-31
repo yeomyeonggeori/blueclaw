@@ -37,7 +37,7 @@ func ConversationScopeForRequest(workspaceRootPath string, request ToolCatalogRe
 	}
 	circleID := circleIDFromConversation(request)
 	if circleID == "" {
-		circleID = "staff"
+		circleID = "member"
 	}
 	return ConversationResourceScope{
 		Kind:                 "circle",

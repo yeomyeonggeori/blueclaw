@@ -172,7 +172,7 @@ func TestMemoryServiceFiltersPrivateAndCircleResources(t *testing.T) {
 
 	ownerFacts, errorValue := memoryService.SearchMemory(context.Background(), MemorySearchRequest{
 		ReaderPersonID: "person-1",
-		ReaderCircles:  []string{"staff", "finance"},
+		ReaderCircles:  []string{"member", "finance"},
 		Namespaces:     []MemoryNamespace{privateNamespace, financeNamespace},
 	})
 	if errorValue != nil {
@@ -184,7 +184,7 @@ func TestMemoryServiceFiltersPrivateAndCircleResources(t *testing.T) {
 
 	otherFacts, errorValue := memoryService.SearchMemory(context.Background(), MemorySearchRequest{
 		ReaderPersonID: "person-2",
-		ReaderCircles:  []string{"staff"},
+		ReaderCircles:  []string{"member"},
 		Namespaces:     []MemoryNamespace{privateNamespace, financeNamespace},
 	})
 	if errorValue != nil {
@@ -222,7 +222,7 @@ func TestMemoryServiceAppliesResourceAccessRulesBeforeRanking(t *testing.T) {
 
 	memoryFacts, errorValue := memoryService.SearchMemory(context.Background(), MemorySearchRequest{
 		ReaderPersonID:      "person-1",
-		ReaderCircles:       []string{"staff"},
+		ReaderCircles:       []string{"member"},
 		ResourceAccessRules: resourceAccessRules,
 		Namespaces: []MemoryNamespace{
 			WorkspaceNamespace("default", 0, nil),

@@ -20,7 +20,7 @@ func TestTerminalRunTranslatesAgentWorkspacePaths(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -74,7 +74,7 @@ func TestTerminalRunRejectsInvalidInputShapes(t *testing.T) {
 	toolRegistry := newTerminalToolTestCatalogBuilder(t.TempDir()).BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 	testCases := []struct {
 		name  string
@@ -113,7 +113,7 @@ func TestTerminalRunAcceptsUnusedApprovalReason(t *testing.T) {
 	toolRegistry := newTerminalToolTestCatalogBuilder(t.TempDir()).BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	result := invokeTerminalRunTestTool(t, toolRegistry, json.RawMessage(`{"command":"true","approvalRequired":false,"approvalReason":"No approval needed."}`))
@@ -128,7 +128,7 @@ func TestTerminalRunAcceptsApprovalFieldsAfterTheApprovalGate(t *testing.T) {
 	toolRegistry := newTerminalToolTestCatalogBuilder(t.TempDir()).BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	result := invokeTerminalRunTestTool(t, toolRegistry, json.RawMessage(`{"command":"true","approvalRequired":true,"approvalReason":"Publish the release."}`))
@@ -143,7 +143,7 @@ func TestTerminalRunFailureHasCanonicalData(t *testing.T) {
 	toolRegistry := newTerminalToolTestCatalogBuilder(t.TempDir()).BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -191,7 +191,7 @@ func TestTerminalRunAllowsStderrRedirection(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -215,7 +215,7 @@ func TestTerminalRunAllowsSourceFileWrite(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -239,7 +239,7 @@ func TestTerminalRunAllowsServiceOwnedPathText(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -265,7 +265,7 @@ func TestTerminalRunDefaultsToPrivateScopeForDirectMessage(t *testing.T) {
 		ConversationID:    "dm:channel-1",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff"},
+			Circles:  []string{"member"},
 		},
 	})
 
@@ -302,7 +302,7 @@ func TestTerminalRunMaterializesRequesterRuntimeEnvironment(t *testing.T) {
 		ConversationID:    "dm:channel-1",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff"},
+			Circles:  []string{"member"},
 		},
 	})
 
@@ -356,7 +356,7 @@ func TestTerminalRunScopesTaskTemporaryDirectoryToTheTaskRun(t *testing.T) {
 		ConversationID:    "dm:channel-1",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff"},
+			Circles:  []string{"member"},
 		},
 	})
 
@@ -404,7 +404,7 @@ func TestTerminalRunRelativeWorkingDirectoryUsesConversationDefault(t *testing.T
 		ConversationID:    "dm:channel-1",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff"},
+			Circles:  []string{"member"},
 		},
 	})
 
@@ -467,7 +467,7 @@ func TestTerminalRunFailsWhenPOSIXDeniesCircleWorkingDirectory(t *testing.T) {
 		ProfileName: "default",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff"},
+			Circles:  []string{"member"},
 		},
 	})
 

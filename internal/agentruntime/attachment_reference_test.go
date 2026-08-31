@@ -22,7 +22,7 @@ func TestFileReadResolvesAnAttachmentURL(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 		AttachmentMaterialResolver: staticAttachmentMaterialResolver{
 			material: agentcontract.VisibleContextMaterial{
 				Platform:    "buzz",
@@ -60,7 +60,7 @@ func TestFileToolsPreserveExplicitPathResolutionAndAccess(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	readResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{

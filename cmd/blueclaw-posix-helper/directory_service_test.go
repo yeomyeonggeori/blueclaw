@@ -49,9 +49,9 @@ func TestCreateUserCommandsUseAShellThatExistsOnMacOS(testInstance *testing.T) {
 }
 
 func TestCreateGroupCommandsCarryTheAllocatedIdentity(testInstance *testing.T) {
-	commands := createGroupCommands("bc_circle_staff", 100004)
+	commands := createGroupCommands("bc_circle_member", 100004)
 
-	if commands[0][2] != "/Groups/bc_circle_staff" {
+	if commands[0][2] != "/Groups/bc_circle_member" {
 		testInstance.Fatalf("expected the record to be created first, got %v", commands[0])
 	}
 	requireAttribute(testInstance, commands, "PrimaryGroupID", "100004")

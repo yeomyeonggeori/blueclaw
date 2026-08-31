@@ -3718,14 +3718,14 @@ func testPolicyProjection() policy.PolicyProjection {
 			PersonID:          "person-1",
 			DisplayName:       "샘플",
 			Emails:            []string{"sample@example.com"},
-			Circles:           []string{"staff"},
+			Circles:           []string{"member"},
 			SecurityLevelRank: 0,
 			GrantedClasses:    []string{},
 		}},
 		Circles: []policy.CirclePolicy{{
-			CircleID:               "staff",
-			DisplayName:            "Staff",
-			WorkspaceDirectoryPath: "/workspace/circles/staff",
+			CircleID:               "member",
+			DisplayName:            "Member",
+			WorkspaceDirectoryPath: "/workspace/circles/member",
 		}},
 		Channels: []policy.ChannelPolicy{{
 			Platform:                 "virtual",

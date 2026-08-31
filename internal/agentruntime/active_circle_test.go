@@ -9,11 +9,11 @@ import (
 func TestResolveActiveCircleIDUsesChannelOrMention(t *testing.T) {
 	channelCircleID, hasChannelConflict := ResolveActiveCircleID(ToolCatalogRequest{
 		ConversationChannelName: "circle-hr-compensation",
-		PersonAccess:            policy.PersonAccess{Circles: []string{"staff", "hr-compensation"}},
+		PersonAccess:            policy.PersonAccess{Circles: []string{"member", "hr-compensation"}},
 	})
 	mentionedCircleID, hasMentionConflict := ResolveActiveCircleID(ToolCatalogRequest{
 		Prompt:       "please remember this for @hr-compensation",
-		PersonAccess: policy.PersonAccess{Circles: []string{"staff", "hr-compensation"}},
+		PersonAccess: policy.PersonAccess{Circles: []string{"member", "hr-compensation"}},
 	})
 
 	if channelCircleID != "hr-compensation" || hasChannelConflict {
@@ -27,7 +27,7 @@ func TestResolveActiveCircleIDUsesChannelOrMention(t *testing.T) {
 func TestResolveActiveCircleIDIgnoresInaccessibleMention(t *testing.T) {
 	circleID, hasConflict := ResolveActiveCircleID(ToolCatalogRequest{
 		Prompt:       "please remember this for @hr-compensation",
-		PersonAccess: policy.PersonAccess{Circles: []string{"staff"}},
+		PersonAccess: policy.PersonAccess{Circles: []string{"member"}},
 	})
 
 	if circleID != "" || hasConflict {
