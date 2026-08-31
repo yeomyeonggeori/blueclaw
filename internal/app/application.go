@@ -392,7 +392,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 	connectorRuntime.RegisterAdapter(newPlatformAdapter("mattermost", runtimeConfiguration, capabilityClient, chatdClient))
 	connectorRuntime.RegisterAdapter(newPlatformAdapter("slack", runtimeConfiguration, capabilityClient, chatdClient))
 	connectorRuntime.RegisterAdapter(newPlatformAdapter("signal", runtimeConfiguration, capabilityClient, chatdClient))
-	agentReplyStore := apiconnector.NewReplyStore()
+	agentReplyStore := apiconnector.NewPersistentReplyStore(filepath.Join(runtimeConfiguration.Terminal.WorkspaceRootPath, ".blueclaw", "state", "agent-replies.json"))
 	connectorRuntime.RegisterAdapter(apiconnector.NewAdapter(identityService, agentReplyStore))
 	connectorRuntime.RegisterAdapter(connectors.NewChatdPlatformAdapter("buzz", chatdClient))
 	connectorEventHandler := httpserver.NewConnectorEventHandler(connectorRuntime)
