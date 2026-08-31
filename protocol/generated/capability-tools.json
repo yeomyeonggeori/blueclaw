@@ -389,7 +389,16 @@
             "type": "string"
           },
           "status": {
-            "description": "Filter by task status. Accepted values: 'planned', 'in_progress', 'completed', 'requested', 'paused', 'rejected', 'stopped'. Leave empty to return all statuses.",
+            "description": "Filter by task status. Omit the field to return every status.",
+            "enum": [
+              "planned",
+              "in_progress",
+              "completed",
+              "requested",
+              "paused",
+              "rejected",
+              "stopped"
+            ],
             "type": "string"
           },
           "weekFrom": {

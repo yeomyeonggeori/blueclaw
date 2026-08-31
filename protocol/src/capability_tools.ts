@@ -257,8 +257,8 @@ export const taskListInputSchema = z.strictObject({
     .describe('Start of the week range as an offset from this week: 0 this week, -1 last week, 1 next week. Omit both weekFrom and weekTo to list the current week; widen the range for other periods.')
     .optional(),
   weekTo: z.number().describe('End of the week range as an offset from this week. Omit both weekFrom and weekTo to list the current week.').optional(),
-  status: z.string()
-    .describe("Filter by task status. Accepted values: 'planned', 'in_progress', 'completed', 'requested', 'paused', 'rejected', 'stopped'. Leave empty to return all statuses.")
+  status: z.enum(WorkspaceTaskStatus)
+    .describe('Filter by task status. Omit the field to return every status.')
     .optional(),
   limit: z.number().describe('Maximum number of tasks to return. Defaults to 50.').optional(),
 });
