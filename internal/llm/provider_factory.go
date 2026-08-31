@@ -176,10 +176,10 @@ func capabilityModelName(runtimeConfiguration config.RuntimeConfiguration) strin
 }
 
 const (
-	defaultMaxModelName    = "google/gemini-3.6-flash"
-	defaultXHighModelName  = "google/gemini-3.5-flash-lite"
-	defaultHighModelName   = "google/gemini-3.5-flash-lite"
-	defaultMediumModelName = "google/gemini-3.1-flash-lite"
+	defaultMaxModelName    = "z-ai/glm-5.3-flash"
+	defaultXHighModelName  = "z-ai/glm-5.3-flash"
+	defaultHighModelName   = "z-ai/glm-5.3-flash"
+	defaultMediumModelName = "z-ai/glm-5.3-flash"
 	defaultLowModelName    = "openai/gpt-5.6-luna"
 	defaultXLowModelName   = "openai/gpt-5.6-luna"
 )
