@@ -2273,6 +2273,884 @@
       "availability": {
         "state": "ok"
       },
+      "canonicalName": "leave_list",
+      "description": "List leave in the record. Use this to answer 'when am I off', 'who is away next week', or 'what have I not had decided yet'. The default scope is the requester; set scope to all for the whole company. registeredKinds in the result names the leave types this company offers, which is what leave_request takes.",
+      "estimatedLatency": "low",
+      "idempotency": {
+        "required": false,
+        "scope": "operation",
+        "supported": false
+      },
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "description": "Earliest day to include. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day. Omit for no lower bound.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Maximum number of rows to return.",
+            "type": "number"
+          },
+          "personHint": {
+            "description": "Name or email of the person whose leave to list. Omit for the requester.",
+            "type": "string"
+          },
+          "scope": {
+            "description": "Whose leave to list when personHint is empty. Defaults to self. Use all only for an explicit company-wide request.",
+            "enum": [
+              "self",
+              "all"
+            ],
+            "type": "string"
+          },
+          "status": {
+            "description": "Filter by status. Omit the field to return every status.",
+            "enum": [
+              "requested",
+              "approved",
+              "rejected"
+            ],
+            "type": "string"
+          },
+          "to": {
+            "description": "Latest day to include. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day. Omit for no upper bound.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "inputSchemaStrict": true,
+      "modelName": "leave_list",
+      "modelVisibility": "visible",
+      "modelVisible": true,
+      "name": "leave_list",
+      "namespace": "leave",
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "type": "integer"
+          },
+          "leave": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "days": {
+                  "type": "number"
+                },
+                "endDate": {
+                  "type": "string"
+                },
+                "isDeducted": {
+                  "type": "boolean"
+                },
+                "isPaid": {
+                  "type": "boolean"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "leaveID": {
+                  "minLength": 1,
+                  "pattern": "^\\S(?:.*\\S)?$",
+                  "type": "string"
+                },
+                "note": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "person": {
+                  "type": "string"
+                },
+                "startDate": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "leaveID",
+                "person",
+                "kind",
+                "days",
+                "status",
+                "isPaid",
+                "isDeducted",
+                "startDate",
+                "endDate",
+                "note"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "personID": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "personName": {
+            "type": "string"
+          },
+          "registeredKinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "statusFilter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "leave",
+          "count",
+          "scope",
+          "personID",
+          "personName",
+          "statusFilter",
+          "registeredKinds"
+        ],
+        "type": "object"
+      },
+      "outputSchemaStrict": true,
+      "policyResource": "tool:leave_list",
+      "privacyClass": "workspace_leave",
+      "requiresUserPresence": false,
+      "resultContract": {
+        "effects": [],
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "count": {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            "leave": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "days": {
+                    "type": "number"
+                  },
+                  "endDate": {
+                    "type": "string"
+                  },
+                  "isDeducted": {
+                    "type": "boolean"
+                  },
+                  "isPaid": {
+                    "type": "boolean"
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "leaveID": {
+                    "minLength": 1,
+                    "pattern": "^\\S(?:.*\\S)?$",
+                    "type": "string"
+                  },
+                  "note": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "person": {
+                    "type": "string"
+                  },
+                  "startDate": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "leaveID",
+                  "person",
+                  "kind",
+                  "days",
+                  "status",
+                  "isPaid",
+                  "isDeducted",
+                  "startDate",
+                  "endDate",
+                  "note"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "personID": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "personName": {
+              "type": "string"
+            },
+            "registeredKinds": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "scope": {
+              "type": "string"
+            },
+            "statusFilter": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "leave",
+            "count",
+            "scope",
+            "personID",
+            "personName",
+            "statusFilter",
+            "registeredKinds"
+          ],
+          "type": "object"
+        }
+      },
+      "sideEffect": "read",
+      "sideEffectClass": "read",
+      "version": "1",
+      "worksOffline": false
+    },
+    {
+      "availability": {
+        "state": "ok"
+      },
+      "canonicalName": "leave_balance",
+      "description": "Read how much leave someone has left for a year. Use this to answer 'how many days do I have left'. tracking is unlimited when the company grants no fixed entitlement, and then the day counts are null rather than zero.",
+      "estimatedLatency": "low",
+      "idempotency": {
+        "required": false,
+        "scope": "operation",
+        "supported": false
+      },
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "personHint": {
+            "description": "Name or email of the person whose balance to read. Omit for the requester.",
+            "type": "string"
+          },
+          "year": {
+            "description": "The leave year to count against. Omit for the year the requester is in now.",
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "inputSchemaStrict": true,
+      "modelName": "leave_balance",
+      "modelVisibility": "visible",
+      "modelVisible": true,
+      "name": "leave_balance",
+      "namespace": "leave",
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "grantedDays": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "personID": {
+            "type": "string"
+          },
+          "personName": {
+            "type": "string"
+          },
+          "remainingDays": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tracking": {
+            "type": "string"
+          },
+          "usedDays": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "year": {
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "personID",
+          "personName",
+          "year",
+          "grantedDays",
+          "remainingDays",
+          "usedDays",
+          "tracking"
+        ],
+        "type": "object"
+      },
+      "outputSchemaStrict": true,
+      "policyResource": "tool:leave_balance",
+      "privacyClass": "workspace_leave",
+      "requiresUserPresence": false,
+      "resultContract": {
+        "effects": [],
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "grantedDays": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "personID": {
+              "type": "string"
+            },
+            "personName": {
+              "type": "string"
+            },
+            "remainingDays": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "tracking": {
+              "type": "string"
+            },
+            "usedDays": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "year": {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "personID",
+            "personName",
+            "year",
+            "grantedDays",
+            "remainingDays",
+            "usedDays",
+            "tracking"
+          ],
+          "type": "object"
+        }
+      },
+      "sideEffect": "read",
+      "sideEffectClass": "read",
+      "version": "1",
+      "worksOffline": false
+    },
+    {
+      "availability": {
+        "state": "ok"
+      },
+      "canonicalName": "leave_request",
+      "completionEvidence": {
+        "action": "write_leave",
+        "mode": "success",
+        "targetKind": "leave"
+      },
+      "description": "File a leave request for the requester. It is filed as requested and grants nothing until somebody decides it. Whether the leave is paid and whether it consumes the entitlement follow from the kind, so do not ask the requester for either.",
+      "estimatedLatency": "medium",
+      "idempotency": {
+        "required": false,
+        "scope": "operation",
+        "supported": false
+      },
+      "inputIntentSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "description": "How many days of entitlement this consumes, which is not the same as the span it covers: a Friday-to-Monday leave spans four days and consumes two, and a half day is one day costing 0.5.",
+            "type": "number"
+          },
+          "endsAt": {
+            "description": "Last day of the leave. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day.",
+            "type": "string"
+          },
+          "kind": {
+            "description": "The kind of leave, named as this company registers it. leave_list returns registeredKinds; a kind outside that list fails with the registered ones.",
+            "type": "string"
+          },
+          "note": {
+            "description": "The reason, in the requester's own words. Omit when they gave none.",
+            "type": "string"
+          },
+          "startsAt": {
+            "description": "First day of the leave. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "description": "How many days of entitlement this consumes, which is not the same as the span it covers: a Friday-to-Monday leave spans four days and consumes two, and a half day is one day costing 0.5.",
+            "type": "number"
+          },
+          "endsAt": {
+            "description": "Last day of the leave. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day.",
+            "type": "string"
+          },
+          "kind": {
+            "description": "The kind of leave, named as this company registers it. leave_list returns registeredKinds; a kind outside that list fails with the registered ones.",
+            "type": "string"
+          },
+          "note": {
+            "description": "The reason, in the requester's own words. Omit when they gave none.",
+            "type": "string"
+          },
+          "startsAt": {
+            "description": "First day of the leave. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "startsAt",
+          "endsAt",
+          "days"
+        ],
+        "type": "object"
+      },
+      "inputSchemaStrict": true,
+      "modelName": "leave_request",
+      "modelVisibility": "visible",
+      "modelVisible": true,
+      "name": "leave_request",
+      "namespace": "leave",
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "type": "number"
+          },
+          "endDate": {
+            "type": "string"
+          },
+          "isDeducted": {
+            "type": "boolean"
+          },
+          "isPaid": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "leaveID": {
+            "minLength": 1,
+            "pattern": "^\\S(?:.*\\S)?$",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "person": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "leaveID",
+          "person",
+          "kind",
+          "days",
+          "status",
+          "isPaid",
+          "isDeducted",
+          "startDate",
+          "endDate",
+          "note"
+        ],
+        "type": "object"
+      },
+      "outputSchemaStrict": true,
+      "policyResource": "tool:leave_request",
+      "privacyClass": "workspace_leave",
+      "requiresUserPresence": false,
+      "resultContract": {
+        "effects": [
+          {
+            "effect": "created",
+            "effectIdentity": "id",
+            "objectType": "leave",
+            "resultField": "leaveID"
+          }
+        ],
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "days": {
+              "type": "number"
+            },
+            "endDate": {
+              "type": "string"
+            },
+            "isDeducted": {
+              "type": "boolean"
+            },
+            "isPaid": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "leaveID": {
+              "minLength": 1,
+              "pattern": "^\\S(?:.*\\S)?$",
+              "type": "string"
+            },
+            "note": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "person": {
+              "type": "string"
+            },
+            "startDate": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "leaveID",
+            "person",
+            "kind",
+            "days",
+            "status",
+            "isPaid",
+            "isDeducted",
+            "startDate",
+            "endDate",
+            "note"
+          ],
+          "type": "object"
+        }
+      },
+      "sideEffect": "workspace_write",
+      "sideEffectClass": "workspace_write",
+      "version": "1",
+      "worksOffline": false
+    },
+    {
+      "availability": {
+        "state": "ok"
+      },
+      "canonicalName": "leave_decide",
+      "completionEvidence": {
+        "action": "write_leave",
+        "mode": "success",
+        "targetKind": "leave"
+      },
+      "description": "Approve or reject a leave request. Only an administrator may, and the record refuses anybody else. An approval is what spends the entitlement, so it requires approval from the person asking for it.",
+      "estimatedLatency": "medium",
+      "idempotency": {
+        "required": false,
+        "scope": "operation",
+        "supported": false
+      },
+      "inputIntentSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "description": "approved or rejected.",
+            "enum": [
+              "approved",
+              "rejected"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "description": "approved or rejected.",
+            "enum": [
+              "approved",
+              "rejected"
+            ],
+            "type": "string"
+          },
+          "leaveHint": {
+            "description": "Identifies the leave to decide: its exact leave ID, or enough of the line leave_list shows for that row — the person, the kind, and the start date — to name exactly one. Resolved server-side; if it does not uniquely resolve, the call fails with a candidates list to retry against.",
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "leaveHint",
+          "decision"
+        ],
+        "type": "object"
+      },
+      "inputSchemaStrict": true,
+      "modelName": "leave_decide",
+      "modelVisibility": "visible",
+      "modelVisible": true,
+      "name": "leave_decide",
+      "namespace": "leave",
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "type": "number"
+          },
+          "endDate": {
+            "type": "string"
+          },
+          "isDeducted": {
+            "type": "boolean"
+          },
+          "isPaid": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "leaveID": {
+            "minLength": 1,
+            "pattern": "^\\S(?:.*\\S)?$",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "person": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "leaveID",
+          "person",
+          "kind",
+          "days",
+          "status",
+          "isPaid",
+          "isDeducted",
+          "startDate",
+          "endDate",
+          "note"
+        ],
+        "type": "object"
+      },
+      "outputSchemaStrict": true,
+      "policyResource": "tool:leave_decide",
+      "privacyClass": "workspace_leave",
+      "requiresApproval": true,
+      "requiresUserPresence": false,
+      "resultContract": {
+        "effects": [
+          {
+            "effect": "updated",
+            "effectIdentity": "id",
+            "objectType": "leave",
+            "resultField": "leaveID"
+          }
+        ],
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "days": {
+              "type": "number"
+            },
+            "endDate": {
+              "type": "string"
+            },
+            "isDeducted": {
+              "type": "boolean"
+            },
+            "isPaid": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "leaveID": {
+              "minLength": 1,
+              "pattern": "^\\S(?:.*\\S)?$",
+              "type": "string"
+            },
+            "note": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "person": {
+              "type": "string"
+            },
+            "startDate": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "leaveID",
+            "person",
+            "kind",
+            "days",
+            "status",
+            "isPaid",
+            "isDeducted",
+            "startDate",
+            "endDate",
+            "note"
+          ],
+          "type": "object"
+        }
+      },
+      "sideEffect": "workspace_write",
+      "sideEffectClass": "workspace_write",
+      "version": "1",
+      "worksOffline": false
+    },
+    {
+      "availability": {
+        "state": "ok"
+      },
       "canonicalName": "message_context",
       "description": "Return the exact current messenger conversation, thread, requester, and bot identities.",
       "estimatedLatency": "low",

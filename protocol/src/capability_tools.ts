@@ -918,6 +918,89 @@ const taskToolDefinitions: CapabilityToolDefinition[] = [
   },
 ];
 
+export enum WorkspaceLeaveStatus {
+  Requested = 'requested',
+  Approved = 'approved',
+  Rejected = 'rejected',
+}
+
+export enum WorkspaceLeaveDecision {
+  Approved = 'approved',
+  Rejected = 'rejected',
+}
+
+const leaveHintSchema = z.string().min(1).max(256).describe(
+  'Identifies the leave to decide: its exact leave ID, or enough of the line leave_list shows for that row — the person, the kind, and the start date — to name exactly one. Resolved server-side; if it does not uniquely resolve, the call fails with a candidates list to retry against.',
+);
+
+export const leaveListInputSchema = z.strictObject({
+  personHint: z.string().describe('Name or email of the person whose leave to list. Omit for the requester.').optional(),
+  scope: z.enum(WorkspaceTaskScope)
+    .describe('Whose leave to list when personHint is empty. Defaults to self. Use all only for an explicit company-wide request.')
+    .optional(),
+  from: z.string().describe(`Earliest day to include. ${momentDescription} Omit for no lower bound.`).optional(),
+  to: z.string().describe(`Latest day to include. ${momentDescription} Omit for no upper bound.`).optional(),
+  status: z.enum(WorkspaceLeaveStatus).describe('Filter by status. Omit the field to return every status.').optional(),
+  limit: z.number().describe('Maximum number of rows to return.').optional(),
+});
+
+export const leaveBalanceInputSchema = z.strictObject({
+  personHint: z.string().describe('Name or email of the person whose balance to read. Omit for the requester.').optional(),
+  year: z.number().describe('The leave year to count against. Omit for the year the requester is in now.').optional(),
+});
+
+export const leaveRequestInputSchema = z.strictObject({
+  kind: z.string().describe('The kind of leave, named as this company registers it. leave_list returns registeredKinds; a kind outside that list fails with the registered ones.'),
+  startsAt: z.string().describe(`First day of the leave. ${momentDescription}`),
+  endsAt: z.string().describe(`Last day of the leave. ${momentDescription}`),
+  days: z.number().describe('How many days of entitlement this consumes, which is not the same as the span it covers: a Friday-to-Monday leave spans four days and consumes two, and a half day is one day costing 0.5.'),
+  note: z.string().describe('The reason, in the requester\'s own words. Omit when they gave none.').optional(),
+});
+
+export const leaveRequestInputIntentSchema = leaveRequestInputSchema.partial();
+
+export const leaveDecideInputSchema = z.strictObject({
+  leaveHint: leaveHintSchema,
+  decision: z.enum(WorkspaceLeaveDecision).describe('approved or rejected.'),
+});
+
+export const leaveDecideInputIntentSchema = z.strictObject({
+  decision: z.enum(WorkspaceLeaveDecision).describe('approved or rejected.').optional(),
+});
+
+export const leaveResultSchema = z.strictObject({
+  leaveID: resourceIDSchema,
+  person: z.string(),
+  kind: z.string(),
+  days: z.number(),
+  status: z.string(),
+  isPaid: z.boolean(),
+  isDeducted: z.boolean(),
+  startDate: z.string(),
+  endDate: z.string(),
+  note: z.string().nullable(),
+});
+
+export const leaveListResultSchema = z.strictObject({
+  leave: z.array(leaveResultSchema),
+  count: z.number().int(),
+  scope: z.string(),
+  personID: z.string().nullable(),
+  personName: z.string(),
+  statusFilter: z.string().nullable(),
+  registeredKinds: z.array(z.string()),
+});
+
+export const leaveBalanceResultSchema = z.strictObject({
+  personID: z.string(),
+  personName: z.string(),
+  year: z.number().int(),
+  grantedDays: z.number().nullable(),
+  remainingDays: z.number().nullable(),
+  usedDays: z.number().nullable(),
+  tracking: z.string(),
+});
+
 const calendarToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: CalendarToolName.Add,
@@ -1310,9 +1393,82 @@ const webToolDefinitions: CapabilityToolDefinition[] = [
   },
 ];
 
+const leaveToolDefinitions: CapabilityToolDefinition[] = [
+  {
+    name: 'leave_list',
+    namespace: 'leave',
+    privacyClass: 'workspace_leave',
+    policyResource: 'tool:leave_list',
+    description: "List leave in the record. Use this to answer 'when am I off', 'who is away next week', or 'what have I not had decided yet'. The default scope is the requester; set scope to all for the whole company. registeredKinds in the result names the leave types this company offers, which is what leave_request takes.",
+    version: '1',
+    estimatedLatency: CapabilityEstimatedLatency.Low,
+    inputSchema: leaveListInputSchema,
+    result: { schema: leaveListResultSchema, effects: [] },
+    sideEffect: CapabilitySideEffect.Read,
+  },
+  {
+    name: 'leave_balance',
+    namespace: 'leave',
+    privacyClass: 'workspace_leave',
+    policyResource: 'tool:leave_balance',
+    description: "Read how much leave someone has left for a year. Use this to answer 'how many days do I have left'. tracking is unlimited when the company grants no fixed entitlement, and then the day counts are null rather than zero.",
+    version: '1',
+    estimatedLatency: CapabilityEstimatedLatency.Low,
+    inputSchema: leaveBalanceInputSchema,
+    result: { schema: leaveBalanceResultSchema, effects: [] },
+    sideEffect: CapabilitySideEffect.Read,
+  },
+  {
+    name: 'leave_request',
+    namespace: 'leave',
+    privacyClass: 'workspace_leave',
+    policyResource: 'tool:leave_request',
+    description: 'File a leave request for the requester. It is filed as requested and grants nothing until somebody decides it. Whether the leave is paid and whether it consumes the entitlement follow from the kind, so do not ask the requester for either.',
+    version: '1',
+    estimatedLatency: CapabilityEstimatedLatency.Medium,
+    inputSchema: leaveRequestInputSchema,
+    inputIntentSchema: leaveRequestInputIntentSchema,
+    result: {
+      schema: leaveResultSchema,
+      effects: [{
+        objectType: 'leave',
+        effect: ResourceMutationEffect.Created,
+        resultField: 'leaveID',
+        effectIdentity: ResourceEffectIdentity.ID,
+      }],
+    },
+    sideEffect: CapabilitySideEffect.WorkspaceWrite,
+    completionEvidence: { mode: 'success', action: 'write_leave', targetKind: 'leave' },
+  },
+  {
+    name: 'leave_decide',
+    namespace: 'leave',
+    privacyClass: 'workspace_leave',
+    policyResource: 'tool:leave_decide',
+    description: 'Approve or reject a leave request. Only an administrator may, and the record refuses anybody else. An approval is what spends the entitlement, so it requires approval from the person asking for it.',
+    version: '1',
+    estimatedLatency: CapabilityEstimatedLatency.Medium,
+    inputSchema: leaveDecideInputSchema,
+    inputIntentSchema: leaveDecideInputIntentSchema,
+    result: {
+      schema: leaveResultSchema,
+      effects: [{
+        objectType: 'leave',
+        effect: ResourceMutationEffect.Updated,
+        resultField: 'leaveID',
+        effectIdentity: ResourceEffectIdentity.ID,
+      }],
+    },
+    sideEffect: CapabilitySideEffect.WorkspaceWrite,
+    requiresApproval: true,
+    completionEvidence: { mode: 'success', action: 'write_leave', targetKind: 'leave' },
+  },
+];
+
 const capabilityToolDefinitions = [
   ...taskToolDefinitions,
   ...calendarToolDefinitions,
+  ...leaveToolDefinitions,
   ...messageToolDefinitions,
   ...channelToolDefinitions,
   ...webToolDefinitions,
@@ -1332,6 +1488,13 @@ export type TaskListInput = z.infer<typeof taskListInputSchema>;
 export type TaskUpdateInput = z.infer<typeof taskUpdateInputSchema>;
 export type TaskDeleteInput = z.infer<typeof taskDeleteInputSchema>;
 export type TaskResult = z.infer<typeof taskResultSchema>;
+export type LeaveListInput = z.infer<typeof leaveListInputSchema>;
+export type LeaveBalanceInput = z.infer<typeof leaveBalanceInputSchema>;
+export type LeaveRequestInput = z.infer<typeof leaveRequestInputSchema>;
+export type LeaveDecideInput = z.infer<typeof leaveDecideInputSchema>;
+export type LeaveResult = z.infer<typeof leaveResultSchema>;
+export type LeaveListResult = z.infer<typeof leaveListResultSchema>;
+export type LeaveBalanceResult = z.infer<typeof leaveBalanceResultSchema>;
 export type CalendarAddInput = z.infer<typeof calendarAddInputSchema>;
 export type CalendarListInput = z.infer<typeof calendarListInputSchema>;
 export type CalendarUpdateInput = z.infer<typeof calendarUpdateInputSchema>;
