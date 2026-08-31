@@ -138,20 +138,20 @@ func PresentationLocalMultiturnSuccessScenario(artifactDirectoryPath string) Vir
 			ExpectedAttachments:          []string{".pptx", ".pdf", ".html", "-notes.txt"},
 			ExpectedWorkspaceFiles: []VirtualWorkspaceFileExpectation{
 				{
-					PathGlob:          "circles/staff/tmp/*/DESIGN.md",
+					PathGlob:          "circles/member/tmp/*/DESIGN.md",
 					ContainsFragments: []string{"colors:", "Visual direction"},
 				},
 				{
-					PathGlob:           "circles/staff/tmp/*/presentation.md",
+					PathGlob:           "circles/member/tmp/*/presentation.md",
 					ContainsFragments:  []string{"design-source: DESIGN.md", "InternKim capability deck", "너 뭐 할 수 있는지"},
 					ForbiddenFragments: []string{"Draft a presentation deck", "user_request:"},
 				},
 				{
-					PathGlob:          "circles/staff/tmp/*/review/slide-review.json",
+					PathGlob:          "circles/member/tmp/*/review/slide-review.json",
 					ContainsFragments: []string{`"passed": true`, `"safeMargin": true`, `"edgeOverflow": true`, `"contactSheets"`},
 				},
 				{
-					PathGlob:          "circles/staff/tmp/*/*.html",
+					PathGlob:          "circles/member/tmp/*/*.html",
 					ContainsFragments: []string{"Paperlogy", "Freesentation", "--background", "InternKim capability deck"},
 				},
 			},
@@ -1188,8 +1188,8 @@ func SitePrototypeAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 		Turns: []VirtualTurn{{
 			Prompt: "테스트용 'Local Fleet Studio' 단일 페이지 소개 웹사이트를 만들어서 배포해줘. 첫 화면 제목은 'Local Fleet Studio', 보조 문구는 '로컬 플릿 웹사이트 생성 배포 테스트', 섹션은 서비스 소개, 장점 3개, 문의 CTA만 넣어줘. 추가 질문하지 말고 합리적인 기본값으로 진행해줘.",
 			ActionResponses: []string{
-				actionCallTool("file_write", `{"path":"/workspace/circles/staff/sites/local-fleet-studio/draft/app/public/site-content.json","content":"{\"siteName\":\"Local Fleet Studio\",\"tagline\":\"로컬 플릿 웹사이트 생성 배포 테스트\",\"blocks\":[{\"variant\":\"hero\",\"title\":\"Local Fleet Studio\",\"body\":\"로컬 플릿 웹사이트 생성 배포 테스트\"},{\"variant\":\"prose\",\"title\":\"서비스 소개\",\"body\":\"Local Fleet Studio는 로컬 플릿 환경에서 웹사이트 생성과 배포 과정을 검증하는 테스트 서비스입니다.\"},{\"variant\":\"features\",\"title\":\"장점\",\"items\":[{\"title\":\"빠른 프로토타입\",\"body\":\"빠른 프로토타입 생성\"},{\"title\":\"안전한 검증\",\"body\":\"안전한 배포 검증\"},{\"title\":\"손쉬운 재배포\",\"body\":\"손쉬운 재배포\"}]},{\"variant\":\"cta\",\"title\":\"문의\",\"body\":\"자세한 내용이 궁금하시면 지금 바로 문의해 주세요.\"}]}"}`),
-				actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/staff/sites/local-fleet-studio/draft","mode":"publish"}`),
+				actionCallTool("file_write", `{"path":"/workspace/circles/member/sites/local-fleet-studio/draft/app/public/site-content.json","content":"{\"siteName\":\"Local Fleet Studio\",\"tagline\":\"로컬 플릿 웹사이트 생성 배포 테스트\",\"blocks\":[{\"variant\":\"hero\",\"title\":\"Local Fleet Studio\",\"body\":\"로컬 플릿 웹사이트 생성 배포 테스트\"},{\"variant\":\"prose\",\"title\":\"서비스 소개\",\"body\":\"Local Fleet Studio는 로컬 플릿 환경에서 웹사이트 생성과 배포 과정을 검증하는 테스트 서비스입니다.\"},{\"variant\":\"features\",\"title\":\"장점\",\"items\":[{\"title\":\"빠른 프로토타입\",\"body\":\"빠른 프로토타입 생성\"},{\"title\":\"안전한 검증\",\"body\":\"안전한 배포 검증\"},{\"title\":\"손쉬운 재배포\",\"body\":\"손쉬운 재배포\"}]},{\"variant\":\"cta\",\"title\":\"문의\",\"body\":\"자세한 내용이 궁금하시면 지금 바로 문의해 주세요.\"}]}"}`),
+				actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/member/sites/local-fleet-studio/draft","mode":"publish"}`),
 				actionFinishMessage("Local Fleet Studio 웹사이트 프로토타입을 배포했습니다: https://local-fleet-studio.device.example.test", "obs-002:site_serve:0"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
@@ -1229,8 +1229,8 @@ func SiteEditRedeployAcceptanceScenario(artifactDirectoryPath string) VirtualSes
 			{
 				Prompt: "Build and deploy a single-page Local Fleet Studio website. Use the heading 'Local Fleet Studio' and subtitle 'Local fleet create deploy test'. Include a short service overview and three feature bullets. Do not ask follow-up questions.",
 				ActionResponses: []string{
-					actionCallTool("file_write", `{"path":"/workspace/circles/staff/sites/local-fleet-studio/draft/app/public/site-content.json","content":"{\"siteName\":\"Local Fleet Studio\",\"tagline\":\"Local fleet create deploy test\",\"blocks\":[{\"variant\":\"hero\",\"title\":\"Local Fleet Studio\",\"body\":\"Local fleet create deploy test\"},{\"variant\":\"prose\",\"title\":\"Overview\",\"body\":\"Local Fleet Studio validates local fleet website creation and deployment.\"},{\"variant\":\"features\",\"title\":\"Features\",\"items\":[{\"title\":\"Fast prototyping\",\"body\":\"Fast prototyping\"},{\"title\":\"Safe verification\",\"body\":\"Safe deploy verification\"},{\"title\":\"Easy redeploys\",\"body\":\"Easy redeploys\"}]}]}"}`),
-					actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/staff/sites/local-fleet-studio/draft","mode":"publish"}`),
+					actionCallTool("file_write", `{"path":"/workspace/circles/member/sites/local-fleet-studio/draft/app/public/site-content.json","content":"{\"siteName\":\"Local Fleet Studio\",\"tagline\":\"Local fleet create deploy test\",\"blocks\":[{\"variant\":\"hero\",\"title\":\"Local Fleet Studio\",\"body\":\"Local fleet create deploy test\"},{\"variant\":\"prose\",\"title\":\"Overview\",\"body\":\"Local Fleet Studio validates local fleet website creation and deployment.\"},{\"variant\":\"features\",\"title\":\"Features\",\"items\":[{\"title\":\"Fast prototyping\",\"body\":\"Fast prototyping\"},{\"title\":\"Safe verification\",\"body\":\"Safe deploy verification\"},{\"title\":\"Easy redeploys\",\"body\":\"Easy redeploys\"}]}]}"}`),
+					actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/member/sites/local-fleet-studio/draft","mode":"publish"}`),
 					actionFinishMessage("Deployed the Local Fleet Studio site: https://local-fleet-studio.device.example.test", "obs-002:site_serve:0"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
@@ -1247,8 +1247,8 @@ func SiteEditRedeployAcceptanceScenario(artifactDirectoryPath string) VirtualSes
 				Prompt: "Update the same Local Fleet Studio website heading to say 'Local Fleet Studio Updated' and add the subtitle 'Redeploy verification passed', then redeploy the same site. Do not create a new site.",
 				ActionResponses: []string{
 					actionCallTool("site_list", `{}`),
-					actionCallTool("file_write", `{"path":"/workspace/circles/staff/sites/local-fleet-studio/draft/app/public/site-content.json","content":"{\"siteName\":\"Local Fleet Studio Updated\",\"tagline\":\"Redeploy verification passed\",\"blocks\":[{\"variant\":\"hero\",\"title\":\"Local Fleet Studio Updated\",\"body\":\"Redeploy verification passed\"}]}"}`),
-					actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio Updated","sourceWorkspacePath":"/workspace/circles/staff/sites/local-fleet-studio/draft","mode":"publish","siteReference":"local-fleet-studio"}`),
+					actionCallTool("file_write", `{"path":"/workspace/circles/member/sites/local-fleet-studio/draft/app/public/site-content.json","content":"{\"siteName\":\"Local Fleet Studio Updated\",\"tagline\":\"Redeploy verification passed\",\"blocks\":[{\"variant\":\"hero\",\"title\":\"Local Fleet Studio Updated\",\"body\":\"Redeploy verification passed\"}]}"}`),
+					actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio Updated","sourceWorkspacePath":"/workspace/circles/member/sites/local-fleet-studio/draft","mode":"publish","siteReference":"local-fleet-studio"}`),
 					actionFinishMessage("Updated and redeployed the site: https://local-fleet-studio.device.example.test", "obs-002:file_write:0", "obs-003:site_serve:0"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
@@ -1286,10 +1286,10 @@ func SiteCustomStructureAcceptanceScenario(artifactDirectoryPath string) Virtual
 		Turns: []VirtualTurn{{
 			Prompt: "Local Fleet Studio 웹사이트 레이아웃을 두 칼럼 커스텀 구조로 바꿔서 다시 배포해줘.",
 			ActionResponses: []string{
-				actionCallTool("file_write", `{"path":"/workspace/circles/staff/sites/demo/draft/app/src/App.tsx","content":"export default function App() {\n  return <main className=\"custom-layout\"><section className=\"column\">Local Fleet Studio</section><section className=\"column\">Two-column custom layout</section></main>;\n}\n"}`),
-				actionCallTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/staff/sites/demo/draft","mode":"publish","siteReference":"demo"}`),
-				actionCallTool("shell", `{"command":"mkdir -p dist && printf '<!doctype html><html><body><main class=\"custom-layout\"><section>Local Fleet Studio</section><section>Two-column custom layout</section></main></body></html>' > dist/index.html","workingDirectoryPath":"/workspace/circles/staff/sites/demo/draft/app","timeoutSecond":120}`),
-				actionCallTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/staff/sites/demo/draft","mode":"publish","siteReference":"demo"}`),
+				actionCallTool("file_write", `{"path":"/workspace/circles/member/sites/demo/draft/app/src/App.tsx","content":"export default function App() {\n  return <main className=\"custom-layout\"><section className=\"column\">Local Fleet Studio</section><section className=\"column\">Two-column custom layout</section></main>;\n}\n"}`),
+				actionCallTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/member/sites/demo/draft","mode":"publish","siteReference":"demo"}`),
+				actionCallTool("shell", `{"command":"mkdir -p dist && printf '<!doctype html><html><body><main class=\"custom-layout\"><section>Local Fleet Studio</section><section>Two-column custom layout</section></main></body></html>' > dist/index.html","workingDirectoryPath":"/workspace/circles/member/sites/demo/draft/app","timeoutSecond":120}`),
+				actionCallTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/member/sites/demo/draft","mode":"publish","siteReference":"demo"}`),
 				actionFinishMessage("커스텀 레이아웃을 빌드하고 다시 배포했습니다: https://demo.device.example.test", "obs-005:site_serve:0"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
@@ -1330,8 +1330,8 @@ func SiteLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 					"site_serve",
 				},
 				ActionResponses: []string{
-					actionCallTool("shell", `{"command":"mkdir -p dist && printf '<!doctype html><html><body><main><h1>Local Fleet Studio</h1><p>로컬 플릿 웹사이트 CRUD 테스트</p></main></body></html>' > dist/index.html","workingDirectoryPath":"/workspace/circles/staff/sites/local-fleet-studio/draft/app","timeoutSecond":120}`),
-					actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/staff/sites/local-fleet-studio/draft","mode":"publish"}`),
+					actionCallTool("shell", `{"command":"mkdir -p dist && printf '<!doctype html><html><body><main><h1>Local Fleet Studio</h1><p>로컬 플릿 웹사이트 CRUD 테스트</p></main></body></html>' > dist/index.html","workingDirectoryPath":"/workspace/circles/member/sites/local-fleet-studio/draft/app","timeoutSecond":120}`),
+					actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/member/sites/local-fleet-studio/draft","mode":"publish"}`),
 					actionFinishMessage("Local Fleet Studio 웹사이트를 배포했습니다: https://local-fleet-studio.device.example.test", "obs-002:site_serve:0"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
@@ -1353,9 +1353,9 @@ func SiteLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 				},
 				ActionResponses: []string{
 					actionCallTool("site_list", `{}`),
-					actionCallTool("file_write", `{"path":"/workspace/circles/staff/sites/local-fleet-studio/draft/app/src/App.tsx","content":"export default function App() {\n  return <main><h1>Local Fleet Studio Updated</h1><p>재배포 검증 완료</p></main>;\n}\n"}`),
-					actionCallTool("shell", `{"command":"mkdir -p dist && printf '<!doctype html><html><body><main><h1>Local Fleet Studio Updated</h1><p>재배포 검증 완료</p></main></body></html>' > dist/index.html","workingDirectoryPath":"/workspace/circles/staff/sites/local-fleet-studio/draft/app","timeoutSecond":120}`),
-					actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/staff/sites/local-fleet-studio/draft","mode":"publish","siteReference":"local-fleet-studio"}`),
+					actionCallTool("file_write", `{"path":"/workspace/circles/member/sites/local-fleet-studio/draft/app/src/App.tsx","content":"export default function App() {\n  return <main><h1>Local Fleet Studio Updated</h1><p>재배포 검증 완료</p></main>;\n}\n"}`),
+					actionCallTool("shell", `{"command":"mkdir -p dist && printf '<!doctype html><html><body><main><h1>Local Fleet Studio Updated</h1><p>재배포 검증 완료</p></main></body></html>' > dist/index.html","workingDirectoryPath":"/workspace/circles/member/sites/local-fleet-studio/draft/app","timeoutSecond":120}`),
+					actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/member/sites/local-fleet-studio/draft","mode":"publish","siteReference":"local-fleet-studio"}`),
 					actionFinishMessage("Local Fleet Studio 웹사이트를 수정하고 다시 배포했습니다: https://local-fleet-studio.device.example.test", "obs-002:file_write:0", "obs-004:site_serve:0"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},

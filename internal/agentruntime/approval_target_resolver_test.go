@@ -20,7 +20,7 @@ func calendarDeleteTargetRequest() approvalgate.ApprovalTargetRequest {
 		ToolName:          "event_delete",
 		ToolInput:         json.RawMessage(`{"eventHint":"상하이 edatec 미팅"}`),
 		RequesterPersonID: "person-1",
-		RequesterEmail:    "staff@example.com",
+		RequesterEmail:    "member@example.com",
 	}
 }
 
@@ -35,7 +35,7 @@ func TestATargetIsResolvedOnTheToolsOwnResolutionEndpoint(t *testing.T) {
 	if httpClient.requestPath != "/v1/tools/event_delete/target.resolve" {
 		t.Fatalf("target resolution has its own endpoint so it cannot execute anything, got %s", httpClient.requestPath)
 	}
-	if !strings.Contains(httpClient.requestBody, "staff@example.com") {
+	if !strings.Contains(httpClient.requestBody, "member@example.com") {
 		t.Fatalf("the same requester resolves the hint that would have run the call, got %s", httpClient.requestBody)
 	}
 	expectedTarget := approvalgate.ApprovalTarget{InputField: "eventHint", ID: "event-1", Title: "상하이 edatec 미팅", StartsAt: "2026-08-18T14:00:00+09:00"}

@@ -31,7 +31,7 @@ func TestTwoPeopleGetSeparatePOSIXWorkspaces(t *testing.T) {
 	}
 
 	requireBlueclawServiceAccount(t)
-	removeProjectedIdentitiesAfter(t, []string{"person-one", "person-two"}, []string{"staff"})
+	removeProjectedIdentitiesAfter(t, []string{"person-one", "person-two"}, []string{"member"})
 	workspaceRootPath := traversableTempDir(t)
 	policyPath := writeTwoPersonPolicy(t)
 	terminalConfiguration := config.TerminalConfiguration{
@@ -44,7 +44,7 @@ func TestTwoPeopleGetSeparatePOSIXWorkspaces(t *testing.T) {
 	provisioner := security.NewPOSIXRequesterWorkspaceProvisioner(security.NewPOSIXSynchronizer(terminalConfiguration, policyPath))
 
 	for _, personID := range []string{"person-one", "person-two"} {
-		personAccess := policy.PersonAccess{PersonID: personID, Circles: []string{"staff"}}
+		personAccess := policy.PersonAccess{PersonID: personID, Circles: []string{"member"}}
 		if errorValue := provisioner.ProvisionRequesterWorkspace(context.Background(), personAccess, workspaceRootPath); errorValue != nil {
 			t.Fatalf("expected %s to be provisioned: %v", personID, errorValue)
 		}
@@ -96,9 +96,9 @@ func ancestorsBelowTemporaryRoot(directoryPath string, temporaryRootPath string)
 func writeTwoPersonPolicy(t *testing.T) string {
 	t.Helper()
 	document := `{"people":[
-	  {"personID":"person-one","displayName":"One","emails":["one@example.com"],"securityLevelName":"member","securityLevelRank":50,"grantedClasses":["internal"],"circles":["staff"]},
-	  {"personID":"person-two","displayName":"Two","emails":["two@example.com"],"securityLevelName":"member","securityLevelRank":50,"grantedClasses":["internal"],"circles":["staff"]}
-	],"circles":[{"circleID":"staff","displayName":"Staff"}]}`
+	  {"personID":"person-one","displayName":"One","emails":["one@example.com"],"securityLevelName":"member","securityLevelRank":50,"grantedClasses":["internal"],"circles":["member"]},
+	  {"personID":"person-two","displayName":"Two","emails":["two@example.com"],"securityLevelName":"member","securityLevelRank":50,"grantedClasses":["internal"],"circles":["member"]}
+	],"circles":[{"circleID":"member","displayName":"Member"}]}`
 	policyPath := filepath.Join(t.TempDir(), "policy.json")
 	if errorValue := os.WriteFile(policyPath, []byte(document), 0o600); errorValue != nil {
 		t.Fatal(errorValue)

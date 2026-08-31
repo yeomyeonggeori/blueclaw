@@ -55,7 +55,7 @@ func TestFileAttachToolAttachesSinglePath(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -91,7 +91,7 @@ func TestFileAttachToolAttachesMultipleFiles(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -131,7 +131,7 @@ func TestFileToolsAcceptVirtualHomePathsWithoutLeakingHostPath(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	writeResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -184,7 +184,7 @@ func TestFileDeliverAcceptsVirtualHomePathReturnedByFileRead(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	readResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -229,7 +229,7 @@ func TestFileReadResolvesSiteRelativePathNativelyAndFailsAsNotFound(t *testing.T
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -253,7 +253,7 @@ func TestFileReadTreatsMissingSiteControlFileAsOptionalState(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -270,7 +270,7 @@ func TestFileReadTreatsMissingSiteControlFileAsOptionalState(t *testing.T) {
 	}
 	if !strings.Contains(result.ContentText(), `"exists":false`) ||
 		!strings.Contains(result.ContentText(), `"optional":true`) ||
-		!strings.Contains(result.ContentText(), `"recommendedWritePath":"/workspace/circles/staff/sites/site-1/draft/.internkim/artifact-brief.md"`) {
+		!strings.Contains(result.ContentText(), `"recommendedWritePath":"/workspace/circles/member/sites/site-1/draft/.internkim/artifact-brief.md"`) {
 		t.Fatalf("expected optional missing control-file payload, got %s", result.ContentText())
 	}
 
@@ -294,7 +294,7 @@ func TestFileWriteAcceptsPortablePathAndContent(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	writeResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -401,7 +401,7 @@ func TestFileReadReturnsLineRangeMetadata(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	readResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -443,7 +443,7 @@ func TestFileReadReturnsRangeAfterOldPrefixLimit(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	readResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -473,7 +473,7 @@ func TestFilePreviewReturnsTextPreview(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	previewResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -499,7 +499,7 @@ func TestFilePreviewUsesCachedAttachmentPreview(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 		InputParts: []agentcontract.AgentPart{{
 			Type: agentcontract.AgentPartTypeFile,
 			File: &agentcontract.AgentFilePart{
@@ -534,7 +534,7 @@ func TestFilePreviewUsesCachedAttachmentPreviewByURL(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 		AttachmentMaterialResolver: staticAttachmentMaterialResolver{
 			material: agentcontract.VisibleContextMaterial{
 				Platform:    "mattermost",
@@ -585,7 +585,7 @@ func TestFilePreviewUsesCachedAttachmentPreviewBySourceBehindAStaleCatalogPath(t
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 		AttachmentMaterialResolver: staticAttachmentMaterialResolver{
 			material: agentcontract.VisibleContextMaterial{
 				Platform:    "mattermost",
@@ -636,7 +636,7 @@ func TestFileReadUsesCachedAttachmentPreviewWhenMaterialFileIsNotMounted(t *test
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 		InputParts: []agentcontract.AgentPart{{
 			Type: agentcontract.AgentPartTypeFile,
 			File: &agentcontract.AgentFilePart{
@@ -682,7 +682,7 @@ func TestFilePreviewResolvesAnAttachmentURL(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 		AttachmentMaterialResolver: staticAttachmentMaterialResolver{
 			material: agentcontract.VisibleContextMaterial{
 				Platform:    "mattermost",
@@ -718,7 +718,7 @@ func TestFilePreviewReadsTheCurrentFileBehindAStaleCatalogPath(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 		VisibleContext: agentcontract.VisibleContext{
 			CurrentMaterials: []agentcontract.VisibleContextMaterial{{
 				MaterialID:  "mattermost:file-1",
@@ -762,7 +762,7 @@ func TestFileReadReadsTheCurrentFileBehindAStaleCatalogPath(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 		VisibleContext: agentcontract.VisibleContext{
 			CurrentMaterials: []agentcontract.VisibleContextMaterial{{
 				MaterialID:  "mattermost:file-1",
@@ -804,7 +804,7 @@ func TestFileReadPointsAnImageURLAtTheReadTool(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 		VisibleContext: agentcontract.VisibleContext{
 			CurrentMaterials: []agentcontract.VisibleContextMaterial{{
 				MaterialID:  "mattermost:file-1",
@@ -843,7 +843,7 @@ func TestFilePreviewUsesResolvedAttachmentPreviewWithoutWorkspaceStat(t *testing
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 		AttachmentMaterialResolver: staticAttachmentMaterialResolver{
 			material: agentcontract.VisibleContextMaterial{
 				Platform:          "mattermost",
@@ -882,7 +882,7 @@ func TestFileEditReplacesSingleExactMatch(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	editResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -919,7 +919,7 @@ func TestFileEditRejectsAmbiguousExactMatch(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	editResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -958,7 +958,7 @@ func TestFilePatchAppliesMultipleExactEdits(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	patchResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -990,7 +990,7 @@ func TestFilePatchValidationIsAllOrNothing(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	patchResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -1039,7 +1039,7 @@ func TestFileWriteFailsWithAccessDeniedWhenPOSIXDeniesCircleDirectory(t *testing
 		RequesterPersonID: "person-1",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff"},
+			Circles:  []string{"member"},
 		},
 	})
 
@@ -1072,7 +1072,7 @@ func TestFileDeliverFailsWithAccessDeniedWhenPOSIXDeniesCircleDirectory(t *testi
 		RequesterPersonID: "person-1",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff"},
+			Circles:  []string{"member"},
 		},
 	})
 
@@ -1104,7 +1104,7 @@ func TestFileReadFailsWithAccessDeniedWhenPOSIXDeniesCircleDirectory(t *testing.
 		RequesterPersonID: "person-1",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff"},
+			Circles:  []string{"member"},
 		},
 	})
 
@@ -1135,7 +1135,7 @@ func TestFileReadAllowsCirclePathWhenPOSIXAllows(t *testing.T) {
 		RequesterPersonID: "person-1",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff", "finance"},
+			Circles:  []string{"member", "finance"},
 		},
 	})
 
@@ -1161,7 +1161,7 @@ func TestFileWriteAllowsCirclePathWhenPOSIXAllows(t *testing.T) {
 		RequesterPersonID: "person-1",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff", "finance"},
+			Circles:  []string{"member", "finance"},
 		},
 	})
 
@@ -1190,7 +1190,7 @@ func TestFileWriteDefaultsToPrivateScopeForDirectMessage(t *testing.T) {
 		ConversationID:    "dm:channel-1",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff"},
+			Circles:  []string{"member"},
 		},
 	})
 
@@ -1228,7 +1228,7 @@ func TestFileWriteDefaultsToCircleScopeForCircleChannel(t *testing.T) {
 		ConversationChannelName: "circle-finance",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff", "finance"},
+			Circles:  []string{"member", "finance"},
 		},
 	})
 
@@ -1251,7 +1251,7 @@ func TestFileWriteDefaultsToCircleScopeForCircleChannel(t *testing.T) {
 	}
 }
 
-func TestFileWriteDefaultsToStaffScopeForGeneralChannel(t *testing.T) {
+func TestFileWriteDefaultsToMemberScopeForGeneralChannel(t *testing.T) {
 	workspacePath := t.TempDir()
 	toolCatalogBuilder := newFileToolTestCatalogBuilder(workspacePath)
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
@@ -1263,7 +1263,7 @@ func TestFileWriteDefaultsToStaffScopeForGeneralChannel(t *testing.T) {
 		ConversationChannelName: "town-square",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff"},
+			Circles:  []string{"member"},
 		},
 	})
 
@@ -1271,18 +1271,18 @@ func TestFileWriteDefaultsToStaffScopeForGeneralChannel(t *testing.T) {
 		ToolName: "file_write",
 		Input: toolcontract.MarshalToolInput(map[string]string{
 			"path":    "status.md",
-			"content": "staff",
+			"content": "member",
 		}),
 	})
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	if result.Failed() {
-		t.Fatalf("expected staff write success, got %+v", result)
+		t.Fatalf("expected member write success, got %+v", result)
 	}
 	expectedPath := filepath.Join(workspacePath, "private", "people", "person-1", "status.md")
-	if document, errorValue := os.ReadFile(expectedPath); errorValue != nil || string(document) != "staff" {
-		t.Fatalf("expected staff file at %s, got %q and %v", expectedPath, string(document), errorValue)
+	if document, errorValue := os.ReadFile(expectedPath); errorValue != nil || string(document) != "member" {
+		t.Fatalf("expected member file at %s, got %q and %v", expectedPath, string(document), errorValue)
 	}
 }
 
@@ -1300,7 +1300,7 @@ func TestFileAttachDefaultsToPrivateScopeForDirectMessage(t *testing.T) {
 		ConversationID:    "dm:channel-1",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff"},
+			Circles:  []string{"member"},
 		},
 	})
 
@@ -1333,7 +1333,7 @@ func TestFileDeliverPersistsDocumentToDocuments(t *testing.T) {
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
 		ConversationID:    "dm:channel-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -1361,7 +1361,7 @@ func TestFileDeliverCanDeliverDraftOutput(t *testing.T) {
 		ConversationID:    "dm:channel-1",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff"},
+			Circles:  []string{"member"},
 		},
 	})
 
@@ -1408,7 +1408,7 @@ func TestFileDeliverResolvesSamePathSpellingsAsTerminalWrite(t *testing.T) {
 		ConversationID:    "dm:channel-1",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff"},
+			Circles:  []string{"member"},
 		},
 	})
 
@@ -1456,7 +1456,7 @@ func TestFileDeliverNotFoundIncludesCandidateFiles(t *testing.T) {
 		ConversationID:    "dm:channel-1",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff"},
+			Circles:  []string{"member"},
 		},
 	})
 
@@ -1508,7 +1508,7 @@ func TestFileWriteAllowsManagedSitePackageManifest(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	})
 
 	managedResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -1551,7 +1551,7 @@ func TestFileWriteThroughWorkspaceActorTreatsContentAsData(t *testing.T) {
 		ConversationID:    "dm:channel-1",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff"},
+			Circles:  []string{"member"},
 		},
 	})
 
@@ -1602,7 +1602,7 @@ func TestFileWriteRespectsRequesterUmaskLikeTerminalRun(t *testing.T) {
 		ConversationID:    "dm:channel-1",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff"},
+			Circles:  []string{"member"},
 		},
 	})
 
@@ -1646,7 +1646,7 @@ func TestFileWriteAndTerminalRunShareRequesterWorkspaceActorView(t *testing.T) {
 		ConversationID:    "dm:channel-1",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff"},
+			Circles:  []string{"member"},
 		},
 	})
 
@@ -1693,7 +1693,7 @@ func TestFileWriteRejectsLegacyMode(t *testing.T) {
 		ConversationID:    "dm:channel-1",
 		PersonAccess: policy.PersonAccess{
 			PersonID: "person-1",
-			Circles:  []string{"staff"},
+			Circles:  []string{"member"},
 		},
 	})
 	toolContext := toolcontract.WithTaskRunID(context.Background(), "run-mode-regression")

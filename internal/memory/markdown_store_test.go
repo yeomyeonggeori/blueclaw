@@ -141,8 +141,8 @@ func TestMemoryUpdateProcessorSkipsMarkdownForCircleMemory(t *testing.T) {
 	processor := NewMemoryUpdateProcessor(memoryService, markdownStore)
 
 	result := processor.Process(context.Background(), MemoryUpdateJob{
-		Namespace:      CircleNamespace("default", "staff"),
-		Content:        "Staff prefers concise updates.",
+		Namespace:      CircleNamespace("default", "member"),
+		Content:        "Member prefers concise updates.",
 		SenderPersonID: "person-1",
 	})
 

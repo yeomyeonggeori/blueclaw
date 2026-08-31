@@ -52,7 +52,7 @@ func unresolvedTargetResolver() *recordingTargetResolver {
 func hintApprovalRequest(taskRunID string) mcpserver.ApprovalRequest {
 	approvalRequest := approvalRequestFixture(taskRunID)
 	approvalRequest.ToolInput = json.RawMessage(`{"eventHint":"NVIDIA·젯슨 공급 미팅"}`)
-	approvalRequest.RequesterEmail = "staff@example.com"
+	approvalRequest.RequesterEmail = "member@example.com"
 	return approvalRequest
 }
 
@@ -209,7 +209,7 @@ func TestTheResolverIsAskedAsTheRequesterWhoseCallItIs(t *testing.T) {
 
 	gate.AwaitApproval(context.Background(), hintApprovalRequest(taskRun.TaskRunID))
 
-	if resolver.receivedRequest.RequesterEmail != "staff@example.com" {
+	if resolver.receivedRequest.RequesterEmail != "member@example.com" {
 		t.Fatalf("resolution follows the same ownership tiebreak the call itself would, got %+v", resolver.receivedRequest)
 	}
 	if resolver.receivedRequest.ToolName != "event_delete" || string(resolver.receivedRequest.ToolInput) != `{"eventHint":"NVIDIA·젯슨 공급 미팅"}` {
@@ -233,7 +233,7 @@ func TestACallTheRequesterAlreadyApprovedForTheWholeTaskResolvesNothingAgain(t *
 func TestAnUnresolvableTargetStopsTheCallWithoutHoldingIt(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
 	gate.UseApprovalTargetResolver(unresolvedTargetResolver())
-	turnGate := gate.TurnGate(TurnContext{RequesterPersonID: "person-1", RequesterEmail: "staff@example.com"})
+	turnGate := gate.TurnGate(TurnContext{RequesterPersonID: "person-1", RequesterEmail: "member@example.com"})
 
 	executed, result := invokeThroughGateInContext(t, toolcontract.WithTaskRunID(context.Background(), taskRun.TaskRunID), turnGate, "file_delete")
 

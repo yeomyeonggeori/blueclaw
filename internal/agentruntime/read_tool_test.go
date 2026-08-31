@@ -17,7 +17,7 @@ func readToolTestRequest() ToolCatalogRequest {
 	return ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"staff"}},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
 	}
 }
 
@@ -69,8 +69,8 @@ func TestReadReturnsADocumentAsConvertedMarkdown(t *testing.T) {
 
 func TestReadReturnsAnImageAttachmentThroughTheImageBackend(t *testing.T) {
 	workspacePath := t.TempDir()
-	writeTestFile(t, filepath.Join(workspacePath, "circles", "staff", "inbox", "mattermost", "post-1", "mascot.png"), "image")
-	httpClient := &recordingHTTPClient{responseBody: `{"provider":"internkim","selectedBackend":"device","toolName":"image_read","outcome":"succeeded","status":"ok","result":{"status":"ok","path":"/workspace/circles/staff/inbox/mattermost/post-1/mascot.png","attachments":[{"devicePath":"/workspace/circles/staff/inbox/mattermost/post-1/mascot.png","filename":"mascot.png","contentType":"image/png","sizeBytes":5,"contentBase64":"aW1hZ2U="}]}}`}
+	writeTestFile(t, filepath.Join(workspacePath, "circles", "member", "inbox", "mattermost", "post-1", "mascot.png"), "image")
+	httpClient := &recordingHTTPClient{responseBody: `{"provider":"internkim","selectedBackend":"device","toolName":"image_read","outcome":"succeeded","status":"ok","result":{"status":"ok","path":"/workspace/circles/member/inbox/mattermost/post-1/mascot.png","attachments":[{"devicePath":"/workspace/circles/member/inbox/mattermost/post-1/mascot.png","filename":"mascot.png","contentType":"image/png","sizeBytes":5,"contentBase64":"aW1hZ2U="}]}}`}
 	toolCatalogBuilder := newFileToolTestCatalogBuilder(workspacePath)
 	toolCatalogBuilder.UseTestCapabilityToolDescriptors(capability.Client{Endpoint: "http://capability.local", HTTPClient: httpClient}, []CapabilityToolDescriptor{canonicalReadDescriptor("image_read")})
 	request := readToolTestRequest()
@@ -81,7 +81,7 @@ func TestReadReturnsAnImageAttachmentThroughTheImageBackend(t *testing.T) {
 			URL:         "https://mattermost.local/api/v4/files/file-1",
 			Filename:    "mascot.png",
 			ContentType: "image/png",
-			Path:        "/workspace/circles/staff/inbox/mattermost/post-1/mascot.png",
+			Path:        "/workspace/circles/member/inbox/mattermost/post-1/mascot.png",
 		},
 	}
 	toolRegistry := toolCatalogBuilder.BuildToolSet(request)

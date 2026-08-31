@@ -340,7 +340,7 @@ func createInvitedPersonPolicy(inviteRequest invitePersonRequest, email string) 
 	securityLevelName := strings.TrimSpace(inviteRequest.SecurityLevelName)
 	securityLevelRank := inviteRequest.SecurityLevelRank
 	grantedClasses := append([]string{}, inviteRequest.GrantedClasses...)
-	circles := normalizeCircles(append([]string{policy.StaffCircleID}, inviteRequest.Circles...))
+	circles := normalizeCircles(append([]string{policy.MemberCircleID}, inviteRequest.Circles...))
 	if inviteRequest.IsAdmin {
 		securityLevelName = "admin"
 		securityLevelRank = 100

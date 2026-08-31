@@ -71,7 +71,7 @@ func (actor stubWorkspaceActor) Stat(_ context.Context, path string) (security.W
 type stubPersonAccessResolver struct{}
 
 func (stubPersonAccessResolver) ResolvePersonAccess(personID string) policy.PersonAccess {
-	return policy.PersonAccess{PersonID: personID, Circles: []string{"staff"}}
+	return policy.PersonAccess{PersonID: personID, Circles: []string{"member"}}
 }
 
 func newWorkspaceFilesTestHandler(factory *stubWorkspaceActorFactory, workspaceRootPath string) WorkspaceFilesHandler {
@@ -143,7 +143,7 @@ func TestWorkspaceFilesHandlerListsAPrivateHomeAsItsOwner(t *testing.T) {
 func TestWorkspaceFilesHandlerListsCircleAndPublicPathsAsTheSamePerson(t *testing.T) {
 	factory := &stubWorkspaceActorFactory{entries: []security.WorkspaceActorDirectoryEntry{{Name: "spec.md", SizeBytes: 3}}}
 	handler := newWorkspaceFilesTestHandler(factory, t.TempDir())
-	for _, path := range []string{"/workspace/circles/staff", "/workspace/shared/public"} {
+	for _, path := range []string{"/workspace/circles/member", "/workspace/shared/public"} {
 		recorder := httptest.NewRecorder()
 		handler.HandleList(recorder, httptest.NewRequest(http.MethodGet, "/admin/api/workspace/list?personID=person-1&path="+path, nil))
 		if recorder.Code != http.StatusOK {

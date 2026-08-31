@@ -64,13 +64,13 @@ func policyDocumentFor(enrollment Enrollment) map[string]any {
 			"emails":            []string{enrollment.Operator.Email},
 			"securityLevelName": "admin",
 			"securityLevelRank": 100,
-			"circles":           []string{"staff"},
+			"circles":           []string{"member"},
 			"isAdmin":           true,
 		}},
 		"circles": []map[string]any{{
-			"circleID":               "staff",
-			"displayName":            "Staff",
-			"workspaceDirectoryPath": filepath.Join(enrollment.WorkspaceRootPath, "circles", "staff"),
+			"circleID":               "member",
+			"displayName":            "Member",
+			"workspaceDirectoryPath": filepath.Join(enrollment.WorkspaceRootPath, "circles", "member"),
 		}},
 	}
 }

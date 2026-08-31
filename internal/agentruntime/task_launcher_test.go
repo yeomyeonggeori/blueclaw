@@ -264,7 +264,7 @@ func TestTaskLauncherRejectsStaleMessageToolRegistryBeforeModelCall(t *testing.T
 	}
 }
 
-func TestTaskLauncherAddsStaffToRequesterAccess(t *testing.T) {
+func TestTaskLauncherAddsMemberToRequesterAccess(t *testing.T) {
 	personAccess := requesterPersonAccessForTaskLaunch(TaskLaunchRequest{
 		RequesterPersonID: "person-1",
 		PersonAccess: policy.PersonAccess{
@@ -275,8 +275,8 @@ func TestTaskLauncherAddsStaffToRequesterAccess(t *testing.T) {
 	if personAccess.PersonID != "person-1" {
 		t.Fatalf("expected requester person id to be copied, got %+v", personAccess)
 	}
-	if !containsString(personAccess.Circles, "staff") || !containsString(personAccess.Circles, "finance") {
-		t.Fatalf("expected task requester access to include staff and explicit circles, got %+v", personAccess.Circles)
+	if !containsString(personAccess.Circles, "member") || !containsString(personAccess.Circles, "finance") {
+		t.Fatalf("expected task requester access to include member and explicit circles, got %+v", personAccess.Circles)
 	}
 }
 
@@ -712,26 +712,26 @@ func TestCapabilityToolExecutionUsesResourceAccess(t *testing.T) {
 		"default": {"company_broadcast_send"},
 	}, nil)
 
-	staffToolSet := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
+	memberToolSet := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName: "default",
 		PersonAccess: policy.PersonAccess{
 			PersonID:            "person-1",
-			Circles:             []string{"staff"},
+			Circles:             []string{"member"},
 			ResourceAccessRules: resourceAccessRules,
 		},
 	})
-	staffResult, errorValue := staffToolSet.Invoke(context.Background(), toolcontract.ToolInvocation{
+	memberResult, errorValue := memberToolSet.Invoke(context.Background(), toolcontract.ToolInvocation{
 		ToolName: "company_broadcast_send",
 		Input:    json.RawMessage(`{"message":"hello"}`),
 	})
 	if errorValue != nil {
 		t.Fatalf("expected denied tool result: %v", errorValue)
 	}
-	if !staffResult.Failed() || !strings.Contains(staffResult.ContentText(), "tool is not allowed") {
-		t.Fatalf("expected staff execution denial, got %+v", staffResult)
+	if !memberResult.Failed() || !strings.Contains(memberResult.ContentText(), "tool is not allowed") {
+		t.Fatalf("expected member execution denial, got %+v", memberResult)
 	}
-	if strings.Contains(staffToolSet.Descriptions(), "company_broadcast_send") {
-		t.Fatalf("expected denied tool to be omitted from catalog, got %s", staffToolSet.Descriptions())
+	if strings.Contains(memberToolSet.Descriptions(), "company_broadcast_send") {
+		t.Fatalf("expected denied tool to be omitted from catalog, got %s", memberToolSet.Descriptions())
 	}
 	if httpClient.requestPath != "" {
 		t.Fatalf("expected denied tool not to call capability bridge, got path=%s", httpClient.requestPath)
@@ -741,7 +741,7 @@ func TestCapabilityToolExecutionUsesResourceAccess(t *testing.T) {
 		ProfileName: "default",
 		PersonAccess: policy.PersonAccess{
 			PersonID:            "person-2",
-			Circles:             []string{"staff", "representative"},
+			Circles:             []string{"member", "representative"},
 			ResourceAccessRules: resourceAccessRules,
 		},
 	})
@@ -760,11 +760,11 @@ func TestCapabilityToolExecutionUsesResourceAccess(t *testing.T) {
 	}
 }
 
-func TestFlowTaskAddToolRequiresStaffCircle(t *testing.T) {
+func TestFlowTaskAddToolRequiresMemberCircle(t *testing.T) {
 	resourceAccessRules := []policy.ResourceAccessPolicy{{
 		Resource: "tool:task_add",
 		Actions:  []string{"execute"},
-		Circles:  []string{"staff"},
+		Circles:  []string{"member"},
 	}}
 	httpClient := &recordingHTTPClient{}
 	toolCatalogBuilder := NewToolCatalogBuilder()
@@ -794,23 +794,23 @@ func TestFlowTaskAddToolRequiresStaffCircle(t *testing.T) {
 		t.Fatalf("expected denied Flow tool not to call capability bridge, got path=%s", httpClient.requestPath)
 	}
 
-	staffToolSet := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
+	memberToolSet := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName: "default",
 		PersonAccess: policy.PersonAccess{
 			PersonID:            "person-2",
-			Circles:             []string{"staff"},
+			Circles:             []string{"member"},
 			ResourceAccessRules: resourceAccessRules,
 		},
 	})
-	staffResult, errorValue := staffToolSet.Invoke(context.Background(), toolcontract.ToolInvocation{
+	memberResult, errorValue := memberToolSet.Invoke(context.Background(), toolcontract.ToolInvocation{
 		ToolName: "task_add",
 		Input:    json.RawMessage(`{"title":"10분 회의"}`),
 	})
 	if errorValue != nil {
-		t.Fatalf("expected staff tool result: %v", errorValue)
+		t.Fatalf("expected member tool result: %v", errorValue)
 	}
-	if staffResult.Failed() {
-		t.Fatalf("expected staff execution success, got %+v", staffResult)
+	if memberResult.Failed() {
+		t.Fatalf("expected member execution success, got %+v", memberResult)
 	}
 	if httpClient.requestPath != "/v1/tools/task_add/invoke" {
 		t.Fatalf("expected Flow capability bridge call, got path=%s body=%s", httpClient.requestPath, httpClient.requestBody)
@@ -1031,11 +1031,11 @@ func (resolver fakeRequesterEmailResolver) ResolvePersonPrimaryEmail(personID st
 
 func TestResolveRequesterEmailBackfillsScheduledLaunchFromPersonID(t *testing.T) {
 	taskLauncher := &TaskLauncher{requesterEmailResolver: fakeRequesterEmailResolver{
-		emailByPersonID: map[string]string{"person-1": "staff@example.com"},
+		emailByPersonID: map[string]string{"person-1": "member@example.com"},
 	}}
 	resolvedEmail := taskLauncher.resolveRequesterEmail(TaskLaunchRequest{RequesterPersonID: "person-1"})
-	if resolvedEmail != "staff@example.com" {
-		t.Fatalf("expected resolved email staff@example.com, got %q", resolvedEmail)
+	if resolvedEmail != "member@example.com" {
+		t.Fatalf("expected resolved email member@example.com, got %q", resolvedEmail)
 	}
 }
 

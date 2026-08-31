@@ -6,7 +6,7 @@
   <h2>People</h2>
   <ul>
     {#each people as person}
-      <li>{person.displayName} · {person.emails.join(", ")} · {person.circles?.join(", ") || "staff"}</li>
+      <li>{person.displayName} · {person.emails.join(", ")} · {person.circles?.join(", ") || "member"}</li>
     {/each}
   </ul>
 </section>
