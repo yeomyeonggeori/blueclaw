@@ -3417,7 +3417,7 @@
         "state": "ok"
       },
       "canonicalName": "attendance_add",
-      "description": "Write a clock-in or clock-out somebody forgot, at the past moment it actually happened. The requester's own record within the last three days is written straight away and comes back with status recorded and its eventID. Anything older is not refused: it becomes a request for an administrator, and comes back with status approval_requested and an approvalID instead. An administrator writes anybody's record with no window at all. A moment in the future is refused. location names a workplace this company has registered and clock_out does not use it.",
+      "description": "Write a clock-in or clock-out, at the moment it actually happened. Omit date and time for right now, which is what somebody clocking in as they arrive means. The record is written straight away and comes back with status added and its eventID; nobody has to approve it. A record older than three days is written just the same, and comes back with backdated true, which means the administrators were told it was written by hand. An administrator writes anybody's record. A moment in the future is refused. location names a workplace this company has registered and clock_out does not use it.",
       "estimatedLatency": "medium",
       "idempotency": {
         "required": false,
@@ -3429,7 +3429,7 @@
         "additionalProperties": false,
         "properties": {
           "date": {
-            "description": "The day the person actually arrived or left. The day it happened, as yyyy-mm-dd in the company time zone.",
+            "description": "The day the person actually arrived or left. The day it happened, as yyyy-mm-dd in the company time zone. Omit for today.",
             "type": "string"
           },
           "kind": {
@@ -3453,7 +3453,7 @@
             "type": "string"
           },
           "time": {
-            "description": "The time they actually arrived or left. The time of day it happened, as 24-hour HH:MM in the company time zone.",
+            "description": "The time they actually arrived or left. The time of day it happened, as 24-hour HH:MM in the company time zone. Omit for the moment this call is made.",
             "type": "string"
           }
         },
@@ -3464,7 +3464,7 @@
         "additionalProperties": false,
         "properties": {
           "date": {
-            "description": "The day the person actually arrived or left. The day it happened, as yyyy-mm-dd in the company time zone.",
+            "description": "The day the person actually arrived or left. The day it happened, as yyyy-mm-dd in the company time zone. Omit for today.",
             "type": "string"
           },
           "kind": {
@@ -3488,14 +3488,12 @@
             "type": "string"
           },
           "time": {
-            "description": "The time they actually arrived or left. The time of day it happened, as 24-hour HH:MM in the company time zone.",
+            "description": "The time they actually arrived or left. The time of day it happened, as 24-hour HH:MM in the company time zone. Omit for the moment this call is made.",
             "type": "string"
           }
         },
         "required": [
           "kind",
-          "date",
-          "time",
           "reason"
         ],
         "type": "object"
@@ -3510,15 +3508,8 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
-          "approvalID": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
+          "backdated": {
+            "type": "boolean"
           },
           "eventID": {
             "anyOf": [
@@ -3537,7 +3528,7 @@
         "required": [
           "status",
           "eventID",
-          "approvalID"
+          "backdated"
         ],
         "type": "object"
       },
@@ -3551,15 +3542,8 @@
           "$schema": "https://json-schema.org/draft/2020-12/schema",
           "additionalProperties": false,
           "properties": {
-            "approvalID": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+            "backdated": {
+              "type": "boolean"
             },
             "eventID": {
               "anyOf": [
@@ -3578,7 +3562,7 @@
           "required": [
             "status",
             "eventID",
-            "approvalID"
+            "backdated"
           ],
           "type": "object"
         }
@@ -3593,7 +3577,7 @@
         "state": "ok"
       },
       "canonicalName": "attendance_update",
-      "description": "Correct the day, the time, or the workplace of an attendance record that was written wrong. What the record held before the correction is kept alongside it, with the reason. The requester corrects their own records from the last three days straight away; an older one becomes a request for an administrator, and comes back with status approval_requested and an approvalID instead of an eventID.",
+      "description": "Correct the day, the time, or the workplace of an attendance record that was written wrong. What the record held before the correction is kept alongside it, with the reason. A person corrects their own records and an administrator corrects anybody's; nobody has to approve it. Correcting a record older than three days comes back with backdated true, which means the administrators were told.",
       "estimatedLatency": "medium",
       "idempotency": {
         "required": false,
@@ -3666,15 +3650,8 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
-          "approvalID": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
+          "backdated": {
+            "type": "boolean"
           },
           "eventID": {
             "anyOf": [
@@ -3693,7 +3670,7 @@
         "required": [
           "status",
           "eventID",
-          "approvalID"
+          "backdated"
         ],
         "type": "object"
       },
@@ -3708,15 +3685,8 @@
           "$schema": "https://json-schema.org/draft/2020-12/schema",
           "additionalProperties": false,
           "properties": {
-            "approvalID": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+            "backdated": {
+              "type": "boolean"
             },
             "eventID": {
               "anyOf": [
@@ -3735,7 +3705,7 @@
           "required": [
             "status",
             "eventID",
-            "approvalID"
+            "backdated"
           ],
           "type": "object"
         }
@@ -3750,7 +3720,7 @@
         "state": "ok"
       },
       "canonicalName": "attendance_delete",
-      "description": "Remove an attendance record that should never have been there. The record stops counting, and who removed it and why stays in the record. The requester removes their own records from the last three days straight away; an older one becomes a request for an administrator, and comes back with status approval_requested and an approvalID instead of an eventID.",
+      "description": "Remove an attendance record that should never have been there. The record stops counting, and who removed it and why stays in the record. A person removes their own records and an administrator removes anybody's; nobody has to approve it. Removing a record older than three days comes back with backdated true, which means the administrators were told.",
       "estimatedLatency": "medium",
       "idempotency": {
         "required": false,
@@ -3799,15 +3769,8 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
-          "approvalID": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
+          "backdated": {
+            "type": "boolean"
           },
           "eventID": {
             "anyOf": [
@@ -3826,7 +3789,7 @@
         "required": [
           "status",
           "eventID",
-          "approvalID"
+          "backdated"
         ],
         "type": "object"
       },
@@ -3841,15 +3804,8 @@
           "$schema": "https://json-schema.org/draft/2020-12/schema",
           "additionalProperties": false,
           "properties": {
-            "approvalID": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+            "backdated": {
+              "type": "boolean"
             },
             "eventID": {
               "anyOf": [
@@ -3868,335 +3824,13 @@
           "required": [
             "status",
             "eventID",
-            "approvalID"
+            "backdated"
           ],
           "type": "object"
         }
       },
       "sideEffect": "destructive",
       "sideEffectClass": "destructive",
-      "version": "1",
-      "worksOffline": false
-    },
-    {
-      "availability": {
-        "state": "ok"
-      },
-      "canonicalName": "approval_list",
-      "description": "Requests that are waiting on a decision. An administrator sees every one the company raised; everybody else sees only the ones they raised themselves. Use this to answer 'is my correction through yet' and to find the request approval_decide is about to decide.",
-      "estimatedLatency": "low",
-      "idempotency": {
-        "required": false,
-        "scope": "operation",
-        "supported": false
-      },
-      "inputSchema": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "additionalProperties": false,
-        "properties": {},
-        "type": "object"
-      },
-      "inputSchemaStrict": true,
-      "modelName": "approval_list",
-      "modelVisibility": "visible",
-      "modelVisible": true,
-      "name": "approval_list",
-      "namespace": "approval",
-      "outputSchema": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "additionalProperties": false,
-        "properties": {
-          "approvals": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "approvalID": {
-                  "minLength": 1,
-                  "pattern": "^\\S(?:.*\\S)?$",
-                  "type": "string"
-                },
-                "askedAt": {
-                  "type": "string"
-                },
-                "askedBy": {
-                  "type": "string"
-                },
-                "asks": {
-                  "type": "string"
-                },
-                "kind": {
-                  "type": "string"
-                },
-                "reason": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "approvalID",
-                "askedBy",
-                "kind",
-                "asks",
-                "reason",
-                "askedAt"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "count": {
-            "maximum": 9007199254740991,
-            "minimum": -9007199254740991,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "count",
-          "approvals"
-        ],
-        "type": "object"
-      },
-      "outputSchemaStrict": true,
-      "policyResource": "tool:approval_list",
-      "privacyClass": "workspace_approval",
-      "requiresUserPresence": false,
-      "resultContract": {
-        "effects": [],
-        "schema": {
-          "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "additionalProperties": false,
-          "properties": {
-            "approvals": {
-              "items": {
-                "additionalProperties": false,
-                "properties": {
-                  "approvalID": {
-                    "minLength": 1,
-                    "pattern": "^\\S(?:.*\\S)?$",
-                    "type": "string"
-                  },
-                  "askedAt": {
-                    "type": "string"
-                  },
-                  "askedBy": {
-                    "type": "string"
-                  },
-                  "asks": {
-                    "type": "string"
-                  },
-                  "kind": {
-                    "type": "string"
-                  },
-                  "reason": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "approvalID",
-                  "askedBy",
-                  "kind",
-                  "asks",
-                  "reason",
-                  "askedAt"
-                ],
-                "type": "object"
-              },
-              "type": "array"
-            },
-            "count": {
-              "maximum": 9007199254740991,
-              "minimum": -9007199254740991,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "count",
-            "approvals"
-          ],
-          "type": "object"
-        }
-      },
-      "sideEffect": "read",
-      "sideEffectClass": "read",
-      "version": "1",
-      "worksOffline": false
-    },
-    {
-      "availability": {
-        "state": "ok"
-      },
-      "canonicalName": "approval_decide",
-      "description": "Approve or reject a waiting request. Only an administrator may, and the record refuses anybody else. Approving carries out the write that was held, as the person who asked for it, and applied says what that write did. A request that was already decided is not decided again.",
-      "estimatedLatency": "medium",
-      "idempotency": {
-        "required": false,
-        "scope": "operation",
-        "supported": false
-      },
-      "inputIntentSchema": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "additionalProperties": false,
-        "properties": {
-          "decision": {
-            "description": "approved or rejected.",
-            "enum": [
-              "approved",
-              "rejected"
-            ],
-            "type": "string"
-          },
-          "note": {
-            "description": "A word back to the person who asked.",
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "inputSchema": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "additionalProperties": false,
-        "properties": {
-          "approvalHint": {
-            "description": "Identifies the request to decide: its exact approval ID, or enough of the line approval_list shows for that row — who asked and what it asks — to name exactly one. Resolved server-side; if it does not uniquely resolve, the call fails with a candidates list to retry against.",
-            "maxLength": 256,
-            "minLength": 1,
-            "type": "string"
-          },
-          "decision": {
-            "description": "approved or rejected.",
-            "enum": [
-              "approved",
-              "rejected"
-            ],
-            "type": "string"
-          },
-          "note": {
-            "description": "A word back to the person who asked. Omit when there is none.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "approvalHint",
-          "decision"
-        ],
-        "type": "object"
-      },
-      "inputSchemaStrict": true,
-      "modelName": "approval_decide",
-      "modelVisibility": "visible",
-      "modelVisible": true,
-      "name": "approval_decide",
-      "namespace": "approval",
-      "outputSchema": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "additionalProperties": false,
-        "properties": {
-          "applied": {
-            "anyOf": [
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "correctedCount": {
-                    "type": "number"
-                  },
-                  "eventID": {
-                    "type": "string"
-                  }
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "approvalID": {
-            "minLength": 1,
-            "pattern": "^\\S(?:.*\\S)?$",
-            "type": "string"
-          },
-          "askedBy": {
-            "type": "string"
-          },
-          "asks": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "approvalID",
-          "askedBy",
-          "asks",
-          "status",
-          "applied"
-        ],
-        "type": "object"
-      },
-      "outputSchemaStrict": true,
-      "policyResource": "tool:approval_decide",
-      "privacyClass": "workspace_approval",
-      "requiresApproval": true,
-      "requiresUserPresence": false,
-      "resultContract": {
-        "effects": [
-          {
-            "effect": "updated",
-            "effectIdentity": "id",
-            "objectType": "approval",
-            "resultField": "approvalID"
-          }
-        ],
-        "schema": {
-          "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "additionalProperties": false,
-          "properties": {
-            "applied": {
-              "anyOf": [
-                {
-                  "additionalProperties": false,
-                  "properties": {
-                    "correctedCount": {
-                      "type": "number"
-                    },
-                    "eventID": {
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "approvalID": {
-              "minLength": 1,
-              "pattern": "^\\S(?:.*\\S)?$",
-              "type": "string"
-            },
-            "askedBy": {
-              "type": "string"
-            },
-            "asks": {
-              "type": "string"
-            },
-            "status": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "approvalID",
-            "askedBy",
-            "asks",
-            "status",
-            "applied"
-          ],
-          "type": "object"
-        }
-      },
-      "sideEffect": "workspace_write",
-      "sideEffectClass": "workspace_write",
       "version": "1",
       "worksOffline": false
     },

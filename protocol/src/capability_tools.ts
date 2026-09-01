@@ -1028,8 +1028,8 @@ export const attendanceListInputSchema = z.strictObject({
 export const attendanceAddInputSchema = z.strictObject({
   personHint: z.string().describe('Name or email of the person the record belongs to. Omit for the requester.').optional(),
   kind: z.enum(WorkspaceAttendanceKind).describe('clock_in for arriving, clock_out for leaving.'),
-  date: z.string().describe(`The day the person actually arrived or left. ${attendanceDayDescription}`),
-  time: z.string().describe(`The time they actually arrived or left. ${attendanceTimeDescription}`),
+  date: z.string().describe(`The day the person actually arrived or left. ${attendanceDayDescription} Omit for today.`).optional(),
+  time: z.string().describe(`The time they actually arrived or left. ${attendanceTimeDescription} Omit for the moment this call is made.`).optional(),
   location: z.string().describe('The registered workplace they were at. clock_out does not use it, so omit it there.').optional(),
   reason: attendanceReasonSchema.describe('Why the record is being written by hand, in the requester\'s own words.'),
 });
@@ -1084,49 +1084,7 @@ export const attendanceListResultSchema = z.strictObject({
 export const attendanceWriteResultSchema = z.strictObject({
   status: z.string(),
   eventID: z.string().nullable(),
-  approvalID: z.string().nullable(),
-});
-
-const approvalHintSchema = z.string().min(1).max(256).describe(
-  'Identifies the request to decide: its exact approval ID, or enough of the line approval_list shows for that row — who asked and what it asks — to name exactly one. Resolved server-side; if it does not uniquely resolve, the call fails with a candidates list to retry against.',
-);
-
-export const approvalListInputSchema = z.strictObject({});
-
-export const approvalDecideInputSchema = z.strictObject({
-  approvalHint: approvalHintSchema,
-  decision: z.enum(WorkspaceDecision).describe('approved or rejected.'),
-  note: z.string().describe('A word back to the person who asked. Omit when there is none.').optional(),
-});
-
-export const approvalDecideInputIntentSchema = z.strictObject({
-  decision: z.enum(WorkspaceDecision).describe('approved or rejected.').optional(),
-  note: z.string().describe('A word back to the person who asked.').optional(),
-});
-
-export const approvalResultSchema = z.strictObject({
-  approvalID: resourceIDSchema,
-  askedBy: z.string(),
-  kind: z.string(),
-  asks: z.string(),
-  reason: z.string(),
-  askedAt: z.string(),
-});
-
-export const approvalListResultSchema = z.strictObject({
-  count: z.number().int(),
-  approvals: z.array(approvalResultSchema),
-});
-
-export const approvalDecideResultSchema = z.strictObject({
-  approvalID: resourceIDSchema,
-  askedBy: z.string(),
-  asks: z.string(),
-  status: z.string(),
-  applied: z.strictObject({
-    eventID: z.string().optional(),
-    correctedCount: z.number().optional(),
-  }).nullable(),
+  backdated: z.boolean(),
 });
 
 const calendarToolDefinitions: CapabilityToolDefinition[] = [
@@ -1611,7 +1569,7 @@ const attendanceToolDefinitions: CapabilityToolDefinition[] = [
     namespace: 'attendance',
     privacyClass: 'workspace_attendance',
     policyResource: 'tool:attendance_add',
-    description: "Write a clock-in or clock-out somebody forgot, at the past moment it actually happened. The requester's own record within the last three days is written straight away and comes back with status recorded and its eventID. Anything older is not refused: it becomes a request for an administrator, and comes back with status approval_requested and an approvalID instead. An administrator writes anybody's record with no window at all. A moment in the future is refused. location names a workplace this company has registered and clock_out does not use it.",
+    description: "Write a clock-in or clock-out, at the moment it actually happened. Omit date and time for right now, which is what somebody clocking in as they arrive means. The record is written straight away and comes back with status added and its eventID; nobody has to approve it. A record older than three days is written just the same, and comes back with backdated true, which means the administrators were told it was written by hand. An administrator writes anybody's record. A moment in the future is refused. location names a workplace this company has registered and clock_out does not use it.",
     version: '1',
     estimatedLatency: CapabilityEstimatedLatency.Medium,
     inputSchema: attendanceAddInputSchema,
@@ -1624,7 +1582,7 @@ const attendanceToolDefinitions: CapabilityToolDefinition[] = [
     namespace: 'attendance',
     privacyClass: 'workspace_attendance',
     policyResource: 'tool:attendance_update',
-    description: 'Correct the day, the time, or the workplace of an attendance record that was written wrong. What the record held before the correction is kept alongside it, with the reason. The requester corrects their own records from the last three days straight away; an older one becomes a request for an administrator, and comes back with status approval_requested and an approvalID instead of an eventID.',
+    description: 'Correct the day, the time, or the workplace of an attendance record that was written wrong. What the record held before the correction is kept alongside it, with the reason. A person corrects their own records and an administrator corrects anybody\'s; nobody has to approve it. Correcting a record older than three days comes back with backdated true, which means the administrators were told.',
     version: '1',
     estimatedLatency: CapabilityEstimatedLatency.Medium,
     inputSchema: attendanceUpdateInputSchema,
@@ -1638,7 +1596,7 @@ const attendanceToolDefinitions: CapabilityToolDefinition[] = [
     namespace: 'attendance',
     privacyClass: 'workspace_attendance',
     policyResource: 'tool:attendance_delete',
-    description: 'Remove an attendance record that should never have been there. The record stops counting, and who removed it and why stays in the record. The requester removes their own records from the last three days straight away; an older one becomes a request for an administrator, and comes back with status approval_requested and an approvalID instead of an eventID.',
+    description: 'Remove an attendance record that should never have been there. The record stops counting, and who removed it and why stays in the record. A person removes their own records and an administrator removes anybody\'s; nobody has to approve it. Removing a record older than three days comes back with backdated true, which means the administrators were told.',
     version: '1',
     estimatedLatency: CapabilityEstimatedLatency.Medium,
     inputSchema: attendanceDeleteInputSchema,
@@ -1649,49 +1607,11 @@ const attendanceToolDefinitions: CapabilityToolDefinition[] = [
   },
 ];
 
-const approvalToolDefinitions: CapabilityToolDefinition[] = [
-  {
-    name: 'approval_list',
-    namespace: 'approval',
-    privacyClass: 'workspace_approval',
-    policyResource: 'tool:approval_list',
-    description: "Requests that are waiting on a decision. An administrator sees every one the company raised; everybody else sees only the ones they raised themselves. Use this to answer 'is my correction through yet' and to find the request approval_decide is about to decide.",
-    version: '1',
-    estimatedLatency: CapabilityEstimatedLatency.Low,
-    inputSchema: approvalListInputSchema,
-    result: { schema: approvalListResultSchema, effects: [] },
-    sideEffect: CapabilitySideEffect.Read,
-  },
-  {
-    name: 'approval_decide',
-    namespace: 'approval',
-    privacyClass: 'workspace_approval',
-    policyResource: 'tool:approval_decide',
-    description: 'Approve or reject a waiting request. Only an administrator may, and the record refuses anybody else. Approving carries out the write that was held, as the person who asked for it, and applied says what that write did. A request that was already decided is not decided again.',
-    version: '1',
-    estimatedLatency: CapabilityEstimatedLatency.Medium,
-    inputSchema: approvalDecideInputSchema,
-    inputIntentSchema: approvalDecideInputIntentSchema,
-    result: {
-      schema: approvalDecideResultSchema,
-      effects: [{
-        objectType: 'approval',
-        effect: ResourceMutationEffect.Updated,
-        resultField: 'approvalID',
-        effectIdentity: ResourceEffectIdentity.ID,
-      }],
-    },
-    sideEffect: CapabilitySideEffect.WorkspaceWrite,
-    requiresApproval: true,
-  },
-];
-
 const capabilityToolDefinitions = [
   ...taskToolDefinitions,
   ...calendarToolDefinitions,
   ...leaveToolDefinitions,
   ...attendanceToolDefinitions,
-  ...approvalToolDefinitions,
   ...messageToolDefinitions,
   ...channelToolDefinitions,
   ...webToolDefinitions,
@@ -1725,11 +1645,6 @@ export type AttendanceDeleteInput = z.infer<typeof attendanceDeleteInputSchema>;
 export type AttendanceResult = z.infer<typeof attendanceResultSchema>;
 export type AttendanceListResult = z.infer<typeof attendanceListResultSchema>;
 export type AttendanceWriteResult = z.infer<typeof attendanceWriteResultSchema>;
-export type ApprovalListInput = z.infer<typeof approvalListInputSchema>;
-export type ApprovalDecideInput = z.infer<typeof approvalDecideInputSchema>;
-export type ApprovalResult = z.infer<typeof approvalResultSchema>;
-export type ApprovalListResult = z.infer<typeof approvalListResultSchema>;
-export type ApprovalDecideResult = z.infer<typeof approvalDecideResultSchema>;
 export type CalendarAddInput = z.infer<typeof calendarAddInputSchema>;
 export type CalendarListInput = z.infer<typeof calendarListInputSchema>;
 export type CalendarUpdateInput = z.infer<typeof calendarUpdateInputSchema>;
