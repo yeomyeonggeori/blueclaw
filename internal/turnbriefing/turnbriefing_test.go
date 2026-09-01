@@ -3,6 +3,7 @@ package turnbriefing
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
@@ -69,5 +70,18 @@ func TestACarriedOutCallThatFailedIsReportedAsFailed(t *testing.T) {
 func TestATurnWithNothingToSayCarriesNoPreamble(t *testing.T) {
 	if preamble := Preamble(agentcontract.AgentTurnRequest{}, ""); preamble != "" {
 		t.Fatalf("expected no preamble when there is nothing to brief, got %q", preamble)
+	}
+}
+
+func TestAnAgentIsToldWhatDayItIs(t *testing.T) {
+	request := briefedRequest()
+	request.EnvironmentNow = time.Date(2026, time.September, 1, 12, 31, 0, 0, time.UTC)
+
+	preamble := Preamble(request, "")
+
+	for _, expectedFragment := range []string{"Now:", "2026-09-01", "This week:"} {
+		if !strings.Contains(preamble, expectedFragment) {
+			t.Fatalf("an agent that is not told the date reads the newest message in the conversation as today, expected %q in:\n%s", expectedFragment, preamble)
+		}
 	}
 }
