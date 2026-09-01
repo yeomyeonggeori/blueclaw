@@ -33,6 +33,7 @@ func (connectorRuntime *ConnectorRuntime) resolveInboundEngagement(ctx context.C
 	addressingDecision, errorValue := connectorRuntime.intakeClassifier.ClassifyAddressing(ctx, agentcontract.AddressingClassificationRequest{
 		Prompt:           event.Prompt,
 		AgentIdentity:    connectorRuntime.agentIdentity(),
+		Company:          connectorRuntime.company(),
 		BotMentioned:     botMentioned,
 		MessageSentAt:    event.RawReceivedAt,
 		ConversationType: event.Context.ConversationType,

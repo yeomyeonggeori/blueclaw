@@ -422,6 +422,7 @@ type ConnectorRuntime struct {
 	workspaceActorFactory  security.WorkspaceActorFactory
 	memoryService          *memory.MemoryService
 	agentIdentityProvider  func() agentcontract.AgentIdentity
+	companyProvider        func() agentcontract.CompanyContext
 	workspaceID            string
 	adminTaskLinkBaseURL   string
 	logger                 *slog.Logger
@@ -637,6 +638,9 @@ func (connectorRuntime *ConnectorRuntime) planTurn(ctx context.Context, taskRunI
 	if request.EnvironmentNow.IsZero() {
 		request.EnvironmentNow = request.TurnStartedAt
 	}
+	if request.Company.IsEmpty() {
+		request.Company = connectorRuntime.company()
+	}
 	callLedger := &agentcontract.TurnRouterCallLedger{}
 	turnDecision, errorValue := connectorRuntime.turnRouter.PlanObserved(ctx, request, callLedger)
 	if trimmedTaskRunID := strings.TrimSpace(taskRunID); trimmedTaskRunID != "" && connectorRuntime.taskRunService != nil {
@@ -662,6 +666,17 @@ func (connectorRuntime *ConnectorRuntime) UseIntakeClassifier(intakeClassifier I
 
 func (connectorRuntime *ConnectorRuntime) UseTaskLauncher(taskLauncher *agentruntime.TaskLauncher) {
 	connectorRuntime.taskLauncher = taskLauncher
+}
+
+func (connectorRuntime *ConnectorRuntime) UseCompanyProvider(companyProvider func() agentcontract.CompanyContext) {
+	connectorRuntime.companyProvider = companyProvider
+}
+
+func (connectorRuntime *ConnectorRuntime) company() agentcontract.CompanyContext {
+	if connectorRuntime.companyProvider == nil {
+		return agentcontract.CompanyContext{}
+	}
+	return connectorRuntime.companyProvider()
 }
 
 func (connectorRuntime *ConnectorRuntime) UseAgentIdentityProvider(agentIdentityProvider func() agentcontract.AgentIdentity) {

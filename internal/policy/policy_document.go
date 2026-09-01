@@ -39,6 +39,7 @@ type CompanyPolicy struct {
 	Description    string `json:"description,omitempty"`
 	Representative string `json:"representative,omitempty"`
 	Website        string `json:"website,omitempty"`
+	TimeZone       string `json:"timeZone,omitempty"`
 }
 
 func (company CompanyPolicy) IsEmpty() bool {
