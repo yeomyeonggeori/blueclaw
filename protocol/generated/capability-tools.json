@@ -2952,6 +2952,415 @@
       "availability": {
         "state": "ok"
       },
+      "canonicalName": "leave_update",
+      "completionEvidence": {
+        "action": "write_leave",
+        "mode": "success",
+        "targetKind": "leave"
+      },
+      "description": "Correct a leave that was filed wrong: its days, its kind, how much entitlement it consumes, or the note. A person corrects their own while it is still waiting on a decision; an administrator corrects anybody's at any time, which is how a leave filed for the wrong year is moved to the right one. Only the fields you pass change.",
+      "estimatedLatency": "medium",
+      "idempotency": {
+        "required": false,
+        "scope": "operation",
+        "supported": false
+      },
+      "inputIntentSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "description": "How many days of entitlement this consumes. Omit to keep the number it consumes.",
+            "type": "number"
+          },
+          "endsAt": {
+            "description": "Last day of the leave. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day. Omit to keep the day it ends on.",
+            "type": "string"
+          },
+          "kind": {
+            "description": "The kind of leave, named as this company registers it. Omit to keep the kind it has.",
+            "type": "string"
+          },
+          "leaveHint": {
+            "description": "Identifies the leave to decide: its exact leave ID, or enough of the line leave_list shows for that row — the person, the kind, and the start date — to name exactly one. Resolved server-side; if it does not uniquely resolve, the call fails with a candidates list to retry against.",
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "note": {
+            "description": "The reason, in the requester's own words. Omit to keep the note it has.",
+            "type": "string"
+          },
+          "startsAt": {
+            "description": "First day of the leave. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day. Omit to keep the day it starts on.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "description": "How many days of entitlement this consumes. Omit to keep the number it consumes.",
+            "type": "number"
+          },
+          "endsAt": {
+            "description": "Last day of the leave. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day. Omit to keep the day it ends on.",
+            "type": "string"
+          },
+          "kind": {
+            "description": "The kind of leave, named as this company registers it. Omit to keep the kind it has.",
+            "type": "string"
+          },
+          "leaveHint": {
+            "description": "Identifies the leave to decide: its exact leave ID, or enough of the line leave_list shows for that row — the person, the kind, and the start date — to name exactly one. Resolved server-side; if it does not uniquely resolve, the call fails with a candidates list to retry against.",
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "note": {
+            "description": "The reason, in the requester's own words. Omit to keep the note it has.",
+            "type": "string"
+          },
+          "startsAt": {
+            "description": "First day of the leave. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day. Omit to keep the day it starts on.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "leaveHint"
+        ],
+        "type": "object"
+      },
+      "inputSchemaStrict": true,
+      "modelName": "leave_update",
+      "modelVisibility": "visible",
+      "modelVisible": true,
+      "name": "leave_update",
+      "namespace": "leave",
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "type": "number"
+          },
+          "endDate": {
+            "type": "string"
+          },
+          "isDeducted": {
+            "type": "boolean"
+          },
+          "isPaid": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "leaveID": {
+            "minLength": 1,
+            "pattern": "^\\S(?:.*\\S)?$",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "person": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "leaveID",
+          "person",
+          "kind",
+          "days",
+          "status",
+          "isPaid",
+          "isDeducted",
+          "startDate",
+          "endDate",
+          "note"
+        ],
+        "type": "object"
+      },
+      "outputSchemaStrict": true,
+      "policyResource": "tool:leave_update",
+      "privacyClass": "workspace_leave",
+      "requiresApproval": true,
+      "requiresUserPresence": false,
+      "resultContract": {
+        "effects": [
+          {
+            "effect": "updated",
+            "effectIdentity": "id",
+            "objectType": "leave",
+            "resultField": "leaveID"
+          }
+        ],
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "days": {
+              "type": "number"
+            },
+            "endDate": {
+              "type": "string"
+            },
+            "isDeducted": {
+              "type": "boolean"
+            },
+            "isPaid": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "leaveID": {
+              "minLength": 1,
+              "pattern": "^\\S(?:.*\\S)?$",
+              "type": "string"
+            },
+            "note": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "person": {
+              "type": "string"
+            },
+            "startDate": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "leaveID",
+            "person",
+            "kind",
+            "days",
+            "status",
+            "isPaid",
+            "isDeducted",
+            "startDate",
+            "endDate",
+            "note"
+          ],
+          "type": "object"
+        }
+      },
+      "sideEffect": "workspace_write",
+      "sideEffectClass": "workspace_write",
+      "version": "1",
+      "worksOffline": false
+    },
+    {
+      "availability": {
+        "state": "ok"
+      },
+      "canonicalName": "leave_delete",
+      "completionEvidence": {
+        "action": "write_leave",
+        "mode": "success",
+        "targetKind": "leave"
+      },
+      "description": "Take a leave back out of the record entirely, as though it was never filed. A person takes back their own while it is still waiting on a decision; an administrator takes back anybody's. Entitlement an approved leave spent comes back with it. To refuse a leave rather than erase it, decide it rejected.",
+      "estimatedLatency": "medium",
+      "idempotency": {
+        "required": false,
+        "scope": "operation",
+        "supported": false
+      },
+      "inputIntentSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "leaveHint": {
+            "description": "Identifies the leave to decide: its exact leave ID, or enough of the line leave_list shows for that row — the person, the kind, and the start date — to name exactly one. Resolved server-side; if it does not uniquely resolve, the call fails with a candidates list to retry against.",
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "leaveHint"
+        ],
+        "type": "object"
+      },
+      "inputSchemaStrict": true,
+      "modelName": "leave_delete",
+      "modelVisibility": "visible",
+      "modelVisible": true,
+      "name": "leave_delete",
+      "namespace": "leave",
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "type": "number"
+          },
+          "endDate": {
+            "type": "string"
+          },
+          "isDeducted": {
+            "type": "boolean"
+          },
+          "isPaid": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "leaveID": {
+            "minLength": 1,
+            "pattern": "^\\S(?:.*\\S)?$",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "person": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "leaveID",
+          "person",
+          "kind",
+          "days",
+          "status",
+          "isPaid",
+          "isDeducted",
+          "startDate",
+          "endDate",
+          "note"
+        ],
+        "type": "object"
+      },
+      "outputSchemaStrict": true,
+      "policyResource": "tool:leave_delete",
+      "privacyClass": "workspace_leave",
+      "requiresApproval": true,
+      "requiresUserPresence": false,
+      "resultContract": {
+        "effects": [
+          {
+            "effect": "deleted",
+            "effectIdentity": "id",
+            "objectType": "leave",
+            "resultField": "leaveID"
+          }
+        ],
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "days": {
+              "type": "number"
+            },
+            "endDate": {
+              "type": "string"
+            },
+            "isDeducted": {
+              "type": "boolean"
+            },
+            "isPaid": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "leaveID": {
+              "minLength": 1,
+              "pattern": "^\\S(?:.*\\S)?$",
+              "type": "string"
+            },
+            "note": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "person": {
+              "type": "string"
+            },
+            "startDate": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "leaveID",
+            "person",
+            "kind",
+            "days",
+            "status",
+            "isPaid",
+            "isDeducted",
+            "startDate",
+            "endDate",
+            "note"
+          ],
+          "type": "object"
+        }
+      },
+      "sideEffect": "destructive",
+      "sideEffectClass": "destructive",
+      "version": "1",
+      "worksOffline": false
+    },
+    {
+      "availability": {
+        "state": "ok"
+      },
       "canonicalName": "leave_decide",
       "completionEvidence": {
         "action": "write_leave",
@@ -3577,7 +3986,7 @@
         "state": "ok"
       },
       "canonicalName": "attendance_update",
-      "description": "Correct the day, the time, or the workplace of an attendance record that was written wrong. What the record held before the correction is kept alongside it, with the reason. A person corrects their own records from the last three days. Correcting an older one, or anybody else's, is an administrator's: asked by anybody else it comes back with status asked, the administrators have been told, and the task is done. Say an administrator was asked; do not call this again.",
+      "description": "Correct the day, the time, or the workplace of attendance records that were written wrong, all in one call. What the record held before the correction is kept alongside it, with the reason. A person corrects their own records from the last three days. Correcting an older one, or anybody else's, is an administrator's: asked by anybody else it comes back with status asked, the administrators have been told, and the task is done. Say an administrator was asked; do not call this again.",
       "estimatedLatency": "medium",
       "idempotency": {
         "required": false,
@@ -3588,20 +3997,39 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
-          "date": {
-            "description": "The day it actually happened. The day it happened, as yyyy-mm-dd in the company time zone.",
-            "type": "string"
-          },
-          "location": {
-            "description": "The registered workplace it happened at.",
-            "type": "string"
+          "corrections": {
+            "description": "The records to correct, together.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "date": {
+                  "description": "The day it actually happened. The day it happened, as yyyy-mm-dd in the company time zone. Omit to keep the day it has.",
+                  "type": "string"
+                },
+                "eventHint": {
+                  "description": "Identifies the attendance record: its exact event ID, or the line attendance_list shows for that row, written as it appeared there (name · kind · yyyy-mm-dd HH:MM). Resolved server-side; if it does not uniquely resolve, the call fails with a candidates list to retry against.",
+                  "maxLength": 256,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "location": {
+                  "description": "The registered workplace it happened at. Omit to keep the one it has.",
+                  "type": "string"
+                },
+                "time": {
+                  "description": "The time it actually happened. The time of day it happened, as 24-hour HH:MM in the company time zone. Omit to keep the time it has.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "eventHint"
+              ],
+              "type": "object"
+            },
+            "type": "array"
           },
           "reason": {
-            "description": "Why the record was wrong.",
-            "type": "string"
-          },
-          "time": {
-            "description": "The time it actually happened. The time of day it happened, as 24-hour HH:MM in the company time zone.",
+            "description": "Why the records were wrong.",
             "type": "string"
           }
         },
@@ -3611,31 +4039,44 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
-          "date": {
-            "description": "The day it actually happened. The day it happened, as yyyy-mm-dd in the company time zone. Omit to keep the day it has.",
-            "type": "string"
-          },
-          "eventHint": {
-            "description": "Identifies the attendance record: its exact event ID, or the line attendance_list shows for that row, written as it appeared there (name · kind · yyyy-mm-dd HH:MM). Resolved server-side; if it does not uniquely resolve, the call fails with a candidates list to retry against.",
-            "maxLength": 256,
-            "minLength": 1,
-            "type": "string"
-          },
-          "location": {
-            "description": "The registered workplace it happened at. Omit to keep the one it has.",
-            "type": "string"
+          "corrections": {
+            "description": "The records to correct, together. Correcting one record is an array of one. A day whose clock-in and clock-out both move goes in one call, because the record refuses a correction that would leave the day out of order partway through.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "date": {
+                  "description": "The day it actually happened. The day it happened, as yyyy-mm-dd in the company time zone. Omit to keep the day it has.",
+                  "type": "string"
+                },
+                "eventHint": {
+                  "description": "Identifies the attendance record: its exact event ID, or the line attendance_list shows for that row, written as it appeared there (name · kind · yyyy-mm-dd HH:MM). Resolved server-side; if it does not uniquely resolve, the call fails with a candidates list to retry against.",
+                  "maxLength": 256,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "location": {
+                  "description": "The registered workplace it happened at. Omit to keep the one it has.",
+                  "type": "string"
+                },
+                "time": {
+                  "description": "The time it actually happened. The time of day it happened, as 24-hour HH:MM in the company time zone. Omit to keep the time it has.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "eventHint"
+              ],
+              "type": "object"
+            },
+            "type": "array"
           },
           "reason": {
-            "description": "Why the record was wrong, in the requester's own words.",
-            "type": "string"
-          },
-          "time": {
-            "description": "The time it actually happened. The time of day it happened, as 24-hour HH:MM in the company time zone. Omit to keep the time it has.",
+            "description": "Why the records were wrong, in the requester's own words.",
             "type": "string"
           }
         },
         "required": [
-          "eventHint",
+          "corrections",
           "reason"
         ],
         "type": "object"
