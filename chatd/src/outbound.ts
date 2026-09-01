@@ -426,15 +426,19 @@ async function handleDirectMessageSend(
 			messageID: sent.id,
 		};
 	}
+	// A person writing from the messenger web is writing to the agent, and says
+	// so by naming nobody. A message the agent was asked to pass on is addressed
+	// to the colleague, and goes out under the name of whoever asked for it.
+	const counterpartPubkeyHex = requestDocument.counterpartPubkeyHex ?? buzzAdapter.botPubkey;
 	const channel = await ensureUserDirectMessageChannel(
 		relayURL,
 		requestDocument.userSecretHex,
-		buzzAdapter.botPubkey,
+		counterpartPubkeyHex,
 	);
 	const messageID = await sendDirectMessageAsUser({
 		relayURL,
 		userSecretHex: requestDocument.userSecretHex,
-		counterpartPubkeyHex: buzzAdapter.botPubkey,
+		counterpartPubkeyHex,
 		message: requestDocument.message,
 		attachments,
 	});

@@ -96,6 +96,9 @@ export interface DirectMessageSendRequest {
 	attachments?: ReplyAttachmentDocument[];
 	channelId?: string;
 	replyToRootId?: string;
+	// Who the message is addressed to. The messenger web sends to the agent and
+	// says nothing, so an absent counterpart still means the agent.
+	counterpartPubkeyHex?: string;
 }
 
 export interface DirectMessagePostRequest {
