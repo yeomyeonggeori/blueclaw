@@ -163,11 +163,7 @@ func singleCronTimeText(hourText string, minuteText string) string {
 }
 
 func taskScheduleTimeZone(taskSchedule task.TaskSchedule) string {
-	timeZone := strings.TrimSpace(taskSchedule.TimeZone)
-	if timeZone == "" {
-		return "Asia/Seoul"
-	}
-	return timeZone
+	return task.ScheduleTimeZoneName(taskSchedule.TimeZone)
 }
 
 func formatOptionalScheduledRunTime(timeValue *time.Time, timeZone string) string {

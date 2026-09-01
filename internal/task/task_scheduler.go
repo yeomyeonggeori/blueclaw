@@ -184,11 +184,7 @@ func (taskScheduler TaskScheduler) calculateCronNextRunAt(taskSchedule TaskSched
 }
 
 func (taskScheduler TaskScheduler) taskScheduleLocation(taskSchedule TaskSchedule) (*time.Location, error) {
-	timeZone := strings.TrimSpace(taskSchedule.TimeZone)
-	if timeZone == "" {
-		timeZone = "Asia/Seoul"
-	}
-	location, errorValue := time.LoadLocation(timeZone)
+	location, errorValue := ScheduleLocation(taskSchedule.TimeZone)
 	if errorValue != nil {
 		return nil, errorInvalidTaskSchedule
 	}
