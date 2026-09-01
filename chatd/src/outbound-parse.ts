@@ -190,6 +190,7 @@ export function parseDirectMessageSendRequest(value: unknown): DirectMessageSend
 		attachments: optionalArray(record, "attachments").map(parseReplyAttachment),
 		channelId: optionalString(record, "channelId"),
 		replyToRootId: optionalString(record, "replyToRootId"),
+		counterpartPubkeyHex: optionalString(record, "counterpartPubkeyHex"),
 	};
 }
 
