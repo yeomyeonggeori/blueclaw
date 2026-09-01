@@ -3151,6 +3151,1059 @@
       "availability": {
         "state": "ok"
       },
+      "canonicalName": "attendance_list",
+      "description": "List clock-ins and clock-outs as the record holds them. Use this to answer 'when did I come in', 'was anybody late this week', or to find the record another attendance tool is about to correct. Dates are yyyy-mm-dd and times are 24-hour HH:MM, both in the company time zone. Without from and to it covers the last thirty days. The default scope is the requester; scope all is the whole company.",
+      "estimatedLatency": "low",
+      "idempotency": {
+        "required": false,
+        "scope": "operation",
+        "supported": false
+      },
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "description": "Earliest day to include. The day it happened, as yyyy-mm-dd in the company time zone. Omit to start thirty days ago.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Maximum number of rows to return.",
+            "type": "number"
+          },
+          "personHint": {
+            "description": "Name or email of the person whose attendance to list. Omit for the requester.",
+            "type": "string"
+          },
+          "scope": {
+            "description": "Whose attendance to list when personHint is empty. Defaults to self. Use all only for an explicit company-wide request.",
+            "enum": [
+              "self",
+              "all"
+            ],
+            "type": "string"
+          },
+          "to": {
+            "description": "Latest day to include. The day it happened, as yyyy-mm-dd in the company time zone. Omit to end today.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "inputSchemaStrict": true,
+      "modelName": "attendance_list",
+      "modelVisibility": "visible",
+      "modelVisible": true,
+      "name": "attendance_list",
+      "namespace": "attendance",
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "attendance": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "date": {
+                  "type": "string"
+                },
+                "eventID": {
+                  "minLength": 1,
+                  "pattern": "^\\S(?:.*\\S)?$",
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "location": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "person": {
+                  "type": "string"
+                },
+                "reason": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "time": {
+                  "type": "string"
+                },
+                "wasCorrected": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "eventID",
+                "person",
+                "kind",
+                "date",
+                "time",
+                "location",
+                "wasCorrected",
+                "reason"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "count": {
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "type": "integer"
+          },
+          "from": {
+            "type": "string"
+          },
+          "personID": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "personName": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "personID",
+          "personName",
+          "from",
+          "to",
+          "count",
+          "attendance"
+        ],
+        "type": "object"
+      },
+      "outputSchemaStrict": true,
+      "policyResource": "tool:attendance_list",
+      "privacyClass": "workspace_attendance",
+      "requiresUserPresence": false,
+      "resultContract": {
+        "effects": [],
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "attendance": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "date": {
+                    "type": "string"
+                  },
+                  "eventID": {
+                    "minLength": 1,
+                    "pattern": "^\\S(?:.*\\S)?$",
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "person": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "time": {
+                    "type": "string"
+                  },
+                  "wasCorrected": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "eventID",
+                  "person",
+                  "kind",
+                  "date",
+                  "time",
+                  "location",
+                  "wasCorrected",
+                  "reason"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "count": {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            "from": {
+              "type": "string"
+            },
+            "personID": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "personName": {
+              "type": "string"
+            },
+            "scope": {
+              "type": "string"
+            },
+            "to": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "scope",
+            "personID",
+            "personName",
+            "from",
+            "to",
+            "count",
+            "attendance"
+          ],
+          "type": "object"
+        }
+      },
+      "sideEffect": "read",
+      "sideEffectClass": "read",
+      "version": "1",
+      "worksOffline": false
+    },
+    {
+      "availability": {
+        "state": "ok"
+      },
+      "canonicalName": "attendance_add",
+      "description": "Write a clock-in or clock-out somebody forgot, at the past moment it actually happened. The requester's own record within the last three days is written straight away and comes back with status recorded and its eventID. Anything older is not refused: it becomes a request for an administrator, and comes back with status approval_requested and an approvalID instead. An administrator writes anybody's record with no window at all. A moment in the future is refused. location names a workplace this company has registered and clock_out does not use it.",
+      "estimatedLatency": "medium",
+      "idempotency": {
+        "required": false,
+        "scope": "operation",
+        "supported": false
+      },
+      "inputIntentSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "description": "The day the person actually arrived or left. The day it happened, as yyyy-mm-dd in the company time zone.",
+            "type": "string"
+          },
+          "kind": {
+            "description": "clock_in for arriving, clock_out for leaving.",
+            "enum": [
+              "clock_in",
+              "clock_out"
+            ],
+            "type": "string"
+          },
+          "location": {
+            "description": "The registered workplace they were at. clock_out does not use it, so omit it there.",
+            "type": "string"
+          },
+          "personHint": {
+            "description": "Name or email of the person the record belongs to. Omit for the requester.",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Why the record is being written by hand, in the requester's own words.",
+            "type": "string"
+          },
+          "time": {
+            "description": "The time they actually arrived or left. The time of day it happened, as 24-hour HH:MM in the company time zone.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "description": "The day the person actually arrived or left. The day it happened, as yyyy-mm-dd in the company time zone.",
+            "type": "string"
+          },
+          "kind": {
+            "description": "clock_in for arriving, clock_out for leaving.",
+            "enum": [
+              "clock_in",
+              "clock_out"
+            ],
+            "type": "string"
+          },
+          "location": {
+            "description": "The registered workplace they were at. clock_out does not use it, so omit it there.",
+            "type": "string"
+          },
+          "personHint": {
+            "description": "Name or email of the person the record belongs to. Omit for the requester.",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Why the record is being written by hand, in the requester's own words.",
+            "type": "string"
+          },
+          "time": {
+            "description": "The time they actually arrived or left. The time of day it happened, as 24-hour HH:MM in the company time zone.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "date",
+          "time",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "inputSchemaStrict": true,
+      "modelName": "attendance_add",
+      "modelVisibility": "visible",
+      "modelVisible": true,
+      "name": "attendance_add",
+      "namespace": "attendance",
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "approvalID": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "eventID": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "eventID",
+          "approvalID"
+        ],
+        "type": "object"
+      },
+      "outputSchemaStrict": true,
+      "policyResource": "tool:attendance_add",
+      "privacyClass": "workspace_attendance",
+      "requiresUserPresence": false,
+      "resultContract": {
+        "effects": [],
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "approvalID": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "eventID": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "status": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "status",
+            "eventID",
+            "approvalID"
+          ],
+          "type": "object"
+        }
+      },
+      "sideEffect": "workspace_write",
+      "sideEffectClass": "workspace_write",
+      "version": "1",
+      "worksOffline": false
+    },
+    {
+      "availability": {
+        "state": "ok"
+      },
+      "canonicalName": "attendance_update",
+      "description": "Correct the day, the time, or the workplace of an attendance record that was written wrong. What the record held before the correction is kept alongside it, with the reason. The requester corrects their own records from the last three days straight away; an older one becomes a request for an administrator, and comes back with status approval_requested and an approvalID instead of an eventID.",
+      "estimatedLatency": "medium",
+      "idempotency": {
+        "required": false,
+        "scope": "operation",
+        "supported": false
+      },
+      "inputIntentSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "description": "The day it actually happened. The day it happened, as yyyy-mm-dd in the company time zone.",
+            "type": "string"
+          },
+          "location": {
+            "description": "The registered workplace it happened at.",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Why the record was wrong.",
+            "type": "string"
+          },
+          "time": {
+            "description": "The time it actually happened. The time of day it happened, as 24-hour HH:MM in the company time zone.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "description": "The day it actually happened. The day it happened, as yyyy-mm-dd in the company time zone. Omit to keep the day it has.",
+            "type": "string"
+          },
+          "eventHint": {
+            "description": "Identifies the attendance record: its exact event ID, or the line attendance_list shows for that row, written as it appeared there (name · kind · yyyy-mm-dd HH:MM). Resolved server-side; if it does not uniquely resolve, the call fails with a candidates list to retry against.",
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "location": {
+            "description": "The registered workplace it happened at. Omit to keep the one it has.",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Why the record was wrong, in the requester's own words.",
+            "type": "string"
+          },
+          "time": {
+            "description": "The time it actually happened. The time of day it happened, as 24-hour HH:MM in the company time zone. Omit to keep the time it has.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "eventHint",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "inputSchemaStrict": true,
+      "modelName": "attendance_update",
+      "modelVisibility": "visible",
+      "modelVisible": true,
+      "name": "attendance_update",
+      "namespace": "attendance",
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "approvalID": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "eventID": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "eventID",
+          "approvalID"
+        ],
+        "type": "object"
+      },
+      "outputSchemaStrict": true,
+      "policyResource": "tool:attendance_update",
+      "privacyClass": "workspace_attendance",
+      "requiresApproval": true,
+      "requiresUserPresence": false,
+      "resultContract": {
+        "effects": [],
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "approvalID": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "eventID": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "status": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "status",
+            "eventID",
+            "approvalID"
+          ],
+          "type": "object"
+        }
+      },
+      "sideEffect": "workspace_write",
+      "sideEffectClass": "workspace_write",
+      "version": "1",
+      "worksOffline": false
+    },
+    {
+      "availability": {
+        "state": "ok"
+      },
+      "canonicalName": "attendance_delete",
+      "description": "Remove an attendance record that should never have been there. The record stops counting, and who removed it and why stays in the record. The requester removes their own records from the last three days straight away; an older one becomes a request for an administrator, and comes back with status approval_requested and an approvalID instead of an eventID.",
+      "estimatedLatency": "medium",
+      "idempotency": {
+        "required": false,
+        "scope": "operation",
+        "supported": false
+      },
+      "inputIntentSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "description": "Why the record should not be there.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "eventHint": {
+            "description": "Identifies the attendance record: its exact event ID, or the line attendance_list shows for that row, written as it appeared there (name · kind · yyyy-mm-dd HH:MM). Resolved server-side; if it does not uniquely resolve, the call fails with a candidates list to retry against.",
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "reason": {
+            "description": "Why the record should not be there, in the requester's own words.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "eventHint",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "inputSchemaStrict": true,
+      "modelName": "attendance_delete",
+      "modelVisibility": "visible",
+      "modelVisible": true,
+      "name": "attendance_delete",
+      "namespace": "attendance",
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "approvalID": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "eventID": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "eventID",
+          "approvalID"
+        ],
+        "type": "object"
+      },
+      "outputSchemaStrict": true,
+      "policyResource": "tool:attendance_delete",
+      "privacyClass": "workspace_attendance",
+      "requiresApproval": true,
+      "requiresUserPresence": false,
+      "resultContract": {
+        "effects": [],
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "approvalID": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "eventID": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "status": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "status",
+            "eventID",
+            "approvalID"
+          ],
+          "type": "object"
+        }
+      },
+      "sideEffect": "destructive",
+      "sideEffectClass": "destructive",
+      "version": "1",
+      "worksOffline": false
+    },
+    {
+      "availability": {
+        "state": "ok"
+      },
+      "canonicalName": "approval_list",
+      "description": "Requests that are waiting on a decision. An administrator sees every one the company raised; everybody else sees only the ones they raised themselves. Use this to answer 'is my correction through yet' and to find the request approval_decide is about to decide.",
+      "estimatedLatency": "low",
+      "idempotency": {
+        "required": false,
+        "scope": "operation",
+        "supported": false
+      },
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "inputSchemaStrict": true,
+      "modelName": "approval_list",
+      "modelVisibility": "visible",
+      "modelVisible": true,
+      "name": "approval_list",
+      "namespace": "approval",
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "approvals": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "approvalID": {
+                  "minLength": 1,
+                  "pattern": "^\\S(?:.*\\S)?$",
+                  "type": "string"
+                },
+                "askedAt": {
+                  "type": "string"
+                },
+                "askedBy": {
+                  "type": "string"
+                },
+                "asks": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "approvalID",
+                "askedBy",
+                "kind",
+                "asks",
+                "reason",
+                "askedAt"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "count": {
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "approvals"
+        ],
+        "type": "object"
+      },
+      "outputSchemaStrict": true,
+      "policyResource": "tool:approval_list",
+      "privacyClass": "workspace_approval",
+      "requiresUserPresence": false,
+      "resultContract": {
+        "effects": [],
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "approvals": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "approvalID": {
+                    "minLength": 1,
+                    "pattern": "^\\S(?:.*\\S)?$",
+                    "type": "string"
+                  },
+                  "askedAt": {
+                    "type": "string"
+                  },
+                  "askedBy": {
+                    "type": "string"
+                  },
+                  "asks": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "approvalID",
+                  "askedBy",
+                  "kind",
+                  "asks",
+                  "reason",
+                  "askedAt"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "count": {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "count",
+            "approvals"
+          ],
+          "type": "object"
+        }
+      },
+      "sideEffect": "read",
+      "sideEffectClass": "read",
+      "version": "1",
+      "worksOffline": false
+    },
+    {
+      "availability": {
+        "state": "ok"
+      },
+      "canonicalName": "approval_decide",
+      "description": "Approve or reject a waiting request. Only an administrator may, and the record refuses anybody else. Approving carries out the write that was held, as the person who asked for it, and applied says what that write did. A request that was already decided is not decided again.",
+      "estimatedLatency": "medium",
+      "idempotency": {
+        "required": false,
+        "scope": "operation",
+        "supported": false
+      },
+      "inputIntentSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "description": "approved or rejected.",
+            "enum": [
+              "approved",
+              "rejected"
+            ],
+            "type": "string"
+          },
+          "note": {
+            "description": "A word back to the person who asked.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "approvalHint": {
+            "description": "Identifies the request to decide: its exact approval ID, or enough of the line approval_list shows for that row — who asked and what it asks — to name exactly one. Resolved server-side; if it does not uniquely resolve, the call fails with a candidates list to retry against.",
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "decision": {
+            "description": "approved or rejected.",
+            "enum": [
+              "approved",
+              "rejected"
+            ],
+            "type": "string"
+          },
+          "note": {
+            "description": "A word back to the person who asked. Omit when there is none.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approvalHint",
+          "decision"
+        ],
+        "type": "object"
+      },
+      "inputSchemaStrict": true,
+      "modelName": "approval_decide",
+      "modelVisibility": "visible",
+      "modelVisible": true,
+      "name": "approval_decide",
+      "namespace": "approval",
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "applied": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "correctedCount": {
+                    "type": "number"
+                  },
+                  "eventID": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "approvalID": {
+            "minLength": 1,
+            "pattern": "^\\S(?:.*\\S)?$",
+            "type": "string"
+          },
+          "askedBy": {
+            "type": "string"
+          },
+          "asks": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "approvalID",
+          "askedBy",
+          "asks",
+          "status",
+          "applied"
+        ],
+        "type": "object"
+      },
+      "outputSchemaStrict": true,
+      "policyResource": "tool:approval_decide",
+      "privacyClass": "workspace_approval",
+      "requiresApproval": true,
+      "requiresUserPresence": false,
+      "resultContract": {
+        "effects": [
+          {
+            "effect": "updated",
+            "effectIdentity": "id",
+            "objectType": "approval",
+            "resultField": "approvalID"
+          }
+        ],
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "applied": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "correctedCount": {
+                      "type": "number"
+                    },
+                    "eventID": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "approvalID": {
+              "minLength": 1,
+              "pattern": "^\\S(?:.*\\S)?$",
+              "type": "string"
+            },
+            "askedBy": {
+              "type": "string"
+            },
+            "asks": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "approvalID",
+            "askedBy",
+            "asks",
+            "status",
+            "applied"
+          ],
+          "type": "object"
+        }
+      },
+      "sideEffect": "workspace_write",
+      "sideEffectClass": "workspace_write",
+      "version": "1",
+      "worksOffline": false
+    },
+    {
+      "availability": {
+        "state": "ok"
+      },
       "canonicalName": "message_context",
       "description": "Return the exact current messenger conversation, thread, requester, and bot identities.",
       "estimatedLatency": "low",
