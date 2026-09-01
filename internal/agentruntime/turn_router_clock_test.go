@@ -35,6 +35,9 @@ func TestTheRouterThatDecidesTheTurnIsToldWhatDayItIs(t *testing.T) {
 	taskLauncher := NewTaskLauncher(harnesstest.New(taskRunService), taskRunService, NewToolCatalogBuilder())
 	router := &clockRecordingTurnRouter{}
 	taskLauncher.UseTurnRouter(router)
+	taskLauncher.UseCompanyProvider(func() agentcontract.CompanyContext {
+		return agentcontract.CompanyContext{Name: "여명거리", TimeZone: "Asia/Seoul"}
+	})
 
 	if _, errorValue := taskLauncher.Launch(context.Background(), TaskLaunchRequest{
 		Source:            TaskLaunchSourceConnector,
@@ -49,6 +52,9 @@ func TestTheRouterThatDecidesTheTurnIsToldWhatDayItIs(t *testing.T) {
 
 	if router.routed.EnvironmentNow.IsZero() {
 		t.Fatal("a router that is not told the date resolves 금요일 against nothing")
+	}
+	if router.routed.Company.TimeZone != "Asia/Seoul" {
+		t.Fatalf("the router reads the clock in the company's zone, got %q", router.routed.Company.TimeZone)
 	}
 	if !router.routed.EnvironmentNow.Equal(router.routed.TurnStartedAt) {
 		t.Fatalf(

@@ -36,6 +36,7 @@ type TaskLauncher struct {
 	requesterWorkspaceProvisioner RequesterWorkspaceProvisioner
 	requesterEmailResolver        RequesterEmailResolver
 	agentIdentityProvider         func() agentcontract.AgentIdentity
+	companyProvider               func() agentcontract.CompanyContext
 	approvalGate                  *approvalgate.Gate
 }
 
@@ -196,6 +197,17 @@ func (taskLauncher *TaskLauncher) UseRequesterEmailResolver(resolver RequesterEm
 
 func (taskLauncher *TaskLauncher) UseAgentIdentityProvider(agentIdentityProvider func() agentcontract.AgentIdentity) {
 	taskLauncher.agentIdentityProvider = agentIdentityProvider
+}
+
+func (taskLauncher *TaskLauncher) UseCompanyProvider(companyProvider func() agentcontract.CompanyContext) {
+	taskLauncher.companyProvider = companyProvider
+}
+
+func (taskLauncher *TaskLauncher) company() agentcontract.CompanyContext {
+	if taskLauncher.companyProvider == nil {
+		return agentcontract.CompanyContext{}
+	}
+	return taskLauncher.companyProvider()
 }
 
 func (taskLauncher *TaskLauncher) agentIdentity() agentcontract.AgentIdentity {
@@ -527,6 +539,7 @@ func (taskLauncher *TaskLauncher) agentTurnRequestForLaunch(request TaskLaunchRe
 		// agent is told the date is unknown and made to read a shell to find out,
 		// on every request that turns on what day it is.
 		EnvironmentNow:             request.TurnStartedAt,
+		Company:                    taskLauncher.company(),
 		RequesterPersonID:          request.RequesterPersonID,
 		RequesterEmail:             request.RequesterEmail,
 		RequesterName:              request.RequesterName,
@@ -726,6 +739,7 @@ func (taskLauncher *TaskLauncher) routedTurnDecision(ctx context.Context, reques
 		PriorTask:         request.PriorTask,
 		TurnStartedAt:     request.TurnStartedAt,
 		EnvironmentNow:    request.TurnStartedAt,
+		Company:           taskLauncher.company(),
 		ToolSet:           taskLauncher.toolCatalogBuilder.BuildToolSet(taskLauncher.toolCatalogRequestForLaunch(request, profileName)),
 	}, callLedger)
 	if errorValue != nil {

@@ -149,6 +149,18 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 		platformAccountLister = platformAccountRepository
 	}
 	policyWatcher := &policy.PolicyWatcher{}
+	companyProvider := func() agentcontract.CompanyContext {
+		company := policyWatcher.CurrentPolicyDocument().Company
+		return agentcontract.CompanyContext{
+			Name:           company.Name,
+			BrandName:      company.BrandName,
+			Slogan:         company.Slogan,
+			Description:    company.Description,
+			Representative: company.Representative,
+			Website:        company.Website,
+			TimeZone:       company.TimeZone,
+		}
+	}
 	policyWatcher.ReloadPolicyDocument(policyDocument)
 
 	auditHandler := adminapi.NewAuditHandler()
@@ -252,18 +264,8 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 			taskRunService,
 			runtimeConfiguration.Terminal.WorkspaceRootPath,
 		),
-		InstructionBundleLoader: instructionBundleLoader,
-		CompanyProvider: func() agentcontract.CompanyContext {
-			company := policyWatcher.CurrentPolicyDocument().Company
-			return agentcontract.CompanyContext{
-				Name:           company.Name,
-				BrandName:      company.BrandName,
-				Slogan:         company.Slogan,
-				Description:    company.Description,
-				Representative: company.Representative,
-				Website:        company.Website,
-			}
-		},
+		InstructionBundleLoader:     instructionBundleLoader,
+		CompanyProvider:             companyProvider,
 		EmbeddingProvider:           embeddingClient,
 		EmbeddingModelName:          embeddingClient.ModelName,
 		SkillIndexPath:              skillIndexPath(runtimeConfiguration),
@@ -335,6 +337,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 	taskLauncher.UseRequesterWorkspaceProvisioner(security.NewPOSIXRequesterWorkspaceProvisioner(posixSynchronizer))
 	taskLauncher.UseRequesterEmailResolver(identityService)
 	taskLauncher.UseAgentIdentityProvider(agentIdentityProvider)
+	taskLauncher.UseCompanyProvider(companyProvider)
 	taskLauncher.UseApprovalGate(toolCatalogApprovalGate)
 	var taskSchedulePoller *scheduler.TaskSchedulePoller
 	if taskScheduleRepository != nil && scheduledDeliveryRepository != nil {
@@ -372,7 +375,9 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 	connectorRuntime.UseLaunchFailureCompleter(launchFailureCompleter)
 	replyGenerator := reply.NewGenerator(languageModelProvider, instructionBundleLoader)
 	replyGenerator.UseAgentIdentityProvider(agentIdentityProvider)
+	replyGenerator.UseCompanyProvider(companyProvider)
 	connectorRuntime.UseReplyGenerator(replyGenerator)
+	connectorRuntime.UseCompanyProvider(companyProvider)
 	connectorRuntime.UseTurnRouter(turnRouter)
 	connectorRuntime.UseIntakeClassifier(intake.NewClassifier(classificationLanguageModelProvider(taskTierLanguageModels, intakeLanguageModelProvider)))
 	connectorRuntime.UseTaskLauncher(taskLauncher)

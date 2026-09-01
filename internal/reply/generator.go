@@ -17,6 +17,7 @@ type Generator struct {
 	languageModel           model.LanguageModelProvider
 	instructionBundleLoader func() agentcontract.InstructionBundle
 	agentIdentityProvider   func() agentcontract.AgentIdentity
+	companyProvider         func() agentcontract.CompanyContext
 }
 
 func NewGenerator(languageModel model.LanguageModelProvider, instructionBundleLoader func() agentcontract.InstructionBundle) *Generator {
@@ -25,6 +26,17 @@ func NewGenerator(languageModel model.LanguageModelProvider, instructionBundleLo
 
 func (generator *Generator) UseAgentIdentityProvider(agentIdentityProvider func() agentcontract.AgentIdentity) {
 	generator.agentIdentityProvider = agentIdentityProvider
+}
+
+func (generator *Generator) UseCompanyProvider(companyProvider func() agentcontract.CompanyContext) {
+	generator.companyProvider = companyProvider
+}
+
+func (generator *Generator) companyTimeZone() string {
+	if generator.companyProvider == nil {
+		return ""
+	}
+	return generator.companyProvider().TimeZone
 }
 
 func (generator *Generator) replySystemInstruction() string {
@@ -81,13 +93,13 @@ func (generator *Generator) replyContext(visibleContext agentcontract.VisibleCon
 	if instructionPrompt := strings.TrimSpace(generator.instructionPrompt()); instructionPrompt != "" {
 		sections = append(sections, "Workspace instructions and available skill references:\n"+instructionPrompt)
 	}
-	if conversation := agentcontract.BuildVisibleContextDescription(visibleContext); conversation != "" {
+	if conversation := agentcontract.BuildVisibleContextDescription(visibleContext, generator.companyTimeZone()); conversation != "" {
 		sections = append(sections, "Conversation:\n"+conversation)
 	}
 	if memoryContext := agentcontract.BuildMemoryContext(memoryFacts); memoryContext != "" {
 		sections = append(sections, "Memory:\n"+memoryContext)
 	}
-	sections = append(sections, runtimeContext(responseLanguage))
+	sections = append(sections, runtimeContext(responseLanguage, generator.companyTimeZone()))
 	return strings.Join(sections, "\n\n")
 }
 
@@ -98,10 +110,10 @@ func (generator *Generator) instructionPrompt() string {
 	return generator.instructionBundleLoader().Prompt
 }
 
-func runtimeContext(responseLanguage string) string {
+func runtimeContext(responseLanguage string, timeZone string) string {
 	return strings.Join([]string{
 		"Runtime:",
 		"Response language: " + toolcontract.ResolveResponseLanguage(responseLanguage),
-		strings.TrimPrefix(agentcontract.BuildTemporalContextDescription(time.Now()), "Runtime temporal context:\n"),
+		strings.TrimPrefix(agentcontract.BuildTemporalContextDescription(time.Now(), timeZone), "Runtime temporal context:\n"),
 	}, "\n")
 }
