@@ -35,8 +35,6 @@ describe('protocol artifacts', () => {
       'attendance_add',
       'attendance_update',
       'attendance_delete',
-      'approval_list',
-      'approval_decide',
       'message_context',
       'message_search',
       'message_send',
