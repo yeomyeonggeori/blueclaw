@@ -36,7 +36,6 @@ func (connectorRuntime *ConnectorRuntime) handleBusyMessageIfNeeded(
 		ResponseLanguage:  responseLanguageForEvent(event),
 		VisibleContext:    event.Context.ToAgentVisibleContext(),
 		ActiveTask:        connectorRuntime.activeTaskContext(activeTaskRun),
-		TurnStartedAt:     time.Now(),
 	})
 	if errorValue != nil {
 		return busyMessageResult{}, errorValue

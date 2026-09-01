@@ -631,6 +631,12 @@ func (connectorRuntime *ConnectorRuntime) planTurn(ctx context.Context, taskRunI
 	if connectorRuntime.turnRouter == nil {
 		return agentcontract.TurnDecision{}, errors.New("connector runtime has no turn router configured")
 	}
+	if request.TurnStartedAt.IsZero() {
+		request.TurnStartedAt = time.Now()
+	}
+	if request.EnvironmentNow.IsZero() {
+		request.EnvironmentNow = request.TurnStartedAt
+	}
 	callLedger := &agentcontract.TurnRouterCallLedger{}
 	turnDecision, errorValue := connectorRuntime.turnRouter.PlanObserved(ctx, request, callLedger)
 	if trimmedTaskRunID := strings.TrimSpace(taskRunID); trimmedTaskRunID != "" && connectorRuntime.taskRunService != nil {
@@ -1387,7 +1393,6 @@ func (connectorRuntime *ConnectorRuntime) classifiedConfirmationDecision(ctx con
 			Prompt:    approval.IntentPrompt,
 			Question:  approval.ApprovalQuestion,
 		},
-		TurnStartedAt: time.Now(),
 	})
 	if errorValue != nil {
 		return agentcontract.TurnDecision{}, errorValue
@@ -1423,7 +1428,6 @@ func (connectorRuntime *ConnectorRuntime) resolveAskReply(ctx context.Context, p
 				SelectionMode: pendingInteraction.SelectionMode,
 				Options:       choiceReplyOptions(pendingInteraction.Options),
 			},
-			TurnStartedAt: time.Now(),
 		})
 		return event, decision, true, errorValue
 	}
@@ -1442,7 +1446,6 @@ func (connectorRuntime *ConnectorRuntime) resolveAskReply(ctx context.Context, p
 			SelectionMode: pendingInteraction.SelectionMode,
 			Options:       choiceReplyOptions(pendingInteraction.Options),
 		},
-		TurnStartedAt: time.Now(),
 	})
 	if errorValue != nil {
 		return event, agentcontract.TurnDecision{}, false, errorValue
