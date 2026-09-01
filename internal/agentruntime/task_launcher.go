@@ -216,6 +216,9 @@ func (taskLauncher *TaskLauncher) resolveRequesterEmail(request TaskLaunchReques
 }
 
 func (taskLauncher *TaskLauncher) Launch(ctx context.Context, request TaskLaunchRequest) (TaskLaunchResult, error) {
+	if request.TurnStartedAt.IsZero() {
+		request.TurnStartedAt = time.Now()
+	}
 	launchResult, routerCallRecords, errorValue := taskLauncher.launchRoutedTask(ctx, request)
 	taskLauncher.appendTurnRouterCallRecords(launchResult.TurnResult.TaskRun.TaskRunID, routerCallRecords)
 	return launchResult, errorValue
@@ -744,11 +747,7 @@ func (taskLauncher *TaskLauncher) intakeWorkDeadline(request TaskLaunchRequest) 
 	if taskLauncher.intakeBudget.MaxElapsedSecond <= 0 {
 		return time.Time{}
 	}
-	turnStartedAt := request.TurnStartedAt
-	if turnStartedAt.IsZero() {
-		turnStartedAt = time.Now()
-	}
-	return turnStartedAt.Add(time.Duration(taskLauncher.intakeBudget.MaxElapsedSecond) * time.Second)
+	return request.TurnStartedAt.Add(time.Duration(taskLauncher.intakeBudget.MaxElapsedSecond) * time.Second)
 }
 
 func (taskLauncher *TaskLauncher) intakeRoutingContext(ctx context.Context, request TaskLaunchRequest) (context.Context, context.CancelFunc) {

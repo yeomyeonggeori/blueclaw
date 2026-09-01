@@ -15,6 +15,9 @@ func Preamble(request agentcontract.AgentTurnRequest, instructionPrompt string) 
 	if introduction := agentIntroduction(request); introduction != "" {
 		sections = append(sections, introduction)
 	}
+	if temporalContext := agentcontract.BuildTemporalContextDescription(request.EnvironmentNow); temporalContext != "" {
+		sections = append(sections, temporalContext)
+	}
 	if facts := rememberedFacts(request.MemoryFacts); facts != "" {
 		sections = append(sections, facts)
 	}
