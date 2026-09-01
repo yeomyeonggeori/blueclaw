@@ -382,7 +382,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) buildTaskSchedule(input scheduleCr
 	if errorValue != nil {
 		return task.TaskSchedule{}, errorValue
 	}
-	timeZone, errorValue := normalizeScheduleTimeZone(input.TimeZone)
+	timeZone, errorValue := normalizeScheduleTimeZone(input.TimeZone, toolCatalogBuilder.companyTimeZone())
 	if errorValue != nil {
 		return task.TaskSchedule{}, errorValue
 	}
@@ -433,7 +433,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) buildUpdatedTaskSchedule(taskSched
 		taskSchedule.AgentProfileName = strings.TrimSpace(*input.AgentProfileName)
 	}
 	if input.TimeZone != nil {
-		timeZone, errorValue := normalizeScheduleTimeZone(*input.TimeZone)
+		timeZone, errorValue := normalizeScheduleTimeZone(*input.TimeZone, toolCatalogBuilder.companyTimeZone())
 		if errorValue != nil {
 			return task.TaskSchedule{}, errorValue
 		}
@@ -678,8 +678,8 @@ func parseTaskScheduleKind(value string) (task.TaskScheduleKind, error) {
 	}
 }
 
-func normalizeScheduleTimeZone(value string) (string, error) {
-	timeZone := firstNonEmptyString(value, "Asia/Seoul")
+func normalizeScheduleTimeZone(value string, companyTimeZone string) (string, error) {
+	timeZone := task.ScheduleTimeZoneName(firstNonEmptyString(value, companyTimeZone))
 	if _, errorValue := time.LoadLocation(timeZone); errorValue != nil {
 		return "", errScheduleTimeZoneInvalid
 	}

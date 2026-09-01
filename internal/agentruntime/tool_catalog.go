@@ -36,6 +36,7 @@ type ToolCatalogBuilder struct {
 	memoryUpdateQueue            memory.MemoryUpdateEnqueuer
 	mcpRegistry                  *mcp.McpRegistry
 	capabilityClient             capability.Client
+	companyProvider              func() agentcontract.CompanyContext
 	capabilityToolDescriptors    []CapabilityToolDescriptor
 	terminalService              *security.ShellService
 	workspaceActorFactory        security.WorkspaceActorFactory
@@ -163,6 +164,17 @@ func NewToolCatalogBuilder() *ToolCatalogBuilder {
 	return &ToolCatalogBuilder{
 		workspaceRootPath: "/workspace",
 	}
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) UseCompanyProvider(companyProvider func() agentcontract.CompanyContext) {
+	toolCatalogBuilder.companyProvider = companyProvider
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) companyTimeZone() string {
+	if toolCatalogBuilder.companyProvider == nil {
+		return ""
+	}
+	return toolCatalogBuilder.companyProvider().TimeZone
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) UseAllowedToolNamesByProfile(allowedToolNamesByProfile map[string][]string, defaultAllowedToolNames []string) {

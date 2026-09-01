@@ -338,6 +338,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 	taskLauncher.UseRequesterEmailResolver(identityService)
 	taskLauncher.UseAgentIdentityProvider(agentIdentityProvider)
 	taskLauncher.UseCompanyProvider(companyProvider)
+	toolCatalogBuilder.UseCompanyProvider(companyProvider)
 	taskLauncher.UseApprovalGate(toolCatalogApprovalGate)
 	var taskSchedulePoller *scheduler.TaskSchedulePoller
 	if taskScheduleRepository != nil && scheduledDeliveryRepository != nil {
@@ -485,6 +486,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 			TaskRunService: taskRunService,
 		},
 		TaskScheduleHandler: adminapi.TaskScheduleHandler{
+			CompanyProvider:   companyProvider,
 			SummaryRepository: taskScheduleSummaryRepository,
 			ListRepository:    taskScheduleListRepository,
 			RepairRepository:  taskScheduleCreatorRepairRepository,

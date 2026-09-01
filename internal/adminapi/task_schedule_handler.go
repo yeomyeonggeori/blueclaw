@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 type TaskScheduleSummaryRepository interface {
@@ -30,6 +31,14 @@ type TaskScheduleHandler struct {
 	SummaryRepository TaskScheduleSummaryRepository
 	ListRepository    TaskScheduleListRepository
 	RepairRepository  TaskScheduleCreatorRepairRepository
+	CompanyProvider   func() agentcontract.CompanyContext
+}
+
+func (taskScheduleHandler TaskScheduleHandler) companyTimeZone() string {
+	if taskScheduleHandler.CompanyProvider == nil {
+		return ""
+	}
+	return taskScheduleHandler.CompanyProvider().TimeZone
 }
 
 var (
@@ -221,7 +230,7 @@ func (taskScheduleHandler TaskScheduleHandler) HandleUpdate(responseWriter http.
 		TaskScheduleID:    taskScheduleID,
 		RequesterPersonID: creatorPersonID,
 		UpdateTaskSchedule: func(existingTaskSchedule task.TaskSchedule) (task.TaskSchedule, error) {
-			return applyTaskScheduleUpdateRequest(existingTaskSchedule, updateRequest)
+			return applyTaskScheduleUpdateRequest(existingTaskSchedule, updateRequest, taskScheduleHandler.companyTimeZone())
 		},
 	})
 	if errorValue != nil {
@@ -325,7 +334,7 @@ func (taskScheduleHandler TaskScheduleHandler) findTaskSchedule(taskScheduleID s
 	}
 }
 
-func applyTaskScheduleUpdateRequest(taskSchedule task.TaskSchedule, request taskScheduleUpdateRequest) (task.TaskSchedule, error) {
+func applyTaskScheduleUpdateRequest(taskSchedule task.TaskSchedule, request taskScheduleUpdateRequest, companyTimeZone string) (task.TaskSchedule, error) {
 	if request.Name != nil {
 		taskSchedule.Name = strings.TrimSpace(*request.Name)
 	}
@@ -333,7 +342,7 @@ func applyTaskScheduleUpdateRequest(taskSchedule task.TaskSchedule, request task
 		taskSchedule.Kind = taskScheduleKind(*request.Kind)
 	}
 	if request.TimeZone != nil {
-		timeZone, errorValue := taskScheduleTimeZone(*request.TimeZone)
+		timeZone, errorValue := taskScheduleTimeZone(*request.TimeZone, companyTimeZone)
 		if errorValue != nil {
 			return task.TaskSchedule{}, errorValue
 		}
@@ -438,11 +447,17 @@ func taskScheduleKind(value string) task.TaskScheduleKind {
 	}
 }
 
-func taskScheduleTimeZone(value string) (string, error) {
-	timeZone := strings.TrimSpace(value)
-	if timeZone == "" {
-		timeZone = "Asia/Seoul"
+func firstNonEmptyTimeZone(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
 	}
+	return ""
+}
+
+func taskScheduleTimeZone(value string, companyTimeZone string) (string, error) {
+	timeZone := task.ScheduleTimeZoneName(firstNonEmptyTimeZone(value, companyTimeZone))
 	if _, errorValue := time.LoadLocation(timeZone); errorValue != nil {
 		return "", errTaskScheduleTimeZoneInvalid
 	}

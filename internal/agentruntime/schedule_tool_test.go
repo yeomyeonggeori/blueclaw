@@ -11,6 +11,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 func TestScheduleCreateToolStoresCurrentReplyTarget(t *testing.T) {
@@ -18,6 +19,9 @@ func TestScheduleCreateToolStoresCurrentReplyTarget(t *testing.T) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
 	toolCatalogBuilder.UseTaskScheduleRepository(repository)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_create"})
+	toolCatalogBuilder.UseCompanyProvider(func() agentcontract.CompanyContext {
+		return agentcontract.CompanyContext{TimeZone: "Asia/Seoul"}
+	})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
@@ -60,7 +64,7 @@ func TestScheduleCreateToolStoresCurrentReplyTarget(t *testing.T) {
 		t.Fatalf("expected agent execution mode, got %+v", taskSchedule)
 	}
 	if taskSchedule.TimeZone != "Asia/Seoul" || taskSchedule.NextRunAt == nil {
-		t.Fatalf("expected default timezone and next run, got %+v", taskSchedule)
+		t.Fatalf("expected the company zone and a next run, got %+v", taskSchedule)
 	}
 }
 

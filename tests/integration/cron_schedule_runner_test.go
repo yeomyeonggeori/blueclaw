@@ -40,6 +40,7 @@ func TestCronScheduleRunsDailyResearchPromptAndAdvancesToNextDay(t *testing.T) {
 			AgentProfileName: "default",
 			Kind:             task.TaskScheduleKindCron,
 			CronExpression:   "0 9 * * *",
+			TimeZone:         "Asia/Seoul",
 			NextRunAt:        &nextRunAt,
 		},
 		ReferenceTime: runAt,
