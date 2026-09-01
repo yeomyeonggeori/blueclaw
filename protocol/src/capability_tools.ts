@@ -968,6 +968,23 @@ export const leaveDecideInputIntentSchema = z.strictObject({
   decision: z.enum(WorkspaceDecision).describe('approved or rejected.').optional(),
 });
 
+export const leaveUpdateInputSchema = z.strictObject({
+  leaveHint: leaveHintSchema,
+  kind: z.string().describe('The kind of leave, named as this company registers it. Omit to keep the kind it has.').optional(),
+  startsAt: z.string().describe(`First day of the leave. ${momentDescription} Omit to keep the day it starts on.`).optional(),
+  endsAt: z.string().describe(`Last day of the leave. ${momentDescription} Omit to keep the day it ends on.`).optional(),
+  days: z.number().describe('How many days of entitlement this consumes. Omit to keep the number it consumes.').optional(),
+  note: z.string().describe('The reason, in the requester\'s own words. Omit to keep the note it has.').optional(),
+});
+
+export const leaveUpdateInputIntentSchema = leaveUpdateInputSchema.partial();
+
+export const leaveDeleteInputSchema = z.strictObject({
+  leaveHint: leaveHintSchema,
+});
+
+export const leaveDeleteInputIntentSchema = z.strictObject({});
+
 export const leaveResultSchema = z.strictObject({
   leaveID: resourceIDSchema,
   person: z.string(),
@@ -1036,19 +1053,21 @@ export const attendanceAddInputSchema = z.strictObject({
 
 export const attendanceAddInputIntentSchema = attendanceAddInputSchema.partial();
 
-export const attendanceUpdateInputSchema = z.strictObject({
+export const attendanceCorrectionSchema = z.strictObject({
   eventHint: attendanceHintSchema,
   date: z.string().describe(`The day it actually happened. ${attendanceDayDescription} Omit to keep the day it has.`).optional(),
   time: z.string().describe(`The time it actually happened. ${attendanceTimeDescription} Omit to keep the time it has.`).optional(),
   location: z.string().describe('The registered workplace it happened at. Omit to keep the one it has.').optional(),
-  reason: attendanceReasonSchema.describe('Why the record was wrong, in the requester\'s own words.'),
+});
+
+export const attendanceUpdateInputSchema = z.strictObject({
+  corrections: z.array(attendanceCorrectionSchema).describe('The records to correct, together. Correcting one record is an array of one. A day whose clock-in and clock-out both move goes in one call, because the record refuses a correction that would leave the day out of order partway through.'),
+  reason: attendanceReasonSchema.describe('Why the records were wrong, in the requester\'s own words.'),
 });
 
 export const attendanceUpdateInputIntentSchema = z.strictObject({
-  date: z.string().describe(`The day it actually happened. ${attendanceDayDescription}`).optional(),
-  time: z.string().describe(`The time it actually happened. ${attendanceTimeDescription}`).optional(),
-  location: z.string().describe('The registered workplace it happened at.').optional(),
-  reason: attendanceReasonSchema.describe('Why the record was wrong.').optional(),
+  corrections: z.array(attendanceCorrectionSchema).describe('The records to correct, together.').optional(),
+  reason: attendanceReasonSchema.describe('Why the records were wrong.').optional(),
 });
 
 export const attendanceDeleteInputSchema = z.strictObject({
@@ -1527,6 +1546,52 @@ const leaveToolDefinitions: CapabilityToolDefinition[] = [
     completionEvidence: { mode: 'success', action: 'write_leave', targetKind: 'leave' },
   },
   {
+    name: 'leave_update',
+    namespace: 'leave',
+    privacyClass: 'workspace_leave',
+    policyResource: 'tool:leave_update',
+    description: 'Correct a leave that was filed wrong: its days, its kind, how much entitlement it consumes, or the note. A person corrects their own while it is still waiting on a decision; an administrator corrects anybody\'s at any time, which is how a leave filed for the wrong year is moved to the right one. Only the fields you pass change.',
+    version: '1',
+    estimatedLatency: CapabilityEstimatedLatency.Medium,
+    inputSchema: leaveUpdateInputSchema,
+    inputIntentSchema: leaveUpdateInputIntentSchema,
+    result: {
+      schema: leaveResultSchema,
+      effects: [{
+        objectType: 'leave',
+        effect: ResourceMutationEffect.Updated,
+        resultField: 'leaveID',
+        effectIdentity: ResourceEffectIdentity.ID,
+      }],
+    },
+    sideEffect: CapabilitySideEffect.WorkspaceWrite,
+    requiresApproval: true,
+    completionEvidence: { mode: 'success', action: 'write_leave', targetKind: 'leave' },
+  },
+  {
+    name: 'leave_delete',
+    namespace: 'leave',
+    privacyClass: 'workspace_leave',
+    policyResource: 'tool:leave_delete',
+    description: 'Take a leave back out of the record entirely, as though it was never filed. A person takes back their own while it is still waiting on a decision; an administrator takes back anybody\'s. Entitlement an approved leave spent comes back with it. To refuse a leave rather than erase it, decide it rejected.',
+    version: '1',
+    estimatedLatency: CapabilityEstimatedLatency.Medium,
+    inputSchema: leaveDeleteInputSchema,
+    inputIntentSchema: leaveDeleteInputIntentSchema,
+    result: {
+      schema: leaveResultSchema,
+      effects: [{
+        objectType: 'leave',
+        effect: ResourceMutationEffect.Deleted,
+        resultField: 'leaveID',
+        effectIdentity: ResourceEffectIdentity.ID,
+      }],
+    },
+    sideEffect: CapabilitySideEffect.Destructive,
+    requiresApproval: true,
+    completionEvidence: { mode: 'success', action: 'write_leave', targetKind: 'leave' },
+  },
+  {
     name: 'leave_decide',
     namespace: 'leave',
     privacyClass: 'workspace_leave',
@@ -1582,7 +1647,7 @@ const attendanceToolDefinitions: CapabilityToolDefinition[] = [
     namespace: 'attendance',
     privacyClass: 'workspace_attendance',
     policyResource: 'tool:attendance_update',
-    description: 'Correct the day, the time, or the workplace of an attendance record that was written wrong. What the record held before the correction is kept alongside it, with the reason. A person corrects their own records from the last three days. Correcting an older one, or anybody else\'s, is an administrator\'s: asked by anybody else it comes back with status asked, the administrators have been told, and the task is done. Say an administrator was asked; do not call this again.',
+    description: 'Correct the day, the time, or the workplace of attendance records that were written wrong, all in one call. What the record held before the correction is kept alongside it, with the reason. A person corrects their own records from the last three days. Correcting an older one, or anybody else\'s, is an administrator\'s: asked by anybody else it comes back with status asked, the administrators have been told, and the task is done. Say an administrator was asked; do not call this again.',
     version: '1',
     estimatedLatency: CapabilityEstimatedLatency.Medium,
     inputSchema: attendanceUpdateInputSchema,

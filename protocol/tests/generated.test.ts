@@ -30,6 +30,8 @@ describe('protocol artifacts', () => {
       'leave_list',
       'leave_balance',
       'leave_request',
+      'leave_update',
+      'leave_delete',
       'leave_decide',
       'attendance_list',
       'attendance_add',
