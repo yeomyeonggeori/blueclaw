@@ -724,6 +724,8 @@ func (taskLauncher *TaskLauncher) routedTurnDecision(ctx context.Context, reques
 		ScheduledRun:      request.ScheduledRun,
 		ActiveGoal:        request.ActiveGoal,
 		PriorTask:         request.PriorTask,
+		TurnStartedAt:     request.TurnStartedAt,
+		EnvironmentNow:    request.TurnStartedAt,
 		ToolSet:           taskLauncher.toolCatalogBuilder.BuildToolSet(taskLauncher.toolCatalogRequestForLaunch(request, profileName)),
 	}, callLedger)
 	if errorValue != nil {
