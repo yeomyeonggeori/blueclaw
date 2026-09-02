@@ -476,7 +476,7 @@ func TestFailedAssertionReturnsObservedTurnResult(t *testing.T) {
 
 func TestVirtualTaskCapabilityPreservesLifecycleState(t *testing.T) {
 	service := virtualCapabilityService{}
-	addResponse := service.response("task_add", []byte(`{"input":{"title":"비용 테스트 회귀 확인","goal":"회귀 방지","targetPersonHint":"예시","participantPersonHints":["샘플"]},"context":{}}`))
+	addResponse := service.response("task_add", []byte(`{"input":{"title":"비용 테스트 회귀 확인","size":"S","participantPersonHints":["예시","샘플"]},"context":{}}`))
 	discoveryResponse := service.response("task_list", []byte(`{"input":{"query":"비용 테스트 회귀 확인"},"context":{}}`))
 	taskID := virtualTaskID(t, discoveryResponse)
 	updateResponse := service.response("task_update", []byte(fmt.Sprintf(`{"input":{"taskHint":%q,"title":"비용 테스트 회귀 확인 완료 준비"},"context":{}}`, taskID)))
@@ -494,17 +494,14 @@ func TestVirtualTaskCapabilityPreservesLifecycleState(t *testing.T) {
 	}
 	if addDocument.Result["taskID"] != "task-1" ||
 		addDocument.Result["content"] != "비용 테스트 회귀 확인" ||
-		addDocument.Result["goal"] != "회귀 방지" ||
+		addDocument.Result["size"] != "S" ||
 		addDocument.Result["ownerName"] != "예시" {
 		t.Fatalf("expected canonical created task result, got %s", addResponse)
-	}
-	if _, isFound := addDocument.Result["targetPersonHint"]; isFound {
-		t.Fatalf("task_add result must not expose input-only targetPersonHint: %s", addResponse)
 	}
 	if _, isFound := addDocument.Result["participantPersonHints"]; isFound {
 		t.Fatalf("task_add result must not expose input-only participantPersonHints: %s", addResponse)
 	}
-	if participantNames := stringSliceValue(addDocument.Result["participantNames"]); !slices.Equal(participantNames, []string{"샘플"}) {
+	if participantNames := stringSliceValue(addDocument.Result["participantNames"]); !slices.Equal(participantNames, []string{"예시", "샘플"}) {
 		t.Fatalf("expected canonical participant names, got %s", addResponse)
 	}
 	if len(addDocument.Effects) != 1 || addDocument.Effects[0] != (toolcontract.ResourceEffect{ObjectType: "task", Effect: "created", ID: "task-1"}) {
@@ -1120,7 +1117,7 @@ func TestGWSDisabled(t *testing.T) {
 
 func TestVirtualCalendarMutationUsesExactEventHint(t *testing.T) {
 	service := virtualCapabilityService{}
-	addResponse := service.calendarResponse("event_add", []byte(`{"input":{"title":"비용 테스트 일정","startISO":"2026-07-16T10:00:00+09:00","endISO":"2026-07-16T11:00:00+09:00","people":["지원팀"]},"context":{"requesterPersonID":"person-1","requesterName":"이수현","requesterEmail":"soohyun@example.com"}}`))
+	addResponse := service.calendarResponse("event_add", []byte(`{"input":{"title":"비용 테스트 일정","startsAt":"2026-07-16T10:00:00+09:00","endsAt":"2026-07-16T11:00:00+09:00","participantPersonHints":["지원팀"]},"context":{"requesterPersonID":"person-1","requesterName":"이수현","requesterEmail":"soohyun@example.com"}}`))
 	if !strings.Contains(addResponse, `"eventID":"calendar-event-001"`) ||
 		!strings.Contains(addResponse, `"objectType":"calendar"`) ||
 		!strings.Contains(addResponse, `"effect":"created"`) ||
@@ -1128,7 +1125,7 @@ func TestVirtualCalendarMutationUsesExactEventHint(t *testing.T) {
 		!strings.Contains(addResponse, `"name":"이수현"`) {
 		t.Fatalf("expected canonical created event and effect, got %s", addResponse)
 	}
-	updateResponse := service.calendarResponse("event_update", []byte(`{"input":{"eventHint":"calendar-event-001","startISO":"2026-07-16T14:00:00+09:00","endISO":"2026-07-16T15:00:00+09:00"}}`))
+	updateResponse := service.calendarResponse("event_update", []byte(`{"input":{"eventHint":"calendar-event-001","startsAt":"2026-07-16T14:00:00+09:00","endsAt":"2026-07-16T15:00:00+09:00"}}`))
 	if !strings.Contains(updateResponse, `"status":"ok"`) || !strings.Contains(updateResponse, `T14:00:00+09:00`) {
 		t.Fatalf("expected exact-ID hint update, got %s", updateResponse)
 	}
@@ -1155,20 +1152,20 @@ func TestVirtualCalendarMutationUsesExactEventHint(t *testing.T) {
 func TestVirtualCalendarListHonorsWindowQueryAndLimit(t *testing.T) {
 	service := virtualCapabilityService{}
 	for _, input := range []string{
-		`{"title":"비용 점검 A","startISO":"2026-07-16T10:00:00+09:00","endISO":"2026-07-16T11:00:00+09:00"}`,
-		`{"title":"채용 점검","startISO":"2026-07-16T12:00:00+09:00","endISO":"2026-07-16T13:00:00+09:00"}`,
-		`{"title":"비용 점검 B","startISO":"2026-07-17T10:00:00+09:00","endISO":"2026-07-17T11:00:00+09:00"}`,
+		`{"title":"비용 점검 A","startsAt":"2026-07-16T10:00:00+09:00","endsAt":"2026-07-16T11:00:00+09:00"}`,
+		`{"title":"채용 점검","startsAt":"2026-07-16T12:00:00+09:00","endsAt":"2026-07-16T13:00:00+09:00"}`,
+		`{"title":"비용 점검 B","startsAt":"2026-07-17T10:00:00+09:00","endsAt":"2026-07-17T11:00:00+09:00"}`,
 	} {
 		service.calendarResponse("event_add", []byte(`{"input":`+input+`}`))
 	}
-	response := service.calendarResponse("event_list", []byte(`{"input":{"startISO":"2026-07-16T00:00:00+09:00","endISO":"2026-07-17T00:00:00+09:00","query":"비용","limit":1}}`))
+	response := service.calendarResponse("event_list", []byte(`{"input":{"startsAt":"2026-07-16T00:00:00+09:00","endsAt":"2026-07-17T00:00:00+09:00","query":"비용","limit":1}}`))
 	if !strings.Contains(response, `"eventID":"calendar-event-001"`) ||
 		strings.Contains(response, `"eventID":"calendar-event-002"`) ||
 		strings.Contains(response, `"eventID":"calendar-event-003"`) {
 		t.Fatalf("expected bounded calendar listing, got %s", response)
 	}
 	for _, input := range []string{
-		`{"startISO":"2026-07-16T00:00:00+09:00"}`,
+		`{"startsAt":"2026-07-16T00:00:00+09:00"}`,
 		`{"limit":1.5}`,
 	} {
 		response = service.calendarResponse("event_list", []byte(`{"input":`+input+`}`))
