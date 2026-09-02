@@ -102,7 +102,6 @@ var virtualCanonicalMessageToolNames = []string{
 	"message_send",
 	"message_update",
 	"message_delete",
-	"channel_update",
 }
 
 var virtualGeneratedDescriptorToolNames = []string{
@@ -111,7 +110,6 @@ var virtualGeneratedDescriptorToolNames = []string{
 	"message_send",
 	"message_update",
 	"message_delete",
-	"channel_update",
 	"document_read",
 	"image_read",
 }
@@ -1678,21 +1676,6 @@ func (service *virtualCapabilityService) response(toolName string, requestBody [
 		messageIDs := stringSliceValue(virtualCapabilityInput(requestBody)["messageIDs"])
 		result := map[string]any{"messageIDs": messageIDs, "deliveryStatus": "deleted"}
 		return virtualCapabilityMessageSuccess(toolName, "deleted", messageIDs, "deleted virtual platform messages", result)
-	case "channel_update":
-		if virtualCapabilityRequestNeedsApproval(requestBody) {
-			return virtualCapabilityApprovalRequired(toolName)
-		}
-		input := virtualCapabilityInput(requestBody)
-		channelID := firstVirtualString(stringValue(input["channelID"]), "virtual-channel-1")
-		result := map[string]any{"channelID": channelID, "updated": true}
-		if inviteeHints := stringSliceValue(input["inviteeHints"]); len(inviteeHints) > 0 {
-			invitedUserIDs := make([]string, 0, len(inviteeHints))
-			for index := range inviteeHints {
-				invitedUserIDs = append(invitedUserIDs, fmt.Sprintf("virtual-invitee-%d", index+1))
-			}
-			result["invitedUserIDs"] = invitedUserIDs
-		}
-		return virtualCapabilityChannelSuccess(toolName, "updated", channelID, "updated virtual channel "+channelID, result)
 	default:
 		return virtualCapabilitySuccess(toolName, toolName+" completed", map[string]any{"toolName": toolName, "ok": true, "request": virtualCapabilityInput(requestBody)})
 	}
@@ -2454,19 +2437,6 @@ func virtualCapabilityMessageSuccess(toolName string, effect string, messageIDs 
 		"content":         content,
 		"result":          result,
 		"effects":         effects,
-	})
-}
-
-func virtualCapabilityChannelSuccess(toolName string, effect string, channelID string, content string, result any) string {
-	return virtualCapabilityJSON(map[string]any{
-		"provider":        "virtual",
-		"selectedBackend": "device",
-		"toolName":        toolName,
-		"outcome":         "succeeded",
-		"status":          "ok",
-		"content":         content,
-		"result":          result,
-		"effects":         []map[string]any{{"objectType": "channel", "effect": effect, "id": channelID}},
 	})
 }
 

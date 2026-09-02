@@ -799,19 +799,16 @@ func TestVirtualMessageToolsUseGeneratedCanonicalContracts(t *testing.T) {
 		"message_send":    {"messageIDs", "deliveryStatus"},
 		"message_update":  {"messageID", "deliveryStatus", "messageUpdated"},
 		"message_delete":  {"messageIDs", "deliveryStatus"},
-		"channel_update":  {"channelID", "updated"},
 	}
 	approvalGatedToolNames := map[string]bool{
 		"message_send":   true,
 		"message_update": false,
 		"message_delete": true,
-		"channel_update": true,
 	}
 	expectedEffects := map[string]agentruntime.CapabilityResourceEffectContract{
 		"message_send":   {ObjectType: "message", Effect: "sent", ResultField: "messageIDs", EffectIdentity: "id"},
 		"message_update": {ObjectType: "message", Effect: "updated", ResultField: "messageID", EffectIdentity: "id"},
 		"message_delete": {ObjectType: "message", Effect: "deleted", ResultField: "messageIDs", EffectIdentity: "id"},
-		"channel_update": {ObjectType: "channel", Effect: "updated", ResultField: "channelID", EffectIdentity: "id"},
 	}
 
 	for _, toolName := range virtualCanonicalMessageToolNames {
@@ -893,15 +890,6 @@ func TestVirtualMessageServiceReturnsCanonicalContextSearchDeleteAndChannelResul
 		!slices.Equal(stringSliceValue(deleteResult["messageIDs"]), []string{"virtual-platform-message-001", "virtual-platform-message-002"}) ||
 		len(deleteEffects) != 2 {
 		t.Fatalf("unexpected message delete result=%+v effects=%+v", deleteResult, deleteEffects)
-	}
-
-	channelResult, channelEffects := virtualCapabilityResponseResult(t, service.response(
-		"channel_update",
-		[]byte(`{"input":{"channelID":"virtual-channel-1","header":"분기 공지"},"context":{"isApprovalContinuation":true}}`),
-	))
-	if channelResult["channelID"] != "virtual-channel-1" || channelResult["updated"] != true || len(channelEffects) != 1 ||
-		channelEffects[0].ObjectType != "channel" || channelEffects[0].ID != "virtual-channel-1" {
-		t.Fatalf("unexpected channel update result=%+v effects=%+v", channelResult, channelEffects)
 	}
 }
 

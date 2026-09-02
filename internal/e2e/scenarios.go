@@ -28,7 +28,7 @@ func workspaceSkillInstruction(skillName string) agentcontract.SkillInstruction 
 
 // ScenarioSkillNames are the skills these scenarios drive. They are the host's
 // to supply, so a standalone checkout finds none of them.
-var ScenarioSkillNames = []string{"presentation", "scheduled-task", "calendar", "internkim-task", "mattermost", "website"}
+var ScenarioSkillNames = []string{"presentation", "scheduled-task", "calendar", "internkim-task", "messages", "website"}
 
 func rootWorkspaceSkillDirectoryPath(skillName string) string {
 	skillDirectoryPath := findScenarioSkillDirectory(skillName)
@@ -781,7 +781,7 @@ func AmbientDutyAnnouncementNoEchoScenario(artifactDirectoryPath string) Virtual
 		ArtifactDirectoryPath:  artifactDirectoryPath,
 		RouterRequiredEvidence: []string{"event_add"},
 		AddressingResponse:     `{"target":"human","shouldRespond":false,"dutyMatch":true,"dutyName":"calendar_upkeep","dutyConfidence":0.92}`,
-		Skills:                 []agentcontract.SkillInstruction{calendarSkill(), mattermostSkill()},
+		Skills:                 []agentcontract.SkillInstruction{calendarSkill(), messagesSkill()},
 		AllowedTools:           []string{"conversation_history", "memory_search", "event_add", "message_send"},
 		CapabilityToolNames:    []string{"event_add", "message_send"},
 		InitialToolNames:       []string{"event_add"},
@@ -1181,8 +1181,8 @@ func calendarSkill() agentcontract.SkillInstruction {
 	return workspaceSkillInstruction("calendar")
 }
 
-func mattermostSkill() agentcontract.SkillInstruction {
-	return workspaceSkillInstruction("mattermost")
+func messagesSkill() agentcontract.SkillInstruction {
+	return workspaceSkillInstruction("messages")
 }
 
 func scheduledTaskSkill() agentcontract.SkillInstruction {
