@@ -680,6 +680,7 @@ bluecollar is readable without one.
 | Unit | `go test ./...`, `bun run test` | none; no external service needed |
 | Integration | `go test ./tests/integration/...` | Postgres-backed cases skip unless `BLUECLAW_TEST_POSTGRES_URL` is set |
 | Live model | same `go test` invocation | skipped unless `BLUECLAW_LIVE_LLM_TEST=1` is set — these call a real model and cost money |
+| External agent CLI | same `go test` invocation | each skips unless `BLUECLAW_TEST_CLAUDE_CODE_PATH`, `BLUECLAW_TEST_CODEX_PATH` or `BLUECLAW_TEST_ANTIGRAVITY_PATH` names the executable — the turn runs on that agent's own credentials |
 | Virtual session | `go run ./cmd/blueclaw-lab virtual-session` | requires `--live-llm` or `BLUECLAW_E2E_LIVE=1` |
 | Fleet and VM | `go run ./cmd/blueclaw-lab vm-up`, `smoke-firecracker` | needs the development VM from `config/lab.example.json` |
 

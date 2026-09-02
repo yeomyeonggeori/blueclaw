@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"strings"
 	"sync"
 	"testing"
@@ -74,15 +73,17 @@ func daemonToolSet(t *testing.T, execution *daemonToolExecution) *toolcontract.T
 	return toolSet
 }
 
-func TestRealClaudeCodeCallsADaemonTool(t *testing.T) {
-	commandPath := strings.TrimSpace(os.Getenv("BLUECLAW_TEST_CLAUDE_CODE_PATH"))
+func theAgentCommandNamedBy(t *testing.T, variableName string, agentName string) string {
+	t.Helper()
+	commandPath := strings.TrimSpace(os.Getenv(variableName))
 	if commandPath == "" {
-		resolvedPath, errorValue := exec.LookPath("claude")
-		if errorValue != nil {
-			t.Skip("claude is not installed, so a real external agent cannot be driven here")
-		}
-		commandPath = resolvedPath
+		t.Skipf("set %s to the %s executable to spend a real model turn on it", variableName, agentName)
 	}
+	return commandPath
+}
+
+func TestRealClaudeCodeCallsADaemonTool(t *testing.T) {
+	commandPath := theAgentCommandNamedBy(t, "BLUECLAW_TEST_CLAUDE_CODE_PATH", "claude")
 
 	execution := &daemonToolExecution{}
 	resolver := mcpserver.NewSessionTokenRequesterResolver(func() string { return "session-token-claude" })
@@ -116,14 +117,7 @@ func TestRealClaudeCodeCallsADaemonTool(t *testing.T) {
 }
 
 func TestRealCodexCallsADaemonTool(t *testing.T) {
-	commandPath := strings.TrimSpace(os.Getenv("BLUECLAW_TEST_CODEX_PATH"))
-	if commandPath == "" {
-		resolvedPath, errorValue := exec.LookPath("codex")
-		if errorValue != nil {
-			t.Skip("codex is not installed, so it cannot be driven here")
-		}
-		commandPath = resolvedPath
-	}
+	commandPath := theAgentCommandNamedBy(t, "BLUECLAW_TEST_CODEX_PATH", "codex")
 
 	execution := &daemonToolExecution{}
 	resolver := mcpserver.NewSessionTokenRequesterResolver(func() string { return "session-token-codex" })

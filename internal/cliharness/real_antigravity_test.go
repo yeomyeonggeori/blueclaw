@@ -3,8 +3,6 @@ package cliharness
 import (
 	"context"
 	"net/http/httptest"
-	"os"
-	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -14,14 +12,7 @@ import (
 )
 
 func TestRealAntigravityCallsADaemonTool(t *testing.T) {
-	commandPath := strings.TrimSpace(os.Getenv("BLUECLAW_TEST_ANTIGRAVITY_PATH"))
-	if commandPath == "" {
-		resolvedPath, errorValue := exec.LookPath("agy")
-		if errorValue != nil {
-			t.Skip("agy is not installed, so antigravity cannot be driven here")
-		}
-		commandPath = resolvedPath
-	}
+	commandPath := theAgentCommandNamedBy(t, "BLUECLAW_TEST_ANTIGRAVITY_PATH", "agy")
 
 	execution := &daemonToolExecution{}
 	resolver := mcpserver.NewSessionTokenRequesterResolver(func() string { return "session-token-antigravity" })
