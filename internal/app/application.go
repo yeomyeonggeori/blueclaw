@@ -473,6 +473,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 			RunsAsRequesterIdentity: strings.TrimSpace(runtimeConfiguration.Terminal.POSIXHelperPath) != "",
 			ToolCatalogURL:          toolCatalogURL(runtimeConfiguration),
 		}},
+		SkillInventoryHandler: adminapi.SkillInventoryHandler{InstructionBundleLoader: instructionBundleLoader},
 		TaskApprovalHandler: adminapi.TaskApprovalHandler{
 			TaskLauncher:    taskLauncher,
 			TaskRunService:  taskRunService,
