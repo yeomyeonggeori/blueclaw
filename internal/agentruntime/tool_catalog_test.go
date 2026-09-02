@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
-	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
@@ -82,15 +81,6 @@ func TestResolveAgentWorkspaceEnvironmentLeavesConcretePathsUnchanged(t *testing
 		resolved["TOOL_DIR"] != workspaceRootPath+"/tools" {
 		t.Fatalf("expected exact concrete environment paths, got %+v", resolved)
 	}
-}
-
-type recordingMemoryUpdateQueue struct {
-	jobs []memory.MemoryUpdateJob
-}
-
-func (queue *recordingMemoryUpdateQueue) Enqueue(job memory.MemoryUpdateJob) (memory.MemoryUpdateAccepted, error) {
-	queue.jobs = append(queue.jobs, job)
-	return memory.MemoryUpdateAccepted{Accepted: true, JobID: "job-1"}, nil
 }
 
 func (repository *memoryTaskScheduleRepository) UpsertTaskSchedule(taskSchedule task.TaskSchedule) error {

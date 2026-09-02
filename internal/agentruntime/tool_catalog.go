@@ -31,9 +31,6 @@ type AttachmentMaterialResolver interface {
 type ToolCatalogBuilder struct {
 	allowedToolNamesByProfile    map[string][]string
 	defaultAllowedToolNames      []string
-	memoryService                *memory.MemoryService
-	pinnedMemoryStore            *memory.MarkdownStore
-	memoryUpdateQueue            memory.MemoryUpdateEnqueuer
 	memoryStore                  *memory.Store
 	memoryIngester               *memory.Ingester
 	mcpRegistry                  *mcp.McpRegistry
@@ -90,7 +87,7 @@ type ToolCatalogRequest struct {
 	HistoryProvider            HistoryProvider
 	AttachmentMaterialResolver AttachmentMaterialResolver
 	PersonAccess               policy.PersonAccess
-	MemoryNamespaces           []memory.MemoryNamespace
+	MemoryLabel                memory.SecurityLabel
 	AccessibleConversationIDs  []string
 	InputParts                 []agentcontract.AgentPart
 	ScheduledRun               agentcontract.ScheduledRunContext
@@ -130,18 +127,6 @@ func (toolCatalogBuilder *ToolCatalogBuilder) companyTimeZone() string {
 func (toolCatalogBuilder *ToolCatalogBuilder) UseAllowedToolNamesByProfile(allowedToolNamesByProfile map[string][]string, defaultAllowedToolNames []string) {
 	toolCatalogBuilder.allowedToolNamesByProfile = copyAllowedToolNamesByProfile(allowedToolNamesByProfile)
 	toolCatalogBuilder.defaultAllowedToolNames = trimNonEmptyStrings(defaultAllowedToolNames)
-}
-
-func (toolCatalogBuilder *ToolCatalogBuilder) UseMemoryService(memoryService *memory.MemoryService) {
-	toolCatalogBuilder.memoryService = memoryService
-}
-
-func (toolCatalogBuilder *ToolCatalogBuilder) UsePinnedMemoryStore(pinnedMemoryStore *memory.MarkdownStore) {
-	toolCatalogBuilder.pinnedMemoryStore = pinnedMemoryStore
-}
-
-func (toolCatalogBuilder *ToolCatalogBuilder) UseMemoryUpdateQueue(memoryUpdateQueue memory.MemoryUpdateEnqueuer) {
-	toolCatalogBuilder.memoryUpdateQueue = memoryUpdateQueue
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) UseMemoryStore(memoryStore *memory.Store, memoryIngester *memory.Ingester) {
@@ -276,7 +261,10 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerHistoryTool(toolRegistry *
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) registerMemoryTool(toolRegistry *toolcontract.ToolSet, request ToolCatalogRequest) {
-	registerMemoryTools(toolCatalogBuilder, toolRegistry, request)
+	if toolCatalogBuilder.memoryStore == nil {
+		return
+	}
+	registerStoreMemoryTools(toolCatalogBuilder, toolRegistry, request)
 }
 
 func fetchHistoryTool(toolContext context.Context, input historyToolInput, request ToolCatalogRequest) (toolcontract.ToolResult, error) {

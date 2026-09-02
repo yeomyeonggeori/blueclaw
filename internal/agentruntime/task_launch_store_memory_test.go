@@ -47,7 +47,7 @@ func TestTaskLauncherInjectsProfileAndRecallFromTheStoreAndQueuesExtraction(t *t
 		Platform:                  "mattermost",
 		Prompt:                    "How is the quarterly launch project going?",
 		PersonAccess:              policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
-		MemoryNamespaces:          []memory.MemoryNamespace{memory.ConversationNamespace("channel-1", 3, []string{"finance"})},
+		MemoryLabel:               memory.SecurityLabel{SecurityLevelRank: 3, RequiredClasses: []string{"finance"}},
 		AccessibleConversationIDs: []string{"channel-1"},
 	})
 	if errorValue != nil {
@@ -115,4 +115,13 @@ func TestTaskLauncherRecallsOnlyWhatTheRequesterMayRead(t *testing.T) {
 	if len(launchResult.MemoryFacts) != 0 {
 		t.Fatalf("expected a fact above the requester's clearance to stay hidden, got %+v", launchResult.MemoryFacts)
 	}
+}
+
+func containsMemoryFactContent(facts []memory.MemoryFact, fragment string) bool {
+	for _, fact := range facts {
+		if strings.Contains(fact.Content, fragment) {
+			return true
+		}
+	}
+	return false
 }

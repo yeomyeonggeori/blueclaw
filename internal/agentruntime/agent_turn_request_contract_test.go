@@ -15,21 +15,12 @@ import (
 func TestLaunchedAgentTurnRequestCarriesHostAssembledContext(t *testing.T) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	harness := harnesstest.New(taskRunService)
-	pinnedMemoryStore := memory.NewMarkdownStore(t.TempDir(), 1200)
-	if _, errorValue := pinnedMemoryStore.MergePersonMemory(context.Background(), "person-1", "The user prefers terse release notes."); errorValue != nil {
+	memoryStore := seededMemoryStore(t, "person-1", "The user leads the quarterly launch project.")
+	if errorValue := memoryStore.Profiles.SaveProfile(context.Background(), memory.Profile{PersonID: "person-1", IdentityLines: []string{"The user prefers terse release notes."}}); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	memoryService := &memory.MemoryService{}
-	memoryService.UseGraphStore(staticGraphMemoryStore{facts: []memory.MemoryFact{{
-		ScopeType:   memory.ScopeTypeUser,
-		NamespaceID: memory.UserNamespace("person-1").NamespaceID,
-		Content:     "The user leads the quarterly launch project.",
-		SourceKind:  memory.MemorySourceKindFact,
-		Score:       0.9,
-	}}})
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UsePinnedMemoryStore(pinnedMemoryStore)
-	toolCatalogBuilder.UseMemoryService(memoryService)
+	toolCatalogBuilder.UseMemoryStore(memoryStore, nil)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{
 		"default": {"memory_search"},
 	}, nil)
@@ -56,7 +47,6 @@ func TestLaunchedAgentTurnRequestCarriesHostAssembledContext(t *testing.T) {
 			},
 		},
 		PersonAccess:              policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
-		MemoryNamespaces:          []memory.MemoryNamespace{memory.UserNamespace("person-1")},
 		AccessibleConversationIDs: []string{"channel-1"},
 	})
 	if errorValue != nil {
@@ -77,14 +67,14 @@ func TestLaunchedAgentTurnRequestCarriesHostAssembledContext(t *testing.T) {
 		t.Fatalf("expected attachment materials on the turn request, got %+v", turnRequest.VisibleContext.Materials)
 	}
 	if len(turnRequest.MemoryFacts) != 2 {
-		t.Fatalf("expected pinned and graph memory facts on the turn request, got %+v", turnRequest.MemoryFacts)
+		t.Fatalf("expected the profile line and the recalled fact on the turn request, got %+v", turnRequest.MemoryFacts)
 	}
-	if turnRequest.MemoryFacts[0].SourceKind != memory.MemorySourceKindPinned ||
+	if turnRequest.MemoryFacts[0].SourceKind != "profile" ||
 		!strings.Contains(turnRequest.MemoryFacts[0].Content, "The user prefers terse release notes.") {
-		t.Fatalf("expected pinned memory first, got %+v", turnRequest.MemoryFacts)
+		t.Fatalf("expected the profile first, got %+v", turnRequest.MemoryFacts)
 	}
 	if turnRequest.MemoryFacts[1].Content != "The user leads the quarterly launch project." {
-		t.Fatalf("expected graph memory after pinned memory, got %+v", turnRequest.MemoryFacts)
+		t.Fatalf("expected the recalled fact after the profile, got %+v", turnRequest.MemoryFacts)
 	}
 	if turnRequest.ToolSet == nil || !containsString(turnRequest.ToolSet.ListToolNames(), "memory_search") {
 		t.Fatalf("expected the launch tool set on the turn request, got %+v", turnRequest.ToolSet)

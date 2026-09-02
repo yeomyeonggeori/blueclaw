@@ -38,6 +38,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/launchfailure"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
+	"github.com/yeomyeonggeori/blueclaw/internal/memory/memorytest"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/reply"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
@@ -71,7 +72,6 @@ type VirtualSessionScenario struct {
 	CapabilityToolNames       []string
 	CapabilityToolDescriptors []agentruntime.CapabilityToolDescriptor
 	InitialToolNames          []string
-	InitialMemory             []memory.MemoryFact
 	InitialSite               *VirtualSiteFixture
 	RouterRequiredEvidence    []string
 	RouterTaskShape           agentcontract.TaskShape
@@ -335,7 +335,6 @@ type VirtualSessionHarness struct {
 	taskRunService   *task.TaskRunService
 	taskEventService *task.TaskEventService
 	scheduleStore    *virtualTaskScheduleRepository
-	memoryStore      *virtualMemoryStore
 	runtime          *connectors.ConnectorRuntime
 	adapter          *virtualAdapter
 	cleanup          func()
@@ -907,17 +906,17 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 		cleanup = capabilityCleanup
 	}
 
-	memoryStore := newVirtualMemoryStore(scenario.InitialMemory)
-	memoryService := &memory.MemoryService{}
-	memoryService.UseGraphStore(memoryStore)
-	runtime.UseMemoryService(memoryService)
+	memoryRepository := memory.NewInMemoryRepository()
+	memoryStore := &memory.Store{Facts: memoryRepository, Profiles: memoryRepository, Jobs: memoryRepository, Embedder: &memorytest.HashEmbedder{}}
+	memoryIngester := &memory.Ingester{Store: *memoryStore, Model: virtualMemoryIngestModel{}}
 	toolCatalogBuilder := virtualToolCatalogBuilder(
 		scenario,
 		workspacePath,
 		taskRunService,
 		scheduleStore,
 		terminalService,
-		memoryService,
+		memoryStore,
+		memoryIngester,
 		capabilityClient,
 		skillRetriever,
 		instructionBundleLoader,
@@ -943,7 +942,6 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 		taskRunService:   taskRunService,
 		taskEventService: taskEventService,
 		scheduleStore:    scheduleStore,
-		memoryStore:      memoryStore,
 		runtime:          runtime,
 		adapter:          adapter,
 		cleanup:          cleanup,
@@ -991,7 +989,8 @@ func virtualToolCatalogBuilder(
 	taskRunService *task.TaskRunService,
 	scheduleStore *virtualTaskScheduleRepository,
 	terminalService *security.ShellService,
-	memoryService *memory.MemoryService,
+	memoryStore *memory.Store,
+	memoryIngester *memory.Ingester,
 	capabilityClient capability.Client,
 	skillRetriever agentcontract.SkillRetriever,
 	instructionBundleLoader func() agentcontract.InstructionBundle,
@@ -1004,8 +1003,7 @@ func virtualToolCatalogBuilder(
 	toolCatalogBuilder.UseWorkspaceActorFactory(security.NewDirectWorkspaceActorFactory(terminalService))
 	toolCatalogBuilder.UseTaskRunService(taskRunService)
 	toolCatalogBuilder.UseTaskScheduleRepository(scheduleStore)
-	toolCatalogBuilder.UseMemoryService(memoryService)
-	toolCatalogBuilder.UseMemoryUpdateQueue(virtualMemoryUpdateQueue{memoryService: memoryService})
+	toolCatalogBuilder.UseMemoryStore(memoryStore, memoryIngester)
 	toolCatalogBuilder.UseSkillSearch(skillRetriever, instructionBundleLoader)
 	toolCatalogBuilder.UseSkillChangeHandler(func(contextValue context.Context) {
 		if skillRetriever == nil {
@@ -3930,44 +3928,9 @@ func firstNonEmptyVirtualString(values ...string) string {
 	return ""
 }
 
-type virtualMemoryStore struct {
-	mutex sync.Mutex
-	facts []memory.MemoryFact
-}
-
-type virtualMemoryUpdateQueue struct {
-	memoryService *memory.MemoryService
-}
-
 type virtualTaskScheduleRepository struct {
 	mutex         sync.Mutex
 	taskSchedules []task.TaskSchedule
-}
-
-func (queue virtualMemoryUpdateQueue) Enqueue(job memory.MemoryUpdateJob) (memory.MemoryUpdateAccepted, error) {
-	if queue.memoryService == nil {
-		return memory.MemoryUpdateAccepted{}, errors.New("memory update queue is unavailable")
-	}
-	jobID := strings.TrimSpace(job.JobID)
-	if jobID == "" {
-		jobID = "virtual-memory-update-" + time.Now().UTC().Format("20060102150405.000000000")
-	}
-	job.JobID = jobID
-	_, errorValue := queue.memoryService.AddEpisode(context.Background(), memory.MemoryEpisode{
-		EpisodeID:       job.JobID,
-		Platform:        job.Platform,
-		ConversationID:  job.ConversationID,
-		SenderPersonID:  job.SenderPersonID,
-		Prompt:          job.Content,
-		OccurredAt:      job.OccurredAt,
-		Namespaces:      []memory.MemoryNamespace{job.Namespace},
-		Source:          "memory_remember",
-		SourceReference: job.SourceReference,
-	})
-	if errorValue != nil {
-		return memory.MemoryUpdateAccepted{}, errorValue
-	}
-	return memory.MemoryUpdateAccepted{Accepted: true, JobID: job.JobID}, nil
 }
 
 func (repository *virtualTaskScheduleRepository) UpsertTaskSchedule(taskSchedule task.TaskSchedule) error {
@@ -4056,71 +4019,29 @@ func (repository *virtualTaskScheduleRepository) CancelTaskSchedules(request tas
 	return task.TaskScheduleCancelResult{TaskSchedules: cancelledTaskSchedules}, nil
 }
 
-func newVirtualMemoryStore(initialFacts []memory.MemoryFact) *virtualMemoryStore {
-	return &virtualMemoryStore{facts: append([]memory.MemoryFact{}, initialFacts...)}
+type virtualMemoryIngestModel struct{}
+
+func (virtualMemoryIngestModel) GenerateResponse(context.Context, string) (string, error) {
+	return "", errors.New("the virtual memory ingest model answers structured requests only")
 }
 
-func (store *virtualMemoryStore) AddEpisode(_ context.Context, episode memory.MemoryEpisode) (memory.MemoryIngestionResult, error) {
-	store.mutex.Lock()
-	defer store.mutex.Unlock()
-	validAt := episode.OccurredAt
-	if validAt.IsZero() {
-		validAt = time.Now().UTC()
+// The virtual session keeps exactly what the agent asked to remember, one
+// private fact per request, so a scenario reads back the sentence it wrote.
+func (virtualMemoryIngestModel) GenerateStructuredResponse(_ context.Context, request llm.StructuredResponseRequest) (llm.StructuredResponse, error) {
+	subject := request.Messages[len(request.Messages)-1].Content
+	sourceIndex := strings.LastIndex(subject, "):\n")
+	content := strings.TrimSpace(subject[sourceIndex+3:])
+	if runes := []rune(content); len(runes) > memory.FactContentCharacterLimit {
+		content = string(runes[:memory.FactContentCharacterLimit])
 	}
-	for _, namespace := range episode.Namespaces {
-		store.facts = append(store.facts, memory.MemoryFact{
-			FactID:            episode.EpisodeID + ":" + namespace.NamespaceID,
-			ScopeType:         namespace.ScopeType,
-			NamespaceID:       namespace.NamespaceID,
-			Content:           episode.Prompt,
-			Score:             0.5,
-			SourceEpisodeID:   episode.EpisodeID,
-			SourceKind:        memory.MemorySourceKindFact,
-			ValidAt:           validAt,
-			SecurityLevelRank: namespace.SecurityLevelRank,
-			RequiredClasses:   append([]string{}, namespace.RequiredClasses...),
-		})
+	document, errorValue := json.Marshal(map[string]any{"facts": []map[string]string{{
+		"content": content, "kind": memory.FactKindFact, "scope": memory.ScopeTypePrivate,
+		"subjectPersonHint": "", "relation": memory.FactRelationNew, "relatedFactID": "", "validUntil": "",
+	}}})
+	if errorValue != nil {
+		return llm.StructuredResponse{}, errorValue
 	}
-	return memory.MemoryIngestionResult{EpisodeID: episode.EpisodeID, NamespaceCount: len(episode.Namespaces)}, nil
-}
-
-func (store *virtualMemoryStore) SearchFacts(_ context.Context, request memory.MemorySearchRequest) ([]memory.MemoryFact, error) {
-	store.mutex.Lock()
-	defer store.mutex.Unlock()
-	namespaceByID := map[string]bool{}
-	for _, namespace := range request.Namespaces {
-		namespaceByID[namespace.NamespaceID] = true
-	}
-	candidates := []memory.MemoryFact{}
-	for _, fact := range store.facts {
-		if !namespaceByID[fact.NamespaceID] || request.ReaderSecurityLevelRank < fact.SecurityLevelRank {
-			continue
-		}
-		candidates = append(candidates, fact)
-	}
-	sort.SliceStable(candidates, func(leftIndex int, rightIndex int) bool {
-		leftScore := virtualRelevanceScore(candidates[leftIndex], request.Query)
-		rightScore := virtualRelevanceScore(candidates[rightIndex], request.Query)
-		if leftScore != rightScore {
-			return leftScore > rightScore
-		}
-		return candidates[leftIndex].ValidAt.After(candidates[rightIndex].ValidAt)
-	})
-	if request.Limit > 0 && len(candidates) > request.Limit {
-		return append([]memory.MemoryFact{}, candidates[:request.Limit]...), nil
-	}
-	return append([]memory.MemoryFact{}, candidates...), nil
-}
-
-func virtualRelevanceScore(fact memory.MemoryFact, query string) float64 {
-	score := fact.Score
-	normalizedContent := strings.ToLower(fact.Content)
-	for _, queryTerm := range strings.Fields(strings.ToLower(strings.TrimSpace(query))) {
-		if strings.Contains(normalizedContent, queryTerm) {
-			score += 0.25
-		}
-	}
-	return score
+	return llm.StructuredResponse{Content: string(document)}, nil
 }
 
 func actionFinishMessage(reply string, evidence ...string) string {

@@ -638,11 +638,11 @@ tool participates in the same approval and evidence rules as a built-in one.
 | `chatd/` | chat bridge and platform adapters (Mattermost, Buzz) |
 | `admin/` | Svelte admin and task console sources |
 | `web/` | build output of `admin/`, untracked; run `cd admin && bun run build` before serving the console |
-| `migrations/` | 29 Postgres migrations, applied in order at boot |
+| `migrations/` | 31 Postgres migrations, applied in order at boot |
 | `tests/` | integration suite and fixtures |
 | `lab/` | provisioning and scenario scripts for the development VM |
 | `config/` | example policy, runtime, and lab configuration |
-| `tools/` | Python sidecars, currently the Graphiti memory daemon |
+| `tools/` | TUI screenshot scripts |
 | `docs/` | [architecture.md](docs/architecture.md) |
 
 | Binary | Purpose |

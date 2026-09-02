@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const DefaultEmbeddingModelName = "qwen/qwen3-embedding-8b"
+const DefaultEmbeddingModelName = "qwen/qwen3-embedding-4b"
 
 const (
 	DefaultProfileCharacterBudget  = 1200

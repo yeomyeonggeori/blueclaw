@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract/harnesstest"
@@ -14,16 +13,8 @@ import (
 func approvalContinuationLauncher(t *testing.T, taskRunService *task.TaskRunService) (*TaskLauncher, *harnesstest.Harness) {
 	t.Helper()
 	harness := harnesstest.New(taskRunService)
-	memoryService := &memory.MemoryService{}
-	memoryService.UseGraphStore(staticGraphMemoryStore{facts: []memory.MemoryFact{{
-		ScopeType:   memory.ScopeTypeUser,
-		NamespaceID: memory.UserNamespace("person-1").NamespaceID,
-		Content:     "The user leads the quarterly launch project.",
-		SourceKind:  memory.MemorySourceKindFact,
-		Score:       0.9,
-	}}})
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseMemoryService(memoryService)
+	toolCatalogBuilder.UseMemoryStore(seededMemoryStore(t, "person-1", "The user leads the quarterly launch project."), nil)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{"default": {"memory_search"}}, nil)
 	return NewTaskLauncher(harness, taskRunService, toolCatalogBuilder), harness
 }
@@ -40,7 +31,6 @@ func launchApprovalContinuation(t *testing.T, taskLauncher *TaskLauncher, taskRu
 		IsApprovalContinuation:    true,
 		ExistingTaskRunID:         taskRunID,
 		PersonAccess:              policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
-		MemoryNamespaces:          []memory.MemoryNamespace{memory.UserNamespace("person-1")},
 		AccessibleConversationIDs: []string{"channel-1"},
 	})
 	if errorValue != nil {

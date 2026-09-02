@@ -40,7 +40,7 @@ func newStoreToolFixture(t *testing.T, allowedTools ...string) storeToolFixture 
 		ConversationID:    "channel-platform",
 		ActiveCircleID:    "circle-platform",
 		PersonAccess:      policy.PersonAccess{PersonID: "person-alice", Circles: []string{"circle-platform"}, SecurityLevelRank: 1},
-		MemoryNamespaces:  []memory.MemoryNamespace{memory.ConversationNamespace("channel-platform", 1, []string{"finance"})},
+		MemoryLabel:       memory.SecurityLabel{SecurityLevelRank: 1, RequiredClasses: []string{"finance"}},
 	})
 	return storeToolFixture{repository: repository, model: scripted, store: store, toolSet: toolSet}
 }
@@ -61,6 +61,21 @@ func decodeToolResult(t *testing.T, result toolcontract.ToolResult, target any) 
 	}
 }
 
+func seededMemoryStore(t *testing.T, personID string, contents ...string) *memory.Store {
+	t.Helper()
+	repository := memory.NewInMemoryRepository()
+	episode := memory.Episode{EpisodeID: "episode-seed-" + personID, SourceKind: memory.EpisodeSourceKindImport, SourceID: "seed-" + personID, RequesterPersonID: personID, Content: "seed", OccurredAt: storeToolNow}
+	writes := make([]memory.FactWrite, 0, len(contents))
+	for index, content := range contents {
+		fact := memory.Fact{FactID: "fact-seed-" + personID + "-" + string(rune('a'+index)), EpisodeID: episode.EpisodeID, ScopeType: memory.ScopeTypePrivate, ScopeID: personID, SubjectPersonID: personID, Kind: memory.FactKindFact, Content: content, ValidFrom: storeToolNow}
+		writes = append(writes, memory.FactWrite{Fact: fact, Embedding: memorytest.Embed(content)})
+	}
+	if errorValue := repository.SaveEpisode(context.Background(), memory.EpisodeWrite{Episode: episode, Facts: writes}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	return &memory.Store{Facts: repository, Profiles: repository, Jobs: repository, Embedder: &memorytest.HashEmbedder{}, Now: func() time.Time { return storeToolNow }}
+}
+
 func TestMemoryRememberToolIngestsThroughTheStore(t *testing.T) {
 	fixture := newStoreToolFixture(t, "memory_remember")
 	fixture.model.Queue(memorytest.IngestResponse(memorytest.IngestFact{Content: "이샘플 prefers bullet summaries", Kind: memory.FactKindPreference, Scope: memory.ScopeTypePrivate, Relation: memory.FactRelationNew}))
@@ -70,7 +85,7 @@ func TestMemoryRememberToolIngestsThroughTheStore(t *testing.T) {
 	}
 	var output memoryStoreRememberOutput
 	decodeToolResult(t, result, &output)
-	if !output.Accepted || output.Status != "persisted" || output.Durability != "durable" || len(output.FactIDs) != 1 {
+	if !output.Accepted || output.EpisodeID == "" || len(output.FactIDs) != 1 {
 		t.Fatalf("expected a persisted fact, got %+v", output)
 	}
 	stored, isFound := fixture.repository.FindFact(output.FactIDs[0])
@@ -126,7 +141,7 @@ func TestMemorySearchSurfacesIDsThatMemoryForgetAccepts(t *testing.T) {
 
 	var search memorySearchToolOutput
 	decodeToolResult(t, fixture.invoke(t, "memory_search", map[string]string{"query": "parks on level"}), &search)
-	if len(search.Facts) != 1 || search.Facts[0].FactID != "fact-own" || search.SearchStatus != memorySearchComplete || search.Sources[0] != memoryStoreSearchSource {
+	if len(search.Facts) != 1 || search.Facts[0].FactID != "fact-own" || search.SearchStatus != memorySearchComplete {
 		t.Fatalf("expected only the reader's own fact from a hybrid search, got %+v", search)
 	}
 

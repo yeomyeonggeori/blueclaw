@@ -138,13 +138,8 @@ SELECT
   AND to_regclass('public.raw_event') IS NOT NULL
   AND to_regclass('public.connector_outbox') IS NOT NULL
   AND to_regclass('public.task_attempt') IS NOT NULL
-  AND EXISTS (
-    SELECT 1
-    FROM information_schema.columns
-    WHERE table_schema = 'public'
-      AND table_name = 'graphiti_episode'
-      AND column_name = 'prompt'
-  )`)
+  AND to_regclass('public.memory_fact') IS NOT NULL
+  AND to_regclass('public.graphiti_episode') IS NULL`)
 	var hasCurrentSchema bool
 	errorValue := row.Scan(&hasCurrentSchema)
 	return hasCurrentSchema, errorValue

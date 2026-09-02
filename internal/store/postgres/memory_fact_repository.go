@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -370,6 +371,17 @@ func nullableTime(value time.Time) sql.NullTime {
 		return sql.NullTime{}
 	}
 	return sql.NullTime{Time: value.UTC(), Valid: true}
+}
+
+func stringSliceFromDocument(document string) []string {
+	values := []string{}
+	if strings.TrimSpace(document) == "" {
+		return values
+	}
+	if errorValue := json.Unmarshal([]byte(document), &values); errorValue != nil {
+		return []string{}
+	}
+	return values
 }
 
 func nonNilStrings(values []string) []string {

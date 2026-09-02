@@ -12,9 +12,45 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
+	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 )
 
-const memoryStoreSearchSource memorySearchSource = "fact_store"
+type memorySearchToolInput struct {
+	Query string `json:"query"`
+}
+
+type memoryRememberToolInput struct {
+	Content string `json:"content"`
+}
+
+type memorySearchStatus string
+
+const (
+	memorySearchComplete memorySearchStatus = "complete"
+	memorySearchDegraded memorySearchStatus = "degraded"
+)
+
+type memorySearchFact struct {
+	FactID     string    `json:"factID"`
+	ScopeType  string    `json:"scopeType"`
+	Content    string    `json:"content"`
+	SourceKind string    `json:"sourceKind"`
+	ValidAt    time.Time `json:"validAt"`
+	Score      *float64  `json:"score,omitempty"`
+}
+
+type memorySearchToolOutput struct {
+	Facts        []memorySearchFact `json:"facts"`
+	SearchStatus memorySearchStatus `json:"searchStatus"`
+}
+
+var (
+	memorySearchInputSchema         = json.RawMessage(`{"type":"object","properties":{"query":{"type":"string","minLength":1,"pattern":"\\S"}},"required":["query"],"additionalProperties":false}`)
+	memorySearchOutputSchema        = json.RawMessage(`{"type":"object","properties":{"facts":{"type":"array","items":{"type":"object","properties":{"factID":{"type":"string"},"scopeType":{"type":"string","enum":["private","circle","workspace"]},"content":{"type":"string"},"sourceKind":{"type":"string","enum":["identity","preference","fact","episode","temporary"]},"validAt":{"type":"string","format":"date-time"},"score":{"type":"number"}},"required":["factID","scopeType","content","sourceKind","validAt"],"additionalProperties":false}},"searchStatus":{"type":"string","enum":["complete","degraded"]}},"required":["facts","searchStatus"],"additionalProperties":false}`)
+	memoryRememberInputSchema       = json.RawMessage(`{"type":"object","properties":{"content":{"type":"string","minLength":1,"maxLength":600,"pattern":"\\S"}},"required":["content"],"additionalProperties":false}`)
+	memoryRememberInputIntentSchema = json.RawMessage(`{"type":"object","properties":{"content":{"type":"string","minLength":1,"maxLength":600,"pattern":"\\S"}},"additionalProperties":false}`)
+	memoryRememberOutputSchema      = json.RawMessage(`{"type":"object","properties":{"accepted":{"type":"boolean"},"episodeID":{"type":"string","pattern":"\\S"},"factIDs":{"type":"array","items":{"type":"string"}},"supersededFactIDs":{"type":"array","items":{"type":"string"}},"reinforcedFactIDs":{"type":"array","items":{"type":"string"}},"failureCode":{"type":"string"}},"required":["accepted","episodeID","factIDs","supersededFactIDs","reinforcedFactIDs"],"additionalProperties":false}`)
+)
 
 type memoryForgetToolInput struct {
 	FactIDs []string `json:"factIDs"`
@@ -28,9 +64,7 @@ type memoryForgetToolOutput struct {
 
 type memoryStoreRememberOutput struct {
 	Accepted          bool     `json:"accepted"`
-	JobID             string   `json:"jobID"`
-	Status            string   `json:"status"`
-	Durability        string   `json:"durability"`
+	EpisodeID         string   `json:"episodeID"`
 	FactIDs           []string `json:"factIDs"`
 	SupersededFactIDs []string `json:"supersededFactIDs"`
 	ReinforcedFactIDs []string `json:"reinforcedFactIDs"`
@@ -139,7 +173,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) searchStoreMemoryTool(ctx context.
 	if searchResult.Mode != memory.SearchModeHybrid {
 		status = memorySearchDegraded
 	}
-	output := memorySearchToolOutput{Facts: facts, SearchStatus: status, Sources: []memorySearchSource{memoryStoreSearchSource}}
+	output := memorySearchToolOutput{Facts: facts, SearchStatus: status}
 	document := json.RawMessage(marshalToolResult(output))
 	return toolcontract.ToolSuccessData(string(document), document)
 }
@@ -194,9 +228,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) rememberStoreMemoryTool(ctx contex
 	}
 	output := memoryStoreRememberOutput{
 		Accepted:          true,
-		JobID:             result.EpisodeID,
-		Status:            "persisted",
-		Durability:        "durable",
+		EpisodeID:         result.EpisodeID,
 		FactIDs:           factIDsOf(result.Facts),
 		SupersededFactIDs: result.SupersededFactIDs,
 		ReinforcedFactIDs: result.ReinforcedFactIDs,
@@ -208,9 +240,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) rememberStoreMemoryTool(ctx contex
 func memoryStoreRememberFailure(failureCode string, summary string) toolcontract.ToolResult {
 	output := memoryStoreRememberOutput{
 		Accepted:          false,
-		JobID:             "none",
-		Status:            "failed",
-		Durability:        "none",
+		EpisodeID:         "none",
 		FactIDs:           []string{},
 		SupersededFactIDs: []string{},
 		ReinforcedFactIDs: []string{},
@@ -246,12 +276,17 @@ func (toolCatalogBuilder *ToolCatalogBuilder) forgetStoreMemoryTool(ctx context.
 }
 
 func memorySecurityLabelForRequest(request ToolCatalogRequest) memory.SecurityLabel {
-	for _, namespace := range request.MemoryNamespaces {
-		if namespace.ScopeType == memory.ScopeTypeConversation && namespace.ScopeConversationID == request.ConversationID {
-			return memory.SecurityLabel{SecurityLevelRank: namespace.SecurityLevelRank, RequiredClasses: append([]string{}, namespace.RequiredClasses...)}
-		}
+	if request.MemoryLabel.RequiredClasses != nil {
+		return request.MemoryLabel
 	}
 	return memory.SecurityLabel{SecurityLevelRank: request.PersonAccess.SecurityLevelRank, RequiredClasses: append([]string{}, request.PersonAccess.GrantedClasses...)}
+}
+
+func MemoryLabelForConversation(personAccess policy.PersonAccess, channelPolicy policy.ChannelPolicy, isChannelPolicyFound bool) memory.SecurityLabel {
+	if isChannelPolicyFound {
+		return memory.SecurityLabel{SecurityLevelRank: channelPolicy.DefaultSecurityLevelRank, RequiredClasses: append([]string{}, channelPolicy.DefaultRequiredClasses...)}
+	}
+	return memory.SecurityLabel{SecurityLevelRank: personAccess.SecurityLevelRank, RequiredClasses: append([]string{}, personAccess.GrantedClasses...)}
 }
 
 func factIDsOf(facts []memory.Fact) []string {

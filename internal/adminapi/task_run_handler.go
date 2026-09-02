@@ -11,7 +11,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
-	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -109,7 +108,7 @@ func (taskRunHandler TaskRunHandler) HandleRunTask(responseWriter http.ResponseW
 		SkipSkillSelection:         precomputedTurnDecision != nil,
 		UseEmptyToolCatalog:        precomputedTurnDecision != nil,
 		PersonAccess:               personAccess,
-		MemoryNamespaces:           taskRunHandler.memoryNamespaces(runRequest.RequesterPersonID, conversationID, personAccess),
+		MemoryLabel:                memory.SecurityLabel{SecurityLevelRank: personAccess.SecurityLevelRank, RequiredClasses: append([]string{}, personAccess.GrantedClasses...)},
 		AccessibleConversationIDs:  []string{conversationID},
 	})
 	if errorValue != nil {
@@ -282,19 +281,6 @@ func isActiveTaskRunStatus(status task.TaskStatus) bool {
 	default:
 		return false
 	}
-}
-
-func (taskRunHandler TaskRunHandler) memoryNamespaces(personID string, conversationID string, personAccess policy.PersonAccess) []memory.MemoryNamespace {
-	namespaces := []memory.MemoryNamespace{
-		memory.UserNamespace(personID),
-		memory.PrivatePersonNamespace(personID),
-		memory.WorkspaceNamespace(taskRunHandler.WorkspaceID, personAccess.SecurityLevelRank, personAccess.GrantedClasses),
-		memory.ConversationNamespace(conversationID, personAccess.SecurityLevelRank, personAccess.GrantedClasses),
-	}
-	for _, circleID := range personAccess.Circles {
-		namespaces = append(namespaces, memory.CircleNamespace(taskRunHandler.WorkspaceID, circleID))
-	}
-	return namespaces
 }
 
 func parseOptionalAdminTime(value string) (*time.Time, error) {

@@ -19,7 +19,6 @@ import (
 func main() {
 	port := flag.Uint("port", 8080, "guest vsock health port")
 	blueclawURL := flag.String("blueclaw-url", "", "optional Blueclaw HTTP health URL; empty means liveness only")
-	graphitiURL := flag.String("graphiti-url", "", "optional Graphiti HTTP health URL; empty means liveness only")
 	flag.Parse()
 
 	listener, errorValue := listenVSock(uint32(*port))
@@ -34,7 +33,7 @@ func main() {
 			log.Printf("accept health connection: %v", errorValue)
 			continue
 		}
-		go handleHealthConnection(connection, []string{*blueclawURL, *graphitiURL})
+		go handleHealthConnection(connection, []string{*blueclawURL})
 	}
 }
 

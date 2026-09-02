@@ -148,7 +148,7 @@ OpenAI-compatible model endpoint. See the README's install section.
 | `project_policy` | upserts the read-only `person` projection |
 | `identity` | builds the identity service and platform account links |
 | `agent_kernel` | constructs the harness and injects instruction bundle, tiers, skills, company context |
-| `memory` | terminal service, memory service, optional Graphiti graph store |
+| `memory` | terminal service, the fact store, the ingest worker |
 
 Migrations run from `database.migrationDirectoryPath`, default `migrations`
 (`internal/app/application.go-895`).
@@ -625,25 +625,37 @@ judgment, failure explanation, recovery direction, or confirmation wording.
 
 ## Memory
 
-Memory has two layers.
+Memory is one Postgres store (`migrations/030_memory_store.sql`) and one write
+path. An episode is something that happened: a finished task run, or the
+sentence a person asked the assistant to remember. Facts are the atomic
+sentences a low-tier model extracts from an episode, each scoped `private`,
+`circle`, or `workspace`, labelled with the security rank and classes of the
+conversation it came from, and retired by a supersede pointer, a forget
+timestamp, or an expiry. Nothing deletes a fact; the live filter hides it.
 
-The durable layer is a markdown store (`internal/memory/markdown_store.go`) with
-its own compaction pass (`internal/memory/markdown_compressor.go`), mirrored in
-Postgres as `memory_record` and `memory_source`. Blueclaw owns identity, policy,
-and ACL namespace selection for every read and write
-(`internal/memory/namespace_service.go`).
+Writing goes through `internal/memory/ingest.go`. The runtime embeds the
+episode, offers the nearest live facts the requester may read as candidates,
+and the model returns the facts the memory should hold afterwards, each
+related to a candidate as `new`, `supersedes`, or `reinforces`. The runtime
+rejects a relation to any fact it did not offer, and no similarity threshold
+merges facts on its own.
 
-Optional on top of that is a temporal knowledge graph through the
-`graphiti-memoryd` sidecar, which owns episode ingestion, graph extraction, Kuzu
-persistence, and hybrid search. It is configured by `memory.graphitiEndpoint`
-and the runtime stays fully functional when that endpoint is unset — the graph
-is an enrichment, not a dependency (`internal/app/application.go-223`).
-
-- The sidecar runs from `tools/graphiti-memoryd` with `graphiti-core[kuzu]`.
-- Kuzu data defaults to `/workspace/.blueclaw/graphiti/kuzu`.
-- Accepted connector events are conservatively routed before ingestion, skipping transient chatter and control messages.
-- Postgres stores only namespace, episode mirror, and diagnostic metadata (`graphiti_namespace`, `graphiti_episode`), never canonical memory records.
-- Graphiti's own model calls go through InternKim capability endpoints and receive no provider secrets.
+- Every completed, failed, or cancelled task run is queued for extraction by a
+  transition observer; `memory_job` is the outbox and
+  `internal/memory/job_worker.go` drains it with leases and backoff.
+- `memory_remember` ingests one sentence synchronously and reports what was
+  created, superseded, or reinforced. `memory_forget` accepts only fact IDs
+  `memory_search` returned in the same task.
+- Launch loads the requester's profile (`memory_profile`, rebuilt by a job
+  whenever a fact about them changes) and a hybrid recall of the prompt under
+  character budgets, and records what it spent in `memory.recall_injected`.
+- Search fuses pgvector cosine and `pg_trgm` word similarity with reciprocal
+  rank fusion. Where the `vector` extension is absent, the migration still
+  applies and search answers lexically; `memory_search` reports which mode
+  answered.
+- Embeddings go through the capability service; the model is
+  `memory.embeddingModel`, 1,024 dimensions, and a change of model is a
+  `reembed` job because every fact records the model that embedded it.
 
 ## Protocol contracts
 
