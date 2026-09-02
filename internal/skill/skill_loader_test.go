@@ -16,9 +16,9 @@ license: Apache-2.0
 compatibility: Requires a POSIX shell.
 metadata:
   author: InternKim
-tool-references:
-  - shell
-  - file_write
+  kim.intern.tool-references:
+    - shell
+    - file_write
 ---
 # Simple Slides
 
@@ -79,7 +79,8 @@ func TestSkillLoaderParsesSpaceSeparatedToolReferences(t *testing.T) {
 	document := `---
 name: file-work
 description: Work with files.
-tool-references: file_read file_write
+metadata:
+  kim.intern.tool-references: file_read file_write
 ---
 Use files.
 `
@@ -128,7 +129,8 @@ func TestSkillLoaderIgnoresAllowedToolsWhenToolReferencesExist(t *testing.T) {
 	document := `---
 name: file-work
 description: Work with files.
-tool-references: file_read file_write
+metadata:
+  kim.intern.tool-references: file_read file_write
 allowed-tools: shell
 ---
 Use files.

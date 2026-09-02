@@ -94,7 +94,7 @@ func setSkillMetadataValue(metadata skillMetadata, key string, value string) ski
 		metadata.Name = cleanSkillScalar(value)
 	case "description":
 		metadata.Description = joinSkillDescription(metadata.Description, cleanSkillScalar(value))
-	case "tool-references", vendorToolReferencesKey:
+	case vendorToolReferencesKey:
 		metadata.ToolReferences = append(metadata.ToolReferences, parseSkillToolReferences(value)...)
 	}
 	return metadata
@@ -103,7 +103,7 @@ func setSkillMetadataValue(metadata skillMetadata, key string, value string) ski
 func appendSkillToolReference(metadata skillMetadata, section string, value string) skillMetadata {
 	toolReference := ToolReference(cleanSkillScalar(value))
 	switch section {
-	case "tool-references", vendorToolReferencesKey:
+	case vendorToolReferencesKey:
 		metadata.ToolReferences = append(metadata.ToolReferences, toolReference)
 	}
 	return metadata

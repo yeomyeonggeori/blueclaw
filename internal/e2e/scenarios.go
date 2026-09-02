@@ -5,7 +5,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"os"
 	"path/filepath"
-	"runtime"
+	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
@@ -26,61 +26,40 @@ func workspaceSkillInstruction(skillName string) agentcontract.SkillInstruction 
 	return skillInstructionFromBundle(skillBundle)
 }
 
-// ScenarioSkillNames are the workspace skills these scenarios drive. Blueclaw
-// ships the ones that need nothing beyond its own kernel; the rest belong to the
-// appliance whose capability tools they call, so a standalone checkout can only
-// find some of them.
-var ScenarioSkillNames = []string{"presentation", "scheduled-task", "calendar", "internkim-task", "website"}
+// ScenarioSkillNames are the skills these scenarios drive. They are the host's
+// to supply, so a standalone checkout finds none of them.
+var ScenarioSkillNames = []string{"presentation", "scheduled-task", "calendar", "internkim-task", "mattermost", "website"}
 
 func rootWorkspaceSkillDirectoryPath(skillName string) string {
-	skillDirectoryPath := findWorkspaceSkillDirectory(skillName)
+	skillDirectoryPath := findScenarioSkillDirectory(skillName)
 	if skillDirectoryPath == "" {
-		panic(fmt.Errorf("workspace skill %q is not bundled here or beside this checkout", skillName))
+		panic(fmt.Errorf("no skill root in %s carries %q", ScenarioSkillRootsVariable, skillName))
 	}
 	return skillDirectoryPath
 }
 
-// findWorkspaceSkillDirectory looks in Blueclaw's own bundle first, then walks
-// up toward a consumer that ships the capability-backed skills, rather than
-// assuming Blueclaw sits at a fixed depth beneath it.
-func findWorkspaceSkillDirectory(skillName string) string {
-	_, sourceFilePath, _, _ := runtime.Caller(0)
-	directoryPath := filepath.Dir(filepath.Dir(filepath.Dir(sourceFilePath)))
-	for range 5 {
-		for _, skillRootPath := range consumerSkillRootPaths(directoryPath) {
-			candidatePath := filepath.Join(skillRootPath, skillName)
-			if isExistingDirectory(candidatePath) {
-				return candidatePath
-			}
-		}
-		parentPath := filepath.Dir(directoryPath)
-		if parentPath == directoryPath {
-			break
-		}
-		directoryPath = parentPath
-	}
-	return ""
-}
+// ScenarioSkillRootsVariable names the directories a host offers these scenarios,
+// separated by the list separator.
+const ScenarioSkillRootsVariable = "BLUECLAW_SCENARIO_SKILL_ROOTS"
 
-// A consumer keeps the skills that only it can serve in its own workspace
-// bundle and takes the portable ones from the agent plugins it vendors, so a
-// scenario skill can live under either root. A plugin is recognized by its
-// manifest rather than by name, which is what the plugin standard promises.
-func consumerSkillRootPaths(directoryPath string) []string {
-	skillRootPaths := []string{filepath.Join(directoryPath, "assets", "blueclaw-workspace", "skills")}
-	dependencyRootPath := filepath.Join(directoryPath, ".dependency")
-	dependencyEntries, errorValue := os.ReadDir(dependencyRootPath)
-	if errorValue != nil {
-		return skillRootPaths
-	}
-	for _, dependencyEntry := range dependencyEntries {
-		pluginPath := filepath.Join(dependencyRootPath, dependencyEntry.Name())
-		if !isExistingFile(filepath.Join(pluginPath, "plugin.json")) {
-			continue
+func ScenarioSkillRootPaths() []string {
+	skillRootPaths := []string{}
+	for _, skillRootPath := range filepath.SplitList(os.Getenv(ScenarioSkillRootsVariable)) {
+		if trimmedPath := strings.TrimSpace(skillRootPath); trimmedPath != "" {
+			skillRootPaths = append(skillRootPaths, trimmedPath)
 		}
-		skillRootPaths = append(skillRootPaths, filepath.Join(pluginPath, "skills"))
 	}
 	return skillRootPaths
+}
+
+func findScenarioSkillDirectory(skillName string) string {
+	for _, skillRootPath := range ScenarioSkillRootPaths() {
+		candidatePath := filepath.Join(skillRootPath, skillName)
+		if isExistingDirectory(candidatePath) {
+			return candidatePath
+		}
+	}
+	return ""
 }
 
 func isExistingDirectory(path string) bool {
@@ -88,23 +67,19 @@ func isExistingDirectory(path string) bool {
 	return errorValue == nil && information.IsDir()
 }
 
-func isExistingFile(path string) bool {
-	information, errorValue := os.Stat(path)
-	return errorValue == nil && information.Mode().IsRegular()
-}
-
 func MissingScenarioSkills() []string {
 	_, missingSkills := ScenarioSkillAvailability()
 	return missingSkills
 }
 
-// ScenarioSkillAvailability separates a standalone checkout, which finds none of
-// these bundles, from a consumer beside one that finds some and not the rest.
+// ScenarioSkillAvailability separates a host that offered no skill roots, which
+// finds none of these bundles, from one that offered roots carrying some and not
+// the rest.
 func ScenarioSkillAvailability() (found []string, missing []string) {
 	found = []string{}
 	missing = []string{}
 	for _, skillName := range ScenarioSkillNames {
-		if findWorkspaceSkillDirectory(skillName) == "" {
+		if findScenarioSkillDirectory(skillName) == "" {
 			missing = append(missing, skillName)
 			continue
 		}
