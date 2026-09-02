@@ -808,10 +808,6 @@ func isLiveVirtualScenario(scenario e2e.VirtualSessionScenario) bool {
 	return true
 }
 
-// A live run loads the skill from disk so the model reads what a host ships. An
-// explicit --skill-dir wins; otherwise the scenario's own skills are looked up in
-// the roots the host offered, and a run that finds none leaves the scripted
-// instructions in place rather than guessing at a layout.
 func liveSkillDirectoryPaths(arguments virtualSessionArguments, scenario e2e.VirtualSessionScenario) []string {
 	if skillDirectoryPath := strings.TrimSpace(arguments.SkillDirectoryPath); skillDirectoryPath != "" {
 		return []string{skillDirectoryPath}

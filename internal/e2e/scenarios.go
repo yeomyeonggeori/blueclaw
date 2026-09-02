@@ -28,7 +28,7 @@ func workspaceSkillInstruction(skillName string) agentcontract.SkillInstruction 
 
 // ScenarioSkillNames are the skills these scenarios drive. They are the host's
 // to supply, so a standalone checkout finds none of them.
-var ScenarioSkillNames = []string{"presentation", "scheduled-task", "calendar", "internkim-task", "website"}
+var ScenarioSkillNames = []string{"presentation", "scheduled-task", "calendar", "internkim-task", "mattermost", "website"}
 
 func rootWorkspaceSkillDirectoryPath(skillName string) string {
 	skillDirectoryPath := findScenarioSkillDirectory(skillName)
@@ -39,8 +39,7 @@ func rootWorkspaceSkillDirectoryPath(skillName string) string {
 }
 
 // ScenarioSkillRootsVariable names the directories a host offers these scenarios,
-// separated by the list separator. Blueclaw does not go looking for a consumer's
-// layout: a host that wants these scenarios run says where its skills are.
+// separated by the list separator.
 const ScenarioSkillRootsVariable = "BLUECLAW_SCENARIO_SKILL_ROOTS"
 
 func ScenarioSkillRootPaths() []string {
