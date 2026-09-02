@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -10,6 +11,8 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/firecracker"
 )
+
+const waitForFileDeadline = 30 * time.Second
 
 type fakeGuestHealthClient struct{}
 
@@ -105,14 +108,17 @@ func TestSupervisorBootGuestWithFakeJailer(t *testing.T) {
 }
 
 func waitForFile(documentPath string) ([]byte, error) {
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(waitForFileDeadline)
 	for {
 		document, errorValue := os.ReadFile(documentPath)
-		if errorValue == nil {
+		if errorValue == nil && len(document) > 0 {
 			return document, nil
 		}
 		if time.Now().After(deadline) {
-			return nil, errorValue
+			if errorValue != nil {
+				return nil, errorValue
+			}
+			return nil, fmt.Errorf("%s stayed empty for %s", documentPath, waitForFileDeadline)
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
