@@ -17,11 +17,11 @@ import (
 func TestMain(mainTesting *testing.M) {
 	foundSkills, missingSkills := ScenarioSkillAvailability()
 	if len(missingSkills) > 0 && len(foundSkills) == 0 {
-		fmt.Printf("skipping the appliance scenarios: no workspace skill bundle beside this checkout\n")
+		fmt.Printf("skipping the appliance scenarios: %s names no skill root\n", ScenarioSkillRootsVariable)
 		os.Exit(0)
 	}
 	if len(missingSkills) > 0 {
-		fmt.Printf("the appliance beside this checkout has no skill bundle for %s; it ships %s\n", strings.Join(missingSkills, ", "), strings.Join(foundSkills, ", "))
+		fmt.Printf("the skill roots in %s carry no bundle for %s; they carry %s\n", ScenarioSkillRootsVariable, strings.Join(missingSkills, ", "), strings.Join(foundSkills, ", "))
 		os.Exit(1)
 	}
 	os.Exit(mainTesting.Run())

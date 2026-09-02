@@ -263,9 +263,9 @@ func runVirtualSession(ctx context.Context, arguments virtualSessionArguments) e
 		return errors.New("virtual-session scenario needs live LLM calls; pass --live-llm or set BLUECLAW_E2E_LIVE=1")
 	}
 	if arguments.LiveLanguageModel {
-		if skillDirectoryPath := firstNonEmptyString(arguments.SkillDirectoryPath, defaultSkillDirectoryPath(scenario.Name)); skillDirectoryPath != "" {
+		if skillDirectoryPaths := liveSkillDirectoryPaths(arguments, scenario); len(skillDirectoryPaths) > 0 {
 			scenario.Skills = nil
-			scenario.SkillDirectoryPaths = []string{skillDirectoryPath}
+			scenario.SkillDirectoryPaths = skillDirectoryPaths
 		}
 	}
 	result, errorValue := e2e.RunVirtualSession(ctx, scenario)
@@ -808,22 +808,25 @@ func isLiveVirtualScenario(scenario e2e.VirtualSessionScenario) bool {
 	return true
 }
 
-func defaultSkillDirectoryPath(scenarioName string) string {
-	var skillName string
-	switch scenarioName {
-	case "document_create_acceptance":
-		skillName = "document"
-	case "presentation_local_multiturn_success":
-		skillName = "presentation"
+// A live run loads the skill from disk so the model reads what a host ships. An
+// explicit --skill-dir wins; otherwise the scenario's own skills are looked up in
+// the roots the host offered, and a run that finds none leaves the scripted
+// instructions in place rather than guessing at a layout.
+func liveSkillDirectoryPaths(arguments virtualSessionArguments, scenario e2e.VirtualSessionScenario) []string {
+	if skillDirectoryPath := strings.TrimSpace(arguments.SkillDirectoryPath); skillDirectoryPath != "" {
+		return []string{skillDirectoryPath}
 	}
-	if skillName == "" {
-		return ""
+	skillDirectoryPaths := []string{}
+	for _, skillInstruction := range scenario.Skills {
+		for _, skillRootPath := range e2e.ScenarioSkillRootPaths() {
+			candidatePath := filepath.Join(skillRootPath, skillInstruction.Name)
+			if information, errorValue := os.Stat(candidatePath); errorValue == nil && information.IsDir() {
+				skillDirectoryPaths = append(skillDirectoryPaths, candidatePath)
+				break
+			}
+		}
 	}
-	candidatePath := filepath.Clean(filepath.Join("../../assets/blueclaw-workspace/skills", skillName))
-	if _, errorValue := os.Stat(candidatePath); errorValue == nil {
-		return candidatePath
-	}
-	return ""
+	return skillDirectoryPaths
 }
 
 func liveLanguageModelName(modelOverride string) string {
