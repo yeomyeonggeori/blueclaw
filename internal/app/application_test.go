@@ -742,6 +742,56 @@ func TestResolveTaskTierLanguageModelProvidersKeepsBareLowWhenMediumMatchesLow(t
 	}
 }
 
+func TestEveryTaskTierPostsTheConfiguredDirectModel(t *testing.T) {
+	receivedModelNames := make(chan string, 6)
+	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		requestDocument := struct {
+			Model string `json:"model"`
+		}{}
+		if errorValue := json.NewDecoder(request.Body).Decode(&requestDocument); errorValue != nil {
+			t.Errorf("expected a decodable completion request: %v", errorValue)
+		}
+		receivedModelNames <- requestDocument.Model
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"","tool_calls":[{"id":"call-1","type":"function","function":{"name":"answer","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}`))
+	}))
+	defer server.Close()
+
+	runtimeConfiguration := config.RuntimeConfiguration{}
+	runtimeConfiguration.LanguageModel.DefaultProvider = "direct"
+	runtimeConfiguration.LanguageModel.Direct.Endpoint = server.URL
+	runtimeConfiguration.LanguageModel.Direct.Model = "llama3.1"
+
+	providers := resolveTaskTierLanguageModelProviders(runtimeConfiguration, slog.New(slog.DiscardHandler))
+
+	for tierName, provider := range map[string]llm.LanguageModelProvider{
+		"xlow":   providers.XLow,
+		"low":    providers.Low,
+		"medium": providers.Medium,
+		"high":   providers.High,
+		"xhigh":  providers.XHigh,
+		"max":    providers.Max,
+	} {
+		if provider == nil {
+			t.Fatalf("expected a %s tier provider", tierName)
+		}
+		request := llm.StructuredResponseRequest{
+			Messages: []llm.Message{{Role: "user", Content: "hello"}},
+			StructuredOutputSchema: llm.StructuredOutputSchema{
+				Name:     "answer",
+				Document: `{"type":"object","properties":{},"additionalProperties":false}`,
+			},
+		}
+		if _, errorValue := provider.GenerateStructuredResponse(context.Background(), request); errorValue != nil {
+			t.Fatalf("expected the %s tier to reach the endpoint: %v", tierName, errorValue)
+		}
+		receivedModelName := <-receivedModelNames
+		if receivedModelName != "llama3.1" {
+			t.Fatalf("the %s tier asked the endpoint for %q, which it does not serve", tierName, receivedModelName)
+		}
+	}
+}
+
 func TestCapabilityEffectWhenConditionSurvivesConfigLineage(t *testing.T) {
 	configuredContract := config.CapabilityToolResultContract{}
 	document := `{

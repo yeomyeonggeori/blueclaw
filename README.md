@@ -238,15 +238,18 @@ anything else speaking that API.
 
 **1. Point the daemon at a model.** Copy
 `config/runtime.standalone.example.json` and fill in `languageModel.direct`: the
-base URL of an OpenAI-compatible server, a file holding its key, and the model
-name. `http://127.0.0.1:11434/v1` is Ollama; a hosted provider such as
-OpenRouter is the same three fields.
+base URL of an OpenAI-compatible server and the model name.
+`http://127.0.0.1:11434/v1` is Ollama. A hosted provider such as OpenRouter
+takes an `apiKeyPath` beside them, a file holding the key; a local server that
+authenticates nobody leaves it out. That one model name is what every tier asks
+for until `languageModel.capability` names tiers of its own.
 
-Treat a local model as a development convenience. The runtime asks for
-structured output natively and falls back to a forced tool call when the server
-rejects that; Ollama treats the forced choice as a hint, so a model may answer
-in prose and fail the turn. Small models also struggle with the larger runtime
-schemas.
+Treat a local model as a development convenience. Every structured call leaves
+as a single function tool with `tool_choice` forcing it, and the runtime reads
+that tool call's arguments as the answer; it never sends `response_format`.
+Ollama treats the forced choice as a hint, so a model may answer in prose, and
+the turn fails with "answered stop with prose instead of calling the schema it
+was given". Small models also struggle with the larger runtime schemas.
 
 **2. Start the daemon.** Set your Postgres connection string in the same file,
 then:

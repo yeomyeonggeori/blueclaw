@@ -49,21 +49,14 @@ func newDirectProvider(runtimeConfiguration config.RuntimeConfiguration, modelNa
 	if errorValue != nil {
 		return nil, errorValue
 	}
-	chosenModel := firstNonEmptyModelName(
-		modelName,
-		directConfiguration.Model,
-		ResolveModelTierNames(runtimeConfiguration).Medium,
-	)
-	if chosenModel == "" {
-		return nil, errors.New("the direct language model provider has no model")
-	}
+	chosenModel := firstNonEmptyModelName(modelName, ResolveModelTierNames(runtimeConfiguration).Medium)
 	return openaicompatible.NewProvider(endpoint, apiKey, chosenModel), nil
 }
 
 func readAPIKey(apiKeyPath string) (string, error) {
 	trimmedPath := strings.TrimSpace(apiKeyPath)
 	if trimmedPath == "" {
-		return "", errors.New("the direct language model provider has no api key path")
+		return "", nil
 	}
 	keyDocument, errorValue := os.ReadFile(trimmedPath)
 	if errorValue != nil {
@@ -115,13 +108,14 @@ type ModelTierNames struct {
 
 func ResolveModelTierNames(runtimeConfiguration config.RuntimeConfiguration) ModelTierNames {
 	capabilityConfiguration := runtimeConfiguration.LanguageModel.Capability
+	directModelName := runtimeConfiguration.LanguageModel.Direct.Model
 	return ModelTierNames{
-		Max:    firstNonEmptyModelName(capabilityConfiguration.MaxModel, defaultMaxModelName),
-		XHigh:  firstNonEmptyModelName(capabilityConfiguration.XHighModel, defaultXHighModelName),
-		High:   firstNonEmptyModelName(capabilityConfiguration.HighModel, defaultHighModelName),
-		Medium: firstNonEmptyModelName(capabilityConfiguration.MediumModel, defaultMediumModelName),
-		Low:    firstNonEmptyModelName(capabilityConfiguration.LowModel, defaultLowModelName),
-		XLow:   firstNonEmptyModelName(capabilityConfiguration.XLowModel, defaultXLowModelName),
+		Max:    firstNonEmptyModelName(capabilityConfiguration.MaxModel, directModelName, defaultMaxModelName),
+		XHigh:  firstNonEmptyModelName(capabilityConfiguration.XHighModel, directModelName, defaultXHighModelName),
+		High:   firstNonEmptyModelName(capabilityConfiguration.HighModel, directModelName, defaultHighModelName),
+		Medium: firstNonEmptyModelName(capabilityConfiguration.MediumModel, directModelName, defaultMediumModelName),
+		Low:    firstNonEmptyModelName(capabilityConfiguration.LowModel, directModelName, defaultLowModelName),
+		XLow:   firstNonEmptyModelName(capabilityConfiguration.XLowModel, directModelName, defaultXLowModelName),
 	}
 }
 

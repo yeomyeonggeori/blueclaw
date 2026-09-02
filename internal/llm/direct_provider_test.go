@@ -1,6 +1,9 @@
 package llm
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -82,15 +85,35 @@ func TestDirectProviderRefusesAMissingEndpoint(t *testing.T) {
 	}
 }
 
-func TestDirectProviderRefusesAMissingKeyPathRatherThanReadingTheEnvironment(t *testing.T) {
+func TestDirectProviderCallsUnauthenticatedRatherThanReadingTheEnvironment(t *testing.T) {
+	t.Setenv("OPENROUTER_API_KEY", "an-environment-key")
+	receivedAuthorization := make(chan string, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		receivedAuthorization <- request.Header.Get("Authorization")
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"","tool_calls":[{"id":"call-1","type":"function","function":{"name":"answer","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}`))
+	}))
+	defer server.Close()
+
 	runtimeConfiguration := directRuntimeConfiguration(t, "a-key")
+	runtimeConfiguration.LanguageModel.Direct.Endpoint = server.URL
 	runtimeConfiguration.LanguageModel.Direct.APIKeyPath = ""
 
-	_, errorValue := NewConfiguredLanguageModelProvider(runtimeConfiguration)
-	if errorValue == nil {
-		t.Fatalf("expected a missing api key path to be refused")
+	languageModelProvider, errorValue := NewConfiguredLanguageModelProvider(runtimeConfiguration)
+	if errorValue != nil {
+		t.Fatalf("expected a local server that authenticates nobody to be reachable: %v", errorValue)
 	}
-	if !strings.Contains(errorValue.Error(), "api key path") {
-		t.Fatalf("expected the refusal to name the key path, got %v", errorValue)
+	request := StructuredResponseRequest{
+		Messages: []Message{{Role: "user", Content: "hello"}},
+		StructuredOutputSchema: StructuredOutputSchema{
+			Name:     "answer",
+			Document: `{"type":"object","properties":{},"additionalProperties":false}`,
+		},
+	}
+	if _, errorValue := languageModelProvider.GenerateStructuredResponse(context.Background(), request); errorValue != nil {
+		t.Fatalf("expected the call to reach the endpoint: %v", errorValue)
+	}
+	if authorization := <-receivedAuthorization; authorization != "" {
+		t.Fatalf("expected no authorization header when no key path is configured, got %q", authorization)
 	}
 }
