@@ -6,7 +6,6 @@ import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import {
   ChatCompletionFinishReason,
   ChatCompletionMessageRole,
-  DocumentToolName,
   ExecutionMode,
   LanguageModelBackend,
   LanguageModelMessageRole,
@@ -14,7 +13,6 @@ import {
   StructuredOutputDiagnosticCategory,
   StructuredOutputRepairStatus,
   StructuredOutputValidationCode,
-  buildCapabilityToolCatalog,
   chatCompletionRequestSchema,
   type ChatCompletionRequest,
   type StructuredResponseRequest,
@@ -144,10 +142,17 @@ describe('llmd provider adapter', () => {
     expect(response.message.toolCalls?.[0]?.function.name).toBe('task_add');
   });
 
-  test('accepts canonical generated document tool schemas', async () => {
-    const descriptor = buildCapabilityToolCatalog('test').tools
-      .find(tool => tool.name === DocumentToolName.Read);
-    if (descriptor === undefined) throw new Error('document_read descriptor is missing');
+  test('accepts a canonical strict tool schema and answers with the canonical name', async () => {
+    const descriptor = {
+      name: 'document_read',
+      description: 'Read a document from the workspace.',
+      inputSchema: {
+        type: 'object',
+        properties: { path: { type: 'string' } },
+        required: ['path'],
+        additionalProperties: false,
+      },
+    };
     const fallbackModel = chatLanguageModel('unused-local-model');
     const remoteModel = toolCallLanguageModel('served-remote-model', [{
       toolName: 'document_read',
@@ -176,7 +181,7 @@ describe('llmd provider adapter', () => {
     // OpenAI-family endpoints reject a function name containing a dot, so the
     // namespace separator goes out sanitized and comes back canonical.
     expect(remoteModel.doStreamCalls[0]?.tools?.map(tool => tool.name)).toEqual(['document_read']);
-    expect(response.message.toolCalls?.[0]?.function.name).toBe(DocumentToolName.Read);
+    expect(response.message.toolCalls?.[0]?.function.name).toBe('document_read');
     expect(remoteModel.doStreamCalls).toHaveLength(1);
     expect(fallbackModel.doStreamCalls).toHaveLength(0);
   });

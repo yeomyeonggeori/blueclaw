@@ -43,7 +43,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/blueclaw/internal/skill"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	capabilitycatalog "github.com/yeomyeonggeori/blueclaw/protocol/generated"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -132,25 +131,57 @@ var virtualGeneratedResultContractToolNames = []string{
 	"site_unserve",
 }
 
-var virtualCanonicalCapabilityToolDescriptorByName = mustLoadVirtualCanonicalCapabilityToolDescriptors()
+// ScenarioCapabilityCatalogVariable names the capability tool catalog a host
+// offers these scenarios. The tools are a product's, not this runtime's, so a
+// standalone checkout is offered none and the scenarios say so and skip.
+const ScenarioCapabilityCatalogVariable = "BLUECLAW_SCENARIO_CAPABILITY_CATALOG"
 
-func mustLoadVirtualCanonicalCapabilityToolDescriptors() map[string]agentruntime.CapabilityToolDescriptor {
+var virtualCanonicalCapabilityToolDescriptorByName = loadScenarioCapabilityToolDescriptors()
+
+func scenarioCapabilityCatalogPath() string {
+	return strings.TrimSpace(os.Getenv(ScenarioCapabilityCatalogVariable))
+}
+
+func scenarioCapabilityToolNames() []string {
+	toolNames := append([]string{}, virtualGeneratedDescriptorToolNames...)
+	return append(toolNames, virtualGeneratedResultContractToolNames...)
+}
+
+// ScenarioCapabilityAvailability separates a host that offered no catalog, which
+// finds none of these tools, from one that offered a catalog carrying some and
+// not the rest.
+func ScenarioCapabilityAvailability() (found []string, missing []string) {
+	descriptors := virtualCanonicalCapabilityToolDescriptorByName
+	found = []string{}
+	missing = []string{}
+	for _, toolName := range scenarioCapabilityToolNames() {
+		if _, isFound := descriptors[toolName]; !isFound {
+			missing = append(missing, toolName)
+			continue
+		}
+		found = append(found, toolName)
+	}
+	return found, missing
+}
+
+func loadScenarioCapabilityToolDescriptors() map[string]agentruntime.CapabilityToolDescriptor {
+	descriptors := map[string]agentruntime.CapabilityToolDescriptor{}
+	catalogPath := scenarioCapabilityCatalogPath()
+	if catalogPath == "" {
+		return descriptors
+	}
+	document, errorValue := os.ReadFile(catalogPath)
+	if errorValue != nil {
+		panic(fmt.Errorf("%s names %s, which cannot be read: %w", ScenarioCapabilityCatalogVariable, catalogPath, errorValue))
+	}
 	var catalog struct {
 		Tools []agentruntime.CapabilityToolDescriptor `json:"tools"`
 	}
-	if errorValue := json.Unmarshal(capabilitycatalog.CapabilityToolCatalog(), &catalog); errorValue != nil {
-		panic(errorValue)
+	if errorValue := json.Unmarshal(document, &catalog); errorValue != nil {
+		panic(fmt.Errorf("%s names %s, which is not a capability tool catalog: %w", ScenarioCapabilityCatalogVariable, catalogPath, errorValue))
 	}
-	descriptors := map[string]agentruntime.CapabilityToolDescriptor{}
 	for _, descriptor := range catalog.Tools {
 		descriptors[descriptor.Name] = descriptor
-	}
-	requiredToolNames := append([]string{}, virtualGeneratedDescriptorToolNames...)
-	requiredToolNames = append(requiredToolNames, virtualGeneratedResultContractToolNames...)
-	for _, toolName := range requiredToolNames {
-		if _, isFound := descriptors[toolName]; !isFound {
-			panic("generated capability descriptor is missing: " + toolName)
-		}
 	}
 	return descriptors
 }

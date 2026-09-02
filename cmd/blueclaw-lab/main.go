@@ -113,6 +113,21 @@ func main() {
 	}
 }
 
+// The tools these scenarios drive belong to a product, which offers its catalog
+// through the environment. A standalone checkout is offered none, so it says so
+// and runs nothing rather than failing on tools it was never given.
+func virtualSessionSkipReason() string {
+	foundTools, missingTools := e2e.ScenarioCapabilityAvailability()
+	if len(missingTools) == 0 {
+		return ""
+	}
+	if len(foundTools) == 0 {
+		return "skipping the virtual session: " + e2e.ScenarioCapabilityCatalogVariable + " names no capability tool catalog"
+	}
+	return "skipping the virtual session: the catalog in " + e2e.ScenarioCapabilityCatalogVariable +
+		" carries no descriptor for " + strings.Join(missingTools, ", ")
+}
+
 type virtualSessionArguments struct {
 	ScenarioName          string
 	ScenarioFilePath      string
@@ -219,6 +234,10 @@ func parseVirtualSessionArguments(arguments []string, defaultScenarioName string
 }
 
 func runVirtualSession(ctx context.Context, arguments virtualSessionArguments) error {
+	if skipReason := virtualSessionSkipReason(); skipReason != "" {
+		fmt.Fprintln(os.Stderr, skipReason)
+		return nil
+	}
 	scenario, errorValue := loadVirtualSessionScenario(arguments)
 	if errorValue != nil {
 		return errorValue

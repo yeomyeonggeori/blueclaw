@@ -2,54 +2,65 @@ import { createHash } from 'node:crypto';
 
 import { z } from 'zod';
 
-import { buildCapabilityToolCatalog } from './capability_tools.ts';
 import { createCanonicalJSONSchemaGenerationOverride } from './json_schema.ts';
 import { protocolSchemas, protocolVersion } from './registry.ts';
 
-type SchemaArtifact = {
+export type SchemaArtifact = {
   fileName: string;
   hash: string;
   name: string;
   schema: Record<string, unknown>;
 };
 
-type CatalogArtifact = {
+export type CatalogArtifactReference = {
   fileName: string;
   hash: string;
-  catalog: ReturnType<typeof buildCapabilityToolCatalog>;
 };
 
 export type ProtocolManifest = {
   aggregateHash: string;
-  capabilityToolCatalog: Pick<CatalogArtifact, 'fileName' | 'hash'>;
+  capabilityToolCatalog?: CatalogArtifactReference;
   protocolVersion: string;
   schemas: Array<Pick<SchemaArtifact, 'fileName' | 'hash' | 'name'>>;
 };
 
-export function buildProtocolArtifacts() {
-  const schemas = Object.entries(protocolSchemas)
+export function buildSchemaArtifacts(): SchemaArtifact[] {
+  return Object.entries(protocolSchemas)
     .sort(([left], [right]) => compareCodeUnits(left, right))
     .map(([name, schema]) => buildSchemaArtifact(name, schema));
-  const capabilityToolCatalog = buildCatalogArtifact();
-  const artifactHashes = [
-    ...schemas.map(({ name, fileName, hash }) => `${name}:${fileName}:${hash}`),
-    `capability-tool-catalog:${capabilityToolCatalog.fileName}:${capabilityToolCatalog.hash}`,
-  ];
-  const aggregateHash = calculateHash(artifactHashes.join('\n'));
+}
+
+// The manifest is the protocol's identity, so how a set of artifacts hashes into
+// one is written here even when a product authors artifacts of its own. A
+// product that carries a tool catalog passes it in and gets a manifest the same
+// reader accepts.
+export function buildProtocolManifest(
+  schemas: SchemaArtifact[],
+  capabilityToolCatalog?: CatalogArtifactReference,
+): ProtocolManifest {
+  const artifactHashes = schemas.map(({ name, fileName, hash }) => `${name}:${fileName}:${hash}`);
+  if (capabilityToolCatalog) {
+    artifactHashes.push(`capability-tool-catalog:${capabilityToolCatalog.fileName}:${capabilityToolCatalog.hash}`);
+  }
   return {
-    capabilityToolCatalog,
-    manifest: {
-      aggregateHash,
-      capabilityToolCatalog: withoutCatalog(capabilityToolCatalog),
-      protocolVersion,
-      schemas: schemas.map(withoutSchema),
-    },
-    schemas,
+    aggregateHash: calculateArtifactHash(artifactHashes.join('\n')),
+    ...(capabilityToolCatalog ? { capabilityToolCatalog } : {}),
+    protocolVersion,
+    schemas: schemas.map(withoutSchema),
   };
+}
+
+export function buildProtocolArtifacts() {
+  const schemas = buildSchemaArtifacts();
+  return { manifest: buildProtocolManifest(schemas), schemas };
 }
 
 export function serializeArtifact(value: unknown): string {
   return `${JSON.stringify(sortValue(value), null, 2)}\n`;
+}
+
+export function calculateArtifactHash(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
 }
 
 function buildSchemaArtifact(name: string, schema: z.ZodType): SchemaArtifact {
@@ -62,31 +73,14 @@ function buildSchemaArtifact(name: string, schema: z.ZodType): SchemaArtifact {
   };
   return {
     fileName: `${name}.schema.json`,
-    hash: calculateHash(serializeArtifact(document)),
+    hash: calculateArtifactHash(serializeArtifact(document)),
     name,
     schema: document,
   };
 }
 
-function buildCatalogArtifact(): CatalogArtifact {
-  const catalog = buildCapabilityToolCatalog(protocolVersion);
-  return {
-    fileName: 'capability-tools.json',
-    hash: calculateHash(serializeArtifact(catalog)),
-    catalog,
-  };
-}
-
 function withoutSchema({ fileName, hash, name }: SchemaArtifact) {
   return { fileName, hash, name };
-}
-
-function withoutCatalog({ fileName, hash }: CatalogArtifact) {
-  return { fileName, hash };
-}
-
-function calculateHash(value: string): string {
-  return createHash('sha256').update(value).digest('hex');
 }
 
 function sortValue(value: unknown): unknown {

@@ -5,9 +5,6 @@ import (
 	"encoding/json"
 )
 
-//go:embed capability-tools.json
-var capabilityToolCatalog []byte
-
 //go:embed manifest.json
 var protocolManifest []byte
 
@@ -16,10 +13,6 @@ var protocolManifest []byte
 type ProtocolIdentity struct {
 	ProtocolVersion       string `json:"protocolVersion"`
 	AggregateProtocolHash string `json:"aggregateHash"`
-}
-
-func CapabilityToolCatalog() []byte {
-	return append([]byte{}, capabilityToolCatalog...)
 }
 
 func BuiltProtocolIdentity() ProtocolIdentity {
