@@ -24,18 +24,20 @@ func (skillLoader SkillLoader) LoadSkillBundle(directoryPath string) (SkillBundl
 	}
 
 	return SkillBundle{
-		Name:           metadata.Name,
-		Description:    metadata.Description,
-		ToolReferences: metadata.ToolReferences,
-		Instruction:    strings.TrimSpace(instruction),
-		DirectoryPath:  directoryPath,
+		Name:                         metadata.Name,
+		Description:                  metadata.Description,
+		ToolReferences:               metadata.ToolReferences,
+		RequiredEnvironmentVariables: metadata.RequiredEnvironmentVariables,
+		Instruction:                  strings.TrimSpace(instruction),
+		DirectoryPath:                directoryPath,
 	}, nil
 }
 
 type skillMetadata struct {
-	Name           string
-	Description    string
-	ToolReferences []ToolReference
+	Name                         string
+	Description                  string
+	ToolReferences               []ToolReference
+	RequiredEnvironmentVariables []string
 }
 
 func parseSkillDocument(document string) (skillMetadata, string) {
@@ -60,7 +62,7 @@ func parseSkillFrontmatter(frontmatter string) skillMetadata {
 			continue
 		}
 		if strings.HasPrefix(trimmedLine, "- ") {
-			metadata = appendSkillToolReference(metadata, section, strings.TrimPrefix(trimmedLine, "- "))
+			metadata = appendSkillFrontmatterListItem(metadata, section, strings.TrimPrefix(trimmedLine, "- "))
 			continue
 		}
 		key, value, hasKey := strings.Cut(trimmedLine, ":")
@@ -80,6 +82,7 @@ func parseSkillFrontmatter(frontmatter string) skillMetadata {
 		section = key
 	}
 	metadata.ToolReferences = uniqueTrimmedSkillValues(metadata.ToolReferences)
+	metadata.RequiredEnvironmentVariables = uniqueTrimmedSkillValues(metadata.RequiredEnvironmentVariables)
 	return metadata
 }
 
@@ -87,6 +90,7 @@ func parseSkillFrontmatter(frontmatter string) skillMetadata {
 // carries another harness's vocabulary rather than this one's, so a skill that
 // has to conform to the specification says which tools it needs here.
 const vendorToolReferencesKey = "kim.intern.tool-references"
+const vendorRequiredEnvironmentKey = "kim.intern.requires-environment"
 
 func setSkillMetadataValue(metadata skillMetadata, key string, value string) skillMetadata {
 	switch key {
@@ -96,15 +100,19 @@ func setSkillMetadataValue(metadata skillMetadata, key string, value string) ski
 		metadata.Description = joinSkillDescription(metadata.Description, cleanSkillScalar(value))
 	case vendorToolReferencesKey:
 		metadata.ToolReferences = append(metadata.ToolReferences, parseSkillToolReferences(value)...)
+	case vendorRequiredEnvironmentKey:
+		metadata.RequiredEnvironmentVariables = append(metadata.RequiredEnvironmentVariables, parseSkillSpaceSeparatedList(value)...)
 	}
 	return metadata
 }
 
-func appendSkillToolReference(metadata skillMetadata, section string, value string) skillMetadata {
-	toolReference := ToolReference(cleanSkillScalar(value))
+func appendSkillFrontmatterListItem(metadata skillMetadata, section string, value string) skillMetadata {
+	cleanedValue := cleanSkillScalar(value)
 	switch section {
 	case vendorToolReferencesKey:
-		metadata.ToolReferences = append(metadata.ToolReferences, toolReference)
+		metadata.ToolReferences = append(metadata.ToolReferences, ToolReference(cleanedValue))
+	case vendorRequiredEnvironmentKey:
+		metadata.RequiredEnvironmentVariables = append(metadata.RequiredEnvironmentVariables, cleanedValue)
 	}
 	return metadata
 }
@@ -151,8 +159,8 @@ func cleanSkillScalar(value string) string {
 	return strings.Trim(strings.TrimSpace(value), `"'`)
 }
 
-func uniqueTrimmedSkillValues(values []ToolReference) []ToolReference {
-	trimmedValues := []ToolReference{}
+func uniqueTrimmedSkillValues[Value ~string](values []Value) []Value {
+	trimmedValues := []Value{}
 	seenValues := map[string]bool{}
 	for _, value := range values {
 		trimmedValue := strings.TrimSpace(string(value))
@@ -160,7 +168,7 @@ func uniqueTrimmedSkillValues(values []ToolReference) []ToolReference {
 			continue
 		}
 		seenValues[trimmedValue] = true
-		trimmedValues = append(trimmedValues, ToolReference(trimmedValue))
+		trimmedValues = append(trimmedValues, Value(trimmedValue))
 	}
 	return trimmedValues
 }
