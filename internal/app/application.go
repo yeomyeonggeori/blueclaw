@@ -82,6 +82,7 @@ type Application struct {
 	taskRetentionSweeper          *scheduler.TaskRetentionSweeper
 	memoryJobWorker               *bluememo.JobWorker
 	memoryJobWorkerCancel         context.CancelFunc
+	memoryStore                   *bluememo.Store
 	taskSchedulePollSecond        int
 	taskRetentionIntervalMinute   int
 	interruptedTaskResumeDelay    time.Duration
@@ -524,6 +525,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 		taskSchedulePoller:            taskSchedulePoller,
 		taskRetentionSweeper:          taskRetentionSweeper,
 		memoryJobWorker:               memoryJobWorker,
+		memoryStore:                   memoryStore,
 		taskSchedulePollSecond:        runtimeConfiguration.Scheduler.TaskSchedulePollIntervalSecond,
 		taskRetentionIntervalMinute:   runtimeConfiguration.Scheduler.RetentionCheckIntervalMinute,
 		interruptedTaskResumeDelay:    2 * time.Second,
@@ -1658,6 +1660,7 @@ func (application *Application) startMemoryJobWorker() {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	application.memoryJobWorkerCancel = cancel
+	application.enqueueMemoryReembed(ctx)
 	go application.memoryJobWorker.Start(ctx, bluememo.DefaultJobWorkerInterval)
 }
 
@@ -1696,10 +1699,21 @@ func buildMemoryStore(
 		Handlers: map[string]bluememo.JobHandler{
 			bluememo.JobKindExtract: memory.ExtractJobHandler{Ingester: *memoryIngester, TaskRuns: taskRunService, Steps: taskStepService, Access: identityService}.Handle,
 			bluememo.JobKindProfile: bluememo.ProfileJobHandler{Builder: bluememo.ProfileBuilder{Store: *memoryStore, Model: memoryModel}}.Handle,
+			bluememo.JobKindReembed: bluememo.ReembedJobHandler{Store: *memoryStore}.Handle,
 		},
 	}
 	logger.Info("application.memory.fact_store_configured", "embeddingModel", memoryStore.EmbeddingModel, "extractionDisabled", runtimeConfiguration.Memory.ExtractionDisabled)
 	return memoryStore, memoryIngester, memoryJobWorker
+}
+
+func (application *Application) enqueueMemoryReembed(ctx context.Context) {
+	if application.memoryStore == nil {
+		return
+	}
+	_, _, errorValue := application.memoryStore.EnqueueReembed(ctx)
+	if errorValue != nil && application.memoryJobWorker.Logger != nil {
+		application.memoryJobWorker.Logger.Warn("application.memory.reembed_enqueue_failed", "error", errorValue.Error())
+	}
 }
 
 func (application *Application) taskSchedulePollIntervalSecond() int {
