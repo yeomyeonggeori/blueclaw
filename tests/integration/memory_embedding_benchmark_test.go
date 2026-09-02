@@ -97,6 +97,7 @@ func TestMemoryEmbeddingBenchmark(t *testing.T) {
 		{name: "qwen/qwen3-embedding-4b", queryInstruction: qwenQueryInstruction},
 		{name: "perplexity/pplx-embed-v1-4b"},
 		{name: "perplexity/pplx-embed-v1-0.6b"},
+		{name: "baai/bge-m3"},
 	}
 	t.Logf("%-32s %8s %8s %8s %8s", "model", "R@1", "R@3", "MRR", "seconds")
 	for _, candidate := range candidates {

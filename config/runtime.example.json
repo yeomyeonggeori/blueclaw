@@ -129,7 +129,7 @@
     "migrationDirectoryPath": "/workspace/.blueclaw/migrations"
   },
   "memory": {
-    "embeddingModel": "qwen/qwen3-embedding-8b",
+    "embeddingModel": "baai/bge-m3",
     "embeddingExecutionMode": "auto",
     "extractionDisabled": false
   },
