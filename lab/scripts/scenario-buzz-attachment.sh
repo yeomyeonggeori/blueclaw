@@ -50,6 +50,10 @@ for _ in $(seq 1 120); do
   if curl -fsS --max-time 3 "$chatd_url/healthz" >/dev/null 2>&1; then break; fi
   sleep 1
 done
+if ! curl -fsS --max-time 5 "$chatd_url/healthz" >/dev/null; then
+  echo "✗ chatd never answered $chatd_url/healthz; every call below would fail on the same thing" >&2
+  exit 1
+fi
 
 # The guest reads its policy from a share the host holds read-only, so the agent
 # cannot invite anybody into it. The scenario is one of the people the device was

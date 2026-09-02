@@ -53,6 +53,10 @@ for _ in $(seq 1 120); do
   if curl -fsS --max-time 3 "$chatd_url/healthz" >/dev/null 2>&1; then break; fi
   sleep 1
 done
+if ! curl -fsS --max-time 5 "$chatd_url/healthz" >/dev/null; then
+  echo "✗ chatd never answered $chatd_url/healthz; every call below would fail on the same thing" >&2
+  exit 1
+fi
 
 # One asks, the other is written to. Both come from the company's own member
 # directory, which is what the public API checks a requester against; the

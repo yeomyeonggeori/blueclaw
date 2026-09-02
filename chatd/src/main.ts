@@ -5,6 +5,7 @@ import { createMattermostAdapter } from './adapters/mattermost/index.ts';
 import { loadConfiguration } from './configuration.ts';
 import { createBridge } from './bridge.ts';
 import { createOutboundHandler } from './outbound.ts';
+import { createRequestHandler } from './server.ts';
 import { createMirror, type MirrorWiring } from './mirror/wire.ts';
 import type { NormalizedPlatformAdapter } from './visible-context.ts';
 import { createMattermostPersonalGateway } from './personal/mattermost.ts';
@@ -70,21 +71,24 @@ const chat = new Chat({
 
 createBridge(chat, configuration, normalizedAdapters);
 
-await chat.initialize();
-
 const outboundHandler = createOutboundHandler(adapters as never, configuration, personalGateways);
 
+let connectedToTheRelay = false;
+
+// Connecting first meant a relay that was down left no port open at all, while
+// systemd reported the unit active and the journal stayed empty. The port is
+// the one thing that can say so, so it opens before the connection is tried.
 Bun.serve({
   port: configuration.listenPort,
   hostname: configuration.listenHostname,
-  fetch: async (request) => {
-    const requestUrl = new URL(request.url);
-    if (requestUrl.pathname === '/webhooks/mattermost' && adapters.mattermost) {
-      return chat.webhooks.mattermost?.(request) ?? new Response('Not Found', { status: 404 });
-    }
-    if (requestUrl.pathname.startsWith('/v1/platform/')) {
-      return outboundHandler(request);
-    }
-    return new Response('Not Found', { status: 404 });
-  },
+  fetch: createRequestHandler({
+    isReady: () => connectedToTheRelay,
+    mattermostWebhook: adapters.mattermost
+      ? (request) => chat.webhooks.mattermost?.(request) ?? new Response('Not Found', { status: 404 })
+      : undefined,
+    outbound: outboundHandler,
+  }),
 });
+
+await chat.initialize();
+connectedToTheRelay = true;
