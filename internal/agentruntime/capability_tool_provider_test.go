@@ -27,13 +27,26 @@ func TestCapabilityToolProviderRegistersOfferedCatalogAtExternalBoundary(t *test
 	if errorValue := json.Unmarshal(document, &catalog); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	toolNames := make([]string, 0, len(catalog.Tools))
+	// A catalog holds a product's whole surface, including capabilities its own
+	// runtime answers for itself and never hands to an agent. What is handed over
+	// is what states a result: a tool with no contract has no answer to give this
+	// runtime, and is never in the set a provider registers.
+	descriptors := make([]CapabilityToolDescriptor, 0, len(catalog.Tools))
 	for _, descriptor := range catalog.Tools {
+		if descriptor.ResultContract != nil {
+			descriptors = append(descriptors, descriptor)
+		}
+	}
+	if len(descriptors) == 0 {
+		t.Fatal("the offered catalog states no result contract, so it hands over nothing")
+	}
+	toolNames := make([]string, 0, len(descriptors))
+	for _, descriptor := range descriptors {
 		toolNames = append(toolNames, descriptor.ModelName)
 	}
 	provider := capabilityToolProvider{
 		toolCatalogBuilder: NewToolCatalogBuilder(),
-		descriptors:        catalog.Tools,
+		descriptors:        descriptors,
 	}
 	toolSet := toolcontract.NewToolSet(toolNames)
 
@@ -48,8 +61,8 @@ func TestCapabilityToolProviderRegistersOfferedCatalogAtExternalBoundary(t *test
 	if len(quarantinedProviders) != 0 {
 		t.Fatalf("expected generated capability catalog to pass the external boundary, got %+v", quarantinedProviders)
 	}
-	if len(toolSet.ListRegisteredToolDefinitions()) != len(catalog.Tools) {
-		t.Fatalf("expected %d registered capability tools, got %d", len(catalog.Tools), len(toolSet.ListRegisteredToolDefinitions()))
+	if len(toolSet.ListRegisteredToolDefinitions()) != len(descriptors) {
+		t.Fatalf("expected %d registered capability tools, got %d", len(descriptors), len(toolSet.ListRegisteredToolDefinitions()))
 	}
 }
 
