@@ -62,7 +62,7 @@ func TestLoadRuntimeConfigurationIncludesGuestAndBridge(t *testing.T) {
     "migrationDirectoryPath": "/workspace/.blueclaw/runtime/current/migrations"
   },
   "memory": {
-    "embeddingModel": "qwen/qwen3-embedding-4b",
+    "embeddingModel": "qwen/qwen3-embedding-8b",
     "embeddingExecutionMode": "remote",
     "extractionDisabled": true
   },
@@ -212,7 +212,7 @@ func TestLoadRuntimeConfigurationIncludesGuestAndBridge(t *testing.T) {
 	if runtimeConfiguration.Database.MigrationDirectoryPath != "/workspace/.blueclaw/runtime/current/migrations" {
 		t.Fatalf("expected migration directory to match, got %q", runtimeConfiguration.Database.MigrationDirectoryPath)
 	}
-	if runtimeConfiguration.Memory.EmbeddingModel != "qwen/qwen3-embedding-4b" || runtimeConfiguration.Memory.EmbeddingExecutionMode != "remote" || !runtimeConfiguration.Memory.ExtractionDisabled {
+	if runtimeConfiguration.Memory.EmbeddingModel != "qwen/qwen3-embedding-8b" || runtimeConfiguration.Memory.EmbeddingExecutionMode != "remote" || !runtimeConfiguration.Memory.ExtractionDisabled {
 		t.Fatalf("expected the memory settings to match, got %+v", runtimeConfiguration.Memory)
 	}
 	if !runtimeConfiguration.Agent.Intake.Enabled {

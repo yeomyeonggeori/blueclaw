@@ -25,7 +25,7 @@ func TestCapabilityEmbeddingClientSendsInputTypeAndDimensions(t *testing.T) {
 
 	client := CapabilityEmbeddingClient{
 		CapabilityClient: capability.Client{Endpoint: server.URL, HTTPClient: server.Client()},
-		ModelName:        "qwen/qwen3-embedding-4b",
+		ModelName:        "qwen/qwen3-embedding-8b",
 		ExecutionMode:    "remote",
 		OutputDimensions: 1024,
 	}
@@ -39,7 +39,7 @@ func TestCapabilityEmbeddingClientSendsInputTypeAndDimensions(t *testing.T) {
 	if receivedRequest["input"] != "where is the Q3 review" || receivedRequest["inputType"] != EmbeddingInputTypeQuery {
 		t.Fatalf("expected a query input, got %v", receivedRequest)
 	}
-	if receivedRequest["outputDimensions"] != float64(1024) || receivedRequest["executionMode"] != "remote" || receivedRequest["model"] != "qwen/qwen3-embedding-4b" {
+	if receivedRequest["outputDimensions"] != float64(1024) || receivedRequest["executionMode"] != "remote" || receivedRequest["model"] != "qwen/qwen3-embedding-8b" {
 		t.Fatalf("expected dimensions, mode and model to be sent, got %v", receivedRequest)
 	}
 }
