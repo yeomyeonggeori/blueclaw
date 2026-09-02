@@ -80,6 +80,8 @@ type Application struct {
 	taskSchedulePoller            *scheduler.TaskSchedulePoller
 	taskRetentionSweeper          *scheduler.TaskRetentionSweeper
 	memoryUpdateQueue             *memory.BackgroundMemoryUpdateQueue
+	memoryJobWorker               *memory.JobWorker
+	memoryJobWorkerCancel         context.CancelFunc
 	taskSchedulePollSecond        int
 	taskRetentionIntervalMinute   int
 	interruptedTaskResumeDelay    time.Duration
@@ -300,6 +302,10 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 	pinnedMemoryStore.UseCompressor(memory.NewLLMMarkdownMemoryCompressor(lowTierLanguageModelProvider), pinnedMemoryCompressionTargetCharacterCount(runtimeConfiguration))
 	memoryUpdateProcessor := memory.NewMemoryUpdateProcessor(memoryService, pinnedMemoryStore)
 	memoryUpdateQueue := memory.NewBackgroundMemoryUpdateQueue(memoryUpdateProcessor, logger)
+	memoryStore, memoryIngester, memoryJobWorker := buildMemoryStore(runtimeConfiguration, database, capabilityClient, lowTierLanguageModelProvider, taskRunService, taskStepService, identityService, logger)
+	if memoryStore != nil && !runtimeConfiguration.Memory.ExtractionDisabled {
+		taskRunService.RegisterTaskRunTransitionObserver(memory.TaskRunTransitionObserver{Store: *memoryStore}.Observe)
+	}
 	backupCoordinator := backup.NewCoordinator(buildBackupManifest(runtimeConfiguration, database))
 	taskIntakeController := runtimecontrol.NewTaskIntakeController()
 	mcpRegistry := mcp.NewMcpRegistry()
@@ -329,6 +335,9 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 	toolCatalogBuilder.UseMemoryService(memoryService)
 	toolCatalogBuilder.UsePinnedMemoryStore(pinnedMemoryStore)
 	toolCatalogBuilder.UseMemoryUpdateQueue(memoryUpdateQueue)
+	if memoryStore != nil {
+		toolCatalogBuilder.UseMemoryStore(memoryStore, memoryIngester)
+	}
 	turnRouter := intake.NewTurnRouter(turnRouterLanguageModelProvider(taskTierLanguageModels, intakeLanguageModelProvider), deriveIntakeOptions(runtimeConfiguration))
 	taskLauncher := agentruntime.NewTaskLauncher(harness, taskRunService, toolCatalogBuilder)
 	taskLauncher.UseTurnRouter(turnRouter)
@@ -550,6 +559,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 		taskSchedulePoller:            taskSchedulePoller,
 		taskRetentionSweeper:          taskRetentionSweeper,
 		memoryUpdateQueue:             memoryUpdateQueue,
+		memoryJobWorker:               memoryJobWorker,
 		taskSchedulePollSecond:        runtimeConfiguration.Scheduler.TaskSchedulePollIntervalSecond,
 		taskRetentionIntervalMinute:   runtimeConfiguration.Scheduler.RetentionCheckIntervalMinute,
 		interruptedTaskResumeDelay:    2 * time.Second,
@@ -1378,6 +1388,7 @@ func (application *Application) Start() error {
 	application.startLogRetentionLoop()
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "memory_queue")
 	application.startMemoryUpdateQueue()
+	application.startMemoryJobWorker()
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "connector_runtime")
 	application.startConnectorRuntime()
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "connector_transports")
@@ -1489,6 +1500,9 @@ func (application *Application) Shutdown(ctx context.Context) error {
 	}
 	if application.memoryUpdateCancel != nil {
 		application.memoryUpdateCancel()
+	}
+	if application.memoryJobWorkerCancel != nil {
+		application.memoryJobWorkerCancel()
 	}
 	errorValue := application.httpServer.Shutdown(ctx)
 	backgroundError := application.awaitBackgroundLoops(ctx)
@@ -1708,6 +1722,55 @@ func (application *Application) taskRetentionIntervalMinuteOrDefault() int {
 		return application.taskRetentionIntervalMinute
 	}
 	return 60
+}
+
+func (application *Application) startMemoryJobWorker() {
+	if application.memoryJobWorker == nil || application.memoryJobWorkerCancel != nil {
+		return
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	application.memoryJobWorkerCancel = cancel
+	go application.memoryJobWorker.Start(ctx, memory.DefaultJobWorkerInterval)
+}
+
+func buildMemoryStore(
+	runtimeConfiguration config.RuntimeConfiguration,
+	database postgres.Database,
+	capabilityClient capability.Client,
+	lowTierLanguageModelProvider llm.LanguageModelProvider,
+	taskRunService *task.TaskRunService,
+	taskStepService *task.TaskStepService,
+	identityService *identity.IdentityService,
+	logger *slog.Logger,
+) (*memory.Store, *memory.Ingester, *memory.JobWorker) {
+	if database.SQL == nil {
+		logger.Info("application.memory.fact_store_not_configured", "reason", "no database")
+		return nil, nil, nil
+	}
+	memoryStore := &memory.Store{
+		Facts:    postgres.NewMemoryFactRepository(database),
+		Profiles: postgres.NewMemoryProfileRepository(database),
+		Jobs:     postgres.NewMemoryJobRepository(database),
+		Embedder: llm.CapabilityEmbeddingClient{
+			CapabilityClient: capabilityClient,
+			ModelName:        firstNonEmptyString(runtimeConfiguration.Memory.EmbeddingModel, memory.DefaultEmbeddingModelName),
+			ExecutionMode:    firstNonEmptyString(runtimeConfiguration.Memory.EmbeddingExecutionMode, "auto"),
+			OutputDimensions: memory.EmbeddingDimensionCount,
+		},
+		EmbeddingModel: firstNonEmptyString(runtimeConfiguration.Memory.EmbeddingModel, memory.DefaultEmbeddingModelName),
+		Logger:         logger,
+	}
+	memoryIngester := &memory.Ingester{Store: *memoryStore, Model: lowTierLanguageModelProvider, People: identityService}
+	memoryJobWorker := &memory.JobWorker{
+		Jobs:   memoryStore.Jobs,
+		Logger: logger,
+		Handlers: map[string]memory.JobHandler{
+			memory.JobKindExtract: memory.ExtractJobHandler{Ingester: *memoryIngester, TaskRuns: taskRunService, Steps: taskStepService, Access: identityService}.Handle,
+			memory.JobKindProfile: memory.ProfileJobHandler{Builder: memory.ProfileBuilder{Store: *memoryStore, Model: lowTierLanguageModelProvider}}.Handle,
+		},
+	}
+	logger.Info("application.memory.fact_store_configured", "embeddingModel", memoryStore.EmbeddingModel, "extractionDisabled", runtimeConfiguration.Memory.ExtractionDisabled)
+	return memoryStore, memoryIngester, memoryJobWorker
 }
 
 func (application *Application) startMemoryUpdateQueue() {

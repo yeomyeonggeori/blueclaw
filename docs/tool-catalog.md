@@ -22,8 +22,11 @@ catalog, so they appear here as one row with no description.
 | `file_preview` | 229 | `file_tools.go` |
 | `file_read` | 299 | `file_tools.go` |
 | `file_write` | 239 | `file_tools.go` |
+| `memory_forget` | 179 | `memory_store_tools.go` |
+| `memory_remember` | 428 | `memory_store_tools.go` |
 | `memory_remember` | 444 | `memory_tools.go` |
 | `memory_search` | 155 | `memory_tools.go` |
+| `memory_search` | 217 | `memory_store_tools.go` |
 | `schedule_cancel` | 446 | `schedule_tool.go` |
 | `schedule_create` | 530 | `schedule_tool.go` |
 | `schedule_list` | 137 | `schedule_tool.go` |
@@ -32,4 +35,4 @@ catalog, so they appear here as one row with no description.
 | `skill_add` | 80 | `skill_management.go` |
 | `skill_remove` | 67 | `skill_management.go` |
 
-22 tools, 4986 bytes of description in total.
+25 tools, 5810 bytes of description in total.

@@ -125,6 +125,27 @@ func (identityService *IdentityService) ResolvePersonPrimaryEmail(personID strin
 	return identityService.emailByPersonID[strings.TrimSpace(personID)]
 }
 
+func (identityService *IdentityService) ResolvePersonIDByDisplayName(displayName string) (string, bool) {
+	identityService.mutex.RLock()
+	defer identityService.mutex.RUnlock()
+
+	wanted := strings.TrimSpace(displayName)
+	if wanted == "" {
+		return "", false
+	}
+	matchedPersonID := ""
+	for personID, candidate := range identityService.displayNameByPersonID {
+		if !strings.EqualFold(strings.TrimSpace(candidate), wanted) {
+			continue
+		}
+		if matchedPersonID != "" {
+			return "", false
+		}
+		matchedPersonID = personID
+	}
+	return matchedPersonID, matchedPersonID != ""
+}
+
 func (identityService *IdentityService) ResolvePersonDisplayName(personID string) string {
 	identityService.mutex.RLock()
 	defer identityService.mutex.RUnlock()

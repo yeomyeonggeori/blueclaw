@@ -8,6 +8,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -138,10 +139,15 @@ type launchStepRecord struct {
 }
 
 type launchMemoryResult struct {
-	Facts           []memory.MemoryFact
-	PinnedFactCount int
-	GraphFactCount  int
-	Error           string
+	Facts            []memory.MemoryFact
+	PinnedFactCount  int
+	GraphFactCount   int
+	ProfileLineCount int
+	RecalledCount    int
+	Mode             string
+	DegradedReason   string
+	IsStoreBacked    bool
+	Error            string
 }
 
 type IntakeBudget struct {
@@ -362,7 +368,9 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 	}
 	if turnResult.TaskRun.TaskRunID != "" {
 		taskLauncher.appendLaunchStepRecords(turnResult.TaskRun.TaskRunID, launchRecords)
-		if memoryResult.Error != "" {
+		if memoryResult.IsStoreBacked {
+			taskLauncher.appendStoreMemoryLaunchEvents(turnResult.TaskRun.TaskRunID, request, memoryResult)
+		} else if memoryResult.Error != "" {
 			taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, "memory.pinned_load_failed", memoryResult.Error)
 		} else {
 			taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, "memory.pinned_load_succeeded", marshalToolResult(map[string]any{
@@ -431,6 +439,9 @@ func (loadMemoryLaunchStep) Name() string {
 }
 
 func (loadMemoryLaunchStep) Run(ctx context.Context, execution *taskLaunchExecution) (launchMemoryResult, error) {
+	if execution.Launcher.toolCatalogBuilder.memoryStore != nil {
+		return recallLaunchMemory(ctx, execution), nil
+	}
 	pinnedMemoryFacts, errorValue := execution.Launcher.toolCatalogBuilder.LoadPinnedMemory(ctx, TaskPinnedMemoryRequest{
 		RequesterPersonID: execution.Request.RequesterPersonID,
 	})
@@ -446,6 +457,86 @@ func (loadMemoryLaunchStep) Run(ctx context.Context, execution *taskLaunchExecut
 }
 
 const launchGraphMemorySearchTimeout = 8 * time.Second
+
+func recallLaunchMemory(ctx context.Context, execution *taskLaunchExecution) launchMemoryResult {
+	request := execution.Request
+	recallContext, cancelRecall := context.WithTimeout(ctx, launchGraphMemorySearchTimeout)
+	defer cancelRecall()
+	recall, errorValue := execution.Launcher.toolCatalogBuilder.memoryStore.Recall(recallContext, memory.RecallRequest{
+		Reader:   memory.ReaderFromPersonAccess(request.PersonAccess),
+		PersonID: request.RequesterPersonID,
+		Query:    request.Prompt,
+		Limit:    memory.DefaultSearchResultLimit,
+	})
+	if errorValue != nil {
+		return launchMemoryResult{IsStoreBacked: true, Error: errorValue.Error()}
+	}
+	return launchMemoryResult{
+		Facts:            launchMemoryFactsFromRecall(request.RequesterPersonID, recall),
+		ProfileLineCount: len(recall.ProfileLines()),
+		RecalledCount:    len(recall.Facts),
+		Mode:             recall.Mode,
+		DegradedReason:   recall.DegradedReason,
+		IsStoreBacked:    true,
+	}
+}
+
+func launchMemoryFactsFromRecall(requesterPersonID string, recall memory.Recall) []memory.MemoryFact {
+	facts := make([]memory.MemoryFact, 0, len(recall.ProfileLines())+len(recall.Facts))
+	for index, line := range recall.ProfileLines() {
+		facts = append(facts, memory.MemoryFact{
+			FactID:     "profile:" + requesterPersonID + ":" + strconv.Itoa(index),
+			ScopeType:  memory.ScopeTypePrivate,
+			Content:    line,
+			SourceKind: "profile",
+			ValidAt:    recall.Profile.BuiltAt,
+		})
+	}
+	for _, scoredFact := range recall.Facts {
+		facts = append(facts, memory.MemoryFact{
+			FactID:            scoredFact.Fact.FactID,
+			ScopeType:         scoredFact.Fact.ScopeType,
+			Content:           scoredFact.Fact.Content,
+			Score:             scoredFact.Score,
+			SourceEpisodeID:   scoredFact.Fact.EpisodeID,
+			SourceKind:        scoredFact.Fact.Kind,
+			ValidAt:           scoredFact.Fact.ValidFrom,
+			SecurityLevelRank: scoredFact.Fact.SecurityLevelRank,
+			RequiredClasses:   append([]string{}, scoredFact.Fact.RequiredClasses...),
+		})
+	}
+	return facts
+}
+
+func (taskLauncher *TaskLauncher) appendStoreMemoryLaunchEvents(taskRunID string, request TaskLaunchRequest, memoryResult launchMemoryResult) {
+	if memoryResult.Error != "" {
+		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "memory.recall_failed", memoryResult.Error)
+	} else {
+		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "memory.recall_injected", marshalToolResult(map[string]any{
+			"profileLineCount": memoryResult.ProfileLineCount,
+			"recalledCount":    memoryResult.RecalledCount,
+			"characters":       memoryFactCharacterCount(memoryResult.Facts),
+			"mode":             memoryResult.Mode,
+			"degradedReason":   memoryResult.DegradedReason,
+		}))
+	}
+	label := memorySecurityLabelForRequest(ToolCatalogRequest{ConversationID: request.ConversationID, PersonAccess: request.PersonAccess, MemoryNamespaces: request.MemoryNamespaces})
+	taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "memory.extraction_context", marshalToolResult(memory.ExtractionContext{
+		RequesterName:     request.RequesterName,
+		ActiveCircleID:    request.ActiveCircleID,
+		SecurityLevelRank: label.SecurityLevelRank,
+		RequiredClasses:   label.RequiredClasses,
+		Platform:          request.Platform,
+	}))
+}
+
+func memoryFactCharacterCount(facts []memory.MemoryFact) int {
+	count := 0
+	for _, fact := range facts {
+		count += len([]rune(fact.Content))
+	}
+	return count
+}
 
 func searchLaunchGraphMemory(ctx context.Context, execution *taskLaunchExecution) []memory.MemoryFact {
 	toolCatalogBuilder := execution.Launcher.toolCatalogBuilder

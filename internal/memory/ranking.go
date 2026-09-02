@@ -7,10 +7,8 @@ import (
 )
 
 const (
-	reciprocalRankOffset         = 60.0
-	episodeDecayHalfLifeDays     = 90.0
-	preferenceReinforcementCap   = 5
-	preferenceReinforcementBonus = 0.1
+	reciprocalRankOffset     = 60.0
+	episodeDecayHalfLifeDays = 90.0
 )
 
 type ScoredFact struct {
@@ -34,6 +32,9 @@ func RankFacts(hits []RankedFact, referenceTime time.Time) []ScoredFact {
 		if scoredFacts[left].Score != scoredFacts[right].Score {
 			return scoredFacts[left].Score > scoredFacts[right].Score
 		}
+		if scoredFacts[left].Fact.ReinforcementCount != scoredFacts[right].Fact.ReinforcementCount {
+			return scoredFacts[left].Fact.ReinforcementCount > scoredFacts[right].Fact.ReinforcementCount
+		}
 		return scoredFacts[left].Fact.ValidFrom.After(scoredFacts[right].Fact.ValidFrom)
 	})
 	return scoredFacts
@@ -41,17 +42,14 @@ func RankFacts(hits []RankedFact, referenceTime time.Time) []ScoredFact {
 
 func adjustedScore(hit RankedFact, referenceTime time.Time) float64 {
 	score := reciprocalRankScore(hit.VectorRank) + reciprocalRankScore(hit.LexicalRank)
-	switch hit.Fact.Kind {
-	case FactKindEpisode:
-		ageDays := referenceTime.Sub(hit.Fact.ValidFrom).Hours() / 24
-		if ageDays > 0 {
-			score *= math.Exp(-ageDays / episodeDecayHalfLifeDays)
-		}
-	case FactKindPreference:
-		reinforcement := min(hit.Fact.ReinforcementCount, preferenceReinforcementCap)
-		score *= 1 + preferenceReinforcementBonus*float64(reinforcement)
+	if hit.Fact.Kind != FactKindEpisode {
+		return score
 	}
-	return score
+	ageDays := referenceTime.Sub(hit.Fact.ValidFrom).Hours() / 24
+	if ageDays <= 0 {
+		return score
+	}
+	return score * math.Exp(-ageDays/episodeDecayHalfLifeDays)
 }
 
 func reciprocalRankScore(rank int) float64 {

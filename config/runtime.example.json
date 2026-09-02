@@ -132,7 +132,10 @@
     "workspaceID": "default",
     "graphitiEndpoint": "http://127.0.0.1:7791",
     "graphitiKuzuPath": "/workspace/.blueclaw/graphiti/kuzu",
-    "timeoutSecond": 15
+    "timeoutSecond": 15,
+    "embeddingModel": "qwen/qwen3-embedding-8b",
+    "embeddingExecutionMode": "auto",
+    "extractionDisabled": false
   },
   "agent": {
     "intake": {

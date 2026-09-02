@@ -238,6 +238,9 @@ type MemoryConfiguration struct {
 	PinnedMemoryHardLimitCharacterCount         int    `json:"pinnedMemoryHardLimitCharacterCount"`
 	PinnedMemoryCompressionTargetCharacterCount int    `json:"pinnedMemoryCompressionTargetCharacterCount"`
 	TimeoutSecond                               int    `json:"timeoutSecond"`
+	EmbeddingModel                              string `json:"embeddingModel"`
+	EmbeddingExecutionMode                      string `json:"embeddingExecutionMode"`
+	ExtractionDisabled                          bool   `json:"extractionDisabled"`
 }
 
 type ConnectorConfiguration struct {

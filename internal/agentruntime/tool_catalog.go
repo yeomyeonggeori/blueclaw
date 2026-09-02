@@ -34,6 +34,8 @@ type ToolCatalogBuilder struct {
 	memoryService                *memory.MemoryService
 	pinnedMemoryStore            *memory.MarkdownStore
 	memoryUpdateQueue            memory.MemoryUpdateEnqueuer
+	memoryStore                  *memory.Store
+	memoryIngester               *memory.Ingester
 	mcpRegistry                  *mcp.McpRegistry
 	capabilityClient             capability.Client
 	companyProvider              func() agentcontract.CompanyContext
@@ -140,6 +142,15 @@ func (toolCatalogBuilder *ToolCatalogBuilder) UsePinnedMemoryStore(pinnedMemoryS
 
 func (toolCatalogBuilder *ToolCatalogBuilder) UseMemoryUpdateQueue(memoryUpdateQueue memory.MemoryUpdateEnqueuer) {
 	toolCatalogBuilder.memoryUpdateQueue = memoryUpdateQueue
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) UseMemoryStore(memoryStore *memory.Store, memoryIngester *memory.Ingester) {
+	toolCatalogBuilder.memoryStore = memoryStore
+	toolCatalogBuilder.memoryIngester = memoryIngester
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) MemoryStore() *memory.Store {
+	return toolCatalogBuilder.memoryStore
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) UseMCPRegistry(mcpRegistry *mcp.McpRegistry) {

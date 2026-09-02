@@ -22,7 +22,7 @@ const (
 	EpisodeSourceKindImport   = "import"
 )
 
-const FactContentCharacterLimit = 300
+const FactContentCharacterLimit = 240
 
 const EmbeddingDimensionCount = 1024
 
