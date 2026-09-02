@@ -67,7 +67,7 @@ test("an edit carries its files into the edited body", async () => {
 		[TARGET]: { id: TARGET, kind: 9, tags: [["h", LIVES_IN]], content: "원문", pubkey: "b".repeat(64), created_at: 1, sig: "" },
 	});
 	const realFetch = globalThis.fetch;
-	globalThis.fetch = (async () =>
+	globalThis.fetch = (async (_input: RequestInfo | URL, _init?: RequestInit) =>
 		Response.json({ url: "http://relay.test/media/그림.png", sha256: "abc", size: 3, type: "image/png" })) as typeof fetch;
 	try {
 		await adapter.editMessage(adapter.encodeThreadId({ channelId: ASKED_FROM }), TARGET, {
