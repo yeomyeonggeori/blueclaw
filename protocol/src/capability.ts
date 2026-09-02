@@ -112,6 +112,12 @@ export enum CapabilityEstimatedLatency {
   Interactive = 'interactive',
 }
 
+export enum CapabilityAnsweredBy {
+  Record = 'record',
+  Company = 'company',
+  Local = 'local',
+}
+
 export enum CapabilityModelVisibility {
   Visible = 'visible',
   Hidden = 'hidden',
@@ -239,6 +245,7 @@ export const capabilityDescriptorSchema = z.strictObject({
   version: nonBlankStringSchema,
   privacyClass: nonBlankStringSchema,
   estimatedLatency: z.enum(CapabilityEstimatedLatency),
+  answeredBy: z.enum(CapabilityAnsweredBy),
   requiresUserPresence: z.boolean(),
   requiresRequesterDevice: z.boolean().optional(),
   requiresCompanionBrowser: z.boolean().optional(),

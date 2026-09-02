@@ -56,6 +56,7 @@
       "version": "1",
       "privacyClass": "workspace_calendar",
       "estimatedLatency": "medium",
+      "answeredBy": "record",
       "requiresUserPresence": false,
       "worksOffline": false,
       "inputSchema": {
@@ -137,6 +138,7 @@
           "version": "1",
           "privacyClass": "local_model",
           "estimatedLatency": "medium",
+          "answeredBy": "local",
           "requiresUserPresence": false,
           "worksOffline": true,
           "inputSchema": {

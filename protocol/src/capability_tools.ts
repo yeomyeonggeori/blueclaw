@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import {
+  CapabilityAnsweredBy,
   CapabilityAvailabilityState,
   CapabilityEstimatedLatency,
   CapabilityModelVisibility,
@@ -803,6 +804,7 @@ type CapabilityResultDefinition = {
 type CapabilityToolDefinition = {
   name: string;
   namespace: string;
+  answeredBy: CapabilityAnsweredBy;
   privacyClass: string;
   policyResource: string;
   description: string;
@@ -827,6 +829,7 @@ const taskToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: 'task_add',
     namespace: 'task',
+    answeredBy: CapabilityAnsweredBy.Record,
     privacyClass: 'workspace_task',
     policyResource: 'tool:task_add',
     description: 'Create a new workspace task with typed task fields. Use this to add a todo or assignment for the requester or another team member. Do not use this to update an existing task — use task.update.',
@@ -849,6 +852,7 @@ const taskToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: 'task_list',
     namespace: 'task',
+    answeredBy: CapabilityAnsweredBy.Record,
     privacyClass: 'workspace_task',
     policyResource: 'tool:task_list',
     description: "List workspace tasks with optional filters. Use this to answer 'what tasks does X have', 'what is on my plate', or 'show incomplete items this week'. The default scope is the requester; set scope to all for the whole workspace.",
@@ -861,6 +865,7 @@ const taskToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: 'task_update',
     namespace: 'task',
+    answeredBy: CapabilityAnsweredBy.Record,
     privacyClass: 'workspace_task',
     policyResource: 'tool:task_update',
     description: 'Update explicit fields on an existing task, including who takes part in it. taskHint is the exact task ID or exact task title from a task_list result, resolved server-side to the canonical task; use task_list first when neither is known. At least one mutable field is required.',
@@ -883,6 +888,7 @@ const taskToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: 'task_delete',
     namespace: 'task',
+    answeredBy: CapabilityAnsweredBy.Record,
     privacyClass: 'workspace_task',
     policyResource: 'tool:task_delete',
     description: 'Permanently delete a task. taskHint is the exact task ID or exact task title from a task_list result, resolved server-side to the canonical task; use task_list first when neither is known. Requires approval; this action is irreversible.',
@@ -906,6 +912,7 @@ const taskToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: 'person_list',
     namespace: 'person',
+    answeredBy: CapabilityAnsweredBy.Record,
     privacyClass: 'workspace_task',
     policyResource: 'tool:person_list',
     description: 'Everyone who works here, with their exact name, email, @handle, and mention. Call this when somebody asks who a person is or who works here, and when a person hint was refused with a list of candidates to choose between. Do not call it to turn a fragment into a name before another call: person hints take the fragment as it was written and the server resolves it, so a name given partly or by a given name alone is already enough.',
@@ -1110,6 +1117,7 @@ const calendarToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: CalendarToolName.Add,
     namespace: 'calendar',
+    answeredBy: CapabilityAnsweredBy.Record,
     privacyClass: 'workspace_calendar',
     policyResource: 'tool:event_add',
     description: 'Create a calendar event with a concrete time range. Resolve natural-language dates and times before calling. Use event_update for an existing event.',
@@ -1132,6 +1140,7 @@ const calendarToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: CalendarToolName.List,
     namespace: 'calendar',
+    answeredBy: CapabilityAnsweredBy.Record,
     privacyClass: 'workspace_calendar',
     policyResource: 'tool:event_list',
     description: 'List calendar events in a concrete time window, optionally filtered by title, description, or location. Resolve natural-language dates to startISO and endISO before calling.',
@@ -1144,6 +1153,7 @@ const calendarToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: CalendarToolName.Update,
     namespace: 'calendar',
+    answeredBy: CapabilityAnsweredBy.Record,
     privacyClass: 'workspace_calendar',
     policyResource: 'tool:event_update',
     description: 'Update explicit fields on a calendar event. eventHint is the exact event ID or exact event title from a event_list result, resolved server-side to the canonical event; use event_list first when neither is known. At least one mutable field is required.',
@@ -1166,6 +1176,7 @@ const calendarToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: CalendarToolName.Delete,
     namespace: 'calendar',
+    answeredBy: CapabilityAnsweredBy.Record,
     privacyClass: 'workspace_calendar',
     policyResource: 'tool:event_delete',
     description: 'Permanently delete a calendar event. eventHint is the exact event ID or exact event title from a event_list result, resolved server-side to the canonical event; use event_list first when neither is known. Requires approval; this action is irreversible.',
@@ -1192,6 +1203,7 @@ const messageToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: MessageToolName.Context,
     namespace: 'message',
+    answeredBy: CapabilityAnsweredBy.Company,
     privacyClass: 'platform_message',
     policyResource: 'tool:message_context',
     description: 'Return the exact current messenger conversation, thread, requester, and bot identities.',
@@ -1204,6 +1216,7 @@ const messageToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: MessageToolName.Search,
     namespace: 'message',
+    answeredBy: CapabilityAnsweredBy.Company,
     privacyClass: 'platform_message',
     policyResource: 'tool:message_search',
     description: 'Find messages in an exact conversation scope, or read known ones in full. Searching by queries returns message IDs with a short preview around the match. Passing messageIDs instead returns those messages complete, which is what you need before rewriting or summarising a long message rather than a phrase inside it.',
@@ -1216,6 +1229,7 @@ const messageToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: MessageToolName.Send,
     namespace: 'message',
+    answeredBy: CapabilityAnsweredBy.Company,
     privacyClass: 'platform_message',
     policyResource: 'tool:message_send',
     description: 'Send a message to a direct message, channel, or the current conversation after approval. attachments uploads workspace files with the message. For targetType=channel, name the channel with channelName; only pass a channelID a tool result gave you. Never answer the person you are replying to with this tool — the final reply is delivered for you. To correct a sent message, use message_update.',
@@ -1240,6 +1254,7 @@ const messageToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: MessageToolName.Update,
     namespace: 'message',
+    answeredBy: CapabilityAnsweredBy.Company,
     privacyClass: 'platform_message',
     policyResource: 'tool:message_update',
     description: 'Replace one exact span of text inside the assistant\'s messages or your own, leaving the rest of it untouched. oldText must appear exactly once in that message; copy it verbatim from a message_search preview or from the message you sent. This is the tool for every correction to something you already posted — when the user points out a mistake, fix that message instead of posting a correction as a new one. It runs immediately without asking the user to confirm, because it can only change text you quoted. If oldText does not match, the call fails without changing anything and returns the message as it currently reads, so retry with a span copied from that. To rewrite a long message wholesale, read it in full first with message_search messageIDs and quote what you read. attachments uploads workspace files into the edited message; pass it alone to add a file, such as an inbound image original, without changing the text.',
@@ -1263,6 +1278,7 @@ const messageToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: MessageToolName.Delete,
     namespace: 'message',
+    answeredBy: CapabilityAnsweredBy.Company,
     privacyClass: 'platform_message',
     policyResource: 'tool:message_delete',
     description: 'Permanently delete exact message IDs from message_search after approval. You may delete yours, the assistant\'s, or anyone\'s if you hold the channel admin role. List only the exact messages the user asked to remove; when several search matches quote or mention the same text, pick the one message that is the target itself, never the whole match list.',
@@ -1289,6 +1305,7 @@ const channelToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: ChannelToolName.Update,
     namespace: 'channel',
+    answeredBy: CapabilityAnsweredBy.Company,
     privacyClass: 'platform_message',
     policyResource: 'tool:channel_update',
     description: 'Update an exact Mattermost channel display name, header, or membership after approval.',
@@ -1315,6 +1332,7 @@ const siteToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: SiteToolName.Serve,
     namespace: 'site',
+    answeredBy: CapabilityAnsweredBy.Company,
     privacyClass: 'workspace_site',
     policyResource: 'tool:site_serve',
     description: 'Serve a site project directory you built in the workspace: preview mode returns a temporary review URL, publish mode deploys to the public URL. First serve allocates the slug from the title; pass siteReference to update an existing served site.',
@@ -1347,6 +1365,7 @@ const siteToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: SiteToolName.List,
     namespace: 'site',
+    answeredBy: CapabilityAnsweredBy.Company,
     privacyClass: 'workspace_site',
     policyResource: 'tool:site_list',
     description: 'List served sites with their exact siteID, slug, lifecycle status, and published URL. Pass siteReference to read one site.',
@@ -1359,6 +1378,7 @@ const siteToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: SiteToolName.Unserve,
     namespace: 'site',
+    answeredBy: CapabilityAnsweredBy.Company,
     privacyClass: 'workspace_site',
     policyResource: 'tool:site_unserve',
     description: 'Take a served site down after explicit runtime approval: unpublishes it, frees its slug, and deletes the server-side record. Workspace source files are not touched.',
@@ -1385,6 +1405,7 @@ const fileToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: DocumentToolName.Read,
     namespace: 'document',
+    answeredBy: CapabilityAnsweredBy.Company,
     privacyClass: 'workspace_document',
     policyResource: 'tool:document_read',
     description: 'Read a workspace document and return Markdown content. path takes an exact /workspace path, or an attachment\'s exact url copied verbatim from the conversation — a document attached to an earlier message is fetched by that url. Never invent a filesystem path from a url. Use image_read for image files.',
@@ -1398,6 +1419,7 @@ const fileToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: ImageToolName.Read,
     namespace: 'image',
+    answeredBy: CapabilityAnsweredBy.Company,
     privacyClass: 'workspace_document',
     policyResource: 'tool:image_read',
     description: 'Read a workspace image and return a base64 attachment. path takes an exact /workspace path, or an attachment\'s exact url copied verbatim from the conversation — an image attached to an earlier message is fetched by that url. Never invent a filesystem path from a url. Use document_read for document files.',
@@ -1414,6 +1436,7 @@ const browserToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: BrowserToolName.Open,
     namespace: 'browser',
+    answeredBy: CapabilityAnsweredBy.Local,
     privacyClass: 'user_browser',
     policyResource: 'tool:browser_open',
     description: 'Open an exact HTTP or HTTPS URL in the available browser and return the resulting page identity and initial structure.',
@@ -1428,6 +1451,7 @@ const browserToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: BrowserToolName.Snapshot,
     namespace: 'browser',
+    answeredBy: CapabilityAnsweredBy.Local,
     privacyClass: 'user_browser',
     policyResource: 'tool:browser_snapshot',
     description: 'Read the current browser page structure and return stable interactive references for inspection and control.',
@@ -1440,6 +1464,7 @@ const browserToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: BrowserToolName.Screenshot,
     namespace: 'browser',
+    answeredBy: CapabilityAnsweredBy.Local,
     privacyClass: 'user_browser',
     policyResource: 'tool:browser_screenshot',
     description: 'Capture the visible browser page and upload it to a temporary workspace-visible device path for visual review.',
@@ -1452,6 +1477,7 @@ const browserToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: BrowserToolName.Click,
     namespace: 'browser',
+    answeredBy: CapabilityAnsweredBy.Local,
     privacyClass: 'user_browser',
     policyResource: 'tool:browser_click',
     description: 'Click one exact target from the current browser snapshot and return the completed action.',
@@ -1468,6 +1494,7 @@ const artifactToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: ArtifactToolName.Review,
     namespace: 'artifact',
+    answeredBy: CapabilityAnsweredBy.Company,
     privacyClass: 'workspace_document',
     policyResource: 'tool:artifact_review',
     description: 'Review rendered artifact screenshots against a concrete intent and rubric, returning typed visual issues and suggested fixes.',
@@ -1487,6 +1514,7 @@ const webToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: WebToolName.Search,
     namespace: 'web',
+    answeredBy: CapabilityAnsweredBy.Company,
     privacyClass: 'public_web',
     policyResource: 'tool:web_search',
     description: 'Search the public web and return ranked result snippets. Use this when you need current information, facts, or links that are not already in context. Do not use for workspace data, calendar, mail, or tasks — those have dedicated tools.',
@@ -1502,6 +1530,7 @@ const leaveToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: 'leave_list',
     namespace: 'leave',
+    answeredBy: CapabilityAnsweredBy.Record,
     privacyClass: 'workspace_leave',
     policyResource: 'tool:leave_list',
     description: "List leave in the record. Use this to answer 'when am I off', 'who is away next week', or 'what have I not had decided yet'. The default scope is the requester; set scope to all for the whole company. registeredKinds in the result names the leave types this company offers, which is what leave_request takes.",
@@ -1514,6 +1543,7 @@ const leaveToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: 'leave_balance',
     namespace: 'leave',
+    answeredBy: CapabilityAnsweredBy.Record,
     privacyClass: 'workspace_leave',
     policyResource: 'tool:leave_balance',
     description: "Read how much leave someone has left for a year. Use this to answer 'how many days do I have left'. tracking is unlimited when the company grants no fixed entitlement, and then the day counts are null rather than zero.",
@@ -1526,6 +1556,7 @@ const leaveToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: 'leave_request',
     namespace: 'leave',
+    answeredBy: CapabilityAnsweredBy.Record,
     privacyClass: 'workspace_leave',
     policyResource: 'tool:leave_request',
     description: 'File a leave request for the requester. It is filed as requested and grants nothing until somebody decides it. Whether the leave is paid and whether it consumes the entitlement follow from the kind, so do not ask the requester for either.',
@@ -1548,6 +1579,7 @@ const leaveToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: 'leave_update',
     namespace: 'leave',
+    answeredBy: CapabilityAnsweredBy.Record,
     privacyClass: 'workspace_leave',
     policyResource: 'tool:leave_update',
     description: 'Correct a leave that was filed wrong: its days, its kind, how much entitlement it consumes, or the note. A person corrects their own while it is still waiting on a decision; an administrator corrects anybody\'s at any time, which is how a leave filed for the wrong year is moved to the right one. Only the fields you pass change.',
@@ -1571,6 +1603,7 @@ const leaveToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: 'leave_delete',
     namespace: 'leave',
+    answeredBy: CapabilityAnsweredBy.Record,
     privacyClass: 'workspace_leave',
     policyResource: 'tool:leave_delete',
     description: 'Take a leave back out of the record entirely, as though it was never filed. A person takes back their own while it is still waiting on a decision; an administrator takes back anybody\'s. Entitlement an approved leave spent comes back with it. To refuse a leave rather than erase it, decide it rejected.',
@@ -1594,6 +1627,7 @@ const leaveToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: 'leave_decide',
     namespace: 'leave',
+    answeredBy: CapabilityAnsweredBy.Record,
     privacyClass: 'workspace_leave',
     policyResource: 'tool:leave_decide',
     description: 'Approve or reject a leave request. Only an administrator may, and the record refuses anybody else. An approval is what spends the entitlement, so it requires approval from the person asking for it.',
@@ -1620,6 +1654,7 @@ const attendanceToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: 'attendance_list',
     namespace: 'attendance',
+    answeredBy: CapabilityAnsweredBy.Record,
     privacyClass: 'workspace_attendance',
     policyResource: 'tool:attendance_list',
     description: "List clock-ins and clock-outs as the record holds them. Use this to answer 'when did I come in', 'was anybody late this week', or to find the record another attendance tool is about to correct. Dates are yyyy-mm-dd and times are 24-hour HH:MM, both in the company time zone. Without from and to it covers the last thirty days. The default scope is the requester; scope all is the whole company.",
@@ -1632,6 +1667,7 @@ const attendanceToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: 'attendance_add',
     namespace: 'attendance',
+    answeredBy: CapabilityAnsweredBy.Record,
     privacyClass: 'workspace_attendance',
     policyResource: 'tool:attendance_add',
     description: "Write a clock-in or clock-out, at the moment it actually happened. Omit date and time for right now, which is what somebody clocking in as they arrive means. A person writes their own record from the last three days and it goes in at once, with status added and its eventID. Reaching further back is an administrator's to write, for anybody. Asked by anybody else it comes back with status asked and no eventID, and the administrators have already been told what was asked for: that is a finished answer and the task is done. Say an administrator was asked and leave it there; do not call this again. A moment in the future is refused. location names a workplace this company has registered and clock_out does not use it.",
@@ -1645,6 +1681,7 @@ const attendanceToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: 'attendance_update',
     namespace: 'attendance',
+    answeredBy: CapabilityAnsweredBy.Record,
     privacyClass: 'workspace_attendance',
     policyResource: 'tool:attendance_update',
     description: 'Correct the day, the time, or the workplace of attendance records that were written wrong, all in one call. What the record held before the correction is kept alongside it, with the reason. A person corrects their own records from the last three days. Correcting an older one, or anybody else\'s, is an administrator\'s: asked by anybody else it comes back with status asked, the administrators have been told, and the task is done. Say an administrator was asked; do not call this again.',
@@ -1659,6 +1696,7 @@ const attendanceToolDefinitions: CapabilityToolDefinition[] = [
   {
     name: 'attendance_delete',
     namespace: 'attendance',
+    answeredBy: CapabilityAnsweredBy.Record,
     privacyClass: 'workspace_attendance',
     policyResource: 'tool:attendance_delete',
     description: 'Remove an attendance record that should never have been there. The record stops counting, and who removed it and why stays in the record. A person removes their own records from the last three days. Removing an older one, or anybody else\'s, is an administrator\'s: asked by anybody else it comes back with status asked, the administrators have been told, and the task is done. Say an administrator was asked; do not call this again.',
@@ -1769,6 +1807,7 @@ function buildCapabilityDescriptor(definition: CapabilityToolDefinition): z.infe
     name: definition.name,
     canonicalName: definition.name,
     namespace: definition.namespace,
+    answeredBy: definition.answeredBy,
     modelName: definition.name,
     modelVisibility,
     modelVisible: modelVisibility === CapabilityModelVisibility.Visible,

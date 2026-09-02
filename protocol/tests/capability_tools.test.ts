@@ -70,6 +70,7 @@ import {
   webSearchResultSchema,
 } from '../src/capability_tools.ts';
 import {
+  CapabilityAnsweredBy,
   CapabilityModelVisibility,
   CapabilitySideEffect,
   ResourceEffectIdentity,
@@ -124,6 +125,21 @@ describe('canonical capability tools', () => {
       JSON.stringify(tool.outputSchema) === JSON.stringify(tool.resultContract?.schema)
     ))).toBe(true);
     expect(new Set(catalog.tools.map(tool => tool.name)).size).toBe(catalog.tools.length);
+  });
+
+  test('names the answerer of every tool', () => {
+    const catalog = buildCapabilityToolCatalog(protocolVersion);
+    const answerers = Object.values(CapabilityAnsweredBy);
+
+    expect(catalog.tools.every(tool => answerers.includes(tool.answeredBy))).toBe(true);
+    expect(catalog.tools.filter(tool => tool.answeredBy === CapabilityAnsweredBy.Local).map(tool => tool.name)).toEqual([
+      BrowserToolName.Open,
+      BrowserToolName.Snapshot,
+      BrowserToolName.Screenshot,
+      BrowserToolName.Click,
+    ]);
+    expect(catalog.tools.filter(tool => tool.answeredBy === CapabilityAnsweredBy.Record)).toHaveLength(19);
+    expect(catalog.tools.filter(tool => tool.answeredBy === CapabilityAnsweredBy.Company)).toHaveLength(13);
   });
 
   test('publishes explicit intent schemas for model-visible state changes', () => {
