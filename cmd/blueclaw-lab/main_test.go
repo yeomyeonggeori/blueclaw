@@ -212,7 +212,17 @@ func openRouterContentForSchema(schemaName string) string {
 	}
 }
 
+// The virtual session drives a product's tools, and a standalone checkout is
+// offered no catalog to drive them from.
+func skipWithoutOfferedCatalog(t *testing.T) {
+	t.Helper()
+	if skipReason := virtualSessionSkipReason(); skipReason != "" {
+		t.Skip(skipReason)
+	}
+}
+
 func TestRunVirtualSessionLiveLanguageModelUsesOpenRouterKeyFileAndFakeServer(t *testing.T) {
+	skipWithoutOfferedCatalog(t)
 	fakeServer := newFakeOpenRouterServer(http.StatusOK)
 	defer fakeServer.Close()
 	arguments := parseLiveVirtualSessionTestArguments(t, fakeServer.URL())
@@ -478,6 +488,7 @@ func TestSaveVirtualSessionEvidenceUsesOrderedVirtualCallRecorderWithoutDuplicat
 }
 
 func TestRunVirtualSessionLiveLanguageModelPrintsFailureSummary(t *testing.T) {
+	skipWithoutOfferedCatalog(t)
 	fakeServer := newFakeOpenRouterServer(http.StatusInternalServerError)
 	defer fakeServer.Close()
 	arguments := parseLiveVirtualSessionTestArguments(t, fakeServer.URL())

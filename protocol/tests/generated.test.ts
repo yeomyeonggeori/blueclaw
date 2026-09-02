@@ -5,7 +5,13 @@ import { describe, expect, test } from 'bun:test';
 import Ajv2020 from 'ajv/dist/2020.js';
 import { z } from 'zod';
 
-import { buildProtocolArtifacts, serializeArtifact } from '../src/artifacts.ts';
+import {
+  buildProtocolArtifacts,
+  buildProtocolManifest,
+  buildSchemaArtifacts,
+  calculateArtifactHash,
+  serializeArtifact,
+} from '../src/artifacts.ts';
 import { protocolSchemas, protocolVersion } from '../src/registry.ts';
 
 const generatedDirectory = fileURLToPath(new URL('../generated/', import.meta.url));
@@ -13,54 +19,34 @@ const fixturesDirectory = fileURLToPath(new URL('../fixtures/', import.meta.url)
 
 describe('protocol artifacts', () => {
   test('include every registered schema with a stable hash', () => {
-    const { capabilityToolCatalog, manifest } = buildProtocolArtifacts();
+    const { manifest } = buildProtocolArtifacts();
     expect(manifest.protocolVersion).toBe(protocolVersion);
-    expect(manifest.capabilityToolCatalog.fileName).toBe('capability-tools.json');
-    expect(manifest.capabilityToolCatalog.hash).toBe(capabilityToolCatalog.hash);
-    expect(capabilityToolCatalog.catalog.tools.map(tool => tool.name)).toEqual([
-      'task_add',
-      'task_list',
-      'task_update',
-      'task_delete',
-      'person_list',
-      'event_add',
-      'event_list',
-      'event_update',
-      'event_delete',
-      'leave_list',
-      'leave_balance',
-      'leave_request',
-      'leave_update',
-      'leave_delete',
-      'leave_decide',
-      'attendance_list',
-      'attendance_add',
-      'attendance_update',
-      'attendance_delete',
-      'message_context',
-      'message_search',
-      'message_send',
-      'message_update',
-      'message_delete',
-      'channel_update',
-      'web_search',
-      'site_serve',
-      'site_list',
-      'site_unserve',
-      'document_read',
-      'image_read',
-      'browser_open',
-      'browser_snapshot',
-      'browser_screenshot',
-      'browser_click',
-      'artifact_review',
-    ]);
+    expect(manifest.capabilityToolCatalog).toBeUndefined();
     expect(manifest.schemas.map(({ name }: { name: string }) => name)).toEqual(Object.keys(protocolSchemas).sort());
     expect(manifest.schemas.map(({ name }: { name: string }) => name)).toEqual(
       [...manifest.schemas.map(({ name }: { name: string }) => name)].sort(),
     );
     expect(manifest.aggregateHash).toMatch(/^[a-f0-9]{64}$/);
     expect(manifest.schemas.every(({ hash }: { hash: string }) => /^[a-f0-9]{64}$/.test(hash))).toBe(true);
+  });
+
+  test('take a product catalog into the same manifest without authoring one', () => {
+    const schemas = buildSchemaArtifacts();
+    const catalogHash = 'a'.repeat(64);
+    const withoutCatalog = buildProtocolManifest(schemas);
+    const withCatalog = buildProtocolManifest(schemas, { fileName: 'capability-tools.json', hash: catalogHash });
+
+    expect(withCatalog.capabilityToolCatalog).toEqual({ fileName: 'capability-tools.json', hash: catalogHash });
+    expect(withCatalog.schemas).toEqual(withoutCatalog.schemas);
+    expect(withCatalog.aggregateHash).not.toBe(withoutCatalog.aggregateHash);
+    expect(withCatalog.aggregateHash).toBe(
+      calculateArtifactHash(
+        [
+          ...schemas.map(({ name, fileName, hash }) => `${name}:${fileName}:${hash}`),
+          `capability-tool-catalog:capability-tools.json:${catalogHash}`,
+        ].join('\n'),
+      ),
+    );
   });
 
   test('serialize deterministically from current Zod schemas', () => {

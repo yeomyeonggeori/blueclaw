@@ -10,8 +10,14 @@ import (
 	"testing"
 )
 
-func TestCapabilityToolProviderRegistersGeneratedCatalogAtExternalBoundary(t *testing.T) {
-	document, errorValue := os.ReadFile("../../protocol/generated/capability-tools.json")
+// The catalog belongs to whatever product binds tools here, offered through
+// BLUECLAW_SCENARIO_CAPABILITY_CATALOG. A standalone checkout is offered none.
+func TestCapabilityToolProviderRegistersOfferedCatalogAtExternalBoundary(t *testing.T) {
+	catalogPath := strings.TrimSpace(os.Getenv("BLUECLAW_SCENARIO_CAPABILITY_CATALOG"))
+	if catalogPath == "" {
+		t.Skip("BLUECLAW_SCENARIO_CAPABILITY_CATALOG names no capability tool catalog")
+	}
+	document, errorValue := os.ReadFile(catalogPath)
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}

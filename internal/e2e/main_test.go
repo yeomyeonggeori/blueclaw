@@ -15,6 +15,15 @@ import (
 // rest means the appliance moved one, and skipping there would turn the whole
 // gate off while still reporting ok.
 func TestMain(mainTesting *testing.M) {
+	foundTools, missingTools := ScenarioCapabilityAvailability()
+	if len(missingTools) > 0 && len(foundTools) == 0 {
+		fmt.Printf("skipping the appliance scenarios: %s names no capability tool catalog\n", ScenarioCapabilityCatalogVariable)
+		os.Exit(0)
+	}
+	if len(missingTools) > 0 {
+		fmt.Printf("the catalog in %s carries no descriptor for %s\n", ScenarioCapabilityCatalogVariable, strings.Join(missingTools, ", "))
+		os.Exit(1)
+	}
 	foundSkills, missingSkills := ScenarioSkillAvailability()
 	if len(missingSkills) > 0 && len(foundSkills) == 0 {
 		fmt.Printf("skipping the appliance scenarios: %s names no skill root\n", ScenarioSkillRootsVariable)

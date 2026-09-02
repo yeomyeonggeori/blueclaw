@@ -12,7 +12,6 @@ func TestHarnessTestdataMatchesProtocolSource(t *testing.T) {
 		harnessPath  string
 	}{
 		{"../../protocol/fixtures/valid.json", "../../.dependency/bluecollar/loop/testdata/protocol-fixtures.json"},
-		{"../../protocol/generated/capability-tools.json", "../../.dependency/bluecollar/loop/testdata/capability-tools.json"},
 	} {
 		protocolBytes, errorValue := os.ReadFile(pair.protocolPath)
 		if errorValue != nil {

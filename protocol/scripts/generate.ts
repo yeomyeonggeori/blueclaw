@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { buildProtocolArtifacts, serializeArtifact } from '../src/artifacts.ts';
 
 const generatedDirectory = fileURLToPath(new URL('../generated/', import.meta.url));
-const preservedGeneratedPaths = ['catalog.go', 'catalog_test.go'];
+const preservedGeneratedPaths = ['catalog.go'];
 
 export async function generateProtocolArtifacts(targetDirectory = generatedDirectory): Promise<void> {
   const preservedDocuments = await readPreservedDocuments(targetDirectory);
@@ -86,9 +86,8 @@ async function readPreservedDocuments(targetDirectory: string): Promise<Map<stri
 }
 
 function buildProtocolArtifactDocuments(): Map<string, string> {
-  const { capabilityToolCatalog, manifest, schemas } = buildProtocolArtifacts();
+  const { manifest, schemas } = buildProtocolArtifacts();
   return new Map([
-    [capabilityToolCatalog.fileName, serializeArtifact(capabilityToolCatalog.catalog)],
     ...schemas.map(({ fileName, schema }) => [join('json-schema', fileName), serializeArtifact(schema)] as const),
     ['manifest.json', serializeArtifact(manifest)],
   ]);
