@@ -1,14 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# A person sends the agent a picture on Buzz and asks about it. The agent has to
-# open the file. Everything before this scenario existed only for Mattermost, so
-# the path that actually carries a company's messages was never driven here.
+# A person sends the agent a picture on Buzz and asks what it says. The picture
+# carries a word, and the scenario passes when the answer carries that word.
+# Everything before this scenario existed only for Mattermost, so the path that
+# actually carries a company's messages was never driven here.
+#
+# What it does not assert is that the agent called read. An attachment on the
+# triggering message is inlined into the prompt by
+# connectorImagePartsShowingTheirBytes, so the picture is already in front of
+# the model and the tool call buys no pixels. Asserting the call passed a run
+# that guessed and failed one that looked (yeomyeonggeori/internkim#1367).
 #
 # The failure it exists for: the bridge that fetches an attachment runs beside
 # the workspace image rather than inside it, wrote its copy on the host, and
 # answered with the /workspace path the agent reads by. image_read then failed
 # with "no such file or directory" on a file the agent had just been told about.
+# That is still checked, over whatever reads the agent chose to make.
 
 sudo_password="$1"
 mount_directory_path="${3:-/mnt/shared/workspace}"
@@ -19,6 +27,9 @@ blueclaw_url=http://127.0.0.1:8080
 chatd_url=http://172.31.0.1:18090
 policy_path=/var/lib/blueclaw/delivery/config/policy.json
 prompt="이 그림에 적힌 글자를 그대로 알려줘."
+# The word the picture carries. It lives here and nowhere the agent can reach.
+expected_word="SALT"
+picture_path="$(cd "$(dirname "${BASH_SOURCE[0]}")/../assets" && pwd)/buzz-attachment-word.png"
 evidence_directory_path="$mount_directory_path/.artifacts/buzz-attachment"
 mkdir -p "$evidence_directory_path"
 
@@ -83,13 +94,14 @@ conversation_identifier="$(post_json "$chatd_url/v1/platform/buzz/dm.ensure" "$(
 test -n "$conversation_identifier"
 
 phase "send the picture"
-picture_base64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+test -f "$picture_path"
+picture_base64="$(base64 < "$picture_path" | tr -d '\n')"
 sent_document="$(post_json "$chatd_url/v1/platform/buzz/person.message.send" "$(jq -cn \
   --argjson actor "$actor" \
   --arg conversationID "$conversation_identifier" \
   --arg body "$prompt" \
   --arg contentBase64 "$picture_base64" \
-  '{actor:$actor,conversationID:$conversationID,body:$body,attachments:[{filename:"buzz-attachment-test.png",contentType:"image/png",contentBase64:$contentBase64}]}')")"
+  '{actor:$actor,conversationID:$conversationID,body:$body,attachments:[{filename:"buzz-attachment-word.png",contentType:"image/png",contentBase64:$contentBase64}]}')")"
 printf '%s' "$sent_document" > "$evidence_directory_path/sent.json"
 
 phase "wait for the task"
@@ -120,11 +132,6 @@ reads="$(printf '%s' "$detail_document" \
   | jq -c '[.taskEvents[].body
       | if type == "string" then (try fromjson catch empty) else . end
       | select(type == "object") | select(.tool == "read")]')"
-if [ "$(printf '%s' "$reads" | jq 'length')" = "0" ]; then
-  echo "✗ the agent never tried to open the picture it was sent"
-  exit 1
-fi
-
 missing="$(printf '%s' "$reads" | jq -c '[.[] | select((.failure.code // "") == "not_found")]')"
 if [ "$(printf '%s' "$missing" | jq 'length')" != "0" ]; then
   echo "✗ the agent was told about a file that was not there:"
@@ -132,10 +139,15 @@ if [ "$(printf '%s' "$missing" | jq 'length')" != "0" ]; then
   exit 1
 fi
 
-if [ "$(printf '%s' "$reads" | jq '[.[] | select(.failure == null)] | length')" = "0" ]; then
-  echo "✗ every attempt to open the picture failed:"
-  printf '%s' "$reads" | jq -r '.[0].output.content // ""'
+reply="$(printf '%s' "$detail_document" | jq -r '.taskRun.result // ""')"
+if [ -z "$reply" ]; then
+  echo "✗ the task ended with no answer at all (status $status)"
+  exit 1
+fi
+if ! printf '%s' "$reply" | grep -qi "$expected_word"; then
+  echo "✗ the agent was sent a picture reading '$expected_word' and answered without it:"
+  printf '%s\n' "$reply"
   exit 1
 fi
 
-echo "✓ buzz attachment: the agent opened the picture it was sent"
+echo "✓ buzz attachment: the answer carries the word the picture carries"

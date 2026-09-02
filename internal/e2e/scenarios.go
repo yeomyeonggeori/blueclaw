@@ -457,7 +457,8 @@ func AttachmentCurrentImageInputScenario(artifactDirectoryPath string) VirtualSe
 				"url=https://mattermost.local/api/v4/files/file-current",
 				"mascot.png",
 			},
-			ExpectedReplyFragments: []string{"흰색 고양이", "김인턴", "이름표"},
+			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
+			ExpectedReplyFragments:   []string{"흰색 고양이", "김인턴", "이름표"},
 			ForbiddenReplyFragments: []string{
 				"상세하게 설명드렸습니다",
 			},
