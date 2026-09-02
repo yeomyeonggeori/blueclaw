@@ -575,10 +575,10 @@ markdown link is not completion evidence.
 `defaultProvider` names one of two providers. `capabilityLLM` is secretless: it
 hands model choice, local runtimes, GPU selection, and fallback policy to a
 capability service, which is how the InternKim appliance runs. `direct` posts to
-an OpenAI-compatible endpoint with a key read from the path it names, which is
-how a standalone deployment runs; that deployment reports
-`capabilityd: not_configured` in its health document. Both are built in
-`internal/llm/provider_factory.go`.
+an OpenAI-compatible endpoint, adding an `Authorization` header only when
+`apiKeyPath` names a file, which is how a standalone deployment runs; that
+deployment reports `capabilityd: not_configured` in its health document. Both
+are built in `internal/llm/provider_factory.go`.
 
 `executionMode` is `device`, `companion`, `remote`, or `auto`; InternKim decides
 what that maps to. A tool that needs the user's own browser or files resolves to
@@ -593,7 +593,10 @@ wording deliberately stays cheap. On a tier failure the runtime ladders within
 the configured ceiling rather than pinning one model, so configuration names
 tiers, never a single model. Tier resolution is
 `resolveTaskTierLanguageModelProviders` (`internal/app/application.go`) over
-`internal/llm/provider_factory.go`.
+`internal/llm/provider_factory.go`. A tier nobody named falls to `direct.model`
+before it falls to the built-in default, so a standalone deployment serving one
+model asks for that model at every tier instead of six names its endpoint does
+not have.
 
 The standalone shape is in `config/runtime.standalone.example.json`. That
 configuration is for native development and tests; appliance packaging keeps

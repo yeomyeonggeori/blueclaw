@@ -4,7 +4,6 @@
     "defaultProvider": "direct",
     "direct": {
       "endpoint": "http://127.0.0.1:11434/v1",
-      "apiKeyPath": "/run/blueclaw/model-api-key",
       "model": "your-model"
     }
   },
