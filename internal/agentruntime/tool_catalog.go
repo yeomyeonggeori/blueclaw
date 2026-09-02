@@ -95,65 +95,13 @@ type ToolCatalogRequest struct {
 	RegisteredToolNameCeiling  []string
 }
 
-type CapabilityToolDescriptor struct {
-	Name                    string
-	CanonicalName           string
-	Namespace               string
-	ModelName               string
-	ModelVisibility         string
-	Description             string
-	PrivacyClass            string
-	RequiresUserPresence    bool
-	RequiresRequesterDevice bool
-	WorksOffline            bool
-	InputSchema             json.RawMessage
-	InputIntentSchema       json.RawMessage
-	OutputSchema            json.RawMessage
-	ResultContract          *CapabilityToolResultContract
-	PolicyResource          string
-	SideEffectClass         string
-	RequiresApproval        bool
-	ApprovalScope           string
-	CompletionEvidence      *CapabilityCompletionEvidence
-	Availability            CapabilityAvailability
-	Idempotency             CapabilityIdempotency
-}
-
-type CapabilityToolResultContract struct {
-	Schema            json.RawMessage                    `json:"schema"`
-	Effects           []CapabilityResourceEffectContract `json:"effects,omitempty"`
-	EvidenceCondition *CapabilityEvidenceCondition       `json:"evidenceCondition,omitempty"`
-}
-
-type CapabilityEvidenceCondition struct {
-	ResultField string          `json:"resultField"`
-	Equals      json.RawMessage `json:"equals"`
-}
-
-type CapabilityResourceEffectContract struct {
-	ObjectType     string                       `json:"objectType"`
-	Effect         string                       `json:"effect"`
-	ResultField    string                       `json:"resultField"`
-	EffectIdentity string                       `json:"effectIdentity"`
-	When           *CapabilityEvidenceCondition `json:"when,omitempty"`
-}
-
-type CapabilityCompletionEvidence struct {
-	Mode       string
-	Action     string
-	TargetKind string
-}
-
-type CapabilityAvailability struct {
-	State  string
-	Reason string
-}
-
-type CapabilityIdempotency struct {
-	Supported bool
-	Required  bool
-	Scope     string
-}
+type CapabilityToolDescriptor = capability.ToolDescriptor
+type CapabilityToolResultContract = capability.ToolResultContract
+type CapabilityEvidenceCondition = capability.EvidenceCondition
+type CapabilityResourceEffectContract = capability.ResourceEffectContract
+type CapabilityCompletionEvidence = capability.CompletionEvidence
+type CapabilityAvailability = capability.Availability
+type CapabilityIdempotency = capability.Idempotency
 
 type historyToolInput struct {
 	HistoryCursor string `json:"historyCursor"`

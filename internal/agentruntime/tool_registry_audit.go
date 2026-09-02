@@ -53,18 +53,8 @@ type ToolRegistryAudit struct {
 }
 
 type capabilityRegistryResponse struct {
-	CompanionStatus    string                         `json:"companionStatus"`
-	DeviceCapabilities []capabilityRegistryDescriptor `json:"deviceCapabilities"`
-}
-
-type capabilityRegistryDescriptor struct {
-	Name              string                        `json:"name"`
-	InputSchema       json.RawMessage               `json:"inputSchema,omitempty"`
-	InputIntentSchema json.RawMessage               `json:"inputIntentSchema,omitempty"`
-	ResultContract    *CapabilityToolResultContract `json:"resultContract,omitempty"`
-	SideEffectClass   string                        `json:"sideEffectClass,omitempty"`
-	RequiresApproval  bool                          `json:"requiresApproval,omitempty"`
-	Idempotency       CapabilityIdempotency         `json:"idempotency"`
+	CompanionStatus    string                     `json:"companionStatus"`
+	DeviceCapabilities []CapabilityToolDescriptor `json:"deviceCapabilities"`
 }
 
 type toolRegistryMismatchError struct {

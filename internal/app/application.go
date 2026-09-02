@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
@@ -904,73 +903,14 @@ func seedCompanionStatus(capabilityClient capability.Client, toolCatalogBuilder 
 func capabilityToolDescriptors(toolDescriptors []config.CapabilityToolDescriptor) []agentruntime.CapabilityToolDescriptor {
 	catalogToolDescriptors := []agentruntime.CapabilityToolDescriptor{}
 	for _, toolDescriptor := range toolDescriptors {
-		trimmedName := strings.TrimSpace(toolDescriptor.Name)
-		if trimmedName == "" {
+		toolDescriptor.Name = strings.TrimSpace(toolDescriptor.Name)
+		toolDescriptor.Description = strings.TrimSpace(toolDescriptor.Description)
+		if toolDescriptor.Name == "" {
 			continue
 		}
-		catalogToolDescriptors = append(catalogToolDescriptors, agentruntime.CapabilityToolDescriptor{
-			Name:                    trimmedName,
-			CanonicalName:           toolDescriptor.CanonicalName,
-			Namespace:               toolDescriptor.Namespace,
-			ModelName:               toolDescriptor.ModelName,
-			ModelVisibility:         toolDescriptor.ModelVisibility,
-			Description:             strings.TrimSpace(toolDescriptor.Description),
-			PrivacyClass:            toolDescriptor.PrivacyClass,
-			RequiresUserPresence:    toolDescriptor.RequiresUserPresence,
-			RequiresRequesterDevice: toolDescriptor.RequiresRequesterDevice,
-			ApprovalScope:           toolDescriptor.ApprovalScope,
-			WorksOffline:            toolDescriptor.WorksOffline,
-			InputSchema:             toolDescriptor.InputSchema,
-			InputIntentSchema:       toolDescriptor.InputIntentSchema,
-			OutputSchema:            toolDescriptor.OutputSchema,
-			ResultContract:          capabilityToolResultContract(toolDescriptor.ResultContract),
-			PolicyResource:          toolDescriptor.PolicyResource,
-			SideEffectClass:         toolDescriptor.SideEffectClass,
-			RequiresApproval:        toolDescriptor.RequiresApproval,
-			CompletionEvidence:      capabilityCompletionEvidence(toolDescriptor.CompletionEvidence),
-			Availability: agentruntime.CapabilityAvailability{
-				State:  toolDescriptor.Availability.State,
-				Reason: toolDescriptor.Availability.Reason,
-			},
-			Idempotency: agentruntime.CapabilityIdempotency{
-				Supported: toolDescriptor.Idempotency.Supported,
-				Required:  toolDescriptor.Idempotency.Required,
-				Scope:     toolDescriptor.Idempotency.Scope,
-			},
-		})
+		catalogToolDescriptors = append(catalogToolDescriptors, toolDescriptor)
 	}
 	return catalogToolDescriptors
-}
-
-func capabilityToolResultContract(contract *config.CapabilityToolResultContract) *agentruntime.CapabilityToolResultContract {
-	if contract == nil {
-		return nil
-	}
-	effects := make([]agentruntime.CapabilityResourceEffectContract, 0, len(contract.Effects))
-	for _, effectContract := range contract.Effects {
-		effects = append(effects, agentruntime.CapabilityResourceEffectContract{
-			ObjectType:     effectContract.ObjectType,
-			Effect:         effectContract.Effect,
-			ResultField:    effectContract.ResultField,
-			EffectIdentity: effectContract.EffectIdentity,
-			When:           capabilityEvidenceCondition(effectContract.When),
-		})
-	}
-	return &agentruntime.CapabilityToolResultContract{
-		Schema:            contract.Schema,
-		Effects:           effects,
-		EvidenceCondition: capabilityEvidenceCondition(contract.EvidenceCondition),
-	}
-}
-
-func capabilityEvidenceCondition(condition *config.EvidenceCondition) *agentruntime.CapabilityEvidenceCondition {
-	if condition == nil {
-		return nil
-	}
-	return &agentruntime.CapabilityEvidenceCondition{
-		ResultField: condition.ResultField,
-		Equals:      append(json.RawMessage{}, condition.Equals...),
-	}
 }
 
 func capabilityCompletionEvidence(completionEvidence *config.CapabilityCompletionEvidence) *agentruntime.CapabilityCompletionEvidence {
