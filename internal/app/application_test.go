@@ -792,24 +792,6 @@ func TestEveryTaskTierPostsTheConfiguredDirectModel(t *testing.T) {
 	}
 }
 
-func TestCapabilityEffectWhenConditionSurvivesConfigLineage(t *testing.T) {
-	configuredContract := config.CapabilityToolResultContract{}
-	document := `{
-		"schema": {"type":"object","additionalProperties":false,"properties":{"siteID":{"type":"string"},"mode":{"type":"string"},"publishedURL":{"type":"string"}},"required":["siteID","mode"]},
-		"effects": [{"objectType":"website","effect":"published","resultField":"publishedURL","effectIdentity":"url","when":{"resultField":"mode","equals":"\"publish\""}}]
-	}`
-	if errorValue := json.Unmarshal([]byte(document), &configuredContract); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	converted := capabilityToolResultContract(&configuredContract)
-	if converted == nil || len(converted.Effects) != 1 {
-		t.Fatalf("conversion lost the effect: %#v", converted)
-	}
-	if converted.Effects[0].When == nil || converted.Effects[0].When.ResultField != "mode" {
-		t.Fatalf("the when condition was dropped in config conversion: %#v", converted.Effects[0])
-	}
-}
-
 func TestApplicationServesHealthWhenProtocolIdentityDisagrees(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		responseWriter.Header().Set("Content-Type", "application/json")

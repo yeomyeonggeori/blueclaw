@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 )
 
 type RuntimeConfiguration struct {
@@ -46,62 +48,12 @@ func (configuration CapabilityConfiguration) IsConfigured() bool {
 	return configuration.VSockCID > 0 && configuration.VSockPort > 0
 }
 
-type CapabilityToolDescriptor struct {
-	Name                    string                        `json:"name"`
-	CanonicalName           string                        `json:"canonicalName"`
-	Namespace               string                        `json:"namespace"`
-	ModelName               string                        `json:"modelName"`
-	ModelVisibility         string                        `json:"modelVisibility"`
-	Description             string                        `json:"description,omitempty"`
-	Version                 string                        `json:"version,omitempty"`
-	PrivacyClass            string                        `json:"privacyClass,omitempty"`
-	EstimatedLatency        string                        `json:"estimatedLatency,omitempty"`
-	RequiresUserPresence    bool                          `json:"requiresUserPresence,omitempty"`
-	RequiresRequesterDevice bool                          `json:"requiresRequesterDevice,omitempty"`
-	ApprovalScope           string                        `json:"approvalScope,omitempty"`
-	WorksOffline            bool                          `json:"worksOffline,omitempty"`
-	InputSchema             json.RawMessage               `json:"inputSchema,omitempty"`
-	InputIntentSchema       json.RawMessage               `json:"inputIntentSchema,omitempty"`
-	OutputSchema            json.RawMessage               `json:"outputSchema,omitempty"`
-	ResultContract          *CapabilityToolResultContract `json:"resultContract,omitempty"`
-	PolicyResource          string                        `json:"policyResource,omitempty"`
-	SideEffectClass         string                        `json:"sideEffectClass,omitempty"`
-	RequiresApproval        bool                          `json:"requiresApproval,omitempty"`
-	CompletionEvidence      *CapabilityCompletionEvidence `json:"completionEvidence,omitempty"`
-	Availability            CapabilityAvailability        `json:"availability"`
-	Idempotency             CapabilityIdempotency         `json:"idempotency"`
-}
-
-type CapabilityToolResultContract struct {
-	Schema            json.RawMessage                    `json:"schema"`
-	Effects           []CapabilityResourceEffectContract `json:"effects,omitempty"`
-	EvidenceCondition *EvidenceCondition                 `json:"evidenceCondition,omitempty"`
-}
-
-type CapabilityResourceEffectContract struct {
-	ObjectType     string             `json:"objectType"`
-	Effect         string             `json:"effect"`
-	ResultField    string             `json:"resultField"`
-	EffectIdentity string             `json:"effectIdentity"`
-	When           *EvidenceCondition `json:"when,omitempty"`
-}
-
-type CapabilityCompletionEvidence struct {
-	Mode       string `json:"mode,omitempty"`
-	Action     string `json:"action,omitempty"`
-	TargetKind string `json:"targetKind,omitempty"`
-}
-
-type CapabilityAvailability struct {
-	State  string `json:"state"`
-	Reason string `json:"reason,omitempty"`
-}
-
-type CapabilityIdempotency struct {
-	Supported bool   `json:"supported"`
-	Required  bool   `json:"required"`
-	Scope     string `json:"scope,omitempty"`
-}
+type CapabilityToolDescriptor = capability.ToolDescriptor
+type CapabilityToolResultContract = capability.ToolResultContract
+type CapabilityResourceEffectContract = capability.ResourceEffectContract
+type CapabilityCompletionEvidence = capability.CompletionEvidence
+type CapabilityAvailability = capability.Availability
+type CapabilityIdempotency = capability.Idempotency
 
 type AgentProfileConfiguration struct {
 	Name             string   `json:"name"`
@@ -134,10 +86,7 @@ type MCPToolResultContract struct {
 	EvidenceCondition *EvidenceCondition          `json:"evidenceCondition,omitempty"`
 }
 
-type EvidenceCondition struct {
-	ResultField string          `json:"resultField"`
-	Equals      json.RawMessage `json:"equals"`
-}
+type EvidenceCondition = capability.EvidenceCondition
 
 type MCPResourceEffectContract struct {
 	ObjectType     string `json:"objectType"`
