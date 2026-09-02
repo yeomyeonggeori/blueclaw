@@ -2002,6 +2002,7 @@ func (service *virtualCapabilityService) taskResponse(toolName string, requestBo
 			values["content"] = title
 		}
 		delete(values, "title")
+		renameVirtualTaskDateFields(values)
 		mergeVirtualCapabilityRecord(service.tasks[index].Values, values, "taskHint")
 		return virtualCapabilityTaskSuccess(toolName, "updated", service.tasks[index].ID, "updated virtual task", service.tasks[index].Values)
 	default:
@@ -2028,17 +2029,27 @@ func virtualTaskResultFromAddInput(taskID string, input map[string]any) map[stri
 			result[fieldName] = value
 		}
 	}
-	if startsAt := strings.TrimSpace(stringValue(input["startsAt"])); startsAt != "" {
-		result["startDate"] = startsAt
-	}
-	if endsAt := strings.TrimSpace(stringValue(input["endsAt"])); endsAt != "" {
-		result["endDate"] = endsAt
+	renameVirtualTaskDateFields(input)
+	for _, fieldName := range []string{"startDate", "endDate"} {
+		if value, isFound := input[fieldName]; isFound {
+			result[fieldName] = value
+		}
 	}
 	if participantNames := stringSliceValue(input["participantPersonHints"]); len(participantNames) > 0 {
 		result["participantNames"] = participantNames
 		result["ownerName"] = participantNames[0]
 	}
 	return result
+}
+
+// A task takes startsAt and endsAt and answers with startDate and endDate.
+func renameVirtualTaskDateFields(values map[string]any) {
+	for inputName, resultName := range map[string]string{"startsAt": "startDate", "endsAt": "endDate"} {
+		if value, isFound := values[inputName]; isFound {
+			values[resultName] = value
+			delete(values, inputName)
+		}
+	}
 }
 
 func (service *virtualCapabilityService) calendarResponse(toolName string, requestBody []byte) string {

@@ -877,7 +877,7 @@ func AmbientTaskCaptureAcceptanceScenario(artifactDirectoryPath string) VirtualS
 			ReplyTargetID:          "virtual-message-011",
 			Addressing:             connectors.AddressingMetadata{OtherPersonMentioned: true},
 			ActionResponses: []string{
-				actionInvokeCapabilityTool("task_update", `{"taskHint":"task-1","endDate":"2026-06-24"}`),
+				actionInvokeCapabilityTool("task_update", `{"taskHint":"task-1","endsAt":"2026-06-24"}`),
 				actionFinishMessage("예시 님 업무 마감을 수요일로 변경했습니다.", "obs-001:task_update:0"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
@@ -905,7 +905,7 @@ func CompletionJudgeRecoveryAcceptanceScenario(artifactDirectoryPath string) Vir
 			ActionResponses: []string{
 				actionInvokeCapabilityTool("task_add", `{"title":"분기 결산 누락 확인"}`),
 				actionFinishMessage("업무를 추가했습니다.", "obs-001:task_add:0"),
-				actionInvokeCapabilityTool("task_update", `{"taskHint":"task-1","endDate":"2026-07-24"}`),
+				actionInvokeCapabilityTool("task_update", `{"taskHint":"task-1","endsAt":"2026-07-24"}`),
 				actionFinishMessage("마감일을 포함해 업무를 추가했습니다.", "obs-003:task_update:0"),
 			},
 			CompletionJudgeResponses: []string{
