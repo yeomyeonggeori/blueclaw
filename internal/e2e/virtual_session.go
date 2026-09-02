@@ -719,6 +719,8 @@ func BuiltinScenario(name string, artifactDirectoryPath string) (VirtualSessionS
 		return CalendarEventLifecycleAcceptanceScenario(artifactDirectoryPath), nil
 	case "calendar_false_finish_recovery_acceptance":
 		return CalendarFalseFinishRecoveryAcceptanceScenario(artifactDirectoryPath), nil
+	case "calendar_read_question_with_write_hint":
+		return CalendarReadQuestionWithWriteHintScenario(artifactDirectoryPath), nil
 	case "ambient_duty_calendar_acceptance":
 		return AmbientDutyCalendarAcceptanceScenario(artifactDirectoryPath), nil
 	case "ambient_duty_nothing_to_record":
