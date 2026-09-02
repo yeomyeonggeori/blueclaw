@@ -549,7 +549,7 @@ func ScheduleCreateAcceptanceScenario(artifactDirectoryPath string) VirtualSessi
 		Turns: []VirtualTurn{{
 			Prompt: "1분마다 \"1분 지났습니다\"라고 보내줘",
 			ActionResponses: []string{
-				actionInvokeCapabilityTool("schedule_create", `{"name":"1분 알림","taskInstruction":"현재 대화에 \"1분 지났습니다\"라고 보낸다.","kind":"interval","intervalSecond":60,"maxRunCount":10,"repeatPolicy":"finite","timeZone":"Asia/Seoul"}`),
+				actionInvokeCapabilityTool("schedule_create", `{"name":"1분 알림","taskInstruction":"현재 대화에 \"1분 지났습니다\"라고 보낸다.","kind":"interval","intervalSecond":60,"maxRunCount":10,"repeatPolicy":"finite"}`),
 				actionFinishMessage("1분마다 알림을 보내도록 예약해둘게요.", "obs-001:schedule_create:0"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
@@ -582,7 +582,7 @@ func ScheduleLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSe
 				Prompt:                 "30분마다 상태 확인하라고 알려줘. 세 번만 해줘",
 				RouterRequiredEvidence: []string{"schedule_create"},
 				ActionResponses: []string{
-					actionInvokeCapabilityTool("schedule_create", `{"name":"상태 확인 알림","taskInstruction":"현재 대화에 \"상태를 확인하세요\"라고 보낸다.","kind":"interval","intervalSecond":1800,"maxRunCount":3,"repeatPolicy":"finite","timeZone":"Asia/Seoul"}`),
+					actionInvokeCapabilityTool("schedule_create", `{"name":"상태 확인 알림","taskInstruction":"현재 대화에 \"상태를 확인하세요\"라고 보낸다.","kind":"interval","intervalSecond":1800,"maxRunCount":3,"repeatPolicy":"finite"}`),
 					actionFinishMessage("30분마다 세 번 상태 확인 알림을 보내도록 예약해둘게요.", "obs-001:schedule_create:0"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
@@ -635,7 +635,7 @@ func CalendarEventLifecycleAcceptanceScenario(artifactDirectoryPath string) Virt
 				Prompt:                 "내일 오전 10시에 제품 회고 일정을 캘린더에 추가해줘",
 				RouterRequiredEvidence: []string{"event_add"},
 				ActionResponses: []string{
-					actionInvokeCapabilityTool("event_add", `{"title":"제품 회고","startISO":"2026-06-13T10:00:00+09:00","endISO":"2026-06-13T11:00:00+09:00","timeZone":"Asia/Seoul"}`),
+					actionInvokeCapabilityTool("event_add", `{"title":"제품 회고","startsAt":"2026-06-13T10:00:00+09:00","endsAt":"2026-06-13T11:00:00+09:00"}`),
 					actionFinishMessage("내일 오전 10시에 제품 회고 일정을 추가했습니다.", "obs-001:event_add:0"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
@@ -648,7 +648,7 @@ func CalendarEventLifecycleAcceptanceScenario(artifactDirectoryPath string) Virt
 				Prompt:                 "그 일정을 내일 오후 2시로 바꿔줘",
 				RouterRequiredEvidence: []string{"event_update"},
 				ActionResponses: []string{
-					actionCallTool("event_update", `{"eventHint":"calendar-event-001","title":"제품 회고","startISO":"2026-06-13T14:00:00+09:00","endISO":"2026-06-13T15:00:00+09:00","timeZone":"Asia/Seoul"}`),
+					actionCallTool("event_update", `{"eventHint":"calendar-event-001","title":"제품 회고","startsAt":"2026-06-13T14:00:00+09:00","endsAt":"2026-06-13T15:00:00+09:00"}`),
 					actionFinishMessage("제품 회고 일정을 내일 오후 2시로 변경했습니다.", "obs-001:event_update:0"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
@@ -701,7 +701,7 @@ func CalendarFalseFinishRecoveryAcceptanceScenario(artifactDirectoryPath string)
 			RouterRequiredEvidence: []string{"event_add"},
 			ActionResponses: []string{
 				actionFinishMessage("7월 13일 미팅을 오전 10시~11시로 등록했습니다."),
-				actionInvokeCapabilityTool("event_add", `{"title":"샨보장 미팅","startISO":"2026-07-13T10:00:00+09:00","endISO":"2026-07-13T11:00:00+09:00","timeZone":"Asia/Seoul"}`),
+				actionInvokeCapabilityTool("event_add", `{"title":"샨보장 미팅","startsAt":"2026-07-13T10:00:00+09:00","endsAt":"2026-07-13T11:00:00+09:00"}`),
 				actionFinishMessage("7월 13일 미팅을 오전 10시~11시로 등록했습니다.", "obs-002:event_add:0"),
 			},
 			ExpectedSelectedSkills: []string{"calendar"},
@@ -739,7 +739,7 @@ func AmbientDutyCalendarAcceptanceScenario(artifactDirectoryPath string) Virtual
 			ReplyTargetID:    "virtual-message-001",
 			Addressing:       connectors.AddressingMetadata{},
 			ActionResponses: []string{
-				actionInvokeCapabilityTool("event_add", `{"title":"정기회의","startISO":"2026-06-12T17:00:00+09:00","endISO":"2026-06-12T18:00:00+09:00","timeZone":"Asia/Seoul","people":["최견본","이샘플"]}`),
+				actionInvokeCapabilityTool("event_add", `{"title":"정기회의","startsAt":"2026-06-12T17:00:00+09:00","endsAt":"2026-06-12T18:00:00+09:00","participantPersonHints":["최견본","이샘플"]}`),
 				actionFinishMessage("정기회의 일정을 추가했습니다.", "obs-001:event_add:0"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
@@ -779,7 +779,7 @@ func AmbientDutyAnnouncementNoEchoScenario(artifactDirectoryPath string) Virtual
 			ReplyTargetID:    "virtual-message-001",
 			Addressing:       connectors.AddressingMetadata{},
 			ActionResponses: []string{
-				actionInvokeCapabilityTool("event_add", `{"title":"라운지 촬영","startISO":"2026-09-02T07:00:00+09:00","endISO":"2026-09-02T10:00:00+09:00","timeZone":"Asia/Seoul"}`),
+				actionInvokeCapabilityTool("event_add", `{"title":"라운지 촬영","startsAt":"2026-09-02T07:00:00+09:00","endsAt":"2026-09-02T10:00:00+09:00"}`),
 				actionFinishMessage("촬영 일정을 캘린더에 기록했습니다.", "obs-001:event_add:0"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
@@ -846,7 +846,7 @@ func AmbientTaskCaptureAcceptanceScenario(artifactDirectoryPath string) VirtualS
 			ReplyTargetID:          "virtual-message-010",
 			Addressing:             connectors.AddressingMetadata{OtherPersonMentioned: true},
 			ActionResponses: []string{
-				actionInvokeCapabilityTool("task_add", `{"title":"신규 가입 플로우 점검","targetPersonHint":"예시"}`),
+				actionInvokeCapabilityTool("task_add", `{"title":"신규 가입 플로우 점검","participantPersonHints":["예시"]}`),
 				actionFinishMessage("예시 님 업무로 추가했습니다.", "obs-001:task_add:0"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
@@ -1138,7 +1138,7 @@ func OneTimeScheduleAcceptanceScenario(artifactDirectoryPath string) VirtualSess
 			Prompt:                 "2027년 1월 15일 오전 9시에 계약서 확인 알림을 한 번만 예약해줘",
 			RouterRequiredEvidence: []string{"schedule_create"},
 			ActionResponses: []string{
-				actionInvokeCapabilityTool("schedule_create", `{"name":"계약서 확인 알림","taskInstruction":"현재 대화에 \"계약서를 확인하세요\"라고 보낸다.","kind":"once","runAt":"2027-01-15T00:00:00Z","timeZone":"Asia/Seoul"}`),
+				actionInvokeCapabilityTool("schedule_create", `{"name":"계약서 확인 알림","taskInstruction":"현재 대화에 \"계약서를 확인하세요\"라고 보낸다.","kind":"once","runAt":"2027-01-15T00:00:00Z"}`),
 				actionFinishMessage("2027년 1월 15일 오전 9시에 한 번 알림을 보내도록 예약해둘게요.", "obs-001:schedule_create:0"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},

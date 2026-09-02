@@ -1464,7 +1464,7 @@ func virtualCapabilityTargetResponse(toolName string, records []virtualCapabilit
 		"inputField": hintFieldName,
 		"id":         record.ID,
 		"title":      stringValue(record.Values[titleFieldName]),
-		"startsAt":   stringValue(record.Values["startISO"]),
+		"startsAt":   stringValue(record.Values["startsAt"]),
 	})
 }
 
@@ -2023,16 +2023,20 @@ func virtualTaskResultFromAddInput(taskID string, input map[string]any) map[stri
 		"taskID":  taskID,
 		"content": strings.TrimSpace(stringValue(input["title"])),
 	}
-	for _, fieldName := range []string{"goal", "size", "status", "startDate", "endDate"} {
+	for _, fieldName := range []string{"business", "size", "status", "type"} {
 		if value, isFound := input[fieldName]; isFound {
 			result[fieldName] = value
 		}
 	}
-	if ownerName := strings.TrimSpace(stringValue(input["targetPersonHint"])); ownerName != "" {
-		result["ownerName"] = ownerName
+	if startsAt := strings.TrimSpace(stringValue(input["startsAt"])); startsAt != "" {
+		result["startDate"] = startsAt
+	}
+	if endsAt := strings.TrimSpace(stringValue(input["endsAt"])); endsAt != "" {
+		result["endDate"] = endsAt
 	}
 	if participantNames := stringSliceValue(input["participantPersonHints"]); len(participantNames) > 0 {
 		result["participantNames"] = participantNames
+		result["ownerName"] = participantNames[0]
 	}
 	return result
 }
@@ -2080,19 +2084,15 @@ func (service *virtualCapabilityService) calendarResponse(toolName string, reque
 
 func (service *virtualCapabilityService) virtualCalendarEventValues(eventID string, input map[string]any, requester virtualCapabilityRequester) map[string]any {
 	values := map[string]any{
-		"eventID":           eventID,
-		"title":             "",
-		"description":       "",
-		"location":          "",
-		"startISO":          "",
-		"endISO":            "",
-		"timeZone":          "",
-		"isAllDay":          false,
-		"color":             "",
-		"people":            []any{},
-		"participants":      []any{},
-		"reminderLeadHours": 24,
-		"updatedAt":         service.nextVirtualCalendarUpdatedAt(),
+		"eventID":      eventID,
+		"title":        "",
+		"note":         "",
+		"location":     "",
+		"startsAt":     "",
+		"endsAt":       "",
+		"isWholeDay":   false,
+		"participants": []any{},
+		"updatedAt":    service.nextVirtualCalendarUpdatedAt(),
 	}
 	mergeVirtualCalendarEvent(values, input, requester, true)
 	return values
@@ -2104,13 +2104,13 @@ func (service *virtualCapabilityService) nextVirtualCalendarUpdatedAt() string {
 }
 
 func mergeVirtualCalendarEvent(event map[string]any, input map[string]any, requester virtualCapabilityRequester, includeRequesterDefault bool) {
-	for _, fieldName := range []string{"title", "description", "location", "startISO", "endISO", "timeZone", "isAllDay", "color", "people", "reminderLeadHours"} {
+	for _, fieldName := range []string{"title", "note", "location", "startsAt", "endsAt", "isWholeDay", "notifyMinutesBefore"} {
 		if value, isPresent := input[fieldName]; isPresent {
 			event[fieldName] = value
 		}
 	}
-	if _, hasPeople := input["people"]; hasPeople {
-		event["participants"] = virtualCalendarParticipants(event["people"], requester, virtualCalendarIncludesRequester(input, includeRequesterDefault))
+	if participantHints, hasParticipants := input["participantPersonHints"]; hasParticipants {
+		event["participants"] = virtualCalendarParticipants(participantHints, requester, virtualCalendarIncludesRequester(input, includeRequesterDefault))
 		return
 	}
 	if virtualCalendarIncludesRequester(input, includeRequesterDefault) {
@@ -2147,31 +2147,31 @@ func virtualCalendarEventList(records []virtualCapabilityRecord, input map[strin
 func virtualCalendarEventMatches(event map[string]any, query string) bool {
 	searchText := strings.ToLower(strings.Join([]string{
 		stringValue(event["title"]),
-		stringValue(event["description"]),
+		stringValue(event["note"]),
 		stringValue(event["location"]),
 	}, "\n"))
 	return strings.Contains(searchText, query)
 }
 
 func virtualCalendarWindow(input map[string]any) (*time.Time, *time.Time, error) {
-	startValue := strings.TrimSpace(stringValue(input["startISO"]))
-	endValue := strings.TrimSpace(stringValue(input["endISO"]))
+	startValue := strings.TrimSpace(stringValue(input["startsAt"]))
+	endValue := strings.TrimSpace(stringValue(input["endsAt"]))
 	if startValue == "" && endValue == "" {
 		return nil, nil, nil
 	}
 	if startValue == "" || endValue == "" {
-		return nil, nil, errors.New("startISO and endISO must be provided together")
+		return nil, nil, errors.New("startsAt and endsAt must be provided together")
 	}
 	start, errorValue := parseVirtualCalendarTime(startValue)
 	if errorValue != nil {
-		return nil, nil, fmt.Errorf("startISO is invalid: %w", errorValue)
+		return nil, nil, fmt.Errorf("startsAt is invalid: %w", errorValue)
 	}
 	end, errorValue := parseVirtualCalendarTime(endValue)
 	if errorValue != nil {
-		return nil, nil, fmt.Errorf("endISO is invalid: %w", errorValue)
+		return nil, nil, fmt.Errorf("endsAt is invalid: %w", errorValue)
 	}
 	if !end.After(start) {
-		return nil, nil, errors.New("endISO must be after startISO")
+		return nil, nil, errors.New("endsAt must be after startsAt")
 	}
 	return &start, &end, nil
 }
@@ -2192,8 +2192,8 @@ func virtualCalendarEventOverlapsWindow(event map[string]any, start *time.Time, 
 	if start == nil || end == nil {
 		return true
 	}
-	eventStart, startError := parseVirtualCalendarTime(stringValue(event["startISO"]))
-	eventEnd, endError := parseVirtualCalendarTime(stringValue(event["endISO"]))
+	eventStart, startError := parseVirtualCalendarTime(stringValue(event["startsAt"]))
+	eventEnd, endError := parseVirtualCalendarTime(stringValue(event["endsAt"]))
 	if startError != nil || endError != nil {
 		return false
 	}
