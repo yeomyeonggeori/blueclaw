@@ -1092,17 +1092,6 @@ func TestVirtualSessionAcceptsReactionOnlyTurn(t *testing.T) {
 	}
 }
 
-func TestGWSDisabled(t *testing.T) {
-	result, errorValue := RunVirtualSession(context.Background(), GWSDisabledScenario(t.TempDir()))
-	if errorValue != nil {
-		t.Fatalf("expected gws disabled scenario to pass: %v", errorValue)
-	}
-	turnResult := result.TurnResults[0]
-	if eventsContain(turnResult.Events, "tool.google.drive.import_pptx.requested", "google.drive.import_pptx") {
-		t.Fatal("disabled google tool must not enter the model palette or runtime")
-	}
-}
-
 func TestVirtualCalendarMutationUsesExactEventHint(t *testing.T) {
 	service := virtualCapabilityService{}
 	addResponse := service.calendarResponse("event_add", []byte(`{"input":{"title":"비용 테스트 일정","startsAt":"2026-07-16T10:00:00+09:00","endsAt":"2026-07-16T11:00:00+09:00","participantPersonHints":["지원팀"]},"context":{"requesterPersonID":"person-1","requesterName":"이수현","requesterEmail":"soohyun@example.com"}}`))

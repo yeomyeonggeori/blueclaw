@@ -738,8 +738,6 @@ func BuiltinScenario(name string, artifactDirectoryPath string) (VirtualSessionS
 		return FileWriteAcceptanceScenario(artifactDirectoryPath), nil
 	case "document_create_acceptance":
 		return DocumentCreateAcceptanceScenario(artifactDirectoryPath), nil
-	case "gws_disabled":
-		return GWSDisabledScenario(artifactDirectoryPath), nil
 	case "schedule_create_acceptance":
 		return ScheduleCreateAcceptanceScenario(artifactDirectoryPath), nil
 	case "schedule_lifecycle_acceptance":
@@ -2723,7 +2721,7 @@ func assertNoScriptedResponseResidue(scriptedModel *agenttest.ScriptedLanguageMo
 func virtualEvidenceRequiresExternalSend(requiredEvidence []string) bool {
 	for _, toolName := range requiredEvidence {
 		switch strings.TrimSpace(toolName) {
-		case "message_send", "mail_message_send", "google.gmail.send", "slack.message.send":
+		case "message_send", "mail_message_send", "slack.message.send":
 			return true
 		}
 	}
