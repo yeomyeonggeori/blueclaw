@@ -473,7 +473,10 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 			RunsAsRequesterIdentity: strings.TrimSpace(runtimeConfiguration.Terminal.POSIXHelperPath) != "",
 			ToolCatalogURL:          toolCatalogURL(runtimeConfiguration),
 		}},
-		SkillInventoryHandler: adminapi.SkillInventoryHandler{InstructionBundleLoader: instructionBundleLoader},
+		SkillInventoryHandler: adminapi.SkillInventoryHandler{InventoryLoader: func() adminapi.SkillInventory {
+			instructions := loadAgentInstructions(runtimeConfiguration)
+			return adminapi.SkillInventory{Loaded: instructions.Bundle.Skills, Unavailable: instructions.UnavailableSkills}
+		}},
 		TaskApprovalHandler: adminapi.TaskApprovalHandler{
 			TaskLauncher:    taskLauncher,
 			TaskRunService:  taskRunService,
@@ -588,10 +591,23 @@ func loadAgentInstructionPrompt(runtimeConfiguration config.RuntimeConfiguration
 	return loadAgentInstructionBundle(runtimeConfiguration).Prompt
 }
 
+// A skill naming an environment variable this host has not set is left out of
+// the bundle: it is in the prompt only where it can run. The inventory carries
+// it separately with the variable it lacks, so the omission is visible.
+type agentInstructions struct {
+	Bundle            agentcontract.InstructionBundle
+	UnavailableSkills []skill.UnavailableSkill
+}
+
 func loadAgentInstructionBundle(runtimeConfiguration config.RuntimeConfiguration) agentcontract.InstructionBundle {
+	return loadAgentInstructions(runtimeConfiguration).Bundle
+}
+
+func loadAgentInstructions(runtimeConfiguration config.RuntimeConfiguration) agentInstructions {
 	parts := []string{}
 	sources := []agentcontract.InstructionSource{}
 	skillInstructions := []agentcontract.SkillInstruction{}
+	unavailableSkills := []skill.UnavailableSkill{}
 	includedSkillByName := map[string]bool{}
 	for _, rootPath := range instructionRootPaths(runtimeConfiguration) {
 		for _, instructionDocument := range readInstructionDocuments(rootPath) {
@@ -605,8 +621,8 @@ func loadAgentInstructionBundle(runtimeConfiguration config.RuntimeConfiguration
 			parts = append(parts, instructionDocument)
 			sources = append(sources, instructionSource)
 		}
-		discoveredSkillInstructions := readSkillInstructions(rootPath, agentruntime.BundledSkillRootPath(rootPath))
-		for _, skillInstruction := range discoveredSkillInstructions {
+		discovered := readSkillInstructions(rootPath, agentruntime.BundledSkillRootPath(rootPath))
+		for _, skillInstruction := range discovered.Selectable {
 			skillName := strings.TrimSpace(skillInstruction.Name)
 			if includedSkillByName[skillName] {
 				continue
@@ -616,6 +632,7 @@ func loadAgentInstructionBundle(runtimeConfiguration config.RuntimeConfiguration
 			}
 			skillInstructions = append(skillInstructions, skillInstruction)
 		}
+		unavailableSkills = append(unavailableSkills, discovered.Unavailable...)
 	}
 	if !includedSkillByName["agent-browser"] {
 		sources = append(sources, agentcontract.InstructionSource{
@@ -624,11 +641,28 @@ func loadAgentInstructionBundle(runtimeConfiguration config.RuntimeConfiguration
 			Missing:   true,
 		})
 	}
-	return agentcontract.InstructionBundle{
-		Prompt:  strings.Join(parts, "\n\n"),
-		Sources: sources,
-		Skills:  skillInstructions,
+	return agentInstructions{
+		Bundle: agentcontract.InstructionBundle{
+			Prompt:  strings.Join(parts, "\n\n"),
+			Sources: sources,
+			Skills:  skillInstructions,
+		},
+		UnavailableSkills: uniqueUnavailableSkills(unavailableSkills, includedSkillByName),
 	}
+}
+
+func uniqueUnavailableSkills(unavailableSkills []skill.UnavailableSkill, includedSkillByName map[string]bool) []skill.UnavailableSkill {
+	listedSkills := []skill.UnavailableSkill{}
+	listedSkillByName := map[string]bool{}
+	for _, unavailableSkill := range unavailableSkills {
+		skillName := strings.TrimSpace(unavailableSkill.Name)
+		if includedSkillByName[skillName] || listedSkillByName[skillName] {
+			continue
+		}
+		listedSkillByName[skillName] = true
+		listedSkills = append(listedSkills, unavailableSkill)
+	}
+	return listedSkills
 }
 
 func pinnedMemoryRootPath(runtimeConfiguration config.RuntimeConfiguration) string {
@@ -704,27 +738,44 @@ func readLegacyInstructionDocument(rootPath string) (string, agentcontract.Instr
 	return "", agentcontract.InstructionSource{}
 }
 
-func readSkillInstructions(rootPath string, bundledSkillsPath string) []agentcontract.SkillInstruction {
-	skillInstructions := []agentcontract.SkillInstruction{}
+type discoveredSkills struct {
+	Selectable  []agentcontract.SkillInstruction
+	Unavailable []skill.UnavailableSkill
+}
+
+func readSkillInstructions(rootPath string, bundledSkillsPath string) discoveredSkills {
+	discovered := discoveredSkills{Selectable: []agentcontract.SkillInstruction{}, Unavailable: []skill.UnavailableSkill{}}
 	skillRegistry := skill.NewSkillRegistry()
 	for _, skillRoot := range []string{filepath.Join(rootPath, ".agents", "skills"), bundledSkillsPath} {
 		discoveredSkillBundles, errorValue := skillRegistry.DiscoverSkill(skillRoot)
-		if errorValue == nil {
-			for _, skillBundle := range discoveredSkillBundles {
-				document, readError := os.ReadFile(filepath.Join(skillBundle.DirectoryPath, "SKILL.md"))
-				if readError == nil {
-					skillInstructions = append(skillInstructions, agentcontract.SkillInstruction{
-						Name:           skillBundle.Name,
-						Description:    skillBundle.Description,
-						Prompt:         strings.TrimSpace((skill.SkillPromptBuilder{}).BuildSkillPrompt([]skill.SkillBundle{skillBundle})),
-						ToolReferences: skillBundle.ReferencedToolNames(),
-						Source:         instructionSource(filepath.Join(skillBundle.DirectoryPath, "SKILL.md"), skillBundle.Name, document),
-					})
-				}
+		if errorValue != nil {
+			continue
+		}
+		for _, skillBundle := range discoveredSkillBundles {
+			documentPath := filepath.Join(skillBundle.DirectoryPath, "SKILL.md")
+			document, readError := os.ReadFile(documentPath)
+			if readError != nil {
+				continue
 			}
+			if missingVariableNames := skillBundle.MissingEnvironmentVariables(); len(missingVariableNames) > 0 {
+				discovered.Unavailable = append(discovered.Unavailable, skill.UnavailableSkill{
+					Name:                        skillBundle.Name,
+					Description:                 skillBundle.Description,
+					Path:                        documentPath,
+					MissingEnvironmentVariables: missingVariableNames,
+				})
+				continue
+			}
+			discovered.Selectable = append(discovered.Selectable, agentcontract.SkillInstruction{
+				Name:           skillBundle.Name,
+				Description:    skillBundle.Description,
+				Prompt:         strings.TrimSpace((skill.SkillPromptBuilder{}).BuildSkillPrompt([]skill.SkillBundle{skillBundle})),
+				ToolReferences: skillBundle.ReferencedToolNames(),
+				Source:         instructionSource(documentPath, skillBundle.Name, document),
+			})
 		}
 	}
-	return skillInstructions
+	return discovered
 }
 
 func loadAgentIdentity(runtimeConfiguration config.RuntimeConfiguration) agentcontract.AgentIdentity {
