@@ -649,7 +649,7 @@ tool participates in the same approval and evidence rules as a built-in one.
 | `cmd/blueclaw` | the daemon |
 | `cmd/blueclaw-posix-helper` | setuid identity switch, POSIX state sync, filesystem operations |
 | `cmd/blueclaw-lab` | development VM lifecycle and scenario runner |
-| `cmd/blueclaw-supervisor` | boots and watches the Firecracker guest, proxies host and guest HTTP, handles workspace image sync and restore |
+| `cmd/blueclaw-supervisor` | boots and watches the virtual-machine guest, proxies host and guest HTTP, handles workspace image sync and restore |
 | `cmd/blueclaw-backup`, `cmd/blueclaw-restore` | workspace and database snapshot bundles |
 | `cmd/blueclaw-guest-healthd`, `cmd/blueclaw-vsock-http-proxy` | guest health and host-to-guest transport |
 | `cmd/bluecollar` | runs the agent loop alone against one directory, for benchmarking; no database, connectors, policy, or POSIX projection |

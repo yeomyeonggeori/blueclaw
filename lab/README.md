@@ -18,7 +18,7 @@ The default topology is:
 
 The host is the companion/browser side.
 The Linux virtual machine is the simulated `InternKim`.
-The Firecracker guest is the simulated production `Blueclaw` runtime boundary.
+The guest is the simulated production `Blueclaw` runtime boundary.
 
 Useful commands:
 
