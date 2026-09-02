@@ -92,6 +92,10 @@ func completionJudgeSatisfiedResponse() string {
 	return `{"satisfied":true,"missingWork":[],"reason":"요청한 작업 결과가 모두 기록되었습니다"}`
 }
 
+func completionJudgeUnrecordedWorkResponse(operationName string) string {
+	return `{"satisfied":false,"missingWork":["no successful ` + operationName + ` operation is recorded"],"reason":"the reply says the work was done and the ledger carries nothing that did it"}`
+}
+
 func PresentationLocalMultiturnSuccessScenario(artifactDirectoryPath string) VirtualSessionScenario {
 	return VirtualSessionScenario{
 		Name:                  "presentation_local_multiturn_success",
@@ -679,9 +683,12 @@ func CalendarFalseFinishRecoveryAcceptanceScenario(artifactDirectoryPath string)
 				actionInvokeCapabilityTool("event_add", `{"title":"샨보장 미팅","startsAt":"2026-07-13T10:00:00+09:00","endsAt":"2026-07-13T11:00:00+09:00"}`),
 				actionFinishMessage("7월 13일 미팅을 오전 10시~11시로 등록했습니다.", "obs-002:event_add:0"),
 			},
-			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-			ExpectedSelectedSkills:   []string{"calendar"},
-			ExpectedToolCalls:        []string{"event_add"},
+			CompletionJudgeResponses: []string{
+				completionJudgeUnrecordedWorkResponse("event_add"),
+				completionJudgeSatisfiedResponse(),
+			},
+			ExpectedSelectedSkills: []string{"calendar"},
+			ExpectedToolCalls:      []string{"event_add"},
 			ExpectedToolCallCounts: map[string]int{
 				"event_add": 1,
 			},
@@ -692,6 +699,38 @@ func CalendarFalseFinishRecoveryAcceptanceScenario(artifactDirectoryPath string)
 			},
 			ExpectedReplyFragments: []string{"등록했습니다"},
 			ForbiddenEvents:        []string{"agent.no_progress_loop_stopped"},
+		}},
+	}
+}
+
+// Intake hands a read question a working set that carries the write tool next to
+// the read one. Nothing in the request asks for a change and the answer is the
+// reply itself, so no evidence rule may stand between this turn and finishing.
+func CalendarReadQuestionWithWriteHintScenario(artifactDirectoryPath string) VirtualSessionScenario {
+	return VirtualSessionScenario{
+		Name:                  "calendar_read_question_with_write_hint",
+		ArtifactDirectoryPath: artifactDirectoryPath,
+		Skills:                []agentcontract.SkillInstruction{calendarSkill()},
+		AllowedTools:          []string{"conversation_history", "memory_search", "event_list", "event_add"},
+		CapabilityToolNames:   []string{"event_list", "event_add"},
+		InitialToolNames:      []string{"event_list", "event_add"},
+		Turns: []VirtualTurn{{
+			Prompt:                 "7월 13일에 미팅 있어?",
+			RouterRequiredEvidence: []string{"event_list"},
+			ActionResponses: []string{
+				actionInvokeCapabilityTool("event_list", `{"startsAt":"2026-07-13","endsAt":"2026-07-14"}`),
+				actionFinishMessage("7월 13일에는 등록된 미팅이 없습니다.", "obs-001:event_list:0"),
+			},
+			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
+			ExpectedSelectedSkills:   []string{"calendar"},
+			ExpectedToolCalls:        []string{"event_list"},
+			ExpectedToolCallCounts: map[string]int{
+				"event_list": 1,
+				"event_add":  0,
+			},
+			ExpectedReplyFragments: []string{"없습니다"},
+			ExpectedTaskStatus:     task.TaskStatusCompleted,
+			ForbiddenEvents:        []string{"agent.evidence_missing", "agent.completion_required"},
 		}},
 	}
 }
