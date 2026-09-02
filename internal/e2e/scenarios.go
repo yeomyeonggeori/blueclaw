@@ -499,23 +499,6 @@ func XLowImageVisionFallbackScenario(artifactDirectoryPath string) VirtualSessio
 	}
 }
 
-func GWSDisabledScenario(artifactDirectoryPath string) VirtualSessionScenario {
-	return VirtualSessionScenario{
-		Name:                  "gws_disabled",
-		ArtifactDirectoryPath: artifactDirectoryPath,
-		AllowedTools:          []string{"memory_search", "shell", "file_write"},
-		Turns: []VirtualTurn{{
-			Prompt:          "구글 드라이브에 파일 올릴 수 있는지 확인해줘",
-			RouterTaskShape: agentcontract.TaskShapeImmediateReply,
-			ActionResponses: []string{
-				actionFinishMessage("Google Workspace 도구는 현재 사용할 수 없습니다. 로컬 파일 작업은 가능합니다."),
-			},
-			ForbiddenModelContexts: []string{"google.drive.import_pptx"},
-			ExpectedReplyFragments: []string{"사용할 수 없습니다"},
-		}},
-	}
-}
-
 func ScheduleCreateAcceptanceScenario(artifactDirectoryPath string) VirtualSessionScenario {
 	return VirtualSessionScenario{
 		Name:                   "schedule_create_acceptance",
