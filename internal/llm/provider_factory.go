@@ -2,7 +2,6 @@ package llm
 
 import (
 	"errors"
-	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -33,8 +32,6 @@ func providerByName(providerName string, runtimeConfiguration config.RuntimeConf
 	switch strings.TrimSpace(providerName) {
 	case "capabilityLLM", "capability", "":
 		return NewCapabilityLLMClientForModel(runtimeConfiguration, modelName), nil
-	case "llmd":
-		return newLLMDClient(runtimeConfiguration, modelName)
 	case "direct":
 		return newDirectProvider(runtimeConfiguration, modelName)
 	default:
@@ -77,83 +74,6 @@ func readAPIKey(apiKeyPath string) (string, error) {
 		return "", errors.New("the direct language model provider's api key file is empty")
 	}
 	return apiKey, nil
-}
-
-func newLLMDClient(runtimeConfiguration config.RuntimeConfiguration, modelName string) (LLMDClient, error) {
-	llmdConfiguration := runtimeConfiguration.LanguageModel.LLMD
-	authKey := ""
-	authKeyPath := strings.TrimSpace(llmdConfiguration.AuthKeyPath)
-	if authKeyPath == "" && !isLLMDBridgeConfiguration(llmdConfiguration) {
-		return LLMDClient{}, errors.New("llmd auth key path is not configured")
-	}
-	if authKeyPath != "" {
-		authKeyDocument, errorValue := os.ReadFile(authKeyPath)
-		if errorValue != nil {
-			return LLMDClient{}, errorValue
-		}
-		authKey = strings.TrimSpace(string(authKeyDocument))
-		if authKey == "" {
-			return LLMDClient{}, errors.New("llmd auth key is empty")
-		}
-	}
-	clientConfiguration := LLMDClientConfiguration{
-		Endpoint:                        llmdConfiguration.Endpoint,
-		UnixSocketPath:                  llmdConfiguration.UnixSocketPath,
-		AuthKey:                         authKey,
-		ModelName:                       modelName,
-		ExecutionMode:                   firstNonEmptyModelName(llmdConfiguration.ExecutionMode, runtimeConfiguration.LanguageModel.Capability.ExecutionMode),
-		LocalOnly:                       llmdConfiguration.LocalOnly,
-		StructuredSchemaNames:           configuredLLMDSchemaNames(runtimeConfiguration),
-		IsStructuredOutputAuthoritative: strings.TrimSpace(runtimeConfiguration.LanguageModel.DefaultProvider) == "llmd",
-	}
-	if HasCapabilityEndpoint(runtimeConfiguration) {
-		capabilityProvider := NewCapabilityLLMClientForModel(runtimeConfiguration, modelName)
-		clientConfiguration.TextProvider = capabilityProvider
-		clientConfiguration.StructuredFallbackProvider = capabilityProvider
-	}
-	return NewLLMDClient(clientConfiguration), nil
-}
-
-func HasCapabilityEndpoint(runtimeConfiguration config.RuntimeConfiguration) bool {
-	return runtimeConfiguration.Capabilities.IsConfigured()
-}
-
-func isLLMDBridgeConfiguration(configuration config.LanguageModelLLMDConfiguration) bool {
-	normalizedEndpoint := strings.TrimRight(strings.TrimSpace(configuration.Endpoint), "/")
-	if normalizedEndpoint == llmdLoopbackBridgeEndpoint {
-		return true
-	}
-	if strings.TrimSpace(configuration.UnixSocketPath) == "" {
-		return false
-	}
-	parsedEndpoint, errorValue := url.Parse(normalizedEndpoint)
-	if errorValue != nil {
-		return false
-	}
-	return parsedEndpoint.Scheme == "http" &&
-		parsedEndpoint.Host != "" &&
-		parsedEndpoint.Path == "/_internkim/llmd" &&
-		parsedEndpoint.RawQuery == "" &&
-		parsedEndpoint.Fragment == ""
-}
-
-func configuredLLMDSchemaNames(runtimeConfiguration config.RuntimeConfiguration) []string {
-	configuredSchemaNames := runtimeConfiguration.LanguageModel.LLMD.StructuredSchemaNames
-	if len(configuredSchemaNames) == 0 {
-		return DefaultLLMDStructuredSchemaNames()
-	}
-	return append([]string{}, configuredSchemaNames...)
-}
-
-func DefaultLLMDStructuredSchemaNames() []string {
-	return []string{
-		"bluecollar_agent_turn_action",
-		"bluecollar_agent_turn_finalizer",
-		"bluecollar_turn_router",
-		"bluecollar_recovery_decision",
-		"bluecollar_contract_skill_arbitration",
-		"bluecollar_completion_judge",
-	}
 }
 
 func NewCapabilityLLMClientForModel(runtimeConfiguration config.RuntimeConfiguration, modelName string) CapabilityLLMClient {

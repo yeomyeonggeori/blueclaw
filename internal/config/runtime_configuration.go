@@ -206,7 +206,6 @@ type LanguageModelConfiguration struct {
 	DefaultProvider  string                               `json:"defaultProvider"`
 	FallbackProvider string                               `json:"fallbackProvider"`
 	Capability       LanguageModelCapabilityConfiguration `json:"capability"`
-	LLMD             LanguageModelLLMDConfiguration       `json:"llmd"`
 	Direct           LanguageModelDirectConfiguration     `json:"direct"`
 }
 
@@ -214,15 +213,6 @@ type LanguageModelDirectConfiguration struct {
 	Endpoint   string `json:"endpoint"`
 	APIKeyPath string `json:"apiKeyPath"`
 	Model      string `json:"model"`
-}
-
-type LanguageModelLLMDConfiguration struct {
-	Endpoint              string   `json:"endpoint"`
-	UnixSocketPath        string   `json:"unixSocketPath"`
-	AuthKeyPath           string   `json:"authKeyPath"`
-	ExecutionMode         string   `json:"executionMode"`
-	LocalOnly             bool     `json:"localOnly"`
-	StructuredSchemaNames []string `json:"structuredSchemaNames"`
 }
 
 type LanguageModelCapabilityConfiguration struct {

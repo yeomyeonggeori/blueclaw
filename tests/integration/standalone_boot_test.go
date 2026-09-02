@@ -60,7 +60,6 @@ func loadStandaloneRuntimeConfiguration(t *testing.T, connectionString string) c
 	runtimeConfiguration.Database.MigrationDirectoryPath = "../../migrations"
 	runtimeConfiguration.Terminal.WorkspaceRootPath = workspaceRootPath
 	runtimeConfiguration.Logging.DirectoryPath = filepath.Join(workspaceRootPath, "logs")
-	runtimeConfiguration.LanguageModel.LLMD.UnixSocketPath = ""
-	runtimeConfiguration.LanguageModel.LLMD.AuthKeyPath = ""
+	runtimeConfiguration.LanguageModel.Direct.APIKeyPath = ""
 	return runtimeConfiguration
 }

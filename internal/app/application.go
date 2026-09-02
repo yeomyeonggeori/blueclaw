@@ -406,13 +406,10 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 	logger.Info("application.initializing", "stage", "router")
 	protocolIdentityExpected := expectedProtocolIdentity(runtimeConfiguration)
 	protocolIdentityStatus := &protocolidentity.Result{Expected: protocolIdentityExpected}
-	llmdIdentityEndpoint, llmdIdentityHTTPClient := llm.ProtocolIdentityTarget(runtimeConfiguration, capabilityClient.HTTPClient)
 	protocolIdentityChecker := protocolidentity.NewChecker(protocolidentity.Configuration{
 		CapabilityEndpoint:   runtimeConfiguration.Capabilities.Endpoint,
-		LLMDBridgeEndpoint:   llmdIdentityEndpoint,
 		Timeout:              time.Duration(runtimeConfiguration.Capabilities.TimeoutSecond) * time.Second,
 		CapabilityHTTPClient: capabilityClient.HTTPClient,
-		LLMDHTTPClient:       llmdIdentityHTTPClient,
 	})
 	router := httpserver.NewRouter(httpserver.RouterDependencies{
 		HealthHandler: httpserver.HealthHandler{
@@ -1187,7 +1184,6 @@ func resolveIntakeLanguageModelProvider(runtimeConfiguration config.RuntimeConfi
 	}
 	languageModelConfiguration := deriveLanguageModelRuntimeConfiguration(runtimeConfiguration)
 	languageModelConfiguration.LanguageModel.Capability.ExecutionMode = executionMode
-	languageModelConfiguration.LanguageModel.LLMD.ExecutionMode = executionMode
 	tierNames := llm.ResolveModelTierNames(languageModelConfiguration)
 	maximumModelTier := normalizeMaximumModelTier(languageModelConfiguration.LanguageModel.Capability.MaximumModelTier)
 	hasConfigurationError := false

@@ -1,12 +1,11 @@
 {
   "baseURL": "http://127.0.0.1:8081",
   "languageModel": {
-    "defaultProvider": "llmd",
-    "llmd": {
-      "unixSocketPath": "/run/blueclaw-llmd/llmd.sock",
-      "authKeyPath": "/run/blueclaw-llmd/auth-key",
-      "executionMode": "auto",
-      "timeoutSecond": 60
+    "defaultProvider": "direct",
+    "direct": {
+      "endpoint": "http://127.0.0.1:11434/v1",
+      "apiKeyPath": "/run/blueclaw/model-api-key",
+      "model": "your-model"
     }
   },
   "database": {

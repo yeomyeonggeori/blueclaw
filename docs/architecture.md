@@ -133,8 +133,8 @@ appliance, agent work executes inside the guest, and the user's own machine is
 used only for browser handoff, approval, and interactive login.
 
 A standalone deployment drops the Firecracker guest, the capability sidecars,
-and the tunnel; `cmd/blueclaw` is an ordinary process against Postgres and
-`llmd`. See the README's install section.
+and the tunnel; `cmd/blueclaw` is an ordinary process against Postgres and one
+OpenAI-compatible model endpoint. See the README's install section.
 
 ## Boot sequence
 
@@ -572,18 +572,13 @@ markdown link is not completion evidence.
 
 ## Language model configuration
 
-Model access reaches Blueclaw through `llmd`, the AI SDK sidecar, over a private
-Unix socket. Provider keys live there rather than in the daemon, so Blueclaw
-never adds an `Authorization` header of its own; it sends `model`,
-`executionMode`, `messages`, and `structuredOutputSchema` to
-`POST /v1/llm/structured` or `POST /v1/llm/chat` (`llmd/src/handler.ts`).
-The Go client is `internal/llm/llmd_client.go`.
-
-A deployment may also declare a secretless provider named `capabilityLLM`, which
+`defaultProvider` names one of two providers. `capabilityLLM` is secretless: it
 hands model choice, local runtimes, GPU selection, and fallback policy to a
-capability service — that is how the InternKim appliance runs. It is optional:
-with no capability endpoint configured, Blueclaw uses `llmd` alone and reports
-`capabilityd: not_configured` in its health document.
+capability service, which is how the InternKim appliance runs. `direct` posts to
+an OpenAI-compatible endpoint with a key read from the path it names, which is
+how a standalone deployment runs; that deployment reports
+`capabilityd: not_configured` in its health document. Both are built in
+`internal/llm/provider_factory.go`.
 
 `executionMode` is `device`, `companion`, `remote`, or `auto`; InternKim decides
 what that maps to. A tool that needs the user's own browser or files resolves to
@@ -600,33 +595,10 @@ tiers, never a single model. Tier resolution is
 `resolveTaskTierLanguageModelProviders` (`internal/app/application.go`) over
 `internal/llm/provider_factory.go`.
 
-When `defaultProvider` is `llmd`, structured output is authoritative and
-contract failures do not fall through to `capabilityLLM`.
-`structuredSchemaNames` selects which schemas take that path; the default set is
-in `internal/llm/provider_factory.go`:
-
-```json
-"llmd": {
-  "unixSocketPath": "/run/blueclaw-llmd/llmd.sock",
-  "authKeyPath": "/run/credentials/llmd-auth-key",
-  "executionMode": "auto",
-  "timeoutSecond": 60,
-  "structuredSchemaNames": [
-    "bluecollar_agent_turn_action",
-    "bluecollar_agent_turn_finalizer",
-    "bluecollar_turn_router",
-    "bluecollar_recovery_decision",
-    "bluecollar_contract_skill_arbitration",
-    "bluecollar_completion_judge"
-  ]
-}
-```
-
-Those six are the routing hot path; the runtime defines roughly thirty named
-schemas in total, one per structured decision. The direct socket configuration
-is for native development and tests — appliance packaging keeps provider
-credentials in a host service and proxies guest requests through the capability
-boundary.
+The standalone shape is in `config/runtime.standalone.example.json`. That
+configuration is for native development and tests; appliance packaging keeps
+provider credentials in a host service and proxies guest requests through the
+capability boundary.
 
 ### LLM-first wording
 
@@ -706,7 +678,7 @@ test reads the canonical source and fails on drift —
 `GET /admin/api/health` returns database reachability and schema validity,
 connector runtime health, memory health, delivery backlog, and a
 `protocolIdentity` block (`internal/httpserver/health_handler.go-33`). That
-block carries per-endpoint status for `capabilityd` and `llmd`
+block carries the status of `capabilityd`
 (`internal/protocolidentity/checker.go-36`) and fails when the Go DTOs and
 the generated JSON Schema artifacts have drifted apart. An endpoint that is not
 configured reports `not_configured` and passes (`checker.go`), which is how

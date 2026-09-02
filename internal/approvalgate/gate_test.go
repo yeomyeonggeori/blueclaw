@@ -256,7 +256,7 @@ func TestTheRequesterIsAskedInWordsTheModelChose(t *testing.T) {
 
 func TestAnUnwordableCallStillReachesTheRequesterAsTheCallItself(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
-	gate.UseLanguageModel(&wordingLanguageModel{failure: errors.New("llmd is unreachable")})
+	gate.UseLanguageModel(&wordingLanguageModel{failure: errors.New("the language model is unreachable")})
 
 	heldOutcome, _ := gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
 

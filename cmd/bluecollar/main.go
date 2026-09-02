@@ -21,19 +21,19 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/loop"
+	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
 )
 
 const defaultRequesterPersonID = "bluecollar"
 
 type runOptions struct {
-	WorkspacePath  string
-	Task           string
-	ModelName      string
-	LLMDSocketPath string
-	LLMDEndpoint   string
-	LLMDAuthKey    string
-	TurnTimeout    time.Duration
-	ResultPath     string
+	WorkspacePath string
+	Task          string
+	ModelName     string
+	Endpoint      string
+	APIKey        string
+	TurnTimeout   time.Duration
+	ResultPath    string
 }
 
 func main() {
@@ -63,9 +63,8 @@ func main() {
 func parseRunOptions() (runOptions, error) {
 	workspacePath := flag.String("workspace", ".", "directory the agent works in")
 	modelName := flag.String("model", "", "model name to pin, for example openai/gpt-5.6-luna")
-	socketPath := flag.String("llm-unix-socket", os.Getenv("BLUECLAW_LLMD_SOCKET_PATH"), "llmd unix socket path")
-	endpoint := flag.String("llm-endpoint", os.Getenv("BLUECLAW_LLMD_ENDPOINT"), "llmd http endpoint, when not using a socket")
-	authKeyPath := flag.String("llm-auth-key-path", os.Getenv("BLUECLAW_LLMD_AUTH_KEY_PATH"), "file holding the llmd auth key")
+	endpoint := flag.String("llm-endpoint", os.Getenv("BLUECLAW_LLM_ENDPOINT"), "OpenAI-compatible chat completions base URL")
+	apiKeyPath := flag.String("llm-api-key-path", os.Getenv("BLUECLAW_LLM_API_KEY_PATH"), "file holding the model endpoint api key")
 	turnTimeout := flag.Duration("timeout", 30*time.Minute, "how long one task may run")
 	resultPath := flag.String("result-json", "", "also write the result document here")
 	flag.Parse()
@@ -81,26 +80,25 @@ func parseRunOptions() (runOptions, error) {
 	if information, statError := os.Stat(absoluteWorkspacePath); statError != nil || !information.IsDir() {
 		return runOptions{}, fmt.Errorf("workspace is not a directory: %s", absoluteWorkspacePath)
 	}
-	authKey := ""
-	if trimmedPath := strings.TrimSpace(*authKeyPath); trimmedPath != "" {
+	apiKey := ""
+	if trimmedPath := strings.TrimSpace(*apiKeyPath); trimmedPath != "" {
 		keyBytes, readError := os.ReadFile(trimmedPath)
 		if readError != nil {
-			return runOptions{}, fmt.Errorf("read llmd auth key: %w", readError)
+			return runOptions{}, fmt.Errorf("read model endpoint api key: %w", readError)
 		}
-		authKey = strings.TrimSpace(string(keyBytes))
+		apiKey = strings.TrimSpace(string(keyBytes))
 	}
-	if strings.TrimSpace(*socketPath) == "" && strings.TrimSpace(*endpoint) == "" {
-		return runOptions{}, fmt.Errorf("a model is required: pass --llm-unix-socket or --llm-endpoint")
+	if strings.TrimSpace(*endpoint) == "" {
+		return runOptions{}, fmt.Errorf("a model is required: pass --llm-endpoint")
 	}
 	return runOptions{
-		WorkspacePath:  absoluteWorkspacePath,
-		Task:           taskText,
-		ModelName:      strings.TrimSpace(*modelName),
-		LLMDSocketPath: strings.TrimSpace(*socketPath),
-		LLMDEndpoint:   strings.TrimSpace(*endpoint),
-		LLMDAuthKey:    authKey,
-		TurnTimeout:    *turnTimeout,
-		ResultPath:     strings.TrimSpace(*resultPath),
+		WorkspacePath: absoluteWorkspacePath,
+		Task:          taskText,
+		ModelName:     strings.TrimSpace(*modelName),
+		Endpoint:      strings.TrimSpace(*endpoint),
+		APIKey:        apiKey,
+		TurnTimeout:   *turnTimeout,
+		ResultPath:    strings.TrimSpace(*resultPath),
 	}, nil
 }
 
@@ -116,12 +114,7 @@ type TaskResult struct {
 }
 
 func runTask(options runOptions) (TaskResult, error) {
-	languageModel := llm.NewLLMDClient(llm.LLMDClientConfiguration{
-		Endpoint:       options.LLMDEndpoint,
-		UnixSocketPath: options.LLMDSocketPath,
-		AuthKey:        options.LLMDAuthKey,
-		ModelName:      modelNameOrDefault(options.ModelName),
-	})
+	languageModel := openaicompatible.NewProvider(options.Endpoint, options.APIKey, modelNameOrDefault(options.ModelName))
 
 	taskEventService := task.NewTaskEventService()
 	taskRunService := task.NewTaskRunService(taskEventService)

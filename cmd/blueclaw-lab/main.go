@@ -114,24 +114,23 @@ func main() {
 }
 
 type virtualSessionArguments struct {
-	ScenarioName             string
-	ScenarioFilePath         string
-	ArtifactDirectoryPath    string
-	LanguageModelEndpoint    string
-	LanguageModelSocket      string
-	LanguageModelProvider    string
-	LanguageModelAuthKeyPath string
-	LanguageModelName        string
-	EmbeddingEndpoint        string
-	ExecutionMode            string
-	SkillDirectoryPath       string
-	Seed                     *int64
-	Temperature              *float64
-	LiveLanguageModel        bool
-	StrictAssertions         bool
-	ValidateOnly             bool
-	MaximumModelTier         string
-	RealModelTiers           bool
+	ScenarioName          string
+	ScenarioFilePath      string
+	ArtifactDirectoryPath string
+	LanguageModelEndpoint string
+	LanguageModelSocket   string
+	LanguageModelProvider string
+	LanguageModelName     string
+	EmbeddingEndpoint     string
+	ExecutionMode         string
+	SkillDirectoryPath    string
+	Seed                  *int64
+	Temperature           *float64
+	LiveLanguageModel     bool
+	StrictAssertions      bool
+	ValidateOnly          bool
+	MaximumModelTier      string
+	RealModelTiers        bool
 }
 
 type virtualSessionEvidence struct {
@@ -171,10 +170,9 @@ func parseVirtualSessionArguments(arguments []string, defaultScenarioName string
 	scenarioName := flagSet.String("scenario", defaultScenarioName, "virtual session scenario name")
 	scenarioFilePath := flagSet.String("scenario-file", "", "file-backed sequential virtual session scenario")
 	artifactDirectoryPath := flagSet.String("artifact-dir", defaultArtifactDirectoryPath, "virtual session artifact directory")
-	languageModelEndpoint := flagSet.String("llm-endpoint", os.Getenv("BLUECLAW_E2E_LLM_ENDPOINT"), "live LLM capability or LLMD endpoint")
+	languageModelEndpoint := flagSet.String("llm-endpoint", os.Getenv("BLUECLAW_E2E_LLM_ENDPOINT"), "live LLM capability endpoint")
 	languageModelSocket := flagSet.String("llm-unix-socket", os.Getenv("BLUECLAW_E2E_LLM_UNIX_SOCKET"), "live LLM capability unix socket path")
-	languageModelProvider := flagSet.String("llm-provider", firstNonEmptyString(os.Getenv("BLUECLAW_E2E_LLM_PROVIDER"), "openrouter"), "live LLM provider: openrouter, direct, capability, or llmd")
-	languageModelAuthKeyPath := flagSet.String("llm-auth-key-path", os.Getenv("BLUECLAW_E2E_LLM_AUTH_KEY_PATH"), "llmd installation auth key path")
+	languageModelProvider := flagSet.String("llm-provider", firstNonEmptyString(os.Getenv("BLUECLAW_E2E_LLM_PROVIDER"), "openrouter"), "live LLM provider: openrouter, direct, or capability")
 	languageModelName := flagSet.String("llm-model", os.Getenv("BLUECLAW_E2E_LLM_MODEL"), "live LLM model override")
 	embeddingEndpoint := flagSet.String("embedding-endpoint", os.Getenv("BLUECLAW_E2E_EMBEDDING_ENDPOINT"), "local OpenAI-compatible embedding endpoint")
 	executionMode := flagSet.String("llm-execution-mode", firstNonEmptyString(os.Getenv("BLUECLAW_E2E_LLM_EXECUTION_MODE"), "auto"), "live LLM execution mode")
@@ -200,24 +198,23 @@ func parseVirtualSessionArguments(arguments []string, defaultScenarioName string
 		return virtualSessionArguments{}, errors.New("tiered model execution cannot be combined with --llm-model")
 	}
 	return virtualSessionArguments{
-		ScenarioName:             *scenarioName,
-		ScenarioFilePath:         strings.TrimSpace(*scenarioFilePath),
-		ArtifactDirectoryPath:    *artifactDirectoryPath,
-		LanguageModelEndpoint:    *languageModelEndpoint,
-		LanguageModelSocket:      *languageModelSocket,
-		LanguageModelProvider:    *languageModelProvider,
-		LanguageModelAuthKeyPath: *languageModelAuthKeyPath,
-		LanguageModelName:        *languageModelName,
-		EmbeddingEndpoint:        strings.TrimSpace(*embeddingEndpoint),
-		ExecutionMode:            *executionMode,
-		SkillDirectoryPath:       *skillDirectoryPath,
-		Seed:                     virtualSessionInt64FlagPointer(arguments, "seed", *seed),
-		Temperature:              virtualSessionFloat64FlagPointer(arguments, "temperature", *temperature),
-		LiveLanguageModel:        *liveLanguageModel,
-		StrictAssertions:         *strictAssertions,
-		ValidateOnly:             *validateOnly,
-		MaximumModelTier:         normalizedMaximumModelTier,
-		RealModelTiers:           *realModelTiers,
+		ScenarioName:          *scenarioName,
+		ScenarioFilePath:      strings.TrimSpace(*scenarioFilePath),
+		ArtifactDirectoryPath: *artifactDirectoryPath,
+		LanguageModelEndpoint: *languageModelEndpoint,
+		LanguageModelSocket:   *languageModelSocket,
+		LanguageModelProvider: *languageModelProvider,
+		LanguageModelName:     *languageModelName,
+		EmbeddingEndpoint:     strings.TrimSpace(*embeddingEndpoint),
+		ExecutionMode:         *executionMode,
+		SkillDirectoryPath:    *skillDirectoryPath,
+		Seed:                  virtualSessionInt64FlagPointer(arguments, "seed", *seed),
+		Temperature:           virtualSessionFloat64FlagPointer(arguments, "temperature", *temperature),
+		LiveLanguageModel:     *liveLanguageModel,
+		StrictAssertions:      *strictAssertions,
+		ValidateOnly:          *validateOnly,
+		MaximumModelTier:      normalizedMaximumModelTier,
+		RealModelTiers:        *realModelTiers,
 	}, nil
 }
 
@@ -397,16 +394,15 @@ func saveVirtualSessionEvidence(arguments virtualSessionArguments, result e2e.Vi
 	}
 	status := virtualSessionEvidenceStatus(result, runError)
 	evidence := virtualSessionEvidence{
-		Scenario:              result.ScenarioName,
-		Status:                status,
-		RequestedProvider:     strings.TrimSpace(arguments.LanguageModelProvider),
-		RequestedModel:        strings.TrimSpace(arguments.LanguageModelName),
-		ExecutionMode:         strings.TrimSpace(arguments.ExecutionMode),
-		MaximumModelTier:      strings.TrimSpace(arguments.MaximumModelTier),
-		RealModelTiers:        arguments.RealModelTiers,
-		StructuredSchemaNames: llmdStructuredSchemaNames(arguments.LanguageModelProvider),
-		Calls:                 virtualSessionLanguageModelCalls(result),
-		TurnMetrics:           virtualSessionTurnMetrics(result),
+		Scenario:          result.ScenarioName,
+		Status:            status,
+		RequestedProvider: strings.TrimSpace(arguments.LanguageModelProvider),
+		RequestedModel:    strings.TrimSpace(arguments.LanguageModelName),
+		ExecutionMode:     strings.TrimSpace(arguments.ExecutionMode),
+		MaximumModelTier:  strings.TrimSpace(arguments.MaximumModelTier),
+		RealModelTiers:    arguments.RealModelTiers,
+		Calls:             virtualSessionLanguageModelCalls(result),
+		TurnMetrics:       virtualSessionTurnMetrics(result),
 	}
 	resultEvidence := virtualSessionResultEvidence{
 		Status:   status,
@@ -501,13 +497,6 @@ func virtualSessionLanguageModelCalls(result e2e.VirtualSessionResult) []e2e.Vir
 		calls = append(calls, turnResult.LanguageModelCallEvents...)
 	}
 	return calls
-}
-
-func llmdStructuredSchemaNames(provider string) []string {
-	if strings.TrimSpace(strings.ToLower(provider)) != "llmd" {
-		return nil
-	}
-	return llm.DefaultLLMDStructuredSchemaNames()
 }
 
 func printVirtualTurnFailureEvents(turnNumber int, turnResult e2e.VirtualTurnResult) {
@@ -712,25 +701,8 @@ func createLiveLanguageModel(arguments virtualSessionArguments) (llm.LanguageMod
 			ModelName:     modelName,
 			ExecutionMode: arguments.ExecutionMode,
 		}, nil
-	case "llmd":
-		authKey, errorValue := resolveLLMDAuthKey(arguments.LanguageModelAuthKeyPath)
-		if errorValue != nil {
-			return nil, errorValue
-		}
-		structuredFallbackProvider := optionalLiveOpenRouterLanguageModel(arguments)
-		return llm.NewLLMDClient(llm.LLMDClientConfiguration{
-			Endpoint:                   arguments.LanguageModelEndpoint,
-			UnixSocketPath:             arguments.LanguageModelSocket,
-			AuthKey:                    authKey,
-			ModelName:                  modelName,
-			ExecutionMode:              arguments.ExecutionMode,
-			GenerationOptions:          generationOptions,
-			TextProvider:               structuredFallbackProvider,
-			StructuredFallbackProvider: structuredFallbackProvider,
-			StructuredSchemaNames:      llmdStructuredSchemaNames("llmd"),
-		}), nil
 	default:
-		return nil, errors.New("live LLM provider must be openrouter, direct, capability, or llmd")
+		return nil, errors.New("live LLM provider must be openrouter, direct, or capability")
 	}
 }
 
@@ -747,24 +719,6 @@ func optionalLiveOpenRouterLanguageModel(arguments virtualSessionArguments) llm.
 		InitialBackoff:    750 * time.Millisecond,
 		GenerationOptions: llm.GenerationOptions{Seed: arguments.Seed, Temperature: arguments.Temperature},
 	}
-}
-
-func resolveLLMDAuthKey(authKeyPath string) (string, error) {
-	if authKey := strings.TrimSpace(os.Getenv("BLUECLAW_E2E_LLM_AUTH_KEY")); authKey != "" {
-		return authKey, nil
-	}
-	if strings.TrimSpace(authKeyPath) == "" {
-		return "", errors.New("llmd live LLM provider requires BLUECLAW_E2E_LLM_AUTH_KEY or --llm-auth-key-path")
-	}
-	document, errorValue := os.ReadFile(authKeyPath)
-	if errorValue != nil {
-		return "", errorValue
-	}
-	authKey := strings.TrimSpace(string(document))
-	if authKey == "" {
-		return "", errors.New("llmd live LLM auth key is empty")
-	}
-	return authKey, nil
 }
 
 func languageModelCallFailureSummaries(turnResult e2e.VirtualTurnResult) []string {

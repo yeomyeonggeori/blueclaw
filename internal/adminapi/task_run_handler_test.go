@@ -85,7 +85,7 @@ func TestTaskRunHandlerLaunchIgnoresClientCancellation(t *testing.T) {
 	}
 }
 
-func TestTaskRunHandlerUsesLLMDTopologyPresetWithoutIntakeCall(t *testing.T) {
+func TestTaskRunHandlerUsesModelPathPresetWithoutIntakeCall(t *testing.T) {
 	handler, taskRunService, taskEventService, languageModel := newPresetTaskRunHandler(true)
 	presetDecision, _, errorValue := handler.resolveTaskDecisionPreset(modelPathTaskDecisionPreset)
 	if errorValue != nil {

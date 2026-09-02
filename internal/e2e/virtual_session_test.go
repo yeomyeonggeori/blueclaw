@@ -216,14 +216,14 @@ func TestVirtualObservedLanguageModelPreservesChatCapabilityAndMetadata(t *testi
 
 func TestVirtualChatCallEventDerivesActionSchemaForForcedChatOnly(t *testing.T) {
 	actionEvent := virtualChatCallEvent("chat", virtualActionChatRequest(), llm.ChatCompletionResponse{
-		ProviderName:    "llmd",
+		ProviderName:    "capability",
 		ModelName:       "low-model",
 		SelectedBackend: "device",
 		FinishReason:    "tool_calls",
 		UsedFallback:    true,
 	}, time.Now(), nil)
 	plainEvent := virtualChatCallEvent("chat", llm.ChatCompletionRequest{}, llm.ChatCompletionResponse{
-		ProviderName:    "llmd",
+		ProviderName:    "capability",
 		ModelName:       "low-model",
 		SelectedBackend: "device",
 		FinishReason:    "stop",

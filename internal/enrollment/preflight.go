@@ -58,16 +58,10 @@ func checkDatabase(ctx context.Context, home Home, connectionString string) Chec
 }
 
 func checkLanguageModel(access LanguageModelAccess) CheckResult {
-	if socketPath := strings.TrimSpace(access.LLMDUnixSocketPath); socketPath != "" {
-		if _, errorValue := os.Stat(socketPath); errorValue != nil {
-			return CheckResult{Name: CheckLanguageModel, Detail: errorValue.Error(), Guidance: "Start llmd, or leave the socket empty and use an OpenRouter key instead."}
-		}
-		return CheckResult{Name: CheckLanguageModel, IsReady: true, Detail: socketPath}
-	}
 	if strings.TrimSpace(access.OpenRouterAPIKey) != "" {
 		return CheckResult{Name: CheckLanguageModel, IsReady: true, Detail: "OpenRouter"}
 	}
-	return CheckResult{Name: CheckLanguageModel, Guidance: "Give blueclaw an OpenRouter key, or point it at a running llmd socket."}
+	return CheckResult{Name: CheckLanguageModel, Guidance: "Give blueclaw an OpenRouter key."}
 }
 
 func checkHarness(harness HarnessChoice) CheckResult {
