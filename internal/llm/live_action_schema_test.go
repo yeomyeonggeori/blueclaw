@@ -47,30 +47,6 @@ func assertContinuedWithTerminalRun(t *testing.T, action loop.ProbedAgentAction)
 	}
 }
 
-func TestLLMDLiveXLowCurrentAgentActionSchemaFromEnv(t *testing.T) {
-	socketPath := strings.TrimSpace(os.Getenv("BLUECLAW_LLMD_LIVE_SOCKET"))
-	authKey := strings.TrimSpace(os.Getenv("BLUECLAW_LLMD_LIVE_AUTH_KEY"))
-	if socketPath == "" || authKey == "" {
-		t.Skip("BLUECLAW_LLMD_LIVE_SOCKET and BLUECLAW_LLMD_LIVE_AUTH_KEY are required")
-	}
-	request := terminalRunProbeRequest(t, "Do not finish. Choose continue, call shell, and set command to printf llmd-schema-ok.")
-	client := llm.NewLLMDClient(llm.LLMDClientConfiguration{
-		UnixSocketPath: socketPath,
-		AuthKey:        authKey,
-		ModelName:      llm.DefaultModelTierNames().XLow,
-		ExecutionMode:  "remote",
-	})
-	response, errorValue := client.GenerateStructuredResponse(context.Background(), request)
-	if errorValue != nil {
-		t.Fatalf("expected llmd xlow response for current action schema: %v", errorValue)
-	}
-	action, errorValue := loop.ProbeAgentActionResponse(response)
-	if errorValue != nil {
-		t.Fatalf("expected parsable llmd agent action, got %q: %v", response.Content, errorValue)
-	}
-	assertContinuedWithTerminalRun(t, action)
-}
-
 func TestOpenRouterLiveLowTierCurrentAgentActionSchemaFromEnv(t *testing.T) {
 	if os.Getenv("BLUECLAW_LIVE_LLM_TEST") != "1" {
 		t.Skip("set BLUECLAW_LIVE_LLM_TEST=1 to run the low-tier action schema test")

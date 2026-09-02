@@ -64,7 +64,7 @@ func TestTaskLauncherPersistsTurnRouterLLMCall(t *testing.T) {
 			Reason:           "direct answer",
 		},
 		response: model.StructuredResponse{
-			ProviderName: "llmd",
+			ProviderName: "capability",
 			ModelName:    "router-model",
 			ModelTier:    "xlow",
 			Usage: model.Usage{
@@ -90,8 +90,8 @@ func TestTaskLauncherPersistsTurnRouterLLMCall(t *testing.T) {
 	if len(records) != 1 {
 		t.Fatalf("expected one persisted router call, got %+v", records)
 	}
-	if records[0].Provider != "llmd" || records[0].Model != "router-model" || records[0].ModelTier != "xlow" || records[0].UsedFallback {
-		t.Fatalf("expected LLMD router metadata without fallback, got %+v", records[0])
+	if records[0].Provider != "capability" || records[0].Model != "router-model" || records[0].ModelTier != "xlow" || records[0].UsedFallback {
+		t.Fatalf("expected router metadata without fallback, got %+v", records[0])
 	}
 	if records[0].PromptTokens != 11 || records[0].CompletionTokens != 7 || records[0].TotalTokens != 18 {
 		t.Fatalf("expected router token metadata, got %+v", records[0])

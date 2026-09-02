@@ -10,6 +10,27 @@ import (
 	"time"
 )
 
+type correctableStructuredOutputError struct {
+	Code                string
+	AllowLegacyFallback bool
+	Diagnostic          StructuredOutputDiagnostic
+}
+
+func (errorValue correctableStructuredOutputError) Error() string {
+	return errorValue.Code
+}
+
+func (errorValue correctableStructuredOutputError) StructuredOutputCorrection() (StructuredOutputCorrection, bool) {
+	if errorValue.AllowLegacyFallback {
+		return StructuredOutputCorrection{}, false
+	}
+	return StructuredOutputCorrection{Code: errorValue.Code, Diagnostic: errorValue.Diagnostic}, true
+}
+
+func (errorValue correctableStructuredOutputError) StructuredOutputDiagnostic() (StructuredOutputDiagnostic, bool) {
+	return errorValue.Diagnostic, errorValue.Diagnostic.Category != ""
+}
+
 type staticLanguageModelProvider struct {
 	response                StructuredResponse
 	error                   error
@@ -117,7 +138,7 @@ func TestFallbackLanguageModelProviderUsesFallbackAfterPrimaryFailure(t *testing
 
 func TestFallbackLanguageModelProviderReturnsCorrectableStructuredErrorWithoutFallback(t *testing.T) {
 	var fallbackCalls int
-	primaryError := llmdHTTPError{
+	primaryError := correctableStructuredOutputError{
 		Code: "structured_output_invalid",
 		Diagnostic: StructuredOutputDiagnostic{
 			Category: StructuredOutputDiagnosticSchemaValidation,
@@ -137,7 +158,7 @@ func TestFallbackLanguageModelProviderReturnsCorrectableStructuredErrorWithoutFa
 
 	response, errorValue := provider.GenerateStructuredResponse(context.Background(), StructuredResponseRequest{})
 
-	var returnedError llmdHTTPError
+	var returnedError correctableStructuredOutputError
 	if response.Content != "" || !errors.As(errorValue, &returnedError) || returnedError.Code != primaryError.Code {
 		t.Fatalf("expected original correctable error, got %#v and %v", response, errorValue)
 	}
@@ -149,7 +170,7 @@ func TestFallbackLanguageModelProviderReturnsCorrectableStructuredErrorWithoutFa
 func TestFallbackLanguageModelProviderUsesFallbackForEmptyCompletion(t *testing.T) {
 	var fallbackCalls int
 	provider := FallbackLanguageModelProvider{
-		PrimaryProvider: staticLanguageModelProvider{error: llmdHTTPError{
+		PrimaryProvider: staticLanguageModelProvider{error: correctableStructuredOutputError{
 			Code: "structured_output_invalid",
 			Diagnostic: StructuredOutputDiagnostic{
 				Category:     StructuredOutputDiagnosticEmptyCompletion,
@@ -175,7 +196,7 @@ func TestFallbackLanguageModelProviderUsesFallbackForEmptyCompletion(t *testing.
 func TestFallbackLanguageModelProviderUsesFallbackForNonCorrectableLegacyError(t *testing.T) {
 	var fallbackCalls int
 	provider := FallbackLanguageModelProvider{
-		PrimaryProvider: staticLanguageModelProvider{error: llmdHTTPError{
+		PrimaryProvider: staticLanguageModelProvider{error: correctableStructuredOutputError{
 			Code:                "structured_output_invalid",
 			AllowLegacyFallback: true,
 			Diagnostic: StructuredOutputDiagnostic{
@@ -192,28 +213,6 @@ func TestFallbackLanguageModelProviderUsesFallbackForNonCorrectableLegacyError(t
 
 	if errorValue != nil || response.Content != "fallback" || !response.UsedFallback {
 		t.Fatalf("expected existing non-correctable fallback semantics, got %#v and %v", response, errorValue)
-	}
-	if fallbackCalls != 1 {
-		t.Fatalf("expected one fallback call, got %d", fallbackCalls)
-	}
-}
-
-func TestFallbackLanguageModelProviderUsesFallbackAfterTransportFailure(t *testing.T) {
-	var fallbackCalls int
-	provider := FallbackLanguageModelProvider{
-		PrimaryProvider: staticLanguageModelProvider{
-			error: llmdTransportError{Cause: errors.New("transport unavailable")},
-		},
-		FallbackProvider: staticLanguageModelProvider{
-			response:                StructuredResponse{Content: "fallback"},
-			structuredResponseCalls: &fallbackCalls,
-		},
-	}
-
-	response, errorValue := provider.GenerateStructuredResponse(context.Background(), StructuredResponseRequest{})
-
-	if errorValue != nil || response.Content != "fallback" || !response.UsedFallback {
-		t.Fatalf("expected transport fallback, got %#v and %v", response, errorValue)
 	}
 	if fallbackCalls != 1 {
 		t.Fatalf("expected one fallback call, got %d", fallbackCalls)

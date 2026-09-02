@@ -90,20 +90,6 @@
     "defaultProvider": "capabilityLLM",
     "capability": {
       "executionMode": "auto"
-    },
-    "llmd": {
-      "unixSocketPath": "/run/blueclaw-llmd/llmd.sock",
-      "authKeyPath": "/run/credentials/llmd-auth-key",
-      "executionMode": "auto",
-      "timeoutSecond": 60,
-      "structuredSchemaNames": [
-        "bluecollar_agent_turn_action",
-        "bluecollar_agent_turn_finalizer",
-        "bluecollar_turn_router",
-        "bluecollar_recovery_decision",
-        "bluecollar_contract_skill_arbitration",
-        "bluecollar_completion_judge"
-      ]
     }
   },
   "firecracker": {

@@ -236,25 +236,11 @@ Requirements: Go 1.26, [Bun](https://bun.sh) 1.3, Postgres, and one
 OpenAI-compatible model endpoint — Ollama, vLLM, LM Studio, OpenRouter, or
 anything else speaking that API.
 
-**1. Start `llmd`, the model sidecar.** It holds the provider credentials and
-runs beside the daemon.
-
-```bash
-cd llmd
-printf 'a-local-secret' > /tmp/llmd-auth
-BLUECLAW_LLMD_AUTH_KEY_PATH=/tmp/llmd-auth \
-BLUECLAW_LLMD_SOCKET_PATH=/tmp/llmd.sock \
-BLUECLAW_LLMD_LLAMA_BASE_URL=http://127.0.0.1:11434/v1 \
-BLUECLAW_LLMD_LLAMA_MODEL=your-model \
-BLUECLAW_LLMD_LLAMA_STRUCTURED_OUTPUTS_ENABLED=true \
-BLUECLAW_LLMD_LOCAL_ONLY=true \
-bun run src/main.ts
-```
-
-`LLAMA_BASE_URL` points at any OpenAI-compatible server; the name is historical.
-`http://127.0.0.1:11434/v1` is Ollama. For a hosted provider, set
-`OPENROUTER_API_KEY` and drop the local variables. `llmd/README.md` lists the credential
-setting.
+**1. Point the daemon at a model.** Copy
+`config/runtime.standalone.example.json` and fill in `languageModel.direct`: the
+base URL of an OpenAI-compatible server, a file holding its key, and the model
+name. `http://127.0.0.1:11434/v1` is Ollama; a hosted provider such as
+OpenRouter is the same three fields.
 
 Treat a local model as a development convenience. The runtime asks for
 structured output natively and falls back to a forced tool call when the server
@@ -262,8 +248,8 @@ rejects that; Ollama treats the forced choice as a hint, so a model may answer
 in prose and fail the turn. Small models also struggle with the larger runtime
 schemas.
 
-**2. Start the daemon.** Copy `config/runtime.standalone.example.json`, set your
-Postgres connection string and the llmd socket and key paths, then:
+**2. Start the daemon.** Set your Postgres connection string in the same file,
+then:
 
 ```bash
 go run ./cmd/blueclaw --runtime runtime.json --policy config/policy.example.json
@@ -274,9 +260,9 @@ curl -s localhost:8081/admin/api/health | jq '.status, .protocolIdentity.passed'
 else is configuration. The 29 migrations under `migrations/` are applied in
 order at boot.
 
-A standalone deployment reports `capabilityd: not_configured` and checks only
-`llmd`. There is no capability service, so the calendar, task, mail, and site
-operations an appliance supplies are simply absent. The agent loop, skills, the
+A standalone deployment reports `capabilityd: not_configured`. There is no
+capability service, so the calendar, task, mail, and site operations an
+appliance supplies are simply absent. The agent loop, skills, the
 terminal, and files work.
 
 **3. Enable per-person POSIX isolation.** Until this step every requester shares
@@ -317,7 +303,7 @@ writes every request, response, tool call, and artifact to a directory:
 
 ```bash
 go run ./cmd/blueclaw-lab virtual-session --scenario presentation \
-  --artifact-dir .artifacts/blueclaw-e2e --live-llm --llm-unix-socket /tmp/llmd.sock
+  --artifact-dir .artifacts/blueclaw-e2e --live-llm
 ```
 
 Live runs spend money, so they are never enabled by configuration alone. The
@@ -469,7 +455,7 @@ The question is which layer owns what.
 | Concern | Claude Code, Codex, opencode, Gemini CLI | blueclaw |
 |---|---|---|
 | Agent loop | yes, that is the product | delegated to a harness behind an interface |
-| Model choice | yes | delegated to `llmd`, swappable mid-run |
+| Model choice | yes | delegated to the configured provider, swappable mid-run |
 | Runs as | the operating system user who started it | an unprivileged user derived from the requester |
 | Multi-person separation | none; one process, one account | per-person Linux user, group, and `0700` home |
 | Approval | in-process prompt, lost on exit | persisted `approval.pending_call`, carried out later |
@@ -644,7 +630,7 @@ tool participates in the same approval and evidence rules as a built-in one.
 | `.dependency/bluecollar/` | the agent loop, as its own repository pinned here |
 | `internal/acpharness/` | blueclaw as an ACP client, plugging an external agent into the daemon |
 | `protocol/` | Zod contracts shared across processes; generates the JSON Schema artifacts |
-| `llmd/` | AI SDK sidecar: structured output and chat generation over a Unix socket |
+| `llmd/` | AI SDK sidecar published on its own: structured output and chat generation over a Unix socket |
 | `chatd/` | chat bridge and platform adapters (Mattermost, Buzz) |
 | `admin/` | Svelte admin and task console sources |
 | `web/` | build output of `admin/`, untracked; run `cd admin && bun run build` before serving the console |
@@ -690,7 +676,7 @@ bluecollar is readable without one.
 |---|---|---|
 | Unit | `go test ./...`, `bun run test` | none; no external service needed |
 | Integration | `go test ./tests/integration/...` | Postgres-backed cases skip unless `BLUECLAW_TEST_POSTGRES_URL` is set |
-| Live model | same `go test` invocation | skipped unless `BLUECLAW_LLMD_LIVE_SOCKET` and `BLUECLAW_LLMD_LIVE_AUTH_KEY`, or `BLUECLAW_LIVE_LLM_TEST=1`, are set — these call a real model and cost money |
+| Live model | same `go test` invocation | skipped unless `BLUECLAW_LIVE_LLM_TEST=1` is set — these call a real model and cost money |
 | Virtual session | `go run ./cmd/blueclaw-lab virtual-session` | requires `--live-llm` or `BLUECLAW_E2E_LIVE=1` |
 | Fleet and VM | `go run ./cmd/blueclaw-lab vm-up`, `smoke-firecracker` | needs the development VM from `config/lab.example.json` |
 
@@ -708,8 +694,8 @@ truth per shared contract.
 
 Shipped and working: the daemon, the five connectors, the task store and event
 ledger, the POSIX projection and setuid helper, the approval gate, the MCP
-client and server, the `llmd` model sidecar with mid-run model swapping, the
-terminal user interface, and five selectable harnesses.
+client and server, mid-run model swapping, the terminal user interface, and five
+selectable harnesses.
 
 | Item | State |
 |---|---|

@@ -20,12 +20,11 @@ type Person struct {
 }
 
 type LanguageModelAccess struct {
-	LLMDUnixSocketPath string
-	OpenRouterAPIKey   string
+	OpenRouterAPIKey string
 }
 
 func (access LanguageModelAccess) IsConfigured() bool {
-	return strings.TrimSpace(access.LLMDUnixSocketPath) != "" || strings.TrimSpace(access.OpenRouterAPIKey) != ""
+	return strings.TrimSpace(access.OpenRouterAPIKey) != ""
 }
 
 type HarnessChoice struct {
@@ -63,7 +62,7 @@ func (enrollment Enrollment) Validate() error {
 		return errors.New("an enrollment needs a workspace root, because that is where the agent's work lives")
 	}
 	if !enrollment.LanguageModel.IsConfigured() {
-		return errors.New("an enrollment needs a way to reach a language model, either a local llmd socket or an OpenRouter key")
+		return errors.New("an enrollment needs a way to reach a language model: an OpenRouter key")
 	}
 	return nil
 }

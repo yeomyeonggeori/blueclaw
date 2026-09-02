@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -245,48 +244,9 @@ func TestRunVirtualSessionLiveLanguageModelUsesOpenRouterKeyFileAndFakeServer(t 
 	}
 }
 
-func TestCreateLiveLanguageModelSupportsLLMDWithoutOpenRouterCredentials(t *testing.T) {
-	t.Setenv("BLUECLAW_E2E_LLM_AUTH_KEY", "installation-key")
-	t.Setenv("OPENROUTER_API_KEY", "")
-	seed := int64(17)
-	temperature := 0.1
-	languageModel, errorValue := createLiveLanguageModel(virtualSessionArguments{
-		LanguageModelProvider: "llmd",
-		LanguageModelEndpoint: "http://llmd",
-		LanguageModelName:     "deepseek/deepseek-v4-flash",
-		ExecutionMode:         "remote",
-		Seed:                  &seed,
-		Temperature:           &temperature,
-	})
-	if errorValue != nil {
-		t.Fatalf("expected llmd live model: %v", errorValue)
-	}
-	llmdClient, isLLMDClient := languageModel.(llm.LLMDClient)
-	if !isLLMDClient {
-		t.Fatalf("expected llmd client, got %T", languageModel)
-	}
-	if llmdClient.AuthKey != "installation-key" || llmdClient.ModelName != "deepseek/deepseek-v4-flash" {
-		t.Fatalf("unexpected llmd live model configuration: %+v", llmdClient)
-	}
-	if llmdClient.GenerationOptions.Seed == nil || *llmdClient.GenerationOptions.Seed != seed {
-		t.Fatalf("expected llmd generation seed, got %+v", llmdClient.GenerationOptions)
-	}
-	expectedSchemaNames := []string{
-		"bluecollar_agent_turn_action",
-		"bluecollar_agent_turn_finalizer",
-		"bluecollar_turn_router",
-		"bluecollar_recovery_decision",
-		"bluecollar_contract_skill_arbitration",
-		"bluecollar_completion_judge",
-	}
-	if !slices.Equal(llmdClient.StructuredSchemaNames, expectedSchemaNames) {
-		t.Fatalf("expected authoritative LLMD schemas, got %#v", llmdClient.StructuredSchemaNames)
-	}
-}
-
 func TestParseVirtualSessionArgumentsLeavesEndpointOmitted(t *testing.T) {
 	t.Setenv("BLUECLAW_E2E_LLM_ENDPOINT", "")
-	arguments, errorValue := parseVirtualSessionArguments([]string{"--llm-provider", "llmd"}, "task-lifecycle", t.TempDir())
+	arguments, errorValue := parseVirtualSessionArguments([]string{"--llm-provider", "capability"}, "task-lifecycle", t.TempDir())
 	if errorValue != nil {
 		t.Fatalf("expected arguments to parse: %v", errorValue)
 	}
@@ -306,15 +266,6 @@ func TestCreateLiveLanguageModelUsesProviderConstructorDefaults(t *testing.T) {
 	capabilityClient, isCapabilityClient := capabilityModel.(llm.CapabilityLLMClient)
 	if !isCapabilityClient || capabilityClient.CapabilityClient.Endpoint != capability.DefaultEndpoint {
 		t.Fatalf("expected capability constructor default endpoint, got %#v", capabilityModel)
-	}
-
-	llmdModel, errorValue := createLiveLanguageModel(virtualSessionArguments{LanguageModelProvider: "llmd"})
-	if errorValue != nil {
-		t.Fatalf("expected llmd model: %v", errorValue)
-	}
-	llmdClient, isLLMDClient := llmdModel.(llm.LLMDClient)
-	if !isLLMDClient || llmdClient.Endpoint != "http://blueclaw-llmd" {
-		t.Fatalf("expected llmd constructor default endpoint, got %#v", llmdModel)
 	}
 }
 
@@ -339,27 +290,12 @@ func TestCreateLiveLanguageModelPreservesUnixSocketTransportWithOmittedEndpoint(
 	} else if httpClient.Timeout != 0 {
 		t.Fatalf("expected capability live client without timeout, got %s", httpClient.Timeout)
 	}
-
-	llmdModel, errorValue := createLiveLanguageModel(virtualSessionArguments{
-		LanguageModelProvider: "llmd",
-		LanguageModelSocket:   arguments.LanguageModelSocket,
-	})
-	if errorValue != nil {
-		t.Fatalf("expected llmd socket model: %v", errorValue)
-	}
-	llmdClient := llmdModel.(llm.LLMDClient)
-	if llmdClient.Endpoint != "http://blueclaw-llmd" || llmdClient.HTTPClient == nil {
-		t.Fatalf("expected llmd socket transport and default endpoint, got %#v", llmdClient)
-	}
-	if httpClient, isHTTPClient := llmdClient.HTTPClient.(*http.Client); !isHTTPClient || httpClient.Timeout != 0 {
-		t.Fatalf("expected LLMD live client without timeout, got %#v", llmdClient.HTTPClient)
-	}
 }
 
 func TestCreateLiveLanguageModelPreservesExplicitEndpointOverrides(t *testing.T) {
 	t.Setenv("BLUECLAW_E2E_LLM_AUTH_KEY", "installation-key")
 	t.Setenv("OPENROUTER_API_KEY", "")
-	for _, provider := range []string{"capability", "llmd"} {
+	for _, provider := range []string{"capability"} {
 		languageModel, errorValue := createLiveLanguageModel(virtualSessionArguments{
 			LanguageModelProvider: provider,
 			LanguageModelEndpoint: "https://explicit-llm.example",
@@ -372,8 +308,6 @@ func TestCreateLiveLanguageModelPreservesExplicitEndpointOverrides(t *testing.T)
 		switch client := languageModel.(type) {
 		case llm.CapabilityLLMClient:
 			endpoint = client.CapabilityClient.Endpoint
-		case llm.LLMDClient:
-			endpoint = client.Endpoint
 		default:
 			t.Fatalf("unexpected %s model type %T", provider, languageModel)
 		}
@@ -402,9 +336,8 @@ func TestSaveVirtualSessionEvidenceRecordsRoutingMetadataWithoutSecrets(t *testi
 		}},
 	}
 	arguments := virtualSessionArguments{
-		LanguageModelProvider:    "llmd",
-		LanguageModelAuthKeyPath: "/tmp/secret-auth-key",
-		ExecutionMode:            "auto",
+		LanguageModelProvider: "capability",
+		ExecutionMode:         "auto",
 	}
 	if errorValue := saveVirtualSessionEvidence(arguments, result, nil); errorValue != nil {
 		t.Fatalf("expected evidence to save: %v", errorValue)
@@ -414,13 +347,10 @@ func TestSaveVirtualSessionEvidenceRecordsRoutingMetadataWithoutSecrets(t *testi
 		t.Fatalf("expected evidence file: %v", errorValue)
 	}
 	content := string(document)
-	for _, expectedText := range []string{"task-lifecycle", "failed", "blocked", "operation contract was invalid", "llmd", "recovery_chat", "llama.cpp", "gemma", "device", "bluecollar_agent_turn_action", "bluecollar_agent_turn_finalizer", "bluecollar_turn_router", "bluecollar_recovery_decision", "bluecollar_contract_skill_arbitration", "bluecollar_completion_judge"} {
+	for _, expectedText := range []string{"task-lifecycle", "failed", "blocked", "operation contract was invalid", "capability", "recovery_chat", "llama.cpp", "gemma", "device"} {
 		if !strings.Contains(content, expectedText) {
 			t.Fatalf("evidence missing %q: %s", expectedText, content)
 		}
-	}
-	if strings.Contains(content, "secret-auth-key") {
-		t.Fatalf("evidence leaked authentication path: %s", content)
 	}
 	resultDocument, errorValue := os.ReadFile(filepath.Join(artifactDirectoryPath, "result.json"))
 	if errorValue != nil {
@@ -503,14 +433,14 @@ func TestSaveVirtualSessionEvidenceUsesOrderedVirtualCallRecorderWithoutDuplicat
 				{
 					Kind:            "chat",
 					SchemaName:      "bluecollar_agent_turn_action",
-					Provider:        "llmd",
+					Provider:        "capability",
 					Model:           "low-model",
 					SelectedBackend: "device",
 					FinishReason:    "tool_calls",
 				},
 				{
 					Kind:            "chat",
-					Provider:        "llmd",
+					Provider:        "capability",
 					Model:           "low-model",
 					SelectedBackend: "device",
 					FinishReason:    "stop",
@@ -522,7 +452,7 @@ func TestSaveVirtualSessionEvidenceUsesOrderedVirtualCallRecorderWithoutDuplicat
 			}},
 		}},
 	}
-	if errorValue := saveVirtualSessionEvidence(virtualSessionArguments{LanguageModelProvider: "llmd"}, result, nil); errorValue != nil {
+	if errorValue := saveVirtualSessionEvidence(virtualSessionArguments{LanguageModelProvider: "capability"}, result, nil); errorValue != nil {
 		t.Fatalf("expected evidence to save: %v", errorValue)
 	}
 	document, errorValue := os.ReadFile(filepath.Join(artifactDirectoryPath, "llm-routing-evidence.json"))

@@ -177,71 +177,6 @@ func TestMaximumLowTierCapsIntakeFallbacks(t *testing.T) {
 	}
 }
 
-func TestResolveIntakeLanguageModelProviderUsesLLMDWhenSelected(t *testing.T) {
-	authKeyPath := filepath.Join(t.TempDir(), "llmd.key")
-	if errorValue := os.WriteFile(authKeyPath, []byte("installation-key"), 0o600); errorValue != nil {
-		t.Fatalf("expected auth key fixture: %v", errorValue)
-	}
-	runtimeConfiguration := configuredModelTierRuntime("")
-	runtimeConfiguration.Agent.Intake.Enabled = true
-	runtimeConfiguration.Agent.Intake.Model = "vendor/intake"
-	runtimeConfiguration.Agent.Intake.ExecutionMode = "companion"
-	runtimeConfiguration.LanguageModel.DefaultProvider = "llmd"
-	runtimeConfiguration.LanguageModel.LLMD.AuthKeyPath = authKeyPath
-
-	provider := resolveIntakeLanguageModelProvider(runtimeConfiguration, nil)
-	fallbackProvider, isFallbackProvider := provider.(llm.FallbackLanguageModelProvider)
-	if !isFallbackProvider {
-		t.Fatalf("expected fallback intake provider, got %T", provider)
-	}
-	primaryProvider, isLLMDPrimary := unwrapModelTier(fallbackProvider.PrimaryProvider).(llm.LLMDClient)
-	if !isLLMDPrimary {
-		t.Fatalf("expected LLMD intake primary provider, got %T", fallbackProvider.PrimaryProvider)
-	}
-	if primaryProvider.ModelName != "vendor/intake" || primaryProvider.ExecutionMode != "companion" {
-		t.Fatalf("expected intake LLMD model and execution mode, got %q and %q", primaryProvider.ModelName, primaryProvider.ExecutionMode)
-	}
-	fallbackLLMDProvider, isLLMDFallback := unwrapModelTier(fallbackProvider.FallbackProvider).(llm.LLMDClient)
-	if !isLLMDFallback {
-		t.Fatalf("expected LLMD intake fallback provider, got %T", fallbackProvider.FallbackProvider)
-	}
-	if fallbackLLMDProvider.ModelName != "vendor/high" || fallbackLLMDProvider.ExecutionMode != "companion" {
-		t.Fatalf("expected high LLMD fallback model and execution mode, got %q and %q", fallbackLLMDProvider.ModelName, fallbackLLMDProvider.ExecutionMode)
-	}
-}
-
-func TestMaximumLowTierCapsIntakeUsesLLMDWhenSelected(t *testing.T) {
-	authKeyPath := filepath.Join(t.TempDir(), "llmd.key")
-	if errorValue := os.WriteFile(authKeyPath, []byte("installation-key"), 0o600); errorValue != nil {
-		t.Fatalf("expected auth key fixture: %v", errorValue)
-	}
-	runtimeConfiguration := configuredModelTierRuntime("low")
-	runtimeConfiguration.Agent.Intake.Enabled = true
-	runtimeConfiguration.Agent.Intake.ExecutionMode = "device"
-	runtimeConfiguration.LanguageModel.DefaultProvider = "llmd"
-	runtimeConfiguration.LanguageModel.LLMD.AuthKeyPath = authKeyPath
-
-	provider := resolveIntakeLanguageModelProvider(runtimeConfiguration, nil)
-	fallbackProvider, isFallbackProvider := provider.(llm.FallbackLanguageModelProvider)
-	if !isFallbackProvider {
-		t.Fatalf("expected capped fallback intake provider, got %T", provider)
-	}
-	primaryProvider, isLLMDPrimary := unwrapModelTier(fallbackProvider.PrimaryProvider).(llm.LLMDClient)
-	if !isLLMDPrimary {
-		t.Fatalf("expected capped LLMD intake primary provider, got %T", fallbackProvider.PrimaryProvider)
-	}
-	if primaryProvider.ModelName != "vendor/low" || primaryProvider.ExecutionMode != "device" {
-		t.Fatalf("expected capped low LLMD model and execution mode, got %q and %q", primaryProvider.ModelName, primaryProvider.ExecutionMode)
-	}
-	fallbackLLMDProvider, isLLMDFallback := unwrapModelTier(fallbackProvider.FallbackProvider).(llm.LLMDClient)
-	if !isLLMDFallback {
-		t.Fatalf("expected capped LLMD intake fallback provider, got %T", fallbackProvider.FallbackProvider)
-	}
-	if fallbackLLMDProvider.ModelName != "vendor/xlow" || fallbackLLMDProvider.ExecutionMode != "device" {
-		t.Fatalf("expected capped xlow LLMD fallback model and execution mode, got %q and %q", fallbackLLMDProvider.ModelName, fallbackLLMDProvider.ExecutionMode)
-	}
-}
-
 func configuredModelTierRuntime(maximumModelTier string) config.RuntimeConfiguration {
 	runtimeConfiguration := config.RuntimeConfiguration{}
 	runtimeConfiguration.LanguageModel.Capability.MaximumModelTier = maximumModelTier
@@ -499,7 +434,6 @@ func TestApplicationChecksProtocolIdentityOnceAndStoresResult(t *testing.T) {
 	runtimeConfiguration.Capabilities.Endpoint = server.URL
 	runtimeConfiguration.Capabilities.ProtocolVersion = protocolVersion
 	runtimeConfiguration.Capabilities.AggregateProtocolHash = aggregateProtocolHash
-	runtimeConfiguration.LanguageModel.LLMD.Endpoint = server.URL
 	application := NewApplication(runtimeConfiguration, "", bluecollarharness.New)
 	application.protocolIdentityExpected = protocolidentity.Identity{
 		ProtocolVersion:       protocolVersion,
@@ -507,7 +441,6 @@ func TestApplicationChecksProtocolIdentityOnceAndStoresResult(t *testing.T) {
 	}
 	application.protocolIdentityChecker = protocolidentity.NewChecker(protocolidentity.Configuration{
 		CapabilityEndpoint: server.URL,
-		LLMDBridgeEndpoint: server.URL,
 		HTTPClient:         server.Client(),
 	})
 
@@ -517,8 +450,8 @@ func TestApplicationChecksProtocolIdentityOnceAndStoresResult(t *testing.T) {
 	if errorValue := application.checkProtocolIdentity(); errorValue != nil {
 		t.Fatalf("expected repeated protocol identity check to reuse result: %v", errorValue)
 	}
-	if requestCount != 3 {
-		t.Fatalf("expected one companion-status seed, one capabilityd, and one LLMD request, got %d", requestCount)
+	if requestCount != 2 {
+		t.Fatalf("expected one companion-status seed and one capabilityd request, got %d", requestCount)
 	}
 	if !application.protocolIdentityStatus.Passed {
 		t.Fatalf("expected stored protocol identity result to pass: %+v", application.protocolIdentityStatus)
@@ -809,44 +742,6 @@ func TestResolveTaskTierLanguageModelProvidersKeepsBareLowWhenMediumMatchesLow(t
 	}
 }
 
-func TestResolveTaskTierLanguageModelProvidersUsesLLMDWhenSelected(t *testing.T) {
-	authKeyPath := filepath.Join(t.TempDir(), "llmd.key")
-	if errorValue := os.WriteFile(authKeyPath, []byte("installation-key"), 0o600); errorValue != nil {
-		t.Fatalf("expected auth key fixture: %v", errorValue)
-	}
-	runtimeConfiguration := config.RuntimeConfiguration{}
-	runtimeConfiguration.LanguageModel.DefaultProvider = "llmd"
-	runtimeConfiguration.LanguageModel.LLMD.AuthKeyPath = authKeyPath
-	providers := resolveTaskTierLanguageModelProviders(runtimeConfiguration, slog.New(slog.DiscardHandler))
-
-	lowProvider, isFallbackProvider := providers.Low.(llm.FallbackLanguageModelProvider)
-	if !isFallbackProvider {
-		t.Fatalf("expected low tier fallback provider, got %T", providers.Low)
-	}
-	if _, isLLMDClient := unwrapModelTier(lowProvider.PrimaryProvider).(llm.LLMDClient); !isLLMDClient {
-		t.Fatalf("expected llmd low tier primary provider, got %T", lowProvider.PrimaryProvider)
-	}
-}
-
-func TestResolveCappedTaskTierLanguageModelProvidersUsesLLMDWhenSelected(t *testing.T) {
-	authKeyPath := filepath.Join(t.TempDir(), "llmd.key")
-	if errorValue := os.WriteFile(authKeyPath, []byte("installation-key"), 0o600); errorValue != nil {
-		t.Fatalf("expected auth key fixture: %v", errorValue)
-	}
-	runtimeConfiguration := configuredModelTierRuntime("low")
-	runtimeConfiguration.LanguageModel.DefaultProvider = "llmd"
-	runtimeConfiguration.LanguageModel.LLMD.AuthKeyPath = authKeyPath
-	providers := resolveTaskTierLanguageModelProviders(runtimeConfiguration, slog.New(slog.DiscardHandler))
-
-	lowProvider, isFallbackProvider := providers.Low.(llm.FallbackLanguageModelProvider)
-	if !isFallbackProvider {
-		t.Fatalf("expected capped low tier fallback provider, got %T", providers.Low)
-	}
-	if _, isLLMDClient := unwrapModelTier(lowProvider.PrimaryProvider).(llm.LLMDClient); !isLLMDClient {
-		t.Fatalf("expected capped llmd low tier primary provider, got %T", lowProvider.PrimaryProvider)
-	}
-}
-
 func TestCapabilityEffectWhenConditionSurvivesConfigLineage(t *testing.T) {
 	configuredContract := config.CapabilityToolResultContract{}
 	document := `{
@@ -875,7 +770,6 @@ func TestApplicationServesHealthWhenProtocolIdentityDisagrees(t *testing.T) {
 	runtimeConfiguration := config.RuntimeConfiguration{}
 	runtimeConfiguration.Logging.DirectoryPath = t.TempDir()
 	runtimeConfiguration.Capabilities.Endpoint = server.URL
-	runtimeConfiguration.LanguageModel.LLMD.Endpoint = server.URL
 	application := NewApplication(runtimeConfiguration, "", bluecollarharness.New)
 	application.httpServer.Addr = "127.0.0.1:0"
 	application.protocolIdentityExpected = protocolidentity.Identity{
@@ -884,7 +778,6 @@ func TestApplicationServesHealthWhenProtocolIdentityDisagrees(t *testing.T) {
 	}
 	application.protocolIdentityChecker = protocolidentity.NewChecker(protocolidentity.Configuration{
 		CapabilityEndpoint: server.URL,
-		LLMDBridgeEndpoint: server.URL,
 		HTTPClient:         server.Client(),
 	})
 

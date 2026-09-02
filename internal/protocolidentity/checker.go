@@ -30,7 +30,6 @@ type Result struct {
 	Passed         bool           `json:"passed"`
 	Expected       Identity       `json:"expected"`
 	Capabilityd    EndpointStatus `json:"capabilityd"`
-	LLMD           EndpointStatus `json:"llmd"`
 	FailureReasons []string       `json:"failureReasons,omitempty"`
 	CheckedAt      time.Time      `json:"checkedAt"`
 }
@@ -41,24 +40,15 @@ type HTTPDoer interface {
 
 type Configuration struct {
 	CapabilityEndpoint   string
-	LLMDBridgeEndpoint   string
 	Timeout              time.Duration
 	HTTPClient           HTTPDoer
 	CapabilityHTTPClient HTTPDoer
-	LLMDHTTPClient       HTTPDoer
 }
 
 type Checker struct {
 	capabilityEndpoint   string
-	llmdEndpoint         string
 	timeout              time.Duration
 	capabilityHTTPClient HTTPDoer
-	llmdHTTPClient       HTTPDoer
-}
-
-type identityResponse struct {
-	Identity
-	Status string `json:"status,omitempty"`
 }
 
 func NewChecker(configuration Configuration) Checker {
@@ -74,16 +64,10 @@ func NewChecker(configuration Configuration) Checker {
 	if capabilityHTTPClient == nil {
 		capabilityHTTPClient = defaultHTTPClient
 	}
-	llmdHTTPClient := configuration.LLMDHTTPClient
-	if llmdHTTPClient == nil {
-		llmdHTTPClient = defaultHTTPClient
-	}
 	return Checker{
 		capabilityEndpoint:   strings.TrimRight(strings.TrimSpace(configuration.CapabilityEndpoint), "/"),
-		llmdEndpoint:         strings.TrimRight(strings.TrimSpace(configuration.LLMDBridgeEndpoint), "/"),
 		timeout:              timeout,
 		capabilityHTTPClient: capabilityHTTPClient,
-		llmdHTTPClient:       llmdHTTPClient,
 	}
 }
 
@@ -108,39 +92,26 @@ func (checker Checker) Check(ctx context.Context, expected Identity) Result {
 	if errorValue := ValidateIdentity(expected); errorValue != nil {
 		result.FailureReasons = append(result.FailureReasons, "expected identity is invalid: "+errorValue.Error())
 		result.Capabilityd = unavailableStatus(errorValue)
-		result.LLMD = unavailableStatus(errorValue)
 		return result
 	}
 	requestContext, cancel := context.WithTimeout(ctx, checker.timeout)
 	defer cancel()
-	result.Capabilityd = checker.checkOptionalEndpoint(requestContext, checker.capabilityEndpoint, "/v1/capabilities", expected, "", checker.capabilityHTTPClient)
-	result.LLMD = checker.checkDegradableEndpoint(requestContext, checker.llmdEndpoint, "/health", expected, "ok", checker.llmdHTTPClient)
+	result.Capabilityd = checker.checkOptionalEndpoint(requestContext, checker.capabilityEndpoint, "/v1/capabilities", expected, checker.capabilityHTTPClient)
 	result.FailureReasons = append(result.FailureReasons, endpointFailureReason("capabilityd", result.Capabilityd))
-	result.FailureReasons = append(result.FailureReasons, endpointFailureReason("llmd", result.LLMD))
 	result.FailureReasons = compactFailureReasons(result.FailureReasons)
-	result.Passed = result.Capabilityd.Passed && result.LLMD.Passed
+	result.Passed = result.Capabilityd.Passed
 	return result
 }
 
-// checkOptionalEndpoint skips a process this deployment does not run. Standalone
-// Blueclaw has no capability service, and an appliance without llmd has no llmd.
-func (checker Checker) checkOptionalEndpoint(ctx context.Context, endpoint string, path string, expected Identity, requiredStatus string, httpClient HTTPDoer) EndpointStatus {
+func (checker Checker) checkOptionalEndpoint(ctx context.Context, endpoint string, path string, expected Identity, httpClient HTTPDoer) EndpointStatus {
 	if strings.TrimSpace(endpoint) == "" {
 		return EndpointStatus{Status: "not_configured", Passed: true}
 	}
-	return checker.checkEndpoint(ctx, endpoint, path, expected, requiredStatus, httpClient)
+	return checker.checkEndpoint(ctx, endpoint, path, expected, httpClient)
 }
 
-func (checker Checker) checkDegradableEndpoint(ctx context.Context, endpoint string, path string, expected Identity, requiredStatus string, httpClient HTTPDoer) EndpointStatus {
-	status := checker.checkOptionalEndpoint(ctx, endpoint, path, expected, requiredStatus, httpClient)
-	if status.Status == "unavailable" {
-		status.Passed = true
-	}
-	return status
-}
-
-func (checker Checker) checkEndpoint(ctx context.Context, endpoint string, path string, expected Identity, requiredStatus string, httpClient HTTPDoer) EndpointStatus {
-	responseDocument := identityResponse{}
+func (checker Checker) checkEndpoint(ctx context.Context, endpoint string, path string, expected Identity, httpClient HTTPDoer) EndpointStatus {
+	responseDocument := Identity{}
 	if errorValue := getJSON(ctx, endpoint, path, &responseDocument, httpClient); errorValue != nil {
 		return unavailableStatus(errorValue)
 	}
@@ -148,18 +119,13 @@ func (checker Checker) checkEndpoint(ctx context.Context, endpoint string, path 
 		ProtocolVersion:       responseDocument.ProtocolVersion,
 		AggregateProtocolHash: responseDocument.AggregateProtocolHash,
 	}
-	if responseDocument.Identity != expected {
+	if responseDocument != expected {
 		status.Status = "drift"
 		status.Error = fmt.Sprintf(
 			"expected protocolVersion %q and aggregateProtocolHash %q, received protocolVersion %q and aggregateProtocolHash %q",
 			expected.ProtocolVersion, expected.AggregateProtocolHash,
 			responseDocument.ProtocolVersion, responseDocument.AggregateProtocolHash,
 		)
-		return status
-	}
-	if requiredStatus != "" && responseDocument.Status != requiredStatus {
-		status.Status = "unhealthy"
-		status.Error = fmt.Sprintf("expected status %q", requiredStatus)
 		return status
 	}
 	status.Status = "ok"

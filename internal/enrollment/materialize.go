@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 )
@@ -47,11 +46,6 @@ func runtimeConfigurationFor(home Home, enrollment Enrollment) config.RuntimeCon
 				AgentCommandPath: enrollment.Harness.AgentCommandPath,
 			},
 		},
-	}
-	if socketPath := strings.TrimSpace(enrollment.LanguageModel.LLMDUnixSocketPath); socketPath != "" {
-		runtimeConfiguration.LanguageModel.DefaultProvider = "llmd"
-		runtimeConfiguration.LanguageModel.LLMD.UnixSocketPath = socketPath
-		runtimeConfiguration.LanguageModel.LLMD.ExecutionMode = "auto"
 	}
 	return runtimeConfiguration
 }
