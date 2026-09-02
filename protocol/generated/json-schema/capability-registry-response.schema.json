@@ -130,6 +130,14 @@
       "items": {
         "additionalProperties": false,
         "properties": {
+          "answeredBy": {
+            "enum": [
+              "record",
+              "company",
+              "local"
+            ],
+            "type": "string"
+          },
           "approvalScope": {
             "type": "string"
           },
@@ -400,6 +408,7 @@
           "version",
           "privacyClass",
           "estimatedLatency",
+          "answeredBy",
           "requiresUserPresence",
           "worksOffline",
           "inputSchema",
@@ -420,6 +429,14 @@
       "items": {
         "additionalProperties": false,
         "properties": {
+          "answeredBy": {
+            "enum": [
+              "record",
+              "company",
+              "local"
+            ],
+            "type": "string"
+          },
           "approvalScope": {
             "type": "string"
           },
@@ -690,6 +707,7 @@
           "version",
           "privacyClass",
           "estimatedLatency",
+          "answeredBy",
           "requiresUserPresence",
           "worksOffline",
           "inputSchema",
@@ -713,6 +731,14 @@
       "items": {
         "additionalProperties": false,
         "properties": {
+          "answeredBy": {
+            "enum": [
+              "record",
+              "company",
+              "local"
+            ],
+            "type": "string"
+          },
           "approvalScope": {
             "type": "string"
           },
@@ -983,6 +1009,7 @@
           "version",
           "privacyClass",
           "estimatedLatency",
+          "answeredBy",
           "requiresUserPresence",
           "worksOffline",
           "inputSchema",

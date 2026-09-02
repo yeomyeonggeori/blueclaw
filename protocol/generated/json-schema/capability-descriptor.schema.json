@@ -122,6 +122,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
+    "answeredBy": {
+      "enum": [
+        "record",
+        "company",
+        "local"
+      ],
+      "type": "string"
+    },
     "approvalScope": {
       "type": "string"
     },
@@ -392,6 +400,7 @@
     "version",
     "privacyClass",
     "estimatedLatency",
+    "answeredBy",
     "requiresUserPresence",
     "worksOffline",
     "inputSchema",

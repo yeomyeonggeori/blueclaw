@@ -2,6 +2,7 @@
   "protocolVersion": "0.4.0",
   "tools": [
     {
+      "answeredBy": "record",
       "availability": {
         "state": "ok"
       },
@@ -353,6 +354,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "record",
       "availability": {
         "state": "ok"
       },
@@ -771,6 +773,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "record",
       "availability": {
         "state": "ok"
       },
@@ -1131,6 +1134,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "record",
       "availability": {
         "state": "ok"
       },
@@ -1236,6 +1240,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "record",
       "availability": {
         "state": "ok"
       },
@@ -1364,6 +1369,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "record",
       "availability": {
         "state": "ok"
       },
@@ -1647,6 +1653,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "record",
       "availability": {
         "state": "ok"
       },
@@ -1877,6 +1884,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "record",
       "availability": {
         "state": "ok"
       },
@@ -2165,6 +2173,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "record",
       "availability": {
         "state": "ok"
       },
@@ -2270,6 +2279,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "record",
       "availability": {
         "state": "ok"
       },
@@ -2566,6 +2576,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "record",
       "availability": {
         "state": "ok"
       },
@@ -2731,6 +2742,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "record",
       "availability": {
         "state": "ok"
       },
@@ -2949,6 +2961,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "record",
       "availability": {
         "state": "ok"
       },
@@ -3177,6 +3190,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "record",
       "availability": {
         "state": "ok"
       },
@@ -3358,6 +3372,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "record",
       "availability": {
         "state": "ok"
       },
@@ -3557,6 +3572,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "record",
       "availability": {
         "state": "ok"
       },
@@ -3822,6 +3838,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "record",
       "availability": {
         "state": "ok"
       },
@@ -3982,6 +3999,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "record",
       "availability": {
         "state": "ok"
       },
@@ -4157,6 +4175,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "record",
       "availability": {
         "state": "ok"
       },
@@ -4276,6 +4295,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "company",
       "availability": {
         "state": "ok"
       },
@@ -4434,6 +4454,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "company",
       "availability": {
         "state": "ok"
       },
@@ -4768,6 +4789,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "company",
       "availability": {
         "state": "ok"
       },
@@ -5045,6 +5067,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "company",
       "availability": {
         "state": "ok"
       },
@@ -5218,6 +5241,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "company",
       "availability": {
         "state": "ok"
       },
@@ -5408,6 +5432,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "company",
       "availability": {
         "state": "ok"
       },
@@ -5578,6 +5603,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "company",
       "availability": {
         "state": "ok"
       },
@@ -5760,6 +5786,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "company",
       "availability": {
         "state": "ok"
       },
@@ -5973,6 +6000,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "company",
       "availability": {
         "state": "ok"
       },
@@ -6128,6 +6156,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "company",
       "availability": {
         "state": "ok"
       },
@@ -6260,6 +6289,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "company",
       "availability": {
         "state": "ok"
       },
@@ -6410,6 +6440,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "company",
       "availability": {
         "state": "ok"
       },
@@ -6580,6 +6611,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "local",
       "availability": {
         "state": "ok"
       },
@@ -6721,6 +6753,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "local",
       "availability": {
         "state": "ok"
       },
@@ -6837,6 +6870,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "local",
       "availability": {
         "state": "ok"
       },
@@ -6981,6 +7015,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "local",
       "availability": {
         "state": "ok"
       },
@@ -7118,6 +7153,7 @@
       "worksOffline": false
     },
     {
+      "answeredBy": "company",
       "availability": {
         "state": "ok"
       },
