@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluememo"
 	"io"
 	"net/http"
 	"slices"
@@ -22,7 +23,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/launchfailure"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
-	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/reply"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
@@ -1975,12 +1975,12 @@ func TestConnectorRuntimeStartsDirectProgressBeforeInitialHistoryFetch(t *testin
 func TestConnectorRuntimeInjectsRequesterPinnedMemoryIntoLanguageModel(t *testing.T) {
 	languageModel := &recordingLanguageModel{reply: "기억했습니다"}
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
-	memoryRepository := memory.NewInMemoryRepository()
-	if errorValue := memoryRepository.SaveProfile(context.Background(), memory.Profile{PersonID: "person-1", IdentityLines: []string{"사용자는 fact 저장소 메모리 설계를 선택했다."}}); errorValue != nil {
+	memoryRepository := bluememo.NewInMemoryRepository()
+	if errorValue := memoryRepository.SaveProfile(context.Background(), bluememo.Profile{PersonID: "person-1", IdentityLines: []string{"사용자는 fact 저장소 메모리 설계를 선택했다."}}); errorValue != nil {
 		t.Fatalf("expected memory profile setup to succeed: %v", errorValue)
 	}
 	toolCatalogBuilder := agentruntime.NewToolCatalogBuilder()
-	toolCatalogBuilder.UseMemoryStore(&memory.Store{Facts: memoryRepository, Profiles: memoryRepository, Jobs: memoryRepository}, nil)
+	toolCatalogBuilder.UseMemoryStore(&bluememo.Store{Facts: memoryRepository, Profiles: memoryRepository, Jobs: memoryRepository}, nil, nil)
 	connectorRuntime.UseTaskLauncher(connectorRuntime.routedTaskLauncherForTest(toolCatalogBuilder))
 
 	_, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, testInboundEvent("message-1"))
@@ -2007,12 +2007,12 @@ func TestConnectorRuntimeInjectsVisibleContextBeforeMemory(t *testing.T) {
 		HasMoreBefore: true,
 		HistoryCursor: "cursor-1",
 	}
-	memoryRepository := memory.NewInMemoryRepository()
-	if errorValue := memoryRepository.SaveProfile(context.Background(), memory.Profile{PersonID: "person-1", IdentityLines: []string{"사용자는 간결한 설계를 선호한다."}}); errorValue != nil {
+	memoryRepository := bluememo.NewInMemoryRepository()
+	if errorValue := memoryRepository.SaveProfile(context.Background(), bluememo.Profile{PersonID: "person-1", IdentityLines: []string{"사용자는 간결한 설계를 선호한다."}}); errorValue != nil {
 		t.Fatalf("expected memory profile setup to succeed: %v", errorValue)
 	}
 	toolCatalogBuilder := agentruntime.NewToolCatalogBuilder()
-	toolCatalogBuilder.UseMemoryStore(&memory.Store{Facts: memoryRepository, Profiles: memoryRepository, Jobs: memoryRepository}, nil)
+	toolCatalogBuilder.UseMemoryStore(&bluememo.Store{Facts: memoryRepository, Profiles: memoryRepository, Jobs: memoryRepository}, nil, nil)
 	connectorRuntime.UseTaskLauncher(connectorRuntime.routedTaskLauncherForTest(toolCatalogBuilder))
 
 	_, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, event)
@@ -3438,7 +3438,7 @@ func TestConnectorRuntimeInjectsRecalledFactsAtLaunchAndNeverWritesMemoryItself(
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
 	memoryRepository := seedConnectorMemory(t, "person-1", "사용자의 이름은 민수다.")
 	toolCatalogBuilder := agentruntime.NewToolCatalogBuilder()
-	toolCatalogBuilder.UseMemoryStore(&memory.Store{Facts: memoryRepository, Profiles: memoryRepository, Jobs: memoryRepository}, nil)
+	toolCatalogBuilder.UseMemoryStore(&bluememo.Store{Facts: memoryRepository, Profiles: memoryRepository, Jobs: memoryRepository}, nil, nil)
 	connectorRuntime.UseTaskLauncher(connectorRuntime.routedTaskLauncherForTest(toolCatalogBuilder))
 
 	channelEvent := testInboundEvent("message-1")
@@ -3463,8 +3463,8 @@ func TestConnectorRuntimeInjectsRecalledFactsAtLaunchAndNeverWritesMemoryItself(
 
 func TestConnectorRuntimeDoesNotShareUserMemoryWithOtherPerson(t *testing.T) {
 	memoryRepository := seedConnectorMemory(t, "person-1", "사용자의 이름은 민수다.")
-	hits, errorValue := memoryRepository.SearchFacts(context.Background(), memory.FactSearchQuery{
-		Reader:        memory.Reader{PersonID: "person-2", SecurityLevelRank: 100, GrantedClasses: []string{"internal"}},
+	hits, errorValue := memoryRepository.SearchFacts(context.Background(), bluememo.FactSearchQuery{
+		Reader:        bluememo.NewReader("person-2", nil, nil, 100, []string{"internal"}),
 		Text:          "이름",
 		ReferenceTime: time.Now().UTC(),
 	})
@@ -3476,13 +3476,13 @@ func TestConnectorRuntimeDoesNotShareUserMemoryWithOtherPerson(t *testing.T) {
 	}
 }
 
-func seedConnectorMemory(t *testing.T, personID string, content string) *memory.InMemoryRepository {
+func seedConnectorMemory(t *testing.T, personID string, content string) *bluememo.InMemoryRepository {
 	t.Helper()
-	memoryRepository := memory.NewInMemoryRepository()
+	memoryRepository := bluememo.NewInMemoryRepository()
 	now := time.Now().UTC()
-	episode := memory.Episode{EpisodeID: "episode-seed", SourceKind: memory.EpisodeSourceKindImport, SourceID: "seed", RequesterPersonID: personID, Content: "seed", OccurredAt: now}
-	fact := memory.Fact{FactID: "fact-seed", EpisodeID: "episode-seed", ScopeType: memory.ScopeTypePrivate, ScopeID: personID, SubjectPersonID: personID, Kind: memory.FactKindIdentity, Content: content, ValidFrom: now}
-	if errorValue := memoryRepository.SaveEpisode(context.Background(), memory.EpisodeWrite{Episode: episode, Facts: []memory.FactWrite{{Fact: fact}}}); errorValue != nil {
+	episode := bluememo.Episode{EpisodeID: "episode-seed", SourceKind: bluememo.EpisodeSourceKindImport, SourceID: "seed", RequesterPersonID: personID, Content: "seed", OccurredAt: now}
+	fact := bluememo.Fact{FactID: "fact-seed", EpisodeID: "episode-seed", ScopeType: bluememo.ScopeTypePrivate, OwnerPersonID: personID, SubjectPersonID: personID, Kind: bluememo.FactKindIdentity, Content: content, ValidFrom: now}
+	if errorValue := memoryRepository.SaveEpisode(context.Background(), bluememo.EpisodeWrite{Episode: episode, Facts: []bluememo.FactWrite{{Fact: fact}}}); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	return memoryRepository

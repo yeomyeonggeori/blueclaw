@@ -7,8 +7,8 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluememo"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -94,7 +94,7 @@ type TaskLaunchRequest struct {
 	HistoryProvider            HistoryProvider
 	AttachmentMaterialResolver AttachmentMaterialResolver
 	PersonAccess               policy.PersonAccess
-	MemoryLabel                memory.SecurityLabel
+	MemoryLabel                bluememo.SecurityLabel
 	AccessibleConversationIDs  []string
 	CheckpointSender           agentcontract.AgentCheckpointSender
 	ArtifactManifest           []agentcontract.ArtifactManifestEntry
@@ -427,49 +427,22 @@ func recallLaunchMemory(ctx context.Context, execution *taskLaunchExecution) lau
 	request := execution.Request
 	recallContext, cancelRecall := context.WithTimeout(ctx, launchGraphMemorySearchTimeout)
 	defer cancelRecall()
-	recall, errorValue := execution.Launcher.toolCatalogBuilder.memoryStore.Recall(recallContext, memory.RecallRequest{
-		Reader:   memory.ReaderFromPersonAccess(request.PersonAccess),
+	recall, errorValue := execution.Launcher.toolCatalogBuilder.memoryStore.Recall(recallContext, bluememo.RecallRequest{
+		Reader:   execution.Launcher.toolCatalogBuilder.memoryReader(request.PersonAccess),
 		PersonID: request.RequesterPersonID,
 		Query:    request.Prompt,
-		Limit:    memory.DefaultSearchResultLimit,
+		Limit:    bluememo.DefaultSearchResultLimit,
 	})
 	if errorValue != nil {
 		return launchMemoryResult{Error: errorValue.Error()}
 	}
 	return launchMemoryResult{
-		Facts:            launchMemoryFactsFromRecall(request.RequesterPersonID, recall),
+		Facts:            memory.LoopMemoryFacts(recall, request.RequesterPersonID),
 		ProfileLineCount: len(recall.ProfileLines()),
 		RecalledCount:    len(recall.Facts),
 		Mode:             recall.Mode,
 		DegradedReason:   recall.DegradedReason,
 	}
-}
-
-func launchMemoryFactsFromRecall(requesterPersonID string, recall memory.Recall) []memory.MemoryFact {
-	facts := make([]memory.MemoryFact, 0, len(recall.ProfileLines())+len(recall.Facts))
-	for index, line := range recall.ProfileLines() {
-		facts = append(facts, memory.MemoryFact{
-			FactID:     "profile:" + requesterPersonID + ":" + strconv.Itoa(index),
-			ScopeType:  memory.ScopeTypePrivate,
-			Content:    line,
-			SourceKind: "profile",
-			ValidAt:    recall.Profile.BuiltAt,
-		})
-	}
-	for _, scoredFact := range recall.Facts {
-		facts = append(facts, memory.MemoryFact{
-			FactID:            scoredFact.Fact.FactID,
-			ScopeType:         scoredFact.Fact.ScopeType,
-			Content:           scoredFact.Fact.Content,
-			Score:             scoredFact.Score,
-			SourceEpisodeID:   scoredFact.Fact.EpisodeID,
-			SourceKind:        scoredFact.Fact.Kind,
-			ValidAt:           scoredFact.Fact.ValidFrom,
-			SecurityLevelRank: scoredFact.Fact.SecurityLevelRank,
-			RequiredClasses:   append([]string{}, scoredFact.Fact.RequiredClasses...),
-		})
-	}
-	return facts
 }
 
 func (taskLauncher *TaskLauncher) appendStoreMemoryLaunchEvents(taskRunID string, request TaskLaunchRequest, memoryResult launchMemoryResult) {
@@ -729,7 +702,7 @@ func requesterPersonAccess(requesterPersonID string, personAccess policy.PersonA
 // loop carries its own type so it never depends on the service that stores them;
 // this single call is where the two meet.
 func loopMemoryScope(scopeType string) string {
-	if scopeType == memory.ScopeTypePrivate {
+	if scopeType == bluememo.ScopeTypePrivate {
 		return agentcontract.MemoryScopeUser
 	}
 	return scopeType

@@ -31,7 +31,10 @@
       "displayName": "C-Level",
       "mattermostChannelID": "",
       "isMattermostManaged": true,
-      "workspaceDirectoryPath": "/workspace/circles/c-level"
+      "workspaceDirectoryPath": "/workspace/circles/c-level",
+      "memberCircles": [
+        "representative"
+      ]
     },
     {
       "circleID": "representative",

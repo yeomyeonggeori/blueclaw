@@ -14,7 +14,7 @@ func approvalContinuationLauncher(t *testing.T, taskRunService *task.TaskRunServ
 	t.Helper()
 	harness := harnesstest.New(taskRunService)
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseMemoryStore(seededMemoryStore(t, "person-1", "The user leads the quarterly launch project."), nil)
+	toolCatalogBuilder.UseMemoryStore(seededMemoryStore(t, "person-1", "The user leads the quarterly launch project."), nil, nil)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{"default": {"memory_search"}}, nil)
 	return NewTaskLauncher(harness, taskRunService, toolCatalogBuilder), harness
 }

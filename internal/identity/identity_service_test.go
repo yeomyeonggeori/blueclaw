@@ -107,3 +107,12 @@ func hasIdentityTestString(values []string, expectedValue string) bool {
 	}
 	return false
 }
+
+func TestIdentityServiceExposesContainedCircles(t *testing.T) {
+	identityService := NewIdentityService(policy.PolicyProjection{ContainedCirclesByID: map[string][]string{"engineering": {"platform"}}})
+	contained := identityService.ContainedCircles()
+	contained["engineering"] = append(contained["engineering"], "tampered")
+	if len(identityService.ContainedCircles()["engineering"]) != 1 {
+		t.Fatal("expected the identity service to hand out a copy of the containment map")
+	}
+}

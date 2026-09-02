@@ -163,3 +163,17 @@ func TestCircleAccessMigrationStoresCirclePolicy(t *testing.T) {
 		}
 	}
 }
+
+func TestMemoryStoreMigrationIsTheOneBluememoOwns(t *testing.T) {
+	ours, errorValue := os.ReadFile(filepath.Join("../../migrations", "030_memory_store.sql"))
+	if errorValue != nil {
+		t.Fatalf("expected the memory store migration to load: %v", errorValue)
+	}
+	theirs, errorValue := os.ReadFile(filepath.Join("../../.dependency/bluememo/migrations", "001_memory_store.sql"))
+	if errorValue != nil {
+		t.Fatalf("expected bluememo's migration to load: %v", errorValue)
+	}
+	if string(ours) != string(theirs) {
+		t.Fatal("migrations/030_memory_store.sql drifted from .dependency/bluememo/migrations/001_memory_store.sql; copy the bluememo file over it, never edit it here")
+	}
+}

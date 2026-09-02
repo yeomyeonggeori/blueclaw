@@ -3,8 +3,8 @@ package agentruntime
 import (
 	"context"
 	"encoding/json"
-	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluememo"
 	"strings"
 	"testing"
 )
@@ -87,7 +87,7 @@ func TestDeadCompatibilityToolsAreNotRegistered(t *testing.T) {
 
 func TestLocalToolProviderPreservesMemorySearchContract(t *testing.T) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseMemoryStore(&memory.Store{Facts: memory.NewInMemoryRepository()}, nil)
+	toolCatalogBuilder.UseMemoryStore(&bluememo.Store{Facts: bluememo.NewInMemoryRepository()}, nil, nil)
 	handlerToolSet := toolcontract.NewToolSet(nil)
 	registerStoreMemoryTools(toolCatalogBuilder, handlerToolSet, ToolCatalogRequest{})
 
@@ -117,7 +117,7 @@ func TestLocalToolProviderPreservesMemorySearchContract(t *testing.T) {
 
 func TestLocalToolProviderPreservesMemoryRememberContract(t *testing.T) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseMemoryStore(&memory.Store{Facts: memory.NewInMemoryRepository()}, nil)
+	toolCatalogBuilder.UseMemoryStore(&bluememo.Store{Facts: bluememo.NewInMemoryRepository()}, nil, nil)
 	handlerToolSet := toolcontract.NewToolSet(nil)
 	registerStoreMemoryTools(toolCatalogBuilder, handlerToolSet, ToolCatalogRequest{})
 

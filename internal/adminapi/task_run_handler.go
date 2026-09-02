@@ -108,7 +108,7 @@ func (taskRunHandler TaskRunHandler) HandleRunTask(responseWriter http.ResponseW
 		SkipSkillSelection:         precomputedTurnDecision != nil,
 		UseEmptyToolCatalog:        precomputedTurnDecision != nil,
 		PersonAccess:               personAccess,
-		MemoryLabel:                memory.SecurityLabel{SecurityLevelRank: personAccess.SecurityLevelRank, RequiredClasses: append([]string{}, personAccess.GrantedClasses...)},
+		MemoryLabel:                memory.LabelForAccess(personAccess),
 		AccessibleConversationIDs:  []string{conversationID},
 	})
 	if errorValue != nil {

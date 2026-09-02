@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluememo"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -3418,12 +3419,12 @@ func detachedConnectorContext(ctx context.Context) context.Context {
 	return context.WithoutCancel(ctx)
 }
 
-func (connectorRuntime *ConnectorRuntime) memoryLabel(personAccess policy.PersonAccess, event PlatformInboundEvent) memory.SecurityLabel {
+func (connectorRuntime *ConnectorRuntime) memoryLabel(personAccess policy.PersonAccess, event PlatformInboundEvent) bluememo.SecurityLabel {
 	channelPolicy, isFound := connectorRuntime.identityService.ResolveConversationPolicy(event.Platform, event.ConversationID)
 	if isPrivateConversationID(event.ConversationID) {
 		isFound = false
 	}
-	return agentruntime.MemoryLabelForConversation(personAccess, channelPolicy, isFound)
+	return memory.LabelForConversation(personAccess, channelPolicy, isFound)
 }
 
 func isPrivateConversationID(conversationID string) bool {

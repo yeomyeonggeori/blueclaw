@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS memory_episode (
   episode_id text PRIMARY KEY,
   source_kind text NOT NULL CHECK (source_kind IN ('task_run', 'explicit', 'import')),
   source_id text NOT NULL,
-  requester_person_id text NOT NULL REFERENCES person (person_id),
+  requester_person_id text NOT NULL,
   conversation_id text NOT NULL DEFAULT '',
   content text NOT NULL,
   occurred_at timestamptz NOT NULL,
@@ -16,10 +16,10 @@ CREATE TABLE IF NOT EXISTS memory_fact (
   fact_id text PRIMARY KEY,
   episode_id text NOT NULL REFERENCES memory_episode (episode_id),
   scope_type text NOT NULL CHECK (scope_type IN ('private', 'circle', 'workspace')),
-  scope_id text NOT NULL DEFAULT '',
-  subject_person_id text REFERENCES person (person_id),
+  owner_person_id text NOT NULL DEFAULT '',
+  subject_person_id text NOT NULL DEFAULT '',
   kind text NOT NULL CHECK (kind IN ('identity', 'preference', 'fact', 'episode', 'temporary')),
-  content text NOT NULL CHECK (char_length(content) BETWEEN 1 AND 300),
+  content text NOT NULL CHECK (char_length(content) BETWEEN 1 AND 240),
   embedding_model text NOT NULL DEFAULT '',
   security_level_rank smallint NOT NULL DEFAULT 0,
   required_classes text[] NOT NULL DEFAULT '{}',
@@ -30,20 +30,29 @@ CREATE TABLE IF NOT EXISTS memory_fact (
   last_recalled_at timestamptz,
   forgotten_at timestamptz,
   forget_reason text,
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CHECK ((scope_type = 'private') = (owner_person_id <> ''))
 );
 
+CREATE TABLE IF NOT EXISTS memory_fact_circle (
+  fact_id text NOT NULL REFERENCES memory_fact (fact_id) ON DELETE CASCADE,
+  circle_id text NOT NULL,
+  PRIMARY KEY (fact_id, circle_id)
+);
+
+CREATE INDEX IF NOT EXISTS memory_fact_circle_circle_idx
+  ON memory_fact_circle (circle_id);
 CREATE INDEX IF NOT EXISTS memory_fact_content_trgm_idx
   ON memory_fact USING gin (content gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS memory_fact_live_idx
-  ON memory_fact (scope_type, scope_id)
+  ON memory_fact (scope_type, owner_person_id)
   WHERE superseded_by IS NULL AND forgotten_at IS NULL;
 CREATE INDEX IF NOT EXISTS memory_fact_subject_idx
   ON memory_fact (subject_person_id)
-  WHERE subject_person_id IS NOT NULL;
+  WHERE subject_person_id <> '';
 
 CREATE TABLE IF NOT EXISTS memory_profile (
-  person_id text PRIMARY KEY REFERENCES person (person_id),
+  person_id text PRIMARY KEY,
   identity_lines text[] NOT NULL DEFAULT '{}',
   current_lines text[] NOT NULL DEFAULT '{}',
   built_from_fact_count integer NOT NULL DEFAULT 0,

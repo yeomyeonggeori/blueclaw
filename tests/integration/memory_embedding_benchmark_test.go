@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"github.com/yeomyeonggeori/bluememo"
 	"math"
 	"os"
 	"sort"
@@ -11,7 +12,6 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
-	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 )
 
 type benchmarkCandidateModel struct {
@@ -111,7 +111,7 @@ func TestMemoryEmbeddingBenchmark(t *testing.T) {
 }
 
 func benchmarkEmbeddingModel(ctx context.Context, apiKey string, candidate benchmarkCandidateModel) (float64, float64, float64, error) {
-	client := llm.OpenAIEmbeddingClient{Endpoint: openRouterEmbeddingsURL, APIKey: apiKey, ModelName: candidate.name, Dimensions: memory.EmbeddingDimensionCount}
+	client := llm.OpenAIEmbeddingClient{Endpoint: openRouterEmbeddingsURL, APIKey: apiKey, ModelName: candidate.name, Dimensions: bluememo.EmbeddingDimensionCount}
 	factEmbeddings := make([][]float32, 0, len(benchmarkFacts))
 	for _, fact := range benchmarkFacts {
 		embedding, errorValue := client.GenerateEmbedding(ctx, fact)

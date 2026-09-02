@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluememo"
 	"io"
 	"net/http"
 	"os"
@@ -18,7 +19,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/launchfailure"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
-	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
@@ -33,12 +33,12 @@ func TestTaskLauncherCreatesAuditedAgentRun(t *testing.T) {
 	agentKernel := loop.NewAgentKernel(taskRunService, task.NewTaskStepService())
 	runtimeLanguageModel := staticRuntimeLanguageModel{content: runtimeFinishMessage("done")}
 	useRuntimeTestLanguageModel(agentKernel, runtimeFinishMessage("done"))
-	memoryRepository := memory.NewInMemoryRepository()
-	if errorValue := memoryRepository.SaveProfile(context.Background(), memory.Profile{PersonID: "person-1", IdentityLines: []string{"사용자는 발표자료 생성을 자주 요청한다."}}); errorValue != nil {
+	memoryRepository := bluememo.NewInMemoryRepository()
+	if errorValue := memoryRepository.SaveProfile(context.Background(), bluememo.Profile{PersonID: "person-1", IdentityLines: []string{"사용자는 발표자료 생성을 자주 요청한다."}}); errorValue != nil {
 		t.Fatalf("expected memory profile setup to succeed: %v", errorValue)
 	}
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseMemoryStore(&memory.Store{Facts: memoryRepository, Profiles: memoryRepository, Jobs: memoryRepository}, nil)
+	toolCatalogBuilder.UseMemoryStore(&bluememo.Store{Facts: memoryRepository, Profiles: memoryRepository, Jobs: memoryRepository}, nil, nil)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{
 		"default": {"conversation_history", "memory_search"},
 	}, nil)
@@ -351,7 +351,7 @@ func TestTaskLauncherAuditsRecallFailureAndRunsWithoutMemory(t *testing.T) {
 	taskRunService := task.NewTaskRunService(taskEventService)
 	harness := harnesstest.New(taskRunService)
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseMemoryStore(&memory.Store{Facts: failingFactRepository{errorValue: errors.New("database is away")}}, nil)
+	toolCatalogBuilder.UseMemoryStore(&bluememo.Store{Facts: failingFactRepository{errorValue: errors.New("database is away")}}, nil, nil)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{
 		"default": {"memory_search"},
 	}, nil)
@@ -958,7 +958,7 @@ func (provisioner *recordingRequesterWorkspaceProvisioner) ProvisionRequesterWor
 }
 
 type failingFactRepository struct {
-	memory.FactRepository
+	bluememo.FactRepository
 	errorValue error
 }
 
@@ -966,7 +966,7 @@ func (repository failingFactRepository) HasVectorSearch(context.Context) (bool, 
 	return false, repository.errorValue
 }
 
-func (repository failingFactRepository) SearchFacts(context.Context, memory.FactSearchQuery) ([]memory.RankedFact, error) {
+func (repository failingFactRepository) SearchFacts(context.Context, bluememo.FactSearchQuery) ([]bluememo.RankedFact, error) {
 	return nil, repository.errorValue
 }
 

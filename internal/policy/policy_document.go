@@ -47,11 +47,12 @@ func (company CompanyPolicy) IsEmpty() bool {
 }
 
 type CirclePolicy struct {
-	CircleID               string `json:"circleID"`
-	DisplayName            string `json:"displayName"`
-	MattermostChannelID    string `json:"mattermostChannelID,omitempty"`
-	IsMattermostManaged    bool   `json:"isMattermostManaged,omitempty"`
-	WorkspaceDirectoryPath string `json:"workspaceDirectoryPath,omitempty"`
+	CircleID               string   `json:"circleID"`
+	DisplayName            string   `json:"displayName"`
+	MattermostChannelID    string   `json:"mattermostChannelID,omitempty"`
+	IsMattermostManaged    bool     `json:"isMattermostManaged,omitempty"`
+	WorkspaceDirectoryPath string   `json:"workspaceDirectoryPath,omitempty"`
+	MemberCircles          []string `json:"memberCircles,omitempty"`
 }
 
 type ChannelPolicy struct {

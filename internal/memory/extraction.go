@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluememo"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 )
@@ -35,45 +37,46 @@ type TaskStepReader interface {
 
 type PersonAccessResolver interface {
 	ResolvePersonAccess(personID string) policy.PersonAccess
+	ContainedCircles() map[string][]string
 }
 
 type ExtractJobHandler struct {
-	Ingester Ingester
+	Ingester bluememo.Ingester
 	TaskRuns TaskRunReader
 	Steps    TaskStepReader
 	Access   PersonAccessResolver
 }
 
-func (handler ExtractJobHandler) Handle(ctx context.Context, job Job) error {
+func (handler ExtractJobHandler) Handle(ctx context.Context, job bluememo.Job) error {
 	if handler.TaskRuns == nil || handler.Access == nil {
 		return errors.New("memory extraction has no task run reader or access resolver")
 	}
 	taskRun, isFound := handler.TaskRuns.FindTaskRun(job.SubjectID)
 	if !isFound {
-		return TerminalJobError{Cause: fmt.Errorf("task run %s no longer exists", job.SubjectID)}
+		return bluememo.TerminalJobError{Cause: fmt.Errorf("task run %s no longer exists", job.SubjectID)}
 	}
 	if strings.TrimSpace(taskRun.RequesterPersonID) == "" {
-		return TerminalJobError{Cause: fmt.Errorf("task run %s has no requester", job.SubjectID)}
+		return bluememo.TerminalJobError{Cause: fmt.Errorf("task run %s has no requester", job.SubjectID)}
 	}
 	extractionContext, hasContext := findExtractionContext(handler.TaskRuns.ListTaskEvent(taskRun.TaskRunID))
 	personAccess := handler.Access.ResolvePersonAccess(taskRun.RequesterPersonID)
-	request := IngestRequest{
-		Episode: Episode{
-			EpisodeID:         taskstate.NewIdentifier(),
-			SourceKind:        EpisodeSourceKindTaskRun,
+	request := bluememo.IngestRequest{
+		Episode: bluememo.Episode{
+			EpisodeID:         bluememo.NewIdentifier(),
+			SourceKind:        bluememo.EpisodeSourceKindTaskRun,
 			SourceID:          taskRun.TaskRunID,
 			RequesterPersonID: taskRun.RequesterPersonID,
 			ConversationID:    taskRun.OriginConversationID,
-			Content:           RenderTaskTranscript(taskRun, handler.steps(taskRun.TaskRunID)),
-			OccurredAt:        firstNonZeroTime(taskRun.UpdatedAt, taskRun.CreatedAt, handler.Ingester.now()),
+			Content:           bluememo.RenderTranscript(TaskTranscript(taskRun, handler.steps(taskRun.TaskRunID))),
+			OccurredAt:        firstNonZeroTime(taskRun.UpdatedAt, taskRun.CreatedAt, time.Now().UTC()),
 		},
-		Reader:        ReaderFromPersonAccess(personAccess),
+		Reader:        ReaderForAccess(personAccess, handler.Access.ContainedCircles()),
 		RequesterName: extractionContext.RequesterName,
-		Label:         SecurityLabel{SecurityLevelRank: personAccess.SecurityLevelRank, RequiredClasses: personAccess.GrantedClasses},
+		Label:         LabelForAccess(personAccess),
 	}
 	if hasContext {
 		request.ActiveCircleID = extractionContext.ActiveCircleID
-		request.Label = SecurityLabel{SecurityLevelRank: extractionContext.SecurityLevelRank, RequiredClasses: extractionContext.RequiredClasses}
+		request.Label = bluememo.SecurityLabel{SecurityLevelRank: extractionContext.SecurityLevelRank, RequiredClasses: extractionContext.RequiredClasses}
 	}
 	result, errorValue := handler.Ingester.Ingest(ctx, request)
 	if errorValue != nil {
@@ -91,10 +94,10 @@ func (handler ExtractJobHandler) Handle(ctx context.Context, job Job) error {
 	return nil
 }
 
-func (handler ExtractJobHandler) recordFailure(taskRunID string, job Job, errorValue error) {
-	var terminalError TerminalJobError
+func (handler ExtractJobHandler) recordFailure(taskRunID string, job bluememo.Job, errorValue error) {
+	var terminalError bluememo.TerminalJobError
 	isTerminal := errors.As(errorValue, &terminalError)
-	if !isTerminal && job.Attempts < DefaultJobMaxAttempts {
+	if !isTerminal && job.Attempts < bluememo.DefaultJobMaxAttempts {
 		return
 	}
 	handler.TaskRuns.AppendTaskEvent(taskRunID, "memory.extraction_failed", marshalEventBody(map[string]any{
@@ -112,6 +115,19 @@ func (handler ExtractJobHandler) steps(taskRunID string) []taskstate.TaskStep {
 	return handler.Steps.ListTaskStep(taskRunID)
 }
 
+func TaskTranscript(taskRun taskstate.TaskRun, steps []taskstate.TaskStep) bluememo.Transcript {
+	transcript := bluememo.Transcript{
+		Prompt:        taskRun.Prompt,
+		Result:        taskRun.Result,
+		Outcome:       string(taskRun.Status),
+		FailureReason: taskRun.FailureReason,
+	}
+	for _, step := range steps {
+		transcript.Steps = append(transcript.Steps, bluememo.TranscriptStep{Instruction: step.Instruction, Status: string(step.Status), Output: step.Output})
+	}
+	return transcript
+}
+
 func findExtractionContext(events []taskstate.TaskEvent) (ExtractionContext, bool) {
 	for index := len(events) - 1; index >= 0; index-- {
 		if events[index].Name != ExtractionContextEventName {
@@ -126,17 +142,9 @@ func findExtractionContext(events []taskstate.TaskEvent) (ExtractionContext, boo
 	return ExtractionContext{}, false
 }
 
-type ProfileJobHandler struct {
-	Builder ProfileBuilder
-}
-
-func (handler ProfileJobHandler) Handle(ctx context.Context, job Job) error {
-	_, errorValue := handler.Builder.Rebuild(ctx, job.SubjectID)
-	return errorValue
-}
-
 type TaskRunTransitionObserver struct {
-	Store Store
+	Store  bluememo.Store
+	Logger *slog.Logger
 }
 
 func (observer TaskRunTransitionObserver) Observe(taskRun taskstate.TaskRun) {
@@ -150,12 +158,19 @@ func (observer TaskRunTransitionObserver) Observe(taskRun taskstate.TaskRun) {
 	}
 	job, isCreated, errorValue := observer.Store.EnqueueExtraction(context.Background(), taskRun.TaskRunID)
 	if errorValue != nil {
-		observer.Store.logger().Warn("memory.extraction.enqueue_failed", "taskRunID", taskRun.TaskRunID, "error", errorValue.Error())
+		observer.logger().Warn("memory.extraction.enqueue_failed", "taskRunID", taskRun.TaskRunID, "error", errorValue.Error())
 		return
 	}
 	if isCreated {
-		observer.Store.logger().Info("memory.extraction.queued", "taskRunID", taskRun.TaskRunID, "jobID", job.JobID)
+		observer.logger().Info("memory.extraction.queued", "taskRunID", taskRun.TaskRunID, "jobID", job.JobID)
 	}
+}
+
+func (observer TaskRunTransitionObserver) logger() *slog.Logger {
+	if observer.Logger != nil {
+		return observer.Logger
+	}
+	return slog.Default()
 }
 
 func marshalEventBody(value any) string {

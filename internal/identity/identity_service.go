@@ -20,6 +20,7 @@ type IdentityService struct {
 	personAccessByPersonID       map[string]policy.PersonAccess
 	channelByCompositeKey        map[string]policy.ChannelPolicy
 	personIDByPlatformAccountKey map[string]string
+	containedCirclesByID         map[string][]string
 	platformAccountRepository    PlatformAccountRepository
 }
 
@@ -59,6 +60,10 @@ func (identityService *IdentityService) reloadPolicyProjection(policyProjection 
 	identityService.personAccessByPersonID = map[string]policy.PersonAccess{}
 	identityService.channelByCompositeKey = map[string]policy.ChannelPolicy{}
 	identityService.personIDByPlatformAccountKey = map[string]string{}
+	identityService.containedCirclesByID = map[string][]string{}
+	for circleID, memberCircles := range policyProjection.ContainedCirclesByID {
+		identityService.containedCirclesByID[circleID] = append([]string{}, memberCircles...)
+	}
 	for email, personID := range policyProjection.PersonIDByEmail {
 		normalizedEmail := strings.ToLower(strings.TrimSpace(email))
 		identityService.personIDByEmail[normalizedEmail] = personID
@@ -116,6 +121,17 @@ func (identityService *IdentityService) ResolvePersonAccess(personID string) pol
 	personAccess.ResourceAccessRules = append([]policy.ResourceAccessPolicy{}, personAccess.ResourceAccessRules...)
 	personAccess.GrantedClasses = append([]string{}, personAccess.GrantedClasses...)
 	return policy.EnsureRequesterDefaults(personAccess)
+}
+
+func (identityService *IdentityService) ContainedCircles() map[string][]string {
+	identityService.mutex.RLock()
+	defer identityService.mutex.RUnlock()
+
+	contained := make(map[string][]string, len(identityService.containedCirclesByID))
+	for circleID, memberCircles := range identityService.containedCirclesByID {
+		contained[circleID] = append([]string{}, memberCircles...)
+	}
+	return contained
 }
 
 func (identityService *IdentityService) ResolvePersonPrimaryEmail(personID string) string {

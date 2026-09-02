@@ -64,7 +64,7 @@ func (taskScheduleRunner TaskScheduleRunner) RunIfDue(ctx context.Context, reque
 		Prompt:                    taskSchedule.Prompt,
 		ScheduledRun:              scheduledRunContext(taskSchedule, referenceTime),
 		PersonAccess:              request.PersonAccess,
-		MemoryLabel:               memory.SecurityLabel{SecurityLevelRank: request.PersonAccess.SecurityLevelRank, RequiredClasses: append([]string{}, request.PersonAccess.GrantedClasses...)},
+		MemoryLabel:               memory.LabelForAccess(request.PersonAccess),
 		AccessibleConversationIDs: []string{"schedule:" + taskSchedule.TaskScheduleID},
 	})
 	if errorValue != nil {

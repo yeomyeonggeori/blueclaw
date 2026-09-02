@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluememo"
+	bluememopostgres "github.com/yeomyeonggeori/bluememo/postgres"
 	"log/slog"
 	"net"
 	"net/http"
@@ -78,7 +80,7 @@ type Application struct {
 	staleTaskCancel               context.CancelFunc
 	taskSchedulePoller            *scheduler.TaskSchedulePoller
 	taskRetentionSweeper          *scheduler.TaskRetentionSweeper
-	memoryJobWorker               *memory.JobWorker
+	memoryJobWorker               *bluememo.JobWorker
 	memoryJobWorkerCancel         context.CancelFunc
 	taskSchedulePollSecond        int
 	taskRetentionIntervalMinute   int
@@ -281,7 +283,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 	logger.Info("application.initializing", "stage", "memory")
 	memoryStore, memoryIngester, memoryJobWorker := buildMemoryStore(runtimeConfiguration, database, capabilityClient, lowTierLanguageModelProvider, taskRunService, taskStepService, identityService, logger)
 	if memoryStore != nil && !runtimeConfiguration.Memory.ExtractionDisabled {
-		taskRunService.RegisterTaskRunTransitionObserver(memory.TaskRunTransitionObserver{Store: *memoryStore}.Observe)
+		taskRunService.RegisterTaskRunTransitionObserver(memory.TaskRunTransitionObserver{Store: *memoryStore, Logger: logger}.Observe)
 	}
 	backupCoordinator := backup.NewCoordinator(buildBackupManifest(runtimeConfiguration, database))
 	taskIntakeController := runtimecontrol.NewTaskIntakeController()
@@ -310,7 +312,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 	toolCatalogBuilder.UseOptionalFileReadPathSuffixes(runtimeConfiguration.Agent.OptionalFileReadPathSuffixes)
 	toolCatalogBuilder.UseSkillChangeHandler(refreshSkillIndex)
 	if memoryStore != nil {
-		toolCatalogBuilder.UseMemoryStore(memoryStore, memoryIngester)
+		toolCatalogBuilder.UseMemoryStore(memoryStore, memoryIngester, identityService)
 	}
 	turnRouter := intake.NewTurnRouter(turnRouterLanguageModelProvider(taskTierLanguageModels, intakeLanguageModelProvider), deriveIntakeOptions(runtimeConfiguration))
 	taskLauncher := agentruntime.NewTaskLauncher(harness, taskRunService, toolCatalogBuilder)
@@ -1656,7 +1658,7 @@ func (application *Application) startMemoryJobWorker() {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	application.memoryJobWorkerCancel = cancel
-	go application.memoryJobWorker.Start(ctx, memory.DefaultJobWorkerInterval)
+	go application.memoryJobWorker.Start(ctx, bluememo.DefaultJobWorkerInterval)
 }
 
 func buildMemoryStore(
@@ -1668,31 +1670,32 @@ func buildMemoryStore(
 	taskStepService *task.TaskStepService,
 	identityService *identity.IdentityService,
 	logger *slog.Logger,
-) (*memory.Store, *memory.Ingester, *memory.JobWorker) {
+) (*bluememo.Store, *bluememo.Ingester, *bluememo.JobWorker) {
 	if database.SQL == nil {
 		logger.Info("application.memory.fact_store_not_configured", "reason", "no database")
 		return nil, nil, nil
 	}
-	memoryStore := &memory.Store{
-		Facts:    postgres.NewMemoryFactRepository(database),
-		Profiles: postgres.NewMemoryProfileRepository(database),
-		Jobs:     postgres.NewMemoryJobRepository(database),
+	memoryStore := &bluememo.Store{
+		Facts:    bluememopostgres.NewFactRepository(database.SQL),
+		Profiles: bluememopostgres.NewProfileRepository(database.SQL),
+		Jobs:     bluememopostgres.NewJobRepository(database.SQL),
 		Embedder: llm.CapabilityEmbeddingClient{
 			CapabilityClient: capabilityClient,
-			ModelName:        firstNonEmptyString(runtimeConfiguration.Memory.EmbeddingModel, memory.DefaultEmbeddingModelName),
+			ModelName:        firstNonEmptyString(runtimeConfiguration.Memory.EmbeddingModel, bluememo.DefaultEmbeddingModelName),
 			ExecutionMode:    firstNonEmptyString(runtimeConfiguration.Memory.EmbeddingExecutionMode, "auto"),
-			OutputDimensions: memory.EmbeddingDimensionCount,
+			OutputDimensions: bluememo.EmbeddingDimensionCount,
 		},
-		EmbeddingModel: firstNonEmptyString(runtimeConfiguration.Memory.EmbeddingModel, memory.DefaultEmbeddingModelName),
+		EmbeddingModel: firstNonEmptyString(runtimeConfiguration.Memory.EmbeddingModel, bluememo.DefaultEmbeddingModelName),
 		Logger:         logger,
 	}
-	memoryIngester := &memory.Ingester{Store: *memoryStore, Model: lowTierLanguageModelProvider, People: identityService}
-	memoryJobWorker := &memory.JobWorker{
+	memoryModel := memory.LanguageModel{Provider: lowTierLanguageModelProvider}
+	memoryIngester := &bluememo.Ingester{Store: *memoryStore, Model: memoryModel, People: identityService}
+	memoryJobWorker := &bluememo.JobWorker{
 		Jobs:   memoryStore.Jobs,
 		Logger: logger,
-		Handlers: map[string]memory.JobHandler{
-			memory.JobKindExtract: memory.ExtractJobHandler{Ingester: *memoryIngester, TaskRuns: taskRunService, Steps: taskStepService, Access: identityService}.Handle,
-			memory.JobKindProfile: memory.ProfileJobHandler{Builder: memory.ProfileBuilder{Store: *memoryStore, Model: lowTierLanguageModelProvider}}.Handle,
+		Handlers: map[string]bluememo.JobHandler{
+			bluememo.JobKindExtract: memory.ExtractJobHandler{Ingester: *memoryIngester, TaskRuns: taskRunService, Steps: taskStepService, Access: identityService}.Handle,
+			bluememo.JobKindProfile: bluememo.ProfileJobHandler{Builder: bluememo.ProfileBuilder{Store: *memoryStore, Model: memoryModel}}.Handle,
 		},
 	}
 	logger.Info("application.memory.fact_store_configured", "embeddingModel", memoryStore.EmbeddingModel, "extractionDisabled", runtimeConfiguration.Memory.ExtractionDisabled)

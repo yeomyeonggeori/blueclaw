@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"github.com/yeomyeonggeori/bluememo"
 	"os"
 	"strings"
 	"testing"
@@ -54,18 +55,18 @@ func TestMemoryLiveLLMExtractsCorrectsAndRecalls(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 
-	repository := memory.NewInMemoryRepository()
-	store := memory.Store{
+	repository := bluememo.NewInMemoryRepository()
+	store := bluememo.Store{
 		Facts:    repository,
 		Profiles: repository,
 		Jobs:     repository,
 		Embedder: openRouterEmbedder{client: llm.OpenAIEmbeddingClient{
 			Endpoint:   openRouterEmbeddingsURL,
 			APIKey:     apiKey,
-			ModelName:  memory.DefaultEmbeddingModelName,
-			Dimensions: memory.EmbeddingDimensionCount,
+			ModelName:  bluememo.DefaultEmbeddingModelName,
+			Dimensions: bluememo.EmbeddingDimensionCount,
 		}},
-		EmbeddingModel: memory.DefaultEmbeddingModelName,
+		EmbeddingModel: bluememo.DefaultEmbeddingModelName,
 	}
 	languageModel := llm.OpenRouterClient{
 		APIKey:       apiKey,
@@ -73,8 +74,8 @@ func TestMemoryLiveLLMExtractsCorrectsAndRecalls(t *testing.T) {
 		ModelName:    llm.DefaultModelTierNames().Low,
 		AttemptCount: 2,
 	}
-	ingester := memory.Ingester{Store: store, Model: languageModel}
-	reader := memory.Reader{PersonID: "person-alice", CircleIDs: []string{"circle-platform"}, SecurityLevelRank: 1}
+	ingester := bluememo.Ingester{Store: store, Model: memory.LanguageModel{Provider: languageModel}}
+	reader := bluememo.NewReader("person-alice", []string{"circle-platform"}, nil, 1, nil)
 	now := time.Now().UTC()
 
 	firstTask := taskstate.TaskRun{
@@ -85,18 +86,18 @@ func TestMemoryLiveLLMExtractsCorrectsAndRecalls(t *testing.T) {
 		Result:            "알겠습니다. 요약은 불릿으로 드리고, 휴가 기간은 기억해 두겠습니다.",
 		UpdatedAt:         now,
 	}
-	first, errorValue := ingester.Ingest(ctx, memory.IngestRequest{
-		Episode: memory.Episode{
+	first, errorValue := ingester.Ingest(ctx, bluememo.IngestRequest{
+		Episode: bluememo.Episode{
 			EpisodeID:         "live-episode-1",
-			SourceKind:        memory.EpisodeSourceKindTaskRun,
+			SourceKind:        bluememo.EpisodeSourceKindTaskRun,
 			SourceID:          firstTask.TaskRunID,
 			RequesterPersonID: "person-alice",
-			Content:           memory.RenderTaskTranscript(firstTask, nil),
+			Content:           bluememo.RenderTranscript(memory.TaskTranscript(firstTask, nil)),
 			OccurredAt:        now,
 		},
 		Reader:        reader,
 		RequesterName: "이샘플",
-		Label:         memory.SecurityLabel{RequiredClasses: []string{}},
+		Label:         bluememo.SecurityLabel{RequiredClasses: []string{}},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected the first extraction to succeed: %v", errorValue)
@@ -106,11 +107,11 @@ func TestMemoryLiveLLMExtractsCorrectsAndRecalls(t *testing.T) {
 		kinds[fact.Kind]++
 		t.Logf("first extraction: [%s %s] %s", fact.Kind, fact.ScopeType, fact.Content)
 	}
-	if len(first.Facts) < 2 || kinds[memory.FactKindPreference] == 0 || kinds[memory.FactKindTemporary] == 0 {
+	if len(first.Facts) < 2 || kinds[bluememo.FactKindPreference] == 0 || kinds[bluememo.FactKindTemporary] == 0 {
 		t.Fatalf("expected at least a preference and a temporary fact, got kinds=%v", kinds)
 	}
 	for _, fact := range first.Facts {
-		if fact.Kind == memory.FactKindTemporary && fact.ValidUntil.IsZero() {
+		if fact.Kind == bluememo.FactKindTemporary && fact.ValidUntil.IsZero() {
 			t.Fatalf("expected the temporary fact to carry its expiry, got %+v", fact)
 		}
 	}
@@ -123,18 +124,18 @@ func TestMemoryLiveLLMExtractsCorrectsAndRecalls(t *testing.T) {
 		Result:            "데이터 팀으로 기억을 고쳤습니다.",
 		UpdatedAt:         now.Add(time.Hour),
 	}
-	second, errorValue := ingester.Ingest(ctx, memory.IngestRequest{
-		Episode: memory.Episode{
+	second, errorValue := ingester.Ingest(ctx, bluememo.IngestRequest{
+		Episode: bluememo.Episode{
 			EpisodeID:         "live-episode-2",
-			SourceKind:        memory.EpisodeSourceKindTaskRun,
+			SourceKind:        bluememo.EpisodeSourceKindTaskRun,
 			SourceID:          secondTask.TaskRunID,
 			RequesterPersonID: "person-alice",
-			Content:           memory.RenderTaskTranscript(secondTask, nil),
+			Content:           bluememo.RenderTranscript(memory.TaskTranscript(secondTask, nil)),
 			OccurredAt:        now.Add(time.Hour),
 		},
 		Reader:        reader,
 		RequesterName: "이샘플",
-		Label:         memory.SecurityLabel{RequiredClasses: []string{}},
+		Label:         bluememo.SecurityLabel{RequiredClasses: []string{}},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected the second extraction to succeed: %v", errorValue)
@@ -156,11 +157,11 @@ func TestMemoryLiveLLMExtractsCorrectsAndRecalls(t *testing.T) {
 		}
 	}
 
-	recall, errorValue := store.Recall(ctx, memory.RecallRequest{Reader: reader, PersonID: "person-alice", Query: "이샘플은 지금 어느 팀 소속이야?"})
+	recall, errorValue := store.Recall(ctx, bluememo.RecallRequest{Reader: reader, PersonID: "person-alice", Query: "이샘플은 지금 어느 팀 소속이야?"})
 	if errorValue != nil {
 		t.Fatalf("expected recall to succeed: %v", errorValue)
 	}
-	if recall.Mode != memory.SearchModeHybrid || len(recall.Facts) == 0 {
+	if recall.Mode != bluememo.SearchModeHybrid || len(recall.Facts) == 0 {
 		t.Fatalf("expected a hybrid recall with results, got mode=%s reason=%q facts=%d", recall.Mode, recall.DegradedReason, len(recall.Facts))
 	}
 	for _, scoredFact := range recall.Facts {
@@ -173,7 +174,7 @@ func TestMemoryLiveLLMExtractsCorrectsAndRecalls(t *testing.T) {
 		t.Fatalf("expected the corrected fact to rank first, got %+v", recall.Facts[0].Fact)
 	}
 
-	profile, errorValue := memory.ProfileBuilder{Store: store, Model: languageModel}.Rebuild(ctx, "person-alice")
+	profile, errorValue := bluememo.ProfileBuilder{Store: store, Model: memory.LanguageModel{Provider: languageModel}}.Rebuild(ctx, "person-alice")
 	if errorValue != nil {
 		t.Fatalf("expected the profile to build: %v", errorValue)
 	}

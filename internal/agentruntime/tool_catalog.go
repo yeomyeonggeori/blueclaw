@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluememo"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -31,8 +32,9 @@ type AttachmentMaterialResolver interface {
 type ToolCatalogBuilder struct {
 	allowedToolNamesByProfile    map[string][]string
 	defaultAllowedToolNames      []string
-	memoryStore                  *memory.Store
-	memoryIngester               *memory.Ingester
+	memoryStore                  *bluememo.Store
+	memoryIngester               *bluememo.Ingester
+	memoryCircles                memory.ContainedCircleResolver
 	mcpRegistry                  *mcp.McpRegistry
 	capabilityClient             capability.Client
 	companyProvider              func() agentcontract.CompanyContext
@@ -87,7 +89,7 @@ type ToolCatalogRequest struct {
 	HistoryProvider            HistoryProvider
 	AttachmentMaterialResolver AttachmentMaterialResolver
 	PersonAccess               policy.PersonAccess
-	MemoryLabel                memory.SecurityLabel
+	MemoryLabel                bluememo.SecurityLabel
 	AccessibleConversationIDs  []string
 	InputParts                 []agentcontract.AgentPart
 	ScheduledRun               agentcontract.ScheduledRunContext
@@ -129,12 +131,21 @@ func (toolCatalogBuilder *ToolCatalogBuilder) UseAllowedToolNamesByProfile(allow
 	toolCatalogBuilder.defaultAllowedToolNames = trimNonEmptyStrings(defaultAllowedToolNames)
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) UseMemoryStore(memoryStore *memory.Store, memoryIngester *memory.Ingester) {
+func (toolCatalogBuilder *ToolCatalogBuilder) UseMemoryStore(memoryStore *bluememo.Store, memoryIngester *bluememo.Ingester, memoryCircles memory.ContainedCircleResolver) {
 	toolCatalogBuilder.memoryStore = memoryStore
 	toolCatalogBuilder.memoryIngester = memoryIngester
+	toolCatalogBuilder.memoryCircles = memoryCircles
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) MemoryStore() *memory.Store {
+func (toolCatalogBuilder *ToolCatalogBuilder) memoryReader(personAccess policy.PersonAccess) bluememo.Reader {
+	containedCircles := map[string][]string{}
+	if toolCatalogBuilder.memoryCircles != nil {
+		containedCircles = toolCatalogBuilder.memoryCircles.ContainedCircles()
+	}
+	return memory.ReaderForAccess(personAccess, containedCircles)
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) MemoryStore() *bluememo.Store {
 	return toolCatalogBuilder.memoryStore
 }
 

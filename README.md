@@ -638,11 +638,12 @@ tool participates in the same approval and evidence rules as a built-in one.
 | `chatd/` | chat bridge and platform adapters (Mattermost, Buzz) |
 | `admin/` | Svelte admin and task console sources |
 | `web/` | build output of `admin/`, untracked; run `cd admin && bun run build` before serving the console |
-| `migrations/` | 31 Postgres migrations, applied in order at boot |
+| `migrations/` | 31 Postgres migrations, applied in order at boot; `030` is bluememo's schema, copied verbatim |
 | `tests/` | integration suite and fixtures |
 | `lab/` | provisioning and scenario scripts for the development VM |
 | `config/` | example policy, runtime, and lab configuration |
 | `tools/` | TUI screenshot scripts |
+| `.dependency/bluememo` | [bluememo](https://github.com/yeomyeonggeori/bluememo), the memory store, vendored as a submodule |
 | `docs/` | [architecture.md](docs/architecture.md) |
 
 | Binary | Purpose |

@@ -3,6 +3,7 @@ package adminapi
 import (
 	"context"
 	"encoding/json"
+	"github.com/yeomyeonggeori/bluememo"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,25 +11,24 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
-	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 )
 
-func memoryHandlerFixture(t *testing.T) (MemoryHandler, *memory.InMemoryRepository) {
+func memoryHandlerFixture(t *testing.T) (MemoryHandler, *bluememo.InMemoryRepository) {
 	t.Helper()
 	now := time.Date(2026, 9, 2, 10, 0, 0, 0, time.UTC)
-	repository := memory.NewInMemoryRepository()
-	episode := memory.Episode{EpisodeID: "episode-1", SourceKind: memory.EpisodeSourceKindImport, SourceID: "seed", RequesterPersonID: "person-alice", Content: "seed", OccurredAt: now}
-	facts := []memory.FactWrite{
-		{Fact: memory.Fact{FactID: "fact-alice", EpisodeID: "episode-1", ScopeType: memory.ScopeTypePrivate, ScopeID: "person-alice", SubjectPersonID: "person-alice", Kind: memory.FactKindPreference, Content: "이샘플 prefers bullet summaries", ValidFrom: now}},
-		{Fact: memory.Fact{FactID: "fact-bob", EpisodeID: "episode-1", ScopeType: memory.ScopeTypePrivate, ScopeID: "person-bob", SubjectPersonID: "person-bob", Kind: memory.FactKindFact, Content: "박예시 parks on level 3", ValidFrom: now.Add(time.Minute)}},
-		{Fact: memory.Fact{FactID: "fact-secret", EpisodeID: "episode-1", ScopeType: memory.ScopeTypeWorkspace, Kind: memory.FactKindFact, Content: "the headcount plan is frozen", SecurityLevelRank: 5, ValidFrom: now}},
-		{Fact: memory.Fact{FactID: "fact-open", EpisodeID: "episode-1", ScopeType: memory.ScopeTypeWorkspace, Kind: memory.FactKindFact, Content: "the all-hands is on Thursday", ValidFrom: now.Add(2 * time.Minute)}},
+	repository := bluememo.NewInMemoryRepository()
+	episode := bluememo.Episode{EpisodeID: "episode-1", SourceKind: bluememo.EpisodeSourceKindImport, SourceID: "seed", RequesterPersonID: "person-alice", Content: "seed", OccurredAt: now}
+	facts := []bluememo.FactWrite{
+		{Fact: bluememo.Fact{FactID: "fact-alice", EpisodeID: "episode-1", ScopeType: bluememo.ScopeTypePrivate, OwnerPersonID: "person-alice", SubjectPersonID: "person-alice", Kind: bluememo.FactKindPreference, Content: "이샘플 prefers bullet summaries", ValidFrom: now}},
+		{Fact: bluememo.Fact{FactID: "fact-bob", EpisodeID: "episode-1", ScopeType: bluememo.ScopeTypePrivate, OwnerPersonID: "person-bob", SubjectPersonID: "person-bob", Kind: bluememo.FactKindFact, Content: "박예시 parks on level 3", ValidFrom: now.Add(time.Minute)}},
+		{Fact: bluememo.Fact{FactID: "fact-secret", EpisodeID: "episode-1", ScopeType: bluememo.ScopeTypeWorkspace, Kind: bluememo.FactKindFact, Content: "the headcount plan is frozen", SecurityLevelRank: 5, ValidFrom: now}},
+		{Fact: bluememo.Fact{FactID: "fact-open", EpisodeID: "episode-1", ScopeType: bluememo.ScopeTypeWorkspace, Kind: bluememo.FactKindFact, Content: "the all-hands is on Thursday", ValidFrom: now.Add(2 * time.Minute)}},
 	}
-	if errorValue := repository.SaveEpisode(context.Background(), memory.EpisodeWrite{Episode: episode, Facts: facts}); errorValue != nil {
+	if errorValue := repository.SaveEpisode(context.Background(), bluememo.EpisodeWrite{Episode: episode, Facts: facts}); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if errorValue := repository.SaveProfile(context.Background(), memory.Profile{PersonID: "person-alice", IdentityLines: []string{"이샘플 wants bullets"}, CurrentLines: []string{}, BuiltAt: now}); errorValue != nil {
+	if errorValue := repository.SaveProfile(context.Background(), bluememo.Profile{PersonID: "person-alice", IdentityLines: []string{"이샘플 wants bullets"}, CurrentLines: []string{}, BuiltAt: now}); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	identityService := identity.NewIdentityService(policy.PolicyProjection{
@@ -36,7 +36,7 @@ func memoryHandlerFixture(t *testing.T) (MemoryHandler, *memory.InMemoryReposito
 			"person-alice": {PersonID: "person-alice", SecurityLevelRank: 1},
 		},
 	})
-	store := &memory.Store{Facts: repository, Profiles: repository, Jobs: repository, EmbeddingModel: "test-embed", Now: func() time.Time { return now }}
+	store := &bluememo.Store{Facts: repository, Profiles: repository, Jobs: repository, EmbeddingModel: "test-embed", Now: func() time.Time { return now }}
 	return MemoryHandler{Store: store, IdentityService: identityService}, repository
 }
 

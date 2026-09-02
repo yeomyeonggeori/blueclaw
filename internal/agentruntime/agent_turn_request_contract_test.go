@@ -2,10 +2,10 @@ package agentruntime
 
 import (
 	"context"
+	"github.com/yeomyeonggeori/bluememo"
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -16,11 +16,11 @@ func TestLaunchedAgentTurnRequestCarriesHostAssembledContext(t *testing.T) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	harness := harnesstest.New(taskRunService)
 	memoryStore := seededMemoryStore(t, "person-1", "The user leads the quarterly launch project.")
-	if errorValue := memoryStore.Profiles.SaveProfile(context.Background(), memory.Profile{PersonID: "person-1", IdentityLines: []string{"The user prefers terse release notes."}}); errorValue != nil {
+	if errorValue := memoryStore.Profiles.SaveProfile(context.Background(), bluememo.Profile{PersonID: "person-1", IdentityLines: []string{"The user prefers terse release notes."}}); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseMemoryStore(memoryStore, nil)
+	toolCatalogBuilder.UseMemoryStore(memoryStore, nil, nil)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{
 		"default": {"memory_search"},
 	}, nil)

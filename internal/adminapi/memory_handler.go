@@ -7,19 +7,21 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yeomyeonggeori/bluememo"
+
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 )
 
 type MemoryHandler struct {
-	Store           *memory.Store
+	Store           *bluememo.Store
 	IdentityService *identity.IdentityService
 }
 
 type memoryFactListResponse struct {
 	PersonID       string           `json:"personID"`
 	EmbeddingModel string           `json:"embeddingModel"`
-	Profile        memory.Profile   `json:"profile"`
+	Profile        bluememo.Profile `json:"profile"`
 	Facts          []memoryFactView `json:"facts"`
 }
 
@@ -27,7 +29,7 @@ type memoryFactView struct {
 	FactID             string    `json:"factID"`
 	EpisodeID          string    `json:"episodeID"`
 	ScopeType          string    `json:"scopeType"`
-	ScopeID            string    `json:"scopeID,omitempty"`
+	CircleIDs          []string  `json:"circleIDs,omitempty"`
 	Kind               string    `json:"kind"`
 	Content            string    `json:"content"`
 	ValidFrom          time.Time `json:"validFrom"`
@@ -101,18 +103,18 @@ func (handler MemoryHandler) isConfigured() bool {
 	return handler.Store != nil && handler.Store.Facts != nil && handler.IdentityService != nil
 }
 
-func (handler MemoryHandler) reader(personID string) memory.Reader {
-	return memory.ReaderFromPersonAccess(handler.IdentityService.ResolvePersonAccess(personID))
+func (handler MemoryHandler) reader(personID string) bluememo.Reader {
+	return memory.ReaderForAccess(handler.IdentityService.ResolvePersonAccess(personID), handler.IdentityService.ContainedCircles())
 }
 
-func memoryFactViews(facts []memory.Fact) []memoryFactView {
+func memoryFactViews(facts []bluememo.Fact) []memoryFactView {
 	views := make([]memoryFactView, 0, len(facts))
 	for _, fact := range facts {
 		views = append(views, memoryFactView{
 			FactID:             fact.FactID,
 			EpisodeID:          fact.EpisodeID,
 			ScopeType:          fact.ScopeType,
-			ScopeID:            fact.ScopeID,
+			CircleIDs:          fact.CircleIDs,
 			Kind:               fact.Kind,
 			Content:            fact.Content,
 			ValidFrom:          fact.ValidFrom,

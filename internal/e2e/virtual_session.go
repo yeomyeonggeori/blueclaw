@@ -13,6 +13,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluememo"
+	"github.com/yeomyeonggeori/bluememo/bluememotest"
 	"io"
 	"log/slog"
 	"math"
@@ -37,8 +39,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/launchfailure"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
-	"github.com/yeomyeonggeori/blueclaw/internal/memory"
-	"github.com/yeomyeonggeori/blueclaw/internal/memory/memorytest"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/reply"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
@@ -906,9 +906,9 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 		cleanup = capabilityCleanup
 	}
 
-	memoryRepository := memory.NewInMemoryRepository()
-	memoryStore := &memory.Store{Facts: memoryRepository, Profiles: memoryRepository, Jobs: memoryRepository, Embedder: &memorytest.HashEmbedder{}}
-	memoryIngester := &memory.Ingester{Store: *memoryStore, Model: virtualMemoryIngestModel{}}
+	memoryRepository := bluememo.NewInMemoryRepository()
+	memoryStore := &bluememo.Store{Facts: memoryRepository, Profiles: memoryRepository, Jobs: memoryRepository, Embedder: &bluememotest.HashEmbedder{}}
+	memoryIngester := &bluememo.Ingester{Store: *memoryStore, Model: virtualMemoryIngestModel{}}
 	toolCatalogBuilder := virtualToolCatalogBuilder(
 		scenario,
 		workspacePath,
@@ -989,8 +989,8 @@ func virtualToolCatalogBuilder(
 	taskRunService *task.TaskRunService,
 	scheduleStore *virtualTaskScheduleRepository,
 	terminalService *security.ShellService,
-	memoryStore *memory.Store,
-	memoryIngester *memory.Ingester,
+	memoryStore *bluememo.Store,
+	memoryIngester *bluememo.Ingester,
 	capabilityClient capability.Client,
 	skillRetriever agentcontract.SkillRetriever,
 	instructionBundleLoader func() agentcontract.InstructionBundle,
@@ -1003,7 +1003,7 @@ func virtualToolCatalogBuilder(
 	toolCatalogBuilder.UseWorkspaceActorFactory(security.NewDirectWorkspaceActorFactory(terminalService))
 	toolCatalogBuilder.UseTaskRunService(taskRunService)
 	toolCatalogBuilder.UseTaskScheduleRepository(scheduleStore)
-	toolCatalogBuilder.UseMemoryStore(memoryStore, memoryIngester)
+	toolCatalogBuilder.UseMemoryStore(memoryStore, memoryIngester, nil)
 	toolCatalogBuilder.UseSkillSearch(skillRetriever, instructionBundleLoader)
 	toolCatalogBuilder.UseSkillChangeHandler(func(contextValue context.Context) {
 		if skillRetriever == nil {
@@ -4021,27 +4021,23 @@ func (repository *virtualTaskScheduleRepository) CancelTaskSchedules(request tas
 
 type virtualMemoryIngestModel struct{}
 
-func (virtualMemoryIngestModel) GenerateResponse(context.Context, string) (string, error) {
-	return "", errors.New("the virtual memory ingest model answers structured requests only")
-}
-
 // The virtual session keeps exactly what the agent asked to remember, one
 // private fact per request, so a scenario reads back the sentence it wrote.
-func (virtualMemoryIngestModel) GenerateStructuredResponse(_ context.Context, request llm.StructuredResponseRequest) (llm.StructuredResponse, error) {
-	subject := request.Messages[len(request.Messages)-1].Content
+func (virtualMemoryIngestModel) GenerateStructured(_ context.Context, request bluememo.StructuredRequest) (string, error) {
+	subject := request.Subject
 	sourceIndex := strings.LastIndex(subject, "):\n")
 	content := strings.TrimSpace(subject[sourceIndex+3:])
-	if runes := []rune(content); len(runes) > memory.FactContentCharacterLimit {
-		content = string(runes[:memory.FactContentCharacterLimit])
+	if runes := []rune(content); len(runes) > bluememo.FactContentCharacterLimit {
+		content = string(runes[:bluememo.FactContentCharacterLimit])
 	}
-	document, errorValue := json.Marshal(map[string]any{"facts": []map[string]string{{
-		"content": content, "kind": memory.FactKindFact, "scope": memory.ScopeTypePrivate,
-		"subjectPersonHint": "", "relation": memory.FactRelationNew, "relatedFactID": "", "validUntil": "",
+	document, errorValue := json.Marshal(map[string]any{"facts": []map[string]any{{
+		"content": content, "kind": bluememo.FactKindFact, "scope": bluememo.ScopeTypePrivate, "circleIDs": []string{},
+		"subjectPersonHint": "", "relation": bluememo.FactRelationNew, "relatedFactID": "", "validUntil": "",
 	}}})
 	if errorValue != nil {
-		return llm.StructuredResponse{}, errorValue
+		return "", errorValue
 	}
-	return llm.StructuredResponse{Content: string(document)}, nil
+	return string(document), nil
 }
 
 func actionFinishMessage(reply string, evidence ...string) string {
