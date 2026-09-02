@@ -679,8 +679,9 @@ func CalendarFalseFinishRecoveryAcceptanceScenario(artifactDirectoryPath string)
 				actionInvokeCapabilityTool("event_add", `{"title":"샨보장 미팅","startsAt":"2026-07-13T10:00:00+09:00","endsAt":"2026-07-13T11:00:00+09:00"}`),
 				actionFinishMessage("7월 13일 미팅을 오전 10시~11시로 등록했습니다.", "obs-002:event_add:0"),
 			},
-			ExpectedSelectedSkills: []string{"calendar"},
-			ExpectedToolCalls:      []string{"event_add"},
+			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
+			ExpectedSelectedSkills:   []string{"calendar"},
+			ExpectedToolCalls:        []string{"event_add"},
 			ExpectedToolCallCounts: map[string]int{
 				"event_add": 1,
 			},
