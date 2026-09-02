@@ -10,6 +10,7 @@ type UnavailableSkill struct {
 	Description                 string   `json:"description,omitempty"`
 	Path                        string   `json:"path"`
 	MissingEnvironmentVariables []string `json:"missingEnvironmentVariables"`
+	MissingToolNames            []string `json:"missingToolNames,omitempty"`
 }
 
 func (skillBundle SkillBundle) MissingEnvironmentVariables() []string {

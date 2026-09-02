@@ -321,3 +321,13 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerLocalTools(toolSet *toolco
 		panic(fmt.Errorf("register trusted local tool provider: %w", errorValue))
 	}
 }
+
+// LocalToolNames are the tools this runtime answers itself, whatever a product's
+// catalog carries.
+func LocalToolNames() []string {
+	names := make([]string, 0, len(localToolDescriptorSpecs))
+	for _, spec := range localToolDescriptorSpecs {
+		names = append(names, spec.Name)
+	}
+	return names
+}

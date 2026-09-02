@@ -201,6 +201,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 	sessionService := auth.NewSessionService()
 	taskAuthService := task.NewTaskAuthService(magicLinkService, sessionService, taskRunService)
 	logger.Info("application.initializing", "stage", "agent_kernel")
+	logSkillsMissingTheirTools(logger, loadAgentInstructions(runtimeConfiguration).UnavailableSkills)
 	instructionBundleLoader := func() agentcontract.InstructionBundle {
 		return loadAgentInstructionBundle(runtimeConfiguration)
 	}
@@ -563,6 +564,21 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 	}
 }
 
+// A skill states the tools it needs. One naming a tool this runtime was never
+// offered cannot do what it says, and the agent would otherwise find out
+// mid-task, so it is said once at start and carried in the skill inventory.
+func logSkillsMissingTheirTools(logger *slog.Logger, unavailableSkills []skill.UnavailableSkill) {
+	if logger == nil {
+		return
+	}
+	for _, unavailableSkill := range unavailableSkills {
+		if len(unavailableSkill.MissingToolNames) == 0 {
+			continue
+		}
+		logger.Error("skill.tools.missing", "skill", unavailableSkill.Name, "missingTools", strings.Join(unavailableSkill.MissingToolNames, ", "), "path", unavailableSkill.Path)
+	}
+}
+
 func logMCPServerQuarantines(logger *slog.Logger, report mcp.LoadReport) {
 	if logger == nil {
 		return
@@ -598,6 +614,17 @@ type agentInstructions struct {
 	UnavailableSkills []skill.UnavailableSkill
 }
 
+// What a skill may name: the tools a product's catalog offered this runtime, plus
+// the ones the runtime and the kernel answer themselves.
+func offeredToolNamesOf(runtimeConfiguration config.RuntimeConfiguration) []string {
+	offeredToolNames := append([]string{}, toolcontract.KernelToolNames()...)
+	offeredToolNames = append(offeredToolNames, agentruntime.LocalToolNames()...)
+	for _, toolDescriptor := range runtimeConfiguration.Capabilities.ToolDescriptors {
+		offeredToolNames = append(offeredToolNames, strings.TrimSpace(toolDescriptor.Name))
+	}
+	return offeredToolNames
+}
+
 func loadAgentInstructionBundle(runtimeConfiguration config.RuntimeConfiguration) agentcontract.InstructionBundle {
 	return loadAgentInstructions(runtimeConfiguration).Bundle
 }
@@ -608,6 +635,7 @@ func loadAgentInstructions(runtimeConfiguration config.RuntimeConfiguration) age
 	skillInstructions := []agentcontract.SkillInstruction{}
 	unavailableSkills := []skill.UnavailableSkill{}
 	includedSkillByName := map[string]bool{}
+	offeredToolNames := offeredToolNamesOf(runtimeConfiguration)
 	for _, rootPath := range instructionRootPaths(runtimeConfiguration) {
 		for _, instructionDocument := range readInstructionDocuments(rootPath) {
 			if instructionDocument.Prompt == "" {
@@ -620,7 +648,7 @@ func loadAgentInstructions(runtimeConfiguration config.RuntimeConfiguration) age
 			parts = append(parts, instructionDocument)
 			sources = append(sources, instructionSource)
 		}
-		discovered := readSkillInstructions(rootPath, agentruntime.BundledSkillRootPath(rootPath))
+		discovered := readSkillInstructions(rootPath, agentruntime.BundledSkillRootPath(rootPath), offeredToolNames)
 		for _, skillInstruction := range discovered.Selectable {
 			skillName := strings.TrimSpace(skillInstruction.Name)
 			if includedSkillByName[skillName] {
@@ -742,7 +770,7 @@ type discoveredSkills struct {
 	Unavailable []skill.UnavailableSkill
 }
 
-func readSkillInstructions(rootPath string, bundledSkillsPath string) discoveredSkills {
+func readSkillInstructions(rootPath string, bundledSkillsPath string, offeredToolNames []string) discoveredSkills {
 	discovered := discoveredSkills{Selectable: []agentcontract.SkillInstruction{}, Unavailable: []skill.UnavailableSkill{}}
 	skillRegistry := skill.NewSkillRegistry()
 	for _, skillRoot := range []string{filepath.Join(rootPath, ".agents", "skills"), bundledSkillsPath} {
@@ -756,12 +784,15 @@ func readSkillInstructions(rootPath string, bundledSkillsPath string) discovered
 			if readError != nil {
 				continue
 			}
-			if missingVariableNames := skillBundle.MissingEnvironmentVariables(); len(missingVariableNames) > 0 {
+			missingVariableNames := skillBundle.MissingEnvironmentVariables()
+			missingToolNames := skillBundle.MissingToolNames(offeredToolNames)
+			if len(missingVariableNames) > 0 || len(missingToolNames) > 0 {
 				discovered.Unavailable = append(discovered.Unavailable, skill.UnavailableSkill{
 					Name:                        skillBundle.Name,
 					Description:                 skillBundle.Description,
 					Path:                        documentPath,
 					MissingEnvironmentVariables: missingVariableNames,
+					MissingToolNames:            missingToolNames,
 				})
 				continue
 			}
