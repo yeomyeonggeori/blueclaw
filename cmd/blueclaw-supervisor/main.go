@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
-	"github.com/yeomyeonggeori/blueclaw/internal/firecracker"
+	"github.com/yeomyeonggeori/blueclaw/internal/guest"
 )
 
 const guestHealthTimeout = 300 * time.Second
@@ -30,10 +30,10 @@ func main() {
 	interruptContext, stopSignalNotification := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopSignalNotification()
 
-	supervisorService := firecracker.NewSupervisorService(
-		runtimeConfiguration.Firecracker,
-		firecracker.WorkspaceVolumeService{},
-		firecracker.VSockGuestHealthClient{},
+	supervisorService := guest.NewSupervisorService(
+		runtimeConfiguration.Guest,
+		guest.WorkspaceVolumeService{},
+		guest.VSockGuestHealthClient{},
 	)
 
 	guestInstance, errorValue := supervisorService.BootGuest(interruptContext)
@@ -43,10 +43,10 @@ func main() {
 
 	listenerContext, stopListenerProxies := context.WithCancel(interruptContext)
 	defer stopListenerProxies()
-	for _, listenerProxyConfiguration := range runtimeConfiguration.Firecracker.GuestListenerProxies {
+	for _, listenerProxyConfiguration := range runtimeConfiguration.Guest.GuestListenerProxies {
 		listenerProxyConfiguration := listenerProxyConfiguration
 		go func() {
-			errorValue := firecracker.GuestListenerProxy{
+			errorValue := guest.GuestListenerProxy{
 				VSockUnixSocketPath:  guestInstance.BootSpecification.VSockUnixSocketPath,
 				GuestPort:            listenerProxyConfiguration.GuestPort,
 				TargetUnixSocketPath: listenerProxyConfiguration.TargetUnixSocketPath,
@@ -70,11 +70,11 @@ func main() {
 	defer stopProxy()
 	proxyErrorChannel := make(chan error, 1)
 	go func() {
-		proxyErrorChannel <- firecracker.HostHTTPProxy{
-			ListenAddress:       runtimeConfiguration.Firecracker.HostHTTPListenAddress,
+		proxyErrorChannel <- guest.HostHTTPProxy{
+			ListenAddress:       runtimeConfiguration.Guest.HostHTTPListenAddress,
 			VSockUnixSocketPath: guestInstance.BootSpecification.VSockUnixSocketPath,
-			GuestPortOrService:  runtimeConfiguration.Firecracker.GuestHTTPPortOrService,
-			DialGuestConnection: firecracker.GuestConnectionDialerFor(guestInstance.BootSpecification.VSockUnixSocketPathByPort),
+			GuestPortOrService:  runtimeConfiguration.Guest.GuestHTTPPortOrService,
+			DialGuestConnection: guest.GuestConnectionDialerFor(guestInstance.BootSpecification.VSockUnixSocketPathByPort),
 		}.Serve(proxyContext)
 	}()
 
@@ -93,7 +93,7 @@ func main() {
 		log.Fatal("guest exited after becoming healthy; restarting the supervisor")
 	case <-interruptContext.Done():
 	}
-	prepareGuestShutdown(runtimeConfiguration.Firecracker.HostHTTPListenAddress)
+	prepareGuestShutdown(runtimeConfiguration.Guest.HostHTTPListenAddress)
 	stopProxy()
 	stopListenerProxies()
 	errorValue = supervisorService.StopGuest(guestInstance)

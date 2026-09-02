@@ -15,7 +15,7 @@ type RuntimeConfiguration struct {
 	Capabilities  CapabilityConfiguration     `json:"capabilities"`
 	AgentProfiles []AgentProfileConfiguration `json:"agentProfiles"`
 	LanguageModel LanguageModelConfiguration  `json:"languageModel"`
-	Firecracker   FirecrackerConfiguration    `json:"firecracker"`
+	Guest         GuestConfiguration          `json:"guest"`
 	Bridge        BridgeConfiguration         `json:"bridge"`
 	Database      DatabaseConfiguration       `json:"database"`
 	Memory        MemoryConfiguration         `json:"memory"`
@@ -178,10 +178,8 @@ type LanguageModelCapabilityConfiguration struct {
 	ContextWindowTokens int    `json:"contextWindowTokens"`
 }
 
-type FirecrackerConfiguration struct {
+type GuestConfiguration struct {
 	VirtualMachineMonitor  string                            `json:"virtualMachineMonitor"`
-	FirecrackerPath        string                            `json:"firecrackerPath"`
-	JailerPath             string                            `json:"jailerPath"`
 	CloudHypervisorPath    string                            `json:"cloudHypervisorPath"`
 	VfkitPath              string                            `json:"vfkitPath"`
 	VirtiofsdPath          string                            `json:"virtiofsdPath"`

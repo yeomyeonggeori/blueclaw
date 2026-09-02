@@ -1,6 +1,6 @@
 //go:build linux
 
-package firecracker
+package guest
 
 import (
 	"bufio"
@@ -23,7 +23,7 @@ func DefaultGuestConnectionDialer(healthContext context.Context, vsockUnixSocket
 	if errorValue != nil {
 		return nil, errorValue
 	}
-	if errorValue = connection.SetDeadline(soonestDeadline(time.Now(), healthContext, firecrackerVSockOperationTimeout)); errorValue != nil {
+	if errorValue = connection.SetDeadline(soonestDeadline(time.Now(), healthContext, guestVSockOperationTimeout)); errorValue != nil {
 		_ = connection.Close()
 		return nil, errorValue
 	}
@@ -41,21 +41,21 @@ func DefaultGuestConnectionDialer(healthContext context.Context, vsockUnixSocket
 	}
 	if !strings.HasPrefix(response, "OK ") {
 		_ = connection.Close()
-		return nil, fmt.Errorf("firecracker vsock connect failed: %s", strings.TrimSpace(response))
+		return nil, fmt.Errorf("vsock connect failed: %s", strings.TrimSpace(response))
 	}
 	if errorValue = connection.SetDeadline(time.Time{}); errorValue != nil {
 		_ = connection.Close()
 		return nil, errorValue
 	}
 
-	return firecrackerGuestConnection{Conn: connection, Reader: reader}, nil
+	return unixSocketGuestConnection{Conn: connection, Reader: reader}, nil
 }
 
-type firecrackerGuestConnection struct {
+type unixSocketGuestConnection struct {
 	net.Conn
 	Reader *bufio.Reader
 }
 
-func (firecrackerGuestConnection firecrackerGuestConnection) Read(buffer []byte) (int, error) {
-	return firecrackerGuestConnection.Reader.Read(buffer)
+func (unixSocketGuestConnection unixSocketGuestConnection) Read(buffer []byte) (int, error) {
+	return unixSocketGuestConnection.Reader.Read(buffer)
 }

@@ -270,7 +270,7 @@ func assertTestFileContent(t *testing.T, path string, expectedContent string) {
 func newFileToolTestCatalogBuilder(workspacePath string) *ToolCatalogBuilder {
 	terminalService := security.NewShellService(config.TerminalConfiguration{
 		WorkspaceRootPath: workspacePath,
-		Mode:              "firecrackerGuest",
+		Mode:              "virtualMachineGuest",
 		TimeoutSecond:     30,
 	})
 	toolCatalogBuilder := NewToolCatalogBuilder()
@@ -283,7 +283,7 @@ func newFileToolTestCatalogBuilder(workspacePath string) *ToolCatalogBuilder {
 func newTerminalToolTestCatalogBuilder(workspacePath string) *ToolCatalogBuilder {
 	terminalService := security.NewShellService(config.TerminalConfiguration{
 		WorkspaceRootPath:     workspacePath,
-		Mode:                  "firecrackerGuest",
+		Mode:                  "virtualMachineGuest",
 		TimeoutSecond:         5,
 		OutputMaxBytes:        4096,
 		SessionMaxCount:       2,

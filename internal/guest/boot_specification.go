@@ -1,4 +1,4 @@
-package firecracker
+package guest
 
 type BootSpecification struct {
 	InstanceID                string

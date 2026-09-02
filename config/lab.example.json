@@ -23,12 +23,5 @@
     "mountDirectoryPath": "/mnt/shared",
     "sshUsername": "admin",
     "sshPassword": "admin"
-  },
-  "firecracker": {
-    "binaryPath": "/usr/local/bin/firecracker",
-    "kernelImagePath": "/opt/blueclaw/blueclaw-runtime/vmlinux.bin",
-    "rootfsImagePath": "/opt/blueclaw/blueclaw-runtime/rootfs.ext4",
-    "workspaceImagePath": "/opt/blueclaw/workspace.ext4",
-    "vsockCID": 52
   }
 }

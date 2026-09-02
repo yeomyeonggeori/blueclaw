@@ -1,7 +1,6 @@
-package firecracker
+package guest
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -34,63 +33,6 @@ func guestLaunchRequestFixture(t *testing.T) GuestLaunchRequest {
 			GuestMACAddress: "AA:FC:00:00:00:01",
 			HostDeviceName:  "bctap0",
 		}},
-	}
-}
-
-func TestFirecrackerMonitorWritesJailedConfiguration(t *testing.T) {
-	request := guestLaunchRequestFixture(t)
-	monitor := FirecrackerMonitor{FirecrackerPath: "/usr/bin/firecracker", JailerPath: "/usr/bin/jailer"}
-
-	guestLaunch, errorValue := monitor.PrepareGuestLaunch(request)
-	if errorValue != nil {
-		t.Fatalf("expected launch to prepare: %v", errorValue)
-	}
-
-	if guestLaunch.ExecutablePath != "/usr/bin/jailer" {
-		t.Fatalf("expected the jailer to be executed, got %q", guestLaunch.ExecutablePath)
-	}
-	if !strings.Contains(strings.Join(guestLaunch.Arguments, " "), "--exec-file /usr/bin/firecracker") {
-		t.Fatalf("expected the jailer to exec firecracker, got %v", guestLaunch.Arguments)
-	}
-
-	document, errorValue := os.ReadFile(filepath.Join(guestLaunch.InstanceRootPath, "firecracker-config.json"))
-	if errorValue != nil {
-		t.Fatalf("expected a written configuration document: %v", errorValue)
-	}
-	var configurationDocument ConfigurationDocument
-	if errorValue := json.Unmarshal(document, &configurationDocument); errorValue != nil {
-		t.Fatalf("expected the configuration document to parse: %v", errorValue)
-	}
-
-	if configurationDocument.MachineConfiguration.VCPUCount != 4 {
-		t.Fatalf("expected vcpu count to match, got %d", configurationDocument.MachineConfiguration.VCPUCount)
-	}
-	if configurationDocument.VSockConfiguration.GuestCID != 52 {
-		t.Fatalf("expected guest cid to match, got %d", configurationDocument.VSockConfiguration.GuestCID)
-	}
-	if configurationDocument.BootSource.KernelImagePath != "/vmlinux.bin" {
-		t.Fatalf("expected jailed kernel path, got %q", configurationDocument.BootSource.KernelImagePath)
-	}
-	if !strings.Contains(configurationDocument.BootSource.BootArguments, " rw") {
-		t.Fatalf("expected guest rootfs to boot writable, got %q", configurationDocument.BootSource.BootArguments)
-	}
-	if len(configurationDocument.DriveConfigurations) != 2 {
-		t.Fatalf("expected rootfs and workspace drives, got %d", len(configurationDocument.DriveConfigurations))
-	}
-	if configurationDocument.DriveConfigurations[0].PathOnHost != "/rootfs.ext4" || configurationDocument.DriveConfigurations[0].IsReadOnly {
-		t.Fatalf("expected a writable jailed rootfs, got %+v", configurationDocument.DriveConfigurations[0])
-	}
-	if configurationDocument.DriveConfigurations[1].PathOnHost != "/workspace.ext4" {
-		t.Fatalf("expected jailed workspace path, got %q", configurationDocument.DriveConfigurations[1].PathOnHost)
-	}
-	if configurationDocument.VSockConfiguration.UnixSocketPath != "/firecracker-vsock.socket" {
-		t.Fatalf("expected jailed vsock path, got %q", configurationDocument.VSockConfiguration.UnixSocketPath)
-	}
-	if len(configurationDocument.NetworkConfigurations) != 1 {
-		t.Fatalf("expected one network interface, got %+v", configurationDocument.NetworkConfigurations)
-	}
-	if configurationDocument.NetworkConfigurations[0].HostDeviceName != "bctap0" {
-		t.Fatalf("expected the tap device to reach the guest, got %+v", configurationDocument.NetworkConfigurations[0])
 	}
 }
 
@@ -159,9 +101,9 @@ func TestSelectVirtualMachineMonitorRejectsAnUnknownName(t *testing.T) {
 	if _, errorValue := SelectVirtualMachineMonitor("qemu", MonitorBinaryPaths{}); errorValue == nil {
 		t.Fatal("expected an unknown monitor to be refused")
 	}
-	monitor, errorValue := SelectVirtualMachineMonitor("", MonitorBinaryPaths{FirecrackerPath: "/f", JailerPath: "/j"})
-	if errorValue != nil || monitor.Name() != FirecrackerMonitorName {
-		t.Fatalf("expected firecracker when the runtime names no monitor, got %v %v", monitor, errorValue)
+	monitor, errorValue := SelectVirtualMachineMonitor("", MonitorBinaryPaths{CloudHypervisorPath: "/c"})
+	if errorValue != nil || monitor.Name() != CloudHypervisorMonitorName {
+		t.Fatalf("expected cloud hypervisor when the runtime names no monitor, got %v %v", monitor, errorValue)
 	}
 	monitor, errorValue = SelectVirtualMachineMonitor(CloudHypervisorMonitorName, MonitorBinaryPaths{CloudHypervisorPath: "/c"})
 	if errorValue != nil || monitor.Name() != CloudHypervisorMonitorName {
@@ -378,8 +320,6 @@ func TestAMonitorIsNeverAskedForBinariesItDoesNotRun(t *testing.T) {
 		{VfkitMonitorName, MonitorBinaryPaths{}, "vfkitPath is required"},
 		{CloudHypervisorMonitorName, MonitorBinaryPaths{CloudHypervisorPath: "/usr/local/bin/cloud-hypervisor"}, ""},
 		{CloudHypervisorMonitorName, MonitorBinaryPaths{}, "cloudHypervisorPath is required"},
-		{FirecrackerMonitorName, MonitorBinaryPaths{FirecrackerPath: "/f", JailerPath: "/j"}, ""},
-		{FirecrackerMonitorName, MonitorBinaryPaths{FirecrackerPath: "/f"}, "jailerPath is required"},
 	}
 
 	for _, testCase := range testCases {
@@ -390,7 +330,7 @@ func TestAMonitorIsNeverAskedForBinariesItDoesNotRun(t *testing.T) {
 		validationError := monitor.ValidateBinaryPaths()
 		if testCase.expectedError == "" {
 			if validationError != nil {
-				t.Fatalf("a Mac has no firecracker and no jailer, so %s must not ask for them: %v", testCase.monitorName, validationError)
+				t.Fatalf("a Mac has no cloud-hypervisor, so %s must not ask for one: %v", testCase.monitorName, validationError)
 			}
 			continue
 		}

@@ -703,14 +703,14 @@ Slack export permissions or plan limits.
 
 `cmd/blueclaw-lab` drives the rig this repository ships: an Apple Silicon macOS
 host acting as the main computer, a Tart ARM Ubuntu virtual machine standing in
-for the appliance, Firecracker inside that machine, and Blueclaw inside the
-Firecracker guest. Mattermost stays in the virtual machine, outside the guest.
-`config/lab.example.json` configures all three layers, and `lab/scripts/` holds
-the provisioning and connector scenario scripts.
+for the appliance, and Blueclaw inside a guest that machine boots under Cloud
+Hypervisor. Mattermost stays in the virtual machine, outside the guest.
+`config/lab.example.json` configures the host and the machine, the host repository's
+fleet lane boots the guest, and `lab/scripts/` holds the provisioning and connector
+scenario scripts.
 
 ```bash
 go run ./cmd/blueclaw-lab --configuration config/lab.example.json vm-up
-go run ./cmd/blueclaw-lab --configuration config/lab.example.json smoke-firecracker
 go run ./cmd/blueclaw-lab --configuration config/lab.example.json vm-down
 ```
 

@@ -1,6 +1,6 @@
 //go:build !linux
 
-package firecracker
+package guest
 
 import (
 	"context"

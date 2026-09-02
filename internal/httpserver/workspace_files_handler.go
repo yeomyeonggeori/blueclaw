@@ -24,7 +24,7 @@ const workspaceDownloadMaximumBytes int64 = 64 * 1024 * 1024
 const tooOldToReadAsThePerson = "this device's workspace helper cannot read a private home; it needs one that can act for a person"
 
 // WorkspaceFilesHandler serves read-only listings and downloads of the guest's
-// live workspace filesystem. The workspace lives inside the Firecracker guest
+// live workspace filesystem. The workspace lives inside the virtual-machine guest
 // image, so a host-side file browser cannot read it; admind proxies here to show
 // a person their own workspace. Every read runs as the person named by the
 // caller, because a private home is owned by that person's POSIX user and the

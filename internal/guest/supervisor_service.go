@@ -1,4 +1,4 @@
-package firecracker
+package guest
 
 import (
 	"context"
@@ -17,12 +17,12 @@ import (
 )
 
 type SupervisorService struct {
-	FirecrackerConfiguration config.FirecrackerConfiguration
-	WorkspaceVolumeService   WorkspaceVolumeService
-	GuestHealthClient        GuestHealthClient
-	OutboundNetworkService   OutboundNetworkService
-	VirtualMachineMonitor    VirtualMachineMonitor
-	HealthCheckInterval      time.Duration
+	GuestConfiguration     config.GuestConfiguration
+	WorkspaceVolumeService WorkspaceVolumeService
+	GuestHealthClient      GuestHealthClient
+	OutboundNetworkService OutboundNetworkService
+	VirtualMachineMonitor  VirtualMachineMonitor
+	HealthCheckInterval    time.Duration
 
 	mutex                sync.RWMutex
 	commandByInstanceID  map[string]*exec.Cmd
@@ -41,18 +41,18 @@ type OutboundNetworkService interface {
 }
 
 func NewSupervisorService(
-	firecrackerConfiguration config.FirecrackerConfiguration,
+	guestConfiguration config.GuestConfiguration,
 	workspaceVolumeService WorkspaceVolumeService,
 	guestHealthClient GuestHealthClient,
 ) *SupervisorService {
 	return &SupervisorService{
-		FirecrackerConfiguration: firecrackerConfiguration,
-		WorkspaceVolumeService:   workspaceVolumeService,
-		GuestHealthClient:        guestHealthClient,
-		OutboundNetworkService:   HostOutboundNetworkService{},
-		commandByInstanceID:      map[string]*exec.Cmd{},
-		exitByInstanceID:         map[string]*guestExitState{},
-		sidecarsByInstanceID:     map[string][]*exec.Cmd{},
+		GuestConfiguration:     guestConfiguration,
+		WorkspaceVolumeService: workspaceVolumeService,
+		GuestHealthClient:      guestHealthClient,
+		OutboundNetworkService: HostOutboundNetworkService{},
+		commandByInstanceID:    map[string]*exec.Cmd{},
+		exitByInstanceID:       map[string]*guestExitState{},
+		sidecarsByInstanceID:   map[string][]*exec.Cmd{},
 	}
 }
 
@@ -196,7 +196,7 @@ func (supervisorService *SupervisorService) WaitForGuestHealth(healthContext con
 			select {
 			case <-exitState.exited:
 				return fmt.Errorf(
-					"firecracker exited before guest became healthy: %v; stderr tail: %s",
+					"the monitor exited before the guest became healthy: %v; stderr tail: %s",
 					exitState.exitError,
 					readLogTail(filepath.Join(guestInstance.BootSpecification.LogDirectoryPath, "stderr.log")),
 				)
@@ -249,15 +249,15 @@ func (supervisorService *SupervisorService) buildBootSpecification() (BootSpecif
 	}
 
 	workspaceVolumeMetadata, errorValue := supervisorService.WorkspaceVolumeService.EnsureWorkspaceImage(
-		supervisorService.FirecrackerConfiguration.WorkspaceImagePath,
-		supervisorService.FirecrackerConfiguration.WorkspaceMinimumBytes,
+		supervisorService.GuestConfiguration.WorkspaceImagePath,
+		supervisorService.GuestConfiguration.WorkspaceMinimumBytes,
 	)
 	if errorValue != nil {
 		return BootSpecification{}, errorValue
 	}
 
 	instanceID := newIdentifier()
-	logDirectoryPath := filepath.Join(supervisorService.FirecrackerConfiguration.LogDirectoryPath, instanceID)
+	logDirectoryPath := filepath.Join(supervisorService.GuestConfiguration.LogDirectoryPath, instanceID)
 	errorValue = os.MkdirAll(logDirectoryPath, 0o755)
 	if errorValue != nil {
 		return BootSpecification{}, errorValue
@@ -279,17 +279,17 @@ func (supervisorService *SupervisorService) buildBootSpecification() (BootSpecif
 
 	guestLaunch, errorValue := virtualMachineMonitor.PrepareGuestLaunch(GuestLaunchRequest{
 		InstanceID:                instanceID,
-		KernelImagePath:           supervisorService.FirecrackerConfiguration.KernelImagePath,
-		RootFilesystemImagePath:   supervisorService.FirecrackerConfiguration.RootfsImagePath,
+		KernelImagePath:           supervisorService.GuestConfiguration.KernelImagePath,
+		RootFilesystemImagePath:   supervisorService.GuestConfiguration.RootfsImagePath,
 		WorkspaceImagePath:        workspaceVolumeMetadata.HostImagePath,
 		RuntimeDirectoryPath:      runtimeDirectoryPath,
-		VCPUCount:                 supervisorService.FirecrackerConfiguration.VCPUCount,
-		MemoryMiB:                 supervisorService.FirecrackerConfiguration.MemoryMiB,
-		VSockCID:                  supervisorService.FirecrackerConfiguration.VSockCID,
+		VCPUCount:                 supervisorService.GuestConfiguration.VCPUCount,
+		MemoryMiB:                 supervisorService.GuestConfiguration.MemoryMiB,
+		VSockCID:                  supervisorService.GuestConfiguration.VSockCID,
 		HostDialedGuestVSockPorts: supervisorService.hostDialedGuestVSockPorts(),
 		GuestDialedHostVSockPorts: supervisorService.guestDialedHostVSockPorts(),
 		NetworkInterfaces:         networkInterfaces,
-		DeliveryDirectoryPath:     supervisorService.FirecrackerConfiguration.DeliveryDirectoryPath,
+		DeliveryDirectoryPath:     supervisorService.GuestConfiguration.DeliveryDirectoryPath,
 		LogDirectoryPath:          logDirectoryPath,
 	})
 	if errorValue != nil {
@@ -308,14 +308,14 @@ func (supervisorService *SupervisorService) buildBootSpecification() (BootSpecif
 		VSockUnixSocketPathByPort: guestLaunch.VSockUnixSocketPathByPort,
 		Sidecars:                  guestLaunch.Sidecars,
 		OutboundNetwork:           outboundNetwork,
-		HealthPortOrService:       supervisorService.FirecrackerConfiguration.HealthPortOrService,
-		VSockCID:                  supervisorService.FirecrackerConfiguration.VSockCID,
+		HealthPortOrService:       supervisorService.GuestConfiguration.HealthPortOrService,
+		VSockCID:                  supervisorService.GuestConfiguration.VSockCID,
 		WorkspaceVolumeMetadata:   workspaceVolumeMetadata,
 	}, nil
 }
 
 func (supervisorService *SupervisorService) hostDialedGuestVSockPorts() []uint32 {
-	configuration := supervisorService.FirecrackerConfiguration
+	configuration := supervisorService.GuestConfiguration
 	ports := []uint32{}
 	for _, portOrService := range []string{configuration.HealthPortOrService, configuration.GuestHTTPPortOrService} {
 		if port, errorValue := strconv.ParseUint(portOrService, 10, 32); errorValue == nil {
@@ -327,7 +327,7 @@ func (supervisorService *SupervisorService) hostDialedGuestVSockPorts() []uint32
 
 func (supervisorService *SupervisorService) guestDialedHostVSockPorts() []uint32 {
 	ports := []uint32{}
-	for _, listenerProxy := range supervisorService.FirecrackerConfiguration.GuestListenerProxies {
+	for _, listenerProxy := range supervisorService.GuestConfiguration.GuestListenerProxies {
 		ports = append(ports, listenerProxy.GuestPort)
 	}
 	return ports
@@ -338,19 +338,17 @@ func (supervisorService *SupervisorService) resolveVirtualMachineMonitor() (Virt
 		return supervisorService.VirtualMachineMonitor, nil
 	}
 	return SelectVirtualMachineMonitor(
-		supervisorService.FirecrackerConfiguration.VirtualMachineMonitor,
+		supervisorService.GuestConfiguration.VirtualMachineMonitor,
 		MonitorBinaryPaths{
-			FirecrackerPath:     supervisorService.FirecrackerConfiguration.FirecrackerPath,
-			JailerPath:          supervisorService.FirecrackerConfiguration.JailerPath,
-			CloudHypervisorPath: supervisorService.FirecrackerConfiguration.CloudHypervisorPath,
-			VfkitPath:           supervisorService.FirecrackerConfiguration.VfkitPath,
-			VirtiofsdPath:       supervisorService.FirecrackerConfiguration.VirtiofsdPath,
+			CloudHypervisorPath: supervisorService.GuestConfiguration.CloudHypervisorPath,
+			VfkitPath:           supervisorService.GuestConfiguration.VfkitPath,
+			VirtiofsdPath:       supervisorService.GuestConfiguration.VirtiofsdPath,
 		},
 	)
 }
 
 func (supervisorService *SupervisorService) prepareOutboundNetwork(instanceID string) (OutboundNetwork, []GuestNetworkInterface, error) {
-	networkConfiguration := resolvedOutboundNetworkConfiguration(supervisorService.FirecrackerConfiguration.OutboundNetwork, instanceID)
+	networkConfiguration := resolvedOutboundNetworkConfiguration(supervisorService.GuestConfiguration.OutboundNetwork, instanceID)
 	if !networkConfiguration.Enabled {
 		return OutboundNetwork{}, nil, nil
 	}
@@ -431,7 +429,7 @@ func removeGuestInstanceDirectory(bootSpecification BootSpecification) error {
 }
 
 func (supervisorService *SupervisorService) removeInactiveInstanceDirectories(runtimeDirectoryPath string, monitorName string) error {
-	monitorDirectoryPath := filepath.Join(runtimeDirectoryPath, monitorName)
+	monitorDirectoryPath := filepath.Join(runtimeDirectoryPath, instanceDirectoryNameFor(monitorName))
 	entries, errorValue := os.ReadDir(monitorDirectoryPath)
 	if os.IsNotExist(errorValue) {
 		return nil
@@ -464,13 +462,13 @@ func (supervisorService *SupervisorService) activeInstanceIDs() map[string]bool 
 }
 
 func (supervisorService *SupervisorService) runtimeDirectoryPath() string {
-	if supervisorService.FirecrackerConfiguration.RuntimeDirectoryPath != "" {
-		return supervisorService.FirecrackerConfiguration.RuntimeDirectoryPath
+	if supervisorService.GuestConfiguration.RuntimeDirectoryPath != "" {
+		return supervisorService.GuestConfiguration.RuntimeDirectoryPath
 	}
 	if runtime.GOOS == "linux" && os.Geteuid() == 0 {
 		return "/var/lib/bc"
 	}
-	return filepath.Join(os.TempDir(), "blueclaw-firecracker")
+	return filepath.Join(os.TempDir(), "blueclaw-guest")
 }
 
 func (supervisorService *SupervisorService) validateConfiguration() error {
@@ -481,34 +479,34 @@ func (supervisorService *SupervisorService) validateConfiguration() error {
 	if errorValue := monitor.ValidateBinaryPaths(); errorValue != nil {
 		return errorValue
 	}
-	if supervisorService.FirecrackerConfiguration.KernelImagePath == "" {
+	if supervisorService.GuestConfiguration.KernelImagePath == "" {
 		return errors.New("kernelImagePath is required")
 	}
-	if supervisorService.FirecrackerConfiguration.RootfsImagePath == "" {
+	if supervisorService.GuestConfiguration.RootfsImagePath == "" {
 		return errors.New("rootfsImagePath is required")
 	}
-	if supervisorService.FirecrackerConfiguration.WorkspaceImagePath == "" {
+	if supervisorService.GuestConfiguration.WorkspaceImagePath == "" {
 		return errors.New("workspaceImagePath is required")
 	}
-	if supervisorService.FirecrackerConfiguration.LogDirectoryPath == "" {
+	if supervisorService.GuestConfiguration.LogDirectoryPath == "" {
 		return errors.New("logDirectoryPath is required")
 	}
-	if supervisorService.FirecrackerConfiguration.VCPUCount <= 0 {
+	if supervisorService.GuestConfiguration.VCPUCount <= 0 {
 		return errors.New("vcpuCount must be positive")
 	}
-	if supervisorService.FirecrackerConfiguration.MemoryMiB <= 0 {
+	if supervisorService.GuestConfiguration.MemoryMiB <= 0 {
 		return errors.New("memoryMiB must be positive")
 	}
-	if supervisorService.FirecrackerConfiguration.VSockCID == 0 {
+	if supervisorService.GuestConfiguration.VSockCID == 0 {
 		return errors.New("vsockCID must be positive")
 	}
-	if supervisorService.FirecrackerConfiguration.HealthPortOrService == "" {
+	if supervisorService.GuestConfiguration.HealthPortOrService == "" {
 		return errors.New("healthPortOrService is required")
 	}
-	if supervisorService.FirecrackerConfiguration.GuestHTTPPortOrService == "" {
+	if supervisorService.GuestConfiguration.GuestHTTPPortOrService == "" {
 		return errors.New("guestHTTPPortOrService is required")
 	}
-	if supervisorService.FirecrackerConfiguration.HostHTTPListenAddress == "" {
+	if supervisorService.GuestConfiguration.HostHTTPListenAddress == "" {
 		return errors.New("hostHTTPListenAddress is required")
 	}
 

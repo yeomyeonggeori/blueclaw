@@ -1,4 +1,4 @@
-package firecracker
+package guest
 
 import (
 	"errors"
@@ -128,7 +128,7 @@ func sortedSocketPaths(socketPathByPort map[uint32]string) []string {
 }
 
 func buildVfkitInstanceRootPath(runtimeDirectoryPath string, instanceID string) string {
-	return filepath.Join(runtimeDirectoryPath, "vfkit", instanceID, "root")
+	return filepath.Join(runtimeDirectoryPath, vfkitInstanceDirectoryName, instanceID, "root")
 }
 
 func vfkitConsoleLogPath(request GuestLaunchRequest, instanceRootPath string) string {

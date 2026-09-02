@@ -1,4 +1,4 @@
-package firecracker
+package guest
 
 import (
 	"context"
@@ -27,7 +27,7 @@ func TestVSockGuestHealthClientChecksHealth(t *testing.T) {
 	guestHealthClient := VSockGuestHealthClient{
 		DialGuestConnection: func(healthContext context.Context, vsockUnixSocketPath string, healthPortOrService string) (GuestConnection, error) {
 			_ = healthContext
-			if vsockUnixSocketPath != "/tmp/firecracker-vsock.socket" {
+			if vsockUnixSocketPath != "/tmp/guest-vsock.socket" {
 				t.Fatalf("expected vsock socket path to match, got %q", vsockUnixSocketPath)
 			}
 			if healthPortOrService != "8080" {
@@ -37,7 +37,7 @@ func TestVSockGuestHealthClientChecksHealth(t *testing.T) {
 		},
 	}
 
-	errorValue := guestHealthClient.CheckHealth(context.Background(), BootSpecification{VSockUnixSocketPath: "/tmp/firecracker-vsock.socket", HealthPortOrService: "8080"})
+	errorValue := guestHealthClient.CheckHealth(context.Background(), BootSpecification{VSockUnixSocketPath: "/tmp/guest-vsock.socket", HealthPortOrService: "8080"})
 	if errorValue != nil {
 		t.Fatalf("expected health check to succeed: %v", errorValue)
 	}
@@ -53,7 +53,7 @@ func TestVSockGuestHealthClientFailsOnUnexpectedHealth(t *testing.T) {
 		},
 	}
 
-	errorValue := guestHealthClient.CheckHealth(context.Background(), BootSpecification{VSockUnixSocketPath: "/tmp/firecracker-vsock.socket", HealthPortOrService: "8080"})
+	errorValue := guestHealthClient.CheckHealth(context.Background(), BootSpecification{VSockUnixSocketPath: "/tmp/guest-vsock.socket", HealthPortOrService: "8080"})
 	if errorValue == nil {
 		t.Fatal("expected unexpected health response to fail")
 	}
