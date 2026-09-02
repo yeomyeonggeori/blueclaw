@@ -607,8 +607,12 @@ func loadAgentInstructionBundle(runtimeConfiguration config.RuntimeConfiguration
 		}
 		discoveredSkillInstructions := readSkillInstructions(rootPath, agentruntime.BundledSkillRootPath(rootPath))
 		for _, skillInstruction := range discoveredSkillInstructions {
-			if strings.TrimSpace(skillInstruction.Name) != "" {
-				includedSkillByName[skillInstruction.Name] = true
+			skillName := strings.TrimSpace(skillInstruction.Name)
+			if includedSkillByName[skillName] {
+				continue
+			}
+			if skillName != "" {
+				includedSkillByName[skillName] = true
 			}
 			skillInstructions = append(skillInstructions, skillInstruction)
 		}
