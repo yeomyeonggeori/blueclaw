@@ -1,4 +1,4 @@
-package firecracker
+package guest
 
 import "fmt"
 
@@ -37,7 +37,7 @@ type GuestLaunch struct {
 	Arguments        []string
 	InstanceRootPath string
 
-	// Firecracker and Cloud Hypervisor multiplex every guest port over one socket and
+	// Cloud Hypervisor multiplexes every guest port over one socket and
 	// open a port with a CONNECT line. vfkit binds a socket per port and speaks the
 	// stream straight away, so a monitor fills in one of these and never both.
 	VSockUnixSocketPath       string
@@ -56,9 +56,11 @@ type SidecarCommand struct {
 }
 
 const (
-	FirecrackerMonitorName     = "firecracker"
 	CloudHypervisorMonitorName = "cloudHypervisor"
 	VfkitMonitorName           = "vfkit"
+
+	cloudHypervisorInstanceDirectoryName = "cloud-hypervisor"
+	vfkitInstanceDirectoryName           = "vfkit"
 
 	// The guest mounts the delivery share by this tag, so it is one name in two repositories.
 	DeliveryMountTag = "delivery"
@@ -66,12 +68,7 @@ const (
 
 func SelectVirtualMachineMonitor(monitorName string, configuration MonitorBinaryPaths) (VirtualMachineMonitor, error) {
 	switch monitorName {
-	case "", FirecrackerMonitorName:
-		return FirecrackerMonitor{
-			FirecrackerPath: configuration.FirecrackerPath,
-			JailerPath:      configuration.JailerPath,
-		}, nil
-	case CloudHypervisorMonitorName:
+	case "", CloudHypervisorMonitorName:
 		return CloudHypervisorMonitor{
 			CloudHypervisorPath: configuration.CloudHypervisorPath,
 			VirtiofsdPath:       configuration.VirtiofsdPath,
@@ -82,9 +79,14 @@ func SelectVirtualMachineMonitor(monitorName string, configuration MonitorBinary
 	return nil, fmt.Errorf("unknown virtual machine monitor %q", monitorName)
 }
 
+func instanceDirectoryNameFor(monitorName string) string {
+	if monitorName == VfkitMonitorName {
+		return vfkitInstanceDirectoryName
+	}
+	return cloudHypervisorInstanceDirectoryName
+}
+
 type MonitorBinaryPaths struct {
-	FirecrackerPath     string
-	JailerPath          string
 	CloudHypervisorPath string
 	VfkitPath           string
 	VirtiofsdPath       string

@@ -68,17 +68,6 @@ func (service Service) VirtualMachineSSH(ctx context.Context, remoteArguments []
 	})
 }
 
-func (service Service) SmokeFirecracker(ctx context.Context) error {
-	return service.runScenarioScript(ctx, filepath.Join("lab", "scripts", "smoke-firecracker.sh"), []string{
-		service.configuration.Firecracker.BinaryPath,
-		service.configuration.Firecracker.KernelImagePath,
-		service.configuration.Firecracker.RootfsImagePath,
-		service.configuration.Firecracker.WorkspaceImagePath,
-		formatUnsignedInteger(service.configuration.Firecracker.VSockCID),
-		service.configuration.VirtualMachine.MountDirectoryPath,
-	})
-}
-
 func (service Service) ScenarioBrowserHandoff(ctx context.Context) error {
 	if service.configuration.Host.Mode != "single-mac" && service.configuration.Host.Mode != "dual-mac" {
 		return errorUnsupportedHostMode

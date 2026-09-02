@@ -92,9 +92,10 @@
       "executionMode": "auto"
     }
   },
-  "firecracker": {
-    "firecrackerPath": "/usr/local/bin/firecracker",
-    "jailerPath": "/usr/local/bin/jailer",
+  "guest": {
+    "virtualMachineMonitor": "cloudHypervisor",
+    "cloudHypervisorPath": "/usr/local/bin/cloud-hypervisor",
+    "virtiofsdPath": "/usr/local/bin/virtiofsd",
     "kernelImagePath": "/opt/blueclaw/blueclaw-runtime/vmlinux.bin",
     "rootfsImagePath": "/opt/blueclaw/blueclaw-runtime/rootfs.ext4",
     "workspaceImagePath": "/var/lib/blueclaw/workspace.ext4",
@@ -308,7 +309,7 @@
     }
   ],
   "terminal": {
-    "mode": "firecrackerGuest",
+    "mode": "virtualMachineGuest",
     "workspaceRootPath": "/workspace",
     "timeoutSecond": 120,
     "outputMaxBytes": 32768,

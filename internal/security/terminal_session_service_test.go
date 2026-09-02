@@ -13,7 +13,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 )
 
-func TestRunCommandUsesBashStdinInFirecrackerGuestMode(t *testing.T) {
+func TestRunCommandUsesBashStdinInVirtualMachineGuestMode(t *testing.T) {
 	shellService := NewShellService(testTerminalConfiguration(t))
 
 	commandResult, errorValue := shellService.RunCommand(context.Background(), CommandRequest{
@@ -28,7 +28,7 @@ func TestRunCommandUsesBashStdinInFirecrackerGuestMode(t *testing.T) {
 	}
 }
 
-func TestRunCommandRequiresPreparedWorkspaceWorkingDirectoryInFirecrackerGuestMode(t *testing.T) {
+func TestRunCommandRequiresPreparedWorkspaceWorkingDirectoryInVirtualMachineGuestMode(t *testing.T) {
 	terminalConfiguration := testTerminalConfiguration(t)
 	shellService := NewShellService(terminalConfiguration)
 	workingDirectoryPath := terminalConfiguration.WorkspaceRootPath + "/.blueclaw/tmp/slides"
@@ -290,7 +290,7 @@ func testTerminalConfiguration(t *testing.T) config.TerminalConfiguration {
 	t.Helper()
 	workspaceRootPath := t.TempDir()
 	return config.TerminalConfiguration{
-		Mode:                  "firecrackerGuest",
+		Mode:                  "virtualMachineGuest",
 		WorkspaceRootPath:     workspaceRootPath,
 		AllowNetwork:          true,
 		AllowInteractiveShell: true,

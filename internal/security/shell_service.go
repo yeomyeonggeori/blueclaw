@@ -284,7 +284,7 @@ func processIDsWithEnvironmentMarker(procRootPath string, scopeMarker string) []
 }
 
 func (shellService *ShellService) prepareWorkingDirectory(workingDirectoryPath string) error {
-	if shellService.commandGuardrailService.terminalConfiguration.Mode != "firecrackerGuest" {
+	if shellService.commandGuardrailService.terminalConfiguration.Mode != "virtualMachineGuest" {
 		return nil
 	}
 	fileInformation, errorValue := os.Stat(workingDirectoryPath)

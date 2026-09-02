@@ -1,11 +1,11 @@
-package firecracker
+package guest
 
 import (
 	"context"
 	"time"
 )
 
-const firecrackerVSockOperationTimeout = 2 * time.Second
+const guestVSockOperationTimeout = 2 * time.Second
 
 func soonestDeadline(now time.Time, ctx context.Context, timeout time.Duration) time.Time {
 	deadline := now.Add(timeout)

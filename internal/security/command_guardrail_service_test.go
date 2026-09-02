@@ -26,7 +26,7 @@ func TestCommandPlanUsesPOSIXHelperForExecutionIdentity(t *testing.T) {
 	}
 	workspaceRootPath := t.TempDir()
 	commandGuardrailService := NewCommandGuardrailService(config.TerminalConfiguration{
-		Mode:                  "firecrackerGuest",
+		Mode:                  "virtualMachineGuest",
 		WorkspaceRootPath:     workspaceRootPath,
 		AllowNetwork:          true,
 		AllowInteractiveShell: true,
@@ -130,7 +130,7 @@ func TestCommandPlanKeepsPrivateCWDInsideHelperArguments(t *testing.T) {
 	workspaceRootPath := t.TempDir()
 	privateWorkingDirectoryPath := workspaceRootPath + "/private/people/person-1/tmp/task/deck"
 	commandGuardrailService := NewCommandGuardrailService(config.TerminalConfiguration{
-		Mode:                  "firecrackerGuest",
+		Mode:                  "virtualMachineGuest",
 		WorkspaceRootPath:     workspaceRootPath,
 		AllowNetwork:          true,
 		AllowInteractiveShell: true,
@@ -166,7 +166,7 @@ func TestCommandPlanDefersPathAccessToPOSIXPermissions(t *testing.T) {
 
 	workspaceRootPath := t.TempDir()
 	commandGuardrailService := NewCommandGuardrailService(config.TerminalConfiguration{
-		Mode:                  "firecrackerGuest",
+		Mode:                  "virtualMachineGuest",
 		WorkspaceRootPath:     workspaceRootPath,
 		AllowNetwork:          true,
 		AllowInteractiveShell: true,
@@ -200,7 +200,7 @@ func TestCommandGuardrailAllowsWorkspaceCapabilityCLIExecutable(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	commandGuardrailService := NewCommandGuardrailService(config.TerminalConfiguration{
-		Mode:                  "firecrackerGuest",
+		Mode:                  "virtualMachineGuest",
 		WorkspaceRootPath:     workspaceRootPath,
 		AllowNetwork:          true,
 		AllowInteractiveShell: true,

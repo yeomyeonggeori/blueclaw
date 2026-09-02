@@ -91,28 +91,6 @@ func TestVirtualMachineUpDefaultsSharedDirectoryToRepositoryRoot(t *testing.T) {
 	}
 }
 
-func TestSmokeFirecrackerUsesRemoteScriptExecution(t *testing.T) {
-	commandRunner := &fakeCommandRunner{outputValue: "10.0.0.5\n"}
-	service := NewService(buildTestConfiguration(), commandRunner, "/repo")
-
-	errorValue := service.SmokeFirecracker(context.Background())
-	if errorValue != nil {
-		t.Fatalf("expected firecracker smoke test to succeed: %v", errorValue)
-	}
-	if len(commandRunner.outputCommands) != 1 {
-		t.Fatalf("expected vm ip lookup, got %d output commands", len(commandRunner.outputCommands))
-	}
-	if len(commandRunner.runCommands) != 1 {
-		t.Fatalf("expected one remote script execution, got %d", len(commandRunner.runCommands))
-	}
-	if commandRunner.runCommands[0].ExecutableName != "sshpass" {
-		t.Fatalf("expected sshpass invocation, got %q", commandRunner.runCommands[0].ExecutableName)
-	}
-	if !strings.HasSuffix(commandRunner.runCommands[0].StandardInputPath, "lab/scripts/smoke-firecracker.sh") {
-		t.Fatalf("expected smoke script path, got %q", commandRunner.runCommands[0].StandardInputPath)
-	}
-}
-
 func buildTestConfiguration() Configuration {
 	return applyDefaultConfiguration(Configuration{
 		Host: HostConfiguration{
@@ -135,13 +113,6 @@ func buildTestConfiguration() Configuration {
 				ListenAddress: "127.0.0.1:8065",
 			},
 			SharedWorkspacePath: "/Users/test/workspace",
-		},
-		Firecracker: FirecrackerConfiguration{
-			BinaryPath:         "/usr/local/bin/firecracker",
-			KernelImagePath:    "/opt/blueclaw/vmlinux",
-			RootfsImagePath:    "/opt/blueclaw/rootfs.ext4",
-			WorkspaceImagePath: "/opt/blueclaw/workspace.ext4",
-			VSockCID:           52,
 		},
 	})
 }

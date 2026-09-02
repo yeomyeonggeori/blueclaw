@@ -1,4 +1,4 @@
-package firecracker
+package guest
 
 import (
 	"context"
@@ -29,7 +29,7 @@ func (vsockGuestHealthClient VSockGuestHealthClient) CheckHealth(healthContext c
 	vsockUnixSocketPath := bootSpecification.VSockUnixSocketPath
 	healthPortOrService := bootSpecification.HealthPortOrService
 
-	attemptContext, cancelAttempt := context.WithTimeout(healthContext, firecrackerVSockOperationTimeout)
+	attemptContext, cancelAttempt := context.WithTimeout(healthContext, guestVSockOperationTimeout)
 	defer cancelAttempt()
 
 	guestConnection, errorValue := dialGuestConnection(attemptContext, vsockUnixSocketPath, healthPortOrService)

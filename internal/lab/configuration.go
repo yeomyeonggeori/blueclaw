@@ -8,7 +8,6 @@ import (
 type Configuration struct {
 	Host           HostConfiguration           `json:"host"`
 	VirtualMachine VirtualMachineConfiguration `json:"vm"`
-	Firecracker    FirecrackerConfiguration    `json:"firecracker"`
 }
 
 type HostConfiguration struct {
@@ -44,14 +43,6 @@ type MattermostConfiguration struct {
 	ListenAddress string `json:"listenAddress"`
 }
 
-type FirecrackerConfiguration struct {
-	BinaryPath         string `json:"binaryPath"`
-	KernelImagePath    string `json:"kernelImagePath"`
-	RootfsImagePath    string `json:"rootfsImagePath"`
-	WorkspaceImagePath string `json:"workspaceImagePath"`
-	VSockCID           uint32 `json:"vsockCID"`
-}
-
 func LoadConfiguration(path string) (Configuration, error) {
 	document, errorValue := os.ReadFile(path)
 	if errorValue != nil {
@@ -83,9 +74,6 @@ func applyDefaultConfiguration(configuration Configuration) Configuration {
 	}
 	if configuration.VirtualMachine.SSHPassword == "" {
 		configuration.VirtualMachine.SSHPassword = "admin"
-	}
-	if configuration.Firecracker.BinaryPath == "" {
-		configuration.Firecracker.BinaryPath = "firecracker"
 	}
 
 	return configuration

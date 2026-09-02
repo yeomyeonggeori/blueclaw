@@ -1,4 +1,4 @@
-package firecracker
+package guest
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 
 func TestGuestListenerProxyForwardsBytesBidirectionally(t *testing.T) {
 	temporaryDirectory := mustShortTempDir(t)
-	vsockUnixSocketPath := filepath.Join(temporaryDirectory, "firecracker-vsock.socket")
+	vsockUnixSocketPath := filepath.Join(temporaryDirectory, "guest-vsock.socket")
 	targetUnixSocketPath := filepath.Join(temporaryDirectory, "target.socket")
 	const guestPort uint32 = 7000
 
@@ -87,8 +87,8 @@ func TestGuestListenerProxyForwardsBytesBidirectionally(t *testing.T) {
 func TestGuestListenerProxyRejectsMissingFields(t *testing.T) {
 	cases := []GuestListenerProxy{
 		{GuestPort: 7000, TargetUnixSocketPath: "/tmp/target.socket"},
-		{VSockUnixSocketPath: "/tmp/firecracker-vsock.socket", TargetUnixSocketPath: "/tmp/target.socket"},
-		{VSockUnixSocketPath: "/tmp/firecracker-vsock.socket", GuestPort: 7000},
+		{VSockUnixSocketPath: "/tmp/guest-vsock.socket", TargetUnixSocketPath: "/tmp/target.socket"},
+		{VSockUnixSocketPath: "/tmp/guest-vsock.socket", GuestPort: 7000},
 	}
 	for index, proxy := range cases {
 		errorValue := proxy.Serve(context.Background())
@@ -100,7 +100,7 @@ func TestGuestListenerProxyRejectsMissingFields(t *testing.T) {
 
 func TestGuestListenerProxyReplacesStaleListenSocket(t *testing.T) {
 	temporaryDirectory := mustShortTempDir(t)
-	vsockUnixSocketPath := filepath.Join(temporaryDirectory, "firecracker-vsock.socket")
+	vsockUnixSocketPath := filepath.Join(temporaryDirectory, "guest-vsock.socket")
 	const guestPort uint32 = 7000
 	listenPath := fmt.Sprintf("%s_%d", vsockUnixSocketPath, guestPort)
 

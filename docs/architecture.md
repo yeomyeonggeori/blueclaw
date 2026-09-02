@@ -87,7 +87,7 @@ the harness arrives as a factory chosen at startup by `agent.harness.name`
 ## Deployment shape
 
 - InternKim is a headless computer the customer owns. It accepts no inbound connection; how an operator reaches it is their own network's business.
-- Blueclaw runs inside a long-lived Firecracker guest with an immutable root filesystem.
+- Blueclaw runs inside a long-lived virtual-machine guest with an immutable root filesystem.
 - The host mounts exactly one writable path into the guest: `workspace`.
 - Persistent application data lives under `workspace/.blueclaw`.
 - Mattermost is self-hosted on the host beside the guest, not inside it.
@@ -132,7 +132,7 @@ The trust boundary is deliberate: long-lived secrets and memory stay on the
 appliance, agent work executes inside the guest, and the user's own machine is
 used only for browser handoff, approval, and interactive login.
 
-A standalone deployment drops the Firecracker guest, the capability sidecars,
+A standalone deployment drops the virtual-machine guest, the capability sidecars,
 and the tunnel; `cmd/blueclaw` is an ordinary process against Postgres and one
 OpenAI-compatible model endpoint. See the README's install section.
 
@@ -703,14 +703,14 @@ Slack export permissions or plan limits.
 
 `cmd/blueclaw-lab` drives the rig this repository ships: an Apple Silicon macOS
 host acting as the main computer, a Tart ARM Ubuntu virtual machine standing in
-for the appliance, Firecracker inside that machine, and Blueclaw inside the
-Firecracker guest. Mattermost stays in the virtual machine, outside the guest.
-`config/lab.example.json` configures all three layers, and `lab/scripts/` holds
-the provisioning and connector scenario scripts.
+for the appliance, and Blueclaw inside a guest that machine boots under Cloud
+Hypervisor. Mattermost stays in the virtual machine, outside the guest.
+`config/lab.example.json` configures the host and the machine, the host repository's
+fleet lane boots the guest, and `lab/scripts/` holds the provisioning and connector
+scenario scripts.
 
 ```bash
 go run ./cmd/blueclaw-lab --configuration config/lab.example.json vm-up
-go run ./cmd/blueclaw-lab --configuration config/lab.example.json smoke-firecracker
 go run ./cmd/blueclaw-lab --configuration config/lab.example.json vm-down
 ```
 

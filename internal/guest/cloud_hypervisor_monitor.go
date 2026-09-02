@@ -1,4 +1,4 @@
-package firecracker
+package guest
 
 import (
 	"errors"
@@ -106,5 +106,5 @@ func cloudHypervisorNetworkArguments(networkInterfaces []GuestNetworkInterface) 
 }
 
 func buildCloudHypervisorInstanceRootPath(runtimeDirectoryPath string, instanceID string) string {
-	return filepath.Join(runtimeDirectoryPath, "cloud-hypervisor", instanceID, "root")
+	return filepath.Join(runtimeDirectoryPath, cloudHypervisorInstanceDirectoryName, instanceID, "root")
 }

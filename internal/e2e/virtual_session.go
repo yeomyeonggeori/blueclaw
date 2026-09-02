@@ -3714,7 +3714,7 @@ func allowedToolsOrDefault(allowedTools []string) []string {
 
 func terminalConfiguration(workspacePath string) config.TerminalConfiguration {
 	return config.TerminalConfiguration{
-		Mode:                  "firecrackerGuest",
+		Mode:                  "virtualMachineGuest",
 		WorkspaceRootPath:     workspacePath,
 		TimeoutSecond:         120,
 		OutputMaxBytes:        32768,

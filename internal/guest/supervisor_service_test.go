@@ -1,4 +1,4 @@
-package firecracker
+package guest
 
 import (
 	"context"
@@ -48,9 +48,8 @@ func TestBuildBootSpecificationIncludesWorkspaceAndVSock(t *testing.T) {
 	}
 	workspaceImagePath := writeFakeExt4WorkspaceImage(t, workspacePath)
 	supervisorService := NewSupervisorService(
-		config.FirecrackerConfiguration{
-			FirecrackerPath:        "/usr/bin/firecracker",
-			JailerPath:             "/usr/bin/jailer",
+		config.GuestConfiguration{
+			CloudHypervisorPath:    "/usr/bin/cloud-hypervisor",
 			KernelImagePath:        kernelImagePath,
 			RootfsImagePath:        rootfsImagePath,
 			WorkspaceImagePath:     workspaceImagePath,
@@ -71,11 +70,11 @@ func TestBuildBootSpecificationIncludesWorkspaceAndVSock(t *testing.T) {
 		t.Fatalf("expected boot specification to build: %v", errorValue)
 	}
 
-	if bootSpecification.MonitorName != FirecrackerMonitorName {
-		t.Fatalf("expected the firecracker monitor by default, got %q", bootSpecification.MonitorName)
+	if bootSpecification.MonitorName != CloudHypervisorMonitorName {
+		t.Fatalf("expected cloud hypervisor by default, got %q", bootSpecification.MonitorName)
 	}
-	if bootSpecification.LaunchExecutablePath != "/usr/bin/jailer" {
-		t.Fatalf("expected the jailer to be launched, got %q", bootSpecification.LaunchExecutablePath)
+	if bootSpecification.LaunchExecutablePath != "/usr/bin/cloud-hypervisor" {
+		t.Fatalf("expected cloud hypervisor to be launched, got %q", bootSpecification.LaunchExecutablePath)
 	}
 	if bootSpecification.InstanceRootPath == "" {
 		t.Fatal("expected an instance root path")
@@ -107,9 +106,8 @@ func TestBuildBootSpecificationIncludesOutboundNetworkWhenEnabled(t *testing.T) 
 	workspaceImagePath := writeFakeExt4WorkspaceImage(t, workspacePath)
 	outboundNetworkService := &recordingOutboundNetworkService{}
 	supervisorService := NewSupervisorService(
-		config.FirecrackerConfiguration{
-			FirecrackerPath:        "/usr/bin/firecracker",
-			JailerPath:             "/usr/bin/jailer",
+		config.GuestConfiguration{
+			CloudHypervisorPath:    "/usr/bin/cloud-hypervisor",
 			KernelImagePath:        kernelImagePath,
 			RootfsImagePath:        rootfsImagePath,
 			WorkspaceImagePath:     workspaceImagePath,
@@ -148,9 +146,9 @@ func TestBuildBootSpecificationIncludesOutboundNetworkWhenEnabled(t *testing.T) 
 func TestStopGuestRemovesInstanceDirectory(t *testing.T) {
 	temporaryDirectory := t.TempDir()
 	instanceID := "testinstance"
-	jailerRootPath := buildJailerRootPath(temporaryDirectory, instanceID)
-	if errorValue := os.MkdirAll(filepath.Join(jailerRootPath, "nested"), 0o700); errorValue != nil {
-		t.Fatalf("expected jailer fixture: %v", errorValue)
+	instanceRootPath := buildCloudHypervisorInstanceRootPath(temporaryDirectory, instanceID)
+	if errorValue := os.MkdirAll(filepath.Join(instanceRootPath, "nested"), 0o700); errorValue != nil {
+		t.Fatalf("expected instance fixture: %v", errorValue)
 	}
 
 	command := exec.Command("sleep", "30")
@@ -158,30 +156,30 @@ func TestStopGuestRemovesInstanceDirectory(t *testing.T) {
 		t.Fatalf("expected process fixture: %v", errorValue)
 	}
 
-	supervisorService := NewSupervisorService(config.FirecrackerConfiguration{}, WorkspaceVolumeService{}, readyGuestHealthClient{})
+	supervisorService := NewSupervisorService(config.GuestConfiguration{}, WorkspaceVolumeService{}, readyGuestHealthClient{})
 	supervisorService.commandByInstanceID[instanceID] = command
 
 	errorValue := supervisorService.StopGuest(GuestInstance{
 		InstanceID: instanceID,
 		BootSpecification: BootSpecification{
-			InstanceRootPath: jailerRootPath,
+			InstanceRootPath: instanceRootPath,
 		},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected stop to succeed: %v", errorValue)
 	}
 
-	if _, errorValue := os.Stat(filepath.Dir(jailerRootPath)); !os.IsNotExist(errorValue) {
-		t.Fatalf("expected jailer directory to be removed, got %v", errorValue)
+	if _, errorValue := os.Stat(filepath.Dir(instanceRootPath)); !os.IsNotExist(errorValue) {
+		t.Fatalf("expected instance directory to be removed, got %v", errorValue)
 	}
 }
 
 func TestStopGuestCleansOutboundNetwork(t *testing.T) {
 	temporaryDirectory := t.TempDir()
 	instanceID := "testinstance"
-	jailerRootPath := buildJailerRootPath(temporaryDirectory, instanceID)
-	if errorValue := os.MkdirAll(filepath.Join(jailerRootPath, "nested"), 0o700); errorValue != nil {
-		t.Fatalf("expected jailer fixture: %v", errorValue)
+	instanceRootPath := buildCloudHypervisorInstanceRootPath(temporaryDirectory, instanceID)
+	if errorValue := os.MkdirAll(filepath.Join(instanceRootPath, "nested"), 0o700); errorValue != nil {
+		t.Fatalf("expected instance fixture: %v", errorValue)
 	}
 
 	command := exec.Command("sleep", "30")
@@ -190,14 +188,14 @@ func TestStopGuestCleansOutboundNetwork(t *testing.T) {
 	}
 
 	outboundNetworkService := &recordingOutboundNetworkService{}
-	supervisorService := NewSupervisorService(config.FirecrackerConfiguration{}, WorkspaceVolumeService{}, readyGuestHealthClient{})
+	supervisorService := NewSupervisorService(config.GuestConfiguration{}, WorkspaceVolumeService{}, readyGuestHealthClient{})
 	supervisorService.OutboundNetworkService = outboundNetworkService
 	supervisorService.commandByInstanceID[instanceID] = command
 
 	errorValue := supervisorService.StopGuest(GuestInstance{
 		InstanceID: instanceID,
 		BootSpecification: BootSpecification{
-			InstanceRootPath: jailerRootPath,
+			InstanceRootPath: instanceRootPath,
 			OutboundNetwork: OutboundNetwork{
 				Enabled:         true,
 				HostDeviceName:  "bctap-test",
@@ -219,27 +217,27 @@ func TestRemoveInactiveInstanceDirectoriesKeepsActiveInstance(t *testing.T) {
 	temporaryDirectory := t.TempDir()
 	activeInstanceID := "active"
 	inactiveInstanceID := "inactive"
-	activeRootPath := buildJailerRootPath(temporaryDirectory, activeInstanceID)
-	inactiveRootPath := buildJailerRootPath(temporaryDirectory, inactiveInstanceID)
+	activeRootPath := buildCloudHypervisorInstanceRootPath(temporaryDirectory, activeInstanceID)
+	inactiveRootPath := buildCloudHypervisorInstanceRootPath(temporaryDirectory, inactiveInstanceID)
 	if errorValue := os.MkdirAll(activeRootPath, 0o700); errorValue != nil {
-		t.Fatalf("expected active jailer fixture: %v", errorValue)
+		t.Fatalf("expected active instance fixture: %v", errorValue)
 	}
 	if errorValue := os.MkdirAll(inactiveRootPath, 0o700); errorValue != nil {
-		t.Fatalf("expected inactive jailer fixture: %v", errorValue)
+		t.Fatalf("expected inactive instance fixture: %v", errorValue)
 	}
 
-	supervisorService := NewSupervisorService(config.FirecrackerConfiguration{}, WorkspaceVolumeService{}, readyGuestHealthClient{})
+	supervisorService := NewSupervisorService(config.GuestConfiguration{}, WorkspaceVolumeService{}, readyGuestHealthClient{})
 	supervisorService.commandByInstanceID[activeInstanceID] = exec.Command("sleep", "30")
 
-	if errorValue := supervisorService.removeInactiveInstanceDirectories(temporaryDirectory, FirecrackerMonitorName); errorValue != nil {
+	if errorValue := supervisorService.removeInactiveInstanceDirectories(temporaryDirectory, CloudHypervisorMonitorName); errorValue != nil {
 		t.Fatalf("expected inactive cleanup to succeed: %v", errorValue)
 	}
 
 	if _, errorValue := os.Stat(filepath.Dir(activeRootPath)); errorValue != nil {
-		t.Fatalf("expected active jailer directory to remain: %v", errorValue)
+		t.Fatalf("expected active instance directory to remain: %v", errorValue)
 	}
 	if _, errorValue := os.Stat(filepath.Dir(inactiveRootPath)); !os.IsNotExist(errorValue) {
-		t.Fatalf("expected inactive jailer directory to be removed, got %v", errorValue)
+		t.Fatalf("expected inactive instance directory to be removed, got %v", errorValue)
 	}
 }
 
@@ -251,7 +249,7 @@ func (neverReadyGuestHealthClient) CheckHealth(healthContext context.Context, bo
 	return errors.New("vsock not ready")
 }
 
-func TestWaitForGuestHealthFailsFastWhenFirecrackerExits(t *testing.T) {
+func TestWaitForGuestHealthFailsFastWhenTheMonitorExits(t *testing.T) {
 	temporaryDirectory := t.TempDir()
 	instanceID := "exitinstance"
 	if errorValue := os.WriteFile(filepath.Join(temporaryDirectory, "stderr.log"), []byte("fatal: rootfs missing"), 0o600); errorValue != nil {
@@ -268,7 +266,7 @@ func TestWaitForGuestHealthFailsFastWhenFirecrackerExits(t *testing.T) {
 		close(exitState.exited)
 	}()
 
-	supervisorService := NewSupervisorService(config.FirecrackerConfiguration{}, WorkspaceVolumeService{}, neverReadyGuestHealthClient{})
+	supervisorService := NewSupervisorService(config.GuestConfiguration{}, WorkspaceVolumeService{}, neverReadyGuestHealthClient{})
 	supervisorService.commandByInstanceID[instanceID] = command
 	supervisorService.exitByInstanceID[instanceID] = exitState
 
@@ -284,7 +282,7 @@ func TestWaitForGuestHealthFailsFastWhenFirecrackerExits(t *testing.T) {
 	if errorValue == nil {
 		t.Fatal("expected fail-fast error")
 	}
-	if !strings.Contains(errorValue.Error(), "firecracker exited") || !strings.Contains(errorValue.Error(), "rootfs missing") {
+	if !strings.Contains(errorValue.Error(), "the monitor exited") || !strings.Contains(errorValue.Error(), "rootfs missing") {
 		t.Fatalf("expected exit diagnosis with stderr tail, got: %v", errorValue)
 	}
 	if time.Since(startedAt) > 3*time.Second {

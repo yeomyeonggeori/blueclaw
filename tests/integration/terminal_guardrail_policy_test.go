@@ -93,7 +93,7 @@ func TestTerminalGuardrailDeniesUnsupportedSandboxProvider(t *testing.T) {
 	workspaceRootPath := t.TempDir()
 	commandGuardrailService := security.NewCommandGuardrailService(config.TerminalConfiguration{
 		Mode:              "sandbox",
-		SandboxProvider:   "firecracker",
+		SandboxProvider:   "qemu",
 		WorkspaceRootPath: workspaceRootPath,
 		TimeoutSecond:     10,
 		AllowNetwork:      false,

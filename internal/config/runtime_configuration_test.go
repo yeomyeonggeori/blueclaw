@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestLoadRuntimeConfigurationIncludesFirecrackerAndBridge(t *testing.T) {
+func TestLoadRuntimeConfigurationIncludesGuestAndBridge(t *testing.T) {
 	workspacePath := t.TempDir()
 	runtimeConfigurationPath := filepath.Join(workspacePath, "runtime.json")
 	runtimeConfigurationDocument := `{
@@ -39,9 +39,8 @@ func TestLoadRuntimeConfigurationIncludesFirecrackerAndBridge(t *testing.T) {
       "contextWindowTokens": 1048576
     }
   },
-  "firecracker": {
-    "firecrackerPath": "/usr/bin/firecracker",
-    "jailerPath": "/usr/bin/jailer",
+  "guest": {
+    "cloudHypervisorPath": "/usr/bin/cloud-hypervisor",
     "kernelImagePath": "/opt/kernel",
     "rootfsImagePath": "/opt/rootfs.ext4",
     "workspaceImagePath": "/var/lib/blueclaw/workspace.ext4",
@@ -151,11 +150,11 @@ func TestLoadRuntimeConfigurationIncludesFirecrackerAndBridge(t *testing.T) {
 		t.Fatalf("expected runtime configuration to load: %v", errorValue)
 	}
 
-	if runtimeConfiguration.Firecracker.VCPUCount != 4 {
-		t.Fatalf("expected vcpu count to match, got %d", runtimeConfiguration.Firecracker.VCPUCount)
+	if runtimeConfiguration.Guest.VCPUCount != 4 {
+		t.Fatalf("expected vcpu count to match, got %d", runtimeConfiguration.Guest.VCPUCount)
 	}
-	if runtimeConfiguration.Firecracker.VSockCID != 52 {
-		t.Fatalf("expected vsock cid to match, got %d", runtimeConfiguration.Firecracker.VSockCID)
+	if runtimeConfiguration.Guest.VSockCID != 52 {
+		t.Fatalf("expected vsock cid to match, got %d", runtimeConfiguration.Guest.VSockCID)
 	}
 	if runtimeConfiguration.Bridge.AuthMode != "sshKeyReuse" {
 		t.Fatalf("expected bridge auth mode to match, got %q", runtimeConfiguration.Bridge.AuthMode)

@@ -649,7 +649,7 @@ tool participates in the same approval and evidence rules as a built-in one.
 | `cmd/blueclaw` | the daemon |
 | `cmd/blueclaw-posix-helper` | setuid identity switch, POSIX state sync, filesystem operations |
 | `cmd/blueclaw-lab` | development VM lifecycle and scenario runner |
-| `cmd/blueclaw-supervisor` | boots and watches the Firecracker guest, proxies host and guest HTTP, handles workspace image sync and restore |
+| `cmd/blueclaw-supervisor` | boots and watches the virtual-machine guest, proxies host and guest HTTP, handles workspace image sync and restore |
 | `cmd/blueclaw-backup`, `cmd/blueclaw-restore` | workspace and database snapshot bundles |
 | `cmd/blueclaw-guest-healthd`, `cmd/blueclaw-vsock-http-proxy` | guest health and host-to-guest transport |
 | `cmd/bluecollar` | runs the agent loop alone against one directory, for benchmarking; no database, connectors, policy, or POSIX projection |
@@ -682,7 +682,7 @@ bluecollar is readable without one.
 | Live model | same `go test` invocation | skipped unless `BLUECLAW_LIVE_LLM_TEST=1` is set — these call a real model and cost money |
 | External agent CLI | same `go test` invocation | each skips unless `BLUECLAW_TEST_CLAUDE_CODE_PATH`, `BLUECLAW_TEST_CODEX_PATH` or `BLUECLAW_TEST_ANTIGRAVITY_PATH` names the executable — the turn runs on that agent's own credentials |
 | Virtual session | `go run ./cmd/blueclaw-lab virtual-session` | requires `--live-llm` or `BLUECLAW_E2E_LIVE=1` |
-| Fleet and VM | `go run ./cmd/blueclaw-lab vm-up`, `smoke-firecracker` | needs the development VM from `config/lab.example.json` |
+| Fleet and VM | `go run ./cmd/blueclaw-lab vm-up` | needs the development VM from `config/lab.example.json`; the guest itself boots under the host's fleet lane |
 
 Regenerating the cross-process contracts:
 

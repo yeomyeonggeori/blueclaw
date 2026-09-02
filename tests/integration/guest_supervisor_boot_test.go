@@ -5,18 +5,19 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
-	"github.com/yeomyeonggeori/blueclaw/internal/firecracker"
+	"github.com/yeomyeonggeori/blueclaw/internal/guest"
 )
 
 const waitForFileDeadline = 30 * time.Second
 
 type fakeGuestHealthClient struct{}
 
-func (fakeGuestHealthClient) CheckHealth(healthContext context.Context, bootSpecification firecracker.BootSpecification) error {
+func (fakeGuestHealthClient) CheckHealth(healthContext context.Context, bootSpecification guest.BootSpecification) error {
 	_ = healthContext
 	if bootSpecification.VSockUnixSocketPath == "" {
 		return os.ErrInvalid
@@ -27,43 +28,36 @@ func (fakeGuestHealthClient) CheckHealth(healthContext context.Context, bootSpec
 	return nil
 }
 
-func TestSupervisorBootGuestWithFakeJailer(t *testing.T) {
+func TestSupervisorBootGuestWithFakeCloudHypervisor(t *testing.T) {
 	workspacePath := t.TempDir()
 	artifactDirectoryPath := filepath.Join(workspacePath, "artifacts")
-	jailerPath := filepath.Join(workspacePath, "fake-jailer.sh")
-	firecrackerPath := filepath.Join(workspacePath, "fake-firecracker")
+	cloudHypervisorPath := filepath.Join(workspacePath, "fake-cloud-hypervisor.sh")
 	kernelImagePath := filepath.Join(workspacePath, "kernel")
 	rootfsImagePath := filepath.Join(workspacePath, "rootfs.ext4")
-	jailerOutputPath := filepath.Join(workspacePath, "jailer-output.txt")
+	monitorOutputPath := filepath.Join(workspacePath, "monitor-output.txt")
 
-	errorValue := os.WriteFile(firecrackerPath, []byte("fake"), 0o700)
-	if errorValue != nil {
-		t.Fatalf("expected fake firecracker to be written: %v", errorValue)
-	}
-	if errorValue = os.WriteFile(kernelImagePath, []byte("kernel"), 0o600); errorValue != nil {
+	if errorValue := os.WriteFile(kernelImagePath, []byte("kernel"), 0o600); errorValue != nil {
 		t.Fatalf("expected fake kernel to be written: %v", errorValue)
 	}
-	if errorValue = os.WriteFile(rootfsImagePath, []byte("rootfs"), 0o600); errorValue != nil {
+	if errorValue := os.WriteFile(rootfsImagePath, []byte("rootfs"), 0o600); errorValue != nil {
 		t.Fatalf("expected fake rootfs to be written: %v", errorValue)
 	}
 	workspaceImagePath := filepath.Join(workspacePath, "workspace.ext4")
 	workspaceDocument := make([]byte, 4096)
 	workspaceDocument[1080] = 0x53
 	workspaceDocument[1081] = 0xef
-	if errorValue = os.WriteFile(workspaceImagePath, workspaceDocument, 0o600); errorValue != nil {
+	if errorValue := os.WriteFile(workspaceImagePath, workspaceDocument, 0o600); errorValue != nil {
 		t.Fatalf("expected fake workspace to be written: %v", errorValue)
 	}
 
-	jailerScript := "#!/bin/sh\nprintf '%s\n' \"$@\" > \"" + jailerOutputPath + "\"\nsleep 5\n"
-	errorValue = os.WriteFile(jailerPath, []byte(jailerScript), 0o700)
-	if errorValue != nil {
-		t.Fatalf("expected fake jailer to be written: %v", errorValue)
+	monitorScript := "#!/bin/sh\nprintf '%s\n' \"$@\" > \"" + monitorOutputPath + "\"\nsleep 5\n"
+	if errorValue := os.WriteFile(cloudHypervisorPath, []byte(monitorScript), 0o700); errorValue != nil {
+		t.Fatalf("expected fake cloud hypervisor to be written: %v", errorValue)
 	}
 
-	supervisorService := firecracker.NewSupervisorService(
-		config.FirecrackerConfiguration{
-			FirecrackerPath:        firecrackerPath,
-			JailerPath:             jailerPath,
+	supervisorService := guest.NewSupervisorService(
+		config.GuestConfiguration{
+			CloudHypervisorPath:    cloudHypervisorPath,
 			KernelImagePath:        kernelImagePath,
 			RootfsImagePath:        rootfsImagePath,
 			WorkspaceImagePath:     workspaceImagePath,
@@ -75,7 +69,7 @@ func TestSupervisorBootGuestWithFakeJailer(t *testing.T) {
 			HostHTTPListenAddress:  "127.0.0.1:8080",
 			LogDirectoryPath:       artifactDirectoryPath,
 		},
-		firecracker.WorkspaceVolumeService{},
+		guest.WorkspaceVolumeService{},
 		fakeGuestHealthClient{},
 	)
 
@@ -85,25 +79,16 @@ func TestSupervisorBootGuestWithFakeJailer(t *testing.T) {
 	}
 	defer supervisorService.StopGuest(guestInstance)
 
-	errorValue = supervisorService.WaitForGuestHealth(context.Background(), guestInstance)
-	if errorValue != nil {
+	if errorValue := supervisorService.WaitForGuestHealth(context.Background(), guestInstance); errorValue != nil {
 		t.Fatalf("expected guest health to succeed: %v", errorValue)
 	}
 
-	configurationDocument, errorValue := os.ReadFile(filepath.Join(guestInstance.BootSpecification.InstanceRootPath, "firecracker-config.json"))
+	monitorOutputDocument, errorValue := waitForFile(monitorOutputPath)
 	if errorValue != nil {
-		t.Fatalf("expected configuration document to be readable: %v", errorValue)
+		t.Fatalf("expected fake cloud hypervisor output to be readable: %v", errorValue)
 	}
-	if len(configurationDocument) == 0 {
-		t.Fatal("expected configuration document to be written")
-	}
-
-	jailerOutputDocument, errorValue := waitForFile(jailerOutputPath)
-	if errorValue != nil {
-		t.Fatalf("expected fake jailer output to be readable: %v", errorValue)
-	}
-	if len(jailerOutputDocument) == 0 {
-		t.Fatal("expected fake jailer to receive arguments")
+	if !strings.Contains(string(monitorOutputDocument), "--kernel") {
+		t.Fatalf("expected the monitor to receive the kernel argument, got %q", monitorOutputDocument)
 	}
 }
 
