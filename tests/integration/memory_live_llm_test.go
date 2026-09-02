@@ -174,6 +174,37 @@ func TestMemoryLiveLLMExtractsCorrectsAndRecalls(t *testing.T) {
 		t.Fatalf("expected the corrected fact to rank first, got %+v", recall.Facts[0].Fact)
 	}
 
+	mundaneTask := taskstate.TaskRun{
+		TaskRunID:         "live-run-3",
+		RequesterPersonID: "person-alice",
+		Status:            taskstate.TaskStatusCompleted,
+		Prompt:            "이 파일 이름을 report-final.pdf로 바꿔줘",
+		Result:            "report.pdf를 report-final.pdf로 바꿨습니다.",
+		UpdatedAt:         now.Add(2 * time.Hour),
+	}
+	mundane, errorValue := ingester.Ingest(ctx, bluememo.IngestRequest{
+		Episode: bluememo.Episode{
+			EpisodeID:         "live-episode-3",
+			SourceKind:        bluememo.EpisodeSourceKindTaskRun,
+			SourceID:          mundaneTask.TaskRunID,
+			RequesterPersonID: "person-alice",
+			Content:           bluememo.RenderTranscript(memory.TaskTranscript(mundaneTask, []taskstate.TaskStep{{Instruction: "continue shell", Status: taskstate.TaskStatusCompleted, Output: "renamed report.pdf -> report-final.pdf"}})),
+			OccurredAt:        now.Add(2 * time.Hour),
+		},
+		Reader:        reader,
+		RequesterName: "이샘플",
+		Label:         bluememo.SecurityLabel{RequiredClasses: []string{}},
+	})
+	if errorValue != nil {
+		t.Fatalf("expected the mundane extraction to succeed: %v", errorValue)
+	}
+	for _, fact := range mundane.Facts {
+		t.Logf("mundane extraction: [%s %v] %s", fact.Kind, fact.CircleIDs, fact.Content)
+	}
+	if len(mundane.Facts) != 0 {
+		t.Fatalf("expected a file rename to leave no memory, got %d facts", len(mundane.Facts))
+	}
+
 	profile, errorValue := bluememo.ProfileBuilder{Store: store, Model: memory.LanguageModel{Provider: languageModel}}.Rebuild(ctx, "person-alice")
 	if errorValue != nil {
 		t.Fatalf("expected the profile to build: %v", errorValue)
