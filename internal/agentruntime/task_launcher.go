@@ -701,19 +701,12 @@ func requesterPersonAccess(requesterPersonID string, personAccess policy.PersonA
 // bluecollarMemoryFacts converts recalled facts into the loop's own shape. The
 // loop carries its own type so it never depends on the service that stores them;
 // this single call is where the two meet.
-func loopMemoryScope(scopeType string) string {
-	if scopeType == bluememo.ScopeTypePrivate {
-		return agentcontract.MemoryScopeUser
-	}
-	return scopeType
-}
-
 func bluecollarMemoryFacts(facts []memory.MemoryFact) []agentcontract.MemoryFact {
 	converted := make([]agentcontract.MemoryFact, 0, len(facts))
 	for _, fact := range facts {
 		converted = append(converted, agentcontract.MemoryFact{
 			FactID:            fact.FactID,
-			ScopeType:         loopMemoryScope(fact.ScopeType),
+			ScopeType:         fact.ScopeType,
 			Content:           fact.Content,
 			Score:             fact.Score,
 			SourceEpisodeID:   fact.SourceEpisodeID,

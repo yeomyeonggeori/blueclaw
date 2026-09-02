@@ -93,18 +93,20 @@ func (fixture memoryStoreFixture) episode(requesterPersonID string) bluememo.Epi
 
 func (fixture memoryStoreFixture) fact(episodeID string, scopeType string, scopeID string, content string) bluememo.Fact {
 	fact := bluememo.Fact{
-		FactID:    taskstate.NewIdentifier(),
-		EpisodeID: episodeID,
-		ScopeType: scopeType,
-		Kind:      bluememo.FactKindFact,
-		Content:   content,
-		ValidFrom: fixture.now.Add(-time.Hour),
+		FactID:        taskstate.NewIdentifier(),
+		EpisodeID:     episodeID,
+		OwnerPersonID: scopeID,
+		Kind:          bluememo.FactKindFact,
+		Content:       content,
+		ValidFrom:     fixture.now.Add(-time.Hour),
 	}
 	switch scopeType {
-	case bluememo.ScopeTypePrivate:
-		fact.OwnerPersonID = scopeID
-	case bluememo.ScopeTypeCircle:
+	case "circle":
+		fact.OwnerPersonID = "memtest-carol"
 		fact.CircleIDs = []string{scopeID}
+	case "member":
+		fact.OwnerPersonID = "memtest-carol"
+		fact.CircleIDs = []string{"member"}
 	}
 	return fact
 }
@@ -134,14 +136,14 @@ func TestMemoryStoreReaderFilterGatesScopeRankAndClasses(t *testing.T) {
 	alice := fixture.addPerson(t, "alice")
 	bob := fixture.addPerson(t, "bob")
 	episode := fixture.episode(alice)
-	aliceFact := fixture.fact(episode.EpisodeID, bluememo.ScopeTypePrivate, alice, "이샘플 owns the Q3 review 프로젝트")
-	bobFact := fixture.fact(episode.EpisodeID, bluememo.ScopeTypePrivate, bob, "박예시 owns the Q3 budget 프로젝트")
-	circleFact := fixture.fact(episode.EpisodeID, bluememo.ScopeTypeCircle, "circle-platform", "the platform circle runs the Q3 프로젝트 retro")
-	strangerCircleFact := fixture.fact(episode.EpisodeID, bluememo.ScopeTypeCircle, "circle-finance", "the finance circle closes the Q3 프로젝트 books")
-	openFact := fixture.fact(episode.EpisodeID, bluememo.ScopeTypeWorkspace, "", "the Q3 프로젝트 review is on 2026-09-20")
-	secretFact := fixture.fact(episode.EpisodeID, bluememo.ScopeTypeWorkspace, "", "the Q3 프로젝트 headcount plan is frozen")
+	aliceFact := fixture.fact(episode.EpisodeID, "private", alice, "이샘플 owns the Q3 review 프로젝트")
+	bobFact := fixture.fact(episode.EpisodeID, "private", bob, "박예시 owns the Q3 budget 프로젝트")
+	circleFact := fixture.fact(episode.EpisodeID, "circle", "circle-platform", "the platform circle runs the Q3 프로젝트 retro")
+	strangerCircleFact := fixture.fact(episode.EpisodeID, "circle", "circle-finance", "the finance circle closes the Q3 프로젝트 books")
+	openFact := fixture.fact(episode.EpisodeID, "member", "", "the Q3 프로젝트 review is on 2026-09-20")
+	secretFact := fixture.fact(episode.EpisodeID, "member", "", "the Q3 프로젝트 headcount plan is frozen")
 	secretFact.SecurityLevelRank = 3
-	classedFact := fixture.fact(episode.EpisodeID, bluememo.ScopeTypeWorkspace, "", "the Q3 프로젝트 legal hold list")
+	classedFact := fixture.fact(episode.EpisodeID, "member", "", "the Q3 프로젝트 legal hold list")
 	classedFact.RequiredClasses = []string{"legal"}
 	fixture.save(t, episode,
 		bluememo.FactWrite{Fact: aliceFact}, bluememo.FactWrite{Fact: bobFact}, bluememo.FactWrite{Fact: circleFact},
@@ -149,7 +151,7 @@ func TestMemoryStoreReaderFilterGatesScopeRankAndClasses(t *testing.T) {
 		bluememo.FactWrite{Fact: classedFact},
 	)
 
-	reader := bluememo.NewReader(alice, []string{"circle-platform"}, nil, 1, nil)
+	reader := bluememo.NewReader(alice, []string{"member", "circle-platform"}, nil, 1, nil)
 	hits := fixture.search(t, reader, "Q3 프로젝트")
 	for _, visible := range []bluememo.Fact{aliceFact, circleFact, openFact} {
 		if _, isVisible := hits[visible.Content]; !isVisible {
@@ -170,11 +172,11 @@ func TestMemoryStoreSupersedeHidesTheOldFactButKeepsItsRow(t *testing.T) {
 	fixture := openMemoryStoreFixture(t)
 	alice := fixture.addPerson(t, "alice")
 	firstEpisode := fixture.episode(alice)
-	oldFact := fixture.fact(firstEpisode.EpisodeID, bluememo.ScopeTypePrivate, alice, "이샘플 works at Google as an engineer")
+	oldFact := fixture.fact(firstEpisode.EpisodeID, "private", alice, "이샘플 works at Google as an engineer")
 	fixture.save(t, firstEpisode, bluememo.FactWrite{Fact: oldFact})
 
 	secondEpisode := fixture.episode(alice)
-	newFact := fixture.fact(secondEpisode.EpisodeID, bluememo.ScopeTypePrivate, alice, "이샘플 works at Stripe as a product manager")
+	newFact := fixture.fact(secondEpisode.EpisodeID, "private", alice, "이샘플 works at Stripe as a product manager")
 	fixture.save(t, secondEpisode, bluememo.FactWrite{Fact: newFact, SupersedesFactID: oldFact.FactID})
 
 	reader := bluememo.NewReader(alice, nil, nil, 1, nil)
@@ -194,7 +196,7 @@ func TestMemoryStoreSupersedeHidesTheOldFactButKeepsItsRow(t *testing.T) {
 	}
 
 	thirdEpisode := fixture.episode(alice)
-	stale := fixture.fact(thirdEpisode.EpisodeID, bluememo.ScopeTypePrivate, alice, "이샘플 works nowhere")
+	stale := fixture.fact(thirdEpisode.EpisodeID, "private", alice, "이샘플 works nowhere")
 	if errorValue := fixture.facts.SaveEpisode(context.Background(), bluememo.EpisodeWrite{Episode: thirdEpisode, Facts: []bluememo.FactWrite{{Fact: stale, SupersedesFactID: oldFact.FactID}}}); errorValue == nil {
 		t.Fatal("expected superseding an already superseded fact to fail")
 	}
@@ -204,11 +206,11 @@ func TestMemoryStoreTemporaryFactsExpireAndReinforcementCounts(t *testing.T) {
 	fixture := openMemoryStoreFixture(t)
 	alice := fixture.addPerson(t, "alice")
 	episode := fixture.episode(alice)
-	expired := fixture.fact(episode.EpisodeID, bluememo.ScopeTypePrivate, alice, "이샘플 is out of office until yesterday")
+	expired := fixture.fact(episode.EpisodeID, "private", alice, "이샘플 is out of office until yesterday")
 	expired.Kind, expired.ValidUntil = bluememo.FactKindTemporary, fixture.now.Add(-time.Minute)
-	current := fixture.fact(episode.EpisodeID, bluememo.ScopeTypePrivate, alice, "이샘플 is out of office until next week")
+	current := fixture.fact(episode.EpisodeID, "private", alice, "이샘플 is out of office until next week")
 	current.Kind, current.ValidUntil = bluememo.FactKindTemporary, fixture.now.Add(7*24*time.Hour)
-	preference := fixture.fact(episode.EpisodeID, bluememo.ScopeTypePrivate, alice, "이샘플 prefers bullet summaries")
+	preference := fixture.fact(episode.EpisodeID, "private", alice, "이샘플 prefers bullet summaries")
 	preference.Kind = bluememo.FactKindPreference
 	fixture.save(t, episode, bluememo.FactWrite{Fact: expired}, bluememo.FactWrite{Fact: current}, bluememo.FactWrite{Fact: preference})
 
@@ -234,8 +236,8 @@ func TestMemoryStoreForgetIsScopedToTheReaderAndKeepsTheRow(t *testing.T) {
 	alice := fixture.addPerson(t, "alice")
 	bob := fixture.addPerson(t, "bob")
 	episode := fixture.episode(alice)
-	aliceFact := fixture.fact(episode.EpisodeID, bluememo.ScopeTypePrivate, alice, "이샘플 parks on level 2")
-	bobFact := fixture.fact(episode.EpisodeID, bluememo.ScopeTypePrivate, bob, "박예시 parks on level 3")
+	aliceFact := fixture.fact(episode.EpisodeID, "private", alice, "이샘플 parks on level 2")
+	bobFact := fixture.fact(episode.EpisodeID, "private", bob, "박예시 parks on level 3")
 	fixture.save(t, episode, bluememo.FactWrite{Fact: aliceFact}, bluememo.FactWrite{Fact: bobFact})
 
 	reader := bluememo.NewReader(alice, nil, nil, 1, nil)
@@ -262,8 +264,8 @@ func TestMemoryStoreVectorSearchRanksByEmbedding(t *testing.T) {
 	}
 	alice := fixture.addPerson(t, "alice")
 	episode := fixture.episode(alice)
-	near := fixture.fact(episode.EpisodeID, bluememo.ScopeTypePrivate, alice, "the standup moved to 10am")
-	far := fixture.fact(episode.EpisodeID, bluememo.ScopeTypePrivate, alice, "the parking garage closes at midnight")
+	near := fixture.fact(episode.EpisodeID, "private", alice, "the standup moved to 10am")
+	far := fixture.fact(episode.EpisodeID, "private", alice, "the parking garage closes at midnight")
 	fixture.save(t, episode,
 		bluememo.FactWrite{Fact: near, Embedding: unitEmbedding(0)},
 		bluememo.FactWrite{Fact: far, Embedding: unitEmbedding(1)},

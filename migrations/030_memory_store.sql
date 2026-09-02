@@ -15,8 +15,7 @@ CREATE TABLE IF NOT EXISTS memory_episode (
 CREATE TABLE IF NOT EXISTS memory_fact (
   fact_id text PRIMARY KEY,
   episode_id text NOT NULL REFERENCES memory_episode (episode_id),
-  scope_type text NOT NULL CHECK (scope_type IN ('private', 'circle', 'workspace')),
-  owner_person_id text NOT NULL DEFAULT '',
+  owner_person_id text NOT NULL CHECK (owner_person_id <> ''),
   subject_person_id text NOT NULL DEFAULT '',
   kind text NOT NULL CHECK (kind IN ('identity', 'preference', 'fact', 'episode', 'temporary')),
   content text NOT NULL CHECK (char_length(content) BETWEEN 1 AND 240),
@@ -30,8 +29,7 @@ CREATE TABLE IF NOT EXISTS memory_fact (
   last_recalled_at timestamptz,
   forgotten_at timestamptz,
   forget_reason text,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  CHECK ((scope_type = 'private') = (owner_person_id <> ''))
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS memory_fact_circle (
@@ -44,8 +42,8 @@ CREATE INDEX IF NOT EXISTS memory_fact_circle_circle_idx
   ON memory_fact_circle (circle_id);
 CREATE INDEX IF NOT EXISTS memory_fact_content_trgm_idx
   ON memory_fact USING gin (content gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS memory_fact_live_idx
-  ON memory_fact (scope_type, owner_person_id)
+CREATE INDEX IF NOT EXISTS memory_fact_owner_idx
+  ON memory_fact (owner_person_id)
   WHERE superseded_by IS NULL AND forgotten_at IS NULL;
 CREATE INDEX IF NOT EXISTS memory_fact_subject_idx
   ON memory_fact (subject_person_id)

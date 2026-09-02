@@ -28,8 +28,8 @@ type memoryFactListResponse struct {
 type memoryFactView struct {
 	FactID             string    `json:"factID"`
 	EpisodeID          string    `json:"episodeID"`
-	ScopeType          string    `json:"scopeType"`
-	CircleIDs          []string  `json:"circleIDs,omitempty"`
+	OwnerPersonID      string    `json:"ownerPersonID"`
+	CircleIDs          []string  `json:"circleIDs"`
 	Kind               string    `json:"kind"`
 	Content            string    `json:"content"`
 	ValidFrom          time.Time `json:"validFrom"`
@@ -113,8 +113,8 @@ func memoryFactViews(facts []bluememo.Fact) []memoryFactView {
 		views = append(views, memoryFactView{
 			FactID:             fact.FactID,
 			EpisodeID:          fact.EpisodeID,
-			ScopeType:          fact.ScopeType,
-			CircleIDs:          fact.CircleIDs,
+			OwnerPersonID:      fact.OwnerPersonID,
+			CircleIDs:          nonNilStrings(fact.CircleIDs),
 			Kind:               fact.Kind,
 			Content:            fact.Content,
 			ValidFrom:          fact.ValidFrom,
@@ -124,4 +124,11 @@ func memoryFactViews(facts []bluememo.Fact) []memoryFactView {
 		})
 	}
 	return views
+}
+
+func nonNilStrings(values []string) []string {
+	if values == nil {
+		return []string{}
+	}
+	return values
 }

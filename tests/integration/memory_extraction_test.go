@@ -85,8 +85,8 @@ func TestMemoryExtractionRecordsFactsAndProfileInPostgres(t *testing.T) {
 
 	memory.TaskRunTransitionObserver{Store: store}.Observe(reader.taskRuns["run-1"])
 	scripted.Queue(bluememotest.IngestResponse(
-		bluememotest.IngestFact{Content: "이샘플 works in the platform team", Kind: bluememo.FactKindIdentity, Scope: bluememo.ScopeTypePrivate, SubjectPersonHint: "이샘플", Relation: bluememo.FactRelationNew},
-		bluememotest.IngestFact{Content: "이샘플 prefers bullet summaries", Kind: bluememo.FactKindPreference, Scope: bluememo.ScopeTypePrivate, SubjectPersonHint: "이샘플", Relation: bluememo.FactRelationNew},
+		bluememotest.IngestFact{Content: "이샘플 works in the platform team", Kind: bluememo.FactKindIdentity, SubjectPersonHint: "이샘플", Relation: bluememo.FactRelationNew},
+		bluememotest.IngestFact{Content: "이샘플 prefers bullet summaries", Kind: bluememo.FactKindPreference, SubjectPersonHint: "이샘플", Relation: bluememo.FactRelationNew},
 	))
 	if runCount, errorValue := worker.RunOnce(ctx); errorValue != nil || runCount != 1 {
 		t.Fatalf("expected the extraction job to run once, got %d (%v)", runCount, errorValue)

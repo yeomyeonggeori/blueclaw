@@ -3481,7 +3481,7 @@ func seedConnectorMemory(t *testing.T, personID string, content string) *bluemem
 	memoryRepository := bluememo.NewInMemoryRepository()
 	now := time.Now().UTC()
 	episode := bluememo.Episode{EpisodeID: "episode-seed", SourceKind: bluememo.EpisodeSourceKindImport, SourceID: "seed", RequesterPersonID: personID, Content: "seed", OccurredAt: now}
-	fact := bluememo.Fact{FactID: "fact-seed", EpisodeID: "episode-seed", ScopeType: bluememo.ScopeTypePrivate, OwnerPersonID: personID, SubjectPersonID: personID, Kind: bluememo.FactKindIdentity, Content: content, ValidFrom: now}
+	fact := bluememo.Fact{FactID: "fact-seed", EpisodeID: "episode-seed", OwnerPersonID: personID, SubjectPersonID: personID, Kind: bluememo.FactKindIdentity, Content: content, ValidFrom: now}
 	if errorValue := memoryRepository.SaveEpisode(context.Background(), bluememo.EpisodeWrite{Episode: episode, Facts: []bluememo.FactWrite{{Fact: fact}}}); errorValue != nil {
 		t.Fatal(errorValue)
 	}

@@ -4031,7 +4031,7 @@ func (virtualMemoryIngestModel) GenerateStructured(_ context.Context, request bl
 		content = string(runes[:bluememo.FactContentCharacterLimit])
 	}
 	document, errorValue := json.Marshal(map[string]any{"facts": []map[string]any{{
-		"content": content, "kind": bluememo.FactKindFact, "scope": bluememo.ScopeTypePrivate, "circleIDs": []string{},
+		"content": content, "kind": bluememo.FactKindFact, "circleIDs": []string{},
 		"subjectPersonHint": "", "relation": bluememo.FactRelationNew, "relatedFactID": "", "validUntil": "",
 	}}})
 	if errorValue != nil {

@@ -20,10 +20,10 @@ func memoryHandlerFixture(t *testing.T) (MemoryHandler, *bluememo.InMemoryReposi
 	repository := bluememo.NewInMemoryRepository()
 	episode := bluememo.Episode{EpisodeID: "episode-1", SourceKind: bluememo.EpisodeSourceKindImport, SourceID: "seed", RequesterPersonID: "person-alice", Content: "seed", OccurredAt: now}
 	facts := []bluememo.FactWrite{
-		{Fact: bluememo.Fact{FactID: "fact-alice", EpisodeID: "episode-1", ScopeType: bluememo.ScopeTypePrivate, OwnerPersonID: "person-alice", SubjectPersonID: "person-alice", Kind: bluememo.FactKindPreference, Content: "이샘플 prefers bullet summaries", ValidFrom: now}},
-		{Fact: bluememo.Fact{FactID: "fact-bob", EpisodeID: "episode-1", ScopeType: bluememo.ScopeTypePrivate, OwnerPersonID: "person-bob", SubjectPersonID: "person-bob", Kind: bluememo.FactKindFact, Content: "박예시 parks on level 3", ValidFrom: now.Add(time.Minute)}},
-		{Fact: bluememo.Fact{FactID: "fact-secret", EpisodeID: "episode-1", ScopeType: bluememo.ScopeTypeWorkspace, Kind: bluememo.FactKindFact, Content: "the headcount plan is frozen", SecurityLevelRank: 5, ValidFrom: now}},
-		{Fact: bluememo.Fact{FactID: "fact-open", EpisodeID: "episode-1", ScopeType: bluememo.ScopeTypeWorkspace, Kind: bluememo.FactKindFact, Content: "the all-hands is on Thursday", ValidFrom: now.Add(2 * time.Minute)}},
+		{Fact: bluememo.Fact{FactID: "fact-alice", EpisodeID: "episode-1", OwnerPersonID: "person-alice", SubjectPersonID: "person-alice", Kind: bluememo.FactKindPreference, Content: "이샘플 prefers bullet summaries", ValidFrom: now}},
+		{Fact: bluememo.Fact{FactID: "fact-bob", EpisodeID: "episode-1", OwnerPersonID: "person-bob", SubjectPersonID: "person-bob", Kind: bluememo.FactKindFact, Content: "박예시 parks on level 3", ValidFrom: now.Add(time.Minute)}},
+		{Fact: bluememo.Fact{FactID: "fact-secret", EpisodeID: "episode-1", OwnerPersonID: "person-carol", CircleIDs: []string{"member"}, Kind: bluememo.FactKindFact, Content: "the headcount plan is frozen", SecurityLevelRank: 5, ValidFrom: now}},
+		{Fact: bluememo.Fact{FactID: "fact-open", EpisodeID: "episode-1", OwnerPersonID: "person-carol", CircleIDs: []string{"member"}, Kind: bluememo.FactKindFact, Content: "the all-hands is on Thursday", ValidFrom: now.Add(2 * time.Minute)}},
 	}
 	if errorValue := repository.SaveEpisode(context.Background(), bluememo.EpisodeWrite{Episode: episode, Facts: facts}); errorValue != nil {
 		t.Fatal(errorValue)
@@ -33,7 +33,7 @@ func memoryHandlerFixture(t *testing.T) (MemoryHandler, *bluememo.InMemoryReposi
 	}
 	identityService := identity.NewIdentityService(policy.PolicyProjection{
 		PersonAccessByPersonID: map[string]policy.PersonAccess{
-			"person-alice": {PersonID: "person-alice", SecurityLevelRank: 1},
+			"person-alice": {PersonID: "person-alice", Circles: []string{"member"}, SecurityLevelRank: 1},
 		},
 	})
 	store := &bluememo.Store{Facts: repository, Profiles: repository, Jobs: repository, EmbeddingModel: "test-embed", Now: func() time.Time { return now }}

@@ -26,7 +26,7 @@ func TestTaskLauncherInjectsProfileAndRecallFromTheStoreAndQueuesExtraction(t *t
 	taskRunService.RegisterTaskRunTransitionObserver(memory.TaskRunTransitionObserver{Store: *store}.Observe)
 
 	seed := bluememo.Episode{EpisodeID: "episode-seed", SourceKind: bluememo.EpisodeSourceKindImport, SourceID: "seed", RequesterPersonID: "person-1", Content: "seed", OccurredAt: now}
-	launchFact := bluememo.Fact{FactID: "fact-launch", EpisodeID: "episode-seed", ScopeType: bluememo.ScopeTypeWorkspace, Kind: bluememo.FactKindFact, Content: "The quarterly launch project is led by 이샘플", ValidFrom: now}
+	launchFact := bluememo.Fact{FactID: "fact-launch", EpisodeID: "episode-seed", OwnerPersonID: "person-9", CircleIDs: []string{"member"}, Kind: bluememo.FactKindFact, Content: "The quarterly launch project is led by 이샘플", ValidFrom: now}
 	if errorValue := repository.SaveEpisode(context.Background(), bluememo.EpisodeWrite{Episode: seed, Facts: []bluememo.FactWrite{{Fact: launchFact, Embedding: bluememotest.Embed(launchFact.Content)}}}); errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -47,7 +47,7 @@ func TestTaskLauncherInjectsProfileAndRecallFromTheStoreAndQueuesExtraction(t *t
 		ConversationID:            "channel-1",
 		Platform:                  "mattermost",
 		Prompt:                    "How is the quarterly launch project going?",
-		PersonAccess:              policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+		PersonAccess:              policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}, SecurityLevelRank: 100},
 		MemoryLabel:               bluememo.SecurityLabel{SecurityLevelRank: 3, RequiredClasses: []string{"finance"}},
 		AccessibleConversationIDs: []string{"channel-1"},
 	})
@@ -95,7 +95,7 @@ func TestTaskLauncherRecallsOnlyWhatTheRequesterMayRead(t *testing.T) {
 	repository := bluememo.NewInMemoryRepository()
 	store := &bluememo.Store{Facts: repository, Profiles: repository, Jobs: repository, Embedder: &bluememotest.HashEmbedder{}, Now: func() time.Time { return now }}
 	seed := bluememo.Episode{EpisodeID: "episode-seed", SourceKind: bluememo.EpisodeSourceKindImport, SourceID: "seed", RequesterPersonID: "person-1", Content: "seed", OccurredAt: now}
-	secret := bluememo.Fact{FactID: "fact-secret", EpisodeID: "episode-seed", ScopeType: bluememo.ScopeTypeWorkspace, Kind: bluememo.FactKindFact, Content: "The quarterly launch headcount plan is frozen", SecurityLevelRank: 5, ValidFrom: now}
+	secret := bluememo.Fact{FactID: "fact-secret", EpisodeID: "episode-seed", OwnerPersonID: "person-1", CircleIDs: []string{"member"}, Kind: bluememo.FactKindFact, Content: "The quarterly launch headcount plan is frozen", SecurityLevelRank: 5, ValidFrom: now}
 	if errorValue := repository.SaveEpisode(context.Background(), bluememo.EpisodeWrite{Episode: seed, Facts: []bluememo.FactWrite{{Fact: secret, Embedding: bluememotest.Embed(secret.Content)}}}); errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -108,7 +108,7 @@ func TestTaskLauncherRecallsOnlyWhatTheRequesterMayRead(t *testing.T) {
 		ProfileName:       "default",
 		ConversationID:    "channel-1",
 		Prompt:            "What is the quarterly launch headcount plan?",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-2", SecurityLevelRank: 1},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-2", Circles: []string{"member"}, SecurityLevelRank: 1},
 	})
 	if errorValue != nil {
 		t.Fatal(errorValue)
@@ -141,7 +141,7 @@ func TestTaskLauncherRecallsAContainedCirclesFactForTheContainingCircle(t *testi
 	repository := bluememo.NewInMemoryRepository()
 	store := &bluememo.Store{Facts: repository, Profiles: repository, Jobs: repository, Embedder: &bluememotest.HashEmbedder{}, Now: func() time.Time { return now }}
 	seed := bluememo.Episode{EpisodeID: "episode-seed", SourceKind: bluememo.EpisodeSourceKindImport, SourceID: "seed", RequesterPersonID: "person-1", Content: "seed", OccurredAt: now}
-	platformFact := bluememo.Fact{FactID: "fact-platform", EpisodeID: "episode-seed", ScopeType: bluememo.ScopeTypeCircle, CircleIDs: []string{"platform"}, Kind: bluememo.FactKindFact, Content: "The platform circle deploys on Thursdays", ValidFrom: now}
+	platformFact := bluememo.Fact{FactID: "fact-platform", EpisodeID: "episode-seed", OwnerPersonID: "person-9", CircleIDs: []string{"platform"}, Kind: bluememo.FactKindFact, Content: "The platform circle deploys on Thursdays", ValidFrom: now}
 	if errorValue := repository.SaveEpisode(context.Background(), bluememo.EpisodeWrite{Episode: seed, Facts: []bluememo.FactWrite{{Fact: platformFact, Embedding: bluememotest.Embed(platformFact.Content)}}}); errorValue != nil {
 		t.Fatal(errorValue)
 	}

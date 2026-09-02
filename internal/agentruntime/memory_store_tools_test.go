@@ -67,7 +67,7 @@ func seededMemoryStore(t *testing.T, personID string, contents ...string) *bluem
 	episode := bluememo.Episode{EpisodeID: "episode-seed-" + personID, SourceKind: bluememo.EpisodeSourceKindImport, SourceID: "seed-" + personID, RequesterPersonID: personID, Content: "seed", OccurredAt: storeToolNow}
 	writes := make([]bluememo.FactWrite, 0, len(contents))
 	for index, content := range contents {
-		fact := bluememo.Fact{FactID: "fact-seed-" + personID + "-" + string(rune('a'+index)), EpisodeID: episode.EpisodeID, ScopeType: bluememo.ScopeTypePrivate, OwnerPersonID: personID, SubjectPersonID: personID, Kind: bluememo.FactKindFact, Content: content, ValidFrom: storeToolNow}
+		fact := bluememo.Fact{FactID: "fact-seed-" + personID + "-" + string(rune('a'+index)), EpisodeID: episode.EpisodeID, OwnerPersonID: personID, SubjectPersonID: personID, Kind: bluememo.FactKindFact, Content: content, ValidFrom: storeToolNow}
 		writes = append(writes, bluememo.FactWrite{Fact: fact, Embedding: bluememotest.Embed(content)})
 	}
 	if errorValue := repository.SaveEpisode(context.Background(), bluememo.EpisodeWrite{Episode: episode, Facts: writes}); errorValue != nil {
@@ -78,7 +78,7 @@ func seededMemoryStore(t *testing.T, personID string, contents ...string) *bluem
 
 func TestMemoryRememberToolIngestsThroughTheStore(t *testing.T) {
 	fixture := newStoreToolFixture(t, "memory_remember")
-	fixture.model.Queue(bluememotest.IngestResponse(bluememotest.IngestFact{Content: "이샘플 prefers bullet summaries", Kind: bluememo.FactKindPreference, Scope: bluememo.ScopeTypePrivate, Relation: bluememo.FactRelationNew}))
+	fixture.model.Queue(bluememotest.IngestResponse(bluememotest.IngestFact{Content: "이샘플 prefers bullet summaries", Kind: bluememo.FactKindPreference, Relation: bluememo.FactRelationNew}))
 	result := fixture.invoke(t, "memory_remember", map[string]string{"content": "이샘플 prefers bullet summaries"})
 	if result.Failed() {
 		t.Fatalf("expected memory_remember to succeed, got %s", result.ContentText())
@@ -89,7 +89,7 @@ func TestMemoryRememberToolIngestsThroughTheStore(t *testing.T) {
 		t.Fatalf("expected a persisted fact, got %+v", output)
 	}
 	stored, isFound := fixture.repository.FindFact(output.FactIDs[0])
-	if !isFound || stored.ScopeType != bluememo.ScopeTypePrivate || stored.SecurityLevelRank != 0 || len(stored.RequiredClasses) != 0 {
+	if !isFound || stored.IsShared() || stored.OwnerPersonID != "person-alice" || stored.SecurityLevelRank != 0 || len(stored.RequiredClasses) != 0 {
 		t.Fatalf("expected a private fact keyed by its owner and carrying no label, got %+v", stored)
 	}
 	if !strings.Contains(fixture.model.LastSubject(), "Requester: 이샘플") || !strings.Contains(fixture.model.LastSubject(), "Active circle: circle-platform") {
@@ -99,11 +99,11 @@ func TestMemoryRememberToolIngestsThroughTheStore(t *testing.T) {
 
 func TestMemoryRememberToolSharesWithTheCirclesTheModelNamesAndTheRequesterIsIn(t *testing.T) {
 	fixture := newStoreToolFixture(t, "memory_remember")
-	fixture.model.Queue(bluememotest.IngestResponse(bluememotest.IngestFact{Content: "The platform standup is at 10:00", Kind: bluememo.FactKindFact, Scope: bluememo.ScopeTypeCircle, CircleIDs: []string{"circle-platform", "circle-sales"}, Relation: bluememo.FactRelationNew}))
+	fixture.model.Queue(bluememotest.IngestResponse(bluememotest.IngestFact{Content: "The platform standup is at 10:00", Kind: bluememo.FactKindFact, CircleIDs: []string{"circle-platform", "circle-sales"}, Relation: bluememo.FactRelationNew}))
 	var output memoryStoreRememberOutput
 	decodeToolResult(t, fixture.invoke(t, "memory_remember", map[string]string{"content": "The platform standup is at 10:00"}), &output)
 	stored, isFound := fixture.repository.FindFact(output.FactIDs[0])
-	if !isFound || stored.ScopeType != bluememo.ScopeTypeCircle || strings.Join(stored.CircleIDs, ",") != "circle-platform" {
+	if !isFound || strings.Join(stored.CircleIDs, ",") != "circle-platform" {
 		t.Fatalf("expected the fact shared with the circle the requester is in and no other, got %+v", stored)
 	}
 	if !strings.Contains(fixture.model.LastSubject(), "Requester's circles: circle-platform") {
@@ -113,14 +113,14 @@ func TestMemoryRememberToolSharesWithTheCirclesTheModelNamesAndTheRequesterIsIn(
 
 func TestMemoryRememberToolReportsASupersededFact(t *testing.T) {
 	fixture := newStoreToolFixture(t, "memory_remember")
-	fixture.model.Queue(bluememotest.IngestResponse(bluememotest.IngestFact{Content: "이샘플 works in the platform team", Kind: bluememo.FactKindIdentity, Scope: bluememo.ScopeTypePrivate, Relation: bluememo.FactRelationNew}))
+	fixture.model.Queue(bluememotest.IngestResponse(bluememotest.IngestFact{Content: "이샘플 works in the platform team", Kind: bluememo.FactKindIdentity, Relation: bluememo.FactRelationNew}))
 	var first memoryStoreRememberOutput
 	firstResult := fixture.invoke(t, "memory_remember", map[string]string{"content": "이샘플 works in the platform team"})
 	if firstResult.Failed() {
 		t.Fatalf("expected the first remember to succeed, got %s", firstResult.ContentText())
 	}
 	decodeToolResult(t, firstResult, &first)
-	fixture.model.Queue(bluememotest.IngestResponse(bluememotest.IngestFact{Content: "이샘플 works in the data team", Kind: bluememo.FactKindIdentity, Scope: bluememo.ScopeTypePrivate, Relation: bluememo.FactRelationSupersedes, RelatedFactID: first.FactIDs[0]}))
+	fixture.model.Queue(bluememotest.IngestResponse(bluememotest.IngestFact{Content: "이샘플 works in the data team", Kind: bluememo.FactKindIdentity, Relation: bluememo.FactRelationSupersedes, RelatedFactID: first.FactIDs[0]}))
 	var second memoryStoreRememberOutput
 	decodeToolResult(t, fixture.invoke(t, "memory_remember", map[string]string{"content": "이샘플 moved to the data team"}), &second)
 	if len(second.SupersededFactIDs) != 1 || second.SupersededFactIDs[0] != first.FactIDs[0] {
@@ -142,8 +142,8 @@ func TestMemoryRememberToolFailsLoudlyWhenTheMergeModelIsDown(t *testing.T) {
 func TestMemorySearchSurfacesIDsThatMemoryForgetAccepts(t *testing.T) {
 	fixture := newStoreToolFixture(t, "memory_search", "memory_forget")
 	seed := bluememo.Episode{EpisodeID: "episode-seed", SourceKind: bluememo.EpisodeSourceKindImport, SourceID: "seed", RequesterPersonID: "person-alice", Content: "seed", OccurredAt: storeToolNow}
-	ownFact := bluememo.Fact{FactID: "fact-own", EpisodeID: "episode-seed", ScopeType: bluememo.ScopeTypePrivate, OwnerPersonID: "person-alice", Kind: bluememo.FactKindFact, Content: "이샘플 parks on level 2", ValidFrom: storeToolNow}
-	otherFact := bluememo.Fact{FactID: "fact-other", EpisodeID: "episode-seed", ScopeType: bluememo.ScopeTypePrivate, OwnerPersonID: "person-bob", Kind: bluememo.FactKindFact, Content: "박예시 parks on level 3", ValidFrom: storeToolNow}
+	ownFact := bluememo.Fact{FactID: "fact-own", EpisodeID: "episode-seed", OwnerPersonID: "person-alice", Kind: bluememo.FactKindFact, Content: "이샘플 parks on level 2", ValidFrom: storeToolNow}
+	otherFact := bluememo.Fact{FactID: "fact-other", EpisodeID: "episode-seed", OwnerPersonID: "person-bob", Kind: bluememo.FactKindFact, Content: "박예시 parks on level 3", ValidFrom: storeToolNow}
 	if errorValue := fixture.repository.SaveEpisode(context.Background(), bluememo.EpisodeWrite{Episode: seed, Facts: []bluememo.FactWrite{{Fact: ownFact, Embedding: bluememotest.Embed(ownFact.Content)}, {Fact: otherFact, Embedding: bluememotest.Embed(otherFact.Content)}}}); errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -155,7 +155,7 @@ func TestMemorySearchSurfacesIDsThatMemoryForgetAccepts(t *testing.T) {
 
 	var search memorySearchToolOutput
 	decodeToolResult(t, fixture.invoke(t, "memory_search", map[string]string{"query": "parks on level"}), &search)
-	if len(search.Facts) != 1 || search.Facts[0].FactID != "fact-own" || search.SearchStatus != memorySearchComplete {
+	if len(search.Facts) != 1 || search.Facts[0].FactID != "fact-own" || len(search.Facts[0].CircleIDs) != 0 || search.SearchStatus != memorySearchComplete {
 		t.Fatalf("expected only the reader's own fact from a hybrid search, got %+v", search)
 	}
 

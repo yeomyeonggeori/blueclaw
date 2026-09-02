@@ -64,12 +64,19 @@ func RememberContentGateMessage(content string) string {
 	return ""
 }
 
+func LoopScopeType(fact bluememo.Fact) string {
+	if fact.IsShared() {
+		return "circle"
+	}
+	return "user"
+}
+
 func LoopMemoryFacts(recall bluememo.Recall, requesterPersonID string) []MemoryFact {
 	facts := make([]MemoryFact, 0, len(recall.ProfileLines())+len(recall.Facts))
 	for index, line := range recall.ProfileLines() {
 		facts = append(facts, MemoryFact{
 			FactID:     "profile:" + requesterPersonID + ":" + string(rune('a'+index)),
-			ScopeType:  bluememo.ScopeTypePrivate,
+			ScopeType:  LoopScopeType(bluememo.Fact{}),
 			Content:    line,
 			SourceKind: "profile",
 			ValidAt:    recall.Profile.BuiltAt,
@@ -78,7 +85,7 @@ func LoopMemoryFacts(recall bluememo.Recall, requesterPersonID string) []MemoryF
 	for _, scoredFact := range recall.Facts {
 		facts = append(facts, MemoryFact{
 			FactID:            scoredFact.Fact.FactID,
-			ScopeType:         scoredFact.Fact.ScopeType,
+			ScopeType:         LoopScopeType(scoredFact.Fact),
 			Content:           scoredFact.Fact.Content,
 			Score:             scoredFact.Score,
 			SourceEpisodeID:   scoredFact.Fact.EpisodeID,

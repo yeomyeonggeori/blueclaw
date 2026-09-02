@@ -631,15 +631,17 @@ Memory is [bluememo](https://github.com/yeomyeonggeori/bluememo), vendored at
 a test fails when it drifts), one write path, one read path. An episode is
 something that happened: a finished task run, or the sentence a person asked
 the assistant to remember. Facts are the atomic sentences a low-tier model
-extracts from an episode, scoped `private`, `circle`, or `workspace`, labelled
-with the security rank and classes of the conversation they came from, and
-retired by a supersede pointer, a forget timestamp, or an expiry. Nothing
-deletes a fact; the live filter hides it.
+extracts from an episode, owned by the person whose task or request produced
+them, labelled with the security rank and classes of the conversation they
+came from, and retired by a supersede pointer, a forget timestamp, or an
+expiry. Nothing deletes a fact; the live filter hides it.
 
-A circle fact names one or more circles, and circles nest: `memberCircles` on
-a circle in `policy.json` says which circles belong to it, so a member of
-`engineering` reads a fact shared with `platform` when `engineering` contains
-`platform`. Writing to a circle needs direct membership. The host resolves the
+A fact with no circles is its owner's alone. A fact that names circles is
+read by their members too, and circles nest: `memberCircles` on a circle in
+`policy.json` says which circles belong to it, so a member of `engineering`
+reads a fact shared with `platform` when `engineering` contains `platform`.
+There is no company-wide scope; sharing with everyone is sharing with the
+`member` circle everyone is in. Writing to a circle needs direct membership. The host resolves the
 containment map from the policy projection and bluememo applies it as one SQL
 predicate.
 

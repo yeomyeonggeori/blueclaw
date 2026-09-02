@@ -31,7 +31,7 @@ const (
 
 type memorySearchFact struct {
 	FactID     string    `json:"factID"`
-	ScopeType  string    `json:"scopeType"`
+	CircleIDs  []string  `json:"circleIDs"`
 	Content    string    `json:"content"`
 	SourceKind string    `json:"sourceKind"`
 	ValidAt    time.Time `json:"validAt"`
@@ -45,7 +45,7 @@ type memorySearchToolOutput struct {
 
 var (
 	memorySearchInputSchema         = json.RawMessage(`{"type":"object","properties":{"query":{"type":"string","minLength":1,"pattern":"\\S"}},"required":["query"],"additionalProperties":false}`)
-	memorySearchOutputSchema        = json.RawMessage(`{"type":"object","properties":{"facts":{"type":"array","items":{"type":"object","properties":{"factID":{"type":"string"},"scopeType":{"type":"string","enum":["private","circle","workspace"]},"content":{"type":"string"},"sourceKind":{"type":"string","enum":["identity","preference","fact","episode","temporary"]},"validAt":{"type":"string","format":"date-time"},"score":{"type":"number"}},"required":["factID","scopeType","content","sourceKind","validAt"],"additionalProperties":false}},"searchStatus":{"type":"string","enum":["complete","degraded"]}},"required":["facts","searchStatus"],"additionalProperties":false}`)
+	memorySearchOutputSchema        = json.RawMessage(`{"type":"object","properties":{"facts":{"type":"array","items":{"type":"object","properties":{"factID":{"type":"string"},"circleIDs":{"type":"array","items":{"type":"string"}},"content":{"type":"string"},"sourceKind":{"type":"string","enum":["identity","preference","fact","episode","temporary"]},"validAt":{"type":"string","format":"date-time"},"score":{"type":"number"}},"required":["factID","circleIDs","content","sourceKind","validAt"],"additionalProperties":false}},"searchStatus":{"type":"string","enum":["complete","degraded"]}},"required":["facts","searchStatus"],"additionalProperties":false}`)
 	memoryRememberInputSchema       = json.RawMessage(`{"type":"object","properties":{"content":{"type":"string","minLength":1,"maxLength":600,"pattern":"\\S"}},"required":["content"],"additionalProperties":false}`)
 	memoryRememberInputIntentSchema = json.RawMessage(`{"type":"object","properties":{"content":{"type":"string","minLength":1,"maxLength":600,"pattern":"\\S"}},"additionalProperties":false}`)
 	memoryRememberOutputSchema      = json.RawMessage(`{"type":"object","properties":{"accepted":{"type":"boolean"},"episodeID":{"type":"string","pattern":"\\S"},"factIDs":{"type":"array","items":{"type":"string"}},"supersededFactIDs":{"type":"array","items":{"type":"string"}},"reinforcedFactIDs":{"type":"array","items":{"type":"string"}},"failureCode":{"type":"string"}},"required":["accepted","episodeID","factIDs","supersededFactIDs","reinforcedFactIDs"],"additionalProperties":false}`)
@@ -120,7 +120,7 @@ func registerStoreMemoryTools(toolCatalogBuilder *ToolCatalogBuilder, toolRegist
 	toolcontract.RegisterToolFunction(toolRegistry, toolcontract.ToolFunction[memorySearchToolInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
 			Name:        "memory_search",
-			Description: "Search what the assistant remembers about people, their preferences, and their work, within what this requester may read. Returns facts by meaning with their IDs; only IDs returned here can be passed to memory_forget.",
+			Description: "Search what the assistant remembers about people, their preferences, and their work, within what this requester may read: their own facts and those shared with their circles. Returns facts by meaning with their IDs; only IDs returned here can be passed to memory_forget.",
 			InputSchema: memorySearchInputSchema,
 		},
 		Handler: func(toolContext context.Context, input memorySearchToolInput) (toolcontract.ToolResult, error) {
@@ -131,7 +131,7 @@ func registerStoreMemoryTools(toolCatalogBuilder *ToolCatalogBuilder, toolRegist
 	toolcontract.RegisterToolFunction(toolRegistry, toolcontract.ToolFunction[memoryRememberToolInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
 			Name:        "memory_remember",
-			Description: "Remember something a person told you or asked you to keep: a preference, a fact about them or their work, a change to something already remembered. Write one plain sentence naming the person. If the memory already holds a version of it, the store updates that version; you never need to look it up first. This is the assistant's private recall, never a message anyone sees. Do not store secrets, one-off requests, or small talk.",
+			Description: "Remember something a person told you or asked you to keep: a preference, a fact about them or their work, a change to something already remembered. Write one plain sentence naming the person, and say who it is for when it is not for them alone (a circle, or everyone). If the memory already holds a version of it, the store updates that version; you never need to look it up first. This is the assistant's private recall, never a message anyone sees. Do not store secrets, one-off requests, or small talk.",
 			InputSchema: memoryRememberInputSchema,
 		},
 		Handler: func(toolContext context.Context, input memoryRememberToolInput) (toolcontract.ToolResult, error) {
@@ -180,7 +180,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) searchStoreMemoryTool(ctx context.
 func projectStoreMemoryFact(scoredFact bluememo.ScoredFact) memorySearchFact {
 	projected := memorySearchFact{
 		FactID:     scoredFact.Fact.FactID,
-		ScopeType:  scoredFact.Fact.ScopeType,
+		CircleIDs:  append([]string{}, scoredFact.Fact.CircleIDs...),
 		Content:    scoredFact.Fact.Content,
 		SourceKind: scoredFact.Fact.Kind,
 		ValidAt:    scoredFact.Fact.ValidFrom,

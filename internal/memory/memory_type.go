@@ -2,12 +2,6 @@ package memory
 
 import "time"
 
-const (
-	ScopeTypeWorkspace = "workspace"
-	ScopeTypeCircle    = "circle"
-	ScopeTypePrivate   = "private"
-)
-
 type MemoryFact struct {
 	FactID            string    `json:"factID"`
 	ScopeType         string    `json:"scopeType"`

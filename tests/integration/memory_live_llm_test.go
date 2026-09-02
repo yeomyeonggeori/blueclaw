@@ -105,7 +105,7 @@ func TestMemoryLiveLLMExtractsCorrectsAndRecalls(t *testing.T) {
 	kinds := map[string]int{}
 	for _, fact := range first.Facts {
 		kinds[fact.Kind]++
-		t.Logf("first extraction: [%s %s] %s", fact.Kind, fact.ScopeType, fact.Content)
+		t.Logf("first extraction: [%s %v] %s", fact.Kind, fact.CircleIDs, fact.Content)
 	}
 	if len(first.Facts) < 2 || kinds[bluememo.FactKindPreference] == 0 || kinds[bluememo.FactKindTemporary] == 0 {
 		t.Fatalf("expected at least a preference and a temporary fact, got kinds=%v", kinds)
@@ -141,7 +141,7 @@ func TestMemoryLiveLLMExtractsCorrectsAndRecalls(t *testing.T) {
 		t.Fatalf("expected the second extraction to succeed: %v", errorValue)
 	}
 	for _, fact := range second.Facts {
-		t.Logf("second extraction: [%s %s] %s", fact.Kind, fact.ScopeType, fact.Content)
+		t.Logf("second extraction: [%s %v] %s", fact.Kind, fact.CircleIDs, fact.Content)
 	}
 	t.Logf("second extraction superseded=%v reinforced=%v candidates=%d", second.SupersededFactIDs, second.ReinforcedFactIDs, second.CandidateCount)
 	if second.CandidateCount == 0 {
