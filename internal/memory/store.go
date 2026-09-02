@@ -13,6 +13,7 @@ const DefaultEmbeddingModelName = "qwen/qwen3-embedding-4b"
 const (
 	DefaultProfileCharacterBudget  = 1200
 	DefaultRecalledCharacterBudget = 2400
+	DefaultAdminFactListLimit      = 200
 )
 
 type Store struct {
@@ -71,6 +72,28 @@ func (store Store) Recall(ctx context.Context, request RecallRequest) (Recall, e
 
 func (store Store) Search(ctx context.Context, reader Reader, query string, limit int) (SearchResult, error) {
 	return SearchService{Facts: store.Facts, Embedder: store.Embedder, Logger: store.Logger, Now: store.Now}.Search(ctx, reader, query, limit)
+}
+
+func (store Store) ListReadable(ctx context.Context, reader Reader, limit int) (Profile, []Fact, error) {
+	if store.Facts == nil {
+		return Profile{}, nil, errors.New("memory fact repository is not configured")
+	}
+	now := store.now()
+	profile := Profile{PersonID: reader.PersonID, IdentityLines: []string{}, CurrentLines: []string{}}
+	if store.Profiles != nil && strings.TrimSpace(reader.PersonID) != "" {
+		storedProfile, isFound, errorValue := store.Profiles.FindProfile(ctx, reader.PersonID)
+		if errorValue != nil {
+			return Profile{}, nil, errorValue
+		}
+		if isFound {
+			profile = storedProfile
+		}
+	}
+	facts, errorValue := store.Facts.ListReadableFacts(ctx, reader, limit, now)
+	if errorValue != nil {
+		return Profile{}, nil, errorValue
+	}
+	return profile, facts, nil
 }
 
 func (store Store) Forget(ctx context.Context, reader Reader, factIDs []string, reason string) ([]string, error) {

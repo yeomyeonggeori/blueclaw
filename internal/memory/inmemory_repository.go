@@ -219,6 +219,20 @@ func (repository *InMemoryRepository) ListFactsByID(_ context.Context, reader Re
 	return facts, nil
 }
 
+func (repository *InMemoryRepository) ListReadableFacts(_ context.Context, reader Reader, limit int, referenceTime time.Time) ([]Fact, error) {
+	repository.mutex.Lock()
+	defer repository.mutex.Unlock()
+	if limit <= 0 {
+		limit = DefaultAdminFactListLimit
+	}
+	facts := repository.readableFactsLocked(reader, referenceTime)
+	sort.SliceStable(facts, func(left int, right int) bool { return facts[left].ValidFrom.After(facts[right].ValidFrom) })
+	if len(facts) > limit {
+		facts = facts[:limit]
+	}
+	return facts, nil
+}
+
 func (repository *InMemoryRepository) ListLiveFactsAboutPerson(_ context.Context, personID string, referenceTime time.Time) ([]Fact, error) {
 	repository.mutex.Lock()
 	defer repository.mutex.Unlock()

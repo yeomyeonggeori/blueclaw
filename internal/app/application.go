@@ -438,6 +438,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 			IdentityService:  identityService,
 		},
 		TaskSearchHandler: adminapi.TaskSearchHandler{SessionQuery: sessionquery.New(taskRunService)},
+		MemoryHandler:     adminapi.MemoryHandler{Store: memoryStore, IdentityService: identityService},
 		TaskRunHandler: adminapi.TaskRunHandler{
 			TaskLauncher:            taskLauncher,
 			IdentityService:         identityService,

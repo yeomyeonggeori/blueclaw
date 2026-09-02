@@ -245,6 +245,24 @@ ORDER BY f.valid_from DESC`, arguments...)
 	return scanMemoryFacts(rows)
 }
 
+func (repository MemoryFactRepository) ListReadableFacts(ctx context.Context, reader memory.Reader, limit int, referenceTime time.Time) ([]memory.Fact, error) {
+	if limit <= 0 {
+		limit = memory.DefaultAdminFactListLimit
+	}
+	arguments := append(readerArguments(reader, referenceTime), limit)
+	rows, errorValue := repository.database.SQL.QueryContext(ctx, `
+SELECT`+memoryFactColumns+`
+FROM memory_fact f
+WHERE`+readableFactFilter+`
+ORDER BY f.valid_from DESC, f.fact_id
+LIMIT $6`, arguments...)
+	if errorValue != nil {
+		return nil, errorValue
+	}
+	defer rows.Close()
+	return scanMemoryFacts(rows)
+}
+
 func (repository MemoryFactRepository) ListLiveFactsAboutPerson(ctx context.Context, personID string, referenceTime time.Time) ([]memory.Fact, error) {
 	rows, errorValue := repository.database.SQL.QueryContext(ctx, `
 SELECT`+memoryFactColumns+`

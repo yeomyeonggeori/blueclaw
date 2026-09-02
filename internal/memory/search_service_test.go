@@ -31,6 +31,10 @@ func (repository *fakeFactRepository) ListFactsByID(context.Context, Reader, []s
 	return nil, errors.New("not used")
 }
 
+func (repository *fakeFactRepository) ListReadableFacts(context.Context, Reader, int, time.Time) ([]Fact, error) {
+	return nil, errors.New("not used")
+}
+
 func (repository *fakeFactRepository) ListLiveFactsAboutPerson(context.Context, string, time.Time) ([]Fact, error) {
 	return nil, errors.New("not used")
 }

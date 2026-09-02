@@ -24,6 +24,7 @@ type FactRepository interface {
 	SaveEpisode(ctx context.Context, write EpisodeWrite) error
 	SearchFacts(ctx context.Context, query FactSearchQuery) ([]RankedFact, error)
 	ListFactsByID(ctx context.Context, reader Reader, factIDs []string, referenceTime time.Time) ([]Fact, error)
+	ListReadableFacts(ctx context.Context, reader Reader, limit int, referenceTime time.Time) ([]Fact, error)
 	ListLiveFactsAboutPerson(ctx context.Context, personID string, referenceTime time.Time) ([]Fact, error)
 	MarkFactsRecalled(ctx context.Context, factIDs []string, recalledAt time.Time) error
 	ForgetFacts(ctx context.Context, reader Reader, factIDs []string, reason string, forgottenAt time.Time) ([]string, error)
