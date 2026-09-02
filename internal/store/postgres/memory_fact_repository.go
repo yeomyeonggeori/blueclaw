@@ -179,8 +179,14 @@ func (repository MemoryFactRepository) SearchFacts(ctx context.Context, query me
 	arguments = append(arguments, query.Text, candidateLimit(query.CandidateLimit))
 	searchSQL := lexicalFactSearchSQL
 	if len(query.Embedding) > 0 {
-		searchSQL = hybridFactSearchSQL
-		arguments = append(arguments, vectorLiteral(query.Embedding))
+		hasVectorSearch, errorValue := repository.HasVectorSearch(ctx)
+		if errorValue != nil {
+			return nil, errorValue
+		}
+		if hasVectorSearch {
+			searchSQL = hybridFactSearchSQL
+			arguments = append(arguments, vectorLiteral(query.Embedding))
+		}
 	}
 	rows, errorValue := repository.database.SQL.QueryContext(ctx, searchSQL, arguments...)
 	if errorValue != nil {
