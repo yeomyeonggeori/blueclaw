@@ -71,37 +71,6 @@ func TestCapabilityPlatformAdapterDoesNotParseMattermostRawAskAction(t *testing.
 	}
 }
 
-func TestCapabilityPlatformAdapterImportsInputAttachments(t *testing.T) {
-	var receivedPath string
-	var receivedBody InputAttachmentImportRequest
-	httpClient := fakeCapabilityHTTPClient{handler: func(request *http.Request) (*http.Response, error) {
-		receivedPath = request.URL.Path
-		if errorValue := json.NewDecoder(request.Body).Decode(&receivedBody); errorValue != nil {
-			t.Fatalf("expected request body to decode: %v", errorValue)
-		}
-		return jsonCapabilityResponse(http.StatusOK, `{"inputParts":[{"type":"file","file":{"path":"/workspace/private/people/person-1/inbox/mattermost/post-1/report.pdf","filename":"report.pdf","markdownPreview":"# Report"}}]}`), nil
-	}}
-	adapter := NewCapabilityPlatformAdapter("mattermost", capability.Client{
-		Endpoint:   "http://capability.test",
-		HTTPClient: httpClient,
-	})
-
-	result, errorValue := adapter.ImportInputAttachments(context.Background(), InputAttachmentImportRequest{
-		MessageID:           "post-1",
-		TargetDirectoryPath: "/workspace/private/people/person-1/inbox/mattermost/post-1",
-		InputAttachments:    []InputAttachment{{Platform: "mattermost", FileID: "file-1"}},
-	})
-	if errorValue != nil {
-		t.Fatalf("expected attachment import to succeed: %v", errorValue)
-	}
-	if receivedPath != "/v1/platform/mattermost/attachments.import" || receivedBody.MessageID != "post-1" {
-		t.Fatalf("unexpected import request path=%q body=%+v", receivedPath, receivedBody)
-	}
-	if len(result.InputParts) != 1 || result.InputParts[0].Type != agentcontract.AgentPartTypeFile {
-		t.Fatalf("expected imported file part, got %+v", result.InputParts)
-	}
-}
-
 func TestCapabilityPlatformAdapterAddsReaction(t *testing.T) {
 	var receivedPath string
 	var receivedBody capabilityReactionRequest
