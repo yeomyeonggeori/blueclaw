@@ -194,6 +194,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 		taskScheduleSummaryRepository = postgresTaskScheduleRepository
 		taskScheduleListRepository = postgresTaskScheduleRepository
 		taskScheduleCreatorRepairRepository = postgresTaskScheduleRepository
+		task.SweepEmptyTaskScheduleTimeZone(postgresTaskScheduleRepository, companyProvider().TimeZone, logger)
 		connectorEventDiagnosticRepository = postgres.NewRawEventRepository(database)
 		conversationResetRepository = postgres.NewConversationResetRepository(database)
 		taskWaitTokenRepository = postgres.NewTaskWaitTokenRepository(database)

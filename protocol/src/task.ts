@@ -68,6 +68,7 @@ export enum TaskEventName {
   AgentCheckpointFailed = 'agent.checkpoint.failed',
   AgentCheckpointSent = 'agent.checkpoint.sent',
   AgentCheckpointSkipped = 'agent.checkpoint.skipped',
+  AgentCompanyTimeZoneFallback = 'agent.company_time_zone_fallback',
   AgentCompletionPersistFailed = 'agent.completion_persist_failed',
   AgentCompletionReplyFailed = 'agent.completion_reply_failed',
   AgentCompletionRequired = 'agent.completion_required',

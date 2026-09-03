@@ -599,6 +599,34 @@ WHERE creator_person_id = $1`,
 	return task.TaskScheduleCreatorRepairResult{UpdatedCount: int(updatedCount)}, nil
 }
 
+func (taskScheduleRepository TaskScheduleRepository) CountEmptyTaskScheduleTimeZone() (int, error) {
+	row := taskScheduleRepository.database.SQL.QueryRowContext(context.Background(), `
+SELECT COUNT(*) FROM task_schedule WHERE btrim(time_zone) = ''`)
+	var emptyCount int
+	if errorValue := row.Scan(&emptyCount); errorValue != nil {
+		return 0, errorValue
+	}
+	return emptyCount, nil
+}
+
+func (taskScheduleRepository TaskScheduleRepository) FillEmptyTaskScheduleTimeZone(timeZone string) (int, error) {
+	result, errorValue := taskScheduleRepository.database.SQL.ExecContext(context.Background(), `
+UPDATE task_schedule
+SET time_zone = $1,
+  updated_at = now()
+WHERE btrim(time_zone) = ''`,
+		strings.TrimSpace(timeZone),
+	)
+	if errorValue != nil {
+		return 0, errorValue
+	}
+	filledCount, errorValue := result.RowsAffected()
+	if errorValue != nil {
+		return 0, errorValue
+	}
+	return int(filledCount), nil
+}
+
 func (taskScheduleRepository TaskScheduleRepository) countTaskSchedules(conditions []string, arguments []any) (int, error) {
 	query := `SELECT COUNT(*) FROM task_schedule WHERE ` + strings.Join(conditions, " AND ")
 	row := taskScheduleRepository.database.SQL.QueryRowContext(context.Background(), query, arguments...)

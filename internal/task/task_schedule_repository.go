@@ -80,6 +80,11 @@ type TaskScheduleCreatorRepairResult struct {
 	UpdatedCount int
 }
 
+type TaskScheduleTimeZoneRepairRepository interface {
+	CountEmptyTaskScheduleTimeZone() (int, error)
+	FillEmptyTaskScheduleTimeZone(string) (int, error)
+}
+
 type TaskScheduleRepository interface {
 	UpsertTaskSchedule(TaskSchedule) error
 	UpdateTaskSchedule(TaskScheduleUpdateRequest) (TaskScheduleUpdateResult, error)

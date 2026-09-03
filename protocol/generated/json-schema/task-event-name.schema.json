@@ -13,6 +13,7 @@
         "agent.checkpoint.failed",
         "agent.checkpoint.sent",
         "agent.checkpoint.skipped",
+        "agent.company_time_zone_fallback",
         "agent.completion_persist_failed",
         "agent.completion_reply_failed",
         "agent.completion_required",
