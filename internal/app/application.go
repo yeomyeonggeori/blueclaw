@@ -489,6 +489,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 			instructions := loadAgentInstructions(runtimeConfiguration)
 			return adminapi.SkillInventory{Loaded: instructions.Bundle.Skills, Unavailable: instructions.UnavailableSkills}
 		}},
+		ToolInventoryHandler: adminapi.ToolInventoryHandler{ToolCatalogBuilder: toolCatalogBuilder},
 		TaskApprovalHandler: adminapi.TaskApprovalHandler{
 			TaskLauncher:    taskLauncher,
 			TaskRunService:  taskRunService,
