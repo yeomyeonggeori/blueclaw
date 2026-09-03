@@ -147,15 +147,24 @@ function resolveProviderRoutes(
           optionalLlamaRoute(configuration, languageModelFactory, requireStructuredOutputs, parallelToolCalls),
           optionalOpenRouterRoute(request, configuration, languageModelFactory, parallelToolCalls),
         ]
-      : [
-          optionalOpenRouterRoute(request, configuration, languageModelFactory, parallelToolCalls),
-          optionalLlamaRoute(configuration, languageModelFactory, requireStructuredOutputs, parallelToolCalls),
-        ];
+      : remoteRouteWithoutLocalFallback(request, configuration, languageModelFactory, requireStructuredOutputs, parallelToolCalls);
   const configuredRoutes = routes.filter(route => route !== undefined);
   if (configuredRoutes.length === 0) {
     throw new LLMDError('configuration_invalid', 503, false, 'auto routing requires an OpenRouter or llama.cpp configuration');
   }
   return configuredRoutes;
+}
+
+function remoteRouteWithoutLocalFallback(
+  request: ProviderRequest,
+  configuration: LLMDConfiguration,
+  languageModelFactory: ProviderLanguageModelFactory,
+  requireStructuredOutputs: boolean,
+  parallelToolCalls?: boolean,
+): Array<ProviderRoute | undefined> {
+  const remoteRoute = optionalOpenRouterRoute(request, configuration, languageModelFactory, parallelToolCalls);
+  if (remoteRoute) return [remoteRoute];
+  return [optionalLlamaRoute(configuration, languageModelFactory, requireStructuredOutputs, parallelToolCalls)];
 }
 
 function parallelToolCallsForRoute(request: ProviderRequest, requireStructuredOutputs: boolean): boolean | undefined {

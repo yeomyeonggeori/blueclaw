@@ -1332,6 +1332,52 @@ describe('llmd provider adapter', () => {
     expect(llamaModel.doStreamCalls).toHaveLength(0);
   });
 
+  test('never falls back to the local model behind a configured remote provider', async () => {
+    const routeAttempts: string[] = [];
+    const remoteModel = apiFailingLanguageModel('openrouter', true, routeAttempts);
+    const llamaModel = successfulLanguageModel('unused-local-model', { ok: true });
+    const generateStructuredResponse = createStructuredResponseGenerator(
+      completeConfiguration(LLMDAutoRoute.RemoteFirst),
+      languageModelFactory(llamaModel, remoteModel),
+    );
+
+    await expect(generateStructuredResponse(structuredRequest)).rejects.toThrow('provider request failed');
+    expect(routeAttempts).toEqual(['openrouter']);
+    expect(llamaModel.doGenerateCalls).toHaveLength(0);
+    expect(llamaModel.doStreamCalls).toHaveLength(0);
+  });
+
+  test('never falls back to the local model for chat behind a configured remote provider', async () => {
+    const routeAttempts: string[] = [];
+    const remoteModel = apiFailingLanguageModel('openrouter', true, routeAttempts);
+    const llamaModel = chatLanguageModel('unused-local-model');
+    const generateChatCompletion = createChatCompletionGenerator(
+      completeConfiguration(LLMDAutoRoute.RemoteFirst),
+      languageModelFactory(llamaModel, remoteModel),
+    );
+
+    await expect(generateChatCompletion({ ...chatRequest, executionMode: ExecutionMode.Auto })).rejects.toThrow(
+      'provider request failed',
+    );
+    expect(routeAttempts).toEqual(['openrouter']);
+    expect(llamaModel.doStreamCalls).toHaveLength(0);
+  });
+
+  test('serves automatic routing from the local model when no remote provider is configured', async () => {
+    const llamaModel = successfulLanguageModel('served-local-model', { ok: true });
+    const remoteModel = successfulLanguageModel('unused-remote-model', { ok: true });
+    const generateStructuredResponse = createStructuredResponseGenerator(
+      { ...completeConfiguration(LLMDAutoRoute.RemoteFirst), openRouterAPIKey: undefined },
+      languageModelFactory(llamaModel, remoteModel),
+    );
+
+    const response = await generateStructuredResponse(structuredRequest);
+
+    expect(response.selectedBackend).toBe(LanguageModelBackend.Device);
+    expect(remoteModel.doGenerateCalls).toHaveLength(0);
+    expect(remoteModel.doStreamCalls).toHaveLength(0);
+  });
+
   test('keeps auto and remote routing local in local-only mode', async () => {
     const llamaModel = successfulLanguageModel('local-model', { ok: true });
     const remoteModel = successfulLanguageModel('remote-model', { ok: true });
