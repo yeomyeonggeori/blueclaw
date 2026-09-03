@@ -4,15 +4,18 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
 const (
-	IdentityFileName = "identity.json"
-	SoulFileName     = "soul.json"
-	SchemaVersion    = 1
+	IdentityFileName  = "identity.json"
+	SoulFileName      = "soul.json"
+	UserDirectoryPath = ".blueclaw/persona/users"
+	SchemaVersion     = 1
 )
 
 //go:embed schema/identity.schema.json
@@ -21,12 +24,13 @@ var IdentitySchemaDocument []byte
 //go:embed schema/soul.schema.json
 var SoulSchemaDocument []byte
 
+//go:embed schema/user.schema.json
+var UserSchemaDocument []byte
+
 type Identity struct {
 	SchemaVersion int      `json:"schemaVersion"`
-	Name          string   `json:"name"`
-	EnglishName   string   `json:"englishName,omitempty"`
-	Handle        string   `json:"handle"`
-	Aliases       []string `json:"aliases,omitempty"`
+	Names         []string `json:"names"`
+	Handle        string   `json:"handle,omitempty"`
 	Role          string   `json:"role,omitempty"`
 	Creature      string   `json:"creature,omitempty"`
 	Emoji         string   `json:"emoji,omitempty"`
@@ -42,6 +46,15 @@ type Soul struct {
 	Language      *Language `json:"language,omitempty"`
 }
 
+type User struct {
+	SchemaVersion int           `json:"schemaVersion"`
+	CallMe        string        `json:"callMe,omitempty"`
+	About         string        `json:"about,omitempty"`
+	Preferences   []string      `json:"preferences,omitempty"`
+	Tone          *Tone         `json:"tone,omitempty"`
+	Language      *UserLanguage `json:"language,omitempty"`
+}
+
 type Tone struct {
 	Register string   `json:"register,omitempty"`
 	Traits   []string `json:"traits,omitempty"`
@@ -50,6 +63,20 @@ type Tone struct {
 type Language struct {
 	Default        string `json:"default,omitempty"`
 	MatchRequester bool   `json:"matchRequester,omitempty"`
+}
+
+type UserLanguage struct {
+	Default string `json:"default,omitempty"`
+}
+
+var personIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
+
+func UserDocumentPath(workspaceRootPath string, personID string) (string, bool) {
+	trimmedPersonID := strings.TrimSpace(personID)
+	if !personIDPattern.MatchString(trimmedPersonID) {
+		return "", false
+	}
+	return filepath.Join(workspaceRootPath, filepath.FromSlash(UserDirectoryPath), trimmedPersonID+".json"), true
 }
 
 func ParseIdentity(document []byte) (Identity, error) {
@@ -74,12 +101,21 @@ func ParseSoul(document []byte) (Soul, error) {
 	return NormalizeSoul(soul), nil
 }
 
+func ParseUser(document []byte) (User, error) {
+	if errorValue := validateAgainstSchema(UserSchemaDocument, "user.json", document); errorValue != nil {
+		return User{}, errorValue
+	}
+	var user User
+	if errorValue := json.Unmarshal(document, &user); errorValue != nil {
+		return User{}, fmt.Errorf("user.json: %w", errorValue)
+	}
+	return NormalizeUser(user), nil
+}
+
 func NormalizeIdentity(identity Identity) Identity {
 	identity.SchemaVersion = SchemaVersion
-	identity.Name = strings.TrimSpace(identity.Name)
-	identity.EnglishName = strings.TrimSpace(identity.EnglishName)
+	identity.Names = normalizeLines(identity.Names)
 	identity.Handle = strings.ToLower(strings.TrimSpace(identity.Handle))
-	identity.Aliases = normalizeLines(identity.Aliases)
 	identity.Role = strings.TrimSpace(identity.Role)
 	identity.Creature = strings.TrimSpace(identity.Creature)
 	identity.Emoji = strings.TrimSpace(identity.Emoji)
@@ -92,14 +128,7 @@ func NormalizeSoul(soul Soul) Soul {
 	soul.Values = normalizeLines(soul.Values)
 	soul.Boundaries = normalizeLines(soul.Boundaries)
 	soul.WorkingStyle = normalizeLines(soul.WorkingStyle)
-	if soul.Tone != nil {
-		tone := Tone{Register: strings.ToLower(strings.TrimSpace(soul.Tone.Register)), Traits: normalizeLines(soul.Tone.Traits)}
-		if tone.Register == "" && len(tone.Traits) == 0 {
-			soul.Tone = nil
-		} else {
-			soul.Tone = &tone
-		}
-	}
+	soul.Tone = normalizeTone(soul.Tone)
 	if soul.Language != nil {
 		language := Language{Default: strings.TrimSpace(soul.Language.Default), MatchRequester: soul.Language.MatchRequester}
 		if language.Default == "" && !language.MatchRequester {
@@ -111,12 +140,44 @@ func NormalizeSoul(soul Soul) Soul {
 	return soul
 }
 
+func NormalizeUser(user User) User {
+	user.SchemaVersion = SchemaVersion
+	user.CallMe = strings.TrimSpace(user.CallMe)
+	user.About = strings.TrimSpace(user.About)
+	user.Preferences = normalizeLines(user.Preferences)
+	user.Tone = normalizeTone(user.Tone)
+	if user.Language != nil {
+		language := UserLanguage{Default: strings.TrimSpace(user.Language.Default)}
+		if language.Default == "" {
+			user.Language = nil
+		} else {
+			user.Language = &language
+		}
+	}
+	return user
+}
+
+func normalizeTone(tone *Tone) *Tone {
+	if tone == nil {
+		return nil
+	}
+	normalized := Tone{Register: strings.ToLower(strings.TrimSpace(tone.Register)), Traits: normalizeLines(tone.Traits)}
+	if normalized.Register == "" && len(normalized.Traits) == 0 {
+		return nil
+	}
+	return &normalized
+}
+
 func CanonicalIdentity(identity Identity) ([]byte, error) {
 	return canonicalDocument(NormalizeIdentity(identity), IdentitySchemaDocument, IdentityFileName)
 }
 
 func CanonicalSoul(soul Soul) ([]byte, error) {
 	return canonicalDocument(NormalizeSoul(soul), SoulSchemaDocument, SoulFileName)
+}
+
+func CanonicalUser(user User) ([]byte, error) {
+	return canonicalDocument(NormalizeUser(user), UserSchemaDocument, "user.json")
 }
 
 func canonicalDocument(value any, schemaDocument []byte, fileName string) ([]byte, error) {

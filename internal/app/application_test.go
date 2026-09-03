@@ -236,7 +236,7 @@ func TestLoadAgentInstructionPromptUsesIdentitySoulAgentsAndSkills(t *testing.T)
 	if errorValue := os.MkdirAll(skillDirectoryPath, 0o755); errorValue != nil {
 		t.Fatalf("expected skill directory: %v", errorValue)
 	}
-	if errorValue := os.WriteFile(filepath.Join(workspacePath, "identity.json"), []byte(`{"schemaVersion": 1, "name": "김인턴", "englishName": "Intern Kim", "handle": "internkim", "role": "the company's AI intern"}`), 0o600); errorValue != nil {
+	if errorValue := os.WriteFile(filepath.Join(workspacePath, "identity.json"), []byte(`{"schemaVersion": 1, "names": ["김인턴", "Intern Kim"], "handle": "internkim", "role": "the company's AI intern"}`), 0o600); errorValue != nil {
 		t.Fatalf("expected identity file: %v", errorValue)
 	}
 	if errorValue := os.WriteFile(filepath.Join(workspacePath, "soul.json"), []byte(`{"schemaVersion": 1, "values": ["Lead with the result."]}`), 0o600); errorValue != nil {
@@ -252,7 +252,7 @@ func TestLoadAgentInstructionPromptUsesIdentitySoulAgentsAndSkills(t *testing.T)
 	runtimeConfiguration.Terminal.WorkspaceRootPath = workspacePath
 
 	instructionBundle := loadAgentInstructionBundle(runtimeConfiguration)
-	for _, expectedFragment := range []string{"Your name is 김인턴 (Intern Kim).", "@internkim", "Your role: the company's AI intern", "What you hold to:\n- Lead with the result.", "Use agent-browser for web automation."} {
+	for _, expectedFragment := range []string{"Your name is 김인턴.", "\"Intern Kim\"", "@internkim", "Your role: the company's AI intern", "What you hold to:\n- Lead with the result.", "Use agent-browser for web automation."} {
 		if !strings.Contains(instructionBundle.Prompt, expectedFragment) {
 			t.Fatalf("expected instruction prompt to contain %q, got %q", expectedFragment, instructionBundle.Prompt)
 		}
@@ -264,7 +264,7 @@ func TestLoadAgentInstructionPromptUsesIdentitySoulAgentsAndSkills(t *testing.T)
 
 func TestLoadAgentIdentityReadsTheIdentityDocument(t *testing.T) {
 	workspacePath := t.TempDir()
-	if errorValue := os.WriteFile(filepath.Join(workspacePath, "identity.json"), []byte(`{"schemaVersion": 1, "name": "김인턴", "handle": "internkim"}`), 0o600); errorValue != nil {
+	if errorValue := os.WriteFile(filepath.Join(workspacePath, "identity.json"), []byte(`{"schemaVersion": 1, "names": ["김인턴"], "handle": "internkim"}`), 0o600); errorValue != nil {
 		t.Fatalf("expected identity file: %v", errorValue)
 	}
 	runtimeConfiguration := config.RuntimeConfiguration{}
@@ -279,7 +279,7 @@ func TestLoadAgentIdentityReadsTheIdentityDocument(t *testing.T) {
 
 func TestAPersonaDocumentTheSchemaRefusesIsReportedAndLeftOut(t *testing.T) {
 	workspacePath := t.TempDir()
-	if errorValue := os.WriteFile(filepath.Join(workspacePath, "identity.json"), []byte(`{"schemaVersion": 1, "name": "김인턴", "handle": "internkim", "nickname": "kim"}`), 0o600); errorValue != nil {
+	if errorValue := os.WriteFile(filepath.Join(workspacePath, "identity.json"), []byte(`{"schemaVersion": 1, "names": ["김인턴"], "handle": "internkim", "nickname": "kim"}`), 0o600); errorValue != nil {
 		t.Fatalf("expected identity file: %v", errorValue)
 	}
 	runtimeConfiguration := config.RuntimeConfiguration{}

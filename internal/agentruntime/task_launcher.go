@@ -584,6 +584,9 @@ func (taskLauncher *TaskLauncher) agentTurnRequestForLaunch(request TaskLaunchRe
 		CheckpointSender:           request.CheckpointSender,
 	}
 	turnRequest.HostInstruction = hostInstructionForRequest(turnRequest)
+	if requesterPersona := requesterPersonaInstruction(taskLauncher.toolCatalogBuilder.WorkspaceRootPath(), request.RequesterPersonID); requesterPersona != "" {
+		turnRequest.HostInstruction += "\n\n" + requesterPersona
+	}
 	return turnRequest
 }
 
