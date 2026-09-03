@@ -400,6 +400,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 		connectorRuntime.RegisterAdapter(newPlatformAdapter(platform, runtimeConfiguration, capabilityClient, chatdClient))
 	}
 	for _, platform := range platformsChatdServesBeyondTheProtocol(runtimeConfiguration.Connectors.Chatd) {
+		logger.Warn("connector.platform.served_beyond_the_protocol", "platform", platform)
 		connectorRuntime.RegisterAdapter(connectors.NewChatdPlatformAdapter(platform, chatdClient))
 	}
 	agentReplyStore := apiconnector.NewPersistentReplyStore(filepath.Join(runtimeConfiguration.Terminal.WorkspaceRootPath, ".blueclaw", "state", "agent-replies.json"))
