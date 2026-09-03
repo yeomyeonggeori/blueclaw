@@ -232,8 +232,7 @@ func TestCapabilityToolRequestIncludesTrustedExecutionContext(t *testing.T) {
 		PrivacyClass:  "platform_message",
 		Idempotency:   CapabilityIdempotency{Supported: true, Scope: "operation"},
 	})
-	toolContext := toolcontract.WithToolConflictResolution(context.Background(), toolcontract.ToolConflictResolutionAllowDuplicate)
-	requestDocument := capabilityToolRequest(toolContext, descriptor, ToolCatalogRequest{
+	requestDocument := capabilityToolRequest(context.Background(), descriptor, ToolCatalogRequest{
 		TaskSource:              TaskLaunchSourceScheduled,
 		IsScheduledRun:          true,
 		IsApprovalContinuation:  true,
@@ -253,9 +252,6 @@ func TestCapabilityToolRequestIncludesTrustedExecutionContext(t *testing.T) {
 	}
 	if contextDocument["replyTargetID"] != "reply-target-1" {
 		t.Fatalf("expected reply target in context, got %+v", contextDocument)
-	}
-	if contextDocument["conflictResolution"] != toolcontract.ToolConflictResolutionAllowDuplicate {
-		t.Fatalf("expected typed conflict resolution in context, got %+v", contextDocument)
 	}
 }
 

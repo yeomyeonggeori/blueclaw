@@ -72,12 +72,6 @@
         "channelName": {
           "type": "string"
         },
-        "conflictResolution": {
-          "enum": [
-            "allow_duplicate"
-          ],
-          "type": "string"
-        },
         "conversationID": {
           "type": "string"
         },

@@ -20,7 +20,6 @@ import {
   StructuredOutputValidationCode,
   structuredOutputDiagnosticSchema,
   structuredOutputSchemaSchema,
-  ToolConflictResolution,
   toolInvokeRequestSchema,
   toolInvokeResponseSchema,
   type ProtocolSchemaName,
@@ -69,23 +68,6 @@ describe('closed protocol values', () => {
     expect(protocolIdentitySchema.safeParse({ ...identity, aggregateProtocolHash: 'A'.repeat(64) }).success).toBe(false);
     expect(protocolIdentitySchema.safeParse({ ...identity, extra: true }).success).toBe(false);
     expect(capabilityRegistryResponseSchema.safeParse({ ...registryResponse, protocolVersion: undefined }).success).toBe(false);
-  });
-
-  test('keeps internal conflict resolution typed and outside tool input', () => {
-    const request = {
-      toolName: 'calendar_add',
-      input: {
-        title: 'customer support check',
-        startISO: '2026-07-24T14:00:00+09:00',
-        endISO: '2026-07-24T15:00:00+09:00',
-      },
-      context: { conflictResolution: ToolConflictResolution.AllowDuplicate },
-    };
-    expect(toolInvokeRequestSchema.safeParse(request).success).toBe(true);
-    expect(toolInvokeRequestSchema.safeParse({
-      ...request,
-      context: { conflictResolution: 'ignore_conflict' },
-    }).success).toBe(false);
   });
 
   test('requires strict structured output schema requests', () => {
