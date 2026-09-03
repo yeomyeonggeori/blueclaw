@@ -10,7 +10,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 func TestTaskMonitorHandlerFiltersAndLimitsTaskRunList(t *testing.T) {
@@ -114,8 +114,8 @@ func TestTaskMonitorHandlerIncludeTotalReturnsCostSummaries(t *testing.T) {
 	taskRunService := task.NewTaskRunService(taskEventService)
 	firstTaskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "first task")
 	secondTaskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "second task")
-	taskRunService.AppendTaskEvent(firstTaskRun.TaskRunID, taskstate.TaskEventLLMCall, `{"costUSD":0.0155,"totalTokens":100}`)
-	taskRunService.AppendTaskEvent(secondTaskRun.TaskRunID, taskstate.TaskEventLLMCall, `{"upstreamInferenceCostUSD":0.0045,"totalTokens":50}`)
+	taskRunService.AppendTaskEvent(firstTaskRun.TaskRunID, agentcontract.TaskEventLLMCall, `{"costUSD":0.0155,"totalTokens":100}`)
+	taskRunService.AppendTaskEvent(secondTaskRun.TaskRunID, agentcontract.TaskEventLLMCall, `{"upstreamInferenceCostUSD":0.0045,"totalTokens":50}`)
 	handler := TaskMonitorHandler{TaskRunService: taskRunService, TaskEventService: taskEventService}
 	request := httptest.NewRequest(http.MethodGet, "/admin/api/task?includeTotal=true&includeCost=true", nil)
 	responseRecorder := httptest.NewRecorder()
@@ -165,9 +165,9 @@ func TestTaskMonitorHandlerLimitsDailyCostSummaryWindow(t *testing.T) {
 	firstTaskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "first task")
 	secondTaskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "second task")
 	thirdTaskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "third task")
-	taskRunService.AppendTaskEvent(firstTaskRun.TaskRunID, taskstate.TaskEventLLMCall, `{"costUSD":0.01}`)
-	taskRunService.AppendTaskEvent(secondTaskRun.TaskRunID, taskstate.TaskEventLLMCall, `{"costUSD":0.02}`)
-	taskRunService.AppendTaskEvent(thirdTaskRun.TaskRunID, taskstate.TaskEventLLMCall, `{"costUSD":0.03}`)
+	taskRunService.AppendTaskEvent(firstTaskRun.TaskRunID, agentcontract.TaskEventLLMCall, `{"costUSD":0.01}`)
+	taskRunService.AppendTaskEvent(secondTaskRun.TaskRunID, agentcontract.TaskEventLLMCall, `{"costUSD":0.02}`)
+	taskRunService.AppendTaskEvent(thirdTaskRun.TaskRunID, agentcontract.TaskEventLLMCall, `{"costUSD":0.03}`)
 	handler := TaskMonitorHandler{TaskRunService: taskRunService, TaskEventService: taskEventService}
 	request := httptest.NewRequest(http.MethodGet, "/admin/api/task?limit=1&offset=1&includeTotal=true&includeCost=true&dailyCostTaskRunLimit=1", nil)
 	responseRecorder := httptest.NewRecorder()
@@ -352,7 +352,7 @@ func TestTaskMonitorHandlerRejectsRunningTaskRunDelete(t *testing.T) {
 func parkedTaskRunAwaitingApproval(t *testing.T, taskRunService *task.TaskRunService, prompt string) task.TaskRun {
 	t.Helper()
 	taskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", prompt)
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventAskRequested, `{"kind":"ask_confirm","message":"삭제할까요?"}`)
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAskRequested, `{"kind":"ask_confirm","message":"삭제할까요?"}`)
 	if _, errorValue := taskRunService.PauseTaskRun(taskRun.TaskRunID, task.TaskStatusWaitingApproval, "삭제할까요?"); errorValue != nil {
 		t.Fatalf("expected the run to park: %v", errorValue)
 	}
@@ -363,7 +363,7 @@ func TestARunWaitingWithAQuestionNobodySentIsReportedAsUndelivered(t *testing.T)
 	taskEventService := task.NewTaskEventService()
 	taskRunService := task.NewTaskRunService(taskEventService)
 	askedTaskRun := parkedTaskRunAwaitingApproval(t, taskRunService, "asked task")
-	taskRunService.AppendTaskEvent(askedTaskRun.TaskRunID, taskstate.TaskEventConnectorReplySent, `{"replyKind":"user_notice","dispatchID":"dispatch-1"}`)
+	taskRunService.AppendTaskEvent(askedTaskRun.TaskRunID, agentcontract.TaskEventConnectorReplySent, `{"replyKind":"user_notice","dispatchID":"dispatch-1"}`)
 	unaskedTaskRun := parkedTaskRunAwaitingApproval(t, taskRunService, "unasked task")
 	handler := TaskMonitorHandler{TaskRunService: taskRunService, TaskEventService: taskEventService}
 	request := httptest.NewRequest(http.MethodGet, "/admin/api/task?status=waiting_approval", nil)

@@ -7,8 +7,8 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract/harnesstest"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 func approvalContinuationLauncher(t *testing.T, taskRunService *task.TaskRunService) (*TaskLauncher, *harnesstest.Harness) {
@@ -51,8 +51,8 @@ func launchApprovalContinuation(t *testing.T, taskLauncher *TaskLauncher, taskRu
 func taskRunAwaitingApprovalOf(t *testing.T, taskRunService *task.TaskRunService, decision string) string {
 	t.Helper()
 	taskRun := taskRunService.CreateTaskRun("person-1", "channel-1", "지난 분기 뭐였는지 찾아줘")
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventApprovalPendingCall, `{"toolName":"memory_search","toolInput":{"query":"quarterly launch"},"confirmation":"기억을 찾아볼까요?"}`)
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventApprovalDecided, `{"decision":"`+decision+`"}`)
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalPendingCall, `{"toolName":"memory_search","toolInput":{"query":"quarterly launch"},"confirmation":"기억을 찾아볼까요?"}`)
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalDecided, `{"decision":"`+decision+`"}`)
 	return taskRun.TaskRunID
 }
 
@@ -93,7 +93,7 @@ func TestADeclinedCallIsNotCarriedOut(t *testing.T) {
 func TestACallIsCarriedOutOnceAndNotAgainOnTheNextResume(t *testing.T) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	taskLauncher, harness := approvalContinuationLauncher(t, taskRunService)
-	harness.TurnStatus = taskstate.TaskStatusWaitingApproval
+	harness.TurnStatus = agentcontract.TaskStatusWaitingApproval
 	taskRunID := taskRunAwaitingApprovalOf(t, taskRunService, "confirm")
 
 	launchApprovalContinuation(t, taskLauncher, taskRunID)

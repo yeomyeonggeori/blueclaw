@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 const messageSendToolName = "message_send"
@@ -14,7 +14,7 @@ type toolRequestedEventBody struct {
 	Input    json.RawMessage `json:"input"`
 }
 
-func agentAlreadyDeliveredTo(taskEvents []taskstate.TaskEvent, deliveryTargets []string) bool {
+func agentAlreadyDeliveredTo(taskEvents []agentcontract.TaskEvent, deliveryTargets []string) bool {
 	knownTargets := []string{}
 	for _, deliveryTarget := range deliveryTargets {
 		if trimmedTarget := strings.TrimSpace(deliveryTarget); trimmedTarget != "" {
@@ -28,7 +28,7 @@ func agentAlreadyDeliveredTo(taskEvents []taskstate.TaskEvent, deliveryTargets [
 		return false
 	}
 	for _, taskEvent := range taskEvents {
-		if taskEvent.Name != taskstate.ToolTaskEventName(messageSendToolName, taskstate.ToolTaskEventRequestedSuffix) {
+		if taskEvent.Name != agentcontract.ToolTaskEventName(messageSendToolName, agentcontract.ToolTaskEventRequestedSuffix) {
 			continue
 		}
 		requested := toolRequestedEventBody{}
@@ -61,9 +61,9 @@ func messageSendTargets(toolInput json.RawMessage, knownTargets []string) bool {
 	return false
 }
 
-func messageSendSucceeded(taskEvents []taskstate.TaskEvent) bool {
+func messageSendSucceeded(taskEvents []agentcontract.TaskEvent) bool {
 	for _, taskEvent := range taskEvents {
-		if taskEvent.Name != taskstate.ToolTaskEventName(messageSendToolName, taskstate.ToolTaskEventResultSuffix) {
+		if taskEvent.Name != agentcontract.ToolTaskEventName(messageSendToolName, agentcontract.ToolTaskEventResultSuffix) {
 			continue
 		}
 		if !strings.Contains(taskEvent.Body, "\"failure\"") {

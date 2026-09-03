@@ -7,13 +7,13 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 func spentApprovalEventBodies(taskRunService *task.TaskRunService, taskRunID string) []string {
 	bodies := []string{}
 	for _, taskEvent := range taskRunService.ListTaskEvent(taskRunID) {
-		if taskEvent.Name == taskstate.TaskEventApprovalExecuted {
+		if taskEvent.Name == agentcontract.TaskEventApprovalExecuted {
 			bodies = append(bodies, taskEvent.Body)
 		}
 	}
@@ -23,7 +23,7 @@ func spentApprovalEventBodies(taskRunService *task.TaskRunService, taskRunID str
 func TestTheSpentApprovalCarriesTheCallAndTheTokenTheLoopIsWaitingOn(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
 	gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventApprovalHeldCall,
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalHeldCall,
 		`{"approvalToken":"token-1","toolName":"event_delete","toolInput":{"eventID":"event-1"},"observationID":"obs-1"}`)
 	recordDecision(taskRunService, taskRun.TaskRunID, "confirm")
 
@@ -43,7 +43,7 @@ func TestTheSpentApprovalCarriesTheCallAndTheTokenTheLoopIsWaitingOn(t *testing.
 func TestATokenIsSpentOnceSoASecondApprovalDoesNotClaimIt(t *testing.T) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	taskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "내일 회의 지워줘")
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventApprovalHeldCall,
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalHeldCall,
 		`{"approvalToken":"token-1","toolName":"event_delete","toolInput":{"eventID":"event-1"},"observationID":"obs-1"}`)
 
 	RecordApprovalSpent(taskRunService, taskRun.TaskRunID, "event_delete", json.RawMessage(`{"eventID":"event-1"}`))

@@ -1,6 +1,9 @@
 package task
 
-import "github.com/yeomyeonggeori/bluecollar/taskstate"
+import (
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
+)
 
 type (
 	ErrIllegalTransition           = taskstate.ErrIllegalTransition
@@ -10,23 +13,23 @@ type (
 	TaskArtifactRepository         = taskstate.TaskArtifactRepository
 	TaskArtifactService            = taskstate.TaskArtifactService
 	TaskArtifactStore              = taskstate.TaskArtifactStore
-	TaskAttempt                    = taskstate.TaskAttempt
-	TaskAttemptStatus              = taskstate.TaskAttemptStatus
-	TaskEvent                      = taskstate.TaskEvent
+	TaskAttempt                    = agentcontract.TaskAttempt
+	TaskAttemptStatus              = agentcontract.TaskAttemptStatus
+	TaskEvent                      = agentcontract.TaskEvent
 	TaskEventRepository            = taskstate.TaskEventRepository
 	TaskEventService               = taskstate.TaskEventService
-	TaskRun                        = taskstate.TaskRun
+	TaskRun                        = agentcontract.TaskRun
 	TaskRunCancelRequest           = taskstate.TaskRunCancelRequest
 	TaskRunOrigin                  = taskstate.TaskRunOrigin
 	TaskRunRepository              = taskstate.TaskRunRepository
 	TaskRunService                 = taskstate.TaskRunService
 	TaskRunStore                   = taskstate.TaskRunStore
-	TaskRunTransition              = taskstate.TaskRunTransition
+	TaskRunTransition              = agentcontract.TaskRunTransition
 	TaskSchedule                   = taskstate.TaskSchedule
 	TaskScheduleExecutionMode      = taskstate.TaskScheduleExecutionMode
 	TaskScheduleKind               = taskstate.TaskScheduleKind
 	TaskSession                    = taskstate.TaskSession
-	TaskStatus                     = taskstate.TaskStatus
+	TaskStatus                     = agentcontract.TaskStatus
 	TaskStep                       = taskstate.TaskStep
 	TaskStepRepository             = taskstate.TaskStepRepository
 	TaskStepService                = taskstate.TaskStepService
@@ -35,28 +38,28 @@ type (
 )
 
 const (
-	TaskAttemptStatusCancelled         = taskstate.TaskAttemptStatusCancelled
-	TaskAttemptStatusCompleted         = taskstate.TaskAttemptStatusCompleted
-	TaskAttemptStatusFailed            = taskstate.TaskAttemptStatusFailed
-	TaskAttemptStatusInterrupted       = taskstate.TaskAttemptStatusInterrupted
-	TaskAttemptStatusRunning           = taskstate.TaskAttemptStatusRunning
-	TaskAttemptStatusStarting          = taskstate.TaskAttemptStatusStarting
-	TaskInterruptReasonPlannedShutdown = taskstate.TaskInterruptReasonPlannedShutdown
-	TaskInterruptReasonRuntimeRestart  = taskstate.TaskInterruptReasonRuntimeRestart
+	TaskAttemptStatusCancelled         = agentcontract.TaskAttemptStatusCancelled
+	TaskAttemptStatusCompleted         = agentcontract.TaskAttemptStatusCompleted
+	TaskAttemptStatusFailed            = agentcontract.TaskAttemptStatusFailed
+	TaskAttemptStatusInterrupted       = agentcontract.TaskAttemptStatusInterrupted
+	TaskAttemptStatusRunning           = agentcontract.TaskAttemptStatusRunning
+	TaskAttemptStatusStarting          = agentcontract.TaskAttemptStatusStarting
+	TaskInterruptReasonPlannedShutdown = agentcontract.TaskInterruptReasonPlannedShutdown
+	TaskInterruptReasonRuntimeRestart  = agentcontract.TaskInterruptReasonRuntimeRestart
 	TaskScheduleExecutionModeAgent     = taskstate.TaskScheduleExecutionModeAgent
 	TaskScheduleExecutionModeMessage   = taskstate.TaskScheduleExecutionModeMessage
 	TaskScheduleKindCron               = taskstate.TaskScheduleKindCron
 	TaskScheduleKindInterval           = taskstate.TaskScheduleKindInterval
 	TaskScheduleKindOnce               = taskstate.TaskScheduleKindOnce
-	TaskStatusBlocked                  = taskstate.TaskStatusBlocked
-	TaskStatusCancelled                = taskstate.TaskStatusCancelled
-	TaskStatusCompleted                = taskstate.TaskStatusCompleted
-	TaskStatusFailed                   = taskstate.TaskStatusFailed
-	TaskStatusInterrupted              = taskstate.TaskStatusInterrupted
-	TaskStatusPlanned                  = taskstate.TaskStatusPlanned
-	TaskStatusRunning                  = taskstate.TaskStatusRunning
-	TaskStatusWaitingApproval          = taskstate.TaskStatusWaitingApproval
-	TaskStatusWaitingUserInput         = taskstate.TaskStatusWaitingUserInput
+	TaskStatusBlocked                  = agentcontract.TaskStatusBlocked
+	TaskStatusCancelled                = agentcontract.TaskStatusCancelled
+	TaskStatusCompleted                = agentcontract.TaskStatusCompleted
+	TaskStatusFailed                   = agentcontract.TaskStatusFailed
+	TaskStatusInterrupted              = agentcontract.TaskStatusInterrupted
+	TaskStatusPlanned                  = agentcontract.TaskStatusPlanned
+	TaskStatusRunning                  = agentcontract.TaskStatusRunning
+	TaskStatusWaitingApproval          = agentcontract.TaskStatusWaitingApproval
+	TaskStatusWaitingUserInput         = agentcontract.TaskStatusWaitingUserInput
 )
 
 var (
@@ -69,5 +72,5 @@ var (
 	NewTaskRunService                     = taskstate.NewTaskRunService
 	NewTaskStepService                    = taskstate.NewTaskStepService
 	StaleUnattendedTaskRunReason          = taskstate.StaleUnattendedTaskRunReason
-	TaskRunWasInterruptedByRuntimeRestart = taskstate.TaskRunWasInterruptedByRuntimeRestart
+	TaskRunWasInterruptedByRuntimeRestart = agentcontract.TaskRunWasInterruptedByRuntimeRestart
 )

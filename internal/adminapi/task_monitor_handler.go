@@ -10,7 +10,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 type TaskMonitorHandler struct {
@@ -216,9 +216,9 @@ func isTaskRunWaitingForTheRequester(status task.TaskStatus) bool {
 func taskRunHasUndeliveredQuestion(taskEvents []task.TaskEvent) bool {
 	for index := len(taskEvents) - 1; index >= 0; index-- {
 		switch taskEvents[index].Name {
-		case taskstate.TaskEventConnectorReplySent:
+		case agentcontract.TaskEventConnectorReplySent:
 			return false
-		case taskstate.TaskEventAskRequested:
+		case agentcontract.TaskEventAskRequested:
 			return true
 		}
 	}
@@ -230,7 +230,7 @@ func (taskMonitorHandler TaskMonitorHandler) taskRunCostSummaries(taskRuns []tas
 	if taskMonitorHandler.TaskEventService == nil {
 		return costSummaries
 	}
-	for _, taskEvent := range taskMonitorHandler.TaskEventService.ListTaskEventByNameForTaskRuns(taskRunIDs(taskRuns), taskstate.TaskEventLLMCall) {
+	for _, taskEvent := range taskMonitorHandler.TaskEventService.ListTaskEventByNameForTaskRuns(taskRunIDs(taskRuns), agentcontract.TaskEventLLMCall) {
 		costUSD, isLLMCall := llmCallCostUSD(taskEvent)
 		if !isLLMCall {
 			continue
@@ -289,7 +289,7 @@ func taskRunIDs(taskRuns []task.TaskRun) []string {
 }
 
 func llmCallCostUSD(taskEvent task.TaskEvent) (float64, bool) {
-	if taskEvent.Name != taskstate.TaskEventLLMCall {
+	if taskEvent.Name != agentcontract.TaskEventLLMCall {
 		return 0, false
 	}
 	var body struct {

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 type stubLanguageModel struct {
@@ -37,7 +37,7 @@ func TestAnHonestFailureReportIsNotCompleted(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected a verdict, got %v", errorValue)
 	}
-	if verdict.Status != taskstate.TaskStatusFailed {
+	if verdict.Status != agentcontract.TaskStatusFailed {
 		t.Fatalf("expected failed, got %q", verdict.Status)
 	}
 	if verdict.Reason == "" {

@@ -16,7 +16,7 @@ func RecordRequesterDecision(taskRunStore taskstate.TaskRunStore, taskRunID stri
 	if decision == "" {
 		return
 	}
-	taskRunStore.AppendTaskEvent(taskRunID, taskstate.TaskEventApprovalDecided, marshalEventBody(map[string]string{
+	taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalDecided, marshalEventBody(map[string]string{
 		"decision": decision,
 		"source":   source,
 	}))
@@ -39,7 +39,7 @@ type ApprovedCall struct {
 	ToolInput json.RawMessage
 }
 
-func ApprovedPendingCall(taskEvents []taskstate.TaskEvent) (ApprovedCall, bool) {
+func ApprovedPendingCall(taskEvents []agentcontract.TaskEvent) (ApprovedCall, bool) {
 	heldCall, decision := undecidedHeldCall(taskEvents)
 	if heldCall.ToolName == "" || !isApprovingDecision(decision) {
 		return ApprovedCall{}, false
@@ -47,7 +47,7 @@ func ApprovedPendingCall(taskEvents []taskstate.TaskEvent) (ApprovedCall, bool) 
 	return ApprovedCall{ToolName: heldCall.ToolName, ToolInput: heldCall.ApprovedInput()}, true
 }
 
-func DeclinedCallNote(taskEvents []taskstate.TaskEvent) string {
+func DeclinedCallNote(taskEvents []agentcontract.TaskEvent) string {
 	heldCall, decision := undecidedHeldCall(taskEvents)
 	if heldCall.ToolName == "" || decision != "cancel" {
 		return ""
@@ -55,17 +55,17 @@ func DeclinedCallNote(taskEvents []taskstate.TaskEvent) string {
 	return "The requester declined the " + heldCall.ToolName + " call you asked about. Do not attempt it again; continue without it or stop and say why you cannot."
 }
 
-func undecidedHeldCall(taskEvents []taskstate.TaskEvent) (agentcontract.HeldCall, string) {
+func undecidedHeldCall(taskEvents []agentcontract.TaskEvent) (agentcontract.HeldCall, string) {
 	heldCall := agentcontract.HeldCall{}
 	decision := ""
 	for _, taskEvent := range taskEvents {
 		switch taskEvent.Name {
-		case taskstate.TaskEventApprovalPendingCall:
+		case agentcontract.TaskEventApprovalPendingCall:
 			heldCall = decodeHeldCallEventBody(taskEvent.Body)
 			decision = ""
-		case taskstate.TaskEventApprovalDecided:
+		case agentcontract.TaskEventApprovalDecided:
 			decision = decodedDecision(taskEvent.Body)
-		case taskstate.TaskEventApprovalExecuted:
+		case agentcontract.TaskEventApprovalExecuted:
 			if executedToolName(taskEvent.Body) == heldCall.ToolName {
 				heldCall = agentcontract.HeldCall{}
 				decision = ""

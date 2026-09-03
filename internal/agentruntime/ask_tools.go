@@ -3,12 +3,12 @@ package agentruntime
 import (
 	"context"
 	"encoding/json"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strconv"
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 type askInputToolInput struct {
@@ -70,7 +70,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) askInputTool(toolContext context.C
 			Value: choice,
 		})
 	}
-	toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventAskRequested, marshalToolResult(map[string]any{
+	toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventAskRequested, marshalToolResult(map[string]any{
 		"kind":             "ask_input",
 		"question":         question,
 		"message":          question,

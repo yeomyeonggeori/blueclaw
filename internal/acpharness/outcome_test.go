@@ -8,7 +8,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/turnoutcome"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 type stubOutcomeLanguageModel struct {
@@ -48,7 +47,7 @@ func TestAnAgentThatEndsItsTurnReportingFailureIsNotRecordedAsCompleted(t *testi
 		responseContent: `{"outcome":"failed","reason":"the agent reported it could not do the work"}`,
 	})
 
-	if turnResult.TaskRun.Status != taskstate.TaskStatusFailed {
+	if turnResult.TaskRun.Status != agentcontract.TaskStatusFailed {
 		t.Fatalf("an ended turn is not a finished task; expected failed, got %q", turnResult.TaskRun.Status)
 	}
 	if turnResult.TaskRun.FailureReason == "" {
@@ -59,7 +58,7 @@ func TestAnAgentThatEndsItsTurnReportingFailureIsNotRecordedAsCompleted(t *testi
 func TestAnUndecidableOutcomeIsRecordedAsFailedRatherThanCompleted(t *testing.T) {
 	turnResult := runTurnWithOutcomeClassifier(t, stubOutcomeLanguageModel{errorValue: errors.New("the classifier is unreachable")})
 
-	if turnResult.TaskRun.Status != taskstate.TaskStatusFailed {
+	if turnResult.TaskRun.Status != agentcontract.TaskStatusFailed {
 		t.Fatalf("expected an undecidable turn to be visible as failed, got %q", turnResult.TaskRun.Status)
 	}
 }
@@ -69,7 +68,7 @@ func TestAnAgentThatReportsSuccessIsRecordedAsCompleted(t *testing.T) {
 		responseContent: `{"outcome":"completed","reason":"the note was written"}`,
 	})
 
-	if turnResult.TaskRun.Status != taskstate.TaskStatusCompleted {
+	if turnResult.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected completed, got %q", turnResult.TaskRun.Status)
 	}
 }

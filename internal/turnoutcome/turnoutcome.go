@@ -6,8 +6,8 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 const verdictSchemaDocument = `{
@@ -32,7 +32,7 @@ The tool list is what the runtime observed, not what the agent claims. A message
 Judge only what the message reports. Do not invent requirements the task did not state. Wording, tone, formatting, length, and language are never grounds for "failed". An apologetic or hedged message that still reports the work as done is "completed".`
 
 type Verdict struct {
-	Status taskstate.TaskStatus
+	Status agentcontract.TaskStatus
 	Reason string
 }
 
@@ -101,14 +101,14 @@ func parseVerdict(responseContent string) (Verdict, error) {
 	return Verdict{Status: status, Reason: strings.TrimSpace(parsed.Reason)}, nil
 }
 
-func statusForOutcome(outcome string) (taskstate.TaskStatus, bool) {
+func statusForOutcome(outcome string) (agentcontract.TaskStatus, bool) {
 	switch strings.TrimSpace(outcome) {
 	case "completed":
-		return taskstate.TaskStatusCompleted, true
+		return agentcontract.TaskStatusCompleted, true
 	case "failed":
-		return taskstate.TaskStatusFailed, true
+		return agentcontract.TaskStatusFailed, true
 	case "blocked":
-		return taskstate.TaskStatusBlocked, true
+		return agentcontract.TaskStatusBlocked, true
 	default:
 		return "", false
 	}

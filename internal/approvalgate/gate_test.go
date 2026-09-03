@@ -9,8 +9,8 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
@@ -80,7 +80,7 @@ func TestACallWithNoTaskRunToAnswerOnIsUnanswerableRatherThanHeld(t *testing.T) 
 }
 
 func recordDecision(taskRunService *task.TaskRunService, taskRunID string, decision string) {
-	taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventApprovalDecided, `{"decision":"`+decision+`"}`)
+	taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalDecided, `{"decision":"`+decision+`"}`)
 }
 
 func TestTheSameCallRunsOnceTheRequesterHasApprovedIt(t *testing.T) {
@@ -204,7 +204,7 @@ func TestAnUnscopedHeldCallDoesNotOfferAScopeItHasNot(t *testing.T) {
 func TestApprovingTheWholeTaskLetsTheNextCallInThatScopeRun(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
 	gate.AwaitApproval(context.Background(), approvalRequestForEvent(taskRun.TaskRunID, `{"eventID":"event-1"}`))
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventApprovalScopeGranted, `{"scope":"calendar"}`)
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalScopeGranted, `{"scope":"calendar"}`)
 
 	nextCallOutcome, _ := gate.AwaitApproval(context.Background(), approvalRequestForEvent(taskRun.TaskRunID, `{"eventID":"event-2"}`))
 	if nextCallOutcome.Decision != mcpserver.ApprovalDecisionApproved {
@@ -214,7 +214,7 @@ func TestApprovingTheWholeTaskLetsTheNextCallInThatScopeRun(t *testing.T) {
 
 func TestApprovingOneScopeDoesNotApproveAnother(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventApprovalScopeGranted, `{"scope":"messaging"}`)
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalScopeGranted, `{"scope":"messaging"}`)
 
 	heldOutcome, _ := gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
 	if heldOutcome.Decision != mcpserver.ApprovalDecisionHeld {

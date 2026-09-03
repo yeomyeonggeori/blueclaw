@@ -3,15 +3,15 @@ package connectors
 import (
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
-func messageSendEvents(targetField string, targetValue string, isFailure bool) []taskstate.TaskEvent {
+func messageSendEvents(targetField string, targetValue string, isFailure bool) []agentcontract.TaskEvent {
 	resultBody := `{"toolName":"message_send","output":{"content":"보냈습니다"}}`
 	if isFailure {
 		resultBody = `{"toolName":"message_send","failure":{"code":"operation_failed"}}`
 	}
-	return []taskstate.TaskEvent{
+	return []agentcontract.TaskEvent{
 		{Name: "tool.message_send.requested", Body: `{"toolName":"message_send","input":{"` + targetField + `":"` + targetValue + `","body":"살아있어요"}}`},
 		{Name: "tool.message_send.result", Body: resultBody},
 	}
@@ -44,7 +44,7 @@ func TestASendThatFailedLeavesTheAnswerToTheRuntime(t *testing.T) {
 }
 
 func TestAnUnrecognisedSendShapeStillDelivers(t *testing.T) {
-	events := []taskstate.TaskEvent{
+	events := []agentcontract.TaskEvent{
 		{Name: "tool.message_send.requested", Body: `{"toolName":"message_send","input":{"recipientHint":"김예시"}}`},
 		{Name: "tool.message_send.result", Body: `{"toolName":"message_send","output":{}}`},
 	}
@@ -55,7 +55,7 @@ func TestAnUnrecognisedSendShapeStillDelivers(t *testing.T) {
 }
 
 func TestATaskThatSentNothingStillReplies(t *testing.T) {
-	if agentAlreadyDeliveredTo([]taskstate.TaskEvent{{Name: "task.completed", Body: "{}"}}, []string{"thread:abc"}) {
+	if agentAlreadyDeliveredTo([]agentcontract.TaskEvent{{Name: "task.completed", Body: "{}"}}, []string{"thread:abc"}) {
 		t.Fatal("expected an ordinary task to reply")
 	}
 }

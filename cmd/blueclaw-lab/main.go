@@ -20,8 +20,8 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/lab"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 type PrintingCommandRunner struct{}
@@ -329,7 +329,7 @@ func validateStrictEmbeddingRetrieval(result e2e.VirtualSessionResult) error {
 	foundReadyEmbedding := false
 	for _, turnResult := range result.TurnResults {
 		for _, event := range turnResult.Events {
-			if event.Name != taskstate.TaskEventAgentInstructionsLoaded {
+			if event.Name != agentcontract.TaskEventAgentInstructionsLoaded {
 				continue
 			}
 			foundRetrievalEvidence = true
@@ -504,13 +504,13 @@ func buildVirtualTurnMetrics(turnNumber int, turnResult e2e.VirtualTurnResult) v
 		metrics.LanguageModelLatencyMS += call.LatencyMS
 	}
 	for _, event := range turnResult.Events {
-		if event.Name == taskstate.TaskEventAgentAction {
+		if event.Name == agentcontract.TaskEventAgentAction {
 			metrics.AgentStepCount++
 		}
-		if strings.HasPrefix(event.Name, taskstate.ToolTaskEventPrefix) && strings.HasSuffix(event.Name, taskstate.ToolTaskEventRequestedSuffix) {
+		if strings.HasPrefix(event.Name, agentcontract.ToolTaskEventPrefix) && strings.HasSuffix(event.Name, agentcontract.ToolTaskEventRequestedSuffix) {
 			metrics.ToolCallCount++
 		}
-		if event.Name == taskstate.TaskEventBlueclawTaskExecutionDuration {
+		if event.Name == agentcontract.TaskEventBlueclawTaskExecutionDuration {
 			metrics.TaskDurationMS = taskDurationMilliseconds(event.Body)
 		}
 	}
@@ -549,8 +549,8 @@ func printVirtualTurnFailureEvents(turnNumber int, turnResult e2e.VirtualTurnRes
 }
 
 func isVirtualFailureDiagnosticEvent(eventName string) bool {
-	return strings.HasPrefix(eventName, taskstate.ToolTaskEventPrefix) ||
-		eventName == taskstate.TaskEventAgentAction ||
+	return strings.HasPrefix(eventName, agentcontract.ToolTaskEventPrefix) ||
+		eventName == agentcontract.TaskEventAgentAction ||
 		strings.Contains(eventName, "tool_palette") ||
 		strings.Contains(eventName, "step_working_set") ||
 		strings.Contains(eventName, "completion") ||

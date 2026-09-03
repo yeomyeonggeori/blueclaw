@@ -21,9 +21,9 @@ var eventNamesWrittenOnBothSides = map[string]string{
 	"llm.call":                    "undecided: the host records the calls it makes and the agent records its own, which may be two events of one kind rather than one event with two writers",
 }
 
-const taskEventNameDeclarationPath = "../../.dependency/bluecollar/taskstate/task_event_name.go"
+const taskEventNameDeclarationPath = "../../.dependency/bluecollar/agentcontract/task_event_name.go"
 
-var taskEventWriteCall = regexp.MustCompile(`(?s:(?:AppendTaskEvent|appendEvent|appendTaskEvent)\(\s*[^,]+,\s*(?:taskstate\.)?(TaskEvent[A-Za-z0-9]+))`)
+var taskEventWriteCall = regexp.MustCompile(`(?s:(?:AppendTaskEvent|appendEvent|appendTaskEvent)\(\s*[^,]+,\s*(?:agentcontract\.)?(TaskEvent[A-Za-z0-9]+))`)
 
 var taskEventNameDeclaration = regexp.MustCompile(`(TaskEvent[A-Za-z0-9]+)\s+= "([a-z0-9_.]+)"`)
 

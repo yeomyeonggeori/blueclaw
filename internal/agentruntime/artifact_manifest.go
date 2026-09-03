@@ -37,10 +37,10 @@ func buildConversationArtifactManifest(request agentcontract.AgentTurnRequest, t
 	return boundedArtifactManifestEntries(request, candidates)
 }
 
-func conversationArtifactTaskRuns(request agentcontract.AgentTurnRequest, taskRuns []taskstate.TaskRun) []taskstate.TaskRun {
+func conversationArtifactTaskRuns(request agentcontract.AgentTurnRequest, taskRuns []agentcontract.TaskRun) []agentcontract.TaskRun {
 	trimmedConversationID := strings.TrimSpace(request.ConversationID)
 	currentTaskRunID := strings.TrimSpace(request.ExistingTaskRunID)
-	matchingTaskRuns := []taskstate.TaskRun{}
+	matchingTaskRuns := []agentcontract.TaskRun{}
 	for _, taskRun := range taskRuns {
 		if strings.TrimSpace(taskRun.OriginConversationID) != trimmedConversationID {
 			continue
@@ -53,7 +53,7 @@ func conversationArtifactTaskRuns(request agentcontract.AgentTurnRequest, taskRu
 	return matchingTaskRuns
 }
 
-func artifactManifestCandidatesFromTaskEvents(taskRunID string, taskEvents []taskstate.TaskEvent, producingSkill string) []artifactManifestCandidate {
+func artifactManifestCandidatesFromTaskEvents(taskRunID string, taskEvents []agentcontract.TaskEvent, producingSkill string) []artifactManifestCandidate {
 	candidates := []artifactManifestCandidate{}
 	for _, taskEvent := range taskEvents {
 		toolName := artifactManifestToolNameFromEvent(taskEvent.Name)
@@ -75,7 +75,7 @@ func artifactManifestCandidatesFromTaskArtifacts(taskRunID string, taskArtifacts
 }
 
 func artifactManifestToolNameFromEvent(name string) string {
-	toolName, _ := taskstate.ToolTaskEventToolName(name, taskstate.ToolTaskEventResultSuffix)
+	toolName, _ := agentcontract.ToolTaskEventToolName(name, agentcontract.ToolTaskEventResultSuffix)
 	return toolName
 }
 
@@ -236,9 +236,9 @@ func pathIsInsideDirectory(directoryPath string, path string) bool {
 	return errorValue == nil && relativePath != "." && !strings.HasPrefix(relativePath, "..")
 }
 
-func selectedSkillNameFromTaskEvents(taskEvents []taskstate.TaskEvent) string {
+func selectedSkillNameFromTaskEvents(taskEvents []agentcontract.TaskEvent) string {
 	for eventIndex := len(taskEvents) - 1; eventIndex >= 0; eventIndex-- {
-		if strings.TrimSpace(taskEvents[eventIndex].Name) != taskstate.TaskEventAgentInstructionsLoaded {
+		if strings.TrimSpace(taskEvents[eventIndex].Name) != agentcontract.TaskEventAgentInstructionsLoaded {
 			continue
 		}
 		if skillName := selectedSkillNameFromInstructionEvent(taskEvents[eventIndex].Body); skillName != "" {

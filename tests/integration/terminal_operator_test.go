@@ -10,7 +10,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/httpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueclaw/internal/tui"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 func terminalOperatorDaemon(t *testing.T) (*httptest.Server, *task.TaskRunService) {
@@ -45,7 +45,7 @@ func TestTerminalOperatorReadsTheRealAdminSurfaceThroughTheTerminalClient(t *tes
 	taskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "내일 회의 캘린더에서 지워줘")
 	taskRunService.AppendTaskEvent(taskRun.TaskRunID, "tool.event_delete.requested", `{"tool":"event_delete"}`)
 	taskRunService.AppendTaskEvent(taskRun.TaskRunID, "tool.event_delete.result", `{"tool":"event_delete"}`)
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventApprovalPendingCall, `{"toolName":"event_delete","confirmation":"내일 회의를 지울까요?"}`)
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalPendingCall, `{"toolName":"event_delete","confirmation":"내일 회의를 지울까요?"}`)
 	if _, errorValue := taskRunService.PauseTaskRun(taskRun.TaskRunID, task.TaskStatusWaitingApproval, "내일 회의를 지울까요?"); errorValue != nil {
 		t.Fatalf("expected the run to reach the approval gate: %v", errorValue)
 	}

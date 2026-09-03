@@ -12,7 +12,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/skill"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 func actionInvokeCapabilityTool(toolName string, input string) string {
@@ -202,7 +201,7 @@ func WebSearchAcceptanceScenario(artifactDirectoryPath string) VirtualSessionSce
 			},
 			ExpectedToolCalls:      []string{"web_search"},
 			ExpectedSequence:       []string{toolRequestedEventName("web_search"), toolResultEventName("web_search")},
-			ForbiddenEvents:        []string{taskstate.TaskEventAgentNoProgressLoopStopped},
+			ForbiddenEvents:        []string{agentcontract.TaskEventAgentNoProgressLoopStopped},
 			ExpectedReplyFragments: []string{"BlueclawSearchStubToken"},
 			ExpectedTaskStatus:     task.TaskStatusCompleted,
 		}},
@@ -630,9 +629,9 @@ func CalendarEventLifecycleAcceptanceScenario(artifactDirectoryPath string) Virt
 				},
 				ExpectedEventCounts: []VirtualEventCount{
 					{Name: toolRequestedEventName("event_delete"), BodyFragment: "event_delete", Count: 1},
-					{Name: taskstate.TaskEventApprovalPendingCall, BodyFragment: `"event_delete"`, Count: 1},
+					{Name: agentcontract.TaskEventApprovalPendingCall, BodyFragment: `"event_delete"`, Count: 1},
 				},
-				ExpectedEvents:     []string{taskstate.TaskEventConfirmationRequested},
+				ExpectedEvents:     []string{agentcontract.TaskEventConfirmationRequested},
 				ExpectedTaskStatus: task.TaskStatusWaitingApproval,
 			},
 			{
@@ -643,9 +642,9 @@ func CalendarEventLifecycleAcceptanceScenario(artifactDirectoryPath string) Virt
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 				ExpectedEventCounts: []VirtualEventCount{
-					{Name: taskstate.TaskEventApprovalExecuted, BodyFragment: `"event_delete"`, Count: 1},
+					{Name: agentcontract.TaskEventApprovalExecuted, BodyFragment: `"event_delete"`, Count: 1},
 				},
-				ExpectedEvents:         []string{taskstate.TaskEventConfirmationReplyClassified},
+				ExpectedEvents:         []string{agentcontract.TaskEventConfirmationReplyClassified},
 				ExpectedReplyFragments: []string{"삭제했습니다"},
 			},
 		},
@@ -678,12 +677,12 @@ func CalendarFalseFinishRecoveryAcceptanceScenario(artifactDirectoryPath string)
 				"event_add": 1,
 			},
 			ExpectedEventCounts: []VirtualEventCount{
-				{Name: taskstate.TaskEventAgentEvidenceMissing, BodyFragment: "event_add", Count: 1},
-				{Name: taskstate.TaskEventAgentCompletionRequired, BodyFragment: "event_add", Count: 1},
+				{Name: agentcontract.TaskEventAgentEvidenceMissing, BodyFragment: "event_add", Count: 1},
+				{Name: agentcontract.TaskEventAgentCompletionRequired, BodyFragment: "event_add", Count: 1},
 				{Name: toolRequestedEventName("event_add"), BodyFragment: "2026-07-13T10:00:00+09:00", Count: 1},
 			},
 			ExpectedReplyFragments: []string{"등록했습니다"},
-			ForbiddenEvents:        []string{taskstate.TaskEventAgentNoProgressLoopStopped},
+			ForbiddenEvents:        []string{agentcontract.TaskEventAgentNoProgressLoopStopped},
 		}},
 	}
 }
@@ -715,7 +714,7 @@ func CalendarReadQuestionWithWriteHintScenario(artifactDirectoryPath string) Vir
 			},
 			ExpectedReplyFragments: []string{"없습니다"},
 			ExpectedTaskStatus:     task.TaskStatusCompleted,
-			ForbiddenEvents:        []string{taskstate.TaskEventAgentEvidenceMissing, taskstate.TaskEventAgentCompletionRequired},
+			ForbiddenEvents:        []string{agentcontract.TaskEventAgentEvidenceMissing, agentcontract.TaskEventAgentCompletionRequired},
 		}},
 	}
 }
@@ -746,7 +745,7 @@ func AmbientDutyCalendarAcceptanceScenario(artifactDirectoryPath string) Virtual
 			ExpectedSelectedSkills:   []string{"calendar"},
 			ExpectedToolCalls:        []string{"event_add"},
 			ExpectedEventCounts: []VirtualEventCount{
-				{Name: taskstate.TaskEventAgentAmbientDutyLaunch, BodyFragment: `"dutyName":"calendar_upkeep"`, Count: 1},
+				{Name: agentcontract.TaskEventAgentAmbientDutyLaunch, BodyFragment: `"dutyName":"calendar_upkeep"`, Count: 1},
 				{Name: toolRequestedEventName("event_add"), BodyFragment: "2026-06-12T17:00:00+09:00", Count: 1},
 				{Name: toolRequestedEventName("event_add"), BodyFragment: "최견본", Count: 1},
 				{Name: toolRequestedEventName("event_add"), BodyFragment: "이샘플", Count: 1},
@@ -792,7 +791,7 @@ func AmbientDutyAnnouncementNoEchoScenario(artifactDirectoryPath string) Virtual
 				"Overheard message from",
 			},
 			ExpectedEventCounts: []VirtualEventCount{
-				{Name: taskstate.TaskEventAgentAmbientDutyLaunch, BodyFragment: `"dutyName":"calendar_upkeep"`, Count: 1},
+				{Name: agentcontract.TaskEventAgentAmbientDutyLaunch, BodyFragment: `"dutyName":"calendar_upkeep"`, Count: 1},
 			},
 		}},
 	}
@@ -856,7 +855,7 @@ func AmbientTaskCaptureAcceptanceScenario(artifactDirectoryPath string) VirtualS
 				"shell":    0,
 			},
 			ExpectedEventCounts: []VirtualEventCount{
-				{Name: taskstate.TaskEventAgentAmbientDutyLaunch, BodyFragment: `"dutyName":"team_flow_update"`, Count: 1},
+				{Name: agentcontract.TaskEventAgentAmbientDutyLaunch, BodyFragment: `"dutyName":"team_flow_update"`, Count: 1},
 				{Name: toolRequestedEventName("task_add"), BodyFragment: "예시", Count: 1},
 				{Name: toolResultEventName("task_add"), BodyFragment: `"ownerName":"예시"`, Count: 1},
 				{Name: toolResultEventName("task_add"), BodyFragment: `"effect":"created"`, Count: 1},
@@ -918,10 +917,10 @@ func CompletionJudgeRecoveryAcceptanceScenario(artifactDirectoryPath string) Vir
 				"task_update": 1,
 			},
 			ExpectedEventCounts: []VirtualEventCount{
-				{Name: taskstate.TaskEventCompletionJudgeVerdict, BodyFragment: `"satisfied":false`, Count: 1},
-				{Name: taskstate.TaskEventCompletionJudgeVerdict, BodyFragment: `"satisfied":true`, Count: 1},
-				{Name: taskstate.TaskEventAgentEvidenceMissing, BodyFragment: "마감일", Count: 1},
-				{Name: taskstate.TaskEventAgentCompletionRequired, BodyFragment: "마감일", Count: 1},
+				{Name: agentcontract.TaskEventCompletionJudgeVerdict, BodyFragment: `"satisfied":false`, Count: 1},
+				{Name: agentcontract.TaskEventCompletionJudgeVerdict, BodyFragment: `"satisfied":true`, Count: 1},
+				{Name: agentcontract.TaskEventAgentEvidenceMissing, BodyFragment: "마감일", Count: 1},
+				{Name: agentcontract.TaskEventAgentCompletionRequired, BodyFragment: "마감일", Count: 1},
 			},
 			ExpectedTaskStatus: task.TaskStatusCompleted,
 		}},
@@ -1380,10 +1379,10 @@ func SiteLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 					{Name: toolRequestedEventName("site_list"), BodyFragment: "site_list", Count: 1},
 					{Name: toolRequestedEventName("site_unserve"), BodyFragment: "site_unserve", Count: 1},
 					{Name: toolResultEventName("site_unserve"), BodyFragment: "interaction_required", Count: 1},
-					{Name: taskstate.TaskEventApprovalPendingCall, BodyFragment: `"site_unserve"`, Count: 1},
-					{Name: taskstate.TaskEventAgentFailureDebtCreated, BodyFragment: "", Count: 0},
+					{Name: agentcontract.TaskEventApprovalPendingCall, BodyFragment: `"site_unserve"`, Count: 1},
+					{Name: agentcontract.TaskEventAgentFailureDebtCreated, BodyFragment: "", Count: 0},
 				},
-				ExpectedEvents:         []string{taskstate.TaskEventConfirmationRequested},
+				ExpectedEvents:         []string{agentcontract.TaskEventConfirmationRequested},
 				ExpectedReplyFragments: []string{"삭제"},
 				ExpectedTaskStatus:     task.TaskStatusWaitingApproval,
 			},
@@ -1397,9 +1396,9 @@ func SiteLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 				ExpectedEventCounts: []VirtualEventCount{
 					{Name: toolRequestedEventName("site_unserve"), BodyFragment: "site_unserve", Count: 2},
 					{Name: toolResultEventName("site_unserve"), BodyFragment: "unserved", Count: 1},
-					{Name: taskstate.TaskEventApprovalExecuted, BodyFragment: `"site_unserve"`, Count: 1},
+					{Name: agentcontract.TaskEventApprovalExecuted, BodyFragment: `"site_unserve"`, Count: 1},
 				},
-				ExpectedEvents:         []string{taskstate.TaskEventConfirmationReplyClassified},
+				ExpectedEvents:         []string{agentcontract.TaskEventConfirmationReplyClassified},
 				ExpectedReplyFragments: []string{"삭제했습니다"},
 			},
 		},
@@ -1418,7 +1417,7 @@ func AskChoiceReplyAcceptanceScenario(artifactDirectoryPath string) VirtualSessi
 				actionCallToolWithMessage("ask_input", "어느 쪽으로 진행할까요?", `{"question":"어느 쪽으로 진행할까요?","choices":["첫 번째","두 번째"]}`),
 			},
 			ExpectedToolCalls:      []string{"ask_input"},
-			ExpectedEvents:         []string{taskstate.TaskEventAskRequested},
+			ExpectedEvents:         []string{agentcontract.TaskEventAskRequested},
 			ExpectedReplyFragments: []string{"어느 쪽으로 진행할까요?"},
 			ExpectedModelContexts:  []string{"choices"},
 		}, {
@@ -1428,7 +1427,7 @@ func AskChoiceReplyAcceptanceScenario(artifactDirectoryPath string) VirtualSessi
 				actionFinishMessage("두 번째로 진행하겠습니다."),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-			ExpectedEvents:           []string{taskstate.TaskEventAskResolved},
+			ExpectedEvents:           []string{agentcontract.TaskEventAskResolved},
 			ExpectedReplyFragments:   []string{"두 번째"},
 		}},
 	}
@@ -1461,10 +1460,10 @@ func DirectMessageSendConfirmAcceptanceScenario(artifactDirectoryPath string) Vi
 			},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: toolRequestedEventName("message_send"), BodyFragment: `"targetType":"directMessage"`, Count: 1},
-				{Name: taskstate.TaskEventApprovalPendingCall, BodyFragment: `"message_send"`, Count: 1},
-				{Name: taskstate.TaskEventAgentFailureDebtCreated, BodyFragment: "", Count: 0},
+				{Name: agentcontract.TaskEventApprovalPendingCall, BodyFragment: `"message_send"`, Count: 1},
+				{Name: agentcontract.TaskEventAgentFailureDebtCreated, BodyFragment: "", Count: 0},
 			},
-			ExpectedEvents:         []string{taskstate.TaskEventConfirmationRequested},
+			ExpectedEvents:         []string{agentcontract.TaskEventConfirmationRequested},
 			ExpectedReplyFragments: []string{"테스트", "오늘 오후 3시에 확인하자"},
 			ExpectedTaskStatus:     task.TaskStatusWaitingApproval,
 		}, {
@@ -1478,9 +1477,9 @@ func DirectMessageSendConfirmAcceptanceScenario(artifactDirectoryPath string) Vi
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: toolRequestedEventName("message_send"), BodyFragment: `"targetType":"directMessage"`, Count: 2},
 				{Name: toolResultEventName("message_send"), BodyFragment: "virtual-platform-message-001", Count: 1},
-				{Name: taskstate.TaskEventApprovalExecuted, BodyFragment: `"message_send"`, Count: 1},
+				{Name: agentcontract.TaskEventApprovalExecuted, BodyFragment: `"message_send"`, Count: 1},
 			},
-			ExpectedEvents:         []string{taskstate.TaskEventConfirmationReplyClassified},
+			ExpectedEvents:         []string{agentcontract.TaskEventConfirmationReplyClassified},
 			ExpectedModelContexts:  []string{"virtual-platform-message-001"},
 			ExpectedReplyFragments: []string{"DM", "보냈습니다"},
 		}},
@@ -1512,9 +1511,9 @@ func ChannelPostAcceptanceScenario(artifactDirectoryPath string) VirtualSessionS
 			},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: toolRequestedEventName("message_send"), BodyFragment: `"targetType":"channel"`, Count: 1},
-				{Name: taskstate.TaskEventApprovalPendingCall, BodyFragment: `"message_send"`, Count: 1},
+				{Name: agentcontract.TaskEventApprovalPendingCall, BodyFragment: `"message_send"`, Count: 1},
 			},
-			ExpectedEvents:         []string{taskstate.TaskEventConfirmationRequested},
+			ExpectedEvents:         []string{agentcontract.TaskEventConfirmationRequested},
 			ExpectedReplyFragments: []string{"announcements", "오늘 5시"},
 			ExpectedTaskStatus:     task.TaskStatusWaitingApproval,
 		}, {
@@ -1529,7 +1528,7 @@ func ChannelPostAcceptanceScenario(artifactDirectoryPath string) VirtualSessionS
 				{Name: toolRequestedEventName("message_send"), BodyFragment: `"targetType":"channel"`, Count: 2},
 				{Name: toolRequestedEventName("message_send"), BodyFragment: `"channelName":"announcements"`, Count: 2},
 				{Name: toolRequestedEventName("message_send"), BodyFragment: `"targetType":"directMessage"`, Count: 0},
-				{Name: taskstate.TaskEventApprovalExecuted, BodyFragment: `"message_send"`, Count: 1},
+				{Name: agentcontract.TaskEventApprovalExecuted, BodyFragment: `"message_send"`, Count: 1},
 			},
 			ExpectedReplyFragments: []string{"채널", "올렸습니다"},
 		}},
@@ -1563,7 +1562,7 @@ func PlatformMessageEditAcceptanceScenario(artifactDirectoryPath string) Virtual
 				{Name: toolRequestedEventName("message_update"), BodyFragment: `"newText":"오후 6시"`, Count: 1},
 				{Name: toolResultEventName("message_update"), BodyFragment: `"messageUpdated":true`, Count: 1},
 			},
-			ForbiddenEvents:        []string{taskstate.TaskEventConfirmationRequested, taskstate.TaskEventApprovalPendingCall},
+			ForbiddenEvents:        []string{agentcontract.TaskEventConfirmationRequested, agentcontract.TaskEventApprovalPendingCall},
 			ExpectedReplyFragments: []string{"수정했습니다"},
 			ExpectedTaskStatus:     task.TaskStatusCompleted,
 		}},

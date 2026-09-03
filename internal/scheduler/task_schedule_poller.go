@@ -12,7 +12,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 const taskScheduleLeaseDuration = 15 * time.Minute
@@ -264,7 +264,7 @@ func (taskSchedulePoller TaskSchedulePoller) enqueuePreparedTaskScheduleReply(re
 
 func (taskSchedulePoller TaskSchedulePoller) recordTaskScheduleDeliveryEvent(result taskScheduleExecutionResult, reply connectors.OutboundReply, outboxID string, errorValue error) {
 	if taskSchedulePoller.TaskRunService != nil && strings.TrimSpace(result.TaskRunID) != "" {
-		eventName := taskstate.TaskEventTaskScheduleDeliveryEnqueued
+		eventName := agentcontract.TaskEventTaskScheduleDeliveryEnqueued
 		eventBody := map[string]string{
 			"taskScheduleID": result.TaskSchedule.TaskScheduleID,
 			"taskRunID":      result.TaskRunID,
@@ -272,7 +272,7 @@ func (taskSchedulePoller TaskSchedulePoller) recordTaskScheduleDeliveryEvent(res
 			"outboxID":       outboxID,
 		}
 		if errorValue != nil {
-			eventName = taskstate.TaskEventTaskScheduleDeliveryFailed
+			eventName = agentcontract.TaskEventTaskScheduleDeliveryFailed
 			eventBody["error"] = errorValue.Error()
 		}
 		taskSchedulePoller.TaskRunService.AppendTaskEvent(result.TaskRunID, eventName, marshalScheduleEventBody(eventBody))

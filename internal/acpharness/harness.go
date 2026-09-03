@@ -176,7 +176,7 @@ func (harness *Harness) toolCatalogServer(agentCapabilities acp.McpCapabilities,
 func (harness *Harness) turnResult(ctx context.Context, request agentcontract.AgentTurnRequest, turnObserver *sessionObserver, succeededToolRecorder *turnoutcome.SucceededToolRecorder, stopReason acp.StopReason) agentcontract.AgentTurnResult {
 	finishMessage := turnObserver.agentMessage()
 	calledToolNames := turnObserver.calledToolNames()
-	taskRun := taskstate.TaskRun{Status: taskStatusForStopReason(stopReason)}
+	taskRun := agentcontract.TaskRun{Status: taskStatusForStopReason(stopReason)}
 	failureReason := ""
 	if stopReason == acp.StopReasonEndTurn {
 		taskRun.Status, failureReason = harness.outcomeForEndedTurn(ctx, request, finishMessage, succeededToolRecorder.SucceededToolNames())
@@ -186,7 +186,7 @@ func (harness *Harness) turnResult(ctx context.Context, request agentcontract.Ag
 			taskRun = existingTaskRun
 		}
 	}
-	if taskRun.Status != taskstate.TaskStatusCompleted && strings.TrimSpace(taskRun.FailureReason) == "" {
+	if taskRun.Status != agentcontract.TaskStatusCompleted && strings.TrimSpace(taskRun.FailureReason) == "" {
 		taskRun.FailureReason = failureReason
 	}
 	return agentcontract.AgentTurnResult{
@@ -197,27 +197,27 @@ func (harness *Harness) turnResult(ctx context.Context, request agentcontract.Ag
 	}
 }
 
-func (harness *Harness) outcomeForEndedTurn(ctx context.Context, request agentcontract.AgentTurnRequest, finishMessage string, calledToolNames []string) (taskstate.TaskStatus, string) {
+func (harness *Harness) outcomeForEndedTurn(ctx context.Context, request agentcontract.AgentTurnRequest, finishMessage string, calledToolNames []string) (agentcontract.TaskStatus, string) {
 	if !harness.outcomeClassifier.IsConfigured() {
-		return taskstate.TaskStatusCompleted, ""
+		return agentcontract.TaskStatusCompleted, ""
 	}
 	verdict, errorValue := harness.outcomeClassifier.Classify(ctx, request.Prompt, finishMessage, calledToolNames)
 	if errorValue != nil {
-		return taskstate.TaskStatusFailed, "the runtime could not determine what this turn achieved: " + errorValue.Error()
+		return agentcontract.TaskStatusFailed, "the runtime could not determine what this turn achieved: " + errorValue.Error()
 	}
 	return verdict.Status, verdict.Reason
 }
 
-func taskStatusForStopReason(stopReason acp.StopReason) taskstate.TaskStatus {
+func taskStatusForStopReason(stopReason acp.StopReason) agentcontract.TaskStatus {
 	switch stopReason {
 	case acp.StopReasonEndTurn:
-		return taskstate.TaskStatusCompleted
+		return agentcontract.TaskStatusCompleted
 	case acp.StopReasonCancelled:
-		return taskstate.TaskStatusCancelled
+		return agentcontract.TaskStatusCancelled
 	case acp.StopReasonRefusal:
-		return taskstate.TaskStatusBlocked
+		return agentcontract.TaskStatusBlocked
 	default:
-		return taskstate.TaskStatusFailed
+		return agentcontract.TaskStatusFailed
 	}
 }
 
@@ -313,13 +313,13 @@ func (observer *sessionObserver) RequestPermission(_ context.Context, request ac
 			if permissionOption.Kind != allowedKind {
 				continue
 			}
-			observer.recordPermissionDecision(taskstate.TaskEventHarnessToolPermitted, request.ToolCall, permissionOption.Kind)
+			observer.recordPermissionDecision(agentcontract.TaskEventHarnessToolPermitted, request.ToolCall, permissionOption.Kind)
 			return acp.RequestPermissionResponse{Outcome: acp.RequestPermissionOutcome{
 				Selected: &acp.RequestPermissionOutcomeSelected{Outcome: "selected", OptionId: permissionOption.OptionId},
 			}}, nil
 		}
 	}
-	observer.recordPermissionDecision(taskstate.TaskEventHarnessToolRefused, request.ToolCall, "")
+	observer.recordPermissionDecision(agentcontract.TaskEventHarnessToolRefused, request.ToolCall, "")
 	return acp.RequestPermissionResponse{Outcome: acp.RequestPermissionOutcome{
 		Cancelled: &acp.RequestPermissionOutcomeCancelled{Outcome: "cancelled"},
 	}}, nil

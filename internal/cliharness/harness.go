@@ -161,7 +161,7 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 
 func (harness *Harness) turnResult(ctx context.Context, request agentcontract.AgentTurnRequest, finishMessage string, succeededToolRecorder *turnoutcome.SucceededToolRecorder) agentcontract.AgentTurnResult {
 	taskStatus, failureReason := harness.outcomeForEndedTurn(ctx, request, finishMessage, succeededToolRecorder.SucceededToolNames())
-	taskRun := taskstate.TaskRun{Status: taskStatus, FailureReason: failureReason}
+	taskRun := agentcontract.TaskRun{Status: taskStatus, FailureReason: failureReason}
 	if harness.taskRunStore != nil && strings.TrimSpace(request.ExistingTaskRunID) != "" {
 		if existingTaskRun, isFound := harness.taskRunStore.FindTaskRun(request.ExistingTaskRunID); isFound {
 			taskRun = existingTaskRun
@@ -170,13 +170,13 @@ func (harness *Harness) turnResult(ctx context.Context, request agentcontract.Ag
 	return agentcontract.AgentTurnResult{TaskRun: taskRun, FinishMessage: finishMessage, UserNotice: finishMessage}
 }
 
-func (harness *Harness) outcomeForEndedTurn(ctx context.Context, request agentcontract.AgentTurnRequest, finishMessage string, succeededToolNames []string) (taskstate.TaskStatus, string) {
+func (harness *Harness) outcomeForEndedTurn(ctx context.Context, request agentcontract.AgentTurnRequest, finishMessage string, succeededToolNames []string) (agentcontract.TaskStatus, string) {
 	if !harness.outcomeClassifier.IsConfigured() {
-		return taskstate.TaskStatusCompleted, ""
+		return agentcontract.TaskStatusCompleted, ""
 	}
 	verdict, errorValue := harness.outcomeClassifier.Classify(ctx, request.Prompt, finishMessage, succeededToolNames)
 	if errorValue != nil {
-		return taskstate.TaskStatusFailed, "the runtime could not determine what this turn achieved: " + errorValue.Error()
+		return agentcontract.TaskStatusFailed, "the runtime could not determine what this turn achieved: " + errorValue.Error()
 	}
 	return verdict.Status, verdict.Reason
 }

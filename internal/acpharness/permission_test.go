@@ -7,6 +7,7 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
@@ -58,11 +59,11 @@ func TestAnAgentOfferingNoWayToProceedIsCancelledRatherThanLeftWaiting(t *testin
 
 type recordingTaskRunStore struct {
 	taskstate.TaskRunStore
-	events []taskstate.TaskEvent
+	events []agentcontract.TaskEvent
 }
 
 func (store *recordingTaskRunStore) AppendTaskEvent(taskRunID string, name string, body string) {
-	store.events = append(store.events, taskstate.TaskEvent{TaskRunID: taskRunID, Name: name, Body: body})
+	store.events = append(store.events, agentcontract.TaskEvent{TaskRunID: taskRunID, Name: name, Body: body})
 }
 
 func permissionRequestForHarnessOwnedTool(optionKind acp.PermissionOptionKind) acp.RequestPermissionRequest {
@@ -85,7 +86,7 @@ func TestAToolTheHarnessRunsItselfIsRecordedEvenThoughItIsPermitted(t *testing.T
 		t.Fatalf("expected the permission to be answered: %v", errorValue)
 	}
 
-	if len(store.events) != 1 || store.events[0].Name != taskstate.TaskEventHarnessToolPermitted {
+	if len(store.events) != 1 || store.events[0].Name != agentcontract.TaskEventHarnessToolPermitted {
 		t.Fatalf("a call the catalog never saw must still reach the ledger, got %+v", store.events)
 	}
 	for _, expectedFragment := range []string{"run a shell command", "rm -rf /workspace/private/people/person-1/drafts", "allow_once"} {
@@ -103,7 +104,7 @@ func TestAPermissionRequestWithNoAllowableOptionIsRecordedAsRefused(t *testing.T
 		t.Fatalf("expected the permission to be answered: %v", errorValue)
 	}
 
-	if len(store.events) != 1 || store.events[0].Name != taskstate.TaskEventHarnessToolRefused {
+	if len(store.events) != 1 || store.events[0].Name != agentcontract.TaskEventHarnessToolRefused {
 		t.Fatalf("expected the refusal to be recorded, got %+v", store.events)
 	}
 }

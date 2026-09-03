@@ -3,6 +3,7 @@ package agentruntime
 import (
 	"context"
 	"encoding/json"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"log/slog"
 	"os"
@@ -11,7 +12,6 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 var terminalRunHeartbeatInterval = 60 * time.Second
@@ -168,7 +168,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) startTerminalRunHeartbeat(toolCont
 			case <-stopChannel:
 				return
 			case <-heartbeatTicker.C:
-				toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventTerminalRunHeartbeat, marshalToolResult(map[string]any{
+				toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventTerminalRunHeartbeat, marshalToolResult(map[string]any{
 					"elapsedSeconds": int(time.Since(startedAt).Seconds()),
 					"command":        commandHead,
 				}))

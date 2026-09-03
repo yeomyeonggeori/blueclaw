@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"log/slog"
 	"net/http"
@@ -26,7 +27,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/runtimecontrol"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	capabilitycatalog "github.com/yeomyeonggeori/blueclaw/protocol/generated"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 type applicationMCPRegistryCloser struct {
@@ -473,7 +473,7 @@ func TestApplicationAutoResumeLaunchesAtMostFiveInterruptedTaskRuns(t *testing.T
 			UpdatedAt:            now.Add(time.Duration(index) * time.Minute),
 		}
 		repository.taskRuns = append(repository.taskRuns, taskRun)
-		taskEventService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventTaskInterrupted, "runtime restarted")
+		taskEventService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventTaskInterrupted, "runtime restarted")
 	}
 	taskRunService.UseRepository(repository)
 	resumer := &applicationAutoResumeResumer{}
@@ -541,8 +541,8 @@ func TestApplicationFailsUnresumedInterruptedTaskRunsWithNotice(t *testing.T) {
 			UpdatedAt:            now,
 		}
 		repository.taskRuns = append(repository.taskRuns, taskRun)
-		taskEventService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventTaskInterrupted, task.TaskInterruptReasonRuntimeRestart)
-		taskEventService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventTaskAutoResumeAttempted, `{"attemptCount":1}`)
+		taskEventService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventTaskInterrupted, task.TaskInterruptReasonRuntimeRestart)
+		taskEventService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventTaskAutoResumeAttempted, `{"attemptCount":1}`)
 	}
 	taskRunService.UseRepository(repository)
 	resumer := &applicationAutoResumeResumer{}

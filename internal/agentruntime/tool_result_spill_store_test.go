@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
@@ -63,7 +64,7 @@ func (factory *spillWorkspaceActorFactory) Requester(_ context.Context, request 
 
 func (factory *spillWorkspaceActorFactory) CanListDirectory(context.Context) bool { return true }
 
-func spillStoreForTest(t *testing.T) (*RequesterToolResultSpillStore, *spillWorkspaceActorFactory, taskstate.TaskRun) {
+func spillStoreForTest(t *testing.T) (*RequesterToolResultSpillStore, *spillWorkspaceActorFactory, agentcontract.TaskRun) {
 	t.Helper()
 	taskRunService := taskstate.NewTaskRunService(taskstate.NewTaskEventService())
 	taskRun := taskRunService.CreateTaskRunWithOrigin("person-7", taskstate.TaskRunOrigin{}, "read the build log")

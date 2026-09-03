@@ -46,7 +46,6 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 type VirtualSessionScenario struct {
@@ -2528,10 +2527,10 @@ func virtualCapabilityRequestNeedsApproval(requestBody []byte) bool {
 func streamProgressObserver(writer io.Writer) func(task.RawTurnEvent) {
 	return func(rawTurnEvent task.RawTurnEvent) {
 		switch {
-		case rawTurnEvent.Name == taskstate.TaskEventAgentCheckpointSent:
+		case rawTurnEvent.Name == agentcontract.TaskEventAgentCheckpointSent:
 			fmt.Fprintf(writer, "  ↳ reply: %s\n", checkpointReplyMessage(rawTurnEvent.Body))
-		case strings.HasPrefix(rawTurnEvent.Name, taskstate.ToolTaskEventPrefix) && strings.HasSuffix(rawTurnEvent.Name, taskstate.ToolTaskEventRequestedSuffix):
-			fmt.Fprintf(writer, "  ↳ tool: %s\n", strings.TrimSuffix(strings.TrimPrefix(rawTurnEvent.Name, taskstate.ToolTaskEventPrefix), taskstate.ToolTaskEventRequestedSuffix))
+		case strings.HasPrefix(rawTurnEvent.Name, agentcontract.ToolTaskEventPrefix) && strings.HasSuffix(rawTurnEvent.Name, agentcontract.ToolTaskEventRequestedSuffix):
+			fmt.Fprintf(writer, "  ↳ tool: %s\n", strings.TrimSuffix(strings.TrimPrefix(rawTurnEvent.Name, agentcontract.ToolTaskEventPrefix), agentcontract.ToolTaskEventRequestedSuffix))
 		}
 	}
 }
@@ -2761,7 +2760,7 @@ func scenarioTurnRouterResponse(scenario VirtualSessionScenario, virtualTurn Vir
 		siteEvidence = virtualTurn.RouterSiteEvidence
 	}
 	route := "start_task"
-	if virtualTurnExpectsEvent(virtualTurn, taskstate.TaskEventAskResolved) {
+	if virtualTurnExpectsEvent(virtualTurn, agentcontract.TaskEventAskResolved) {
 		route = "continue_task"
 	}
 	routerDocument := map[string]any{
@@ -2778,7 +2777,7 @@ func scenarioTurnRouterResponse(scenario VirtualSessionScenario, virtualTurn Vir
 		"initialToolNames":       appendUniqueScenarioToolNames(scenario.InitialToolNames, requiredEvidence),
 		"priorTaskReference":     "none",
 	}
-	if virtualTurnExpectsEvent(virtualTurn, taskstate.TaskEventConfirmationReplyClassified) {
+	if virtualTurnExpectsEvent(virtualTurn, agentcontract.TaskEventConfirmationReplyClassified) {
 		routerDocument["approval"] = "approve"
 	}
 	encodedDocument, errorValue := json.Marshal(routerDocument)
@@ -3276,7 +3275,7 @@ func assertEventSubsequence(events []task.TaskEvent, expectedNames []string) err
 func checkpointReplyMessages(events []task.TaskEvent) []string {
 	messages := []string{}
 	for _, event := range events {
-		if event.Name != taskstate.TaskEventAgentCheckpointSent {
+		if event.Name != agentcontract.TaskEventAgentCheckpointSent {
 			continue
 		}
 		message := checkpointReplyMessage(event.Body)
@@ -3371,7 +3370,7 @@ func eventsContain(events []task.TaskEvent, name string, bodyFragment string) bo
 
 func selectedSkillDecisionPresent(events []task.TaskEvent, skillName string) bool {
 	for _, event := range events {
-		if event.Name != taskstate.TaskEventAgentInstructionsLoaded {
+		if event.Name != agentcontract.TaskEventAgentInstructionsLoaded {
 			continue
 		}
 		var body struct {
@@ -3400,19 +3399,19 @@ func countEvents(events []task.TaskEvent, name string) int {
 }
 
 func toolRequestedEventName(toolName string) string {
-	return taskstate.ToolTaskEventName(toolName, taskstate.ToolTaskEventRequestedSuffix)
+	return agentcontract.ToolTaskEventName(toolName, agentcontract.ToolTaskEventRequestedSuffix)
 }
 
 func toolResultEventName(toolName string) string {
-	return taskstate.ToolTaskEventName(toolName, taskstate.ToolTaskEventResultSuffix)
+	return agentcontract.ToolTaskEventName(toolName, agentcontract.ToolTaskEventResultSuffix)
 }
 
 func requestedToolCallPresent(events []task.TaskEvent, toolName string) bool {
-	return eventsContain(events, taskstate.ToolTaskEventName(toolName, taskstate.ToolTaskEventRequestedSuffix), toolName)
+	return eventsContain(events, agentcontract.ToolTaskEventName(toolName, agentcontract.ToolTaskEventRequestedSuffix), toolName)
 }
 
 func countRequestedToolCalls(events []task.TaskEvent, toolName string) int {
-	return countEvents(events, taskstate.ToolTaskEventName(toolName, taskstate.ToolTaskEventRequestedSuffix))
+	return countEvents(events, agentcontract.ToolTaskEventName(toolName, agentcontract.ToolTaskEventRequestedSuffix))
 }
 
 func succeededToolCallPresent(events []task.TaskEvent, toolName string) bool {
@@ -3422,7 +3421,7 @@ func succeededToolCallPresent(events []task.TaskEvent, toolName string) bool {
 func countSucceededToolCalls(events []task.TaskEvent, toolName string) int {
 	count := 0
 	for _, event := range events {
-		if event.Name != taskstate.ToolTaskEventName(toolName, taskstate.ToolTaskEventResultSuffix) {
+		if event.Name != agentcontract.ToolTaskEventName(toolName, agentcontract.ToolTaskEventResultSuffix) {
 			continue
 		}
 		var observation struct {
@@ -3440,7 +3439,7 @@ func countSucceededToolCalls(events []task.TaskEvent, toolName string) int {
 
 func exposedToolNamePresent(events []task.TaskEvent, toolName string) bool {
 	for _, event := range events {
-		if event.Name != taskstate.TaskEventAgentInstructionsLoaded {
+		if event.Name != agentcontract.TaskEventAgentInstructionsLoaded {
 			continue
 		}
 		var body struct {
@@ -3462,7 +3461,7 @@ func assertValidityReviewPassed(events []task.TaskEvent) error {
 	lastReviewPassed := false
 	reviewCount := 0
 	for _, event := range events {
-		if event.Name != taskstate.TaskEventAgentValidityReview {
+		if event.Name != agentcontract.TaskEventAgentValidityReview {
 			continue
 		}
 		var body struct {

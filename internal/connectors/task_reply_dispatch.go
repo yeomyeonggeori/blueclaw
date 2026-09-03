@@ -6,7 +6,6 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 type taskReplyDecisionKind string
@@ -77,19 +76,19 @@ func (connectorRuntime *ConnectorRuntime) dispatchTaskReply(
 		}
 		return ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: taskRunID, Reason: reason}, nil
 	case taskReplyDecisionSuppressDelivered:
-		connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventReplySuppressedDuplicate, marshalConnectorEventBody(map[string]string{
+		connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventReplySuppressedDuplicate, marshalConnectorEventBody(map[string]string{
 			"conversationID": event.ConversationID,
 			"reason":         decision.Reason,
 		}))
 		return ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: taskRunID, Reason: decision.Reason}, nil
 	case taskReplyDecisionSuppressCancelled:
-		connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventTaskStopOutboxSuppressed, marshalConnectorEventBody(map[string]string{
+		connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventTaskStopOutboxSuppressed, marshalConnectorEventBody(map[string]string{
 			"messageID": event.MessageID,
 			"reason":    "task was cancelled before final reply send",
 		}))
 		return ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: taskRunID, Reason: decision.Reason}, nil
 	case taskReplyDecisionSuppressSuperseded, taskReplyDecisionSuppressRequested:
-		connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventConnectorReplySuppressed, marshalConnectorEventBody(map[string]string{
+		connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventConnectorReplySuppressed, marshalConnectorEventBody(map[string]string{
 			"messageID": event.MessageID,
 			"reason":    decision.Reason,
 		}))
@@ -127,12 +126,12 @@ func (connectorRuntime *ConnectorRuntime) sendCompletedTaskReply(
 		RecoveryActions: recoveryActionsForEvent(turnResult.RecoveryActions, event),
 	})
 	if errorValue != nil {
-		connectorRuntime.appendConnectorReplyEvent(taskRunID, taskstate.TaskEventConnectorReplyFailed, connectorReplyEventBody(event, OutboundReply{TaskRunID: taskRunID, ReplyKind: connectorReplyKindSuccess}, "", "", errorValue.Error()))
+		connectorRuntime.appendConnectorReplyEvent(taskRunID, agentcontract.TaskEventConnectorReplyFailed, connectorReplyEventBody(event, OutboundReply{TaskRunID: taskRunID, ReplyKind: connectorReplyKindSuccess}, "", "", errorValue.Error()))
 		connectorRuntime.logger.Error("connector."+platform+".outbound.failed", "messageID", event.MessageID, "taskRunID", taskRunID, "error", errorValue.Error())
 		return ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: taskRunID, Reason: "reply_failed"}, nil
 	}
 	if connectorRuntime.outboxRepository() == nil {
-		connectorRuntime.appendConnectorReplyEvent(taskRunID, taskstate.TaskEventConnectorReplySent, connectorReplyEventBody(event, OutboundReply{TaskRunID: taskRunID, ReplyKind: connectorReplyKindSuccess}, "", dispatchID, ""))
+		connectorRuntime.appendConnectorReplyEvent(taskRunID, agentcontract.TaskEventConnectorReplySent, connectorReplyEventBody(event, OutboundReply{TaskRunID: taskRunID, ReplyKind: connectorReplyKindSuccess}, "", dispatchID, ""))
 	}
 	connectorRuntime.logger.Info("connector."+platform+".outbound.sent", "messageID", event.MessageID, "taskRunID", taskRunID, "replyDispatchID", dispatchID)
 	return ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: taskRunID, ReplyDispatchID: dispatchID}, nil

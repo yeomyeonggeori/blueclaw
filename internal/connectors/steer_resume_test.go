@@ -7,7 +7,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 func TestUserSteerTaskProfileSourceReferenceResolvesRealPlatform(t *testing.T) {
@@ -146,7 +145,7 @@ func TestResumePausedTaskForSteerImportsVisibleAttachments(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
 	harness.Reply = "이어서 진행하겠습니다."
 	pausedTaskRun := seedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{ConversationID: "direct-1"}, "글 수정해줘")
-	connectorRuntime.taskRunService.AppendTaskEvent(pausedTaskRun.TaskRunID, taskstate.TaskEventAgentTaskLaunched,
+	connectorRuntime.taskRunService.AppendTaskEvent(pausedTaskRun.TaskRunID, agentcontract.TaskEventAgentTaskLaunched,
 		`{"sourceReference":"test:thread:abc","platform":"test","conversationID":"direct-1","replyTargetID":"reply-target-1","requesterPersonID":"person-1"}`)
 	event := testInboundEvent("message-steer-attachments")
 	event.Context.InputAttachments = []InputAttachment{{

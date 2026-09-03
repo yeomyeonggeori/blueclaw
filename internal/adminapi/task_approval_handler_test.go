@@ -10,7 +10,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 func approvalTestTaskRunService(t *testing.T) (*task.TaskRunService, *task.TaskEventService) {
@@ -86,7 +86,7 @@ func TestApprovalRefusesWhenNoLauncherCanCarryTheDecision(t *testing.T) {
 func TestApprovalScopeIsGrantedOnlyWhenApprovingTheWholeTask(t *testing.T) {
 	taskRunService, _ := approvalTestTaskRunService(t)
 	taskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "캘린더 정리")
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventAskRequested, `{"approvalScope":"calendar"}`)
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAskRequested, `{"approvalScope":"calendar"}`)
 	handler := TaskApprovalHandler{TaskRunService: taskRunService}
 
 	handler.grantApprovalScope(taskRun.TaskRunID)

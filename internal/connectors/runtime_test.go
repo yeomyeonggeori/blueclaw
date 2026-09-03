@@ -30,7 +30,6 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/agentcontract/harnesstest"
 	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/loop"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 func TestConnectorRuntimeProcessesInvitedMessageAndDeduplicates(t *testing.T) {
@@ -964,7 +963,7 @@ func TestConnectorRuntimeFindsPriorTaskContextForFailedArtifactGoal(t *testing.T
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventAgentIntake, string(intakeEvent))
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentIntake, string(intakeEvent))
 	if _, errorValue := taskRunService.FailTaskRun(taskRun.TaskRunID, "file attach failed"); errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -1621,7 +1620,7 @@ func TestConnectorRuntimeDoesNotFilterUserNoticeAttachmentClaimText(t *testing.T
 
 func TestConnectorRuntimeSendsAskUserNoticeForTargetUser(t *testing.T) {
 	connectorRuntime, _, _ := newStubbedTestConnectorRuntime(t)
-	connectorRuntime.taskRunService.AppendTaskEvent("task-1", taskstate.TaskEventAskRequested, `{"kind":"input","question":"제목은 어떻게 할까요?"}`)
+	connectorRuntime.taskRunService.AppendTaskEvent("task-1", agentcontract.TaskEventAskRequested, `{"kind":"input","question":"제목은 어떻게 할까요?"}`)
 	sentReplies := []OutboundReply{}
 	event := testInboundEvent("message-1")
 	event.SenderID = "requester-1"
@@ -4162,7 +4161,7 @@ func appendConnectorActiveGoal(t *testing.T, taskRunService *task.TaskRunService
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventAgentGoalBlocked, string(document))
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentGoalBlocked, string(document))
 }
 
 func connectorRuntimeAgentKernel(connectorRuntime *ConnectorRuntime) *loop.AgentKernel {
@@ -4268,7 +4267,7 @@ func createWaitingInputTaskRun(t *testing.T, taskRunService *task.TaskRunService
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventAskRequested, marshalConnectorEventBody(map[string]string{
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAskRequested, marshalConnectorEventBody(map[string]string{
 		"interactionID":    interactionID,
 		"kind":             "input",
 		"question":         prompt,
@@ -4286,7 +4285,7 @@ func createWaitingInputTaskRunWithOptions(t *testing.T, taskRunService *task.Tas
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventAskRequested, marshalConnectorEventBody(map[string]any{
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAskRequested, marshalConnectorEventBody(map[string]any{
 		"interactionID": interactionID,
 		"kind":          "ask_input",
 		"question":      prompt,

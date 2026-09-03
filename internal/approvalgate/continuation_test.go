@@ -6,20 +6,19 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 func taskRunWithHeldCall(t *testing.T) (*task.TaskRunService, string) {
 	t.Helper()
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	taskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "내일 회의 지워줘")
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventApprovalPendingCall, `{"toolName":"event_delete","toolInput":{"eventHint":"내일 회의"},"confirmation":"지울까요?"}`)
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalPendingCall, `{"toolName":"event_delete","toolInput":{"eventHint":"내일 회의"},"confirmation":"지울까요?"}`)
 	return taskRunService, taskRun.TaskRunID
 }
 
 func TestAnApprovedCallIsHandedBackWithTheInputItWasApprovedWith(t *testing.T) {
 	taskRunService, taskRunID := taskRunWithHeldCall(t)
-	taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventApprovalDecided, `{"decision":"confirm"}`)
+	taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalDecided, `{"decision":"confirm"}`)
 
 	approvedCall, isApproved := ApprovedPendingCall(taskRunService.ListTaskEvent(taskRunID))
 	if !isApproved || approvedCall.ToolName != "event_delete" {
@@ -32,8 +31,8 @@ func TestAnApprovedCallIsHandedBackWithTheInputItWasApprovedWith(t *testing.T) {
 
 func TestACallThatAlreadyRanIsNotHandedBackAgain(t *testing.T) {
 	taskRunService, taskRunID := taskRunWithHeldCall(t)
-	taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventApprovalDecided, `{"decision":"confirm"}`)
-	taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventApprovalExecuted, `{"toolName":"event_delete"}`)
+	taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalDecided, `{"decision":"confirm"}`)
+	taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalExecuted, `{"toolName":"event_delete"}`)
 
 	if _, isApproved := ApprovedPendingCall(taskRunService.ListTaskEvent(taskRunID)); isApproved {
 		t.Fatal("expected a call that already ran to stay carried out")
@@ -42,9 +41,9 @@ func TestACallThatAlreadyRanIsNotHandedBackAgain(t *testing.T) {
 
 func TestANewHeldCallDoesNotInheritTheDecisionMadeAboutTheLastOne(t *testing.T) {
 	taskRunService, taskRunID := taskRunWithHeldCall(t)
-	taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventApprovalDecided, `{"decision":"confirm"}`)
-	taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventApprovalExecuted, `{"toolName":"event_delete"}`)
-	taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventApprovalPendingCall, `{"toolName":"message_send","toolInput":{"message":"보냅니다"},"confirmation":"보낼까요?"}`)
+	taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalDecided, `{"decision":"confirm"}`)
+	taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalExecuted, `{"toolName":"event_delete"}`)
+	taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalPendingCall, `{"toolName":"message_send","toolInput":{"message":"보냅니다"},"confirmation":"보낼까요?"}`)
 
 	if _, isApproved := ApprovedPendingCall(taskRunService.ListTaskEvent(taskRunID)); isApproved {
 		t.Fatal("expected a freshly held call to wait for its own decision")
@@ -53,7 +52,7 @@ func TestANewHeldCallDoesNotInheritTheDecisionMadeAboutTheLastOne(t *testing.T) 
 
 func TestADeclinedCallIsReportedAsDeclinedRatherThanLeftSilent(t *testing.T) {
 	taskRunService, taskRunID := taskRunWithHeldCall(t)
-	taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventApprovalDecided, `{"decision":"cancel"}`)
+	taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalDecided, `{"decision":"cancel"}`)
 
 	declinedCallNote := DeclinedCallNote(taskRunService.ListTaskEvent(taskRunID))
 	if !strings.Contains(declinedCallNote, "declined") {

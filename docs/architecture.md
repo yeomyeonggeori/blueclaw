@@ -1,7 +1,7 @@
 # Blueclaw Architecture
 
 The ledger vocabulary is declared in bluecollar's
-`taskstate/task_event_name.go` and generated into the protocol as
+`agentcontract/task_event_name.go` and generated into the protocol as
 `task-event-name`; the model-facing [tool catalog](tool-catalog.md) is generated
 from the code that registers it. Neither is edited here.
 
@@ -21,7 +21,7 @@ function names beside them are the durable reference.
 | Harness selection | which loop runs, from `agent.harness.name` | `internal/harnessselection`, `internal/harnessdriver` |
 | Harness | the agent loop: run a turn and report what happened | `.dependency/bluecollar` (in-process), `internal/acpharness`, `internal/cliharness` |
 | Harness boundary | what an out-of-process agent may reach and what its turn achieved | `internal/mcpserver`, `internal/approvalgate`, `internal/turnoutcome`, `internal/security` |
-| Contract | the types both compile against, and the harness port | `.dependency/bluecollar/agentcontract/`, `.dependency/bluecollar/toolcontract/`, `.dependency/bluecollar/taskstate/` |
+| Contract | the types both compile against, and the harness port | `.dependency/bluecollar/agentcontract/`, `.dependency/bluecollar/toolcontract/` |
 | Operator surface | enrollment, the terminal UI | `internal/enrollment`, `internal/tui`, `cmd/blueclaw-cli` |
 
 ### Running a harness that is not this repository's
@@ -378,7 +378,7 @@ questions, not grants.
 
 ## Task store
 
-`.dependency/bluecollar/taskstate/` is the durable state of a run and is host-owned, not harness-owned.
+`.dependency/bluecollar/taskstate/` is the service over the durable state of a run and is host-owned, not harness-owned. The records it stores (`TaskRun`, `TaskStatus`, `TaskAttempt`, `TaskEvent`) are declared in `.dependency/bluecollar/agentcontract/task_run.go`.
 
 | Type | File |
 |---|---|

@@ -29,7 +29,7 @@ func (completer *Completer) CompleteLaunchFailure(responseContext context.Contex
 	}
 	failedTaskRun, failError := completer.taskRunService.FailTaskRun(taskRun.TaskRunID, reason)
 	if failError != nil {
-		taskRun.Status = taskstate.TaskStatusFailed
+		taskRun.Status = agentcontract.TaskStatusFailed
 		taskRun.FailureReason = firstNonEmptyString(reason, failError.Error())
 		failedTaskRun = taskRun
 	}
@@ -44,8 +44,8 @@ func (completer *Completer) CompleteLaunchFailure(responseContext context.Contex
 		DiagnosticEventID:  agentcontract.DiagnosticEventID(request, taskRun.TaskRunID, phase),
 	}
 	failureNotice, noticeStatus := (agentcontract.FailureNoticeGenerator{LanguageModel: completer.languageModel}).Generate(responseContext, launchFailureReport)
-	completer.taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventAgentFailureReply, marshalEventBody(noticeStatus))
-	completer.taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventAgentFailureReport, marshalEventBody(map[string]any{
+	completer.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentFailureReply, marshalEventBody(noticeStatus))
+	completer.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentFailureReport, marshalEventBody(map[string]any{
 		"phase":      phase,
 		"report":     launchFailureReport,
 		"generation": noticeStatus,
@@ -59,7 +59,7 @@ func (completer *Completer) CompleteLaunchFailure(responseContext context.Contex
 	}
 }
 
-func (completer *Completer) taskRunForLaunchFailure(request agentcontract.AgentTurnRequest) (taskstate.TaskRun, error) {
+func (completer *Completer) taskRunForLaunchFailure(request agentcontract.AgentTurnRequest) (agentcontract.TaskRun, error) {
 	if taskRunID := strings.TrimSpace(request.ExistingTaskRunID); taskRunID != "" {
 		if taskRun, isFound := completer.taskRunService.FindTaskRun(taskRunID); isFound {
 			return taskRun, nil
@@ -72,7 +72,7 @@ func (completer *Completer) taskRunForLaunchFailure(request agentcontract.AgentT
 	}, request.Prompt)
 }
 
-func persistTaskRunResult(taskRunService taskstate.TaskRunStore, taskRun taskstate.TaskRun, result string) taskstate.TaskRun {
+func persistTaskRunResult(taskRunService taskstate.TaskRunStore, taskRun agentcontract.TaskRun, result string) agentcontract.TaskRun {
 	persistedTaskRun, errorValue := taskRunService.RecordTaskRunResult(taskRun.TaskRunID, result)
 	if errorValue != nil {
 		taskRun.Result = result
@@ -123,10 +123,10 @@ type IntakeLimit struct {
 
 func (completer *Completer) CompleteIntakeElapsed(responseContext context.Context, request agentcontract.AgentTurnRequest, intakeLimit IntakeLimit) agentcontract.AgentTurnResult {
 	taskRun := completer.taskRunForIntakeLimit(request)
-	completer.taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventAgentLimitStop, marshalEventBody(intakeLimitEventBody(intakeLimit)))
-	blockedTaskRun, errorValue := completer.taskRunService.PauseTaskRun(taskRun.TaskRunID, taskstate.TaskStatusBlocked, "max_elapsed")
+	completer.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentLimitStop, marshalEventBody(intakeLimitEventBody(intakeLimit)))
+	blockedTaskRun, errorValue := completer.taskRunService.PauseTaskRun(taskRun.TaskRunID, agentcontract.TaskStatusBlocked, "max_elapsed")
 	if errorValue != nil {
-		taskRun.Status = taskstate.TaskStatusBlocked
+		taskRun.Status = agentcontract.TaskStatusBlocked
 		taskRun.FailureReason = "max_elapsed"
 		blockedTaskRun = taskRun
 	}
@@ -139,13 +139,13 @@ func (completer *Completer) CompleteIntakeElapsed(responseContext context.Contex
 		ResponseLanguage:   request.ResponseLanguage,
 		DiagnosticEventID:  taskRun.TaskRunID + ":intake_limit",
 	})
-	completer.taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventAgentLimitReply, marshalEventBody(map[string]any{
+	completer.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentLimitReply, marshalEventBody(map[string]any{
 		"source":            noticeStatus.Source,
 		"reason":            noticeStatus.Reason,
 		"textRecoveryError": noticeStatus.TextRecoveryError,
 	}))
 	blockedTaskRun = persistTaskRunResult(completer.taskRunService, blockedTaskRun, failureNotice.SendableMessage())
-	completer.taskRunService.AppendTaskEvent(blockedTaskRun.TaskRunID, taskstate.TaskEventAgentGoalBlocked, marshalEventBody(agentcontract.ActiveGoal{
+	completer.taskRunService.AppendTaskEvent(blockedTaskRun.TaskRunID, agentcontract.TaskEventAgentGoalBlocked, marshalEventBody(agentcontract.ActiveGoal{
 		GoalID:              blockedTaskRun.TaskRunID,
 		TaskRunID:           blockedTaskRun.TaskRunID,
 		OriginalInstruction: strings.TrimSpace(request.Prompt),
@@ -159,7 +159,7 @@ func (completer *Completer) CompleteIntakeElapsed(responseContext context.Contex
 	}
 }
 
-func (completer *Completer) taskRunForIntakeLimit(request agentcontract.AgentTurnRequest) taskstate.TaskRun {
+func (completer *Completer) taskRunForIntakeLimit(request agentcontract.AgentTurnRequest) agentcontract.TaskRun {
 	if taskRunID := strings.TrimSpace(request.ExistingTaskRunID); taskRunID != "" {
 		if taskRun, isFound := completer.taskRunService.FindTaskRun(taskRunID); isFound {
 			return taskRun

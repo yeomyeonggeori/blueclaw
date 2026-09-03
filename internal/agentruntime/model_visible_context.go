@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 // Anything on the request that reaches a model request has to be reconstructable
@@ -91,5 +90,5 @@ func (taskLauncher *TaskLauncher) recordModelVisibleContext(taskRunID string, re
 	if document == "" {
 		return
 	}
-	taskLauncher.toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventTaskModelVisibleContext, document)
+	taskLauncher.toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventTaskModelVisibleContext, document)
 }

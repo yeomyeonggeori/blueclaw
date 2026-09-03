@@ -9,7 +9,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
@@ -222,7 +222,7 @@ func TestACallTheRequesterAlreadyApprovedForTheWholeTaskResolvesNothingAgain(t *
 	gate, taskRunService, taskRun := gateFixture(t)
 	resolver := resolvedTargetResolver()
 	gate.UseApprovalTargetResolver(resolver)
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventApprovalScopeGranted, `{"scope":"calendar"}`)
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalScopeGranted, `{"scope":"calendar"}`)
 
 	gate.AwaitApproval(context.Background(), hintApprovalRequest(taskRun.TaskRunID))
 
