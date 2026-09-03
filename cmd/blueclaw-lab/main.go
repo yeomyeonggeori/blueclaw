@@ -98,9 +98,14 @@ func main() {
 		errorValue = service.ScenarioSlack(ctx)
 	case "virtual-session":
 		virtualSessionArguments, parseError := parseVirtualSessionArguments(flag.Args()[1:], *virtualScenarioName, *virtualArtifactDirectoryPath)
-		if parseError != nil {
+		switch {
+		case parseError != nil:
 			errorValue = parseError
-		} else {
+		case virtualSessionArguments.ListScenarios:
+			for _, name := range e2e.BuiltinScenarioNames() {
+				fmt.Println(name)
+			}
+		default:
 			errorValue = runVirtualSession(ctx, virtualSessionArguments)
 		}
 	default:
@@ -144,6 +149,7 @@ type virtualSessionArguments struct {
 	ValidateOnly          bool
 	MaximumModelTier      string
 	RealModelTiers        bool
+	ListScenarios         bool
 }
 
 type virtualSessionEvidence struct {
@@ -197,8 +203,20 @@ func parseVirtualSessionArguments(arguments []string, defaultScenarioName string
 	validateOnly := flagSet.Bool("validate-only", false, "validate the scenario file without running it")
 	maximumModelTier := flagSet.String("maximum-model-tier", "", "maximum live model tier: xlow, low, medium, high, xhigh, or max")
 	realModelTiers := flagSet.Bool("real-model-tiers", false, "use the production model tier configuration without a ceiling")
+	listScenarios := flagSet.Bool("list-scenarios", false, "print every scenario name BuiltinScenario accepts, one per line, and exit")
+	flagSet.Usage = func() {
+		fmt.Fprintln(flagSet.Output(), "Usage: blueclaw-lab virtual-session [flags]")
+		flagSet.PrintDefaults()
+		fmt.Fprintln(flagSet.Output(), "\nScenarios:")
+		for _, name := range e2e.BuiltinScenarioNames() {
+			fmt.Fprintln(flagSet.Output(), "  "+name)
+		}
+	}
 	if errorValue := flagSet.Parse(arguments); errorValue != nil {
 		return virtualSessionArguments{}, errorValue
+	}
+	if *listScenarios {
+		return virtualSessionArguments{ListScenarios: true}, nil
 	}
 	normalizedMaximumModelTier, errorValue := normalizeVirtualMaximumModelTier(*maximumModelTier)
 	if errorValue != nil {
