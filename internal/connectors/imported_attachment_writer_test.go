@@ -177,3 +177,38 @@ func TestARefusedPictureShowsNoBytes(t *testing.T) {
 		t.Fatal("expected a picture nobody could write to carry no bytes")
 	}
 }
+
+func TestARenamedPictureStillShowsItsBytes(t *testing.T) {
+	writer, workspacePath := attachmentWriterForTest(t, "person-1")
+	agentPath := filepath.Join(workspacePath, "private/people/person-1/inbox/buzz/dm/screenshot.png")
+
+	writer.writeAll(context.Background(), []InputAttachment{{
+		Path:          agentPath,
+		ContentBase64: base64.StdEncoding.EncodeToString([]byte("first screenshot")),
+	}})
+	written, contents := writer.writeAll(context.Background(), []InputAttachment{{
+		FileID:        "file-2",
+		Filename:      "screenshot.png",
+		Path:          agentPath,
+		ContentBase64: base64.StdEncoding.EncodeToString([]byte("second screenshot")),
+	}})
+
+	if written[0].Path == agentPath {
+		t.Fatalf("expected the colliding attachment to be renamed, got %q", written[0].Path)
+	}
+
+	parts := connectorInputPartsAtWrittenPaths([]agentcontract.AgentPart{{
+		Type: "image",
+		Image: &agentcontract.AgentImagePart{
+			MimeType: "image/png",
+			Path:     agentPath,
+			Filename: "screenshot.png",
+		},
+		Source: agentcontract.AgentPartSource{FileID: "file-2"},
+	}}, written)
+	parts = connectorImagePartsShowingTheirBytes(parts, contents)
+
+	if parts[0].Image.DataBase64 != base64.StdEncoding.EncodeToString([]byte("second screenshot")) {
+		t.Fatalf("expected the renamed attachment's own bytes, got %+v", parts[0].Image)
+	}
+}

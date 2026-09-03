@@ -2760,6 +2760,7 @@ func (connectorRuntime *ConnectorRuntime) withAttachmentMaterials(ctx context.Co
 		writtenAttachments, writtenContents := connectorRuntime.attachmentWriterFor(personID).writeAll(ctx, result.InputAttachments)
 		result.InputParts = connectorInputPartsAtWrittenPaths(result.InputParts, writtenAttachments)
 		result.InputParts = connectorImagePartsShowingTheirBytes(result.InputParts, writtenContents)
+		connectorRuntime.warnAboutImagesMissingBytes(adapter, event.MessageID, result.InputParts)
 		importedAttachments := connectorReadableInputAttachments(writtenAttachments, personID, scope)
 		event.Context.InputAttachments = connectorReplaceImportedInputAttachments(event.Context.InputAttachments, importedAttachments)
 		event.Context.Materials = connectorReplaceImportedInputAttachments(event.Context.Materials, importedAttachments)
@@ -2791,6 +2792,24 @@ func (connectorRuntime *ConnectorRuntime) attachmentWriterFor(personID string) i
 	return importedAttachmentWriter{workspaceActorFactory: connectorRuntime.workspaceActorFactory, personID: personID}
 }
 
+// An image part that reaches the model without bytes degrades to its filename
+// text with nothing marking the loss. This names the attachment that could not
+// be shown instead of letting it disappear silently.
+func (connectorRuntime *ConnectorRuntime) warnAboutImagesMissingBytes(adapter PlatformAdapter, messageID string, parts []agentcontract.AgentPart) {
+	for _, part := range parts {
+		if part.Type != agentcontract.AgentPartTypeImage || part.Image == nil {
+			continue
+		}
+		if strings.TrimSpace(part.Image.DataBase64) != "" {
+			continue
+		}
+		connectorRuntime.logger.Warn("connector."+adapter.Name()+".attachments.image_bytes_missing",
+			slog.String("messageID", messageID),
+			slog.String("fileID", part.Source.FileID),
+			slog.String("filename", part.Image.Filename))
+	}
+}
+
 const mostInlineImageBytesShown = 8 << 20
 
 // An image the message came with is put in front of the model with the message,
@@ -2813,26 +2832,27 @@ func connectorImagePartsShowingTheirBytes(parts []agentcontract.AgentPart, conte
 	return result
 }
 
-// A part names the same file the attachment does. Whatever name the file ended
-// up under is the one the agent is told about.
+// A part is matched to the attachment that wrote it by file id, not filename:
+// a collision with an existing file under a different name renames the file,
+// and the part still carries the name it arrived under.
 func connectorInputPartsAtWrittenPaths(parts []agentcontract.AgentPart, writtenAttachments []InputAttachment) []agentcontract.AgentPart {
-	pathByFilename := map[string]string{}
+	pathByFileID := map[string]string{}
 	for _, attachment := range writtenAttachments {
-		if strings.TrimSpace(attachment.Path) == "" {
+		if strings.TrimSpace(attachment.Path) == "" || strings.TrimSpace(attachment.FileID) == "" {
 			continue
 		}
-		pathByFilename[attachment.Filename] = attachment.Path
+		pathByFileID[attachment.FileID] = attachment.Path
 	}
 	result := make([]agentcontract.AgentPart, 0, len(parts))
 	for _, part := range parts {
 		if part.File != nil {
 			file := *part.File
-			file.Path = firstNonEmptyString(pathByFilename[file.Filename], file.Path)
+			file.Path = firstNonEmptyString(pathByFileID[part.Source.FileID], file.Path)
 			part.File = &file
 		}
 		if part.Image != nil {
 			image := *part.Image
-			image.Path = firstNonEmptyString(pathByFilename[image.Filename], image.Path)
+			image.Path = firstNonEmptyString(pathByFileID[part.Source.FileID], image.Path)
 			part.Image = &image
 		}
 		result = append(result, part)
