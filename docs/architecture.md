@@ -314,6 +314,28 @@ an AI SDK harness adapter without a lossy translation. The completion and
 approval gates that currently ride inside the action document are separable and
 stay.
 
+### Identity, soul, and the person asking
+
+Three documents say who the agent is, how it carries itself, and how one
+person wants to be worked with. The runtime renders each into the prompt
+rather than pasting it, and every one is a JSON Schema document
+(`internal/persona/schema/`) with `additionalProperties: false`, item and
+length ceilings, and a pinned `schemaVersion`.
+
+| document | where | carries | read |
+|---|---|---|---|
+| `identity.json` | workspace root | `names` (every name the agent answers to; the first is how it introduces itself), an optional `handle`, a role, what it is, an emoji, an introduction | once, into the standing instructions and the turn briefing's `AgentIdentity` |
+| `soul.json` | workspace root | what it holds to, what it never does, how it works, a tone (`formal`, `polite`, `casual` plus traits), a language policy | once, into the standing instructions |
+| `private/people/<personID>/.internkim/user.json` | the person's own home, owned by their POSIX user | what one person wants to be called, what they want known about them, their preferences, a tone, a language | at every launch, read as that person through the helper, for the requester only, appended to the turn's host instruction; written the same way by `PUT /admin/api/persona/user?personID=`, and started for a new person by `POST` on the same path, which never touches a document that is already there |
+
+A document the schema refuses is reported (`application.persona_document_rejected`
+for the two workspace documents, `agentruntime.requester_persona_rejected` for a
+person's) and left out rather than rendered by guesswork. The host writes all
+three in their canonical form and owns any product rule on top of the schema,
+such as a fixed first name or which person may edit which file. There is no
+free-text persona file: a sentence that does not fit a field is a field the
+schema still lacks.
+
 ### Tool exposure
 
 Tool exposure is separate from all of this. Extension tool schemas offered to

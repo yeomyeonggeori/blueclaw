@@ -584,6 +584,9 @@ func (taskLauncher *TaskLauncher) agentTurnRequestForLaunch(request TaskLaunchRe
 		CheckpointSender:           request.CheckpointSender,
 	}
 	turnRequest.HostInstruction = hostInstructionForRequest(turnRequest)
+	if requesterPersona := requesterPersonaInstruction(taskLauncher.toolCatalogBuilder.workspaceActorFactory, personAccessForLaunch(request), taskLauncher.toolCatalogBuilder.WorkspaceRootPath()); requesterPersona != "" {
+		turnRequest.HostInstruction += "\n\n" + requesterPersona
+	}
 	return turnRequest
 }
 
@@ -815,4 +818,12 @@ func workspaceGuidance(workspaceRootPath string) []string {
 		"Circle-shared files live under " + filepath.Join(workspaceRootPath, "circles") + "/<circleID> when the requester belongs to that circle.",
 		filepath.Join(workspaceRootPath, ".blueclaw") + " is service-owned runtime state and is normally not writable from terminal tools.",
 	}
+}
+
+func personAccessForLaunch(request TaskLaunchRequest) policy.PersonAccess {
+	personAccess := request.PersonAccess
+	if strings.TrimSpace(personAccess.PersonID) == "" {
+		personAccess.PersonID = strings.TrimSpace(request.RequesterPersonID)
+	}
+	return personAccess
 }

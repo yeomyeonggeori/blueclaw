@@ -230,19 +230,16 @@ func unwrapModelTier(provider llm.LanguageModelProvider) llm.LanguageModelProvid
 	return provider
 }
 
-func TestLoadAgentInstructionPromptUsesAgentsAndSkills(t *testing.T) {
+func TestLoadAgentInstructionPromptUsesIdentitySoulAgentsAndSkills(t *testing.T) {
 	workspacePath := t.TempDir()
 	skillDirectoryPath := filepath.Join(workspacePath, ".agents", "skills", "browser")
 	if errorValue := os.MkdirAll(skillDirectoryPath, 0o755); errorValue != nil {
 		t.Fatalf("expected skill directory: %v", errorValue)
 	}
-	if errorValue := os.WriteFile(filepath.Join(workspacePath, "IDENTITY.md"), []byte("Use the runtime display name."), 0o600); errorValue != nil {
+	if errorValue := os.WriteFile(filepath.Join(workspacePath, "identity.json"), []byte(`{"schemaVersion": 1, "names": ["김인턴", "Intern Kim"], "handle": "internkim", "role": "the company's AI intern"}`), 0o600); errorValue != nil {
 		t.Fatalf("expected identity file: %v", errorValue)
 	}
-	if errorValue := os.WriteFile(filepath.Join(workspacePath, "BOT_PROFILE.yaml"), []byte("username: internkim\ndisplayName: internkim\nenglishDisplayName: Intern Kim\naliases:\n  - internkim\npublicDescription: \"\"\nidentityExtension: Use the display name.\n"), 0o600); errorValue != nil {
-		t.Fatalf("expected bot profile file: %v", errorValue)
-	}
-	if errorValue := os.WriteFile(filepath.Join(workspacePath, "SOUL.md"), []byte("Lead with the result."), 0o600); errorValue != nil {
+	if errorValue := os.WriteFile(filepath.Join(workspacePath, "soul.json"), []byte(`{"schemaVersion": 1, "values": ["Lead with the result."]}`), 0o600); errorValue != nil {
 		t.Fatalf("expected soul file: %v", errorValue)
 	}
 	if errorValue := os.WriteFile(filepath.Join(workspacePath, "AGENTS.md"), []byte("Use agent-browser for web automation."), 0o600); errorValue != nil {
@@ -255,7 +252,7 @@ func TestLoadAgentInstructionPromptUsesAgentsAndSkills(t *testing.T) {
 	runtimeConfiguration.Terminal.WorkspaceRootPath = workspacePath
 
 	instructionBundle := loadAgentInstructionBundle(runtimeConfiguration)
-	for _, expectedFragment := range []string{"Use the runtime display name.", "current displayName: internkim", "Use the display name.", "Lead with the result.", "Use agent-browser for web automation."} {
+	for _, expectedFragment := range []string{"Your name is 김인턴.", "\"Intern Kim\"", "@internkim", "Your role: the company's AI intern", "What you hold to:\n- Lead with the result.", "Use agent-browser for web automation."} {
 		if !strings.Contains(instructionBundle.Prompt, expectedFragment) {
 			t.Fatalf("expected instruction prompt to contain %q, got %q", expectedFragment, instructionBundle.Prompt)
 		}
@@ -265,10 +262,10 @@ func TestLoadAgentInstructionPromptUsesAgentsAndSkills(t *testing.T) {
 	}
 }
 
-func TestLoadAgentIdentityReadsBotProfile(t *testing.T) {
+func TestLoadAgentIdentityReadsTheIdentityDocument(t *testing.T) {
 	workspacePath := t.TempDir()
-	if errorValue := os.WriteFile(filepath.Join(workspacePath, "BOT_PROFILE.yaml"), []byte("username: internkim\ndisplayName: 김인턴\n"), 0o600); errorValue != nil {
-		t.Fatalf("expected bot profile file: %v", errorValue)
+	if errorValue := os.WriteFile(filepath.Join(workspacePath, "identity.json"), []byte(`{"schemaVersion": 1, "names": ["김인턴"], "handle": "internkim"}`), 0o600); errorValue != nil {
+		t.Fatalf("expected identity file: %v", errorValue)
 	}
 	runtimeConfiguration := config.RuntimeConfiguration{}
 	runtimeConfiguration.Terminal.WorkspaceRootPath = workspacePath
@@ -276,18 +273,28 @@ func TestLoadAgentIdentityReadsBotProfile(t *testing.T) {
 	agentIdentity := loadAgentIdentity(runtimeConfiguration)
 
 	if agentIdentity.Name != "김인턴" || agentIdentity.Handle != "internkim" {
-		t.Fatalf("expected the bot profile identity, got %+v", agentIdentity)
+		t.Fatalf("expected the identity document's name and handle, got %+v", agentIdentity)
 	}
 }
 
-func TestRenderBotProfileInstructionOmitsUnconfiguredUsername(t *testing.T) {
-	instruction := renderBotProfileInstruction([]byte("displayName: 김인턴\n"))
-
-	if strings.Contains(instruction, "internal username") {
-		t.Fatalf("expected no username line without a configured username, got %q", instruction)
+func TestAPersonaDocumentTheSchemaRefusesIsReportedAndLeftOut(t *testing.T) {
+	workspacePath := t.TempDir()
+	if errorValue := os.WriteFile(filepath.Join(workspacePath, "identity.json"), []byte(`{"schemaVersion": 1, "names": ["김인턴"], "handle": "internkim", "nickname": "kim"}`), 0o600); errorValue != nil {
+		t.Fatalf("expected identity file: %v", errorValue)
 	}
-	if !strings.Contains(instruction, "current displayName: 김인턴") {
-		t.Fatalf("expected the configured displayName, got %q", instruction)
+	runtimeConfiguration := config.RuntimeConfiguration{}
+	runtimeConfiguration.Terminal.WorkspaceRootPath = workspacePath
+
+	instructions := loadAgentInstructions(runtimeConfiguration)
+
+	if strings.Contains(instructions.Bundle.Prompt, "김인턴") {
+		t.Fatalf("expected the refused identity to stay out of the prompt, got %q", instructions.Bundle.Prompt)
+	}
+	if len(instructions.RejectedDocuments) != 1 || !strings.Contains(instructions.RejectedDocuments[0].Error.Error(), "nickname") {
+		t.Fatalf("expected the refusal to be reported with its reason, got %+v", instructions.RejectedDocuments)
+	}
+	if agentIdentity := loadAgentIdentity(runtimeConfiguration); agentIdentity.Name != "" {
+		t.Fatalf("expected no identity from a refused document, got %+v", agentIdentity)
 	}
 }
 

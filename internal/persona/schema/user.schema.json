@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blueclaw.dev/schema/user.schema.json",
+  "title": "user",
+  "description": "How one person wants the agent to work with them. One document per person, written by the host from that person's own settings and read by the runtime when that person asks.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "callMe": { "type": "string", "maxLength": 64, "description": "What the person wants to be called." },
+    "about": { "type": "string", "maxLength": 400, "description": "What the person wants the agent to know about them and their work." },
+    "preferences": { "type": "array", "maxItems": 8, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 200 }, "description": "How the person wants the agent to work with them, one sentence each." },
+    "tone": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "register": { "type": "string", "enum": ["formal", "polite", "casual"], "description": "The level of formality the person wants." },
+        "traits": { "type": "array", "maxItems": 6, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 40 }, "description": "Adjectives for how the person wants the agent to sound." }
+      }
+    },
+    "language": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "default": { "type": "string", "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$", "description": "The language the person wants answers in, as a BCP 47 tag." }
+      }
+    }
+  }
+}
