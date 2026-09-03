@@ -398,7 +398,7 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 	}
 	chatdClient := newChatdClient(runtimeConfiguration)
 	for _, platform := range capabilitycatalog.MessengerPlatformNames() {
-		connectorRuntime.RegisterAdapter(newPlatformAdapter(platform, runtimeConfiguration, capabilityClient, chatdClient))
+		connectorRuntime.RegisterAdapter(connectors.NewChatdPlatformAdapter(platform, chatdClient))
 	}
 	for _, platform := range platformsChatdServesBeyondTheProtocol(runtimeConfiguration.Connectors.Chatd) {
 		logger.Warn("connector.platform.served_beyond_the_protocol", "platform", platform)
@@ -1069,22 +1069,6 @@ func newChatdClient(runtimeConfiguration config.RuntimeConfiguration) capability
 		Endpoint: firstNonEmptyString(runtimeConfiguration.Connectors.Chatd.Endpoint, connectors.DefaultChatdEndpoint),
 		Timeout:  time.Duration(runtimeConfiguration.Connectors.Chatd.TimeoutSecond) * time.Second,
 	})
-}
-
-func newPlatformAdapter(platform string, runtimeConfiguration config.RuntimeConfiguration, capabilityClient capability.Client, chatdClient capability.Client) connectors.PlatformAdapter {
-	if isChatdEnabledForPlatform(runtimeConfiguration.Connectors.Chatd, platform) {
-		return connectors.NewChatdPlatformAdapter(platform, chatdClient)
-	}
-	return connectors.NewCapabilityPlatformAdapter(platform, capabilityClient)
-}
-
-func isChatdEnabledForPlatform(chatdConfiguration config.ChatdConnectorConfiguration, platform string) bool {
-	for _, enabledPlatform := range chatdConfiguration.EnabledPlatforms {
-		if strings.EqualFold(strings.TrimSpace(enabledPlatform), platform) {
-			return true
-		}
-	}
-	return false
 }
 
 func platformsChatdServesBeyondTheProtocol(chatdConfiguration config.ChatdConnectorConfiguration) []string {

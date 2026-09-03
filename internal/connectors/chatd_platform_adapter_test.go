@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
@@ -200,5 +202,21 @@ func TestChatdPlatformAdapterUsesChatdEndpointsWithoutAuthorization(t *testing.T
 		if authorizationHeader != "" {
 			t.Fatalf("expected no authorization header for %s, got %q", path, authorizationHeader)
 		}
+	}
+}
+
+type fakeCapabilityHTTPClient struct {
+	handler func(*http.Request) (*http.Response, error)
+}
+
+func (client fakeCapabilityHTTPClient) Do(request *http.Request) (*http.Response, error) {
+	return client.handler(request)
+}
+
+func jsonCapabilityResponse(statusCode int, body string) *http.Response {
+	return &http.Response{
+		StatusCode: statusCode,
+		Body:       io.NopCloser(strings.NewReader(body)),
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
 	}
 }

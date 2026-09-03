@@ -180,7 +180,7 @@ A new platform is an adapter, not a new runtime. The three seams:
 |---|---|---|
 | inbound normalization | `PlatformInboundEvent` | `internal/connectors/runtime.go` |
 | outbound delivery | `PlatformAdapter`, registered with `RegisterAdapter` | `internal/connectors/runtime.go` |
-| transport choice | capability call, or `chatd` HTTP | `internal/connectors/capability_platform_adapter.go`, `internal/connectors/chatd_platform_adapter.go` |
+| transport choice | `chatd` HTTP | `internal/connectors/chatd_platform_adapter.go` |
 
 Inbound events enter through `HandleHTTPEvent`
 (`internal/connectors/runtime.go`) or `HandleRealtimeEvent`, both
