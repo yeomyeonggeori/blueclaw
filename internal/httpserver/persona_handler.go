@@ -77,6 +77,25 @@ func (handler PersonaHandler) HandleWriteUser(responseWriter http.ResponseWriter
 	writeJSON(responseWriter, user)
 }
 
+// HandleSeedUser gives a person the document the host knows how to start them
+// with, and only that: a person who already has one keeps every word of it.
+func (handler PersonaHandler) HandleSeedUser(responseWriter http.ResponseWriter, request *http.Request) {
+	actor, documentPath, isResolved := handler.resolveActorAndDocument(responseWriter, request)
+	if !isResolved {
+		return
+	}
+	_, errorValue := actor.ReadFile(request.Context(), documentPath, personaDocumentMaximumBytes)
+	if errorValue == nil {
+		handler.HandleReadUser(responseWriter, request)
+		return
+	}
+	if !security.IsActorNotFoundError(errorValue) {
+		writeWorkspaceActorError(responseWriter, errorValue)
+		return
+	}
+	handler.HandleWriteUser(responseWriter, request)
+}
+
 func (handler PersonaHandler) resolveActorAndDocument(responseWriter http.ResponseWriter, request *http.Request) (security.WorkspaceActor, string, bool) {
 	personID := strings.TrimSpace(request.URL.Query().Get("personID"))
 	if personID == "" {

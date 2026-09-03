@@ -118,3 +118,34 @@ func TestPersonaHandlerRefusesWhatTheSchemaDoesNotNameAndNeedsAPerson(t *testing
 		t.Fatalf("expected a write without a person to be refused, got %d", recorder.Code)
 	}
 }
+
+func TestPersonaHandlerSeedsOnlyThePersonWhoHasNoDocumentYet(t *testing.T) {
+	workspacePath := t.TempDir()
+	factory := &personaStubFactory{documents: map[string][]byte{}}
+	handler := PersonaHandler{WorkspaceRootPath: workspacePath, WorkspaceActorFactory: factory, PersonAccessResolver: stubPersonAccessResolver{}}
+	documentPath := filepath.Join(security.PersonHomeDirectoryPath(workspacePath, "person-1"), ".internkim", "user.json")
+
+	recorder := httptest.NewRecorder()
+	handler.HandleSeedUser(recorder, httptest.NewRequest(http.MethodPost, "/admin/api/persona/user?personID=person-1", strings.NewReader(`{"schemaVersion": 1, "callMe": "이샘플"}`)))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected the seed to be written, got %d %s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(string(factory.documents[documentPath]), `"callMe": "이샘플"`) {
+		t.Fatalf("expected the seeded name, got %q", factory.documents[documentPath])
+	}
+
+	recorder = httptest.NewRecorder()
+	handler.HandleWriteUser(recorder, httptest.NewRequest(http.MethodPut, "/admin/api/persona/user?personID=person-1", strings.NewReader(`{"schemaVersion": 1, "callMe": "샘플님"}`)))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected the person's own write to succeed, got %d %s", recorder.Code, recorder.Body.String())
+	}
+
+	recorder = httptest.NewRecorder()
+	handler.HandleSeedUser(recorder, httptest.NewRequest(http.MethodPost, "/admin/api/persona/user?personID=person-1", strings.NewReader(`{"schemaVersion": 1, "callMe": "이샘플"}`)))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "샘플님") {
+		t.Fatalf("expected a second seed to leave the person's own document alone, got %d %s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(string(factory.documents[documentPath]), `"callMe": "샘플님"`) {
+		t.Fatalf("expected the person's own name to survive the seed, got %q", factory.documents[documentPath])
+	}
+}
