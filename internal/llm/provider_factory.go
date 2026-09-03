@@ -88,13 +88,18 @@ func capabilityModelName(runtimeConfiguration config.RuntimeConfiguration) strin
 	return strings.TrimSpace(runtimeConfiguration.LanguageModel.Capability.Model)
 }
 
+// One model answers every tier. The tiers still mean what they meant — how much
+// budget and how many steps a turn is given — and a company that wants a
+// different model at a tier still says so in its runtime configuration.
+const defaultModelName = "z-ai/glm-5.3-flash"
+
 const (
-	defaultMaxModelName    = "z-ai/glm-5.3-flash"
-	defaultXHighModelName  = "z-ai/glm-5.3-flash"
-	defaultHighModelName   = "z-ai/glm-5.3-flash"
-	defaultMediumModelName = "z-ai/glm-5.3-flash"
-	defaultLowModelName    = "openai/gpt-5.6-luna"
-	defaultXLowModelName   = "openai/gpt-5.6-luna"
+	defaultMaxModelName    = defaultModelName
+	defaultXHighModelName  = defaultModelName
+	defaultHighModelName   = defaultModelName
+	defaultMediumModelName = defaultModelName
+	defaultLowModelName    = defaultModelName
+	defaultXLowModelName   = defaultModelName
 )
 
 type ModelTierNames struct {
