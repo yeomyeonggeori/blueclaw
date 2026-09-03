@@ -1,5 +1,5 @@
 {
-  "aggregateHash": "d4b1eb4f17f0aa992df343e6f811ec28cbdf8ddb98f2bb2a4a26e277ecfcb5e3",
+  "aggregateHash": "9ae152da9cfa6d06b575e4e9d4a75342f407e3c14b0f16d4be3f97cef476e1f8",
   "protocolVersion": "0.4.0",
   "schemas": [
     {
@@ -39,7 +39,7 @@
     },
     {
       "fileName": "connector-platform.schema.json",
-      "hash": "746daec24bf36046cdacdda5ab24d99dc136c2fed34a65622d2df016649f06dd",
+      "hash": "f3ca11f6c247b347bfcc24f25399f8c139907eceb2f8e9ebef7949280c98de51",
       "name": "connector-platform"
     },
     {
@@ -49,7 +49,7 @@
     },
     {
       "fileName": "messenger-platform.schema.json",
-      "hash": "f4bc126fa173adf03ed1a774bcab0a5e6db1173af1984834dfc0ba596978fb42",
+      "hash": "1c4b42aec8e99d4b505892ae0c481da77b0aabeefb9004d37a112d53b5f37c29",
       "name": "messenger-platform"
     },
     {

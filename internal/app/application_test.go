@@ -449,46 +449,6 @@ func TestApplicationChecksProtocolIdentityOnceAndStoresResult(t *testing.T) {
 	}
 }
 
-func TestApplicationConnectorRouteAcceptsNormalizedSlackEvent(t *testing.T) {
-	runtimeConfiguration := config.RuntimeConfiguration{}
-	runtimeConfiguration.Logging.DirectoryPath = t.TempDir()
-	application := NewApplication(runtimeConfiguration, "", bluecollarharness.New)
-
-	payload := []byte(`{}`)
-	request := httptest.NewRequest(http.MethodPost, "/connectors/slack/events", bytes.NewReader(payload))
-	responseRecorder := httptest.NewRecorder()
-	application.httpServer.Handler.ServeHTTP(responseRecorder, request)
-
-	if responseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected normalized event status ok, got %d", responseRecorder.Code)
-	}
-	var responseDocument map[string]any
-	if errorValue := json.Unmarshal(responseRecorder.Body.Bytes(), &responseDocument); errorValue != nil {
-		t.Fatalf("expected response document: %v", errorValue)
-	}
-	if responseDocument["platform"] != "slack" {
-		t.Fatalf("expected slack platform response, got %+v", responseDocument)
-	}
-	if responseDocument["reason"] != "no_event" {
-		t.Fatalf("expected no_event response, got %+v", responseDocument)
-	}
-}
-
-func TestApplicationRegistersSignalHTTPRoute(t *testing.T) {
-	runtimeConfiguration := config.RuntimeConfiguration{}
-	runtimeConfiguration.Logging.DirectoryPath = t.TempDir()
-	application := NewApplication(runtimeConfiguration, "", bluecollarharness.New)
-
-	payload := []byte(`{}`)
-	request := httptest.NewRequest(http.MethodPost, "/connectors/signal/events", bytes.NewReader(payload))
-	responseRecorder := httptest.NewRecorder()
-	application.httpServer.Handler.ServeHTTP(responseRecorder, request)
-
-	if responseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected signal normalized event status ok, got %d", responseRecorder.Code)
-	}
-}
-
 func TestApplicationAutoResumeLaunchesAtMostFiveInterruptedTaskRuns(t *testing.T) {
 	taskEventService := task.NewTaskEventService()
 	taskRunService := task.NewTaskRunService(taskEventService)

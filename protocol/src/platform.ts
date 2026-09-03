@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const messengerPlatformNames = ['buzz', 'signal', 'slack'] as const;
+export const messengerPlatformNames = ['buzz'] as const;
 
 export const connectorPlatformNames = ['api', ...messengerPlatformNames] as const;
 
