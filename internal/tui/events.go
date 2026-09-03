@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 type TimelineEntryKind string
@@ -49,11 +51,6 @@ type toolResultEventBody struct {
 	Output struct {
 		Content string `json:"content"`
 	} `json:"output"`
-}
-
-type approvalPendingEventBody struct {
-	ToolName     string `json:"toolName"`
-	Confirmation string `json:"confirmation"`
 }
 
 type approvalExecutedEventBody struct {
@@ -113,7 +110,7 @@ func BuildTimeline(taskEvents []TaskEvent) []TimelineEntry {
 			})
 
 		case taskEvent.Name == "approval.pending_call":
-			pendingBody := decodeEventBody[approvalPendingEventBody](taskEvent.Body)
+			pendingBody := decodeEventBody[agentcontract.HeldCall](taskEvent.Body)
 			timelineEntries = append(timelineEntries, TimelineEntry{
 				Kind:         TimelineEntryApprovalPending,
 				Time:         taskEvent.CreatedAt,

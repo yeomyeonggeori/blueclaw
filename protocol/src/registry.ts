@@ -2,6 +2,7 @@ import type { z } from 'zod';
 
 import { agentActionSchema, agentMessageSchema } from './agent.ts';
 import {
+  approvalTargetSchema,
   capabilityDescriptorSchema,
   capabilityRegistryResponseSchema,
   toolInvokeRequestSchema,
@@ -21,6 +22,7 @@ export const protocolVersion = '0.4.0';
 export const protocolSchemas = {
   'agent-action': agentActionSchema,
   'agent-message': agentMessageSchema,
+  'approval-target': approvalTargetSchema,
   'capability-descriptor': capabilityDescriptorSchema,
   'capability-registry-response': capabilityRegistryResponseSchema,
   'chat-completion-request': chatCompletionRequestSchema,

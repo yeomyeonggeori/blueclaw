@@ -1,5 +1,5 @@
 {
-  "aggregateHash": "bc7b021250a565e38ed5dce475524b212e83e6a969422d21bb1b8815d72d0655",
+  "aggregateHash": "f01dec6ad998b3e156c30b0e379daca086dfd3348eb212d8bc30626f14dd5326",
   "protocolVersion": "0.4.0",
   "schemas": [
     {
@@ -11,6 +11,11 @@
       "fileName": "agent-message.schema.json",
       "hash": "065c09b484cf9c9ce4290f597217047e53a2bd6ff5db911e49fd8768566b0cbe",
       "name": "agent-message"
+    },
+    {
+      "fileName": "approval-target.schema.json",
+      "hash": "1804ce3e7f0e8493a0ca46acf79658987db415888e1f9ee512669c0198d56700",
+      "name": "approval-target"
     },
     {
       "fileName": "capability-descriptor.schema.json",

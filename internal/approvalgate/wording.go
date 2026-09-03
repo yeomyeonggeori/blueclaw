@@ -113,7 +113,7 @@ func (gate *Gate) generateConfirmationWording(ctx context.Context, approvalReque
 
 func rawApprovalSummary(approvalRequest mcpserver.ApprovalRequest, target ApprovalTarget) string {
 	summary := strings.TrimSpace(approvalRequest.ToolName)
-	if target.isResolved() {
+	if target.IsResolved() {
 		return strings.TrimSpace(summary + " " + firstNonEmpty(target.Title, target.ID))
 	}
 	if toolInput := strings.TrimSpace(string(approvalRequest.ToolInput)); toolInput != "" && toolInput != "{}" {
@@ -167,7 +167,7 @@ func approvalQuestionActionDetails(toolInput json.RawMessage, target ApprovalTar
 }
 
 func detailsNamingTheResolvedTarget(details map[string]string, target ApprovalTarget) map[string]string {
-	if !target.isResolved() {
+	if !target.IsResolved() {
 		return details
 	}
 	delete(details, strings.TrimSpace(target.InputField))

@@ -44,7 +44,7 @@ func ApprovedPendingCall(taskEvents []taskstate.TaskEvent) (ApprovedCall, bool) 
 	if heldCall.ToolName == "" || !isApprovingDecision(decision) {
 		return ApprovedCall{}, false
 	}
-	return ApprovedCall{ToolName: heldCall.ToolName, ToolInput: heldCall.approvedInput()}, true
+	return ApprovedCall{ToolName: heldCall.ToolName, ToolInput: heldCall.ApprovedInput()}, true
 }
 
 func DeclinedCallNote(taskEvents []taskstate.TaskEvent) string {
@@ -55,8 +55,8 @@ func DeclinedCallNote(taskEvents []taskstate.TaskEvent) string {
 	return "The requester declined the " + heldCall.ToolName + " call you asked about. Do not attempt it again; continue without it or stop and say why you cannot."
 }
 
-func undecidedHeldCall(taskEvents []taskstate.TaskEvent) (heldCallRecord, string) {
-	heldCall := heldCallRecord{}
+func undecidedHeldCall(taskEvents []taskstate.TaskEvent) (agentcontract.HeldCall, string) {
+	heldCall := agentcontract.HeldCall{}
 	decision := ""
 	for _, taskEvent := range taskEvents {
 		switch taskEvent.Name {
@@ -67,7 +67,7 @@ func undecidedHeldCall(taskEvents []taskstate.TaskEvent) (heldCallRecord, string
 			decision = decodedDecision(taskEvent.Body)
 		case "approval.executed":
 			if executedToolName(taskEvent.Body) == heldCall.ToolName {
-				heldCall = heldCallRecord{}
+				heldCall = agentcontract.HeldCall{}
 				decision = ""
 			}
 		}

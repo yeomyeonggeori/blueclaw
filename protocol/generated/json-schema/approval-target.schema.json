@@ -1,0 +1,23 @@
+{
+  "$id": "https://schemas.blueclaw.dev/0.4.0/approval-target.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "inputField": {
+      "type": "string"
+    },
+    "preview": {
+      "type": "string"
+    },
+    "startsAt": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    }
+  },
+  "type": "object"
+}

@@ -7,18 +7,11 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
-type ApprovalTarget struct {
-	InputField string `json:"inputField,omitempty"`
-	ID         string `json:"id,omitempty"`
-	Title      string `json:"title,omitempty"`
-	StartsAt   string `json:"startsAt,omitempty"`
-	// What the action is about to touch, quoted for the approval question.
-	// A preview never narrows the replayed input the way a resolved ID does.
-	Preview string `json:"preview,omitempty"`
-}
+type ApprovalTarget = agentcontract.ApprovalTarget
 
 type ApprovalTargetResolution struct {
 	Target  ApprovalTarget
@@ -43,12 +36,8 @@ func (gate *Gate) UseApprovalTargetResolver(approvalTargetResolver ApprovalTarge
 	gate.approvalTargetResolver = approvalTargetResolver
 }
 
-func (target ApprovalTarget) isResolved() bool {
-	return strings.TrimSpace(target.InputField) != "" && strings.TrimSpace(target.ID) != ""
-}
-
 func (resolution ApprovalTargetResolution) namesNothingThatExists() bool {
-	return !resolution.Target.isResolved() && resolution.Failure.Failure != nil
+	return !resolution.Target.IsResolved() && resolution.Failure.Failure != nil
 }
 
 func (gate *Gate) resolveApprovalTarget(ctx context.Context, approvalRequest mcpserver.ApprovalRequest) ApprovalTargetResolution {
@@ -75,7 +64,7 @@ func (gate *Gate) resolveApprovalTarget(ctx context.Context, approvalRequest mcp
 }
 
 func narrowedToolInput(toolInput json.RawMessage, target ApprovalTarget) json.RawMessage {
-	if !target.isResolved() {
+	if !target.IsResolved() {
 		return nil
 	}
 	document := map[string]json.RawMessage{}

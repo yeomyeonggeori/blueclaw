@@ -7,25 +7,10 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
-
-type heldCallRecord struct {
-	ToolName          string                   `json:"toolName"`
-	ToolInput         json.RawMessage          `json:"toolInput"`
-	ApprovedToolInput json.RawMessage          `json:"approvedToolInput,omitempty"`
-	ApprovalScope     string                   `json:"approvalScope,omitempty"`
-	Confirmation      string                   `json:"confirmation"`
-	HarnessSession    mcpserver.HarnessSession `json:"harnessSession"`
-}
-
-func (record heldCallRecord) approvedInput() json.RawMessage {
-	if len(record.ApprovedToolInput) > 0 {
-		return record.ApprovedToolInput
-	}
-	return record.ToolInput
-}
 
 type Gate struct {
 	taskRunService         taskstate.TaskRunStore
@@ -100,8 +85,7 @@ func (gate *Gate) recordedDecision(taskRunID string, approvalRequest mcpserver.A
 	for _, taskEvent := range gate.taskRunService.ListTaskEvent(taskRunID) {
 		switch taskEvent.Name {
 		case "approval.pending_call":
-			heldCall := decodeHeldCallEventBody(taskEvent.Body)
-			heldCallKey = canonicalToolCallKey(heldCall.ToolName, heldCall.ToolInput)
+			heldCallKey = decodeHeldCallEventBody(taskEvent.Body).CanonicalCallKey()
 		case "approval.decided":
 			decision, isDecided = decisionFromEventBody(taskEvent.Body)
 			decidedCallKey = heldCallKey
@@ -111,26 +95,10 @@ func (gate *Gate) recordedDecision(taskRunID string, approvalRequest mcpserver.A
 			}
 		}
 	}
-	if !isDecided || decidedCallKey != canonicalToolCallKey(approvalRequest.ToolName, approvalRequest.ToolInput) {
+	if !isDecided || decidedCallKey != agentcontract.CanonicalToolCallKey(approvalRequest.ToolName, approvalRequest.ToolInput) {
 		return "", false
 	}
 	return decision, true
-}
-
-func canonicalToolCallKey(toolName string, toolInput json.RawMessage) string {
-	return strings.TrimSpace(toolName) + "\x00" + canonicalToolInput(toolInput)
-}
-
-func canonicalToolInput(toolInput json.RawMessage) string {
-	if len(toolInput) == 0 {
-		return "{}"
-	}
-	var document any
-	if json.Unmarshal(toolInput, &document) != nil {
-		return strings.TrimSpace(string(toolInput))
-	}
-	canonicalDocument, _ := json.Marshal(document)
-	return string(canonicalDocument)
 }
 
 func decisionFromEventBody(body string) (mcpserver.ApprovalDecision, bool) {
@@ -153,8 +121,8 @@ func unmarshalEventBody(body string, target any) {
 	json.Unmarshal([]byte(body), target)
 }
 
-func decodeHeldCallEventBody(body string) heldCallRecord {
-	decodedBody := heldCallRecord{}
+func decodeHeldCallEventBody(body string) agentcontract.HeldCall {
+	decodedBody := agentcontract.HeldCall{}
 	unmarshalEventBody(body, &decodedBody)
 	decodedBody.ToolName = strings.TrimSpace(decodedBody.ToolName)
 	return decodedBody
@@ -169,7 +137,7 @@ func executedToolName(body string) string {
 }
 
 func (gate *Gate) recordHeldCall(taskRunID string, approvalRequest mcpserver.ApprovalRequest, confirmation string, target ApprovalTarget) {
-	gate.taskRunService.AppendTaskEvent(taskRunID, "approval.pending_call", marshalEventBody(heldCallRecord{
+	gate.taskRunService.AppendTaskEvent(taskRunID, "approval.pending_call", marshalEventBody(agentcontract.HeldCall{
 		ToolName:          approvalRequest.ToolName,
 		ToolInput:         approvalRequest.ToolInput,
 		ApprovedToolInput: narrowedToolInput(approvalRequest.ToolInput, target),

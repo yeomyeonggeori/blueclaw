@@ -44,6 +44,18 @@
       ]
     }
   ],
+  "approval-target": [
+    {
+      "inputField": "eventHint",
+      "id": "event-1",
+      "title": "상하이 edatec 미팅",
+      "startsAt": "2026-08-18T14:00:00+09:00"
+    },
+    {
+      "preview": "“회식은 금요일입니다”"
+    },
+    {}
+  ],
   "capability-descriptor": [
     {
       "name": "event_add",

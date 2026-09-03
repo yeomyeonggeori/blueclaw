@@ -29,6 +29,15 @@
       ]
     }
   ],
+  "approval-target": [
+    {
+      "id": 1
+    },
+    {
+      "id": "event-1",
+      "unknownField": "no"
+    }
+  ],
   "chat-completion-request": [
     {
       "executionMode": "server",

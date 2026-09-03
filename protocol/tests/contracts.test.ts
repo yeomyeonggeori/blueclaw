@@ -30,6 +30,7 @@ const fixturesDirectory = fileURLToPath(new URL('../fixtures/', import.meta.url)
 const fixtureSchemaNames = {
   'agent-action': 'agent-action',
   'agent-message': 'agent-message',
+  'approval-target': 'approval-target',
   'capability-descriptor': 'capability-descriptor',
   'capability-registry-response': 'capability-registry-response',
   'chat-completion-request': 'chat-completion-request',

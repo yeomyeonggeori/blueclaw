@@ -357,6 +357,15 @@ export const toolInvokeResponseSchema = z.strictObject({
   result: jsonValueSchema,
 });
 
+export const approvalTargetSchema = z.strictObject({
+  inputField: z.string().optional(),
+  id: z.string().optional(),
+  title: z.string().optional(),
+  startsAt: z.string().optional(),
+  preview: z.string().optional(),
+});
+
+export type ApprovalTarget = z.infer<typeof approvalTargetSchema>;
 export type CapabilityDescriptor = z.infer<typeof capabilityDescriptorSchema>;
 export type SiteSourceBundle = z.infer<typeof siteSourceBundleSchema>;
 export type ToolInvokeTransport = z.infer<typeof toolInvokeTransportSchema>;
