@@ -131,6 +131,11 @@ type taskLaunchExecution struct {
 	NormalizedProfileName string
 }
 
+const (
+	launchStepStatusError  = "error"
+	launchStepStatusResult = "result"
+)
+
 type launchStepRecord struct {
 	StepName string `json:"stepName"`
 	Status   string `json:"status"`
@@ -264,7 +269,7 @@ func (taskLauncher *TaskLauncher) closeAbandonedLaunchTaskRun(openedTaskRun laun
 	if _, isFound := taskLauncher.taskRunService.FindTaskRun(openedTaskRun.TaskRunID); !isFound {
 		return
 	}
-	taskLauncher.taskRunService.AppendTaskEvent(openedTaskRun.TaskRunID, "task.abandoned_by_turn", marshalToolResult(map[string]string{
+	taskLauncher.taskRunService.AppendTaskEvent(openedTaskRun.TaskRunID, taskstate.TaskEventTaskAbandonedByTurn, marshalToolResult(map[string]string{
 		"turnTaskRunID": usedTaskRunID,
 	}))
 	taskLauncher.taskRunService.CancelTaskRunWithReason(openedTaskRun.TaskRunID, requesterPersonID, "the turn ran on task run "+usedTaskRunID)
@@ -275,7 +280,7 @@ func (taskLauncher *TaskLauncher) appendTurnRouterCallRecords(taskRunID string, 
 		return
 	}
 	for _, callRecord := range callRecords {
-		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "llm.call", marshalToolResult(callRecord))
+		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventLLMCall, marshalToolResult(callRecord))
 	}
 }
 
@@ -363,17 +368,17 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 	if turnResult.TaskRun.TaskRunID != "" {
 		taskLauncher.appendLaunchStepRecords(turnResult.TaskRun.TaskRunID, launchRecords)
 		if memoryResult.Error != "" {
-			taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, "memory.pinned_load_failed", memoryResult.Error)
+			taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, taskstate.TaskEventMemoryPinnedLoadFailed, memoryResult.Error)
 		} else {
-			taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, "memory.pinned_load_succeeded", marshalToolResult(map[string]any{
+			taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, taskstate.TaskEventMemoryPinnedLoadSucceeded, marshalToolResult(map[string]any{
 				"factCount":       len(memoryResult.Facts),
 				"pinnedFactCount": memoryResult.PinnedFactCount,
 				"graphFactCount":  memoryResult.GraphFactCount,
 			}))
 		}
-		taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, "agent.task_launched", marshalTaskLaunchEvent(request, normalizedProfileName, launchedToolNames, registryAudit, len(memoryResult.Facts)))
+		taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, taskstate.TaskEventAgentTaskLaunched, marshalTaskLaunchEvent(request, normalizedProfileName, launchedToolNames, registryAudit, len(memoryResult.Facts)))
 		taskLauncher.appendAmbientDutyLaunchEvent(turnResult.TaskRun.TaskRunID, request)
-		taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, "agent.conversation_scope", marshalToolResult(conversationScope))
+		taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, taskstate.TaskEventAgentConversationScope, marshalToolResult(conversationScope))
 	}
 	return TaskLaunchResult{
 		TurnResult:            turnResult,
@@ -498,9 +503,9 @@ func (step runTurnLaunchStep) Run(ctx context.Context, execution *taskLaunchExec
 func runLaunchStep[T any](ctx context.Context, execution *taskLaunchExecution, step taskLaunchStep[T]) (T, launchStepRecord) {
 	result, errorValue := runLaunchStepRecoveringFromPanic(ctx, execution, step)
 	if errorValue != nil {
-		return result, launchStepRecord{StepName: step.Name(), Status: "error", Error: errorValue.Error()}
+		return result, launchStepRecord{StepName: step.Name(), Status: launchStepStatusError, Error: errorValue.Error()}
 	}
-	return result, launchStepRecord{StepName: step.Name(), Status: "result"}
+	return result, launchStepRecord{StepName: step.Name(), Status: launchStepStatusResult}
 }
 
 func runLaunchStepRecoveringFromPanic[T any](ctx context.Context, execution *taskLaunchExecution, step taskLaunchStep[T]) (result T, errorValue error) {
@@ -620,7 +625,7 @@ func (taskLauncher *TaskLauncher) appendAmbientDutyLaunchEvent(taskRunID string,
 	if !ambientDuty.IsMatch {
 		return
 	}
-	taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "agent.ambient_duty_launch", marshalToolResult(map[string]any{
+	taskLauncher.taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventAgentAmbientDutyLaunch, marshalToolResult(map[string]any{
 		"dutyName":   ambientDuty.Name,
 		"confidence": ambientDuty.Confidence,
 	}))
@@ -628,9 +633,15 @@ func (taskLauncher *TaskLauncher) appendAmbientDutyLaunchEvent(taskRunID string,
 
 func (taskLauncher *TaskLauncher) appendLaunchStepRecords(taskRunID string, records []launchStepRecord) {
 	for _, record := range records {
-		eventName := "agent.launch_step." + record.Status
-		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, eventName, marshalToolResult(record))
+		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, launchStepTaskEventName(record.Status), marshalToolResult(record))
 	}
+}
+
+func launchStepTaskEventName(status string) string {
+	if status == launchStepStatusError {
+		return taskstate.TaskEventAgentLaunchStepError
+	}
+	return taskstate.TaskEventAgentLaunchStepResult
 }
 
 func (taskLauncher *TaskLauncher) toolCatalogRequestForLaunch(request TaskLaunchRequest, profileName string) ToolCatalogRequest {
@@ -795,7 +806,7 @@ func (taskLauncher *TaskLauncher) appendUnroutedLaunchAudit(taskRunID string, re
 	if strings.TrimSpace(taskRunID) == "" {
 		return
 	}
-	taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "agent.task_launched", marshalTaskLaunchEvent(request, profileName, nil, ToolRegistryAudit{}, 0))
+	taskLauncher.taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventAgentTaskLaunched, marshalTaskLaunchEvent(request, profileName, nil, ToolRegistryAudit{}, 0))
 }
 
 func workspaceGuidance(workspaceRootPath string) []string {

@@ -9,6 +9,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 type busyMessageResult struct {
@@ -40,7 +41,7 @@ func (connectorRuntime *ConnectorRuntime) handleBusyMessageIfNeeded(
 	if errorValue != nil {
 		return busyMessageResult{}, errorValue
 	}
-	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, "task.busy_message.routed", marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, taskstate.TaskEventTaskBusyMessageRouted, marshalConnectorEventBody(map[string]string{
 		"messageID":       event.MessageID,
 		"busyRoute":       string(decision.BusyRoute),
 		"reason":          strings.TrimSpace(decision.Reason),
@@ -76,7 +77,7 @@ func (connectorRuntime *ConnectorRuntime) handleBusyCancelMessage(
 	sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error),
 ) (busyMessageResult, error) {
 	_, _ = connectorRuntime.taskRunService.CancelTaskRunWithReason(activeTaskRun.TaskRunID, activeTaskRun.RequesterPersonID, "task cancelled by newer user instruction")
-	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, "task.cancel.requested", marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, taskstate.TaskEventTaskCancelRequested, marshalConnectorEventBody(map[string]string{
 		"messageID":       event.MessageID,
 		"reason":          strings.TrimSpace(decision.Reason),
 		"latestUserInput": strings.TrimSpace(event.Prompt),
@@ -101,7 +102,7 @@ func (connectorRuntime *ConnectorRuntime) handleBusyStatusMessage(
 	decision agentcontract.TurnDecision,
 	sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error),
 ) (busyMessageResult, error) {
-	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, "task.status.requested", marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, taskstate.TaskEventTaskStatusRequested, marshalConnectorEventBody(map[string]string{
 		"messageID": event.MessageID,
 		"reason":    strings.TrimSpace(decision.Reason),
 	}))
@@ -142,7 +143,7 @@ func (connectorRuntime *ConnectorRuntime) handleBusySteerMessage(
 }
 
 func (connectorRuntime *ConnectorRuntime) appendSteerRequestedEvent(taskRunID string, event PlatformInboundEvent, instruction string, decision agentcontract.TurnDecision) {
-	connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, "task.steer.requested", marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventTaskSteerRequested, marshalConnectorEventBody(map[string]string{
 		"messageID":   event.MessageID,
 		"instruction": instruction,
 		"reason":      strings.TrimSpace(decision.Reason),
@@ -228,7 +229,7 @@ func (connectorRuntime *ConnectorRuntime) replySteerResumeUnavailable(
 	decision agentcontract.TurnDecision,
 	sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error),
 ) (busyMessageResult, error) {
-	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, "task.steer.resume_unavailable", marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, taskstate.TaskEventTaskSteerResumeUnavailable, marshalConnectorEventBody(map[string]string{
 		"messageID": event.MessageID,
 		"reason":    strings.TrimSpace(decision.Reason),
 	}))
@@ -245,7 +246,7 @@ func (connectorRuntime *ConnectorRuntime) replySteerResumeUnavailable(
 
 func (connectorRuntime *ConnectorRuntime) replaceBusyTask(event PlatformInboundEvent, activeTaskRun task.TaskRun, decision agentcontract.TurnDecision) {
 	_, _ = connectorRuntime.taskRunService.CancelTaskRunWithReason(activeTaskRun.TaskRunID, activeTaskRun.RequesterPersonID, "task replaced by newer user instruction")
-	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, "task.replaced", marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, taskstate.TaskEventTaskReplaced, marshalConnectorEventBody(map[string]string{
 		"messageID":       event.MessageID,
 		"reason":          strings.TrimSpace(decision.Reason),
 		"latestUserInput": strings.TrimSpace(event.Prompt),
@@ -255,7 +256,7 @@ func (connectorRuntime *ConnectorRuntime) replaceBusyTask(event PlatformInboundE
 func (connectorRuntime *ConnectorRuntime) supersedeBusyTask(event PlatformInboundEvent, platform string, activeTaskRun task.TaskRun, decision agentcontract.TurnDecision) {
 	_, _ = connectorRuntime.taskRunService.CancelTaskRunWithReason(activeTaskRun.TaskRunID, activeTaskRun.RequesterPersonID, "superseded_by_new_message")
 	connectorRuntime.resolveOpenTaskWaitsForTaskRun(activeTaskRun.RequesterPersonID, platform, activeTaskRun.OriginConversationID, activeTaskRun.TaskRunID)
-	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, "task.superseded_by_message", marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, taskstate.TaskEventTaskSupersededByMessage, marshalConnectorEventBody(map[string]string{
 		"messageID":       event.MessageID,
 		"reason":          strings.TrimSpace(decision.Reason),
 		"latestUserInput": strings.TrimSpace(event.Prompt),
@@ -312,7 +313,7 @@ func (connectorRuntime *ConnectorRuntime) handlePossibleFinishedTaskFollowUp(
 	if errorValue != nil || !isRelated {
 		return busyMessageResult{}, nil
 	}
-	connectorRuntime.taskRunService.AppendTaskEvent(finishedTaskRun.TaskRunID, "task.busy_message.after_finish", marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(finishedTaskRun.TaskRunID, taskstate.TaskEventTaskBusyMessageAfterFinish, marshalConnectorEventBody(map[string]string{
 		"messageID":       event.MessageID,
 		"latestUserInput": strings.TrimSpace(event.Prompt),
 	}))

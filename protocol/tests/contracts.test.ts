@@ -4,6 +4,10 @@ import { fileURLToPath } from 'node:url';
 
 import {
   askInteractionSchema,
+  ledgerEventNameSchema,
+  TaskEventName,
+  ToolTaskEventSuffix,
+  toolTaskEventPrefix,
   ChatCompletionFinishReason,
   chatCompletionMessageSchema,
   chatCompletionRequestSchema,
@@ -542,6 +546,30 @@ describe('closed protocol values', () => {
       },
       selectedBackend: 'remote',
     }).success).toBe(false);
+  });
+});
+
+describe('ledger event names', () => {
+  test('accept every declared fixed name', () => {
+    for (const name of Object.values(TaskEventName)) {
+      expect(ledgerEventNameSchema.safeParse(name).success).toBe(true);
+    }
+  });
+
+  test('accept a tool event for any tool, so a new tool needs no protocol change', () => {
+    for (const suffix of Object.values(ToolTaskEventSuffix)) {
+      expect(ledgerEventNameSchema.safeParse(`${toolTaskEventPrefix}a_tool_nobody_has_written_yet${suffix}`).success).toBe(true);
+    }
+  });
+
+  test('refuse a tool event whose tool name is not one segment or whose suffix is not declared', () => {
+    expect(ledgerEventNameSchema.safeParse('tool.site.app.publish.result').success).toBe(false);
+    expect(ledgerEventNameSchema.safeParse('tool.shell.finished').success).toBe(false);
+    expect(ledgerEventNameSchema.safeParse('tool..result').success).toBe(false);
+  });
+
+  test('refuse a name no producer declares', () => {
+    expect(ledgerEventNameSchema.safeParse('approval.granted').success).toBe(false);
   });
 });
 

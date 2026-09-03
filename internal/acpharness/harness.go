@@ -22,9 +22,6 @@ import (
 
 const toolCatalogServerName = "blueclaw"
 
-const harnessToolPermittedEventName = "harness.tool_permitted"
-const harnessToolRefusedEventName = "harness.tool_refused"
-
 type ToolCatalogPublisher interface {
 	PublishToolCatalog(requesterToolSet mcpserver.RequesterToolSet) (endpointURL string, bearerToken string, revoke func(), errorValue error)
 }
@@ -316,13 +313,13 @@ func (observer *sessionObserver) RequestPermission(_ context.Context, request ac
 			if permissionOption.Kind != allowedKind {
 				continue
 			}
-			observer.recordPermissionDecision(harnessToolPermittedEventName, request.ToolCall, permissionOption.Kind)
+			observer.recordPermissionDecision(taskstate.TaskEventHarnessToolPermitted, request.ToolCall, permissionOption.Kind)
 			return acp.RequestPermissionResponse{Outcome: acp.RequestPermissionOutcome{
 				Selected: &acp.RequestPermissionOutcomeSelected{Outcome: "selected", OptionId: permissionOption.OptionId},
 			}}, nil
 		}
 	}
-	observer.recordPermissionDecision(harnessToolRefusedEventName, request.ToolCall, "")
+	observer.recordPermissionDecision(taskstate.TaskEventHarnessToolRefused, request.ToolCall, "")
 	return acp.RequestPermissionResponse{Outcome: acp.RequestPermissionOutcome{
 		Cancelled: &acp.RequestPermissionOutcomeCancelled{Outcome: "cancelled"},
 	}}, nil

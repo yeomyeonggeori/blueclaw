@@ -5,9 +5,8 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
-
-const modelVisibleContextEventName = "task.model_visible_context"
 
 // Anything on the request that reaches a model request has to be reconstructable
 // from the task ledger, so a field here is either recorded or declared as one the
@@ -92,5 +91,5 @@ func (taskLauncher *TaskLauncher) recordModelVisibleContext(taskRunID string, re
 	if document == "" {
 		return
 	}
-	taskLauncher.toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, modelVisibleContextEventName, document)
+	taskLauncher.toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventTaskModelVisibleContext, document)
 }

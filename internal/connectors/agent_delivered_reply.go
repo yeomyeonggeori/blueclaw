@@ -28,7 +28,7 @@ func agentAlreadyDeliveredTo(taskEvents []taskstate.TaskEvent, deliveryTargets [
 		return false
 	}
 	for _, taskEvent := range taskEvents {
-		if taskEvent.Name != "tool."+messageSendToolName+".requested" {
+		if taskEvent.Name != taskstate.ToolTaskEventName(messageSendToolName, taskstate.ToolTaskEventRequestedSuffix) {
 			continue
 		}
 		requested := toolRequestedEventBody{}
@@ -63,7 +63,7 @@ func messageSendTargets(toolInput json.RawMessage, knownTargets []string) bool {
 
 func messageSendSucceeded(taskEvents []taskstate.TaskEvent) bool {
 	for _, taskEvent := range taskEvents {
-		if taskEvent.Name != "tool."+messageSendToolName+".result" {
+		if taskEvent.Name != taskstate.ToolTaskEventName(messageSendToolName, taskstate.ToolTaskEventResultSuffix) {
 			continue
 		}
 		if !strings.Contains(taskEvent.Body, "\"failure\"") {

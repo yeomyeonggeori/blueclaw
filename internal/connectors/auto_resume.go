@@ -9,6 +9,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 type interruptedTaskLaunchContext struct {
@@ -86,7 +87,7 @@ func (connectorRuntime *ConnectorRuntime) FailUnresumedInterruptedTaskRun(ctx co
 }
 
 func (connectorRuntime *ConnectorRuntime) failUnresumedTaskWithoutReplyChannel(ctx context.Context, taskRun task.TaskRun, reason string, detail string) {
-	connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, "task.auto_resume_reply_unavailable", marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventTaskAutoResumeReplyUnavailable, marshalConnectorEventBody(map[string]string{
 		"reason": reason,
 		"detail": detail,
 	}))
@@ -154,7 +155,7 @@ func (connectorRuntime *ConnectorRuntime) interruptedTaskLaunchRequest(taskRun t
 func interruptedTaskLaunchContextFromEvents(taskRun task.TaskRun, taskEvents []task.TaskEvent) (interruptedTaskLaunchContext, bool) {
 	for index := len(taskEvents) - 1; index >= 0; index-- {
 		taskEvent := taskEvents[index]
-		if taskEvent.Name != "agent.task_launched" {
+		if taskEvent.Name != taskstate.TaskEventAgentTaskLaunched {
 			continue
 		}
 		var launchContext interruptedTaskLaunchContext
@@ -262,7 +263,7 @@ func highestRecordedTaskLevel(taskEvents []task.TaskEvent) agentcontract.TaskLev
 			TaskComplexity string `json:"taskComplexity"`
 		}
 		switch taskEvent.Name {
-		case "agent.intake", "agent.budget_escalated":
+		case taskstate.TaskEventAgentIntake:
 			if json.Unmarshal([]byte(taskEvent.Body), &body) != nil {
 				continue
 			}

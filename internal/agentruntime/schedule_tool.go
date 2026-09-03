@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 type scheduleCreateToolInput struct {
@@ -237,7 +238,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) createScheduleTool(toolContext con
 	}
 	resultDocument := scheduleCreateResultDocument(initializedTaskSchedule)
 	if taskRunID := toolcontract.TaskRunIDFromContext(toolContext); taskRunID != "" && toolCatalogBuilder.taskRunService != nil {
-		toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, "schedule.created", string(resultDocument))
+		toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventScheduleCreated, string(resultDocument))
 	}
 	return toolcontract.ToolSuccessData(string(resultDocument), resultDocument), nil
 }
@@ -271,7 +272,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) updateScheduleTool(toolContext con
 	}
 	resultDocument := scheduleCreateResultDocument(result.TaskSchedule)
 	if taskRunID := toolcontract.TaskRunIDFromContext(toolContext); taskRunID != "" && toolCatalogBuilder.taskRunService != nil {
-		toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, "schedule.updated", string(resultDocument))
+		toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventScheduleUpdated, string(resultDocument))
 	}
 	return toolcontract.ToolSuccessData(string(resultDocument), resultDocument), nil
 }
@@ -304,7 +305,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) cancelScheduleTool(toolContext con
 		return toolcontract.ToolFailureData(toolcontract.FailureNotFound, toolcontract.FailureCodes.NotFound, "schedule_cancel", "no active schedules or pending scheduled work matched the cancellation request", resultDocument), nil
 	}
 	if taskRunID := toolcontract.TaskRunIDFromContext(toolContext); taskRunID != "" && toolCatalogBuilder.taskRunService != nil {
-		toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, "schedule.cancelled", string(resultDocument))
+		toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventScheduleCancelled, string(resultDocument))
 	}
 	return toolcontract.ToolSuccessData(string(resultDocument), resultDocument), nil
 }

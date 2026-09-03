@@ -1,0 +1,10 @@
+{
+  "$id": "https://schemas.blueclaw.dev/0.4.0/tool-task-event-suffix.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "enum": [
+    ".requested",
+    ".result",
+    ".cancelled"
+  ],
+  "type": "string"
+}

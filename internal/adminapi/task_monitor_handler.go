@@ -10,6 +10,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 type TaskMonitorHandler struct {
@@ -215,9 +216,9 @@ func isTaskRunWaitingForTheRequester(status task.TaskStatus) bool {
 func taskRunHasUndeliveredQuestion(taskEvents []task.TaskEvent) bool {
 	for index := len(taskEvents) - 1; index >= 0; index-- {
 		switch taskEvents[index].Name {
-		case "connector.reply.sent":
+		case taskstate.TaskEventConnectorReplySent:
 			return false
-		case "ask.requested":
+		case taskstate.TaskEventAskRequested:
 			return true
 		}
 	}
@@ -229,7 +230,7 @@ func (taskMonitorHandler TaskMonitorHandler) taskRunCostSummaries(taskRuns []tas
 	if taskMonitorHandler.TaskEventService == nil {
 		return costSummaries
 	}
-	for _, taskEvent := range taskMonitorHandler.TaskEventService.ListTaskEventByNameForTaskRuns(taskRunIDs(taskRuns), "llm.call") {
+	for _, taskEvent := range taskMonitorHandler.TaskEventService.ListTaskEventByNameForTaskRuns(taskRunIDs(taskRuns), taskstate.TaskEventLLMCall) {
 		costUSD, isLLMCall := llmCallCostUSD(taskEvent)
 		if !isLLMCall {
 			continue
@@ -288,7 +289,7 @@ func taskRunIDs(taskRuns []task.TaskRun) []string {
 }
 
 func llmCallCostUSD(taskEvent task.TaskEvent) (float64, bool) {
-	if taskEvent.Name != "llm.call" {
+	if taskEvent.Name != taskstate.TaskEventLLMCall {
 		return 0, false
 	}
 	var body struct {

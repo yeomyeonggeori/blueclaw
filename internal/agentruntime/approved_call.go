@@ -6,6 +6,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
@@ -28,7 +29,7 @@ func (step carryOutApprovedCallLaunchStep) Run(ctx context.Context, execution *t
 		return nil, nil
 	}
 	result := invokeApprovedCall(ctx, step.ToolSet, approvedCall)
-	taskRunService.AppendTaskEvent(taskRunID, "approval.executed", marshalToolResult(map[string]any{
+	taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventApprovalExecuted, marshalToolResult(map[string]any{
 		"toolName":  approvedCall.ToolName,
 		"toolInput": approvedCall.ToolInput,
 	}))

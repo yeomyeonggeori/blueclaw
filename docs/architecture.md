@@ -1,8 +1,9 @@
 # Blueclaw Architecture
 
-The ledger vocabulary and the model-facing tool catalog are generated from the
-code that owns them: [event catalog](event-catalog.md), [tool
-catalog](tool-catalog.md). Neither is edited here.
+The ledger vocabulary is declared in bluecollar's
+`taskstate/task_event_name.go` and generated into the protocol as
+`task-event-name`; the model-facing [tool catalog](tool-catalog.md) is generated
+from the code that registers it. Neither is edited here.
 
 This document describes the runtime as it is built today, for someone who wants
 to modify it. [`README.md`](../README.md) covers what Blueclaw is, how to run

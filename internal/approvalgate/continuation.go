@@ -16,7 +16,7 @@ func RecordRequesterDecision(taskRunStore taskstate.TaskRunStore, taskRunID stri
 	if decision == "" {
 		return
 	}
-	taskRunStore.AppendTaskEvent(taskRunID, "approval.decided", marshalEventBody(map[string]string{
+	taskRunStore.AppendTaskEvent(taskRunID, taskstate.TaskEventApprovalDecided, marshalEventBody(map[string]string{
 		"decision": decision,
 		"source":   source,
 	}))
@@ -60,12 +60,12 @@ func undecidedHeldCall(taskEvents []taskstate.TaskEvent) (agentcontract.HeldCall
 	decision := ""
 	for _, taskEvent := range taskEvents {
 		switch taskEvent.Name {
-		case "approval.pending_call":
+		case taskstate.TaskEventApprovalPendingCall:
 			heldCall = decodeHeldCallEventBody(taskEvent.Body)
 			decision = ""
-		case "approval.decided":
+		case taskstate.TaskEventApprovalDecided:
 			decision = decodedDecision(taskEvent.Body)
-		case "approval.executed":
+		case taskstate.TaskEventApprovalExecuted:
 			if executedToolName(taskEvent.Body) == heldCall.ToolName {
 				heldCall = agentcontract.HeldCall{}
 				decision = ""

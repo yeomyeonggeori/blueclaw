@@ -20,6 +20,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 type virtualStructuredOutputCorrectionTestError struct{}
@@ -1491,7 +1492,7 @@ func truthyEnvironmentValue(value string) bool {
 func toolEventCount(events []task.TaskEvent) int {
 	count := 0
 	for _, event := range events {
-		if strings.HasPrefix(event.Name, "tool.") {
+		if strings.HasPrefix(event.Name, taskstate.ToolTaskEventPrefix) {
 			count++
 		}
 	}

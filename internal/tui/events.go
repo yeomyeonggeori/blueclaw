@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 type TimelineEntryKind string
@@ -99,7 +100,7 @@ func BuildTimeline(taskEvents []TaskEvent) []TimelineEntry {
 			timelineEntries[entryIndex].ResultSummary = toolResultSummary(resultBody)
 			timelineEntries[entryIndex].ResultIsFailure = resultBody.Failure != nil
 
-		case taskEvent.Name == "agent.checkpoint.sent":
+		case taskEvent.Name == taskstate.TaskEventAgentCheckpointSent:
 			checkpointBody := decodeEventBody[checkpointSentEventBody](taskEvent.Body)
 			timelineEntries = append(timelineEntries, TimelineEntry{
 				Kind:         TimelineEntryAgentMessage,
@@ -109,7 +110,7 @@ func BuildTimeline(taskEvents []TaskEvent) []TimelineEntry {
 				Message:      checkpointBody.Message,
 			})
 
-		case taskEvent.Name == "approval.pending_call":
+		case taskEvent.Name == taskstate.TaskEventApprovalPendingCall:
 			pendingBody := decodeEventBody[agentcontract.HeldCall](taskEvent.Body)
 			timelineEntries = append(timelineEntries, TimelineEntry{
 				Kind:         TimelineEntryApprovalPending,
@@ -119,7 +120,7 @@ func BuildTimeline(taskEvents []TaskEvent) []TimelineEntry {
 				Message:      pendingBody.Confirmation,
 			})
 
-		case taskEvent.Name == "approval.executed":
+		case taskEvent.Name == taskstate.TaskEventApprovalExecuted:
 			executedBody := decodeEventBody[approvalExecutedEventBody](taskEvent.Body)
 			timelineEntries = append(timelineEntries, TimelineEntry{
 				Kind:         TimelineEntryApprovalExecuted,
@@ -158,15 +159,15 @@ func LatestApprovalQuestion(taskEvents []TaskEvent) (string, bool) {
 }
 
 func parseToolEventName(eventName string) (toolName string, phase string, isToolEvent bool) {
-	if !strings.HasPrefix(eventName, "tool.") {
+	if !strings.HasPrefix(eventName, taskstate.ToolTaskEventPrefix) {
 		return "", "", false
 	}
-	remainder := strings.TrimPrefix(eventName, "tool.")
+	remainder := strings.TrimPrefix(eventName, taskstate.ToolTaskEventPrefix)
 	switch {
-	case strings.HasSuffix(remainder, ".requested"):
-		return strings.TrimSuffix(remainder, ".requested"), "requested", true
-	case strings.HasSuffix(remainder, ".result"):
-		return strings.TrimSuffix(remainder, ".result"), "result", true
+	case strings.HasSuffix(remainder, taskstate.ToolTaskEventRequestedSuffix):
+		return strings.TrimSuffix(remainder, taskstate.ToolTaskEventRequestedSuffix), "requested", true
+	case strings.HasSuffix(remainder, taskstate.ToolTaskEventResultSuffix):
+		return strings.TrimSuffix(remainder, taskstate.ToolTaskEventResultSuffix), "result", true
 	default:
 		return "", "", false
 	}

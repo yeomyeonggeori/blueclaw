@@ -19,12 +19,34 @@ var eventNamesWrittenOnBothSides = map[string]string{
 	"agent.goal.blocked":          "the host, which sees every turn result",
 	"task.stop.outbox_suppressed": "the host, which is what cancelled the run",
 	"llm.call":                    "undecided: the host records the calls it makes and the agent records its own, which may be two events of one kind rather than one event with two writers",
+	"approval.executed":           "undecided: the host records the call its gate released and the loop spends its own held-call token, which may be two events of one kind rather than one event with two writers",
 }
 
-var taskEventWriteCall = regexp.MustCompile(`(?s:(?:AppendTaskEvent|appendEvent|appendTaskEvent)\(\s*[^,]+,\s*"([a-z0-9_.]+)")`)
+const taskEventNameDeclarationPath = "../../.dependency/bluecollar/taskstate/task_event_name.go"
+
+var taskEventWriteCall = regexp.MustCompile(`(?s:(?:AppendTaskEvent|appendEvent|appendTaskEvent)\(\s*[^,]+,\s*(?:taskstate\.)?(TaskEvent[A-Za-z0-9]+))`)
+
+var taskEventNameDeclaration = regexp.MustCompile(`(TaskEvent[A-Za-z0-9]+)\s+= "([a-z0-9_.]+)"`)
+
+func declaredTaskEventNames(t *testing.T) map[string]string {
+	t.Helper()
+	source, readError := os.ReadFile(filepath.FromSlash(taskEventNameDeclarationPath))
+	if readError != nil {
+		t.Fatalf("reading %s: %v", taskEventNameDeclarationPath, readError)
+	}
+	names := map[string]string{}
+	for _, match := range taskEventNameDeclaration.FindAllStringSubmatch(string(source), -1) {
+		names[match[1]] = match[2]
+	}
+	if len(names) == 0 {
+		t.Fatalf("no task event names declared in %s", taskEventNameDeclarationPath)
+	}
+	return names
+}
 
 func eventNamesWrittenUnder(t *testing.T, rootPath string) map[string]bool {
 	t.Helper()
+	declaredNames := declaredTaskEventNames(t)
 	writtenNames := map[string]bool{}
 	errorValue := filepath.WalkDir(rootPath, func(path string, entry fs.DirEntry, walkError error) error {
 		if walkError != nil {
@@ -38,7 +60,9 @@ func eventNamesWrittenUnder(t *testing.T, rootPath string) map[string]bool {
 			return readError
 		}
 		for _, match := range taskEventWriteCall.FindAllStringSubmatch(string(source), -1) {
-			writtenNames[match[1]] = true
+			if name, isDeclared := declaredNames[match[1]]; isDeclared {
+				writtenNames[name] = true
+			}
 		}
 		return nil
 	})

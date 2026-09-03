@@ -1,5 +1,5 @@
 {
-  "aggregateHash": "0535550111be32767507d3fb634508897127d46c6c8b01a2688c5a982990e8ef",
+  "aggregateHash": "d4b1eb4f17f0aa992df343e6f811ec28cbdf8ddb98f2bb2a4a26e277ecfcb5e3",
   "protocolVersion": "0.4.0",
   "schemas": [
     {
@@ -83,6 +83,11 @@
       "name": "task-event"
     },
     {
+      "fileName": "task-event-name.schema.json",
+      "hash": "d78a79eb7fd751bbb4f613c91bdecf6287e6e1ca4eff884b93fe59a411891d4a",
+      "name": "task-event-name"
+    },
+    {
       "fileName": "task-run.schema.json",
       "hash": "f3f278b7a02601c19575aaf5645f52f082ef576137d9b51c69b761d23ce14725",
       "name": "task-run"
@@ -101,6 +106,11 @@
       "fileName": "tool-invoke-response.schema.json",
       "hash": "958abb34d372341b628d297e4726051f54e4de93e545d709aa301d42e2ffd3fa",
       "name": "tool-invoke-response"
+    },
+    {
+      "fileName": "tool-task-event-suffix.schema.json",
+      "hash": "b752f1bf2576abbff10f56c813cdf56fc6c9cbafc49453a0e87833d28b659863",
+      "name": "tool-task-event-suffix"
     }
   ]
 }

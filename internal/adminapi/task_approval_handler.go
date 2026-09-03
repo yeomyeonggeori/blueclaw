@@ -13,6 +13,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 type TaskApprovalHandler struct {
@@ -131,12 +132,12 @@ func (handler TaskApprovalHandler) grantApprovalScope(taskRunID string) {
 	if scope == "" {
 		return
 	}
-	handler.TaskRunService.AppendTaskEvent(taskRunID, "approval.scope_granted", marshalApprovalEventBody(map[string]string{"scope": scope}))
+	handler.TaskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventApprovalScopeGranted, marshalApprovalEventBody(map[string]string{"scope": scope}))
 }
 
 func pendingApprovalScopeForTaskRun(taskEvents []task.TaskEvent) string {
 	for index := len(taskEvents) - 1; index >= 0; index-- {
-		if taskEvents[index].Name != "ask.requested" {
+		if taskEvents[index].Name != taskstate.TaskEventAskRequested {
 			continue
 		}
 		var askBody struct {

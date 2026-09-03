@@ -9,43 +9,15 @@ import (
 )
 
 var (
-	taskEventPattern = regexp.MustCompile(`AppendTaskEvent\([^,]+,\s*"([a-z][a-zA-Z0-9_.]*)"`)
-	toolNamePattern  = regexp.MustCompile(`Name:\s*(?:toolcontract\.)?([A-Za-z0-9_".]+)`)
-	toolDescription  = regexp.MustCompile(`Description:\s*"((?:[^"\\]|\\.)*)"`)
-	toolDefinition   = regexp.MustCompile(`(?s)toolcontract\.ToolDefinition\{(.*?)\n\t*\}`)
+	toolNamePattern = regexp.MustCompile(`Name:\s*(?:toolcontract\.)?([A-Za-z0-9_".]+)`)
+	toolDescription = regexp.MustCompile(`Description:\s*"((?:[^"\\]|\\.)*)"`)
+	toolDefinition  = regexp.MustCompile(`(?s)toolcontract\.ToolDefinition\{(.*?)\n\t*\}`)
 )
-
-type TaskEventEntry struct {
-	Name    string
-	Sources []string
-}
 
 type ToolEntry struct {
 	Name             string
 	Source           string
 	DescriptionBytes int
-}
-
-func TaskEvents(sourceRoot string) ([]TaskEventEntry, error) {
-	sourcesByName := map[string]map[string]bool{}
-	errorValue := walkSourceFiles(sourceRoot, func(path string, source string) {
-		for _, match := range taskEventPattern.FindAllStringSubmatch(source, -1) {
-			name := match[1]
-			if sourcesByName[name] == nil {
-				sourcesByName[name] = map[string]bool{}
-			}
-			sourcesByName[name][filepath.Base(filepath.Dir(path))] = true
-		}
-	})
-	if errorValue != nil {
-		return nil, errorValue
-	}
-	entries := make([]TaskEventEntry, 0, len(sourcesByName))
-	for name, sources := range sourcesByName {
-		entries = append(entries, TaskEventEntry{Name: name, Sources: sortedKeys(sources)})
-	}
-	sort.Slice(entries, func(left int, right int) bool { return entries[left].Name < entries[right].Name })
-	return entries, nil
 }
 
 func Tools(sourceRoot string) ([]ToolEntry, error) {
@@ -98,13 +70,4 @@ func walkSourceFiles(sourceRoot string, visit func(path string, source string)) 
 		visit(path, string(source))
 		return nil
 	})
-}
-
-func sortedKeys(values map[string]bool) []string {
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
 }

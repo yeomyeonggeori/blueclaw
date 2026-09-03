@@ -51,7 +51,7 @@ func (gate *Gate) AwaitApproval(ctx context.Context, approvalRequest mcpserver.A
 }
 
 func (gate *Gate) approvedOutcome(taskRunID string, toolName string) mcpserver.ApprovalOutcome {
-	gate.taskRunService.AppendTaskEvent(taskRunID, "approval.executed", marshalEventBody(map[string]string{"toolName": toolName}))
+	gate.taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventApprovalExecuted, marshalEventBody(map[string]string{"toolName": toolName}))
 	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionApproved}
 }
 
@@ -61,7 +61,7 @@ func (gate *Gate) taskHasApprovedScope(taskRunID string, approvalScope string) b
 		return false
 	}
 	for _, taskEvent := range gate.taskRunService.ListTaskEvent(taskRunID) {
-		if taskEvent.Name != "approval.scope_granted" {
+		if taskEvent.Name != taskstate.TaskEventApprovalScopeGranted {
 			continue
 		}
 		grant := struct {
@@ -84,12 +84,12 @@ func (gate *Gate) recordedDecision(taskRunID string, approvalRequest mcpserver.A
 	decidedCallKey := ""
 	for _, taskEvent := range gate.taskRunService.ListTaskEvent(taskRunID) {
 		switch taskEvent.Name {
-		case "approval.pending_call":
+		case taskstate.TaskEventApprovalPendingCall:
 			heldCallKey = decodeHeldCallEventBody(taskEvent.Body).CanonicalCallKey()
-		case "approval.decided":
+		case taskstate.TaskEventApprovalDecided:
 			decision, isDecided = decisionFromEventBody(taskEvent.Body)
 			decidedCallKey = heldCallKey
-		case "approval.executed":
+		case taskstate.TaskEventApprovalExecuted:
 			if executedToolName(taskEvent.Body) == strings.TrimSpace(approvalRequest.ToolName) {
 				decision, isDecided = "", false
 			}
@@ -137,7 +137,7 @@ func executedToolName(body string) string {
 }
 
 func (gate *Gate) recordHeldCall(taskRunID string, approvalRequest mcpserver.ApprovalRequest, confirmation string, target ApprovalTarget) {
-	gate.taskRunService.AppendTaskEvent(taskRunID, "approval.pending_call", marshalEventBody(agentcontract.HeldCall{
+	gate.taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventApprovalPendingCall, marshalEventBody(agentcontract.HeldCall{
 		ToolName:          approvalRequest.ToolName,
 		ToolInput:         approvalRequest.ToolInput,
 		ApprovedToolInput: narrowedToolInput(approvalRequest.ToolInput, target),
@@ -145,7 +145,7 @@ func (gate *Gate) recordHeldCall(taskRunID string, approvalRequest mcpserver.App
 		Confirmation:      confirmation,
 		HarnessSession:    approvalRequest.HarnessSession,
 	}))
-	gate.taskRunService.AppendTaskEvent(taskRunID, "confirmation.requested", marshalEventBody(map[string]string{
+	gate.taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventConfirmationRequested, marshalEventBody(map[string]string{
 		"userFacingMessage": confirmation,
 		"message":           confirmation,
 		"reasonCode":        approvalReasonCode(approvalRequest),
@@ -153,7 +153,7 @@ func (gate *Gate) recordHeldCall(taskRunID string, approvalRequest mcpserver.App
 		"responseLanguage":  approvalRequest.ResponseLanguage,
 		"source":            "tool_catalog",
 	}))
-	gate.taskRunService.AppendTaskEvent(taskRunID, "ask.requested", marshalEventBody(askRecord(approvalRequest, confirmation)))
+	gate.taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventAskRequested, marshalEventBody(askRecord(approvalRequest, confirmation)))
 }
 
 func approvalReasonCode(approvalRequest mcpserver.ApprovalRequest) string {

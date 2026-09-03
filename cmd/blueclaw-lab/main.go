@@ -21,6 +21,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 type PrintingCommandRunner struct{}
@@ -328,7 +329,7 @@ func validateStrictEmbeddingRetrieval(result e2e.VirtualSessionResult) error {
 	foundReadyEmbedding := false
 	for _, turnResult := range result.TurnResults {
 		for _, event := range turnResult.Events {
-			if event.Name != "agent.instructions_loaded" {
+			if event.Name != taskstate.TaskEventAgentInstructionsLoaded {
 				continue
 			}
 			foundRetrievalEvidence = true
@@ -503,13 +504,13 @@ func buildVirtualTurnMetrics(turnNumber int, turnResult e2e.VirtualTurnResult) v
 		metrics.LanguageModelLatencyMS += call.LatencyMS
 	}
 	for _, event := range turnResult.Events {
-		if event.Name == "agent.action" {
+		if event.Name == taskstate.TaskEventAgentAction {
 			metrics.AgentStepCount++
 		}
-		if strings.HasPrefix(event.Name, "tool.") && strings.HasSuffix(event.Name, ".requested") {
+		if strings.HasPrefix(event.Name, taskstate.ToolTaskEventPrefix) && strings.HasSuffix(event.Name, taskstate.ToolTaskEventRequestedSuffix) {
 			metrics.ToolCallCount++
 		}
-		if event.Name == "blueclaw.task.execution_duration" {
+		if event.Name == taskstate.TaskEventBlueclawTaskExecutionDuration {
 			metrics.TaskDurationMS = taskDurationMilliseconds(event.Body)
 		}
 	}
@@ -548,8 +549,8 @@ func printVirtualTurnFailureEvents(turnNumber int, turnResult e2e.VirtualTurnRes
 }
 
 func isVirtualFailureDiagnosticEvent(eventName string) bool {
-	return strings.HasPrefix(eventName, "tool.") ||
-		eventName == "agent.action" ||
+	return strings.HasPrefix(eventName, taskstate.ToolTaskEventPrefix) ||
+		eventName == taskstate.TaskEventAgentAction ||
 		strings.Contains(eventName, "tool_palette") ||
 		strings.Contains(eventName, "step_working_set") ||
 		strings.Contains(eventName, "completion") ||

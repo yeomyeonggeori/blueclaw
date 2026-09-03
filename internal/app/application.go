@@ -53,6 +53,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 const databaseInitializationTimeout = 240 * time.Second
@@ -1683,7 +1684,7 @@ func (application *Application) resumeInterruptedTaskRuns(ctx context.Context, n
 			continue
 		}
 		if _, errorValue := application.interruptedTaskResumer.ResumeInterruptedTaskRun(ctx, taskRun); errorValue != nil {
-			application.taskRunService.AppendTaskEvent(taskRun.TaskRunID, "task.auto_resume_launch_failed", errorValue.Error())
+			application.taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventTaskAutoResumeLaunchFailed, errorValue.Error())
 		}
 	}
 	application.failUnresumedInterruptedTaskRuns(ctx)
@@ -1697,7 +1698,7 @@ func (application *Application) failUnresumedInterruptedTaskRuns(ctx context.Con
 		if !task.TaskRunWasInterruptedByRuntimeRestart(taskRun) {
 			continue
 		}
-		application.taskRunService.AppendTaskEvent(taskRun.TaskRunID, "task.auto_resume_abandoned", taskRun.FailureReason)
+		application.taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventTaskAutoResumeAbandoned, taskRun.FailureReason)
 		application.interruptedTaskResumer.FailUnresumedInterruptedTaskRun(ctx, taskRun, "the task was interrupted by a runtime restart and could not be resumed")
 	}
 }

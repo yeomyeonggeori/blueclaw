@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 type StaleTaskNotifier interface {
@@ -42,7 +43,7 @@ func (sweeper StaleTaskSweeper) SweepOnce(ctx context.Context, now time.Time) in
 			return sweptCount
 		}
 		reason := task.StaleUnattendedTaskRunReason(taskRun, now)
-		sweeper.TaskRunService.AppendTaskEvent(taskRun.TaskRunID, "task.stale_expired", reason)
+		sweeper.TaskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventTaskStaleExpired, reason)
 		if sweeper.expireStaleTaskRun(ctx, taskRun, reason) {
 			sweptCount++
 		}

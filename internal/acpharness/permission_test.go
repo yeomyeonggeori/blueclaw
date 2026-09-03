@@ -85,7 +85,7 @@ func TestAToolTheHarnessRunsItselfIsRecordedEvenThoughItIsPermitted(t *testing.T
 		t.Fatalf("expected the permission to be answered: %v", errorValue)
 	}
 
-	if len(store.events) != 1 || store.events[0].Name != harnessToolPermittedEventName {
+	if len(store.events) != 1 || store.events[0].Name != taskstate.TaskEventHarnessToolPermitted {
 		t.Fatalf("a call the catalog never saw must still reach the ledger, got %+v", store.events)
 	}
 	for _, expectedFragment := range []string{"run a shell command", "rm -rf /workspace/private/people/person-1/drafts", "allow_once"} {
@@ -103,7 +103,7 @@ func TestAPermissionRequestWithNoAllowableOptionIsRecordedAsRefused(t *testing.T
 		t.Fatalf("expected the permission to be answered: %v", errorValue)
 	}
 
-	if len(store.events) != 1 || store.events[0].Name != harnessToolRefusedEventName {
+	if len(store.events) != 1 || store.events[0].Name != taskstate.TaskEventHarnessToolRefused {
 		t.Fatalf("expected the refusal to be recorded, got %+v", store.events)
 	}
 }

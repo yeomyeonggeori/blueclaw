@@ -8,6 +8,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 type taskControlSelection struct {
@@ -33,18 +34,18 @@ func (connectorRuntime *ConnectorRuntime) handleTaskControlIfRequested(
 
 	selection := connectorRuntime.applyTaskControlIntent(decision, personID, event)
 	for _, taskRun := range selection.cancelledTaskRuns {
-		connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, "task.stop.requested", marshalConnectorEventBody(map[string]string{
+		connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventTaskStopRequested, marshalConnectorEventBody(map[string]string{
 			"messageID": event.MessageID,
 			"intent":    string(selection.intent),
 			"reason":    selection.reason,
 		}))
-		connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, "task.stop.classified", marshalConnectorEventBody(map[string]any{
+		connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventTaskStopClassified, marshalConnectorEventBody(map[string]any{
 			"intent":             string(selection.intent),
 			"reason":             selection.reason,
 			"classifiedByLLM":    false,
 			"originConversation": event.ConversationID,
 		}))
-		connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, "task.stop.cancelled", marshalConnectorEventBody(map[string]string{
+		connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventTaskStopCancelled, marshalConnectorEventBody(map[string]string{
 			"messageID": event.MessageID,
 		}))
 	}

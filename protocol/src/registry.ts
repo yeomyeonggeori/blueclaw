@@ -16,7 +16,15 @@ import {
   structuredResponseSchema,
 } from './llm.ts';
 import { connectorPlatformSchema, messengerPlatformSchema } from './platform.ts';
-import { taskArtifactSchema, taskAttemptSchema, taskEventSchema, taskRunSchema, taskScheduleSchema } from './task.ts';
+import {
+  ledgerEventNameSchema,
+  taskArtifactSchema,
+  taskAttemptSchema,
+  taskEventSchema,
+  taskRunSchema,
+  taskScheduleSchema,
+  toolTaskEventSuffixSchema,
+} from './task.ts';
 
 export const protocolVersion = '0.4.0';
 
@@ -37,9 +45,11 @@ export const protocolSchemas = {
   'task-artifact': taskArtifactSchema,
   'task-attempt': taskAttemptSchema,
   'task-event': taskEventSchema,
+  'task-event-name': ledgerEventNameSchema,
   'task-run': taskRunSchema,
   'task-schedule': taskScheduleSchema,
   'tool-invoke-request': toolInvokeRequestSchema,
+  'tool-task-event-suffix': toolTaskEventSuffixSchema,
   'tool-invoke-response': toolInvokeResponseSchema,
 } satisfies Record<string, z.ZodType>;
 

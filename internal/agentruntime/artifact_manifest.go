@@ -75,11 +75,8 @@ func artifactManifestCandidatesFromTaskArtifacts(taskRunID string, taskArtifacts
 }
 
 func artifactManifestToolNameFromEvent(name string) string {
-	trimmedName := strings.TrimSpace(name)
-	if !strings.HasPrefix(trimmedName, "tool.") || !strings.HasSuffix(trimmedName, ".result") {
-		return ""
-	}
-	return strings.TrimSuffix(strings.TrimPrefix(trimmedName, "tool."), ".result")
+	toolName, _ := taskstate.ToolTaskEventToolName(name, taskstate.ToolTaskEventResultSuffix)
+	return toolName
 }
 
 func artifactManifestCandidatesFromToolBody(taskRunID string, body string, toolName string, producingSkill string) []artifactManifestCandidate {
@@ -241,7 +238,7 @@ func pathIsInsideDirectory(directoryPath string, path string) bool {
 
 func selectedSkillNameFromTaskEvents(taskEvents []taskstate.TaskEvent) string {
 	for eventIndex := len(taskEvents) - 1; eventIndex >= 0; eventIndex-- {
-		if strings.TrimSpace(taskEvents[eventIndex].Name) != "agent.instructions_loaded" {
+		if strings.TrimSpace(taskEvents[eventIndex].Name) != taskstate.TaskEventAgentInstructionsLoaded {
 			continue
 		}
 		if skillName := selectedSkillNameFromInstructionEvent(taskEvents[eventIndex].Body); skillName != "" {

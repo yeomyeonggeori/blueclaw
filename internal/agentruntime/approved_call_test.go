@@ -51,8 +51,8 @@ func launchApprovalContinuation(t *testing.T, taskLauncher *TaskLauncher, taskRu
 func taskRunAwaitingApprovalOf(t *testing.T, taskRunService *task.TaskRunService, decision string) string {
 	t.Helper()
 	taskRun := taskRunService.CreateTaskRun("person-1", "channel-1", "지난 분기 뭐였는지 찾아줘")
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, "approval.pending_call", `{"toolName":"memory_search","toolInput":{"query":"quarterly launch"},"confirmation":"기억을 찾아볼까요?"}`)
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, "approval.decided", `{"decision":"`+decision+`"}`)
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventApprovalPendingCall, `{"toolName":"memory_search","toolInput":{"query":"quarterly launch"},"confirmation":"기억을 찾아볼까요?"}`)
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventApprovalDecided, `{"decision":"`+decision+`"}`)
 	return taskRun.TaskRunID
 }
 

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 var terminalRunHeartbeatInterval = 60 * time.Second
@@ -167,7 +168,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) startTerminalRunHeartbeat(toolCont
 			case <-stopChannel:
 				return
 			case <-heartbeatTicker.C:
-				toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, "terminal.run.heartbeat", marshalToolResult(map[string]any{
+				toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventTerminalRunHeartbeat, marshalToolResult(map[string]any{
 					"elapsedSeconds": int(time.Since(startedAt).Seconds()),
 					"command":        commandHead,
 				}))

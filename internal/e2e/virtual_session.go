@@ -46,6 +46,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 type VirtualSessionScenario struct {
@@ -2527,10 +2528,10 @@ func virtualCapabilityRequestNeedsApproval(requestBody []byte) bool {
 func streamProgressObserver(writer io.Writer) func(task.RawTurnEvent) {
 	return func(rawTurnEvent task.RawTurnEvent) {
 		switch {
-		case rawTurnEvent.Name == "agent.checkpoint.sent":
+		case rawTurnEvent.Name == taskstate.TaskEventAgentCheckpointSent:
 			fmt.Fprintf(writer, "  ↳ reply: %s\n", checkpointReplyMessage(rawTurnEvent.Body))
-		case strings.HasPrefix(rawTurnEvent.Name, "tool.") && strings.HasSuffix(rawTurnEvent.Name, ".requested"):
-			fmt.Fprintf(writer, "  ↳ tool: %s\n", strings.TrimSuffix(strings.TrimPrefix(rawTurnEvent.Name, "tool."), ".requested"))
+		case strings.HasPrefix(rawTurnEvent.Name, taskstate.ToolTaskEventPrefix) && strings.HasSuffix(rawTurnEvent.Name, taskstate.ToolTaskEventRequestedSuffix):
+			fmt.Fprintf(writer, "  ↳ tool: %s\n", strings.TrimSuffix(strings.TrimPrefix(rawTurnEvent.Name, taskstate.ToolTaskEventPrefix), taskstate.ToolTaskEventRequestedSuffix))
 		}
 	}
 }
@@ -2760,7 +2761,7 @@ func scenarioTurnRouterResponse(scenario VirtualSessionScenario, virtualTurn Vir
 		siteEvidence = virtualTurn.RouterSiteEvidence
 	}
 	route := "start_task"
-	if virtualTurnExpectsEvent(virtualTurn, "ask.resolved") {
+	if virtualTurnExpectsEvent(virtualTurn, taskstate.TaskEventAskResolved) {
 		route = "continue_task"
 	}
 	routerDocument := map[string]any{
@@ -2777,7 +2778,7 @@ func scenarioTurnRouterResponse(scenario VirtualSessionScenario, virtualTurn Vir
 		"initialToolNames":       appendUniqueScenarioToolNames(scenario.InitialToolNames, requiredEvidence),
 		"priorTaskReference":     "none",
 	}
-	if virtualTurnExpectsEvent(virtualTurn, "confirmation.reply_classified") {
+	if virtualTurnExpectsEvent(virtualTurn, taskstate.TaskEventConfirmationReplyClassified) {
 		routerDocument["approval"] = "approve"
 	}
 	encodedDocument, errorValue := json.Marshal(routerDocument)
@@ -3275,7 +3276,7 @@ func assertEventSubsequence(events []task.TaskEvent, expectedNames []string) err
 func checkpointReplyMessages(events []task.TaskEvent) []string {
 	messages := []string{}
 	for _, event := range events {
-		if event.Name != "agent.checkpoint.sent" {
+		if event.Name != taskstate.TaskEventAgentCheckpointSent {
 			continue
 		}
 		message := checkpointReplyMessage(event.Body)
@@ -3370,7 +3371,7 @@ func eventsContain(events []task.TaskEvent, name string, bodyFragment string) bo
 
 func selectedSkillDecisionPresent(events []task.TaskEvent, skillName string) bool {
 	for _, event := range events {
-		if event.Name != "agent.instructions_loaded" {
+		if event.Name != taskstate.TaskEventAgentInstructionsLoaded {
 			continue
 		}
 		var body struct {
@@ -3398,12 +3399,20 @@ func countEvents(events []task.TaskEvent, name string) int {
 	return count
 }
 
+func toolRequestedEventName(toolName string) string {
+	return taskstate.ToolTaskEventName(toolName, taskstate.ToolTaskEventRequestedSuffix)
+}
+
+func toolResultEventName(toolName string) string {
+	return taskstate.ToolTaskEventName(toolName, taskstate.ToolTaskEventResultSuffix)
+}
+
 func requestedToolCallPresent(events []task.TaskEvent, toolName string) bool {
-	return eventsContain(events, "tool."+toolName+".requested", toolName)
+	return eventsContain(events, taskstate.ToolTaskEventName(toolName, taskstate.ToolTaskEventRequestedSuffix), toolName)
 }
 
 func countRequestedToolCalls(events []task.TaskEvent, toolName string) int {
-	return countEvents(events, "tool."+toolName+".requested")
+	return countEvents(events, taskstate.ToolTaskEventName(toolName, taskstate.ToolTaskEventRequestedSuffix))
 }
 
 func succeededToolCallPresent(events []task.TaskEvent, toolName string) bool {
@@ -3413,7 +3422,7 @@ func succeededToolCallPresent(events []task.TaskEvent, toolName string) bool {
 func countSucceededToolCalls(events []task.TaskEvent, toolName string) int {
 	count := 0
 	for _, event := range events {
-		if event.Name != "tool."+toolName+".result" {
+		if event.Name != taskstate.ToolTaskEventName(toolName, taskstate.ToolTaskEventResultSuffix) {
 			continue
 		}
 		var observation struct {
@@ -3431,7 +3440,7 @@ func countSucceededToolCalls(events []task.TaskEvent, toolName string) int {
 
 func exposedToolNamePresent(events []task.TaskEvent, toolName string) bool {
 	for _, event := range events {
-		if event.Name != "agent.instructions_loaded" {
+		if event.Name != taskstate.TaskEventAgentInstructionsLoaded {
 			continue
 		}
 		var body struct {
@@ -3453,7 +3462,7 @@ func assertValidityReviewPassed(events []task.TaskEvent) error {
 	lastReviewPassed := false
 	reviewCount := 0
 	for _, event := range events {
-		if event.Name != "agent.validity_review" {
+		if event.Name != taskstate.TaskEventAgentValidityReview {
 			continue
 		}
 		var body struct {
