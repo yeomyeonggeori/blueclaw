@@ -37,6 +37,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
+	"github.com/yeomyeonggeori/blueclaw/internal/persona"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/protocolidentity"
 	"github.com/yeomyeonggeori/blueclaw/internal/reply"
@@ -203,7 +204,9 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 	sessionService := auth.NewSessionService()
 	taskAuthService := task.NewTaskAuthService(magicLinkService, sessionService, taskRunService)
 	logger.Info("application.initializing", "stage", "agent_kernel")
-	logSkillsMissingTheirTools(logger, loadAgentInstructions(runtimeConfiguration).UnavailableSkills)
+	startupInstructions := loadAgentInstructions(runtimeConfiguration)
+	logSkillsMissingTheirTools(logger, startupInstructions.UnavailableSkills)
+	logRejectedPersonaDocuments(logger, startupInstructions.RejectedDocuments)
 	instructionBundleLoader := func() agentcontract.InstructionBundle {
 		return loadAgentInstructionBundle(runtimeConfiguration)
 	}
@@ -605,6 +608,12 @@ func logCapabilityProviderQuarantine(logger *slog.Logger, quarantinedProvider to
 	logger.Warn("capability.provider.quarantined", "providerID", quarantinedProvider.ProviderID, "reason", quarantinedProvider.Reason)
 }
 
+func logRejectedPersonaDocuments(logger *slog.Logger, rejectedDocuments []instructionDocument) {
+	for _, rejectedDocument := range rejectedDocuments {
+		logger.Warn("application.persona_document_rejected", "path", rejectedDocument.Source.Path, "error", rejectedDocument.Error.Error())
+	}
+}
+
 func loadAgentInstructionPrompt(runtimeConfiguration config.RuntimeConfiguration) string {
 	return loadAgentInstructionBundle(runtimeConfiguration).Prompt
 }
@@ -615,6 +624,7 @@ func loadAgentInstructionPrompt(runtimeConfiguration config.RuntimeConfiguration
 type agentInstructions struct {
 	Bundle            agentcontract.InstructionBundle
 	UnavailableSkills []skill.UnavailableSkill
+	RejectedDocuments []instructionDocument
 }
 
 // What a skill may name: the tools a product's catalog offered this runtime, plus
@@ -637,10 +647,15 @@ func loadAgentInstructions(runtimeConfiguration config.RuntimeConfiguration) age
 	sources := []agentcontract.InstructionSource{}
 	skillInstructions := []agentcontract.SkillInstruction{}
 	unavailableSkills := []skill.UnavailableSkill{}
+	rejectedDocuments := []instructionDocument{}
 	includedSkillByName := map[string]bool{}
 	offeredToolNames := offeredToolNamesOf(runtimeConfiguration)
 	for _, rootPath := range instructionRootPaths(runtimeConfiguration) {
 		for _, instructionDocument := range readInstructionDocuments(rootPath) {
+			if instructionDocument.Error != nil {
+				rejectedDocuments = append(rejectedDocuments, instructionDocument)
+				continue
+			}
 			if instructionDocument.Prompt == "" {
 				continue
 			}
@@ -678,6 +693,7 @@ func loadAgentInstructions(runtimeConfiguration config.RuntimeConfiguration) age
 			Skills:  skillInstructions,
 		},
 		UnavailableSkills: uniqueUnavailableSkills(unavailableSkills, includedSkillByName),
+		RejectedDocuments: rejectedDocuments,
 	}
 }
 
@@ -736,25 +752,38 @@ func instructionRootPaths(runtimeConfiguration config.RuntimeConfiguration) []st
 type instructionDocument struct {
 	Prompt string
 	Source agentcontract.InstructionSource
+	Error  error
 }
 
 func readInstructionDocuments(rootPath string) []instructionDocument {
 	documents := []instructionDocument{}
-	for _, fileName := range []string{"IDENTITY.md", "BOT_PROFILE.yaml", "SOUL.md"} {
-		path := filepath.Join(rootPath, fileName)
-		document, errorValue := os.ReadFile(path)
-		if errorValue == nil && strings.TrimSpace(string(document)) != "" {
-			prompt := strings.TrimSpace(string(document))
-			if fileName == "BOT_PROFILE.yaml" {
-				prompt = renderBotProfileInstruction(document)
-			}
-			documents = append(documents, instructionDocument{
-				Prompt: prompt,
-				Source: instructionSource(path, "", document),
-			})
+	if identityPath, document, identity, errorValue := readIdentityDocument(rootPath); document != nil {
+		if errorValue != nil {
+			documents = append(documents, instructionDocument{Prompt: "", Source: instructionSource(identityPath, "", document), Error: errorValue})
+		} else {
+			documents = append(documents, instructionDocument{Prompt: persona.RenderIdentityInstruction(identity), Source: instructionSource(identityPath, "", document)})
+		}
+	}
+	soulPath := filepath.Join(rootPath, persona.SoulFileName)
+	if document, errorValue := os.ReadFile(soulPath); errorValue == nil {
+		soul, parseError := persona.ParseSoul(document)
+		if parseError != nil {
+			documents = append(documents, instructionDocument{Source: instructionSource(soulPath, "", document), Error: parseError})
+		} else {
+			documents = append(documents, instructionDocument{Prompt: persona.RenderSoulInstruction(soul), Source: instructionSource(soulPath, "", document)})
 		}
 	}
 	return documents
+}
+
+func readIdentityDocument(rootPath string) (string, []byte, persona.Identity, error) {
+	identityPath := filepath.Join(rootPath, persona.IdentityFileName)
+	document, errorValue := os.ReadFile(identityPath)
+	if errorValue != nil {
+		return identityPath, nil, persona.Identity{}, errorValue
+	}
+	identity, errorValue := persona.ParseIdentity(document)
+	return identityPath, document, identity, errorValue
 }
 
 func readLegacyInstructionDocument(rootPath string) (string, agentcontract.InstructionSource) {
@@ -813,67 +842,13 @@ func readSkillInstructions(rootPath string, bundledSkillsPath string, offeredToo
 
 func loadAgentIdentity(runtimeConfiguration config.RuntimeConfiguration) agentcontract.AgentIdentity {
 	for _, rootPath := range instructionRootPaths(runtimeConfiguration) {
-		document, errorValue := os.ReadFile(filepath.Join(rootPath, "BOT_PROFILE.yaml"))
-		if errorValue != nil {
+		_, document, identity, errorValue := readIdentityDocument(rootPath)
+		if document == nil || errorValue != nil {
 			continue
 		}
-		profile := parseSimpleYAML(document)
-		agentIdentity := agentcontract.AgentIdentity{
-			Name:   strings.TrimSpace(profile["displayName"]),
-			Handle: strings.TrimSpace(profile["username"]),
-		}
-		if agentIdentity.Name != "" || agentIdentity.Handle != "" {
-			return agentIdentity
-		}
+		return persona.AgentIdentityOf(identity)
 	}
 	return agentcontract.AgentIdentity{}
-}
-
-func renderBotProfileInstruction(document []byte) string {
-	profile := parseSimpleYAML(document)
-	lines := []string{"Runtime bot profile:"}
-	if username := strings.TrimSpace(profile["username"]); username != "" {
-		lines = append(lines, "- internal username: "+username)
-	}
-	lines = append(lines,
-		"- current displayName: "+profile["displayName"],
-		"- English displayName: "+profile["englishDisplayName"],
-		"- aliases: "+profile["aliases"],
-		"- public description: "+profile["publicDescription"],
-	)
-	if strings.TrimSpace(profile["identityExtension"]) != "" {
-		lines = append(lines, "Identity extension:\n"+strings.TrimSpace(profile["identityExtension"]))
-	}
-	return strings.Join(lines, "\n")
-}
-
-func parseSimpleYAML(document []byte) map[string]string {
-	values := map[string]string{}
-	lines := strings.Split(string(document), "\n")
-	for index := 0; index < len(lines); index++ {
-		line := strings.TrimSpace(lines[index])
-		if line == "" || strings.HasPrefix(line, "#") || line == "---" {
-			continue
-		}
-		if line == "aliases:" {
-			aliases := []string{}
-			for index+1 < len(lines) {
-				nextLine := strings.TrimSpace(lines[index+1])
-				if !strings.HasPrefix(nextLine, "- ") {
-					break
-				}
-				aliases = append(aliases, unquoteSimpleYAML(strings.TrimSpace(strings.TrimPrefix(nextLine, "- "))))
-				index++
-			}
-			values["aliases"] = strings.Join(aliases, ", ")
-			continue
-		}
-		key, value, found := strings.Cut(line, ":")
-		if found {
-			values[strings.TrimSpace(key)] = unquoteSimpleYAML(strings.TrimSpace(value))
-		}
-	}
-	return values
 }
 
 func unquoteSimpleYAML(value string) string {

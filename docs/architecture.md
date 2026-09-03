@@ -314,6 +314,23 @@ an AI SDK harness adapter without a lossy translation. The completion and
 approval gates that currently ride inside the action document are separable and
 stay.
 
+### Identity and soul
+
+Two documents at the workspace root say who the agent is and how it carries
+itself, and the runtime renders them into the standing instructions before
+every turn. `identity.json` carries the name, an English name, the handle,
+aliases, a role, what the agent is, an emoji, and how it introduces itself.
+`soul.json` carries what the agent holds to, what it never does, how it works,
+a tone (`formal`, `polite`, or `casual` plus a few traits), and a language
+policy. Both are JSON Schema documents (`internal/persona/schema/`) with
+`additionalProperties: false`, item and length ceilings, and a pinned
+`schemaVersion`; a document the schema refuses is logged as
+`application.persona_document_rejected` and left out of the prompt rather than
+rendered by guesswork. The host writes both files in their canonical form and
+owns any product rule on top of the schema, such as a fixed name. There is no
+free-text persona file: a sentence that does not fit a field is a field the
+schema still lacks.
+
 ### Tool exposure
 
 Tool exposure is separate from all of this. Extension tool schemas offered to
