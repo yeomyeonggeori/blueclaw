@@ -15,8 +15,8 @@ func TestMigrationsApplyList(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected migrations to load: %v", errorValue)
 	}
-	if len(migrationPaths) != 29 {
-		t.Fatalf("expected 29 migration files, got %d", len(migrationPaths))
+	if len(migrationPaths) != 31 {
+		t.Fatalf("expected 31 migration files, got %d", len(migrationPaths))
 	}
 }
 
@@ -33,26 +33,6 @@ func TestMinimalConversationContractMigrationStoresReplayFields(t *testing.T) {
 		"visible_context_sha256 bytea",
 		"has_more_before boolean NOT NULL DEFAULT false",
 		"history_cursor text",
-	}
-	for _, requiredField := range requiredFields {
-		if !strings.Contains(migrationText, requiredField) {
-			t.Fatalf("expected migration to include %q", requiredField)
-		}
-	}
-}
-
-func TestGraphitiMemoryMigrationStoresMirrorMetadata(t *testing.T) {
-	migrationDocument, errorValue := os.ReadFile(filepath.Join("../../migrations", "012_graphiti_memory_metadata.sql"))
-	if errorValue != nil {
-		t.Fatalf("expected graphiti memory migration to load: %v", errorValue)
-	}
-
-	migrationText := string(migrationDocument)
-	requiredFields := []string{
-		"graphiti_namespace",
-		"graphiti_episode",
-		"namespace_document jsonb",
-		"UNIQUE (source_platform, source_message_id)",
 	}
 	for _, requiredField := range requiredFields {
 		if !strings.Contains(migrationText, requiredField) {
@@ -181,5 +161,19 @@ func TestCircleAccessMigrationStoresCirclePolicy(t *testing.T) {
 		if !strings.Contains(migrationText, requiredField) {
 			t.Fatalf("expected migration to include %q", requiredField)
 		}
+	}
+}
+
+func TestMemoryStoreMigrationIsTheOneBluememoOwns(t *testing.T) {
+	ours, errorValue := os.ReadFile(filepath.Join("../../migrations", "030_memory_store.sql"))
+	if errorValue != nil {
+		t.Fatalf("expected the memory store migration to load: %v", errorValue)
+	}
+	theirs, errorValue := os.ReadFile(filepath.Join("../../.dependency/bluememo/migrations", "001_memory_store.sql"))
+	if errorValue != nil {
+		t.Fatalf("expected bluememo's migration to load: %v", errorValue)
+	}
+	if string(ours) != string(theirs) {
+		t.Fatal("migrations/030_memory_store.sql drifted from .dependency/bluememo/migrations/001_memory_store.sql; copy the bluememo file over it, never edit it here")
 	}
 }

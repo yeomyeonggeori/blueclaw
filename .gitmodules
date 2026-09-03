@@ -2,3 +2,7 @@
 	path = .dependency/bluecollar
 	url = https://github.com/yeomyeonggeori/bluecollar.git
 	branch = main
+[submodule ".dependency/bluememo"]
+	path = .dependency/bluememo
+	url = https://github.com/yeomyeonggeori/bluememo.git
+	branch = main

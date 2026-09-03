@@ -11,6 +11,7 @@ type PolicyProjection struct {
 	ApprovedEmailByPersonID map[string][]string
 	PersonIDByEmail         map[string]string
 	DisplayNameByPersonID   map[string]string
+	ContainedCirclesByID    map[string][]string
 	PersonAccessByPersonID  map[string]PersonAccess
 	ChannelByCompositeKey   map[string]ChannelPolicy
 	ResourceAccessRules     []ResourceAccessPolicy
@@ -31,6 +32,7 @@ func (policyProjectionService PolicyProjectionService) ReplacePolicyProjectionTr
 		ApprovedEmailByPersonID: map[string][]string{},
 		PersonIDByEmail:         map[string]string{},
 		DisplayNameByPersonID:   map[string]string{},
+		ContainedCirclesByID:    ContainedCircles(policyDocument.Circles),
 		PersonAccessByPersonID:  map[string]PersonAccess{},
 		ChannelByCompositeKey:   map[string]ChannelPolicy{},
 		ResourceAccessRules:     append([]ResourceAccessPolicy{}, policyDocument.ResourceAccess...),
@@ -85,6 +87,7 @@ func canonicalCirclePolicies(circlePolicies []CirclePolicy) []CirclePolicy {
 	result := append([]CirclePolicy{}, circlePolicies...)
 	for index := range result {
 		result[index].CircleID = strings.ToLower(strings.TrimSpace(result[index].CircleID))
+		result[index].MemberCircles = normalizePolicyStrings(result[index].MemberCircles)
 	}
 	if hasCirclePolicy(result, MemberCircleID) {
 		return result
@@ -117,4 +120,17 @@ func normalizePolicyStrings(values []string) []string {
 		normalizedValues = append(normalizedValues, normalizedValue)
 	}
 	return normalizedValues
+}
+
+func ContainedCircles(circlePolicies []CirclePolicy) map[string][]string {
+	contained := map[string][]string{}
+	for _, circlePolicy := range circlePolicies {
+		circleID := strings.ToLower(strings.TrimSpace(circlePolicy.CircleID))
+		memberCircles := normalizePolicyStrings(circlePolicy.MemberCircles)
+		if circleID == "" || len(memberCircles) == 0 {
+			continue
+		}
+		contained[circleID] = memberCircles
+	}
+	return contained
 }

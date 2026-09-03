@@ -12,7 +12,7 @@ func TestCanonicalPersonReferenceUpdateStatementsIncludeRuntimeIdentityTables(t 
 		"UPDATE task_run SET requester_person_id",
 		"UPDATE platform_account SET person_id",
 		"UPDATE memory_record SET scope_person_id",
-		"UPDATE graphiti_namespace SET scope_person_id",
+		"UPDATE memory_fact SET subject_person_id",
 	}
 
 	for _, fragment := range expectedFragments {

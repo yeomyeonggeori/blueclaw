@@ -148,7 +148,7 @@ OpenAI-compatible model endpoint. See the README's install section.
 | `project_policy` | upserts the read-only `person` projection |
 | `identity` | builds the identity service and platform account links |
 | `agent_kernel` | constructs the harness and injects instruction bundle, tiers, skills, company context |
-| `memory` | terminal service, memory service, optional Graphiti graph store |
+| `memory` | terminal service, the fact store, the ingest worker |
 
 Migrations run from `database.migrationDirectoryPath`, default `migrations`
 (`internal/app/application.go-895`).
@@ -625,25 +625,47 @@ judgment, failure explanation, recovery direction, or confirmation wording.
 
 ## Memory
 
-Memory has two layers.
+Memory is [bluememo](https://github.com/yeomyeonggeori/bluememo), vendored at
+`.dependency/bluememo` the way the harness is: one Postgres store
+(`migrations/030_memory_store.sql` is a verbatim copy of bluememo's schema, and
+a test fails when it drifts), one write path, one read path. An episode is
+something that happened: a finished task run, or the sentence a person asked
+the assistant to remember. Facts are the atomic sentences a low-tier model
+extracts from an episode, owned by the person whose task or request produced
+them, labelled with the security rank and classes of the conversation they
+came from, and retired by a supersede pointer, a forget timestamp, or an
+expiry. Nothing deletes a fact; the live filter hides it.
 
-The durable layer is a markdown store (`internal/memory/markdown_store.go`) with
-its own compaction pass (`internal/memory/markdown_compressor.go`), mirrored in
-Postgres as `memory_record` and `memory_source`. Blueclaw owns identity, policy,
-and ACL namespace selection for every read and write
-(`internal/memory/namespace_service.go`).
+A fact with no circles is its owner's alone. A fact that names circles is
+read by their members too, and circles nest: `memberCircles` on a circle in
+`policy.json` says which circles belong to it, so a member of `engineering`
+reads a fact shared with `platform` when `engineering` contains `platform`.
+There is no company-wide scope; sharing with everyone is sharing with the
+`member` circle everyone is in. Writing to a circle needs direct membership. The host resolves the
+containment map from the policy projection and bluememo applies it as one SQL
+predicate.
 
-Optional on top of that is a temporal knowledge graph through the
-`graphiti-memoryd` sidecar, which owns episode ingestion, graph extraction, Kuzu
-persistence, and hybrid search. It is configured by `memory.graphitiEndpoint`
-and the runtime stays fully functional when that endpoint is unset — the graph
-is an enrichment, not a dependency (`internal/app/application.go-223`).
+What blueclaw adds around the store lives in `internal/memory`:
 
-- The sidecar runs from `tools/graphiti-memoryd` with `graphiti-core[kuzu]`.
-- Kuzu data defaults to `/workspace/.blueclaw/graphiti/kuzu`.
-- Accepted connector events are conservatively routed before ingestion, skipping transient chatter and control messages.
-- Postgres stores only namespace, episode mirror, and diagnostic metadata (`graphiti_namespace`, `graphiti_episode`), never canonical memory records.
-- Graphiti's own model calls go through InternKim capability endpoints and receive no provider secrets.
+- `ReaderForAccess` turns a `policy.PersonAccess` and the containment map into
+  the reader bluememo filters by; `LabelForConversation` picks the label a
+  fact inherits.
+- `ExtractJobHandler` renders a finished task run into a transcript and
+  ingests it; `TaskRunTransitionObserver` queues that job for every completed,
+  failed, or cancelled run, reading the requester name, active circle and
+  label from the `memory.extraction_context` event the launcher wrote.
+- `LanguageModel` adapts the harness's structured-output provider to
+  bluememo's one-method interface, so bluememo depends on neither the harness
+  nor this host.
+- `memory_remember` ingests one sentence synchronously and reports what was
+  created, superseded, or reinforced; `memory_forget` accepts only fact IDs
+  `memory_search` returned in the same task.
+- Launch loads the requester's profile and a hybrid recall of the prompt under
+  character budgets and records what it spent in `memory.recall_injected`.
+- Embeddings go through the capability service at `memory.embeddingModel`,
+  1,024 dimensions; a change of model is a `reembed` job because every fact
+  records the model that embedded it. Where the `vector` extension is absent,
+  search answers lexically and says so.
 
 ## Protocol contracts
 

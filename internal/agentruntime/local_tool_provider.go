@@ -61,9 +61,9 @@ var localToolDescriptorSpecs = []localToolDescriptorSpec{
 		ResultContract: &toolcontract.ToolResultContract{
 			Schema: memoryRememberOutputSchema,
 			Effects: []toolcontract.ResourceEffectContract{{
-				ObjectType:     "memory_update",
-				Effect:         "accepted",
-				ResultField:    "jobID",
+				ObjectType:     "memory_episode",
+				Effect:         "recorded",
+				ResultField:    "episodeID",
 				EffectIdentity: "id",
 			}},
 			EvidenceCondition: &toolcontract.EvidenceCondition{
@@ -75,6 +75,30 @@ var localToolDescriptorSpecs = []localToolDescriptorSpec{
 		PolicyResource:    "tool:memory_remember",
 		SideEffectClass:   toolcontract.ToolSideEffectStateChange,
 		InputIntentSchema: memoryRememberInputIntentSchema,
+		Completion:        toolcontract.ToolCompletion{Mode: toolcontract.ToolCompletionObservation},
+		Idempotency:       toolcontract.ToolIdempotencyNone,
+		Availability:      localToolAvailable,
+	},
+	{
+		ID:           "local/memory_forget",
+		ProviderID:   localToolProviderID,
+		Namespace:    "memory",
+		Name:         "memory_forget",
+		PrivacyClass: "workspace_memory",
+		OutputSchema: memoryForgetOutputSchema,
+		ResultContract: &toolcontract.ToolResultContract{
+			Schema: memoryForgetOutputSchema,
+			Effects: []toolcontract.ResourceEffectContract{{
+				ObjectType:     "memory_fact",
+				Effect:         "forgotten",
+				ResultField:    "forgottenFactIDs",
+				EffectIdentity: "id",
+			}},
+		},
+		Visibility:        toolcontract.ToolVisibilityModel,
+		PolicyResource:    "tool:memory_forget",
+		SideEffectClass:   toolcontract.ToolSideEffectStateChange,
+		InputIntentSchema: memoryForgetInputIntentSchema,
 		Completion:        toolcontract.ToolCompletion{Mode: toolcontract.ToolCompletionObservation},
 		Idempotency:       toolcontract.ToolIdempotencyNone,
 		Availability:      localToolAvailable,

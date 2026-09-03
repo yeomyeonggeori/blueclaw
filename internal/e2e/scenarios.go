@@ -148,12 +148,19 @@ func MemoryGuidedFollowupScenario(artifactDirectoryPath string) VirtualSessionSc
 	return VirtualSessionScenario{
 		Name:                  "memory_guided_followup",
 		ArtifactDirectoryPath: artifactDirectoryPath,
+		AllowedTools:          []string{"conversation_history", "memory_search", "memory_remember"},
 		Turns: []VirtualTurn{
 			{
-				Prompt:          "내 발표 자료는 항상 짧은 문장과 한국어 제목을 선호한다고 기억해줘",
-				RouterTaskShape: agentcontract.TaskShapeImmediateReply,
+				Prompt:                 "내 발표 자료는 항상 짧은 문장과 한국어 제목을 선호한다고 기억해줘",
+				RouterRequiredEvidence: []string{"memory_remember"},
 				ActionResponses: []string{
-					actionFinishMessage("기억해둘게요."),
+					actionCallTool("memory_remember", `{"content":"발표 자료는 짧은 문장과 한국어 제목을 선호한다"}`),
+					actionFinishMessage("기억해둘게요.", "obs-001:memory_remember:0"),
+				},
+				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
+				ExpectedToolCalls:        []string{"memory_remember"},
+				ExpectedEventCounts: []VirtualEventCount{
+					{Name: "tool.memory_remember.requested", BodyFragment: "한국어 제목", Count: 1},
 				},
 				ExpectedReplyFragments: []string{"기억"},
 			},
@@ -163,6 +170,8 @@ func MemoryGuidedFollowupScenario(artifactDirectoryPath string) VirtualSessionSc
 				ActionResponses: []string{
 					actionFinishMessage("짧은 문장과 한국어 제목 중심으로 정리하겠습니다."),
 				},
+				ExpectedEvents:         []string{"memory.recall_injected"},
+				ExpectedModelContexts:  []string{"발표 자료는 짧은 문장과 한국어 제목을 선호한다"},
 				ExpectedReplyFragments: []string{"짧은 문장", "한국어 제목"},
 			},
 		},

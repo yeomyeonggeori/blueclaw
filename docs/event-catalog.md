@@ -37,8 +37,11 @@ for those.
 | `connector.reaction.skipped` | connectors |
 | `connector.reply.suppressed` | connectors |
 | `llm.call` | agentruntime, connectors |
-| `memory.pinned_load_failed` | agentruntime |
-| `memory.pinned_load_succeeded` | agentruntime |
+| `memory.extraction_completed` | memory |
+| `memory.extraction_context` | agentruntime |
+| `memory.extraction_failed` | memory |
+| `memory.recall_failed` | agentruntime |
+| `memory.recall_injected` | agentruntime |
 | `reply.suppressed_duplicate` | connectors |
 | `schedule.cancelled` | agentruntime |
 | `schedule.created` | agentruntime |

@@ -143,7 +143,7 @@ func (connectorRuntime *ConnectorRuntime) interruptedTaskLaunchRequest(taskRun t
 		ActiveGoal:                 interruptedTaskActiveGoalWithInstruction(taskRun, taskEvents, profile.guidanceNote, profile.instruction),
 		PrecomputedTurnDecision:    interruptedTaskTurnDecision(taskEvents, event.Context.ResponseLanguage),
 		PersonAccess:               personAccess,
-		MemoryNamespaces:           connectorRuntime.accessibleNamespaces(taskRun.RequesterPersonID, personAccess, event),
+		MemoryLabel:                connectorRuntime.memoryLabel(personAccess, event),
 		AccessibleConversationIDs:  []string{conversationID},
 		HistoryProvider:            connectorHistoryProvider{adapter: adapter},
 		AttachmentMaterialResolver: connectorAttachmentMaterialResolver{adapter: adapter, personID: taskRun.RequesterPersonID, event: event, sentSources: connectorRuntime.sentAttachmentSources, attachmentWriter: connectorRuntime.attachmentWriterFor(taskRun.RequesterPersonID)},

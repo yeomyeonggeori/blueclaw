@@ -37,6 +37,7 @@ require (
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/yeomyeonggeori/bluecollar v0.0.0
+	github.com/yeomyeonggeori/bluememo v0.0.0
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	golang.org/x/crypto v0.37.0 // indirect
 	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
@@ -48,3 +49,5 @@ require (
 )
 
 replace github.com/yeomyeonggeori/bluecollar => ./.dependency/bluecollar
+
+replace github.com/yeomyeonggeori/bluememo => ./.dependency/bluememo

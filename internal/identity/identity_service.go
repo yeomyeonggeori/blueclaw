@@ -20,6 +20,7 @@ type IdentityService struct {
 	personAccessByPersonID       map[string]policy.PersonAccess
 	channelByCompositeKey        map[string]policy.ChannelPolicy
 	personIDByPlatformAccountKey map[string]string
+	containedCirclesByID         map[string][]string
 	platformAccountRepository    PlatformAccountRepository
 }
 
@@ -59,6 +60,10 @@ func (identityService *IdentityService) reloadPolicyProjection(policyProjection 
 	identityService.personAccessByPersonID = map[string]policy.PersonAccess{}
 	identityService.channelByCompositeKey = map[string]policy.ChannelPolicy{}
 	identityService.personIDByPlatformAccountKey = map[string]string{}
+	identityService.containedCirclesByID = map[string][]string{}
+	for circleID, memberCircles := range policyProjection.ContainedCirclesByID {
+		identityService.containedCirclesByID[circleID] = append([]string{}, memberCircles...)
+	}
 	for email, personID := range policyProjection.PersonIDByEmail {
 		normalizedEmail := strings.ToLower(strings.TrimSpace(email))
 		identityService.personIDByEmail[normalizedEmail] = personID
@@ -118,11 +123,43 @@ func (identityService *IdentityService) ResolvePersonAccess(personID string) pol
 	return policy.EnsureRequesterDefaults(personAccess)
 }
 
+func (identityService *IdentityService) ContainedCircles() map[string][]string {
+	identityService.mutex.RLock()
+	defer identityService.mutex.RUnlock()
+
+	contained := make(map[string][]string, len(identityService.containedCirclesByID))
+	for circleID, memberCircles := range identityService.containedCirclesByID {
+		contained[circleID] = append([]string{}, memberCircles...)
+	}
+	return contained
+}
+
 func (identityService *IdentityService) ResolvePersonPrimaryEmail(personID string) string {
 	identityService.mutex.RLock()
 	defer identityService.mutex.RUnlock()
 
 	return identityService.emailByPersonID[strings.TrimSpace(personID)]
+}
+
+func (identityService *IdentityService) ResolvePersonIDByDisplayName(displayName string) (string, bool) {
+	identityService.mutex.RLock()
+	defer identityService.mutex.RUnlock()
+
+	wanted := strings.TrimSpace(displayName)
+	if wanted == "" {
+		return "", false
+	}
+	matchedPersonID := ""
+	for personID, candidate := range identityService.displayNameByPersonID {
+		if !strings.EqualFold(strings.TrimSpace(candidate), wanted) {
+			continue
+		}
+		if matchedPersonID != "" {
+			return "", false
+		}
+		matchedPersonID = personID
+	}
+	return matchedPersonID, matchedPersonID != ""
 }
 
 func (identityService *IdentityService) ResolvePersonDisplayName(personID string) string {

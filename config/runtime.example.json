@@ -129,10 +129,9 @@
     "migrationDirectoryPath": "/workspace/.blueclaw/migrations"
   },
   "memory": {
-    "workspaceID": "default",
-    "graphitiEndpoint": "http://127.0.0.1:7791",
-    "graphitiKuzuPath": "/workspace/.blueclaw/graphiti/kuzu",
-    "timeoutSecond": 15
+    "embeddingModel": "baai/bge-m3",
+    "embeddingExecutionMode": "auto",
+    "extractionDisabled": false
   },
   "agent": {
     "intake": {

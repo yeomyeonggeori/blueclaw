@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluememo"
 	"io"
 	"net/http"
 	"slices"
@@ -22,7 +23,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/launchfailure"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
-	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/reply"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
@@ -1975,12 +1975,12 @@ func TestConnectorRuntimeStartsDirectProgressBeforeInitialHistoryFetch(t *testin
 func TestConnectorRuntimeInjectsRequesterPinnedMemoryIntoLanguageModel(t *testing.T) {
 	languageModel := &recordingLanguageModel{reply: "기억했습니다"}
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
-	pinnedMemoryStore := memory.NewMarkdownStore(t.TempDir(), 1200)
-	if _, errorValue := pinnedMemoryStore.MergePersonMemory(context.Background(), "person-1", "사용자는 Graphiti 메모리 설계를 선택했다."); errorValue != nil {
-		t.Fatalf("expected pinned memory setup to succeed: %v", errorValue)
+	memoryRepository := bluememo.NewInMemoryRepository()
+	if errorValue := memoryRepository.SaveProfile(context.Background(), bluememo.Profile{PersonID: "person-1", IdentityLines: []string{"사용자는 fact 저장소 메모리 설계를 선택했다."}}); errorValue != nil {
+		t.Fatalf("expected memory profile setup to succeed: %v", errorValue)
 	}
 	toolCatalogBuilder := agentruntime.NewToolCatalogBuilder()
-	toolCatalogBuilder.UsePinnedMemoryStore(pinnedMemoryStore)
+	toolCatalogBuilder.UseMemoryStore(&bluememo.Store{Facts: memoryRepository, Profiles: memoryRepository, Jobs: memoryRepository}, nil, nil)
 	connectorRuntime.UseTaskLauncher(connectorRuntime.routedTaskLauncherForTest(toolCatalogBuilder))
 
 	_, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, testInboundEvent("message-1"))
@@ -1991,7 +1991,7 @@ func TestConnectorRuntimeInjectsRequesterPinnedMemoryIntoLanguageModel(t *testin
 	if len(languageModel.request.Messages) < 2 {
 		t.Fatalf("expected memory context message, got %+v", languageModel.request.Messages)
 	}
-	if !structuredMessagesContain(languageModel.request.Messages, "Graphiti 메모리 설계") {
+	if !structuredMessagesContain(languageModel.request.Messages, "fact 저장소 메모리 설계") {
 		t.Fatalf("expected requester memory in model context, got %+v", languageModel.request.Messages)
 	}
 }
@@ -2007,12 +2007,12 @@ func TestConnectorRuntimeInjectsVisibleContextBeforeMemory(t *testing.T) {
 		HasMoreBefore: true,
 		HistoryCursor: "cursor-1",
 	}
-	pinnedMemoryStore := memory.NewMarkdownStore(t.TempDir(), 1200)
-	if _, errorValue := pinnedMemoryStore.MergePersonMemory(context.Background(), "person-1", "사용자는 간결한 설계를 선호한다."); errorValue != nil {
-		t.Fatalf("expected pinned memory setup to succeed: %v", errorValue)
+	memoryRepository := bluememo.NewInMemoryRepository()
+	if errorValue := memoryRepository.SaveProfile(context.Background(), bluememo.Profile{PersonID: "person-1", IdentityLines: []string{"사용자는 간결한 설계를 선호한다."}}); errorValue != nil {
+		t.Fatalf("expected memory profile setup to succeed: %v", errorValue)
 	}
 	toolCatalogBuilder := agentruntime.NewToolCatalogBuilder()
-	toolCatalogBuilder.UsePinnedMemoryStore(pinnedMemoryStore)
+	toolCatalogBuilder.UseMemoryStore(&bluememo.Store{Facts: memoryRepository, Profiles: memoryRepository, Jobs: memoryRepository}, nil, nil)
 	connectorRuntime.UseTaskLauncher(connectorRuntime.routedTaskLauncherForTest(toolCatalogBuilder))
 
 	_, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, event)
@@ -3433,112 +3433,59 @@ func TestConnectorProgressHeartbeatIntervalMaintainsTypingIndicator(t *testing.T
 	}
 }
 
-func TestConnectorRuntimeDoesNotAutomaticallyIngestMemoryButInjectsGraphMemoryAtLaunch(t *testing.T) {
+func TestConnectorRuntimeInjectsRecalledFactsAtLaunchAndNeverWritesMemoryItself(t *testing.T) {
 	languageModel := &recordingLanguageModel{reply: "ok"}
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
-	graphStore := &fakeGraphMemoryStore{
-		facts: []memory.MemoryFact{
-			{ScopeType: memory.ScopeTypeUser, NamespaceID: "user:person-1", Content: "사용자의 이름은 민수다."},
-		},
-	}
-	memoryService := &memory.MemoryService{}
-	memoryService.UseGraphStore(graphStore)
-	connectorRuntime.UseMemoryService(memoryService)
+	memoryRepository := seedConnectorMemory(t, "person-1", "사용자의 이름은 민수다.")
+	toolCatalogBuilder := agentruntime.NewToolCatalogBuilder()
+	toolCatalogBuilder.UseMemoryStore(&bluememo.Store{Facts: memoryRepository, Profiles: memoryRepository, Jobs: memoryRepository}, nil, nil)
+	connectorRuntime.UseTaskLauncher(connectorRuntime.routedTaskLauncherForTest(toolCatalogBuilder))
 
 	channelEvent := testInboundEvent("message-1")
 	channelEvent.ConversationID = "channel-1"
 	channelEvent.Prompt = "내 이름은 민수야"
-	_, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, channelEvent)
-	if errorValue != nil {
+	if _, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, channelEvent); errorValue != nil {
 		t.Fatalf("expected channel memory event to process: %v", errorValue)
 	}
-
 	directEvent := testInboundEvent("message-2")
 	directEvent.ConversationID = "dm-1"
 	directEvent.Prompt = "내 이름 뭐야?"
-	_, errorValue = connectorRuntime.HandleInboundEvent(context.Background(), adapter, directEvent)
-	if errorValue != nil {
+	if _, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, directEvent); errorValue != nil {
 		t.Fatalf("expected direct memory recall event to process: %v", errorValue)
 	}
-
-	if len(graphStore.episodes) != 0 {
-		t.Fatalf("expected no automatic Graphiti episode ingestion, got %d", len(graphStore.episodes))
+	if len(memoryRepository.AllFacts()) != 1 {
+		t.Fatalf("expected the connector to write no memory of its own, got %d facts", len(memoryRepository.AllFacts()))
 	}
 	if !structuredMessagesContain(languageModel.request.Messages, "민수") {
-		t.Fatalf("expected launch-time graph memory injection to surface stored facts, got %+v", languageModel.request.Messages)
-	}
-}
-
-func TestConnectorRuntimeDoesNotAutomaticallyIngestMemoryWhenReplySendFails(t *testing.T) {
-	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnDecision = startTaskTurnDecision()
-	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "ok"}
-	adapter.sendReplyError = errors.New("send failed")
-	graphStore := &fakeGraphMemoryStore{}
-	memoryService := &memory.MemoryService{}
-	memoryService.UseGraphStore(graphStore)
-	connectorRuntime.UseMemoryService(memoryService)
-
-	event := testInboundEvent("message-memory-reply-failed")
-	event.Prompt = "내 선호는 Graphiti-only 메모리야"
-	result, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, event)
-	if errorValue != nil {
-		t.Fatalf("expected event to process: %v", errorValue)
-	}
-	if result.Reason != "reply_failed" {
-		t.Fatalf("expected reply failed result, got %+v", result)
-	}
-	if len(graphStore.episodes) != 0 {
-		t.Fatalf("expected no automatic memory ingestion before reply success, got %d", len(graphStore.episodes))
-	}
-}
-
-func TestConnectorRuntimeDoesNotAutomaticallyIngestMemoryForPathBearingReply(t *testing.T) {
-	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnDecision = startTaskTurnDecision()
-	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "saved at /workspace/result.md"}
-	graphStore := &fakeGraphMemoryStore{}
-	memoryService := &memory.MemoryService{}
-	memoryService.UseGraphStore(graphStore)
-	connectorRuntime.UseMemoryService(memoryService)
-
-	event := testInboundEvent("message-memory-blocked")
-	event.Prompt = "내 선호는 artifact 경로를 노출하지 않는 거야"
-	result, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, event)
-	if errorValue != nil {
-		t.Fatalf("expected event to process: %v", errorValue)
-	}
-	if result.Reason != "" || result.ReplyDispatchID == "" {
-		t.Fatalf("expected unfiltered reply delivery, got %+v", result)
-	}
-	if len(adapter.sentReplies) != 1 || adapter.sentReplies[0].message != "saved at /workspace/result.md" {
-		t.Fatalf("expected exact model wording, got %+v", adapter.sentReplies)
-	}
-	if len(graphStore.episodes) != 0 {
-		t.Fatalf("expected no automatic memory ingestion before connector blocking, got %d", len(graphStore.episodes))
+		t.Fatalf("expected launch-time recall to surface the stored fact, got %+v", languageModel.request.Messages)
 	}
 }
 
 func TestConnectorRuntimeDoesNotShareUserMemoryWithOtherPerson(t *testing.T) {
-	memoryService := &memory.MemoryService{}
-	memoryService.StoreMemoryFact(memory.MemoryFact{
-		ScopeType:   memory.ScopeTypeUser,
-		NamespaceID: "user:person-1",
-		Content:     "사용자의 이름은 민수다.",
-	})
-
-	records, errorValue := memoryService.SearchMemory(context.Background(), memory.MemorySearchRequest{
-		ReaderPersonID:          "person-2",
-		ReaderSecurityLevelRank: 100,
-		ReaderGrantedClasses:    []string{"internal"},
-		Namespaces:              []memory.MemoryNamespace{memory.UserNamespace("person-2")},
+	memoryRepository := seedConnectorMemory(t, "person-1", "사용자의 이름은 민수다.")
+	hits, errorValue := memoryRepository.SearchFacts(context.Background(), bluememo.FactSearchQuery{
+		Reader:        bluememo.NewReader("person-2", nil, nil, 100, []string{"internal"}),
+		Text:          "이름",
+		ReferenceTime: time.Now().UTC(),
 	})
 	if errorValue != nil {
 		t.Fatalf("expected memory search to succeed: %v", errorValue)
 	}
-	if len(records) != 0 {
-		t.Fatalf("expected person-2 not to read person-1 user memory, got %d", len(records))
+	if len(hits) != 0 {
+		t.Fatalf("expected person-2 not to read person-1 private memory, got %d", len(hits))
 	}
+}
+
+func seedConnectorMemory(t *testing.T, personID string, content string) *bluememo.InMemoryRepository {
+	t.Helper()
+	memoryRepository := bluememo.NewInMemoryRepository()
+	now := time.Now().UTC()
+	episode := bluememo.Episode{EpisodeID: "episode-seed", SourceKind: bluememo.EpisodeSourceKindImport, SourceID: "seed", RequesterPersonID: personID, Content: "seed", OccurredAt: now}
+	fact := bluememo.Fact{FactID: "fact-seed", EpisodeID: "episode-seed", OwnerPersonID: personID, SubjectPersonID: personID, Kind: bluememo.FactKindIdentity, Content: content, ValidFrom: now}
+	if errorValue := memoryRepository.SaveEpisode(context.Background(), bluememo.EpisodeWrite{Episode: episode, Facts: []bluememo.FactWrite{{Fact: fact}}}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	return memoryRepository
 }
 
 func TestConnectorRuntimeRejectsMissingHistoryCursorWhenMoreContextExists(t *testing.T) {
@@ -3986,37 +3933,6 @@ func (languageModel staticScopeLanguageModel) GenerateStructuredResponse(_ conte
 		return llm.StructuredResponse{Content: connectorDefaultTurnRouterResponse()}, nil
 	}
 	return llm.StructuredResponse{Content: connectorFinishMessage("ok")}, nil
-}
-
-type fakeGraphMemoryStore struct {
-	episodes []memory.MemoryEpisode
-	facts    []memory.MemoryFact
-}
-
-func (store *fakeGraphMemoryStore) AddEpisode(_ context.Context, episode memory.MemoryEpisode) (memory.MemoryIngestionResult, error) {
-	store.episodes = append(store.episodes, episode)
-	return memory.MemoryIngestionResult{EpisodeID: episode.EpisodeID, NamespaceCount: len(episode.Namespaces)}, nil
-}
-
-func (store *fakeGraphMemoryStore) SearchFacts(_ context.Context, request memory.MemorySearchRequest) ([]memory.MemoryFact, error) {
-	facts := []memory.MemoryFact{}
-	for _, fact := range store.facts {
-		for _, namespace := range request.Namespaces {
-			if fact.NamespaceID == namespace.NamespaceID {
-				facts = append(facts, fact)
-			}
-		}
-	}
-	return facts, nil
-}
-
-func containsEpisodeNamespace(episode memory.MemoryEpisode, namespaceID string) bool {
-	for _, namespace := range episode.Namespaces {
-		if namespace.NamespaceID == namespaceID {
-			return true
-		}
-	}
-	return false
 }
 
 type testHTTPDoer func(*http.Request) (*http.Response, error)

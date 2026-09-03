@@ -13,12 +13,14 @@ type OpenAIEmbeddingClient struct {
 	Endpoint   string
 	APIKey     string
 	ModelName  string
+	Dimensions int
 	HTTPClient *http.Client
 }
 
 type openAIEmbeddingRequest struct {
-	Model string `json:"model"`
-	Input string `json:"input"`
+	Model      string `json:"model"`
+	Input      string `json:"input"`
+	Dimensions int    `json:"dimensions,omitempty"`
 }
 
 type openAIEmbeddingResponse struct {
@@ -28,7 +30,7 @@ type openAIEmbeddingResponse struct {
 }
 
 func (client OpenAIEmbeddingClient) GenerateEmbedding(ctx context.Context, input string) ([]float32, error) {
-	requestDocument, errorValue := json.Marshal(openAIEmbeddingRequest{Model: client.ModelName, Input: input})
+	requestDocument, errorValue := json.Marshal(openAIEmbeddingRequest{Model: client.ModelName, Input: input, Dimensions: client.Dimensions})
 	if errorValue != nil {
 		return nil, errorValue
 	}

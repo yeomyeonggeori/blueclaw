@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluememo"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -420,7 +421,6 @@ type ConnectorRuntime struct {
 	approvalGate           *approvalgate.Gate
 	toolCatalogBuilder     *agentruntime.ToolCatalogBuilder
 	workspaceActorFactory  security.WorkspaceActorFactory
-	memoryService          *memory.MemoryService
 	agentIdentityProvider  func() agentcontract.AgentIdentity
 	companyProvider        func() agentcontract.CompanyContext
 	workspaceID            string
@@ -504,11 +504,6 @@ func (connectorRuntime *ConnectorRuntime) RegisterAdapter(adapter PlatformAdapte
 
 func (connectorRuntime *ConnectorRuntime) UseUnknownAccountResolver(unknownAccountResolver UnknownAccountResolver) {
 	connectorRuntime.unknownAccountResolver = unknownAccountResolver
-}
-
-func (connectorRuntime *ConnectorRuntime) UseMemoryService(memoryService *memory.MemoryService) {
-	connectorRuntime.memoryService = memoryService
-	connectorRuntime.toolCatalogBuilder.UseMemoryService(memoryService)
 }
 
 func (connectorRuntime *ConnectorRuntime) UseAdminTaskLinkBaseURL(adminTaskLinkBaseURL string) {
@@ -3342,7 +3337,7 @@ func (connectorRuntime *ConnectorRuntime) buildTurnToolSet(adapter PlatformAdapt
 		HistoryProvider:            connectorHistoryProvider{adapter: adapter},
 		AttachmentMaterialResolver: connectorAttachmentMaterialResolver{adapter: adapter, personID: personID, event: event, sentSources: connectorRuntime.sentAttachmentSources, attachmentWriter: connectorRuntime.attachmentWriterFor(personID)},
 		PersonAccess:               personAccess,
-		MemoryNamespaces:           connectorRuntime.accessibleNamespaces(personID, personAccess, event),
+		MemoryLabel:                connectorRuntime.memoryLabel(personAccess, event),
 		AccessibleConversationIDs:  []string{event.ConversationID},
 		InputParts:                 append([]agentcontract.AgentPart{}, event.InputParts...),
 	})
@@ -3424,25 +3419,12 @@ func detachedConnectorContext(ctx context.Context) context.Context {
 	return context.WithoutCancel(ctx)
 }
 
-func (connectorRuntime *ConnectorRuntime) accessibleNamespaces(personID string, personAccess policy.PersonAccess, event PlatformInboundEvent) []memory.MemoryNamespace {
-	conversationSecurityLevelRank := personAccess.SecurityLevelRank
-	conversationRequiredClasses := append([]string{}, personAccess.GrantedClasses...)
-	if channelPolicy, isFound := connectorRuntime.identityService.ResolveConversationPolicy(event.Platform, event.ConversationID); isFound {
-		conversationSecurityLevelRank = channelPolicy.DefaultSecurityLevelRank
-		conversationRequiredClasses = append([]string{}, channelPolicy.DefaultRequiredClasses...)
+func (connectorRuntime *ConnectorRuntime) memoryLabel(personAccess policy.PersonAccess, event PlatformInboundEvent) bluememo.SecurityLabel {
+	channelPolicy, isFound := connectorRuntime.identityService.ResolveConversationPolicy(event.Platform, event.ConversationID)
+	if isPrivateConversationID(event.ConversationID) {
+		isFound = false
 	}
-	namespaces := []memory.MemoryNamespace{
-		memory.UserNamespace(personID),
-		memory.PrivatePersonNamespace(personID),
-		memory.WorkspaceNamespace(connectorRuntime.workspaceID, personAccess.SecurityLevelRank, personAccess.GrantedClasses),
-	}
-	if !isPrivateConversationID(event.ConversationID) {
-		namespaces = append(namespaces, memory.ConversationNamespace(event.ConversationID, conversationSecurityLevelRank, conversationRequiredClasses))
-	}
-	for _, circleID := range personAccess.Circles {
-		namespaces = append(namespaces, memory.CircleNamespace(connectorRuntime.workspaceID, circleID))
-	}
-	return namespaces
+	return memory.LabelForConversation(personAccess, channelPolicy, isFound)
 }
 
 func isPrivateConversationID(conversationID string) bool {

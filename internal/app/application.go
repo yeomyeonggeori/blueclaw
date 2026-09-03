@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluememo"
+	bluememopostgres "github.com/yeomyeonggeori/bluememo/postgres"
 	"log/slog"
 	"net"
 	"net/http"
@@ -74,12 +76,13 @@ type Application struct {
 	interruptedTaskResumeCancel   context.CancelFunc
 	taskScheduleCancel            context.CancelFunc
 	logRetentionCancel            context.CancelFunc
-	memoryUpdateCancel            context.CancelFunc
 	taskRetentionCancel           context.CancelFunc
 	staleTaskCancel               context.CancelFunc
 	taskSchedulePoller            *scheduler.TaskSchedulePoller
 	taskRetentionSweeper          *scheduler.TaskRetentionSweeper
-	memoryUpdateQueue             *memory.BackgroundMemoryUpdateQueue
+	memoryJobWorker               *bluememo.JobWorker
+	memoryJobWorkerCancel         context.CancelFunc
+	memoryStore                   *bluememo.Store
 	taskSchedulePollSecond        int
 	taskRetentionIntervalMinute   int
 	interruptedTaskResumeDelay    time.Duration
@@ -279,27 +282,10 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 		skillRetriever.Refresh(ctx, instructionBundleLoader().Skills)
 	}
 	logger.Info("application.initializing", "stage", "memory")
-	memoryService := &memory.MemoryService{}
-	if strings.TrimSpace(runtimeConfiguration.Memory.GraphitiEndpoint) != "" {
-		memoryService.UseGraphStore(memory.NewGraphitiClient(
-			runtimeConfiguration.Memory.GraphitiEndpoint,
-			time.Duration(runtimeConfiguration.Memory.TimeoutSecond)*time.Second,
-		))
-	} else {
-		logger.Info("application.memory.graph_store_not_configured")
+	memoryStore, memoryIngester, memoryJobWorker := buildMemoryStore(runtimeConfiguration, database, capabilityClient, lowTierLanguageModelProvider, taskRunService, taskStepService, identityService, logger)
+	if memoryStore != nil && !runtimeConfiguration.Memory.ExtractionDisabled {
+		taskRunService.RegisterTaskRunTransitionObserver(memory.TaskRunTransitionObserver{Store: *memoryStore, Logger: logger}.Observe)
 	}
-	var memoryGraphReporter memory.GraphMemoryReporter
-	var memoryGraphMigrator memory.GraphMemoryMigrator
-	if database.SQL != nil {
-		graphitiMemoryRepository := postgres.NewGraphitiMemoryRepository(database)
-		memoryService.UseMirror(graphitiMemoryRepository)
-		memoryGraphReporter = graphitiMemoryRepository
-		memoryGraphMigrator = graphitiMemoryRepository
-	}
-	pinnedMemoryStore := memory.NewMarkdownStore(pinnedMemoryRootPath(runtimeConfiguration), pinnedMemoryHardLimitCharacterCount(runtimeConfiguration))
-	pinnedMemoryStore.UseCompressor(memory.NewLLMMarkdownMemoryCompressor(lowTierLanguageModelProvider), pinnedMemoryCompressionTargetCharacterCount(runtimeConfiguration))
-	memoryUpdateProcessor := memory.NewMemoryUpdateProcessor(memoryService, pinnedMemoryStore)
-	memoryUpdateQueue := memory.NewBackgroundMemoryUpdateQueue(memoryUpdateProcessor, logger)
 	backupCoordinator := backup.NewCoordinator(buildBackupManifest(runtimeConfiguration, database))
 	taskIntakeController := runtimecontrol.NewTaskIntakeController()
 	mcpRegistry := mcp.NewMcpRegistry()
@@ -326,9 +312,9 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 	toolCatalogBuilder.UseWorkspaceRootPath(runtimeConfiguration.Terminal.WorkspaceRootPath)
 	toolCatalogBuilder.UseOptionalFileReadPathSuffixes(runtimeConfiguration.Agent.OptionalFileReadPathSuffixes)
 	toolCatalogBuilder.UseSkillChangeHandler(refreshSkillIndex)
-	toolCatalogBuilder.UseMemoryService(memoryService)
-	toolCatalogBuilder.UsePinnedMemoryStore(pinnedMemoryStore)
-	toolCatalogBuilder.UseMemoryUpdateQueue(memoryUpdateQueue)
+	if memoryStore != nil {
+		toolCatalogBuilder.UseMemoryStore(memoryStore, memoryIngester, identityService)
+	}
 	turnRouter := intake.NewTurnRouter(turnRouterLanguageModelProvider(taskTierLanguageModels, intakeLanguageModelProvider), deriveIntakeOptions(runtimeConfiguration))
 	taskLauncher := agentruntime.NewTaskLauncher(harness, taskRunService, toolCatalogBuilder)
 	taskLauncher.UseTurnRouter(turnRouter)
@@ -349,7 +335,6 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 			TaskRunService:         taskRunService,
 			PersonAccessResolver:   identityService,
 			TaskIntakeGate:         taskIntakeController,
-			WorkspaceID:            runtimeConfiguration.Memory.WorkspaceID,
 			WorkerID:               "blueclaw-app",
 			Logger:                 logger,
 		}
@@ -385,8 +370,6 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 	connectorRuntime.UseApprovalGate(toolCatalogApprovalGate)
 	connectorRuntime.UseAgentIdentityProvider(agentIdentityProvider)
 	connectorRuntime.UseAllowedToolNamesByProfile(deriveAllowedToolNamesByProfile(runtimeConfiguration), deriveAllowedToolNames(runtimeConfiguration))
-	connectorRuntime.UseMemoryService(memoryService)
-	connectorRuntime.UseWorkspaceID(runtimeConfiguration.Memory.WorkspaceID)
 	connectorRuntime.UseAdminTaskLinkBaseURL(runtimeConfiguration.Agent.AdminTaskLinkBaseURL)
 	connectorRuntime.UseWorkspaceActorFactory(terminalService.WorkspaceActorFactory())
 	connectorRuntime.UseIngressGate(backupCoordinator)
@@ -415,7 +398,6 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 		HealthHandler: httpserver.HealthHandler{
 			Database:                 database,
 			ConnectorRuntime:         connectorRuntime,
-			MemoryService:            memoryService,
 			MaximumBacklog:           1000,
 			ProtocolIdentity:         protocolIdentityStatus,
 			ProtocolIdentityChecker:  &protocolIdentityChecker,
@@ -459,10 +441,10 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 			IdentityService:  identityService,
 		},
 		TaskSearchHandler: adminapi.TaskSearchHandler{SessionQuery: sessionquery.New(taskRunService)},
+		MemoryHandler:     adminapi.MemoryHandler{Store: memoryStore, IdentityService: identityService},
 		TaskRunHandler: adminapi.TaskRunHandler{
 			TaskLauncher:            taskLauncher,
 			IdentityService:         identityService,
-			WorkspaceID:             runtimeConfiguration.Memory.WorkspaceID,
 			TaskRunService:          taskRunService,
 			TaskIntakeGate:          taskIntakeController,
 			AllowTaskDecisionPreset: runtimeConfiguration.Agent.AllowAdminTaskDiagnostic,
@@ -497,13 +479,6 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 		},
 		ConversationReset: adminapi.ConversationResetHandler{
 			Repository: conversationResetRepository,
-		},
-		MemoryGraphHandler: adminapi.MemoryGraphHandler{
-			MemoryService: memoryService,
-			Reporter:      memoryGraphReporter,
-			Migrator:      memoryGraphMigrator,
-			MarkdownStore: pinnedMemoryStore,
-			Identity:      identityService,
 		},
 		BackupHandler: adminapi.BackupHandler{
 			Coordinator: backupCoordinator,
@@ -549,7 +524,8 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 		startupError:                  startupError,
 		taskSchedulePoller:            taskSchedulePoller,
 		taskRetentionSweeper:          taskRetentionSweeper,
-		memoryUpdateQueue:             memoryUpdateQueue,
+		memoryJobWorker:               memoryJobWorker,
+		memoryStore:                   memoryStore,
 		taskSchedulePollSecond:        runtimeConfiguration.Scheduler.TaskSchedulePollIntervalSecond,
 		taskRetentionIntervalMinute:   runtimeConfiguration.Scheduler.RetentionCheckIntervalMinute,
 		interruptedTaskResumeDelay:    2 * time.Second,
@@ -690,30 +666,6 @@ func uniqueUnavailableSkills(unavailableSkills []skill.UnavailableSkill, include
 		listedSkills = append(listedSkills, unavailableSkill)
 	}
 	return listedSkills
-}
-
-func pinnedMemoryRootPath(runtimeConfiguration config.RuntimeConfiguration) string {
-	if strings.TrimSpace(runtimeConfiguration.Memory.PinnedMemoryRootPath) != "" {
-		return strings.TrimSpace(runtimeConfiguration.Memory.PinnedMemoryRootPath)
-	}
-	return filepath.Join(runtimeConfiguration.Terminal.WorkspaceRootPath, ".blueclaw", "memory")
-}
-
-func pinnedMemoryHardLimitCharacterCount(runtimeConfiguration config.RuntimeConfiguration) int {
-	if runtimeConfiguration.Memory.PinnedMemoryHardLimitCharacterCount > 0 {
-		return runtimeConfiguration.Memory.PinnedMemoryHardLimitCharacterCount
-	}
-	if runtimeConfiguration.Memory.PinnedMemoryCharacterLimit > 0 {
-		return runtimeConfiguration.Memory.PinnedMemoryCharacterLimit
-	}
-	return memory.DefaultPinnedMemoryHardLimitCharacterCount
-}
-
-func pinnedMemoryCompressionTargetCharacterCount(runtimeConfiguration config.RuntimeConfiguration) int {
-	if runtimeConfiguration.Memory.PinnedMemoryCompressionTargetCharacterCount > 0 {
-		return runtimeConfiguration.Memory.PinnedMemoryCompressionTargetCharacterCount
-	}
-	return memory.DefaultPinnedMemoryCompressionTargetCharacterCount
 }
 
 func instructionRootPaths(runtimeConfiguration config.RuntimeConfiguration) []string {
@@ -1032,22 +984,14 @@ func buildBackupManifest(runtimeConfiguration config.RuntimeConfiguration, datab
 	return backup.Manifest{
 		ContractVersion: 1,
 		BlueclawVersion: "main",
-		SchemaVersion:   "012_graphiti_memory_metadata",
+		SchemaVersion:   "031_drop_graphiti_memory",
 		PersistentDataRoots: []string{
 			"/workspace/.blueclaw",
-			graphitiKuzuPath(runtimeConfiguration),
 			runtimeConfiguration.Terminal.WorkspaceRootPath,
 		},
 		DatabaseKind:            databaseKind,
 		RequiredBackupArtifacts: requiredArtifacts,
 	}
-}
-
-func graphitiKuzuPath(runtimeConfiguration config.RuntimeConfiguration) string {
-	if strings.TrimSpace(runtimeConfiguration.Memory.GraphitiKuzuPath) != "" {
-		return strings.TrimSpace(runtimeConfiguration.Memory.GraphitiKuzuPath)
-	}
-	return "/workspace/.blueclaw/graphiti/kuzu"
 }
 
 func newCapabilityClient(runtimeConfiguration config.RuntimeConfiguration) capability.Client {
@@ -1376,8 +1320,8 @@ func (application *Application) Start() error {
 	}
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "log_retention")
 	application.startLogRetentionLoop()
-	application.runtimeLogger.Logger.Info("application.starting", "stage", "memory_queue")
-	application.startMemoryUpdateQueue()
+	application.runtimeLogger.Logger.Info("application.starting", "stage", "memory_worker")
+	application.startMemoryJobWorker()
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "connector_runtime")
 	application.startConnectorRuntime()
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "connector_transports")
@@ -1487,8 +1431,8 @@ func (application *Application) Shutdown(ctx context.Context) error {
 	if application.logRetentionCancel != nil {
 		application.logRetentionCancel()
 	}
-	if application.memoryUpdateCancel != nil {
-		application.memoryUpdateCancel()
+	if application.memoryJobWorkerCancel != nil {
+		application.memoryJobWorkerCancel()
 	}
 	errorValue := application.httpServer.Shutdown(ctx)
 	backgroundError := application.awaitBackgroundLoops(ctx)
@@ -1710,13 +1654,66 @@ func (application *Application) taskRetentionIntervalMinuteOrDefault() int {
 	return 60
 }
 
-func (application *Application) startMemoryUpdateQueue() {
-	if application.memoryUpdateQueue == nil || application.memoryUpdateCancel != nil {
+func (application *Application) startMemoryJobWorker() {
+	if application.memoryJobWorker == nil || application.memoryJobWorkerCancel != nil {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	application.memoryUpdateCancel = cancel
-	application.memoryUpdateQueue.Start(ctx)
+	application.memoryJobWorkerCancel = cancel
+	application.enqueueMemoryReembed(ctx)
+	go application.memoryJobWorker.Start(ctx, bluememo.DefaultJobWorkerInterval)
+}
+
+func buildMemoryStore(
+	runtimeConfiguration config.RuntimeConfiguration,
+	database postgres.Database,
+	capabilityClient capability.Client,
+	lowTierLanguageModelProvider llm.LanguageModelProvider,
+	taskRunService *task.TaskRunService,
+	taskStepService *task.TaskStepService,
+	identityService *identity.IdentityService,
+	logger *slog.Logger,
+) (*bluememo.Store, *bluememo.Ingester, *bluememo.JobWorker) {
+	if database.SQL == nil {
+		logger.Info("application.memory.fact_store_not_configured", "reason", "no database")
+		return nil, nil, nil
+	}
+	memoryStore := &bluememo.Store{
+		Facts:    bluememopostgres.NewFactRepository(database.SQL),
+		Profiles: bluememopostgres.NewProfileRepository(database.SQL),
+		Jobs:     bluememopostgres.NewJobRepository(database.SQL),
+		Embedder: llm.CapabilityEmbeddingClient{
+			CapabilityClient: capabilityClient,
+			ModelName:        firstNonEmptyString(runtimeConfiguration.Memory.EmbeddingModel, bluememo.DefaultEmbeddingModelName),
+			ExecutionMode:    firstNonEmptyString(runtimeConfiguration.Memory.EmbeddingExecutionMode, "auto"),
+			OutputDimensions: bluememo.EmbeddingDimensionCount,
+		},
+		EmbeddingModel: firstNonEmptyString(runtimeConfiguration.Memory.EmbeddingModel, bluememo.DefaultEmbeddingModelName),
+		Logger:         logger,
+	}
+	memoryModel := memory.LanguageModel{Provider: lowTierLanguageModelProvider}
+	memoryIngester := &bluememo.Ingester{Store: *memoryStore, Model: memoryModel, People: identityService}
+	memoryJobWorker := &bluememo.JobWorker{
+		Jobs:   memoryStore.Jobs,
+		Logger: logger,
+		Handlers: map[string]bluememo.JobHandler{
+			bluememo.JobKindExtract: memory.ExtractJobHandler{Ingester: *memoryIngester, TaskRuns: taskRunService, Steps: taskStepService, Access: identityService}.Handle,
+			bluememo.JobKindProfile: bluememo.ProfileJobHandler{Builder: bluememo.ProfileBuilder{Store: *memoryStore, Model: memoryModel}}.Handle,
+			bluememo.JobKindReembed: bluememo.ReembedJobHandler{Store: *memoryStore}.Handle,
+		},
+	}
+	logger.Info("application.memory.fact_store_configured", "embeddingModel", memoryStore.EmbeddingModel, "extractionDisabled", runtimeConfiguration.Memory.ExtractionDisabled)
+	return memoryStore, memoryIngester, memoryJobWorker
+}
+
+func (application *Application) enqueueMemoryReembed(ctx context.Context) {
+	if application.memoryStore == nil {
+		return
+	}
+	_, _, errorValue := application.memoryStore.EnqueueReembed(ctx)
+	if errorValue != nil && application.memoryJobWorker.Logger != nil {
+		application.memoryJobWorker.Logger.Warn("application.memory.reembed_enqueue_failed", "error", errorValue.Error())
+	}
 }
 
 func (application *Application) taskSchedulePollIntervalSecond() int {

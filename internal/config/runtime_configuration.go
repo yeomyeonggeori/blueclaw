@@ -230,14 +230,9 @@ type DatabaseConfiguration struct {
 }
 
 type MemoryConfiguration struct {
-	WorkspaceID                                 string `json:"workspaceID"`
-	GraphitiEndpoint                            string `json:"graphitiEndpoint"`
-	GraphitiKuzuPath                            string `json:"graphitiKuzuPath"`
-	PinnedMemoryRootPath                        string `json:"pinnedMemoryRootPath"`
-	PinnedMemoryCharacterLimit                  int    `json:"pinnedMemoryCharacterLimit"`
-	PinnedMemoryHardLimitCharacterCount         int    `json:"pinnedMemoryHardLimitCharacterCount"`
-	PinnedMemoryCompressionTargetCharacterCount int    `json:"pinnedMemoryCompressionTargetCharacterCount"`
-	TimeoutSecond                               int    `json:"timeoutSecond"`
+	EmbeddingModel         string `json:"embeddingModel"`
+	EmbeddingExecutionMode string `json:"embeddingExecutionMode"`
+	ExtractionDisabled     bool   `json:"extractionDisabled"`
 }
 
 type ConnectorConfiguration struct {

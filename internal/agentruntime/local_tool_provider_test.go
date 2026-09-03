@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluememo"
 	"strings"
 	"testing"
 )
@@ -86,8 +87,9 @@ func TestDeadCompatibilityToolsAreNotRegistered(t *testing.T) {
 
 func TestLocalToolProviderPreservesMemorySearchContract(t *testing.T) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
+	toolCatalogBuilder.UseMemoryStore(&bluememo.Store{Facts: bluememo.NewInMemoryRepository()}, nil, nil)
 	handlerToolSet := toolcontract.NewToolSet(nil)
-	registerMemoryTools(toolCatalogBuilder, handlerToolSet, ToolCatalogRequest{})
+	registerStoreMemoryTools(toolCatalogBuilder, handlerToolSet, ToolCatalogRequest{})
 
 	boundTools, errorValue := (localToolProvider{handlerToolSet: handlerToolSet}).ListTools(context.Background())
 	if errorValue != nil {
@@ -115,8 +117,9 @@ func TestLocalToolProviderPreservesMemorySearchContract(t *testing.T) {
 
 func TestLocalToolProviderPreservesMemoryRememberContract(t *testing.T) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
+	toolCatalogBuilder.UseMemoryStore(&bluememo.Store{Facts: bluememo.NewInMemoryRepository()}, nil, nil)
 	handlerToolSet := toolcontract.NewToolSet(nil)
-	registerMemoryTools(toolCatalogBuilder, handlerToolSet, ToolCatalogRequest{})
+	registerStoreMemoryTools(toolCatalogBuilder, handlerToolSet, ToolCatalogRequest{})
 
 	boundTools, errorValue := (localToolProvider{handlerToolSet: handlerToolSet}).ListTools(context.Background())
 	if errorValue != nil {
@@ -134,8 +137,8 @@ func TestLocalToolProviderPreservesMemoryRememberContract(t *testing.T) {
 	if !equalJSONSchema(descriptor.OutputSchema, memoryRememberOutputSchema) || !equalJSONSchema(descriptor.ResultContract.Schema, memoryRememberOutputSchema) {
 		t.Fatalf("expected canonical output schema preservation, got %+v", descriptor)
 	}
-	if len(descriptor.ResultContract.Effects) != 1 || descriptor.ResultContract.Effects[0].ResultField != "jobID" {
-		t.Fatalf("expected exact memory update effect, got %+v", descriptor.ResultContract)
+	if len(descriptor.ResultContract.Effects) != 1 || descriptor.ResultContract.Effects[0].ResultField != "episodeID" {
+		t.Fatalf("expected the recorded episode effect, got %+v", descriptor.ResultContract)
 	}
 	condition := descriptor.ResultContract.EvidenceCondition
 	if condition == nil || condition.ResultField != "accepted" || string(condition.Equals) != "true" {

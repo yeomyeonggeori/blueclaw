@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
-	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/protocolidentity"
 	"github.com/yeomyeonggeori/blueclaw/internal/store/postgres"
 )
@@ -15,7 +14,6 @@ import (
 type HealthHandler struct {
 	Database                 postgres.Database
 	ConnectorRuntime         *connectors.ConnectorRuntime
-	MemoryService            *memory.MemoryService
 	MaximumBacklog           int
 	ProtocolIdentity         *protocolidentity.Result
 	ProtocolIdentityChecker  *protocolidentity.Checker
@@ -26,7 +24,6 @@ type healthResponse struct {
 	Status           string                            `json:"status"`
 	Database         databaseHealth                    `json:"database"`
 	Connector        connectors.ConnectorRuntimeHealth `json:"connector"`
-	Memory           memory.MemoryHealth               `json:"memory"`
 	Backlog          postgres.ConnectorDeliveryBacklog `json:"backlog"`
 	ProtocolIdentity protocolidentity.Result           `json:"protocolIdentity"`
 	FailureReasons   []string                          `json:"failureReasons,omitempty"`
@@ -64,9 +61,6 @@ func (healthHandler HealthHandler) health(ctx context.Context) healthResponse {
 	}
 	if healthHandler.ConnectorRuntime != nil {
 		response.Connector = healthHandler.ConnectorRuntime.Health()
-	}
-	if healthHandler.MemoryService != nil {
-		response.Memory = healthHandler.MemoryService.Health(ctx)
 	}
 	if healthHandler.ProtocolIdentityChecker != nil {
 		response.ProtocolIdentity = healthHandler.ProtocolIdentityChecker.Check(ctx, healthHandler.ProtocolIdentityExpected)
@@ -121,9 +115,6 @@ func healthFailureReasons(response healthResponse) []string {
 	}
 	if !response.Connector.Passed {
 		failureReasons = append(failureReasons, "connector runtime is not healthy")
-	}
-	if response.Memory.Configured && !response.Memory.Reachable {
-		failureReasons = append(failureReasons, "graphiti memory is not reachable")
 	}
 	if !response.ProtocolIdentity.CheckedAt.IsZero() && !response.ProtocolIdentity.Passed {
 		failureReasons = append(failureReasons, "protocol identity is not valid")
