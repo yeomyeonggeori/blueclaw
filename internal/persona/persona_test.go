@@ -1,7 +1,6 @@
 package persona
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -96,18 +95,6 @@ func TestParseUserNormalizesAndRenders(t *testing.T) {
 	}
 	if RenderUserInstruction(User{}) != "" {
 		t.Fatal("expected an empty user document to render nothing")
-	}
-}
-
-func TestUserDocumentPathAcceptsOnlyAPlainPersonID(t *testing.T) {
-	path, isValid := UserDocumentPath("/workspace", "person-1")
-	if !isValid || path != filepath.Join("/workspace", ".blueclaw", "persona", "users", "person-1.json") {
-		t.Fatalf("expected the user document under the service-owned directory, got %q %v", path, isValid)
-	}
-	for _, personID := range []string{"", "../etc", "a/b", ".hidden", "with space"} {
-		if _, isValid := UserDocumentPath("/workspace", personID); isValid {
-			t.Fatalf("expected %q to be refused as a person ID", personID)
-		}
 	}
 }
 

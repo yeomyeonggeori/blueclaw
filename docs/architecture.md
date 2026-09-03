@@ -326,7 +326,7 @@ length ceilings, and a pinned `schemaVersion`.
 |---|---|---|---|
 | `identity.json` | workspace root | `names` (every name the agent answers to; the first is how it introduces itself), an optional `handle`, a role, what it is, an emoji, an introduction | once, into the standing instructions and the turn briefing's `AgentIdentity` |
 | `soul.json` | workspace root | what it holds to, what it never does, how it works, a tone (`formal`, `polite`, `casual` plus traits), a language policy | once, into the standing instructions |
-| `.blueclaw/persona/users/<personID>.json` | service-owned | what one person wants to be called, what they want known about them, their preferences, a tone, a language | at every launch, for the requester only, appended to the turn's host instruction |
+| `private/people/<personID>/.internkim/user.json` | the person's own home, owned by their POSIX user | what one person wants to be called, what they want known about them, their preferences, a tone, a language | at every launch, read as that person through the helper, for the requester only, appended to the turn's host instruction; written the same way by `PUT /admin/api/persona/user?personID=` |
 
 A document the schema refuses is reported (`application.persona_document_rejected`
 for the two workspace documents, `agentruntime.requester_persona_rejected` for a

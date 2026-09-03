@@ -4,18 +4,16 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
 const (
-	IdentityFileName  = "identity.json"
-	SoulFileName      = "soul.json"
-	UserDirectoryPath = ".blueclaw/persona/users"
-	SchemaVersion     = 1
+	IdentityFileName         = "identity.json"
+	SoulFileName             = "soul.json"
+	UserDocumentRelativePath = ".internkim/user.json"
+	SchemaVersion            = 1
 )
 
 //go:embed schema/identity.schema.json
@@ -67,16 +65,6 @@ type Language struct {
 
 type UserLanguage struct {
 	Default string `json:"default,omitempty"`
-}
-
-var personIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
-
-func UserDocumentPath(workspaceRootPath string, personID string) (string, bool) {
-	trimmedPersonID := strings.TrimSpace(personID)
-	if !personIDPattern.MatchString(trimmedPersonID) {
-		return "", false
-	}
-	return filepath.Join(workspaceRootPath, filepath.FromSlash(UserDirectoryPath), trimmedPersonID+".json"), true
 }
 
 func ParseIdentity(document []byte) (Identity, error) {

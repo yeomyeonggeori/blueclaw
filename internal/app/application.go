@@ -434,6 +434,11 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 			WorkspaceActorFactory: terminalService.WorkspaceActorFactory(),
 			PersonAccessResolver:  identityService,
 		},
+		PersonaHandler: httpserver.PersonaHandler{
+			WorkspaceRootPath:     runtimeConfiguration.Terminal.WorkspaceRootPath,
+			WorkspaceActorFactory: terminalService.WorkspaceActorFactory(),
+			PersonAccessResolver:  identityService,
+		},
 		ToolCatalogHandler: toolCatalogHandler,
 		PolicyHandler: adminapi.PolicyHandler{
 			PolicyPath:                   policyPath,

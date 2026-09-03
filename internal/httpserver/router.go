@@ -33,6 +33,7 @@ type RouterDependencies struct {
 	ConnectorEventHandler *ConnectorEventHandler
 	AgentReplyHandler     AgentReplyHandler
 	WorkspaceFilesHandler WorkspaceFilesHandler
+	PersonaHandler        PersonaHandler
 	ToolCatalogHandler    http.Handler
 }
 
@@ -84,6 +85,8 @@ func NewRouter(routerDependencies RouterDependencies) http.Handler {
 	multiplexer.HandleFunc("GET /admin/api/memory/pinned-people", routerDependencies.MemoryGraphHandler.HandleListPinnedPeople)
 	multiplexer.HandleFunc("GET /admin/api/workspace/list", routerDependencies.WorkspaceFilesHandler.HandleList)
 	multiplexer.HandleFunc("GET /admin/api/workspace/download", routerDependencies.WorkspaceFilesHandler.HandleDownload)
+	multiplexer.HandleFunc("GET /admin/api/persona/user", routerDependencies.PersonaHandler.HandleReadUser)
+	multiplexer.HandleFunc("PUT /admin/api/persona/user", routerDependencies.PersonaHandler.HandleWriteUser)
 	multiplexer.HandleFunc("GET /admin/api/backup/manifest", routerDependencies.BackupHandler.HandleManifest)
 	multiplexer.HandleFunc("POST /admin/api/backup/prepare", routerDependencies.BackupHandler.HandlePrepare)
 	multiplexer.HandleFunc("POST /admin/api/backup/complete", routerDependencies.BackupHandler.HandleComplete)
