@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -25,7 +26,7 @@ type PersonaHandler struct {
 }
 
 func (handler PersonaHandler) HandleReadUser(responseWriter http.ResponseWriter, request *http.Request) {
-	actor, documentPath, isResolved := handler.resolveActorAndDocument(responseWriter, request)
+	actor, documentPath, backupPath, isResolved := handler.resolveActorAndDocument(responseWriter, request)
 	if !isResolved {
 		return
 	}
@@ -38,16 +39,22 @@ func (handler PersonaHandler) HandleReadUser(responseWriter http.ResponseWriter,
 		writeWorkspaceActorError(responseWriter, errorValue)
 		return
 	}
-	user, errorValue := persona.ParseUser(document)
+	user, document, isRestored, errorValue := persona.ParseWithBackup(persona.ParseUser, document, backupPath)
 	if errorValue != nil {
 		http.Error(responseWriter, errorValue.Error(), http.StatusUnprocessableEntity)
 		return
+	}
+	if isRestored {
+		slog.Warn("httpserver.persona_restored_from_backup", "path", documentPath)
+		if writeError := actor.WriteFile(request.Context(), documentPath, document); writeError != nil {
+			slog.Warn("httpserver.persona_restore_write_failed", "path", documentPath, "error", writeError.Error())
+		}
 	}
 	writeJSON(responseWriter, user)
 }
 
 func (handler PersonaHandler) HandleWriteUser(responseWriter http.ResponseWriter, request *http.Request) {
-	actor, documentPath, isResolved := handler.resolveActorAndDocument(responseWriter, request)
+	actor, documentPath, backupPath, isResolved := handler.resolveActorAndDocument(responseWriter, request)
 	if !isResolved {
 		return
 	}
@@ -74,13 +81,14 @@ func (handler PersonaHandler) HandleWriteUser(responseWriter http.ResponseWriter
 		writeWorkspaceActorError(responseWriter, errorValue)
 		return
 	}
+	persona.SaveBackup(backupPath, canonical)
 	writeJSON(responseWriter, user)
 }
 
 // HandleSeedUser gives a person the document the host knows how to start them
 // with, and only that: a person who already has one keeps every word of it.
 func (handler PersonaHandler) HandleSeedUser(responseWriter http.ResponseWriter, request *http.Request) {
-	actor, documentPath, isResolved := handler.resolveActorAndDocument(responseWriter, request)
+	actor, documentPath, _, isResolved := handler.resolveActorAndDocument(responseWriter, request)
 	if !isResolved {
 		return
 	}
@@ -96,23 +104,24 @@ func (handler PersonaHandler) HandleSeedUser(responseWriter http.ResponseWriter,
 	handler.HandleWriteUser(responseWriter, request)
 }
 
-func (handler PersonaHandler) resolveActorAndDocument(responseWriter http.ResponseWriter, request *http.Request) (security.WorkspaceActor, string, bool) {
+func (handler PersonaHandler) resolveActorAndDocument(responseWriter http.ResponseWriter, request *http.Request) (security.WorkspaceActor, string, string, bool) {
 	personID := strings.TrimSpace(request.URL.Query().Get("personID"))
 	if personID == "" {
 		http.Error(responseWriter, "personID is required", http.StatusBadRequest)
-		return nil, "", false
+		return nil, "", "", false
 	}
-	homePath := security.PersonHomeDirectoryPath(firstNonEmptyWorkspaceRoot(handler.WorkspaceRootPath), personID)
+	workspaceRootPath := firstNonEmptyWorkspaceRoot(handler.WorkspaceRootPath)
+	homePath := security.PersonHomeDirectoryPath(workspaceRootPath, personID)
 	if homePath == "" {
 		http.Error(responseWriter, "personID is required", http.StatusBadRequest)
-		return nil, "", false
+		return nil, "", "", false
 	}
 	actor, errorValue := handler.requesterActor(request.Context(), personID)
 	if errorValue != nil {
 		writeWorkspaceActorError(responseWriter, errorValue)
-		return nil, "", false
+		return nil, "", "", false
 	}
-	return actor, filepath.Join(homePath, persona.UserDocumentRelativePath), true
+	return actor, filepath.Join(homePath, persona.UserDocumentRelativePath), persona.UserBackupPath(workspaceRootPath, personID), true
 }
 
 func (handler PersonaHandler) requesterActor(ctx context.Context, personID string) (security.WorkspaceActor, error) {

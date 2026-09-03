@@ -38,10 +38,16 @@ func requesterPersonaInstruction(factory security.WorkspaceActorFactory, personA
 		slog.Warn("agentruntime.requester_persona_unreadable", "path", documentPath, "error", errorValue.Error())
 		return ""
 	}
-	user, errorValue := persona.ParseUser(document)
+	user, document, isRestored, errorValue := persona.ParseWithBackup(persona.ParseUser, document, persona.UserBackupPath(workspaceRootPath, personID))
 	if errorValue != nil {
 		slog.Warn("agentruntime.requester_persona_rejected", "path", documentPath, "error", errorValue.Error())
 		return ""
+	}
+	if isRestored {
+		slog.Warn("agentruntime.requester_persona_restored_from_backup", "path", documentPath)
+		if writeError := actor.WriteFile(ctx, documentPath, document); writeError != nil {
+			slog.Warn("agentruntime.requester_persona_restore_write_failed", "path", documentPath, "error", writeError.Error())
+		}
 	}
 	return persona.RenderUserInstruction(user)
 }

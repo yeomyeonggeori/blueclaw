@@ -771,7 +771,10 @@ func readInstructionDocuments(rootPath string) []instructionDocument {
 	}
 	soulPath := filepath.Join(rootPath, persona.SoulFileName)
 	if document, errorValue := os.ReadFile(soulPath); errorValue == nil {
-		soul, parseError := persona.ParseSoul(document)
+		soul, document, isRestored, parseError := persona.ParseWithBackup(persona.ParseSoul, document, persona.BackupPath(rootPath, persona.SoulFileName))
+		if isRestored {
+			restorePersonaDocument(soulPath, document)
+		}
 		if parseError != nil {
 			documents = append(documents, instructionDocument{Source: instructionSource(soulPath, "", document), Error: parseError})
 		} else {
@@ -787,8 +790,19 @@ func readIdentityDocument(rootPath string) (string, []byte, persona.Identity, er
 	if errorValue != nil {
 		return identityPath, nil, persona.Identity{}, errorValue
 	}
-	identity, errorValue := persona.ParseIdentity(document)
+	identity, document, isRestored, errorValue := persona.ParseWithBackup(persona.ParseIdentity, document, persona.BackupPath(rootPath, persona.IdentityFileName))
+	if isRestored {
+		restorePersonaDocument(identityPath, document)
+	}
 	return identityPath, document, identity, errorValue
+}
+
+func restorePersonaDocument(livePath string, document []byte) {
+	if errorValue := os.WriteFile(livePath, document, 0o644); errorValue != nil {
+		slog.Warn("persona.document_restore_write_failed", "path", livePath, "error", errorValue.Error())
+		return
+	}
+	slog.Warn("persona.document_restored_from_backup", "path", livePath)
 }
 
 func readLegacyInstructionDocument(rootPath string) (string, agentcontract.InstructionSource) {
