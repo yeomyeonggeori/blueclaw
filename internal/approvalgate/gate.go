@@ -29,11 +29,11 @@ func New(taskRunService taskstate.TaskRunStore) *Gate {
 func (gate *Gate) AwaitApproval(ctx context.Context, approvalRequest mcpserver.ApprovalRequest) (mcpserver.ApprovalOutcome, error) {
 	taskRunID := strings.TrimSpace(approvalRequest.TaskRunID)
 	if gate.taskHasApprovedScope(taskRunID, approvalRequest.ApprovalScope) {
-		return gate.approvedOutcome(taskRunID, approvalRequest.ToolName), nil
+		return gate.approvedOutcome(taskRunID, approvalRequest), nil
 	}
 	if decision, isDecided := gate.recordedDecision(taskRunID, approvalRequest); isDecided {
 		if decision == mcpserver.ApprovalDecisionApproved {
-			return gate.approvedOutcome(taskRunID, approvalRequest.ToolName), nil
+			return gate.approvedOutcome(taskRunID, approvalRequest), nil
 		}
 		return mcpserver.ApprovalOutcome{Decision: decision}, nil
 	}
@@ -50,8 +50,8 @@ func (gate *Gate) AwaitApproval(ctx context.Context, approvalRequest mcpserver.A
 	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionHeld, Notice: confirmation}, nil
 }
 
-func (gate *Gate) approvedOutcome(taskRunID string, toolName string) mcpserver.ApprovalOutcome {
-	gate.taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventApprovalExecuted, marshalEventBody(map[string]string{"toolName": toolName}))
+func (gate *Gate) approvedOutcome(taskRunID string, approvalRequest mcpserver.ApprovalRequest) mcpserver.ApprovalOutcome {
+	RecordApprovalSpent(gate.taskRunService, taskRunID, approvalRequest.ToolName, approvalRequest.ToolInput)
 	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionApproved}
 }
 
