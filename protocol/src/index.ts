@@ -3,5 +3,6 @@ export * from './capability.ts';
 export * from './chat.ts';
 export * from './common.ts';
 export * from './llm.ts';
+export * from './platform.ts';
 export * from './registry.ts';
 export * from './task.ts';

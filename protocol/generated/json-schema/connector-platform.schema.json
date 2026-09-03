@@ -1,0 +1,11 @@
+{
+  "$id": "https://schemas.blueclaw.dev/0.4.0/connector-platform.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "enum": [
+    "api",
+    "buzz",
+    "signal",
+    "slack"
+  ],
+  "type": "string"
+}

@@ -94,11 +94,7 @@ func NewRouter(routerDependencies RouterDependencies) http.Handler {
 	multiplexer.HandleFunc("GET /tasks/api/events", routerDependencies.SSEHandler.HandleTaskEventStream)
 	multiplexer.HandleFunc("GET /agent/api/replies", routerDependencies.AgentReplyHandler.HandleListReplies)
 	if routerDependencies.ConnectorEventHandler != nil {
-		multiplexer.HandleFunc("POST /connectors/mattermost/events", routerDependencies.ConnectorEventHandler.HandleConnectorEvent("mattermost"))
-		multiplexer.HandleFunc("POST /connectors/slack/events", routerDependencies.ConnectorEventHandler.HandleConnectorEvent("slack"))
-		multiplexer.HandleFunc("POST /connectors/signal/events", routerDependencies.ConnectorEventHandler.HandleConnectorEvent("signal"))
-		multiplexer.HandleFunc("POST /connectors/api/events", routerDependencies.ConnectorEventHandler.HandleConnectorEvent("api"))
-		multiplexer.HandleFunc("POST /connectors/buzz/events", routerDependencies.ConnectorEventHandler.HandleConnectorEvent("buzz"))
+		multiplexer.HandleFunc("POST /connectors/{platform}/events", routerDependencies.ConnectorEventHandler.HandleConnectorEvent())
 	}
 
 	if _, errorValue := os.Stat("web/admin"); errorValue == nil {

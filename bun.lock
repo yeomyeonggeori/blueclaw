@@ -21,6 +21,7 @@
       "name": "@blueclaw/chatd",
       "version": "0.1.0",
       "dependencies": {
+        "@blueclaw/protocol": "workspace:*",
         "@chat-adapter/shared": "4.34.0",
         "@chat-adapter/state-memory": "4.34.0",
         "chat": "4.34.0",

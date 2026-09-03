@@ -447,7 +447,7 @@ type ConnectorRuntimeHealth struct {
 	HasQueueRepository          bool      `json:"hasQueueRepository"`
 	HasOutboxRepository         bool      `json:"hasOutboxRepository"`
 	RegisteredPlatforms         []string  `json:"registeredPlatforms"`
-	MattermostAdapterRegistered bool      `json:"mattermostAdapterRegistered"`
+	HasPlatformAdapter          bool      `json:"hasPlatformAdapter"`
 	InboxWorkerCount            int       `json:"inboxWorkerCount"`
 	OutboxWorkerCount           int       `json:"outboxWorkerCount"`
 	InboxWorkersAlive           bool      `json:"inboxWorkersAlive"`
@@ -3239,7 +3239,7 @@ func (connectorRuntime *ConnectorRuntime) Health() ConnectorRuntimeHealth {
 		HasQueueRepository:          connectorRuntime.queueRepository() != nil,
 		HasOutboxRepository:         connectorRuntime.outboxRepository() != nil,
 		RegisteredPlatforms:         platforms,
-		MattermostAdapterRegistered: connectorRuntime.adapterByPlatform["mattermost"] != nil,
+		HasPlatformAdapter:          len(platforms) > 0,
 		InboxWorkerCount:            len(connectorRuntime.inboxHeartbeats),
 		OutboxWorkerCount:           len(connectorRuntime.outboxHeartbeats),
 		LastInboxHeartbeatAt:        latestTime(connectorRuntime.inboxHeartbeats),
@@ -3251,7 +3251,7 @@ func (connectorRuntime *ConnectorRuntime) Health() ConnectorRuntimeHealth {
 		health.HasEventRepository &&
 		health.HasQueueRepository &&
 		health.HasOutboxRepository &&
-		health.MattermostAdapterRegistered &&
+		health.HasPlatformAdapter &&
 		health.InboxWorkersAlive &&
 		health.OutboxWorkersAlive
 	return health

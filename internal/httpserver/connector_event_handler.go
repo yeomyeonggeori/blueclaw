@@ -17,13 +17,14 @@ func NewConnectorEventHandler(connectorRuntime *connectors.ConnectorRuntime) *Co
 	}
 }
 
-func (connectorEventHandler *ConnectorEventHandler) HandleConnectorEvent(platform string) http.HandlerFunc {
+func (connectorEventHandler *ConnectorEventHandler) HandleConnectorEvent() http.HandlerFunc {
 	return func(responseWriter http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost {
 			http.Error(responseWriter, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
+		platform := request.PathValue("platform")
 		result, immediateResponse, errorValue := connectorEventHandler.ConnectorRuntime.HandleHTTPEvent(request.Context(), platform, request)
 		if errorValue != nil {
 			http.Error(responseWriter, errorValue.Error(), http.StatusBadRequest)

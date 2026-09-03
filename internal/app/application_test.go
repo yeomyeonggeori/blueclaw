@@ -25,6 +25,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/protocolidentity"
 	"github.com/yeomyeonggeori/blueclaw/internal/runtimecontrol"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
+	capabilitycatalog "github.com/yeomyeonggeori/blueclaw/protocol/generated"
 )
 
 type applicationMCPRegistryCloser struct {
@@ -350,25 +351,14 @@ func TestNewApplicationRegistersSecretlessConnectorTransports(t *testing.T) {
 	application := NewApplication(runtimeConfiguration, "", bluecollarharness.New)
 
 	transportNames := strings.Join(application.connectorTransportNames(), ",")
-	for _, expectedName := range []string{"mattermost:mattermost-internal-ingress", "slack:slack-internal-ingress", "signal:signal-internal-ingress"} {
+	for _, platform := range capabilitycatalog.MessengerPlatformNames() {
+		expectedName := platform + ":" + platform + "-internal-ingress"
 		if !strings.Contains(transportNames, expectedName) {
 			t.Fatalf("expected transport %q in %q", expectedName, transportNames)
 		}
 	}
 	if strings.Contains(transportNames, "websocket") {
 		t.Fatalf("expected no platform-owned websocket transport, got %q", transportNames)
-	}
-}
-
-func TestNewApplicationAllowsSignalInternalIngress(t *testing.T) {
-	runtimeConfiguration := config.RuntimeConfiguration{}
-	runtimeConfiguration.Logging.DirectoryPath = t.TempDir()
-	runtimeConfiguration.Connectors.Signal.Enabled = true
-
-	application := NewApplication(runtimeConfiguration, "", bluecollarharness.New)
-
-	if application.startupError != nil {
-		t.Fatalf("expected signal internal ingress to be allowed: %v", application.startupError)
 	}
 }
 

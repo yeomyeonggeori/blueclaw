@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -117,14 +118,9 @@ func TestLoadRuntimeConfigurationIncludesGuestAndBridge(t *testing.T) {
     }
   ],
   "connectors": {
-    "mattermost": {
-      "baseURL": "http://localhost:8065"
-    },
-    "slack": {
-      "baseURL": "https://slack.com/api"
-    },
-    "signal": {
-      "enabled": false
+    "chatd": {
+      "endpoint": "http://127.0.0.1:8090",
+      "enabledPlatforms": ["buzz"]
     }
   },
   "terminal": {
@@ -189,11 +185,11 @@ func TestLoadRuntimeConfigurationIncludesGuestAndBridge(t *testing.T) {
 	if runtimeConfiguration.Capabilities.TimeoutSecond != 15 {
 		t.Fatalf("expected capability timeout to match, got %d", runtimeConfiguration.Capabilities.TimeoutSecond)
 	}
-	if runtimeConfiguration.Connectors.Slack.BaseURL != "https://slack.com/api" {
-		t.Fatalf("expected slack base url to match, got %q", runtimeConfiguration.Connectors.Slack.BaseURL)
+	if runtimeConfiguration.Connectors.Chatd.Endpoint != "http://127.0.0.1:8090" {
+		t.Fatalf("expected chatd endpoint to match, got %q", runtimeConfiguration.Connectors.Chatd.Endpoint)
 	}
-	if runtimeConfiguration.Connectors.Signal.Enabled {
-		t.Fatal("expected signal connector to be disabled")
+	if !slices.Equal(runtimeConfiguration.Connectors.Chatd.EnabledPlatforms, []string{"buzz"}) {
+		t.Fatalf("expected chatd to name the enabled platforms, got %v", runtimeConfiguration.Connectors.Chatd.EnabledPlatforms)
 	}
 	if runtimeConfiguration.LanguageModel.DefaultProvider != "capabilityLLM" {
 		t.Fatalf("expected default language model provider to match, got %q", runtimeConfiguration.LanguageModel.DefaultProvider)

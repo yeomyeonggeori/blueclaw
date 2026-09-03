@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@blueclaw/protocol": "workspace:*",
     "@chat-adapter/shared": "4.34.0",
     "@chat-adapter/state-memory": "4.34.0",
     "chat": "4.34.0",

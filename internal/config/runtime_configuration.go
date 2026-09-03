@@ -241,22 +241,7 @@ type MemoryConfiguration struct {
 }
 
 type ConnectorConfiguration struct {
-	Mattermost MattermostConnectorConfiguration `json:"mattermost"`
-	Slack      SlackConnectorConfiguration      `json:"slack"`
-	Signal     SignalConnectorConfiguration     `json:"signal"`
-	Chatd      ChatdConnectorConfiguration      `json:"chatd"`
-}
-
-type MattermostConnectorConfiguration struct {
-	BaseURL string `json:"baseURL"`
-}
-
-type SlackConnectorConfiguration struct {
-	BaseURL string `json:"baseURL"`
-}
-
-type SignalConnectorConfiguration struct {
-	Enabled bool `json:"enabled"`
+	Chatd ChatdConnectorConfiguration `json:"chatd"`
 }
 
 type ChatdConnectorConfiguration struct {

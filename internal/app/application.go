@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -395,12 +396,14 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 		connectorRuntime.UseEventRepository(postgres.NewRawEventRepository(database))
 	}
 	chatdClient := newChatdClient(runtimeConfiguration)
-	connectorRuntime.RegisterAdapter(newPlatformAdapter("mattermost", runtimeConfiguration, capabilityClient, chatdClient))
-	connectorRuntime.RegisterAdapter(newPlatformAdapter("slack", runtimeConfiguration, capabilityClient, chatdClient))
-	connectorRuntime.RegisterAdapter(newPlatformAdapter("signal", runtimeConfiguration, capabilityClient, chatdClient))
+	for _, platform := range capabilitycatalog.MessengerPlatformNames() {
+		connectorRuntime.RegisterAdapter(newPlatformAdapter(platform, runtimeConfiguration, capabilityClient, chatdClient))
+	}
+	for _, platform := range platformsChatdServesBeyondTheProtocol(runtimeConfiguration.Connectors.Chatd) {
+		connectorRuntime.RegisterAdapter(connectors.NewChatdPlatformAdapter(platform, chatdClient))
+	}
 	agentReplyStore := apiconnector.NewPersistentReplyStore(filepath.Join(runtimeConfiguration.Terminal.WorkspaceRootPath, ".blueclaw", "state", "agent-replies.json"))
 	connectorRuntime.RegisterAdapter(apiconnector.NewAdapter(identityService, agentReplyStore))
-	connectorRuntime.RegisterAdapter(connectors.NewChatdPlatformAdapter("buzz", chatdClient))
 	connectorEventHandler := httpserver.NewConnectorEventHandler(connectorRuntime)
 
 	logger.Info("application.initializing", "stage", "router")
@@ -526,11 +529,9 @@ func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath
 		},
 	})
 
-	connectorTransports := []connectors.ConnectorTransport{
-		connectors.NewHTTPWebhookTransport("mattermost-internal-ingress", "mattermost"),
-		connectors.NewHTTPWebhookTransport("slack-internal-ingress", "slack"),
-		connectors.NewHTTPWebhookTransport("signal-internal-ingress", "signal"),
-		connectors.NewHTTPWebhookTransport("buzz-internal-ingress", "buzz"),
+	connectorTransports := []connectors.ConnectorTransport{}
+	for _, platform := range capabilitycatalog.MessengerPlatformNames() {
+		connectorTransports = append(connectorTransports, connectors.NewHTTPWebhookTransport(platform+"-internal-ingress", platform))
 	}
 
 	logger.Info("application.initializing", "stage", "ready")
@@ -1082,6 +1083,18 @@ func isChatdEnabledForPlatform(chatdConfiguration config.ChatdConnectorConfigura
 		}
 	}
 	return false
+}
+
+func platformsChatdServesBeyondTheProtocol(chatdConfiguration config.ChatdConnectorConfiguration) []string {
+	platforms := []string{}
+	for _, enabledPlatform := range chatdConfiguration.EnabledPlatforms {
+		platform := strings.ToLower(strings.TrimSpace(enabledPlatform))
+		if platform == "" || capabilitycatalog.IsConnectorPlatform(platform) || slices.Contains(platforms, platform) {
+			continue
+		}
+		platforms = append(platforms, platform)
+	}
+	return platforms
 }
 
 func skillIndexPath(runtimeConfiguration config.RuntimeConfiguration) string {

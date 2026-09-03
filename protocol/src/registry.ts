@@ -15,6 +15,7 @@ import {
   structuredResponseRequestSchema,
   structuredResponseSchema,
 } from './llm.ts';
+import { connectorPlatformSchema, messengerPlatformSchema } from './platform.ts';
 import { taskArtifactSchema, taskAttemptSchema, taskEventSchema, taskRunSchema, taskScheduleSchema } from './task.ts';
 
 export const protocolVersion = '0.4.0';
@@ -27,7 +28,9 @@ export const protocolSchemas = {
   'capability-registry-response': capabilityRegistryResponseSchema,
   'chat-completion-request': chatCompletionRequestSchema,
   'chat-completion-response': chatCompletionResponseSchema,
+  'connector-platform': connectorPlatformSchema,
   'connector-runtime-result': connectorRuntimeResultSchema,
+  'messenger-platform': messengerPlatformSchema,
   'platform-inbound-event': platformInboundEventSchema,
   'structured-response': structuredResponseSchema,
   'structured-response-request': structuredResponseRequestSchema,

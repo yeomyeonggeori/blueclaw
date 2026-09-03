@@ -13,7 +13,7 @@ func TestNewPlatformAdapterDefaultsToCapability(t *testing.T) {
 	capabilityClient := capability.Client{Endpoint: "http://capability.test"}
 	chatdClient := capability.Client{Endpoint: "http://chatd.test"}
 
-	adapter := newPlatformAdapter("mattermost", runtimeConfiguration, capabilityClient, chatdClient)
+	adapter := newPlatformAdapter("slack", runtimeConfiguration, capabilityClient, chatdClient)
 
 	capabilityAdapter, isCapabilityAdapter := adapter.(connectors.CapabilityPlatformAdapter)
 	if !isCapabilityAdapter {
@@ -27,18 +27,18 @@ func TestNewPlatformAdapterDefaultsToCapability(t *testing.T) {
 func TestNewPlatformAdapterSwitchesToChatdWhenPlatformEnabled(t *testing.T) {
 	runtimeConfiguration := config.RuntimeConfiguration{
 		Connectors: config.ConnectorConfiguration{
-			Chatd: config.ChatdConnectorConfiguration{EnabledPlatforms: []string{"Mattermost"}},
+			Chatd: config.ChatdConnectorConfiguration{EnabledPlatforms: []string{"Buzz"}},
 		},
 	}
 	capabilityClient := capability.Client{Endpoint: "http://capability.test"}
 	chatdClient := capability.Client{Endpoint: "http://chatd.test"}
 
-	mattermostAdapter := newPlatformAdapter("mattermost", runtimeConfiguration, capabilityClient, chatdClient)
+	buzzAdapter := newPlatformAdapter("buzz", runtimeConfiguration, capabilityClient, chatdClient)
 	slackAdapter := newPlatformAdapter("slack", runtimeConfiguration, capabilityClient, chatdClient)
 
-	chatdAdapter, isChatdAdapter := mattermostAdapter.(connectors.ChatdPlatformAdapter)
+	chatdAdapter, isChatdAdapter := buzzAdapter.(connectors.ChatdPlatformAdapter)
 	if !isChatdAdapter {
-		t.Fatalf("expected chatd adapter once mattermost is enabled, got %T", mattermostAdapter)
+		t.Fatalf("expected chatd adapter once buzz is enabled, got %T", buzzAdapter)
 	}
 	if chatdAdapter.ChatdClient.Endpoint != "http://chatd.test" {
 		t.Fatalf("expected chatd client to carry configured endpoint, got %q", chatdAdapter.ChatdClient.Endpoint)

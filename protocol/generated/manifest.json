@@ -1,5 +1,5 @@
 {
-  "aggregateHash": "f01dec6ad998b3e156c30b0e379daca086dfd3348eb212d8bc30626f14dd5326",
+  "aggregateHash": "0535550111be32767507d3fb634508897127d46c6c8b01a2688c5a982990e8ef",
   "protocolVersion": "0.4.0",
   "schemas": [
     {
@@ -38,9 +38,19 @@
       "name": "chat-completion-response"
     },
     {
+      "fileName": "connector-platform.schema.json",
+      "hash": "746daec24bf36046cdacdda5ab24d99dc136c2fed34a65622d2df016649f06dd",
+      "name": "connector-platform"
+    },
+    {
       "fileName": "connector-runtime-result.schema.json",
       "hash": "1be4ac519bb90585b966475ea421ce62373f97896ea0d67c21d8dfec4d40522c",
       "name": "connector-runtime-result"
+    },
+    {
+      "fileName": "messenger-platform.schema.json",
+      "hash": "f4bc126fa173adf03ed1a774bcab0a5e6db1173af1984834dfc0ba596978fb42",
+      "name": "messenger-platform"
     },
     {
       "fileName": "platform-inbound-event.schema.json",
