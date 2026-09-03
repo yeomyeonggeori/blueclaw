@@ -722,81 +722,70 @@ func virtualTruncatedCallContent(content string) string {
 	return content[:maximumVirtualCallContentBytes]
 }
 
+const defaultBuiltinScenarioName = "presentation_local_multiturn_success"
+
+var builtinScenarioFactories = map[string]func(string) VirtualSessionScenario{
+	"presentation":                              PresentationLocalMultiturnSuccessScenario,
+	defaultBuiltinScenarioName:                  PresentationLocalMultiturnSuccessScenario,
+	"memory":                                    MemoryGuidedFollowupScenario,
+	"memory_guided_followup":                    MemoryGuidedFollowupScenario,
+	"plain_question_acceptance":                 PlainQuestionAcceptanceScenario,
+	"web_search_acceptance":                     WebSearchAcceptanceScenario,
+	"tool_permission_hides_skill":               ToolPermissionHidesSkillScenario,
+	"file_write_acceptance":                     FileWriteAcceptanceScenario,
+	"document_create_acceptance":                DocumentCreateAcceptanceScenario,
+	"schedule_create_acceptance":                ScheduleCreateAcceptanceScenario,
+	"schedule_lifecycle_acceptance":             ScheduleLifecycleAcceptanceScenario,
+	"calendar_event_lifecycle_acceptance":       CalendarEventLifecycleAcceptanceScenario,
+	"calendar_false_finish_recovery_acceptance": CalendarFalseFinishRecoveryAcceptanceScenario,
+	"calendar_read_question_with_write_hint":    CalendarReadQuestionWithWriteHintScenario,
+	"ambient_duty_calendar_acceptance":          AmbientDutyCalendarAcceptanceScenario,
+	"ambient_duty_nothing_to_record":            AmbientDutyNothingToRecordScenario,
+	"ambient_duty_announcement_no_echo":         AmbientDutyAnnouncementNoEchoScenario,
+	"ambient_task_capture_acceptance":           AmbientTaskCaptureAcceptanceScenario,
+	"skill_lifecycle_acceptance":                SkillLifecycleAcceptanceScenario,
+	"capability_question_acceptance":            CapabilityQuestionAcceptanceScenario,
+	"task_history_question_acceptance":          TaskHistoryQuestionAcceptanceScenario,
+	"memory_explicit_tool_acceptance":           MemoryExplicitToolAcceptanceScenario,
+	"failure_explanation_acceptance":            FailureExplanationAcceptanceScenario,
+	"one_time_schedule_acceptance":              OneTimeScheduleAcceptanceScenario,
+	"site_artifact_acceptance":                  SitePrototypeAcceptanceScenario,
+	"site_edit_redeploy_acceptance":             SiteEditRedeployAcceptanceScenario,
+	"site_custom_structure_acceptance":          SiteCustomStructureAcceptanceScenario,
+	"site_lifecycle_acceptance":                 SiteLifecycleAcceptanceScenario,
+	"ask_choice_reply_acceptance":               AskChoiceReplyAcceptanceScenario,
+	"dm_send_confirm_acceptance":                DirectMessageSendConfirmAcceptanceScenario,
+	"channel_post_acceptance":                   ChannelPostAcceptanceScenario,
+	"platform_message_edit_acceptance":          PlatformMessageEditAcceptanceScenario,
+	"attachment_material_read":                  AttachmentMaterialReadScenario,
+	"attachment_html_preview_recovery":          AttachmentHTMLPreviewRecoveryScenario,
+	"attachment_html_previous_preview_recovery": AttachmentHTMLPreviousPreviewRecoveryScenario,
+	"attachment_current_image_input":            AttachmentCurrentImageInputScenario,
+	"xlow_image_vision_fallback":                XLowImageVisionFallbackScenario,
+}
+
 func BuiltinScenario(name string, artifactDirectoryPath string) (VirtualSessionScenario, error) {
-	switch strings.TrimSpace(name) {
-	case "", "presentation", "presentation_local_multiturn_success":
-		return PresentationLocalMultiturnSuccessScenario(artifactDirectoryPath), nil
-	case "memory", "memory_guided_followup":
-		return MemoryGuidedFollowupScenario(artifactDirectoryPath), nil
-	case "plain_question_acceptance":
-		return PlainQuestionAcceptanceScenario(artifactDirectoryPath), nil
-	case "web_search_acceptance":
-		return WebSearchAcceptanceScenario(artifactDirectoryPath), nil
-	case "tool_permission_hides_skill":
-		return ToolPermissionHidesSkillScenario(artifactDirectoryPath), nil
-	case "file_write_acceptance":
-		return FileWriteAcceptanceScenario(artifactDirectoryPath), nil
-	case "document_create_acceptance":
-		return DocumentCreateAcceptanceScenario(artifactDirectoryPath), nil
-	case "schedule_create_acceptance":
-		return ScheduleCreateAcceptanceScenario(artifactDirectoryPath), nil
-	case "schedule_lifecycle_acceptance":
-		return ScheduleLifecycleAcceptanceScenario(artifactDirectoryPath), nil
-	case "calendar_event_lifecycle_acceptance":
-		return CalendarEventLifecycleAcceptanceScenario(artifactDirectoryPath), nil
-	case "calendar_false_finish_recovery_acceptance":
-		return CalendarFalseFinishRecoveryAcceptanceScenario(artifactDirectoryPath), nil
-	case "calendar_read_question_with_write_hint":
-		return CalendarReadQuestionWithWriteHintScenario(artifactDirectoryPath), nil
-	case "ambient_duty_calendar_acceptance":
-		return AmbientDutyCalendarAcceptanceScenario(artifactDirectoryPath), nil
-	case "ambient_duty_nothing_to_record":
-		return AmbientDutyNothingToRecordScenario(artifactDirectoryPath), nil
-	case "ambient_duty_announcement_no_echo":
-		return AmbientDutyAnnouncementNoEchoScenario(artifactDirectoryPath), nil
-	case "ambient_task_capture_acceptance":
-		return AmbientTaskCaptureAcceptanceScenario(artifactDirectoryPath), nil
-	case "skill_lifecycle_acceptance":
-		return SkillLifecycleAcceptanceScenario(artifactDirectoryPath), nil
-	case "capability_question_acceptance":
-		return CapabilityQuestionAcceptanceScenario(artifactDirectoryPath), nil
-	case "task_history_question_acceptance":
-		return TaskHistoryQuestionAcceptanceScenario(artifactDirectoryPath), nil
-	case "memory_explicit_tool_acceptance":
-		return MemoryExplicitToolAcceptanceScenario(artifactDirectoryPath), nil
-	case "failure_explanation_acceptance":
-		return FailureExplanationAcceptanceScenario(artifactDirectoryPath), nil
-	case "one_time_schedule_acceptance":
-		return OneTimeScheduleAcceptanceScenario(artifactDirectoryPath), nil
-	case "site_artifact_acceptance":
-		return SitePrototypeAcceptanceScenario(artifactDirectoryPath), nil
-	case "site_edit_redeploy_acceptance":
-		return SiteEditRedeployAcceptanceScenario(artifactDirectoryPath), nil
-	case "site_custom_structure_acceptance":
-		return SiteCustomStructureAcceptanceScenario(artifactDirectoryPath), nil
-	case "site_lifecycle_acceptance":
-		return SiteLifecycleAcceptanceScenario(artifactDirectoryPath), nil
-	case "ask_choice_reply_acceptance":
-		return AskChoiceReplyAcceptanceScenario(artifactDirectoryPath), nil
-	case "dm_send_confirm_acceptance":
-		return DirectMessageSendConfirmAcceptanceScenario(artifactDirectoryPath), nil
-	case "channel_post_acceptance":
-		return ChannelPostAcceptanceScenario(artifactDirectoryPath), nil
-	case "platform_message_edit_acceptance":
-		return PlatformMessageEditAcceptanceScenario(artifactDirectoryPath), nil
-	case "attachment_material_read":
-		return AttachmentMaterialReadScenario(artifactDirectoryPath), nil
-	case "attachment_html_preview_recovery":
-		return AttachmentHTMLPreviewRecoveryScenario(artifactDirectoryPath), nil
-	case "attachment_html_previous_preview_recovery":
-		return AttachmentHTMLPreviousPreviewRecoveryScenario(artifactDirectoryPath), nil
-	case "attachment_current_image_input":
-		return AttachmentCurrentImageInputScenario(artifactDirectoryPath), nil
-	case "xlow_image_vision_fallback":
-		return XLowImageVisionFallbackScenario(artifactDirectoryPath), nil
-	default:
+	trimmedName := strings.TrimSpace(name)
+	if trimmedName == "" {
+		trimmedName = defaultBuiltinScenarioName
+	}
+	factory, isKnown := builtinScenarioFactories[trimmedName]
+	if !isKnown {
 		return VirtualSessionScenario{}, fmt.Errorf("unknown virtual session scenario: %s", name)
 	}
+	return factory(artifactDirectoryPath), nil
+}
+
+// BuiltinScenarioNames lists every name BuiltinScenario accepts, sorted, so a
+// caller's --help output stays derived from this registry instead of a
+// hand-kept copy.
+func BuiltinScenarioNames() []string {
+	names := make([]string, 0, len(builtinScenarioFactories))
+	for name := range builtinScenarioFactories {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 var virtualSessionAgentHarnessFactory harnessdriver.Factory

@@ -552,9 +552,10 @@ Neither runs before the kernel decides.
   runs as the daemon user. The shipped `config/runtime.standalone.example.json`
   does not set it, so a default standalone deployment runs everything as the
   daemon user on either platform.
-- `cmd/bluecollar` deliberately uses `DirectWorkspaceActorFactory`
+- The virtual-session scripted harness (`internal/e2e/virtual_session.go`)
+  deliberately uses `DirectWorkspaceActorFactory`
   (`internal/security/direct_workspace_actor.go`), which has no projection at
-  all. It is a single-directory batch runner, not a multi-person daemon.
+  all. It runs one scenario in one workspace, not a multi-person daemon.
 - `internal/access/access.go` exposes `CanAccess`, consulted before exposing
   capability and MCP tools and before memory reads. This README used to call it
   a migration leftover awaiting deletion. That was wrong: POSIX confines what a
@@ -652,7 +653,6 @@ tool participates in the same approval and evidence rules as a built-in one.
 | `cmd/blueclaw-supervisor` | boots and watches the virtual-machine guest, proxies host and guest HTTP, handles workspace image sync and restore |
 | `cmd/blueclaw-backup`, `cmd/blueclaw-restore` | workspace and database snapshot bundles |
 | `cmd/blueclaw-guest-healthd`, `cmd/blueclaw-vsock-http-proxy` | guest health and host-to-guest transport |
-| `cmd/bluecollar` | runs the agent loop alone against one directory, for benchmarking; no database, connectors, policy, or POSIX projection |
 
 ## Development
 

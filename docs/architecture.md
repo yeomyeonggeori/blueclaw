@@ -550,9 +550,10 @@ socket, into the service that performs the effect.
 
 `DirectWorkspaceActorFactory`
 (`internal/security/direct_workspace_actor.go`) is the deliberate opposite —
-it runs work as the process itself, with no projection. `cmd/bluecollar` uses it
-because a single-directory benchmark run has no second person to isolate from.
-An appliance must never use it.
+it runs work as the process itself, with no projection. The virtual-session
+scripted harness (`internal/e2e/virtual_session.go`) uses it because a single
+scenario in one workspace has no second person to isolate from. An appliance
+must never use it.
 
 ### Artifacts
 
