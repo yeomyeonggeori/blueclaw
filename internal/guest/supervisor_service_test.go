@@ -241,6 +241,44 @@ func TestRemoveInactiveInstanceDirectoriesKeepsActiveInstance(t *testing.T) {
 	}
 }
 
+type resettingGuestHealthClient struct {
+	resetsRemaining int
+	checkCount      int
+}
+
+func (client *resettingGuestHealthClient) CheckHealth(healthContext context.Context, bootSpecification BootSpecification) error {
+	_ = healthContext
+	_ = bootSpecification
+	client.checkCount++
+	if client.checkCount <= client.resetsRemaining {
+		return errors.New("read unix /var/lib/blueclaw/instances/guest/cloud-hypervisor-vsock.socket: read: connection reset by peer")
+	}
+	return nil
+}
+
+func TestWaitForGuestHealthTreatsAVSockResetAsAGuestThatIsNotUpYet(t *testing.T) {
+	healthClient := &resettingGuestHealthClient{resetsRemaining: 4}
+	supervisorService := NewSupervisorService(config.GuestConfiguration{}, WorkspaceVolumeService{}, healthClient)
+	supervisorService.HealthCheckInterval = time.Millisecond
+
+	healthContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if errorValue := supervisorService.WaitForGuestHealth(healthContext, GuestInstance{InstanceID: "bootinstance"}); errorValue != nil {
+		t.Fatalf("expected a guest that resets while it boots to become healthy, got %v", errorValue)
+	}
+	if healthClient.checkCount != 5 {
+		t.Fatalf("expected the wait to keep asking through every reset, got %d checks", healthClient.checkCount)
+	}
+}
+
+func TestGuestBootHealthTimeoutLeavesRoomForAColdFirstBoot(t *testing.T) {
+	const observedColdFirstBoot = 150 * time.Second
+	if GuestBootHealthTimeout <= observedColdFirstBoot {
+		t.Fatalf("a cold first boot took %s and the deadline is %s", observedColdFirstBoot, GuestBootHealthTimeout)
+	}
+}
+
 type neverReadyGuestHealthClient struct{}
 
 func (neverReadyGuestHealthClient) CheckHealth(healthContext context.Context, bootSpecification BootSpecification) error {

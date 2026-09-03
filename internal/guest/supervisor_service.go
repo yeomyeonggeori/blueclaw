@@ -30,6 +30,8 @@ type SupervisorService struct {
 	sidecarsByInstanceID map[string][]*exec.Cmd
 }
 
+const GuestBootHealthTimeout = 10 * time.Minute
+
 type guestExitState struct {
 	exited    chan struct{}
 	exitError error
@@ -185,6 +187,7 @@ func (supervisorService *SupervisorService) WaitForGuestHealth(healthContext con
 	if healthCheckInterval <= 0 {
 		healthCheckInterval = 200 * time.Millisecond
 	}
+	startedAt := time.Now()
 
 	supervisorService.mutex.RLock()
 	exitState := supervisorService.exitByInstanceID[guestInstance.InstanceID]
@@ -213,7 +216,7 @@ func (supervisorService *SupervisorService) WaitForGuestHealth(healthContext con
 		select {
 		case <-healthContext.Done():
 			if lastError != nil {
-				return fmt.Errorf("guest health did not become ready: %w", lastError)
+				return fmt.Errorf("guest health did not become ready in %s: %w", time.Since(startedAt).Round(time.Second), lastError)
 			}
 			return healthContext.Err()
 		case <-time.After(healthCheckInterval):

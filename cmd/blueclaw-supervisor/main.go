@@ -16,8 +16,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/guest"
 )
 
-const guestHealthTimeout = 300 * time.Second
-
 func main() {
 	runtimeConfigurationPath := flag.String("runtime", "config/runtime.example.json", "runtime configuration path")
 	flag.Parse()
@@ -57,7 +55,7 @@ func main() {
 		}()
 	}
 
-	healthContext, cancelHealthCheck := context.WithTimeout(interruptContext, guestHealthTimeout)
+	healthContext, cancelHealthCheck := context.WithTimeout(interruptContext, guest.GuestBootHealthTimeout)
 	defer cancelHealthCheck()
 
 	errorValue = supervisorService.WaitForGuestHealth(healthContext, guestInstance)
