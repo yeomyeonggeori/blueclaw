@@ -871,10 +871,6 @@ func loadAgentIdentity(runtimeConfiguration config.RuntimeConfiguration) agentco
 	return agentcontract.AgentIdentity{}
 }
 
-func unquoteSimpleYAML(value string) string {
-	return strings.Trim(value, `"'`)
-}
-
 func firstNonEmptyString(values ...string) string {
 	for _, value := range values {
 		if strings.TrimSpace(value) != "" {
