@@ -36,6 +36,9 @@ func (turnGate turnToolCallGate) ReviewToolCall(ctx context.Context, toolInvocat
 	if repliesIntoTheConversationItWasAskedIn(toolDefinition, toolInvocation.Input) {
 		return toolcontract.ToolCallReview{MayProceed: true}, nil
 	}
+	if toolcontract.IsDelegatedTurn(ctx) {
+		return toolcontract.ToolCallReview{Result: delegatedTurnDeniedResult()}, nil
+	}
 	if turnGate.gate == nil {
 		return toolcontract.ToolCallReview{Result: unanswerableCallResult()}, nil
 	}
@@ -116,7 +119,11 @@ func HeldCallResult(notice string) toolcontract.ToolResult {
 }
 
 func unanswerableCallResult() toolcontract.ToolResult {
-	return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.PolicyBlocked, "approval", "This call needs the requester's approval and there is no conversation they can answer on, so it can never run. Do not wait for an approval; take another route or tell them what you could not do.")
+	return refusedCallResult("This call needs the requester's approval and there is no conversation they can answer on, so it can never run. Do not wait for an approval; take another route or tell them what you could not do.")
+}
+
+func delegatedTurnDeniedResult() toolcontract.ToolResult {
+	return refusedCallResult("This call needs the requester's approval, and a delegated turn has no one to ask: only the turn that was asked for the work can hold a call for approval. Do not wait for an approval; take another route, or report this back as the part you could not do.")
 }
 
 func rejectedCallResult(notice string) toolcontract.ToolResult {
@@ -124,5 +131,9 @@ func rejectedCallResult(notice string) toolcontract.ToolResult {
 	if rejectedNotice == "" {
 		rejectedNotice = "The requester declined this call. Do not retry it; choose another way or stop."
 	}
-	return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.PolicyBlocked, "approval", rejectedNotice)
+	return refusedCallResult(rejectedNotice)
+}
+
+func refusedCallResult(notice string) toolcontract.ToolResult {
+	return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.PolicyBlocked, "approval", notice)
 }

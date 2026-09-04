@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
+	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
@@ -158,5 +159,46 @@ func TestAToolThatNeedsNoApprovalNeverReachesTheGate(t *testing.T) {
 	}
 	if len(gate.received()) != 0 {
 		t.Fatalf("expected the gate not to be consulted for a tool that needs no approval, got %+v", gate.received())
+	}
+}
+
+func TestADelegatedTurnIsDeniedRatherThanHeld(t *testing.T) {
+	gate, taskRunService, taskRun := gateFixture(t)
+	delegatedContext := toolcontract.WithDelegatedTurn(toolcontract.WithTaskRunID(context.Background(), taskRun.TaskRunID))
+
+	executed, result := invokeThroughGateInContext(t, delegatedContext, gate.TurnGate(TurnContext{RequesterPersonID: "person-1", ConversationID: "conversation-1"}), "file_delete")
+
+	if len(*executed) != 0 {
+		t.Fatalf("expected a denied call never to run, it ran %+v", *executed)
+	}
+	if !result.Failed() || result.Failure.RequiresApproval {
+		t.Fatalf("a call the child must stop waiting for is not a call that is still held: %+v", result)
+	}
+	currentTaskRun, _ := taskRunService.FindTaskRun(taskRun.TaskRunID)
+	if currentTaskRun.Status == task.TaskStatusWaitingApproval {
+		t.Fatal("a run left waiting for an approval nobody was asked for is a run a later approve can hijack")
+	}
+	for _, taskEvent := range taskRunService.ListTaskEvent(taskRun.TaskRunID) {
+		if taskEvent.Name == "approval.pending_call" {
+			t.Fatalf("a denied call is not a held call, and the ledger must not offer one to resume: %s", taskEvent.Body)
+		}
+	}
+}
+
+func TestATopLevelTurnStillHoldsTheCallItNeedsApprovalFor(t *testing.T) {
+	gate, taskRunService, taskRun := gateFixture(t)
+	turnContext := toolcontract.WithTaskRunID(context.Background(), taskRun.TaskRunID)
+
+	executed, result := invokeThroughGateInContext(t, turnContext, gate.TurnGate(TurnContext{RequesterPersonID: "person-1", ConversationID: "conversation-1"}), "file_delete")
+
+	if len(*executed) != 0 {
+		t.Fatalf("expected a held call never to run, it ran %+v", *executed)
+	}
+	if !result.Failed() || !result.Failure.RequiresApproval {
+		t.Fatalf("the turn the requester is talking to is the one that may ask them: %+v", result)
+	}
+	heldTaskRun, _ := taskRunService.FindTaskRun(taskRun.TaskRunID)
+	if heldTaskRun.Status != task.TaskStatusWaitingApproval {
+		t.Fatalf("expected the run to wait for the requester, got %q", heldTaskRun.Status)
 	}
 }
