@@ -35,6 +35,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/harnessdriver"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/launchfailure"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
@@ -2675,7 +2676,7 @@ func scenarioLaunchesAmbientDuty(scenario VirtualSessionScenario) bool {
 	if json.Unmarshal([]byte(scenario.AddressingResponse), &decision) != nil {
 		return false
 	}
-	return connectors.AmbientDutyLaunchesWithoutReply(decision)
+	return inboundengagement.AmbientDutyLaunchesWithoutReply(decision)
 }
 
 func virtualTurnReachesRouter(virtualTurn VirtualTurn) bool {

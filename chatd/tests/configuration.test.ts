@@ -24,3 +24,27 @@ test("chatd keeps to this machine when nobody says otherwise", () => {
 
 	expect(configuration.listenHostname).toBe("127.0.0.1");
 });
+
+test("chatd sends inbound events to the relay door when one is configured", () => {
+	const configuration = loadConfiguration({
+		CHATD_BOT_USER_NAME: "internkim",
+		CHATD_MATTERMOST_BASE_URL: "http://127.0.0.1:8065",
+		CHATD_MATTERMOST_BOT_TOKEN: "bot",
+		CHATD_BLUECLAW_INGRESS_URL: "http://127.0.0.1:8080/connectors/mattermost/events",
+		CHATD_RELAY_INBOUND_URL: "  https://relay.example.com/inbound  ",
+	});
+
+	expect(configuration.relayInboundURL).toBe("https://relay.example.com/inbound");
+});
+
+test("chatd keeps the connectors route when no relay door is named", () => {
+	const configuration = loadConfiguration({
+		CHATD_BOT_USER_NAME: "internkim",
+		CHATD_MATTERMOST_BASE_URL: "http://127.0.0.1:8065",
+		CHATD_MATTERMOST_BOT_TOKEN: "bot",
+		CHATD_BLUECLAW_INGRESS_URL: "http://127.0.0.1:8080/connectors/mattermost/events",
+		CHATD_RELAY_INBOUND_URL: "   ",
+	});
+
+	expect(configuration.relayInboundURL).toBeUndefined();
+});

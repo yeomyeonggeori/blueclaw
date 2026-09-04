@@ -27,6 +27,7 @@ function createConfiguration(overrides: Partial<ChatdConfiguration> = {}): Chatd
 		botUserName: "mattermost-bot",
 		blueclawBaseURL: "https://blueclaw.example.com",
 		blueclawIngressURL: "https://blueclaw.example.com/ingress",
+		relayInboundURL: undefined,
 		admindBaseURL: undefined,
 		listenPort: 18090,
 		listenHostname: "127.0.0.1",

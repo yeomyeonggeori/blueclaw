@@ -17,16 +17,26 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
+	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 type recordingLauncher struct {
-	launched []agentruntime.TaskLaunchRequest
-	reply    string
+	mutex          sync.Mutex
+	launched       []agentruntime.TaskLaunchRequest
+	reply          string
+	launchedSignal chan agentruntime.TaskLaunchRequest
 }
 
 func (launcher *recordingLauncher) Launch(_ context.Context, request agentruntime.TaskLaunchRequest) (agentruntime.TaskLaunchResult, error) {
+	launcher.mutex.Lock()
 	launcher.launched = append(launcher.launched, request)
+	launchedSignal := launcher.launchedSignal
+	launcher.mutex.Unlock()
+	select {
+	case launchedSignal <- request:
+	default:
+	}
 	return agentruntime.TaskLaunchResult{TurnResult: agentcontract.AgentTurnResult{
 		TaskRun:       agentcontract.TaskRun{Status: agentcontract.TaskStatusCompleted},
 		FinishMessage: launcher.reply,
@@ -49,12 +59,13 @@ func (staticDirectory) ResolvePersonAccess(personID string) policy.PersonAccess 
 }
 
 type recordingClient struct {
-	mutex            sync.Mutex
-	messages         []string
-	thoughts         []string
-	permissionAsked  []acp.RequestPermissionRequest
-	permissionChoice acp.PermissionOptionId
-	answerByAsking   func(acp.RequestPermissionRequest) acp.PermissionOptionId
+	mutex                 sync.Mutex
+	messages              []string
+	thoughts              []string
+	permissionAsked       []acp.RequestPermissionRequest
+	permissionAskedSignal chan acp.RequestPermissionRequest
+	permissionChoice      acp.PermissionOptionId
+	answerByAsking        func(acp.RequestPermissionRequest) acp.PermissionOptionId
 }
 
 func (client *recordingClient) SessionUpdate(_ context.Context, notification acp.SessionNotification) error {
@@ -74,7 +85,12 @@ func (client *recordingClient) RequestPermission(_ context.Context, request acp.
 	client.permissionAsked = append(client.permissionAsked, request)
 	choice := client.permissionChoice
 	answerByAsking := client.answerByAsking
+	askedSignal := client.permissionAskedSignal
 	client.mutex.Unlock()
+	select {
+	case askedSignal <- request:
+	default:
+	}
 	if answerByAsking != nil {
 		choice = answerByAsking(request)
 	}
@@ -130,9 +146,18 @@ func connectedPair(t *testing.T, launcher TaskLauncher, client *recordingClient)
 
 func connectedPairWithRouter(t *testing.T, launcher TaskLauncher, client *recordingClient, turnRouter TurnRouter) (*acp.ClientSideConnection, *PermissionRelay) {
 	t.Helper()
+	return connectedPairWithCollaborators(t, client, Collaborators{
+		TaskLauncher: launcher,
+		Directory:    staticDirectory{},
+		TurnRouter:   turnRouter,
+	})
+}
+
+func connectedPairWithCollaborators(t *testing.T, client *recordingClient, collaborators Collaborators) (*acp.ClientSideConnection, *PermissionRelay) {
+	t.Helper()
 	agentSide, clientSide := net.Pipe()
 	permissionRelay := NewPermissionRelay(silentLogger())
-	agent := NewAgent(launcher, staticDirectory{}, permissionRelay, turnRouter, silentLogger())
+	agent := NewAgent(collaborators, permissionRelay, silentLogger())
 	agentConnection := acp.NewAgentSideConnection(agent, agentSide, agentSide)
 	agent.UseConnection(agentConnection)
 	clientConnection := acp.NewClientSideConnection(client, clientSide, clientSide)
@@ -412,4 +437,179 @@ func TestAnAnswerToACallNobodyIsWaitingOnIsRefused(t *testing.T) {
 	if errorValue == nil {
 		t.Fatal("a call nobody is waiting on was answered, so any client could approve anything")
 	}
+}
+
+func heldCallForTest() agentcontract.HeldCall {
+	return agentcontract.HeldCall{
+		ToolName:      "message_send",
+		ToolInput:     json.RawMessage(`{"targetType":"directMessage"}`),
+		ApprovalScope: "message_send",
+		Confirmation:  "박예시에게 보낼까요?",
+	}
+}
+
+func runWaitingOnAHeldCall(t *testing.T, taskRunService *task.TaskRunService, conversationID string, heldCall agentcontract.HeldCall) agentcontract.TaskRun {
+	t.Helper()
+	taskRun := taskRunService.CreateTaskRun("person-sample", conversationID, "박예시한테 DM 보내줘")
+	if _, errorValue := taskRunService.PauseTaskRun(taskRun.TaskRunID, agentcontract.TaskStatusWaitingApproval, heldCall.Confirmation); errorValue != nil {
+		t.Fatalf("pause task run: %v", errorValue)
+	}
+	body, errorValue := json.Marshal(heldCall)
+	if errorValue != nil {
+		t.Fatalf("held call body: %v", errorValue)
+	}
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalPendingCall, string(body))
+	return taskRun
+}
+
+func reconnectedPair(t *testing.T, launcher TaskLauncher, client *recordingClient, taskRunService *task.TaskRunService) *acp.ClientSideConnection {
+	t.Helper()
+	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
+		TaskLauncher: launcher,
+		Directory:    staticDirectory{},
+		TurnRouter:   scriptedRouter{},
+		TaskRunStore: taskRunService,
+	})
+	return connection
+}
+
+func loadSessionForTest(t *testing.T, connection *acp.ClientSideConnection, sessionID acp.SessionId, meta map[string]any) error {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, errorValue := connection.Initialize(ctx, acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber}); errorValue != nil {
+		t.Fatalf("initialize: %v", errorValue)
+	}
+	_, errorValue := connection.LoadSession(ctx, acp.LoadSessionRequest{
+		SessionId:  sessionID,
+		Cwd:        "/workspace",
+		McpServers: []acp.McpServer{},
+		Meta:       meta,
+	})
+	return errorValue
+}
+
+// The load response is answered before the questions go out, so the test waits
+// for the question rather than for the load.
+func awaitPermissionRequest(t *testing.T, client *recordingClient) acp.RequestPermissionRequest {
+	t.Helper()
+	select {
+	case request := <-client.permissionAskedSignal:
+		return request
+	case <-time.After(5 * time.Second):
+		t.Fatal("the reconnected client was never asked again, so the run waits for an answer nobody will give")
+	}
+	return acp.RequestPermissionRequest{}
+}
+
+func expectNobodyIsAskedAgain(t *testing.T, client *recordingClient) {
+	t.Helper()
+	select {
+	case request := <-client.permissionAskedSignal:
+		t.Fatalf("the client was asked about %q, which nobody is waiting on", request.ToolCall.ToolCallId)
+	case <-time.After(500 * time.Millisecond):
+	}
+}
+
+func hasTaskEvent(taskRunService *task.TaskRunService, taskRunID string, name string) bool {
+	for _, taskEvent := range taskRunService.ListTaskEvent(taskRunID) {
+		if taskEvent.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func TestLoadingASessionAsksAgainAboutTheCallItsRunStoppedOn(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	heldCall := heldCallForTest()
+	runWaitingOnAHeldCall(t, taskRunService, "conversation-1", heldCall)
+	client := &recordingClient{permissionAskedSignal: make(chan acp.RequestPermissionRequest, 4)}
+	connection := reconnectedPair(t, &recordingLauncher{}, client, taskRunService)
+
+	if errorValue := loadSessionForTest(t, connection, "session-the-relay-still-holds", sessionMeta("sample@example.test", "conversation-1")); errorValue != nil {
+		t.Fatalf("load session: %v", errorValue)
+	}
+
+	asked := awaitPermissionRequest(t, client)
+	if asked.ToolCall.ToolCallId != acp.ToolCallId(approvalgate.HeldCallID(heldCall.ToolName, heldCall.ToolInput)) {
+		t.Fatalf("the question carried tool call id %q, which is not the one the client already has open", asked.ToolCall.ToolCallId)
+	}
+	if asked.ToolCall.Title == nil || *asked.ToolCall.Title != heldCall.Confirmation {
+		t.Fatal("the person was asked something other than the question the run stopped on")
+	}
+	expectNobodyIsAskedAgain(t, client)
+}
+
+func TestApprovingTheReissuedQuestionResumesTheRunItBelongsTo(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	waitingRun := runWaitingOnAHeldCall(t, taskRunService, "conversation-1", heldCallForTest())
+	launcher := &recordingLauncher{launchedSignal: make(chan agentruntime.TaskLaunchRequest, 4)}
+	client := &recordingClient{
+		permissionAskedSignal: make(chan acp.RequestPermissionRequest, 4),
+		permissionChoice:      approveOnceOptionID,
+	}
+	connection := reconnectedPair(t, launcher, client, taskRunService)
+
+	if errorValue := loadSessionForTest(t, connection, "session-the-relay-still-holds", sessionMeta("sample@example.test", "conversation-1")); errorValue != nil {
+		t.Fatalf("load session: %v", errorValue)
+	}
+
+	resumed := agentruntime.TaskLaunchRequest{}
+	select {
+	case resumed = <-launcher.launchedSignal:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the answered call never resumed, so the approval was collected and thrown away")
+	}
+	if !resumed.IsApprovalContinuation {
+		t.Fatal("the resumed turn does not carry the approval, so the call would be asked about all over again")
+	}
+	if !resumed.IsRuntimeRestartResume {
+		t.Fatal("the resumed turn does not read as a restart resume, so it looks like a fresh request")
+	}
+	if resumed.ExistingTaskRunID != waitingRun.TaskRunID {
+		t.Fatalf("the turn resumed %q, expected the run that was waiting (%q)", resumed.ExistingTaskRunID, waitingRun.TaskRunID)
+	}
+	if !hasTaskEvent(taskRunService, waitingRun.TaskRunID, agentcontract.TaskEventApprovalDecided) {
+		t.Fatal("the answer was never recorded on the run, so a second restart would ask about the same call again")
+	}
+}
+
+func TestACallHeldInAnotherConversationIsNotReissued(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	runWaitingOnAHeldCall(t, taskRunService, "conversation-somewhere-else", heldCallForTest())
+	client := &recordingClient{permissionAskedSignal: make(chan acp.RequestPermissionRequest, 4)}
+	connection := reconnectedPair(t, &recordingLauncher{}, client, taskRunService)
+
+	if errorValue := loadSessionForTest(t, connection, "session-the-relay-still-holds", sessionMeta("sample@example.test", "conversation-1")); errorValue != nil {
+		t.Fatalf("load session: %v", errorValue)
+	}
+
+	expectNobodyIsAskedAgain(t, client)
+}
+
+func TestACallTheRequesterAlreadyAnsweredIsNotAskedAgain(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	answeredRun := runWaitingOnAHeldCall(t, taskRunService, "conversation-1", heldCallForTest())
+	taskRunService.AppendTaskEvent(answeredRun.TaskRunID, agentcontract.TaskEventApprovalDecided, `{"decision":"confirm","source":"acp_permission"}`)
+	client := &recordingClient{permissionAskedSignal: make(chan acp.RequestPermissionRequest, 4)}
+	connection := reconnectedPair(t, &recordingLauncher{}, client, taskRunService)
+
+	if errorValue := loadSessionForTest(t, connection, "session-the-relay-still-holds", sessionMeta("sample@example.test", "conversation-1")); errorValue != nil {
+		t.Fatalf("load session: %v", errorValue)
+	}
+
+	expectNobodyIsAskedAgain(t, client)
+}
+
+func TestLoadingASessionThatNamesNobodyIsRefused(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	runWaitingOnAHeldCall(t, taskRunService, "conversation-1", heldCallForTest())
+	client := &recordingClient{permissionAskedSignal: make(chan acp.RequestPermissionRequest, 4)}
+	connection := reconnectedPair(t, &recordingLauncher{}, client, taskRunService)
+
+	if errorValue := loadSessionForTest(t, connection, "session-the-relay-still-holds", nil); errorValue == nil {
+		t.Fatal("a reloaded session that names nobody opened, and every tool it ran would run as the service account")
+	}
+	expectNobodyIsAskedAgain(t, client)
 }

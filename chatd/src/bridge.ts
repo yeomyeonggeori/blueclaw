@@ -1,5 +1,6 @@
 import type { Chat, Message, Thread } from 'chat';
 import type { ChatdConfiguration } from './configuration.ts';
+import { deliverInboundEventToRelay, type NormalizedInboundEvent } from './relay-inbound.ts';
 import {
   buildVisibleContext,
   emptyVisibleContext,
@@ -102,24 +103,30 @@ async function forwardNormalizedEvent(
     onlyExchangeOpenings: startsItsOwnExchange,
   }).catch(() => emptyVisibleContext(scopeThreadId));
   const addressing = adapter.addressingOf(message.raw);
+  const event: NormalizedInboundEvent = {
+    platform,
+    conversationID: thread.id,
+    messageID: message.id,
+    senderID: message.author.userId,
+    replyTargetID: thread.id,
+    prompt: message.text,
+    context: {
+      ...context,
+      inputAttachments: inputAttachmentsOfMessage(platform, message) ?? [],
+      addressing: {
+        botMentioned: addressing.botMentioned || message.isMention === true,
+        otherPersonMentioned: addressing.otherPersonMentioned,
+      },
+    },
+  };
+  if (configuration.relayInboundURL) {
+    await deliverInboundEventToRelay(configuration.relayInboundURL, event);
+    return;
+  }
   const response = await fetch(`${configuration.blueclawBaseURL}/connectors/${platform}/events`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      conversationID: thread.id,
-      messageID: message.id,
-      senderID: message.author.userId,
-      replyTargetID: thread.id,
-      prompt: message.text,
-      context: {
-        ...context,
-        inputAttachments: inputAttachmentsOfMessage(platform, message) ?? [],
-        addressing: {
-          botMentioned: addressing.botMentioned || message.isMention === true,
-          otherPersonMentioned: addressing.otherPersonMentioned,
-        },
-      },
-    }),
+    body: JSON.stringify(event),
   });
   if (!response.ok) {
     throw new Error(`blueclaw ${platform} ingress returned ${response.status}`);

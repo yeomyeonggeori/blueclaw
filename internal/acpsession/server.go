@@ -14,21 +14,17 @@ import (
 
 type Server struct {
 	socketPath      string
-	taskLauncher    TaskLauncher
-	directory       PersonDirectory
+	collaborators   Collaborators
 	permissionRelay *PermissionRelay
-	turnRouter      TurnRouter
 	logger          *slog.Logger
 	listener        net.Listener
 }
 
-func NewServer(socketPath string, taskLauncher TaskLauncher, directory PersonDirectory, permissionRelay *PermissionRelay, turnRouter TurnRouter, logger *slog.Logger) *Server {
+func NewServer(socketPath string, collaborators Collaborators, permissionRelay *PermissionRelay, logger *slog.Logger) *Server {
 	return &Server{
 		socketPath:      socketPath,
-		taskLauncher:    taskLauncher,
-		directory:       directory,
+		collaborators:   collaborators,
 		permissionRelay: permissionRelay,
-		turnRouter:      turnRouter,
 		logger:          logger,
 	}
 }
@@ -72,7 +68,7 @@ func (server *Server) Serve(ctx context.Context) {
 
 func (server *Server) serveConnection(connection net.Conn) {
 	defer connection.Close()
-	agent := NewAgent(server.taskLauncher, server.directory, server.permissionRelay, server.turnRouter, server.logger)
+	agent := NewAgent(server.collaborators, server.permissionRelay, server.logger)
 	agentConnection := acp.NewAgentSideConnection(agent, connection, connection)
 	agentConnection.SetLogger(server.logger)
 	agent.UseConnection(agentConnection)

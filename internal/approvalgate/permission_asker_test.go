@@ -123,3 +123,34 @@ func TestAGateWithNoAskerHoldsTheCallItAlwaysHeld(t *testing.T) {
 		t.Fatal("the connectors path stopped pausing the run it holds")
 	}
 }
+
+type inspectingAsker struct {
+	inspect           func()
+	statusWhileAsking agentcontract.TaskStatus
+	eventsWhileAsking []string
+}
+
+func (asker *inspectingAsker) AskPermission(context.Context, mcpserver.ApprovalRequest, string) (agentcontract.ApprovalSignal, bool) {
+	asker.inspect()
+	return agentcontract.ApprovalSignalApprove, true
+}
+
+func TestTheRunWaitsAndTheCallIsHeldWhileTheQuestionIsStillOutstanding(t *testing.T) {
+	gate, taskRunService, taskRun := gateFixture(t)
+	asker := &inspectingAsker{}
+	asker.inspect = func() {
+		asker.statusWhileAsking = taskRunStatus(t, taskRunService, taskRun.TaskRunID)
+		asker.eventsWhileAsking = recordedEventNames(taskRunService, taskRun.TaskRunID)
+	}
+	gate.UsePermissionAsker(asker)
+
+	if _, errorValue := gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID)); errorValue != nil {
+		t.Fatalf("await approval: %v", errorValue)
+	}
+	if asker.statusWhileAsking != agentcontract.TaskStatusWaitingApproval {
+		t.Fatalf("the run read %q while the person was being asked, so a restart here finds nothing waiting", asker.statusWhileAsking)
+	}
+	if !carriesEvent(asker.eventsWhileAsking, agentcontract.TaskEventApprovalPendingCall) {
+		t.Fatalf("the ledger carried %v while the person was being asked, so a restart here cannot say which call was held", asker.eventsWhileAsking)
+	}
+}

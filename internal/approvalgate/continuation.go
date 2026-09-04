@@ -47,6 +47,14 @@ func ApprovedPendingCall(taskEvents []agentcontract.TaskEvent) (ApprovedCall, bo
 	return ApprovedCall{ToolName: heldCall.ToolName, ToolInput: heldCall.ApprovedInput()}, true
 }
 
+func PendingHeldCall(taskEvents []agentcontract.TaskEvent) (agentcontract.HeldCall, bool) {
+	heldCall, decision := undecidedHeldCall(taskEvents)
+	if heldCall.ToolName == "" || decision != "" {
+		return agentcontract.HeldCall{}, false
+	}
+	return heldCall, true
+}
+
 func DeclinedCallNote(taskEvents []agentcontract.TaskEvent) string {
 	heldCall, decision := undecidedHeldCall(taskEvents)
 	if heldCall.ToolName == "" || decision != "cancel" {

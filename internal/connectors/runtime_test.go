@@ -4503,64 +4503,6 @@ func testChannelInboundEvent(messageID string) PlatformInboundEvent {
 	return event
 }
 
-func TestResolveInboundEngagementIgnoresUninvitedAttachmentsOnly(t *testing.T) {
-	connectorRuntime, _, harness := newStubbedTestConnectorRuntime(t)
-	harness.AddressingDecision = agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true}
-
-	channelEvent := PlatformInboundEvent{
-		Prompt:  "User attached file(s).",
-		Context: VisibleContext{ConversationType: "O", AttachmentsOnly: true},
-	}
-	decision := connectorRuntime.resolveInboundEngagement(context.Background(), "mattermost", channelEvent)
-	if decision.ShouldLaunch {
-		t.Fatalf("uninvited attachments-only channel post must be ignored, got %+v", decision)
-	}
-	if !strings.Contains(decision.IgnoreReason, "attachments_only") {
-		t.Fatalf("expected attachments_only ignore reason, got %q", decision.IgnoreReason)
-	}
-
-	dmEvent := PlatformInboundEvent{
-		Prompt:  "User attached file(s).",
-		Context: VisibleContext{ConversationType: "D", AttachmentsOnly: true},
-	}
-	if !connectorRuntime.resolveInboundEngagement(context.Background(), "mattermost", dmEvent).ShouldLaunch {
-		t.Fatal("DM with only an attachment must still engage")
-	}
-
-	mentionEvent := PlatformInboundEvent{
-		Prompt:  "User attached file(s).",
-		Context: VisibleContext{ConversationType: "O", AttachmentsOnly: true, Addressing: AddressingMetadata{BotMentioned: true}},
-	}
-	if !connectorRuntime.resolveInboundEngagement(context.Background(), "mattermost", mentionEvent).ShouldLaunch {
-		t.Fatal("bot-mentioned attachment-only post must still engage")
-	}
-}
-
-func TestResolveInboundEngagementReactOnly(t *testing.T) {
-	connectorRuntime, _, harness := newStubbedTestConnectorRuntime(t)
-	harness.AddressingDecision = agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetAnyone, ShouldRespond: false, ReactionEmoji: "eyes"}
-	event := testChannelInboundEvent("message-1")
-
-	decision := connectorRuntime.resolveInboundEngagement(context.Background(), "mattermost", event)
-	if decision.ShouldLaunch {
-		t.Fatalf("react-only message must not launch a task, got %+v", decision)
-	}
-	if decision.ReactionEmoji != "eyes" {
-		t.Fatalf("expected react-only emoji 'eyes', got %+v", decision)
-	}
-}
-
-func TestResolveInboundEngagementReactAndRespond(t *testing.T) {
-	connectorRuntime, _, harness := newStubbedTestConnectorRuntime(t)
-	harness.AddressingDecision = agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true, ReactionEmoji: "+1"}
-	event := testChannelInboundEvent("message-1")
-
-	decision := connectorRuntime.resolveInboundEngagement(context.Background(), "mattermost", event)
-	if !decision.ShouldLaunch || decision.ReactionEmoji != "+1" {
-		t.Fatalf("expected react-and-respond (launch + emoji), got %+v", decision)
-	}
-}
-
 func TestLatestActiveGoalFailsClosedOnMalformedNewestEvent(t *testing.T) {
 	validGoalDocument, _ := json.Marshal(agentcontract.ActiveGoal{
 		TaskRunID: "old-task",

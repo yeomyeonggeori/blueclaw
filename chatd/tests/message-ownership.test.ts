@@ -113,6 +113,7 @@ function configurationNaming(admindBaseURL: string | undefined): ChatdConfigurat
 		botUserName: "internkim",
 		blueclawBaseURL: "http://127.0.0.1:8080",
 		blueclawIngressURL: undefined,
+		relayInboundURL: undefined,
 		admindBaseURL,
 		listenPort: 18090,
 		listenHostname: "127.0.0.1",

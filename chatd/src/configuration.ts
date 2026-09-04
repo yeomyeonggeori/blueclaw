@@ -16,6 +16,7 @@ export type ChatdConfiguration = {
   botUserName: string;
   blueclawBaseURL: string;
   blueclawIngressURL: string | undefined;
+  relayInboundURL: string | undefined;
   admindBaseURL: string | undefined;
   listenPort: number;
   listenHostname: string;
@@ -32,6 +33,7 @@ export function loadConfiguration(environment: Record<string, string | undefined
         'http://127.0.0.1:8080',
     ),
     blueclawIngressURL: environment['CHATD_BLUECLAW_INGRESS_URL']?.trim() || undefined,
+    relayInboundURL: environment['CHATD_RELAY_INBOUND_URL']?.trim() || undefined,
     admindBaseURL: environment['CHATD_ADMIND_BASE_URL']?.trim() || undefined,
     listenPort: parseListenPort(environment['CHATD_LISTEN_PORT']),
     listenHostname: environment['CHATD_LISTEN_HOSTNAME']?.trim() || '127.0.0.1',

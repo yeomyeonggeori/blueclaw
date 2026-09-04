@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -38,7 +39,7 @@ type inboundTurn struct {
 	activeGoal    agentcontract.ActiveGoal
 	hasActiveGoal bool
 
-	addressingLaunch inboundEngagementDecision
+	addressingLaunch inboundengagement.Decision
 	priorTask        agentcontract.PriorTaskContext
 
 	stopProgress      func()
