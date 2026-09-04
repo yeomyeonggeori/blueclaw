@@ -15,7 +15,10 @@ const (
 	setupFieldEmail
 	setupFieldWorkspaceRootPath
 	setupFieldDatabaseConnectionString
-	setupFieldOpenRouterAPIKey
+	setupFieldModelEndpointURL
+	setupFieldModelName
+	setupFieldModelAPIKey
+	setupFieldEmbeddingModelName
 	setupFieldHarness
 	setupFieldMode
 )
@@ -25,7 +28,10 @@ var setupFieldOrder = []setupFieldID{
 	setupFieldEmail,
 	setupFieldWorkspaceRootPath,
 	setupFieldDatabaseConnectionString,
-	setupFieldOpenRouterAPIKey,
+	setupFieldModelEndpointURL,
+	setupFieldModelName,
+	setupFieldModelAPIKey,
+	setupFieldEmbeddingModelName,
 	setupFieldHarness,
 	setupFieldMode,
 }
@@ -74,8 +80,14 @@ func (setupModel SetupModel) fieldLabel(fieldID setupFieldID) string {
 		return "Workspace"
 	case setupFieldDatabaseConnectionString:
 		return "Postgres"
-	case setupFieldOpenRouterAPIKey:
-		return "OpenRouter key"
+	case setupFieldModelEndpointURL:
+		return "Model endpoint"
+	case setupFieldModelName:
+		return "Model name"
+	case setupFieldModelAPIKey:
+		return "API key"
+	case setupFieldEmbeddingModelName:
+		return "Embedding model"
 	case setupFieldHarness:
 		return "Harness"
 	case setupFieldMode:
@@ -94,8 +106,14 @@ func (setupModel SetupModel) fieldValue(fieldID setupFieldID) string {
 		return setupModel.answers.WorkspaceRootPath
 	case setupFieldDatabaseConnectionString:
 		return setupModel.answers.DatabaseConnectionString
-	case setupFieldOpenRouterAPIKey:
-		return maskedSecret(setupModel.answers.LanguageModel.OpenRouterAPIKey)
+	case setupFieldModelEndpointURL:
+		return setupModel.answers.LanguageModel.EndpointURL
+	case setupFieldModelName:
+		return setupModel.answers.LanguageModel.ModelName
+	case setupFieldModelAPIKey:
+		return maskedSecret(setupModel.answers.LanguageModel.APIKey)
+	case setupFieldEmbeddingModelName:
+		return setupModel.answers.LanguageModel.EmbeddingModelName
 	case setupFieldHarness:
 		return setupModel.selectedHarnessLabel()
 	case setupFieldMode:
@@ -148,8 +166,14 @@ func (setupModel SetupModel) rawSelectedFieldValue() string {
 		return setupModel.answers.WorkspaceRootPath
 	case setupFieldDatabaseConnectionString:
 		return setupModel.answers.DatabaseConnectionString
-	case setupFieldOpenRouterAPIKey:
-		return setupModel.answers.LanguageModel.OpenRouterAPIKey
+	case setupFieldModelEndpointURL:
+		return setupModel.answers.LanguageModel.EndpointURL
+	case setupFieldModelName:
+		return setupModel.answers.LanguageModel.ModelName
+	case setupFieldModelAPIKey:
+		return setupModel.answers.LanguageModel.APIKey
+	case setupFieldEmbeddingModelName:
+		return setupModel.answers.LanguageModel.EmbeddingModelName
 	}
 	return ""
 }
@@ -164,8 +188,14 @@ func (setupModel *SetupModel) setSelectedField(value string) {
 		setupModel.answers.WorkspaceRootPath = value
 	case setupFieldDatabaseConnectionString:
 		setupModel.answers.DatabaseConnectionString = value
-	case setupFieldOpenRouterAPIKey:
-		setupModel.answers.LanguageModel.OpenRouterAPIKey = value
+	case setupFieldModelEndpointURL:
+		setupModel.answers.LanguageModel.EndpointURL = value
+	case setupFieldModelName:
+		setupModel.answers.LanguageModel.ModelName = value
+	case setupFieldModelAPIKey:
+		setupModel.answers.LanguageModel.APIKey = value
+	case setupFieldEmbeddingModelName:
+		setupModel.answers.LanguageModel.EmbeddingModelName = value
 	}
 }
 

@@ -10,7 +10,7 @@ import (
 
 func TestDeriveTurnOptionsWiresContextWindowTokens(t *testing.T) {
 	runtimeConfiguration := config.RuntimeConfiguration{}
-	runtimeConfiguration.LanguageModel.Capability.ContextWindowTokens = 128000
+	runtimeConfiguration.LanguageModel.ContextWindowTokens = 128000
 	seed := int64(41)
 	temperature := 0.2
 	runtimeConfiguration.Agent.GenerationOptions.Seed = &seed

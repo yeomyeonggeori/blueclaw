@@ -34,6 +34,10 @@ func (home Home) PolicyPath() string {
 	return filepath.Join(home.DirectoryPath, "policy.json")
 }
 
+func (home Home) ModelAPIKeyPath() string {
+	return filepath.Join(home.DirectoryPath, "model-api-key")
+}
+
 func (home Home) WorkspaceRootPath() string {
 	return filepath.Join(home.DirectoryPath, "workspace")
 }

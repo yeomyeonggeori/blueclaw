@@ -57,7 +57,7 @@ func SuggestedAnswers(home Home) Answers {
 		Mode:                     RunModeHost,
 		WorkspaceRootPath:        home.WorkspaceRootPath(),
 		DatabaseConnectionString: detectedDatabaseConnectionString(home),
-		LanguageModel:            LanguageModelAccess{OpenRouterAPIKey: strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY"))},
+		LanguageModel:            detectedLanguageModelAccess(),
 		Harness:                  detectedHarness(),
 	}
 }
@@ -68,6 +68,15 @@ var harnessCommandNames = []struct {
 }{
 	{harnessName: "claude-code", commandName: "claude"},
 	{harnessName: "codex", commandName: "codex"},
+}
+
+func detectedLanguageModelAccess() LanguageModelAccess {
+	return LanguageModelAccess{
+		EndpointURL:        strings.TrimSpace(os.Getenv("BLUECLAW_MODEL_ENDPOINT")),
+		ModelName:          strings.TrimSpace(os.Getenv("BLUECLAW_MODEL_NAME")),
+		APIKey:             strings.TrimSpace(os.Getenv("BLUECLAW_MODEL_API_KEY")),
+		EmbeddingModelName: strings.TrimSpace(os.Getenv("BLUECLAW_EMBEDDING_MODEL_NAME")),
+	}
 }
 
 func detectedHarness() HarnessChoice {

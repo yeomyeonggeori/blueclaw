@@ -43,7 +43,7 @@ func deriveTurnOptions(runtimeConfiguration config.RuntimeConfiguration) agentco
 		MaxIterationCount:   taskLevelProfile.MaxIterationCount,
 		MaxToolCallCount:    taskLevelProfile.MaxToolCallCount,
 		MaxElapsedSecond:    int(taskLevelProfile.Duration.Seconds()),
-		ContextWindowTokens: runtimeConfiguration.LanguageModel.Capability.ContextWindowTokens,
+		ContextWindowTokens: runtimeConfiguration.LanguageModel.ContextWindowTokens,
 		TaskLevel:           taskLevelProfile.TaskLevel,
 		GenerationOptions: llm.GenerationOptions{
 			Seed:        runtimeConfiguration.Agent.GenerationOptions.Seed,

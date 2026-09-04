@@ -39,9 +39,17 @@ func keyPressForName(keyName string) tea.KeyPressMsg {
 	return tea.KeyPressMsg{Code: tea.KeySpace}
 }
 
+func reachableLanguageModel() enrollment.LanguageModelAccess {
+	return enrollment.LanguageModelAccess{
+		EndpointURL: "https://models.example.com/v1",
+		ModelName:   "example-model-large",
+		APIKey:      "test-key",
+	}
+}
+
 func TestSetupWillNotFinishAnInstallThatCannotStart(t *testing.T) {
 	setupModel := setupModelFixture(t)
-	setupModel.answers.LanguageModel.OpenRouterAPIKey = "test-key"
+	setupModel.answers.LanguageModel = reachableLanguageModel()
 	setupModel.answers.DatabaseConnectionString = "postgres://nobody@127.0.0.1:1/blueclaw?sslmode=disable&connect_timeout=1"
 
 	if errorValue := (&setupModel).Finish(); errorValue == nil {
@@ -79,6 +87,18 @@ func TestSetupNamesEveryDependencyItCouldNotReach(t *testing.T) {
 	}
 }
 
+func TestSetupRefusesToFinishWhenTheEndpointNamesNoModel(t *testing.T) {
+	setupModel := setupModelFixture(t)
+	setupModel.answers.LanguageModel = reachableLanguageModel()
+	setupModel.answers.LanguageModel.ModelName = ""
+
+	(&setupModel).RunPreflight()
+
+	if !hasFailedCheck(setupModel, enrollment.CheckLanguageModel) {
+		t.Fatalf("expected an endpoint with no model named on it to be reported, got %+v", setupModel.CheckResults())
+	}
+}
+
 func TestSetupRefusesToFinishWithNoWayToReachAModel(t *testing.T) {
 	setupModel := setupModelFixture(t)
 	setupModel.answers.LanguageModel = enrollment.LanguageModelAccess{}
@@ -111,11 +131,11 @@ func TestTypingEditsTheSelectedFieldOnly(t *testing.T) {
 
 func TestTheKeyIsNeverShownBackInFull(t *testing.T) {
 	setupModel := setupModelFixture(t)
-	setupModel.answers.LanguageModel.OpenRouterAPIKey = "sk-or-v1-secret-value"
+	setupModel.answers.LanguageModel.APIKey = "endpoint-secret-value"
 
-	shownValue := setupModel.fieldValue(setupFieldOpenRouterAPIKey)
+	shownValue := setupModel.fieldValue(setupFieldModelAPIKey)
 
-	if shownValue == setupModel.answers.LanguageModel.OpenRouterAPIKey {
+	if shownValue == setupModel.answers.LanguageModel.APIKey {
 		t.Fatal("expected the key to be masked on screen, because setup runs where people can see the terminal")
 	}
 	if shownValue == "" {

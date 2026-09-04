@@ -182,7 +182,7 @@
   ],
   "chat-completion-request": [
     {
-      "model": "openrouter/auto",
+      "model": "example/router",
       "executionMode": "auto",
       "context": {
         "requesterPersonID": "person-1",
@@ -254,8 +254,8 @@
   "chat-completion-response": [
     {
       "finishReason": "tool_calls",
-      "provider": "openrouter",
-      "model": "google/gemini-3.1-flash-lite",
+      "provider": "example-gateway",
+      "model": "example/fast",
       "message": {
         "role": "assistant",
         "content": "",
@@ -349,7 +349,7 @@
   ],
   "structured-response-request": [
     {
-      "model": "openrouter/auto",
+      "model": "example/router",
       "executionMode": "auto",
       "context": {
         "requesterPersonID": "person-1",
@@ -386,8 +386,8 @@
   ],
   "structured-response": [
     {
-      "provider": "openrouter",
-      "model": "google/gemini-3.1-flash-lite",
+      "provider": "example-gateway",
+      "model": "example/fast",
       "content": "{\"items\":[]}",
       "selectedBackend": "remote",
       "finishReason": "stop",

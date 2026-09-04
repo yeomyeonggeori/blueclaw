@@ -20,11 +20,14 @@ type Person struct {
 }
 
 type LanguageModelAccess struct {
-	OpenRouterAPIKey string
+	EndpointURL        string
+	ModelName          string
+	APIKey             string
+	EmbeddingModelName string
 }
 
 func (access LanguageModelAccess) IsConfigured() bool {
-	return strings.TrimSpace(access.OpenRouterAPIKey) != ""
+	return strings.TrimSpace(access.EndpointURL) != "" && strings.TrimSpace(access.ModelName) != ""
 }
 
 type HarnessChoice struct {
@@ -62,7 +65,7 @@ func (enrollment Enrollment) Validate() error {
 		return errors.New("an enrollment needs a workspace root, because that is where the agent's work lives")
 	}
 	if !enrollment.LanguageModel.IsConfigured() {
-		return errors.New("an enrollment needs a way to reach a language model: an OpenRouter key")
+		return errors.New("an enrollment needs a way to reach a language model: a model endpoint and the name of a model it serves")
 	}
 	return nil
 }

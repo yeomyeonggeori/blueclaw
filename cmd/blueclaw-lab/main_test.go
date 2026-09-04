@@ -76,7 +76,7 @@ func TestBuildVirtualTurnMetricsRecordsEfficiencyWithoutThresholds(t *testing.T)
 	}
 }
 
-type fakeOpenRouterServer struct {
+type fakeModelEndpointServer struct {
 	server               *httptest.Server
 	mutex                sync.Mutex
 	requestCount         int
@@ -86,47 +86,48 @@ type fakeOpenRouterServer struct {
 	statusCode           int
 }
 
-func newFakeOpenRouterServer(statusCode int) *fakeOpenRouterServer {
-	fakeServer := &fakeOpenRouterServer{statusCode: statusCode}
+func newFakeModelEndpointServer(statusCode int) *fakeModelEndpointServer {
+	fakeServer := &fakeModelEndpointServer{statusCode: statusCode}
 	fakeServer.server = httptest.NewServer(http.HandlerFunc(fakeServer.handleRequest))
 	return fakeServer
 }
 
-func (fakeServer *fakeOpenRouterServer) Close() {
+func (fakeServer *fakeModelEndpointServer) Close() {
 	fakeServer.server.Close()
 }
 
-func (fakeServer *fakeOpenRouterServer) URL() string {
+func (fakeServer *fakeModelEndpointServer) URL() string {
 	return fakeServer.server.URL
 }
 
-func (fakeServer *fakeOpenRouterServer) RequestCount() int {
+func (fakeServer *fakeModelEndpointServer) RequestCount() int {
 	fakeServer.mutex.Lock()
 	defer fakeServer.mutex.Unlock()
 	return fakeServer.requestCount
 }
 
-func (fakeServer *fakeOpenRouterServer) SchemaNames() []string {
+func (fakeServer *fakeModelEndpointServer) SchemaNames() []string {
 	fakeServer.mutex.Lock()
 	defer fakeServer.mutex.Unlock()
 	return append([]string{}, fakeServer.schemaNames...)
 }
 
-func (fakeServer *fakeOpenRouterServer) AuthorizationHeaders() []string {
+func (fakeServer *fakeModelEndpointServer) AuthorizationHeaders() []string {
 	fakeServer.mutex.Lock()
 	defer fakeServer.mutex.Unlock()
 	return append([]string{}, fakeServer.authorizationHeaders...)
 }
 
-func (fakeServer *fakeOpenRouterServer) RequestDocuments() []map[string]any {
+func (fakeServer *fakeModelEndpointServer) RequestDocuments() []map[string]any {
 	fakeServer.mutex.Lock()
 	defer fakeServer.mutex.Unlock()
 	return append([]map[string]any{}, fakeServer.requestDocuments...)
 }
 
-func (fakeServer *fakeOpenRouterServer) handleRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	requestDocument := openRouterRequestDocument(request)
-	schemaName := schemaNameFromOpenRouterDocument(requestDocument)
+func (fakeServer *fakeModelEndpointServer) handleRequest(responseWriter http.ResponseWriter, request *http.Request) {
+	requestDocument := modelEndpointRequestDocument(request)
+	toolName := calledToolNameFromRequestDocument(requestDocument)
+	schemaName := schemaNameForToolName(toolName)
 	fakeServer.mutex.Lock()
 	fakeServer.requestCount++
 	fakeServer.schemaNames = append(fakeServer.schemaNames, schemaName)
@@ -139,15 +140,35 @@ func (fakeServer *fakeOpenRouterServer) handleRequest(responseWriter http.Respon
 		return
 	}
 	responseWriter.Header().Set("Content-Type", "application/json")
-	if toolName := nativeToolNameFromOpenRouterDocument(requestDocument); toolName != "" {
-		_, _ = responseWriter.Write([]byte(openRouterToolCallAnswer(toolName)))
+	if toolName != "" {
+		_, _ = responseWriter.Write([]byte(fakeModelToolCallAnswer(toolName, schemaName)))
 		return
 	}
-	encodedContent, _ := json.Marshal(openRouterContentForSchema(schemaName))
+	encodedContent, _ := json.Marshal(fakeModelContentForSchema(schemaName))
 	_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":` + string(encodedContent) + `}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`))
 }
 
-func nativeToolNameFromOpenRouterDocument(requestDocument map[string]any) string {
+func calledToolNameFromRequestDocument(requestDocument map[string]any) string {
+	if forcedToolName := forcedToolNameFromRequestDocument(requestDocument); forcedToolName != "" {
+		return forcedToolName
+	}
+	return offeredFinishToolName(requestDocument)
+}
+
+func forcedToolNameFromRequestDocument(requestDocument map[string]any) string {
+	toolChoice, isFound := requestDocument["tool_choice"].(map[string]any)
+	if !isFound {
+		return ""
+	}
+	function, isFunction := toolChoice["function"].(map[string]any)
+	if !isFunction {
+		return ""
+	}
+	name, _ := function["name"].(string)
+	return strings.TrimSpace(name)
+}
+
+func offeredFinishToolName(requestDocument map[string]any) string {
 	tools, isFound := requestDocument["tools"].([]any)
 	if !isFound || len(tools) == 0 {
 		return ""
@@ -168,13 +189,13 @@ func nativeToolNameFromOpenRouterDocument(requestDocument map[string]any) string
 	return ""
 }
 
-func openRouterToolCallAnswer(toolName string) string {
-	arguments, _ := json.Marshal(openRouterContentForSchema("bluecollar_agent_turn_action"))
+func fakeModelToolCallAnswer(toolName string, schemaName string) string {
+	arguments, _ := json.Marshal(fakeModelContentForSchema(schemaName))
 	call := `{"id":"call-1","type":"function","function":{"name":"` + toolName + `","arguments":` + string(arguments) + `}}`
 	return `{"choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","tool_calls":[` + call + `]}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`
 }
 
-func openRouterRequestDocument(request *http.Request) map[string]any {
+func modelEndpointRequestDocument(request *http.Request) map[string]any {
 	var requestDocument map[string]any
 	_ = json.NewDecoder(request.Body).Decode(&requestDocument)
 	if requestDocument == nil {
@@ -183,30 +204,21 @@ func openRouterRequestDocument(request *http.Request) map[string]any {
 	return requestDocument
 }
 
-func schemaNameFromOpenRouterDocument(requestDocument map[string]any) string {
-	if nativeToolNameFromOpenRouterDocument(requestDocument) != "" {
+func schemaNameForToolName(toolName string) string {
+	if toolName == "finish" {
 		return "bluecollar_agent_turn_action"
 	}
-	responseFormat, isFound := requestDocument["response_format"].(map[string]any)
-	if !isFound {
-		return ""
-	}
-	jsonSchema, isFound := responseFormat["json_schema"].(map[string]any)
-	if !isFound {
-		return ""
-	}
-	name, _ := jsonSchema["name"].(string)
-	return strings.TrimSpace(name)
+	return toolName
 }
 
-func openRouterContentForSchema(schemaName string) string {
+func fakeModelContentForSchema(schemaName string) string {
 	switch schemaName {
 	case "bluecollar_skill_search_queries":
 		return `{"queries":[]}`
 	case "bluecollar_turn_router":
 		return `{"route":"answer_question","classification":"quick_reply","taskShape":"immediate_reply","level":"xlow","requestedOutputFormats":null,"requiredEvidence":[],"initialToolNames":[],"responseLanguage":"ko","reason":"fake live router","userFacingReply":"","priorTaskReference":"none"}`
 	case "bluecollar_agent_turn_action":
-		return `{"action":"finish","message":"fake live reply from OpenRouter","completionSummary":"fake live reply from OpenRouter","replyParts":[{"type":"text","text":"fake live reply from OpenRouter"}],"goalStatus":"satisfied","goalSatisfied":true,"hasRemainingWork":false,"completionEvidenceIDs":[],"qualityReview":[],"executionStateUpdate":{}}`
+		return `{"action":"finish","message":"fake live reply from the model endpoint","completionSummary":"fake live reply from the model endpoint","replyParts":[{"type":"text","text":"fake live reply from the model endpoint"}],"goalStatus":"satisfied","goalSatisfied":true,"hasRemainingWork":false,"completionEvidenceIDs":[],"qualityReview":[],"executionStateUpdate":{}}`
 	default:
 		return "fake recovery reply"
 	}
@@ -221,9 +233,9 @@ func skipWithoutOfferedCatalog(t *testing.T) {
 	}
 }
 
-func TestRunVirtualSessionLiveLanguageModelUsesOpenRouterKeyFileAndFakeServer(t *testing.T) {
+func TestRunVirtualSessionLiveLanguageModelUsesEndpointKeyAndFakeServer(t *testing.T) {
 	skipWithoutOfferedCatalog(t)
-	fakeServer := newFakeOpenRouterServer(http.StatusOK)
+	fakeServer := newFakeModelEndpointServer(http.StatusOK)
 	defer fakeServer.Close()
 	arguments := parseLiveVirtualSessionTestArguments(t, fakeServer.URL())
 
@@ -235,18 +247,18 @@ func TestRunVirtualSessionLiveLanguageModelUsesOpenRouterKeyFileAndFakeServer(t 
 		t.Fatalf("expected live virtual session to pass: %v\n%s", errorValue, output)
 	}
 	if fakeServer.RequestCount() == 0 {
-		t.Fatal("expected fake OpenRouter server to receive at least one request")
+		t.Fatal("expected fake model endpoint server to receive at least one request")
 	}
 	if !containsString(fakeServer.SchemaNames(), "bluecollar_agent_turn_action") {
 		t.Fatalf("expected full path to call action model, got schemas %+v", fakeServer.SchemaNames())
 	}
-	if !allStringsEqual(fakeServer.AuthorizationHeaders(), "Bearer sk-file-test") {
-		t.Fatalf("expected key file authorization header, got %+v", fakeServer.AuthorizationHeaders())
+	if !allStringsEqual(fakeServer.AuthorizationHeaders(), "Bearer sk-endpoint-test") {
+		t.Fatalf("expected the endpoint key in the authorization header, got %+v", fakeServer.AuthorizationHeaders())
 	}
-	if !allOpenRouterRequestsUseGenerationOptions(fakeServer.RequestDocuments(), 123, 0.25) {
-		t.Fatalf("expected seed and temperature to be forwarded, got %+v", fakeServer.RequestDocuments())
+	if !allRequestsUseModelName(fakeServer.RequestDocuments(), "test-model") {
+		t.Fatalf("expected the requested model name to be forwarded, got %+v", fakeServer.RequestDocuments())
 	}
-	if !strings.Contains(output, "fake live reply from OpenRouter") {
+	if !strings.Contains(output, "fake live reply from the model endpoint") {
 		t.Fatalf("expected fake model reply in output, got %s", output)
 	}
 	if strings.Contains(output, "요청 처리 중 오류") {
@@ -267,7 +279,6 @@ func TestParseVirtualSessionArgumentsLeavesEndpointOmitted(t *testing.T) {
 
 func TestCreateLiveLanguageModelUsesProviderConstructorDefaults(t *testing.T) {
 	t.Setenv("BLUECLAW_E2E_LLM_AUTH_KEY", "installation-key")
-	t.Setenv("OPENROUTER_API_KEY", "")
 
 	capabilityModel, errorValue := createLiveLanguageModel(virtualSessionArguments{LanguageModelProvider: "capability"})
 	if errorValue != nil {
@@ -281,7 +292,6 @@ func TestCreateLiveLanguageModelUsesProviderConstructorDefaults(t *testing.T) {
 
 func TestCreateLiveLanguageModelPreservesUnixSocketTransportWithOmittedEndpoint(t *testing.T) {
 	t.Setenv("BLUECLAW_E2E_LLM_AUTH_KEY", "installation-key")
-	t.Setenv("OPENROUTER_API_KEY", "")
 	arguments := virtualSessionArguments{LanguageModelSocket: "/tmp/blueclaw-llm.sock"}
 
 	capabilityModel, errorValue := createLiveLanguageModel(virtualSessionArguments{
@@ -304,7 +314,6 @@ func TestCreateLiveLanguageModelPreservesUnixSocketTransportWithOmittedEndpoint(
 
 func TestCreateLiveLanguageModelPreservesExplicitEndpointOverrides(t *testing.T) {
 	t.Setenv("BLUECLAW_E2E_LLM_AUTH_KEY", "installation-key")
-	t.Setenv("OPENROUTER_API_KEY", "")
 	for _, provider := range []string{"capability"} {
 		languageModel, errorValue := createLiveLanguageModel(virtualSessionArguments{
 			LanguageModelProvider: provider,
@@ -489,7 +498,7 @@ func TestSaveVirtualSessionEvidenceUsesOrderedVirtualCallRecorderWithoutDuplicat
 
 func TestRunVirtualSessionLiveLanguageModelPrintsFailureSummary(t *testing.T) {
 	skipWithoutOfferedCatalog(t)
-	fakeServer := newFakeOpenRouterServer(http.StatusInternalServerError)
+	fakeServer := newFakeModelEndpointServer(http.StatusInternalServerError)
 	defer fakeServer.Close()
 	arguments := parseLiveVirtualSessionTestArguments(t, fakeServer.URL())
 
@@ -501,29 +510,20 @@ func TestRunVirtualSessionLiveLanguageModelPrintsFailureSummary(t *testing.T) {
 		t.Fatalf("expected the hardened harness to reject the failed task, got %v\n%s", errorValue, output)
 	}
 	if fakeServer.RequestCount() == 0 {
-		t.Fatal("expected fake OpenRouter server to receive at least one request")
+		t.Fatal("expected fake model endpoint server to receive at least one request")
 	}
 	if !strings.Contains(output, "llm.call error:") {
 		t.Fatalf("expected llm.call failure summary, got %s", output)
 	}
-	if !strings.Contains(output, "code=500") {
+	if !strings.Contains(output, "model endpoint returned 500") {
 		t.Fatalf("expected HTTP 500 detail in failure summary, got %s", output)
 	}
 }
 
 func parseLiveVirtualSessionTestArguments(t *testing.T, baseURL string) virtualSessionArguments {
 	t.Helper()
-	homeDirectoryPath := t.TempDir()
-	keyDirectoryPath := filepath.Join(homeDirectoryPath, ".blueclaw")
-	if errorValue := os.MkdirAll(keyDirectoryPath, 0700); errorValue != nil {
-		t.Fatalf("failed to create key directory: %v", errorValue)
-	}
-	if errorValue := os.WriteFile(filepath.Join(keyDirectoryPath, "openrouter_api_key"), []byte("sk-file-test\n"), 0600); errorValue != nil {
-		t.Fatalf("failed to write key file: %v", errorValue)
-	}
-	t.Setenv("HOME", homeDirectoryPath)
-	t.Setenv("OPENROUTER_API_KEY", "")
-	t.Setenv("OPENROUTER_BASE_URL", baseURL)
+	t.Setenv("BLUECOLLAR_MODEL_ENDPOINT", baseURL)
+	t.Setenv("BLUECOLLAR_MODEL_API_KEY", "sk-endpoint-test")
 	originalDelay := delayLiveVirtualSession
 	delayLiveVirtualSession = func() {}
 	t.Cleanup(func() {
@@ -562,7 +562,7 @@ func TestParseVirtualSessionArgumentsAcceptsStrictScenarioFile(t *testing.T) {
 }
 
 type virtualTierTestProvider struct {
-	modelName string
+	modelTier string
 }
 
 func (provider virtualTierTestProvider) GenerateResponse(context.Context, string) (string, error) {
@@ -570,16 +570,16 @@ func (provider virtualTierTestProvider) GenerateResponse(context.Context, string
 }
 
 func (provider virtualTierTestProvider) GenerateStructuredResponse(_ context.Context, request llm.StructuredResponseRequest) (llm.StructuredResponse, error) {
-	content := openRouterContentForSchema(request.StructuredOutputSchema.Name)
+	content := fakeModelContentForSchema(request.StructuredOutputSchema.Name)
 	if request.StructuredOutputSchema.Name == "bluecollar_turn_router" {
 		content = `{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"xhigh","requestedOutputFormats":null,"requiredEvidence":[],"initialToolNames":[],"responseLanguage":"ko","reason":"xhigh integration test","userFacingReply":"","priorTaskReference":"none"}`
 	}
-	return llm.StructuredResponse{ModelName: provider.modelName, Content: content}, nil
+	return llm.StructuredResponse{ModelName: provider.modelTier, Content: content}, nil
 }
 
 func TestConfigureVirtualScenarioCappedProviderReportsCeilingTier(t *testing.T) {
-	providerFactory := func(modelName string) llm.LanguageModelProvider {
-		return virtualTierTestProvider{modelName: modelName}
+	providerFactory := func(modelTier string) llm.LanguageModelProvider {
+		return virtualTierTestProvider{modelTier: modelTier}
 	}
 	scenario := e2e.VirtualSessionScenario{}
 	configureVirtualScenarioModelTiers(&scenario, "low", providerFactory)
@@ -593,8 +593,8 @@ func TestConfigureVirtualScenarioCappedProviderReportsCeilingTier(t *testing.T) 
 }
 
 func TestVirtualModelCeilingDoesNotReduceTaskWorkDuration(t *testing.T) {
-	providerFactory := func(modelName string) llm.LanguageModelProvider {
-		return virtualTierTestProvider{modelName: modelName}
+	providerFactory := func(modelTier string) llm.LanguageModelProvider {
+		return virtualTierTestProvider{modelTier: modelTier}
 	}
 	scenario := e2e.VirtualSessionScenario{
 		Name:                     "xhigh_task_with_low_model_ceiling",
@@ -666,12 +666,12 @@ func virtualTurnActionModelTier(t *testing.T, turnResult e2e.VirtualTurnResult) 
 	return ""
 }
 
-func allOpenRouterRequestsUseGenerationOptions(requestDocuments []map[string]any, seed int64, temperature float64) bool {
+func allRequestsUseModelName(requestDocuments []map[string]any, modelName string) bool {
 	if len(requestDocuments) == 0 {
 		return false
 	}
 	for _, requestDocument := range requestDocuments {
-		if requestDocument["seed"] != float64(seed) || requestDocument["temperature"] != temperature {
+		if requestDocument["model"] != modelName {
 			return false
 		}
 	}

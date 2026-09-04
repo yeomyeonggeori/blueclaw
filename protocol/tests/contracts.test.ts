@@ -223,7 +223,7 @@ describe('closed protocol values', () => {
       selectedBackend: 'companion',
     }).success).toBe(false);
     expect(structuredResponseSchema.safeParse({
-      provider: 'openrouter',
+      provider: 'example-gateway',
       model: 'model',
       content: '{}',
       selectedBackend: 'remote',
@@ -451,7 +451,7 @@ describe('closed protocol values', () => {
       function: { name: 'lookup', arguments: '{"city":"Seoul"}' },
     };
     const responseDocument = {
-      provider: 'openrouter',
+      provider: 'example-gateway',
       model: 'model',
       message: { role: 'assistant', content: 'done' },
       selectedBackend: 'remote',

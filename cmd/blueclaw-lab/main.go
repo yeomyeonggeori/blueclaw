@@ -15,7 +15,6 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/bluecollarharness"
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
-	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/e2e"
 	"github.com/yeomyeonggeori/blueclaw/internal/lab"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
@@ -141,6 +140,7 @@ type virtualSessionArguments struct {
 	LanguageModelProvider string
 	LanguageModelName     string
 	EmbeddingEndpoint     string
+	EmbeddingModelName    string
 	ExecutionMode         string
 	SkillDirectoryPath    string
 	Seed                  *int64
@@ -192,9 +192,10 @@ func parseVirtualSessionArguments(arguments []string, defaultScenarioName string
 	artifactDirectoryPath := flagSet.String("artifact-dir", defaultArtifactDirectoryPath, "virtual session artifact directory")
 	languageModelEndpoint := flagSet.String("llm-endpoint", os.Getenv("BLUECLAW_E2E_LLM_ENDPOINT"), "live LLM capability endpoint")
 	languageModelSocket := flagSet.String("llm-unix-socket", os.Getenv("BLUECLAW_E2E_LLM_UNIX_SOCKET"), "live LLM capability unix socket path")
-	languageModelProvider := flagSet.String("llm-provider", firstNonEmptyString(os.Getenv("BLUECLAW_E2E_LLM_PROVIDER"), "openrouter"), "live LLM provider: openrouter, direct, or capability")
+	languageModelProvider := flagSet.String("llm-provider", firstNonEmptyString(os.Getenv("BLUECLAW_E2E_LLM_PROVIDER"), "endpoint"), "live LLM provider: endpoint or capability")
 	languageModelName := flagSet.String("llm-model", os.Getenv("BLUECLAW_E2E_LLM_MODEL"), "live LLM model override")
 	embeddingEndpoint := flagSet.String("embedding-endpoint", os.Getenv("BLUECLAW_E2E_EMBEDDING_ENDPOINT"), "local OpenAI-compatible embedding endpoint")
+	embeddingModelName := flagSet.String("embedding-model", os.Getenv("BLUECLAW_E2E_EMBEDDING_MODEL"), "name the embedding model answers to at its endpoint")
 	executionMode := flagSet.String("llm-execution-mode", firstNonEmptyString(os.Getenv("BLUECLAW_E2E_LLM_EXECUTION_MODE"), "auto"), "live LLM execution mode")
 	seed := flagSet.Int64("seed", 0, "generation seed for live LLM calls")
 	temperature := flagSet.Float64("temperature", 0, "generation temperature for live LLM calls")
@@ -202,7 +203,7 @@ func parseVirtualSessionArguments(arguments []string, defaultScenarioName string
 	liveLanguageModel := flagSet.Bool("live-llm", truthyEnvironmentValue(os.Getenv("BLUECLAW_E2E_LIVE")), "explicitly allow costed live LLM calls for unscripted scenarios")
 	strictAssertions := flagSet.Bool("strict-assertions", false, "fail when any declared step expectation is not satisfied")
 	validateOnly := flagSet.Bool("validate-only", false, "validate the scenario file without running it")
-	maximumModelTier := flagSet.String("maximum-model-tier", "", "maximum live model tier: xlow, low, medium, high, xhigh, or max")
+	maximumModelTier := flagSet.String("maximum-model-tier", "", "maximum live model tier, one of "+strings.Join(llm.ModelTiers, ", "))
 	realModelTiers := flagSet.Bool("real-model-tiers", false, "use the production model tier configuration without a ceiling")
 	listScenarios := flagSet.Bool("list-scenarios", false, "print every scenario name BuiltinScenario accepts, one per line, and exit")
 	flagSet.Usage = func() {
@@ -238,6 +239,7 @@ func parseVirtualSessionArguments(arguments []string, defaultScenarioName string
 		LanguageModelProvider: *languageModelProvider,
 		LanguageModelName:     *languageModelName,
 		EmbeddingEndpoint:     strings.TrimSpace(*embeddingEndpoint),
+		EmbeddingModelName:    strings.TrimSpace(*embeddingModelName),
 		ExecutionMode:         *executionMode,
 		SkillDirectoryPath:    *skillDirectoryPath,
 		Seed:                  virtualSessionInt64FlagPointer(arguments, "seed", *seed),
@@ -269,10 +271,8 @@ func runVirtualSession(ctx context.Context, arguments virtualSessionArguments) e
 			return errorValue
 		}
 		var languageModelFactoryError error
-		languageModelFactory := func(modelName string) llm.LanguageModelProvider {
-			modelArguments := arguments
-			modelArguments.LanguageModelName = modelName
-			modelProvider, factoryError := createLiveLanguageModel(modelArguments)
+		languageModelFactory := func(string) llm.LanguageModelProvider {
+			modelProvider, factoryError := createLiveLanguageModel(arguments)
 			if factoryError != nil {
 				languageModelFactoryError = errors.Join(languageModelFactoryError, factoryError)
 				return nil
@@ -280,10 +280,13 @@ func runVirtualSession(ctx context.Context, arguments virtualSessionArguments) e
 			return modelProvider
 		}
 		scenario.LanguageModel = languageModel
-		embeddingProvider := liveEmbeddingProvider(arguments)
+		embeddingProvider, errorValue := liveEmbeddingProvider(arguments)
+		if errorValue != nil {
+			return errorValue
+		}
 		embeddingObserver = &observedEmbeddingProvider{provider: embeddingProvider}
 		scenario.EmbeddingProvider = embeddingObserver
-		scenario.EmbeddingModel = llm.DefaultEmbeddingModelName
+		scenario.EmbeddingModel = arguments.EmbeddingModelName
 		if arguments.RealModelTiers || arguments.MaximumModelTier != "" {
 			configureVirtualScenarioModelTiers(&scenario, arguments.MaximumModelTier, languageModelFactory)
 			if languageModelFactoryError != nil {
@@ -381,21 +384,21 @@ func (provider *observedEmbeddingProvider) GenerateEmbedding(ctx context.Context
 	return embedding, errorValue
 }
 
-func liveEmbeddingProvider(arguments virtualSessionArguments) llm.EmbeddingProvider {
-	if strings.TrimSpace(arguments.EmbeddingEndpoint) != "" {
-		return llm.OpenAIEmbeddingClient{
-			Endpoint:  arguments.EmbeddingEndpoint,
-			ModelName: llm.DefaultEmbeddingModelName,
-		}
+func liveEmbeddingProvider(arguments virtualSessionArguments) (llm.EmbeddingProvider, error) {
+	if embeddingEndpoint := strings.TrimSpace(arguments.EmbeddingEndpoint); embeddingEndpoint != "" {
+		return openaicompatible.Endpoint{
+			URL:       embeddingEndpoint,
+			ModelName: arguments.EmbeddingModelName,
+		}.EmbeddingProvider()
 	}
 	return llm.CapabilityEmbeddingClient{
 		CapabilityClient: capability.NewClient(capability.Configuration{
 			Endpoint:       endpointForVirtualSession(arguments),
 			UnixSocketPath: arguments.LanguageModelSocket,
 		}),
-		ModelName:     llm.DefaultEmbeddingModelName,
+		ModelName:     arguments.EmbeddingModelName,
 		ExecutionMode: arguments.ExecutionMode,
-	}
+	}, nil
 }
 
 func printVirtualSessionResult(result e2e.VirtualSessionResult) {
@@ -568,27 +571,17 @@ type virtualModelTierProviders struct {
 	max    llm.LanguageModelProvider
 }
 
-type virtualModelTierNames struct {
-	xLow   string
-	low    string
-	medium string
-	high   string
-	xHigh  string
-	max    string
-}
-
-func configureVirtualScenarioModelTiers(scenario *e2e.VirtualSessionScenario, maximumModelTier string, providerFactory func(string) llm.LanguageModelProvider) {
-	tierNames := defaultVirtualModelTierNames()
+func configureVirtualScenarioModelTiers(scenario *e2e.VirtualSessionScenario, maximumModelTier string, providerFactory func(modelTier string) llm.LanguageModelProvider) {
 	if maximumModelTier == "" {
-		providers := buildUncappedVirtualModelTierProviders(tierNames, providerFactory)
+		providers := buildUncappedVirtualModelTierProviders(providerFactory)
 		applyVirtualModelTierProviders(scenario, providers, fallbackVirtualModelProvider(
-			llm.WithModelTier(providerFactory(tierNames.medium), "medium"),
-			llm.WithModelTier(providerFactory(tierNames.high), "high"),
+			tieredVirtualModelProvider(providerFactory, "medium"),
+			tieredVirtualModelProvider(providerFactory, "high"),
 			"intake", "high",
 		))
 		return
 	}
-	providers := buildCappedVirtualModelTierProviders(tierNames, providerFactory)
+	providers := buildCappedVirtualModelTierProviders(providerFactory)
 	maximumProvider := providers.providerForTier(maximumModelTier)
 	applyVirtualModelTierProviders(scenario, virtualModelTierProviders{
 		xLow: providers.providerAtOrBelow("xlow", maximumModelTier), low: providers.providerAtOrBelow("low", maximumModelTier),
@@ -607,13 +600,17 @@ func applyVirtualModelTierProviders(scenario *e2e.VirtualSessionScenario, provid
 	scenario.IntakeLanguageModel = intakeProvider
 }
 
-func buildUncappedVirtualModelTierProviders(tierNames virtualModelTierNames, providerFactory func(string) llm.LanguageModelProvider) virtualModelTierProviders {
-	xLowModel := llm.WithModelTier(providerFactory(tierNames.xLow), "xlow")
-	lowModel := llm.WithModelTier(providerFactory(tierNames.low), "low")
-	mediumModel := llm.WithModelTier(providerFactory(tierNames.medium), "medium")
-	highModel := llm.WithModelTier(providerFactory(tierNames.high), "high")
-	xHighModel := llm.WithModelTier(providerFactory(tierNames.xHigh), "xhigh")
-	maxModel := llm.WithModelTier(providerFactory(tierNames.max), "max")
+func tieredVirtualModelProvider(providerFactory func(modelTier string) llm.LanguageModelProvider, modelTier string) llm.LanguageModelProvider {
+	return llm.WithModelTier(providerFactory(modelTier), modelTier)
+}
+
+func buildUncappedVirtualModelTierProviders(providerFactory func(modelTier string) llm.LanguageModelProvider) virtualModelTierProviders {
+	xLowModel := tieredVirtualModelProvider(providerFactory, "xlow")
+	lowModel := tieredVirtualModelProvider(providerFactory, "low")
+	mediumModel := tieredVirtualModelProvider(providerFactory, "medium")
+	highModel := tieredVirtualModelProvider(providerFactory, "high")
+	xHighModel := tieredVirtualModelProvider(providerFactory, "xhigh")
+	maxModel := tieredVirtualModelProvider(providerFactory, "max")
 	lowProvider := fallbackVirtualModelProvider(lowModel, mediumModel, "low", "medium")
 	xLowProvider := fallbackVirtualModelProvider(xLowModel, lowProvider, "xlow", "low")
 	mediumProvider := fallbackVirtualModelProvider(mediumModel, lowModel, "medium", "low")
@@ -623,14 +620,14 @@ func buildUncappedVirtualModelTierProviders(tierNames virtualModelTierNames, pro
 	return virtualModelTierProviders{xLow: xLowProvider, low: lowProvider, medium: mediumProvider, high: highProvider, xHigh: xHighProvider, max: maxProvider}
 }
 
-func buildCappedVirtualModelTierProviders(tierNames virtualModelTierNames, providerFactory func(string) llm.LanguageModelProvider) virtualModelTierProviders {
-	xLowModel := llm.WithModelTier(providerFactory(tierNames.xLow), "xlow")
-	lowProvider := fallbackVirtualModelProvider(llm.WithModelTier(providerFactory(tierNames.low), "low"), xLowModel, "low", "xlow")
+func buildCappedVirtualModelTierProviders(providerFactory func(modelTier string) llm.LanguageModelProvider) virtualModelTierProviders {
+	xLowModel := tieredVirtualModelProvider(providerFactory, "xlow")
+	lowProvider := fallbackVirtualModelProvider(tieredVirtualModelProvider(providerFactory, "low"), xLowModel, "low", "xlow")
 	xLowProvider := llm.VisionFallbackProvider{TextOnlyModel: xLowModel, VisionModel: lowProvider}
-	mediumProvider := fallbackVirtualModelProvider(llm.WithModelTier(providerFactory(tierNames.medium), "medium"), lowProvider, "medium", "low")
-	highProvider := fallbackVirtualModelProvider(llm.WithModelTier(providerFactory(tierNames.high), "high"), mediumProvider, "high", "medium")
-	xHighProvider := fallbackVirtualModelProvider(llm.WithModelTier(providerFactory(tierNames.xHigh), "xhigh"), highProvider, "xhigh", "high")
-	maxProvider := fallbackVirtualModelProvider(llm.WithModelTier(providerFactory(tierNames.max), "max"), xHighProvider, "max", "xhigh")
+	mediumProvider := fallbackVirtualModelProvider(tieredVirtualModelProvider(providerFactory, "medium"), lowProvider, "medium", "low")
+	highProvider := fallbackVirtualModelProvider(tieredVirtualModelProvider(providerFactory, "high"), mediumProvider, "high", "medium")
+	xHighProvider := fallbackVirtualModelProvider(tieredVirtualModelProvider(providerFactory, "xhigh"), highProvider, "xhigh", "high")
+	maxProvider := fallbackVirtualModelProvider(tieredVirtualModelProvider(providerFactory, "max"), xHighProvider, "max", "xhigh")
 	return virtualModelTierProviders{xLow: xLowProvider, low: lowProvider, medium: mediumProvider, high: highProvider, xHigh: xHighProvider, max: maxProvider}
 }
 
@@ -667,29 +664,21 @@ func normalizeVirtualMaximumModelTier(modelTier string) (string, error) {
 	if normalizedModelTier == "" {
 		return "", nil
 	}
-	for _, supportedModelTier := range []string{"xlow", "low", "medium", "high", "xhigh", "max"} {
+	for _, supportedModelTier := range llm.ModelTiers {
 		if normalizedModelTier == supportedModelTier {
 			return normalizedModelTier, nil
 		}
 	}
-	return "", fmt.Errorf("maximum model tier must be xlow, low, medium, high, xhigh, or max: %s", modelTier)
+	return "", fmt.Errorf("maximum model tier must be one of %s: %s", strings.Join(llm.ModelTiers, ", "), modelTier)
 }
 
 func virtualModelTierRank(modelTier string) int {
-	for rank, supportedModelTier := range []string{"xlow", "low", "medium", "high", "xhigh", "max"} {
+	for rank, supportedModelTier := range llm.ModelTiers {
 		if modelTier == supportedModelTier {
 			return rank
 		}
 	}
 	return 0
-}
-
-func defaultVirtualModelTierNames() virtualModelTierNames {
-	tierNames := llm.ResolveModelTierNames(config.RuntimeConfiguration{})
-	return virtualModelTierNames{
-		xLow: tierNames.XLow, low: tierNames.Low, medium: tierNames.Medium,
-		high: tierNames.High, xHigh: tierNames.XHigh, max: tierNames.Max,
-	}
 }
 
 func loadVirtualSessionScenario(arguments virtualSessionArguments) (e2e.VirtualSessionScenario, error) {
@@ -699,62 +688,41 @@ func loadVirtualSessionScenario(arguments virtualSessionArguments) (e2e.VirtualS
 	return e2e.BuiltinScenario(arguments.ScenarioName, arguments.ArtifactDirectoryPath)
 }
 
-const defaultOpenRouterBaseURL = "https://openrouter.ai/api/v1"
-
 func createLiveLanguageModel(arguments virtualSessionArguments) (llm.LanguageModelProvider, error) {
-	generationOptions := llm.GenerationOptions{Seed: arguments.Seed, Temperature: arguments.Temperature}
-	modelName := liveLanguageModelName(arguments.LanguageModelName)
 	switch strings.TrimSpace(arguments.LanguageModelProvider) {
-	case "openrouter", "":
-		openRouterAPIKey, errorValue := resolveOpenRouterAPIKey()
-		if errorValue != nil {
-			return nil, errorValue
-		}
-		return llm.OpenRouterClient{
-			APIKey:            openRouterAPIKey,
-			BaseURL:           firstNonEmptyString(os.Getenv("OPENROUTER_BASE_URL"), llm.DefaultOpenRouterChatCompletionsURL),
-			ModelName:         modelName,
-			AttemptCount:      3,
-			InitialBackoff:    750 * time.Millisecond,
-			GenerationOptions: generationOptions,
-		}, nil
-	case "direct":
-		openRouterAPIKey, errorValue := resolveOpenRouterAPIKey()
-		if errorValue != nil {
-			return nil, errorValue
-		}
-		return openaicompatible.NewProvider(
-			firstNonEmptyString(os.Getenv("OPENROUTER_BASE_URL"), defaultOpenRouterBaseURL),
-			openRouterAPIKey,
-			modelName,
-		), nil
+	case "endpoint", "":
+		return liveEndpointLanguageModel(arguments)
 	case "capability":
 		return llm.CapabilityLLMClient{
 			CapabilityClient: capability.NewClient(capability.Configuration{
 				Endpoint:       arguments.LanguageModelEndpoint,
 				UnixSocketPath: arguments.LanguageModelSocket,
 			}),
-			ModelName:     modelName,
+			ModelName:     strings.TrimSpace(arguments.LanguageModelName),
 			ExecutionMode: arguments.ExecutionMode,
 		}, nil
 	default:
-		return nil, errors.New("live LLM provider must be openrouter, direct, or capability")
+		return nil, errors.New("live LLM provider must be endpoint or capability")
 	}
 }
 
-func optionalLiveOpenRouterLanguageModel(arguments virtualSessionArguments) llm.LanguageModelProvider {
-	openRouterAPIKey, errorValue := resolveOpenRouterAPIKey()
-	if errorValue != nil {
-		return nil
+func liveLanguageModelEndpoint(arguments virtualSessionArguments) openaicompatible.Endpoint {
+	return openaicompatible.Endpoint{
+		URL:       firstNonEmptyString(arguments.LanguageModelEndpoint, os.Getenv("BLUECOLLAR_MODEL_ENDPOINT")),
+		ModelName: strings.TrimSpace(arguments.LanguageModelName),
+		APIKey:    strings.TrimSpace(os.Getenv("BLUECOLLAR_MODEL_API_KEY")),
 	}
-	return llm.OpenRouterClient{
-		APIKey:            openRouterAPIKey,
-		BaseURL:           firstNonEmptyString(os.Getenv("OPENROUTER_BASE_URL"), llm.DefaultOpenRouterChatCompletionsURL),
-		ModelName:         liveLanguageModelName(arguments.LanguageModelName),
-		AttemptCount:      3,
-		InitialBackoff:    750 * time.Millisecond,
-		GenerationOptions: llm.GenerationOptions{Seed: arguments.Seed, Temperature: arguments.Temperature},
+}
+
+func liveEndpointLanguageModel(arguments virtualSessionArguments) (llm.LanguageModelProvider, error) {
+	endpoint := liveLanguageModelEndpoint(arguments)
+	if endpoint.URL == "" {
+		return nil, errors.New("the live language model endpoint is missing: pass --llm-endpoint or set BLUECOLLAR_MODEL_ENDPOINT")
 	}
+	if endpoint.ModelName == "" {
+		return nil, errors.New("the live language model name is missing: pass --llm-model or set BLUECLAW_E2E_LLM_MODEL")
+	}
+	return endpoint.Provider()
 }
 
 func languageModelCallFailureSummaries(turnResult e2e.VirtualTurnResult) []string {
@@ -798,26 +766,6 @@ func virtualSessionFloat64FlagPointer(arguments []string, name string, value flo
 	return &result
 }
 
-func resolveOpenRouterAPIKey() (string, error) {
-	openRouterAPIKey := strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY"))
-	if openRouterAPIKey != "" {
-		return openRouterAPIKey, nil
-	}
-	homeDirectoryPath, errorValue := os.UserHomeDir()
-	if errorValue != nil {
-		return "", errorValue
-	}
-	document, errorValue := os.ReadFile(filepath.Join(homeDirectoryPath, ".blueclaw", "openrouter_api_key"))
-	if errorValue != nil {
-		return "", errors.New("OPENROUTER_API_KEY is required or ~/.blueclaw/openrouter_api_key must exist")
-	}
-	openRouterAPIKey = strings.TrimSpace(strings.TrimPrefix(string(document), "OPENROUTER_API_KEY="))
-	if openRouterAPIKey == "" {
-		return "", errors.New("OpenRouter API key file is empty")
-	}
-	return openRouterAPIKey, nil
-}
-
 var delayLiveVirtualSession = func() {
 	time.Sleep(1500 * time.Millisecond)
 }
@@ -859,13 +807,6 @@ func liveSkillDirectoryPaths(arguments virtualSessionArguments, scenario e2e.Vir
 		}
 	}
 	return skillDirectoryPaths
-}
-
-func liveLanguageModelName(modelOverride string) string {
-	if modelName := strings.TrimSpace(modelOverride); modelName != "" {
-		return modelName
-	}
-	return llm.ResolveModelTierNames(config.RuntimeConfiguration{}).XLow
 }
 
 func firstNonEmptyString(values ...string) string {

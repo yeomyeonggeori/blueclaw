@@ -233,16 +233,16 @@ building from source. The appliance tooling that provisions, packages, and
 deploys it lives in a separate private repository.
 
 Requirements: Go 1.26, [Bun](https://bun.sh) 1.3, Postgres, and one
-OpenAI-compatible model endpoint — Ollama, vLLM, LM Studio, OpenRouter, or
-anything else speaking that API.
+OpenAI-compatible model endpoint — Ollama, vLLM, LM Studio, or anything else
+speaking that API.
 
 **1. Point the daemon at a model.** Copy
 `config/runtime.standalone.example.json` and fill in `languageModel.direct`: the
 base URL of an OpenAI-compatible server and the model name.
-`http://127.0.0.1:11434/v1` is Ollama. A hosted provider such as OpenRouter
-takes an `apiKeyPath` beside them, a file holding the key; a local server that
-authenticates nobody leaves it out. That one model name is what every tier asks
-for until `languageModel.capability` names tiers of its own.
+`http://127.0.0.1:11434/v1` is Ollama. A hosted provider takes an `apiKeyPath`
+beside them, a file holding the key; a local server that authenticates nobody
+leaves it out. That one model name is what every tier asks for until
+`languageModel.capability` names tiers of its own.
 
 Treat a local model as a development convenience. Every structured call leaves
 as a single function tool with `tool_choice` forcing it, and the runtime reads
@@ -634,7 +634,6 @@ tool participates in the same approval and evidence rules as a built-in one.
 | `.dependency/bluecollar/` | the agent loop, as its own repository pinned here |
 | `internal/acpharness/` | blueclaw as an ACP client, plugging an external agent into the daemon |
 | `protocol/` | Zod contracts shared across processes; generates the JSON Schema artifacts |
-| `llmd/` | AI SDK sidecar published on its own: structured output and chat generation over a Unix socket |
 | `chatd/` | chat bridge and platform adapters (Mattermost, Buzz) |
 | `admin/` | Svelte admin and task console sources |
 | `web/` | build output of `admin/`, untracked; run `cd admin && bun run build` before serving the console |
@@ -667,10 +666,10 @@ bun install
 bun run test
 ```
 
-The four TypeScript packages are one Bun workspace, so a single `bun install` at
-the root covers them. `bun run test` typechecks, then runs `protocol`, `llmd`,
-`chatd`, and `admin` in turn. CI runs exactly these
-commands (`.github/workflows/ci.yml`), with Postgres 16 as a service. It checks
+The three TypeScript packages are one Bun workspace, so a single `bun install`
+at the root covers them. `bun run test` typechecks, then runs `protocol`,
+`chatd`, and `admin` in turn. CI runs exactly these commands
+(`.github/workflows/ci.yml`), with Postgres 16 as a service. It checks
 out the bluecollar submodule with `SUBMODULE_READ_TOKEN` when that secret
 exists, falling back to the repository token — which is enough as soon as
 bluecollar is readable without one.

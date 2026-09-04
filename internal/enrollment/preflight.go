@@ -58,10 +58,15 @@ func checkDatabase(ctx context.Context, home Home, connectionString string) Chec
 }
 
 func checkLanguageModel(access LanguageModelAccess) CheckResult {
-	if strings.TrimSpace(access.OpenRouterAPIKey) != "" {
-		return CheckResult{Name: CheckLanguageModel, IsReady: true, Detail: "OpenRouter"}
+	endpointURL := strings.TrimSpace(access.EndpointURL)
+	if endpointURL == "" {
+		return CheckResult{Name: CheckLanguageModel, Guidance: "Give blueclaw a model endpoint to ask, and a key for it if that endpoint wants one."}
 	}
-	return CheckResult{Name: CheckLanguageModel, Guidance: "Give blueclaw an OpenRouter key."}
+	modelName := strings.TrimSpace(access.ModelName)
+	if modelName == "" {
+		return CheckResult{Name: CheckLanguageModel, Guidance: "Name the model this endpoint serves, the way the endpoint spells it."}
+	}
+	return CheckResult{Name: CheckLanguageModel, IsReady: true, Detail: modelName + " at " + endpointURL}
 }
 
 func checkHarness(harness HarnessChoice) CheckResult {

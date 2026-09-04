@@ -462,7 +462,7 @@ func TestCanonicalReadRejectsEffects(t *testing.T) {
 }
 
 func TestCanonicalWebSearchAcceptsNormalizedResultContract(t *testing.T) {
-	httpClient := &recordingHTTPClient{responseBody: `{"provider":"openrouter","selectedBackend":"remote","toolName":"web_search","outcome":"succeeded","status":"ok","result":{"provider":"openrouter","remoteLLMInvolved":true,"compatibility":"openrouter_server_tool_auto","query":"internkim","answer":"result","results":[{"title":"InternKim","url":"https://internkim.example","snippet":"An agent platform"}]}}`}
+	httpClient := &recordingHTTPClient{responseBody: `{"provider":"example-gateway","selectedBackend":"remote","toolName":"web_search","outcome":"succeeded","status":"ok","result":{"provider":"example-gateway","remoteLLMInvolved":true,"compatibility":"example_gateway_server_tool_auto","query":"internkim","answer":"result","results":[{"title":"InternKim","url":"https://internkim.example","snippet":"An agent platform"}]}}`}
 	toolCatalogBuilder := NewToolCatalogBuilder()
 	toolCatalogBuilder.UseTestCapabilityToolDescriptors(capability.Client{Endpoint: "http://capability.local", HTTPClient: httpClient}, []CapabilityToolDescriptor{canonicalWebSearchDescriptor()})
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"web_search"})
@@ -478,7 +478,7 @@ func TestCanonicalWebSearchAcceptsNormalizedResultContract(t *testing.T) {
 }
 
 func TestCanonicalWebSearchRejectsReadEffects(t *testing.T) {
-	httpClient := &recordingHTTPClient{responseBody: `{"provider":"openrouter","selectedBackend":"remote","toolName":"web_search","outcome":"succeeded","status":"ok","result":{"provider":"openrouter","remoteLLMInvolved":true,"compatibility":"openrouter_server_tool_auto","query":"internkim","answer":"result","results":[]},"effects":[{"objectType":"web","effect":"read","url":"https://internkim.example"}]}`}
+	httpClient := &recordingHTTPClient{responseBody: `{"provider":"example-gateway","selectedBackend":"remote","toolName":"web_search","outcome":"succeeded","status":"ok","result":{"provider":"example-gateway","remoteLLMInvolved":true,"compatibility":"example_gateway_server_tool_auto","query":"internkim","answer":"result","results":[]},"effects":[{"objectType":"web","effect":"read","url":"https://internkim.example"}]}`}
 	toolCatalogBuilder := NewToolCatalogBuilder()
 	toolCatalogBuilder.UseTestCapabilityToolDescriptors(capability.Client{Endpoint: "http://capability.local", HTTPClient: httpClient}, []CapabilityToolDescriptor{canonicalWebSearchDescriptor()})
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"web_search"})

@@ -87,9 +87,18 @@
     ]
   },
   "languageModel": {
-    "defaultProvider": "capabilityLLM",
+    "contextWindowTokens": 1048576,
+    "embedding": {
+      "model": "your-embedding-model"
+    },
     "capability": {
-      "executionMode": "auto"
+      "executionMode": "auto",
+      "xlowModel": "your-model",
+      "lowModel": "your-model",
+      "mediumModel": "your-model",
+      "highModel": "your-model",
+      "xhighModel": "your-model",
+      "maxModel": "your-model"
     }
   },
   "guest": {

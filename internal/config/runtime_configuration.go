@@ -129,7 +129,6 @@ type HarnessConfiguration struct {
 
 type AgentIntakeConfiguration struct {
 	Enabled       bool   `json:"enabled"`
-	Model         string `json:"model"`
 	ExecutionMode string `json:"executionMode"`
 }
 
@@ -152,30 +151,33 @@ type AgentGenerationOptions struct {
 }
 
 type LanguageModelConfiguration struct {
-	DefaultProvider  string                               `json:"defaultProvider"`
-	FallbackProvider string                               `json:"fallbackProvider"`
-	Capability       LanguageModelCapabilityConfiguration `json:"capability"`
-	Direct           LanguageModelDirectConfiguration     `json:"direct"`
+	Tiers               map[string][]ModelEndpointConfiguration `json:"tiers,omitempty"`
+	Embedding           ModelEndpointConfiguration              `json:"embedding,omitempty"`
+	MaximumModelTier    string                                  `json:"maximumModelTier,omitempty"`
+	MinimumModelTier    string                                  `json:"minimumModelTier,omitempty"`
+	ContextWindowTokens int                                     `json:"contextWindowTokens,omitempty"`
+	Capability          LanguageModelCapabilityConfiguration    `json:"capability,omitempty"`
 }
 
-type LanguageModelDirectConfiguration struct {
+// ModelEndpointConfiguration is one rung: where to ask, what the model is
+// called there, and the file holding that endpoint's key. A tier is an ordered
+// list of these, tried in order, and nothing in this repository decides what
+// goes in one.
+type ModelEndpointConfiguration struct {
 	Endpoint   string `json:"endpoint"`
-	APIKeyPath string `json:"apiKeyPath"`
 	Model      string `json:"model"`
+	APIKeyPath string `json:"apiKeyPath,omitempty"`
 }
 
 type LanguageModelCapabilityConfiguration struct {
-	Model               string `json:"model"`
-	MaximumModelTier    string `json:"maximumModelTier,omitempty"`
-	MinimumModelTier    string `json:"minimumModelTier,omitempty"`
-	MaxModel            string `json:"maxModel"`
-	XHighModel          string `json:"xhighModel"`
-	HighModel           string `json:"highModel"`
-	MediumModel         string `json:"mediumModel"`
-	LowModel            string `json:"lowModel"`
-	XLowModel           string `json:"xlowModel"`
-	ExecutionMode       string `json:"executionMode"`
-	ContextWindowTokens int    `json:"contextWindowTokens"`
+	Model         string `json:"model"`
+	MaxModel      string `json:"maxModel"`
+	XHighModel    string `json:"xhighModel"`
+	HighModel     string `json:"highModel"`
+	MediumModel   string `json:"mediumModel"`
+	LowModel      string `json:"lowModel"`
+	XLowModel     string `json:"xlowModel"`
+	ExecutionMode string `json:"executionMode"`
 }
 
 type GuestConfiguration struct {

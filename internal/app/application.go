@@ -55,8 +55,6 @@ type Application struct {
 	taskSchedulePollSecond        int
 	taskRetentionIntervalMinute   int
 	interruptedTaskResumeDelay    time.Duration
-	languageModelDefaultProvider  string
-	languageModelFallbackProvider string
 	languageModelConfigured       bool
 	protocolIdentityChecker       protocolidentity.Checker
 	protocolIdentityExpected      protocolidentity.Identity
@@ -157,8 +155,6 @@ func newApplication(components applicationComponents) *Application {
 		taskSchedulePollSecond:        components.runtimeConfiguration.Scheduler.TaskSchedulePollIntervalSecond,
 		taskRetentionIntervalMinute:   components.runtimeConfiguration.Scheduler.RetentionCheckIntervalMinute,
 		interruptedTaskResumeDelay:    2 * time.Second,
-		languageModelDefaultProvider:  components.kernel.languageModelRuntimeConfiguration.LanguageModel.DefaultProvider,
-		languageModelFallbackProvider: components.kernel.languageModelRuntimeConfiguration.LanguageModel.FallbackProvider,
 		languageModelConfigured:       components.kernel.taskTierLanguageModels.High != nil,
 		protocolIdentityChecker:       components.protocolIdentity.checker,
 		protocolIdentityExpected:      components.protocolIdentity.expected,

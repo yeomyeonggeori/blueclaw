@@ -596,20 +596,29 @@ markdown link is not completion evidence.
 
 ## Language model configuration
 
-`defaultProvider` names one of two providers. `capabilityLLM` is secretless: it
-hands model choice, local runtimes, GPU selection, and fallback policy to a
-capability service, which is how the InternKim appliance runs. `direct` posts to
-an OpenAI-compatible endpoint, adding an `Authorization` header only when
-`apiKeyPath` names a file, which is how a standalone deployment runs; that
-deployment reports `capabilityd: not_configured` in its health document. Both
-are built in `internal/llm/provider_factory.go`.
+The document names where each tier reaches its model, and this repository
+decides nothing about which model that is.
+
+`languageModel.tiers` maps each tier to an ordered list of endpoints. Each entry
+carries the endpoint URL, the name the model answers to there, and an optional
+`apiKeyPath` naming the file holding that endpoint's key; the runtime adds an
+`Authorization` header only when that file is named. A tier with several entries
+tries them in order, so a company writes its own degraded fallbacks beside its
+first choice. A deployment configured this way reports `capabilityd:
+not_configured` in its health document.
+
+`languageModel.capability` is the other shape, and it is how the InternKim
+appliance runs: it names a model per tier and hands model choice, local
+runtimes, GPU selection, and fallback policy to a capability service, so no key
+appears in the document. A configuration that names both shapes is refused.
+Both are built in `internal/llm/provider_factory.go`.
 
 `executionMode` is `device`, `companion`, `remote`, or `auto`; InternKim decides
 what that maps to. A tool that needs the user's own browser or files resolves to
 `companion` regardless of the rest.
 
-Requests route across six named tiers — `xlowModel`, `lowModel`, `mediumModel`,
-`highModel`, `xhighModel`, and `maxModel` — with
+Requests route across the six named tiers `xlow`, `low`, `medium`, `high`,
+`xhigh` and `max`, with
 `maximumModelTier` and `minimumModelTier` bounding where the runtime may ladder.
 Cheap classification (addressing, intake routing) sits at the bottom, ordinary
 work in the middle, deep or extended effort at the top; failure and recovery

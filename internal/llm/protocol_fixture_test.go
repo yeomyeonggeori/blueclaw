@@ -11,7 +11,7 @@ func TestProtocolStructuredRequestFixtureMatchesCapabilityRequest(t *testing.T) 
 	if errorValue := json.Unmarshal(protocolLLMFixture(t, "structured-response-request"), &request); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if request.ExecutionMode != "auto" || request.Model != "openrouter/auto" {
+	if request.ExecutionMode != "auto" || request.Model != "example/router" {
 		t.Fatalf("unexpected structured request fixture: %#v", request)
 	}
 	if request.Context == nil || request.Context.RequesterPersonID != "person-1" {

@@ -33,11 +33,10 @@ func TestLoadRuntimeConfigurationIncludesGuestAndBridge(t *testing.T) {
     ]
   },
   "languageModel": {
-    "defaultProvider": "capabilityLLM",
+    "contextWindowTokens": 1048576,
     "capability": {
       "model": "gemma-4-E4B-it",
-      "executionMode": "auto",
-      "contextWindowTokens": 1048576
+      "executionMode": "auto"
     }
   },
   "guest": {
@@ -191,17 +190,14 @@ func TestLoadRuntimeConfigurationIncludesGuestAndBridge(t *testing.T) {
 	if !slices.Equal(runtimeConfiguration.Connectors.Chatd.EnabledPlatforms, []string{"buzz"}) {
 		t.Fatalf("expected chatd to name the enabled platforms, got %v", runtimeConfiguration.Connectors.Chatd.EnabledPlatforms)
 	}
-	if runtimeConfiguration.LanguageModel.DefaultProvider != "capabilityLLM" {
-		t.Fatalf("expected default language model provider to match, got %q", runtimeConfiguration.LanguageModel.DefaultProvider)
-	}
 	if runtimeConfiguration.LanguageModel.Capability.Model != "gemma-4-E4B-it" {
 		t.Fatalf("expected capability model to match, got %q", runtimeConfiguration.LanguageModel.Capability.Model)
 	}
 	if runtimeConfiguration.LanguageModel.Capability.ExecutionMode != "auto" {
 		t.Fatalf("expected capability execution mode to match, got %q", runtimeConfiguration.LanguageModel.Capability.ExecutionMode)
 	}
-	if runtimeConfiguration.LanguageModel.Capability.ContextWindowTokens != 1048576 {
-		t.Fatalf("expected capability context window to match, got %d", runtimeConfiguration.LanguageModel.Capability.ContextWindowTokens)
+	if runtimeConfiguration.LanguageModel.ContextWindowTokens != 1048576 {
+		t.Fatalf("expected the context window to match, got %d", runtimeConfiguration.LanguageModel.ContextWindowTokens)
 	}
 	if runtimeConfiguration.Database.Driver != "postgres" {
 		t.Fatalf("expected database driver to match, got %q", runtimeConfiguration.Database.Driver)
@@ -220,9 +216,6 @@ func TestLoadRuntimeConfigurationIncludesGuestAndBridge(t *testing.T) {
 	}
 	if !runtimeConfiguration.Agent.Intake.Enabled {
 		t.Fatal("expected agent intake to be enabled")
-	}
-	if runtimeConfiguration.Agent.Intake.Model != "" {
-		t.Fatalf("expected agent intake model to remain optional, got %q", runtimeConfiguration.Agent.Intake.Model)
 	}
 	if runtimeConfiguration.Agent.Intake.ExecutionMode != "auto" {
 		t.Fatalf("expected agent intake execution mode to match, got %q", runtimeConfiguration.Agent.Intake.ExecutionMode)

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
+	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 )
 
 func homeFixture(t *testing.T) Home {
@@ -23,8 +24,13 @@ func completeAnswers(home Home) Answers {
 		Mode:                     RunModeHost,
 		WorkspaceRootPath:        home.WorkspaceRootPath(),
 		DatabaseConnectionString: "postgres://blueclaw@127.0.0.1:5432/blueclaw?sslmode=disable",
-		LanguageModel:            LanguageModelAccess{OpenRouterAPIKey: "test-key"},
-		Harness:                  HarnessChoice{Name: "claude-code", AgentCommandPath: "/usr/local/bin/claude"},
+		LanguageModel: LanguageModelAccess{
+			EndpointURL:        "https://models.example.com/v1",
+			ModelName:          "example-model-large",
+			APIKey:             "test-key",
+			EmbeddingModelName: "example-embedding-small",
+		},
+		Harness: HarnessChoice{Name: "claude-code", AgentCommandPath: "/usr/local/bin/claude"},
 	}
 }
 
@@ -65,6 +71,58 @@ func TestTheWrittenConfigurationIsTheOneTheRuntimeLoads(t *testing.T) {
 	}
 }
 
+func TestEveryTierReachesTheEndpointTheOperatorGave(t *testing.T) {
+	home := homeFixture(t)
+	answers := completeAnswers(home)
+	enrolled, _ := NewLocalProvider(home, answers).Enroll(context.Background())
+	if errorValue := Materialize(home, enrolled); errorValue != nil {
+		t.Fatalf("expected the enrollment to be written: %v", errorValue)
+	}
+
+	runtimeConfiguration, errorValue := config.LoadRuntimeConfiguration(home.RuntimeConfigurationPath())
+	if errorValue != nil {
+		t.Fatalf("expected the runtime to load what onboarding wrote: %v", errorValue)
+	}
+	for _, modelTierName := range llm.ModelTiers {
+		rungs := runtimeConfiguration.LanguageModel.Tiers[modelTierName]
+		if len(rungs) != 1 {
+			t.Fatalf("expected the %s tier to carry the one endpoint setup collected, got %v", modelTierName, rungs)
+		}
+		if rungs[0].Endpoint != answers.LanguageModel.EndpointURL || rungs[0].Model != answers.LanguageModel.ModelName {
+			t.Fatalf("expected the %s tier to reach %q at %q, got %+v", modelTierName, answers.LanguageModel.ModelName, answers.LanguageModel.EndpointURL, rungs[0])
+		}
+		if rungs[0].APIKeyPath != home.ModelAPIKeyPath() {
+			t.Fatalf("expected the %s tier to read the key setup wrote, got %q", modelTierName, rungs[0].APIKeyPath)
+		}
+	}
+	if runtimeConfiguration.LanguageModel.Embedding.Model != answers.LanguageModel.EmbeddingModelName {
+		t.Fatalf("expected the embedding model to survive setup, got %+v", runtimeConfiguration.LanguageModel.Embedding)
+	}
+
+	storedKey, errorValue := os.ReadFile(home.ModelAPIKeyPath())
+	if errorValue != nil {
+		t.Fatalf("expected the key to be written where the configuration points: %v", errorValue)
+	}
+	if strings.TrimSpace(string(storedKey)) != answers.LanguageModel.APIKey {
+		t.Fatalf("expected the key file to hold the key that was given, got %q", strings.TrimSpace(string(storedKey)))
+	}
+}
+
+func TestAnEnrollmentWithoutAnEmbeddingModelWritesNone(t *testing.T) {
+	home := homeFixture(t)
+	answers := completeAnswers(home)
+	answers.LanguageModel.EmbeddingModelName = ""
+	enrolled, _ := NewLocalProvider(home, answers).Enroll(context.Background())
+	if errorValue := Materialize(home, enrolled); errorValue != nil {
+		t.Fatalf("expected the enrollment to be written: %v", errorValue)
+	}
+
+	runtimeConfiguration, _ := config.LoadRuntimeConfiguration(home.RuntimeConfigurationPath())
+	if runtimeConfiguration.LanguageModel.Embedding.Model != "" {
+		t.Fatalf("expected no embedding endpoint to be invented, got %+v", runtimeConfiguration.LanguageModel.Embedding)
+	}
+}
+
 func TestTheOperatorBecomesAPersonTheAgentCanRunAs(t *testing.T) {
 	home := homeFixture(t)
 	enrolled, _ := NewLocalProvider(home, completeAnswers(home)).Enroll(context.Background())
@@ -94,6 +152,16 @@ func TestAnEnrollmentWithNoWayToReachAModelIsRefused(t *testing.T) {
 
 	if _, errorValue := NewLocalProvider(home, answers).Enroll(context.Background()); errorValue == nil {
 		t.Fatal("expected setup to refuse an install that cannot reach a model, rather than failing later at the first turn")
+	}
+}
+
+func TestAnEndpointWithNoModelNamedOnItIsRefused(t *testing.T) {
+	home := homeFixture(t)
+	answers := completeAnswers(home)
+	answers.LanguageModel.ModelName = ""
+
+	if _, errorValue := NewLocalProvider(home, answers).Enroll(context.Background()); errorValue == nil {
+		t.Fatal("expected setup to refuse an endpoint with no model named on it, because every request has to name one")
 	}
 }
 

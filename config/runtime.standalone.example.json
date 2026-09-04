@@ -1,10 +1,17 @@
 {
   "baseURL": "http://127.0.0.1:8081",
   "languageModel": {
-    "defaultProvider": "direct",
-    "direct": {
+    "tiers": {
+      "xlow": [{ "endpoint": "http://127.0.0.1:11434/v1", "model": "your-model" }],
+      "low": [{ "endpoint": "http://127.0.0.1:11434/v1", "model": "your-model" }],
+      "medium": [{ "endpoint": "http://127.0.0.1:11434/v1", "model": "your-model" }],
+      "high": [{ "endpoint": "http://127.0.0.1:11434/v1", "model": "your-model" }],
+      "xhigh": [{ "endpoint": "http://127.0.0.1:11434/v1", "model": "your-model" }],
+      "max": [{ "endpoint": "http://127.0.0.1:11434/v1", "model": "your-model" }]
+    },
+    "embedding": {
       "endpoint": "http://127.0.0.1:11434/v1",
-      "model": "your-model"
+      "model": "your-embedding-model"
     }
   },
   "database": {

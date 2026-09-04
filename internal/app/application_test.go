@@ -86,26 +86,8 @@ func TestCapabilityToolDescriptorsPreserveResultContracts(t *testing.T) {
 	}
 }
 
-func TestResolveLanguageModelProviderDefaultsToCapabilityLLM(t *testing.T) {
-	t.Setenv("OPENROUTER_API_KEY", "must-not-be-read")
-	runtimeConfiguration := config.RuntimeConfiguration{}
-	runtimeConfiguration.LanguageModel.Capability.Model = "gemma-4-E4B-it"
-
-	languageModelProvider := resolveLanguageModelProvider(runtimeConfiguration)
-	if languageModelProvider == nil {
-		t.Fatal("expected capability provider to be inferred")
-	}
-	capabilityLLMClient, isCapabilityProvider := languageModelProvider.(llm.CapabilityLLMClient)
-	if !isCapabilityProvider {
-		t.Fatalf("expected capability provider, got %T", languageModelProvider)
-	}
-	if capabilityLLMClient.ModelName != "gemma-4-E4B-it" {
-		t.Fatalf("expected capability model, got %q", capabilityLLMClient.ModelName)
-	}
-}
-
 func TestResolveIntakeLanguageModelProviderUsesReliableTaskTierModel(t *testing.T) {
-	runtimeConfiguration := config.RuntimeConfiguration{}
+	runtimeConfiguration := configuredModelTierRuntime("")
 	runtimeConfiguration.Agent.Intake.Enabled = true
 	runtimeConfiguration.Agent.Intake.ExecutionMode = "auto"
 
@@ -122,34 +104,14 @@ func TestResolveIntakeLanguageModelProviderUsesReliableTaskTierModel(t *testing.
 	if !isFallbackCapabilityClient {
 		t.Fatalf("expected fallback capability intake provider, got %T", fallbackLanguageModelProvider.FallbackProvider)
 	}
-	expectedTierNames := llm.ResolveModelTierNames(deriveLanguageModelRuntimeConfiguration(runtimeConfiguration))
-	if primaryClient.ModelName != expectedTierNames.Medium {
-		t.Fatalf("expected medium tier intake model %q, got %q", expectedTierNames.Medium, primaryClient.ModelName)
+	if primaryClient.ModelName != "vendor/medium" {
+		t.Fatalf("expected the medium tier model for intake, got %q", primaryClient.ModelName)
 	}
-	if fallbackClient.ModelName != expectedTierNames.High {
-		t.Fatalf("expected high tier intake fallback model %q, got %q", expectedTierNames.High, fallbackClient.ModelName)
+	if fallbackClient.ModelName != "vendor/high" {
+		t.Fatalf("expected the high tier model as the intake fallback, got %q", fallbackClient.ModelName)
 	}
 	if primaryClient.ExecutionMode != "auto" || fallbackClient.ExecutionMode != "auto" {
 		t.Fatalf("expected automatic intake execution mode, got %q and %q", primaryClient.ExecutionMode, fallbackClient.ExecutionMode)
-	}
-}
-
-func TestResolveIntakeLanguageModelProviderUsesExplicitModel(t *testing.T) {
-	runtimeConfiguration := config.RuntimeConfiguration{}
-	runtimeConfiguration.Agent.Intake.Enabled = true
-	runtimeConfiguration.Agent.Intake.Model = "x-ai/grok-4.3"
-
-	languageModelProvider := resolveIntakeLanguageModelProvider(runtimeConfiguration, nil)
-	fallbackLanguageModelProvider, isFallbackProvider := languageModelProvider.(llm.FallbackLanguageModelProvider)
-	if !isFallbackProvider {
-		t.Fatalf("expected fallback intake provider, got %T", languageModelProvider)
-	}
-	primaryClient, isPrimaryCapabilityClient := unwrapModelTier(fallbackLanguageModelProvider.PrimaryProvider).(llm.CapabilityLLMClient)
-	if !isPrimaryCapabilityClient {
-		t.Fatalf("expected primary capability intake provider, got %T", fallbackLanguageModelProvider.PrimaryProvider)
-	}
-	if primaryClient.ModelName != "x-ai/grok-4.3" {
-		t.Fatalf("expected explicit intake model, got %q", primaryClient.ModelName)
 	}
 }
 
@@ -181,7 +143,7 @@ func TestMaximumLowTierCapsIntakeFallbacks(t *testing.T) {
 
 func configuredModelTierRuntime(maximumModelTier string) config.RuntimeConfiguration {
 	runtimeConfiguration := config.RuntimeConfiguration{}
-	runtimeConfiguration.LanguageModel.Capability.MaximumModelTier = maximumModelTier
+	runtimeConfiguration.LanguageModel.MaximumModelTier = maximumModelTier
 	runtimeConfiguration.LanguageModel.Capability.MaxModel = "vendor/max"
 	runtimeConfiguration.LanguageModel.Capability.XHighModel = "vendor/xhigh"
 	runtimeConfiguration.LanguageModel.Capability.HighModel = "vendor/high"
@@ -659,9 +621,7 @@ func taskEventsContainApplicationEvent(taskEvents []task.TaskEvent, name string)
 }
 
 func TestResolveTaskTierLanguageModelProvidersEscalateLowToMedium(t *testing.T) {
-	runtimeConfiguration := config.RuntimeConfiguration{}
-	runtimeConfiguration.LanguageModel.Capability.LowModel = "vendor/low"
-	runtimeConfiguration.LanguageModel.Capability.MediumModel = "vendor/medium"
+	runtimeConfiguration := configuredModelTierRuntime("")
 	providers := resolveTaskTierLanguageModelProviders(runtimeConfiguration, slog.New(slog.DiscardHandler))
 
 	lowProvider, isFallbackProvider := providers.Low.(llm.FallbackLanguageModelProvider)
@@ -690,7 +650,7 @@ func TestResolveTaskTierLanguageModelProvidersEscalateLowToMedium(t *testing.T) 
 }
 
 func TestResolveTaskTierLanguageModelProvidersKeepsBareLowWhenMediumMatchesLow(t *testing.T) {
-	runtimeConfiguration := config.RuntimeConfiguration{}
+	runtimeConfiguration := configuredModelTierRuntime("")
 	runtimeConfiguration.LanguageModel.Capability.LowModel = "vendor/shared"
 	runtimeConfiguration.LanguageModel.Capability.MediumModel = "vendor/shared"
 	providers := resolveTaskTierLanguageModelProviders(runtimeConfiguration, slog.New(slog.DiscardHandler))
@@ -700,7 +660,7 @@ func TestResolveTaskTierLanguageModelProvidersKeepsBareLowWhenMediumMatchesLow(t
 	}
 }
 
-func TestEveryTaskTierPostsTheConfiguredDirectModel(t *testing.T) {
+func TestEveryTaskTierPostsTheModelItsEndpointWasGiven(t *testing.T) {
 	receivedModelNames := make(chan string, 6)
 	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		requestDocument := struct {
@@ -716,9 +676,12 @@ func TestEveryTaskTierPostsTheConfiguredDirectModel(t *testing.T) {
 	defer server.Close()
 
 	runtimeConfiguration := config.RuntimeConfiguration{}
-	runtimeConfiguration.LanguageModel.DefaultProvider = "direct"
-	runtimeConfiguration.LanguageModel.Direct.Endpoint = server.URL
-	runtimeConfiguration.LanguageModel.Direct.Model = "llama3.1"
+	runtimeConfiguration.LanguageModel.Tiers = map[string][]config.ModelEndpointConfiguration{}
+	for _, modelTier := range llm.ModelTiers {
+		runtimeConfiguration.LanguageModel.Tiers[modelTier] = []config.ModelEndpointConfiguration{
+			{Endpoint: server.URL, Model: "vendor/one"},
+		}
+	}
 
 	providers := resolveTaskTierLanguageModelProviders(runtimeConfiguration, slog.New(slog.DiscardHandler))
 
@@ -744,7 +707,7 @@ func TestEveryTaskTierPostsTheConfiguredDirectModel(t *testing.T) {
 			t.Fatalf("expected the %s tier to reach the endpoint: %v", tierName, errorValue)
 		}
 		receivedModelName := <-receivedModelNames
-		if receivedModelName != "llama3.1" {
+		if receivedModelName != "vendor/one" {
 			t.Fatalf("the %s tier asked the endpoint for %q, which it does not serve", tierName, receivedModelName)
 		}
 	}

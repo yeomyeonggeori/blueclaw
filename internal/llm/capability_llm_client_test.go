@@ -500,7 +500,7 @@ func TestCapabilityLLMClientLocalRecoveryChatUsesDeviceExecutionMode(t *testing.
 
 func TestCapabilityLLMClientLocalRecoveryChatRejectsRemoteBackend(t *testing.T) {
 	httpClient := fakeCapabilityHTTPClient{handler: func(request *http.Request) (*http.Response, error) {
-		return jsonCapabilityResponse(http.StatusOK, `{"finishReason":"stop","provider":"openrouter","model":"remote-model","message":{"role":"assistant","content":"remote recovery chat"},"selectedBackend":"remote"}`), nil
+		return jsonCapabilityResponse(http.StatusOK, `{"finishReason":"stop","provider":"example-gateway","model":"remote-model","message":{"role":"assistant","content":"remote recovery chat"},"selectedBackend":"remote"}`), nil
 	}}
 	client := CapabilityLLMClient{
 		CapabilityClient: capability.Client{Endpoint: "http://internkim-capability", HTTPClient: httpClient},

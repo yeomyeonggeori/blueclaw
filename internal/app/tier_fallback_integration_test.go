@@ -10,7 +10,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 )
 
@@ -36,17 +35,15 @@ func TestLowTierEscalatesToMediumThroughRealCapabilityTransport(t *testing.T) {
 			return
 		}
 		json.NewEncoder(responseWriter).Encode(map[string]any{
-			"provider": "openrouter",
+			"provider": "example-gateway",
 			"model":    modelName,
 			"content":  `{"action":"finish"}`,
 		})
 	}))
 	defer server.Close()
 
-	runtimeConfiguration := config.RuntimeConfiguration{}
+	runtimeConfiguration := configuredModelTierRuntime("")
 	runtimeConfiguration.Capabilities.Endpoint = server.URL
-	runtimeConfiguration.LanguageModel.Capability.LowModel = "vendor/low"
-	runtimeConfiguration.LanguageModel.Capability.MediumModel = "vendor/medium"
 
 	providers := resolveTaskTierLanguageModelProviders(runtimeConfiguration, slog.New(slog.DiscardHandler))
 	response, errorValue := providers.Low.GenerateStructuredResponse(context.Background(), llm.StructuredResponseRequest{
@@ -79,7 +76,7 @@ func TestCappedHighTierReportsLowModelTier(t *testing.T) {
 			return
 		}
 		json.NewEncoder(responseWriter).Encode(map[string]any{
-			"provider": "openrouter",
+			"provider": "example-gateway",
 			"model":    "vendor/low",
 			"content":  `{"action":"finish"}`,
 		})

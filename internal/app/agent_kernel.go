@@ -23,7 +23,7 @@ type agentKernel struct {
 	languageModelRuntimeConfiguration config.RuntimeConfiguration
 	taskTierLanguageModels            agentcontract.TaskTierLanguageModels
 	capabilityClient                  capability.Client
-	embeddingClient                   llm.CapabilityEmbeddingClient
+	embeddingClient                   llm.EmbeddingProvider
 	intakeLanguageModelProvider       llm.LanguageModelProvider
 	terminalService                   *security.ShellService
 	toolCatalog                       toolCatalogEndpoint
@@ -46,16 +46,16 @@ func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, agentHarne
 		agentIdentityProvider: func() agentcontract.AgentIdentity {
 			return loadAgentIdentity(runtimeConfiguration)
 		},
-		languageModelRuntimeConfiguration: deriveLanguageModelRuntimeConfiguration(runtimeConfiguration),
+		languageModelRuntimeConfiguration: runtimeConfiguration,
 		taskTierLanguageModels:            resolveTaskTierLanguageModelProviders(runtimeConfiguration, logger),
 		capabilityClient:                  newCapabilityClient(runtimeConfiguration),
 	}
 	logger.Info("application.initializing", "stage", "skill_retriever")
-	kernel.embeddingClient = llm.CapabilityEmbeddingClient{
-		CapabilityClient: kernel.capabilityClient,
-		ModelName:        llm.DefaultEmbeddingModelName,
-		ExecutionMode:    firstNonEmptyString(runtimeConfiguration.LanguageModel.Capability.ExecutionMode, "auto"),
+	embeddingProvider, embeddingError := llm.NewConfiguredEmbeddingProvider(runtimeConfiguration)
+	if embeddingError != nil {
+		logger.Error("embedding provider configuration failed", "error", embeddingError.Error())
 	}
+	kernel.embeddingClient = embeddingProvider
 	kernel.intakeLanguageModelProvider = resolveIntakeLanguageModelProvider(runtimeConfiguration, logger)
 	kernel.terminalService = security.NewShellService(runtimeConfiguration.Terminal)
 	kernel.toolCatalog = newToolCatalogEndpoint(services.taskRunService, kernel.taskTierLanguageModels.High, kernel.capabilityClient)
@@ -119,7 +119,7 @@ func startAgentHarness(runtimeConfiguration config.RuntimeConfiguration, harness
 		InstructionBundleLoader:     kernel.instructionBundleLoader,
 		CompanyProvider:             companyProvider,
 		EmbeddingProvider:           kernel.embeddingClient,
-		EmbeddingModelName:          kernel.embeddingClient.ModelName,
+		EmbeddingModelName:          runtimeConfiguration.LanguageModel.Embedding.Model,
 		SkillIndexPath:              skillIndexPath(runtimeConfiguration),
 		TaskTierLanguageModels:      kernel.taskTierLanguageModels,
 		IntakeLanguageModelProvider: kernel.intakeLanguageModelProvider,
