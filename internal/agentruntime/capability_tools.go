@@ -49,11 +49,15 @@ func (toolCatalogBuilder *ToolCatalogBuilder) reportMCPQuarantines(quarantinedPr
 	}
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) registerCapabilityTools(toolRegistry *toolcontract.ToolSet, request ToolCatalogRequest) {
+func (toolCatalogBuilder *ToolCatalogBuilder) registerCapabilityTools(
+	toolRegistry *toolcontract.ToolSet,
+	request ToolCatalogRequest,
+	takenToolNames []string,
+) {
 	provider := capabilityToolProvider{
 		toolCatalogBuilder: toolCatalogBuilder,
 		request:            request,
-		descriptors:        toolCatalogBuilder.reachableCapabilityToolDefinitions(),
+		descriptors:        withoutToolNames(toolCatalogBuilder.reachableCapabilityToolDefinitions(), takenToolNames),
 	}
 	quarantinedProviders, errorValue := toolRegistry.RegisterProviders(context.Background(), []toolcontract.ToolProviderRegistration{{
 		Provider: provider,

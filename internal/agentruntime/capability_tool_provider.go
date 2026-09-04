@@ -95,10 +95,34 @@ func validCapabilityObjectSchema(schema json.RawMessage) bool {
 
 func (provider capabilityToolProvider) boundTool(descriptor CapabilityToolDescriptor) toolcontract.BoundTool {
 	operation := strings.TrimSpace(descriptor.CanonicalName)
+	return boundToolFromDescriptor(
+		descriptor,
+		"capabilityd/"+strings.TrimSpace(descriptor.CanonicalName),
+		provider.ProviderID(),
+		capabilityToolAvailability(descriptor, provider.request),
+		func(toolContext context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+			return provider.toolCatalogBuilder.invokeCapabilityOperation(
+				toolContext,
+				operation,
+				descriptor,
+				provider.request,
+				invocation.Input,
+			)
+		},
+	)
+}
+
+func boundToolFromDescriptor(
+	descriptor CapabilityToolDescriptor,
+	toolID string,
+	providerID string,
+	availability toolcontract.ToolAvailability,
+	handler func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error),
+) toolcontract.BoundTool {
 	return toolcontract.BoundTool{
 		Definition: toolcontract.ToolDescriptor{
-			ID:                      "capabilityd/" + strings.TrimSpace(descriptor.CanonicalName),
-			ProviderID:              provider.ProviderID(),
+			ID:                      toolID,
+			ProviderID:              providerID,
 			Namespace:               strings.TrimSpace(descriptor.Namespace),
 			Name:                    strings.TrimSpace(descriptor.ModelName),
 			Description:             strings.TrimSpace(descriptor.Description),
@@ -119,16 +143,8 @@ func (provider capabilityToolProvider) boundTool(descriptor CapabilityToolDescri
 			Idempotency:             capabilityToolIdempotency(descriptor.Idempotency),
 			IdempotencyScope:        strings.TrimSpace(descriptor.Idempotency.Scope),
 		},
-		Availability: capabilityToolAvailability(descriptor, provider.request),
-		Handler: func(toolContext context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-			return provider.toolCatalogBuilder.invokeCapabilityOperation(
-				toolContext,
-				operation,
-				descriptor,
-				provider.request,
-				invocation.Input,
-			)
-		},
+		Availability: availability,
+		Handler:      handler,
 	}
 }
 

@@ -34,6 +34,14 @@ type HTTPDoer interface {
 }
 
 func NewClient(configuration Configuration) Client {
+	endpoint, httpClient := Dial(configuration)
+	return Client{
+		Endpoint:   endpoint,
+		HTTPClient: httpClient,
+	}
+}
+
+func Dial(configuration Configuration) (string, *http.Client) {
 	endpoint := strings.TrimRight(strings.TrimSpace(configuration.Endpoint), "/")
 	if endpoint == "" {
 		endpoint = DefaultEndpoint
@@ -58,10 +66,7 @@ func NewClient(configuration Configuration) Client {
 		}
 	}
 
-	return Client{
-		Endpoint:   endpoint,
-		HTTPClient: httpClient,
-	}
+	return endpoint, httpClient
 }
 
 func transportWithError(transport *http.Transport, errorValue error) http.RoundTripper {

@@ -127,14 +127,18 @@ func startAgentHarness(runtimeConfiguration config.RuntimeConfiguration, harness
 }
 
 func newCapabilityClient(runtimeConfiguration config.RuntimeConfiguration) capability.Client {
-	return capability.NewClient(capability.Configuration{
+	return capability.NewClient(capabilityConfiguration(runtimeConfiguration))
+}
+
+func capabilityConfiguration(runtimeConfiguration config.RuntimeConfiguration) capability.Configuration {
+	return capability.Configuration{
 		Endpoint:       runtimeConfiguration.Capabilities.Endpoint,
 		Transport:      runtimeConfiguration.Capabilities.Transport,
 		UnixSocketPath: runtimeConfiguration.Capabilities.UnixSocketPath,
 		VSockCID:       runtimeConfiguration.Capabilities.VSockCID,
 		VSockPort:      runtimeConfiguration.Capabilities.VSockPort,
 		Timeout:        time.Duration(runtimeConfiguration.Capabilities.TimeoutSecond) * time.Second,
-	})
+	}
 }
 
 func currentExecutablePath() string {

@@ -73,3 +73,11 @@ type Idempotency struct {
 	Required  bool   `json:"required"`
 	Scope     string `json:"scope,omitempty"`
 }
+
+// Which of three things holds a tool's answer, as protocol/src/capability.ts
+// spells them.
+const (
+	AnsweredByRecord  = "record"
+	AnsweredByCompany = "company"
+	AnsweredByLocal   = "local"
+)

@@ -47,6 +47,12 @@ func newToolCatalogBuilder(runtimeConfiguration config.RuntimeConfiguration, ker
 		logCapabilityProviderQuarantine(logger, quarantinedProvider)
 	})
 	toolCatalogBuilder.UseCapabilityToolDescriptors(kernel.capabilityClient, capabilityToolDescriptors(runtimeConfiguration.Capabilities.ToolDescriptors))
+	if runtimeConfiguration.Capabilities.IsConfigured() {
+		toolCatalogBuilder.UseRecordCatalog(mcp.NewRecordCatalog(capabilityConfiguration(runtimeConfiguration)))
+		toolCatalogBuilder.UseRecordCatalogDivergenceReporter(func(divergence agentruntime.RecordCatalogDivergence) {
+			logRecordCatalogDivergence(logger, divergence)
+		})
+	}
 	seedCompanionStatus(kernel.capabilityClient, toolCatalogBuilder)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(deriveAllowedToolNamesByProfile(runtimeConfiguration), deriveAllowedToolNames(runtimeConfiguration))
 	toolCatalogBuilder.UseSkillSearch(kernel.skillRetriever, kernel.instructionBundleLoader)
@@ -85,6 +91,18 @@ func logCapabilityProviderQuarantine(logger *slog.Logger, quarantinedProvider to
 		return
 	}
 	logger.Warn("capability.provider.quarantined", "providerID", quarantinedProvider.ProviderID, "reason", quarantinedProvider.Reason)
+}
+
+func logRecordCatalogDivergence(logger *slog.Logger, divergence agentruntime.RecordCatalogDivergence) {
+	if logger == nil {
+		return
+	}
+	logger.Warn("record.catalog.divergence",
+		"requesterEmail", divergence.RequesterEmail,
+		"discoveredOnly", divergence.DiscoveredOnly,
+		"stampedOnly", divergence.StampedOnly,
+		"discoveryFailed", divergence.DiscoveryFailed,
+	)
 }
 
 func deriveAllowedToolNames(runtimeConfiguration config.RuntimeConfiguration) []string {

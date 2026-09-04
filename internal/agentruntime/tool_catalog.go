@@ -51,12 +51,18 @@ type ToolCatalogBuilder struct {
 	instructionBundleLoader      func() agentcontract.InstructionBundle
 	mcpQuarantineReporter        func(toolcontract.QuarantinedToolProvider)
 	capabilityQuarantineReporter func(toolcontract.QuarantinedToolProvider)
-	liveSnapshotMutex            sync.Mutex
-	liveSnapshotDescriptors      []CapabilityToolDescriptor
-	liveSnapshotHash             string
-	companionStatusMutex         sync.Mutex
-	companionStatusValue         string
-	companionStatusCheckedAt     time.Time
+
+	recordCatalog                   RecordCatalogClient
+	recordCatalogDivergenceReporter func(RecordCatalogDivergence)
+	recordCatalogMutex              sync.Mutex
+	recordCatalogByRequester        map[string]discoveredCatalog
+
+	liveSnapshotMutex        sync.Mutex
+	liveSnapshotDescriptors  []CapabilityToolDescriptor
+	liveSnapshotHash         string
+	companionStatusMutex     sync.Mutex
+	companionStatusValue     string
+	companionStatusCheckedAt time.Time
 }
 
 type toolHandlerContext struct {
@@ -219,7 +225,9 @@ func (toolCatalogBuilder *ToolCatalogBuilder) BuildToolSet(request ToolCatalogRe
 	}
 	toolCatalogBuilder.registerLocalTools(toolSet, request, handlerContext)
 	toolCatalogBuilder.registerKernelTools(toolSet, handlerContext)
-	toolCatalogBuilder.registerCapabilityTools(toolSet, request)
+	discoveredRecordTools := toolCatalogBuilder.discoveredRecordTools(request)
+	toolCatalogBuilder.registerRecordCatalogTools(toolSet, request, discoveredRecordTools)
+	toolCatalogBuilder.registerCapabilityTools(toolSet, request, namesOf(discoveredRecordTools))
 	toolCatalogBuilder.registerMCPTools(toolSet, request)
 	toolSet.UseToolCallGate(request.ToolCallGate)
 	return toolSetWithinRegisteredToolNameCeiling(toolSet, request.RegisteredToolNameCeiling)
