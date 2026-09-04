@@ -432,7 +432,7 @@ Tools arrive from providers implementing `toolcontract.ToolProvider`
 |---|---|
 | kernel tools | `internal/agentruntime/kernel_tool_provider.go` |
 | capability tools (declared in runtime configuration) | `internal/agentruntime/capability_tool_provider.go` |
-| MCP servers | `internal/agentruntime/mcp_tool_provider.go` |
+| record catalog tools (discovered at session time) | `internal/agentruntime/record_catalog_tools.go` |
 | local/skill tools | `internal/agentruntime/local_tool_provider.go` |
 
 Trust is explicit. A `trusted` provider that fails to load fails the
@@ -559,9 +559,8 @@ the workspace root, sanitizes the environment down to an allowlist of
 variable *names* and forces the canonical `PATH`, caps the timeout, and in sandbox mode requires bubblewrap.
 
 `internal/access/access.go` is a remaining Go-side ACL pre-check, consulted
-before exposing capability tools (`internal/agentruntime/capability_tools.go`,
-), MCP tools (`internal/agentruntime/mcp_tool_provider.go`), and memory
-reads (`internal/memory/memory_service.go`). It was described here as a
+before exposing capability tools (`internal/agentruntime/capability_tools.go`)
+and memory reads (`internal/memory/memory_service.go`). It was described here as a
 migration leftover awaiting the POSIX actor; that is wrong for what it guards.
 POSIX decides what a process may touch on this machine and cannot decide whether
 a person may send a company message or change a shared calendar — those run in

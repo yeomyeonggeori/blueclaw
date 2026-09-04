@@ -15,7 +15,6 @@ import (
 	apiconnector "github.com/yeomyeonggeori/blueclaw/internal/connectors/api"
 	"github.com/yeomyeonggeori/blueclaw/internal/harnessdriver"
 	"github.com/yeomyeonggeori/blueclaw/internal/httpserver"
-	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/protocolidentity"
 	runtimelogging "github.com/yeomyeonggeori/blueclaw/internal/runtime"
@@ -63,7 +62,6 @@ type Application struct {
 	protocolIdentityCheckOnce   sync.Once
 	protocolIdentityCheckError  error
 	refreshSkillIndex           func(context.Context)
-	mcpRegistry                 mcpRegistryCloser
 	acpSessionServer            *acpsession.Server
 	acpSessionCancel            context.CancelFunc
 }
@@ -82,10 +80,6 @@ func (options InboundOptions) admitsConnectorHTTPEvent() bool {
 	return strings.TrimSpace(options.InboundPath) != InboundPathACP
 }
 
-type mcpRegistryCloser interface {
-	Close() error
-}
-
 type interruptedTaskResumer interface {
 	CanResumeInterruptedTaskRun(task.TaskRun) bool
 	ResumeInterruptedTaskRun(context.Context, task.TaskRun) (connectors.ConnectorRuntimeResult, error)
@@ -102,7 +96,6 @@ type applicationComponents struct {
 	memory                memoryComponents
 	backupCoordinator     *backup.Coordinator
 	taskIntakeController  *runtimecontrol.TaskIntakeController
-	mcpRegistry           *mcp.McpRegistry
 	toolCatalogBuilder    *agentruntime.ToolCatalogBuilder
 	turnRouter            intake.TurnRouter
 	taskLauncher          *agentruntime.TaskLauncher
@@ -131,9 +124,7 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 	components.memory = newMemoryComponents(runtimeConfiguration, components.foundation.database, components.kernel.taskTierLanguageModels.Low, logger)
 	components.backupCoordinator = backup.NewCoordinator(buildBackupManifest(runtimeConfiguration, components.foundation.database))
 	components.taskIntakeController = runtimecontrol.NewTaskIntakeController()
-	components.mcpRegistry = mcp.NewMcpRegistry()
-	logMCPServerQuarantines(logger, components.mcpRegistry.LoadServerDefinition(runtimeConfiguration.MCPServers))
-	components.toolCatalogBuilder = newToolCatalogBuilder(runtimeConfiguration, components.kernel, components.services, components.memory, components.mcpRegistry, logger)
+	components.toolCatalogBuilder = newToolCatalogBuilder(runtimeConfiguration, components.kernel, components.services, components.memory, logger)
 	components.turnRouter = intake.NewTurnRouter(turnRouterLanguageModelProvider(components.kernel.taskTierLanguageModels, components.kernel.intakeLanguageModelProvider), deriveIntakeOptions(runtimeConfiguration))
 	components.taskLauncher = newTaskLauncher(runtimeConfiguration, components.foundation, components.directory, components.kernel, components.services, components.toolCatalogBuilder, components.turnRouter)
 	components.taskSchedulePoller = newTaskSchedulePoller(runtimeConfiguration, components.services, components.directory.identityService, components.taskLauncher, components.taskIntakeController, logger)
@@ -179,7 +170,6 @@ func newApplication(components applicationComponents) *Application {
 		protocolIdentityExpected:    components.protocolIdentity.expected,
 		protocolIdentityStatus:      components.protocolIdentity.status,
 		refreshSkillIndex:           components.kernel.refreshSkillIndex,
-		mcpRegistry:                 components.mcpRegistry,
 		acpSessionServer:            components.acpSessionServer,
 	}
 }

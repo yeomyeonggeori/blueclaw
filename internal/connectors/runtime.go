@@ -18,7 +18,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
-	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
@@ -614,10 +613,6 @@ func (connectorRuntime *ConnectorRuntime) UseIngressGate(ingressGate IngressGate
 
 func (connectorRuntime *ConnectorRuntime) UseTaskIntakeGate(taskIntakeGate TaskIntakeGate) {
 	connectorRuntime.taskIntakeGate = taskIntakeGate
-}
-
-func (connectorRuntime *ConnectorRuntime) UseMCPRegistry(mcpRegistry *mcp.McpRegistry) {
-	connectorRuntime.toolCatalogBuilder.UseMCPRegistry(mcpRegistry)
 }
 
 func (connectorRuntime *ConnectorRuntime) UseCapabilityToolDescriptors(capabilityClient capability.Client, toolDescriptors []agentruntime.CapabilityToolDescriptor) {

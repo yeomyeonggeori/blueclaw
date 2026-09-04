@@ -12,7 +12,6 @@ import (
 	"sync"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
-	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
@@ -33,7 +32,6 @@ type ToolCatalogBuilder struct {
 	memoryService                *memory.MemoryService
 	pinnedMemoryStore            *memory.MarkdownStore
 	memoryUpdateQueue            memory.MemoryUpdateEnqueuer
-	mcpRegistry                  *mcp.McpRegistry
 	capabilityClient             capability.Client
 	capabilityRegistry           *CapabilityRegistry
 	companyProvider              func() agentcontract.CompanyContext
@@ -48,7 +46,6 @@ type ToolCatalogBuilder struct {
 	skillChangeHandler           func(context.Context)
 	skillRetriever               agentcontract.SkillRetriever
 	instructionBundleLoader      func() agentcontract.InstructionBundle
-	mcpQuarantineReporter        func(toolcontract.QuarantinedToolProvider)
 	capabilityQuarantineReporter func(toolcontract.QuarantinedToolProvider)
 
 	recordCatalog                   RecordCatalogClient
@@ -140,14 +137,6 @@ func (toolCatalogBuilder *ToolCatalogBuilder) UseMemoryUpdateQueue(memoryUpdateQ
 	toolCatalogBuilder.memoryUpdateQueue = memoryUpdateQueue
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) UseMCPRegistry(mcpRegistry *mcp.McpRegistry) {
-	toolCatalogBuilder.mcpRegistry = mcpRegistry
-}
-
-func (toolCatalogBuilder *ToolCatalogBuilder) UseMCPQuarantineReporter(reporter func(toolcontract.QuarantinedToolProvider)) {
-	toolCatalogBuilder.mcpQuarantineReporter = reporter
-}
-
 func (toolCatalogBuilder *ToolCatalogBuilder) UseCapabilityQuarantineReporter(reporter func(toolcontract.QuarantinedToolProvider)) {
 	toolCatalogBuilder.capabilityQuarantineReporter = reporter
 }
@@ -224,7 +213,6 @@ func (toolCatalogBuilder *ToolCatalogBuilder) BuildToolSet(request ToolCatalogRe
 	discoveredRecordTools := toolCatalogBuilder.discoveredRecordTools(request)
 	toolCatalogBuilder.registerRecordCatalogTools(toolSet, request, discoveredRecordTools)
 	toolCatalogBuilder.registerCapabilityTools(toolSet, request, namesOf(discoveredRecordTools))
-	toolCatalogBuilder.registerMCPTools(toolSet, request)
 	toolSet.UseToolCallGate(request.ToolCallGate)
 	return toolSetWithinRegisteredToolNameCeiling(toolSet, request.RegisteredToolNameCeiling)
 }

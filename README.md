@@ -614,12 +614,6 @@ bundled loop runs. `defaultTaskLevel` is the effort a task starts at
 deployment's own control files, which the daemon knows about and
 the harness does not; the default is empty.
 
-External [MCP](https://modelcontextprotocol.io) servers mount into the tool
-catalog through `mcpServers` in the same runtime configuration
-(`MCPServerConfiguration`, `internal/config/runtime_configuration.go`). Each
-server's tools can carry a result contract and policy metadata, so an external
-tool participates in the same approval and evidence rules as a built-in one.
-
 ## Repository layout
 
 | Path | What lives there |

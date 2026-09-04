@@ -120,7 +120,6 @@ func (application *Application) Shutdown(ctx context.Context) error {
 	errorValue := application.httpServer.Shutdown(ctx)
 	backgroundError := application.awaitBackgroundLoops(ctx)
 	terminalCloseError := application.closeTerminalSessions()
-	mcpCloseError := application.closeMCPRegistry()
 	closeErrorValue := application.runtimeLogger.Close()
 	databaseCloseError := application.database.Close()
 	if errorValue != nil {
@@ -131,9 +130,6 @@ func (application *Application) Shutdown(ctx context.Context) error {
 	}
 	if terminalCloseError != nil {
 		return terminalCloseError
-	}
-	if mcpCloseError != nil {
-		return mcpCloseError
 	}
 	if closeErrorValue != nil {
 		return closeErrorValue
@@ -174,13 +170,6 @@ func (application *Application) closeTerminalSessions() error {
 		return nil
 	}
 	return application.terminalService.CloseAllSessions()
-}
-
-func (application *Application) closeMCPRegistry() error {
-	if application.mcpRegistry == nil {
-		return nil
-	}
-	return application.mcpRegistry.Close()
 }
 
 func (application *Application) startConnectorRuntime() {

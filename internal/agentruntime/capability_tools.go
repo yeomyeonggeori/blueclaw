@@ -32,23 +32,6 @@ func capabilityToolIdempotencyKey(toolContext context.Context, descriptor Capabi
 	return hex.EncodeToString(digest[:])
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) registerMCPTools(toolRegistry *toolcontract.ToolSet, request ToolCatalogRequest) {
-	quarantinedProviders, errorValue := toolRegistry.RegisterProviders(context.Background(), mcpToolProviders(toolCatalogBuilder.mcpRegistry, request))
-	if errorValue != nil {
-		panic(errorValue)
-	}
-	toolCatalogBuilder.reportMCPQuarantines(quarantinedProviders)
-}
-
-func (toolCatalogBuilder *ToolCatalogBuilder) reportMCPQuarantines(quarantinedProviders []toolcontract.QuarantinedToolProvider) {
-	if toolCatalogBuilder.mcpQuarantineReporter == nil {
-		return
-	}
-	for _, quarantinedProvider := range quarantinedProviders {
-		toolCatalogBuilder.mcpQuarantineReporter(quarantinedProvider)
-	}
-}
-
 func (toolCatalogBuilder *ToolCatalogBuilder) registerCapabilityTools(
 	toolRegistry *toolcontract.ToolSet,
 	request ToolCatalogRequest,

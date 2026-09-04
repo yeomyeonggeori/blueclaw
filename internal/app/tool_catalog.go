@@ -36,13 +36,9 @@ func newToolCatalogEndpoint(taskRunService *task.TaskRunService, approvalLanguag
 	return toolCatalogEndpoint{resolver: resolver, handler: handler, approvalGate: approvalGate}
 }
 
-func newToolCatalogBuilder(runtimeConfiguration config.RuntimeConfiguration, kernel agentKernel, services taskServices, memoryComponents memoryComponents, mcpRegistry *mcp.McpRegistry, logger *slog.Logger) *agentruntime.ToolCatalogBuilder {
+func newToolCatalogBuilder(runtimeConfiguration config.RuntimeConfiguration, kernel agentKernel, services taskServices, memoryComponents memoryComponents, logger *slog.Logger) *agentruntime.ToolCatalogBuilder {
 	logger.Info("application.initializing", "stage", "tool_catalog")
 	toolCatalogBuilder := agentruntime.NewToolCatalogBuilder()
-	toolCatalogBuilder.UseMCPRegistry(mcpRegistry)
-	toolCatalogBuilder.UseMCPQuarantineReporter(func(quarantinedProvider toolcontract.QuarantinedToolProvider) {
-		logMCPProviderQuarantine(logger, quarantinedProvider)
-	})
 	toolCatalogBuilder.UseCapabilityQuarantineReporter(func(quarantinedProvider toolcontract.QuarantinedToolProvider) {
 		logCapabilityProviderQuarantine(logger, quarantinedProvider)
 	})
@@ -68,22 +64,6 @@ func newToolCatalogBuilder(runtimeConfiguration config.RuntimeConfiguration, ker
 	toolCatalogBuilder.UsePinnedMemoryStore(memoryComponents.pinnedMemoryStore)
 	toolCatalogBuilder.UseMemoryUpdateQueue(memoryComponents.memoryUpdateQueue)
 	return toolCatalogBuilder
-}
-
-func logMCPServerQuarantines(logger *slog.Logger, report mcp.LoadReport) {
-	if logger == nil {
-		return
-	}
-	for _, quarantinedServer := range report.Quarantined {
-		logger.Warn("mcp.server.quarantined", "serverName", quarantinedServer.Name, "reason", quarantinedServer.Reason)
-	}
-}
-
-func logMCPProviderQuarantine(logger *slog.Logger, quarantinedProvider toolcontract.QuarantinedToolProvider) {
-	if logger == nil {
-		return
-	}
-	logger.Warn("mcp.provider.quarantined", "providerID", quarantinedProvider.ProviderID, "reason", quarantinedProvider.Reason)
 }
 
 func logCapabilityProviderQuarantine(logger *slog.Logger, quarantinedProvider toolcontract.QuarantinedToolProvider) {

@@ -1,78 +1,17 @@
 package mcp
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
-	"os/exec"
 	"strings"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-type ServerClient struct{}
-
 type ToolResult struct {
 	Content           []json.RawMessage `json:"content"`
 	StructuredContent json.RawMessage   `json:"structuredContent,omitempty"`
 	IsError           bool              `json:"isError"`
-}
-
-type serverSession struct {
-	session *sdkmcp.ClientSession
-}
-
-func (serverClient ServerClient) Connect(ctx context.Context, serverDefinition ServerDefinition) (*serverSession, error) {
-	client := sdkmcp.NewClient(&sdkmcp.Implementation{Name: "blueclaw", Version: "1"}, nil)
-	transport, errorValue := clientTransport(serverDefinition)
-	if errorValue != nil {
-		return nil, errorValue
-	}
-	session, errorValue := client.Connect(ctx, transport, nil)
-	if errorValue != nil {
-		return nil, errorValue
-	}
-	return &serverSession{session: session}, nil
-}
-
-func (serverClient ServerClient) ListTools(ctx context.Context, session *serverSession) ([]*sdkmcp.Tool, error) {
-	tools := []*sdkmcp.Tool{}
-	for tool, errorValue := range session.session.Tools(ctx, nil) {
-		if errorValue != nil {
-			return nil, errorValue
-		}
-		tools = append(tools, tool)
-	}
-	return tools, nil
-}
-
-func (serverClient ServerClient) InvokeTool(ctx context.Context, session *serverSession, invocation Invocation) (string, error) {
-	arguments, errorValue := parseToolArguments(invocation.Input)
-	if errorValue != nil {
-		return "", errorValue
-	}
-	result, errorValue := session.session.CallTool(ctx, &sdkmcp.CallToolParams{Name: invocation.ToolName, Arguments: arguments})
-	if errorValue != nil {
-		return "", errorValue
-	}
-	return normalizeToolResult(result)
-}
-
-func clientTransport(serverDefinition ServerDefinition) (sdkmcp.Transport, error) {
-	switch serverDefinition.Transport {
-	case TransportStdio:
-		if strings.TrimSpace(serverDefinition.Command) == "" {
-			return nil, errors.New("mcp stdio command is required")
-		}
-		return &sdkmcp.CommandTransport{Command: exec.Command(serverDefinition.Command, serverDefinition.Arguments...)}, nil
-	case TransportStreamableHTTP:
-		if strings.TrimSpace(serverDefinition.Endpoint) == "" {
-			return nil, errors.New("mcp streamable http endpoint is required")
-		}
-		return &sdkmcp.StreamableClientTransport{Endpoint: serverDefinition.Endpoint, MaxRetries: -1, DisableStandaloneSSE: true}, nil
-	default:
-		return nil, errors.New("mcp transport is unsupported")
-	}
 }
 
 func parseToolArguments(input string) (map[string]any, error) {

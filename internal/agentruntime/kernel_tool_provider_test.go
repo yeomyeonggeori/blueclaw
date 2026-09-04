@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"reflect"
 	"slices"
 	"testing"
 
@@ -315,4 +316,13 @@ func TestKernelToolProviderProjectsEveryResultPathEffect(t *testing.T) {
 			}
 		})
 	}
+}
+
+func equalJSONSchema(firstSchema json.RawMessage, secondSchema json.RawMessage) bool {
+	var firstDocument any
+	var secondDocument any
+	if json.Unmarshal(firstSchema, &firstDocument) != nil || json.Unmarshal(secondSchema, &secondDocument) != nil {
+		return false
+	}
+	return reflect.DeepEqual(firstDocument, secondDocument)
 }

@@ -1,13 +1,11 @@
 package app
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"log/slog"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -24,22 +22,11 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
-	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
 	"github.com/yeomyeonggeori/blueclaw/internal/protocolidentity"
 	"github.com/yeomyeonggeori/blueclaw/internal/runtimecontrol"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	capabilitycatalog "github.com/yeomyeonggeori/blueclaw/protocol/generated"
 )
-
-type applicationMCPRegistryCloser struct {
-	closeCount int
-	closeError error
-}
-
-func (closer *applicationMCPRegistryCloser) Close() error {
-	closer.closeCount++
-	return closer.closeError
-}
 
 func TestTaskIntakeControllerStartsUnquiesced(t *testing.T) {
 	controller := runtimecontrol.NewTaskIntakeController()
@@ -331,52 +318,6 @@ func TestNewApplicationRegistersSecretlessConnectorTransports(t *testing.T) {
 	}
 	if strings.Contains(transportNames, "websocket") {
 		t.Fatalf("expected no platform-owned websocket transport, got %q", transportNames)
-	}
-}
-
-func TestApplicationShutdownClosesOwnedMCPRegistry(t *testing.T) {
-	runtimeConfiguration := config.RuntimeConfiguration{}
-	runtimeConfiguration.Logging.DirectoryPath = t.TempDir()
-	application := NewApplication(runtimeConfiguration, "", bluecollarharness.New, InboundOptions{})
-	expectedError := errors.New("close MCP registry")
-	registry := &applicationMCPRegistryCloser{closeError: expectedError}
-	application.mcpRegistry = registry
-
-	errorValue := application.Shutdown(context.Background())
-
-	if !errors.Is(errorValue, expectedError) {
-		t.Fatalf("expected MCP close error, got %v", errorValue)
-	}
-	if registry.closeCount != 1 {
-		t.Fatalf("expected MCP registry to close once, got %d", registry.closeCount)
-	}
-}
-
-func TestMCPQuarantineLogsPreserveStructuredIdentity(t *testing.T) {
-	var output bytes.Buffer
-	logger := slog.New(slog.NewJSONHandler(&output, nil))
-
-	logMCPServerQuarantines(logger, mcp.LoadReport{Quarantined: []mcp.QuarantinedServer{{
-		Name:   "workspace",
-		Reason: "server unavailable",
-	}}})
-	logMCPProviderQuarantine(logger, toolcontract.QuarantinedToolProvider{
-		ProviderID: "mcp:workspace",
-		Reason:     "tool name collision",
-	})
-
-	logOutput := output.String()
-	for _, expectedText := range []string{
-		`"msg":"mcp.server.quarantined"`,
-		`"serverName":"workspace"`,
-		`"reason":"server unavailable"`,
-		`"msg":"mcp.provider.quarantined"`,
-		`"providerID":"mcp:workspace"`,
-		`"reason":"tool name collision"`,
-	} {
-		if !strings.Contains(logOutput, expectedText) {
-			t.Fatalf("expected structured log field %s in %s", expectedText, logOutput)
-		}
 	}
 }
 

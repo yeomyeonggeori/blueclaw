@@ -94,28 +94,6 @@ func TestLoadRuntimeConfigurationIncludesGuestAndBridge(t *testing.T) {
       "allowedToolNames": ["conversation_history", "memory_search", "echo"]
     }
   ],
-  "mcpServers": [
-    {
-      "name": "echo",
-      "transport": "stdio",
-      "command": "/bin/echo",
-      "tools": [{
-        "name": "echo",
-        "namespace": "test",
-        "description": "Echo input",
-        "inputSchema": {"type": "object"},
-        "inputIntentSchema": {"type": "object"},
-        "policy": {
-          "privacyClass": "test",
-          "modelVisibility": "visible",
-          "policyResource": "tool:test.echo",
-          "sideEffectClass": "read",
-          "completionMode": "none",
-          "idempotency": "supported"
-        }
-      }]
-    }
-  ],
   "connectors": {
     "chatd": {
       "endpoint": "http://127.0.0.1:8090",
@@ -240,12 +218,6 @@ func TestLoadRuntimeConfigurationIncludesGuestAndBridge(t *testing.T) {
 	}
 	if len(runtimeConfiguration.AgentProfiles) != 1 || runtimeConfiguration.AgentProfiles[0].AllowedToolNames[2] != "echo" {
 		t.Fatalf("expected agent profile tool allowlist to load, got %+v", runtimeConfiguration.AgentProfiles)
-	}
-	if len(runtimeConfiguration.MCPServers) != 1 || len(runtimeConfiguration.MCPServers[0].Tools) != 1 || runtimeConfiguration.MCPServers[0].Tools[0].Name != "echo" {
-		t.Fatalf("expected canonical MCP tools to load, got %+v", runtimeConfiguration.MCPServers)
-	}
-	if len(runtimeConfiguration.MCPServers[0].Tools[0].InputIntentSchema) == 0 {
-		t.Fatal("expected MCP input intent schema to load")
 	}
 	if runtimeConfiguration.Logging.RetentionDays != 7 {
 		t.Fatalf("expected log retention to match, got %d", runtimeConfiguration.Logging.RetentionDays)

@@ -22,7 +22,6 @@ type RuntimeConfiguration struct {
 	Agent         AgentConfiguration          `json:"agent"`
 	Connectors    ConnectorConfiguration      `json:"connectors"`
 	Logging       LoggingConfiguration        `json:"logging"`
-	MCPServers    []MCPServerConfiguration    `json:"mcpServers"`
 	Terminal      TerminalConfiguration       `json:"terminal"`
 	Scheduler     SchedulerConfiguration      `json:"scheduler"`
 }
@@ -60,53 +59,7 @@ type AgentProfileConfiguration struct {
 	AllowedToolNames []string `json:"allowedToolNames"`
 }
 
-type MCPServerConfiguration struct {
-	Name      string                 `json:"name"`
-	Transport string                 `json:"transport"`
-	Command   string                 `json:"command"`
-	Arguments []string               `json:"arguments"`
-	Endpoint  string                 `json:"endpoint"`
-	Tools     []MCPToolConfiguration `json:"tools,omitempty"`
-}
-
-type MCPToolConfiguration struct {
-	Name              string                 `json:"name"`
-	Namespace         string                 `json:"namespace"`
-	Description       string                 `json:"description"`
-	InputSchema       json.RawMessage        `json:"inputSchema"`
-	InputIntentSchema json.RawMessage        `json:"inputIntentSchema,omitempty"`
-	OutputSchema      json.RawMessage        `json:"outputSchema"`
-	ResultContract    *MCPToolResultContract `json:"resultContract"`
-	Policy            *MCPToolPolicyMetadata `json:"policy"`
-}
-
-type MCPToolResultContract struct {
-	Schema            json.RawMessage             `json:"schema"`
-	Effects           []MCPResourceEffectContract `json:"effects,omitempty"`
-	EvidenceCondition *EvidenceCondition          `json:"evidenceCondition,omitempty"`
-}
-
 type EvidenceCondition = capability.EvidenceCondition
-
-type MCPResourceEffectContract struct {
-	ObjectType     string `json:"objectType"`
-	Effect         string `json:"effect"`
-	ResultField    string `json:"resultField"`
-	EffectIdentity string `json:"effectIdentity"`
-}
-
-type MCPToolPolicyMetadata struct {
-	PrivacyClass         string `json:"privacyClass"`
-	RequiresUserPresence bool   `json:"requiresUserPresence"`
-	WorksOffline         bool   `json:"worksOffline"`
-	ModelVisibility      string `json:"modelVisibility"`
-	PolicyResource       string `json:"policyResource"`
-	SideEffectClass      string `json:"sideEffectClass"`
-	RequiresApproval     bool   `json:"requiresApproval"`
-	CompletionMode       string `json:"completionMode"`
-	Idempotency          string `json:"idempotency"`
-	IdempotencyScope     string `json:"idempotencyScope"`
-}
 
 type AgentConfiguration struct {
 	Intake                       AgentIntakeConfiguration `json:"intake"`

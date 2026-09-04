@@ -17,11 +17,9 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
-	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/launchfailure"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
-	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/reply"
@@ -3248,39 +3246,6 @@ func structuredRequestsContainMessage(requests []llm.StructuredResponseRequest, 
 		}
 	}
 	return false
-}
-
-func TestConnectorRuntimeQuarantinesSchemaOnlyMCPConfiguration(t *testing.T) {
-	connectorRuntime, adapter, _ := newStubbedTestConnectorRuntime(t)
-	connectorRuntime.UseAllowedToolNames([]string{"allowed_tool"})
-	mcpRegistry := mcp.NewMcpRegistry()
-	inputSchema := json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"}},"required":["query"],"additionalProperties":false}`)
-	loadReport := mcpRegistry.LoadServerDefinition([]config.MCPServerConfiguration{
-		{
-			Name: "workspace-mcp",
-			Tools: []config.MCPToolConfiguration{
-				{Name: "allowed_tool", Description: "Allowed MCP tool", InputSchema: inputSchema},
-				{Name: "blocked_tool", Description: "Blocked MCP tool", InputSchema: inputSchema},
-			},
-		},
-	})
-	if len(loadReport.Quarantined) != 1 {
-		t.Fatalf("expected schema-only MCP server to be quarantined, got %+v", loadReport)
-	}
-	connectorRuntime.UseMCPRegistry(mcpRegistry)
-
-	toolRegistry := connectorRuntime.buildTurnToolSet(adapter, testInboundEvent("message-1"), "person-1", policy.PersonAccess{})
-	if _, isFound := findAgentToolDefinition(toolRegistry.ListToolDefinitions(), "allowed_tool"); isFound {
-		t.Fatalf("expected quarantined MCP tools to stay hidden, got %+v", toolRegistry.ListToolDefinitions())
-	}
-
-	toolResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{ToolName: "allowed_tool", Input: json.RawMessage(`{}`)})
-	if errorValue != nil {
-		t.Fatalf("expected policy denial as tool result: %v", errorValue)
-	}
-	if !toolResult.Failed() || toolResult.ContentText() != "tool is not allowed" {
-		t.Fatalf("expected quarantined MCP invocation to be denied, got %+v", toolResult)
-	}
 }
 
 func TestConnectorRuntimeDetachesHTTPEventFromCanceledRequestContext(t *testing.T) {

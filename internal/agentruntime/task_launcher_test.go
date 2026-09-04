@@ -14,10 +14,8 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
-	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/launchfailure"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
-	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
@@ -385,24 +383,10 @@ func TestTaskLauncherAuditsPinnedMemoryFailureAndRunsWithoutMemory(t *testing.T)
 	}
 }
 
-func TestToolCatalogHidesHistoryAndQuarantinedMCPTools(t *testing.T) {
-	mcpRegistry := mcp.NewMcpRegistry()
-	loadReport := mcpRegistry.LoadServerDefinition([]config.MCPServerConfiguration{
-		{
-			Name: "local-mcp",
-			Tools: []config.MCPToolConfiguration{
-				{Name: "allowed_tool", Description: "Allowed"},
-				{Name: "blocked_tool", Description: "Blocked"},
-			},
-		},
-	})
-	if len(loadReport.Quarantined) != 1 {
-		t.Fatalf("expected invalid MCP server to be quarantined, got %+v", loadReport)
-	}
+func TestToolCatalogHidesToolNamesNobodyRegistered(t *testing.T) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseMCPRegistry(mcpRegistry)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{
-		"default": {"allowed_tool", "memory_search"},
+		"default": {"unregistered_tool", "memory_search"},
 	}, nil)
 
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{ProfileName: "default"})
@@ -410,14 +394,11 @@ func TestToolCatalogHidesHistoryAndQuarantinedMCPTools(t *testing.T) {
 	if containsString(toolNames, "conversation_history") {
 		t.Fatalf("expected history tool to be hidden without provider, got %+v", toolNames)
 	}
-	if containsString(toolNames, "allowed_tool") {
-		t.Fatalf("expected quarantined MCP tool to stay hidden, got %+v", toolNames)
-	}
-	if containsString(toolNames, "blocked_tool") {
-		t.Fatalf("expected blocked MCP tool to be hidden, got %+v", toolNames)
+	if containsString(toolNames, "unregistered_tool") {
+		t.Fatalf("expected an allowed name no provider registered to stay hidden, got %+v", toolNames)
 	}
 
-	toolResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{ToolName: "blocked_tool", Input: json.RawMessage(`{}`)})
+	toolResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{ToolName: "unregistered_tool", Input: json.RawMessage(`{}`)})
 	if errorValue != nil {
 		t.Fatalf("expected denied tool as result: %v", errorValue)
 	}
