@@ -230,24 +230,26 @@ func TestMemoryRememberToolRejectsMultipleActiveCircleCandidates(t *testing.T) {
 
 func TestMemorySearchUsesPersonAndActiveCircleNamespaces(t *testing.T) {
 	memoryService := &memory.MemoryService{}
-	memoryService.StoreMemoryFact(memory.MemoryFact{
-		ScopeType:   memory.ScopeTypeUser,
-		NamespaceID: memory.UserNamespace("person-1").NamespaceID,
-		Content:     "Call the user master.",
-		SourceKind:  memory.MemorySourceKindFact,
-	})
-	memoryService.StoreMemoryFact(memory.MemoryFact{
-		ScopeType:   memory.ScopeTypeCircle,
-		NamespaceID: memory.CircleNamespace("default", "hr-compensation").NamespaceID,
-		Content:     "Salary files stay in HR compensation.",
-		SourceKind:  memory.MemorySourceKindFact,
-	})
-	memoryService.StoreMemoryFact(memory.MemoryFact{
-		ScopeType:   memory.ScopeTypeCircle,
-		NamespaceID: memory.CircleNamespace("default", "admin").NamespaceID,
-		Content:     "Admin-only operational memory.",
-		SourceKind:  memory.MemorySourceKindFact,
-	})
+	memoryService.UseGraphStore(staticGraphMemoryStore{facts: []memory.MemoryFact{
+		{
+			ScopeType:   memory.ScopeTypeUser,
+			NamespaceID: memory.UserNamespace("person-1").NamespaceID,
+			Content:     "Call the user master.",
+			SourceKind:  memory.MemorySourceKindFact,
+		},
+		{
+			ScopeType:   memory.ScopeTypeCircle,
+			NamespaceID: memory.CircleNamespace("default", "hr-compensation").NamespaceID,
+			Content:     "Salary files stay in HR compensation.",
+			SourceKind:  memory.MemorySourceKindFact,
+		},
+		{
+			ScopeType:   memory.ScopeTypeCircle,
+			NamespaceID: memory.CircleNamespace("default", "admin").NamespaceID,
+			Content:     "Admin-only operational memory.",
+			SourceKind:  memory.MemorySourceKindFact,
+		},
+	}})
 	toolCatalogBuilder := NewToolCatalogBuilder()
 	toolCatalogBuilder.UseMemoryService(memoryService)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"memory_search"})
@@ -427,14 +429,6 @@ func TestMemorySearchReturnsRecoverableToolErrorWhenGraphitiFails(t *testing.T) 
 func TestMemorySearchDegradedWithPinnedFallback(t *testing.T) {
 	memoryService := &memory.MemoryService{}
 	memoryService.UseGraphStore(failingGraphMemoryStore{errorValue: errors.New("graphiti unavailable")})
-	memoryService.StoreMemoryFact(memory.MemoryFact{
-		FactID:      "recent-1",
-		ScopeType:   memory.ScopeTypeUser,
-		NamespaceID: memory.UserNamespace("person-1").NamespaceID,
-		Content:     "The requester reviews release notes on Monday.",
-		SourceKind:  memory.MemorySourceKindFact,
-		ValidAt:     time.Date(2026, time.July, 18, 1, 0, 0, 0, time.UTC),
-	})
 	pinnedMemoryStore := memory.NewMarkdownStore(t.TempDir(), 1200)
 	if _, errorValue := pinnedMemoryStore.MergePersonMemory(context.Background(), "person-1", "The requester prefers terse release notes."); errorValue != nil {
 		t.Fatal(errorValue)
@@ -465,7 +459,7 @@ func TestMemorySearchDegradedWithPinnedFallback(t *testing.T) {
 	if document.SearchStatus != "degraded" {
 		t.Fatalf("expected degraded search status, got %+v", document)
 	}
-	if len(document.Sources) != 2 || document.Sources[0] != "pinned_markdown" || document.Sources[1] != "recent_memory" {
+	if len(document.Sources) != 1 || document.Sources[0] != "pinned_markdown" {
 		t.Fatalf("expected exact degraded sources, got %+v", document.Sources)
 	}
 	if !containsMemoryFact(document.Facts, "# Memory\n- The requester prefers terse release notes.") {
@@ -579,8 +573,8 @@ func TestMemoryRememberToolPersistsMarkdownBeforeQueue(t *testing.T) {
 	if document.Status != "persisted" || document.Durability != "durable" {
 		t.Fatalf("expected persisted durable status, got %+v", document)
 	}
-	if len(queue.jobs) != 1 || !queue.jobs[0].SkipMarkdown {
-		t.Fatalf("expected graphiti enrichment job without markdown rewrite, got %+v", queue.jobs)
+	if len(queue.jobs) != 1 {
+		t.Fatalf("expected one graphiti enrichment job, got %+v", queue.jobs)
 	}
 	memoryFacts, errorValue := pinnedMemoryStore.LoadPinnedMemory(context.Background(), "person-1")
 	if errorValue != nil {

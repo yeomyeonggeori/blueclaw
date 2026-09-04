@@ -31,7 +31,6 @@ type memorySearchSource string
 const (
 	memorySearchGraphSource  memorySearchSource = "graph_memory"
 	memorySearchPinnedSource memorySearchSource = "pinned_markdown"
-	memorySearchRecentSource memorySearchSource = "recent_memory"
 )
 
 type memorySearchFact struct {
@@ -51,7 +50,7 @@ type memorySearchToolOutput struct {
 
 var (
 	memorySearchInputSchema         = json.RawMessage(`{"type":"object","properties":{"query":{"type":"string","minLength":1,"pattern":"\\S"}},"required":["query"],"additionalProperties":false}`)
-	memorySearchOutputSchema        = json.RawMessage(`{"type":"object","properties":{"facts":{"type":"array","items":{"type":"object","properties":{"factID":{"type":"string"},"scopeType":{"type":"string"},"content":{"type":"string"},"sourceKind":{"type":"string"},"validAt":{"type":"string","format":"date-time"},"score":{"type":"number"}},"required":["factID","scopeType","content","sourceKind","validAt"],"additionalProperties":false}},"searchStatus":{"type":"string","enum":["complete","degraded"]},"sources":{"type":"array","items":{"type":"string","enum":["graph_memory","pinned_markdown","recent_memory"]},"uniqueItems":true}},"required":["facts","searchStatus","sources"],"additionalProperties":false,"allOf":[{"if":{"properties":{"searchStatus":{"const":"complete"}},"required":["searchStatus"]},"then":{"properties":{"sources":{"type":"array","items":{"const":"graph_memory"},"minItems":1,"maxItems":1}}}},{"if":{"properties":{"searchStatus":{"const":"degraded"}},"required":["searchStatus"]},"then":{"properties":{"sources":{"type":"array","items":{"enum":["pinned_markdown","recent_memory"]},"minItems":1,"maxItems":2}}}}]}`)
+	memorySearchOutputSchema        = json.RawMessage(`{"type":"object","properties":{"facts":{"type":"array","items":{"type":"object","properties":{"factID":{"type":"string"},"scopeType":{"type":"string"},"content":{"type":"string"},"sourceKind":{"type":"string"},"validAt":{"type":"string","format":"date-time"},"score":{"type":"number"}},"required":["factID","scopeType","content","sourceKind","validAt"],"additionalProperties":false}},"searchStatus":{"type":"string","enum":["complete","degraded"]},"sources":{"type":"array","items":{"type":"string","enum":["graph_memory","pinned_markdown"]},"uniqueItems":true}},"required":["facts","searchStatus","sources"],"additionalProperties":false,"allOf":[{"if":{"properties":{"searchStatus":{"const":"complete"}},"required":["searchStatus"]},"then":{"properties":{"sources":{"type":"array","items":{"const":"graph_memory"},"minItems":1,"maxItems":1}}}},{"if":{"properties":{"searchStatus":{"const":"degraded"}},"required":["searchStatus"]},"then":{"properties":{"sources":{"type":"array","items":{"const":"pinned_markdown"},"minItems":1,"maxItems":1}}}}]}`)
 	memoryRememberInputSchema       = json.RawMessage(`{"type":"object","properties":{"content":{"type":"string","minLength":1,"maxLength":600,"pattern":"\\S"}},"required":["content"],"additionalProperties":false}`)
 	memoryRememberInputIntentSchema = json.RawMessage(`{"type":"object","properties":{"content":{"type":"string","minLength":1,"maxLength":600,"pattern":"\\S"}},"additionalProperties":false}`)
 	memoryRememberOutputSchema      = json.RawMessage(`{"type":"object","properties":{"accepted":{"type":"boolean"},"jobID":{"type":"string","pattern":"\\S"},"status":{"type":"string","enum":["persisted","queued_volatile","failed"]},"durability":{"type":"string","enum":["durable","volatile","none"]},"graphitiStatus":{"type":"string"},"markdownUpdated":{"type":"boolean"},"failureCode":{"type":"string"},"failureComponent":{"type":"string"}},"required":["accepted","jobID","status","durability"],"additionalProperties":false}`)
@@ -167,11 +166,6 @@ func (toolCatalogBuilder *ToolCatalogBuilder) searchFallbackMemory(ctx context.C
 		memoryFacts = append(memoryFacts, pinnedMemoryFacts...)
 		sources = append(sources, memorySearchPinnedSource)
 	}
-	localMemoryFacts, localError := toolCatalogBuilder.SearchLocalMemory(ctx, request)
-	if localError == nil && len(localMemoryFacts) > 0 {
-		memoryFacts = appendMemoryFacts(memoryFacts, localMemoryFacts)
-		sources = append(sources, memorySearchRecentSource)
-	}
 	return memoryFacts, sources
 }
 
@@ -208,13 +202,6 @@ func (toolCatalogBuilder *ToolCatalogBuilder) SearchMemory(ctx context.Context, 
 		return nil, nil
 	}
 	return toolCatalogBuilder.memoryService.SearchMemory(ctx, memorySearchRequest(request))
-}
-
-func (toolCatalogBuilder *ToolCatalogBuilder) SearchLocalMemory(ctx context.Context, request TaskMemoryRequest) ([]memory.MemoryFact, error) {
-	if toolCatalogBuilder.memoryService == nil {
-		return nil, nil
-	}
-	return toolCatalogBuilder.memoryService.SearchLocalMemory(ctx, memorySearchRequest(request))
 }
 
 func memorySearchRequest(request TaskMemoryRequest) memory.MemorySearchRequest {
@@ -284,7 +271,6 @@ func (toolCatalogBuilder *ToolCatalogBuilder) persistMemoryUpdateTool(ctx contex
 	if errorValue != nil {
 		return memoryRememberResult(failedMemoryUpdate(job.JobID, "markdown_write_failed", "markdown"))
 	}
-	job.SkipMarkdown = true
 	accepted := memory.MemoryUpdateAccepted{
 		Accepted:        true,
 		JobID:           job.JobID,

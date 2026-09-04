@@ -40,7 +40,7 @@ func newMemoryComponents(runtimeConfiguration config.RuntimeConfiguration, datab
 	}
 	components.pinnedMemoryStore = memory.NewMarkdownStore(pinnedMemoryRootPath(runtimeConfiguration), pinnedMemoryHardLimitCharacterCount(runtimeConfiguration))
 	components.pinnedMemoryStore.UseCompressor(memory.NewLLMMarkdownMemoryCompressor(compressionLanguageModel), pinnedMemoryCompressionTargetCharacterCount(runtimeConfiguration))
-	components.memoryUpdateQueue = memory.NewBackgroundMemoryUpdateQueue(memory.NewMemoryUpdateProcessor(memoryService, components.pinnedMemoryStore), logger)
+	components.memoryUpdateQueue = memory.NewBackgroundMemoryUpdateQueue(memory.NewMemoryUpdateProcessor(memoryService), logger)
 	return components
 }
 

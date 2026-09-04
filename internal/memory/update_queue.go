@@ -7,6 +7,8 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -21,7 +23,6 @@ type MemoryUpdateJob struct {
 	SenderPersonID  string
 	SourceReference string
 	OccurredAt      time.Time
-	SkipMarkdown    bool
 }
 
 type MemoryUpdateAccepted struct {
@@ -41,26 +42,55 @@ type MemoryUpdateEnqueuer interface {
 
 type MemoryUpdateProcessor struct {
 	memoryService *MemoryService
-	markdownStore *MarkdownStore
 }
 
 type MemoryUpdateResult struct {
 	GraphitiSucceeded bool
 	GraphitiError     string
-	MarkdownUpdated   bool
-	MarkdownError     string
+}
+
+type MemoryQueueDrainResult struct {
+	Drained     bool
+	DroppedJobs []MemoryUpdateJob
 }
 
 type BackgroundMemoryUpdateQueue struct {
-	processor MemoryUpdateProcessor
-	jobs      chan MemoryUpdateJob
-	logger    *slog.Logger
+	processor   MemoryUpdateProcessor
+	jobs        chan MemoryUpdateJob
+	logger      *slog.Logger
+	quiescing   atomic.Bool
+	pendingJobs sync.WaitGroup
+	currentJob  currentMemoryUpdateJob
 }
 
-func NewMemoryUpdateProcessor(memoryService *MemoryService, markdownStore *MarkdownStore) MemoryUpdateProcessor {
+type currentMemoryUpdateJob struct {
+	mutex  sync.Mutex
+	job    MemoryUpdateJob
+	active bool
+}
+
+func (current *currentMemoryUpdateJob) set(job MemoryUpdateJob) {
+	current.mutex.Lock()
+	defer current.mutex.Unlock()
+	current.job = job
+	current.active = true
+}
+
+func (current *currentMemoryUpdateJob) clear() {
+	current.mutex.Lock()
+	defer current.mutex.Unlock()
+	current.active = false
+}
+
+func (current *currentMemoryUpdateJob) snapshot() (MemoryUpdateJob, bool) {
+	current.mutex.Lock()
+	defer current.mutex.Unlock()
+	return current.job, current.active
+}
+
+func NewMemoryUpdateProcessor(memoryService *MemoryService) MemoryUpdateProcessor {
 	return MemoryUpdateProcessor{
 		memoryService: memoryService,
-		markdownStore: markdownStore,
 	}
 }
 
@@ -83,7 +113,11 @@ func (queue *BackgroundMemoryUpdateQueue) Enqueue(job MemoryUpdateJob) (MemoryUp
 	if queue == nil {
 		return MemoryUpdateAccepted{}, errors.New("memory update queue is unavailable")
 	}
+	if queue.quiescing.Load() {
+		return MemoryUpdateAccepted{}, errors.New("memory update queue is quiescing for shutdown")
+	}
 	normalizedJob := normalizeMemoryUpdateJob(job)
+	queue.pendingJobs.Add(1)
 	// TODO: Replace the volatile in-process memory update queue with a durable queue.
 	select {
 	case queue.jobs <- normalizedJob:
@@ -95,7 +129,45 @@ func (queue *BackgroundMemoryUpdateQueue) Enqueue(job MemoryUpdateJob) (MemoryUp
 			GraphitiStatus: "queued",
 		}, nil
 	default:
+		queue.pendingJobs.Done()
 		return MemoryUpdateAccepted{}, errors.New("memory update queue is full")
+	}
+}
+
+// Drain stops the queue from accepting new jobs and waits, until ctx is
+// done, for the in-flight job and every buffered job to finish processing.
+// Jobs still outstanding when ctx is done are reported as dropped rather
+// than silently discarded.
+func (queue *BackgroundMemoryUpdateQueue) Drain(ctx context.Context) MemoryQueueDrainResult {
+	if queue == nil {
+		return MemoryQueueDrainResult{Drained: true}
+	}
+	queue.quiescing.Store(true)
+	drained := make(chan struct{})
+	go func() {
+		queue.pendingJobs.Wait()
+		close(drained)
+	}()
+	select {
+	case <-drained:
+		return MemoryQueueDrainResult{Drained: true}
+	case <-ctx.Done():
+		return MemoryQueueDrainResult{Drained: false, DroppedJobs: queue.outstandingJobs()}
+	}
+}
+
+func (queue *BackgroundMemoryUpdateQueue) outstandingJobs() []MemoryUpdateJob {
+	outstanding := make([]MemoryUpdateJob, 0, len(queue.jobs)+1)
+	if job, active := queue.currentJob.snapshot(); active {
+		outstanding = append(outstanding, job)
+	}
+	for {
+		select {
+		case job := <-queue.jobs:
+			outstanding = append(outstanding, job)
+		default:
+			return outstanding
+		}
 	}
 }
 
@@ -111,7 +183,10 @@ func (queue *BackgroundMemoryUpdateQueue) run(ctx context.Context) {
 }
 
 func (queue *BackgroundMemoryUpdateQueue) processJob(ctx context.Context, job MemoryUpdateJob) {
+	queue.currentJob.set(job)
 	defer func() {
+		queue.currentJob.clear()
+		queue.pendingJobs.Done()
 		if recovered := recover(); recovered != nil {
 			queue.logger.Error("memory.update_panic", slog.String("jobID", job.JobID), slog.Any("panic", recovered))
 		}
@@ -126,11 +201,6 @@ func (queue *BackgroundMemoryUpdateQueue) logResult(job MemoryUpdateJob, result 
 	} else if result.GraphitiSucceeded {
 		queue.logger.Info("memory.graphiti_update_succeeded", slog.String("jobID", job.JobID), slog.String("namespaceID", job.Namespace.NamespaceID))
 	}
-	if result.MarkdownError != "" {
-		queue.logger.Warn("memory.markdown_update_failed", slog.String("jobID", job.JobID), slog.String("error", result.MarkdownError))
-	} else if result.MarkdownUpdated {
-		queue.logger.Info("memory.markdown_update_succeeded", slog.String("jobID", job.JobID), slog.String("namespaceID", job.Namespace.NamespaceID))
-	}
 }
 
 func (processor MemoryUpdateProcessor) Process(ctx context.Context, job MemoryUpdateJob) MemoryUpdateResult {
@@ -141,14 +211,6 @@ func (processor MemoryUpdateProcessor) Process(ctx context.Context, job MemoryUp
 			result.GraphitiError = errorValue.Error()
 		} else {
 			result.GraphitiSucceeded = true
-		}
-	}
-	if processor.markdownStore != nil && normalizedJob.Namespace.ScopeType == ScopeTypeUser && !normalizedJob.SkipMarkdown {
-		isUpdated, errorValue := processor.markdownStore.MergePersonMemory(ctx, normalizedJob.Namespace.ScopePersonID, normalizedJob.Content)
-		if errorValue != nil {
-			result.MarkdownError = errorValue.Error()
-		} else {
-			result.MarkdownUpdated = isUpdated
 		}
 	}
 	return result

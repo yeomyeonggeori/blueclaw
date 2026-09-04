@@ -102,12 +102,11 @@ func TestMarkdownStoreDeletePersonMemoryRemovesContent(t *testing.T) {
 	}
 }
 
-func TestMemoryUpdateProcessorUpdatesGraphitiAndMarkdown(t *testing.T) {
+func TestMemoryUpdateProcessorAddsGraphEpisode(t *testing.T) {
 	graphStore := &recordingGraphStore{}
 	memoryService := &MemoryService{}
 	memoryService.UseGraphStore(graphStore)
-	markdownStore := NewMarkdownStore(t.TempDir(), 1200)
-	processor := NewMemoryUpdateProcessor(memoryService, markdownStore)
+	processor := NewMemoryUpdateProcessor(memoryService)
 
 	result := processor.Process(context.Background(), MemoryUpdateJob{
 		Namespace:      UserNamespace("person-1"),
@@ -118,39 +117,8 @@ func TestMemoryUpdateProcessorUpdatesGraphitiAndMarkdown(t *testing.T) {
 	if !result.GraphitiSucceeded || result.GraphitiError != "" {
 		t.Fatalf("expected graph update success, got %+v", result)
 	}
-	if !result.MarkdownUpdated || result.MarkdownError != "" {
-		t.Fatalf("expected markdown update success, got %+v", result)
-	}
 	if len(graphStore.episodes) != 1 || graphStore.episodes[0].Prompt != "Call the user master." {
 		t.Fatalf("expected graph episode, got %+v", graphStore.episodes)
-	}
-	memoryFacts, errorValue := markdownStore.LoadPinnedMemory(context.Background(), "person-1")
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if len(memoryFacts) != 1 || !strings.Contains(memoryFacts[0].Content, "master") {
-		t.Fatalf("expected markdown memory, got %+v", memoryFacts)
-	}
-}
-
-func TestMemoryUpdateProcessorSkipsMarkdownForCircleMemory(t *testing.T) {
-	graphStore := &recordingGraphStore{}
-	memoryService := &MemoryService{}
-	memoryService.UseGraphStore(graphStore)
-	markdownStore := NewMarkdownStore(t.TempDir(), 1200)
-	processor := NewMemoryUpdateProcessor(memoryService, markdownStore)
-
-	result := processor.Process(context.Background(), MemoryUpdateJob{
-		Namespace:      CircleNamespace("default", "member"),
-		Content:        "Member prefers concise updates.",
-		SenderPersonID: "person-1",
-	})
-
-	if !result.GraphitiSucceeded || result.GraphitiError != "" {
-		t.Fatalf("expected graph update success, got %+v", result)
-	}
-	if result.MarkdownUpdated || result.MarkdownError != "" {
-		t.Fatalf("expected markdown to be skipped, got %+v", result)
 	}
 }
 

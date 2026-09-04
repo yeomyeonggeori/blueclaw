@@ -3521,11 +3521,11 @@ func TestConnectorRuntimeDoesNotAutomaticallyIngestMemoryForPathBearingReply(t *
 
 func TestConnectorRuntimeDoesNotShareUserMemoryWithOtherPerson(t *testing.T) {
 	memoryService := &memory.MemoryService{}
-	memoryService.StoreMemoryFact(memory.MemoryFact{
+	memoryService.UseGraphStore(&fakeGraphMemoryStore{facts: []memory.MemoryFact{{
 		ScopeType:   memory.ScopeTypeUser,
 		NamespaceID: "user:person-1",
 		Content:     "사용자의 이름은 민수다.",
-	})
+	}}})
 
 	records, errorValue := memoryService.SearchMemory(context.Background(), memory.MemorySearchRequest{
 		ReaderPersonID:          "person-2",

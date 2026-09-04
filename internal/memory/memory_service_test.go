@@ -10,25 +10,27 @@ import (
 
 func TestMemoryServiceSeparatesUserWorkspaceAndConversationNamespaces(t *testing.T) {
 	memoryService := &MemoryService{}
-	memoryService.StoreMemoryFact(MemoryFact{
-		ScopeType:   ScopeTypeUser,
-		NamespaceID: "user:person-1",
-		Content:     "the user's name is Sam.",
-	})
-	memoryService.StoreMemoryFact(MemoryFact{
-		ScopeType:         ScopeTypeWorkspace,
-		NamespaceID:       WorkspaceNamespace("default", 50, []string{"finance"}).NamespaceID,
-		Content:           "only the finance team uses the corporate card.",
-		SecurityLevelRank: 50,
-		RequiredClasses:   []string{"finance"},
-	})
-	memoryService.StoreMemoryFact(MemoryFact{
-		ScopeType:         ScopeTypeConversation,
-		NamespaceID:       ConversationNamespace("channel-1", 10, []string{"internal"}).NamespaceID,
-		Content:           "this channel is for release meetings.",
-		SecurityLevelRank: 10,
-		RequiredClasses:   []string{"internal"},
-	})
+	memoryService.UseGraphStore(fixedFactGraphStore{facts: []MemoryFact{
+		{
+			ScopeType:   ScopeTypeUser,
+			NamespaceID: "user:person-1",
+			Content:     "the user's name is Sam.",
+		},
+		{
+			ScopeType:         ScopeTypeWorkspace,
+			NamespaceID:       WorkspaceNamespace("default", 50, []string{"finance"}).NamespaceID,
+			Content:           "only the finance team uses the corporate card.",
+			SecurityLevelRank: 50,
+			RequiredClasses:   []string{"finance"},
+		},
+		{
+			ScopeType:         ScopeTypeConversation,
+			NamespaceID:       ConversationNamespace("channel-1", 10, []string{"internal"}).NamespaceID,
+			Content:           "this channel is for release meetings.",
+			SecurityLevelRank: 10,
+			RequiredClasses:   []string{"internal"},
+		},
+	}})
 
 	personOneFacts, errorValue := memoryService.SearchMemory(context.Background(), MemorySearchRequest{
 		ReaderPersonID:          "person-1",
@@ -89,40 +91,42 @@ func TestMemoryServiceRanksAfterPolicyFiltering(t *testing.T) {
 	memoryService := &MemoryService{}
 	olderTime := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	newerTime := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
-	memoryService.StoreMemoryFact(MemoryFact{
-		FactID:            "inaccessible",
-		ScopeType:         ScopeTypeWorkspace,
-		NamespaceID:       WorkspaceNamespace("default", 80, []string{"finance"}).NamespaceID,
-		Content:           "the Project Aurora budget is confidential.",
-		Score:             50,
-		SecurityLevelRank: 80,
-		RequiredClasses:   []string{"finance"},
-		ValidAt:           newerTime,
-	})
-	memoryService.StoreMemoryFact(MemoryFact{
-		FactID:      "query-match",
-		ScopeType:   ScopeTypeUser,
-		NamespaceID: UserNamespace("person-1").NamespaceID,
-		Content:     "the user prioritizes Project Aurora.",
-		Score:       0.1,
-		ValidAt:     olderTime,
-	})
-	memoryService.StoreMemoryFact(MemoryFact{
-		FactID:      "high-score",
-		ScopeType:   ScopeTypeUser,
-		NamespaceID: UserNamespace("person-1").NamespaceID,
-		Content:     "the user prefers a concise design.",
-		Score:       0.9,
-		ValidAt:     newerTime,
-	})
-	memoryService.StoreMemoryFact(MemoryFact{
-		FactID:      "old-low-score",
-		ScopeType:   ScopeTypeUser,
-		NamespaceID: UserNamespace("person-1").NamespaceID,
-		Content:     "the user avoids Monday morning meetings.",
-		Score:       0.2,
-		ValidAt:     olderTime,
-	})
+	memoryService.UseGraphStore(fixedFactGraphStore{facts: []MemoryFact{
+		{
+			FactID:            "inaccessible",
+			ScopeType:         ScopeTypeWorkspace,
+			NamespaceID:       WorkspaceNamespace("default", 80, []string{"finance"}).NamespaceID,
+			Content:           "the Project Aurora budget is confidential.",
+			Score:             50,
+			SecurityLevelRank: 80,
+			RequiredClasses:   []string{"finance"},
+			ValidAt:           newerTime,
+		},
+		{
+			FactID:      "query-match",
+			ScopeType:   ScopeTypeUser,
+			NamespaceID: UserNamespace("person-1").NamespaceID,
+			Content:     "the user prioritizes Project Aurora.",
+			Score:       0.1,
+			ValidAt:     olderTime,
+		},
+		{
+			FactID:      "high-score",
+			ScopeType:   ScopeTypeUser,
+			NamespaceID: UserNamespace("person-1").NamespaceID,
+			Content:     "the user prefers a concise design.",
+			Score:       0.9,
+			ValidAt:     newerTime,
+		},
+		{
+			FactID:      "old-low-score",
+			ScopeType:   ScopeTypeUser,
+			NamespaceID: UserNamespace("person-1").NamespaceID,
+			Content:     "the user avoids Monday morning meetings.",
+			Score:       0.2,
+			ValidAt:     olderTime,
+		},
+	}})
 
 	memoryFacts, errorValue := memoryService.SearchMemory(context.Background(), MemorySearchRequest{
 		Query:                   "Project Aurora",
@@ -157,18 +161,20 @@ func TestMemoryServiceFiltersPrivateAndCircleResources(t *testing.T) {
 	memoryService := &MemoryService{}
 	privateNamespace := PrivatePersonNamespace("person-1")
 	financeNamespace := CircleNamespace("default", "finance")
-	memoryService.StoreMemoryFact(MemoryFact{
-		FactID:      "private",
-		ScopeType:   ScopeTypePrivate,
-		NamespaceID: privateNamespace.NamespaceID,
-		Content:     "a one-on-one note between Sam and the bot.",
-	})
-	memoryService.StoreMemoryFact(MemoryFact{
-		FactID:      "finance",
-		ScopeType:   ScopeTypeCircle,
-		NamespaceID: financeNamespace.NamespaceID,
-		Content:     "finance circle material.",
-	})
+	memoryService.UseGraphStore(fixedFactGraphStore{facts: []MemoryFact{
+		{
+			FactID:      "private",
+			ScopeType:   ScopeTypePrivate,
+			NamespaceID: privateNamespace.NamespaceID,
+			Content:     "a one-on-one note between Sam and the bot.",
+		},
+		{
+			FactID:      "finance",
+			ScopeType:   ScopeTypeCircle,
+			NamespaceID: financeNamespace.NamespaceID,
+			Content:     "finance circle material.",
+		},
+	}})
 
 	ownerFacts, errorValue := memoryService.SearchMemory(context.Background(), MemorySearchRequest{
 		ReaderPersonID: "person-1",
@@ -205,20 +211,22 @@ func TestMemoryServiceAppliesResourceAccessRulesBeforeRanking(t *testing.T) {
 		Actions:  []string{"read"},
 		Circles:  []string{"admin"},
 	}}
-	memoryService.StoreMemoryFact(MemoryFact{
-		FactID:      "workspace-secret",
-		ScopeType:   ScopeTypeWorkspace,
-		NamespaceID: WorkspaceNamespace("default", 0, nil).NamespaceID,
-		Content:     "a workspace-wide note that a rule still blocks.",
-		Score:       100,
-	})
-	memoryService.StoreMemoryFact(MemoryFact{
-		FactID:      "private",
-		ScopeType:   ScopeTypePrivate,
-		NamespaceID: PrivatePersonNamespace("person-1").NamespaceID,
-		Content:     "a low-scoring personal note.",
-		Score:       1,
-	})
+	memoryService.UseGraphStore(fixedFactGraphStore{facts: []MemoryFact{
+		{
+			FactID:      "workspace-secret",
+			ScopeType:   ScopeTypeWorkspace,
+			NamespaceID: WorkspaceNamespace("default", 0, nil).NamespaceID,
+			Content:     "a workspace-wide note that a rule still blocks.",
+			Score:       100,
+		},
+		{
+			FactID:      "private",
+			ScopeType:   ScopeTypePrivate,
+			NamespaceID: PrivatePersonNamespace("person-1").NamespaceID,
+			Content:     "a low-scoring personal note.",
+			Score:       1,
+		},
+	}})
 
 	memoryFacts, errorValue := memoryService.SearchMemory(context.Background(), MemorySearchRequest{
 		ReaderPersonID:      "person-1",
@@ -243,30 +251,32 @@ func TestMemoryServiceAppliesResourceAccessRulesBeforeRanking(t *testing.T) {
 func TestMemoryServiceRanksSourceKindAndDeduplicatesBeforeLimit(t *testing.T) {
 	memoryService := &MemoryService{}
 	namespace := UserNamespace("person-1")
-	memoryService.StoreMemoryFact(MemoryFact{
-		FactID:      "episode",
-		ScopeType:   ScopeTypeUser,
-		NamespaceID: namespace.NamespaceID,
-		Content:     "the user prefers graph memory.",
-		Score:       0.9,
-		SourceKind:  MemorySourceKindEpisode,
-	})
-	memoryService.StoreMemoryFact(MemoryFact{
-		FactID:      "fact",
-		ScopeType:   ScopeTypeUser,
-		NamespaceID: namespace.NamespaceID,
-		Content:     "the user prefers graph memory.",
-		Score:       0.8,
-		SourceKind:  MemorySourceKindFact,
-	})
-	memoryService.StoreMemoryFact(MemoryFact{
-		FactID:      "node",
-		ScopeType:   ScopeTypeUser,
-		NamespaceID: namespace.NamespaceID,
-		Content:     "the user prefers a concise design.",
-		Score:       0.85,
-		SourceKind:  MemorySourceKindNode,
-	})
+	memoryService.UseGraphStore(fixedFactGraphStore{facts: []MemoryFact{
+		{
+			FactID:      "episode",
+			ScopeType:   ScopeTypeUser,
+			NamespaceID: namespace.NamespaceID,
+			Content:     "the user prefers graph memory.",
+			Score:       0.9,
+			SourceKind:  MemorySourceKindEpisode,
+		},
+		{
+			FactID:      "fact",
+			ScopeType:   ScopeTypeUser,
+			NamespaceID: namespace.NamespaceID,
+			Content:     "the user prefers graph memory.",
+			Score:       0.8,
+			SourceKind:  MemorySourceKindFact,
+		},
+		{
+			FactID:      "node",
+			ScopeType:   ScopeTypeUser,
+			NamespaceID: namespace.NamespaceID,
+			Content:     "the user prefers a concise design.",
+			Score:       0.85,
+			SourceKind:  MemorySourceKindNode,
+		},
+	}})
 
 	memoryFacts, errorValue := memoryService.SearchMemory(context.Background(), MemorySearchRequest{
 		Query:          "graph memory",
@@ -304,6 +314,18 @@ func containsFactID(memoryFacts []MemoryFact, factID string) bool {
 		}
 	}
 	return false
+}
+
+type fixedFactGraphStore struct {
+	facts []MemoryFact
+}
+
+func (store fixedFactGraphStore) AddEpisode(context.Context, MemoryEpisode) (MemoryIngestionResult, error) {
+	return MemoryIngestionResult{}, nil
+}
+
+func (store fixedFactGraphStore) SearchFacts(context.Context, MemorySearchRequest) ([]MemoryFact, error) {
+	return store.facts, nil
 }
 
 type answeringGraphStore struct{}

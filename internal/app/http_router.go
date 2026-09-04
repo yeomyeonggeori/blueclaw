@@ -35,7 +35,12 @@ func newRouterDependencies(components applicationComponents) httpserver.RouterDe
 		SkillInventoryHandler: newSkillInventoryHandler(runtimeConfiguration),
 		ToolInventoryHandler:  adminapi.ToolInventoryHandler{ToolCatalogBuilder: components.toolCatalogBuilder},
 		TaskApprovalHandler:   newTaskApprovalHandler(services, directory, components.taskLauncher),
-		QuiesceHandler:        adminapi.QuiesceHandler{Controller: components.taskIntakeController, TaskRunService: services.taskRunService},
+		QuiesceHandler: adminapi.QuiesceHandler{
+			Controller:        components.taskIntakeController,
+			TaskRunService:    services.taskRunService,
+			MemoryUpdateQueue: components.memory.memoryUpdateQueue,
+			Logger:            components.foundation.logger,
+		},
 		TaskScheduleHandler:   newTaskScheduleHandler(services, directory),
 		ConnectorDiagnostics:  adminapi.ConnectorEventDiagnosticHandler{Repository: services.repositories.connectorEventDiagnostic},
 		ConversationReset:     adminapi.ConversationResetHandler{Repository: services.repositories.conversationReset},

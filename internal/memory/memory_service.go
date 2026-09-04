@@ -66,7 +66,6 @@ type MemorySearchRequest struct {
 
 type MemoryService struct {
 	mutex              sync.RWMutex
-	memoryFacts        []MemoryFact
 	store              GraphMemoryStore
 	mirror             GraphMemoryMirror
 	lastSearchError    string
@@ -88,12 +87,6 @@ func (memoryService *MemoryService) HasGraphStore() bool {
 	memoryService.mutex.RLock()
 	defer memoryService.mutex.RUnlock()
 	return memoryService.store != nil
-}
-
-func (memoryService *MemoryService) StoreMemoryFact(memoryFact MemoryFact) {
-	memoryService.mutex.Lock()
-	defer memoryService.mutex.Unlock()
-	memoryService.memoryFacts = append(memoryService.memoryFacts, memoryFact)
 }
 
 func (memoryService *MemoryService) AddEpisode(ctx context.Context, episode MemoryEpisode) (MemoryIngestionResult, error) {
@@ -165,17 +158,16 @@ func (memoryService *MemoryService) SearchMemory(ctx context.Context, request Me
 		request.Limit = 12
 	}
 	request.Namespaces = memoryService.resolveAccessibleNamespaces(ctx, request)
-	if memoryService.store != nil {
-		memoryFacts, errorValue := memoryService.store.SearchFacts(ctx, request)
-		if errorValue != nil {
-			memoryService.recordSearchError(errorValue.Error())
-			return nil, errorValue
-		}
-		memoryService.recordSearchError("")
-		return limitMemoryFacts(rankMemoryFacts(deduplicateMemoryFacts(filterReadableMemoryFacts(request, memoryFacts)), request.Query), request.Limit), nil
+	if memoryService.store == nil {
+		return nil, nil
 	}
-
-	return memoryService.SearchLocalMemory(ctx, request)
+	memoryFacts, errorValue := memoryService.store.SearchFacts(ctx, request)
+	if errorValue != nil {
+		memoryService.recordSearchError(errorValue.Error())
+		return nil, errorValue
+	}
+	memoryService.recordSearchError("")
+	return limitMemoryFacts(rankMemoryFacts(deduplicateMemoryFacts(filterReadableMemoryFacts(request, memoryFacts)), request.Query), request.Limit), nil
 }
 
 func (memoryService *MemoryService) ListMemory(ctx context.Context, request MemorySearchRequest) ([]MemoryFact, error) {
@@ -194,25 +186,6 @@ func (memoryService *MemoryService) ListMemory(ctx context.Context, request Memo
 	}
 	memoryService.recordSearchError("")
 	return limitMemoryFacts(rankMemoryFacts(deduplicateMemoryFacts(filterReadableMemoryFacts(request, memoryFacts)), ""), request.Limit), nil
-}
-
-func (memoryService *MemoryService) SearchLocalMemory(ctx context.Context, request MemorySearchRequest) ([]MemoryFact, error) {
-	if memoryService == nil {
-		return nil, nil
-	}
-	if errorValue := ctx.Err(); errorValue != nil {
-		return nil, errorValue
-	}
-	if request.Limit <= 0 {
-		request.Limit = 12
-	}
-	request.Namespaces = memoryService.resolveAccessibleNamespaces(ctx, request)
-	memoryService.mutex.RLock()
-	defer memoryService.mutex.RUnlock()
-
-	filteredMemoryFacts := filterReadableMemoryFacts(request, memoryService.memoryFacts)
-	rankedMemoryFacts := rankMemoryFacts(deduplicateMemoryFacts(filteredMemoryFacts), request.Query)
-	return limitMemoryFacts(rankedMemoryFacts, request.Limit), nil
 }
 
 func filterReadableMemoryFacts(request MemorySearchRequest, memoryFacts []MemoryFact) []MemoryFact {

@@ -14,6 +14,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/guest"
+	"github.com/yeomyeonggeori/blueclaw/internal/runtimecontrol"
 )
 
 func main() {
@@ -104,7 +105,7 @@ func prepareGuestShutdown(hostHTTPListenAddress string) {
 	if hostHTTPListenAddress == "" {
 		return
 	}
-	requestContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	requestContext, cancel := context.WithTimeout(context.Background(), runtimecontrol.PrepareShutdownWindow)
 	defer cancel()
 	request, errorValue := http.NewRequestWithContext(requestContext, http.MethodPost, "http://"+hostHTTPListenAddress+"/admin/api/runtime/prepare-shutdown", nil)
 	if errorValue != nil {

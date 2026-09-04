@@ -1,9 +1,13 @@
 package adminapi
 
 import (
+	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/memory"
+	"github.com/yeomyeonggeori/blueclaw/internal/runtimecontrol"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
 
@@ -16,9 +20,15 @@ type TaskIntakeGate interface {
 	IsQuiesced() bool
 }
 
+type MemoryQueueDrainer interface {
+	Drain(ctx context.Context) memory.MemoryQueueDrainResult
+}
+
 type QuiesceHandler struct {
-	Controller     QuiesceController
-	TaskRunService *task.TaskRunService
+	Controller        QuiesceController
+	TaskRunService    *task.TaskRunService
+	MemoryUpdateQueue MemoryQueueDrainer
+	Logger            *slog.Logger
 }
 
 type quiesceRequest struct {
@@ -51,6 +61,8 @@ func (quiesceHandler QuiesceHandler) HandlePost(responseWriter http.ResponseWrit
 type prepareShutdownResponse struct {
 	Quiesced             bool `json:"quiesced"`
 	InterruptedTaskCount int  `json:"interruptedTaskCount"`
+	MemoryQueueDrained   bool `json:"memoryQueueDrained"`
+	MemoryJobsDropped    int  `json:"memoryJobsDropped,omitempty"`
 }
 
 func (quiesceHandler QuiesceHandler) HandlePrepareShutdown(responseWriter http.ResponseWriter, _ *http.Request) {
@@ -61,10 +73,43 @@ func (quiesceHandler QuiesceHandler) HandlePrepareShutdown(responseWriter http.R
 	if quiesceHandler.TaskRunService != nil {
 		interruptedTaskCount = len(quiesceHandler.TaskRunService.InterruptRuntimeTaskRunsForPlannedShutdown())
 	}
+	memoryDrainResult := quiesceHandler.drainMemoryUpdateQueue()
 	writeJSON(responseWriter, http.StatusOK, prepareShutdownResponse{
 		Quiesced:             quiesceHandler.isQuiesced(),
 		InterruptedTaskCount: interruptedTaskCount,
+		MemoryQueueDrained:   memoryDrainResult.Drained,
+		MemoryJobsDropped:    len(memoryDrainResult.DroppedJobs),
 	})
+}
+
+func (quiesceHandler QuiesceHandler) drainMemoryUpdateQueue() memory.MemoryQueueDrainResult {
+	if quiesceHandler.MemoryUpdateQueue == nil {
+		return memory.MemoryQueueDrainResult{Drained: true}
+	}
+	drainContext, cancel := context.WithTimeout(context.Background(), runtimecontrol.MemoryDrainDeadline)
+	defer cancel()
+	result := quiesceHandler.MemoryUpdateQueue.Drain(drainContext)
+	if !result.Drained {
+		quiesceHandler.logDroppedMemoryJobs(result.DroppedJobs)
+	}
+	return result
+}
+
+func (quiesceHandler QuiesceHandler) logDroppedMemoryJobs(droppedJobs []memory.MemoryUpdateJob) {
+	conversationIDs := make([]string, 0, len(droppedJobs))
+	for _, droppedJob := range droppedJobs {
+		conversationIDs = append(conversationIDs, droppedJob.ConversationID)
+	}
+	quiesceHandler.loggerOrDefault().Warn("memory.queue_drain_incomplete",
+		slog.Int("droppedJobCount", len(droppedJobs)),
+		slog.Any("conversationIDs", conversationIDs))
+}
+
+func (quiesceHandler QuiesceHandler) loggerOrDefault() *slog.Logger {
+	if quiesceHandler.Logger != nil {
+		return quiesceHandler.Logger
+	}
+	return slog.Default()
 }
 
 func (quiesceHandler QuiesceHandler) response() quiesceResponse {
