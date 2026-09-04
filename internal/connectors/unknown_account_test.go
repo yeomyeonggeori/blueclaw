@@ -96,11 +96,11 @@ func TestADirectoryThatNeverAnsweredIsNotToldAsAnUnknownAccount(t *testing.T) {
 		Platform:             "buzz",
 		PlatformAccountEmail: "lee@example.test",
 		DirectoryUnreachable: true,
-	})
+	}, "en")
 	answeredNo := unmatchedAccountReplyFor(senderAuthorization{
 		Platform:             "buzz",
 		PlatformAccountEmail: "lee@example.test",
-	})
+	}, "en")
 
 	if unreachable == answeredNo {
 		t.Fatal("a lookup that failed and an answer of no cannot read the same")

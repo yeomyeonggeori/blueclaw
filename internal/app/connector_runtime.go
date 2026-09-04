@@ -39,6 +39,7 @@ func newConnectorRuntime(runtimeConfiguration config.RuntimeConfiguration, found
 	replyGenerator.UseCompanyProvider(directory.companyProvider)
 	connectorRuntime.UseReplyGenerator(replyGenerator)
 	connectorRuntime.UseCompanyProvider(directory.companyProvider)
+	connectorRuntime.UseCompanyLocaleProvider(directory.companyLocaleProvider)
 	connectorRuntime.UseTurnRouter(turnRouter)
 	connectorRuntime.UseIntakeClassifier(intake.NewClassifier(classificationLanguageModelProvider(kernel.taskTierLanguageModels, kernel.intakeLanguageModelProvider)))
 	connectorRuntime.UseTaskLauncher(taskLauncher)

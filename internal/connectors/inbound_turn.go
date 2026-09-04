@@ -101,7 +101,7 @@ func (connectorRuntime *ConnectorRuntime) refuseUnauthorizedSender(ctx context.C
 		slog.String("reason", refusalReason),
 		slog.String("senderID", turn.event.SenderID),
 		slog.String("platformAccountEmail", authorization.PlatformAccountEmail))
-	dispatchID, sendError := turn.sendReply(ctx, turn.replyTarget, OutboundReply{Message: unmatchedAccountReplyFor(authorization), ReplyKind: connectorReplyKindPermissionNotice})
+	dispatchID, sendError := turn.sendReply(ctx, turn.replyTarget, OutboundReply{Message: unmatchedAccountReplyFor(authorization, connectorRuntime.companyLocale()), ReplyKind: connectorReplyKindPermissionNotice})
 	if sendError != nil {
 		connectorRuntime.logger.Error("connector."+turn.platform+".outbound.failed", slog.String("messageID", turn.event.MessageID), slog.String("error", sendError.Error()))
 		return ConnectorRuntimeResult{Handled: true, Platform: turn.platform, Reason: refusalReason}

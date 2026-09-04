@@ -16,6 +16,7 @@ type identityDirectory struct {
 	platformAccountLister   adminapi.PlatformAccountLister
 	policyWatcher           *policy.PolicyWatcher
 	companyProvider         func() agentcontract.CompanyContext
+	companyLocaleProvider   func() string
 }
 
 func newIdentityDirectory(database postgres.Database, policyDocument policy.PolicyDocument, logger *slog.Logger) identityDirectory {
@@ -35,6 +36,7 @@ func newIdentityDirectory(database postgres.Database, policyDocument policy.Poli
 		platformAccountLister:   platformAccountLister,
 		policyWatcher:           policyWatcher,
 		companyProvider:         newCompanyProvider(policyWatcher),
+		companyLocaleProvider:   newCompanyLocaleProvider(policyWatcher),
 	}
 	policyWatcher.ReloadPolicyDocument(policyDocument)
 	return directory
@@ -52,5 +54,11 @@ func newCompanyProvider(policyWatcher *policy.PolicyWatcher) func() agentcontrac
 			Website:        company.Website,
 			TimeZone:       company.TimeZone,
 		}
+	}
+}
+
+func newCompanyLocaleProvider(policyWatcher *policy.PolicyWatcher) func() string {
+	return func() string {
+		return policyWatcher.CurrentPolicyDocument().Company.Locale
 	}
 }
