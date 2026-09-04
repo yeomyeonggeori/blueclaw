@@ -5,16 +5,64 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"log/slog"
+	"net/http"
 	"strings"
 	"time"
 
+	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
+	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
+	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
+
+type toolCatalogEndpoint struct {
+	resolver     *mcpserver.SessionTokenRequesterResolver
+	handler      http.Handler
+	approvalGate *approvalgate.Gate
+}
+
+func newToolCatalogEndpoint(taskRunService *task.TaskRunService, approvalLanguageModel model.LanguageModelProvider, capabilityClient capability.Client) toolCatalogEndpoint {
+	resolver := mcpserver.NewSessionTokenRequesterResolver(newToolCatalogSessionToken)
+	handler := mcpserver.NewToolCatalogHandler(resolver, "1")
+	approvalGate := approvalgate.New(taskRunService)
+	approvalGate.UseLanguageModel(approvalLanguageModel)
+	approvalGate.UseApprovalTargetResolver(agentruntime.NewCapabilityApprovalTargetResolver(capabilityClient))
+	return toolCatalogEndpoint{resolver: resolver, handler: handler, approvalGate: approvalGate}
+}
+
+func newToolCatalogBuilder(runtimeConfiguration config.RuntimeConfiguration, kernel agentKernel, services taskServices, memoryComponents memoryComponents, mcpRegistry *mcp.McpRegistry, logger *slog.Logger) *agentruntime.ToolCatalogBuilder {
+	logger.Info("application.initializing", "stage", "tool_catalog")
+	toolCatalogBuilder := agentruntime.NewToolCatalogBuilder()
+	toolCatalogBuilder.UseMCPRegistry(mcpRegistry)
+	toolCatalogBuilder.UseMCPQuarantineReporter(func(quarantinedProvider toolcontract.QuarantinedToolProvider) {
+		logMCPProviderQuarantine(logger, quarantinedProvider)
+	})
+	toolCatalogBuilder.UseCapabilityQuarantineReporter(func(quarantinedProvider toolcontract.QuarantinedToolProvider) {
+		logCapabilityProviderQuarantine(logger, quarantinedProvider)
+	})
+	toolCatalogBuilder.UseCapabilityToolDescriptors(kernel.capabilityClient, capabilityToolDescriptors(runtimeConfiguration.Capabilities.ToolDescriptors))
+	seedCompanionStatus(kernel.capabilityClient, toolCatalogBuilder)
+	toolCatalogBuilder.UseAllowedToolNamesByProfile(deriveAllowedToolNamesByProfile(runtimeConfiguration), deriveAllowedToolNames(runtimeConfiguration))
+	toolCatalogBuilder.UseSkillSearch(kernel.skillRetriever, kernel.instructionBundleLoader)
+	toolCatalogBuilder.UseTerminalService(kernel.terminalService)
+	toolCatalogBuilder.UseTaskRunService(services.taskRunService)
+	toolCatalogBuilder.UseTaskArtifactService(services.taskArtifactService)
+	toolCatalogBuilder.UseTaskScheduleRepository(services.repositories.taskSchedule)
+	toolCatalogBuilder.UseTaskWaitTokenRepository(services.repositories.taskWaitToken)
+	toolCatalogBuilder.UseWorkspaceRootPath(runtimeConfiguration.Terminal.WorkspaceRootPath)
+	toolCatalogBuilder.UseOptionalFileReadPathSuffixes(runtimeConfiguration.Agent.OptionalFileReadPathSuffixes)
+	toolCatalogBuilder.UseSkillChangeHandler(kernel.refreshSkillIndex)
+	toolCatalogBuilder.UseMemoryService(memoryComponents.memoryService)
+	toolCatalogBuilder.UsePinnedMemoryStore(memoryComponents.pinnedMemoryStore)
+	toolCatalogBuilder.UseMemoryUpdateQueue(memoryComponents.memoryUpdateQueue)
+	return toolCatalogBuilder
+}
 
 func logMCPServerQuarantines(logger *slog.Logger, report mcp.LoadReport) {
 	if logger == nil {

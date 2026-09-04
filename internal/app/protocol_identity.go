@@ -4,11 +4,32 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/protocolidentity"
 	capabilitycatalog "github.com/yeomyeonggeori/blueclaw/protocol/generated"
 )
+
+type protocolIdentityComponents struct {
+	expected protocolidentity.Identity
+	status   *protocolidentity.Result
+	checker  protocolidentity.Checker
+}
+
+func newProtocolIdentity(runtimeConfiguration config.RuntimeConfiguration, capabilityClient capability.Client) protocolIdentityComponents {
+	expected := expectedProtocolIdentity(runtimeConfiguration)
+	return protocolIdentityComponents{
+		expected: expected,
+		status:   &protocolidentity.Result{Expected: expected},
+		checker: protocolidentity.NewChecker(protocolidentity.Configuration{
+			CapabilityEndpoint:   runtimeConfiguration.Capabilities.Endpoint,
+			Timeout:              time.Duration(runtimeConfiguration.Capabilities.TimeoutSecond) * time.Second,
+			CapabilityHTTPClient: capabilityClient.HTTPClient,
+		}),
+	}
+}
 
 // expectedProtocolIdentity prefers what the appliance pinned, and otherwise
 // falls back to the contract this build was generated from.
