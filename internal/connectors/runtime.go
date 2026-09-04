@@ -1036,214 +1036,34 @@ func (connectorRuntime *ConnectorRuntime) processInboundEvent(ctx context.Contex
 
 func (connectorRuntime *ConnectorRuntime) processInboundEventWithReplySender(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent, sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error)) (ConnectorRuntimeResult, error) {
 	ctx = withConnectorEvent(ctx, event)
-	platform := adapter.Name()
-	connectorRuntime.logger.Info(
-		"connector."+platform+".ingress.received",
-		slog.String("source", event.Source),
-		slog.String("messageID", event.MessageID),
-		slog.String("conversationID", event.ConversationID),
-		slog.String("senderID", event.SenderID),
-		slog.String("replyTargetID", event.ReplyTargetID),
-		slog.Bool("hasMoreBefore", event.Context.HasMoreBefore),
-	)
-
-	replyTarget, errorValue := connectorRuntime.buildReplyTarget(ctx, adapter, event)
-	if errorValue != nil {
-		return ConnectorRuntimeResult{}, errorValue
+	turn := &inboundTurn{adapter: adapter, platform: adapter.Name(), event: event, sendReply: sendReply, stopProgress: func() {}}
+	connectorRuntime.logInboundEventReceived(turn)
+	if result, isHandled, errorValue := connectorRuntime.admitInboundTurn(ctx, turn); isHandled {
+		return result, errorValue
 	}
-	authorization, errorValue := connectorRuntime.authorizeSender(ctx, adapter, event)
-	if errorValue != nil {
-		connectorRuntime.logger.Error("connector."+platform+".auth.failed", slog.String("messageID", event.MessageID), slog.String("error", errorValue.Error()))
-		return ConnectorRuntimeResult{}, errorValue
-	}
-	personID := authorization.PersonID
-	if !authorization.IsAllowed {
-		if shouldIgnoreUninvitedAddressing(event) {
-			connectorRuntime.logger.Info("connector."+platform+".ingress.ignored", slog.String("messageID", event.MessageID), slog.String("reason", "not_addressed_to_bot"))
-			return ConnectorRuntimeResult{Handled: true, Platform: platform, Ignored: true, Reason: "not_addressed_to_bot"}, nil
-		}
-		refusalReason := "unmatched_account"
-		if authorization.DirectoryUnreachable {
-			refusalReason = "directory_unreachable"
-		}
-		connectorRuntime.logger.Info("connector."+platform+".auth.rejected",
-			slog.String("messageID", event.MessageID),
-			slog.String("reason", refusalReason),
-			slog.String("senderID", event.SenderID),
-			slog.String("platformAccountEmail", authorization.PlatformAccountEmail))
-		dispatchID, sendError := sendReply(ctx, replyTarget, OutboundReply{Message: unmatchedAccountReplyFor(authorization), ReplyKind: connectorReplyKindPermissionNotice})
-		if sendError != nil {
-			connectorRuntime.logger.Error("connector."+platform+".outbound.failed", slog.String("messageID", event.MessageID), slog.String("error", sendError.Error()))
-			return ConnectorRuntimeResult{Handled: true, Platform: platform, Reason: refusalReason}, nil
-		}
-		connectorRuntime.logger.Info("connector."+platform+".outbound.sent", slog.String("messageID", event.MessageID), slog.String("replyDispatchID", dispatchID))
-		return ConnectorRuntimeResult{Handled: true, Platform: platform, Reason: refusalReason, ReplyDispatchID: dispatchID}, nil
-	}
-
-	connectorRuntime.logger.Info("connector."+platform+".auth.allowed", slog.String("messageID", event.MessageID), slog.String("personID", personID))
-	if result, isHandled := connectorRuntime.suppressDuplicateSourceTaskIfNeeded(platform, event, personID); isHandled {
-		return result, nil
-	}
-	if result, isHandled := connectorRuntime.handleTaskControlIfRequested(ctx, platform, adapter, event, replyTarget, personID, sendReply); isHandled {
-		return result, nil
-	}
-	stopProgress := func() {}
-	isProgressStarted := false
 	defer func() {
-		if isProgressStarted {
-			stopProgress()
+		if turn.isProgressStarted {
+			turn.stopProgress()
 		}
 	}()
-	if shouldStartProgressBeforeAddressing(event) {
-		stopProgress = connectorRuntime.startProgressHeartbeat(ctx, adapter, replyTarget)
-		isProgressStarted = true
+	if shouldStartProgressBeforeAddressing(turn.event) {
+		turn.startProgress(connectorRuntime.startProgressHeartbeat(ctx, turn.adapter, turn.replyTarget))
 	}
-	personAccess := connectorRuntime.identityService.ResolvePersonAccess(personID)
-	requesterEmail := connectorRuntime.requesterEmailForEvent(personID, event)
-	taskWaitResolution := connectorRuntime.resolveInboundTaskWait(personID, platform, event)
-	engagedAckEmojiName := connectorRuntime.applyEngagedAckReaction(ctx, platform, adapter, event,
-		event.Context.Addressing.BotMentioned || taskWaitResolution.HasTaskWaitToken || taskWaitResolution.IsAmbiguous)
-	if taskWaitResolution.IsAmbiguous {
-		return connectorRuntime.handleAmbiguousTaskWait(ctx, platform, adapter, event, replyTarget, personID, requesterEmail, personAccess, taskWaitResolution, engagedAckEmojiName, sendReply)
+	if result, isHandled, errorValue := connectorRuntime.resolvePendingConfirmation(ctx, turn); isHandled {
+		return result, errorValue
 	}
-	pendingApproval, turnDecision, hasPendingConfirmation, errorValue := connectorRuntime.resolveConfirmationReply(ctx, platform, personID, event, taskWaitResolution)
-	if errorValue != nil {
+	if errorValue := connectorRuntime.resolvePendingAsk(ctx, turn); errorValue != nil {
 		return ConnectorRuntimeResult{}, errorValue
 	}
-	isApprovalContinuation := hasPendingConfirmation && turnDecision.Approval != nil && agentcontract.IsApprovingSignal(*turnDecision.Approval)
-	if hasPendingConfirmation {
-		connectorRuntime.resolveTaskWaitToken(taskWaitResolution)
+	connectorRuntime.resolveTurnActiveGoal(ctx, turn)
+	if result, isHandled := connectorRuntime.resolveTurnAddressing(ctx, turn); isHandled {
+		return result, nil
 	}
-	if hasPendingConfirmation && !isApprovalContinuation && shouldStopAfterPendingConfirmation(turnDecision) {
-		return connectorRuntime.handleRejectedConfirmation(ctx, platform, adapter, event, replyTarget, pendingApproval, agentcontract.ConfirmationReplyDecision{Decision: string(agentcontract.ApprovalSignalReject), Reason: turnDecision.Reason}, sendReply)
+	if result, isHandled, errorValue := connectorRuntime.handleBusyTurn(ctx, turn); isHandled {
+		return result, errorValue
 	}
-	if hasPendingConfirmation && !isApprovalContinuation && turnDecision.Route == agentcontract.TurnRouteAnswerQuestion {
-		return connectorRuntime.handlePendingConfirmationQuestion(ctx, platform, adapter, event, replyTarget, pendingApproval, turnDecision, sendReply)
-	}
-	didSupersedePendingConfirmation := false
-	if hasPendingConfirmation && !isApprovalContinuation {
-		connectorRuntime.cancelPendingConfirmation(event, pendingApproval, turnDecision)
-		didSupersedePendingConfirmation = true
-	}
-	pendingAskInteraction, hasPendingAskInteraction := connectorRuntime.findPendingAskInteraction(personID, platform, event, taskWaitResolution)
-	previousPrompt := event.Prompt
-	event, askTurnDecision, hasAskTurnDecision, errorValue := connectorRuntime.resolveAskReply(ctx, platform, personID, event, taskWaitResolution)
-	if errorValue != nil {
-		return ConnectorRuntimeResult{}, errorValue
-	}
-	didSupersedePendingAsk := false
-	if hasPendingAskInteraction && askReplySupersedesInteraction(askTurnDecision, hasAskTurnDecision) {
-		connectorRuntime.supersedePendingAskInteraction(event, pendingAskInteraction, askTurnDecision)
-		connectorRuntime.resolveTaskWaitToken(taskWaitResolution)
-		pendingAskInteraction = AskInteraction{}
-		hasPendingAskInteraction = false
-		taskWaitResolution = inboundTaskWaitResolution{}
-		didSupersedePendingAsk = true
-	} else if hasPendingAskInteraction && askReplyConsumesInteraction(pendingAskInteraction, previousPrompt, event, askTurnDecision, hasAskTurnDecision) {
-		connectorRuntime.appendAskResolvedEvent(pendingAskInteraction, event, askTurnDecision)
-		connectorRuntime.resolveTaskWaitToken(taskWaitResolution)
-	}
-	activeGoal, hasActiveGoal := connectorRuntime.findActiveGoal(personID, platform, event, taskWaitResolution)
-	if !isApprovalContinuation && hasActiveGoal && turnDecision.Route == agentcontract.TurnRouteStartTask {
-		activeGoal = agentcontract.ActiveGoal{}
-		hasActiveGoal = false
-	}
-	if isApprovalContinuation {
-		event = approvedContinuationEvent(event, pendingApproval)
-		activeGoal = pendingApprovalActiveGoal(pendingApproval, event.Prompt)
-		hasActiveGoal = true
-	}
-	if engagedAckEmojiName == "" {
-		engagedAckEmojiName = connectorRuntime.applyEngagedAckReaction(ctx, platform, adapter, event,
-			isApprovalContinuation || hasPendingAskInteraction || hasActiveGoal)
-	}
-	event = connectorRuntime.withInitialVisibleContext(ctx, adapter, event)
-	addressingLaunch := connectorRuntime.resolveInboundEngagement(ctx, platform, event)
-	if addressingLaunch.ReactionEmoji != "" {
-		if engagedAckEmojiName != "" && engagedAckEmojiName != addressingLaunch.ReactionEmoji {
-			connectorRuntime.clearEngagedAckReaction(ctx, platform, adapter, event, engagedAckEmojiName)
-			engagedAckEmojiName = ""
-		}
-		connectorRuntime.addAddressingReaction(ctx, platform, adapter, event, addressingLaunch.ReactionEmoji)
-	}
-	if !addressingLaunch.ShouldLaunch {
-		reason := firstNonEmptyString(addressingLaunch.IgnoreReason, "addressing_react_only")
-		connectorRuntime.logger.Info("connector."+platform+".ingress.ignored", slog.String("messageID", event.MessageID), slog.String("reason", reason))
-		return ConnectorRuntimeResult{Handled: true, Platform: platform, Ignored: true, Reason: reason}, nil
-	}
-	if connectorRuntime.shouldDeferNewTaskLaunch(isApprovalContinuation, hasPendingAskInteraction, hasActiveGoal) {
-		connectorRuntime.logger.Info("connector."+platform+".ingress.deferred", slog.String("messageID", event.MessageID), slog.String("reason", "task_intake_quiesced"))
-		return ConnectorRuntimeResult{Handled: true, Platform: platform, Ignored: true, Reason: "task_intake_quiesced"}, nil
-	}
-	if !isApprovalContinuation && !hasPendingAskInteraction && !didSupersedePendingAsk && !didSupersedePendingConfirmation {
-		busyResult, errorValue := connectorRuntime.handleBusyMessageIfNeeded(ctx, platform, event, replyTarget, personID, sendReply)
-		if errorValue != nil {
-			return ConnectorRuntimeResult{}, errorValue
-		}
-		if busyResult.isHandled {
-			return busyResult.connectorResult, nil
-		}
-		if busyResult.clearActiveGoal {
-			activeGoal = agentcontract.ActiveGoal{}
-			hasActiveGoal = false
-		}
-	}
-	if !isProgressStarted {
-		stopProgress = connectorRuntime.startProgressHeartbeat(ctx, adapter, replyTarget)
-		isProgressStarted = true
-	}
-	event = connectorRuntime.withAttachmentMaterials(ctx, adapter, event, personID)
-	priorTask := agentcontract.PriorTaskContext{}
-	if !isApprovalContinuation && !hasPendingAskInteraction && !hasActiveGoal {
-		priorTask, _ = connectorRuntime.findPriorTaskContext(personID, event)
-	}
-
-	connectorRuntime.logger.Info("connector."+platform+".agent.started", slog.String("messageID", event.MessageID))
-	precomputedTurnDecision := precomputedTurnDecisionForLaunch(turnDecision, hasPendingConfirmation, askTurnDecision, hasAskTurnDecision)
-	taskStartedAt := time.Now()
-	conversationTurn := ConversationTurn{
-		Platform:                  platform,
-		Adapter:                   adapter,
-		Event:                     event,
-		ReplyTarget:               replyTarget,
-		RequesterPersonID:         personID,
-		RequesterEmail:            requesterEmail,
-		PersonAccess:              personAccess,
-		IsApprovalContinuation:    isApprovalContinuation,
-		ActiveGoal:                activeGoal,
-		HasActiveGoal:             hasActiveGoal,
-		PriorTask:                 priorTask,
-		PrecomputedTurnDecision:   precomputedTurnDecision,
-		AmbientDuty:               addressingLaunch.AmbientDuty,
-		CheckpointSender:          connectorRuntime.checkpointSenderForTurn(platform, event, replyTarget, sendReply),
-		AccessibleConversationIDs: []string{event.ConversationID},
-		IsBlockedContinuation:     activeGoal.Status == agentcontract.ActiveGoalStatusBlocked && hasActiveGoal,
-	}
-	narrator := connectorRuntime.startNarrating(ctx, adapter, replyTarget)
-	defer narrator.stop()
-	sendReply = narrator.takeOverSending(sendReply)
-	launchResult, errorValue := connectorRuntime.currentTaskLauncher().Launch(ctx, connectorRuntime.buildTaskLaunchRequest(conversationTurn))
-	if errorValue != nil {
-		connectorRuntime.logger.Error("connector."+platform+".agent.failed", slog.String("messageID", event.MessageID), slog.String("error", errorValue.Error()))
-		failureTurnResult := connectorRuntime.launchFailureCompleter.CompleteLaunchFailure(ctx, agentcontract.AgentTurnRequest{
-			RequesterPersonID: personID,
-			RequesterEmail:    requesterEmail,
-			Platform:          platform,
-			ConversationID:    event.ConversationID,
-			Prompt:            event.Prompt,
-			ResponseLanguage:  event.Context.ResponseLanguage,
-		}, "launch", "connector_launch", errorValue)
-		return connectorRuntime.dispatchTaskReply(ctx, platform, adapter, event, replyTarget, failureTurnResult, engagedAckEmojiName, sendReply)
-	}
-	turnResult := launchResult.TurnResult
-	if addressingLaunch.SuppressReply {
-		turnResult.ReplySuppressionReason = "ambient_duty_no_reply"
-	}
-	taskRunID := turnResult.TaskRun.TaskRunID
-	taskDuration := time.Since(taskStartedAt)
-	connectorRuntime.logger.Info("connector."+platform+".agent.completed", slog.String("messageID", event.MessageID), slog.String("taskRunID", taskRunID), slog.Int64("duration_ms", taskDuration.Milliseconds()))
-	connectorRuntime.appendTaskExecutionDuration(taskRunID, taskDuration)
-	return connectorRuntime.dispatchTaskReply(ctx, platform, adapter, event, replyTarget, turnResult, engagedAckEmojiName, sendReply)
+	connectorRuntime.prepareTurnForLaunch(ctx, turn)
+	return connectorRuntime.launchTurn(ctx, turn)
 }
 
 func (connectorRuntime *ConnectorRuntime) shouldDeferNewTaskLaunch(isApprovalContinuation bool, hasPendingAskInteraction bool, hasActiveGoal bool) bool {
