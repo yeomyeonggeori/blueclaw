@@ -10,9 +10,6 @@
   let policyDocument: PolicyDocument = {
     people: [],
     circles: [],
-    circleSync: {
-      mattermostPrivateChannels: []
-    },
     resourceAccess: [],
     channels: [],
     retention: {
@@ -25,7 +22,7 @@
   });
 </script>
 
-<CircleStatus circles={policyDocument.circles} mattermostPrivateChannels={policyDocument.circleSync.mattermostPrivateChannels} />
+<CircleStatus circles={policyDocument.circles} />
 <PeopleEditor people={policyDocument.people} />
 <ChannelRuleEditor channels={policyDocument.channels} />
 <RetentionEditor rawEventDays={policyDocument.retention.rawEventDays} />

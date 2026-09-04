@@ -7,7 +7,6 @@ type PolicyDocument struct {
 	Company        CompanyPolicy          `json:"company,omitempty"`
 	Channels       []ChannelPolicy        `json:"channels"`
 	ResourceAccess []ResourceAccessPolicy `json:"resourceAccess"`
-	CircleSync     CircleSyncPolicy       `json:"circleSync"`
 	Retention      RetentionPolicy        `json:"retention"`
 	Rules          []TopicRule            `json:"rules"`
 	Metadata       PolicyMetadata         `json:"metadata"`
@@ -50,7 +49,6 @@ type CirclePolicy struct {
 	CircleID               string `json:"circleID"`
 	DisplayName            string `json:"displayName"`
 	MattermostChannelID    string `json:"mattermostChannelID,omitempty"`
-	IsMattermostManaged    bool   `json:"isMattermostManaged,omitempty"`
 	WorkspaceDirectoryPath string `json:"workspaceDirectoryPath,omitempty"`
 }
 
@@ -69,16 +67,6 @@ type ResourceAccessPolicy struct {
 	Resource string   `json:"resource"`
 	Actions  []string `json:"actions"`
 	Circles  []string `json:"circles"`
-}
-
-type CircleSyncPolicy struct {
-	MattermostPrivateChannels []MattermostCircleChannelPolicy `json:"mattermostPrivateChannels"`
-}
-
-type MattermostCircleChannelPolicy struct {
-	CircleID    string `json:"circleID"`
-	ChannelName string `json:"channelName"`
-	ChannelID   string `json:"channelID,omitempty"`
 }
 
 type RetentionPolicy struct {

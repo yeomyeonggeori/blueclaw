@@ -13,16 +13,8 @@ export type PolicyDocument = {
     circleID: string;
     displayName: string;
     mattermostChannelID: string;
-    isMattermostManaged: boolean;
     workspaceDirectoryPath: string;
   }>;
-  circleSync: {
-    mattermostPrivateChannels: Array<{
-      circleID: string;
-      channelName: string;
-      channelID: string;
-    }>;
-  };
   resourceAccess: Array<{
     resource: string;
     actions: string[];

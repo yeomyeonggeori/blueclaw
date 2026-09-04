@@ -23,47 +23,27 @@
     {
       "circleID": "member",
       "displayName": "Member",
-      "isMattermostManaged": false,
       "workspaceDirectoryPath": "/workspace/circles/member"
     },
     {
       "circleID": "c-level",
       "displayName": "C-Level",
       "mattermostChannelID": "",
-      "isMattermostManaged": true,
       "workspaceDirectoryPath": "/workspace/circles/c-level"
     },
     {
       "circleID": "representative",
       "displayName": "Representative",
       "mattermostChannelID": "",
-      "isMattermostManaged": true,
       "workspaceDirectoryPath": "/workspace/circles/representative"
     },
     {
       "circleID": "admin",
       "displayName": "Admin",
       "mattermostChannelID": "",
-      "isMattermostManaged": true,
       "workspaceDirectoryPath": "/workspace/circles/admin"
     }
   ],
-  "circleSync": {
-    "mattermostPrivateChannels": [
-      {
-        "circleID": "c-level",
-        "channelName": "circle-c-level"
-      },
-      {
-        "circleID": "representative",
-        "channelName": "circle-representative"
-      },
-      {
-        "circleID": "admin",
-        "channelName": "circle-admin"
-      }
-    ]
-  },
   "resourceAccess": [
     {
       "resource": "file:circle:member",
