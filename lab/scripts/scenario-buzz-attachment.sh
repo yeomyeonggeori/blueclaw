@@ -51,6 +51,8 @@ post_json() {
   curl --silent --show-error --fail-with-body -H 'Content-Type: application/json' -d "$body" "$url"
 }
 
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scenario-buzz-people.sh"
+
 phase "wait for blueclaw and chatd"
 for _ in $(seq 1 300); do
   if curl -fsS --max-time 3 "$blueclaw_url/admin/api/health" >/dev/null 2>&1; then break; fi
@@ -66,11 +68,10 @@ if ! curl -fsS --max-time 5 "$chatd_url/healthz" >/dev/null; then
   exit 1
 fi
 
-# The guest reads its policy from a share the host holds read-only, so the agent
-# cannot invite anybody into it. The scenario is one of the people the device was
-# provisioned with instead of one it makes up.
-phase "take a person the device already has"
-person_document="$(run_as_root cat "$policy_path" | jq -c '[.people[] | select((.emails // []) | length > 0)] | .[0]')"
+phase "take a person the company says works here"
+people_document="$(company_people_with_buzz_identity)"
+test "$(printf '%s' "$people_document" | jq 'length')" -gt 0
+person_document="$(printf '%s' "$people_document" | jq -c '.[0]')"
 test_person_identifier="$(printf '%s' "$person_document" | jq -r '.personID')"
 test_email="$(printf '%s' "$person_document" | jq -r '.emails[0]')"
 test -n "$test_person_identifier"
