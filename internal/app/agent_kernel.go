@@ -23,6 +23,7 @@ type agentKernel struct {
 	languageModelRuntimeConfiguration config.RuntimeConfiguration
 	taskTierLanguageModels            agentcontract.TaskTierLanguageModels
 	capabilityClient                  capability.Client
+	capabilityRegistry                *agentruntime.CapabilityRegistry
 	embeddingClient                   llm.EmbeddingProvider
 	intakeLanguageModelProvider       llm.LanguageModelProvider
 	terminalService                   *security.ShellService
@@ -36,19 +37,22 @@ type agentKernel struct {
 
 func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, agentHarnessFactory harnessdriver.Factory, services taskServices, companyProvider func() agentcontract.CompanyContext, logger *slog.Logger) agentKernel {
 	logger.Info("application.initializing", "stage", "agent_kernel")
-	startupInstructions := loadAgentInstructions(runtimeConfiguration)
+	capabilityClient := newCapabilityClient(runtimeConfiguration)
+	capabilityRegistry := agentruntime.NewCapabilityRegistry(capabilityClient, capabilityToolDescriptors(runtimeConfiguration.Capabilities.ToolDescriptors))
+	startupInstructions := loadAgentInstructions(runtimeConfiguration, capabilityRegistry)
 	logSkillsMissingTheirTools(logger, startupInstructions.UnavailableSkills)
 	logRejectedPersonaDocuments(logger, startupInstructions.RejectedDocuments)
 	kernel := agentKernel{
 		instructionBundleLoader: func() agentcontract.InstructionBundle {
-			return loadAgentInstructionBundle(runtimeConfiguration)
+			return loadAgentInstructionBundle(runtimeConfiguration, capabilityRegistry)
 		},
 		agentIdentityProvider: func() agentcontract.AgentIdentity {
 			return loadAgentIdentity(runtimeConfiguration)
 		},
 		languageModelRuntimeConfiguration: runtimeConfiguration,
 		taskTierLanguageModels:            resolveTaskTierLanguageModelProviders(runtimeConfiguration, logger),
-		capabilityClient:                  newCapabilityClient(runtimeConfiguration),
+		capabilityClient:                  capabilityClient,
+		capabilityRegistry:                capabilityRegistry,
 	}
 	logger.Info("application.initializing", "stage", "skill_retriever")
 	embeddingProvider, embeddingError := llm.NewConfiguredEmbeddingProvider(runtimeConfiguration)

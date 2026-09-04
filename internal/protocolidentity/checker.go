@@ -89,6 +89,11 @@ func ValidateIdentity(identity Identity) error {
 
 func (checker Checker) Check(ctx context.Context, expected Identity) Result {
 	result := Result{Expected: expected, CheckedAt: time.Now().UTC()}
+	if expected == (Identity{}) {
+		result.Capabilityd = EndpointStatus{Status: "not_pinned", Passed: true}
+		result.Passed = true
+		return result
+	}
 	if errorValue := ValidateIdentity(expected); errorValue != nil {
 		result.FailureReasons = append(result.FailureReasons, "expected identity is invalid: "+errorValue.Error())
 		result.Capabilityd = unavailableStatus(errorValue)

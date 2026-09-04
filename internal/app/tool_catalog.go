@@ -46,14 +46,14 @@ func newToolCatalogBuilder(runtimeConfiguration config.RuntimeConfiguration, ker
 	toolCatalogBuilder.UseCapabilityQuarantineReporter(func(quarantinedProvider toolcontract.QuarantinedToolProvider) {
 		logCapabilityProviderQuarantine(logger, quarantinedProvider)
 	})
-	toolCatalogBuilder.UseCapabilityToolDescriptors(kernel.capabilityClient, capabilityToolDescriptors(runtimeConfiguration.Capabilities.ToolDescriptors))
+	toolCatalogBuilder.UseCapabilityRegistry(kernel.capabilityClient, kernel.capabilityRegistry)
 	if runtimeConfiguration.Capabilities.IsConfigured() {
 		toolCatalogBuilder.UseRecordCatalog(mcp.NewRecordCatalog(capabilityConfiguration(runtimeConfiguration)))
 		toolCatalogBuilder.UseRecordCatalogDivergenceReporter(func(divergence agentruntime.RecordCatalogDivergence) {
 			logRecordCatalogDivergence(logger, divergence)
 		})
 	}
-	seedCompanionStatus(kernel.capabilityClient, toolCatalogBuilder)
+	seedCompanionStatus(kernel.capabilityRegistry)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(deriveAllowedToolNamesByProfile(runtimeConfiguration), deriveAllowedToolNames(runtimeConfiguration))
 	toolCatalogBuilder.UseSkillSearch(kernel.skillRetriever, kernel.instructionBundleLoader)
 	toolCatalogBuilder.UseTerminalService(kernel.terminalService)
@@ -125,19 +125,10 @@ func deriveAllowedToolNames(runtimeConfiguration config.RuntimeConfiguration) []
 	return allowedToolNames
 }
 
-func seedCompanionStatus(capabilityClient capability.Client, toolCatalogBuilder *agentruntime.ToolCatalogBuilder) {
-	if strings.TrimSpace(capabilityClient.Endpoint) == "" {
-		return
-	}
+func seedCompanionStatus(capabilityRegistry *agentruntime.CapabilityRegistry) {
 	statusContext, cancelStatus := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancelStatus()
-	var response struct {
-		CompanionStatus string `json:"companionStatus"`
-	}
-	if errorValue := capabilityClient.GetJSON(statusContext, "/v1/capabilities", &response); errorValue != nil {
-		return
-	}
-	toolCatalogBuilder.UseCompanionStatus(response.CompanionStatus)
+	capabilityRegistry.Warm(statusContext)
 }
 
 func capabilityToolDescriptors(toolDescriptors []config.CapabilityToolDescriptor) []agentruntime.CapabilityToolDescriptor {

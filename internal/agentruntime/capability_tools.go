@@ -450,10 +450,6 @@ func capabilityInputSkeleton(inputSchema json.RawMessage, requiredFields []strin
 	return skeleton
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) capabilityToolDefinitions() []CapabilityToolDescriptor {
-	return copyCapabilityToolDescriptors(toolCatalogBuilder.capabilityToolDescriptors)
-}
-
 func capabilityToolAvailability(toolDescriptor CapabilityToolDescriptor, request ToolCatalogRequest) toolcontract.ToolAvailability {
 	switch strings.TrimSpace(toolDescriptor.Availability.State) {
 	case "not_allowed":

@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/bluecollarharness"
+	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
@@ -213,7 +215,7 @@ func TestLoadAgentInstructionPromptUsesIdentitySoulAgentsAndSkills(t *testing.T)
 	runtimeConfiguration := config.RuntimeConfiguration{}
 	runtimeConfiguration.Terminal.WorkspaceRootPath = workspacePath
 
-	instructionBundle := loadAgentInstructionBundle(runtimeConfiguration)
+	instructionBundle := loadAgentInstructionBundle(runtimeConfiguration, agentruntime.NewCapabilityRegistry(capability.Client{}, nil))
 	for _, expectedFragment := range []string{"Your name is 김인턴.", "\"Intern Kim\"", "@internkim", "Your role: the company's AI intern", "What you hold to:\n- Lead with the result.", "Use agent-browser for web automation."} {
 		if !strings.Contains(instructionBundle.Prompt, expectedFragment) {
 			t.Fatalf("expected instruction prompt to contain %q, got %q", expectedFragment, instructionBundle.Prompt)
@@ -247,7 +249,7 @@ func TestAPersonaDocumentTheSchemaRefusesIsReportedAndLeftOut(t *testing.T) {
 	runtimeConfiguration := config.RuntimeConfiguration{}
 	runtimeConfiguration.Terminal.WorkspaceRootPath = workspacePath
 
-	instructions := loadAgentInstructions(runtimeConfiguration)
+	instructions := loadAgentInstructions(runtimeConfiguration, agentruntime.NewCapabilityRegistry(capability.Client{}, nil))
 
 	if strings.Contains(instructions.Bundle.Prompt, "김인턴") {
 		t.Fatalf("expected the refused identity to stay out of the prompt, got %q", instructions.Bundle.Prompt)
@@ -278,7 +280,7 @@ Research helper body.
 	runtimeConfiguration := config.RuntimeConfiguration{}
 	runtimeConfiguration.Terminal.WorkspaceRootPath = workspacePath
 
-	instructionBundle := loadAgentInstructionBundle(runtimeConfiguration)
+	instructionBundle := loadAgentInstructionBundle(runtimeConfiguration, agentruntime.NewCapabilityRegistry(capability.Client{}, nil))
 
 	if len(instructionBundle.Skills) != 1 || instructionBundle.Skills[0].Name != "research-helper" {
 		t.Fatalf("expected added user skill to be discovered, got %+v", instructionBundle.Skills)

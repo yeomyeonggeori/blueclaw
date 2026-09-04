@@ -282,3 +282,20 @@ func TestLoadRuntimeConfigurationRejectsMissingOrInvalidCapabilityProtocolIdenti
 		})
 	}
 }
+
+func TestLoadRuntimeConfigurationTakesACapabilityEndpointThatStampsNothing(t *testing.T) {
+	runtimeConfigurationPath := filepath.Join(t.TempDir(), "runtime.json")
+	document := `{"capabilities":{"endpoint":"http://internkim-capability","unixSocketPath":"/run/internkim/capability.sock","timeoutSecond":30}}`
+	if errorValue := os.WriteFile(runtimeConfigurationPath, []byte(document), 0o600); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	runtimeConfiguration, errorValue := LoadRuntimeConfiguration(runtimeConfigurationPath)
+
+	if errorValue != nil {
+		t.Fatalf("expected an unstamped capability endpoint to load, got %v", errorValue)
+	}
+	if len(runtimeConfiguration.Capabilities.ToolDescriptors) != 0 {
+		t.Fatalf("expected no stamped descriptors, got %+v", runtimeConfiguration.Capabilities.ToolDescriptors)
+	}
+}

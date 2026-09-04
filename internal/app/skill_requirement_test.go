@@ -1,10 +1,14 @@
 package app
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 )
 
@@ -31,7 +35,7 @@ func instructionsForSkillRequiringAToken(t *testing.T) agentInstructions {
 	t.Setenv("BLUECLAW_BUNDLED_SKILLS_PATH", deliveredSkillsPath)
 	runtimeConfiguration := config.RuntimeConfiguration{}
 	runtimeConfiguration.Terminal.WorkspaceRootPath = t.TempDir()
-	return loadAgentInstructions(runtimeConfiguration)
+	return loadAgentInstructions(runtimeConfiguration, agentruntime.NewCapabilityRegistry(capability.Client{}, nil))
 }
 
 func skillNames(instructions agentInstructions) []string {
@@ -83,5 +87,52 @@ func TestTheSameSkillIsSelectableOnceItsVariableIsSet(t *testing.T) {
 	}
 	if len(instructions.UnavailableSkills) != 0 {
 		t.Fatalf("nothing is unavailable here, got %+v", instructions.UnavailableSkills)
+	}
+}
+
+const skillRequiringACapabilityTool = `---
+name: messages
+description: Writes to a person on the messenger.
+metadata:
+  kim.intern.tool-references: "message_send"
+---
+Body.
+`
+
+func TestASkillNamingACapabilityToolIsSelectableFromTheLiveRegistry(t *testing.T) {
+	deliveredSkillsPath := t.TempDir()
+	skillDirectoryPath := filepath.Join(deliveredSkillsPath, "messages")
+	if errorValue := os.MkdirAll(skillDirectoryPath, 0o755); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := os.WriteFile(filepath.Join(skillDirectoryPath, "SKILL.md"), []byte(skillRequiringACapabilityTool), 0o600); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	t.Setenv("BLUECLAW_BUNDLED_SKILLS_PATH", deliveredSkillsPath)
+	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, _ *http.Request) {
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"deviceCapabilities":[{"name":"message_send"}]}`))
+	}))
+	defer server.Close()
+	runtimeConfiguration := config.RuntimeConfiguration{}
+	runtimeConfiguration.Terminal.WorkspaceRootPath = t.TempDir()
+	capabilityRegistry := agentruntime.NewCapabilityRegistry(
+		capability.Client{Endpoint: server.URL, HTTPClient: server.Client()},
+		nil,
+	)
+
+	instructions := loadAgentInstructions(runtimeConfiguration, capabilityRegistry)
+
+	if len(instructions.UnavailableSkills) != 0 {
+		t.Fatalf("expected the live registry to offer message_send, got %+v", instructions.UnavailableSkills)
+	}
+	selected := false
+	for _, skillName := range skillNames(instructions) {
+		if skillName == "messages" {
+			selected = true
+		}
+	}
+	if !selected {
+		t.Fatalf("expected the skill in the prompt, got %v", skillNames(instructions))
 	}
 }

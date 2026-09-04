@@ -38,8 +38,8 @@ func logRejectedPersonaDocuments(logger *slog.Logger, rejectedDocuments []instru
 	}
 }
 
-func loadAgentInstructionPrompt(runtimeConfiguration config.RuntimeConfiguration) string {
-	return loadAgentInstructionBundle(runtimeConfiguration).Prompt
+func loadAgentInstructionPrompt(runtimeConfiguration config.RuntimeConfiguration, capabilityRegistry *agentruntime.CapabilityRegistry) string {
+	return loadAgentInstructionBundle(runtimeConfiguration, capabilityRegistry).Prompt
 }
 
 // A skill naming an environment variable this host has not set is left out of
@@ -53,27 +53,27 @@ type agentInstructions struct {
 
 // What a skill may name: the tools a product's catalog offered this runtime, plus
 // the ones the runtime and the kernel answer themselves.
-func offeredToolNamesOf(runtimeConfiguration config.RuntimeConfiguration) []string {
+func offeredToolNamesOf(capabilityRegistry *agentruntime.CapabilityRegistry) []string {
 	offeredToolNames := append([]string{}, toolcontract.KernelToolNames()...)
 	offeredToolNames = append(offeredToolNames, agentruntime.LocalToolNames()...)
-	for _, toolDescriptor := range runtimeConfiguration.Capabilities.ToolDescriptors {
+	for _, toolDescriptor := range capabilityRegistry.ToolDescriptors() {
 		offeredToolNames = append(offeredToolNames, strings.TrimSpace(toolDescriptor.Name))
 	}
 	return offeredToolNames
 }
 
-func loadAgentInstructionBundle(runtimeConfiguration config.RuntimeConfiguration) agentcontract.InstructionBundle {
-	return loadAgentInstructions(runtimeConfiguration).Bundle
+func loadAgentInstructionBundle(runtimeConfiguration config.RuntimeConfiguration, capabilityRegistry *agentruntime.CapabilityRegistry) agentcontract.InstructionBundle {
+	return loadAgentInstructions(runtimeConfiguration, capabilityRegistry).Bundle
 }
 
-func loadAgentInstructions(runtimeConfiguration config.RuntimeConfiguration) agentInstructions {
+func loadAgentInstructions(runtimeConfiguration config.RuntimeConfiguration, capabilityRegistry *agentruntime.CapabilityRegistry) agentInstructions {
 	parts := []string{}
 	sources := []agentcontract.InstructionSource{}
 	skillInstructions := []agentcontract.SkillInstruction{}
 	unavailableSkills := []skill.UnavailableSkill{}
 	rejectedDocuments := []instructionDocument{}
 	includedSkillByName := map[string]bool{}
-	offeredToolNames := offeredToolNamesOf(runtimeConfiguration)
+	offeredToolNames := offeredToolNamesOf(capabilityRegistry)
 	for _, rootPath := range instructionRootPaths(runtimeConfiguration) {
 		for _, instructionDocument := range readInstructionDocuments(rootPath) {
 			if instructionDocument.Error != nil {

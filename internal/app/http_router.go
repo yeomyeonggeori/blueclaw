@@ -32,7 +32,7 @@ func newRouterDependencies(components applicationComponents) httpserver.RouterDe
 		TaskSearchHandler:     adminapi.TaskSearchHandler{SessionQuery: sessionquery.New(services.taskRunService)},
 		TaskRunHandler:        newTaskRunHandler(runtimeConfiguration, services, directory, components.taskLauncher, components.taskIntakeController),
 		HarnessStatusHandler:  newHarnessStatusHandler(runtimeConfiguration, kernel.harnessName),
-		SkillInventoryHandler: newSkillInventoryHandler(runtimeConfiguration),
+		SkillInventoryHandler: newSkillInventoryHandler(runtimeConfiguration, kernel.capabilityRegistry),
 		ToolInventoryHandler:  adminapi.ToolInventoryHandler{ToolCatalogBuilder: components.toolCatalogBuilder},
 		TaskApprovalHandler:   newTaskApprovalHandler(services, directory, components.taskLauncher),
 		QuiesceHandler: adminapi.QuiesceHandler{
@@ -140,9 +140,9 @@ func newHarnessStatusHandler(runtimeConfiguration config.RuntimeConfiguration, h
 	}}
 }
 
-func newSkillInventoryHandler(runtimeConfiguration config.RuntimeConfiguration) adminapi.SkillInventoryHandler {
+func newSkillInventoryHandler(runtimeConfiguration config.RuntimeConfiguration, capabilityRegistry *agentruntime.CapabilityRegistry) adminapi.SkillInventoryHandler {
 	return adminapi.SkillInventoryHandler{InventoryLoader: func() adminapi.SkillInventory {
-		instructions := loadAgentInstructions(runtimeConfiguration)
+		instructions := loadAgentInstructions(runtimeConfiguration, capabilityRegistry)
 		return adminapi.SkillInventory{Loaded: instructions.Bundle.Skills, Unavailable: instructions.UnavailableSkills}
 	}}
 }

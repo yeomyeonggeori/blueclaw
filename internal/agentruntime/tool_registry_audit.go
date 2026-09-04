@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 )
 
 const toolRegistryVersion = "platform-message-v1"
@@ -52,11 +51,6 @@ type ToolRegistryAudit struct {
 	LiveRegistryServedFromCache       bool   `json:"liveRegistryServedFromCache,omitempty"`
 }
 
-type capabilityRegistryResponse struct {
-	CompanionStatus    string                     `json:"companionStatus"`
-	DeviceCapabilities []CapabilityToolDescriptor `json:"deviceCapabilities"`
-}
-
 type toolRegistryMismatchError struct {
 	audit ToolRegistryAudit
 }
@@ -96,7 +90,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) BuildToolRegistryAudit(ctx context
 		HasOldPlatformDMInspect:       registryContainsString(configuredNames, "platform.dm.inspect"),
 	}
 
-	if !requiresLiveCapabilityRegistryCheck(configuredDescriptors) {
+	if !requiresLiveCapabilityRegistryCheck(toolCatalogBuilder.stampedCapabilityToolDefinitions()) {
 		return audit, nil
 	}
 
@@ -110,7 +104,6 @@ func (toolCatalogBuilder *ToolCatalogBuilder) BuildToolRegistryAudit(ctx context
 		liveDescriptors, liveHash = cachedDescriptors, cachedHash
 		audit.LiveRegistryServedFromCache = true
 	} else {
-		toolCatalogBuilder.storeLiveCapabilitySnapshot(liveDescriptors, liveHash)
 	}
 	liveNames := capabilityDescriptorNames(liveDescriptors)
 	audit.LiveCapabilityHash = liveHash
@@ -139,30 +132,6 @@ func capabilityDescriptorNames(toolDescriptors []CapabilityToolDescriptor) []str
 
 func requiresLiveCapabilityRegistryCheck(configuredDescriptors []CapabilityToolDescriptor) bool {
 	return len(configuredDescriptors) > 0
-}
-
-func (toolCatalogBuilder *ToolCatalogBuilder) liveCapabilityToolDescriptors(ctx context.Context) ([]CapabilityToolDescriptor, string, error) {
-	var response capabilityRegistryResponse
-	if errorValue := toolCatalogBuilder.capabilityClient.GetJSON(ctx, "/v1/capabilities", &response); errorValue != nil {
-		return nil, "", errorValue
-	}
-	toolCatalogBuilder.UseCompanionStatus(response.CompanionStatus)
-	toolDescriptors := []CapabilityToolDescriptor{}
-	for _, descriptor := range response.DeviceCapabilities {
-		toolName := strings.TrimSpace(descriptor.Name)
-		if toolName != "" {
-			toolDescriptors = append(toolDescriptors, CapabilityToolDescriptor{
-				Name:              toolName,
-				InputSchema:       append(json.RawMessage{}, descriptor.InputSchema...),
-				InputIntentSchema: append(json.RawMessage{}, descriptor.InputIntentSchema...),
-				ResultContract:    descriptor.ResultContract,
-				SideEffectClass:   strings.TrimSpace(descriptor.SideEffectClass),
-				RequiresApproval:  descriptor.RequiresApproval,
-				Idempotency:       descriptor.Idempotency,
-			})
-		}
-	}
-	return toolDescriptors, hashCapabilityDescriptors(toolDescriptors), nil
 }
 
 func hasMessageRegistryMismatch(audit ToolRegistryAudit) bool {
@@ -307,34 +276,3 @@ func descriptorIsBrowserCapability(descriptor CapabilityToolDescriptor) bool {
 	return descriptor.RequiresRequesterDevice
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) companionBrowserAvailable() bool {
-	toolCatalogBuilder.companionStatusMutex.Lock()
-	defer toolCatalogBuilder.companionStatusMutex.Unlock()
-	if toolCatalogBuilder.companionStatusValue == "" {
-		return true
-	}
-	return toolCatalogBuilder.companionStatusValue == "available"
-}
-
-func (toolCatalogBuilder *ToolCatalogBuilder) UseCompanionStatus(companionStatus string) {
-	toolCatalogBuilder.companionStatusMutex.Lock()
-	defer toolCatalogBuilder.companionStatusMutex.Unlock()
-	toolCatalogBuilder.companionStatusValue = strings.TrimSpace(companionStatus)
-	toolCatalogBuilder.companionStatusCheckedAt = time.Now()
-}
-
-func (toolCatalogBuilder *ToolCatalogBuilder) cachedLiveCapabilitySnapshot() ([]CapabilityToolDescriptor, string, bool) {
-	toolCatalogBuilder.liveSnapshotMutex.Lock()
-	defer toolCatalogBuilder.liveSnapshotMutex.Unlock()
-	if toolCatalogBuilder.liveSnapshotHash == "" {
-		return nil, "", false
-	}
-	return append([]CapabilityToolDescriptor{}, toolCatalogBuilder.liveSnapshotDescriptors...), toolCatalogBuilder.liveSnapshotHash, true
-}
-
-func (toolCatalogBuilder *ToolCatalogBuilder) storeLiveCapabilitySnapshot(descriptors []CapabilityToolDescriptor, hash string) {
-	toolCatalogBuilder.liveSnapshotMutex.Lock()
-	defer toolCatalogBuilder.liveSnapshotMutex.Unlock()
-	toolCatalogBuilder.liveSnapshotDescriptors = append([]CapabilityToolDescriptor{}, descriptors...)
-	toolCatalogBuilder.liveSnapshotHash = hash
-}

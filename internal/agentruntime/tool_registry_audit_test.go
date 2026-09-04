@@ -101,7 +101,7 @@ func TestBuildToolRegistryAuditDegradesWhenLiveCapabilityRegistryIsUnavailable(t
 func TestBuildToolRegistryAuditServesCachedSnapshotWhenLiveFetchFails(t *testing.T) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
 	toolCatalogBuilder.UseTestCapabilityToolDescriptors(capability.Client{}, []CapabilityToolDescriptor{{Name: "task_add"}})
-	toolCatalogBuilder.storeLiveCapabilitySnapshot([]CapabilityToolDescriptor{{Name: "task_add"}}, "snapshot-hash")
+	toolCatalogBuilder.capabilityRegistry.keepLive([]CapabilityToolDescriptor{{Name: "task_add"}}, "snapshot-hash", "")
 
 	audit, errorValue := toolCatalogBuilder.BuildToolRegistryAudit(context.Background(), toolcontract.NewToolSet(nil))
 

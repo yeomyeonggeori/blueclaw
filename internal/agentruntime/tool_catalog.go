@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
@@ -36,8 +35,8 @@ type ToolCatalogBuilder struct {
 	memoryUpdateQueue            memory.MemoryUpdateEnqueuer
 	mcpRegistry                  *mcp.McpRegistry
 	capabilityClient             capability.Client
+	capabilityRegistry           *CapabilityRegistry
 	companyProvider              func() agentcontract.CompanyContext
-	capabilityToolDescriptors    []CapabilityToolDescriptor
 	terminalService              *security.ShellService
 	workspaceActorFactory        security.WorkspaceActorFactory
 	taskRunService               *task.TaskRunService
@@ -56,13 +55,6 @@ type ToolCatalogBuilder struct {
 	recordCatalogDivergenceReporter func(RecordCatalogDivergence)
 	recordCatalogMutex              sync.Mutex
 	recordCatalogByRequester        map[string]discoveredCatalog
-
-	liveSnapshotMutex        sync.Mutex
-	liveSnapshotDescriptors  []CapabilityToolDescriptor
-	liveSnapshotHash         string
-	companionStatusMutex     sync.Mutex
-	companionStatusValue     string
-	companionStatusCheckedAt time.Time
 }
 
 type toolHandlerContext struct {
@@ -161,8 +153,12 @@ func (toolCatalogBuilder *ToolCatalogBuilder) UseCapabilityQuarantineReporter(re
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) UseCapabilityToolDescriptors(capabilityClient capability.Client, toolDescriptors []CapabilityToolDescriptor) {
+	toolCatalogBuilder.UseCapabilityRegistry(capabilityClient, NewCapabilityRegistry(capabilityClient, toolDescriptors))
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) UseCapabilityRegistry(capabilityClient capability.Client, capabilityRegistry *CapabilityRegistry) {
 	toolCatalogBuilder.capabilityClient = capabilityClient
-	toolCatalogBuilder.capabilityToolDescriptors = copyCapabilityToolDescriptors(toolDescriptors)
+	toolCatalogBuilder.capabilityRegistry = capabilityRegistry
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) UseTerminalService(terminalService *security.ShellService) {

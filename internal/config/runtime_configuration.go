@@ -293,8 +293,17 @@ func LoadRuntimeConfiguration(path string) (RuntimeConfiguration, error) {
 	return configuration, nil
 }
 
+func capabilityRegistryIsUnstamped(configuration *CapabilityConfiguration) bool {
+	return len(configuration.ToolDescriptors) == 0 &&
+		strings.TrimSpace(configuration.ProtocolVersion) == "" &&
+		strings.TrimSpace(configuration.AggregateProtocolHash) == ""
+}
+
 func validateCapabilityProtocolIdentity(configuration *CapabilityConfiguration) error {
 	if !configuration.IsConfigured() {
+		return nil
+	}
+	if capabilityRegistryIsUnstamped(configuration) {
 		return nil
 	}
 	if configuration.ProtocolVersion == "" || configuration.ProtocolVersion != strings.TrimSpace(configuration.ProtocolVersion) {

@@ -9,7 +9,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/protocolidentity"
-	capabilitycatalog "github.com/yeomyeonggeori/blueclaw/protocol/generated"
 )
 
 type protocolIdentityComponents struct {
@@ -31,19 +30,13 @@ func newProtocolIdentity(runtimeConfiguration config.RuntimeConfiguration, capab
 	}
 }
 
-// expectedProtocolIdentity prefers what the appliance pinned, and otherwise
-// falls back to the contract this build was generated from.
 func expectedProtocolIdentity(runtimeConfiguration config.RuntimeConfiguration) protocolidentity.Identity {
-	if strings.TrimSpace(runtimeConfiguration.Capabilities.ProtocolVersion) != "" {
-		return protocolidentity.Identity{
-			ProtocolVersion:       runtimeConfiguration.Capabilities.ProtocolVersion,
-			AggregateProtocolHash: runtimeConfiguration.Capabilities.AggregateProtocolHash,
-		}
+	if strings.TrimSpace(runtimeConfiguration.Capabilities.ProtocolVersion) == "" {
+		return protocolidentity.Identity{}
 	}
-	builtIdentity := capabilitycatalog.BuiltProtocolIdentity()
 	return protocolidentity.Identity{
-		ProtocolVersion:       builtIdentity.ProtocolVersion,
-		AggregateProtocolHash: builtIdentity.AggregateProtocolHash,
+		ProtocolVersion:       runtimeConfiguration.Capabilities.ProtocolVersion,
+		AggregateProtocolHash: runtimeConfiguration.Capabilities.AggregateProtocolHash,
 	}
 }
 

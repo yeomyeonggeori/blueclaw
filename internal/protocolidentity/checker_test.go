@@ -2,6 +2,7 @@ package protocolidentity
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -128,4 +129,26 @@ func TestValidateIdentityRejectsMissingAndInvalidValues(t *testing.T) {
 			t.Fatalf("expected identity to be rejected: %+v", identity)
 		}
 	}
+}
+
+func TestCheckPassesWithoutAskingWhenNothingIsPinned(t *testing.T) {
+	checker := NewChecker(Configuration{
+		CapabilityEndpoint:   "http://internkim-capability",
+		CapabilityHTTPClient: refusingHTTPClient{},
+	})
+
+	result := checker.Check(context.Background(), Identity{})
+
+	if !result.Passed {
+		t.Fatalf("expected an unpinned identity to pass, got %+v", result)
+	}
+	if result.Capabilityd.Status != "not_pinned" {
+		t.Fatalf("expected the endpoint to be reported unpinned, got %+v", result.Capabilityd)
+	}
+}
+
+type refusingHTTPClient struct{}
+
+func (refusingHTTPClient) Do(*http.Request) (*http.Response, error) {
+	return nil, errors.New("the checker asked capabilityd although nothing was pinned")
 }

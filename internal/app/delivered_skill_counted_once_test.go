@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 )
 
@@ -24,7 +26,7 @@ func TestLoadAgentInstructionBundleCountsADeliveredSkillOnce(t *testing.T) {
 	runtimeConfiguration := config.RuntimeConfiguration{}
 	runtimeConfiguration.Terminal.WorkspaceRootPath = t.TempDir()
 
-	instructionBundle := loadAgentInstructionBundle(runtimeConfiguration)
+	instructionBundle := loadAgentInstructionBundle(runtimeConfiguration, agentruntime.NewCapabilityRegistry(capability.Client{}, nil))
 
 	deliveredCount := 0
 	for _, skillInstruction := range instructionBundle.Skills {
