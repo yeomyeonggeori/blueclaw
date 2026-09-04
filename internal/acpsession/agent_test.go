@@ -613,3 +613,79 @@ func TestLoadingASessionThatNamesNobodyIsRefused(t *testing.T) {
 	}
 	expectNobodyIsAskedAgain(t, client)
 }
+
+func openSessionNamingTheCatalog(
+	t *testing.T,
+	connection *acp.ClientSideConnection,
+	meta map[string]any,
+	mcpServers []acp.McpServer,
+) acp.SessionId {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, errorValue := connection.Initialize(ctx, acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber}); errorValue != nil {
+		t.Fatalf("initialize: %v", errorValue)
+	}
+	newSession, errorValue := connection.NewSession(ctx, acp.NewSessionRequest{
+		Cwd:        "/workspace",
+		McpServers: mcpServers,
+		Meta:       meta,
+	})
+	if errorValue != nil {
+		t.Fatalf("new session: %v", errorValue)
+	}
+	return newSession.SessionId
+}
+
+func theOnlyLaunch(t *testing.T, launcher *recordingLauncher) agentruntime.TaskLaunchRequest {
+	t.Helper()
+	launcher.mutex.Lock()
+	defer launcher.mutex.Unlock()
+	if len(launcher.launched) != 1 {
+		t.Fatalf("the turn launched %d times, expected once", len(launcher.launched))
+	}
+	return launcher.launched[0]
+}
+
+func promptForTest(t *testing.T, connection *acp.ClientSideConnection, sessionID acp.SessionId) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, errorValue := connection.Prompt(ctx, acp.PromptRequest{
+		SessionId: sessionID,
+		Prompt:    []acp.ContentBlock{acp.TextBlock("업무 하나 추가해줘")},
+	}); errorValue != nil {
+		t.Fatalf("prompt: %v", errorValue)
+	}
+}
+
+func TestATurnIsGivenTheCatalogTheSessionNamed(t *testing.T) {
+	launcher := &recordingLauncher{reply: "네"}
+	connection, _ := connectedPair(t, launcher, &recordingClient{})
+	sessionID := openSessionNamingTheCatalog(t, connection,
+		sessionMeta("sample@example.test", "conversation-1"),
+		[]acp.McpServer{{Http: &acp.McpServerHttpInline{
+			Name:    "internkim",
+			Url:     "http://127.0.0.1:18091/mcp/session-1",
+			Headers: []acp.HttpHeader{{Name: "Authorization", Value: "Bearer a-token"}},
+		}}},
+	)
+
+	promptForTest(t, connection, sessionID)
+
+	if theOnlyLaunch(t, launcher).RecordCatalog == nil {
+		t.Fatal("the turn was given no record catalog although the session named one")
+	}
+}
+
+func TestATurnIsGivenNoCatalogWhenTheSessionNamedNone(t *testing.T) {
+	launcher := &recordingLauncher{reply: "네"}
+	connection, _ := connectedPair(t, launcher, &recordingClient{})
+	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
+
+	promptForTest(t, connection, sessionID)
+
+	if launched := theOnlyLaunch(t, launcher); launched.RecordCatalog != nil {
+		t.Fatalf("a session naming no catalog handed one over: %+v", launched.RecordCatalog)
+	}
+}

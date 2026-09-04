@@ -74,10 +74,9 @@ func aDescriptor(name string, answeredBy string) capability.ToolDescriptor {
 	}
 }
 
-func aBuilderWith(standIn *recordCatalogStandIn, stamped ...capability.ToolDescriptor) (*ToolCatalogBuilder, *[]RecordCatalogDivergence) {
+func aBuilderWith(stamped ...capability.ToolDescriptor) (*ToolCatalogBuilder, *[]RecordCatalogDivergence) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
 	toolCatalogBuilder.UseCapabilityToolDescriptors(capability.Client{}, stamped)
-	toolCatalogBuilder.UseRecordCatalog(standIn)
 	reported := []RecordCatalogDivergence{}
 	toolCatalogBuilder.UseRecordCatalogDivergenceReporter(func(divergence RecordCatalogDivergence) {
 		reported = append(reported, divergence)
@@ -85,18 +84,18 @@ func aBuilderWith(standIn *recordCatalogStandIn, stamped ...capability.ToolDescr
 	return toolCatalogBuilder, &reported
 }
 
-func aRequestFrom(requesterEmail string) ToolCatalogRequest {
-	return ToolCatalogRequest{RequesterEmail: requesterEmail}
+func aRequestFrom(standIn *recordCatalogStandIn, requesterEmail string) ToolCatalogRequest {
+	return ToolCatalogRequest{RequesterEmail: requesterEmail, RecordCatalog: standIn}
 }
 
 func TestDiscoveredRecordToolReplacesTheStampedOneOfTheSameName(t *testing.T) {
 	standIn := &recordCatalogStandIn{discovered: []capability.ToolDescriptor{aDescriptor("task_add", capability.AnsweredByRecord)}}
-	toolCatalogBuilder, _ := aBuilderWith(standIn,
+	toolCatalogBuilder, _ := aBuilderWith(
 		aDescriptor("task_add", capability.AnsweredByRecord),
 		aDescriptor("message_send", capability.AnsweredByCompany),
 	)
 
-	toolSet := toolCatalogBuilder.BuildToolSet(aRequestFrom("sample@example.test"))
+	toolSet := toolCatalogBuilder.BuildToolSet(aRequestFrom(standIn, "sample@example.test"))
 
 	discovered, isFound := toolSet.ToolDefinition("task_add")
 	if !isFound {
@@ -119,12 +118,12 @@ func TestACompanyToolIsNeverTakenFromDiscovery(t *testing.T) {
 		aDescriptor("task_add", capability.AnsweredByRecord),
 		aDescriptor("message_send", capability.AnsweredByCompany),
 	}}
-	toolCatalogBuilder, _ := aBuilderWith(standIn,
+	toolCatalogBuilder, _ := aBuilderWith(
 		aDescriptor("task_add", capability.AnsweredByRecord),
 		aDescriptor("message_send", capability.AnsweredByCompany),
 	)
 
-	toolSet := toolCatalogBuilder.BuildToolSet(aRequestFrom("sample@example.test"))
+	toolSet := toolCatalogBuilder.BuildToolSet(aRequestFrom(standIn, "sample@example.test"))
 
 	messageSend, isFound := toolSet.ToolDefinition("message_send")
 	if !isFound {
@@ -137,9 +136,9 @@ func TestACompanyToolIsNeverTakenFromDiscovery(t *testing.T) {
 
 func TestDiscoveryThatFailsLeavesTheStampedDescriptorsStanding(t *testing.T) {
 	standIn := &recordCatalogStandIn{discoveryFailed: errors.New("the capability service is not listening")}
-	toolCatalogBuilder, reported := aBuilderWith(standIn, aDescriptor("task_add", capability.AnsweredByRecord))
+	toolCatalogBuilder, reported := aBuilderWith(aDescriptor("task_add", capability.AnsweredByRecord))
 
-	toolSet := toolCatalogBuilder.BuildToolSet(aRequestFrom("sample@example.test"))
+	toolSet := toolCatalogBuilder.BuildToolSet(aRequestFrom(standIn, "sample@example.test"))
 
 	stamped, isFound := toolSet.ToolDefinition("task_add")
 	if !isFound || stamped.ProviderID != "capabilityd" {
@@ -155,12 +154,12 @@ func TestDivergenceNamesEveryToolOnlyOneSideCarries(t *testing.T) {
 		aDescriptor("task_add", capability.AnsweredByRecord),
 		aDescriptor("crm_contact_add", capability.AnsweredByRecord),
 	}}
-	toolCatalogBuilder, reported := aBuilderWith(standIn,
+	toolCatalogBuilder, reported := aBuilderWith(
 		aDescriptor("task_add", capability.AnsweredByRecord),
 		aDescriptor("leave_request", capability.AnsweredByRecord),
 	)
 
-	toolCatalogBuilder.BuildToolSet(aRequestFrom("sample@example.test"))
+	toolCatalogBuilder.BuildToolSet(aRequestFrom(standIn, "sample@example.test"))
 
 	if len(*reported) != 1 {
 		t.Fatalf("divergence was reported %d times", len(*reported))
@@ -176,9 +175,9 @@ func TestDivergenceNamesEveryToolOnlyOneSideCarries(t *testing.T) {
 
 func TestACatalogTheTwoSidesAgreeOnIsNotReported(t *testing.T) {
 	standIn := &recordCatalogStandIn{discovered: []capability.ToolDescriptor{aDescriptor("task_add", capability.AnsweredByRecord)}}
-	toolCatalogBuilder, reported := aBuilderWith(standIn, aDescriptor("task_add", capability.AnsweredByRecord))
+	toolCatalogBuilder, reported := aBuilderWith(aDescriptor("task_add", capability.AnsweredByRecord))
 
-	toolCatalogBuilder.BuildToolSet(aRequestFrom("sample@example.test"))
+	toolCatalogBuilder.BuildToolSet(aRequestFrom(standIn, "sample@example.test"))
 
 	if len(*reported) != 0 {
 		t.Fatalf("a catalog both sides agree on was reported as %+v", *reported)
@@ -192,8 +191,8 @@ func TestADiscoveredToolIsCalledOverMCPAsTheRequester(t *testing.T) {
 			StructuredContent: json.RawMessage(`{"tool":"task_add","result":{"taskID":"task-1"}}`),
 		},
 	}
-	toolCatalogBuilder, _ := aBuilderWith(standIn, aDescriptor("task_add", capability.AnsweredByRecord))
-	toolSet := toolCatalogBuilder.BuildToolSet(aRequestFrom("sample@example.test"))
+	toolCatalogBuilder, _ := aBuilderWith(aDescriptor("task_add", capability.AnsweredByRecord))
+	toolSet := toolCatalogBuilder.BuildToolSet(aRequestFrom(standIn, "sample@example.test"))
 
 	result, errorValue := toolSet.InvokeInternal(context.Background(), toolcontract.ToolInvocation{
 		ToolName: "task_add",
@@ -222,11 +221,11 @@ func TestADiscoveredToolIsCalledOverMCPAsTheRequester(t *testing.T) {
 
 func TestOneDiscoveryServesTheTurnsThatFollowIt(t *testing.T) {
 	standIn := &recordCatalogStandIn{discovered: []capability.ToolDescriptor{aDescriptor("task_add", capability.AnsweredByRecord)}}
-	toolCatalogBuilder, _ := aBuilderWith(standIn, aDescriptor("task_add", capability.AnsweredByRecord))
+	toolCatalogBuilder, _ := aBuilderWith(aDescriptor("task_add", capability.AnsweredByRecord))
 
-	toolCatalogBuilder.BuildToolSet(aRequestFrom("sample@example.test"))
-	toolCatalogBuilder.BuildToolSet(aRequestFrom("sample@example.test"))
-	toolCatalogBuilder.BuildToolSet(aRequestFrom("example@example.test"))
+	toolCatalogBuilder.BuildToolSet(aRequestFrom(standIn, "sample@example.test"))
+	toolCatalogBuilder.BuildToolSet(aRequestFrom(standIn, "sample@example.test"))
+	toolCatalogBuilder.BuildToolSet(aRequestFrom(standIn, "example@example.test"))
 
 	if !reflect.DeepEqual(standIn.askedToDiscoverFor, []string{"sample@example.test", "example@example.test"}) {
 		t.Fatalf("discovery was asked for %v", standIn.askedToDiscoverFor)
@@ -235,7 +234,7 @@ func TestOneDiscoveryServesTheTurnsThatFollowIt(t *testing.T) {
 
 func TestATurnNobodyAskedForDiscoversNothing(t *testing.T) {
 	standIn := &recordCatalogStandIn{discovered: []capability.ToolDescriptor{aDescriptor("task_add", capability.AnsweredByRecord)}}
-	toolCatalogBuilder, _ := aBuilderWith(standIn, aDescriptor("task_add", capability.AnsweredByRecord))
+	toolCatalogBuilder, _ := aBuilderWith(aDescriptor("task_add", capability.AnsweredByRecord))
 
 	toolSet := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{})
 

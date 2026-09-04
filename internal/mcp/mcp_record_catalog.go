@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -20,7 +21,19 @@ const (
 	RequesterMetaKey  = "kim.intern/requester"
 )
 
-const recordCatalogPath = "/v1/mcp"
+const recordCatalogTimeout = 30 * time.Second
+
+// Where a session says its company's catalog answers, and what to send to be
+// let in.
+type RecordCatalogAddress struct {
+	Name    string
+	URL     string
+	Headers map[string]string
+}
+
+func (address RecordCatalogAddress) IsAddressed() bool {
+	return strings.TrimSpace(address.URL) != ""
+}
 
 type RecordCatalog struct {
 	endpoint   string
@@ -30,9 +43,41 @@ type RecordCatalog struct {
 	session *sdkmcp.ClientSession
 }
 
-func NewRecordCatalog(configuration capability.Configuration) *RecordCatalog {
-	endpoint, httpClient := capability.Dial(configuration)
-	return &RecordCatalog{endpoint: endpoint + recordCatalogPath, httpClient: httpClient}
+func NewRecordCatalog(address RecordCatalogAddress) *RecordCatalog {
+	if !address.IsAddressed() {
+		return nil
+	}
+	return &RecordCatalog{
+		endpoint: strings.TrimSpace(address.URL),
+		httpClient: &http.Client{
+			Timeout:   recordCatalogTimeout,
+			Transport: headerCarryingTransport{headers: copyHeaders(address.Headers)},
+		},
+	}
+}
+
+type headerCarryingTransport struct {
+	headers map[string]string
+}
+
+func (transport headerCarryingTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	carried := request.Clone(request.Context())
+	for name, value := range transport.headers {
+		carried.Header.Set(name, value)
+	}
+	return http.DefaultTransport.RoundTrip(carried)
+}
+
+func copyHeaders(headers map[string]string) map[string]string {
+	copied := map[string]string{}
+	for name, value := range headers {
+		name, value = strings.TrimSpace(name), strings.TrimSpace(value)
+		if name == "" || value == "" {
+			continue
+		}
+		copied[name] = value
+	}
+	return copied
 }
 
 func (catalog *RecordCatalog) DiscoverTools(ctx context.Context, requesterEmail string) ([]capability.ToolDescriptor, error) {
@@ -105,7 +150,7 @@ func (catalog *RecordCatalog) connected(ctx context.Context) (*sdkmcp.ClientSess
 		return catalog.session, nil
 	}
 	if catalog.httpClient == nil {
-		return nil, errors.New("the record catalog has no way to reach the capability service")
+		return nil, errors.New("the record catalog was given no address to reach")
 	}
 	client := sdkmcp.NewClient(&sdkmcp.Implementation{Name: "blueclaw", Version: "1"}, nil)
 	session, errorValue := client.Connect(ctx, &sdkmcp.StreamableClientTransport{

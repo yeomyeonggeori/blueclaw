@@ -11,6 +11,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
+	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
@@ -37,6 +38,16 @@ type PersonDirectory interface {
 type openSession struct {
 	context           SessionContext
 	workspaceRootPath string
+	recordCatalog     *mcp.RecordCatalog
+}
+
+// A nil pointer put in an interface is not a nil interface, and the caller
+// checks the interface.
+func (session openSession) catalog() agentruntime.RecordCatalogClient {
+	if session.recordCatalog == nil {
+		return nil
+	}
+	return session.recordCatalog
 }
 
 type Agent struct {
@@ -93,14 +104,14 @@ func (agent *Agent) Initialize(_ context.Context, request acp.InitializeRequest)
 
 func (agent *Agent) NewSession(_ context.Context, request acp.NewSessionRequest) (acp.NewSessionResponse, error) {
 	sessionID := acp.SessionId(newSessionIdentifier())
-	if _, errorValue := agent.openSessionAs(sessionID, request.Meta, request.Cwd); errorValue != nil {
+	if _, errorValue := agent.openSessionAs(sessionID, request.Meta, request.Cwd, request.McpServers); errorValue != nil {
 		return acp.NewSessionResponse{}, errorValue
 	}
 	return acp.NewSessionResponse{SessionId: sessionID}, nil
 }
 
 func (agent *Agent) LoadSession(ctx context.Context, request acp.LoadSessionRequest) (acp.LoadSessionResponse, error) {
-	sessionContext, errorValue := agent.openSessionAs(request.SessionId, request.Meta, request.Cwd)
+	sessionContext, errorValue := agent.openSessionAs(request.SessionId, request.Meta, request.Cwd, request.McpServers)
 	if errorValue != nil {
 		return acp.LoadSessionResponse{}, errorValue
 	}
@@ -109,7 +120,7 @@ func (agent *Agent) LoadSession(ctx context.Context, request acp.LoadSessionRequ
 	return acp.LoadSessionResponse{}, nil
 }
 
-func (agent *Agent) openSessionAs(sessionID acp.SessionId, meta map[string]any, workspaceRootPath string) (SessionContext, error) {
+func (agent *Agent) openSessionAs(sessionID acp.SessionId, meta map[string]any, workspaceRootPath string, mcpServers []acp.McpServer) (SessionContext, error) {
 	sessionContext, errorValue := SessionContextFromMeta(meta)
 	if errorValue != nil {
 		return SessionContext{}, errorValue
@@ -118,9 +129,16 @@ func (agent *Agent) openSessionAs(sessionID acp.SessionId, meta map[string]any, 
 	if errorValue != nil {
 		return SessionContext{}, errorValue
 	}
+	recordCatalog := mcp.NewRecordCatalog(recordCatalogAddressOf(mcpServers))
 	agent.mutex.Lock()
-	agent.sessions[sessionID] = openSession{context: sessionContext, workspaceRootPath: workspaceRootPath}
+	replaced := agent.sessions[sessionID]
+	agent.sessions[sessionID] = openSession{
+		context:           sessionContext,
+		workspaceRootPath: workspaceRootPath,
+		recordCatalog:     recordCatalog,
+	}
 	agent.mutex.Unlock()
+	closeRecordCatalog(replaced.recordCatalog)
 	agent.permissionRelay.hold(sessionContext, sessionID, agent.connection)
 	agent.logger.Info("acpsession.opened",
 		"sessionID", string(sessionID),
@@ -207,6 +225,7 @@ func (agent *Agent) taskLaunchRequestFor(session openSession, sessionID acp.Sess
 		RequesterCallingName:    requester.CallingName,
 		RequesterHandle:         requester.Handle,
 		RequesterEmail:          requester.Email,
+		RecordCatalog:           session.catalog(),
 		OriginReplyTargetID:     replyTargetID,
 		OriginIsThread:          addressing.IsThread || messageContext.IsThread,
 		ProfileName:             defaultProfileName,
@@ -222,6 +241,30 @@ func (agent *Agent) taskLaunchRequestFor(session openSession, sessionID acp.Sess
 		PersonAccess:            agent.directory.ResolvePersonAccess(requester.PersonID),
 		CheckpointSender:        agent.checkpointSenderFor(sessionID),
 	}
+}
+
+// The company's catalog is named by whoever opened the session. A turn that
+// arrived any other way is given none, and answers from what capabilityd
+// offers.
+func recordCatalogAddressOf(mcpServers []acp.McpServer) mcp.RecordCatalogAddress {
+	for _, server := range mcpServers {
+		if server.Http == nil {
+			continue
+		}
+		headers := map[string]string{}
+		for _, header := range server.Http.Headers {
+			headers[header.Name] = header.Value
+		}
+		return mcp.RecordCatalogAddress{Name: server.Http.Name, URL: server.Http.Url, Headers: headers}
+	}
+	return mcp.RecordCatalogAddress{}
+}
+
+func closeRecordCatalog(recordCatalog *mcp.RecordCatalog) {
+	if recordCatalog == nil {
+		return
+	}
+	_ = recordCatalog.Close()
 }
 
 const defaultProfileName = "default"

@@ -67,6 +67,7 @@ type ToolCatalogRequest struct {
 	RequesterPersonID          string
 	RequesterName              string
 	RequesterEmail             string
+	RecordCatalog              RecordCatalogClient
 	RequesterPlatformUserID    string
 	TaskSource                 TaskLaunchSource
 	IsScheduledRun             bool

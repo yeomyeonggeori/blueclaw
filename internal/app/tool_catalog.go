@@ -16,7 +16,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
-	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
@@ -43,12 +42,9 @@ func newToolCatalogBuilder(runtimeConfiguration config.RuntimeConfiguration, ker
 		logCapabilityProviderQuarantine(logger, quarantinedProvider)
 	})
 	toolCatalogBuilder.UseCapabilityRegistry(kernel.capabilityClient, kernel.capabilityRegistry)
-	if runtimeConfiguration.Capabilities.IsConfigured() {
-		toolCatalogBuilder.UseRecordCatalog(mcp.NewRecordCatalog(capabilityConfiguration(runtimeConfiguration)))
-		toolCatalogBuilder.UseRecordCatalogDivergenceReporter(func(divergence agentruntime.RecordCatalogDivergence) {
-			logRecordCatalogDivergence(logger, divergence)
-		})
-	}
+	toolCatalogBuilder.UseRecordCatalogDivergenceReporter(func(divergence agentruntime.RecordCatalogDivergence) {
+		logRecordCatalogDivergence(logger, divergence)
+	})
 	seedCompanionStatus(kernel.capabilityRegistry)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(deriveAllowedToolNamesByProfile(runtimeConfiguration), deriveAllowedToolNames(runtimeConfiguration))
 	toolCatalogBuilder.UseSkillSearch(kernel.skillRetriever, kernel.instructionBundleLoader)

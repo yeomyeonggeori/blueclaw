@@ -110,7 +110,7 @@ func aCatalogOnAServer(t *testing.T) (*RecordCatalog, *carriedMessages) {
 		func(*http.Request) *sdkmcp.Server { return server },
 		&sdkmcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true},
 	))
-	catalog := NewRecordCatalog(capability.Configuration{Endpoint: httpServer.URL})
+	catalog := NewRecordCatalog(RecordCatalogAddress{Name: "internkim", URL: httpServer.URL})
 	t.Cleanup(func() {
 		_ = catalog.Close()
 		httpServer.Close()

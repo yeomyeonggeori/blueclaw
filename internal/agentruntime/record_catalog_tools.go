@@ -37,17 +37,13 @@ type RecordCatalogDivergence struct {
 	DiscoveryFailed string
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) UseRecordCatalog(recordCatalog RecordCatalogClient) {
-	toolCatalogBuilder.recordCatalog = recordCatalog
-}
-
 func (toolCatalogBuilder *ToolCatalogBuilder) UseRecordCatalogDivergenceReporter(reporter func(RecordCatalogDivergence)) {
 	toolCatalogBuilder.recordCatalogDivergenceReporter = reporter
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) discoveredRecordTools(request ToolCatalogRequest) []capability.ToolDescriptor {
 	requesterEmail := strings.ToLower(strings.TrimSpace(request.RequesterEmail))
-	if toolCatalogBuilder.recordCatalog == nil || requesterEmail == "" {
+	if request.RecordCatalog == nil || requesterEmail == "" {
 		return nil
 	}
 
@@ -57,7 +53,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) discoveredRecordTools(request Tool
 
 	discoveryContext, cancelDiscovery := context.WithTimeout(context.Background(), recordCatalogTimeout)
 	defer cancelDiscovery()
-	discovered, errorValue := toolCatalogBuilder.recordCatalog.DiscoverTools(discoveryContext, requesterEmail)
+	discovered, errorValue := request.RecordCatalog.DiscoverTools(discoveryContext, requesterEmail)
 	if errorValue != nil {
 		toolCatalogBuilder.reportRecordCatalogDivergence(RecordCatalogDivergence{
 			RequesterEmail:  requesterEmail,
@@ -288,7 +284,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerRecordCatalogTools(
 	}
 	quarantinedProviders, errorValue := toolRegistry.RegisterProviders(context.Background(), []toolcontract.ToolProviderRegistration{{
 		Provider: recordCatalogToolProvider{
-			recordCatalog: toolCatalogBuilder.recordCatalog,
+			recordCatalog: request.RecordCatalog,
 			request:       request,
 			descriptors:   descriptors,
 		},

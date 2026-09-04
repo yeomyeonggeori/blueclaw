@@ -60,6 +60,7 @@ type TaskLaunchRequest struct {
 	RequesterCallingName       string
 	RequesterHandle            string
 	RequesterEmail             string
+	RecordCatalog              RecordCatalogClient
 	RequesterPlatformUserID    string
 	IsApprovalContinuation     bool
 	IsRuntimeRestartResume     bool
@@ -716,8 +717,9 @@ func launchStepTaskEventName(status string) string {
 
 func (taskLauncher *TaskLauncher) toolCatalogRequestForLaunch(request TaskLaunchRequest, profileName string) ToolCatalogRequest {
 	return ToolCatalogRequest{
-		ProfileName: profileName,
-		Prompt:      request.Prompt,
+		ProfileName:   profileName,
+		Prompt:        request.Prompt,
+		RecordCatalog: request.RecordCatalog,
 		ToolCallGate: taskLauncher.approvalGate.TurnGate(approvalgate.TurnContext{
 			RequesterPersonID: request.RequesterPersonID,
 			RequesterEmail:    request.RequesterEmail,
