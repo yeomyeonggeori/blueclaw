@@ -18,7 +18,7 @@ func TestNewApplicationRegistersEveryDeclaredConnectorPlatform(t *testing.T) {
 	runtimeConfiguration := config.RuntimeConfiguration{}
 	runtimeConfiguration.Logging.DirectoryPath = t.TempDir()
 
-	application := NewApplication(runtimeConfiguration, "", bluecollarharness.New)
+	application := NewApplication(runtimeConfiguration, "", bluecollarharness.New, InboundOptions{})
 
 	registered := application.connectorRuntime.Health().RegisteredPlatforms
 	slices.Sort(registered)
@@ -38,7 +38,7 @@ func TestNewApplicationRegistersAChatdPlatformTheProtocolDoesNotNameAndSaysSo(t 
 	}
 	runtimeConfiguration.Logging.DirectoryPath = logDirectoryPath
 
-	application := NewApplication(runtimeConfiguration, "", bluecollarharness.New)
+	application := NewApplication(runtimeConfiguration, "", bluecollarharness.New, InboundOptions{})
 
 	registered := application.connectorRuntime.Health().RegisteredPlatforms
 	if !slices.Contains(registered, "a-messenger-on-its-way-out") {
@@ -60,7 +60,7 @@ func TestNewApplicationSaysNothingWhenEveryPlatformIsDeclared(t *testing.T) {
 	}
 	runtimeConfiguration.Logging.DirectoryPath = logDirectoryPath
 
-	NewApplication(runtimeConfiguration, "", bluecollarharness.New)
+	NewApplication(runtimeConfiguration, "", bluecollarharness.New, InboundOptions{})
 
 	log := readRuntimeLog(t, logDirectoryPath)
 	if !strings.Contains(log, "application.initializing") {
@@ -92,7 +92,7 @@ func TestConnectorEventRouteAnswersEveryDeclaredPlatform(t *testing.T) {
 	runtimeConfiguration := config.RuntimeConfiguration{}
 	runtimeConfiguration.Logging.DirectoryPath = t.TempDir()
 
-	application := NewApplication(runtimeConfiguration, "", bluecollarharness.New)
+	application := NewApplication(runtimeConfiguration, "", bluecollarharness.New, InboundOptions{})
 
 	for _, platform := range capabilitycatalog.ConnectorPlatformNames() {
 		request := httptest.NewRequest(http.MethodPost, "/connectors/"+platform+"/events", strings.NewReader("{}"))

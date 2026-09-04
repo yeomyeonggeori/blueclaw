@@ -16,6 +16,7 @@ type Gate struct {
 	taskRunService         taskstate.TaskRunStore
 	languageModel          model.LanguageModelProvider
 	approvalTargetResolver ApprovalTargetResolver
+	permissionAsker        PermissionAsker
 }
 
 func (gate *Gate) UseLanguageModel(languageModel model.LanguageModelProvider) {
@@ -42,6 +43,9 @@ func (gate *Gate) AwaitApproval(ctx context.Context, approvalRequest mcpserver.A
 		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionUnresolvedTarget, Failure: resolution.Failure}, nil
 	}
 	confirmation := gate.confirmationWording(ctx, approvalRequest, resolution.Target)
+	if outcome, isAnswered := gate.askedOutcome(ctx, taskRunID, approvalRequest, confirmation, resolution.Target); isAnswered {
+		return outcome, nil
+	}
 	if _, errorValue := gate.taskRunService.PauseTaskRun(taskRunID, agentcontract.TaskStatusWaitingApproval, confirmation); errorValue != nil {
 		slog.Warn("approvalgate.call_is_unanswerable", "taskRunID", taskRunID, "toolName", strings.TrimSpace(approvalRequest.ToolName), "reason", errorValue.Error())
 		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionUnanswerable}, nil
@@ -51,8 +55,8 @@ func (gate *Gate) AwaitApproval(ctx context.Context, approvalRequest mcpserver.A
 }
 
 func (gate *Gate) approvedOutcome(taskRunID string, approvalRequest mcpserver.ApprovalRequest) mcpserver.ApprovalOutcome {
-	RecordApprovalSpent(gate.taskRunService, taskRunID, approvalRequest.ToolName, approvalRequest.ToolInput)
-	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionApproved}
+	approvalToken := RecordApprovalSpent(gate.taskRunService, taskRunID, approvalRequest.ToolName, approvalRequest.ToolInput)
+	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionApproved, ApprovedCallID: approvalToken}
 }
 
 func (gate *Gate) taskHasApprovedScope(taskRunID string, approvalScope string) bool {

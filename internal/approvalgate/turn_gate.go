@@ -63,7 +63,7 @@ func (turnGate turnToolCallGate) ReviewToolCall(ctx context.Context, toolInvocat
 	}
 	switch outcome.Decision {
 	case mcpserver.ApprovalDecisionApproved:
-		return toolcontract.ToolCallReview{MayProceed: true}, nil
+		return toolcontract.ToolCallReview{MayProceed: true, ApprovedCallID: outcome.ApprovedCallID}, nil
 	case mcpserver.ApprovalDecisionRejected:
 		return toolcontract.ToolCallReview{Result: rejectedCallResult(outcome.Notice)}, nil
 	case mcpserver.ApprovalDecisionUnanswerable:

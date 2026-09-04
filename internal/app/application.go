@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/acpsession"
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/backup"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
@@ -31,38 +32,54 @@ const databaseInitializationTimeout = 240 * time.Second
 const backgroundLoopStopGrace = 10 * time.Second
 
 type Application struct {
-	httpServer                    *http.Server
-	connectorRuntime              *connectors.ConnectorRuntime
-	connectorTransports           []connectors.ConnectorTransport
-	taskRunService                *task.TaskRunService
-	interruptedTaskResumer        interruptedTaskResumer
-	runtimeLogger                 *runtimelogging.PersistentLogger
-	terminalService               *security.ShellService
-	backgroundLoops               sync.WaitGroup
-	database                      postgres.Database
-	startupError                  error
-	connectorRuntimeCancel        context.CancelFunc
-	connectorTransportCancel      context.CancelFunc
-	interruptedTaskResumeCancel   context.CancelFunc
-	taskScheduleCancel            context.CancelFunc
-	logRetentionCancel            context.CancelFunc
-	memoryUpdateCancel            context.CancelFunc
-	taskRetentionCancel           context.CancelFunc
-	staleTaskCancel               context.CancelFunc
-	taskSchedulePoller            *scheduler.TaskSchedulePoller
-	taskRetentionSweeper          *scheduler.TaskRetentionSweeper
-	memoryUpdateQueue             *memory.BackgroundMemoryUpdateQueue
-	taskSchedulePollSecond        int
-	taskRetentionIntervalMinute   int
-	interruptedTaskResumeDelay    time.Duration
-	languageModelConfigured       bool
-	protocolIdentityChecker       protocolidentity.Checker
-	protocolIdentityExpected      protocolidentity.Identity
-	protocolIdentityStatus        *protocolidentity.Result
-	protocolIdentityCheckOnce     sync.Once
-	protocolIdentityCheckError    error
-	refreshSkillIndex             func(context.Context)
-	mcpRegistry                   mcpRegistryCloser
+	httpServer                  *http.Server
+	connectorRuntime            *connectors.ConnectorRuntime
+	connectorTransports         []connectors.ConnectorTransport
+	taskRunService              *task.TaskRunService
+	interruptedTaskResumer      interruptedTaskResumer
+	runtimeLogger               *runtimelogging.PersistentLogger
+	terminalService             *security.ShellService
+	backgroundLoops             sync.WaitGroup
+	database                    postgres.Database
+	startupError                error
+	connectorRuntimeCancel      context.CancelFunc
+	connectorTransportCancel    context.CancelFunc
+	interruptedTaskResumeCancel context.CancelFunc
+	taskScheduleCancel          context.CancelFunc
+	logRetentionCancel          context.CancelFunc
+	memoryUpdateCancel          context.CancelFunc
+	taskRetentionCancel         context.CancelFunc
+	staleTaskCancel             context.CancelFunc
+	taskSchedulePoller          *scheduler.TaskSchedulePoller
+	taskRetentionSweeper        *scheduler.TaskRetentionSweeper
+	memoryUpdateQueue           *memory.BackgroundMemoryUpdateQueue
+	taskSchedulePollSecond      int
+	taskRetentionIntervalMinute int
+	interruptedTaskResumeDelay  time.Duration
+	languageModelConfigured     bool
+	protocolIdentityChecker     protocolidentity.Checker
+	protocolIdentityExpected    protocolidentity.Identity
+	protocolIdentityStatus      *protocolidentity.Result
+	protocolIdentityCheckOnce   sync.Once
+	protocolIdentityCheckError  error
+	refreshSkillIndex           func(context.Context)
+	mcpRegistry                 mcpRegistryCloser
+	acpSessionServer            *acpsession.Server
+	acpSessionCancel            context.CancelFunc
+}
+
+type InboundOptions struct {
+	ACPSocketPath string
+	InboundPath   string
+}
+
+const (
+	InboundPathConnectors = "connectors"
+	InboundPathACP        = "acp"
+)
+
+func (options InboundOptions) admitsConnectorHTTPEvent() bool {
+	return strings.TrimSpace(options.InboundPath) != InboundPathACP
 }
 
 type mcpRegistryCloser interface {
@@ -95,15 +112,16 @@ type applicationComponents struct {
 	agentReplyStore       *apiconnector.ReplyStore
 	connectorEventHandler *httpserver.ConnectorEventHandler
 	protocolIdentity      protocolIdentityComponents
+	acpSessionServer      *acpsession.Server
 	router                http.Handler
 	startupError          error
 }
 
-func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath string, agentHarnessFactory harnessdriver.Factory) *Application {
-	return newApplication(newApplicationComponents(runtimeConfiguration, policyPath, agentHarnessFactory))
+func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath string, agentHarnessFactory harnessdriver.Factory, inbound InboundOptions) *Application {
+	return newApplication(newApplicationComponents(runtimeConfiguration, policyPath, agentHarnessFactory, inbound))
 }
 
-func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, policyPath string, agentHarnessFactory harnessdriver.Factory) applicationComponents {
+func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, policyPath string, agentHarnessFactory harnessdriver.Factory, inbound InboundOptions) applicationComponents {
 	components := applicationComponents{runtimeConfiguration: runtimeConfiguration, policyPath: policyPath}
 	components.foundation = newRuntimeFoundation(runtimeConfiguration, policyPath)
 	logger := components.foundation.logger
@@ -125,7 +143,8 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 	registerChatdAdapters(components.connectorRuntime, runtimeConfiguration, logger)
 	components.agentReplyStore = newAgentReplyStore(runtimeConfiguration)
 	components.connectorRuntime.RegisterAdapter(apiconnector.NewAdapter(components.directory.identityService, components.agentReplyStore))
-	components.connectorEventHandler = httpserver.NewConnectorEventHandler(components.connectorRuntime)
+	components.connectorEventHandler = httpserver.NewConnectorEventHandler(components.connectorRuntime, inbound.admitsConnectorHTTPEvent())
+	components.acpSessionServer = newACPSessionServer(inbound, components.kernel, components.directory, components.taskLauncher, components.turnRouter, logger)
 	logger.Info("application.initializing", "stage", "router")
 	components.protocolIdentity = newProtocolIdentity(runtimeConfiguration, components.kernel.capabilityClient)
 	components.startupError = firstNonNilError(components.foundation.startupError, components.kernel.startupError)
@@ -141,26 +160,27 @@ func newApplication(components applicationComponents) *Application {
 			Addr:    deriveListenAddress(components.runtimeConfiguration.BaseURL),
 			Handler: components.router,
 		},
-		connectorRuntime:              components.connectorRuntime,
-		connectorTransports:           connectorTransports,
-		taskRunService:                components.services.taskRunService,
-		interruptedTaskResumer:        components.connectorRuntime,
-		runtimeLogger:                 components.foundation.runtimeLogger,
-		terminalService:               components.kernel.terminalService,
-		database:                      components.foundation.database,
-		startupError:                  components.startupError,
-		taskSchedulePoller:            components.taskSchedulePoller,
-		taskRetentionSweeper:          components.taskRetentionSweeper,
-		memoryUpdateQueue:             components.memory.memoryUpdateQueue,
-		taskSchedulePollSecond:        components.runtimeConfiguration.Scheduler.TaskSchedulePollIntervalSecond,
-		taskRetentionIntervalMinute:   components.runtimeConfiguration.Scheduler.RetentionCheckIntervalMinute,
-		interruptedTaskResumeDelay:    2 * time.Second,
-		languageModelConfigured:       components.kernel.taskTierLanguageModels.High != nil,
-		protocolIdentityChecker:       components.protocolIdentity.checker,
-		protocolIdentityExpected:      components.protocolIdentity.expected,
-		protocolIdentityStatus:        components.protocolIdentity.status,
-		refreshSkillIndex:             components.kernel.refreshSkillIndex,
-		mcpRegistry:                   components.mcpRegistry,
+		connectorRuntime:            components.connectorRuntime,
+		connectorTransports:         connectorTransports,
+		taskRunService:              components.services.taskRunService,
+		interruptedTaskResumer:      components.connectorRuntime,
+		runtimeLogger:               components.foundation.runtimeLogger,
+		terminalService:             components.kernel.terminalService,
+		database:                    components.foundation.database,
+		startupError:                components.startupError,
+		taskSchedulePoller:          components.taskSchedulePoller,
+		taskRetentionSweeper:        components.taskRetentionSweeper,
+		memoryUpdateQueue:           components.memory.memoryUpdateQueue,
+		taskSchedulePollSecond:      components.runtimeConfiguration.Scheduler.TaskSchedulePollIntervalSecond,
+		taskRetentionIntervalMinute: components.runtimeConfiguration.Scheduler.RetentionCheckIntervalMinute,
+		interruptedTaskResumeDelay:  2 * time.Second,
+		languageModelConfigured:     components.kernel.taskTierLanguageModels.High != nil,
+		protocolIdentityChecker:     components.protocolIdentity.checker,
+		protocolIdentityExpected:    components.protocolIdentity.expected,
+		protocolIdentityStatus:      components.protocolIdentity.status,
+		refreshSkillIndex:           components.kernel.refreshSkillIndex,
+		mcpRegistry:                 components.mcpRegistry,
+		acpSessionServer:            components.acpSessionServer,
 	}
 }
 

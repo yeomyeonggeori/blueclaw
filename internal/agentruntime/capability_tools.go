@@ -546,6 +546,9 @@ func capabilityToolRequest(toolContext context.Context, descriptor CapabilityToo
 	if responseLanguage := toolcontract.ResponseLanguageFromContext(toolContext); responseLanguage != "" {
 		contextDocument["responseLanguage"] = responseLanguage
 	}
+	if approvedCallID := toolcontract.ApprovedCallIDFromContext(toolContext); approvedCallID != "" {
+		contextDocument["approvedCallID"] = approvedCallID
+	}
 	requestDocument := map[string]any{
 		"toolName":       descriptor.CanonicalName,
 		"input":          payload.Input,

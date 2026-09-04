@@ -7,13 +7,17 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 )
 
+const connectorEventsClosedNotice = "this daemon was started with -inbound acp, so a turn arrives on the acp session and not here; post this event to the relay instead"
+
 type ConnectorEventHandler struct {
 	ConnectorRuntime *connectors.ConnectorRuntime
+	AdmitsHTTPEvent  bool
 }
 
-func NewConnectorEventHandler(connectorRuntime *connectors.ConnectorRuntime) *ConnectorEventHandler {
+func NewConnectorEventHandler(connectorRuntime *connectors.ConnectorRuntime, admitsHTTPEvent bool) *ConnectorEventHandler {
 	return &ConnectorEventHandler{
 		ConnectorRuntime: connectorRuntime,
+		AdmitsHTTPEvent:  admitsHTTPEvent,
 	}
 }
 
@@ -21,6 +25,10 @@ func (connectorEventHandler *ConnectorEventHandler) HandleConnectorEvent() http.
 	return func(responseWriter http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost {
 			http.Error(responseWriter, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if !connectorEventHandler.AdmitsHTTPEvent {
+			http.Error(responseWriter, connectorEventsClosedNotice, http.StatusConflict)
 			return
 		}
 

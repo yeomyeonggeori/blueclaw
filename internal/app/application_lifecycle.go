@@ -33,6 +33,10 @@ func (application *Application) Start() error {
 	application.startConnectorRuntime()
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "connector_transports")
 	application.startConnectorTransports()
+	application.runtimeLogger.Logger.Info("application.starting", "stage", "acp_session")
+	if errorValue := application.startACPSessionServer(); errorValue != nil {
+		return errorValue
+	}
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "task_schedule")
 	application.startTaskSchedulePoller()
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "task_retention")
@@ -91,6 +95,9 @@ func (application *Application) Shutdown(ctx context.Context) error {
 	}
 	if application.connectorRuntimeCancel != nil {
 		application.connectorRuntimeCancel()
+	}
+	if application.acpSessionCancel != nil {
+		application.acpSessionCancel()
 	}
 	if application.taskScheduleCancel != nil {
 		application.taskScheduleCancel()
@@ -183,6 +190,19 @@ func (application *Application) startConnectorRuntime() {
 	ctx, cancel := context.WithCancel(context.Background())
 	application.connectorRuntimeCancel = cancel
 	application.connectorRuntime.Start(ctx)
+}
+
+func (application *Application) startACPSessionServer() error {
+	if application.acpSessionServer == nil || application.acpSessionCancel != nil {
+		return nil
+	}
+	if errorValue := application.acpSessionServer.Listen(); errorValue != nil {
+		return errorValue
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	application.acpSessionCancel = cancel
+	go application.acpSessionServer.Serve(ctx)
+	return nil
 }
 
 func (application *Application) startConnectorTransports() {

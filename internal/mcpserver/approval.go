@@ -41,4 +41,7 @@ type ApprovalOutcome struct {
 	Decision ApprovalDecision
 	Notice   string
 	Failure  toolcontract.ToolResult
+	// Names the held call an approved outcome spends, so a tool backend is told
+	// which approval it runs under rather than inferring it from the turn.
+	ApprovedCallID string
 }

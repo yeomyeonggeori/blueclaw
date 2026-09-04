@@ -23,6 +23,8 @@ func main() {
 	home := enrollment.ResolveHome()
 	runtimeConfigurationPath := flag.String("runtime", home.RuntimeConfigurationPath(), "runtime configuration path")
 	policyPath := flag.String("policy", home.PolicyPath(), "policy document path")
+	acpSocketPath := flag.String("acp-socket", "", "unix socket to serve the acp agent on; unset serves none")
+	inboundPath := flag.String("inbound", app.InboundPathConnectors, "which path admits an inbound message: connectors or acp")
 	shouldPrintRevision := flag.Bool("version", false, "print the revision this binary was built from and exit")
 	flag.Parse()
 
@@ -40,7 +42,7 @@ func main() {
 		log.Fatal(errorValue)
 	}
 
-	application := app.NewApplication(runtimeConfiguration, *policyPath, bundledHarnessFactory())
+	application := app.NewApplication(runtimeConfiguration, *policyPath, bundledHarnessFactory(), app.InboundOptions{ACPSocketPath: *acpSocketPath, InboundPath: *inboundPath})
 	log.Fatal(application.Start())
 }
 

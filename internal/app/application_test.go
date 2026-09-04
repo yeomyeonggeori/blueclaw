@@ -318,7 +318,7 @@ func TestNewApplicationRegistersSecretlessConnectorTransports(t *testing.T) {
 	runtimeConfiguration := config.RuntimeConfiguration{}
 	runtimeConfiguration.Logging.DirectoryPath = t.TempDir()
 
-	application := NewApplication(runtimeConfiguration, "", bluecollarharness.New)
+	application := NewApplication(runtimeConfiguration, "", bluecollarharness.New, InboundOptions{})
 
 	transportNames := strings.Join(application.connectorTransportNames(), ",")
 	for _, platform := range capabilitycatalog.MessengerPlatformNames() {
@@ -335,7 +335,7 @@ func TestNewApplicationRegistersSecretlessConnectorTransports(t *testing.T) {
 func TestApplicationShutdownClosesOwnedMCPRegistry(t *testing.T) {
 	runtimeConfiguration := config.RuntimeConfiguration{}
 	runtimeConfiguration.Logging.DirectoryPath = t.TempDir()
-	application := NewApplication(runtimeConfiguration, "", bluecollarharness.New)
+	application := NewApplication(runtimeConfiguration, "", bluecollarharness.New, InboundOptions{})
 	expectedError := errors.New("close MCP registry")
 	registry := &applicationMCPRegistryCloser{closeError: expectedError}
 	application.mcpRegistry = registry
@@ -394,7 +394,7 @@ func TestApplicationChecksProtocolIdentityOnceAndStoresResult(t *testing.T) {
 	runtimeConfiguration.Capabilities.Endpoint = server.URL
 	runtimeConfiguration.Capabilities.ProtocolVersion = protocolVersion
 	runtimeConfiguration.Capabilities.AggregateProtocolHash = aggregateProtocolHash
-	application := NewApplication(runtimeConfiguration, "", bluecollarharness.New)
+	application := NewApplication(runtimeConfiguration, "", bluecollarharness.New, InboundOptions{})
 	application.protocolIdentityExpected = protocolidentity.Identity{
 		ProtocolVersion:       protocolVersion,
 		AggregateProtocolHash: aggregateProtocolHash,
@@ -723,7 +723,7 @@ func TestApplicationServesHealthWhenProtocolIdentityDisagrees(t *testing.T) {
 	runtimeConfiguration := config.RuntimeConfiguration{}
 	runtimeConfiguration.Logging.DirectoryPath = t.TempDir()
 	runtimeConfiguration.Capabilities.Endpoint = server.URL
-	application := NewApplication(runtimeConfiguration, "", bluecollarharness.New)
+	application := NewApplication(runtimeConfiguration, "", bluecollarharness.New, InboundOptions{})
 	application.httpServer.Addr = "127.0.0.1:0"
 	application.protocolIdentityExpected = protocolidentity.Identity{
 		ProtocolVersion:       "0.4.0",

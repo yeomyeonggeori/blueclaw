@@ -25,7 +25,7 @@ func TestStandaloneRuntimeIsHealthyWithoutACapabilityService(t *testing.T) {
 	}
 
 	runtimeConfiguration := loadStandaloneRuntimeConfiguration(t, connectionString)
-	application := app.NewApplication(runtimeConfiguration, "../../config/policy.example.json", bluecollarharness.New)
+	application := app.NewApplication(runtimeConfiguration, "../../config/policy.example.json", bluecollarharness.New, app.InboundOptions{})
 	healthDocument := map[string]any{}
 	responseRecorder := httptest.NewRecorder()
 	application.Handler().ServeHTTP(responseRecorder, httptest.NewRequest(http.MethodGet, "/admin/api/health", nil))
