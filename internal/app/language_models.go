@@ -37,15 +37,7 @@ func resolveTaskTierLanguageModelProviders(runtimeConfiguration config.RuntimeCo
 	if maximumModelTier != "" {
 		return resolveCappedTaskTierLanguageModelProviders(languageModelConfiguration, tierNames, minimumModelTier, maximumModelTier, logger)
 	}
-	if logger != nil {
-		logger.Info("resolved task model tiers",
-			"max", tierNames.Max,
-			"xhigh", tierNames.XHigh,
-			"high", tierNames.High,
-			"medium", tierNames.Medium,
-			"low", tierNames.Low,
-			"xlow", tierNames.XLow)
-	}
+	logResolvedModelTiers(logger, tierNames)
 	hasConfigurationError := false
 	configuredProvider := func(modelName string) llm.LanguageModelProvider {
 		provider, errorValue := llm.NewConfiguredLanguageModelProviderForModel(languageModelConfiguration, modelName)
@@ -57,68 +49,54 @@ func resolveTaskTierLanguageModelProviders(runtimeConfiguration config.RuntimeCo
 		}
 		return provider
 	}
-	lowModel := llm.WithModelTier(configuredProvider(tierNames.Low), "low")
-	xLowModel := llm.WithModelTier(configuredProvider(tierNames.XLow), "xlow")
-	mediumModel := llm.WithModelTier(configuredProvider(tierNames.Medium), "medium")
-	highModel := llm.WithModelTier(configuredProvider(tierNames.High), "high")
-	xHighModel := llm.WithModelTier(configuredProvider(tierNames.XHigh), "xhigh")
-	maxModel := llm.WithModelTier(configuredProvider(tierNames.Max), "max")
+	models := modelTierProviders{
+		low:    llm.WithModelTier(configuredProvider(tierNames.Low), "low"),
+		xLow:   llm.WithModelTier(configuredProvider(tierNames.XLow), "xlow"),
+		medium: llm.WithModelTier(configuredProvider(tierNames.Medium), "medium"),
+		high:   llm.WithModelTier(configuredProvider(tierNames.High), "high"),
+		xHigh:  llm.WithModelTier(configuredProvider(tierNames.XHigh), "xhigh"),
+		max:    llm.WithModelTier(configuredProvider(tierNames.Max), "max"),
+	}
 	if hasConfigurationError {
 		return agentcontract.TaskTierLanguageModels{}
 	}
+	return taskTierLanguageModelsWithFallback(tierNames, models, logger)
+}
 
-	lowWithFallback := llm.LanguageModelProvider(lowModel)
+func logResolvedModelTiers(logger *slog.Logger, tierNames llm.ModelTierNames) {
+	if logger == nil {
+		return
+	}
+	logger.Info("resolved task model tiers",
+		"max", tierNames.Max,
+		"xhigh", tierNames.XHigh,
+		"high", tierNames.High,
+		"medium", tierNames.Medium,
+		"low", tierNames.Low,
+		"xlow", tierNames.XLow)
+}
+
+func taskTierLanguageModelsWithFallback(tierNames llm.ModelTierNames, models modelTierProviders, logger *slog.Logger) agentcontract.TaskTierLanguageModels {
+	lowWithFallback := models.low
 	if tierNames.Medium != tierNames.Low {
 		lowWithFallback = llm.FallbackLanguageModelProvider{
-			PrimaryProvider:  lowModel,
-			FallbackProvider: mediumModel,
+			PrimaryProvider:  models.low,
+			FallbackProvider: models.medium,
 			PrimaryLabel:     "low",
 			FallbackLabel:    "medium",
 			Logger:           logger,
 		}
 	}
-	xLowWithFallback := llm.FallbackLanguageModelProvider{
-		PrimaryProvider:  xLowModel,
-		FallbackProvider: lowWithFallback,
-		PrimaryLabel:     "xlow",
-		FallbackLabel:    "low",
-		Logger:           logger,
-	}
-	mediumWithFallback := llm.FallbackLanguageModelProvider{
-		PrimaryProvider:  mediumModel,
-		FallbackProvider: lowModel,
-		PrimaryLabel:     "medium",
-		FallbackLabel:    "low",
-		Logger:           logger,
-	}
-	highWithFallback := llm.FallbackLanguageModelProvider{
-		PrimaryProvider:  highModel,
-		FallbackProvider: mediumWithFallback,
-		PrimaryLabel:     "high",
-		FallbackLabel:    "medium",
-		Logger:           logger,
-	}
-	xHighWithFallback := llm.FallbackLanguageModelProvider{
-		PrimaryProvider:  xHighModel,
-		FallbackProvider: highWithFallback,
-		PrimaryLabel:     "xhigh",
-		FallbackLabel:    "high",
-		Logger:           logger,
-	}
-	maxWithFallback := llm.FallbackLanguageModelProvider{
-		PrimaryProvider:  maxModel,
-		FallbackProvider: xHighWithFallback,
-		PrimaryLabel:     "max",
-		FallbackLabel:    "xhigh",
-		Logger:           logger,
-	}
+	mediumWithFallback := descendingFallbackProvider(models.medium, models.low, "medium", "low", logger)
+	highWithFallback := descendingFallbackProvider(models.high, mediumWithFallback, "high", "medium", logger)
+	xHighWithFallback := descendingFallbackProvider(models.xHigh, highWithFallback, "xhigh", "high", logger)
 	return agentcontract.TaskTierLanguageModels{
 		Low:    lowWithFallback,
-		XLow:   xLowWithFallback,
+		XLow:   descendingFallbackProvider(models.xLow, lowWithFallback, "xlow", "low", logger),
 		Medium: mediumWithFallback,
 		High:   highWithFallback,
 		XHigh:  xHighWithFallback,
-		Max:    maxWithFallback,
+		Max:    descendingFallbackProvider(models.max, xHighWithFallback, "max", "xhigh", logger),
 	}
 }
 
@@ -171,7 +149,7 @@ func resolveIntakeLanguageModelProvider(runtimeConfiguration config.RuntimeConfi
 	}
 }
 
-type cappedModelTierProviders struct {
+type modelTierProviders struct {
 	xLow   llm.LanguageModelProvider
 	low    llm.LanguageModelProvider
 	medium llm.LanguageModelProvider
@@ -210,7 +188,7 @@ func resolveCappedTaskTierLanguageModelProviders(runtimeConfiguration config.Run
 	}
 }
 
-func buildCappedModelTierProviders(tierNames llm.ModelTierNames, providerFactory func(string) llm.LanguageModelProvider, logger *slog.Logger) cappedModelTierProviders {
+func buildCappedModelTierProviders(tierNames llm.ModelTierNames, providerFactory func(string) llm.LanguageModelProvider, logger *slog.Logger) modelTierProviders {
 	xLowModel := llm.WithModelTier(providerFactory(tierNames.XLow), "xlow")
 	lowModel := llm.WithModelTier(providerFactory(tierNames.Low), "low")
 	lowProvider := descendingFallbackProvider(lowModel, xLowModel, "low", "xlow", logger)
@@ -219,7 +197,7 @@ func buildCappedModelTierProviders(tierNames llm.ModelTierNames, providerFactory
 	highProvider := descendingFallbackProvider(llm.WithModelTier(providerFactory(tierNames.High), "high"), mediumProvider, "high", "medium", logger)
 	xHighProvider := descendingFallbackProvider(llm.WithModelTier(providerFactory(tierNames.XHigh), "xhigh"), highProvider, "xhigh", "high", logger)
 	maxProvider := descendingFallbackProvider(llm.WithModelTier(providerFactory(tierNames.Max), "max"), xHighProvider, "max", "xhigh", logger)
-	return cappedModelTierProviders{xLow: xLowProvider, low: lowProvider, medium: mediumProvider, high: highProvider, xHigh: xHighProvider, max: maxProvider}
+	return modelTierProviders{xLow: xLowProvider, low: lowProvider, medium: mediumProvider, high: highProvider, xHigh: xHighProvider, max: maxProvider}
 }
 
 func descendingFallbackProvider(primaryProvider llm.LanguageModelProvider, fallbackProvider llm.LanguageModelProvider, primaryLabel string, fallbackLabel string, logger *slog.Logger) llm.LanguageModelProvider {
@@ -229,7 +207,7 @@ func descendingFallbackProvider(primaryProvider llm.LanguageModelProvider, fallb
 	}
 }
 
-func (providers cappedModelTierProviders) providerWithinBounds(requestedTier string, minimumModelTier string, maximumModelTier string) llm.LanguageModelProvider {
+func (providers modelTierProviders) providerWithinBounds(requestedTier string, minimumModelTier string, maximumModelTier string) llm.LanguageModelProvider {
 	boundedTier := requestedTier
 	if minimumModelTier != "" && modelTierRank(boundedTier) < modelTierRank(minimumModelTier) {
 		boundedTier = minimumModelTier
@@ -240,7 +218,7 @@ func (providers cappedModelTierProviders) providerWithinBounds(requestedTier str
 	return providers.providerForTier(boundedTier)
 }
 
-func (providers cappedModelTierProviders) providerForTier(modelTier string) llm.LanguageModelProvider {
+func (providers modelTierProviders) providerForTier(modelTier string) llm.LanguageModelProvider {
 	switch normalizeMaximumModelTier(modelTier) {
 	case "max":
 		return providers.max
