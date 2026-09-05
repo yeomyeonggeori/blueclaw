@@ -3154,6 +3154,13 @@ func assertTurnResult(workspacePath string, virtualTurn VirtualTurn, turnResult 
 	if strings.TrimSpace(virtualTurn.ExpectedReplyTargetID) != "" && turnResult.ReplyTargetID != strings.TrimSpace(virtualTurn.ExpectedReplyTargetID) {
 		return fmt.Errorf("expected reply target %q, got %q", strings.TrimSpace(virtualTurn.ExpectedReplyTargetID), turnResult.ReplyTargetID)
 	}
+	if errorValue := assertReplyContentExpectations(virtualTurn, turnResult); errorValue != nil {
+		return errorValue
+	}
+	return assertStructuralTurnExpectations(virtualTurn, turnResult)
+}
+
+func assertReplyContentExpectations(virtualTurn VirtualTurn, turnResult VirtualTurnResult) error {
 	for _, fragment := range virtualTurn.ExpectedReplyFragments {
 		if !strings.Contains(turnResult.FinishMessage, fragment) {
 			return fmt.Errorf("expected reply fragment %q in %q", fragment, turnResult.FinishMessage)
@@ -3167,7 +3174,7 @@ func assertTurnResult(workspacePath string, virtualTurn VirtualTurn, turnResult 
 	if virtualTurn.MinimumReplyLength > 0 && len([]rune(turnResult.FinishMessage)) < virtualTurn.MinimumReplyLength {
 		return fmt.Errorf("expected reply length >= %d, got %d: %q", virtualTurn.MinimumReplyLength, len([]rune(turnResult.FinishMessage)), turnResult.FinishMessage)
 	}
-	return assertStructuralTurnExpectations(virtualTurn, turnResult)
+	return nil
 }
 
 func assertLanguageModelCallsSucceeded(turnResult VirtualTurnResult) error {
