@@ -1855,6 +1855,7 @@ func priorTaskContextForTaskRun(taskRun task.TaskRun, taskEvents []task.TaskEven
 	intakeDecision := latestIntakeDecision(taskEvents)
 	requestedOutputFormats := appendUniqueConnectorStrings([]string{}, intakeDecision.RequestedOutputFormats...)
 	requestedOutputFormats = appendUniqueConnectorStrings(requestedOutputFormats, outputFormatsFromAttachmentSuffixes(activeGoal.OutcomeContract.RequiredAttachmentSuffixes)...)
+	attempts, omittedAttemptCount := priorTaskRecordedAttempts(taskEvents)
 	return agentcontract.PriorTaskContext{
 		TaskRunID:              strings.TrimSpace(taskRun.TaskRunID),
 		Status:                 string(taskRun.Status),
@@ -1863,6 +1864,8 @@ func priorTaskContextForTaskRun(taskRun task.TaskRun, taskEvents []task.TaskEven
 		FailureReason:          strings.TrimSpace(taskRun.FailureReason),
 		OutcomeContract:        activeGoal.OutcomeContract,
 		RequestedOutputFormats: requestedOutputFormats,
+		RecordedAttempts:       attempts,
+		OmittedAttemptCount:    omittedAttemptCount,
 	}
 }
 

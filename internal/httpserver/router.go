@@ -88,6 +88,7 @@ func NewRouter(routerDependencies RouterDependencies) http.Handler {
 	multiplexer.HandleFunc("GET /admin/api/workspace/list", routerDependencies.WorkspaceFilesHandler.HandleList)
 	multiplexer.HandleFunc("GET /admin/api/workspace/download", routerDependencies.WorkspaceFilesHandler.HandleDownload)
 	multiplexer.HandleFunc("GET /admin/api/persona/user", routerDependencies.PersonaHandler.HandleReadUser)
+	multiplexer.HandleFunc("PUT /admin/api/persona/agent", routerDependencies.PersonaHandler.HandleWriteAgent)
 	multiplexer.HandleFunc("PUT /admin/api/persona/user", routerDependencies.PersonaHandler.HandleWriteUser)
 	multiplexer.HandleFunc("POST /admin/api/persona/user", routerDependencies.PersonaHandler.HandleSeedUser)
 	multiplexer.HandleFunc("GET /admin/api/backup/manifest", routerDependencies.BackupHandler.HandleManifest)
