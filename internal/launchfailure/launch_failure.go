@@ -130,19 +130,38 @@ func (completer *Completer) CompleteIntakeElapsed(responseContext context.Contex
 		taskRun.FailureReason = "max_elapsed"
 		blockedTaskRun = taskRun
 	}
-	failureNotice, noticeStatus := (agentcontract.FailureNoticeGenerator{LanguageModel: completer.languageModel}).Generate(responseContext, agentcontract.FailureReport{
-		Phase:              "limit",
-		StopReason:         "max_elapsed",
-		SafeFailureSummary: agentcontract.ElapsedLimitRawErrorSummary,
-		RawError:           agentcontract.ElapsedLimitRawErrorSummary,
-		OriginalRequest:    request.Prompt,
-		ResponseLanguage:   request.ResponseLanguage,
-		DiagnosticEventID:  taskRun.TaskRunID + ":intake_limit",
+	elapsedSecond := 0.0
+	if !intakeLimit.TurnStartedAt.IsZero() {
+		elapsedSecond = time.Since(intakeLimit.TurnStartedAt).Seconds()
+	}
+	carriedOutToolNames := make([]string, 0, len(request.CarriedOutCalls))
+	for _, carriedOutCall := range request.CarriedOutCalls {
+		carriedOutToolNames = append(carriedOutToolNames, carriedOutCall.ToolName)
+	}
+	failureReport := agentcontract.BuildIntakeFailureReport(agentcontract.IntakeFailureReportInput{
+		OriginalRequest:        request.Prompt,
+		ResponseLanguage:       request.ResponseLanguage,
+		DiagnosticEventID:      taskRun.TaskRunID + ":intake_limit",
+		MaxIterationCount:      intakeLimit.MaxIterationCount,
+		MaxToolCallCount:       intakeLimit.MaxToolCallCount,
+		MaxElapsedSecond:       intakeLimit.MaxElapsedSecond,
+		ElapsedSecond:          elapsedSecond,
+		CarriedOutToolNames:    carriedOutToolNames,
+		PriorTaskID:            request.PriorTask.TaskRunID,
+		PriorTaskStatus:        request.PriorTask.Status,
+		PriorTaskResult:        request.PriorTask.Result,
+		PriorTaskFailureReason: request.PriorTask.FailureReason,
 	})
+	failureNotice, noticeStatus := (agentcontract.FailureNoticeGenerator{LanguageModel: completer.languageModel}).Generate(responseContext, failureReport)
 	completer.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentLimitReply, marshalEventBody(map[string]any{
 		"source":            noticeStatus.Source,
 		"reason":            noticeStatus.Reason,
 		"textRecoveryError": noticeStatus.TextRecoveryError,
+	}))
+	completer.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentFailureReport, marshalEventBody(map[string]any{
+		"phase":      "limit",
+		"report":     failureReport,
+		"generation": noticeStatus,
 	}))
 	blockedTaskRun = persistTaskRunResult(completer.taskRunService, blockedTaskRun, failureNotice.SendableMessage())
 	completer.taskRunService.AppendTaskEvent(blockedTaskRun.TaskRunID, agentcontract.TaskEventAgentGoalBlocked, marshalEventBody(agentcontract.ActiveGoal{

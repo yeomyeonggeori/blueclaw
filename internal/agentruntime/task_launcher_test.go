@@ -337,10 +337,21 @@ func TestTaskLauncherProvisionsRequesterWorkspaceBeforeToolSet(t *testing.T) {
 	if len(launchStepBodies) < 2 {
 		t.Fatalf("expected launch step results, got %+v", taskEvents)
 	}
-	if !strings.Contains(launchStepBodies[0], `"stepName":"provision_requester_workspace"`) {
-		t.Fatalf("expected requester provisioning before toolset build, got %+v", launchStepBodies)
+	provisionIndex := -1
+	buildIndex := -1
+	for stepIndex, body := range launchStepBodies {
+		var record launchStepRecord
+		if errorValue := json.Unmarshal([]byte(body), &record); errorValue != nil {
+			t.Fatal(errorValue)
+		}
+		if record.StepName == "provision_requester_workspace" {
+			provisionIndex = stepIndex
+		}
+		if record.StepName == "build_tool_set" {
+			buildIndex = stepIndex
+		}
 	}
-	if !strings.Contains(launchStepBodies[1], `"stepName":"build_tool_set"`) {
+	if provisionIndex < 0 || buildIndex <= provisionIndex {
 		t.Fatalf("expected toolset build after requester provisioning, got %+v", launchStepBodies)
 	}
 }
