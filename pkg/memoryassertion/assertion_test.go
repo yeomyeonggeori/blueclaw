@@ -7,10 +7,37 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestVerifierAcceptsTheAdmindFixture(t *testing.T) {
+	fixtureBytes, errorValue := os.ReadFile("testdata/assertion.json")
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	var fixture struct {
+		Secret string `json:"secret"`
+		Method string `json:"method"`
+		Path string `json:"path"`
+		ExpiresAt int64 `json:"expiresAt"`
+		Body string `json:"body"`
+		Header string `json:"header"`
+	}
+	if errorValue := json.Unmarshal(fixtureBytes, &fixture); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	request := httptest.NewRequest(fixture.Method, "http://localhost"+fixture.Path, strings.NewReader(fixture.Body))
+	request.Header.Set(HeaderName, fixture.Header)
+	verifier := New([]byte(fixture.Secret))
+	verifier.clock = func() time.Time { return time.Unix(fixture.ExpiresAt-30, 0) }
+	readerPersonID, errorValue := verifier.Verify(request, []byte(fixture.Body))
+	if errorValue != nil || readerPersonID != "user:person-1" {
+		t.Fatalf("fixture verification failed for %q: %v", readerPersonID, errorValue)
+	}
+}
 
 func TestVerifierAcceptsBoundAssertionAndRejectsTampering(t *testing.T) {
 	secret := []byte("test-secret")
@@ -51,11 +78,12 @@ func TestVerifierRejectsExpiredAndWrongEndpoint(t *testing.T) {
 	if _, errorValue := New(secret).Verify(request, body); errorValue == nil {
 		t.Fatal("expected wrong endpoint to fail")
 	}
+	request.Header.Set(HeaderName, signAssertion(secret, "person-1", time.Now().Add(20*time.Second).Unix(), body, "POST", request.URL.Path))
 	parts := strings.Split(request.Header.Get(HeaderName), ".")
 	documentBytes, _ := base64.RawURLEncoding.DecodeString(parts[0])
 	var assertion document
 	_ = json.Unmarshal(documentBytes, &assertion)
-	assertion.ExpiresAt = time.Now().Add(-time.Second).Unix()
+	assertion.ExpiresAt = time.Now().Add(45*time.Second).Unix()
 	tamperedDocument, _ := json.Marshal(assertion)
 	request.Header.Set(HeaderName, base64.RawURLEncoding.EncodeToString(tamperedDocument)+"."+parts[1])
 	if _, errorValue := New(secret).Verify(request, body); errorValue == nil {

@@ -1,0 +1,9 @@
+{
+  "secret": "fixture-secret",
+  "method": "POST",
+  "path": "/admin/api/memory/facts/delete",
+  "readerPersonID": "user:person-1",
+  "expiresAt": 1893456030,
+  "body": "{\"content\":\"Corrected decision\",\"factID\":\"fact:sample\",\"namespaceID\":\"user:person-1\",\"readerPersonID\":\"user:person-1\"}",
+  "header": "eyJyZWFkZXJQZXJzb25JRCI6InVzZXI6cGVyc29uLTEiLCJleHBpcmVzQXQiOjE4OTM0NTYwMzAsImJvZHlTSEEyNTYiOiI5ZDg3NDhiNzYxMmJhZjFiNGI0YmUxYjA4MjIxNzg3NTQxZmRiZjVmYTFiZmVkYjQ4ZTIyNGUxZGE3MmMwNDc2In0.a-bhAfD3cVH6FNfnOGOHdZh_F_6_I_tdrlBbV7NeiEw"
+}
