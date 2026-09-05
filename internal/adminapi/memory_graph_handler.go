@@ -12,11 +12,12 @@ import (
 )
 
 type MemoryGraphHandler struct {
-	MemoryService *memory.MemoryService
-	Reporter      memory.GraphMemoryReporter
-	Migrator      memory.GraphMemoryMigrator
-	MarkdownStore *memory.MarkdownStore
-	Identity      *identity.IdentityService
+	MemoryService  *memory.MemoryService
+	Reporter       memory.GraphMemoryReporter
+	Migrator       memory.GraphMemoryMigrator
+	MarkdownStore  *memory.MarkdownStore
+	Identity       *identity.IdentityService
+	ReaderPersonID func(*http.Request) string
 }
 
 func (memoryGraphHandler MemoryGraphHandler) HandleGetMemoryGraph(responseWriter http.ResponseWriter, request *http.Request) {
@@ -97,6 +98,98 @@ func (memoryGraphHandler MemoryGraphHandler) HandleDeleteEpisode(responseWriter 
 		return
 	}
 	writeJSON(responseWriter, http.StatusOK, result)
+}
+
+func (memoryGraphHandler MemoryGraphHandler) HandleUpdateFact(responseWriter http.ResponseWriter, request *http.Request) {
+	readerPersonID := memoryGraphHandler.readReaderPersonID(request)
+	var body memory.MemoryFactUpdateRequest
+	if errorValue := json.NewDecoder(request.Body).Decode(&body); errorValue != nil {
+		http.Error(responseWriter, errorValue.Error(), http.StatusBadRequest)
+		return
+	}
+	if errorValue := memoryGraphHandler.authorizeFactMutation(request, body.NamespaceID, body.FactID, readerPersonID); errorValue != nil {
+		http.Error(responseWriter, errorValue.Error(), mutationStatus(errorValue))
+		return
+	}
+	if memoryGraphHandler.MemoryService == nil {
+		http.Error(responseWriter, "memory service is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	fact, errorValue := memoryGraphHandler.MemoryService.UpdateFact(request.Context(), body)
+	if errorValue != nil {
+		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(responseWriter, http.StatusOK, fact)
+}
+
+func (memoryGraphHandler MemoryGraphHandler) HandleDeleteFact(responseWriter http.ResponseWriter, request *http.Request) {
+	readerPersonID := memoryGraphHandler.readReaderPersonID(request)
+	var body memory.MemoryFactDeleteRequest
+	if errorValue := json.NewDecoder(request.Body).Decode(&body); errorValue != nil {
+		http.Error(responseWriter, errorValue.Error(), http.StatusBadRequest)
+		return
+	}
+	if errorValue := memoryGraphHandler.authorizeFactMutation(request, body.NamespaceID, body.FactID, readerPersonID); errorValue != nil {
+		http.Error(responseWriter, errorValue.Error(), mutationStatus(errorValue))
+		return
+	}
+	if memoryGraphHandler.MemoryService == nil {
+		http.Error(responseWriter, "memory service is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	result, errorValue := memoryGraphHandler.MemoryService.DeleteFact(request.Context(), body)
+	if errorValue != nil {
+		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(responseWriter, http.StatusOK, result)
+}
+
+func (memoryGraphHandler MemoryGraphHandler) readReaderPersonID(request *http.Request) string {
+	if memoryGraphHandler.ReaderPersonID == nil {
+		return ""
+	}
+	return strings.TrimSpace(memoryGraphHandler.ReaderPersonID(request))
+}
+
+func (memoryGraphHandler MemoryGraphHandler) authorizeFactMutation(request *http.Request, namespaceID string, factID string, readerPersonID string) error {
+	if strings.TrimSpace(namespaceID) == "" || strings.TrimSpace(factID) == "" || readerPersonID == "" {
+		return mutationError{http.StatusBadRequest, "reader identity and fact target are required"}
+	}
+	if memoryGraphHandler.Identity == nil {
+		return mutationError{http.StatusServiceUnavailable, "memory graph authorization is not configured"}
+	}
+	reader, hasReader := memoryGraphHandler.Reporter.(memory.GraphMemoryEpisodeReader)
+	if !hasReader {
+		return mutationError{http.StatusServiceUnavailable, "memory graph reader is not configured"}
+	}
+	namespaces, errorValue := reader.ListMemoryGraphNamespacesByID(request.Context(), []string{namespaceID})
+	if errorValue != nil {
+		return errorValue
+	}
+	if len(namespaces) != 1 {
+		return mutationError{http.StatusNotFound, "memory namespace not found"}
+	}
+	namespace := namespaces[0]
+	graphNamespace := memory.MemoryGraphNamespace{NamespaceID: namespace.NamespaceID, ScopeType: namespace.ScopeType, ScopePersonID: namespace.ScopePersonID, ScopeConversationID: namespace.ScopeConversationID, ScopeCircleID: namespace.ScopeCircleID, SecurityLevelRank: namespace.SecurityLevelRank, RequiredClasses: namespace.RequiredClasses}
+	if !canReadNamespace(graphNamespace, readerPersonID, memoryGraphHandler.Identity.ResolvePersonAccess(readerPersonID)) {
+		return mutationError{http.StatusForbidden, "memory namespace is not readable"}
+	}
+	return nil
+}
+
+type mutationError struct {
+	status  int
+	message string
+}
+
+func (errorValue mutationError) Error() string { return errorValue.message }
+func mutationStatus(errorValue error) int {
+	if typedError, ok := errorValue.(mutationError); ok {
+		return typedError.status
+	}
+	return http.StatusInternalServerError
 }
 
 func (memoryGraphHandler MemoryGraphHandler) HandleSavePinnedMemory(responseWriter http.ResponseWriter, request *http.Request) {
@@ -251,6 +344,9 @@ func (memoryGraphHandler MemoryGraphHandler) HandleMigrateIdentity(responseWrite
 }
 
 func (memoryGraphHandler MemoryGraphHandler) attachPinnedFacts(request *http.Request, graph memory.MemoryGraph) memory.MemoryGraph {
+	if strings.TrimSpace(request.URL.Query().Get("query")) != "" {
+		return graph
+	}
 	if memoryGraphHandler.MarkdownStore == nil {
 		return graph
 	}
@@ -309,12 +405,16 @@ func (memoryGraphHandler MemoryGraphHandler) attachSearchFacts(request *http.Req
 		return graph
 	}
 	query := strings.TrimSpace(request.URL.Query().Get("query"))
-	graph.Facts = memoryGraphHandler.collectNamespaceFacts(request, graph.Namespaces, query, memoryGraphLimit(request))
+	limit := memoryGraphLimit(request)
+	facts, failures := memoryGraphHandler.collectNamespaceFacts(request, graph.Namespaces, query, limit)
+	graph.Facts = facts
+	graph.Retrieval = memory.MemoryRetrieval{Query: query, Complete: len(failures) == 0 && len(facts) < limit, Limit: limit, Failures: failures}
 	return graph
 }
 
-func (memoryGraphHandler MemoryGraphHandler) collectNamespaceFacts(request *http.Request, namespaces []memory.MemoryGraphNamespace, query string, limit int) []memory.MemoryFact {
+func (memoryGraphHandler MemoryGraphHandler) collectNamespaceFacts(request *http.Request, namespaces []memory.MemoryGraphNamespace, query string, limit int) ([]memory.MemoryFact, []memory.MemoryRetrievalFailure) {
 	facts := []memory.MemoryFact{}
+	failures := []memory.MemoryRetrievalFailure{}
 	seenFactKeys := map[string]bool{}
 	for _, namespace := range namespaces {
 		searchRequest := memory.MemorySearchRequest{
@@ -329,6 +429,7 @@ func (memoryGraphHandler MemoryGraphHandler) collectNamespaceFacts(request *http
 		}
 		namespaceFacts, errorValue := memoryGraphHandler.namespaceFacts(request, query, searchRequest)
 		if errorValue != nil {
+			failures = append(failures, memory.MemoryRetrievalFailure{NamespaceID: namespace.NamespaceID, Message: safeRetrievalFailureMessage(errorValue)})
 			continue
 		}
 		for _, fact := range namespaceFacts {
@@ -339,11 +440,19 @@ func (memoryGraphHandler MemoryGraphHandler) collectNamespaceFacts(request *http
 			seenFactKeys[key] = true
 			facts = append(facts, fact)
 			if len(facts) >= limit {
-				return facts
+				return facts, failures
 			}
 		}
 	}
-	return facts
+	return facts, failures
+}
+
+func safeRetrievalFailureMessage(errorValue error) string {
+	message := strings.Join(strings.Fields(errorValue.Error()), " ")
+	if len(message) > 240 {
+		return "memory retrieval failed"
+	}
+	return message
 }
 
 func (memoryGraphHandler MemoryGraphHandler) namespaceFacts(request *http.Request, query string, searchRequest memory.MemorySearchRequest) ([]memory.MemoryFact, error) {

@@ -118,10 +118,6 @@ type TaskMemoryRequest struct {
 	AccessibleConversationIDs []string
 }
 
-type TaskPinnedMemoryRequest struct {
-	RequesterPersonID string
-}
-
 type taskLaunchStep[T any] interface {
 	Name() string
 	Run(context.Context, *taskLaunchExecution) (T, error)
@@ -145,13 +141,6 @@ type launchStepRecord struct {
 	DurationMs      int64  `json:"durationMs"`
 	Error           string `json:"error,omitempty"`
 	errorValue      error  `json:"-"`
-}
-
-type launchMemoryResult struct {
-	Facts           []memory.MemoryFact
-	PinnedFactCount int
-	GraphFactCount  int
-	Error           string
 }
 
 type IntakeBudget struct {
@@ -347,6 +336,9 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 	}
 	toolSet, record := runLaunchStep(ctx, execution, buildToolSetLaunchStep{})
 	launchRecords = append(launchRecords, record)
+	if record.Error != "" {
+		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, nil, record.StepName, launchRecords, errorFromStepRecord(record)), routerCallRecords, nil
+	}
 	toolNames := toolSet.ListToolNames()
 	registryAudit, record := runLaunchStep(ctx, execution, auditToolRegistryLaunchStep{ToolSet: toolSet})
 	launchRecords = append(launchRecords, record)
@@ -360,12 +352,10 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 		ConversationChannelID:   request.ConversationChannelID,
 		ConversationChannelName: request.ConversationChannelName,
 	})
-	memoryResult, record := runLaunchStep(ctx, execution, loadMemoryLaunchStep{})
-	launchRecords = append(launchRecords, record)
 	carriedOutCalls, record := runLaunchStep(ctx, execution, carryOutApprovedCallLaunchStep{ToolSet: toolSet})
 	launchRecords = append(launchRecords, record)
 	turnResult, record := runLaunchStep(ctx, execution, runTurnLaunchStep{
-		MemoryFacts:       memoryResult.Facts,
+		MemoryFacts:       nil,
 		ToolSet:           toolSet,
 		ConversationScope: conversationScope,
 		CarriedOutCalls:   carriedOutCalls,
@@ -384,22 +374,13 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 	}
 	if turnResult.TaskRun.TaskRunID != "" {
 		taskLauncher.appendLaunchStepRecords(turnResult.TaskRun.TaskRunID, launchRecords)
-		if memoryResult.Error != "" {
-			taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, agentcontract.TaskEventMemoryPinnedLoadFailed, memoryResult.Error)
-		} else {
-			taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, agentcontract.TaskEventMemoryPinnedLoadSucceeded, marshalToolResult(map[string]any{
-				"factCount":       len(memoryResult.Facts),
-				"pinnedFactCount": memoryResult.PinnedFactCount,
-				"graphFactCount":  memoryResult.GraphFactCount,
-			}))
-		}
-		taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, agentcontract.TaskEventAgentTaskLaunched, marshalTaskLaunchEvent(request, normalizedProfileName, launchedToolNames, registryAudit, len(memoryResult.Facts)))
+		taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, agentcontract.TaskEventAgentTaskLaunched, marshalTaskLaunchEvent(request, normalizedProfileName, launchedToolNames, registryAudit, 0))
 		taskLauncher.appendAmbientDutyLaunchEvent(turnResult.TaskRun.TaskRunID, request)
 		taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, agentcontract.TaskEventAgentConversationScope, marshalToolResult(conversationScope))
 	}
 	return TaskLaunchResult{
 		TurnResult:            turnResult,
-		MemoryFacts:           memoryResult.Facts,
+		MemoryFacts:           nil,
 		ToolNames:             launchedToolNames,
 		NormalizedProfileName: normalizedProfileName,
 	}, routerCallRecords, nil
@@ -481,52 +462,6 @@ func (auditToolRegistryLaunchStep) Name() string {
 
 func (step auditToolRegistryLaunchStep) Run(ctx context.Context, execution *taskLaunchExecution) (ToolRegistryAudit, error) {
 	return execution.Launcher.toolCatalogBuilder.BuildToolRegistryAudit(ctx, step.ToolSet)
-}
-
-type loadMemoryLaunchStep struct{}
-
-func (loadMemoryLaunchStep) Name() string {
-	return "load_memory"
-}
-
-func (loadMemoryLaunchStep) Run(ctx context.Context, execution *taskLaunchExecution) (launchMemoryResult, error) {
-	pinnedMemoryFacts, errorValue := execution.Launcher.toolCatalogBuilder.LoadPinnedMemory(ctx, TaskPinnedMemoryRequest{
-		RequesterPersonID: execution.Request.RequesterPersonID,
-	})
-	if errorValue != nil {
-		return launchMemoryResult{Error: errorValue.Error()}, nil
-	}
-	graphMemoryFacts := searchLaunchGraphMemory(ctx, execution)
-	return launchMemoryResult{
-		Facts:           appendMemoryFacts(pinnedMemoryFacts, graphMemoryFacts),
-		PinnedFactCount: len(pinnedMemoryFacts),
-		GraphFactCount:  len(graphMemoryFacts),
-	}, nil
-}
-
-const launchGraphMemorySearchTimeout = 8 * time.Second
-
-func searchLaunchGraphMemory(ctx context.Context, execution *taskLaunchExecution) []memory.MemoryFact {
-	toolCatalogBuilder := execution.Launcher.toolCatalogBuilder
-	request := execution.Request
-	if !toolCatalogBuilder.canSearchGraphMemory() || strings.TrimSpace(request.Prompt) == "" {
-		return nil
-	}
-	catalogRequest := execution.Launcher.toolCatalogRequestForLaunch(request, execution.NormalizedProfileName)
-	searchContext, cancelSearch := context.WithTimeout(ctx, launchGraphMemorySearchTimeout)
-	defer cancelSearch()
-	graphMemoryFacts, errorValue := toolCatalogBuilder.SearchMemory(searchContext, TaskMemoryRequest{
-		Query:                     request.Prompt,
-		RequesterPersonID:         request.RequesterPersonID,
-		ConversationID:            request.ConversationID,
-		PersonAccess:              request.PersonAccess,
-		MemoryNamespaces:          searchMemoryNamespaces(catalogRequest),
-		AccessibleConversationIDs: request.AccessibleConversationIDs,
-	})
-	if errorValue != nil {
-		return nil
-	}
-	return graphMemoryFacts
 }
 
 type runTurnLaunchStep struct {

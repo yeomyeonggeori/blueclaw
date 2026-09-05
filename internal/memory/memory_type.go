@@ -56,17 +56,53 @@ type MemoryEpisodeDeleteResult struct {
 	NamespaceCount int    `json:"namespaceCount"`
 }
 
+type MemoryFactUpdateRequest struct {
+	NamespaceID string     `json:"namespaceID"`
+	FactID      string     `json:"factID"`
+	Content     string     `json:"content"`
+	ValidAt     *time.Time `json:"validAt,omitempty"`
+	InvalidAt   *time.Time `json:"invalidAt,omitempty"`
+	ExpiredAt   *time.Time `json:"expiredAt,omitempty"`
+}
+
+type MemoryFactDeleteRequest struct {
+	NamespaceID string `json:"namespaceID"`
+	FactID      string `json:"factID"`
+}
+
+type MemoryFactMutationResult struct {
+	FactID      string `json:"factID"`
+	NamespaceID string `json:"namespaceID"`
+	Deleted     bool   `json:"deleted"`
+}
+
 type MemoryFact struct {
-	FactID            string    `json:"factID"`
-	ScopeType         string    `json:"scopeType"`
-	NamespaceID       string    `json:"namespaceID"`
-	Content           string    `json:"content"`
-	Score             float64   `json:"score"`
-	SourceEpisodeID   string    `json:"sourceEpisodeID"`
-	SourceKind        string    `json:"sourceKind"`
-	ValidAt           time.Time `json:"validAt"`
-	SecurityLevelRank int       `json:"securityLevelRank"`
-	RequiredClasses   []string  `json:"requiredClasses"`
+	FactID            string     `json:"factID"`
+	ScopeType         string     `json:"scopeType"`
+	NamespaceID       string     `json:"namespaceID"`
+	Content           string     `json:"content"`
+	Score             float64    `json:"score"`
+	SourceEpisodeID   string     `json:"sourceEpisodeID"`
+	SourceEpisodeIDs  []string   `json:"sourceEpisodeIDs,omitempty"`
+	SourceKind        string     `json:"sourceKind"`
+	ValidAt           time.Time  `json:"validAt"`
+	RecordedAt        time.Time  `json:"recordedAt"`
+	InvalidAt         *time.Time `json:"invalidAt,omitempty"`
+	ExpiredAt         *time.Time `json:"expiredAt,omitempty"`
+	SecurityLevelRank int        `json:"securityLevelRank"`
+	RequiredClasses   []string   `json:"requiredClasses"`
+}
+
+type MemoryRetrieval struct {
+	Query    string                   `json:"query"`
+	Complete bool                     `json:"complete"`
+	Limit    int                      `json:"limit"`
+	Failures []MemoryRetrievalFailure `json:"failures"`
+}
+
+type MemoryRetrievalFailure struct {
+	NamespaceID string `json:"namespaceID"`
+	Message     string `json:"message"`
 }
 
 type MemoryHealth struct {
@@ -125,6 +161,7 @@ type MemoryGraph struct {
 	Facts      []MemoryFact           `json:"facts"`
 	Nodes      []MemoryGraphNode      `json:"nodes"`
 	Edges      []MemoryGraphEdge      `json:"edges"`
+	Retrieval  MemoryRetrieval        `json:"retrieval"`
 }
 
 type MemoryIdentityMapping struct {

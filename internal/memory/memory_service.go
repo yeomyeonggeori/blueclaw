@@ -2,9 +2,11 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/access"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
@@ -17,6 +19,11 @@ type GraphMemoryStore interface {
 
 type GraphMemoryEpisodeDeleter interface {
 	DeleteEpisode(context.Context, MemoryEpisodeDeleteRequest) (MemoryEpisodeDeleteResult, error)
+}
+
+type GraphMemoryFactEditor interface {
+	UpdateFact(context.Context, MemoryFactUpdateRequest) (MemoryFact, error)
+	DeleteFact(context.Context, MemoryFactDeleteRequest) (MemoryFactMutationResult, error)
 }
 
 type GraphMemoryHealthChecker interface {
@@ -91,7 +98,10 @@ func (memoryService *MemoryService) HasGraphStore() bool {
 
 func (memoryService *MemoryService) AddEpisode(ctx context.Context, episode MemoryEpisode) (MemoryIngestionResult, error) {
 	if memoryService.mirror != nil {
-		_ = memoryService.mirror.SaveGraphNamespaces(ctx, episode.Namespaces)
+		if errorValue := memoryService.mirror.SaveGraphNamespaces(ctx, episode.Namespaces); errorValue != nil {
+			memoryService.recordIngestionError(errorValue.Error())
+			return MemoryIngestionResult{}, errorValue
+		}
 	}
 	if memoryService.store == nil {
 		result := MemoryIngestionResult{EpisodeID: episode.EpisodeID, NamespaceCount: len(episode.Namespaces)}
@@ -153,6 +163,28 @@ func (memoryService *MemoryService) DeleteEpisode(ctx context.Context, request M
 	return result, nil
 }
 
+func (memoryService *MemoryService) UpdateFact(ctx context.Context, request MemoryFactUpdateRequest) (MemoryFact, error) {
+	if memoryService == nil || memoryService.store == nil {
+		return MemoryFact{}, errors.New("memory service is not configured")
+	}
+	editor, hasEditor := memoryService.store.(GraphMemoryFactEditor)
+	if !hasEditor {
+		return MemoryFact{}, errors.New("memory fact editing is not supported")
+	}
+	return editor.UpdateFact(ctx, request)
+}
+
+func (memoryService *MemoryService) DeleteFact(ctx context.Context, request MemoryFactDeleteRequest) (MemoryFactMutationResult, error) {
+	if memoryService == nil || memoryService.store == nil {
+		return MemoryFactMutationResult{}, errors.New("memory service is not configured")
+	}
+	editor, hasEditor := memoryService.store.(GraphMemoryFactEditor)
+	if !hasEditor {
+		return MemoryFactMutationResult{}, errors.New("memory fact editing is not supported")
+	}
+	return editor.DeleteFact(ctx, request)
+}
+
 func (memoryService *MemoryService) SearchMemory(ctx context.Context, request MemorySearchRequest) ([]MemoryFact, error) {
 	if request.Limit <= 0 {
 		request.Limit = 12
@@ -167,7 +199,8 @@ func (memoryService *MemoryService) SearchMemory(ctx context.Context, request Me
 		return nil, errorValue
 	}
 	memoryService.recordSearchError("")
-	return limitMemoryFacts(rankMemoryFacts(deduplicateMemoryFacts(filterReadableMemoryFacts(request, memoryFacts)), request.Query), request.Limit), nil
+	readableFacts := filterReadableMemoryFacts(request, memoryFacts)
+	return limitMemoryFacts(rankMemoryFacts(deduplicateMemoryFacts(filterCurrentMemoryFacts(readableFacts, time.Now().UTC()))), request.Limit), nil
 }
 
 func (memoryService *MemoryService) ListMemory(ctx context.Context, request MemorySearchRequest) ([]MemoryFact, error) {
@@ -185,7 +218,7 @@ func (memoryService *MemoryService) ListMemory(ctx context.Context, request Memo
 		return nil, errorValue
 	}
 	memoryService.recordSearchError("")
-	return limitMemoryFacts(rankMemoryFacts(deduplicateMemoryFacts(filterReadableMemoryFacts(request, memoryFacts)), ""), request.Limit), nil
+	return limitMemoryFacts(rankMemoryFacts(deduplicateMemoryFacts(filterReadableMemoryFacts(request, memoryFacts))), request.Limit), nil
 }
 
 func filterReadableMemoryFacts(request MemorySearchRequest, memoryFacts []MemoryFact) []MemoryFact {
@@ -198,46 +231,31 @@ func filterReadableMemoryFacts(request MemorySearchRequest, memoryFacts []Memory
 	return filteredMemoryFacts
 }
 
-func rankMemoryFacts(memoryFacts []MemoryFact, query string) []MemoryFact {
+func filterCurrentMemoryFacts(memoryFacts []MemoryFact, currentTime time.Time) []MemoryFact {
+	currentFacts := []MemoryFact{}
+	for _, memoryFact := range memoryFacts {
+		if !memoryFact.ValidAt.IsZero() && memoryFact.ValidAt.After(currentTime) {
+			continue
+		}
+		if memoryFact.InvalidAt != nil && !memoryFact.InvalidAt.After(currentTime) {
+			continue
+		}
+		if memoryFact.ExpiredAt != nil && !memoryFact.ExpiredAt.After(currentTime) {
+			continue
+		}
+		currentFacts = append(currentFacts, memoryFact)
+	}
+	return currentFacts
+}
+
+func rankMemoryFacts(memoryFacts []MemoryFact) []MemoryFact {
 	rankedMemoryFacts := append([]MemoryFact{}, memoryFacts...)
-	normalizedQuery := strings.ToLower(strings.TrimSpace(query))
 	sort.SliceStable(rankedMemoryFacts, func(leftIndex int, rightIndex int) bool {
 		leftMemoryFact := rankedMemoryFacts[leftIndex]
 		rightMemoryFact := rankedMemoryFacts[rightIndex]
-		leftScore := relevanceScore(leftMemoryFact, normalizedQuery)
-		rightScore := relevanceScore(rightMemoryFact, normalizedQuery)
-		if leftScore != rightScore {
-			return leftScore > rightScore
-		}
-		if !leftMemoryFact.ValidAt.Equal(rightMemoryFact.ValidAt) {
-			return leftMemoryFact.ValidAt.After(rightMemoryFact.ValidAt)
-		}
-		leftSourceRank := memorySourceKindRank(leftMemoryFact.SourceKind)
-		rightSourceRank := memorySourceKindRank(rightMemoryFact.SourceKind)
-		if leftSourceRank != rightSourceRank {
-			return leftSourceRank > rightSourceRank
-		}
-		return memoryFactStableKey(leftMemoryFact) < memoryFactStableKey(rightMemoryFact)
+		return leftMemoryFact.Score > rightMemoryFact.Score
 	})
 	return rankedMemoryFacts
-}
-
-func relevanceScore(memoryFact MemoryFact, normalizedQuery string) float64 {
-	score := memoryFact.Score
-	score += float64(memorySourceKindRank(memoryFact.SourceKind)) * 0.01
-	normalizedContent := strings.ToLower(memoryFact.Content)
-	if normalizedQuery == "" {
-		return score
-	}
-	if strings.Contains(normalizedContent, normalizedQuery) {
-		score += 1
-	}
-	for _, queryTerm := range strings.Fields(normalizedQuery) {
-		if strings.Contains(normalizedContent, queryTerm) {
-			score += 0.25
-		}
-	}
-	return score
 }
 
 func memorySourceKindRank(sourceKind string) int {

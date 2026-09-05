@@ -13,10 +13,11 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 )
 
-func TestMemoryRememberToolEnqueuesPersonMemory(t *testing.T) {
-	queue := &recordingMemoryUpdateQueue{}
+func TestMemoryRememberToolPersistsPersonMemorySynchronously(t *testing.T) {
+	memoryService := &memory.MemoryService{}
+	memoryService.UseGraphStore(staticGraphMemoryStore{facts: []memory.MemoryFact{}})
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseMemoryUpdateQueue(queue)
+	toolCatalogBuilder.UseMemoryService(memoryService)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"memory_remember"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
@@ -38,25 +39,19 @@ func TestMemoryRememberToolEnqueuesPersonMemory(t *testing.T) {
 	if result.Failed() {
 		t.Fatalf("expected memory_remember success, got %s", result.ContentText())
 	}
-	if len(queue.jobs) != 1 {
-		t.Fatalf("expected one queued memory job, got %+v", queue.jobs)
-	}
-	job := queue.jobs[0]
-	if job.Namespace.NamespaceID != memory.UserNamespace("person-1").NamespaceID || job.Content != "Call the user master." {
-		t.Fatalf("expected person memory job, got %+v", job)
-	}
 	if !strings.Contains(result.ContentText(), `"accepted":true`) {
 		t.Fatalf("expected accepted result, got %s", result.ContentText())
 	}
-	if !strings.Contains(result.ContentText(), `"status":"queued_volatile"`) {
-		t.Fatalf("expected queued volatile result, got %s", result.ContentText())
+	if !strings.Contains(result.ContentText(), `"status":"persisted"`) {
+		t.Fatalf("expected persisted result, got %s", result.ContentText())
 	}
 }
 
 func TestMemoryRememberToolLeavesMeaningToTheModel(t *testing.T) {
-	queue := &recordingMemoryUpdateQueue{}
+	memoryService := &memory.MemoryService{}
+	memoryService.UseGraphStore(staticGraphMemoryStore{facts: []memory.MemoryFact{}})
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseMemoryUpdateQueue(queue)
+	toolCatalogBuilder.UseMemoryService(memoryService)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"memory_remember"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
@@ -75,10 +70,7 @@ func TestMemoryRememberToolLeavesMeaningToTheModel(t *testing.T) {
 	if result.Failed() {
 		t.Fatalf("expected explicit model tool call to remain authoritative, got %s", result.ContentText())
 	}
-	if len(queue.jobs) != 1 || queue.jobs[0].Content != "thanks" {
-		t.Fatalf("expected explicit content to be queued without phrase filtering, got %+v", queue.jobs)
-	}
-	if len(result.Effects) != 1 || result.Effects[0].ID != "job-1" {
+	if len(result.Effects) != 1 || result.Effects[0].ObjectType != "memory_update" || result.Effects[0].Effect != "accepted" {
 		t.Fatalf("expected exact memory update effect, got %+v", result.Effects)
 	}
 }
@@ -133,8 +125,8 @@ func TestMemoryRememberToolReportsQueueFailure(t *testing.T) {
 		t.Fatalf("expected queue failure to remain a failed observation, got %+v", result)
 	}
 	document := decodeMemoryUpdateAccepted(t, string(result.Output.Data))
-	if document.Accepted || document.Status != "failed" || document.FailureCode != "queue_unavailable" {
-		t.Fatalf("expected typed queue failure, got %+v", document)
+	if document.Accepted || document.Status != "failed" || document.FailureCode != "memory_unavailable" {
+		t.Fatalf("expected typed unavailable failure, got %+v", document)
 	}
 }
 
@@ -167,10 +159,11 @@ func TestMemoryRememberToolRejectsInaccessibleActiveCircle(t *testing.T) {
 	}
 }
 
-func TestMemoryRememberToolEnqueuesCircleMemoryForActiveCircle(t *testing.T) {
-	queue := &recordingMemoryUpdateQueue{}
+func TestMemoryRememberToolPersistsCircleMemoryForActiveCircle(t *testing.T) {
+	memoryService := &memory.MemoryService{}
+	memoryService.UseGraphStore(staticGraphMemoryStore{facts: []memory.MemoryFact{}})
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseMemoryUpdateQueue(queue)
+	toolCatalogBuilder.UseMemoryService(memoryService)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"memory_remember"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
@@ -190,12 +183,6 @@ func TestMemoryRememberToolEnqueuesCircleMemoryForActiveCircle(t *testing.T) {
 	}
 	if result.Failed() {
 		t.Fatalf("expected memory_remember success, got %s", result.ContentText())
-	}
-	if len(queue.jobs) != 1 {
-		t.Fatalf("expected one queued memory job, got %+v", queue.jobs)
-	}
-	if queue.jobs[0].Namespace.ScopeType != memory.ScopeTypeCircle || queue.jobs[0].Namespace.ScopeCircleID != "hr-compensation" {
-		t.Fatalf("expected circle memory job, got %+v", queue.jobs[0])
 	}
 }
 
@@ -356,7 +343,7 @@ func TestMemorySearchProjectsCompleteGraphResult(t *testing.T) {
 	if len(document.Facts) != 1 || document.Facts[0].FactID != "fact-1" || document.Facts[0].Score == nil || *document.Facts[0].Score != 0.91 {
 		t.Fatalf("expected projected graph fact, got %+v", document.Facts)
 	}
-	for _, privateField := range []string{"namespaceID", "securityLevelRank", "requiredClasses", "sourceEpisodeID", namespace.NamespaceID, "episode-secret", "executive-secret"} {
+	for _, privateField := range []string{"securityLevelRank", "requiredClasses", "sourceEpisodeID", "episode-secret", "executive-secret"} {
 		if strings.Contains(result.ContentText(), privateField) {
 			t.Fatalf("expected model-safe result without %q, got %s", privateField, result.ContentText())
 		}
@@ -426,7 +413,7 @@ func TestMemorySearchReturnsRecoverableToolErrorWhenGraphitiFails(t *testing.T) 
 	}
 }
 
-func TestMemorySearchDegradedWithPinnedFallback(t *testing.T) {
+func TestMemorySearchReturnsUnavailableWhenGraphFails(t *testing.T) {
 	memoryService := &memory.MemoryService{}
 	memoryService.UseGraphStore(failingGraphMemoryStore{errorValue: errors.New("graphiti unavailable")})
 	pinnedMemoryStore := memory.NewMarkdownStore(t.TempDir(), 1200)
@@ -452,21 +439,8 @@ func TestMemorySearchDegradedWithPinnedFallback(t *testing.T) {
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if result.Failed() {
-		t.Fatalf("expected degraded memory_search success, got %s", result.ContentText())
-	}
-	document := decodeMemorySearchToolOutput(t, result.ContentText())
-	if document.SearchStatus != "degraded" {
-		t.Fatalf("expected degraded search status, got %+v", document)
-	}
-	if len(document.Sources) != 1 || document.Sources[0] != "pinned_markdown" {
-		t.Fatalf("expected exact degraded sources, got %+v", document.Sources)
-	}
-	if !containsMemoryFact(document.Facts, "# Memory\n- The requester prefers terse release notes.") {
-		t.Fatalf("expected pinned fallback fact, got %+v", document.Facts)
-	}
-	if strings.Contains(result.ContentText(), `"degraded":`) {
-		t.Fatalf("expected searchStatus to be the only degraded signal, got %s", result.ContentText())
+	if !result.Failed() || result.FailureCode() != toolcontract.FailureCodes.Unavailable.String() {
+		t.Fatalf("expected unavailable memory search, got %+v", result)
 	}
 }
 
@@ -500,7 +474,7 @@ func TestMemorySearchReturnsUnavailableWhenFallbackEmpty(t *testing.T) {
 	}
 }
 
-func TestMemorySearchPinnedFallbackScopesRequesterNamespace(t *testing.T) {
+func TestMemorySearchDoesNotReadPinnedMarkdown(t *testing.T) {
 	memoryService := &memory.MemoryService{}
 	memoryService.UseGraphStore(failingGraphMemoryStore{errorValue: errors.New("graphiti unavailable")})
 	pinnedMemoryStore := memory.NewMarkdownStore(t.TempDir(), 1200)
@@ -532,22 +506,17 @@ func TestMemorySearchPinnedFallbackScopesRequesterNamespace(t *testing.T) {
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if result.Failed() {
-		t.Fatalf("expected scoped fallback success, got %s", result.ContentText())
-	}
-	if strings.Contains(result.ContentText(), "Person two") {
-		t.Fatalf("expected person two memory to be excluded, got %s", result.ContentText())
-	}
-	if !strings.Contains(result.ContentText(), "Person one") {
-		t.Fatalf("expected person one memory, got %s", result.ContentText())
+	if !result.Failed() || result.FailureCode() != toolcontract.FailureCodes.Unavailable.String() {
+		t.Fatalf("expected unavailable memory search, got %+v", result)
 	}
 }
 
-func TestMemoryRememberToolPersistsMarkdownBeforeQueue(t *testing.T) {
-	queue := &recordingMemoryUpdateQueue{}
+func TestMemoryRememberToolDoesNotWriteMarkdown(t *testing.T) {
+	memoryService := &memory.MemoryService{}
+	memoryService.UseGraphStore(staticGraphMemoryStore{facts: []memory.MemoryFact{}})
 	pinnedMemoryStore := memory.NewMarkdownStore(t.TempDir(), 1200)
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseMemoryUpdateQueue(queue)
+	toolCatalogBuilder.UseMemoryService(memoryService)
 	toolCatalogBuilder.UsePinnedMemoryStore(pinnedMemoryStore)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"memory_remember"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
@@ -573,16 +542,105 @@ func TestMemoryRememberToolPersistsMarkdownBeforeQueue(t *testing.T) {
 	if document.Status != "persisted" || document.Durability != "durable" {
 		t.Fatalf("expected persisted durable status, got %+v", document)
 	}
-	if len(queue.jobs) != 1 {
-		t.Fatalf("expected one graphiti enrichment job, got %+v", queue.jobs)
-	}
 	memoryFacts, errorValue := pinnedMemoryStore.LoadPinnedMemory(context.Background(), "person-1")
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if len(memoryFacts) != 1 || !strings.Contains(memoryFacts[0].Content, "markdown memory") {
-		t.Fatalf("expected synchronous markdown memory, got %+v", memoryFacts)
+	if len(memoryFacts) != 0 {
+		t.Fatalf("expected no Markdown memory write, got %+v", memoryFacts)
 	}
+}
+
+func TestMemoryFactCrudToolsUseExactAuthorizedTarget(t *testing.T) {
+	store := &editableGraphMemoryStore{}
+	memoryService := &memory.MemoryService{}
+	memoryService.UseGraphStore(store)
+	builder := NewToolCatalogBuilder()
+	builder.UseMemoryService(memoryService)
+	builder.UseAllowedToolNamesByProfile(nil, []string{"memory_update", "memory_delete"})
+	registry := builder.BuildToolSet(ToolCatalogRequest{ProfileName: "default", RequesterPersonID: "person-1"})
+	updateResult, errorValue := registry.Invoke(context.Background(), toolcontract.ToolInvocation{ToolName: "memory_update", Input: toolcontract.MarshalToolInput(map[string]string{"factID": "fact-1", "namespaceID": "user:person-1", "content": "Updated fact."})})
+	if errorValue != nil || updateResult.Failed() || store.updated.NamespaceID != "user:person-1" || store.updated.FactID != "fact-1" {
+		t.Fatalf("expected authorized exact update, result=%+v error=%v store=%+v", updateResult, errorValue, store.updated)
+	}
+	deleteResult, errorValue := registry.Invoke(context.Background(), toolcontract.ToolInvocation{ToolName: "memory_delete", Input: toolcontract.MarshalToolInput(map[string]string{"factID": "fact-1", "namespaceID": "user:person-1"})})
+	if errorValue != nil || deleteResult.Failed() || store.deleted.NamespaceID != "user:person-1" || store.deleted.FactID != "fact-1" {
+		t.Fatalf("expected authorized exact delete, result=%+v error=%v store=%+v", deleteResult, errorValue, store.deleted)
+	}
+	deniedResult, errorValue := registry.Invoke(context.Background(), toolcontract.ToolInvocation{ToolName: "memory_delete", Input: toolcontract.MarshalToolInput(map[string]string{"factID": "fact-2", "namespaceID": "user:person-2"})})
+	if errorValue != nil || !deniedResult.Failed() {
+		t.Fatalf("expected other-person delete denial, result=%+v error=%v", deniedResult, errorValue)
+	}
+}
+
+func TestMemoryFactCrudToolsRejectInvalidInputAndBackendErrors(t *testing.T) {
+	store := &editableGraphMemoryStore{updateError: errors.New("update failed"), deleteError: errors.New("delete failed")}
+	memoryService := &memory.MemoryService{}
+	memoryService.UseGraphStore(store)
+	builder := NewToolCatalogBuilder()
+	builder.UseMemoryService(memoryService)
+	builder.UseAllowedToolNamesByProfile(nil, []string{"memory_update", "memory_delete"})
+	registry := builder.BuildToolSet(ToolCatalogRequest{ProfileName: "default", RequesterPersonID: "person-1"})
+
+	invalidResult, errorValue := registry.Invoke(context.Background(), toolcontract.ToolInvocation{ToolName: "memory_update", Input: toolcontract.MarshalToolInput(map[string]string{"factID": "fact-1", "namespaceID": "user:person-1", "content": "   "})})
+	if errorValue != nil || !invalidResult.Failed() || store.updated.FactID != "" {
+		t.Fatalf("expected invalid content rejection before backend, result=%+v error=%v store=%+v", invalidResult, errorValue, store.updated)
+	}
+
+	updateResult, errorValue := registry.Invoke(context.Background(), toolcontract.ToolInvocation{ToolName: "memory_update", Input: toolcontract.MarshalToolInput(map[string]string{"factID": "fact-1", "namespaceID": "user:person-1", "content": "Updated fact."})})
+	if errorValue != nil || !updateResult.Failed() {
+		t.Fatalf("expected backend update error, result=%+v error=%v", updateResult, errorValue)
+	}
+	deleteResult, errorValue := registry.Invoke(context.Background(), toolcontract.ToolInvocation{ToolName: "memory_delete", Input: toolcontract.MarshalToolInput(map[string]string{"factID": "fact-1", "namespaceID": "user:person-1"})})
+	if errorValue != nil || !deleteResult.Failed() {
+		t.Fatalf("expected backend delete error, result=%+v error=%v", deleteResult, errorValue)
+	}
+}
+
+func TestMemoryFactCrudToolsRejectUnownedCircleBeforeBackend(t *testing.T) {
+	store := &editableGraphMemoryStore{}
+	memoryService := &memory.MemoryService{}
+	memoryService.UseGraphStore(store)
+	builder := NewToolCatalogBuilder()
+	builder.UseMemoryService(memoryService)
+	builder.UseAllowedToolNamesByProfile(nil, []string{"memory_update", "memory_delete"})
+	registry := builder.BuildToolSet(ToolCatalogRequest{
+		ProfileName:       "default",
+		RequesterPersonID: "person-1",
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
+	})
+	result, errorValue := registry.Invoke(context.Background(), toolcontract.ToolInvocation{ToolName: "memory_delete", Input: toolcontract.MarshalToolInput(map[string]string{"factID": "fact-1", "namespaceID": memory.CircleNamespace("default", "admin").NamespaceID})})
+	if errorValue != nil || !result.Failed() || store.deleted.FactID != "" {
+		t.Fatalf("expected unowned circle denial before backend, result=%+v error=%v store=%+v", result, errorValue, store.deleted)
+	}
+}
+
+type editableGraphMemoryStore struct {
+	updated     memory.MemoryFactUpdateRequest
+	deleted     memory.MemoryFactDeleteRequest
+	updateError error
+	deleteError error
+}
+
+func (store *editableGraphMemoryStore) AddEpisode(context.Context, memory.MemoryEpisode) (memory.MemoryIngestionResult, error) {
+	return memory.MemoryIngestionResult{}, nil
+}
+func (store *editableGraphMemoryStore) SearchFacts(context.Context, memory.MemorySearchRequest) ([]memory.MemoryFact, error) {
+	return nil, nil
+}
+func (store *editableGraphMemoryStore) UpdateFact(_ context.Context, request memory.MemoryFactUpdateRequest) (memory.MemoryFact, error) {
+	if store.updateError != nil {
+		return memory.MemoryFact{}, store.updateError
+	}
+	store.updated = request
+	return memory.MemoryFact{FactID: request.FactID, NamespaceID: request.NamespaceID, Content: request.Content}, nil
+}
+func (store *editableGraphMemoryStore) DeleteFact(_ context.Context, request memory.MemoryFactDeleteRequest) (memory.MemoryFactMutationResult, error) {
+	if store.deleteError != nil {
+		return memory.MemoryFactMutationResult{}, store.deleteError
+	}
+	store.deleted = request
+	return memory.MemoryFactMutationResult{FactID: request.FactID, NamespaceID: request.NamespaceID, Deleted: true}, nil
 }
 
 func decodeMemorySearchToolOutput(t *testing.T, content string) memorySearchToolOutput {

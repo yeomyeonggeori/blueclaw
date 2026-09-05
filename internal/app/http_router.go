@@ -1,7 +1,11 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"io"
+	"net/http"
+	"os"
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/adminapi"
@@ -12,6 +16,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/runtimecontrol"
 	"github.com/yeomyeonggeori/blueclaw/internal/sessionquery"
 	"github.com/yeomyeonggeori/blueclaw/internal/userapi"
+	"github.com/yeomyeonggeori/blueclaw/pkg/memoryassertion"
 )
 
 func newRouterDependencies(components applicationComponents) httpserver.RouterDependencies {
@@ -44,7 +49,7 @@ func newRouterDependencies(components applicationComponents) httpserver.RouterDe
 		TaskScheduleHandler:   newTaskScheduleHandler(services, directory),
 		ConnectorDiagnostics:  adminapi.ConnectorEventDiagnosticHandler{Repository: services.repositories.connectorEventDiagnostic},
 		ConversationReset:     adminapi.ConversationResetHandler{Repository: services.repositories.conversationReset},
-		MemoryGraphHandler:    newMemoryGraphHandler(components.memory, directory),
+		MemoryGraphHandler:    newMemoryGraphHandler(components.memory, directory, runtimeConfiguration.Memory.AdminAssertionKeyPath),
 		BackupHandler:         adminapi.BackupHandler{Coordinator: components.backupCoordinator},
 		TaskInboxHandler:      userapi.TaskInboxHandler{TaskRunService: services.taskRunService, TaskStepService: services.taskStepService, TaskAuthService: services.taskAuthService},
 		TaskActionHandler:     userapi.TaskActionHandler{TaskRunService: services.taskRunService, TaskAuthService: services.taskAuthService},
@@ -172,12 +177,31 @@ func newTaskScheduleHandler(services taskServices, directory identityDirectory) 
 	}
 }
 
-func newMemoryGraphHandler(memoryComponents memoryComponents, directory identityDirectory) adminapi.MemoryGraphHandler {
+func newMemoryGraphHandler(memoryComponents memoryComponents, directory identityDirectory, assertionKeyPath string) adminapi.MemoryGraphHandler {
 	return adminapi.MemoryGraphHandler{
 		MemoryService: memoryComponents.memoryService,
 		Reporter:      memoryComponents.graphReporter,
 		Migrator:      memoryComponents.graphMigrator,
 		MarkdownStore: memoryComponents.pinnedMemoryStore,
 		Identity:      directory.identityService,
+		ReaderPersonID: func(request *http.Request) string {
+			body, errorValue := io.ReadAll(io.LimitReader(request.Body, 16*1024+1))
+			request.Body = io.NopCloser(bytes.NewReader(body))
+			if len(body) > 16*1024 {
+				return ""
+			}
+			if errorValue != nil {
+				return ""
+			}
+			secret, errorValue := os.ReadFile(assertionKeyPath)
+			if errorValue != nil {
+				return ""
+			}
+			readerPersonID, errorValue := memoryassertion.New(bytes.TrimSpace(secret)).Verify(request, body)
+			if errorValue != nil {
+				return ""
+			}
+			return readerPersonID
+		},
 	}
 }

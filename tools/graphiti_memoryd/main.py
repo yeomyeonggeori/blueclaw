@@ -172,6 +172,14 @@ class GraphitiMemoryService:
         with self.operation_lock:
             return await self.delete_episode_locked(request_document)
 
+    async def update_fact(self, request_document: dict[str, Any]) -> dict[str, Any]:
+        with self.operation_lock:
+            return await self.update_fact_locked(request_document)
+
+    async def delete_fact(self, request_document: dict[str, Any]) -> dict[str, Any]:
+        with self.operation_lock:
+            return await self.delete_fact_locked(request_document)
+
     async def add_episode_locked(self, request_document: dict[str, Any]) -> dict[str, Any]:
         from graphiti_core.nodes import EpisodeType
 
@@ -184,10 +192,10 @@ class GraphitiMemoryService:
         for namespace in namespaces:
             namespace_id = namespace["namespaceID"]
             await self.graphiti.add_episode(
-                name=graphiti_group_id(episode_id + ":" + namespace_id),
+                name=graphiti_episode_name(episode_id, namespace_id),
                 episode_body=episode_body_for_namespace(namespace, sender_person_id, prompt),
                 source=EpisodeType.message,
-                source_description=source_reference,
+                source_description=episode_source_description(episode_id, source_reference),
                 reference_time=occurred_at,
                 group_id=graphiti_group_id(namespace_id),
                 custom_extraction_instructions=extraction_instructions_for_namespace(namespace, sender_person_id),
@@ -207,11 +215,11 @@ class GraphitiMemoryService:
 
         if episode_id == "" or namespace_id == "":
             return 0
-        expected_name = graphiti_group_id(episode_id + ":" + namespace_id)
+        expected_names = {graphiti_episode_name(episode_id, namespace_id), graphiti_group_id(episode_id + ":" + namespace_id)}
         group_id = graphiti_group_id(namespace_id)
         episodes = await EpisodicNode.get_by_group_ids(self.graphiti.driver, [group_id], limit=1000)
         for episode in episodes:
-            if str(getattr(episode, "name", "") or "") != expected_name:
+            if str(getattr(episode, "name", "") or "") not in expected_names:
                 continue
             result = self.graphiti.remove_episode(str(getattr(episode, "uuid", "")))
             if hasattr(result, "__await__"):
@@ -219,9 +227,41 @@ class GraphitiMemoryService:
             return 1
         return 0
 
-    async def search_locked(self, request_document: dict[str, Any]) -> dict[str, Any]:
-        from graphiti_core.search.search_config_recipes import COMBINED_HYBRID_SEARCH_RRF
+    async def update_fact_locked(self, request_document: dict[str, Any]) -> dict[str, Any]:
+        from graphiti_core.edges import EntityEdge
 
+        namespace_id = str(request_document.get("namespaceID", "")).strip()
+        fact_id = str(request_document.get("factID", "")).removeprefix("fact:").strip()
+        content = str(request_document.get("content", "")).strip()
+        if not content or len(content) > 600:
+            raise ValueError("fact content must be between 1 and 600 characters")
+        edge = await EntityEdge.get_by_uuid(self.graphiti.driver, fact_id)
+        require_fact_namespace(edge, namespace_id)
+        edge.fact = content
+        for field_name in ["valid_at", "invalid_at", "expired_at"]:
+            field_value = request_document.get(camel_case(field_name))
+            if field_value is not None:
+                setattr(edge, field_name, parse_optional_datetime(field_value))
+        edge.fact_embedding = (await self.graphiti.embedder.create_batch([edge.fact]))[0]
+        await edge.save(self.graphiti.driver)
+        from graphiti_core.nodes import EpisodicNode
+
+        episodes = await EpisodicNode.get_by_group_ids(self.graphiti.driver, [graphiti_group_id(namespace_id)], limit=1000)
+        episode_sources = episode_source_mapping(episodes, namespace_id)
+        namespace = {"scopeType": namespace_id.split(":", 1)[0]}
+        return memory_fact(namespace, namespace_id, fact_id, edge.fact, "fact", edge, episode_sources)
+
+    async def delete_fact_locked(self, request_document: dict[str, Any]) -> dict[str, Any]:
+        from graphiti_core.edges import EntityEdge
+
+        namespace_id = str(request_document.get("namespaceID", "")).strip()
+        fact_id = str(request_document.get("factID", "")).removeprefix("fact:").strip()
+        edge = await EntityEdge.get_by_uuid(self.graphiti.driver, fact_id)
+        require_fact_namespace(edge, namespace_id)
+        await edge.delete(self.graphiti.driver)
+        return {"factID": "fact:" + fact_id, "namespaceID": namespace_id, "deleted": True}
+
+    async def search_locked(self, request_document: dict[str, Any]) -> dict[str, Any]:
         query = request_document.get("Query") or request_document.get("query") or ""
         limit = int(request_document.get("Limit") or request_document.get("limit") or 12)
         namespaces = request_document.get("Namespaces") or request_document.get("namespaces") or []
@@ -229,29 +269,17 @@ class GraphitiMemoryService:
         for namespace in namespaces:
             namespace_id = namespace["namespaceID"]
             namespace_facts: list[dict[str, Any]] = []
+            from graphiti_core.nodes import EpisodicNode
+
+            episodes = await EpisodicNode.get_by_group_ids(
+                self.graphiti.driver, [graphiti_group_id(namespace_id)], limit=1000
+            )
+            episode_sources = episode_source_mapping(episodes, namespace_id)
             results = await self.graphiti.search(query=query, group_ids=[graphiti_group_id(namespace_id)], num_results=limit)
             for result in results:
-                namespace_facts.append(
-                    {
-                        "factID": getattr(result, "uuid", ""),
-                        "scopeType": namespace.get("scopeType", ""),
-                        "namespaceID": namespace_id,
-                        "content": getattr(result, "fact", ""),
-                        "score": float(getattr(result, "score", 0) or 0),
-                        "sourceEpisodeID": getattr(result, "source_node_uuid", ""),
-                        "sourceKind": "fact",
-                        "validAt": serialize_datetime(getattr(result, "valid_at", None)),
-                        "securityLevelRank": namespace.get("securityLevelRank", 0),
-                        "requiredClasses": namespace.get("requiredClasses", []),
-                    }
-                )
-            if len(namespace_facts) < limit:
-                search_results = await self.graphiti.search_(
-                    query=query,
-                    config=COMBINED_HYBRID_SEARCH_RRF,
-                    group_ids=[graphiti_group_id(namespace_id)],
-                )
-                namespace_facts.extend(facts_from_search_results(search_results, namespace, limit-len(namespace_facts)))
+                fact = memory_fact(namespace, namespace_id, getattr(result, "uuid", ""), getattr(result, "fact", ""), "fact", result, episode_sources)
+                fact["score"] = float(getattr(result, "score", 0) or 0)
+                namespace_facts.append(fact)
             facts.extend(namespace_facts)
         return {"facts": facts}
 
@@ -267,29 +295,25 @@ class GraphitiMemoryService:
 
     async def list_namespace_facts(self, namespace: dict[str, Any], namespace_id: str, group_id: str, limit: int) -> list[dict[str, Any]]:
         from graphiti_core.edges import EntityEdge
-        from graphiti_core.nodes import EntityNode
+        from graphiti_core.nodes import EntityNode, EpisodicNode
 
         facts: list[dict[str, Any]] = []
-        try:
-            edges = await EntityEdge.get_by_group_ids(self.graphiti.driver, [group_id], limit=limit)
-        except Exception:
-            edges = []
+        episodes = await EpisodicNode.get_by_group_ids(self.graphiti.driver, [group_id], limit=1000)
+        episode_sources = episode_source_mapping(episodes, namespace_id)
+        edges = await EntityEdge.get_by_group_ids(self.graphiti.driver, [group_id], limit=limit)
         for edge in edges:
             content = str(getattr(edge, "fact", "") or "").strip()
             if content == "":
                 continue
-            facts.append(memory_fact(namespace, namespace_id, getattr(edge, "uuid", ""), content, "fact"))
-        try:
-            nodes = await EntityNode.get_by_group_ids(self.graphiti.driver, [group_id], limit=limit)
-        except Exception:
-            nodes = []
+            facts.append(memory_fact(namespace, namespace_id, getattr(edge, "uuid", ""), content, "fact", edge, episode_sources))
+        nodes = await EntityNode.get_by_group_ids(self.graphiti.driver, [group_id], limit=limit)
         for node in nodes:
             name = str(getattr(node, "name", "") or "").strip()
             summary = str(getattr(node, "summary", "") or "").strip()
             content = " ".join(value for value in [name, summary] if value)
             if content == "":
                 continue
-            facts.append(memory_fact(namespace, namespace_id, getattr(node, "uuid", ""), content, "node"))
+            facts.append(memory_fact(namespace, namespace_id, getattr(node, "uuid", ""), content, "node", node, episode_sources))
         return facts
 
 
@@ -322,10 +346,27 @@ class LazyGraphitiMemoryService:
         service = await self.get_service()
         return await service.delete_episode(request_document)
 
+    async def update_fact(self, request_document: dict[str, Any]) -> dict[str, Any]:
+        service = await self.get_service()
+        return await service.update_fact(request_document)
+
+    async def delete_fact(self, request_document: dict[str, Any]) -> dict[str, Any]:
+        service = await self.get_service()
+        return await service.delete_fact(request_document)
+
 
 def graphiti_group_id(namespace_id: str) -> str:
     digest = hashlib.sha256(namespace_id.encode("utf-8")).hexdigest()[:24]
     return "bc_" + digest
+
+
+def graphiti_episode_name(episode_id: str, namespace_id: str) -> str:
+    return "blueclaw_episode:" + namespace_id + ":" + episode_id
+
+
+def require_fact_namespace(edge: Any, namespace_id: str):
+    if not namespace_id or str(getattr(edge, "group_id", "")) != graphiti_group_id(namespace_id):
+        raise ValueError("fact does not belong to namespace")
 
 
 def create_kuzu_driver(kuzu_path: str) -> KuzuDriver:
@@ -407,19 +448,88 @@ def facts_from_search_results(search_results: Any, namespace: dict[str, Any], li
     return facts
 
 
-def memory_fact(namespace: dict[str, Any], namespace_id: str, fact_id: str, content: str, source_kind: str) -> dict[str, Any]:
-    return {
+def memory_fact(namespace: dict[str, Any], namespace_id: str, fact_id: str, content: str, source_kind: str, graphiti_object: Any = None, episode_sources: dict[str, str] | None = None) -> dict[str, Any]:
+    source_episode_ids = source_episode_ids_for(graphiti_object, episode_sources or {})
+    fact = {
         "factID": source_kind + ":" + fact_id,
         "scopeType": namespace.get("scopeType", ""),
         "namespaceID": namespace_id,
         "content": content,
         "score": 0,
-        "sourceEpisodeID": fact_id,
+        "sourceEpisodeID": source_episode_ids[0] if source_episode_ids else "",
+        "sourceEpisodeIDs": source_episode_ids,
         "sourceKind": source_kind,
-        "validAt": zero_time(),
         "securityLevelRank": namespace.get("securityLevelRank", 0),
         "requiredClasses": namespace.get("requiredClasses", []),
     }
+    for field_name in ["valid_at", "created_at"]:
+        serialized_value = serialize_optional_datetime(getattr(graphiti_object, field_name, None))
+        if serialized_value:
+            fact["recordedAt" if field_name == "created_at" else "validAt"] = serialized_value
+    for field_name in ["invalid_at", "expired_at"]:
+        serialized_value = serialize_optional_datetime(getattr(graphiti_object, field_name, None))
+        if serialized_value:
+            fact[camel_case(field_name)] = serialized_value
+    return fact
+
+
+def episode_source_description(episode_id: str, source_reference: str) -> str:
+    return json.dumps({"episodeID": episode_id, "sourceReference": source_reference}, ensure_ascii=False, separators=(",", ":"))
+
+
+def episode_source_mapping(episodes: list[Any], namespace_id: str) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for episode in episodes:
+        episode_uuid = str(getattr(episode, "uuid", "") or "").strip()
+        if not episode_uuid:
+            continue
+        source_description = str(getattr(episode, "source_description", "") or "")
+        try:
+            document = json.loads(source_description)
+        except (TypeError, ValueError):
+            document = {}
+        episode_id = str(document.get("episodeID", "") or "").strip()
+        if episode_id:
+            mapping[episode_uuid] = episode_id
+            continue
+        synthetic_name = graphiti_episode_name_from_namespace(episode, namespace_id)
+        if synthetic_name:
+            mapping[episode_uuid] = synthetic_name
+    return mapping
+
+
+def graphiti_episode_name_from_namespace(episode: Any, namespace_id: str) -> str:
+    name = str(getattr(episode, "name", "") or "").strip()
+    prefix = "blueclaw_episode:" + namespace_id + ":"
+    if name.startswith(prefix):
+        return name[len(prefix):]
+    return ""
+
+
+def source_episode_ids_for(graphiti_object: Any, episode_sources: dict[str, str]) -> list[str]:
+    episode_ids = []
+    for episode_uuid in getattr(graphiti_object, "episodes", []) or []:
+        source_episode_id = episode_sources.get(str(episode_uuid).strip(), "")
+        if source_episode_id and source_episode_id not in episode_ids:
+            episode_ids.append(source_episode_id)
+    return episode_ids
+
+
+def serialize_optional_datetime(value: Any) -> str:
+    if isinstance(value, datetime):
+        return serialize_datetime(value)
+    return ""
+
+
+def parse_optional_datetime(value: Any) -> datetime | None:
+    if value is None or value == "":
+        return None
+    return parse_datetime(str(value))
+
+
+def camel_case(value: str) -> str:
+    field, suffix = value.split("_", 1)
+    return field + suffix.title()
 
 
 def post_json(url: str, request_document: dict[str, Any]) -> dict[str, Any]:
@@ -457,13 +567,9 @@ def parse_datetime(value: str | None) -> datetime:
 
 
 def serialize_datetime(value: Any) -> str:
-    if isinstance(value, datetime):
-        return value.astimezone(timezone.utc).isoformat()
-    return zero_time()
-
-
-def zero_time() -> str:
-    return "0001-01-01T00:00:00Z"
+    if not isinstance(value, datetime):
+        return ""
+    return value.astimezone(timezone.utc).isoformat()
 
 
 class RequestHandler(BaseHTTPRequestHandler):
@@ -482,6 +588,10 @@ class RequestHandler(BaseHTTPRequestHandler):
                 response_document = asyncio.run(self.service.add_episode(request_document))
             elif self.path == "/v1/episodes/delete":
                 response_document = asyncio.run(self.service.delete_episode(request_document))
+            elif self.path == "/v1/facts/update":
+                response_document = asyncio.run(self.service.update_fact(request_document))
+            elif self.path == "/v1/facts/delete":
+                response_document = asyncio.run(self.service.delete_fact(request_document))
             elif self.path == "/v1/search":
                 response_document = asyncio.run(self.service.search(request_document))
             elif self.path == "/v1/list":

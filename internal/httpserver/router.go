@@ -81,6 +81,8 @@ func NewRouter(routerDependencies RouterDependencies) http.Handler {
 	multiplexer.HandleFunc("POST /admin/api/conversation/reset", routerDependencies.ConversationReset.HandleReset)
 	multiplexer.HandleFunc("GET /admin/api/memory/graph", routerDependencies.MemoryGraphHandler.HandleGetMemoryGraph)
 	multiplexer.HandleFunc("POST /admin/api/memory/episodes/delete", routerDependencies.MemoryGraphHandler.HandleDeleteEpisode)
+	multiplexer.HandleFunc("POST /admin/api/memory/facts/update", routerDependencies.MemoryGraphHandler.HandleUpdateFact)
+	multiplexer.HandleFunc("POST /admin/api/memory/facts/delete", routerDependencies.MemoryGraphHandler.HandleDeleteFact)
 	multiplexer.HandleFunc("POST /admin/api/memory/pinned/update", routerDependencies.MemoryGraphHandler.HandleSavePinnedMemory)
 	multiplexer.HandleFunc("POST /admin/api/memory/pinned/delete", routerDependencies.MemoryGraphHandler.HandleDeletePinnedMemory)
 	multiplexer.HandleFunc("POST /admin/api/memory/migrate-identity", routerDependencies.MemoryGraphHandler.HandleMigrateIdentity)

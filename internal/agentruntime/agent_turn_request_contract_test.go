@@ -2,7 +2,6 @@ package agentruntime
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
@@ -76,15 +75,8 @@ func TestLaunchedAgentTurnRequestCarriesHostAssembledContext(t *testing.T) {
 	if len(turnRequest.VisibleContext.Materials) == 0 || turnRequest.VisibleContext.Materials[0].Filename != "quarterly.pdf" {
 		t.Fatalf("expected attachment materials on the turn request, got %+v", turnRequest.VisibleContext.Materials)
 	}
-	if len(turnRequest.MemoryFacts) != 2 {
-		t.Fatalf("expected pinned and graph memory facts on the turn request, got %+v", turnRequest.MemoryFacts)
-	}
-	if turnRequest.MemoryFacts[0].SourceKind != memory.MemorySourceKindPinned ||
-		!strings.Contains(turnRequest.MemoryFacts[0].Content, "The user prefers terse release notes.") {
-		t.Fatalf("expected pinned memory first, got %+v", turnRequest.MemoryFacts)
-	}
-	if turnRequest.MemoryFacts[1].Content != "The user leads the quarterly launch project." {
-		t.Fatalf("expected graph memory after pinned memory, got %+v", turnRequest.MemoryFacts)
+	if len(turnRequest.MemoryFacts) != 0 {
+		t.Fatalf("expected no automatic memory facts on the turn request, got %+v", turnRequest.MemoryFacts)
 	}
 	if turnRequest.ToolSet == nil || !containsString(turnRequest.ToolSet.ListToolNames(), "memory_search") {
 		t.Fatalf("expected the launch tool set on the turn request, got %+v", turnRequest.ToolSet)
