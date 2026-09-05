@@ -506,7 +506,7 @@ func TestRunVirtualSessionLiveLanguageModelPrintsFailureSummary(t *testing.T) {
 		return runVirtualSession(context.Background(), arguments)
 	})
 
-	if errorValue == nil || !strings.Contains(errorValue.Error(), "task ended failed") {
+	if errorValue == nil || !strings.Contains(errorValue.Error(), `got "failed"`) {
 		t.Fatalf("expected the hardened harness to reject the failed task, got %v\n%s", errorValue, output)
 	}
 	if fakeServer.RequestCount() == 0 {
