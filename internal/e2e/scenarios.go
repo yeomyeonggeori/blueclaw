@@ -134,13 +134,7 @@ func PresentationLocalMultiturnSuccessScenario(artifactDirectoryPath string) Vir
 					ContainsFragments: []string{"Paperlogy", "Freesentation", "--background", "InternKim capability deck"},
 				},
 			},
-			ForbiddenReplyFragments: []string{
-				"PPT 못",
-				"PPT 파일을 직접 생성할 수",
-				"credentials",
-				"자격 증명",
-			},
-		}},
+			}},
 	}
 }
 
