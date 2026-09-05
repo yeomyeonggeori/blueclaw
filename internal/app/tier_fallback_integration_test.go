@@ -45,7 +45,10 @@ func TestLowTierEscalatesToMediumThroughRealCapabilityTransport(t *testing.T) {
 	runtimeConfiguration := configuredModelTierRuntime("")
 	runtimeConfiguration.Capabilities.Endpoint = server.URL
 
-	providers := resolveTaskTierLanguageModelProviders(runtimeConfiguration, slog.New(slog.DiscardHandler))
+	providers, errorValue := resolveTaskTierLanguageModelProviders(runtimeConfiguration, slog.New(slog.DiscardHandler))
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
 	response, errorValue := providers.Low.GenerateStructuredResponse(context.Background(), llm.StructuredResponseRequest{
 		Messages: []llm.Message{{Role: "user", Content: "test"}},
 		StructuredOutputSchema: llm.StructuredOutputSchema{
@@ -85,7 +88,10 @@ func TestCappedHighTierReportsLowModelTier(t *testing.T) {
 
 	runtimeConfiguration := configuredModelTierRuntime("low")
 	runtimeConfiguration.Capabilities.Endpoint = server.URL
-	providers := resolveTaskTierLanguageModelProviders(runtimeConfiguration, slog.New(slog.DiscardHandler))
+	providers, errorValue := resolveTaskTierLanguageModelProviders(runtimeConfiguration, slog.New(slog.DiscardHandler))
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
 	response, errorValue := providers.High.GenerateStructuredResponse(context.Background(), llm.StructuredResponseRequest{
 		StructuredOutputSchema: llm.StructuredOutputSchema{Name: "bluecollar_agent_turn_action", Document: `{"type":"object"}`},
 	})

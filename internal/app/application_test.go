@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/bluecollarharness"
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/bluecollarharness"
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
@@ -80,7 +80,10 @@ func TestResolveIntakeLanguageModelProviderUsesReliableTaskTierModel(t *testing.
 	runtimeConfiguration.Agent.Intake.Enabled = true
 	runtimeConfiguration.Agent.Intake.ExecutionMode = "auto"
 
-	languageModelProvider := resolveIntakeLanguageModelProvider(runtimeConfiguration, nil)
+	languageModelProvider, errorValue := resolveIntakeLanguageModelProvider(runtimeConfiguration, nil)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
 	fallbackLanguageModelProvider, isFallbackProvider := languageModelProvider.(llm.FallbackLanguageModelProvider)
 	if !isFallbackProvider {
 		t.Fatalf("expected fallback intake provider, got %T", languageModelProvider)
@@ -106,7 +109,10 @@ func TestResolveIntakeLanguageModelProviderUsesReliableTaskTierModel(t *testing.
 
 func TestMaximumXLowTierCapsTaskModelsAndUsesLowForImages(t *testing.T) {
 	runtimeConfiguration := configuredModelTierRuntime("xlow")
-	providers := resolveTaskTierLanguageModelProviders(runtimeConfiguration, slog.New(slog.DiscardHandler))
+	providers, errorValue := resolveTaskTierLanguageModelProviders(runtimeConfiguration, slog.New(slog.DiscardHandler))
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
 
 	for providerName, provider := range map[string]llm.LanguageModelProvider{
 		"low": providers.Low, "xlow": providers.XLow, "medium": providers.Medium,
@@ -122,7 +128,10 @@ func TestMaximumXLowTierCapsTaskModelsAndUsesLowForImages(t *testing.T) {
 func TestMaximumLowTierCapsIntakeFallbacks(t *testing.T) {
 	runtimeConfiguration := configuredModelTierRuntime("low")
 	runtimeConfiguration.Agent.Intake.Enabled = true
-	provider := resolveIntakeLanguageModelProvider(runtimeConfiguration, nil)
+	provider, errorValue := resolveIntakeLanguageModelProvider(runtimeConfiguration, nil)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
 
 	modelNames := languageModelProviderNames(provider)
 	if !reflect.DeepEqual(modelNames, []string{"vendor/low", "vendor/xlow"}) {
@@ -565,7 +574,10 @@ func taskEventsContainApplicationEvent(taskEvents []task.TaskEvent, name string)
 
 func TestResolveTaskTierLanguageModelProvidersEscalateLowToMedium(t *testing.T) {
 	runtimeConfiguration := configuredModelTierRuntime("")
-	providers := resolveTaskTierLanguageModelProviders(runtimeConfiguration, slog.New(slog.DiscardHandler))
+	providers, errorValue := resolveTaskTierLanguageModelProviders(runtimeConfiguration, slog.New(slog.DiscardHandler))
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
 
 	lowProvider, isFallbackProvider := providers.Low.(llm.FallbackLanguageModelProvider)
 	if !isFallbackProvider {
@@ -596,7 +608,10 @@ func TestResolveTaskTierLanguageModelProvidersKeepsBareLowWhenMediumMatchesLow(t
 	runtimeConfiguration := configuredModelTierRuntime("")
 	runtimeConfiguration.LanguageModel.Capability.LowModel = "vendor/shared"
 	runtimeConfiguration.LanguageModel.Capability.MediumModel = "vendor/shared"
-	providers := resolveTaskTierLanguageModelProviders(runtimeConfiguration, slog.New(slog.DiscardHandler))
+	providers, errorValue := resolveTaskTierLanguageModelProviders(runtimeConfiguration, slog.New(slog.DiscardHandler))
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
 
 	if _, isFallbackProvider := providers.Low.(llm.FallbackLanguageModelProvider); isFallbackProvider {
 		t.Fatal("expected bare low provider when the medium model equals the low model")
@@ -626,7 +641,10 @@ func TestEveryTaskTierPostsTheModelItsEndpointWasGiven(t *testing.T) {
 		}
 	}
 
-	providers := resolveTaskTierLanguageModelProviders(runtimeConfiguration, slog.New(slog.DiscardHandler))
+	providers, errorValue := resolveTaskTierLanguageModelProviders(runtimeConfiguration, slog.New(slog.DiscardHandler))
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
 
 	for tierName, provider := range map[string]llm.LanguageModelProvider{
 		"xlow":   providers.XLow,

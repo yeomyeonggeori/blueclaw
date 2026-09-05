@@ -18,6 +18,10 @@ func (application *Application) Start() error {
 	if application.startupError != nil {
 		return application.startupError
 	}
+	if application.languageModelError != nil {
+		application.runtimeLogger.Logger.Error("application.language_model_configuration_rejected", "error", application.languageModelError.Error())
+		return application.serveWithoutStartingWork()
+	}
 	if errorValue := application.checkProtocolIdentity(); errorValue != nil {
 		application.runtimeLogger.Logger.Error("application.protocol_identity_rejected", "error", errorValue.Error())
 		return application.serveWithoutStartingWork()

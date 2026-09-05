@@ -56,6 +56,7 @@ type Application struct {
 	taskRetentionIntervalMinute int
 	interruptedTaskResumeDelay  time.Duration
 	languageModelConfigured     bool
+	languageModelError          error
 	protocolIdentityChecker     protocolidentity.Checker
 	protocolIdentityExpected    protocolidentity.Identity
 	protocolIdentityStatus      *protocolidentity.Result
@@ -124,6 +125,7 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 	components.memory = newMemoryComponents(runtimeConfiguration, components.foundation.database, components.kernel.taskTierLanguageModels.Low, logger)
 	components.backupCoordinator = backup.NewCoordinator(buildBackupManifest(runtimeConfiguration, components.foundation.database))
 	components.taskIntakeController = runtimecontrol.NewTaskIntakeController()
+	components.taskIntakeController.SetQuiesced(components.kernel.languageModelError != nil)
 	components.toolCatalogBuilder = newToolCatalogBuilder(runtimeConfiguration, components.kernel, components.services, components.memory, logger)
 	components.turnRouter = intake.NewTurnRouter(turnRouterLanguageModelProvider(components.kernel.taskTierLanguageModels, components.kernel.intakeLanguageModelProvider), deriveIntakeOptions(runtimeConfiguration))
 	components.taskLauncher = newTaskLauncher(runtimeConfiguration, components.foundation, components.directory, components.kernel, components.services, components.toolCatalogBuilder, components.turnRouter)
@@ -166,6 +168,7 @@ func newApplication(components applicationComponents) *Application {
 		taskRetentionIntervalMinute: components.runtimeConfiguration.Scheduler.RetentionCheckIntervalMinute,
 		interruptedTaskResumeDelay:  2 * time.Second,
 		languageModelConfigured:     components.kernel.taskTierLanguageModels.High != nil,
+		languageModelError:          components.kernel.languageModelError,
 		protocolIdentityChecker:     components.protocolIdentity.checker,
 		protocolIdentityExpected:    components.protocolIdentity.expected,
 		protocolIdentityStatus:      components.protocolIdentity.status,
