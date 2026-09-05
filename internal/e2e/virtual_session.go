@@ -235,6 +235,7 @@ type VirtualTurn struct {
 	ExpectedCheckpointReplies    []string
 	ForbiddenEvents              []string
 	ExpectedTaskStatus           task.TaskStatus
+	ForbidToolCalls              bool
 }
 
 type VirtualEventCount struct {
@@ -3222,6 +3223,13 @@ func normalizedResponseExpectation(expectation VirtualResponseExpectation) Virtu
 func assertStructuralTurnExpectations(virtualTurn VirtualTurn, turnResult VirtualTurnResult) error {
 	if errorValue := assertTaskDidNotFailUnexpectedly(virtualTurn, turnResult); errorValue != nil {
 		return errorValue
+	}
+	if virtualTurn.ForbidToolCalls {
+		for _, event := range turnResult.Events {
+			if toolName, isToolCall := agentcontract.ToolTaskEventToolName(event.Name, agentcontract.ToolTaskEventRequestedSuffix); isToolCall {
+				return fmt.Errorf("request forbids tool calls, but %s was requested", toolName)
+			}
+		}
 	}
 	for _, toolName := range virtualTurn.ExpectedExposedTools {
 		if !exposedToolNamePresent(turnResult.Events, toolName) {
