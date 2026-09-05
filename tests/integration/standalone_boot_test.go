@@ -38,8 +38,8 @@ func TestStandaloneRuntimeIsHealthyWithoutACapabilityService(t *testing.T) {
 	}
 	protocolIdentity, _ := healthDocument["protocolIdentity"].(map[string]any)
 	capabilityd, _ := protocolIdentity["capabilityd"].(map[string]any)
-	if capabilityd["status"] != "not_configured" {
-		t.Fatalf("expected the capability service to be reported as absent, got %s", responseRecorder.Body.String())
+	if capabilityd["status"] != "not_pinned" || capabilityd["passed"] != true {
+		t.Fatalf("expected the standalone runtime to require no pinned capability protocol, got %s", responseRecorder.Body.String())
 	}
 	if protocolIdentity["passed"] != true {
 		t.Fatalf("expected the protocol identity check to pass without a capability service, got %s", responseRecorder.Body.String())
