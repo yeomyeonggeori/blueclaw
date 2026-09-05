@@ -28,7 +28,7 @@ var runtimeOnlyRequestFields = []string{
 	"ExistingTaskRunID", "IsTaskRunOpenedForThisTurn", "OriginReplyTargetID", "OriginIsThread",
 	"ProfileName", "ToolSet", "SkillDecisions", "SkillRetrievalMode", "SkillIndexStatus",
 	"SkillCandidateCount", "ToolExposure", "PrecomputedTurnDecision", "IsPrecomputedDecisionExact",
-	"SkipSkillSelection", "EffortStartedAt", "TurnAnchorClamped", "OriginalTurnStartedAt",
+	"SkipSkillSelection", "EffortStartedAt", "TurnAnchorClamped", "OriginalTurnStartedAt", "ExecutionStartedAt",
 	"CheckpointSender", "RestrictActionToTerminalOnly",
 }
 

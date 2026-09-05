@@ -98,6 +98,7 @@ type TaskLaunchRequest struct {
 	CheckpointSender           agentcontract.AgentCheckpointSender
 	ArtifactManifest           []agentcontract.ArtifactManifestEntry
 	TurnStartedAt              time.Time
+	ExecutionStartedAt         time.Time
 }
 
 type TaskLaunchResult struct {
@@ -137,9 +138,12 @@ const (
 )
 
 type launchStepRecord struct {
-	StepName string `json:"stepName"`
-	Status   string `json:"status"`
-	Error    string `json:"error,omitempty"`
+	StepName        string `json:"stepName"`
+	Status          string `json:"status"`
+	StartedAtUnixMs int64  `json:"startedAtUnixMs"`
+	DurationMs      int64  `json:"durationMs"`
+	Error           string `json:"error,omitempty"`
+	errorValue      error  `json:"-"`
 }
 
 type launchMemoryResult struct {
@@ -285,32 +289,45 @@ func (taskLauncher *TaskLauncher) appendTurnRouterCallRecords(taskRunID string, 
 }
 
 func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request TaskLaunchRequest) (TaskLaunchResult, []agentcontract.LLMCallRecord, error) {
-	request.RequesterEmail = taskLauncher.resolveRequesterEmail(request)
-	request.PersonAccess = requesterPersonAccessForTaskLaunch(request)
+	launchRecords := []launchStepRecord{}
 	normalizedProfileName := normalizeProfileName(request.ProfileName)
-	activeCircleRequest := withResolvedActiveCircle(ToolCatalogRequest{
-		Prompt:                  request.Prompt,
-		ConversationChannelName: request.ConversationChannelName,
-		PersonAccess:            request.PersonAccess,
-		ActiveCircleID:          request.ActiveCircleID,
-		ActiveCircleConflict:    request.ActiveCircleConflict,
-	})
+	resolvedEmail, record := runLaunchStep(ctx, &taskLaunchExecution{Launcher: taskLauncher, Request: request}, resolveRequesterEmailLaunchStep{})
+	launchRecords = append(launchRecords, record)
+	request.RequesterEmail = resolvedEmail
+	if record.Error != "" {
+		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, nil, record.StepName, launchRecords, record.errorValue), nil, nil
+	}
+	request.PersonAccess = requesterPersonAccessForTaskLaunch(request)
+	activeCircleRequest, record := runLaunchStep(ctx, &taskLaunchExecution{Launcher: taskLauncher, Request: request, NormalizedProfileName: normalizedProfileName}, resolveActiveCircleLaunchStep{})
+	launchRecords = append(launchRecords, record)
+	if record.Error != "" {
+		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, nil, record.StepName, launchRecords, record.errorValue), nil, nil
+	}
 	request.ActiveCircleID = activeCircleRequest.ActiveCircleID
 	request.ActiveCircleConflict = activeCircleRequest.ActiveCircleConflict
-	request.ArtifactManifest = taskLauncher.conversationArtifactManifest(request, normalizedProfileName)
+	artifactManifest, record := runLaunchStep(ctx, &taskLaunchExecution{Launcher: taskLauncher, Request: request, NormalizedProfileName: normalizedProfileName}, conversationArtifactManifestLaunchStep{})
+	launchRecords = append(launchRecords, record)
+	if record.Error != "" {
+		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, nil, record.StepName, launchRecords, record.errorValue), nil, nil
+	}
+	request.ArtifactManifest = artifactManifest
 	turnDecision, routingOutcome := taskLauncher.routedTurnDecision(ctx, request, normalizedProfileName)
+	launchRecords = append(launchRecords, routingOutcome.LaunchRecords...)
 	routerCallRecords := routingOutcome.CallRecords
 	if routingOutcome.DidElapse {
 		return TaskLaunchResult{
-			TurnResult:            taskLauncher.completeIntakeElapsed(ctx, request, normalizedProfileName),
+			TurnResult:            taskLauncher.completeIntakeElapsed(ctx, request, normalizedProfileName, launchRecords),
 			NormalizedProfileName: normalizedProfileName,
 		}, routerCallRecords, nil
 	}
 	if routingOutcome.Error != nil {
 		return TaskLaunchResult{
-			TurnResult:            taskLauncher.completeTurnRouterFailure(ctx, request, normalizedProfileName, routingOutcome),
+			TurnResult:            taskLauncher.completeTurnRouterFailure(ctx, request, normalizedProfileName, routingOutcome, launchRecords),
 			NormalizedProfileName: normalizedProfileName,
 		}, routerCallRecords, nil
+	}
+	if !request.IsRuntimeRestartResume {
+		request.ExecutionStartedAt = time.Now()
 	}
 	request.PrecomputedTurnDecision = turnDecision
 	openedTaskRun := taskLauncher.openTaskRunForLaunch(request)
@@ -322,8 +339,7 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 		Request:               request,
 		NormalizedProfileName: normalizedProfileName,
 	}
-	launchRecords := []launchStepRecord{}
-	_, record := runLaunchStep(ctx, execution, provisionRequesterWorkspaceLaunchStep{})
+	_, record = runLaunchStep(ctx, execution, provisionRequesterWorkspaceLaunchStep{})
 	launchRecords = append(launchRecords, record)
 	if record.Error != "" {
 		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, nil, record.StepName, launchRecords, errorFromStepRecord(record)), routerCallRecords, nil
@@ -389,6 +405,43 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 }
 
 type provisionRequesterWorkspaceLaunchStep struct{}
+
+type resolveRequesterEmailLaunchStep struct{}
+
+func (resolveRequesterEmailLaunchStep) Name() string {
+	return "resolve_requester_email"
+}
+
+func (resolveRequesterEmailLaunchStep) Run(_ context.Context, execution *taskLaunchExecution) (string, error) {
+	return execution.Launcher.resolveRequesterEmail(execution.Request), nil
+}
+
+type resolveActiveCircleLaunchStep struct{}
+
+func (resolveActiveCircleLaunchStep) Name() string {
+	return "resolve_active_circle"
+}
+
+func (resolveActiveCircleLaunchStep) Run(_ context.Context, execution *taskLaunchExecution) (ToolCatalogRequest, error) {
+	request := execution.Request
+	return withResolvedActiveCircle(ToolCatalogRequest{
+		Prompt:                  request.Prompt,
+		ConversationChannelName: request.ConversationChannelName,
+		PersonAccess:            request.PersonAccess,
+		ActiveCircleID:          request.ActiveCircleID,
+		ActiveCircleConflict:    request.ActiveCircleConflict,
+	}), nil
+}
+
+type conversationArtifactManifestLaunchStep struct{}
+
+func (conversationArtifactManifestLaunchStep) Name() string {
+	return "conversation_artifact_manifest"
+}
+
+func (conversationArtifactManifestLaunchStep) Run(_ context.Context, execution *taskLaunchExecution) ([]agentcontract.ArtifactManifestEntry, error) {
+	return execution.Launcher.conversationArtifactManifest(execution.Request, execution.NormalizedProfileName), nil
+}
 
 func (provisionRequesterWorkspaceLaunchStep) Name() string {
 	return "provision_requester_workspace"
@@ -501,11 +554,21 @@ func (step runTurnLaunchStep) Run(ctx context.Context, execution *taskLaunchExec
 }
 
 func runLaunchStep[T any](ctx context.Context, execution *taskLaunchExecution, step taskLaunchStep[T]) (T, launchStepRecord) {
+	startedAt := time.Now()
 	result, errorValue := runLaunchStepRecoveringFromPanic(ctx, execution, step)
-	if errorValue != nil {
-		return result, launchStepRecord{StepName: step.Name(), Status: launchStepStatusError, Error: errorValue.Error()}
+	record := launchStepRecord{
+		StepName:        step.Name(),
+		StartedAtUnixMs: startedAt.UnixMilli(),
+		DurationMs:      time.Since(startedAt).Milliseconds(),
 	}
-	return result, launchStepRecord{StepName: step.Name(), Status: launchStepStatusResult}
+	if errorValue != nil {
+		record.Status = launchStepStatusError
+		record.Error = errorValue.Error()
+		record.errorValue = errorValue
+		return result, record
+	}
+	record.Status = launchStepStatusResult
+	return result, record
 }
 
 func runLaunchStepRecoveringFromPanic[T any](ctx context.Context, execution *taskLaunchExecution, step taskLaunchStep[T]) (result T, errorValue error) {
@@ -520,6 +583,9 @@ func runLaunchStepRecoveringFromPanic[T any](ctx context.Context, execution *tas
 }
 
 func errorFromStepRecord(record launchStepRecord) error {
+	if record.errorValue != nil {
+		return record.errorValue
+	}
 	return errors.New(record.Error)
 }
 
@@ -538,8 +604,9 @@ func (taskLauncher *TaskLauncher) completeLaunchFailure(ctx context.Context, req
 
 func (taskLauncher *TaskLauncher) agentTurnRequestForLaunch(request TaskLaunchRequest, profileName string, memoryFacts []memory.MemoryFact, toolSet *toolcontract.ToolSet, conversationScope ConversationResourceScope) agentcontract.AgentTurnRequest {
 	turnRequest := agentcontract.AgentTurnRequest{
-		ArtifactManifest: request.ArtifactManifest,
-		TurnStartedAt:    request.TurnStartedAt,
+		ArtifactManifest:   request.ArtifactManifest,
+		TurnStartedAt:      request.TurnStartedAt,
+		ExecutionStartedAt: request.ExecutionStartedAt,
 		// The appliance keeps the clock of the company it runs for. Without it the
 		// agent is told the date is unknown and made to read a shell to find out,
 		// on every request that turns on what day it is.
@@ -730,46 +797,90 @@ func bluecollarMemoryFacts(facts []memory.MemoryFact) []agentcontract.MemoryFact
 }
 
 type routingOutcome struct {
-	Error       error
-	DidElapse   bool
-	CallRecords []agentcontract.LLMCallRecord
+	Error         error
+	DidElapse     bool
+	CallRecords   []agentcontract.LLMCallRecord
+	LaunchRecords []launchStepRecord
+}
+
+type buildRouterToolSetLaunchStep struct {
+	Request     TaskLaunchRequest
+	ProfileName string
+}
+
+func (buildRouterToolSetLaunchStep) Name() string {
+	return "build_router_tool_set"
+}
+
+func (step buildRouterToolSetLaunchStep) Run(_ context.Context, execution *taskLaunchExecution) (*toolcontract.ToolSet, error) {
+	return execution.Launcher.toolCatalogBuilder.BuildToolSet(execution.Launcher.toolCatalogRequestForLaunch(step.Request, step.ProfileName)), nil
+}
+
+type routerCallResult struct {
+	TurnDecision agentcontract.TurnDecision
+	CallRecords  []agentcontract.LLMCallRecord
+}
+
+type routerCallLaunchStep struct {
+	Request     TaskLaunchRequest
+	ProfileName string
+	ToolSet     *toolcontract.ToolSet
+}
+
+func (routerCallLaunchStep) Name() string {
+	return "router_call"
+}
+
+func (step routerCallLaunchStep) Run(ctx context.Context, execution *taskLaunchExecution) (routerCallResult, error) {
+	routingContext, cancel := execution.Launcher.intakeRoutingContext(ctx, step.Request)
+	defer cancel()
+	callLedger := &agentcontract.TurnRouterCallLedger{}
+	turnDecision, errorValue := execution.Launcher.turnRouter.PlanObserved(routingContext, agentcontract.AgentRequest{
+		RequesterPersonID: step.Request.RequesterPersonID,
+		ConversationID:    step.Request.ConversationID,
+		Prompt:            step.Request.Prompt,
+		ResponseLanguage:  step.Request.ResponseLanguage,
+		VisibleContext:    step.Request.VisibleContext,
+		ScheduledRun:      step.Request.ScheduledRun,
+		ActiveGoal:        step.Request.ActiveGoal,
+		PriorTask:         step.Request.PriorTask,
+		TurnStartedAt:     step.Request.TurnStartedAt,
+		EnvironmentNow:    step.Request.TurnStartedAt,
+		Company:           execution.Launcher.company(),
+		ToolSet:           step.ToolSet,
+	}, callLedger)
+	result := routerCallResult{TurnDecision: turnDecision, CallRecords: callLedger.Records}
+	return result, errorValue
 }
 
 func (taskLauncher *TaskLauncher) routedTurnDecision(ctx context.Context, request TaskLaunchRequest, profileName string) (*agentcontract.TurnDecision, routingOutcome) {
 	if request.PrecomputedTurnDecision != nil || taskLauncher.turnRouter == nil {
 		return request.PrecomputedTurnDecision, routingOutcome{}
 	}
-	routingContext, cancel := taskLauncher.intakeRoutingContext(ctx, request)
-	defer cancel()
-	callLedger := &agentcontract.TurnRouterCallLedger{}
-	turnDecision, errorValue := taskLauncher.turnRouter.PlanObserved(routingContext, agentcontract.AgentRequest{
-		RequesterPersonID: request.RequesterPersonID,
-		ConversationID:    request.ConversationID,
-		Prompt:            request.Prompt,
-		ResponseLanguage:  request.ResponseLanguage,
-		VisibleContext:    request.VisibleContext,
-		ScheduledRun:      request.ScheduledRun,
-		ActiveGoal:        request.ActiveGoal,
-		PriorTask:         request.PriorTask,
-		TurnStartedAt:     request.TurnStartedAt,
-		EnvironmentNow:    request.TurnStartedAt,
-		Company:           taskLauncher.company(),
-		ToolSet:           taskLauncher.toolCatalogBuilder.BuildToolSet(taskLauncher.toolCatalogRequestForLaunch(request, profileName)),
-	}, callLedger)
-	if errorValue != nil {
-		workDeadline := taskLauncher.intakeWorkDeadline(request)
-		didElapse := !workDeadline.IsZero() && workDeadline.Before(time.Now())
-		return nil, routingOutcome{Error: errorValue, DidElapse: didElapse, CallRecords: callLedger.Records}
+	execution := &taskLaunchExecution{Launcher: taskLauncher, Request: request, NormalizedProfileName: profileName}
+	routerToolSet, toolSetRecord := runLaunchStep(ctx, execution, buildRouterToolSetLaunchStep{Request: request, ProfileName: profileName})
+	if toolSetRecord.Error != "" {
+		return nil, routingOutcome{Error: toolSetRecord.errorValue, LaunchRecords: []launchStepRecord{toolSetRecord}}
 	}
-	return &turnDecision, routingOutcome{CallRecords: callLedger.Records}
+	routerResult, routerCallRecord := runLaunchStep(ctx, execution, routerCallLaunchStep{Request: request, ProfileName: profileName, ToolSet: routerToolSet})
+	launchRecords := []launchStepRecord{toolSetRecord, routerCallRecord}
+	callRecords := routerResult.CallRecords
+	if routerCallRecord.Error == "" {
+		return &routerResult.TurnDecision, routingOutcome{CallRecords: callRecords, LaunchRecords: launchRecords}
+	}
+	errorValue := routerCallRecord.errorValue
+	workDeadline := taskLauncher.intakeWorkDeadline(request)
+	didElapse := errors.Is(errorValue, context.DeadlineExceeded) && !errors.Is(ctx.Err(), context.DeadlineExceeded) && !workDeadline.IsZero() && workDeadline.Before(time.Now())
+	return nil, routingOutcome{Error: errorValue, DidElapse: didElapse, CallRecords: callRecords, LaunchRecords: launchRecords}
 }
 
-func (taskLauncher *TaskLauncher) completeTurnRouterFailure(ctx context.Context, request TaskLaunchRequest, profileName string, outcome routingOutcome) agentcontract.AgentTurnResult {
+func (taskLauncher *TaskLauncher) completeTurnRouterFailure(ctx context.Context, request TaskLaunchRequest, profileName string, outcome routingOutcome, launchRecords []launchStepRecord) agentcontract.AgentTurnResult {
 	if taskLauncher.launchFailureCompleter == nil {
 		return agentcontract.AgentTurnResult{}
 	}
 	turnResult := taskLauncher.launchFailureCompleter.CompleteLaunchFailure(ctx, taskLauncher.agentTurnRequestForLaunch(request, profileName, nil, nil, ConversationResourceScope{}), "routing", "turn_router", outcome.Error)
 	taskLauncher.appendUnroutedLaunchAudit(turnResult.TaskRun.TaskRunID, request, profileName)
+	taskLauncher.appendLaunchStepRecords(turnResult.TaskRun.TaskRunID, launchRecords)
 	return turnResult
 }
 
@@ -788,7 +899,7 @@ func (taskLauncher *TaskLauncher) intakeRoutingContext(ctx context.Context, requ
 	return context.WithDeadline(ctx, workDeadline)
 }
 
-func (taskLauncher *TaskLauncher) completeIntakeElapsed(ctx context.Context, request TaskLaunchRequest, profileName string) agentcontract.AgentTurnResult {
+func (taskLauncher *TaskLauncher) completeIntakeElapsed(ctx context.Context, request TaskLaunchRequest, profileName string, launchRecords []launchStepRecord) agentcontract.AgentTurnResult {
 	intakeElapsedCompleter, isAvailable := taskLauncher.launchFailureCompleter.(IntakeElapsedCompleter)
 	if !isAvailable {
 		return agentcontract.AgentTurnResult{}
@@ -802,6 +913,7 @@ func (taskLauncher *TaskLauncher) completeIntakeElapsed(ctx context.Context, req
 		WorkDeadline:      taskLauncher.intakeWorkDeadline(request),
 	})
 	taskLauncher.appendUnroutedLaunchAudit(turnResult.TaskRun.TaskRunID, request, profileName)
+	taskLauncher.appendLaunchStepRecords(turnResult.TaskRun.TaskRunID, launchRecords)
 	return turnResult
 }
 
