@@ -1,0 +1,18 @@
+{
+  "name": "task-classification-live",
+  "skillDirectoryPaths": ["../../internkim-plugin/skills/internkim-task"],
+  "allowedTools": ["conversation_history", "memory_search", "task_add", "task_list", "task_update"],
+  "capabilityToolNames": ["task_add", "task_list", "task_update"],
+  "initialToolNames": ["task_add"],
+  "steps": [
+    {
+      "prompt": "Please record the work item to review the sample onboarding checklist and prepare the next revision.",
+      "expectedResponse": "reply",
+      "expectedToolCalls": ["task_add"],
+      "expectedEventCounts": [
+        {"name": "tool.task_add.requested", "bodyFragment": "\"size\":\"", "minCount": 1}
+      ],
+      "expectedTaskStatus": "completed"
+    }
+  ]
+}

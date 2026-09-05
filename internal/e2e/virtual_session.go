@@ -1993,7 +1993,9 @@ func (service *virtualCapabilityService) taskResponse(toolName string, requestBo
 		return virtualCapabilityTaskSuccess(toolName, "created", record.ID, "created virtual task", record.Values)
 	case "task_list":
 		tasks := virtualCapabilityRecordValues(service.tasks)
-		return virtualCapabilitySuccess(toolName, "listed virtual tasks", map[string]any{"tasks": tasks, "count": len(tasks), "scope": "virtual"})
+		return virtualCapabilitySuccess(toolName, "listed virtual tasks", map[string]any{
+			"tasks": tasks, "count": len(tasks), "scope": "virtual", "registeredLabels": virtualTaskRegisteredLabels(),
+		})
 	case "task_update":
 		if len(input) < 2 {
 			return virtualCapabilityInvalidInput(toolName, "at least one task field must be updated")
@@ -2022,6 +2024,32 @@ func (service *virtualCapabilityService) taskResponse(toolName string, requestBo
 		service.tasks = append(service.tasks[:index], service.tasks[index+1:]...)
 		return virtualCapabilityTaskSuccess(toolName, "deleted", deletedRecord.ID, "deleted virtual task", map[string]any{"taskID": deletedRecord.ID, "deleted": true})
 	}
+}
+
+func virtualTaskRegisteredLabels() map[string]any {
+	labels := map[string]any{"businesses": []string{}, "types": []string{}, "sizes": []string{}, "statuses": []string{}}
+	if _, isFound := virtualCanonicalCapabilityToolDescriptor("task_add"); !isFound {
+		return labels
+	}
+	labels["sizes"] = virtualTaskEnumValues("task_add", "size")
+	labels["statuses"] = virtualTaskEnumValues("task_update", "status")
+	return labels
+}
+
+func virtualTaskEnumValues(toolName string, fieldName string) []string {
+	descriptor, isFound := virtualCanonicalCapabilityToolDescriptor(toolName)
+	if !isFound {
+		return []string{}
+	}
+	var schema struct {
+		Properties map[string]struct {
+			Enum []string `json:"enum"`
+		} `json:"properties"`
+	}
+	if json.Unmarshal(descriptor.InputSchema, &schema) != nil {
+		return []string{}
+	}
+	return append([]string{}, schema.Properties[fieldName].Enum...)
 }
 
 func virtualTaskResultFromAddInput(taskID string, input map[string]any) map[string]any {
