@@ -71,6 +71,28 @@ func TestAssertTurnResultGateFields(t *testing.T) {
 	}
 }
 
+func TestStructuralGateAllowsFormerPresentationWordingFragments(t *testing.T) {
+	turn := VirtualTurn{
+		ExpectedResponse:   VirtualResponseReply,
+		ExpectedToolCalls:  []string{"shell"},
+		ExpectedTaskStatus: task.TaskStatusCompleted,
+	}
+	completedResult := VirtualTurnResult{
+		TaskStatus:    task.TaskStatusCompleted,
+		DidReply:      true,
+		FinishMessage: "PPT 파일을 직접 생성할 수 없다는 안내와 credentials 설명을 포함한 답변",
+		Events:        []task.TaskEvent{gateNamedEvent("tool.shell.result")},
+	}
+	if errorValue := assertTurnResult("", turn, completedResult); errorValue != nil {
+		t.Fatalf("expected structural gate to ignore reply wording, got %v", errorValue)
+	}
+
+	completedResult.Events = nil
+	if assertTurnResult("", turn, completedResult) == nil {
+		t.Fatal("expected missing required shell result to fail the structural gate")
+	}
+}
+
 func TestStreamProgressObserverFormatsReplyAndTool(t *testing.T) {
 	buffer := &bytes.Buffer{}
 	observe := streamProgressObserver(buffer)
