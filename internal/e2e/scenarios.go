@@ -179,7 +179,10 @@ func PlainQuestionAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 			ActionResponses: []string{
 				actionFinishMessage("좋은 회의록의 핵심은 결정사항, 담당자, 기한을 분명히 남기는 것입니다."),
 			},
-			ExpectedReplyFragments: []string{"결정사항", "담당자", "기한"},
+			ExpectedTaskStatus: task.TaskStatusCompleted,
+			ExpectedResponse:   VirtualResponseReply,
+			MinimumReplyLength: 1,
+			ForbidToolCalls:    true,
 		}},
 	}
 }

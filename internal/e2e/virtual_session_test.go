@@ -458,6 +458,18 @@ func TestPlainQuestionAcceptance(t *testing.T) {
 	}
 }
 
+func TestPlainQuestionAcceptsEquivalentWordingAndRejectsToolWork(t *testing.T) {
+	turn := PlainQuestionAcceptanceScenario(t.TempDir()).Turns[0]
+	result := VirtualTurnResult{TaskStatus: task.TaskStatusCompleted, DidReply: true, FinishMessage: "무엇을 정했는지, 누가 언제까지 실행할지를 짧게 정리하세요."}
+	if errorValue := assertTurnResult(t.TempDir(), turn, result); errorValue != nil {
+		t.Fatalf("a different wording failed acceptance: %v", errorValue)
+	}
+	result.Events = []task.TaskEvent{{Name: toolRequestedEventName("file_write")}}
+	if errorValue := assertStructuralTurnExpectations(turn, result); errorValue == nil {
+		t.Fatal("a no-tools request accepted a file write")
+	}
+}
+
 func TestFailedAssertionReturnsObservedTurnResult(t *testing.T) {
 	scenario := PlainQuestionAcceptanceScenario(t.TempDir())
 	scenario.Turns[0].ExpectedTaskStatus = task.TaskStatusFailed
