@@ -537,6 +537,34 @@ func TestVirtualTaskCapabilityPreservesLifecycleState(t *testing.T) {
 	}
 }
 
+func TestVirtualTaskListUsesCanonicalLabels(t *testing.T) {
+	service := virtualCapabilityService{}
+	listResponse := service.response("task_list", []byte(`{"input":{},"context":{}}`))
+	var listDocument struct {
+		Result struct {
+			RegisteredLabels struct {
+				Businesses []map[string]any `json:"businesses"`
+				Types      []map[string]any `json:"types"`
+				Sizes      []string         `json:"sizes"`
+				Statuses   []string         `json:"statuses"`
+			} `json:"registeredLabels"`
+		} `json:"result"`
+	}
+	if errorValue := json.Unmarshal([]byte(listResponse), &listDocument); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if _, isFound := virtualCanonicalCapabilityToolDescriptor("task_add"); !isFound {
+		t.Fatal("expected the canonical task_add descriptor to be loaded")
+	}
+	if listDocument.Result.RegisteredLabels.Businesses == nil || listDocument.Result.RegisteredLabels.Types == nil || len(listDocument.Result.RegisteredLabels.Sizes) == 0 || len(listDocument.Result.RegisteredLabels.Statuses) == 0 {
+		t.Fatal("expected complete registered labels, including explicit empty company label lists")
+	}
+	if !slices.Equal(listDocument.Result.RegisteredLabels.Sizes, virtualTaskEnumValues("task_add", "size")) ||
+		!slices.Equal(listDocument.Result.RegisteredLabels.Statuses, virtualTaskEnumValues("task_update", "status")) {
+		t.Fatalf("expected registered labels to match canonical enums, got sizes=%v statuses=%v", listDocument.Result.RegisteredLabels.Sizes, listDocument.Result.RegisteredLabels.Statuses)
+	}
+}
+
 func virtualTaskID(t *testing.T, response string) string {
 	t.Helper()
 	var document struct {
