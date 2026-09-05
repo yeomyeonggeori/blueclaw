@@ -13,6 +13,7 @@ import (
 )
 
 type HealthHandler struct {
+	LanguageModel            LanguageModelHealth
 	Database                 postgres.Database
 	ConnectorRuntime         *connectors.ConnectorRuntime
 	MemoryService            *memory.MemoryService
@@ -23,6 +24,7 @@ type HealthHandler struct {
 }
 
 type healthResponse struct {
+	LanguageModel    LanguageModelHealth               `json:"languageModel"`
 	Status           string                            `json:"status"`
 	Database         databaseHealth                    `json:"database"`
 	Connector        connectors.ConnectorRuntimeHealth `json:"connector"`
@@ -31,6 +33,11 @@ type healthResponse struct {
 	ProtocolIdentity protocolidentity.Result           `json:"protocolIdentity"`
 	FailureReasons   []string                          `json:"failureReasons,omitempty"`
 	CheckedAt        time.Time                         `json:"checkedAt"`
+}
+
+type LanguageModelHealth struct {
+	Configured bool   `json:"configured"`
+	Error      string `json:"error,omitempty"`
 }
 
 type databaseHealth struct {
@@ -56,8 +63,9 @@ func (healthHandler HealthHandler) HandleHealth(responseWriter http.ResponseWrit
 
 func (healthHandler HealthHandler) health(ctx context.Context) healthResponse {
 	response := healthResponse{
-		Status:    "ok",
-		CheckedAt: time.Now().UTC(),
+		Status:        "ok",
+		CheckedAt:     time.Now().UTC(),
+		LanguageModel: healthHandler.LanguageModel,
 	}
 	if healthHandler.MaximumBacklog <= 0 {
 		healthHandler.MaximumBacklog = 1000
@@ -113,6 +121,9 @@ func (healthHandler HealthHandler) backlogFailureReasons(backlog postgres.Connec
 
 func healthFailureReasons(response healthResponse) []string {
 	failureReasons := []string{}
+	if !response.LanguageModel.Configured {
+		failureReasons = append(failureReasons, "language model configuration is not valid")
+	}
 	if !response.Database.Reachable {
 		failureReasons = append(failureReasons, "postgres database is not reachable")
 	}

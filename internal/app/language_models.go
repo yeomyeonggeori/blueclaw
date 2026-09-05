@@ -10,10 +10,10 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
-func resolveTaskTierLanguageModelProviders(runtimeConfiguration config.RuntimeConfiguration, logger *slog.Logger) agentcontract.TaskTierLanguageModels {
+func resolveTaskTierLanguageModelProviders(runtimeConfiguration config.RuntimeConfiguration, logger *slog.Logger) (agentcontract.TaskTierLanguageModels, error) {
 	providers, errorValue := resolveModelTierProviders(runtimeConfiguration, logger)
 	if errorValue != nil {
-		return agentcontract.TaskTierLanguageModels{}
+		return agentcontract.TaskTierLanguageModels{}, errorValue
 	}
 	minimumModelTier := normalizeModelTier(runtimeConfiguration.LanguageModel.MinimumModelTier)
 	maximumModelTier := normalizeModelTier(runtimeConfiguration.LanguageModel.MaximumModelTier)
@@ -25,7 +25,7 @@ func resolveTaskTierLanguageModelProviders(runtimeConfiguration config.RuntimeCo
 			High:   providers.high,
 			XHigh:  providers.xHigh,
 			Max:    providers.max,
-		}
+		}, nil
 	}
 	return agentcontract.TaskTierLanguageModels{
 		XLow:   providers.providerWithinBounds("xlow", minimumModelTier, maximumModelTier),
@@ -34,12 +34,12 @@ func resolveTaskTierLanguageModelProviders(runtimeConfiguration config.RuntimeCo
 		High:   providers.providerWithinBounds("high", minimumModelTier, maximumModelTier),
 		XHigh:  providers.providerWithinBounds("xhigh", minimumModelTier, maximumModelTier),
 		Max:    providers.providerWithinBounds("max", minimumModelTier, maximumModelTier),
-	}
+	}, nil
 }
 
-func resolveIntakeLanguageModelProvider(runtimeConfiguration config.RuntimeConfiguration, logger *slog.Logger) llm.LanguageModelProvider {
+func resolveIntakeLanguageModelProvider(runtimeConfiguration config.RuntimeConfiguration, logger *slog.Logger) (llm.LanguageModelProvider, error) {
 	if !runtimeConfiguration.Agent.Intake.Enabled {
-		return nil
+		return nil, nil
 	}
 	intakeConfiguration := runtimeConfiguration
 	intakeConfiguration.LanguageModel.Capability.ExecutionMode = firstNonEmptyString(
@@ -48,10 +48,10 @@ func resolveIntakeLanguageModelProvider(runtimeConfiguration config.RuntimeConfi
 	)
 	providers, errorValue := resolveModelTierProviders(intakeConfiguration, logger)
 	if errorValue != nil {
-		return nil
+		return nil, errorValue
 	}
 	if maximumModelTier := normalizeModelTier(runtimeConfiguration.LanguageModel.MaximumModelTier); maximumModelTier != "" {
-		return providers.providerForTier(maximumModelTier)
+		return providers.providerForTier(maximumModelTier), nil
 	}
 	return llm.FallbackLanguageModelProvider{
 		PrimaryProvider:  providers.mediumTierOnly,
@@ -59,7 +59,7 @@ func resolveIntakeLanguageModelProvider(runtimeConfiguration config.RuntimeConfi
 		PrimaryLabel:     "intake",
 		FallbackLabel:    "high",
 		Logger:           logger,
-	}
+	}, nil
 }
 
 type modelTierProviders struct {

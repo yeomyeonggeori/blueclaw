@@ -256,12 +256,17 @@ then:
 
 ```bash
 go run ./cmd/blueclaw --runtime runtime.json --policy config/policy.example.json
-curl -s localhost:8081/admin/api/health | jq '.status, .protocolIdentity.passed'
+curl -s localhost:8081/admin/api/health | jq '.status, .languageModel, .protocolIdentity.passed'
 ```
 
 `cmd/blueclaw` takes exactly two flags, `--runtime` and `--policy`; everything
 else is configuration. The 29 migrations under `migrations/` are applied in
 order at boot.
+
+Model initialization errors remain visible in `languageModel.error`. A missing tier or invalid
+provider configuration returns HTTP 503 from health and keeps background task workers stopped.
+The daemon remains available for diagnosis. Model readiness checks initialization; a release
+acceptance run must also exercise the live model path.
 
 A standalone deployment reports `capabilityd: not_configured`. There is no
 capability service, so the calendar, task, mail, and site operations an

@@ -56,6 +56,7 @@ func newRouterDependencies(components applicationComponents) httpserver.RouterDe
 
 func newHealthHandler(components applicationComponents) httpserver.HealthHandler {
 	return httpserver.HealthHandler{
+		LanguageModel:            languageModelHealth(components.kernel),
 		Database:                 components.foundation.database,
 		ConnectorRuntime:         components.connectorRuntime,
 		MemoryService:            components.memory.memoryService,
@@ -64,6 +65,13 @@ func newHealthHandler(components applicationComponents) httpserver.HealthHandler
 		ProtocolIdentityChecker:  &components.protocolIdentity.checker,
 		ProtocolIdentityExpected: components.protocolIdentity.expected,
 	}
+}
+
+func languageModelHealth(kernel agentKernel) httpserver.LanguageModelHealth {
+	if kernel.languageModelError != nil {
+		return httpserver.LanguageModelHealth{Error: kernel.languageModelError.Error()}
+	}
+	return httpserver.LanguageModelHealth{Configured: turnRouterLanguageModelProvider(kernel.taskTierLanguageModels, kernel.intakeLanguageModelProvider) != nil}
 }
 
 func newWorkspaceFilesHandler(runtimeConfiguration config.RuntimeConfiguration, kernel agentKernel, directory identityDirectory) httpserver.WorkspaceFilesHandler {

@@ -33,6 +33,7 @@ type agentKernel struct {
 	skillRetriever                    agentcontract.SkillRetriever
 	refreshSkillIndex                 func(context.Context)
 	startupError                      error
+	languageModelError                error
 }
 
 func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, agentHarnessFactory harnessdriver.Factory, services taskServices, companyProvider func() agentcontract.CompanyContext, logger *slog.Logger) agentKernel {
@@ -42,6 +43,8 @@ func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, agentHarne
 	startupInstructions := loadAgentInstructions(runtimeConfiguration, capabilityRegistry)
 	logSkillsMissingTheirTools(logger, startupInstructions.UnavailableSkills)
 	logRejectedPersonaDocuments(logger, startupInstructions.RejectedDocuments)
+	taskTierLanguageModels, taskModelsError := resolveTaskTierLanguageModelProviders(runtimeConfiguration, logger)
+	intakeLanguageModel, intakeModelError := resolveIntakeLanguageModelProvider(runtimeConfiguration, logger)
 	kernel := agentKernel{
 		instructionBundleLoader: func() agentcontract.InstructionBundle {
 			return loadAgentInstructionBundle(runtimeConfiguration, capabilityRegistry)
@@ -50,7 +53,9 @@ func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, agentHarne
 			return loadAgentIdentity(runtimeConfiguration)
 		},
 		languageModelRuntimeConfiguration: runtimeConfiguration,
-		taskTierLanguageModels:            resolveTaskTierLanguageModelProviders(runtimeConfiguration, logger),
+		taskTierLanguageModels:            taskTierLanguageModels,
+		intakeLanguageModelProvider:       intakeLanguageModel,
+		languageModelError:                firstNonNilError(taskModelsError, intakeModelError),
 		capabilityClient:                  capabilityClient,
 		capabilityRegistry:                capabilityRegistry,
 	}
@@ -60,7 +65,6 @@ func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, agentHarne
 		logger.Error("embedding provider configuration failed", "error", embeddingError.Error())
 	}
 	kernel.embeddingClient = embeddingProvider
-	kernel.intakeLanguageModelProvider = resolveIntakeLanguageModelProvider(runtimeConfiguration, logger)
 	kernel.terminalService = security.NewShellService(runtimeConfiguration.Terminal)
 	kernel.toolCatalog = newToolCatalogEndpoint(services.taskRunService, kernel.taskTierLanguageModels.High, kernel.capabilityClient)
 	harnessFactory, harnessName, selectionError := selectAgentHarness(runtimeConfiguration, agentHarnessFactory, kernel, logger)
