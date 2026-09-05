@@ -72,24 +72,22 @@ func TestAssertTurnResultGateFields(t *testing.T) {
 }
 
 func TestStructuralGateAllowsFormerPresentationWordingFragments(t *testing.T) {
-	turn := VirtualTurn{
-		ExpectedResponse:   VirtualResponseReply,
-		ExpectedToolCalls:  []string{"shell"},
-		ExpectedTaskStatus: task.TaskStatusCompleted,
-	}
+	turn := PresentationLocalMultiturnSuccessScenario(t.TempDir()).Turns[0]
 	completedResult := VirtualTurnResult{
 		TaskStatus:    task.TaskStatusCompleted,
 		DidReply:      true,
 		FinishMessage: "PPT 파일을 직접 생성할 수 없다는 안내와 credentials 설명을 포함한 답변",
-		Events:        []task.TaskEvent{gateNamedEvent("tool.shell.result")},
 	}
-	if errorValue := assertTurnResult("", turn, completedResult); errorValue != nil {
-		t.Fatalf("expected structural gate to ignore reply wording, got %v", errorValue)
+	if errorValue := assertReplyContentExpectations(turn, completedResult); errorValue != nil {
+		t.Fatalf("expected Presentation reply wording to be unconstrained, got %v", errorValue)
 	}
 
-	completedResult.Events = nil
-	if assertTurnResult("", turn, completedResult) == nil {
-		t.Fatal("expected missing required shell result to fail the structural gate")
+	completedResult.Events = []task.TaskEvent{
+		gateNamedEvent("tool.shell.result"),
+		gateNamedEvent("tool.file_deliver.result"),
+	}
+	if errorValue := assertTurnResult("", turn, completedResult); errorValue == nil {
+		t.Fatal("expected missing Presentation artifact evidence to fail the structural gate")
 	}
 }
 
