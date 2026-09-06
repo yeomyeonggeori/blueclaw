@@ -144,11 +144,7 @@ func (store *Store) UpdateSettings(settings Settings) error {
 	if settings.ActiveLimit <= 0 {
 		return errors.New("active limit must be positive")
 	}
-	document, errorValue := json.Marshal(settings)
-	if errorValue != nil {
-		return errorValue
-	}
-	if errorValue := os.WriteFile(store.path+".settings", document, 0o600); errorValue != nil {
+	if errorValue := writePrivateJSON(store.path+".settings", settings); errorValue != nil {
 		return errorValue
 	}
 	store.enabled, store.activeLimit = settings.Enabled, settings.ActiveLimit
