@@ -12,6 +12,8 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/persona"
 )
 
+const maxReviewEvidenceBytes = 48 * 1024
+
 type SoulRevision = persona.SoulRevision
 
 type ReviewRecord struct {
@@ -231,12 +233,21 @@ func (coordinator *Coordinator) claimBatch(now time.Time) ([]Experience, error) 
 	audience := state.Pending[0].Audience
 	batch := []Experience{}
 	remaining := []Experience{}
+	evidenceBytes := 0
 	for _, experience := range state.Pending {
-		if experience.Audience == audience && len(batch) < 20 {
+		serializedExperience, errorValue := json.Marshal(experience)
+		if errorValue != nil {
+			return nil, errorValue
+		}
+		if experience.Audience == audience && len(batch) < 20 && evidenceBytes+len(serializedExperience) <= maxReviewEvidenceBytes {
 			batch = append(batch, experience)
+			evidenceBytes += len(serializedExperience)
 		} else {
 			remaining = append(remaining, experience)
 		}
+	}
+	if len(batch) == 0 {
+		return nil, nil
 	}
 	state.Pending = remaining
 	state.InFlight = append([]Experience{}, batch...)

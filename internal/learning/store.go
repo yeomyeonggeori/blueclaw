@@ -194,11 +194,6 @@ func (store *Store) ApplyDecision(decision StoreDecision) (Skill, error) {
 	default:
 		return Skill{}, errors.New("unsupported learning decision")
 	}
-	items, errorValue := store.Get(decision.ID, decision.Skill.Audience, false)
-	if errorValue != nil {
-		return Skill{}, errorValue
-	}
-	return items[0], nil
 }
 
 func (store *Store) retireDecision(decision StoreDecision) (Skill, error) {

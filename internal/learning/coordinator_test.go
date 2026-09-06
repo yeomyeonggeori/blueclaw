@@ -2,9 +2,12 @@ package learning
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/yeomyeonggeori/bluecollar/model"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -223,6 +226,52 @@ func TestCoordinatorDailyAttemptCapCountsFailedReviews(t *testing.T) {
 	coordinator.mutex.Unlock()
 	if batch, errorValue := coordinator.claimBatch(now.Add(4 * time.Hour)); errorValue != nil || len(batch) != 0 {
 		t.Fatalf("fourth attempt was allowed: %+v %v", batch, errorValue)
+	}
+}
+
+func TestCoordinatorClaimBatchKeepsSerializedEvidenceWithinBudget(t *testing.T) {
+	root := t.TempDir()
+	store, errorValue := Open(filepath.Join(root, "skills.json"), 20)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := store.UpdateSettings(Settings{Enabled: true, ActiveLimit: 20}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	coordinator, errorValue := NewCoordinator(root, store, Reviewer{}, nil)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	for taskNumber := 0; taskNumber < 20; taskNumber++ {
+		if errorValue := coordinator.Observe(Experience{
+			TaskID:   fmt.Sprintf("task-%d", taskNumber),
+			Audience: "company",
+			Request:  strings.Repeat("request ", 3000),
+			Outcome:  []byte(`{"ok":true}`),
+		}); errorValue != nil {
+			t.Fatal(errorValue)
+		}
+	}
+	now := time.Now().UTC()
+	coordinator.state.LastObserved = now.Add(-6 * time.Minute)
+	coordinator.state.LastReview = now.Add(-2 * time.Hour)
+	batch, errorValue := coordinator.claimBatch(now)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(batch) != 2 || len(coordinator.state.Pending) != 18 {
+		t.Fatalf("expected byte-bounded batch of two with eighteen pending, got batch=%d pending=%d", len(batch), len(coordinator.state.Pending))
+	}
+	serializedBytes := 0
+	for _, experience := range batch {
+		serializedExperience, errorValue := json.Marshal(experience)
+		if errorValue != nil {
+			t.Fatal(errorValue)
+		}
+		serializedBytes += len(serializedExperience)
+	}
+	if serializedBytes > maxReviewEvidenceBytes {
+		t.Fatalf("claimed evidence exceeded budget: %d", serializedBytes)
 	}
 }
 
