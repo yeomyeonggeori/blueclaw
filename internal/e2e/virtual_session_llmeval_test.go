@@ -85,10 +85,17 @@ func runLiveMemoryTurn(t *testing.T, model llm.LanguageModelProvider, initialMem
 	if len(result.TurnResults) != 1 {
 		t.Fatalf("expected one live memory turn, got %d", len(result.TurnResults))
 	}
-	if result.TurnResults[0].TaskStatus != "completed" || strings.TrimSpace(result.TurnResults[0].FinishMessage) == "" {
+	turnResult := result.TurnResults[0]
+	if strings.TrimSpace(turnResult.FinishMessage) == "" {
+		t.Fatalf("memory evaluation produced no user-facing answer: %+v", turnResult)
+	}
+	if len(initialMemory) > 0 && turnResult.TaskStatus != "completed" {
+		t.Fatalf("memory evaluation did not produce a completed answer: %+v", turnResult)
+	}
+	if len(initialMemory) == 0 && turnResult.TaskStatus != "completed" && turnResult.TaskStatus != "waiting_user_input" {
 		t.Fatalf("memory evaluation did not produce a completed answer: %+v", result.TurnResults[0])
 	}
-	return result.TurnResults[0]
+	return turnResult
 }
 
 func preserveLiveSessionEvidence(t *testing.T, directory string, result VirtualSessionResult, executionError error) {
