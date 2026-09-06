@@ -81,6 +81,9 @@ func TestLaunchedAgentTurnRequestCarriesHostAssembledContext(t *testing.T) {
 	if turnRequest.ToolSet == nil || !containsString(turnRequest.ToolSet.ListToolNames(), "memory_search") {
 		t.Fatalf("expected the launch tool set on the turn request, got %+v", turnRequest.ToolSet)
 	}
+	if !containsString(turnRequest.PinnedToolNames, "memory_search") {
+		t.Fatalf("expected registered memory_search to remain callable in the turn working set, got %+v", turnRequest.PinnedToolNames)
+	}
 	if !containsString(turnRequest.RequesterCircles, "member") {
 		t.Fatalf("expected resolved requester circles on the turn request, got %+v", turnRequest.RequesterCircles)
 	}

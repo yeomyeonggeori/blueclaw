@@ -135,8 +135,9 @@ type taskLaunchExecution struct {
 }
 
 const (
-	launchStepStatusError  = "error"
-	launchStepStatusResult = "result"
+	launchStepStatusError          = "error"
+	launchStepStatusResult         = "result"
+	contextualMemorySearchToolName = "memory_search"
 )
 
 type launchStepRecord struct {
@@ -551,6 +552,10 @@ func (taskLauncher *TaskLauncher) completeLaunchFailure(ctx context.Context, req
 }
 
 func (taskLauncher *TaskLauncher) agentTurnRequestForLaunch(request TaskLaunchRequest, profileName string, memoryFacts []memory.MemoryFact, toolSet *toolcontract.ToolSet, conversationScope ConversationResourceScope) agentcontract.AgentTurnRequest {
+	pinnedToolNames := append([]string{}, request.PinnedToolNames...)
+	if toolSet != nil && toolSet.IsAllowed(contextualMemorySearchToolName) {
+		pinnedToolNames = appendUniqueString(pinnedToolNames, contextualMemorySearchToolName)
+	}
 	turnRequest := agentcontract.AgentTurnRequest{
 		ArtifactManifest:   request.ArtifactManifest,
 		TurnStartedAt:      request.TurnStartedAt,
@@ -590,7 +595,7 @@ func (taskLauncher *TaskLauncher) agentTurnRequestForLaunch(request TaskLaunchRe
 		SkipSkillSelection:         request.SkipSkillSelection,
 		MemoryFacts:                bluecollarMemoryFacts(memoryFacts),
 		ToolSet:                    toolSet,
-		PinnedToolNames:            append([]string{}, request.PinnedToolNames...),
+		PinnedToolNames:            pinnedToolNames,
 		PinnedSkillNames:           append([]string{}, request.PinnedSkillNames...),
 		WorkspaceRootPath:          taskLauncher.toolCatalogBuilder.WorkspaceRootPath(),
 		WorkspaceDefaultPath:       conversationScope.DefaultDirectoryPath,
@@ -603,6 +608,15 @@ func (taskLauncher *TaskLauncher) agentTurnRequestForLaunch(request TaskLaunchRe
 		turnRequest.HostInstruction += "\n\n" + requesterPersona
 	}
 	return turnRequest
+}
+
+func appendUniqueString(values []string, value string) []string {
+	for _, existingValue := range values {
+		if existingValue == value {
+			return values
+		}
+	}
+	return append(values, value)
 }
 
 // A missing artifact service must reach the harness as an absent store, not as a
