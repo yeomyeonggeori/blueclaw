@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/adminapi"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/learning"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
@@ -66,6 +67,85 @@ func TestLearningHandlerRequiresSignedIdentityAndOwnAudience(t *testing.T) {
 	if response.Code != http.StatusOK || strings.Contains(response.Body.String(), "other-skill") {
 		t.Fatalf("reader audience leaked: %d %s", response.Code, response.Body.String())
 	}
+}
+
+func TestLearningSettingsHTTPPersistsInFreshNestedStore(t *testing.T) {
+	root := t.TempDir()
+	keyPath := filepath.Join(root, "assertion-key")
+	if errorValue := os.WriteFile(keyPath, []byte("synthetic-key"), 0600); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	storePath := filepath.Join(root, "nested", "learning", "skills.json")
+	directory := identityDirectory{identityService: identity.NewIdentityService(policy.PolicyProjection{
+		PersonIDByEmail:        map[string]string{"admin@example.com": "admin"},
+		PersonAccessByPersonID: map[string]policy.PersonAccess{"admin": {PersonID: "admin", Circles: []string{policy.AdminCircleID}}},
+	})}
+	store, errorValue := learning.Open(storePath, learning.DefaultActiveLimit)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	server := learningSettingsTestServer(t, learningHandlerForStore(store, directory, keyPath))
+	initialStatus, initialSettings := learningSettingsRequest(t, server, http.MethodGet, "")
+	if initialStatus != http.StatusOK || initialSettings.Enabled || initialSettings.ActiveLimit != 20 {
+		t.Fatalf("initial settings response = %d %+v", initialStatus, initialSettings)
+	}
+	updatedSettings := `{"activeLimit":20,"enabled":true}`
+	updatedStatus, updatedDocument := learningSettingsRequest(t, server, http.MethodPost, updatedSettings)
+	if updatedStatus != http.StatusOK || !updatedDocument.Enabled || updatedDocument.ActiveLimit != 20 {
+		t.Fatalf("updated settings response = %d %+v", updatedStatus, updatedDocument)
+	}
+	server.Close()
+	settingsPath := storePath + ".settings"
+	settingsInformation, errorValue := os.Stat(settingsPath)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if settingsInformation.Mode().Perm() != 0o600 {
+		t.Fatalf("settings permissions = %o, want 600", settingsInformation.Mode().Perm())
+	}
+	parentInformation, errorValue := os.Stat(filepath.Dir(settingsPath))
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if parentInformation.Mode().Perm() != 0o700 {
+		t.Fatalf("settings parent permissions = %o, want 700", parentInformation.Mode().Perm())
+	}
+	restartedStore, errorValue := learning.Open(storePath, 1)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	restartedServer := learningSettingsTestServer(t, learningHandlerForStore(restartedStore, directory, keyPath))
+	defer restartedServer.Close()
+	persistedStatus, persistedSettings := learningSettingsRequest(t, restartedServer, http.MethodGet, "")
+	if persistedStatus != http.StatusOK || !persistedSettings.Enabled || persistedSettings.ActiveLimit != 20 {
+		t.Fatalf("restarted settings response = %d %+v", persistedStatus, persistedSettings)
+	}
+}
+
+func learningSettingsTestServer(t *testing.T, handler adminapi.LearningHandler) *httptest.Server {
+	t.Helper()
+	multiplexer := http.NewServeMux()
+	multiplexer.HandleFunc("/admin/api/agent-learning/settings", handler.HandleSettings)
+	return httptest.NewServer(multiplexer)
+}
+
+func learningSettingsRequest(t *testing.T, server *httptest.Server, method, body string) (int, learning.Settings) {
+	t.Helper()
+	request, errorValue := http.NewRequest(method, server.URL+"/admin/api/agent-learning/settings", strings.NewReader(body))
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	signLearningTestRequest(t, request, "admin", body)
+	response, errorValue := server.Client().Do(request)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	defer response.Body.Close()
+	var settings learning.Settings
+	if errorValue := json.NewDecoder(response.Body).Decode(&settings); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	return response.StatusCode, settings
 }
 
 func signLearningTestRequest(t *testing.T, request *http.Request, reader, body string) {
