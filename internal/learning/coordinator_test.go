@@ -6,11 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"github.com/yeomyeonggeori/bluecollar/model"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/yeomyeonggeori/blueclaw/internal/persona"
 )
 
 type failingLearningModel struct{}
@@ -161,6 +164,73 @@ func TestCoordinatorRecoversInFlightBatchAfterRestart(t *testing.T) {
 	}
 	if len(restarted.state.InFlight) != 0 || len(restarted.state.Pending) != 1 || len(restarted.state.ReviewedIDs) != 0 {
 		t.Fatalf("in-flight batch was not recovered: %+v", restarted.state)
+	}
+}
+
+func TestCoordinatorRequeuesBatchWhenSoulCannotBeRead(t *testing.T) {
+	root := t.TempDir()
+	store, errorValue := Open(filepath.Join(root, "skills.json"), 20)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := store.UpdateSettings(Settings{Enabled: true, ActiveLimit: 20}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := os.WriteFile(filepath.Join(root, persona.SoulFileName), []byte(`{"schemaVersion":1,"unknown":true}`), 0o600); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	coordinator, errorValue := NewCoordinator(root, store, Reviewer{Model: failingLearningModel{}}, nil)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := coordinator.Observe(Experience{TaskID: "invalid-soul", Audience: "company", Outcome: []byte(`{"ok":true}`)}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	now := time.Now().UTC()
+	coordinator.state.LastObserved = now.Add(-6 * time.Minute)
+	coordinator.state.LastReview = now.Add(-2 * time.Hour)
+	if errorValue := coordinator.ReviewPending(context.Background(), now); errorValue == nil {
+		t.Fatal("expected invalid soul failure")
+	}
+	if len(coordinator.state.InFlight) != 0 || len(coordinator.state.Pending) != 1 || coordinator.state.Pending[0].TaskID != "invalid-soul" {
+		t.Fatalf("soul failure lost evidence: %+v", coordinator.state)
+	}
+}
+
+func TestCoordinatorDoesNotOverwriteExistingInFlightBatch(t *testing.T) {
+	root := t.TempDir()
+	store, errorValue := Open(filepath.Join(root, "skills.json"), 20)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := store.UpdateSettings(Settings{Enabled: true, ActiveLimit: 20}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	coordinator, errorValue := NewCoordinator(root, store, Reviewer{Model: failingLearningModel{}}, nil)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := coordinator.Observe(Experience{TaskID: "in-flight", Audience: "company", Outcome: []byte(`{"ok":true}`)}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	now := time.Now().UTC()
+	coordinator.state.LastObserved = now.Add(-6 * time.Minute)
+	coordinator.state.LastReview = now.Add(-2 * time.Hour)
+	batch, errorValue := coordinator.claimBatch(now)
+	if errorValue != nil || len(batch) != 1 {
+		t.Fatalf("claim batch: %v %+v", errorValue, batch)
+	}
+	if errorValue := coordinator.Observe(Experience{TaskID: "later-pending", Audience: "company", Outcome: []byte(`{"ok":true}`)}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	coordinator.state.LastObserved = now.Add(-6 * time.Minute)
+	coordinator.state.LastReview = now.Add(-2 * time.Hour)
+	secondBatch, errorValue := coordinator.claimBatch(now.Add(time.Hour))
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(secondBatch) != 0 || len(coordinator.state.InFlight) != 1 || coordinator.state.InFlight[0].TaskID != "in-flight" {
+		t.Fatalf("existing in-flight batch was overwritten: %+v", coordinator.state)
 	}
 }
 

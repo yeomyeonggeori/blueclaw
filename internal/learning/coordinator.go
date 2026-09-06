@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -143,10 +144,10 @@ func (coordinator *Coordinator) ReviewPending(ctx context.Context, now time.Time
 	if os.IsNotExist(errorValue) {
 		soul = []byte(`{"schemaVersion":1}`)
 	} else if errorValue != nil {
-		return errorValue
+		return coordinator.requeuePreparationFailure(batch, errorValue)
 	}
 	if _, errorValue := persona.ParseSoul(soul); errorValue != nil {
-		return errorValue
+		return coordinator.requeuePreparationFailure(batch, errorValue)
 	}
 	input := ReviewInput{Experience: batch, Soul: soul, Skills: coordinator.store.List(batch[0].Audience, false), ActiveLimit: coordinator.store.Settings().ActiveLimit}
 	if coordinator.tools != nil {
@@ -185,6 +186,13 @@ func (coordinator *Coordinator) ReviewPending(ctx context.Context, now time.Time
 	return reviewError
 }
 
+func (coordinator *Coordinator) requeuePreparationFailure(batch []Experience, reviewError error) error {
+	if requeueError := coordinator.requeueBatch(batch); requeueError != nil {
+		return fmt.Errorf("%w; requeue failed: %v", reviewError, requeueError)
+	}
+	return reviewError
+}
+
 func (coordinator *Coordinator) requeueBatch(batch []Experience) error {
 	coordinator.mutex.Lock()
 	defer coordinator.mutex.Unlock()
@@ -213,6 +221,9 @@ func (coordinator *Coordinator) claimBatch(now time.Time) ([]Experience, error) 
 	coordinator.mutex.Lock()
 	defer coordinator.mutex.Unlock()
 	if coordinator.store == nil || !coordinator.store.Settings().Enabled {
+		return nil, nil
+	}
+	if len(coordinator.state.InFlight) > 0 {
 		return nil, nil
 	}
 	if coordinator.activeTasks > 0 || coordinator.reviewing || len(coordinator.state.Pending) == 0 {
