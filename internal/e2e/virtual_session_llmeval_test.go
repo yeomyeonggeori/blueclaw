@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -77,6 +78,7 @@ func runLiveMemoryTurn(t *testing.T, model llm.LanguageModelProvider, initialMem
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	result, errorValue := RunVirtualSession(ctx, scenario)
+	preserveLiveSessionEvidence(t, artifactDirectory, result, errorValue)
 	if errorValue != nil {
 		t.Fatalf("live memory evaluation failed: %v", errorValue)
 	}
@@ -87,6 +89,24 @@ func runLiveMemoryTurn(t *testing.T, model llm.LanguageModelProvider, initialMem
 		t.Fatalf("memory evaluation did not produce a completed answer: %+v", result.TurnResults[0])
 	}
 	return result.TurnResults[0]
+}
+
+func preserveLiveSessionEvidence(t *testing.T, directory string, result VirtualSessionResult, executionError error) {
+	t.Helper()
+	failure := ""
+	if executionError != nil {
+		failure = executionError.Error()
+	}
+	document, errorValue := json.MarshalIndent(struct {
+		Result VirtualSessionResult `json:"result"`
+		Error  string               `json:"error,omitempty"`
+	}{Result: result, Error: failure}, "", "  ")
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := os.WriteFile(filepath.Join(directory, "result.json"), document, 0600); errorValue != nil {
+		t.Fatal(errorValue)
+	}
 }
 
 func TestPresentationLocalMultiturnSuccessLive(t *testing.T) {

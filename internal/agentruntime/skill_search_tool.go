@@ -2,10 +2,15 @@ package agentruntime
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
+
+	"github.com/yeomyeonggeori/blueclaw/internal/learning"
+	"github.com/yeomyeonggeori/blueclaw/internal/skill"
 )
 
 const (
@@ -146,6 +151,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerSkillSearchTool(toolRegist
 func (toolCatalogBuilder *ToolCatalogBuilder) searchSkills(toolContext context.Context, input skillSearchToolInput, handlerContext toolHandlerContext, availableToolSet *toolcontract.ToolSet) (toolcontract.ToolResult, error) {
 	instructionBundle := toolCatalogBuilder.instructionBundleLoader()
 	visibleInstructions := agentcontract.VisibleSkillInstructionsForRequester(instructionBundle.Skills, handlerContext.request.PersonAccess.Circles)
+	visibleInstructions = mergeLearnedSkillInstructions(visibleInstructions, toolCatalogBuilder.learnedSkills(handlerContext.request.RequesterPersonID))
 	availableInstructions := toolCatalogBuilder.skillRetriever.Available(agentcontract.AgentRequest{ToolSet: availableToolSet}, visibleInstructions)
 	if strings.TrimSpace(input.Name) != "" {
 		return skillSearchNameResult(availableInstructions, input.Name), nil
@@ -156,6 +162,58 @@ func (toolCatalogBuilder *ToolCatalogBuilder) searchSkills(toolContext context.C
 	retrievalResult := toolCatalogBuilder.searchSkillInstructions(toolContext, input, handlerContext, availableToolSet, availableInstructions)
 	retrievalResult = includeExactSkillNameMatches(availableInstructions, input.Queries, retrievalResult)
 	return successfulSkillSearchResult(searchSkillSearchResult(availableInstructions, retrievalResult, searchSkillResultLimit(input.Limit))), nil
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) learnedSkills(requesterPersonID string) []agentcontract.SkillInstruction {
+	if toolCatalogBuilder.learnedSkillLoader == nil || strings.TrimSpace(requesterPersonID) == "" {
+		return nil
+	}
+	audience := "person:" + strings.TrimSpace(requesterPersonID)
+	return learnedSkillInstructions(toolCatalogBuilder.learnedSkillLoader(audience))
+}
+
+func learnedSkillInstructions(skills []learning.Skill) []agentcontract.SkillInstruction {
+	instructions := make([]agentcontract.SkillInstruction, 0, len(skills))
+	for _, learnedSkill := range skills {
+		parsed, errorValue := skill.ParseDocument(learnedSkill.Instruction)
+		if errorValue != nil {
+			continue
+		}
+		instruction := strings.TrimSpace(parsed.Instruction)
+		if learnedSkill.Status != "active" || strings.TrimSpace(learnedSkill.ID) == "" || instruction == "" {
+			continue
+		}
+		digest := sha256.Sum256([]byte(instruction))
+		instructions = append(instructions, agentcontract.SkillInstruction{
+			Name:        "learned/" + learnedSkill.ID,
+			Description: firstNonEmptyString(strings.TrimSpace(learnedSkill.Description), strings.TrimSpace(parsed.Description)),
+			Prompt:      instruction,
+			Source: agentcontract.InstructionSource{
+				Path:      "learned://" + learnedSkill.Audience + "/" + learnedSkill.ID + "/SKILL.md",
+				SkillName: "learned/" + learnedSkill.ID,
+				ByteSize:  len([]byte(instruction)),
+				SHA256:    fmt.Sprintf("%x", digest),
+			},
+		})
+	}
+	return instructions
+}
+
+func mergeLearnedSkillInstructions(installed, learned []agentcontract.SkillInstruction) []agentcontract.SkillInstruction {
+	merged := append([]agentcontract.SkillInstruction{}, installed...)
+	for _, learnedInstruction := range learned {
+		found := false
+		for _, installedInstruction := range merged {
+			if strings.EqualFold(strings.TrimSpace(installedInstruction.Name), strings.TrimSpace(learnedInstruction.Name)) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			merged = append(merged, learnedInstruction)
+		}
+	}
+	return merged
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) searchSkillInstructions(toolContext context.Context, input skillSearchToolInput, handlerContext toolHandlerContext, availableToolSet *toolcontract.ToolSet, skillInstructions []agentcontract.SkillInstruction) agentcontract.SkillRetrievalResult {
@@ -310,6 +368,9 @@ func truncateSkillSearchPrompt(prompt string) (string, bool) {
 func stableSkillSourcePath(skillInstruction agentcontract.SkillInstruction) string {
 	skillName := strings.TrimSpace(skillInstruction.Name)
 	sourcePath := "/" + strings.TrimPrefix(strings.ReplaceAll(strings.TrimSpace(skillInstruction.Source.Path), "\\", "/"), "/")
+	if strings.HasPrefix(sourcePath, "/learned://") {
+		return sourcePath[1:]
+	}
 	if strings.Contains(sourcePath, "/.agents/skills/") {
 		return "/workspace/.agents/skills/" + skillName + "/SKILL.md"
 	}

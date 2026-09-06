@@ -38,6 +38,7 @@ func newRouterDependencies(components applicationComponents) httpserver.RouterDe
 		TaskRunHandler:        newTaskRunHandler(runtimeConfiguration, services, directory, components.taskLauncher, components.taskIntakeController),
 		HarnessStatusHandler:  newHarnessStatusHandler(runtimeConfiguration, kernel.harnessName),
 		SkillInventoryHandler: newSkillInventoryHandler(runtimeConfiguration, kernel.capabilityRegistry),
+		LearningHandler:       learningHandlerForStore(components.learningStore, directory, runtimeConfiguration.Memory.AdminAssertionKeyPath, components.learningCoordinator),
 		ToolInventoryHandler:  adminapi.ToolInventoryHandler{ToolCatalogBuilder: components.toolCatalogBuilder},
 		TaskApprovalHandler:   newTaskApprovalHandler(services, directory, components.taskLauncher),
 		QuiesceHandler: adminapi.QuiesceHandler{
@@ -92,6 +93,30 @@ func newPersonaHandler(runtimeConfiguration config.RuntimeConfiguration, kernel 
 		WorkspaceRootPath:     runtimeConfiguration.Terminal.WorkspaceRootPath,
 		WorkspaceActorFactory: kernel.terminalService.WorkspaceActorFactory(),
 		PersonAccessResolver:  directory.identityService,
+		AuthorizeRequest:      personaRequestAuthorizer(runtimeConfiguration.Memory.AdminAssertionKeyPath),
+	}
+}
+
+func personaRequestAuthorizer(keyPath string) func(*http.Request) bool {
+	reader := signedPersonaReader(keyPath)
+	return func(request *http.Request) bool {
+		principal := reader(request)
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/admin/api/persona/user":
+			return principal != "" && principal == request.URL.Query().Get("personID")
+		case request.Method == http.MethodPut && request.URL.Path == "/admin/api/persona/user":
+			return principal != "" && principal == request.URL.Query().Get("personID")
+		case request.Method == http.MethodPost && request.URL.Path == "/admin/api/persona/user":
+			return principal == "internkim-persona-seed"
+		case request.Method == http.MethodGet && request.URL.Path == "/admin/api/persona/agent":
+			return principal == "internkim-persona-service"
+		case request.Method == http.MethodPost && request.URL.Path == "/admin/api/persona/agent":
+			return principal == "internkim-persona-service"
+		case request.Method == http.MethodPut && request.URL.Path == "/admin/api/persona/agent":
+			return principal == "internkim-persona-service"
+		default:
+			return false
+		}
 	}
 }
 

@@ -19,12 +19,12 @@ func TestVerifierAcceptsTheAdmindFixture(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	var fixture struct {
-		Secret string `json:"secret"`
-		Method string `json:"method"`
-		Path string `json:"path"`
-		ExpiresAt int64 `json:"expiresAt"`
-		Body string `json:"body"`
-		Header string `json:"header"`
+		Secret    string `json:"secret"`
+		Method    string `json:"method"`
+		Path      string `json:"path"`
+		ExpiresAt int64  `json:"expiresAt"`
+		Body      string `json:"body"`
+		Header    string `json:"header"`
 	}
 	if errorValue := json.Unmarshal(fixtureBytes, &fixture); errorValue != nil {
 		t.Fatal(errorValue)
@@ -83,7 +83,7 @@ func TestVerifierRejectsExpiredAndWrongEndpoint(t *testing.T) {
 	documentBytes, _ := base64.RawURLEncoding.DecodeString(parts[0])
 	var assertion document
 	_ = json.Unmarshal(documentBytes, &assertion)
-	assertion.ExpiresAt = time.Now().Add(45*time.Second).Unix()
+	assertion.ExpiresAt = time.Now().Add(45 * time.Second).Unix()
 	tamperedDocument, _ := json.Marshal(assertion)
 	request.Header.Set(HeaderName, base64.RawURLEncoding.EncodeToString(tamperedDocument)+"."+parts[1])
 	if _, errorValue := New(secret).Verify(request, body); errorValue == nil {

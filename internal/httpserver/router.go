@@ -35,6 +35,7 @@ type RouterDependencies struct {
 	AgentReplyHandler     AgentReplyHandler
 	WorkspaceFilesHandler WorkspaceFilesHandler
 	PersonaHandler        PersonaHandler
+	LearningHandler       adminapi.LearningHandler
 	ToolCatalogHandler    http.Handler
 }
 
@@ -68,6 +69,15 @@ func NewRouter(routerDependencies RouterDependencies) http.Handler {
 	multiplexer.HandleFunc("GET /admin/api/harness", routerDependencies.HarnessStatusHandler.HandleGetHarnessStatus)
 	multiplexer.HandleFunc("GET /admin/api/skills", routerDependencies.SkillInventoryHandler.HandleListSkills)
 	multiplexer.HandleFunc("GET /admin/api/tools", routerDependencies.ToolInventoryHandler.HandleListTools)
+	multiplexer.HandleFunc("GET /admin/api/agent-learning/skills", routerDependencies.LearningHandler.HandleList)
+	multiplexer.HandleFunc("GET /admin/api/agent-learning/skills/{id}", routerDependencies.LearningHandler.HandleGet)
+	multiplexer.HandleFunc("POST /admin/api/agent-learning/skills/retire", routerDependencies.LearningHandler.HandleMutation)
+	multiplexer.HandleFunc("POST /admin/api/agent-learning/skills/restore", routerDependencies.LearningHandler.HandleMutation)
+	multiplexer.HandleFunc("POST /admin/api/agent-learning/skills/protect", routerDependencies.LearningHandler.HandleMutation)
+	multiplexer.HandleFunc("GET /admin/api/agent-learning/settings", routerDependencies.LearningHandler.HandleSettings)
+	multiplexer.HandleFunc("POST /admin/api/agent-learning/settings", routerDependencies.LearningHandler.HandleSettings)
+	multiplexer.HandleFunc("GET /admin/api/agent-learning/soul", routerDependencies.LearningHandler.HandleSoul)
+	multiplexer.HandleFunc("GET /admin/api/agent-learning/soul/history", routerDependencies.LearningHandler.HandleSoul)
 	multiplexer.HandleFunc("GET /admin/api/quiesce", routerDependencies.QuiesceHandler.HandleGet)
 	multiplexer.HandleFunc("POST /admin/api/quiesce", routerDependencies.QuiesceHandler.HandlePost)
 	multiplexer.HandleFunc("POST /admin/api/runtime/prepare-shutdown", routerDependencies.QuiesceHandler.HandlePrepareShutdown)
@@ -89,10 +99,12 @@ func NewRouter(routerDependencies RouterDependencies) http.Handler {
 	multiplexer.HandleFunc("GET /admin/api/memory/pinned-people", routerDependencies.MemoryGraphHandler.HandleListPinnedPeople)
 	multiplexer.HandleFunc("GET /admin/api/workspace/list", routerDependencies.WorkspaceFilesHandler.HandleList)
 	multiplexer.HandleFunc("GET /admin/api/workspace/download", routerDependencies.WorkspaceFilesHandler.HandleDownload)
-	multiplexer.HandleFunc("GET /admin/api/persona/user", routerDependencies.PersonaHandler.HandleReadUser)
-	multiplexer.HandleFunc("PUT /admin/api/persona/agent", routerDependencies.PersonaHandler.HandleWriteAgent)
-	multiplexer.HandleFunc("PUT /admin/api/persona/user", routerDependencies.PersonaHandler.HandleWriteUser)
-	multiplexer.HandleFunc("POST /admin/api/persona/user", routerDependencies.PersonaHandler.HandleSeedUser)
+	multiplexer.HandleFunc("GET /admin/api/persona/user", routerDependencies.PersonaHandler.authorized(routerDependencies.PersonaHandler.HandleReadUser))
+	multiplexer.HandleFunc("GET /admin/api/persona/agent", routerDependencies.PersonaHandler.authorized(routerDependencies.PersonaHandler.HandleReadAgent))
+	multiplexer.HandleFunc("POST /admin/api/persona/agent", routerDependencies.PersonaHandler.authorized(routerDependencies.PersonaHandler.HandleSeedAgent))
+	multiplexer.HandleFunc("PUT /admin/api/persona/agent", routerDependencies.PersonaHandler.authorized(routerDependencies.PersonaHandler.HandleWriteAgent))
+	multiplexer.HandleFunc("PUT /admin/api/persona/user", routerDependencies.PersonaHandler.authorized(routerDependencies.PersonaHandler.HandleWriteUser))
+	multiplexer.HandleFunc("POST /admin/api/persona/user", routerDependencies.PersonaHandler.authorized(routerDependencies.PersonaHandler.HandleSeedUser))
 	multiplexer.HandleFunc("GET /admin/api/backup/manifest", routerDependencies.BackupHandler.HandleManifest)
 	multiplexer.HandleFunc("POST /admin/api/backup/prepare", routerDependencies.BackupHandler.HandlePrepare)
 	multiplexer.HandleFunc("POST /admin/api/backup/complete", routerDependencies.BackupHandler.HandleComplete)

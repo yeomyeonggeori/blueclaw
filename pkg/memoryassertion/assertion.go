@@ -30,6 +30,14 @@ func New(secret []byte) Verifier {
 }
 
 func (verifier Verifier) Verify(request *http.Request, body []byte) (string, error) {
+	return verifier.verify(request, body, request.URL.Path)
+}
+
+func (verifier Verifier) VerifyRequestTarget(request *http.Request, body []byte) (string, error) {
+	return verifier.verify(request, body, request.URL.RequestURI())
+}
+
+func (verifier Verifier) verify(request *http.Request, body []byte, requestTarget string) (string, error) {
 	if len(verifier.secret) == 0 || len(body) > 16*1024 {
 		return "", errors.New("memory assertion unavailable")
 	}
@@ -54,7 +62,7 @@ func (verifier Verifier) Verify(request *http.Request, body []byte) (string, err
 		return "", errors.New("memory assertion body mismatch")
 	}
 	mac := hmac.New(sha256.New, verifier.secret)
-	mac.Write([]byte(request.Method + "\n" + request.URL.Path + "\n" + parts[0]))
+	mac.Write([]byte(request.Method + "\n" + requestTarget + "\n" + parts[0]))
 	expected := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 	provided, errorValue := base64.RawURLEncoding.DecodeString(parts[1])
 	if errorValue != nil || !hmac.Equal([]byte(expected), []byte(parts[1])) || len(provided) == 0 {

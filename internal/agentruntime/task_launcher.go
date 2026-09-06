@@ -38,6 +38,11 @@ type TaskLauncher struct {
 	agentIdentityProvider         func() agentcontract.AgentIdentity
 	companyProvider               func() agentcontract.CompanyContext
 	approvalGate                  *approvalgate.Gate
+	observeTask                   func(TaskLaunchRequest) func(TaskLaunchResult, error)
+}
+
+func (taskLauncher *TaskLauncher) UseTaskObserver(observer func(TaskLaunchRequest) func(TaskLaunchResult, error)) {
+	taskLauncher.observeTask = observer
 }
 
 func (taskLauncher *TaskLauncher) UseApprovalGate(approvalGate *approvalgate.Gate) {
@@ -227,11 +232,18 @@ func (taskLauncher *TaskLauncher) resolveRequesterEmail(request TaskLaunchReques
 }
 
 func (taskLauncher *TaskLauncher) Launch(ctx context.Context, request TaskLaunchRequest) (TaskLaunchResult, error) {
+	var finishObservation func(TaskLaunchResult, error)
+	if taskLauncher.observeTask != nil {
+		finishObservation = taskLauncher.observeTask(request)
+	}
 	if request.TurnStartedAt.IsZero() {
 		request.TurnStartedAt = time.Now()
 	}
 	launchResult, routerCallRecords, errorValue := taskLauncher.launchRoutedTask(ctx, request)
 	taskLauncher.appendTurnRouterCallRecords(launchResult.TurnResult.TaskRun.TaskRunID, routerCallRecords)
+	if finishObservation != nil {
+		finishObservation(launchResult, errorValue)
+	}
 	return launchResult, errorValue
 }
 

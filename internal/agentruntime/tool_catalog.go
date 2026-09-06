@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
+	"github.com/yeomyeonggeori/blueclaw/internal/learning"
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
@@ -46,6 +47,7 @@ type ToolCatalogBuilder struct {
 	skillChangeHandler           func(context.Context)
 	skillRetriever               agentcontract.SkillRetriever
 	instructionBundleLoader      func() agentcontract.InstructionBundle
+	learnedSkillLoader           func(string) []learning.Skill
 	capabilityQuarantineReporter func(toolcontract.QuarantinedToolProvider)
 
 	recordCatalog                   RecordCatalogClient
@@ -198,8 +200,32 @@ func (toolCatalogBuilder *ToolCatalogBuilder) UseSkillSearch(skillRetriever agen
 	toolCatalogBuilder.instructionBundleLoader = instructionBundleLoader
 }
 
+func (toolCatalogBuilder *ToolCatalogBuilder) UseLearnedSkillLoader(learnedSkillLoader func(string) []learning.Skill) {
+	toolCatalogBuilder.learnedSkillLoader = learnedSkillLoader
+}
+
 func (toolCatalogBuilder *ToolCatalogBuilder) WorkspaceRootPath() string {
 	return strings.TrimSpace(toolCatalogBuilder.workspaceRootPath)
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) AvailableToolNames() []string {
+	seen := map[string]bool{}
+	toolNames := []string{}
+	appendToolNames := func(names []string) {
+		for _, name := range names {
+			trimmedName := strings.TrimSpace(name)
+			if trimmedName == "" || seen[trimmedName] {
+				continue
+			}
+			seen[trimmedName] = true
+			toolNames = append(toolNames, trimmedName)
+		}
+	}
+	appendToolNames(toolCatalogBuilder.defaultAllowedToolNames)
+	for _, names := range toolCatalogBuilder.allowedToolNamesByProfile {
+		appendToolNames(names)
+	}
+	return toolNames
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) BuildToolSet(request ToolCatalogRequest) *toolcontract.ToolSet {
@@ -259,6 +285,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerHistoryTool(toolRegistry *
 
 func (toolCatalogBuilder *ToolCatalogBuilder) registerMemoryTool(toolRegistry *toolcontract.ToolSet, request ToolCatalogRequest) {
 	registerMemoryTools(toolCatalogBuilder, toolRegistry, request)
+	registerPersonaTools(toolCatalogBuilder, toolRegistry, request)
 }
 
 func fetchHistoryTool(toolContext context.Context, input historyToolInput, request ToolCatalogRequest) (toolcontract.ToolResult, error) {

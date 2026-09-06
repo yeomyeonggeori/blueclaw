@@ -37,6 +37,14 @@ type localToolDescriptorSpec struct {
 
 var localToolDescriptorSpecs = []localToolDescriptorSpec{
 	{
+		ID: "local/persona_read", ProviderID: localToolProviderID, Namespace: "persona", Name: "persona_read", PrivacyClass: "workspace_persona",
+		InputIntentSchema: personaToolReadSchema, OutputSchema: personaToolOutputSchema, ResultContract: &toolcontract.ToolResultContract{Schema: personaToolOutputSchema}, Visibility: toolcontract.ToolVisibilityModel, PolicyResource: "tool:persona_read", SideEffectClass: toolcontract.ToolSideEffectRead, Completion: toolcontract.ToolCompletion{Mode: toolcontract.ToolCompletionNone}, Idempotency: toolcontract.ToolIdempotencyNone, Availability: localToolAvailable,
+	},
+	{
+		ID: "local/persona_update", ProviderID: localToolProviderID, Namespace: "persona", Name: "persona_update", PrivacyClass: "workspace_persona",
+		InputIntentSchema: personaToolIntentSchema, OutputSchema: personaToolOutputSchema, ResultContract: &toolcontract.ToolResultContract{Schema: personaToolOutputSchema}, Visibility: toolcontract.ToolVisibilityModel, PolicyResource: "tool:persona_update", SideEffectClass: toolcontract.ToolSideEffectStateChange, Completion: toolcontract.ToolCompletion{Mode: toolcontract.ToolCompletionObservation}, Idempotency: toolcontract.ToolIdempotencyNone, Availability: localToolAvailable,
+	},
+	{
 		ID:              "local/memory_search",
 		ProviderID:      localToolProviderID,
 		Namespace:       "memory",

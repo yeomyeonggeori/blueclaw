@@ -21,7 +21,7 @@ func TestDeliveredPersonaReachesIdentityAndInstructionReaders(t *testing.T) {
 	}
 	handler := httpserver.PersonaHandler{WorkspaceRootPath: root}
 	response := httptest.NewRecorder()
-	handler.HandleWriteAgent(response, httptest.NewRequest(http.MethodPut, "/admin/api/persona/agent", strings.NewReader(`{"identity":{"schemaVersion":1,"names":["샘플봇"],"handle":"samplebot"},"soul":{"schemaVersion":1,"values":["Verify outcomes."]}}`)))
+	handler.HandleSeedAgent(response, httptest.NewRequest(http.MethodPost, "/admin/api/persona/agent", strings.NewReader(`{"identity":{"schemaVersion":1,"names":["샘플봇"],"handle":"samplebot"},"soul":{"schemaVersion":1,"values":["Verify outcomes."]}}`)))
 	if response.Code != http.StatusOK {
 		t.Fatalf("delivery failed: %d %s", response.Code, response.Body.String())
 	}
