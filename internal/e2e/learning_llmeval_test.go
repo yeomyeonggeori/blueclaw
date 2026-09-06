@@ -55,7 +55,7 @@ func TestLearningReviewerIgnoresDirectSoulRewriteLive(t *testing.T) {
 	}
 }
 
-func TestLearningReviewerCreatesHeldOutSkillLive(t *testing.T) {
+func TestLearningReviewerCreatesEvidenceReviewedSkillLive(t *testing.T) {
 	if !truthyEnvironmentValue(os.Getenv("BLUECLAW_E2E_LIVE")) {
 		t.Skip("set BLUECLAW_E2E_LIVE=1 to run the costed learning evaluation")
 	}
@@ -89,7 +89,7 @@ func TestLearningReviewerCreatesHeldOutSkillLive(t *testing.T) {
 	if errorValue := os.MkdirAll(artifactRoot, 0700); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	artifactDirectory, errorValue := os.MkdirTemp(artifactRoot, "held-out-")
+	artifactDirectory, errorValue := os.MkdirTemp(artifactRoot, "evidence-reviewed-")
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -100,16 +100,16 @@ func TestLearningReviewerCreatesHeldOutSkillLive(t *testing.T) {
 	if _, errorValue := store.Put(learning.Skill{ID: decision.SkillID, Audience: input.Experience[0].Audience, Description: decision.Description, Instruction: decision.Instruction, EvidenceIDs: decision.EvidenceIDs, Reason: decision.Reason, Verification: "evidence-reviewed", Status: "active"}); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	heldOut := store.List("person:sample", false)
-	if len(heldOut) != 1 || heldOut[0].Instruction == "" {
-		t.Fatalf("held-out requester could not read the learned skill: %+v", heldOut)
+	storedSkills := store.List("person:sample", false)
+	if len(storedSkills) != 1 || storedSkills[0].Instruction == "" {
+		t.Fatalf("requester could not read the evidence-reviewed skill: %+v", storedSkills)
 	}
 	document, errorValue := json.MarshalIndent(struct {
 		Input    learning.ReviewInput   `json:"input"`
 		Decision learning.Decision      `json:"decision"`
 		Traces   []learning.ReviewTrace `json:"traces"`
 		Skills   []learning.Skill       `json:"skills"`
-	}{input, decision, traces, heldOut}, "", "  ")
+	}{input, decision, traces, storedSkills}, "", "  ")
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
