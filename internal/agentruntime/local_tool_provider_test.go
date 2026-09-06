@@ -143,6 +143,32 @@ func TestLocalToolProviderPreservesMemoryRememberContract(t *testing.T) {
 	}
 }
 
+func TestLocalToolProviderPreservesMemoryFactMutationContracts(t *testing.T) {
+	toolCatalogBuilder := NewToolCatalogBuilder()
+	handlerToolSet := toolcontract.NewToolSet(nil)
+	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"memory_update", "memory_delete"})
+	registerMemoryTools(toolCatalogBuilder, handlerToolSet, ToolCatalogRequest{ProfileName: "default"})
+
+	boundTools, errorValue := (localToolProvider{handlerToolSet: handlerToolSet}).ListTools(context.Background())
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	for _, toolName := range []string{"memory_update", "memory_delete"} {
+		var descriptor toolcontract.ToolDescriptor
+		for _, boundTool := range boundTools {
+			if boundTool.Definition.Name == toolName {
+				descriptor = boundTool.Definition
+			}
+		}
+		if descriptor.Name == "" || descriptor.ResultContract == nil {
+			t.Fatalf("expected %s result contract, got %+v", toolName, descriptor)
+		}
+		if len(descriptor.ResultContract.Effects) != 1 || descriptor.ResultContract.Effects[0].ObjectType != "memory_fact" || descriptor.ResultContract.Effects[0].ResultField != "factID" {
+			t.Fatalf("expected exact %s mutation effect, got %+v", toolName, descriptor.ResultContract)
+		}
+	}
+}
+
 func TestLocalToolProviderRejectsMalformedMemorySearchResult(t *testing.T) {
 	handlerToolSet := toolcontract.NewToolSet(nil)
 	if errorValue := handlerToolSet.RegisterTool(toolcontract.ToolDefinition{

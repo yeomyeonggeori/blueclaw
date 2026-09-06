@@ -8,6 +8,24 @@ import (
 
 type SkillLoader struct{}
 
+func ParseDocument(document string) (SkillBundle, error) {
+	trimmedDocument := strings.TrimSpace(document)
+	if trimmedDocument == "" {
+		return SkillBundle{}, os.ErrInvalid
+	}
+	metadata, instruction := parseSkillDocument(trimmedDocument)
+	if strings.HasPrefix(trimmedDocument, "---\n") && strings.TrimSpace(metadata.Name) == "" {
+		return SkillBundle{}, os.ErrInvalid
+	}
+	if strings.HasPrefix(trimmedDocument, "---\n") && strings.TrimSpace(instruction) == "" {
+		return SkillBundle{}, os.ErrInvalid
+	}
+	if strings.TrimSpace(metadata.Description) == "" {
+		metadata.Description = firstMarkdownParagraph(instruction)
+	}
+	return SkillBundle{Name: metadata.Name, Description: metadata.Description, ToolReferences: metadata.ToolReferences, RequiredEnvironmentVariables: metadata.RequiredEnvironmentVariables, Instruction: strings.TrimSpace(instruction)}, nil
+}
+
 func (skillLoader SkillLoader) LoadSkillBundle(directoryPath string) (SkillBundle, error) {
 	documentPath := filepath.Join(directoryPath, "SKILL.md")
 	document, errorValue := os.ReadFile(documentPath)

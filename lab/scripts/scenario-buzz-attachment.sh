@@ -104,12 +104,14 @@ sent_document="$(post_json "$chatd_url/v1/platform/buzz/person.message.send" "$(
   --arg contentBase64 "$picture_base64" \
   '{actor:$actor,conversationID:$conversationID,body:$body,attachments:[{filename:"buzz-attachment-word.png",contentType:"image/png",contentBase64:$contentBase64}]}')")"
 printf '%s' "$sent_document" > "$evidence_directory_path/sent.json"
+expected_reply_target="$(printf '%s' "$sent_document" | jq -er '"buzz:" + .conversationID + ":" + .id')"
 
 phase "wait for the task"
 task_run_identifier=""
 for _ in $(seq 1 240); do
   task_run_identifier="$(curl -fsS --max-time 5 "$blueclaw_url/admin/api/run" \
-    | jq -r --arg personID "$test_person_identifier" '[.[] | select(.requesterPersonID == $personID)] | .[0].taskRunID // empty')"
+    | jq -r --arg personID "$test_person_identifier" --arg replyTargetID "$expected_reply_target" \
+      '[.[] | select(.requesterPersonID == $personID and .originReplyTargetID == $replyTargetID)] | .[0].taskRunID // empty')"
   if [ -n "$task_run_identifier" ]; then break; fi
   sleep 2
 done

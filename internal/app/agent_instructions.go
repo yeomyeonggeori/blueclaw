@@ -165,7 +165,7 @@ func readInstructionDocuments(rootPath string) []instructionDocument {
 		}
 	}
 	soulPath := filepath.Join(rootPath, persona.SoulFileName)
-	if document, errorValue := os.ReadFile(soulPath); errorValue == nil {
+	if document, errorValue := persona.ReadSoulDocument(rootPath); errorValue == nil {
 		soul, document, isRestored, parseError := persona.ParseWithBackup(persona.ParseSoul, document, persona.BackupPath(rootPath, persona.SoulFileName))
 		if isRestored {
 			restorePersonaDocument(soulPath, document)

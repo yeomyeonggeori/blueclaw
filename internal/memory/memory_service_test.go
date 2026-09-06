@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -146,14 +147,37 @@ func TestMemoryServiceRanksAfterPolicyFiltering(t *testing.T) {
 	if len(memoryFacts) != 2 {
 		t.Fatalf("expected limit after ranking, got %d", len(memoryFacts))
 	}
-	if memoryFacts[0].FactID != "query-match" {
-		t.Fatalf("expected query match first, got %+v", memoryFacts)
+	if memoryFacts[0].FactID != "high-score" {
+		t.Fatalf("expected provider score first, got %+v", memoryFacts)
 	}
-	if memoryFacts[1].FactID != "high-score" {
-		t.Fatalf("expected score-ranked fact second, got %+v", memoryFacts)
+	if memoryFacts[1].FactID != "old-low-score" {
+		t.Fatalf("expected next provider score second, got %+v", memoryFacts)
 	}
 	if containsMemory(memoryFacts, "the Project Aurora budget is confidential.") {
 		t.Fatal("expected inaccessible high-score memory to be filtered before ranking")
+	}
+}
+
+func TestMemoryServiceSearchExcludesInvalidAndExpiredFacts(t *testing.T) {
+	currentTime := time.Now().UTC()
+	invalidAt := currentTime.Add(-time.Minute)
+	expiredAt := currentTime.Add(-time.Minute)
+	memoryService := &MemoryService{}
+	memoryService.UseGraphStore(fixedFactGraphStore{facts: []MemoryFact{
+		{FactID: "current", NamespaceID: UserNamespace("person-1").NamespaceID, Content: "current"},
+		{FactID: "invalid", NamespaceID: UserNamespace("person-1").NamespaceID, Content: "invalid", InvalidAt: &invalidAt},
+		{FactID: "expired", NamespaceID: UserNamespace("person-1").NamespaceID, Content: "expired", ExpiredAt: &expiredAt},
+	}})
+
+	facts, errorValue := memoryService.SearchMemory(context.Background(), MemorySearchRequest{
+		ReaderPersonID: "person-1",
+		Namespaces:     []MemoryNamespace{UserNamespace("person-1")},
+	})
+	if errorValue != nil {
+		t.Fatalf("expected search to succeed: %v", errorValue)
+	}
+	if len(facts) != 1 || facts[0].FactID != "current" {
+		t.Fatalf("expected only current fact, got %+v", facts)
 	}
 }
 
@@ -290,8 +314,8 @@ func TestMemoryServiceRanksSourceKindAndDeduplicatesBeforeLimit(t *testing.T) {
 	if len(memoryFacts) != 2 {
 		t.Fatalf("expected deduplicated limited facts, got %+v", memoryFacts)
 	}
-	if memoryFacts[0].SourceKind != MemorySourceKindFact {
-		t.Fatalf("expected durable fact to outrank duplicate episode, got %+v", memoryFacts)
+	if memoryFacts[0].SourceKind != MemorySourceKindNode {
+		t.Fatalf("expected highest provider score first, got %+v", memoryFacts)
 	}
 	if containsFactID(memoryFacts, "episode") {
 		t.Fatalf("expected duplicate raw episode to be removed, got %+v", memoryFacts)
@@ -364,4 +388,35 @@ func TestMemoryHealthReportsTheCapabilityRatherThanTheDaemon(t *testing.T) {
 	if health := memoryService.Health(context.Background()); !health.Reachable || health.Error != "" {
 		t.Fatalf("a later successful search must clear the health error, got %+v", health)
 	}
+}
+
+func TestMemoryServicePropagatesNamespaceMirrorFailure(t *testing.T) {
+	graphStore := &recordingAddEpisodeStore{}
+	memoryService := &MemoryService{store: graphStore, mirror: failingNamespaceMirror{}}
+	_, errorValue := memoryService.AddEpisode(context.Background(), MemoryEpisode{EpisodeID: "episode-1", Namespaces: []MemoryNamespace{{NamespaceID: "user:person-1"}}})
+	if errorValue == nil || graphStore.called {
+		t.Fatalf("expected namespace persistence failure before graph ingestion, error=%v called=%v", errorValue, graphStore.called)
+	}
+}
+
+type recordingAddEpisodeStore struct{ called bool }
+
+func (store *recordingAddEpisodeStore) AddEpisode(context.Context, MemoryEpisode) (MemoryIngestionResult, error) {
+	store.called = true
+	return MemoryIngestionResult{}, nil
+}
+func (store *recordingAddEpisodeStore) SearchFacts(context.Context, MemorySearchRequest) ([]MemoryFact, error) {
+	return nil, nil
+}
+
+type failingNamespaceMirror struct{}
+
+func (failingNamespaceMirror) SaveGraphNamespaces(context.Context, []MemoryNamespace) error {
+	return errors.New("namespace mirror unavailable")
+}
+func (failingNamespaceMirror) SaveGraphEpisode(context.Context, MemoryEpisode, string, string) error {
+	return nil
+}
+func (failingNamespaceMirror) ListAccessibleNamespaces(context.Context, MemorySearchRequest) ([]MemoryNamespace, error) {
+	return nil, nil
 }

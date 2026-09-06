@@ -16,6 +16,10 @@ type staticGraphMemoryStore struct {
 	facts []memory.MemoryFact
 }
 
+type launchSpyGraphMemoryStore struct {
+	searchCalls int
+}
+
 func (store staticGraphMemoryStore) AddEpisode(context.Context, memory.MemoryEpisode) (memory.MemoryIngestionResult, error) {
 	return memory.MemoryIngestionResult{}, nil
 }
@@ -24,24 +28,23 @@ func (store staticGraphMemoryStore) SearchFacts(context.Context, memory.MemorySe
 	return store.facts, nil
 }
 
-func TestTaskLauncherInjectsGraphMemoryAtLaunch(t *testing.T) {
+func (store *launchSpyGraphMemoryStore) AddEpisode(context.Context, memory.MemoryEpisode) (memory.MemoryIngestionResult, error) {
+	return memory.MemoryIngestionResult{}, nil
+}
+
+func (store *launchSpyGraphMemoryStore) SearchFacts(context.Context, memory.MemorySearchRequest) ([]memory.MemoryFact, error) {
+	store.searchCalls++
+	return nil, nil
+}
+
+func TestTaskLauncherDoesNotRetrieveMemoryAtLaunch(t *testing.T) {
 	taskEventService := task.NewTaskEventService()
 	taskRunService := task.NewTaskRunService(taskEventService)
 	harness := harnesstest.New(taskRunService)
-	pinnedMemoryStore := memory.NewMarkdownStore(t.TempDir(), 1200)
-	if _, errorValue := pinnedMemoryStore.MergePersonMemory(context.Background(), "person-1", "The user prefers terse release notes."); errorValue != nil {
-		t.Fatal(errorValue)
-	}
+	graphStore := &launchSpyGraphMemoryStore{}
 	memoryService := &memory.MemoryService{}
-	memoryService.UseGraphStore(staticGraphMemoryStore{facts: []memory.MemoryFact{{
-		ScopeType:   memory.ScopeTypeUser,
-		NamespaceID: memory.UserNamespace("person-1").NamespaceID,
-		Content:     "The user leads the quarterly launch project.",
-		SourceKind:  memory.MemorySourceKindFact,
-		Score:       0.9,
-	}}})
+	memoryService.UseGraphStore(graphStore)
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UsePinnedMemoryStore(pinnedMemoryStore)
 	toolCatalogBuilder.UseMemoryService(memoryService)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{
 		"default": {"memory_search"},
@@ -61,18 +64,15 @@ func TestTaskLauncherInjectsGraphMemoryAtLaunch(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected launch to succeed: %v", errorValue)
 	}
-	if len(launchResult.MemoryFacts) != 2 {
-		t.Fatalf("expected pinned and graph memory facts, got %+v", launchResult.MemoryFacts)
+	if len(launchResult.MemoryFacts) != 0 {
+		t.Fatalf("expected launch to carry no memory facts, got %+v", launchResult.MemoryFacts)
 	}
-	if !containsMemoryFactContent(launchResult.MemoryFacts, "quarterly launch project") {
-		t.Fatalf("expected graph fact to be injected, got %+v", launchResult.MemoryFacts)
-	}
-	if !containsMemoryFactContent(launchResult.MemoryFacts, "terse release notes") {
-		t.Fatalf("expected pinned fact to be kept, got %+v", launchResult.MemoryFacts)
+	if graphStore.searchCalls != 0 {
+		t.Fatalf("expected launch to skip graph memory search, got %d calls", graphStore.searchCalls)
 	}
 }
 
-func TestTaskLauncherKeepsPinnedMemoryWhenGraphSearchFails(t *testing.T) {
+func TestTaskLauncherDoesNotLoadPinnedMemoryAtLaunch(t *testing.T) {
 	taskEventService := task.NewTaskEventService()
 	taskRunService := task.NewTaskRunService(taskEventService)
 	harness := harnesstest.New(taskRunService)
@@ -102,8 +102,8 @@ func TestTaskLauncherKeepsPinnedMemoryWhenGraphSearchFails(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected launch to succeed: %v", errorValue)
 	}
-	if len(launchResult.MemoryFacts) != 1 || !containsMemoryFactContent(launchResult.MemoryFacts, "terse release notes") {
-		t.Fatalf("expected pinned-only memory facts, got %+v", launchResult.MemoryFacts)
+	if len(launchResult.MemoryFacts) != 0 {
+		t.Fatalf("expected launch to carry no pinned memory facts, got %+v", launchResult.MemoryFacts)
 	}
 }
 

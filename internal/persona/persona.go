@@ -4,6 +4,8 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -166,6 +168,33 @@ func CanonicalSoul(soul Soul) ([]byte, error) {
 
 func CanonicalUser(user User) ([]byte, error) {
 	return canonicalDocument(NormalizeUser(user), UserSchemaDocument, "user.json")
+}
+
+func SaveDocument(root string, name string, document []byte) error {
+	if err := os.MkdirAll(root, 0o750); err != nil {
+		return err
+	}
+	file, err := os.CreateTemp(root, ".persona-*.json")
+	if err != nil {
+		return err
+	}
+	temporaryPath := file.Name()
+	defer os.Remove(temporaryPath)
+	if _, err := file.Write(document); err != nil {
+		file.Close()
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(temporaryPath, 0o644); err != nil {
+		return err
+	}
+	if err := os.Rename(temporaryPath, filepath.Join(root, name)); err != nil {
+		return err
+	}
+	SaveBackup(BackupPath(root, name), document)
+	return nil
 }
 
 func canonicalDocument(value any, schemaDocument []byte, fileName string) ([]byte, error) {

@@ -275,4 +275,3 @@ func containsBrowserDescriptor(descriptors []CapabilityToolDescriptor) bool {
 func descriptorIsBrowserCapability(descriptor CapabilityToolDescriptor) bool {
 	return descriptor.RequiresRequesterDevice
 }
-

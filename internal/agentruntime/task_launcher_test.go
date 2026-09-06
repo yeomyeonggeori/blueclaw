@@ -59,8 +59,8 @@ func TestTaskLauncherCreatesAuditedAgentRun(t *testing.T) {
 	if launchResult.TurnResult.TaskRun.TaskRunID == "" {
 		t.Fatal("expected task run id")
 	}
-	if len(launchResult.MemoryFacts) != 1 {
-		t.Fatalf("expected pinned memory result, got %+v", launchResult.MemoryFacts)
+	if len(launchResult.MemoryFacts) != 0 {
+		t.Fatalf("expected no automatic memory retrieval, got %+v", launchResult.MemoryFacts)
 	}
 	if !containsString(launchResult.ToolNames, "conversation_history") || !containsString(launchResult.ToolNames, "memory_search") {
 		t.Fatalf("expected launch tool catalog, got %+v", launchResult.ToolNames)
@@ -74,7 +74,7 @@ func TestTaskLauncherCreatesAuditedAgentRun(t *testing.T) {
 	if taskLaunchEvent.Name == "" {
 		t.Fatalf("expected task launch event, got %+v", taskEvents)
 	}
-	if !strings.Contains(taskLaunchEvent.Body, `"source":"connector"`) || !strings.Contains(taskLaunchEvent.Body, `"memoryFactCount":1`) {
+	if !strings.Contains(taskLaunchEvent.Body, `"source":"connector"`) || !strings.Contains(taskLaunchEvent.Body, `"memoryFactCount":0`) {
 		t.Fatalf("expected launch audit body, got %s", taskLaunchEvent.Body)
 	}
 }
@@ -356,7 +356,7 @@ func TestTaskLauncherProvisionsRequesterWorkspaceBeforeToolSet(t *testing.T) {
 	}
 }
 
-func TestTaskLauncherAuditsPinnedMemoryFailureAndRunsWithoutMemory(t *testing.T) {
+func TestTaskLauncherRunsWithoutReadingPinnedMemory(t *testing.T) {
 	taskEventService := task.NewTaskEventService()
 	taskRunService := task.NewTaskRunService(taskEventService)
 	harness := harnesstest.New(taskRunService)
@@ -389,8 +389,8 @@ func TestTaskLauncherAuditsPinnedMemoryFailureAndRunsWithoutMemory(t *testing.T)
 		t.Fatalf("expected no memory facts after pinned memory failure, got %+v", launchResult.MemoryFacts)
 	}
 	taskEvents := taskEventService.ListTaskEvent(launchResult.TurnResult.TaskRun.TaskRunID)
-	if !containsTaskEvent(taskEvents, "memory.pinned_load_failed") {
-		t.Fatalf("expected pinned memory failure event, got %+v", taskEvents)
+	if containsTaskEvent(taskEvents, "memory.pinned_load_failed") || containsTaskEvent(taskEvents, "memory.pinned_load_succeeded") {
+		t.Fatalf("expected no automatic pinned memory event, got %+v", taskEvents)
 	}
 }
 

@@ -29,6 +29,7 @@ func (application *Application) Start() error {
 	if application.refreshSkillIndex != nil {
 		go application.refreshSkillIndex(context.Background())
 	}
+	application.startLearningCoordinator()
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "log_retention")
 	application.startLogRetentionLoop()
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "memory_queue")
@@ -121,6 +122,9 @@ func (application *Application) Shutdown(ctx context.Context) error {
 	if application.memoryUpdateCancel != nil {
 		application.memoryUpdateCancel()
 	}
+	if application.learningCancel != nil {
+		application.learningCancel()
+	}
 	errorValue := application.httpServer.Shutdown(ctx)
 	backgroundError := application.awaitBackgroundLoops(ctx)
 	terminalCloseError := application.closeTerminalSessions()
@@ -139,6 +143,13 @@ func (application *Application) Shutdown(ctx context.Context) error {
 		return closeErrorValue
 	}
 	return databaseCloseError
+}
+
+func (application *Application) startLearningCoordinator() {
+	if application.learningCoordinator == nil || application.learningCancel != nil {
+		return
+	}
+	application.learningCancel = application.startBackgroundLoop(application.learningCoordinator.Run)
 }
 
 // Cancelling a context asks a goroutine to stop. Nothing was waiting for one to have

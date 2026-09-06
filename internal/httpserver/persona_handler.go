@@ -23,6 +23,17 @@ type PersonaHandler struct {
 	WorkspaceRootPath     string
 	WorkspaceActorFactory security.WorkspaceActorFactory
 	PersonAccessResolver  PersonAccessResolver
+	AuthorizeRequest      func(*http.Request) bool
+}
+
+func (handler PersonaHandler) authorized(next http.HandlerFunc) http.HandlerFunc {
+	return func(responseWriter http.ResponseWriter, request *http.Request) {
+		if handler.AuthorizeRequest == nil || !handler.AuthorizeRequest(request) {
+			http.Error(responseWriter, "persona service authorization required", http.StatusForbidden)
+			return
+		}
+		next(responseWriter, request)
+	}
 }
 
 func (handler PersonaHandler) HandleReadUser(responseWriter http.ResponseWriter, request *http.Request) {

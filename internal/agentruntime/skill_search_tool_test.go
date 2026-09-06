@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/yeomyeonggeori/blueclaw/internal/learning"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
@@ -143,6 +144,33 @@ func TestSkillSearchNameModeReturnsCanonicalPromptMetadata(t *testing.T) {
 	}
 	if skill.SourcePath != "/workspace/skills/site-prototype/SKILL.md" {
 		t.Fatalf("expected stable virtual source path, got %q", skill.SourcePath)
+	}
+}
+
+func TestSkillSearchLoadsOnlyCurrentRequestersLearnedSkills(t *testing.T) {
+	retriever := &recordingSkillSearchRetriever{}
+	var requestedAudience string
+	toolCatalogBuilder := NewToolCatalogBuilder()
+	toolCatalogBuilder.UseSkillSearch(retriever, func() agentcontract.InstructionBundle {
+		return agentcontract.InstructionBundle{Skills: []agentcontract.SkillInstruction{{Name: "installed", Description: "Installed skill", Prompt: "Installed instructions."}}}
+	})
+	toolCatalogBuilder.UseLearnedSkillLoader(func(audience string) []learning.Skill {
+		requestedAudience = audience
+		if audience != "person:person-1" {
+			return []learning.Skill{{ID: "person-2-secret", Audience: audience, Description: "wrong audience", Instruction: "secret", Status: "active"}}
+		}
+		return []learning.Skill{{ID: "learned-procedure", Audience: audience, Version: 2, Description: "Learned procedure", Instruction: "Version two instructions.", Status: "active"}}
+	})
+	toolSet := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{ProfileName: "default", RequesterPersonID: "person-1"})
+	result := invokeSkillSearch(t, toolSet, json.RawMessage(`{"name":"learned/learned-procedure"}`))
+	if requestedAudience != "person:person-1" {
+		t.Fatalf("loader audience = %q", requestedAudience)
+	}
+	if result.Skills[0].Prompt != "Version two instructions." || result.Skills[0].SourcePath != "learned://person:person-1/learned-procedure/SKILL.md" {
+		t.Fatalf("unexpected learned skill result: %+v", result.Skills)
+	}
+	if _, isFound := findSkillInstructionByName(retriever.instructions, "person-2-secret"); isFound {
+		t.Fatal("another person's learned skill was exposed")
 	}
 }
 

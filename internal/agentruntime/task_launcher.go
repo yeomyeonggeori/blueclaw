@@ -38,6 +38,11 @@ type TaskLauncher struct {
 	agentIdentityProvider         func() agentcontract.AgentIdentity
 	companyProvider               func() agentcontract.CompanyContext
 	approvalGate                  *approvalgate.Gate
+	observeTask                   func(TaskLaunchRequest) func(TaskLaunchResult, error)
+}
+
+func (taskLauncher *TaskLauncher) UseTaskObserver(observer func(TaskLaunchRequest) func(TaskLaunchResult, error)) {
+	taskLauncher.observeTask = observer
 }
 
 func (taskLauncher *TaskLauncher) UseApprovalGate(approvalGate *approvalgate.Gate) {
@@ -118,10 +123,6 @@ type TaskMemoryRequest struct {
 	AccessibleConversationIDs []string
 }
 
-type TaskPinnedMemoryRequest struct {
-	RequesterPersonID string
-}
-
 type taskLaunchStep[T any] interface {
 	Name() string
 	Run(context.Context, *taskLaunchExecution) (T, error)
@@ -134,8 +135,9 @@ type taskLaunchExecution struct {
 }
 
 const (
-	launchStepStatusError  = "error"
-	launchStepStatusResult = "result"
+	launchStepStatusError          = "error"
+	launchStepStatusResult         = "result"
+	contextualMemorySearchToolName = "memory_search"
 )
 
 type launchStepRecord struct {
@@ -145,13 +147,6 @@ type launchStepRecord struct {
 	DurationMs      int64  `json:"durationMs"`
 	Error           string `json:"error,omitempty"`
 	errorValue      error  `json:"-"`
-}
-
-type launchMemoryResult struct {
-	Facts           []memory.MemoryFact
-	PinnedFactCount int
-	GraphFactCount  int
-	Error           string
 }
 
 type IntakeBudget struct {
@@ -238,11 +233,18 @@ func (taskLauncher *TaskLauncher) resolveRequesterEmail(request TaskLaunchReques
 }
 
 func (taskLauncher *TaskLauncher) Launch(ctx context.Context, request TaskLaunchRequest) (TaskLaunchResult, error) {
+	var finishObservation func(TaskLaunchResult, error)
+	if taskLauncher.observeTask != nil {
+		finishObservation = taskLauncher.observeTask(request)
+	}
 	if request.TurnStartedAt.IsZero() {
 		request.TurnStartedAt = time.Now()
 	}
 	launchResult, routerCallRecords, errorValue := taskLauncher.launchRoutedTask(ctx, request)
 	taskLauncher.appendTurnRouterCallRecords(launchResult.TurnResult.TaskRun.TaskRunID, routerCallRecords)
+	if finishObservation != nil {
+		finishObservation(launchResult, errorValue)
+	}
 	return launchResult, errorValue
 }
 
@@ -347,6 +349,9 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 	}
 	toolSet, record := runLaunchStep(ctx, execution, buildToolSetLaunchStep{})
 	launchRecords = append(launchRecords, record)
+	if record.Error != "" {
+		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, nil, record.StepName, launchRecords, errorFromStepRecord(record)), routerCallRecords, nil
+	}
 	toolNames := toolSet.ListToolNames()
 	registryAudit, record := runLaunchStep(ctx, execution, auditToolRegistryLaunchStep{ToolSet: toolSet})
 	launchRecords = append(launchRecords, record)
@@ -360,12 +365,10 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 		ConversationChannelID:   request.ConversationChannelID,
 		ConversationChannelName: request.ConversationChannelName,
 	})
-	memoryResult, record := runLaunchStep(ctx, execution, loadMemoryLaunchStep{})
-	launchRecords = append(launchRecords, record)
 	carriedOutCalls, record := runLaunchStep(ctx, execution, carryOutApprovedCallLaunchStep{ToolSet: toolSet})
 	launchRecords = append(launchRecords, record)
 	turnResult, record := runLaunchStep(ctx, execution, runTurnLaunchStep{
-		MemoryFacts:       memoryResult.Facts,
+		MemoryFacts:       nil,
 		ToolSet:           toolSet,
 		ConversationScope: conversationScope,
 		CarriedOutCalls:   carriedOutCalls,
@@ -384,22 +387,13 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 	}
 	if turnResult.TaskRun.TaskRunID != "" {
 		taskLauncher.appendLaunchStepRecords(turnResult.TaskRun.TaskRunID, launchRecords)
-		if memoryResult.Error != "" {
-			taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, agentcontract.TaskEventMemoryPinnedLoadFailed, memoryResult.Error)
-		} else {
-			taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, agentcontract.TaskEventMemoryPinnedLoadSucceeded, marshalToolResult(map[string]any{
-				"factCount":       len(memoryResult.Facts),
-				"pinnedFactCount": memoryResult.PinnedFactCount,
-				"graphFactCount":  memoryResult.GraphFactCount,
-			}))
-		}
-		taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, agentcontract.TaskEventAgentTaskLaunched, marshalTaskLaunchEvent(request, normalizedProfileName, launchedToolNames, registryAudit, len(memoryResult.Facts)))
+		taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, agentcontract.TaskEventAgentTaskLaunched, marshalTaskLaunchEvent(request, normalizedProfileName, launchedToolNames, registryAudit, 0))
 		taskLauncher.appendAmbientDutyLaunchEvent(turnResult.TaskRun.TaskRunID, request)
 		taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, agentcontract.TaskEventAgentConversationScope, marshalToolResult(conversationScope))
 	}
 	return TaskLaunchResult{
 		TurnResult:            turnResult,
-		MemoryFacts:           memoryResult.Facts,
+		MemoryFacts:           nil,
 		ToolNames:             launchedToolNames,
 		NormalizedProfileName: normalizedProfileName,
 	}, routerCallRecords, nil
@@ -483,52 +477,6 @@ func (step auditToolRegistryLaunchStep) Run(ctx context.Context, execution *task
 	return execution.Launcher.toolCatalogBuilder.BuildToolRegistryAudit(ctx, step.ToolSet)
 }
 
-type loadMemoryLaunchStep struct{}
-
-func (loadMemoryLaunchStep) Name() string {
-	return "load_memory"
-}
-
-func (loadMemoryLaunchStep) Run(ctx context.Context, execution *taskLaunchExecution) (launchMemoryResult, error) {
-	pinnedMemoryFacts, errorValue := execution.Launcher.toolCatalogBuilder.LoadPinnedMemory(ctx, TaskPinnedMemoryRequest{
-		RequesterPersonID: execution.Request.RequesterPersonID,
-	})
-	if errorValue != nil {
-		return launchMemoryResult{Error: errorValue.Error()}, nil
-	}
-	graphMemoryFacts := searchLaunchGraphMemory(ctx, execution)
-	return launchMemoryResult{
-		Facts:           appendMemoryFacts(pinnedMemoryFacts, graphMemoryFacts),
-		PinnedFactCount: len(pinnedMemoryFacts),
-		GraphFactCount:  len(graphMemoryFacts),
-	}, nil
-}
-
-const launchGraphMemorySearchTimeout = 8 * time.Second
-
-func searchLaunchGraphMemory(ctx context.Context, execution *taskLaunchExecution) []memory.MemoryFact {
-	toolCatalogBuilder := execution.Launcher.toolCatalogBuilder
-	request := execution.Request
-	if !toolCatalogBuilder.canSearchGraphMemory() || strings.TrimSpace(request.Prompt) == "" {
-		return nil
-	}
-	catalogRequest := execution.Launcher.toolCatalogRequestForLaunch(request, execution.NormalizedProfileName)
-	searchContext, cancelSearch := context.WithTimeout(ctx, launchGraphMemorySearchTimeout)
-	defer cancelSearch()
-	graphMemoryFacts, errorValue := toolCatalogBuilder.SearchMemory(searchContext, TaskMemoryRequest{
-		Query:                     request.Prompt,
-		RequesterPersonID:         request.RequesterPersonID,
-		ConversationID:            request.ConversationID,
-		PersonAccess:              request.PersonAccess,
-		MemoryNamespaces:          searchMemoryNamespaces(catalogRequest),
-		AccessibleConversationIDs: request.AccessibleConversationIDs,
-	})
-	if errorValue != nil {
-		return nil
-	}
-	return graphMemoryFacts
-}
-
 type runTurnLaunchStep struct {
 	MemoryFacts       []memory.MemoryFact
 	ToolSet           *toolcontract.ToolSet
@@ -604,6 +552,10 @@ func (taskLauncher *TaskLauncher) completeLaunchFailure(ctx context.Context, req
 }
 
 func (taskLauncher *TaskLauncher) agentTurnRequestForLaunch(request TaskLaunchRequest, profileName string, memoryFacts []memory.MemoryFact, toolSet *toolcontract.ToolSet, conversationScope ConversationResourceScope) agentcontract.AgentTurnRequest {
+	pinnedToolNames := append([]string{}, request.PinnedToolNames...)
+	if toolSet != nil && toolSet.IsAllowed(contextualMemorySearchToolName) {
+		pinnedToolNames = appendUniqueString(pinnedToolNames, contextualMemorySearchToolName)
+	}
 	turnRequest := agentcontract.AgentTurnRequest{
 		ArtifactManifest:   request.ArtifactManifest,
 		TurnStartedAt:      request.TurnStartedAt,
@@ -643,7 +595,7 @@ func (taskLauncher *TaskLauncher) agentTurnRequestForLaunch(request TaskLaunchRe
 		SkipSkillSelection:         request.SkipSkillSelection,
 		MemoryFacts:                bluecollarMemoryFacts(memoryFacts),
 		ToolSet:                    toolSet,
-		PinnedToolNames:            append([]string{}, request.PinnedToolNames...),
+		PinnedToolNames:            pinnedToolNames,
 		PinnedSkillNames:           append([]string{}, request.PinnedSkillNames...),
 		WorkspaceRootPath:          taskLauncher.toolCatalogBuilder.WorkspaceRootPath(),
 		WorkspaceDefaultPath:       conversationScope.DefaultDirectoryPath,
@@ -656,6 +608,15 @@ func (taskLauncher *TaskLauncher) agentTurnRequestForLaunch(request TaskLaunchRe
 		turnRequest.HostInstruction += "\n\n" + requesterPersona
 	}
 	return turnRequest
+}
+
+func appendUniqueString(values []string, value string) []string {
+	for _, existingValue := range values {
+		if existingValue == value {
+			return values
+		}
+	}
+	return append(values, value)
 }
 
 // A missing artifact service must reach the harness as an absent store, not as a

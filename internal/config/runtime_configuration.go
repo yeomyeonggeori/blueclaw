@@ -185,6 +185,7 @@ type DatabaseConfiguration struct {
 }
 
 type MemoryConfiguration struct {
+	AdminAssertionKeyPath                       string `json:"adminAssertionKeyPath"`
 	WorkspaceID                                 string `json:"workspaceID"`
 	GraphitiEndpoint                            string `json:"graphitiEndpoint"`
 	GraphitiKuzuPath                            string `json:"graphitiKuzuPath"`

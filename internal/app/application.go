@@ -15,6 +15,7 @@ import (
 	apiconnector "github.com/yeomyeonggeori/blueclaw/internal/connectors/api"
 	"github.com/yeomyeonggeori/blueclaw/internal/harnessdriver"
 	"github.com/yeomyeonggeori/blueclaw/internal/httpserver"
+	"github.com/yeomyeonggeori/blueclaw/internal/learning"
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/protocolidentity"
 	runtimelogging "github.com/yeomyeonggeori/blueclaw/internal/runtime"
@@ -47,11 +48,13 @@ type Application struct {
 	taskScheduleCancel          context.CancelFunc
 	logRetentionCancel          context.CancelFunc
 	memoryUpdateCancel          context.CancelFunc
+	learningCancel              context.CancelFunc
 	taskRetentionCancel         context.CancelFunc
 	staleTaskCancel             context.CancelFunc
 	taskSchedulePoller          *scheduler.TaskSchedulePoller
 	taskRetentionSweeper        *scheduler.TaskRetentionSweeper
 	memoryUpdateQueue           *memory.BackgroundMemoryUpdateQueue
+	learningCoordinator         *learning.Coordinator
 	taskSchedulePollSecond      int
 	taskRetentionIntervalMinute int
 	interruptedTaskResumeDelay  time.Duration
@@ -109,6 +112,8 @@ type applicationComponents struct {
 	acpSessionServer      *acpsession.Server
 	router                http.Handler
 	startupError          error
+	learningStore         *learning.Store
+	learningCoordinator   *learning.Coordinator
 }
 
 func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath string, agentHarnessFactory harnessdriver.Factory, inbound InboundOptions) *Application {
@@ -123,12 +128,30 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 	components.services = newTaskServices(runtimeConfiguration, components.foundation.database, components.directory.companyProvider, logger)
 	components.kernel = newAgentKernel(runtimeConfiguration, agentHarnessFactory, components.services, components.directory.companyProvider, logger)
 	components.memory = newMemoryComponents(runtimeConfiguration, components.foundation.database, components.kernel.taskTierLanguageModels.Low, logger)
+	components.learningStore, components.startupError = openLearningStore(runtimeConfiguration.Terminal.WorkspaceRootPath)
+	learningCoordinator, learningError := newLearningCoordinator(runtimeConfiguration, components.learningStore, components.kernel.taskTierLanguageModels.Low, logger)
+	components.learningCoordinator = learningCoordinator
+	components.startupError = firstNonNilError(components.startupError, learningError)
 	components.backupCoordinator = backup.NewCoordinator(buildBackupManifest(runtimeConfiguration, components.foundation.database))
 	components.taskIntakeController = runtimecontrol.NewTaskIntakeController()
 	components.taskIntakeController.SetQuiesced(components.kernel.languageModelError != nil)
 	components.toolCatalogBuilder = newToolCatalogBuilder(runtimeConfiguration, components.kernel, components.services, components.memory, logger)
+	if components.learningStore != nil {
+		components.toolCatalogBuilder.UseLearnedSkillLoader(func(audience string) []learning.Skill {
+			return components.learningStore.List(audience, false)
+		})
+	}
+	if components.learningCoordinator != nil {
+		components.learningCoordinator.UseAvailableTools(func() []string {
+			return components.toolCatalogBuilder.AvailableToolNames()
+		})
+		components.learningCoordinator.Report = func(errorValue error) {
+			logger.Error("learning.review_failed", "error", errorValue.Error())
+		}
+	}
 	components.turnRouter = intake.NewTurnRouter(turnRouterLanguageModelProvider(components.kernel.taskTierLanguageModels, components.kernel.intakeLanguageModelProvider), deriveIntakeOptions(runtimeConfiguration))
 	components.taskLauncher = newTaskLauncher(runtimeConfiguration, components.foundation, components.directory, components.kernel, components.services, components.toolCatalogBuilder, components.turnRouter)
+	components.taskLauncher.UseTaskObserver(learningTaskObserver(components.learningCoordinator, components.services.taskRunService))
 	components.taskSchedulePoller = newTaskSchedulePoller(runtimeConfiguration, components.services, components.directory.identityService, components.taskLauncher, components.taskIntakeController, logger)
 	logger.Info("application.initializing", "stage", "connector_runtime")
 	components.taskRetentionSweeper = newTaskRetentionSweeper(runtimeConfiguration, components.services, logger)
@@ -140,7 +163,7 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 	components.acpSessionServer = newACPSessionServer(inbound, components.kernel, components.directory, components.taskLauncher, components.turnRouter, components.connectorRuntime, components.services.taskRunService, logger)
 	logger.Info("application.initializing", "stage", "router")
 	components.protocolIdentity = newProtocolIdentity(runtimeConfiguration, components.kernel.capabilityClient)
-	components.startupError = firstNonNilError(components.foundation.startupError, components.kernel.startupError)
+	components.startupError = firstNonNilError(components.foundation.startupError, components.kernel.startupError, components.startupError)
 	components.router = httpserver.NewRouter(newRouterDependencies(components))
 	return components
 }
@@ -164,6 +187,7 @@ func newApplication(components applicationComponents) *Application {
 		taskSchedulePoller:          components.taskSchedulePoller,
 		taskRetentionSweeper:        components.taskRetentionSweeper,
 		memoryUpdateQueue:           components.memory.memoryUpdateQueue,
+		learningCoordinator:         components.learningCoordinator,
 		taskSchedulePollSecond:      components.runtimeConfiguration.Scheduler.TaskSchedulePollIntervalSecond,
 		taskRetentionIntervalMinute: components.runtimeConfiguration.Scheduler.RetentionCheckIntervalMinute,
 		interruptedTaskResumeDelay:  2 * time.Second,

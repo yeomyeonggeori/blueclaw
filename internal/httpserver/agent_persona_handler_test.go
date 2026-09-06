@@ -18,6 +18,17 @@ func TestAgentPersonaIsInstalledWhereTheRuntimeReadsIt(t *testing.T) {
 		}
 	}
 	response := httptest.NewRecorder()
+	seedResponse := response
+	handler.HandleSeedAgent(seedResponse, httptest.NewRequest(http.MethodPost, "/admin/api/persona/agent", strings.NewReader(`{"identity":{"schemaVersion":1,"names":["샘플봇"],"handle":"samplebot"},"soul":{"schemaVersion":1,"values":["Verify outcomes."]}}`)))
+	if seedResponse.Code != http.StatusOK {
+		t.Fatalf("seed status=%d body=%s", seedResponse.Code, seedResponse.Body.String())
+	}
+	for _, name := range []string{"IDENTITY.md", "SOUL.md"} {
+		if errorValue := os.WriteFile(filepath.Join(root, name), []byte("retired"), 0o600); errorValue != nil {
+			t.Fatal(errorValue)
+		}
+	}
+	response = httptest.NewRecorder()
 	handler.HandleWriteAgent(response, httptest.NewRequest(http.MethodPut, "/admin/api/persona/agent", strings.NewReader(`{"identity":{"schemaVersion":1,"names":["샘플봇"],"handle":"samplebot"},"soul":{"schemaVersion":1,"values":["Verify outcomes."]}}`)))
 	if response.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
@@ -43,5 +54,28 @@ func TestRejectedSoulDoesNotPartiallyInstallIdentity(t *testing.T) {
 	}
 	if _, errorValue := os.Stat(filepath.Join(root, "identity.json")); !os.IsNotExist(errorValue) {
 		t.Fatal("invalid bundle partially changed identity")
+	}
+}
+
+func TestAgentIdentityUpdateCannotChangeAuthoritativeSoul(t *testing.T) {
+	root := t.TempDir()
+	handler := PersonaHandler{WorkspaceRootPath: root}
+	seedResponse := httptest.NewRecorder()
+	handler.HandleSeedAgent(seedResponse, httptest.NewRequest(http.MethodPost, "/admin/api/persona/agent", strings.NewReader(`{"identity":{"schemaVersion":1,"names":["샘플봇"],"handle":"samplebot"},"soul":{"schemaVersion":1,"values":["Keep the baseline."]}}`)))
+	if seedResponse.Code != http.StatusOK {
+		t.Fatalf("seed status=%d body=%s", seedResponse.Code, seedResponse.Body.String())
+	}
+	response := httptest.NewRecorder()
+	handler.HandleWriteAgent(response, httptest.NewRequest(http.MethodPut, "/admin/api/persona/agent", strings.NewReader(`{"identity":{"schemaVersion":1,"names":["새봇"],"handle":"newbot"},"soul":{"schemaVersion":1,"values":["Replace the baseline."]}}`)))
+	if response.Code != http.StatusConflict {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	identity, errorValue := os.ReadFile(filepath.Join(root, "identity.json"))
+	if errorValue != nil || !strings.Contains(string(identity), "샘플봇") {
+		t.Fatalf("identity changed after rejected soul update: %s %v", identity, errorValue)
+	}
+	soul, errorValue := os.ReadFile(filepath.Join(root, "soul.json"))
+	if errorValue != nil || !strings.Contains(string(soul), "Keep the baseline.") {
+		t.Fatalf("soul changed after rejected update: %s %v", soul, errorValue)
 	}
 }
