@@ -1970,7 +1970,7 @@ func TestConnectorRuntimeStartsDirectProgressBeforeInitialHistoryFetch(t *testin
 	}
 }
 
-func TestConnectorRuntimeInjectsRequesterPinnedMemoryIntoLanguageModel(t *testing.T) {
+func TestConnectorRuntimeKeepsPinnedMemoryOutOfGreetingContext(t *testing.T) {
 	languageModel := &recordingLanguageModel{reply: "기억했습니다"}
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
 	pinnedMemoryStore := memory.NewMarkdownStore(t.TempDir(), 1200)
@@ -1987,14 +1987,14 @@ func TestConnectorRuntimeInjectsRequesterPinnedMemoryIntoLanguageModel(t *testin
 	}
 
 	if len(languageModel.request.Messages) < 2 {
-		t.Fatalf("expected memory context message, got %+v", languageModel.request.Messages)
+		t.Fatalf("expected instruction and user messages, got %+v", languageModel.request.Messages)
 	}
-	if !structuredMessagesContain(languageModel.request.Messages, "Graphiti 메모리 설계") {
-		t.Fatalf("expected requester memory in model context, got %+v", languageModel.request.Messages)
+	if structuredMessagesContain(languageModel.request.Messages, "Graphiti 메모리 설계") {
+		t.Fatalf("greeting must not inject stored requester memory: %+v", languageModel.request.Messages)
 	}
 }
 
-func TestConnectorRuntimeInjectsVisibleContextBeforeMemory(t *testing.T) {
+func TestConnectorRuntimePreservesVisibleContextWithoutPinnedMemory(t *testing.T) {
 	languageModel := &recordingLanguageModel{reply: "맥락 확인"}
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
 	event := testInboundEvent("message-1")
@@ -2021,15 +2021,14 @@ func TestConnectorRuntimeInjectsVisibleContextBeforeMemory(t *testing.T) {
 	visibleContextIndex := messageIndex(languageModel.request.Messages, "admin: 이전 메시지")
 	memoryIndex := messageIndex(languageModel.request.Messages, "간결한 설계")
 	promptIndex := userMessageIndex(languageModel.request.Messages, event.Prompt)
-	if visibleContextIndex < 0 || memoryIndex < 0 || promptIndex < 0 {
-		t.Fatalf("expected visible context, memory, and prompt messages, got %+v", languageModel.request.Messages)
+	if visibleContextIndex < 0 || memoryIndex >= 0 || promptIndex < 0 {
+		t.Fatalf("expected visible context and prompt without stored memory: %+v", languageModel.request.Messages)
 	}
 	contextBody := joinConnectorMessageContent(languageModel.request.Messages)
 	visibleContextTextIndex := strings.Index(contextBody, "admin: 이전 메시지")
-	memoryTextIndex := strings.Index(contextBody, "간결한 설계")
 	promptTextIndex := strings.LastIndex(contextBody, event.Prompt)
-	if !(visibleContextTextIndex < memoryTextIndex && memoryTextIndex < promptTextIndex) {
-		t.Fatalf("expected visible context before memory before prompt, got %q", contextBody)
+	if visibleContextTextIndex >= promptTextIndex {
+		t.Fatalf("expected visible context before the current prompt, got %q", contextBody)
 	}
 }
 
@@ -3398,21 +3397,21 @@ func TestConnectorProgressHeartbeatIntervalMaintainsTypingIndicator(t *testing.T
 	}
 }
 
-func TestConnectorRuntimeDoesNotAutomaticallyIngestMemoryButInjectsGraphMemoryAtLaunch(t *testing.T) {
+func TestConnectorRuntimeDoesNotAutomaticallyIngestOrRetrieveGraphMemory(t *testing.T) {
 	languageModel := &recordingLanguageModel{reply: "ok"}
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
-	graphStore := &fakeGraphMemoryStore{
+	graphStore := &selectiveMemorySearchSpy{fakeGraphMemoryStore: &fakeGraphMemoryStore{
 		facts: []memory.MemoryFact{
-			{ScopeType: memory.ScopeTypeUser, NamespaceID: "user:person-1", Content: "사용자의 이름은 민수다."},
+			{ScopeType: memory.ScopeTypeUser, NamespaceID: "user:person-1", Content: "사용자의 이름은 이샘플이다."},
 		},
-	}
+	}}
 	memoryService := &memory.MemoryService{}
 	memoryService.UseGraphStore(graphStore)
 	connectorRuntime.UseMemoryService(memoryService)
 
 	channelEvent := testInboundEvent("message-1")
 	channelEvent.ConversationID = "channel-1"
-	channelEvent.Prompt = "내 이름은 민수야"
+	channelEvent.Prompt = "내 이름은 이샘플이야"
 	_, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, channelEvent)
 	if errorValue != nil {
 		t.Fatalf("expected channel memory event to process: %v", errorValue)
@@ -3429,8 +3428,11 @@ func TestConnectorRuntimeDoesNotAutomaticallyIngestMemoryButInjectsGraphMemoryAt
 	if len(graphStore.episodes) != 0 {
 		t.Fatalf("expected no automatic Graphiti episode ingestion, got %d", len(graphStore.episodes))
 	}
-	if !structuredMessagesContain(languageModel.request.Messages, "민수") {
-		t.Fatalf("expected launch-time graph memory injection to surface stored facts, got %+v", languageModel.request.Messages)
+	if graphStore.searchCount != 0 {
+		t.Fatalf("expected graph lookup only through an explicit tool call, got %d automatic searches", graphStore.searchCount)
+	}
+	if structuredMessagesContain(languageModel.request.Messages, "사용자의 이름은 이샘플이다.") {
+		t.Fatalf("launch injected a stored graph fact without a memory search: %+v", languageModel.request.Messages)
 	}
 }
 
