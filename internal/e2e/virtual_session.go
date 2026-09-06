@@ -749,6 +749,7 @@ var builtinScenarioFactories = map[string]func(string) VirtualSessionScenario{
 	"capability_question_acceptance":            CapabilityQuestionAcceptanceScenario,
 	"task_history_question_acceptance":          TaskHistoryQuestionAcceptanceScenario,
 	"memory_explicit_tool_acceptance":           MemoryExplicitToolAcceptanceScenario,
+	"persona_profile_update_acceptance":         PersonaProfileUpdateAcceptanceScenario,
 	"failure_explanation_acceptance":            FailureExplanationAcceptanceScenario,
 	"one_time_schedule_acceptance":              OneTimeScheduleAcceptanceScenario,
 	"site_artifact_acceptance":                  SitePrototypeAcceptanceScenario,

@@ -50,7 +50,7 @@ func (builder *ToolCatalogBuilder) readPersonaTool(ctx context.Context, input pe
 func (builder *ToolCatalogBuilder) updatePersonaTool(ctx context.Context, input personaToolInput, request ToolCatalogRequest) (toolcontract.ToolResult, error) {
 	target := strings.TrimSpace(input.Target)
 	if target != "user" {
-		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "persona_update", "target must be user or soul"), nil
+		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "persona_update", "only the current requester user profile can be updated"), nil
 	}
 	current, errorValue := builder.personaDocument(ctx, target, request)
 	if errorValue != nil {
