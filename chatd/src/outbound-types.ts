@@ -111,6 +111,15 @@ export interface DirectMessagePostResponse {
 	messageID: string;
 }
 
+export interface DirectMessageOpenRequest {
+	externalUserID: string;
+}
+
+export interface DirectMessageOpenResponse {
+	conversationID: string;
+	replyTargetID: string;
+}
+
 export interface ConversationsListRequest {
 	userSecretHex: string;
 }

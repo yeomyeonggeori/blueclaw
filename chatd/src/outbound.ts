@@ -17,6 +17,7 @@ import {
 	parseAttachmentImportRequest,
 	parseChannelEnsureRequest,
 	parseDirectMessageEnsureRequest,
+	parseDirectMessageOpenRequest,
 	parseDirectMessagePostRequest,
 	parseConversationsListRequest,
 	parsePeopleListRequest,
@@ -41,6 +42,7 @@ import type {
 	AttachmentImportResponse,
 	ChannelEnsureResponse,
 	DirectMessageEnsureResponse,
+	DirectMessageOpenResponse,
 	DirectMessagePostResponse,
 	ConversationsListResponse,
 	PeopleListResponse,
@@ -81,6 +83,7 @@ const capabilityHandlers: Record<string, CapabilityHandler> = {
 	"identity.self": handleIdentitySelf,
 	"channel.ensure": handleChannelEnsure,
 	"dm.ensure": handleDirectMessageEnsure,
+	"dm.open": handleDirectMessageOpen,
 	"dm.post": handleDirectMessagePost,
 	"dm.send": handleDirectMessageSend,
 	"conversations.list": handleConversationsList,
@@ -335,6 +338,22 @@ async function handleDirectMessageEnsure(
 		userPubkeyHex: channel.userPubkeyHex,
 		botName: botUser?.fullName,
 		botAvatarURL: botUser?.avatarUrl,
+	};
+}
+
+async function handleDirectMessageOpen(
+	adapter: PlatformChatAdapter,
+	_configuration: ChatdConfiguration,
+	requestBody: unknown,
+): Promise<DirectMessageOpenResponse> {
+	const requestDocument = parseDirectMessageOpenRequest(requestBody);
+	if (!("openDM" in adapter) || typeof adapter.openDM !== "function") {
+		throw new Error(`platform ${adapter.name} does not support opening direct messages`);
+	}
+	const threadID = await adapter.openDM(requestDocument.externalUserID);
+	return {
+		conversationID: adapter.channelIdFromThreadId(threadID),
+		replyTargetID: threadID,
 	};
 }
 

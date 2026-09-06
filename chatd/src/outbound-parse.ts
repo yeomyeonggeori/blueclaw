@@ -5,6 +5,7 @@ import type {
 	AttachmentImportRequest,
 	ChannelEnsureRequest,
 	DirectMessageEnsureRequest,
+	DirectMessageOpenRequest,
 	DirectMessagePostRequest,
 	DirectMessageSendRequest,
 	HistoryFetchRequest,
@@ -210,6 +211,11 @@ export function parseDirectMessageEnsureRequest(value: unknown): DirectMessageEn
 		channelId: optionalString(record, "channelId"),
 		counterpartPubkeyHex: optionalString(record, "counterpartPubkeyHex"),
 	};
+}
+
+export function parseDirectMessageOpenRequest(value: unknown): DirectMessageOpenRequest {
+	const record = requireRecord(value, "dm.open request");
+	return { externalUserID: requireString(record, "externalUserID") };
 }
 
 export function parseConversationsListRequest(value: unknown): { userSecretHex: string } {

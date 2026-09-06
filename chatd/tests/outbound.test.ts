@@ -451,3 +451,22 @@ describe("channel resolution guards", () => {
 		expect(body.error).toContain("channel-real");
 	});
 });
+
+describe("dm.open", () => {
+	it("opens a Mattermost direct conversation and returns its channel ID", async () => {
+		const adapter = createAdapter();
+		globalThis.fetch = mock(async (input) => {
+			expect(String(input)).toContain("/api/v4/channels/direct");
+			return jsonResponse(200, { id: "direct-channel" });
+		}) as never;
+		const handler = createOutboundHandler({ mattermost: adapter }, createConfiguration());
+
+		const response = await handler(outboundRequest("dm.open", { externalUserID: "user-2" }));
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			conversationID: "direct-channel",
+			replyTargetID: "mattermost:ZGlyZWN0LWNoYW5uZWw",
+		});
+	});
+});

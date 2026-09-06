@@ -98,6 +98,35 @@ func TestParseUserNormalizesAndRenders(t *testing.T) {
 	}
 }
 
+func TestUserMorningBriefingDefaultsForLegacyDocuments(t *testing.T) {
+	user, errorValue := ParseUser([]byte(`{"schemaVersion": 1}`))
+	if errorValue != nil {
+		t.Fatalf("expected a legacy user document to parse: %v", errorValue)
+	}
+	expected := DefaultMorningBriefing()
+	if *user.MorningBriefing != expected {
+		t.Fatalf("expected morning briefing defaults, got %+v", *user.MorningBriefing)
+	}
+	canonical, errorValue := CanonicalUser(User{})
+	if errorValue != nil || !strings.Contains(string(canonical), `"morningBriefing": {`) {
+		t.Fatalf("expected canonical user to include morning briefing defaults: %s (%v)", canonical, errorValue)
+	}
+}
+
+func TestUserMorningBriefingPreservesExplicitValues(t *testing.T) {
+	user, errorValue := ParseUser([]byte(`{"schemaVersion": 1, "morningBriefing": {"enabled": false, "time": "09:30"}}`))
+	if errorValue != nil {
+		t.Fatalf("expected configured morning briefing to parse: %v", errorValue)
+	}
+	if user.MorningBriefing.Enabled || user.MorningBriefing.Time != "09:30" {
+		t.Fatalf("expected configured morning briefing, got %+v", *user.MorningBriefing)
+	}
+	partial, errorValue := ParseUser([]byte(`{"schemaVersion": 1, "morningBriefing": {"time": "07:15"}}`))
+	if errorValue != nil || !partial.MorningBriefing.Enabled || partial.MorningBriefing.Time != "07:15" {
+		t.Fatalf("expected partial morning briefing defaults, got %+v (%v)", *partial.MorningBriefing, errorValue)
+	}
+}
+
 func TestParseRefusesWhatTheSchemaDoesNotName(t *testing.T) {
 	for name, document := range map[string]string{
 		"an unknown identity field":    `{"schemaVersion": 1, "names": ["김인턴"], "nickname": "kim"}`,
@@ -123,9 +152,11 @@ func TestParseRefusesWhatTheSchemaDoesNotName(t *testing.T) {
 		}
 	}
 	for name, document := range map[string]string{
-		"an unknown user field":      `{"schemaVersion": 1, "nickname": "kim"}`,
-		"a matchRequester on a user": `{"schemaVersion": 1, "language": {"default": "ko", "matchRequester": true}}`,
-		"too many preferences":       `{"schemaVersion": 1, "preferences": ["a","b","c","d","e","f","g","h","i"]}`,
+		"an unknown user field":            `{"schemaVersion": 1, "nickname": "kim"}`,
+		"a matchRequester on a user":       `{"schemaVersion": 1, "language": {"default": "ko", "matchRequester": true}}`,
+		"too many preferences":             `{"schemaVersion": 1, "preferences": ["a","b","c","d","e","f","g","h","i"]}`,
+		"an invalid morning briefing time": `{"schemaVersion": 1, "morningBriefing": {"time": "9:00"}}`,
+		"a null morning briefing":          `{"schemaVersion": 1, "morningBriefing": null}`,
 	} {
 		if _, errorValue := ParseUser([]byte(document)); errorValue == nil {
 			t.Fatalf("expected %s to be refused", name)
