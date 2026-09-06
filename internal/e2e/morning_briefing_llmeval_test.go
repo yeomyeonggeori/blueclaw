@@ -32,8 +32,8 @@ func TestMorningBriefingSettingsLive(t *testing.T) {
 		AllowedTools:           []string{"persona_read", "persona_update"},
 		WritableWorkspacePaths: []string{"private/people/person-1/.internkim/user.json", ".blueclaw/state/persona-backup/people/person-1/user.json"},
 		Turns: []VirtualTurn{
-			{Prompt: "아침 브리핑을 매일 오전 9시 15분으로 바꾸고 지금부터 비활성화해줘.", RouterTaskShape: agentcontract.TaskShapeImmediateReply, ExpectedResponse: VirtualResponseReply},
-			{Prompt: "시간만 오전 10시로 바꿔줘. 비활성화 상태는 그대로 유지해.", RouterTaskShape: agentcontract.TaskShapeImmediateReply, ExpectedResponse: VirtualResponseReply},
+			{Prompt: "아침 브리핑을 매일 오전 9시 15분으로 바꾸고 지금부터 비활성화해줘.", RouterTaskShape: agentcontract.TaskShapeResearchTask, ExpectedResponse: VirtualResponseReply},
+			{Prompt: "시간만 오전 10시로 바꿔줘. 비활성화 상태는 그대로 유지해.", RouterTaskShape: agentcontract.TaskShapeResearchTask, ExpectedResponse: VirtualResponseReply},
 		},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)

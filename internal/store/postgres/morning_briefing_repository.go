@@ -86,7 +86,7 @@ UPDATE task_schedule
 SET name = $1, prompt = $2, execution_mode = $3, agent_profile_name = $4,
     schedule_kind = $5, cron_expression = $6, next_run_at = $7,
     platform = $8, delivery_conversation_id = $9, reply_target_id = $10,
-    time_zone = $11, expires_at = CASE WHEN $7 IS NULL THEN expires_at ELSE NULL END, updated_at = $12
+    time_zone = $11, expires_at = CASE WHEN $7::timestamptz IS NULL THEN expires_at ELSE NULL END, updated_at = $12
 WHERE task_schedule_id = $13`,
 		desired.Name, desired.Prompt, normalizedTaskScheduleExecutionMode(desired.ExecutionMode), desired.AgentProfileName,
 		string(desired.Kind), emptyStringAsNil(desired.CronExpression), nextRunAt,
