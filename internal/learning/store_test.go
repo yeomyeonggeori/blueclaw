@@ -142,6 +142,32 @@ func TestStoreSettingsSurviveRestart(t *testing.T) {
 	}
 }
 
+func TestStoreSettingsCreateNestedDirectoryAndStayPrivate(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "nested", "learning", "skills.json")
+	store, errorValue := Open(path, 20)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := store.UpdateSettings(Settings{Enabled: true, ActiveLimit: 7}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	settingsPath := path + ".settings"
+	fileInformation, errorValue := os.Stat(settingsPath)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if fileInformation.Mode().Perm() != 0o600 {
+		t.Fatalf("settings permissions = %o, want 600", fileInformation.Mode().Perm())
+	}
+	restarted, errorValue := Open(path, 20)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if settings := restarted.Settings(); !settings.Enabled || settings.ActiveLimit != 7 {
+		t.Fatalf("settings did not persist after creating the nested directory: %+v", settings)
+	}
+}
+
 func TestStoreRejectsOversizedLearnedInstruction(t *testing.T) {
 	store, errorValue := Open(filepath.Join(t.TempDir(), "skills.json"), 20)
 	if errorValue != nil {
