@@ -68,6 +68,10 @@ test -n "$before_pg_version"
 run_as_root mkdir -p /var/lib/blueclaw/delivery/runtime/current /var/lib/blueclaw/delivery/skills
 run_as_root rsync -a --delete "$host_workspace/.blueclaw/runtime/current/" /var/lib/blueclaw/delivery/runtime/current/
 run_as_root rsync -a --delete "$host_workspace/skills/" /var/lib/blueclaw/delivery/skills/
+run_as_root chown -R root:root /var/lib/blueclaw/delivery/runtime/current /var/lib/blueclaw/delivery/skills
+run_as_root find /var/lib/blueclaw/delivery/runtime/current /var/lib/blueclaw/delivery/skills -type d -exec chmod 0755 {} +
+run_as_root find /var/lib/blueclaw/delivery/runtime/current /var/lib/blueclaw/delivery/skills -type f -exec chmod 0644 {} +
+run_as_root find /var/lib/blueclaw/delivery/runtime/current/bin -type f -exec chmod 0755 {} +
 
 after_sync_pg_version="$(run_as_root debugfs -R 'cat /.blueclaw/postgres/data/PG_VERSION' "$workspace_image" 2>/dev/null | tr -d '\r\n')"
 if [ "$after_sync_pg_version" != "$before_pg_version" ]; then
