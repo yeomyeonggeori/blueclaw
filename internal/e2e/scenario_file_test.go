@@ -3,6 +3,7 @@ package e2e
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -48,6 +49,28 @@ func TestLoadScenarioFileReadsSequentialStepsAndResolvesSkills(t *testing.T) {
 	}
 	if scenario.Turns[0].MinimumReplyLength != 0 || scenario.Turns[1].MinimumReplyLength != 1 {
 		t.Fatalf("expected only reply steps to require non-empty text, got %+v", scenario.Turns)
+	}
+}
+
+func TestWorkspacePersistenceRepairsOnlyPublicDeliveryPaths(t *testing.T) {
+	_, sourceFilePath, _, _ := runtime.Caller(0)
+	repositoryRootPath := filepath.Clean(filepath.Join(filepath.Dir(sourceFilePath), "../.."))
+	script, errorValue := os.ReadFile(filepath.Join(repositoryRootPath, "lab/scripts/scenario-workspace-persistence.sh"))
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	command := string(script)
+	for _, fragment := range []string{
+		"run_as_root chown -R root:root /var/lib/blueclaw/delivery/runtime/current /var/lib/blueclaw/delivery/skills",
+		"run_as_root find /var/lib/blueclaw/delivery/runtime/current /var/lib/blueclaw/delivery/skills -type f -exec chmod 0644 {} +",
+		"run_as_root find /var/lib/blueclaw/delivery/runtime/current/bin -type f -exec chmod 0755 {} +",
+	} {
+		if !strings.Contains(command, fragment) {
+			t.Fatalf("workspace persistence refresh is missing public permission repair %q", fragment)
+		}
+	}
+	if strings.Contains(command, "chown -R root:root /var/lib/blueclaw/delivery\n") || strings.Contains(command, "/var/lib/blueclaw/delivery/secrets") {
+		t.Fatal("workspace persistence refresh must not traverse or modify private delivery secrets")
 	}
 }
 
