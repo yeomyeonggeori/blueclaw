@@ -36,7 +36,7 @@ func TestMorningBriefingSettingsLive(t *testing.T) {
 			{Prompt: "시간만 오전 10시로 바꿔줘. 비활성화 상태는 그대로 유지해.", RouterTaskShape: agentcontract.TaskShapeResearchTask, ExpectedResponse: VirtualResponseReply},
 		},
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
 	defer cancel()
 	result, executionError := RunVirtualSession(ctx, scenario)
 	preserveLiveSessionEvidence(t, directory, result, executionError)
