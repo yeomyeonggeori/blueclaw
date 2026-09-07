@@ -2,12 +2,14 @@ package agentruntime
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
+	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract/harnesstest"
@@ -126,6 +128,71 @@ func TestTaskScheduleRunnerAddsCronContextToLaunch(t *testing.T) {
 	if !strings.Contains(taskLaunchEvent.Body, `"scheduledRun"`) || !strings.Contains(taskLaunchEvent.Body, `"scheduleID":"schedule-briefing"`) {
 		t.Fatalf("expected task launch event to include scheduled run context, got %s", taskLaunchEvent.Body)
 	}
+}
+
+func TestTaskScheduleRunnerForwardsRequesterLanguageToRouter(t *testing.T) {
+	for _, testCase := range []struct {
+		name             string
+		profileLanguage  string
+		runLanguage      string
+		expectedLanguage string
+	}{
+		{name: "profile language", profileLanguage: "ko", expectedLanguage: "ko"},
+		{name: "explicit language", profileLanguage: "ko", runLanguage: "en", expectedLanguage: "en"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			taskEventService := task.NewTaskEventService()
+			taskRunService := task.NewTaskRunService(taskEventService)
+			agentKernel := loop.NewAgentKernel(taskRunService, task.NewTaskStepService())
+			languageModel := &capturingScheduleRuntimeLanguageModel{content: runtimeFinishMessage("scheduled done")}
+			useScheduledRuntimeLanguageModel(agentKernel, languageModel)
+			toolCatalogBuilder := NewToolCatalogBuilder()
+			workspacePath := t.TempDir()
+			toolCatalogBuilder.UseWorkspaceRootPath(workspacePath)
+			documentPath := filepath.Join(security.PersonHomeDirectoryPath(workspacePath, "person-1"), ".internkim", "user.json")
+			toolCatalogBuilder.UseWorkspaceActorFactory(&personaActorFactory{documents: map[string][]byte{
+				documentPath: []byte(`{"schemaVersion": 1, "language": {"default": "` + testCase.profileLanguage + `"}}`),
+			}})
+			router := &scheduleLanguageRecordingTurnRouter{}
+			taskLauncher := NewTaskLauncher(agentKernel, taskRunService, toolCatalogBuilder)
+			taskLauncher.UseTurnRouter(router)
+			runAt := time.Date(2026, 6, 15, 23, 0, 0, 0, time.UTC)
+
+			_, errorValue := NewTaskScheduleRunner(taskLauncher).RunIfDue(context.Background(), TaskScheduleRunRequest{
+				TaskSchedule: task.TaskSchedule{
+					TaskScheduleID:  "schedule-language-" + testCase.name,
+					CreatorPersonID: "person-1",
+					Prompt:          "오늘의 브리핑",
+					Kind:            task.TaskScheduleKindOnce,
+					RunAt:           &runAt,
+					NextRunAt:       &runAt,
+				},
+				ReferenceTime:    runAt,
+				PersonAccess:     policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+				WorkspaceID:      "workspace-1",
+				ResponseLanguage: testCase.runLanguage,
+			})
+			if errorValue != nil {
+				t.Fatal(errorValue)
+			}
+			if router.request.ResponseLanguage != testCase.expectedLanguage {
+				t.Fatalf("expected router request language %q, got %q", testCase.expectedLanguage, router.request.ResponseLanguage)
+			}
+		})
+	}
+}
+
+type scheduleLanguageRecordingTurnRouter struct {
+	request agentcontract.AgentRequest
+}
+
+func (router *scheduleLanguageRecordingTurnRouter) Plan(context.Context, agentcontract.AgentRequest) (agentcontract.TurnDecision, error) {
+	return agentcontract.TurnDecision{Route: agentcontract.TurnRouteStartTask}, nil
+}
+
+func (router *scheduleLanguageRecordingTurnRouter) PlanObserved(_ context.Context, request agentcontract.AgentRequest, _ *agentcontract.TurnRouterCallLedger) (agentcontract.TurnDecision, error) {
+	router.request = request
+	return agentcontract.TurnDecision{Route: agentcontract.TurnRouteStartTask}, nil
 }
 
 func TestTaskScheduleRunnerPreservesScheduledArtifactRouting(t *testing.T) {

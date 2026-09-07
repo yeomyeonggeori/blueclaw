@@ -20,10 +20,11 @@ type TaskScheduleRunner struct {
 }
 
 type TaskScheduleRunRequest struct {
-	TaskSchedule  task.TaskSchedule
-	ReferenceTime time.Time
-	PersonAccess  policy.PersonAccess
-	WorkspaceID   string
+	TaskSchedule     task.TaskSchedule
+	ReferenceTime    time.Time
+	PersonAccess     policy.PersonAccess
+	WorkspaceID      string
+	ResponseLanguage string
 }
 
 type TaskScheduleRunResult struct {
@@ -52,6 +53,10 @@ func (taskScheduleRunner TaskScheduleRunner) RunIfDue(ctx context.Context, reque
 	if workspaceID == "" {
 		workspaceID = taskScheduleRunner.workspaceID
 	}
+	responseLanguage := request.ResponseLanguage
+	if strings.TrimSpace(responseLanguage) == "" {
+		responseLanguage = requesterPersonaLanguage(taskScheduleRunner.taskLauncher.toolCatalogBuilder.workspaceActorFactory, request.PersonAccess, taskScheduleRunner.taskLauncher.toolCatalogBuilder.WorkspaceRootPath())
+	}
 	launchResult, errorValue := taskScheduleRunner.taskLauncher.Launch(ctx, TaskLaunchRequest{
 		Source:                    TaskLaunchSourceScheduled,
 		SourceReference:           taskSchedule.TaskScheduleID,
@@ -62,6 +67,7 @@ func (taskScheduleRunner TaskScheduleRunner) RunIfDue(ctx context.Context, reque
 		ConversationID:            "schedule:" + taskSchedule.TaskScheduleID,
 		ReplyTargetID:             taskSchedule.ReplyTargetID,
 		Prompt:                    taskSchedule.Prompt,
+		ResponseLanguage:          responseLanguage,
 		ScheduledRun:              scheduledRunContext(taskSchedule, referenceTime),
 		PersonAccess:              request.PersonAccess,
 		MemoryNamespaces:          scheduledMemoryNamespaces(taskSchedule, request.PersonAccess, workspaceID),
