@@ -26,8 +26,8 @@ catalog, so they appear here as one row with no description.
 | `memory_remember` | 467 | `memory_tools.go` |
 | `memory_search` | 274 | `memory_tools.go` |
 | `memory_update` | 88 | `memory_tools.go` |
-| `persona_read` | 221 | `persona_tools.go` |
-| `persona_update` | 197 | `persona_tools.go` |
+| `persona_read` | 280 | `persona_tools.go` |
+| `persona_update` | 451 | `persona_tools.go` |
 | `schedule_cancel` | 446 | `schedule_tool.go` |
 | `schedule_create` | 530 | `schedule_tool.go` |
 | `schedule_list` | 137 | `schedule_tool.go` |
@@ -36,4 +36,4 @@ catalog, so they appear here as one row with no description.
 | `skill_add` | 80 | `skill_management.go` |
 | `skill_remove` | 67 | `skill_management.go` |
 
-26 tools, 5722 bytes of description in total.
+26 tools, 6035 bytes of description in total.
