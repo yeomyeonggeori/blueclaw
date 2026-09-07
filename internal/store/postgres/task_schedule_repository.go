@@ -14,6 +14,8 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
 
+var errManagedTaskScheduleMutation = errors.New("managed morning briefing schedules cannot be changed by generic schedule operations")
+
 type TaskScheduleRepository struct {
 	database Database
 }
@@ -23,6 +25,14 @@ func NewTaskScheduleRepository(database Database) TaskScheduleRepository {
 }
 
 func (taskScheduleRepository TaskScheduleRepository) UpsertTaskSchedule(taskSchedule task.TaskSchedule) error {
+	var isManaged bool
+	if errorValue := taskScheduleRepository.database.SQL.QueryRowContext(context.Background(), `
+SELECT EXISTS (SELECT 1 FROM morning_briefing_schedule WHERE task_schedule_id = $1)`, taskSchedule.TaskScheduleID).Scan(&isManaged); errorValue != nil {
+		return errorValue
+	}
+	if isManaged {
+		return errManagedTaskScheduleMutation
+	}
 	now := time.Now().UTC()
 	if taskSchedule.CreatedAt.IsZero() {
 		taskSchedule.CreatedAt = now
@@ -63,7 +73,11 @@ ON CONFLICT (task_schedule_id) DO UPDATE SET
   last_error = EXCLUDED.last_error,
   next_attempt_at = EXCLUDED.next_attempt_at,
   max_run_count = EXCLUDED.max_run_count,
-  completed_run_count = EXCLUDED.completed_run_count`,
+  completed_run_count = EXCLUDED.completed_run_count
+WHERE NOT EXISTS (
+  SELECT 1 FROM morning_briefing_schedule
+  WHERE task_schedule_id = task_schedule.task_schedule_id
+)`,
 		taskSchedule.TaskScheduleID,
 		emptyStringAsNil(taskSchedule.CreatorPersonID),
 		taskSchedule.Name,
@@ -108,6 +122,7 @@ func (taskScheduleRepository TaskScheduleRepository) UpdateTaskSchedule(request 
 	row := transaction.QueryRowContext(context.Background(), `SELECT `+taskScheduleReturningColumns()+`
 FROM task_schedule
 WHERE task_schedule_id = $1
+  AND NOT EXISTS (SELECT 1 FROM morning_briefing_schedule WHERE task_schedule_id = task_schedule.task_schedule_id)
   AND creator_person_id = $2
   AND next_run_at IS NOT NULL
   AND (expires_at IS NULL OR expires_at > now())
@@ -147,6 +162,7 @@ func (taskScheduleRepository TaskScheduleRepository) DeleteTaskSchedule(request 
 	row := taskScheduleRepository.database.SQL.QueryRowContext(context.Background(), `
 DELETE FROM task_schedule
 WHERE task_schedule_id = $1
+  AND NOT EXISTS (SELECT 1 FROM morning_briefing_schedule WHERE task_schedule_id = task_schedule.task_schedule_id)
   AND creator_person_id = $2
 RETURNING `+taskScheduleReturningColumns(), taskScheduleID, requesterPersonID)
 	taskSchedule, errorValue := scanTaskSchedule(row)
@@ -202,7 +218,7 @@ RETURNING `+taskScheduleReturningColumns(),
 
 func (taskScheduleRepository TaskScheduleRepository) MarkTaskScheduleSucceeded(taskSchedule task.TaskSchedule) error {
 	now := time.Now().UTC()
-	_, errorValue := taskScheduleRepository.database.SQL.ExecContext(context.Background(), `
+	query := `
 UPDATE task_schedule
 SET next_run_at = $2,
   last_run_at = $3,
@@ -214,15 +230,32 @@ SET next_run_at = $2,
   next_attempt_at = $1,
   completed_run_count = $6,
   updated_at = $1
-WHERE task_schedule_id = $5`,
+
+WHERE task_schedule_id = $5`
+	arguments := []any{
 		now,
 		taskSchedule.NextRunAt,
 		taskSchedule.LastRunAt,
 		emptyStringAsNil(taskSchedule.LastTaskRunID),
 		taskSchedule.TaskScheduleID,
 		taskSchedule.CompletedRunCount,
-	)
-	return errorValue
+	}
+	if task.IsMorningBriefing(taskSchedule) {
+		query += " AND EXISTS (SELECT 1 FROM morning_briefing_schedule WHERE task_schedule_id = $5) AND lease_owner = $7 AND leased_until = $8"
+		arguments = append(arguments, taskSchedule.LeaseOwner, taskSchedule.LeasedUntil)
+	}
+	result, errorValue := taskScheduleRepository.database.SQL.ExecContext(context.Background(), query, arguments...)
+	if errorValue != nil {
+		return errorValue
+	}
+	rowsAffected, errorValue := result.RowsAffected()
+	if errorValue != nil {
+		return errorValue
+	}
+	if task.IsMorningBriefing(taskSchedule) && rowsAffected == 0 {
+		return errStaleMorningBriefingLease
+	}
+	return nil
 }
 
 func (taskScheduleRepository TaskScheduleRepository) MarkTaskScheduleSucceededAndEnqueueDelivery(taskSchedule task.TaskSchedule, taskRunID string, deliveryDeduplicationKey string, reply connectors.OutboundReply) (string, error) {
@@ -236,6 +269,11 @@ func (taskScheduleRepository TaskScheduleRepository) MarkTaskScheduleSucceededAn
 		return "", errorValue
 	}
 	defer transaction.Rollback()
+	if task.IsMorningBriefing(taskSchedule) {
+		if errorValue := verifyMorningBriefingLease(transaction, taskSchedule, now); errorValue != nil {
+			return "", errorValue
+		}
+	}
 	conversationID, errorValue := ensureConversationWithTransaction(transaction, taskSchedule.Platform, taskSchedule.ConversationID, now)
 	if errorValue != nil {
 		return "", errorValue
@@ -416,7 +454,7 @@ func (taskScheduleRepository TaskScheduleRepository) MarkTaskScheduleFailed(task
 		referenceTime = time.Now().UTC()
 	}
 	nextAttemptAt := referenceTime.Add(taskScheduleRetryDelay(taskSchedule.FailureCount + 1))
-	_, errorValue := taskScheduleRepository.database.SQL.ExecContext(context.Background(), `
+	query := `
 UPDATE task_schedule
 SET lease_owner = '',
   leased_until = NULL,
@@ -424,13 +462,30 @@ SET lease_owner = '',
   last_error = $1,
   next_attempt_at = $2,
   updated_at = $3
-WHERE task_schedule_id = $4`,
+
+WHERE task_schedule_id = $4`
+	arguments := []any{
 		errorMessage,
 		nextAttemptAt,
 		referenceTime,
 		taskSchedule.TaskScheduleID,
-	)
-	return errorValue
+	}
+	if task.IsMorningBriefing(taskSchedule) {
+		query += " AND EXISTS (SELECT 1 FROM morning_briefing_schedule WHERE task_schedule_id = $4) AND lease_owner = $5 AND leased_until = $6"
+		arguments = append(arguments, taskSchedule.LeaseOwner, taskSchedule.LeasedUntil)
+	}
+	result, errorValue := taskScheduleRepository.database.SQL.ExecContext(context.Background(), query, arguments...)
+	if errorValue != nil {
+		return errorValue
+	}
+	rowsAffected, errorValue := result.RowsAffected()
+	if errorValue != nil {
+		return errorValue
+	}
+	if task.IsMorningBriefing(taskSchedule) && rowsAffected == 0 {
+		return errStaleMorningBriefingLease
+	}
+	return nil
 }
 
 func (taskScheduleRepository TaskScheduleRepository) ExpireTaskSchedule(taskSchedule task.TaskSchedule, errorMessage string, referenceTime time.Time) error {
@@ -467,6 +522,7 @@ func (taskScheduleRepository TaskScheduleRepository) CancelTaskSchedules(request
 	conditions := []string{
 		"next_run_at IS NOT NULL",
 		"(expires_at IS NULL OR expires_at > $1)",
+		"NOT EXISTS (SELECT 1 FROM morning_briefing_schedule WHERE task_schedule_id = task_schedule.task_schedule_id)",
 	}
 	arguments := []any{cancelledAt}
 	switch request.Scope {

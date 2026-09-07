@@ -47,12 +47,57 @@ type Soul struct {
 }
 
 type User struct {
-	SchemaVersion int           `json:"schemaVersion"`
-	CallMe        string        `json:"callMe,omitempty"`
-	About         string        `json:"about,omitempty"`
-	Preferences   []string      `json:"preferences,omitempty"`
-	Tone          *Tone         `json:"tone,omitempty"`
-	Language      *UserLanguage `json:"language,omitempty"`
+	SchemaVersion   int              `json:"schemaVersion"`
+	CallMe          string           `json:"callMe,omitempty"`
+	About           string           `json:"about,omitempty"`
+	Preferences     []string         `json:"preferences,omitempty"`
+	Tone            *Tone            `json:"tone,omitempty"`
+	Language        *UserLanguage    `json:"language,omitempty"`
+	MorningBriefing *MorningBriefing `json:"morningBriefing"`
+}
+
+type MorningBriefing struct {
+	Enabled bool   `json:"enabled"`
+	Time    string `json:"time"`
+}
+
+func DefaultMorningBriefing() MorningBriefing {
+	return defaultMorningBriefing
+}
+
+var defaultMorningBriefing = morningBriefingSchemaDefault()
+
+func morningBriefingSchemaDefault() MorningBriefing {
+	type settings MorningBriefing
+	var schema struct {
+		Properties map[string]struct {
+			Default settings `json:"default"`
+		} `json:"properties"`
+	}
+	if errorValue := json.Unmarshal(UserSchemaDocument, &schema); errorValue != nil {
+		panic(errorValue)
+	}
+	return MorningBriefing(schema.Properties["morningBriefing"].Default)
+}
+
+func (briefing *MorningBriefing) UnmarshalJSON(document []byte) error {
+	var fields struct {
+		Enabled *bool   `json:"enabled"`
+		Time    *string `json:"time"`
+	}
+	if errorValue := json.Unmarshal(document, &fields); errorValue != nil {
+		return errorValue
+	}
+	defaults := DefaultMorningBriefing()
+	briefing.Enabled = defaults.Enabled
+	briefing.Time = defaults.Time
+	if fields.Enabled != nil {
+		briefing.Enabled = *fields.Enabled
+	}
+	if fields.Time != nil {
+		briefing.Time = *fields.Time
+	}
+	return nil
 }
 
 type Tone struct {
@@ -136,6 +181,16 @@ func NormalizeUser(user User) User {
 	user.About = strings.TrimSpace(user.About)
 	user.Preferences = normalizeLines(user.Preferences)
 	user.Tone = normalizeTone(user.Tone)
+	if user.MorningBriefing == nil {
+		defaultMorningBriefing := DefaultMorningBriefing()
+		user.MorningBriefing = &defaultMorningBriefing
+	} else {
+		if strings.TrimSpace(user.MorningBriefing.Time) == "" {
+			user.MorningBriefing.Time = DefaultMorningBriefing().Time
+		} else {
+			user.MorningBriefing.Time = strings.TrimSpace(user.MorningBriefing.Time)
+		}
+	}
 	if user.Language != nil {
 		language := UserLanguage{Default: strings.TrimSpace(user.Language.Default)}
 		if language.Default == "" {

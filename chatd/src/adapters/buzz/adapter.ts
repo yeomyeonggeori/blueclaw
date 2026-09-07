@@ -35,7 +35,7 @@ import {
 } from "./types.ts";
 import type { ReactionSummary } from "../../visible-context.ts";
 import type { OutgoingAttachment } from "../../outgoing-attachment.ts";
-import { buildMessageBody } from "./user-session.ts";
+import { buildMessageBody, ensureUserDirectMessageChannel } from "./user-session.ts";
 import { withRelayAs } from "./relay-pool.ts";
 import { rankBySearchScore } from "../../message-search.ts";
 import { originOfTags } from "../../mirror/origin.ts";
@@ -331,6 +331,17 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		this.channelsById.set(channelId, { channelId, name, isDM: false });
 		this.subscribeToChannels();
 		return this.managedChannel(channelId, true);
+	}
+
+	async openDM(externalUserID: string): Promise<string> {
+		const channel = await ensureUserDirectMessageChannel(
+			this.config.relayURL,
+			this.config.privateKeyHex,
+			externalUserID,
+		);
+		this.channelsById.set(channel.channelID, { channelId: channel.channelID, name: "", isDM: true });
+		this.subscribeToChannels();
+		return this.encodeThreadId({ channelId: channel.channelID });
 	}
 
 	private managedChannel(channelId: string, created: boolean): ManagedChannel {

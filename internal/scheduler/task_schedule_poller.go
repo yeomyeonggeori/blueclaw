@@ -26,6 +26,10 @@ type TaskScheduleTransactionalDeliveryRepository interface {
 	MarkTaskScheduleSucceededAndEnqueueDelivery(task.TaskSchedule, string, string, connectors.OutboundReply) (string, error)
 }
 
+type MorningBriefingOccurrenceRepository interface {
+	RetireMorningBriefingOccurrence(task.TaskSchedule, string, time.Time) error
+}
+
 type PersonAccessResolver interface {
 	ResolvePersonAccess(string) policy.PersonAccess
 }
@@ -45,6 +49,7 @@ type TaskSchedulePoller struct {
 	WorkerID               string
 	Logger                 *slog.Logger
 	StaleTaskRunTimeout    time.Duration
+	MorningBriefing        *MorningBriefing
 }
 
 type taskScheduleExecutionResult struct {
@@ -91,6 +96,11 @@ func (taskSchedulePoller TaskSchedulePoller) RunDue(ctx context.Context, referen
 		return 0, nil
 	}
 	taskSchedulePoller.cancelStaleScheduledTaskRuns(referenceTime)
+	if taskSchedulePoller.MorningBriefing != nil {
+		if errorValue := taskSchedulePoller.MorningBriefing.Reconcile(ctx, referenceTime); errorValue != nil {
+			taskSchedulePoller.logger().Error("morning_briefing.reconcile_failed", "error", errorValue)
+		}
+	}
 	taskSchedules, errorValue := taskSchedulePoller.TaskScheduleRepository.ClaimDueTaskSchedules(limit, taskScheduleLeaseDuration, referenceTime, taskSchedulePoller.workerID())
 	if errorValue != nil {
 		return 0, errorValue
@@ -127,6 +137,11 @@ const maxTaskScheduleFailureCount = 5
 
 func (taskSchedulePoller TaskSchedulePoller) recordTaskScheduleFailure(taskSchedule task.TaskSchedule, errorValue error, referenceTime time.Time) error {
 	if taskScheduleFailureIsTerminal(taskSchedule, errorValue, referenceTime) {
+		if task.IsMorningBriefing(taskSchedule) {
+			if repository, isSupported := taskSchedulePoller.TaskScheduleRepository.(MorningBriefingOccurrenceRepository); isSupported {
+				return repository.RetireMorningBriefingOccurrence(taskSchedule, errorValue.Error(), referenceTime)
+			}
+		}
 		return taskSchedulePoller.TaskScheduleRepository.ExpireTaskSchedule(taskSchedule, errorValue.Error(), referenceTime)
 	}
 	return taskSchedulePoller.TaskScheduleRepository.MarkTaskScheduleFailed(taskSchedule, errorValue.Error(), referenceTime)
@@ -141,6 +156,9 @@ func taskScheduleFailureIsTerminal(taskSchedule task.TaskSchedule, errorValue er
 }
 
 func (taskSchedulePoller TaskSchedulePoller) runTaskSchedule(ctx context.Context, taskSchedule task.TaskSchedule, referenceTime time.Time) error {
+	if canRun, errorValue := taskSchedulePoller.canRunMorningBriefing(ctx, taskSchedule); errorValue != nil || !canRun {
+		return taskSchedulePoller.pauseMorningBriefing(taskSchedule, errorValue)
+	}
 	if errorValue := validateTaskScheduleDeliveryTarget(taskSchedule); errorValue != nil {
 		return errorValue
 	}
@@ -150,6 +168,9 @@ func (taskSchedulePoller TaskSchedulePoller) runTaskSchedule(ctx context.Context
 	}
 	if !result.DidRun {
 		return taskSchedulePoller.TaskScheduleRepository.MarkTaskScheduleSucceeded(result.TaskSchedule)
+	}
+	if canRun, errorValue := taskSchedulePoller.canRunMorningBriefing(ctx, taskSchedule); errorValue != nil || !canRun {
+		return taskSchedulePoller.pauseMorningBriefing(result.TaskSchedule, errorValue)
 	}
 	if errorValue := taskSchedulePoller.markTaskScheduleSucceededAndEnqueueReply(taskSchedule, result); errorValue != nil {
 		taskSchedulePoller.logger().Error(
@@ -164,6 +185,21 @@ func (taskSchedulePoller TaskSchedulePoller) runTaskSchedule(ctx context.Context
 		return errorValue
 	}
 	return nil
+}
+
+func (taskSchedulePoller TaskSchedulePoller) pauseMorningBriefing(schedule task.TaskSchedule, errorValue error) error {
+	if errorValue != nil {
+		return errorValue
+	}
+	schedule.NextRunAt = nil
+	return taskSchedulePoller.TaskScheduleRepository.MarkTaskScheduleSucceeded(schedule)
+}
+
+func (taskSchedulePoller TaskSchedulePoller) canRunMorningBriefing(ctx context.Context, schedule task.TaskSchedule) (bool, error) {
+	if taskSchedulePoller.MorningBriefing == nil {
+		return true, nil
+	}
+	return taskSchedulePoller.MorningBriefing.CanRun(ctx, schedule)
 }
 
 func (taskSchedulePoller TaskSchedulePoller) executeTaskSchedule(ctx context.Context, taskSchedule task.TaskSchedule, referenceTime time.Time) (taskScheduleExecutionResult, error) {

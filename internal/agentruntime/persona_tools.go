@@ -26,13 +26,13 @@ var personaToolOutputSchema = buildPersonaToolOutputSchema()
 
 func registerPersonaTools(builder *ToolCatalogBuilder, registry *toolcontract.ToolSet, request ToolCatalogRequest) {
 	toolcontract.RegisterToolFunction(registry, toolcontract.ToolFunction[personaToolInput, toolcontract.ToolResult]{
-		Definition: toolcontract.ToolDefinition{Name: "persona_read", Description: "Read the current requester profile or shared agent working guidance. Use this when deciding whether a stable preference belongs in user.json, shared working style belongs in soul.json, or a durable fact belongs in memory.", InputSchema: personaToolReadSchema},
+		Definition: toolcontract.ToolDefinition{Name: "persona_read", Description: "Read the current requester profile, including morning briefing settings, or shared agent working guidance. user.json owns personal preferences and the built-in daily morningBriefing time and enabled state. Shared working style belongs in soul.json; durable facts belong in memory.", InputSchema: personaToolReadSchema},
 		Handler: func(ctx context.Context, input personaToolInput) (toolcontract.ToolResult, error) {
 			return builder.readPersonaTool(ctx, input, request)
 		}, Result: toolcontract.IdentityToolResult,
 	})
 	toolcontract.RegisterToolFunction(registry, toolcontract.ToolFunction[personaToolInput, toolcontract.ToolResult]{
-		Definition: toolcontract.ToolDefinition{Name: "persona_update", Description: "Update only the current requester's user profile with a validated patch. Omitted fields are preserved. Store durable facts and decisions in memory; shared working principles are managed internally.", InputSchema: personaUserUpdateSchema},
+		Definition: toolcontract.ToolDefinition{Name: "persona_update", Description: "Update the current requester's personal preferences and built-in morning briefing settings in user.json with a validated patch. Set morningBriefing.time to a daily HH:MM in the company time zone and morningBriefing.enabled to enable or disable the briefing. This managed hook is configured here and cannot be deleted through schedule tools. Omitted fields are preserved. Store durable facts in memory; shared working principles are managed internally.", InputSchema: personaUserUpdateSchema},
 		Handler: func(ctx context.Context, input personaToolInput) (toolcontract.ToolResult, error) {
 			return builder.updatePersonaTool(ctx, input, request)
 		}, Result: toolcontract.IdentityToolResult,
