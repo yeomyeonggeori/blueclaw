@@ -49,6 +49,10 @@ func (taskScheduleRunner TaskScheduleRunner) RunIfDue(ctx context.Context, reque
 	if !taskScheduleRunner.taskScheduler.IsTaskScheduleDue(taskSchedule, referenceTime) {
 		return TaskScheduleRunResult{TaskSchedule: taskSchedule}, nil
 	}
+	if taskScheduleRunner.skipEmptyMorningBriefing(ctx, request, referenceTime) {
+		advancedSchedule, errorValue := taskScheduleRunner.taskScheduler.AdvanceTaskSchedule(taskSchedule, referenceTime)
+		return TaskScheduleRunResult{TaskSchedule: advancedSchedule}, errorValue
+	}
 	workspaceID := request.WorkspaceID
 	if workspaceID == "" {
 		workspaceID = taskScheduleRunner.workspaceID
