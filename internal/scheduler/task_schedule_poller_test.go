@@ -194,7 +194,7 @@ func TestTaskSchedulePollerDoesNotAdvanceWhenDeliveryFails(t *testing.T) {
 		MaxRunCount:      10,
 		NextRunAt:        &nextRunAt,
 	}}}
-	taskScheduleRunner, harness := taskScheduleRunnerWithHarness(task.TaskStatusCompleted, "오늘의 조사 결과입니다.")
+	taskScheduleRunner, harness, _ := taskScheduleRunnerWithHarness(task.TaskStatusCompleted, "오늘의 조사 결과입니다.")
 	poller := TaskSchedulePoller{
 		TaskScheduleRepository: repository,
 		DeliveryRepository:     &pollerDeliveryRepository{errorValue: errors.New("outbox unavailable")},
@@ -399,10 +399,12 @@ func TestTaskSchedulePollerLogsDeliveryFailures(t *testing.T) {
 func TestTaskSchedulePollerRejectsScheduledInteractionWithoutWaiting(t *testing.T) {
 	repository := &pollerScheduleRepository{taskSchedules: []task.TaskSchedule{waitingTaskSchedule(time.Now().UTC())}}
 	deliveryRepository := &pollerDeliveryRepository{}
+	taskScheduleRunner, _, taskRunService := taskScheduleRunnerWithHarness(task.TaskStatusBlocked, "확인이 필요해요.")
 	poller := TaskSchedulePoller{
 		TaskScheduleRepository: repository,
 		DeliveryRepository:     deliveryRepository,
-		TaskScheduleRunner:     testTaskScheduleRunner(task.TaskStatusBlocked, "확인이 필요해요."),
+		TaskScheduleRunner:     taskScheduleRunner,
+		TaskRunService:         taskRunService,
 		PersonAccessResolver:   staticPersonAccessResolver{},
 	}
 
@@ -417,11 +419,15 @@ func TestTaskSchedulePollerRejectsScheduledInteractionWithoutWaiting(t *testing.
 	if repository.succeeded != nil {
 		t.Fatalf("expected interactive scheduled task not to advance, got %+v", repository.succeeded)
 	}
-	if len(repository.failed) != 1 {
-		t.Fatalf("expected scheduled interaction to retry with backoff instead of waiting, got expired=%+v failed=%+v", repository.expired, repository.failed)
+	if len(repository.failed) != 0 {
+		t.Fatalf("expected scheduled interaction not to retry, got failed=%+v", repository.failed)
 	}
-	if len(repository.expired) != 0 {
-		t.Fatalf("expected the schedule to survive a single blocked run, got %+v", repository.expired)
+	if len(repository.expired) != 1 {
+		t.Fatalf("expected the schedule to expire after a blocked run, got %+v", repository.expired)
+	}
+	taskRuns := taskRunService.ListTaskRun()
+	if len(taskRuns) != 1 || taskRuns[0].Status != task.TaskStatusFailed {
+		t.Fatalf("expected blocked scheduled task run to be failed, got %+v", taskRuns)
 	}
 }
 
@@ -679,11 +685,11 @@ func (staticPersonAccessResolver) ResolvePersonAccess(personID string) policy.Pe
 }
 
 func testTaskScheduleRunner(turnStatus task.TaskStatus, finishMessage string) agentruntime.TaskScheduleRunner {
-	taskScheduleRunner, _ := taskScheduleRunnerWithHarness(turnStatus, finishMessage)
+	taskScheduleRunner, _, _ := taskScheduleRunnerWithHarness(turnStatus, finishMessage)
 	return taskScheduleRunner
 }
 
-func taskScheduleRunnerWithHarness(turnStatus task.TaskStatus, finishMessage string) (agentruntime.TaskScheduleRunner, *harnesstest.Harness) {
+func taskScheduleRunnerWithHarness(turnStatus task.TaskStatus, finishMessage string) (agentruntime.TaskScheduleRunner, *harnesstest.Harness, *task.TaskRunService) {
 	taskEventService := task.NewTaskEventService()
 	taskRunService := task.NewTaskRunService(taskEventService)
 	harness := harnesstest.New(taskRunService)
@@ -692,7 +698,7 @@ func taskScheduleRunnerWithHarness(turnStatus task.TaskStatus, finishMessage str
 	toolCatalogBuilder := agentruntime.NewToolCatalogBuilder()
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"ask_confirm"})
 	toolCatalogBuilder.UseTaskRunService(taskRunService)
-	return agentruntime.NewTaskScheduleRunner(agentruntime.NewTaskLauncher(harness, taskRunService, toolCatalogBuilder)), harness
+	return agentruntime.NewTaskScheduleRunner(agentruntime.NewTaskLauncher(harness, taskRunService, toolCatalogBuilder)), harness, taskRunService
 }
 
 func waitingTaskSchedule(runAt time.Time) task.TaskSchedule {

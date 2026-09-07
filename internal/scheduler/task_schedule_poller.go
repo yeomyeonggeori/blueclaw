@@ -228,6 +228,16 @@ func (taskSchedulePoller TaskSchedulePoller) executeAgentTaskSchedule(ctx contex
 	}
 	reply, errorValue := scheduledTaskReply(result)
 	if errorValue != nil {
+		var terminalError taskScheduleTerminalError
+		if errors.As(errorValue, &terminalError) {
+			terminalErrorMessage := errorValue.Error()
+			if taskSchedulePoller.TaskRunService == nil {
+				return taskScheduleExecutionResult{}, errors.New("task run service is unavailable while recording scheduled interaction")
+			}
+			if _, failError := taskSchedulePoller.TaskRunService.FailTaskRun(result.LaunchResult.TurnResult.TaskRun.TaskRunID, terminalErrorMessage); failError != nil {
+				return taskScheduleExecutionResult{}, failError
+			}
+		}
 		return taskScheduleExecutionResult{}, errorValue
 	}
 	return taskScheduleExecutionResult{
@@ -450,5 +460,5 @@ func (taskSchedulePoller TaskSchedulePoller) logger() *slog.Logger {
 }
 
 func taskStatusRequiresInteraction(status task.TaskStatus) bool {
-	return status == task.TaskStatusWaitingApproval || status == task.TaskStatusWaitingUserInput
+	return status == task.TaskStatusWaitingApproval || status == task.TaskStatusWaitingUserInput || status == task.TaskStatusBlocked
 }

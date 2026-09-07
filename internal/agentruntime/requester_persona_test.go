@@ -90,3 +90,26 @@ func TestRequesterPersonaInstructionLeavesOutADocumentTheSchemaRefuses(t *testin
 		t.Fatalf("expected a refused document to render nothing, got %q", instruction)
 	}
 }
+
+func TestRequesterPersonaLanguageReadsTheRequestersPreference(t *testing.T) {
+	for _, testCase := range []struct {
+		name     string
+		document string
+		expected string
+	}{
+		{name: "korean", document: `{"schemaVersion": 1, "language": {"default": "ko"}}`, expected: "ko"},
+		{name: "english", document: `{"schemaVersion": 1, "language": {"default": "en"}}`, expected: "en"},
+		{name: "custom", document: `{"schemaVersion": 1, "language": {"default": "ja-JP"}}`, expected: "ja-JP"},
+		{name: "missing", document: `{"schemaVersion": 1}`, expected: ""},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			workspacePath := t.TempDir()
+			documentPath := filepath.Join(security.PersonHomeDirectoryPath(workspacePath, "person-1"), ".internkim", "user.json")
+			factory := &personaActorFactory{documents: map[string][]byte{documentPath: []byte(testCase.document)}}
+
+			if language := requesterPersonaLanguage(factory, policy.PersonAccess{PersonID: "person-1"}, workspacePath); language != testCase.expected {
+				t.Fatalf("expected %q, got %q", testCase.expected, language)
+			}
+		})
+	}
+}
