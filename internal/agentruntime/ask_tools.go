@@ -16,18 +16,12 @@ type askInputToolInput struct {
 	Choices  []string `json:"choices"`
 }
 
-type askInputOption struct {
-	Key   string `json:"key"`
-	Label string `json:"label"`
-	Value string `json:"value"`
-}
-
 type askInputResult struct {
-	TaskRunID string           `json:"taskRunID"`
-	Status    string           `json:"status"`
-	Question  string           `json:"question"`
-	Kind      string           `json:"kind"`
-	Options   []askInputOption `json:"options"`
+	TaskRunID string                              `json:"taskRunID"`
+	Status    string                              `json:"status"`
+	Question  string                              `json:"question"`
+	Kind      string                              `json:"kind"`
+	Options   []agentcontract.ClarificationOption `json:"options"`
 }
 
 var (
@@ -61,36 +55,27 @@ func (toolCatalogBuilder *ToolCatalogBuilder) askInputTool(toolContext context.C
 	if errorValue != nil {
 		return toolcontract.ToolFailureResult(toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "ask_input", errorValue.Error()), nil
 	}
-	choices := trimNonEmptyStrings(input.Choices)
-	options := make([]askInputOption, 0, len(choices))
-	for index, choice := range choices {
-		options = append(options, askInputOption{
-			Key:   strconv.Itoa(index + 1),
-			Label: choice,
-			Value: choice,
-		})
-	}
-	toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventAskRequested, marshalToolResult(map[string]any{
-		"kind":             "ask_input",
-		"question":         question,
-		"message":          question,
-		"options":          options,
-		"selectionMode":    selectionModeForOptions(len(options)),
-		"responseLanguage": toolcontract.ResponseLanguageFromContext(toolContext),
-	}))
+	options := numberedClarificationOptions(trimNonEmptyStrings(input.Choices))
+	askRequest := agentcontract.NewAskInputRequest(question, options, toolcontract.ResponseLanguageFromContext(toolContext))
+	toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventAskRequested, marshalToolResult(askRequest))
 	resultDocument := json.RawMessage(marshalToolResult(askInputResult{
 		TaskRunID: taskRunID,
 		Status:    string(task.TaskStatusWaitingUserInput),
 		Question:  question,
-		Kind:      "ask_input",
+		Kind:      askRequest.Kind,
 		Options:   options,
 	}))
 	return toolcontract.ToolSuccessData(string(resultDocument), resultDocument), nil
 }
 
-func selectionModeForOptions(optionCount int) string {
-	if optionCount == 0 {
-		return ""
+func numberedClarificationOptions(choices []string) []agentcontract.ClarificationOption {
+	options := make([]agentcontract.ClarificationOption, 0, len(choices))
+	for index, choice := range choices {
+		options = append(options, agentcontract.ClarificationOption{
+			Key:   strconv.Itoa(index + 1),
+			Label: choice,
+			Value: choice,
+		})
 	}
-	return "single"
+	return options
 }
