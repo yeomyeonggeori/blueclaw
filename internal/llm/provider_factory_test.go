@@ -140,6 +140,9 @@ func TestACapabilityLadderReachesEveryTierThroughTheCapabilityRoute(t *testing.T
 		if capabilityClient.ModelName != "example/model" || capabilityClient.ExecutionMode != "auto" {
 			t.Fatalf("%s lost the model or the execution mode it was configured with: %+v", modelTier, capabilityClient)
 		}
+		if capabilityClient.ModelTier != modelTier {
+			t.Fatalf("%s must tell capabilityd which tier is asking, got %q", modelTier, capabilityClient.ModelTier)
+		}
 	}
 }
 
