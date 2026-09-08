@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { BuzzAdapter } from "../src/adapters/buzz/adapter.ts";
 import { reactionContentOf } from "../src/mirror/reaction-emoji.ts";
+import type { Message } from "chat";
 import { firstTagValue, threadTagsOf, type BuzzEvent } from "../src/adapters/buzz/types.ts";
 
 const CHANNEL_UUID = "8f14e45f-ea3c-4c2d-9d4b-1a2b3c4d5e6f";
@@ -161,5 +162,142 @@ describe("buzz addressing", () => {
 	test("handles events without p tags", () => {
 		const adapter = createAdapter();
 		expect(adapter.addressingOf(createEvent())).toEqual({ botMentioned: false, otherPersonMentioned: false });
+	});
+});
+const OTHER_CHANNEL_UUID = "3b7e1a90-5c2d-4e8f-9a1b-6c5d4e3f2a1b";
+
+type RelayInjectable = {
+	relay: {
+		query: (filter: object) => Promise<BuzzEvent[]>;
+		publish: (kind: number, content: string, tags: string[][]) => Promise<BuzzEvent>;
+		subscribe: (filters: object[], onEvent: (event: BuzzEvent) => void) => void;
+	};
+};
+
+type IncomingEventInjectable = RelayInjectable & {
+	channelsById: Map<string, unknown>;
+	chat: { processMessage: () => Promise<void> } | null;
+	dispatchIncomingEvent: (event: BuzzEvent) => Promise<void>;
+};
+
+function adapterWithRelay(knownEvents: BuzzEvent[]) {
+	const adapter = createAdapter();
+	const published: Array<{ kind: number; tags: string[][] }> = [];
+	(adapter as unknown as RelayInjectable).relay = {
+		query: async () => knownEvents,
+		publish: async (kind, _content, tags) => {
+			published.push({ kind, tags });
+			return createEvent();
+		},
+		subscribe: () => undefined,
+	};
+	return { adapter, published };
+}
+
+describe("buzz cross-channel edit and delete", () => {
+	test("delete stamps the channel the target lives in", async () => {
+		const target = createEvent({ tags: [["h", OTHER_CHANNEL_UUID]] });
+		const { adapter, published } = adapterWithRelay([target]);
+		await adapter.deleteMessage(adapter.encodeThreadId({ channelId: CHANNEL_UUID }), target.id);
+		expect(published[0]?.tags).toContainEqual(["h", OTHER_CHANNEL_UUID]);
+	});
+
+	test("delete falls back to the conversation channel for an unknown target", async () => {
+		const { adapter, published } = adapterWithRelay([]);
+		await adapter.deleteMessage(adapter.encodeThreadId({ channelId: CHANNEL_UUID }), "d".repeat(64));
+		expect(published[0]?.tags).toContainEqual(["h", CHANNEL_UUID]);
+	});
+
+	test("edit stamps the channel the target lives in", async () => {
+		const target = createEvent({ tags: [["h", OTHER_CHANNEL_UUID]] });
+		const { adapter, published } = adapterWithRelay([target]);
+		await adapter.editMessage(adapter.encodeThreadId({ channelId: CHANNEL_UUID }), target.id, "edited");
+		expect(published[0]?.tags).toContainEqual(["h", OTHER_CHANNEL_UUID]);
+	});
+});
+
+describe("buzz inbound edits", () => {
+	test("forwards an authored root edit with its original thread and unique event ID", async () => {
+		const original = createEvent({ id: ROOT_EVENT_ID, content: "original" });
+		const edit = createEvent({
+			id: "d".repeat(64),
+			kind: 40003,
+			content: "edited",
+			tags: [["h", CHANNEL_UUID], ["e", ROOT_EVENT_ID]],
+			created_at: 1784900001,
+		});
+		const adapter = createAdapter();
+		const received: Array<{ eventID: string; threadID: string; message: Message }> = [];
+		(adapter as unknown as IncomingEventInjectable).relay = {
+			query: async () => [original],
+			publish: async (_kind, _content, _tags) => original,
+			subscribe: () => undefined,
+		};
+		(adapter as unknown as IncomingEventInjectable).channelsById.set(CHANNEL_UUID, {});
+		(adapter as unknown as IncomingEventInjectable).chat = { processMessage: async () => undefined };
+		adapter.onMessageEdit(async (receivedEdit) => {
+			received.push(receivedEdit);
+		});
+
+		await (adapter as unknown as IncomingEventInjectable).dispatchIncomingEvent(edit);
+
+		expect(received).toHaveLength(1);
+		expect(received[0]?.eventID).toBe(edit.id);
+		expect(received[0]?.message.id).toBe(original.id);
+		expect(received[0]?.message.raw).toBe(original);
+		expect(received[0]?.message.text).toBe("edited");
+		expect(received[0]?.message.metadata.edited).toBe(true);
+		expect(received[0]?.threadID).toBe(`buzz:${CHANNEL_UUID}:${ROOT_EVENT_ID}`);
+	});
+
+	test("rejects edits from another author or channel", async () => {
+		const original = createEvent({ id: ROOT_EVENT_ID });
+		const adapter = createAdapter();
+		const received: string[] = [];
+		(adapter as unknown as IncomingEventInjectable).relay = {
+			query: async () => [original],
+			publish: async (_kind, _content, _tags) => original,
+			subscribe: () => undefined,
+		};
+		(adapter as unknown as IncomingEventInjectable).channelsById.set(CHANNEL_UUID, {});
+		(adapter as unknown as IncomingEventInjectable).chat = { processMessage: async () => undefined };
+		adapter.onMessageEdit(async (edit) => {
+			received.push(edit.eventID);
+		});
+
+		await (adapter as unknown as IncomingEventInjectable).dispatchIncomingEvent(
+			createEvent({ kind: 40003, tags: [["h", CHANNEL_UUID], ["e", ROOT_EVENT_ID]], pubkey: "b".repeat(64) }),
+		);
+		await (adapter as unknown as IncomingEventInjectable).dispatchIncomingEvent(
+			createEvent({ kind: 40003, tags: [["h", OTHER_CHANNEL_UUID], ["e", ROOT_EVENT_ID]] }),
+		);
+
+		expect(received).toEqual([]);
+	});
+
+	test("keeps a thread edit on the original root thread", async () => {
+		const originalID = "9".repeat(64);
+		const original = createEvent({ id: originalID, tags: [["h", CHANNEL_UUID], ["e", ROOT_EVENT_ID, "", "root"]] });
+		const edit = createEvent({
+			id: "8".repeat(64),
+			kind: 40003,
+			tags: [["h", CHANNEL_UUID], ["e", originalID]],
+		});
+		const adapter = createAdapter();
+		const received: string[] = [];
+		(adapter as unknown as IncomingEventInjectable).relay = {
+			query: async () => [original],
+			publish: async (_kind, _content, _tags) => original,
+			subscribe: () => undefined,
+		};
+		(adapter as unknown as IncomingEventInjectable).channelsById.set(CHANNEL_UUID, {});
+		(adapter as unknown as IncomingEventInjectable).chat = { processMessage: async () => undefined };
+		adapter.onMessageEdit(async (editEvent) => {
+			received.push(editEvent.threadID);
+		});
+
+		await (adapter as unknown as IncomingEventInjectable).dispatchIncomingEvent(edit);
+
+		expect(received).toEqual([`buzz:${CHANNEL_UUID}:${ROOT_EVENT_ID}`]);
 	});
 });

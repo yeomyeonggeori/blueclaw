@@ -101,6 +101,9 @@ func (connectorRuntime *ConnectorRuntime) buildTaskLaunchRequest(turn Conversati
 }
 
 func eventIsThreadReply(event PlatformInboundEvent) bool {
+	if event.IsThread != nil {
+		return *event.IsThread
+	}
 	return event.ReplyTargetID != "" && event.MessageID != "" && event.ReplyTargetID != event.MessageID
 }
 

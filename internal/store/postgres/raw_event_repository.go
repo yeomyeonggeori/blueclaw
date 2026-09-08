@@ -126,7 +126,7 @@ ON CONFLICT (platform, conversation_id, external_message_id) DO NOTHING`,
 		rawEventID,
 		event.Platform,
 		conversationID,
-		event.MessageID,
+		event.ExternalEventID(),
 		[]byte(event.Prompt),
 		contentHash[:],
 		time.Now().UTC(),
@@ -145,7 +145,7 @@ ON CONFLICT (platform, conversation_id, external_message_id) DO NOTHING`,
 		return false, result, nil
 	}
 
-	existingResult, fetchError := rawEventRepository.GetConnectorResult(event.Platform, conversationID, event.MessageID)
+	existingResult, fetchError := rawEventRepository.GetConnectorResult(event.Platform, conversationID, event.ExternalEventID())
 	if fetchError != nil {
 		return true, connectors.ConnectorRuntimeResult{}, fetchError
 	}
@@ -164,7 +164,12 @@ func (rawEventRepository RawEventRepository) TryEnqueueConnectorEvent(event conn
 	}
 	contentHash := sha256.Sum256([]byte(event.Prompt))
 	rawEventID := event.DedupeKey()
-	execResult, errorValue := rawEventRepository.database.SQL.ExecContext(context.Background(), `
+	transaction, errorValue := rawEventRepository.database.SQL.BeginTx(context.Background(), nil)
+	if errorValue != nil {
+		return false, connectors.ConnectorRuntimeResult{}, errorValue
+	}
+	defer transaction.Rollback()
+	execResult, errorValue := transaction.ExecContext(context.Background(), `
 INSERT INTO raw_event (
   raw_event_id, platform, conversation_id, external_message_id, event_type,
   content_ciphertext, encryption_key_version, content_sha256, security_level_rank,
@@ -176,7 +181,7 @@ ON CONFLICT (platform, conversation_id, external_message_id) DO NOTHING`,
 		rawEventID,
 		event.Platform,
 		conversationID,
-		event.MessageID,
+		event.ExternalEventID(),
 		[]byte(event.Prompt),
 		contentHash[:],
 		time.Now().UTC(),
@@ -193,7 +198,16 @@ ON CONFLICT (platform, conversation_id, external_message_id) DO NOTHING`,
 	}
 	affectedRows, errorValue := execResult.RowsAffected()
 	if errorValue == nil && affectedRows == 1 {
+		if errorValue := suppressSupersededConnectorEvents(transaction, event.PreviousMessages); errorValue != nil {
+			return false, connectors.ConnectorRuntimeResult{}, errorValue
+		}
+		if errorValue := transaction.Commit(); errorValue != nil {
+			return false, connectors.ConnectorRuntimeResult{}, errorValue
+		}
 		return false, connectors.ConnectorRuntimeResult{}, nil
+	}
+	if errorValue := transaction.Commit(); errorValue != nil {
+		return false, connectors.ConnectorRuntimeResult{}, errorValue
 	}
 
 	result, errorValue := rawEventRepository.GetConnectorResultByRawEventID(event)
@@ -261,10 +275,12 @@ SET connector_status = 'succeeded',
   connector_completed_at = $1,
   connector_result_json = $2,
   connector_error = ''
-WHERE raw_event_id = $3`,
+WHERE raw_event_id = $3
+  AND connector_result_json->>'reason' IS DISTINCT FROM $4`,
 		time.Now().UTC(),
 		resultDocument,
 		event.DedupeKey(),
+		connectors.SupersededRequestReason,
 	)
 	return errorValue
 }
@@ -282,12 +298,14 @@ SET connector_status = $1,
   connector_next_attempt_at = $2,
   connector_completed_at = $3,
   connector_error = $4
-WHERE raw_event_id = $5`,
+WHERE raw_event_id = $5
+  AND connector_result_json->>'reason' IS DISTINCT FROM $6`,
 		status,
 		nextAttemptAt,
 		time.Now().UTC(),
 		errorValue.Error(),
 		queuedEvent.Event.DedupeKey(),
+		connectors.SupersededRequestReason,
 	)
 	return updateError
 }
@@ -304,7 +322,7 @@ WHERE platform = $2 AND conversation_id = $3 AND external_message_id = $4`,
 		resultDocument,
 		event.Platform,
 		conversationID,
-		event.MessageID,
+		event.ExternalEventID(),
 	)
 	return errorValue
 }
@@ -374,6 +392,20 @@ func (rawEventRepository RawEventRepository) EnqueueConnectorReply(event connect
 	if errorValue := ensureSyntheticRawEvent(transaction, event, rawEventID, conversationID); errorValue != nil {
 		return "", errorValue
 	}
+	var supersededReason sql.NullString
+	if errorValue := transaction.QueryRowContext(context.Background(), `
+SELECT connector_result_json->>'reason'
+FROM raw_event
+WHERE raw_event_id = $1
+FOR UPDATE`, rawEventID).Scan(&supersededReason); errorValue != nil {
+		return "", errorValue
+	}
+	if supersededReason.Valid && supersededReason.String == connectors.SupersededRequestReason {
+		if errorValue := transaction.Commit(); errorValue != nil {
+			return "", errorValue
+		}
+		return "", nil
+	}
 	_, errorValue = transaction.ExecContext(context.Background(), `
 INSERT INTO connector_outbox (
   outbox_id, raw_event_id, platform, reply_target_id, reply_target_json, reply_json
@@ -396,7 +428,7 @@ ON CONFLICT (outbox_id) DO NOTHING`,
 }
 
 func ensureSyntheticRawEvent(transaction *sql.Tx, event connectors.PlatformInboundEvent, rawEventID string, conversationID string) error {
-	externalMessageID := strings.TrimSpace(event.MessageID)
+	externalMessageID := event.ExternalEventID()
 	if externalMessageID == "" {
 		externalMessageID = rawEventID
 	}

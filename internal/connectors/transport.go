@@ -135,6 +135,7 @@ func ParseNormalizedInboundEvent(payload []byte, platform string, source string)
 	}
 
 	event.Platform = platform
+	event.PreviousMessages = nil
 	if strings.TrimSpace(event.Source) == "" {
 		event.Source = source
 	}
