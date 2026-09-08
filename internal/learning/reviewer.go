@@ -118,11 +118,9 @@ func (reviewer Reviewer) assess(ctx context.Context, input ReviewInput, decision
 }
 
 func (reviewer Reviewer) generate(ctx context.Context, instruction, input, name, schema string) (model.StructuredResponse, ReviewTrace, error) {
-	maximumTokens := 4500
 	request := model.StructuredResponseRequest{
 		Messages:               []model.Message{{Role: "system", Content: instruction}, {Role: "user", Content: input}},
 		StructuredOutputSchema: model.StructuredOutputSchema{Name: name, Document: schema, IsStrictlyEnforced: true},
-		GenerationOptions:      model.GenerationOptions{MaxTokens: &maximumTokens},
 	}
 	trace := ReviewTrace{StartedAt: time.Now().UTC(), Request: request}
 	response, errorValue := reviewer.Model.GenerateStructuredResponse(ctx, request)
