@@ -197,6 +197,8 @@ const (
 
 type VirtualTurn struct {
 	Prompt                       string
+	BeforeReplyMessages          []string
+	IsThread                     *bool
 	ExpectedResponse             VirtualResponseExpectation
 	ConversationType             string
 	ChannelID                    string
@@ -731,6 +733,7 @@ var builtinScenarioFactories = map[string]func(string) VirtualSessionScenario{
 	defaultBuiltinScenarioName:                  PresentationLocalMultiturnSuccessScenario,
 	"memory":                                    MemoryGuidedFollowupScenario,
 	"memory_guided_followup":                    MemoryGuidedFollowupScenario,
+	"request_revision_acceptance":               RequestRevisionAcceptanceScenario,
 	"plain_question_acceptance":                 PlainQuestionAcceptanceScenario,
 	"web_search_acceptance":                     WebSearchAcceptanceScenario,
 	"tool_permission_hides_skill":               ToolPermissionHidesSkillScenario,
@@ -2582,6 +2585,7 @@ func (harness *VirtualSessionHarness) Run(ctx context.Context) (VirtualSessionRe
 	if errorValue != nil {
 		return result, errorValue
 	}
+	messageIndex := 0
 	for index, virtualTurn := range harness.scenario.Turns {
 		if harness.scriptedModel != nil {
 			for _, routerResponse := range scenarioRouterResponsesForTurn(harness.scenario, virtualTurn) {
@@ -2592,24 +2596,34 @@ func (harness *VirtualSessionHarness) Run(ctx context.Context) (VirtualSessionRe
 				harness.scriptedModel.EnqueueStructuredResponses("bluecollar_completion_judge", virtualTurn.CompletionJudgeResponses...)
 			}
 		}
-		turnResult, errorValue := harness.runTurn(ctx, index, virtualTurn)
+		turnResults, errorValue := harness.runTurnBurst(ctx, messageIndex, virtualTurn)
+		messageIndex += 1 + len(virtualTurn.BeforeReplyMessages)
 		if errorValue != nil {
 			return result, errorValue
 		}
-		turnResult.InformationalAssertions = informationalAssertionResults(virtualTurn, turnResult)
-		result.TurnResults = append(result.TurnResults, turnResult)
-		if errorValue := harness.assertTurnResult(virtualTurn, turnResult); errorValue != nil {
-			return result, fmt.Errorf("%s turn %d: %w", harness.scenario.Name, index+1, errorValue)
+		for resultIndex, turnResult := range turnResults {
+			turnResult.InformationalAssertions = informationalAssertionResults(virtualTurn, turnResult)
+			result.TurnResults = append(result.TurnResults, turnResult)
+			if resultIndex == len(turnResults)-1 {
+				if errorValue := harness.assertTurnResult(virtualTurn, turnResult); errorValue != nil {
+					return result, fmt.Errorf("%s turn %d: %w", harness.scenario.Name, index+1, errorValue)
+				}
+			}
 		}
+		finalTurnResult := turnResults[len(turnResults)-1]
 		if harness.scriptedModel != nil {
-			if errorValue := assertScriptedControlCallsServed(turnResult.LanguageModelCallEvents); errorValue != nil {
+			if errorValue := assertScriptedControlCallsServed(finalTurnResult.LanguageModelCallEvents); errorValue != nil {
 				return result, fmt.Errorf("%s turn %d: %w", harness.scenario.Name, index+1, errorValue)
 			}
 			if errorValue := assertNoScriptedResponseResidue(harness.scriptedModel); errorValue != nil {
-				return result, fmt.Errorf("%s turn %d: %w; events: %s", harness.scenario.Name, index+1, errorValue, summarizeEvents(turnResult.Events))
+				return result, fmt.Errorf("%s turn %d: %w; events: %s", harness.scenario.Name, index+1, errorValue, summarizeEvents(finalTurnResult.Events))
 			}
 		}
-		harness.rememberTurn(virtualTurn, turnResult)
+		for promptIndex, prompt := range append([]string{virtualTurn.Prompt}, virtualTurn.BeforeReplyMessages...) {
+			messageTurn := virtualTurn
+			messageTurn.Prompt = prompt
+			harness.rememberTurn(messageTurn, turnResults[promptIndex])
+		}
 	}
 	result.TaskSchedules = harness.scheduleStore.TaskSchedules()
 	if errorValue := harness.assertWorkspaceFootprint(digestsBefore); errorValue != nil {
@@ -2628,6 +2642,81 @@ func (harness *VirtualSessionHarness) assertWorkspaceFootprint(digestsBefore map
 		return nil
 	}
 	return fmt.Errorf("%s changed files it never claimed: %s. A scenario asserts what the agent produced and nothing asserted what it left behind, so declare these in WritableWorkspacePaths or find out who wrote them", harness.scenario.Name, strings.Join(changes, "; "))
+}
+
+func (harness *VirtualSessionHarness) runTurnBurst(ctx context.Context, index int, virtualTurn VirtualTurn) ([]VirtualTurnResult, error) {
+	burstContext, cancel := context.WithCancel(ctx)
+	var runningTurns sync.WaitGroup
+	defer func() {
+		cancel()
+		runningTurns.Wait()
+	}()
+	initialReplyCount := harness.adapter.ReplyCount()
+	prompts := append([]string{virtualTurn.Prompt}, virtualTurn.BeforeReplyMessages...)
+	if len(prompts) == 1 {
+		turnResult, errorValue := harness.runTurn(ctx, index, virtualTurn)
+		return []VirtualTurnResult{turnResult}, errorValue
+	}
+	results := make([]VirtualTurnResult, 0, len(prompts))
+	var previousResult <-chan virtualTurnResult
+	for promptIndex, prompt := range prompts {
+		isFinal := promptIndex == len(prompts)-1
+		harness.adapter.prepareProgressBarrier(!isFinal)
+		turn := virtualTurn
+		turn.Prompt = prompt
+		turn.BeforeReplyMessages = nil
+		currentResult := make(chan virtualTurnResult, 1)
+		runningTurns.Add(1)
+		go func(turnIndex int, currentTurn VirtualTurn) {
+			defer runningTurns.Done()
+			turnResult, errorValue := harness.runTurn(burstContext, turnIndex, currentTurn)
+			currentResult <- virtualTurnResult{result: turnResult, errorValue: errorValue}
+		}(index+promptIndex, turn)
+		if !isFinal {
+			select {
+			case <-harness.adapter.progressArrivedChannel():
+			case completed := <-currentResult:
+				return append(results, completed.result), fmt.Errorf("burst message ended before its progress barrier: %w", completed.errorValue)
+			case <-ctx.Done():
+				cancel()
+				return results, ctx.Err()
+			}
+		}
+		if previousResult != nil {
+			var completed virtualTurnResult
+			select {
+			case completed = <-previousResult:
+			case <-ctx.Done():
+				cancel()
+				return results, ctx.Err()
+			}
+			if completed.errorValue != nil {
+				return results, completed.errorValue
+			}
+			results = append(results, completed.result)
+		}
+		previousResult = currentResult
+	}
+	var completed virtualTurnResult
+	select {
+	case completed = <-previousResult:
+	case <-ctx.Done():
+		cancel()
+		return results, ctx.Err()
+	}
+	if completed.errorValue != nil {
+		return results, completed.errorValue
+	}
+	results = append(results, completed.result)
+	if replyCount := harness.adapter.ReplyCount() - initialReplyCount; replyCount != 1 {
+		return results, fmt.Errorf("burst produced %d replies, expected one", replyCount)
+	}
+	return results, nil
+}
+
+type virtualTurnResult struct {
+	result     VirtualTurnResult
+	errorValue error
 }
 
 func actionScriptedLanguageModelForScenario(scenario VirtualSessionScenario) *agenttest.ScriptedLanguageModel {
@@ -2865,6 +2954,7 @@ func (harness *VirtualSessionHarness) runTurn(ctx context.Context, index int, vi
 		Source:         "e2e",
 		ConversationID: conversationID,
 		MessageID:      fmt.Sprintf("virtual-message-%03d", index+1),
+		IsThread:       virtualTurn.IsThread,
 		SenderID:       "user-1",
 		ReplyTargetID:  virtualReplyTargetID(index, virtualTurn),
 		Prompt:         virtualTurn.Prompt,
@@ -3797,11 +3887,18 @@ func testPolicyProjection() policy.PolicyProjection {
 }
 
 type virtualAdapter struct {
-	mutex         sync.Mutex
-	workspacePath string
-	replies       map[string]virtualReply
-	reactions     []connectors.ReactionTarget
-	history       []connectors.VisibleContextMessage
+	mutex           sync.Mutex
+	workspacePath   string
+	progressBarrier *virtualProgressBarrier
+	replies         map[string]virtualReply
+	reactions       []connectors.ReactionTarget
+	history         []connectors.VisibleContextMessage
+}
+
+type virtualProgressBarrier struct {
+	arrived chan struct{}
+	once    sync.Once
+	block   bool
 }
 
 type virtualReply struct {
@@ -3828,8 +3925,38 @@ func (adapter *virtualAdapter) ResolveIdentity(context.Context, string) (identit
 	}, nil
 }
 
-func (adapter *virtualAdapter) StartProgress(context.Context, connectors.ReplyTarget) error {
+func (adapter *virtualAdapter) prepareProgressBarrier(block bool) {
+	adapter.mutex.Lock()
+	defer adapter.mutex.Unlock()
+	adapter.progressBarrier = &virtualProgressBarrier{arrived: make(chan struct{}), block: block}
+}
+
+func (adapter *virtualAdapter) StartProgress(contextValue context.Context, _ connectors.ReplyTarget) error {
+	adapter.mutex.Lock()
+	progressBarrier := adapter.progressBarrier
+	adapter.mutex.Unlock()
+	if progressBarrier != nil {
+		progressBarrier.once.Do(func() { close(progressBarrier.arrived) })
+	}
+	if progressBarrier != nil && progressBarrier.block {
+		<-contextValue.Done()
+	}
 	return nil
+}
+
+func (adapter *virtualAdapter) progressArrivedChannel() <-chan struct{} {
+	adapter.mutex.Lock()
+	defer adapter.mutex.Unlock()
+	if adapter.progressBarrier == nil {
+		return nil
+	}
+	return adapter.progressBarrier.arrived
+}
+
+func (adapter *virtualAdapter) ReplyCount() int {
+	adapter.mutex.Lock()
+	defer adapter.mutex.Unlock()
+	return len(adapter.replies)
 }
 
 func (adapter *virtualAdapter) StopProgress(context.Context, connectors.ReplyTarget) error {

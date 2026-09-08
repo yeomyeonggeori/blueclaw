@@ -181,6 +181,33 @@ func PlainQuestionAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 	}
 }
 
+func RequestRevisionAcceptanceScenario(artifactDirectoryPath string) VirtualSessionScenario {
+	isThread := false
+	return VirtualSessionScenario{
+		Name:                  "request_revision_acceptance",
+		ArtifactDirectoryPath: artifactDirectoryPath,
+		RouterTaskShape:       agentcontract.TaskShapeImmediateReply,
+		Turns: []VirtualTurn{
+			{
+				Prompt:                 "출근 시각을 HH:MM으로만 알려줘. 9시 10분",
+				BeforeReplyMessages:    []string{"아니 10시", "10분"},
+				ReplyTargetID:          "virtual-revision-root",
+				ActionResponses:        []string{actionFinishMessage("10:10")},
+				ExpectedReplyFragments: []string{"10:10"},
+				ExpectedTaskStatus:     task.TaskStatusCompleted,
+			},
+			{
+				Prompt:                 "다음 메시지들로 정하는 주말 계획을 한 문장으로 알려줘",
+				IsThread:               &isThread,
+				BeforeReplyMessages:    []string{"등산", "토요일 오전"},
+				ActionResponses:        []string{actionFinishMessage("토요일 오전에 등산을 갑니다.")},
+				ExpectedReplyFragments: []string{"토요일", "등산"},
+				ExpectedTaskStatus:     task.TaskStatusCompleted,
+			},
+		},
+	}
+}
+
 func WebSearchAcceptanceScenario(artifactDirectoryPath string) VirtualSessionScenario {
 	return VirtualSessionScenario{
 		Name:                  "web_search_acceptance",

@@ -167,7 +167,7 @@ func (connectorRuntime *ConnectorRuntime) looksLikeActiveTaskFollowUp(ctx contex
 	if !isFound {
 		return false
 	}
-	activeTaskRun, isFound := connectorRuntime.latestCurrentConversationActiveTask(personID, event.ConversationID)
+	activeTaskRun, isFound := connectorRuntime.latestCurrentConversationActiveTask(personID, event)
 	if !isFound {
 		return false
 	}

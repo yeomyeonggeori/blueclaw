@@ -25,7 +25,7 @@ func (connectorRuntime *ConnectorRuntime) handleBusyMessageIfNeeded(
 	personID string,
 	sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error),
 ) (busyMessageResult, error) {
-	activeTaskRun, isFound := connectorRuntime.latestCurrentConversationActiveTask(personID, event.ConversationID)
+	activeTaskRun, isFound := connectorRuntime.latestCurrentConversationActiveTask(personID, event)
 	if !isFound {
 		return connectorRuntime.handlePossibleFinishedTaskFollowUp(ctx, platform, event, replyTarget, personID, sendReply)
 	}
@@ -297,7 +297,7 @@ func (connectorRuntime *ConnectorRuntime) handlePossibleFinishedTaskFollowUp(
 	personID string,
 	sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error),
 ) (busyMessageResult, error) {
-	finishedTaskRun, isFound := connectorRuntime.latestRecentlyFinishedConversationTask(personID, event.ConversationID)
+	finishedTaskRun, isFound := connectorRuntime.latestRecentlyFinishedConversationTask(personID, event)
 	if !isFound {
 		return busyMessageResult{}, nil
 	}
@@ -339,12 +339,12 @@ func (connectorRuntime *ConnectorRuntime) generateFinishedTaskFollowUpReply(ctx 
 	return connectorRuntime.replyGenerator.GenerateReplyWithContext(ctx, prompt, event.Context.ToAgentVisibleContext(), nil)
 }
 
-func (connectorRuntime *ConnectorRuntime) latestRecentlyFinishedConversationTask(personID string, conversationID string) (task.TaskRun, bool) {
+func (connectorRuntime *ConnectorRuntime) latestRecentlyFinishedConversationTask(personID string, event PlatformInboundEvent) (task.TaskRun, bool) {
 	var latestTaskRun task.TaskRun
 	isFound := false
 	cutoff := time.Now().Add(-recentlyFinishedTaskFollowUpWindow)
 	for _, taskRun := range connectorRuntime.taskRunService.ListTaskRunByPersonID(personID) {
-		if taskRun.OriginConversationID != conversationID {
+		if !taskRunMatchesMessageScope(taskRun, event) {
 			continue
 		}
 		if isTaskControlActiveStatus(taskRun.Status) {
@@ -361,11 +361,11 @@ func (connectorRuntime *ConnectorRuntime) latestRecentlyFinishedConversationTask
 	return latestTaskRun, isFound
 }
 
-func (connectorRuntime *ConnectorRuntime) latestCurrentConversationActiveTask(personID string, conversationID string) (task.TaskRun, bool) {
+func (connectorRuntime *ConnectorRuntime) latestCurrentConversationActiveTask(personID string, event PlatformInboundEvent) (task.TaskRun, bool) {
 	var latestTaskRun task.TaskRun
 	isFound := false
 	for _, taskRun := range connectorRuntime.activeTaskRunsForPerson(personID) {
-		if taskRun.OriginConversationID != conversationID {
+		if !taskRunMatchesMessageScope(taskRun, event) {
 			continue
 		}
 		if !isFound || taskRun.UpdatedAt.After(latestTaskRun.UpdatedAt) {

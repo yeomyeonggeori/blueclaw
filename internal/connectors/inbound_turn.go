@@ -82,6 +82,9 @@ func (connectorRuntime *ConnectorRuntime) admitInboundTurn(ctx context.Context, 
 	if result, isHandled := connectorRuntime.suppressDuplicateSourceTaskIfNeeded(turn.platform, turn.event, turn.personID); isHandled {
 		return result, true, nil
 	}
+	for _, message := range turn.event.PreviousMessages {
+		connectorRuntime.cancelPendingSourceTask(turn.personID, turn.platform, turn.event.ConversationID, message.SourceReference)
+	}
 	if result, isHandled := connectorRuntime.handleTaskControlIfRequested(ctx, turn.platform, turn.adapter, turn.event, turn.replyTarget, turn.personID, turn.sendReply); isHandled {
 		return result, true, nil
 	}
@@ -186,6 +189,10 @@ func (connectorRuntime *ConnectorRuntime) resolvePendingAsk(ctx context.Context,
 
 func (connectorRuntime *ConnectorRuntime) resolveTurnActiveGoal(ctx context.Context, turn *inboundTurn) {
 	turn.activeGoal, turn.hasActiveGoal = connectorRuntime.findActiveGoal(turn.personID, turn.platform, turn.event, turn.taskWaitResolution)
+	if len(turn.event.PreviousMessages) > 0 {
+		turn.activeGoal = agentcontract.ActiveGoal{}
+		turn.hasActiveGoal = false
+	}
 	if !turn.isApprovalContinuation && turn.hasActiveGoal && turn.turnDecision.Route == agentcontract.TurnRouteStartTask {
 		turn.activeGoal = agentcontract.ActiveGoal{}
 		turn.hasActiveGoal = false
@@ -224,7 +231,7 @@ func (connectorRuntime *ConnectorRuntime) resolveTurnAddressing(ctx context.Cont
 }
 
 func (connectorRuntime *ConnectorRuntime) handleBusyTurn(ctx context.Context, turn *inboundTurn) (ConnectorRuntimeResult, bool, error) {
-	if turn.isApprovalContinuation || turn.hasPendingAskInteraction || turn.didSupersedePendingAsk || turn.didSupersedePendingConfirmation {
+	if len(turn.event.PreviousMessages) > 0 || turn.isApprovalContinuation || turn.hasPendingAskInteraction || turn.didSupersedePendingAsk || turn.didSupersedePendingConfirmation {
 		return ConnectorRuntimeResult{}, false, nil
 	}
 	busyResult, errorValue := connectorRuntime.handleBusyMessageIfNeeded(ctx, turn.platform, turn.event, turn.replyTarget, turn.personID, turn.sendReply)
@@ -245,9 +252,16 @@ func (connectorRuntime *ConnectorRuntime) prepareTurnForLaunch(ctx context.Conte
 	if !turn.isProgressStarted {
 		turn.startProgress(connectorRuntime.startProgressHeartbeat(ctx, turn.adapter, turn.replyTarget))
 	}
+	if ctx.Err() != nil {
+		return
+	}
 	turn.event = connectorRuntime.withAttachmentMaterials(ctx, turn.adapter, turn.event, turn.personID)
 	if !turn.isApprovalContinuation && !turn.hasPendingAskInteraction && !turn.hasActiveGoal {
-		turn.priorTask, _ = connectorRuntime.findPriorTaskContext(turn.personID, turn.event)
+		var hasRevisedPriorTask bool
+		turn.priorTask, hasRevisedPriorTask = connectorRuntime.revisedPriorTask(turn.personID, turn.event)
+		if !hasRevisedPriorTask {
+			turn.priorTask, _ = connectorRuntime.findPriorTaskContext(turn.personID, turn.event)
+		}
 	}
 }
 

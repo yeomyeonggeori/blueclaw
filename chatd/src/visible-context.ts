@@ -1,5 +1,5 @@
 import { convertEmojiPlaceholders } from "chat";
-import type { FetchOptions, ThreadInfo, UserInfo } from "chat";
+import type { FetchOptions, Message, ThreadInfo, UserInfo } from "chat";
 
 export type AddressingDocument = {
 	botMentioned: boolean;
@@ -85,9 +85,16 @@ export type ContextCapableAdapter = {
 	senderAvatarUrlOf?(senderId: string): string | undefined;
 };
 
+export type NormalizedMessageEdit = {
+	eventID: string;
+	threadID: string;
+	message: Message;
+};
+
 export type NormalizedPlatformAdapter = ContextCapableAdapter & {
 	historyScopeThreadId(threadId: string, messageId: string): string;
 	addressingOf(raw: unknown): AddressingDocument;
+	onMessageEdit?(handler: (edit: NormalizedMessageEdit) => Promise<void>): void;
 };
 
 export type HistoryCursorState = {

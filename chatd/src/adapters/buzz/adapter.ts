@@ -33,7 +33,7 @@ import {
 	type BuzzEvent,
 	type BuzzThreadId,
 } from "./types.ts";
-import type { ReactionSummary } from "../../visible-context.ts";
+import type { NormalizedMessageEdit, ReactionSummary } from "../../visible-context.ts";
 import type { OutgoingAttachment } from "../../outgoing-attachment.ts";
 import { buildMessageBody, ensureUserDirectMessageChannel } from "./user-session.ts";
 import { withRelayAs } from "./relay-pool.ts";
@@ -223,6 +223,7 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	private readonly relay: BuzzRelayClient;
 	private readonly converter = new BuzzFormatConverter();
 	private chat: ChatInstance | null = null;
+	private messageEditHandler: ((edit: NormalizedMessageEdit) => Promise<void>) | undefined;
 	private channelsById = new Map<string, BuzzChannel>();
 	private subscribedChannelIds = new Set<string>();
 	private elevatedPubkeysByChannel = new Map<string, Set<string>>();
@@ -422,7 +423,7 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 			if (this.subscribedChannelIds.has(channelId)) continue;
 			this.subscribedChannelIds.add(channelId);
 			this.relay.subscribe(
-				[{ kinds: [STREAM_MESSAGE_KIND], "#h": [channelId], since: Math.floor(Date.now() / 1000) }],
+				[{ kinds: [STREAM_MESSAGE_KIND, EDIT_MESSAGE_KIND], "#h": [channelId], since: Math.floor(Date.now() / 1000) }],
 				(event) => {
 					void this.dispatchIncomingEvent(event).catch((reason) =>
 						reportBuzzFailure(`handling message ${event.id}`, reason),
@@ -471,9 +472,31 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 			await this.refreshChannels();
 			this.subscribeToChannels();
 		}
+		if (event.kind === EDIT_MESSAGE_KIND) {
+			await this.dispatchIncomingEdit(event, channelId);
+			return;
+		}
 		this.emitMirrorInbound(event, channelId);
 		const threadId = this.threadIdForEvent(event);
 		await this.chat.processMessage(this, threadId, async () => await this.messageFromEvent(event));
+	}
+
+	onMessageEdit(handler: (edit: NormalizedMessageEdit) => Promise<void>): void {
+		this.messageEditHandler = handler;
+	}
+
+	private async dispatchIncomingEdit(event: BuzzEvent, channelId: string): Promise<void> {
+		const targetEventId = firstTagValue(event, "e");
+		if (!targetEventId || !this.messageEditHandler) return;
+		const [originalEvent] = await this.relay.query({
+			ids: [targetEventId],
+			kinds: [STREAM_MESSAGE_KIND],
+			"#h": [channelId],
+		});
+		if (!originalEvent || originalEvent.pubkey !== event.pubkey || firstTagValue(originalEvent, "h") !== channelId) return;
+		const profile = await this.fetchProfile(originalEvent.pubkey);
+		const message = this.buildMessage(originalEvent, profile, { text: event.content, editedAt: event.created_at });
+		await this.messageEditHandler({ eventID: event.id, threadID: message.threadId, message });
 	}
 
 	private emitMirrorInbound(event: BuzzEvent, channelId: string): void {
@@ -514,9 +537,9 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	private buildMessage(
 		event: BuzzEvent,
 		profile: { name?: string; nip05?: string } | undefined,
-		editedText?: string,
+		edit?: string | { text: string; editedAt: number },
 	): Message<BuzzEvent> {
-		const text = editedText ?? event.content;
+		const text = typeof edit === "string" ? edit : (edit?.text ?? event.content);
 		return new Message({
 			id: event.id,
 			threadId: this.threadIdForEvent(event),
@@ -524,7 +547,11 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 			formatted: this.converter.toAst(text),
 			raw: event,
 			author: this.authorForPubkey(event.pubkey, profile),
-			metadata: { dateSent: new Date(event.created_at * 1000), edited: editedText !== undefined },
+			metadata: {
+				dateSent: new Date(event.created_at * 1000),
+				edited: edit !== undefined,
+				editedAt: typeof edit === "object" ? new Date(edit.editedAt * 1000) : undefined,
+			},
 			attachments: attachmentsFromEvent(event),
 		});
 	}

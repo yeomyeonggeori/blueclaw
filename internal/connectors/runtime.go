@@ -58,8 +58,11 @@ type PlatformInboundEvent struct {
 	Source           string                    `json:"-"`
 	ConversationID   string                    `json:"conversationID"`
 	MessageID        string                    `json:"messageID"`
+	EventID          string                    `json:"eventID,omitempty"`
 	SenderID         string                    `json:"senderID"`
 	ReplyTargetID    string                    `json:"replyTargetID"`
+	IsThread         *bool                     `json:"isThread,omitempty"`
+	PreviousMessages []PendingRequestMessage   `json:"previousMessages,omitempty"`
 	Prompt           string                    `json:"prompt"`
 	InputParts       []agentcontract.AgentPart `json:"inputParts,omitempty"`
 	ResponseLanguage string                    `json:"responseLanguage,omitempty"`
@@ -468,6 +471,7 @@ type ConnectorRuntime struct {
 	taskIntakeGate          TaskIntakeGate
 	taskWaitTokenRepository task.TaskWaitTokenRepository
 	conversationLocks       map[string]*sync.Mutex
+	pendingRequests         *pendingRequestStore
 	sentAttachmentSources   *sentAttachmentSourceStore
 	started                 bool
 	inboxHeartbeats         []time.Time
@@ -524,6 +528,7 @@ func NewConnectorRuntime(identityService *identity.IdentityService, harness agen
 		adapterByPlatform:     map[string]PlatformAdapter{},
 		processedResults:      map[string]ConnectorRuntimeResult{},
 		conversationLocks:     map[string]*sync.Mutex{},
+		pendingRequests:       newPendingRequestStore(),
 		sentAttachmentSources: newSentAttachmentSourceStore(),
 	}
 }
@@ -731,6 +736,10 @@ func (connectorRuntime *ConnectorRuntime) agentIdentity() agentcontract.AgentIde
 }
 
 func (connectorRuntime *ConnectorRuntime) Start(ctx context.Context) {
+	if errorValue := connectorRuntime.restorePendingRequests(); errorValue != nil {
+		connectorRuntime.logger.Error("connector.requests.restore_failed", slog.String("error", errorValue.Error()))
+		return
+	}
 	if connectorRuntime.queueRepository() != nil {
 		connectorRuntime.prepareConnectorWorkers("inbox", connectorInboxWorkerCount)
 		for index := 0; index < connectorInboxWorkerCount; index++ {
@@ -847,7 +856,7 @@ func (connectorRuntime *ConnectorRuntime) handleInboundEventImmediately(ctx cont
 			connectorRuntime.logger.Info("connector."+adapter.Name()+".event.suppressed", slog.String("source", event.Source), slog.String("reason", "duplicate"), slog.String("messageID", event.MessageID))
 			return result, nil
 		}
-		result, errorValue = connectorRuntime.processInboundEvent(ctx, adapter, event)
+		result, errorValue = connectorRuntime.processPendingInboundEvent(ctx, adapter, event, adapter.SendReply, false)
 		if errorValue != nil {
 			return ConnectorRuntimeResult{}, errorValue
 		}
@@ -860,7 +869,7 @@ func (connectorRuntime *ConnectorRuntime) handleInboundEventImmediately(ctx cont
 		return result, nil
 	}
 
-	result, errorValue := connectorRuntime.processInboundEvent(ctx, adapter, event)
+	result, errorValue := connectorRuntime.processPendingInboundEvent(ctx, adapter, event, adapter.SendReply, false)
 	if errorValue != nil {
 		return ConnectorRuntimeResult{}, errorValue
 	}
@@ -870,6 +879,11 @@ func (connectorRuntime *ConnectorRuntime) handleInboundEventImmediately(ctx cont
 }
 
 func (connectorRuntime *ConnectorRuntime) enqueueInboundEvent(event PlatformInboundEvent, queueRepository ConnectorQueueRepository) (ConnectorRuntimeResult, error) {
+	connectorRuntime.refreshPendingRequestDelivery(event)
+	store := connectorRuntime.pendingRequests
+	store.mutex.Lock()
+	defer store.mutex.Unlock()
+	event, previous := store.prepare(event)
 	isDuplicate, result, errorValue := queueRepository.TryEnqueueConnectorEvent(event)
 	if errorValue != nil {
 		return ConnectorRuntimeResult{}, errorValue
@@ -881,6 +895,7 @@ func (connectorRuntime *ConnectorRuntime) enqueueInboundEvent(event PlatformInbo
 		connectorRuntime.logger.Info("connector."+event.Platform+".event.suppressed", slog.String("source", event.Source), slog.String("reason", "duplicate"), slog.String("messageID", event.MessageID))
 		return result, nil
 	}
+	store.register(event, previous)
 	return ConnectorRuntimeResult{Handled: true, Platform: event.Platform, Reason: "queued"}, nil
 }
 
@@ -923,7 +938,7 @@ func (connectorRuntime *ConnectorRuntime) processQueuedConnectorEvent(ctx contex
 	}
 	connectorRuntime.logConnectorQueueWait(event)
 	lock := connectorRuntime.conversationLock(event.Platform + ":" + event.ConversationID)
-	if connectorRuntime.shouldProcessBeforeConversationLock(ctx, adapter, event) {
+	if connectorRuntime.pendingRequests.isSuperseded(event.DedupeKey()) || (len(event.PreviousMessages) == 0 && connectorRuntime.shouldProcessBeforeConversationLock(ctx, adapter, event)) {
 		connectorRuntime.processQueuedConnectorEventWithAdapter(ctx, adapter, queuedEvent)
 		return
 	}
@@ -966,7 +981,7 @@ func (connectorRuntime *ConnectorRuntime) processQueuedConnectorEventWithAdapter
 	if ctx.Err() != nil {
 		return
 	}
-	result, errorValue := connectorRuntime.processInboundEventWithReplySender(ctx, adapter, event, connectorRuntime.enqueueConnectorReply)
+	result, errorValue := connectorRuntime.processPendingInboundEvent(ctx, adapter, event, connectorRuntime.enqueueConnectorReply, true)
 	if ctx.Err() != nil {
 		return
 	}
@@ -1041,6 +1056,9 @@ func (connectorRuntime *ConnectorRuntime) processNextQueuedConnectorReply(ctx co
 }
 
 func (connectorRuntime *ConnectorRuntime) processQueuedConnectorReply(ctx context.Context, queuedReply QueuedConnectorReply) {
+	if connectorRuntime.suppressSupersededQueuedReply(queuedReply) {
+		return
+	}
 	adapter, errorValue := connectorRuntime.findAdapter(queuedReply.Platform)
 	if errorValue != nil {
 		connectorRuntime.markQueuedConnectorReplyFailed(queuedReply, errorValue)
@@ -1048,7 +1066,11 @@ func (connectorRuntime *ConnectorRuntime) processQueuedConnectorReply(ctx contex
 	}
 	queuedReply.Reply.RawEventID = firstNonEmptyString(queuedReply.Reply.RawEventID, queuedReply.RawEventID)
 	queuedReply.Reply.OutboxID = firstNonEmptyString(queuedReply.Reply.OutboxID, queuedReply.OutboxID)
-	dispatchID, errorValue := adapter.SendReply(ctx, queuedReply.ReplyTarget, queuedReply.Reply)
+	sendReply := connectorRuntime.pendingRequestReplySender(queuedReply.RawEventID, adapter.SendReply, true)
+	dispatchID, errorValue := sendReply(ctx, queuedReply.ReplyTarget, queuedReply.Reply)
+	if dispatchID == "" && errorValue == nil && connectorRuntime.suppressSupersededQueuedReply(queuedReply) {
+		return
+	}
 	if ctx.Err() != nil {
 		return
 	}
@@ -1089,6 +1111,9 @@ func (connectorRuntime *ConnectorRuntime) processInboundEventWithReplySender(ctx
 	if shouldStartProgressBeforeAddressing(turn.event) {
 		turn.startProgress(connectorRuntime.startProgressHeartbeat(ctx, turn.adapter, turn.replyTarget))
 	}
+	if errorValue := ctx.Err(); errorValue != nil {
+		return ConnectorRuntimeResult{}, errorValue
+	}
 	if result, isHandled, errorValue := connectorRuntime.resolvePendingConfirmation(ctx, turn); isHandled {
 		return result, errorValue
 	}
@@ -1103,6 +1128,9 @@ func (connectorRuntime *ConnectorRuntime) processInboundEventWithReplySender(ctx
 		return result, errorValue
 	}
 	connectorRuntime.prepareTurnForLaunch(ctx, turn)
+	if errorValue := ctx.Err(); errorValue != nil {
+		return ConnectorRuntimeResult{}, errorValue
+	}
 	return connectorRuntime.launchTurn(ctx, turn)
 }
 
@@ -3552,9 +3580,12 @@ func connectorEventFromContext(ctx context.Context) (PlatformInboundEvent, bool)
 }
 
 func (event PlatformInboundEvent) DedupeKey() string {
-	messageID := strings.TrimSpace(event.MessageID)
 	conversationID := strings.TrimSpace(event.ConversationID)
-	return event.Platform + ":" + conversationID + ":" + messageID
+	return event.Platform + ":" + conversationID + ":" + event.ExternalEventID()
+}
+
+func (event PlatformInboundEvent) ExternalEventID() string {
+	return firstNonEmptyString(strings.TrimSpace(event.EventID), strings.TrimSpace(event.MessageID))
 }
 
 func (connectorRuntime *ConnectorRuntime) suppressDuplicateSourceTaskIfNeeded(platform string, event PlatformInboundEvent, personID string) (ConnectorRuntimeResult, bool) {

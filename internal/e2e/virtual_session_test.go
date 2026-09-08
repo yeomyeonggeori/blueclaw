@@ -23,6 +23,27 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
 
+func TestRequestRevisionBurstProducesOneReply(t *testing.T) {
+	scenario := RequestRevisionAcceptanceScenario(t.TempDir())
+
+	result, errorValue := RunVirtualSession(context.Background(), scenario)
+	if errorValue != nil {
+		t.Fatalf("expected request revision burst to pass: %v", errorValue)
+	}
+	if len(result.TurnResults) != 6 {
+		t.Fatalf("expected six inbound results from two bursts, got %d", len(result.TurnResults))
+	}
+	replyCount := 0
+	for _, turnResult := range result.TurnResults {
+		if turnResult.DidReply {
+			replyCount++
+		}
+	}
+	if replyCount != 2 || !result.TurnResults[2].DidReply || !result.TurnResults[5].DidReply {
+		t.Fatalf("expected one final reply per burst, got %+v", result.TurnResults)
+	}
+}
+
 type virtualStructuredOutputCorrectionTestError struct{}
 
 func (virtualStructuredOutputCorrectionTestError) Error() string {
