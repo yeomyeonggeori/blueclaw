@@ -1142,7 +1142,7 @@ func (connectorRuntime *ConnectorRuntime) shouldDeferNewTaskLaunch(isApprovalCon
 }
 
 func shouldDeferQueuedConnectorEvent(result ConnectorRuntimeResult) bool {
-	return result.Ignored && result.Reason == "task_intake_quiesced"
+	return result.Reason == requestAlreadyRunningReason || (result.Ignored && result.Reason == "task_intake_quiesced")
 }
 
 const engagedAckReactionEmojiName = "eyes"

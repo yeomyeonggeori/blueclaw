@@ -25,18 +25,18 @@ func TestPendingRequestStoreCollectsSequentialRootMessages(t *testing.T) {
 	secondEvent := pendingRequestTestEvent("message-2")
 	thirdEvent := pendingRequestTestEvent("message-3")
 
-	_, firstRequest, canStart := store.begin(contextValue, firstEvent)
-	if !canStart {
+	_, firstRequest, startReason := store.begin(contextValue, firstEvent)
+	if startReason != pendingRequestStarted {
 		t.Fatal("expected first request to begin")
 	}
 	store.finish(firstRequest)
-	_, secondRequest, canStart := store.begin(contextValue, secondEvent)
-	if !canStart {
+	_, secondRequest, startReason := store.begin(contextValue, secondEvent)
+	if startReason != pendingRequestStarted {
 		t.Fatal("expected second request to begin")
 	}
 	store.finish(secondRequest)
-	_, thirdRequest, canStart := store.begin(contextValue, thirdEvent)
-	if !canStart {
+	_, thirdRequest, startReason := store.begin(contextValue, thirdEvent)
+	if startReason != pendingRequestStarted {
 		t.Fatal("expected third request to begin")
 	}
 
@@ -50,12 +50,12 @@ func TestPendingRequestStoreCollectsSequentialRootMessages(t *testing.T) {
 
 func TestPendingRequestStoreSupersededEntriesCannotBegin(t *testing.T) {
 	store := newPendingRequestStore()
-	firstContext, firstRequest, canStart := store.begin(context.Background(), pendingRequestTestEvent("message-1"))
-	if !canStart {
+	firstContext, firstRequest, startReason := store.begin(context.Background(), pendingRequestTestEvent("message-1"))
+	if startReason != pendingRequestStarted {
 		t.Fatal("expected first request to begin")
 	}
-	_, secondRequest, canStart := store.begin(context.Background(), pendingRequestTestEvent("message-2"))
-	if !canStart {
+	_, secondRequest, startReason := store.begin(context.Background(), pendingRequestTestEvent("message-2"))
+	if startReason != pendingRequestStarted {
 		t.Fatal("expected second request to begin")
 	}
 	if !store.isSuperseded(firstRequest.event.DedupeKey()) {
@@ -66,8 +66,8 @@ func TestPendingRequestStoreSupersededEntriesCannotBegin(t *testing.T) {
 	default:
 		t.Fatal("expected superseded running request context to be cancelled")
 	}
-	_, _, canStart = store.begin(context.Background(), pendingRequestTestEvent("message-1"))
-	if canStart {
+	_, _, startReason = store.begin(context.Background(), pendingRequestTestEvent("message-1"))
+	if startReason == pendingRequestStarted {
 		t.Fatal("expected superseded entry not to begin")
 	}
 	store.finish(secondRequest)
@@ -87,13 +87,13 @@ func TestPendingRequestStoreDoesNotSupersedeDifferentScopes(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			store := newPendingRequestStore()
 			firstEvent := pendingRequestTestEvent("message-1")
-			_, firstRequest, canStart := store.begin(context.Background(), firstEvent)
-			if !canStart {
+			_, firstRequest, startReason := store.begin(context.Background(), firstEvent)
+			if startReason != pendingRequestStarted {
 				t.Fatal("expected first request to begin")
 			}
 			secondEvent := testCase.modify(pendingRequestTestEvent("message-2"))
-			_, secondRequest, canStart := store.begin(context.Background(), secondEvent)
-			if !canStart {
+			_, secondRequest, startReason := store.begin(context.Background(), secondEvent)
+			if startReason != pendingRequestStarted {
 				t.Fatal("expected different-scope request to begin")
 			}
 			if firstRequest.isSuperseded {
@@ -109,16 +109,16 @@ func TestPendingRequestStoreDoesNotSupersedeDifferentScopes(t *testing.T) {
 func TestPendingRequestStoreThreadAndRootScopes(t *testing.T) {
 	store := newPendingRequestStore()
 	rootEvent := pendingRequestTestEvent("root-message")
-	_, rootRequest, canStart := store.begin(context.Background(), rootEvent)
-	if !canStart {
+	_, rootRequest, startReason := store.begin(context.Background(), rootEvent)
+	if startReason != pendingRequestStarted {
 		t.Fatal("expected root request to begin")
 	}
 	store.finish(rootRequest)
 
 	threadEvent := pendingRequestTestEvent("thread-message")
 	threadEvent.ReplyTargetID = rootEvent.MessageID
-	_, threadRequest, canStart := store.begin(context.Background(), threadEvent)
-	if !canStart {
+	_, threadRequest, startReason := store.begin(context.Background(), threadEvent)
+	if startReason != pendingRequestStarted {
 		t.Fatal("expected same-root thread request to begin")
 	}
 	if !rootRequest.isSuperseded {
@@ -128,8 +128,8 @@ func TestPendingRequestStoreThreadAndRootScopes(t *testing.T) {
 
 	otherThreadEvent := pendingRequestTestEvent("other-thread-message")
 	otherThreadEvent.ReplyTargetID = "other-root"
-	_, _, canStart = store.begin(context.Background(), otherThreadEvent)
-	if !canStart {
+	_, _, startReason = store.begin(context.Background(), otherThreadEvent)
+	if startReason != pendingRequestStarted {
 		t.Fatal("expected other-thread request to begin")
 	}
 	if threadRequest.isSuperseded {
@@ -139,8 +139,8 @@ func TestPendingRequestStoreThreadAndRootScopes(t *testing.T) {
 
 func TestPendingRequestStoreDeliveredReplyClosesWindow(t *testing.T) {
 	store := newPendingRequestStore()
-	_, request, canStart := store.begin(context.Background(), pendingRequestTestEvent("message-1"))
-	if !canStart {
+	_, request, startReason := store.begin(context.Background(), pendingRequestTestEvent("message-1"))
+	if startReason != pendingRequestStarted {
 		t.Fatal("expected request to begin")
 	}
 	store.mutex.Lock()
@@ -148,8 +148,8 @@ func TestPendingRequestStoreDeliveredReplyClosesWindow(t *testing.T) {
 	store.mutex.Unlock()
 	store.finish(request)
 
-	_, nextRequest, canStart := store.begin(context.Background(), pendingRequestTestEvent("message-2"))
-	if !canStart {
+	_, nextRequest, startReason := store.begin(context.Background(), pendingRequestTestEvent("message-2"))
+	if startReason != pendingRequestStarted {
 		t.Fatal("expected next request to begin")
 	}
 	if len(nextRequest.event.PreviousMessages) != 0 {
@@ -160,17 +160,37 @@ func TestPendingRequestStoreDeliveredReplyClosesWindow(t *testing.T) {
 func TestPendingRequestStoreDuplicateIDDoesNotSupersede(t *testing.T) {
 	store := newPendingRequestStore()
 	event := pendingRequestTestEvent("message-1")
-	_, firstRequest, canStart := store.begin(context.Background(), event)
-	if !canStart {
+	_, firstRequest, startReason := store.begin(context.Background(), event)
+	if startReason != pendingRequestStarted {
 		t.Fatal("expected first request to begin")
 	}
-	_, duplicateRequest, canStart := store.begin(context.Background(), event)
-	if canStart || duplicateRequest != firstRequest {
+	_, duplicateRequest, startReason := store.begin(context.Background(), event)
+	if startReason == pendingRequestStarted || duplicateRequest != firstRequest {
 		t.Fatal("expected duplicate request to reuse the existing entry")
 	}
 	if firstRequest.isSuperseded {
 		t.Fatal("expected duplicate ID not to supersede request")
 	}
+}
+
+func TestPendingRequestStoreReportsAlreadyRunningDuplicate(t *testing.T) {
+	store := newPendingRequestStore()
+	event := pendingRequestTestEvent("message-1")
+	_, request, startReason := store.begin(context.Background(), event)
+	if startReason != pendingRequestStarted {
+		t.Fatalf("expected first request to start, got %q", startReason)
+	}
+	_, duplicateRequest, startReason := store.begin(context.Background(), event)
+	if startReason != pendingRequestAlreadyRunning {
+		t.Fatalf("expected duplicate request to report already running, got %q", startReason)
+	}
+	if duplicateRequest != request {
+		t.Fatal("expected duplicate request to reuse the running entry")
+	}
+	if !shouldDeferQueuedConnectorEvent(ConnectorRuntimeResult{Reason: requestAlreadyRunningReason}) {
+		t.Fatal("expected already-running result to defer queued event")
+	}
+	store.finish(request)
 }
 
 func TestRevisedRequestEventPreservesInputPartsAndAttachments(t *testing.T) {

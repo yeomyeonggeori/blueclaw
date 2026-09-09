@@ -33,6 +33,14 @@ type pendingRequestStore struct {
 	supersededReferences map[string]bool
 }
 
+type pendingRequestStartReason string
+
+const (
+	pendingRequestStarted        pendingRequestStartReason = "started"
+	pendingRequestSuperseded     pendingRequestStartReason = "superseded"
+	pendingRequestAlreadyRunning pendingRequestStartReason = "already_running"
+)
+
 func newPendingRequestStore() *pendingRequestStore {
 	return &pendingRequestStore{requests: map[string]*pendingRequest{}, supersededReferences: map[string]bool{}}
 }
@@ -104,11 +112,11 @@ func (store *pendingRequestStore) register(event PlatformInboundEvent, previous 
 	}
 }
 
-func (store *pendingRequestStore) begin(ctx context.Context, event PlatformInboundEvent) (context.Context, *pendingRequest, bool) {
+func (store *pendingRequestStore) begin(ctx context.Context, event PlatformInboundEvent) (context.Context, *pendingRequest, pendingRequestStartReason) {
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
 	if store.supersededReferences[event.DedupeKey()] {
-		return ctx, nil, false
+		return ctx, nil, pendingRequestSuperseded
 	}
 	request := store.requests[event.DedupeKey()]
 	if request == nil {
@@ -116,8 +124,11 @@ func (store *pendingRequestStore) begin(ctx context.Context, event PlatformInbou
 		store.register(event, previous)
 		request = store.requests[event.DedupeKey()]
 	}
-	if request.isSuperseded || request.isRunning {
-		return ctx, request, false
+	if request.isSuperseded {
+		return ctx, request, pendingRequestSuperseded
+	}
+	if request.isRunning {
+		return ctx, request, pendingRequestAlreadyRunning
 	}
 	if request.isFinished {
 		request.done = make(chan struct{})
@@ -126,7 +137,7 @@ func (store *pendingRequestStore) begin(ctx context.Context, event PlatformInbou
 	request.isRunning = true
 	requestContext, cancel := context.WithCancel(ctx)
 	request.cancel = cancel
-	return requestContext, request, true
+	return requestContext, request, pendingRequestStarted
 }
 
 func (store *pendingRequestStore) finish(request *pendingRequest) bool {
