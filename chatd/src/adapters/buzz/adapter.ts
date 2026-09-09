@@ -547,6 +547,7 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 			formatted: this.converter.toAst(text),
 			raw: event,
 			author: this.authorForPubkey(event.pubkey, profile),
+			isMention: this.addressingOf(event).botMentioned,
 			metadata: {
 				dateSent: new Date(event.created_at * 1000),
 				edited: edit !== undefined,

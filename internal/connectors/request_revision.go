@@ -17,6 +17,7 @@ type ConnectorRevisionRepository interface {
 }
 
 const SupersededRequestReason = "superseded_by_new_message"
+const requestAlreadyRunningReason = "request_already_running"
 
 func taskRunMatchesMessageScope(taskRun task.TaskRun, event PlatformInboundEvent) bool {
 	if event.IsThread == nil && !isMultiPersonConversation(event) {
@@ -53,8 +54,11 @@ func (connectorRuntime *ConnectorRuntime) processPendingInboundEvent(ctx context
 		return result, errorValue
 	}
 	connectorRuntime.refreshPendingRequestDelivery(event)
-	requestContext, request, canStart := connectorRuntime.pendingRequests.begin(ctx, event)
-	if !canStart {
+	requestContext, request, startReason := connectorRuntime.pendingRequests.begin(ctx, event)
+	if startReason == pendingRequestAlreadyRunning {
+		return ConnectorRuntimeResult{Handled: true, Platform: event.Platform, Reason: requestAlreadyRunningReason}, nil
+	}
+	if startReason == pendingRequestSuperseded {
 		return ConnectorRuntimeResult{Handled: true, Platform: event.Platform, Reason: SupersededRequestReason}, nil
 	}
 	defer connectorRuntime.finishPendingRequest(request)

@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { createMemoryState } from "@chat-adapter/state-memory";
 import { BuzzAdapter } from "../src/adapters/buzz/adapter.ts";
 import { reactionContentOf } from "../src/mirror/reaction-emoji.ts";
-import type { Message } from "chat";
+import { Chat, type Message } from "chat";
 import { firstTagValue, threadTagsOf, type BuzzEvent } from "../src/adapters/buzz/types.ts";
 
 const CHANNEL_UUID = "8f14e45f-ea3c-4c2d-9d4b-1a2b3c4d5e6f";
@@ -168,6 +169,7 @@ const OTHER_CHANNEL_UUID = "3b7e1a90-5c2d-4e8f-9a1b-6c5d4e3f2a1b";
 
 type RelayInjectable = {
 	relay: {
+		pubkeyHex?: string;
 		query: (filter: object) => Promise<BuzzEvent[]>;
 		publish: (kind: number, content: string, tags: string[][]) => Promise<BuzzEvent>;
 		subscribe: (filters: object[], onEvent: (event: BuzzEvent) => void) => void;
@@ -176,7 +178,13 @@ type RelayInjectable = {
 
 type IncomingEventInjectable = RelayInjectable & {
 	channelsById: Map<string, unknown>;
-	chat: { processMessage: () => Promise<void> } | null;
+	chat: {
+		processMessage: (
+			adapter: BuzzAdapter,
+			threadId: string,
+			messageFactory: () => Promise<Message<BuzzEvent>>,
+		) => Promise<void>;
+	} | null;
 	dispatchIncomingEvent: (event: BuzzEvent) => Promise<void>;
 };
 
@@ -299,5 +307,54 @@ describe("buzz inbound edits", () => {
 		await (adapter as unknown as IncomingEventInjectable).dispatchIncomingEvent(edit);
 
 		expect(received).toEqual([`buzz:${CHANNEL_UUID}:${ROOT_EVENT_ID}`]);
+	});
+});
+
+describe("buzz inbound addressing", () => {
+	test("marks a stream root addressed by a bot p tag without requiring an @ mention", async () => {
+		const adapter = createAdapter();
+		const botPubkey = adapter.botPubkey;
+		(adapter as unknown as IncomingEventInjectable).relay = {
+			pubkeyHex: botPubkey,
+			query: async () => [],
+			publish: async (_kind, _content, _tags) => createEvent(),
+			subscribe: () => undefined,
+		};
+		(adapter as unknown as IncomingEventInjectable).channelsById.set(CHANNEL_UUID, {});
+		const state = createMemoryState();
+		await state.connect();
+		const chat = new Chat({
+			userName: "internkim",
+			state,
+			concurrency: "queue",
+			adapters: { buzz: adapter },
+		});
+		let mentionCount = 0;
+		let subscribedMessageCount = 0;
+		chat.onNewMention(async () => {
+			mentionCount += 1;
+		});
+		chat.onSubscribedMessage(async () => {
+			subscribedMessageCount += 1;
+		});
+		(adapter as unknown as { chat: Chat }).chat = chat;
+
+		await (adapter as unknown as IncomingEventInjectable).dispatchIncomingEvent(
+			createEvent({
+				content: "please handle this",
+				tags: [["h", CHANNEL_UUID], ["p", botPubkey]],
+			}),
+		);
+
+		await (adapter as unknown as IncomingEventInjectable).dispatchIncomingEvent(
+			createEvent({
+				id: "d".repeat(64),
+				content: "other person only",
+				tags: [["h", CHANNEL_UUID], ["p", "d".repeat(64)]],
+			}),
+		);
+
+		expect(mentionCount).toBe(1);
+		expect(subscribedMessageCount).toBe(0);
 	});
 });

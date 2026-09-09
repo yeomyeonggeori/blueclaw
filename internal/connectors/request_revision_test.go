@@ -3,6 +3,7 @@ package connectors
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -150,6 +151,57 @@ func TestConnectorRevisionCancelsRunningTaskBeforeLaunchingReplacement(t *testin
 	}
 	if len(adapter.sentReplies) != 1 {
 		t.Fatalf("expected one final reply, got %+v", adapter.sentReplies)
+	}
+}
+
+func TestConnectorRevisionReclaimedEventKeepsOriginalReplyOwner(t *testing.T) {
+	languageModel := &blockingTestLanguageModel{reply: "final result", started: make(chan struct{}), release: make(chan struct{})}
+	releaseOriginal := sync.OnceFunc(func() { close(languageModel.release) })
+	t.Cleanup(releaseOriginal)
+	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
+	connectorRuntimeAgentKernel(connectorRuntime).UseIntakeLanguageModelProvider(testLanguageModel{reply: "classified"})
+	repository := &revisionTestRepository{}
+	connectorRuntime.UseEventRepository(repository)
+	event := revisionInboundEvent("reclaimed", "Write a report")
+	if _, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, event); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	queuedEvents, errorValue := repository.ClaimPendingConnectorEvents(1, connectorClaimLeaseDuration)
+	if errorValue != nil || len(queuedEvents) != 1 {
+		t.Fatalf("expected one claimed event, events=%+v error=%v", queuedEvents, errorValue)
+	}
+	firstFinished := make(chan struct{})
+	go func() {
+		connectorRuntime.processQueuedConnectorEventWithAdapter(context.Background(), adapter, queuedEvents[0])
+		close(firstFinished)
+	}()
+	select {
+	case <-languageModel.started:
+	case <-time.After(time.Second):
+		t.Fatal("expected original task to reach the model")
+	}
+	connectorRuntime.processQueuedConnectorEventWithAdapter(context.Background(), adapter, queuedEvents[0])
+	if len(repository.succeededEvents) != 0 {
+		t.Fatalf("expected reclaimed event to remain running, got %+v", repository.succeededEvents)
+	}
+	if len(repository.pendingReplies) != 0 {
+		t.Fatalf("expected reclaimed event not to enqueue a duplicate reply, got %+v", repository.pendingReplies)
+	}
+	releaseOriginal()
+	select {
+	case <-firstFinished:
+	case <-time.After(time.Second):
+		t.Fatal("expected original task to finish")
+	}
+	if len(repository.pendingReplies) != 1 {
+		t.Fatalf("expected original task to enqueue one reply, got %+v", repository.pendingReplies)
+	}
+	if len(repository.succeededEvents) != 1 {
+		t.Fatalf("expected original event to be marked succeeded once, got %+v", repository.succeededEvents)
+	}
+	connectorRuntime.processNextQueuedConnectorReply(context.Background())
+	if len(adapter.sentReplies) != 1 {
+		t.Fatalf("expected one delivered reply, got %+v", adapter.sentReplies)
 	}
 }
 
