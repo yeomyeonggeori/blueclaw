@@ -9,6 +9,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract/harnesstest"
 )
 
 type retryQueueRepository struct {
@@ -155,6 +156,55 @@ func TestRetryTaskRunRejectsForgedChildReference(t *testing.T) {
 	}
 	if harness.RunTurnCallCount() != 0 {
 		t.Fatal("forged retry launched a task")
+	}
+}
+
+type interruptedRetryHarness struct {
+	*harnesstest.Harness
+	testing        *testing.T
+	taskRunService *task.TaskRunService
+	isFirstTurn    bool
+}
+
+func (harness *interruptedRetryHarness) RunTurn(ctx context.Context, request agentcontract.AgentTurnRequest) (agentcontract.AgentTurnResult, error) {
+	if !harness.isFirstTurn {
+		return harness.Harness.RunTurn(ctx, request)
+	}
+	harness.isFirstTurn = false
+	taskRun, _ := harness.taskRunService.FindTaskRun(request.ExistingTaskRunID)
+	if _, isFound := interruptedTaskLaunchContextFromEvents(taskRun, harness.taskRunService.ListTaskEvent(taskRun.TaskRunID)); !isFound {
+		harness.testing.Fatal("retry has no durable launch context before its first turn")
+	}
+	harness.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentGoalUpdated, `{"goalID":"retry-goal","currentObjective":"finish the remaining export"}`)
+	interruptedTaskRun, _ := harness.taskRunService.InterruptInactiveTaskRun(taskRun.TaskRunID, task.TaskInterruptReasonRuntimeRestart)
+	return agentcontract.AgentTurnResult{TaskRun: interruptedTaskRun}, nil
+}
+
+func TestRetryTaskRunResumesStartedChildThroughRuntimeRecovery(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	baseHarness := harnesstest.New(taskRunService)
+	harness := &interruptedRetryHarness{Harness: baseHarness, testing: t, taskRunService: taskRunService, isFirstTurn: true}
+	connectorRuntime, adapter := connectorRuntimeForHarness(t, harness, baseHarness, baseHarness, baseHarness, taskRunService, testLanguageModel{reply: "stub"})
+	queueRepository := newRetryQueueRepository()
+	connectorRuntime.UseEventRepository(queueRepository)
+	sourceTaskRun := seedRetrySourceTaskRun(t, connectorRuntime)
+	childTaskRun, errorValue := connectorRuntime.RetryTaskRun(context.Background(), sourceTaskRun.TaskRunID)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	processOneRetryEvent(t, connectorRuntime, queueRepository)
+	childTaskRun, _ = taskRunService.FindTaskRun(childTaskRun.TaskRunID)
+	event := retryInboundEvent(sourceTaskRun, childTaskRun, interruptedTaskLaunchContext{Platform: adapter.Name()})
+	result, errorValue := connectorRuntime.processTaskRetry(context.Background(), adapter, event, adapter.SendReply)
+	if errorValue != nil || !result.Duplicate || baseHarness.RunTurnCallCount() != 0 {
+		t.Fatalf("queued retry competed with runtime recovery: %+v, %v", result, errorValue)
+	}
+	if _, errorValue = connectorRuntime.ResumeInterruptedTaskRun(context.Background(), childTaskRun); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	request := baseHarness.LastTurnRequest()
+	if !request.IsRuntimeRestartResume || request.ExistingTaskRunID != childTaskRun.TaskRunID || request.ActiveGoal.CurrentObjective != "finish the remaining export" {
+		t.Fatalf("retry did not restore child execution state: %+v", request)
 	}
 }
 

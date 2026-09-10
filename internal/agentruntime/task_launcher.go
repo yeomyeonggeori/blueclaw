@@ -367,6 +367,9 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 	})
 	carriedOutCalls, record := runLaunchStep(ctx, execution, carryOutApprovedCallLaunchStep{ToolSet: toolSet})
 	launchRecords = append(launchRecords, record)
+	if request.ExistingTaskRunID != "" {
+		taskLauncher.taskRunService.AppendTaskEvent(request.ExistingTaskRunID, agentcontract.TaskEventAgentTaskLaunched, marshalTaskLaunchEvent(request, normalizedProfileName, toolNames, registryAudit, 0))
+	}
 	turnResult, record := runLaunchStep(ctx, execution, runTurnLaunchStep{
 		MemoryFacts:       nil,
 		ToolSet:           toolSet,
@@ -387,7 +390,9 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 	}
 	if turnResult.TaskRun.TaskRunID != "" {
 		taskLauncher.appendLaunchStepRecords(turnResult.TaskRun.TaskRunID, launchRecords)
-		taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, agentcontract.TaskEventAgentTaskLaunched, marshalTaskLaunchEvent(request, normalizedProfileName, launchedToolNames, registryAudit, 0))
+		if turnResult.TaskRun.TaskRunID != request.ExistingTaskRunID {
+			taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, agentcontract.TaskEventAgentTaskLaunched, marshalTaskLaunchEvent(request, normalizedProfileName, launchedToolNames, registryAudit, 0))
+		}
 		taskLauncher.appendAmbientDutyLaunchEvent(turnResult.TaskRun.TaskRunID, request)
 		taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, agentcontract.TaskEventAgentConversationScope, marshalToolResult(conversationScope))
 	}

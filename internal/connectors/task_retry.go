@@ -143,13 +143,17 @@ func (connectorRuntime *ConnectorRuntime) processTaskRetry(ctx context.Context, 
 	if childTaskRun.Status != task.TaskStatusPlanned && childTaskRun.Status != task.TaskStatusInterrupted {
 		return ConnectorRuntimeResult{Handled: true, Platform: adapter.Name(), TaskRunID: childTaskRun.TaskRunID, Duplicate: true}, nil
 	}
+	childEvents := connectorRuntime.taskRunService.ListTaskEvent(childTaskRun.TaskRunID)
+	if _, isPending := connectorRuntime.pendingRetrySource(childEvents); !isPending && hasTaskRetrySource(childEvents, sourceTaskRun.TaskRunID) {
+		return ConnectorRuntimeResult{Handled: true, Platform: adapter.Name(), TaskRunID: childTaskRun.TaskRunID, Duplicate: true}, nil
+	}
 	events := connectorRuntime.taskRunService.ListTaskEvent(sourceTaskRun.TaskRunID)
 	linkedChild, isLinked := retryChildForSource(events, connectorRuntime.taskRunService)
 	if !isLinked || linkedChild.TaskRunID != childTaskRun.TaskRunID || !hasTaskRetrySource(connectorRuntime.taskRunService.ListTaskEvent(childTaskRun.TaskRunID), sourceTaskRun.TaskRunID) {
 		return ConnectorRuntimeResult{}, ErrTaskRetryUnavailable
 	}
 	launchContext, contextFound := interruptedTaskLaunchContextFromEvents(sourceTaskRun, events)
-	if !contextFound {
+	if !contextFound || adapter.Name() != launchContext.Platform {
 		return ConnectorRuntimeResult{}, ErrTaskRetryUnavailable
 	}
 	event = retryInboundEvent(sourceTaskRun, childTaskRun, launchContext)
