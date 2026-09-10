@@ -33,7 +33,7 @@ func newRouterDependencies(components applicationComponents) httpserver.RouterDe
 		IdentityResolve:       adminapi.IdentityResolveHandler{PolicyWatcher: directory.policyWatcher, PlatformAccountLister: directory.platformAccountLister},
 		AuditHandler:          services.auditHandler,
 		AttentionHandler:      adminapi.AttentionHandler{LanguageModel: kernel.taskTierLanguageModels.High},
-		TaskMonitorHandler:    newTaskMonitorHandler(services, directory),
+		TaskMonitorHandler:    newTaskMonitorHandler(services, directory, components.connectorRuntime),
 		TaskSearchHandler:     adminapi.TaskSearchHandler{SessionQuery: sessionquery.New(services.taskRunService)},
 		TaskRunHandler:        newTaskRunHandler(runtimeConfiguration, services, directory, components.taskLauncher, components.taskIntakeController),
 		HarnessStatusHandler:  newHarnessStatusHandler(runtimeConfiguration, kernel.harnessName),
@@ -149,12 +149,13 @@ func newPolicyReloadHandler(components applicationComponents) func(policy.Policy
 	}
 }
 
-func newTaskMonitorHandler(services taskServices, directory identityDirectory) adminapi.TaskMonitorHandler {
+func newTaskMonitorHandler(services taskServices, directory identityDirectory, retryTaskRun adminapi.TaskRunRetryer) adminapi.TaskMonitorHandler {
 	return adminapi.TaskMonitorHandler{
 		TaskRunService:   services.taskRunService,
 		TaskStepService:  services.taskStepService,
 		TaskEventService: services.taskEventService,
 		IdentityService:  directory.identityService,
+		RetryTaskRun:     retryTaskRun,
 	}
 }
 

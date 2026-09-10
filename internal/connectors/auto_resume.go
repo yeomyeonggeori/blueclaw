@@ -26,6 +26,9 @@ type interruptedTaskLaunchContext struct {
 
 func (connectorRuntime *ConnectorRuntime) CanResumeInterruptedTaskRun(taskRun task.TaskRun) bool {
 	taskEvents := connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID)
+	if sourceTaskRun, isRetry := connectorRuntime.pendingRetrySource(taskEvents); isRetry {
+		return connectorRuntime.CanResumeInterruptedTaskRun(sourceTaskRun)
+	}
 	launchContext, isFound := interruptedTaskLaunchContextFromEvents(taskRun, taskEvents)
 	if !isFound {
 		return false
@@ -36,6 +39,9 @@ func (connectorRuntime *ConnectorRuntime) CanResumeInterruptedTaskRun(taskRun ta
 
 func (connectorRuntime *ConnectorRuntime) ResumeInterruptedTaskRun(ctx context.Context, taskRun task.TaskRun) (ConnectorRuntimeResult, error) {
 	taskEvents := connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID)
+	if sourceTaskRun, isRetry := connectorRuntime.pendingRetrySource(taskEvents); isRetry {
+		return connectorRuntime.resumePendingTaskRetry(ctx, sourceTaskRun, taskRun)
+	}
 	launchContext, isFound := interruptedTaskLaunchContextFromEvents(taskRun, taskEvents)
 	if !isFound {
 		return ConnectorRuntimeResult{}, errors.New("interrupted task launch context is missing")

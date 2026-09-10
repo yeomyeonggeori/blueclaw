@@ -63,6 +63,7 @@ func NewRouter(routerDependencies RouterDependencies) http.Handler {
 	multiplexer.HandleFunc("GET /admin/api/run/search", routerDependencies.TaskSearchHandler.HandleSearchTaskRuns)
 	multiplexer.HandleFunc("GET /admin/api/run/detail", routerDependencies.TaskMonitorHandler.HandleGetTaskRun)
 	multiplexer.HandleFunc("POST /admin/api/run/delete", routerDependencies.TaskMonitorHandler.HandleDeleteTaskRun)
+	multiplexer.HandleFunc("POST /admin/api/run/retry", routerDependencies.TaskMonitorHandler.HandleRetryTaskRun)
 	multiplexer.HandleFunc("POST /admin/api/run/start", routerDependencies.TaskRunHandler.HandleRunTask)
 	multiplexer.HandleFunc("POST /admin/api/run/cancel", routerDependencies.TaskRunHandler.HandleCancelTaskRun)
 	multiplexer.HandleFunc("POST /admin/api/run/approve", routerDependencies.TaskApprovalHandler.HandleApproveTaskRun)

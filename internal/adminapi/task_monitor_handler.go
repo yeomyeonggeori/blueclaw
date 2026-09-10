@@ -18,6 +18,7 @@ type TaskMonitorHandler struct {
 	TaskStepService  *task.TaskStepService
 	TaskEventService *task.TaskEventService
 	IdentityService  *identity.IdentityService
+	RetryTaskRun     TaskRunRetryer
 }
 
 const defaultDailyCostTaskRunLimit = 500

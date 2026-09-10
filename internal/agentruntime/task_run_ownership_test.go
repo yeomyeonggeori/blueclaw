@@ -80,6 +80,31 @@ func TestOneTurnOpensOneTaskRun(t *testing.T) {
 	}
 }
 
+func TestReservedFirstTurnKeepsTaskRunOwnership(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	reservedTaskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "Continue the failed request")
+	harness := harnesstest.New(taskRunService)
+	taskLauncher := NewTaskLauncher(harness, taskRunService, NewToolCatalogBuilder())
+	result, errorValue := taskLauncher.Launch(context.Background(), TaskLaunchRequest{
+		Source:                     TaskLaunchSourceConnector,
+		RequesterPersonID:          "person-1",
+		ConversationID:             "conversation-1",
+		Prompt:                     reservedTaskRun.Prompt,
+		ExistingTaskRunID:          reservedTaskRun.TaskRunID,
+		IsTaskRunOpenedForThisTurn: true,
+		PersonAccess:               policy.PersonAccess{PersonID: "person-1"},
+	})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if !harness.LastTurnRequest().IsTaskRunOpenedForThisTurn {
+		t.Fatal("a reserved first turn must reach the harness as a new run")
+	}
+	if result.TurnResult.TaskRun.TaskRunID != reservedTaskRun.TaskRunID || len(taskRunService.ListTaskRun()) != 1 {
+		t.Fatal("launch must use the reserved run without creating another")
+	}
+}
+
 func TestAFirstTurnIsAuditedWhateverHarnessRanIt(t *testing.T) {
 	taskEventService, _, launchResult := launchThroughExternalHarness(t)
 
