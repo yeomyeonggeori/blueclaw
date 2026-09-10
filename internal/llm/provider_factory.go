@@ -78,9 +78,12 @@ func endpointProvider(endpointConfiguration config.ModelEndpointConfiguration) (
 		return nil, errorValue
 	}
 	return openaicompatible.Endpoint{
-		URL:       endpointConfiguration.Endpoint,
-		ModelName: endpointConfiguration.Model,
-		APIKey:    apiKey,
+		URL:             endpointConfiguration.Endpoint,
+		ModelName:       endpointConfiguration.Model,
+		APIKey:          apiKey,
+		ProviderOrder:   endpointConfiguration.ProviderOrder,
+		ProviderSort:    endpointConfiguration.ProviderSort,
+		ReasoningEffort: endpointConfiguration.ReasoningEffort,
 	}.Provider()
 }
 
@@ -91,7 +94,7 @@ func capabilityTierProviderFactory(runtimeConfiguration config.RuntimeConfigurat
 			return TierProvider{}, errors.New("the capability language model configuration gives the " + modelTier + " tier no model")
 		}
 		return TierProvider{
-			Provider: NewCapabilityLLMClientForModel(runtimeConfiguration, modelName),
+			Provider: NewCapabilityLLMClientForTier(runtimeConfiguration, modelTier, modelName),
 			Reaches:  modelName,
 		}, nil
 	}
@@ -165,10 +168,11 @@ func NewConfiguredEmbeddingProvider(runtimeConfiguration config.RuntimeConfigura
 	}.EmbeddingProvider()
 }
 
-func NewCapabilityLLMClientForModel(runtimeConfiguration config.RuntimeConfiguration, modelName string) CapabilityLLMClient {
+func NewCapabilityLLMClientForTier(runtimeConfiguration config.RuntimeConfiguration, modelTier string, modelName string) CapabilityLLMClient {
 	return CapabilityLLMClient{
 		CapabilityClient: newCapabilityClient(runtimeConfiguration),
 		ModelName:        strings.TrimSpace(modelName),
+		ModelTier:        strings.TrimSpace(modelTier),
 		ExecutionMode:    runtimeConfiguration.LanguageModel.Capability.ExecutionMode,
 	}
 }

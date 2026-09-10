@@ -599,3 +599,32 @@ func TestCapabilityLLMClientGenerateChatCompletionPrefersRequestModelName(t *tes
 		t.Fatalf("expected the request model to win over the client model, got %v", sentModelNames)
 	}
 }
+
+func TestCapabilityLLMClientTellsCapabilitydWhichTierIsAsking(t *testing.T) {
+	var receivedDocument capabilityChatCompletionRequestDocument
+	httpClient := fakeCapabilityHTTPClient{handler: func(request *http.Request) (*http.Response, error) {
+		if errorValue := json.NewDecoder(request.Body).Decode(&receivedDocument); errorValue != nil {
+			t.Fatalf("expected request document to decode: %v", errorValue)
+		}
+		return jsonCapabilityResponse(http.StatusOK, `{"finishReason":"stop","provider":"openrouter","upstreamProvider":"Modal","model":"gemma","message":{"role":"assistant","content":"ok"},"usage":{}}`), nil
+	}}
+	client := CapabilityLLMClient{
+		CapabilityClient: capability.Client{Endpoint: "http://internkim-capability", HTTPClient: httpClient},
+		ModelName:        "gemma",
+		ModelTier:        "xlow",
+	}
+
+	response, errorValue := client.GenerateChatCompletion(context.Background(), ChatCompletionRequest{
+		Messages: []ChatCompletionMessage{{Role: "user", Content: "hello"}},
+	})
+
+	if errorValue != nil {
+		t.Fatalf("expected chat completion: %v", errorValue)
+	}
+	if receivedDocument.ModelTier != "xlow" {
+		t.Fatalf("capabilityd decides reasoning effort by tier, so the tier must travel, got %q", receivedDocument.ModelTier)
+	}
+	if response.UpstreamProvider != "Modal" {
+		t.Fatalf("the provider that served the turn must reach the ledger, got %q", response.UpstreamProvider)
+	}
+}

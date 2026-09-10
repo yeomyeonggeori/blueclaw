@@ -13,11 +13,13 @@ import (
 type CapabilityLLMClient struct {
 	CapabilityClient capability.Client
 	ModelName        string
+	ModelTier        string
 	ExecutionMode    string
 }
 
 type capabilityStructuredResponseRequestDocument struct {
 	Model                  string                           `json:"model,omitempty"`
+	ModelTier              string                           `json:"modelTier,omitempty"`
 	ExecutionMode          string                           `json:"executionMode"`
 	Context                *RequestContext                  `json:"context,omitempty"`
 	Messages               []Message                        `json:"messages"`
@@ -27,6 +29,7 @@ type capabilityStructuredResponseRequestDocument struct {
 
 type capabilityTextResponseRequestDocument struct {
 	Model         string          `json:"model,omitempty"`
+	ModelTier     string          `json:"modelTier,omitempty"`
 	ExecutionMode string          `json:"executionMode"`
 	Context       *RequestContext `json:"context,omitempty"`
 	Messages      []Message       `json:"messages"`
@@ -34,6 +37,7 @@ type capabilityTextResponseRequestDocument struct {
 
 type capabilityChatCompletionRequestDocument struct {
 	Model             string                  `json:"model,omitempty"`
+	ModelTier         string                  `json:"modelTier,omitempty"`
 	ExecutionMode     string                  `json:"executionMode"`
 	Context           *RequestContext         `json:"context,omitempty"`
 	Messages          []ChatCompletionMessage `json:"messages"`
@@ -50,13 +54,14 @@ type capabilityStructuredOutputSchema struct {
 }
 
 type capabilityStructuredResponseDocument struct {
-	ProviderName    string `json:"provider"`
-	ModelName       string `json:"model"`
-	Content         string `json:"content"`
-	SelectedBackend string `json:"selectedBackend"`
-	FinishReason    string `json:"finishReason,omitempty"`
-	ConstraintMode  string `json:"constraintMode,omitempty"`
-	Usage           Usage  `json:"usage"`
+	ProviderName     string `json:"provider"`
+	UpstreamProvider string `json:"upstreamProvider,omitempty"`
+	ModelName        string `json:"model"`
+	Content          string `json:"content"`
+	SelectedBackend  string `json:"selectedBackend"`
+	FinishReason     string `json:"finishReason,omitempty"`
+	ConstraintMode   string `json:"constraintMode,omitempty"`
+	Usage            Usage  `json:"usage"`
 	// capabilityd keeps a chain of its own, so the model that answers is not
 	// always the tier that was asked for. The ledger has carried these two
 	// fields all along; only this hop dropped them, which is why a turn
@@ -178,6 +183,7 @@ func (capabilityLLMClient CapabilityLLMClient) generateResponse(responseContext 
 		"/v1/llm/text",
 		capabilityTextResponseRequestDocument{
 			Model:         capabilityLLMClient.ModelName,
+			ModelTier:     capabilityLLMClient.ModelTier,
 			ExecutionMode: executionMode,
 			Context:       requestContextPointer(responseContext),
 			Messages: []Message{{
@@ -220,16 +226,17 @@ func (capabilityLLMClient CapabilityLLMClient) GenerateStructuredResponse(respon
 	}
 
 	return StructuredResponse{
-		Transport:       "capability",
-		ProviderName:    providerName,
-		ModelName:       modelName,
-		Content:         responseDocument.Content,
-		SelectedBackend: responseDocument.SelectedBackend,
-		FinishReason:    responseDocument.FinishReason,
-		ConstraintMode:  responseDocument.ConstraintMode,
-		Usage:           responseDocument.Usage,
-		UsedFallback:    responseDocument.UsedFallback,
-		FallbackReason:  responseDocument.FallbackReason,
+		Transport:        "capability",
+		ProviderName:     providerName,
+		UpstreamProvider: responseDocument.UpstreamProvider,
+		ModelName:        modelName,
+		Content:          responseDocument.Content,
+		SelectedBackend:  responseDocument.SelectedBackend,
+		FinishReason:     responseDocument.FinishReason,
+		ConstraintMode:   responseDocument.ConstraintMode,
+		Usage:            responseDocument.Usage,
+		UsedFallback:     responseDocument.UsedFallback,
+		FallbackReason:   responseDocument.FallbackReason,
 	}, nil
 }
 
@@ -244,6 +251,7 @@ func (capabilityLLMClient CapabilityLLMClient) generateChatCompletion(responseCo
 
 	requestDocument := capabilityChatCompletionRequestDocument{
 		Model:             requestedModelNameOrDefault(request, capabilityLLMClient.ModelName),
+		ModelTier:         capabilityLLMClient.ModelTier,
 		ExecutionMode:     executionMode,
 		Context:           requestContextPointer(responseContext),
 		Messages:          append([]ChatCompletionMessage{}, request.Messages...),
@@ -279,6 +287,7 @@ func (capabilityLLMClient CapabilityLLMClient) buildStructuredRequestDocument(re
 
 	return capabilityStructuredResponseRequestDocument{
 		Model:             capabilityLLMClient.ModelName,
+		ModelTier:         capabilityLLMClient.ModelTier,
 		ExecutionMode:     capabilityLLMClient.executionMode(),
 		Context:           requestContextPointer(responseContext),
 		Messages:          append([]Message{}, structuredResponseRequest.Messages...),
