@@ -4,8 +4,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-
-	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 )
 
 func withResolvedActiveCircle(request ToolCatalogRequest) ToolCatalogRequest {
@@ -37,21 +35,6 @@ func ResolveActiveCircleID(request ToolCatalogRequest) (string, bool) {
 		return circleID, false
 	}
 	return "", false
-}
-
-func searchMemoryNamespaces(request ToolCatalogRequest) []memory.MemoryNamespace {
-	namespaces := []memory.MemoryNamespace{}
-	if strings.TrimSpace(request.RequesterPersonID) != "" {
-		namespaces = append(namespaces, memory.UserNamespace(request.RequesterPersonID))
-	}
-	activeCircleID := strings.ToLower(strings.TrimSpace(request.ActiveCircleID))
-	if activeCircleID == "" || !personAccessIncludesCircle(request.PersonAccess, activeCircleID) {
-		return namespaces
-	}
-	if namespace, isFound := findCircleNamespace(request.MemoryNamespaces, activeCircleID); isFound {
-		return append(namespaces, namespace)
-	}
-	return append(namespaces, memory.CircleNamespace(memory.DefaultWorkspaceID, activeCircleID))
 }
 
 func mentionedCircleIDs(prompt string, circleIDs []string) []string {
@@ -86,13 +69,4 @@ func normalizedCircleIDs(circleIDs []string) []string {
 func circleMentionPattern(circleID string) *regexp.Regexp {
 	escapedCircleID := regexp.QuoteMeta(strings.ToLower(strings.TrimSpace(circleID)))
 	return regexp.MustCompile(`(?i)(^|[^A-Za-z0-9._-])@` + escapedCircleID + `($|[^A-Za-z0-9._-])`)
-}
-
-func findCircleNamespace(namespaces []memory.MemoryNamespace, circleID string) (memory.MemoryNamespace, bool) {
-	for _, namespace := range namespaces {
-		if namespace.ScopeType == memory.ScopeTypeCircle && strings.ToLower(strings.TrimSpace(namespace.ScopeCircleID)) == circleID {
-			return namespace, true
-		}
-	}
-	return memory.MemoryNamespace{}, false
 }

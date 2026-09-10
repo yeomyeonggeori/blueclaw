@@ -7,6 +7,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluememo"
 	"path/filepath"
 	"strings"
 	"time"
@@ -99,7 +100,7 @@ type TaskLaunchRequest struct {
 	HistoryProvider            HistoryProvider
 	AttachmentMaterialResolver AttachmentMaterialResolver
 	PersonAccess               policy.PersonAccess
-	MemoryNamespaces           []memory.MemoryNamespace
+	MemoryLabel                bluememo.SecurityLabel
 	AccessibleConversationIDs  []string
 	CheckpointSender           agentcontract.AgentCheckpointSender
 	ArtifactManifest           []agentcontract.ArtifactManifestEntry
@@ -112,15 +113,6 @@ type TaskLaunchResult struct {
 	MemoryFacts           []memory.MemoryFact
 	ToolNames             []string
 	NormalizedProfileName string
-}
-
-type TaskMemoryRequest struct {
-	Query                     string
-	RequesterPersonID         string
-	ConversationID            string
-	PersonAccess              policy.PersonAccess
-	MemoryNamespaces          []memory.MemoryNamespace
-	AccessibleConversationIDs []string
 }
 
 type taskLaunchStep[T any] interface {
@@ -147,6 +139,15 @@ type launchStepRecord struct {
 	DurationMs      int64  `json:"durationMs"`
 	Error           string `json:"error,omitempty"`
 	errorValue      error  `json:"-"`
+}
+
+type launchMemoryResult struct {
+	Facts            []memory.MemoryFact
+	ProfileLineCount int
+	RecalledCount    int
+	Mode             string
+	DegradedReason   string
+	Error            string
 }
 
 type IntakeBudget struct {
@@ -365,13 +366,15 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 		ConversationChannelID:   request.ConversationChannelID,
 		ConversationChannelName: request.ConversationChannelName,
 	})
+	memoryResult, record := runLaunchStep(ctx, execution, loadMemoryLaunchStep{})
+	launchRecords = append(launchRecords, record)
 	carriedOutCalls, record := runLaunchStep(ctx, execution, carryOutApprovedCallLaunchStep{ToolSet: toolSet})
 	launchRecords = append(launchRecords, record)
 	if request.ExistingTaskRunID != "" {
-		taskLauncher.taskRunService.AppendTaskEvent(request.ExistingTaskRunID, agentcontract.TaskEventAgentTaskLaunched, marshalTaskLaunchEvent(request, normalizedProfileName, toolNames, registryAudit, 0))
+		taskLauncher.taskRunService.AppendTaskEvent(request.ExistingTaskRunID, agentcontract.TaskEventAgentTaskLaunched, marshalTaskLaunchEvent(request, normalizedProfileName, toolNames, registryAudit, len(memoryResult.Facts)))
 	}
 	turnResult, record := runLaunchStep(ctx, execution, runTurnLaunchStep{
-		MemoryFacts:       nil,
+		MemoryFacts:       memoryResult.Facts,
 		ToolSet:           toolSet,
 		ConversationScope: conversationScope,
 		CarriedOutCalls:   carriedOutCalls,
@@ -391,14 +394,17 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 	if turnResult.TaskRun.TaskRunID != "" {
 		taskLauncher.appendLaunchStepRecords(turnResult.TaskRun.TaskRunID, launchRecords)
 		if turnResult.TaskRun.TaskRunID != request.ExistingTaskRunID {
-			taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, agentcontract.TaskEventAgentTaskLaunched, marshalTaskLaunchEvent(request, normalizedProfileName, launchedToolNames, registryAudit, 0))
+			taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, agentcontract.TaskEventAgentTaskLaunched, marshalTaskLaunchEvent(request, normalizedProfileName, launchedToolNames, registryAudit, len(memoryResult.Facts)))
+		}
+		if taskLauncher.toolCatalogBuilder.memoryStore != nil {
+			taskLauncher.appendStoreMemoryLaunchEvents(turnResult.TaskRun.TaskRunID, request, memoryResult)
 		}
 		taskLauncher.appendAmbientDutyLaunchEvent(turnResult.TaskRun.TaskRunID, request)
 		taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, agentcontract.TaskEventAgentConversationScope, marshalToolResult(conversationScope))
 	}
 	return TaskLaunchResult{
 		TurnResult:            turnResult,
-		MemoryFacts:           nil,
+		MemoryFacts:           memoryResult.Facts,
 		ToolNames:             launchedToolNames,
 		NormalizedProfileName: normalizedProfileName,
 	}, routerCallRecords, nil
@@ -480,6 +486,73 @@ func (auditToolRegistryLaunchStep) Name() string {
 
 func (step auditToolRegistryLaunchStep) Run(ctx context.Context, execution *taskLaunchExecution) (ToolRegistryAudit, error) {
 	return execution.Launcher.toolCatalogBuilder.BuildToolRegistryAudit(ctx, step.ToolSet)
+}
+
+type loadMemoryLaunchStep struct{}
+
+func (loadMemoryLaunchStep) Name() string {
+	return "load_memory"
+}
+
+func (loadMemoryLaunchStep) Run(ctx context.Context, execution *taskLaunchExecution) (launchMemoryResult, error) {
+	if execution.Launcher.toolCatalogBuilder.memoryStore == nil {
+		return launchMemoryResult{}, nil
+	}
+	return recallLaunchMemory(ctx, execution), nil
+}
+
+const launchGraphMemorySearchTimeout = 8 * time.Second
+
+func recallLaunchMemory(ctx context.Context, execution *taskLaunchExecution) launchMemoryResult {
+	request := execution.Request
+	recallContext, cancelRecall := context.WithTimeout(ctx, launchGraphMemorySearchTimeout)
+	defer cancelRecall()
+	recall, errorValue := execution.Launcher.toolCatalogBuilder.memoryStore.Recall(recallContext, bluememo.RecallRequest{
+		Reader:   execution.Launcher.toolCatalogBuilder.memoryReader(request.PersonAccess),
+		PersonID: request.RequesterPersonID,
+		Query:    request.Prompt,
+		Limit:    bluememo.DefaultSearchResultLimit,
+	})
+	if errorValue != nil {
+		return launchMemoryResult{Error: errorValue.Error()}
+	}
+	return launchMemoryResult{
+		Facts:            memory.LoopMemoryFacts(recall, request.RequesterPersonID),
+		ProfileLineCount: len(recall.ProfileLines()),
+		RecalledCount:    len(recall.Facts),
+		Mode:             recall.Mode,
+		DegradedReason:   recall.DegradedReason,
+	}
+}
+
+func (taskLauncher *TaskLauncher) appendStoreMemoryLaunchEvents(taskRunID string, request TaskLaunchRequest, memoryResult launchMemoryResult) {
+	if memoryResult.Error != "" {
+		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "memory.recall_failed", memoryResult.Error)
+	} else {
+		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "memory.recall_injected", marshalToolResult(map[string]any{
+			"profileLineCount": memoryResult.ProfileLineCount,
+			"recalledCount":    memoryResult.RecalledCount,
+			"characters":       memoryFactCharacterCount(memoryResult.Facts),
+			"mode":             memoryResult.Mode,
+			"degradedReason":   memoryResult.DegradedReason,
+		}))
+	}
+	label := memorySecurityLabelForRequest(ToolCatalogRequest{PersonAccess: request.PersonAccess, MemoryLabel: request.MemoryLabel})
+	taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "memory.extraction_context", marshalToolResult(memory.ExtractionContext{
+		RequesterName:     request.RequesterName,
+		ActiveCircleID:    request.ActiveCircleID,
+		SecurityLevelRank: label.SecurityLevelRank,
+		RequiredClasses:   label.RequiredClasses,
+		Platform:          request.Platform,
+	}))
+}
+
+func memoryFactCharacterCount(facts []memory.MemoryFact) int {
+	count := 0
+	for _, fact := range facts {
+		count += len([]rune(fact.Content))
+	}
+	return count
 }
 
 type runTurnLaunchStep struct {
@@ -715,7 +788,7 @@ func (taskLauncher *TaskLauncher) toolCatalogRequestForLaunch(request TaskLaunch
 		HistoryProvider:            request.HistoryProvider,
 		AttachmentMaterialResolver: request.AttachmentMaterialResolver,
 		PersonAccess:               request.PersonAccess,
-		MemoryNamespaces:           request.MemoryNamespaces,
+		MemoryLabel:                request.MemoryLabel,
 		AccessibleConversationIDs:  request.AccessibleConversationIDs,
 		InputParts:                 append([]agentcontract.AgentPart{}, request.InputParts...),
 		ScheduledRun:               request.ScheduledRun,
@@ -754,7 +827,6 @@ func bluecollarMemoryFacts(facts []memory.MemoryFact) []agentcontract.MemoryFact
 		converted = append(converted, agentcontract.MemoryFact{
 			FactID:            fact.FactID,
 			ScopeType:         fact.ScopeType,
-			NamespaceID:       fact.NamespaceID,
 			Content:           fact.Content,
 			Score:             fact.Score,
 			SourceEpisodeID:   fact.SourceEpisodeID,

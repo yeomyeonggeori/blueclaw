@@ -134,8 +134,10 @@ func canonicalPersonReferenceUpdateStatements() []canonicalPersonReferenceUpdate
 		{tableName: "memory_record", statement: "UPDATE memory_record SET scope_person_id = $2 WHERE scope_person_id = $1"},
 		{tableName: "policy_revision", statement: "UPDATE policy_revision SET changed_by_person_id = $2 WHERE changed_by_person_id = $1"},
 		{tableName: "admin_audit_log", statement: "UPDATE admin_audit_log SET actor_person_id = $2 WHERE actor_person_id = $1"},
-		{tableName: "graphiti_namespace", statement: "UPDATE graphiti_namespace SET scope_person_id = $2 WHERE scope_person_id = $1"},
-		{tableName: "graphiti_episode", statement: "UPDATE graphiti_episode SET sender_person_id = $2 WHERE sender_person_id = $1"},
+		{tableName: "memory_episode", statement: "UPDATE memory_episode SET requester_person_id = $2 WHERE requester_person_id = $1"},
+		{tableName: "memory_fact", statement: "UPDATE memory_fact SET subject_person_id = $2 WHERE subject_person_id = $1"},
+		{tableName: "memory_fact", statement: "UPDATE memory_fact SET scope_id = $2 WHERE scope_type = 'private' AND scope_id = $1"},
+		{tableName: "memory_profile", statement: "UPDATE memory_profile SET person_id = $2 WHERE person_id = $1 AND NOT EXISTS (SELECT 1 FROM memory_profile existing WHERE existing.person_id = $2)"},
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluememo"
 	"strings"
 	"testing"
 )
@@ -86,8 +87,9 @@ func TestDeadCompatibilityToolsAreNotRegistered(t *testing.T) {
 
 func TestLocalToolProviderPreservesMemorySearchContract(t *testing.T) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
+	toolCatalogBuilder.UseMemoryStore(&bluememo.Store{Facts: bluememo.NewInMemoryRepository()}, nil, nil)
 	handlerToolSet := toolcontract.NewToolSet(nil)
-	registerMemoryTools(toolCatalogBuilder, handlerToolSet, ToolCatalogRequest{})
+	registerStoreMemoryTools(toolCatalogBuilder, handlerToolSet, ToolCatalogRequest{})
 
 	boundTools, errorValue := (localToolProvider{handlerToolSet: handlerToolSet}).ListTools(context.Background())
 	if errorValue != nil {
@@ -115,8 +117,9 @@ func TestLocalToolProviderPreservesMemorySearchContract(t *testing.T) {
 
 func TestLocalToolProviderPreservesMemoryRememberContract(t *testing.T) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
+	toolCatalogBuilder.UseMemoryStore(&bluememo.Store{Facts: bluememo.NewInMemoryRepository()}, nil, nil)
 	handlerToolSet := toolcontract.NewToolSet(nil)
-	registerMemoryTools(toolCatalogBuilder, handlerToolSet, ToolCatalogRequest{})
+	registerStoreMemoryTools(toolCatalogBuilder, handlerToolSet, ToolCatalogRequest{})
 
 	boundTools, errorValue := (localToolProvider{handlerToolSet: handlerToolSet}).ListTools(context.Background())
 	if errorValue != nil {
@@ -134,38 +137,12 @@ func TestLocalToolProviderPreservesMemoryRememberContract(t *testing.T) {
 	if !equalJSONSchema(descriptor.OutputSchema, memoryRememberOutputSchema) || !equalJSONSchema(descriptor.ResultContract.Schema, memoryRememberOutputSchema) {
 		t.Fatalf("expected canonical output schema preservation, got %+v", descriptor)
 	}
-	if len(descriptor.ResultContract.Effects) != 1 || descriptor.ResultContract.Effects[0].ResultField != "jobID" {
-		t.Fatalf("expected exact memory update effect, got %+v", descriptor.ResultContract)
+	if len(descriptor.ResultContract.Effects) != 1 || descriptor.ResultContract.Effects[0].ResultField != "episodeID" {
+		t.Fatalf("expected the recorded episode effect, got %+v", descriptor.ResultContract)
 	}
 	condition := descriptor.ResultContract.EvidenceCondition
 	if condition == nil || condition.ResultField != "accepted" || string(condition.Equals) != "true" {
 		t.Fatalf("expected accepted memory evidence condition, got %+v", condition)
-	}
-}
-
-func TestLocalToolProviderPreservesMemoryFactMutationContracts(t *testing.T) {
-	toolCatalogBuilder := NewToolCatalogBuilder()
-	handlerToolSet := toolcontract.NewToolSet(nil)
-	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"memory_update", "memory_delete"})
-	registerMemoryTools(toolCatalogBuilder, handlerToolSet, ToolCatalogRequest{ProfileName: "default"})
-
-	boundTools, errorValue := (localToolProvider{handlerToolSet: handlerToolSet}).ListTools(context.Background())
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	for _, toolName := range []string{"memory_update", "memory_delete"} {
-		var descriptor toolcontract.ToolDescriptor
-		for _, boundTool := range boundTools {
-			if boundTool.Definition.Name == toolName {
-				descriptor = boundTool.Definition
-			}
-		}
-		if descriptor.Name == "" || descriptor.ResultContract == nil {
-			t.Fatalf("expected %s result contract, got %+v", toolName, descriptor)
-		}
-		if len(descriptor.ResultContract.Effects) != 1 || descriptor.ResultContract.Effects[0].ObjectType != "memory_fact" || descriptor.ResultContract.Effects[0].ResultField != "factID" {
-			t.Fatalf("expected exact %s mutation effect, got %+v", toolName, descriptor.ResultContract)
-		}
 	}
 }
 

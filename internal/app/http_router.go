@@ -1,11 +1,8 @@
 package app
 
 import (
-	"bytes"
 	"context"
-	"io"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/adminapi"
@@ -16,7 +13,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/runtimecontrol"
 	"github.com/yeomyeonggeori/blueclaw/internal/sessionquery"
 	"github.com/yeomyeonggeori/blueclaw/internal/userapi"
-	"github.com/yeomyeonggeori/blueclaw/pkg/memoryassertion"
 )
 
 func newRouterDependencies(components applicationComponents) httpserver.RouterDependencies {
@@ -42,15 +38,13 @@ func newRouterDependencies(components applicationComponents) httpserver.RouterDe
 		ToolInventoryHandler:  adminapi.ToolInventoryHandler{ToolCatalogBuilder: components.toolCatalogBuilder},
 		TaskApprovalHandler:   newTaskApprovalHandler(services, directory, components.taskLauncher),
 		QuiesceHandler: adminapi.QuiesceHandler{
-			Controller:        components.taskIntakeController,
-			TaskRunService:    services.taskRunService,
-			MemoryUpdateQueue: components.memory.memoryUpdateQueue,
-			Logger:            components.foundation.logger,
+			Controller:     components.taskIntakeController,
+			TaskRunService: services.taskRunService,
 		},
 		TaskScheduleHandler:   newTaskScheduleHandler(services, directory),
 		ConnectorDiagnostics:  adminapi.ConnectorEventDiagnosticHandler{Repository: services.repositories.connectorEventDiagnostic},
 		ConversationReset:     adminapi.ConversationResetHandler{Repository: services.repositories.conversationReset},
-		MemoryGraphHandler:    newMemoryGraphHandler(components.memory, directory, runtimeConfiguration.Memory.AdminAssertionKeyPath),
+		MemoryHandler:         adminapi.MemoryHandler{Store: components.memory.store, IdentityService: directory.identityService},
 		BackupHandler:         adminapi.BackupHandler{Coordinator: components.backupCoordinator},
 		TaskInboxHandler:      userapi.TaskInboxHandler{TaskRunService: services.taskRunService, TaskStepService: services.taskStepService, TaskAuthService: services.taskAuthService},
 		TaskActionHandler:     userapi.TaskActionHandler{TaskRunService: services.taskRunService, TaskAuthService: services.taskAuthService},
@@ -65,7 +59,6 @@ func newHealthHandler(components applicationComponents) httpserver.HealthHandler
 		LanguageModel:            languageModelHealth(components.kernel),
 		Database:                 components.foundation.database,
 		ConnectorRuntime:         components.connectorRuntime,
-		MemoryService:            components.memory.memoryService,
 		MaximumBacklog:           1000,
 		ProtocolIdentity:         components.protocolIdentity.status,
 		ProtocolIdentityChecker:  &components.protocolIdentity.checker,
@@ -163,7 +156,6 @@ func newTaskRunHandler(runtimeConfiguration config.RuntimeConfiguration, service
 	return adminapi.TaskRunHandler{
 		TaskLauncher:            taskLauncher,
 		IdentityService:         directory.identityService,
-		WorkspaceID:             runtimeConfiguration.Memory.WorkspaceID,
 		TaskRunService:          services.taskRunService,
 		TaskIntakeGate:          taskIntakeController,
 		AllowTaskDecisionPreset: runtimeConfiguration.Agent.AllowAdminTaskDiagnostic,
@@ -200,34 +192,5 @@ func newTaskScheduleHandler(services taskServices, directory identityDirectory) 
 		SummaryRepository: services.repositories.taskScheduleSummary,
 		ListRepository:    services.repositories.taskScheduleList,
 		RepairRepository:  services.repositories.taskScheduleCreatorRepair,
-	}
-}
-
-func newMemoryGraphHandler(memoryComponents memoryComponents, directory identityDirectory, assertionKeyPath string) adminapi.MemoryGraphHandler {
-	return adminapi.MemoryGraphHandler{
-		MemoryService: memoryComponents.memoryService,
-		Reporter:      memoryComponents.graphReporter,
-		Migrator:      memoryComponents.graphMigrator,
-		MarkdownStore: memoryComponents.pinnedMemoryStore,
-		Identity:      directory.identityService,
-		ReaderPersonID: func(request *http.Request) string {
-			body, errorValue := io.ReadAll(io.LimitReader(request.Body, 16*1024+1))
-			request.Body = io.NopCloser(bytes.NewReader(body))
-			if len(body) > 16*1024 {
-				return ""
-			}
-			if errorValue != nil {
-				return ""
-			}
-			secret, errorValue := os.ReadFile(assertionKeyPath)
-			if errorValue != nil {
-				return ""
-			}
-			readerPersonID, errorValue := memoryassertion.New(bytes.TrimSpace(secret)).Verify(request, body)
-			if errorValue != nil {
-				return ""
-			}
-			return readerPersonID
-		},
 	}
 }

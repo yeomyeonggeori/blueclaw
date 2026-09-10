@@ -16,7 +16,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/harnessdriver"
 	"github.com/yeomyeonggeori/blueclaw/internal/httpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/learning"
-	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/protocolidentity"
 	runtimelogging "github.com/yeomyeonggeori/blueclaw/internal/runtime"
 	"github.com/yeomyeonggeori/blueclaw/internal/runtimecontrol"
@@ -25,6 +24,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/store/postgres"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/intake"
+	"github.com/yeomyeonggeori/bluememo"
 )
 
 const databaseInitializationTimeout = 240 * time.Second
@@ -47,13 +47,14 @@ type Application struct {
 	interruptedTaskResumeCancel context.CancelFunc
 	taskScheduleCancel          context.CancelFunc
 	logRetentionCancel          context.CancelFunc
-	memoryUpdateCancel          context.CancelFunc
+	memoryJobWorkerCancel       context.CancelFunc
 	learningCancel              context.CancelFunc
 	taskRetentionCancel         context.CancelFunc
 	staleTaskCancel             context.CancelFunc
 	taskSchedulePoller          *scheduler.TaskSchedulePoller
 	taskRetentionSweeper        *scheduler.TaskRetentionSweeper
-	memoryUpdateQueue           *memory.BackgroundMemoryUpdateQueue
+	memoryJobWorker             *bluememo.JobWorker
+	memoryStore                 *bluememo.Store
 	learningCoordinator         *learning.Coordinator
 	taskSchedulePollSecond      int
 	taskRetentionIntervalMinute int
@@ -127,7 +128,7 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 	components.directory = newIdentityDirectory(components.foundation.database, components.foundation.policyDocument, logger)
 	components.services = newTaskServices(runtimeConfiguration, components.foundation.database, components.directory.companyProvider, logger)
 	components.kernel = newAgentKernel(runtimeConfiguration, agentHarnessFactory, components.services, components.directory.companyProvider, logger)
-	components.memory = newMemoryComponents(runtimeConfiguration, components.foundation.database, components.kernel.taskTierLanguageModels.Low, logger)
+	components.memory = newMemoryComponents(runtimeConfiguration, components.foundation.database, components.kernel, components.services, components.directory.identityService, logger)
 	components.learningStore, components.startupError = openLearningStore(runtimeConfiguration.Terminal.WorkspaceRootPath)
 	learningCoordinator, learningError := newLearningCoordinator(runtimeConfiguration, components.learningStore, components.kernel.taskTierLanguageModels.Low, logger)
 	components.learningCoordinator = learningCoordinator
@@ -135,7 +136,7 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 	components.backupCoordinator = backup.NewCoordinator(buildBackupManifest(runtimeConfiguration, components.foundation.database))
 	components.taskIntakeController = runtimecontrol.NewTaskIntakeController()
 	components.taskIntakeController.SetQuiesced(components.kernel.languageModelError != nil)
-	components.toolCatalogBuilder = newToolCatalogBuilder(runtimeConfiguration, components.kernel, components.services, components.memory, logger)
+	components.toolCatalogBuilder = newToolCatalogBuilder(runtimeConfiguration, components.kernel, components.services, components.directory, components.memory, logger)
 	if components.learningStore != nil {
 		components.toolCatalogBuilder.UseLearnedSkillLoader(func(audience string) []learning.Skill {
 			return components.learningStore.List(audience, false)
@@ -156,7 +157,7 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 	configureMorningBriefing(components.taskSchedulePoller, runtimeConfiguration, components.directory, components.kernel, logger)
 	logger.Info("application.initializing", "stage", "connector_runtime")
 	components.taskRetentionSweeper = newTaskRetentionSweeper(runtimeConfiguration, components.services, logger)
-	components.connectorRuntime = newConnectorRuntime(runtimeConfiguration, components.foundation, components.directory, components.kernel, components.services, components.memory, components.taskLauncher, components.turnRouter, components.backupCoordinator, components.taskIntakeController)
+	components.connectorRuntime = newConnectorRuntime(runtimeConfiguration, components.foundation, components.directory, components.kernel, components.services, components.taskLauncher, components.turnRouter, components.backupCoordinator, components.taskIntakeController)
 	registerChatdAdapters(components.connectorRuntime, runtimeConfiguration, logger)
 	components.agentReplyStore = newAgentReplyStore(runtimeConfiguration)
 	components.connectorRuntime.RegisterAdapter(apiconnector.NewAdapter(components.directory.identityService, components.agentReplyStore))
@@ -187,7 +188,8 @@ func newApplication(components applicationComponents) *Application {
 		startupError:                components.startupError,
 		taskSchedulePoller:          components.taskSchedulePoller,
 		taskRetentionSweeper:        components.taskRetentionSweeper,
-		memoryUpdateQueue:           components.memory.memoryUpdateQueue,
+		memoryJobWorker:             components.memory.jobWorker,
+		memoryStore:                 components.memory.store,
 		learningCoordinator:         components.learningCoordinator,
 		taskSchedulePollSecond:      components.runtimeConfiguration.Scheduler.TaskSchedulePollIntervalSecond,
 		taskRetentionIntervalMinute: components.runtimeConfiguration.Scheduler.RetentionCheckIntervalMinute,

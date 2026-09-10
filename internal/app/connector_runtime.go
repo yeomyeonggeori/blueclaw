@@ -21,7 +21,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/intake"
 )
 
-func newConnectorRuntime(runtimeConfiguration config.RuntimeConfiguration, foundation runtimeFoundation, directory identityDirectory, kernel agentKernel, services taskServices, memoryComponents memoryComponents, taskLauncher *agentruntime.TaskLauncher, turnRouter intake.TurnRouter, backupCoordinator *backup.Coordinator, taskIntakeController *runtimecontrol.TaskIntakeController) *connectors.ConnectorRuntime {
+func newConnectorRuntime(runtimeConfiguration config.RuntimeConfiguration, foundation runtimeFoundation, directory identityDirectory, kernel agentKernel, services taskServices, taskLauncher *agentruntime.TaskLauncher, turnRouter intake.TurnRouter, backupCoordinator *backup.Coordinator, taskIntakeController *runtimecontrol.TaskIntakeController) *connectors.ConnectorRuntime {
 	logger := foundation.logger
 	languageModelProvider := kernel.taskTierLanguageModels.High
 	connectorRuntime := connectors.NewConnectorRuntime(
@@ -46,8 +46,6 @@ func newConnectorRuntime(runtimeConfiguration config.RuntimeConfiguration, found
 	connectorRuntime.UseApprovalGate(kernel.toolCatalog.approvalGate)
 	connectorRuntime.UseAgentIdentityProvider(kernel.agentIdentityProvider)
 	connectorRuntime.UseAllowedToolNamesByProfile(deriveAllowedToolNamesByProfile(runtimeConfiguration), deriveAllowedToolNames(runtimeConfiguration))
-	connectorRuntime.UseMemoryService(memoryComponents.memoryService)
-	connectorRuntime.UseWorkspaceID(runtimeConfiguration.Memory.WorkspaceID)
 	connectorRuntime.UseAdminTaskLinkBaseURL(runtimeConfiguration.Agent.AdminTaskLinkBaseURL)
 	connectorRuntime.UseWorkspaceActorFactory(kernel.terminalService.WorkspaceActorFactory())
 	connectorRuntime.UseIngressGate(backupCoordinator)
