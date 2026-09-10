@@ -74,7 +74,7 @@ func (taskScheduleRunner TaskScheduleRunner) RunIfDue(ctx context.Context, reque
 		ResponseLanguage:          responseLanguage,
 		ScheduledRun:              scheduledRunContext(taskSchedule, referenceTime),
 		PersonAccess:              request.PersonAccess,
-		MemoryNamespaces:          scheduledMemoryNamespaces(taskSchedule, request.PersonAccess, workspaceID),
+		MemoryLabel:               memory.LabelForAccess(request.PersonAccess),
 		AccessibleConversationIDs: []string{"schedule:" + taskSchedule.TaskScheduleID},
 	})
 	if errorValue != nil {
@@ -86,15 +86,6 @@ func (taskScheduleRunner TaskScheduleRunner) RunIfDue(ctx context.Context, reque
 	}
 	advancedTaskSchedule.LastTaskRunID = launchResult.TurnResult.TaskRun.TaskRunID
 	return TaskScheduleRunResult{TaskSchedule: advancedTaskSchedule, LaunchResult: launchResult, DidRun: true}, nil
-}
-
-func scheduledMemoryNamespaces(taskSchedule task.TaskSchedule, personAccess policy.PersonAccess, workspaceID string) []memory.MemoryNamespace {
-	conversationID := "schedule:" + taskSchedule.TaskScheduleID
-	return []memory.MemoryNamespace{
-		memory.UserNamespace(taskSchedule.CreatorPersonID),
-		memory.WorkspaceNamespace(workspaceID, personAccess.SecurityLevelRank, personAccess.GrantedClasses),
-		memory.ConversationNamespace(conversationID, personAccess.SecurityLevelRank, personAccess.GrantedClasses),
-	}
 }
 
 func scheduledRunContext(taskSchedule task.TaskSchedule, referenceTime time.Time) agentcontract.ScheduledRunContext {

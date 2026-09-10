@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/protocolidentity"
 )
 
@@ -39,26 +38,6 @@ func TestHealthReportsProtocolIdentityDrift(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(responseDocument.FailureReasons, ","), "protocol identity is not valid") {
 		t.Fatalf("expected protocol identity failure reason, got %+v", responseDocument.FailureReasons)
-	}
-}
-
-func TestHealthStaysOKWhenGraphMemoryIsNotConfigured(t *testing.T) {
-	handler := HealthHandler{MemoryService: &memory.MemoryService{}}
-	responseRecorder := httptest.NewRecorder()
-	handler.HandleHealth(responseRecorder, httptest.NewRequest(http.MethodGet, "/admin/api/health", nil))
-
-	var responseDocument struct {
-		Memory         memory.MemoryHealth `json:"memory"`
-		FailureReasons []string            `json:"failureReasons"`
-	}
-	if errorValue := json.Unmarshal(responseRecorder.Body.Bytes(), &responseDocument); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if responseDocument.Memory.Configured {
-		t.Fatalf("expected memory to report as not configured, got %+v", responseDocument.Memory)
-	}
-	if strings.Contains(strings.Join(responseDocument.FailureReasons, ","), "graphiti memory") {
-		t.Fatalf("expected an unconfigured memory not to fail health, got %+v", responseDocument.FailureReasons)
 	}
 }
 

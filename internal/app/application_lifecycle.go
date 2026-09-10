@@ -12,6 +12,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/scheduler"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluememo"
 )
 
 func (application *Application) Start() error {
@@ -32,8 +33,8 @@ func (application *Application) Start() error {
 	application.startLearningCoordinator()
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "log_retention")
 	application.startLogRetentionLoop()
-	application.runtimeLogger.Logger.Info("application.starting", "stage", "memory_queue")
-	application.startMemoryUpdateQueue()
+	application.runtimeLogger.Logger.Info("application.starting", "stage", "memory_worker")
+	application.startMemoryJobWorker()
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "connector_runtime")
 	application.startConnectorRuntime()
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "connector_transports")
@@ -119,8 +120,8 @@ func (application *Application) Shutdown(ctx context.Context) error {
 	if application.logRetentionCancel != nil {
 		application.logRetentionCancel()
 	}
-	if application.memoryUpdateCancel != nil {
-		application.memoryUpdateCancel()
+	if application.memoryJobWorkerCancel != nil {
+		application.memoryJobWorkerCancel()
 	}
 	if application.learningCancel != nil {
 		application.learningCancel()
@@ -354,13 +355,23 @@ func (application *Application) taskRetentionIntervalMinuteOrDefault() int {
 	return 60
 }
 
-func (application *Application) startMemoryUpdateQueue() {
-	if application.memoryUpdateQueue == nil || application.memoryUpdateCancel != nil {
+func (application *Application) startMemoryJobWorker() {
+	if application.memoryJobWorker == nil || application.memoryJobWorkerCancel != nil {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	application.memoryUpdateCancel = cancel
-	application.memoryUpdateQueue.Start(ctx)
+	application.memoryJobWorkerCancel = cancel
+	application.enqueueMemoryReembed(ctx)
+	go application.memoryJobWorker.Start(ctx, bluememo.DefaultJobWorkerInterval)
+}
+
+func (application *Application) enqueueMemoryReembed(ctx context.Context) {
+	if application.memoryStore == nil {
+		return
+	}
+	if _, _, errorValue := application.memoryStore.EnqueueReembed(ctx); errorValue != nil {
+		application.runtimeLogger.Logger.Warn("application.memory.reembed_enqueue_failed", "error", errorValue.Error())
+	}
 }
 
 func (application *Application) taskSchedulePollIntervalSecond() int {

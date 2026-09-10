@@ -2,68 +2,57 @@ package app
 
 import (
 	"log/slog"
-	"path/filepath"
-	"strings"
-	"time"
+
+	"github.com/yeomyeonggeori/bluememo"
+	bluememopostgres "github.com/yeomyeonggeori/bluememo/postgres"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
+	"github.com/yeomyeonggeori/blueclaw/internal/identity"
+	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/store/postgres"
-	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
 type memoryComponents struct {
-	memoryService     *memory.MemoryService
-	graphReporter     memory.GraphMemoryReporter
-	graphMigrator     memory.GraphMemoryMigrator
-	pinnedMemoryStore *memory.MarkdownStore
-	memoryUpdateQueue *memory.BackgroundMemoryUpdateQueue
+	store     *bluememo.Store
+	ingester  *bluememo.Ingester
+	jobWorker *bluememo.JobWorker
 }
 
-func newMemoryComponents(runtimeConfiguration config.RuntimeConfiguration, database postgres.Database, compressionLanguageModel model.LanguageModelProvider, logger *slog.Logger) memoryComponents {
+func newMemoryComponents(runtimeConfiguration config.RuntimeConfiguration, database postgres.Database, kernel agentKernel, services taskServices, identityService *identity.IdentityService, logger *slog.Logger) memoryComponents {
 	logger.Info("application.initializing", "stage", "memory")
-	memoryService := &memory.MemoryService{}
-	if strings.TrimSpace(runtimeConfiguration.Memory.GraphitiEndpoint) != "" {
-		memoryService.UseGraphStore(memory.NewGraphitiClient(
-			runtimeConfiguration.Memory.GraphitiEndpoint,
-			time.Duration(runtimeConfiguration.Memory.TimeoutSecond)*time.Second,
-		))
-	} else {
-		logger.Info("application.memory.graph_store_not_configured")
+	if database.SQL == nil {
+		logger.Info("application.memory.fact_store_not_configured", "reason", "no database")
+		return memoryComponents{}
 	}
-	components := memoryComponents{memoryService: memoryService}
-	if database.SQL != nil {
-		graphitiMemoryRepository := postgres.NewGraphitiMemoryRepository(database)
-		memoryService.UseMirror(graphitiMemoryRepository)
-		components.graphReporter = graphitiMemoryRepository
-		components.graphMigrator = graphitiMemoryRepository
+	embeddingModelName := firstNonEmptyString(runtimeConfiguration.Memory.EmbeddingModel, bluememo.DefaultEmbeddingModelName)
+	store := &bluememo.Store{
+		Facts:    bluememopostgres.NewFactRepository(database.SQL),
+		Profiles: bluememopostgres.NewProfileRepository(database.SQL),
+		Jobs:     bluememopostgres.NewJobRepository(database.SQL),
+		Embedder: llm.CapabilityEmbeddingClient{
+			CapabilityClient: kernel.capabilityClient,
+			ModelName:        embeddingModelName,
+			ExecutionMode:    firstNonEmptyString(runtimeConfiguration.Memory.EmbeddingExecutionMode, "auto"),
+			OutputDimensions: bluememo.EmbeddingDimensionCount,
+		},
+		EmbeddingModel: embeddingModelName,
+		Logger:         logger,
 	}
-	components.pinnedMemoryStore = memory.NewMarkdownStore(pinnedMemoryRootPath(runtimeConfiguration), pinnedMemoryHardLimitCharacterCount(runtimeConfiguration))
-	components.pinnedMemoryStore.UseCompressor(memory.NewLLMMarkdownMemoryCompressor(compressionLanguageModel), pinnedMemoryCompressionTargetCharacterCount(runtimeConfiguration))
-	components.memoryUpdateQueue = memory.NewBackgroundMemoryUpdateQueue(memory.NewMemoryUpdateProcessor(memoryService), logger)
-	return components
-}
-
-func pinnedMemoryRootPath(runtimeConfiguration config.RuntimeConfiguration) string {
-	if strings.TrimSpace(runtimeConfiguration.Memory.PinnedMemoryRootPath) != "" {
-		return strings.TrimSpace(runtimeConfiguration.Memory.PinnedMemoryRootPath)
+	memoryModel := memory.LanguageModel{Provider: kernel.taskTierLanguageModels.Low}
+	ingester := &bluememo.Ingester{Store: *store, Model: memoryModel, People: identityService}
+	jobWorker := &bluememo.JobWorker{
+		Jobs:   store.Jobs,
+		Logger: logger,
+		Handlers: map[string]bluememo.JobHandler{
+			bluememo.JobKindExtract: memory.ExtractJobHandler{Ingester: *ingester, TaskRuns: services.taskRunService, Steps: services.taskStepService, Access: identityService}.Handle,
+			bluememo.JobKindProfile: bluememo.ProfileJobHandler{Builder: bluememo.ProfileBuilder{Store: *store, Model: memoryModel}}.Handle,
+			bluememo.JobKindReembed: bluememo.ReembedJobHandler{Store: *store}.Handle,
+		},
 	}
-	return filepath.Join(runtimeConfiguration.Terminal.WorkspaceRootPath, ".blueclaw", "memory")
-}
-
-func pinnedMemoryHardLimitCharacterCount(runtimeConfiguration config.RuntimeConfiguration) int {
-	if runtimeConfiguration.Memory.PinnedMemoryHardLimitCharacterCount > 0 {
-		return runtimeConfiguration.Memory.PinnedMemoryHardLimitCharacterCount
+	if !runtimeConfiguration.Memory.ExtractionDisabled {
+		services.taskRunService.RegisterTaskRunTransitionObserver(memory.TaskRunTransitionObserver{Store: *store, Logger: logger}.Observe)
 	}
-	if runtimeConfiguration.Memory.PinnedMemoryCharacterLimit > 0 {
-		return runtimeConfiguration.Memory.PinnedMemoryCharacterLimit
-	}
-	return memory.DefaultPinnedMemoryHardLimitCharacterCount
-}
-
-func pinnedMemoryCompressionTargetCharacterCount(runtimeConfiguration config.RuntimeConfiguration) int {
-	if runtimeConfiguration.Memory.PinnedMemoryCompressionTargetCharacterCount > 0 {
-		return runtimeConfiguration.Memory.PinnedMemoryCompressionTargetCharacterCount
-	}
-	return memory.DefaultPinnedMemoryCompressionTargetCharacterCount
+	logger.Info("application.memory.fact_store_configured", "embeddingModel", embeddingModelName, "extractionDisabled", runtimeConfiguration.Memory.ExtractionDisabled)
+	return memoryComponents{store: store, ingester: ingester, jobWorker: jobWorker}
 }

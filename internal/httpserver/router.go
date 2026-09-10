@@ -17,6 +17,7 @@ type RouterDependencies struct {
 	AttentionHandler      adminapi.AttentionHandler
 	TaskMonitorHandler    adminapi.TaskMonitorHandler
 	TaskRunHandler        adminapi.TaskRunHandler
+	MemoryHandler         adminapi.MemoryHandler
 	TaskApprovalHandler   adminapi.TaskApprovalHandler
 	HarnessStatusHandler  adminapi.HarnessStatusHandler
 	SkillInventoryHandler adminapi.SkillInventoryHandler
@@ -26,7 +27,6 @@ type RouterDependencies struct {
 	TaskScheduleHandler   adminapi.TaskScheduleHandler
 	ConnectorDiagnostics  adminapi.ConnectorEventDiagnosticHandler
 	ConversationReset     adminapi.ConversationResetHandler
-	MemoryGraphHandler    adminapi.MemoryGraphHandler
 	BackupHandler         adminapi.BackupHandler
 	TaskInboxHandler      userapi.TaskInboxHandler
 	TaskActionHandler     userapi.TaskActionHandler
@@ -82,6 +82,8 @@ func NewRouter(routerDependencies RouterDependencies) http.Handler {
 	multiplexer.HandleFunc("GET /admin/api/quiesce", routerDependencies.QuiesceHandler.HandleGet)
 	multiplexer.HandleFunc("POST /admin/api/quiesce", routerDependencies.QuiesceHandler.HandlePost)
 	multiplexer.HandleFunc("POST /admin/api/runtime/prepare-shutdown", routerDependencies.QuiesceHandler.HandlePrepareShutdown)
+	multiplexer.HandleFunc("GET /admin/api/memory/facts", routerDependencies.MemoryHandler.HandleListFacts)
+	multiplexer.HandleFunc("POST /admin/api/memory/facts/forget", routerDependencies.MemoryHandler.HandleForgetFacts)
 	multiplexer.HandleFunc("GET /admin/api/schedule", routerDependencies.TaskScheduleHandler.HandleList)
 	multiplexer.HandleFunc("POST /admin/api/schedule/cancel", routerDependencies.TaskScheduleHandler.HandleCancel)
 	multiplexer.HandleFunc("POST /admin/api/schedule/delete", routerDependencies.TaskScheduleHandler.HandleDelete)
@@ -90,14 +92,6 @@ func NewRouter(routerDependencies RouterDependencies) http.Handler {
 	multiplexer.HandleFunc("GET /admin/api/schedule/summary", routerDependencies.TaskScheduleHandler.HandleSummary)
 	multiplexer.HandleFunc("GET /admin/api/connector/events", routerDependencies.ConnectorDiagnostics.HandleList)
 	multiplexer.HandleFunc("POST /admin/api/conversation/reset", routerDependencies.ConversationReset.HandleReset)
-	multiplexer.HandleFunc("GET /admin/api/memory/graph", routerDependencies.MemoryGraphHandler.HandleGetMemoryGraph)
-	multiplexer.HandleFunc("POST /admin/api/memory/episodes/delete", routerDependencies.MemoryGraphHandler.HandleDeleteEpisode)
-	multiplexer.HandleFunc("POST /admin/api/memory/facts/update", routerDependencies.MemoryGraphHandler.HandleUpdateFact)
-	multiplexer.HandleFunc("POST /admin/api/memory/facts/delete", routerDependencies.MemoryGraphHandler.HandleDeleteFact)
-	multiplexer.HandleFunc("POST /admin/api/memory/pinned/update", routerDependencies.MemoryGraphHandler.HandleSavePinnedMemory)
-	multiplexer.HandleFunc("POST /admin/api/memory/pinned/delete", routerDependencies.MemoryGraphHandler.HandleDeletePinnedMemory)
-	multiplexer.HandleFunc("POST /admin/api/memory/migrate-identity", routerDependencies.MemoryGraphHandler.HandleMigrateIdentity)
-	multiplexer.HandleFunc("GET /admin/api/memory/pinned-people", routerDependencies.MemoryGraphHandler.HandleListPinnedPeople)
 	multiplexer.HandleFunc("GET /admin/api/workspace/list", routerDependencies.WorkspaceFilesHandler.HandleList)
 	multiplexer.HandleFunc("GET /admin/api/workspace/download", routerDependencies.WorkspaceFilesHandler.HandleDownload)
 	multiplexer.HandleFunc("GET /admin/api/persona/user", routerDependencies.PersonaHandler.authorized(routerDependencies.PersonaHandler.HandleReadUser))

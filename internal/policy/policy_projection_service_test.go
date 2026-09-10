@@ -1,6 +1,10 @@
 package policy
 
-import "testing"
+import (
+	"sort"
+	"strings"
+	"testing"
+)
 
 func TestPolicyProjectionGivesMemberToEveryPerson(t *testing.T) {
 	policyProjection := PolicyProjectionService{}.ReplacePolicyProjectionTransactionally(PolicyDocument{
@@ -120,4 +124,20 @@ func hasTestPolicyString(values []string, expectedValue string) bool {
 		}
 	}
 	return false
+}
+
+func TestContainedCirclesFollowMemberCirclesOnTheCirclePolicy(t *testing.T) {
+	contained := ContainedCircles([]CirclePolicy{
+		{CircleID: "Engineering", MemberCircles: []string{"Platform", "data", "platform", ""}},
+		{CircleID: "sales"},
+	})
+	engineering := append([]string{}, contained["engineering"]...)
+	sort.Strings(engineering)
+	if len(contained) != 1 || strings.Join(engineering, ",") != "data,platform" {
+		t.Fatalf("expected engineering to contain data and platform once, lowercased, got %v", contained)
+	}
+	projection := PolicyProjectionService{}.ReplacePolicyProjectionTransactionally(PolicyDocument{Circles: []CirclePolicy{{CircleID: "engineering", MemberCircles: []string{"platform"}}}})
+	if strings.Join(projection.ContainedCirclesByID["engineering"], ",") != "platform" {
+		t.Fatalf("expected the projection to carry the containment, got %v", projection.ContainedCirclesByID)
+	}
 }

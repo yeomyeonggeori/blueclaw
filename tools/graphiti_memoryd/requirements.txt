@@ -1,5 +1,0 @@
-graphiti-core[kuzu]==0.29.3
-# graphiti_core.llm_client.client imports httpx without declaring it, so it only
-# arrives transitively and disappears whenever the resolved tree changes shape.
-httpx==0.28.1
-requests-unixsocket==0.4.1

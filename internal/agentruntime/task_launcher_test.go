@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"io"
 	"net/http"
 	"os"
@@ -13,10 +12,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluememo"
+
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/launchfailure"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
-	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
@@ -31,12 +32,12 @@ func TestTaskLauncherCreatesAuditedAgentRun(t *testing.T) {
 	agentKernel := loop.NewAgentKernel(taskRunService, task.NewTaskStepService())
 	runtimeLanguageModel := staticRuntimeLanguageModel{content: runtimeFinishMessage("done")}
 	useRuntimeTestLanguageModel(agentKernel, runtimeFinishMessage("done"))
-	pinnedMemoryStore := memory.NewMarkdownStore(t.TempDir(), 1200)
-	if _, errorValue := pinnedMemoryStore.MergePersonMemory(context.Background(), "person-1", "사용자는 발표자료 생성을 자주 요청한다."); errorValue != nil {
-		t.Fatalf("expected pinned memory setup to succeed: %v", errorValue)
+	memoryRepository := bluememo.NewInMemoryRepository()
+	if errorValue := memoryRepository.SaveProfile(context.Background(), bluememo.Profile{PersonID: "person-1", IdentityLines: []string{"사용자는 발표자료 생성을 자주 요청한다."}}); errorValue != nil {
+		t.Fatalf("expected memory profile setup to succeed: %v", errorValue)
 	}
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UsePinnedMemoryStore(pinnedMemoryStore)
+	toolCatalogBuilder.UseMemoryStore(&bluememo.Store{Facts: memoryRepository, Profiles: memoryRepository, Jobs: memoryRepository}, nil, nil)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{
 		"default": {"conversation_history", "memory_search"},
 	}, nil)
@@ -50,7 +51,6 @@ func TestTaskLauncherCreatesAuditedAgentRun(t *testing.T) {
 		Prompt:                    "발표자료 만들어줘",
 		HistoryProvider:           staticHistoryProvider{},
 		PersonAccess:              policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
-		MemoryNamespaces:          []memory.MemoryNamespace{memory.UserNamespace("person-1")},
 		AccessibleConversationIDs: []string{"channel-1"},
 	})
 	if errorValue != nil {
@@ -59,8 +59,8 @@ func TestTaskLauncherCreatesAuditedAgentRun(t *testing.T) {
 	if launchResult.TurnResult.TaskRun.TaskRunID == "" {
 		t.Fatal("expected task run id")
 	}
-	if len(launchResult.MemoryFacts) != 0 {
-		t.Fatalf("expected no automatic memory retrieval, got %+v", launchResult.MemoryFacts)
+	if len(launchResult.MemoryFacts) != 1 {
+		t.Fatalf("expected the profile line on the launch result, got %+v", launchResult.MemoryFacts)
 	}
 	if !containsString(launchResult.ToolNames, "conversation_history") || !containsString(launchResult.ToolNames, "memory_search") {
 		t.Fatalf("expected launch tool catalog, got %+v", launchResult.ToolNames)
@@ -74,7 +74,7 @@ func TestTaskLauncherCreatesAuditedAgentRun(t *testing.T) {
 	if taskLaunchEvent.Name == "" {
 		t.Fatalf("expected task launch event, got %+v", taskEvents)
 	}
-	if !strings.Contains(taskLaunchEvent.Body, `"source":"connector"`) || !strings.Contains(taskLaunchEvent.Body, `"memoryFactCount":0`) {
+	if !strings.Contains(taskLaunchEvent.Body, `"source":"connector"`) || !strings.Contains(taskLaunchEvent.Body, `"memoryFactCount":1`) {
 		t.Fatalf("expected launch audit body, got %s", taskLaunchEvent.Body)
 	}
 }
@@ -356,16 +356,12 @@ func TestTaskLauncherProvisionsRequesterWorkspaceBeforeToolSet(t *testing.T) {
 	}
 }
 
-func TestTaskLauncherRunsWithoutReadingPinnedMemory(t *testing.T) {
+func TestTaskLauncherAuditsRecallFailureAndRunsWithoutMemory(t *testing.T) {
 	taskEventService := task.NewTaskEventService()
 	taskRunService := task.NewTaskRunService(taskEventService)
 	harness := harnesstest.New(taskRunService)
-	rootPath := t.TempDir()
-	if errorValue := os.WriteFile(filepath.Join(rootPath, "people"), []byte("not a directory"), 0600); errorValue != nil {
-		t.Fatalf("expected pinned memory failure setup to succeed: %v", errorValue)
-	}
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UsePinnedMemoryStore(memory.NewMarkdownStore(rootPath, 1200))
+	toolCatalogBuilder.UseMemoryStore(&bluememo.Store{Facts: failingFactRepository{errorValue: errors.New("database is away")}}, nil, nil)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{
 		"default": {"memory_search"},
 	}, nil)
@@ -380,17 +376,16 @@ func TestTaskLauncherRunsWithoutReadingPinnedMemory(t *testing.T) {
 		ConversationID:    "channel-1",
 		Prompt:            "내 이름 뭐야?",
 		PersonAccess:      policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
-		MemoryNamespaces:  []memory.MemoryNamespace{memory.UserNamespace("person-1")},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected launch to continue without memory: %v", errorValue)
 	}
 	if len(launchResult.MemoryFacts) != 0 {
-		t.Fatalf("expected no memory facts after pinned memory failure, got %+v", launchResult.MemoryFacts)
+		t.Fatalf("expected no memory facts after a recall failure, got %+v", launchResult.MemoryFacts)
 	}
 	taskEvents := taskEventService.ListTaskEvent(launchResult.TurnResult.TaskRun.TaskRunID)
-	if containsTaskEvent(taskEvents, "memory.pinned_load_failed") || containsTaskEvent(taskEvents, "memory.pinned_load_succeeded") {
-		t.Fatalf("expected no automatic pinned memory event, got %+v", taskEvents)
+	if !containsTaskEvent(taskEvents, "memory.recall_failed") {
+		t.Fatalf("expected a recall failure event, got %+v", taskEvents)
 	}
 }
 
@@ -955,16 +950,17 @@ func (provisioner *recordingRequesterWorkspaceProvisioner) ProvisionRequesterWor
 	return provisioner.provision(personAccess, workspaceRootPath)
 }
 
-type failingGraphMemoryStore struct {
+type failingFactRepository struct {
+	bluememo.FactRepository
 	errorValue error
 }
 
-func (store failingGraphMemoryStore) AddEpisode(context.Context, memory.MemoryEpisode) (memory.MemoryIngestionResult, error) {
-	return memory.MemoryIngestionResult{}, nil
+func (repository failingFactRepository) HasVectorSearch(context.Context) (bool, error) {
+	return false, repository.errorValue
 }
 
-func (store failingGraphMemoryStore) SearchFacts(context.Context, memory.MemorySearchRequest) ([]memory.MemoryFact, error) {
-	return nil, store.errorValue
+func (repository failingFactRepository) SearchFacts(context.Context, bluememo.FactSearchQuery) ([]bluememo.RankedFact, error) {
+	return nil, repository.errorValue
 }
 
 func runtimeFinishMessage(reply string) string {

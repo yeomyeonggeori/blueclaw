@@ -49,7 +49,6 @@ func newTaskSchedulePoller(runtimeConfiguration config.RuntimeConfiguration, ser
 		TaskRunService:         services.taskRunService,
 		PersonAccessResolver:   identityService,
 		TaskIntakeGate:         taskIntakeController,
-		WorkspaceID:            runtimeConfiguration.Memory.WorkspaceID,
 		WorkerID:               "blueclaw-app",
 		Logger:                 logger,
 	}
