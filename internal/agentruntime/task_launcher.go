@@ -255,7 +255,7 @@ type launchTaskRun struct {
 
 func (taskLauncher *TaskLauncher) openTaskRunForLaunch(request TaskLaunchRequest) launchTaskRun {
 	if existingTaskRunID := strings.TrimSpace(request.ExistingTaskRunID); existingTaskRunID != "" {
-		return launchTaskRun{TaskRunID: existingTaskRunID}
+		return launchTaskRun{TaskRunID: existingTaskRunID, IsOpenedByHost: request.IsTaskRunOpenedForThisTurn}
 	}
 	taskRun := taskLauncher.taskRunService.CreateTaskRunWithOrigin(request.RequesterPersonID, taskstate.TaskRunOrigin{
 		ConversationID: request.ConversationID,

@@ -69,6 +69,12 @@ type PlatformInboundEvent struct {
 	Context          VisibleContext            `json:"context"`
 	RawReceivedAt    time.Time                 `json:"-"`
 	LegacyFields     map[string]interface{}    `json:"legacyFields,omitempty"`
+	TaskRetry        *TaskRetryReference       `json:"taskRetry,omitempty"`
+}
+
+type TaskRetryReference struct {
+	SourceTaskRunID string `json:"sourceTaskRunID"`
+	TaskRunID       string `json:"taskRunID"`
 }
 
 type ReplyTarget struct {
@@ -464,6 +470,7 @@ type ConnectorRuntime struct {
 	logger                 *slog.Logger
 
 	mutex                   sync.Mutex
+	retryMutex              sync.Mutex
 	adapterByPlatform       map[string]PlatformAdapter
 	processedResults        map[string]ConnectorRuntimeResult
 	eventRepository         ConnectorEventRepository
@@ -938,7 +945,7 @@ func (connectorRuntime *ConnectorRuntime) processQueuedConnectorEvent(ctx contex
 	}
 	connectorRuntime.logConnectorQueueWait(event)
 	lock := connectorRuntime.conversationLock(event.Platform + ":" + event.ConversationID)
-	if connectorRuntime.pendingRequests.isSuperseded(event.DedupeKey()) || (len(event.PreviousMessages) == 0 && connectorRuntime.shouldProcessBeforeConversationLock(ctx, adapter, event)) {
+	if event.TaskRetry == nil && (connectorRuntime.pendingRequests.isSuperseded(event.DedupeKey()) || (len(event.PreviousMessages) == 0 && connectorRuntime.shouldProcessBeforeConversationLock(ctx, adapter, event))) {
 		connectorRuntime.processQueuedConnectorEventWithAdapter(ctx, adapter, queuedEvent)
 		return
 	}
@@ -1098,6 +1105,9 @@ func (connectorRuntime *ConnectorRuntime) processInboundEvent(ctx context.Contex
 
 func (connectorRuntime *ConnectorRuntime) processInboundEventWithReplySender(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent, sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error)) (ConnectorRuntimeResult, error) {
 	ctx = withConnectorEvent(ctx, event)
+	if event.TaskRetry != nil {
+		return connectorRuntime.processTaskRetry(ctx, adapter, event, sendReply)
+	}
 	turn := &inboundTurn{adapter: adapter, platform: adapter.Name(), event: event, sendReply: sendReply, stopProgress: func() {}}
 	connectorRuntime.logInboundEventReceived(turn)
 	if result, isHandled, errorValue := connectorRuntime.admitInboundTurn(ctx, turn); isHandled {

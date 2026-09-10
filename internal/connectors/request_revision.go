@@ -39,6 +39,9 @@ func (connectorRuntime *ConnectorRuntime) restorePendingRequests() error {
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
 	for _, event := range events {
+		if event.TaskRetry != nil {
+			continue
+		}
 		preparedEvent, previous := store.prepare(event)
 		store.register(preparedEvent, previous)
 	}
@@ -46,6 +49,9 @@ func (connectorRuntime *ConnectorRuntime) restorePendingRequests() error {
 }
 
 func (connectorRuntime *ConnectorRuntime) processPendingInboundEvent(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent, sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error), isQueued bool) (ConnectorRuntimeResult, error) {
+	if event.TaskRetry != nil {
+		return connectorRuntime.processInboundEventWithReplySender(ctx, adapter, event, sendReply)
+	}
 	if exactTaskControlIntent(event.Prompt) != agentcontract.TaskControlIntentNone {
 		result, errorValue := connectorRuntime.processInboundEventWithReplySender(ctx, adapter, event, sendReply)
 		if errorValue == nil && result.ReplyDispatchID != "" {
