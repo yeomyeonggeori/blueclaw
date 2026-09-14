@@ -31,6 +31,7 @@ type inboundTurn struct {
 	hasPendingConfirmation          bool
 	isApprovalContinuation          bool
 	didSupersedePendingConfirmation bool
+	keptPendingConfirmation         bool
 
 	pendingAskInteraction    AskInteraction
 	hasPendingAskInteraction bool
@@ -141,26 +142,32 @@ func (connectorRuntime *ConnectorRuntime) resolvePendingConfirmation(ctx context
 	if !hasPendingConfirmation || turn.isApprovalContinuation {
 		return ConnectorRuntimeResult{}, false, nil
 	}
-	return connectorRuntime.supersedePendingConfirmation(ctx, turn)
+	return connectorRuntime.settlePendingConfirmation(ctx, turn)
 }
 
 func (connectorRuntime *ConnectorRuntime) routerToolSetForTurn(turn *inboundTurn) *toolcontract.ToolSet {
 	return connectorRuntime.currentTaskLauncher().RouterToolSet(connectorRuntime.buildTaskLaunchRequest(connectorRuntime.conversationTurnFor(turn, nil)))
 }
 
-func (connectorRuntime *ConnectorRuntime) supersedePendingConfirmation(ctx context.Context, turn *inboundTurn) (ConnectorRuntimeResult, bool, error) {
+func (connectorRuntime *ConnectorRuntime) settlePendingConfirmation(ctx context.Context, turn *inboundTurn) (ConnectorRuntimeResult, bool, error) {
 	if confirmationWasRejected(turn.turnDecision) {
 		rejection := agentcontract.ConfirmationReplyDecision{Decision: string(agentcontract.ApprovalSignalReject), Reason: turn.turnDecision.Reason}
 		result, errorValue := connectorRuntime.handleRejectedConfirmation(ctx, turn.platform, turn.adapter, turn.event, turn.replyTarget, turn.pendingApproval, rejection, turn.sendReply)
 		return result, true, errorValue
 	}
-	if turn.turnDecision.Route == agentcontract.TurnRouteAnswerQuestion {
-		result, errorValue := connectorRuntime.handlePendingConfirmationQuestion(ctx, turn.platform, turn.adapter, turn.event, turn.replyTarget, turn.pendingApproval, turn.turnDecision, turn.sendReply)
+	switch turn.turnDecision.Route {
+	case agentcontract.TurnRouteAnswerQuestion:
+		result, errorValue := connectorRuntime.handlePendingConfirmationQuestion(ctx, turn.platform, turn.adapter, turn.event, turn.replyTarget, turn.pendingApproval, turn.sendReply)
 		return result, true, errorValue
+	case agentcontract.TurnRouteReviseTask:
+		connectorRuntime.cancelPendingConfirmation(turn.event, turn.pendingApproval, turn.turnDecision)
+		turn.didSupersedePendingConfirmation = true
+		return ConnectorRuntimeResult{}, false, nil
+	default:
+		connectorRuntime.logger.Info("connector."+turn.platform+".confirmation.kept", slog.String("messageID", turn.event.MessageID), slog.String("taskRunID", turn.pendingApproval.TaskRun.TaskRunID), slog.String("route", string(turn.turnDecision.Route)))
+		turn.keptPendingConfirmation = true
+		return ConnectorRuntimeResult{}, false, nil
 	}
-	connectorRuntime.cancelPendingConfirmation(turn.event, turn.pendingApproval, turn.turnDecision)
-	turn.didSupersedePendingConfirmation = true
-	return ConnectorRuntimeResult{}, false, nil
 }
 
 func (connectorRuntime *ConnectorRuntime) resolvePendingAsk(ctx context.Context, turn *inboundTurn) error {
@@ -196,6 +203,10 @@ func (connectorRuntime *ConnectorRuntime) resolvePendingAsk(ctx context.Context,
 
 func (connectorRuntime *ConnectorRuntime) resolveTurnActiveGoal(ctx context.Context, turn *inboundTurn) {
 	turn.activeGoal, turn.hasActiveGoal = connectorRuntime.findActiveGoal(turn.personID, turn.platform, turn.event, turn.taskWaitResolution)
+	if turn.keptPendingConfirmation && turn.activeGoal.TaskRunID == turn.pendingApproval.TaskRun.TaskRunID {
+		turn.activeGoal = agentcontract.ActiveGoal{}
+		turn.hasActiveGoal = false
+	}
 	if len(turn.event.PreviousMessages) > 0 {
 		turn.activeGoal = agentcontract.ActiveGoal{}
 		turn.hasActiveGoal = false
@@ -238,7 +249,7 @@ func (connectorRuntime *ConnectorRuntime) resolveTurnAddressing(ctx context.Cont
 }
 
 func (connectorRuntime *ConnectorRuntime) handleBusyTurn(ctx context.Context, turn *inboundTurn) (ConnectorRuntimeResult, bool, error) {
-	if len(turn.event.PreviousMessages) > 0 || turn.isApprovalContinuation || turn.hasPendingAskInteraction || turn.didSupersedePendingAsk || turn.didSupersedePendingConfirmation {
+	if len(turn.event.PreviousMessages) > 0 || turn.isApprovalContinuation || turn.hasPendingAskInteraction || turn.didSupersedePendingAsk || turn.didSupersedePendingConfirmation || turn.keptPendingConfirmation {
 		return ConnectorRuntimeResult{}, false, nil
 	}
 	busyResult, errorValue := connectorRuntime.handleBusyMessageIfNeeded(ctx, turn.platform, turn.event, turn.replyTarget, turn.personID, turn.sendReply)
