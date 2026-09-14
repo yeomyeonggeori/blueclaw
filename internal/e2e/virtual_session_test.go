@@ -508,6 +508,28 @@ func TestFailedAssertionReturnsObservedTurnResult(t *testing.T) {
 	}
 }
 
+func TestAllowedTaskStatusesKeepUnexpectedFailuresRejected(t *testing.T) {
+	result := VirtualTurnResult{TaskRunID: "status-test", TaskStatus: task.TaskStatusFailed}
+	turn := VirtualTurn{AllowedTaskStatuses: []task.TaskStatus{task.TaskStatusCompleted, task.TaskStatusWaitingUserInput}}
+	if errorValue := assertTaskDidNotFailUnexpectedly(turn, result); errorValue == nil {
+		t.Fatal("expected an unlisted failure to remain rejected")
+	}
+	if errorValue := assertStructuralTurnExpectations(turn, result); errorValue == nil {
+		t.Fatal("expected the status constraint to reject an unlisted failure")
+	}
+	turn.AllowedTaskStatuses = append(turn.AllowedTaskStatuses, task.TaskStatusFailed)
+	if errorValue := assertTaskDidNotFailUnexpectedly(turn, result); errorValue != nil {
+		t.Fatalf("expected an explicitly allowed failure: %v", errorValue)
+	}
+	if errorValue := assertStructuralTurnExpectations(turn, result); errorValue != nil {
+		t.Fatalf("expected an explicitly allowed terminal status: %v", errorValue)
+	}
+	turn.ExpectedTaskStatus = task.TaskStatusCompleted
+	if errorValue := assertStructuralTurnExpectations(turn, result); errorValue == nil {
+		t.Fatal("expected an exact status constraint to remain enforced")
+	}
+}
+
 func TestVirtualTaskCapabilityPreservesLifecycleState(t *testing.T) {
 	service := virtualCapabilityService{}
 	addResponse := service.response("task_add", []byte(`{"input":{"title":"비용 테스트 회귀 확인","size":"S","participantPersonHints":["예시","샘플"]},"context":{}}`))

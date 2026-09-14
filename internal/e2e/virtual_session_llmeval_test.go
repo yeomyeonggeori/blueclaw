@@ -13,6 +13,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
+	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
 	"github.com/yeomyeonggeori/bluememo"
@@ -74,6 +75,9 @@ func runLiveMemoryTurn(t *testing.T, model llm.LanguageModelProvider, initialMem
 	}
 	t.Logf("memory evidence: %s", artifactDirectory)
 	scenario := VirtualSessionScenario{Name: "memory_recall_live", ArtifactDirectoryPath: artifactDirectory, LanguageModel: model, DisableScriptedModel: true, FailOnLanguageModelError: true, InitialMemoryFacts: initialMemory, AllowedTools: []string{"memory_search"}, Turns: []VirtualTurn{{Prompt: prompt, RouterTaskShape: agentcontract.TaskShapeResearchTask, ExpectedResponse: VirtualResponseReply, ForbiddenReplyFragments: forbiddenReplyFragments}}}
+	if len(initialMemory) == 0 {
+		scenario.Turns[0].AllowedTaskStatuses = []task.TaskStatus{task.TaskStatusCompleted, task.TaskStatusWaitingUserInput, task.TaskStatusFailed}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	result, errorValue := RunVirtualSession(ctx, scenario)
@@ -91,8 +95,8 @@ func runLiveMemoryTurn(t *testing.T, model llm.LanguageModelProvider, initialMem
 	if len(initialMemory) > 0 && turnResult.TaskStatus != "completed" {
 		t.Fatalf("memory evaluation did not produce a completed answer: %+v", turnResult)
 	}
-	if len(initialMemory) == 0 && turnResult.TaskStatus != "completed" && turnResult.TaskStatus != "waiting_user_input" {
-		t.Fatalf("memory evaluation did not produce a completed answer: %+v", result.TurnResults[0])
+	if len(initialMemory) == 0 && turnResult.TaskStatus == task.TaskStatusFailed && !eventsContain(turnResult.Events, "agent.goal.blocked", "") {
+		t.Fatalf("empty-memory control failed without a blocked goal: %+v", turnResult)
 	}
 	return turnResult
 }

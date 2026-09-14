@@ -238,6 +238,7 @@ type VirtualTurn struct {
 	ExpectedCheckpointReplies    []string
 	ForbiddenEvents              []string
 	ExpectedTaskStatus           task.TaskStatus
+	AllowedTaskStatuses          []task.TaskStatus
 	ForbidToolCalls              bool
 }
 
@@ -3133,6 +3134,9 @@ func assertTaskDidNotFailUnexpectedly(virtualTurn VirtualTurn, turnResult Virtua
 	if strings.TrimSpace(string(virtualTurn.ExpectedTaskStatus)) != "" {
 		return nil
 	}
+	if slices.Contains(virtualTurn.AllowedTaskStatuses, turnResult.TaskStatus) {
+		return nil
+	}
 	if turnResult.TaskRunID == "" || turnResult.TaskStatus != task.TaskStatusFailed {
 		return nil
 	}
@@ -3390,6 +3394,9 @@ func assertStructuralTurnExpectations(virtualTurn VirtualTurn, turnResult Virtua
 	}
 	if strings.TrimSpace(string(virtualTurn.ExpectedTaskStatus)) != "" && turnResult.TaskStatus != virtualTurn.ExpectedTaskStatus {
 		return fmt.Errorf("expected task status %q, got %q", virtualTurn.ExpectedTaskStatus, turnResult.TaskStatus)
+	}
+	if len(virtualTurn.AllowedTaskStatuses) > 0 && !slices.Contains(virtualTurn.AllowedTaskStatuses, turnResult.TaskStatus) {
+		return fmt.Errorf("expected one of task statuses %q, got %q", virtualTurn.AllowedTaskStatuses, turnResult.TaskStatus)
 	}
 	return nil
 }
