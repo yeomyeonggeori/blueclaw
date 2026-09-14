@@ -9,7 +9,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 type busyMessageResult struct {
@@ -18,37 +17,15 @@ type busyMessageResult struct {
 	clearActiveGoal bool
 }
 
-func (connectorRuntime *ConnectorRuntime) handleBusyMessageIfNeeded(
+func (connectorRuntime *ConnectorRuntime) settleBusyDecision(
 	ctx context.Context,
 	platform string,
 	event PlatformInboundEvent,
 	replyTarget ReplyTarget,
-	personID string,
-	toolSet *toolcontract.ToolSet,
+	activeTaskRun task.TaskRun,
+	decision agentcontract.TurnDecision,
 	sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error),
 ) (busyMessageResult, error) {
-	activeTaskRun, isFound := connectorRuntime.latestCurrentConversationActiveTask(personID, event)
-	if !isFound {
-		return connectorRuntime.handlePossibleFinishedTaskFollowUp(ctx, platform, event, replyTarget, personID, sendReply)
-	}
-	decision, errorValue := connectorRuntime.planTurn(ctx, activeTaskRun.TaskRunID, agentcontract.AgentRequest{
-		RequesterPersonID: personID,
-		ConversationID:    event.ConversationID,
-		Prompt:            event.Prompt,
-		ResponseLanguage:  responseLanguageForEvent(event),
-		VisibleContext:    event.Context.ToAgentVisibleContext(),
-		ToolSet:           toolSet,
-		ActiveTask:        connectorRuntime.activeTaskContext(activeTaskRun),
-	})
-	if errorValue != nil {
-		return busyMessageResult{}, errorValue
-	}
-	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskBusyMessageRouted, marshalConnectorEventBody(map[string]string{
-		"messageID":       event.MessageID,
-		"busyRoute":       string(decision.BusyRoute),
-		"reason":          strings.TrimSpace(decision.Reason),
-		"latestUserInput": strings.TrimSpace(event.Prompt),
-	}))
 	switch decision.BusyRoute {
 	case agentcontract.BusyRouteStatus:
 		return connectorRuntime.handleBusyStatusMessage(ctx, platform, event, replyTarget, activeTaskRun, decision, sendReply)
@@ -369,6 +346,21 @@ func (connectorRuntime *ConnectorRuntime) latestCurrentConversationActiveTask(pe
 	isFound := false
 	for _, taskRun := range connectorRuntime.activeTaskRunsForPerson(personID) {
 		if !taskRunMatchesMessageScope(taskRun, event) {
+			continue
+		}
+		if !isFound || taskRun.UpdatedAt.After(latestTaskRun.UpdatedAt) {
+			latestTaskRun = taskRun
+			isFound = true
+		}
+	}
+	return latestTaskRun, isFound
+}
+
+func (connectorRuntime *ConnectorRuntime) latestRunningConversationTask(personID string, event PlatformInboundEvent) (task.TaskRun, bool) {
+	var latestTaskRun task.TaskRun
+	isFound := false
+	for _, taskRun := range connectorRuntime.activeTaskRunsForPerson(personID) {
+		if !taskRunMatchesMessageScope(taskRun, event) || taskRun.Status == task.TaskStatusWaitingApproval || taskRun.Status == task.TaskStatusWaitingUserInput {
 			continue
 		}
 		if !isFound || taskRun.UpdatedAt.After(latestTaskRun.UpdatedAt) {
