@@ -422,7 +422,7 @@ func TestConnectorRuntimePreservesNaturalLanguageOptionReply(t *testing.T) {
 	}
 }
 
-func TestConnectorRuntimePendingInputStartTaskSupersedesWaitingTask(t *testing.T) {
+func TestConnectorRuntimePendingInputStartTaskLeavesTheWaitingTaskWaiting(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
 	harness.TurnDecision = agentcontract.TurnDecision{
 		Route:            agentcontract.TurnRouteStartTask,
@@ -453,24 +453,20 @@ func TestConnectorRuntimePendingInputStartTaskSupersedesWaitingTask(t *testing.T
 		t.Fatalf("expected new task result, got %+v", result)
 	}
 	waitingTaskRun, _ = connectorRuntime.taskRunService.FindTaskRun(waitingTaskRun.TaskRunID)
-	if waitingTaskRun.Status != task.TaskStatusCancelled || waitingTaskRun.FailureReason != "superseded_by_new_message" {
-		t.Fatalf("expected waiting task superseded, got %+v", waitingTaskRun)
+	if waitingTaskRun.Status != task.TaskStatusWaitingUserInput {
+		t.Fatalf("an independent question leaves the ask waiting for its answer, got %+v", waitingTaskRun)
 	}
 	openWaits, errorValue := taskWaitRepository.FindOpenByPersonAndConversation("person-1", "test", "direct-1")
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if len(openWaits) != 0 {
-		t.Fatalf("expected superseded wait token to close, got %+v", openWaits)
+	if len(openWaits) != 1 {
+		t.Fatalf("the wait token stays open for the answer still to come, got %+v", openWaits)
 	}
 	if len(adapter.sentReplies) != 1 || adapter.sentReplies[0].message != "휴게소 들러도 괜찮습니다." {
 		t.Fatalf("expected latest-message reply only, got %+v", adapter.sentReplies)
 	}
-	if !connectorTaskEventsContain(connectorRuntime, waitingTaskRun.TaskRunID, "ask.superseded_by_message", "message-new-question") {
-		t.Fatal("expected ask superseded event")
-	}
 }
-
 func TestConnectorRuntimeWritesResolvesAndExpiresTaskWaitRecord(t *testing.T) {
 	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
 		StructuredResponsesBySchema: map[string][]string{

@@ -1448,23 +1448,8 @@ func askReplyConsumesInteraction(interaction AskInteraction, previousPrompt stri
 	}
 }
 
-func askReplySupersedesInteraction(decision agentcontract.TurnDecision, hasDecision bool) bool {
+func askReplyIsUnrelated(decision agentcontract.TurnDecision, hasDecision bool) bool {
 	return hasDecision && decision.Route == agentcontract.TurnRouteStartTask
-}
-
-func (connectorRuntime *ConnectorRuntime) supersedePendingAskInteraction(event PlatformInboundEvent, interaction AskInteraction, decision agentcontract.TurnDecision) {
-	taskRun, isFound := connectorRuntime.taskRunService.FindTaskRun(interaction.TaskRunID)
-	if isFound {
-		_, _ = connectorRuntime.taskRunService.CancelTaskRunWithReason(taskRun.TaskRunID, taskRun.RequesterPersonID, "superseded_by_new_message")
-		connectorRuntime.resolveOpenTaskWaitsForTaskRun(taskRun.RequesterPersonID, event.Platform, taskRun.OriginConversationID, taskRun.TaskRunID)
-	}
-	connectorRuntime.taskRunService.AppendTaskEvent(interaction.TaskRunID, agentcontract.TaskEventAskSupersededByMessage, marshalConnectorEventBody(map[string]string{
-		"interactionID":   strings.TrimSpace(interaction.InteractionID),
-		"messageID":       strings.TrimSpace(event.MessageID),
-		"route":           strings.TrimSpace(string(decision.Route)),
-		"reason":          strings.TrimSpace(decision.Reason),
-		"latestUserInput": strings.TrimSpace(event.Prompt),
-	}))
 }
 
 func (connectorRuntime *ConnectorRuntime) appendAskResolvedEvent(interaction AskInteraction, event PlatformInboundEvent, decision agentcontract.TurnDecision) {
