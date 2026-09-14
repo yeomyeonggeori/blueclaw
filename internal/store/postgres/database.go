@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	bluememopostgres "github.com/yeomyeonggeori/bluememo/postgres"
 )
 
 type Database struct {
@@ -48,6 +49,16 @@ func (database Database) Exec(ctx context.Context, query string, arguments ...an
 }
 
 func (migrationRunner MigrationRunner) ApplyMigrations(ctx context.Context, database Database) error {
+	if errorValue := migrationRunner.applyHostMigrations(ctx, database); errorValue != nil {
+		return errorValue
+	}
+	if errorValue := bluememopostgres.ApplyMigrations(ctx, database.SQL); errorValue != nil {
+		return fmt.Errorf("apply memory library migrations: %w", errorValue)
+	}
+	return nil
+}
+
+func (migrationRunner MigrationRunner) applyHostMigrations(ctx context.Context, database Database) error {
 	migrationPaths, errorValue := migrationRunner.ListMigrationPath()
 	if errorValue != nil {
 		return errorValue
