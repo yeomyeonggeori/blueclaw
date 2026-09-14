@@ -243,6 +243,9 @@ func TestCloudHypervisorMonitorServesTheDeliveryShare(t *testing.T) {
 	if !containsArgument(guestLaunch.Sidecars[0].Arguments, "--shared-dir=/var/lib/blueclaw/delivery") {
 		t.Fatalf("expected virtiofsd to serve the delivery directory, got %v", guestLaunch.Sidecars[0].Arguments)
 	}
+	if !containsArgument(guestLaunch.Sidecars[0].Arguments, "--cache=never") {
+		t.Fatalf("the guest must see host replacements before reloading policy, got %v", guestLaunch.Sidecars[0].Arguments)
+	}
 }
 
 func TestCloudHypervisorMonitorAsksForNoShareWhenNoneIsGiven(t *testing.T) {
