@@ -28,7 +28,8 @@ func memoryHandlerFixture(t *testing.T) (MemoryHandler, *bluememo.InMemoryReposi
 	if errorValue := repository.SaveEpisode(context.Background(), bluememo.EpisodeWrite{Episode: episode, Facts: facts}); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if errorValue := repository.SaveProfile(context.Background(), bluememo.Profile{PersonID: "person-alice", IdentityLines: []string{"이샘플 wants bullets"}, CurrentLines: []string{}, BuiltAt: now}); errorValue != nil {
+	profile := bluememo.Profile{PersonID: "person-alice", IdentityLines: []string{"이샘플 wants bullets"}, CurrentLines: []string{}, SourceFactIDs: []string{"fact-alice"}, BuiltFromFactCount: 1, BuiltAt: now}
+	if errorValue := repository.SaveProfile(context.Background(), profile); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	identityService := identity.NewIdentityService(policy.PolicyProjection{

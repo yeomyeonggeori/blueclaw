@@ -13,9 +13,10 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
-	"github.com/yeomyeonggeori/blueclaw/internal/memory"
+	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
+	"github.com/yeomyeonggeori/bluememo"
 )
 
 func TestMemoryRecallWithoutConversationHistoryLive(t *testing.T) {
@@ -28,18 +29,17 @@ func TestMemoryRecallWithoutConversationHistoryLive(t *testing.T) {
 		t.Skip("set BLUECLAW_E2E_LLM_ENDPOINT or BLUECLAW_E2E_LLM_UNIX_SOCKET to run live memory evaluation")
 	}
 	model := liveMemoryModel(t, endpoint, socketPath)
-	remembered := runLiveMemoryTurn(t, model, []memory.MemoryFact{{
-		FactID: "synthetic-memory-fact", ScopeType: memory.ScopeTypeUser,
-		NamespaceID: memory.UserNamespace("person-1").NamespaceID,
-		Content:     "The internal codename for the migration is Blue Lantern.",
-		SourceKind:  memory.MemorySourceKindFact,
-		ValidAt:     time.Now().UTC(),
+	remembered := runLiveMemoryTurn(t, model, []bluememo.Fact{{
+		FactID: "synthetic-memory-fact", OwnerPersonID: "person-1",
+		Content:   "The internal codename for the migration is Blue Lantern.",
+		Kind:      bluememo.FactKindFact,
+		ValidFrom: time.Now().UTC(),
 	}}, "What is the internal codename for the migration?", "Blue Lantern")
 	if !strings.Contains(remembered.FinishMessage, "Blue Lantern") {
 		t.Fatalf("memory-backed answer omitted the stored fact: %q", remembered.FinishMessage)
 	}
-	if !eventsContain(remembered.Events, "tool.memory_search.requested", "") {
-		t.Fatal("expected live model to request memory_search")
+	if !eventsContain(remembered.Events, "memory.recall_injected", "") {
+		t.Fatal("expected the store recall to reach the live agent")
 	}
 	control := runLiveMemoryTurn(t, model, nil, "What is the internal codename for the migration?", "Blue Lantern")
 	if strings.Contains(control.FinishMessage, "Blue Lantern") {
@@ -59,7 +59,7 @@ func liveMemoryModel(t *testing.T, endpoint string, socketPath string) llm.Langu
 	return llm.CapabilityLLMClient{CapabilityClient: capability.NewClient(capability.Configuration{Endpoint: endpoint, UnixSocketPath: socketPath}), ModelName: os.Getenv("BLUECLAW_E2E_LLM_MODEL"), ExecutionMode: firstNonEmptyTestString(os.Getenv("BLUECLAW_E2E_LLM_EXECUTION_MODE"), "auto")}
 }
 
-func runLiveMemoryTurn(t *testing.T, model llm.LanguageModelProvider, initialMemory []memory.MemoryFact, prompt string, forbiddenAnswer string) VirtualTurnResult {
+func runLiveMemoryTurn(t *testing.T, model llm.LanguageModelProvider, initialMemory []bluememo.Fact, prompt string, forbiddenAnswer string) VirtualTurnResult {
 	t.Helper()
 	forbiddenReplyFragments := []string{}
 	if len(initialMemory) == 0 {
@@ -74,7 +74,10 @@ func runLiveMemoryTurn(t *testing.T, model llm.LanguageModelProvider, initialMem
 		t.Fatal(errorValue)
 	}
 	t.Logf("memory evidence: %s", artifactDirectory)
-	scenario := VirtualSessionScenario{Name: "memory_recall_live", ArtifactDirectoryPath: artifactDirectory, LanguageModel: model, DisableScriptedModel: true, FailOnLanguageModelError: true, InitialMemory: initialMemory, AllowedTools: []string{"memory_search"}, Turns: []VirtualTurn{{Prompt: prompt, RouterTaskShape: agentcontract.TaskShapeResearchTask, ExpectedResponse: VirtualResponseReply, ForbiddenReplyFragments: forbiddenReplyFragments}}}
+	scenario := VirtualSessionScenario{Name: "memory_recall_live", ArtifactDirectoryPath: artifactDirectory, LanguageModel: model, DisableScriptedModel: true, FailOnLanguageModelError: true, InitialMemoryFacts: initialMemory, AllowedTools: []string{"memory_search"}, Turns: []VirtualTurn{{Prompt: prompt, RouterTaskShape: agentcontract.TaskShapeResearchTask, ExpectedResponse: VirtualResponseReply, ForbiddenReplyFragments: forbiddenReplyFragments}}}
+	if len(initialMemory) == 0 {
+		scenario.Turns[0].AllowedTaskStatuses = []task.TaskStatus{task.TaskStatusCompleted, task.TaskStatusWaitingUserInput, task.TaskStatusFailed}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	result, errorValue := RunVirtualSession(ctx, scenario)
@@ -92,8 +95,8 @@ func runLiveMemoryTurn(t *testing.T, model llm.LanguageModelProvider, initialMem
 	if len(initialMemory) > 0 && turnResult.TaskStatus != "completed" {
 		t.Fatalf("memory evaluation did not produce a completed answer: %+v", turnResult)
 	}
-	if len(initialMemory) == 0 && turnResult.TaskStatus != "completed" && turnResult.TaskStatus != "waiting_user_input" {
-		t.Fatalf("memory evaluation did not produce a completed answer: %+v", result.TurnResults[0])
+	if len(initialMemory) == 0 && turnResult.TaskStatus == task.TaskStatusFailed && !eventsContain(turnResult.Events, "agent.goal.blocked", "") {
+		t.Fatalf("empty-memory control failed without a blocked goal: %+v", turnResult)
 	}
 	return turnResult
 }

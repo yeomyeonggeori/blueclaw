@@ -46,6 +46,10 @@ func (resolver integrationAccessResolver) ResolvePersonAccess(string) policy.Per
 	return resolver.personAccess
 }
 
+func (resolver integrationAccessResolver) FindPersonAccess(personID string) (policy.PersonAccess, bool) {
+	return resolver.personAccess, resolver.personAccess.PersonID == personID
+}
+
 func (resolver integrationAccessResolver) ContainedCircles() map[string][]string {
 	return map[string][]string{}
 }
@@ -81,7 +85,7 @@ func TestMemoryExtractionRecordsFactsAndProfileInPostgres(t *testing.T) {
 		Now:  func() time.Time { return fixture.now },
 		Handlers: map[string]bluememo.JobHandler{
 			bluememo.JobKindExtract: memory.ExtractJobHandler{Ingester: ingester, TaskRuns: reader, Steps: reader, Access: access}.Handle,
-			bluememo.JobKindProfile: bluememo.ProfileJobHandler{Builder: bluememo.ProfileBuilder{Store: store, Model: scripted, Now: func() time.Time { return fixture.now }}}.Handle,
+			bluememo.JobKindProfile: bluememo.ProfileJobHandler{Builder: bluememo.ProfileBuilder{Store: store, Model: scripted, Now: func() time.Time { return fixture.now }}, ResolveReader: memory.ProfileReaderResolver(access)}.Handle,
 		},
 	}
 
@@ -105,7 +109,7 @@ func TestMemoryExtractionRecordsFactsAndProfileInPostgres(t *testing.T) {
 	if factCount != 2 || episodeCount != 1 {
 		t.Fatalf("expected two facts under one task episode, got facts=%d episodes=%d", factCount, episodeCount)
 	}
-	recall, errorValue := store.Recall(ctx, bluememo.RecallRequest{Reader: bluememo.NewReader(alice, nil, nil, 1, nil), PersonID: alice, Query: "요약 bullet summaries"})
+	recall, errorValue := store.Recall(ctx, bluememo.RecallRequest{Reader: bluememo.NewReader(alice, nil, nil, 1, nil), Query: "요약 bullet summaries"})
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}

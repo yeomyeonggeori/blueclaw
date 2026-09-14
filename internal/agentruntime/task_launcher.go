@@ -508,10 +508,9 @@ func recallLaunchMemory(ctx context.Context, execution *taskLaunchExecution) lau
 	recallContext, cancelRecall := context.WithTimeout(ctx, launchGraphMemorySearchTimeout)
 	defer cancelRecall()
 	recall, errorValue := execution.Launcher.toolCatalogBuilder.memoryStore.Recall(recallContext, bluememo.RecallRequest{
-		Reader:   execution.Launcher.toolCatalogBuilder.memoryReader(request.PersonAccess),
-		PersonID: request.RequesterPersonID,
-		Query:    request.Prompt,
-		Limit:    bluememo.DefaultSearchResultLimit,
+		Reader: execution.Launcher.toolCatalogBuilder.memoryReader(request.PersonAccess),
+		Query:  request.Prompt,
+		Limit:  bluememo.DefaultSearchResultLimit,
 	})
 	if errorValue != nil {
 		return launchMemoryResult{Error: errorValue.Error()}

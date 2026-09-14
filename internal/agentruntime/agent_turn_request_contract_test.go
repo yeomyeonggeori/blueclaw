@@ -16,7 +16,7 @@ func TestLaunchedAgentTurnRequestCarriesHostAssembledContext(t *testing.T) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	harness := harnesstest.New(taskRunService)
 	memoryStore := seededMemoryStore(t, "person-1", "The user leads the quarterly launch project.")
-	if errorValue := memoryStore.Profiles.SaveProfile(context.Background(), bluememo.Profile{PersonID: "person-1", IdentityLines: []string{"The user prefers terse release notes."}}); errorValue != nil {
+	if errorValue := memoryStore.Profiles.SaveProfile(context.Background(), bluememo.Profile{PersonID: "person-1", CurrentLines: []string{"The user leads the quarterly launch project."}, SourceFactIDs: []string{"fact-seed-person-1-a"}, BuiltFromFactCount: 1}); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	toolCatalogBuilder := NewToolCatalogBuilder()
@@ -70,7 +70,7 @@ func TestLaunchedAgentTurnRequestCarriesHostAssembledContext(t *testing.T) {
 		t.Fatalf("expected the profile line and the recalled fact on the turn request, got %+v", turnRequest.MemoryFacts)
 	}
 	if turnRequest.MemoryFacts[0].SourceKind != "profile" ||
-		!strings.Contains(turnRequest.MemoryFacts[0].Content, "The user prefers terse release notes.") {
+		!strings.Contains(turnRequest.MemoryFacts[0].Content, "The user leads the quarterly launch project.") {
 		t.Fatalf("expected the profile first, got %+v", turnRequest.MemoryFacts)
 	}
 	if turnRequest.MemoryFacts[1].Content != "The user leads the quarterly launch project." {

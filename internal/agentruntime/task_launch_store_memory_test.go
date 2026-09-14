@@ -26,11 +26,12 @@ func TestTaskLauncherInjectsProfileAndRecallFromTheStoreAndQueuesExtraction(t *t
 	taskRunService.RegisterTaskRunTransitionObserver(memory.TaskRunTransitionObserver{Store: *store}.Observe)
 
 	seed := bluememo.Episode{EpisodeID: "episode-seed", SourceKind: bluememo.EpisodeSourceKindImport, SourceID: "seed", RequesterPersonID: "person-1", Content: "seed", OccurredAt: now}
-	launchFact := bluememo.Fact{FactID: "fact-launch", EpisodeID: "episode-seed", OwnerPersonID: "person-9", CircleIDs: []string{"member"}, Kind: bluememo.FactKindFact, Content: "The quarterly launch project is led by 이샘플", ValidFrom: now}
-	if errorValue := repository.SaveEpisode(context.Background(), bluememo.EpisodeWrite{Episode: seed, Facts: []bluememo.FactWrite{{Fact: launchFact, Embedding: bluememotest.Embed(launchFact.Content)}}}); errorValue != nil {
+	launchFact := bluememo.Fact{FactID: "fact-launch", EpisodeID: "episode-seed", OwnerPersonID: "person-9", SubjectPersonID: "person-1", CircleIDs: []string{"member"}, Kind: bluememo.FactKindFact, Content: "The quarterly launch project is led by 이샘플", ValidFrom: now}
+	preference := bluememo.Fact{FactID: "fact-preference", EpisodeID: seed.EpisodeID, OwnerPersonID: "person-1", SubjectPersonID: "person-1", Kind: bluememo.FactKindPreference, Content: "이샘플 prefers terse release notes", ValidFrom: now}
+	if errorValue := repository.SaveEpisode(context.Background(), bluememo.EpisodeWrite{Episode: seed, Facts: []bluememo.FactWrite{{Fact: launchFact, Embedding: bluememotest.Embed(launchFact.Content)}, {Fact: preference}}}); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if errorValue := repository.SaveProfile(context.Background(), bluememo.Profile{PersonID: "person-1", IdentityLines: []string{"이샘플 prefers terse release notes"}, CurrentLines: []string{"이샘플 is preparing the quarterly launch"}, BuiltAt: now}); errorValue != nil {
+	if errorValue := repository.SaveProfile(context.Background(), bluememo.Profile{PersonID: "person-1", IdentityLines: []string{"이샘플 prefers terse release notes"}, CurrentLines: []string{"이샘플 is preparing the quarterly launch"}, BuiltAt: now, SourceFactIDs: []string{launchFact.FactID, preference.FactID}, BuiltFromFactCount: 2}); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 

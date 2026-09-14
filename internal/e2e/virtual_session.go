@@ -74,6 +74,7 @@ type VirtualSessionScenario struct {
 	CapabilityToolDescriptors []agentruntime.CapabilityToolDescriptor
 	InitialToolNames          []string
 	InitialSite               *VirtualSiteFixture
+	InitialMemoryFacts        []bluememo.Fact
 	RouterRequiredEvidence    []string
 	RouterTaskShape           agentcontract.TaskShape
 	RouterTaskLevel           string
@@ -237,6 +238,7 @@ type VirtualTurn struct {
 	ExpectedCheckpointReplies    []string
 	ForbiddenEvents              []string
 	ExpectedTaskStatus           task.TaskStatus
+	AllowedTaskStatuses          []task.TaskStatus
 	ForbidToolCalls              bool
 }
 
@@ -913,6 +915,10 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	}
 
 	memoryRepository := bluememo.NewInMemoryRepository()
+	if errorValue := seedVirtualMemory(memoryRepository, scenario.InitialMemoryFacts); errorValue != nil {
+		cleanup()
+		return nil, errorValue
+	}
 	memoryStore := &bluememo.Store{Facts: memoryRepository, Profiles: memoryRepository, Jobs: memoryRepository, Embedder: &bluememotest.HashEmbedder{}}
 	memoryIngester := &bluememo.Ingester{Store: *memoryStore, Model: virtualMemoryIngestModel{}}
 	toolCatalogBuilder := virtualToolCatalogBuilder(
@@ -3128,6 +3134,9 @@ func assertTaskDidNotFailUnexpectedly(virtualTurn VirtualTurn, turnResult Virtua
 	if strings.TrimSpace(string(virtualTurn.ExpectedTaskStatus)) != "" {
 		return nil
 	}
+	if slices.Contains(virtualTurn.AllowedTaskStatuses, turnResult.TaskStatus) {
+		return nil
+	}
 	if turnResult.TaskRunID == "" || turnResult.TaskStatus != task.TaskStatusFailed {
 		return nil
 	}
@@ -3385,6 +3394,9 @@ func assertStructuralTurnExpectations(virtualTurn VirtualTurn, turnResult Virtua
 	}
 	if strings.TrimSpace(string(virtualTurn.ExpectedTaskStatus)) != "" && turnResult.TaskStatus != virtualTurn.ExpectedTaskStatus {
 		return fmt.Errorf("expected task status %q, got %q", virtualTurn.ExpectedTaskStatus, turnResult.TaskStatus)
+	}
+	if len(virtualTurn.AllowedTaskStatuses) > 0 && !slices.Contains(virtualTurn.AllowedTaskStatuses, turnResult.TaskStatus) {
+		return fmt.Errorf("expected one of task statuses %q, got %q", virtualTurn.AllowedTaskStatuses, turnResult.TaskStatus)
 	}
 	return nil
 }

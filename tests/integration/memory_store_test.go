@@ -305,8 +305,9 @@ func TestMemoryStoreJobsDeduplicateClaimAndSettle(t *testing.T) {
 	if again, _ := fixture.jobs.ClaimDueJobs(ctx, []string{bluememo.JobKindExtract}, fixture.now.Add(time.Second), time.Minute, 10); len(again) != 0 {
 		t.Fatalf("expected the leased job to stay claimed, got %+v", again)
 	}
-	if errorValue := fixture.jobs.RetryJob(ctx, first.JobID, "model unavailable", fixture.now.Add(time.Minute)); errorValue != nil {
-		t.Fatal(errorValue)
+	isSettled, errorValue := fixture.jobs.RetryJob(ctx, claimed[0], "model unavailable", fixture.now.Add(time.Minute))
+	if errorValue != nil || !isSettled {
+		t.Fatalf("expected the active claim to schedule a retry, got settled=%v (%v)", isSettled, errorValue)
 	}
 	if early, _ := fixture.jobs.ClaimDueJobs(ctx, []string{bluememo.JobKindExtract}, fixture.now.Add(30*time.Second), time.Minute, 10); len(early) != 0 {
 		t.Fatalf("expected the retried job to wait for run_after, got %+v", early)
@@ -315,8 +316,9 @@ func TestMemoryStoreJobsDeduplicateClaimAndSettle(t *testing.T) {
 	if errorValue != nil || len(retried) != 1 || retried[0].Attempts != 2 || retried[0].LastError != "model unavailable" {
 		t.Fatalf("expected the retried job to be claimed with attempts=2, got %+v (%v)", retried, errorValue)
 	}
-	if errorValue := fixture.jobs.FinishJob(ctx, first.JobID, fixture.now.Add(3*time.Minute)); errorValue != nil {
-		t.Fatal(errorValue)
+	isSettled, errorValue = fixture.jobs.FinishJob(ctx, retried[0], fixture.now.Add(3*time.Minute))
+	if errorValue != nil || !isSettled {
+		t.Fatalf("expected the active retry claim to finish, got settled=%v (%v)", isSettled, errorValue)
 	}
 	_, created, errorValue = fixture.jobs.EnqueueJob(ctx, bluememo.JobKindExtract, "task-run-1", fixture.now)
 	if errorValue != nil || !created {

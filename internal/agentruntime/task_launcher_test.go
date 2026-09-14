@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"github.com/yeomyeonggeori/bluememo"
@@ -33,7 +34,12 @@ func TestTaskLauncherCreatesAuditedAgentRun(t *testing.T) {
 	runtimeLanguageModel := staticRuntimeLanguageModel{content: runtimeFinishMessage("done")}
 	useRuntimeTestLanguageModel(agentKernel, runtimeFinishMessage("done"))
 	memoryRepository := bluememo.NewInMemoryRepository()
-	if errorValue := memoryRepository.SaveProfile(context.Background(), bluememo.Profile{PersonID: "person-1", IdentityLines: []string{"사용자는 발표자료 생성을 자주 요청한다."}}); errorValue != nil {
+	seed := bluememo.Episode{EpisodeID: "profile-source", SourceKind: bluememo.EpisodeSourceKindImport, SourceID: "profile-source", RequesterPersonID: "person-1", Content: "The reader likes slide presentations.", OccurredAt: time.Now().UTC()}
+	fact := bluememo.Fact{FactID: "profile-fact", EpisodeID: seed.EpisodeID, OwnerPersonID: "person-1", SubjectPersonID: "person-1", Kind: bluememo.FactKindPreference, Content: seed.Content, ValidFrom: seed.OccurredAt}
+	if errorValue := memoryRepository.SaveEpisode(context.Background(), bluememo.EpisodeWrite{Episode: seed, Facts: []bluememo.FactWrite{{Fact: fact}}}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := memoryRepository.SaveProfile(context.Background(), bluememo.Profile{PersonID: "person-1", IdentityLines: []string{"사용자는 발표자료 생성을 자주 요청한다."}, SourceFactIDs: []string{fact.FactID}, BuiltFromFactCount: 1}); errorValue != nil {
 		t.Fatalf("expected memory profile setup to succeed: %v", errorValue)
 	}
 	toolCatalogBuilder := NewToolCatalogBuilder()

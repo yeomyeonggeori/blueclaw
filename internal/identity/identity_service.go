@@ -123,6 +123,19 @@ func (identityService *IdentityService) ResolvePersonAccess(personID string) pol
 	return policy.EnsureRequesterDefaults(personAccess)
 }
 
+func (identityService *IdentityService) FindPersonAccess(personID string) (policy.PersonAccess, bool) {
+	identityService.mutex.RLock()
+	defer identityService.mutex.RUnlock()
+	personAccess, isFound := identityService.personAccessByPersonID[personID]
+	if !isFound {
+		return policy.PersonAccess{}, false
+	}
+	personAccess.Circles = append([]string{}, personAccess.Circles...)
+	personAccess.ResourceAccessRules = append([]policy.ResourceAccessPolicy{}, personAccess.ResourceAccessRules...)
+	personAccess.GrantedClasses = append([]string{}, personAccess.GrantedClasses...)
+	return policy.EnsureRequesterDefaults(personAccess), true
+}
+
 func (identityService *IdentityService) ContainedCircles() map[string][]string {
 	identityService.mutex.RLock()
 	defer identityService.mutex.RUnlock()
