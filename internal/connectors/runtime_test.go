@@ -4476,3 +4476,69 @@ func TestAttachmentMaterialIsFoundByItsExactURL(t *testing.T) {
 		t.Fatal("an empty reference must not resolve")
 	}
 }
+
+func TestANewRequestWhileAConfirmationIsPendingIsRoutedWithTheCatalogAndDoesNotRejectIt(t *testing.T) {
+	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
+		ChatResponsesBySchema: map[string][]string{
+			"blueclaw_reply": {"누구의 연락처가 필요하신가요?"},
+		},
+		StructuredResponsesBySchema: map[string][]string{
+			"bluecollar_turn_router": {
+				`{"route":"start_task","classification":"bounded_task","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"calendar delete needs approval first","userFacingReply":""}`,
+				`{"route":"clarify","classification":"needs_confirmation","taskShape":"approval_gated_task","level":"xlow","requestedOutputFormats":null,"responseLanguage":"ko","reason":"a new request unrelated to the pending confirmation","userFacingReply":"","approval":"unclear","clarificationQuestion":"누구의 연락처가 필요하신가요?"}`,
+			},
+			"bluecollar_execution_plan": {
+				`{"originalInstruction":"내일 휴가 일정을 캘린더에서 삭제해줘","summary":"내일 휴가 일정을 삭제합니다.","targets":["calendar event"],"schedule":"","startAt":"","endAt":"","cadence":"","externalSend":false,"thirdPartyExternalSend":false,"repeated":false,"highFrequency":false,"destructive":true,"permissionChange":false,"publicDeploy":false,"paidAction":false,"missingInformation":[],"continuationInstruction":"내일 휴가 일정을 캘린더에서 삭제합니다."}`,
+			},
+			"blueclaw_approval_question": {
+				`{"question":"내일 휴가 일정을 삭제할까요?"}`,
+			},
+		},
+		ActionResponses: []string{
+			`{"action":"continue","toolName":"event_delete","toolInput":{"eventHint":"event-1"}}`,
+		},
+	})
+	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
+	connectorRuntimeAgentKernel(connectorRuntime).UseIntakeLanguageModelProvider(languageModel)
+	connectorRuntimeAgentKernel(connectorRuntime).UseIntakeOptions(agentcontract.IntakeOptions{IsEnabled: true})
+	useTestConnectorSkill(connectorRuntime, connectorCalendarSkill())
+	connectorRuntime.UseAllowedToolNames([]string{"conversation_history", "memory_search", "ask_confirm", "event_delete"})
+	connectorRuntime.UseTestCapabilityTools(capability.Client{
+		Endpoint: "http://capability.test",
+		HTTPClient: testHTTPDoer(func(request *http.Request) (*http.Response, error) {
+			if request.URL.Path == "/v1/capabilities" {
+				return testCapabilityRegistrySelfHealResponse(), nil
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(`{"provider":"capabilityd","selectedBackend":"device","toolName":"event_delete","outcome":"succeeded","status":"ok","content":"calendar event deleted","result":{"eventID":"event-1"}}`)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		}),
+	}, []string{"event_delete"})
+
+	firstEvent := testInboundEvent("message-1")
+	firstEvent.Prompt = "내일 휴가 일정을 캘린더에서 삭제해줘"
+	firstResult, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, firstEvent)
+	if errorValue != nil {
+		t.Fatalf("expected confirmation request: %v", errorValue)
+	}
+
+	secondEvent := testInboundEvent("message-2")
+	secondEvent.Prompt = "찬희님 전화번호랑 이메일 좀"
+	secondResult, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, secondEvent)
+	if errorValue != nil {
+		t.Fatalf("expected the new request to be handled: %v", errorValue)
+	}
+	if secondResult.Reason == "confirmation_rejected" || secondResult.TaskRunID == firstResult.TaskRunID {
+		t.Fatalf("a message that is not a refusal must not reject the pending action, got %+v", secondResult)
+	}
+	if !connectorTaskEventsContain(connectorRuntime, firstResult.TaskRunID, agentcontract.TaskEventConfirmationReplaced, "") || connectorTaskEventsContain(connectorRuntime, firstResult.TaskRunID, agentcontract.TaskEventConfirmationRejected, "") {
+		t.Fatalf("the pending confirmation is replaced by the new request, never rejected by it: %+v", connectorRuntime.taskRunService.ListTaskEvent(firstResult.TaskRunID))
+	}
+	requests := languageModel.Requests()
+	routerIndex := connectorSchemaIndexAfter(requests, "bluecollar_turn_router", 1)
+	if routerIndex < 0 || !structuredMessagesContain(requests[routerIndex].Messages, "Available tools") || !structuredMessagesContain(requests[routerIndex].Messages, "event_delete") {
+		t.Fatalf("the router judging a reply to a confirmation sees the same tools a fresh turn does, got %+v", requests[routerIndex].Messages)
+	}
+}

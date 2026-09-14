@@ -8,6 +8,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 type inboundTurn struct {
@@ -24,6 +25,7 @@ type inboundTurn struct {
 	taskWaitResolution  inboundTaskWaitResolution
 	engagedAckEmojiName string
 
+	routerToolSet                   *toolcontract.ToolSet
 	pendingApproval                 pendingApproval
 	turnDecision                    agentcontract.TurnDecision
 	hasPendingConfirmation          bool
@@ -124,7 +126,8 @@ func (connectorRuntime *ConnectorRuntime) resolvePendingConfirmation(ctx context
 		result, errorValue := connectorRuntime.handleAmbiguousTaskWait(ctx, turn.platform, turn.adapter, turn.event, turn.replyTarget, turn.personID, turn.requesterEmail, turn.personAccess, turn.taskWaitResolution, turn.engagedAckEmojiName, turn.sendReply)
 		return result, true, errorValue
 	}
-	resolvedApproval, turnDecision, hasPendingConfirmation, errorValue := connectorRuntime.resolveConfirmationReply(ctx, turn.platform, turn.personID, turn.event, turn.taskWaitResolution)
+	turn.routerToolSet = connectorRuntime.routerToolSetForTurn(turn)
+	resolvedApproval, turnDecision, hasPendingConfirmation, errorValue := connectorRuntime.resolveConfirmationReply(ctx, turn.platform, turn.personID, turn.event, turn.taskWaitResolution, turn.routerToolSet)
 	if errorValue != nil {
 		return ConnectorRuntimeResult{}, true, errorValue
 	}
@@ -141,8 +144,12 @@ func (connectorRuntime *ConnectorRuntime) resolvePendingConfirmation(ctx context
 	return connectorRuntime.supersedePendingConfirmation(ctx, turn)
 }
 
+func (connectorRuntime *ConnectorRuntime) routerToolSetForTurn(turn *inboundTurn) *toolcontract.ToolSet {
+	return connectorRuntime.currentTaskLauncher().RouterToolSet(connectorRuntime.buildTaskLaunchRequest(connectorRuntime.conversationTurnFor(turn, nil)))
+}
+
 func (connectorRuntime *ConnectorRuntime) supersedePendingConfirmation(ctx context.Context, turn *inboundTurn) (ConnectorRuntimeResult, bool, error) {
-	if shouldStopAfterPendingConfirmation(turn.turnDecision) {
+	if confirmationWasRejected(turn.turnDecision) {
 		rejection := agentcontract.ConfirmationReplyDecision{Decision: string(agentcontract.ApprovalSignalReject), Reason: turn.turnDecision.Reason}
 		result, errorValue := connectorRuntime.handleRejectedConfirmation(ctx, turn.platform, turn.adapter, turn.event, turn.replyTarget, turn.pendingApproval, rejection, turn.sendReply)
 		return result, true, errorValue
@@ -159,7 +166,7 @@ func (connectorRuntime *ConnectorRuntime) supersedePendingConfirmation(ctx conte
 func (connectorRuntime *ConnectorRuntime) resolvePendingAsk(ctx context.Context, turn *inboundTurn) error {
 	pendingAskInteraction, hasPendingAskInteraction := connectorRuntime.findPendingAskInteraction(turn.personID, turn.platform, turn.event, turn.taskWaitResolution)
 	previousPrompt := turn.event.Prompt
-	event, askTurnDecision, hasAskTurnDecision, errorValue := connectorRuntime.resolveAskReply(ctx, turn.platform, turn.personID, turn.event, turn.taskWaitResolution)
+	event, askTurnDecision, hasAskTurnDecision, errorValue := connectorRuntime.resolveAskReply(ctx, turn.platform, turn.personID, turn.event, turn.taskWaitResolution, turn.routerToolSet)
 	if errorValue != nil {
 		return errorValue
 	}
