@@ -3,6 +3,7 @@ package connectors
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
@@ -25,20 +26,15 @@ type inboundTurn struct {
 	taskWaitResolution  inboundTaskWaitResolution
 	engagedAckEmojiName string
 
-	routerToolSet                   *toolcontract.ToolSet
-	pendingApproval                 pendingApproval
-	turnDecision                    agentcontract.TurnDecision
-	hasPendingConfirmation          bool
-	isApprovalContinuation          bool
-	didSupersedePendingConfirmation bool
-	keptPendingConfirmation         bool
-	keptTaskRunID                   string
-
+	routerToolSet            *toolcontract.ToolSet
+	turnDecision             agentcontract.TurnDecision
+	hasTurnDecision          bool
+	pendingApproval          pendingApproval
+	isApprovalContinuation   bool
 	pendingAskInteraction    AskInteraction
 	hasPendingAskInteraction bool
-	askTurnDecision          agentcontract.TurnDecision
-	hasAskTurnDecision       bool
-	keptPendingAsk           bool
+	keptTaskRunIDs           []string
+	clearsActiveGoal         bool
 
 	activeGoal    agentcontract.ActiveGoal
 	hasActiveGoal bool
@@ -118,7 +114,7 @@ func (connectorRuntime *ConnectorRuntime) refuseUnauthorizedSender(ctx context.C
 	return ConnectorRuntimeResult{Handled: true, Platform: turn.platform, Reason: refusalReason, ReplyDispatchID: dispatchID}
 }
 
-func (connectorRuntime *ConnectorRuntime) resolvePendingConfirmation(ctx context.Context, turn *inboundTurn) (ConnectorRuntimeResult, bool, error) {
+func (connectorRuntime *ConnectorRuntime) resolveOpenInteractions(ctx context.Context, turn *inboundTurn) (ConnectorRuntimeResult, bool, error) {
 	turn.personAccess = connectorRuntime.identityService.ResolvePersonAccess(turn.personID)
 	turn.requesterEmail = connectorRuntime.requesterEmailForEvent(turn.personID, turn.event)
 	turn.taskWaitResolution = connectorRuntime.resolveInboundTaskWait(turn.personID, turn.platform, turn.event)
@@ -128,79 +124,16 @@ func (connectorRuntime *ConnectorRuntime) resolvePendingConfirmation(ctx context
 		result, errorValue := connectorRuntime.handleAmbiguousTaskWait(ctx, turn.platform, turn.adapter, turn.event, turn.replyTarget, turn.personID, turn.requesterEmail, turn.personAccess, turn.taskWaitResolution, turn.engagedAckEmojiName, turn.sendReply)
 		return result, true, errorValue
 	}
-	turn.routerToolSet = connectorRuntime.routerToolSetForTurn(turn)
-	resolvedApproval, turnDecision, hasPendingConfirmation, errorValue := connectorRuntime.resolveConfirmationReply(ctx, turn.platform, turn.personID, turn.event, turn.taskWaitResolution, turn.routerToolSet)
-	if errorValue != nil {
-		return ConnectorRuntimeResult{}, true, errorValue
-	}
-	turn.pendingApproval = resolvedApproval
-	turn.turnDecision = turnDecision
-	turn.hasPendingConfirmation = hasPendingConfirmation
-	turn.isApprovalContinuation = hasPendingConfirmation && turnDecision.Approval != nil && agentcontract.IsApprovingSignal(*turnDecision.Approval)
-	if hasPendingConfirmation {
-		connectorRuntime.resolveTaskWaitToken(turn.taskWaitResolution)
-	}
-	if !hasPendingConfirmation || turn.isApprovalContinuation {
-		return ConnectorRuntimeResult{}, false, nil
-	}
-	return connectorRuntime.settlePendingConfirmation(ctx, turn)
+	return connectorRuntime.settleOpenInteractions(ctx, turn)
 }
 
 func (connectorRuntime *ConnectorRuntime) routerToolSetForTurn(turn *inboundTurn) *toolcontract.ToolSet {
 	return connectorRuntime.currentTaskLauncher().RouterToolSet(connectorRuntime.buildTaskLaunchRequest(connectorRuntime.conversationTurnFor(turn, nil)))
 }
 
-func (connectorRuntime *ConnectorRuntime) settlePendingConfirmation(ctx context.Context, turn *inboundTurn) (ConnectorRuntimeResult, bool, error) {
-	if confirmationWasRejected(turn.turnDecision) {
-		rejection := agentcontract.ConfirmationReplyDecision{Decision: string(agentcontract.ApprovalSignalReject), Reason: turn.turnDecision.Reason}
-		result, errorValue := connectorRuntime.handleRejectedConfirmation(ctx, turn.platform, turn.adapter, turn.event, turn.replyTarget, turn.pendingApproval, rejection, turn.sendReply)
-		return result, true, errorValue
-	}
-	if turn.turnDecision.Route == agentcontract.TurnRouteReviseTask {
-		connectorRuntime.cancelPendingConfirmation(turn.event, turn.pendingApproval, turn.turnDecision)
-		turn.didSupersedePendingConfirmation = true
-		return ConnectorRuntimeResult{}, false, nil
-	}
-	connectorRuntime.logger.Info("connector."+turn.platform+".confirmation.kept", slog.String("messageID", turn.event.MessageID), slog.String("taskRunID", turn.pendingApproval.TaskRun.TaskRunID), slog.String("route", string(turn.turnDecision.Route)))
-	turn.keptPendingConfirmation = true
-	turn.keptTaskRunID = turn.pendingApproval.TaskRun.TaskRunID
-	return ConnectorRuntimeResult{}, false, nil
-}
-
-func (connectorRuntime *ConnectorRuntime) resolvePendingAsk(ctx context.Context, turn *inboundTurn) error {
-	pendingAskInteraction, hasPendingAskInteraction := connectorRuntime.findPendingAskInteraction(turn.personID, turn.platform, turn.event, turn.taskWaitResolution)
-	previousPrompt := turn.event.Prompt
-	event, askTurnDecision, hasAskTurnDecision, errorValue := connectorRuntime.resolveAskReply(ctx, turn.platform, turn.personID, turn.event, turn.taskWaitResolution, turn.routerToolSet)
-	if errorValue != nil {
-		return errorValue
-	}
-	turn.event = event
-	turn.pendingAskInteraction = pendingAskInteraction
-	turn.hasPendingAskInteraction = hasPendingAskInteraction
-	turn.askTurnDecision = askTurnDecision
-	turn.hasAskTurnDecision = hasAskTurnDecision
-	if !hasPendingAskInteraction {
-		return nil
-	}
-	if askReplyIsUnrelated(askTurnDecision, hasAskTurnDecision) {
-		connectorRuntime.logger.Info("connector."+turn.platform+".ask.kept", slog.String("messageID", turn.event.MessageID), slog.String("taskRunID", pendingAskInteraction.TaskRunID), slog.String("route", string(askTurnDecision.Route)))
-		turn.pendingAskInteraction = AskInteraction{}
-		turn.hasPendingAskInteraction = false
-		turn.taskWaitResolution = inboundTaskWaitResolution{}
-		turn.keptPendingAsk = true
-		turn.keptTaskRunID = pendingAskInteraction.TaskRunID
-		return nil
-	}
-	if askReplyConsumesInteraction(pendingAskInteraction, previousPrompt, turn.event, askTurnDecision, hasAskTurnDecision) {
-		connectorRuntime.appendAskResolvedEvent(pendingAskInteraction, turn.event, askTurnDecision)
-		connectorRuntime.resolveTaskWaitToken(turn.taskWaitResolution)
-	}
-	return nil
-}
-
 func (connectorRuntime *ConnectorRuntime) resolveTurnActiveGoal(ctx context.Context, turn *inboundTurn) {
 	turn.activeGoal, turn.hasActiveGoal = connectorRuntime.findActiveGoal(turn.personID, turn.platform, turn.event, turn.taskWaitResolution)
-	if turn.hasActiveGoal && turn.activeGoal.TaskRunID == turn.keptTaskRunID {
+	if turn.hasActiveGoal && (turn.clearsActiveGoal || slices.Contains(turn.keptTaskRunIDs, turn.activeGoal.TaskRunID)) {
 		turn.activeGoal = agentcontract.ActiveGoal{}
 		turn.hasActiveGoal = false
 	}
@@ -245,24 +178,6 @@ func (connectorRuntime *ConnectorRuntime) resolveTurnAddressing(ctx context.Cont
 	return ConnectorRuntimeResult{}, false
 }
 
-func (connectorRuntime *ConnectorRuntime) handleBusyTurn(ctx context.Context, turn *inboundTurn) (ConnectorRuntimeResult, bool, error) {
-	if len(turn.event.PreviousMessages) > 0 || turn.isApprovalContinuation || turn.hasPendingAskInteraction || turn.keptPendingAsk || turn.didSupersedePendingConfirmation || turn.keptPendingConfirmation {
-		return ConnectorRuntimeResult{}, false, nil
-	}
-	busyResult, errorValue := connectorRuntime.handleBusyMessageIfNeeded(ctx, turn.platform, turn.event, turn.replyTarget, turn.personID, turn.routerToolSet, turn.sendReply)
-	if errorValue != nil {
-		return ConnectorRuntimeResult{}, true, errorValue
-	}
-	if busyResult.isHandled {
-		return busyResult.connectorResult, true, nil
-	}
-	if busyResult.clearActiveGoal {
-		turn.activeGoal = agentcontract.ActiveGoal{}
-		turn.hasActiveGoal = false
-	}
-	return ConnectorRuntimeResult{}, false, nil
-}
-
 func (connectorRuntime *ConnectorRuntime) prepareTurnForLaunch(ctx context.Context, turn *inboundTurn) {
 	if !turn.isProgressStarted {
 		turn.startProgress(connectorRuntime.startProgressHeartbeat(ctx, turn.adapter, turn.replyTarget))
@@ -282,7 +197,7 @@ func (connectorRuntime *ConnectorRuntime) prepareTurnForLaunch(ctx context.Conte
 
 func (connectorRuntime *ConnectorRuntime) launchTurn(ctx context.Context, turn *inboundTurn) (ConnectorRuntimeResult, error) {
 	connectorRuntime.logger.Info("connector."+turn.platform+".agent.started", slog.String("messageID", turn.event.MessageID))
-	precomputedTurnDecision := precomputedTurnDecisionForLaunch(turn.turnDecision, turn.hasPendingConfirmation, turn.askTurnDecision, turn.hasAskTurnDecision)
+	precomputedTurnDecision := precomputedTurnDecisionForLaunch(turn.turnDecision, turn.hasTurnDecision)
 	taskStartedAt := time.Now()
 	conversationTurn := connectorRuntime.conversationTurnFor(turn, precomputedTurnDecision)
 	narrator := connectorRuntime.startNarrating(ctx, turn.adapter, turn.replyTarget)

@@ -1119,18 +1119,12 @@ func (connectorRuntime *ConnectorRuntime) processInboundEventWithReplySender(ctx
 	if errorValue := ctx.Err(); errorValue != nil {
 		return ConnectorRuntimeResult{}, errorValue
 	}
-	if result, isHandled, errorValue := connectorRuntime.resolvePendingConfirmation(ctx, turn); isHandled {
+	if result, isHandled, errorValue := connectorRuntime.resolveOpenInteractions(ctx, turn); isHandled {
 		return result, errorValue
-	}
-	if errorValue := connectorRuntime.resolvePendingAsk(ctx, turn); errorValue != nil {
-		return ConnectorRuntimeResult{}, errorValue
 	}
 	connectorRuntime.resolveTurnActiveGoal(ctx, turn)
 	if result, isHandled := connectorRuntime.resolveTurnAddressing(ctx, turn); isHandled {
 		return result, nil
-	}
-	if result, isHandled, errorValue := connectorRuntime.handleBusyTurn(ctx, turn); isHandled {
-		return result, errorValue
 	}
 	connectorRuntime.prepareTurnForLaunch(ctx, turn)
 	if errorValue := ctx.Err(); errorValue != nil {
@@ -1261,23 +1255,6 @@ func (connectorRuntime *ConnectorRuntime) appendTaskExecutionDuration(taskRunID 
 	}))
 }
 
-func (connectorRuntime *ConnectorRuntime) resolveConfirmationReply(ctx context.Context, platform string, personID string, event PlatformInboundEvent, taskWaitResolution inboundTaskWaitResolution, toolSet *toolcontract.ToolSet) (pendingApproval, agentcontract.TurnDecision, bool, error) {
-	approval, isFound := connectorRuntime.findPendingApproval(personID, platform, event, taskWaitResolution)
-	if !isFound {
-		return pendingApproval{}, agentcontract.TurnDecision{}, false, nil
-	}
-	decision, errorValue := connectorRuntime.classifiedConfirmationDecision(ctx, platform, personID, event, approval, toolSet)
-	if errorValue != nil {
-		return pendingApproval{}, agentcontract.TurnDecision{}, false, errorValue
-	}
-	decision.Approval = approvalSignalSurvivingRoute(decision.Approval, decision.Route)
-	approvalgate.RecordRequesterDecision(connectorRuntime.taskRunService, approval.TaskRun.TaskRunID, decision.Approval, "chat_reply")
-	if decision.Approval != nil && *decision.Approval == agentcontract.ApprovalSignalApproveTask {
-		connectorRuntime.grantApprovalScopeForTask(approval.TaskRun.TaskRunID)
-	}
-	return approval, decision, true, nil
-}
-
 func approvalSignalSurvivingRoute(approvalSignal *agentcontract.ApprovalSignal, route agentcontract.TurnRoute) *agentcontract.ApprovalSignal {
 	if approvalSignal == nil || !agentcontract.IsApprovingSignal(*approvalSignal) {
 		return approvalSignal
@@ -1287,91 +1264,6 @@ func approvalSignalSurvivingRoute(approvalSignal *agentcontract.ApprovalSignal, 
 	}
 	unclearSignal := agentcontract.ApprovalSignalUnclear
 	return &unclearSignal
-}
-
-func (connectorRuntime *ConnectorRuntime) classifiedConfirmationDecision(ctx context.Context, platform string, personID string, event PlatformInboundEvent, approval pendingApproval, toolSet *toolcontract.ToolSet) (agentcontract.TurnDecision, error) {
-	decision, errorValue := connectorRuntime.planTurn(ctx, approval.TaskRun.TaskRunID, agentcontract.AgentRequest{
-		RequesterPersonID: personID,
-		ConversationID:    event.ConversationID,
-		Prompt:            event.Prompt,
-		ResponseLanguage:  responseLanguageForEvent(event),
-		VisibleContext:    event.Context.ToAgentVisibleContext(),
-		ToolSet:           toolSet,
-		PendingConfirmation: agentcontract.PendingConfirmationContext{
-			TaskRunID: approval.TaskRun.TaskRunID,
-			Prompt:    approval.IntentPrompt,
-			Question:  approval.ApprovalQuestion,
-		},
-	})
-	if errorValue != nil {
-		return agentcontract.TurnDecision{}, errorValue
-	}
-	connectorRuntime.taskRunService.AppendTaskEvent(approval.TaskRun.TaskRunID, agentcontract.TaskEventConfirmationReplyClassified, marshalConnectorEventBody(map[string]any{
-		"messageID":   event.MessageID,
-		"route":       decision.Route,
-		"approval":    decision.Approval,
-		"reason":      decision.Reason,
-		"replyPrompt": strings.TrimSpace(event.Prompt),
-	}))
-	if decision.Approval != nil && agentcontract.IsApprovingSignal(*decision.Approval) {
-		connectorRuntime.logger.Info("connector."+platform+".confirmation.accepted", slog.String("messageID", event.MessageID), slog.String("taskRunID", approval.TaskRun.TaskRunID))
-	}
-	return decision, nil
-}
-
-func (connectorRuntime *ConnectorRuntime) resolveAskReply(ctx context.Context, platform string, personID string, event PlatformInboundEvent, taskWaitResolution inboundTaskWaitResolution, toolSet *toolcontract.ToolSet) (PlatformInboundEvent, agentcontract.TurnDecision, bool, error) {
-	pendingInteraction, isFound := connectorRuntime.findPendingAskInteraction(personID, platform, event, taskWaitResolution)
-	if !isFound {
-		return event, agentcontract.TurnDecision{}, false, nil
-	}
-	if pendingInteraction.Kind == "ask_input" {
-		decision, errorValue := connectorRuntime.planTurn(ctx, pendingInteraction.TaskRunID, agentcontract.AgentRequest{
-			RequesterPersonID: personID,
-			ConversationID:    event.ConversationID,
-			Prompt:            event.Prompt,
-			ResponseLanguage:  responseLanguageForEvent(event),
-			VisibleContext:    event.Context.ToAgentVisibleContext(),
-			ToolSet:           toolSet,
-			PendingInput: agentcontract.PendingInputContext{
-				TaskRunID:     pendingInteraction.TaskRunID,
-				Question:      pendingInteraction.Question,
-				SelectionMode: pendingInteraction.SelectionMode,
-				Options:       choiceReplyOptions(pendingInteraction.Options),
-			},
-		})
-		return event, decision, true, errorValue
-	}
-	if pendingInteraction.Kind != "ask_choice_single" && pendingInteraction.Kind != "ask_choice_multiple" {
-		return event, agentcontract.TurnDecision{}, false, nil
-	}
-	decision, errorValue := connectorRuntime.planTurn(ctx, pendingInteraction.TaskRunID, agentcontract.AgentRequest{
-		RequesterPersonID: personID,
-		ConversationID:    event.ConversationID,
-		Prompt:            event.Prompt,
-		ResponseLanguage:  responseLanguageForEvent(event),
-		VisibleContext:    event.Context.ToAgentVisibleContext(),
-		ToolSet:           toolSet,
-		PendingChoice: agentcontract.PendingChoiceContext{
-			TaskRunID:     pendingInteraction.TaskRunID,
-			Question:      pendingInteraction.Question,
-			SelectionMode: pendingInteraction.SelectionMode,
-			Options:       choiceReplyOptions(pendingInteraction.Options),
-		},
-	})
-	if errorValue != nil {
-		return event, agentcontract.TurnDecision{}, false, errorValue
-	}
-	connectorRuntime.taskRunService.AppendTaskEvent(pendingInteraction.TaskRunID, agentcontract.TaskEventAskReplyClassified, marshalConnectorEventBody(map[string]any{
-		"messageID": event.MessageID,
-		"choices":   decision.Choices,
-		"route":     decision.Route,
-		"reason":    decision.Reason,
-	}))
-	if len(decision.Choices) == 0 {
-		return event, decision, true, nil
-	}
-	event.Prompt = resolvedChoicePrompt(pendingInteraction, decision.Choices)
-	return event, decision, true, nil
 }
 
 func choiceReplyOptions(options []AskChoiceOption) []agentcontract.ChoiceReplyOption {
@@ -1387,26 +1279,15 @@ func choiceReplyOptions(options []AskChoiceOption) []agentcontract.ChoiceReplyOp
 	return replyOptions
 }
 
-func resolvedChoicePrompt(interaction AskInteraction, keys []string) string {
-	values := []string{}
-	for _, key := range keys {
-		values = append(values, resolvedChoiceKeyText(interaction, key))
-	}
-	return "User selected: " + strings.Join(trimNonEmptyConnectorStrings(values), ", ")
-}
-
 func confirmationWasRejected(decision agentcontract.TurnDecision) bool {
 	return decision.Approval != nil && *decision.Approval == agentcontract.ApprovalSignalReject
 }
 
-func precomputedTurnDecisionForLaunch(confirmationDecision agentcontract.TurnDecision, hasConfirmationDecision bool, askDecision agentcontract.TurnDecision, hasAskDecision bool) *agentcontract.TurnDecision {
-	if hasConfirmationDecision {
-		return &confirmationDecision
+func precomputedTurnDecisionForLaunch(decision agentcontract.TurnDecision, hasDecision bool) *agentcontract.TurnDecision {
+	if !hasDecision {
+		return nil
 	}
-	if hasAskDecision {
-		return &askDecision
-	}
-	return nil
+	return &decision
 }
 
 func (connectorRuntime *ConnectorRuntime) cancelPendingConfirmation(event PlatformInboundEvent, approval pendingApproval, decision agentcontract.TurnDecision) {
@@ -1416,40 +1297,6 @@ func (connectorRuntime *ConnectorRuntime) cancelPendingConfirmation(event Platfo
 		"route":     string(decision.Route),
 		"reason":    strings.TrimSpace(decision.Reason),
 	}))
-}
-
-func resolvedChoiceKeyText(interaction AskInteraction, choiceKey string) string {
-	normalizedChoiceKey := strings.TrimSpace(choiceKey)
-	for _, option := range interaction.Options {
-		if strings.TrimSpace(option.Key) != normalizedChoiceKey {
-			continue
-		}
-		value := strings.TrimSpace(option.Value)
-		if value == "" {
-			value = strings.TrimSpace(option.Label)
-		}
-		if value == "" {
-			value = normalizedChoiceKey
-		}
-		return normalizedChoiceKey + " / " + value
-	}
-	return normalizedChoiceKey
-}
-
-func askReplyConsumesInteraction(interaction AskInteraction, previousPrompt string, event PlatformInboundEvent, decision agentcontract.TurnDecision, hasDecision bool) bool {
-	if !hasDecision {
-		return false
-	}
-	switch strings.TrimSpace(interaction.Kind) {
-	case "ask_input":
-		return decision.Route == agentcontract.TurnRouteContinueTask || decision.Route == agentcontract.TurnRouteReviseTask || decision.Route == agentcontract.TurnRouteStartTask
-	default:
-		return strings.TrimSpace(event.Prompt) != strings.TrimSpace(previousPrompt)
-	}
-}
-
-func askReplyIsUnrelated(decision agentcontract.TurnDecision, hasDecision bool) bool {
-	return hasDecision && decision.Route == agentcontract.TurnRouteStartTask
 }
 
 func (connectorRuntime *ConnectorRuntime) appendAskResolvedEvent(interaction AskInteraction, event PlatformInboundEvent, decision agentcontract.TurnDecision) {

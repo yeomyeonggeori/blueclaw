@@ -2885,25 +2885,15 @@ func TestConnectorRuntimeRoutesPendingConfirmationRevisionAsNewTask(t *testing.T
 	}
 }
 
-func TestAskReplyConsumesInputRevision(t *testing.T) {
-	interaction := AskInteraction{
-		Kind: "ask_input",
-		Options: []AskChoiceOption{
-			{Key: "one", Label: "선택지 1"},
-			{Key: "two", Label: "선택지 2"},
-		},
+func TestAnAskIsAnsweredByARevisionOrAChoiceAndLeftOpenByAnIndependentRequest(t *testing.T) {
+	if !askIsAnswered(agentcontract.TurnDecision{Route: agentcontract.TurnRouteReviseTask}) {
+		t.Fatal("a message that modifies the asked work answers the question")
 	}
-	event := testInboundEvent("message-2")
-	event.Prompt = "아니 새로 이걸 해줘"
-	decision := agentcontract.TurnDecision{
-		Route:          agentcontract.TurnRouteStartTask,
-		Classification: agentcontract.IntakeClassificationBoundedTask,
-		TaskShape:      agentcontract.TaskShapeMaintenanceTask,
-		Choices:        nil,
+	if !askIsAnswered(agentcontract.TurnDecision{Route: agentcontract.TurnRouteStartTask, Choices: []string{"two"}}) {
+		t.Fatal("a chosen option answers the question whatever the route says")
 	}
-
-	if !askReplyConsumesInteraction(interaction, "선택지를 골라주세요", event, decision, true) {
-		t.Fatal("expected non-choice replacement request to resolve the pending choice")
+	if askIsAnswered(agentcontract.TurnDecision{Route: agentcontract.TurnRouteStartTask}) {
+		t.Fatal("an independent request leaves the question open")
 	}
 }
 
@@ -4629,5 +4619,66 @@ func TestAQuestionAboutThePendingConfirmationLeavesItPending(t *testing.T) {
 	}
 	if connectorTaskEventsContain(connectorRuntime, firstResult.TaskRunID, agentcontract.TaskEventConfirmationReplaced, "") {
 		t.Fatal("a question replaces nothing")
+	}
+}
+
+func TestTheRouterIsAskedOnceAndSeesHowManyExchangesFollowedTheConfirmation(t *testing.T) {
+	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
+		StructuredResponsesBySchema: map[string][]string{
+			"bluecollar_turn_router": {
+				`{"route":"start_task","classification":"bounded_task","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"calendar delete needs approval first","userFacingReply":""}`,
+				`{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"unrelated request","userFacingReply":"","approval":"unclear"}`,
+				`{"route":"consume","classification":"quick_reply","taskShape":"immediate_reply","level":"xlow","requestedOutputFormats":null,"responseLanguage":"ko","reason":"a bare yes after other exchanges names nothing","userFacingReply":"","approval":"unclear"}`,
+			},
+			"bluecollar_execution_plan": {
+				`{"originalInstruction":"내일 휴가 일정을 캘린더에서 삭제해줘","summary":"내일 휴가 일정을 삭제합니다.","targets":["calendar event"],"schedule":"","startAt":"","endAt":"","cadence":"","externalSend":false,"thirdPartyExternalSend":false,"repeated":false,"highFrequency":false,"destructive":true,"permissionChange":false,"publicDeploy":false,"paidAction":false,"missingInformation":[],"continuationInstruction":"내일 휴가 일정을 캘린더에서 삭제합니다."}`,
+			},
+			"blueclaw_approval_question": {
+				`{"question":"내일 휴가 일정을 삭제할까요?"}`,
+			},
+		},
+		ActionResponses: []string{
+			`{"action":"continue","toolName":"event_delete","toolInput":{"eventHint":"event-1"}}`,
+			`{"action":"finish","message":"찬희 님의 연락처는 디렉터리에 없습니다."}`,
+		},
+	})
+	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
+	connectorRuntimeAgentKernel(connectorRuntime).UseIntakeLanguageModelProvider(languageModel)
+	connectorRuntimeAgentKernel(connectorRuntime).UseIntakeOptions(agentcontract.IntakeOptions{IsEnabled: true})
+	useTestConnectorSkill(connectorRuntime, connectorCalendarSkill())
+	connectorRuntime.UseAllowedToolNames([]string{"conversation_history", "memory_search", "ask_confirm", "event_delete"})
+	connectorRuntime.UseTestCapabilityTools(capability.Client{
+		Endpoint: "http://capability.test",
+		HTTPClient: testHTTPDoer(func(request *http.Request) (*http.Response, error) {
+			if request.URL.Path == "/v1/capabilities" {
+				return testCapabilityRegistrySelfHealResponse(), nil
+			}
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"provider":"capabilityd","selectedBackend":"device","toolName":"event_delete","outcome":"succeeded","status":"ok","content":"calendar event deleted","result":{"eventID":"event-1"}}`)), Header: http.Header{"Content-Type": []string{"application/json"}}}, nil
+		}),
+	}, []string{"event_delete"})
+
+	for index, prompt := range []string{"내일 휴가 일정을 캘린더에서 삭제해줘", "찬희님 전화번호랑 이메일 좀", "응"} {
+		event := testInboundEvent("message-" + strconv.Itoa(index+1))
+		event.Prompt = prompt
+		if _, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, event); errorValue != nil {
+			t.Fatalf("message %d: %v", index+1, errorValue)
+		}
+	}
+
+	requests := languageModel.Requests()
+	routerRequests := []llm.StructuredResponseRequest{}
+	for _, request := range requests {
+		if request.StructuredOutputSchema.Name == "bluecollar_turn_router" {
+			routerRequests = append(routerRequests, request)
+		}
+	}
+	if len(routerRequests) != 3 {
+		t.Fatalf("one router call per message, got %d: %+v", len(routerRequests), connectorRequestSchemaNames(requests))
+	}
+	if !structuredMessagesContain(routerRequests[1].Messages, "nothing has been exchanged since") {
+		t.Fatalf("the first message after the question sees a fresh question, got %+v", routerRequests[1].Messages)
+	}
+	if !structuredMessagesContain(routerRequests[2].Messages, "1 exchange(s) have happened since") {
+		t.Fatalf("the router sees that an exchange followed the question, got %+v", routerRequests[2].Messages)
 	}
 }
