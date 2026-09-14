@@ -20,6 +20,19 @@ func ReaderForAccess(personAccess policy.PersonAccess, containedCircles map[stri
 	return bluememo.NewReader(personAccess.PersonID, personAccess.Circles, containedCircles, personAccess.SecurityLevelRank, personAccess.GrantedClasses)
 }
 
+type ProfileAccessResolver interface {
+	FindPersonAccess(string) (policy.PersonAccess, bool)
+	ContainedCircles() map[string][]string
+}
+
+func ProfileReaderResolver(access ProfileAccessResolver) func(context.Context, string) (bluememo.Reader, bool, error) {
+	return func(_ context.Context, personID string) (bluememo.Reader, bool, error) {
+		personAccess, isFound := access.FindPersonAccess(personID)
+		reader := ReaderForAccess(personAccess, access.ContainedCircles())
+		return reader, isFound, nil
+	}
+}
+
 func LabelForAccess(personAccess policy.PersonAccess) bluememo.SecurityLabel {
 	return bluememo.SecurityLabel{SecurityLevelRank: personAccess.SecurityLevelRank, RequiredClasses: append([]string{}, personAccess.GrantedClasses...)}
 }

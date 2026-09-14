@@ -46,7 +46,7 @@ func newMemoryComponents(runtimeConfiguration config.RuntimeConfiguration, datab
 		Logger: logger,
 		Handlers: map[string]bluememo.JobHandler{
 			bluememo.JobKindExtract: memory.ExtractJobHandler{Ingester: *ingester, TaskRuns: services.taskRunService, Steps: services.taskStepService, Access: identityService}.Handle,
-			bluememo.JobKindProfile: bluememo.ProfileJobHandler{Builder: bluememo.ProfileBuilder{Store: *store, Model: memoryModel}}.Handle,
+			bluememo.JobKindProfile: bluememo.ProfileJobHandler{Builder: bluememo.ProfileBuilder{Store: *store, Model: memoryModel}, ResolveReader: memory.ProfileReaderResolver(identityService)}.Handle,
 			bluememo.JobKindReembed: bluememo.ReembedJobHandler{Store: *store}.Handle,
 		},
 	}

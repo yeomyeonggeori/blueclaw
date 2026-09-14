@@ -158,7 +158,7 @@ func TestMemoryLiveLLMExtractsCorrectsAndRecalls(t *testing.T) {
 		}
 	}
 
-	recall, errorValue := store.Recall(ctx, bluememo.RecallRequest{Reader: reader, PersonID: "person-alice", Query: "이샘플은 지금 어느 팀 소속이야?"})
+	recall, errorValue := store.Recall(ctx, bluememo.RecallRequest{Reader: reader, Query: "이샘플은 지금 어느 팀 소속이야?"})
 	if errorValue != nil {
 		t.Fatalf("expected recall to succeed: %v", errorValue)
 	}
@@ -206,7 +206,7 @@ func TestMemoryLiveLLMExtractsCorrectsAndRecalls(t *testing.T) {
 		t.Fatalf("expected a file rename to leave no memory, got %d facts", len(mundane.Facts))
 	}
 
-	profile, errorValue := bluememo.ProfileBuilder{Store: store, Model: memory.LanguageModel{Provider: languageModel}}.Rebuild(ctx, "person-alice")
+	profile, errorValue := bluememo.ProfileBuilder{Store: store, Model: memory.LanguageModel{Provider: languageModel}}.Rebuild(ctx, reader)
 	if errorValue != nil {
 		t.Fatalf("expected the profile to build: %v", errorValue)
 	}

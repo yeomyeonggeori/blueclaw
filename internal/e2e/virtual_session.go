@@ -74,6 +74,7 @@ type VirtualSessionScenario struct {
 	CapabilityToolDescriptors []agentruntime.CapabilityToolDescriptor
 	InitialToolNames          []string
 	InitialSite               *VirtualSiteFixture
+	InitialMemoryFacts        []bluememo.Fact
 	RouterRequiredEvidence    []string
 	RouterTaskShape           agentcontract.TaskShape
 	RouterTaskLevel           string
@@ -913,6 +914,10 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	}
 
 	memoryRepository := bluememo.NewInMemoryRepository()
+	if errorValue := seedVirtualMemory(memoryRepository, scenario.InitialMemoryFacts); errorValue != nil {
+		cleanup()
+		return nil, errorValue
+	}
 	memoryStore := &bluememo.Store{Facts: memoryRepository, Profiles: memoryRepository, Jobs: memoryRepository, Embedder: &bluememotest.HashEmbedder{}}
 	memoryIngester := &bluememo.Ingester{Store: *memoryStore, Model: virtualMemoryIngestModel{}}
 	toolCatalogBuilder := virtualToolCatalogBuilder(
