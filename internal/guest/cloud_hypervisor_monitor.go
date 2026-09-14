@@ -64,6 +64,7 @@ func (monitor CloudHypervisorMonitor) PrepareGuestLaunch(request GuestLaunchRequ
 			Arguments: []string{
 				"--socket-path=" + deliverySocketPath,
 				"--shared-dir=" + request.DeliveryDirectoryPath,
+				"--cache=never",
 				"--sandbox", "namespace",
 			},
 		})
