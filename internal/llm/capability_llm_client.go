@@ -47,6 +47,12 @@ type capabilityChatCompletionRequestDocument struct {
 	GenerationOptions *GenerationOptions      `json:"generationOptions,omitempty"`
 }
 
+type capabilityChatCompletionResponseDocument struct {
+	ChatCompletionResponse
+	UsedFallback   bool   `json:"usedFallback,omitempty"`
+	FallbackReason string `json:"fallbackReason,omitempty"`
+}
+
 type capabilityStructuredOutputSchema struct {
 	Name               string          `json:"name"`
 	Document           json.RawMessage `json:"document"`
@@ -261,11 +267,14 @@ func (capabilityLLMClient CapabilityLLMClient) generateChatCompletion(responseCo
 		GenerationOptions: generationOptionsPointer(request.GenerationOptions),
 	}
 
-	var response ChatCompletionResponse
-	errorValue := capabilityLLMClient.postJSONWithRetry(responseContext, "/v1/llm/chat", requestDocument, &response)
+	var responseDocument capabilityChatCompletionResponseDocument
+	errorValue := capabilityLLMClient.postJSONWithRetry(responseContext, "/v1/llm/chat", requestDocument, &responseDocument)
 	if errorValue != nil {
 		return ChatCompletionResponse{}, errorValue
 	}
+	response := responseDocument.ChatCompletionResponse
+	response.UsedFallback = responseDocument.UsedFallback
+	response.FallbackReason = responseDocument.FallbackReason
 	if strings.TrimSpace(response.ProviderName) == "" {
 		response.ProviderName = "capabilityLLM"
 	}

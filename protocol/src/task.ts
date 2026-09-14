@@ -115,6 +115,7 @@ export enum TaskEventName {
   AgentLimitReply = 'agent.limit_reply',
   AgentLimitStop = 'agent.limit_stop',
   AgentLLMUnavailable = 'agent.llm_unavailable',
+  AgentModelCallCut = 'agent.model_call_cut',
   AgentNoProgressLoopPaused = 'agent.no_progress_loop_paused',
   AgentNoProgressLoopStopped = 'agent.no_progress_loop_stopped',
   AgentNonRetryableToolRefused = 'agent.non_retryable_tool_refused',
