@@ -1261,12 +1261,12 @@ func (connectorRuntime *ConnectorRuntime) appendTaskExecutionDuration(taskRunID 
 	}))
 }
 
-func (connectorRuntime *ConnectorRuntime) resolveConfirmationReply(ctx context.Context, platform string, personID string, event PlatformInboundEvent, taskWaitResolution inboundTaskWaitResolution) (pendingApproval, agentcontract.TurnDecision, bool, error) {
+func (connectorRuntime *ConnectorRuntime) resolveConfirmationReply(ctx context.Context, platform string, personID string, event PlatformInboundEvent, taskWaitResolution inboundTaskWaitResolution, toolSet *toolcontract.ToolSet) (pendingApproval, agentcontract.TurnDecision, bool, error) {
 	approval, isFound := connectorRuntime.findPendingApproval(personID, platform, event, taskWaitResolution)
 	if !isFound {
 		return pendingApproval{}, agentcontract.TurnDecision{}, false, nil
 	}
-	decision, errorValue := connectorRuntime.classifiedConfirmationDecision(ctx, platform, personID, event, approval)
+	decision, errorValue := connectorRuntime.classifiedConfirmationDecision(ctx, platform, personID, event, approval, toolSet)
 	if errorValue != nil {
 		return pendingApproval{}, agentcontract.TurnDecision{}, false, errorValue
 	}
@@ -1289,13 +1289,14 @@ func approvalSignalSurvivingRoute(approvalSignal *agentcontract.ApprovalSignal, 
 	return &unclearSignal
 }
 
-func (connectorRuntime *ConnectorRuntime) classifiedConfirmationDecision(ctx context.Context, platform string, personID string, event PlatformInboundEvent, approval pendingApproval) (agentcontract.TurnDecision, error) {
+func (connectorRuntime *ConnectorRuntime) classifiedConfirmationDecision(ctx context.Context, platform string, personID string, event PlatformInboundEvent, approval pendingApproval, toolSet *toolcontract.ToolSet) (agentcontract.TurnDecision, error) {
 	decision, errorValue := connectorRuntime.planTurn(ctx, approval.TaskRun.TaskRunID, agentcontract.AgentRequest{
 		RequesterPersonID: personID,
 		ConversationID:    event.ConversationID,
 		Prompt:            event.Prompt,
 		ResponseLanguage:  responseLanguageForEvent(event),
 		VisibleContext:    event.Context.ToAgentVisibleContext(),
+		ToolSet:           toolSet,
 		PendingConfirmation: agentcontract.PendingConfirmationContext{
 			TaskRunID: approval.TaskRun.TaskRunID,
 			Prompt:    approval.IntentPrompt,
@@ -1318,7 +1319,7 @@ func (connectorRuntime *ConnectorRuntime) classifiedConfirmationDecision(ctx con
 	return decision, nil
 }
 
-func (connectorRuntime *ConnectorRuntime) resolveAskReply(ctx context.Context, platform string, personID string, event PlatformInboundEvent, taskWaitResolution inboundTaskWaitResolution) (PlatformInboundEvent, agentcontract.TurnDecision, bool, error) {
+func (connectorRuntime *ConnectorRuntime) resolveAskReply(ctx context.Context, platform string, personID string, event PlatformInboundEvent, taskWaitResolution inboundTaskWaitResolution, toolSet *toolcontract.ToolSet) (PlatformInboundEvent, agentcontract.TurnDecision, bool, error) {
 	pendingInteraction, isFound := connectorRuntime.findPendingAskInteraction(personID, platform, event, taskWaitResolution)
 	if !isFound {
 		return event, agentcontract.TurnDecision{}, false, nil
@@ -1330,6 +1331,7 @@ func (connectorRuntime *ConnectorRuntime) resolveAskReply(ctx context.Context, p
 			Prompt:            event.Prompt,
 			ResponseLanguage:  responseLanguageForEvent(event),
 			VisibleContext:    event.Context.ToAgentVisibleContext(),
+			ToolSet:           toolSet,
 			PendingInput: agentcontract.PendingInputContext{
 				TaskRunID:     pendingInteraction.TaskRunID,
 				Question:      pendingInteraction.Question,
@@ -1348,6 +1350,7 @@ func (connectorRuntime *ConnectorRuntime) resolveAskReply(ctx context.Context, p
 		Prompt:            event.Prompt,
 		ResponseLanguage:  responseLanguageForEvent(event),
 		VisibleContext:    event.Context.ToAgentVisibleContext(),
+		ToolSet:           toolSet,
 		PendingChoice: agentcontract.PendingChoiceContext{
 			TaskRunID:     pendingInteraction.TaskRunID,
 			Question:      pendingInteraction.Question,
@@ -1392,16 +1395,8 @@ func resolvedChoicePrompt(interaction AskInteraction, keys []string) string {
 	return "User selected: " + strings.Join(trimNonEmptyConnectorStrings(values), ", ")
 }
 
-func shouldStopAfterPendingConfirmation(decision agentcontract.TurnDecision) bool {
-	if decision.Approval != nil && *decision.Approval == agentcontract.ApprovalSignalApprove {
-		return false
-	}
-	switch decision.Route {
-	case agentcontract.TurnRouteAnswerQuestion, agentcontract.TurnRouteStartTask, agentcontract.TurnRouteReviseTask:
-		return false
-	default:
-		return true
-	}
+func confirmationWasRejected(decision agentcontract.TurnDecision) bool {
+	return decision.Approval != nil && *decision.Approval == agentcontract.ApprovalSignalReject
 }
 
 func precomputedTurnDecisionForLaunch(confirmationDecision agentcontract.TurnDecision, hasConfirmationDecision bool, askDecision agentcontract.TurnDecision, hasAskDecision bool) *agentcontract.TurnDecision {

@@ -856,7 +856,14 @@ func (buildRouterToolSetLaunchStep) Name() string {
 }
 
 func (step buildRouterToolSetLaunchStep) Run(_ context.Context, execution *taskLaunchExecution) (*toolcontract.ToolSet, error) {
-	return execution.Launcher.toolCatalogBuilder.BuildToolSet(execution.Launcher.toolCatalogRequestForLaunch(step.Request, step.ProfileName)), nil
+	return execution.Launcher.RouterToolSet(step.Request), nil
+}
+
+func (taskLauncher *TaskLauncher) RouterToolSet(request TaskLaunchRequest) *toolcontract.ToolSet {
+	if taskLauncher.toolCatalogBuilder == nil {
+		return nil
+	}
+	return taskLauncher.toolCatalogBuilder.BuildToolSet(taskLauncher.toolCatalogRequestForLaunch(request, normalizeProfileName(request.ProfileName)))
 }
 
 type routerCallResult struct {
