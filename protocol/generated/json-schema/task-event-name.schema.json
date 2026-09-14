@@ -60,6 +60,7 @@
         "agent.limit_reply",
         "agent.limit_stop",
         "agent.llm_unavailable",
+        "agent.model_call_cut",
         "agent.no_progress_loop_paused",
         "agent.no_progress_loop_stopped",
         "agent.non_retryable_tool_refused",
