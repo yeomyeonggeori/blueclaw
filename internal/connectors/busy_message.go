@@ -9,6 +9,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 type busyMessageResult struct {
@@ -23,6 +24,7 @@ func (connectorRuntime *ConnectorRuntime) handleBusyMessageIfNeeded(
 	event PlatformInboundEvent,
 	replyTarget ReplyTarget,
 	personID string,
+	toolSet *toolcontract.ToolSet,
 	sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error),
 ) (busyMessageResult, error) {
 	activeTaskRun, isFound := connectorRuntime.latestCurrentConversationActiveTask(personID, event)
@@ -35,6 +37,7 @@ func (connectorRuntime *ConnectorRuntime) handleBusyMessageIfNeeded(
 		Prompt:            event.Prompt,
 		ResponseLanguage:  responseLanguageForEvent(event),
 		VisibleContext:    event.Context.ToAgentVisibleContext(),
+		ToolSet:           toolSet,
 		ActiveTask:        connectorRuntime.activeTaskContext(activeTaskRun),
 	})
 	if errorValue != nil {

@@ -32,12 +32,13 @@ type inboundTurn struct {
 	isApprovalContinuation          bool
 	didSupersedePendingConfirmation bool
 	keptPendingConfirmation         bool
+	keptTaskRunID                   string
 
 	pendingAskInteraction    AskInteraction
 	hasPendingAskInteraction bool
 	askTurnDecision          agentcontract.TurnDecision
 	hasAskTurnDecision       bool
-	didSupersedePendingAsk   bool
+	keptPendingAsk           bool
 
 	activeGoal    agentcontract.ActiveGoal
 	hasActiveGoal bool
@@ -162,6 +163,7 @@ func (connectorRuntime *ConnectorRuntime) settlePendingConfirmation(ctx context.
 	}
 	connectorRuntime.logger.Info("connector."+turn.platform+".confirmation.kept", slog.String("messageID", turn.event.MessageID), slog.String("taskRunID", turn.pendingApproval.TaskRun.TaskRunID), slog.String("route", string(turn.turnDecision.Route)))
 	turn.keptPendingConfirmation = true
+	turn.keptTaskRunID = turn.pendingApproval.TaskRun.TaskRunID
 	return ConnectorRuntimeResult{}, false, nil
 }
 
@@ -180,13 +182,13 @@ func (connectorRuntime *ConnectorRuntime) resolvePendingAsk(ctx context.Context,
 	if !hasPendingAskInteraction {
 		return nil
 	}
-	if askReplySupersedesInteraction(askTurnDecision, hasAskTurnDecision) {
-		connectorRuntime.supersedePendingAskInteraction(turn.event, pendingAskInteraction, askTurnDecision)
-		connectorRuntime.resolveTaskWaitToken(turn.taskWaitResolution)
+	if askReplyIsUnrelated(askTurnDecision, hasAskTurnDecision) {
+		connectorRuntime.logger.Info("connector."+turn.platform+".ask.kept", slog.String("messageID", turn.event.MessageID), slog.String("taskRunID", pendingAskInteraction.TaskRunID), slog.String("route", string(askTurnDecision.Route)))
 		turn.pendingAskInteraction = AskInteraction{}
 		turn.hasPendingAskInteraction = false
 		turn.taskWaitResolution = inboundTaskWaitResolution{}
-		turn.didSupersedePendingAsk = true
+		turn.keptPendingAsk = true
+		turn.keptTaskRunID = pendingAskInteraction.TaskRunID
 		return nil
 	}
 	if askReplyConsumesInteraction(pendingAskInteraction, previousPrompt, turn.event, askTurnDecision, hasAskTurnDecision) {
@@ -198,7 +200,7 @@ func (connectorRuntime *ConnectorRuntime) resolvePendingAsk(ctx context.Context,
 
 func (connectorRuntime *ConnectorRuntime) resolveTurnActiveGoal(ctx context.Context, turn *inboundTurn) {
 	turn.activeGoal, turn.hasActiveGoal = connectorRuntime.findActiveGoal(turn.personID, turn.platform, turn.event, turn.taskWaitResolution)
-	if turn.keptPendingConfirmation && turn.activeGoal.TaskRunID == turn.pendingApproval.TaskRun.TaskRunID {
+	if turn.hasActiveGoal && turn.activeGoal.TaskRunID == turn.keptTaskRunID {
 		turn.activeGoal = agentcontract.ActiveGoal{}
 		turn.hasActiveGoal = false
 	}
@@ -244,10 +246,10 @@ func (connectorRuntime *ConnectorRuntime) resolveTurnAddressing(ctx context.Cont
 }
 
 func (connectorRuntime *ConnectorRuntime) handleBusyTurn(ctx context.Context, turn *inboundTurn) (ConnectorRuntimeResult, bool, error) {
-	if len(turn.event.PreviousMessages) > 0 || turn.isApprovalContinuation || turn.hasPendingAskInteraction || turn.didSupersedePendingAsk || turn.didSupersedePendingConfirmation || turn.keptPendingConfirmation {
+	if len(turn.event.PreviousMessages) > 0 || turn.isApprovalContinuation || turn.hasPendingAskInteraction || turn.keptPendingAsk || turn.didSupersedePendingConfirmation || turn.keptPendingConfirmation {
 		return ConnectorRuntimeResult{}, false, nil
 	}
-	busyResult, errorValue := connectorRuntime.handleBusyMessageIfNeeded(ctx, turn.platform, turn.event, turn.replyTarget, turn.personID, turn.sendReply)
+	busyResult, errorValue := connectorRuntime.handleBusyMessageIfNeeded(ctx, turn.platform, turn.event, turn.replyTarget, turn.personID, turn.routerToolSet, turn.sendReply)
 	if errorValue != nil {
 		return ConnectorRuntimeResult{}, true, errorValue
 	}
