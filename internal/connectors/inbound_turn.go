@@ -155,19 +155,14 @@ func (connectorRuntime *ConnectorRuntime) settlePendingConfirmation(ctx context.
 		result, errorValue := connectorRuntime.handleRejectedConfirmation(ctx, turn.platform, turn.adapter, turn.event, turn.replyTarget, turn.pendingApproval, rejection, turn.sendReply)
 		return result, true, errorValue
 	}
-	switch turn.turnDecision.Route {
-	case agentcontract.TurnRouteAnswerQuestion:
-		result, errorValue := connectorRuntime.handlePendingConfirmationQuestion(ctx, turn.platform, turn.adapter, turn.event, turn.replyTarget, turn.pendingApproval, turn.sendReply)
-		return result, true, errorValue
-	case agentcontract.TurnRouteReviseTask:
+	if turn.turnDecision.Route == agentcontract.TurnRouteReviseTask {
 		connectorRuntime.cancelPendingConfirmation(turn.event, turn.pendingApproval, turn.turnDecision)
 		turn.didSupersedePendingConfirmation = true
 		return ConnectorRuntimeResult{}, false, nil
-	default:
-		connectorRuntime.logger.Info("connector."+turn.platform+".confirmation.kept", slog.String("messageID", turn.event.MessageID), slog.String("taskRunID", turn.pendingApproval.TaskRun.TaskRunID), slog.String("route", string(turn.turnDecision.Route)))
-		turn.keptPendingConfirmation = true
-		return ConnectorRuntimeResult{}, false, nil
 	}
+	connectorRuntime.logger.Info("connector."+turn.platform+".confirmation.kept", slog.String("messageID", turn.event.MessageID), slog.String("taskRunID", turn.pendingApproval.TaskRun.TaskRunID), slog.String("route", string(turn.turnDecision.Route)))
+	turn.keptPendingConfirmation = true
+	return ConnectorRuntimeResult{}, false, nil
 }
 
 func (connectorRuntime *ConnectorRuntime) resolvePendingAsk(ctx context.Context, turn *inboundTurn) error {

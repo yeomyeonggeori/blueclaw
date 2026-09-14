@@ -2756,10 +2756,10 @@ func TestConnectorRuntimeRoutesShortConfirmationReplyThroughRouter(t *testing.T)
 	}
 }
 
-func TestConnectorRuntimeAnswersPendingConfirmationQuestionWithoutLaunching(t *testing.T) {
+func TestConnectorRuntimeAnswersPendingConfirmationQuestionAsItsOwnTurn(t *testing.T) {
 	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
 		ChatResponsesBySchema: map[string][]string{
-			"blueclaw_reply": {"요청하신 작업은 취소했습니다."},
+			"blueclaw_reply": {"삭제는 되돌릴 수 없어서 확인을 받습니다."},
 		},
 		StructuredResponsesBySchema: map[string][]string{
 			"bluecollar_turn_router": {
@@ -2775,6 +2775,7 @@ func TestConnectorRuntimeAnswersPendingConfirmationQuestionWithoutLaunching(t *t
 		},
 		ActionResponses: []string{
 			`{"action":"continue","toolName":"event_delete","toolInput":{"eventHint":"event-1"}}`,
+			`{"action":"finish","message":"삭제는 되돌릴 수 없어서 확인을 받습니다."}`,
 		},
 	})
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
@@ -2812,12 +2813,16 @@ func TestConnectorRuntimeAnswersPendingConfirmationQuestionWithoutLaunching(t *t
 	if errorValue != nil {
 		t.Fatalf("expected pending confirmation reply to process: %v", errorValue)
 	}
-	if secondResult.TaskRunID != firstResult.TaskRunID || secondResult.Reason != "confirmation_question" {
-		t.Fatalf("expected pending confirmation question to be answered after cancelling pending action, got %+v", secondResult)
+	if secondResult.TaskRunID == "" || secondResult.TaskRunID == firstResult.TaskRunID {
+		t.Fatalf("a question beside a waiting confirmation runs as its own turn, got %+v", secondResult)
+	}
+	firstTaskRun, _ := connectorRuntime.taskRunService.FindTaskRun(firstResult.TaskRunID)
+	if firstTaskRun.Status != task.TaskStatusWaitingApproval {
+		t.Fatalf("the question does not withdraw the confirmation, got %s", firstTaskRun.Status)
 	}
 	requests := languageModel.Requests()
-	if connectorSchemaIndexAfter(requests, "bluecollar_agent_turn_action", connectorSchemaIndexAfter(requests, "bluecollar_turn_router", 1)) >= 0 {
-		t.Fatalf("non-approval confirmation reply must not launch a new agent turn, got schemas=%+v", connectorRequestSchemaNames(requests))
+	if connectorSchemaIndexAfter(requests, "bluecollar_agent_turn_action", connectorSchemaIndexAfter(requests, "bluecollar_turn_router", 1)) < 0 {
+		t.Fatalf("the question is answered by an agent turn that can read the record, got schemas=%+v", connectorRequestSchemaNames(requests))
 	}
 }
 
@@ -4581,6 +4586,7 @@ func TestAQuestionAboutThePendingConfirmationLeavesItPending(t *testing.T) {
 		},
 		ActionResponses: []string{
 			`{"action":"continue","toolName":"event_delete","toolInput":{"eventHint":"event-1"}}`,
+			`{"action":"finish","message":"내일 휴가로 등록된 일정 하나입니다."}`,
 		},
 	})
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
@@ -4608,8 +4614,8 @@ func TestAQuestionAboutThePendingConfirmationLeavesItPending(t *testing.T) {
 	secondEvent := testInboundEvent("message-2")
 	secondEvent.Prompt = "그게 어떤 일정이었지?"
 	secondResult, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, secondEvent)
-	if errorValue != nil || secondResult.Reason != "confirmation_question" {
-		t.Fatalf("expected the question to be answered in place: %v %+v", errorValue, secondResult)
+	if errorValue != nil || secondResult.TaskRunID == "" || secondResult.TaskRunID == firstResult.TaskRunID {
+		t.Fatalf("a question runs as its own turn, with tools, beside the waiting confirmation: %v %+v", errorValue, secondResult)
 	}
 	firstTaskRun, _ := connectorRuntime.taskRunService.FindTaskRun(firstResult.TaskRunID)
 	if firstTaskRun.Status != task.TaskStatusWaitingApproval {
