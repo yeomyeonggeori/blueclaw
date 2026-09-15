@@ -4261,7 +4261,7 @@ func actionNoToolFallbackFinishMessage(reply string) string {
 }
 
 func actionFailMessage(reason string) string {
-	return `{"action":"fail","reason":` + quote(reason) + `,"goalStatus":"blocked","goalSatisfied":false,"remainingWork":"The requested task could not complete.","failureResolution":"failure_report","usedFailureFacts":{"attempts":[{"toolName":"shell","inputSummary":"printf 'permission denied blocked_by_captcha' >&2; exit 126","errorCode":"operation_failed","failureStage":"shell","message":"errorCode=operation_failed; failureStage=shell; exitCode=126; stderrTail=permission denied blocked_by_captcha"}],"budgetState":"failure_report_required"},"executionStateUpdate":{}}`
+	return `{"action":"fail","message":` + quote(reason) + `,"reason":` + quote(reason) + `,"goalStatus":"blocked","goalSatisfied":false,"remainingWork":"The requested task could not complete.","failureResolution":"failure_report","usedFailureFacts":{"attempts":[{"toolName":"shell","inputSummary":"printf 'permission denied blocked_by_captcha' >&2; exit 126","errorCode":"operation_failed","failureStage":"shell","message":"errorCode=operation_failed; failureStage=shell; exitCode=126; stderrTail=permission denied blocked_by_captcha"}],"budgetState":"no_tool_fallback_available"},"executionStateUpdate":{}}`
 }
 
 func actionCallTool(toolName string, input string) string {
