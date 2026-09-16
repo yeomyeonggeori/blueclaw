@@ -105,7 +105,7 @@ describe("a person's assets are read with that person's own credential", () => {
 	});
 
 	test("a picture the platform will not hand over is a failure, not a person without one", async () => {
-		globalThis.fetch = (async () => new Response("expired", { status: 401 })) as typeof fetch;
+		globalThis.fetch = (async (_input: RequestInfo | URL) => new Response("expired", { status: 401 })) as typeof fetch;
 
 		const answer = await call("mattermost", "person.picture", {
 			actor,
@@ -118,7 +118,7 @@ describe("a person's assets are read with that person's own credential", () => {
 	});
 
 	test("an emoji nobody registered is none, not a refusal", async () => {
-		globalThis.fetch = (async () => new Response("no such emoji", { status: 404 })) as typeof fetch;
+		globalThis.fetch = (async (_input: RequestInfo | URL) => new Response("no such emoji", { status: 404 })) as typeof fetch;
 
 		const answer = await call("mattermost", "person.emoji.image", {
 			actor,
@@ -131,7 +131,7 @@ describe("a person's assets are read with that person's own credential", () => {
 
 	test("a relay-served file the relay will not serve is a failure, not a file that is not there", async () => {
 		const attachmentURL = `https://relay.test/media/${"b".repeat(64)}.png`;
-		globalThis.fetch = (async () => new Response("unauthorized", { status: 401 })) as typeof fetch;
+		globalThis.fetch = (async (_input: RequestInfo | URL) => new Response("unauthorized", { status: 401 })) as typeof fetch;
 		const relayGateways = {
 			...gateways,
 			buzz: createBuzzPersonalGateway({} as never, { relayURL: "wss://relay.test" }),
