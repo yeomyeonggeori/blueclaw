@@ -104,6 +104,55 @@ describe("a person's assets are read with that person's own credential", () => {
 		expect(await answer.json()).toEqual({ emoji: [] });
 	});
 
+	test("a picture the platform will not hand over is a failure, not a person without one", async () => {
+		globalThis.fetch = (async () => new Response("expired", { status: 401 })) as typeof fetch;
+
+		const answer = await call("mattermost", "person.picture", {
+			actor,
+			externalID: "person-1",
+			largestBytes: 100_000,
+		});
+
+		expect(answer.status).toBe(502);
+		expect(await answer.json()).toEqual({ error: "mattermost answered 401 for /users/person-1/image" });
+	});
+
+	test("an emoji nobody registered is none, not a refusal", async () => {
+		globalThis.fetch = (async () => new Response("no such emoji", { status: 404 })) as typeof fetch;
+
+		const answer = await call("mattermost", "person.emoji.image", {
+			actor,
+			name: "nobody-made-this",
+			largestBytes: 100_000,
+		});
+
+		expect(await answer.json()).toEqual({ image: null });
+	});
+
+	test("a relay-served file the relay will not serve is a failure, not a file that is not there", async () => {
+		const attachmentURL = `https://relay.test/media/${"b".repeat(64)}.png`;
+		globalThis.fetch = (async () => new Response("unauthorized", { status: 401 })) as typeof fetch;
+		const relayGateways = {
+			...gateways,
+			buzz: createBuzzPersonalGateway({} as never, { relayURL: "wss://relay.test" }),
+		};
+		const handler = createOutboundHandler(adapters, configuration, relayGateways);
+
+		const answer = await handler(
+			new Request("http://127.0.0.1/v1/platform/buzz/person.message.attachment", {
+				method: "POST",
+				body: JSON.stringify({
+					actor: { kind: "buzz-secret", secret: buzzSecretHex },
+					messageID: attachmentURL,
+					largestBytes: 100_000,
+				}),
+			}),
+		);
+
+		expect(answer.status).toBe(502);
+		expect(await answer.json()).toEqual({ error: `buzz answered 401 for ${attachmentURL}` });
+	});
+
 	test("a relay-served attachment is read with a signed blossom get authorization", async () => {
 		const digest = "a".repeat(64);
 		const attachmentURL = `https://relay.test/media/${digest}.png`;

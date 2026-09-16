@@ -93,6 +93,17 @@ export class CredentialRefused extends Error {
 	}
 }
 
+export class ReadRefused extends Error {
+	constructor(
+		platform: string,
+		url: string,
+		readonly status: number,
+	) {
+		super(`${platform} answered ${status} for ${url}`);
+		this.name = "ReadRefused";
+	}
+}
+
 export type PersonalEmoji = {
 	name: string;
 };

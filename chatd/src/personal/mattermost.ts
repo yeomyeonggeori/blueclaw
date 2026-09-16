@@ -17,6 +17,7 @@ import {
 	type PersonalMessagePage,
 	type PersonalPerson,
 	type PersonalReaction,
+	ReadRefused,
 } from "./gateway.ts";
 import { withinBudget } from "./page-budget.ts";
 
@@ -285,11 +286,9 @@ class MattermostPersonalGateway implements PersonalGateway {
 		largestBytes: number,
 	): Promise<PersonalFile | null> {
 		const described = await this.readAsPerson(actor, `/files/${encodeURIComponent(attachmentID)}/info`);
-		if (!described) return null;
 		const info = (await described.json()) as MattermostFileInfo;
 		if (info.size > largestBytes) return null;
 		const response = await this.readAsPerson(actor, `/files/${encodeURIComponent(attachmentID)}`);
-		if (!response) return null;
 		const bytes = new Uint8Array(await response.arrayBuffer());
 		if (bytes.length === 0 || bytes.length > largestBytes) return null;
 		return {
@@ -363,10 +362,14 @@ class MattermostPersonalGateway implements PersonalGateway {
 	}
 
 	private async emojiIDOf(actor: ActorCredential, name: string): Promise<string | null> {
-		const response = await this.readAsPerson(actor, `/emoji/name/${encodeURIComponent(name)}`);
-		if (!response) return null;
-		const emoji = (await response.json()) as { id?: string };
-		return emoji.id ?? null;
+		try {
+			const response = await this.readAsPerson(actor, `/emoji/name/${encodeURIComponent(name)}`);
+			const emoji = (await response.json()) as { id?: string };
+			return emoji.id ?? null;
+		} catch (error) {
+			if (error instanceof ReadRefused && error.status === 404) return null;
+			throw error;
+		}
 	}
 
 	async readProfilePicture(
@@ -377,12 +380,13 @@ class MattermostPersonalGateway implements PersonalGateway {
 		return this.readImage(actor, `/users/${encodeURIComponent(externalID)}/image`, largestBytes);
 	}
 
-	private async readAsPerson(actor: ActorCredential, path: string): Promise<Response | null> {
+	private async readAsPerson(actor: ActorCredential, path: string): Promise<Response> {
 		requireMatchingCredential(this, actor);
 		const response = await fetch(`${this.baseURL}/api/v4${path}`, {
 			headers: { Authorization: `Bearer ${actor.secret}` },
 		});
-		return response.ok ? response : null;
+		if (!response.ok) throw new ReadRefused("mattermost", path, response.status);
+		return response;
 	}
 
 	private async readImage(
@@ -391,7 +395,6 @@ class MattermostPersonalGateway implements PersonalGateway {
 		largestBytes: number,
 	): Promise<PersonalImage | null> {
 		const response = await this.readAsPerson(actor, path);
-		if (!response) return null;
 		const type = response.headers.get("content-type") ?? "image/png";
 		const bytes = new Uint8Array(await response.arrayBuffer());
 		if (bytes.length === 0 || bytes.length > largestBytes) return null;
