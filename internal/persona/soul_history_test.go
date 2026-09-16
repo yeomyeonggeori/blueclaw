@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -43,6 +44,18 @@ func TestSoulHistoryAppendsWithExpectedVersionAndSurvivesRestart(t *testing.T) {
 	}
 }
 
+func TestReadSoulHistorySynthesizesInitialRevisionForEmptyRoot(t *testing.T) {
+	root := t.TempDir()
+
+	history, errorValue := ReadSoulHistory(root)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(history) != 1 || history[0].Version != 1 {
+		t.Fatalf("expected synthesized initial revision, got %+v", history)
+	}
+}
+
 func jsonEqual(left, right any) bool {
 	leftDocument, leftError := json.Marshal(left)
 	rightDocument, rightError := json.Marshal(right)
@@ -71,6 +84,59 @@ func TestSoulHistoryBoundsRevisions(t *testing.T) {
 func TestSoulHistoryPathIsPrivateWorkspaceState(t *testing.T) {
 	if filepath.Base(soulHistoryPath("/workspace")) != "soul-history.json" {
 		t.Fatal("unexpected soul history path")
+	}
+}
+
+func TestReadSoulDocumentReportsAbsentWithoutCreatingDefaultBackup(t *testing.T) {
+	root := t.TempDir()
+
+	if _, errorValue := ReadSoulDocument(root); !os.IsNotExist(errorValue) {
+		t.Fatalf("expected absent soul document, got %v", errorValue)
+	}
+	if _, errorValue := os.Stat(filepath.Join(root, ".blueclaw")); !os.IsNotExist(errorValue) {
+		t.Fatalf("expected absent soul document not to create state, got %v", errorValue)
+	}
+}
+
+func TestReadSoulDocumentReadsBaselineWithoutHistory(t *testing.T) {
+	root := t.TempDir()
+	baseline := []byte(`{"schemaVersion":1,"values":["steady"]}`)
+	if errorValue := os.WriteFile(filepath.Join(root, SoulFileName), baseline, 0o600); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	document, errorValue := ReadSoulDocument(root)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	parsedSoul, errorValue := ParseSoul(baseline)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	expectedDocument, errorValue := CanonicalSoul(parsedSoul)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if string(document) != string(expectedDocument) {
+		t.Fatalf("expected baseline document, got %s", document)
+	}
+}
+
+func TestReadSoulDocumentReadsHistoryWithoutProjection(t *testing.T) {
+	root := t.TempDir()
+	if _, errorValue := AppendSoulRevision(root, 1, []byte(`{"schemaVersion":1,"values":["steady"]}`), "sample", nil, "reflection"); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := os.Remove(filepath.Join(root, SoulFileName)); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	document, errorValue := ReadSoulDocument(root)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if !json.Valid(document) || !strings.Contains(string(document), "steady") {
+		t.Fatalf("expected authoritative history document, got %s", document)
 	}
 }
 
