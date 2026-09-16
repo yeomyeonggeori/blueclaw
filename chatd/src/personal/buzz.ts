@@ -28,6 +28,7 @@ import {
 	type PersonalMessage,
 	type PersonalMessagePage,
 	type PersonalPerson,
+	ReadRefused,
 } from "./gateway.ts";
 
 export type BuzzPersonalSettings = {
@@ -340,7 +341,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 }
 
 // A file too big for the caller is not an error to raise, it is a file they do
-// not get; the same is true of one the relay will not serve.
+// not get.
 async function readWithinLimit(
 	url: string,
 	largestBytes: number,
@@ -348,7 +349,7 @@ async function readWithinLimit(
 	headers: Record<string, string>,
 ): Promise<{ contentType: string; contentBase64: string } | null> {
 	const response = await fetch(url, { headers });
-	if (!response.ok) return null;
+	if (!response.ok) throw new ReadRefused("buzz", url, response.status);
 	const bytes = new Uint8Array(await response.arrayBuffer());
 	if (bytes.byteLength > largestBytes) return null;
 	return {
