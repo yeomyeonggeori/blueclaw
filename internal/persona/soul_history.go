@@ -23,7 +23,7 @@ type SoulRevision struct {
 var soulHistoryMutex sync.Mutex
 
 func ReadSoulDocument(root string) ([]byte, error) {
-	history, errorValue := ReadSoulHistory(root)
+	history, errorValue := readSoulHistory(root, false)
 	if errorValue != nil {
 		return nil, errorValue
 	}
@@ -31,6 +31,10 @@ func ReadSoulDocument(root string) ([]byte, error) {
 }
 
 func ReadSoulHistory(root string) ([]SoulRevision, error) {
+	return readSoulHistory(root, true)
+}
+
+func readSoulHistory(root string, allowMissingBaseline bool) ([]SoulRevision, error) {
 	path := soulHistoryPath(root)
 	document, errorValue := os.ReadFile(path)
 	if errorValue == nil {
@@ -45,6 +49,9 @@ func ReadSoulHistory(root string) ([]SoulRevision, error) {
 	}
 	baseline, errorValue := os.ReadFile(filepath.Join(root, SoulFileName))
 	if os.IsNotExist(errorValue) {
+		if !allowMissingBaseline {
+			return nil, errorValue
+		}
 		baseline = []byte(`{"schemaVersion":1}`)
 	} else if errorValue != nil {
 		return nil, errorValue

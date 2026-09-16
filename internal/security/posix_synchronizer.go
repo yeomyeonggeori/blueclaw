@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -93,7 +94,7 @@ func (synchronizer POSIXSynchronizer) runSynchronizeCommand(ctx context.Context,
 	command := exec.CommandContext(ctx, helperPath, "sync", "--state", statePath, "--workspace", workspaceRootPath)
 	output, errorValue := command.CombinedOutput()
 	if errorValue != nil {
-		return errors.New("POSIX synchronization failed: " + strings.TrimSpace(string(output)))
+		return formatPOSIXCommandError("synchronization", helperPath, errorValue, output)
 	}
 	return nil
 }
@@ -224,7 +225,15 @@ func (synchronizer POSIXSynchronizer) ReconcileHome(ctx context.Context, personI
 	command := exec.CommandContext(ctx, helperPath, "reconcile-home", "--person-id", strings.TrimSpace(personID), "--workspace", rootPath)
 	output, errorValue := command.CombinedOutput()
 	if errorValue != nil {
-		return errors.New("POSIX home reconciliation failed: " + strings.TrimSpace(string(output)))
+		return formatPOSIXCommandError("home reconciliation", helperPath, errorValue, output)
 	}
 	return nil
+}
+
+func formatPOSIXCommandError(operation string, helperPath string, errorValue error, output []byte) error {
+	detail := strings.TrimSpace(string(output))
+	if detail == "" {
+		detail = "helper produced no output"
+	}
+	return fmt.Errorf("POSIX %s failed using helper %q: %w; output: %s", operation, helperPath, errorValue, detail)
 }

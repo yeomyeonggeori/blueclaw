@@ -3,14 +3,74 @@ package security
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 )
+
+func TestPOSIXSynchronizerReportsMissingHelper(t *testing.T) {
+	rootPath := t.TempDir()
+	policyPath := filepath.Join(rootPath, "policy.json")
+	if errorValue := os.WriteFile(policyPath, []byte(`{"people":[]}`), 0600); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	helperPath := filepath.Join(rootPath, "missing-helper")
+	synchronizer := NewPOSIXSynchronizer(config.TerminalConfiguration{
+		POSIXHelperPath:   helperPath,
+		WorkspaceRootPath: filepath.Join(rootPath, "workspace"),
+	}, policyPath)
+
+	errorValue := synchronizer.Synchronize(context.Background())
+	if errorValue == nil {
+		t.Fatal("expected missing helper to fail synchronization")
+	}
+	var pathError *os.PathError
+	if !errors.As(errorValue, &pathError) {
+		t.Fatalf("expected missing helper error to preserve os.PathError, got %v", errorValue)
+	}
+	for _, expectedFragment := range []string{helperPath, "helper produced no output", "POSIX synchronization failed"} {
+		if !strings.Contains(errorValue.Error(), expectedFragment) {
+			t.Fatalf("expected error to contain %q, got %v", expectedFragment, errorValue)
+		}
+	}
+}
+
+func TestPOSIXSynchronizerReportsReconcileHelperOutputAndProcessError(t *testing.T) {
+	rootPath := t.TempDir()
+	policyPath := filepath.Join(rootPath, "policy.json")
+	if errorValue := os.WriteFile(policyPath, []byte(`{"people":[]}`), 0600); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	helperPath := filepath.Join(rootPath, "helper")
+	if errorValue := os.WriteFile(helperPath, []byte("#!/bin/sh\nprintf '%s\\n' 'reconcile failed' >&2\nexit 23\n"), 0700); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	synchronizer := NewPOSIXSynchronizer(config.TerminalConfiguration{
+		POSIXHelperPath:   helperPath,
+		WorkspaceRootPath: filepath.Join(rootPath, "workspace"),
+	}, policyPath)
+
+	errorValue := synchronizer.ReconcileHome(context.Background(), "person-1", filepath.Join(rootPath, "workspace"))
+	if errorValue == nil {
+		t.Fatal("expected failing helper to fail home reconciliation")
+	}
+	var exitError *exec.ExitError
+	if !errors.As(errorValue, &exitError) {
+		t.Fatalf("expected helper process error to be preserved, got %v", errorValue)
+	}
+	for _, expectedFragment := range []string{helperPath, "POSIX home reconciliation failed", "reconcile failed"} {
+		if !strings.Contains(errorValue.Error(), expectedFragment) {
+			t.Fatalf("expected error to contain %q, got %v", expectedFragment, errorValue)
+		}
+	}
+}
 
 func TestPOSIXSynchronizerPassesComputedStateDocumentToHelper(t *testing.T) {
 	rootPath := t.TempDir()
