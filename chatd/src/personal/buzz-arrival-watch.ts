@@ -28,6 +28,7 @@ type Watcher = {
 	relay: BuzzRelayClient;
 	connecting: Promise<void>;
 	participantsByChannel: Map<string, string[]>;
+	subscribedChannelIDs: Set<string>;
 	listedAtSeconds: number;
 	renewedAt: number;
 };
@@ -35,7 +36,7 @@ type Watcher = {
 export function createBuzzArrivalWatch(relayURL: string, authTagJSON: string | undefined): BuzzArrivalWatch {
 	return new BuzzArrivalWatch({
 		openRelay: (userSecretHex) => createBuzzRelayClient(relayURL, userSecretHex, authTagJSON),
-		listConversations: (userSecretHex) => listUserConversations(relayURL, userSecretHex),
+		listConversations: (userSecretHex) => listUserConversations(relayURL, userSecretHex, { withProfiles: false }),
 		tell: postArrival,
 		now: () => Date.now(),
 	});
@@ -92,6 +93,7 @@ export class BuzzArrivalWatch {
 				),
 			),
 			participantsByChannel: new Map(),
+			subscribedChannelIDs: new Set(),
 			listedAtSeconds: openedAtSeconds,
 			renewedAt: this.dependencies.now(),
 		};
@@ -102,12 +104,13 @@ export class BuzzArrivalWatch {
 	private async followConversations(watcher: Watcher): Promise<void> {
 		const listingStartedAt = this.nowSeconds();
 		const conversations = await this.dependencies.listConversations(watcher.userSecretHex);
-		const joinedChannelIDs = conversations
-			.map((conversation) => conversation.channelID)
-			.filter((channelID) => !watcher.participantsByChannel.has(channelID));
-		for (const conversation of conversations) {
-			watcher.participantsByChannel.set(conversation.channelID, conversation.participantPubkeyHexes);
-		}
+		watcher.participantsByChannel = new Map(
+			conversations.map((conversation) => [conversation.channelID, conversation.participantPubkeyHexes]),
+		);
+		const joinedChannelIDs = [...watcher.participantsByChannel.keys()].filter(
+			(channelID) => !watcher.subscribedChannelIDs.has(channelID),
+		);
+		for (const channelID of joinedChannelIDs) watcher.subscribedChannelIDs.add(channelID);
 		if (joinedChannelIDs.length > 0) {
 			watcher.relay.subscribe(
 				[{ kinds: [STREAM_MESSAGE_KIND], "#h": joinedChannelIDs, since: watcher.listedAtSeconds }],

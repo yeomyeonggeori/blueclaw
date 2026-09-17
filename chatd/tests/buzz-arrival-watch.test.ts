@@ -170,6 +170,28 @@ describe("watching a person's conversations for arriving messages", () => {
 		expect(told.map((arrival) => arrival.messageID)).toEqual(["m-2"]);
 	});
 
+	test("a conversation the person has left is not told, and rejoining it does not subscribe again", async () => {
+		const conversations = new Map([[aliceSecret, [conversation("group-1", ["alice", "bob"])]]]);
+		const { watch, relays, told, now } = harness(conversations);
+		await watch.watch(aliceSecret, arrivalsURL);
+		const relay = relays.get(aliceSecret)!;
+
+		conversations.set(aliceSecret, []);
+		await watch.watch(aliceSecret, arrivalsURL);
+		deliverTo(relay, "group-1", message("m-after-leaving", "group-1", "bob", now()));
+		expect(told).toHaveLength(0);
+
+		conversations.set(aliceSecret, [conversation("group-1", ["alice", "bob", "carol"])]);
+		await watch.watch(aliceSecret, arrivalsURL);
+		deliverTo(relay, "group-1", message("m-after-rejoining", "group-1", "bob", now()));
+
+		const channelSubscriptions = relay.subscriptions.filter((one) => (one.filters as { "#h"?: string[] }[])[0]?.["#h"]);
+		expect(channelSubscriptions).toHaveLength(1);
+		expect(told.map((arrival) => [arrival.messageID, arrival.recipientExternalIDs])).toEqual([
+			["m-after-rejoining", ["alice", "bob", "carol"]],
+		]);
+	});
+
 	test("a message replayed long after it was posted is not told", async () => {
 		const { watch, relays, told, now } = harness(new Map([[aliceSecret, [conversation("dm-1", ["alice", "bob"])]]]));
 		await watch.watch(aliceSecret, arrivalsURL);
