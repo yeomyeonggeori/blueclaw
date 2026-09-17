@@ -4026,7 +4026,7 @@ func findAgentToolDefinition(toolDefinitions []toolcontract.ToolDefinition, tool
 }
 
 func connectorFinishMessage(reply string) string {
-	return `{"action":"finish","message":` + strconv.Quote(reply) + `,"completionSummary":` + strconv.Quote(reply) + `,"replyParts":[{"type":"text","text":` + strconv.Quote(reply) + `}],"goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[]}`
+	return `{"action":"finish","message":` + strconv.Quote(reply) + `,"completionSummary":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[]}`
 }
 
 func connectorDefaultTurnRouterResponse() string {
@@ -4034,7 +4034,7 @@ func connectorDefaultTurnRouterResponse() string {
 }
 
 func connectorFinishMessageWithEvidence(reply string, observationID string, toolName string, attachmentIndex int) string {
-	return `{"action":"finish","message":` + strconv.Quote(reply) + `,"completionSummary":` + strconv.Quote(reply) + `,"replyParts":[{"type":"text","text":` + strconv.Quote(reply) + `}],"goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[{"observationID":` + strconv.Quote(observationID) + `,"toolName":` + strconv.Quote(toolName) + `,"attachmentIndex":` + strconv.Itoa(attachmentIndex) + `}]}`
+	return `{"action":"finish","message":` + strconv.Quote(reply) + `,"completionSummary":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[{"observationID":` + strconv.Quote(observationID) + `,"toolName":` + strconv.Quote(toolName) + `,"attachmentIndex":` + strconv.Itoa(attachmentIndex) + `}]}`
 }
 
 func appendConnectorActiveGoal(t *testing.T, taskRunService *task.TaskRunService, taskRun task.TaskRun, activeGoal agentcontract.ActiveGoal) {

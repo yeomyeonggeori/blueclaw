@@ -313,25 +313,6 @@
         },
         "remainingWork": {
           "type": "string"
-        },
-        "replyParts": {
-          "items": {
-            "additionalProperties": {},
-            "properties": {
-              "text": {
-                "type": "string"
-              },
-              "type": {
-                "const": "text",
-                "type": "string"
-              }
-            },
-            "required": [
-              "text"
-            ],
-            "type": "object"
-          },
-          "type": "array"
         }
       },
       "required": [
