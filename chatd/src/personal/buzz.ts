@@ -13,15 +13,22 @@ import {
 	sendChannelMessageAsUser,
 } from "../adapters/buzz/user-session.ts";
 import {
+	createChannelAsUser,
+	joinChannelAsUser,
+	listOpenChannelsAsUser,
+} from "../adapters/buzz/user-channels.ts";
+import {
 	CredentialRefused,
 	UnsupportedByPlatform,
 	requireMatchingCredential,
 	type ActorCredential,
+	type CreatedPersonalChannel,
 	type CredentialRequirement,
 	type PersonalConversation,
 	type PersonalEmoji,
 	type PersonalGateway,
 	type IssuedCredential,
+	type NewPersonalChannel,
 	type PersonalIdentity,
 	type PersonalFile,
 	type PersonalImage,
@@ -112,6 +119,45 @@ class BuzzPersonalGateway implements PersonalGateway {
 			counterpart,
 		);
 		return { id: channel.channelID, name: "", kind: "dm", isPrivate: true };
+	}
+
+	async createChannel(actor: ActorCredential, channel: NewPersonalChannel): Promise<CreatedPersonalChannel> {
+		this.require(actor);
+		const created = await createChannelAsUser({
+			relayURL: this.settings.relayURL,
+			userSecretHex: actor.secret,
+			spec: {
+				name: channel.name,
+				description: channel.description,
+				visibility: channel.visibility,
+				memberPubkeyHexes: channel.memberExternalIDs,
+			},
+		});
+		return {
+			id: created.channelID,
+			name: created.name,
+			description: channel.description,
+			kind: "group",
+			isPrivate: channel.visibility === "private",
+			uninvitedExternalIDs: created.uninvitedPubkeyHexes,
+		};
+	}
+
+	async listOpenChannels(actor: ActorCredential): Promise<PersonalConversation[]> {
+		this.require(actor);
+		const channels = await listOpenChannelsAsUser({ relayURL: this.settings.relayURL, userSecretHex: actor.secret });
+		return channels.map((channel) => ({
+			id: channel.channelID,
+			name: channel.name,
+			description: channel.description,
+			kind: "group",
+			isPrivate: false,
+		}));
+	}
+
+	async joinChannel(actor: ActorCredential, conversationID: string): Promise<void> {
+		this.require(actor);
+		await joinChannelAsUser({ relayURL: this.settings.relayURL, userSecretHex: actor.secret, channelID: conversationID });
 	}
 
 	async listMessages(

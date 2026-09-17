@@ -2,6 +2,7 @@ import type { PersonalGateway } from "./gateway.ts";
 import {
 	MalformedRequest,
 	parseCredentialAnswers,
+	parseNewChannel,
 	parsePersonRequest,
 	requireConversation,
 	requireExternalID,
@@ -46,6 +47,19 @@ export const personCapabilities: Record<string, PersonCapability> = {
 	"person.dm.ensure": async (gateway, body) => {
 		const request = parsePersonRequest(body);
 		return await gateway.ensureDirectConversation(request.actor, request.counterpartExternalIDs);
+	},
+	"person.channel.create": async (gateway, body) => {
+		const request = parsePersonRequest(body);
+		return await gateway.createChannel(request.actor, parseNewChannel(body));
+	},
+	"person.channels.open.list": async (gateway, body) => {
+		const request = parsePersonRequest(body);
+		return { channels: await gateway.listOpenChannels(request.actor) };
+	},
+	"person.channel.join": async (gateway, body) => {
+		const request = parsePersonRequest(body);
+		await gateway.joinChannel(request.actor, requireConversation(request));
+		return {};
 	},
 	"person.messages.list": async (gateway, body) => {
 		const request = parsePersonRequest(body);

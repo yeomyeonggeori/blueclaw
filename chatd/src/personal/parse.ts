@@ -1,4 +1,5 @@
-import type { ActorCredential } from "./gateway.ts";
+import type { ActorCredential, NewPersonalChannel } from "./gateway.ts";
+import { canonicalChannelName } from "../channels.ts";
 import type { OutgoingAttachment } from "../outgoing-attachment.ts";
 
 export class MalformedRequest extends Error {
@@ -26,6 +27,26 @@ export type PersonRequest = {
 	counterpartExternalIDs: string[];
 	attachments: OutgoingAttachment[];
 };
+
+export function parseNewChannel(value: unknown): NewPersonalChannel {
+	const record = asRecord(value);
+	const visibility = record.visibility;
+	if (visibility !== "open" && visibility !== "private") {
+		throw new MalformedRequest("visibility must be open or private");
+	}
+	const members = record.memberExternalIDs ?? [];
+	if (!Array.isArray(members) || members.some((entry) => typeof entry !== "string")) {
+		throw new MalformedRequest("memberExternalIDs must be a list of ids");
+	}
+	const name = requireText(record, "name");
+	if (!canonicalChannelName(name)) throw new MalformedRequest("a channel name needs more than a # prefix");
+	return {
+		name,
+		description: optionalText(record, "description"),
+		visibility,
+		memberExternalIDs: members as string[],
+	};
+}
 
 const legacyBuzzSecretField = "userSecretHex";
 const legacyCounterpartField = "counterpartPubkeyHex";
