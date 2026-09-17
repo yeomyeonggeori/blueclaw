@@ -14,7 +14,7 @@ type DeliveryAttempt = { accepted: true } | { accepted: false; failure: string }
 
 const acceptedStatusCode = 202;
 const requestTimeoutMilliseconds = 10_000;
-const maximumAttempts = 8;
+const maximumAttempts = 120;
 const initialBackoffMilliseconds = 250;
 const maximumBackoffMilliseconds = 5_000;
 

@@ -75,7 +75,7 @@ describe('delivering an inbound event to the relay', () => {
     await expect(
       deliverInboundEventToRelay(relayInboundURL, inboundEvent(), sleepInstantly),
     ).rejects.toThrow(/message-1/);
-    expect(relay.requestCount()).toBe(8);
+    expect(relay.requestCount()).toBe(120);
   });
 
   test('retries a thrown fetch and reports its message when the attempts run out', async () => {
