@@ -37,6 +37,7 @@ import {
 	type PersonalPerson,
 	ReadRefused,
 } from "./gateway.ts";
+import { createBuzzArrivalWatch, type BuzzArrivalWatch } from "./buzz-arrival-watch.ts";
 
 export type BuzzPersonalSettings = {
 	relayURL: string;
@@ -53,11 +54,19 @@ export function createBuzzPersonalGateway(
 class BuzzPersonalGateway implements PersonalGateway {
 	readonly platform = "buzz";
 	readonly credentialKind = "buzz-secret";
+	private readonly arrivals: BuzzArrivalWatch;
 
 	constructor(
 		private readonly adapter: BuzzAdapter,
 		private readonly settings: BuzzPersonalSettings,
-	) {}
+	) {
+		this.arrivals = createBuzzArrivalWatch(settings.relayURL, settings.authTagJSON);
+	}
+
+	async watchArrivals(actor: ActorCredential, arrivalsURL: string): Promise<void> {
+		this.require(actor);
+		await this.arrivals.watch(actor.secret, arrivalsURL);
+	}
 
 	credentialRequirement(): CredentialRequirement {
 		return {

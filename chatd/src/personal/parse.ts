@@ -24,6 +24,7 @@ export type PersonRequest = {
 	name?: string;
 	externalID?: string;
 	largestBytes?: number;
+	arrivalsURL?: string;
 	counterpartExternalIDs: string[];
 	attachments: OutgoingAttachment[];
 };
@@ -64,6 +65,7 @@ export function parsePersonRequest(value: unknown): PersonRequest {
 		name: optionalText(record, "name"),
 		externalID: optionalText(record, "externalID"),
 		largestBytes: optionalCount(record, "largestBytes"),
+		arrivalsURL: optionalText(record, "arrivalsURL"),
 		counterpartExternalIDs: parseCounterparts(record),
 		attachments: parseAttachments(record),
 	};
@@ -148,6 +150,17 @@ export function requireExternalID(request: PersonRequest): string {
 export function requireLargestBytes(request: PersonRequest): number {
 	if (!request.largestBytes) throw missing("largestBytes");
 	return request.largestBytes;
+}
+
+const loopbackHostnames = new Set(["127.0.0.1", "localhost"]);
+
+export function requireLoopbackArrivalsURL(request: PersonRequest): string {
+	if (!request.arrivalsURL) throw missing("arrivalsURL");
+	const parsed = URL.parse(request.arrivalsURL);
+	if (!parsed || parsed.protocol !== "http:" || !loopbackHostnames.has(parsed.hostname)) {
+		throw new MalformedRequest("arrivalsURL must be an http address on this machine's loopback");
+	}
+	return parsed.toString();
 }
 
 function parseCounterparts(record: Record<string, unknown>): string[] {
