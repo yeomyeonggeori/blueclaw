@@ -61,6 +61,7 @@ async function fetchProfileAsUser(
 export async function listUserConversations(
 	relayURL: string,
 	userSecretHex: string,
+	options: { withProfiles: boolean } = { withProfiles: true },
 ): Promise<UserConversation[]> {
 	return withRelayAs(relayURL, userSecretHex, undefined, async (relay) => {
 			const userPubkeyHex = relay.pubkeyHex;
@@ -94,7 +95,7 @@ export async function listUserConversations(
 					const participants = participantsOf(metadata, membershipsByChannel.get(channelID));
 					const counterpart = participants.find((pubkey) => pubkey !== userPubkeyHex);
 					if (!counterpart) continue;
-					const profile = await fetchProfileAsUser(relay, counterpart);
+					const profile = options.withProfiles ? await fetchProfileAsUser(relay, counterpart) : {};
 					conversations.push({
 						channelID,
 						name: profile.name ?? counterpart.slice(0, 8),

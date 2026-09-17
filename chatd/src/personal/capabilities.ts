@@ -8,6 +8,7 @@ import {
 	requireExternalID,
 	requireLargestBytes,
 	requireMessage,
+	requireLoopbackArrivalsURL,
 	requireName,
 } from "./parse.ts";
 
@@ -132,6 +133,11 @@ export const personCapabilities: Record<string, PersonCapability> = {
 				requireLargestBytes(request),
 			),
 		};
+	},
+	"person.arrivals.watch": async (gateway, body) => {
+		const request = parsePersonRequest(body);
+		await gateway.watchArrivals(request.actor, requireLoopbackArrivalsURL(request));
+		return {};
 	},
 	"person.message.attachment": async (gateway, body) => {
 		const request = parsePersonRequest(body);

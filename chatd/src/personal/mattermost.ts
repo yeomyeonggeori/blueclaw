@@ -385,6 +385,10 @@ class MattermostPersonalGateway implements PersonalGateway {
 		}
 	}
 
+	async watchArrivals(): Promise<void> {
+		throw new UnsupportedByPlatform(this.platform, "watch for arriving messages");
+	}
+
 	async readProfilePicture(
 		actor: ActorCredential,
 		externalID: string,
