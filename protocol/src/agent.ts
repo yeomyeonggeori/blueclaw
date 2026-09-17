@@ -112,16 +112,10 @@ export const setQualityCriteriaActionSchema = actionStateSchema.extend({
   qualityCriteria: z.array(z.string()),
 });
 
-export const finishReplyPartSchema = z.looseObject({
-  type: z.literal('text').optional(),
-  text: z.string(),
-});
-
 export const finishActionSchema = actionStateSchema.extend({
   action: z.literal('finish'),
   message: z.string(),
   goalSatisfied: z.boolean(),
-  replyParts: z.array(finishReplyPartSchema).optional(),
   completionSummary: z.string().optional(),
   failureResolution: z.string().optional(),
   goalStatus: z.literal('satisfied'),

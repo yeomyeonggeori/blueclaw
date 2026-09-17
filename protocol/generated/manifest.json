@@ -1,10 +1,10 @@
 {
-  "aggregateHash": "5b4ace568e519c1b19f88bc0e92e3eea4f4496b0127dce12645b90960c4af4b5",
+  "aggregateHash": "3f1aee3cba48abc059a8b6d7194aa587be8f46008c0bb1c0f23515f03de004a4",
   "protocolVersion": "0.4.0",
   "schemas": [
     {
       "fileName": "agent-action.schema.json",
-      "hash": "b94a4b501cc601a9855d23c878e3e35f16b22c6bceb1aaa40490a97f32c3ca01",
+      "hash": "80a920a10ac471d88498ee05b3fd046f17c5e5cd876bfaa62d26fc1da897e64c",
       "name": "agent-action"
     },
     {
