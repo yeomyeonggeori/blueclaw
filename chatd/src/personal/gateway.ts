@@ -16,11 +16,23 @@ export type PersonalIdentity = {
 export type PersonalConversation = {
 	id: string;
 	name: string;
+	description?: string;
 	kind: "dm" | "group";
 	isPrivate: boolean;
 	avatarURL?: string;
 	participantExternalIDs?: string[];
 	webURL?: string;
+};
+
+export type NewPersonalChannel = {
+	name: string;
+	description?: string;
+	visibility: "open" | "private";
+	memberExternalIDs: string[];
+};
+
+export type CreatedPersonalChannel = PersonalConversation & {
+	uninvitedExternalIDs: string[];
 };
 
 export type PersonalPerson = {
@@ -132,6 +144,9 @@ export interface PersonalGateway {
 		actor: ActorCredential,
 		counterpartExternalIDs: string[],
 	): Promise<PersonalConversation>;
+	createChannel(actor: ActorCredential, channel: NewPersonalChannel): Promise<CreatedPersonalChannel>;
+	listOpenChannels(actor: ActorCredential): Promise<PersonalConversation[]>;
+	joinChannel(actor: ActorCredential, conversationID: string): Promise<void>;
 	listMessages(
 		actor: ActorCredential,
 		conversationID: string,

@@ -5,6 +5,7 @@ import {
 	UnsupportedByPlatform,
 	type ActorCredential,
 	type CredentialRequirement,
+	type CreatedPersonalChannel,
 	type PersonalConversation,
 	type PersonalEmoji,
 	type IssuedCredential,
@@ -199,6 +200,18 @@ class MattermostPersonalGateway implements PersonalGateway {
 			isPrivate: true,
 			webURL: team ? webURLOf(await this.browserBaseURL(), team, channel) : undefined,
 		};
+	}
+
+	async createChannel(): Promise<CreatedPersonalChannel> {
+		throw new UnsupportedByPlatform(this.platform, "create a channel");
+	}
+
+	async listOpenChannels(): Promise<PersonalConversation[]> {
+		throw new UnsupportedByPlatform(this.platform, "list open channels");
+	}
+
+	async joinChannel(): Promise<void> {
+		throw new UnsupportedByPlatform(this.platform, "join a channel");
 	}
 
 	async listMessages(
