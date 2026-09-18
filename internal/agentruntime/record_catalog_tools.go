@@ -248,20 +248,6 @@ func resultInsideTheEnvelope(structuredContent json.RawMessage) json.RawMessage 
 	return envelope.Result
 }
 
-func withoutToolNamesAlreadyRegistered(
-	toolRegistry *toolcontract.ToolSet,
-	descriptors []capability.ToolDescriptor,
-) []capability.ToolDescriptor {
-	kept := make([]capability.ToolDescriptor, 0, len(descriptors))
-	for _, descriptor := range descriptors {
-		if toolRegistry.IsRegistered(modelNameOf(descriptor)) {
-			continue
-		}
-		kept = append(kept, descriptor)
-	}
-	return kept
-}
-
 func (toolCatalogBuilder *ToolCatalogBuilder) registerRecordCatalogTools(
 	toolRegistry *toolcontract.ToolSet,
 	request ToolCatalogRequest,

@@ -992,7 +992,7 @@ func TestScheduleCreateToolRejectsMissingReplyTarget(t *testing.T) {
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if !result.Failed() || !strings.Contains(result.ContentText(), "reply target") {
+	if !result.Failed() || !strings.Contains(result.ContentText(), "replyTargetID") {
 		t.Fatalf("expected reply target error, got %+v", result)
 	}
 }

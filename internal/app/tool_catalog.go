@@ -41,6 +41,9 @@ func newToolCatalogBuilder(runtimeConfiguration config.RuntimeConfiguration, ker
 	toolCatalogBuilder.UseCapabilityQuarantineReporter(func(quarantinedProvider toolcontract.QuarantinedToolProvider) {
 		logCapabilityProviderQuarantine(logger, quarantinedProvider)
 	})
+	toolCatalogBuilder.UseCapabilityToolShadowReporter(func(shadowedTool agentruntime.ShadowedCapabilityTool) {
+		logShadowedCapabilityTool(logger, shadowedTool)
+	})
 	toolCatalogBuilder.UseCapabilityRegistry(kernel.capabilityClient, kernel.capabilityRegistry)
 	toolCatalogBuilder.UseRecordCatalogDivergenceReporter(func(divergence agentruntime.RecordCatalogDivergence) {
 		logRecordCatalogDivergence(logger, divergence)
@@ -67,6 +70,16 @@ func logCapabilityProviderQuarantine(logger *slog.Logger, quarantinedProvider to
 		return
 	}
 	logger.Warn("capability.provider.quarantined", "providerID", quarantinedProvider.ProviderID, "reason", quarantinedProvider.Reason)
+}
+
+func logShadowedCapabilityTool(logger *slog.Logger, shadowedTool agentruntime.ShadowedCapabilityTool) {
+	if logger == nil {
+		return
+	}
+	logger.Warn("capability.tool.shadowed",
+		"canonicalName", shadowedTool.CanonicalName,
+		"modelName", shadowedTool.ModelName,
+	)
 }
 
 func logRecordCatalogDivergence(logger *slog.Logger, divergence agentruntime.RecordCatalogDivergence) {

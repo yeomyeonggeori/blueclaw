@@ -16,6 +16,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/access"
+	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 )
 
@@ -39,7 +40,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerCapabilityTools(
 	provider := capabilityToolProvider{
 		toolCatalogBuilder: toolCatalogBuilder,
 		request:            request,
-		descriptors: withoutToolNamesAlreadyRegistered(
+		descriptors: toolCatalogBuilder.withoutToolNamesAlreadyRegistered(
 			toolRegistry,
 			toolCatalogBuilder.reachableCapabilityToolDefinitions(),
 		),
@@ -52,6 +53,37 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerCapabilityTools(
 		panic(errorValue)
 	}
 	toolCatalogBuilder.reportCapabilityQuarantines(quarantinedProviders)
+}
+
+type ShadowedCapabilityTool struct {
+	CanonicalName string
+	ModelName     string
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) withoutToolNamesAlreadyRegistered(
+	toolRegistry *toolcontract.ToolSet,
+	descriptors []capability.ToolDescriptor,
+) []capability.ToolDescriptor {
+	kept := make([]capability.ToolDescriptor, 0, len(descriptors))
+	for _, descriptor := range descriptors {
+		modelName := modelNameOf(descriptor)
+		if toolRegistry.IsRegistered(modelName) {
+			toolCatalogBuilder.reportShadowedCapabilityTool(ShadowedCapabilityTool{
+				CanonicalName: strings.TrimSpace(descriptor.CanonicalName),
+				ModelName:     modelName,
+			})
+			continue
+		}
+		kept = append(kept, descriptor)
+	}
+	return kept
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) reportShadowedCapabilityTool(shadowedTool ShadowedCapabilityTool) {
+	if toolCatalogBuilder.capabilityToolShadowReporter == nil {
+		return
+	}
+	toolCatalogBuilder.capabilityToolShadowReporter(shadowedTool)
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) reportCapabilityQuarantines(quarantinedProviders []toolcontract.QuarantinedToolProvider) {

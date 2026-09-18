@@ -57,30 +57,12 @@ type scheduleCancelOperationResult struct {
 	Cancelled                  bool     `json:"cancelled"`
 }
 
-type scheduleCreateToolResult struct {
-	ScheduleID       string     `json:"scheduleID"`
-	Name             string     `json:"name"`
-	TaskInstruction  string     `json:"taskInstruction"`
-	TimeZone         string     `json:"timeZone"`
-	Kind             string     `json:"kind"`
-	RunAt            *time.Time `json:"runAt,omitempty"`
-	IntervalSecond   int        `json:"intervalSecond,omitempty"`
-	CronExpression   string     `json:"cronExpression,omitempty"`
-	MaxRunCount      int        `json:"maxRunCount,omitempty"`
-	ExpiresAt        *time.Time `json:"expiresAt,omitempty"`
-	NextRunAt        *time.Time `json:"nextRunAt,omitempty"`
-	ConversationID   string     `json:"conversationID"`
-	ReplyTargetID    string     `json:"replyTargetID"`
-	AgentProfileName string     `json:"agentProfileName"`
-}
-
 type scheduleListToolOutput = task.ScheduleListOutput
 
 var (
 	errScheduleCancelScopeInvalid = errors.New("schedule cancellation scope is invalid")
 	errScheduleCancelIDsRequired  = errors.New("scheduleIDs are required for scheduleIDs scope")
 	errScheduleCancelIDsInvalid   = errors.New("scheduleIDs must be exact nonblank identifiers")
-	errScheduleKindInvalid        = errors.New("schedule kind is invalid")
 	errScheduleIDRequired         = errors.New("scheduleID must be an exact nonblank identifier")
 	errScheduleUpdateRequired     = errors.New("schedule_update requires at least one field to change")
 )
@@ -110,13 +92,26 @@ func validateScheduleCancelIDs(scope task.TaskScheduleCancelScope, scheduleIDs [
 }
 
 func validateScheduleUpdate(input scheduleUpdateToolInput) error {
-	if input.Name != nil || input.TaskInstruction != nil || input.AgentProfileName != nil ||
-		input.Kind != nil || input.RunAt != nil || input.ExpiresAt != nil ||
-		input.IntervalSecond != nil || input.CronExpression != nil ||
-		input.TimeZone != nil || input.MaxRunCount != nil || input.RepeatPolicy != nil {
-		return nil
+	if task.ScheduleUpdateChangesNothing(scheduleUpdateInputOf(input)) {
+		return errScheduleUpdateRequired
 	}
-	return errScheduleUpdateRequired
+	return nil
+}
+
+func scheduleUpdateInputOf(input scheduleUpdateToolInput) task.ScheduleUpdateInput {
+	return task.ScheduleUpdateInput{
+		Description:      input.Name,
+		TaskInstruction:  input.TaskInstruction,
+		AgentProfileName: input.AgentProfileName,
+		Kind:             input.Kind,
+		RunAt:            input.RunAt,
+		ExpiresAt:        input.ExpiresAt,
+		IntervalSecond:   input.IntervalSecond,
+		CronExpression:   input.CronExpression,
+		TimeZone:         input.TimeZone,
+		MaxRunCount:      input.MaxRunCount,
+		RepeatPolicy:     input.RepeatPolicy,
+	}
 }
 
 func taskScheduleIDs(taskSchedules []task.TaskSchedule) []string {
@@ -197,16 +192,9 @@ func (toolCatalogBuilder *ToolCatalogBuilder) createScheduleTool(toolContext con
 	if toolCatalogBuilder.taskScheduleRepository == nil {
 		return toolcontract.ToolFailureResult(toolcontract.FailureDependencyUnavailable, toolcontract.FailureCodes.Unavailable, "schedule_create", "task schedule repository is unavailable"), nil
 	}
-	taskSchedule, errorValue := toolCatalogBuilder.buildTaskSchedule(input, handlerContext)
+	initializedTaskSchedule, errorValue := toolCatalogBuilder.buildTaskSchedule(input, handlerContext, time.Now().UTC())
 	if errorValue != nil {
 		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "schedule_create", errorValue.Error()), nil
-	}
-	initializedTaskSchedule, errorValue := (task.TaskScheduler{}).InitializeTaskSchedule(taskSchedule, time.Now().UTC())
-	if errorValue != nil {
-		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "schedule_create", "invalid task schedule"), nil
-	}
-	if initializedTaskSchedule.NextRunAt == nil {
-		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "schedule_create", "task schedule has no future run"), nil
 	}
 	if errorValue := toolCatalogBuilder.taskScheduleRepository.UpsertTaskSchedule(initializedTaskSchedule); errorValue != nil {
 		return toolcontract.ToolResult{}, errorValue
@@ -346,107 +334,76 @@ func scheduleOriginConversationIDs(taskSchedules []task.TaskSchedule) []string {
 	return originConversationIDs
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) buildTaskSchedule(input scheduleCreateToolInput, handlerContext toolHandlerContext) (task.TaskSchedule, error) {
-	if errorValue := validateScheduleCreateContext(handlerContext.request); errorValue != nil {
-		return task.TaskSchedule{}, errorValue
+func (toolCatalogBuilder *ToolCatalogBuilder) scheduleCreateContext(handlerContext toolHandlerContext, input scheduleCreateToolInput, referenceTime time.Time) task.ScheduleCreateContext {
+	return task.ScheduleCreateContext{
+		CreatorPersonID:  handlerContext.request.RequesterPersonID,
+		AgentProfileName: firstNonEmptyString(input.AgentProfileName, handlerContext.request.ProfileName),
+		Delivery: task.ScheduleDeliveryBinding{
+			Platform:       handlerContext.request.Platform,
+			ConversationID: handlerContext.request.ConversationID,
+			ReplyTargetID:  handlerContext.request.ReplyTargetID,
+		},
+		CompanyTimeZone: toolCatalogBuilder.companyTimeZone(),
+		ReferenceTime:   referenceTime,
 	}
-	taskInstruction := strings.TrimSpace(input.TaskInstruction)
-	if taskInstruction == "" {
-		return task.TaskSchedule{}, errScheduleTaskInstructionRequired
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) buildTaskSchedule(input scheduleCreateToolInput, handlerContext toolHandlerContext, referenceTime time.Time) (task.TaskSchedule, error) {
+	if handlerContext.request.IsScheduledRun {
+		return task.TaskSchedule{}, errScheduleCreateInScheduledRun
 	}
-	kind, errorValue := parseTaskScheduleKind(input.Kind)
-	if errorValue != nil {
-		return task.TaskSchedule{}, errorValue
-	}
-	timeZone, errorValue := normalizeScheduleTimeZone(input.TimeZone, toolCatalogBuilder.companyTimeZone())
-	if errorValue != nil {
-		return task.TaskSchedule{}, errorValue
-	}
-	now := time.Now().UTC()
-	taskSchedule := task.TaskSchedule{
-		TaskScheduleID:   task.NewIdentifier(),
-		CreatorPersonID:  strings.TrimSpace(handlerContext.request.RequesterPersonID),
-		Name:             firstNonEmptyString(input.Name, taskInstruction),
-		Prompt:           taskInstruction,
-		ExecutionMode:    task.TaskScheduleExecutionModeAgent,
-		AgentProfileName: firstNonEmptyString(input.AgentProfileName, handlerContext.request.ProfileName, "default"),
-		Platform:         strings.TrimSpace(handlerContext.request.Platform),
-		ConversationID:   strings.TrimSpace(handlerContext.request.ConversationID),
-		ReplyTargetID:    strings.TrimSpace(handlerContext.request.ReplyTargetID),
-		TimeZone:         timeZone,
-		Kind:             kind,
-		IntervalSecond:   input.IntervalSecond,
-		CronExpression:   strings.TrimSpace(input.CronExpression),
-		MaxRunCount:      input.MaxRunCount,
-		CreatedAt:        now,
-		UpdatedAt:        now,
-		NextAttemptAt:    &now,
-	}
-	if errorValue := applyScheduleRunAt(&taskSchedule, input.RunAt); errorValue != nil {
-		return task.TaskSchedule{}, errorValue
-	}
-	if errorValue := applyScheduleExpiresAt(&taskSchedule, input.ExpiresAt, now); errorValue != nil {
-		return task.TaskSchedule{}, errorValue
-	}
-	if errorValue := validateScheduleRepeatPolicy(input, taskSchedule); errorValue != nil {
-		return task.TaskSchedule{}, errorValue
-	}
-	return taskSchedule, nil
+	return task.InitializeScheduleCreate(task.ScheduleCreateInput{
+		Description:     input.Name,
+		TaskInstruction: input.TaskInstruction,
+		Kind:            input.Kind,
+		RunAt:           input.RunAt,
+		ExpiresAt:       input.ExpiresAt,
+		IntervalSecond:  input.IntervalSecond,
+		CronExpression:  input.CronExpression,
+		TimeZone:        input.TimeZone,
+		MaxRunCount:     input.MaxRunCount,
+		RepeatPolicy:    input.RepeatPolicy,
+	}, toolCatalogBuilder.scheduleCreateContext(handlerContext, input, referenceTime))
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) buildUpdatedTaskSchedule(taskSchedule task.TaskSchedule, input scheduleUpdateToolInput) (task.TaskSchedule, error) {
-	now := time.Now().UTC()
-	if input.Name != nil {
-		taskSchedule.Name = strings.TrimSpace(*input.Name)
-	}
-	if taskInstruction := scheduleUpdateTaskInstruction(input); taskInstruction != nil {
-		if strings.TrimSpace(*taskInstruction) == "" {
-			return task.TaskSchedule{}, errScheduleTaskInstructionRequired
-		}
-		taskSchedule.Prompt = strings.TrimSpace(*taskInstruction)
-	}
-	if input.AgentProfileName != nil {
-		taskSchedule.AgentProfileName = strings.TrimSpace(*input.AgentProfileName)
-	}
-	if input.TimeZone != nil {
-		timeZone, errorValue := normalizeScheduleTimeZone(*input.TimeZone, toolCatalogBuilder.companyTimeZone())
-		if errorValue != nil {
-			return task.TaskSchedule{}, errorValue
-		}
-		taskSchedule.TimeZone = timeZone
-	}
-	updatedTaskSchedule, errorValue := applyScheduleUpdateTiming(taskSchedule, input, now)
-	if errorValue != nil {
-		return task.TaskSchedule{}, errorValue
-	}
-	updatedTaskSchedule.UpdatedAt = now
-	updatedTaskSchedule.NextAttemptAt = &now
-	initializedTaskSchedule, errorValue := (task.TaskScheduler{}).InitializeTaskSchedule(updatedTaskSchedule, now)
-	if errorValue != nil {
-		return task.TaskSchedule{}, errorValue
-	}
-	if initializedTaskSchedule.NextRunAt == nil {
-		return task.TaskSchedule{}, errScheduleNoFutureRun
-	}
-	return initializedTaskSchedule, nil
+	return task.ApplyScheduleUpdate(taskSchedule, scheduleUpdateInputOf(input), toolCatalogBuilder.companyTimeZone(), time.Now().UTC())
+}
+
+type nativeScheduleMutationResult struct {
+	ScheduleID       string     `json:"scheduleID"`
+	Name             string     `json:"name"`
+	TaskInstruction  string     `json:"taskInstruction"`
+	TimeZone         string     `json:"timeZone"`
+	Kind             string     `json:"kind"`
+	RunAt            *time.Time `json:"runAt,omitempty"`
+	IntervalSecond   int        `json:"intervalSecond,omitempty"`
+	CronExpression   string     `json:"cronExpression,omitempty"`
+	MaxRunCount      int        `json:"maxRunCount,omitempty"`
+	ExpiresAt        *time.Time `json:"expiresAt,omitempty"`
+	NextRunAt        *time.Time `json:"nextRunAt,omitempty"`
+	ConversationID   string     `json:"conversationID"`
+	ReplyTargetID    string     `json:"replyTargetID"`
+	AgentProfileName string     `json:"agentProfileName"`
 }
 
 func scheduleCreateResultDocument(taskSchedule task.TaskSchedule) json.RawMessage {
-	return json.RawMessage(MarshalBody(scheduleCreateToolResult{
-		ScheduleID:       taskSchedule.TaskScheduleID,
-		Name:             taskSchedule.Name,
-		TaskInstruction:  taskSchedule.Prompt,
-		TimeZone:         taskSchedule.TimeZone,
-		Kind:             string(taskSchedule.Kind),
-		RunAt:            taskSchedule.RunAt,
-		IntervalSecond:   taskSchedule.IntervalSecond,
-		CronExpression:   taskSchedule.CronExpression,
-		MaxRunCount:      taskSchedule.MaxRunCount,
-		ExpiresAt:        taskSchedule.ExpiresAt,
-		NextRunAt:        taskSchedule.NextRunAt,
-		ConversationID:   taskSchedule.ConversationID,
-		ReplyTargetID:    taskSchedule.ReplyTargetID,
-		AgentProfileName: taskSchedule.AgentProfileName,
+	mutation := task.ProjectScheduleMutation(taskSchedule)
+	return json.RawMessage(MarshalBody(nativeScheduleMutationResult{
+		ScheduleID:       mutation.ScheduleID,
+		Name:             mutation.Description,
+		TaskInstruction:  mutation.TaskInstruction,
+		TimeZone:         mutation.TimeZone,
+		Kind:             mutation.Kind,
+		RunAt:            mutation.RunAt,
+		IntervalSecond:   mutation.IntervalSecond,
+		CronExpression:   mutation.CronExpression,
+		MaxRunCount:      mutation.MaxRunCount,
+		ExpiresAt:        mutation.ExpiresAt,
+		NextRunAt:        mutation.NextRunAt,
+		ConversationID:   mutation.ConversationID,
+		ReplyTargetID:    mutation.ReplyTargetID,
+		AgentProfileName: mutation.AgentProfileName,
 	}))
 }
 
@@ -463,176 +420,12 @@ func parseScheduleCancelScope(value string) (task.TaskScheduleCancelScope, error
 	}
 }
 
-func applyScheduleUpdateTiming(taskSchedule task.TaskSchedule, input scheduleUpdateToolInput, now time.Time) (task.TaskSchedule, error) {
-	if input.Kind != nil {
-		kind, errorValue := parseTaskScheduleKind(*input.Kind)
-		if errorValue != nil {
-			return task.TaskSchedule{}, errorValue
-		}
-		taskSchedule.Kind = kind
-	}
-	if input.RunAt != nil {
-		if errorValue := applyScheduleRunAtPointer(&taskSchedule, *input.RunAt); errorValue != nil {
-			return task.TaskSchedule{}, errorValue
-		}
-	}
-	if input.ExpiresAt != nil {
-		if errorValue := applyScheduleExpiresAtPointer(&taskSchedule, *input.ExpiresAt, now); errorValue != nil {
-			return task.TaskSchedule{}, errorValue
-		}
-	}
-	if input.IntervalSecond != nil {
-		taskSchedule.IntervalSecond = *input.IntervalSecond
-	}
-	if input.CronExpression != nil {
-		taskSchedule.CronExpression = strings.TrimSpace(*input.CronExpression)
-	}
-	if input.MaxRunCount != nil {
-		taskSchedule.MaxRunCount = *input.MaxRunCount
-	}
-	normalizeUpdatedTaskScheduleKindFields(&taskSchedule)
-	if errorValue := validateScheduleRepeatPolicy(scheduleUpdateAsCreateInput(input), taskSchedule); errorValue != nil {
-		return task.TaskSchedule{}, errorValue
-	}
-	return taskSchedule, nil
-}
-
-func normalizeUpdatedTaskScheduleKindFields(taskSchedule *task.TaskSchedule) {
-	switch taskSchedule.Kind {
-	case task.TaskScheduleKindOnce:
-		taskSchedule.IntervalSecond = 0
-		taskSchedule.CronExpression = ""
-		taskSchedule.MaxRunCount = 0
-	case task.TaskScheduleKindInterval:
-		taskSchedule.CronExpression = ""
-	case task.TaskScheduleKindCron:
-		taskSchedule.IntervalSecond = 0
-	}
-}
-
-func scheduleUpdateTaskInstruction(input scheduleUpdateToolInput) *string {
-	return input.TaskInstruction
-}
-
-func scheduleUpdateAsCreateInput(input scheduleUpdateToolInput) scheduleCreateToolInput {
-	createInput := scheduleCreateToolInput{}
-	if input.RepeatPolicy != nil {
-		createInput.RepeatPolicy = *input.RepeatPolicy
-	}
-	return createInput
-}
-
-func applyScheduleExpiresAt(taskSchedule *task.TaskSchedule, value string, referenceTime time.Time) error {
-	trimmedValue := strings.TrimSpace(value)
-	if trimmedValue == "" {
-		return nil
-	}
-	expiresAt, errorValue := time.Parse(time.RFC3339, trimmedValue)
-	if errorValue != nil {
-		return errScheduleInvalidExpiresAt
-	}
-	expiresAt = expiresAt.UTC()
-	if !expiresAt.After(referenceTime) {
-		return errScheduleInvalidExpiresAt
-	}
-	taskSchedule.ExpiresAt = &expiresAt
-	return nil
-}
-
-func applyScheduleExpiresAtPointer(taskSchedule *task.TaskSchedule, value string, referenceTime time.Time) error {
-	if strings.TrimSpace(value) == "" {
-		taskSchedule.ExpiresAt = nil
-		return nil
-	}
-	return applyScheduleExpiresAt(taskSchedule, value, referenceTime)
-}
-
-func validateScheduleRepeatPolicy(input scheduleCreateToolInput, taskSchedule task.TaskSchedule) error {
-	if taskSchedule.Kind != task.TaskScheduleKindInterval && taskSchedule.Kind != task.TaskScheduleKindCron {
-		return nil
-	}
-	if taskSchedule.MaxRunCount > 0 || taskSchedule.ExpiresAt != nil {
-		return nil
-	}
-	switch strings.TrimSpace(input.RepeatPolicy) {
-	case "unbounded":
-		return nil
-	case "finite":
-		return errScheduleFiniteBoundRequired
-	default:
-		return errScheduleRepeatPolicyRequired
-	}
-}
-
-func validateScheduleCreateContext(request ToolCatalogRequest) error {
-	if request.IsScheduledRun {
-		return errScheduleCreateInScheduledRun
-	}
-	if strings.TrimSpace(request.RequesterPersonID) == "" {
-		return errScheduleRequesterRequired
-	}
-	if strings.TrimSpace(request.Platform) == "" || strings.TrimSpace(request.ConversationID) == "" {
-		return errScheduleConversationRequired
-	}
-	if strings.TrimSpace(request.ReplyTargetID) == "" {
-		return errScheduleReplyTargetRequired
-	}
-	return nil
-}
-
-func parseTaskScheduleKind(value string) (task.TaskScheduleKind, error) {
-	switch value {
-	case string(task.TaskScheduleKindOnce):
-		return task.TaskScheduleKindOnce, nil
-	case string(task.TaskScheduleKindInterval):
-		return task.TaskScheduleKindInterval, nil
-	case string(task.TaskScheduleKindCron):
-		return task.TaskScheduleKindCron, nil
-	default:
-		return "", errScheduleKindInvalid
-	}
-}
-
-func normalizeScheduleTimeZone(value string, companyTimeZone string) (string, error) {
-	timeZone := task.ScheduleTimeZoneName(firstNonEmptyString(value, companyTimeZone))
-	if _, errorValue := time.LoadLocation(timeZone); errorValue != nil {
-		return "", errScheduleTimeZoneInvalid
-	}
-	return timeZone, nil
-}
-
-func applyScheduleRunAt(taskSchedule *task.TaskSchedule, value string) error {
-	if strings.TrimSpace(value) == "" {
-		return nil
-	}
-	runAt, errorValue := time.Parse(time.RFC3339, strings.TrimSpace(value))
-	if errorValue != nil {
-		return errScheduleRunAtInvalid
-	}
-	taskSchedule.RunAt = &runAt
-	return nil
-}
-
-func applyScheduleRunAtPointer(taskSchedule *task.TaskSchedule, value string) error {
-	if strings.TrimSpace(value) == "" {
-		taskSchedule.RunAt = nil
-		return nil
-	}
-	return applyScheduleRunAt(taskSchedule, value)
-}
-
 func isScheduleToolValidationError(errorValue error) bool {
-	return errors.Is(errorValue, errScheduleCancelScopeInvalid) ||
+	return task.IsScheduleWriteInputError(errorValue) ||
+		errors.Is(errorValue, errScheduleCancelScopeInvalid) ||
 		errors.Is(errorValue, errScheduleCancelIDsRequired) ||
 		errors.Is(errorValue, errScheduleCancelIDsInvalid) ||
-		errors.Is(errorValue, errScheduleKindInvalid) ||
 		errors.Is(errorValue, errScheduleIDRequired) ||
 		errors.Is(errorValue, errScheduleUpdateRequired) ||
-		errors.Is(errorValue, errScheduleTaskInstructionRequired) ||
-		errors.Is(errorValue, errScheduleTimeZoneInvalid) ||
-		errors.Is(errorValue, errScheduleRunAtInvalid) ||
-		errors.Is(errorValue, errScheduleInvalidExpiresAt) ||
-		errors.Is(errorValue, errScheduleRepeatPolicyRequired) ||
-		errors.Is(errorValue, errScheduleFiniteBoundRequired) ||
-		errors.Is(errorValue, errScheduleNoFutureRun)
+		errors.Is(errorValue, errScheduleCreateInScheduledRun)
 }
