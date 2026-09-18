@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
@@ -22,15 +21,14 @@ type ScriptedLanguageModelOptions struct {
 }
 
 type ScriptedLanguageModel struct {
-	mutex                          sync.Mutex
-	actionResponses                []string
-	chatResponsesBySchema          map[string][]string
-	structuredResponsesBySchema    map[string][]string
-	lastStructuredResponseBySchema map[string]string
-	defaultResponsesBySchema       map[string]string
-	requests                       []model.StructuredResponseRequest
-	providerName                   string
-	modelName                      string
+	mutex                       sync.Mutex
+	actionResponses             []string
+	chatResponsesBySchema       map[string][]string
+	structuredResponsesBySchema map[string][]string
+	defaultResponsesBySchema    map[string]string
+	requests                    []model.StructuredResponseRequest
+	providerName                string
+	modelName                   string
 }
 
 type scriptedChatCompleter struct {
@@ -327,29 +325,14 @@ func defaultSkillSearchQueriesResponse(request model.StructuredResponseRequest) 
 	return string(document)
 }
 
-// popStructuredResponse dispenses one scripted turn per message for the router
-// schema, because one scripted turn is now read twice: the intake decision asks
-// with no messages and takes the next turn off the script, and the words call
-// that follows carries the turn's prompt and reads that same turn again.
 func (languageModel *ScriptedLanguageModel) popStructuredResponse(request model.StructuredResponseRequest) (string, bool) {
 	schemaName := strings.TrimSpace(request.StructuredOutputSchema.Name)
-	if schemaName == agentcontract.TurnRouterSchemaName && len(request.Messages) > 0 {
-		lastResponse, isReplayable := languageModel.lastStructuredResponseBySchema[schemaName]
-		if isReplayable {
-			return lastResponse, true
-		}
-	}
 	responses := languageModel.structuredResponsesBySchema[schemaName]
 	if len(responses) == 0 {
 		return "", false
 	}
-	response := responses[0]
 	languageModel.structuredResponsesBySchema[schemaName] = responses[1:]
-	if languageModel.lastStructuredResponseBySchema == nil {
-		languageModel.lastStructuredResponseBySchema = map[string]string{}
-	}
-	languageModel.lastStructuredResponseBySchema[schemaName] = response
-	return response, true
+	return responses[0], true
 }
 
 func (languageModel *ScriptedLanguageModel) popActionResponse() (string, error) {
@@ -474,8 +457,6 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-// ErrNoScriptedResponse says the script ran out rather than the model failing,
-// which a caller that scripts only the calls it expects needs to tell apart.
 var ErrNoScriptedResponse = errors.New("scripted language model has no response")
 
 type noScriptedResponseError struct {
