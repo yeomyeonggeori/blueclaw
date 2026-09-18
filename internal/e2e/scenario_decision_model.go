@@ -42,7 +42,7 @@ func (turnScript *scenarioTurnScript) pendingCount() int {
 
 type scenarioDecisionModel struct {
 	turnScript        *scenarioTurnScript
-	languageModelTurn intaketest.LanguageModelDecisionModel
+	languageModelTurn *intaketest.LanguageModelDecisionModel
 	addressing        agentcontract.AddressingDecision
 }
 
@@ -50,7 +50,7 @@ func newScenarioDecisionModel(turnScript *scenarioTurnScript, languageModel mode
 	addressing := scenarioAddressingDecision(addressingResponse)
 	return scenarioDecisionModel{
 		turnScript: turnScript,
-		languageModelTurn: intaketest.LanguageModelDecisionModel{
+		languageModelTurn: &intaketest.LanguageModelDecisionModel{
 			LanguageModel: languageModel,
 			Addressing:    addressing,
 			ModelName:     scenarioDecisionModelName,

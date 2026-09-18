@@ -30,7 +30,7 @@ func TestCronScheduleRunsDailyResearchPromptAndAdvancesToNextDay(t *testing.T) {
 	nextRunAt := runAt
 
 	taskLauncher := agentruntime.NewTaskLauncher(agentKernel, taskRunService, toolCatalogBuilder)
-	taskLauncher.UseTurnRouter(intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(intaketest.LanguageModelDecisionModel{LanguageModel: languageModel}, nil, nil), agentcontract.IntakeOptions{IsEnabled: true}))
+	taskLauncher.UseTurnRouter(intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(&intaketest.LanguageModelDecisionModel{LanguageModel: languageModel}, nil, nil), agentcontract.IntakeOptions{IsEnabled: true}))
 	taskLauncher.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, languageModel))
 	result, errorValue := agentruntime.NewScheduleRunner(taskLauncher).RunIfDue(context.Background(), agentruntime.ScheduleRunRequest{
 		Schedule: task.Schedule{

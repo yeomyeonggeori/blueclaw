@@ -119,7 +119,7 @@ func TestABurstIsSplitSoEveryDecisionRequestFitsTheCeiling(t *testing.T) {
 	recorder := &burstIntakeDecider{}
 	connectorRuntime.UseIntakeDecider(recorder)
 	receivedAt := time.Unix(1756800000, 0)
-	longPrompt := strings.Repeat("a", 10000)
+	longPrompt := strings.Repeat("a", connectorDecisionRequestByteCeiling/4)
 	queuedEvents := []QueuedConnectorEvent{}
 	for index := 1; index <= 4; index++ {
 		queuedEvent := burstQueuedEvent("message-"+strconv.Itoa(index), "direct-1", "sender-user", receivedAt.Add(time.Duration(index)*time.Second))
