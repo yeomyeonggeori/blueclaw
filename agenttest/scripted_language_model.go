@@ -248,7 +248,7 @@ func (languageModel *ScriptedLanguageModel) GenerateStructuredResponse(_ context
 	defer languageModel.mutex.Unlock()
 	languageModel.requests = append(languageModel.requests, request)
 	schemaName := strings.TrimSpace(request.StructuredOutputSchema.Name)
-	if response, isFound := languageModel.popStructuredResponse(schemaName); isFound {
+	if response, isFound := languageModel.popStructuredResponse(request); isFound {
 		return languageModel.structuredResponse(response), nil
 	}
 	if schemaName == "bluecollar_agent_turn_action" {
@@ -270,7 +270,7 @@ func (languageModel *ScriptedLanguageModel) GenerateStructuredResponse(_ context
 		if schemaName == "blueclaw_approval_question" {
 			return languageModel.structuredResponse(defaultApprovalQuestionResponse(request)), nil
 		}
-		return model.StructuredResponse{}, fmt.Errorf("scripted language model has no %s response", schemaName)
+		return model.StructuredResponse{}, noScriptedResponseError{schemaName: schemaName}
 	}
 	if schemaName == "bluecollar_skill_search_queries" && response == `{"queries":[]}` {
 		return languageModel.structuredResponse(defaultSkillSearchQueriesResponse(request)), nil
@@ -325,14 +325,14 @@ func defaultSkillSearchQueriesResponse(request model.StructuredResponseRequest) 
 	return string(document)
 }
 
-func (languageModel *ScriptedLanguageModel) popStructuredResponse(schemaName string) (string, bool) {
+func (languageModel *ScriptedLanguageModel) popStructuredResponse(request model.StructuredResponseRequest) (string, bool) {
+	schemaName := strings.TrimSpace(request.StructuredOutputSchema.Name)
 	responses := languageModel.structuredResponsesBySchema[schemaName]
 	if len(responses) == 0 {
 		return "", false
 	}
-	response := responses[0]
 	languageModel.structuredResponsesBySchema[schemaName] = responses[1:]
-	return response, true
+	return responses[0], true
 }
 
 func (languageModel *ScriptedLanguageModel) popActionResponse() (string, error) {
@@ -455,4 +455,18 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+var ErrNoScriptedResponse = errors.New("scripted language model has no response")
+
+type noScriptedResponseError struct {
+	schemaName string
+}
+
+func (errorValue noScriptedResponseError) Error() string {
+	return "scripted language model has no " + errorValue.schemaName + " response"
+}
+
+func (errorValue noScriptedResponseError) Is(target error) bool {
+	return target == ErrNoScriptedResponse
 }

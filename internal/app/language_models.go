@@ -7,6 +7,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
@@ -232,4 +233,15 @@ func turnRouterLanguageModelProvider(taskTierLanguageModels agentcontract.TaskTi
 		return intakeLanguageModelProvider
 	}
 	return taskTierLanguageModels.High
+}
+
+func newDecisionPlanner(runtimeConfiguration config.RuntimeConfiguration, visionLanguageModel model.LanguageModelProvider, logger *slog.Logger) intake.DecisionPlanner {
+	decisionModel, errorValue := llm.NewConfiguredDecisionModel(runtimeConfiguration)
+	if errorValue != nil {
+		if logger != nil {
+			logger.Error("intake decision model configuration failed", "error", errorValue.Error())
+		}
+		return intake.DecisionPlanner{}
+	}
+	return intake.NewDecisionPlanner(decisionModel, newAttachmentDescriber(visionLanguageModel), nil)
 }

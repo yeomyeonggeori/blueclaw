@@ -272,6 +272,7 @@ const recentlyFinishedTaskFollowUpWindow = 15 * time.Second
 func (connectorRuntime *ConnectorRuntime) handlePossibleFinishedTaskFollowUp(
 	ctx context.Context,
 	platform string,
+	adapter PlatformAdapter,
 	event PlatformInboundEvent,
 	replyTarget ReplyTarget,
 	personID string,
@@ -284,12 +285,7 @@ func (connectorRuntime *ConnectorRuntime) handlePossibleFinishedTaskFollowUp(
 	if event.RawReceivedAt.IsZero() || !event.RawReceivedAt.Before(finishedTaskRun.UpdatedAt) {
 		return busyMessageResult{}, nil
 	}
-	isRelated, errorValue := connectorRuntime.intakeClassifier.ClassifyActiveTaskFollowUp(ctx, agentcontract.ActiveTaskFollowUpClassificationRequest{
-		ActiveTaskPrompt: finishedTaskRun.Prompt,
-		ActiveTaskStatus: string(finishedTaskRun.Status),
-		LatestMessage:    event.Prompt,
-	})
-	if errorValue != nil || !isRelated {
+	if !connectorRuntime.relatesToActiveTask(ctx, adapter, event) {
 		return busyMessageResult{}, nil
 	}
 	connectorRuntime.taskRunService.AppendTaskEvent(finishedTaskRun.TaskRunID, agentcontract.TaskEventTaskBusyMessageAfterFinish, marshalConnectorEventBody(map[string]string{
