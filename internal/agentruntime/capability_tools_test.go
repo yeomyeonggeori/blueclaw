@@ -822,3 +822,28 @@ func TestToolCatalogKeepsEveryCapabilityToolWhenOneNameIsAlreadyALocalTool(t *te
 		t.Fatalf("the shared name went to the capability twin instead of the local tool: %+v", scheduleList)
 	}
 }
+
+func TestWithoutToolNamesAlreadyRegisteredReportsEveryCapabilityToolANativeTwinShadows(t *testing.T) {
+	toolCatalogBuilder := NewToolCatalogBuilder()
+	shadowedTools := []ShadowedCapabilityTool{}
+	toolCatalogBuilder.UseCapabilityToolShadowReporter(func(shadowedTool ShadowedCapabilityTool) {
+		shadowedTools = append(shadowedTools, shadowedTool)
+	})
+	handlerToolSet := toolcontract.NewToolSet(nil)
+	toolCatalogBuilder.registerAskInputTool(handlerToolSet)
+
+	kept := toolCatalogBuilder.withoutToolNamesAlreadyRegistered(handlerToolSet, []capability.ToolDescriptor{
+		{Name: "ask_input", CanonicalName: "ask.input"},
+		{Name: "message_send", CanonicalName: "message.send"},
+	})
+
+	if len(kept) != 1 || kept[0].Name != "message_send" {
+		t.Fatalf("expected only the unshadowed tool to survive, got %+v", kept)
+	}
+	if len(shadowedTools) != 1 {
+		t.Fatalf("expected one shadowed tool reported, got %+v", shadowedTools)
+	}
+	if shadowedTools[0].ModelName != "ask_input" || shadowedTools[0].CanonicalName != "ask.input" {
+		t.Fatalf("the diagnostic does not name the dropped tool: %+v", shadowedTools[0])
+	}
+}

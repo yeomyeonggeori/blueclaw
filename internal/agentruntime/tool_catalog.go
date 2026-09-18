@@ -50,6 +50,7 @@ type ToolCatalogBuilder struct {
 	instructionBundleLoader      func() agentcontract.InstructionBundle
 	learnedSkillLoader           func(string) []learning.Skill
 	capabilityQuarantineReporter func(toolcontract.QuarantinedToolProvider)
+	capabilityToolShadowReporter func(ShadowedCapabilityTool)
 
 	recordCatalog                   RecordCatalogClient
 	recordCatalogDivergenceReporter func(RecordCatalogDivergence)
@@ -149,6 +150,10 @@ func (toolCatalogBuilder *ToolCatalogBuilder) MemoryStore() *bluememo.Store {
 
 func (toolCatalogBuilder *ToolCatalogBuilder) UseCapabilityQuarantineReporter(reporter func(toolcontract.QuarantinedToolProvider)) {
 	toolCatalogBuilder.capabilityQuarantineReporter = reporter
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) UseCapabilityToolShadowReporter(reporter func(ShadowedCapabilityTool)) {
+	toolCatalogBuilder.capabilityToolShadowReporter = reporter
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) UseCapabilityToolDescriptors(capabilityClient capability.Client, toolDescriptors []CapabilityToolDescriptor) {
