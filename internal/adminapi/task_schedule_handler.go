@@ -144,13 +144,7 @@ func (taskScheduleHandler TaskScheduleHandler) HandleToolList(responseWriter htt
 		return
 	}
 	referenceTime := time.Now().UTC()
-	result, errorValue := taskScheduleHandler.ListRepository.ListTaskSchedules(task.TaskScheduleListRequest{
-		CreatorPersonID: creatorPersonID,
-		IncludeExpired:  true,
-		Page:            1,
-		PageSize:        20,
-		ReferenceTime:   referenceTime,
-	})
+	result, errorValue := taskScheduleHandler.ListRepository.ListTaskSchedules(task.ScheduleListQuery(creatorPersonID, referenceTime))
 	if errorValue != nil {
 		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
 		return

@@ -185,12 +185,8 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerScheduleTools(toolRegistry
 
 func (toolCatalogBuilder *ToolCatalogBuilder) listScheduleTool(input scheduleListToolInput, handlerContext toolHandlerContext) (scheduleListToolOutput, error) {
 	referenceTime := time.Now().UTC()
-	result, errorValue := toolCatalogBuilder.taskScheduleRepository.ListTaskSchedules(task.TaskScheduleListRequest{
-		CreatorPersonID: strings.TrimSpace(handlerContext.request.RequesterPersonID),
-		Page:            1,
-		PageSize:        20,
-		ReferenceTime:   referenceTime,
-	})
+	result, errorValue := toolCatalogBuilder.taskScheduleRepository.ListTaskSchedules(
+		task.ScheduleListQuery(handlerContext.request.RequesterPersonID, referenceTime))
 	if errorValue != nil {
 		return scheduleListToolOutput{}, errorValue
 	}

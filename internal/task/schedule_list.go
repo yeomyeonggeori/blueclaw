@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+const scheduleListPageSize = 20
+
 type ScheduleListInput struct {
 	Status string `json:"status"`
 	Limit  int    `json:"limit"`
@@ -25,6 +27,16 @@ type ScheduleListItem struct {
 	Status          string     `json:"status"`
 	NextRunAt       *time.Time `json:"nextRunAt,omitempty"`
 	LastRunAt       *time.Time `json:"lastRunAt,omitempty"`
+}
+
+func ScheduleListQuery(creatorPersonID string, referenceTime time.Time) TaskScheduleListRequest {
+	return TaskScheduleListRequest{
+		CreatorPersonID: strings.TrimSpace(creatorPersonID),
+		IncludeExpired:  true,
+		Page:            1,
+		PageSize:        scheduleListPageSize,
+		ReferenceTime:   referenceTime,
+	}
 }
 
 func ProjectScheduleList(taskSchedules []TaskSchedule, input ScheduleListInput, referenceTime time.Time) ScheduleListOutput {
@@ -48,8 +60,8 @@ func normalizedScheduleListLimit(limit int) int {
 	if limit <= 0 {
 		return 10
 	}
-	if limit > 20 {
-		return 20
+	if limit > scheduleListPageSize {
+		return scheduleListPageSize
 	}
 	return limit
 }
