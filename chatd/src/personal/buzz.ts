@@ -13,8 +13,10 @@ import {
 	sendChannelMessageAsUser,
 } from "../adapters/buzz/user-session.ts";
 import {
+	addChannelMembersAsUser,
 	createChannelAsUser,
 	joinChannelAsUser,
+	leaveChannelAsUser,
 	listOpenChannelsAsUser,
 } from "../adapters/buzz/user-channels.ts";
 import {
@@ -100,6 +102,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 			isPrivate: conversation.isPrivate,
 			avatarURL: conversation.avatarURL,
 			participantExternalIDs: conversation.participantPubkeyHexes,
+			description: conversation.description,
 		}));
 	}
 
@@ -167,6 +170,26 @@ class BuzzPersonalGateway implements PersonalGateway {
 	async joinChannel(actor: ActorCredential, conversationID: string): Promise<void> {
 		this.require(actor);
 		await joinChannelAsUser({ relayURL: this.settings.relayURL, userSecretHex: actor.secret, channelID: conversationID });
+	}
+
+	async addChannelMembers(
+		actor: ActorCredential,
+		conversationID: string,
+		memberExternalIDs: string[],
+	): Promise<{ uninvitedExternalIDs: string[] }> {
+		this.require(actor);
+		const added = await addChannelMembersAsUser({
+			relayURL: this.settings.relayURL,
+			userSecretHex: actor.secret,
+			channelID: conversationID,
+			memberPubkeyHexes: memberExternalIDs,
+		});
+		return { uninvitedExternalIDs: added.uninvitedPubkeyHexes };
+	}
+
+	async leaveChannel(actor: ActorCredential, conversationID: string): Promise<void> {
+		this.require(actor);
+		await leaveChannelAsUser({ relayURL: this.settings.relayURL, userSecretHex: actor.secret, channelID: conversationID });
 	}
 
 	async listMessages(

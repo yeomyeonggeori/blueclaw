@@ -214,6 +214,14 @@ class MattermostPersonalGateway implements PersonalGateway {
 		throw new UnsupportedByPlatform(this.platform, "join a channel");
 	}
 
+	async addChannelMembers(): Promise<{ uninvitedExternalIDs: string[] }> {
+		throw new UnsupportedByPlatform(this.platform, "add channel members");
+	}
+
+	async leaveChannel(): Promise<void> {
+		throw new UnsupportedByPlatform(this.platform, "leave a channel");
+	}
+
 	async listMessages(
 		actor: ActorCredential,
 		conversationID: string,

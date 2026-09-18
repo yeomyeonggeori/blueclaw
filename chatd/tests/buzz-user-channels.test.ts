@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { createChannelTags, openChannelsToJoin } from "../src/adapters/buzz/user-channels.ts";
+import { createChannelTags, isLastOwner, openChannelsToJoin } from "../src/adapters/buzz/user-channels.ts";
 import type { BuzzEvent } from "../src/adapters/buzz/types.ts";
-import { MalformedRequest, parseNewChannel } from "../src/personal/parse.ts";
+import { MalformedRequest, parseMemberExternalIDs, parseNewChannel } from "../src/personal/parse.ts";
 
 function metadata(channelID: string, tags: string[][], createdAt = 1): BuzzEvent {
 	return {
@@ -81,5 +81,41 @@ describe("parseNewChannel", () => {
 
 	test("refuses a channel without a name", () => {
 		expect(() => parseNewChannel({ actor, visibility: "open" })).toThrow("missing required field name");
+	});
+});
+
+describe("parseMemberExternalIDs", () => {
+	test("reads the members a person asked to add", () => {
+		expect(parseMemberExternalIDs({ memberExternalIDs: ["a", "b"] })).toEqual(["a", "b"]);
+	});
+
+	test("treats a missing list as nobody", () => {
+		expect(parseMemberExternalIDs({})).toEqual([]);
+	});
+
+	test("refuses a list that holds something other than ids", () => {
+		expect(() => parseMemberExternalIDs({ memberExternalIDs: ["a", 1] })).toThrow(MalformedRequest);
+	});
+});
+
+describe("isLastOwner", () => {
+	function roster(tags: string[][]): BuzzEvent {
+		return { id: "r", pubkey: "relay", created_at: 1, kind: 39002, tags: [["d", "c"], ...tags], content: "", sig: "" };
+	}
+
+	test("is the person when nobody else owns the channel", () => {
+		expect(isLastOwner(roster([["p", "me", "", "owner"], ["p", "you", "", "member"]]), "me")).toBe(true);
+	});
+
+	test("is not the person when another owner remains", () => {
+		expect(isLastOwner(roster([["p", "me", "", "owner"], ["p", "you", "", "owner"]]), "me")).toBe(false);
+	});
+
+	test("is not a member who owns nothing", () => {
+		expect(isLastOwner(roster([["p", "me", "", "member"], ["p", "you", "", "owner"]]), "me")).toBe(false);
+	});
+
+	test("is nobody when the roster is unknown", () => {
+		expect(isLastOwner(undefined, "me")).toBe(false);
 	});
 });

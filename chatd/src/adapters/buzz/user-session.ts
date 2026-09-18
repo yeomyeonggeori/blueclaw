@@ -25,6 +25,7 @@ export type UserConversation = {
 	isPrivate: boolean;
 	participantPubkeyHexes: string[];
 	avatarURL?: string;
+	description?: string;
 };
 
 function hexToBytes(hex: string): Uint8Array {
@@ -111,6 +112,7 @@ export async function listUserConversations(
 						isDM: false,
 						isPrivate: metadata ? carriesTag(metadata, "private") : false,
 						participantPubkeyHexes: participantsOf(metadata, membershipsByChannel.get(channelID)),
+						description: metadata ? firstTagValue(metadata, "about") : undefined,
 					});
 				}
 			}
