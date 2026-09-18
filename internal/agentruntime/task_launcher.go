@@ -638,12 +638,9 @@ func (taskLauncher *TaskLauncher) agentTurnRequestForLaunch(request TaskLaunchRe
 		pinnedToolNames = appendUniqueString(pinnedToolNames, contextualMemorySearchToolName)
 	}
 	turnRequest := agentcontract.AgentTurnRequest{
-		ArtifactManifest:   request.ArtifactManifest,
-		TurnStartedAt:      request.TurnStartedAt,
-		ExecutionStartedAt: request.ExecutionStartedAt,
-		// The appliance keeps the clock of the company it runs for. Without it the
-		// agent is told the date is unknown and made to read a shell to find out,
-		// on every request that turns on what day it is.
+		ArtifactManifest:           request.ArtifactManifest,
+		TurnStartedAt:              request.TurnStartedAt,
+		ExecutionStartedAt:         request.ExecutionStartedAt,
 		EnvironmentNow:             request.TurnStartedAt,
 		Company:                    taskLauncher.company(),
 		RequesterPersonID:          request.RequesterPersonID,
@@ -700,8 +697,6 @@ func appendUniqueString(values []string, value string) []string {
 	return append(values, value)
 }
 
-// A missing artifact service must reach the harness as an absent store, not as a
-// non-nil port holding a nil pointer.
 func conversationArtifactStore(taskArtifactService *task.TaskArtifactService) taskstate.TaskArtifactStore {
 	if taskArtifactService == nil {
 		return nil
@@ -821,9 +816,6 @@ func requesterPersonAccess(requesterPersonID string, personAccess policy.PersonA
 	return policy.EnsureRequesterDefaults(personAccess)
 }
 
-// bluecollarMemoryFacts converts recalled facts into the loop's own shape. The
-// loop carries its own type so it never depends on the service that stores them;
-// this single call is where the two meet.
 func bluecollarMemoryFacts(facts []memory.MemoryFact) []agentcontract.MemoryFact {
 	converted := make([]agentcontract.MemoryFact, 0, len(facts))
 	for _, fact := range facts {

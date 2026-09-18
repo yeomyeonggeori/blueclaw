@@ -146,10 +146,6 @@ func (connectorRuntime *ConnectorRuntime) resumePausedTaskForSteer(
 		return connectorRuntime.replySteerResumeUnavailable(ctx, platform, event, replyTarget, activeTaskRun, decision, sendReply)
 	}
 	connectorRuntime.appendSteerRequestedEvent(activeTaskRun.TaskRunID, event, instruction, decision)
-	// The normal launch path imports the conversation's attachments into
-	// workspace materials only after busy routing has decided nothing; a steer
-	// resume launches from inside that routing, so without this the resumed
-	// task sees an image only as a URL in message text and invents a path.
 	event = connectorRuntime.withAttachmentMaterials(ctx, adapter, event, activeTaskRun.RequesterPersonID)
 	launchRequest := connectorRuntime.interruptedTaskLaunchRequest(activeTaskRun, taskEvents, launchContext, event, adapter, userSteerTaskProfile(platform, activeTaskRun.TaskRunID, instruction), sendReply)
 	turnResult := connectorRuntime.launchSteeredTask(ctx, platform, event, activeTaskRun, steeredTaskLaunchRequest(launchRequest, event, instruction))
@@ -179,17 +175,6 @@ func (connectorRuntime *ConnectorRuntime) completeSteerResumeLaunchFailure(ctx c
 	}, "launch", "steer_resume", errorValue)
 }
 
-// A steer that says something new is a new ask made against the same task, so
-// the contract the old objective derived — required evidence, expected results,
-// tool selection — must not outlive it. Launching with routing precomputed as
-// continue_task kept that stale contract binding: a task paused on "delete the
-// duplicate" absorbed "edit the post instead" into its objective while its
-// contract still demanded delete evidence, and the agent deleted. Let intake
-// run again on the person's own words, with the restored goal as context, so
-// the router decides whether the message refines the job or revises it, and
-// the contract is re-derived either way. Dropping the approval-continuation
-// flag also keeps a call approved for the old objective from being carried out
-// under the new one.
 func steeredTaskLaunchRequest(launchRequest agentruntime.TaskLaunchRequest, event PlatformInboundEvent, instruction string) agentruntime.TaskLaunchRequest {
 	steeredPrompt := firstNonEmptyString(strings.TrimSpace(event.Prompt), instruction)
 	if steeredPrompt == "" {
@@ -262,16 +247,8 @@ func (connectorRuntime *ConnectorRuntime) generateBusyReply(ctx context.Context,
 	return connectorRuntime.replyGenerator.GenerateReplyWithContext(ctx, prompt, event.Context.ToAgentVisibleContext(), nil)
 }
 
-// recentlyFinishedTaskFollowUpWindow bounds how long after a task leaves active status a
-// later message is still eligible to be treated as a follow-up to it, rather than a
-// self-contained new request.
 const recentlyFinishedTaskFollowUpWindow = 15 * time.Second
 
-// handlePossibleFinishedTaskFollowUp covers the narrow race where the active task finished
-// between when a message was flagged as worth fast-tracking and when it is actually
-// classified: rather than silently falling through into new-task creation (turning a
-// correction into a duplicate task) or silently dropping the message, it tells the user the
-// prior task already finished and lets them decide whether to start something new.
 func (connectorRuntime *ConnectorRuntime) handlePossibleFinishedTaskFollowUp(
 	ctx context.Context,
 	platform string,

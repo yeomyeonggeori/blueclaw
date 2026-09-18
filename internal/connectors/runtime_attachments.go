@@ -12,11 +12,6 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
-// Only the triggering message's attachments are imported eagerly: what the
-// person just handed over should be visible without a tool call. Everything
-// older stays where it is and is read on demand by the url standing in its
-// message — importing the whole visible window bought nothing but latency and
-// still missed every message that had scrolled past it.
 func (connectorRuntime *ConnectorRuntime) withAttachmentMaterials(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent, personID string) PlatformInboundEvent {
 	attachments := connectorUniqueInputAttachments(event.Context.InputAttachments)
 	if len(attachments) == 0 {
@@ -61,11 +56,6 @@ func (connectorRuntime *ConnectorRuntime) withAttachmentMaterials(ctx context.Co
 
 const connectorAttachmentImportRefusedCode = "attachment_import_failed"
 
-// An attachment that could not be brought in is still handed to the agent, and
-// without this it arrives looking ordinary: a file with a url the agent cannot
-// open. It would then ask whoever sent it to attach the file again, which is
-// the one thing they already did. It arrives refused, with the reason, so the
-// agent says what went wrong and the ledger holds it.
 func connectorRefusedInputAttachments(attachments []InputAttachment, errorValue error) []InputAttachment {
 	refused := make([]InputAttachment, 0, len(attachments))
 	for _, attachment := range attachments {
@@ -78,9 +68,6 @@ func (connectorRuntime *ConnectorRuntime) attachmentWriterFor(personID string) i
 	return importedAttachmentWriter{workspaceActorFactory: connectorRuntime.workspaceActorFactory, personID: personID}
 }
 
-// An image part that reaches the model without bytes degrades to its filename
-// text with nothing marking the loss. This names the attachment that could not
-// be shown instead of letting it disappear silently.
 func (connectorRuntime *ConnectorRuntime) warnAboutImagesMissingBytes(adapter PlatformAdapter, messageID string, parts []agentcontract.AgentPart) {
 	for _, part := range parts {
 		if part.Type != agentcontract.AgentPartTypeImage || part.Image == nil {
@@ -98,11 +85,6 @@ func (connectorRuntime *ConnectorRuntime) warnAboutImagesMissingBytes(adapter Pl
 
 const mostInlineImageBytesShown = 8 << 20
 
-// An image the message came with is put in front of the model with the message,
-// whatever messenger it came over. This layer is the one owner of that: an
-// importing adapter hands back bytes, the writer puts them in the person's
-// workspace, and the picture travels with the prompt instead of costing a tool
-// call to look at what was just sent.
 func connectorImagePartsShowingTheirBytes(parts []agentcontract.AgentPart, contents writtenAttachmentContents) []agentcontract.AgentPart {
 	result := make([]agentcontract.AgentPart, 0, len(parts))
 	for _, part := range parts {
@@ -118,9 +100,6 @@ func connectorImagePartsShowingTheirBytes(parts []agentcontract.AgentPart, conte
 	return result
 }
 
-// A part is matched to the attachment that wrote it by file id, not filename:
-// a collision with an existing file under a different name renames the file,
-// and the part still carries the name it arrived under.
 func connectorInputPartsAtWrittenPaths(parts []agentcontract.AgentPart, writtenAttachments []InputAttachment) []agentcontract.AgentPart {
 	pathByFileID := map[string]string{}
 	for _, attachment := range writtenAttachments {
@@ -374,9 +353,6 @@ func (resolver connectorAttachmentMaterialResolver) findAttachmentMaterial(ctx c
 	return InputAttachment{}, false, errors.New("attachment lookup stopped after " + strconv.Itoa(attachmentHistoryPageLimit) + " pages; the conversation is longer than the resolver reads")
 }
 
-// A reference is a material ID, or the attachment's exact URL: the URL is the
-// one name the model always holds, because it stands in the message text
-// itself, long after the message has scrolled out of the visible window.
 func findAttachmentMaterialInContext(visibleContext VisibleContext, reference string) (InputAttachment, bool) {
 	trimmedReference := strings.TrimSpace(reference)
 	if trimmedReference == "" {

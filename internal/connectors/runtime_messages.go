@@ -37,11 +37,8 @@ type TaskRetryReference struct {
 }
 
 type ReplyTarget struct {
-	ConversationID string `json:"conversationID"`
-	ReplyTargetID  string `json:"replyTargetID"`
-	// AnsweringMessageID is the message this reply answers. The thread says where
-	// the reply belongs; this says what it is a reply to, so somebody who wrote
-	// deep in a thread does not find the answer at the top of it.
+	ConversationID     string `json:"conversationID"`
+	ReplyTargetID      string `json:"replyTargetID"`
 	AnsweringMessageID string `json:"answeringMessageID,omitempty"`
 	DedupeKey          string `json:"dedupeKey"`
 }
@@ -184,35 +181,30 @@ type QueuedConnectorReply struct {
 }
 
 type VisibleContext struct {
-	Messages         []VisibleContextMessage `json:"messages"`
-	HasMoreBefore    bool                    `json:"hasMoreBefore"`
-	HistoryCursor    string                  `json:"historyCursor"`
-	ResponseLanguage string                  `json:"responseLanguage,omitempty"`
-	Sender           VisibleContextSender    `json:"sender,omitempty"`
-	ConversationType string                  `json:"conversationType,omitempty"`
-	ChannelID        string                  `json:"channelID,omitempty"`
-	ChannelName      string                  `json:"channelName,omitempty"`
-	Addressing       AddressingMetadata      `json:"addressing,omitempty"`
-	AttachmentsOnly  bool                    `json:"attachmentsOnly,omitempty"`
-	// MessagesOpenOtherExchanges says the messages are how other conversations in
-	// the same place opened, rather than the conversation being continued.
-	MessagesOpenOtherExchanges bool              `json:"messagesOpenOtherExchanges,omitempty"`
-	InputAttachments           []InputAttachment `json:"inputAttachments,omitempty"`
-	Materials                  []InputAttachment `json:"materials,omitempty"`
+	Messages                   []VisibleContextMessage `json:"messages"`
+	HasMoreBefore              bool                    `json:"hasMoreBefore"`
+	HistoryCursor              string                  `json:"historyCursor"`
+	ResponseLanguage           string                  `json:"responseLanguage,omitempty"`
+	Sender                     VisibleContextSender    `json:"sender,omitempty"`
+	ConversationType           string                  `json:"conversationType,omitempty"`
+	ChannelID                  string                  `json:"channelID,omitempty"`
+	ChannelName                string                  `json:"channelName,omitempty"`
+	Addressing                 AddressingMetadata      `json:"addressing,omitempty"`
+	AttachmentsOnly            bool                    `json:"attachmentsOnly,omitempty"`
+	MessagesOpenOtherExchanges bool                    `json:"messagesOpenOtherExchanges,omitempty"`
+	InputAttachments           []InputAttachment       `json:"inputAttachments,omitempty"`
+	Materials                  []InputAttachment       `json:"materials,omitempty"`
 }
 
 type InputAttachment struct {
-	Platform    string `json:"platform,omitempty"`
-	FileID      string `json:"fileID,omitempty"`
-	URL         string `json:"url,omitempty"`
-	MessageID   string `json:"messageID,omitempty"`
-	Filename    string `json:"filename,omitempty"`
-	ContentType string `json:"contentType,omitempty"`
-	SizeBytes   int64  `json:"sizeBytes,omitempty"`
-	Path        string `json:"path,omitempty"`
-	// ContentBase64 carries the fetched file from the bridge that could reach the
-	// platform to the workspace it belongs in. It lives only for that hop: the
-	// file is written here and the field is cleared before anything records it.
+	Platform      string `json:"platform,omitempty"`
+	FileID        string `json:"fileID,omitempty"`
+	URL           string `json:"url,omitempty"`
+	MessageID     string `json:"messageID,omitempty"`
+	Filename      string `json:"filename,omitempty"`
+	ContentType   string `json:"contentType,omitempty"`
+	SizeBytes     int64  `json:"sizeBytes,omitempty"`
+	Path          string `json:"path,omitempty"`
 	ContentBase64 string `json:"contentBase64,omitempty"`
 	IsAvailable   bool   `json:"isAvailable,omitempty"`
 	ErrorCode     string `json:"errorCode,omitempty"`
@@ -341,9 +333,6 @@ func agentPreviousVisibleContextMaterials(attachments []InputAttachment, current
 	return materials
 }
 
-// An attachment that failed to come in stays in the catalog with its error, or
-// the model is left with nothing but the url in the message text and invents a
-// path from it. Only an attachment with no identity at all is dropped.
 func agentVisibleContextMaterials(attachments []InputAttachment) []agentcontract.VisibleContextMaterial {
 	materials := make([]agentcontract.VisibleContextMaterial, 0, len(attachments))
 	for _, attachment := range attachments {

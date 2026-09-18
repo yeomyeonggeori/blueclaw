@@ -62,15 +62,10 @@ type PlatformAdapter interface {
 	FetchHistory(context.Context, string, int) (VisibleContext, error)
 }
 
-// A platform that can change a message it already sent lets one message carry a
-// turn from start to finish: what the agent is doing while it works, and its
-// answer when it is done.
 type ReplyEditingAdapter interface {
 	EditReply(context.Context, ReplyTarget, string, string) error
 }
 
-// A platform that can take back a message it already sent lets the narration be
-// scaffolding: it comes down once the answer stands as a message of its own.
 type ReplyDeletingAdapter interface {
 	DeleteReply(context.Context, ReplyTarget, string) error
 }
@@ -113,8 +108,6 @@ const connectorMaximumAttemptCount = 5
 const connectorReplyKindSuccess = "success"
 const connectorReplyKindCheckpoint = "checkpoint"
 
-// What a turn is doing while it does it. It is written for somebody watching,
-// and it is not something anyone said, so it is not read back as context.
 const ConnectorReplyKindProgress = "progress"
 const connectorReplyKindUserNotice = "user_notice"
 const connectorReplyKindPermissionNotice = "permission_notice"
@@ -836,16 +829,7 @@ func (connectorRuntime *ConnectorRuntime) authorizeSender(ctx context.Context, a
 	}, nil
 }
 
-// askTheHostAboutUnknownAccount runs while a person waits on the answer, so a host that
-// cannot say leaves this agent exactly as it was: the account stays unmatched and the
-// refusal is the one it would have sent anyway.
-//
-// This sits at the one place a match fails rather than on each platform adapter. Whether
-// a message arrived through chatd or through a capability is a routing detail, and an
-// answer that depends on which door it came through is the same fact kept twice.
 func (connectorRuntime *ConnectorRuntime) askTheHostAboutUnknownAccount(ctx context.Context, platform string, externalUserID string, messageID string, platformAccountIdentity identity.PlatformAccountIdentity) (string, bool, bool) {
-	// A deployment with no resolver has no directory to ask, which is not a lookup
-	// that failed. It refuses as it did before this existed.
 	if connectorRuntime.unknownAccountResolver == nil {
 		return "", false, false
 	}
@@ -867,8 +851,6 @@ func (connectorRuntime *ConnectorRuntime) askTheHostAboutUnknownAccount(ctx cont
 	connectorRuntime.identityService.RememberPlatformAccount(platformAccountIdentity)
 	personID, isFound := connectorRuntime.identityService.ResolvePersonIDByPlatformAccount(platform, externalUserID)
 	if !isFound {
-		// The directory carries the address and this agent still cannot place it,
-		// which is a projection that has not caught up rather than a stranger.
 		connectorRuntime.logger.Error("connector."+platform+".directory.answered",
 			slog.String("messageID", messageID),
 			slog.String("email", platformAccountIdentity.Email),
@@ -891,9 +873,6 @@ func (connectorRuntime *ConnectorRuntime) buildReplyTarget(ctx context.Context, 
 	}, nil
 }
 
-// While a turn runs, what it is doing is written into one message the person can
-// watch. Nothing is registered when the platform cannot change a message it
-// already sent, because a line per tool call would be a line per message.
 func (connectorRuntime *ConnectorRuntime) startNarrating(ctx context.Context, adapter PlatformAdapter, replyTarget ReplyTarget) *turnNarrator {
 	narrator := newTurnNarrator(adapter, replyTarget)
 	if narrator == nil || connectorRuntime.taskEventService == nil {
@@ -1055,8 +1034,6 @@ func taskEventSourceReference(taskEvent task.TaskEvent) string {
 	return strings.TrimSpace(document.SourceReference)
 }
 
-// The person chose to approve the whole family for this task, so the scope the
-// pending question named is recorded once and the agent stops asking for it.
 func (connectorRuntime *ConnectorRuntime) grantApprovalScopeForTask(taskRunID string) {
 	scope := pendingApprovalScope(connectorRuntime.taskRunService.ListTaskEvent(taskRunID))
 	if scope == "" {

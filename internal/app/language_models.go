@@ -96,9 +96,6 @@ func resolveModelTierProviders(runtimeConfiguration config.RuntimeConfiguration,
 	return uncappedModelTierProviders(tiers, logger), nil
 }
 
-// A capped ladder is a machine that cannot run its upper tiers, so the lowest
-// tier climbs for an image instead of answering blind, and every tier above it
-// degrades downward.
 func cappedModelTierProviders(tiers map[string]llm.TierProvider, logger *slog.Logger) modelTierProviders {
 	xLowModel := taggedTierProvider(tiers, "xlow")
 	lowProvider := descendingFallbackProvider(taggedTierProvider(tiers, "low"), xLowModel, "low", "xlow", logger)

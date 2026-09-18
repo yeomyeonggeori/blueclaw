@@ -203,10 +203,6 @@ func interruptedTaskActiveGoal(taskRun task.TaskRun, taskEvents []task.TaskEvent
 	return interruptedTaskActiveGoalWithInstruction(taskRun, taskEvents, guidanceNote, "")
 }
 
-// interruptedTaskActiveGoalWithInstruction lets a new instruction replace the objective the
-// task was carrying. A task that stopped to ask something keeps "I need to ask" as its
-// objective, so without this the answer arrives, the objective does not move, and the same
-// question is asked again — a trap a person cannot talk their way out of.
 func interruptedTaskActiveGoalWithInstruction(taskRun task.TaskRun, taskEvents []task.TaskEvent, guidanceNote string, instruction string) agentcontract.ActiveGoal {
 	activeGoal := latestActiveGoal(taskEvents)
 	activeGoal.GoalID = firstNonEmptyString(activeGoal.GoalID, taskRun.TaskRunID)
@@ -225,9 +221,7 @@ func interruptedTaskActiveGoalWithInstruction(taskRun task.TaskRun, taskEvents [
 type taskResumeProfile struct {
 	sourceReference string
 	guidanceNote    string
-	// instruction replaces the objective the task stopped on. A restart carries none,
-	// because nothing new was said; a steer carries what the person just asked for.
-	instruction string
+	instruction     string
 }
 
 func autoResumeTaskProfile(taskRunID string) taskResumeProfile {

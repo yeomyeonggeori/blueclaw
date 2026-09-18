@@ -15,8 +15,6 @@ const narrationResultSuffix = ".result"
 const narrationSubjectLimit = 48
 const narrationLineLimit = 6
 
-// A call the agent is making, and how it turned out once it has. A person
-// watching three lines needs to know which of them broke.
 type narratedCall struct {
 	callID  string
 	label   string
@@ -30,10 +28,6 @@ func (call narratedCall) String() string {
 	return call.label + call.outcome
 }
 
-// A tool call reads as the tool's own name and the thing it was pointed at, the
-// way a coding agent shows Read(main.go). The name comes from the catalog and
-// the argument from the call, so no list of phrases has to be kept beside the
-// list of tools.
 func narrationOfTurnEvent(rawTurnEvent taskstate.RawTurnEvent) (narratedCall, bool) {
 	toolName, isRequest := toolNameOfNarrationEvent(rawTurnEvent.Name, narrationRequestedSuffix)
 	if !isRequest {
@@ -85,9 +79,6 @@ func narrationCallFailed(body string) bool {
 	return json.Unmarshal([]byte(body), &decoded) == nil && decoded.Failure != nil
 }
 
-// Every tool names its subject differently, and a call may carry a dozen fields
-// nobody wants to read. The first of these the call actually has is the one
-// worth showing.
 var narrationSubjectFields = []string{"path", "filePath", "query", "command", "title", "name", "url"}
 
 func narrationSubject(body string) string {
@@ -117,8 +108,6 @@ func narrationText(value any) string {
 	return strings.TrimSpace(text[:narrationSubjectLimit]) + "…"
 }
 
-// The lines a person watches are the last few: a turn that called forty tools is
-// not something anyone reads from the top.
 func narrationMessage(calls []narratedCall) string {
 	if len(calls) == 0 {
 		return ""
@@ -134,9 +123,6 @@ func narrationMessage(calls []narratedCall) string {
 	return "_" + strings.Join(lines, "_\n_") + "_"
 }
 
-// turnNarrator keeps one message saying what the agent is doing, and hands it
-// over when the answer is ready, so a turn costs the conversation one message
-// rather than a silence followed by one.
 type turnNarrator struct {
 	editor      ReplyEditingAdapter
 	deleter     ReplyDeletingAdapter
@@ -221,13 +207,6 @@ func (narrator *turnNarrator) startSaying(ctx context.Context, message string) {
 	narrator.mutex.Unlock()
 }
 
-// The narration is scaffolding: once the turn's first reply is delivered as a
-// message of its own, the scaffolding comes down. The answer used to arrive by
-// editing the narration in place, but an edit is an overlay every reader must
-// apply, and a reader that missed it showed the working notes as the answer
-// forever. A deletion is honored everywhere, so the answer is always sent
-// whole and the narration deleted; a platform that cannot delete keeps the
-// edit-in-place handover.
 func (narrator *turnNarrator) takeOverSending(
 	sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error),
 ) func(context.Context, ReplyTarget, OutboundReply) (string, error) {
@@ -261,8 +240,6 @@ func replyIsOnlyWords(reply OutboundReply) bool {
 		reply.Interaction == nil
 }
 
-// The narrated message is handed over once. Whatever the turn says after that
-// is a message of its own.
 func (narrator *turnNarrator) claimNarratedMessage() string {
 	narrator.mutex.Lock()
 	defer narrator.mutex.Unlock()
