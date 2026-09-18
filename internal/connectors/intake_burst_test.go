@@ -2,10 +2,15 @@ package connectors
 
 import (
 	"context"
+	"errors"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/intake"
+	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
 func burstQueuedEvent(messageID string, conversationID string, senderID string, receivedAt time.Time) QueuedConnectorEvent {
@@ -106,4 +111,107 @@ func (decider *burstIntakeDecider) Decide(_ context.Context, request agentcontra
 		})
 	}
 	return decisions, nil
+}
+
+func TestABurstIsSplitSoEveryDecisionRequestFitsTheCeiling(t *testing.T) {
+	connectorRuntime, _, _ := recordingIntakeDecisionRuntime(t)
+	recorder := &burstIntakeDecider{}
+	connectorRuntime.UseIntakeDecider(recorder)
+	receivedAt := time.Unix(1756800000, 0)
+	longPrompt := strings.Repeat("a", 10000)
+	queuedEvents := []QueuedConnectorEvent{}
+	for index := 1; index <= 4; index++ {
+		queuedEvent := burstQueuedEvent("message-"+strconv.Itoa(index), "direct-1", "sender-user", receivedAt.Add(time.Duration(index)*time.Second))
+		queuedEvent.Event.Prompt = longPrompt
+		queuedEvents = append(queuedEvents, queuedEvent)
+	}
+
+	connectorRuntime.decideClaimedBurst(context.Background(), queuedEvents)
+
+	if len(recorder.requests) != 2 {
+		t.Fatalf("expected the oversized burst to be split in two, got %d calls", len(recorder.requests))
+	}
+	decidedMessageIDs := []string{}
+	for _, request := range recorder.requests {
+		byteCount := intake.DecisionRequestByteCount(request)
+		if byteCount > connectorDecisionRequestByteCeiling {
+			t.Fatalf("expected every decision request to fit %d bytes, got %d", connectorDecisionRequestByteCeiling, byteCount)
+		}
+		for _, message := range request.Messages {
+			decidedMessageIDs = append(decidedMessageIDs, message.MessageID)
+		}
+	}
+	if len(decidedMessageIDs) != 4 {
+		t.Fatalf("expected every message to be decided by one of the bursts, got %v", decidedMessageIDs)
+	}
+}
+
+func TestAnAttachmentsOnlyGroupMessageNobodyAskedAboutIsNeverDecided(t *testing.T) {
+	connectorRuntime, _, _ := recordingIntakeDecisionRuntime(t)
+	describer := &countingAttachmentDescriber{}
+	decisionModel := &refusingDecisionModel{}
+	connectorRuntime.UseIntakeDecider(intake.NewDecisionPlanner(decisionModel, describer, func() float64 { return 1 }))
+	receivedAt := time.Unix(1756800000, 0)
+	queuedEvents := []QueuedConnectorEvent{
+		burstChannelQueuedEvent("message-1", receivedAt, true, "이거 정리해줘"),
+		burstChannelQueuedEvent("message-2", receivedAt.Add(time.Second), false, ""),
+		burstChannelQueuedEvent("message-3", receivedAt.Add(2*time.Second), true, "이어서 부탁해"),
+	}
+
+	connectorRuntime.decideClaimedBurst(context.Background(), queuedEvents)
+
+	if len(decisionModel.decidedMessageCounts) != 1 {
+		t.Fatalf("expected one decision call for the two mentions, got %v", decisionModel.decidedMessageCounts)
+	}
+	if decisionModel.decidedMessageCounts[0] != 2 {
+		t.Fatalf("expected the uninvited attachment to be left out of the decision, got %d messages", decisionModel.decidedMessageCounts[0])
+	}
+	if describer.callCount != 0 {
+		t.Fatalf("expected no picture to be described for a message the gate ignores, got %d calls", describer.callCount)
+	}
+}
+
+func burstChannelQueuedEvent(messageID string, receivedAt time.Time, isBotMentioned bool, prompt string) QueuedConnectorEvent {
+	event := testChannelInboundEvent(messageID)
+	event.RawReceivedAt = receivedAt
+	event.Prompt = prompt
+	event.Context.Addressing = AddressingMetadata{BotMentioned: isBotMentioned}
+	if prompt != "" {
+		return QueuedConnectorEvent{Event: event}
+	}
+	event.Context.AttachmentsOnly = true
+	event.InputParts = []agentcontract.AgentPart{{
+		Type:  agentcontract.AgentPartTypeImage,
+		Image: &agentcontract.AgentImagePart{MimeType: "image/png", Filename: "board.png", DataBase64: "aGVsbG8="},
+	}}
+	return QueuedConnectorEvent{Event: event}
+}
+
+type countingAttachmentDescriber struct {
+	callCount int
+}
+
+func (describer *countingAttachmentDescriber) DescribeAttachments(context.Context, []agentcontract.AgentPart) ([]string, error) {
+	describer.callCount++
+	return []string{"화이트보드 사진."}, nil
+}
+
+type refusingDecisionModel struct {
+	decidedMessageCounts []int
+}
+
+func (decisionModel *refusingDecisionModel) Decide(_ context.Context, request model.DecisionRequest) (model.DecisionResponse, error) {
+	decisionModel.decidedMessageCounts = append(decisionModel.decidedMessageCounts, decidedMessageCount(request))
+	return model.DecisionResponse{}, errors.New("the scripted decision model answers nothing")
+}
+
+func decidedMessageCount(request model.DecisionRequest) int {
+	messageKeys := map[string]bool{}
+	for questionKey := range request.Questions {
+		messageKey, _, isKeyed := strings.Cut(questionKey, ".")
+		if isKeyed {
+			messageKeys[messageKey] = true
+		}
+	}
+	return len(messageKeys)
 }

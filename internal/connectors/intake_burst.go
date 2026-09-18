@@ -5,21 +5,15 @@ import (
 	"errors"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/intake"
 )
 
-// A person says one thing in three messages. When they are all waiting when the
-// worker claims, they are one arrival, and one decision call answers about all
-// of them.
 const connectorDecisionBurstSize = 4
 
-// A decision call carries one question set per message, so the messages' own
-// text is the part that grows without bound. Past this the burst is cut and the
-// rest are decided in the next call.
-const connectorDecisionBurstPromptBudgetBytes = 8000
+const connectorDecisionRequestByteCeiling = 80000
 
-// Messages further apart than this are a backlog rather than a burst, and a
-// backlog's later messages deserve the state the earlier ones left behind.
 const connectorDecisionBurstWindow = 30 * time.Second
 
 func (connectorRuntime *ConnectorRuntime) decideClaimedBurst(ctx context.Context, queuedEvents []QueuedConnectorEvent) {
@@ -37,12 +31,41 @@ func (connectorRuntime *ConnectorRuntime) decideInboundBurst(ctx context.Context
 		return
 	}
 	decisionRequest, ledgerTaskRunID := connectorRuntime.inboundDecisionRequest(ctx, adapter, events[len(events)-1])
+	for _, fittingEvents := range burstsWithinTheRequestCeiling(decisionRequest, events) {
+		if len(fittingEvents) < 2 {
+			continue
+		}
+		connectorRuntime.decideFittingBurst(ctx, decisionRequest, ledgerTaskRunID, fittingEvents)
+	}
+}
+
+func (connectorRuntime *ConnectorRuntime) decideFittingBurst(ctx context.Context, decisionRequest agentcontract.IntakeDecisionRequest, ledgerTaskRunID string, events []PlatformInboundEvent) {
 	decisionRequest.Messages = burstDecisionMessages(events)
 	decisions, callRecords, errorValue := connectorRuntime.decideBurst(ctx, decisionRequest, ledgerTaskRunID)
 	for _, event := range events {
 		seedInboundDecision(event, decisions, errorValue)
 		holdIntakeCallRecords(event.intakeDecision, ledgerTaskRunID, callRecords)
 	}
+}
+
+func burstsWithinTheRequestCeiling(decisionRequest agentcontract.IntakeDecisionRequest, events []PlatformInboundEvent) [][]PlatformInboundEvent {
+	bursts := [][]PlatformInboundEvent{}
+	burst := []PlatformInboundEvent{}
+	for _, event := range events {
+		candidateBurst := append(append([]PlatformInboundEvent{}, burst...), event)
+		if len(burst) > 0 && !decisionRequestFitsTheCeiling(decisionRequest, candidateBurst) {
+			bursts = append(bursts, burst)
+			burst = []PlatformInboundEvent{event}
+			continue
+		}
+		burst = candidateBurst
+	}
+	return append(bursts, burst)
+}
+
+func decisionRequestFitsTheCeiling(decisionRequest agentcontract.IntakeDecisionRequest, events []PlatformInboundEvent) bool {
+	decisionRequest.Messages = burstDecisionMessages(events)
+	return intake.DecisionRequestByteCount(decisionRequest) <= connectorDecisionRequestByteCeiling
 }
 
 func (connectorRuntime *ConnectorRuntime) decideBurst(ctx context.Context, decisionRequest agentcontract.IntakeDecisionRequest, ledgerTaskRunID string) (agentcontract.IntakeDecisions, []agentcontract.LLMCallRecord, error) {
@@ -101,10 +124,11 @@ func inboundDecisionBursts(queuedEvents []QueuedConnectorEvent) [][]PlatformInbo
 	return bursts
 }
 
-// isBurstDecidableEvent keeps a burst to what one shared state describes: one
-// conversation, one sender, one message each.
 func isBurstDecidableEvent(event PlatformInboundEvent) bool {
-	return event.TaskRetry == nil && event.MessageID != "" && event.SenderID != "" && event.ConversationID != ""
+	if event.TaskRetry != nil || event.MessageID == "" || event.SenderID == "" || event.ConversationID == "" {
+		return false
+	}
+	return !inboundengagement.IsIgnoredWithoutDeciding(engagementRequestForEvent(event))
 }
 
 func inboundDecisionBurstKey(event PlatformInboundEvent) string {
@@ -114,25 +138,19 @@ func inboundDecisionBurstKey(event PlatformInboundEvent) string {
 func burstsWithinBudget(events []PlatformInboundEvent) [][]PlatformInboundEvent {
 	bursts := [][]PlatformInboundEvent{}
 	burst := []PlatformInboundEvent{}
-	promptByteCount := 0
 	for _, event := range events {
-		if len(burst) > 0 && !burstAccepts(burst, promptByteCount, event) {
+		if len(burst) > 0 && !burstAccepts(burst, event) {
 			bursts = append(bursts, burst)
 			burst = []PlatformInboundEvent{}
-			promptByteCount = 0
 		}
 		burst = append(burst, event)
-		promptByteCount += len(event.Prompt)
 	}
 	bursts = append(bursts, burst)
 	return burstsOfSeveralMessages(bursts)
 }
 
-func burstAccepts(burst []PlatformInboundEvent, promptByteCount int, event PlatformInboundEvent) bool {
+func burstAccepts(burst []PlatformInboundEvent, event PlatformInboundEvent) bool {
 	if len(burst) >= connectorDecisionBurstSize {
-		return false
-	}
-	if promptByteCount+len(event.Prompt) > connectorDecisionBurstPromptBudgetBytes {
 		return false
 	}
 	return isWithinBurstWindow(burst[0].RawReceivedAt, event.RawReceivedAt)
@@ -145,8 +163,6 @@ func isWithinBurstWindow(firstReceivedAt time.Time, receivedAt time.Time) bool {
 	return receivedAt.Sub(firstReceivedAt) <= connectorDecisionBurstWindow
 }
 
-// burstsOfSeveralMessages drops the bursts of one, because a lone message is
-// already decided once, by whichever consumer asks about it first.
 func burstsOfSeveralMessages(bursts [][]PlatformInboundEvent) [][]PlatformInboundEvent {
 	burstsWorthBatching := [][]PlatformInboundEvent{}
 	for _, burst := range bursts {

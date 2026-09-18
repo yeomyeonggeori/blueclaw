@@ -11,9 +11,8 @@ import (
 
 const ambientDutyLaunchConfidenceThreshold = 0.7
 
-// AddressingDecider answers who one inbound message is addressed to. The whole
-// intake decision is made once for the message before the gate reads it, so
-// this hands back an already-decided answer rather than asking a model here.
+const attachmentsOnlyUninvitedReason = "attachments_only_uninvited"
+
 type AddressingDecider interface {
 	DecideAddressing(context.Context, Request) (agentcontract.AddressingDecision, error)
 }
@@ -54,8 +53,8 @@ func (gate *Gate) Resolve(ctx context.Context, platform string, request Request)
 	if !IsMultiPersonConversation(request.ConversationType) {
 		return Decision{ShouldLaunch: true}
 	}
-	if request.AttachmentsOnly && !request.BotMentioned {
-		return Decision{IgnoreReason: "attachments_only_uninvited"}
+	if IsIgnoredWithoutDeciding(request) {
+		return Decision{IgnoreReason: attachmentsOnlyUninvitedReason}
 	}
 	addressingDecision, errorValue := gate.addressingDecider.DecideAddressing(ctx, request)
 	if errorValue != nil {
@@ -76,6 +75,10 @@ func (gate *Gate) Resolve(ctx context.Context, platform string, request Request)
 		ReactionEmoji: addressingDecision.ReactionEmoji,
 		AmbientDuty:   ambientDuty,
 	}
+}
+
+func IsIgnoredWithoutDeciding(request Request) bool {
+	return IsMultiPersonConversation(request.ConversationType) && request.AttachmentsOnly && !request.BotMentioned
 }
 
 func ShouldIgnoreUninvitedAddressing(conversationType string, botMentioned bool) bool {

@@ -20,7 +20,11 @@ func (connectorRuntime *ConnectorRuntime) EngagementGate() *inboundengagement.Ga
 
 func (connectorRuntime *ConnectorRuntime) resolveInboundEngagement(ctx context.Context, adapter PlatformAdapter, platform string, event PlatformInboundEvent) inboundengagement.Decision {
 	gate := inboundengagement.NewGate(eventAddressingDecider{connectorRuntime: connectorRuntime, adapter: adapter, event: event}, connectorRuntime.logger)
-	return gate.Resolve(ctx, platform, inboundengagement.Request{
+	return gate.Resolve(ctx, platform, engagementRequestForEvent(event))
+}
+
+func engagementRequestForEvent(event PlatformInboundEvent) inboundengagement.Request {
+	return inboundengagement.Request{
 		Prompt:           event.Prompt,
 		MessageID:        event.MessageID,
 		ConversationType: event.Context.ConversationType,
@@ -30,5 +34,5 @@ func (connectorRuntime *ConnectorRuntime) resolveInboundEngagement(ctx context.C
 		SenderName:       event.Context.Sender.Name,
 		SenderHandle:     event.Context.Sender.Handle,
 		VisibleContext:   event.Context.ToAgentVisibleContext(),
-	})
+	}
 }
