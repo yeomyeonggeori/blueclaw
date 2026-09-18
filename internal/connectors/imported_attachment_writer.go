@@ -17,10 +17,6 @@ const connectorWorkspaceRootPath = "/workspace"
 
 const mostAttachmentBytesCarried = 16 << 20
 
-// The bridges that fetch an attachment run beside the workspace, not inside it:
-// what they write lands on their own filesystem and the agent's /workspace never
-// sees it. They hand over the bytes, and the file is written here, as the person
-// the message came from, into their own inbox.
 type importedAttachmentWriter struct {
 	workspaceActorFactory security.WorkspaceActorFactory
 	personID              string
@@ -40,9 +36,6 @@ func (writer importedAttachmentWriter) writeAll(ctx context.Context, attachments
 	return written, contents
 }
 
-// The bytes that were just written, kept for the one hop that puts a picture in
-// front of the model with the message it came on, instead of costing a tool
-// call to look at what was just sent.
 type writtenAttachmentContents map[string][]byte
 
 func (writer importedAttachmentWriter) write(ctx context.Context, attachment InputAttachment, takenPaths map[string]bool) (InputAttachment, []byte) {
@@ -90,9 +83,6 @@ func (writer importedAttachmentWriter) requesterActor(ctx context.Context) (secu
 	})
 }
 
-// Two people can send the same name in one conversation, and the same picture
-// can arrive twice. Identical content keeps the name it already has; different
-// content under a taken name gets a number.
 func freeAttachmentPath(ctx context.Context, actor security.WorkspaceActor, filePath string, content []byte, takenPaths map[string]bool) string {
 	candidate := filePath
 	for suffix := 2; suffix < 100; suffix++ {

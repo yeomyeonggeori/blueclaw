@@ -79,14 +79,14 @@ func (connectorRuntime *ConnectorRuntime) RetryTaskRun(ctx context.Context, sour
 
 func (connectorRuntime *ConnectorRuntime) enqueueTaskRetry(sourceTaskRun task.TaskRun, childTaskRun task.TaskRun, launchContext interruptedTaskLaunchContext) error {
 	if !hasTaskRetrySource(connectorRuntime.taskRunService.ListTaskEvent(childTaskRun.TaskRunID), sourceTaskRun.TaskRunID) {
-		body := marshalConnectorEventBody(TaskRetryReference{SourceTaskRunID: sourceTaskRun.TaskRunID})
+		body := agentruntime.MarshalBody(TaskRetryReference{SourceTaskRunID: sourceTaskRun.TaskRunID})
 		if _, errorValue := connectorRuntime.taskRunService.AppendTaskEventWithError(childTaskRun.TaskRunID, taskRetrySourceEvent, body); errorValue != nil {
 			return errorValue
 		}
 	}
 	_, _, errorValue := connectorRuntime.queueRepository().TryEnqueueConnectorEvent(retryInboundEvent(sourceTaskRun, childTaskRun, launchContext))
 	if errorValue != nil {
-		connectorRuntime.taskRunService.AppendTaskEvent(childTaskRun.TaskRunID, "task.retry_enqueue_failed", marshalConnectorEventBody(map[string]string{"error": errorValue.Error()}))
+		connectorRuntime.taskRunService.AppendTaskEvent(childTaskRun.TaskRunID, "task.retry_enqueue_failed", agentruntime.MarshalBody(map[string]string{"error": errorValue.Error()}))
 	}
 	return errorValue
 }

@@ -125,7 +125,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) addSkillTool(toolContext context.C
 		return toolcontract.ToolResult{}, errorValue
 	}
 	toolCatalogBuilder.refreshSkills(toolContext)
-	resultDocument := json.RawMessage(marshalToolResult(skillAddResult{
+	resultDocument := json.RawMessage(MarshalBody(skillAddResult{
 		Name:          skillName,
 		Path:          toolCatalogBuilder.agentWorkspacePath(filepath.Join(skillDirectoryPath, "SKILL.md")),
 		Status:        status,
@@ -146,7 +146,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) removeSkillTool(toolContext contex
 	}
 	skillDirectoryPath := toolCatalogBuilder.userManagedSkillDirectoryPath(skillName)
 	if _, errorValue := os.Stat(skillDirectoryPath); os.IsNotExist(errorValue) {
-		return toolcontract.ToolFailureData(toolcontract.FailureNotFound, toolcontract.FailureCodes.NotFound, "skill_remove", "user-managed skill was not found", json.RawMessage(marshalToolResult(map[string]string{
+		return toolcontract.ToolFailureData(toolcontract.FailureNotFound, toolcontract.FailureCodes.NotFound, "skill_remove", "user-managed skill was not found", json.RawMessage(MarshalBody(map[string]string{
 			"name":   skillName,
 			"path":   toolCatalogBuilder.agentWorkspacePath(skillDirectoryPath),
 			"status": "missing",
@@ -156,7 +156,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) removeSkillTool(toolContext contex
 		return toolcontract.ToolResult{}, errorValue
 	}
 	toolCatalogBuilder.refreshSkills(toolContext)
-	resultDocument := json.RawMessage(marshalToolResult(skillRemoveResult{
+	resultDocument := json.RawMessage(MarshalBody(skillRemoveResult{
 		Name:    skillName,
 		Path:    toolCatalogBuilder.agentWorkspacePath(skillDirectoryPath),
 		Status:  "removed",

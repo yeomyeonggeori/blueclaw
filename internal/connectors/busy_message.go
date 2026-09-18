@@ -56,7 +56,7 @@ func (connectorRuntime *ConnectorRuntime) handleBusyCancelMessage(
 	sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error),
 ) (busyMessageResult, error) {
 	_, _ = connectorRuntime.taskRunService.CancelTaskRunWithReason(activeTaskRun.TaskRunID, activeTaskRun.RequesterPersonID, "task cancelled by newer user instruction")
-	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskCancelRequested, marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskCancelRequested, agentruntime.MarshalBody(map[string]string{
 		"messageID":       event.MessageID,
 		"reason":          strings.TrimSpace(decision.Reason),
 		"latestUserInput": strings.TrimSpace(event.Prompt),
@@ -81,7 +81,7 @@ func (connectorRuntime *ConnectorRuntime) handleBusyStatusMessage(
 	decision agentcontract.TurnDecision,
 	sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error),
 ) (busyMessageResult, error) {
-	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskStatusRequested, marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskStatusRequested, agentruntime.MarshalBody(map[string]string{
 		"messageID": event.MessageID,
 		"reason":    strings.TrimSpace(decision.Reason),
 	}))
@@ -122,7 +122,7 @@ func (connectorRuntime *ConnectorRuntime) handleBusySteerMessage(
 }
 
 func (connectorRuntime *ConnectorRuntime) appendSteerRequestedEvent(taskRunID string, event PlatformInboundEvent, instruction string, decision agentcontract.TurnDecision) {
-	connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventTaskSteerRequested, marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventTaskSteerRequested, agentruntime.MarshalBody(map[string]string{
 		"messageID":   event.MessageID,
 		"instruction": instruction,
 		"reason":      strings.TrimSpace(decision.Reason),
@@ -146,47 +146,35 @@ func (connectorRuntime *ConnectorRuntime) resumePausedTaskForSteer(
 		return connectorRuntime.replySteerResumeUnavailable(ctx, platform, event, replyTarget, activeTaskRun, decision, sendReply)
 	}
 	connectorRuntime.appendSteerRequestedEvent(activeTaskRun.TaskRunID, event, instruction, decision)
-	// The normal launch path imports the conversation's attachments into
-	// workspace materials only after busy routing has decided nothing; a steer
-	// resume launches from inside that routing, so without this the resumed
-	// task sees an image only as a URL in message text and invents a path.
 	event = connectorRuntime.withAttachmentMaterials(ctx, adapter, event, activeTaskRun.RequesterPersonID)
 	launchRequest := connectorRuntime.interruptedTaskLaunchRequest(activeTaskRun, taskEvents, launchContext, event, adapter, userSteerTaskProfile(platform, activeTaskRun.TaskRunID, instruction), sendReply)
-	launchRequest = steeredTaskLaunchRequest(launchRequest, event, instruction)
-	launchResult, errorValue := connectorRuntime.currentTaskLauncher().Launch(ctx, launchRequest)
-	if errorValue != nil {
-		failureTurnResult := connectorRuntime.launchFailureCompleter.CompleteLaunchFailure(ctx, agentcontract.AgentTurnRequest{
-			RequesterPersonID: activeTaskRun.RequesterPersonID,
-			ExistingTaskRunID: activeTaskRun.TaskRunID,
-			Platform:          platform,
-			ConversationID:    event.ConversationID,
-			Prompt:            activeTaskRun.Prompt,
-			ResponseLanguage:  event.Context.ResponseLanguage,
-		}, "launch", "steer_resume", errorValue)
-		connectorResult, dispatchError := connectorRuntime.dispatchTaskReply(withConnectorEvent(ctx, event), adapter.Name(), adapter, event, replyTarget, failureTurnResult, "", sendReply)
-		if dispatchError != nil {
-			return busyMessageResult{}, dispatchError
-		}
-		return busyMessageResult{connectorResult: connectorResult, isHandled: true}, nil
-	}
-	connectorResult, errorValue := connectorRuntime.dispatchTaskReply(withConnectorEvent(ctx, event), adapter.Name(), adapter, event, replyTarget, launchResult.TurnResult, "", sendReply)
+	turnResult := connectorRuntime.launchSteeredTask(ctx, platform, event, activeTaskRun, steeredTaskLaunchRequest(launchRequest, event, instruction))
+	connectorResult, errorValue := connectorRuntime.dispatchTaskReply(withConnectorEvent(ctx, event), adapter.Name(), adapter, event, replyTarget, turnResult, "", sendReply)
 	if errorValue != nil {
 		return busyMessageResult{}, errorValue
 	}
 	return busyMessageResult{connectorResult: connectorResult, isHandled: true}, nil
 }
 
-// A steer that says something new is a new ask made against the same task, so
-// the contract the old objective derived — required evidence, expected results,
-// tool selection — must not outlive it. Launching with routing precomputed as
-// continue_task kept that stale contract binding: a task paused on "delete the
-// duplicate" absorbed "edit the post instead" into its objective while its
-// contract still demanded delete evidence, and the agent deleted. Let intake
-// run again on the person's own words, with the restored goal as context, so
-// the router decides whether the message refines the job or revises it, and
-// the contract is re-derived either way. Dropping the approval-continuation
-// flag also keeps a call approved for the old objective from being carried out
-// under the new one.
+func (connectorRuntime *ConnectorRuntime) launchSteeredTask(ctx context.Context, platform string, event PlatformInboundEvent, activeTaskRun task.TaskRun, launchRequest agentruntime.TaskLaunchRequest) agentcontract.AgentTurnResult {
+	launchResult, errorValue := connectorRuntime.currentTaskLauncher().Launch(ctx, launchRequest)
+	if errorValue == nil {
+		return launchResult.TurnResult
+	}
+	return connectorRuntime.completeSteerResumeLaunchFailure(ctx, platform, event, activeTaskRun, errorValue)
+}
+
+func (connectorRuntime *ConnectorRuntime) completeSteerResumeLaunchFailure(ctx context.Context, platform string, event PlatformInboundEvent, activeTaskRun task.TaskRun, errorValue error) agentcontract.AgentTurnResult {
+	return connectorRuntime.launchFailureCompleter.CompleteLaunchFailure(ctx, agentcontract.AgentTurnRequest{
+		RequesterPersonID: activeTaskRun.RequesterPersonID,
+		ExistingTaskRunID: activeTaskRun.TaskRunID,
+		Platform:          platform,
+		ConversationID:    event.ConversationID,
+		Prompt:            activeTaskRun.Prompt,
+		ResponseLanguage:  event.Context.ResponseLanguage,
+	}, "launch", "steer_resume", errorValue)
+}
+
 func steeredTaskLaunchRequest(launchRequest agentruntime.TaskLaunchRequest, event PlatformInboundEvent, instruction string) agentruntime.TaskLaunchRequest {
 	steeredPrompt := firstNonEmptyString(strings.TrimSpace(event.Prompt), instruction)
 	if steeredPrompt == "" {
@@ -208,7 +196,7 @@ func (connectorRuntime *ConnectorRuntime) replySteerResumeUnavailable(
 	decision agentcontract.TurnDecision,
 	sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error),
 ) (busyMessageResult, error) {
-	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskSteerResumeUnavailable, marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskSteerResumeUnavailable, agentruntime.MarshalBody(map[string]string{
 		"messageID": event.MessageID,
 		"reason":    strings.TrimSpace(decision.Reason),
 	}))
@@ -225,7 +213,7 @@ func (connectorRuntime *ConnectorRuntime) replySteerResumeUnavailable(
 
 func (connectorRuntime *ConnectorRuntime) replaceBusyTask(event PlatformInboundEvent, activeTaskRun task.TaskRun, decision agentcontract.TurnDecision) {
 	_, _ = connectorRuntime.taskRunService.CancelTaskRunWithReason(activeTaskRun.TaskRunID, activeTaskRun.RequesterPersonID, "task replaced by newer user instruction")
-	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskReplaced, marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskReplaced, agentruntime.MarshalBody(map[string]string{
 		"messageID":       event.MessageID,
 		"reason":          strings.TrimSpace(decision.Reason),
 		"latestUserInput": strings.TrimSpace(event.Prompt),
@@ -235,7 +223,7 @@ func (connectorRuntime *ConnectorRuntime) replaceBusyTask(event PlatformInboundE
 func (connectorRuntime *ConnectorRuntime) supersedeBusyTask(event PlatformInboundEvent, platform string, activeTaskRun task.TaskRun, decision agentcontract.TurnDecision) {
 	_, _ = connectorRuntime.taskRunService.CancelTaskRunWithReason(activeTaskRun.TaskRunID, activeTaskRun.RequesterPersonID, "superseded_by_new_message")
 	connectorRuntime.resolveOpenTaskWaitsForTaskRun(activeTaskRun.RequesterPersonID, platform, activeTaskRun.OriginConversationID, activeTaskRun.TaskRunID)
-	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskSupersededByMessage, marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskSupersededByMessage, agentruntime.MarshalBody(map[string]string{
 		"messageID":       event.MessageID,
 		"reason":          strings.TrimSpace(decision.Reason),
 		"latestUserInput": strings.TrimSpace(event.Prompt),
@@ -259,16 +247,8 @@ func (connectorRuntime *ConnectorRuntime) generateBusyReply(ctx context.Context,
 	return connectorRuntime.replyGenerator.GenerateReplyWithContext(ctx, prompt, event.Context.ToAgentVisibleContext(), nil)
 }
 
-// recentlyFinishedTaskFollowUpWindow bounds how long after a task leaves active status a
-// later message is still eligible to be treated as a follow-up to it, rather than a
-// self-contained new request.
 const recentlyFinishedTaskFollowUpWindow = 15 * time.Second
 
-// handlePossibleFinishedTaskFollowUp covers the narrow race where the active task finished
-// between when a message was flagged as worth fast-tracking and when it is actually
-// classified: rather than silently falling through into new-task creation (turning a
-// correction into a duplicate task) or silently dropping the message, it tells the user the
-// prior task already finished and lets them decide whether to start something new.
 func (connectorRuntime *ConnectorRuntime) handlePossibleFinishedTaskFollowUp(
 	ctx context.Context,
 	platform string,
@@ -288,7 +268,7 @@ func (connectorRuntime *ConnectorRuntime) handlePossibleFinishedTaskFollowUp(
 	if !connectorRuntime.relatesToActiveTask(ctx, adapter, event) {
 		return busyMessageResult{}, nil
 	}
-	connectorRuntime.taskRunService.AppendTaskEvent(finishedTaskRun.TaskRunID, agentcontract.TaskEventTaskBusyMessageAfterFinish, marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(finishedTaskRun.TaskRunID, agentcontract.TaskEventTaskBusyMessageAfterFinish, agentruntime.MarshalBody(map[string]string{
 		"messageID":       event.MessageID,
 		"latestUserInput": strings.TrimSpace(event.Prompt),
 	}))

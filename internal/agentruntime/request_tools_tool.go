@@ -44,7 +44,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerRequestToolsTool(toolRegis
 			InputSchema: requestToolsInputSchema,
 		},
 		Handler: func(_ context.Context, input requestToolsToolInput) (toolcontract.ToolResult, error) {
-			document := json.RawMessage(marshalToolResult(requestToolsToolOutput{RequestedToolNames: input.ToolNames}))
+			document := json.RawMessage(MarshalBody(requestToolsToolOutput{RequestedToolNames: input.ToolNames}))
 			return toolcontract.ToolSuccessData(string(document), document), nil
 		},
 		Result: toolcontract.IdentityToolResult,

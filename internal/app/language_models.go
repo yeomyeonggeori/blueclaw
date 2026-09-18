@@ -96,43 +96,44 @@ func resolveModelTierProviders(runtimeConfiguration config.RuntimeConfiguration,
 	return uncappedModelTierProviders(tiers, logger), nil
 }
 
-// A capped ladder is a machine that cannot run its upper tiers, so the lowest
-// tier climbs for an image instead of answering blind, and every tier above it
-// degrades downward.
 func cappedModelTierProviders(tiers map[string]llm.TierProvider, logger *slog.Logger) modelTierProviders {
 	xLowModel := taggedTierProvider(tiers, "xlow")
 	lowProvider := descendingFallbackProvider(taggedTierProvider(tiers, "low"), xLowModel, "low", "xlow", logger)
-	mediumTierOnly := taggedTierProvider(tiers, "medium")
-	highTierOnly := taggedTierProvider(tiers, "high")
-	mediumProvider := descendingFallbackProvider(mediumTierOnly, lowProvider, "medium", "low", logger)
-	highProvider := descendingFallbackProvider(highTierOnly, mediumProvider, "high", "medium", logger)
-	xHighProvider := descendingFallbackProvider(taggedTierProvider(tiers, "xhigh"), highProvider, "xhigh", "high", logger)
-	return modelTierProviders{
+	return modelTierProvidersAboveLow(tiers, modelTierProvidersBelowMedium{
 		xLow:           llm.VisionFallbackProvider{TextOnlyModel: xLowModel, VisionModel: lowProvider},
 		low:            lowProvider,
-		medium:         mediumProvider,
-		high:           highProvider,
-		xHigh:          xHighProvider,
-		max:            descendingFallbackProvider(taggedTierProvider(tiers, "max"), xHighProvider, "max", "xhigh", logger),
-		mediumTierOnly: mediumTierOnly,
-		highTierOnly:   highTierOnly,
-	}
+		mediumFallback: lowProvider,
+	}, logger)
 }
 
 func uncappedModelTierProviders(tiers map[string]llm.TierProvider, logger *slog.Logger) modelTierProviders {
 	lowTierOnly := taggedTierProvider(tiers, "low")
-	mediumTierOnly := taggedTierProvider(tiers, "medium")
-	highTierOnly := taggedTierProvider(tiers, "high")
 	lowProvider := lowTierOnly
 	if tiers["medium"].Reaches != tiers["low"].Reaches {
-		lowProvider = descendingFallbackProvider(lowTierOnly, mediumTierOnly, "low", "medium", logger)
+		lowProvider = descendingFallbackProvider(lowTierOnly, taggedTierProvider(tiers, "medium"), "low", "medium", logger)
 	}
-	mediumProvider := descendingFallbackProvider(mediumTierOnly, lowTierOnly, "medium", "low", logger)
+	return modelTierProvidersAboveLow(tiers, modelTierProvidersBelowMedium{
+		xLow:           descendingFallbackProvider(taggedTierProvider(tiers, "xlow"), lowProvider, "xlow", "low", logger),
+		low:            lowProvider,
+		mediumFallback: lowTierOnly,
+	}, logger)
+}
+
+type modelTierProvidersBelowMedium struct {
+	xLow           llm.LanguageModelProvider
+	low            llm.LanguageModelProvider
+	mediumFallback llm.LanguageModelProvider
+}
+
+func modelTierProvidersAboveLow(tiers map[string]llm.TierProvider, lowerTiers modelTierProvidersBelowMedium, logger *slog.Logger) modelTierProviders {
+	mediumTierOnly := taggedTierProvider(tiers, "medium")
+	highTierOnly := taggedTierProvider(tiers, "high")
+	mediumProvider := descendingFallbackProvider(mediumTierOnly, lowerTiers.mediumFallback, "medium", "low", logger)
 	highProvider := descendingFallbackProvider(highTierOnly, mediumProvider, "high", "medium", logger)
 	xHighProvider := descendingFallbackProvider(taggedTierProvider(tiers, "xhigh"), highProvider, "xhigh", "high", logger)
 	return modelTierProviders{
-		xLow:           descendingFallbackProvider(taggedTierProvider(tiers, "xlow"), lowProvider, "xlow", "low", logger),
-		low:            lowProvider,
+		xLow:           lowerTiers.xLow,
+		low:            lowerTiers.low,
 		medium:         mediumProvider,
 		high:           highProvider,
 		xHigh:          xHighProvider,
