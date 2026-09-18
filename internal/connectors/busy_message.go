@@ -152,28 +152,31 @@ func (connectorRuntime *ConnectorRuntime) resumePausedTaskForSteer(
 	// task sees an image only as a URL in message text and invents a path.
 	event = connectorRuntime.withAttachmentMaterials(ctx, adapter, event, activeTaskRun.RequesterPersonID)
 	launchRequest := connectorRuntime.interruptedTaskLaunchRequest(activeTaskRun, taskEvents, launchContext, event, adapter, userSteerTaskProfile(platform, activeTaskRun.TaskRunID, instruction), sendReply)
-	launchRequest = steeredTaskLaunchRequest(launchRequest, event, instruction)
-	launchResult, errorValue := connectorRuntime.currentTaskLauncher().Launch(ctx, launchRequest)
-	if errorValue != nil {
-		failureTurnResult := connectorRuntime.launchFailureCompleter.CompleteLaunchFailure(ctx, agentcontract.AgentTurnRequest{
-			RequesterPersonID: activeTaskRun.RequesterPersonID,
-			ExistingTaskRunID: activeTaskRun.TaskRunID,
-			Platform:          platform,
-			ConversationID:    event.ConversationID,
-			Prompt:            activeTaskRun.Prompt,
-			ResponseLanguage:  event.Context.ResponseLanguage,
-		}, "launch", "steer_resume", errorValue)
-		connectorResult, dispatchError := connectorRuntime.dispatchTaskReply(withConnectorEvent(ctx, event), adapter.Name(), adapter, event, replyTarget, failureTurnResult, "", sendReply)
-		if dispatchError != nil {
-			return busyMessageResult{}, dispatchError
-		}
-		return busyMessageResult{connectorResult: connectorResult, isHandled: true}, nil
-	}
-	connectorResult, errorValue := connectorRuntime.dispatchTaskReply(withConnectorEvent(ctx, event), adapter.Name(), adapter, event, replyTarget, launchResult.TurnResult, "", sendReply)
+	turnResult := connectorRuntime.launchSteeredTask(ctx, platform, event, activeTaskRun, steeredTaskLaunchRequest(launchRequest, event, instruction))
+	connectorResult, errorValue := connectorRuntime.dispatchTaskReply(withConnectorEvent(ctx, event), adapter.Name(), adapter, event, replyTarget, turnResult, "", sendReply)
 	if errorValue != nil {
 		return busyMessageResult{}, errorValue
 	}
 	return busyMessageResult{connectorResult: connectorResult, isHandled: true}, nil
+}
+
+func (connectorRuntime *ConnectorRuntime) launchSteeredTask(ctx context.Context, platform string, event PlatformInboundEvent, activeTaskRun task.TaskRun, launchRequest agentruntime.TaskLaunchRequest) agentcontract.AgentTurnResult {
+	launchResult, errorValue := connectorRuntime.currentTaskLauncher().Launch(ctx, launchRequest)
+	if errorValue == nil {
+		return launchResult.TurnResult
+	}
+	return connectorRuntime.completeSteerResumeLaunchFailure(ctx, platform, event, activeTaskRun, errorValue)
+}
+
+func (connectorRuntime *ConnectorRuntime) completeSteerResumeLaunchFailure(ctx context.Context, platform string, event PlatformInboundEvent, activeTaskRun task.TaskRun, errorValue error) agentcontract.AgentTurnResult {
+	return connectorRuntime.launchFailureCompleter.CompleteLaunchFailure(ctx, agentcontract.AgentTurnRequest{
+		RequesterPersonID: activeTaskRun.RequesterPersonID,
+		ExistingTaskRunID: activeTaskRun.TaskRunID,
+		Platform:          platform,
+		ConversationID:    event.ConversationID,
+		Prompt:            activeTaskRun.Prompt,
+		ResponseLanguage:  event.Context.ResponseLanguage,
+	}, "launch", "steer_resume", errorValue)
 }
 
 // A steer that says something new is a new ask made against the same task, so
