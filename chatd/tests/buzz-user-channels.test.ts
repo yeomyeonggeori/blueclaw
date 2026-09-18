@@ -1,7 +1,67 @@
-import { describe, expect, test } from "bun:test";
-import { createChannelTags, isLastOwner, openChannelsToJoin, rolesOnRoster } from "../src/adapters/buzz/user-channels.ts";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { BuzzEvent } from "../src/adapters/buzz/types.ts";
+import type { UserChannelRole } from "../src/adapters/buzz/user-channels.ts";
 import { MalformedRequest, parseMemberExternalIDs, parseNewChannel } from "../src/personal/parse.ts";
+
+const CHANNEL = "channel-1";
+const ACTOR_PUBKEY = "a".repeat(64);
+const OTHER_MEMBER = "b".repeat(64);
+const PUT_USER_KIND = 9000;
+const REMOVE_USER_KIND = 9001;
+
+type Published = { kind: number; content: string; tags: string[][] };
+
+let members = new Map<string, UserChannelRole>();
+let published: Published[] = [];
+
+function rosterEvent(): BuzzEvent {
+	return {
+		id: "roster",
+		pubkey: "relay",
+		created_at: 1,
+		kind: 39002,
+		tags: [["d", CHANNEL], ...[...members].map(([pubkey, role]) => ["p", pubkey, "", role])],
+		content: "",
+		sig: "",
+	};
+}
+
+function applyToRoster(kind: number, tags: string[][]): void {
+	const pubkey = tags.find((tag) => tag[0] === "p")?.[1];
+	if (!pubkey) return;
+	if (kind === PUT_USER_KIND) {
+		const role = tags.find((tag) => tag[0] === "role")?.[1];
+		members.set(pubkey, role === "owner" || role === "admin" ? role : "member");
+	} else if (kind === REMOVE_USER_KIND) {
+		members.delete(pubkey);
+	}
+}
+
+const relay = {
+	pubkeyHex: ACTOR_PUBKEY,
+	connect: async () => {},
+	disconnect: () => {},
+	subscribe: () => {},
+	query: async () => [rosterEvent()],
+	publish: async (kind: number, content: string, tags: string[][]) => {
+		published.push({ kind, content, tags });
+		applyToRoster(kind, tags);
+		return { id: "published", pubkey: ACTOR_PUBKEY, created_at: 300, kind, tags, content, sig: "" };
+	},
+	publishForAcknowledgement: async () => "",
+};
+
+mock.module("../src/adapters/buzz/relay-client.ts", () => ({ createBuzzRelayClient: () => relay }));
+
+const {
+	addChannelOwnerAsUser,
+	createChannelTags,
+	isLastOwner,
+	openChannelsToJoin,
+	removeChannelMemberAsUser,
+	rolesOnRoster,
+	TargetIsChannelOwner,
+} = await import("../src/adapters/buzz/user-channels.ts");
 
 function metadata(channelID: string, tags: string[][], createdAt = 1): BuzzEvent {
 	return {
@@ -143,5 +203,64 @@ describe("rolesOnRoster", () => {
 
 	test("knows nobody from an unknown roster", () => {
 		expect(rolesOnRoster(undefined).size).toBe(0);
+	});
+});
+
+describe("addChannelOwnerAsUser", () => {
+	beforeEach(() => {
+		published = [];
+		members = new Map([[ACTOR_PUBKEY, "owner"], [OTHER_MEMBER, "member"]]);
+	});
+
+	test("leaves the actor an owner and produces a roster with two owners", async () => {
+		await addChannelOwnerAsUser({
+			relayURL: "wss://relay",
+			userSecretHex: "irrelevant-secret",
+			channelID: CHANNEL,
+			newOwnerPubkeyHex: OTHER_MEMBER,
+		});
+
+		expect(published).toEqual([
+			{ kind: PUT_USER_KIND, content: "", tags: [["h", CHANNEL], ["p", OTHER_MEMBER], ["role", "owner"]] },
+		]);
+		const roles = rolesOnRoster(rosterEvent());
+		expect(roles.get(ACTOR_PUBKEY)).toBe("owner");
+		expect(roles.get(OTHER_MEMBER)).toBe("owner");
+		expect([...roles.values()].filter((role) => role === "owner")).toHaveLength(2);
+	});
+});
+
+describe("removeChannelMemberAsUser", () => {
+	beforeEach(() => {
+		published = [];
+		members = new Map([[ACTOR_PUBKEY, "owner"], [OTHER_MEMBER, "member"]]);
+	});
+
+	test("publishes the removal of a plain member", async () => {
+		await removeChannelMemberAsUser({
+			relayURL: "wss://relay",
+			userSecretHex: "irrelevant-secret",
+			channelID: CHANNEL,
+			memberPubkeyHex: OTHER_MEMBER,
+		});
+
+		expect(published).toEqual([
+			{ kind: REMOVE_USER_KIND, content: "", tags: [["h", CHANNEL], ["p", OTHER_MEMBER]] },
+		]);
+		expect(rolesOnRoster(rosterEvent()).has(OTHER_MEMBER)).toBe(false);
+	});
+
+	test("refuses to remove a member whose roster role is owner", async () => {
+		members.set(OTHER_MEMBER, "owner");
+
+		await expect(
+			removeChannelMemberAsUser({
+				relayURL: "wss://relay",
+				userSecretHex: "irrelevant-secret",
+				channelID: CHANNEL,
+				memberPubkeyHex: OTHER_MEMBER,
+			}),
+		).rejects.toThrow(TargetIsChannelOwner);
+		expect(published).toEqual([]);
 	});
 });
