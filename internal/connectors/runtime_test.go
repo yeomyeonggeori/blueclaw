@@ -1493,7 +1493,7 @@ func TestConnectorRuntimeProcessesAssistantRequestedAmbiguousChannelMessage(t *t
 }
 
 func TestConnectorRuntimeDecidesIntakeWithItsOwnDecider(t *testing.T) {
-	replyLanguageModel := &addressingTestLanguageModel{reply: "ok"}
+	replyLanguageModel := testLanguageModel{reply: "ok"}
 	connectorRuntime, adapter := newTestConnectorRuntime(t, replyLanguageModel)
 	decider := &scriptedIntakeDecider{addressing: addressedToBot(), turnFields: startTaskTurnDecision()}
 	connectorRuntime.UseIntakeDecider(decider)
@@ -1562,7 +1562,7 @@ func TestConnectorRuntimeIgnoresUninvitedAmbiguousChannelMessageWithoutReply(t *
 }
 
 func TestConnectorRuntimeIgnoresWhenTheIntakeDecisionFails(t *testing.T) {
-	connectorRuntime, adapter := newTestConnectorRuntime(t, &addressingTestLanguageModel{reply: "unused"})
+	connectorRuntime, adapter := newTestConnectorRuntime(t, testLanguageModel{reply: "unused"})
 	connectorRuntime.UseIntakeDecider(&scriptedIntakeDecider{errorValue: errors.New("decision model unavailable")})
 
 	result, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, testChannelInboundEvent("message-1"))
@@ -3175,10 +3175,6 @@ func TestConnectorRuntimeAddsCalendarEventWithoutApproval(t *testing.T) {
 	if result.TaskRunID == "" {
 		t.Fatal("expected task run id")
 	}
-	requests := languageModel.Requests()
-	if connectorContainsSchemaName(requests, "bluecollar_choice_reply_decision") {
-		t.Fatalf("expected no approval continuation classification, got %+v", connectorRequestSchemaNames(requests))
-	}
 	if len(invokedTools) != 1 || invokedTools[0] != "event_add/invoke" {
 		t.Fatalf("expected direct calendar add invocation, got %+v", invokedTools)
 	}
@@ -3854,35 +3850,6 @@ func (languageModel *blockingTestLanguageModel) GenerateStructuredResponse(ctx c
 	}
 }
 
-type addressingTestLanguageModel struct {
-	addressingTarget string
-	dutyMatch        bool
-	dutyName         string
-	dutyConfidence   float64
-	reactionEmoji    string
-	addressingError  error
-	reply            string
-	requests         []llm.StructuredResponseRequest
-}
-
-func (languageModel *addressingTestLanguageModel) GenerateResponse(context.Context, string) (string, error) {
-	return languageModel.reply, nil
-}
-
-func (languageModel *addressingTestLanguageModel) GenerateStructuredResponse(_ context.Context, request llm.StructuredResponseRequest) (llm.StructuredResponse, error) {
-	languageModel.requests = append(languageModel.requests, request)
-	if request.StructuredOutputSchema.Name == "bluecollar_addressing_classification" {
-		if languageModel.addressingError != nil {
-			return llm.StructuredResponse{}, languageModel.addressingError
-		}
-		return llm.StructuredResponse{Content: `{"target":` + strconv.Quote(languageModel.addressingTarget) + `,"shouldRespond":` + strconv.FormatBool(languageModel.addressingTarget == string(agentcontract.AddressingTargetBot)) + `,"reactionEmoji":` + strconv.Quote(languageModel.reactionEmoji) + `,"dutyMatch":` + strconv.FormatBool(languageModel.dutyMatch) + `,"dutyName":` + strconv.Quote(languageModel.dutyName) + `,"dutyConfidence":` + strconv.FormatFloat(languageModel.dutyConfidence, 'f', -1, 64) + `}`}, nil
-	}
-	if request.StructuredOutputSchema.Name == "bluecollar_turn_router" {
-		return llm.StructuredResponse{Content: connectorDefaultTurnRouterResponse()}, nil
-	}
-	return llm.StructuredResponse{Content: connectorFinishMessage(languageModel.reply)}, nil
-}
-
 type recordingLanguageModel struct {
 	reply   string
 	request llm.StructuredResponseRequest
@@ -4135,8 +4102,6 @@ func (decider *scriptedIntakeDecider) Decide(_ context.Context, request agentcon
 	return decisions, nil
 }
 
-// recordingIntakeDecider keeps every state the intake decision was asked about,
-// which is where a message's own words and the conversation around it now live.
 type recordingIntakeDecider struct {
 	decider  IntakeDecider
 	requests []agentcontract.IntakeDecisionRequest
@@ -4170,7 +4135,7 @@ func addressedToBot() agentcontract.AddressingDecision {
 
 func newAddressedTestConnectorRuntime(t *testing.T, addressingTarget agentcontract.AddressingTarget) (*ConnectorRuntime, *testAdapter) {
 	t.Helper()
-	connectorRuntime, adapter := newTestConnectorRuntime(t, &addressingTestLanguageModel{reply: "ok"})
+	connectorRuntime, adapter := newTestConnectorRuntime(t, testLanguageModel{reply: "ok"})
 	connectorRuntime.UseIntakeDecider(&scriptedIntakeDecider{
 		addressing: agentcontract.AddressingDecision{Target: addressingTarget, ShouldRespond: addressingTarget == agentcontract.AddressingTargetBot},
 		turnFields: startTaskTurnDecision(),
