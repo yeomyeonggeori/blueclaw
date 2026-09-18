@@ -370,8 +370,41 @@ func (toolCatalogBuilder *ToolCatalogBuilder) buildUpdatedTaskSchedule(taskSched
 	return task.ApplyScheduleUpdate(taskSchedule, scheduleUpdateInputOf(input), toolCatalogBuilder.companyTimeZone(), time.Now().UTC())
 }
 
+type nativeScheduleMutationResult struct {
+	ScheduleID       string     `json:"scheduleID"`
+	Name             string     `json:"name"`
+	TaskInstruction  string     `json:"taskInstruction"`
+	TimeZone         string     `json:"timeZone"`
+	Kind             string     `json:"kind"`
+	RunAt            *time.Time `json:"runAt,omitempty"`
+	IntervalSecond   int        `json:"intervalSecond,omitempty"`
+	CronExpression   string     `json:"cronExpression,omitempty"`
+	MaxRunCount      int        `json:"maxRunCount,omitempty"`
+	ExpiresAt        *time.Time `json:"expiresAt,omitempty"`
+	NextRunAt        *time.Time `json:"nextRunAt,omitempty"`
+	ConversationID   string     `json:"conversationID"`
+	ReplyTargetID    string     `json:"replyTargetID"`
+	AgentProfileName string     `json:"agentProfileName"`
+}
+
 func scheduleCreateResultDocument(taskSchedule task.TaskSchedule) json.RawMessage {
-	return json.RawMessage(marshalToolResult(task.ProjectScheduleMutation(taskSchedule)))
+	mutation := task.ProjectScheduleMutation(taskSchedule)
+	return json.RawMessage(marshalToolResult(nativeScheduleMutationResult{
+		ScheduleID:       mutation.ScheduleID,
+		Name:             mutation.Description,
+		TaskInstruction:  mutation.TaskInstruction,
+		TimeZone:         mutation.TimeZone,
+		Kind:             mutation.Kind,
+		RunAt:            mutation.RunAt,
+		IntervalSecond:   mutation.IntervalSecond,
+		CronExpression:   mutation.CronExpression,
+		MaxRunCount:      mutation.MaxRunCount,
+		ExpiresAt:        mutation.ExpiresAt,
+		NextRunAt:        mutation.NextRunAt,
+		ConversationID:   mutation.ConversationID,
+		ReplyTargetID:    mutation.ReplyTargetID,
+		AgentProfileName: mutation.AgentProfileName,
+	}))
 }
 
 func parseScheduleCancelScope(value string) (task.TaskScheduleCancelScope, error) {

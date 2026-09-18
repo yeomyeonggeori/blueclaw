@@ -11,6 +11,7 @@ var (
 	ErrScheduleConversationRequired    = errors.New("platform and conversationID are required")
 	ErrScheduleReplyTargetRequired     = errors.New("replyTargetID is required")
 	ErrScheduleTaskInstructionRequired = errors.New("taskInstruction is required")
+	ErrScheduleUpdateFieldRequired     = errors.New("at least one field to change is required")
 	ErrScheduleKindInvalid             = errors.New("kind must be once, interval or cron")
 	ErrScheduleTimeZoneInvalid         = errors.New("timeZone must be a valid IANA time zone")
 	ErrScheduleRunAtInvalid            = errors.New("runAt must be RFC3339")
@@ -63,7 +64,7 @@ type ScheduleCreateContext struct {
 
 type ScheduleMutationResult struct {
 	ScheduleID       string     `json:"scheduleID"`
-	Name             string     `json:"name"`
+	Description      string     `json:"description"`
 	TaskInstruction  string     `json:"taskInstruction"`
 	TimeZone         string     `json:"timeZone"`
 	Kind             string     `json:"kind"`
@@ -177,7 +178,7 @@ func ScheduleUpdateChangesNothing(input ScheduleUpdateInput) bool {
 func ProjectScheduleMutation(taskSchedule TaskSchedule) ScheduleMutationResult {
 	return ScheduleMutationResult{
 		ScheduleID:       taskSchedule.TaskScheduleID,
-		Name:             taskSchedule.Name,
+		Description:      taskSchedule.Name,
 		TaskInstruction:  taskSchedule.Prompt,
 		TimeZone:         taskSchedule.TimeZone,
 		Kind:             string(taskSchedule.Kind),
@@ -220,6 +221,7 @@ func IsScheduleWriteInputError(errorValue error) bool {
 		ErrScheduleConversationRequired,
 		ErrScheduleReplyTargetRequired,
 		ErrScheduleTaskInstructionRequired,
+		ErrScheduleUpdateFieldRequired,
 		ErrScheduleKindInvalid,
 		ErrScheduleTimeZoneInvalid,
 		ErrScheduleRunAtInvalid,

@@ -18,6 +18,7 @@ type TaskScheduleSummaryRepository interface {
 
 type TaskScheduleListRepository interface {
 	ListTaskSchedules(task.TaskScheduleListRequest) (task.TaskScheduleListResult, error)
+	UpsertTaskSchedule(task.TaskSchedule) error
 	UpdateTaskSchedule(task.TaskScheduleUpdateRequest) (task.TaskScheduleUpdateResult, error)
 	DeleteTaskSchedule(task.TaskScheduleDeleteRequest) (task.TaskScheduleDeleteResult, error)
 	CancelTaskSchedules(task.TaskScheduleCancelRequest) (task.TaskScheduleCancelResult, error)
@@ -110,11 +111,7 @@ func (taskScheduleHandler TaskScheduleHandler) HandleList(responseWriter http.Re
 }
 
 func (taskScheduleHandler TaskScheduleHandler) HandleToolList(responseWriter http.ResponseWriter, request *http.Request) {
-	if taskScheduleHandler.ReaderPersonID == nil {
-		http.Error(responseWriter, "schedule list authorization required", http.StatusForbidden)
-		return
-	}
-	creatorPersonID := strings.TrimSpace(taskScheduleHandler.ReaderPersonID(request))
+	creatorPersonID := taskScheduleHandler.signedPrincipal(request)
 	if creatorPersonID == "" {
 		http.Error(responseWriter, "schedule list authorization required", http.StatusForbidden)
 		return

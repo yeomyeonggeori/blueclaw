@@ -354,11 +354,19 @@ type taskScheduleListRepositoryStub struct {
 	deleteRequest task.TaskScheduleDeleteRequest
 	cancelRequest task.TaskScheduleCancelRequest
 	taskSchedules []task.TaskSchedule
+
+	upsertedTaskSchedule task.TaskSchedule
 }
 
 func (repository *taskScheduleListRepositoryStub) ListTaskSchedules(request task.TaskScheduleListRequest) (task.TaskScheduleListResult, error) {
 	repository.request = request
 	return task.TaskScheduleListResult{TaskSchedules: repository.taskSchedules, TotalCount: len(repository.taskSchedules), Page: request.Page, PageSize: request.PageSize}, nil
+}
+
+func (repository *taskScheduleListRepositoryStub) UpsertTaskSchedule(taskSchedule task.TaskSchedule) error {
+	repository.upsertedTaskSchedule = taskSchedule
+	repository.taskSchedules = append(repository.taskSchedules, taskSchedule)
+	return nil
 }
 
 func (repository *taskScheduleListRepositoryStub) UpdateTaskSchedule(request task.TaskScheduleUpdateRequest) (task.TaskScheduleUpdateResult, error) {
@@ -415,4 +423,320 @@ func containsTaskScheduleID(taskScheduleIDs []string, taskScheduleID string) boo
 		}
 	}
 	return false
+}
+
+func scheduleWriteHandler(repository *taskScheduleListRepositoryStub, signedPersonID string) TaskScheduleHandler {
+	return TaskScheduleHandler{
+		ListRepository: repository,
+		ReaderPersonID: func(*http.Request) string { return signedPersonID },
+	}
+}
+
+func postScheduleTool(handler TaskScheduleHandler, path string, body string) *httptest.ResponseRecorder {
+	responseRecorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+	switch path {
+	case "/admin/api/schedule/tool-create":
+		handler.HandleToolCreate(responseRecorder, request)
+	case "/admin/api/schedule/tool-update":
+		handler.HandleToolUpdate(responseRecorder, request)
+	default:
+		handler.HandleToolCancel(responseRecorder, request)
+	}
+	return responseRecorder
+}
+
+func ownScheduleFixture(taskScheduleID string, creatorPersonID string, description string) task.TaskSchedule {
+	nextRunAt := time.Now().UTC().Add(time.Hour)
+	return task.TaskSchedule{
+		TaskScheduleID:   taskScheduleID,
+		CreatorPersonID:  creatorPersonID,
+		Name:             description,
+		Prompt:           "brief " + description,
+		ExecutionMode:    task.TaskScheduleExecutionModeAgent,
+		AgentProfileName: "default",
+		Platform:         "buzz",
+		ConversationID:   "channel-1",
+		ReplyTargetID:    "post-1",
+		TimeZone:         "Asia/Seoul",
+		Kind:             task.TaskScheduleKindInterval,
+		IntervalSecond:   3600,
+		NextRunAt:        &nextRunAt,
+	}
+}
+
+func TestScheduleToolWritesFailClosedWithoutSignedPrincipal(t *testing.T) {
+	repository := &taskScheduleListRepositoryStub{}
+	for _, handler := range []TaskScheduleHandler{
+		{ListRepository: repository},
+		scheduleWriteHandler(repository, ""),
+	} {
+		for path, body := range map[string]string{
+			"/admin/api/schedule/tool-create": `{"taskInstruction":"brief me","kind":"once","platform":"buzz","conversationID":"channel-1","replyTargetID":"post-1"}`,
+			"/admin/api/schedule/tool-update": `{"scheduleHint":"schedule-1","description":"새 이름"}`,
+			"/admin/api/schedule/tool-cancel": `{"scheduleHints":["schedule-1"]}`,
+		} {
+			responseRecorder := postScheduleTool(handler, path, body)
+			if responseRecorder.Code != http.StatusForbidden {
+				t.Fatalf("%s unsigned status = %d, want %d", path, responseRecorder.Code, http.StatusForbidden)
+			}
+		}
+	}
+	if repository.upsertedTaskSchedule.TaskScheduleID != "" || repository.cancelRequest.RequesterPersonID != "" {
+		t.Fatalf("an unsigned request reached the repository: %+v", repository)
+	}
+}
+
+func TestScheduleToolWritesRejectBodySuppliedCreator(t *testing.T) {
+	repository := &taskScheduleListRepositoryStub{
+		taskSchedules: []task.TaskSchedule{ownScheduleFixture("schedule-1", "person-이샘플", "주간 보고")},
+	}
+	handler := scheduleWriteHandler(repository, "person-이샘플")
+	for path, body := range map[string]string{
+		"/admin/api/schedule/tool-create": `{"taskInstruction":"brief me","kind":"once","runAt":"2099-01-01T00:00:00Z","platform":"buzz","conversationID":"channel-1","replyTargetID":"post-1","creatorPersonID":"person-박예시"}`,
+		"/admin/api/schedule/tool-update": `{"scheduleHint":"schedule-1","description":"새 이름","creatorPersonID":"person-박예시"}`,
+		"/admin/api/schedule/tool-cancel": `{"scheduleHints":["schedule-1"],"creatorPersonID":"person-박예시"}`,
+	} {
+		responseRecorder := postScheduleTool(handler, path, body)
+		if responseRecorder.Code != http.StatusBadRequest {
+			t.Fatalf("%s body creator status = %d, want %d: %s", path, responseRecorder.Code, http.StatusBadRequest, responseRecorder.Body.String())
+		}
+	}
+	if repository.upsertedTaskSchedule.TaskScheduleID != "" || repository.cancelRequest.RequesterPersonID != "" {
+		t.Fatalf("a body-supplied creator reached the repository: %+v", repository)
+	}
+}
+
+func TestScheduleToolCreateRefusesWithoutDeliveryBinding(t *testing.T) {
+	repository := &taskScheduleListRepositoryStub{}
+	handler := scheduleWriteHandler(repository, "person-이샘플")
+
+	responseRecorder := postScheduleTool(handler, "/admin/api/schedule/tool-create",
+		`{"taskInstruction":"brief me","kind":"once","runAt":"2099-01-01T00:00:00Z"}`)
+
+	if responseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d: %s", responseRecorder.Code, http.StatusBadRequest, responseRecorder.Body.String())
+	}
+	if !strings.Contains(responseRecorder.Body.String(), task.ErrScheduleConversationRequired.Error()) {
+		t.Fatalf("expected the delivery refusal reason, got %s", responseRecorder.Body.String())
+	}
+	if repository.upsertedTaskSchedule.TaskScheduleID != "" {
+		t.Fatalf("a schedule without delivery binding was stored: %+v", repository.upsertedTaskSchedule)
+	}
+}
+
+func TestScheduleToolCreateRefusesScheduleWithNoFutureRun(t *testing.T) {
+	repository := &taskScheduleListRepositoryStub{}
+	handler := scheduleWriteHandler(repository, "person-이샘플")
+
+	responseRecorder := postScheduleTool(handler, "/admin/api/schedule/tool-create",
+		`{"taskInstruction":"brief me","kind":"once","runAt":"2020-01-01T00:00:00Z","platform":"buzz","conversationID":"channel-1","replyTargetID":"post-1"}`)
+
+	if responseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d: %s", responseRecorder.Code, http.StatusBadRequest, responseRecorder.Body.String())
+	}
+	if !strings.Contains(responseRecorder.Body.String(), task.ErrScheduleNoFutureRun.Error()) {
+		t.Fatalf("expected the no-future-run refusal, got %s", responseRecorder.Body.String())
+	}
+	if repository.upsertedTaskSchedule.TaskScheduleID != "" {
+		t.Fatalf("a schedule with no future run was stored: %+v", repository.upsertedTaskSchedule)
+	}
+}
+
+func TestScheduleToolCreateStoresTheSignedPrincipalsSchedule(t *testing.T) {
+	repository := &taskScheduleListRepositoryStub{}
+	handler := scheduleWriteHandler(repository, "person-이샘플")
+
+	responseRecorder := postScheduleTool(handler, "/admin/api/schedule/tool-create",
+		`{"taskInstruction":"주간 보고를 정리한다","description":"주간 보고","kind":"cron","cronExpression":"0 9 * * 1","repeatPolicy":"unbounded","timeZone":"Asia/Seoul","platform":"buzz","conversationID":"channel-1","replyTargetID":"post-1"}`)
+
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", responseRecorder.Code, http.StatusOK, responseRecorder.Body.String())
+	}
+	var mutation task.ScheduleMutationResult
+	if errorValue := json.NewDecoder(responseRecorder.Body).Decode(&mutation); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if mutation.Description != "주간 보고" || mutation.TaskInstruction != "주간 보고를 정리한다" || mutation.NextRunAt == nil {
+		t.Fatalf("unexpected mutation projection: %+v", mutation)
+	}
+	if mutation.AgentProfileName != "default" || mutation.ConversationID != "channel-1" || mutation.ReplyTargetID != "post-1" {
+		t.Fatalf("unexpected delivery projection: %+v", mutation)
+	}
+	if repository.upsertedTaskSchedule.CreatorPersonID != "person-이샘플" {
+		t.Fatalf("the stored creator escaped the signed principal: %+v", repository.upsertedTaskSchedule)
+	}
+}
+
+func TestScheduleToolUpdateResolvesDescriptionHintAndRewritesTaskInstruction(t *testing.T) {
+	repository := &taskScheduleListRepositoryStub{
+		taskSchedules: []task.TaskSchedule{ownScheduleFixture("schedule-1", "person-이샘플", "주간 보고")},
+	}
+	handler := scheduleWriteHandler(repository, "person-이샘플")
+
+	responseRecorder := postScheduleTool(handler, "/admin/api/schedule/tool-update",
+		`{"scheduleHint":"주간","taskInstruction":"주간 보고와 지표를 함께 정리한다","intervalSecond":7200,"repeatPolicy":"unbounded"}`)
+
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", responseRecorder.Code, http.StatusOK, responseRecorder.Body.String())
+	}
+	var mutation task.ScheduleMutationResult
+	if errorValue := json.NewDecoder(responseRecorder.Body).Decode(&mutation); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if mutation.ScheduleID != "schedule-1" || mutation.TaskInstruction != "주간 보고와 지표를 함께 정리한다" || mutation.IntervalSecond != 7200 {
+		t.Fatalf("unexpected mutation projection: %+v", mutation)
+	}
+	if repository.updateRequest.RequesterPersonID != "person-이샘플" {
+		t.Fatalf("the update escaped the signed principal: %+v", repository.updateRequest)
+	}
+}
+
+func TestScheduleToolUpdateAnswersAmbiguousHintWithCandidatesAndMutatesNothing(t *testing.T) {
+	repository := &taskScheduleListRepositoryStub{
+		taskSchedules: []task.TaskSchedule{
+			ownScheduleFixture("schedule-1", "person-이샘플", "주간 보고 월요일"),
+			ownScheduleFixture("schedule-2", "person-이샘플", "주간 보고 금요일"),
+		},
+	}
+	handler := scheduleWriteHandler(repository, "person-이샘플")
+
+	responseRecorder := postScheduleTool(handler, "/admin/api/schedule/tool-update",
+		`{"scheduleHint":"주간 보고","description":"새 이름"}`)
+
+	if responseRecorder.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want %d: %s", responseRecorder.Code, http.StatusConflict, responseRecorder.Body.String())
+	}
+	var conflict scheduleHintConflict
+	if errorValue := json.NewDecoder(responseRecorder.Body).Decode(&conflict); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if conflict.Hint != "주간 보고" || len(conflict.Candidates) != 2 || conflict.Error == "" {
+		t.Fatalf("unexpected conflict body: %+v", conflict)
+	}
+	if repository.updateRequest.RequesterPersonID != "" {
+		t.Fatalf("an ambiguous hint reached the repository: %+v", repository.updateRequest)
+	}
+}
+
+func TestScheduleToolCancelCancelsNothingWhenOneHintIsAmbiguous(t *testing.T) {
+	repository := &taskScheduleListRepositoryStub{
+		taskSchedules: []task.TaskSchedule{
+			ownScheduleFixture("schedule-1", "person-이샘플", "일일 점검"),
+			ownScheduleFixture("schedule-2", "person-이샘플", "주간 보고 월요일"),
+			ownScheduleFixture("schedule-3", "person-이샘플", "주간 보고 금요일"),
+		},
+	}
+	handler := scheduleWriteHandler(repository, "person-이샘플")
+
+	responseRecorder := postScheduleTool(handler, "/admin/api/schedule/tool-cancel",
+		`{"scheduleHints":["일일 점검","주간 보고"]}`)
+
+	if responseRecorder.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want %d: %s", responseRecorder.Code, http.StatusConflict, responseRecorder.Body.String())
+	}
+	var conflict scheduleHintConflict
+	if errorValue := json.NewDecoder(responseRecorder.Body).Decode(&conflict); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if conflict.Hint != "주간 보고" || len(conflict.Candidates) != 2 {
+		t.Fatalf("unexpected conflict body: %+v", conflict)
+	}
+	if repository.cancelRequest.RequesterPersonID != "" {
+		t.Fatalf("a partly unresolved cancel reached the repository: %+v", repository.cancelRequest)
+	}
+}
+
+func TestScheduleToolCancelCancelsEveryResolvedHint(t *testing.T) {
+	repository := &taskScheduleListRepositoryStub{
+		taskSchedules: []task.TaskSchedule{
+			ownScheduleFixture("schedule-1", "person-이샘플", "일일 점검"),
+			ownScheduleFixture("schedule-2", "person-이샘플", "주간 보고"),
+		},
+	}
+	handler := scheduleWriteHandler(repository, "person-이샘플")
+
+	responseRecorder := postScheduleTool(handler, "/admin/api/schedule/tool-cancel",
+		`{"scheduleHints":["일일 점검","schedule-2"]}`)
+
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", responseRecorder.Code, http.StatusOK, responseRecorder.Body.String())
+	}
+	var result scheduleToolCancelResult
+	if errorValue := json.NewDecoder(responseRecorder.Body).Decode(&result); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(result.Cancelled) != 2 || result.Cancelled[0].ScheduleID != "schedule-1" || result.Cancelled[1].Description != "주간 보고" {
+		t.Fatalf("unexpected cancel result: %+v", result)
+	}
+}
+
+func TestScheduleToolWritesNeverReachAColleaguesSchedule(t *testing.T) {
+	repository := &taskScheduleListRepositoryStub{
+		taskSchedules: []task.TaskSchedule{
+			ownScheduleFixture("schedule-colleague", "person-박예시", "최견본 주간 보고"),
+			ownScheduleFixture("schedule-own", "person-이샘플", "내 일일 점검"),
+		},
+	}
+	handler := scheduleWriteHandler(repository, "person-이샘플")
+
+	for path, body := range map[string]string{
+		"/admin/api/schedule/tool-update": `{"scheduleHint":"schedule-colleague","description":"새 이름"}`,
+		"/admin/api/schedule/tool-cancel": `{"scheduleHints":["schedule-colleague"]}`,
+	} {
+		responseRecorder := postScheduleTool(handler, path, body)
+		if responseRecorder.Code != http.StatusConflict {
+			t.Fatalf("%s status = %d, want %d: %s", path, responseRecorder.Code, http.StatusConflict, responseRecorder.Body.String())
+		}
+		var conflict scheduleHintConflict
+		if errorValue := json.NewDecoder(responseRecorder.Body).Decode(&conflict); errorValue != nil {
+			t.Fatal(errorValue)
+		}
+		if len(conflict.Candidates) != 0 {
+			t.Fatalf("%s offered a colleague's schedule as a candidate: %+v", path, conflict.Candidates)
+		}
+	}
+
+	responseRecorder := postScheduleTool(handler, "/admin/api/schedule/tool-update", `{"scheduleHint":"주간 보고","description":"새 이름"}`)
+	if responseRecorder.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want %d: %s", responseRecorder.Code, http.StatusConflict, responseRecorder.Body.String())
+	}
+	if repository.updateRequest.RequesterPersonID != "" || repository.cancelRequest.RequesterPersonID != "" {
+		t.Fatalf("a colleague's schedule reached the repository: %+v", repository)
+	}
+}
+
+func TestScheduleToolResponsesMatchTheirDeclaredOutputSchemas(t *testing.T) {
+	for _, responseCase := range []struct {
+		path   string
+		body   string
+		schema json.RawMessage
+	}{
+		{
+			path:   "/admin/api/schedule/tool-create",
+			body:   `{"taskInstruction":"주간 보고를 정리한다","description":"주간 보고","kind":"cron","cronExpression":"0 9 * * 1","repeatPolicy":"unbounded","timeZone":"Asia/Seoul","platform":"buzz","conversationID":"channel-1","replyTargetID":"post-1"}`,
+			schema: scheduleToolMutationOutputSchema,
+		},
+		{
+			path:   "/admin/api/schedule/tool-update",
+			body:   `{"scheduleHint":"주간 보고","intervalSecond":7200,"repeatPolicy":"unbounded"}`,
+			schema: scheduleToolMutationOutputSchema,
+		},
+		{
+			path:   "/admin/api/schedule/tool-cancel",
+			body:   `{"scheduleHints":["주간 보고"]}`,
+			schema: scheduleToolCancelOutputSchema,
+		},
+	} {
+		repository := &taskScheduleListRepositoryStub{
+			taskSchedules: []task.TaskSchedule{ownScheduleFixture("schedule-1", "person-이샘플", "주간 보고")},
+		}
+		responseRecorder := postScheduleTool(scheduleWriteHandler(repository, "person-이샘플"), responseCase.path, responseCase.body)
+		if responseRecorder.Code != http.StatusOK {
+			t.Fatalf("%s status = %d, want %d: %s", responseCase.path, responseRecorder.Code, http.StatusOK, responseRecorder.Body.String())
+		}
+		if errorValue := validateAgainstScheduleSchema(responseCase.schema, responseRecorder.Body.Bytes()); errorValue != nil {
+			t.Fatalf("%s answered a body its declared output schema rejects: %v", responseCase.path, errorValue)
+		}
+	}
 }
