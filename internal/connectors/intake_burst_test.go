@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -215,6 +216,7 @@ func decidedMessageCount(request model.DecisionRequest) int {
 	}
 	return len(messageKeys)
 }
+
 func TestAnAttachmentsOnlyGroupMessageIsProcessedWithoutBeingDecided(t *testing.T) {
 	connectorRuntime, _, _ := recordingIntakeDecisionRuntime(t)
 	describer := &countingAttachmentDescriber{}
@@ -288,3 +290,39 @@ func (decider *reactingBurstDecider) Decide(_ context.Context, request agentcont
 	return decisions, nil
 }
 
+func TestABurstRecordsItsOneDecisionCallInOneLedger(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	connectorRuntime := NewConnectorRuntime(testConnectorIdentityService(), nil, taskRunService, task.NewTaskEventService(), nil)
+	connectorRuntime.UseTaskRunService(taskRunService)
+	connectorRuntime.RegisterAdapter(&testAdapter{senderEmail: "invited@example.com"})
+	connectorRuntime.UseIntakeDecider(&recordingCallLedgerDecider{})
+	receivedAt := time.Unix(1756800000, 0)
+	queuedEvents := []QueuedConnectorEvent{
+		burstChannelQueuedEvent("message-1", receivedAt, true, "이거 정리해줘"),
+		burstChannelQueuedEvent("message-2", receivedAt.Add(time.Second), true, "이어서 부탁해"),
+	}
+
+	connectorRuntime.decideClaimedBurst(context.Background(), queuedEvents)
+	connectorRuntime.recordHeldIntakeCalls("task-1", queuedEvents[0].Event)
+	connectorRuntime.recordHeldIntakeCalls("task-2", queuedEvents[1].Event)
+
+	if len(taskRunService.ListTaskEvent("task-1")) != 1 {
+		t.Fatalf("expected the first launched task to hold the burst's one decision call, got %+v", taskRunService.ListTaskEvent("task-1"))
+	}
+	if len(taskRunService.ListTaskEvent("task-2")) != 0 {
+		t.Fatalf("expected the burst's decision call to be recorded once, got %+v", taskRunService.ListTaskEvent("task-2"))
+	}
+}
+
+type recordingCallLedgerDecider struct{}
+
+func (decider *recordingCallLedgerDecider) Decide(_ context.Context, request agentcontract.IntakeDecisionRequest, callLedger *agentcontract.IntakeCallLedger) (agentcontract.IntakeDecisions, error) {
+	if callLedger != nil {
+		callLedger.Records = append(callLedger.Records, agentcontract.LLMCallRecord{Model: "decision-model", DecidedMessageCount: len(request.Messages)})
+	}
+	decisions := agentcontract.IntakeDecisions{}
+	for _, message := range request.Messages {
+		decisions.Messages = append(decisions.Messages, agentcontract.IntakeMessageDecision{MessageID: message.MessageID, Addressing: addressedToBot()})
+	}
+	return decisions, nil
+}

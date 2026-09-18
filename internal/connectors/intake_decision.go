@@ -21,11 +21,15 @@ func (connectorRuntime *ConnectorRuntime) UseIntakeDecider(intakeDecider IntakeD
 }
 
 type inboundDecision struct {
-	once        sync.Once
-	decision    agentcontract.IntakeMessageDecision
-	errorValue  error
-	callRecords []agentcontract.LLMCallRecord
-	recordOnce  sync.Once
+	once       sync.Once
+	decision   agentcontract.IntakeMessageDecision
+	errorValue error
+	heldCalls  *heldIntakeCalls
+}
+
+type heldIntakeCalls struct {
+	records    []agentcontract.LLMCallRecord
+	recordOnce sync.Once
 }
 
 func withInboundDecision(event PlatformInboundEvent) PlatformInboundEvent {
@@ -69,15 +73,32 @@ func holdIntakeCallRecords(decisionMemo *inboundDecision, ledgerTaskRunID string
 	if decisionMemo == nil || strings.TrimSpace(ledgerTaskRunID) != "" {
 		return
 	}
-	decisionMemo.callRecords = callRecords
+	decisionMemo.heldCalls = &heldIntakeCalls{records: callRecords}
+}
+
+func holdBurstIntakeCallRecords(events []PlatformInboundEvent, ledgerTaskRunID string, callRecords []agentcontract.LLMCallRecord) {
+	if strings.TrimSpace(ledgerTaskRunID) != "" {
+		return
+	}
+	burstCalls := &heldIntakeCalls{records: callRecords}
+	for _, event := range events {
+		if event.intakeDecision == nil {
+			continue
+		}
+		event.intakeDecision.heldCalls = burstCalls
+	}
 }
 
 func (connectorRuntime *ConnectorRuntime) recordHeldIntakeCalls(taskRunID string, event PlatformInboundEvent) {
 	if event.intakeDecision == nil {
 		return
 	}
-	event.intakeDecision.recordOnce.Do(func() {
-		connectorRuntime.recordIntakeCalls(taskRunID, event.intakeDecision.callRecords)
+	heldCalls := event.intakeDecision.heldCalls
+	if heldCalls == nil {
+		return
+	}
+	heldCalls.recordOnce.Do(func() {
+		connectorRuntime.recordIntakeCalls(taskRunID, heldCalls.records)
 	})
 }
 
@@ -92,10 +113,10 @@ func heldIntakeDecisionAttributes(event PlatformInboundEvent) []any {
 		slog.Float64("reactionProbability", decision.ReactionProbability),
 		slog.Float64("reactionDraw", decision.ReactionDraw),
 	}
-	if len(event.intakeDecision.callRecords) == 0 {
+	if event.intakeDecision.heldCalls == nil || len(event.intakeDecision.heldCalls.records) == 0 {
 		return attributes
 	}
-	callRecord := event.intakeDecision.callRecords[0]
+	callRecord := event.intakeDecision.heldCalls.records[0]
 	return append(attributes,
 		slog.String("decisionModel", callRecord.Model),
 		slog.Int64("decisionLatencyMs", callRecord.LatencyMS),

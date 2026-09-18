@@ -44,8 +44,8 @@ func (connectorRuntime *ConnectorRuntime) decideFittingBurst(ctx context.Context
 	decisions, callRecords, errorValue := connectorRuntime.decideBurst(ctx, decisionRequest, ledgerTaskRunID)
 	for _, event := range events {
 		seedInboundDecision(event, decisions, errorValue)
-		holdIntakeCallRecords(event.intakeDecision, ledgerTaskRunID, callRecords)
 	}
+	holdBurstIntakeCallRecords(events, ledgerTaskRunID, callRecords)
 }
 
 func burstsWithinTheRequestCeiling(decisionRequest agentcontract.IntakeDecisionRequest, events []PlatformInboundEvent) [][]PlatformInboundEvent {
