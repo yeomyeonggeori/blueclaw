@@ -9,7 +9,7 @@ var scheduleListInputSchema = json.RawMessage(`{
 	"type": "object",
 	"properties": {
 		"status": {"type": "string", "enum": ["active", "failed", "expired"]},
-		"limit": {"type": "integer", "minimum": 1}
+		"limit": {"type": "integer", "minimum": 1, "maximum": 9007199254740991}
 	},
 	"additionalProperties": false
 }`)

@@ -88,6 +88,77 @@ func TestTaskScheduleHandlerListsActiveSchedules(t *testing.T) {
 	}
 }
 
+func TestTaskScheduleToolListUsesOnlySignedPrincipalAndExactProjection(t *testing.T) {
+	nextRunAt := time.Now().UTC().Add(time.Hour)
+	fullInstruction := strings.Repeat("full instruction ", 20)
+	repository := &taskScheduleListRepositoryStub{taskSchedules: []task.TaskSchedule{
+		{
+			TaskScheduleID:  "other-schedule",
+			CreatorPersonID: "person-other",
+			Prompt:          "must not be selected",
+			Kind:            task.TaskScheduleKindOnce,
+			NextRunAt:       &nextRunAt,
+		},
+		{
+			TaskScheduleID:  "failed-schedule",
+			CreatorPersonID: "person-signed",
+			Prompt:          fullInstruction,
+			Name:            "Daily report",
+			Kind:            task.TaskScheduleKindCron,
+			CronExpression:  "0 9 * * *",
+			NextRunAt:       &nextRunAt,
+			LastError:       "temporary failure",
+		},
+	}}
+	handler := TaskScheduleHandler{
+		ListRepository: repository,
+		ReaderPersonID: func(*http.Request) string { return "person-signed" },
+	}
+	request := httptest.NewRequest(http.MethodPost, "/admin/api/schedule/tool-list", strings.NewReader(`{"status":"failed","limit":1,"creatorPersonID":"person-other"}`))
+	responseRecorder := httptest.NewRecorder()
+
+	handler.HandleToolList(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("unknown creator field should be refused, got %d: %s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+	request = httptest.NewRequest(http.MethodPost, "/admin/api/schedule/tool-list", strings.NewReader(`{"status":"failed"}{"limit":1}`))
+	responseRecorder = httptest.NewRecorder()
+	handler.HandleToolList(responseRecorder, request)
+	if responseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("trailing JSON should be refused, got %d: %s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+	request = httptest.NewRequest(http.MethodPost, "/admin/api/schedule/tool-list", strings.NewReader(`{"status":"failed","limit":1}`))
+	responseRecorder = httptest.NewRecorder()
+	handler.HandleToolList(responseRecorder, request)
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected ok response, got %d: %s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+	if repository.request.CreatorPersonID != "person-signed" || !repository.request.IncludeExpired || repository.request.PageSize != 20 {
+		t.Fatalf("repository query escaped signed principal: %+v", repository.request)
+	}
+	var output task.ScheduleListOutput
+	if errorValue := json.NewDecoder(responseRecorder.Body).Decode(&output); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(output.Schedules) != 1 || output.Schedules[0].ScheduleID != "failed-schedule" || output.Schedules[0].TaskInstruction != fullInstruction {
+		t.Fatalf("unexpected tool projection: %+v", output)
+	}
+}
+
+func TestTaskScheduleToolListFailsClosedWithoutSignedPrincipal(t *testing.T) {
+	for _, handler := range []TaskScheduleHandler{
+		{},
+		{ReaderPersonID: func(*http.Request) string { return "" }},
+	} {
+		responseRecorder := httptest.NewRecorder()
+		handler.HandleToolList(responseRecorder, httptest.NewRequest(http.MethodPost, "/admin/api/schedule/tool-list", strings.NewReader(`{}`)))
+		if responseRecorder.Code != http.StatusForbidden {
+			t.Fatalf("unsigned request status = %d, want %d", responseRecorder.Code, http.StatusForbidden)
+		}
+	}
+}
+
 func TestTaskScheduleHandlerCancelsOwnedSchedule(t *testing.T) {
 	nextRunAt := time.Now().UTC().Add(time.Hour)
 	repository := &taskScheduleListRepositoryStub{
