@@ -553,6 +553,9 @@ func capabilityToolRequest(toolContext context.Context, descriptor CapabilityToo
 	if !request.ScheduledRun.IsEmpty() {
 		contextDocument["scheduledRun"] = request.ScheduledRun
 	}
+	if taskRunID := strings.TrimSpace(toolcontract.TaskRunIDFromContext(toolContext)); taskRunID != "" {
+		contextDocument["taskRunID"] = taskRunID
+	}
 	// A tool that hands a person's name back has to write it the way the answer
 	// will be read: a name recorded given name first is read family name first
 	// in Korean.

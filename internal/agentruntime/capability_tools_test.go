@@ -255,6 +255,21 @@ func TestCapabilityToolRequestIncludesTrustedExecutionContext(t *testing.T) {
 	}
 }
 
+func TestCapabilityToolRequestNamesTheTaskRunTheTurnBelongsTo(t *testing.T) {
+	descriptor := completeTestCapabilityToolDescriptor(CapabilityToolDescriptor{Name: "schedule_create", CanonicalName: "schedule_create"})
+	payload := preparedCapabilityToolPayload{Input: json.RawMessage(`{"taskInstruction":"주간 보고를 정리한다","kind":"once"}`)}
+
+	insideATask := capabilityToolRequest(toolcontract.WithTaskRunID(context.Background(), "run-1"), descriptor, ToolCatalogRequest{}, payload)
+	if insideATask["context"].(map[string]any)["taskRunID"] != "run-1" {
+		t.Fatalf("the turn's task run did not reach the capability request: %+v", insideATask["context"])
+	}
+
+	outsideATask := capabilityToolRequest(context.Background(), descriptor, ToolCatalogRequest{}, payload)
+	if _, isNamed := outsideATask["context"].(map[string]any)["taskRunID"]; isNamed {
+		t.Fatalf("a turn belonging to no task named one: %+v", outsideATask["context"])
+	}
+}
+
 func TestCapabilityToolRequestSeparatesModelInputFromTransport(t *testing.T) {
 	input := json.RawMessage(`{"siteID":"site-1"}`)
 	transport := map[string]any{"siteSourceBundle": map[string]any{"workspacePath": "/workspace/site"}}
