@@ -796,7 +796,7 @@ func TestCapabilityReadKeepsTheRefusalWhenNothingResolves(t *testing.T) {
 
 func TestToolCatalogKeepsEveryCapabilityToolWhenOneNameIsAlreadyALocalTool(t *testing.T) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(&memoryTaskScheduleRepository{})
+	toolCatalogBuilder.UseScheduleRepository(&memoryScheduleRepository{})
 	quarantinedProviders := []toolcontract.QuarantinedToolProvider{}
 	toolCatalogBuilder.UseCapabilityQuarantineReporter(func(quarantinedProvider toolcontract.QuarantinedToolProvider) {
 		quarantinedProviders = append(quarantinedProviders, quarantinedProvider)

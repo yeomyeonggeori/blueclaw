@@ -11,30 +11,30 @@ const MaximumOpenScheduleCountPerPerson = 50
 var ErrScheduleLimitReached = errors.New("a person can hold " + strconv.Itoa(MaximumOpenScheduleCountPerPerson) + " open schedules; cancel one before creating another")
 
 type ScheduleCreateRepository interface {
-	ListTaskSchedules(TaskScheduleListRequest) (TaskScheduleListResult, error)
-	UpsertTaskSchedule(TaskSchedule) error
+	ListSchedules(ScheduleListRequest) (ScheduleListResult, error)
+	UpsertSchedule(Schedule) error
 }
 
-func CreateSchedule(repository ScheduleCreateRepository, input ScheduleCreateInput, createContext ScheduleCreateContext) (TaskSchedule, error) {
-	taskSchedule, errorValue := InitializeScheduleCreate(input, createContext)
+func CreateSchedule(repository ScheduleCreateRepository, input ScheduleCreateInput, createContext ScheduleCreateContext) (Schedule, error) {
+	schedule, errorValue := InitializeScheduleCreate(input, createContext)
 	if errorValue != nil {
-		return TaskSchedule{}, errorValue
+		return Schedule{}, errorValue
 	}
 	openScheduleCount, errorValue := openScheduleCountOf(repository, createContext)
 	if errorValue != nil {
-		return TaskSchedule{}, errorValue
+		return Schedule{}, errorValue
 	}
 	if openScheduleCount >= MaximumOpenScheduleCountPerPerson {
-		return TaskSchedule{}, ErrScheduleLimitReached
+		return Schedule{}, ErrScheduleLimitReached
 	}
-	if errorValue := repository.UpsertTaskSchedule(taskSchedule); errorValue != nil {
-		return TaskSchedule{}, errorValue
+	if errorValue := repository.UpsertSchedule(schedule); errorValue != nil {
+		return Schedule{}, errorValue
 	}
-	return taskSchedule, nil
+	return schedule, nil
 }
 
 func openScheduleCountOf(repository ScheduleCreateRepository, createContext ScheduleCreateContext) (int, error) {
-	result, errorValue := repository.ListTaskSchedules(TaskScheduleListRequest{
+	result, errorValue := repository.ListSchedules(ScheduleListRequest{
 		CreatorPersonID: strings.TrimSpace(createContext.CreatorPersonID),
 		Page:            1,
 		PageSize:        1,

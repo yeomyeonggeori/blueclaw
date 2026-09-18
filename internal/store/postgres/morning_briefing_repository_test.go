@@ -16,10 +16,10 @@ func TestMorningBriefingConfigurationChangeTracksCadenceSeparately(t *testing.T)
 		platform: "mattermost", conversationID: "channel", replyTargetID: "reply", timeZone: "Asia/Seoul",
 		kind: "cron", cronExpression: "0 8 * * *", nextRunAt: timePointer(time.Date(2026, 9, 7, 8, 0, 0, 0, time.UTC)),
 	}
-	desired := task.TaskSchedule{
-		Name: "Morning briefing", Prompt: "brief", ExecutionMode: task.TaskScheduleExecutionModeAgent, AgentProfileName: "default",
+	desired := task.Schedule{
+		Name: "Morning briefing", Prompt: "brief", ExecutionMode: task.ScheduleExecutionModeAgent, AgentProfileName: "default",
 		Platform: "mattermost", ConversationID: "channel", ReplyTargetID: "reply", TimeZone: "Asia/Seoul",
-		Kind: task.TaskScheduleKindCron, CronExpression: "0 8 * * *", NextRunAt: timePointer(time.Date(2026, 9, 8, 8, 0, 0, 0, time.UTC)),
+		Kind: task.ScheduleKindCron, CronExpression: "0 8 * * *", NextRunAt: timePointer(time.Date(2026, 9, 8, 8, 0, 0, 0, time.UTC)),
 	}
 	changed, cadenceChanged := morningBriefingConfigurationChanged(existing, desired)
 	if changed || cadenceChanged {

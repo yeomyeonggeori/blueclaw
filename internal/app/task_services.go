@@ -25,14 +25,14 @@ type taskServices struct {
 type taskRepositories struct {
 	person                       postgres.PersonRepository
 	personReferenceCanonicalizer adminapi.PersonReferenceCanonicalizer
-	taskSchedule                 task.TaskScheduleRepository
-	taskScheduleSummary          adminapi.TaskScheduleSummaryRepository
-	taskScheduleList             adminapi.TaskScheduleListRepository
-	taskScheduleCreatorRepair    adminapi.TaskScheduleCreatorRepairRepository
+	schedule                     task.ScheduleRepository
+	scheduleSummary              adminapi.ScheduleSummaryRepository
+	scheduleList                 adminapi.ScheduleListRepository
+	scheduleCreatorRepair        adminapi.ScheduleCreatorRepairRepository
 	connectorEventDiagnostic     adminapi.ConnectorEventDiagnosticRepository
 	conversationReset            adminapi.ConversationResetRepository
 	taskWaitToken                task.TaskWaitTokenRepository
-	scheduledDelivery            scheduler.TaskScheduleDeliveryRepository
+	scheduledDelivery            scheduler.ScheduleDeliveryRepository
 }
 
 func newTaskServices(runtimeConfiguration config.RuntimeConfiguration, database postgres.Database, companyProvider func() agentcontract.CompanyContext, logger *slog.Logger) taskServices {
@@ -62,15 +62,15 @@ func newTaskRepositories(database postgres.Database, services taskServices, comp
 	services.taskArtifactService.UseRepository(postgres.NewTaskArtifactRepository(database))
 	services.taskRunService.UseRepository(postgres.NewTaskRunRepository(database))
 	services.taskRunService.InterruptOrphanedRuntimeTaskRuns(task.TaskInterruptReasonRuntimeRestart)
-	taskScheduleRepository := postgres.NewTaskScheduleRepository(database)
-	task.SweepEmptyTaskScheduleTimeZone(taskScheduleRepository, companyProvider().TimeZone, logger)
+	scheduleRepository := postgres.NewScheduleRepository(database)
+	task.SweepEmptyScheduleTimeZone(scheduleRepository, companyProvider().TimeZone, logger)
 	return taskRepositories{
 		person:                       personRepository,
 		personReferenceCanonicalizer: personRepository,
-		taskSchedule:                 taskScheduleRepository,
-		taskScheduleSummary:          taskScheduleRepository,
-		taskScheduleList:             taskScheduleRepository,
-		taskScheduleCreatorRepair:    taskScheduleRepository,
+		schedule:                     scheduleRepository,
+		scheduleSummary:              scheduleRepository,
+		scheduleList:                 scheduleRepository,
+		scheduleCreatorRepair:        scheduleRepository,
 		connectorEventDiagnostic:     postgres.NewRawEventRepository(database),
 		conversationReset:            postgres.NewConversationResetRepository(database),
 		taskWaitToken:                postgres.NewTaskWaitTokenRepository(database),

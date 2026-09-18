@@ -490,12 +490,12 @@ func connectorReplyOutboxID(rawEventID string, reply connectors.OutboundReply) s
 	return strings.TrimSpace(rawEventID) + ":reply:" + strings.TrimSpace(reply.ReplyKind) + ":" + hex.EncodeToString(digest[:8])
 }
 
-func (rawEventRepository RawEventRepository) EnqueueScheduledConnectorReply(taskSchedule task.TaskSchedule, taskRunID string, reply connectors.OutboundReply) (string, error) {
-	conversationID, errorValue := NewConversationRepository(rawEventRepository.database).EnsureConversation(taskSchedule.Platform, taskSchedule.ConversationID)
+func (rawEventRepository RawEventRepository) EnqueueScheduledConnectorReply(schedule task.Schedule, taskRunID string, reply connectors.OutboundReply) (string, error) {
+	conversationID, errorValue := NewConversationRepository(rawEventRepository.database).EnsureConversation(schedule.Platform, schedule.ConversationID)
 	if errorValue != nil {
 		return "", errorValue
 	}
-	rawEventID := "schedule:" + taskSchedule.TaskScheduleID + ":task:" + taskRunID
+	rawEventID := "schedule:" + schedule.ScheduleID + ":task:" + taskRunID
 	reply.RawEventID = rawEventID
 	reply.OutboxID = rawEventID
 	if strings.TrimSpace(reply.TaskRunID) == "" {
@@ -505,8 +505,8 @@ func (rawEventRepository RawEventRepository) EnqueueScheduledConnectorReply(task
 		reply.ReplyKind = "success"
 	}
 	replyTarget := connectors.ReplyTarget{
-		ConversationID: taskSchedule.ConversationID,
-		ReplyTargetID:  taskSchedule.ReplyTargetID,
+		ConversationID: schedule.ConversationID,
+		ReplyTargetID:  schedule.ReplyTargetID,
 		DedupeKey:      rawEventID,
 	}
 	replyTargetDocument, errorValue := json.Marshal(replyTarget)
@@ -518,7 +518,7 @@ func (rawEventRepository RawEventRepository) EnqueueScheduledConnectorReply(task
 		return "", errorValue
 	}
 	now := time.Now().UTC()
-	contentHash := sha256.Sum256([]byte(taskSchedule.Prompt))
+	contentHash := sha256.Sum256([]byte(schedule.Prompt))
 	transaction, errorValue := rawEventRepository.database.SQL.BeginTx(context.Background(), nil)
 	if errorValue != nil {
 		return "", errorValue
@@ -533,13 +533,13 @@ INSERT INTO raw_event (
 ) VALUES ($1,$2,$3,$1,'scheduled_task',$4,1,$5,0,'{}',$6,$6,$7,$8,$9,$10,false,NULL)
 ON CONFLICT (raw_event_id) DO NOTHING`,
 		rawEventID,
-		taskSchedule.Platform,
+		schedule.Platform,
 		conversationID,
-		[]byte(taskSchedule.Prompt),
+		[]byte(schedule.Prompt),
 		contentHash[:],
 		now,
 		now.AddDate(0, 0, 60),
-		taskSchedule.ReplyTargetID,
+		schedule.ReplyTargetID,
 		mustJSON(connectors.VisibleContext{}),
 		hashJSON(connectors.VisibleContext{}),
 	)
@@ -552,8 +552,8 @@ INSERT INTO connector_outbox (
 ) VALUES ($1,$1,$2,$3,$4,$5)
 ON CONFLICT (outbox_id) DO NOTHING`,
 		rawEventID,
-		taskSchedule.Platform,
-		taskSchedule.ReplyTargetID,
+		schedule.Platform,
+		schedule.ReplyTargetID,
 		replyTargetDocument,
 		replyDocument,
 	)

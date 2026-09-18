@@ -17,7 +17,7 @@ import (
 )
 
 type MorningBriefingRepository interface {
-	ReconcileMorningBriefings(context.Context, []task.TaskSchedule, time.Time) error
+	ReconcileMorningBriefings(context.Context, []task.Schedule, time.Time) error
 }
 
 type MorningBriefingAccounts interface {
@@ -53,7 +53,7 @@ func (briefing *MorningBriefing) Reconcile(ctx context.Context, referenceTime ti
 	if errorValue != nil {
 		return errorValue
 	}
-	schedules := make([]task.TaskSchedule, 0, len(document.People))
+	schedules := make([]task.Schedule, 0, len(document.People))
 	for _, person := range document.People {
 		schedule, errorValue := briefing.personSchedule(ctx, person, accounts, document.Company.TimeZone, referenceTime)
 		if errorValue != nil {
@@ -65,10 +65,10 @@ func (briefing *MorningBriefing) Reconcile(ctx context.Context, referenceTime ti
 	return briefing.Repository.ReconcileMorningBriefings(ctx, schedules, referenceTime)
 }
 
-func (briefing *MorningBriefing) personSchedule(ctx context.Context, person policy.PersonPolicy, accounts []identity.PlatformAccountIdentity, timeZone string, referenceTime time.Time) (task.TaskSchedule, error) {
+func (briefing *MorningBriefing) personSchedule(ctx context.Context, person policy.PersonPolicy, accounts []identity.PlatformAccountIdentity, timeZone string, referenceTime time.Time) (task.Schedule, error) {
 	user, errorValue := briefing.readUser(ctx, person.PersonID)
 	if errorValue != nil {
-		return task.TaskSchedule{}, errorValue
+		return task.Schedule{}, errorValue
 	}
 	settings := *user.MorningBriefing
 	schedule, errorValue := newMorningBriefingSchedule(person.PersonID, settings, timeZone, referenceTime)
@@ -82,7 +82,7 @@ func (briefing *MorningBriefing) personSchedule(ctx context.Context, person poli
 	}
 	conversationID, replyTargetID, errorValue := briefing.directMessage(ctx, account)
 	if errorValue != nil {
-		return task.TaskSchedule{}, errorValue
+		return task.Schedule{}, errorValue
 	}
 	schedule.Platform = account.Platform
 	schedule.ConversationID = conversationID
@@ -146,28 +146,28 @@ func morningBriefingAccount(personID string, accounts []identity.PlatformAccount
 	return matching[0], true
 }
 
-func newMorningBriefingSchedule(personID string, settings persona.MorningBriefing, timeZone string, referenceTime time.Time) (task.TaskSchedule, error) {
+func newMorningBriefingSchedule(personID string, settings persona.MorningBriefing, timeZone string, referenceTime time.Time) (task.Schedule, error) {
 	if timeZone == "" {
-		return task.TaskSchedule{}, fmt.Errorf("company timezone is required for morning briefing")
+		return task.Schedule{}, fmt.Errorf("company timezone is required for morning briefing")
 	}
 	if _, errorValue := time.LoadLocation(timeZone); errorValue != nil {
-		return task.TaskSchedule{}, errorValue
+		return task.Schedule{}, errorValue
 	}
 	clock, errorValue := time.Parse("15:04", settings.Time)
 	if errorValue != nil {
-		return task.TaskSchedule{}, errorValue
+		return task.Schedule{}, errorValue
 	}
-	schedule := task.TaskSchedule{
-		TaskScheduleID: task.MorningBriefingScheduleID(personID), CreatorPersonID: personID,
+	schedule := task.Schedule{
+		ScheduleID: task.MorningBriefingScheduleID(personID), CreatorPersonID: personID,
 		Name: "Morning briefing", Prompt: morningBriefingPrompt,
-		ExecutionMode: task.TaskScheduleExecutionModeAgent, AgentProfileName: "default",
-		Kind: task.TaskScheduleKindCron, CronExpression: fmt.Sprintf("%d %d * * *", clock.Minute(), clock.Hour()),
+		ExecutionMode: task.ScheduleExecutionModeAgent, AgentProfileName: "default",
+		Kind: task.ScheduleKindCron, CronExpression: fmt.Sprintf("%d %d * * *", clock.Minute(), clock.Hour()),
 		TimeZone: timeZone, CreatedAt: referenceTime, UpdatedAt: referenceTime,
 	}
 	if !settings.Enabled {
 		return schedule, nil
 	}
-	return (task.TaskScheduler{}).InitializeTaskSchedule(schedule, referenceTime)
+	return (task.Scheduler{}).InitializeSchedule(schedule, referenceTime)
 }
 
 func (briefing *MorningBriefing) directMessage(ctx context.Context, account identity.PlatformAccountIdentity) (string, string, error) {
@@ -189,7 +189,7 @@ func (briefing *MorningBriefing) directMessage(ctx context.Context, account iden
 	return conversationID, replyTargetID, nil
 }
 
-func (briefing *MorningBriefing) CanRun(ctx context.Context, schedule task.TaskSchedule) (bool, error) {
+func (briefing *MorningBriefing) CanRun(ctx context.Context, schedule task.Schedule) (bool, error) {
 	if !task.IsMorningBriefing(schedule) {
 		return true, nil
 	}

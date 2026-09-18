@@ -79,36 +79,36 @@ type ScheduleMutationResult struct {
 	AgentProfileName string     `json:"agentProfileName"`
 }
 
-func BuildScheduleCreate(input ScheduleCreateInput, createContext ScheduleCreateContext) (TaskSchedule, error) {
+func BuildScheduleCreate(input ScheduleCreateInput, createContext ScheduleCreateContext) (Schedule, error) {
 	if errorValue := requireScheduleDelivery(createContext); errorValue != nil {
-		return TaskSchedule{}, errorValue
+		return Schedule{}, errorValue
 	}
 	taskInstruction := strings.TrimSpace(input.TaskInstruction)
 	if taskInstruction == "" {
-		return TaskSchedule{}, ErrScheduleTaskInstructionRequired
+		return Schedule{}, ErrScheduleTaskInstructionRequired
 	}
 	kind, errorValue := parseScheduleKind(input.Kind)
 	if errorValue != nil {
-		return TaskSchedule{}, errorValue
+		return Schedule{}, errorValue
 	}
 	timeZone, errorValue := normalizeScheduleTimeZone(input.TimeZone, createContext.CompanyTimeZone)
 	if errorValue != nil {
-		return TaskSchedule{}, errorValue
+		return Schedule{}, errorValue
 	}
 	runAt, errorValue := parseScheduleRunAt(input.RunAt)
 	if errorValue != nil {
-		return TaskSchedule{}, errorValue
+		return Schedule{}, errorValue
 	}
 	expiresAt, errorValue := parseScheduleExpiresAt(input.ExpiresAt, createContext.ReferenceTime)
 	if errorValue != nil {
-		return TaskSchedule{}, errorValue
+		return Schedule{}, errorValue
 	}
-	taskSchedule := TaskSchedule{
-		TaskScheduleID:   NewIdentifier(),
+	schedule := Schedule{
+		ScheduleID:       NewIdentifier(),
 		CreatorPersonID:  strings.TrimSpace(createContext.CreatorPersonID),
 		Name:             firstNonBlankScheduleValue(input.Description, taskInstruction),
 		Prompt:           taskInstruction,
-		ExecutionMode:    TaskScheduleExecutionModeAgent,
+		ExecutionMode:    ScheduleExecutionModeAgent,
 		AgentProfileName: firstNonBlankScheduleValue(createContext.AgentProfileName, "default"),
 		Platform:         strings.TrimSpace(createContext.Delivery.Platform),
 		ConversationID:   strings.TrimSpace(createContext.Delivery.ConversationID),
@@ -124,48 +124,48 @@ func BuildScheduleCreate(input ScheduleCreateInput, createContext ScheduleCreate
 		UpdatedAt:        createContext.ReferenceTime,
 		NextAttemptAt:    &createContext.ReferenceTime,
 	}
-	if errorValue := validateScheduleRepeatPolicy(taskSchedule, input.RepeatPolicy); errorValue != nil {
-		return TaskSchedule{}, errorValue
+	if errorValue := validateScheduleRepeatPolicy(schedule, input.RepeatPolicy); errorValue != nil {
+		return Schedule{}, errorValue
 	}
-	return taskSchedule, nil
+	return schedule, nil
 }
 
-func InitializeScheduleCreate(input ScheduleCreateInput, createContext ScheduleCreateContext) (TaskSchedule, error) {
-	taskSchedule, errorValue := BuildScheduleCreate(input, createContext)
+func InitializeScheduleCreate(input ScheduleCreateInput, createContext ScheduleCreateContext) (Schedule, error) {
+	schedule, errorValue := BuildScheduleCreate(input, createContext)
 	if errorValue != nil {
-		return TaskSchedule{}, errorValue
+		return Schedule{}, errorValue
 	}
-	return initializedScheduleWithFutureRun(taskSchedule, createContext.ReferenceTime)
+	return initializedScheduleWithFutureRun(schedule, createContext.ReferenceTime)
 }
 
-func ApplyScheduleUpdate(taskSchedule TaskSchedule, input ScheduleUpdateInput, companyTimeZone string, referenceTime time.Time) (TaskSchedule, error) {
+func ApplyScheduleUpdate(schedule Schedule, input ScheduleUpdateInput, companyTimeZone string, referenceTime time.Time) (Schedule, error) {
 	if input.Description != nil {
-		taskSchedule.Name = strings.TrimSpace(*input.Description)
+		schedule.Name = strings.TrimSpace(*input.Description)
 	}
 	if input.TaskInstruction != nil {
 		taskInstruction := strings.TrimSpace(*input.TaskInstruction)
 		if taskInstruction == "" {
-			return TaskSchedule{}, ErrScheduleTaskInstructionRequired
+			return Schedule{}, ErrScheduleTaskInstructionRequired
 		}
-		taskSchedule.Prompt = taskInstruction
+		schedule.Prompt = taskInstruction
 	}
 	if input.AgentProfileName != nil {
-		taskSchedule.AgentProfileName = strings.TrimSpace(*input.AgentProfileName)
+		schedule.AgentProfileName = strings.TrimSpace(*input.AgentProfileName)
 	}
 	if input.TimeZone != nil {
 		timeZone, errorValue := normalizeScheduleTimeZone(*input.TimeZone, companyTimeZone)
 		if errorValue != nil {
-			return TaskSchedule{}, errorValue
+			return Schedule{}, errorValue
 		}
-		taskSchedule.TimeZone = timeZone
+		schedule.TimeZone = timeZone
 	}
-	updatedTaskSchedule, errorValue := applyScheduleUpdateCadence(taskSchedule, input, referenceTime)
+	updatedSchedule, errorValue := applyScheduleUpdateCadence(schedule, input, referenceTime)
 	if errorValue != nil {
-		return TaskSchedule{}, errorValue
+		return Schedule{}, errorValue
 	}
-	updatedTaskSchedule.UpdatedAt = referenceTime
-	updatedTaskSchedule.NextAttemptAt = &referenceTime
-	return initializedScheduleWithFutureRun(updatedTaskSchedule, referenceTime)
+	updatedSchedule.UpdatedAt = referenceTime
+	updatedSchedule.NextAttemptAt = &referenceTime
+	return initializedScheduleWithFutureRun(updatedSchedule, referenceTime)
 }
 
 func ScheduleUpdateChangesNothing(input ScheduleUpdateInput) bool {
@@ -175,22 +175,22 @@ func ScheduleUpdateChangesNothing(input ScheduleUpdateInput) bool {
 		input.TimeZone == nil && input.MaxRunCount == nil && input.RepeatPolicy == nil
 }
 
-func ProjectScheduleMutation(taskSchedule TaskSchedule) ScheduleMutationResult {
+func ProjectScheduleMutation(schedule Schedule) ScheduleMutationResult {
 	return ScheduleMutationResult{
-		ScheduleID:       taskSchedule.TaskScheduleID,
-		Description:      taskSchedule.Name,
-		TaskInstruction:  taskSchedule.Prompt,
-		TimeZone:         taskSchedule.TimeZone,
-		Kind:             string(taskSchedule.Kind),
-		RunAt:            taskSchedule.RunAt,
-		IntervalSecond:   taskSchedule.IntervalSecond,
-		CronExpression:   taskSchedule.CronExpression,
-		MaxRunCount:      taskSchedule.MaxRunCount,
-		ExpiresAt:        taskSchedule.ExpiresAt,
-		NextRunAt:        taskSchedule.NextRunAt,
-		ConversationID:   taskSchedule.ConversationID,
-		ReplyTargetID:    taskSchedule.ReplyTargetID,
-		AgentProfileName: taskSchedule.AgentProfileName,
+		ScheduleID:       schedule.ScheduleID,
+		Description:      schedule.Name,
+		TaskInstruction:  schedule.Prompt,
+		TimeZone:         schedule.TimeZone,
+		Kind:             string(schedule.Kind),
+		RunAt:            schedule.RunAt,
+		IntervalSecond:   schedule.IntervalSecond,
+		CronExpression:   schedule.CronExpression,
+		MaxRunCount:      schedule.MaxRunCount,
+		ExpiresAt:        schedule.ExpiresAt,
+		NextRunAt:        schedule.NextRunAt,
+		ConversationID:   schedule.ConversationID,
+		ReplyTargetID:    schedule.ReplyTargetID,
+		AgentProfileName: schedule.AgentProfileName,
 	}
 }
 
@@ -230,7 +230,7 @@ func IsScheduleWriteInputError(errorValue error) bool {
 		ErrScheduleFiniteBoundRequired,
 		ErrScheduleNoFutureRun,
 		ErrScheduleLimitReached,
-		errorInvalidTaskSchedule,
+		errorInvalidSchedule,
 		errorInvalidCronExpression,
 		errorUnableToFindNextTaskRun,
 	} {
@@ -241,73 +241,73 @@ func IsScheduleWriteInputError(errorValue error) bool {
 	return false
 }
 
-func applyScheduleUpdateCadence(taskSchedule TaskSchedule, input ScheduleUpdateInput, referenceTime time.Time) (TaskSchedule, error) {
+func applyScheduleUpdateCadence(schedule Schedule, input ScheduleUpdateInput, referenceTime time.Time) (Schedule, error) {
 	if input.Kind != nil {
 		kind, errorValue := parseScheduleKind(*input.Kind)
 		if errorValue != nil {
-			return TaskSchedule{}, errorValue
+			return Schedule{}, errorValue
 		}
-		taskSchedule.Kind = kind
+		schedule.Kind = kind
 	}
 	if input.RunAt != nil {
 		runAt, errorValue := parseScheduleRunAt(*input.RunAt)
 		if errorValue != nil {
-			return TaskSchedule{}, errorValue
+			return Schedule{}, errorValue
 		}
-		taskSchedule.RunAt = runAt
+		schedule.RunAt = runAt
 	}
 	if input.ExpiresAt != nil {
 		expiresAt, errorValue := parseScheduleExpiresAt(*input.ExpiresAt, referenceTime)
 		if errorValue != nil {
-			return TaskSchedule{}, errorValue
+			return Schedule{}, errorValue
 		}
-		taskSchedule.ExpiresAt = expiresAt
+		schedule.ExpiresAt = expiresAt
 	}
 	if input.IntervalSecond != nil {
-		taskSchedule.IntervalSecond = *input.IntervalSecond
+		schedule.IntervalSecond = *input.IntervalSecond
 	}
 	if input.CronExpression != nil {
-		taskSchedule.CronExpression = strings.TrimSpace(*input.CronExpression)
+		schedule.CronExpression = strings.TrimSpace(*input.CronExpression)
 	}
 	if input.MaxRunCount != nil {
-		taskSchedule.MaxRunCount = *input.MaxRunCount
+		schedule.MaxRunCount = *input.MaxRunCount
 	}
-	normalizeScheduleCadenceFields(&taskSchedule)
-	if errorValue := validateScheduleRepeatPolicy(taskSchedule, scheduleRepeatPolicyOf(input)); errorValue != nil {
-		return TaskSchedule{}, errorValue
+	normalizeScheduleCadenceFields(&schedule)
+	if errorValue := validateScheduleRepeatPolicy(schedule, scheduleRepeatPolicyOf(input)); errorValue != nil {
+		return Schedule{}, errorValue
 	}
-	return taskSchedule, nil
+	return schedule, nil
 }
 
-func initializedScheduleWithFutureRun(taskSchedule TaskSchedule, referenceTime time.Time) (TaskSchedule, error) {
-	initializedTaskSchedule, errorValue := (TaskScheduler{}).InitializeTaskSchedule(taskSchedule, referenceTime)
+func initializedScheduleWithFutureRun(schedule Schedule, referenceTime time.Time) (Schedule, error) {
+	initializedSchedule, errorValue := (Scheduler{}).InitializeSchedule(schedule, referenceTime)
 	if errorValue != nil {
-		return TaskSchedule{}, errorValue
+		return Schedule{}, errorValue
 	}
-	if initializedTaskSchedule.NextRunAt == nil {
-		return TaskSchedule{}, ErrScheduleNoFutureRun
+	if initializedSchedule.NextRunAt == nil {
+		return Schedule{}, ErrScheduleNoFutureRun
 	}
-	return initializedTaskSchedule, nil
+	return initializedSchedule, nil
 }
 
-func normalizeScheduleCadenceFields(taskSchedule *TaskSchedule) {
-	switch taskSchedule.Kind {
-	case TaskScheduleKindOnce:
-		taskSchedule.IntervalSecond = 0
-		taskSchedule.CronExpression = ""
-		taskSchedule.MaxRunCount = 0
-	case TaskScheduleKindInterval:
-		taskSchedule.CronExpression = ""
-	case TaskScheduleKindCron:
-		taskSchedule.IntervalSecond = 0
+func normalizeScheduleCadenceFields(schedule *Schedule) {
+	switch schedule.Kind {
+	case ScheduleKindOnce:
+		schedule.IntervalSecond = 0
+		schedule.CronExpression = ""
+		schedule.MaxRunCount = 0
+	case ScheduleKindInterval:
+		schedule.CronExpression = ""
+	case ScheduleKindCron:
+		schedule.IntervalSecond = 0
 	}
 }
 
-func validateScheduleRepeatPolicy(taskSchedule TaskSchedule, repeatPolicy string) error {
-	if taskSchedule.Kind != TaskScheduleKindInterval && taskSchedule.Kind != TaskScheduleKindCron {
+func validateScheduleRepeatPolicy(schedule Schedule, repeatPolicy string) error {
+	if schedule.Kind != ScheduleKindInterval && schedule.Kind != ScheduleKindCron {
 		return nil
 	}
-	if taskSchedule.MaxRunCount > 0 || taskSchedule.ExpiresAt != nil {
+	if schedule.MaxRunCount > 0 || schedule.ExpiresAt != nil {
 		return nil
 	}
 	switch strings.TrimSpace(repeatPolicy) {
@@ -327,14 +327,14 @@ func scheduleRepeatPolicyOf(input ScheduleUpdateInput) string {
 	return *input.RepeatPolicy
 }
 
-func parseScheduleKind(value string) (TaskScheduleKind, error) {
+func parseScheduleKind(value string) (ScheduleKind, error) {
 	switch strings.TrimSpace(value) {
-	case string(TaskScheduleKindOnce):
-		return TaskScheduleKindOnce, nil
-	case string(TaskScheduleKindInterval):
-		return TaskScheduleKindInterval, nil
-	case string(TaskScheduleKindCron):
-		return TaskScheduleKindCron, nil
+	case string(ScheduleKindOnce):
+		return ScheduleKindOnce, nil
+	case string(ScheduleKindInterval):
+		return ScheduleKindInterval, nil
+	case string(ScheduleKindCron):
+		return ScheduleKindCron, nil
 	default:
 		return "", ErrScheduleKindInvalid
 	}

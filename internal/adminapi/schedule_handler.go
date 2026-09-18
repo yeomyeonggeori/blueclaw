@@ -12,54 +12,54 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
-type TaskScheduleSummaryRepository interface {
-	SummarizeActiveTaskSchedules(time.Time) (task.TaskScheduleSummary, error)
+type ScheduleSummaryRepository interface {
+	SummarizeActiveSchedules(time.Time) (task.ScheduleSummary, error)
 }
 
-type TaskScheduleListRepository interface {
-	ListTaskSchedules(task.TaskScheduleListRequest) (task.TaskScheduleListResult, error)
-	UpsertTaskSchedule(task.TaskSchedule) error
-	UpdateTaskSchedule(task.TaskScheduleUpdateRequest) (task.TaskScheduleUpdateResult, error)
-	DeleteTaskSchedule(task.TaskScheduleDeleteRequest) (task.TaskScheduleDeleteResult, error)
-	CancelTaskSchedules(task.TaskScheduleCancelRequest) (task.TaskScheduleCancelResult, error)
+type ScheduleListRepository interface {
+	ListSchedules(task.ScheduleListRequest) (task.ScheduleListResult, error)
+	UpsertSchedule(task.Schedule) error
+	UpdateSchedule(task.ScheduleUpdateRequest) (task.ScheduleUpdateResult, error)
+	DeleteSchedule(task.ScheduleDeleteRequest) (task.ScheduleDeleteResult, error)
+	CancelSchedules(task.ScheduleCancelRequest) (task.ScheduleCancelResult, error)
 }
 
-type TaskScheduleCreatorRepairRepository interface {
-	RepairTaskScheduleCreatorPersonID(task.TaskScheduleCreatorRepairRequest) (task.TaskScheduleCreatorRepairResult, error)
+type ScheduleCreatorRepairRepository interface {
+	RepairScheduleCreatorPersonID(task.ScheduleCreatorRepairRequest) (task.ScheduleCreatorRepairResult, error)
 }
 
-type TaskScheduleHandler struct {
-	SummaryRepository TaskScheduleSummaryRepository
-	ListRepository    TaskScheduleListRepository
-	RepairRepository  TaskScheduleCreatorRepairRepository
+type ScheduleHandler struct {
+	SummaryRepository ScheduleSummaryRepository
+	ListRepository    ScheduleListRepository
+	RepairRepository  ScheduleCreatorRepairRepository
 	CompanyProvider   func() agentcontract.CompanyContext
 	ReaderPersonID    func(*http.Request) string
 }
 
-func (taskScheduleHandler TaskScheduleHandler) companyTimeZone() string {
-	if taskScheduleHandler.CompanyProvider == nil {
+func (scheduleHandler ScheduleHandler) companyTimeZone() string {
+	if scheduleHandler.CompanyProvider == nil {
 		return ""
 	}
-	return taskScheduleHandler.CompanyProvider().TimeZone
+	return scheduleHandler.CompanyProvider().TimeZone
 }
 
-type taskScheduleCreatorRepairRequest struct {
+type scheduleCreatorRepairRequest struct {
 	FromCreatorPersonID string `json:"fromCreatorPersonID"`
 	ToCreatorPersonID   string `json:"toCreatorPersonID"`
 }
 
-type taskScheduleCancelRequest struct {
-	TaskScheduleID  string `json:"taskScheduleID"`
+type scheduleCancelRequest struct {
+	ScheduleID      string `json:"taskScheduleID"`
 	CreatorPersonID string `json:"creatorPersonID"`
 }
 
-type taskScheduleDeleteRequest struct {
-	TaskScheduleID  string `json:"taskScheduleID"`
+type scheduleDeleteRequest struct {
+	ScheduleID      string `json:"taskScheduleID"`
 	CreatorPersonID string `json:"creatorPersonID"`
 }
 
-type taskScheduleUpdateRequest struct {
-	TaskScheduleID  string  `json:"taskScheduleID"`
+type scheduleUpdateRequest struct {
+	ScheduleID      string  `json:"taskScheduleID"`
 	CreatorPersonID string  `json:"creatorPersonID"`
 	Name            *string `json:"name"`
 	Kind            *string `json:"kind"`
@@ -72,17 +72,17 @@ type taskScheduleUpdateRequest struct {
 	RepeatPolicy    *string `json:"repeatPolicy"`
 }
 
-type taskScheduleToolListRequest struct {
+type scheduleToolListRequest struct {
 	Status string `json:"status"`
 	Limit  int    `json:"limit"`
 }
 
-func (taskScheduleHandler TaskScheduleHandler) HandleSummary(responseWriter http.ResponseWriter, request *http.Request) {
-	if taskScheduleHandler.SummaryRepository == nil {
+func (scheduleHandler ScheduleHandler) HandleSummary(responseWriter http.ResponseWriter, request *http.Request) {
+	if scheduleHandler.SummaryRepository == nil {
 		http.Error(responseWriter, "task schedule summary repository is not configured", http.StatusServiceUnavailable)
 		return
 	}
-	summary, errorValue := taskScheduleHandler.SummaryRepository.SummarizeActiveTaskSchedules(time.Now().UTC())
+	summary, errorValue := scheduleHandler.SummaryRepository.SummarizeActiveSchedules(time.Now().UTC())
 	if errorValue != nil {
 		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
 		return
@@ -90,19 +90,19 @@ func (taskScheduleHandler TaskScheduleHandler) HandleSummary(responseWriter http
 	writeJSON(responseWriter, http.StatusOK, summary)
 }
 
-func (taskScheduleHandler TaskScheduleHandler) HandleList(responseWriter http.ResponseWriter, request *http.Request) {
-	if taskScheduleHandler.ListRepository == nil {
+func (scheduleHandler ScheduleHandler) HandleList(responseWriter http.ResponseWriter, request *http.Request) {
+	if scheduleHandler.ListRepository == nil {
 		http.Error(responseWriter, "task schedule list repository is not configured", http.StatusServiceUnavailable)
 		return
 	}
-	result, errorValue := taskScheduleHandler.ListRepository.ListTaskSchedules(taskScheduleListRequestFromHTTP(request))
+	result, errorValue := scheduleHandler.ListRepository.ListSchedules(scheduleListRequestFromHTTP(request))
 	if errorValue != nil {
 		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
 		return
 	}
 	writeJSON(responseWriter, http.StatusOK, map[string]any{
-		"schedules":  taskScheduleListItems(result.TaskSchedules),
-		"count":      len(result.TaskSchedules),
+		"schedules":  scheduleListItems(result.Schedules),
+		"count":      len(result.Schedules),
 		"totalCount": result.TotalCount,
 		"page":       result.Page,
 		"pageSize":   result.PageSize,
@@ -110,17 +110,17 @@ func (taskScheduleHandler TaskScheduleHandler) HandleList(responseWriter http.Re
 	})
 }
 
-func (taskScheduleHandler TaskScheduleHandler) HandleToolList(responseWriter http.ResponseWriter, request *http.Request) {
-	creatorPersonID := taskScheduleHandler.signedPrincipal(request)
+func (scheduleHandler ScheduleHandler) HandleToolList(responseWriter http.ResponseWriter, request *http.Request) {
+	creatorPersonID := scheduleHandler.signedPrincipal(request)
 	if creatorPersonID == "" {
 		http.Error(responseWriter, "schedule list authorization required", http.StatusForbidden)
 		return
 	}
-	if taskScheduleHandler.ListRepository == nil {
+	if scheduleHandler.ListRepository == nil {
 		http.Error(responseWriter, "task schedule list repository is not configured", http.StatusServiceUnavailable)
 		return
 	}
-	var input taskScheduleToolListRequest
+	var input scheduleToolListRequest
 	decoder := json.NewDecoder(request.Body)
 	decoder.DisallowUnknownFields()
 	if errorValue := decoder.Decode(&input); errorValue != nil {
@@ -132,34 +132,34 @@ func (taskScheduleHandler TaskScheduleHandler) HandleToolList(responseWriter htt
 		return
 	}
 	referenceTime := time.Now().UTC()
-	result, errorValue := taskScheduleHandler.ListRepository.ListTaskSchedules(task.ScheduleListQuery(creatorPersonID, referenceTime))
+	result, errorValue := scheduleHandler.ListRepository.ListSchedules(task.ScheduleListQuery(creatorPersonID, referenceTime))
 	if errorValue != nil {
 		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(responseWriter, http.StatusOK, task.ProjectScheduleList(result.TaskSchedules, task.ScheduleListInput{
+	writeJSON(responseWriter, http.StatusOK, task.ProjectScheduleList(result.Schedules, task.ScheduleListInput{
 		Status: input.Status,
 		Limit:  input.Limit,
 	}, referenceTime))
 }
 
-func (taskScheduleHandler TaskScheduleHandler) HandleCancel(responseWriter http.ResponseWriter, request *http.Request) {
-	if taskScheduleHandler.ListRepository == nil {
+func (scheduleHandler ScheduleHandler) HandleCancel(responseWriter http.ResponseWriter, request *http.Request) {
+	if scheduleHandler.ListRepository == nil {
 		http.Error(responseWriter, "task schedule repository is not configured", http.StatusServiceUnavailable)
 		return
 	}
-	var cancelRequest taskScheduleCancelRequest
+	var cancelRequest scheduleCancelRequest
 	if errorValue := json.NewDecoder(request.Body).Decode(&cancelRequest); errorValue != nil {
 		http.Error(responseWriter, errorValue.Error(), http.StatusBadRequest)
 		return
 	}
-	taskScheduleID := strings.TrimSpace(cancelRequest.TaskScheduleID)
+	scheduleID := strings.TrimSpace(cancelRequest.ScheduleID)
 	creatorPersonID := strings.TrimSpace(cancelRequest.CreatorPersonID)
-	if taskScheduleID == "" || creatorPersonID == "" {
+	if scheduleID == "" || creatorPersonID == "" {
 		http.Error(responseWriter, "taskScheduleID and creatorPersonID are required", http.StatusBadRequest)
 		return
 	}
-	taskSchedule, found, errorValue := taskScheduleHandler.findTaskSchedule(taskScheduleID)
+	schedule, found, errorValue := scheduleHandler.findSchedule(scheduleID)
 	if errorValue != nil {
 		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
 		return
@@ -168,14 +168,14 @@ func (taskScheduleHandler TaskScheduleHandler) HandleCancel(responseWriter http.
 		http.Error(responseWriter, "task schedule not found", http.StatusNotFound)
 		return
 	}
-	if taskSchedule.CreatorPersonID != creatorPersonID {
+	if schedule.CreatorPersonID != creatorPersonID {
 		http.Error(responseWriter, "task schedule creator mismatch", http.StatusForbidden)
 		return
 	}
-	result, errorValue := taskScheduleHandler.ListRepository.CancelTaskSchedules(task.TaskScheduleCancelRequest{
-		Scope:             task.TaskScheduleCancelScopeScheduleIDs,
+	result, errorValue := scheduleHandler.ListRepository.CancelSchedules(task.ScheduleCancelRequest{
+		Scope:             task.ScheduleCancelScopeScheduleIDs,
 		RequesterPersonID: creatorPersonID,
-		TaskScheduleIDs:   []string{taskScheduleID},
+		ScheduleIDs:       []string{scheduleID},
 		CancelledAt:       time.Now().UTC(),
 	})
 	if errorValue != nil {
@@ -185,23 +185,23 @@ func (taskScheduleHandler TaskScheduleHandler) HandleCancel(responseWriter http.
 	writeJSON(responseWriter, http.StatusOK, result)
 }
 
-func (taskScheduleHandler TaskScheduleHandler) HandleDelete(responseWriter http.ResponseWriter, request *http.Request) {
-	if taskScheduleHandler.ListRepository == nil {
+func (scheduleHandler ScheduleHandler) HandleDelete(responseWriter http.ResponseWriter, request *http.Request) {
+	if scheduleHandler.ListRepository == nil {
 		http.Error(responseWriter, "task schedule repository is not configured", http.StatusServiceUnavailable)
 		return
 	}
-	var deleteRequest taskScheduleDeleteRequest
+	var deleteRequest scheduleDeleteRequest
 	if errorValue := json.NewDecoder(request.Body).Decode(&deleteRequest); errorValue != nil {
 		http.Error(responseWriter, errorValue.Error(), http.StatusBadRequest)
 		return
 	}
-	taskScheduleID := strings.TrimSpace(deleteRequest.TaskScheduleID)
+	scheduleID := strings.TrimSpace(deleteRequest.ScheduleID)
 	creatorPersonID := strings.TrimSpace(deleteRequest.CreatorPersonID)
-	if taskScheduleID == "" || creatorPersonID == "" {
+	if scheduleID == "" || creatorPersonID == "" {
 		http.Error(responseWriter, "taskScheduleID and creatorPersonID are required", http.StatusBadRequest)
 		return
 	}
-	taskSchedule, found, errorValue := taskScheduleHandler.findTaskSchedule(taskScheduleID)
+	schedule, found, errorValue := scheduleHandler.findSchedule(scheduleID)
 	if errorValue != nil {
 		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
 		return
@@ -210,12 +210,12 @@ func (taskScheduleHandler TaskScheduleHandler) HandleDelete(responseWriter http.
 		http.Error(responseWriter, "task schedule not found", http.StatusNotFound)
 		return
 	}
-	if taskSchedule.CreatorPersonID != creatorPersonID {
+	if schedule.CreatorPersonID != creatorPersonID {
 		http.Error(responseWriter, "task schedule creator mismatch", http.StatusForbidden)
 		return
 	}
-	result, errorValue := taskScheduleHandler.ListRepository.DeleteTaskSchedule(task.TaskScheduleDeleteRequest{
-		TaskScheduleID:    taskScheduleID,
+	result, errorValue := scheduleHandler.ListRepository.DeleteSchedule(task.ScheduleDeleteRequest{
+		ScheduleID:        scheduleID,
 		RequesterPersonID: creatorPersonID,
 	})
 	if errorValue != nil {
@@ -229,23 +229,23 @@ func (taskScheduleHandler TaskScheduleHandler) HandleDelete(responseWriter http.
 	writeJSON(responseWriter, http.StatusOK, result)
 }
 
-func (taskScheduleHandler TaskScheduleHandler) HandleUpdate(responseWriter http.ResponseWriter, request *http.Request) {
-	if taskScheduleHandler.ListRepository == nil {
+func (scheduleHandler ScheduleHandler) HandleUpdate(responseWriter http.ResponseWriter, request *http.Request) {
+	if scheduleHandler.ListRepository == nil {
 		http.Error(responseWriter, "task schedule repository is not configured", http.StatusServiceUnavailable)
 		return
 	}
-	var updateRequest taskScheduleUpdateRequest
+	var updateRequest scheduleUpdateRequest
 	if errorValue := json.NewDecoder(request.Body).Decode(&updateRequest); errorValue != nil {
 		http.Error(responseWriter, errorValue.Error(), http.StatusBadRequest)
 		return
 	}
-	taskScheduleID := strings.TrimSpace(updateRequest.TaskScheduleID)
+	scheduleID := strings.TrimSpace(updateRequest.ScheduleID)
 	creatorPersonID := strings.TrimSpace(updateRequest.CreatorPersonID)
-	if taskScheduleID == "" || creatorPersonID == "" {
+	if scheduleID == "" || creatorPersonID == "" {
 		http.Error(responseWriter, "taskScheduleID and creatorPersonID are required", http.StatusBadRequest)
 		return
 	}
-	taskSchedule, found, errorValue := taskScheduleHandler.findTaskSchedule(taskScheduleID)
+	schedule, found, errorValue := scheduleHandler.findSchedule(scheduleID)
 	if errorValue != nil {
 		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
 		return
@@ -254,15 +254,15 @@ func (taskScheduleHandler TaskScheduleHandler) HandleUpdate(responseWriter http.
 		http.Error(responseWriter, "task schedule not found", http.StatusNotFound)
 		return
 	}
-	if taskSchedule.CreatorPersonID != creatorPersonID {
+	if schedule.CreatorPersonID != creatorPersonID {
 		http.Error(responseWriter, "task schedule creator mismatch", http.StatusForbidden)
 		return
 	}
-	result, errorValue := taskScheduleHandler.ListRepository.UpdateTaskSchedule(task.TaskScheduleUpdateRequest{
-		TaskScheduleID:    taskScheduleID,
+	result, errorValue := scheduleHandler.ListRepository.UpdateSchedule(task.ScheduleUpdateRequest{
+		ScheduleID:        scheduleID,
 		RequesterPersonID: creatorPersonID,
-		UpdateTaskSchedule: func(existingTaskSchedule task.TaskSchedule) (task.TaskSchedule, error) {
-			return applyTaskScheduleUpdateRequest(existingTaskSchedule, updateRequest, taskScheduleHandler.companyTimeZone())
+		UpdateSchedule: func(existingSchedule task.Schedule) (task.Schedule, error) {
+			return applyScheduleUpdateRequest(existingSchedule, updateRequest, scheduleHandler.companyTimeZone())
 		},
 	})
 	if errorValue != nil {
@@ -276,12 +276,12 @@ func (taskScheduleHandler TaskScheduleHandler) HandleUpdate(responseWriter http.
 	writeJSON(responseWriter, http.StatusOK, result)
 }
 
-func (taskScheduleHandler TaskScheduleHandler) HandleRepairCreator(responseWriter http.ResponseWriter, request *http.Request) {
-	if taskScheduleHandler.RepairRepository == nil {
+func (scheduleHandler ScheduleHandler) HandleRepairCreator(responseWriter http.ResponseWriter, request *http.Request) {
+	if scheduleHandler.RepairRepository == nil {
 		http.Error(responseWriter, "task schedule repair repository is not configured", http.StatusServiceUnavailable)
 		return
 	}
-	var repairRequest taskScheduleCreatorRepairRequest
+	var repairRequest scheduleCreatorRepairRequest
 	if errorValue := json.NewDecoder(request.Body).Decode(&repairRequest); errorValue != nil {
 		http.Error(responseWriter, errorValue.Error(), http.StatusBadRequest)
 		return
@@ -293,10 +293,10 @@ func (taskScheduleHandler TaskScheduleHandler) HandleRepairCreator(responseWrite
 		return
 	}
 	if fromCreatorPersonID == toCreatorPersonID {
-		writeJSON(responseWriter, http.StatusOK, task.TaskScheduleCreatorRepairResult{})
+		writeJSON(responseWriter, http.StatusOK, task.ScheduleCreatorRepairResult{})
 		return
 	}
-	result, errorValue := taskScheduleHandler.RepairRepository.RepairTaskScheduleCreatorPersonID(task.TaskScheduleCreatorRepairRequest{
+	result, errorValue := scheduleHandler.RepairRepository.RepairScheduleCreatorPersonID(task.ScheduleCreatorRepairRequest{
 		FromCreatorPersonID: fromCreatorPersonID,
 		ToCreatorPersonID:   toCreatorPersonID,
 	})
@@ -307,8 +307,8 @@ func (taskScheduleHandler TaskScheduleHandler) HandleRepairCreator(responseWrite
 	writeJSON(responseWriter, http.StatusOK, result)
 }
 
-type taskScheduleListItem struct {
-	TaskScheduleID    string     `json:"taskScheduleID"`
+type scheduleListItem struct {
+	ScheduleID        string     `json:"taskScheduleID"`
 	CreatorPersonID   string     `json:"creatorPersonID"`
 	Name              string     `json:"name,omitempty"`
 	ExecutionMode     string     `json:"executionMode"`
@@ -329,9 +329,9 @@ type taskScheduleListItem struct {
 	PromptPreview     string     `json:"promptPreview"`
 }
 
-func taskScheduleListRequestFromHTTP(request *http.Request) task.TaskScheduleListRequest {
+func scheduleListRequestFromHTTP(request *http.Request) task.ScheduleListRequest {
 	queryValues := request.URL.Query()
-	return task.TaskScheduleListRequest{
+	return task.ScheduleListRequest{
 		ConversationID:  strings.TrimSpace(queryValues.Get("deliveryConversationID")),
 		CreatorPersonID: strings.TrimSpace(queryValues.Get("creatorPersonID")),
 		UnboundedOnly:   parseBoolQuery(queryValues.Get("unboundedOnly")),
@@ -342,32 +342,32 @@ func taskScheduleListRequestFromHTTP(request *http.Request) task.TaskScheduleLis
 	}
 }
 
-func (taskScheduleHandler TaskScheduleHandler) findTaskSchedule(taskScheduleID string) (task.TaskSchedule, bool, error) {
+func (scheduleHandler ScheduleHandler) findSchedule(scheduleID string) (task.Schedule, bool, error) {
 	page := 1
 	for {
-		result, errorValue := taskScheduleHandler.ListRepository.ListTaskSchedules(task.TaskScheduleListRequest{
+		result, errorValue := scheduleHandler.ListRepository.ListSchedules(task.ScheduleListRequest{
 			IncludeExpired: true,
 			Page:           page,
 			PageSize:       200,
 			ReferenceTime:  time.Now().UTC(),
 		})
 		if errorValue != nil {
-			return task.TaskSchedule{}, false, errorValue
+			return task.Schedule{}, false, errorValue
 		}
-		for _, taskSchedule := range result.TaskSchedules {
-			if taskSchedule.TaskScheduleID == taskScheduleID {
-				return taskSchedule, true, nil
+		for _, schedule := range result.Schedules {
+			if schedule.ScheduleID == scheduleID {
+				return schedule, true, nil
 			}
 		}
-		if len(result.TaskSchedules) == 0 || page*result.PageSize >= result.TotalCount {
-			return task.TaskSchedule{}, false, nil
+		if len(result.Schedules) == 0 || page*result.PageSize >= result.TotalCount {
+			return task.Schedule{}, false, nil
 		}
 		page++
 	}
 }
 
-func applyTaskScheduleUpdateRequest(taskSchedule task.TaskSchedule, request taskScheduleUpdateRequest, companyTimeZone string) (task.TaskSchedule, error) {
-	return task.ApplyScheduleUpdate(taskSchedule, task.ScheduleUpdateInput{
+func applyScheduleUpdateRequest(schedule task.Schedule, request scheduleUpdateRequest, companyTimeZone string) (task.Schedule, error) {
+	return task.ApplyScheduleUpdate(schedule, task.ScheduleUpdateInput{
 		Description:    request.Name,
 		Kind:           request.Kind,
 		RunAt:          request.RunAt,
@@ -380,29 +380,29 @@ func applyTaskScheduleUpdateRequest(taskSchedule task.TaskSchedule, request task
 	}, companyTimeZone, time.Now().UTC())
 }
 
-func taskScheduleListItems(taskSchedules []task.TaskSchedule) []taskScheduleListItem {
-	items := []taskScheduleListItem{}
-	for _, taskSchedule := range taskSchedules {
-		items = append(items, taskScheduleListItem{
-			TaskScheduleID:    taskSchedule.TaskScheduleID,
-			CreatorPersonID:   taskSchedule.CreatorPersonID,
-			Name:              taskSchedule.Name,
-			ExecutionMode:     string(taskSchedule.ExecutionMode),
-			Kind:              string(taskSchedule.Kind),
-			IntervalSecond:    taskSchedule.IntervalSecond,
-			CronExpression:    taskSchedule.CronExpression,
-			MaxRunCount:       taskSchedule.MaxRunCount,
-			CompletedRunCount: taskSchedule.CompletedRunCount,
-			CreatedAt:         taskSchedule.CreatedAt,
-			UpdatedAt:         taskSchedule.UpdatedAt,
-			NextRunAt:         taskSchedule.NextRunAt,
-			LastRunAt:         taskSchedule.LastRunAt,
-			ExpiresAt:         taskSchedule.ExpiresAt,
-			LastTaskRunID:     taskSchedule.LastTaskRunID,
-			FailureCount:      taskSchedule.FailureCount,
-			DeliveryChannelID: taskSchedule.ConversationID,
-			ReplyTargetID:     taskSchedule.ReplyTargetID,
-			PromptPreview:     compactPromptPreview(taskSchedule.Prompt, 160),
+func scheduleListItems(schedules []task.Schedule) []scheduleListItem {
+	items := []scheduleListItem{}
+	for _, schedule := range schedules {
+		items = append(items, scheduleListItem{
+			ScheduleID:        schedule.ScheduleID,
+			CreatorPersonID:   schedule.CreatorPersonID,
+			Name:              schedule.Name,
+			ExecutionMode:     string(schedule.ExecutionMode),
+			Kind:              string(schedule.Kind),
+			IntervalSecond:    schedule.IntervalSecond,
+			CronExpression:    schedule.CronExpression,
+			MaxRunCount:       schedule.MaxRunCount,
+			CompletedRunCount: schedule.CompletedRunCount,
+			CreatedAt:         schedule.CreatedAt,
+			UpdatedAt:         schedule.UpdatedAt,
+			NextRunAt:         schedule.NextRunAt,
+			LastRunAt:         schedule.LastRunAt,
+			ExpiresAt:         schedule.ExpiresAt,
+			LastTaskRunID:     schedule.LastTaskRunID,
+			FailureCount:      schedule.FailureCount,
+			DeliveryChannelID: schedule.ConversationID,
+			ReplyTargetID:     schedule.ReplyTargetID,
+			PromptPreview:     compactPromptPreview(schedule.Prompt, 160),
 		})
 	}
 	return items

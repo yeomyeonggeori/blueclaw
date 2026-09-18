@@ -1593,10 +1593,10 @@ func failureEventCount(events []task.TaskEvent) int {
 	return count
 }
 
-func activeScheduleCount(taskSchedules []task.TaskSchedule) int {
+func activeScheduleCount(schedules []task.Schedule) int {
 	count := 0
-	for _, taskSchedule := range taskSchedules {
-		if taskSchedule.NextRunAt != nil {
+	for _, schedule := range schedules {
+		if schedule.NextRunAt != nil {
 			count++
 		}
 	}

@@ -213,7 +213,7 @@ func TestLocalToolDescriptorsAreComplete(t *testing.T) {
 
 func TestLocalToolProviderPreservesScheduleContracts(t *testing.T) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(&memoryTaskScheduleRepository{})
+	toolCatalogBuilder.UseScheduleRepository(&memoryScheduleRepository{})
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_list", "schedule_create", "schedule_update", "schedule_cancel"})
 	toolSet := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",

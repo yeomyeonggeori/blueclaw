@@ -95,7 +95,7 @@ func TestMorningBriefingReconcileReadsUsersAndRemovesMissingRosterEntries(t *tes
 	if errorValue := briefing.Reconcile(context.Background(), time.Date(2026, 9, 7, 0, 0, 0, 0, time.UTC)); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if len(repository.schedules) != 2 || repository.schedules[0].TaskScheduleID != task.MorningBriefingScheduleID("person-1") {
+	if len(repository.schedules) != 2 || repository.schedules[0].ScheduleID != task.MorningBriefingScheduleID("person-1") {
 		t.Fatalf("expected one schedule per roster person, got %+v", repository.schedules)
 	}
 	if repository.schedules[0].ConversationID != "conversation-1" || repository.schedules[0].ReplyTargetID != "reply-1" {
@@ -201,9 +201,9 @@ func writePersonaUser(t *testing.T, rootPath string, personID string, document [
 	}
 }
 
-type recordingMorningBriefingRepository struct{ schedules []task.TaskSchedule }
+type recordingMorningBriefingRepository struct{ schedules []task.Schedule }
 
-func (repository *recordingMorningBriefingRepository) ReconcileMorningBriefings(_ context.Context, schedules []task.TaskSchedule, _ time.Time) error {
+func (repository *recordingMorningBriefingRepository) ReconcileMorningBriefings(_ context.Context, schedules []task.Schedule, _ time.Time) error {
 	repository.schedules = schedules
 	return nil
 }

@@ -223,9 +223,9 @@ type TerminalConfiguration struct {
 }
 
 type SchedulerConfiguration struct {
-	RetentionCheckIntervalMinute   int `json:"retentionCheckIntervalMinute"`
-	TaskSchedulePollIntervalSecond int `json:"taskSchedulePollIntervalSecond"`
-	TaskRetentionDays              int `json:"taskRetentionDays"`
+	RetentionCheckIntervalMinute int `json:"retentionCheckIntervalMinute"`
+	SchedulePollIntervalSecond   int `json:"taskSchedulePollIntervalSecond"`
+	TaskRetentionDays            int `json:"taskRetentionDays"`
 }
 
 func LoadRuntimeConfiguration(path string) (RuntimeConfiguration, error) {

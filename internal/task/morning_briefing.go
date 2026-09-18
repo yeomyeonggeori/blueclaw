@@ -10,6 +10,6 @@ func MorningBriefingScheduleID(personID string) string {
 	return fmt.Sprintf("%x", digest)
 }
 
-func IsMorningBriefing(schedule TaskSchedule) bool {
-	return schedule.CreatorPersonID != "" && schedule.TaskScheduleID == MorningBriefingScheduleID(schedule.CreatorPersonID)
+func IsMorningBriefing(schedule Schedule) bool {
+	return schedule.CreatorPersonID != "" && schedule.ScheduleID == MorningBriefingScheduleID(schedule.CreatorPersonID)
 }

@@ -215,8 +215,8 @@ func TestLoadRuntimeConfigurationIncludesGuestAndBridge(t *testing.T) {
 	if runtimeConfiguration.Logging.RetentionDays != 7 {
 		t.Fatalf("expected log retention to match, got %d", runtimeConfiguration.Logging.RetentionDays)
 	}
-	if runtimeConfiguration.Scheduler.TaskSchedulePollIntervalSecond != 30 {
-		t.Fatalf("expected task schedule poll interval to match, got %d", runtimeConfiguration.Scheduler.TaskSchedulePollIntervalSecond)
+	if runtimeConfiguration.Scheduler.SchedulePollIntervalSecond != 30 {
+		t.Fatalf("expected task schedule poll interval to match, got %d", runtimeConfiguration.Scheduler.SchedulePollIntervalSecond)
 	}
 }
 

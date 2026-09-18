@@ -8,12 +8,12 @@ import (
 )
 
 var (
-	errorInvalidTaskSchedule     = errors.New("invalid task schedule")
+	errorInvalidSchedule         = errors.New("invalid task schedule")
 	errorInvalidCronExpression   = errors.New("invalid cron expression")
 	errorUnableToFindNextTaskRun = errors.New("unable to find next task run")
 )
 
-type TaskScheduler struct{}
+type Scheduler struct{}
 
 type cronExpressionMatcher struct {
 	allowsAnyValue bool
@@ -28,120 +28,120 @@ type parsedCronExpression struct {
 	dayOfWeek  cronExpressionMatcher
 }
 
-func (taskScheduler TaskScheduler) ScheduleTask(taskRun TaskRun) TaskRun {
+func (scheduler Scheduler) ScheduleTask(taskRun TaskRun) TaskRun {
 	taskRun.Status = TaskStatusPlanned
 	return taskRun
 }
 
-func (taskScheduler TaskScheduler) InitializeTaskSchedule(taskSchedule TaskSchedule, referenceTime time.Time) (TaskSchedule, error) {
-	if taskScheduleReachedRunLimit(taskSchedule) {
-		taskSchedule.NextRunAt = nil
-		return taskSchedule, nil
+func (scheduler Scheduler) InitializeSchedule(schedule Schedule, referenceTime time.Time) (Schedule, error) {
+	if scheduleReachedRunLimit(schedule) {
+		schedule.NextRunAt = nil
+		return schedule, nil
 	}
-	if taskScheduleExpired(taskSchedule, referenceTime) {
-		taskSchedule.NextRunAt = nil
-		return taskSchedule, nil
+	if scheduleExpired(schedule, referenceTime) {
+		schedule.NextRunAt = nil
+		return schedule, nil
 	}
 
-	nextRunAt, isActive, errorValue := taskScheduler.calculateNextRunAt(taskSchedule, referenceTime)
+	nextRunAt, isActive, errorValue := scheduler.calculateNextRunAt(schedule, referenceTime)
 	if errorValue != nil {
-		return TaskSchedule{}, errorValue
+		return Schedule{}, errorValue
 	}
 	if !isActive {
-		taskSchedule.NextRunAt = nil
-		return taskSchedule, nil
+		schedule.NextRunAt = nil
+		return schedule, nil
 	}
 
-	taskSchedule.NextRunAt = &nextRunAt
-	return taskSchedule, nil
+	schedule.NextRunAt = &nextRunAt
+	return schedule, nil
 }
 
-func (taskScheduler TaskScheduler) AdvanceTaskSchedule(taskSchedule TaskSchedule, executedAt time.Time) (TaskSchedule, error) {
-	taskSchedule.LastRunAt = &executedAt
-	taskSchedule.CompletedRunCount++
+func (scheduler Scheduler) AdvanceSchedule(schedule Schedule, executedAt time.Time) (Schedule, error) {
+	schedule.LastRunAt = &executedAt
+	schedule.CompletedRunCount++
 
-	if taskScheduleReachedRunLimit(taskSchedule) {
-		taskSchedule.NextRunAt = nil
-		return taskSchedule, nil
+	if scheduleReachedRunLimit(schedule) {
+		schedule.NextRunAt = nil
+		return schedule, nil
 	}
-	if taskScheduleExpired(taskSchedule, executedAt) {
-		taskSchedule.NextRunAt = nil
-		return taskSchedule, nil
+	if scheduleExpired(schedule, executedAt) {
+		schedule.NextRunAt = nil
+		return schedule, nil
 	}
 
-	nextRunAt, isActive, errorValue := taskScheduler.calculateNextRunAt(taskSchedule, executedAt)
+	nextRunAt, isActive, errorValue := scheduler.calculateNextRunAt(schedule, executedAt)
 	if errorValue != nil {
-		return TaskSchedule{}, errorValue
+		return Schedule{}, errorValue
 	}
 	if !isActive {
-		taskSchedule.NextRunAt = nil
-		return taskSchedule, nil
+		schedule.NextRunAt = nil
+		return schedule, nil
 	}
 
-	taskSchedule.NextRunAt = &nextRunAt
-	return taskSchedule, nil
+	schedule.NextRunAt = &nextRunAt
+	return schedule, nil
 }
 
-func taskScheduleReachedRunLimit(taskSchedule TaskSchedule) bool {
-	return taskSchedule.MaxRunCount > 0 && taskSchedule.CompletedRunCount >= taskSchedule.MaxRunCount
+func scheduleReachedRunLimit(schedule Schedule) bool {
+	return schedule.MaxRunCount > 0 && schedule.CompletedRunCount >= schedule.MaxRunCount
 }
 
-func taskScheduleExpired(taskSchedule TaskSchedule, referenceTime time.Time) bool {
-	return taskSchedule.ExpiresAt != nil && !taskSchedule.ExpiresAt.IsZero() && !taskSchedule.ExpiresAt.After(referenceTime)
+func scheduleExpired(schedule Schedule, referenceTime time.Time) bool {
+	return schedule.ExpiresAt != nil && !schedule.ExpiresAt.IsZero() && !schedule.ExpiresAt.After(referenceTime)
 }
 
-func (taskScheduler TaskScheduler) IsTaskScheduleDue(taskSchedule TaskSchedule, referenceTime time.Time) bool {
-	if taskScheduleExpired(taskSchedule, referenceTime) {
+func (scheduler Scheduler) IsScheduleDue(schedule Schedule, referenceTime time.Time) bool {
+	if scheduleExpired(schedule, referenceTime) {
 		return false
 	}
-	if taskSchedule.NextRunAt == nil {
+	if schedule.NextRunAt == nil {
 		return false
 	}
 
-	return !taskSchedule.NextRunAt.After(referenceTime)
+	return !schedule.NextRunAt.After(referenceTime)
 }
 
-func (taskScheduler TaskScheduler) calculateNextRunAt(taskSchedule TaskSchedule, referenceTime time.Time) (time.Time, bool, error) {
-	switch taskSchedule.Kind {
-	case TaskScheduleKindOnce:
-		return taskScheduler.calculateOneTimeNextRunAt(taskSchedule, referenceTime)
-	case TaskScheduleKindInterval:
-		return taskScheduler.calculateIntervalNextRunAt(taskSchedule, referenceTime)
-	case TaskScheduleKindCron:
-		return taskScheduler.calculateCronNextRunAt(taskSchedule, referenceTime)
+func (scheduler Scheduler) calculateNextRunAt(schedule Schedule, referenceTime time.Time) (time.Time, bool, error) {
+	switch schedule.Kind {
+	case ScheduleKindOnce:
+		return scheduler.calculateOneTimeNextRunAt(schedule, referenceTime)
+	case ScheduleKindInterval:
+		return scheduler.calculateIntervalNextRunAt(schedule, referenceTime)
+	case ScheduleKindCron:
+		return scheduler.calculateCronNextRunAt(schedule, referenceTime)
 	default:
-		return time.Time{}, false, errorInvalidTaskSchedule
+		return time.Time{}, false, errorInvalidSchedule
 	}
 }
 
-func (taskScheduler TaskScheduler) calculateOneTimeNextRunAt(taskSchedule TaskSchedule, referenceTime time.Time) (time.Time, bool, error) {
-	if taskSchedule.RunAt == nil {
-		return time.Time{}, false, errorInvalidTaskSchedule
+func (scheduler Scheduler) calculateOneTimeNextRunAt(schedule Schedule, referenceTime time.Time) (time.Time, bool, error) {
+	if schedule.RunAt == nil {
+		return time.Time{}, false, errorInvalidSchedule
 	}
-	if taskSchedule.LastRunAt != nil {
+	if schedule.LastRunAt != nil {
 		return time.Time{}, false, nil
 	}
-	if taskSchedule.RunAt.Before(referenceTime) {
+	if schedule.RunAt.Before(referenceTime) {
 		return time.Time{}, false, nil
 	}
 
-	return *taskSchedule.RunAt, true, nil
+	return *schedule.RunAt, true, nil
 }
 
-func (taskScheduler TaskScheduler) calculateIntervalNextRunAt(taskSchedule TaskSchedule, referenceTime time.Time) (time.Time, bool, error) {
-	if taskSchedule.IntervalSecond <= 0 {
-		return time.Time{}, false, errorInvalidTaskSchedule
+func (scheduler Scheduler) calculateIntervalNextRunAt(schedule Schedule, referenceTime time.Time) (time.Time, bool, error) {
+	if schedule.IntervalSecond <= 0 {
+		return time.Time{}, false, errorInvalidSchedule
 	}
 
-	intervalDuration := time.Duration(taskSchedule.IntervalSecond) * time.Second
-	if taskSchedule.LastRunAt == nil && taskSchedule.RunAt == nil {
+	intervalDuration := time.Duration(schedule.IntervalSecond) * time.Second
+	if schedule.LastRunAt == nil && schedule.RunAt == nil {
 		return referenceTime, true, nil
 	}
 	baseTime := referenceTime
-	if taskSchedule.LastRunAt != nil {
-		baseTime = *taskSchedule.LastRunAt
-	} else if taskSchedule.RunAt != nil {
-		baseTime = *taskSchedule.RunAt
+	if schedule.LastRunAt != nil {
+		baseTime = *schedule.LastRunAt
+	} else if schedule.RunAt != nil {
+		baseTime = *schedule.RunAt
 	}
 
 	if baseTime.After(referenceTime) {
@@ -156,23 +156,23 @@ func (taskScheduler TaskScheduler) calculateIntervalNextRunAt(taskSchedule TaskS
 	return nextRunAt, true, nil
 }
 
-func (taskScheduler TaskScheduler) calculateCronNextRunAt(taskSchedule TaskSchedule, referenceTime time.Time) (time.Time, bool, error) {
-	if strings.TrimSpace(taskSchedule.CronExpression) == "" {
-		return time.Time{}, false, errorInvalidTaskSchedule
+func (scheduler Scheduler) calculateCronNextRunAt(schedule Schedule, referenceTime time.Time) (time.Time, bool, error) {
+	if strings.TrimSpace(schedule.CronExpression) == "" {
+		return time.Time{}, false, errorInvalidSchedule
 	}
-	location, errorValue := taskScheduler.taskScheduleLocation(taskSchedule)
+	location, errorValue := scheduler.scheduleLocation(schedule)
 	if errorValue != nil {
 		return time.Time{}, false, errorValue
 	}
 
-	parsedExpression, errorValue := parseCronExpression(taskSchedule.CronExpression)
+	parsedExpression, errorValue := parseCronExpression(schedule.CronExpression)
 	if errorValue != nil {
 		return time.Time{}, false, errorValue
 	}
 
 	searchTime := referenceTime.In(location)
-	if taskSchedule.RunAt != nil && taskSchedule.RunAt.After(referenceTime) {
-		searchTime = taskSchedule.RunAt.In(location).Add(-time.Minute)
+	if schedule.RunAt != nil && schedule.RunAt.After(referenceTime) {
+		searchTime = schedule.RunAt.In(location).Add(-time.Minute)
 	}
 
 	nextRunAt, errorValue := parsedExpression.findNextRunAt(searchTime)
@@ -183,10 +183,10 @@ func (taskScheduler TaskScheduler) calculateCronNextRunAt(taskSchedule TaskSched
 	return nextRunAt.UTC(), true, nil
 }
 
-func (taskScheduler TaskScheduler) taskScheduleLocation(taskSchedule TaskSchedule) (*time.Location, error) {
-	location, errorValue := ScheduleLocation(taskSchedule.TimeZone)
+func (scheduler Scheduler) scheduleLocation(schedule Schedule) (*time.Location, error) {
+	location, errorValue := ScheduleLocation(schedule.TimeZone)
 	if errorValue != nil {
-		return nil, errorInvalidTaskSchedule
+		return nil, errorInvalidSchedule
 	}
 	return location, nil
 }

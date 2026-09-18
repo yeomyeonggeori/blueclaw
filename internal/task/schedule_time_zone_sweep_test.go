@@ -15,11 +15,11 @@ type recordingTimeZoneRepairRepository struct {
 	filledTimeZones []string
 }
 
-func (repository *recordingTimeZoneRepairRepository) CountEmptyTaskScheduleTimeZone() (int, error) {
+func (repository *recordingTimeZoneRepairRepository) CountEmptyScheduleTimeZone() (int, error) {
 	return repository.emptyCount, repository.countError
 }
 
-func (repository *recordingTimeZoneRepairRepository) FillEmptyTaskScheduleTimeZone(timeZone string) (int, error) {
+func (repository *recordingTimeZoneRepairRepository) FillEmptyScheduleTimeZone(timeZone string) (int, error) {
 	if repository.fillError != nil {
 		return 0, repository.fillError
 	}
@@ -29,7 +29,7 @@ func (repository *recordingTimeZoneRepairRepository) FillEmptyTaskScheduleTimeZo
 
 func sweepWithLoggedOutput(repository *recordingTimeZoneRepairRepository, companyTimeZone string) string {
 	logOutput := &bytes.Buffer{}
-	SweepEmptyTaskScheduleTimeZone(repository, companyTimeZone, slog.New(slog.NewTextHandler(logOutput, nil)))
+	SweepEmptyScheduleTimeZone(repository, companyTimeZone, slog.New(slog.NewTextHandler(logOutput, nil)))
 	return logOutput.String()
 }
 

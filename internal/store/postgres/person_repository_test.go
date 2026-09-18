@@ -8,7 +8,7 @@ import (
 func TestCanonicalPersonReferenceUpdateStatementsIncludeRuntimeIdentityTables(t *testing.T) {
 	statements := canonicalPersonReferenceUpdateStatements()
 	expectedFragments := []string{
-		"UPDATE task_schedule SET creator_person_id",
+		"UPDATE schedule SET creator_person_id",
 		"UPDATE task_run SET requester_person_id",
 		"UPDATE platform_account SET person_id",
 		"UPDATE memory_record SET scope_person_id",

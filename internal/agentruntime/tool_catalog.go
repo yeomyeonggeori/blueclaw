@@ -41,7 +41,7 @@ type ToolCatalogBuilder struct {
 	workspaceActorFactory        security.WorkspaceActorFactory
 	taskRunService               *task.TaskRunService
 	taskArtifactService          *task.TaskArtifactService
-	taskScheduleRepository       task.TaskScheduleRepository
+	scheduleRepository           task.ScheduleRepository
 	taskWaitTokenRepository      task.TaskWaitTokenRepository
 	workspaceRootPath            string
 	optionalFileReadPathSuffixes []string
@@ -184,8 +184,8 @@ func (toolCatalogBuilder *ToolCatalogBuilder) UseTaskArtifactService(taskArtifac
 	toolCatalogBuilder.taskArtifactService = taskArtifactService
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) UseTaskScheduleRepository(taskScheduleRepository task.TaskScheduleRepository) {
-	toolCatalogBuilder.taskScheduleRepository = taskScheduleRepository
+func (toolCatalogBuilder *ToolCatalogBuilder) UseScheduleRepository(scheduleRepository task.ScheduleRepository) {
+	toolCatalogBuilder.scheduleRepository = scheduleRepository
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) UseTaskWaitTokenRepository(taskWaitTokenRepository task.TaskWaitTokenRepository) {

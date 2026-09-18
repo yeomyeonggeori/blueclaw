@@ -69,7 +69,7 @@ func TestInitializeScheduleCreateRefusesASchedulePastItsOnlyRun(t *testing.T) {
 func TestInitializeScheduleCreateFallsBackToTheDefaultProfileAndTaskInstruction(t *testing.T) {
 	referenceTime := time.Now().UTC()
 
-	taskSchedule, errorValue := InitializeScheduleCreate(ScheduleCreateInput{
+	schedule, errorValue := InitializeScheduleCreate(ScheduleCreateInput{
 		TaskInstruction: "주간 보고를 정리한다",
 		Kind:            "once",
 		RunAt:           referenceTime.Add(time.Hour).Format(time.RFC3339),
@@ -78,8 +78,8 @@ func TestInitializeScheduleCreateFallsBackToTheDefaultProfileAndTaskInstruction(
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if taskSchedule.AgentProfileName != "default" || taskSchedule.Name != "주간 보고를 정리한다" || taskSchedule.TimeZone != "Asia/Seoul" {
-		t.Fatalf("unexpected schedule: %+v", taskSchedule)
+	if schedule.AgentProfileName != "default" || schedule.Name != "주간 보고를 정리한다" || schedule.TimeZone != "Asia/Seoul" {
+		t.Fatalf("unexpected schedule: %+v", schedule)
 	}
 }
 
@@ -88,9 +88,9 @@ func TestApplyScheduleUpdateRefusesAnInvalidKindInsteadOfFallingBackToOnce(t *te
 	nextRunAt := referenceTime.Add(time.Hour)
 	kind := "weekly"
 
-	_, errorValue := ApplyScheduleUpdate(TaskSchedule{
-		TaskScheduleID: "schedule-1",
-		Kind:           TaskScheduleKindInterval,
+	_, errorValue := ApplyScheduleUpdate(Schedule{
+		ScheduleID:     "schedule-1",
+		Kind:           ScheduleKindInterval,
 		IntervalSecond: 3600,
 		NextRunAt:      &nextRunAt,
 	}, ScheduleUpdateInput{Kind: &kind}, "Asia/Seoul", referenceTime)
@@ -103,12 +103,12 @@ func TestApplyScheduleUpdateRefusesAnInvalidKindInsteadOfFallingBackToOnce(t *te
 func TestApplyScheduleUpdateClearsTheCadenceFieldsTheNewKindCannotUse(t *testing.T) {
 	referenceTime := time.Now().UTC()
 	nextRunAt := referenceTime.Add(time.Hour)
-	kind := string(TaskScheduleKindOnce)
+	kind := string(ScheduleKindOnce)
 	runAt := nextRunAt.Format(time.RFC3339)
 
-	updatedTaskSchedule, errorValue := ApplyScheduleUpdate(TaskSchedule{
-		TaskScheduleID: "schedule-1",
-		Kind:           TaskScheduleKindInterval,
+	updatedSchedule, errorValue := ApplyScheduleUpdate(Schedule{
+		ScheduleID:     "schedule-1",
+		Kind:           ScheduleKindInterval,
 		IntervalSecond: 3600,
 		MaxRunCount:    5,
 		NextRunAt:      &nextRunAt,
@@ -117,8 +117,8 @@ func TestApplyScheduleUpdateClearsTheCadenceFieldsTheNewKindCannotUse(t *testing
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if updatedTaskSchedule.IntervalSecond != 0 || updatedTaskSchedule.MaxRunCount != 0 {
-		t.Fatalf("unexpected cadence: %+v", updatedTaskSchedule)
+	if updatedSchedule.IntervalSecond != 0 || updatedSchedule.MaxRunCount != 0 {
+		t.Fatalf("unexpected cadence: %+v", updatedSchedule)
 	}
 }
 
@@ -127,11 +127,11 @@ func TestApplyScheduleUpdateRefusesABlankTaskInstruction(t *testing.T) {
 	nextRunAt := referenceTime.Add(time.Hour)
 	taskInstruction := "   "
 
-	_, errorValue := ApplyScheduleUpdate(TaskSchedule{
-		TaskScheduleID: "schedule-1",
-		Kind:           TaskScheduleKindOnce,
-		RunAt:          &nextRunAt,
-		NextRunAt:      &nextRunAt,
+	_, errorValue := ApplyScheduleUpdate(Schedule{
+		ScheduleID: "schedule-1",
+		Kind:       ScheduleKindOnce,
+		RunAt:      &nextRunAt,
+		NextRunAt:  &nextRunAt,
 	}, ScheduleUpdateInput{TaskInstruction: &taskInstruction}, "Asia/Seoul", referenceTime)
 
 	if !errors.Is(errorValue, ErrScheduleTaskInstructionRequired) {

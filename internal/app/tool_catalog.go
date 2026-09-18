@@ -54,7 +54,7 @@ func newToolCatalogBuilder(runtimeConfiguration config.RuntimeConfiguration, ker
 	toolCatalogBuilder.UseTerminalService(kernel.terminalService)
 	toolCatalogBuilder.UseTaskRunService(services.taskRunService)
 	toolCatalogBuilder.UseTaskArtifactService(services.taskArtifactService)
-	toolCatalogBuilder.UseTaskScheduleRepository(services.repositories.taskSchedule)
+	toolCatalogBuilder.UseScheduleRepository(services.repositories.schedule)
 	toolCatalogBuilder.UseTaskWaitTokenRepository(services.repositories.taskWaitToken)
 	toolCatalogBuilder.UseWorkspaceRootPath(runtimeConfiguration.Terminal.WorkspaceRootPath)
 	toolCatalogBuilder.UseOptionalFileReadPathSuffixes(runtimeConfiguration.Agent.OptionalFileReadPathSuffixes)

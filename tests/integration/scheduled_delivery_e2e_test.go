@@ -25,8 +25,8 @@ import (
 func TestScheduledTaskRunsAndDeliversThroughConnectorOutbox(t *testing.T) {
 	runAt := time.Date(2026, 5, 6, 7, 0, 0, 0, time.UTC)
 	nextRunAt := runAt
-	repository := &scheduledDeliveryRepository{taskSchedules: []task.TaskSchedule{{
-		TaskScheduleID:   "schedule-daily-brief",
+	repository := &scheduledDeliveryRepository{schedules: []task.Schedule{{
+		ScheduleID:       "schedule-daily-brief",
 		CreatorPersonID:  "person-1",
 		Name:             "daily brief",
 		Prompt:           "look at my schedule and the industry news and tell me at 7am what to do today.",
@@ -35,7 +35,7 @@ func TestScheduledTaskRunsAndDeliversThroughConnectorOutbox(t *testing.T) {
 		ConversationID:   "direct-1",
 		ReplyTargetID:    "reply-target-1",
 		TimeZone:         "Asia/Seoul",
-		Kind:             task.TaskScheduleKindCron,
+		Kind:             task.ScheduleKindCron,
 		CronExpression:   "0 7 * * *",
 		NextRunAt:        &nextRunAt,
 	}}}
@@ -100,7 +100,7 @@ func newScheduledDeliveryConnectorRuntime(languageModel staticScheduleLanguageMo
 	return connectorRuntime
 }
 
-func newScheduledDeliveryPoller(languageModel staticScheduleLanguageModel, repository *scheduledDeliveryRepository) scheduler.TaskSchedulePoller {
+func newScheduledDeliveryPoller(languageModel staticScheduleLanguageModel, repository *scheduledDeliveryRepository) scheduler.SchedulePoller {
 	taskEventService := task.NewTaskEventService()
 	taskRunService := task.NewTaskRunService(taskEventService)
 	agentKernel := loop.NewAgentKernel(taskRunService, task.NewTaskStepService())
@@ -112,13 +112,13 @@ func newScheduledDeliveryPoller(languageModel staticScheduleLanguageModel, repos
 	taskLauncher := agentruntime.NewTaskLauncher(agentKernel, taskRunService, toolCatalogBuilder)
 	taskLauncher.UseTurnRouter(intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(intaketest.LanguageModelDecisionModel{LanguageModel: languageModel}, nil, nil), agentcontract.IntakeOptions{IsEnabled: true}))
 	taskLauncher.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, languageModel))
-	return scheduler.TaskSchedulePoller{
-		TaskScheduleRepository: repository,
-		DeliveryRepository:     repository,
-		TaskScheduleRunner:     agentruntime.NewTaskScheduleRunner(taskLauncher),
-		PersonAccessResolver:   scheduledDeliveryAccessResolver{},
-		WorkspaceID:            "workspace-1",
-		WorkerID:               "test-worker",
+	return scheduler.SchedulePoller{
+		ScheduleRepository:   repository,
+		DeliveryRepository:   repository,
+		ScheduleRunner:       agentruntime.NewScheduleRunner(taskLauncher),
+		PersonAccessResolver: scheduledDeliveryAccessResolver{},
+		WorkspaceID:          "workspace-1",
+		WorkerID:             "test-worker",
 	}
 }
 
@@ -135,70 +135,70 @@ func waitForScheduledDelivery(t *testing.T, adapter *scheduledDeliveryAdapter, t
 
 type scheduledDeliveryRepository struct {
 	mutex          sync.Mutex
-	taskSchedules  []task.TaskSchedule
-	succeeded      *task.TaskSchedule
+	schedules      []task.Schedule
+	succeeded      *task.Schedule
 	failed         []string
 	pendingReplies []connectors.QueuedConnectorReply
 	sentReplies    []string
 }
 
-func (repository *scheduledDeliveryRepository) UpsertTaskSchedule(taskSchedule task.TaskSchedule) error {
-	repository.taskSchedules = append(repository.taskSchedules, taskSchedule)
+func (repository *scheduledDeliveryRepository) UpsertSchedule(schedule task.Schedule) error {
+	repository.schedules = append(repository.schedules, schedule)
 	return nil
 }
 
-func (repository *scheduledDeliveryRepository) ListTaskSchedules(task.TaskScheduleListRequest) (task.TaskScheduleListResult, error) {
-	return task.TaskScheduleListResult{}, nil
+func (repository *scheduledDeliveryRepository) ListSchedules(task.ScheduleListRequest) (task.ScheduleListResult, error) {
+	return task.ScheduleListResult{}, nil
 }
 
-func (repository *scheduledDeliveryRepository) ClaimDueTaskSchedules(limit int, _ time.Duration, referenceTime time.Time, _ string) ([]task.TaskSchedule, error) {
-	claimedSchedules := []task.TaskSchedule{}
-	remainingSchedules := []task.TaskSchedule{}
-	for _, taskSchedule := range repository.taskSchedules {
-		if len(claimedSchedules) < limit && taskSchedule.NextRunAt != nil && !taskSchedule.NextRunAt.After(referenceTime) {
-			claimedSchedules = append(claimedSchedules, taskSchedule)
+func (repository *scheduledDeliveryRepository) ClaimDueSchedules(limit int, _ time.Duration, referenceTime time.Time, _ string) ([]task.Schedule, error) {
+	claimedSchedules := []task.Schedule{}
+	remainingSchedules := []task.Schedule{}
+	for _, schedule := range repository.schedules {
+		if len(claimedSchedules) < limit && schedule.NextRunAt != nil && !schedule.NextRunAt.After(referenceTime) {
+			claimedSchedules = append(claimedSchedules, schedule)
 			continue
 		}
-		remainingSchedules = append(remainingSchedules, taskSchedule)
+		remainingSchedules = append(remainingSchedules, schedule)
 	}
-	repository.taskSchedules = remainingSchedules
+	repository.schedules = remainingSchedules
 	return claimedSchedules, nil
 }
 
-func (repository *scheduledDeliveryRepository) MarkTaskScheduleSucceeded(taskSchedule task.TaskSchedule) error {
-	repository.succeeded = &taskSchedule
+func (repository *scheduledDeliveryRepository) MarkScheduleSucceeded(schedule task.Schedule) error {
+	repository.succeeded = &schedule
 	return nil
 }
 
-func (repository *scheduledDeliveryRepository) MarkTaskScheduleFailed(_ task.TaskSchedule, errorMessage string, _ time.Time) error {
+func (repository *scheduledDeliveryRepository) MarkScheduleFailed(_ task.Schedule, errorMessage string, _ time.Time) error {
 	repository.failed = append(repository.failed, errorMessage)
 	return nil
 }
 
-func (repository *scheduledDeliveryRepository) ExpireTaskSchedule(task.TaskSchedule, string, time.Time) error {
+func (repository *scheduledDeliveryRepository) ExpireSchedule(task.Schedule, string, time.Time) error {
 	return nil
 }
 
-func (repository *scheduledDeliveryRepository) CancelTaskSchedules(task.TaskScheduleCancelRequest) (task.TaskScheduleCancelResult, error) {
-	return task.TaskScheduleCancelResult{}, nil
+func (repository *scheduledDeliveryRepository) CancelSchedules(task.ScheduleCancelRequest) (task.ScheduleCancelResult, error) {
+	return task.ScheduleCancelResult{}, nil
 }
 
-func (repository *scheduledDeliveryRepository) UpdateTaskSchedule(task.TaskScheduleUpdateRequest) (task.TaskScheduleUpdateResult, error) {
-	return task.TaskScheduleUpdateResult{}, nil
+func (repository *scheduledDeliveryRepository) UpdateSchedule(task.ScheduleUpdateRequest) (task.ScheduleUpdateResult, error) {
+	return task.ScheduleUpdateResult{}, nil
 }
 
-func (repository *scheduledDeliveryRepository) EnqueueScheduledConnectorReply(taskSchedule task.TaskSchedule, taskRunID string, reply connectors.OutboundReply) (string, error) {
+func (repository *scheduledDeliveryRepository) EnqueueScheduledConnectorReply(schedule task.Schedule, taskRunID string, reply connectors.OutboundReply) (string, error) {
 	repository.mutex.Lock()
 	defer repository.mutex.Unlock()
-	if taskSchedule.ReplyTargetID == "" {
+	if schedule.ReplyTargetID == "" {
 		return "", errors.New("reply target is required")
 	}
-	rawEventID := "schedule:" + taskSchedule.TaskScheduleID + ":task:" + taskRunID
+	rawEventID := "schedule:" + schedule.ScheduleID + ":task:" + taskRunID
 	repository.pendingReplies = append(repository.pendingReplies, connectors.QueuedConnectorReply{
 		OutboxID:    rawEventID,
 		RawEventID:  rawEventID,
-		Platform:    taskSchedule.Platform,
-		ReplyTarget: connectors.ReplyTarget{ConversationID: taskSchedule.ConversationID, ReplyTargetID: taskSchedule.ReplyTargetID, DedupeKey: rawEventID},
+		Platform:    schedule.Platform,
+		ReplyTarget: connectors.ReplyTarget{ConversationID: schedule.ConversationID, ReplyTargetID: schedule.ReplyTargetID, DedupeKey: rawEventID},
 		Reply:       reply,
 	})
 	return rawEventID, nil

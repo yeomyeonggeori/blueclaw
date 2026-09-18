@@ -16,7 +16,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/loop"
 )
 
-func TestTaskScheduleRunnerLaunchesDueSchedule(t *testing.T) {
+func TestScheduleRunnerLaunchesDueSchedule(t *testing.T) {
 	taskEventService := task.NewTaskEventService()
 	taskRunService := task.NewTaskRunService(taskEventService)
 	harness := harnesstest.New(taskRunService)
@@ -29,12 +29,12 @@ func TestTaskScheduleRunnerLaunchesDueSchedule(t *testing.T) {
 	taskLauncher.UseRequesterWorkspaceProvisioner(provisioner)
 	runAt := time.Date(2026, 5, 2, 9, 0, 0, 0, time.UTC)
 
-	result, errorValue := NewTaskScheduleRunner(taskLauncher).RunIfDue(context.Background(), TaskScheduleRunRequest{
-		TaskSchedule: task.TaskSchedule{
-			TaskScheduleID:  "schedule-1",
+	result, errorValue := NewScheduleRunner(taskLauncher).RunIfDue(context.Background(), ScheduleRunRequest{
+		Schedule: task.Schedule{
+			ScheduleID:      "schedule-1",
 			CreatorPersonID: "person-1",
 			Prompt:          "daily brief",
-			Kind:            task.TaskScheduleKindOnce,
+			Kind:            task.ScheduleKindOnce,
 			RunAt:           &runAt,
 			NextRunAt:       &runAt,
 		},
@@ -48,17 +48,17 @@ func TestTaskScheduleRunnerLaunchesDueSchedule(t *testing.T) {
 	if !result.DidRun {
 		t.Fatal("expected due schedule to run")
 	}
-	if result.TaskSchedule.LastTaskRunID == "" {
-		t.Fatalf("expected last task run id, got %+v", result.TaskSchedule)
+	if result.Schedule.LastTaskRunID == "" {
+		t.Fatalf("expected last task run id, got %+v", result.Schedule)
 	}
 	if provisioner.callCount != 1 {
 		t.Fatalf("expected scheduled launch to provision requester workspace, got %d calls", provisioner.callCount)
 	}
-	if result.TaskSchedule.LastRunAt == nil || !result.TaskSchedule.LastRunAt.Equal(runAt) {
-		t.Fatalf("expected last run time, got %+v", result.TaskSchedule.LastRunAt)
+	if result.Schedule.LastRunAt == nil || !result.Schedule.LastRunAt.Equal(runAt) {
+		t.Fatalf("expected last run time, got %+v", result.Schedule.LastRunAt)
 	}
-	if result.TaskSchedule.NextRunAt != nil {
-		t.Fatalf("expected one-time schedule to complete, got next run %+v", result.TaskSchedule.NextRunAt)
+	if result.Schedule.NextRunAt != nil {
+		t.Fatalf("expected one-time schedule to complete, got next run %+v", result.Schedule.NextRunAt)
 	}
 
 	taskEvents := taskEventService.ListTaskEvent(result.LaunchResult.TurnResult.TaskRun.TaskRunID)
@@ -67,7 +67,7 @@ func TestTaskScheduleRunnerLaunchesDueSchedule(t *testing.T) {
 	}
 }
 
-func TestTaskScheduleRunnerAddsCronContextToLaunch(t *testing.T) {
+func TestScheduleRunnerAddsCronContextToLaunch(t *testing.T) {
 	taskEventService := task.NewTaskEventService()
 	taskRunService := task.NewTaskRunService(taskEventService)
 	agentKernel := loop.NewAgentKernel(taskRunService, task.NewTaskStepService())
@@ -80,13 +80,13 @@ func TestTaskScheduleRunnerAddsCronContextToLaunch(t *testing.T) {
 	taskLauncher := routedTaskLauncher(agentKernel, taskRunService, toolCatalogBuilder, languageModel)
 	nextRunAt := time.Date(2026, 6, 15, 23, 0, 0, 0, time.UTC)
 
-	result, errorValue := NewTaskScheduleRunner(taskLauncher).RunIfDue(context.Background(), TaskScheduleRunRequest{
-		TaskSchedule: task.TaskSchedule{
-			TaskScheduleID:    "schedule-briefing",
+	result, errorValue := NewScheduleRunner(taskLauncher).RunIfDue(context.Background(), ScheduleRunRequest{
+		Schedule: task.Schedule{
+			ScheduleID:        "schedule-briefing",
 			CreatorPersonID:   "person-1",
 			Name:              "일일 브리핑",
 			Prompt:            "오늘의 주요 일정, 날씨, 할 일을 브리핑한다.",
-			Kind:              task.TaskScheduleKindCron,
+			Kind:              task.ScheduleKindCron,
 			CronExpression:    "0 8 * * *",
 			TimeZone:          "Asia/Seoul",
 			NextRunAt:         &nextRunAt,
@@ -130,7 +130,7 @@ func TestTaskScheduleRunnerAddsCronContextToLaunch(t *testing.T) {
 	}
 }
 
-func TestTaskScheduleRunnerForwardsRequesterLanguageToRouter(t *testing.T) {
+func TestScheduleRunnerForwardsRequesterLanguageToRouter(t *testing.T) {
 	for _, testCase := range []struct {
 		name             string
 		profileLanguage  string
@@ -158,12 +158,12 @@ func TestTaskScheduleRunnerForwardsRequesterLanguageToRouter(t *testing.T) {
 			taskLauncher.UseTurnRouter(router)
 			runAt := time.Date(2026, 6, 15, 23, 0, 0, 0, time.UTC)
 
-			_, errorValue := NewTaskScheduleRunner(taskLauncher).RunIfDue(context.Background(), TaskScheduleRunRequest{
-				TaskSchedule: task.TaskSchedule{
-					TaskScheduleID:  "schedule-language-" + testCase.name,
+			_, errorValue := NewScheduleRunner(taskLauncher).RunIfDue(context.Background(), ScheduleRunRequest{
+				Schedule: task.Schedule{
+					ScheduleID:      "schedule-language-" + testCase.name,
 					CreatorPersonID: "person-1",
 					Prompt:          "오늘의 브리핑",
-					Kind:            task.TaskScheduleKindOnce,
+					Kind:            task.ScheduleKindOnce,
 					RunAt:           &runAt,
 					NextRunAt:       &runAt,
 				},
@@ -195,7 +195,7 @@ func (router *scheduleLanguageRecordingTurnRouter) PlanObserved(_ context.Contex
 	return agentcontract.TurnDecision{Route: agentcontract.TurnRouteStartTask}, nil
 }
 
-func TestTaskScheduleRunnerPreservesScheduledArtifactRouting(t *testing.T) {
+func TestScheduleRunnerPreservesScheduledArtifactRouting(t *testing.T) {
 	taskEventService := task.NewTaskEventService()
 	taskRunService := task.NewTaskRunService(taskEventService)
 	agentKernel := loop.NewAgentKernel(taskRunService, task.NewTaskStepService())
@@ -207,12 +207,12 @@ func TestTaskScheduleRunnerPreservesScheduledArtifactRouting(t *testing.T) {
 	taskLauncher := routedTaskLauncher(agentKernel, taskRunService, NewToolCatalogBuilder(), languageModel)
 	runAt := time.Date(2026, 6, 16, 9, 0, 0, 0, time.UTC)
 
-	result, errorValue := NewTaskScheduleRunner(taskLauncher).RunIfDue(context.Background(), TaskScheduleRunRequest{
-		TaskSchedule: task.TaskSchedule{
-			TaskScheduleID:  "schedule-presentation",
+	result, errorValue := NewScheduleRunner(taskLauncher).RunIfDue(context.Background(), ScheduleRunRequest{
+		Schedule: task.Schedule{
+			ScheduleID:      "schedule-presentation",
 			CreatorPersonID: "person-1",
 			Prompt:          "이번 주 영업 현황을 발표자료로 정리해줘.",
-			Kind:            task.TaskScheduleKindOnce,
+			Kind:            task.ScheduleKindOnce,
 			RunAt:           &runAt,
 			NextRunAt:       &runAt,
 		},

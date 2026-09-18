@@ -37,8 +37,8 @@ func (connectorRuntime *ConnectorRuntime) UseWorkspaceActorFactory(workspaceActo
 	connectorRuntime.toolCatalogBuilder.UseWorkspaceActorFactory(workspaceActorFactory)
 }
 
-func (connectorRuntime *ConnectorRuntime) UseTaskScheduleRepository(taskScheduleRepository task.TaskScheduleRepository) {
-	connectorRuntime.toolCatalogBuilder.UseTaskScheduleRepository(taskScheduleRepository)
+func (connectorRuntime *ConnectorRuntime) UseScheduleRepository(scheduleRepository task.ScheduleRepository) {
+	connectorRuntime.toolCatalogBuilder.UseScheduleRepository(scheduleRepository)
 }
 
 func (connectorRuntime *ConnectorRuntime) UseTaskWaitTokenRepository(taskWaitTokenRepository task.TaskWaitTokenRepository) {

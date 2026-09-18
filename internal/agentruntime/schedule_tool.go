@@ -74,11 +74,11 @@ func validateScheduleID(value string) error {
 	return nil
 }
 
-func validateScheduleCancelIDs(scope task.TaskScheduleCancelScope, scheduleIDs []string) error {
-	if scope != task.TaskScheduleCancelScopeScheduleIDs && len(scheduleIDs) > 0 {
+func validateScheduleCancelIDs(scope task.ScheduleCancelScope, scheduleIDs []string) error {
+	if scope != task.ScheduleCancelScopeScheduleIDs && len(scheduleIDs) > 0 {
 		return errScheduleCancelIDsInvalid
 	}
-	if scope == task.TaskScheduleCancelScopeScheduleIDs && len(scheduleIDs) == 0 {
+	if scope == task.ScheduleCancelScopeScheduleIDs && len(scheduleIDs) == 0 {
 		return errScheduleCancelIDsRequired
 	}
 	seenScheduleIDs := map[string]bool{}
@@ -114,10 +114,10 @@ func scheduleUpdateInputOf(input scheduleUpdateToolInput) task.ScheduleUpdateInp
 	}
 }
 
-func taskScheduleIDs(taskSchedules []task.TaskSchedule) []string {
-	scheduleIDs := make([]string, 0, len(taskSchedules))
-	for _, taskSchedule := range taskSchedules {
-		scheduleIDs = append(scheduleIDs, taskSchedule.TaskScheduleID)
+func scheduleIDsOf(schedules []task.Schedule) []string {
+	scheduleIDs := make([]string, 0, len(schedules))
+	for _, schedule := range schedules {
+		scheduleIDs = append(scheduleIDs, schedule.ScheduleID)
 	}
 	return scheduleIDs
 }
@@ -128,7 +128,7 @@ func scheduleListToolResult(output scheduleListToolOutput) toolcontract.ToolResu
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) registerScheduleTools(toolRegistry *toolcontract.ToolSet, handlerContext toolHandlerContext) {
-	if toolCatalogBuilder.taskScheduleRepository != nil && strings.TrimSpace(handlerContext.request.RequesterPersonID) != "" {
+	if toolCatalogBuilder.scheduleRepository != nil && strings.TrimSpace(handlerContext.request.RequesterPersonID) != "" {
 		toolcontract.RegisterToolFunction(toolRegistry, toolcontract.ToolFunction[scheduleListToolInput, scheduleListToolOutput]{
 			Definition: toolcontract.ToolDefinition{
 				Name:        "schedule_list",
@@ -178,26 +178,26 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerScheduleTools(toolRegistry
 
 func (toolCatalogBuilder *ToolCatalogBuilder) listScheduleTool(input scheduleListToolInput, handlerContext toolHandlerContext) (scheduleListToolOutput, error) {
 	referenceTime := time.Now().UTC()
-	result, errorValue := toolCatalogBuilder.taskScheduleRepository.ListTaskSchedules(
+	result, errorValue := toolCatalogBuilder.scheduleRepository.ListSchedules(
 		task.ScheduleListQuery(handlerContext.request.RequesterPersonID, referenceTime))
 	if errorValue != nil {
 		return scheduleListToolOutput{}, errorValue
 	}
-	return task.ProjectScheduleList(result.TaskSchedules, input, referenceTime), nil
+	return task.ProjectScheduleList(result.Schedules, input, referenceTime), nil
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) createScheduleTool(toolContext context.Context, input scheduleCreateToolInput, handlerContext toolHandlerContext) (toolcontract.ToolResult, error) {
-	if toolCatalogBuilder.taskScheduleRepository == nil {
+	if toolCatalogBuilder.scheduleRepository == nil {
 		return toolcontract.ToolFailureResult(toolcontract.FailureDependencyUnavailable, toolcontract.FailureCodes.Unavailable, "schedule_create", "task schedule repository is unavailable"), nil
 	}
-	initializedTaskSchedule, errorValue := toolCatalogBuilder.createTaskSchedule(input, handlerContext, time.Now().UTC())
+	initializedSchedule, errorValue := toolCatalogBuilder.createSchedule(input, handlerContext, time.Now().UTC())
 	if task.IsScheduleWriteInputError(errorValue) {
 		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "schedule_create", errorValue.Error()), nil
 	}
 	if errorValue != nil {
 		return toolcontract.ToolResult{}, errorValue
 	}
-	resultDocument := scheduleCreateResultDocument(initializedTaskSchedule)
+	resultDocument := scheduleCreateResultDocument(initializedSchedule)
 	if taskRunID := toolcontract.TaskRunIDFromContext(toolContext); taskRunID != "" && toolCatalogBuilder.taskRunService != nil {
 		toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventScheduleCreated, string(resultDocument))
 	}
@@ -205,7 +205,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) createScheduleTool(toolContext con
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) updateScheduleTool(toolContext context.Context, input scheduleUpdateToolInput, handlerContext toolHandlerContext) (toolcontract.ToolResult, error) {
-	if toolCatalogBuilder.taskScheduleRepository == nil {
+	if toolCatalogBuilder.scheduleRepository == nil {
 		return toolcontract.ToolFailureResult(toolcontract.FailureDependencyUnavailable, toolcontract.FailureCodes.Unavailable, "schedule_update", "task schedule repository is unavailable"), nil
 	}
 	if errorValue := validateScheduleID(input.ScheduleID); errorValue != nil {
@@ -214,14 +214,14 @@ func (toolCatalogBuilder *ToolCatalogBuilder) updateScheduleTool(toolContext con
 	if errorValue := validateScheduleUpdate(input); errorValue != nil {
 		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "schedule_update", errorValue.Error()), nil
 	}
-	updateRequest := task.TaskScheduleUpdateRequest{
-		TaskScheduleID:    input.ScheduleID,
+	updateRequest := task.ScheduleUpdateRequest{
+		ScheduleID:        input.ScheduleID,
 		RequesterPersonID: strings.TrimSpace(handlerContext.request.RequesterPersonID),
-		UpdateTaskSchedule: func(existingTaskSchedule task.TaskSchedule) (task.TaskSchedule, error) {
-			return toolCatalogBuilder.buildUpdatedTaskSchedule(existingTaskSchedule, input)
+		UpdateSchedule: func(existingSchedule task.Schedule) (task.Schedule, error) {
+			return toolCatalogBuilder.buildUpdatedSchedule(existingSchedule, input)
 		},
 	}
-	result, errorValue := toolCatalogBuilder.taskScheduleRepository.UpdateTaskSchedule(updateRequest)
+	result, errorValue := toolCatalogBuilder.scheduleRepository.UpdateSchedule(updateRequest)
 	if errorValue != nil {
 		if isScheduleToolValidationError(errorValue) {
 			return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "schedule_update", errorValue.Error()), nil
@@ -231,7 +231,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) updateScheduleTool(toolContext con
 	if !result.IsFound {
 		return toolcontract.ToolFailureResult(toolcontract.FailureNotFound, toolcontract.FailureCodes.NotFound, "schedule_update", "active schedule was not found for the current requester"), nil
 	}
-	resultDocument := scheduleCreateResultDocument(result.TaskSchedule)
+	resultDocument := scheduleCreateResultDocument(result.Schedule)
 	if taskRunID := toolcontract.TaskRunIDFromContext(toolContext); taskRunID != "" && toolCatalogBuilder.taskRunService != nil {
 		toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventScheduleUpdated, string(resultDocument))
 	}
@@ -239,7 +239,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) updateScheduleTool(toolContext con
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) cancelScheduleTool(toolContext context.Context, input scheduleCancelToolInput, handlerContext toolHandlerContext) (toolcontract.ToolResult, error) {
-	if toolCatalogBuilder.taskScheduleRepository == nil {
+	if toolCatalogBuilder.scheduleRepository == nil {
 		return toolcontract.ToolFailureResult(toolcontract.FailureDependencyUnavailable, toolcontract.FailureCodes.Unavailable, "schedule_cancel", "task schedule repository is unavailable"), nil
 	}
 	scope, errorValue := parseScheduleCancelScope(input.Scope)
@@ -250,11 +250,11 @@ func (toolCatalogBuilder *ToolCatalogBuilder) cancelScheduleTool(toolContext con
 		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "schedule_cancel", errorValue.Error()), nil
 	}
 	cancelledAt := time.Now().UTC()
-	cancelRequest := task.TaskScheduleCancelRequest{
+	cancelRequest := task.ScheduleCancelRequest{
 		Scope:             scope,
 		RequesterPersonID: strings.TrimSpace(handlerContext.request.RequesterPersonID),
 		ConversationID:    strings.TrimSpace(handlerContext.request.ConversationID),
-		TaskScheduleIDs:   append([]string{}, input.ScheduleIDs...),
+		ScheduleIDs:       append([]string{}, input.ScheduleIDs...),
 		CancelledAt:       cancelledAt,
 	}
 	result, errorValue := toolCatalogBuilder.cancelMatchingSchedules(cancelRequest, cancelledAt)
@@ -271,17 +271,17 @@ func (toolCatalogBuilder *ToolCatalogBuilder) cancelScheduleTool(toolContext con
 	return toolcontract.ToolSuccessData(string(resultDocument), resultDocument), nil
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) cancelMatchingSchedules(cancelRequest task.TaskScheduleCancelRequest, cancelledAt time.Time) (scheduleCancelOperationResult, error) {
-	result, errorValue := toolCatalogBuilder.taskScheduleRepository.CancelTaskSchedules(cancelRequest)
+func (toolCatalogBuilder *ToolCatalogBuilder) cancelMatchingSchedules(cancelRequest task.ScheduleCancelRequest, cancelledAt time.Time) (scheduleCancelOperationResult, error) {
+	result, errorValue := toolCatalogBuilder.scheduleRepository.CancelSchedules(cancelRequest)
 	if errorValue != nil {
 		return scheduleCancelOperationResult{}, errorValue
 	}
 	cancelledTaskRunCount := toolCatalogBuilder.cancelScheduledTaskRuns(cancelRequest, result)
 	cancelledWaitCount := toolCatalogBuilder.cancelPendingWaits(cancelRequest, cancelledAt)
-	effectiveCancellationCount := len(result.TaskSchedules) + cancelledTaskRunCount + cancelledWaitCount
+	effectiveCancellationCount := len(result.Schedules) + cancelledTaskRunCount + cancelledWaitCount
 	return scheduleCancelOperationResult{
-		CancelledScheduleIDs:       taskScheduleIDs(result.TaskSchedules),
-		CancelledScheduleCount:     len(result.TaskSchedules),
+		CancelledScheduleIDs:       scheduleIDsOf(result.Schedules),
+		CancelledScheduleCount:     len(result.Schedules),
 		CancelledTaskRunCount:      cancelledTaskRunCount,
 		CancelledWaitCount:         cancelledWaitCount,
 		EffectiveCancellationCount: effectiveCancellationCount,
@@ -289,7 +289,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) cancelMatchingSchedules(cancelRequ
 	}, nil
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) cancelScheduledTaskRuns(cancelRequest task.TaskScheduleCancelRequest, result task.TaskScheduleCancelResult) int {
+func (toolCatalogBuilder *ToolCatalogBuilder) cancelScheduledTaskRuns(cancelRequest task.ScheduleCancelRequest, result task.ScheduleCancelResult) int {
 	if toolCatalogBuilder.taskRunService == nil {
 		return 0
 	}
@@ -297,37 +297,37 @@ func (toolCatalogBuilder *ToolCatalogBuilder) cancelScheduledTaskRuns(cancelRequ
 		ScheduleOnly: true,
 		Reason:       "schedule_cancel",
 	}
-	if cancelRequest.Scope == task.TaskScheduleCancelScopeMine {
+	if cancelRequest.Scope == task.ScheduleCancelScopeMine {
 		taskRunCancelRequest.RequesterPersonID = strings.TrimSpace(cancelRequest.RequesterPersonID)
 		taskRunCancelRequest.OriginConversationIDPrefix = "schedule:"
 	} else {
-		taskRunCancelRequest.OriginConversationIDs = scheduleOriginConversationIDs(result.TaskSchedules)
+		taskRunCancelRequest.OriginConversationIDs = scheduleOriginConversationIDs(result.Schedules)
 	}
 	return len(toolCatalogBuilder.taskRunService.CancelActiveTaskRuns(taskRunCancelRequest))
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) cancelPendingWaits(cancelRequest task.TaskScheduleCancelRequest, cancelledAt time.Time) int {
+func (toolCatalogBuilder *ToolCatalogBuilder) cancelPendingWaits(cancelRequest task.ScheduleCancelRequest, cancelledAt time.Time) int {
 	if toolCatalogBuilder.taskRunService == nil {
 		return 0
 	}
-	if toolCatalogBuilder.taskWaitTokenRepository != nil && cancelRequest.Scope == task.TaskScheduleCancelScopeMine {
+	if toolCatalogBuilder.taskWaitTokenRepository != nil && cancelRequest.Scope == task.ScheduleCancelScopeMine {
 		_, _ = toolCatalogBuilder.taskWaitTokenRepository.ExpireTaskWaitTokensForPerson(cancelRequest.RequesterPersonID, cancelledAt)
 	}
 	originConversationID := ""
-	if cancelRequest.Scope == task.TaskScheduleCancelScopeCurrentConversation {
+	if cancelRequest.Scope == task.ScheduleCancelScopeCurrentConversation {
 		originConversationID = cancelRequest.ConversationID
 	}
 	cancelledTaskRuns := toolCatalogBuilder.taskRunService.CancelWaitingTaskRuns(cancelRequest.RequesterPersonID, originConversationID, "schedule_cancel")
 	return len(cancelledTaskRuns)
 }
 
-func scheduleOriginConversationIDs(taskSchedules []task.TaskSchedule) []string {
+func scheduleOriginConversationIDs(schedules []task.Schedule) []string {
 	originConversationIDs := []string{}
-	for _, taskSchedule := range taskSchedules {
-		if strings.TrimSpace(taskSchedule.TaskScheduleID) == "" {
+	for _, schedule := range schedules {
+		if strings.TrimSpace(schedule.ScheduleID) == "" {
 			continue
 		}
-		originConversationIDs = append(originConversationIDs, "schedule:"+taskSchedule.TaskScheduleID)
+		originConversationIDs = append(originConversationIDs, "schedule:"+schedule.ScheduleID)
 	}
 	return originConversationIDs
 }
@@ -346,8 +346,8 @@ func (toolCatalogBuilder *ToolCatalogBuilder) scheduleCreateContext(handlerConte
 	}
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) createTaskSchedule(input scheduleCreateToolInput, handlerContext toolHandlerContext, referenceTime time.Time) (task.TaskSchedule, error) {
-	return task.CreateSchedule(toolCatalogBuilder.taskScheduleRepository, task.ScheduleCreateInput{
+func (toolCatalogBuilder *ToolCatalogBuilder) createSchedule(input scheduleCreateToolInput, handlerContext toolHandlerContext, referenceTime time.Time) (task.Schedule, error) {
+	return task.CreateSchedule(toolCatalogBuilder.scheduleRepository, task.ScheduleCreateInput{
 		Description:     input.Name,
 		TaskInstruction: input.TaskInstruction,
 		Kind:            input.Kind,
@@ -361,8 +361,8 @@ func (toolCatalogBuilder *ToolCatalogBuilder) createTaskSchedule(input scheduleC
 	}, toolCatalogBuilder.scheduleCreateContext(handlerContext, input, referenceTime))
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) buildUpdatedTaskSchedule(taskSchedule task.TaskSchedule, input scheduleUpdateToolInput) (task.TaskSchedule, error) {
-	return task.ApplyScheduleUpdate(taskSchedule, scheduleUpdateInputOf(input), toolCatalogBuilder.companyTimeZone(), time.Now().UTC())
+func (toolCatalogBuilder *ToolCatalogBuilder) buildUpdatedSchedule(schedule task.Schedule, input scheduleUpdateToolInput) (task.Schedule, error) {
+	return task.ApplyScheduleUpdate(schedule, scheduleUpdateInputOf(input), toolCatalogBuilder.companyTimeZone(), time.Now().UTC())
 }
 
 type nativeScheduleMutationResult struct {
@@ -382,8 +382,8 @@ type nativeScheduleMutationResult struct {
 	AgentProfileName string     `json:"agentProfileName"`
 }
 
-func scheduleCreateResultDocument(taskSchedule task.TaskSchedule) json.RawMessage {
-	mutation := task.ProjectScheduleMutation(taskSchedule)
+func scheduleCreateResultDocument(schedule task.Schedule) json.RawMessage {
+	mutation := task.ProjectScheduleMutation(schedule)
 	return json.RawMessage(MarshalBody(nativeScheduleMutationResult{
 		ScheduleID:       mutation.ScheduleID,
 		Name:             mutation.Description,
@@ -402,14 +402,14 @@ func scheduleCreateResultDocument(taskSchedule task.TaskSchedule) json.RawMessag
 	}))
 }
 
-func parseScheduleCancelScope(value string) (task.TaskScheduleCancelScope, error) {
+func parseScheduleCancelScope(value string) (task.ScheduleCancelScope, error) {
 	switch strings.TrimSpace(value) {
-	case string(task.TaskScheduleCancelScopeCurrentConversation):
-		return task.TaskScheduleCancelScopeCurrentConversation, nil
-	case string(task.TaskScheduleCancelScopeMine):
-		return task.TaskScheduleCancelScopeMine, nil
-	case string(task.TaskScheduleCancelScopeScheduleIDs):
-		return task.TaskScheduleCancelScopeScheduleIDs, nil
+	case string(task.ScheduleCancelScopeCurrentConversation):
+		return task.ScheduleCancelScopeCurrentConversation, nil
+	case string(task.ScheduleCancelScopeMine):
+		return task.ScheduleCancelScopeMine, nil
+	case string(task.ScheduleCancelScopeScheduleIDs):
+		return task.ScheduleCancelScopeScheduleIDs, nil
 	default:
 		return "", errScheduleCancelScopeInvalid
 	}

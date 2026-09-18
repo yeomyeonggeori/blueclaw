@@ -70,8 +70,8 @@ type scheduleHintConflict struct {
 	Candidates []task.ScheduleCandidate `json:"candidates"`
 }
 
-func (taskScheduleHandler TaskScheduleHandler) HandleToolCreate(responseWriter http.ResponseWriter, request *http.Request) {
-	creatorPersonID, isReady := taskScheduleHandler.readyForScheduleWrite(responseWriter, request)
+func (scheduleHandler ScheduleHandler) HandleToolCreate(responseWriter http.ResponseWriter, request *http.Request) {
+	creatorPersonID, isReady := scheduleHandler.readyForScheduleWrite(responseWriter, request)
 	if !isReady {
 		return
 	}
@@ -81,7 +81,7 @@ func (taskScheduleHandler TaskScheduleHandler) HandleToolCreate(responseWriter h
 		return
 	}
 	referenceTime := time.Now().UTC()
-	taskSchedule, errorValue := task.CreateSchedule(taskScheduleHandler.ListRepository, task.ScheduleCreateInput{
+	schedule, errorValue := task.CreateSchedule(scheduleHandler.ListRepository, task.ScheduleCreateInput{
 		Description:     input.Description,
 		TaskInstruction: input.TaskInstruction,
 		Kind:            input.Kind,
@@ -99,18 +99,18 @@ func (taskScheduleHandler TaskScheduleHandler) HandleToolCreate(responseWriter h
 			ConversationID: input.ConversationID,
 			ReplyTargetID:  input.ReplyTargetID,
 		},
-		CompanyTimeZone: taskScheduleHandler.companyTimeZone(),
+		CompanyTimeZone: scheduleHandler.companyTimeZone(),
 		ReferenceTime:   referenceTime,
 	})
 	if errorValue != nil {
 		writeScheduleWriteError(responseWriter, errorValue)
 		return
 	}
-	writeJSON(responseWriter, http.StatusOK, task.ProjectScheduleMutation(taskSchedule))
+	writeJSON(responseWriter, http.StatusOK, task.ProjectScheduleMutation(schedule))
 }
 
-func (taskScheduleHandler TaskScheduleHandler) HandleToolUpdate(responseWriter http.ResponseWriter, request *http.Request) {
-	creatorPersonID, isReady := taskScheduleHandler.readyForScheduleWrite(responseWriter, request)
+func (scheduleHandler ScheduleHandler) HandleToolUpdate(responseWriter http.ResponseWriter, request *http.Request) {
+	creatorPersonID, isReady := scheduleHandler.readyForScheduleWrite(responseWriter, request)
 	if !isReady {
 		return
 	}
@@ -136,21 +136,21 @@ func (taskScheduleHandler TaskScheduleHandler) HandleToolUpdate(responseWriter h
 		return
 	}
 	referenceTime := time.Now().UTC()
-	ownTaskSchedules, errorValue := taskScheduleHandler.ownOpenTaskSchedules(creatorPersonID, referenceTime)
+	ownSchedules, errorValue := scheduleHandler.ownOpenSchedules(creatorPersonID, referenceTime)
 	if errorValue != nil {
 		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
 		return
 	}
-	resolution := task.ResolveScheduleHint(input.ScheduleHint, ownTaskSchedules)
+	resolution := task.ResolveScheduleHint(input.ScheduleHint, ownSchedules)
 	if resolution.Outcome != task.ScheduleHintResolved {
 		writeScheduleHintConflict(responseWriter, "scheduleHint", input.ScheduleHint, resolution)
 		return
 	}
-	result, errorValue := taskScheduleHandler.ListRepository.UpdateTaskSchedule(task.TaskScheduleUpdateRequest{
-		TaskScheduleID:    resolution.Match.TaskScheduleID,
+	result, errorValue := scheduleHandler.ListRepository.UpdateSchedule(task.ScheduleUpdateRequest{
+		ScheduleID:        resolution.Match.ScheduleID,
 		RequesterPersonID: creatorPersonID,
-		UpdateTaskSchedule: func(existingTaskSchedule task.TaskSchedule) (task.TaskSchedule, error) {
-			return task.ApplyScheduleUpdate(existingTaskSchedule, updateInput, taskScheduleHandler.companyTimeZone(), referenceTime)
+		UpdateSchedule: func(existingSchedule task.Schedule) (task.Schedule, error) {
+			return task.ApplyScheduleUpdate(existingSchedule, updateInput, scheduleHandler.companyTimeZone(), referenceTime)
 		},
 	})
 	if errorValue != nil {
@@ -161,11 +161,11 @@ func (taskScheduleHandler TaskScheduleHandler) HandleToolUpdate(responseWriter h
 		http.Error(responseWriter, "task schedule not found", http.StatusNotFound)
 		return
 	}
-	writeJSON(responseWriter, http.StatusOK, task.ProjectScheduleMutation(result.TaskSchedule))
+	writeJSON(responseWriter, http.StatusOK, task.ProjectScheduleMutation(result.Schedule))
 }
 
-func (taskScheduleHandler TaskScheduleHandler) HandleToolCancel(responseWriter http.ResponseWriter, request *http.Request) {
-	creatorPersonID, isReady := taskScheduleHandler.readyForScheduleWrite(responseWriter, request)
+func (scheduleHandler ScheduleHandler) HandleToolCancel(responseWriter http.ResponseWriter, request *http.Request) {
+	creatorPersonID, isReady := scheduleHandler.readyForScheduleWrite(responseWriter, request)
 	if !isReady {
 		return
 	}
@@ -175,79 +175,79 @@ func (taskScheduleHandler TaskScheduleHandler) HandleToolCancel(responseWriter h
 		return
 	}
 	referenceTime := time.Now().UTC()
-	ownTaskSchedules, errorValue := taskScheduleHandler.ownOpenTaskSchedules(creatorPersonID, referenceTime)
+	ownSchedules, errorValue := scheduleHandler.ownOpenSchedules(creatorPersonID, referenceTime)
 	if errorValue != nil {
 		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
 		return
 	}
-	taskScheduleIDs, unresolvedHint, resolution := resolveEveryScheduleHint(input.ScheduleHints, ownTaskSchedules)
+	scheduleIDs, unresolvedHint, resolution := resolveEveryScheduleHint(input.ScheduleHints, ownSchedules)
 	if unresolvedHint != "" {
 		writeScheduleHintConflict(responseWriter, "scheduleHints", unresolvedHint, resolution)
 		return
 	}
-	result, errorValue := taskScheduleHandler.ListRepository.CancelTaskSchedules(task.TaskScheduleCancelRequest{
-		Scope:             task.TaskScheduleCancelScopeScheduleIDs,
+	result, errorValue := scheduleHandler.ListRepository.CancelSchedules(task.ScheduleCancelRequest{
+		Scope:             task.ScheduleCancelScopeScheduleIDs,
 		RequesterPersonID: creatorPersonID,
-		TaskScheduleIDs:   taskScheduleIDs,
+		ScheduleIDs:       scheduleIDs,
 		CancelledAt:       referenceTime,
 	})
 	if errorValue != nil {
 		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(responseWriter, http.StatusOK, scheduleToolCancelResult{Cancelled: cancelledScheduleItems(result.TaskSchedules)})
+	writeJSON(responseWriter, http.StatusOK, scheduleToolCancelResult{Cancelled: cancelledScheduleItems(result.Schedules)})
 }
 
-func resolveEveryScheduleHint(hints []string, ownTaskSchedules []task.TaskSchedule) ([]string, string, task.ScheduleHintResolution) {
-	taskScheduleIDs := []string{}
-	seenTaskScheduleIDs := map[string]bool{}
+func resolveEveryScheduleHint(hints []string, ownSchedules []task.Schedule) ([]string, string, task.ScheduleHintResolution) {
+	scheduleIDs := []string{}
+	seenScheduleIDs := map[string]bool{}
 	for _, hint := range hints {
-		resolution := task.ResolveScheduleHint(hint, ownTaskSchedules)
+		resolution := task.ResolveScheduleHint(hint, ownSchedules)
 		if resolution.Outcome != task.ScheduleHintResolved {
 			return nil, hint, resolution
 		}
-		if seenTaskScheduleIDs[resolution.Match.TaskScheduleID] {
+		if seenScheduleIDs[resolution.Match.ScheduleID] {
 			continue
 		}
-		seenTaskScheduleIDs[resolution.Match.TaskScheduleID] = true
-		taskScheduleIDs = append(taskScheduleIDs, resolution.Match.TaskScheduleID)
+		seenScheduleIDs[resolution.Match.ScheduleID] = true
+		scheduleIDs = append(scheduleIDs, resolution.Match.ScheduleID)
 	}
-	return taskScheduleIDs, "", task.ScheduleHintResolution{}
+	return scheduleIDs, "", task.ScheduleHintResolution{}
 }
 
-func cancelledScheduleItems(taskSchedules []task.TaskSchedule) []cancelledScheduleItem {
-	items := make([]cancelledScheduleItem, 0, len(taskSchedules))
-	for _, taskSchedule := range taskSchedules {
+func cancelledScheduleItems(schedules []task.Schedule) []cancelledScheduleItem {
+	items := make([]cancelledScheduleItem, 0, len(schedules))
+	for _, schedule := range schedules {
 		items = append(items, cancelledScheduleItem{
-			ScheduleID:  taskSchedule.TaskScheduleID,
-			Description: taskSchedule.Name,
+			ScheduleID:  schedule.ScheduleID,
+			Description: schedule.Name,
 		})
 	}
 	return items
 }
 
-func (taskScheduleHandler TaskScheduleHandler) readyForScheduleWrite(responseWriter http.ResponseWriter, request *http.Request) (string, bool) {
-	creatorPersonID := taskScheduleHandler.signedPrincipal(request)
+func (scheduleHandler ScheduleHandler) readyForScheduleWrite(responseWriter http.ResponseWriter, request *http.Request) (string, bool) {
+	creatorPersonID := scheduleHandler.signedPrincipal(request)
 	if creatorPersonID == "" {
 		http.Error(responseWriter, "schedule write authorization required", http.StatusForbidden)
 		return "", false
 	}
-	if taskScheduleHandler.ListRepository == nil {
+	if scheduleHandler.ListRepository == nil {
 		http.Error(responseWriter, "task schedule repository is not configured", http.StatusServiceUnavailable)
 		return "", false
 	}
 	return creatorPersonID, true
 }
 
-func (taskScheduleHandler TaskScheduleHandler) signedPrincipal(request *http.Request) string {
-	if taskScheduleHandler.ReaderPersonID == nil {
+func (scheduleHandler ScheduleHandler) signedPrincipal(request *http.Request) string {
+	if scheduleHandler.ReaderPersonID == nil {
 		return ""
 	}
-	return strings.TrimSpace(taskScheduleHandler.ReaderPersonID(request))
+	return strings.TrimSpace(scheduleHandler.ReaderPersonID(request))
 }
 
-func (taskScheduleHandler TaskScheduleHandler) ownOpenTaskSchedules(creatorPersonID string, referenceTime time.Time) ([]task.TaskSchedule, error) {
-	result, errorValue := taskScheduleHandler.ListRepository.ListTaskSchedules(task.TaskScheduleListRequest{
+func (scheduleHandler ScheduleHandler) ownOpenSchedules(creatorPersonID string, referenceTime time.Time) ([]task.Schedule, error) {
+	result, errorValue := scheduleHandler.ListRepository.ListSchedules(task.ScheduleListRequest{
 		CreatorPersonID: creatorPersonID,
 		Page:            1,
 		PageSize:        scheduleHintPageSize,
@@ -256,7 +256,7 @@ func (taskScheduleHandler TaskScheduleHandler) ownOpenTaskSchedules(creatorPerso
 	if errorValue != nil {
 		return nil, errorValue
 	}
-	return task.OpenSchedulesCreatedBy(result.TaskSchedules, creatorPersonID, referenceTime), nil
+	return task.OpenSchedulesCreatedBy(result.Schedules, creatorPersonID, referenceTime), nil
 }
 
 func writeScheduleWriteError(responseWriter http.ResponseWriter, errorValue error) {

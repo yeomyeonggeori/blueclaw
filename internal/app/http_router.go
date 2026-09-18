@@ -41,7 +41,7 @@ func newRouterDependencies(components applicationComponents) httpserver.RouterDe
 			Controller:     components.taskIntakeController,
 			TaskRunService: services.taskRunService,
 		},
-		TaskScheduleHandler:   newTaskScheduleHandler(runtimeConfiguration, services, directory),
+		ScheduleHandler:       newScheduleHandler(runtimeConfiguration, services, directory),
 		ConnectorDiagnostics:  adminapi.ConnectorEventDiagnosticHandler{Repository: services.repositories.connectorEventDiagnostic},
 		ConversationReset:     adminapi.ConversationResetHandler{Repository: services.repositories.conversationReset},
 		MemoryHandler:         adminapi.MemoryHandler{Store: components.memory.store, IdentityService: directory.identityService},
@@ -186,12 +186,12 @@ func newTaskApprovalHandler(services taskServices, directory identityDirectory, 
 	}
 }
 
-func newTaskScheduleHandler(runtimeConfiguration config.RuntimeConfiguration, services taskServices, directory identityDirectory) adminapi.TaskScheduleHandler {
-	return adminapi.TaskScheduleHandler{
+func newScheduleHandler(runtimeConfiguration config.RuntimeConfiguration, services taskServices, directory identityDirectory) adminapi.ScheduleHandler {
+	return adminapi.ScheduleHandler{
 		CompanyProvider:   directory.companyProvider,
-		SummaryRepository: services.repositories.taskScheduleSummary,
-		ListRepository:    services.repositories.taskScheduleList,
-		RepairRepository:  services.repositories.taskScheduleCreatorRepair,
+		SummaryRepository: services.repositories.scheduleSummary,
+		ListRepository:    services.repositories.scheduleList,
+		RepairRepository:  services.repositories.scheduleCreatorRepair,
 		ReaderPersonID:    signedReader(runtimeConfiguration.Memory.AdminAssertionKeyPath, true),
 	}
 }

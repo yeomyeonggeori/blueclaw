@@ -25,7 +25,7 @@ func TestScheduledTaskReplyPreservesModelWording(t *testing.T) {
 		Attachments:   []toolcontract.FileAttachment{{Filename: "report.pdf", DevicePath: "/workspace/private/people/p1/artifacts/report.pdf"}},
 	}
 
-	reply, errorValue := scheduledTaskReply(agentruntime.TaskScheduleRunResult{
+	reply, errorValue := scheduledTaskReply(agentruntime.ScheduleRunResult{
 		LaunchResult: agentruntime.TaskLaunchResult{TurnResult: turnResult},
 	})
 
@@ -37,11 +37,11 @@ func TestScheduledTaskReplyPreservesModelWording(t *testing.T) {
 	}
 }
 
-func TestTaskSchedulePollerRunsDueScheduleAndEnqueuesReply(t *testing.T) {
+func TestSchedulePollerRunsDueScheduleAndEnqueuesReply(t *testing.T) {
 	runAt := time.Date(2026, 5, 6, 7, 0, 0, 0, time.UTC)
 	nextRunAt := runAt
-	repository := &pollerScheduleRepository{taskSchedules: []task.TaskSchedule{{
-		TaskScheduleID:   "schedule-1",
+	repository := &pollerScheduleRepository{schedules: []task.Schedule{{
+		ScheduleID:       "schedule-1",
 		CreatorPersonID:  "person-1",
 		Name:             "daily research",
 		Prompt:           "매일 업계 뉴스를 조사해서 알려줘.",
@@ -50,17 +50,17 @@ func TestTaskSchedulePollerRunsDueScheduleAndEnqueuesReply(t *testing.T) {
 		ConversationID:   "channel-1",
 		ReplyTargetID:    "reply-target-1",
 		TimeZone:         "Asia/Seoul",
-		Kind:             task.TaskScheduleKindCron,
+		Kind:             task.ScheduleKindCron,
 		CronExpression:   "0 7 * * *",
 		NextRunAt:        &nextRunAt,
 	}}}
 	deliveryRepository := &pollerDeliveryRepository{}
-	poller := TaskSchedulePoller{
-		TaskScheduleRepository: repository,
-		DeliveryRepository:     deliveryRepository,
-		TaskScheduleRunner:     testTaskScheduleRunner(task.TaskStatusCompleted, "오늘의 조사 결과입니다."),
-		PersonAccessResolver:   staticPersonAccessResolver{},
-		WorkspaceID:            "workspace-1",
+	poller := SchedulePoller{
+		ScheduleRepository:   repository,
+		DeliveryRepository:   deliveryRepository,
+		ScheduleRunner:       testScheduleRunner(task.TaskStatusCompleted, "오늘의 조사 결과입니다."),
+		PersonAccessResolver: staticPersonAccessResolver{},
+		WorkspaceID:          "workspace-1",
 	}
 
 	runCount, errorValue := poller.RunDue(context.Background(), runAt, 1)
@@ -85,13 +85,13 @@ func TestTaskSchedulePollerRunsDueScheduleAndEnqueuesReply(t *testing.T) {
 	}
 }
 
-func TestTaskSchedulePollerDoesNotClaimDueScheduleWhenQuiesced(t *testing.T) {
+func TestSchedulePollerDoesNotClaimDueScheduleWhenQuiesced(t *testing.T) {
 	runAt := time.Date(2026, 5, 6, 7, 0, 0, 0, time.UTC)
 	nextRunAt := runAt
 	claimCount := 0
 	repository := &pollerScheduleRepository{
-		taskSchedules: []task.TaskSchedule{{
-			TaskScheduleID:   "schedule-1",
+		schedules: []task.Schedule{{
+			ScheduleID:       "schedule-1",
 			CreatorPersonID:  "person-1",
 			Prompt:           "매일 업계 뉴스를 조사해서 알려줘.",
 			AgentProfileName: "default",
@@ -99,7 +99,7 @@ func TestTaskSchedulePollerDoesNotClaimDueScheduleWhenQuiesced(t *testing.T) {
 			ConversationID:   "channel-1",
 			ReplyTargetID:    "reply-target-1",
 			TimeZone:         "Asia/Seoul",
-			Kind:             task.TaskScheduleKindInterval,
+			Kind:             task.ScheduleKindInterval,
 			IntervalSecond:   60,
 			NextRunAt:        &nextRunAt,
 		}},
@@ -107,11 +107,11 @@ func TestTaskSchedulePollerDoesNotClaimDueScheduleWhenQuiesced(t *testing.T) {
 			claimCount++
 		},
 	}
-	poller := TaskSchedulePoller{
-		TaskScheduleRepository: repository,
-		DeliveryRepository:     &pollerDeliveryRepository{},
-		TaskScheduleRunner:     testTaskScheduleRunner(task.TaskStatusCompleted, "오늘의 조사 결과입니다."),
-		TaskIntakeGate:         pollerTaskIntakeGate{isQuiesced: true},
+	poller := SchedulePoller{
+		ScheduleRepository: repository,
+		DeliveryRepository: &pollerDeliveryRepository{},
+		ScheduleRunner:     testScheduleRunner(task.TaskStatusCompleted, "오늘의 조사 결과입니다."),
+		TaskIntakeGate:     pollerTaskIntakeGate{isQuiesced: true},
 	}
 
 	runCount, errorValue := poller.RunDue(context.Background(), runAt, 1)
@@ -130,29 +130,29 @@ func TestTaskSchedulePollerDoesNotClaimDueScheduleWhenQuiesced(t *testing.T) {
 	}
 }
 
-func TestTaskSchedulePollerDeliversMessageScheduleWithoutAgentRun(t *testing.T) {
+func TestSchedulePollerDeliversMessageScheduleWithoutAgentRun(t *testing.T) {
 	runAt := time.Date(2026, 5, 6, 7, 0, 0, 0, time.UTC)
 	nextRunAt := runAt
-	repository := &pollerScheduleRepository{taskSchedules: []task.TaskSchedule{{
-		TaskScheduleID:  "schedule-1",
+	repository := &pollerScheduleRepository{schedules: []task.Schedule{{
+		ScheduleID:      "schedule-1",
 		CreatorPersonID: "person-1",
 		Name:            "apology repeat",
 		Prompt:          "죄송합니다.",
-		ExecutionMode:   task.TaskScheduleExecutionModeMessage,
+		ExecutionMode:   task.ScheduleExecutionModeMessage,
 		Platform:        "mattermost",
 		ConversationID:  "channel-1",
 		ReplyTargetID:   "reply-target-1",
 		TimeZone:        "Asia/Seoul",
-		Kind:            task.TaskScheduleKindInterval,
+		Kind:            task.ScheduleKindInterval,
 		IntervalSecond:  60,
 		MaxRunCount:     1,
 		NextRunAt:       &nextRunAt,
 	}}}
 	deliveryRepository := &pollerDeliveryRepository{}
-	poller := TaskSchedulePoller{
-		TaskScheduleRepository: repository,
-		DeliveryRepository:     deliveryRepository,
-		TaskRunService:         task.NewTaskRunService(task.NewTaskEventService()),
+	poller := SchedulePoller{
+		ScheduleRepository: repository,
+		DeliveryRepository: deliveryRepository,
+		TaskRunService:     task.NewTaskRunService(task.NewTaskEventService()),
 	}
 
 	runCount, errorValue := poller.RunDue(context.Background(), runAt, 1)
@@ -177,11 +177,11 @@ func TestTaskSchedulePollerDeliversMessageScheduleWithoutAgentRun(t *testing.T) 
 	}
 }
 
-func TestTaskSchedulePollerDoesNotAdvanceWhenDeliveryFails(t *testing.T) {
+func TestSchedulePollerDoesNotAdvanceWhenDeliveryFails(t *testing.T) {
 	runAt := time.Date(2026, 5, 6, 7, 0, 0, 0, time.UTC)
 	nextRunAt := runAt
-	repository := &pollerScheduleRepository{taskSchedules: []task.TaskSchedule{{
-		TaskScheduleID:   "schedule-1",
+	repository := &pollerScheduleRepository{schedules: []task.Schedule{{
+		ScheduleID:       "schedule-1",
 		CreatorPersonID:  "person-1",
 		Prompt:           "매일 업계 뉴스를 조사해서 알려줘.",
 		AgentProfileName: "default",
@@ -189,20 +189,20 @@ func TestTaskSchedulePollerDoesNotAdvanceWhenDeliveryFails(t *testing.T) {
 		ConversationID:   "channel-1",
 		ReplyTargetID:    "reply-target-1",
 		TimeZone:         "Asia/Seoul",
-		Kind:             task.TaskScheduleKindInterval,
+		Kind:             task.ScheduleKindInterval,
 		IntervalSecond:   60,
 		MaxRunCount:      10,
 		NextRunAt:        &nextRunAt,
 	}}}
-	taskScheduleRunner, harness, _ := taskScheduleRunnerWithHarness(task.TaskStatusCompleted, "오늘의 조사 결과입니다.")
-	poller := TaskSchedulePoller{
-		TaskScheduleRepository: repository,
-		DeliveryRepository:     &pollerDeliveryRepository{errorValue: errors.New("outbox unavailable")},
-		TaskScheduleRunner:     taskScheduleRunner,
-		PersonAccessResolver:   staticPersonAccessResolver{},
+	scheduleRunner, harness, _ := scheduleRunnerWithHarness(task.TaskStatusCompleted, "오늘의 조사 결과입니다.")
+	poller := SchedulePoller{
+		ScheduleRepository:   repository,
+		DeliveryRepository:   &pollerDeliveryRepository{errorValue: errors.New("outbox unavailable")},
+		ScheduleRunner:       scheduleRunner,
+		PersonAccessResolver: staticPersonAccessResolver{},
 	}
 
-	errorValue := poller.runTaskSchedule(context.Background(), repository.taskSchedules[0], runAt)
+	errorValue := poller.runSchedule(context.Background(), repository.schedules[0], runAt)
 
 	if errorValue == nil || !strings.Contains(errorValue.Error(), "outbox unavailable") {
 		t.Fatalf("expected delivery error to surface, got %v", errorValue)
@@ -218,12 +218,12 @@ func TestTaskSchedulePollerDoesNotAdvanceWhenDeliveryFails(t *testing.T) {
 	}
 }
 
-func TestTaskSchedulePollerAtomicSuccessAdvancesOnceAndEnqueuesOnce(t *testing.T) {
+func TestSchedulePollerAtomicSuccessAdvancesOnceAndEnqueuesOnce(t *testing.T) {
 	runAt := time.Date(2026, 5, 6, 7, 0, 0, 0, time.UTC)
 	nextRunAt := runAt
 	repository := &pollerAtomicScheduleRepository{
-		pollerScheduleRepository: &pollerScheduleRepository{taskSchedules: []task.TaskSchedule{{
-			TaskScheduleID:   "schedule-1",
+		pollerScheduleRepository: &pollerScheduleRepository{schedules: []task.Schedule{{
+			ScheduleID:       "schedule-1",
 			CreatorPersonID:  "person-1",
 			Prompt:           "매일 업계 뉴스를 조사해서 알려줘.",
 			AgentProfileName: "default",
@@ -231,19 +231,19 @@ func TestTaskSchedulePollerAtomicSuccessAdvancesOnceAndEnqueuesOnce(t *testing.T
 			ConversationID:   "channel-1",
 			ReplyTargetID:    "reply-target-1",
 			TimeZone:         "Asia/Seoul",
-			Kind:             task.TaskScheduleKindInterval,
+			Kind:             task.ScheduleKindInterval,
 			IntervalSecond:   60,
 			MaxRunCount:      10,
 			NextRunAt:        &nextRunAt,
 		}}},
 	}
-	poller := TaskSchedulePoller{
-		TaskScheduleRepository: repository,
-		TaskScheduleRunner:     testTaskScheduleRunner(task.TaskStatusCompleted, "오늘의 조사 결과입니다."),
-		PersonAccessResolver:   staticPersonAccessResolver{},
+	poller := SchedulePoller{
+		ScheduleRepository:   repository,
+		ScheduleRunner:       testScheduleRunner(task.TaskStatusCompleted, "오늘의 조사 결과입니다."),
+		PersonAccessResolver: staticPersonAccessResolver{},
 	}
 
-	errorValue := poller.runTaskSchedule(context.Background(), repository.taskSchedules[0], runAt)
+	errorValue := poller.runSchedule(context.Background(), repository.schedules[0], runAt)
 
 	if errorValue != nil {
 		t.Fatal(errorValue)
@@ -263,12 +263,12 @@ func TestTaskSchedulePollerAtomicSuccessAdvancesOnceAndEnqueuesOnce(t *testing.T
 	}
 }
 
-func TestTaskSchedulePollerRetriedOccurrenceDoesNotDoubleEnqueue(t *testing.T) {
+func TestSchedulePollerRetriedOccurrenceDoesNotDoubleEnqueue(t *testing.T) {
 	runAt := time.Date(2026, 5, 6, 7, 0, 0, 0, time.UTC)
 	nextRunAt := runAt
 	repository := &pollerAtomicScheduleRepository{
-		pollerScheduleRepository: &pollerScheduleRepository{taskSchedules: []task.TaskSchedule{{
-			TaskScheduleID:   "schedule-1",
+		pollerScheduleRepository: &pollerScheduleRepository{schedules: []task.Schedule{{
+			ScheduleID:       "schedule-1",
 			CreatorPersonID:  "person-1",
 			Prompt:           "매일 업계 뉴스를 조사해서 알려줘.",
 			AgentProfileName: "default",
@@ -276,21 +276,21 @@ func TestTaskSchedulePollerRetriedOccurrenceDoesNotDoubleEnqueue(t *testing.T) {
 			ConversationID:   "channel-1",
 			ReplyTargetID:    "reply-target-1",
 			TimeZone:         "Asia/Seoul",
-			Kind:             task.TaskScheduleKindInterval,
+			Kind:             task.ScheduleKindInterval,
 			IntervalSecond:   60,
 			MaxRunCount:      10,
 			NextRunAt:        &nextRunAt,
 		}}},
 	}
-	poller := TaskSchedulePoller{
-		TaskScheduleRepository: repository,
-		TaskScheduleRunner:     testTaskScheduleRunner(task.TaskStatusCompleted, "오늘의 조사 결과입니다."),
-		PersonAccessResolver:   staticPersonAccessResolver{},
+	poller := SchedulePoller{
+		ScheduleRepository:   repository,
+		ScheduleRunner:       testScheduleRunner(task.TaskStatusCompleted, "오늘의 조사 결과입니다."),
+		PersonAccessResolver: staticPersonAccessResolver{},
 	}
-	claimedTaskSchedule := repository.taskSchedules[0]
+	claimedSchedule := repository.schedules[0]
 
-	firstError := poller.runTaskSchedule(context.Background(), claimedTaskSchedule, runAt)
-	secondError := poller.runTaskSchedule(context.Background(), claimedTaskSchedule, runAt)
+	firstError := poller.runSchedule(context.Background(), claimedSchedule, runAt)
+	secondError := poller.runSchedule(context.Background(), claimedSchedule, runAt)
 
 	if firstError != nil || secondError != nil {
 		t.Fatalf("expected retry to be idempotent, first=%v second=%v", firstError, secondError)
@@ -300,28 +300,28 @@ func TestTaskSchedulePollerRetriedOccurrenceDoesNotDoubleEnqueue(t *testing.T) {
 	}
 }
 
-func TestTaskSchedulePollerDoesNotRunExpiredSchedule(t *testing.T) {
+func TestSchedulePollerDoesNotRunExpiredSchedule(t *testing.T) {
 	runAt := time.Date(2026, 5, 6, 7, 0, 0, 0, time.UTC)
 	expiredAt := runAt.Add(-time.Minute)
-	repository := &pollerScheduleRepository{taskSchedules: []task.TaskSchedule{{
-		TaskScheduleID:  "schedule-expired",
+	repository := &pollerScheduleRepository{schedules: []task.Schedule{{
+		ScheduleID:      "schedule-expired",
 		CreatorPersonID: "person-1",
 		Prompt:          "만료된 알림",
-		ExecutionMode:   task.TaskScheduleExecutionModeMessage,
+		ExecutionMode:   task.ScheduleExecutionModeMessage,
 		Platform:        "mattermost",
 		ConversationID:  "channel-1",
 		ReplyTargetID:   "reply-target-1",
 		TimeZone:        "Asia/Seoul",
-		Kind:            task.TaskScheduleKindInterval,
+		Kind:            task.ScheduleKindInterval,
 		IntervalSecond:  60,
 		NextRunAt:       &runAt,
 		ExpiresAt:       &expiredAt,
 	}}}
 	deliveryRepository := &pollerDeliveryRepository{}
-	poller := TaskSchedulePoller{
-		TaskScheduleRepository: repository,
-		DeliveryRepository:     deliveryRepository,
-		TaskRunService:         task.NewTaskRunService(task.NewTaskEventService()),
+	poller := SchedulePoller{
+		ScheduleRepository: repository,
+		DeliveryRepository: deliveryRepository,
+		TaskRunService:     task.NewTaskRunService(task.NewTaskEventService()),
 	}
 
 	runCount, errorValue := poller.RunDue(context.Background(), runAt, 1)
@@ -334,11 +334,11 @@ func TestTaskSchedulePollerDoesNotRunExpiredSchedule(t *testing.T) {
 	}
 }
 
-func TestTaskSchedulePollerLogsClaimErrors(t *testing.T) {
+func TestSchedulePollerLogsClaimErrors(t *testing.T) {
 	var logBuffer bytes.Buffer
 	ctx, cancel := context.WithCancel(context.Background())
-	poller := TaskSchedulePoller{
-		TaskScheduleRepository: &pollerScheduleRepository{
+	poller := SchedulePoller{
+		ScheduleRepository: &pollerScheduleRepository{
 			claimError:    errors.New("database unavailable"),
 			claimCallback: cancel,
 		},
@@ -353,11 +353,11 @@ func TestTaskSchedulePollerLogsClaimErrors(t *testing.T) {
 	}
 }
 
-func TestTaskSchedulePollerLogsDeliveryFailures(t *testing.T) {
+func TestSchedulePollerLogsDeliveryFailures(t *testing.T) {
 	var logBuffer bytes.Buffer
 	runAt := time.Date(2026, 5, 6, 7, 0, 0, 0, time.UTC)
-	repository := &pollerScheduleRepository{taskSchedules: []task.TaskSchedule{{
-		TaskScheduleID:   "schedule-1",
+	repository := &pollerScheduleRepository{schedules: []task.Schedule{{
+		ScheduleID:       "schedule-1",
 		CreatorPersonID:  "person-1",
 		Prompt:           "매일 업계 뉴스를 조사해서 알려줘.",
 		AgentProfileName: "default",
@@ -365,15 +365,15 @@ func TestTaskSchedulePollerLogsDeliveryFailures(t *testing.T) {
 		ConversationID:   "channel-1",
 		ReplyTargetID:    "reply-target-1",
 		TimeZone:         "Asia/Seoul",
-		Kind:             task.TaskScheduleKindCron,
+		Kind:             task.ScheduleKindCron,
 		CronExpression:   "0 7 * * *",
 		NextRunAt:        &runAt,
 	}}}
-	poller := TaskSchedulePoller{
-		TaskScheduleRepository: repository,
-		DeliveryRepository:     &pollerDeliveryRepository{errorValue: errors.New("outbox unavailable")},
-		TaskScheduleRunner:     testTaskScheduleRunner(task.TaskStatusCompleted, "오늘의 조사 결과입니다."),
-		Logger:                 slog.New(slog.NewTextHandler(&logBuffer, nil)),
+	poller := SchedulePoller{
+		ScheduleRepository: repository,
+		DeliveryRepository: &pollerDeliveryRepository{errorValue: errors.New("outbox unavailable")},
+		ScheduleRunner:     testScheduleRunner(task.TaskStatusCompleted, "오늘의 조사 결과입니다."),
+		Logger:             slog.New(slog.NewTextHandler(&logBuffer, nil)),
 	}
 
 	runCount, errorValue := poller.RunDue(context.Background(), runAt, 1)
@@ -396,19 +396,19 @@ func TestTaskSchedulePollerLogsDeliveryFailures(t *testing.T) {
 	}
 }
 
-func TestTaskSchedulePollerRejectsScheduledInteractionWithoutWaiting(t *testing.T) {
-	repository := &pollerScheduleRepository{taskSchedules: []task.TaskSchedule{waitingTaskSchedule(time.Now().UTC())}}
+func TestSchedulePollerRejectsScheduledInteractionWithoutWaiting(t *testing.T) {
+	repository := &pollerScheduleRepository{schedules: []task.Schedule{waitingSchedule(time.Now().UTC())}}
 	deliveryRepository := &pollerDeliveryRepository{}
-	taskScheduleRunner, _, taskRunService := taskScheduleRunnerWithHarness(task.TaskStatusBlocked, "확인이 필요해요.")
-	poller := TaskSchedulePoller{
-		TaskScheduleRepository: repository,
-		DeliveryRepository:     deliveryRepository,
-		TaskScheduleRunner:     taskScheduleRunner,
-		TaskRunService:         taskRunService,
-		PersonAccessResolver:   staticPersonAccessResolver{},
+	scheduleRunner, _, taskRunService := scheduleRunnerWithHarness(task.TaskStatusBlocked, "확인이 필요해요.")
+	poller := SchedulePoller{
+		ScheduleRepository:   repository,
+		DeliveryRepository:   deliveryRepository,
+		ScheduleRunner:       scheduleRunner,
+		TaskRunService:       taskRunService,
+		PersonAccessResolver: staticPersonAccessResolver{},
 	}
 
-	_, errorValue := poller.RunDue(context.Background(), *repository.taskSchedules[0].NextRunAt, 1)
+	_, errorValue := poller.RunDue(context.Background(), *repository.schedules[0].NextRunAt, 1)
 
 	if errorValue != nil {
 		t.Fatal(errorValue)
@@ -431,20 +431,20 @@ func TestTaskSchedulePollerRejectsScheduledInteractionWithoutWaiting(t *testing.
 	}
 }
 
-func TestTaskSchedulePollerSkipsActiveRunForSameSchedule(t *testing.T) {
+func TestSchedulePollerSkipsActiveRunForSameSchedule(t *testing.T) {
 	runAt := time.Now().UTC()
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	taskRun := taskRunService.CreateTaskRun("person-1", "schedule:schedule-waiting", "already running")
 	if _, errorValue := taskRunService.AdvanceTaskRun(taskRun.TaskRunID, "assistant"); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	repository := &pollerScheduleRepository{taskSchedules: []task.TaskSchedule{waitingTaskSchedule(runAt)}}
-	poller := TaskSchedulePoller{
-		TaskScheduleRepository: repository,
-		DeliveryRepository:     &pollerDeliveryRepository{},
-		TaskScheduleRunner:     testTaskScheduleRunner(task.TaskStatusCompleted, "should not run"),
-		TaskRunService:         taskRunService,
-		PersonAccessResolver:   staticPersonAccessResolver{},
+	repository := &pollerScheduleRepository{schedules: []task.Schedule{waitingSchedule(runAt)}}
+	poller := SchedulePoller{
+		ScheduleRepository:   repository,
+		DeliveryRepository:   &pollerDeliveryRepository{},
+		ScheduleRunner:       testScheduleRunner(task.TaskStatusCompleted, "should not run"),
+		TaskRunService:       taskRunService,
+		PersonAccessResolver: staticPersonAccessResolver{},
 	}
 
 	runCount, errorValue := poller.RunDue(context.Background(), runAt, 1)
@@ -460,17 +460,17 @@ func TestTaskSchedulePollerSkipsActiveRunForSameSchedule(t *testing.T) {
 	}
 }
 
-func TestTaskSchedulePollerDoesNotDeliverFailedTaskReply(t *testing.T) {
-	repository := &pollerScheduleRepository{taskSchedules: []task.TaskSchedule{waitingTaskSchedule(time.Now().UTC())}}
+func TestSchedulePollerDoesNotDeliverFailedTaskReply(t *testing.T) {
+	repository := &pollerScheduleRepository{schedules: []task.Schedule{waitingSchedule(time.Now().UTC())}}
 	deliveryRepository := &pollerDeliveryRepository{}
-	poller := TaskSchedulePoller{
-		TaskScheduleRepository: repository,
-		DeliveryRepository:     deliveryRepository,
-		TaskScheduleRunner:     testTaskScheduleRunner(task.TaskStatusFailed, "calendar unavailable"),
-		PersonAccessResolver:   staticPersonAccessResolver{},
+	poller := SchedulePoller{
+		ScheduleRepository:   repository,
+		DeliveryRepository:   deliveryRepository,
+		ScheduleRunner:       testScheduleRunner(task.TaskStatusFailed, "calendar unavailable"),
+		PersonAccessResolver: staticPersonAccessResolver{},
 	}
 
-	_, errorValue := poller.RunDue(context.Background(), *repository.taskSchedules[0].NextRunAt, 1)
+	_, errorValue := poller.RunDue(context.Background(), *repository.schedules[0].NextRunAt, 1)
 
 	if errorValue != nil {
 		t.Fatal(errorValue)
@@ -486,26 +486,26 @@ func TestTaskSchedulePollerDoesNotDeliverFailedTaskReply(t *testing.T) {
 	}
 }
 
-func TestTaskSchedulePollerExpiresOneTimeMessageWithInvalidDeliveryTarget(t *testing.T) {
+func TestSchedulePollerExpiresOneTimeMessageWithInvalidDeliveryTarget(t *testing.T) {
 	runAt := time.Now().UTC().Add(-time.Minute)
-	repository := &pollerScheduleRepository{taskSchedules: []task.TaskSchedule{{
-		TaskScheduleID:   "schedule-once",
+	repository := &pollerScheduleRepository{schedules: []task.Schedule{{
+		ScheduleID:       "schedule-once",
 		CreatorPersonID:  "person-1",
 		Prompt:           "알림입니다.",
-		ExecutionMode:    task.TaskScheduleExecutionModeMessage,
+		ExecutionMode:    task.ScheduleExecutionModeMessage,
 		AgentProfileName: "default",
 		Platform:         "mattermost",
 		ConversationID:   "channel-1",
 		TimeZone:         "Asia/Seoul",
-		Kind:             task.TaskScheduleKindOnce,
+		Kind:             task.ScheduleKindOnce,
 		RunAt:            &runAt,
 		NextRunAt:        &runAt,
 	}}}
-	poller := TaskSchedulePoller{
-		TaskScheduleRepository: repository,
-		DeliveryRepository:     &pollerDeliveryRepository{},
-		TaskRunService:         task.NewTaskRunService(task.NewTaskEventService()),
-		PersonAccessResolver:   staticPersonAccessResolver{},
+	poller := SchedulePoller{
+		ScheduleRepository:   repository,
+		DeliveryRepository:   &pollerDeliveryRepository{},
+		TaskRunService:       task.NewTaskRunService(task.NewTaskEventService()),
+		PersonAccessResolver: staticPersonAccessResolver{},
 	}
 
 	_, errorValue := poller.RunDue(context.Background(), runAt, 1)
@@ -521,17 +521,17 @@ func TestTaskSchedulePollerExpiresOneTimeMessageWithInvalidDeliveryTarget(t *tes
 	}
 }
 
-func TestTaskSchedulePollerCancelsStaleScheduledTaskRuns(t *testing.T) {
+func TestSchedulePollerCancelsStaleScheduledTaskRuns(t *testing.T) {
 	referenceTime := time.Now().UTC().Add(time.Hour)
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	taskRun := taskRunService.CreateTaskRun("person-1", "schedule:schedule-1", "stale schedule")
 	if _, errorValue := taskRunService.AdvanceTaskRun(taskRun.TaskRunID, "assistant"); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	poller := TaskSchedulePoller{
-		TaskScheduleRepository: &pollerScheduleRepository{},
-		TaskRunService:         taskRunService,
-		StaleTaskRunTimeout:    time.Minute,
+	poller := SchedulePoller{
+		ScheduleRepository:  &pollerScheduleRepository{},
+		TaskRunService:      taskRunService,
+		StaleTaskRunTimeout: time.Minute,
 	}
 
 	_, errorValue := poller.RunDue(context.Background(), referenceTime, 1)
@@ -546,87 +546,87 @@ func TestTaskSchedulePollerCancelsStaleScheduledTaskRuns(t *testing.T) {
 }
 
 type pollerScheduleRepository struct {
-	taskSchedules []task.TaskSchedule
-	succeeded     *task.TaskSchedule
+	schedules     []task.Schedule
+	succeeded     *task.Schedule
 	failed        []string
-	expired       []task.TaskSchedule
+	expired       []task.Schedule
 	claimError    error
 	claimCallback func()
 }
 
-func (repository *pollerScheduleRepository) UpsertTaskSchedule(taskSchedule task.TaskSchedule) error {
-	repository.taskSchedules = append(repository.taskSchedules, taskSchedule)
+func (repository *pollerScheduleRepository) UpsertSchedule(schedule task.Schedule) error {
+	repository.schedules = append(repository.schedules, schedule)
 	return nil
 }
 
-func (repository *pollerScheduleRepository) UpdateTaskSchedule(request task.TaskScheduleUpdateRequest) (task.TaskScheduleUpdateResult, error) {
-	for index, taskSchedule := range repository.taskSchedules {
-		if taskSchedule.TaskScheduleID != request.TaskScheduleID || taskSchedule.CreatorPersonID != request.RequesterPersonID || taskSchedule.NextRunAt == nil {
+func (repository *pollerScheduleRepository) UpdateSchedule(request task.ScheduleUpdateRequest) (task.ScheduleUpdateResult, error) {
+	for index, schedule := range repository.schedules {
+		if schedule.ScheduleID != request.ScheduleID || schedule.CreatorPersonID != request.RequesterPersonID || schedule.NextRunAt == nil {
 			continue
 		}
-		updatedTaskSchedule := taskSchedule
+		updatedSchedule := schedule
 		var errorValue error
-		if request.UpdateTaskSchedule != nil {
-			updatedTaskSchedule, errorValue = request.UpdateTaskSchedule(taskSchedule)
+		if request.UpdateSchedule != nil {
+			updatedSchedule, errorValue = request.UpdateSchedule(schedule)
 			if errorValue != nil {
-				return task.TaskScheduleUpdateResult{}, errorValue
+				return task.ScheduleUpdateResult{}, errorValue
 			}
 		}
-		repository.taskSchedules[index] = updatedTaskSchedule
-		return task.TaskScheduleUpdateResult{TaskSchedule: updatedTaskSchedule, IsFound: true}, nil
+		repository.schedules[index] = updatedSchedule
+		return task.ScheduleUpdateResult{Schedule: updatedSchedule, IsFound: true}, nil
 	}
-	return task.TaskScheduleUpdateResult{}, nil
+	return task.ScheduleUpdateResult{}, nil
 }
 
-func (repository *pollerScheduleRepository) ClaimDueTaskSchedules(limit int, _ time.Duration, referenceTime time.Time, _ string) ([]task.TaskSchedule, error) {
+func (repository *pollerScheduleRepository) ClaimDueSchedules(limit int, _ time.Duration, referenceTime time.Time, _ string) ([]task.Schedule, error) {
 	if repository.claimCallback != nil {
 		repository.claimCallback()
 	}
 	if repository.claimError != nil {
 		return nil, repository.claimError
 	}
-	dueTaskSchedules := []task.TaskSchedule{}
-	for _, taskSchedule := range repository.taskSchedules {
-		if (task.TaskScheduler{}).IsTaskScheduleDue(taskSchedule, referenceTime) {
-			dueTaskSchedules = append(dueTaskSchedules, taskSchedule)
+	dueSchedules := []task.Schedule{}
+	for _, schedule := range repository.schedules {
+		if (task.Scheduler{}).IsScheduleDue(schedule, referenceTime) {
+			dueSchedules = append(dueSchedules, schedule)
 		}
 	}
-	if limit <= 0 || limit > len(dueTaskSchedules) {
-		limit = len(dueTaskSchedules)
+	if limit <= 0 || limit > len(dueSchedules) {
+		limit = len(dueSchedules)
 	}
-	return append([]task.TaskSchedule{}, dueTaskSchedules[:limit]...), nil
+	return append([]task.Schedule{}, dueSchedules[:limit]...), nil
 }
 
-func (repository *pollerScheduleRepository) ListTaskSchedules(task.TaskScheduleListRequest) (task.TaskScheduleListResult, error) {
-	return task.TaskScheduleListResult{}, nil
+func (repository *pollerScheduleRepository) ListSchedules(task.ScheduleListRequest) (task.ScheduleListResult, error) {
+	return task.ScheduleListResult{}, nil
 }
 
-func (repository *pollerScheduleRepository) MarkTaskScheduleSucceeded(taskSchedule task.TaskSchedule) error {
-	repository.succeeded = &taskSchedule
-	for index, existingTaskSchedule := range repository.taskSchedules {
-		if existingTaskSchedule.TaskScheduleID == taskSchedule.TaskScheduleID {
-			repository.taskSchedules[index] = taskSchedule
+func (repository *pollerScheduleRepository) MarkScheduleSucceeded(schedule task.Schedule) error {
+	repository.succeeded = &schedule
+	for index, existingSchedule := range repository.schedules {
+		if existingSchedule.ScheduleID == schedule.ScheduleID {
+			repository.schedules[index] = schedule
 			break
 		}
 	}
 	return nil
 }
 
-func (repository *pollerScheduleRepository) MarkTaskScheduleFailed(_ task.TaskSchedule, errorMessage string, _ time.Time) error {
+func (repository *pollerScheduleRepository) MarkScheduleFailed(_ task.Schedule, errorMessage string, _ time.Time) error {
 	repository.failed = append(repository.failed, errorMessage)
 	return nil
 }
 
-func (repository *pollerScheduleRepository) ExpireTaskSchedule(taskSchedule task.TaskSchedule, errorMessage string, referenceTime time.Time) error {
-	taskSchedule.ExpiresAt = &referenceTime
-	taskSchedule.NextRunAt = nil
-	taskSchedule.LastError = errorMessage
-	repository.expired = append(repository.expired, taskSchedule)
+func (repository *pollerScheduleRepository) ExpireSchedule(schedule task.Schedule, errorMessage string, referenceTime time.Time) error {
+	schedule.ExpiresAt = &referenceTime
+	schedule.NextRunAt = nil
+	schedule.LastError = errorMessage
+	repository.expired = append(repository.expired, schedule)
 	return nil
 }
 
-func (repository *pollerScheduleRepository) CancelTaskSchedules(task.TaskScheduleCancelRequest) (task.TaskScheduleCancelResult, error) {
-	return task.TaskScheduleCancelResult{}, nil
+func (repository *pollerScheduleRepository) CancelSchedules(task.ScheduleCancelRequest) (task.ScheduleCancelResult, error) {
+	return task.ScheduleCancelResult{}, nil
 }
 
 type pollerDeliveryRepository struct {
@@ -642,7 +642,7 @@ func (gate pollerTaskIntakeGate) IsQuiesced() bool {
 	return gate.isQuiesced
 }
 
-func (repository *pollerDeliveryRepository) EnqueueScheduledConnectorReply(_ task.TaskSchedule, _ string, reply connectors.OutboundReply) (string, error) {
+func (repository *pollerDeliveryRepository) EnqueueScheduledConnectorReply(_ task.Schedule, _ string, reply connectors.OutboundReply) (string, error) {
 	if repository.errorValue != nil {
 		return "", repository.errorValue
 	}
@@ -656,14 +656,14 @@ type pollerAtomicScheduleRepository struct {
 	deliveryError             error
 }
 
-func (repository *pollerAtomicScheduleRepository) MarkTaskScheduleSucceededAndEnqueueDelivery(taskSchedule task.TaskSchedule, _ string, deliveryDeduplicationKey string, _ connectors.OutboundReply) (string, error) {
+func (repository *pollerAtomicScheduleRepository) MarkScheduleSucceededAndEnqueueDelivery(schedule task.Schedule, _ string, deliveryDeduplicationKey string, _ connectors.OutboundReply) (string, error) {
 	if repository.deliveryError != nil {
 		return "", repository.deliveryError
 	}
 	if !repository.hasDeliveryDeduplicationKey(deliveryDeduplicationKey) {
 		repository.deliveryDeduplicationKeys = append(repository.deliveryDeduplicationKeys, deliveryDeduplicationKey)
 	}
-	if errorValue := repository.MarkTaskScheduleSucceeded(taskSchedule); errorValue != nil {
+	if errorValue := repository.MarkScheduleSucceeded(schedule); errorValue != nil {
 		return "", errorValue
 	}
 	return deliveryDeduplicationKey, nil
@@ -684,12 +684,12 @@ func (staticPersonAccessResolver) ResolvePersonAccess(personID string) policy.Pe
 	return policy.PersonAccess{PersonID: personID, SecurityLevelRank: 100, GrantedClasses: []string{"internal"}}
 }
 
-func testTaskScheduleRunner(turnStatus task.TaskStatus, finishMessage string) agentruntime.TaskScheduleRunner {
-	taskScheduleRunner, _, _ := taskScheduleRunnerWithHarness(turnStatus, finishMessage)
-	return taskScheduleRunner
+func testScheduleRunner(turnStatus task.TaskStatus, finishMessage string) agentruntime.ScheduleRunner {
+	scheduleRunner, _, _ := scheduleRunnerWithHarness(turnStatus, finishMessage)
+	return scheduleRunner
 }
 
-func taskScheduleRunnerWithHarness(turnStatus task.TaskStatus, finishMessage string) (agentruntime.TaskScheduleRunner, *harnesstest.Harness, *task.TaskRunService) {
+func scheduleRunnerWithHarness(turnStatus task.TaskStatus, finishMessage string) (agentruntime.ScheduleRunner, *harnesstest.Harness, *task.TaskRunService) {
 	taskEventService := task.NewTaskEventService()
 	taskRunService := task.NewTaskRunService(taskEventService)
 	harness := harnesstest.New(taskRunService)
@@ -698,12 +698,12 @@ func taskScheduleRunnerWithHarness(turnStatus task.TaskStatus, finishMessage str
 	toolCatalogBuilder := agentruntime.NewToolCatalogBuilder()
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"ask_confirm"})
 	toolCatalogBuilder.UseTaskRunService(taskRunService)
-	return agentruntime.NewTaskScheduleRunner(agentruntime.NewTaskLauncher(harness, taskRunService, toolCatalogBuilder)), harness, taskRunService
+	return agentruntime.NewScheduleRunner(agentruntime.NewTaskLauncher(harness, taskRunService, toolCatalogBuilder)), harness, taskRunService
 }
 
-func waitingTaskSchedule(runAt time.Time) task.TaskSchedule {
-	return task.TaskSchedule{
-		TaskScheduleID:   "schedule-waiting",
+func waitingSchedule(runAt time.Time) task.Schedule {
+	return task.Schedule{
+		ScheduleID:       "schedule-waiting",
 		CreatorPersonID:  "person-1",
 		Prompt:           "내 스케줄을 보고 확인이 필요한 일을 알려줘.",
 		AgentProfileName: "default",
@@ -711,20 +711,20 @@ func waitingTaskSchedule(runAt time.Time) task.TaskSchedule {
 		ConversationID:   "channel-1",
 		ReplyTargetID:    "reply-target-1",
 		TimeZone:         "Asia/Seoul",
-		Kind:             task.TaskScheduleKindOnce,
+		Kind:             task.ScheduleKindOnce,
 		RunAt:            &runAt,
 		NextRunAt:        &runAt,
 	}
 }
 
-func TestRecordTaskScheduleFailureExpiresAfterRepeatedFailures(t *testing.T) {
-	taskSchedule := waitingTaskSchedule(time.Now().UTC())
-	taskSchedule.FailureCount = maxTaskScheduleFailureCount - 1
-	if !taskScheduleFailureIsTerminal(taskSchedule, errors.New("transient"), time.Now()) {
+func TestRecordScheduleFailureExpiresAfterRepeatedFailures(t *testing.T) {
+	schedule := waitingSchedule(time.Now().UTC())
+	schedule.FailureCount = maxScheduleFailureCount - 1
+	if !scheduleFailureIsTerminal(schedule, errors.New("transient"), time.Now()) {
 		t.Fatal("expected the failure cap to expire the schedule")
 	}
-	taskSchedule.FailureCount = 0
-	if taskScheduleFailureIsTerminal(taskSchedule, errors.New("transient"), time.Now()) {
+	schedule.FailureCount = 0
+	if scheduleFailureIsTerminal(schedule, errors.New("transient"), time.Now()) {
 		t.Fatal("expected a first transient failure to stay retryable")
 	}
 }
