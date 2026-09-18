@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -176,7 +177,7 @@ func (connectorRuntime *ConnectorRuntime) cancelPendingSourceTask(personID strin
 		return
 	}
 	connectorRuntime.resolveOpenTaskWaitsForTaskRun(personID, platform, conversationID, taskRun.TaskRunID)
-	connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, "task.superseded_by_message", marshalConnectorEventBody(map[string]string{"sourceReference": sourceReference}))
+	connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, "task.superseded_by_message", agentruntime.MarshalBody(map[string]string{"sourceReference": sourceReference}))
 }
 
 func (connectorRuntime *ConnectorRuntime) pendingRequestReplySender(sourceReference string, sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error), isDelivery bool) func(context.Context, ReplyTarget, OutboundReply) (string, error) {
@@ -219,7 +220,7 @@ func (connectorRuntime *ConnectorRuntime) revisedPriorTask(personID string, even
 	if len(evidence) == 0 {
 		return priorTask, false
 	}
-	priorTask.Result = "Recorded work from the superseded requests. Cancellation does not undo these effects. Inspect and amend existing results to satisfy the revised request without duplicating them.\n" + marshalConnectorEventBody(evidence)
+	priorTask.Result = "Recorded work from the superseded requests. Cancellation does not undo these effects. Inspect and amend existing results to satisfy the revised request without duplicating them.\n" + agentruntime.MarshalBody(evidence)
 	return priorTask, true
 }
 

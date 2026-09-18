@@ -13,6 +13,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract/harnesstest"
 	"github.com/yeomyeonggeori/bluecollar/intake"
+	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
@@ -31,7 +32,7 @@ func TestTaskLauncherRouterDeadlinePersistsOneBlockedTask(t *testing.T) {
 	taskEventService := task.NewTaskEventService()
 	taskRunService := task.NewTaskRunService(taskEventService)
 	taskLauncher := NewTaskLauncher(harnesstest.New(taskRunService), taskRunService, NewToolCatalogBuilder())
-	taskLauncher.UseTurnRouter(intake.NewTurnRouter(deadlineBlockingRouterLanguageModel{}, agentcontract.IntakeOptions{IsEnabled: true}))
+	taskLauncher.UseTurnRouter(intake.NewTurnRouter(deadlineBlockingRouterLanguageModel{}, intake.NewDecisionPlanner(intaketest.LanguageModelDecisionModel{LanguageModel: deadlineBlockingRouterLanguageModel{}}, nil, nil), agentcontract.IntakeOptions{IsEnabled: true}))
 	taskLauncher.UseIntakeBudget(IntakeBudget{TaskLevel: string(agentcontract.TaskLevelLow), MaxElapsedSecond: 1})
 	taskLauncher.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, nil))
 

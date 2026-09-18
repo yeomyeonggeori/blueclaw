@@ -80,8 +80,15 @@ func TestPendingRequestStoreDoesNotSupersedeDifferentScopes(t *testing.T) {
 	}{
 		{name: "sender", modify: func(event PlatformInboundEvent) PlatformInboundEvent { event.SenderID = "sender-2"; return event }},
 		{name: "platform", modify: func(event PlatformInboundEvent) PlatformInboundEvent { event.Platform = "slack"; return event }},
-		{name: "channel", modify: func(event PlatformInboundEvent) PlatformInboundEvent { event.ConversationID = "channel-2"; return event }},
-		{name: "thread", modify: func(event PlatformInboundEvent) PlatformInboundEvent { event.MessageID = "message-2"; event.ReplyTargetID = "root-2"; return event }},
+		{name: "channel", modify: func(event PlatformInboundEvent) PlatformInboundEvent {
+			event.ConversationID = "channel-2"
+			return event
+		}},
+		{name: "thread", modify: func(event PlatformInboundEvent) PlatformInboundEvent {
+			event.MessageID = "message-2"
+			event.ReplyTargetID = "root-2"
+			return event
+		}},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {

@@ -57,8 +57,8 @@ func (toolCatalogBuilder *ToolCatalogBuilder) askInputTool(toolContext context.C
 	}
 	options := numberedClarificationOptions(trimNonEmptyStrings(input.Choices))
 	askRequest := agentcontract.NewAskInputRequest(question, options, toolcontract.ResponseLanguageFromContext(toolContext))
-	toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventAskRequested, marshalToolResult(askRequest))
-	resultDocument := json.RawMessage(marshalToolResult(askInputResult{
+	toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventAskRequested, MarshalBody(askRequest))
+	resultDocument := json.RawMessage(MarshalBody(askInputResult{
 		TaskRunID: taskRunID,
 		Status:    string(task.TaskStatusWaitingUserInput),
 		Question:  question,

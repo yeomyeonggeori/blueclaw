@@ -19,7 +19,7 @@ func newIngressGateTestRuntime(gate IngressGate) (*ConnectorRuntime, *task.TaskR
 	taskRunService := task.NewTaskRunService(taskEventService)
 	connectorRuntimeHarness := harnesstest.New(taskRunService)
 	connectorRuntime := NewConnectorRuntime(identityService, connectorRuntimeHarness, taskRunService, taskEventService, slog.Default())
-	connectorRuntime.UseIntakeClassifier(connectorRuntimeHarness)
+	connectorRuntime.UseIntakeDecider(connectorRuntimeHarness)
 	connectorRuntime.UseReplyGenerator(connectorRuntimeHarness)
 	connectorRuntime.UseIngressGate(gate)
 	return connectorRuntime, taskRunService

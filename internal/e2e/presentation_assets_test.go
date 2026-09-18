@@ -11,7 +11,7 @@ import (
 )
 
 func TestPresentationAssetsStayPureSkill(t *testing.T) {
-	skillDirectoryPath := rootPresentationSkillPath()
+	skillDirectoryPath := presentationSkillPath()
 	if skillDirectoryPath == "" {
 		t.Skip("root presentation skill is unavailable")
 	}
@@ -46,8 +46,8 @@ func TestPresentationAssetsStayPureSkill(t *testing.T) {
 	if !strings.Contains(skillDocument, "slides.html` is the source of truth") {
 		t.Fatal("SKILL.md should make slides.html the source of truth")
 	}
-	if !strings.Contains(skillDocument, "/workspace/skills/presentation/scripts/build.sh") {
-		t.Fatal("SKILL.md should guide agents to run the bundled build script from scripts")
+	if !strings.Contains(skillDocument, "<skill>/scripts/build.sh") {
+		t.Fatal("SKILL.md should guide agents to run the bundled build script from wherever the host installed the skill")
 	}
 	if !strings.Contains(skillDocument, "With no `FORMATS`") {
 		t.Fatal("SKILL.md should explain html-only builds")
@@ -90,7 +90,7 @@ func TestPresentationAssetsStayPureSkill(t *testing.T) {
 }
 
 func TestPresentationSkillCarriesDesignGuidanceWithoutTemplateAsset(t *testing.T) {
-	skillDirectoryPath := rootPresentationSkillPath()
+	skillDirectoryPath := presentationSkillPath()
 	if skillDirectoryPath == "" {
 		t.Skip("root presentation skill is unavailable")
 	}

@@ -8,16 +8,16 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
-type stubAddressingClassifier struct {
+type scriptedAddressingDecider struct {
 	decision agentcontract.AddressingDecision
 }
 
-func (classifier stubAddressingClassifier) ClassifyAddressing(context.Context, agentcontract.AddressingClassificationRequest) (agentcontract.AddressingDecision, error) {
-	return classifier.decision, nil
+func (decider scriptedAddressingDecider) DecideAddressing(context.Context, Request) (agentcontract.AddressingDecision, error) {
+	return decider.decision, nil
 }
 
 func gateReturning(decision agentcontract.AddressingDecision) *Gate {
-	return NewGate(stubAddressingClassifier{decision: decision}, nil, nil, nil)
+	return NewGate(scriptedAddressingDecider{decision: decision}, nil)
 }
 
 func channelRequest() Request {

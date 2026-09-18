@@ -212,7 +212,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerFileTools(toolRegistry *to
 }
 
 func fileToolSuccess(document map[string]any) toolcontract.ToolResult {
-	content := marshalToolResult(document)
+	content := MarshalBody(document)
 	return toolcontract.ToolResult{
 		Output: toolcontract.ToolOutput{Content: content, Data: json.RawMessage(content)},
 	}
@@ -1428,7 +1428,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) rollbackPatchWrites(toolContext co
 }
 
 func fileExactEditFailure(stage string, path string, editIndex int, matchCount int, guidance string) toolcontract.ToolResult {
-	content := marshalToolResult(map[string]any{
+	content := MarshalBody(map[string]any{
 		"path":       strings.TrimSpace(path),
 		"editIndex":  editIndex,
 		"matchCount": matchCount,
@@ -1461,7 +1461,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) attachFileTool(toolContext context
 		attachments = append(attachments, attachment)
 		deliveredPaths = append(deliveredPaths, attachment.DevicePath)
 	}
-	data := json.RawMessage(marshalToolResult(map[string]any{
+	data := json.RawMessage(MarshalBody(map[string]any{
 		"deliveredPaths":  deliveredPaths,
 		"attachmentCount": len(attachments),
 	}))
@@ -1541,7 +1541,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) fileDeliverReadFailure(toolContext
 	}
 	dataFields := actorFailureDataFields("read_file", "file_deliver", path, outcome.actorError("read_file", path))
 	dataFields["candidateFiles"] = candidateFiles
-	result.Output.Data = json.RawMessage(marshalToolResult(dataFields))
+	result.Output.Data = json.RawMessage(MarshalBody(dataFields))
 	return result
 }
 

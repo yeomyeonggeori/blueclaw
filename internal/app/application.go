@@ -103,6 +103,7 @@ type applicationComponents struct {
 	taskIntakeController  *runtimecontrol.TaskIntakeController
 	toolCatalogBuilder    *agentruntime.ToolCatalogBuilder
 	turnRouter            intake.TurnRouter
+	decisionPlanner       intake.DecisionPlanner
 	taskLauncher          *agentruntime.TaskLauncher
 	taskSchedulePoller    *scheduler.TaskSchedulePoller
 	taskRetentionSweeper  *scheduler.TaskRetentionSweeper
@@ -150,14 +151,15 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 			logger.Error("learning.review_failed", "error", errorValue.Error())
 		}
 	}
-	components.turnRouter = intake.NewTurnRouter(turnRouterLanguageModelProvider(components.kernel.taskTierLanguageModels, components.kernel.intakeLanguageModelProvider), deriveIntakeOptions(runtimeConfiguration))
+	components.decisionPlanner = newDecisionPlanner(runtimeConfiguration, turnRouterLanguageModelProvider(components.kernel.taskTierLanguageModels, components.kernel.intakeLanguageModelProvider), logger)
+	components.turnRouter = intake.NewTurnRouter(turnRouterLanguageModelProvider(components.kernel.taskTierLanguageModels, components.kernel.intakeLanguageModelProvider), components.decisionPlanner, deriveIntakeOptions(runtimeConfiguration))
 	components.taskLauncher = newTaskLauncher(runtimeConfiguration, components.foundation, components.directory, components.kernel, components.services, components.toolCatalogBuilder, components.turnRouter)
 	components.taskLauncher.UseTaskObserver(learningTaskObserver(components.learningCoordinator, components.services.taskRunService))
 	components.taskSchedulePoller = newTaskSchedulePoller(runtimeConfiguration, components.services, components.directory.identityService, components.taskLauncher, components.taskIntakeController, logger)
 	configureMorningBriefing(components.taskSchedulePoller, runtimeConfiguration, components.directory, components.kernel, logger)
 	logger.Info("application.initializing", "stage", "connector_runtime")
 	components.taskRetentionSweeper = newTaskRetentionSweeper(runtimeConfiguration, components.services, logger)
-	components.connectorRuntime = newConnectorRuntime(runtimeConfiguration, components.foundation, components.directory, components.kernel, components.services, components.taskLauncher, components.turnRouter, components.backupCoordinator, components.taskIntakeController)
+	components.connectorRuntime = newConnectorRuntime(runtimeConfiguration, components.foundation, components.directory, components.kernel, components.services, components.taskLauncher, components.turnRouter, components.decisionPlanner, components.backupCoordinator, components.taskIntakeController)
 	registerChatdAdapters(components.connectorRuntime, runtimeConfiguration, logger)
 	components.agentReplyStore = newAgentReplyStore(runtimeConfiguration)
 	components.connectorRuntime.RegisterAdapter(apiconnector.NewAdapter(components.directory.identityService, components.agentReplyStore))

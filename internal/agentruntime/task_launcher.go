@@ -91,6 +91,7 @@ type TaskLaunchRequest struct {
 	PriorTask                  agentcontract.PriorTaskContext
 	ScheduledRun               agentcontract.ScheduledRunContext
 	PrecomputedTurnDecision    *agentcontract.TurnDecision
+	DecidedTurnFields          *agentcontract.TurnDecision
 	IsPrecomputedDecisionExact bool
 	SkipSkillSelection         bool
 	UseEmptyToolCatalog        bool
@@ -167,7 +168,7 @@ func (taskLauncher *TaskLauncher) UseIntakeBudget(intakeBudget IntakeBudget) {
 
 type TurnRouter interface {
 	Plan(context.Context, agentcontract.AgentRequest) (agentcontract.TurnDecision, error)
-	PlanObserved(context.Context, agentcontract.AgentRequest, *agentcontract.TurnRouterCallLedger) (agentcontract.TurnDecision, error)
+	PlanObserved(context.Context, agentcontract.AgentRequest, *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error)
 }
 
 func (taskLauncher *TaskLauncher) UseTurnRouter(turnRouter TurnRouter) {
@@ -277,7 +278,7 @@ func (taskLauncher *TaskLauncher) closeAbandonedLaunchTaskRun(openedTaskRun laun
 	if _, isFound := taskLauncher.taskRunService.FindTaskRun(openedTaskRun.TaskRunID); !isFound {
 		return
 	}
-	taskLauncher.taskRunService.AppendTaskEvent(openedTaskRun.TaskRunID, agentcontract.TaskEventTaskAbandonedByTurn, marshalToolResult(map[string]string{
+	taskLauncher.taskRunService.AppendTaskEvent(openedTaskRun.TaskRunID, agentcontract.TaskEventTaskAbandonedByTurn, MarshalBody(map[string]string{
 		"turnTaskRunID": usedTaskRunID,
 	}))
 	taskLauncher.taskRunService.CancelTaskRunWithReason(openedTaskRun.TaskRunID, requesterPersonID, "the turn ran on task run "+usedTaskRunID)
@@ -288,31 +289,34 @@ func (taskLauncher *TaskLauncher) appendTurnRouterCallRecords(taskRunID string, 
 		return
 	}
 	for _, callRecord := range callRecords {
-		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventLLMCall, marshalToolResult(callRecord))
+		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventLLMCall, MarshalBody(callRecord))
 	}
 }
 
 func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request TaskLaunchRequest) (TaskLaunchResult, []agentcontract.LLMCallRecord, error) {
 	launchRecords := []launchStepRecord{}
 	normalizedProfileName := normalizeProfileName(request.ProfileName)
+	completeFailedLaunch := func(record launchStepRecord, toolNames []string) TaskLaunchResult {
+		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, toolNames, record.StepName, launchRecords, errorFromStepRecord(record))
+	}
 	resolvedEmail, record := runLaunchStep(ctx, &taskLaunchExecution{Launcher: taskLauncher, Request: request}, resolveRequesterEmailLaunchStep{})
 	launchRecords = append(launchRecords, record)
 	request.RequesterEmail = resolvedEmail
 	if record.Error != "" {
-		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, nil, record.StepName, launchRecords, record.errorValue), nil, nil
+		return completeFailedLaunch(record, nil), nil, nil
 	}
 	request.PersonAccess = requesterPersonAccessForTaskLaunch(request)
 	activeCircleRequest, record := runLaunchStep(ctx, &taskLaunchExecution{Launcher: taskLauncher, Request: request, NormalizedProfileName: normalizedProfileName}, resolveActiveCircleLaunchStep{})
 	launchRecords = append(launchRecords, record)
 	if record.Error != "" {
-		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, nil, record.StepName, launchRecords, record.errorValue), nil, nil
+		return completeFailedLaunch(record, nil), nil, nil
 	}
 	request.ActiveCircleID = activeCircleRequest.ActiveCircleID
 	request.ActiveCircleConflict = activeCircleRequest.ActiveCircleConflict
 	artifactManifest, record := runLaunchStep(ctx, &taskLaunchExecution{Launcher: taskLauncher, Request: request, NormalizedProfileName: normalizedProfileName}, conversationArtifactManifestLaunchStep{})
 	launchRecords = append(launchRecords, record)
 	if record.Error != "" {
-		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, nil, record.StepName, launchRecords, record.errorValue), nil, nil
+		return completeFailedLaunch(record, nil), nil, nil
 	}
 	request.ArtifactManifest = artifactManifest
 	turnDecision, routingOutcome := taskLauncher.routedTurnDecision(ctx, request, normalizedProfileName)
@@ -346,18 +350,18 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 	_, record = runLaunchStep(ctx, execution, provisionRequesterWorkspaceLaunchStep{})
 	launchRecords = append(launchRecords, record)
 	if record.Error != "" {
-		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, nil, record.StepName, launchRecords, errorFromStepRecord(record)), routerCallRecords, nil
+		return completeFailedLaunch(record, nil), routerCallRecords, nil
 	}
 	toolSet, record := runLaunchStep(ctx, execution, buildToolSetLaunchStep{})
 	launchRecords = append(launchRecords, record)
 	if record.Error != "" {
-		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, nil, record.StepName, launchRecords, errorFromStepRecord(record)), routerCallRecords, nil
+		return completeFailedLaunch(record, nil), routerCallRecords, nil
 	}
 	toolNames := toolSet.ListToolNames()
 	registryAudit, record := runLaunchStep(ctx, execution, auditToolRegistryLaunchStep{ToolSet: toolSet})
 	launchRecords = append(launchRecords, record)
 	if record.Error != "" {
-		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, toolNames, record.StepName, launchRecords, errorFromStepRecord(record)), routerCallRecords, nil
+		return completeFailedLaunch(record, toolNames), routerCallRecords, nil
 	}
 	conversationScope := ConversationScopeForRequest(taskLauncher.toolCatalogBuilder.WorkspaceRootPath(), ToolCatalogRequest{
 		RequesterPersonID:       request.RequesterPersonID,
@@ -385,7 +389,7 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 		if taskRunID := strings.TrimSpace(turnResult.TaskRun.TaskRunID); taskRunID != "" {
 			request.ExistingTaskRunID = taskRunID
 		}
-		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, toolNames, record.StepName, launchRecords, errorFromStepRecord(record)), routerCallRecords, nil
+		return completeFailedLaunch(record, toolNames), routerCallRecords, nil
 	}
 	launchedToolNames := turnResult.ToolNames
 	if len(launchedToolNames) == 0 {
@@ -400,7 +404,7 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 			taskLauncher.appendStoreMemoryLaunchEvents(turnResult.TaskRun.TaskRunID, request, memoryResult)
 		}
 		taskLauncher.appendAmbientDutyLaunchEvent(turnResult.TaskRun.TaskRunID, request)
-		taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, agentcontract.TaskEventAgentConversationScope, marshalToolResult(conversationScope))
+		taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, agentcontract.TaskEventAgentConversationScope, MarshalBody(conversationScope))
 	}
 	return TaskLaunchResult{
 		TurnResult:            turnResult,
@@ -528,7 +532,7 @@ func (taskLauncher *TaskLauncher) appendStoreMemoryLaunchEvents(taskRunID string
 	if memoryResult.Error != "" {
 		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "memory.recall_failed", memoryResult.Error)
 	} else {
-		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "memory.recall_injected", marshalToolResult(map[string]any{
+		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "memory.recall_injected", MarshalBody(map[string]any{
 			"profileLineCount": memoryResult.ProfileLineCount,
 			"recalledCount":    memoryResult.RecalledCount,
 			"characters":       memoryFactCharacterCount(memoryResult.Facts),
@@ -537,7 +541,7 @@ func (taskLauncher *TaskLauncher) appendStoreMemoryLaunchEvents(taskRunID string
 		}))
 	}
 	label := memorySecurityLabelForRequest(ToolCatalogRequest{PersonAccess: request.PersonAccess, MemoryLabel: request.MemoryLabel})
-	taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "memory.extraction_context", marshalToolResult(memory.ExtractionContext{
+	taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "memory.extraction_context", MarshalBody(memory.ExtractionContext{
 		RequesterName:     request.RequesterName,
 		ActiveCircleID:    request.ActiveCircleID,
 		SecurityLevelRank: label.SecurityLevelRank,
@@ -634,12 +638,9 @@ func (taskLauncher *TaskLauncher) agentTurnRequestForLaunch(request TaskLaunchRe
 		pinnedToolNames = appendUniqueString(pinnedToolNames, contextualMemorySearchToolName)
 	}
 	turnRequest := agentcontract.AgentTurnRequest{
-		ArtifactManifest:   request.ArtifactManifest,
-		TurnStartedAt:      request.TurnStartedAt,
-		ExecutionStartedAt: request.ExecutionStartedAt,
-		// The appliance keeps the clock of the company it runs for. Without it the
-		// agent is told the date is unknown and made to read a shell to find out,
-		// on every request that turns on what day it is.
+		ArtifactManifest:           request.ArtifactManifest,
+		TurnStartedAt:              request.TurnStartedAt,
+		ExecutionStartedAt:         request.ExecutionStartedAt,
 		EnvironmentNow:             request.TurnStartedAt,
 		Company:                    taskLauncher.company(),
 		RequesterPersonID:          request.RequesterPersonID,
@@ -696,8 +697,6 @@ func appendUniqueString(values []string, value string) []string {
 	return append(values, value)
 }
 
-// A missing artifact service must reach the harness as an absent store, not as a
-// non-nil port holding a nil pointer.
 func conversationArtifactStore(taskArtifactService *task.TaskArtifactService) taskstate.TaskArtifactStore {
 	if taskArtifactService == nil {
 		return nil
@@ -734,7 +733,7 @@ func (taskLauncher *TaskLauncher) appendAmbientDutyLaunchEvent(taskRunID string,
 	if !ambientDuty.IsMatch {
 		return
 	}
-	taskLauncher.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventAgentAmbientDutyLaunch, marshalToolResult(map[string]any{
+	taskLauncher.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventAgentAmbientDutyLaunch, MarshalBody(map[string]any{
 		"dutyName":   ambientDuty.Name,
 		"confidence": ambientDuty.Confidence,
 	}))
@@ -742,7 +741,7 @@ func (taskLauncher *TaskLauncher) appendAmbientDutyLaunchEvent(taskRunID string,
 
 func (taskLauncher *TaskLauncher) appendLaunchStepRecords(taskRunID string, records []launchStepRecord) {
 	for _, record := range records {
-		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, launchStepTaskEventName(record.Status), marshalToolResult(record))
+		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, launchStepTaskEventName(record.Status), MarshalBody(record))
 	}
 }
 
@@ -817,9 +816,6 @@ func requesterPersonAccess(requesterPersonID string, personAccess policy.PersonA
 	return policy.EnsureRequesterDefaults(personAccess)
 }
 
-// bluecollarMemoryFacts converts recalled facts into the loop's own shape. The
-// loop carries its own type so it never depends on the service that stores them;
-// this single call is where the two meet.
 func bluecollarMemoryFacts(facts []memory.MemoryFact) []agentcontract.MemoryFact {
 	converted := make([]agentcontract.MemoryFact, 0, len(facts))
 	for _, fact := range facts {
@@ -883,7 +879,7 @@ func (routerCallLaunchStep) Name() string {
 func (step routerCallLaunchStep) Run(ctx context.Context, execution *taskLaunchExecution) (routerCallResult, error) {
 	routingContext, cancel := execution.Launcher.intakeRoutingContext(ctx, step.Request)
 	defer cancel()
-	callLedger := &agentcontract.TurnRouterCallLedger{}
+	callLedger := &agentcontract.IntakeCallLedger{}
 	turnDecision, errorValue := execution.Launcher.turnRouter.PlanObserved(routingContext, agentcontract.AgentRequest{
 		RequesterPersonID: step.Request.RequesterPersonID,
 		ConversationID:    step.Request.ConversationID,
@@ -897,6 +893,7 @@ func (step routerCallLaunchStep) Run(ctx context.Context, execution *taskLaunchE
 		EnvironmentNow:    step.Request.TurnStartedAt,
 		Company:           execution.Launcher.company(),
 		ToolSet:           step.ToolSet,
+		DecidedTurnFields: step.Request.DecidedTurnFields,
 	}, callLedger)
 	result := routerCallResult{TurnDecision: turnDecision, CallRecords: callLedger.Records}
 	return result, errorValue

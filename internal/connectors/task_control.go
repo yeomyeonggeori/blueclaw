@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -33,18 +34,18 @@ func (connectorRuntime *ConnectorRuntime) handleTaskControlIfRequested(
 
 	selection := connectorRuntime.applyTaskControlIntent(decision, personID, event)
 	for _, taskRun := range selection.cancelledTaskRuns {
-		connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventTaskStopRequested, marshalConnectorEventBody(map[string]string{
+		connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventTaskStopRequested, agentruntime.MarshalBody(map[string]string{
 			"messageID": event.MessageID,
 			"intent":    string(selection.intent),
 			"reason":    selection.reason,
 		}))
-		connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventTaskStopClassified, marshalConnectorEventBody(map[string]any{
+		connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventTaskStopClassified, agentruntime.MarshalBody(map[string]any{
 			"intent":             string(selection.intent),
 			"reason":             selection.reason,
 			"classifiedByLLM":    false,
 			"originConversation": event.ConversationID,
 		}))
-		connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventTaskStopCancelled, marshalConnectorEventBody(map[string]string{
+		connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventTaskStopCancelled, agentruntime.MarshalBody(map[string]string{
 			"messageID": event.MessageID,
 		}))
 	}
@@ -167,19 +168,10 @@ func (connectorRuntime *ConnectorRuntime) looksLikeActiveTaskFollowUp(ctx contex
 	if !isFound {
 		return false
 	}
-	activeTaskRun, isFound := connectorRuntime.latestCurrentConversationActiveTask(personID, event)
-	if !isFound {
+	if _, isFound := connectorRuntime.latestCurrentConversationActiveTask(personID, event); !isFound {
 		return false
 	}
-	isRelated, errorValue := connectorRuntime.intakeClassifier.ClassifyActiveTaskFollowUp(ctx, agentcontract.ActiveTaskFollowUpClassificationRequest{
-		ActiveTaskPrompt: activeTaskRun.Prompt,
-		ActiveTaskStatus: string(activeTaskRun.Status),
-		LatestMessage:    event.Prompt,
-	})
-	if errorValue != nil {
-		return false
-	}
-	return isRelated
+	return connectorRuntime.relatesToActiveTask(ctx, adapter, event)
 }
 
 func exactTaskControlIntent(prompt string) agentcontract.TaskControlIntent {
