@@ -116,7 +116,6 @@ export const finishActionSchema = actionStateSchema.extend({
   action: z.literal('finish'),
   message: z.string(),
   goalSatisfied: z.boolean(),
-  completionSummary: z.string().optional(),
   failureResolution: z.string().optional(),
   goalStatus: z.literal('satisfied'),
   completionEvidenceIDs: z.array(z.string()),

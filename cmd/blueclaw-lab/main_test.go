@@ -218,7 +218,7 @@ func fakeModelContentForSchema(schemaName string) string {
 	case "bluecollar_turn_router":
 		return `{"route":"answer_question","classification":"quick_reply","taskShape":"immediate_reply","level":"xlow","requestedOutputFormats":null,"requiredEvidence":[],"initialToolNames":[],"responseLanguage":"ko","reason":"fake live router","userFacingReply":"","priorTaskReference":"none"}`
 	case "bluecollar_agent_turn_action":
-		return `{"action":"finish","message":"fake live reply from the model endpoint","completionSummary":"fake live reply from the model endpoint","goalStatus":"satisfied","goalSatisfied":true,"hasRemainingWork":false,"completionEvidenceIDs":[],"qualityReview":[],"executionStateUpdate":{}}`
+		return `{"action":"finish","message":"fake live reply from the model endpoint","goalStatus":"satisfied","goalSatisfied":true,"hasRemainingWork":false,"completionEvidenceIDs":[],"qualityReview":[],"executionStateUpdate":{}}`
 	default:
 		return "fake recovery reply"
 	}

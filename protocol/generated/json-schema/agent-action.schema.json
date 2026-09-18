@@ -211,9 +211,6 @@
           },
           "type": "array"
         },
-        "completionSummary": {
-          "type": "string"
-        },
         "executionStateUpdate": {
           "additionalProperties": {},
           "properties": {
