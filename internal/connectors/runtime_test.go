@@ -3624,14 +3624,26 @@ func (repository *testConnectorQueueRepository) TryEnqueueConnectorEvent(event P
 	return false, ConnectorRuntimeResult{}, nil
 }
 
-func (repository *testConnectorQueueRepository) ClaimPendingConnectorEvents(int, time.Duration) ([]QueuedConnectorEvent, error) {
+func (repository *testConnectorQueueRepository) ClaimPendingConnectorEvents(limit int, _ time.Duration) ([]QueuedConnectorEvent, error) {
 	if len(repository.pendingEvents) == 0 {
 		return nil, nil
 	}
-	queuedEvent := repository.pendingEvents[0]
-	repository.pendingEvents = repository.pendingEvents[1:]
-	queuedEvent.AttemptCount++
-	return []QueuedConnectorEvent{queuedEvent}, nil
+	if limit < 1 {
+		limit = 1
+	}
+	burstKey := inboundDecisionBurstKey(repository.pendingEvents[0].Event)
+	claimedEvents := []QueuedConnectorEvent{}
+	remainingEvents := []QueuedConnectorEvent{}
+	for _, queuedEvent := range repository.pendingEvents {
+		if len(claimedEvents) < limit && inboundDecisionBurstKey(queuedEvent.Event) == burstKey {
+			queuedEvent.AttemptCount++
+			claimedEvents = append(claimedEvents, queuedEvent)
+			continue
+		}
+		remainingEvents = append(remainingEvents, queuedEvent)
+	}
+	repository.pendingEvents = remainingEvents
+	return claimedEvents, nil
 }
 
 func (repository *testConnectorQueueRepository) MarkConnectorEventSucceeded(_ PlatformInboundEvent, result ConnectorRuntimeResult) error {

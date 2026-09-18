@@ -237,3 +237,54 @@ func TestAnAttachmentsOnlyGroupMessageIsProcessedWithoutBeingDecided(t *testing.
 	}
 }
 
+func TestAClaimedBurstIsDecidedOnceAndProcessedInArrivalOrder(t *testing.T) {
+	connectorRuntime, _, adapter := recordingIntakeDecisionRuntime(t)
+	recorder := &reactingBurstDecider{}
+	connectorRuntime.UseIntakeDecider(recorder)
+	repository := &testConnectorQueueRepository{}
+	connectorRuntime.UseEventRepository(repository)
+	receivedAt := time.Unix(1756800000, 0)
+	repository.pendingEvents = []QueuedConnectorEvent{
+		burstChannelQueuedEvent("message-1", receivedAt, true, "이거 정리해줘"),
+		burstChannelQueuedEvent("message-2", receivedAt.Add(time.Second), true, "이어서 부탁해"),
+	}
+
+	connectorRuntime.processNextQueuedConnectorEvent(context.Background())
+
+	if len(recorder.requests) != 1 {
+		t.Fatalf("expected the claimed burst to be decided in one call, got %d", len(recorder.requests))
+	}
+	decidedMessageIDs := []string{}
+	for _, message := range recorder.requests[0].Messages {
+		decidedMessageIDs = append(decidedMessageIDs, message.MessageID)
+	}
+	if len(decidedMessageIDs) != 2 || decidedMessageIDs[0] != "message-1" || decidedMessageIDs[1] != "message-2" {
+		t.Fatalf("expected both messages in arrival order in the one decision, got %v", decidedMessageIDs)
+	}
+	reactedMessageIDs := []string{}
+	for _, reaction := range adapter.reactions {
+		if reaction.Reason == "addressing_ack" {
+			reactedMessageIDs = append(reactedMessageIDs, reaction.MessageID)
+		}
+	}
+	if len(reactedMessageIDs) != 2 || reactedMessageIDs[0] != "message-1" || reactedMessageIDs[1] != "message-2" {
+		t.Fatalf("expected the burst to be processed in arrival order, got %v", reactedMessageIDs)
+	}
+}
+
+type reactingBurstDecider struct {
+	requests []agentcontract.IntakeDecisionRequest
+}
+
+func (decider *reactingBurstDecider) Decide(_ context.Context, request agentcontract.IntakeDecisionRequest, _ *agentcontract.IntakeCallLedger) (agentcontract.IntakeDecisions, error) {
+	decider.requests = append(decider.requests, request)
+	decisions := agentcontract.IntakeDecisions{}
+	for _, message := range request.Messages {
+		decisions.Messages = append(decisions.Messages, agentcontract.IntakeMessageDecision{
+			MessageID:  message.MessageID,
+			Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetHuman, ReactionEmoji: "eyes"},
+		})
+	}
+	return decisions, nil
+}
+
