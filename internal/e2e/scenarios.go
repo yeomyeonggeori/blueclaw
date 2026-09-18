@@ -149,7 +149,7 @@ func MemoryGuidedFollowupScenario(artifactDirectoryPath string) VirtualSessionSc
 				RouterRequiredEvidence: []string{"memory_remember"},
 				ActionResponses: []string{
 					actionCallTool("memory_remember", `{"content":"발표 자료는 짧은 문장과 한국어 제목을 선호한다"}`),
-					actionFinishMessage("기억해둘게요.", "obs-001:memory_remember:0"),
+					actionFinishMessage("기억해둘게요.", "obs-001"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 				ExpectedToolCalls:        []string{"memory_remember"},
@@ -230,7 +230,7 @@ func WebSearchAcceptanceScenario(artifactDirectoryPath string) VirtualSessionSce
 			RouterRequiredEvidence: []string{"web_search"},
 			ActionResponses: []string{
 				actionCallTool("web_search", `{"query":"current external information acceptance test","limit":1}`),
-				actionFinishMessage("검색 결과 BlueclawSearchStubToken 정보를 확인했습니다.", "obs-001:web_search:0"),
+				actionFinishMessage("검색 결과 BlueclawSearchStubToken 정보를 확인했습니다.", "obs-001"),
 			},
 			ExpectedToolCalls:      []string{"web_search"},
 			ExpectedSequence:       []string{toolRequestedEventName("web_search"), toolResultEventName("web_search")},
@@ -270,7 +270,7 @@ func FileWriteAcceptanceScenario(artifactDirectoryPath string) VirtualSessionSce
 			ActionResponses: []string{
 				actionCallTool("file_write", `{"path":"work/customer-support/faq-revision.json","content":"{\"title\":\"FAQ 개편\",\"owner\":\"고객지원팀\",\"status\":\"검토 중\"}\n"}`),
 				actionCallTool("file_deliver", `{"path":"work/customer-support/faq-revision.json"}`),
-				actionFinishMessage("JSON 메모 파일을 생성하고 첨부해 저장 결과를 확인했습니다.", "obs-002:file_deliver:0"),
+				actionFinishMessage("JSON 메모 파일을 생성하고 첨부해 저장 결과를 확인했습니다.", "obs-002"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 			ExpectedToolCalls:        []string{"file_write", "file_deliver"},
@@ -347,7 +347,7 @@ func AttachmentMaterialReadScenario(artifactDirectoryPath string) VirtualSession
 			ContextMaterials: []connectors.InputAttachment{attachment},
 			ActionResponses: []string{
 				actionCallTool("read", `{"path":"https://mattermost.local/api/v4/files/file-1"}`),
-				actionFinishMessage("이미지를 확인했습니다.", "obs-001:read:0"),
+				actionFinishMessage("이미지를 확인했습니다.", "obs-001"),
 			},
 			ExpectedToolCalls:      []string{"read"},
 			ExpectedToolCallCounts: map[string]int{"shell": 0},
@@ -386,7 +386,7 @@ func AttachmentHTMLPreviewRecoveryScenario(artifactDirectoryPath string) Virtual
 			InputAttachments: []connectors.InputAttachment{attachment},
 			ActionResponses: []string{
 				actionCallTool("read", `{"path":"https://mattermost.local/api/v4/files/file-html"}`),
-				actionFinishMessage("첨부 HTML을 확인했습니다. 자동화 섹션의 정보 구조와 CTA를 더 선명하게 다듬으면 좋겠습니다.", "obs-001:read:0"),
+				actionFinishMessage("첨부 HTML을 확인했습니다. 자동화 섹션의 정보 구조와 CTA를 더 선명하게 다듬으면 좋겠습니다.", "obs-001"),
 			},
 			ExpectedToolCalls: []string{"read"},
 			ExpectedToolCallCounts: map[string]int{
@@ -433,7 +433,7 @@ func AttachmentHTMLPreviousPreviewRecoveryScenario(artifactDirectoryPath string)
 			ContextMaterials: []connectors.InputAttachment{attachment},
 			ActionResponses: []string{
 				actionCallTool("read", `{"path":"https://mattermost.local/api/v4/files/file-html"}`),
-				actionFinishMessage("이전 첨부 HTML을 확인했습니다. 자동화 흐름의 핵심 CTA와 섹션 우선순위를 더 명확히 잡으면 좋겠습니다.", "obs-001:read:0"),
+				actionFinishMessage("이전 첨부 HTML을 확인했습니다. 자동화 흐름의 핵심 CTA와 섹션 우선순위를 더 명확히 잡으면 좋겠습니다.", "obs-001"),
 			},
 			ExpectedToolCalls: []string{"read"},
 			ExpectedToolCallCounts: map[string]int{
@@ -545,7 +545,7 @@ func ScheduleCreateAcceptanceScenario(artifactDirectoryPath string) VirtualSessi
 			Prompt: "1분마다 \"1분 지났습니다\"라고 보내줘",
 			ActionResponses: []string{
 				actionInvokeCapabilityTool("schedule_create", `{"name":"1분 알림","taskInstruction":"현재 대화에 \"1분 지났습니다\"라고 보낸다.","kind":"interval","intervalSecond":60,"maxRunCount":10,"repeatPolicy":"finite"}`),
-				actionFinishMessage("1분마다 알림을 보내도록 예약해둘게요.", "obs-001:schedule_create:0"),
+				actionFinishMessage("1분마다 알림을 보내도록 예약해둘게요.", "obs-001"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 			ExpectedSelectedSkills:   []string{"scheduled-task"},
@@ -578,7 +578,7 @@ func ScheduleLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSe
 				RouterRequiredEvidence: []string{"schedule_create"},
 				ActionResponses: []string{
 					actionInvokeCapabilityTool("schedule_create", `{"name":"상태 확인 알림","taskInstruction":"현재 대화에 \"상태를 확인하세요\"라고 보낸다.","kind":"interval","intervalSecond":1800,"maxRunCount":3,"repeatPolicy":"finite"}`),
-					actionFinishMessage("30분마다 세 번 상태 확인 알림을 보내도록 예약해둘게요.", "obs-001:schedule_create:0"),
+					actionFinishMessage("30분마다 세 번 상태 확인 알림을 보내도록 예약해둘게요.", "obs-001"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 				ExpectedSelectedSkills:   []string{"scheduled-task"},
@@ -593,7 +593,7 @@ func ScheduleLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSe
 				RouterRequiredEvidence: []string{"schedule_update"},
 				ActionResponses: []string{
 					actionInvokeCapabilityTool("schedule_update", `{"scheduleID":"virtual-schedule-001","intervalSecond":3600,"maxRunCount":5,"repeatPolicy":"finite"}`),
-					actionFinishMessage("예약을 1시간마다 다섯 번으로 수정했습니다.", "obs-001:schedule_update:0"),
+					actionFinishMessage("예약을 1시간마다 다섯 번으로 수정했습니다.", "obs-001"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 				ExpectedEventCounts: []VirtualEventCount{
@@ -606,7 +606,7 @@ func ScheduleLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSe
 				RouterRequiredEvidence: []string{"schedule_cancel"},
 				ActionResponses: []string{
 					actionInvokeCapabilityTool("schedule_cancel", `{"scope":"mine"}`),
-					actionFinishMessage("예약을 삭제했습니다.", "obs-001:schedule_cancel:0"),
+					actionFinishMessage("예약을 삭제했습니다.", "obs-001"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 				ExpectedEventCounts: []VirtualEventCount{
@@ -631,7 +631,7 @@ func CalendarEventLifecycleAcceptanceScenario(artifactDirectoryPath string) Virt
 				RouterRequiredEvidence: []string{"event_add"},
 				ActionResponses: []string{
 					actionInvokeCapabilityTool("event_add", `{"title":"제품 회고","startsAt":"2026-06-13T10:00:00+09:00","endsAt":"2026-06-13T11:00:00+09:00"}`),
-					actionFinishMessage("내일 오전 10시에 제품 회고 일정을 추가했습니다.", "obs-001:event_add:0"),
+					actionFinishMessage("내일 오전 10시에 제품 회고 일정을 추가했습니다.", "obs-001"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 				ExpectedSelectedSkills:   []string{"calendar"},
@@ -644,7 +644,7 @@ func CalendarEventLifecycleAcceptanceScenario(artifactDirectoryPath string) Virt
 				RouterRequiredEvidence: []string{"event_update"},
 				ActionResponses: []string{
 					actionCallTool("event_update", `{"eventHint":"calendar-event-001","title":"제품 회고","startsAt":"2026-06-13T14:00:00+09:00","endsAt":"2026-06-13T15:00:00+09:00"}`),
-					actionFinishMessage("제품 회고 일정을 내일 오후 2시로 변경했습니다.", "obs-001:event_update:0"),
+					actionFinishMessage("제품 회고 일정을 내일 오후 2시로 변경했습니다.", "obs-001"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 				ExpectedEventCounts: []VirtualEventCount{
@@ -670,7 +670,7 @@ func CalendarEventLifecycleAcceptanceScenario(artifactDirectoryPath string) Virt
 				Prompt:         "확인",
 				RouterApproval: "approve",
 				ActionResponses: []string{
-					actionFinishMessage("제품 회고 일정을 삭제했습니다.", "obs-002:event_delete:0"),
+					actionFinishMessage("제품 회고 일정을 삭제했습니다.", "obs-002"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 				ExpectedEventCounts: []VirtualEventCount{
@@ -697,7 +697,7 @@ func CalendarFalseFinishRecoveryAcceptanceScenario(artifactDirectoryPath string)
 			ActionResponses: []string{
 				actionFinishMessage("7월 13일 미팅을 오전 10시~11시로 등록했습니다."),
 				actionInvokeCapabilityTool("event_add", `{"title":"샨보장 미팅","startsAt":"2026-07-13T10:00:00+09:00","endsAt":"2026-07-13T11:00:00+09:00"}`),
-				actionFinishMessage("7월 13일 미팅을 오전 10시~11시로 등록했습니다.", "obs-002:event_add:0"),
+				actionFinishMessage("7월 13일 미팅을 오전 10시~11시로 등록했습니다.", "obs-002"),
 			},
 			CompletionJudgeResponses: []string{
 				completionJudgeUnrecordedWorkResponse("event_add"),
@@ -735,7 +735,7 @@ func CalendarReadQuestionWithWriteHintScenario(artifactDirectoryPath string) Vir
 			RouterRequiredEvidence: []string{"event_list"},
 			ActionResponses: []string{
 				actionInvokeCapabilityTool("event_list", `{"startsAt":"2026-07-13","endsAt":"2026-07-14"}`),
-				actionFinishMessage("7월 13일에는 등록된 미팅이 없습니다.", "obs-001:event_list:0"),
+				actionFinishMessage("7월 13일에는 등록된 미팅이 없습니다.", "obs-001"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 			ExpectedSelectedSkills:   []string{"calendar"},
@@ -771,7 +771,7 @@ func AmbientDutyCalendarAcceptanceScenario(artifactDirectoryPath string) Virtual
 			Addressing:       connectors.AddressingMetadata{},
 			ActionResponses: []string{
 				actionInvokeCapabilityTool("event_add", `{"title":"정기회의","startsAt":"2026-06-12T17:00:00+09:00","endsAt":"2026-06-12T18:00:00+09:00","participantPersonHints":["최견본","이샘플"]}`),
-				actionFinishMessage("정기회의 일정을 추가했습니다.", "obs-001:event_add:0"),
+				actionFinishMessage("정기회의 일정을 추가했습니다.", "obs-001"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 			ExpectedSelectedSkills:   []string{"calendar"},
@@ -811,7 +811,7 @@ func AmbientDutyAnnouncementNoEchoScenario(artifactDirectoryPath string) Virtual
 			Addressing:       connectors.AddressingMetadata{},
 			ActionResponses: []string{
 				actionInvokeCapabilityTool("event_add", `{"title":"라운지 촬영","startsAt":"2026-09-02T07:00:00+09:00","endsAt":"2026-09-02T10:00:00+09:00"}`),
-				actionFinishMessage("촬영 일정을 캘린더에 기록했습니다.", "obs-001:event_add:0"),
+				actionFinishMessage("촬영 일정을 캘린더에 기록했습니다.", "obs-001"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 			ExpectedToolCalls:        []string{"event_add"},
@@ -878,7 +878,7 @@ func AmbientTaskCaptureAcceptanceScenario(artifactDirectoryPath string) VirtualS
 			Addressing:             connectors.AddressingMetadata{OtherPersonMentioned: true},
 			ActionResponses: []string{
 				actionInvokeCapabilityTool("task_add", `{"title":"신규 가입 플로우 점검","participantPersonHints":["예시"]}`),
-				actionFinishMessage("예시 님 업무로 추가했습니다.", "obs-001:task_add:0"),
+				actionFinishMessage("예시 님 업무로 추가했습니다.", "obs-001"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 			ExpectedToolCalls:        []string{"task_add"},
@@ -909,7 +909,7 @@ func AmbientTaskCaptureAcceptanceScenario(artifactDirectoryPath string) VirtualS
 			Addressing:             connectors.AddressingMetadata{OtherPersonMentioned: true},
 			ActionResponses: []string{
 				actionInvokeCapabilityTool("task_update", `{"taskHint":"task-1","endsAt":"2026-06-24"}`),
-				actionFinishMessage("예시 님 업무 마감을 수요일로 변경했습니다.", "obs-001:task_update:0"),
+				actionFinishMessage("예시 님 업무 마감을 수요일로 변경했습니다.", "obs-001"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 			ExpectedToolCalls:        []string{"task_update"},
@@ -935,9 +935,9 @@ func CompletionJudgeRecoveryAcceptanceScenario(artifactDirectoryPath string) Vir
 			RouterRequiredEvidence: []string{"task_add", "task_update"},
 			ActionResponses: []string{
 				actionInvokeCapabilityTool("task_add", `{"title":"분기 결산 누락 확인"}`),
-				actionFinishMessage("업무를 추가했습니다.", "obs-001:task_add:0"),
+				actionFinishMessage("업무를 추가했습니다.", "obs-001"),
 				actionInvokeCapabilityTool("task_update", `{"taskHint":"task-1","endsAt":"2026-07-24"}`),
-				actionFinishMessage("마감일을 포함해 업무를 추가했습니다.", "obs-003:task_update:0"),
+				actionFinishMessage("마감일을 포함해 업무를 추가했습니다.", "obs-003"),
 			},
 			CompletionJudgeResponses: []string{
 				`{"satisfied":false,"missingWork":["마감일(endDate)이 누락되었습니다"],"reason":"업무에 요청된 마감일이 기록되지 않았습니다"}`,
@@ -972,7 +972,7 @@ func SkillLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSessi
 				RouterRequiredEvidence: []string{"skill_add"},
 				ActionResponses: []string{
 					actionCallTool("skill_add", skillAddToolInput(skillName, skillContent)),
-					actionFinishMessage("memo-helper skill을 등록했습니다.", "obs-001:skill_add:0"),
+					actionFinishMessage("memo-helper skill을 등록했습니다.", "obs-001"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 				ExpectedToolCalls:        []string{"skill_add"},
@@ -994,7 +994,7 @@ func SkillLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSessi
 				RouterRequiredEvidence: []string{"skill_remove"},
 				ActionResponses: []string{
 					actionCallTool("skill_remove", `{"name":"memo-helper"}`),
-					actionFinishMessage("memo-helper skill을 삭제했습니다.", "obs-001:skill_remove:0"),
+					actionFinishMessage("memo-helper skill을 삭제했습니다.", "obs-001"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 				ExpectedToolCalls:        []string{"skill_remove"},
@@ -1022,7 +1022,7 @@ func CapabilityQuestionAcceptanceScenario(artifactDirectoryPath string) VirtualS
 			RouterTaskShape: agentcontract.TaskShapeResearchTask,
 			ActionResponses: []string{
 				actionCallTool("skill_search", `{}`),
-				actionFinishMessage("사용 가능한 skill에는 presentation, scheduled-task, site-prototype이 있습니다.", "obs-001:skill_search:0"),
+				actionFinishMessage("사용 가능한 skill에는 presentation, scheduled-task, site-prototype이 있습니다.", "obs-001"),
 			},
 			ExpectedToolCalls: []string{"skill_search"},
 			ExpectedToolCallCounts: map[string]int{
@@ -1058,7 +1058,7 @@ func TaskHistoryQuestionAcceptanceScenario(artifactDirectoryPath string) Virtual
 				RouterTaskShape: agentcontract.TaskShapeResearchTask,
 				ActionResponses: []string{
 					actionCallTool("conversation_history", `{"limit":20}`),
-					actionFinishMessage("최근에는 계약서 확인 요약 작업을 완료했습니다.", "obs-001:conversation_history:0"),
+					actionFinishMessage("최근에는 계약서 확인 요약 작업을 완료했습니다.", "obs-001"),
 				},
 				ExpectedToolCalls: []string{"conversation_history"},
 				ExpectedToolCallCounts: map[string]int{
@@ -1084,7 +1084,7 @@ func MemoryExplicitToolAcceptanceScenario(artifactDirectoryPath string) VirtualS
 				RouterRequiredEvidence: []string{"memory_remember"},
 				ActionResponses: []string{
 					actionCallTool("memory_remember", `{"content":"preferred language is Korean"}`),
-					actionFinishMessage("Remembered: your preferred language is Korean.", "obs-001:memory_remember:0"),
+					actionFinishMessage("Remembered: your preferred language is Korean.", "obs-001"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 				ExpectedToolCalls:        []string{"memory_remember"},
@@ -1102,7 +1102,7 @@ func MemoryExplicitToolAcceptanceScenario(artifactDirectoryPath string) VirtualS
 				RouterRequiredEvidence: []string{"memory_search"},
 				ActionResponses: []string{
 					actionCallTool("memory_search", `{"query":"preferred language"}`),
-					actionFinishMessage("Your preferred language is Korean.", "obs-001:memory_search:0"),
+					actionFinishMessage("Your preferred language is Korean.", "obs-001"),
 				},
 				ExpectedToolCalls: []string{"memory_search"},
 				ExpectedToolCallCounts: map[string]int{
@@ -1126,7 +1126,7 @@ func PersonaProfileUpdateAcceptanceScenario(artifactDirectoryPath string) Virtua
 				RouterRequiredEvidence: []string{"persona_update"},
 				ActionResponses: []string{
 					actionCallTool("persona_update", `{"target":"user","patch":{"language":{"default":"ko"}}}`),
-					actionFinishMessage("한국어 답변 설정을 저장했습니다.", "obs-001:persona_update:0"),
+					actionFinishMessage("한국어 답변 설정을 저장했습니다.", "obs-001"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 				ExpectedToolCalls:        []string{"persona_update"},
@@ -1145,7 +1145,7 @@ func PersonaProfileUpdateAcceptanceScenario(artifactDirectoryPath string) Virtua
 				RouterRequiredEvidence: []string{"persona_read"},
 				ActionResponses: []string{
 					actionCallTool("persona_read", `{"target":"user"}`),
-					actionFinishMessage("저장된 언어 설정은 한국어입니다.", "obs-001:persona_read:0"),
+					actionFinishMessage("저장된 언어 설정은 한국어입니다.", "obs-001"),
 				},
 				ExpectedToolCalls: []string{"persona_read"},
 				ExpectedEventCounts: []VirtualEventCount{{
@@ -1162,7 +1162,7 @@ func PersonaProfileUpdateAcceptanceScenario(artifactDirectoryPath string) Virtua
 				ActionResponses: []string{
 					actionCallTool("persona_update", `{"target":"soul","patch":{"language":{"default":"ko"}}}`),
 					actionCallTool("persona_read", `{"target":"soul"}`),
-					actionFinishMessage("공유 원칙은 foreground에서 변경할 수 없습니다. 현재 원칙을 다시 확인했습니다.", "obs-002:persona_read:0"),
+					actionFinishMessage("공유 원칙은 foreground에서 변경할 수 없습니다. 현재 원칙을 다시 확인했습니다.", "obs-002"),
 				},
 				ExpectedToolCalls: []string{"persona_read"},
 				ForbiddenEvents:   []string{toolRequestedEventName("persona_update"), toolResultEventName("persona_update")},
@@ -1209,7 +1209,7 @@ func FailureExplanationAcceptanceScenario(artifactDirectoryPath string) VirtualS
 				RouterTaskShape: agentcontract.TaskShapeResearchTask,
 				ActionResponses: []string{
 					actionCallTool("conversation_history", `{"limit":20}`),
-					actionFinishMessage("shell 실행이 permission denied 때문에 실패했습니다.", "obs-001:conversation_history:0"),
+					actionFinishMessage("shell 실행이 permission denied 때문에 실패했습니다.", "obs-001"),
 				},
 				ExpectedToolCalls: []string{"conversation_history"},
 				ExpectedEventCounts: []VirtualEventCount{
@@ -1233,7 +1233,7 @@ func OneTimeScheduleAcceptanceScenario(artifactDirectoryPath string) VirtualSess
 			RouterRequiredEvidence: []string{"schedule_create"},
 			ActionResponses: []string{
 				actionInvokeCapabilityTool("schedule_create", `{"name":"계약서 확인 알림","taskInstruction":"현재 대화에 \"계약서를 확인하세요\"라고 보낸다.","kind":"once","runAt":"2027-01-15T00:00:00Z"}`),
-				actionFinishMessage("2027년 1월 15일 오전 9시에 한 번 알림을 보내도록 예약해둘게요.", "obs-001:schedule_create:0"),
+				actionFinishMessage("2027년 1월 15일 오전 9시에 한 번 알림을 보내도록 예약해둘게요.", "obs-001"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 			ExpectedSelectedSkills:   []string{"scheduled-task"},
@@ -1284,7 +1284,7 @@ func SitePrototypeAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 			ActionResponses: []string{
 				actionCallTool("file_write", `{"path":"/workspace/circles/member/sites/local-fleet-studio/draft/app/public/site-content.json","content":"{\"siteName\":\"Local Fleet Studio\",\"tagline\":\"로컬 플릿 웹사이트 생성 배포 테스트\",\"blocks\":[{\"variant\":\"hero\",\"title\":\"Local Fleet Studio\",\"body\":\"로컬 플릿 웹사이트 생성 배포 테스트\"},{\"variant\":\"prose\",\"title\":\"서비스 소개\",\"body\":\"Local Fleet Studio는 로컬 플릿 환경에서 웹사이트 생성과 배포 과정을 검증하는 테스트 서비스입니다.\"},{\"variant\":\"features\",\"title\":\"장점\",\"items\":[{\"title\":\"빠른 프로토타입\",\"body\":\"빠른 프로토타입 생성\"},{\"title\":\"안전한 검증\",\"body\":\"안전한 배포 검증\"},{\"title\":\"손쉬운 재배포\",\"body\":\"손쉬운 재배포\"}]},{\"variant\":\"cta\",\"title\":\"문의\",\"body\":\"자세한 내용이 궁금하시면 지금 바로 문의해 주세요.\"}]}"}`),
 				actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/member/sites/local-fleet-studio/draft","mode":"publish"}`),
-				actionFinishMessage("Local Fleet Studio 웹사이트 프로토타입을 배포했습니다: https://local-fleet-studio.device.example.test", "obs-002:site_serve:0"),
+				actionFinishMessage("Local Fleet Studio 웹사이트 프로토타입을 배포했습니다: https://local-fleet-studio.device.example.test", "obs-002"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 			ExpectedSelectedSkills:   []string{"website"},
@@ -1325,7 +1325,7 @@ func SiteEditRedeployAcceptanceScenario(artifactDirectoryPath string) VirtualSes
 				ActionResponses: []string{
 					actionCallTool("file_write", `{"path":"/workspace/circles/member/sites/local-fleet-studio/draft/app/public/site-content.json","content":"{\"siteName\":\"Local Fleet Studio\",\"tagline\":\"Local fleet create deploy test\",\"blocks\":[{\"variant\":\"hero\",\"title\":\"Local Fleet Studio\",\"body\":\"Local fleet create deploy test\"},{\"variant\":\"prose\",\"title\":\"Overview\",\"body\":\"Local Fleet Studio validates local fleet website creation and deployment.\"},{\"variant\":\"features\",\"title\":\"Features\",\"items\":[{\"title\":\"Fast prototyping\",\"body\":\"Fast prototyping\"},{\"title\":\"Safe verification\",\"body\":\"Safe deploy verification\"},{\"title\":\"Easy redeploys\",\"body\":\"Easy redeploys\"}]}]}"}`),
 					actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/member/sites/local-fleet-studio/draft","mode":"publish"}`),
-					actionFinishMessage("Deployed the Local Fleet Studio site: https://local-fleet-studio.device.example.test", "obs-002:site_serve:0"),
+					actionFinishMessage("Deployed the Local Fleet Studio site: https://local-fleet-studio.device.example.test", "obs-002"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 				ExpectedSelectedSkills:   []string{"website"},
@@ -1343,7 +1343,7 @@ func SiteEditRedeployAcceptanceScenario(artifactDirectoryPath string) VirtualSes
 					actionCallTool("site_list", `{}`),
 					actionCallTool("file_write", `{"path":"/workspace/circles/member/sites/local-fleet-studio/draft/app/public/site-content.json","content":"{\"siteName\":\"Local Fleet Studio Updated\",\"tagline\":\"Redeploy verification passed\",\"blocks\":[{\"variant\":\"hero\",\"title\":\"Local Fleet Studio Updated\",\"body\":\"Redeploy verification passed\"}]}"}`),
 					actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio Updated","sourceWorkspacePath":"/workspace/circles/member/sites/local-fleet-studio/draft","mode":"publish","siteReference":"local-fleet-studio"}`),
-					actionFinishMessage("Updated and redeployed the site: https://local-fleet-studio.device.example.test", "obs-002:file_write:0", "obs-003:site_serve:0"),
+					actionFinishMessage("Updated and redeployed the site: https://local-fleet-studio.device.example.test", "obs-002", "obs-003"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 				ExpectedToolCallCounts:   map[string]int{"shell": 0},
@@ -1384,7 +1384,7 @@ func SiteCustomStructureAcceptanceScenario(artifactDirectoryPath string) Virtual
 				actionCallTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/member/sites/demo/draft","mode":"publish","siteReference":"demo"}`),
 				actionCallTool("shell", `{"command":"mkdir -p dist && printf '<!doctype html><html><body><main class=\"custom-layout\"><section>Local Fleet Studio</section><section>Two-column custom layout</section></main></body></html>' > dist/index.html","workingDirectoryPath":"/workspace/circles/member/sites/demo/draft/app","timeoutSecond":120}`),
 				actionCallTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/member/sites/demo/draft","mode":"publish","siteReference":"demo"}`),
-				actionFinishMessage("커스텀 레이아웃을 빌드하고 다시 배포했습니다: https://demo.device.example.test", "obs-005:site_serve:0"),
+				actionFinishMessage("커스텀 레이아웃을 빌드하고 다시 배포했습니다: https://demo.device.example.test", "obs-005"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 			ExpectedToolCallCounts:   map[string]int{"shell": 1, "file_write": 1, "site_serve": 1},
@@ -1426,7 +1426,7 @@ func SiteLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 				ActionResponses: []string{
 					actionCallTool("shell", `{"command":"mkdir -p dist && printf '<!doctype html><html><body><main><h1>Local Fleet Studio</h1><p>로컬 플릿 웹사이트 CRUD 테스트</p></main></body></html>' > dist/index.html","workingDirectoryPath":"/workspace/circles/member/sites/local-fleet-studio/draft/app","timeoutSecond":120}`),
 					actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/member/sites/local-fleet-studio/draft","mode":"publish"}`),
-					actionFinishMessage("Local Fleet Studio 웹사이트를 배포했습니다: https://local-fleet-studio.device.example.test", "obs-002:site_serve:0"),
+					actionFinishMessage("Local Fleet Studio 웹사이트를 배포했습니다: https://local-fleet-studio.device.example.test", "obs-002"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 				ExpectedSelectedSkills:   []string{"website"},
@@ -1450,7 +1450,7 @@ func SiteLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 					actionCallTool("file_write", `{"path":"/workspace/circles/member/sites/local-fleet-studio/draft/app/src/App.tsx","content":"export default function App() {\n  return <main><h1>Local Fleet Studio Updated</h1><p>재배포 검증 완료</p></main>;\n}\n"}`),
 					actionCallTool("shell", `{"command":"mkdir -p dist && printf '<!doctype html><html><body><main><h1>Local Fleet Studio Updated</h1><p>재배포 검증 완료</p></main></body></html>' > dist/index.html","workingDirectoryPath":"/workspace/circles/member/sites/local-fleet-studio/draft/app","timeoutSecond":120}`),
 					actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/member/sites/local-fleet-studio/draft","mode":"publish","siteReference":"local-fleet-studio"}`),
-					actionFinishMessage("Local Fleet Studio 웹사이트를 수정하고 다시 배포했습니다: https://local-fleet-studio.device.example.test", "obs-002:file_write:0", "obs-004:site_serve:0"),
+					actionFinishMessage("Local Fleet Studio 웹사이트를 수정하고 다시 배포했습니다: https://local-fleet-studio.device.example.test", "obs-002", "obs-004"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 				ExpectedEventCounts: []VirtualEventCount{
@@ -1485,7 +1485,7 @@ func SiteLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 				Prompt:         "확인",
 				RouterApproval: "approve",
 				ActionResponses: []string{
-					actionFinishMessage("Local Fleet Studio 테스트 웹사이트를 삭제했습니다.", "obs-004:site_unserve:0"),
+					actionFinishMessage("Local Fleet Studio 테스트 웹사이트를 삭제했습니다.", "obs-004"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 				ExpectedEventCounts: []VirtualEventCount{
@@ -1565,7 +1565,7 @@ func DirectMessageSendConfirmAcceptanceScenario(artifactDirectoryPath string) Vi
 			Prompt:         "확인",
 			RouterApproval: "approve",
 			ActionResponses: []string{
-				actionFinishMessage("테스트이에게 DM을 보냈습니다.", "obs-001:message_send:0"),
+				actionFinishMessage("테스트이에게 DM을 보냈습니다.", "obs-001"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 			ExpectedToolCalls:        []string{"message_send"},
@@ -1615,7 +1615,7 @@ func ChannelPostAcceptanceScenario(artifactDirectoryPath string) VirtualSessionS
 			Prompt:         "확인",
 			RouterApproval: "approve",
 			ActionResponses: []string{
-				actionFinishMessage("announcements 채널에 공지를 올렸습니다.", "obs-001:message_send:0"),
+				actionFinishMessage("announcements 채널에 공지를 올렸습니다.", "obs-001"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 			ExpectedToolCalls:        []string{"message_send"},
@@ -1643,7 +1643,7 @@ func PlatformMessageEditAcceptanceScenario(artifactDirectoryPath string) Virtual
 			ActionResponses: []string{
 				actionCallTool("message_search", `{"scope":"currentChannel","messageIDs":["virtual-platform-message-001"]}`),
 				actionCallToolWithMessage("message_update", "공지 메시지 문구를 수정합니다.", `{"messageID":"virtual-platform-message-001","oldText":"오후 5시","newText":"오후 6시"}`),
-				actionFinishMessage("공지 메시지 문구를 수정했습니다.", "obs-002:message_update:0"),
+				actionFinishMessage("공지 메시지 문구를 수정했습니다.", "obs-002"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 			ExpectedToolCalls:        []string{"message_search", "message_update"},

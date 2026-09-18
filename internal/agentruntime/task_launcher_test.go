@@ -970,7 +970,7 @@ func (repository failingFactRepository) SearchFacts(context.Context, bluememo.Fa
 }
 
 func runtimeFinishMessage(reply string) string {
-	return `{"action":"finish","goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[],"finishMessage":"` + reply + `"}`
+	return `{"action":"finish","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[],"finishMessage":"` + reply + `"}`
 }
 
 func containsString(values []string, expected string) bool {

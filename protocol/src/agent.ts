@@ -65,17 +65,10 @@ export const executionStateSchema = z.looseObject({
   wasCompacted: z.boolean().optional(),
 });
 
-export const completionEvidenceReferenceSchema = z.looseObject({
-  observationID: z.string(),
-  toolName: z.string(),
-  attachmentIndex: nonNegativeIntegerSchema.optional(),
-});
-
 export const qualityReviewItemSchema = z.looseObject({
   id: z.string().optional(),
   passed: z.boolean().optional(),
   evidenceIDs: z.array(z.string()).optional(),
-  evidence: z.array(completionEvidenceReferenceSchema).optional(),
   notes: z.string().optional(),
 });
 
@@ -119,7 +112,6 @@ export const finishActionSchema = actionStateSchema.extend({
   failureResolution: z.string().optional(),
   goalStatus: z.literal('satisfied'),
   completionEvidenceIDs: z.array(z.string()),
-  completionEvidence: z.array(completionEvidenceReferenceSchema).optional(),
   qualityReview: z.array(qualityReviewItemSchema),
 });
 

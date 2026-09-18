@@ -181,30 +181,6 @@
           "const": "finish",
           "type": "string"
         },
-        "completionEvidence": {
-          "items": {
-            "additionalProperties": {},
-            "properties": {
-              "attachmentIndex": {
-                "maximum": 9007199254740991,
-                "minimum": 0,
-                "type": "integer"
-              },
-              "observationID": {
-                "type": "string"
-              },
-              "toolName": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "observationID",
-              "toolName"
-            ],
-            "type": "object"
-          },
-          "type": "array"
-        },
         "completionEvidenceIDs": {
           "items": {
             "type": "string"
@@ -261,30 +237,6 @@
           "items": {
             "additionalProperties": {},
             "properties": {
-              "evidence": {
-                "items": {
-                  "additionalProperties": {},
-                  "properties": {
-                    "attachmentIndex": {
-                      "maximum": 9007199254740991,
-                      "minimum": 0,
-                      "type": "integer"
-                    },
-                    "observationID": {
-                      "type": "string"
-                    },
-                    "toolName": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "observationID",
-                    "toolName"
-                  ],
-                  "type": "object"
-                },
-                "type": "array"
-              },
               "evidenceIDs": {
                 "items": {
                   "type": "string"

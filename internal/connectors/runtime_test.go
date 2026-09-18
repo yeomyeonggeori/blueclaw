@@ -2457,7 +2457,7 @@ func TestConnectorRuntimeRunsAgentHistoryToolAndSendsOneFinishMessage(t *testing
 	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
 		ActionResponses: []string{
 			`{"action":"continue","toolName":"conversation_history","toolInput":{"limit":20}}`,
-			connectorFinishMessageWithEvidence("이전 대화를 확인했습니다", "obs-001", "conversation_history", 0),
+			connectorFinishMessageCiting("이전 대화를 확인했습니다", "obs-001"),
 		},
 		DefaultResponsesBySchema: map[string]string{
 			"bluecollar_turn_router": `{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"scripted test default","userFacingReply":""}`,
@@ -2548,7 +2548,7 @@ func TestConnectorRuntimeClassifiesConfirmationReplyBeforeResumingPendingTask(t 
 		},
 		ActionResponses: []string{
 			`{"action":"continue","toolName":"event_delete","toolInput":{"eventHint":"event-1","userConfirmed":true}}`,
-			connectorFinishMessageWithEvidence("내일 휴가 일정을 캘린더에서 삭제했습니다.", "obs-002", "event_delete", 0),
+			connectorFinishMessageCiting("내일 휴가 일정을 캘린더에서 삭제했습니다.", "obs-002"),
 		},
 	})
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
@@ -2697,7 +2697,7 @@ func TestConnectorRuntimeRoutesShortConfirmationReplyThroughRouter(t *testing.T)
 		},
 		ActionResponses: []string{
 			`{"action":"continue","toolName":"event_delete","toolInput":{"eventHint":"event-1","userConfirmed":true}}`,
-			connectorFinishMessageWithEvidence("내일 휴가 일정을 캘린더에서 삭제했습니다.", "obs-002", "event_delete", 0),
+			connectorFinishMessageCiting("내일 휴가 일정을 캘린더에서 삭제했습니다.", "obs-002"),
 		},
 	})
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
@@ -2914,7 +2914,7 @@ func TestConnectorRuntimeInteractiveConfirmRestoresPersistedIntakeState(t *testi
 		},
 		ActionResponses: []string{
 			`{"action":"continue","toolName":"event_delete","toolInput":{"eventHint":"event-1","userConfirmed":true}}`,
-			connectorFinishMessageWithEvidence("내일 휴가 일정을 캘린더에서 삭제했습니다.", "obs-002", "event_delete", 0),
+			connectorFinishMessageCiting("내일 휴가 일정을 캘린더에서 삭제했습니다.", "obs-002"),
 		},
 	})
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
@@ -3018,7 +3018,7 @@ func TestConnectorRuntimeContinuesWaitingUserInputGoal(t *testing.T) {
 		},
 		ActionResponses: []string{
 			`{"action":"continue","toolName":"message_send","toolInput":{"targetType":"directMessage","personHint":"샘플","message":"우선 진행합니다."}}`,
-			connectorFinishMessageWithEvidence("샘플에게 DM을 보냈습니다.", "obs-001", "message_send", 0),
+			connectorFinishMessageCiting("샘플에게 DM을 보냈습니다.", "obs-001"),
 		},
 	})
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
@@ -3134,7 +3134,7 @@ func TestConnectorRuntimeAddsCalendarEventWithoutApproval(t *testing.T) {
 		}},
 		ActionResponses: []string{
 			`{"action":"continue","toolName":"event_add","toolInput":{"title":"휴가","startISO":"2026-05-09","endISO":"2026-05-10","isAllDay":true}}`,
-			connectorFinishMessageWithEvidence("내일 휴가 일정을 캘린더에 추가했습니다.", "obs-001", "event_add", 0),
+			connectorFinishMessageCiting("내일 휴가 일정을 캘린더에 추가했습니다.", "obs-001"),
 		},
 	})
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
@@ -3182,7 +3182,7 @@ func TestConnectorRuntimeReadsTypedCapabilityToolResponse(t *testing.T) {
 	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
 		ActionResponses: []string{
 			`{"action":"continue","toolName":"browser_snapshot","toolInput":{},"nextStepPlan":{"objective":"observe the current browser","expectedTools":[],"expectedNextResults":["browser snapshot is available"],"doneCriteria":["snapshot result is available"],"risk":"browser may be unavailable","workingSetReason":"browser_snapshot was explicitly required"}}`,
-			connectorFinishMessageWithEvidence("브라우저를 확인했습니다", "obs-001", "browser_snapshot", 0),
+			connectorFinishMessageCiting("브라우저를 확인했습니다", "obs-001"),
 		},
 		DefaultResponsesBySchema: map[string]string{
 			"bluecollar_turn_router": `{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"scripted test default","userFacingReply":""}`,
@@ -4026,15 +4026,15 @@ func findAgentToolDefinition(toolDefinitions []toolcontract.ToolDefinition, tool
 }
 
 func connectorFinishMessage(reply string) string {
-	return `{"action":"finish","message":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[]}`
+	return `{"action":"finish","message":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[]}`
 }
 
 func connectorDefaultTurnRouterResponse() string {
 	return `{"route":"answer_question","classification":"quick_reply","taskShape":"immediate_reply","level":"xlow","requestedOutputFormats":null,"responseLanguage":"ko","reason":"connector test default","userFacingReply":""}`
 }
 
-func connectorFinishMessageWithEvidence(reply string, observationID string, toolName string, attachmentIndex int) string {
-	return `{"action":"finish","message":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[{"observationID":` + strconv.Quote(observationID) + `,"toolName":` + strconv.Quote(toolName) + `,"attachmentIndex":` + strconv.Itoa(attachmentIndex) + `}]}`
+func connectorFinishMessageCiting(reply string, observationID string) string {
+	return `{"action":"finish","message":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[` + strconv.Quote(observationID) + `]}`
 }
 
 func appendConnectorActiveGoal(t *testing.T, taskRunService *task.TaskRunService, taskRun task.TaskRun, activeGoal agentcontract.ActiveGoal) {
@@ -4500,7 +4500,7 @@ func TestANewRequestWhileAConfirmationIsPendingLeavesItPendingAndIsRoutedWithThe
 		ActionResponses: []string{
 			`{"action":"continue","toolName":"event_delete","toolInput":{"eventHint":"event-1"}}`,
 			`{"action":"finish","message":"찬희 님의 연락처는 디렉터리에 없습니다."}`,
-			connectorFinishMessageWithEvidence("내일 휴가 일정을 캘린더에서 삭제했습니다.", "obs-002", "event_delete", 0),
+			connectorFinishMessageCiting("내일 휴가 일정을 캘린더에서 삭제했습니다.", "obs-002"),
 		},
 	})
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
