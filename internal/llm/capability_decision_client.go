@@ -37,7 +37,7 @@ func (decisionClient CapabilityDecisionClient) Decide(responseContext context.Co
 		return model.DecisionResponse{}, errors.New("a decision call carries no question")
 	}
 	requestDocument := capabilityDecisionRequestDocument{
-		Model:     firstNonEmptyDecisionValue(request.Model, decisionClient.ModelName),
+		Model:     firstNonEmpty(request.Model, decisionClient.ModelName),
 		State:     request.State,
 		Questions: request.Questions,
 		SessionID: request.SessionID,
@@ -53,8 +53,8 @@ func (decisionClient CapabilityDecisionClient) Decide(responseContext context.Co
 	return model.DecisionResponse{
 		Answers:          typedDecisionAnswers(responseDocument.Answers, request.Questions),
 		Usage:            decisionUsage(responseDocument.Usage),
-		ModelName:        firstNonEmptyDecisionValue(responseDocument.ModelName, decisionClient.ModelName),
-		ProviderName:     firstNonEmptyDecisionValue(responseDocument.ProviderName, "capabilityLLM"),
+		ModelName:        firstNonEmpty(responseDocument.ModelName, decisionClient.ModelName),
+		ProviderName:     firstNonEmpty(responseDocument.ProviderName, "capabilityLLM"),
 		UpstreamProvider: responseDocument.UpstreamProvider,
 		LatencyMS:        decisionLatency(responseDocument.LatencyMS, startedAt),
 	}, nil
@@ -94,7 +94,7 @@ func decisionLatency(reportedLatencyMS int64, startedAt time.Time) int64 {
 	return time.Since(startedAt).Milliseconds()
 }
 
-func firstNonEmptyDecisionValue(values ...string) string {
+func firstNonEmpty(values ...string) string {
 	for _, value := range values {
 		if trimmedValue := strings.TrimSpace(value); trimmedValue != "" {
 			return trimmedValue
