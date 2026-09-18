@@ -67,7 +67,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerPlanUpdateTool(toolRegistr
 		},
 		Handler: func(_ context.Context, input planUpdateToolInput) (toolcontract.ToolResult, error) {
 			goal, steps := toolcontract.NormalizePlan(input.Goal, input.Steps)
-			document := json.RawMessage(marshalToolResult(planUpdateToolOutput{Goal: goal, Steps: steps}))
+			document := json.RawMessage(MarshalBody(planUpdateToolOutput{Goal: goal, Steps: steps}))
 			return toolcontract.ToolSuccessData(string(document), document), nil
 		},
 		Result: toolcontract.IdentityToolResult,

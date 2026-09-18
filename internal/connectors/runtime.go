@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -224,7 +223,7 @@ func (connectorRuntime *ConnectorRuntime) planTurn(ctx context.Context, taskRunI
 	turnDecision, errorValue := connectorRuntime.turnRouter.PlanObserved(ctx, request, callLedger)
 	if trimmedTaskRunID := strings.TrimSpace(taskRunID); trimmedTaskRunID != "" && connectorRuntime.taskRunService != nil {
 		for _, callRecord := range callLedger.Records {
-			connectorRuntime.taskRunService.AppendTaskEvent(trimmedTaskRunID, agentcontract.TaskEventLLMCall, marshalConnectorEventBody(callRecord))
+			connectorRuntime.taskRunService.AppendTaskEvent(trimmedTaskRunID, agentcontract.TaskEventLLMCall, agentruntime.MarshalBody(callRecord))
 		}
 	}
 	return turnDecision, errorValue
@@ -424,7 +423,7 @@ func (connectorRuntime *ConnectorRuntime) appendTaskExecutionDuration(taskRunID 
 	if strings.TrimSpace(taskRunID) == "" {
 		return
 	}
-	connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventBlueclawTaskExecutionDuration, marshalConnectorEventBody(map[string]any{
+	connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventBlueclawTaskExecutionDuration, agentruntime.MarshalBody(map[string]any{
 		"durationMs": duration.Milliseconds(),
 	}))
 }
@@ -466,7 +465,7 @@ func precomputedTurnDecisionForLaunch(decision agentcontract.TurnDecision, hasDe
 
 func (connectorRuntime *ConnectorRuntime) cancelPendingConfirmation(event PlatformInboundEvent, approval pendingApproval, decision agentcontract.TurnDecision) {
 	_, _ = connectorRuntime.taskRunService.CancelTaskRunWithReason(approval.TaskRun.TaskRunID, approval.TaskRun.RequesterPersonID, "confirmation.replaced")
-	connectorRuntime.taskRunService.AppendTaskEvent(approval.TaskRun.TaskRunID, agentcontract.TaskEventConfirmationReplaced, marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(approval.TaskRun.TaskRunID, agentcontract.TaskEventConfirmationReplaced, agentruntime.MarshalBody(map[string]string{
 		"messageID": event.MessageID,
 		"route":     string(decision.Route),
 		"reason":    strings.TrimSpace(decision.Reason),
@@ -474,7 +473,7 @@ func (connectorRuntime *ConnectorRuntime) cancelPendingConfirmation(event Platfo
 }
 
 func (connectorRuntime *ConnectorRuntime) appendAskResolvedEvent(interaction AskInteraction, event PlatformInboundEvent, decision agentcontract.TurnDecision) {
-	connectorRuntime.taskRunService.AppendTaskEvent(interaction.TaskRunID, agentcontract.TaskEventAskResolved, marshalConnectorEventBody(map[string]any{
+	connectorRuntime.taskRunService.AppendTaskEvent(interaction.TaskRunID, agentcontract.TaskEventAskResolved, agentruntime.MarshalBody(map[string]any{
 		"interactionID": strings.TrimSpace(interaction.InteractionID),
 		"kind":          strings.TrimSpace(interaction.Kind),
 		"messageID":     strings.TrimSpace(event.MessageID),
@@ -484,37 +483,9 @@ func (connectorRuntime *ConnectorRuntime) appendAskResolvedEvent(interaction Ask
 	}))
 }
 
-func trimNonEmptyConnectorStrings(values []string) []string {
-	trimmedValues := []string{}
-	for _, value := range values {
-		trimmedValue := strings.TrimSpace(value)
-		if trimmedValue != "" {
-			trimmedValues = append(trimmedValues, trimmedValue)
-		}
-	}
-	return trimmedValues
-}
-
-func appendUniqueConnectorStrings(values []string, candidates ...string) []string {
-	result := append([]string{}, values...)
-	seen := map[string]bool{}
-	for _, value := range result {
-		seen[strings.TrimSpace(value)] = true
-	}
-	for _, candidate := range candidates {
-		trimmedCandidate := strings.TrimSpace(candidate)
-		if trimmedCandidate == "" || seen[trimmedCandidate] {
-			continue
-		}
-		seen[trimmedCandidate] = true
-		result = append(result, trimmedCandidate)
-	}
-	return result
-}
-
 func (connectorRuntime *ConnectorRuntime) handleRejectedConfirmation(ctx context.Context, platform string, adapter PlatformAdapter, event PlatformInboundEvent, replyTarget ReplyTarget, approval pendingApproval, decision agentcontract.ConfirmationReplyDecision, sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error)) (ConnectorRuntimeResult, error) {
 	_, _ = connectorRuntime.taskRunService.CancelTaskRunWithReason(approval.TaskRun.TaskRunID, approval.TaskRun.RequesterPersonID, "confirmation.rejected")
-	connectorRuntime.taskRunService.AppendTaskEvent(approval.TaskRun.TaskRunID, agentcontract.TaskEventConfirmationRejected, marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(approval.TaskRun.TaskRunID, agentcontract.TaskEventConfirmationRejected, agentruntime.MarshalBody(map[string]string{
 		"messageID": event.MessageID,
 		"reason":    decision.Reason,
 	}))
@@ -552,19 +523,11 @@ func (connectorRuntime *ConnectorRuntime) completeApprovedPendingTask(pendingTas
 	if result == "" {
 		result = "Approved and continued in task " + continuationTaskRunID + "."
 	}
-	connectorRuntime.taskRunService.AppendTaskEvent(pendingTaskRun.TaskRunID, agentcontract.TaskEventApprovalContinued, marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(pendingTaskRun.TaskRunID, agentcontract.TaskEventApprovalContinued, agentruntime.MarshalBody(map[string]string{
 		"continuationTaskRunID": continuationTaskRunID,
 		"result":                result,
 	}))
 	_, _ = connectorRuntime.taskRunService.CompleteTaskRun(pendingTaskRun.TaskRunID, result)
-}
-
-func marshalConnectorEventBody(value any) string {
-	document, errorValue := json.Marshal(value)
-	if errorValue != nil {
-		return fmt.Sprint(value)
-	}
-	return string(document)
 }
 
 func connectorReplyEventBody(event PlatformInboundEvent, reply OutboundReply, outboxID string, dispatchID string, reason string) map[string]string {
@@ -582,7 +545,7 @@ func (connectorRuntime *ConnectorRuntime) appendConnectorReplyEvent(taskRunID st
 	if strings.TrimSpace(taskRunID) == "" {
 		return
 	}
-	connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, name, marshalConnectorEventBody(body))
+	connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, name, agentruntime.MarshalBody(body))
 }
 
 func (connectorRuntime *ConnectorRuntime) sendCheckpointReply(ctx context.Context, platform string, event PlatformInboundEvent, replyTarget ReplyTarget, checkpoint agentcontract.AgentCheckpoint, sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error)) error {
@@ -803,14 +766,6 @@ func (historyProvider connectorHistoryProvider) FetchHistory(ctx context.Context
 		return agentcontract.VisibleContext{}, errorValue
 	}
 	return visibleContext.ToAgentVisibleContext(), nil
-}
-
-func marshalConnectorToolResult(value any) string {
-	document, errorValue := json.Marshal(value)
-	if errorValue != nil {
-		return fmt.Sprint(value)
-	}
-	return string(document)
 }
 
 func trimNonEmptyStrings(values []string) []string {
@@ -1050,7 +1005,7 @@ func (connectorRuntime *ConnectorRuntime) suppressDuplicateSourceTaskIfNeeded(pl
 	if !isFound {
 		return ConnectorRuntimeResult{}, false
 	}
-	connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventConnectorDuplicateSourceSuppressed, marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventConnectorDuplicateSourceSuppressed, agentruntime.MarshalBody(map[string]string{
 		"messageID":       event.MessageID,
 		"sourceReference": sourceReference,
 	}))
@@ -1107,7 +1062,7 @@ func (connectorRuntime *ConnectorRuntime) grantApprovalScopeForTask(taskRunID st
 	if scope == "" {
 		return
 	}
-	connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalScopeGranted, marshalConnectorEventBody(map[string]string{"scope": scope}))
+	connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalScopeGranted, agentruntime.MarshalBody(map[string]string{"scope": scope}))
 }
 
 func pendingApprovalScope(taskEvents []agentcontract.TaskEvent) string {

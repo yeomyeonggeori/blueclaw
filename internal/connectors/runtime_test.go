@@ -4202,7 +4202,7 @@ func createWaitingInputTaskRun(t *testing.T, taskRunService *task.TaskRunService
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAskRequested, marshalConnectorEventBody(map[string]string{
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAskRequested, agentruntime.MarshalBody(map[string]string{
 		"interactionID":    interactionID,
 		"kind":             "input",
 		"question":         prompt,
@@ -4220,7 +4220,7 @@ func createWaitingInputTaskRunWithOptions(t *testing.T, taskRunService *task.Tas
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAskRequested, marshalConnectorEventBody(map[string]any{
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAskRequested, agentruntime.MarshalBody(map[string]any{
 		"interactionID": interactionID,
 		"kind":          "ask_input",
 		"question":      prompt,

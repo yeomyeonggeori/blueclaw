@@ -92,7 +92,7 @@ func (connectorRuntime *ConnectorRuntime) FailUnresumedInterruptedTaskRun(ctx co
 }
 
 func (connectorRuntime *ConnectorRuntime) failUnresumedTaskWithoutReplyChannel(ctx context.Context, taskRun task.TaskRun, reason string, detail string) {
-	connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventTaskAutoResumeReplyUnavailable, marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventTaskAutoResumeReplyUnavailable, agentruntime.MarshalBody(map[string]string{
 		"reason": reason,
 		"detail": detail,
 	}))

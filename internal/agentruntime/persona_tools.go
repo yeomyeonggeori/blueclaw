@@ -226,6 +226,6 @@ func hasPolicyCircle(access policy.PersonAccess, circle string) bool {
 
 func personaToolSuccess(target string, document []byte) toolcontract.ToolResult {
 	var value json.RawMessage = document
-	output := json.RawMessage(marshalToolResult(map[string]json.RawMessage{"target": json.RawMessage(`"` + target + `"`), "document": value}))
+	output := json.RawMessage(MarshalBody(map[string]json.RawMessage{"target": json.RawMessage(`"` + target + `"`), "document": value}))
 	return toolcontract.ToolSuccessData(string(output), output)
 }

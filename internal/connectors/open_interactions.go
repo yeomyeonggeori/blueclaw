@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -114,7 +115,7 @@ func (connectorRuntime *ConnectorRuntime) routeOpenInteractions(ctx context.Cont
 
 func (connectorRuntime *ConnectorRuntime) recordOpenInteractionRouting(turn *inboundTurn, open openInteractions, decision agentcontract.TurnDecision) {
 	if open.hasConfirmation {
-		connectorRuntime.taskRunService.AppendTaskEvent(open.confirmation.TaskRun.TaskRunID, agentcontract.TaskEventConfirmationReplyClassified, marshalConnectorEventBody(map[string]any{
+		connectorRuntime.taskRunService.AppendTaskEvent(open.confirmation.TaskRun.TaskRunID, agentcontract.TaskEventConfirmationReplyClassified, agentruntime.MarshalBody(map[string]any{
 			"messageID":   turn.event.MessageID,
 			"route":       decision.Route,
 			"approval":    decision.Approval,
@@ -123,7 +124,7 @@ func (connectorRuntime *ConnectorRuntime) recordOpenInteractionRouting(turn *inb
 		}))
 	}
 	if open.hasAsk {
-		connectorRuntime.taskRunService.AppendTaskEvent(open.ask.TaskRunID, agentcontract.TaskEventAskReplyClassified, marshalConnectorEventBody(map[string]any{
+		connectorRuntime.taskRunService.AppendTaskEvent(open.ask.TaskRunID, agentcontract.TaskEventAskReplyClassified, agentruntime.MarshalBody(map[string]any{
 			"messageID": turn.event.MessageID,
 			"choices":   decision.Choices,
 			"route":     decision.Route,
@@ -131,7 +132,7 @@ func (connectorRuntime *ConnectorRuntime) recordOpenInteractionRouting(turn *inb
 		}))
 	}
 	if open.hasRunningTask {
-		connectorRuntime.taskRunService.AppendTaskEvent(open.runningTask.TaskRunID, agentcontract.TaskEventTaskBusyMessageRouted, marshalConnectorEventBody(map[string]string{
+		connectorRuntime.taskRunService.AppendTaskEvent(open.runningTask.TaskRunID, agentcontract.TaskEventTaskBusyMessageRouted, agentruntime.MarshalBody(map[string]string{
 			"messageID":       turn.event.MessageID,
 			"busyRoute":       string(decision.BusyRoute),
 			"reason":          strings.TrimSpace(decision.Reason),

@@ -278,7 +278,7 @@ func (taskLauncher *TaskLauncher) closeAbandonedLaunchTaskRun(openedTaskRun laun
 	if _, isFound := taskLauncher.taskRunService.FindTaskRun(openedTaskRun.TaskRunID); !isFound {
 		return
 	}
-	taskLauncher.taskRunService.AppendTaskEvent(openedTaskRun.TaskRunID, agentcontract.TaskEventTaskAbandonedByTurn, marshalToolResult(map[string]string{
+	taskLauncher.taskRunService.AppendTaskEvent(openedTaskRun.TaskRunID, agentcontract.TaskEventTaskAbandonedByTurn, MarshalBody(map[string]string{
 		"turnTaskRunID": usedTaskRunID,
 	}))
 	taskLauncher.taskRunService.CancelTaskRunWithReason(openedTaskRun.TaskRunID, requesterPersonID, "the turn ran on task run "+usedTaskRunID)
@@ -289,7 +289,7 @@ func (taskLauncher *TaskLauncher) appendTurnRouterCallRecords(taskRunID string, 
 		return
 	}
 	for _, callRecord := range callRecords {
-		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventLLMCall, marshalToolResult(callRecord))
+		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventLLMCall, MarshalBody(callRecord))
 	}
 }
 
@@ -401,7 +401,7 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 			taskLauncher.appendStoreMemoryLaunchEvents(turnResult.TaskRun.TaskRunID, request, memoryResult)
 		}
 		taskLauncher.appendAmbientDutyLaunchEvent(turnResult.TaskRun.TaskRunID, request)
-		taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, agentcontract.TaskEventAgentConversationScope, marshalToolResult(conversationScope))
+		taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, agentcontract.TaskEventAgentConversationScope, MarshalBody(conversationScope))
 	}
 	return TaskLaunchResult{
 		TurnResult:            turnResult,
@@ -529,7 +529,7 @@ func (taskLauncher *TaskLauncher) appendStoreMemoryLaunchEvents(taskRunID string
 	if memoryResult.Error != "" {
 		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "memory.recall_failed", memoryResult.Error)
 	} else {
-		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "memory.recall_injected", marshalToolResult(map[string]any{
+		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "memory.recall_injected", MarshalBody(map[string]any{
 			"profileLineCount": memoryResult.ProfileLineCount,
 			"recalledCount":    memoryResult.RecalledCount,
 			"characters":       memoryFactCharacterCount(memoryResult.Facts),
@@ -538,7 +538,7 @@ func (taskLauncher *TaskLauncher) appendStoreMemoryLaunchEvents(taskRunID string
 		}))
 	}
 	label := memorySecurityLabelForRequest(ToolCatalogRequest{PersonAccess: request.PersonAccess, MemoryLabel: request.MemoryLabel})
-	taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "memory.extraction_context", marshalToolResult(memory.ExtractionContext{
+	taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "memory.extraction_context", MarshalBody(memory.ExtractionContext{
 		RequesterName:     request.RequesterName,
 		ActiveCircleID:    request.ActiveCircleID,
 		SecurityLevelRank: label.SecurityLevelRank,
@@ -735,7 +735,7 @@ func (taskLauncher *TaskLauncher) appendAmbientDutyLaunchEvent(taskRunID string,
 	if !ambientDuty.IsMatch {
 		return
 	}
-	taskLauncher.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventAgentAmbientDutyLaunch, marshalToolResult(map[string]any{
+	taskLauncher.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventAgentAmbientDutyLaunch, MarshalBody(map[string]any{
 		"dutyName":   ambientDuty.Name,
 		"confidence": ambientDuty.Confidence,
 	}))
@@ -743,7 +743,7 @@ func (taskLauncher *TaskLauncher) appendAmbientDutyLaunchEvent(taskRunID string,
 
 func (taskLauncher *TaskLauncher) appendLaunchStepRecords(taskRunID string, records []launchStepRecord) {
 	for _, record := range records {
-		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, launchStepTaskEventName(record.Status), marshalToolResult(record))
+		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, launchStepTaskEventName(record.Status), MarshalBody(record))
 	}
 }
 

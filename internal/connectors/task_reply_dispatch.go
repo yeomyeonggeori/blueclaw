@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -76,19 +77,19 @@ func (connectorRuntime *ConnectorRuntime) dispatchTaskReply(
 		}
 		return ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: taskRunID, Reason: reason}, nil
 	case taskReplyDecisionSuppressDelivered:
-		connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventReplySuppressedDuplicate, marshalConnectorEventBody(map[string]string{
+		connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventReplySuppressedDuplicate, agentruntime.MarshalBody(map[string]string{
 			"conversationID": event.ConversationID,
 			"reason":         decision.Reason,
 		}))
 		return ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: taskRunID, Reason: decision.Reason}, nil
 	case taskReplyDecisionSuppressCancelled:
-		connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventTaskStopOutboxSuppressed, marshalConnectorEventBody(map[string]string{
+		connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventTaskStopOutboxSuppressed, agentruntime.MarshalBody(map[string]string{
 			"messageID": event.MessageID,
 			"reason":    "task was cancelled before final reply send",
 		}))
 		return ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: taskRunID, Reason: decision.Reason}, nil
 	case taskReplyDecisionSuppressSuperseded, taskReplyDecisionSuppressRequested:
-		connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventConnectorReplySuppressed, marshalConnectorEventBody(map[string]string{
+		connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventConnectorReplySuppressed, agentruntime.MarshalBody(map[string]string{
 			"messageID": event.MessageID,
 			"reason":    decision.Reason,
 		}))

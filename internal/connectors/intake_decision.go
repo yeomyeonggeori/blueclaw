@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -131,7 +132,7 @@ func (connectorRuntime *ConnectorRuntime) recordIntakeCalls(taskRunID string, ca
 		return
 	}
 	for _, callRecord := range callRecords {
-		connectorRuntime.taskRunService.AppendTaskEvent(trimmedTaskRunID, agentcontract.TaskEventLLMCall, marshalConnectorEventBody(callRecord))
+		connectorRuntime.taskRunService.AppendTaskEvent(trimmedTaskRunID, agentcontract.TaskEventLLMCall, agentruntime.MarshalBody(callRecord))
 	}
 }
 

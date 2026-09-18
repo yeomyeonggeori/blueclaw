@@ -56,7 +56,7 @@ func (connectorRuntime *ConnectorRuntime) handleBusyCancelMessage(
 	sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error),
 ) (busyMessageResult, error) {
 	_, _ = connectorRuntime.taskRunService.CancelTaskRunWithReason(activeTaskRun.TaskRunID, activeTaskRun.RequesterPersonID, "task cancelled by newer user instruction")
-	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskCancelRequested, marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskCancelRequested, agentruntime.MarshalBody(map[string]string{
 		"messageID":       event.MessageID,
 		"reason":          strings.TrimSpace(decision.Reason),
 		"latestUserInput": strings.TrimSpace(event.Prompt),
@@ -81,7 +81,7 @@ func (connectorRuntime *ConnectorRuntime) handleBusyStatusMessage(
 	decision agentcontract.TurnDecision,
 	sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error),
 ) (busyMessageResult, error) {
-	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskStatusRequested, marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskStatusRequested, agentruntime.MarshalBody(map[string]string{
 		"messageID": event.MessageID,
 		"reason":    strings.TrimSpace(decision.Reason),
 	}))
@@ -122,7 +122,7 @@ func (connectorRuntime *ConnectorRuntime) handleBusySteerMessage(
 }
 
 func (connectorRuntime *ConnectorRuntime) appendSteerRequestedEvent(taskRunID string, event PlatformInboundEvent, instruction string, decision agentcontract.TurnDecision) {
-	connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventTaskSteerRequested, marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventTaskSteerRequested, agentruntime.MarshalBody(map[string]string{
 		"messageID":   event.MessageID,
 		"instruction": instruction,
 		"reason":      strings.TrimSpace(decision.Reason),
@@ -208,7 +208,7 @@ func (connectorRuntime *ConnectorRuntime) replySteerResumeUnavailable(
 	decision agentcontract.TurnDecision,
 	sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error),
 ) (busyMessageResult, error) {
-	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskSteerResumeUnavailable, marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskSteerResumeUnavailable, agentruntime.MarshalBody(map[string]string{
 		"messageID": event.MessageID,
 		"reason":    strings.TrimSpace(decision.Reason),
 	}))
@@ -225,7 +225,7 @@ func (connectorRuntime *ConnectorRuntime) replySteerResumeUnavailable(
 
 func (connectorRuntime *ConnectorRuntime) replaceBusyTask(event PlatformInboundEvent, activeTaskRun task.TaskRun, decision agentcontract.TurnDecision) {
 	_, _ = connectorRuntime.taskRunService.CancelTaskRunWithReason(activeTaskRun.TaskRunID, activeTaskRun.RequesterPersonID, "task replaced by newer user instruction")
-	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskReplaced, marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskReplaced, agentruntime.MarshalBody(map[string]string{
 		"messageID":       event.MessageID,
 		"reason":          strings.TrimSpace(decision.Reason),
 		"latestUserInput": strings.TrimSpace(event.Prompt),
@@ -235,7 +235,7 @@ func (connectorRuntime *ConnectorRuntime) replaceBusyTask(event PlatformInboundE
 func (connectorRuntime *ConnectorRuntime) supersedeBusyTask(event PlatformInboundEvent, platform string, activeTaskRun task.TaskRun, decision agentcontract.TurnDecision) {
 	_, _ = connectorRuntime.taskRunService.CancelTaskRunWithReason(activeTaskRun.TaskRunID, activeTaskRun.RequesterPersonID, "superseded_by_new_message")
 	connectorRuntime.resolveOpenTaskWaitsForTaskRun(activeTaskRun.RequesterPersonID, platform, activeTaskRun.OriginConversationID, activeTaskRun.TaskRunID)
-	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskSupersededByMessage, marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskSupersededByMessage, agentruntime.MarshalBody(map[string]string{
 		"messageID":       event.MessageID,
 		"reason":          strings.TrimSpace(decision.Reason),
 		"latestUserInput": strings.TrimSpace(event.Prompt),
@@ -288,7 +288,7 @@ func (connectorRuntime *ConnectorRuntime) handlePossibleFinishedTaskFollowUp(
 	if !connectorRuntime.relatesToActiveTask(ctx, adapter, event) {
 		return busyMessageResult{}, nil
 	}
-	connectorRuntime.taskRunService.AppendTaskEvent(finishedTaskRun.TaskRunID, agentcontract.TaskEventTaskBusyMessageAfterFinish, marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(finishedTaskRun.TaskRunID, agentcontract.TaskEventTaskBusyMessageAfterFinish, agentruntime.MarshalBody(map[string]string{
 		"messageID":       event.MessageID,
 		"latestUserInput": strings.TrimSpace(event.Prompt),
 	}))

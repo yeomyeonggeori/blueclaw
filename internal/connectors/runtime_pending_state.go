@@ -221,8 +221,8 @@ func taskRunMatchesReplyTarget(taskRun task.TaskRun, event PlatformInboundEvent)
 func priorTaskContextForTaskRun(taskRun task.TaskRun, taskEvents []task.TaskEvent) agentcontract.PriorTaskContext {
 	activeGoal := latestActiveGoal(taskEvents)
 	intakeDecision := latestIntakeDecision(taskEvents)
-	requestedOutputFormats := appendUniqueConnectorStrings([]string{}, intakeDecision.RequestedOutputFormats...)
-	requestedOutputFormats = appendUniqueConnectorStrings(requestedOutputFormats, outputFormatsFromAttachmentSuffixes(activeGoal.OutcomeContract.RequiredAttachmentSuffixes)...)
+	requestedOutputFormats := agentcontract.AppendUniqueStrings([]string{}, intakeDecision.RequestedOutputFormats...)
+	requestedOutputFormats = agentcontract.AppendUniqueStrings(requestedOutputFormats, outputFormatsFromAttachmentSuffixes(activeGoal.OutcomeContract.RequiredAttachmentSuffixes)...)
 	attempts, omittedAttemptCount := priorTaskRecordedAttempts(taskEvents)
 	return agentcontract.PriorTaskContext{
 		TaskRunID:              strings.TrimSpace(taskRun.TaskRunID),
@@ -243,7 +243,7 @@ func outputFormatsFromAttachmentSuffixes(suffixes []string) []string {
 		format := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(suffix)), ".")
 		switch format {
 		case "html", "pptx", "pdf", "txt", "docx", "xlsx", "csv":
-			formats = appendUniqueConnectorStrings(formats, format)
+			formats = agentcontract.AppendUniqueStrings(formats, format)
 		}
 	}
 	return formats

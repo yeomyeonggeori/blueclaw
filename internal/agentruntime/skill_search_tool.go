@@ -385,7 +385,7 @@ func searchSkillResultLimit(requestedLimit int) int {
 }
 
 func successfulSkillSearchResult(output skillSearchToolOutput) toolcontract.ToolResult {
-	document := json.RawMessage(marshalToolResult(output))
+	document := json.RawMessage(MarshalBody(output))
 	return toolcontract.ToolSuccessData(string(document), document)
 }
 

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
@@ -72,7 +73,7 @@ func (connectorRuntime *ConnectorRuntime) addAddressingReaction(ctx context.Cont
 func (connectorRuntime *ConnectorRuntime) addConsumeReaction(ctx context.Context, platform string, adapter PlatformAdapter, event PlatformInboundEvent, taskRunID string, reactionEmojiName string) string {
 	reactionAdapter, isSupported := adapter.(MessageReactionAdapter)
 	if !isSupported {
-		connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventConnectorReactionSkipped, marshalConnectorEventBody(map[string]string{
+		connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventConnectorReactionSkipped, agentruntime.MarshalBody(map[string]string{
 			"messageID": event.MessageID,
 			"reason":    "reaction_adapter_unavailable",
 		}))
@@ -86,7 +87,7 @@ func (connectorRuntime *ConnectorRuntime) addConsumeReaction(ctx context.Context
 		Reason:         "consume",
 	}
 	if errorValue := reactionAdapter.AddReaction(ctx, target); errorValue != nil {
-		connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventConnectorReactionFailed, marshalConnectorEventBody(map[string]string{
+		connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventConnectorReactionFailed, agentruntime.MarshalBody(map[string]string{
 			"messageID": event.MessageID,
 			"emojiName": target.EmojiName,
 			"error":     errorValue.Error(),
@@ -94,7 +95,7 @@ func (connectorRuntime *ConnectorRuntime) addConsumeReaction(ctx context.Context
 		connectorRuntime.logger.Warn("connector."+platform+".reaction.failed", slog.String("messageID", event.MessageID), slog.String("taskRunID", taskRunID), slog.String("error", errorValue.Error()))
 		return "consume_reaction_failed"
 	}
-	connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventConnectorReactionSent, marshalConnectorEventBody(map[string]string{
+	connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventConnectorReactionSent, agentruntime.MarshalBody(map[string]string{
 		"messageID": event.MessageID,
 		"emojiName": target.EmojiName,
 		"reason":    target.Reason,
