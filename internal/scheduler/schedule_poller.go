@@ -17,6 +17,7 @@ import (
 
 const scheduleLeaseDuration = 15 * time.Minute
 const defaultStaleScheduledTaskRunTimeout = 30 * time.Minute
+const scheduleSessionPageSize = 200
 
 type ScheduleDeliveryRepository interface {
 	EnqueueScheduledConnectorReply(task.Schedule, string, connectors.OutboundReply) (string, error)
@@ -255,7 +256,7 @@ func (schedulePoller SchedulePoller) executeMessageSchedule(schedule task.Schedu
 	if schedulePoller.TaskRunService == nil {
 		return scheduleExecutionResult{}, errors.New("task run service is unavailable")
 	}
-	taskRun := schedulePoller.TaskRunService.CreateTaskRun(schedule.CreatorPersonID, "schedule:"+schedule.ScheduleID, schedule.Prompt)
+	taskRun := schedulePoller.TaskRunService.CreateTaskRun(schedule.CreatorPersonID, task.ScheduleSessionID(schedule.ScheduleID), schedule.Prompt)
 	if _, errorValue := schedulePoller.TaskRunService.AdvanceTaskRun(taskRun.TaskRunID, firstNonEmptyString(schedule.AgentProfileName, "default")); errorValue != nil {
 		return scheduleExecutionResult{}, errorValue
 	}
@@ -349,7 +350,7 @@ func scheduleDeliveryDeduplicationKey(schedule task.Schedule) string {
 	if schedule.NextRunAt != nil {
 		occurrenceTime = schedule.NextRunAt.UTC()
 	}
-	return "schedule:" + strings.TrimSpace(schedule.ScheduleID) + ":occurrence:" + occurrenceTime.Format(time.RFC3339Nano)
+	return task.ScheduleSessionID(schedule.ScheduleID) + ":occurrence:" + occurrenceTime.Format(time.RFC3339Nano)
 }
 
 func scheduledTaskReply(result agentruntime.ScheduleRunResult) (connectors.OutboundReply, error) {
@@ -376,7 +377,7 @@ func (schedulePoller SchedulePoller) hasActiveScheduleRun(schedule task.Schedule
 	if schedulePoller.TaskRunService == nil {
 		return false
 	}
-	originConversationID := "schedule:" + strings.TrimSpace(schedule.ScheduleID)
+	originConversationID := task.ScheduleSessionID(schedule.ScheduleID)
 	for _, taskRun := range schedulePoller.TaskRunService.ListTaskRun() {
 		if taskRun.OriginConversationID != originConversationID {
 			continue
@@ -404,15 +405,51 @@ func (schedulePoller SchedulePoller) cancelStaleScheduledTaskRuns(referenceTime 
 	if referenceTime.IsZero() {
 		referenceTime = time.Now().UTC()
 	}
+	sessionIDs, errorValue := schedulePoller.allScheduleSessionIDs(referenceTime)
+	if errorValue != nil {
+		schedulePoller.logger().Error("task_schedule.stale_runs_listing_failed", "error", errorValue.Error())
+		return
+	}
+	if len(sessionIDs) == 0 {
+		return
+	}
 	staleBefore := referenceTime.Add(-schedulePoller.staleTaskRunTimeout())
 	cancelledTaskRuns := schedulePoller.TaskRunService.CancelActiveTaskRuns(task.TaskRunCancelRequest{
-		OriginConversationIDPrefix: "schedule:",
-		ScheduleOnly:               true,
-		StaleBefore:                &staleBefore,
-		Reason:                     "scheduled task stale timeout",
+		OriginConversationIDs: sessionIDs,
+		StaleBefore:           &staleBefore,
+		Reason:                "scheduled task stale timeout",
 	})
 	if len(cancelledTaskRuns) > 0 {
 		schedulePoller.logger().Warn("task_schedule.stale_runs_cancelled", "count", len(cancelledTaskRuns))
+	}
+}
+
+func (schedulePoller SchedulePoller) allScheduleSessionIDs(referenceTime time.Time) ([]string, error) {
+	sessionIDs := []string{}
+	listedScheduleCount := 0
+	for page := 1; ; page++ {
+		result, errorValue := schedulePoller.ScheduleRepository.ListSchedules(task.ScheduleListRequest{
+			IncludeExpired: true,
+			Page:           page,
+			PageSize:       scheduleSessionPageSize,
+			ReferenceTime:  referenceTime,
+		})
+		if errorValue != nil {
+			return nil, errorValue
+		}
+		if len(result.Schedules) == 0 {
+			return sessionIDs, nil
+		}
+		listedScheduleCount += len(result.Schedules)
+		for _, schedule := range result.Schedules {
+			if strings.TrimSpace(schedule.ScheduleID) == "" {
+				continue
+			}
+			sessionIDs = append(sessionIDs, task.ScheduleSessionID(schedule.ScheduleID))
+		}
+		if listedScheduleCount >= result.TotalCount {
+			return sessionIDs, nil
+		}
 	}
 }
 

@@ -77,6 +77,7 @@ type TaskLaunchRequest struct {
 	ProfileName                string
 	Platform                   string
 	ConversationID             string
+	DeliveryConversationID     string
 	ConversationType           string
 	ConversationChannelID      string
 	ConversationChannelName    string
@@ -775,6 +776,7 @@ func (taskLauncher *TaskLauncher) toolCatalogRequestForLaunch(request TaskLaunch
 		IsScheduledRun:             request.Source == TaskLaunchSourceScheduled,
 		IsApprovalContinuation:     request.IsApprovalContinuation,
 		ConversationID:             request.ConversationID,
+		DeliveryConversationID:     request.DeliveryConversationID,
 		ConversationType:           request.ConversationType,
 		ConversationChannelID:      request.ConversationChannelID,
 		ConversationChannelName:    request.ConversationChannelName,

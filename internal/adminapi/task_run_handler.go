@@ -43,15 +43,13 @@ const (
 )
 
 type taskRunCancelRequest struct {
-	TaskRunIDs                 []string `json:"taskRunIDs"`
-	RequesterPersonID          string   `json:"requesterPersonID"`
-	RequesterEmail             string   `json:"requesterEmail"`
-	OriginConversationIDs      []string `json:"originConversationIDs"`
-	OriginConversationIDPrefix string   `json:"originConversationIDPrefix"`
-	Mode                       string   `json:"mode"`
-	ScheduleOnly               bool     `json:"scheduleOnly"`
-	StaleBefore                string   `json:"staleBefore"`
-	Reason                     string   `json:"reason"`
+	TaskRunIDs            []string `json:"taskRunIDs"`
+	RequesterPersonID     string   `json:"requesterPersonID"`
+	RequesterEmail        string   `json:"requesterEmail"`
+	OriginConversationIDs []string `json:"originConversationIDs"`
+	Mode                  string   `json:"mode"`
+	StaleBefore           string   `json:"staleBefore"`
+	Reason                string   `json:"reason"`
 }
 
 func (taskRunHandler TaskRunHandler) HandleRunTask(responseWriter http.ResponseWriter, request *http.Request) {
@@ -178,17 +176,15 @@ func (taskRunHandler TaskRunHandler) HandleCancelTaskRun(responseWriter http.Res
 		return
 	}
 	if !hasTaskRunCancelSelector(cancelRequest) {
-		http.Error(responseWriter, "taskRunIDs, requesterPersonID, or scheduleOnly is required", http.StatusBadRequest)
+		http.Error(responseWriter, "taskRunIDs, requesterPersonID, or originConversationIDs is required", http.StatusBadRequest)
 		return
 	}
 	taskRunCancelRequest := task.TaskRunCancelRequest{
-		TaskRunIDs:                 cancelRequest.TaskRunIDs,
-		RequesterPersonID:          requesterPersonID,
-		OriginConversationIDs:      cancelRequest.OriginConversationIDs,
-		ScheduleOnly:               cancelRequest.ScheduleOnly,
-		StaleBefore:                staleBefore,
-		Reason:                     firstNonEmptyAdminString(cancelRequest.Reason, "admin task cancel"),
-		OriginConversationIDPrefix: firstNonEmptyAdminString(cancelRequest.OriginConversationIDPrefix, adminScheduleOriginPrefix(cancelRequest.ScheduleOnly)),
+		TaskRunIDs:            cancelRequest.TaskRunIDs,
+		RequesterPersonID:     requesterPersonID,
+		OriginConversationIDs: cancelRequest.OriginConversationIDs,
+		StaleBefore:           staleBefore,
+		Reason:                firstNonEmptyAdminString(cancelRequest.Reason, "admin task cancel"),
 	}
 	cancelledTaskRuns := taskRunHandler.TaskRunService.CancelActiveTaskRuns(taskRunCancelRequest)
 	writeJSON(responseWriter, http.StatusOK, map[string]any{
@@ -199,7 +195,7 @@ func (taskRunHandler TaskRunHandler) HandleCancelTaskRun(responseWriter http.Res
 }
 
 func hasTaskRunCancelSelector(request taskRunCancelRequest) bool {
-	return len(request.TaskRunIDs) > 0 || strings.TrimSpace(request.RequesterPersonID) != "" || strings.TrimSpace(request.RequesterEmail) != "" || request.ScheduleOnly || len(request.OriginConversationIDs) > 0
+	return len(request.TaskRunIDs) > 0 || strings.TrimSpace(request.RequesterPersonID) != "" || strings.TrimSpace(request.RequesterEmail) != "" || len(request.OriginConversationIDs) > 0
 }
 
 func (taskRunHandler TaskRunHandler) handleStopTaskRun(responseWriter http.ResponseWriter, cancelRequest taskRunCancelRequest, requesterPersonID string, staleBefore *time.Time) {
@@ -293,13 +289,6 @@ func parseOptionalAdminTime(value string) (*time.Time, error) {
 		return nil, errorValue
 	}
 	return &parsedTime, nil
-}
-
-func adminScheduleOriginPrefix(scheduleOnly bool) string {
-	if scheduleOnly {
-		return "schedule:"
-	}
-	return ""
 }
 
 func firstNonEmptyAdminString(values ...string) string {
