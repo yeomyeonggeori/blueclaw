@@ -4241,23 +4241,11 @@ func actionFinishMessage(reply string, evidence ...string) string {
 		}
 		evidenceDocuments = append(evidenceDocuments, `{"observationID":`+quote(parts[0])+`,"toolName":`+quote(parts[1])+`,"attachmentIndex":`+parts[2]+`}`)
 	}
-	return `{"action":"finish","message":` + quote(reply) + `,"completionSummary":` + quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[` + strings.Join(evidenceDocuments, ",") + `]}`
-}
-
-func actionFinishWithCompletionSummary(summary string, reply string, evidence ...string) string {
-	evidenceDocuments := []string{}
-	for _, value := range evidence {
-		parts := strings.Split(value, ":")
-		if len(parts) != 3 {
-			continue
-		}
-		evidenceDocuments = append(evidenceDocuments, `{"observationID":`+quote(parts[0])+`,"toolName":`+quote(parts[1])+`,"attachmentIndex":`+parts[2]+`}`)
-	}
-	return `{"action":"finish","message":` + quote(reply) + `,"completionSummary":` + quote(summary) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[` + strings.Join(evidenceDocuments, ",") + `]}`
+	return `{"action":"finish","message":` + quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[` + strings.Join(evidenceDocuments, ",") + `]}`
 }
 
 func actionNoToolFallbackFinishMessage(reply string) string {
-	return `{"action":"finish","message":` + quote(reply) + `,"completionSummary":` + quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[],"failureResolution":"no_tool_fallback"}`
+	return `{"action":"finish","message":` + quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[],"failureResolution":"no_tool_fallback"}`
 }
 
 func actionFailMessage(reason string) string {
