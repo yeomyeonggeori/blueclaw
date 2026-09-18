@@ -85,17 +85,17 @@ func (toolCatalogBuilder *ToolCatalogBuilder) runTerminalTool(toolContext contex
 	commandResult, errorValue := workspaceActor.Run(toolContext, input)
 	stopHeartbeat()
 	slog.Info("shell command completed", "durationMs", time.Since(runStartedAt).Milliseconds(), "exitCode", commandResult.ExitCode, "timedOut", commandResult.TimedOut, "signal", commandResult.Signal)
-	content := marshalToolResult(commandResult)
+	content := MarshalBody(commandResult)
 	if errorValue != nil {
 		if runtimePathFailure := terminalRuntimePathFailure(input, commandResult, content); runtimePathFailure != nil {
 			return *runtimePathFailure, nil
 		}
 		document := terminalCommandResult(commandResult, false)
-		content = marshalToolResult(document)
+		content = MarshalBody(document)
 		return toolcontract.ToolFailureWithOutput(toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "shell", content, json.RawMessage(content)), nil
 	}
 	document := terminalCommandResult(commandResult, true)
-	content = marshalToolResult(document)
+	content = MarshalBody(document)
 	return toolcontract.ToolSuccessData(content, json.RawMessage(content)), nil
 }
 
@@ -120,7 +120,7 @@ func normalizedTerminalRunFailure(result toolcontract.ToolResult) toolcontract.T
 	document["mode"] = terminalRunModeCommand
 	document["completed"] = false
 	completeTerminalCommandFailureDocument(document, result)
-	data := json.RawMessage(marshalToolResult(document))
+	data := json.RawMessage(MarshalBody(document))
 	result.Output.Data = data
 	return result
 }
@@ -168,7 +168,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) startTerminalRunHeartbeat(toolCont
 			case <-stopChannel:
 				return
 			case <-heartbeatTicker.C:
-				toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventTerminalRunHeartbeat, marshalToolResult(map[string]any{
+				toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventTerminalRunHeartbeat, MarshalBody(map[string]any{
 					"elapsedSeconds": int(time.Since(startedAt).Seconds()),
 					"command":        commandHead,
 				}))
@@ -191,7 +191,7 @@ func terminalRuntimePathFailure(commandRequest security.CommandRequest, commandR
 	if !strings.Contains(combinedText, "not found in $path") && !strings.Contains(combinedText, "command not found") && !strings.Contains(combinedText, "executable file not found") {
 		return nil
 	}
-	document := json.RawMessage(marshalToolResult(map[string]any{
+	document := json.RawMessage(MarshalBody(map[string]any{
 		"failureClass":      "shell_runtime_path",
 		"command":           commandRequest.Command,
 		"actualPATH":        commandRequest.EnvironmentVariables["PATH"],

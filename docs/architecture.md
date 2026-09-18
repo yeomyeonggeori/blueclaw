@@ -64,10 +64,13 @@ Turn routing, which used to be a harness method (`RouteTurn`), is now host
 policy: `ConnectorRuntime.planTurn` (`internal/connectors/runtime.go`) and
 `TaskLauncher.routedTurnDecision` (`internal/agentruntime/task_launcher.go`)
 both drive an `intake.TurnRouter` directly instead of asking the harness to
-route. Addressing and active-task-follow-up classification moved the same
-way, behind the host's own `IntakeClassifier` port
-(`internal/connectors/runtime.go`), implemented by `intake.NewClassifier`
-(wired in `internal/app/application.go`).
+route. Every closed question about an inbound message — who it is addressed
+to, whether it follows on from the task already running, and the turn router's
+own fields — is answered by one call to the decision model, behind the host's
+own `IntakeDecider` port (`internal/connectors/intake_decision.go`),
+implemented by `intake.NewDecisionPlanner` (wired in
+`internal/app/application.go`). The answer is memoized on the inbound event, so
+whichever consumer asks first pays for it and the rest read it.
 
 Everything else the host needs from a task — events, cancellation, run lookup,
 completion — it takes from `taskstate.TaskRunService` directly. Those methods
@@ -253,16 +256,18 @@ An inbound message becomes at most one task run. The path, end to end:
 1. **Ingress.** `ConnectorRuntime.HandleInboundEvent`
    (`internal/connectors/runtime.go`) persists the raw event, resolves the
    sender to a policy person, and refuses uninvited accounts.
-2. **Addressing.** For channel messages the runtime asks its `IntakeClassifier`
-   whether the bot was addressed at all — `ClassifyAddressing`
-   (`internal/connectors/inbound_engagement.go`, implemented by
-   `intake.NewClassifier`). The decision is a four-outcome choice: ignore,
-   react only, reply, or react and reply.
-3. **Busy routing.** If the person already has an active task,
+2. **Decision.** One call to the decision model answers every closed question
+   about the message at once (`internal/connectors/intake_decision.go`,
+   implemented by `intake.NewDecisionPlanner`). Addressing is a four-outcome
+   choice: ignore, react only, reply, or react and reply. The gate reads that
+   half (`internal/connectors/inbound_engagement.go`); a message a picture is
+   the whole of is described by a vision model first, so the decision reads
+   sentences rather than bytes.
+3. **Busy routing.** If the person already has an active task, the same
+   decision's `busyRoute` chooses between steering the running task, replacing
+   it, answering status, or starting a second one, read by
    `ConnectorRuntime.planTurn` (`internal/connectors/runtime.go`) and
-   `ClassifyActiveTaskFollowUp` (`internal/connectors/busy_message.go`,
-   `internal/connectors/task_control.go`) decide between steering the running
-   task, replacing it, answering status, or starting a second one.
+   `relatesToActiveTask` (`internal/connectors/intake_decision.go`).
    `BusyRoute*` constants are in `.dependency/bluecollar/agentcontract/turn_decision.go`.
 4. **Launch.** `TaskLauncher.Launch`
    (`internal/agentruntime/task_launcher.go`) runs an ordered pipeline of

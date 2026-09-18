@@ -336,6 +336,7 @@ type VirtualSessionHarness struct {
 	artifactPath     string
 	workspacePath    string
 	scriptedModel    *agenttest.ScriptedLanguageModel
+	turnScript       *scenarioTurnScript
 	requestRecorder  virtualLanguageModelRequestRecorder
 	callRecorder     virtualLanguageModelCallRecorder
 	taskRunService   *task.TaskRunService
@@ -887,9 +888,11 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	adapter := &virtualAdapter{workspacePath: workspacePath}
 	runtime.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, highLanguageModel))
 	runtime.UseReplyGenerator(reply.NewGenerator(highLanguageModel, instructionBundleLoader))
-	scenarioTurnRouter := intake.NewTurnRouter(firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel), agentcontract.IntakeOptions{IsEnabled: true, DefaultTaskLevel: agentcontract.TaskLevelLow})
+	turnScript := scenarioTurnScriptFor(scriptedModel)
+	scenarioDecisionPlanner := intake.NewDecisionPlanner(newScenarioDecisionModel(turnScript, firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel), scenario.AddressingResponse), nil, nil)
+	scenarioTurnRouter := intake.NewTurnRouter(firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel), scenarioDecisionPlanner, agentcontract.IntakeOptions{IsEnabled: true, DefaultTaskLevel: agentcontract.TaskLevelLow})
 	runtime.UseTurnRouter(scenarioTurnRouter)
-	runtime.UseIntakeClassifier(intake.NewClassifier(firstAvailableLanguageModel(xLowLanguageModel, intakeLanguageModel, highLanguageModel)))
+	runtime.UseIntakeDecider(scenarioDecisionPlanner)
 	runtime.RegisterAdapter(adapter)
 	runtime.UseWorkspaceID("e2e")
 	runtime.UseWorkspaceRootPath(workspacePath)
@@ -939,7 +942,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	virtualApprovalGate.UseLanguageModel(highLanguageModel)
 	virtualApprovalGate.UseApprovalTargetResolver(agentruntime.NewCapabilityApprovalTargetResolver(capabilityClient))
 	virtualTaskLauncher.UseApprovalGate(virtualApprovalGate)
-	virtualTaskLauncher.UseTurnRouter(intake.NewTurnRouter(firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel), agentcontract.IntakeOptions{IsEnabled: true, DefaultTaskLevel: agentcontract.TaskLevelLow}))
+	virtualTaskLauncher.UseTurnRouter(scenarioTurnRouter)
 	virtualTaskLauncher.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, highLanguageModel))
 	virtualTaskLauncher.UseRequesterEmailResolver(identityService)
 	runtime.UseTaskLauncher(virtualTaskLauncher)
@@ -949,6 +952,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 		artifactPath:     artifactPath,
 		workspacePath:    workspacePath,
 		scriptedModel:    scriptedModel,
+		turnScript:       turnScript,
 		requestRecorder:  virtualRequestRecorder(languageModel),
 		callRecorder:     virtualCallRecorder(languageModel),
 		taskRunService:   taskRunService,
@@ -2592,9 +2596,10 @@ func (harness *VirtualSessionHarness) Run(ctx context.Context) (VirtualSessionRe
 	messageIndex := 0
 	for index, virtualTurn := range harness.scenario.Turns {
 		if harness.scriptedModel != nil {
-			for _, routerResponse := range scenarioRouterResponsesForTurn(harness.scenario, virtualTurn) {
-				harness.scriptedModel.EnqueueStructuredResponses("bluecollar_turn_router", routerResponse)
+			for range scenarioRouterResponsesForTurn(harness.scenario, virtualTurn) {
+				harness.scriptedModel.EnqueueStructuredResponses("bluecollar_turn_router", scenarioTurnWordsResponse())
 			}
+			harness.turnScript.beginTurn(index+1, scenarioTurnScriptEntries(harness.scenario, virtualTurn))
 			harness.scriptedModel.SetActionResponses(materializeScriptedWorkspacePaths(harness.workspacePath, virtualTurn.ActionResponses)...)
 			if len(virtualTurn.CompletionJudgeResponses) > 0 {
 				harness.scriptedModel.EnqueueStructuredResponses("bluecollar_completion_judge", virtualTurn.CompletionJudgeResponses...)
@@ -2619,7 +2624,7 @@ func (harness *VirtualSessionHarness) Run(ctx context.Context) (VirtualSessionRe
 			if errorValue := assertScriptedControlCallsServed(finalTurnResult.LanguageModelCallEvents); errorValue != nil {
 				return result, fmt.Errorf("%s turn %d: %w", harness.scenario.Name, index+1, errorValue)
 			}
-			if errorValue := assertNoScriptedResponseResidue(harness.scriptedModel); errorValue != nil {
+			if errorValue := assertNoScriptedResponseResidue(harness.scriptedModel, harness.turnScript); errorValue != nil {
 				return result, fmt.Errorf("%s turn %d: %w; events: %s", harness.scenario.Name, index+1, errorValue, summarizeEvents(finalTurnResult.Events))
 			}
 		}
@@ -2751,10 +2756,6 @@ func scenarioNeedsScriptedModel(scenario VirtualSessionScenario) bool {
 
 func scenarioDefaultResponses(scenario VirtualSessionScenario) map[string]string {
 	defaultResponses := map[string]string{}
-	defaultResponses["bluecollar_addressing_classification"] = `{"target":"anyone","shouldRespond":false,"dutyMatch":false,"dutyName":"","dutyConfidence":0}`
-	if strings.TrimSpace(scenario.AddressingResponse) != "" {
-		defaultResponses["bluecollar_addressing_classification"] = strings.TrimSpace(scenario.AddressingResponse)
-	}
 	if virtualEvidenceRequiresExternalSend(scenario.RouterRequiredEvidence) {
 		defaultResponses["bluecollar_execution_plan"] = `{"originalInstruction":"scripted external send","summary":"scripted external send","targets":[],"schedule":"","startAt":"","endAt":"","cadence":"","externalSend":true,"thirdPartyExternalSend":true,"repeated":false,"highFrequency":false,"destructive":false,"permissionChange":false,"publicDeploy":false,"paidAction":false,"missingInformation":[],"continuationInstruction":"scripted external send"}`
 	}
@@ -2784,6 +2785,13 @@ func scenarioSkillSearchQueriesResponse(queryDescriptions []string) string {
 	return string(document)
 }
 
+func scenarioTurnScriptFor(scriptedModel *agenttest.ScriptedLanguageModel) *scenarioTurnScript {
+	if scriptedModel == nil {
+		return nil
+	}
+	return &scenarioTurnScript{}
+}
+
 func scenarioRouterResponsesForTurn(scenario VirtualSessionScenario, virtualTurn VirtualTurn) []string {
 	if !virtualTurnReachesRouter(virtualTurn) || scenarioLaunchesAmbientDuty(scenario) {
 		return nil
@@ -2792,6 +2800,18 @@ func scenarioRouterResponsesForTurn(scenario VirtualSessionScenario, virtualTurn
 		return []string{scenarioApprovalRouterResponse(virtualTurn.RouterApproval)}
 	}
 	return []string{scenarioTurnRouterResponse(scenario, virtualTurn)}
+}
+
+func scenarioTurnScriptEntries(scenario VirtualSessionScenario, virtualTurn VirtualTurn) []string {
+	scriptedTurns := scenarioRouterResponsesForTurn(scenario, virtualTurn)
+	if len(scriptedTurns) == 0 {
+		return []string{scenarioAddressingOnlyTurn}
+	}
+	return scriptedTurns
+}
+
+func scenarioTurnWordsResponse() string {
+	return `{"reason":"scripted scenario default","userFacingReply":"","clarificationQuestion":"","clarificationOptions":[],"busyInstruction":"","expectedResults":[]}`
 }
 
 func scenarioLaunchesAmbientDuty(scenario VirtualSessionScenario) bool {
@@ -2823,7 +2843,10 @@ func assertScriptedControlCallsServed(callEvents []VirtualLanguageModelCallEvent
 	return nil
 }
 
-func assertNoScriptedResponseResidue(scriptedModel *agenttest.ScriptedLanguageModel) error {
+func assertNoScriptedResponseResidue(scriptedModel *agenttest.ScriptedLanguageModel, turnScript *scenarioTurnScript) error {
+	if turnScript != nil && turnScript.pendingCount() > 0 {
+		return fmt.Errorf("scripted turns were left undecided after the turn: %d", turnScript.pendingCount())
+	}
 	pendingCounts := scriptedModel.PendingResponseCounts()
 	if len(pendingCounts) == 0 {
 		return nil
@@ -2848,6 +2871,7 @@ func scenarioApprovalRouterResponse(approval string) string {
 		"taskShape":        "maintenance_task",
 		"level":            "low",
 		"approval":         strings.TrimSpace(approval),
+		"busyRoute":        string(agentcontract.BusyRouteNewTask),
 		"responseLanguage": "ko",
 		"reason":           "scripted approval reply classification",
 		"userFacingReply":  "",
@@ -2900,6 +2924,7 @@ func scenarioTurnRouterResponse(scenario VirtualSessionScenario, virtualTurn Vir
 		"userFacingReply":        "",
 		"initialToolNames":       appendUniqueScenarioToolNames(scenario.InitialToolNames, requiredEvidence),
 		"priorTaskReference":     "none",
+		"busyRoute":              string(agentcontract.BusyRouteNewTask),
 	}
 	if virtualTurnExpectsEvent(virtualTurn, agentcontract.TaskEventConfirmationReplyClassified) {
 		routerDocument["approval"] = "approve"

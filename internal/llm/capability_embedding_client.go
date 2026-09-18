@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 )
@@ -96,7 +95,7 @@ func (client CapabilityEmbeddingClient) post(ctx context.Context, input any, inp
 		capabilityEmbeddingRequestDocument{
 			Input:            input,
 			Model:            client.ModelName,
-			ExecutionMode:    firstNonEmptyEmbeddingString(client.ExecutionMode, "auto"),
+			ExecutionMode:    firstNonEmpty(client.ExecutionMode, "auto"),
 			InputType:        inputType,
 			OutputDimensions: client.OutputDimensions,
 		},
@@ -111,13 +110,4 @@ func float32Embedding(values []float64) []float32 {
 		embedding = append(embedding, float32(value))
 	}
 	return embedding
-}
-
-func firstNonEmptyEmbeddingString(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
 }

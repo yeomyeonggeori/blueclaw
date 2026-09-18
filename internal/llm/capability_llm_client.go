@@ -68,12 +68,8 @@ type capabilityStructuredResponseDocument struct {
 	FinishReason     string `json:"finishReason,omitempty"`
 	ConstraintMode   string `json:"constraintMode,omitempty"`
 	Usage            Usage  `json:"usage"`
-	// capabilityd keeps a chain of its own, so the model that answers is not
-	// always the tier that was asked for. The ledger has carried these two
-	// fields all along; only this hop dropped them, which is why a turn
-	// answered by a device model looked like an ordinary one.
-	UsedFallback   bool   `json:"usedFallback,omitempty"`
-	FallbackReason string `json:"fallbackReason,omitempty"`
+	UsedFallback     bool   `json:"usedFallback,omitempty"`
+	FallbackReason   string `json:"fallbackReason,omitempty"`
 }
 
 func (capabilityLLMClient CapabilityLLMClient) GenerateResponse(responseContext context.Context, prompt string) (string, error) {

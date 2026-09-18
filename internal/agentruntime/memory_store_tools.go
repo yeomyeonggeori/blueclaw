@@ -173,7 +173,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) searchStoreMemoryTool(ctx context.
 		status = memorySearchDegraded
 	}
 	output := memorySearchToolOutput{Facts: facts, SearchStatus: status}
-	document := json.RawMessage(marshalToolResult(output))
+	document := json.RawMessage(MarshalBody(output))
 	return toolcontract.ToolSuccessData(string(document), document)
 }
 
@@ -232,7 +232,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) rememberStoreMemoryTool(ctx contex
 		SupersededFactIDs: result.SupersededFactIDs,
 		ReinforcedFactIDs: result.ReinforcedFactIDs,
 	}
-	document := json.RawMessage(marshalToolResult(output))
+	document := json.RawMessage(MarshalBody(output))
 	return toolcontract.ToolSuccessData(string(document), document)
 }
 
@@ -245,7 +245,7 @@ func memoryStoreRememberFailure(failureCode string, summary string) toolcontract
 		ReinforcedFactIDs: []string{},
 		FailureCode:       failureCode,
 	}
-	document := json.RawMessage(marshalToolResult(output))
+	document := json.RawMessage(MarshalBody(output))
 	return toolcontract.ToolFailureData(toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "memory_remember", summary, document)
 }
 
@@ -270,7 +270,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) forgetStoreMemoryTool(ctx context.
 		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.NotFound, "memory_forget", "none of the facts are live and readable any more")
 	}
 	output := memoryForgetToolOutput{ForgottenFactIDs: forgottenFactIDs, Reason: strings.TrimSpace(input.Reason)}
-	document := json.RawMessage(marshalToolResult(output))
+	document := json.RawMessage(MarshalBody(output))
 	return toolcontract.ToolSuccessData(string(document), document)
 }
 

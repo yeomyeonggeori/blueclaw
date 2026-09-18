@@ -129,7 +129,7 @@ func TestPresentationLocalMultiturnSuccessLive(t *testing.T) {
 		t.Skip("set BLUECLAW_E2E_LLM_ENDPOINT or BLUECLAW_E2E_LLM_UNIX_SOCKET to run live slides virtual session")
 	}
 	scenario := PresentationLocalMultiturnSuccessScenario(t.TempDir())
-	if skillDirectoryPath := rootPresentationSkillPath(); skillDirectoryPath != "" {
+	if skillDirectoryPath := presentationSkillPath(); skillDirectoryPath != "" {
 		scenario.Skills = nil
 		scenario.SkillDirectoryPaths = []string{skillDirectoryPath}
 	}

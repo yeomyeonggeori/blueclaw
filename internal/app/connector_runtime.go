@@ -21,7 +21,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/intake"
 )
 
-func newConnectorRuntime(runtimeConfiguration config.RuntimeConfiguration, foundation runtimeFoundation, directory identityDirectory, kernel agentKernel, services taskServices, taskLauncher *agentruntime.TaskLauncher, turnRouter intake.TurnRouter, backupCoordinator *backup.Coordinator, taskIntakeController *runtimecontrol.TaskIntakeController) *connectors.ConnectorRuntime {
+func newConnectorRuntime(runtimeConfiguration config.RuntimeConfiguration, foundation runtimeFoundation, directory identityDirectory, kernel agentKernel, services taskServices, taskLauncher *agentruntime.TaskLauncher, turnRouter intake.TurnRouter, decisionPlanner intake.DecisionPlanner, backupCoordinator *backup.Coordinator, taskIntakeController *runtimecontrol.TaskIntakeController) *connectors.ConnectorRuntime {
 	logger := foundation.logger
 	languageModelProvider := kernel.taskTierLanguageModels.High
 	connectorRuntime := connectors.NewConnectorRuntime(
@@ -41,7 +41,7 @@ func newConnectorRuntime(runtimeConfiguration config.RuntimeConfiguration, found
 	connectorRuntime.UseCompanyProvider(directory.companyProvider)
 	connectorRuntime.UseCompanyLocaleProvider(directory.companyLocaleProvider)
 	connectorRuntime.UseTurnRouter(turnRouter)
-	connectorRuntime.UseIntakeClassifier(intake.NewClassifier(classificationLanguageModelProvider(kernel.taskTierLanguageModels, kernel.intakeLanguageModelProvider)))
+	connectorRuntime.UseIntakeDecider(decisionPlanner)
 	connectorRuntime.UseTaskLauncher(taskLauncher)
 	connectorRuntime.UseApprovalGate(kernel.toolCatalog.approvalGate)
 	connectorRuntime.UseAgentIdentityProvider(kernel.agentIdentityProvider)

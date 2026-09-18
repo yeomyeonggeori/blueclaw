@@ -133,6 +133,7 @@ type LanguageModelCapabilityConfiguration struct {
 	MediumModel   string `json:"mediumModel"`
 	LowModel      string `json:"lowModel"`
 	XLowModel     string `json:"xlowModel"`
+	DecisionModel string `json:"decisionModel"`
 	ExecutionMode string `json:"executionMode"`
 }
 

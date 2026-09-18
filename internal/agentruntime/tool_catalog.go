@@ -315,7 +315,7 @@ func fetchHistoryTool(toolContext context.Context, input historyToolInput, reque
 	if errorValue != nil {
 		return toolcontract.ToolResult{}, errorValue
 	}
-	document := json.RawMessage(marshalToolResult(projectConversationHistory(visibleContext)))
+	document := json.RawMessage(MarshalBody(projectConversationHistory(visibleContext)))
 	return toolcontract.ToolSuccessData(string(document), document), nil
 }
 
@@ -377,7 +377,7 @@ func actorToolFailure(operation string, stage string, virtualPath string, errorV
 		failureKind = toolcontract.FailureInvalidInput
 		failureCode = toolcontract.FailureCodes.InvalidInput
 	}
-	result := toolcontract.ToolFailureWithOutput(failureKind, failureCode, stage, message, json.RawMessage(marshalToolResult(actorFailureDataFields(operation, stage, virtualPath, errorValue))))
+	result := toolcontract.ToolFailureWithOutput(failureKind, failureCode, stage, message, json.RawMessage(MarshalBody(actorFailureDataFields(operation, stage, virtualPath, errorValue))))
 	result.Failure.Retryable = true
 	result.Failure.SafeRetry = true
 	return result
@@ -549,7 +549,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) agentWorkspacePath(path string) st
 	return filepath.ToSlash(filepath.Join("/workspace", relativePath))
 }
 
-func marshalToolResult(value any) string {
+func MarshalBody(value any) string {
 	document, errorValue := json.Marshal(value)
 	if errorValue != nil {
 		return fmt.Sprint(value)

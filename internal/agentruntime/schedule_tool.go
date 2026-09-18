@@ -123,7 +123,7 @@ func taskScheduleIDs(taskSchedules []task.TaskSchedule) []string {
 }
 
 func scheduleListToolResult(output scheduleListToolOutput) toolcontract.ToolResult {
-	document := json.RawMessage(marshalToolResult(output))
+	document := json.RawMessage(MarshalBody(output))
 	return toolcontract.ToolSuccessData(string(document), document)
 }
 
@@ -263,7 +263,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) cancelScheduleTool(toolContext con
 	if errorValue != nil {
 		return toolcontract.ToolResult{}, errorValue
 	}
-	resultDocument := json.RawMessage(marshalToolResult(result))
+	resultDocument := json.RawMessage(MarshalBody(result))
 	if result.EffectiveCancellationCount == 0 {
 		return toolcontract.ToolFailureData(toolcontract.FailureNotFound, toolcontract.FailureCodes.NotFound, "schedule_cancel", "no active schedules or pending scheduled work matched the cancellation request", resultDocument), nil
 	}
@@ -389,7 +389,7 @@ type nativeScheduleMutationResult struct {
 
 func scheduleCreateResultDocument(taskSchedule task.TaskSchedule) json.RawMessage {
 	mutation := task.ProjectScheduleMutation(taskSchedule)
-	return json.RawMessage(marshalToolResult(nativeScheduleMutationResult{
+	return json.RawMessage(MarshalBody(nativeScheduleMutationResult{
 		ScheduleID:       mutation.ScheduleID,
 		Name:             mutation.Description,
 		TaskInstruction:  mutation.TaskInstruction,

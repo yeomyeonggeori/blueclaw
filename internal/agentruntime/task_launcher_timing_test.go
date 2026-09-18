@@ -95,7 +95,7 @@ func (router *failingTurnRouter) Plan(context.Context, agentcontract.AgentReques
 	return agentcontract.TurnDecision{}, router.errorValue
 }
 
-func (router *failingTurnRouter) PlanObserved(context.Context, agentcontract.AgentRequest, *agentcontract.TurnRouterCallLedger) (agentcontract.TurnDecision, error) {
+func (router *failingTurnRouter) PlanObserved(context.Context, agentcontract.AgentRequest, *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error) {
 	return agentcontract.TurnDecision{}, router.errorValue
 }
 

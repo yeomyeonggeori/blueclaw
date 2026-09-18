@@ -5,25 +5,30 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
-type addressingRequestRecorder struct {
-	lastRequest agentcontract.AddressingClassificationRequest
+type intakeDecisionRecorder struct {
+	lastRequest agentcontract.IntakeDecisionRequest
 }
 
-func (recorder *addressingRequestRecorder) ClassifyAddressing(ctx context.Context, request agentcontract.AddressingClassificationRequest) (agentcontract.AddressingDecision, error) {
+func (recorder *intakeDecisionRecorder) Decide(_ context.Context, request agentcontract.IntakeDecisionRequest, _ *agentcontract.IntakeCallLedger) (agentcontract.IntakeDecisions, error) {
 	recorder.lastRequest = request
-	return agentcontract.AddressingDecision{ShouldRespond: true}, nil
-}
-
-func (recorder *addressingRequestRecorder) ClassifyActiveTaskFollowUp(context.Context, agentcontract.ActiveTaskFollowUpClassificationRequest) (bool, error) {
-	return false, nil
+	decisions := agentcontract.IntakeDecisions{}
+	for _, message := range request.Messages {
+		decisions.Messages = append(decisions.Messages, agentcontract.IntakeMessageDecision{
+			MessageID:  message.MessageID,
+			Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true},
+		})
+	}
+	return decisions, nil
 }
 
 func channelMentionEvent() PlatformInboundEvent {
 	return PlatformInboundEvent{
-		Prompt: "이번 주 일정 정리해줘",
+		Platform: "mattermost",
+		Prompt:   "이번 주 일정 정리해줘",
 		Context: VisibleContext{
 			ConversationType: "O",
 			Addressing:       AddressingMetadata{BotMentioned: true},
@@ -31,50 +36,90 @@ func channelMentionEvent() PlatformInboundEvent {
 	}
 }
 
-func TestAddressingClassificationCarriesConfiguredAgentIdentity(t *testing.T) {
-	recorder := &addressingRequestRecorder{}
-	connectorRuntime := NewConnectorRuntime(nil, nil, nil, nil, nil)
-	connectorRuntime.UseIntakeClassifier(recorder)
+func recordingIntakeDecisionRuntime(t *testing.T) (*ConnectorRuntime, *intakeDecisionRecorder, *testAdapter) {
+	t.Helper()
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	recorder := &intakeDecisionRecorder{}
+	connectorRuntime := NewConnectorRuntime(testConnectorIdentityService(), nil, taskRunService, task.NewTaskEventService(), nil)
+	connectorRuntime.UseTaskRunService(taskRunService)
+	connectorRuntime.UseIntakeDecider(recorder)
+	adapter := &testAdapter{senderEmail: "invited@example.com"}
+	connectorRuntime.RegisterAdapter(adapter)
+	return connectorRuntime, recorder, adapter
+}
+
+func TestIntakeDecisionCarriesConfiguredAgentIdentity(t *testing.T) {
+	connectorRuntime, recorder, adapter := recordingIntakeDecisionRuntime(t)
 	connectorRuntime.UseAgentIdentityProvider(func() agentcontract.AgentIdentity {
 		return agentcontract.AgentIdentity{Name: "김인턴", Handle: "internkim"}
 	})
 
-	connectorRuntime.resolveInboundEngagement(context.Background(), "mattermost", channelMentionEvent())
+	connectorRuntime.resolveInboundEngagement(context.Background(), adapter, "mattermost", withInboundDecision(channelMentionEvent()))
 
 	if recorder.lastRequest.AgentIdentity.Name != "김인턴" || recorder.lastRequest.AgentIdentity.Handle != "internkim" {
-		t.Fatalf("expected the configured agent identity to reach the addressing classifier, got %+v", recorder.lastRequest.AgentIdentity)
+		t.Fatalf("expected the configured agent identity to reach the intake decision, got %+v", recorder.lastRequest.AgentIdentity)
 	}
 }
 
-func TestAddressingClassificationCarriesInboundEventFields(t *testing.T) {
-	recorder := &addressingRequestRecorder{}
-	connectorRuntime := NewConnectorRuntime(nil, nil, nil, nil, nil)
-	connectorRuntime.UseIntakeClassifier(recorder)
+func TestIntakeDecisionCarriesInboundEventFields(t *testing.T) {
+	connectorRuntime, recorder, adapter := recordingIntakeDecisionRuntime(t)
 
 	event := channelMentionEvent()
 	event.MessageID = "message-1"
 	event.RawReceivedAt = time.Unix(1756800000, 0)
 	event.Context.Sender = VisibleContextSender{Name: "이샘플", Handle: "sample"}
 
-	connectorRuntime.resolveInboundEngagement(context.Background(), "mattermost", event)
+	connectorRuntime.resolveInboundEngagement(context.Background(), adapter, "mattermost", withInboundDecision(event))
 
-	request := recorder.lastRequest
-	if request.Prompt != event.Prompt || request.ConversationType != "O" || !request.BotMentioned {
-		t.Fatalf("expected the inbound event's prompt, conversation type and mention to reach the classifier, got %+v", request)
+	if recorder.lastRequest.ConversationType != "O" {
+		t.Fatalf("expected the conversation type to reach the intake decision, got %q", recorder.lastRequest.ConversationType)
 	}
-	if request.SenderName != "이샘플" || request.SenderHandle != "sample" || !request.MessageSentAt.Equal(event.RawReceivedAt) {
-		t.Fatalf("expected the inbound event's sender and receipt time to reach the classifier, got %+v", request)
+	if len(recorder.lastRequest.Messages) != 1 {
+		t.Fatalf("expected one message to be decided, got %d", len(recorder.lastRequest.Messages))
+	}
+	message := recorder.lastRequest.Messages[0]
+	if message.MessageID != "message-1" || message.Prompt != event.Prompt || !message.BotMentioned {
+		t.Fatalf("expected the inbound event's message to reach the decision, got %+v", message)
+	}
+	if message.SenderName != "이샘플" || message.SenderHandle != "sample" || !message.SentAt.Equal(event.RawReceivedAt) {
+		t.Fatalf("expected the sender and receipt time to reach the decision, got %+v", message)
 	}
 }
 
-func TestAddressingClassificationWithoutIdentityProviderStaysEmpty(t *testing.T) {
-	recorder := &addressingRequestRecorder{}
-	connectorRuntime := NewConnectorRuntime(nil, nil, nil, nil, nil)
-	connectorRuntime.UseIntakeClassifier(recorder)
+func TestIntakeDecisionWithoutIdentityProviderStaysEmpty(t *testing.T) {
+	connectorRuntime, recorder, adapter := recordingIntakeDecisionRuntime(t)
 
-	connectorRuntime.resolveInboundEngagement(context.Background(), "mattermost", channelMentionEvent())
+	connectorRuntime.resolveInboundEngagement(context.Background(), adapter, "mattermost", withInboundDecision(channelMentionEvent()))
 
 	if recorder.lastRequest.AgentIdentity != (agentcontract.AgentIdentity{}) {
 		t.Fatalf("expected an empty agent identity without a provider, got %+v", recorder.lastRequest.AgentIdentity)
 	}
+}
+
+func TestOneMessageIsDecidedOnce(t *testing.T) {
+	connectorRuntime, _, adapter := recordingIntakeDecisionRuntime(t)
+	countingDecider := &countingIntakeDecider{}
+	connectorRuntime.UseIntakeDecider(countingDecider)
+	event := withInboundDecision(channelMentionEvent())
+
+	connectorRuntime.resolveInboundEngagement(context.Background(), adapter, "mattermost", event)
+	connectorRuntime.decidedTurnFields(context.Background(), adapter, event)
+	connectorRuntime.relatesToActiveTask(context.Background(), adapter, event)
+
+	if countingDecider.callCount != 1 {
+		t.Fatalf("expected the gate, the router and the follow-up check to share one decision call, got %d", countingDecider.callCount)
+	}
+}
+
+type countingIntakeDecider struct {
+	callCount int
+}
+
+func (decider *countingIntakeDecider) Decide(_ context.Context, request agentcontract.IntakeDecisionRequest, _ *agentcontract.IntakeCallLedger) (agentcontract.IntakeDecisions, error) {
+	decider.callCount++
+	decisions := agentcontract.IntakeDecisions{}
+	for _, message := range request.Messages {
+		decisions.Messages = append(decisions.Messages, agentcontract.IntakeMessageDecision{MessageID: message.MessageID})
+	}
+	return decisions, nil
 }
