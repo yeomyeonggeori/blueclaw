@@ -46,8 +46,8 @@ func TestAClaimTakesOneConversationAndLeavesTheOtherClaimable(t *testing.T) {
 		}
 	}
 
-	claimedConversations := map[string]int{}
-	for claimCount := 0; claimCount < 10 && len(claimedConversations) < 2; claimCount++ {
+	claimedMessageIDs := map[string][]string{}
+	for claimCount := 0; claimCount < 10 && len(claimedMessageIDs) < 2; claimCount++ {
 		queuedEvents, errorValue := repository.ClaimPendingConnectorEvents(4, time.Minute)
 		if errorValue != nil {
 			t.Fatal(errorValue)
@@ -55,23 +55,27 @@ func TestAClaimTakesOneConversationAndLeavesTheOtherClaimable(t *testing.T) {
 		if len(queuedEvents) == 0 {
 			break
 		}
-		conversationsInClaim := map[string]int{}
+		conversationsInClaim := map[string][]string{}
 		for _, queuedEvent := range queuedEvents {
-			conversationsInClaim[queuedEvent.Event.ConversationID]++
+			conversationsInClaim[queuedEvent.Event.ConversationID] = append(conversationsInClaim[queuedEvent.Event.ConversationID], queuedEvent.Event.MessageID)
 		}
 		if len(conversationsInClaim) != 1 {
 			t.Fatalf("expected one claim to hold one conversation, got %v", conversationsInClaim)
 		}
-		for conversationID, messageCount := range conversationsInClaim {
-			claimedConversations[conversationID] = messageCount
+		for conversationID, messageIDs := range conversationsInClaim {
+			claimedMessageIDs[conversationID] = messageIDs
 		}
 	}
 
-	if claimedConversations[busyConversation] != 2 {
-		t.Fatalf("expected the busy conversation's two messages in one claim, got %v", claimedConversations)
+	busyMessageIDs := claimedMessageIDs[busyConversation]
+	if len(busyMessageIDs) != 2 {
+		t.Fatalf("expected the busy conversation's two messages in one claim, got %v", claimedMessageIDs)
 	}
-	if claimedConversations[waitingConversation] != 1 {
-		t.Fatalf("expected the other conversation to stay claimable by a second worker, got %v", claimedConversations)
+	if busyMessageIDs[0] != fixturePrefix+"-first" || busyMessageIDs[1] != fixturePrefix+"-third" {
+		t.Fatalf("expected the claim to answer in arrival order, got %v", busyMessageIDs)
+	}
+	if len(claimedMessageIDs[waitingConversation]) != 1 {
+		t.Fatalf("expected the other conversation to stay claimable by a second worker, got %v", claimedMessageIDs)
 	}
 }
 

@@ -247,14 +247,18 @@ WITH head AS (
   ORDER BY raw_event.ingested_at ASC
   LIMIT $3 - 1
   FOR UPDATE OF raw_event SKIP LOCKED
+), claimed AS (
+  UPDATE raw_event
+  SET connector_status = 'running',
+    connector_started_at = $1,
+    connector_attempt_count = connector_attempt_count + 1,
+    connector_error = ''
+  WHERE raw_event_id IN (SELECT raw_event_id FROM head UNION ALL SELECT raw_event_id FROM burst)
+  RETURNING connector_event_json, connector_attempt_count, ingested_at
 )
-UPDATE raw_event
-SET connector_status = 'running',
-  connector_started_at = $1,
-  connector_attempt_count = connector_attempt_count + 1,
-  connector_error = ''
-WHERE raw_event_id IN (SELECT raw_event_id FROM head UNION ALL SELECT raw_event_id FROM burst)
-RETURNING connector_event_json, connector_attempt_count`,
+SELECT connector_event_json, connector_attempt_count
+FROM claimed
+ORDER BY ingested_at ASC`,
 		now,
 		staleStartedAt,
 		limit,
