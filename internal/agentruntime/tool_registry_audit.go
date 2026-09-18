@@ -40,7 +40,6 @@ type ToolRegistryAudit struct {
 	PlatformMessageDescriptorHash     string `json:"platformMessageDescriptorHash"`
 	LivePlatformMessageDescriptorHash string `json:"livePlatformMessageDescriptorHash,omitempty"`
 	AllowedToolHash                   string `json:"allowedToolHash"`
-	HasScheduleUpdate                 bool   `json:"hasScheduleUpdate"`
 	HasPlatformMessageDelete          bool   `json:"hasPlatformMessageDelete"`
 	HasOldMattermostPostDelete        bool   `json:"hasOldMattermostPostDelete"`
 	HasOldPlatformDMInspect           bool   `json:"hasOldPlatformDMInspect"`
@@ -84,7 +83,6 @@ func (toolCatalogBuilder *ToolCatalogBuilder) BuildToolRegistryAudit(ctx context
 		CapabilityDescriptorHash:      hashCapabilityDescriptors(configuredDescriptors),
 		PlatformMessageDescriptorHash: hashCapabilityDescriptors(configuredPlatformMessageDescriptors),
 		AllowedToolHash:               hashStrings(allowedToolNames),
-		HasScheduleUpdate:             registryContainsString(allowedToolNames, "schedule_update"),
 		HasPlatformMessageDelete:      registryContainsString(configuredNames, "message_delete"),
 		HasOldMattermostPostDelete:    registryContainsString(configuredNames, "mattermost_post_delete"),
 		HasOldPlatformDMInspect:       registryContainsString(configuredNames, "platform.dm.inspect"),

@@ -41,8 +41,6 @@ type ToolCatalogBuilder struct {
 	workspaceActorFactory        security.WorkspaceActorFactory
 	taskRunService               *task.TaskRunService
 	taskArtifactService          *task.TaskArtifactService
-	scheduleRepository           task.ScheduleRepository
-	taskWaitTokenRepository      task.TaskWaitTokenRepository
 	workspaceRootPath            string
 	optionalFileReadPathSuffixes []string
 	skillChangeHandler           func(context.Context)
@@ -185,14 +183,6 @@ func (toolCatalogBuilder *ToolCatalogBuilder) UseTaskArtifactService(taskArtifac
 	toolCatalogBuilder.taskArtifactService = taskArtifactService
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) UseScheduleRepository(scheduleRepository task.ScheduleRepository) {
-	toolCatalogBuilder.scheduleRepository = scheduleRepository
-}
-
-func (toolCatalogBuilder *ToolCatalogBuilder) UseTaskWaitTokenRepository(taskWaitTokenRepository task.TaskWaitTokenRepository) {
-	toolCatalogBuilder.taskWaitTokenRepository = taskWaitTokenRepository
-}
-
 func (toolCatalogBuilder *ToolCatalogBuilder) UseWorkspaceRootPath(workspaceRootPath string) {
 	trimmedWorkspaceRootPath := strings.TrimSpace(workspaceRootPath)
 	if trimmedWorkspaceRootPath != "" {
@@ -248,7 +238,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) BuildToolSet(request ToolCatalogRe
 		request:           request,
 		conversationScope: toolCatalogBuilder.conversationScope(request),
 	}
-	toolCatalogBuilder.registerLocalTools(toolSet, request, handlerContext)
+	toolCatalogBuilder.registerLocalTools(toolSet, request)
 	toolCatalogBuilder.registerKernelTools(toolSet, handlerContext)
 	toolCatalogBuilder.registerRecordCatalogTools(toolSet, request, toolCatalogBuilder.discoveredRecordTools(request))
 	toolCatalogBuilder.registerCapabilityTools(toolSet, request)
@@ -325,9 +315,8 @@ func fetchHistoryTool(toolContext context.Context, input historyToolInput, reque
 	return toolcontract.ToolSuccessData(string(document), document), nil
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) registerBuiltInTools(toolRegistry *toolcontract.ToolSet, handlerContext toolHandlerContext) {
+func (toolCatalogBuilder *ToolCatalogBuilder) registerBuiltInTools(toolRegistry *toolcontract.ToolSet) {
 	toolCatalogBuilder.registerAskInputTool(toolRegistry)
-	toolCatalogBuilder.registerScheduleTools(toolRegistry, handlerContext)
 	toolCatalogBuilder.registerSkillManagementTools(toolRegistry)
 }
 

@@ -539,12 +539,13 @@ func ScheduleCreateAcceptanceScenario(artifactDirectoryPath string) VirtualSessi
 		ArtifactDirectoryPath:  artifactDirectoryPath,
 		Skills:                 []agentcontract.SkillInstruction{scheduledTaskSkill()},
 		AllowedTools:           append(toolcontract.KernelToolNames(), "schedule_create", "schedule_cancel"),
+		CapabilityToolNames:    []string{"schedule_create", "schedule_cancel"},
 		InitialToolNames:       []string{"schedule_create", "schedule_cancel"},
 		RouterRequiredEvidence: []string{"schedule_create"},
 		Turns: []VirtualTurn{{
 			Prompt: "1분마다 \"1분 지났습니다\"라고 보내줘",
 			ActionResponses: []string{
-				actionInvokeCapabilityTool("schedule_create", `{"name":"1분 알림","taskInstruction":"현재 대화에 \"1분 지났습니다\"라고 보낸다.","kind":"interval","intervalSecond":60,"maxRunCount":10,"repeatPolicy":"finite"}`),
+				actionInvokeCapabilityTool("schedule_create", `{"description":"1분 알림","taskInstruction":"현재 대화에 \"1분 지났습니다\"라고 보낸다.","kind":"interval","intervalSecond":60,"maxRunCount":10,"repeatPolicy":"finite"}`),
 				actionFinishMessage("1분마다 알림을 보내도록 예약해둘게요.", "obs-001"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
@@ -571,13 +572,14 @@ func ScheduleLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSe
 		ArtifactDirectoryPath: artifactDirectoryPath,
 		Skills:                []agentcontract.SkillInstruction{scheduledTaskSkill()},
 		AllowedTools:          append(toolcontract.KernelToolNames(), "schedule_create", "schedule_update", "schedule_cancel"),
+		CapabilityToolNames:   []string{"schedule_create", "schedule_update", "schedule_cancel"},
 		InitialToolNames:      []string{"schedule_create", "schedule_update", "schedule_cancel"},
 		Turns: []VirtualTurn{
 			{
 				Prompt:                 "30분마다 상태 확인하라고 알려줘. 세 번만 해줘",
 				RouterRequiredEvidence: []string{"schedule_create"},
 				ActionResponses: []string{
-					actionInvokeCapabilityTool("schedule_create", `{"name":"상태 확인 알림","taskInstruction":"현재 대화에 \"상태를 확인하세요\"라고 보낸다.","kind":"interval","intervalSecond":1800,"maxRunCount":3,"repeatPolicy":"finite"}`),
+					actionInvokeCapabilityTool("schedule_create", `{"description":"상태 확인 알림","taskInstruction":"현재 대화에 \"상태를 확인하세요\"라고 보낸다.","kind":"interval","intervalSecond":1800,"maxRunCount":3,"repeatPolicy":"finite"}`),
 					actionFinishMessage("30분마다 세 번 상태 확인 알림을 보내도록 예약해둘게요.", "obs-001"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
@@ -592,7 +594,7 @@ func ScheduleLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSe
 				Prompt:                 "그 예약을 1시간마다 다섯 번으로 바꿔줘",
 				RouterRequiredEvidence: []string{"schedule_update"},
 				ActionResponses: []string{
-					actionInvokeCapabilityTool("schedule_update", `{"scheduleID":"virtual-schedule-001","intervalSecond":3600,"maxRunCount":5,"repeatPolicy":"finite"}`),
+					actionInvokeCapabilityTool("schedule_update", `{"scheduleHint":"virtual-schedule-001","intervalSecond":3600,"maxRunCount":5,"repeatPolicy":"finite"}`),
 					actionFinishMessage("예약을 1시간마다 다섯 번으로 수정했습니다.", "obs-001"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
@@ -605,7 +607,7 @@ func ScheduleLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSe
 				Prompt:                 "그 예약 삭제해줘",
 				RouterRequiredEvidence: []string{"schedule_cancel"},
 				ActionResponses: []string{
-					actionInvokeCapabilityTool("schedule_cancel", `{"scope":"mine"}`),
+					actionInvokeCapabilityTool("schedule_cancel", `{"scheduleHints":["virtual-schedule-001"]}`),
 					actionFinishMessage("예약을 삭제했습니다.", "obs-001"),
 				},
 				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
@@ -1228,11 +1230,12 @@ func OneTimeScheduleAcceptanceScenario(artifactDirectoryPath string) VirtualSess
 		ArtifactDirectoryPath: artifactDirectoryPath,
 		Skills:                []agentcontract.SkillInstruction{scheduledTaskSkill()},
 		AllowedTools:          []string{"conversation_history", "memory_search", "schedule_create", "schedule_cancel"},
+		CapabilityToolNames:   []string{"schedule_create", "schedule_cancel"},
 		Turns: []VirtualTurn{{
 			Prompt:                 "2027년 1월 15일 오전 9시에 계약서 확인 알림을 한 번만 예약해줘",
 			RouterRequiredEvidence: []string{"schedule_create"},
 			ActionResponses: []string{
-				actionInvokeCapabilityTool("schedule_create", `{"name":"계약서 확인 알림","taskInstruction":"현재 대화에 \"계약서를 확인하세요\"라고 보낸다.","kind":"once","runAt":"2027-01-15T00:00:00Z"}`),
+				actionInvokeCapabilityTool("schedule_create", `{"description":"계약서 확인 알림","taskInstruction":"현재 대화에 \"계약서를 확인하세요\"라고 보낸다.","kind":"once","runAt":"2027-01-15T00:00:00Z"}`),
 				actionFinishMessage("2027년 1월 15일 오전 9시에 한 번 알림을 보내도록 예약해둘게요.", "obs-001"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},

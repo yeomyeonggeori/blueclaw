@@ -130,69 +130,6 @@ var localToolDescriptorSpecs = []localToolDescriptorSpec{
 		Availability:         localToolAvailable,
 	},
 	{
-		ID:              "local/schedule_list",
-		ProviderID:      localToolProviderID,
-		Namespace:       "schedule",
-		Name:            "schedule_list",
-		PrivacyClass:    "workspace_schedule",
-		OutputSchema:    scheduleListOutputSchema,
-		ResultContract:  scheduleListResultContract(),
-		Visibility:      toolcontract.ToolVisibilityModel,
-		PolicyResource:  "tool:schedule_list",
-		SideEffectClass: toolcontract.ToolSideEffectRead,
-		Completion:      toolcontract.ToolCompletion{Mode: toolcontract.ToolCompletionNone},
-		Idempotency:     toolcontract.ToolIdempotencyNone,
-		Availability:    localToolAvailable,
-	},
-	{
-		ID:                "local/schedule_create",
-		ProviderID:        localToolProviderID,
-		Namespace:         "schedule",
-		Name:              "schedule_create",
-		PrivacyClass:      "workspace_schedule",
-		OutputSchema:      scheduleMutationResultSchema,
-		ResultContract:    scheduleMutationResultContract("created"),
-		Visibility:        toolcontract.ToolVisibilityModel,
-		PolicyResource:    "tool:schedule_create",
-		SideEffectClass:   toolcontract.ToolSideEffectStateChange,
-		InputIntentSchema: scheduleCreateInputIntentSchema,
-		Completion:        toolcontract.ToolCompletion{Mode: toolcontract.ToolCompletionObservation},
-		Idempotency:       toolcontract.ToolIdempotencyNone,
-		Availability:      localToolAvailable,
-	},
-	{
-		ID:                "local/schedule_update",
-		ProviderID:        localToolProviderID,
-		Namespace:         "schedule",
-		Name:              "schedule_update",
-		PrivacyClass:      "workspace_schedule",
-		OutputSchema:      scheduleMutationResultSchema,
-		ResultContract:    scheduleMutationResultContract("updated"),
-		Visibility:        toolcontract.ToolVisibilityModel,
-		PolicyResource:    "tool:schedule_update",
-		SideEffectClass:   toolcontract.ToolSideEffectStateChange,
-		InputIntentSchema: scheduleUpdateInputIntentSchema,
-		Completion:        toolcontract.ToolCompletion{Mode: toolcontract.ToolCompletionObservation},
-		Idempotency:       toolcontract.ToolIdempotencyNone,
-		Availability:      localToolAvailable,
-	},
-	{
-		ID:                "local/schedule_cancel",
-		ProviderID:        localToolProviderID,
-		Namespace:         "schedule",
-		Name:              "schedule_cancel",
-		PrivacyClass:      "workspace_schedule",
-		OutputSchema:      scheduleCancelResultSchema,
-		ResultContract:    scheduleCancelResultContract(),
-		Visibility:        toolcontract.ToolVisibilityModel,
-		PolicyResource:    "tool:schedule_cancel",
-		SideEffectClass:   toolcontract.ToolSideEffectStateChange,
-		InputIntentSchema: scheduleCancelInputIntentSchema,
-		Completion:        toolcontract.ToolCompletion{Mode: toolcontract.ToolCompletionObservation},
-		Idempotency:       toolcontract.ToolIdempotencyNone,
-		Availability:      localToolAvailable,
-	},
-	{
 		ID:           "local/skill_add",
 		ProviderID:   localToolProviderID,
 		Namespace:    "skill",
@@ -344,10 +281,10 @@ func validateLocalToolDescriptorSpec(spec localToolDescriptorSpec) error {
 	return nil
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) registerLocalTools(toolSet *toolcontract.ToolSet, request ToolCatalogRequest, handlerContext toolHandlerContext) {
+func (toolCatalogBuilder *ToolCatalogBuilder) registerLocalTools(toolSet *toolcontract.ToolSet, request ToolCatalogRequest) {
 	handlerToolSet := toolcontract.NewToolSet(nil)
 	toolCatalogBuilder.registerMemoryTool(handlerToolSet, request)
-	toolCatalogBuilder.registerBuiltInTools(handlerToolSet, handlerContext)
+	toolCatalogBuilder.registerBuiltInTools(handlerToolSet)
 	provider := localToolProvider{handlerToolSet: handlerToolSet}
 	if errorValue := toolSet.RegisterProvider(context.Background(), provider); errorValue != nil {
 		panic(fmt.Errorf("register trusted local tool provider: %w", errorValue))

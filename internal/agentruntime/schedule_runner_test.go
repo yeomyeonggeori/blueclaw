@@ -14,7 +14,6 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract/harnesstest"
 	"github.com/yeomyeonggeori/bluecollar/loop"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 func TestScheduleRunnerLaunchesDueSchedule(t *testing.T) {
@@ -300,75 +299,4 @@ func structuredRequestMessagesText(requests []llm.StructuredResponseRequest) str
 		}
 	}
 	return strings.Join(lines, "\n")
-}
-
-func TestAScheduleCreatedInAScheduledRunDeliversWhereItsParentDoes(t *testing.T) {
-	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
-	harness := harnesstest.New(taskRunService)
-	scheduleRepository := &memoryScheduleRepository{}
-	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseScheduleRepository(scheduleRepository)
-	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_create", "schedule_cancel"})
-	taskLauncher := NewTaskLauncher(harness, taskRunService, toolCatalogBuilder)
-	runAt := time.Date(2026, 5, 2, 9, 0, 0, 0, time.UTC)
-
-	_, errorValue := NewScheduleRunner(taskLauncher).RunIfDue(context.Background(), ScheduleRunRequest{
-		Schedule: task.Schedule{
-			ScheduleID:      "parent-schedule",
-			CreatorPersonID: "person-1",
-			Prompt:          "daily brief",
-			Platform:        "mattermost",
-			ConversationID:  "conversation-sample",
-			ReplyTargetID:   "reply-target-1",
-			Kind:            task.ScheduleKindOnce,
-			RunAt:           &runAt,
-			NextRunAt:       &runAt,
-		},
-		ReferenceTime: runAt,
-		PersonAccess:  policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
-	})
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-
-	createResult, errorValue := harness.LastTurnRequest().ToolSet.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "schedule_create",
-		Input: toolcontract.MarshalToolInput(map[string]any{
-			"name":            "follow up",
-			"taskInstruction": "send the follow-up summary.",
-			"kind":            "cron",
-			"cronExpression":  "0 9 * * 1",
-			"repeatPolicy":    "unbounded",
-		}),
-	})
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if createResult.Failed() {
-		t.Fatalf("expected the scheduled run to create a schedule, got %s", createResult.ContentText())
-	}
-	if len(scheduleRepository.schedules) != 1 || scheduleRepository.schedules[0].ConversationID != "conversation-sample" {
-		t.Fatalf("expected the child schedule to deliver where its parent does, got %+v", scheduleRepository.schedules)
-	}
-
-	chatToolSet := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
-		ProfileName:       "default",
-		RequesterPersonID: "person-1",
-		Platform:          "mattermost",
-		ConversationID:    "conversation-sample",
-		ReplyTargetID:     "reply-target-2",
-	})
-	cancelResult, errorValue := chatToolSet.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "schedule_cancel",
-		Input:    toolcontract.MarshalToolInput(map[string]any{"scope": "currentConversation"}),
-	})
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if cancelResult.Failed() {
-		t.Fatalf("expected the chat conversation to cancel the child schedule, got %s", cancelResult.ContentText())
-	}
-	if scheduleRepository.schedules[0].NextRunAt != nil {
-		t.Fatalf("expected the child schedule to be cancelled, got %+v", scheduleRepository.schedules[0])
-	}
 }

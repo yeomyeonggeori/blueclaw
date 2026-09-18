@@ -37,13 +37,8 @@ func (connectorRuntime *ConnectorRuntime) UseWorkspaceActorFactory(workspaceActo
 	connectorRuntime.toolCatalogBuilder.UseWorkspaceActorFactory(workspaceActorFactory)
 }
 
-func (connectorRuntime *ConnectorRuntime) UseScheduleRepository(scheduleRepository task.ScheduleRepository) {
-	connectorRuntime.toolCatalogBuilder.UseScheduleRepository(scheduleRepository)
-}
-
 func (connectorRuntime *ConnectorRuntime) UseTaskWaitTokenRepository(taskWaitTokenRepository task.TaskWaitTokenRepository) {
 	connectorRuntime.taskWaitTokenRepository = taskWaitTokenRepository
-	connectorRuntime.toolCatalogBuilder.UseTaskWaitTokenRepository(taskWaitTokenRepository)
 }
 
 func (connectorRuntime *ConnectorRuntime) UseApprovalGate(approvalGate *approvalgate.Gate) {

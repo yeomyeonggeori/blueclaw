@@ -1593,16 +1593,6 @@ func failureEventCount(events []task.TaskEvent) int {
 	return count
 }
 
-func activeScheduleCount(schedules []task.Schedule) int {
-	count := 0
-	for _, schedule := range schedules {
-		if schedule.NextRunAt != nil {
-			count++
-		}
-	}
-	return count
-}
-
 func eventBodies(events []task.TaskEvent, name string) []string {
 	bodies := []string{}
 	for _, event := range events {
