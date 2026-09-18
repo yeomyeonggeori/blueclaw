@@ -37,7 +37,7 @@ import { personCapabilities, type PersonCapability } from "./personal/capabiliti
 import { MalformedRequest } from "./personal/parse.ts";
 import { CredentialRefused, type PersonalGateway } from "./personal/gateway.ts";
 import { AttachmentRefused } from "./outgoing-attachment.ts";
-import { LastOwnerCannotLeave } from "./adapters/buzz/user-channels.ts";
+import { LastOwnerCannotLeave, NotChannelOwner, OwnershipPartlyHandedOver } from "./adapters/buzz/user-channels.ts";
 import type {
 	AgentPartDocument,
 	AttachmentImportResponse,
@@ -180,6 +180,12 @@ async function answerAsPerson(
 			return jsonResponse(415, { error: error.message, refusedAttachments: error.refusals });
 		}
 		if (error instanceof LastOwnerCannotLeave) {
+			return jsonResponse(409, { error: error.message, reason: error.reason });
+		}
+		if (error instanceof NotChannelOwner) {
+			return jsonResponse(409, { error: error.message, reason: error.reason });
+		}
+		if (error instanceof OwnershipPartlyHandedOver) {
 			return jsonResponse(409, { error: error.message, reason: error.reason });
 		}
 		return jsonResponse(502, { error: error instanceof Error ? error.message : String(error) });

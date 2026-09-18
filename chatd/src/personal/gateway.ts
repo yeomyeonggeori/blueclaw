@@ -18,6 +18,7 @@ export type PersonalConversation = {
 	name: string;
 	description?: string;
 	kind: "dm" | "group";
+	roleOfExternalID?: Record<string, string>;
 	isPrivate: boolean;
 	avatarURL?: string;
 	participantExternalIDs?: string[];
@@ -153,6 +154,8 @@ export interface PersonalGateway {
 		memberExternalIDs: string[],
 	): Promise<{ uninvitedExternalIDs: string[] }>;
 	leaveChannel(actor: ActorCredential, conversationID: string): Promise<void>;
+	handOverChannel(actor: ActorCredential, conversationID: string, newOwnerExternalID: string): Promise<void>;
+	deleteChannel(actor: ActorCredential, conversationID: string): Promise<void>;
 	listMessages(
 		actor: ActorCredential,
 		conversationID: string,

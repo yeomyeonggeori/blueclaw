@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createChannelTags, isLastOwner, openChannelsToJoin } from "../src/adapters/buzz/user-channels.ts";
+import { createChannelTags, isLastOwner, openChannelsToJoin, rolesOnRoster } from "../src/adapters/buzz/user-channels.ts";
 import type { BuzzEvent } from "../src/adapters/buzz/types.ts";
 import { MalformedRequest, parseMemberExternalIDs, parseNewChannel } from "../src/personal/parse.ts";
 
@@ -117,5 +117,31 @@ describe("isLastOwner", () => {
 
 	test("is nobody when the roster is unknown", () => {
 		expect(isLastOwner(undefined, "me")).toBe(false);
+	});
+});
+
+describe("rolesOnRoster", () => {
+	function roster(tags: string[][]): BuzzEvent {
+		return { id: "r", pubkey: "relay", created_at: 1, kind: 39002, tags: [["d", "c"], ...tags], content: "", sig: "" };
+	}
+
+	test("reads the role the relay wrote beside each member", () => {
+		expect([...rolesOnRoster(roster([["p", "me", "", "owner"], ["p", "you", "", "admin"]]))]).toEqual([
+			["me", "owner"],
+			["you", "admin"],
+		]);
+	});
+
+	test("calls anything else a member", () => {
+		expect(rolesOnRoster(roster([["p", "me", "", "guest"], ["p", "you"]]))).toEqual(
+			new Map([
+				["me", "member"],
+				["you", "member"],
+			]),
+		);
+	});
+
+	test("knows nobody from an unknown roster", () => {
+		expect(rolesOnRoster(undefined).size).toBe(0);
 	});
 });

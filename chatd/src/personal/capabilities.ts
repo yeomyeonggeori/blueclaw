@@ -75,6 +75,16 @@ export const personCapabilities: Record<string, PersonCapability> = {
 		await gateway.leaveChannel(request.actor, requireConversation(request));
 		return {};
 	},
+	"person.channel.owner.set": async (gateway, body) => {
+		const request = parsePersonRequest(body);
+		await gateway.handOverChannel(request.actor, requireConversation(request), requireExternalID(request));
+		return {};
+	},
+	"person.channel.delete": async (gateway, body) => {
+		const request = parsePersonRequest(body);
+		await gateway.deleteChannel(request.actor, requireConversation(request));
+		return {};
+	},
 	"person.messages.list": async (gateway, body) => {
 		const request = parsePersonRequest(body);
 		return await gateway.listMessages(request.actor, requireConversation(request), request.before);

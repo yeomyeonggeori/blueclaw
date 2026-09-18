@@ -15,6 +15,8 @@ import {
 import {
 	addChannelMembersAsUser,
 	createChannelAsUser,
+	deleteChannelAsUser,
+	handOverOwnershipAsUser,
 	joinChannelAsUser,
 	leaveChannelAsUser,
 	listOpenChannelsAsUser,
@@ -103,6 +105,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 			avatarURL: conversation.avatarURL,
 			participantExternalIDs: conversation.participantPubkeyHexes,
 			description: conversation.description,
+			roleOfExternalID: conversation.roleOfPubkeyHex,
 		}));
 	}
 
@@ -190,6 +193,25 @@ class BuzzPersonalGateway implements PersonalGateway {
 	async leaveChannel(actor: ActorCredential, conversationID: string): Promise<void> {
 		this.require(actor);
 		await leaveChannelAsUser({ relayURL: this.settings.relayURL, userSecretHex: actor.secret, channelID: conversationID });
+	}
+
+	async handOverChannel(
+		actor: ActorCredential,
+		conversationID: string,
+		newOwnerExternalID: string,
+	): Promise<void> {
+		this.require(actor);
+		await handOverOwnershipAsUser({
+			relayURL: this.settings.relayURL,
+			userSecretHex: actor.secret,
+			channelID: conversationID,
+			newOwnerPubkeyHex: newOwnerExternalID,
+		});
+	}
+
+	async deleteChannel(actor: ActorCredential, conversationID: string): Promise<void> {
+		this.require(actor);
+		await deleteChannelAsUser({ relayURL: this.settings.relayURL, userSecretHex: actor.secret, channelID: conversationID });
 	}
 
 	async listMessages(
