@@ -147,6 +147,12 @@ export interface PersonalGateway {
 	createChannel(actor: ActorCredential, channel: NewPersonalChannel): Promise<CreatedPersonalChannel>;
 	listOpenChannels(actor: ActorCredential): Promise<PersonalConversation[]>;
 	joinChannel(actor: ActorCredential, conversationID: string): Promise<void>;
+	addChannelMembers(
+		actor: ActorCredential,
+		conversationID: string,
+		memberExternalIDs: string[],
+	): Promise<{ uninvitedExternalIDs: string[] }>;
+	leaveChannel(actor: ActorCredential, conversationID: string): Promise<void>;
 	listMessages(
 		actor: ActorCredential,
 		conversationID: string,

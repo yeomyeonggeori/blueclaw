@@ -5,6 +5,7 @@ import { carriesTag, firstTagValue, type BuzzEvent } from "./types.ts";
 const PUT_USER_KIND = 9000;
 const CREATE_CHANNEL_KIND = 9007;
 const JOIN_REQUEST_KIND = 9021;
+const LEAVE_REQUEST_KIND = 9022;
 const GROUP_METADATA_KIND = 39000;
 const GROUP_MEMBERS_KIND = 39002;
 
@@ -44,21 +45,68 @@ export async function createChannelAsUser(request: {
 	const tags = createChannelTags(channelID, request.spec);
 	return withRelayAs(request.relayURL, request.userSecretHex, undefined, async (relay) => {
 		await relay.publish(CREATE_CHANNEL_KIND, "", tags);
-		const others = new Set(request.spec.memberPubkeyHexes.filter((pubkey) => pubkey !== relay.pubkeyHex));
-		const uninvitedPubkeyHexes: string[] = [];
-		for (const pubkey of others) {
-			try {
-				await relay.publish(PUT_USER_KIND, "", [
-					["h", channelID],
-					["p", pubkey],
-				]);
-			} catch (refusal) {
-				console.warn("a channel member was not added", { channelID, pubkey, refusal: String(refusal) });
-				uninvitedPubkeyHexes.push(pubkey);
-			}
-		}
+		const uninvitedPubkeyHexes = await addMembers(relay, channelID, request.spec.memberPubkeyHexes);
 		return { channelID, name: canonicalChannelName(request.spec.name), uninvitedPubkeyHexes };
 	});
+}
+
+export async function addChannelMembersAsUser(request: {
+	relayURL: string;
+	userSecretHex: string;
+	channelID: string;
+	memberPubkeyHexes: string[];
+}): Promise<{ uninvitedPubkeyHexes: string[] }> {
+	return withRelayAs(request.relayURL, request.userSecretHex, undefined, async (relay) => ({
+		uninvitedPubkeyHexes: await addMembers(relay, request.channelID, request.memberPubkeyHexes),
+	}));
+}
+
+export class LastOwnerCannotLeave extends Error {
+	readonly reason = "last-owner";
+
+	constructor(channelID: string) {
+		super(`the only owner of channel ${channelID} cannot leave it`);
+		this.name = "LastOwnerCannotLeave";
+	}
+}
+
+export function isLastOwner(roster: BuzzEvent | undefined, pubkeyHex: string): boolean {
+	const owners = (roster?.tags ?? []).filter((tag) => tag[0] === "p" && tag[3] === "owner").map((tag) => tag[1]);
+	return owners.length === 1 && owners[0] === pubkeyHex;
+}
+
+export async function leaveChannelAsUser(request: {
+	relayURL: string;
+	userSecretHex: string;
+	channelID: string;
+}): Promise<void> {
+	await withRelayAs(request.relayURL, request.userSecretHex, undefined, async (relay) => {
+		const rosters = await relay.query({ kinds: [GROUP_MEMBERS_KIND], "#d": [request.channelID] });
+		const roster = rosters.sort((first, second) => second.created_at - first.created_at)[0];
+		if (isLastOwner(roster, relay.pubkeyHex)) throw new LastOwnerCannotLeave(request.channelID);
+		await relay.publish(LEAVE_REQUEST_KIND, "", [["h", request.channelID]]);
+	});
+}
+
+async function addMembers(
+	relay: { pubkeyHex: string; publish: (kind: number, content: string, tags: string[][]) => Promise<unknown> },
+	channelID: string,
+	memberPubkeyHexes: string[],
+): Promise<string[]> {
+	const others = new Set(memberPubkeyHexes.filter((pubkey) => pubkey !== relay.pubkeyHex));
+	const uninvitedPubkeyHexes: string[] = [];
+	for (const pubkey of others) {
+		try {
+			await relay.publish(PUT_USER_KIND, "", [
+				["h", channelID],
+				["p", pubkey],
+			]);
+		} catch (refusal) {
+			console.warn("a channel member was not added", { channelID, pubkey, refusal: String(refusal) });
+			uninvitedPubkeyHexes.push(pubkey);
+		}
+	}
+	return uninvitedPubkeyHexes;
 }
 
 export function openChannelsToJoin(

@@ -35,18 +35,22 @@ export function parseNewChannel(value: unknown): NewPersonalChannel {
 	if (visibility !== "open" && visibility !== "private") {
 		throw new MalformedRequest("visibility must be open or private");
 	}
-	const members = record.memberExternalIDs ?? [];
-	if (!Array.isArray(members) || members.some((entry) => typeof entry !== "string")) {
-		throw new MalformedRequest("memberExternalIDs must be a list of ids");
-	}
 	const name = requireText(record, "name");
 	if (!canonicalChannelName(name)) throw new MalformedRequest("a channel name needs more than a # prefix");
 	return {
 		name,
 		description: optionalText(record, "description"),
 		visibility,
-		memberExternalIDs: members as string[],
+		memberExternalIDs: parseMemberExternalIDs(record),
 	};
+}
+
+export function parseMemberExternalIDs(value: unknown): string[] {
+	const members = asRecord(value).memberExternalIDs ?? [];
+	if (!Array.isArray(members) || members.some((entry) => typeof entry !== "string")) {
+		throw new MalformedRequest("memberExternalIDs must be a list of ids");
+	}
+	return members as string[];
 }
 
 const legacyBuzzSecretField = "userSecretHex";
