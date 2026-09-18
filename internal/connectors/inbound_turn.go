@@ -170,7 +170,8 @@ func (connectorRuntime *ConnectorRuntime) resolveTurnAddressing(ctx context.Cont
 	}
 	if !turn.addressingLaunch.ShouldLaunch {
 		reason := firstNonEmptyString(turn.addressingLaunch.IgnoreReason, "addressing_react_only")
-		connectorRuntime.logger.Info("connector."+turn.platform+".ingress.ignored", slog.String("messageID", turn.event.MessageID), slog.String("reason", reason))
+		ignoredAttributes := append([]any{slog.String("messageID", turn.event.MessageID), slog.String("reason", reason)}, heldIntakeDecisionAttributes(turn.event)...)
+		connectorRuntime.logger.Info("connector."+turn.platform+".ingress.ignored", ignoredAttributes...)
 		return ConnectorRuntimeResult{Handled: true, Platform: turn.platform, Ignored: true, Reason: reason}, true
 	}
 	if connectorRuntime.shouldDeferNewTaskLaunch(turn.isApprovalContinuation, turn.hasPendingAskInteraction, turn.hasActiveGoal) {

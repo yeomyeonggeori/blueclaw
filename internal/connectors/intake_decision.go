@@ -12,9 +12,6 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
-// IntakeDecider answers every closed question about an inbound message in one
-// call: who it is addressed to, whether it follows on from the task already
-// running, and every field the turn router used to decide in prose.
 type IntakeDecider interface {
 	Decide(context.Context, agentcontract.IntakeDecisionRequest, *agentcontract.IntakeCallLedger) (agentcontract.IntakeDecisions, error)
 }
@@ -23,9 +20,6 @@ func (connectorRuntime *ConnectorRuntime) UseIntakeDecider(intakeDecider IntakeD
 	connectorRuntime.intakeDecider = intakeDecider
 }
 
-// inboundDecision holds the one decision made about one message. The gate, the
-// follow-up fast path and the turn router all read it, and whichever asks first
-// pays for it.
 type inboundDecision struct {
 	once        sync.Once
 	decision    agentcontract.IntakeMessageDecision
@@ -71,9 +65,6 @@ func (connectorRuntime *ConnectorRuntime) decideInboundMessageNow(ctx context.Co
 	return decision, nil
 }
 
-// holdIntakeCallRecords keeps the decision's own call until a task run exists to
-// hold it. The decision is made before the message has a task run, so a fresh
-// request's deciding call would otherwise appear in no ledger at all.
 func holdIntakeCallRecords(decisionMemo *inboundDecision, ledgerTaskRunID string, callRecords []agentcontract.LLMCallRecord) {
 	if decisionMemo == nil || strings.TrimSpace(ledgerTaskRunID) != "" {
 		return
@@ -90,6 +81,29 @@ func (connectorRuntime *ConnectorRuntime) recordHeldIntakeCalls(taskRunID string
 	})
 }
 
+func heldIntakeDecisionAttributes(event PlatformInboundEvent) []any {
+	if event.intakeDecision == nil || strings.TrimSpace(event.intakeDecision.decision.MessageID) == "" {
+		return nil
+	}
+	decision := event.intakeDecision.decision
+	attributes := []any{
+		slog.String("target", string(decision.Addressing.Target)),
+		slog.Bool("shouldRespond", decision.Addressing.ShouldRespond),
+		slog.Float64("reactionProbability", decision.ReactionProbability),
+		slog.Float64("reactionDraw", decision.ReactionDraw),
+	}
+	if len(event.intakeDecision.callRecords) == 0 {
+		return attributes
+	}
+	callRecord := event.intakeDecision.callRecords[0]
+	return append(attributes,
+		slog.String("decisionModel", callRecord.Model),
+		slog.Int64("decisionLatencyMs", callRecord.LatencyMS),
+		slog.Float64("decisionCostUSD", callRecord.CostUSD),
+		slog.Int("decidedMessageCount", callRecord.DecidedMessageCount),
+	)
+}
+
 func (connectorRuntime *ConnectorRuntime) recordIntakeCalls(taskRunID string, callRecords []agentcontract.LLMCallRecord) {
 	trimmedTaskRunID := strings.TrimSpace(taskRunID)
 	if trimmedTaskRunID == "" || connectorRuntime.taskRunService == nil {
@@ -100,10 +114,6 @@ func (connectorRuntime *ConnectorRuntime) recordIntakeCalls(taskRunID string, ca
 	}
 }
 
-// inboundDecisionRequest assembles the whole state the decision reads. It is
-// built where the message is claimed rather than inside the turn, because the
-// fast path that skips the conversation lock needs the same answer the gate and
-// the router need.
 func (connectorRuntime *ConnectorRuntime) inboundDecisionRequest(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (agentcontract.IntakeDecisionRequest, string) {
 	personID, _ := connectorRuntime.identityService.ResolvePersonIDByPlatformAccount(adapter.Name(), event.SenderID)
 	turn := &inboundTurn{
@@ -171,8 +181,6 @@ func inboundDecisionMessage(event PlatformInboundEvent) agentcontract.IntakeDeci
 	}
 }
 
-// eventAddressingDecider hands the gate the addressing half of the one decision
-// made about this message, so the gate reads rather than asks.
 type eventAddressingDecider struct {
 	connectorRuntime *ConnectorRuntime
 	adapter          PlatformAdapter
@@ -184,8 +192,6 @@ func (decider eventAddressingDecider) DecideAddressing(ctx context.Context, _ in
 	return decision.Addressing, errorValue
 }
 
-// DecideAddressing answers for a caller that has a message but no queued
-// inbound event, such as an editor session over ACP.
 func (connectorRuntime *ConnectorRuntime) DecideAddressing(ctx context.Context, request inboundengagement.Request) (agentcontract.AddressingDecision, error) {
 	if connectorRuntime.intakeDecider == nil {
 		return agentcontract.AddressingDecision{}, errors.New("connector runtime has no intake decider configured")
