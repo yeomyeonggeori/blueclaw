@@ -221,23 +221,39 @@ func (rawEventRepository RawEventRepository) ClaimPendingConnectorEvents(limit i
 	now := time.Now().UTC()
 	staleStartedAt := now.Add(-leaseDuration)
 	rows, errorValue := rawEventRepository.database.SQL.QueryContext(context.Background(), `
-WITH claim AS (
-  SELECT raw_event_id FROM raw_event
+WITH head AS (
+  SELECT raw_event_id, platform, conversation_id, connector_event_json->>'senderID' AS sender_id
+  FROM raw_event
   WHERE connector_event_json != '{}'::jsonb
     AND (
       (connector_status = 'pending' AND connector_next_attempt_at <= $1)
       OR (connector_status = 'running' AND connector_started_at <= $2)
     )
   ORDER BY ingested_at ASC
-  LIMIT $3
+  LIMIT 1
   FOR UPDATE SKIP LOCKED
+), burst AS (
+  SELECT raw_event.raw_event_id
+  FROM raw_event, head
+  WHERE raw_event.connector_event_json != '{}'::jsonb
+    AND (
+      (raw_event.connector_status = 'pending' AND raw_event.connector_next_attempt_at <= $1)
+      OR (raw_event.connector_status = 'running' AND raw_event.connector_started_at <= $2)
+    )
+    AND raw_event.raw_event_id <> head.raw_event_id
+    AND raw_event.platform = head.platform
+    AND raw_event.conversation_id = head.conversation_id
+    AND raw_event.connector_event_json->>'senderID' IS NOT DISTINCT FROM head.sender_id
+  ORDER BY raw_event.ingested_at ASC
+  LIMIT $3 - 1
+  FOR UPDATE OF raw_event SKIP LOCKED
 )
 UPDATE raw_event
 SET connector_status = 'running',
   connector_started_at = $1,
   connector_attempt_count = connector_attempt_count + 1,
   connector_error = ''
-WHERE raw_event_id IN (SELECT raw_event_id FROM claim)
+WHERE raw_event_id IN (SELECT raw_event_id FROM head UNION ALL SELECT raw_event_id FROM burst)
 RETURNING connector_event_json, connector_attempt_count`,
 		now,
 		staleStartedAt,
