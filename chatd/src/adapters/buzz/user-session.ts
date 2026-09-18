@@ -2,6 +2,7 @@ import { getPublicKey } from "nostr-tools/pure";
 import { withRelayAs } from "./relay-pool.ts";
 import { BlobRefused, imetaTag, uploadBlob, type BlossomBlob } from "./blossom.ts";
 import { carriesTag, firstTagValue, threadTagsOf, type BuzzEvent } from "./types.ts";
+import { rolesOnRoster } from "./user-channels.ts";
 import {
 	AttachmentRefused,
 	isAlreadyKept,
@@ -26,6 +27,7 @@ export type UserConversation = {
 	participantPubkeyHexes: string[];
 	avatarURL?: string;
 	description?: string;
+	roleOfPubkeyHex?: Record<string, string>;
 };
 
 function hexToBytes(hex: string): Uint8Array {
@@ -113,6 +115,7 @@ export async function listUserConversations(
 						isPrivate: metadata ? carriesTag(metadata, "private") : false,
 						participantPubkeyHexes: participantsOf(metadata, membershipsByChannel.get(channelID)),
 						description: metadata ? firstTagValue(metadata, "about") : undefined,
+						roleOfPubkeyHex: Object.fromEntries(rolesOnRoster(membershipsByChannel.get(channelID))),
 					});
 				}
 			}

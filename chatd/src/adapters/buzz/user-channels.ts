@@ -6,6 +6,7 @@ const PUT_USER_KIND = 9000;
 const CREATE_CHANNEL_KIND = 9007;
 const JOIN_REQUEST_KIND = 9021;
 const LEAVE_REQUEST_KIND = 9022;
+const DELETE_CHANNEL_KIND = 9008;
 const GROUP_METADATA_KIND = 39000;
 const GROUP_MEMBERS_KIND = 39002;
 
@@ -70,9 +71,95 @@ export class LastOwnerCannotLeave extends Error {
 	}
 }
 
+export type UserChannelRole = "owner" | "admin" | "member";
+
+export class OwnershipPartlyHandedOver extends Error {
+	readonly reason = "still-an-owner";
+
+	constructor(channelID: string) {
+		super(`the new owner of channel ${channelID} is set, but the old one was not stepped down`);
+		this.name = "OwnershipPartlyHandedOver";
+	}
+}
+
+export class NotChannelOwner extends Error {
+	readonly reason = "not-owner";
+
+	constructor(channelID: string) {
+		super(`only an owner of channel ${channelID} may do this`);
+		this.name = "NotChannelOwner";
+	}
+}
+
+export function rolesOnRoster(roster: BuzzEvent | undefined): Map<string, UserChannelRole> {
+	const roles = new Map<string, UserChannelRole>();
+	for (const tag of roster?.tags ?? []) {
+		if (tag[0] !== "p" || typeof tag[1] !== "string") continue;
+		roles.set(tag[1], tag[3] === "owner" || tag[3] === "admin" ? tag[3] : "member");
+	}
+	return roles;
+}
+
 export function isLastOwner(roster: BuzzEvent | undefined, pubkeyHex: string): boolean {
-	const owners = (roster?.tags ?? []).filter((tag) => tag[0] === "p" && tag[3] === "owner").map((tag) => tag[1]);
+	const owners = [...rolesOnRoster(roster)].filter(([, role]) => role === "owner").map(([pubkey]) => pubkey);
 	return owners.length === 1 && owners[0] === pubkeyHex;
+}
+
+export async function handOverOwnershipAsUser(request: {
+	relayURL: string;
+	userSecretHex: string;
+	channelID: string;
+	newOwnerPubkeyHex: string;
+}): Promise<void> {
+	await asAnOwner(request, async (relay) => {
+		await relay.publish(PUT_USER_KIND, "", [
+			["h", request.channelID],
+			["p", request.newOwnerPubkeyHex],
+			["role", "owner"],
+		]);
+		try {
+			await relay.publish(PUT_USER_KIND, "", [
+				["h", request.channelID],
+				["p", relay.pubkeyHex],
+				["role", "member"],
+			]);
+		} catch (refusal) {
+			console.warn("an old owner was not stepped down", { channelID: request.channelID, refusal: String(refusal) });
+			throw new OwnershipPartlyHandedOver(request.channelID);
+		}
+	});
+}
+
+export async function deleteChannelAsUser(request: {
+	relayURL: string;
+	userSecretHex: string;
+	channelID: string;
+}): Promise<void> {
+	await asAnOwner(request, async (relay) => {
+		await relay.publish(DELETE_CHANNEL_KIND, "", [["h", request.channelID]]);
+	});
+}
+
+async function asAnOwner(
+	request: { relayURL: string; userSecretHex: string; channelID: string },
+	work: (relay: {
+		pubkeyHex: string;
+		publish: (kind: number, content: string, tags: string[][]) => Promise<unknown>;
+	}) => Promise<void>,
+): Promise<void> {
+	await withRelayAs(request.relayURL, request.userSecretHex, undefined, async (relay) => {
+		const roles = rolesOnRoster(await latestRoster(relay, request.channelID));
+		if (roles.get(relay.pubkeyHex) !== "owner") throw new NotChannelOwner(request.channelID);
+		await work(relay);
+	});
+}
+
+async function latestRoster(
+	relay: { query: (filter: object) => Promise<BuzzEvent[]> },
+	channelID: string,
+): Promise<BuzzEvent | undefined> {
+	const rosters = await relay.query({ kinds: [GROUP_MEMBERS_KIND], "#d": [channelID] });
+	return rosters.sort((first, second) => second.created_at - first.created_at)[0];
 }
 
 export async function leaveChannelAsUser(request: {
@@ -81,9 +168,9 @@ export async function leaveChannelAsUser(request: {
 	channelID: string;
 }): Promise<void> {
 	await withRelayAs(request.relayURL, request.userSecretHex, undefined, async (relay) => {
-		const rosters = await relay.query({ kinds: [GROUP_MEMBERS_KIND], "#d": [request.channelID] });
-		const roster = rosters.sort((first, second) => second.created_at - first.created_at)[0];
-		if (isLastOwner(roster, relay.pubkeyHex)) throw new LastOwnerCannotLeave(request.channelID);
+		if (isLastOwner(await latestRoster(relay, request.channelID), relay.pubkeyHex)) {
+			throw new LastOwnerCannotLeave(request.channelID);
+		}
 		await relay.publish(LEAVE_REQUEST_KIND, "", [["h", request.channelID]]);
 	});
 }
