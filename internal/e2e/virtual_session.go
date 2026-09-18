@@ -4232,20 +4232,16 @@ func (virtualMemoryIngestModel) GenerateStructured(_ context.Context, request bl
 	return string(document), nil
 }
 
-func actionFinishMessage(reply string, evidence ...string) string {
-	evidenceDocuments := []string{}
-	for _, value := range evidence {
-		parts := strings.Split(value, ":")
-		if len(parts) != 3 {
-			continue
-		}
-		evidenceDocuments = append(evidenceDocuments, `{"observationID":`+quote(parts[0])+`,"toolName":`+quote(parts[1])+`,"attachmentIndex":`+parts[2]+`}`)
+func actionFinishMessage(reply string, observationIDs ...string) string {
+	citedIDs := []string{}
+	for _, observationID := range observationIDs {
+		citedIDs = append(citedIDs, quote(observationID))
 	}
-	return `{"action":"finish","message":` + quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[` + strings.Join(evidenceDocuments, ",") + `]}`
+	return `{"action":"finish","message":` + quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[` + strings.Join(citedIDs, ",") + `]}`
 }
 
 func actionNoToolFallbackFinishMessage(reply string) string {
-	return `{"action":"finish","message":` + quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[],"failureResolution":"no_tool_fallback"}`
+	return `{"action":"finish","message":` + quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[],"failureResolution":"no_tool_fallback"}`
 }
 
 func actionFailMessage(reason string) string {

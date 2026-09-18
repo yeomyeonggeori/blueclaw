@@ -244,7 +244,7 @@ func (languageModel *schemaRecordingAdminLanguageModel) GenerateResponse(context
 func (languageModel *schemaRecordingAdminLanguageModel) GenerateStructuredResponse(_ context.Context, request llm.StructuredResponseRequest) (llm.StructuredResponse, error) {
 	languageModel.schemaNames = append(languageModel.schemaNames, request.StructuredOutputSchema.Name)
 	languageModel.schemaDocuments = append(languageModel.schemaDocuments, request.StructuredOutputSchema.Document)
-	return llm.StructuredResponse{Content: `{"action":"finish","goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[],"message":"diagnostic done"}`}, nil
+	return llm.StructuredResponse{Content: `{"action":"finish","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[],"message":"diagnostic done"}`}, nil
 }
 
 func (languageModel *schemaRecordingAdminLanguageModel) schemaDocumentContains(fragment string) bool {
