@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -14,21 +15,33 @@ const scenarioIgnoringAddressingResponse = `{"target":"anyone","shouldRespond":f
 
 const scenarioDecisionModelName = "scenario-decision-model"
 
+const scenarioAddressingOnlyTurn = "addressing_only"
+
 type scenarioTurnScript struct {
-	turnDocuments []string
+	turnIndex        int
+	turnDocuments    []string
+	lastTurnDocument string
+	hasServedTurn    bool
 }
 
-func (turnScript *scenarioTurnScript) enqueue(turnDocument string) {
-	turnScript.turnDocuments = append(turnScript.turnDocuments, turnDocument)
+func (turnScript *scenarioTurnScript) beginTurn(turnIndex int, turnDocuments []string) {
+	turnScript.turnIndex = turnIndex
+	turnScript.turnDocuments = append([]string{}, turnDocuments...)
+	turnScript.lastTurnDocument = ""
+	turnScript.hasServedTurn = false
 }
 
-func (turnScript *scenarioTurnScript) pop() (string, bool) {
-	if len(turnScript.turnDocuments) == 0 {
-		return "", false
+func (turnScript *scenarioTurnScript) next() (string, error) {
+	if len(turnScript.turnDocuments) > 0 {
+		turnScript.lastTurnDocument = turnScript.turnDocuments[0]
+		turnScript.turnDocuments = turnScript.turnDocuments[1:]
+		turnScript.hasServedTurn = true
+		return turnScript.lastTurnDocument, nil
 	}
-	turnDocument := turnScript.turnDocuments[0]
-	turnScript.turnDocuments = turnScript.turnDocuments[1:]
-	return turnDocument, true
+	if !turnScript.hasServedTurn {
+		return "", fmt.Errorf("the scenario scripts no decision for turn %d", turnScript.turnIndex)
+	}
+	return turnScript.lastTurnDocument, nil
 }
 
 func (turnScript *scenarioTurnScript) pendingCount() int {
@@ -58,8 +71,11 @@ func (decisionModel scenarioDecisionModel) Decide(ctx context.Context, request m
 	if decisionModel.turnScript == nil {
 		return decisionModel.languageModelTurn.Decide(ctx, request)
 	}
-	turnDocument, hasScriptedTurn := decisionModel.turnScript.pop()
-	if !hasScriptedTurn {
+	turnDocument, errorValue := decisionModel.turnScript.next()
+	if errorValue != nil {
+		return model.DecisionResponse{}, errorValue
+	}
+	if strings.TrimSpace(turnDocument) == scenarioAddressingOnlyTurn {
 		return model.DecisionResponse{
 			Answers:   intaketest.Answers(request.Questions, decisionModel.addressingOnlyOutcome),
 			ModelName: scenarioDecisionModelName,

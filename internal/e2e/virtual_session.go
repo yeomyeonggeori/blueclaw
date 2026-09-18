@@ -2596,10 +2596,10 @@ func (harness *VirtualSessionHarness) Run(ctx context.Context) (VirtualSessionRe
 	messageIndex := 0
 	for index, virtualTurn := range harness.scenario.Turns {
 		if harness.scriptedModel != nil {
-			for _, routerResponse := range scenarioRouterResponsesForTurn(harness.scenario, virtualTurn) {
-				harness.turnScript.enqueue(routerResponse)
+			for range scenarioRouterResponsesForTurn(harness.scenario, virtualTurn) {
 				harness.scriptedModel.EnqueueStructuredResponses("bluecollar_turn_router", scenarioTurnWordsResponse())
 			}
+			harness.turnScript.beginTurn(index+1, scenarioTurnScriptEntries(harness.scenario, virtualTurn))
 			harness.scriptedModel.SetActionResponses(materializeScriptedWorkspacePaths(harness.workspacePath, virtualTurn.ActionResponses)...)
 			if len(virtualTurn.CompletionJudgeResponses) > 0 {
 				harness.scriptedModel.EnqueueStructuredResponses("bluecollar_completion_judge", virtualTurn.CompletionJudgeResponses...)
@@ -2756,10 +2756,6 @@ func scenarioNeedsScriptedModel(scenario VirtualSessionScenario) bool {
 
 func scenarioDefaultResponses(scenario VirtualSessionScenario) map[string]string {
 	defaultResponses := map[string]string{}
-	defaultResponses["bluecollar_addressing_classification"] = `{"target":"anyone","shouldRespond":false,"dutyMatch":false,"dutyName":"","dutyConfidence":0}`
-	if strings.TrimSpace(scenario.AddressingResponse) != "" {
-		defaultResponses["bluecollar_addressing_classification"] = strings.TrimSpace(scenario.AddressingResponse)
-	}
 	if virtualEvidenceRequiresExternalSend(scenario.RouterRequiredEvidence) {
 		defaultResponses["bluecollar_execution_plan"] = `{"originalInstruction":"scripted external send","summary":"scripted external send","targets":[],"schedule":"","startAt":"","endAt":"","cadence":"","externalSend":true,"thirdPartyExternalSend":true,"repeated":false,"highFrequency":false,"destructive":false,"permissionChange":false,"publicDeploy":false,"paidAction":false,"missingInformation":[],"continuationInstruction":"scripted external send"}`
 	}
@@ -2804,6 +2800,14 @@ func scenarioRouterResponsesForTurn(scenario VirtualSessionScenario, virtualTurn
 		return []string{scenarioApprovalRouterResponse(virtualTurn.RouterApproval)}
 	}
 	return []string{scenarioTurnRouterResponse(scenario, virtualTurn)}
+}
+
+func scenarioTurnScriptEntries(scenario VirtualSessionScenario, virtualTurn VirtualTurn) []string {
+	scriptedTurns := scenarioRouterResponsesForTurn(scenario, virtualTurn)
+	if len(scriptedTurns) == 0 {
+		return []string{scenarioAddressingOnlyTurn}
+	}
+	return scriptedTurns
 }
 
 func scenarioTurnWordsResponse() string {
@@ -2919,6 +2923,7 @@ func scenarioTurnRouterResponse(scenario VirtualSessionScenario, virtualTurn Vir
 		"userFacingReply":        "",
 		"initialToolNames":       appendUniqueScenarioToolNames(scenario.InitialToolNames, requiredEvidence),
 		"priorTaskReference":     "none",
+		"busyRoute":              string(agentcontract.BusyRouteNewTask),
 	}
 	if virtualTurnExpectsEvent(virtualTurn, agentcontract.TaskEventConfirmationReplyClassified) {
 		routerDocument["approval"] = "approve"
