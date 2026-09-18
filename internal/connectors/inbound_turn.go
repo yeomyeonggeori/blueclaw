@@ -160,7 +160,6 @@ func (connectorRuntime *ConnectorRuntime) resolveTurnActiveGoal(ctx context.Cont
 func (connectorRuntime *ConnectorRuntime) resolveTurnAddressing(ctx context.Context, turn *inboundTurn) (ConnectorRuntimeResult, bool) {
 	turn.event = connectorRuntime.withInitialVisibleContext(ctx, turn.adapter, turn.event)
 	turn.addressingLaunch = connectorRuntime.resolveInboundEngagement(ctx, turn.adapter, turn.platform, turn.event)
-	turn.decidedTurnFields = connectorRuntime.decidedTurnFields(ctx, turn.adapter, turn.event)
 	if turn.addressingLaunch.ReactionEmoji != "" {
 		if turn.engagedAckEmojiName != "" && turn.engagedAckEmojiName != turn.addressingLaunch.ReactionEmoji {
 			connectorRuntime.clearEngagedAckReaction(ctx, turn.platform, turn.adapter, turn.event, turn.engagedAckEmojiName)
@@ -174,6 +173,7 @@ func (connectorRuntime *ConnectorRuntime) resolveTurnAddressing(ctx context.Cont
 		connectorRuntime.logger.Info("connector."+turn.platform+".ingress.ignored", ignoredAttributes...)
 		return ConnectorRuntimeResult{Handled: true, Platform: turn.platform, Ignored: true, Reason: reason}, true
 	}
+	turn.decidedTurnFields = connectorRuntime.decidedTurnFields(ctx, turn.adapter, turn.event)
 	if connectorRuntime.shouldDeferNewTaskLaunch(turn.isApprovalContinuation, turn.hasPendingAskInteraction, turn.hasActiveGoal) {
 		connectorRuntime.logger.Info("connector."+turn.platform+".ingress.deferred", slog.String("messageID", turn.event.MessageID), slog.String("reason", "task_intake_quiesced"))
 		return ConnectorRuntimeResult{Handled: true, Platform: turn.platform, Ignored: true, Reason: "task_intake_quiesced"}, true

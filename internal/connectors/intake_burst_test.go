@@ -215,3 +215,25 @@ func decidedMessageCount(request model.DecisionRequest) int {
 	}
 	return len(messageKeys)
 }
+func TestAnAttachmentsOnlyGroupMessageIsProcessedWithoutBeingDecided(t *testing.T) {
+	connectorRuntime, _, _ := recordingIntakeDecisionRuntime(t)
+	describer := &countingAttachmentDescriber{}
+	decisionModel := &refusingDecisionModel{}
+	connectorRuntime.UseIntakeDecider(intake.NewDecisionPlanner(decisionModel, describer, func() float64 { return 1 }))
+	repository := &testConnectorQueueRepository{}
+	connectorRuntime.UseEventRepository(repository)
+	repository.pendingEvents = []QueuedConnectorEvent{burstChannelQueuedEvent("message-1", time.Unix(1756800000, 0), false, "")}
+
+	connectorRuntime.processNextQueuedConnectorEvent(context.Background())
+
+	if len(decisionModel.decidedMessageCounts) != 0 {
+		t.Fatalf("expected the ignored message to reach no decision call, got %v", decisionModel.decidedMessageCounts)
+	}
+	if describer.callCount != 0 {
+		t.Fatalf("expected no picture to be described for a message the gate ignores, got %d calls", describer.callCount)
+	}
+	if len(repository.succeededEvents) != 1 || !repository.succeededEvents[0].Ignored {
+		t.Fatalf("expected the message to be processed and ignored, got %+v", repository.succeededEvents)
+	}
+}
+
