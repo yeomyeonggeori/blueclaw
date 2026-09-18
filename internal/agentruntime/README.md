@@ -8,14 +8,13 @@ agent does to the world outside its own reasoning passes through here.
 This package is the whole of what the model sees of this product's
 capabilities, and every byte of it is charged on every step of every task.
 
-Nine families, registered in `tool_catalog.go`:
+Eight families, registered in `tool_catalog.go`:
 
 | Family | Registered in |
 |---|---|
 | terminal | `terminal_tools.go` |
 | files and delivery | `file_tools.go` |
 | memory | `memory_tools.go` |
-| schedules | `schedule_tool.go` |
 | skills | `skill_search_tool.go`, `skill_management.go` |
 | plan | `plan_tool.go` |
 | asking the requester | `ask_tools.go` |
@@ -30,7 +29,7 @@ The current catalog and what each description costs is generated:
 [docs/tool-catalog.md](../../docs/tool-catalog.md).
 
 Two things about that surface are worth knowing before changing it. The
-descriptions are uneven, from 530 bytes for `schedule_create` down to 47 for
+descriptions are uneven, from 505 bytes for `memory_remember` down to 47 for
 `shell`, and the gap does not track how hard the tool is to use
 correctly. And a wrong-tool call is corrected after the fact by recovery
 guidance, on every model, every time, so wording that prevents one is cheaper

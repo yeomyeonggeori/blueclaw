@@ -141,11 +141,9 @@ func TestScheduleLifecycleAcceptance(t *testing.T) {
 		!eventsContain(secondTurnResult.Events, "tool.schedule_update.result", "intervalSecond") {
 		t.Fatalf("expected modification through the capability kernel; events: %s", summarizeEvents(secondTurnResult.Events))
 	}
-	if !eventsContain(thirdTurnResult.Events, "tool.schedule_cancel.requested", "schedule_cancel") {
+	if !eventsContain(thirdTurnResult.Events, "tool.schedule_cancel.requested", "schedule_cancel") ||
+		!eventsContain(thirdTurnResult.Events, "tool.schedule_cancel.result", "virtual-schedule-001") {
 		t.Fatalf("expected deletion through the capability kernel; events: %s", summarizeEvents(thirdTurnResult.Events))
-	}
-	if activeScheduleCount(result.Schedules) != 0 {
-		t.Fatalf("expected zero active schedules, got %+v", result.Schedules)
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
+	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/loop"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
@@ -796,13 +797,12 @@ func TestCapabilityReadKeepsTheRefusalWhenNothingResolves(t *testing.T) {
 
 func TestToolCatalogKeepsEveryCapabilityToolWhenOneNameIsAlreadyALocalTool(t *testing.T) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseScheduleRepository(&memoryScheduleRepository{})
 	quarantinedProviders := []toolcontract.QuarantinedToolProvider{}
 	toolCatalogBuilder.UseCapabilityQuarantineReporter(func(quarantinedProvider toolcontract.QuarantinedToolProvider) {
 		quarantinedProviders = append(quarantinedProviders, quarantinedProvider)
 	})
-	toolCatalogBuilder.UseTestCapabilityTools(capability.Client{}, []string{"schedule_list", "message_send", "web_search"})
-	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_list", "schedule_create", "message_send", "web_search"})
+	toolCatalogBuilder.UseTestCapabilityTools(capability.Client{}, []string{"ask_input", "message_send", "web_search"})
+	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"ask_input", "message_send", "web_search"})
 
 	toolSet := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
@@ -812,14 +812,55 @@ func TestToolCatalogKeepsEveryCapabilityToolWhenOneNameIsAlreadyALocalTool(t *te
 	if len(quarantinedProviders) != 0 {
 		t.Fatalf("one shared tool name took the whole capability provider out of the turn: %+v", quarantinedProviders)
 	}
-	for _, toolName := range []string{"schedule_list", "message_send", "web_search"} {
+	for _, toolName := range []string{"ask_input", "message_send", "web_search"} {
 		if !toolSet.IsRegistered(toolName) {
 			t.Fatalf("%s did not reach the turn", toolName)
 		}
 	}
-	scheduleList, isFound := toolSet.ToolDefinition("schedule_list")
-	if !isFound || scheduleList.ProviderID == "capabilityd" {
-		t.Fatalf("the shared name went to the capability twin instead of the local tool: %+v", scheduleList)
+	askInput, isFound := toolSet.ToolDefinition("ask_input")
+	if !isFound || askInput.ProviderID == "capabilityd" {
+		t.Fatalf("the shared name went to the capability twin instead of the local tool: %+v", askInput)
+	}
+}
+
+func TestAScheduledRunTellsACapabilityToolWhereItsAnswerIsDelivered(t *testing.T) {
+	httpClient := &recordingHTTPClient{}
+	toolCatalogBuilder := NewToolCatalogBuilder()
+	toolCatalogBuilder.UseTestCapabilityTools(capability.Client{Endpoint: "http://capability.local", HTTPClient: httpClient}, []string{"schedule_create"})
+	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_create"})
+	scheduleSessionID := task.ScheduleSessionID("parent-schedule")
+	toolSet := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
+		ProfileName:            "default",
+		RequesterPersonID:      "person-1",
+		PersonAccess:           policy.PersonAccess{PersonID: "person-1"},
+		IsScheduledRun:         true,
+		Platform:               "mattermost",
+		ConversationID:         scheduleSessionID,
+		DeliveryConversationID: "conversation-sample",
+		ReplyTargetID:          "reply-target-1",
+	})
+
+	result, errorValue := toolSet.Invoke(context.Background(), toolcontract.ToolInvocation{ToolName: "schedule_create", Input: json.RawMessage(`{}`)})
+
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if result.Failed() {
+		t.Fatalf("expected the scheduled run to reach the capability tool, got %+v", result)
+	}
+	var requestDocument struct {
+		Context struct {
+			ConversationID string `json:"conversationID"`
+		} `json:"context"`
+	}
+	if errorValue := json.Unmarshal([]byte(httpClient.requestBody), &requestDocument); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if requestDocument.Context.ConversationID != "conversation-sample" {
+		t.Fatalf("expected the delivery conversation to travel, got %q", requestDocument.Context.ConversationID)
+	}
+	if strings.Contains(httpClient.requestBody, scheduleSessionID) {
+		t.Fatalf("a schedule session id must never reach a capability tool, got %s", httpClient.requestBody)
 	}
 }
 

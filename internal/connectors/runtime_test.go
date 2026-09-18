@@ -2481,7 +2481,7 @@ func TestConnectorRuntimeRunsAgentHistoryToolAndSendsOneFinishMessage(t *testing
 func TestConnectorRuntimeCreatesScheduledTaskFromNaturalLanguagePrompt(t *testing.T) {
 	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
 		ActionResponses: []string{
-			`{"action":"continue","toolName":"schedule_create","toolInput":{"name":"daily research brief","taskInstruction":"업계 뉴스를 조사해서 핵심만 보고해줘.","kind":"cron","cronExpression":"0 7 * * *","repeatPolicy":"unbounded","timeZone":"Asia/Seoul"},"executionStateUpdate":{},"nextStepPlan":{"objective":"confirm schedule creation","expectedTools":[],"doneCriteria":["schedule is created"],"risk":"","workingSetReason":"schedule_create returns the created schedule"}}`,
+			`{"action":"continue","toolName":"schedule_create","toolInput":{"description":"daily research brief","taskInstruction":"업계 뉴스를 조사해서 핵심만 보고해줘.","kind":"cron","cronExpression":"0 7 * * *","repeatPolicy":"unbounded","timeZone":"Asia/Seoul"},"executionStateUpdate":{},"nextStepPlan":{"objective":"confirm schedule creation","expectedTools":[],"doneCriteria":["schedule is created"],"risk":"","workingSetReason":"schedule_create returns the created schedule"}}`,
 			connectorFinishMessage("매일 아침 7시에 조사해서 알려드릴게요."),
 		},
 		DefaultResponsesBySchema: map[string]string{
@@ -2491,8 +2491,22 @@ func TestConnectorRuntimeCreatesScheduledTaskFromNaturalLanguagePrompt(t *testin
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
 	connectorRuntime.UseAllowedToolNames([]string{"conversation_history", "schedule_create"})
 	useTestConnectorSkill(connectorRuntime, connectorScheduledTaskSkill())
-	repository := &connectorScheduleRepository{}
-	connectorRuntime.UseScheduleRepository(repository)
+	capabilityRequestBodies := []string{}
+	connectorRuntime.UseTestCapabilityTools(capability.Client{
+		Endpoint: "http://capability.test",
+		HTTPClient: testHTTPDoer(func(request *http.Request) (*http.Response, error) {
+			if request.URL.Path == "/v1/capabilities" {
+				return testCapabilityRegistrySelfHealResponse(), nil
+			}
+			requestBody, _ := io.ReadAll(request.Body)
+			capabilityRequestBodies = append(capabilityRequestBodies, string(requestBody))
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(`{"provider":"capabilityd","selectedBackend":"device","toolName":"schedule_create","outcome":"succeeded","status":"ok","content":"schedule created","result":{"scheduleID":"schedule-1","nextRunAt":"2026-06-13T07:00:00+09:00"}}`)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		}),
+	}, []string{"schedule_create"})
 	event := testInboundEvent("message-1")
 	event.Prompt = "매일 업계 뉴스를 조사해서 아침 7시에 알려줘."
 
@@ -2504,18 +2518,13 @@ func TestConnectorRuntimeCreatesScheduledTaskFromNaturalLanguagePrompt(t *testin
 	if result.TaskRunID == "" {
 		t.Fatal("expected task run id")
 	}
-	if len(repository.schedules) != 1 {
-		t.Fatalf("expected one task schedule, got %+v", repository.schedules)
+	if len(capabilityRequestBodies) != 1 {
+		t.Fatalf("expected one schedule capability call, got %+v", capabilityRequestBodies)
 	}
-	schedule := repository.schedules[0]
-	if schedule.Prompt != "업계 뉴스를 조사해서 핵심만 보고해줘." {
-		t.Fatalf("expected stored task instruction without cadence, got %q", schedule.Prompt)
-	}
-	if schedule.CronExpression != "0 7 * * *" || schedule.TimeZone != "Asia/Seoul" {
-		t.Fatalf("expected cron schedule in Asia/Seoul, got %+v", schedule)
-	}
-	if schedule.Platform != event.Platform || schedule.ConversationID != event.ConversationID || schedule.ReplyTargetID != event.ReplyTargetID {
-		t.Fatalf("expected connector context delivery target, got %+v", schedule)
+	for _, fragment := range []string{`"업계 뉴스를 조사해서 핵심만 보고해줘."`, `"0 7 * * *"`, `"Asia/Seoul"`, `"conversationID":"direct-1"`} {
+		if !strings.Contains(capabilityRequestBodies[0], fragment) {
+			t.Fatalf("expected the schedule capability call to carry %s, got %s", fragment, capabilityRequestBodies[0])
+		}
 	}
 	if len(adapter.sentReplies) != 1 || adapter.sentReplies[0].message != "매일 아침 7시에 조사해서 알려드릴게요." {
 		t.Fatalf("expected confirmation reply, got %+v", adapter.sentReplies)
@@ -3543,68 +3552,6 @@ type testTaskIntakeGate struct {
 
 func (gate testTaskIntakeGate) IsQuiesced() bool {
 	return gate.isQuiesced
-}
-
-type connectorScheduleRepository struct {
-	schedules []task.Schedule
-}
-
-func (repository *connectorScheduleRepository) UpsertSchedule(schedule task.Schedule) error {
-	repository.schedules = append(repository.schedules, schedule)
-	return nil
-}
-
-func (repository *connectorScheduleRepository) UpdateSchedule(request task.ScheduleUpdateRequest) (task.ScheduleUpdateResult, error) {
-	for index, schedule := range repository.schedules {
-		if schedule.ScheduleID != request.ScheduleID || schedule.CreatorPersonID != request.RequesterPersonID || schedule.NextRunAt == nil {
-			continue
-		}
-		updatedSchedule := schedule
-		var errorValue error
-		if request.UpdateSchedule != nil {
-			updatedSchedule, errorValue = request.UpdateSchedule(schedule)
-			if errorValue != nil {
-				return task.ScheduleUpdateResult{}, errorValue
-			}
-		}
-		repository.schedules[index] = updatedSchedule
-		return task.ScheduleUpdateResult{Schedule: updatedSchedule, IsFound: true}, nil
-	}
-	return task.ScheduleUpdateResult{}, nil
-}
-
-func (repository *connectorScheduleRepository) ListSchedules(request task.ScheduleListRequest) (task.ScheduleListResult, error) {
-	schedules := []task.Schedule{}
-	for _, schedule := range repository.schedules {
-		if request.CreatorPersonID != "" && schedule.CreatorPersonID != request.CreatorPersonID {
-			continue
-		}
-		if !request.IncludeExpired && schedule.NextRunAt == nil {
-			continue
-		}
-		schedules = append(schedules, schedule)
-	}
-	return task.ScheduleListResult{Schedules: schedules, TotalCount: len(schedules), Page: 1, PageSize: len(schedules)}, nil
-}
-
-func (repository *connectorScheduleRepository) ClaimDueSchedules(int, time.Duration, time.Time, string) ([]task.Schedule, error) {
-	return nil, nil
-}
-
-func (repository *connectorScheduleRepository) MarkScheduleSucceeded(task.Schedule) error {
-	return nil
-}
-
-func (repository *connectorScheduleRepository) MarkScheduleFailed(task.Schedule, string, time.Time) error {
-	return nil
-}
-
-func (repository *connectorScheduleRepository) ExpireSchedule(task.Schedule, string, time.Time) error {
-	return nil
-}
-
-func (repository *connectorScheduleRepository) CancelSchedules(task.ScheduleCancelRequest) (task.ScheduleCancelResult, error) {
-	return task.ScheduleCancelResult{}, nil
 }
 
 func (repository *testConnectorQueueRepository) TryInsertConnectorEvent(PlatformInboundEvent) (bool, ConnectorRuntimeResult, error) {

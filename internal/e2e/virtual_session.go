@@ -129,6 +129,10 @@ var virtualGeneratedResultContractToolNames = []string{
 	"site_serve",
 	"site_list",
 	"site_unserve",
+	"schedule_list",
+	"schedule_create",
+	"schedule_update",
+	"schedule_cancel",
 }
 
 // ScenarioCapabilityCatalogVariable names the capability tool catalog a host
@@ -279,7 +283,6 @@ type VirtualSessionResult struct {
 	ScenarioName          string
 	ArtifactDirectoryPath string
 	TurnResults           []VirtualTurnResult
-	Schedules             []task.Schedule
 }
 
 type VirtualTurnResult struct {
@@ -341,7 +344,6 @@ type VirtualSessionHarness struct {
 	callRecorder     virtualLanguageModelCallRecorder
 	taskRunService   *task.TaskRunService
 	taskEventService *task.TaskEventService
-	scheduleStore    *virtualScheduleRepository
 	runtime          *connectors.ConnectorRuntime
 	adapter          *virtualAdapter
 	cleanup          func()
@@ -901,8 +903,6 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	runtime.UseTerminalService(terminalService)
 	runtime.UseWorkspaceActorFactory(security.NewDirectWorkspaceActorFactory(terminalService))
 	runtime.UseTaskRunService(taskRunService)
-	scheduleStore := &virtualScheduleRepository{}
-	runtime.UseScheduleRepository(scheduleStore)
 	cleanup := func() {}
 	var capabilityClient capability.Client
 	capabilityToolNames := virtualCapabilityToolNames(scenario)
@@ -928,7 +928,6 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 		scenario,
 		workspacePath,
 		taskRunService,
-		scheduleStore,
 		terminalService,
 		memoryStore,
 		memoryIngester,
@@ -957,7 +956,6 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 		callRecorder:     virtualCallRecorder(languageModel),
 		taskRunService:   taskRunService,
 		taskEventService: taskEventService,
-		scheduleStore:    scheduleStore,
 		runtime:          runtime,
 		adapter:          adapter,
 		cleanup:          cleanup,
@@ -1003,7 +1001,6 @@ func virtualToolCatalogBuilder(
 	scenario VirtualSessionScenario,
 	workspacePath string,
 	taskRunService *task.TaskRunService,
-	scheduleStore *virtualScheduleRepository,
 	terminalService *security.ShellService,
 	memoryStore *bluememo.Store,
 	memoryIngester *bluememo.Ingester,
@@ -1018,7 +1015,6 @@ func virtualToolCatalogBuilder(
 	toolCatalogBuilder.UseTerminalService(terminalService)
 	toolCatalogBuilder.UseWorkspaceActorFactory(security.NewDirectWorkspaceActorFactory(terminalService))
 	toolCatalogBuilder.UseTaskRunService(taskRunService)
-	toolCatalogBuilder.UseScheduleRepository(scheduleStore)
 	toolCatalogBuilder.UseMemoryStore(memoryStore, memoryIngester, nil)
 	toolCatalogBuilder.UseSkillSearch(skillRetriever, instructionBundleLoader)
 	toolCatalogBuilder.UseSkillChangeHandler(func(contextValue context.Context) {
@@ -1150,7 +1146,7 @@ func virtualCapabilitySideEffectClass(toolName string) string {
 	switch toolName {
 	case "web_search", "image_read", "document_read", "task_list", "event_list", "site_list":
 		return toolcontract.ToolSideEffectRead
-	case "task_delete", "event_delete", "schedule_cancel", "site_unserve", "message_delete":
+	case "task_delete", "event_delete", "site_unserve", "message_delete":
 		return toolcontract.ToolSideEffectDestructive
 	case "message_send":
 		return toolcontract.ToolSideEffectExternalSend
@@ -1402,7 +1398,9 @@ type virtualCapabilityService struct {
 	workspacePath    string
 	tasks            []virtualCapabilityRecord
 	events           []virtualCapabilityRecord
+	schedules        []virtualCapabilityRecord
 	calendarRevision int
+	scheduleRevision int
 	site             *virtualCapabilityRecord
 	sitePublished    bool
 }
@@ -1528,6 +1526,8 @@ func (service *virtualCapabilityService) response(toolName string, requestBody [
 		return service.taskResponse(toolName, requestBody)
 	case "event_add", "event_list", "event_update", "event_delete":
 		return service.calendarResponse(toolName, requestBody)
+	case "schedule_create", "schedule_list", "schedule_update", "schedule_cancel":
+		return service.scheduleResponse(toolName, requestBody)
 	case "site_serve":
 		input := virtualCapabilityInput(requestBody)
 		mode := stringValue(input["mode"])
@@ -2138,6 +2138,109 @@ func (service *virtualCapabilityService) calendarResponse(toolName string, reque
 	}
 }
 
+func (service *virtualCapabilityService) scheduleResponse(toolName string, requestBody []byte) string {
+	input := virtualCapabilityInput(requestBody)
+	switch toolName {
+	case "schedule_create":
+		scheduleID := fmt.Sprintf("virtual-schedule-%03d", len(service.schedules)+1)
+		record := virtualCapabilityRecord{ID: scheduleID, Values: service.virtualScheduleValues(scheduleID, input, requestBody)}
+		service.schedules = append(service.schedules, record)
+		return virtualCapabilityScheduleSuccess(toolName, "created", record.ID, "created virtual schedule", record.Values)
+	case "schedule_list":
+		return virtualCapabilitySuccess(toolName, "listed virtual schedules", map[string]any{"schedules": virtualScheduleListValues(service.schedules)})
+	case "schedule_update":
+		index := virtualCapabilityRecordIndexByHint(service.schedules, input, "scheduleHint", "description")
+		if index < 0 {
+			return virtualCapabilityNotFound(toolName, "schedule")
+		}
+		mergeVirtualSchedule(service.schedules[index].Values, input)
+		service.schedules[index].Values["nextRunAt"] = service.nextVirtualScheduleRunAt()
+		return virtualCapabilityScheduleSuccess(toolName, "updated", service.schedules[index].ID, "updated virtual schedule", service.schedules[index].Values)
+	default:
+		cancelledSchedules := []map[string]any{}
+		for _, scheduleHint := range stringSliceValue(input["scheduleHints"]) {
+			index := virtualCapabilityRecordIndexByHint(service.schedules, map[string]any{"scheduleHint": scheduleHint}, "scheduleHint", "description")
+			if index < 0 {
+				return virtualCapabilityNotFound(toolName, "schedule")
+			}
+			cancelledSchedule := service.schedules[index]
+			service.schedules = append(service.schedules[:index], service.schedules[index+1:]...)
+			cancelledSchedules = append(cancelledSchedules, map[string]any{
+				"scheduleID":  cancelledSchedule.ID,
+				"description": stringValue(cancelledSchedule.Values["description"]),
+			})
+		}
+		return virtualCapabilitySuccess(toolName, "cancelled virtual schedules", map[string]any{"cancelled": cancelledSchedules})
+	}
+}
+
+func (service *virtualCapabilityService) virtualScheduleValues(scheduleID string, input map[string]any, requestBody []byte) map[string]any {
+	conversation := virtualCapabilityConversationFromRequest(requestBody)
+	values := map[string]any{
+		"scheduleID":       scheduleID,
+		"description":      "",
+		"taskInstruction":  "",
+		"timeZone":         "Asia/Seoul",
+		"kind":             "once",
+		"nextRunAt":        service.nextVirtualScheduleRunAt(),
+		"conversationID":   conversation.conversationID,
+		"replyTargetID":    conversation.replyTargetID,
+		"agentProfileName": "default",
+	}
+	mergeVirtualSchedule(values, input)
+	if strings.TrimSpace(stringValue(values["description"])) == "" {
+		values["description"] = stringValue(values["taskInstruction"])
+	}
+	return values
+}
+
+func (service *virtualCapabilityService) nextVirtualScheduleRunAt() string {
+	service.scheduleRevision++
+	return time.Date(2027, time.January, 1, 0, 0, service.scheduleRevision, 0, time.UTC).Format(time.RFC3339)
+}
+
+func mergeVirtualSchedule(schedule map[string]any, input map[string]any) {
+	for _, fieldName := range []string{"description", "taskInstruction", "timeZone", "kind", "runAt", "expiresAt", "intervalSecond", "cronExpression", "maxRunCount"} {
+		if value, isPresent := input[fieldName]; isPresent {
+			schedule[fieldName] = value
+		}
+	}
+}
+
+func virtualScheduleListValues(records []virtualCapabilityRecord) []map[string]any {
+	schedules := []map[string]any{}
+	for _, record := range records {
+		schedules = append(schedules, map[string]any{
+			"scheduleID":      record.ID,
+			"taskInstruction": stringValue(record.Values["taskInstruction"]),
+			"description":     stringValue(record.Values["description"]),
+			"cadence":         stringValue(record.Values["kind"]),
+			"status":          "active",
+			"nextRunAt":       stringValue(record.Values["nextRunAt"]),
+		})
+	}
+	return schedules
+}
+
+type virtualCapabilityConversation struct {
+	conversationID string
+	replyTargetID  string
+}
+
+func virtualCapabilityConversationFromRequest(requestBody []byte) virtualCapabilityConversation {
+	var requestDocument struct {
+		Context struct {
+			ConversationID string `json:"conversationID"`
+			ReplyTargetID  string `json:"replyTargetID"`
+		} `json:"context"`
+	}
+	_ = json.Unmarshal(requestBody, &requestDocument)
+	return virtualCapabilityConversation{
+		conversationID: strings.TrimSpace(requestDocument.Context.ConversationID),
+		replyTargetID:  strings.TrimSpace(requestDocument.Context.ReplyTargetID),
+	}
+}
+
 func (service *virtualCapabilityService) virtualCalendarEventValues(eventID string, input map[string]any, requester virtualCapabilityRequester) map[string]any {
 	values := map[string]any{
 		"eventID":      eventID,
@@ -2439,6 +2542,19 @@ func virtualCapabilityTaskSuccess(toolName string, effect string, taskID string,
 	})
 }
 
+func virtualCapabilityScheduleSuccess(toolName string, effect string, scheduleID string, content string, result any) string {
+	return virtualCapabilityJSON(map[string]any{
+		"provider":        "virtual",
+		"selectedBackend": "device",
+		"toolName":        toolName,
+		"outcome":         "succeeded",
+		"status":          "ok",
+		"content":         content,
+		"result":          result,
+		"effects":         []map[string]any{{"objectType": "schedule", "effect": effect, "id": scheduleID}},
+	})
+}
+
 func virtualCapabilityCalendarSuccess(toolName string, effect string, eventID string, content string, result any) string {
 	return virtualCapabilityJSON(map[string]any{
 		"provider":        "virtual",
@@ -2634,7 +2750,6 @@ func (harness *VirtualSessionHarness) Run(ctx context.Context) (VirtualSessionRe
 			harness.rememberTurn(messageTurn, turnResults[promptIndex])
 		}
 	}
-	result.Schedules = harness.scheduleStore.Schedules()
 	if errorValue := harness.assertWorkspaceFootprint(digestsBefore); errorValue != nil {
 		return result, errorValue
 	}
@@ -4143,97 +4258,6 @@ func firstNonEmptyVirtualString(values ...string) string {
 		}
 	}
 	return ""
-}
-
-type virtualScheduleRepository struct {
-	mutex     sync.Mutex
-	schedules []task.Schedule
-}
-
-func (repository *virtualScheduleRepository) UpsertSchedule(schedule task.Schedule) error {
-	repository.mutex.Lock()
-	defer repository.mutex.Unlock()
-	schedule.ScheduleID = fmt.Sprintf("virtual-schedule-%03d", len(repository.schedules)+1)
-	repository.schedules = append(repository.schedules, schedule)
-	return nil
-}
-
-func (repository *virtualScheduleRepository) UpdateSchedule(request task.ScheduleUpdateRequest) (task.ScheduleUpdateResult, error) {
-	repository.mutex.Lock()
-	defer repository.mutex.Unlock()
-	for index, schedule := range repository.schedules {
-		if schedule.ScheduleID != request.ScheduleID || schedule.CreatorPersonID != request.RequesterPersonID || schedule.NextRunAt == nil {
-			continue
-		}
-		updatedSchedule := schedule
-		var errorValue error
-		if request.UpdateSchedule != nil {
-			updatedSchedule, errorValue = request.UpdateSchedule(schedule)
-			if errorValue != nil {
-				return task.ScheduleUpdateResult{}, errorValue
-			}
-		}
-		repository.schedules[index] = updatedSchedule
-		return task.ScheduleUpdateResult{Schedule: updatedSchedule, IsFound: true}, nil
-	}
-	return task.ScheduleUpdateResult{}, nil
-}
-
-func (repository *virtualScheduleRepository) Schedules() []task.Schedule {
-	repository.mutex.Lock()
-	defer repository.mutex.Unlock()
-	return append([]task.Schedule{}, repository.schedules...)
-}
-
-func (repository *virtualScheduleRepository) ListSchedules(request task.ScheduleListRequest) (task.ScheduleListResult, error) {
-	repository.mutex.Lock()
-	defer repository.mutex.Unlock()
-	schedules := []task.Schedule{}
-	for _, schedule := range repository.schedules {
-		if request.CreatorPersonID != "" && schedule.CreatorPersonID != request.CreatorPersonID {
-			continue
-		}
-		if !request.IncludeExpired && schedule.NextRunAt == nil {
-			continue
-		}
-		schedules = append(schedules, schedule)
-	}
-	pageSize := request.PageSize
-	if pageSize <= 0 || pageSize > len(schedules) {
-		pageSize = len(schedules)
-	}
-	return task.ScheduleListResult{Schedules: append([]task.Schedule{}, schedules[:pageSize]...), TotalCount: len(schedules), Page: 1, PageSize: pageSize}, nil
-}
-
-func (repository *virtualScheduleRepository) ClaimDueSchedules(int, time.Duration, time.Time, string) ([]task.Schedule, error) {
-	return nil, nil
-}
-
-func (repository *virtualScheduleRepository) MarkScheduleSucceeded(task.Schedule) error {
-	return nil
-}
-
-func (repository *virtualScheduleRepository) MarkScheduleFailed(task.Schedule, string, time.Time) error {
-	return nil
-}
-
-func (repository *virtualScheduleRepository) ExpireSchedule(task.Schedule, string, time.Time) error {
-	return nil
-}
-
-func (repository *virtualScheduleRepository) CancelSchedules(request task.ScheduleCancelRequest) (task.ScheduleCancelResult, error) {
-	repository.mutex.Lock()
-	defer repository.mutex.Unlock()
-	cancelledSchedules := []task.Schedule{}
-	for index, schedule := range repository.schedules {
-		if schedule.CreatorPersonID != request.RequesterPersonID || schedule.NextRunAt == nil {
-			continue
-		}
-		repository.schedules[index].ExpiresAt = &request.CancelledAt
-		repository.schedules[index].NextRunAt = nil
-		cancelledSchedules = append(cancelledSchedules, repository.schedules[index])
-	}
-	return task.ScheduleCancelResult{Schedules: cancelledSchedules}, nil
 }
 
 type virtualMemoryIngestModel struct{}

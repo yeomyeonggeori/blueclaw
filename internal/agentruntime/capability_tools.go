@@ -543,7 +543,7 @@ func capabilityToolRequest(toolContext context.Context, descriptor CapabilityToo
 		"taskSource":              string(request.TaskSource),
 		"isScheduledRun":          request.IsScheduledRun,
 		"isApprovalContinuation":  request.IsApprovalContinuation,
-		"conversationID":          request.ConversationID,
+		"conversationID":          request.DeliveryConversationID,
 		"conversationType":        request.ConversationType,
 		"channelID":               request.ConversationChannelID,
 		"channelName":             request.ConversationChannelName,

@@ -19,6 +19,8 @@ func connectorTestCapabilityInputSchemaForTool(toolName string) json.RawMessage 
 		return json.RawMessage(`{"type":"object","properties":{"eventHint":{"type":"string"},"userConfirmed":{"type":"boolean"}},"additionalProperties":false}`)
 	case "message_send":
 		return json.RawMessage(`{"type":"object","properties":{"targetType":{"type":"string"},"personHint":{"type":"string"},"message":{"type":"string"}},"additionalProperties":false}`)
+	case "schedule_create":
+		return json.RawMessage(`{"type":"object","properties":{"description":{"type":"string"},"taskInstruction":{"type":"string"},"kind":{"type":"string"},"cronExpression":{"type":"string"},"timeZone":{"type":"string"},"repeatPolicy":{"type":"string"}},"required":["taskInstruction","kind"],"additionalProperties":false}`)
 	default:
 		return connectorTestCapabilityClosedSchema
 	}
@@ -32,6 +34,8 @@ func connectorTestCapabilityResultSchemaForTool(toolName string) json.RawMessage
 		return json.RawMessage(`{"type":"object","properties":{"messageID":{"type":"string"}},"additionalProperties":false}`)
 	case "browser_snapshot":
 		return json.RawMessage(`{"type":"object","properties":{"url":{"type":"string"},"snapshotText":{"type":"string"},"devicePath":{"type":"string"},"filename":{"type":"string"},"contentType":{"type":"string"},"sizeBytes":{"type":"number"}},"additionalProperties":false}`)
+	case "schedule_create":
+		return json.RawMessage(`{"type":"object","properties":{"scheduleID":{"type":"string"},"nextRunAt":{"type":"string"}},"additionalProperties":false}`)
 	default:
 		return connectorTestCapabilityClosedSchema
 	}
