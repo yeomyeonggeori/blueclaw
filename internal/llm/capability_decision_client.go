@@ -9,9 +9,6 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
-// CapabilityDecisionClient asks capabilityd's decision route. A decision model
-// answers closed questions and writes nothing, so there is no schema, no
-// messages, and no fallback: a call either answers or fails.
 type CapabilityDecisionClient struct {
 	CapabilityLLMClient
 }
@@ -63,8 +60,6 @@ func (decisionClient CapabilityDecisionClient) Decide(responseContext context.Co
 	}, nil
 }
 
-// The route answers a choice, a noul, or a score without naming which; the
-// question that was asked is what says how to read it.
 func typedDecisionAnswers(answers map[string]model.DecisionAnswer, questions map[string]model.DecisionQuestion) map[string]model.DecisionAnswer {
 	typedAnswers := make(map[string]model.DecisionAnswer, len(answers))
 	for questionName, answer := range answers {

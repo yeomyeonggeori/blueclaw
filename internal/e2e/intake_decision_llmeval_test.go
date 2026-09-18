@@ -18,10 +18,6 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
-// intakeDecisionCase is one message the runtime has to read correctly, with the
-// answers a person would give. The corpus replaces the golden turn-router
-// fixtures, which graded a chat model's prose against a schema that no longer
-// exists.
 type intakeDecisionCase struct {
 	name                string
 	request             agentcontract.IntakeDecisionRequest

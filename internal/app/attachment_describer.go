@@ -14,10 +14,6 @@ const attachmentDescriptionSystemPrompt = "Describe each picture the way somebod
 
 const attachmentDescriptionSchema = `{"type":"object","properties":{"descriptions":{"type":"array","items":{"type":"string"}}},"required":["descriptions"],"additionalProperties":false}`
 
-// languageModelAttachmentDescriber turns pictures into sentences for the
-// decision model, which reads text and nothing else. It runs once, for a
-// message whose whole content is an attachment, and only after the engagement
-// gate has already let that message through.
 type languageModelAttachmentDescriber struct {
 	languageModel model.LanguageModelProvider
 }

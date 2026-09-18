@@ -235,9 +235,6 @@ func turnRouterLanguageModelProvider(taskTierLanguageModels agentcontract.TaskTi
 	return taskTierLanguageModels.High
 }
 
-// newDecisionPlanner builds the one call every inbound message is decided by.
-// A configuration that names no decision model leaves the planner empty, and
-// every decision then fails loudly rather than falling back to a chat model.
 func newDecisionPlanner(runtimeConfiguration config.RuntimeConfiguration, visionLanguageModel model.LanguageModelProvider, logger *slog.Logger) intake.DecisionPlanner {
 	decisionModel, errorValue := llm.NewConfiguredDecisionModel(runtimeConfiguration)
 	if errorValue != nil {
