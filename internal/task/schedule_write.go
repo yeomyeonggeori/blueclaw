@@ -229,6 +229,10 @@ func IsScheduleWriteInputError(errorValue error) bool {
 		ErrScheduleRepeatPolicyRequired,
 		ErrScheduleFiniteBoundRequired,
 		ErrScheduleNoFutureRun,
+		ErrScheduleLimitReached,
+		errorInvalidTaskSchedule,
+		errorInvalidCronExpression,
+		errorUnableToFindNextTaskRun,
 	} {
 		if errors.Is(errorValue, inputError) {
 			return true

@@ -997,29 +997,86 @@ func TestScheduleCreateToolRejectsMissingReplyTarget(t *testing.T) {
 	}
 }
 
-func TestScheduleCreateExecutorRejectsScheduledRunContext(t *testing.T) {
+func TestAScheduledRunCreatesAScheduleLikeAnyOtherRun(t *testing.T) {
+	repository := &memoryTaskScheduleRepository{}
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(&memoryTaskScheduleRepository{})
+	toolCatalogBuilder.UseTaskScheduleRepository(repository)
 
-	result, errorValue := toolCatalogBuilder.createScheduleTool(context.Background(), scheduleCreateToolInput{
-		TaskInstruction: "create a new schedule.",
-		Kind:            "cron",
-		CronExpression:  "* * * * *",
-		RepeatPolicy:    "unbounded",
-	}, toolHandlerContext{request: ToolCatalogRequest{
-		IsScheduledRun:    true,
-		RequesterPersonID: "person-1",
-		Platform:          "mattermost",
-		ConversationID:    "channel-1",
-		ReplyTargetID:     "reply-target-1",
-	}})
+	result, errorValue := toolCatalogBuilder.createScheduleTool(context.Background(), reminderScheduleInput(), scheduleRequesterContext(true))
 
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if !result.Failed() || !strings.Contains(result.ContentText(), "scheduled task executions cannot create new schedules") {
-		t.Fatalf("expected scheduled run schedule_create failure, got %+v", result)
+	if result.Failed() || len(repository.taskSchedules) != 1 {
+		t.Fatalf("expected the scheduled run to create one schedule, got %+v with %d stored", result, len(repository.taskSchedules))
 	}
+}
+
+func TestScheduleCreateStopsAtTheOpenScheduleLimitWhoeverAsks(t *testing.T) {
+	for _, isScheduledRun := range []bool{false, true} {
+		repository := &memoryTaskScheduleRepository{taskSchedules: openSchedulesOf("person-1", task.MaximumOpenScheduleCountPerPerson)}
+		toolCatalogBuilder := NewToolCatalogBuilder()
+		toolCatalogBuilder.UseTaskScheduleRepository(repository)
+
+		result, errorValue := toolCatalogBuilder.createScheduleTool(context.Background(), reminderScheduleInput(), scheduleRequesterContext(isScheduledRun))
+
+		if errorValue != nil {
+			t.Fatal(errorValue)
+		}
+		if !result.Failed() || !strings.Contains(result.ContentText(), task.ErrScheduleLimitReached.Error()) {
+			t.Fatalf("expected the open schedule limit to refuse the create, got %+v", result)
+		}
+		if len(repository.taskSchedules) != task.MaximumOpenScheduleCountPerPerson {
+			t.Fatalf("expected nothing stored past the limit, got %d schedules", len(repository.taskSchedules))
+		}
+	}
+}
+
+func TestAnotherPersonsSchedulesDoNotCountTowardTheLimit(t *testing.T) {
+	repository := &memoryTaskScheduleRepository{taskSchedules: openSchedulesOf("person-2", task.MaximumOpenScheduleCountPerPerson)}
+	toolCatalogBuilder := NewToolCatalogBuilder()
+	toolCatalogBuilder.UseTaskScheduleRepository(repository)
+
+	result, errorValue := toolCatalogBuilder.createScheduleTool(context.Background(), reminderScheduleInput(), scheduleRequesterContext(false))
+
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if result.Failed() {
+		t.Fatalf("expected person-1 to create a schedule while person-2 is at the limit, got %+v", result)
+	}
+}
+
+func reminderScheduleInput() scheduleCreateToolInput {
+	return scheduleCreateToolInput{
+		TaskInstruction: "send the weekly summary.",
+		Kind:            "cron",
+		CronExpression:  "0 9 * * 1",
+		RepeatPolicy:    "unbounded",
+	}
+}
+
+func scheduleRequesterContext(isScheduledRun bool) toolHandlerContext {
+	return toolHandlerContext{request: ToolCatalogRequest{
+		IsScheduledRun:    isScheduledRun,
+		RequesterPersonID: "person-1",
+		Platform:          "mattermost",
+		ConversationID:    "channel-1",
+		ReplyTargetID:     "reply-target-1",
+	}}
+}
+
+func openSchedulesOf(creatorPersonID string, count int) []task.TaskSchedule {
+	nextRunAt := time.Now().UTC().Add(time.Hour)
+	taskSchedules := make([]task.TaskSchedule, 0, count)
+	for index := 0; index < count; index++ {
+		taskSchedules = append(taskSchedules, task.TaskSchedule{
+			TaskScheduleID:  "schedule-" + strconv.Itoa(index),
+			CreatorPersonID: creatorPersonID,
+			NextRunAt:       &nextRunAt,
+		})
+	}
+	return taskSchedules
 }
 
 func newScheduleListTestRegistry(repository *memoryTaskScheduleRepository, requesterPersonID string) *toolcontract.ToolSet {

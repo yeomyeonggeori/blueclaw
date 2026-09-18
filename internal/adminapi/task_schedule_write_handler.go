@@ -81,7 +81,7 @@ func (taskScheduleHandler TaskScheduleHandler) HandleToolCreate(responseWriter h
 		return
 	}
 	referenceTime := time.Now().UTC()
-	taskSchedule, errorValue := task.InitializeScheduleCreate(task.ScheduleCreateInput{
+	taskSchedule, errorValue := task.CreateSchedule(taskScheduleHandler.ListRepository, task.ScheduleCreateInput{
 		Description:     input.Description,
 		TaskInstruction: input.TaskInstruction,
 		Kind:            input.Kind,
@@ -104,10 +104,6 @@ func (taskScheduleHandler TaskScheduleHandler) HandleToolCreate(responseWriter h
 	})
 	if errorValue != nil {
 		writeScheduleWriteError(responseWriter, errorValue)
-		return
-	}
-	if errorValue := taskScheduleHandler.ListRepository.UpsertTaskSchedule(taskSchedule); errorValue != nil {
-		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
 		return
 	}
 	writeJSON(responseWriter, http.StatusOK, task.ProjectScheduleMutation(taskSchedule))

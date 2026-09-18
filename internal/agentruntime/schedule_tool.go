@@ -141,30 +141,28 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerScheduleTools(toolRegistry
 			Result: scheduleListToolResult,
 		})
 	}
-	if !handlerContext.request.IsScheduledRun {
-		toolcontract.RegisterToolFunction(toolRegistry, toolcontract.ToolFunction[scheduleCreateToolInput, toolcontract.ToolResult]{
-			Definition: toolcontract.ToolDefinition{
-				Name:        "schedule_create",
-				Description: "Create a scheduled task for the current requester and reply target. Put only the work to perform at run time in taskInstruction. Do not copy the original scheduling request into taskInstruction. Cadence and stop conditions must be represented only by kind, runAt, intervalSecond, cronExpression, expiresAt, and maxRunCount. For interval or cron schedules, set repeatPolicy to finite when the user gave an end condition and include expiresAt or maxRunCount; set repeatPolicy to unbounded only when the user explicitly wants no end.",
-				InputSchema: scheduleCreateInputSchema,
-			},
-			Handler: func(toolContext context.Context, input scheduleCreateToolInput) (toolcontract.ToolResult, error) {
-				return toolCatalogBuilder.createScheduleTool(toolContext, input, handlerContext)
-			},
-			Result: toolcontract.IdentityToolResult,
-		})
-		toolcontract.RegisterToolFunction(toolRegistry, toolcontract.ToolFunction[scheduleUpdateToolInput, toolcontract.ToolResult]{
-			Definition: toolcontract.ToolDefinition{
-				Name:        "schedule_update",
-				Description: "Update an active scheduled task created by the current requester. Provide scheduleID and only the scalar fields that should change. Keep only the work to perform at run time in taskInstruction; represent cadence and stop conditions only with kind, runAt, intervalSecond, cronExpression, expiresAt, maxRunCount, and repeatPolicy.",
-				InputSchema: scheduleUpdateInputSchema,
-			},
-			Handler: func(toolContext context.Context, input scheduleUpdateToolInput) (toolcontract.ToolResult, error) {
-				return toolCatalogBuilder.updateScheduleTool(toolContext, input, handlerContext)
-			},
-			Result: toolcontract.IdentityToolResult,
-		})
-	}
+	toolcontract.RegisterToolFunction(toolRegistry, toolcontract.ToolFunction[scheduleCreateToolInput, toolcontract.ToolResult]{
+		Definition: toolcontract.ToolDefinition{
+			Name:        "schedule_create",
+			Description: "Create a scheduled task for the current requester and reply target. Put only the work to perform at run time in taskInstruction. Do not copy the original scheduling request into taskInstruction. Cadence and stop conditions must be represented only by kind, runAt, intervalSecond, cronExpression, expiresAt, and maxRunCount. For interval or cron schedules, set repeatPolicy to finite when the user gave an end condition and include expiresAt or maxRunCount; set repeatPolicy to unbounded only when the user explicitly wants no end.",
+			InputSchema: scheduleCreateInputSchema,
+		},
+		Handler: func(toolContext context.Context, input scheduleCreateToolInput) (toolcontract.ToolResult, error) {
+			return toolCatalogBuilder.createScheduleTool(toolContext, input, handlerContext)
+		},
+		Result: toolcontract.IdentityToolResult,
+	})
+	toolcontract.RegisterToolFunction(toolRegistry, toolcontract.ToolFunction[scheduleUpdateToolInput, toolcontract.ToolResult]{
+		Definition: toolcontract.ToolDefinition{
+			Name:        "schedule_update",
+			Description: "Update an active scheduled task created by the current requester. Provide scheduleID and only the scalar fields that should change. Keep only the work to perform at run time in taskInstruction; represent cadence and stop conditions only with kind, runAt, intervalSecond, cronExpression, expiresAt, maxRunCount, and repeatPolicy.",
+			InputSchema: scheduleUpdateInputSchema,
+		},
+		Handler: func(toolContext context.Context, input scheduleUpdateToolInput) (toolcontract.ToolResult, error) {
+			return toolCatalogBuilder.updateScheduleTool(toolContext, input, handlerContext)
+		},
+		Result: toolcontract.IdentityToolResult,
+	})
 	toolcontract.RegisterToolFunction(toolRegistry, toolcontract.ToolFunction[scheduleCancelToolInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
 			Name:        "schedule_cancel",
@@ -192,11 +190,11 @@ func (toolCatalogBuilder *ToolCatalogBuilder) createScheduleTool(toolContext con
 	if toolCatalogBuilder.taskScheduleRepository == nil {
 		return toolcontract.ToolFailureResult(toolcontract.FailureDependencyUnavailable, toolcontract.FailureCodes.Unavailable, "schedule_create", "task schedule repository is unavailable"), nil
 	}
-	initializedTaskSchedule, errorValue := toolCatalogBuilder.buildTaskSchedule(input, handlerContext, time.Now().UTC())
-	if errorValue != nil {
+	initializedTaskSchedule, errorValue := toolCatalogBuilder.createTaskSchedule(input, handlerContext, time.Now().UTC())
+	if task.IsScheduleWriteInputError(errorValue) {
 		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "schedule_create", errorValue.Error()), nil
 	}
-	if errorValue := toolCatalogBuilder.taskScheduleRepository.UpsertTaskSchedule(initializedTaskSchedule); errorValue != nil {
+	if errorValue != nil {
 		return toolcontract.ToolResult{}, errorValue
 	}
 	resultDocument := scheduleCreateResultDocument(initializedTaskSchedule)
@@ -348,11 +346,8 @@ func (toolCatalogBuilder *ToolCatalogBuilder) scheduleCreateContext(handlerConte
 	}
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) buildTaskSchedule(input scheduleCreateToolInput, handlerContext toolHandlerContext, referenceTime time.Time) (task.TaskSchedule, error) {
-	if handlerContext.request.IsScheduledRun {
-		return task.TaskSchedule{}, errScheduleCreateInScheduledRun
-	}
-	return task.InitializeScheduleCreate(task.ScheduleCreateInput{
+func (toolCatalogBuilder *ToolCatalogBuilder) createTaskSchedule(input scheduleCreateToolInput, handlerContext toolHandlerContext, referenceTime time.Time) (task.TaskSchedule, error) {
+	return task.CreateSchedule(toolCatalogBuilder.taskScheduleRepository, task.ScheduleCreateInput{
 		Description:     input.Name,
 		TaskInstruction: input.TaskInstruction,
 		Kind:            input.Kind,
@@ -426,6 +421,5 @@ func isScheduleToolValidationError(errorValue error) bool {
 		errors.Is(errorValue, errScheduleCancelIDsRequired) ||
 		errors.Is(errorValue, errScheduleCancelIDsInvalid) ||
 		errors.Is(errorValue, errScheduleIDRequired) ||
-		errors.Is(errorValue, errScheduleUpdateRequired) ||
-		errors.Is(errorValue, errScheduleCreateInScheduledRun)
+		errors.Is(errorValue, errScheduleUpdateRequired)
 }
