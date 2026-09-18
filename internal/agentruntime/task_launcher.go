@@ -296,24 +296,27 @@ func (taskLauncher *TaskLauncher) appendTurnRouterCallRecords(taskRunID string, 
 func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request TaskLaunchRequest) (TaskLaunchResult, []agentcontract.LLMCallRecord, error) {
 	launchRecords := []launchStepRecord{}
 	normalizedProfileName := normalizeProfileName(request.ProfileName)
+	completeFailedLaunch := func(record launchStepRecord, toolNames []string) TaskLaunchResult {
+		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, toolNames, record.StepName, launchRecords, errorFromStepRecord(record))
+	}
 	resolvedEmail, record := runLaunchStep(ctx, &taskLaunchExecution{Launcher: taskLauncher, Request: request}, resolveRequesterEmailLaunchStep{})
 	launchRecords = append(launchRecords, record)
 	request.RequesterEmail = resolvedEmail
 	if record.Error != "" {
-		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, nil, record.StepName, launchRecords, record.errorValue), nil, nil
+		return completeFailedLaunch(record, nil), nil, nil
 	}
 	request.PersonAccess = requesterPersonAccessForTaskLaunch(request)
 	activeCircleRequest, record := runLaunchStep(ctx, &taskLaunchExecution{Launcher: taskLauncher, Request: request, NormalizedProfileName: normalizedProfileName}, resolveActiveCircleLaunchStep{})
 	launchRecords = append(launchRecords, record)
 	if record.Error != "" {
-		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, nil, record.StepName, launchRecords, record.errorValue), nil, nil
+		return completeFailedLaunch(record, nil), nil, nil
 	}
 	request.ActiveCircleID = activeCircleRequest.ActiveCircleID
 	request.ActiveCircleConflict = activeCircleRequest.ActiveCircleConflict
 	artifactManifest, record := runLaunchStep(ctx, &taskLaunchExecution{Launcher: taskLauncher, Request: request, NormalizedProfileName: normalizedProfileName}, conversationArtifactManifestLaunchStep{})
 	launchRecords = append(launchRecords, record)
 	if record.Error != "" {
-		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, nil, record.StepName, launchRecords, record.errorValue), nil, nil
+		return completeFailedLaunch(record, nil), nil, nil
 	}
 	request.ArtifactManifest = artifactManifest
 	turnDecision, routingOutcome := taskLauncher.routedTurnDecision(ctx, request, normalizedProfileName)
@@ -347,18 +350,18 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 	_, record = runLaunchStep(ctx, execution, provisionRequesterWorkspaceLaunchStep{})
 	launchRecords = append(launchRecords, record)
 	if record.Error != "" {
-		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, nil, record.StepName, launchRecords, errorFromStepRecord(record)), routerCallRecords, nil
+		return completeFailedLaunch(record, nil), routerCallRecords, nil
 	}
 	toolSet, record := runLaunchStep(ctx, execution, buildToolSetLaunchStep{})
 	launchRecords = append(launchRecords, record)
 	if record.Error != "" {
-		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, nil, record.StepName, launchRecords, errorFromStepRecord(record)), routerCallRecords, nil
+		return completeFailedLaunch(record, nil), routerCallRecords, nil
 	}
 	toolNames := toolSet.ListToolNames()
 	registryAudit, record := runLaunchStep(ctx, execution, auditToolRegistryLaunchStep{ToolSet: toolSet})
 	launchRecords = append(launchRecords, record)
 	if record.Error != "" {
-		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, toolNames, record.StepName, launchRecords, errorFromStepRecord(record)), routerCallRecords, nil
+		return completeFailedLaunch(record, toolNames), routerCallRecords, nil
 	}
 	conversationScope := ConversationScopeForRequest(taskLauncher.toolCatalogBuilder.WorkspaceRootPath(), ToolCatalogRequest{
 		RequesterPersonID:       request.RequesterPersonID,
@@ -386,7 +389,7 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 		if taskRunID := strings.TrimSpace(turnResult.TaskRun.TaskRunID); taskRunID != "" {
 			request.ExistingTaskRunID = taskRunID
 		}
-		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, toolNames, record.StepName, launchRecords, errorFromStepRecord(record)), routerCallRecords, nil
+		return completeFailedLaunch(record, toolNames), routerCallRecords, nil
 	}
 	launchedToolNames := turnResult.ToolNames
 	if len(launchedToolNames) == 0 {
