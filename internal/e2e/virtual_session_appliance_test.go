@@ -8,8 +8,6 @@ package e2e
 import (
 	"context"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -25,12 +23,8 @@ func TestPresentationScenarioDoesNotScriptToolCalls(t *testing.T) {
 	}
 }
 
-func rootPresentationSkillPath() string {
-	candidatePath := filepath.Clean("../../../../assets/blueclaw-workspace/skills/presentation")
-	if _, errorValue := os.Stat(candidatePath); errorValue == nil {
-		return candidatePath
-	}
-	return ""
+func presentationSkillPath() string {
+	return findScenarioSkillDirectory("presentation")
 }
 
 func TestToolPermissionScenarioReturnsPlannedFallback(t *testing.T) {
