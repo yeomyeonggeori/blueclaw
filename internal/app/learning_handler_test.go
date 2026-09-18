@@ -153,13 +153,17 @@ func signLearningTestRequest(t *testing.T, request *http.Request, reader, body s
 }
 
 func signLearningTestRequestTarget(t *testing.T, request *http.Request, reader, body, target string) {
+	signLearningTestRequestTargetAt(t, request, reader, body, target, time.Now().Add(30*time.Second))
+}
+
+func signLearningTestRequestTargetAt(t *testing.T, request *http.Request, reader, body, target string, expiresAt time.Time) {
 	t.Helper()
 	digest := sha256.Sum256([]byte(body))
 	claims, errorValue := json.Marshal(struct {
 		ReaderPersonID string `json:"readerPersonID"`
 		ExpiresAt      int64  `json:"expiresAt"`
 		BodySHA256     string `json:"bodySHA256"`
-	}{reader, time.Now().Add(30 * time.Second).Unix(), hex.EncodeToString(digest[:])})
+	}{reader, expiresAt.Unix(), hex.EncodeToString(digest[:])})
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -167,6 +171,49 @@ func signLearningTestRequestTarget(t *testing.T, request *http.Request, reader, 
 	mac := hmac.New(sha256.New, []byte("synthetic-key"))
 	mac.Write([]byte(request.Method + "\n" + target + "\n" + encoded))
 	request.Header.Set(memoryassertion.HeaderName, encoded+"."+base64.RawURLEncoding.EncodeToString(mac.Sum(nil)))
+}
+
+func TestSignedScheduleReaderBindsPrincipalMethodTargetBodyAndExpiry(t *testing.T) {
+	keyPath := filepath.Join(t.TempDir(), "assertion-key")
+	if errorValue := os.WriteFile(keyPath, []byte("synthetic-key"), 0600); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	reader := signedReader(keyPath, true)
+	validBody := `{"status":"failed","limit":1}`
+	validTarget := "/admin/api/schedule/tool-list"
+	testCases := []struct {
+		name          string
+		method        string
+		target        string
+		body          string
+		signedMethod  string
+		signedTarget  string
+		signedBody    string
+		expiresAt     time.Time
+		shouldResolve bool
+	}{
+		{name: "valid", method: http.MethodPost, target: validTarget, body: validBody, signedMethod: http.MethodPost, signedTarget: validTarget, signedBody: validBody, expiresAt: time.Now().Add(30 * time.Second), shouldResolve: true},
+		{name: "method tampered", method: http.MethodGet, target: validTarget, body: validBody, signedMethod: http.MethodPost, signedTarget: validTarget, signedBody: validBody, expiresAt: time.Now().Add(30 * time.Second)},
+		{name: "target tampered", method: http.MethodPost, target: validTarget + "?page=2", body: validBody, signedMethod: http.MethodPost, signedTarget: validTarget, signedBody: validBody, expiresAt: time.Now().Add(30 * time.Second)},
+		{name: "body tampered", method: http.MethodPost, target: validTarget, body: `{"status":"active"}`, signedMethod: http.MethodPost, signedTarget: validTarget, signedBody: validBody, expiresAt: time.Now().Add(30 * time.Second)},
+		{name: "expired", method: http.MethodPost, target: validTarget, body: validBody, signedMethod: http.MethodPost, signedTarget: validTarget, signedBody: validBody, expiresAt: time.Now().Add(-time.Second)},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			request := httptest.NewRequest(testCase.method, testCase.target, strings.NewReader(testCase.body))
+			signedRequest := httptest.NewRequest(testCase.signedMethod, testCase.signedTarget, strings.NewReader(testCase.signedBody))
+			signLearningTestRequestTargetAt(t, signedRequest, "person-signed", testCase.signedBody, testCase.signedTarget, testCase.expiresAt)
+			request.Header.Set(memoryassertion.HeaderName, signedRequest.Header.Get(memoryassertion.HeaderName))
+			resolved := reader(request)
+			if (resolved == "person-signed") != testCase.shouldResolve {
+				t.Fatalf("resolved principal = %q", resolved)
+			}
+		})
+	}
+	missingKeyReader := signedReader(filepath.Join(t.TempDir(), "missing-key"), true)
+	if principal := missingKeyReader(httptest.NewRequest(http.MethodPost, validTarget, strings.NewReader(validBody))); principal != "" {
+		t.Fatalf("missing key resolved principal %q", principal)
+	}
 }
 
 func TestPersonaRequestAuthorizerUsesExactPrincipalAndTarget(t *testing.T) {

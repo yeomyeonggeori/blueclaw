@@ -41,7 +41,7 @@ func newRouterDependencies(components applicationComponents) httpserver.RouterDe
 			Controller:     components.taskIntakeController,
 			TaskRunService: services.taskRunService,
 		},
-		TaskScheduleHandler:   newTaskScheduleHandler(services, directory),
+		TaskScheduleHandler:   newTaskScheduleHandler(runtimeConfiguration, services, directory),
 		ConnectorDiagnostics:  adminapi.ConnectorEventDiagnosticHandler{Repository: services.repositories.connectorEventDiagnostic},
 		ConversationReset:     adminapi.ConversationResetHandler{Repository: services.repositories.conversationReset},
 		MemoryHandler:         adminapi.MemoryHandler{Store: components.memory.store, IdentityService: directory.identityService},
@@ -186,11 +186,12 @@ func newTaskApprovalHandler(services taskServices, directory identityDirectory, 
 	}
 }
 
-func newTaskScheduleHandler(services taskServices, directory identityDirectory) adminapi.TaskScheduleHandler {
+func newTaskScheduleHandler(runtimeConfiguration config.RuntimeConfiguration, services taskServices, directory identityDirectory) adminapi.TaskScheduleHandler {
 	return adminapi.TaskScheduleHandler{
 		CompanyProvider:   directory.companyProvider,
 		SummaryRepository: services.repositories.taskScheduleSummary,
 		ListRepository:    services.repositories.taskScheduleList,
 		RepairRepository:  services.repositories.taskScheduleCreatorRepair,
+		ReaderPersonID:    signedReader(runtimeConfiguration.Memory.AdminAssertionKeyPath, true),
 	}
 }

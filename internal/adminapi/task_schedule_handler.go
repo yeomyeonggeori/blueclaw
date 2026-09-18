@@ -3,6 +3,7 @@ package adminapi
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -32,6 +33,7 @@ type TaskScheduleHandler struct {
 	ListRepository    TaskScheduleListRepository
 	RepairRepository  TaskScheduleCreatorRepairRepository
 	CompanyProvider   func() agentcontract.CompanyContext
+	ReaderPersonID    func(*http.Request) string
 }
 
 func (taskScheduleHandler TaskScheduleHandler) companyTimeZone() string {
@@ -78,6 +80,11 @@ type taskScheduleUpdateRequest struct {
 	RepeatPolicy    *string `json:"repeatPolicy"`
 }
 
+type taskScheduleToolListRequest struct {
+	Status string `json:"status"`
+	Limit  int    `json:"limit"`
+}
+
 func (taskScheduleHandler TaskScheduleHandler) HandleSummary(responseWriter http.ResponseWriter, request *http.Request) {
 	if taskScheduleHandler.SummaryRepository == nil {
 		http.Error(responseWriter, "task schedule summary repository is not configured", http.StatusServiceUnavailable)
@@ -109,6 +116,49 @@ func (taskScheduleHandler TaskScheduleHandler) HandleList(responseWriter http.Re
 		"pageSize":   result.PageSize,
 		"checkedAt":  time.Now().UTC(),
 	})
+}
+
+func (taskScheduleHandler TaskScheduleHandler) HandleToolList(responseWriter http.ResponseWriter, request *http.Request) {
+	if taskScheduleHandler.ReaderPersonID == nil {
+		http.Error(responseWriter, "schedule list authorization required", http.StatusForbidden)
+		return
+	}
+	creatorPersonID := strings.TrimSpace(taskScheduleHandler.ReaderPersonID(request))
+	if creatorPersonID == "" {
+		http.Error(responseWriter, "schedule list authorization required", http.StatusForbidden)
+		return
+	}
+	if taskScheduleHandler.ListRepository == nil {
+		http.Error(responseWriter, "task schedule list repository is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	var input taskScheduleToolListRequest
+	decoder := json.NewDecoder(request.Body)
+	decoder.DisallowUnknownFields()
+	if errorValue := decoder.Decode(&input); errorValue != nil {
+		http.Error(responseWriter, "invalid schedule list request", http.StatusBadRequest)
+		return
+	}
+	if errorValue := decoder.Decode(&struct{}{}); errorValue != io.EOF {
+		http.Error(responseWriter, "invalid schedule list request", http.StatusBadRequest)
+		return
+	}
+	referenceTime := time.Now().UTC()
+	result, errorValue := taskScheduleHandler.ListRepository.ListTaskSchedules(task.TaskScheduleListRequest{
+		CreatorPersonID: creatorPersonID,
+		IncludeExpired:  true,
+		Page:            1,
+		PageSize:        20,
+		ReferenceTime:   referenceTime,
+	})
+	if errorValue != nil {
+		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(responseWriter, http.StatusOK, task.ProjectScheduleList(result.TaskSchedules, task.ScheduleListInput{
+		Status: input.Status,
+		Limit:  input.Limit,
+	}, referenceTime))
 }
 
 func (taskScheduleHandler TaskScheduleHandler) HandleCancel(responseWriter http.ResponseWriter, request *http.Request) {
