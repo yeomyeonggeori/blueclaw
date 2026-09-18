@@ -14,12 +14,14 @@ import {
 } from "../adapters/buzz/user-session.ts";
 import {
 	addChannelMembersAsUser,
+	addChannelOwnerAsUser,
 	createChannelAsUser,
 	deleteChannelAsUser,
 	handOverOwnershipAsUser,
 	joinChannelAsUser,
 	leaveChannelAsUser,
 	listOpenChannelsAsUser,
+	removeChannelMemberAsUser,
 } from "../adapters/buzz/user-channels.ts";
 import {
 	CredentialRefused,
@@ -190,6 +192,20 @@ class BuzzPersonalGateway implements PersonalGateway {
 		return { uninvitedExternalIDs: added.uninvitedPubkeyHexes };
 	}
 
+	async removeChannelMember(
+		actor: ActorCredential,
+		conversationID: string,
+		externalID: string,
+	): Promise<void> {
+		this.require(actor);
+		await removeChannelMemberAsUser({
+			relayURL: this.settings.relayURL,
+			userSecretHex: actor.secret,
+			channelID: conversationID,
+			memberPubkeyHex: externalID,
+		});
+	}
+
 	async leaveChannel(actor: ActorCredential, conversationID: string): Promise<void> {
 		this.require(actor);
 		await leaveChannelAsUser({ relayURL: this.settings.relayURL, userSecretHex: actor.secret, channelID: conversationID });
@@ -206,6 +222,20 @@ class BuzzPersonalGateway implements PersonalGateway {
 			userSecretHex: actor.secret,
 			channelID: conversationID,
 			newOwnerPubkeyHex: newOwnerExternalID,
+		});
+	}
+
+	async addChannelOwner(
+		actor: ActorCredential,
+		conversationID: string,
+		externalID: string,
+	): Promise<void> {
+		this.require(actor);
+		await addChannelOwnerAsUser({
+			relayURL: this.settings.relayURL,
+			userSecretHex: actor.secret,
+			channelID: conversationID,
+			newOwnerPubkeyHex: externalID,
 		});
 	}
 

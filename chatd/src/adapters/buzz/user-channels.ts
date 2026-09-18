@@ -3,6 +3,7 @@ import { withRelayAs } from "./relay-pool.ts";
 import { carriesTag, firstTagValue, type BuzzEvent } from "./types.ts";
 
 const PUT_USER_KIND = 9000;
+const REMOVE_USER_KIND = 9001;
 const CREATE_CHANNEL_KIND = 9007;
 const JOIN_REQUEST_KIND = 9021;
 const LEAVE_REQUEST_KIND = 9022;
@@ -91,6 +92,15 @@ export class NotChannelOwner extends Error {
 	}
 }
 
+export class TargetIsChannelOwner extends Error {
+	readonly reason = "target-is-owner";
+
+	constructor(channelID: string) {
+		super(`the target of this removal from channel ${channelID} is an owner or admin`);
+		this.name = "TargetIsChannelOwner";
+	}
+}
+
 export function rolesOnRoster(roster: BuzzEvent | undefined): Map<string, UserChannelRole> {
 	const roles = new Map<string, UserChannelRole>();
 	for (const tag of roster?.tags ?? []) {
@@ -130,6 +140,21 @@ export async function handOverOwnershipAsUser(request: {
 	});
 }
 
+export async function addChannelOwnerAsUser(request: {
+	relayURL: string;
+	userSecretHex: string;
+	channelID: string;
+	newOwnerPubkeyHex: string;
+}): Promise<void> {
+	await asAnOwner(request, async (relay) => {
+		await relay.publish(PUT_USER_KIND, "", [
+			["h", request.channelID],
+			["p", request.newOwnerPubkeyHex],
+			["role", "owner"],
+		]);
+	});
+}
+
 export async function deleteChannelAsUser(request: {
 	relayURL: string;
 	userSecretHex: string;
@@ -144,6 +169,7 @@ async function asAnOwner(
 	request: { relayURL: string; userSecretHex: string; channelID: string },
 	work: (relay: {
 		pubkeyHex: string;
+		query: (filter: object) => Promise<BuzzEvent[]>;
 		publish: (kind: number, content: string, tags: string[][]) => Promise<unknown>;
 	}) => Promise<void>,
 ): Promise<void> {
@@ -172,6 +198,22 @@ export async function leaveChannelAsUser(request: {
 			throw new LastOwnerCannotLeave(request.channelID);
 		}
 		await relay.publish(LEAVE_REQUEST_KIND, "", [["h", request.channelID]]);
+	});
+}
+
+export async function removeChannelMemberAsUser(request: {
+	relayURL: string;
+	userSecretHex: string;
+	channelID: string;
+	memberPubkeyHex: string;
+}): Promise<void> {
+	await asAnOwner(request, async (relay) => {
+		const targetRole = rolesOnRoster(await latestRoster(relay, request.channelID)).get(request.memberPubkeyHex);
+		if (targetRole === "owner" || targetRole === "admin") throw new TargetIsChannelOwner(request.channelID);
+		await relay.publish(REMOVE_USER_KIND, "", [
+			["h", request.channelID],
+			["p", request.memberPubkeyHex],
+		]);
 	});
 }
 

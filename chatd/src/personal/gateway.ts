@@ -153,8 +153,10 @@ export interface PersonalGateway {
 		conversationID: string,
 		memberExternalIDs: string[],
 	): Promise<{ uninvitedExternalIDs: string[] }>;
+	removeChannelMember(actor: ActorCredential, conversationID: string, externalID: string): Promise<void>;
 	leaveChannel(actor: ActorCredential, conversationID: string): Promise<void>;
 	handOverChannel(actor: ActorCredential, conversationID: string, newOwnerExternalID: string): Promise<void>;
+	addChannelOwner(actor: ActorCredential, conversationID: string, externalID: string): Promise<void>;
 	deleteChannel(actor: ActorCredential, conversationID: string): Promise<void>;
 	listMessages(
 		actor: ActorCredential,
