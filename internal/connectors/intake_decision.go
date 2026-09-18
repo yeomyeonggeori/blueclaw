@@ -253,6 +253,7 @@ func (connectorRuntime *ConnectorRuntime) relatesToActiveTask(ctx context.Contex
 func (connectorRuntime *ConnectorRuntime) decidedTurnFields(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) *agentcontract.TurnDecision {
 	decision, errorValue := connectorRuntime.decideInboundMessage(ctx, adapter, event)
 	if errorValue != nil {
+		connectorRuntime.logger.Warn("connector."+adapter.Name()+".intake.decision_failed", slog.String("messageID", event.MessageID), slog.String("error", errorValue.Error()))
 		return nil
 	}
 	turnFields := decision.TurnFields
