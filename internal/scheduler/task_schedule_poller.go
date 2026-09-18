@@ -255,7 +255,7 @@ func (taskSchedulePoller TaskSchedulePoller) executeMessageTaskSchedule(taskSche
 	if taskSchedulePoller.TaskRunService == nil {
 		return taskScheduleExecutionResult{}, errors.New("task run service is unavailable")
 	}
-	taskRun := taskSchedulePoller.TaskRunService.CreateTaskRun(taskSchedule.CreatorPersonID, "schedule:"+taskSchedule.TaskScheduleID, taskSchedule.Prompt)
+	taskRun := taskSchedulePoller.TaskRunService.CreateTaskRun(taskSchedule.CreatorPersonID, task.ScheduleOriginConversationID(taskSchedule.TaskScheduleID), taskSchedule.Prompt)
 	if _, errorValue := taskSchedulePoller.TaskRunService.AdvanceTaskRun(taskRun.TaskRunID, firstNonEmptyString(taskSchedule.AgentProfileName, "default")); errorValue != nil {
 		return taskScheduleExecutionResult{}, errorValue
 	}
@@ -376,7 +376,7 @@ func (taskSchedulePoller TaskSchedulePoller) hasActiveTaskScheduleRun(taskSchedu
 	if taskSchedulePoller.TaskRunService == nil {
 		return false
 	}
-	originConversationID := "schedule:" + strings.TrimSpace(taskSchedule.TaskScheduleID)
+	originConversationID := task.ScheduleOriginConversationID(taskSchedule.TaskScheduleID)
 	for _, taskRun := range taskSchedulePoller.TaskRunService.ListTaskRun() {
 		if taskRun.OriginConversationID != originConversationID {
 			continue
@@ -406,7 +406,7 @@ func (taskSchedulePoller TaskSchedulePoller) cancelStaleScheduledTaskRuns(refere
 	}
 	staleBefore := referenceTime.Add(-taskSchedulePoller.staleTaskRunTimeout())
 	cancelledTaskRuns := taskSchedulePoller.TaskRunService.CancelActiveTaskRuns(task.TaskRunCancelRequest{
-		OriginConversationIDPrefix: "schedule:",
+		OriginConversationIDPrefix: task.ScheduleOriginConversationIDPrefix,
 		ScheduleOnly:               true,
 		StaleBefore:                &staleBefore,
 		Reason:                     "scheduled task stale timeout",

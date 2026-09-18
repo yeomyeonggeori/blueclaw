@@ -192,6 +192,7 @@ func newTaskScheduleHandler(runtimeConfiguration config.RuntimeConfiguration, se
 		SummaryRepository: services.repositories.taskScheduleSummary,
 		ListRepository:    services.repositories.taskScheduleList,
 		RepairRepository:  services.repositories.taskScheduleCreatorRepair,
+		TaskRunReader:     services.taskRunService,
 		ReaderPersonID:    signedReader(runtimeConfiguration.Memory.AdminAssertionKeyPath, true),
 	}
 }

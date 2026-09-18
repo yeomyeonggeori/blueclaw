@@ -301,7 +301,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) cancelScheduledTaskRuns(cancelRequ
 	}
 	if cancelRequest.Scope == task.TaskScheduleCancelScopeMine {
 		taskRunCancelRequest.RequesterPersonID = strings.TrimSpace(cancelRequest.RequesterPersonID)
-		taskRunCancelRequest.OriginConversationIDPrefix = "schedule:"
+		taskRunCancelRequest.OriginConversationIDPrefix = task.ScheduleOriginConversationIDPrefix
 	} else {
 		taskRunCancelRequest.OriginConversationIDs = scheduleOriginConversationIDs(result.TaskSchedules)
 	}
@@ -329,7 +329,7 @@ func scheduleOriginConversationIDs(taskSchedules []task.TaskSchedule) []string {
 		if strings.TrimSpace(taskSchedule.TaskScheduleID) == "" {
 			continue
 		}
-		originConversationIDs = append(originConversationIDs, "schedule:"+taskSchedule.TaskScheduleID)
+		originConversationIDs = append(originConversationIDs, task.ScheduleOriginConversationID(taskSchedule.TaskScheduleID))
 	}
 	return originConversationIDs
 }

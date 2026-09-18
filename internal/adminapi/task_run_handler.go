@@ -297,7 +297,7 @@ func parseOptionalAdminTime(value string) (*time.Time, error) {
 
 func adminScheduleOriginPrefix(scheduleOnly bool) string {
 	if scheduleOnly {
-		return "schedule:"
+		return task.ScheduleOriginConversationIDPrefix
 	}
 	return ""
 }

@@ -39,7 +39,7 @@ func (runner TaskScheduleRunner) morningBriefingToolSet(request TaskScheduleRunR
 		TaskSource:                TaskLaunchSourceScheduled,
 		IsScheduledRun:            true,
 		Platform:                  request.TaskSchedule.Platform,
-		ConversationID:            "schedule:" + request.TaskSchedule.TaskScheduleID,
+		ConversationID:            task.ScheduleOriginConversationID(request.TaskSchedule.TaskScheduleID),
 		RegisteredToolNameCeiling: []string{"task_list", "event_list"},
 	})
 }

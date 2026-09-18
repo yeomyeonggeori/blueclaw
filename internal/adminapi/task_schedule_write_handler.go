@@ -19,9 +19,14 @@ const (
 	scheduleHintPageSize         = 200
 )
 
-var errScheduleToolRequestInvalid = errors.New("invalid schedule request")
+var (
+	errScheduleToolRequestInvalid    = errors.New("invalid schedule request")
+	errScheduleCreateRunUnknown      = errors.New("taskRunID names no task run the requester started")
+	errScheduleCreateFromScheduleRun = errors.New("a task run started by a schedule cannot create another schedule")
+)
 
 type scheduleToolCreateRequest struct {
+	TaskRunID       string `json:"taskRunID"`
 	TaskInstruction string `json:"taskInstruction"`
 	Description     string `json:"description"`
 	Kind            string `json:"kind"`
@@ -78,6 +83,9 @@ func (taskScheduleHandler TaskScheduleHandler) HandleToolCreate(responseWriter h
 	var input scheduleToolCreateRequest
 	if errorValue := decodeScheduleToolRequest(request, scheduleToolCreateInputSchema, &input); errorValue != nil {
 		http.Error(responseWriter, errorValue.Error(), http.StatusBadRequest)
+		return
+	}
+	if !taskScheduleHandler.runMayCreateSchedules(responseWriter, input.TaskRunID, creatorPersonID) {
 		return
 	}
 	referenceTime := time.Now().UTC()
@@ -241,6 +249,27 @@ func (taskScheduleHandler TaskScheduleHandler) readyForScheduleWrite(responseWri
 		return "", false
 	}
 	return creatorPersonID, true
+}
+
+func (taskScheduleHandler TaskScheduleHandler) runMayCreateSchedules(responseWriter http.ResponseWriter, taskRunID string, creatorPersonID string) bool {
+	trimmedTaskRunID := strings.TrimSpace(taskRunID)
+	if trimmedTaskRunID == "" {
+		return true
+	}
+	if taskScheduleHandler.TaskRunReader == nil {
+		http.Error(responseWriter, "task run reader is not configured", http.StatusServiceUnavailable)
+		return false
+	}
+	taskRun, isFound := taskScheduleHandler.TaskRunReader.FindTaskRun(trimmedTaskRunID)
+	if !isFound || strings.TrimSpace(taskRun.RequesterPersonID) != creatorPersonID {
+		http.Error(responseWriter, errScheduleCreateRunUnknown.Error(), http.StatusForbidden)
+		return false
+	}
+	if task.IsScheduleStartedTaskRun(taskRun) {
+		http.Error(responseWriter, errScheduleCreateFromScheduleRun.Error(), http.StatusForbidden)
+		return false
+	}
+	return true
 }
 
 func (taskScheduleHandler TaskScheduleHandler) signedPrincipal(request *http.Request) string {

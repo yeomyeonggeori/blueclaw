@@ -28,10 +28,15 @@ type TaskScheduleCreatorRepairRepository interface {
 	RepairTaskScheduleCreatorPersonID(task.TaskScheduleCreatorRepairRequest) (task.TaskScheduleCreatorRepairResult, error)
 }
 
+type TaskRunReader interface {
+	FindTaskRun(taskRunID string) (task.TaskRun, bool)
+}
+
 type TaskScheduleHandler struct {
 	SummaryRepository TaskScheduleSummaryRepository
 	ListRepository    TaskScheduleListRepository
 	RepairRepository  TaskScheduleCreatorRepairRepository
+	TaskRunReader     TaskRunReader
 	CompanyProvider   func() agentcontract.CompanyContext
 	ReaderPersonID    func(*http.Request) string
 }

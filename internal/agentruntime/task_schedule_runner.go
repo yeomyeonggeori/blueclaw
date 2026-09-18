@@ -68,14 +68,14 @@ func (taskScheduleRunner TaskScheduleRunner) RunIfDue(ctx context.Context, reque
 		IsApprovalContinuation:    true,
 		ProfileName:               taskSchedule.AgentProfileName,
 		Platform:                  taskSchedule.Platform,
-		ConversationID:            "schedule:" + taskSchedule.TaskScheduleID,
+		ConversationID:            task.ScheduleOriginConversationID(taskSchedule.TaskScheduleID),
 		ReplyTargetID:             taskSchedule.ReplyTargetID,
 		Prompt:                    taskSchedule.Prompt,
 		ResponseLanguage:          responseLanguage,
 		ScheduledRun:              scheduledRunContext(taskSchedule, referenceTime),
 		PersonAccess:              request.PersonAccess,
 		MemoryLabel:               memory.LabelForAccess(request.PersonAccess),
-		AccessibleConversationIDs: []string{"schedule:" + taskSchedule.TaskScheduleID},
+		AccessibleConversationIDs: []string{task.ScheduleOriginConversationID(taskSchedule.TaskScheduleID)},
 	})
 	if errorValue != nil {
 		return TaskScheduleRunResult{}, errorValue

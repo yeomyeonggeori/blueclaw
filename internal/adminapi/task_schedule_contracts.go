@@ -5,6 +5,7 @@ import "encoding/json"
 var scheduleToolCreateInputSchema = json.RawMessage(`{
 	"type": "object",
 	"properties": {
+		"taskRunID": {"type": "string", "minLength": 1, "pattern": "\\S"},
 		"taskInstruction": {"type": "string", "minLength": 1, "pattern": "\\S"},
 		"description": {"type": "string"},
 		"kind": {"type": "string", "enum": ["once", "interval", "cron"]},
