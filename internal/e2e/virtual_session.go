@@ -887,7 +887,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	adapter := &virtualAdapter{workspacePath: workspacePath}
 	runtime.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, highLanguageModel))
 	runtime.UseReplyGenerator(reply.NewGenerator(highLanguageModel, instructionBundleLoader))
-	scenarioDecisionPlanner := intake.NewDecisionPlanner(newScenarioDecisionModel(firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel), scenario.AddressingResponse), nil, nil)
+	scenarioDecisionPlanner := intake.NewDecisionPlanner(newScenarioDecisionModel(firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel), scriptedModel, scenario.AddressingResponse), nil, nil)
 	scenarioTurnRouter := intake.NewTurnRouter(firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel), scenarioDecisionPlanner, agentcontract.IntakeOptions{IsEnabled: true, DefaultTaskLevel: agentcontract.TaskLevelLow})
 	runtime.UseTurnRouter(scenarioTurnRouter)
 	runtime.UseIntakeDecider(scenarioDecisionPlanner)

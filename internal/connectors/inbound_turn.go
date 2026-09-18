@@ -214,6 +214,7 @@ func (connectorRuntime *ConnectorRuntime) launchTurn(ctx context.Context, turn *
 		turnResult.ReplySuppressionReason = "ambient_duty_no_reply"
 	}
 	taskRunID := turnResult.TaskRun.TaskRunID
+	connectorRuntime.recordHeldIntakeCalls(taskRunID, turn.event)
 	taskDuration := time.Since(taskStartedAt)
 	connectorRuntime.logger.Info("connector."+turn.platform+".agent.completed", slog.String("messageID", turn.event.MessageID), slog.String("taskRunID", taskRunID), slog.Int64("duration_ms", taskDuration.Milliseconds()))
 	connectorRuntime.appendTaskExecutionDuration(taskRunID, taskDuration)

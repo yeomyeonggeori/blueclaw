@@ -272,7 +272,7 @@ func (languageModel *ScriptedLanguageModel) GenerateStructuredResponse(_ context
 		if schemaName == "blueclaw_approval_question" {
 			return languageModel.structuredResponse(defaultApprovalQuestionResponse(request)), nil
 		}
-		return model.StructuredResponse{}, fmt.Errorf("scripted language model has no %s response", schemaName)
+		return model.StructuredResponse{}, noScriptedResponseError{schemaName: schemaName}
 	}
 	if schemaName == "bluecollar_skill_search_queries" && response == `{"queries":[]}` {
 		return languageModel.structuredResponse(defaultSkillSearchQueriesResponse(request)), nil
@@ -472,4 +472,20 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// ErrNoScriptedResponse says the script ran out rather than the model failing,
+// which a caller that scripts only the calls it expects needs to tell apart.
+var ErrNoScriptedResponse = errors.New("scripted language model has no response")
+
+type noScriptedResponseError struct {
+	schemaName string
+}
+
+func (errorValue noScriptedResponseError) Error() string {
+	return "scripted language model has no " + errorValue.schemaName + " response"
+}
+
+func (errorValue noScriptedResponseError) Is(target error) bool {
+	return target == ErrNoScriptedResponse
 }

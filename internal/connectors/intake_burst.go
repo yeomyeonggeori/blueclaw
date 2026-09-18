@@ -38,20 +38,21 @@ func (connectorRuntime *ConnectorRuntime) decideInboundBurst(ctx context.Context
 	}
 	decisionRequest, ledgerTaskRunID := connectorRuntime.inboundDecisionRequest(ctx, adapter, events[len(events)-1])
 	decisionRequest.Messages = burstDecisionMessages(events)
-	decisions, errorValue := connectorRuntime.decideBurst(ctx, decisionRequest, ledgerTaskRunID)
+	decisions, callRecords, errorValue := connectorRuntime.decideBurst(ctx, decisionRequest, ledgerTaskRunID)
 	for _, event := range events {
 		seedInboundDecision(event, decisions, errorValue)
+		holdIntakeCallRecords(event.intakeDecision, ledgerTaskRunID, callRecords)
 	}
 }
 
-func (connectorRuntime *ConnectorRuntime) decideBurst(ctx context.Context, decisionRequest agentcontract.IntakeDecisionRequest, ledgerTaskRunID string) (agentcontract.IntakeDecisions, error) {
+func (connectorRuntime *ConnectorRuntime) decideBurst(ctx context.Context, decisionRequest agentcontract.IntakeDecisionRequest, ledgerTaskRunID string) (agentcontract.IntakeDecisions, []agentcontract.LLMCallRecord, error) {
 	if connectorRuntime.intakeDecider == nil {
-		return agentcontract.IntakeDecisions{}, errors.New("connector runtime has no intake decider configured")
+		return agentcontract.IntakeDecisions{}, nil, errors.New("connector runtime has no intake decider configured")
 	}
 	callLedger := &agentcontract.IntakeCallLedger{}
 	decisions, errorValue := connectorRuntime.intakeDecider.Decide(ctx, decisionRequest, callLedger)
 	connectorRuntime.recordIntakeCalls(ledgerTaskRunID, callLedger.Records)
-	return decisions, errorValue
+	return decisions, callLedger.Records, errorValue
 }
 
 func burstDecisionMessages(events []PlatformInboundEvent) []agentcontract.IntakeDecisionMessage {

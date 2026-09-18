@@ -27,9 +27,11 @@ func (connectorRuntime *ConnectorRuntime) UseIntakeDecider(intakeDecider IntakeD
 // follow-up fast path and the turn router all read it, and whichever asks first
 // pays for it.
 type inboundDecision struct {
-	once       sync.Once
-	decision   agentcontract.IntakeMessageDecision
-	errorValue error
+	once        sync.Once
+	decision    agentcontract.IntakeMessageDecision
+	errorValue  error
+	callRecords []agentcontract.LLMCallRecord
+	recordOnce  sync.Once
 }
 
 func withInboundDecision(event PlatformInboundEvent) PlatformInboundEvent {
@@ -42,15 +44,15 @@ func withInboundDecision(event PlatformInboundEvent) PlatformInboundEvent {
 
 func (connectorRuntime *ConnectorRuntime) decideInboundMessage(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (agentcontract.IntakeMessageDecision, error) {
 	if event.intakeDecision == nil {
-		return connectorRuntime.decideInboundMessageNow(ctx, adapter, event)
+		return connectorRuntime.decideInboundMessageNow(ctx, adapter, event, nil)
 	}
 	event.intakeDecision.once.Do(func() {
-		event.intakeDecision.decision, event.intakeDecision.errorValue = connectorRuntime.decideInboundMessageNow(ctx, adapter, event)
+		event.intakeDecision.decision, event.intakeDecision.errorValue = connectorRuntime.decideInboundMessageNow(ctx, adapter, event, event.intakeDecision)
 	})
 	return event.intakeDecision.decision, event.intakeDecision.errorValue
 }
 
-func (connectorRuntime *ConnectorRuntime) decideInboundMessageNow(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (agentcontract.IntakeMessageDecision, error) {
+func (connectorRuntime *ConnectorRuntime) decideInboundMessageNow(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent, decisionMemo *inboundDecision) (agentcontract.IntakeMessageDecision, error) {
 	if connectorRuntime.intakeDecider == nil {
 		return agentcontract.IntakeMessageDecision{}, errors.New("connector runtime has no intake decider configured")
 	}
@@ -58,6 +60,7 @@ func (connectorRuntime *ConnectorRuntime) decideInboundMessageNow(ctx context.Co
 	callLedger := &agentcontract.IntakeCallLedger{}
 	decisions, errorValue := connectorRuntime.intakeDecider.Decide(ctx, decisionRequest, callLedger)
 	connectorRuntime.recordIntakeCalls(ledgerTaskRunID, callLedger.Records)
+	holdIntakeCallRecords(decisionMemo, ledgerTaskRunID, callLedger.Records)
 	if errorValue != nil {
 		return agentcontract.IntakeMessageDecision{}, errorValue
 	}
@@ -66,6 +69,25 @@ func (connectorRuntime *ConnectorRuntime) decideInboundMessageNow(ctx context.Co
 		return agentcontract.IntakeMessageDecision{}, errors.New("the intake decision answered about no message " + event.MessageID)
 	}
 	return decision, nil
+}
+
+// holdIntakeCallRecords keeps the decision's own call until a task run exists to
+// hold it. The decision is made before the message has a task run, so a fresh
+// request's deciding call would otherwise appear in no ledger at all.
+func holdIntakeCallRecords(decisionMemo *inboundDecision, ledgerTaskRunID string, callRecords []agentcontract.LLMCallRecord) {
+	if decisionMemo == nil || strings.TrimSpace(ledgerTaskRunID) != "" {
+		return
+	}
+	decisionMemo.callRecords = callRecords
+}
+
+func (connectorRuntime *ConnectorRuntime) recordHeldIntakeCalls(taskRunID string, event PlatformInboundEvent) {
+	if event.intakeDecision == nil {
+		return
+	}
+	event.intakeDecision.recordOnce.Do(func() {
+		connectorRuntime.recordIntakeCalls(taskRunID, event.intakeDecision.callRecords)
+	})
 }
 
 func (connectorRuntime *ConnectorRuntime) recordIntakeCalls(taskRunID string, callRecords []agentcontract.LLMCallRecord) {
