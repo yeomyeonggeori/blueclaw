@@ -70,6 +70,11 @@ export const personCapabilities: Record<string, PersonCapability> = {
 		if (members.length === 0) throw new MalformedRequest("memberExternalIDs must name someone to add");
 		return await gateway.addChannelMembers(request.actor, requireConversation(request), members);
 	},
+	"person.channel.member.remove": async (gateway, body) => {
+		const request = parsePersonRequest(body);
+		await gateway.removeChannelMember(request.actor, requireConversation(request), requireExternalID(request));
+		return {};
+	},
 	"person.channel.leave": async (gateway, body) => {
 		const request = parsePersonRequest(body);
 		await gateway.leaveChannel(request.actor, requireConversation(request));
@@ -78,6 +83,11 @@ export const personCapabilities: Record<string, PersonCapability> = {
 	"person.channel.owner.set": async (gateway, body) => {
 		const request = parsePersonRequest(body);
 		await gateway.handOverChannel(request.actor, requireConversation(request), requireExternalID(request));
+		return {};
+	},
+	"person.channel.owner.add": async (gateway, body) => {
+		const request = parsePersonRequest(body);
+		await gateway.addChannelOwner(request.actor, requireConversation(request), requireExternalID(request));
 		return {};
 	},
 	"person.channel.delete": async (gateway, body) => {
