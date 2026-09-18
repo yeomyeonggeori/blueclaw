@@ -11,8 +11,11 @@ import (
 
 const ambientDutyLaunchConfidenceThreshold = 0.7
 
-type AddressingClassifier interface {
-	ClassifyAddressing(context.Context, agentcontract.AddressingClassificationRequest) (agentcontract.AddressingDecision, error)
+// AddressingDecider answers who one inbound message is addressed to. The whole
+// intake decision is made once for the message before the gate reads it, so
+// this hands back an already-decided answer rather than asking a model here.
+type AddressingDecider interface {
+	DecideAddressing(context.Context, Request) (agentcontract.AddressingDecision, error)
 }
 
 type Decision struct {
@@ -36,22 +39,15 @@ type Request struct {
 }
 
 type Gate struct {
-	addressingClassifier  AddressingClassifier
-	agentIdentityProvider func() agentcontract.AgentIdentity
-	companyProvider       func() agentcontract.CompanyContext
-	logger                *slog.Logger
+	addressingDecider AddressingDecider
+	logger            *slog.Logger
 }
 
-func NewGate(addressingClassifier AddressingClassifier, agentIdentityProvider func() agentcontract.AgentIdentity, companyProvider func() agentcontract.CompanyContext, logger *slog.Logger) *Gate {
+func NewGate(addressingDecider AddressingDecider, logger *slog.Logger) *Gate {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Gate{
-		addressingClassifier:  addressingClassifier,
-		agentIdentityProvider: agentIdentityProvider,
-		companyProvider:       companyProvider,
-		logger:                logger,
-	}
+	return &Gate{addressingDecider: addressingDecider, logger: logger}
 }
 
 func (gate *Gate) Resolve(ctx context.Context, platform string, request Request) Decision {
@@ -61,23 +57,13 @@ func (gate *Gate) Resolve(ctx context.Context, platform string, request Request)
 	if request.AttachmentsOnly && !request.BotMentioned {
 		return Decision{IgnoreReason: "attachments_only_uninvited"}
 	}
-	addressingDecision, errorValue := gate.addressingClassifier.ClassifyAddressing(ctx, agentcontract.AddressingClassificationRequest{
-		Prompt:           request.Prompt,
-		AgentIdentity:    gate.agentIdentity(),
-		Company:          gate.company(),
-		BotMentioned:     request.BotMentioned,
-		MessageSentAt:    request.MessageSentAt,
-		ConversationType: request.ConversationType,
-		SenderName:       request.SenderName,
-		SenderHandle:     request.SenderHandle,
-		VisibleContext:   request.VisibleContext,
-	})
+	addressingDecision, errorValue := gate.addressingDecider.DecideAddressing(ctx, request)
 	if errorValue != nil {
-		gate.logger.Warn("connector."+platform+".addressing.classifier_failed", slog.String("messageID", request.MessageID), slog.String("error", errorValue.Error()))
+		gate.logger.Warn("connector."+platform+".addressing.decision_failed", slog.String("messageID", request.MessageID), slog.String("error", errorValue.Error()))
 		if request.BotMentioned {
 			return Decision{ShouldLaunch: true}
 		}
-		return Decision{IgnoreReason: "addressing_classifier_failed dutyMatch=false"}
+		return Decision{IgnoreReason: "addressing_decision_failed dutyMatch=false"}
 	}
 	ambientDuty := ambientDutyContextFromAddressingDecision(addressingDecision)
 	shouldLaunch := addressingDecision.ShouldRespond || ambientDuty.IsMatch
@@ -90,20 +76,6 @@ func (gate *Gate) Resolve(ctx context.Context, platform string, request Request)
 		ReactionEmoji: addressingDecision.ReactionEmoji,
 		AmbientDuty:   ambientDuty,
 	}
-}
-
-func (gate *Gate) agentIdentity() agentcontract.AgentIdentity {
-	if gate.agentIdentityProvider == nil {
-		return agentcontract.AgentIdentity{}
-	}
-	return gate.agentIdentityProvider()
-}
-
-func (gate *Gate) company() agentcontract.CompanyContext {
-	if gate.companyProvider == nil {
-		return agentcontract.CompanyContext{}
-	}
-	return gate.companyProvider()
 }
 
 func ShouldIgnoreUninvitedAddressing(conversationType string, botMentioned bool) bool {

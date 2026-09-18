@@ -167,19 +167,10 @@ func (connectorRuntime *ConnectorRuntime) looksLikeActiveTaskFollowUp(ctx contex
 	if !isFound {
 		return false
 	}
-	activeTaskRun, isFound := connectorRuntime.latestCurrentConversationActiveTask(personID, event)
-	if !isFound {
+	if _, isFound := connectorRuntime.latestCurrentConversationActiveTask(personID, event); !isFound {
 		return false
 	}
-	isRelated, errorValue := connectorRuntime.intakeClassifier.ClassifyActiveTaskFollowUp(ctx, agentcontract.ActiveTaskFollowUpClassificationRequest{
-		ActiveTaskPrompt: activeTaskRun.Prompt,
-		ActiveTaskStatus: string(activeTaskRun.Status),
-		LatestMessage:    event.Prompt,
-	})
-	if errorValue != nil {
-		return false
-	}
-	return isRelated
+	return connectorRuntime.relatesToActiveTask(ctx, adapter, event)
 }
 
 func exactTaskControlIntent(prompt string) agentcontract.TaskControlIntent {

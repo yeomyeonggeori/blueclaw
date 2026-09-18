@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
@@ -21,14 +22,15 @@ type ScriptedLanguageModelOptions struct {
 }
 
 type ScriptedLanguageModel struct {
-	mutex                       sync.Mutex
-	actionResponses             []string
-	chatResponsesBySchema       map[string][]string
-	structuredResponsesBySchema map[string][]string
-	defaultResponsesBySchema    map[string]string
-	requests                    []model.StructuredResponseRequest
-	providerName                string
-	modelName                   string
+	mutex                          sync.Mutex
+	actionResponses                []string
+	chatResponsesBySchema          map[string][]string
+	structuredResponsesBySchema    map[string][]string
+	lastStructuredResponseBySchema map[string]string
+	defaultResponsesBySchema       map[string]string
+	requests                       []model.StructuredResponseRequest
+	providerName                   string
+	modelName                      string
 }
 
 type scriptedChatCompleter struct {
@@ -248,7 +250,7 @@ func (languageModel *ScriptedLanguageModel) GenerateStructuredResponse(_ context
 	defer languageModel.mutex.Unlock()
 	languageModel.requests = append(languageModel.requests, request)
 	schemaName := strings.TrimSpace(request.StructuredOutputSchema.Name)
-	if response, isFound := languageModel.popStructuredResponse(schemaName); isFound {
+	if response, isFound := languageModel.popStructuredResponse(request); isFound {
 		return languageModel.structuredResponse(response), nil
 	}
 	if schemaName == "bluecollar_agent_turn_action" {
@@ -325,13 +327,28 @@ func defaultSkillSearchQueriesResponse(request model.StructuredResponseRequest) 
 	return string(document)
 }
 
-func (languageModel *ScriptedLanguageModel) popStructuredResponse(schemaName string) (string, bool) {
+// popStructuredResponse dispenses one scripted turn per message for the router
+// schema, because one scripted turn is now read twice: the intake decision asks
+// with no messages and takes the next turn off the script, and the words call
+// that follows carries the turn's prompt and reads that same turn again.
+func (languageModel *ScriptedLanguageModel) popStructuredResponse(request model.StructuredResponseRequest) (string, bool) {
+	schemaName := strings.TrimSpace(request.StructuredOutputSchema.Name)
+	if schemaName == agentcontract.TurnRouterSchemaName && len(request.Messages) > 0 {
+		lastResponse, isReplayable := languageModel.lastStructuredResponseBySchema[schemaName]
+		if isReplayable {
+			return lastResponse, true
+		}
+	}
 	responses := languageModel.structuredResponsesBySchema[schemaName]
 	if len(responses) == 0 {
 		return "", false
 	}
 	response := responses[0]
 	languageModel.structuredResponsesBySchema[schemaName] = responses[1:]
+	if languageModel.lastStructuredResponseBySchema == nil {
+		languageModel.lastStructuredResponseBySchema = map[string]string{}
+	}
+	languageModel.lastStructuredResponseBySchema[schemaName] = response
 	return response, true
 }
 

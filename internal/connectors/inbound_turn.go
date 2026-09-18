@@ -39,8 +39,9 @@ type inboundTurn struct {
 	activeGoal    agentcontract.ActiveGoal
 	hasActiveGoal bool
 
-	addressingLaunch inboundengagement.Decision
-	priorTask        agentcontract.PriorTaskContext
+	addressingLaunch  inboundengagement.Decision
+	decidedTurnFields *agentcontract.TurnDecision
+	priorTask         agentcontract.PriorTaskContext
 
 	stopProgress      func()
 	isProgressStarted bool
@@ -158,7 +159,8 @@ func (connectorRuntime *ConnectorRuntime) resolveTurnActiveGoal(ctx context.Cont
 
 func (connectorRuntime *ConnectorRuntime) resolveTurnAddressing(ctx context.Context, turn *inboundTurn) (ConnectorRuntimeResult, bool) {
 	turn.event = connectorRuntime.withInitialVisibleContext(ctx, turn.adapter, turn.event)
-	turn.addressingLaunch = connectorRuntime.resolveInboundEngagement(ctx, turn.platform, turn.event)
+	turn.addressingLaunch = connectorRuntime.resolveInboundEngagement(ctx, turn.adapter, turn.platform, turn.event)
+	turn.decidedTurnFields = connectorRuntime.decidedTurnFields(ctx, turn.adapter, turn.event)
 	if turn.addressingLaunch.ReactionEmoji != "" {
 		if turn.engagedAckEmojiName != "" && turn.engagedAckEmojiName != turn.addressingLaunch.ReactionEmoji {
 			connectorRuntime.clearEngagedAckReaction(ctx, turn.platform, turn.adapter, turn.event, turn.engagedAckEmojiName)
@@ -232,6 +234,7 @@ func (connectorRuntime *ConnectorRuntime) conversationTurnFor(turn *inboundTurn,
 		HasActiveGoal:             turn.hasActiveGoal,
 		PriorTask:                 turn.priorTask,
 		PrecomputedTurnDecision:   precomputedTurnDecision,
+		DecidedTurnFields:         turn.decidedTurnFields,
 		AmbientDuty:               turn.addressingLaunch.AmbientDuty,
 		CheckpointSender:          connectorRuntime.checkpointSenderForTurn(turn.platform, turn.event, turn.replyTarget, turn.sendReply),
 		AccessibleConversationIDs: []string{turn.event.ConversationID},

@@ -12,6 +12,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake"
+	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
 	"github.com/yeomyeonggeori/bluecollar/loop"
 )
 
@@ -29,7 +30,7 @@ func TestCronScheduleRunsDailyResearchPromptAndAdvancesToNextDay(t *testing.T) {
 	nextRunAt := runAt
 
 	taskLauncher := agentruntime.NewTaskLauncher(agentKernel, taskRunService, toolCatalogBuilder)
-	taskLauncher.UseTurnRouter(intake.NewTurnRouter(languageModel, agentcontract.IntakeOptions{IsEnabled: true}))
+	taskLauncher.UseTurnRouter(intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(intaketest.LanguageModelDecisionModel{LanguageModel: languageModel}, nil, nil), agentcontract.IntakeOptions{IsEnabled: true}))
 	taskLauncher.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, languageModel))
 	result, errorValue := agentruntime.NewTaskScheduleRunner(taskLauncher).RunIfDue(context.Background(), agentruntime.TaskScheduleRunRequest{
 		TaskSchedule: task.TaskSchedule{

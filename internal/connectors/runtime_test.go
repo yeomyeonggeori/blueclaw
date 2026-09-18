@@ -28,6 +28,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract/harnesstest"
 	"github.com/yeomyeonggeori/bluecollar/intake"
+	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
 	"github.com/yeomyeonggeori/bluecollar/loop"
 )
 
@@ -390,6 +391,7 @@ func TestConnectorRuntimePreservesNaturalLanguageOptionReply(t *testing.T) {
 		ActionResponses: []string{connectorFinishMessage("발표자료로 진행했습니다.")},
 	})
 	connectorRuntime, adapter, taskRunService, taskWaitRepository := newWaitRoutingTestConnectorRuntime(t, languageModel)
+	intakeDecisions := recordIntakeDecisions(connectorRuntime)
 	waitingTaskRun := createWaitingInputTaskRunWithOptions(t, taskRunService, "어떤 형식으로 만들까요?", "input-options")
 	if errorValue := taskWaitRepository.InsertTaskWaitToken(waitRoutingTaskWaitToken(waitingTaskRun, "input-dispatch", "input-options")); errorValue != nil {
 		t.Fatal(errorValue)
@@ -405,12 +407,11 @@ func TestConnectorRuntimePreservesNaturalLanguageOptionReply(t *testing.T) {
 	if result.TaskRunID != waitingTaskRun.TaskRunID {
 		t.Fatalf("expected waiting task continuation, got %+v", result)
 	}
-	requests := languageModel.Requests()
-	routerIndex := connectorSchemaIndexAfter(requests, "bluecollar_turn_router", -1)
-	if routerIndex < 0 || !structuredMessagesContain(requests[routerIndex].Messages, replyText) {
-		t.Fatalf("expected exact natural-language option reply in router request, got %+v", requests)
+	if _, isDecided := intakeDecisions.decidedPrompt(replyText); !isDecided {
+		t.Fatalf("expected exact natural-language option reply in the intake decision, got %+v", intakeDecisions.requests)
 	}
-	actionIndex := connectorSchemaIndexAfter(requests, "bluecollar_agent_turn_action", routerIndex)
+	requests := languageModel.Requests()
+	actionIndex := connectorSchemaIndexAfter(requests, "bluecollar_agent_turn_action", -1)
 	if actionIndex < 0 || !structuredMessagesContain(requests[actionIndex].Messages, replyText) {
 		t.Fatalf("expected exact natural-language reply in resumed agent request, got %+v", requests)
 	}
@@ -1193,7 +1194,7 @@ func TestConnectorRuntimeRequesterEmailFallsBackToVisibleSenderEmail(t *testing.
 	taskRunService := task.NewTaskRunService(taskEventService)
 	connectorRuntimeHarness := harnesstest.New(taskRunService)
 	connectorRuntime := NewConnectorRuntime(identityService, connectorRuntimeHarness, taskRunService, taskEventService, nil)
-	connectorRuntime.UseIntakeClassifier(connectorRuntimeHarness)
+	connectorRuntime.UseIntakeDecider(connectorRuntimeHarness)
 	connectorRuntime.UseReplyGenerator(connectorRuntimeHarness)
 	event := testInboundEvent("message-1")
 	event.Context.Sender.Email = "Sender@Example.com"
@@ -1216,7 +1217,7 @@ func TestConnectorRuntimeRequesterEmailPrefersPolicyPrimaryEmail(t *testing.T) {
 	taskRunService := task.NewTaskRunService(taskEventService)
 	connectorRuntimeHarness := harnesstest.New(taskRunService)
 	connectorRuntime := NewConnectorRuntime(identityService, connectorRuntimeHarness, taskRunService, taskEventService, nil)
-	connectorRuntime.UseIntakeClassifier(connectorRuntimeHarness)
+	connectorRuntime.UseIntakeDecider(connectorRuntimeHarness)
 	connectorRuntime.UseReplyGenerator(connectorRuntimeHarness)
 	event := testInboundEvent("message-1")
 	event.Context.Sender.Email = "sender@example.com"
@@ -1228,7 +1229,7 @@ func TestConnectorRuntimeRequesterEmailPrefersPolicyPrimaryEmail(t *testing.T) {
 	}
 }
 
-func TestConnectorRuntimeSkipsAddressingClassifierForDirectMessage(t *testing.T) {
+func TestConnectorRuntimeDecidesOneDirectMessageOnce(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
 	harness.TurnDecision = startTaskTurnDecision()
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "ok"}
@@ -1243,8 +1244,8 @@ func TestConnectorRuntimeSkipsAddressingClassifierForDirectMessage(t *testing.T)
 	if result.TaskRunID == "" || len(adapter.sentReplies) != 1 {
 		t.Fatalf("expected direct message task and reply, got result=%+v replies=%d", result, len(adapter.sentReplies))
 	}
-	if harness.ClassifyAddressingCallCount() != 0 {
-		t.Fatalf("expected direct message to skip addressing classifier, got %d classifications", harness.ClassifyAddressingCallCount())
+	if harness.DecideCallCount() != 1 {
+		t.Fatalf("expected one decision call for one message, got %d", harness.DecideCallCount())
 	}
 }
 
@@ -1437,9 +1438,8 @@ func TestLatestAskInteractionReturnsNewAskAfterEarlierResolution(t *testing.T) {
 	}
 }
 
-func TestConnectorRuntimeProcessesBotMentionThroughAddressingClassifier(t *testing.T) {
-	languageModel := &addressingTestLanguageModel{addressingTarget: string(agentcontract.AddressingTargetBot), reply: "ok"}
-	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
+func TestConnectorRuntimeProcessesABotMentionTheIntakeDecisionAddressesToIt(t *testing.T) {
+	connectorRuntime, adapter := newAddressedTestConnectorRuntime(t, agentcontract.AddressingTargetBot)
 	event := testChannelInboundEvent("message-1")
 	event.Context.Addressing.BotMentioned = true
 
@@ -1451,14 +1451,10 @@ func TestConnectorRuntimeProcessesBotMentionThroughAddressingClassifier(t *testi
 	if result.TaskRunID == "" || len(adapter.sentReplies) != 1 {
 		t.Fatalf("expected bot mention task and reply, got result=%+v replies=%d", result, len(adapter.sentReplies))
 	}
-	if !connectorContainsSchemaName(languageModel.requests, "bluecollar_addressing_classification") {
-		t.Fatalf("expected bot mention to run the addressing classifier, got schemas %+v", connectorRequestSchemaNames(languageModel.requests))
-	}
 }
 
 func TestConnectorRuntimeIgnoresOtherPersonMentionWithoutDuty(t *testing.T) {
-	languageModel := &addressingTestLanguageModel{addressingTarget: string(agentcontract.AddressingTargetHuman), reply: "unused"}
-	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
+	connectorRuntime, adapter := newAddressedTestConnectorRuntime(t, agentcontract.AddressingTargetHuman)
 	event := testChannelInboundEvent("message-1")
 	event.Context.Addressing.OtherPersonMentioned = true
 
@@ -1476,14 +1472,10 @@ func TestConnectorRuntimeIgnoresOtherPersonMentionWithoutDuty(t *testing.T) {
 	if len(adapter.reactions) != 0 {
 		t.Fatalf("expected addressing ignored message not to receive reaction, got %+v", adapter.reactions)
 	}
-	if !connectorContainsSchemaName(languageModel.requests, "bluecollar_addressing_classification") {
-		t.Fatalf("expected other-person mention to be classified for standing-duty capture, got schemas %+v", connectorRequestSchemaNames(languageModel.requests))
-	}
 }
 
 func TestConnectorRuntimeProcessesAssistantRequestedAmbiguousChannelMessage(t *testing.T) {
-	languageModel := &addressingTestLanguageModel{addressingTarget: string(agentcontract.AddressingTargetBot), reply: "ok"}
-	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
+	connectorRuntime, adapter := newAddressedTestConnectorRuntime(t, agentcontract.AddressingTargetBot)
 
 	result, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, testChannelInboundEvent("message-1"))
 	if errorValue != nil {
@@ -1493,30 +1485,24 @@ func TestConnectorRuntimeProcessesAssistantRequestedAmbiguousChannelMessage(t *t
 	if result.TaskRunID == "" || len(adapter.sentReplies) != 1 {
 		t.Fatalf("expected assistant-requested task and reply, got result=%+v replies=%d", result, len(adapter.sentReplies))
 	}
-	if !connectorContainsSchemaName(languageModel.requests, "bluecollar_addressing_classification") {
-		t.Fatalf("expected addressing classifier request, got schemas %+v", connectorRequestSchemaNames(languageModel.requests))
-	}
 }
 
-func TestConnectorRuntimeUsesIntakeLanguageModelForAddressingClassifier(t *testing.T) {
-	replyLanguageModel := &addressingTestLanguageModel{addressingTarget: string(agentcontract.AddressingTargetHuman), reply: "ok"}
-	intakeLanguageModel := &addressingTestLanguageModel{addressingTarget: string(agentcontract.AddressingTargetBot), reply: "unused"}
+func TestConnectorRuntimeDecidesIntakeWithItsOwnDecider(t *testing.T) {
+	replyLanguageModel := &addressingTestLanguageModel{reply: "ok"}
 	connectorRuntime, adapter := newTestConnectorRuntime(t, replyLanguageModel)
-	connectorRuntime.UseIntakeClassifier(intake.NewClassifier(intakeLanguageModel))
+	decider := &scriptedIntakeDecider{addressing: addressedToBot(), turnFields: startTaskTurnDecision()}
+	connectorRuntime.UseIntakeDecider(decider)
 
 	result, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, testChannelInboundEvent("message-1"))
 	if errorValue != nil {
-		t.Fatalf("expected intake classifier to process: %v", errorValue)
+		t.Fatalf("expected the decided message to process: %v", errorValue)
 	}
 
 	if result.TaskRunID == "" || len(adapter.sentReplies) != 1 {
-		t.Fatalf("expected intake classifier result to launch task, got result=%+v replies=%d", result, len(adapter.sentReplies))
+		t.Fatalf("expected the decision to launch a task, got result=%+v replies=%d", result, len(adapter.sentReplies))
 	}
-	if !connectorContainsSchemaName(intakeLanguageModel.requests, "bluecollar_addressing_classification") {
-		t.Fatalf("expected intake language model to classify addressing, got schemas %+v", connectorRequestSchemaNames(intakeLanguageModel.requests))
-	}
-	if connectorContainsSchemaName(replyLanguageModel.requests, "bluecollar_addressing_classification") {
-		t.Fatalf("expected reply language model not to classify addressing, got schemas %+v", connectorRequestSchemaNames(replyLanguageModel.requests))
+	if decider.callCount != 1 {
+		t.Fatalf("expected one decision call for the message, got %d", decider.callCount)
 	}
 }
 
@@ -1570,17 +1556,17 @@ func TestConnectorRuntimeIgnoresUninvitedAmbiguousChannelMessageWithoutReply(t *
 	}
 }
 
-func TestConnectorRuntimeIgnoresWhenAddressingClassifierFails(t *testing.T) {
-	languageModel := &addressingTestLanguageModel{addressingError: errors.New("classifier unavailable"), reply: "unused"}
-	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
+func TestConnectorRuntimeIgnoresWhenTheIntakeDecisionFails(t *testing.T) {
+	connectorRuntime, adapter := newTestConnectorRuntime(t, &addressingTestLanguageModel{reply: "unused"})
+	connectorRuntime.UseIntakeDecider(&scriptedIntakeDecider{errorValue: errors.New("decision model unavailable")})
 
 	result, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, testChannelInboundEvent("message-1"))
 	if errorValue != nil {
-		t.Fatalf("expected classifier failure to close the gate: %v", errorValue)
+		t.Fatalf("expected a decision failure to close the gate: %v", errorValue)
 	}
 
-	if !result.Ignored || result.Reason != "addressing_classifier_failed dutyMatch=false" {
-		t.Fatalf("expected addressing_classifier_failed ignore, got %+v", result)
+	if !result.Ignored || result.Reason != "addressing_decision_failed dutyMatch=false" {
+		t.Fatalf("expected addressing_decision_failed ignore, got %+v", result)
 	}
 	if result.TaskRunID != "" || len(adapter.sentReplies) != 0 || len(adapter.progressStarts) != 0 {
 		t.Fatalf("expected no task/reply/progress, got result=%+v replies=%d progress=%d", result, len(adapter.sentReplies), len(adapter.progressStarts))
@@ -1927,7 +1913,7 @@ func TestConnectorRuntimeSendsNoticeWhenLaunchReturnsNoTask(t *testing.T) {
 	if result.Reason != "task_not_completed" || result.TaskRunID == "" {
 		t.Fatalf("expected launch failure result, got %+v", result)
 	}
-	if len(adapter.sentReplies) != 1 || !strings.Contains(adapter.sentReplies[0].message, "turn router language model unavailable") {
+	if len(adapter.sentReplies) != 1 || !strings.Contains(adapter.sentReplies[0].message, "decision language model unavailable") {
 		t.Fatalf("expected launch failure notice, got %+v", adapter.sentReplies)
 	}
 }
@@ -2636,6 +2622,7 @@ func TestConnectorRuntimeClassifiesNaturalLanguageConfirmationRejection(t *testi
 		},
 	})
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
+	intakeDecisions := recordIntakeDecisions(connectorRuntime)
 	connectorRuntimeAgentKernel(connectorRuntime).UseIntakeLanguageModelProvider(languageModel)
 	connectorRuntimeAgentKernel(connectorRuntime).UseIntakeOptions(agentcontract.IntakeOptions{IsEnabled: true})
 	useTestConnectorSkill(connectorRuntime, connectorCalendarSkill())
@@ -2670,12 +2657,12 @@ func TestConnectorRuntimeClassifiesNaturalLanguageConfirmationRejection(t *testi
 	if secondResult.TaskRunID != firstResult.TaskRunID || secondResult.Reason != "confirmation_rejected" {
 		t.Fatalf("expected pending confirmation rejection, got %+v", secondResult)
 	}
-	requests := languageModel.Requests()
-	routerIndex := connectorSchemaIndexAfter(requests, "bluecollar_turn_router", 1)
-	if routerIndex < 0 || !structuredMessagesContain(requests[routerIndex].Messages, "아니, 이번에는 하지 마") {
-		t.Fatalf("expected exact rejection text in router request, got %+v", requests)
+	if _, isDecided := intakeDecisions.decidedPrompt("아니, 이번에는 하지 마"); !isDecided {
+		t.Fatalf("expected exact rejection text in the intake decision, got %+v", intakeDecisions.requests)
 	}
-	if connectorSchemaIndexAfter(requests, "bluecollar_agent_turn_action", routerIndex) >= 0 {
+	requests := languageModel.Requests()
+	approvalQuestionIndex := connectorSchemaIndexAfter(requests, "blueclaw_approval_question", -1)
+	if connectorSchemaIndexAfter(requests, "bluecollar_agent_turn_action", approvalQuestionIndex) >= 0 {
 		t.Fatalf("expected rejection not to execute an agent action, got %+v", connectorRequestSchemaNames(requests))
 	}
 }
@@ -4062,7 +4049,7 @@ func newTestConnectorRuntimeRoutingWith(t *testing.T, languageModel llm.Language
 	t.Helper()
 
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
-	return connectorRuntimeForHarness(t, testConnectorAgentKernel(taskRunService, languageModel), intake.NewClassifier(languageModel), reply.NewGenerator(languageModel, nil), intake.NewTurnRouter(routerLanguageModel, agentcontract.IntakeOptions{IsEnabled: true}), taskRunService, languageModel)
+	return connectorRuntimeForHarness(t, testConnectorAgentKernel(taskRunService, languageModel), intake.NewDecisionPlanner(intaketest.LanguageModelDecisionModel{LanguageModel: languageModel, Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true}}, nil, nil), reply.NewGenerator(languageModel, nil), intake.NewTurnRouter(routerLanguageModel, intake.NewDecisionPlanner(intaketest.LanguageModelDecisionModel{LanguageModel: routerLanguageModel, Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true}}, nil, nil), agentcontract.IntakeOptions{IsEnabled: true}), taskRunService, languageModel)
 }
 
 func newStubbedTestConnectorRuntime(t *testing.T) (*ConnectorRuntime, *testAdapter, *harnesstest.Harness) {
@@ -4074,11 +4061,11 @@ func newStubbedTestConnectorRuntime(t *testing.T) (*ConnectorRuntime, *testAdapt
 	return connectorRuntime, adapter, harness
 }
 
-func connectorRuntimeForHarness(t *testing.T, harness agentcontract.Harness, intakeClassifier IntakeClassifier, replyGenerator ReplyGenerator, turnRouter TurnRouter, taskRunService *task.TaskRunService, languageModel llm.LanguageModelProvider) (*ConnectorRuntime, *testAdapter) {
+func connectorRuntimeForHarness(t *testing.T, harness agentcontract.Harness, intakeDecider IntakeDecider, replyGenerator ReplyGenerator, turnRouter TurnRouter, taskRunService *task.TaskRunService, languageModel llm.LanguageModelProvider) (*ConnectorRuntime, *testAdapter) {
 	t.Helper()
 
 	connectorRuntime := NewConnectorRuntime(testConnectorIdentityService(), harness, taskRunService, task.NewTaskEventService(), nil)
-	connectorRuntime.UseIntakeClassifier(intakeClassifier)
+	connectorRuntime.UseIntakeDecider(intakeDecider)
 	connectorRuntime.UseReplyGenerator(replyGenerator)
 	connectorRuntime.UseTaskRunService(taskRunService)
 	connectorRuntime.UseTurnRouter(turnRouter)
@@ -4088,6 +4075,72 @@ func connectorRuntimeForHarness(t *testing.T, harness agentcontract.Harness, int
 	connectorRuntime.UseApprovalGate(testApprovalGate)
 	adapter := &testAdapter{senderEmail: "invited@example.com"}
 	connectorRuntime.RegisterAdapter(adapter)
+	return connectorRuntime, adapter
+}
+
+type scriptedIntakeDecider struct {
+	addressing agentcontract.AddressingDecision
+	turnFields agentcontract.TurnDecision
+	errorValue error
+	callCount  int
+}
+
+func (decider *scriptedIntakeDecider) Decide(_ context.Context, request agentcontract.IntakeDecisionRequest, _ *agentcontract.IntakeCallLedger) (agentcontract.IntakeDecisions, error) {
+	decider.callCount++
+	if decider.errorValue != nil {
+		return agentcontract.IntakeDecisions{}, decider.errorValue
+	}
+	decisions := agentcontract.IntakeDecisions{}
+	for _, message := range request.Messages {
+		decisions.Messages = append(decisions.Messages, agentcontract.IntakeMessageDecision{
+			MessageID:  message.MessageID,
+			Addressing: decider.addressing,
+			TurnFields: decider.turnFields,
+		})
+	}
+	return decisions, nil
+}
+
+// recordingIntakeDecider keeps every state the intake decision was asked about,
+// which is where a message's own words and the conversation around it now live.
+type recordingIntakeDecider struct {
+	decider  IntakeDecider
+	requests []agentcontract.IntakeDecisionRequest
+}
+
+func (recorder *recordingIntakeDecider) Decide(ctx context.Context, request agentcontract.IntakeDecisionRequest, callLedger *agentcontract.IntakeCallLedger) (agentcontract.IntakeDecisions, error) {
+	recorder.requests = append(recorder.requests, request)
+	return recorder.decider.Decide(ctx, request, callLedger)
+}
+
+func recordIntakeDecisions(connectorRuntime *ConnectorRuntime) *recordingIntakeDecider {
+	recorder := &recordingIntakeDecider{decider: connectorRuntime.intakeDecider}
+	connectorRuntime.UseIntakeDecider(recorder)
+	return recorder
+}
+
+func (recorder *recordingIntakeDecider) decidedPrompt(prompt string) (agentcontract.IntakeDecisionRequest, bool) {
+	for _, request := range recorder.requests {
+		for _, message := range request.Messages {
+			if message.Prompt == prompt {
+				return request, true
+			}
+		}
+	}
+	return agentcontract.IntakeDecisionRequest{}, false
+}
+
+func addressedToBot() agentcontract.AddressingDecision {
+	return agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true}
+}
+
+func newAddressedTestConnectorRuntime(t *testing.T, addressingTarget agentcontract.AddressingTarget) (*ConnectorRuntime, *testAdapter) {
+	t.Helper()
+	connectorRuntime, adapter := newTestConnectorRuntime(t, &addressingTestLanguageModel{reply: "ok"})
+	connectorRuntime.UseIntakeDecider(&scriptedIntakeDecider{
+		addressing: agentcontract.AddressingDecision{Target: addressingTarget, ShouldRespond: addressingTarget == agentcontract.AddressingTargetBot},
+		turnFields: startTaskTurnDecision(),
+	})
 	return connectorRuntime, adapter
 }
 
@@ -4137,7 +4190,7 @@ func newWaitRoutingTestConnectorRuntime(t *testing.T, languageModel llm.Language
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	taskWaitRepository := task.NewInMemoryTaskWaitTokenRepository()
 
-	connectorRuntime, adapter := connectorRuntimeForHarness(t, testConnectorAgentKernel(taskRunService, languageModel), intake.NewClassifier(languageModel), reply.NewGenerator(languageModel, nil), intake.NewTurnRouter(languageModel, agentcontract.IntakeOptions{IsEnabled: true}), taskRunService, languageModel)
+	connectorRuntime, adapter := connectorRuntimeForHarness(t, testConnectorAgentKernel(taskRunService, languageModel), intake.NewDecisionPlanner(intaketest.LanguageModelDecisionModel{LanguageModel: languageModel, Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true}}, nil, nil), reply.NewGenerator(languageModel, nil), intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(intaketest.LanguageModelDecisionModel{LanguageModel: languageModel, Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true}}, nil, nil), agentcontract.IntakeOptions{IsEnabled: true}), taskRunService, languageModel)
 	connectorRuntime.UseTaskWaitTokenRepository(taskWaitRepository)
 	return connectorRuntime, adapter, taskRunService, taskWaitRepository
 }
@@ -4504,6 +4557,7 @@ func TestANewRequestWhileAConfirmationIsPendingLeavesItPendingAndIsRoutedWithThe
 		},
 	})
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
+	intakeDecisions := recordIntakeDecisions(connectorRuntime)
 	connectorRuntimeAgentKernel(connectorRuntime).UseIntakeLanguageModelProvider(languageModel)
 	connectorRuntimeAgentKernel(connectorRuntime).UseIntakeOptions(agentcontract.IntakeOptions{IsEnabled: true})
 	useTestConnectorSkill(connectorRuntime, connectorCalendarSkill())
@@ -4543,10 +4597,12 @@ func TestANewRequestWhileAConfirmationIsPendingLeavesItPendingAndIsRoutedWithThe
 	if firstTaskRun.Status != task.TaskStatusWaitingApproval {
 		t.Fatalf("an unrelated message leaves the confirmation waiting, got %s", firstTaskRun.Status)
 	}
-	requests := languageModel.Requests()
-	routerIndex := connectorSchemaIndexAfter(requests, "bluecollar_turn_router", 1)
-	if routerIndex < 0 || !structuredMessagesContain(requests[routerIndex].Messages, "Available tools") || !structuredMessagesContain(requests[routerIndex].Messages, "event_delete") {
-		t.Fatalf("the router judging a reply to a confirmation sees the same tools a fresh turn does, got %+v", requests[routerIndex].Messages)
+	secondDecision, isDecided := intakeDecisions.decidedPrompt(secondEvent.Prompt)
+	if !isDecided {
+		t.Fatalf("expected the new request to be decided, got %+v", intakeDecisions.requests)
+	}
+	if secondDecision.ToolSet == nil || !secondDecision.ToolSet.IsAllowed("event_delete") {
+		t.Fatalf("the decision judging a reply to a confirmation sees the same tools a fresh turn does, got %+v", secondDecision.ToolSet)
 	}
 
 	thirdEvent := testInboundEvent("message-3")
@@ -4622,7 +4678,7 @@ func TestAQuestionAboutThePendingConfirmationLeavesItPending(t *testing.T) {
 	}
 }
 
-func TestTheRouterIsAskedOnceAndSeesHowManyExchangesFollowedTheConfirmation(t *testing.T) {
+func TestOneDecisionPerMessageSeesHowManyExchangesFollowedTheConfirmation(t *testing.T) {
 	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
 		StructuredResponsesBySchema: map[string][]string{
 			"bluecollar_turn_router": {
@@ -4643,6 +4699,7 @@ func TestTheRouterIsAskedOnceAndSeesHowManyExchangesFollowedTheConfirmation(t *t
 		},
 	})
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
+	intakeDecisions := recordIntakeDecisions(connectorRuntime)
 	connectorRuntimeAgentKernel(connectorRuntime).UseIntakeLanguageModelProvider(languageModel)
 	connectorRuntimeAgentKernel(connectorRuntime).UseIntakeOptions(agentcontract.IntakeOptions{IsEnabled: true})
 	useTestConnectorSkill(connectorRuntime, connectorCalendarSkill())
@@ -4665,20 +4722,13 @@ func TestTheRouterIsAskedOnceAndSeesHowManyExchangesFollowedTheConfirmation(t *t
 		}
 	}
 
-	requests := languageModel.Requests()
-	routerRequests := []llm.StructuredResponseRequest{}
-	for _, request := range requests {
-		if request.StructuredOutputSchema.Name == "bluecollar_turn_router" {
-			routerRequests = append(routerRequests, request)
-		}
+	if len(intakeDecisions.requests) != 3 {
+		t.Fatalf("one decision call per message, got %d", len(intakeDecisions.requests))
 	}
-	if len(routerRequests) != 3 {
-		t.Fatalf("one router call per message, got %d: %+v", len(routerRequests), connectorRequestSchemaNames(requests))
+	if intakeDecisions.requests[1].PendingConfirmation.ExchangesSince != 0 {
+		t.Fatalf("the first message after the question sees a fresh question, got %+v", intakeDecisions.requests[1].PendingConfirmation)
 	}
-	if !structuredMessagesContain(routerRequests[1].Messages, "nothing has been exchanged since") {
-		t.Fatalf("the first message after the question sees a fresh question, got %+v", routerRequests[1].Messages)
-	}
-	if !structuredMessagesContain(routerRequests[2].Messages, "1 exchange(s) have happened since") {
-		t.Fatalf("the router sees that an exchange followed the question, got %+v", routerRequests[2].Messages)
+	if intakeDecisions.requests[2].PendingConfirmation.ExchangesSince != 1 {
+		t.Fatalf("the decision sees that an exchange followed the question, got %+v", intakeDecisions.requests[2].PendingConfirmation)
 	}
 }

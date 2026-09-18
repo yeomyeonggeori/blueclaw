@@ -24,7 +24,7 @@ func (router *clockRecordingTurnRouter) Plan(
 func (router *clockRecordingTurnRouter) PlanObserved(
 	_ context.Context,
 	request agentcontract.AgentRequest,
-	_ *agentcontract.TurnRouterCallLedger,
+	_ *agentcontract.IntakeCallLedger,
 ) (agentcontract.TurnDecision, error) {
 	router.routed = request
 	return agentcontract.TurnDecision{Route: agentcontract.TurnRouteStartTask}, nil

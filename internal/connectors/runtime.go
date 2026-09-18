@@ -71,6 +71,8 @@ type PlatformInboundEvent struct {
 	RawReceivedAt    time.Time                 `json:"-"`
 	LegacyFields     map[string]interface{}    `json:"legacyFields,omitempty"`
 	TaskRetry        *TaskRetryReference       `json:"taskRetry,omitempty"`
+
+	intakeDecision *inboundDecision
 }
 
 type TaskRetryReference struct {
@@ -452,7 +454,7 @@ type ConnectorRuntime struct {
 	identityService        *identity.IdentityService
 	unknownAccountResolver UnknownAccountResolver
 	harness                agentcontract.Harness
-	intakeClassifier       IntakeClassifier
+	intakeDecider          IntakeDecider
 	turnRouter             TurnRouter
 	replyGenerator         ReplyGenerator
 	launchFailureCompleter LaunchFailureCompleter
@@ -661,7 +663,7 @@ func (connectorRuntime *ConnectorRuntime) UseReplyGenerator(replyGenerator Reply
 
 type TurnRouter interface {
 	Plan(context.Context, agentcontract.AgentRequest) (agentcontract.TurnDecision, error)
-	PlanObserved(context.Context, agentcontract.AgentRequest, *agentcontract.TurnRouterCallLedger) (agentcontract.TurnDecision, error)
+	PlanObserved(context.Context, agentcontract.AgentRequest, *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error)
 }
 
 func (connectorRuntime *ConnectorRuntime) planTurn(ctx context.Context, taskRunID string, request agentcontract.AgentRequest) (agentcontract.TurnDecision, error) {
@@ -677,7 +679,7 @@ func (connectorRuntime *ConnectorRuntime) planTurn(ctx context.Context, taskRunI
 	if request.Company.IsEmpty() {
 		request.Company = connectorRuntime.company()
 	}
-	callLedger := &agentcontract.TurnRouterCallLedger{}
+	callLedger := &agentcontract.IntakeCallLedger{}
 	turnDecision, errorValue := connectorRuntime.turnRouter.PlanObserved(ctx, request, callLedger)
 	if trimmedTaskRunID := strings.TrimSpace(taskRunID); trimmedTaskRunID != "" && connectorRuntime.taskRunService != nil {
 		for _, callRecord := range callLedger.Records {
@@ -689,15 +691,6 @@ func (connectorRuntime *ConnectorRuntime) planTurn(ctx context.Context, taskRunI
 
 func (connectorRuntime *ConnectorRuntime) UseTurnRouter(turnRouter TurnRouter) {
 	connectorRuntime.turnRouter = turnRouter
-}
-
-type IntakeClassifier interface {
-	ClassifyAddressing(context.Context, agentcontract.AddressingClassificationRequest) (agentcontract.AddressingDecision, error)
-	ClassifyActiveTaskFollowUp(context.Context, agentcontract.ActiveTaskFollowUpClassificationRequest) (bool, error)
-}
-
-func (connectorRuntime *ConnectorRuntime) UseIntakeClassifier(intakeClassifier IntakeClassifier) {
-	connectorRuntime.intakeClassifier = intakeClassifier
 }
 
 func (connectorRuntime *ConnectorRuntime) UseTaskLauncher(taskLauncher *agentruntime.TaskLauncher) {
@@ -938,6 +931,8 @@ func (connectorRuntime *ConnectorRuntime) processQueuedConnectorEvent(ctx contex
 		connectorRuntime.markQueuedConnectorEventFailed(queuedEvent, errorValue)
 		return
 	}
+	event = withInboundDecision(event)
+	queuedEvent.Event = event
 	connectorRuntime.logConnectorQueueWait(event)
 	lock := connectorRuntime.conversationLock(event.Platform + ":" + event.ConversationID)
 	if event.TaskRetry == nil && (connectorRuntime.pendingRequests.isSuperseded(event.DedupeKey()) || (len(event.PreviousMessages) == 0 && connectorRuntime.shouldProcessBeforeConversationLock(ctx, adapter, event))) {
@@ -1099,6 +1094,7 @@ func (connectorRuntime *ConnectorRuntime) processInboundEvent(ctx context.Contex
 }
 
 func (connectorRuntime *ConnectorRuntime) processInboundEventWithReplySender(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent, sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error)) (ConnectorRuntimeResult, error) {
+	event = withInboundDecision(event)
 	ctx = withConnectorEvent(ctx, event)
 	if event.TaskRetry != nil {
 		return connectorRuntime.processTaskRetry(ctx, adapter, event, sendReply)

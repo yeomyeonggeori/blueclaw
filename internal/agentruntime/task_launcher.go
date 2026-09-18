@@ -91,6 +91,7 @@ type TaskLaunchRequest struct {
 	PriorTask                  agentcontract.PriorTaskContext
 	ScheduledRun               agentcontract.ScheduledRunContext
 	PrecomputedTurnDecision    *agentcontract.TurnDecision
+	DecidedTurnFields          *agentcontract.TurnDecision
 	IsPrecomputedDecisionExact bool
 	SkipSkillSelection         bool
 	UseEmptyToolCatalog        bool
@@ -167,7 +168,7 @@ func (taskLauncher *TaskLauncher) UseIntakeBudget(intakeBudget IntakeBudget) {
 
 type TurnRouter interface {
 	Plan(context.Context, agentcontract.AgentRequest) (agentcontract.TurnDecision, error)
-	PlanObserved(context.Context, agentcontract.AgentRequest, *agentcontract.TurnRouterCallLedger) (agentcontract.TurnDecision, error)
+	PlanObserved(context.Context, agentcontract.AgentRequest, *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error)
 }
 
 func (taskLauncher *TaskLauncher) UseTurnRouter(turnRouter TurnRouter) {
@@ -883,7 +884,7 @@ func (routerCallLaunchStep) Name() string {
 func (step routerCallLaunchStep) Run(ctx context.Context, execution *taskLaunchExecution) (routerCallResult, error) {
 	routingContext, cancel := execution.Launcher.intakeRoutingContext(ctx, step.Request)
 	defer cancel()
-	callLedger := &agentcontract.TurnRouterCallLedger{}
+	callLedger := &agentcontract.IntakeCallLedger{}
 	turnDecision, errorValue := execution.Launcher.turnRouter.PlanObserved(routingContext, agentcontract.AgentRequest{
 		RequesterPersonID: step.Request.RequesterPersonID,
 		ConversationID:    step.Request.ConversationID,
@@ -897,6 +898,7 @@ func (step routerCallLaunchStep) Run(ctx context.Context, execution *taskLaunchE
 		EnvironmentNow:    step.Request.TurnStartedAt,
 		Company:           execution.Launcher.company(),
 		ToolSet:           step.ToolSet,
+		DecidedTurnFields: step.Request.DecidedTurnFields,
 	}, callLedger)
 	result := routerCallResult{TurnDecision: turnDecision, CallRecords: callLedger.Records}
 	return result, errorValue

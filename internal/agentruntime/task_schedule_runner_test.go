@@ -190,7 +190,7 @@ func (router *scheduleLanguageRecordingTurnRouter) Plan(context.Context, agentco
 	return agentcontract.TurnDecision{Route: agentcontract.TurnRouteStartTask}, nil
 }
 
-func (router *scheduleLanguageRecordingTurnRouter) PlanObserved(_ context.Context, request agentcontract.AgentRequest, _ *agentcontract.TurnRouterCallLedger) (agentcontract.TurnDecision, error) {
+func (router *scheduleLanguageRecordingTurnRouter) PlanObserved(_ context.Context, request agentcontract.AgentRequest, _ *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error) {
 	router.request = request
 	return agentcontract.TurnDecision{Route: agentcontract.TurnRouteStartTask}, nil
 }

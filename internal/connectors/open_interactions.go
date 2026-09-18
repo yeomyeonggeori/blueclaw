@@ -82,6 +82,7 @@ func (connectorRuntime *ConnectorRuntime) routeOpenInteractions(ctx context.Cont
 		ResponseLanguage:  responseLanguageForEvent(turn.event),
 		VisibleContext:    turn.event.Context.ToAgentVisibleContext(),
 		ToolSet:           turn.routerToolSet,
+		DecidedTurnFields: connectorRuntime.decidedTurnFields(ctx, turn.adapter, turn.event),
 	}
 	if open.hasConfirmation {
 		request.PendingConfirmation = agentcontract.PendingConfirmationContext{
@@ -229,7 +230,7 @@ func (connectorRuntime *ConnectorRuntime) settleFinishedTaskFollowUp(ctx context
 	if len(turn.event.PreviousMessages) > 0 {
 		return ConnectorRuntimeResult{}, false, nil
 	}
-	busyResult, errorValue := connectorRuntime.handlePossibleFinishedTaskFollowUp(ctx, turn.platform, turn.event, turn.replyTarget, turn.personID, turn.sendReply)
+	busyResult, errorValue := connectorRuntime.handlePossibleFinishedTaskFollowUp(ctx, turn.platform, turn.adapter, turn.event, turn.replyTarget, turn.personID, turn.sendReply)
 	if errorValue != nil {
 		return ConnectorRuntimeResult{}, true, errorValue
 	}
