@@ -524,12 +524,13 @@ func TestSchedulePollerExpiresOneTimeMessageWithInvalidDeliveryTarget(t *testing
 func TestSchedulePollerCancelsStaleScheduledTaskRuns(t *testing.T) {
 	referenceTime := time.Now().UTC().Add(time.Hour)
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
-	taskRun := taskRunService.CreateTaskRun("person-1", "schedule:schedule-1", "stale schedule")
+	taskRun := taskRunService.CreateTaskRun("person-1", task.ScheduleSessionID("schedule-1"), "stale schedule")
 	if _, errorValue := taskRunService.AdvanceTaskRun(taskRun.TaskRunID, "assistant"); errorValue != nil {
 		t.Fatal(errorValue)
 	}
+	expiredSchedule := task.Schedule{ScheduleID: "schedule-1", CreatorPersonID: "person-1", Kind: task.ScheduleKindOnce}
 	poller := SchedulePoller{
-		ScheduleRepository:  &pollerScheduleRepository{},
+		ScheduleRepository:  &pollerScheduleRepository{schedules: []task.Schedule{expiredSchedule}},
 		TaskRunService:      taskRunService,
 		StaleTaskRunTimeout: time.Minute,
 	}
@@ -597,8 +598,15 @@ func (repository *pollerScheduleRepository) ClaimDueSchedules(limit int, _ time.
 	return append([]task.Schedule{}, dueSchedules[:limit]...), nil
 }
 
-func (repository *pollerScheduleRepository) ListSchedules(task.ScheduleListRequest) (task.ScheduleListResult, error) {
-	return task.ScheduleListResult{}, nil
+func (repository *pollerScheduleRepository) ListSchedules(request task.ScheduleListRequest) (task.ScheduleListResult, error) {
+	schedules := []task.Schedule{}
+	for _, schedule := range repository.schedules {
+		if !request.IncludeExpired && schedule.NextRunAt == nil {
+			continue
+		}
+		schedules = append(schedules, schedule)
+	}
+	return task.ScheduleListResult{Schedules: schedules, TotalCount: len(schedules), Page: 1, PageSize: len(schedules)}, nil
 }
 
 func (repository *pollerScheduleRepository) MarkScheduleSucceeded(schedule task.Schedule) error {

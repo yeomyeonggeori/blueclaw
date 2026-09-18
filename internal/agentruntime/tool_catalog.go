@@ -77,6 +77,7 @@ type ToolCatalogRequest struct {
 	IsScheduledRun             bool
 	IsApprovalContinuation     bool
 	ConversationID             string
+	DeliveryConversationID     string
 	ConversationType           string
 	ConversationChannelID      string
 	ConversationChannelName    string
@@ -241,7 +242,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) AvailableToolNames() []string {
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) BuildToolSet(request ToolCatalogRequest) *toolcontract.ToolSet {
-	request = withResolvedActiveCircle(request)
+	request = withResolvedDeliveryConversation(withResolvedActiveCircle(request))
 	toolSet := toolcontract.NewToolSet(toolCatalogBuilder.allowedToolNames(request.ProfileName))
 	handlerContext := toolHandlerContext{
 		request:           request,
@@ -253,6 +254,11 @@ func (toolCatalogBuilder *ToolCatalogBuilder) BuildToolSet(request ToolCatalogRe
 	toolCatalogBuilder.registerCapabilityTools(toolSet, request)
 	toolSet.UseToolCallGate(request.ToolCallGate)
 	return toolSetWithinRegisteredToolNameCeiling(toolSet, request.RegisteredToolNameCeiling)
+}
+
+func withResolvedDeliveryConversation(request ToolCatalogRequest) ToolCatalogRequest {
+	request.DeliveryConversationID = firstNonEmptyString(request.DeliveryConversationID, request.ConversationID)
+	return request
 }
 
 func toolSetWithinRegisteredToolNameCeiling(toolSet *toolcontract.ToolSet, ceilingToolNames []string) *toolcontract.ToolSet {

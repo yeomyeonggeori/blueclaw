@@ -1,6 +1,13 @@
 package task
 
-import "time"
+import (
+	"strings"
+	"time"
+)
+
+func ScheduleSessionID(scheduleID string) string {
+	return "schedule:" + strings.TrimSpace(scheduleID)
+}
 
 type ScheduleKind string
 

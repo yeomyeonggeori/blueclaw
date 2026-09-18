@@ -1058,11 +1058,12 @@ func reminderScheduleInput() scheduleCreateToolInput {
 
 func scheduleRequesterContext(isScheduledRun bool) toolHandlerContext {
 	return toolHandlerContext{request: ToolCatalogRequest{
-		IsScheduledRun:    isScheduledRun,
-		RequesterPersonID: "person-1",
-		Platform:          "mattermost",
-		ConversationID:    "channel-1",
-		ReplyTargetID:     "reply-target-1",
+		IsScheduledRun:         isScheduledRun,
+		RequesterPersonID:      "person-1",
+		Platform:               "mattermost",
+		ConversationID:         "channel-1",
+		DeliveryConversationID: "channel-1",
+		ReplyTargetID:          "reply-target-1",
 	}}
 }
 

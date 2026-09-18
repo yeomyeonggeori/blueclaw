@@ -293,15 +293,16 @@ func (toolCatalogBuilder *ToolCatalogBuilder) cancelScheduledTaskRuns(cancelRequ
 	if toolCatalogBuilder.taskRunService == nil {
 		return 0
 	}
+	originConversationIDs := scheduleOriginConversationIDs(result.Schedules)
+	if len(originConversationIDs) == 0 {
+		return 0
+	}
 	taskRunCancelRequest := task.TaskRunCancelRequest{
-		ScheduleOnly: true,
-		Reason:       "schedule_cancel",
+		OriginConversationIDs: originConversationIDs,
+		Reason:                "schedule_cancel",
 	}
 	if cancelRequest.Scope == task.ScheduleCancelScopeMine {
 		taskRunCancelRequest.RequesterPersonID = strings.TrimSpace(cancelRequest.RequesterPersonID)
-		taskRunCancelRequest.OriginConversationIDPrefix = "schedule:"
-	} else {
-		taskRunCancelRequest.OriginConversationIDs = scheduleOriginConversationIDs(result.Schedules)
 	}
 	return len(toolCatalogBuilder.taskRunService.CancelActiveTaskRuns(taskRunCancelRequest))
 }
@@ -327,7 +328,7 @@ func scheduleOriginConversationIDs(schedules []task.Schedule) []string {
 		if strings.TrimSpace(schedule.ScheduleID) == "" {
 			continue
 		}
-		originConversationIDs = append(originConversationIDs, "schedule:"+schedule.ScheduleID)
+		originConversationIDs = append(originConversationIDs, task.ScheduleSessionID(schedule.ScheduleID))
 	}
 	return originConversationIDs
 }
@@ -338,7 +339,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) scheduleCreateContext(handlerConte
 		AgentProfileName: firstNonEmptyString(input.AgentProfileName, handlerContext.request.ProfileName),
 		Delivery: task.ScheduleDeliveryBinding{
 			Platform:       handlerContext.request.Platform,
-			ConversationID: handlerContext.request.ConversationID,
+			ConversationID: handlerContext.request.DeliveryConversationID,
 			ReplyTargetID:  handlerContext.request.ReplyTargetID,
 		},
 		CompanyTimeZone: toolCatalogBuilder.companyTimeZone(),

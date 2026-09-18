@@ -68,14 +68,15 @@ func (scheduleRunner ScheduleRunner) RunIfDue(ctx context.Context, request Sched
 		IsApprovalContinuation:    true,
 		ProfileName:               schedule.AgentProfileName,
 		Platform:                  schedule.Platform,
-		ConversationID:            "schedule:" + schedule.ScheduleID,
+		ConversationID:            task.ScheduleSessionID(schedule.ScheduleID),
+		DeliveryConversationID:    schedule.ConversationID,
 		ReplyTargetID:             schedule.ReplyTargetID,
 		Prompt:                    schedule.Prompt,
 		ResponseLanguage:          responseLanguage,
 		ScheduledRun:              scheduledRunContext(schedule, referenceTime),
 		PersonAccess:              request.PersonAccess,
 		MemoryLabel:               memory.LabelForAccess(request.PersonAccess),
-		AccessibleConversationIDs: []string{"schedule:" + schedule.ScheduleID},
+		AccessibleConversationIDs: []string{task.ScheduleSessionID(schedule.ScheduleID)},
 	})
 	if errorValue != nil {
 		return ScheduleRunResult{}, errorValue
