@@ -912,7 +912,7 @@ func (connectorRuntime *ConnectorRuntime) processNextQueuedConnectorEvent(ctx co
 	if queueRepository == nil {
 		return false
 	}
-	queuedEvents, errorValue := queueRepository.ClaimPendingConnectorEvents(1, connectorClaimLeaseDuration)
+	queuedEvents, errorValue := queueRepository.ClaimPendingConnectorEvents(connectorDecisionBurstSize, connectorClaimLeaseDuration)
 	if errorValue != nil {
 		connectorRuntime.logger.Warn("connector.inbox.claim_failed", slog.String("error", errorValue.Error()))
 		return false
@@ -920,7 +920,10 @@ func (connectorRuntime *ConnectorRuntime) processNextQueuedConnectorEvent(ctx co
 	if len(queuedEvents) == 0 {
 		return false
 	}
-	connectorRuntime.processQueuedConnectorEvent(ctx, queuedEvents[0])
+	connectorRuntime.decideClaimedBurst(ctx, queuedEvents)
+	for _, queuedEvent := range queuedEvents {
+		connectorRuntime.processQueuedConnectorEvent(ctx, queuedEvent)
+	}
 	return true
 }
 
