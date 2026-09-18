@@ -814,7 +814,7 @@ func TestScheduleToolCreateRefusesARunTheRequesterDoesNotOwn(t *testing.T) {
 		if responseRecorder.Code != http.StatusForbidden {
 			t.Fatalf("%s status = %d, want %d: %s", refusalCase.name, responseRecorder.Code, http.StatusForbidden, responseRecorder.Body.String())
 		}
-		if !strings.Contains(responseRecorder.Body.String(), errScheduleCreateRunUnknown.Error()) {
+		if !strings.Contains(responseRecorder.Body.String(), errScheduleWriteRunUnknown.Error()) {
 			t.Fatalf("%s expected the unknown-run refusal, got %s", refusalCase.name, responseRecorder.Body.String())
 		}
 		if repository.upsertedTaskSchedule.TaskScheduleID != "" {
@@ -863,5 +863,134 @@ func TestScheduleToolCreateSchemaTakesTheRunIDAndRefusesAnAssertedOrigin(t *test
 	assertedOrigin := `{"taskInstruction":"주간 보고를 정리한다","kind":"once","runAt":"2099-01-01T00:00:00Z","platform":"buzz","conversationID":"channel-1","replyTargetID":"post-1","isScheduledRun":false}`
 	if validateAgainstScheduleSchema(scheduleToolCreateInputSchema, []byte(assertedOrigin)) == nil {
 		t.Fatal("the declared input schema accepts a caller-asserted run origin")
+	}
+}
+
+const rewrittenTaskInstruction = "주간 보고와 지표를 함께 정리한다"
+
+func scheduleUpdateBodyForRun(taskRunID string) string {
+	return `{"taskRunID":"` + taskRunID + `","scheduleHint":"주간","taskInstruction":"` + rewrittenTaskInstruction + `","repeatPolicy":"unbounded"}`
+}
+
+func repositoryHoldingOneOwnSchedule() *taskScheduleListRepositoryStub {
+	return &taskScheduleListRepositoryStub{
+		taskSchedules: []task.TaskSchedule{ownScheduleFixture("schedule-1", "person-이샘플", "주간 보고")},
+	}
+}
+
+func storedTaskInstruction(repository *taskScheduleListRepositoryStub) string {
+	return repository.taskSchedules[0].Prompt
+}
+
+func TestScheduleToolUpdateRefusesARunAScheduleStarted(t *testing.T) {
+	repository := repositoryHoldingOneOwnSchedule()
+	untouchedTaskInstruction := storedTaskInstruction(repository)
+	handler := scheduleWriteHandlerReadingRuns(repository, "person-이샘플", task.TaskRun{
+		TaskRunID:            "run-scheduled",
+		RequesterPersonID:    "person-이샘플",
+		OriginConversationID: task.ScheduleOriginConversationID("schedule-2"),
+	})
+
+	responseRecorder := postScheduleTool(handler, "/admin/api/schedule/tool-update", scheduleUpdateBodyForRun("run-scheduled"))
+
+	if responseRecorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d: %s", responseRecorder.Code, http.StatusForbidden, responseRecorder.Body.String())
+	}
+	if !strings.Contains(responseRecorder.Body.String(), errScheduleUpdateFromScheduleRun.Error()) {
+		t.Fatalf("expected the scheduled-run refusal, got %s", responseRecorder.Body.String())
+	}
+	if repository.updateRequest.RequesterPersonID != "" {
+		t.Fatalf("a scheduled run reached the repository: %+v", repository.updateRequest)
+	}
+	if storedTaskInstruction(repository) != untouchedTaskInstruction {
+		t.Fatalf("a scheduled run changed a schedule: %q", storedTaskInstruction(repository))
+	}
+}
+
+func TestScheduleToolUpdateRefusesARunTheRequesterDoesNotOwn(t *testing.T) {
+	for _, refusalCase := range []struct {
+		name      string
+		taskRunID string
+		taskRuns  []task.TaskRun
+	}{
+		{
+			name:      "unknown run",
+			taskRunID: "run-missing",
+			taskRuns:  nil,
+		},
+		{
+			name:      "a colleague's run",
+			taskRunID: "run-colleague",
+			taskRuns: []task.TaskRun{{
+				TaskRunID:            "run-colleague",
+				RequesterPersonID:    "person-박예시",
+				OriginConversationID: "channel-1",
+			}},
+		},
+	} {
+		repository := repositoryHoldingOneOwnSchedule()
+		untouchedTaskInstruction := storedTaskInstruction(repository)
+		handler := scheduleWriteHandlerReadingRuns(repository, "person-이샘플", refusalCase.taskRuns...)
+
+		responseRecorder := postScheduleTool(handler, "/admin/api/schedule/tool-update", scheduleUpdateBodyForRun(refusalCase.taskRunID))
+
+		if responseRecorder.Code != http.StatusForbidden {
+			t.Fatalf("%s status = %d, want %d: %s", refusalCase.name, responseRecorder.Code, http.StatusForbidden, responseRecorder.Body.String())
+		}
+		if !strings.Contains(responseRecorder.Body.String(), errScheduleWriteRunUnknown.Error()) {
+			t.Fatalf("%s expected the unknown-run refusal, got %s", refusalCase.name, responseRecorder.Body.String())
+		}
+		if storedTaskInstruction(repository) != untouchedTaskInstruction {
+			t.Fatalf("%s changed a schedule: %q", refusalCase.name, storedTaskInstruction(repository))
+		}
+	}
+}
+
+func TestScheduleToolUpdateAllowsARunNoScheduleStarted(t *testing.T) {
+	repository := repositoryHoldingOneOwnSchedule()
+	handler := scheduleWriteHandlerReadingRuns(repository, "person-이샘플", task.TaskRun{
+		TaskRunID:            "run-conversation",
+		RequesterPersonID:    "person-이샘플",
+		OriginConversationID: "channel-1",
+	})
+
+	responseRecorder := postScheduleTool(handler, "/admin/api/schedule/tool-update", scheduleUpdateBodyForRun("run-conversation"))
+
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", responseRecorder.Code, http.StatusOK, responseRecorder.Body.String())
+	}
+	if storedTaskInstruction(repository) != rewrittenTaskInstruction {
+		t.Fatalf("an ordinary run did not change its schedule: %q", storedTaskInstruction(repository))
+	}
+}
+
+func TestScheduleToolUpdateWithoutATaskRunIDChangesTheSchedule(t *testing.T) {
+	repository := repositoryHoldingOneOwnSchedule()
+	handler := scheduleWriteHandlerReadingRuns(repository, "person-이샘플")
+
+	responseRecorder := postScheduleTool(handler, "/admin/api/schedule/tool-update",
+		`{"scheduleHint":"주간","taskInstruction":"`+rewrittenTaskInstruction+`","repeatPolicy":"unbounded"}`)
+
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", responseRecorder.Code, http.StatusOK, responseRecorder.Body.String())
+	}
+	if storedTaskInstruction(repository) != rewrittenTaskInstruction {
+		t.Fatalf("a client outside any task did not change its schedule: %q", storedTaskInstruction(repository))
+	}
+}
+
+func TestScheduleToolUpdateSchemaTakesTheRunIDAndRefusesAnAssertedOrigin(t *testing.T) {
+	if errorValue := validateAgainstScheduleSchema(scheduleToolUpdateInputSchema, []byte(scheduleUpdateBodyForRun("run-conversation"))); errorValue != nil {
+		t.Fatalf("the declared input schema rejects a real body carrying taskRunID: %v", errorValue)
+	}
+	assertedOrigin := `{"scheduleHint":"주간","taskInstruction":"` + rewrittenTaskInstruction + `","repeatPolicy":"unbounded","isScheduledRun":false}`
+	if validateAgainstScheduleSchema(scheduleToolUpdateInputSchema, []byte(assertedOrigin)) == nil {
+		t.Fatal("the declared input schema accepts a caller-asserted run origin")
+	}
+}
+
+func TestScheduleToolCancelSchemaTakesNoTaskRun(t *testing.T) {
+	if validateAgainstScheduleSchema(scheduleToolCancelInputSchema, []byte(`{"scheduleHints":["주간"],"taskRunID":"run-conversation"}`)) == nil {
+		t.Fatal("the declared cancel schema accepts a task run it never reads")
 	}
 }

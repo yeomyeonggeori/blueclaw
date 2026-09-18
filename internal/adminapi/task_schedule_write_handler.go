@@ -21,8 +21,9 @@ const (
 
 var (
 	errScheduleToolRequestInvalid    = errors.New("invalid schedule request")
-	errScheduleCreateRunUnknown      = errors.New("taskRunID names no task run the requester started")
+	errScheduleWriteRunUnknown       = errors.New("taskRunID names no task run the requester started")
 	errScheduleCreateFromScheduleRun = errors.New("a task run started by a schedule cannot create another schedule")
+	errScheduleUpdateFromScheduleRun = errors.New("a task run started by a schedule cannot change a schedule")
 )
 
 type scheduleToolCreateRequest struct {
@@ -43,6 +44,7 @@ type scheduleToolCreateRequest struct {
 }
 
 type scheduleToolUpdateRequest struct {
+	TaskRunID       string  `json:"taskRunID"`
 	ScheduleHint    string  `json:"scheduleHint"`
 	TaskInstruction *string `json:"taskInstruction"`
 	Description     *string `json:"description"`
@@ -85,7 +87,7 @@ func (taskScheduleHandler TaskScheduleHandler) HandleToolCreate(responseWriter h
 		http.Error(responseWriter, errorValue.Error(), http.StatusBadRequest)
 		return
 	}
-	if !taskScheduleHandler.runMayCreateSchedules(responseWriter, input.TaskRunID, creatorPersonID) {
+	if !taskScheduleHandler.runMayWriteSchedules(responseWriter, input.TaskRunID, creatorPersonID, errScheduleCreateFromScheduleRun) {
 		return
 	}
 	referenceTime := time.Now().UTC()
@@ -129,6 +131,9 @@ func (taskScheduleHandler TaskScheduleHandler) HandleToolUpdate(responseWriter h
 	var input scheduleToolUpdateRequest
 	if errorValue := decodeScheduleToolRequest(request, scheduleToolUpdateInputSchema, &input); errorValue != nil {
 		http.Error(responseWriter, errorValue.Error(), http.StatusBadRequest)
+		return
+	}
+	if !taskScheduleHandler.runMayWriteSchedules(responseWriter, input.TaskRunID, creatorPersonID, errScheduleUpdateFromScheduleRun) {
 		return
 	}
 	updateInput := task.ScheduleUpdateInput{
@@ -251,7 +256,7 @@ func (taskScheduleHandler TaskScheduleHandler) readyForScheduleWrite(responseWri
 	return creatorPersonID, true
 }
 
-func (taskScheduleHandler TaskScheduleHandler) runMayCreateSchedules(responseWriter http.ResponseWriter, taskRunID string, creatorPersonID string) bool {
+func (taskScheduleHandler TaskScheduleHandler) runMayWriteSchedules(responseWriter http.ResponseWriter, taskRunID string, creatorPersonID string, scheduleStartedRefusal error) bool {
 	trimmedTaskRunID := strings.TrimSpace(taskRunID)
 	if trimmedTaskRunID == "" {
 		return true
@@ -262,11 +267,11 @@ func (taskScheduleHandler TaskScheduleHandler) runMayCreateSchedules(responseWri
 	}
 	taskRun, isFound := taskScheduleHandler.TaskRunReader.FindTaskRun(trimmedTaskRunID)
 	if !isFound || strings.TrimSpace(taskRun.RequesterPersonID) != creatorPersonID {
-		http.Error(responseWriter, errScheduleCreateRunUnknown.Error(), http.StatusForbidden)
+		http.Error(responseWriter, errScheduleWriteRunUnknown.Error(), http.StatusForbidden)
 		return false
 	}
 	if task.IsScheduleStartedTaskRun(taskRun) {
-		http.Error(responseWriter, errScheduleCreateFromScheduleRun.Error(), http.StatusForbidden)
+		http.Error(responseWriter, scheduleStartedRefusal.Error(), http.StatusForbidden)
 		return false
 	}
 	return true

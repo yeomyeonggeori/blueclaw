@@ -27,6 +27,7 @@ var scheduleToolCreateInputSchema = json.RawMessage(`{
 var scheduleToolUpdateInputSchema = json.RawMessage(`{
 	"type": "object",
 	"properties": {
+		"taskRunID": {"type": "string", "minLength": 1, "pattern": "\\S"},
 		"scheduleHint": {"type": "string", "minLength": 1, "pattern": "\\S"},
 		"taskInstruction": {"type": "string", "minLength": 1, "pattern": "\\S"},
 		"description": {"type": "string"},
