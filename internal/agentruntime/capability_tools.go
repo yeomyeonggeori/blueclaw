@@ -35,12 +35,14 @@ func capabilityToolIdempotencyKey(toolContext context.Context, descriptor Capabi
 func (toolCatalogBuilder *ToolCatalogBuilder) registerCapabilityTools(
 	toolRegistry *toolcontract.ToolSet,
 	request ToolCatalogRequest,
-	takenToolNames []string,
 ) {
 	provider := capabilityToolProvider{
 		toolCatalogBuilder: toolCatalogBuilder,
 		request:            request,
-		descriptors:        withoutToolNames(toolCatalogBuilder.reachableCapabilityToolDefinitions(), takenToolNames),
+		descriptors: withoutToolNamesAlreadyRegistered(
+			toolRegistry,
+			toolCatalogBuilder.reachableCapabilityToolDefinitions(),
+		),
 	}
 	quarantinedProviders, errorValue := toolRegistry.RegisterProviders(context.Background(), []toolcontract.ToolProviderRegistration{{
 		Provider: provider,

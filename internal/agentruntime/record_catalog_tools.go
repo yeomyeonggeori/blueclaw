@@ -248,25 +248,13 @@ func resultInsideTheEnvelope(structuredContent json.RawMessage) json.RawMessage 
 	return envelope.Result
 }
 
-func namesOf(descriptors []capability.ToolDescriptor) []string {
-	names := make([]string, 0, len(descriptors))
-	for _, descriptor := range descriptors {
-		names = append(names, modelNameOf(descriptor))
-	}
-	return names
-}
-
-func withoutToolNames(descriptors []capability.ToolDescriptor, takenToolNames []string) []capability.ToolDescriptor {
-	if len(takenToolNames) == 0 {
-		return descriptors
-	}
-	taken := map[string]bool{}
-	for _, toolName := range takenToolNames {
-		taken[toolName] = true
-	}
+func withoutToolNamesAlreadyRegistered(
+	toolRegistry *toolcontract.ToolSet,
+	descriptors []capability.ToolDescriptor,
+) []capability.ToolDescriptor {
 	kept := make([]capability.ToolDescriptor, 0, len(descriptors))
 	for _, descriptor := range descriptors {
-		if taken[modelNameOf(descriptor)] {
+		if toolRegistry.IsRegistered(modelNameOf(descriptor)) {
 			continue
 		}
 		kept = append(kept, descriptor)
