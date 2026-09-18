@@ -44,7 +44,7 @@ func (application *Application) Start() error {
 		return errorValue
 	}
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "task_schedule")
-	application.startTaskSchedulePoller()
+	application.startSchedulePoller()
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "task_retention")
 	application.startTaskRetentionSweeper()
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "stale_tasks")
@@ -105,8 +105,8 @@ func (application *Application) Shutdown(ctx context.Context) error {
 	if application.acpSessionCancel != nil {
 		application.acpSessionCancel()
 	}
-	if application.taskScheduleCancel != nil {
-		application.taskScheduleCancel()
+	if application.scheduleCancel != nil {
+		application.scheduleCancel()
 	}
 	if application.taskRetentionCancel != nil {
 		application.taskRetentionCancel()
@@ -250,13 +250,13 @@ func (application *Application) startLogRetentionLoop() {
 	application.logRetentionCancel = application.startBackgroundLoop(application.runtimeLogger.StartRetentionLoop)
 }
 
-func (application *Application) startTaskSchedulePoller() {
-	if application.taskSchedulePoller == nil || application.taskScheduleCancel != nil {
+func (application *Application) startSchedulePoller() {
+	if application.schedulePoller == nil || application.scheduleCancel != nil {
 		return
 	}
-	interval := time.Duration(application.taskSchedulePollIntervalSecond()) * time.Second
-	application.taskScheduleCancel = application.startBackgroundLoop(func(ctx context.Context) {
-		application.taskSchedulePoller.Start(ctx, interval)
+	interval := time.Duration(application.schedulePollIntervalSecond()) * time.Second
+	application.scheduleCancel = application.startBackgroundLoop(func(ctx context.Context) {
+		application.schedulePoller.Start(ctx, interval)
 	})
 }
 
@@ -374,9 +374,9 @@ func (application *Application) enqueueMemoryReembed(ctx context.Context) {
 	}
 }
 
-func (application *Application) taskSchedulePollIntervalSecond() int {
-	if application.taskSchedulePollSecond > 0 {
-		return application.taskSchedulePollSecond
+func (application *Application) schedulePollIntervalSecond() int {
+	if application.schedulePollSecond > 0 {
+		return application.schedulePollSecond
 	}
 	return 30
 }

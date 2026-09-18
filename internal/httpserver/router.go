@@ -24,7 +24,7 @@ type RouterDependencies struct {
 	ToolInventoryHandler  adminapi.ToolInventoryHandler
 	TaskSearchHandler     adminapi.TaskSearchHandler
 	QuiesceHandler        adminapi.QuiesceHandler
-	TaskScheduleHandler   adminapi.TaskScheduleHandler
+	ScheduleHandler       adminapi.ScheduleHandler
 	ConnectorDiagnostics  adminapi.ConnectorEventDiagnosticHandler
 	ConversationReset     adminapi.ConversationResetHandler
 	BackupHandler         adminapi.BackupHandler
@@ -84,16 +84,16 @@ func NewRouter(routerDependencies RouterDependencies) http.Handler {
 	multiplexer.HandleFunc("POST /admin/api/runtime/prepare-shutdown", routerDependencies.QuiesceHandler.HandlePrepareShutdown)
 	multiplexer.HandleFunc("GET /admin/api/memory/facts", routerDependencies.MemoryHandler.HandleListFacts)
 	multiplexer.HandleFunc("POST /admin/api/memory/facts/forget", routerDependencies.MemoryHandler.HandleForgetFacts)
-	multiplexer.HandleFunc("GET /admin/api/schedule", routerDependencies.TaskScheduleHandler.HandleList)
-	multiplexer.HandleFunc("POST /admin/api/schedule/tool-list", routerDependencies.TaskScheduleHandler.HandleToolList)
-	multiplexer.HandleFunc("POST /admin/api/schedule/tool-create", routerDependencies.TaskScheduleHandler.HandleToolCreate)
-	multiplexer.HandleFunc("POST /admin/api/schedule/tool-update", routerDependencies.TaskScheduleHandler.HandleToolUpdate)
-	multiplexer.HandleFunc("POST /admin/api/schedule/tool-cancel", routerDependencies.TaskScheduleHandler.HandleToolCancel)
-	multiplexer.HandleFunc("POST /admin/api/schedule/cancel", routerDependencies.TaskScheduleHandler.HandleCancel)
-	multiplexer.HandleFunc("POST /admin/api/schedule/delete", routerDependencies.TaskScheduleHandler.HandleDelete)
-	multiplexer.HandleFunc("POST /admin/api/schedule/update", routerDependencies.TaskScheduleHandler.HandleUpdate)
-	multiplexer.HandleFunc("POST /admin/api/schedule/repair-creator", routerDependencies.TaskScheduleHandler.HandleRepairCreator)
-	multiplexer.HandleFunc("GET /admin/api/schedule/summary", routerDependencies.TaskScheduleHandler.HandleSummary)
+	multiplexer.HandleFunc("GET /admin/api/schedule", routerDependencies.ScheduleHandler.HandleList)
+	multiplexer.HandleFunc("POST /admin/api/schedule/tool-list", routerDependencies.ScheduleHandler.HandleToolList)
+	multiplexer.HandleFunc("POST /admin/api/schedule/tool-create", routerDependencies.ScheduleHandler.HandleToolCreate)
+	multiplexer.HandleFunc("POST /admin/api/schedule/tool-update", routerDependencies.ScheduleHandler.HandleToolUpdate)
+	multiplexer.HandleFunc("POST /admin/api/schedule/tool-cancel", routerDependencies.ScheduleHandler.HandleToolCancel)
+	multiplexer.HandleFunc("POST /admin/api/schedule/cancel", routerDependencies.ScheduleHandler.HandleCancel)
+	multiplexer.HandleFunc("POST /admin/api/schedule/delete", routerDependencies.ScheduleHandler.HandleDelete)
+	multiplexer.HandleFunc("POST /admin/api/schedule/update", routerDependencies.ScheduleHandler.HandleUpdate)
+	multiplexer.HandleFunc("POST /admin/api/schedule/repair-creator", routerDependencies.ScheduleHandler.HandleRepairCreator)
+	multiplexer.HandleFunc("GET /admin/api/schedule/summary", routerDependencies.ScheduleHandler.HandleSummary)
 	multiplexer.HandleFunc("GET /admin/api/connector/events", routerDependencies.ConnectorDiagnostics.HandleList)
 	multiplexer.HandleFunc("POST /admin/api/conversation/reset", routerDependencies.ConversationReset.HandleReset)
 	multiplexer.HandleFunc("GET /admin/api/workspace/list", routerDependencies.WorkspaceFilesHandler.HandleList)

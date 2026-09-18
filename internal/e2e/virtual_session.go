@@ -279,7 +279,7 @@ type VirtualSessionResult struct {
 	ScenarioName          string
 	ArtifactDirectoryPath string
 	TurnResults           []VirtualTurnResult
-	TaskSchedules         []task.TaskSchedule
+	Schedules             []task.Schedule
 }
 
 type VirtualTurnResult struct {
@@ -341,7 +341,7 @@ type VirtualSessionHarness struct {
 	callRecorder     virtualLanguageModelCallRecorder
 	taskRunService   *task.TaskRunService
 	taskEventService *task.TaskEventService
-	scheduleStore    *virtualTaskScheduleRepository
+	scheduleStore    *virtualScheduleRepository
 	runtime          *connectors.ConnectorRuntime
 	adapter          *virtualAdapter
 	cleanup          func()
@@ -901,8 +901,8 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	runtime.UseTerminalService(terminalService)
 	runtime.UseWorkspaceActorFactory(security.NewDirectWorkspaceActorFactory(terminalService))
 	runtime.UseTaskRunService(taskRunService)
-	scheduleStore := &virtualTaskScheduleRepository{}
-	runtime.UseTaskScheduleRepository(scheduleStore)
+	scheduleStore := &virtualScheduleRepository{}
+	runtime.UseScheduleRepository(scheduleStore)
 	cleanup := func() {}
 	var capabilityClient capability.Client
 	capabilityToolNames := virtualCapabilityToolNames(scenario)
@@ -1003,7 +1003,7 @@ func virtualToolCatalogBuilder(
 	scenario VirtualSessionScenario,
 	workspacePath string,
 	taskRunService *task.TaskRunService,
-	scheduleStore *virtualTaskScheduleRepository,
+	scheduleStore *virtualScheduleRepository,
 	terminalService *security.ShellService,
 	memoryStore *bluememo.Store,
 	memoryIngester *bluememo.Ingester,
@@ -1018,7 +1018,7 @@ func virtualToolCatalogBuilder(
 	toolCatalogBuilder.UseTerminalService(terminalService)
 	toolCatalogBuilder.UseWorkspaceActorFactory(security.NewDirectWorkspaceActorFactory(terminalService))
 	toolCatalogBuilder.UseTaskRunService(taskRunService)
-	toolCatalogBuilder.UseTaskScheduleRepository(scheduleStore)
+	toolCatalogBuilder.UseScheduleRepository(scheduleStore)
 	toolCatalogBuilder.UseMemoryStore(memoryStore, memoryIngester, nil)
 	toolCatalogBuilder.UseSkillSearch(skillRetriever, instructionBundleLoader)
 	toolCatalogBuilder.UseSkillChangeHandler(func(contextValue context.Context) {
@@ -2634,7 +2634,7 @@ func (harness *VirtualSessionHarness) Run(ctx context.Context) (VirtualSessionRe
 			harness.rememberTurn(messageTurn, turnResults[promptIndex])
 		}
 	}
-	result.TaskSchedules = harness.scheduleStore.TaskSchedules()
+	result.Schedules = harness.scheduleStore.Schedules()
 	if errorValue := harness.assertWorkspaceFootprint(digestsBefore); errorValue != nil {
 		return result, errorValue
 	}
@@ -4145,95 +4145,95 @@ func firstNonEmptyVirtualString(values ...string) string {
 	return ""
 }
 
-type virtualTaskScheduleRepository struct {
-	mutex         sync.Mutex
-	taskSchedules []task.TaskSchedule
+type virtualScheduleRepository struct {
+	mutex     sync.Mutex
+	schedules []task.Schedule
 }
 
-func (repository *virtualTaskScheduleRepository) UpsertTaskSchedule(taskSchedule task.TaskSchedule) error {
+func (repository *virtualScheduleRepository) UpsertSchedule(schedule task.Schedule) error {
 	repository.mutex.Lock()
 	defer repository.mutex.Unlock()
-	taskSchedule.TaskScheduleID = fmt.Sprintf("virtual-schedule-%03d", len(repository.taskSchedules)+1)
-	repository.taskSchedules = append(repository.taskSchedules, taskSchedule)
+	schedule.ScheduleID = fmt.Sprintf("virtual-schedule-%03d", len(repository.schedules)+1)
+	repository.schedules = append(repository.schedules, schedule)
 	return nil
 }
 
-func (repository *virtualTaskScheduleRepository) UpdateTaskSchedule(request task.TaskScheduleUpdateRequest) (task.TaskScheduleUpdateResult, error) {
+func (repository *virtualScheduleRepository) UpdateSchedule(request task.ScheduleUpdateRequest) (task.ScheduleUpdateResult, error) {
 	repository.mutex.Lock()
 	defer repository.mutex.Unlock()
-	for index, taskSchedule := range repository.taskSchedules {
-		if taskSchedule.TaskScheduleID != request.TaskScheduleID || taskSchedule.CreatorPersonID != request.RequesterPersonID || taskSchedule.NextRunAt == nil {
+	for index, schedule := range repository.schedules {
+		if schedule.ScheduleID != request.ScheduleID || schedule.CreatorPersonID != request.RequesterPersonID || schedule.NextRunAt == nil {
 			continue
 		}
-		updatedTaskSchedule := taskSchedule
+		updatedSchedule := schedule
 		var errorValue error
-		if request.UpdateTaskSchedule != nil {
-			updatedTaskSchedule, errorValue = request.UpdateTaskSchedule(taskSchedule)
+		if request.UpdateSchedule != nil {
+			updatedSchedule, errorValue = request.UpdateSchedule(schedule)
 			if errorValue != nil {
-				return task.TaskScheduleUpdateResult{}, errorValue
+				return task.ScheduleUpdateResult{}, errorValue
 			}
 		}
-		repository.taskSchedules[index] = updatedTaskSchedule
-		return task.TaskScheduleUpdateResult{TaskSchedule: updatedTaskSchedule, IsFound: true}, nil
+		repository.schedules[index] = updatedSchedule
+		return task.ScheduleUpdateResult{Schedule: updatedSchedule, IsFound: true}, nil
 	}
-	return task.TaskScheduleUpdateResult{}, nil
+	return task.ScheduleUpdateResult{}, nil
 }
 
-func (repository *virtualTaskScheduleRepository) TaskSchedules() []task.TaskSchedule {
+func (repository *virtualScheduleRepository) Schedules() []task.Schedule {
 	repository.mutex.Lock()
 	defer repository.mutex.Unlock()
-	return append([]task.TaskSchedule{}, repository.taskSchedules...)
+	return append([]task.Schedule{}, repository.schedules...)
 }
 
-func (repository *virtualTaskScheduleRepository) ListTaskSchedules(request task.TaskScheduleListRequest) (task.TaskScheduleListResult, error) {
+func (repository *virtualScheduleRepository) ListSchedules(request task.ScheduleListRequest) (task.ScheduleListResult, error) {
 	repository.mutex.Lock()
 	defer repository.mutex.Unlock()
-	taskSchedules := []task.TaskSchedule{}
-	for _, taskSchedule := range repository.taskSchedules {
-		if request.CreatorPersonID != "" && taskSchedule.CreatorPersonID != request.CreatorPersonID {
+	schedules := []task.Schedule{}
+	for _, schedule := range repository.schedules {
+		if request.CreatorPersonID != "" && schedule.CreatorPersonID != request.CreatorPersonID {
 			continue
 		}
-		if !request.IncludeExpired && taskSchedule.NextRunAt == nil {
+		if !request.IncludeExpired && schedule.NextRunAt == nil {
 			continue
 		}
-		taskSchedules = append(taskSchedules, taskSchedule)
+		schedules = append(schedules, schedule)
 	}
 	pageSize := request.PageSize
-	if pageSize <= 0 || pageSize > len(taskSchedules) {
-		pageSize = len(taskSchedules)
+	if pageSize <= 0 || pageSize > len(schedules) {
+		pageSize = len(schedules)
 	}
-	return task.TaskScheduleListResult{TaskSchedules: append([]task.TaskSchedule{}, taskSchedules[:pageSize]...), TotalCount: len(taskSchedules), Page: 1, PageSize: pageSize}, nil
+	return task.ScheduleListResult{Schedules: append([]task.Schedule{}, schedules[:pageSize]...), TotalCount: len(schedules), Page: 1, PageSize: pageSize}, nil
 }
 
-func (repository *virtualTaskScheduleRepository) ClaimDueTaskSchedules(int, time.Duration, time.Time, string) ([]task.TaskSchedule, error) {
+func (repository *virtualScheduleRepository) ClaimDueSchedules(int, time.Duration, time.Time, string) ([]task.Schedule, error) {
 	return nil, nil
 }
 
-func (repository *virtualTaskScheduleRepository) MarkTaskScheduleSucceeded(task.TaskSchedule) error {
+func (repository *virtualScheduleRepository) MarkScheduleSucceeded(task.Schedule) error {
 	return nil
 }
 
-func (repository *virtualTaskScheduleRepository) MarkTaskScheduleFailed(task.TaskSchedule, string, time.Time) error {
+func (repository *virtualScheduleRepository) MarkScheduleFailed(task.Schedule, string, time.Time) error {
 	return nil
 }
 
-func (repository *virtualTaskScheduleRepository) ExpireTaskSchedule(task.TaskSchedule, string, time.Time) error {
+func (repository *virtualScheduleRepository) ExpireSchedule(task.Schedule, string, time.Time) error {
 	return nil
 }
 
-func (repository *virtualTaskScheduleRepository) CancelTaskSchedules(request task.TaskScheduleCancelRequest) (task.TaskScheduleCancelResult, error) {
+func (repository *virtualScheduleRepository) CancelSchedules(request task.ScheduleCancelRequest) (task.ScheduleCancelResult, error) {
 	repository.mutex.Lock()
 	defer repository.mutex.Unlock()
-	cancelledTaskSchedules := []task.TaskSchedule{}
-	for index, taskSchedule := range repository.taskSchedules {
-		if taskSchedule.CreatorPersonID != request.RequesterPersonID || taskSchedule.NextRunAt == nil {
+	cancelledSchedules := []task.Schedule{}
+	for index, schedule := range repository.schedules {
+		if schedule.CreatorPersonID != request.RequesterPersonID || schedule.NextRunAt == nil {
 			continue
 		}
-		repository.taskSchedules[index].ExpiresAt = &request.CancelledAt
-		repository.taskSchedules[index].NextRunAt = nil
-		cancelledTaskSchedules = append(cancelledTaskSchedules, repository.taskSchedules[index])
+		repository.schedules[index].ExpiresAt = &request.CancelledAt
+		repository.schedules[index].NextRunAt = nil
+		cancelledSchedules = append(cancelledSchedules, repository.schedules[index])
 	}
-	return task.TaskScheduleCancelResult{TaskSchedules: cancelledTaskSchedules}, nil
+	return task.ScheduleCancelResult{Schedules: cancelledSchedules}, nil
 }
 
 type virtualMemoryIngestModel struct{}

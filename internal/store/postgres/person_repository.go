@@ -124,7 +124,7 @@ func (personRepository PersonRepository) canonicalizePersonReferences(legacyPers
 
 func canonicalPersonReferenceUpdateStatements() []canonicalPersonReferenceUpdate {
 	return []canonicalPersonReferenceUpdate{
-		{tableName: "task_schedule", statement: "UPDATE task_schedule SET creator_person_id = $2 WHERE creator_person_id = $1"},
+		{tableName: "schedule", statement: "UPDATE schedule SET creator_person_id = $2 WHERE creator_person_id = $1"},
 		{tableName: "task_run", statement: "UPDATE task_run SET requester_person_id = $2 WHERE requester_person_id = $1"},
 		{tableName: "task_wait_token", statement: "UPDATE task_wait_token SET person_id = $2 WHERE person_id = $1"},
 		{tableName: "task_session", statement: "UPDATE task_session SET person_id = $2 WHERE person_id = $1"},

@@ -21,57 +21,57 @@ type ScheduleCandidate struct {
 
 type ScheduleHintResolution struct {
 	Outcome    ScheduleHintOutcome
-	Match      TaskSchedule
+	Match      Schedule
 	Candidates []ScheduleCandidate
 }
 
-func OpenSchedulesCreatedBy(taskSchedules []TaskSchedule, creatorPersonID string, referenceTime time.Time) []TaskSchedule {
+func OpenSchedulesCreatedBy(schedules []Schedule, creatorPersonID string, referenceTime time.Time) []Schedule {
 	creator := strings.TrimSpace(creatorPersonID)
-	own := []TaskSchedule{}
-	for _, taskSchedule := range taskSchedules {
-		if strings.TrimSpace(taskSchedule.CreatorPersonID) != creator {
+	own := []Schedule{}
+	for _, schedule := range schedules {
+		if strings.TrimSpace(schedule.CreatorPersonID) != creator {
 			continue
 		}
-		if taskScheduleStatus(taskSchedule, referenceTime) == "expired" {
+		if scheduleStatus(schedule, referenceTime) == "expired" {
 			continue
 		}
-		own = append(own, taskSchedule)
+		own = append(own, schedule)
 	}
 	return own
 }
 
-func ResolveScheduleHint(hint string, taskSchedules []TaskSchedule) ScheduleHintResolution {
+func ResolveScheduleHint(hint string, schedules []Schedule) ScheduleHintResolution {
 	trimmedHint := strings.TrimSpace(hint)
 	if trimmedHint == "" {
 		return ScheduleHintResolution{Outcome: ScheduleHintNotFound, Candidates: []ScheduleCandidate{}}
 	}
-	for _, taskSchedule := range taskSchedules {
-		if strings.TrimSpace(taskSchedule.TaskScheduleID) == trimmedHint {
-			return ScheduleHintResolution{Outcome: ScheduleHintResolved, Match: taskSchedule}
+	for _, schedule := range schedules {
+		if strings.TrimSpace(schedule.ScheduleID) == trimmedHint {
+			return ScheduleHintResolution{Outcome: ScheduleHintResolved, Match: schedule}
 		}
 	}
-	if resolution, isDecided := resolutionFrom(schedulesWithDescriptionEqualTo(trimmedHint, taskSchedules)); isDecided {
+	if resolution, isDecided := resolutionFrom(schedulesWithDescriptionEqualTo(trimmedHint, schedules)); isDecided {
 		return resolution
 	}
-	if resolution, isDecided := resolutionFrom(schedulesWithDescriptionContaining(trimmedHint, taskSchedules)); isDecided {
+	if resolution, isDecided := resolutionFrom(schedulesWithDescriptionContaining(trimmedHint, schedules)); isDecided {
 		return resolution
 	}
 	return ScheduleHintResolution{Outcome: ScheduleHintNotFound, Candidates: []ScheduleCandidate{}}
 }
 
-func ScheduleCandidatesOf(taskSchedules []TaskSchedule) []ScheduleCandidate {
-	candidates := make([]ScheduleCandidate, 0, len(taskSchedules))
-	for _, taskSchedule := range taskSchedules {
+func ScheduleCandidatesOf(schedules []Schedule) []ScheduleCandidate {
+	candidates := make([]ScheduleCandidate, 0, len(schedules))
+	for _, schedule := range schedules {
 		candidates = append(candidates, ScheduleCandidate{
-			ScheduleID:  taskSchedule.TaskScheduleID,
-			Description: taskSchedule.Name,
-			NextRunAt:   taskSchedule.NextRunAt,
+			ScheduleID:  schedule.ScheduleID,
+			Description: schedule.Name,
+			NextRunAt:   schedule.NextRunAt,
 		})
 	}
 	return candidates
 }
 
-func resolutionFrom(matches []TaskSchedule) (ScheduleHintResolution, bool) {
+func resolutionFrom(matches []Schedule) (ScheduleHintResolution, bool) {
 	switch len(matches) {
 	case 0:
 		return ScheduleHintResolution{}, false
@@ -82,23 +82,23 @@ func resolutionFrom(matches []TaskSchedule) (ScheduleHintResolution, bool) {
 	}
 }
 
-func schedulesWithDescriptionEqualTo(hint string, taskSchedules []TaskSchedule) []TaskSchedule {
-	matches := []TaskSchedule{}
-	for _, taskSchedule := range taskSchedules {
-		if strings.EqualFold(strings.TrimSpace(taskSchedule.Name), hint) {
-			matches = append(matches, taskSchedule)
+func schedulesWithDescriptionEqualTo(hint string, schedules []Schedule) []Schedule {
+	matches := []Schedule{}
+	for _, schedule := range schedules {
+		if strings.EqualFold(strings.TrimSpace(schedule.Name), hint) {
+			matches = append(matches, schedule)
 		}
 	}
 	return matches
 }
 
-func schedulesWithDescriptionContaining(hint string, taskSchedules []TaskSchedule) []TaskSchedule {
+func schedulesWithDescriptionContaining(hint string, schedules []Schedule) []Schedule {
 	foldedHint := strings.ToLower(hint)
-	matches := []TaskSchedule{}
-	for _, taskSchedule := range taskSchedules {
-		description := strings.ToLower(strings.TrimSpace(taskSchedule.Name))
+	matches := []Schedule{}
+	for _, schedule := range schedules {
+		description := strings.ToLower(strings.TrimSpace(schedule.Name))
 		if description != "" && strings.Contains(description, foldedHint) {
-			matches = append(matches, taskSchedule)
+			matches = append(matches, schedule)
 		}
 	}
 	return matches

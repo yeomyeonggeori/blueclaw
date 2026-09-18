@@ -32,14 +32,14 @@ func TestCronScheduleRunsDailyResearchPromptAndAdvancesToNextDay(t *testing.T) {
 	taskLauncher := agentruntime.NewTaskLauncher(agentKernel, taskRunService, toolCatalogBuilder)
 	taskLauncher.UseTurnRouter(intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(intaketest.LanguageModelDecisionModel{LanguageModel: languageModel}, nil, nil), agentcontract.IntakeOptions{IsEnabled: true}))
 	taskLauncher.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, languageModel))
-	result, errorValue := agentruntime.NewTaskScheduleRunner(taskLauncher).RunIfDue(context.Background(), agentruntime.TaskScheduleRunRequest{
-		TaskSchedule: task.TaskSchedule{
-			TaskScheduleID:   "schedule-daily-research",
+	result, errorValue := agentruntime.NewScheduleRunner(taskLauncher).RunIfDue(context.Background(), agentruntime.ScheduleRunRequest{
+		Schedule: task.Schedule{
+			ScheduleID:       "schedule-daily-research",
 			CreatorPersonID:  "person-1",
 			Name:             "daily research brief",
 			Prompt:           "research the industry news every day and give me the highlights at 9am.",
 			AgentProfileName: "default",
-			Kind:             task.TaskScheduleKindCron,
+			Kind:             task.ScheduleKindCron,
 			CronExpression:   "0 9 * * *",
 			TimeZone:         "Asia/Seoul",
 			NextRunAt:        &nextRunAt,
@@ -57,15 +57,15 @@ func TestCronScheduleRunsDailyResearchPromptAndAdvancesToNextDay(t *testing.T) {
 	if result.LaunchResult.TurnResult.FinishMessage != "Today's research surfaced three key changes." {
 		t.Fatalf("expected daily research reply, got %q", result.LaunchResult.TurnResult.FinishMessage)
 	}
-	if result.TaskSchedule.LastTaskRunID == "" {
-		t.Fatalf("expected launched task run id, got %+v", result.TaskSchedule)
+	if result.Schedule.LastTaskRunID == "" {
+		t.Fatalf("expected launched task run id, got %+v", result.Schedule)
 	}
-	if result.TaskSchedule.LastRunAt == nil || !result.TaskSchedule.LastRunAt.Equal(runAt) {
-		t.Fatalf("expected last run time %s, got %+v", runAt.Format(time.RFC3339), result.TaskSchedule.LastRunAt)
+	if result.Schedule.LastRunAt == nil || !result.Schedule.LastRunAt.Equal(runAt) {
+		t.Fatalf("expected last run time %s, got %+v", runAt.Format(time.RFC3339), result.Schedule.LastRunAt)
 	}
 	expectedNextRunAt := time.Date(2026, 5, 7, 0, 0, 0, 0, time.UTC)
-	if result.TaskSchedule.NextRunAt == nil || !result.TaskSchedule.NextRunAt.Equal(expectedNextRunAt) {
-		t.Fatalf("expected next run time %s, got %+v", expectedNextRunAt.Format(time.RFC3339), result.TaskSchedule.NextRunAt)
+	if result.Schedule.NextRunAt == nil || !result.Schedule.NextRunAt.Equal(expectedNextRunAt) {
+		t.Fatalf("expected next run time %s, got %+v", expectedNextRunAt.Format(time.RFC3339), result.Schedule.NextRunAt)
 	}
 }
 

@@ -8,11 +8,11 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
 
-type taskScheduleScannerStub struct {
+type scheduleScannerStub struct {
 	values []any
 }
 
-func (scanner taskScheduleScannerStub) Scan(targets ...any) error {
+func (scanner scheduleScannerStub) Scan(targets ...any) error {
 	for index, value := range scanner.values {
 		switch target := targets[index].(type) {
 		case *string:
@@ -34,9 +34,9 @@ func (scanner taskScheduleScannerStub) Scan(targets ...any) error {
 	return nil
 }
 
-func TestScanTaskScheduleIncludesRunLimit(t *testing.T) {
+func TestScanScheduleIncludesRunLimit(t *testing.T) {
 	createdAt := time.Date(2026, 5, 9, 12, 0, 0, 0, time.UTC)
-	taskSchedule, errorValue := scanTaskSchedule(taskScheduleScannerStub{values: []any{
+	schedule, errorValue := scanSchedule(scheduleScannerStub{values: []any{
 		"schedule-1",
 		"person-1",
 		"limited reminder",
@@ -68,19 +68,19 @@ func TestScanTaskScheduleIncludesRunLimit(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected task schedule scan to succeed: %v", errorValue)
 	}
-	if taskSchedule.MaxRunCount != 10 || taskSchedule.CompletedRunCount != 4 {
-		t.Fatalf("expected run limit fields to scan, got %+v", taskSchedule)
+	if schedule.MaxRunCount != 10 || schedule.CompletedRunCount != 4 {
+		t.Fatalf("expected run limit fields to scan, got %+v", schedule)
 	}
-	if taskSchedule.ExecutionMode != "message" {
-		t.Fatalf("expected execution mode to scan, got %+v", taskSchedule)
+	if schedule.ExecutionMode != "message" {
+		t.Fatalf("expected execution mode to scan, got %+v", schedule)
 	}
-	if taskSchedule.CronExpression != "" {
-		t.Fatalf("expected nullable cron expression to scan as empty, got %q", taskSchedule.CronExpression)
+	if schedule.CronExpression != "" {
+		t.Fatalf("expected nullable cron expression to scan as empty, got %q", schedule.CronExpression)
 	}
 }
 
-func TestTaskScheduleListFilterIncludesExpiredRowsWithoutNextRun(t *testing.T) {
-	conditions, _ := taskScheduleListFilter(task.TaskScheduleListRequest{IncludeExpired: true})
+func TestScheduleListFilterIncludesExpiredRowsWithoutNextRun(t *testing.T) {
+	conditions, _ := scheduleListFilter(task.ScheduleListRequest{IncludeExpired: true})
 	for _, condition := range conditions {
 		if condition == "next_run_at IS NOT NULL" {
 			t.Fatalf("expected includeExpired to allow schedules without next_run_at, got %+v", conditions)
@@ -88,14 +88,14 @@ func TestTaskScheduleListFilterIncludesExpiredRowsWithoutNextRun(t *testing.T) {
 	}
 }
 
-func TestTaskScheduleListFilterExcludesExpiredRowsByDefault(t *testing.T) {
-	conditions, _ := taskScheduleListFilter(task.TaskScheduleListRequest{})
-	if !containsTaskScheduleListCondition(conditions, "next_run_at IS NOT NULL") || !containsTaskScheduleListCondition(conditions, "(expires_at IS NULL OR expires_at > $1)") {
+func TestScheduleListFilterExcludesExpiredRowsByDefault(t *testing.T) {
+	conditions, _ := scheduleListFilter(task.ScheduleListRequest{})
+	if !containsScheduleListCondition(conditions, "next_run_at IS NOT NULL") || !containsScheduleListCondition(conditions, "(expires_at IS NULL OR expires_at > $1)") {
 		t.Fatalf("expected default list filter to require active schedules, got %+v", conditions)
 	}
 }
 
-func containsTaskScheduleListCondition(conditions []string, expectedCondition string) bool {
+func containsScheduleListCondition(conditions []string, expectedCondition string) bool {
 	for _, condition := range conditions {
 		if condition == expectedCondition {
 			return true

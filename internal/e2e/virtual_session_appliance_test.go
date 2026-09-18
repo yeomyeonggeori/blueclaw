@@ -144,8 +144,8 @@ func TestScheduleLifecycleAcceptance(t *testing.T) {
 	if !eventsContain(thirdTurnResult.Events, "tool.schedule_cancel.requested", "schedule_cancel") {
 		t.Fatalf("expected deletion through the capability kernel; events: %s", summarizeEvents(thirdTurnResult.Events))
 	}
-	if activeScheduleCount(result.TaskSchedules) != 0 {
-		t.Fatalf("expected zero active schedules, got %+v", result.TaskSchedules)
+	if activeScheduleCount(result.Schedules) != 0 {
+		t.Fatalf("expected zero active schedules, got %+v", result.Schedules)
 	}
 }
 

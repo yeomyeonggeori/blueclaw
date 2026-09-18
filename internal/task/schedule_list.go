@@ -29,8 +29,8 @@ type ScheduleListItem struct {
 	LastRunAt       *time.Time `json:"lastRunAt,omitempty"`
 }
 
-func ScheduleListQuery(creatorPersonID string, referenceTime time.Time) TaskScheduleListRequest {
-	return TaskScheduleListRequest{
+func ScheduleListQuery(creatorPersonID string, referenceTime time.Time) ScheduleListRequest {
+	return ScheduleListRequest{
 		CreatorPersonID: strings.TrimSpace(creatorPersonID),
 		IncludeExpired:  true,
 		Page:            1,
@@ -39,12 +39,12 @@ func ScheduleListQuery(creatorPersonID string, referenceTime time.Time) TaskSche
 	}
 }
 
-func ProjectScheduleList(taskSchedules []TaskSchedule, input ScheduleListInput, referenceTime time.Time) ScheduleListOutput {
+func ProjectScheduleList(schedules []Schedule, input ScheduleListInput, referenceTime time.Time) ScheduleListOutput {
 	limit := normalizedScheduleListLimit(input.Limit)
 	status := strings.TrimSpace(input.Status)
 	items := []ScheduleListItem{}
-	for _, taskSchedule := range taskSchedules {
-		item := scheduleListItemFromSchedule(taskSchedule, referenceTime)
+	for _, schedule := range schedules {
+		item := scheduleListItemFromSchedule(schedule, referenceTime)
 		if status != "" && item.Status != status {
 			continue
 		}
@@ -66,36 +66,36 @@ func normalizedScheduleListLimit(limit int) int {
 	return limit
 }
 
-func scheduleListItemFromSchedule(taskSchedule TaskSchedule, referenceTime time.Time) ScheduleListItem {
+func scheduleListItemFromSchedule(schedule Schedule, referenceTime time.Time) ScheduleListItem {
 	return ScheduleListItem{
-		ScheduleID:      taskSchedule.TaskScheduleID,
-		TaskInstruction: taskSchedule.Prompt,
-		Description:     taskSchedule.Name,
-		Cadence:         taskScheduleCadence(taskSchedule),
-		CronExpression:  taskSchedule.CronExpression,
-		RunAt:           taskSchedule.RunAt,
-		Status:          taskScheduleStatus(taskSchedule, referenceTime),
-		NextRunAt:       taskSchedule.NextRunAt,
-		LastRunAt:       taskSchedule.LastRunAt,
+		ScheduleID:      schedule.ScheduleID,
+		TaskInstruction: schedule.Prompt,
+		Description:     schedule.Name,
+		Cadence:         scheduleCadence(schedule),
+		CronExpression:  schedule.CronExpression,
+		RunAt:           schedule.RunAt,
+		Status:          scheduleStatus(schedule, referenceTime),
+		NextRunAt:       schedule.NextRunAt,
+		LastRunAt:       schedule.LastRunAt,
 	}
 }
 
-func taskScheduleCadence(taskSchedule TaskSchedule) string {
-	switch taskSchedule.Kind {
-	case TaskScheduleKindInterval:
-		return "every " + strconv.Itoa(taskSchedule.IntervalSecond) + " seconds"
-	case TaskScheduleKindCron:
+func scheduleCadence(schedule Schedule) string {
+	switch schedule.Kind {
+	case ScheduleKindInterval:
+		return "every " + strconv.Itoa(schedule.IntervalSecond) + " seconds"
+	case ScheduleKindCron:
 		return "cron"
 	default:
 		return "once"
 	}
 }
 
-func taskScheduleStatus(taskSchedule TaskSchedule, referenceTime time.Time) string {
-	if taskSchedule.NextRunAt == nil || taskSchedule.ExpiresAt != nil && !taskSchedule.ExpiresAt.After(referenceTime) {
+func scheduleStatus(schedule Schedule, referenceTime time.Time) string {
+	if schedule.NextRunAt == nil || schedule.ExpiresAt != nil && !schedule.ExpiresAt.After(referenceTime) {
 		return "expired"
 	}
-	if strings.TrimSpace(taskSchedule.LastError) != "" {
+	if strings.TrimSpace(schedule.LastError) != "" {
 		return "failed"
 	}
 	return "active"

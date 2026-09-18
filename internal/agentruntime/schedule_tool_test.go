@@ -15,9 +15,9 @@ import (
 )
 
 func TestScheduleCreateToolStoresCurrentReplyTarget(t *testing.T) {
-	repository := &memoryTaskScheduleRepository{}
+	repository := &memoryScheduleRepository{}
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(repository)
+	toolCatalogBuilder.UseScheduleRepository(repository)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_create"})
 	toolCatalogBuilder.UseCompanyProvider(func() agentcontract.CompanyContext {
 		return agentcontract.CompanyContext{TimeZone: "Asia/Seoul"}
@@ -50,29 +50,29 @@ func TestScheduleCreateToolStoresCurrentReplyTarget(t *testing.T) {
 	if len(result.Effects) != 1 || result.Effects[0].ObjectType != "schedule" || result.Effects[0].Effect != "created" || result.Effects[0].ID == "" {
 		t.Fatalf("expected exact schedule create effect, got %+v", result.Effects)
 	}
-	if len(repository.taskSchedules) != 1 {
-		t.Fatalf("expected one schedule, got %+v", repository.taskSchedules)
+	if len(repository.schedules) != 1 {
+		t.Fatalf("expected one schedule, got %+v", repository.schedules)
 	}
-	taskSchedule := repository.taskSchedules[0]
-	if taskSchedule.Platform != "mattermost" || taskSchedule.ConversationID != "channel-1" || taskSchedule.ReplyTargetID != "reply-target-1" {
-		t.Fatalf("expected current reply target to be stored, got %+v", taskSchedule)
+	schedule := repository.schedules[0]
+	if schedule.Platform != "mattermost" || schedule.ConversationID != "channel-1" || schedule.ReplyTargetID != "reply-target-1" {
+		t.Fatalf("expected current reply target to be stored, got %+v", schedule)
 	}
-	if taskSchedule.Prompt != "research the important industry news and tell me." {
-		t.Fatalf("expected stored task instruction without cadence, got %q", taskSchedule.Prompt)
+	if schedule.Prompt != "research the important industry news and tell me." {
+		t.Fatalf("expected stored task instruction without cadence, got %q", schedule.Prompt)
 	}
-	if taskSchedule.ExecutionMode != task.TaskScheduleExecutionModeAgent {
-		t.Fatalf("expected agent execution mode, got %+v", taskSchedule)
+	if schedule.ExecutionMode != task.ScheduleExecutionModeAgent {
+		t.Fatalf("expected agent execution mode, got %+v", schedule)
 	}
-	if taskSchedule.TimeZone != "Asia/Seoul" || taskSchedule.NextRunAt == nil {
-		t.Fatalf("expected the company zone and a next run, got %+v", taskSchedule)
+	if schedule.TimeZone != "Asia/Seoul" || schedule.NextRunAt == nil {
+		t.Fatalf("expected the company zone and a next run, got %+v", schedule)
 	}
 }
 
 func TestScheduleListToolListsRequesterSchedulesOnly(t *testing.T) {
 	nextRunAt := time.Now().UTC().Add(time.Hour)
-	repository := &memoryTaskScheduleRepository{taskSchedules: []task.TaskSchedule{
-		{TaskScheduleID: "schedule-a", CreatorPersonID: "person-a", Name: "A schedule", Prompt: "Check A", Kind: task.TaskScheduleKindOnce, RunAt: &nextRunAt, NextRunAt: &nextRunAt},
-		{TaskScheduleID: "schedule-b", CreatorPersonID: "person-b", Name: "B schedule", Prompt: "Check B", Kind: task.TaskScheduleKindOnce, RunAt: &nextRunAt, NextRunAt: &nextRunAt},
+	repository := &memoryScheduleRepository{schedules: []task.Schedule{
+		{ScheduleID: "schedule-a", CreatorPersonID: "person-a", Name: "A schedule", Prompt: "Check A", Kind: task.ScheduleKindOnce, RunAt: &nextRunAt, NextRunAt: &nextRunAt},
+		{ScheduleID: "schedule-b", CreatorPersonID: "person-b", Name: "B schedule", Prompt: "Check B", Kind: task.ScheduleKindOnce, RunAt: &nextRunAt, NextRunAt: &nextRunAt},
 	}}
 	toolRegistry := newScheduleListTestRegistry(repository, "person-a")
 
@@ -88,9 +88,9 @@ func TestScheduleListToolListsRequesterSchedulesOnly(t *testing.T) {
 
 func TestScheduleListToolFiltersByStatus(t *testing.T) {
 	nextRunAt := time.Now().UTC().Add(time.Hour)
-	repository := &memoryTaskScheduleRepository{taskSchedules: []task.TaskSchedule{
-		{TaskScheduleID: "schedule-active", CreatorPersonID: "person-1", Prompt: "Active", Kind: task.TaskScheduleKindInterval, IntervalSecond: 60, NextRunAt: &nextRunAt},
-		{TaskScheduleID: "schedule-failed", CreatorPersonID: "person-1", Prompt: "Failed", Kind: task.TaskScheduleKindCron, CronExpression: "0 9 * * *", NextRunAt: &nextRunAt, LastError: "provider unavailable"},
+	repository := &memoryScheduleRepository{schedules: []task.Schedule{
+		{ScheduleID: "schedule-active", CreatorPersonID: "person-1", Prompt: "Active", Kind: task.ScheduleKindInterval, IntervalSecond: 60, NextRunAt: &nextRunAt},
+		{ScheduleID: "schedule-failed", CreatorPersonID: "person-1", Prompt: "Failed", Kind: task.ScheduleKindCron, CronExpression: "0 9 * * *", NextRunAt: &nextRunAt, LastError: "provider unavailable"},
 	}}
 	toolRegistry := newScheduleListTestRegistry(repository, "person-1")
 
@@ -106,18 +106,18 @@ func TestScheduleListToolFiltersByStatus(t *testing.T) {
 
 func TestScheduleListToolCapsLimitAtTwenty(t *testing.T) {
 	nextRunAt := time.Now().UTC().Add(time.Hour)
-	taskSchedules := []task.TaskSchedule{}
+	schedules := []task.Schedule{}
 	for index := 0; index < 25; index++ {
-		taskSchedules = append(taskSchedules, task.TaskSchedule{
-			TaskScheduleID:  "schedule-" + strconv.Itoa(index),
+		schedules = append(schedules, task.Schedule{
+			ScheduleID:      "schedule-" + strconv.Itoa(index),
 			CreatorPersonID: "person-1",
 			Prompt:          "Task",
-			Kind:            task.TaskScheduleKindOnce,
+			Kind:            task.ScheduleKindOnce,
 			RunAt:           &nextRunAt,
 			NextRunAt:       &nextRunAt,
 		})
 	}
-	repository := &memoryTaskScheduleRepository{taskSchedules: taskSchedules}
+	repository := &memoryScheduleRepository{schedules: schedules}
 	toolRegistry := newScheduleListTestRegistry(repository, "person-1")
 
 	output := invokeScheduleList(t, toolRegistry, map[string]any{"limit": 99})
@@ -128,7 +128,7 @@ func TestScheduleListToolCapsLimitAtTwenty(t *testing.T) {
 }
 
 func TestScheduleListToolRequiresRequesterPersonID(t *testing.T) {
-	repository := &memoryTaskScheduleRepository{}
+	repository := &memoryScheduleRepository{}
 	toolRegistry := newScheduleListTestRegistry(repository, "")
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
@@ -173,9 +173,9 @@ func TestScheduleCreateSchemaUsesTaskInstruction(t *testing.T) {
 }
 
 func TestScheduleCreateRejectsLegacyPromptAndUnknownFields(t *testing.T) {
-	repository := &memoryTaskScheduleRepository{}
+	repository := &memoryScheduleRepository{}
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(repository)
+	toolCatalogBuilder.UseScheduleRepository(repository)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_create"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
@@ -197,15 +197,15 @@ func TestScheduleCreateRejectsLegacyPromptAndUnknownFields(t *testing.T) {
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if !result.Failed() || len(repository.taskSchedules) != 0 {
-		t.Fatalf("expected legacy prompt input to fail without mutation, result=%+v schedules=%+v", result, repository.taskSchedules)
+	if !result.Failed() || len(repository.schedules) != 0 {
+		t.Fatalf("expected legacy prompt input to fail without mutation, result=%+v schedules=%+v", result, repository.schedules)
 	}
 }
 
 func TestScheduleCreateRejectsUnknownKindWithoutInference(t *testing.T) {
-	repository := &memoryTaskScheduleRepository{}
+	repository := &memoryScheduleRepository{}
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(repository)
+	toolCatalogBuilder.UseScheduleRepository(repository)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_create"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
@@ -227,23 +227,23 @@ func TestScheduleCreateRejectsUnknownKindWithoutInference(t *testing.T) {
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if !result.Failed() || len(repository.taskSchedules) != 0 {
-		t.Fatalf("expected unknown kind to fail without inference, result=%+v schedules=%+v", result, repository.taskSchedules)
+	if !result.Failed() || len(repository.schedules) != 0 {
+		t.Fatalf("expected unknown kind to fail without inference, result=%+v schedules=%+v", result, repository.schedules)
 	}
 }
 
 func TestScheduleUpdateRejectsNonExactScheduleID(t *testing.T) {
 	nextRunAt := time.Now().UTC().Add(time.Hour)
-	repository := &memoryTaskScheduleRepository{taskSchedules: []task.TaskSchedule{{
-		TaskScheduleID:  "schedule-owned",
+	repository := &memoryScheduleRepository{schedules: []task.Schedule{{
+		ScheduleID:      "schedule-owned",
 		CreatorPersonID: "person-1",
 		Prompt:          "inspect the status",
-		Kind:            task.TaskScheduleKindOnce,
+		Kind:            task.ScheduleKindOnce,
 		NextRunAt:       &nextRunAt,
 		TimeZone:        "Asia/Seoul",
 	}}}
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(repository)
+	toolCatalogBuilder.UseScheduleRepository(repository)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_update"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{ProfileName: "default", RequesterPersonID: "person-1"})
 
@@ -257,23 +257,23 @@ func TestScheduleUpdateRejectsNonExactScheduleID(t *testing.T) {
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if !result.Failed() || repository.taskSchedules[0].Name == "changed" {
-		t.Fatalf("expected non-exact schedule ID to fail without mutation, result=%+v schedule=%+v", result, repository.taskSchedules[0])
+	if !result.Failed() || repository.schedules[0].Name == "changed" {
+		t.Fatalf("expected non-exact schedule ID to fail without mutation, result=%+v schedule=%+v", result, repository.schedules[0])
 	}
 }
 
 func TestScheduleUpdateRequiresAChange(t *testing.T) {
 	nextRunAt := time.Now().UTC().Add(time.Hour)
-	repository := &memoryTaskScheduleRepository{taskSchedules: []task.TaskSchedule{{
-		TaskScheduleID:  "schedule-owned",
+	repository := &memoryScheduleRepository{schedules: []task.Schedule{{
+		ScheduleID:      "schedule-owned",
 		CreatorPersonID: "person-1",
 		Prompt:          "inspect the status",
-		Kind:            task.TaskScheduleKindOnce,
+		Kind:            task.ScheduleKindOnce,
 		NextRunAt:       &nextRunAt,
 		TimeZone:        "Asia/Seoul",
 	}}}
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(repository)
+	toolCatalogBuilder.UseScheduleRepository(repository)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_update"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{ProfileName: "default", RequesterPersonID: "person-1"})
 
@@ -284,15 +284,15 @@ func TestScheduleUpdateRequiresAChange(t *testing.T) {
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if !result.Failed() || repository.taskSchedules[0].Prompt != "inspect the status" {
-		t.Fatalf("expected empty update to fail without mutation, result=%+v schedule=%+v", result, repository.taskSchedules[0])
+	if !result.Failed() || repository.schedules[0].Prompt != "inspect the status" {
+		t.Fatalf("expected empty update to fail without mutation, result=%+v schedule=%+v", result, repository.schedules[0])
 	}
 }
 
 func TestScheduleCancelRejectsUnknownScopeWithoutMutation(t *testing.T) {
-	repository := &memoryTaskScheduleRepository{}
+	repository := &memoryScheduleRepository{}
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(repository)
+	toolCatalogBuilder.UseScheduleRepository(repository)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_cancel"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{ProfileName: "default", RequesterPersonID: "person-1"})
 
@@ -309,9 +309,9 @@ func TestScheduleCancelRejectsUnknownScopeWithoutMutation(t *testing.T) {
 }
 
 func TestScheduleCreateToolStoresTaskInstructionAsAgentTask(t *testing.T) {
-	repository := &memoryTaskScheduleRepository{}
+	repository := &memoryScheduleRepository{}
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(repository)
+	toolCatalogBuilder.UseScheduleRepository(repository)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_create"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
@@ -338,27 +338,27 @@ func TestScheduleCreateToolStoresTaskInstructionAsAgentTask(t *testing.T) {
 	if result.Failed() {
 		t.Fatalf("expected schedule_create success, got %s", result.ContentText())
 	}
-	if len(repository.taskSchedules) != 1 {
-		t.Fatalf("expected one schedule, got %+v", repository.taskSchedules)
+	if len(repository.schedules) != 1 {
+		t.Fatalf("expected one schedule, got %+v", repository.schedules)
 	}
-	if repository.taskSchedules[0].ExecutionMode != task.TaskScheduleExecutionModeAgent {
-		t.Fatalf("expected agent execution mode, got %+v", repository.taskSchedules[0])
+	if repository.schedules[0].ExecutionMode != task.ScheduleExecutionModeAgent {
+		t.Fatalf("expected agent execution mode, got %+v", repository.schedules[0])
 	}
-	if repository.taskSchedules[0].Prompt != "say sorry." {
-		t.Fatalf("expected task instruction to be stored, got %+v", repository.taskSchedules[0])
+	if repository.schedules[0].Prompt != "say sorry." {
+		t.Fatalf("expected task instruction to be stored, got %+v", repository.schedules[0])
 	}
 	if !strings.Contains(result.ContentText(), `"taskInstruction":"say sorry."`) || strings.Contains(result.ContentText(), `"prompt"`) {
 		t.Fatalf("expected tool result to expose taskInstruction without prompt, got %s", result.ContentText())
 	}
-	if repository.taskSchedules[0].ExpiresAt != nil {
-		t.Fatalf("expected schedule expiration to default to nil, got %+v", repository.taskSchedules[0])
+	if repository.schedules[0].ExpiresAt != nil {
+		t.Fatalf("expected schedule expiration to default to nil, got %+v", repository.schedules[0])
 	}
 }
 
 func TestScheduleCreateToolRejectsBoundedRepeatWithoutFiniteBound(t *testing.T) {
-	repository := &memoryTaskScheduleRepository{}
+	repository := &memoryScheduleRepository{}
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(repository)
+	toolCatalogBuilder.UseScheduleRepository(repository)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_create"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
@@ -386,16 +386,16 @@ func TestScheduleCreateToolRejectsBoundedRepeatWithoutFiniteBound(t *testing.T) 
 	if !result.Failed() || !strings.Contains(result.ContentText(), "expiresAt or maxRunCount") {
 		t.Fatalf("expected finite bound failure, got %s", result.ContentText())
 	}
-	if len(repository.taskSchedules) != 0 {
-		t.Fatalf("expected no schedule to be created, got %+v", repository.taskSchedules)
+	if len(repository.schedules) != 0 {
+		t.Fatalf("expected no schedule to be created, got %+v", repository.schedules)
 	}
 }
 
 func TestScheduleCreateToolStoresExpiresAtForBoundedRepeat(t *testing.T) {
-	repository := &memoryTaskScheduleRepository{}
+	repository := &memoryScheduleRepository{}
 	expiresAt := time.Now().UTC().Add(2 * time.Hour).Format(time.RFC3339)
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(repository)
+	toolCatalogBuilder.UseScheduleRepository(repository)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_create"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
@@ -424,8 +424,8 @@ func TestScheduleCreateToolStoresExpiresAtForBoundedRepeat(t *testing.T) {
 	if result.Failed() {
 		t.Fatalf("expected schedule_create success, got %s", result.ContentText())
 	}
-	if len(repository.taskSchedules) != 1 || repository.taskSchedules[0].ExpiresAt == nil {
-		t.Fatalf("expected one expiring schedule, got %+v", repository.taskSchedules)
+	if len(repository.schedules) != 1 || repository.schedules[0].ExpiresAt == nil {
+		t.Fatalf("expected one expiring schedule, got %+v", repository.schedules)
 	}
 	if !strings.Contains(result.ContentText(), `"expiresAt"`) || !strings.Contains(result.ContentText(), `"nextRunAt"`) {
 		t.Fatalf("expected schedule result to include timing fields, got %s", result.ContentText())
@@ -456,22 +456,22 @@ func TestScheduledToolSetKeepsOnlyAskInputAvailable(t *testing.T) {
 
 func TestScheduleCancelToolCancelsRequesterSchedules(t *testing.T) {
 	nextRunAt := time.Now().UTC().Add(time.Minute)
-	repository := &memoryTaskScheduleRepository{taskSchedules: []task.TaskSchedule{{
-		TaskScheduleID:   "schedule-owned",
+	repository := &memoryScheduleRepository{schedules: []task.Schedule{{
+		ScheduleID:       "schedule-owned",
 		CreatorPersonID:  "person-1",
 		ConversationID:   "channel-1",
 		Prompt:           "owned",
-		Kind:             task.TaskScheduleKindInterval,
+		Kind:             task.ScheduleKindInterval,
 		IntervalSecond:   60,
 		NextRunAt:        &nextRunAt,
 		ExpiresAt:        timePointer(nextRunAt.Add(time.Hour)),
 		AgentProfileName: "default",
 	}, {
-		TaskScheduleID:   "schedule-other",
+		ScheduleID:       "schedule-other",
 		CreatorPersonID:  "person-2",
 		ConversationID:   "channel-1",
 		Prompt:           "other",
-		Kind:             task.TaskScheduleKindInterval,
+		Kind:             task.ScheduleKindInterval,
 		IntervalSecond:   60,
 		NextRunAt:        &nextRunAt,
 		ExpiresAt:        timePointer(nextRunAt.Add(time.Hour)),
@@ -483,7 +483,7 @@ func TestScheduleCancelToolCancelsRequesterSchedules(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(repository)
+	toolCatalogBuilder.UseScheduleRepository(repository)
 	toolCatalogBuilder.UseTaskRunService(taskRunService)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_cancel"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
@@ -508,12 +508,12 @@ func TestScheduleCancelToolCancelsRequesterSchedules(t *testing.T) {
 	if !strings.Contains(result.ContentText(), `"cancelledScheduleIDs":["schedule-owned"]`) || !strings.Contains(result.ContentText(), `"cancelledScheduleCount":1`) || !strings.Contains(result.ContentText(), `"cancelledWaitCount":1`) || strings.Contains(result.ContentText(), `"taskSchedules"`) {
 		t.Fatalf("expected one schedule and one wait cancelled, got %s", result.ContentText())
 	}
-	ownedSchedule := repository.taskSchedules[1]
-	if ownedSchedule.TaskScheduleID != "schedule-owned" || ownedSchedule.NextRunAt != nil || ownedSchedule.ExpiresAt == nil || ownedSchedule.ExpiresAt.After(time.Now().UTC().Add(time.Second)) {
+	ownedSchedule := repository.schedules[1]
+	if ownedSchedule.ScheduleID != "schedule-owned" || ownedSchedule.NextRunAt != nil || ownedSchedule.ExpiresAt == nil || ownedSchedule.ExpiresAt.After(time.Now().UTC().Add(time.Second)) {
 		t.Fatalf("expected owned schedule to expire, got %+v", ownedSchedule)
 	}
-	otherSchedule := repository.taskSchedules[0]
-	if otherSchedule.TaskScheduleID != "schedule-other" || otherSchedule.NextRunAt == nil {
+	otherSchedule := repository.schedules[0]
+	if otherSchedule.ScheduleID != "schedule-other" || otherSchedule.NextRunAt == nil {
 		t.Fatalf("expected other schedule to remain active, got %+v", otherSchedule)
 	}
 	cancelledTaskRun, isFound := taskRunService.FindTaskRun(waitingTaskRun.TaskRunID)
@@ -524,22 +524,22 @@ func TestScheduleCancelToolCancelsRequesterSchedules(t *testing.T) {
 
 func TestScheduleCancelToolCancelsCurrentConversationDeliverySchedules(t *testing.T) {
 	nextRunAt := time.Now().UTC().Add(time.Minute)
-	repository := &memoryTaskScheduleRepository{taskSchedules: []task.TaskSchedule{{
-		TaskScheduleID:   "schedule-delivered",
+	repository := &memoryScheduleRepository{schedules: []task.Schedule{{
+		ScheduleID:       "schedule-delivered",
 		CreatorPersonID:  "person-creator",
 		ConversationID:   "dm-recipient",
 		Prompt:           "spam",
-		Kind:             task.TaskScheduleKindInterval,
+		Kind:             task.ScheduleKindInterval,
 		IntervalSecond:   60,
 		NextRunAt:        &nextRunAt,
 		ExpiresAt:        timePointer(nextRunAt.Add(time.Hour)),
 		AgentProfileName: "default",
 	}, {
-		TaskScheduleID:   "schedule-other-conversation",
+		ScheduleID:       "schedule-other-conversation",
 		CreatorPersonID:  "person-creator",
 		ConversationID:   "dm-other",
 		Prompt:           "other",
-		Kind:             task.TaskScheduleKindInterval,
+		Kind:             task.ScheduleKindInterval,
 		IntervalSecond:   60,
 		NextRunAt:        &nextRunAt,
 		ExpiresAt:        timePointer(nextRunAt.Add(time.Hour)),
@@ -551,7 +551,7 @@ func TestScheduleCancelToolCancelsCurrentConversationDeliverySchedules(t *testin
 		t.Fatal(errorValue)
 	}
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(repository)
+	toolCatalogBuilder.UseScheduleRepository(repository)
 	toolCatalogBuilder.UseTaskRunService(taskRunService)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_cancel"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
@@ -576,12 +576,12 @@ func TestScheduleCancelToolCancelsCurrentConversationDeliverySchedules(t *testin
 	if !strings.Contains(result.ContentText(), `"cancelledScheduleCount":1`) || !strings.Contains(result.ContentText(), `"cancelledTaskRunCount":1`) || !strings.Contains(result.ContentText(), `"effectiveCancellationCount":2`) {
 		t.Fatalf("expected delivered schedule and active run cancelled, got %s", result.ContentText())
 	}
-	deliveredSchedule := repository.taskSchedules[1]
-	if deliveredSchedule.TaskScheduleID != "schedule-delivered" || deliveredSchedule.NextRunAt != nil {
+	deliveredSchedule := repository.schedules[1]
+	if deliveredSchedule.ScheduleID != "schedule-delivered" || deliveredSchedule.NextRunAt != nil {
 		t.Fatalf("expected delivered schedule to expire, got %+v", deliveredSchedule)
 	}
-	otherSchedule := repository.taskSchedules[0]
-	if otherSchedule.TaskScheduleID != "schedule-other-conversation" || otherSchedule.NextRunAt == nil {
+	otherSchedule := repository.schedules[0]
+	if otherSchedule.ScheduleID != "schedule-other-conversation" || otherSchedule.NextRunAt == nil {
 		t.Fatalf("expected other conversation schedule to remain active, got %+v", otherSchedule)
 	}
 	cancelledTaskRun, isFound := taskRunService.FindTaskRun(taskRun.TaskRunID)
@@ -594,7 +594,7 @@ func TestScheduleCancelToolFailsWhenNothingMatched(t *testing.T) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	taskRun := taskRunService.CreateTaskRun("person-1", "dm-1", "cancel request")
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(&memoryTaskScheduleRepository{})
+	toolCatalogBuilder.UseScheduleRepository(&memoryScheduleRepository{})
 	toolCatalogBuilder.UseTaskRunService(taskRunService)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_cancel"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
@@ -626,12 +626,12 @@ func TestScheduleCancelToolFailsWhenNothingMatched(t *testing.T) {
 
 func TestScheduleUpdateToolUpdatesIntervalSchedule(t *testing.T) {
 	nextRunAt := time.Now().UTC().Add(time.Hour)
-	repository := &memoryTaskScheduleRepository{taskSchedules: []task.TaskSchedule{{
-		TaskScheduleID:   "schedule-owned",
+	repository := &memoryScheduleRepository{schedules: []task.Schedule{{
+		ScheduleID:       "schedule-owned",
 		CreatorPersonID:  "person-1",
 		Name:             "status reminder",
 		Prompt:           "check the status.",
-		Kind:             task.TaskScheduleKindInterval,
+		Kind:             task.ScheduleKindInterval,
 		IntervalSecond:   1800,
 		MaxRunCount:      3,
 		NextRunAt:        &nextRunAt,
@@ -639,7 +639,7 @@ func TestScheduleUpdateToolUpdatesIntervalSchedule(t *testing.T) {
 		AgentProfileName: "default",
 	}}}
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(repository)
+	toolCatalogBuilder.UseScheduleRepository(repository)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_update"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
@@ -662,7 +662,7 @@ func TestScheduleUpdateToolUpdatesIntervalSchedule(t *testing.T) {
 	if result.Failed() {
 		t.Fatalf("expected schedule_update success, got %s", result.ContentText())
 	}
-	updatedSchedule := repository.taskSchedules[0]
+	updatedSchedule := repository.schedules[0]
 	if updatedSchedule.IntervalSecond != 3600 || updatedSchedule.MaxRunCount != 5 || updatedSchedule.NextRunAt == nil {
 		t.Fatalf("expected interval update, got %+v", updatedSchedule)
 	}
@@ -677,12 +677,12 @@ func TestScheduleUpdateToolUpdatesIntervalSchedule(t *testing.T) {
 func TestScheduleUpdateToolUpdatesOneOffRunAt(t *testing.T) {
 	nextRunAt := time.Now().UTC().Add(time.Hour)
 	runAt := time.Now().UTC().Add(2 * time.Hour).Truncate(time.Second)
-	repository := &memoryTaskScheduleRepository{taskSchedules: []task.TaskSchedule{{
-		TaskScheduleID:   "schedule-owned",
+	repository := &memoryScheduleRepository{schedules: []task.Schedule{{
+		ScheduleID:       "schedule-owned",
 		CreatorPersonID:  "person-1",
 		Name:             "status reminder",
 		Prompt:           "check the status.",
-		Kind:             task.TaskScheduleKindInterval,
+		Kind:             task.ScheduleKindInterval,
 		IntervalSecond:   1800,
 		MaxRunCount:      3,
 		NextRunAt:        &nextRunAt,
@@ -690,7 +690,7 @@ func TestScheduleUpdateToolUpdatesOneOffRunAt(t *testing.T) {
 		AgentProfileName: "default",
 	}}}
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(repository)
+	toolCatalogBuilder.UseScheduleRepository(repository)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_update"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
@@ -712,8 +712,8 @@ func TestScheduleUpdateToolUpdatesOneOffRunAt(t *testing.T) {
 	if result.Failed() {
 		t.Fatalf("expected schedule_update success, got %s", result.ContentText())
 	}
-	updatedSchedule := repository.taskSchedules[0]
-	if updatedSchedule.Kind != task.TaskScheduleKindOnce || updatedSchedule.RunAt == nil || !updatedSchedule.RunAt.Equal(runAt) {
+	updatedSchedule := repository.schedules[0]
+	if updatedSchedule.Kind != task.ScheduleKindOnce || updatedSchedule.RunAt == nil || !updatedSchedule.RunAt.Equal(runAt) {
 		t.Fatalf("expected one-off runAt update, got %+v", updatedSchedule)
 	}
 	if updatedSchedule.IntervalSecond != 0 || updatedSchedule.MaxRunCount != 0 || updatedSchedule.NextRunAt == nil || !updatedSchedule.NextRunAt.Equal(runAt) {
@@ -729,7 +729,7 @@ func TestScheduleUpdateToolUpdatesOneOffRunAt(t *testing.T) {
 
 func TestScheduleUpdateToolFailsForNonexistentID(t *testing.T) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(&memoryTaskScheduleRepository{})
+	toolCatalogBuilder.UseScheduleRepository(&memoryScheduleRepository{})
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_update"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
@@ -756,12 +756,12 @@ func TestScheduleUpdateToolFailsForNonexistentID(t *testing.T) {
 
 func TestScheduleUpdateToolFailsForWrongOwnerID(t *testing.T) {
 	nextRunAt := time.Now().UTC().Add(time.Hour)
-	repository := &memoryTaskScheduleRepository{taskSchedules: []task.TaskSchedule{{
-		TaskScheduleID:   "schedule-other",
+	repository := &memoryScheduleRepository{schedules: []task.Schedule{{
+		ScheduleID:       "schedule-other",
 		CreatorPersonID:  "person-2",
 		Name:             "status reminder",
 		Prompt:           "check the status.",
-		Kind:             task.TaskScheduleKindInterval,
+		Kind:             task.ScheduleKindInterval,
 		IntervalSecond:   1800,
 		MaxRunCount:      3,
 		NextRunAt:        &nextRunAt,
@@ -769,7 +769,7 @@ func TestScheduleUpdateToolFailsForWrongOwnerID(t *testing.T) {
 		AgentProfileName: "default",
 	}}}
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(repository)
+	toolCatalogBuilder.UseScheduleRepository(repository)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_update"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
@@ -792,15 +792,15 @@ func TestScheduleUpdateToolFailsForWrongOwnerID(t *testing.T) {
 	if !result.Failed() || result.FailureCode() != toolcontract.FailureCodes.NotFound.String() {
 		t.Fatalf("expected not found failure, got %s", result.ContentText())
 	}
-	if repository.taskSchedules[0].IntervalSecond != 1800 || repository.taskSchedules[0].MaxRunCount != 3 {
-		t.Fatalf("expected wrong-owner schedule to remain unchanged, got %+v", repository.taskSchedules[0])
+	if repository.schedules[0].IntervalSecond != 1800 || repository.schedules[0].MaxRunCount != 3 {
+		t.Fatalf("expected wrong-owner schedule to remain unchanged, got %+v", repository.schedules[0])
 	}
 }
 
 func TestScheduleCreateToolRejectsIntervalWithoutExplicitCadence(t *testing.T) {
-	repository := &memoryTaskScheduleRepository{}
+	repository := &memoryScheduleRepository{}
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(repository)
+	toolCatalogBuilder.UseScheduleRepository(repository)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_create"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
@@ -828,15 +828,15 @@ func TestScheduleCreateToolRejectsIntervalWithoutExplicitCadence(t *testing.T) {
 	if !result.Failed() {
 		t.Fatalf("expected schedule_create to reject missing intervalSecond, got %s", result.ContentText())
 	}
-	if len(repository.taskSchedules) != 0 {
-		t.Fatalf("expected no schedule to be created, got %+v", repository.taskSchedules)
+	if len(repository.schedules) != 0 {
+		t.Fatalf("expected no schedule to be created, got %+v", repository.schedules)
 	}
 }
 
 func TestScheduleCreateToolStoresMaxRunCount(t *testing.T) {
-	repository := &memoryTaskScheduleRepository{}
+	repository := &memoryScheduleRepository{}
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(repository)
+	toolCatalogBuilder.UseScheduleRepository(repository)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_create"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
@@ -865,21 +865,21 @@ func TestScheduleCreateToolStoresMaxRunCount(t *testing.T) {
 	if result.Failed() {
 		t.Fatalf("expected schedule_create success, got %s", result.ContentText())
 	}
-	if len(repository.taskSchedules) != 1 {
-		t.Fatalf("expected one schedule, got %+v", repository.taskSchedules)
+	if len(repository.schedules) != 1 {
+		t.Fatalf("expected one schedule, got %+v", repository.schedules)
 	}
-	if repository.taskSchedules[0].MaxRunCount != 10 {
-		t.Fatalf("expected max run count 10, got %+v", repository.taskSchedules[0])
+	if repository.schedules[0].MaxRunCount != 10 {
+		t.Fatalf("expected max run count 10, got %+v", repository.schedules[0])
 	}
-	if repository.taskSchedules[0].Prompt != "say sorry." {
-		t.Fatalf("expected task instruction without cadence or run count, got %+v", repository.taskSchedules[0])
+	if repository.schedules[0].Prompt != "say sorry." {
+		t.Fatalf("expected task instruction without cadence or run count, got %+v", repository.schedules[0])
 	}
 }
 
 func TestScheduleCreateToolSeparatesRepeatFieldsFromTaskInstruction(t *testing.T) {
-	repository := &memoryTaskScheduleRepository{}
+	repository := &memoryScheduleRepository{}
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(repository)
+	toolCatalogBuilder.UseScheduleRepository(repository)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_create"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
@@ -908,29 +908,29 @@ func TestScheduleCreateToolSeparatesRepeatFieldsFromTaskInstruction(t *testing.T
 	if result.Failed() {
 		t.Fatalf("expected schedule_create success, got %s", result.ContentText())
 	}
-	if len(repository.taskSchedules) != 1 {
-		t.Fatalf("expected one schedule, got %+v", repository.taskSchedules)
+	if len(repository.schedules) != 1 {
+		t.Fatalf("expected one schedule, got %+v", repository.schedules)
 	}
-	taskSchedule := repository.taskSchedules[0]
-	if taskSchedule.IntervalSecond != 60 || taskSchedule.MaxRunCount != 3 {
-		t.Fatalf("expected structured repeat fields, got %+v", taskSchedule)
+	schedule := repository.schedules[0]
+	if schedule.IntervalSecond != 60 || schedule.MaxRunCount != 3 {
+		t.Fatalf("expected structured repeat fields, got %+v", schedule)
 	}
-	if taskSchedule.Prompt != "send \"hello\" to Wendy." {
-		t.Fatalf("expected only executable action in task instruction, got %q", taskSchedule.Prompt)
+	if schedule.Prompt != "send \"hello\" to Wendy." {
+		t.Fatalf("expected only executable action in task instruction, got %q", schedule.Prompt)
 	}
 }
 
 func TestScheduleCancelToolCancelsActiveScheduledTaskRuns(t *testing.T) {
 	runAt := time.Now().UTC().Add(time.Hour)
-	repository := &memoryTaskScheduleRepository{taskSchedules: []task.TaskSchedule{{
-		TaskScheduleID:  "schedule-1",
+	repository := &memoryScheduleRepository{schedules: []task.Schedule{{
+		ScheduleID:      "schedule-1",
 		CreatorPersonID: "person-1",
 		Prompt:          "test",
 		Platform:        "mattermost",
 		ConversationID:  "channel-1",
 		ReplyTargetID:   "reply-target-1",
 		TimeZone:        "Asia/Seoul",
-		Kind:            task.TaskScheduleKindOnce,
+		Kind:            task.ScheduleKindOnce,
 		RunAt:           &runAt,
 		NextRunAt:       &runAt,
 		ExpiresAt:       timePointer(runAt.Add(time.Hour)),
@@ -941,7 +941,7 @@ func TestScheduleCancelToolCancelsActiveScheduledTaskRuns(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(repository)
+	toolCatalogBuilder.UseScheduleRepository(repository)
 	toolCatalogBuilder.UseTaskRunService(taskRunService)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_cancel"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
@@ -971,7 +971,7 @@ func TestScheduleCancelToolCancelsActiveScheduledTaskRuns(t *testing.T) {
 
 func TestScheduleCreateToolRejectsMissingReplyTarget(t *testing.T) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(&memoryTaskScheduleRepository{})
+	toolCatalogBuilder.UseScheduleRepository(&memoryScheduleRepository{})
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_create"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
@@ -997,34 +997,91 @@ func TestScheduleCreateToolRejectsMissingReplyTarget(t *testing.T) {
 	}
 }
 
-func TestScheduleCreateExecutorRejectsScheduledRunContext(t *testing.T) {
+func TestAScheduledRunCreatesAScheduleLikeAnyOtherRun(t *testing.T) {
+	repository := &memoryScheduleRepository{}
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(&memoryTaskScheduleRepository{})
+	toolCatalogBuilder.UseScheduleRepository(repository)
 
-	result, errorValue := toolCatalogBuilder.createScheduleTool(context.Background(), scheduleCreateToolInput{
-		TaskInstruction: "create a new schedule.",
-		Kind:            "cron",
-		CronExpression:  "* * * * *",
-		RepeatPolicy:    "unbounded",
-	}, toolHandlerContext{request: ToolCatalogRequest{
-		IsScheduledRun:    true,
-		RequesterPersonID: "person-1",
-		Platform:          "mattermost",
-		ConversationID:    "channel-1",
-		ReplyTargetID:     "reply-target-1",
-	}})
+	result, errorValue := toolCatalogBuilder.createScheduleTool(context.Background(), reminderScheduleInput(), scheduleRequesterContext(true))
 
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if !result.Failed() || !strings.Contains(result.ContentText(), "scheduled task executions cannot create new schedules") {
-		t.Fatalf("expected scheduled run schedule_create failure, got %+v", result)
+	if result.Failed() || len(repository.schedules) != 1 {
+		t.Fatalf("expected the scheduled run to create one schedule, got %+v with %d stored", result, len(repository.schedules))
 	}
 }
 
-func newScheduleListTestRegistry(repository *memoryTaskScheduleRepository, requesterPersonID string) *toolcontract.ToolSet {
+func TestScheduleCreateStopsAtTheOpenScheduleLimitWhoeverAsks(t *testing.T) {
+	for _, isScheduledRun := range []bool{false, true} {
+		repository := &memoryScheduleRepository{schedules: openSchedulesOf("person-1", task.MaximumOpenScheduleCountPerPerson)}
+		toolCatalogBuilder := NewToolCatalogBuilder()
+		toolCatalogBuilder.UseScheduleRepository(repository)
+
+		result, errorValue := toolCatalogBuilder.createScheduleTool(context.Background(), reminderScheduleInput(), scheduleRequesterContext(isScheduledRun))
+
+		if errorValue != nil {
+			t.Fatal(errorValue)
+		}
+		if !result.Failed() || !strings.Contains(result.ContentText(), task.ErrScheduleLimitReached.Error()) {
+			t.Fatalf("expected the open schedule limit to refuse the create, got %+v", result)
+		}
+		if len(repository.schedules) != task.MaximumOpenScheduleCountPerPerson {
+			t.Fatalf("expected nothing stored past the limit, got %d schedules", len(repository.schedules))
+		}
+	}
+}
+
+func TestAnotherPersonsSchedulesDoNotCountTowardTheLimit(t *testing.T) {
+	repository := &memoryScheduleRepository{schedules: openSchedulesOf("person-2", task.MaximumOpenScheduleCountPerPerson)}
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTaskScheduleRepository(repository)
+	toolCatalogBuilder.UseScheduleRepository(repository)
+
+	result, errorValue := toolCatalogBuilder.createScheduleTool(context.Background(), reminderScheduleInput(), scheduleRequesterContext(false))
+
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if result.Failed() {
+		t.Fatalf("expected person-1 to create a schedule while person-2 is at the limit, got %+v", result)
+	}
+}
+
+func reminderScheduleInput() scheduleCreateToolInput {
+	return scheduleCreateToolInput{
+		TaskInstruction: "send the weekly summary.",
+		Kind:            "cron",
+		CronExpression:  "0 9 * * 1",
+		RepeatPolicy:    "unbounded",
+	}
+}
+
+func scheduleRequesterContext(isScheduledRun bool) toolHandlerContext {
+	return toolHandlerContext{request: ToolCatalogRequest{
+		IsScheduledRun:    isScheduledRun,
+		RequesterPersonID: "person-1",
+		Platform:          "mattermost",
+		ConversationID:    "channel-1",
+		ReplyTargetID:     "reply-target-1",
+	}}
+}
+
+func openSchedulesOf(creatorPersonID string, count int) []task.Schedule {
+	nextRunAt := time.Now().UTC().Add(time.Hour)
+	schedules := make([]task.Schedule, 0, count)
+	for index := 0; index < count; index++ {
+		schedules = append(schedules, task.Schedule{
+			ScheduleID:      "schedule-" + strconv.Itoa(index),
+			CreatorPersonID: creatorPersonID,
+			NextRunAt:       &nextRunAt,
+		})
+	}
+	return schedules
+}
+
+func newScheduleListTestRegistry(repository *memoryScheduleRepository, requesterPersonID string) *toolcontract.ToolSet {
+	toolCatalogBuilder := NewToolCatalogBuilder()
+	toolCatalogBuilder.UseScheduleRepository(repository)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_list"})
 	return toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",

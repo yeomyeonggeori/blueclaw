@@ -17,13 +17,13 @@ func TestReconcileMorningBriefingsPersistsLifecycleAndGuardsGenericMutations(t *
 	database, cleanup := morningBriefingIntegrationDatabase(t, ctx)
 	defer cleanup()
 	var errorValue error
-	repository := NewTaskScheduleRepository(database)
+	repository := NewScheduleRepository(database)
 	personID := "morning-briefing-test-person"
 	scheduleID := task.MorningBriefingScheduleID(personID)
 	now := time.Date(2026, 9, 7, 1, 0, 0, 0, time.UTC)
 	defer func() {
 		_, _ = database.SQL.ExecContext(ctx, "DELETE FROM morning_briefing_schedule WHERE person_id = $1", personID)
-		_, _ = database.SQL.ExecContext(ctx, "DELETE FROM task_schedule WHERE task_schedule_id = $1", scheduleID)
+		_, _ = database.SQL.ExecContext(ctx, "DELETE FROM schedule WHERE schedule_id = $1", scheduleID)
 		_, _ = database.SQL.ExecContext(ctx, "DELETE FROM person WHERE person_id = $1", personID)
 	}()
 	_, errorValue = database.SQL.ExecContext(ctx, `
@@ -33,81 +33,81 @@ VALUES ($1, '이샘플', 'member', 1, $2, $2)`, personID, now)
 		t.Fatal(errorValue)
 	}
 	desired := morningBriefingTestSchedule(personID, scheduleID, timePointer(now.Add(time.Hour)))
-	if errorValue := repository.ReconcileMorningBriefings(ctx, []task.TaskSchedule{desired}, now); errorValue != nil {
+	if errorValue := repository.ReconcileMorningBriefings(ctx, []task.Schedule{desired}, now); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	var storedNextRunAt time.Time
-	if errorValue := database.SQL.QueryRowContext(ctx, "SELECT next_run_at FROM task_schedule WHERE task_schedule_id = $1", scheduleID).Scan(&storedNextRunAt); errorValue != nil {
+	if errorValue := database.SQL.QueryRowContext(ctx, "SELECT next_run_at FROM schedule WHERE schedule_id = $1", scheduleID).Scan(&storedNextRunAt); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	if !storedNextRunAt.Equal(*desired.NextRunAt) {
 		t.Fatalf("expected initial next run %v, got %v", *desired.NextRunAt, storedNextRunAt)
 	}
-	if _, errorValue := database.SQL.ExecContext(ctx, "UPDATE task_schedule SET last_run_at = $1, completed_run_count = 4, failure_count = 2 WHERE task_schedule_id = $2", now, scheduleID); errorValue != nil {
+	if _, errorValue := database.SQL.ExecContext(ctx, "UPDATE schedule SET last_run_at = $1, completed_run_count = 4, failure_count = 2 WHERE schedule_id = $2", now, scheduleID); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	desired.NextRunAt = timePointer(now.Add(2 * time.Hour))
-	if errorValue := repository.ReconcileMorningBriefings(ctx, []task.TaskSchedule{desired}, now); errorValue != nil {
+	if errorValue := repository.ReconcileMorningBriefings(ctx, []task.Schedule{desired}, now); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if errorValue := database.SQL.QueryRowContext(ctx, "SELECT next_run_at FROM task_schedule WHERE task_schedule_id = $1", scheduleID).Scan(&storedNextRunAt); errorValue != nil {
+	if errorValue := database.SQL.QueryRowContext(ctx, "SELECT next_run_at FROM schedule WHERE schedule_id = $1", scheduleID).Scan(&storedNextRunAt); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	if !storedNextRunAt.Equal(*timePointer(now.Add(time.Hour))) {
 		t.Fatalf("expected unchanged due time, got %v", storedNextRunAt)
 	}
-	if _, errorValue := repository.UpdateTaskSchedule(task.TaskScheduleUpdateRequest{TaskScheduleID: scheduleID, RequesterPersonID: personID}); errorValue != nil {
+	if _, errorValue := repository.UpdateSchedule(task.ScheduleUpdateRequest{ScheduleID: scheduleID, RequesterPersonID: personID}); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	deleted, errorValue := repository.DeleteTaskSchedule(task.TaskScheduleDeleteRequest{TaskScheduleID: scheduleID, RequesterPersonID: personID})
+	deleted, errorValue := repository.DeleteSchedule(task.ScheduleDeleteRequest{ScheduleID: scheduleID, RequesterPersonID: personID})
 	if errorValue != nil || deleted.IsFound {
 		t.Fatalf("expected managed delete guard, got %+v (%v)", deleted, errorValue)
 	}
-	cancelled, errorValue := repository.CancelTaskSchedules(task.TaskScheduleCancelRequest{Scope: task.TaskScheduleCancelScopeMine, RequesterPersonID: personID, CancelledAt: now})
-	if errorValue != nil || len(cancelled.TaskSchedules) != 0 {
+	cancelled, errorValue := repository.CancelSchedules(task.ScheduleCancelRequest{Scope: task.ScheduleCancelScopeMine, RequesterPersonID: personID, CancelledAt: now})
+	if errorValue != nil || len(cancelled.Schedules) != 0 {
 		t.Fatalf("expected managed cancel guard, got %+v (%v)", cancelled, errorValue)
 	}
 	desired.NextRunAt = nil
-	if errorValue := repository.ReconcileMorningBriefings(ctx, []task.TaskSchedule{desired}, now); errorValue != nil {
+	if errorValue := repository.ReconcileMorningBriefings(ctx, []task.Schedule{desired}, now); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	var isDisabled bool
-	if errorValue := database.SQL.QueryRowContext(ctx, "SELECT next_run_at IS NULL FROM task_schedule WHERE task_schedule_id = $1", scheduleID).Scan(&isDisabled); errorValue != nil {
+	if errorValue := database.SQL.QueryRowContext(ctx, "SELECT next_run_at IS NULL FROM schedule WHERE schedule_id = $1", scheduleID).Scan(&isDisabled); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	if !isDisabled {
 		t.Fatalf("expected disabled schedule to have no next run")
 	}
 	desired.NextRunAt = timePointer(now.Add(3 * time.Hour))
-	if errorValue := repository.ReconcileMorningBriefings(ctx, []task.TaskSchedule{desired}, now); errorValue != nil {
+	if errorValue := repository.ReconcileMorningBriefings(ctx, []task.Schedule{desired}, now); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if errorValue := database.SQL.QueryRowContext(ctx, "SELECT next_run_at IS NOT NULL FROM task_schedule WHERE task_schedule_id = $1", scheduleID).Scan(&isDisabled); errorValue != nil || !isDisabled {
+	if errorValue := database.SQL.QueryRowContext(ctx, "SELECT next_run_at IS NOT NULL FROM schedule WHERE schedule_id = $1", scheduleID).Scan(&isDisabled); errorValue != nil || !isDisabled {
 		t.Fatalf("expected re-enabled schedule, got active=%v (%v)", isDisabled, errorValue)
 	}
-	if _, errorValue := database.SQL.ExecContext(ctx, "UPDATE task_schedule SET expires_at = $1, next_run_at = NULL WHERE task_schedule_id = $2", now.Add(-time.Minute), scheduleID); errorValue != nil {
+	if _, errorValue := database.SQL.ExecContext(ctx, "UPDATE schedule SET expires_at = $1, next_run_at = NULL WHERE schedule_id = $2", now.Add(-time.Minute), scheduleID); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if errorValue := repository.ReconcileMorningBriefings(ctx, []task.TaskSchedule{desired}, now); errorValue != nil {
+	if errorValue := repository.ReconcileMorningBriefings(ctx, []task.Schedule{desired}, now); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	var isUnexpired bool
-	if errorValue := database.SQL.QueryRowContext(ctx, "SELECT expires_at IS NULL, next_run_at IS NOT NULL FROM task_schedule WHERE task_schedule_id = $1", scheduleID).Scan(&isUnexpired, &isDisabled); errorValue != nil || !isUnexpired || !isDisabled {
+	if errorValue := database.SQL.QueryRowContext(ctx, "SELECT expires_at IS NULL, next_run_at IS NOT NULL FROM schedule WHERE schedule_id = $1", scheduleID).Scan(&isUnexpired, &isDisabled); errorValue != nil || !isUnexpired || !isDisabled {
 		t.Fatalf("expected expired schedule recovery, got unexpired=%v active=%v (%v)", isUnexpired, isDisabled, errorValue)
 	}
-	if errorValue := repository.UpsertTaskSchedule(desired); errorValue != errManagedTaskScheduleMutation {
+	if errorValue := repository.UpsertSchedule(desired); errorValue != errManagedScheduleMutation {
 		t.Fatalf("expected generic upsert guard, got %v", errorValue)
 	}
 	if errorValue := repository.ReconcileMorningBriefings(ctx, nil, now); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if errorValue := database.SQL.QueryRowContext(ctx, "SELECT next_run_at IS NULL FROM task_schedule WHERE task_schedule_id = $1", scheduleID).Scan(&isDisabled); errorValue != nil {
+	if errorValue := database.SQL.QueryRowContext(ctx, "SELECT next_run_at IS NULL FROM schedule WHERE schedule_id = $1", scheduleID).Scan(&isDisabled); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	if !isDisabled {
 		t.Fatalf("expected removed person schedule to stay disabled")
 	}
-	if _, errorValue := database.SQL.ExecContext(ctx, "UPDATE task_schedule SET lease_owner = 'new-worker', leased_until = $1, next_run_at = $2 WHERE task_schedule_id = $3", now.Add(time.Hour), now, scheduleID); errorValue != nil {
+	if _, errorValue := database.SQL.ExecContext(ctx, "UPDATE schedule SET lease_owner = 'new-worker', leased_until = $1, next_run_at = $2 WHERE schedule_id = $3", now.Add(time.Hour), now, scheduleID); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	stale := desired
@@ -117,7 +117,7 @@ VALUES ($1, '이샘플', 'member', 1, $2, $2)`, personID, now)
 		t.Fatalf("expected stale retirement rejection, got %v", errorValue)
 	}
 	leaseUntil := now.Add(time.Hour)
-	if _, errorValue := database.SQL.ExecContext(ctx, "UPDATE task_schedule SET lease_owner = 'current-worker', leased_until = $1, next_run_at = $2, failure_count = 4, completed_run_count = 2 WHERE task_schedule_id = $3", leaseUntil, now, scheduleID); errorValue != nil {
+	if _, errorValue := database.SQL.ExecContext(ctx, "UPDATE schedule SET lease_owner = 'current-worker', leased_until = $1, next_run_at = $2, failure_count = 4, completed_run_count = 2 WHERE schedule_id = $3", leaseUntil, now, scheduleID); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	claimed := desired
@@ -130,7 +130,7 @@ VALUES ($1, '이샘플', 'member', 1, $2, $2)`, personID, now)
 	var failureCount, completedRunCount int
 	var nextDay time.Time
 	var lastError string
-	if errorValue := database.SQL.QueryRowContext(ctx, "SELECT next_run_at, failure_count, completed_run_count, last_error FROM task_schedule WHERE task_schedule_id = $1", scheduleID).Scan(&nextDay, &failureCount, &completedRunCount, &lastError); errorValue != nil {
+	if errorValue := database.SQL.QueryRowContext(ctx, "SELECT next_run_at, failure_count, completed_run_count, last_error FROM schedule WHERE schedule_id = $1", scheduleID).Scan(&nextDay, &failureCount, &completedRunCount, &lastError); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	if !nextDay.After(now) || failureCount != 0 || completedRunCount != 2 || lastError != "fifth failure" {
@@ -179,11 +179,11 @@ func morningBriefingIntegrationDatabase(t *testing.T, ctx context.Context) (Data
 	return database, func() {}
 }
 
-func morningBriefingTestSchedule(personID string, scheduleID string, nextRunAt *time.Time) task.TaskSchedule {
-	return task.TaskSchedule{
-		TaskScheduleID: scheduleID, CreatorPersonID: personID, Name: "Morning briefing", Prompt: "brief",
-		ExecutionMode: task.TaskScheduleExecutionModeAgent, AgentProfileName: "default", Platform: "mattermost",
-		ConversationID: "conversation", ReplyTargetID: "reply", TimeZone: "Asia/Seoul", Kind: task.TaskScheduleKindCron,
+func morningBriefingTestSchedule(personID string, scheduleID string, nextRunAt *time.Time) task.Schedule {
+	return task.Schedule{
+		ScheduleID: scheduleID, CreatorPersonID: personID, Name: "Morning briefing", Prompt: "brief",
+		ExecutionMode: task.ScheduleExecutionModeAgent, AgentProfileName: "default", Platform: "mattermost",
+		ConversationID: "conversation", ReplyTargetID: "reply", TimeZone: "Asia/Seoul", Kind: task.ScheduleKindCron,
 		CronExpression: "0 8 * * *", NextRunAt: nextRunAt, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
 	}
 }

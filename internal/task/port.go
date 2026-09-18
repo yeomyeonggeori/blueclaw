@@ -25,9 +25,6 @@ type (
 	TaskRunService                 = taskstate.TaskRunService
 	TaskRunStore                   = taskstate.TaskRunStore
 	TaskRunTransition              = agentcontract.TaskRunTransition
-	TaskSchedule                   = taskstate.TaskSchedule
-	TaskScheduleExecutionMode      = taskstate.TaskScheduleExecutionMode
-	TaskScheduleKind               = taskstate.TaskScheduleKind
 	TaskSession                    = taskstate.TaskSession
 	TaskStatus                     = agentcontract.TaskStatus
 	TaskStep                       = taskstate.TaskStep
@@ -46,11 +43,6 @@ const (
 	TaskAttemptStatusStarting          = agentcontract.TaskAttemptStatusStarting
 	TaskInterruptReasonPlannedShutdown = agentcontract.TaskInterruptReasonPlannedShutdown
 	TaskInterruptReasonRuntimeRestart  = agentcontract.TaskInterruptReasonRuntimeRestart
-	TaskScheduleExecutionModeAgent     = taskstate.TaskScheduleExecutionModeAgent
-	TaskScheduleExecutionModeMessage   = taskstate.TaskScheduleExecutionModeMessage
-	TaskScheduleKindCron               = taskstate.TaskScheduleKindCron
-	TaskScheduleKindInterval           = taskstate.TaskScheduleKindInterval
-	TaskScheduleKindOnce               = taskstate.TaskScheduleKindOnce
 	TaskStatusBlocked                  = agentcontract.TaskStatusBlocked
 	TaskStatusCancelled                = agentcontract.TaskStatusCancelled
 	TaskStatusCompleted                = agentcontract.TaskStatusCompleted

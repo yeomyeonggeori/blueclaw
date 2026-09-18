@@ -11,11 +11,11 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
 
-func TestTaskScheduleHandlerReturnsSummary(t *testing.T) {
+func TestScheduleHandlerReturnsSummary(t *testing.T) {
 	nextRunAt := time.Date(2026, 6, 6, 3, 0, 0, 0, time.UTC)
-	handler := TaskScheduleHandler{
-		SummaryRepository: taskScheduleSummaryRepositoryStub{
-			summary: task.TaskScheduleSummary{
+	handler := ScheduleHandler{
+		SummaryRepository: scheduleSummaryRepositoryStub{
+			summary: task.ScheduleSummary{
 				ActiveCount:       3,
 				UnboundedCount:    1,
 				IntervalCount:     2,
@@ -46,16 +46,16 @@ func TestTaskScheduleHandlerReturnsSummary(t *testing.T) {
 	}
 }
 
-func TestTaskScheduleHandlerListsActiveSchedules(t *testing.T) {
+func TestScheduleHandlerListsActiveSchedules(t *testing.T) {
 	nextRunAt := time.Date(2026, 6, 6, 3, 0, 0, 0, time.UTC)
 	longPrompt := strings.Repeat("scheduled message ", 40)
-	repository := &taskScheduleListRepositoryStub{
-		taskSchedules: []task.TaskSchedule{{
-			TaskScheduleID:   "schedule-1",
+	repository := &scheduleListRepositoryStub{
+		schedules: []task.Schedule{{
+			ScheduleID:       "schedule-1",
 			CreatorPersonID:  "person-1",
 			Prompt:           longPrompt,
-			ExecutionMode:    task.TaskScheduleExecutionModeAgent,
-			Kind:             task.TaskScheduleKindCron,
+			ExecutionMode:    task.ScheduleExecutionModeAgent,
+			Kind:             task.ScheduleKindCron,
 			CronExpression:   "0 * * * *",
 			NextRunAt:        &nextRunAt,
 			CreatedAt:        nextRunAt.Add(-time.Hour),
@@ -65,7 +65,7 @@ func TestTaskScheduleHandlerListsActiveSchedules(t *testing.T) {
 			AgentProfileName: "default",
 		}},
 	}
-	handler := TaskScheduleHandler{ListRepository: repository}
+	handler := ScheduleHandler{ListRepository: repository}
 	request := httptest.NewRequest(http.MethodGet, "/admin/api/schedule?deliveryConversationID=channel-1&unboundedOnly=true&includeExpired=true&page=2&pageSize=5", nil)
 	responseRecorder := httptest.NewRecorder()
 
@@ -88,29 +88,29 @@ func TestTaskScheduleHandlerListsActiveSchedules(t *testing.T) {
 	}
 }
 
-func TestTaskScheduleToolListUsesOnlySignedPrincipalAndExactProjection(t *testing.T) {
+func TestScheduleToolListUsesOnlySignedPrincipalAndExactProjection(t *testing.T) {
 	nextRunAt := time.Now().UTC().Add(time.Hour)
 	fullInstruction := strings.Repeat("full instruction ", 20)
-	repository := &taskScheduleListRepositoryStub{taskSchedules: []task.TaskSchedule{
+	repository := &scheduleListRepositoryStub{schedules: []task.Schedule{
 		{
-			TaskScheduleID:  "other-schedule",
+			ScheduleID:      "other-schedule",
 			CreatorPersonID: "person-other",
 			Prompt:          "must not be selected",
-			Kind:            task.TaskScheduleKindOnce,
+			Kind:            task.ScheduleKindOnce,
 			NextRunAt:       &nextRunAt,
 		},
 		{
-			TaskScheduleID:  "failed-schedule",
+			ScheduleID:      "failed-schedule",
 			CreatorPersonID: "person-signed",
 			Prompt:          fullInstruction,
 			Name:            "Daily report",
-			Kind:            task.TaskScheduleKindCron,
+			Kind:            task.ScheduleKindCron,
 			CronExpression:  "0 9 * * *",
 			NextRunAt:       &nextRunAt,
 			LastError:       "temporary failure",
 		},
 	}}
-	handler := TaskScheduleHandler{
+	handler := ScheduleHandler{
 		ListRepository: repository,
 		ReaderPersonID: func(*http.Request) string { return "person-signed" },
 	}
@@ -146,8 +146,8 @@ func TestTaskScheduleToolListUsesOnlySignedPrincipalAndExactProjection(t *testin
 	}
 }
 
-func TestTaskScheduleToolListFailsClosedWithoutSignedPrincipal(t *testing.T) {
-	for _, handler := range []TaskScheduleHandler{
+func TestScheduleToolListFailsClosedWithoutSignedPrincipal(t *testing.T) {
+	for _, handler := range []ScheduleHandler{
 		{},
 		{ReaderPersonID: func(*http.Request) string { return "" }},
 	} {
@@ -159,18 +159,18 @@ func TestTaskScheduleToolListFailsClosedWithoutSignedPrincipal(t *testing.T) {
 	}
 }
 
-func TestTaskScheduleHandlerCancelsOwnedSchedule(t *testing.T) {
+func TestScheduleHandlerCancelsOwnedSchedule(t *testing.T) {
 	nextRunAt := time.Now().UTC().Add(time.Hour)
-	repository := &taskScheduleListRepositoryStub{
-		taskSchedules: []task.TaskSchedule{{
-			TaskScheduleID:  "schedule-1",
+	repository := &scheduleListRepositoryStub{
+		schedules: []task.Schedule{{
+			ScheduleID:      "schedule-1",
 			CreatorPersonID: "person-1",
-			Kind:            task.TaskScheduleKindInterval,
+			Kind:            task.ScheduleKindInterval,
 			IntervalSecond:  3600,
 			NextRunAt:       &nextRunAt,
 		}},
 	}
-	handler := TaskScheduleHandler{ListRepository: repository}
+	handler := ScheduleHandler{ListRepository: repository}
 	request := httptest.NewRequest(http.MethodPost, "/admin/api/schedule/cancel", strings.NewReader(`{"taskScheduleID":"schedule-1","creatorPersonID":"person-1"}`))
 	responseRecorder := httptest.NewRecorder()
 
@@ -179,7 +179,7 @@ func TestTaskScheduleHandlerCancelsOwnedSchedule(t *testing.T) {
 	if responseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected ok response, got %d: %s", responseRecorder.Code, responseRecorder.Body.String())
 	}
-	if len(repository.cancelRequest.TaskScheduleIDs) != 1 || repository.cancelRequest.TaskScheduleIDs[0] != "schedule-1" {
+	if len(repository.cancelRequest.ScheduleIDs) != 1 || repository.cancelRequest.ScheduleIDs[0] != "schedule-1" {
 		t.Fatalf("expected schedule id cancel request, got %+v", repository.cancelRequest)
 	}
 	if repository.cancelRequest.RequesterPersonID != "person-1" {
@@ -187,18 +187,18 @@ func TestTaskScheduleHandlerCancelsOwnedSchedule(t *testing.T) {
 	}
 }
 
-func TestTaskScheduleHandlerDeletesOwnedSchedule(t *testing.T) {
+func TestScheduleHandlerDeletesOwnedSchedule(t *testing.T) {
 	nextRunAt := time.Now().UTC().Add(time.Hour)
-	repository := &taskScheduleListRepositoryStub{
-		taskSchedules: []task.TaskSchedule{{
-			TaskScheduleID:  "schedule-1",
+	repository := &scheduleListRepositoryStub{
+		schedules: []task.Schedule{{
+			ScheduleID:      "schedule-1",
 			CreatorPersonID: "person-1",
-			Kind:            task.TaskScheduleKindInterval,
+			Kind:            task.ScheduleKindInterval,
 			IntervalSecond:  3600,
 			NextRunAt:       &nextRunAt,
 		}},
 	}
-	handler := TaskScheduleHandler{ListRepository: repository}
+	handler := ScheduleHandler{ListRepository: repository}
 	request := httptest.NewRequest(http.MethodPost, "/admin/api/schedule/delete", strings.NewReader(`{"taskScheduleID":"schedule-1","creatorPersonID":"person-1"}`))
 	responseRecorder := httptest.NewRecorder()
 
@@ -207,26 +207,26 @@ func TestTaskScheduleHandlerDeletesOwnedSchedule(t *testing.T) {
 	if responseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected ok response, got %d: %s", responseRecorder.Code, responseRecorder.Body.String())
 	}
-	if repository.deleteRequest.TaskScheduleID != "schedule-1" || repository.deleteRequest.RequesterPersonID != "person-1" {
+	if repository.deleteRequest.ScheduleID != "schedule-1" || repository.deleteRequest.RequesterPersonID != "person-1" {
 		t.Fatalf("expected delete request, got %+v", repository.deleteRequest)
 	}
-	if len(repository.taskSchedules) != 0 {
-		t.Fatalf("expected schedule to be removed, got %+v", repository.taskSchedules)
+	if len(repository.schedules) != 0 {
+		t.Fatalf("expected schedule to be removed, got %+v", repository.schedules)
 	}
 }
 
-func TestTaskScheduleHandlerRejectsDeleteCreatorMismatch(t *testing.T) {
+func TestScheduleHandlerRejectsDeleteCreatorMismatch(t *testing.T) {
 	nextRunAt := time.Now().UTC().Add(time.Hour)
-	repository := &taskScheduleListRepositoryStub{
-		taskSchedules: []task.TaskSchedule{{
-			TaskScheduleID:  "schedule-1",
+	repository := &scheduleListRepositoryStub{
+		schedules: []task.Schedule{{
+			ScheduleID:      "schedule-1",
 			CreatorPersonID: "person-1",
-			Kind:            task.TaskScheduleKindInterval,
+			Kind:            task.ScheduleKindInterval,
 			IntervalSecond:  3600,
 			NextRunAt:       &nextRunAt,
 		}},
 	}
-	handler := TaskScheduleHandler{ListRepository: repository}
+	handler := ScheduleHandler{ListRepository: repository}
 	request := httptest.NewRequest(http.MethodPost, "/admin/api/schedule/delete", strings.NewReader(`{"taskScheduleID":"schedule-1","creatorPersonID":"person-2"}`))
 	responseRecorder := httptest.NewRecorder()
 
@@ -240,18 +240,18 @@ func TestTaskScheduleHandlerRejectsDeleteCreatorMismatch(t *testing.T) {
 	}
 }
 
-func TestTaskScheduleHandlerRejectsCancelCreatorMismatch(t *testing.T) {
+func TestScheduleHandlerRejectsCancelCreatorMismatch(t *testing.T) {
 	nextRunAt := time.Now().UTC().Add(time.Hour)
-	repository := &taskScheduleListRepositoryStub{
-		taskSchedules: []task.TaskSchedule{{
-			TaskScheduleID:  "schedule-1",
+	repository := &scheduleListRepositoryStub{
+		schedules: []task.Schedule{{
+			ScheduleID:      "schedule-1",
 			CreatorPersonID: "person-1",
-			Kind:            task.TaskScheduleKindInterval,
+			Kind:            task.ScheduleKindInterval,
 			IntervalSecond:  3600,
 			NextRunAt:       &nextRunAt,
 		}},
 	}
-	handler := TaskScheduleHandler{ListRepository: repository}
+	handler := ScheduleHandler{ListRepository: repository}
 	request := httptest.NewRequest(http.MethodPost, "/admin/api/schedule/cancel", strings.NewReader(`{"taskScheduleID":"schedule-1","creatorPersonID":"person-2"}`))
 	responseRecorder := httptest.NewRecorder()
 
@@ -265,8 +265,8 @@ func TestTaskScheduleHandlerRejectsCancelCreatorMismatch(t *testing.T) {
 	}
 }
 
-func TestTaskScheduleHandlerReturnsNotFoundForMissingCancelSchedule(t *testing.T) {
-	handler := TaskScheduleHandler{ListRepository: &taskScheduleListRepositoryStub{}}
+func TestScheduleHandlerReturnsNotFoundForMissingCancelSchedule(t *testing.T) {
+	handler := ScheduleHandler{ListRepository: &scheduleListRepositoryStub{}}
 	request := httptest.NewRequest(http.MethodPost, "/admin/api/schedule/cancel", strings.NewReader(`{"taskScheduleID":"missing","creatorPersonID":"person-1"}`))
 	responseRecorder := httptest.NewRecorder()
 
@@ -277,24 +277,24 @@ func TestTaskScheduleHandlerReturnsNotFoundForMissingCancelSchedule(t *testing.T
 	}
 }
 
-func TestTaskScheduleHandlerUpdatesOwnedSchedule(t *testing.T) {
+func TestScheduleHandlerUpdatesOwnedSchedule(t *testing.T) {
 	nextRunAt := time.Now().UTC().Add(time.Hour)
-	repository := &taskScheduleListRepositoryStub{
-		taskSchedules: []task.TaskSchedule{{
-			TaskScheduleID:   "schedule-1",
+	repository := &scheduleListRepositoryStub{
+		schedules: []task.Schedule{{
+			ScheduleID:       "schedule-1",
 			CreatorPersonID:  "person-1",
 			Name:             "Old name",
-			ExecutionMode:    task.TaskScheduleExecutionModeAgent,
+			ExecutionMode:    task.ScheduleExecutionModeAgent,
 			AgentProfileName: "default",
 			TimeZone:         "Asia/Seoul",
-			Kind:             task.TaskScheduleKindInterval,
+			Kind:             task.ScheduleKindInterval,
 			IntervalSecond:   3600,
 			NextRunAt:        &nextRunAt,
 			CreatedAt:        nextRunAt.Add(-time.Hour),
 			UpdatedAt:        nextRunAt.Add(-time.Hour),
 		}},
 	}
-	handler := TaskScheduleHandler{ListRepository: repository}
+	handler := ScheduleHandler{ListRepository: repository}
 	request := httptest.NewRequest(http.MethodPost, "/admin/api/schedule/update", strings.NewReader(`{"taskScheduleID":"schedule-1","creatorPersonID":"person-1","name":"New name","intervalSecond":7200,"repeatPolicy":"unbounded"}`))
 	responseRecorder := httptest.NewRecorder()
 
@@ -303,30 +303,30 @@ func TestTaskScheduleHandlerUpdatesOwnedSchedule(t *testing.T) {
 	if responseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected ok response, got %d: %s", responseRecorder.Code, responseRecorder.Body.String())
 	}
-	var result task.TaskScheduleUpdateResult
+	var result task.ScheduleUpdateResult
 	if errorValue := json.NewDecoder(responseRecorder.Body).Decode(&result); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if result.TaskSchedule.Name != "New name" || result.TaskSchedule.IntervalSecond != 7200 || result.TaskSchedule.NextRunAt == nil {
-		t.Fatalf("expected updated schedule, got %+v", result.TaskSchedule)
+	if result.Schedule.Name != "New name" || result.Schedule.IntervalSecond != 7200 || result.Schedule.NextRunAt == nil {
+		t.Fatalf("expected updated schedule, got %+v", result.Schedule)
 	}
 	if repository.updateRequest.RequesterPersonID != "person-1" {
 		t.Fatalf("expected requester person, got %+v", repository.updateRequest)
 	}
 }
 
-func TestTaskScheduleHandlerRejectsUpdateCreatorMismatch(t *testing.T) {
+func TestScheduleHandlerRejectsUpdateCreatorMismatch(t *testing.T) {
 	nextRunAt := time.Now().UTC().Add(time.Hour)
-	repository := &taskScheduleListRepositoryStub{
-		taskSchedules: []task.TaskSchedule{{
-			TaskScheduleID:  "schedule-1",
+	repository := &scheduleListRepositoryStub{
+		schedules: []task.Schedule{{
+			ScheduleID:      "schedule-1",
 			CreatorPersonID: "person-1",
-			Kind:            task.TaskScheduleKindInterval,
+			Kind:            task.ScheduleKindInterval,
 			IntervalSecond:  3600,
 			NextRunAt:       &nextRunAt,
 		}},
 	}
-	handler := TaskScheduleHandler{ListRepository: repository}
+	handler := ScheduleHandler{ListRepository: repository}
 	request := httptest.NewRequest(http.MethodPost, "/admin/api/schedule/update", strings.NewReader(`{"taskScheduleID":"schedule-1","creatorPersonID":"person-2","name":"New name"}`))
 	responseRecorder := httptest.NewRecorder()
 
@@ -340,99 +340,99 @@ func TestTaskScheduleHandlerRejectsUpdateCreatorMismatch(t *testing.T) {
 	}
 }
 
-type taskScheduleSummaryRepositoryStub struct {
-	summary task.TaskScheduleSummary
+type scheduleSummaryRepositoryStub struct {
+	summary task.ScheduleSummary
 }
 
-func (repository taskScheduleSummaryRepositoryStub) SummarizeActiveTaskSchedules(time.Time) (task.TaskScheduleSummary, error) {
+func (repository scheduleSummaryRepositoryStub) SummarizeActiveSchedules(time.Time) (task.ScheduleSummary, error) {
 	return repository.summary, nil
 }
 
-type taskScheduleListRepositoryStub struct {
-	request       task.TaskScheduleListRequest
-	updateRequest task.TaskScheduleUpdateRequest
-	deleteRequest task.TaskScheduleDeleteRequest
-	cancelRequest task.TaskScheduleCancelRequest
-	taskSchedules []task.TaskSchedule
+type scheduleListRepositoryStub struct {
+	request       task.ScheduleListRequest
+	updateRequest task.ScheduleUpdateRequest
+	deleteRequest task.ScheduleDeleteRequest
+	cancelRequest task.ScheduleCancelRequest
+	schedules     []task.Schedule
 
-	upsertedTaskSchedule task.TaskSchedule
+	upsertedSchedule task.Schedule
 }
 
-func (repository *taskScheduleListRepositoryStub) ListTaskSchedules(request task.TaskScheduleListRequest) (task.TaskScheduleListResult, error) {
+func (repository *scheduleListRepositoryStub) ListSchedules(request task.ScheduleListRequest) (task.ScheduleListResult, error) {
 	repository.request = request
-	return task.TaskScheduleListResult{TaskSchedules: repository.taskSchedules, TotalCount: len(repository.taskSchedules), Page: request.Page, PageSize: request.PageSize}, nil
+	return task.ScheduleListResult{Schedules: repository.schedules, TotalCount: len(repository.schedules), Page: request.Page, PageSize: request.PageSize}, nil
 }
 
-func (repository *taskScheduleListRepositoryStub) UpsertTaskSchedule(taskSchedule task.TaskSchedule) error {
-	repository.upsertedTaskSchedule = taskSchedule
-	repository.taskSchedules = append(repository.taskSchedules, taskSchedule)
+func (repository *scheduleListRepositoryStub) UpsertSchedule(schedule task.Schedule) error {
+	repository.upsertedSchedule = schedule
+	repository.schedules = append(repository.schedules, schedule)
 	return nil
 }
 
-func (repository *taskScheduleListRepositoryStub) UpdateTaskSchedule(request task.TaskScheduleUpdateRequest) (task.TaskScheduleUpdateResult, error) {
+func (repository *scheduleListRepositoryStub) UpdateSchedule(request task.ScheduleUpdateRequest) (task.ScheduleUpdateResult, error) {
 	repository.updateRequest = request
-	for index, taskSchedule := range repository.taskSchedules {
-		if taskSchedule.TaskScheduleID != request.TaskScheduleID || taskSchedule.CreatorPersonID != request.RequesterPersonID || taskSchedule.NextRunAt == nil {
+	for index, schedule := range repository.schedules {
+		if schedule.ScheduleID != request.ScheduleID || schedule.CreatorPersonID != request.RequesterPersonID || schedule.NextRunAt == nil {
 			continue
 		}
-		updatedTaskSchedule := taskSchedule
-		if request.UpdateTaskSchedule != nil {
+		updatedSchedule := schedule
+		if request.UpdateSchedule != nil {
 			var errorValue error
-			updatedTaskSchedule, errorValue = request.UpdateTaskSchedule(taskSchedule)
+			updatedSchedule, errorValue = request.UpdateSchedule(schedule)
 			if errorValue != nil {
-				return task.TaskScheduleUpdateResult{}, errorValue
+				return task.ScheduleUpdateResult{}, errorValue
 			}
 		}
-		repository.taskSchedules[index] = updatedTaskSchedule
-		return task.TaskScheduleUpdateResult{TaskSchedule: updatedTaskSchedule, IsFound: true}, nil
+		repository.schedules[index] = updatedSchedule
+		return task.ScheduleUpdateResult{Schedule: updatedSchedule, IsFound: true}, nil
 	}
-	return task.TaskScheduleUpdateResult{}, nil
+	return task.ScheduleUpdateResult{}, nil
 }
 
-func (repository *taskScheduleListRepositoryStub) DeleteTaskSchedule(request task.TaskScheduleDeleteRequest) (task.TaskScheduleDeleteResult, error) {
+func (repository *scheduleListRepositoryStub) DeleteSchedule(request task.ScheduleDeleteRequest) (task.ScheduleDeleteResult, error) {
 	repository.deleteRequest = request
-	for index, taskSchedule := range repository.taskSchedules {
-		if taskSchedule.TaskScheduleID != request.TaskScheduleID || taskSchedule.CreatorPersonID != request.RequesterPersonID {
+	for index, schedule := range repository.schedules {
+		if schedule.ScheduleID != request.ScheduleID || schedule.CreatorPersonID != request.RequesterPersonID {
 			continue
 		}
-		repository.taskSchedules = append(repository.taskSchedules[:index], repository.taskSchedules[index+1:]...)
-		return task.TaskScheduleDeleteResult{TaskSchedule: taskSchedule, IsFound: true}, nil
+		repository.schedules = append(repository.schedules[:index], repository.schedules[index+1:]...)
+		return task.ScheduleDeleteResult{Schedule: schedule, IsFound: true}, nil
 	}
-	return task.TaskScheduleDeleteResult{}, nil
+	return task.ScheduleDeleteResult{}, nil
 }
 
-func (repository *taskScheduleListRepositoryStub) CancelTaskSchedules(request task.TaskScheduleCancelRequest) (task.TaskScheduleCancelResult, error) {
+func (repository *scheduleListRepositoryStub) CancelSchedules(request task.ScheduleCancelRequest) (task.ScheduleCancelResult, error) {
 	repository.cancelRequest = request
-	cancelledTaskSchedules := []task.TaskSchedule{}
-	for index, taskSchedule := range repository.taskSchedules {
-		if taskSchedule.CreatorPersonID != request.RequesterPersonID || !containsTaskScheduleID(request.TaskScheduleIDs, taskSchedule.TaskScheduleID) {
+	cancelledSchedules := []task.Schedule{}
+	for index, schedule := range repository.schedules {
+		if schedule.CreatorPersonID != request.RequesterPersonID || !containsScheduleID(request.ScheduleIDs, schedule.ScheduleID) {
 			continue
 		}
-		taskSchedule.NextRunAt = nil
-		taskSchedule.ExpiresAt = &request.CancelledAt
-		repository.taskSchedules[index] = taskSchedule
-		cancelledTaskSchedules = append(cancelledTaskSchedules, taskSchedule)
+		schedule.NextRunAt = nil
+		schedule.ExpiresAt = &request.CancelledAt
+		repository.schedules[index] = schedule
+		cancelledSchedules = append(cancelledSchedules, schedule)
 	}
-	return task.TaskScheduleCancelResult{TaskSchedules: cancelledTaskSchedules}, nil
+	return task.ScheduleCancelResult{Schedules: cancelledSchedules}, nil
 }
 
-func containsTaskScheduleID(taskScheduleIDs []string, taskScheduleID string) bool {
-	for _, candidateTaskScheduleID := range taskScheduleIDs {
-		if candidateTaskScheduleID == taskScheduleID {
+func containsScheduleID(scheduleIDs []string, scheduleID string) bool {
+	for _, candidateScheduleID := range scheduleIDs {
+		if candidateScheduleID == scheduleID {
 			return true
 		}
 	}
 	return false
 }
 
-func scheduleWriteHandler(repository *taskScheduleListRepositoryStub, signedPersonID string) TaskScheduleHandler {
-	return TaskScheduleHandler{
+func scheduleWriteHandler(repository *scheduleListRepositoryStub, signedPersonID string) ScheduleHandler {
+	return ScheduleHandler{
 		ListRepository: repository,
 		ReaderPersonID: func(*http.Request) string { return signedPersonID },
 	}
 }
 
-func postScheduleTool(handler TaskScheduleHandler, path string, body string) *httptest.ResponseRecorder {
+func postScheduleTool(handler ScheduleHandler, path string, body string) *httptest.ResponseRecorder {
 	responseRecorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
 	switch path {
@@ -446,28 +446,28 @@ func postScheduleTool(handler TaskScheduleHandler, path string, body string) *ht
 	return responseRecorder
 }
 
-func ownScheduleFixture(taskScheduleID string, creatorPersonID string, description string) task.TaskSchedule {
+func ownScheduleFixture(scheduleID string, creatorPersonID string, description string) task.Schedule {
 	nextRunAt := time.Now().UTC().Add(time.Hour)
-	return task.TaskSchedule{
-		TaskScheduleID:   taskScheduleID,
+	return task.Schedule{
+		ScheduleID:       scheduleID,
 		CreatorPersonID:  creatorPersonID,
 		Name:             description,
 		Prompt:           "brief " + description,
-		ExecutionMode:    task.TaskScheduleExecutionModeAgent,
+		ExecutionMode:    task.ScheduleExecutionModeAgent,
 		AgentProfileName: "default",
 		Platform:         "buzz",
 		ConversationID:   "channel-1",
 		ReplyTargetID:    "post-1",
 		TimeZone:         "Asia/Seoul",
-		Kind:             task.TaskScheduleKindInterval,
+		Kind:             task.ScheduleKindInterval,
 		IntervalSecond:   3600,
 		NextRunAt:        &nextRunAt,
 	}
 }
 
 func TestScheduleToolWritesFailClosedWithoutSignedPrincipal(t *testing.T) {
-	repository := &taskScheduleListRepositoryStub{}
-	for _, handler := range []TaskScheduleHandler{
+	repository := &scheduleListRepositoryStub{}
+	for _, handler := range []ScheduleHandler{
 		{ListRepository: repository},
 		scheduleWriteHandler(repository, ""),
 	} {
@@ -482,14 +482,14 @@ func TestScheduleToolWritesFailClosedWithoutSignedPrincipal(t *testing.T) {
 			}
 		}
 	}
-	if repository.upsertedTaskSchedule.TaskScheduleID != "" || repository.cancelRequest.RequesterPersonID != "" {
+	if repository.upsertedSchedule.ScheduleID != "" || repository.cancelRequest.RequesterPersonID != "" {
 		t.Fatalf("an unsigned request reached the repository: %+v", repository)
 	}
 }
 
 func TestScheduleToolWritesRejectBodySuppliedCreator(t *testing.T) {
-	repository := &taskScheduleListRepositoryStub{
-		taskSchedules: []task.TaskSchedule{ownScheduleFixture("schedule-1", "person-이샘플", "주간 보고")},
+	repository := &scheduleListRepositoryStub{
+		schedules: []task.Schedule{ownScheduleFixture("schedule-1", "person-이샘플", "주간 보고")},
 	}
 	handler := scheduleWriteHandler(repository, "person-이샘플")
 	for path, body := range map[string]string{
@@ -502,13 +502,13 @@ func TestScheduleToolWritesRejectBodySuppliedCreator(t *testing.T) {
 			t.Fatalf("%s body creator status = %d, want %d: %s", path, responseRecorder.Code, http.StatusBadRequest, responseRecorder.Body.String())
 		}
 	}
-	if repository.upsertedTaskSchedule.TaskScheduleID != "" || repository.cancelRequest.RequesterPersonID != "" {
+	if repository.upsertedSchedule.ScheduleID != "" || repository.cancelRequest.RequesterPersonID != "" {
 		t.Fatalf("a body-supplied creator reached the repository: %+v", repository)
 	}
 }
 
 func TestScheduleToolCreateRefusesWithoutDeliveryBinding(t *testing.T) {
-	repository := &taskScheduleListRepositoryStub{}
+	repository := &scheduleListRepositoryStub{}
 	handler := scheduleWriteHandler(repository, "person-이샘플")
 
 	responseRecorder := postScheduleTool(handler, "/admin/api/schedule/tool-create",
@@ -520,13 +520,13 @@ func TestScheduleToolCreateRefusesWithoutDeliveryBinding(t *testing.T) {
 	if !strings.Contains(responseRecorder.Body.String(), task.ErrScheduleConversationRequired.Error()) {
 		t.Fatalf("expected the delivery refusal reason, got %s", responseRecorder.Body.String())
 	}
-	if repository.upsertedTaskSchedule.TaskScheduleID != "" {
-		t.Fatalf("a schedule without delivery binding was stored: %+v", repository.upsertedTaskSchedule)
+	if repository.upsertedSchedule.ScheduleID != "" {
+		t.Fatalf("a schedule without delivery binding was stored: %+v", repository.upsertedSchedule)
 	}
 }
 
 func TestScheduleToolCreateRefusesScheduleWithNoFutureRun(t *testing.T) {
-	repository := &taskScheduleListRepositoryStub{}
+	repository := &scheduleListRepositoryStub{}
 	handler := scheduleWriteHandler(repository, "person-이샘플")
 
 	responseRecorder := postScheduleTool(handler, "/admin/api/schedule/tool-create",
@@ -538,13 +538,13 @@ func TestScheduleToolCreateRefusesScheduleWithNoFutureRun(t *testing.T) {
 	if !strings.Contains(responseRecorder.Body.String(), task.ErrScheduleNoFutureRun.Error()) {
 		t.Fatalf("expected the no-future-run refusal, got %s", responseRecorder.Body.String())
 	}
-	if repository.upsertedTaskSchedule.TaskScheduleID != "" {
-		t.Fatalf("a schedule with no future run was stored: %+v", repository.upsertedTaskSchedule)
+	if repository.upsertedSchedule.ScheduleID != "" {
+		t.Fatalf("a schedule with no future run was stored: %+v", repository.upsertedSchedule)
 	}
 }
 
 func TestScheduleToolCreateStoresTheSignedPrincipalsSchedule(t *testing.T) {
-	repository := &taskScheduleListRepositoryStub{}
+	repository := &scheduleListRepositoryStub{}
 	handler := scheduleWriteHandler(repository, "person-이샘플")
 
 	responseRecorder := postScheduleTool(handler, "/admin/api/schedule/tool-create",
@@ -563,14 +563,14 @@ func TestScheduleToolCreateStoresTheSignedPrincipalsSchedule(t *testing.T) {
 	if mutation.AgentProfileName != "default" || mutation.ConversationID != "channel-1" || mutation.ReplyTargetID != "post-1" {
 		t.Fatalf("unexpected delivery projection: %+v", mutation)
 	}
-	if repository.upsertedTaskSchedule.CreatorPersonID != "person-이샘플" {
-		t.Fatalf("the stored creator escaped the signed principal: %+v", repository.upsertedTaskSchedule)
+	if repository.upsertedSchedule.CreatorPersonID != "person-이샘플" {
+		t.Fatalf("the stored creator escaped the signed principal: %+v", repository.upsertedSchedule)
 	}
 }
 
 func TestScheduleToolUpdateResolvesDescriptionHintAndRewritesTaskInstruction(t *testing.T) {
-	repository := &taskScheduleListRepositoryStub{
-		taskSchedules: []task.TaskSchedule{ownScheduleFixture("schedule-1", "person-이샘플", "주간 보고")},
+	repository := &scheduleListRepositoryStub{
+		schedules: []task.Schedule{ownScheduleFixture("schedule-1", "person-이샘플", "주간 보고")},
 	}
 	handler := scheduleWriteHandler(repository, "person-이샘플")
 
@@ -593,8 +593,8 @@ func TestScheduleToolUpdateResolvesDescriptionHintAndRewritesTaskInstruction(t *
 }
 
 func TestScheduleToolUpdateAnswersAmbiguousHintWithCandidatesAndMutatesNothing(t *testing.T) {
-	repository := &taskScheduleListRepositoryStub{
-		taskSchedules: []task.TaskSchedule{
+	repository := &scheduleListRepositoryStub{
+		schedules: []task.Schedule{
 			ownScheduleFixture("schedule-1", "person-이샘플", "주간 보고 월요일"),
 			ownScheduleFixture("schedule-2", "person-이샘플", "주간 보고 금요일"),
 		},
@@ -620,8 +620,8 @@ func TestScheduleToolUpdateAnswersAmbiguousHintWithCandidatesAndMutatesNothing(t
 }
 
 func TestScheduleToolCancelCancelsNothingWhenOneHintIsAmbiguous(t *testing.T) {
-	repository := &taskScheduleListRepositoryStub{
-		taskSchedules: []task.TaskSchedule{
+	repository := &scheduleListRepositoryStub{
+		schedules: []task.Schedule{
 			ownScheduleFixture("schedule-1", "person-이샘플", "일일 점검"),
 			ownScheduleFixture("schedule-2", "person-이샘플", "주간 보고 월요일"),
 			ownScheduleFixture("schedule-3", "person-이샘플", "주간 보고 금요일"),
@@ -648,8 +648,8 @@ func TestScheduleToolCancelCancelsNothingWhenOneHintIsAmbiguous(t *testing.T) {
 }
 
 func TestScheduleToolCancelCancelsEveryResolvedHint(t *testing.T) {
-	repository := &taskScheduleListRepositoryStub{
-		taskSchedules: []task.TaskSchedule{
+	repository := &scheduleListRepositoryStub{
+		schedules: []task.Schedule{
 			ownScheduleFixture("schedule-1", "person-이샘플", "일일 점검"),
 			ownScheduleFixture("schedule-2", "person-이샘플", "주간 보고"),
 		},
@@ -672,8 +672,8 @@ func TestScheduleToolCancelCancelsEveryResolvedHint(t *testing.T) {
 }
 
 func TestScheduleToolWritesNeverReachAColleaguesSchedule(t *testing.T) {
-	repository := &taskScheduleListRepositoryStub{
-		taskSchedules: []task.TaskSchedule{
+	repository := &scheduleListRepositoryStub{
+		schedules: []task.Schedule{
 			ownScheduleFixture("schedule-colleague", "person-박예시", "최견본 주간 보고"),
 			ownScheduleFixture("schedule-own", "person-이샘플", "내 일일 점검"),
 		},
@@ -728,8 +728,8 @@ func TestScheduleToolResponsesMatchTheirDeclaredOutputSchemas(t *testing.T) {
 			schema: scheduleToolCancelOutputSchema,
 		},
 	} {
-		repository := &taskScheduleListRepositoryStub{
-			taskSchedules: []task.TaskSchedule{ownScheduleFixture("schedule-1", "person-이샘플", "주간 보고")},
+		repository := &scheduleListRepositoryStub{
+			schedules: []task.Schedule{ownScheduleFixture("schedule-1", "person-이샘플", "주간 보고")},
 		}
 		responseRecorder := postScheduleTool(scheduleWriteHandler(repository, "person-이샘플"), responseCase.path, responseCase.body)
 		if responseRecorder.Code != http.StatusOK {

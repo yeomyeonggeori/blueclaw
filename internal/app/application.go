@@ -45,18 +45,18 @@ type Application struct {
 	connectorRuntimeCancel      context.CancelFunc
 	connectorTransportCancel    context.CancelFunc
 	interruptedTaskResumeCancel context.CancelFunc
-	taskScheduleCancel          context.CancelFunc
+	scheduleCancel              context.CancelFunc
 	logRetentionCancel          context.CancelFunc
 	memoryJobWorkerCancel       context.CancelFunc
 	learningCancel              context.CancelFunc
 	taskRetentionCancel         context.CancelFunc
 	staleTaskCancel             context.CancelFunc
-	taskSchedulePoller          *scheduler.TaskSchedulePoller
+	schedulePoller              *scheduler.SchedulePoller
 	taskRetentionSweeper        *scheduler.TaskRetentionSweeper
 	memoryJobWorker             *bluememo.JobWorker
 	memoryStore                 *bluememo.Store
 	learningCoordinator         *learning.Coordinator
-	taskSchedulePollSecond      int
+	schedulePollSecond          int
 	taskRetentionIntervalMinute int
 	interruptedTaskResumeDelay  time.Duration
 	languageModelConfigured     bool
@@ -105,7 +105,7 @@ type applicationComponents struct {
 	turnRouter            intake.TurnRouter
 	decisionPlanner       intake.DecisionPlanner
 	taskLauncher          *agentruntime.TaskLauncher
-	taskSchedulePoller    *scheduler.TaskSchedulePoller
+	schedulePoller        *scheduler.SchedulePoller
 	taskRetentionSweeper  *scheduler.TaskRetentionSweeper
 	connectorRuntime      *connectors.ConnectorRuntime
 	agentReplyStore       *apiconnector.ReplyStore
@@ -155,8 +155,8 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 	components.turnRouter = intake.NewTurnRouter(turnRouterLanguageModelProvider(components.kernel.taskTierLanguageModels, components.kernel.intakeLanguageModelProvider), components.decisionPlanner, deriveIntakeOptions(runtimeConfiguration))
 	components.taskLauncher = newTaskLauncher(runtimeConfiguration, components.foundation, components.directory, components.kernel, components.services, components.toolCatalogBuilder, components.turnRouter)
 	components.taskLauncher.UseTaskObserver(learningTaskObserver(components.learningCoordinator, components.services.taskRunService))
-	components.taskSchedulePoller = newTaskSchedulePoller(runtimeConfiguration, components.services, components.directory.identityService, components.taskLauncher, components.taskIntakeController, logger)
-	configureMorningBriefing(components.taskSchedulePoller, runtimeConfiguration, components.directory, components.kernel, logger)
+	components.schedulePoller = newSchedulePoller(runtimeConfiguration, components.services, components.directory.identityService, components.taskLauncher, components.taskIntakeController, logger)
+	configureMorningBriefing(components.schedulePoller, runtimeConfiguration, components.directory, components.kernel, logger)
 	logger.Info("application.initializing", "stage", "connector_runtime")
 	components.taskRetentionSweeper = newTaskRetentionSweeper(runtimeConfiguration, components.services, logger)
 	components.connectorRuntime = newConnectorRuntime(runtimeConfiguration, components.foundation, components.directory, components.kernel, components.services, components.taskLauncher, components.turnRouter, components.decisionPlanner, components.backupCoordinator, components.taskIntakeController)
@@ -188,12 +188,12 @@ func newApplication(components applicationComponents) *Application {
 		terminalService:             components.kernel.terminalService,
 		database:                    components.foundation.database,
 		startupError:                components.startupError,
-		taskSchedulePoller:          components.taskSchedulePoller,
+		schedulePoller:              components.schedulePoller,
 		taskRetentionSweeper:        components.taskRetentionSweeper,
 		memoryJobWorker:             components.memory.jobWorker,
 		memoryStore:                 components.memory.store,
 		learningCoordinator:         components.learningCoordinator,
-		taskSchedulePollSecond:      components.runtimeConfiguration.Scheduler.TaskSchedulePollIntervalSecond,
+		schedulePollSecond:          components.runtimeConfiguration.Scheduler.SchedulePollIntervalSecond,
 		taskRetentionIntervalMinute: components.runtimeConfiguration.Scheduler.RetentionCheckIntervalMinute,
 		interruptedTaskResumeDelay:  2 * time.Second,
 		languageModelConfigured:     components.kernel.taskTierLanguageModels.High != nil,

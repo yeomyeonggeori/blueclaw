@@ -201,17 +201,17 @@ func morningBriefingTestToolSet(tasks string, events string, replacement func(st
 }
 
 func TestMorningBriefingScheduleIdentificationRemainsNarrow(t *testing.T) {
-	schedule := task.TaskSchedule{CreatorPersonID: "person-1", TaskScheduleID: task.MorningBriefingScheduleID("person-1")}
+	schedule := task.Schedule{CreatorPersonID: "person-1", ScheduleID: task.MorningBriefingScheduleID("person-1")}
 	if !task.IsMorningBriefing(schedule) {
 		t.Fatal("expected the managed morning briefing schedule to be identified")
 	}
-	schedule.TaskScheduleID = "schedule-other"
+	schedule.ScheduleID = "schedule-other"
 	if task.IsMorningBriefing(schedule) {
 		t.Fatal("expected an ordinary schedule to bypass the managed preflight")
 	}
 }
 
-func TestTaskScheduleRunnerSkipsEmptyManagedBriefingWithoutLaunching(t *testing.T) {
+func TestScheduleRunnerSkipsEmptyManagedBriefingWithoutLaunching(t *testing.T) {
 	taskEventService := task.NewTaskEventService()
 	taskRunService := task.NewTaskRunService(taskEventService)
 	harness := harnesstest.New(taskRunService)
@@ -227,16 +227,16 @@ func TestTaskScheduleRunnerSkipsEmptyManagedBriefingWithoutLaunching(t *testing.
 	taskLauncher := NewTaskLauncher(harness, taskRunService, toolCatalogBuilder)
 	taskLauncher.UseRequesterEmailResolver(briefingRequesterEmailResolver{})
 	runAt := time.Date(2026, 6, 15, 23, 0, 0, 0, time.UTC)
-	schedule := task.TaskSchedule{
-		TaskScheduleID:  task.MorningBriefingScheduleID("person-1"),
+	schedule := task.Schedule{
+		ScheduleID:      task.MorningBriefingScheduleID("person-1"),
 		CreatorPersonID: "person-1",
-		Kind:            task.TaskScheduleKindCron,
+		Kind:            task.ScheduleKindCron,
 		CronExpression:  "0 8 * * *",
 		TimeZone:        "Asia/Seoul",
 		NextRunAt:       &runAt,
 	}
-	result, errorValue := NewTaskScheduleRunner(taskLauncher).RunIfDue(context.Background(), TaskScheduleRunRequest{
-		TaskSchedule:  schedule,
+	result, errorValue := NewScheduleRunner(taskLauncher).RunIfDue(context.Background(), ScheduleRunRequest{
+		Schedule:      schedule,
 		ReferenceTime: runAt,
 		PersonAccess:  policy.PersonAccess{PersonID: "person-1"},
 	})
@@ -246,8 +246,8 @@ func TestTaskScheduleRunnerSkipsEmptyManagedBriefingWithoutLaunching(t *testing.
 	if result.DidRun {
 		t.Fatal("expected empty managed briefing to skip launch")
 	}
-	if result.TaskSchedule.NextRunAt == nil || !result.TaskSchedule.NextRunAt.After(runAt) {
-		t.Fatalf("expected schedule to advance, got %+v", result.TaskSchedule)
+	if result.Schedule.NextRunAt == nil || !result.Schedule.NextRunAt.After(runAt) {
+		t.Fatalf("expected schedule to advance, got %+v", result.Schedule)
 	}
 	if len(taskRunService.ListTaskRun()) != 0 {
 		t.Fatal("expected skip to create no task run")

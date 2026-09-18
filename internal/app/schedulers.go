@@ -12,11 +12,11 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/scheduler"
 )
 
-func configureMorningBriefing(poller *scheduler.TaskSchedulePoller, configuration config.RuntimeConfiguration, directory identityDirectory, kernel agentKernel, logger *slog.Logger) {
+func configureMorningBriefing(poller *scheduler.SchedulePoller, configuration config.RuntimeConfiguration, directory identityDirectory, kernel agentKernel, logger *slog.Logger) {
 	if poller == nil || directory.platformAccountLister == nil {
 		return
 	}
-	repository, isSupported := poller.TaskScheduleRepository.(scheduler.MorningBriefingRepository)
+	repository, isSupported := poller.ScheduleRepository.(scheduler.MorningBriefingRepository)
 	if !isSupported {
 		return
 	}
@@ -38,19 +38,19 @@ func configureMorningBriefing(poller *scheduler.TaskSchedulePoller, configuratio
 	}
 }
 
-func newTaskSchedulePoller(runtimeConfiguration config.RuntimeConfiguration, services taskServices, identityService *identity.IdentityService, taskLauncher *agentruntime.TaskLauncher, taskIntakeController *runtimecontrol.TaskIntakeController, logger *slog.Logger) *scheduler.TaskSchedulePoller {
-	if services.repositories.taskSchedule == nil || services.repositories.scheduledDelivery == nil {
+func newSchedulePoller(runtimeConfiguration config.RuntimeConfiguration, services taskServices, identityService *identity.IdentityService, taskLauncher *agentruntime.TaskLauncher, taskIntakeController *runtimecontrol.TaskIntakeController, logger *slog.Logger) *scheduler.SchedulePoller {
+	if services.repositories.schedule == nil || services.repositories.scheduledDelivery == nil {
 		return nil
 	}
-	return &scheduler.TaskSchedulePoller{
-		TaskScheduleRepository: services.repositories.taskSchedule,
-		DeliveryRepository:     services.repositories.scheduledDelivery,
-		TaskScheduleRunner:     agentruntime.NewTaskScheduleRunner(taskLauncher),
-		TaskRunService:         services.taskRunService,
-		PersonAccessResolver:   identityService,
-		TaskIntakeGate:         taskIntakeController,
-		WorkerID:               "blueclaw-app",
-		Logger:                 logger,
+	return &scheduler.SchedulePoller{
+		ScheduleRepository:   services.repositories.schedule,
+		DeliveryRepository:   services.repositories.scheduledDelivery,
+		ScheduleRunner:       agentruntime.NewScheduleRunner(taskLauncher),
+		TaskRunService:       services.taskRunService,
+		PersonAccessResolver: identityService,
+		TaskIntakeGate:       taskIntakeController,
+		WorkerID:             "blueclaw-app",
+		Logger:               logger,
 	}
 }
 

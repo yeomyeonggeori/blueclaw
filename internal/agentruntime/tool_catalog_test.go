@@ -21,9 +21,9 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
 
-type memoryTaskScheduleRepository struct {
-	taskSchedules []task.TaskSchedule
-	failed        []string
+type memoryScheduleRepository struct {
+	schedules []task.Schedule
+	failed    []string
 }
 
 func TestResolveAgentWorkspaceReferencesUsesPathBoundaries(t *testing.T) {
@@ -83,123 +83,123 @@ func TestResolveAgentWorkspaceEnvironmentLeavesConcretePathsUnchanged(t *testing
 	}
 }
 
-func (repository *memoryTaskScheduleRepository) UpsertTaskSchedule(taskSchedule task.TaskSchedule) error {
-	repository.taskSchedules = append(repository.taskSchedules, taskSchedule)
+func (repository *memoryScheduleRepository) UpsertSchedule(schedule task.Schedule) error {
+	repository.schedules = append(repository.schedules, schedule)
 	return nil
 }
 
-func (repository *memoryTaskScheduleRepository) UpdateTaskSchedule(request task.TaskScheduleUpdateRequest) (task.TaskScheduleUpdateResult, error) {
-	for index, taskSchedule := range repository.taskSchedules {
-		if !memoryTaskScheduleMatchesUpdateRequest(taskSchedule, request) {
+func (repository *memoryScheduleRepository) UpdateSchedule(request task.ScheduleUpdateRequest) (task.ScheduleUpdateResult, error) {
+	for index, schedule := range repository.schedules {
+		if !memoryScheduleMatchesUpdateRequest(schedule, request) {
 			continue
 		}
-		updatedTaskSchedule := taskSchedule
+		updatedSchedule := schedule
 		var errorValue error
-		if request.UpdateTaskSchedule != nil {
-			updatedTaskSchedule, errorValue = request.UpdateTaskSchedule(taskSchedule)
+		if request.UpdateSchedule != nil {
+			updatedSchedule, errorValue = request.UpdateSchedule(schedule)
 			if errorValue != nil {
-				return task.TaskScheduleUpdateResult{}, errorValue
+				return task.ScheduleUpdateResult{}, errorValue
 			}
 		}
-		repository.taskSchedules[index] = updatedTaskSchedule
-		return task.TaskScheduleUpdateResult{TaskSchedule: updatedTaskSchedule, IsFound: true}, nil
+		repository.schedules[index] = updatedSchedule
+		return task.ScheduleUpdateResult{Schedule: updatedSchedule, IsFound: true}, nil
 	}
-	return task.TaskScheduleUpdateResult{}, nil
+	return task.ScheduleUpdateResult{}, nil
 }
 
-func (repository *memoryTaskScheduleRepository) ClaimDueTaskSchedules(int, time.Duration, time.Time, string) ([]task.TaskSchedule, error) {
-	return append([]task.TaskSchedule{}, repository.taskSchedules...), nil
+func (repository *memoryScheduleRepository) ClaimDueSchedules(int, time.Duration, time.Time, string) ([]task.Schedule, error) {
+	return append([]task.Schedule{}, repository.schedules...), nil
 }
 
-func (repository *memoryTaskScheduleRepository) MarkTaskScheduleSucceeded(taskSchedule task.TaskSchedule) error {
-	repository.taskSchedules = []task.TaskSchedule{taskSchedule}
+func (repository *memoryScheduleRepository) MarkScheduleSucceeded(schedule task.Schedule) error {
+	repository.schedules = []task.Schedule{schedule}
 	return nil
 }
 
-func (repository *memoryTaskScheduleRepository) MarkTaskScheduleFailed(_ task.TaskSchedule, errorMessage string, _ time.Time) error {
+func (repository *memoryScheduleRepository) MarkScheduleFailed(_ task.Schedule, errorMessage string, _ time.Time) error {
 	repository.failed = append(repository.failed, errorMessage)
 	return nil
 }
 
-func (repository *memoryTaskScheduleRepository) ExpireTaskSchedule(taskSchedule task.TaskSchedule, errorMessage string, referenceTime time.Time) error {
-	taskSchedule.ExpiresAt = timePointer(referenceTime)
-	taskSchedule.NextRunAt = nil
-	taskSchedule.LastError = errorMessage
-	repository.taskSchedules = append(repository.taskSchedules, taskSchedule)
+func (repository *memoryScheduleRepository) ExpireSchedule(schedule task.Schedule, errorMessage string, referenceTime time.Time) error {
+	schedule.ExpiresAt = timePointer(referenceTime)
+	schedule.NextRunAt = nil
+	schedule.LastError = errorMessage
+	repository.schedules = append(repository.schedules, schedule)
 	return nil
 }
 
-func (repository *memoryTaskScheduleRepository) CancelTaskSchedules(request task.TaskScheduleCancelRequest) (task.TaskScheduleCancelResult, error) {
-	cancelledTaskSchedules := []task.TaskSchedule{}
-	remainingTaskSchedules := []task.TaskSchedule{}
-	for _, taskSchedule := range repository.taskSchedules {
-		if memoryTaskScheduleMatchesCancelRequest(taskSchedule, request) {
-			taskSchedule.ExpiresAt = timePointer(request.CancelledAt)
-			taskSchedule.NextRunAt = nil
-			cancelledTaskSchedules = append(cancelledTaskSchedules, taskSchedule)
+func (repository *memoryScheduleRepository) CancelSchedules(request task.ScheduleCancelRequest) (task.ScheduleCancelResult, error) {
+	cancelledSchedules := []task.Schedule{}
+	remainingSchedules := []task.Schedule{}
+	for _, schedule := range repository.schedules {
+		if memoryScheduleMatchesCancelRequest(schedule, request) {
+			schedule.ExpiresAt = timePointer(request.CancelledAt)
+			schedule.NextRunAt = nil
+			cancelledSchedules = append(cancelledSchedules, schedule)
 			continue
 		}
-		remainingTaskSchedules = append(remainingTaskSchedules, taskSchedule)
+		remainingSchedules = append(remainingSchedules, schedule)
 	}
-	repository.taskSchedules = append(remainingTaskSchedules, cancelledTaskSchedules...)
-	return task.TaskScheduleCancelResult{TaskSchedules: cancelledTaskSchedules}, nil
+	repository.schedules = append(remainingSchedules, cancelledSchedules...)
+	return task.ScheduleCancelResult{Schedules: cancelledSchedules}, nil
 }
 
-func (repository *memoryTaskScheduleRepository) ListTaskSchedules(request task.TaskScheduleListRequest) (task.TaskScheduleListResult, error) {
-	taskSchedules := []task.TaskSchedule{}
-	for _, taskSchedule := range repository.taskSchedules {
-		if !memoryTaskScheduleMatchesListRequest(taskSchedule, request) {
+func (repository *memoryScheduleRepository) ListSchedules(request task.ScheduleListRequest) (task.ScheduleListResult, error) {
+	schedules := []task.Schedule{}
+	for _, schedule := range repository.schedules {
+		if !memoryScheduleMatchesListRequest(schedule, request) {
 			continue
 		}
-		taskSchedules = append(taskSchedules, taskSchedule)
+		schedules = append(schedules, schedule)
 	}
 	pageSize := request.PageSize
-	if pageSize <= 0 || pageSize > len(taskSchedules) {
-		pageSize = len(taskSchedules)
+	if pageSize <= 0 || pageSize > len(schedules) {
+		pageSize = len(schedules)
 	}
-	return task.TaskScheduleListResult{
-		TaskSchedules: append([]task.TaskSchedule{}, taskSchedules[:pageSize]...),
-		TotalCount:    len(taskSchedules),
-		Page:          1,
-		PageSize:      pageSize,
+	return task.ScheduleListResult{
+		Schedules:  append([]task.Schedule{}, schedules[:pageSize]...),
+		TotalCount: len(schedules),
+		Page:       1,
+		PageSize:   pageSize,
 	}, nil
 }
 
-func memoryTaskScheduleMatchesUpdateRequest(taskSchedule task.TaskSchedule, request task.TaskScheduleUpdateRequest) bool {
-	if taskSchedule.TaskScheduleID != request.TaskScheduleID {
+func memoryScheduleMatchesUpdateRequest(schedule task.Schedule, request task.ScheduleUpdateRequest) bool {
+	if schedule.ScheduleID != request.ScheduleID {
 		return false
 	}
-	if taskSchedule.CreatorPersonID != request.RequesterPersonID {
+	if schedule.CreatorPersonID != request.RequesterPersonID {
 		return false
 	}
-	return taskSchedule.NextRunAt != nil
+	return schedule.NextRunAt != nil
 }
 
-func memoryTaskScheduleMatchesCancelRequest(taskSchedule task.TaskSchedule, request task.TaskScheduleCancelRequest) bool {
-	if taskSchedule.NextRunAt == nil {
+func memoryScheduleMatchesCancelRequest(schedule task.Schedule, request task.ScheduleCancelRequest) bool {
+	if schedule.NextRunAt == nil {
 		return false
 	}
 	switch request.Scope {
-	case task.TaskScheduleCancelScopeCurrentConversation:
-		return taskSchedule.ConversationID == request.ConversationID
-	case task.TaskScheduleCancelScopeScheduleIDs:
-		if !containsString(request.TaskScheduleIDs, taskSchedule.TaskScheduleID) {
+	case task.ScheduleCancelScopeCurrentConversation:
+		return schedule.ConversationID == request.ConversationID
+	case task.ScheduleCancelScopeScheduleIDs:
+		if !containsString(request.ScheduleIDs, schedule.ScheduleID) {
 			return false
 		}
-		return taskSchedule.CreatorPersonID == request.RequesterPersonID || taskSchedule.ConversationID == request.ConversationID
+		return schedule.CreatorPersonID == request.RequesterPersonID || schedule.ConversationID == request.ConversationID
 	default:
-		return taskSchedule.CreatorPersonID == request.RequesterPersonID
+		return schedule.CreatorPersonID == request.RequesterPersonID
 	}
 }
 
-func memoryTaskScheduleMatchesListRequest(taskSchedule task.TaskSchedule, request task.TaskScheduleListRequest) bool {
-	if request.CreatorPersonID != "" && taskSchedule.CreatorPersonID != request.CreatorPersonID {
+func memoryScheduleMatchesListRequest(schedule task.Schedule, request task.ScheduleListRequest) bool {
+	if request.CreatorPersonID != "" && schedule.CreatorPersonID != request.CreatorPersonID {
 		return false
 	}
-	if request.ConversationID != "" && taskSchedule.ConversationID != request.ConversationID {
+	if request.ConversationID != "" && schedule.ConversationID != request.ConversationID {
 		return false
 	}
-	return request.IncludeExpired || taskSchedule.NextRunAt != nil
+	return request.IncludeExpired || schedule.NextRunAt != nil
 }
 
 func timePointer(value time.Time) *time.Time {

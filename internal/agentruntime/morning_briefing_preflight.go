@@ -13,33 +13,33 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
-func (runner TaskScheduleRunner) skipEmptyMorningBriefing(ctx context.Context, request TaskScheduleRunRequest, referenceTime time.Time) bool {
-	if !task.IsMorningBriefing(request.TaskSchedule) {
+func (runner ScheduleRunner) skipEmptyMorningBriefing(ctx context.Context, request ScheduleRunRequest, referenceTime time.Time) bool {
+	if !task.IsMorningBriefing(request.Schedule) {
 		return false
 	}
-	requesterEmail := runner.taskLauncher.resolveRequesterEmail(TaskLaunchRequest{RequesterPersonID: request.TaskSchedule.CreatorPersonID})
+	requesterEmail := runner.taskLauncher.resolveRequesterEmail(TaskLaunchRequest{RequesterPersonID: request.Schedule.CreatorPersonID})
 	toolSet := runner.morningBriefingToolSet(request, requesterEmail)
-	isEmpty, errorValue := morningBriefingIsEmpty(ctx, toolSet, requesterEmail, request.TaskSchedule.TimeZone, referenceTime)
+	isEmpty, errorValue := morningBriefingIsEmpty(ctx, toolSet, requesterEmail, request.Schedule.TimeZone, referenceTime)
 	if errorValue != nil {
-		slog.Warn("morning_briefing.preflight_failed", "taskScheduleID", request.TaskSchedule.TaskScheduleID, "error", errorValue)
+		slog.Warn("morning_briefing.preflight_failed", "taskScheduleID", request.Schedule.ScheduleID, "error", errorValue)
 		return false
 	}
 	if isEmpty {
-		slog.Info("morning_briefing.skipped_empty", "taskScheduleID", request.TaskSchedule.TaskScheduleID, "referenceTime", referenceTime)
+		slog.Info("morning_briefing.skipped_empty", "taskScheduleID", request.Schedule.ScheduleID, "referenceTime", referenceTime)
 	}
 	return isEmpty
 }
 
-func (runner TaskScheduleRunner) morningBriefingToolSet(request TaskScheduleRunRequest, requesterEmail string) *toolcontract.ToolSet {
+func (runner ScheduleRunner) morningBriefingToolSet(request ScheduleRunRequest, requesterEmail string) *toolcontract.ToolSet {
 	return runner.taskLauncher.toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
-		ProfileName:               request.TaskSchedule.AgentProfileName,
-		RequesterPersonID:         request.TaskSchedule.CreatorPersonID,
+		ProfileName:               request.Schedule.AgentProfileName,
+		RequesterPersonID:         request.Schedule.CreatorPersonID,
 		RequesterEmail:            requesterEmail,
 		PersonAccess:              request.PersonAccess,
 		TaskSource:                TaskLaunchSourceScheduled,
 		IsScheduledRun:            true,
-		Platform:                  request.TaskSchedule.Platform,
-		ConversationID:            "schedule:" + request.TaskSchedule.TaskScheduleID,
+		Platform:                  request.Schedule.Platform,
+		ConversationID:            "schedule:" + request.Schedule.ScheduleID,
 		RegisteredToolNameCeiling: []string{"task_list", "event_list"},
 	})
 }

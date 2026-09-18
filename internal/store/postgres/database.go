@@ -150,6 +150,7 @@ SELECT
   AND to_regclass('public.connector_outbox') IS NOT NULL
   AND to_regclass('public.task_attempt') IS NOT NULL
   AND to_regclass('public.memory_fact') IS NOT NULL
+  AND to_regclass('public.schedule') IS NOT NULL
   AND to_regclass('public.graphiti_episode') IS NULL`)
 	var hasCurrentSchema bool
 	errorValue := row.Scan(&hasCurrentSchema)
