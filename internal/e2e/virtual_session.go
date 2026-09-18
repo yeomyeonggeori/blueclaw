@@ -2871,6 +2871,7 @@ func scenarioApprovalRouterResponse(approval string) string {
 		"taskShape":        "maintenance_task",
 		"level":            "low",
 		"approval":         strings.TrimSpace(approval),
+		"busyRoute":        string(agentcontract.BusyRouteNewTask),
 		"responseLanguage": "ko",
 		"reason":           "scripted approval reply classification",
 		"userFacingReply":  "",

@@ -18,30 +18,22 @@ const scenarioDecisionModelName = "scenario-decision-model"
 const scenarioAddressingOnlyTurn = "addressing_only"
 
 type scenarioTurnScript struct {
-	turnIndex        int
-	turnDocuments    []string
-	lastTurnDocument string
-	hasServedTurn    bool
+	turnIndex     int
+	turnDocuments []string
 }
 
 func (turnScript *scenarioTurnScript) beginTurn(turnIndex int, turnDocuments []string) {
 	turnScript.turnIndex = turnIndex
 	turnScript.turnDocuments = append([]string{}, turnDocuments...)
-	turnScript.lastTurnDocument = ""
-	turnScript.hasServedTurn = false
 }
 
 func (turnScript *scenarioTurnScript) next() (string, error) {
-	if len(turnScript.turnDocuments) > 0 {
-		turnScript.lastTurnDocument = turnScript.turnDocuments[0]
-		turnScript.turnDocuments = turnScript.turnDocuments[1:]
-		turnScript.hasServedTurn = true
-		return turnScript.lastTurnDocument, nil
+	if len(turnScript.turnDocuments) == 0 {
+		return "", fmt.Errorf("turn %d asked for a decision its script does not hold", turnScript.turnIndex)
 	}
-	if !turnScript.hasServedTurn {
-		return "", fmt.Errorf("the scenario scripts no decision for turn %d", turnScript.turnIndex)
-	}
-	return turnScript.lastTurnDocument, nil
+	turnDocument := turnScript.turnDocuments[0]
+	turnScript.turnDocuments = turnScript.turnDocuments[1:]
+	return turnDocument, nil
 }
 
 func (turnScript *scenarioTurnScript) pendingCount() int {
