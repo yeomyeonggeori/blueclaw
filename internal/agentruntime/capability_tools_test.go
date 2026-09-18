@@ -627,10 +627,10 @@ func TestCapabilityToolIdempotencyKeyOnlyForSendTools(t *testing.T) {
 	}
 }
 
-func TestToolCatalogQuarantinesCapabilityDescriptorCollidingWithKernelTool(t *testing.T) {
+func TestToolCatalogLeavesAKernelToolNameToTheKernelTool(t *testing.T) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			t.Fatalf("expected a colliding capability descriptor to quarantine instead of panicking, got panic: %v", recovered)
+			t.Fatalf("expected a colliding capability descriptor to be dropped instead of panicking, got panic: %v", recovered)
 		}
 	}()
 	toolCatalogBuilder := NewToolCatalogBuilder()
@@ -638,18 +638,22 @@ func TestToolCatalogQuarantinesCapabilityDescriptorCollidingWithKernelTool(t *te
 	toolCatalogBuilder.UseCapabilityQuarantineReporter(func(quarantinedProvider toolcontract.QuarantinedToolProvider) {
 		reportedProviders = append(reportedProviders, quarantinedProvider)
 	})
-	toolCatalogBuilder.UseTestCapabilityToolDescriptors(capability.Client{}, []CapabilityToolDescriptor{{
-		Name:        toolcontract.FileReadToolName,
-		Description: "Colliding capability tool.",
-	}})
+	toolCatalogBuilder.UseTestCapabilityToolDescriptors(capability.Client{}, []CapabilityToolDescriptor{
+		{Name: toolcontract.FileReadToolName, Description: "Colliding capability tool."},
+		{Name: "web_search", Description: "A capability tool that collides with nothing."},
+	})
 
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{ProfileName: "default"})
 
-	if !toolRegistry.IsRegistered(toolcontract.FileReadToolName) {
-		t.Fatal("expected the trusted kernel tool to remain registered after the capability collision")
+	fileRead, isFound := toolRegistry.ToolDefinition(toolcontract.FileReadToolName)
+	if !isFound || fileRead.ProviderID == "capabilityd" {
+		t.Fatalf("the kernel tool lost its own name to the capability descriptor: %+v", fileRead)
 	}
-	if len(reportedProviders) != 1 || reportedProviders[0].ProviderID != "capabilityd" {
-		t.Fatalf("expected the capabilityd provider to be quarantined, got %+v", reportedProviders)
+	if !toolRegistry.IsRegistered("web_search") {
+		t.Fatal("a capability tool that collided with nothing left the turn with the one that did")
+	}
+	if len(reportedProviders) != 0 {
+		t.Fatalf("dropping one descriptor took the whole provider with it: %+v", reportedProviders)
 	}
 }
 
@@ -787,5 +791,34 @@ func TestCapabilityReadKeepsTheRefusalWhenNothingResolves(t *testing.T) {
 	}
 	if !result.Failed() || result.FailureStage() != "document_read" {
 		t.Fatalf("a genuinely missing path must keep its refusal, got %+v", result)
+	}
+}
+
+func TestToolCatalogKeepsEveryCapabilityToolWhenOneNameIsAlreadyALocalTool(t *testing.T) {
+	toolCatalogBuilder := NewToolCatalogBuilder()
+	toolCatalogBuilder.UseTaskScheduleRepository(&memoryTaskScheduleRepository{})
+	quarantinedProviders := []toolcontract.QuarantinedToolProvider{}
+	toolCatalogBuilder.UseCapabilityQuarantineReporter(func(quarantinedProvider toolcontract.QuarantinedToolProvider) {
+		quarantinedProviders = append(quarantinedProviders, quarantinedProvider)
+	})
+	toolCatalogBuilder.UseTestCapabilityTools(capability.Client{}, []string{"schedule_list", "message_send", "web_search"})
+	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"schedule_list", "schedule_create", "message_send", "web_search"})
+
+	toolSet := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
+		ProfileName:       "default",
+		RequesterPersonID: "person-1",
+	})
+
+	if len(quarantinedProviders) != 0 {
+		t.Fatalf("one shared tool name took the whole capability provider out of the turn: %+v", quarantinedProviders)
+	}
+	for _, toolName := range []string{"schedule_list", "message_send", "web_search"} {
+		if !toolSet.IsRegistered(toolName) {
+			t.Fatalf("%s did not reach the turn", toolName)
+		}
+	}
+	scheduleList, isFound := toolSet.ToolDefinition("schedule_list")
+	if !isFound || scheduleList.ProviderID == "capabilityd" {
+		t.Fatalf("the shared name went to the capability twin instead of the local tool: %+v", scheduleList)
 	}
 }
