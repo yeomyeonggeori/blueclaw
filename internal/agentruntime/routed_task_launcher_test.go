@@ -15,7 +15,7 @@ func routedTaskLauncher(harness agentcontract.Harness, taskRunService *task.Task
 
 func routedTaskLauncherAuthoringNoticesWith(harness agentcontract.Harness, taskRunService *task.TaskRunService, toolCatalogBuilder *ToolCatalogBuilder, routerLanguageModel model.LanguageModelProvider, noticeLanguageModel model.LanguageModelProvider) *TaskLauncher {
 	taskLauncher := NewTaskLauncher(harness, taskRunService, toolCatalogBuilder)
-	taskLauncher.UseTurnRouter(intake.NewTurnRouter(routerLanguageModel, intake.NewDecisionPlanner(intaketest.LanguageModelDecisionModel{LanguageModel: routerLanguageModel}, nil, nil), agentcontract.IntakeOptions{IsEnabled: true}))
+	taskLauncher.UseTurnRouter(intake.NewTurnRouter(routerLanguageModel, intake.NewDecisionPlanner(&intaketest.LanguageModelDecisionModel{LanguageModel: routerLanguageModel}, nil, nil), agentcontract.IntakeOptions{IsEnabled: true}))
 	taskLauncher.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, noticeLanguageModel))
 	return taskLauncher
 }

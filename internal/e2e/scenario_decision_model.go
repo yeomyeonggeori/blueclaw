@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
@@ -42,15 +43,19 @@ func (turnScript *scenarioTurnScript) pendingCount() int {
 
 type scenarioDecisionModel struct {
 	turnScript        *scenarioTurnScript
-	languageModelTurn intaketest.LanguageModelDecisionModel
+	languageModelTurn *intaketest.LanguageModelDecisionModel
 	addressing        agentcontract.AddressingDecision
+
+	mutex          sync.Mutex
+	decidedOutcome intaketest.Outcome
+	hasDecidedTurn bool
 }
 
-func newScenarioDecisionModel(turnScript *scenarioTurnScript, languageModel model.LanguageModelProvider, addressingResponse string) scenarioDecisionModel {
+func newScenarioDecisionModel(turnScript *scenarioTurnScript, languageModel model.LanguageModelProvider, addressingResponse string) *scenarioDecisionModel {
 	addressing := scenarioAddressingDecision(addressingResponse)
-	return scenarioDecisionModel{
+	return &scenarioDecisionModel{
 		turnScript: turnScript,
-		languageModelTurn: intaketest.LanguageModelDecisionModel{
+		languageModelTurn: &intaketest.LanguageModelDecisionModel{
 			LanguageModel: languageModel,
 			Addressing:    addressing,
 			ModelName:     scenarioDecisionModelName,
@@ -59,9 +64,12 @@ func newScenarioDecisionModel(turnScript *scenarioTurnScript, languageModel mode
 	}
 }
 
-func (decisionModel scenarioDecisionModel) Decide(ctx context.Context, request model.DecisionRequest) (model.DecisionResponse, error) {
+func (decisionModel *scenarioDecisionModel) Decide(ctx context.Context, request model.DecisionRequest) (model.DecisionResponse, error) {
 	if decisionModel.turnScript == nil {
 		return decisionModel.languageModelTurn.Decide(ctx, request)
+	}
+	if outcome, isDecided := decisionModel.decidedTurn(); isDecided && asksOnlyAboutTools(request.Questions) {
+		return decisionModel.answersFrom(request, outcome), nil
 	}
 	turnDocument, errorValue := decisionModel.turnScript.next()
 	if errorValue != nil {
@@ -82,13 +90,40 @@ func (decisionModel scenarioDecisionModel) Decide(ctx context.Context, request m
 		TurnDecision:      turnDecision,
 		PendingChoiceKeys: intaketest.PendingChoiceKeys(request.State),
 	}
+	decisionModel.rememberDecidedTurn(outcome)
+	return decisionModel.answersFrom(request, outcome), nil
+}
+
+func (decisionModel *scenarioDecisionModel) answersFrom(request model.DecisionRequest, outcome intaketest.Outcome) model.DecisionResponse {
 	return model.DecisionResponse{
 		Answers:   intaketest.Answers(request.Questions, func(string) intaketest.Outcome { return outcome }),
 		ModelName: scenarioDecisionModelName,
-	}, nil
+	}
 }
 
-func (decisionModel scenarioDecisionModel) addressingOnlyOutcome(string) intaketest.Outcome {
+func (decisionModel *scenarioDecisionModel) decidedTurn() (intaketest.Outcome, bool) {
+	decisionModel.mutex.Lock()
+	defer decisionModel.mutex.Unlock()
+	return decisionModel.decidedOutcome, decisionModel.hasDecidedTurn
+}
+
+func (decisionModel *scenarioDecisionModel) rememberDecidedTurn(outcome intaketest.Outcome) {
+	decisionModel.mutex.Lock()
+	defer decisionModel.mutex.Unlock()
+	decisionModel.decidedOutcome = outcome
+	decisionModel.hasDecidedTurn = true
+}
+
+func asksOnlyAboutTools(questions map[string]model.DecisionQuestion) bool {
+	for questionName := range questions {
+		if !strings.Contains(questionName, "."+agentcontract.IntakeQuestionPrefixTool) {
+			return false
+		}
+	}
+	return len(questions) > 0
+}
+
+func (decisionModel *scenarioDecisionModel) addressingOnlyOutcome(string) intaketest.Outcome {
 	return intaketest.Outcome{Addressing: decisionModel.addressing}
 }
 

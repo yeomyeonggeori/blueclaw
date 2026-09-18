@@ -168,11 +168,10 @@ func (connectorRuntime *ConnectorRuntime) settleOpenInteractions(ctx context.Con
 }
 
 func (connectorRuntime *ConnectorRuntime) settleConfirmation(ctx context.Context, turn *inboundTurn, confirmation pendingApproval, decision agentcontract.TurnDecision) (ConnectorRuntimeResult, bool, error) {
-	approval := approvalSignalSurvivingRoute(decision.Approval, decision.Route)
-	approvalgate.RecordRequesterDecision(connectorRuntime.taskRunService, confirmation.TaskRun.TaskRunID, approval, "chat_reply")
+	approvalgate.RecordRequesterDecision(connectorRuntime.taskRunService, confirmation.TaskRun.TaskRunID, decision.Approval, "chat_reply")
 	turn.pendingApproval = confirmation
-	if approval != nil && agentcontract.IsApprovingSignal(*approval) {
-		if *approval == agentcontract.ApprovalSignalApproveTask {
+	if decision.Approval != nil && agentcontract.IsApprovingSignal(*decision.Approval) {
+		if *decision.Approval == agentcontract.ApprovalSignalApproveTask {
 			connectorRuntime.grantApprovalScopeForTask(confirmation.TaskRun.TaskRunID)
 		}
 		connectorRuntime.logger.Info("connector."+turn.platform+".confirmation.accepted", slog.String("messageID", turn.event.MessageID), slog.String("taskRunID", confirmation.TaskRun.TaskRunID))
@@ -180,7 +179,7 @@ func (connectorRuntime *ConnectorRuntime) settleConfirmation(ctx context.Context
 		turn.isApprovalContinuation = true
 		return ConnectorRuntimeResult{}, false, nil
 	}
-	if approval != nil && *approval == agentcontract.ApprovalSignalReject {
+	if decision.Approval != nil && *decision.Approval == agentcontract.ApprovalSignalReject {
 		connectorRuntime.resolveTaskWaitToken(turn.taskWaitResolution)
 		rejection := agentcontract.ConfirmationReplyDecision{Decision: string(agentcontract.ApprovalSignalReject), Reason: decision.Reason}
 		result, errorValue := connectorRuntime.handleRejectedConfirmation(ctx, turn.platform, turn.adapter, turn.event, turn.replyTarget, confirmation, rejection, turn.sendReply)

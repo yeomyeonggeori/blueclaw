@@ -3997,7 +3997,7 @@ func newTestConnectorRuntimeRoutingWith(t *testing.T, languageModel llm.Language
 	t.Helper()
 
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
-	return connectorRuntimeForHarness(t, testConnectorAgentKernel(taskRunService, languageModel), intake.NewDecisionPlanner(intaketest.LanguageModelDecisionModel{LanguageModel: languageModel, Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true}}, nil, nil), reply.NewGenerator(languageModel, nil), intake.NewTurnRouter(routerLanguageModel, intake.NewDecisionPlanner(intaketest.LanguageModelDecisionModel{LanguageModel: routerLanguageModel, Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true}}, nil, nil), agentcontract.IntakeOptions{IsEnabled: true}), taskRunService, languageModel)
+	return connectorRuntimeForHarness(t, testConnectorAgentKernel(taskRunService, languageModel), intake.NewDecisionPlanner(&intaketest.LanguageModelDecisionModel{LanguageModel: languageModel, Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true}}, nil, nil), reply.NewGenerator(languageModel, nil), intake.NewTurnRouter(routerLanguageModel, intake.NewDecisionPlanner(&intaketest.LanguageModelDecisionModel{LanguageModel: routerLanguageModel, Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true}}, nil, nil), agentcontract.IntakeOptions{IsEnabled: true}), taskRunService, languageModel)
 }
 
 func newStubbedTestConnectorRuntime(t *testing.T) (*ConnectorRuntime, *testAdapter, *harnesstest.Harness) {
@@ -4136,7 +4136,7 @@ func newWaitRoutingTestConnectorRuntime(t *testing.T, languageModel llm.Language
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	taskWaitRepository := task.NewInMemoryTaskWaitTokenRepository()
 
-	connectorRuntime, adapter := connectorRuntimeForHarness(t, testConnectorAgentKernel(taskRunService, languageModel), intake.NewDecisionPlanner(intaketest.LanguageModelDecisionModel{LanguageModel: languageModel, Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true}}, nil, nil), reply.NewGenerator(languageModel, nil), intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(intaketest.LanguageModelDecisionModel{LanguageModel: languageModel, Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true}}, nil, nil), agentcontract.IntakeOptions{IsEnabled: true}), taskRunService, languageModel)
+	connectorRuntime, adapter := connectorRuntimeForHarness(t, testConnectorAgentKernel(taskRunService, languageModel), intake.NewDecisionPlanner(&intaketest.LanguageModelDecisionModel{LanguageModel: languageModel, Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true}}, nil, nil), reply.NewGenerator(languageModel, nil), intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(&intaketest.LanguageModelDecisionModel{LanguageModel: languageModel, Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true}}, nil, nil), agentcontract.IntakeOptions{IsEnabled: true}), taskRunService, languageModel)
 	connectorRuntime.UseTaskWaitTokenRepository(taskWaitRepository)
 	return connectorRuntime, adapter, taskRunService, taskWaitRepository
 }

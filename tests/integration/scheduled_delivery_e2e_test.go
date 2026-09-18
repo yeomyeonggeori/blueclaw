@@ -86,7 +86,7 @@ func newScheduledDeliveryConnectorRuntime(languageModel staticScheduleLanguageMo
 	agentKernel := loop.NewAgentKernel(taskRunService, task.NewTaskStepService())
 	useScheduleTestLanguageModel(agentKernel, languageModel)
 	connectorRuntime := connectors.NewConnectorRuntime(identityService, agentKernel, taskRunService, taskEventService, nil)
-	turnRouter := intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(intaketest.LanguageModelDecisionModel{LanguageModel: languageModel}, nil, nil), agentcontract.IntakeOptions{IsEnabled: true})
+	turnRouter := intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(&intaketest.LanguageModelDecisionModel{LanguageModel: languageModel}, nil, nil), agentcontract.IntakeOptions{IsEnabled: true})
 	launchFailureCompleter := launchfailure.NewCompleter(taskRunService, languageModel)
 	connectorRuntime.UseTurnRouter(turnRouter)
 	connectorRuntime.UseLaunchFailureCompleter(launchFailureCompleter)
@@ -110,7 +110,7 @@ func newScheduledDeliveryPoller(languageModel staticScheduleLanguageModel, repos
 		"default": {"memory_search"},
 	}, nil)
 	taskLauncher := agentruntime.NewTaskLauncher(agentKernel, taskRunService, toolCatalogBuilder)
-	taskLauncher.UseTurnRouter(intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(intaketest.LanguageModelDecisionModel{LanguageModel: languageModel}, nil, nil), agentcontract.IntakeOptions{IsEnabled: true}))
+	taskLauncher.UseTurnRouter(intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(&intaketest.LanguageModelDecisionModel{LanguageModel: languageModel}, nil, nil), agentcontract.IntakeOptions{IsEnabled: true}))
 	taskLauncher.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, languageModel))
 	return scheduler.SchedulePoller{
 		ScheduleRepository:   repository,

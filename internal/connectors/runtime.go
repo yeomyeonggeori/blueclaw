@@ -421,17 +421,6 @@ func (connectorRuntime *ConnectorRuntime) appendTaskExecutionDuration(taskRunID 
 	}))
 }
 
-func approvalSignalSurvivingRoute(approvalSignal *agentcontract.ApprovalSignal, route agentcontract.TurnRoute) *agentcontract.ApprovalSignal {
-	if approvalSignal == nil || !agentcontract.IsApprovingSignal(*approvalSignal) {
-		return approvalSignal
-	}
-	if route != agentcontract.TurnRouteReviseTask && route != agentcontract.TurnRouteStartTask {
-		return approvalSignal
-	}
-	unclearSignal := agentcontract.ApprovalSignalUnclear
-	return &unclearSignal
-}
-
 func choiceReplyOptions(options []AskChoiceOption) []agentcontract.ChoiceReplyOption {
 	replyOptions := []agentcontract.ChoiceReplyOption{}
 	for _, option := range options {
