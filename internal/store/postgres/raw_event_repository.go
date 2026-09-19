@@ -330,6 +330,20 @@ WHERE raw_event_id = $5
 	return updateError
 }
 
+func (rawEventRepository RawEventRepository) ReleaseConnectorEventClaim(queuedEvent connectors.QueuedConnectorEvent, nextAttemptAt time.Time) error {
+	_, updateError := rawEventRepository.database.SQL.ExecContext(context.Background(), `
+UPDATE raw_event
+SET connector_status = 'pending',
+  connector_next_attempt_at = $1,
+  connector_attempt_count = greatest(connector_attempt_count - 1, 0)
+WHERE raw_event_id = $2
+  AND connector_status = 'running'`,
+		nextAttemptAt.UTC(),
+		queuedEvent.Event.DedupeKey(),
+	)
+	return updateError
+}
+
 func (rawEventRepository RawEventRepository) SaveConnectorResult(event connectors.PlatformInboundEvent, result connectors.ConnectorRuntimeResult) error {
 	conversationID := event.Platform + ":" + event.ConversationID
 	resultDocument, errorValue := json.Marshal(result)

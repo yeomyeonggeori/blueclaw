@@ -228,6 +228,10 @@ func (repository *scheduledDeliveryRepository) MarkConnectorEventFailed(connecto
 	return nil
 }
 
+func (repository *scheduledDeliveryRepository) ReleaseConnectorEventClaim(connectors.QueuedConnectorEvent, time.Time) error {
+	return nil
+}
+
 func (repository *scheduledDeliveryRepository) EnqueueConnectorReply(event connectors.PlatformInboundEvent, replyTarget connectors.ReplyTarget, reply connectors.OutboundReply) (string, error) {
 	outboxID := event.DedupeKey()
 	repository.pendingReplies = append(repository.pendingReplies, connectors.QueuedConnectorReply{

@@ -78,11 +78,28 @@ func (connectorRuntime *ConnectorRuntime) processQueuedConnectorEvent(ctx contex
 		connectorRuntime.processQueuedConnectorEventWithAdapter(ctx, adapter, queuedEvent)
 		return
 	}
-	lockStartedAt := time.Now()
-	lock.Lock()
-	connectorRuntime.logConnectorLockWait(event, time.Since(lockStartedAt))
+	if !lock.TryLock() {
+		connectorRuntime.releaseQueuedConnectorEventToTheConversationInFlight(queuedEvent)
+		return
+	}
 	defer lock.Unlock()
 	connectorRuntime.processQueuedConnectorEventWithAdapter(ctx, adapter, queuedEvent)
+}
+
+func (connectorRuntime *ConnectorRuntime) releaseQueuedConnectorEventToTheConversationInFlight(queuedEvent QueuedConnectorEvent) {
+	event := queuedEvent.Event
+	connectorRuntime.logger.Info(
+		"connector."+event.Platform+".inbox.conversation_in_flight",
+		slog.String("messageID", event.MessageID),
+		slog.String("conversationID", event.ConversationID),
+	)
+	if errorValue := connectorRuntime.queueRepository().ReleaseConnectorEventClaim(queuedEvent, time.Now().UTC().Add(connectorWorkerIdleDelay)); errorValue != nil {
+		connectorRuntime.logger.Warn(
+			"connector."+event.Platform+".inbox.release_claim_failed",
+			slog.String("messageID", event.MessageID),
+			slog.String("error", errorValue.Error()),
+		)
+	}
 }
 
 func (connectorRuntime *ConnectorRuntime) logConnectorQueueWait(event PlatformInboundEvent) {
@@ -95,16 +112,6 @@ func (connectorRuntime *ConnectorRuntime) logConnectorQueueWait(event PlatformIn
 	}
 	connectorRuntime.logger.Info(
 		"blueclaw.connector.queue_wait",
-		slog.String("platform", event.Platform),
-		slog.String("messageID", event.MessageID),
-		slog.String("conversationID", event.ConversationID),
-		slog.Int64("duration_ms", waitDuration.Milliseconds()),
-	)
-}
-
-func (connectorRuntime *ConnectorRuntime) logConnectorLockWait(event PlatformInboundEvent, waitDuration time.Duration) {
-	connectorRuntime.logger.Info(
-		"blueclaw.connector.lock_wait",
 		slog.String("platform", event.Platform),
 		slog.String("messageID", event.MessageID),
 		slog.String("conversationID", event.ConversationID),
