@@ -223,32 +223,16 @@ func sanitizeEnvironmentVariables(environmentVariables map[string]string, worksp
 		"LANG": "C.UTF-8",
 	}
 
-	allowedEnvironmentVariableName := map[string]bool{
-		"TERM":                           true,
-		"LANG":                           true,
-		"LC_ALL":                         true,
-		"COLORTERM":                      true,
-		"BLUECLAW_REQUESTER_TMP":         true,
-		"BLUECLAW_TASK_TMP":              true,
-		"BLUECLAW_REQUESTER_ARTIFACTS":   true,
-		"BLUECLAW_DEPENDENCY_CACHE":      true,
-		"BLUECLAW_BUILTIN_SKILLS_PYTHON": true,
-		"HOME":                           true,
-		"TMPDIR":                         true,
-		"TMP":                            true,
-		"TEMP":                           true,
-		"XDG_CACHE_HOME":                 true,
-		"XDG_CONFIG_HOME":                true,
-		"XDG_RUNTIME_DIR":                true,
-		"BUN_TMPDIR":                     true,
-		"BUN_INSTALL":                    true,
-		"BUN_INSTALL_CACHE_DIR":          true,
-		"CAPABILITY_BRIDGE_URL":          true,
-		"npm_config_cache":               true,
+	allowedTerminalEnvironmentName := map[string]bool{
+		"TERM":                  true,
+		"LANG":                  true,
+		"LC_ALL":                true,
+		"COLORTERM":             true,
+		"CAPABILITY_BRIDGE_URL": true,
 	}
 
 	for name, value := range environmentVariables {
-		if allowedEnvironmentVariableName[name] {
+		if IsWorkspaceManagedEnvironmentName(name) || allowedTerminalEnvironmentName[name] {
 			sanitizedEnvironmentVariables[name] = value
 		}
 	}
