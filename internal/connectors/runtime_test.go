@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -3539,7 +3540,9 @@ type testReply struct {
 }
 
 type testConnectorQueueRepository struct {
+	mutex           sync.Mutex
 	pendingEvents   []QueuedConnectorEvent
+	releasedEvents  []QueuedConnectorEvent
 	succeededEvents []ConnectorRuntimeResult
 	pendingReplies  []QueuedConnectorReply
 	sentReplies     []string
@@ -3563,11 +3566,15 @@ func (repository *testConnectorQueueRepository) SaveConnectorResult(PlatformInbo
 }
 
 func (repository *testConnectorQueueRepository) TryEnqueueConnectorEvent(event PlatformInboundEvent) (bool, ConnectorRuntimeResult, error) {
+	repository.mutex.Lock()
+	defer repository.mutex.Unlock()
 	repository.pendingEvents = append(repository.pendingEvents, QueuedConnectorEvent{Event: event, AttemptCount: 0})
 	return false, ConnectorRuntimeResult{}, nil
 }
 
 func (repository *testConnectorQueueRepository) ClaimPendingConnectorEvents(limit int, _ time.Duration) ([]QueuedConnectorEvent, error) {
+	repository.mutex.Lock()
+	defer repository.mutex.Unlock()
 	if len(repository.pendingEvents) == 0 {
 		return nil, nil
 	}
@@ -3590,6 +3597,8 @@ func (repository *testConnectorQueueRepository) ClaimPendingConnectorEvents(limi
 }
 
 func (repository *testConnectorQueueRepository) MarkConnectorEventSucceeded(_ PlatformInboundEvent, result ConnectorRuntimeResult) error {
+	repository.mutex.Lock()
+	defer repository.mutex.Unlock()
 	repository.succeededEvents = append(repository.succeededEvents, result)
 	return nil
 }
@@ -3598,7 +3607,17 @@ func (repository *testConnectorQueueRepository) MarkConnectorEventFailed(QueuedC
 	return nil
 }
 
+func (repository *testConnectorQueueRepository) ReleaseConnectorEventClaim(queuedEvent QueuedConnectorEvent, _ time.Time) error {
+	repository.mutex.Lock()
+	defer repository.mutex.Unlock()
+	repository.releasedEvents = append(repository.releasedEvents, queuedEvent)
+	repository.pendingEvents = append(repository.pendingEvents, queuedEvent)
+	return nil
+}
+
 func (repository *testConnectorQueueRepository) EnqueueConnectorReply(event PlatformInboundEvent, replyTarget ReplyTarget, reply OutboundReply) (string, error) {
+	repository.mutex.Lock()
+	defer repository.mutex.Unlock()
 	outboxID := event.DedupeKey()
 	repository.pendingReplies = append(repository.pendingReplies, QueuedConnectorReply{
 		OutboxID:     outboxID,
@@ -3612,6 +3631,8 @@ func (repository *testConnectorQueueRepository) EnqueueConnectorReply(event Plat
 }
 
 func (repository *testConnectorQueueRepository) ClaimPendingConnectorReplies(int, time.Duration) ([]QueuedConnectorReply, error) {
+	repository.mutex.Lock()
+	defer repository.mutex.Unlock()
 	if len(repository.pendingReplies) == 0 {
 		return nil, nil
 	}
@@ -3622,11 +3643,15 @@ func (repository *testConnectorQueueRepository) ClaimPendingConnectorReplies(int
 }
 
 func (repository *testConnectorQueueRepository) MarkConnectorReplySent(_ QueuedConnectorReply, dispatchID string) error {
+	repository.mutex.Lock()
+	defer repository.mutex.Unlock()
 	repository.sentReplies = append(repository.sentReplies, dispatchID)
 	return nil
 }
 
 func (repository *testConnectorQueueRepository) MarkConnectorReplyFailed(_ QueuedConnectorReply, errorValue error, _ time.Time) error {
+	repository.mutex.Lock()
+	defer repository.mutex.Unlock()
 	repository.failedReplies = append(repository.failedReplies, errorValue.Error())
 	return nil
 }

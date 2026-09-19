@@ -42,6 +42,7 @@ type ConnectorQueueRepository interface {
 	ClaimPendingConnectorEvents(int, time.Duration) ([]QueuedConnectorEvent, error)
 	MarkConnectorEventSucceeded(PlatformInboundEvent, ConnectorRuntimeResult) error
 	MarkConnectorEventFailed(QueuedConnectorEvent, error, time.Time) error
+	ReleaseConnectorEventClaim(QueuedConnectorEvent, time.Time) error
 }
 
 type ConnectorOutboxRepository interface {
