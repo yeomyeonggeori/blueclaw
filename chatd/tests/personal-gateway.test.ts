@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { createOutboundHandler } from "../src/outbound.ts";
 import { createMattermostPersonalGateway } from "../src/personal/mattermost.ts";
+import { UnsupportedByPlatform } from "../src/personal/gateway.ts";
 import { parseActor } from "../src/personal/parse.ts";
 import type { ChatdConfiguration } from "../src/configuration.ts";
 
@@ -344,5 +345,36 @@ describe("an attachment the messenger gave no media type", () => {
 		const attachments = answer.messages[0].attachments;
 		expect(attachments[0].contentType).toBe("image/png");
 		expect(attachments[1].contentType).toBe("");
+	});
+});
+
+describe("an operation the platform never does", () => {
+	test("is answered as unsupported, with a reason a screen can read", async () => {
+		const refusing = {
+			mattermost: {
+				platform: "mattermost",
+				credentialKind: "mattermost-token",
+				removeReaction: async () => {
+					throw new UnsupportedByPlatform("mattermost", "take a reaction back");
+				},
+			},
+		} as never;
+
+		const answer = await call(
+			"person.reaction.remove",
+			{
+				actor: { kind: "mattermost-token", secret: "token" },
+				conversationID: "channel-1",
+				messageID: "post-1",
+				emoji: "\u{1F440}",
+			},
+			refusing,
+		);
+
+		expect(answer.status).toBe(501);
+		expect(await answer.json()).toMatchObject({
+			reason: "unsupported-by-platform",
+			platform: "mattermost",
+		});
 	});
 });
