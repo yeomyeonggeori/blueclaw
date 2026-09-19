@@ -628,3 +628,63 @@ func TestCapabilityLLMClientTellsCapabilitydWhichTierIsAsking(t *testing.T) {
 		t.Fatalf("the provider that served the turn must reach the ledger, got %q", response.UpstreamProvider)
 	}
 }
+
+func routeBodies(t *testing.T, ctx context.Context) map[string]map[string]any {
+	t.Helper()
+	bodiesByPath := map[string]map[string]any{}
+	httpClient := fakeCapabilityHTTPClient{handler: func(request *http.Request) (*http.Response, error) {
+		body := map[string]any{}
+		if errorValue := json.NewDecoder(request.Body).Decode(&body); errorValue != nil {
+			t.Fatalf("expected request document to decode: %v", errorValue)
+		}
+		bodiesByPath[request.URL.Path] = body
+		if request.URL.Path == "/v1/llm/chat" {
+			return jsonCapabilityResponse(http.StatusOK, `{"provider":"capabilityLLM","model":"gemma","finishReason":"stop","message":{"role":"assistant","content":"done"}}`), nil
+		}
+		return jsonCapabilityResponse(http.StatusOK, `{"provider":"capabilityLLM","model":"gemma","content":"{\"reply\":\"ok\"}","selectedBackend":"companion_local"}`), nil
+	}}
+	client := CapabilityLLMClient{
+		CapabilityClient: capability.Client{
+			Endpoint:   "http://internkim-capability",
+			HTTPClient: httpClient,
+		},
+		ModelName: "gemma",
+	}
+	if _, errorValue := client.GenerateResponse(ctx, "say hello"); errorValue != nil {
+		t.Fatalf("expected a text response: %v", errorValue)
+	}
+	if _, errorValue := client.GenerateStructuredResponse(ctx, buildTestStructuredResponseRequest()); errorValue != nil {
+		t.Fatalf("expected a structured response: %v", errorValue)
+	}
+	chatRequest := ChatCompletionRequest{Messages: []ChatCompletionMessage{{Role: "user", Content: "say hello"}}}
+	if _, errorValue := client.GenerateChatCompletion(ctx, chatRequest); errorValue != nil {
+		t.Fatalf("expected a chat completion: %v", errorValue)
+	}
+	return bodiesByPath
+}
+
+// Capabilityd pins one upstream provider and one prompt cache per session id,
+// so every call of one conversation has to name the same one or the turns land
+// on providers that cannot see each other's cache.
+func TestCapabilityLLMClientSendsTheConversationAsItsSessionID(t *testing.T) {
+	requestContext := RequestContext{RequesterPersonID: "person-1", ConversationID: "dm:channel-1", Platform: "buzz"}
+	bodiesByPath := routeBodies(t, ContextWithRequestContext(context.Background(), requestContext))
+	for _, path := range []string{"/v1/llm/text", "/v1/llm/structured", "/v1/llm/chat"} {
+		body, isCalled := bodiesByPath[path]
+		if !isCalled {
+			t.Fatalf("%s was never asked", path)
+		}
+		if body["sessionID"] != "dm:channel-1" {
+			t.Errorf("%s did not carry the conversation as its session: %v", path, body["sessionID"])
+		}
+	}
+}
+
+func TestCapabilityLLMClientSendsNoSessionIDWithoutAConversation(t *testing.T) {
+	bodiesByPath := routeBodies(t, context.Background())
+	for path, body := range bodiesByPath {
+		if _, isPresent := body["sessionID"]; isPresent {
+			t.Errorf("%s invented a session: %v", path, body["sessionID"])
+		}
+	}
+}

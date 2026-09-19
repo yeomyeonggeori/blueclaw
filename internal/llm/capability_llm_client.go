@@ -22,6 +22,7 @@ type capabilityStructuredResponseRequestDocument struct {
 	ModelTier              string                           `json:"modelTier,omitempty"`
 	ExecutionMode          string                           `json:"executionMode"`
 	Context                *RequestContext                  `json:"context,omitempty"`
+	SessionID              string                           `json:"sessionID,omitempty"`
 	Messages               []Message                        `json:"messages"`
 	StructuredOutputSchema capabilityStructuredOutputSchema `json:"structuredOutputSchema"`
 	GenerationOptions      *GenerationOptions               `json:"generationOptions,omitempty"`
@@ -32,6 +33,7 @@ type capabilityTextResponseRequestDocument struct {
 	ModelTier     string          `json:"modelTier,omitempty"`
 	ExecutionMode string          `json:"executionMode"`
 	Context       *RequestContext `json:"context,omitempty"`
+	SessionID     string          `json:"sessionID,omitempty"`
 	Messages      []Message       `json:"messages"`
 }
 
@@ -40,6 +42,7 @@ type capabilityChatCompletionRequestDocument struct {
 	ModelTier         string                  `json:"modelTier,omitempty"`
 	ExecutionMode     string                  `json:"executionMode"`
 	Context           *RequestContext         `json:"context,omitempty"`
+	SessionID         string                  `json:"sessionID,omitempty"`
 	Messages          []ChatCompletionMessage `json:"messages"`
 	Tools             []ChatCompletionTool    `json:"tools,omitempty"`
 	ToolChoice        json.RawMessage         `json:"toolChoice,omitempty"`
@@ -188,6 +191,7 @@ func (capabilityLLMClient CapabilityLLMClient) generateResponse(responseContext 
 			ModelTier:     capabilityLLMClient.ModelTier,
 			ExecutionMode: executionMode,
 			Context:       requestContextPointer(responseContext),
+			SessionID:     sessionIDOf(responseContext),
 			Messages: []Message{{
 				Role:    "user",
 				Content: prompt,
@@ -256,6 +260,7 @@ func (capabilityLLMClient CapabilityLLMClient) generateChatCompletion(responseCo
 		ModelTier:         capabilityLLMClient.ModelTier,
 		ExecutionMode:     executionMode,
 		Context:           requestContextPointer(responseContext),
+		SessionID:         sessionIDOf(responseContext),
 		Messages:          append([]ChatCompletionMessage{}, request.Messages...),
 		Tools:             append([]ChatCompletionTool{}, request.Tools...),
 		ToolChoice:        append(json.RawMessage{}, request.ToolChoice...),
@@ -295,6 +300,7 @@ func (capabilityLLMClient CapabilityLLMClient) buildStructuredRequestDocument(re
 		ModelTier:         capabilityLLMClient.ModelTier,
 		ExecutionMode:     capabilityLLMClient.executionMode(),
 		Context:           requestContextPointer(responseContext),
+		SessionID:         sessionIDOf(responseContext),
 		Messages:          append([]Message{}, structuredResponseRequest.Messages...),
 		GenerationOptions: generationOptionsPointer(structuredResponseRequest.GenerationOptions),
 		StructuredOutputSchema: capabilityStructuredOutputSchema{
@@ -317,6 +323,14 @@ func generationOptionsPointer(options GenerationOptions) *GenerationOptions {
 		return nil
 	}
 	return &options
+}
+
+// The turn's conversation is the longest-lived identity the model call can
+// see: the task run id is minted inside the turn and the request context
+// carries no other run identity. Capabilityd pins one upstream provider and one
+// prompt cache per id, so the turns of a conversation share both.
+func sessionIDOf(ctx context.Context) string {
+	return strings.TrimSpace(RequestContextFromContext(ctx).ConversationID)
 }
 
 func requestContextPointer(ctx context.Context) *RequestContext {
