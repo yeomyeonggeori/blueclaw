@@ -4286,11 +4286,19 @@ func actionFinishMessage(reply string, observationIDs ...string) string {
 	for _, observationID := range observationIDs {
 		citedIDs = append(citedIDs, quote(observationID))
 	}
-	return `{"action":"finish","message":` + quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[` + strings.Join(citedIDs, ",") + `]}`
+	return `{"action":"reply","final":true,"message":` + quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[` + strings.Join(citedIDs, ",") + `]}`
+}
+
+func actionFinalReplyWithAttachment(reply string, path string) string {
+	return `{"action":"reply","final":true,"message":` + quote(reply) + `,"attachments":[{"path":` + quote(path) + `}],"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[]}`
+}
+
+func actionReplyExpectingAnswer(question string) string {
+	return `{"action":"reply","expectsAnswer":true,"message":` + quote(question) + `}`
 }
 
 func actionNoToolFallbackFinishMessage(reply string) string {
-	return `{"action":"finish","message":` + quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[],"failureResolution":"no_tool_fallback"}`
+	return `{"action":"reply","final":true,"message":` + quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[],"failureResolution":"no_tool_fallback"}`
 }
 
 func actionFailMessage(reason string) string {

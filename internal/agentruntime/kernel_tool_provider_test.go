@@ -110,7 +110,7 @@ func TestLocalKernelToolNamesExcludeCapabilityBackedImageReader(t *testing.T) {
 		toolcontract.FileDeleteToolName,
 		toolcontract.FileEditToolName,
 		toolcontract.FilePreviewToolName,
-		toolcontract.PlanUpdateToolName,
+		toolcontract.PlanToolName,
 		toolcontract.RequestToolsToolName,
 		toolcontract.ConversationHistoryToolName,
 	}
