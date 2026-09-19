@@ -68,8 +68,11 @@ func TestTaskLauncherCreatesAuditedAgentRun(t *testing.T) {
 	if len(launchResult.MemoryFacts) != 1 {
 		t.Fatalf("expected the profile line on the launch result, got %+v", launchResult.MemoryFacts)
 	}
-	if !containsString(launchResult.ToolNames, "conversation_history") || !containsString(launchResult.ToolNames, "memory_search") {
+	if !containsString(launchResult.ToolNames, "memory_search") {
 		t.Fatalf("expected launch tool catalog, got %+v", launchResult.ToolNames)
+	}
+	if containsString(launchResult.ToolNames, "conversation_history") {
+		t.Fatalf("expected the hidden history tool to stay out of the launch tool catalog, got %+v", launchResult.ToolNames)
 	}
 
 	taskEvents := taskEventService.ListTaskEvent(launchResult.TurnResult.TaskRun.TaskRunID)

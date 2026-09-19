@@ -2444,11 +2444,11 @@ func TestConnectorRuntimeFetchesInitialVisibleContextFromHistoryCursor(t *testin
 	}
 }
 
-func TestConnectorRuntimeRunsAgentHistoryToolAndSendsOneFinishMessage(t *testing.T) {
+func TestConnectorRuntimeDeniesTheHiddenHistoryToolAndSendsOneFinishMessage(t *testing.T) {
 	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
 		ActionResponses: []string{
 			`{"action":"continue","toolName":"conversation_history","toolInput":{"limit":20}}`,
-			connectorFinishMessageCiting("이전 대화를 확인했습니다", "obs-001"),
+			connectorFinishMessage("이전 대화를 확인했습니다"),
 		},
 		DefaultResponsesBySchema: map[string]string{
 			"bluecollar_turn_router": `{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"scripted test default","userFacingReply":""}`,
@@ -2467,8 +2467,8 @@ func TestConnectorRuntimeRunsAgentHistoryToolAndSendsOneFinishMessage(t *testing
 	if result.TaskRunID == "" {
 		t.Fatal("expected task run id")
 	}
-	if len(adapter.historyCursors) != 2 || adapter.historyCursors[0] != "cursor-1" || adapter.historyCursors[1] != "cursor-1" {
-		t.Fatalf("expected history fetch with cursor, got %+v", adapter.historyCursors)
+	if len(adapter.historyCursors) != 1 || adapter.historyCursors[0] != "cursor-1" {
+		t.Fatalf("expected only the runtime's own history fetch, got %+v", adapter.historyCursors)
 	}
 	if len(adapter.sentReplies) != 1 {
 		t.Fatalf("expected one final reply, got %d", len(adapter.sentReplies))
