@@ -293,8 +293,6 @@ func TestTerminalRunDefaultsToPrivateScopeForDirectMessage(t *testing.T) {
 
 func TestTerminalRunMaterializesRequesterRuntimeEnvironment(t *testing.T) {
 	workspacePath := t.TempDir()
-	builtinSkillsPythonPath := filepath.Join(t.TempDir(), "bin", "python")
-	t.Setenv("BLUECLAW_BUILTIN_SKILLS_PYTHON", builtinSkillsPythonPath)
 	toolCatalogBuilder := newTerminalToolTestCatalogBuilder(workspacePath)
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
@@ -309,7 +307,7 @@ func TestTerminalRunMaterializesRequesterRuntimeEnvironment(t *testing.T) {
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
 		ToolName: "shell",
 		Input: toolcontract.MarshalToolInput(map[string]any{
-			"command": `test -d "$TMPDIR" && test -d "$BUN_TMPDIR" && test -d "$BUN_INSTALL" && printf '%s\n%s\n%s\n%s\n%s\n%s' "$HOME" "$PATH" "$TMPDIR" "$BUN_TMPDIR" "$BUN_INSTALL" "$BLUECLAW_BUILTIN_SKILLS_PYTHON"`,
+			"command": `test -d "$TMPDIR" && test -d "$BUN_TMPDIR" && test -d "$BUN_INSTALL" && test -d "$XDG_CACHE_HOME" && printf '%s\n%s\n%s\n%s\n%s\n%s' "$HOME" "$PATH" "$TMPDIR" "$BUN_TMPDIR" "$BUN_INSTALL" "$XDG_CACHE_HOME"`,
 		}),
 	})
 	if errorValue != nil {
@@ -329,16 +327,14 @@ func TestTerminalRunMaterializesRequesterRuntimeEnvironment(t *testing.T) {
 		filepath.Join(requesterRootPath, "tmp", ".runtime", "tmp"),
 		filepath.Join(requesterRootPath, "tmp", ".runtime", "bun", "tmp"),
 		filepath.Join(requesterRootPath, "tmp", ".runtime", "bun", "install"),
-		builtinSkillsPythonPath,
+		filepath.Join(requesterRootPath, "tmp", ".runtime", "cache"),
 	}
 	actualValues := strings.Split(strings.TrimSpace(commandResult.Stdout), "\n")
 	if !slices.Equal(actualValues, expectedValues) {
 		t.Fatalf("expected exact runtime environment paths %v, got %v", expectedValues, actualValues)
 	}
 	for _, expectedText := range expectedValues {
-		if expectedText == requesterRootPath ||
-			expectedText == security.CanonicalRuntimePATH ||
-			expectedText == builtinSkillsPythonPath {
+		if expectedText == requesterRootPath || expectedText == security.CanonicalRuntimePATH {
 			continue
 		}
 		if _, errorValue := os.Stat(expectedText); errorValue != nil {
@@ -364,7 +360,7 @@ func TestTerminalRunScopesTaskTemporaryDirectoryToTheTaskRun(t *testing.T) {
 	result, errorValue := toolRegistry.Invoke(toolContext, toolcontract.ToolInvocation{
 		ToolName: "shell",
 		Input: toolcontract.MarshalToolInput(map[string]any{
-			"command": `printf '%s\n%s\n%s' "$BLUECLAW_REQUESTER_TMP" "$BLUECLAW_TASK_TMP" "$TMPDIR"`,
+			"command": `printf '%s\n%s' "$BLUECLAW_TASK_TMP" "$TMPDIR"`,
 		}),
 	})
 	if errorValue != nil {
@@ -379,7 +375,6 @@ func TestTerminalRunScopesTaskTemporaryDirectoryToTheTaskRun(t *testing.T) {
 	}
 	requesterHomePath := filepath.Join(workspacePath, "private", "people", "person-1")
 	expectedValues := []string{
-		filepath.Join(requesterHomePath, "tmp"),
 		filepath.Join(requesterHomePath, "tmp", "tasks", "task-run-1"),
 		filepath.Join(requesterHomePath, "tmp", "tasks", "task-run-1", "tmp"),
 	}
@@ -387,10 +382,10 @@ func TestTerminalRunScopesTaskTemporaryDirectoryToTheTaskRun(t *testing.T) {
 	if !slices.Equal(actualValues, expectedValues) {
 		t.Fatalf("expected task scoped temporary directories %v, got %v", expectedValues, actualValues)
 	}
-	if actualValues[0] == actualValues[1] {
-		t.Fatalf("expected requester tmp and task tmp to differ, got %v", actualValues)
+	if actualValues[0] == filepath.Join(requesterHomePath, "tmp") {
+		t.Fatalf("expected task tmp to sit below the requester tmp, got %v", actualValues)
 	}
-	if _, errorValue := os.Stat(expectedValues[1]); errorValue != nil {
+	if _, errorValue := os.Stat(expectedValues[0]); errorValue != nil {
 		t.Fatalf("expected task temporary directory to exist, got %v", errorValue)
 	}
 }

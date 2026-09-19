@@ -126,14 +126,12 @@ func applyPOSIXEnvironment(environmentVariables map[string]string, identity Exec
 	}
 	if strings.TrimSpace(identity.HomeDirectoryPath) != "" {
 		result["HOME"] = identity.HomeDirectoryPath
-		setDefaultEnvironmentValue(result, "BLUECLAW_REQUESTER_TMP", RequesterTemporaryDirectoryPath(identity.HomeDirectoryPath))
 		setDefaultEnvironmentValue(result, "BLUECLAW_REQUESTER_ARTIFACTS", identity.HomeDirectoryPath+"/artifacts")
 	}
-	requesterTmpPath := firstNonEmptyString(result["BLUECLAW_REQUESTER_TMP"], identity.HomeDirectoryPath+"/tmp")
+	requesterTmpPath := identity.HomeDirectoryPath + "/tmp"
 	runtimeRootPath := requesterTmpPath + "/.runtime"
 	scratchRootPath := firstNonEmptyString(result["BLUECLAW_TASK_TMP"], runtimeRootPath)
 	dependencyCachePath := "/workspace/shared/cache/dependencies"
-	setDefaultEnvironmentValue(result, "BLUECLAW_DEPENDENCY_CACHE", dependencyCachePath)
 	setDefaultEnvironmentValue(result, "TMPDIR", scratchRootPath+"/tmp")
 	setDefaultEnvironmentValue(result, "TMP", scratchRootPath+"/tmp")
 	setDefaultEnvironmentValue(result, "TEMP", scratchRootPath+"/tmp")

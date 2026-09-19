@@ -503,7 +503,10 @@ vocabulary.
 A command never inherits the daemon's environment. `sanitizeEnvironmentVariables`
 (`internal/security/command_guardrail_service.go`) starts from an empty map, sets
 `HOME`, `TERM` and `LANG`, then copies allowed names out of the environment the
-tool call itself requested. `os.Environ()` is not one of its inputs.
+tool call itself requested. The allowed set is
+`IsWorkspaceManagedEnvironmentName` (`internal/security/runtime_environment.go`),
+the one list of the names the workspace owns, plus the terminal names and the
+capability bridge URL. `os.Environ()` is not one of its inputs.
 `applyPOSIXEnvironment` (`internal/security/posix_identity.go`) derives the rest
 from the resolved identity: `HOME` from that person's home directory, `TMPDIR`
 and the `XDG_*` paths from that person's task temporary directory. The spawn then

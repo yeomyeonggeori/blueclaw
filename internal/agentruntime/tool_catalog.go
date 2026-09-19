@@ -431,35 +431,11 @@ func mergeWorkspaceEnvironment(environmentVariables map[string]string, workspace
 		result[name] = value
 	}
 	for name, value := range workspaceEnvironment {
-		if isWorkspaceManagedEnvironmentName(name) || strings.TrimSpace(result[name]) == "" {
+		if security.IsWorkspaceManagedEnvironmentName(name) || strings.TrimSpace(result[name]) == "" {
 			result[name] = value
 		}
 	}
 	return result
-}
-
-func isWorkspaceManagedEnvironmentName(name string) bool {
-	switch name {
-	case "BLUECLAW_REQUESTER_TMP",
-		"BLUECLAW_TASK_TMP",
-		"BLUECLAW_REQUESTER_ARTIFACTS",
-		"BLUECLAW_DEPENDENCY_CACHE",
-		"HOME",
-		"PATH",
-		"TMPDIR",
-		"TMP",
-		"TEMP",
-		"XDG_CACHE_HOME",
-		"XDG_CONFIG_HOME",
-		"XDG_RUNTIME_DIR",
-		"BUN_TMPDIR",
-		"BUN_INSTALL",
-		"BUN_INSTALL_CACHE_DIR",
-		"npm_config_cache":
-		return true
-	default:
-		return false
-	}
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) resolveAgentWorkspacePath(value string) string {

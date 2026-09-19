@@ -73,9 +73,6 @@ func TestPOSIXEnvironmentKeepsTaskTemporaryDirectorySeparate(t *testing.T) {
 		"BLUECLAW_TASK_TMP": taskTemporaryDirectoryPath,
 	}, identity)
 
-	if environmentVariables["BLUECLAW_REQUESTER_TMP"] != "/workspace/private/people/person-1/tmp" {
-		t.Fatalf("expected person scoped requester tmp, got %+v", environmentVariables)
-	}
 	if environmentVariables["BLUECLAW_TASK_TMP"] != taskTemporaryDirectoryPath {
 		t.Fatalf("expected task scoped tmp to survive, got %+v", environmentVariables)
 	}

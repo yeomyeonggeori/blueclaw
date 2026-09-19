@@ -64,9 +64,6 @@ func TestCommandPlanUsesPOSIXHelperForExecutionIdentity(t *testing.T) {
 	if commandPlan.EnvironmentVariables["PATH"] != CanonicalRuntimePATH {
 		t.Fatalf("expected canonical runtime PATH, got %+v", commandPlan.EnvironmentVariables)
 	}
-	if commandPlan.EnvironmentVariables["BLUECLAW_REQUESTER_TMP"] != workspaceRootPath+"/tmp" {
-		t.Fatalf("expected requester tmp environment, got %+v", commandPlan.EnvironmentVariables)
-	}
 	if _, isPresent := commandPlan.EnvironmentVariables["BLUECLAW_TASK_TMP"]; isPresent {
 		t.Fatalf("expected no task tmp environment outside a task run, got %+v", commandPlan.EnvironmentVariables)
 	}
@@ -89,16 +86,20 @@ func TestCommandPlanUsesPOSIXHelperForExecutionIdentity(t *testing.T) {
 
 func TestSanitizeEnvironmentIgnoresRequesterPATH(t *testing.T) {
 	environmentVariables := sanitizeEnvironmentVariables(map[string]string{
-		"PATH":                           "/workspace/private/people/person-1/bin",
-		"HOME":                           "/workspace/private/people/person-1",
-		"BLUECLAW_BUILTIN_SKILLS_PYTHON": "/opt/blueclaw/builtin-skills-venv/bin/python",
+		"PATH":               "/workspace/private/people/person-1/bin",
+		"HOME":               "/workspace/private/people/person-1",
+		"XDG_CACHE_HOME":     "/workspace/private/people/person-1/tmp/.runtime/cache",
+		"OPENROUTER_API_KEY": "secret",
 	}, "/workspace")
 
 	if environmentVariables["PATH"] != CanonicalRuntimePATH {
 		t.Fatalf("expected requester PATH to be ignored, got %+v", environmentVariables)
 	}
-	if environmentVariables["BLUECLAW_BUILTIN_SKILLS_PYTHON"] != "/opt/blueclaw/builtin-skills-venv/bin/python" {
-		t.Fatalf("expected managed skills runtime to survive sanitization, got %+v", environmentVariables)
+	if environmentVariables["XDG_CACHE_HOME"] != "/workspace/private/people/person-1/tmp/.runtime/cache" {
+		t.Fatalf("expected the workspace managed cache home to survive sanitization, got %+v", environmentVariables)
+	}
+	if _, isPresent := environmentVariables["OPENROUTER_API_KEY"]; isPresent {
+		t.Fatalf("expected an unmanaged variable to be dropped, got %+v", environmentVariables)
 	}
 }
 

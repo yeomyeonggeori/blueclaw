@@ -6,7 +6,6 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -221,9 +220,6 @@ func (toolCatalogBuilder *ToolCatalogBuilder) terminalWorkingDirectoryPath(value
 
 func (toolCatalogBuilder *ToolCatalogBuilder) terminalEnvironmentVariables(environmentVariables map[string]string, requesterHomePath string, taskRunID string) map[string]string {
 	mergedEnvironmentVariables := mergeWorkspaceEnvironment(environmentVariables, requesterWorkspaceEnvironment(requesterHomePath, toolCatalogBuilder.workspaceRootPath, taskRunID))
-	if builtinSkillsPythonPath := strings.TrimSpace(os.Getenv("BLUECLAW_BUILTIN_SKILLS_PYTHON")); builtinSkillsPythonPath != "" {
-		mergedEnvironmentVariables["BLUECLAW_BUILTIN_SKILLS_PYTHON"] = builtinSkillsPythonPath
-	}
 	if endpoint := strings.TrimSpace(toolCatalogBuilder.capabilityClient.Endpoint); endpoint != "" {
 		mergedEnvironmentVariables["CAPABILITY_BRIDGE_URL"] = endpoint
 	}
@@ -238,9 +234,7 @@ func requesterWorkspaceEnvironment(requesterHomePath string, workspaceRootPath s
 	taskTmpPath := security.TaskTemporaryDirectoryPath(requesterHomePath, taskRunID)
 	scratchRootPath := firstNonEmptyString(taskTmpPath, runtimeRootPath)
 	environmentVariables := map[string]string{
-		"BLUECLAW_REQUESTER_TMP":       requesterTmpPath,
 		"BLUECLAW_REQUESTER_ARTIFACTS": filepath.Join(requesterHomePath, "artifacts"),
-		"BLUECLAW_DEPENDENCY_CACHE":    dependencyCachePath,
 		"HOME":                         requesterHomePath,
 		"PATH":                         security.CanonicalRuntimePATH,
 		"TMPDIR":                       filepath.Join(scratchRootPath, "tmp"),
