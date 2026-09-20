@@ -383,17 +383,17 @@ var kernelToolDescriptorSpecs = []kernelToolDescriptorSpec{
 		},
 	},
 	{
-		Name:            toolcontract.RequestToolsToolName,
+		Name:            toolcontract.FindToolsToolName,
 		Namespace:       "tools",
 		PrivacyClass:    "workspace",
-		Visibility:      toolcontract.ToolVisibilityInternal,
-		PolicyResource:  "tool:request_tools",
-		SideEffectClass: toolcontract.ToolSideEffectNone,
+		Visibility:      toolcontract.ToolVisibilityModel,
+		PolicyResource:  "tool:find_tools",
+		SideEffectClass: toolcontract.ToolSideEffectRead,
 		CompletionMode:  toolcontract.ToolCompletionNone,
 		Idempotency:     toolcontract.ToolIdempotencyNone,
-		OutputSchema:    requestToolsResultSchema,
+		OutputSchema:    findToolsResultSchema,
 		ResultContract: &toolcontract.ToolResultContract{
-			Schema: requestToolsResultSchema,
+			Schema: findToolsResultSchema,
 		},
 	},
 	{
@@ -537,7 +537,7 @@ func newKernelToolProvider(toolCatalogBuilder *ToolCatalogBuilder, handlerContex
 	toolCatalogBuilder.registerFileTools(handlerToolSet, handlerContext)
 	toolCatalogBuilder.registerSkillSearchTool(handlerToolSet, handlerContext, availableToolSet)
 	toolCatalogBuilder.registerPlanTool(handlerToolSet)
-	toolCatalogBuilder.registerRequestToolsTool(handlerToolSet)
+	toolCatalogBuilder.registerFindToolsTool(handlerToolSet, availableToolSet)
 	return kernelToolProvider{handlerToolSet: handlerToolSet}
 }
 

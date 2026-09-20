@@ -45,6 +45,7 @@ type ToolCatalogBuilder struct {
 	optionalFileReadPathSuffixes []string
 	skillChangeHandler           func(context.Context)
 	skillRetriever               agentcontract.SkillRetriever
+	toolSelector                 ToolSelector
 	instructionBundleLoader      func() agentcontract.InstructionBundle
 	learnedSkillLoader           func(string) []learning.Skill
 	capabilityQuarantineReporter func(toolcontract.QuarantinedToolProvider)
@@ -201,6 +202,10 @@ func (toolCatalogBuilder *ToolCatalogBuilder) UseSkillChangeHandler(skillChangeH
 func (toolCatalogBuilder *ToolCatalogBuilder) UseSkillSearch(skillRetriever agentcontract.SkillRetriever, instructionBundleLoader func() agentcontract.InstructionBundle) {
 	toolCatalogBuilder.skillRetriever = skillRetriever
 	toolCatalogBuilder.instructionBundleLoader = instructionBundleLoader
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) UseToolSelector(toolSelector ToolSelector) {
+	toolCatalogBuilder.toolSelector = toolSelector
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) UseLearnedSkillLoader(learnedSkillLoader func(string) []learning.Skill) {
