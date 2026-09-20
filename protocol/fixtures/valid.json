@@ -15,6 +15,53 @@
         ],
         "nextPlan": "Read the file"
       }
+    },
+    {
+      "action": "reply",
+      "message": "The summary is attached.",
+      "attachments": [
+        {
+          "path": "home/project/summary.md",
+          "filename": "summary.md"
+        }
+      ],
+      "final": true,
+      "goalSatisfied": true,
+      "hasRemainingWork": false,
+      "goalStatus": "satisfied",
+      "completionEvidenceIDs": [
+        "observation-1"
+      ],
+      "qualityReview": [
+        {
+          "id": "criterion-1",
+          "passed": true,
+          "evidenceIDs": [
+            "observation-1"
+          ]
+        }
+      ],
+      "executionStateUpdate": {
+        "goal": "Summarize the project"
+      }
+    },
+    {
+      "action": "reply",
+      "message": "Which of these should I use?",
+      "choices": [
+        "the draft",
+        "the published version"
+      ],
+      "expectsAnswer": true,
+      "final": false,
+      "goalSatisfied": false,
+      "hasRemainingWork": true,
+      "goalStatus": "in_progress",
+      "completionEvidenceIDs": [],
+      "qualityReview": [],
+      "executionStateUpdate": {
+        "currentBlocker": "The requester has not said which version to summarize"
+      }
     }
   ],
   "agent-message": [

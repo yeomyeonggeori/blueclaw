@@ -81,13 +81,13 @@
         "goalStatus": {
           "type": "string"
         },
+        "hasRemainingWork": {
+          "type": "boolean"
+        },
         "message": {
           "type": "string"
         },
         "reason": {
-          "type": "string"
-        },
-        "remainingWork": {
           "type": "string"
         },
         "toolInput": {
@@ -151,6 +151,9 @@
         "goalStatus": {
           "type": "string"
         },
+        "hasRemainingWork": {
+          "type": "boolean"
+        },
         "message": {
           "type": "string"
         },
@@ -161,9 +164,6 @@
           "type": "array"
         },
         "reason": {
-          "type": "string"
-        },
-        "remainingWork": {
           "type": "string"
         }
       },
@@ -178,8 +178,32 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "const": "finish",
+          "const": "reply",
           "type": "string"
+        },
+        "attachments": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "filename": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "choices": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "completionEvidenceIDs": {
           "items": {
@@ -220,15 +244,27 @@
           },
           "type": "object"
         },
+        "expectsAnswer": {
+          "type": "boolean"
+        },
         "failureResolution": {
           "type": "string"
+        },
+        "final": {
+          "type": "boolean"
         },
         "goalSatisfied": {
           "type": "boolean"
         },
         "goalStatus": {
-          "const": "satisfied",
+          "enum": [
+            "satisfied",
+            "in_progress"
+          ],
           "type": "string"
+        },
+        "hasRemainingWork": {
+          "type": "boolean"
         },
         "message": {
           "type": "string"
@@ -259,17 +295,16 @@
         },
         "reason": {
           "type": "string"
-        },
-        "remainingWork": {
-          "type": "string"
         }
       },
       "required": [
         "message",
         "goalStatus",
         "goalSatisfied",
+        "hasRemainingWork",
         "executionStateUpdate",
         "action",
+        "final",
         "completionEvidenceIDs",
         "qualityReview"
       ],
@@ -325,13 +360,13 @@
           "const": "blocked",
           "type": "string"
         },
+        "hasRemainingWork": {
+          "type": "boolean"
+        },
         "message": {
           "type": "string"
         },
         "reason": {
-          "type": "string"
-        },
-        "remainingWork": {
           "type": "string"
         },
         "usedFailureFacts": {
@@ -371,7 +406,6 @@
       "required": [
         "reason",
         "goalStatus",
-        "goalSatisfied",
         "executionStateUpdate",
         "action"
       ],
