@@ -1516,7 +1516,6 @@ func AskChoiceReplyAcceptanceScenario(artifactDirectoryPath string) VirtualSessi
 			ExpectedToolCalls:      []string{"ask_input"},
 			ExpectedEvents:         []string{agentcontract.TaskEventAskRequested},
 			ExpectedReplyFragments: []string{"어느 쪽으로 진행할까요?"},
-			ExpectedModelContexts:  []string{"어느 쪽으로 진행할까요?"},
 		}, {
 			Prompt:          "두 번째",
 			RouterTaskShape: agentcontract.TaskShapeImmediateReply,
@@ -1526,6 +1525,7 @@ func AskChoiceReplyAcceptanceScenario(artifactDirectoryPath string) VirtualSessi
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 			ExpectedEvents:           []string{agentcontract.TaskEventAskResolved},
 			ExpectedReplyFragments:   []string{"두 번째"},
+			ExpectedModelContexts:    []string{"어느 쪽으로 진행할까요?"},
 		}},
 	}
 }
