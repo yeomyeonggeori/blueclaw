@@ -16,7 +16,8 @@ var harnessOwnedToolNames = map[string]bool{
 	toolcontract.FileEditToolName:    true,
 	toolcontract.FilePreviewToolName: true,
 	toolcontract.ImageReadToolName:   true,
-	toolcontract.PlanUpdateToolName:  true,
+	toolcontract.PlanToolName:        true,
+	toolcontract.FindToolsToolName:   true,
 	toolcontract.SkillSearchToolName: true,
 }
 

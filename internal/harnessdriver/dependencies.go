@@ -22,6 +22,7 @@ type Dependencies struct {
 	SkillIndexPath              string
 	TaskTierLanguageModels      agentcontract.TaskTierLanguageModels
 	IntakeLanguageModelProvider model.LanguageModelProvider
+	ToolSelector                agentcontract.ToolSelector
 
 	IntakeOptions       *agentcontract.IntakeOptions
 	TurnOptionOverrides agentcontract.TurnOptions

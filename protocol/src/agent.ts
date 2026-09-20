@@ -85,12 +85,17 @@ export const failureReportFactsSchema = z.looseObject({
   budgetState: z.string().optional(),
 });
 
+export const replyAttachmentSchema = z.strictObject({
+  path: z.string(),
+  filename: z.string().optional(),
+});
+
 const actionStateSchema = z.strictObject({
   message: z.string().optional(),
   reason: z.string().optional(),
   goalStatus: z.string().optional(),
   goalSatisfied: z.boolean().optional(),
-  remainingWork: z.string().optional(),
+  hasRemainingWork: z.boolean().optional(),
   executionStateUpdate: executionStateSchema,
 });
 
@@ -105,12 +110,17 @@ export const setQualityCriteriaActionSchema = actionStateSchema.extend({
   qualityCriteria: z.array(z.string()),
 });
 
-export const finishActionSchema = actionStateSchema.extend({
-  action: z.literal('finish'),
+export const replyActionSchema = actionStateSchema.extend({
+  action: z.literal('reply'),
   message: z.string(),
+  attachments: z.array(replyAttachmentSchema).optional(),
+  choices: z.array(z.string()).optional(),
+  expectsAnswer: z.boolean().optional(),
+  final: z.boolean(),
   goalSatisfied: z.boolean(),
+  hasRemainingWork: z.boolean(),
   failureResolution: z.string().optional(),
-  goalStatus: z.literal('satisfied'),
+  goalStatus: z.enum(['satisfied', 'in_progress']),
   completionEvidenceIDs: z.array(z.string()),
   qualityReview: z.array(qualityReviewItemSchema),
 });
@@ -118,7 +128,6 @@ export const finishActionSchema = actionStateSchema.extend({
 export const failActionSchema = actionStateSchema.extend({
   action: z.literal('fail'),
   reason: z.string(),
-  goalSatisfied: z.boolean(),
   failureResolution: z.string().optional(),
   goalStatus: z.literal('blocked'),
   usedFailureFacts: failureReportFactsSchema.optional(),
@@ -127,7 +136,7 @@ export const failActionSchema = actionStateSchema.extend({
 export const agentActionSchema = z.discriminatedUnion('action', [
   continueActionSchema,
   setQualityCriteriaActionSchema,
-  finishActionSchema,
+  replyActionSchema,
   failActionSchema,
 ]);
 

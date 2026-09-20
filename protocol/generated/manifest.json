@@ -1,10 +1,10 @@
 {
-  "aggregateHash": "1f3e1f5051ff1600e64ca78a06d993ba18ea9b084826e92657df0dea8ca9d048",
+  "aggregateHash": "cecf92b57772f79cf10e87ed2d45428c9085ae2e520070dc2a60b9ce1a0cb7c9",
   "protocolVersion": "0.4.0",
   "schemas": [
     {
       "fileName": "agent-action.schema.json",
-      "hash": "a68c0542ca901dff687cc6788f9c4aa1a1f118afbf0c8985cc03d245fe4b8493",
+      "hash": "70124589218cef73272653d94a6367189245799c8a031a990725cae11011d148",
       "name": "agent-action"
     },
     {
@@ -84,7 +84,7 @@
     },
     {
       "fileName": "task-event-name.schema.json",
-      "hash": "b45676aced43096d7adb70299d9196bd826160b7bf552b35d5d38c6730b709f6",
+      "hash": "3a4ba5ed38fd9cfd4d4e22db670fe47bba5b88d1e25f3f0af294671392fba7e0",
       "name": "task-event-name"
     },
     {

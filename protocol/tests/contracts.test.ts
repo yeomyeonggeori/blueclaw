@@ -30,6 +30,10 @@ import {
 } from '../src/index.ts';
 
 const fixturesDirectory = fileURLToPath(new URL('../fixtures/', import.meta.url));
+const taskEventNameDeclarationPath = fileURLToPath(
+  new URL('../../.dependency/bluecollar/agentcontract/task_event_name.go', import.meta.url),
+);
+const taskEventNameDeclaration = /^\s*(?:TaskEvent[A-Za-z0-9]+)\s+= "(?<eventName>[a-z0-9_.]+)"$/gm;
 
 const fixtureSchemaNames = {
   'agent-action': 'agent-action',
@@ -571,6 +575,13 @@ describe('ledger event names', () => {
   test('refuse a name no producer declares', () => {
     expect(ledgerEventNameSchema.safeParse('approval.granted').success).toBe(false);
   });
+
+  test('declare exactly the names the agent contract declares', async () => {
+    const declaredNames = await readDeclaredTaskEventNames();
+    const enumeratedNames: string[] = Object.values(TaskEventName);
+    expect(declaredNames.length).toBeGreaterThan(0);
+    expect(enumeratedNames.sort(compareCodeUnits)).toEqual(declaredNames.sort(compareCodeUnits));
+  });
 });
 
 describe('protocol fixtures', () => {
@@ -591,6 +602,11 @@ describe('protocol fixtures', () => {
     }
   });
 });
+
+async function readDeclaredTaskEventNames(): Promise<string[]> {
+  const source = await readFile(taskEventNameDeclarationPath, 'utf8');
+  return [...source.matchAll(taskEventNameDeclaration)].map(match => match.groups?.eventName ?? '');
+}
 
 async function readFixtureBundle(kind: 'valid' | 'invalid'): Promise<Record<string, unknown[]>> {
   return JSON.parse(await readFile(`${fixturesDirectory}/${kind}.json`, 'utf8'));

@@ -482,7 +482,7 @@ func TestConnectorRuntimeWritesResolvesAndExpiresTaskWaitRecord(t *testing.T) {
 			},
 		},
 		ActionResponses: []string{
-			`{"action":"continue","message":"추가 정보가 필요합니다.","toolName":"ask_input","toolInput":{"question":"추가 정보가 필요합니다."},"nextStepPlan":{"objective":"wait","expectedTools":[],"expectedNextResults":["user replies"],"doneCriteria":["reply received"],"risk":"none","workingSetReason":"ask_input waits for the user"}}`,
+			`{"action":"reply","expectsAnswer":true,"message":"추가 정보가 필요합니다."}`,
 		},
 	})
 	connectorRuntime, adapter, taskRunService, taskWaitRepository := newWaitRoutingTestConnectorRuntime(t, languageModel)
@@ -499,7 +499,7 @@ func TestConnectorRuntimeWritesResolvesAndExpiresTaskWaitRecord(t *testing.T) {
 	if len(openWaits) != 1 {
 		t.Fatalf("expected one open wait, got %+v", openWaits)
 	}
-	if openWaits[0].TaskRunID != result.TaskRunID || openWaits[0].ReplyTargetID != "dispatch-2" || openWaits[0].DispatchID != "dispatch-2" || openWaits[0].Kind != "input" {
+	if openWaits[0].TaskRunID != result.TaskRunID || openWaits[0].ReplyTargetID != "dispatch-1" || openWaits[0].DispatchID != "dispatch-1" || openWaits[0].Kind != "input" {
 		t.Fatalf("unexpected persisted wait: %+v result=%+v", openWaits[0], result)
 	}
 	if errorValue := taskWaitRepository.ResolveTaskWait(openWaits[0].WaitID, time.Now().UTC()); errorValue != nil {
@@ -2776,7 +2776,7 @@ func TestConnectorRuntimeAnswersPendingConfirmationQuestionAsItsOwnTurn(t *testi
 		},
 		ActionResponses: []string{
 			`{"action":"continue","toolName":"event_delete","toolInput":{"eventHint":"event-1"}}`,
-			`{"action":"finish","message":"삭제는 되돌릴 수 없어서 확인을 받습니다."}`,
+			`{"action":"reply","final":true,"message":"삭제는 되돌릴 수 없어서 확인을 받습니다."}`,
 		},
 	})
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
@@ -3395,6 +3395,55 @@ func TestConnectorRuntimeSendsCheckpointReplyKind(t *testing.T) {
 	}
 }
 
+func TestACheckpointCarriesItsAttachmentToTheRequester(t *testing.T) {
+	connectorRuntime, adapter, _ := newStubbedTestConnectorRuntime(t)
+	event := testInboundEvent("message-checkpoint-file")
+	replyTarget := ReplyTarget{ConversationID: event.ConversationID, ReplyTargetID: event.ReplyTargetID}
+
+	errorValue := connectorRuntime.sendCheckpointReply(context.Background(), adapter.Name(), event, replyTarget, agentcontract.AgentCheckpoint{
+		TaskRunID:   "task-1",
+		Message:     "초안을 먼저 보냅니다.",
+		Attachments: []toolcontract.FileAttachment{{DevicePath: "/tmp/draft.pdf", Filename: "draft.pdf"}},
+	}, adapter.SendReply)
+	if errorValue != nil {
+		t.Fatalf("expected the checkpoint to send: %v", errorValue)
+	}
+	if len(adapter.sentReplies) != 1 || len(adapter.sentReplies[0].attachments) != 1 {
+		t.Fatalf("expected a mid-task reply to carry its file, got %+v", adapter.sentReplies)
+	}
+	if adapter.sentReplies[0].attachments[0].Filename != "draft.pdf" {
+		t.Fatalf("expected the delivered file, got %+v", adapter.sentReplies[0].attachments)
+	}
+}
+
+func TestAPausedQuestionCarriesItsAttachmentToTheRequester(t *testing.T) {
+	connectorRuntime, _, _ := newStubbedTestConnectorRuntime(t)
+	sentReplies := []OutboundReply{}
+	event := testInboundEvent("message-question-file")
+
+	_, isSent := connectorRuntime.sendUserNoticeReply(
+		context.Background(),
+		"test",
+		event,
+		"task-1",
+		ReplyTarget{ConversationID: "direct-1", ReplyTargetID: "reply-target-1"},
+		agentcontract.AgentTurnResult{
+			UserNotice:  "어느 쪽으로 보낼까요?",
+			Attachments: []toolcontract.FileAttachment{{DevicePath: "/tmp/draft.pdf", Filename: "draft.pdf"}},
+		},
+		func(_ context.Context, _ ReplyTarget, reply OutboundReply) (string, error) {
+			sentReplies = append(sentReplies, reply)
+			return "dispatch-1", nil
+		},
+	)
+	if !isSent {
+		t.Fatal("expected the question to reach the requester")
+	}
+	if len(sentReplies) != 1 || len(sentReplies[0].Attachments) != 1 {
+		t.Fatalf("expected the question to carry the file it announced, got %+v", sentReplies)
+	}
+}
+
 func TestConnectorProgressHeartbeatIntervalMaintainsTypingIndicator(t *testing.T) {
 	if connectorProgressHeartbeatInterval > 5*time.Second {
 		t.Fatalf("expected progress heartbeat to refresh before typing expires, got %s", connectorProgressHeartbeatInterval)
@@ -3986,7 +4035,7 @@ func findAgentToolDefinition(toolDefinitions []toolcontract.ToolDefinition, tool
 }
 
 func connectorFinishMessage(reply string) string {
-	return `{"action":"finish","message":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[]}`
+	return `{"action":"reply","final":true,"message":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[]}`
 }
 
 func connectorDefaultTurnRouterResponse() string {
@@ -3994,7 +4043,7 @@ func connectorDefaultTurnRouterResponse() string {
 }
 
 func connectorFinishMessageCiting(reply string, observationID string) string {
-	return `{"action":"finish","message":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[` + strconv.Quote(observationID) + `]}`
+	return `{"action":"reply","final":true,"message":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[` + strconv.Quote(observationID) + `]}`
 }
 
 func appendConnectorActiveGoal(t *testing.T, taskRunService *task.TaskRunService, taskRun task.TaskRun, activeGoal agentcontract.ActiveGoal) {
@@ -4527,7 +4576,7 @@ func TestANewRequestWhileAConfirmationIsPendingLeavesItPendingAndIsRoutedWithThe
 		},
 		ActionResponses: []string{
 			`{"action":"continue","toolName":"event_delete","toolInput":{"eventHint":"event-1"}}`,
-			`{"action":"finish","message":"찬희 님의 연락처는 디렉터리에 없습니다."}`,
+			`{"action":"reply","final":true,"message":"찬희 님의 연락처는 디렉터리에 없습니다."}`,
 			connectorFinishMessageCiting("내일 휴가 일정을 캘린더에서 삭제했습니다.", "obs-002"),
 		},
 	})
@@ -4615,7 +4664,7 @@ func TestAQuestionAboutThePendingConfirmationLeavesItPending(t *testing.T) {
 		},
 		ActionResponses: []string{
 			`{"action":"continue","toolName":"event_delete","toolInput":{"eventHint":"event-1"}}`,
-			`{"action":"finish","message":"내일 휴가로 등록된 일정 하나입니다."}`,
+			`{"action":"reply","final":true,"message":"내일 휴가로 등록된 일정 하나입니다."}`,
 		},
 	})
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
@@ -4675,7 +4724,7 @@ func TestOneDecisionPerMessageSeesHowManyExchangesFollowedTheConfirmation(t *tes
 		},
 		ActionResponses: []string{
 			`{"action":"continue","toolName":"event_delete","toolInput":{"eventHint":"event-1"}}`,
-			`{"action":"finish","message":"찬희 님의 연락처는 디렉터리에 없습니다."}`,
+			`{"action":"reply","final":true,"message":"찬희 님의 연락처는 디렉터리에 없습니다."}`,
 		},
 	})
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)

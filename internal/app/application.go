@@ -151,7 +151,8 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 			logger.Error("learning.review_failed", "error", errorValue.Error())
 		}
 	}
-	components.decisionPlanner = newDecisionPlanner(runtimeConfiguration, turnRouterLanguageModelProvider(components.kernel.taskTierLanguageModels, components.kernel.intakeLanguageModelProvider), logger)
+	components.decisionPlanner = components.kernel.decisionPlanner
+	components.toolCatalogBuilder.UseToolSelector(components.decisionPlanner)
 	components.turnRouter = intake.NewTurnRouter(turnRouterLanguageModelProvider(components.kernel.taskTierLanguageModels, components.kernel.intakeLanguageModelProvider), components.decisionPlanner, deriveIntakeOptions(runtimeConfiguration))
 	components.taskLauncher = newTaskLauncher(runtimeConfiguration, components.foundation, components.directory, components.kernel, components.services, components.toolCatalogBuilder, components.turnRouter)
 	components.taskLauncher.UseTaskObserver(learningTaskObserver(components.learningCoordinator, components.services.taskRunService))

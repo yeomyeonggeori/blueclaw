@@ -535,11 +535,12 @@ func (connectorRuntime *ConnectorRuntime) sendCheckpointReply(ctx context.Contex
 	message := strings.TrimSpace(checkpoint.Message)
 	taskRunID := strings.TrimSpace(checkpoint.TaskRunID)
 	reply := OutboundReply{
-		Message:   message,
-		TaskRunID: taskRunID,
-		ReplyKind: connectorReplyKindCheckpoint,
+		Message:     message,
+		TaskRunID:   taskRunID,
+		ReplyKind:   connectorReplyKindCheckpoint,
+		Attachments: checkpoint.Attachments,
 	}
-	if message == "" {
+	if message == "" && len(checkpoint.Attachments) == 0 {
 		connectorRuntime.appendConnectorReplyEvent(taskRunID, agentcontract.TaskEventConnectorReplySuppressed, connectorReplyEventBody(event, reply, "", "", "missing_checkpoint_message"))
 		return errors.New("missing checkpoint message")
 	}
@@ -570,6 +571,7 @@ func (connectorRuntime *ConnectorRuntime) sendUserNoticeReply(ctx context.Contex
 		Message:         notice,
 		TaskRunID:       taskRunID,
 		ReplyKind:       connectorReplyKindUserNotice,
+		Attachments:     turnResult.Attachments,
 		RecoveryActions: recoveryActionsForEvent(turnResult.RecoveryActions, event),
 		FailureNotice:   failureNotice,
 	}

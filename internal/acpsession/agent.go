@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 var (
@@ -285,6 +287,9 @@ func (agent *Agent) checkpointSenderFor(sessionID acp.SessionId) agentcontract.A
 				return errorValue
 			}
 		}
+		if errorValue := agent.notifyAttachments(checkpointContext, sessionID, checkpoint.Attachments); errorValue != nil {
+			return errorValue
+		}
 		toolName := strings.TrimSpace(checkpoint.ToolName)
 		if toolName == "" {
 			return nil
@@ -303,7 +308,28 @@ func (agent *Agent) sendReply(ctx context.Context, sessionID acp.SessionId, turn
 	}
 	if errorValue := agent.notify(ctx, sessionID, acp.UpdateAgentMessageText(reply)); errorValue != nil {
 		agent.logger.Warn("acpsession.reply.undelivered", "sessionID", string(sessionID), "error", errorValue.Error())
+		return
 	}
+	if errorValue := agent.notifyAttachments(ctx, sessionID, turnResult.Attachments); errorValue != nil {
+		agent.logger.Warn("acpsession.attachments.undelivered", "sessionID", string(sessionID), "error", errorValue.Error())
+	}
+}
+
+func (agent *Agent) notifyAttachments(ctx context.Context, sessionID acp.SessionId, attachments []toolcontract.FileAttachment) error {
+	for _, attachment := range attachments {
+		devicePath := strings.TrimSpace(attachment.DevicePath)
+		if devicePath == "" {
+			continue
+		}
+		name := strings.TrimSpace(attachment.Filename)
+		if name == "" {
+			name = filepath.Base(devicePath)
+		}
+		if errorValue := agent.notify(ctx, sessionID, acp.UpdateAgentMessage(acp.ResourceLinkBlock(name, "file://"+devicePath))); errorValue != nil {
+			return errorValue
+		}
+	}
+	return nil
 }
 
 func (agent *Agent) notify(ctx context.Context, sessionID acp.SessionId, update acp.SessionUpdate) error {

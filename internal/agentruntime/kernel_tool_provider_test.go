@@ -110,8 +110,8 @@ func TestLocalKernelToolNamesExcludeCapabilityBackedImageReader(t *testing.T) {
 		toolcontract.FileDeleteToolName,
 		toolcontract.FileEditToolName,
 		toolcontract.FilePreviewToolName,
-		toolcontract.PlanUpdateToolName,
-		toolcontract.RequestToolsToolName,
+		toolcontract.PlanToolName,
+		toolcontract.FindToolsToolName,
 		toolcontract.ConversationHistoryToolName,
 	}
 	if len(toolcontract.KernelToolNames()) != len(expectedKernelToolNames)+1 {

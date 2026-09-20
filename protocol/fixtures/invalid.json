@@ -17,6 +17,26 @@
         "file_read"
       ],
       "executionStateUpdate": {}
+    },
+    {
+      "action": "reply",
+      "message": "I could not finish.",
+      "final": true,
+      "goalSatisfied": false,
+      "hasRemainingWork": true,
+      "goalStatus": "blocked",
+      "completionEvidenceIDs": [],
+      "qualityReview": [],
+      "executionStateUpdate": {}
+    },
+    {
+      "action": "finish",
+      "message": "Done.",
+      "goalSatisfied": true,
+      "goalStatus": "satisfied",
+      "completionEvidenceIDs": [],
+      "qualityReview": [],
+      "executionStateUpdate": {}
     }
   ],
   "agent-message": [

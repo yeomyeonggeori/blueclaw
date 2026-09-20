@@ -285,18 +285,18 @@ An inbound message becomes at most one task run. The path, end to end:
 ### Inside the turn
 
 - **Task** is one user request lifecycle, from intake through the final reply or reaction.
-- **Step** is one internal progress unit inside a Task. A Step either runs one tool with `continue`, or closes the Task with `finish`/`fail`.
+- **Step** is one internal progress unit inside a Task. A Step either runs one tool with `continue`, speaks to the requester with `reply`, or ends the Task with `fail`. A `reply` carrying `final: true` closes the Task; otherwise it is an update and the Task keeps going.
 - **Checkpoint** is optional user-visible progress text on a `continue` Step. It never closes the Task, and the tool still runs in the same Step.
 - **Final Step** runs no tool and must send the reply, failure reply, or reaction that closes the Task.
 
 The turn contract is a discriminated union of four actions, defined in
-`protocol/src/agent.ts-138`:
+`protocol/src/agent.ts-136`:
 
 | Action | Carries |
 |---|---|
 | `continue` | `toolName`, `toolInput` |
 | `set_quality_criteria` | `qualityCriteria` |
-| `finish` | `message`, `completionEvidenceIDs`, `qualityReview`, `goalStatus: satisfied` |
+| `reply` | `message`, `final`, `goalStatus: satisfied` or `in_progress`, `completionEvidenceIDs`, `qualityReview`, optional `attachments` (`path`, `filename`), `choices`, `expectsAnswer` |
 | `fail` | `reason`, `goalStatus: blocked`, optional `usedFailureFacts` |
 
 Every action carries an `executionStateUpdate` — `workspace`, `knownFacts`,
@@ -354,8 +354,8 @@ disappearing.
 
 ### Completion gates
 
-Completion gates are independent from tool visibility. A `finish` must name the
-observations that prove the work happened
+Completion gates are independent from tool visibility. A final `reply` must name
+the observations that prove the work happened
 (`.dependency/bluecollar/completion_gate.go`,
 `.dependency/bluecollar/completion_judge.go`), and draft or setup evidence such as
 site creation cannot close a publish Task without the required build, review,

@@ -19,6 +19,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 type recordingLauncher struct {
@@ -62,6 +63,7 @@ type recordingClient struct {
 	mutex                 sync.Mutex
 	messages              []string
 	thoughts              []string
+	resourceLinks         []string
 	permissionAsked       []acp.RequestPermissionRequest
 	permissionAskedSignal chan acp.RequestPermissionRequest
 	permissionChoice      acp.PermissionOptionId
@@ -76,6 +78,9 @@ func (client *recordingClient) SessionUpdate(_ context.Context, notification acp
 	}
 	if chunk := notification.Update.AgentThoughtChunk; chunk != nil && chunk.Content.Text != nil {
 		client.thoughts = append(client.thoughts, chunk.Content.Text.Text)
+	}
+	if chunk := notification.Update.AgentMessageChunk; chunk != nil && chunk.Content.ResourceLink != nil {
+		client.resourceLinks = append(client.resourceLinks, chunk.Content.ResourceLink.Uri)
 	}
 	return nil
 }
@@ -688,4 +693,52 @@ func TestATurnIsGivenNoCatalogWhenTheSessionNamedNone(t *testing.T) {
 	if launched := theOnlyLaunch(t, launcher); launched.RecordCatalog != nil {
 		t.Fatalf("a session naming no catalog handed one over: %+v", launched.RecordCatalog)
 	}
+}
+
+func TestAProgressReplyHandsTheSessionTheFileItAnnounces(t *testing.T) {
+	launcher := &recordingLauncher{reply: "보냈습니다"}
+	client := &recordingClient{}
+	connection, _ := connectedPair(t, launcher, client)
+	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, errorValue := connection.Prompt(ctx, acp.PromptRequest{
+		SessionId: sessionID,
+		Prompt:    []acp.ContentBlock{acp.TextBlock("초안 보내줘")},
+	}); errorValue != nil {
+		t.Fatalf("prompt: %v", errorValue)
+	}
+	if len(launcher.launched) != 1 {
+		t.Fatalf("the turn launched %d times, expected once", len(launcher.launched))
+	}
+	checkpointSender := launcher.launched[0].CheckpointSender
+	if checkpointSender == nil {
+		t.Fatal("the launched turn has no way to speak mid-task")
+	}
+
+	if errorValue := checkpointSender(ctx, agentcontract.AgentCheckpoint{
+		TaskRunID:   "task-1",
+		Message:     "초안을 먼저 보냅니다.",
+		Attachments: []toolcontract.FileAttachment{{DevicePath: "/tmp/draft.pdf", Filename: "draft.pdf"}},
+	}); errorValue != nil {
+		t.Fatalf("checkpoint: %v", errorValue)
+	}
+
+	if deliveredLink := client.waitForResourceLink(); deliveredLink != "file:///tmp/draft.pdf" {
+		t.Fatalf("the file the reply announced never reached the session, got %q", deliveredLink)
+	}
+}
+
+func (client *recordingClient) waitForResourceLink() string {
+	for attempt := 0; attempt < 100; attempt++ {
+		client.mutex.Lock()
+		links := append([]string{}, client.resourceLinks...)
+		client.mutex.Unlock()
+		if len(links) > 0 {
+			return links[0]
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return ""
 }

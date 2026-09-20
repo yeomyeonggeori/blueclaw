@@ -865,6 +865,8 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	}
 	instructionBundleLoader := virtualInstructionBundleLoader(skillInstructions, workspacePath)
 	scenarioIntakeOptions := agentcontract.IntakeOptions{IsEnabled: true, DefaultTaskLevel: agentcontract.TaskLevelLow}
+	turnScript := scenarioTurnScriptFor(scriptedModel)
+	scenarioDecisionPlanner := intake.NewDecisionPlanner(newScenarioDecisionModel(turnScript, firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel), scenario.AddressingResponse), nil, nil)
 	agentHarness, skillRetriever := virtualSessionAgentHarnessFactory(harnessdriver.Dependencies{
 		TaskRunStore:      taskRunService,
 		TaskStepStore:     taskStepService,
@@ -883,6 +885,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 		InstructionBundleLoader:     instructionBundleLoader,
 		EmbeddingProvider:           scenario.EmbeddingProvider,
 		EmbeddingModelName:          scenario.EmbeddingModel,
+		ToolSelector:                scenarioDecisionPlanner,
 	})
 
 	identityService := identity.NewIdentityService(testPolicyProjection())
@@ -890,8 +893,6 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	adapter := &virtualAdapter{workspacePath: workspacePath}
 	runtime.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, highLanguageModel))
 	runtime.UseReplyGenerator(reply.NewGenerator(highLanguageModel, instructionBundleLoader))
-	turnScript := scenarioTurnScriptFor(scriptedModel)
-	scenarioDecisionPlanner := intake.NewDecisionPlanner(newScenarioDecisionModel(turnScript, firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel), scenario.AddressingResponse), nil, nil)
 	scenarioTurnRouter := intake.NewTurnRouter(firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel), scenarioDecisionPlanner, agentcontract.IntakeOptions{IsEnabled: true, DefaultTaskLevel: agentcontract.TaskLevelLow})
 	runtime.UseTurnRouter(scenarioTurnRouter)
 	runtime.UseIntakeDecider(scenarioDecisionPlanner)
@@ -4286,11 +4287,19 @@ func actionFinishMessage(reply string, observationIDs ...string) string {
 	for _, observationID := range observationIDs {
 		citedIDs = append(citedIDs, quote(observationID))
 	}
-	return `{"action":"finish","message":` + quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[` + strings.Join(citedIDs, ",") + `]}`
+	return `{"action":"reply","final":true,"message":` + quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[` + strings.Join(citedIDs, ",") + `]}`
+}
+
+func actionFinalReplyWithAttachment(reply string, path string) string {
+	return `{"action":"reply","final":true,"message":` + quote(reply) + `,"attachments":[{"path":` + quote(path) + `}],"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[]}`
+}
+
+func actionReplyExpectingAnswer(question string) string {
+	return `{"action":"reply","expectsAnswer":true,"message":` + quote(question) + `}`
 }
 
 func actionNoToolFallbackFinishMessage(reply string) string {
-	return `{"action":"finish","message":` + quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[],"failureResolution":"no_tool_fallback"}`
+	return `{"action":"reply","final":true,"message":` + quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[],"failureResolution":"no_tool_fallback"}`
 }
 
 func actionFailMessage(reason string) string {

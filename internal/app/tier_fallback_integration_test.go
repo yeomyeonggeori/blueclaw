@@ -37,7 +37,7 @@ func TestLowTierEscalatesToMediumThroughRealCapabilityTransport(t *testing.T) {
 		json.NewEncoder(responseWriter).Encode(map[string]any{
 			"provider": "example-gateway",
 			"model":    modelName,
-			"content":  `{"action":"finish"}`,
+			"content":  `{"action":"reply","final":true}`,
 		})
 	}))
 	defer server.Close()
@@ -81,7 +81,7 @@ func TestCappedHighTierReportsLowModelTier(t *testing.T) {
 		json.NewEncoder(responseWriter).Encode(map[string]any{
 			"provider": "example-gateway",
 			"model":    "vendor/low",
-			"content":  `{"action":"finish"}`,
+			"content":  `{"action":"reply","final":true}`,
 		})
 	}))
 	defer server.Close()
