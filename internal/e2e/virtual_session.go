@@ -865,6 +865,8 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	}
 	instructionBundleLoader := virtualInstructionBundleLoader(skillInstructions, workspacePath)
 	scenarioIntakeOptions := agentcontract.IntakeOptions{IsEnabled: true, DefaultTaskLevel: agentcontract.TaskLevelLow}
+	turnScript := scenarioTurnScriptFor(scriptedModel)
+	scenarioDecisionPlanner := intake.NewDecisionPlanner(newScenarioDecisionModel(turnScript, firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel), scenario.AddressingResponse), nil, nil)
 	agentHarness, skillRetriever := virtualSessionAgentHarnessFactory(harnessdriver.Dependencies{
 		TaskRunStore:      taskRunService,
 		TaskStepStore:     taskStepService,
@@ -883,6 +885,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 		InstructionBundleLoader:     instructionBundleLoader,
 		EmbeddingProvider:           scenario.EmbeddingProvider,
 		EmbeddingModelName:          scenario.EmbeddingModel,
+		ToolSelector:                scenarioDecisionPlanner,
 	})
 
 	identityService := identity.NewIdentityService(testPolicyProjection())
@@ -890,8 +893,6 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	adapter := &virtualAdapter{workspacePath: workspacePath}
 	runtime.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, highLanguageModel))
 	runtime.UseReplyGenerator(reply.NewGenerator(highLanguageModel, instructionBundleLoader))
-	turnScript := scenarioTurnScriptFor(scriptedModel)
-	scenarioDecisionPlanner := intake.NewDecisionPlanner(newScenarioDecisionModel(turnScript, firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel), scenario.AddressingResponse), nil, nil)
 	scenarioTurnRouter := intake.NewTurnRouter(firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel), scenarioDecisionPlanner, agentcontract.IntakeOptions{IsEnabled: true, DefaultTaskLevel: agentcontract.TaskLevelLow})
 	runtime.UseTurnRouter(scenarioTurnRouter)
 	runtime.UseIntakeDecider(scenarioDecisionPlanner)

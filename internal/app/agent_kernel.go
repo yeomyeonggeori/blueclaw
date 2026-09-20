@@ -15,6 +15,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/intake"
 )
 
 type agentKernel struct {
@@ -26,6 +27,7 @@ type agentKernel struct {
 	capabilityRegistry                *agentruntime.CapabilityRegistry
 	embeddingClient                   llm.EmbeddingProvider
 	intakeLanguageModelProvider       llm.LanguageModelProvider
+	decisionPlanner                   intake.DecisionPlanner
 	terminalService                   *security.ShellService
 	toolCatalog                       toolCatalogEndpoint
 	harness                           agentcontract.Harness
@@ -65,6 +67,7 @@ func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, agentHarne
 		logger.Error("embedding provider configuration failed", "error", embeddingError.Error())
 	}
 	kernel.embeddingClient = embeddingProvider
+	kernel.decisionPlanner = newDecisionPlanner(runtimeConfiguration, turnRouterLanguageModelProvider(taskTierLanguageModels, intakeLanguageModel), logger)
 	kernel.terminalService = security.NewShellService(runtimeConfiguration.Terminal)
 	kernel.toolCatalog = newToolCatalogEndpoint(services.taskRunService, kernel.taskTierLanguageModels.High, kernel.capabilityClient)
 	harnessFactory, harnessName, selectionError := selectAgentHarness(runtimeConfiguration, agentHarnessFactory, kernel, logger)
@@ -131,6 +134,7 @@ func startAgentHarness(runtimeConfiguration config.RuntimeConfiguration, harness
 		SkillIndexPath:              skillIndexPath(runtimeConfiguration),
 		TaskTierLanguageModels:      kernel.taskTierLanguageModels,
 		IntakeLanguageModelProvider: kernel.intakeLanguageModelProvider,
+		ToolSelector:                kernel.decisionPlanner,
 	})
 }
 

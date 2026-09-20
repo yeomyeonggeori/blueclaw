@@ -9,10 +9,6 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
-type ToolSelector interface {
-	SelectToolNames(context.Context, agentcontract.ToolSelectionNeed) ([]agentcontract.SelectedTool, error)
-}
-
 var findToolsInputSchema = json.RawMessage(`{
 	"type":"object",
 	"additionalProperties":false,

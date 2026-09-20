@@ -34,6 +34,9 @@ func New(dependencies harnessdriver.Dependencies) (agentcontract.Harness, agentc
 	if dependencies.IntakeLanguageModelProvider != nil {
 		agentKernel.UseIntakeLanguageModelProvider(dependencies.IntakeLanguageModelProvider)
 	}
+	if dependencies.ToolSelector != nil {
+		agentKernel.UseToolSelector(dependencies.ToolSelector)
+	}
 	return agentKernel, skillRetriever
 }
 
