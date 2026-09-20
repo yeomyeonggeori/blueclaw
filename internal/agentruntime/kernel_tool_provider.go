@@ -215,7 +215,7 @@ var kernelToolDescriptorSpecs = []kernelToolDescriptorSpec{
 		Name:              toolcontract.FileDeliverToolName,
 		Namespace:         "file",
 		PrivacyClass:      "workspace",
-		Visibility:        toolcontract.ToolVisibilityModel,
+		Visibility:        toolcontract.ToolVisibilityInternal,
 		PolicyResource:    "tool:file_deliver",
 		SideEffectClass:   toolcontract.ToolSideEffectExternalWrite,
 		CompletionMode:    toolcontract.ToolCompletionObservation,
@@ -369,17 +369,17 @@ var kernelToolDescriptorSpecs = []kernelToolDescriptorSpec{
 		},
 	},
 	{
-		Name:            toolcontract.PlanUpdateToolName,
+		Name:            toolcontract.PlanToolName,
 		Namespace:       "plan",
 		PrivacyClass:    "workspace",
 		Visibility:      toolcontract.ToolVisibilityModel,
-		PolicyResource:  "tool:plan_update",
+		PolicyResource:  "tool:plan",
 		SideEffectClass: toolcontract.ToolSideEffectNone,
 		CompletionMode:  toolcontract.ToolCompletionNone,
 		Idempotency:     toolcontract.ToolIdempotencyNone,
-		OutputSchema:    planUpdateResultSchema,
+		OutputSchema:    planResultSchema,
 		ResultContract: &toolcontract.ToolResultContract{
-			Schema: planUpdateResultSchema,
+			Schema: planResultSchema,
 		},
 	},
 	{
@@ -536,7 +536,7 @@ func newKernelToolProvider(toolCatalogBuilder *ToolCatalogBuilder, handlerContex
 	toolCatalogBuilder.registerTerminalTools(handlerToolSet, handlerContext)
 	toolCatalogBuilder.registerFileTools(handlerToolSet, handlerContext)
 	toolCatalogBuilder.registerSkillSearchTool(handlerToolSet, handlerContext, availableToolSet)
-	toolCatalogBuilder.registerPlanUpdateTool(handlerToolSet)
+	toolCatalogBuilder.registerPlanTool(handlerToolSet)
 	toolCatalogBuilder.registerRequestToolsTool(handlerToolSet)
 	return kernelToolProvider{handlerToolSet: handlerToolSet}
 }

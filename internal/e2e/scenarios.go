@@ -269,8 +269,7 @@ func FileWriteAcceptanceScenario(artifactDirectoryPath string) VirtualSessionSce
 			RouterRequiredEvidence: []string{"file_write", "file_deliver"},
 			ActionResponses: []string{
 				actionCallTool("file_write", `{"path":"work/customer-support/faq-revision.json","content":"{\"title\":\"FAQ 개편\",\"owner\":\"고객지원팀\",\"status\":\"검토 중\"}\n"}`),
-				actionCallTool("file_deliver", `{"path":"work/customer-support/faq-revision.json"}`),
-				actionFinishMessage("JSON 메모 파일을 생성하고 첨부해 저장 결과를 확인했습니다.", "obs-002"),
+				actionFinalReplyWithAttachment("JSON 메모 파일을 생성하고 첨부해 저장 결과를 확인했습니다.", "work/customer-support/faq-revision.json"),
 			},
 			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 			ExpectedToolCalls:        []string{"file_write", "file_deliver"},
@@ -1512,12 +1511,12 @@ func AskChoiceReplyAcceptanceScenario(artifactDirectoryPath string) VirtualSessi
 			Prompt:                 "둘 중 하나 고르게 해줘",
 			RouterRequiredEvidence: []string{toolcontract.AskInputToolName},
 			ActionResponses: []string{
-				actionCallToolWithMessage("ask_input", "어느 쪽으로 진행할까요?", `{"question":"어느 쪽으로 진행할까요?","choices":["첫 번째","두 번째"]}`),
+				actionReplyExpectingAnswer("어느 쪽으로 진행할까요? 첫 번째 또는 두 번째 중에서 알려 주세요."),
 			},
 			ExpectedToolCalls:      []string{"ask_input"},
 			ExpectedEvents:         []string{agentcontract.TaskEventAskRequested},
 			ExpectedReplyFragments: []string{"어느 쪽으로 진행할까요?"},
-			ExpectedModelContexts:  []string{"choices"},
+			ExpectedModelContexts:  []string{"어느 쪽으로 진행할까요?"},
 		}, {
 			Prompt:          "두 번째",
 			RouterTaskShape: agentcontract.TaskShapeImmediateReply,

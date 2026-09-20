@@ -95,5 +95,5 @@ func useScheduleTestLanguageModel(agentKernel *loop.AgentKernel, languageModel s
 }
 
 func scheduleFinishMessage(reply string) string {
-	return `{"action":"finish","message":"` + reply + `","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[],"qualityReview":[]}`
+	return `{"action":"reply","final":true,"message":"` + reply + `","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[],"qualityReview":[]}`
 }

@@ -26,7 +26,7 @@ func TestLocalToolProviderUsesCanonicalDescriptors(t *testing.T) {
 	if inputDescriptor.Name != "ask_input" {
 		t.Fatalf("expected ask_input descriptor, got %+v", inputDescriptor)
 	}
-	if inputDescriptor.ID != "local/ask_input" || inputDescriptor.ProviderID != localToolProviderID || inputDescriptor.Namespace != "ask" || inputDescriptor.Visibility != toolcontract.ToolVisibilityModel {
+	if inputDescriptor.ID != "local/ask_input" || inputDescriptor.ProviderID != localToolProviderID || inputDescriptor.Namespace != "ask" || inputDescriptor.Visibility != toolcontract.ToolVisibilityInternal {
 		t.Fatalf("unexpected ask_input descriptor: %+v", inputDescriptor)
 	}
 	if inputDescriptor.PolicyResource != "tool:ask_input" || inputDescriptor.Completion.Mode != toolcontract.ToolCompletionNone || inputDescriptor.Idempotency != toolcontract.ToolIdempotencyNone {

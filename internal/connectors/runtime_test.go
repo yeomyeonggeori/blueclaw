@@ -482,7 +482,7 @@ func TestConnectorRuntimeWritesResolvesAndExpiresTaskWaitRecord(t *testing.T) {
 			},
 		},
 		ActionResponses: []string{
-			`{"action":"continue","message":"추가 정보가 필요합니다.","toolName":"ask_input","toolInput":{"question":"추가 정보가 필요합니다."},"nextStepPlan":{"objective":"wait","expectedTools":[],"expectedNextResults":["user replies"],"doneCriteria":["reply received"],"risk":"none","workingSetReason":"ask_input waits for the user"}}`,
+			`{"action":"reply","expectsAnswer":true,"message":"추가 정보가 필요합니다."}`,
 		},
 	})
 	connectorRuntime, adapter, taskRunService, taskWaitRepository := newWaitRoutingTestConnectorRuntime(t, languageModel)
@@ -499,7 +499,7 @@ func TestConnectorRuntimeWritesResolvesAndExpiresTaskWaitRecord(t *testing.T) {
 	if len(openWaits) != 1 {
 		t.Fatalf("expected one open wait, got %+v", openWaits)
 	}
-	if openWaits[0].TaskRunID != result.TaskRunID || openWaits[0].ReplyTargetID != "dispatch-2" || openWaits[0].DispatchID != "dispatch-2" || openWaits[0].Kind != "input" {
+	if openWaits[0].TaskRunID != result.TaskRunID || openWaits[0].ReplyTargetID != "dispatch-1" || openWaits[0].DispatchID != "dispatch-1" || openWaits[0].Kind != "input" {
 		t.Fatalf("unexpected persisted wait: %+v result=%+v", openWaits[0], result)
 	}
 	if errorValue := taskWaitRepository.ResolveTaskWait(openWaits[0].WaitID, time.Now().UTC()); errorValue != nil {
@@ -2776,7 +2776,7 @@ func TestConnectorRuntimeAnswersPendingConfirmationQuestionAsItsOwnTurn(t *testi
 		},
 		ActionResponses: []string{
 			`{"action":"continue","toolName":"event_delete","toolInput":{"eventHint":"event-1"}}`,
-			`{"action":"finish","message":"삭제는 되돌릴 수 없어서 확인을 받습니다."}`,
+			`{"action":"reply","final":true,"message":"삭제는 되돌릴 수 없어서 확인을 받습니다."}`,
 		},
 	})
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
@@ -3986,7 +3986,7 @@ func findAgentToolDefinition(toolDefinitions []toolcontract.ToolDefinition, tool
 }
 
 func connectorFinishMessage(reply string) string {
-	return `{"action":"finish","message":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[]}`
+	return `{"action":"reply","final":true,"message":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[]}`
 }
 
 func connectorDefaultTurnRouterResponse() string {
@@ -3994,7 +3994,7 @@ func connectorDefaultTurnRouterResponse() string {
 }
 
 func connectorFinishMessageCiting(reply string, observationID string) string {
-	return `{"action":"finish","message":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[` + strconv.Quote(observationID) + `]}`
+	return `{"action":"reply","final":true,"message":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[` + strconv.Quote(observationID) + `]}`
 }
 
 func appendConnectorActiveGoal(t *testing.T, taskRunService *task.TaskRunService, taskRun task.TaskRun, activeGoal agentcontract.ActiveGoal) {
@@ -4527,7 +4527,7 @@ func TestANewRequestWhileAConfirmationIsPendingLeavesItPendingAndIsRoutedWithThe
 		},
 		ActionResponses: []string{
 			`{"action":"continue","toolName":"event_delete","toolInput":{"eventHint":"event-1"}}`,
-			`{"action":"finish","message":"찬희 님의 연락처는 디렉터리에 없습니다."}`,
+			`{"action":"reply","final":true,"message":"찬희 님의 연락처는 디렉터리에 없습니다."}`,
 			connectorFinishMessageCiting("내일 휴가 일정을 캘린더에서 삭제했습니다.", "obs-002"),
 		},
 	})
@@ -4615,7 +4615,7 @@ func TestAQuestionAboutThePendingConfirmationLeavesItPending(t *testing.T) {
 		},
 		ActionResponses: []string{
 			`{"action":"continue","toolName":"event_delete","toolInput":{"eventHint":"event-1"}}`,
-			`{"action":"finish","message":"내일 휴가로 등록된 일정 하나입니다."}`,
+			`{"action":"reply","final":true,"message":"내일 휴가로 등록된 일정 하나입니다."}`,
 		},
 	})
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
@@ -4675,7 +4675,7 @@ func TestOneDecisionPerMessageSeesHowManyExchangesFollowedTheConfirmation(t *tes
 		},
 		ActionResponses: []string{
 			`{"action":"continue","toolName":"event_delete","toolInput":{"eventHint":"event-1"}}`,
-			`{"action":"finish","message":"찬희 님의 연락처는 디렉터리에 없습니다."}`,
+			`{"action":"reply","final":true,"message":"찬희 님의 연락처는 디렉터리에 없습니다."}`,
 		},
 	})
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
