@@ -42,10 +42,6 @@ type findToolsToolInput struct {
 	Need string `json:"need"`
 }
 
-type findToolsToolOutput struct {
-	SelectedTools []agentcontract.SelectedTool `json:"selectedTools"`
-}
-
 func (toolCatalogBuilder *ToolCatalogBuilder) registerFindToolsTool(toolRegistry *toolcontract.ToolSet, availableToolSet *toolcontract.ToolSet) {
 	toolcontract.RegisterToolFunction(toolRegistry, toolcontract.ToolFunction[findToolsToolInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
@@ -67,15 +63,28 @@ func (toolCatalogBuilder *ToolCatalogBuilder) findTools(toolContext context.Cont
 	if strings.TrimSpace(input.Need) == "" {
 		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, toolcontract.FindToolsToolName, "need must say what the tool has to do"), nil
 	}
+	callLedger := &agentcontract.IntakeCallLedger{}
 	selectedTools, errorValue := toolCatalogBuilder.toolSelector.SelectToolNames(toolContext, agentcontract.ToolSelectionNeed{
-		Need:    input.Need,
-		ToolSet: availableToolSet,
+		Need:       input.Need,
+		ToolSet:    availableToolSet,
+		CallLedger: callLedger,
 	})
+	toolCatalogBuilder.appendSelectionCallRecords(toolContext, callLedger.Records)
 	if errorValue != nil {
 		return toolcontract.ToolFailureResult(toolcontract.FailureDependencyUnavailable, toolcontract.FailureCodes.Unavailable, toolcontract.FindToolsToolName, "tool selection failed: "+errorValue.Error()), nil
 	}
-	document := json.RawMessage(MarshalBody(findToolsToolOutput{SelectedTools: selectedTools}))
+	document := json.RawMessage(MarshalBody(agentcontract.FoundTools{SelectedTools: selectedTools}))
 	return toolcontract.ToolSuccessData(foundToolsSummary(selectedTools), document), nil
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) appendSelectionCallRecords(toolContext context.Context, records []agentcontract.LLMCallRecord) {
+	taskRunID := toolcontract.TaskRunIDFromContext(toolContext)
+	if taskRunID == "" || toolCatalogBuilder.taskRunService == nil {
+		return
+	}
+	for _, record := range records {
+		toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventLLMCall, MarshalBody(record))
+	}
 }
 
 func foundToolsSummary(selectedTools []agentcontract.SelectedTool) string {

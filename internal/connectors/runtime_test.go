@@ -3395,6 +3395,55 @@ func TestConnectorRuntimeSendsCheckpointReplyKind(t *testing.T) {
 	}
 }
 
+func TestACheckpointCarriesItsAttachmentToTheRequester(t *testing.T) {
+	connectorRuntime, adapter, _ := newStubbedTestConnectorRuntime(t)
+	event := testInboundEvent("message-checkpoint-file")
+	replyTarget := ReplyTarget{ConversationID: event.ConversationID, ReplyTargetID: event.ReplyTargetID}
+
+	errorValue := connectorRuntime.sendCheckpointReply(context.Background(), adapter.Name(), event, replyTarget, agentcontract.AgentCheckpoint{
+		TaskRunID:   "task-1",
+		Message:     "초안을 먼저 보냅니다.",
+		Attachments: []toolcontract.FileAttachment{{DevicePath: "/tmp/draft.pdf", Filename: "draft.pdf"}},
+	}, adapter.SendReply)
+	if errorValue != nil {
+		t.Fatalf("expected the checkpoint to send: %v", errorValue)
+	}
+	if len(adapter.sentReplies) != 1 || len(adapter.sentReplies[0].attachments) != 1 {
+		t.Fatalf("expected a mid-task reply to carry its file, got %+v", adapter.sentReplies)
+	}
+	if adapter.sentReplies[0].attachments[0].Filename != "draft.pdf" {
+		t.Fatalf("expected the delivered file, got %+v", adapter.sentReplies[0].attachments)
+	}
+}
+
+func TestAPausedQuestionCarriesItsAttachmentToTheRequester(t *testing.T) {
+	connectorRuntime, _, _ := newStubbedTestConnectorRuntime(t)
+	sentReplies := []OutboundReply{}
+	event := testInboundEvent("message-question-file")
+
+	_, isSent := connectorRuntime.sendUserNoticeReply(
+		context.Background(),
+		"test",
+		event,
+		"task-1",
+		ReplyTarget{ConversationID: "direct-1", ReplyTargetID: "reply-target-1"},
+		agentcontract.AgentTurnResult{
+			UserNotice:  "어느 쪽으로 보낼까요?",
+			Attachments: []toolcontract.FileAttachment{{DevicePath: "/tmp/draft.pdf", Filename: "draft.pdf"}},
+		},
+		func(_ context.Context, _ ReplyTarget, reply OutboundReply) (string, error) {
+			sentReplies = append(sentReplies, reply)
+			return "dispatch-1", nil
+		},
+	)
+	if !isSent {
+		t.Fatal("expected the question to reach the requester")
+	}
+	if len(sentReplies) != 1 || len(sentReplies[0].Attachments) != 1 {
+		t.Fatalf("expected the question to carry the file it announced, got %+v", sentReplies)
+	}
+}
+
 func TestConnectorProgressHeartbeatIntervalMaintainsTypingIndicator(t *testing.T) {
 	if connectorProgressHeartbeatInterval > 5*time.Second {
 		t.Fatalf("expected progress heartbeat to refresh before typing expires, got %s", connectorProgressHeartbeatInterval)
