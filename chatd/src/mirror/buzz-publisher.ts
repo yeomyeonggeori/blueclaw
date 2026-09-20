@@ -1,9 +1,9 @@
 import {
-	addReactionAsUser,
 	deleteChannelMessageAsUser,
 	editChannelMessageAsUser,
 	sendChannelMessageAsUser,
 } from '../adapters/buzz/user-session.ts';
+import { addReactionAsUser } from '../adapters/buzz/user-reactions.ts';
 import type { BuzzDelete, BuzzEdit, BuzzGateway, BuzzPublish, BuzzReaction } from './orchestrator.ts';
 import { originTag } from './origin.ts';
 

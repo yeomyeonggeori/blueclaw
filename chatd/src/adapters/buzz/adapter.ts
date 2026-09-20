@@ -37,6 +37,9 @@ import type { NormalizedMessageEdit, ReactionSummary } from "../../visible-conte
 import type { OutgoingAttachment } from "../../outgoing-attachment.ts";
 import { buildMessageBody, ensureUserDirectMessageChannel } from "./user-session.ts";
 import { withRelayAs } from "./relay-pool.ts";
+import { DELETE_MESSAGE_KIND, REACTION_KIND, isAbout, takenBackIDs, takenBackReactionIDs } from "./deletions.ts";
+
+const mostDeletionsReadPerMessage = 4;
 import { rankBySearchScore } from "../../message-search.ts";
 import { originOfTags } from "../../mirror/origin.ts";
 import { reactionContentOf } from "../../mirror/reaction-emoji.ts";
@@ -75,7 +78,6 @@ function decodeCreatedAtCursor(cursor?: string): number | undefined {
 	return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-const REACTION_KIND = 7;
 const PROFILE_KIND = 0;
 const GROUP_METADATA_KIND = 39000;
 const GROUP_ADMINS_KIND = 39001;
@@ -84,7 +86,6 @@ const elevatedChannelRoles = new Set(["owner", "admin"]);
 const CREATE_CHANNEL_KIND = 9007;
 const SET_TOPIC_KIND = 9002;
 const EDIT_MESSAGE_KIND = 40003;
-const DELETE_MESSAGE_KIND = 9005;
 const MEMBER_ADDED_NOTIFICATION_KIND = 44100;
 const MEMBER_REMOVED_NOTIFICATION_KIND = 44101;
 
@@ -455,7 +456,7 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 			.then((senderEmail) => {
 				if (event.kind === EDIT_MESSAGE_KIND) {
 					mirror.edit({ targetEventId, buzzChannelId: channelId, text: event.content, senderEmail, origin });
-				} else if (event.kind === DELETE_MESSAGE_KIND) {
+				} else if (event.kind === DELETE_MESSAGE_KIND && !isAbout(event, REACTION_KIND)) {
 					mirror.remove({ targetEventId, buzzChannelId: channelId, senderEmail, origin });
 				} else if (event.kind === REACTION_KIND) {
 					mirror.react({ targetEventId, buzzChannelId: channelId, emoji: event.content, senderEmail, origin });
@@ -762,11 +763,11 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 			limit,
 		};
 		if (until !== undefined) filter.until = until;
-		const [events, deleted, edits] = await Promise.all([
+		const [events, edits] = await Promise.all([
 			this.relay.query(filter),
-			this.deletedMessageIds(decoded.channelId, limit),
 			this.latestEditsIn(decoded.channelId, limit),
 		]);
+		const deleted = await this.deletedAmong(events);
 		const chronological = events
 			.filter((event) => !deleted.has(event.id))
 			.sort((first, second) => first.created_at - second.created_at);
@@ -785,15 +786,15 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		rootEventId: string,
 		limit: number,
 	): Promise<FetchResult<BuzzEvent>> {
-		const [events, deleted, edits] = await Promise.all([
+		const [events, edits] = await Promise.all([
 			this.relay.query({
 				kinds: [STREAM_MESSAGE_KIND],
 				"#h": [channelId],
 				limit: Math.max(limit * 3, limit),
 			}),
-			this.deletedMessageIds(channelId, Math.max(limit * 3, limit)),
 			this.latestEditsIn(channelId, Math.max(limit * 3, limit)),
 		]);
+		const deleted = await this.deletedAmong(events);
 		const chronological = events
 			.filter((event) => !deleted.has(event.id))
 			.sort((first, second) => first.created_at - second.created_at);
@@ -816,11 +817,11 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 			return this.searchMessagesById(request, request.messageIds);
 		}
 		const scanLimit = Math.max(request.limit * 3, buzzMessageSearchScanLimit);
-		const [events, deleted, edits] = await Promise.all([
+		const [events, edits] = await Promise.all([
 			this.relay.query({ kinds: [STREAM_MESSAGE_KIND], "#h": [request.channelId], limit: scanLimit }),
-			this.deletedMessageIds(request.channelId, scanLimit),
 			this.latestEditsIn(request.channelId, scanLimit),
 		]);
+		const deleted = await this.deletedAmong(events);
 		const visible = events.filter((event) => {
 			if (deleted.has(event.id)) return false;
 			if (firstTagValue(event, "h") !== request.channelId) return false;
@@ -895,17 +896,12 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	// Somebody deletes a message to unsay it. The relay keeps what was said and
 	// records that it was taken back, so a reader that asks only for messages is
 	// handed words their author withdrew.
-	private async deletedMessageIds(channelId: string, limit: number): Promise<Set<string>> {
-		const events = await this.relay
-			.query({ kinds: [DELETE_MESSAGE_KIND], "#h": [channelId], limit: Math.max(limit * 3, limit) })
-			.catch(() => []);
-		const deleted = new Set<string>();
-		for (const event of events) {
-			for (const tag of event.tags) {
-				if (tag[0] === "e" && tag[1]) deleted.add(tag[1]);
-			}
-		}
-		return deleted;
+	private async deletedAmong(events: BuzzEvent[]): Promise<Set<string>> {
+		return takenBackIDs(
+			this.relay,
+			events.map((event) => event.id),
+			mostDeletionsReadPerMessage,
+		).catch(() => new Set<string>());
 	}
 
 	async listPeople(excludePubkeyHex: string): Promise<{ id: string; name: string; avatarURL?: string }[]> {
@@ -941,8 +937,10 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 			"#h": [decoded.channelId],
 			limit: 500,
 		});
+		const takenBack = await takenBackReactionIDs(this.relay, events.map((event) => event.id));
 		const countsByMessage = new Map<string, Map<string, ReactionSummary>>();
 		for (const event of events) {
+			if (takenBack.has(event.id)) continue;
 			const targetId = firstTagValue(event, "e");
 			if (!targetId) continue;
 			const display = reactionDisplayOf(event);

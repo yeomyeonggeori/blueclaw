@@ -1,8 +1,8 @@
 import type { BuzzAdapter } from "../adapters/buzz/adapter.ts";
 import { isServedByTheRelay, readAuthorizationHeader } from "../adapters/buzz/blossom.ts";
 import type { OutgoingAttachment } from "../outgoing-attachment.ts";
+import { addReactionAsUser, removeReactionAsUser } from "../adapters/buzz/user-reactions.ts";
 import {
-	addReactionAsUser,
 	deleteChannelMessageAsUser,
 	editChannelMessageAsUser,
 	ensureUserDirectMessageChannel,
@@ -390,9 +390,21 @@ class BuzzPersonalGateway implements PersonalGateway {
 		});
 	}
 
-	async removeReaction(actor: ActorCredential): Promise<void> {
+	async removeReaction(
+		actor: ActorCredential,
+		conversationID: string,
+		messageID: string,
+		emoji: string,
+	): Promise<void> {
 		this.require(actor);
-		throw new UnsupportedByPlatform(this.platform, "take a reaction back");
+		await removeReactionAsUser({
+			relayURL: this.settings.relayURL,
+			userSecretHex: actor.secret,
+			channelID: conversationID,
+			targetEventId: messageID,
+			emoji,
+			authTagJSON: this.settings.authTagJSON,
+		});
 	}
 
 	async listCustomEmoji(actor: ActorCredential): Promise<PersonalEmoji[]> {

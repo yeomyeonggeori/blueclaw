@@ -209,7 +209,12 @@ export interface PersonalGateway {
 }
 
 export class UnsupportedByPlatform extends Error {
-	constructor(platform: string, operation: string) {
+	readonly reason = "unsupported-by-platform";
+
+	constructor(
+		readonly platform: string,
+		readonly operation: string,
+	) {
 		super(`${platform} cannot ${operation} as a person`);
 		this.name = "UnsupportedByPlatform";
 	}

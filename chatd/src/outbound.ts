@@ -35,7 +35,7 @@ import {
 import { MessageChangeRefused, isElevatedIn, signerForMessageChange } from "./message-ownership.ts";
 import { personCapabilities, type PersonCapability } from "./personal/capabilities.ts";
 import { MalformedRequest } from "./personal/parse.ts";
-import { CredentialRefused, type PersonalGateway } from "./personal/gateway.ts";
+import { CredentialRefused, UnsupportedByPlatform, type PersonalGateway } from "./personal/gateway.ts";
 import { AttachmentRefused } from "./outgoing-attachment.ts";
 import {
 	LastOwnerCannotLeave,
@@ -195,6 +195,9 @@ async function answerAsPerson(
 		}
 		if (error instanceof TargetIsChannelOwner) {
 			return jsonResponse(409, { error: error.message, reason: error.reason });
+		}
+		if (error instanceof UnsupportedByPlatform) {
+			return jsonResponse(501, { error: error.message, reason: error.reason, platform: error.platform });
 		}
 		return jsonResponse(502, { error: error instanceof Error ? error.message : String(error) });
 	}

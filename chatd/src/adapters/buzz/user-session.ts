@@ -3,6 +3,8 @@ import { withRelayAs } from "./relay-pool.ts";
 import { BlobRefused, imetaTag, uploadBlob, type BlossomBlob } from "./blossom.ts";
 import { carriesTag, firstTagValue, threadTagsOf, type BuzzEvent } from "./types.ts";
 import { rolesOnRoster } from "./user-channels.ts";
+import { DELETE_MESSAGE_KIND, takenBackIDs } from "./deletions.ts";
+import { reactionsTo, type UserMessageReaction } from "./user-reactions.ts";
 import {
 	AttachmentRefused,
 	isAlreadyKept,
@@ -12,8 +14,6 @@ import {
 
 const STREAM_MESSAGE_KIND = 9;
 const EDIT_MESSAGE_KIND = 40003;
-const DELETE_MESSAGE_KIND = 9005;
-const REACTION_KIND = 7;
 const DM_OPEN_KIND = 41010;
 const GROUP_METADATA_KIND = 39000;
 const GROUP_MEMBERS_KIND = 39002;
@@ -217,21 +217,6 @@ export async function deleteChannelMessageAsUser(request: {
 	});
 }
 
-export async function addReactionAsUser(request: {
-	relayURL: string;
-	userSecretHex: string;
-	channelID: string;
-	targetEventId: string;
-	emoji: string;
-	extraTags?: string[][];
-	authTagJSON?: string;
-}): Promise<void> {
-	return withRelayAs(request.relayURL, request.userSecretHex, request.authTagJSON, async (relay) => {
-			const tags: string[][] = [["e", request.targetEventId], ["h", request.channelID], ...(request.extraTags ?? [])];
-			await relay.publish(REACTION_KIND, request.emoji, tags);
-	});
-}
-
 export type UserDirectMessageSend = {
 	relayURL: string;
 	userSecretHex: string;
@@ -402,12 +387,6 @@ export type UserMessage = {
 	reactions: UserMessageReaction[];
 };
 
-export type UserMessageReaction = {
-	emoji: string;
-	imageURL?: string;
-	byPubkeyHexes: string[];
-};
-
 export type UserMessageAttachment = {
 	url: string;
 	contentType: string;
@@ -518,42 +497,6 @@ export function attachmentsOfTags(tags: string[][]): UserMessageAttachment[] {
 	return attachments;
 }
 
-const mostReactionsReadPerMessage = 64;
-
-// A reaction points at the message it is about, so the messages just read are
-// what to ask for.
-async function reactionsTo(
-	relay: { query: (filter: object) => Promise<BuzzEvent[]> },
-	messageIDs: string[],
-): Promise<Map<string, UserMessageReaction[]>> {
-	if (messageIDs.length === 0) return new Map();
-	const events = await relay.query({
-		kinds: [REACTION_KIND],
-		"#e": messageIDs,
-		limit: messageIDs.length * mostReactionsReadPerMessage,
-	});
-	const byMessage = new Map<string, Map<string, UserMessageReaction>>();
-	for (const event of events) {
-		const messageID = firstTagValue(event, "e");
-		if (!messageID) continue;
-		const grouped = byMessage.get(messageID) ?? new Map<string, UserMessageReaction>();
-		const reaction = reactionOf(event);
-		const already = grouped.get(reaction.emoji) ?? { ...reaction, byPubkeyHexes: [] };
-		if (!already.byPubkeyHexes.includes(event.pubkey)) already.byPubkeyHexes.push(event.pubkey);
-		grouped.set(reaction.emoji, already);
-		byMessage.set(messageID, grouped);
-	}
-	return new Map([...byMessage].map(([messageID, grouped]) => [messageID, [...grouped.values()]]));
-}
-
-// A custom emoji names itself on an emoji tag and points at its own picture,
-// where an ordinary one is the content and nothing else.
-function reactionOf(event: BuzzEvent): UserMessageReaction {
-	const named = event.tags.find((tag) => tag[0] === "emoji" && typeof tag[1] === "string");
-	if (!named) return { emoji: event.content, byPubkeyHexes: [] };
-	return { emoji: named[1] as string, imageURL: named[2], byPubkeyHexes: [] };
-}
-
 // A message that was edited still reads as the event that created it, so the
 // latest edit is what the author last meant to say. An agent narrating its work
 // edits one message many times before it holds the answer.
@@ -583,18 +526,7 @@ export async function deletionsTo(
 	relay: { query: (filter: object) => Promise<BuzzEvent[]> },
 	messageIDs: string[],
 ): Promise<Set<string>> {
-	if (messageIDs.length === 0) return new Set();
-	const events = await relay.query({
-		kinds: [DELETE_MESSAGE_KIND],
-		"#e": messageIDs,
-		limit: messageIDs.length * mostDeletionsReadPerMessage,
-	});
-	const taken = new Set<string>();
-	for (const event of events) {
-		const messageID = firstTagValue(event, "e");
-		if (messageID) taken.add(messageID);
-	}
-	return taken;
+	return takenBackIDs(relay, messageIDs, mostDeletionsReadPerMessage);
 }
 
 const mostDeletionsReadPerMessage = 4;
