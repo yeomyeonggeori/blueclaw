@@ -32,6 +32,7 @@ function fakeRelay(): FakeRelay {
 			relay.subscriptions.push({ filters, onEvent });
 		},
 		query: async () => [],
+		queryComplete: async () => ({ events: [], complete: true }),
 		publish: async () => {
 			throw new Error("a watcher never publishes");
 		},

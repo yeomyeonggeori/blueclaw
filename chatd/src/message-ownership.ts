@@ -28,6 +28,31 @@ export async function signerForMessageChange(
 			`message ${messageID} was written by somebody else and this device cannot sign as the person who asked`,
 		);
 	}
+	return signingSecretFor(pubkeyHex, admindBaseURL, messageID);
+}
+
+export function signingKeyring(admindBaseURL: string | undefined): (author: string, id: string) => Promise<string> {
+	const held = new Map<string, Promise<string>>();
+	return (authorPubkeyHex, messageID) => {
+		const known = held.get(authorPubkeyHex);
+		if (known) return known;
+		const asked = signingSecretFor(authorPubkeyHex, admindBaseURL, messageID);
+		held.set(authorPubkeyHex, asked);
+		return asked;
+	};
+}
+
+export async function signingSecretFor(
+	authorPubkeyHex: string,
+	admindBaseURL: string | undefined,
+	messageID: string,
+): Promise<string> {
+	const pubkeyHex = authorPubkeyHex.trim().toLowerCase();
+	if (!admindBaseURL || !secretHexPattern.test(pubkeyHex)) {
+		throw new MessageChangeRefused(
+			`message ${messageID} was written by somebody else and this device cannot sign as the person who wrote it`,
+		);
+	}
 	const secretHex = await askAdmindForSigningSecret(admindBaseURL, pubkeyHex, messageID);
 	if (pubkeyFromSecret(secretHex) !== pubkeyHex) {
 		throw new MessageChangeRefused(
@@ -73,7 +98,8 @@ export async function isElevatedIn(
 	adapter: BuzzAdapter,
 	channelID: string,
 	actorPubkeyHex: string,
+	freshly = false,
 ): Promise<boolean> {
 	if (actorPubkeyHex === "" || channelID === "") return false;
-	return (await adapter.channelElevatedPubkeys(channelID)).has(actorPubkeyHex);
+	return (await adapter.channelElevatedPubkeys(channelID, freshly)).has(actorPubkeyHex);
 }

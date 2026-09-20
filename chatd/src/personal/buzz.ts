@@ -1,4 +1,7 @@
 import type { BuzzAdapter } from "../adapters/buzz/adapter.ts";
+import { deleteThread } from "../adapters/buzz/thread-deletion.ts";
+import type { BuzzEvent } from "../adapters/buzz/types.ts";
+import { isElevatedIn, signingKeyring } from "../message-ownership.ts";
 import { isServedByTheRelay, readAuthorizationHeader } from "../adapters/buzz/blossom.ts";
 import type { OutgoingAttachment } from "../outgoing-attachment.ts";
 import { addReactionAsUser, removeReactionAsUser } from "../adapters/buzz/user-reactions.ts";
@@ -48,6 +51,7 @@ import { createBuzzArrivalWatch, type BuzzArrivalWatch } from "./buzz-arrival-wa
 export type BuzzPersonalSettings = {
 	relayURL: string;
 	authTagJSON?: string;
+	admindBaseURL?: string;
 };
 
 export function createBuzzPersonalGateway(
@@ -360,6 +364,37 @@ class BuzzPersonalGateway implements PersonalGateway {
 		messageID: string,
 	): Promise<void> {
 		this.require(actor);
+		const root = await this.adapter.readMessageEvent(messageID);
+		const channelID = await this.adapter.channelOwningMessage(
+			this.adapter.encodeThreadId({ channelId: conversationID }),
+			messageID,
+		);
+		const keyring = signingKeyring(this.settings.admindBaseURL);
+		await deleteThread({
+			relay: this.adapter,
+			channelID,
+			rootEventId: messageID,
+			mayClearReplies: () => this.mayClearReplies(actor, root, channelID),
+			deleteRoot: () => this.deleteOneMessage(actor, channelID, messageID),
+			deleteReply: (reply) => this.deleteSomebodyElses(channelID, reply, keyring),
+		});
+	}
+
+	private async mayClearReplies(
+		actor: ActorCredential,
+		root: BuzzEvent | undefined,
+		channelID: string,
+	): Promise<boolean> {
+		if (!root) return false;
+		if (root.pubkey !== this.adapter.botPubkey) return true;
+		return isElevatedIn(this.adapter, channelID, pubkeyFromSecret(actor.secret), true);
+	}
+
+	private async deleteOneMessage(
+		actor: ActorCredential,
+		conversationID: string,
+		messageID: string,
+	): Promise<void> {
 		if (await this.isWrittenByTheAgent(messageID)) {
 			await this.adapter.deleteMessage(this.adapter.encodeThreadId({ channelId: conversationID }), messageID);
 			return;
@@ -369,6 +404,24 @@ class BuzzPersonalGateway implements PersonalGateway {
 			userSecretHex: actor.secret,
 			channelID: conversationID,
 			targetEventId: messageID,
+			authTagJSON: this.settings.authTagJSON,
+		});
+	}
+
+	private async deleteSomebodyElses(
+		channelID: string,
+		reply: BuzzEvent,
+		keyring: (author: string, id: string) => Promise<string>,
+	): Promise<void> {
+		if (reply.pubkey === this.adapter.botPubkey) {
+			await this.adapter.deleteMessage(this.adapter.encodeThreadId({ channelId: channelID }), reply.id);
+			return;
+		}
+		await deleteChannelMessageAsUser({
+			relayURL: this.settings.relayURL,
+			userSecretHex: await keyring(reply.pubkey, reply.id),
+			channelID,
+			targetEventId: reply.id,
 			authTagJSON: this.settings.authTagJSON,
 		});
 	}

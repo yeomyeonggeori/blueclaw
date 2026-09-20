@@ -14,6 +14,13 @@ const OTHER_CHANNEL = "3b7e1a90-5c2d-4e8f-9a1b-6c5d4e3f2a1b";
 const OWN_REACTION = "b".repeat(64);
 const STRANGER_REACTION = "d".repeat(64);
 const PERSON_OTHER_REACTION = "f".repeat(64);
+const ANSWERER_SECRET = "3".repeat(64);
+const ANSWERER = getPublicKey(hexToBytes(ANSWERER_SECRET));
+const REPLY_BY_STRANGER = "1".repeat(64);
+const ADMIND = "http://127.0.0.1:9999";
+const AGENT_ROOT = "7".repeat(64);
+const REPLY_TO_AGENT = "8".repeat(64);
+const realFetch = globalThis.fetch;
 
 type Published = { kind: number; content: string; tags: string[][] };
 
@@ -25,15 +32,24 @@ function messageEvent(id: string, pubkey: string): BuzzEvent {
 	return { id, pubkey, created_at: 100, kind: 9, tags: [["h", CHANNEL]], content: "먼저 쓴 글", sig: "" };
 }
 
-type Filter = { ids?: string[]; kinds?: number[]; authors?: string[]; "#e"?: string[] };
+type Filter = {
+	ids?: string[];
+	kinds?: number[];
+	authors?: string[];
+	"#e"?: string[];
+	"#h"?: string[];
+	"#d"?: string[];
+};
 
 function eventsNamed(filter: Filter): BuzzEvent[] {
 	if (filter.ids) return messages.filter((event) => filter.ids?.includes(event.id));
-	if (!filter.kinds && !filter.authors && !filter["#e"]) return [];
+	if (!filter.kinds && !filter.authors && !filter["#e"] && !filter["#h"] && !filter["#d"]) return [];
 	return messages.filter(
 		(event) =>
 			(!filter.kinds || filter.kinds.includes(event.kind)) &&
 			(!filter.authors || filter.authors.includes(event.pubkey)) &&
+			(!filter["#h"] || event.tags.some((tag) => tag[0] === "h" && filter["#h"]?.includes(tag[1] as string))) &&
+			(!filter["#d"] || event.tags.some((tag) => tag[0] === "d" && filter["#d"]?.includes(tag[1] as string))) &&
 			(!filter["#e"] || event.tags.some((tag) => tag[0] === "e" && filter["#e"]?.includes(tag[1] as string))),
 	);
 }
@@ -50,12 +66,25 @@ function reactionEvent(id: string, pubkey: string, emoji: string, channel = CHAN
 	};
 }
 
+function replyEvent(id: string, pubkey: string, rootID: string): BuzzEvent {
+	return {
+		id,
+		pubkey,
+		created_at: 200,
+		kind: 9,
+		tags: [["h", CHANNEL], ["e", rootID, "", "root"], ["e", rootID, "", "reply"]],
+		content: "답글",
+		sig: "",
+	};
+}
+
 const personRelay = {
 	pubkeyHex: "person",
 	connect: async () => {},
 	disconnect: () => {},
 	subscribe: () => {},
 	query: async (filter: Filter) => eventsNamed(filter),
+	queryComplete: async (filter: Filter) => ({ events: eventsNamed(filter), complete: true }),
 	publish: async (kind: number, content: string, tags: string[][]) => {
 		publishedAsThePerson.push({ kind, content, tags });
 		return { id: "person-event", pubkey: "person", created_at: 300, kind, tags, content, sig: "" };
@@ -68,7 +97,7 @@ mock.module("../src/adapters/buzz/relay-client.ts", () => ({ createBuzzRelayClie
 const { BuzzAdapter } = await import("../src/adapters/buzz/adapter.ts");
 const { createBuzzPersonalGateway } = await import("../src/personal/buzz.ts");
 
-function gatewayOverTheRelay() {
+function gatewayOverTheRelay(elevated: string[] = []) {
 	const adapter = new BuzzAdapter({
 		relayURL: "wss://relay.test",
 		privateKeyHex: "1".repeat(64),
@@ -77,12 +106,22 @@ function gatewayOverTheRelay() {
 	(adapter as unknown as { relay: unknown }).relay = {
 		pubkeyHex: BOT_PUBKEY,
 		query: async (filter: Filter) => eventsNamed(filter),
+		queryComplete: async (filter: Filter) => ({ events: eventsNamed(filter), complete: true }),
 		publish: async (kind: number, content: string, tags: string[][]) => {
 			publishedAsTheAgent.push({ kind, content, tags });
 			return { id: "agent-event", pubkey: BOT_PUBKEY, created_at: 300, kind, tags, content, sig: "" };
 		},
 	};
-	return createBuzzPersonalGateway(adapter, { relayURL: "wss://relay.test" });
+	messages.push({
+		id: "admins",
+		pubkey: BOT_PUBKEY,
+		created_at: 50,
+		kind: 39001,
+		tags: [["d", CHANNEL], ...elevated.map((pubkey) => ["p", pubkey, "", "owner"])],
+		content: "",
+		sig: "",
+	});
+	return createBuzzPersonalGateway(adapter, { relayURL: "wss://relay.test", admindBaseURL: ADMIND });
 }
 
 const actor = { kind: "buzz-secret", secret: USER_SECRET };
@@ -158,5 +197,85 @@ describe("a person taking a reaction back on buzz", () => {
 
 		expect(publishedAsThePerson).toEqual([]);
 		expect(publishedAsTheAgent).toEqual([]);
+	});
+});
+
+describe("a person deleting the first message of a thread", () => {
+	test("takes the replies other people wrote with it", async () => {
+		messages.push(replyEvent(REPLY_BY_STRANGER, ANSWERER, STRANGER_MESSAGE));
+		globalThis.fetch = (async () => Response.json({ secretHex: ANSWERER_SECRET })) as unknown as typeof fetch;
+
+		try {
+			await gatewayOverTheRelay().deleteMessage(actor, CHANNEL, STRANGER_MESSAGE);
+		} finally {
+			globalThis.fetch = realFetch;
+		}
+
+		expect(publishedAsThePerson.map((event) => event.kind)).toEqual([9005, 9005]);
+		expect(publishedAsThePerson[0]?.tags).toContainEqual(["e", STRANGER_MESSAGE]);
+		expect(publishedAsThePerson[1]?.tags).toContainEqual(["e", REPLY_BY_STRANGER]);
+	});
+
+	test("leaves the replies alone when this device holds no key for their author", async () => {
+		messages.push(replyEvent(REPLY_BY_STRANGER, ANSWERER, STRANGER_MESSAGE));
+		globalThis.fetch = (async () => new Response("no", { status: 404 })) as unknown as typeof fetch;
+
+		try {
+			await expect(gatewayOverTheRelay().deleteMessage(actor, CHANNEL, STRANGER_MESSAGE)).rejects.toThrow();
+		} finally {
+			globalThis.fetch = realFetch;
+		}
+
+		expect(publishedAsThePerson.map((event) => event.tags)).toEqual([
+			[["h", CHANNEL], ["e", STRANGER_MESSAGE]],
+		]);
+	});
+
+	test("a message nobody answered is still one deletion", async () => {
+		await gatewayOverTheRelay().deleteMessage(actor, CHANNEL, STRANGER_MESSAGE);
+
+		expect(publishedAsThePerson.map((event) => event.kind)).toEqual([9005]);
+	});
+});
+
+describe("a thread the agent started", () => {
+	function agentThread(): void {
+		messages.push(messageEvent(AGENT_ROOT, BOT_PUBKEY), replyEvent(REPLY_TO_AGENT, ANSWERER, AGENT_ROOT));
+	}
+
+	test("keeps its replies when the person asking administers nothing", async () => {
+		agentThread();
+		globalThis.fetch = (async () => Response.json({ secretHex: ANSWERER_SECRET })) as unknown as typeof fetch;
+
+		try {
+			await expect(gatewayOverTheRelay().deleteMessage(actor, CHANNEL, AGENT_ROOT)).rejects.toThrow();
+		} finally {
+			globalThis.fetch = realFetch;
+		}
+
+		expect(publishedAsTheAgent.map((event) => event.kind)).toEqual([9005]);
+		expect(publishedAsThePerson).toEqual([]);
+	});
+
+	test("goes with its replies when the person asking administers the channel", async () => {
+		agentThread();
+		globalThis.fetch = (async () => Response.json({ secretHex: ANSWERER_SECRET })) as unknown as typeof fetch;
+
+		try {
+			await gatewayOverTheRelay([PERSON]).deleteMessage(actor, CHANNEL, AGENT_ROOT);
+		} finally {
+			globalThis.fetch = realFetch;
+		}
+
+		expect(publishedAsTheAgent.map((event) => event.kind)).toEqual([9005]);
+		expect(publishedAsThePerson[0]?.tags).toContainEqual(["e", REPLY_TO_AGENT]);
+	});
+
+	test("keeps its replies when this device cannot read the root at all", async () => {
+		messages.push(replyEvent(REPLY_TO_AGENT, ANSWERER, AGENT_ROOT));
+
+		await expect(gatewayOverTheRelay([PERSON]).deleteMessage(actor, CHANNEL, AGENT_ROOT)).rejects.toThrow();
+
+		expect(publishedAsThePerson.map((event) => event.tags)).toEqual([[["h", CHANNEL], ["e", AGENT_ROOT]]]);
 	});
 });

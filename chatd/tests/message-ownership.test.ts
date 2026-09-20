@@ -92,14 +92,19 @@ function withMessages(admins: BuzzEvent[] = []) {
 		messageEvent(STRANGER_MESSAGE, STRANGER),
 	];
 	const publishedAsTheBot: Published[] = [];
+	function held(filter: { ids?: string[]; kinds?: number[] }): BuzzEvent[] {
+		if (filter.ids) return messages.filter((event) => filter.ids?.includes(event.id));
+		if (filter.kinds?.includes(39001)) return admins;
+		if (filter.kinds?.includes(9)) return messages;
+		return [];
+	}
 	(adapter as unknown as { relay: unknown }).relay = {
 		pubkeyHex: botPubkey,
-		query: async (filter: { ids?: string[]; kinds?: number[] }) => {
-			if (filter.ids) return messages.filter((event) => filter.ids?.includes(event.id));
-			if (filter.kinds?.includes(39001)) return admins;
-			if (filter.kinds?.includes(9)) return messages;
-			return [];
-		},
+		query: async (filter: { ids?: string[]; kinds?: number[] }) => held(filter),
+		queryComplete: async (filter: { ids?: string[]; kinds?: number[] }) => ({
+			events: held(filter),
+			complete: true,
+		}),
 		publish: async (kind: number, content: string, tags: string[][]) => {
 			publishedAsTheBot.push({ kind, content, tags });
 			return { id: "published", pubkey: botPubkey, created_at: 300, kind, tags, content, sig: "" };
