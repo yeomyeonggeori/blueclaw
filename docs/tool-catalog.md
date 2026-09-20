@@ -11,24 +11,24 @@ catalog, so they appear here as one row with no description.
 |---|---:|---|
 | `(named by the device catalog)` | 0 | `capability_tools.go` |
 | `AskInputToolName` | 279 | `ask_tools.go` |
+| `EquipToolName` | 245 | `equip_tool.go` |
 | `FileDeliverToolName` | 69 | `file_tools.go` |
-| `FindToolsToolName` | 245 | `find_tools_tool.go` |
 | `PlanToolName` | 472 | `plan_tool.go` |
 | `ReadToolName` | 299 | `file_tools.go` |
 | `SkillSearchToolName` | 208 | `skill_search_tool.go` |
+| `bash` | 47 | `shell_tools.go` |
 | `conversation_history` | 85 | `tool_catalog.go` |
-| `file_delete` | 321 | `file_tools.go` |
-| `file_edit` | 331 | `file_tools.go` |
+| `edit` | 331 | `file_tools.go` |
+| `file_delete` | 316 | `file_tools.go` |
 | `file_preview` | 229 | `file_tools.go` |
 | `file_read` | 299 | `file_tools.go` |
-| `file_write` | 239 | `file_tools.go` |
 | `memory_forget` | 179 | `memory_store_tools.go` |
 | `memory_remember` | 505 | `memory_store_tools.go` |
 | `memory_search` | 270 | `memory_store_tools.go` |
 | `persona_read` | 280 | `persona_tools.go` |
 | `persona_update` | 451 | `persona_tools.go` |
-| `shell` | 47 | `shell_tools.go` |
 | `skill_add` | 80 | `skill_management.go` |
 | `skill_remove` | 67 | `skill_management.go` |
+| `write` | 239 | `file_tools.go` |
 
-21 tools, 4955 bytes of description in total.
+21 tools, 4950 bytes of description in total.

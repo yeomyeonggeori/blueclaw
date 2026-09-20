@@ -12,7 +12,7 @@ func TestSiteToolNeedsSourceBundleOnlyForServe(t *testing.T) {
 	if !siteToolNeedsSourceBundle("site_serve") || !siteToolNeedsSourceBundle(" site_serve ") {
 		t.Fatal("expected site_serve to require a source bundle")
 	}
-	for _, toolName := range []string{"site_list", "site_unserve", "file_write", ""} {
+	for _, toolName := range []string{"site_list", "site_unserve", "write", ""} {
 		if siteToolNeedsSourceBundle(toolName) {
 			t.Fatalf("expected %q not to require a source bundle", toolName)
 		}

@@ -90,14 +90,14 @@ type fileAttachFileInput struct {
 func (toolCatalogBuilder *ToolCatalogBuilder) registerFileTools(toolRegistry *toolcontract.ToolSet, handlerContext toolHandlerContext) {
 	toolcontract.RegisterToolFunction(toolRegistry, toolcontract.ToolFunction[fileWriteToolInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
-			Name:        "file_write",
+			Name:        "write",
 			Description: "Overwrite one UTF-8 text file under the Blueclaw workspace. Treat content as the complete file body, like terminal redirection to a file: include the text exactly as it should appear in the file, with real line breaks for multiline source.",
 			RecoveryCard: toolcontract.ToolRecoveryCard{
 				Does:       "Overwrites one workspace text file with the exact content string.",
 				Produces:   "A written source, document, script, or config file at the requested path.",
 				SideEffect: "workspace_write",
 				UseWhen:    "A new file must be created, or an existing file is being replaced wholesale.",
-				AvoidWhen:  "An existing file only needs a targeted change — use file_edit to keep the rest of the work instead of rewriting the whole file; or you only need to inspect files, append shell output, or run commands. Do not pass escaped newline sequences when writing multiline source.",
+				AvoidWhen:  "An existing file only needs a targeted change — use edit to keep the rest of the work instead of rewriting the whole file; or you only need to inspect files, append shell output, or run commands. Do not pass escaped newline sequences when writing multiline source.",
 			},
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string","description":"Workspace path to create or overwrite."},"content":{"type":"string","description":"Complete file body as plain UTF-8 text. Use real line breaks for multiline files; this is the text that will be written exactly."}},"required":["path","content"],"additionalProperties":false}`),
 		},
@@ -132,7 +132,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerFileTools(toolRegistry *to
 				Does:       "Reads a text file or requested line range from the actual workspace file; an attachment url falls back to cached preview text.",
 				Produces:   "Text content plus path, line range, original size, returned size, line count if known, and truncation metadata.",
 				SideEffect: "read",
-				UseWhen:    "You need current file content before file_edit or file.write.",
+				UseWhen:    "You need current file content before edit or write.",
 				AvoidWhen:  "The file is binary, an attached document needing conversion, or you already have the exact current text needed for an edit.",
 			},
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string","description":"Workspace text file path, or an attachment's exact url copied verbatim from the conversation."},"startLine":{"type":"integer","description":"Optional 1-based first line to return. Avoid for minified or few-line files; use startByte instead."},"lineCount":{"type":"integer","description":"Optional number of lines to return from startLine."},"startByte":{"type":"integer","description":"Optional 0-based byte offset for byte-range reads. Use this for minified or single-line files; continue from the nextByte value of the previous read until isEndOfFile is true."}},"additionalProperties":false}`),
@@ -162,14 +162,14 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerFileTools(toolRegistry *to
 	})
 	toolcontract.RegisterToolFunction(toolRegistry, toolcontract.ToolFunction[filePatchToolInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
-			Name:        "file_edit",
+			Name:        "edit",
 			Description: "Apply one or more exact text replacements to workspace files as one atomic edit. Each oldText must appear exactly once where it is applied. This is the tool for every targeted change to an existing file: pass a single edit for one change, or group related changes into one call. Read the file first so each oldText matches exactly.",
 			RecoveryCard: toolcontract.ToolRecoveryCard{
 				Does:       "Replaces exact oldText occurrences with newText across one or more workspace text files, all-or-nothing.",
 				Produces:   "Modified source, document, script, or config files with match metadata.",
 				SideEffect: "workspace_write",
 				UseWhen:    "An existing file needs one or more targeted changes and the current oldText snippets are known.",
-				AvoidWhen:  "The change creates a new file or replaces most of a file (use file_write), or oldText is missing or ambiguous (use read first).",
+				AvoidWhen:  "The change creates a new file or replaces most of a file (use write), or oldText is missing or ambiguous (use read first).",
 			},
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"edits":{"type":"array","items":{"type":"object","properties":{"path":{"type":"string","description":"Workspace text file path to modify."},"oldText":{"type":"string","description":"Exact existing text to replace; must appear exactly once when this edit is applied."},"newText":{"type":"string","description":"Replacement text."}},"required":["path","oldText","newText"],"additionalProperties":false}}},"required":["edits"],"additionalProperties":false}`),
 		},
@@ -182,15 +182,15 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerFileTools(toolRegistry *to
 		Definition: toolcontract.ToolDefinition{
 			Name:             "file_delete",
 			RequiresApproval: true,
-			Description:      "Delete one file from the Blueclaw workspace by its path. Use the same path form as file_write and read, for example ~/documents/notes.docx or ~/documents/report.pdf. The runtime pauses for the user's approval before the file is removed, so find the file yourself and call this directly — do not ask the user which file.",
+			Description:      "Delete one file from the Blueclaw workspace by its path. Use the same path form as write and read, for example ~/documents/notes.docx or ~/documents/report.pdf. The runtime pauses for the user's approval before the file is removed, so find the file yourself and call this directly — do not ask the user which file.",
 			RecoveryCard: toolcontract.ToolRecoveryCard{
 				Does:       "Removes one workspace file at the requested path.",
 				Produces:   "Confirmation that the file no longer exists.",
 				SideEffect: "workspace_write",
 				UseWhen:    "A workspace file the requester created or owns should be removed; resolve the path with the same form used to write it.",
-				AvoidWhen:  "You only need to overwrite a file (use file_write), the path is a directory, or it is a built-in resource.",
+				AvoidWhen:  "You only need to overwrite a file (use write), the path is a directory, or it is a built-in resource.",
 			},
-			InputSchema: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string","description":"Workspace file path to delete, in the same form as file_write (for example tmp/notes.txt)."}},"required":["path"],"additionalProperties":false}`),
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string","description":"Workspace file path to delete, in the same form as write (for example tmp/notes.txt)."}},"required":["path"],"additionalProperties":false}`),
 		},
 		Handler: func(toolContext context.Context, input fileDeleteToolInput) (toolcontract.ToolResult, error) {
 			return toolCatalogBuilder.deleteFileTool(toolContext, input, handlerContext)
@@ -221,12 +221,12 @@ func fileToolSuccess(document map[string]any) toolcontract.ToolResult {
 func (toolCatalogBuilder *ToolCatalogBuilder) writeFileTool(toolContext context.Context, input fileWriteToolInput, handlerContext toolHandlerContext) (toolcontract.ToolResult, error) {
 	path := strings.TrimSpace(input.Path)
 	if path == "" {
-		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "file_write", "path is required"), nil
+		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "write", "path is required"), nil
 	}
 	if input.Content == "" {
-		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "file_write", "content is required"), nil
+		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "write", "content is required"), nil
 	}
-	if failureResult := toolCatalogBuilder.runRequesterFileWrite(toolContext, handlerContext, "file_write", path, input.Content); failureResult != nil {
+	if failureResult := toolCatalogBuilder.runRequesterFileWrite(toolContext, handlerContext, "write", path, input.Content); failureResult != nil {
 		return *failureResult, nil
 	}
 	return fileToolSuccess(map[string]any{
@@ -1035,10 +1035,10 @@ func truncateTextByBytes(content string, maxBytes int) (string, bool) {
 
 func (toolCatalogBuilder *ToolCatalogBuilder) patchFileTool(toolContext context.Context, input filePatchToolInput, handlerContext toolHandlerContext) (toolcontract.ToolResult, error) {
 	if len(input.Edits) == 0 {
-		return fileExactEditFailure("file_edit", "", -1, 0, "edits is required"), nil
+		return fileExactEditFailure("edit", "", -1, 0, "edits is required"), nil
 	}
 	if len(input.Edits) > 100 {
-		return fileExactEditFailure("file_edit", "", -1, len(input.Edits), "too many edits; split the patch into smaller groups"), nil
+		return fileExactEditFailure("edit", "", -1, len(input.Edits), "too many edits; split the patch into smaller groups"), nil
 	}
 	patchState := newFilePatchState()
 	for editIndex, edit := range input.Edits {
@@ -1071,11 +1071,11 @@ func newFilePatchState() *filePatchState {
 func (toolCatalogBuilder *ToolCatalogBuilder) validatePatchEdit(toolContext context.Context, handlerContext toolHandlerContext, patchState *filePatchState, edit filePatchEditInput, editIndex int) *toolcontract.ToolResult {
 	path := strings.TrimSpace(edit.Path)
 	if path == "" {
-		result := fileExactEditFailure("file_edit", "", editIndex, 0, "path is required")
+		result := fileExactEditFailure("edit", "", editIndex, 0, "path is required")
 		return &result
 	}
 	if edit.OldText == "" {
-		result := fileExactEditFailure("file_edit", path, editIndex, 0, "oldText is required")
+		result := fileExactEditFailure("edit", path, editIndex, 0, "oldText is required")
 		return &result
 	}
 	if result := toolCatalogBuilder.loadEditableFile(toolContext, handlerContext, patchState, path); result != nil {
@@ -1084,7 +1084,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) validatePatchEdit(toolContext cont
 	currentContent := patchState.currentContents[path]
 	updatedContent, matchCount, applied := applyExactOrTolerantEdit(currentContent, edit.OldText, edit.NewText)
 	if !applied {
-		result := fileExactEditFailure("file_edit", path, editIndex, matchCount, fileEditMatchFailureGuidance(currentContent, edit.OldText, matchCount))
+		result := fileExactEditFailure("edit", path, editIndex, matchCount, fileEditMatchFailureGuidance(currentContent, edit.OldText, matchCount))
 		return &result
 	}
 	patchState.currentContents[path] = updatedContent
@@ -1303,9 +1303,9 @@ func fileEditMatchFailureGuidance(content string, oldText string, matchCount int
 		return "oldText matched " + strconv.Itoa(matchCount) + " places; include more surrounding lines so oldText identifies exactly one location."
 	}
 	if similar := closestFileLines(content, oldText); similar != "" {
-		return "oldText was not found, even after allowing whitespace and quote differences. The closest current lines in the file are:\n" + similar + "\nCopy the exact text shown above into oldText and retry file.edit. Do not rewrite the whole file — that discards the rest of the work."
+		return "oldText was not found, even after allowing whitespace and quote differences. The closest current lines in the file are:\n" + similar + "\nCopy the exact text shown above into oldText and retry edit. Do not rewrite the whole file — that discards the rest of the work."
 	}
-	return "oldText was not found, even after allowing whitespace and quote differences. Read the file with file_read to copy the exact current text, then retry file.edit. Do not rewrite the whole file."
+	return "oldText was not found, even after allowing whitespace and quote differences. Read the file with file_read to copy the exact current text, then retry edit. Do not rewrite the whole file."
 }
 
 func closestFileLines(content string, oldText string) string {
@@ -1387,20 +1387,20 @@ func (toolCatalogBuilder *ToolCatalogBuilder) loadEditableFile(toolContext conte
 		return actorFailure
 	}
 	if outcome.RunError != nil {
-		result := outcome.toolFailure("read_file", "file_edit", path)
+		result := outcome.toolFailure("read_file", "edit", path)
 		return &result
 	}
 	sizeBytes, content, isParsed := parseFileReadShellOutput(outcome.CommandResult.Stdout)
 	if !isParsed {
-		result := toolcontract.ToolFailureResult(toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "file_edit", "file size probe returned unreadable output")
+		result := toolcontract.ToolFailureResult(toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "edit", "file size probe returned unreadable output")
 		return &result
 	}
 	if sizeBytes > int64(maximumEditableTextFileBytes) || len(content) > maximumEditableTextFileBytes {
-		result := fileExactEditFailure("file_edit", path, -1, 0, "file is too large for exact edit; rewrite a smaller generated file or use a more specific workflow")
+		result := fileExactEditFailure("edit", path, -1, 0, "file is too large for exact edit; rewrite a smaller generated file or use a more specific workflow")
 		return &result
 	}
 	if !utf8.ValidString(content) || strings.IndexByte(content, 0) >= 0 {
-		result := toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "file_edit", "file_edit supports UTF-8 text files; use a specialized document or artifact tool for binary files")
+		result := toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "edit", "edit supports UTF-8 text files; use a specialized document or artifact tool for binary files")
 		return &result
 	}
 	patchState.originalContents[path] = content
@@ -1412,7 +1412,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) loadEditableFile(toolContext conte
 func (toolCatalogBuilder *ToolCatalogBuilder) writePatchState(toolContext context.Context, handlerContext toolHandlerContext, patchState *filePatchState) *toolcontract.ToolResult {
 	writtenPaths := []string{}
 	for _, path := range patchState.pathOrder {
-		if failureResult := toolCatalogBuilder.runRequesterFileWrite(toolContext, handlerContext, "file_edit", path, patchState.currentContents[path]); failureResult != nil {
+		if failureResult := toolCatalogBuilder.runRequesterFileWrite(toolContext, handlerContext, "edit", path, patchState.currentContents[path]); failureResult != nil {
 			toolCatalogBuilder.rollbackPatchWrites(toolContext, handlerContext, patchState, writtenPaths)
 			return failureResult
 		}
@@ -1423,7 +1423,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) writePatchState(toolContext contex
 
 func (toolCatalogBuilder *ToolCatalogBuilder) rollbackPatchWrites(toolContext context.Context, handlerContext toolHandlerContext, patchState *filePatchState, writtenPaths []string) {
 	for _, path := range writtenPaths {
-		_ = toolCatalogBuilder.runRequesterFileWrite(toolContext, handlerContext, "file_edit", path, patchState.originalContents[path])
+		_ = toolCatalogBuilder.runRequesterFileWrite(toolContext, handlerContext, "edit", path, patchState.originalContents[path])
 	}
 }
 
@@ -1440,8 +1440,8 @@ func fileExactEditFailure(stage string, path string, editIndex int, matchCount i
 	result.Failure.RetryPolicy = "different_input"
 	result.Failure.RecoveryHints = []toolcontract.RecoveryHint{{
 		Action:    "inspect_then_targeted_edit",
-		ToolNames: []string{"file_read", "file_edit"},
-		Reason:    "The oldText no longer matches the file on disk. Read the current file with file_read, copy the exact snippet, then retry a targeted file.edit. Do not rewrite the whole file — a targeted edit keeps the rest of the work and is far cheaper.",
+		ToolNames: []string{"file_read", "edit"},
+		Reason:    "The oldText no longer matches the file on disk. Read the current file with file_read, copy the exact snippet, then retry a targeted edit. Do not rewrite the whole file — a targeted edit keeps the rest of the work and is far cheaper.",
 	}}
 	return result
 }

@@ -17,8 +17,8 @@ compatibility: Requires a POSIX shell.
 metadata:
   author: InternKim
   kim.intern.tool-references:
-    - shell
-    - file_write
+    - bash
+    - write
 ---
 # Simple Slides
 
@@ -39,7 +39,7 @@ Build slides.
 	if skillBundle.Description != "Create presentation decks." {
 		t.Fatalf("expected description from frontmatter, got %q", skillBundle.Description)
 	}
-	if !containsToolReference(skillBundle.ToolReferences, "shell") || !containsToolReference(skillBundle.ToolReferences, "file_write") {
+	if !containsToolReference(skillBundle.ToolReferences, "bash") || !containsToolReference(skillBundle.ToolReferences, "write") {
 		t.Fatalf("expected tool references, got %+v", skillBundle.ToolReferences)
 	}
 	if skillBundle.Instruction != "# Simple Slides\n\nBuild slides." {
@@ -80,7 +80,7 @@ func TestSkillLoaderParsesSpaceSeparatedToolReferences(t *testing.T) {
 name: file-work
 description: Work with files.
 metadata:
-  kim.intern.tool-references: file_read file_write
+  kim.intern.tool-references: file_read write
 ---
 Use files.
 `
@@ -93,7 +93,7 @@ Use files.
 		t.Fatal(errorValue)
 	}
 
-	if !containsToolReference(skillBundle.ToolReferences, "file_read") || !containsToolReference(skillBundle.ToolReferences, "file_write") {
+	if !containsToolReference(skillBundle.ToolReferences, "file_read") || !containsToolReference(skillBundle.ToolReferences, "write") {
 		t.Fatalf("expected space separated tool references, got %+v", skillBundle.ToolReferences)
 	}
 }
@@ -130,8 +130,8 @@ func TestSkillLoaderIgnoresAllowedToolsWhenToolReferencesExist(t *testing.T) {
 name: file-work
 description: Work with files.
 metadata:
-  kim.intern.tool-references: file_read file_write
-allowed-tools: shell
+  kim.intern.tool-references: file_read write
+allowed-tools: bash
 ---
 Use files.
 `
@@ -144,7 +144,7 @@ Use files.
 		t.Fatal(errorValue)
 	}
 
-	expectedToolReferences := []ToolReference{"file_read", "file_write"}
+	expectedToolReferences := []ToolReference{"file_read", "write"}
 	if len(skillBundle.ToolReferences) != len(expectedToolReferences) {
 		t.Fatalf("expected unique tool references, got %+v", skillBundle.ToolReferences)
 	}
@@ -170,7 +170,7 @@ func TestSkillLoaderReadsToolReferencesFromTheMetadataMap(t *testing.T) {
 name: calculator
 description: Calculate an expression.
 metadata:
-  kim.intern.tool-references: "shell"
+  kim.intern.tool-references: "bash"
 ---
 Use the evaluator.
 `
@@ -184,7 +184,7 @@ Use the evaluator.
 	}
 
 	toolNames := skillBundle.ReferencedToolNames()
-	if len(toolNames) != 1 || toolNames[0] != "shell" {
+	if len(toolNames) != 1 || toolNames[0] != "bash" {
 		t.Fatalf("a skill that has to satisfy the Agent Skills schema declares its tools here, got %+v", toolNames)
 	}
 }

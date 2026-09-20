@@ -30,7 +30,7 @@ The current catalog and what each description costs is generated:
 
 Two things about that surface are worth knowing before changing it. The
 descriptions are uneven, from 505 bytes for `memory_remember` down to 47 for
-`shell`, and the gap does not track how hard the tool is to use
+`bash`, and the gap does not track how hard the tool is to use
 correctly. And a wrong-tool call is corrected after the fact by recovery
 guidance, on every model, every time, so wording that prevents one is cheaper
 than it looks.

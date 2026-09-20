@@ -82,13 +82,24 @@ func callNeedsApproval(toolDefinition toolcontract.ToolDefinition, toolInput jso
 	if toolDefinition.RequiresApproval {
 		return true
 	}
-	if strings.TrimSpace(toolDefinition.Name) != toolcontract.ShellToolName {
+	if !inputSchemaAcceptsApprovalRequired(toolDefinition.InputSchema) {
 		return false
 	}
 	var document struct {
 		ApprovalRequired bool `json:"approvalRequired"`
 	}
 	return json.Unmarshal(toolInput, &document) == nil && document.ApprovalRequired
+}
+
+func inputSchemaAcceptsApprovalRequired(inputSchema json.RawMessage) bool {
+	var schema struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	if json.Unmarshal(inputSchema, &schema) != nil {
+		return false
+	}
+	_, isDeclared := schema.Properties["approvalRequired"]
+	return isDeclared
 }
 
 func repliesIntoTheConversationItWasAskedIn(toolDefinition toolcontract.ToolDefinition, toolInput json.RawMessage) bool {

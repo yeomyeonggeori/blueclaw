@@ -10,14 +10,14 @@ import (
 // its own. The kernel, not this list, is what keeps either version inside the
 // requester's identity.
 var harnessOwnedToolNames = map[string]bool{
-	toolcontract.ShellToolName:       true,
+	toolcontract.BashToolName:        true,
 	toolcontract.FileReadToolName:    true,
-	toolcontract.FileWriteToolName:   true,
-	toolcontract.FileEditToolName:    true,
+	toolcontract.WriteToolName:       true,
+	toolcontract.EditToolName:        true,
 	toolcontract.FilePreviewToolName: true,
 	toolcontract.ImageReadToolName:   true,
 	toolcontract.PlanToolName:        true,
-	toolcontract.FindToolsToolName:   true,
+	toolcontract.EquipToolName:       true,
 	toolcontract.SkillSearchToolName: true,
 }
 

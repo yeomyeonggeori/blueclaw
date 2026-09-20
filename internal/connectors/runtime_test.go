@@ -3378,7 +3378,7 @@ func TestConnectorRuntimeSendsCheckpointReplyKind(t *testing.T) {
 	errorValue := connectorRuntime.sendCheckpointReply(context.Background(), adapter.Name(), event, replyTarget, agentcontract.AgentCheckpoint{
 		TaskRunID: "task-1",
 		Message:   "작업 중입니다.",
-		ToolName:  "shell",
+		ToolName:  "bash",
 	}, adapter.SendReply)
 	if errorValue != nil {
 		t.Fatalf("expected checkpoint reply to send: %v", errorValue)

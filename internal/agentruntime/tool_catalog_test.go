@@ -293,15 +293,15 @@ func internalTestToolNames() []string {
 		"read",
 		"document_read",
 		"file_deliver",
-		"file_edit",
+		"edit",
 		"file_preview",
 		"file_read",
-		"file_write",
+		"write",
 		"image_read",
 		"skill_add",
 		"skill_remove",
 		"skill_search",
-		"shell",
+		"bash",
 	}
 }
 

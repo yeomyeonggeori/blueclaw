@@ -29,7 +29,7 @@ func TestPriorTaskCarriesRecordedCallsInsteadOfInventedAttempts(t *testing.T) {
 func TestPriorTaskEvidenceIsBoundedAndSaysWhatWasOmitted(t *testing.T) {
 	events := []task.TaskEvent{}
 	for index := 0; index < priorTaskAttemptLimit+3; index++ {
-		events = append(events, task.TaskEvent{Name: "tool.shell.result", Body: fmt.Sprintf(`{"observationID":"obs-%d","toolInput":{"command":"%s"}}`, index, strings.Repeat("x", priorTaskInputByteLimit))})
+		events = append(events, task.TaskEvent{Name: "tool.bash.result", Body: fmt.Sprintf(`{"observationID":"obs-%d","toolInput":{"command":"%s"}}`, index, strings.Repeat("x", priorTaskInputByteLimit))})
 	}
 	attempts, omittedCount := priorTaskRecordedAttempts(events)
 	if len(attempts) != priorTaskAttemptLimit || omittedCount != 3 || attempts[0].ObservationID != "obs-3" {

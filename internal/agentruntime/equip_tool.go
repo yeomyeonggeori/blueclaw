@@ -9,7 +9,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
-var findToolsInputSchema = json.RawMessage(`{
+var equipInputSchema = json.RawMessage(`{
 	"type":"object",
 	"additionalProperties":false,
 	"required":["need"],
@@ -18,7 +18,7 @@ var findToolsInputSchema = json.RawMessage(`{
 	}
 }`)
 
-var findToolsResultSchema = json.RawMessage(`{
+var equipResultSchema = json.RawMessage(`{
 	"type":"object",
 	"additionalProperties":false,
 	"required":["selectedTools"],
@@ -38,30 +38,30 @@ var findToolsResultSchema = json.RawMessage(`{
 	}
 }`)
 
-type findToolsToolInput struct {
+type equipToolInput struct {
 	Need string `json:"need"`
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) registerFindToolsTool(toolRegistry *toolcontract.ToolSet, availableToolSet *toolcontract.ToolSet) {
-	toolcontract.RegisterToolFunction(toolRegistry, toolcontract.ToolFunction[findToolsToolInput, toolcontract.ToolResult]{
+func (toolCatalogBuilder *ToolCatalogBuilder) registerEquipTool(toolRegistry *toolcontract.ToolSet, availableToolSet *toolcontract.ToolSet) {
+	toolcontract.RegisterToolFunction(toolRegistry, toolcontract.ToolFunction[equipToolInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
-			Name:        toolcontract.FindToolsToolName,
+			Name:        toolcontract.EquipToolName,
 			Description: "Describe in one sentence what you need a tool to do, and get back the tools that do it with a one-line description each. They become callable on your next step. Say the need, not a tool name: you are not expected to know what anything is called.",
-			InputSchema: findToolsInputSchema,
+			InputSchema: equipInputSchema,
 		},
-		Handler: func(toolContext context.Context, input findToolsToolInput) (toolcontract.ToolResult, error) {
-			return toolCatalogBuilder.findTools(toolContext, input, availableToolSet)
+		Handler: func(toolContext context.Context, input equipToolInput) (toolcontract.ToolResult, error) {
+			return toolCatalogBuilder.equip(toolContext, input, availableToolSet)
 		},
 		Result: toolcontract.IdentityToolResult,
 	})
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) findTools(toolContext context.Context, input findToolsToolInput, availableToolSet *toolcontract.ToolSet) (toolcontract.ToolResult, error) {
+func (toolCatalogBuilder *ToolCatalogBuilder) equip(toolContext context.Context, input equipToolInput, availableToolSet *toolcontract.ToolSet) (toolcontract.ToolResult, error) {
 	if toolCatalogBuilder.toolSelector == nil {
-		return toolcontract.ToolFailureResult(toolcontract.FailureDependencyUnavailable, toolcontract.FailureCodes.Unavailable, toolcontract.FindToolsToolName, "no tool selector is configured for this runtime"), nil
+		return toolcontract.ToolFailureResult(toolcontract.FailureDependencyUnavailable, toolcontract.FailureCodes.Unavailable, toolcontract.EquipToolName, "no tool selector is configured for this runtime"), nil
 	}
 	if strings.TrimSpace(input.Need) == "" {
-		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, toolcontract.FindToolsToolName, "need must say what the tool has to do"), nil
+		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, toolcontract.EquipToolName, "need must say what the tool has to do"), nil
 	}
 	callLedger := &agentcontract.IntakeCallLedger{}
 	selectedTools, errorValue := toolCatalogBuilder.toolSelector.SelectToolNames(toolContext, agentcontract.ToolSelectionNeed{
@@ -71,9 +71,9 @@ func (toolCatalogBuilder *ToolCatalogBuilder) findTools(toolContext context.Cont
 	})
 	toolCatalogBuilder.appendSelectionCallRecords(toolContext, callLedger.Records)
 	if errorValue != nil {
-		return toolcontract.ToolFailureResult(toolcontract.FailureDependencyUnavailable, toolcontract.FailureCodes.Unavailable, toolcontract.FindToolsToolName, "tool selection failed: "+errorValue.Error()), nil
+		return toolcontract.ToolFailureResult(toolcontract.FailureDependencyUnavailable, toolcontract.FailureCodes.Unavailable, toolcontract.EquipToolName, "tool selection failed: "+errorValue.Error()), nil
 	}
-	document := json.RawMessage(MarshalBody(agentcontract.FoundTools{SelectedTools: selectedTools}))
+	document := json.RawMessage(MarshalBody(agentcontract.EquippedTools{SelectedTools: selectedTools}))
 	return toolcontract.ToolSuccessData(foundToolsSummary(selectedTools), document), nil
 }
 

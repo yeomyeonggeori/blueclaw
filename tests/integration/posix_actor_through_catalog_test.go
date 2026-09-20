@@ -86,7 +86,7 @@ func TestAToolCalledThroughTheCatalogReachesTheRequesterPOSIXActor(t *testing.T)
 	}))
 	toolCatalogBuilder.UseWorkspaceActorFactory(actorFactory)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{
-		"default": {toolcontract.ShellToolName},
+		"default": {toolcontract.BashToolName},
 	}, nil)
 
 	toolSet := toolCatalogBuilder.BuildToolSet(agentruntime.ToolCatalogRequest{
@@ -114,7 +114,7 @@ func TestAToolCalledThroughTheCatalogReachesTheRequesterPOSIXActor(t *testing.T)
 	t.Cleanup(func() { _ = clientSession.Close() })
 
 	callResult, errorValue := clientSession.CallTool(context.Background(), &mcp.CallToolParams{
-		Name:      toolcontract.ShellToolName,
+		Name:      toolcontract.BashToolName,
 		Arguments: map[string]any{"command": "ls"},
 	})
 	if errorValue != nil {

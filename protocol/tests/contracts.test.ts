@@ -568,7 +568,7 @@ describe('ledger event names', () => {
 
   test('refuse a tool event whose tool name is not one segment or whose suffix is not declared', () => {
     expect(ledgerEventNameSchema.safeParse('tool.site.app.publish.result').success).toBe(false);
-    expect(ledgerEventNameSchema.safeParse('tool.shell.finished').success).toBe(false);
+    expect(ledgerEventNameSchema.safeParse('tool.bash.finished').success).toBe(false);
     expect(ledgerEventNameSchema.safeParse('tool..result').success).toBe(false);
   });
 

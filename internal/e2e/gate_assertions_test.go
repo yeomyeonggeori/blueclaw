@@ -83,7 +83,7 @@ func TestStructuralGateAllowsFormerPresentationWordingFragments(t *testing.T) {
 	}
 
 	completedResult.Events = []task.TaskEvent{
-		gateNamedEvent("tool.shell.result"),
+		gateNamedEvent("tool.bash.result"),
 		gateNamedEvent("tool.file_deliver.result"),
 	}
 	if errorValue := assertTurnResult("", turn, completedResult); errorValue == nil {
