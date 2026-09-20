@@ -277,7 +277,7 @@ func TestCoordinatorDailyAttemptCapCountsFailedReviews(t *testing.T) {
 	if errorValue := coordinator.Observe(Experience{TaskID: "cap-review", Audience: "company", Outcome: []byte(`{"ok":true}`)}); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	now := time.Now().UTC()
+	now := time.Date(2026, time.September, 20, 12, 0, 0, 0, time.UTC)
 	for attempt := 0; attempt < 3; attempt++ {
 		coordinator.mutex.Lock()
 		coordinator.state.LastObserved = now.Add(-6 * time.Minute)
