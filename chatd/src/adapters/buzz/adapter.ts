@@ -710,10 +710,14 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	// the conversation it was asked from: the relay rejects a control event
 	// whose channel tag names somewhere else, so "delete that 잡담 post" asked
 	// in a DM has to land in 잡담.
-	private async channelOwningMessage(threadId: string, messageId: string): Promise<string> {
+	async channelOwningMessage(threadId: string, messageId: string): Promise<string> {
 		const target = await this.readMessageEvent(messageId);
 		const owningChannelId = target ? firstTagValue(target, "h") : undefined;
 		return owningChannelId ?? this.decodeThreadId(threadId).channelId;
+	}
+
+	queryComplete(filter: object): Promise<{ events: BuzzEvent[]; complete: boolean }> {
+		return this.relay.queryComplete(filter);
 	}
 
 	async readMessageEvent(messageId: string): Promise<BuzzEvent | undefined> {
@@ -724,8 +728,8 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	// The relay provisions a room's roles and publishes them as its kind 39001
 	// admin list, which makes the relay the record of who administers a channel
 	// and leaves chatd nothing to decide but what that record says.
-	async channelElevatedPubkeys(channelId: string): Promise<Set<string>> {
-		const known = this.elevatedPubkeysByChannel.get(channelId);
+	async channelElevatedPubkeys(channelId: string, freshly = false): Promise<Set<string>> {
+		const known = freshly ? undefined : this.elevatedPubkeysByChannel.get(channelId);
 		if (known) return known;
 		const events = await this.relay
 			.query({ kinds: [GROUP_ADMINS_KIND], "#d": [channelId] })

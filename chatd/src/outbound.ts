@@ -32,7 +32,8 @@ import {
 	parseReactionRequest,
 	parseReplySendRequest,
 } from "./outbound-parse.ts";
-import { MessageChangeRefused, isElevatedIn, signerForMessageChange } from "./message-ownership.ts";
+import { MessageChangeRefused, isElevatedIn, signerForMessageChange, signingKeyring } from "./message-ownership.ts";
+import { ThreadPartlyDeleted, deleteThread } from "./adapters/buzz/thread-deletion.ts";
 import { personCapabilities, type PersonCapability } from "./personal/capabilities.ts";
 import { MalformedRequest } from "./personal/parse.ts";
 import { CredentialRefused, UnsupportedByPlatform, type PersonalGateway } from "./personal/gateway.ts";
@@ -148,7 +149,10 @@ export function createOutboundHandler(
 			if (error instanceof MalformedRequest) {
 				return jsonResponse(400, { error: error.message });
 			}
-			if (error instanceof MessageChangeRefused) {
+			if (error instanceof ThreadPartlyDeleted) {
+			return jsonResponse(409, { error: error.message, reason: error.reason, remaining: error.remaining });
+		}
+		if (error instanceof MessageChangeRefused) {
 				return jsonResponse(403, { error: error.message });
 			}
 			return jsonResponse(502, { error: error instanceof Error ? error.message : String(error) });
@@ -198,6 +202,9 @@ async function answerAsPerson(
 		}
 		if (error instanceof UnsupportedByPlatform) {
 			return jsonResponse(501, { error: error.message, reason: error.reason, platform: error.platform });
+		}
+		if (error instanceof ThreadPartlyDeleted) {
+			return jsonResponse(409, { error: error.message, reason: error.reason, remaining: error.remaining });
 		}
 		return jsonResponse(502, { error: error instanceof Error ? error.message : String(error) });
 	}
@@ -543,16 +550,37 @@ async function handleMessageDelete(
 	requestBody: unknown,
 ): Promise<Record<string, never>> {
 	const requestDocument = parseMessageDeleteRequest(requestBody);
-	const signerSecretHex =
-		adapter instanceof BuzzAdapter
-			? await signerForMessageChange(
-					adapter,
-					requestDocument.messageID,
-					requestDocument.requesterPubkeyHex,
-					configuration.admindBaseURL,
-				)
-			: undefined;
-	await adapter.deleteMessage(requestDocument.replyTargetID, requestDocument.messageID, signerSecretHex);
+	if (!(adapter instanceof BuzzAdapter)) {
+		await adapter.deleteMessage(requestDocument.replyTargetID, requestDocument.messageID);
+		return {};
+	}
+	const signerSecretHex = await signerForMessageChange(
+		adapter,
+		requestDocument.messageID,
+		requestDocument.requesterPubkeyHex,
+		configuration.admindBaseURL,
+	);
+	const root = await adapter.readMessageEvent(requestDocument.messageID);
+	const channelID = await adapter.channelOwningMessage(requestDocument.replyTargetID, requestDocument.messageID);
+	const keyring = signingKeyring(configuration.admindBaseURL);
+	await deleteThread({
+		relay: adapter,
+		channelID,
+		rootEventId: requestDocument.messageID,
+		mayClearReplies: async () => {
+			if (!root) return false;
+			if (root.pubkey !== adapter.botPubkey) return true;
+			return isElevatedIn(adapter, channelID, (requestDocument.requesterPubkeyHex ?? "").trim().toLowerCase(), true);
+		},
+		deleteRoot: () =>
+			adapter.deleteMessage(requestDocument.replyTargetID, requestDocument.messageID, signerSecretHex),
+		deleteReply: async (reply) =>
+			adapter.deleteMessage(
+				adapter.encodeThreadId({ channelId: channelID }),
+				reply.id,
+				reply.pubkey === adapter.botPubkey ? undefined : await keyring(reply.pubkey, reply.id),
+			),
+	});
 	return {};
 }
 

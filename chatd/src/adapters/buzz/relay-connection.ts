@@ -8,6 +8,7 @@ export type RelayConnection = {
 	disconnect: () => void;
 	subscribe: (filters: object[], onEvent: EventListener) => void;
 	query: (filter: object, timeoutMs?: number) => Promise<BuzzEvent[]>;
+	queryComplete: (filter: object, timeoutMs?: number) => Promise<{ events: BuzzEvent[]; complete: boolean }>;
 	publish: (kind: number, content: string, tags: string[][]) => Promise<BuzzEvent>;
 	publishForAcknowledgement: (kind: number, content: string, tags: string[][]) => Promise<string>;
 };
@@ -269,24 +270,10 @@ export function createRelayConnection(
 			}
 		},
 		async query(filter, timeoutMs = 8_000) {
-			await waitForOpen();
-			const subscriptionID = `query-${subscriptionSerial++}`;
-			return await new Promise<BuzzEvent[]>((resolve) => {
-				const timeoutHandle = setTimeout(() => {
-					const query = pendingQueries.get(subscriptionID);
-					pendingQueries.delete(subscriptionID);
-					send(["CLOSE", subscriptionID]);
-					resolve(query?.events ?? []);
-				}, timeoutMs);
-				pendingQueries.set(subscriptionID, {
-					events: [],
-					resolve: (events) => {
-						clearTimeout(timeoutHandle);
-						resolve(events);
-					},
-				});
-				send(["REQ", subscriptionID, filter]);
-			});
+			return (await queryForCompleteness(filter, timeoutMs)).events;
+		},
+		async queryComplete(filter, timeoutMs = 8_000) {
+			return queryForCompleteness(filter, timeoutMs);
 		},
 		async publish(kind, content, tags) {
 			return (await publishAndAwaitAcknowledgement(kind, content, tags)).event;
@@ -295,6 +282,30 @@ export function createRelayConnection(
 			return (await publishAndAwaitAcknowledgement(kind, content, tags)).acknowledgement;
 		},
 	};
+
+	async function queryForCompleteness(
+		filter: object,
+		timeoutMs: number,
+	): Promise<{ events: BuzzEvent[]; complete: boolean }> {
+		await waitForOpen();
+		const subscriptionID = `query-${subscriptionSerial++}`;
+		return await new Promise<{ events: BuzzEvent[]; complete: boolean }>((resolve) => {
+			const timeoutHandle = setTimeout(() => {
+				const query = pendingQueries.get(subscriptionID);
+				pendingQueries.delete(subscriptionID);
+				send(["CLOSE", subscriptionID]);
+				resolve({ events: query?.events ?? [], complete: false });
+			}, timeoutMs);
+			pendingQueries.set(subscriptionID, {
+				events: [],
+				resolve: (events) => {
+					clearTimeout(timeoutHandle);
+					resolve({ events, complete: true });
+				},
+			});
+			send(["REQ", subscriptionID, filter]);
+		});
+	}
 
 	async function publishAndAwaitAcknowledgement(
 		kind: number,

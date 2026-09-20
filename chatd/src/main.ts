@@ -59,6 +59,7 @@ if (configuration.buzz) {
   personalGateways.buzz = createBuzzPersonalGateway(buzzAdapter, {
     relayURL: configuration.buzz.relayURL,
     authTagJSON: configuration.buzz.authTagJSON,
+    admindBaseURL: configuration.admindBaseURL,
   });
 }
 
