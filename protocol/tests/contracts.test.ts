@@ -578,8 +578,9 @@ describe('ledger event names', () => {
 
   test('declare exactly the names the agent contract declares', async () => {
     const declaredNames = await readDeclaredTaskEventNames();
+    const enumeratedNames: string[] = Object.values(TaskEventName);
     expect(declaredNames.length).toBeGreaterThan(0);
-    expect(Object.values(TaskEventName).sort(compareCodeUnits)).toEqual(declaredNames.sort(compareCodeUnits));
+    expect(enumeratedNames.sort(compareCodeUnits)).toEqual(declaredNames.sort(compareCodeUnits));
   });
 });
 
