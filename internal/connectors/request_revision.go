@@ -169,15 +169,17 @@ func (connectorRuntime *ConnectorRuntime) cancelPendingRequestTask(event Platfor
 
 func (connectorRuntime *ConnectorRuntime) cancelPendingSourceTask(personID string, platform string, conversationID string, sourceReference string) {
 	taskRun, isFound := connectorRuntime.findTaskRunBySourceReference(personID, sourceReference)
-	if !isFound || !isTaskControlActiveStatus(taskRun.Status) {
+	if !isFound || taskRun.Status == task.TaskStatusCompleted {
 		return
 	}
-	if _, errorValue := connectorRuntime.taskRunService.CancelTaskRunWithReason(taskRun.TaskRunID, personID, SupersededRequestReason); errorValue != nil {
-		connectorRuntime.logger.Warn("connector.request.cancel_failed", slog.String("taskRunID", taskRun.TaskRunID), slog.String("error", errorValue.Error()))
-		return
+	if isTaskControlActiveStatus(taskRun.Status) {
+		if _, errorValue := connectorRuntime.taskRunService.CancelTaskRunWithReason(taskRun.TaskRunID, personID, SupersededRequestReason); errorValue != nil {
+			connectorRuntime.logger.Warn("connector.request.cancel_failed", slog.String("taskRunID", taskRun.TaskRunID), slog.String("error", errorValue.Error()))
+			return
+		}
+		connectorRuntime.resolveOpenTaskWaitsForTaskRun(personID, platform, conversationID, taskRun.TaskRunID)
 	}
-	connectorRuntime.resolveOpenTaskWaitsForTaskRun(personID, platform, conversationID, taskRun.TaskRunID)
-	connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, "task.superseded_by_message", agentruntime.MarshalBody(map[string]string{"sourceReference": sourceReference}))
+	connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventTaskSupersededByMessage, agentruntime.MarshalBody(map[string]string{"sourceReference": sourceReference}))
 }
 
 func (connectorRuntime *ConnectorRuntime) pendingRequestReplySender(sourceReference string, sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error), isDelivery bool) func(context.Context, ReplyTarget, OutboundReply) (string, error) {

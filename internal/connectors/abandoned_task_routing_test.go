@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -36,5 +37,20 @@ func TestAMessageIsNotRoutedIntoARunningTaskNoTurnIsWorkingOn(t *testing.T) {
 	}
 	if len(adapter.sentReplies) != 1 || adapter.sentReplies[0].message != "새 작업으로 처리했습니다." {
 		t.Fatalf("expected the requester to be answered, got %+v", adapter.sentReplies)
+	}
+}
+
+func TestASupersededRunReclaimedBeforeTheCancelStillSaysItWasSuperseded(t *testing.T) {
+	connectorRuntime, _, _ := newStubbedTestConnectorRuntime(t)
+	reclaimedTaskRun := seedAbandonedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{ConversationID: "direct-1"}, "대체된 요청")
+	connectorRuntime.taskRunService.AppendTaskEvent(reclaimedTaskRun.TaskRunID, agentcontract.TaskEventAgentTaskSource, agentruntime.MarshalBody(map[string]string{"sourceReference": "message-replaced"}))
+	if _, isInterrupted := connectorRuntime.taskRunService.InterruptInactiveTaskRun(reclaimedTaskRun.TaskRunID, agentcontract.TaskInterruptReasonUnownedExecution); !isInterrupted {
+		t.Fatal("expected the unowned run to be reclaimed")
+	}
+
+	connectorRuntime.cancelPendingSourceTask("person-1", "test", "direct-1", "message-replaced")
+
+	if !connectorTaskEventsContain(connectorRuntime, reclaimedTaskRun.TaskRunID, agentcontract.TaskEventTaskSupersededByMessage, "message-replaced") {
+		t.Fatal("the ledger has to keep the fact that the requester replaced this run")
 	}
 }

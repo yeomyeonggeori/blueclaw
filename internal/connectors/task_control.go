@@ -143,7 +143,7 @@ func (connectorRuntime *ConnectorRuntime) interruptInactiveRuntimeTaskIfNeeded(t
 	if connectorRuntime.taskRunService.IsTaskRunActuallyRunning(taskRun) {
 		return false
 	}
-	_, isInterrupted := connectorRuntime.taskRunService.InterruptInactiveTaskRun(taskRun.TaskRunID, "runtime no longer owns this execution")
+	_, isInterrupted := connectorRuntime.taskRunService.InterruptInactiveTaskRun(taskRun.TaskRunID, agentcontract.TaskInterruptReasonUnownedExecution)
 	return isInterrupted
 }
 
