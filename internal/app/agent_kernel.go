@@ -43,7 +43,7 @@ func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, agentHarne
 	capabilityClient := newCapabilityClient(runtimeConfiguration)
 	capabilityRegistry := agentruntime.NewCapabilityRegistry(capabilityClient, capabilityToolDescriptors(runtimeConfiguration.Capabilities.ToolDescriptors))
 	startupInstructions := loadAgentInstructions(runtimeConfiguration, capabilityRegistry)
-	logSkillsMissingTheirTools(logger, startupInstructions.UnavailableSkills)
+	logSkillsThisHostCannotSatisfy(logger, startupInstructions.UnavailableSkills)
 	logRejectedPersonaDocuments(logger, startupInstructions.RejectedDocuments)
 	taskTierLanguageModels, taskModelsError := resolveTaskTierLanguageModelProviders(runtimeConfiguration, logger)
 	intakeLanguageModel, intakeModelError := resolveIntakeLanguageModelProvider(runtimeConfiguration, logger)

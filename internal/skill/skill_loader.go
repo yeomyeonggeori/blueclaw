@@ -23,7 +23,7 @@ func ParseDocument(document string) (SkillBundle, error) {
 	if strings.TrimSpace(metadata.Description) == "" {
 		metadata.Description = firstMarkdownParagraph(instruction)
 	}
-	return SkillBundle{Name: metadata.Name, Description: metadata.Description, ToolReferences: metadata.ToolReferences, RequiredEnvironmentVariables: metadata.RequiredEnvironmentVariables, Instruction: strings.TrimSpace(instruction)}, nil
+	return SkillBundle{Name: metadata.Name, Description: metadata.Description, ToolReferences: metadata.ToolReferences, RequiredEnvironmentVariables: metadata.RequiredEnvironmentVariables, RequiredAnyFilePaths: metadata.RequiredAnyFilePaths, Instruction: strings.TrimSpace(instruction)}, nil
 }
 
 func (skillLoader SkillLoader) LoadSkillBundle(directoryPath string) (SkillBundle, error) {
@@ -46,6 +46,7 @@ func (skillLoader SkillLoader) LoadSkillBundle(directoryPath string) (SkillBundl
 		Description:                  metadata.Description,
 		ToolReferences:               metadata.ToolReferences,
 		RequiredEnvironmentVariables: metadata.RequiredEnvironmentVariables,
+		RequiredAnyFilePaths:         metadata.RequiredAnyFilePaths,
 		Instruction:                  strings.TrimSpace(instruction),
 		DirectoryPath:                directoryPath,
 	}, nil
@@ -56,6 +57,7 @@ type skillMetadata struct {
 	Description                  string
 	ToolReferences               []ToolReference
 	RequiredEnvironmentVariables []string
+	RequiredAnyFilePaths         []string
 }
 
 func parseSkillDocument(document string) (skillMetadata, string) {
@@ -101,6 +103,7 @@ func parseSkillFrontmatter(frontmatter string) skillMetadata {
 	}
 	metadata.ToolReferences = uniqueTrimmedSkillValues(metadata.ToolReferences)
 	metadata.RequiredEnvironmentVariables = uniqueTrimmedSkillValues(metadata.RequiredEnvironmentVariables)
+	metadata.RequiredAnyFilePaths = uniqueTrimmedSkillValues(metadata.RequiredAnyFilePaths)
 	return metadata
 }
 
@@ -109,6 +112,11 @@ func parseSkillFrontmatter(frontmatter string) skillMetadata {
 // has to conform to the specification says which tools it needs here.
 const vendorToolReferencesKey = "kim.intern.tool-references"
 const vendorRequiredEnvironmentKey = "kim.intern.requires-environment"
+
+// A font, a template, a binary blob: something the machine either has or does
+// not, that no operator is going to be told to set. The skill names every path
+// that would do, and one of them being there is enough.
+const vendorRequiredAnyFileKey = "kim.intern.requires-any-file"
 
 func setSkillMetadataValue(metadata skillMetadata, key string, value string) skillMetadata {
 	switch key {
@@ -120,6 +128,8 @@ func setSkillMetadataValue(metadata skillMetadata, key string, value string) ski
 		metadata.ToolReferences = append(metadata.ToolReferences, parseSkillToolReferences(value)...)
 	case vendorRequiredEnvironmentKey:
 		metadata.RequiredEnvironmentVariables = append(metadata.RequiredEnvironmentVariables, parseSkillSpaceSeparatedList(value)...)
+	case vendorRequiredAnyFileKey:
+		metadata.RequiredAnyFilePaths = append(metadata.RequiredAnyFilePaths, parseSkillSpaceSeparatedList(value)...)
 	}
 	return metadata
 }
@@ -131,6 +141,8 @@ func appendSkillFrontmatterListItem(metadata skillMetadata, section string, valu
 		metadata.ToolReferences = append(metadata.ToolReferences, ToolReference(cleanedValue))
 	case vendorRequiredEnvironmentKey:
 		metadata.RequiredEnvironmentVariables = append(metadata.RequiredEnvironmentVariables, cleanedValue)
+	case vendorRequiredAnyFileKey:
+		metadata.RequiredAnyFilePaths = append(metadata.RequiredAnyFilePaths, cleanedValue)
 	}
 	return metadata
 }

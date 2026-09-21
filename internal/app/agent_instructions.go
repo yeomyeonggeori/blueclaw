@@ -17,18 +17,24 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
-// A skill states the tools it needs. One naming a tool this runtime was never
-// offered cannot do what it says, and the agent would otherwise find out
-// mid-task, so it is said once at start and carried in the skill inventory.
-func logSkillsMissingTheirTools(logger *slog.Logger, unavailableSkills []skill.UnavailableSkill) {
+// A skill states what it needs: the tools it calls, the environment it is given,
+// the file it opens. One this host cannot satisfy cannot do what it says, and
+// the agent would otherwise find out mid-task, so every reason is said once at
+// start and carried in the skill inventory.
+func logSkillsThisHostCannotSatisfy(logger *slog.Logger, unavailableSkills []skill.UnavailableSkill) {
 	if logger == nil {
 		return
 	}
 	for _, unavailableSkill := range unavailableSkills {
-		if len(unavailableSkill.MissingToolNames) == 0 {
-			continue
+		if len(unavailableSkill.MissingToolNames) > 0 {
+			logger.Error("skill.tools.missing", "skill", unavailableSkill.Name, "missingTools", strings.Join(unavailableSkill.MissingToolNames, ", "), "path", unavailableSkill.Path)
 		}
-		logger.Error("skill.tools.missing", "skill", unavailableSkill.Name, "missingTools", strings.Join(unavailableSkill.MissingToolNames, ", "), "path", unavailableSkill.Path)
+		if len(unavailableSkill.MissingEnvironmentVariables) > 0 {
+			logger.Error("skill.environment.missing", "skill", unavailableSkill.Name, "missingEnvironment", strings.Join(unavailableSkill.MissingEnvironmentVariables, ", "), "path", unavailableSkill.Path)
+		}
+		if len(unavailableSkill.MissingAnyFilePaths) > 0 {
+			logger.Error("skill.file.missing", "skill", unavailableSkill.Name, "anyOfTheseWouldHaveDone", strings.Join(unavailableSkill.MissingAnyFilePaths, ", "), "path", unavailableSkill.Path)
+		}
 	}
 }
 
@@ -42,9 +48,9 @@ func loadAgentInstructionPrompt(runtimeConfiguration config.RuntimeConfiguration
 	return loadAgentInstructionBundle(runtimeConfiguration, capabilityRegistry).Prompt
 }
 
-// A skill naming an environment variable this host has not set is left out of
-// the bundle: it is in the prompt only where it can run. The inventory carries
-// it separately with the variable it lacks, so the omission is visible.
+// A skill this host cannot satisfy is left out of the bundle: it is in the
+// prompt only where it can run. The inventory carries it separately with what
+// it lacks, so the omission is visible.
 type agentInstructions struct {
 	Bundle            agentcontract.InstructionBundle
 	UnavailableSkills []skill.UnavailableSkill
@@ -232,13 +238,15 @@ func readSkillInstructions(rootPath string, bundledSkillsPath string, offeredToo
 			}
 			missingVariableNames := skillBundle.MissingEnvironmentVariables()
 			missingToolNames := skillBundle.MissingToolNames(offeredToolNames)
-			if len(missingVariableNames) > 0 || len(missingToolNames) > 0 {
+			missingAnyFilePaths := skillBundle.MissingAnyFilePaths()
+			if len(missingVariableNames) > 0 || len(missingToolNames) > 0 || len(missingAnyFilePaths) > 0 {
 				discovered.Unavailable = append(discovered.Unavailable, skill.UnavailableSkill{
 					Name:                        skillBundle.Name,
 					Description:                 skillBundle.Description,
 					Path:                        documentPath,
 					MissingEnvironmentVariables: missingVariableNames,
 					MissingToolNames:            missingToolNames,
+					MissingAnyFilePaths:         missingAnyFilePaths,
 				})
 				continue
 			}

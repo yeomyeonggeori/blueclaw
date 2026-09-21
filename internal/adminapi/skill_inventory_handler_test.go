@@ -3,6 +3,7 @@ package adminapi
 import (
 	"encoding/json"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/skill"
@@ -71,5 +72,32 @@ func TestSkillInventoryNamesWhatAnUnavailableSkillLacks(t *testing.T) {
 	missingVariableNames := document.UnavailableSkills[0].MissingEnvironmentVariables
 	if len(missingVariableNames) != 1 || missingVariableNames[0] != "INTERNKIM_TOKEN" {
 		t.Fatalf("expected the variable it lacks to be named, got %v", missingVariableNames)
+	}
+}
+
+// The same for a file: a host missing the font its PDF skill embeds is told
+// which paths would have done, on the surface an operator opens rather than in
+// the struct.
+func TestSkillInventoryNamesTheFilesThatWouldHaveDone(t *testing.T) {
+	handler := SkillInventoryHandler{InventoryLoader: func() SkillInventory {
+		return SkillInventory{Unavailable: []skill.UnavailableSkill{{
+			Name:                "pdf",
+			Path:                "/opt/internkim/skills/pdf/SKILL.md",
+			MissingAnyFilePaths: []string{"/usr/share/fonts/truetype/nanum/NanumGothic.ttf", "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"},
+		}}}
+	}}
+
+	recorder := httptest.NewRecorder()
+	handler.HandleListSkills(recorder, httptest.NewRequest("GET", "/admin/api/skills", nil))
+
+	if !strings.Contains(recorder.Body.String(), `"missingAnyFilePaths":["/usr/share/fonts/truetype/nanum/NanumGothic.ttf"`) {
+		t.Fatalf("the reason must reach the wire, not only the struct: %s", recorder.Body.String())
+	}
+	document := SkillInventoryDocument{}
+	if errorValue := json.Unmarshal(recorder.Body.Bytes(), &document); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(document.UnavailableSkills) != 1 || len(document.UnavailableSkills[0].MissingAnyFilePaths) != 2 {
+		t.Fatalf("expected both paths that would have done, got %+v", document.UnavailableSkills)
 	}
 }
