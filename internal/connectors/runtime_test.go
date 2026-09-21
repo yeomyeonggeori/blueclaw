@@ -4192,8 +4192,18 @@ func testConnectorAgentKernel(taskRunService *task.TaskRunService, languageModel
 }
 
 // Connector tests only need a task run the runtime can react to, so they seed
-// one the way the task service does instead of running a whole agent turn.
+// one the way the task service does instead of running a whole agent turn. The
+// registered turn stands in for the turn that would be working on it; without
+// one the runtime is right to treat the run as abandoned.
 func seedRunningTaskRun(t *testing.T, taskRunService *task.TaskRunService, origin task.TaskRunOrigin, prompt string) task.TaskRun {
+	t.Helper()
+
+	runningTaskRun := seedAbandonedRunningTaskRun(t, taskRunService, origin, prompt)
+	taskRunService.RegisterTaskRunCancel(runningTaskRun.TaskRunID, func() {})
+	return runningTaskRun
+}
+
+func seedAbandonedRunningTaskRun(t *testing.T, taskRunService *task.TaskRunService, origin task.TaskRunOrigin, prompt string) task.TaskRun {
 	t.Helper()
 
 	taskRun := taskRunService.CreateTaskRunWithOrigin("person-1", origin, prompt)
