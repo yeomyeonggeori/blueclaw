@@ -26,7 +26,7 @@ func (input terminalRunToolInput) commandRequest() security.CommandRequest {
 func (toolCatalogBuilder *ToolCatalogBuilder) registerTerminalTools(toolRegistry *toolcontract.ToolSet, handlerContext toolHandlerContext) {
 	toolcontract.RegisterToolFunction(toolRegistry, toolcontract.ToolFunction[terminalRunToolInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
-			Name:        "shell",
+			Name:        "bash",
 			Description: "Run one command inside the requester workspace.",
 			RecoveryCard: toolcontract.ToolRecoveryCard{
 				Does:       "Runs workspace commands, build scripts, render checks, or tests.",
@@ -46,7 +46,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerTerminalTools(toolRegistry
 
 func (toolCatalogBuilder *ToolCatalogBuilder) runTerminalRunTool(toolContext context.Context, input terminalRunToolInput, handlerContext toolHandlerContext) (toolcontract.ToolResult, error) {
 	if errorValue := validateTerminalRunInput(input); errorValue != nil {
-		result := toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "shell", errorValue.Error())
+		result := toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "bash", errorValue.Error())
 		return normalizedTerminalRunFailure(result), nil
 	}
 	result, errorValue := toolCatalogBuilder.runTerminalTool(toolContext, input.commandRequest(), handlerContext)
@@ -55,7 +55,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) runTerminalRunTool(toolContext con
 
 func (toolCatalogBuilder *ToolCatalogBuilder) runTerminalTool(toolContext context.Context, input security.CommandRequest, handlerContext toolHandlerContext) (toolcontract.ToolResult, error) {
 	if toolCatalogBuilder.terminalService == nil {
-		return toolcontract.ToolFailureResult(toolcontract.FailureDependencyUnavailable, toolcontract.FailureCodes.Unavailable, "shell", "terminal service is unavailable"), nil
+		return toolcontract.ToolFailureResult(toolcontract.FailureDependencyUnavailable, toolcontract.FailureCodes.Unavailable, "bash", "terminal service is unavailable"), nil
 	}
 	requesterHomePath := toolCatalogBuilder.requesterHomePath(handlerContext.request)
 	taskRunID := toolcontract.TaskRunIDFromContext(toolContext)
@@ -91,7 +91,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) runTerminalTool(toolContext contex
 		}
 		document := terminalCommandResult(commandResult, false)
 		content = MarshalBody(document)
-		return toolcontract.ToolFailureWithOutput(toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "shell", content, json.RawMessage(content)), nil
+		return toolcontract.ToolFailureWithOutput(toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "bash", content, json.RawMessage(content)), nil
 	}
 	document := terminalCommandResult(commandResult, true)
 	content = MarshalBody(document)

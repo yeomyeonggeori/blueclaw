@@ -109,7 +109,7 @@ func TestTheKernelRunsACatalogToolAsTheRequesterUnprivilegedUser(t *testing.T) {
 	toolCatalogBuilder := agentruntime.NewToolCatalogBuilder()
 	toolCatalogBuilder.UseWorkspaceRootPath(workspaceRootPath)
 	toolCatalogBuilder.UseTerminalService(terminalService)
-	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{"default": {toolcontract.ShellToolName}}, nil)
+	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{"default": {toolcontract.BashToolName}}, nil)
 	toolSet := toolCatalogBuilder.BuildToolSet(agentruntime.ToolCatalogRequest{
 		RequesterPersonID: requesterPersonID,
 		ProfileName:       "default",
@@ -122,7 +122,7 @@ func TestTheKernelRunsACatalogToolAsTheRequesterUnprivilegedUser(t *testing.T) {
 	}
 
 	toolResult, errorValue := toolSet.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: toolcontract.ShellToolName,
+		ToolName: toolcontract.BashToolName,
 		Input:    json.RawMessage(`{"command":"id -un && id -u"}`),
 	})
 	if errorValue != nil {

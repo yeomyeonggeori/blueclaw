@@ -105,7 +105,7 @@ func TestTaskRunHandlerUsesModelPathPresetWithoutIntakeCall(t *testing.T) {
 	if len(languageModel.schemaNames) != 1 || languageModel.schemaNames[0] != "bluecollar_agent_turn_action" {
 		t.Fatalf("expected only agent action schema, got %v", languageModel.schemaNames)
 	}
-	if languageModel.schemaDocumentContains("shell") {
+	if languageModel.schemaDocumentContains("bash") {
 		t.Fatalf("expected diagnostic profile without tool schemas, got %+v", languageModel.schemaDocuments)
 	}
 	var responseDocument struct {
@@ -125,7 +125,7 @@ func TestTaskRunHandlerUsesModelPathPresetWithoutIntakeCall(t *testing.T) {
 func TestTaskRunHandlerRejectsTaskDecisionPresetOverrides(t *testing.T) {
 	overrides := []string{
 		`"profileName":"default"`,
-		`"pinnedToolNames":["shell"]`,
+		`"pinnedToolNames":["bash"]`,
 		`"pinnedSkillNames":["mail"]`,
 	}
 	for _, override := range overrides {

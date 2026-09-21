@@ -289,7 +289,7 @@ Research helper body.
 func TestDeriveAllowedToolNamesByProfileKeepsDomainCapabilitiesOutOfBaseline(t *testing.T) {
 	runtimeConfiguration := config.RuntimeConfiguration{}
 	runtimeConfiguration.AgentProfiles = []config.AgentProfileConfiguration{
-		{Name: "default", AllowedToolNames: []string{"shell"}},
+		{Name: "default", AllowedToolNames: []string{"bash"}},
 	}
 	runtimeConfiguration.Capabilities.ToolDescriptors = []config.CapabilityToolDescriptor{{Name: "site_serve"}}
 
@@ -299,7 +299,7 @@ func TestDeriveAllowedToolNamesByProfileKeepsDomainCapabilitiesOutOfBaseline(t *
 	if containsString(defaultProfileToolNames, "site_serve") {
 		t.Fatalf("expected domain capability to stay out of profile baseline, got %+v", defaultProfileToolNames)
 	}
-	for _, expectedToolName := range []string{"shell", "file_deliver", "skill_search", "file_read", "file_write", "file_edit", "file_preview", "image_read"} {
+	for _, expectedToolName := range []string{"bash", "file_deliver", "skill_search", "file_read", "write", "edit", "file_preview", "image_read"} {
 		if !containsString(defaultProfileToolNames, expectedToolName) {
 			t.Fatalf("expected baseline tool %q, got %+v", expectedToolName, defaultProfileToolNames)
 		}

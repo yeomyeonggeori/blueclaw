@@ -193,11 +193,11 @@ var (
 
 var kernelToolDescriptorSpecs = []kernelToolDescriptorSpec{
 	{
-		Name:              toolcontract.ShellToolName,
+		Name:              toolcontract.BashToolName,
 		Namespace:         "terminal",
 		PrivacyClass:      "workspace",
 		Visibility:        toolcontract.ToolVisibilityModel,
-		PolicyResource:    "tool:shell",
+		PolicyResource:    "tool:bash",
 		SideEffectClass:   toolcontract.ToolSideEffectWorkspaceWrite,
 		CompletionMode:    toolcontract.ToolCompletionObservation,
 		Idempotency:       toolcontract.ToolIdempotencyNone,
@@ -275,11 +275,11 @@ var kernelToolDescriptorSpecs = []kernelToolDescriptorSpec{
 		},
 	},
 	{
-		Name:              toolcontract.FileWriteToolName,
+		Name:              toolcontract.WriteToolName,
 		Namespace:         "file",
 		PrivacyClass:      "workspace",
 		Visibility:        toolcontract.ToolVisibilityModel,
-		PolicyResource:    "tool:file_write",
+		PolicyResource:    "tool:write",
 		SideEffectClass:   toolcontract.ToolSideEffectWorkspaceWrite,
 		CompletionMode:    toolcontract.ToolCompletionObservation,
 		Idempotency:       toolcontract.ToolIdempotencyNone,
@@ -326,11 +326,11 @@ var kernelToolDescriptorSpecs = []kernelToolDescriptorSpec{
 		},
 	},
 	{
-		Name:              toolcontract.FileEditToolName,
+		Name:              toolcontract.EditToolName,
 		Namespace:         "file",
 		PrivacyClass:      "workspace",
 		Visibility:        toolcontract.ToolVisibilityModel,
-		PolicyResource:    "tool:file_edit",
+		PolicyResource:    "tool:edit",
 		SideEffectClass:   toolcontract.ToolSideEffectWorkspaceWrite,
 		CompletionMode:    toolcontract.ToolCompletionObservation,
 		Idempotency:       toolcontract.ToolIdempotencyNone,
@@ -383,17 +383,17 @@ var kernelToolDescriptorSpecs = []kernelToolDescriptorSpec{
 		},
 	},
 	{
-		Name:            toolcontract.FindToolsToolName,
+		Name:            toolcontract.EquipToolName,
 		Namespace:       "tools",
 		PrivacyClass:    "workspace",
 		Visibility:      toolcontract.ToolVisibilityModel,
-		PolicyResource:  "tool:find_tools",
+		PolicyResource:  "tool:equip",
 		SideEffectClass: toolcontract.ToolSideEffectRead,
 		CompletionMode:  toolcontract.ToolCompletionNone,
 		Idempotency:     toolcontract.ToolIdempotencyNone,
-		OutputSchema:    findToolsResultSchema,
+		OutputSchema:    equipResultSchema,
 		ResultContract: &toolcontract.ToolResultContract{
-			Schema: findToolsResultSchema,
+			Schema: equipResultSchema,
 		},
 	},
 	{
@@ -537,7 +537,7 @@ func newKernelToolProvider(toolCatalogBuilder *ToolCatalogBuilder, handlerContex
 	toolCatalogBuilder.registerFileTools(handlerToolSet, handlerContext)
 	toolCatalogBuilder.registerSkillSearchTool(handlerToolSet, handlerContext, availableToolSet)
 	toolCatalogBuilder.registerPlanTool(handlerToolSet)
-	toolCatalogBuilder.registerFindToolsTool(handlerToolSet, availableToolSet)
+	toolCatalogBuilder.registerEquipTool(handlerToolSet, availableToolSet)
 	return kernelToolProvider{handlerToolSet: handlerToolSet}
 }
 

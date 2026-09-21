@@ -20,7 +20,7 @@ func TestMorningBriefingScheduledLaunchHasReadOnlyToolCeiling(t *testing.T) {
 			t.Fatalf("expected %s in briefing ceiling %v", requiredTool, ceiling)
 		}
 	}
-	for _, forbiddenTool := range []string{"message_send", "task_update", "persona_update", "schedule_cancel", "shell"} {
+	for _, forbiddenTool := range []string{"message_send", "task_update", "persona_update", "schedule_cancel", "bash"} {
 		if slices.Contains(ceiling, forbiddenTool) {
 			t.Fatalf("forbidden tool %s in briefing ceiling %v", forbiddenTool, ceiling)
 		}

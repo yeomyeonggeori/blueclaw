@@ -25,7 +25,7 @@ name: internkim-api
 description: Drives the company workspace over its public API.
 compatibility: Requires python3 and a personal access token in INTERNKIM_TOKEN.
 metadata:
-  kim.intern.tool-references: "shell"
+  kim.intern.tool-references: "bash"
   kim.intern.requires-environment: "INTERNKIM_TOKEN"
 ---
 Body.

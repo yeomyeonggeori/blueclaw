@@ -7,6 +7,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"testing"
@@ -135,7 +136,7 @@ func TestFileToolsAcceptVirtualHomePathsWithoutLeakingHostPath(t *testing.T) {
 	})
 
 	writeResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "file_write",
+		ToolName: "write",
 		Input: toolcontract.MarshalToolInput(map[string]string{
 			"path":    "projects/deck/presentation.md",
 			"content": "# Deck",
@@ -145,10 +146,10 @@ func TestFileToolsAcceptVirtualHomePathsWithoutLeakingHostPath(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	if writeResult.Failed() {
-		t.Fatalf("expected file_write success, got %s", writeResult.ContentText())
+		t.Fatalf("expected write success, got %s", writeResult.ContentText())
 	}
 	if strings.Contains(writeResult.ContentText(), workspacePath) {
-		t.Fatalf("expected file_write result not to expose host path, got %s", writeResult.ContentText())
+		t.Fatalf("expected write result not to expose host path, got %s", writeResult.ContentText())
 	}
 	expectedWrittenPath := "projects/deck/presentation.md"
 	assertFileResourceEffect(t, writeResult, "file", "created", expectedWrittenPath)
@@ -298,7 +299,7 @@ func TestFileWriteAcceptsPortablePathAndContent(t *testing.T) {
 	})
 
 	writeResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "file_write",
+		ToolName: "write",
 		Input: toolcontract.MarshalToolInput(map[string]any{
 			"path":    "projects/site/index.html",
 			"content": "<html>ready</html>",
@@ -308,7 +309,7 @@ func TestFileWriteAcceptsPortablePathAndContent(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	if writeResult.Failed() {
-		t.Fatalf("expected file_write success, got %s", writeResult.ContentText())
+		t.Fatalf("expected write success, got %s", writeResult.ContentText())
 	}
 	document, errorValue := os.ReadFile(filepath.Join(workspacePath, "private", "people", "person-1", "projects", "site", "index.html"))
 	if errorValue != nil {
@@ -323,18 +324,18 @@ func TestFileWriteDescribesContentAsExactFileBody(t *testing.T) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{ProfileName: "default"})
 
-	toolDefinition, isFound := toolRegistry.ToolDefinition("file_write")
+	toolDefinition, isFound := toolRegistry.ToolDefinition("write")
 	if !isFound {
-		t.Fatal("expected file_write definition")
+		t.Fatal("expected write definition")
 	}
 	if !strings.Contains(toolDefinition.Description, "complete file body") {
-		t.Fatalf("expected file_write description to explain exact file body, got %q", toolDefinition.Description)
+		t.Fatalf("expected write description to explain exact file body, got %q", toolDefinition.Description)
 	}
 	if !strings.Contains(string(toolDefinition.InputSchema), "real line breaks") {
-		t.Fatalf("expected file_write schema to explain multiline content, got %s", string(toolDefinition.InputSchema))
+		t.Fatalf("expected write schema to explain multiline content, got %s", string(toolDefinition.InputSchema))
 	}
 	if !strings.Contains(toolDefinition.RecoveryCard.AvoidWhen, "escaped newline sequences") {
-		t.Fatalf("expected file_write recovery card to warn about escaped newlines, got %+v", toolDefinition.RecoveryCard)
+		t.Fatalf("expected write recovery card to warn about escaped newlines, got %+v", toolDefinition.RecoveryCard)
 	}
 }
 
@@ -886,7 +887,7 @@ func TestFileEditReplacesSingleExactMatch(t *testing.T) {
 	})
 
 	editResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "file_edit",
+		ToolName: "edit",
 		Input: toolcontract.MarshalToolInput(map[string]any{
 			"edits": []map[string]string{
 				{"path": "tmp/source.ts", "oldText": "Old", "newText": "New"},
@@ -897,7 +898,7 @@ func TestFileEditReplacesSingleExactMatch(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	if editResult.Failed() {
-		t.Fatalf("expected file_edit success, got %s", editResult.ContentText())
+		t.Fatalf("expected edit success, got %s", editResult.ContentText())
 	}
 	document, errorValue := os.ReadFile(filePath)
 	if errorValue != nil {
@@ -923,7 +924,7 @@ func TestFileEditRejectsAmbiguousExactMatch(t *testing.T) {
 	})
 
 	editResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "file_edit",
+		ToolName: "edit",
 		Input: toolcontract.MarshalToolInput(map[string]any{
 			"edits": []map[string]string{
 				{"path": "tmp/source.ts", "oldText": "same", "newText": "changed"},
@@ -934,9 +935,9 @@ func TestFileEditRejectsAmbiguousExactMatch(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	if !editResult.Failed() {
-		t.Fatalf("expected ambiguous file_edit to fail, got %s", editResult.ContentText())
+		t.Fatalf("expected ambiguous edit to fail, got %s", editResult.ContentText())
 	}
-	if editResult.Failure.Stage != "file_edit" || !strings.Contains(editResult.ContentText(), `"matchCount":2`) {
+	if editResult.Failure.Stage != "edit" || !strings.Contains(editResult.ContentText(), `"matchCount":2`) {
 		t.Fatalf("expected match count failure, got %+v %s", editResult.Failure, editResult.ContentText())
 	}
 	document, errorValue := os.ReadFile(filePath)
@@ -962,7 +963,7 @@ func TestFilePatchAppliesMultipleExactEdits(t *testing.T) {
 	})
 
 	patchResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "file_edit",
+		ToolName: "edit",
 		Input: toolcontract.MarshalToolInput(map[string]any{
 			"edits": []map[string]string{
 				{"path": "tmp/one.ts", "oldText": "alpha", "newText": "ALPHA"},
@@ -974,7 +975,7 @@ func TestFilePatchAppliesMultipleExactEdits(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	if patchResult.Failed() {
-		t.Fatalf("expected file_edit success, got %s", patchResult.ContentText())
+		t.Fatalf("expected edit success, got %s", patchResult.ContentText())
 	}
 	assertTestFileContent(t, firstPath, "ALPHA")
 	assertTestFileContent(t, secondPath, "BETA")
@@ -994,7 +995,7 @@ func TestFilePatchValidationIsAllOrNothing(t *testing.T) {
 	})
 
 	patchResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "file_edit",
+		ToolName: "edit",
 		Input: toolcontract.MarshalToolInput(map[string]any{
 			"edits": []map[string]string{
 				{"path": "tmp/one.ts", "oldText": "alpha", "newText": "ALPHA"},
@@ -1006,7 +1007,7 @@ func TestFilePatchValidationIsAllOrNothing(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	if !patchResult.Failed() {
-		t.Fatalf("expected file_edit failure, got %s", patchResult.ContentText())
+		t.Fatalf("expected edit failure, got %s", patchResult.ContentText())
 	}
 	if !strings.Contains(patchResult.ContentText(), `"editIndex":1`) || !strings.Contains(patchResult.ContentText(), `"matchCount":0`) {
 		t.Fatalf("expected failing edit metadata, got %s", patchResult.ContentText())
@@ -1044,7 +1045,7 @@ func TestFileWriteFailsWithAccessDeniedWhenPOSIXDeniesCircleDirectory(t *testing
 	})
 
 	writeResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "file_write",
+		ToolName: "write",
 		Input: toolcontract.MarshalToolInput(map[string]string{
 			"path":    filepath.Join(financeDirectoryPath, "report.md"),
 			"content": "changed",
@@ -1166,7 +1167,7 @@ func TestFileWriteAllowsCirclePathWhenPOSIXAllows(t *testing.T) {
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "file_write",
+		ToolName: "write",
 		Input: toolcontract.MarshalToolInput(map[string]string{
 			"path":    filepath.Join(workspacePath, "circles", "finance", "report.md"),
 			"content": "finance",
@@ -1195,7 +1196,7 @@ func TestFileWriteDefaultsToPrivateScopeForDirectMessage(t *testing.T) {
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "file_write",
+		ToolName: "write",
 		Input: toolcontract.MarshalToolInput(map[string]string{
 			"path":    "notes.md",
 			"content": "private",
@@ -1233,7 +1234,7 @@ func TestFileWriteDefaultsToCircleScopeForCircleChannel(t *testing.T) {
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "file_write",
+		ToolName: "write",
 		Input: toolcontract.MarshalToolInput(map[string]string{
 			"path":    "report.md",
 			"content": "finance",
@@ -1268,7 +1269,7 @@ func TestFileWriteDefaultsToMemberScopeForGeneralChannel(t *testing.T) {
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "file_write",
+		ToolName: "write",
 		Input: toolcontract.MarshalToolInput(map[string]string{
 			"path":    "status.md",
 			"content": "member",
@@ -1366,7 +1367,7 @@ func TestFileDeliverCanDeliverDraftOutput(t *testing.T) {
 	})
 
 	writeResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "file_write",
+		ToolName: "write",
 		Input: toolcontract.MarshalToolInput(map[string]string{
 			"path":    "tmp/deck/build/deck.pptx",
 			"content": "pptx",
@@ -1376,7 +1377,7 @@ func TestFileDeliverCanDeliverDraftOutput(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	if writeResult.Failed() {
-		t.Fatalf("expected file_write success, got %s", writeResult.ContentText())
+		t.Fatalf("expected write success, got %s", writeResult.ContentText())
 	}
 	deliverResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
 		ToolName: toolcontract.FileDeliverToolName,
@@ -1413,7 +1414,7 @@ func TestFileDeliverResolvesSamePathSpellingsAsTerminalWrite(t *testing.T) {
 	})
 
 	runResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "shell",
+		ToolName: "bash",
 		Input: toolcontract.MarshalToolInput(map[string]any{
 			"command": "mkdir -p ~/documents && printf docx-bytes > ~/documents/report.docx",
 		}),
@@ -1461,7 +1462,7 @@ func TestFileDeliverNotFoundIncludesCandidateFiles(t *testing.T) {
 	})
 
 	runResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "shell",
+		ToolName: "bash",
 		Input: toolcontract.MarshalToolInput(map[string]any{
 			"command": "mkdir -p ~/documents && printf docx-bytes > ~/documents/'Han River Ops 2026 Q2 Operations Review.docx'",
 		}),
@@ -1504,7 +1505,7 @@ func TestFileDeliverNotFoundIncludesCandidateFiles(t *testing.T) {
 func TestFileWriteAllowsManagedSitePackageManifest(t *testing.T) {
 	workspacePath := t.TempDir()
 	toolCatalogBuilder := newFileToolTestCatalogBuilder(workspacePath)
-	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"file_write"})
+	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"write"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:       "default",
 		RequesterPersonID: "person-1",
@@ -1512,7 +1513,7 @@ func TestFileWriteAllowsManagedSitePackageManifest(t *testing.T) {
 	})
 
 	managedResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "file_write",
+		ToolName: "write",
 		Input: toolcontract.MarshalToolInput(map[string]string{
 			"path":    "~/sites/site-1/draft/app/package.json",
 			"content": `{"project":"user-owned package manifest"}`,
@@ -1526,7 +1527,7 @@ func TestFileWriteAllowsManagedSitePackageManifest(t *testing.T) {
 	}
 
 	tmpResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "file_write",
+		ToolName: "write",
 		Input: toolcontract.MarshalToolInput(map[string]string{
 			"path":    "tmp/demo/package.json",
 			"content": `{"project":"freeform package file"}`,
@@ -1557,7 +1558,7 @@ func TestFileWriteThroughWorkspaceActorTreatsContentAsData(t *testing.T) {
 
 	content := "hello\n$(touch should-not-exist)\n"
 	writeResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "file_write",
+		ToolName: "write",
 		Input: toolcontract.MarshalToolInput(map[string]any{
 			"path":    "tmp/deck/input.txt",
 			"content": content,
@@ -1567,7 +1568,7 @@ func TestFileWriteThroughWorkspaceActorTreatsContentAsData(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	if writeResult.Failed() {
-		t.Fatalf("expected file_write success, got %s", writeResult.ContentText())
+		t.Fatalf("expected write success, got %s", writeResult.ContentText())
 	}
 
 	taskTmpPath := filepath.Join(workspacePath, "private", "people", "person-1", "tmp")
@@ -1579,7 +1580,7 @@ func TestFileWriteThroughWorkspaceActorTreatsContentAsData(t *testing.T) {
 		t.Fatalf("expected exact content, got %q", string(document))
 	}
 	if _, errorValue := os.Stat(filepath.Join(taskTmpPath, "should-not-exist")); !os.IsNotExist(errorValue) {
-		t.Fatalf("file_write content must not be executed as shell, stat error %v", errorValue)
+		t.Fatalf("write content must not be executed as shell, stat error %v", errorValue)
 	}
 	fileInformation, errorValue := os.Stat(filepath.Join(taskTmpPath, "deck", "input.txt"))
 	if errorValue != nil {
@@ -1607,7 +1608,7 @@ func TestFileWriteRespectsRequesterUmaskLikeTerminalRun(t *testing.T) {
 	})
 
 	writeResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "file_write",
+		ToolName: "write",
 		Input: toolcontract.MarshalToolInput(map[string]string{
 			"path":    "tmp/deck/input.txt",
 			"content": "ok",
@@ -1617,7 +1618,7 @@ func TestFileWriteRespectsRequesterUmaskLikeTerminalRun(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	if writeResult.Failed() {
-		t.Fatalf("expected file_write success, got %s", writeResult.ContentText())
+		t.Fatalf("expected write success, got %s", writeResult.ContentText())
 	}
 
 	deckDirectoryPath := filepath.Join(workspacePath, "private", "people", "person-1", "tmp", "deck")
@@ -1651,7 +1652,7 @@ func TestFileWriteAndTerminalRunShareRequesterWorkspaceActorView(t *testing.T) {
 	})
 
 	writeResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "file_write",
+		ToolName: "write",
 		Input: toolcontract.MarshalToolInput(map[string]string{
 			"path":    "tmp/deck/input.txt",
 			"content": "same workspace",
@@ -1661,11 +1662,11 @@ func TestFileWriteAndTerminalRunShareRequesterWorkspaceActorView(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	if writeResult.Failed() {
-		t.Fatalf("expected file_write success, got %s", writeResult.ContentText())
+		t.Fatalf("expected write success, got %s", writeResult.ContentText())
 	}
 
 	runResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "shell",
+		ToolName: "bash",
 		Input: toolcontract.MarshalToolInput(map[string]any{
 			"workingDirectoryPath": "tmp/deck",
 			"command":              "mkdir -p build && cat input.txt > build/output.txt",
@@ -1680,7 +1681,7 @@ func TestFileWriteAndTerminalRunShareRequesterWorkspaceActorView(t *testing.T) {
 	outputPath := filepath.Join(workspacePath, "private", "people", "person-1", "tmp", "deck", "build", "output.txt")
 	document, errorValue := os.ReadFile(outputPath)
 	if errorValue != nil || string(document) != "same workspace" {
-		t.Fatalf("expected terminal to read file_write output, got %q and %v", string(document), errorValue)
+		t.Fatalf("expected terminal to read write output, got %q and %v", string(document), errorValue)
 	}
 }
 
@@ -1699,7 +1700,7 @@ func TestFileWriteRejectsLegacyMode(t *testing.T) {
 	toolContext := toolcontract.WithTaskRunID(context.Background(), "run-mode-regression")
 
 	writeResult, errorValue := toolRegistry.Invoke(toolContext, toolcontract.ToolInvocation{
-		ToolName: "file_write",
+		ToolName: "write",
 		Input: toolcontract.MarshalToolInput(map[string]any{
 			"path":    "tmp/docx-guide/document.json",
 			"content": `{"title":"readable"}`,
@@ -1720,7 +1721,7 @@ func TestFileWriteWithoutRequesterIdentityDoesNotFallbackToServiceUser(t *testin
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{ProfileName: "default"})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "file_write",
+		ToolName: "write",
 		Input: toolcontract.MarshalToolInput(map[string]string{
 			"path":    "tmp/deck/input.txt",
 			"content": "no service fallback",
@@ -1733,7 +1734,7 @@ func TestFileWriteWithoutRequesterIdentityDoesNotFallbackToServiceUser(t *testin
 		t.Fatalf("expected actor identity failure, got %+v", result)
 	}
 	if _, errorValue := os.Stat(filepath.Join(workspacePath, "tmp", "deck", "input.txt")); !os.IsNotExist(errorValue) {
-		t.Fatalf("file_write must not fall back to service-user workspace writes, stat error %v", errorValue)
+		t.Fatalf("write must not fall back to service-user workspace writes, stat error %v", errorValue)
 	}
 }
 
@@ -1747,7 +1748,7 @@ func TestFileWriteRejectsBuiltInSkillPaths(t *testing.T) {
 		"/workspace/.agents/skills/agent-browser/SKILL.md",
 	} {
 		result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-			ToolName: "file_write",
+			ToolName: "write",
 			Input: toolcontract.MarshalToolInput(map[string]string{
 				"path":    path,
 				"content": "no",
@@ -1757,7 +1758,7 @@ func TestFileWriteRejectsBuiltInSkillPaths(t *testing.T) {
 			t.Fatal(errorValue)
 		}
 		if !result.Failed() {
-			t.Fatalf("expected file_write to reject immutable skill path %q", path)
+			t.Fatalf("expected write to reject immutable skill path %q", path)
 		}
 	}
 }
@@ -1838,7 +1839,7 @@ func TestFileEditMatchFailureGuidanceSuggestsClosestLines(t *testing.T) {
 	if !strings.Contains(guidance, "closest current lines") || !strings.Contains(guidance, "export const Button") {
 		t.Fatalf("expected closest-line suggestion, got %q", guidance)
 	}
-	if strings.Contains(guidance, "file_write") {
+	if regexp.MustCompile(`\b` + toolcontract.WriteToolName + `\b`).MatchString(guidance) {
 		t.Fatalf("edit-failure guidance must not nudge a full rewrite, got %q", guidance)
 	}
 }

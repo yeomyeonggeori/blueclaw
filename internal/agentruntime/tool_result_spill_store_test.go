@@ -78,7 +78,7 @@ func TestASpillIsWrittenAsThePersonWhoAskedForTheWork(t *testing.T) {
 	spillRef, errorValue := store.SaveToolResultSpill(context.Background(), ToolResultSpill{
 		TaskRunID:         taskRun.TaskRunID,
 		ObservationID:     "obs-4",
-		ToolName:          "shell",
+		ToolName:          "bash",
 		WorkspaceRootPath: "/workspace",
 		SuggestedName:     "shell.result.txt",
 		Content:           "the whole build log",

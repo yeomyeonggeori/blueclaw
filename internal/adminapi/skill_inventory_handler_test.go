@@ -14,7 +14,7 @@ func TestSkillInventoryNamesWhereEachSkillWasRead(t *testing.T) {
 		return SkillInventory{Loaded: []agentcontract.SkillInstruction{{
 			Name:           "presentation",
 			Description:    "builds decks",
-			ToolReferences: []string{"shell"},
+			ToolReferences: []string{"bash"},
 			Source:         agentcontract.InstructionSource{Path: "/delivery/skills/presentation/SKILL.md"},
 		}}}
 	}}

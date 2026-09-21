@@ -62,7 +62,7 @@ func (virtualStructuredOutputCorrectionTestError) StructuredOutputCorrection() (
 
 func TestDefaultToolPaletteUsesCanonicalNames(t *testing.T) {
 	toolNames := allowedToolsOrDefault(nil)
-	for _, toolName := range []string{"shell", "ask_input", "file_deliver"} {
+	for _, toolName := range []string{"bash", "ask_input", "file_deliver"} {
 		if !slices.Contains(toolNames, toolName) {
 			t.Fatalf("expected canonical tool %s, got %+v", toolName, toolNames)
 		}
@@ -485,7 +485,7 @@ func TestPlainQuestionAcceptsEquivalentWordingAndRejectsToolWork(t *testing.T) {
 	if errorValue := assertTurnResult(t.TempDir(), turn, result); errorValue != nil {
 		t.Fatalf("a different wording failed acceptance: %v", errorValue)
 	}
-	result.Events = []task.TaskEvent{{Name: toolRequestedEventName("file_write")}}
+	result.Events = []task.TaskEvent{{Name: toolRequestedEventName("write")}}
 	if errorValue := assertStructuralTurnExpectations(turn, result); errorValue == nil {
 		t.Fatal("a no-tools request accepted a file write")
 	}
@@ -1134,20 +1134,20 @@ func TestFileWriteAcceptance(t *testing.T) {
 	if turnResult.TaskStatus != task.TaskStatusCompleted {
 		t.Fatalf("expected completed turn, got %s", turnResult.TaskStatus)
 	}
-	if countEvents(turnResult.Events, "tool.file_write.requested") != 1 {
-		t.Fatalf("expected one file_write request, got events: %s", summarizeEvents(turnResult.Events))
+	if countEvents(turnResult.Events, "tool.write.requested") != 1 {
+		t.Fatalf("expected one write request, got events: %s", summarizeEvents(turnResult.Events))
 	}
 	if countEvents(turnResult.Events, "tool.file_deliver.requested") != 1 {
 		t.Fatalf("expected one file_deliver request, got events: %s", summarizeEvents(turnResult.Events))
 	}
-	if countEvents(turnResult.Events, "tool.shell.requested") != 0 {
-		t.Fatalf("file_write result contract must avoid redundant terminal verification, got events: %s", summarizeEvents(turnResult.Events))
+	if countEvents(turnResult.Events, "tool.bash.requested") != 0 {
+		t.Fatalf("write result contract must avoid redundant terminal verification, got events: %s", summarizeEvents(turnResult.Events))
 	}
 }
 
 func TestFileWriteAcceptanceRejectsWrongPersistedContent(t *testing.T) {
 	scenario := FileWriteAcceptanceScenario(t.TempDir())
-	scenario.Turns[0].ActionResponses[0] = actionCallTool("file_write", `{"path":"work/customer-support/faq-revision.json","content":"{}\n"}`)
+	scenario.Turns[0].ActionResponses[0] = actionCallTool("write", `{"path":"work/customer-support/faq-revision.json","content":"{}\n"}`)
 
 	_, errorValue := RunVirtualSession(context.Background(), scenario)
 	if errorValue == nil || !strings.Contains(errorValue.Error(), "FAQ 개편") {
@@ -1491,7 +1491,7 @@ func TestAttachmentMaterialRead(t *testing.T) {
 	if !eventsContain(turnResult.Events, "tool.read.requested", `"path":"https://mattermost.local/api/v4/files/file-1"`) {
 		t.Fatalf("expected read to name the attachment by its url; events: %s", summarizeEvents(turnResult.Events))
 	}
-	if eventsContain(turnResult.Events, "tool.shell.requested", "shell") {
+	if eventsContain(turnResult.Events, "tool.bash.requested", "bash") {
 		t.Fatalf("expected attachment read not to search the workspace; events: %s", summarizeEvents(turnResult.Events))
 	}
 	if turnResult.UserModelImagePartCount == 0 {
@@ -1508,7 +1508,7 @@ func TestAttachmentHTMLPreviewRecovery(t *testing.T) {
 		t.Fatalf("expected attachment html preview recovery scenario to pass: %v", errorValue)
 	}
 	turnResult := result.TurnResults[0]
-	if eventsContain(turnResult.Events, "tool.shell.requested", "shell") {
+	if eventsContain(turnResult.Events, "tool.bash.requested", "bash") {
 		t.Fatalf("expected html attachment preview not to search the workspace; events: %s", summarizeEvents(turnResult.Events))
 	}
 	if !eventsContain(turnResult.Events, "tool.read.result", "Virtual HTML Title") {
@@ -1522,7 +1522,7 @@ func TestAttachmentHTMLPreviousPreviewRecovery(t *testing.T) {
 		t.Fatalf("expected previous attachment html preview recovery scenario to pass: %v", errorValue)
 	}
 	turnResult := result.TurnResults[0]
-	if eventsContain(turnResult.Events, "tool.shell.requested", "shell") {
+	if eventsContain(turnResult.Events, "tool.bash.requested", "bash") {
 		t.Fatalf("expected previous html attachment preview not to search the workspace; events: %s", summarizeEvents(turnResult.Events))
 	}
 	if !eventsContain(turnResult.Events, "tool.read.result", "Virtual HTML Title") {
@@ -1545,7 +1545,7 @@ func TestAttachmentCurrentImageInput(t *testing.T) {
 	if eventsContain(turnResult.Events, "tool.read.requested", "read") {
 		t.Fatalf("expected current image input not to require a read call; events: %s", summarizeEvents(turnResult.Events))
 	}
-	if eventsContain(turnResult.Events, "tool.shell.requested", "shell") {
+	if eventsContain(turnResult.Events, "tool.bash.requested", "bash") {
 		t.Fatalf("expected current image input not to search the workspace; events: %s", summarizeEvents(turnResult.Events))
 	}
 	if len(turnResult.Attachments) != 0 {

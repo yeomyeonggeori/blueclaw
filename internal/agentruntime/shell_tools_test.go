@@ -24,7 +24,7 @@ func TestTerminalRunTranslatesAgentWorkspacePaths(t *testing.T) {
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "shell",
+		ToolName: "bash",
 		Input: toolcontract.MarshalToolInput(map[string]any{
 			"command":              "mkdir -p build && printf ok > build/result.txt",
 			"workingDirectoryPath": "tmp/deck",
@@ -96,7 +96,7 @@ func TestTerminalRunRejectsInvalidInputShapes(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-				ToolName: toolcontract.ShellToolName,
+				ToolName: toolcontract.BashToolName,
 				Input:    testCase.input,
 			})
 			if errorValue != nil {
@@ -147,7 +147,7 @@ func TestTerminalRunFailureHasCanonicalData(t *testing.T) {
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: toolcontract.ShellToolName,
+		ToolName: toolcontract.BashToolName,
 		Input:    json.RawMessage(`{"command":"exit 7"}`),
 	})
 
@@ -168,7 +168,7 @@ func TestTerminalRunFailureHasCanonicalData(t *testing.T) {
 
 func invokeTerminalRunTestTool(t *testing.T, toolRegistry *toolcontract.ToolSet, input json.RawMessage) toolcontract.ToolResult {
 	t.Helper()
-	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{ToolName: toolcontract.ShellToolName, Input: input})
+	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{ToolName: toolcontract.BashToolName, Input: input})
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -195,7 +195,7 @@ func TestTerminalRunAllowsStderrRedirection(t *testing.T) {
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "shell",
+		ToolName: "bash",
 		Input: toolcontract.MarshalToolInput(map[string]any{
 			"command":              "printf ok 2>&1",
 			"workingDirectoryPath": "tmp/deck",
@@ -219,7 +219,7 @@ func TestTerminalRunAllowsSourceFileWrite(t *testing.T) {
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "shell",
+		ToolName: "bash",
 		Input: toolcontract.MarshalToolInput(map[string]any{
 			"command":              "printf 'export default function App(){}' > App.tsx",
 			"workingDirectoryPath": "tmp/deck",
@@ -243,7 +243,7 @@ func TestTerminalRunAllowsServiceOwnedPathText(t *testing.T) {
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "shell",
+		ToolName: "bash",
 		Input: toolcontract.MarshalToolInput(map[string]any{
 			"command": "printf '%s' /workspace/.blueclaw/tmp/deck",
 		}),
@@ -270,7 +270,7 @@ func TestTerminalRunDefaultsToPrivateScopeForDirectMessage(t *testing.T) {
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "shell",
+		ToolName: "bash",
 		Input: toolcontract.MarshalToolInput(map[string]any{
 			"command": "pwd",
 		}),
@@ -305,7 +305,7 @@ func TestTerminalRunMaterializesRequesterRuntimeEnvironment(t *testing.T) {
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "shell",
+		ToolName: "bash",
 		Input: toolcontract.MarshalToolInput(map[string]any{
 			"command": `test -d "$TMPDIR" && test -d "$BUN_TMPDIR" && test -d "$BUN_INSTALL" && test -d "$XDG_CACHE_HOME" && printf '%s\n%s\n%s\n%s\n%s\n%s' "$HOME" "$PATH" "$TMPDIR" "$BUN_TMPDIR" "$BUN_INSTALL" "$XDG_CACHE_HOME"`,
 		}),
@@ -358,7 +358,7 @@ func TestTerminalRunScopesTaskTemporaryDirectoryToTheTaskRun(t *testing.T) {
 
 	toolContext := toolcontract.WithTaskRunID(context.Background(), "task-run-1")
 	result, errorValue := toolRegistry.Invoke(toolContext, toolcontract.ToolInvocation{
-		ToolName: "shell",
+		ToolName: "bash",
 		Input: toolcontract.MarshalToolInput(map[string]any{
 			"command": `printf '%s\n%s' "$BLUECLAW_TASK_TMP" "$TMPDIR"`,
 		}),
@@ -404,7 +404,7 @@ func TestTerminalRunRelativeWorkingDirectoryUsesConversationDefault(t *testing.T
 	})
 
 	writeResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "file_write",
+		ToolName: "write",
 		Input: toolcontract.MarshalToolInput(map[string]string{
 			"path":    "tmp/deck/input.txt",
 			"content": "ok",
@@ -414,11 +414,11 @@ func TestTerminalRunRelativeWorkingDirectoryUsesConversationDefault(t *testing.T
 		t.Fatal(errorValue)
 	}
 	if writeResult.Failed() {
-		t.Fatalf("expected file_write success, got %s", writeResult.ContentText())
+		t.Fatalf("expected write success, got %s", writeResult.ContentText())
 	}
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "shell",
+		ToolName: "bash",
 		Input: toolcontract.MarshalToolInput(map[string]any{
 			"command":              "pwd && cat input.txt && printf built > result.txt",
 			"workingDirectoryPath": "tmp/deck",
@@ -467,7 +467,7 @@ func TestTerminalRunFailsWhenPOSIXDeniesCircleWorkingDirectory(t *testing.T) {
 	})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "shell",
+		ToolName: "bash",
 		Input: toolcontract.MarshalToolInput(map[string]any{
 			"command":              "printf no",
 			"workingDirectoryPath": "/workspace/circles/finance",

@@ -101,17 +101,17 @@ func TestKernelToolProviderPassesExplicitSchemaValidation(t *testing.T) {
 
 func TestLocalKernelToolNamesExcludeCapabilityBackedImageReader(t *testing.T) {
 	expectedKernelToolNames := []string{
-		toolcontract.ShellToolName,
+		toolcontract.BashToolName,
 		toolcontract.FileDeliverToolName,
 		toolcontract.SkillSearchToolName,
 		toolcontract.ReadToolName,
 		toolcontract.FileReadToolName,
-		toolcontract.FileWriteToolName,
+		toolcontract.WriteToolName,
 		toolcontract.FileDeleteToolName,
-		toolcontract.FileEditToolName,
+		toolcontract.EditToolName,
 		toolcontract.FilePreviewToolName,
 		toolcontract.PlanToolName,
-		toolcontract.FindToolsToolName,
+		toolcontract.EquipToolName,
 		toolcontract.ConversationHistoryToolName,
 	}
 	if len(toolcontract.KernelToolNames()) != len(expectedKernelToolNames)+1 {
@@ -136,11 +136,11 @@ func TestKernelToolsHaveCanonicalResultContracts(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	expectedEffectCounts := map[string]int{
-		toolcontract.ShellToolName:               0,
+		toolcontract.BashToolName:                0,
 		toolcontract.FileReadToolName:            0,
-		toolcontract.FileWriteToolName:           2,
+		toolcontract.WriteToolName:               2,
 		toolcontract.FileDeleteToolName:          1,
-		toolcontract.FileEditToolName:            2,
+		toolcontract.EditToolName:                2,
 		toolcontract.FilePreviewToolName:         0,
 		toolcontract.FileDeliverToolName:         1,
 		toolcontract.ConversationHistoryToolName: 0,
@@ -175,7 +175,7 @@ func TestTerminalRunDescriptorUsesStrictCanonicalContract(t *testing.T) {
 	}
 	var definition toolcontract.ToolDefinition
 	for _, boundTool := range boundTools {
-		if boundTool.Definition.Name == toolcontract.ShellToolName {
+		if boundTool.Definition.Name == toolcontract.BashToolName {
 			definition = boundTool.Definition
 			break
 		}
@@ -268,7 +268,7 @@ func TestKernelToolProviderProjectsEveryResultPathEffect(t *testing.T) {
 			}},
 		},
 		{
-			toolName: toolcontract.FileEditToolName,
+			toolName: toolcontract.EditToolName,
 			data:     json.RawMessage(`{"editedFiles":["tmp/first.md","tmp/second.md"],"editCount":2}`),
 			expectedEffect: []toolcontract.ResourceEffect{
 				{ObjectType: "file", Effect: "updated", Path: "tmp/first.md"},

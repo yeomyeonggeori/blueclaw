@@ -181,7 +181,7 @@ letting it run beside the gate.
 What remains outside is the tools an agent runs inside its own process: goose's
 shell, Claude Code's editor. Those are answered yes. The boundary there is
 POSIX — the agent runs as the requester's unprivileged user, and a shell call it
-makes itself can do no more than one made through `shell`. The answer is
+makes itself can do no more than one made through `bash`. The answer is
 recorded: `harness.tool_permitted` and `harness.tool_refused`
 go to the event ledger, so reading a task afterwards shows the calls the catalog
 never saw.
@@ -491,7 +491,7 @@ It authorizes only a real UID of `root` or `blueclaw`
 `setgid`, and `setuid` in that order (`applyIdentity`) before `syscall.Exec`.
 After that call the process is the requester and cannot regain privilege.
 
-File tools are not a separate code path. `read`, `file_write`, `file_edit`
+File tools are not a separate code path. `read`, `write`, `edit`
 and the rest build a shell command and run it through the same requester
 primitive (`internal/agentruntime/requester_shell.go`), starting in the
 requester's own `$HOME` (`requesterShellScript`), so tilde expansion, globs, and

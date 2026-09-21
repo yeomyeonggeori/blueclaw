@@ -105,7 +105,7 @@ func TestPresentationSkillCarriesDesignGuidanceWithoutTemplateAsset(t *testing.T
 		t.Fatal("SKILL.md should define DESIGN.md as an authoring brief")
 	}
 	if !strings.Contains(skillDocument, "shell heredocs") {
-		t.Fatal("SKILL.md should keep source authoring on file_write")
+		t.Fatal("SKILL.md should keep source authoring on write")
 	}
 	if !strings.Contains(skillDocument, "Avoid bullet-only decks") {
 		t.Fatal("SKILL.md should discourage bullet-only decks")

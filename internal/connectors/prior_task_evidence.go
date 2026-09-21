@@ -6,6 +6,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 const priorTaskAttemptLimit = 12
@@ -22,7 +23,7 @@ func priorTaskRecordedAttempts(events []task.TaskEvent) ([]agentcontract.PriorTa
 		if json.Unmarshal([]byte(event.Body), &attempt) != nil || attempt.ObservationID == "" {
 			continue
 		}
-		attempt.Tool = toolName
+		attempt.Tool = toolcontract.CanonicalToolName(toolName)
 		if len(attempt.ToolInput) > priorTaskInputByteLimit {
 			attempt.ToolInput = nil
 			attempt.ToolInputOmitted = true

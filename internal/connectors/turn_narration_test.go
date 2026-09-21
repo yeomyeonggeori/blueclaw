@@ -21,8 +21,8 @@ func TestNarrationNamesTheToolAndWhatItWasPointedAt(t *testing.T) {
 		},
 		{
 			name:     "a command is what the terminal is about",
-			event:    taskstate.RawTurnEvent{Name: "tool.shell.requested", Body: `{"input":{"command":"bun test"}}`},
-			expected: "shell(bun test)",
+			event:    taskstate.RawTurnEvent{Name: "tool.bash.requested", Body: `{"input":{"command":"bun test"}}`},
+			expected: "bash(bun test)",
 		},
 		{
 			name:     "a call with nothing worth showing is still worth naming",
@@ -139,7 +139,7 @@ func TestTheAnswerReplacesTheNarrationRatherThanFollowingIt(t *testing.T) {
 	}
 
 	narrator.observe(context.Background(), taskstate.RawTurnEvent{Name: "tool.file_read.requested", Body: `{"input":{"path":"/a"}}`})
-	narrator.observe(context.Background(), taskstate.RawTurnEvent{Name: "tool.shell.requested", Body: `{"input":{"command":"ls"}}`})
+	narrator.observe(context.Background(), taskstate.RawTurnEvent{Name: "tool.bash.requested", Body: `{"input":{"command":"ls"}}`})
 
 	sent := 0
 	sendReply := narrator.takeOverSending(func(context.Context, ReplyTarget, OutboundReply) (string, error) {
@@ -198,7 +198,7 @@ func TestNarrationStopsOnceTheAnswerHasTakenTheMessage(t *testing.T) {
 	sendReply(context.Background(), ReplyTarget{}, OutboundReply{Message: "done"})
 
 	editsBefore := len(adapter.editedMessages)
-	narrator.observe(context.Background(), taskstate.RawTurnEvent{Name: "tool.shell.requested", Body: `{"input":{"command":"ls"}}`})
+	narrator.observe(context.Background(), taskstate.RawTurnEvent{Name: "tool.bash.requested", Body: `{"input":{"command":"ls"}}`})
 
 	if len(adapter.editedMessages) != editsBefore {
 		t.Fatalf("the answer was overwritten by a later tool call")
@@ -217,7 +217,7 @@ func TestALineSaysHowTheCallTurnedOut(t *testing.T) {
 		Body: `{"observationID":"call-1","input":{"path":"/a"}}`,
 	})
 	narrator.observe(context.Background(), taskstate.RawTurnEvent{
-		Name: "tool.shell.requested",
+		Name: "tool.bash.requested",
 		Body: `{"observationID":"call-2","input":{"command":"ls"}}`,
 	})
 	narrator.observe(context.Background(), taskstate.RawTurnEvent{
@@ -225,12 +225,12 @@ func TestALineSaysHowTheCallTurnedOut(t *testing.T) {
 		Body: `{"observationID":"call-1"}`,
 	})
 	narrator.observe(context.Background(), taskstate.RawTurnEvent{
-		Name: "tool.shell.result",
+		Name: "tool.bash.result",
 		Body: `{"observationID":"call-2","failure":{"reason":"exit 1"}}`,
 	})
 
 	last := adapter.editedMessages[len(adapter.editedMessages)-1]
-	if want := "_file_read(/a) ✓_\n_shell(ls) ✗_"; last != want {
+	if want := "_file_read(/a) ✓_\n_bash(ls) ✗_"; last != want {
 		t.Fatalf("narration reads %q, want %q", last, want)
 	}
 }

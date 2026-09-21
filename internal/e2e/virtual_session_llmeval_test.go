@@ -150,7 +150,7 @@ func TestPresentationLocalMultiturnSuccessLive(t *testing.T) {
 		t.Fatalf("expected one turn result, got %d", len(result.TurnResults))
 	}
 	turnResult := result.TurnResults[0]
-	if !eventsContain(turnResult.Events, "tool.shell.result", "exitCode") {
+	if !eventsContain(turnResult.Events, "tool.bash.result", "exitCode") {
 		t.Fatal("expected terminal build to succeed")
 	}
 }

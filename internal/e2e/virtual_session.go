@@ -3995,7 +3995,7 @@ func allowedToolsOrDefault(allowedTools []string) []string {
 	if len(allowedTools) > 0 {
 		return append([]string{}, allowedTools...)
 	}
-	return []string{"conversation_history", "memory_search", "shell", "ask_input", "read", "file_read", "file_write", "file_edit", "file_deliver"}
+	return []string{"conversation_history", "memory_search", "bash", "ask_input", "read", "file_read", "write", "edit", "file_deliver"}
 }
 
 func terminalConfiguration(workspacePath string) config.TerminalConfiguration {
@@ -4306,7 +4306,7 @@ func actionNoToolFallbackFinishMessage(reply string) string {
 }
 
 func actionFailMessage(reason string) string {
-	return `{"action":"fail","message":` + quote(reason) + `,"reason":` + quote(reason) + `,"goalStatus":"blocked","goalSatisfied":false,"remainingWork":"The requested task could not complete.","failureResolution":"failure_report","usedFailureFacts":{"attempts":[{"toolName":"shell","inputSummary":"printf 'permission denied blocked_by_captcha' >&2; exit 126","errorCode":"operation_failed","failureStage":"shell","message":"errorCode=operation_failed; failureStage=shell; exitCode=126; stderrTail=permission denied blocked_by_captcha"}],"budgetState":"no_tool_fallback_available"},"executionStateUpdate":{}}`
+	return `{"action":"fail","message":` + quote(reason) + `,"reason":` + quote(reason) + `,"goalStatus":"blocked","goalSatisfied":false,"remainingWork":"The requested task could not complete.","failureResolution":"failure_report","usedFailureFacts":{"attempts":[{"toolName":"bash","inputSummary":"printf 'permission denied blocked_by_captcha' >&2; exit 126","errorCode":"operation_failed","failureStage":"bash","message":"errorCode=operation_failed; failureStage=shell; exitCode=126; stderrTail=permission denied blocked_by_captcha"}],"budgetState":"no_tool_fallback_available"},"executionStateUpdate":{}}`
 }
 
 func actionCallTool(toolName string, input string) string {
@@ -4316,9 +4316,9 @@ func actionCallTool(toolName string, input string) string {
 // Shell-native file tools resolve paths through the OS, so the harness rewrites the guest /workspace root onto its temporary host root.
 var shellNativeFileToolNames = map[string]bool{
 	"read":         true,
-	"file_write":   true,
+	"write":        true,
 	"file_read":    true,
-	"file_edit":    true,
+	"edit":         true,
 	"file_delete":  true,
 	"file_preview": true,
 	"file_deliver": true,
