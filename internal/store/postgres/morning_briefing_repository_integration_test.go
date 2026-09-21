@@ -150,7 +150,7 @@ func morningBriefingIntegrationDatabase(t *testing.T, ctx context.Context) (Data
 	}
 	adminURL := *parsedURL
 	adminURL.Path = "/postgres"
-	adminDatabase, errorValue := OpenDatabase(ctx, adminURL.String())
+	adminDatabase, errorValue := OpenDatabase(ctx, adminURL.String(), 0)
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -168,7 +168,7 @@ func morningBriefingIntegrationDatabase(t *testing.T, ctx context.Context) (Data
 	})
 	databaseURL := *parsedURL
 	databaseURL.Path = "/" + databaseName
-	database, errorValue = OpenDatabase(ctx, databaseURL.String())
+	database, errorValue = OpenDatabase(ctx, databaseURL.String(), 0)
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}

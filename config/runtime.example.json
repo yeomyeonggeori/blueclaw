@@ -135,7 +135,8 @@
   "database": {
     "driver": "postgres",
     "connectionString": "postgres://blueclaw@/blueclaw?host=/var/run/postgresql&sslmode=disable",
-    "migrationDirectoryPath": "/workspace/.blueclaw/migrations"
+    "migrationDirectoryPath": "/workspace/.blueclaw/migrations",
+    "maxOpenConnections": 30
   },
   "memory": {
     "embeddingModel": "baai/bge-m3",

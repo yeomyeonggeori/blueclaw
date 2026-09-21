@@ -16,7 +16,7 @@ func TestAClaimTakesOneConversationAndLeavesTheOtherClaimable(t *testing.T) {
 		t.Skip("set BLUECLAW_TEST_POSTGRES_URL to run the disposable PostgreSQL regression")
 	}
 
-	database, errorValue := OpenDatabase(context.Background(), connectionString)
+	database, errorValue := OpenDatabase(context.Background(), connectionString, 0)
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}

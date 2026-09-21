@@ -31,7 +31,7 @@ func openMemoryStoreFixture(t *testing.T) memoryStoreFixture {
 		t.Skip("set BLUECLAW_TEST_POSTGRES_URL to run the memory store checks")
 	}
 	ctx := context.Background()
-	database, errorValue := postgres.OpenDatabase(ctx, connectionString)
+	database, errorValue := postgres.OpenDatabase(ctx, connectionString, 0)
 	if errorValue != nil {
 		t.Fatalf("expected the test database to open: %v", errorValue)
 	}
