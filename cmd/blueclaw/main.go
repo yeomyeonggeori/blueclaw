@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	_ "time/tzdata"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/app"
 	"github.com/yeomyeonggeori/blueclaw/internal/buildrevision"
