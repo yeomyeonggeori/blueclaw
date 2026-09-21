@@ -64,6 +64,11 @@ export type PersonalAttachment = {
 	heightPixels?: number;
 };
 
+export type PersonalMentions = {
+	externalIDs: string[];
+	isEveryone: boolean;
+};
+
 export type PersonalMessage = {
 	id: string;
 	conversationID: string;
@@ -72,6 +77,7 @@ export type PersonalMessage = {
 	body: string;
 	postedAt: string;
 	editedAt?: string;
+	mentions?: PersonalMentions;
 	reactions: PersonalReaction[];
 	attachments: PersonalAttachment[];
 };
@@ -169,6 +175,7 @@ export interface PersonalGateway {
 		body: string,
 		parentID?: string,
 		attachments?: OutgoingAttachment[],
+		mentions?: PersonalMentions,
 	): Promise<PersonalMessage>;
 	readAttachment(
 		actor: ActorCredential,

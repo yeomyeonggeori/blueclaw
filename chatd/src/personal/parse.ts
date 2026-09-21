@@ -1,4 +1,4 @@
-import type { ActorCredential, NewPersonalChannel } from "./gateway.ts";
+import type { ActorCredential, NewPersonalChannel, PersonalMentions } from "./gateway.ts";
 import { canonicalChannelName } from "../channels.ts";
 import type { OutgoingAttachment } from "../outgoing-attachment.ts";
 
@@ -27,6 +27,7 @@ export type PersonRequest = {
 	arrivalsURL?: string;
 	counterpartExternalIDs: string[];
 	attachments: OutgoingAttachment[];
+	mentions?: PersonalMentions;
 };
 
 export function parseNewChannel(value: unknown): NewPersonalChannel {
@@ -72,7 +73,19 @@ export function parsePersonRequest(value: unknown): PersonRequest {
 		arrivalsURL: optionalText(record, "arrivalsURL"),
 		counterpartExternalIDs: parseCounterparts(record),
 		attachments: parseAttachments(record),
+		mentions: parseMentions(record),
 	};
+}
+
+function parseMentions(record: Record<string, unknown>): PersonalMentions | undefined {
+	const given = record.mentions;
+	if (given === undefined) return undefined;
+	const mentions = asRecord(given);
+	const externalIDs = mentions.externalIDs ?? [];
+	if (!Array.isArray(externalIDs) || externalIDs.some((entry) => typeof entry !== "string")) {
+		throw new MalformedRequest("mentions.externalIDs must be a list of ids");
+	}
+	return { externalIDs: externalIDs as string[], isEveryone: mentions.isEveryone === true };
 }
 
 function parseAttachments(record: Record<string, unknown>): OutgoingAttachment[] {

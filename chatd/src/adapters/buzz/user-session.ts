@@ -5,6 +5,7 @@ import { carriesTag, firstTagValue, threadTagsOf, type BuzzEvent } from "./types
 import { rolesOnRoster } from "./user-channels.ts";
 import { DELETE_MESSAGE_KIND, takenBackIDs } from "./deletions.ts";
 import { reactionsTo, type UserMessageReaction } from "./user-reactions.ts";
+import { mentionsOf, type UserMentions } from "./user-mentions.ts";
 import {
 	AttachmentRefused,
 	isAlreadyKept,
@@ -383,6 +384,7 @@ export type UserMessage = {
 	authorPubkeyHex: string;
 	body: string;
 	postedAt: string;
+	mentions: UserMentions;
 	attachments: UserMessageAttachment[];
 	reactions: UserMessageReaction[];
 };
@@ -424,6 +426,7 @@ export async function listChannelMessagesAsUser(request: {
 						authorPubkeyHex: event.pubkey,
 						body: event.content,
 						postedAt: new Date(event.created_at * 1000).toISOString(),
+						mentions: mentionsOf(event),
 						attachments: attachmentsOf(event),
 					};
 				});

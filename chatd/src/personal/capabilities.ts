@@ -107,6 +107,7 @@ export const personCapabilities: Record<string, PersonCapability> = {
 			request.body ?? "",
 			request.parentID,
 			request.attachments,
+			request.mentions,
 		);
 	},
 	"person.message.edit": async (gateway, body) => {
