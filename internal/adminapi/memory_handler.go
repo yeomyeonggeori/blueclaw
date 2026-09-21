@@ -1,6 +1,7 @@
 package adminapi
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -36,6 +37,7 @@ type memoryFactView struct {
 	ValidUntil         time.Time `json:"validUntil,omitzero"`
 	ReinforcementCount int       `json:"reinforcementCount"`
 	LastRecalledAt     time.Time `json:"lastRecalledAt,omitzero"`
+	TriggerPhrases     []string  `json:"triggerPhrases"`
 }
 
 type memoryForgetRequest struct {
@@ -68,7 +70,7 @@ func (handler MemoryHandler) HandleListFacts(responseWriter http.ResponseWriter,
 		PersonID:       personID,
 		EmbeddingModel: handler.Store.EmbeddingModel,
 		Profile:        profile,
-		Facts:          memoryFactViews(facts),
+		Facts:          memoryFactViews(facts, handler.triggerPhrases(request.Context(), facts)),
 	})
 }
 
@@ -107,7 +109,23 @@ func (handler MemoryHandler) reader(personID string) bluememo.Reader {
 	return memory.ReaderForAccess(handler.IdentityService.ResolvePersonAccess(personID), handler.IdentityService.ContainedCircles())
 }
 
-func memoryFactViews(facts []bluememo.Fact) []memoryFactView {
+func (handler MemoryHandler) triggerPhrases(ctx context.Context, facts []bluememo.Fact) map[string][]string {
+	if handler.Store.Triggers == nil || len(facts) == 0 {
+		return nil
+	}
+	factIDs := make([]string, 0, len(facts))
+	for _, fact := range facts {
+		factIDs = append(factIDs, fact.FactID)
+	}
+	phrases, errorValue := handler.Store.Triggers.ListTriggerPhrases(ctx, factIDs)
+	if errorValue != nil {
+		handler.Store.Logger.WarnContext(ctx, "memory.trigger_phrases_unavailable", "error", errorValue.Error())
+		return nil
+	}
+	return phrases
+}
+
+func memoryFactViews(facts []bluememo.Fact, triggerPhrases map[string][]string) []memoryFactView {
 	views := make([]memoryFactView, 0, len(facts))
 	for _, fact := range facts {
 		views = append(views, memoryFactView{
@@ -121,6 +139,7 @@ func memoryFactViews(facts []bluememo.Fact) []memoryFactView {
 			ValidUntil:         fact.ValidUntil,
 			ReinforcementCount: fact.ReinforcementCount,
 			LastRecalledAt:     fact.LastRecalledAt,
+			TriggerPhrases:     nonNilStrings(triggerPhrases[fact.FactID]),
 		})
 	}
 	return views
