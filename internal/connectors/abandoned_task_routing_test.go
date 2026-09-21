@@ -2,7 +2,9 @@ package connectors
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
@@ -52,5 +54,33 @@ func TestASupersededRunReclaimedBeforeTheCancelStillSaysItWasSuperseded(t *testi
 
 	if !connectorTaskEventsContain(connectorRuntime, reclaimedTaskRun.TaskRunID, agentcontract.TaskEventTaskSupersededByMessage, "message-replaced") {
 		t.Fatal("the ledger has to keep the fact that the requester replaced this run")
+	}
+}
+
+func TestASupersedeIsRecordedEvenWhenTheCancelTransitionFails(t *testing.T) {
+	now := time.Now()
+	taskRunRepository := newTestTaskRunRepository()
+	runningTaskRun := task.TaskRun{
+		TaskRunID:            "task-replaced",
+		RequesterPersonID:    "person-1",
+		OriginConversationID: "direct-1",
+		CurrentAttemptID:     "attempt-replaced",
+		Status:               task.TaskStatusRunning,
+		Prompt:               "대체된 요청",
+		CreatedAt:            now,
+		UpdatedAt:            now,
+	}
+	taskRunRepository.taskRuns[runningTaskRun.TaskRunID] = runningTaskRun
+	connectorRuntime, _, taskEventService, _ := newStubbedRepositoryBackedTestConnectorRuntime(t, taskRunRepository)
+	taskEventService.AppendTaskEvent(runningTaskRun.TaskRunID, agentcontract.TaskEventAgentTaskSource, agentruntime.MarshalBody(map[string]string{"sourceReference": "message-replaced"}))
+	taskRunRepository.transitionError = errors.New("the store refused the write")
+
+	connectorRuntime.cancelPendingSourceTask("person-1", "test", "direct-1", "message-replaced")
+
+	if storedTaskRun := taskRunRepository.taskRuns[runningTaskRun.TaskRunID]; storedTaskRun.Status != task.TaskStatusRunning {
+		t.Fatalf("stored status = %s, want the cancel to have failed so the branch under test is reached", storedTaskRun.Status)
+	}
+	if !connectorTaskEventsContain(connectorRuntime, runningTaskRun.TaskRunID, agentcontract.TaskEventTaskSupersededByMessage, "message-replaced") {
+		t.Fatal("the ledger has to keep the fact that the requester replaced this run even when the cancel could not land")
 	}
 }

@@ -175,9 +175,9 @@ func (connectorRuntime *ConnectorRuntime) cancelPendingSourceTask(personID strin
 	if isTaskControlActiveStatus(taskRun.Status) {
 		if _, errorValue := connectorRuntime.taskRunService.CancelTaskRunWithReason(taskRun.TaskRunID, personID, SupersededRequestReason); errorValue != nil {
 			connectorRuntime.logger.Warn("connector.request.cancel_failed", slog.String("taskRunID", taskRun.TaskRunID), slog.String("error", errorValue.Error()))
-			return
+		} else {
+			connectorRuntime.resolveOpenTaskWaitsForTaskRun(personID, platform, conversationID, taskRun.TaskRunID)
 		}
-		connectorRuntime.resolveOpenTaskWaitsForTaskRun(personID, platform, conversationID, taskRun.TaskRunID)
 	}
 	connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventTaskSupersededByMessage, agentruntime.MarshalBody(map[string]string{"sourceReference": sourceReference}))
 }

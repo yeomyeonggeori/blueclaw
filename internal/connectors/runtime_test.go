@@ -4298,8 +4298,9 @@ func newStubbedRepositoryBackedTestConnectorRuntime(t *testing.T, taskRunReposit
 }
 
 type testTaskRunRepository struct {
-	taskRuns     map[string]task.TaskRun
-	taskAttempts map[string]task.TaskAttempt
+	taskRuns        map[string]task.TaskRun
+	taskAttempts    map[string]task.TaskAttempt
+	transitionError error
 }
 
 func newTestTaskRunRepository() *testTaskRunRepository {
@@ -4329,6 +4330,9 @@ func (repository *testTaskRunRepository) FinishTaskRunAttempt(taskRun task.TaskR
 }
 
 func (repository *testTaskRunRepository) TransitionTaskRun(transition task.TaskRunTransition) (task.TaskRun, error) {
+	if repository.transitionError != nil {
+		return task.TaskRun{}, repository.transitionError
+	}
 	taskRun, isFound := repository.taskRuns[transition.TaskRunID]
 	if !isFound {
 		return task.TaskRun{}, errors.New("task run not found")
