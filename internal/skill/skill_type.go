@@ -7,6 +7,7 @@ type SkillBundle struct {
 	Description                  string          `json:"description,omitempty"`
 	ToolReferences               []ToolReference `json:"toolReferences,omitempty"`
 	RequiredEnvironmentVariables []string        `json:"requiredEnvironmentVariables,omitempty"`
+	RequiredAnyFilePaths         []string        `json:"requiredAnyFilePaths,omitempty"`
 	Instruction                  string          `json:"instruction"`
 	DirectoryPath                string          `json:"directoryPath"`
 }
