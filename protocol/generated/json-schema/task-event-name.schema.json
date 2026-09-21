@@ -91,6 +91,7 @@
         "agent.tool_input_malformed",
         "agent.tool_result_images_restored",
         "agent.tool_results_pruned",
+        "agent.turn_abandoned",
         "agent.turn_anchor_clamped",
         "agent.unchanged_result",
         "agent.unreadable_action",

@@ -143,7 +143,7 @@ func (connectorRuntime *ConnectorRuntime) interruptInactiveRuntimeTaskIfNeeded(t
 	if connectorRuntime.taskRunService.IsTaskRunActuallyRunning(taskRun) {
 		return false
 	}
-	_, isInterrupted := connectorRuntime.taskRunService.InterruptInactiveTaskRun(taskRun.TaskRunID, "runtime no longer owns this execution")
+	_, isInterrupted := connectorRuntime.taskRunService.InterruptInactiveTaskRun(taskRun.TaskRunID, agentcontract.TaskInterruptReasonUnownedExecution)
 	return isInterrupted
 }
 
@@ -187,12 +187,7 @@ func exactTaskControlIntent(prompt string) agentcontract.TaskControlIntent {
 }
 
 func isTaskControlActiveStatus(status task.TaskStatus) bool {
-	switch status {
-	case task.TaskStatusPlanned, task.TaskStatusRunning, task.TaskStatusWaitingApproval, task.TaskStatusWaitingUserInput, task.TaskStatusBlocked:
-		return true
-	default:
-		return false
-	}
+	return agentcontract.IsTaskRunRequesterControllable(status)
 }
 
 func taskControlReply(selection taskControlSelection, responseLanguage string) string {

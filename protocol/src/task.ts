@@ -146,6 +146,7 @@ export enum TaskEventName {
   AgentToolInputMalformed = 'agent.tool_input_malformed',
   AgentToolResultImagesRestored = 'agent.tool_result_images_restored',
   AgentToolResultsPruned = 'agent.tool_results_pruned',
+  AgentTurnAbandoned = 'agent.turn_abandoned',
   AgentTurnAnchorClamped = 'agent.turn_anchor_clamped',
   AgentUnchangedResult = 'agent.unchanged_result',
   AgentUnreadableAction = 'agent.unreadable_action',
