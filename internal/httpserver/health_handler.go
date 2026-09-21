@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -38,10 +39,19 @@ type LanguageModelHealth struct {
 }
 
 type databaseHealth struct {
-	Reachable         bool   `json:"reachable"`
-	MigrationsApplied bool   `json:"migrationsApplied"`
-	SchemaValid       bool   `json:"schemaValid"`
-	Error             string `json:"error,omitempty"`
+	Reachable         bool                 `json:"reachable"`
+	MigrationsApplied bool                 `json:"migrationsApplied"`
+	SchemaValid       bool                 `json:"schemaValid"`
+	Error             string               `json:"error,omitempty"`
+	Connections       connectionPoolHealth `json:"connections"`
+}
+
+type connectionPoolHealth struct {
+	Allowed      int    `json:"allowed"`
+	InUse        int    `json:"inUse"`
+	Idle         int    `json:"idle"`
+	WaitCount    int64  `json:"waitCount"`
+	WaitDuration string `json:"waitDuration"`
 }
 
 func (healthHandler HealthHandler) HandleHealth(responseWriter http.ResponseWriter, request *http.Request) {
@@ -96,13 +106,24 @@ func (healthHandler HealthHandler) databaseHealth(ctx context.Context) databaseH
 	if healthHandler.Database.SQL == nil {
 		return databaseHealth{Error: "postgres database is not configured"}
 	}
+	connections := connectionPoolHealthOf(healthHandler.Database.SQL.Stats())
 	if errorValue := healthHandler.Database.SQL.PingContext(ctx); errorValue != nil {
-		return databaseHealth{Error: errorValue.Error()}
+		return databaseHealth{Error: errorValue.Error(), Connections: connections}
 	}
 	if errorValue := postgres.ValidateConnectorDeliverySchema(ctx, healthHandler.Database); errorValue != nil {
-		return databaseHealth{Reachable: true, MigrationsApplied: false, Error: errorValue.Error()}
+		return databaseHealth{Reachable: true, MigrationsApplied: false, Error: errorValue.Error(), Connections: connections}
 	}
-	return databaseHealth{Reachable: true, MigrationsApplied: true, SchemaValid: true}
+	return databaseHealth{Reachable: true, MigrationsApplied: true, SchemaValid: true, Connections: connections}
+}
+
+func connectionPoolHealthOf(statistics sql.DBStats) connectionPoolHealth {
+	return connectionPoolHealth{
+		Allowed:      statistics.MaxOpenConnections,
+		InUse:        statistics.InUse,
+		Idle:         statistics.Idle,
+		WaitCount:    statistics.WaitCount,
+		WaitDuration: statistics.WaitDuration.Round(time.Millisecond).String(),
+	}
 }
 
 func (healthHandler HealthHandler) backlogFailureReasons(backlog postgres.ConnectorDeliveryBacklog) []string {

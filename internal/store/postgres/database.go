@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	bluememopostgres "github.com/yeomyeonggeori/bluememo/postgres"
@@ -18,7 +19,12 @@ type Database struct {
 	SQL              *sql.DB
 }
 
-func OpenDatabase(ctx context.Context, connectionString string) (Database, error) {
+const (
+	connectionMaxIdleTime = 10 * time.Minute
+	connectionMaxLifetime = 30 * time.Minute
+)
+
+func OpenDatabase(ctx context.Context, connectionString string, maxOpenConnections int) (Database, error) {
 	if strings.TrimSpace(connectionString) == "" {
 		return Database{}, errors.New("postgres connection string is required")
 	}
@@ -30,7 +36,36 @@ func OpenDatabase(ctx context.Context, connectionString string) (Database, error
 		_ = sqlDatabase.Close()
 		return Database{}, errorValue
 	}
+	if maxOpenConnections <= 0 {
+		maxOpenConnections, errorValue = connectionsTheServerAllows(ctx, sqlDatabase)
+		if errorValue != nil {
+			_ = sqlDatabase.Close()
+			return Database{}, errorValue
+		}
+	}
+	boundToTheConnectionBudget(sqlDatabase, maxOpenConnections)
 	return Database{ConnectionString: connectionString, SQL: sqlDatabase}, nil
+}
+
+func boundToTheConnectionBudget(sqlDatabase *sql.DB, maxOpenConnections int) {
+	sqlDatabase.SetMaxOpenConns(maxOpenConnections)
+	sqlDatabase.SetMaxIdleConns(maxOpenConnections)
+	sqlDatabase.SetConnMaxIdleTime(connectionMaxIdleTime)
+	sqlDatabase.SetConnMaxLifetime(connectionMaxLifetime)
+}
+
+func connectionsTheServerAllows(ctx context.Context, sqlDatabase *sql.DB) (int, error) {
+	var allowed int
+	errorValue := sqlDatabase.QueryRowContext(ctx,
+		`SELECT current_setting('max_connections')::int - current_setting('superuser_reserved_connections')::int`,
+	).Scan(&allowed)
+	if errorValue != nil {
+		return 0, fmt.Errorf("ask postgres how many connections it allows: %w", errorValue)
+	}
+	if allowed < 1 {
+		return 0, fmt.Errorf("postgres allows %d connections beyond the ones it reserves for a superuser", allowed)
+	}
+	return allowed, nil
 }
 
 func (database Database) Close() error {

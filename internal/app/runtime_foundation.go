@@ -20,7 +20,7 @@ func openRuntimeDatabase(runtimeConfiguration config.RuntimeConfiguration, logge
 	ctx, cancel := context.WithTimeout(context.Background(), databaseInitializationTimeout)
 	defer cancel()
 	logger.Info("application.open_database.phase", "phase", "connect")
-	database, errorValue := postgres.OpenDatabase(ctx, runtimeConfiguration.Database.ConnectionString)
+	database, errorValue := postgres.OpenDatabase(ctx, runtimeConfiguration.Database.ConnectionString, runtimeConfiguration.Database.MaxOpenConnections)
 	if errorValue != nil {
 		return postgres.Database{}, errorValue
 	}

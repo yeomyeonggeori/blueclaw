@@ -83,7 +83,7 @@ func (managed ManagedPostgres) EnsureRunning(ctx context.Context) error {
 func (managed ManagedPostgres) IsReachable(ctx context.Context) bool {
 	connectContext, cancel := context.WithTimeout(ctx, databaseCheckTimeout)
 	defer cancel()
-	database, errorValue := postgres.OpenDatabase(connectContext, managed.ConnectionString())
+	database, errorValue := postgres.OpenDatabase(connectContext, managed.ConnectionString(), 0)
 	if errorValue != nil {
 		return false
 	}

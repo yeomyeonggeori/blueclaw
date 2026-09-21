@@ -49,7 +49,7 @@ func checkDatabase(ctx context.Context, home Home, connectionString string) Chec
 	}
 	connectContext, cancel := context.WithTimeout(ctx, databaseCheckTimeout)
 	defer cancel()
-	database, errorValue := postgres.OpenDatabase(connectContext, connectionString)
+	database, errorValue := postgres.OpenDatabase(connectContext, connectionString, 0)
 	if errorValue != nil {
 		return CheckResult{Name: CheckDatabase, Detail: errorValue.Error(), Guidance: "Start a Postgres and create a database blueclaw can reach, then correct this line."}
 	}

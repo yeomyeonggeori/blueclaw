@@ -186,6 +186,7 @@ type DatabaseConfiguration struct {
 	Driver                 string `json:"driver"`
 	ConnectionString       string `json:"connectionString"`
 	MigrationDirectoryPath string `json:"migrationDirectoryPath"`
+	MaxOpenConnections     int    `json:"maxOpenConnections"`
 }
 
 type MemoryConfiguration struct {
