@@ -428,7 +428,7 @@ func (provider kernelToolProvider) ListTools(context.Context) ([]toolcontract.Bo
 		}
 	}
 	boundTools := make([]toolcontract.BoundTool, 0, len(registeredToolNames))
-	for _, toolName := range localKernelToolNames() {
+	for _, toolName := range KernelToolNames() {
 		toolDefinition, isFound := provider.handlerToolSet.ToolDefinition(toolName)
 		if !isFound {
 			continue
@@ -464,12 +464,20 @@ func (provider kernelToolProvider) boundTool(toolDefinition toolcontract.ToolDef
 	}, nil
 }
 
-func localKernelToolNames() []string {
+func KernelToolNames() []string {
 	toolNames := make([]string, 0, len(kernelToolDescriptorSpecs))
 	for _, descriptorSpec := range kernelToolDescriptorSpecs {
 		toolNames = append(toolNames, descriptorSpec.Name)
 	}
 	return toolNames
+}
+
+func RuntimeInvokedCapabilityToolNames() []string {
+	return []string{toolcontract.ImageReadToolName}
+}
+
+func AlwaysAllowedToolNames() []string {
+	return append(KernelToolNames(), RuntimeInvokedCapabilityToolNames()...)
 }
 
 func kernelToolDescriptorSpecForName(toolName string) (kernelToolDescriptorSpec, bool) {

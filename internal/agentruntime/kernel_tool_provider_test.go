@@ -27,12 +27,12 @@ func TestKernelToolProviderUsesCanonicalDescriptors(t *testing.T) {
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if len(boundTools) != len(localKernelToolNames())-1 {
+	if len(boundTools) != len(KernelToolNames())-1 {
 		t.Fatalf("expected local kernel palette, got %d tools", len(boundTools))
 	}
 
 	expectedToolNames := map[string]bool{}
-	for _, toolName := range localKernelToolNames() {
+	for _, toolName := range KernelToolNames() {
 		if toolName != toolcontract.SkillSearchToolName {
 			expectedToolNames[toolName] = true
 		}
@@ -99,7 +99,7 @@ func TestKernelToolProviderPassesExplicitSchemaValidation(t *testing.T) {
 	}
 }
 
-func TestLocalKernelToolNamesExcludeCapabilityBackedImageReader(t *testing.T) {
+func TestKernelToolNamesExcludeCapabilityBackedImageReader(t *testing.T) {
 	expectedKernelToolNames := []string{
 		toolcontract.BashToolName,
 		toolcontract.FileDeliverToolName,
@@ -114,15 +114,17 @@ func TestLocalKernelToolNamesExcludeCapabilityBackedImageReader(t *testing.T) {
 		toolcontract.EquipToolName,
 		toolcontract.ConversationHistoryToolName,
 	}
-	if len(toolcontract.KernelToolNames()) != len(expectedKernelToolNames)+1 {
-		t.Fatalf("expected the kernel names to exceed local names by image_read only, got %+v", toolcontract.KernelToolNames())
+	for _, toolName := range KernelToolNames() {
+		if toolName == toolcontract.ImageReadToolName {
+			t.Fatalf("image_read is served by the capability registry, so no kernel provider binds it: %+v", KernelToolNames())
+		}
 	}
-	if len(localKernelToolNames()) != len(expectedKernelToolNames) {
-		t.Fatalf("expected every locally bound kernel tool accounted for, got %+v", localKernelToolNames())
+	if len(KernelToolNames()) != len(expectedKernelToolNames) {
+		t.Fatalf("expected every locally bound kernel tool accounted for, got %+v", KernelToolNames())
 	}
-	for index, toolName := range localKernelToolNames() {
+	for index, toolName := range KernelToolNames() {
 		if toolName != expectedKernelToolNames[index] {
-			t.Fatalf("unexpected local kernel membership: %+v", localKernelToolNames())
+			t.Fatalf("unexpected local kernel membership: %+v", KernelToolNames())
 		}
 	}
 }
