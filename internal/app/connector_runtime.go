@@ -45,7 +45,7 @@ func newConnectorRuntime(runtimeConfiguration config.RuntimeConfiguration, found
 	connectorRuntime.UseTaskLauncher(taskLauncher)
 	connectorRuntime.UseApprovalGate(kernel.toolCatalog.approvalGate)
 	connectorRuntime.UseAgentIdentityProvider(kernel.agentIdentityProvider)
-	connectorRuntime.UseAllowedToolNamesByProfile(deriveAllowedToolNamesByProfile(runtimeConfiguration), deriveAllowedToolNames(runtimeConfiguration))
+	connectorRuntime.UseAllowedToolNamesByProfile(deriveAllowedToolNamesByProfile(runtimeConfiguration), agentruntime.AlwaysAllowedToolNames())
 	connectorRuntime.UseAdminTaskLinkBaseURL(runtimeConfiguration.Agent.AdminTaskLinkBaseURL)
 	connectorRuntime.UseWorkspaceActorFactory(kernel.terminalService.WorkspaceActorFactory())
 	connectorRuntime.UseIngressGate(backupCoordinator)

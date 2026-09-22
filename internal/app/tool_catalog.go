@@ -49,7 +49,7 @@ func newToolCatalogBuilder(runtimeConfiguration config.RuntimeConfiguration, ker
 		logRecordCatalogDivergence(logger, divergence)
 	})
 	seedCompanionStatus(kernel.capabilityRegistry)
-	toolCatalogBuilder.UseAllowedToolNamesByProfile(deriveAllowedToolNamesByProfile(runtimeConfiguration), deriveAllowedToolNames(runtimeConfiguration))
+	toolCatalogBuilder.UseAllowedToolNamesByProfile(deriveAllowedToolNamesByProfile(runtimeConfiguration), agentruntime.AlwaysAllowedToolNames())
 	toolCatalogBuilder.UseSkillSearch(kernel.skillRetriever, kernel.instructionBundleLoader)
 	toolCatalogBuilder.UseTerminalService(kernel.terminalService)
 	toolCatalogBuilder.UseTaskRunService(services.taskRunService)
@@ -90,26 +90,6 @@ func logRecordCatalogDivergence(logger *slog.Logger, divergence agentruntime.Rec
 		"stampedOnly", divergence.StampedOnly,
 		"discoveryFailed", divergence.DiscoveryFailed,
 	)
-}
-
-func deriveAllowedToolNames(runtimeConfiguration config.RuntimeConfiguration) []string {
-	allowedToolNameByName := map[string]bool{}
-	for _, toolName := range toolcontract.KernelToolNames() {
-		allowedToolNameByName[toolName] = true
-	}
-	for _, agentProfile := range runtimeConfiguration.AgentProfiles {
-		for _, allowedToolName := range agentProfile.AllowedToolNames {
-			trimmedToolName := strings.TrimSpace(allowedToolName)
-			if toolcontract.IsKernelToolName(trimmedToolName) {
-				allowedToolNameByName[trimmedToolName] = true
-			}
-		}
-	}
-	allowedToolNames := []string{}
-	for allowedToolName := range allowedToolNameByName {
-		allowedToolNames = append(allowedToolNames, allowedToolName)
-	}
-	return allowedToolNames
 }
 
 func seedCompanionStatus(capabilityRegistry *agentruntime.CapabilityRegistry) {
@@ -155,14 +135,15 @@ func deriveAllowedToolNamesByProfile(runtimeConfiguration config.RuntimeConfigur
 }
 
 func appendDefaultBuiltInToolNames(toolNames []string) []string {
-	result := toolcontract.KernelToolNames()
+	allowedToolNames := agentruntime.AlwaysAllowedToolNames()
 	for _, toolName := range toolNames {
 		trimmedToolName := strings.TrimSpace(toolName)
-		if toolcontract.IsKernelToolName(trimmedToolName) && !containsString(result, trimmedToolName) {
-			result = append(result, trimmedToolName)
+		if trimmedToolName == "" || containsString(allowedToolNames, trimmedToolName) {
+			continue
 		}
+		allowedToolNames = append(allowedToolNames, trimmedToolName)
 	}
-	return result
+	return allowedToolNames
 }
 
 func containsString(values []string, expectedValue string) bool {

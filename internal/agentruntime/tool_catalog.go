@@ -275,7 +275,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) allowedToolNames(profileName strin
 }
 
 func DefaultAllowedToolNames() []string {
-	return append(toolcontract.KernelToolNames(), toolcontract.AskInputToolName)
+	return append(KernelToolNames(), toolcontract.AskInputToolName)
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) registerHistoryTool(toolRegistry *toolcontract.ToolSet, request ToolCatalogRequest) {

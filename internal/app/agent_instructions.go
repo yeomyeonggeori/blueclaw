@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/persona"
@@ -60,7 +58,7 @@ type agentInstructions struct {
 // What a skill may name: the tools a product's catalog offered this runtime, plus
 // the ones the runtime and the kernel answer themselves.
 func offeredToolNamesOf(capabilityRegistry *agentruntime.CapabilityRegistry) []string {
-	offeredToolNames := append([]string{}, toolcontract.KernelToolNames()...)
+	offeredToolNames := append([]string{}, agentruntime.KernelToolNames()...)
 	offeredToolNames = append(offeredToolNames, agentruntime.LocalToolNames()...)
 	for _, toolDescriptor := range capabilityRegistry.ToolDescriptors() {
 		offeredToolNames = append(offeredToolNames, strings.TrimSpace(toolDescriptor.Name))
