@@ -30,6 +30,7 @@ func newMemoryComponents(runtimeConfiguration config.RuntimeConfiguration, datab
 		Facts:    bluememopostgres.NewFactRepository(database.SQL),
 		Profiles: bluememopostgres.NewProfileRepository(database.SQL),
 		Jobs:     bluememopostgres.NewJobRepository(database.SQL),
+		Triggers: bluememopostgres.NewTriggerRepository(database.SQL),
 		Embedder: llm.CapabilityEmbeddingClient{
 			CapabilityClient: kernel.capabilityClient,
 			ModelName:        embeddingModelName,
@@ -45,9 +46,10 @@ func newMemoryComponents(runtimeConfiguration config.RuntimeConfiguration, datab
 		Jobs:   store.Jobs,
 		Logger: logger,
 		Handlers: map[string]bluememo.JobHandler{
-			bluememo.JobKindExtract: memory.ExtractJobHandler{Ingester: *ingester, TaskRuns: services.taskRunService, Steps: services.taskStepService, Access: identityService}.Handle,
-			bluememo.JobKindProfile: bluememo.ProfileJobHandler{Builder: bluememo.ProfileBuilder{Store: *store, Model: memoryModel}, ResolveReader: memory.ProfileReaderResolver(identityService)}.Handle,
-			bluememo.JobKindReembed: bluememo.ReembedJobHandler{Store: *store}.Handle,
+			bluememo.JobKindExtract:  memory.ExtractJobHandler{Ingester: *ingester, TaskRuns: services.taskRunService, Steps: services.taskStepService, Access: identityService}.Handle,
+			bluememo.JobKindProfile:  bluememo.ProfileJobHandler{Builder: bluememo.ProfileBuilder{Store: *store, Model: memoryModel}, ResolveReader: memory.ProfileReaderResolver(identityService)}.Handle,
+			bluememo.JobKindReembed:  bluememo.ReembedJobHandler{Store: *store}.Handle,
+			bluememo.JobKindRehearse: bluememo.RehearseJobHandler{Rehearser: bluememo.Rehearser{Store: *store, Model: memoryModel}}.Handle,
 		},
 	}
 	if !runtimeConfiguration.Memory.ExtractionDisabled {

@@ -55,11 +55,14 @@ func TestTaskLauncherInjectsProfileAndRecallFromTheStoreAndQueuesExtraction(t *t
 	if errorValue != nil {
 		t.Fatalf("expected launch to succeed: %v", errorValue)
 	}
-	if len(launchResult.MemoryFacts) != 3 {
-		t.Fatalf("expected two profile lines and one recalled fact, got %+v", launchResult.MemoryFacts)
+	if len(launchResult.MemoryFacts) != 4 {
+		t.Fatalf("expected two profile lines, the recalled fact and its episode sibling, got %+v", launchResult.MemoryFacts)
 	}
 	if launchResult.MemoryFacts[0].SourceKind != "profile" || !containsMemoryFactContent(launchResult.MemoryFacts, "quarterly launch project is led by") {
 		t.Fatalf("expected the profile first and the recalled fact present, got %+v", launchResult.MemoryFacts)
+	}
+	if !containsMemoryFactContent(launchResult.MemoryFacts, "prefers terse release notes") {
+		t.Fatalf("expected the sibling extracted from the same episode, which carries no embedding of its own, got %+v", launchResult.MemoryFacts)
 	}
 
 	events := taskRunService.ListTaskEvent(launchResult.TurnResult.TaskRun.TaskRunID)
@@ -71,7 +74,7 @@ func TestTaskLauncherInjectsProfileAndRecallFromTheStoreAndQueuesExtraction(t *t
 	if errorValue := json.Unmarshal([]byte(bodiesByName["memory.recall_injected"]), &recallBody); errorValue != nil {
 		t.Fatalf("expected a recall event, got %v", bodiesByName)
 	}
-	if recallBody["profileLineCount"] != float64(2) || recallBody["recalledCount"] != float64(1) || recallBody["mode"] != bluememo.SearchModeHybrid {
+	if recallBody["profileLineCount"] != float64(2) || recallBody["recalledCount"] != float64(2) || recallBody["mode"] != bluememo.SearchModeHybrid {
 		t.Fatalf("expected the recall event to carry counts and mode, got %v", recallBody)
 	}
 	var extractionContext memory.ExtractionContext
