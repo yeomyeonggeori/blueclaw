@@ -819,6 +819,9 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	if strings.TrimSpace(scenario.Name) == "" {
 		return nil, errors.New("scenario name is required")
 	}
+	if errorValue := refuseActionsNamingToolsTheModelCannotCall(scenario); errorValue != nil {
+		return nil, errorValue
+	}
 	artifactPath, errorValue := prepareArtifactDirectory(scenario)
 	if errorValue != nil {
 		return nil, errorValue
@@ -4388,4 +4391,28 @@ func firstAvailableLanguageModel(candidates ...model.LanguageModelProvider) mode
 		}
 	}
 	return nil
+}
+
+// The action schema enum-locks toolName to the exposed palette.
+func refuseActionsNamingToolsTheModelCannotCall(scenario VirtualSessionScenario) error {
+	for turnIndex, virtualTurn := range scenario.Turns {
+		for _, actionResponse := range virtualTurn.ActionResponses {
+			toolName := scriptedActionToolName(actionResponse)
+			if toolName == "" || !slices.Contains(toolcontract.RuntimeOnlyKernelToolNames(), toolName) {
+				continue
+			}
+			return fmt.Errorf("%s turn %d scripts the model calling %s, which is a runtime-only kernel tool the model is never offered", scenario.Name, turnIndex+1, toolName)
+		}
+	}
+	return nil
+}
+
+func scriptedActionToolName(actionResponse string) string {
+	var action struct {
+		ToolName string `json:"toolName"`
+	}
+	if errorValue := json.Unmarshal([]byte(actionResponse), &action); errorValue != nil {
+		return ""
+	}
+	return strings.TrimSpace(action.ToolName)
 }

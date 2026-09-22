@@ -326,3 +326,39 @@ func equalJSONSchema(firstSchema json.RawMessage, secondSchema json.RawMessage) 
 	}
 	return reflect.DeepEqual(firstDocument, secondDocument)
 }
+
+var kernelToolNamesServedOutsideTheKernelProvider = []string{toolcontract.ImageReadToolName}
+
+func TestEveryKernelDescriptorMatchesWhatTheDeclarationPromises(t *testing.T) {
+	visibilityByToolName := map[string]string{}
+	for _, descriptorSpec := range kernelToolDescriptorSpecs {
+		visibilityByToolName[descriptorSpec.Name] = descriptorSpec.Visibility
+	}
+	for _, toolName := range toolcontract.ModelFacingKernelToolNames() {
+		if visibilityByToolName[toolName] != toolcontract.ToolVisibilityModel {
+			t.Fatalf("%s is declared model-facing but its descriptor says %q, so the model cannot name it", toolName, visibilityByToolName[toolName])
+		}
+	}
+	for _, toolName := range toolcontract.RuntimeOnlyKernelToolNames() {
+		if slices.Contains(kernelToolNamesServedOutsideTheKernelProvider, toolName) {
+			continue
+		}
+		visibility, isRegistered := visibilityByToolName[toolName]
+		if !isRegistered {
+			t.Fatalf("%s is declared runtime-only and the kernel provider registers no descriptor for it; give it one, or name it in kernelToolNamesServedOutsideTheKernelProvider", toolName)
+		}
+		if visibility != toolcontract.ToolVisibilityInternal {
+			t.Fatalf("%s is declared runtime-only but its descriptor says %q, so the model sees a tool the declaration hides", toolName, visibility)
+		}
+	}
+	for _, descriptorSpec := range kernelToolDescriptorSpecs {
+		if !toolcontract.IsKernelToolName(descriptorSpec.Name) {
+			t.Fatalf("the kernel provider registers %s, which no kernel tool list names", descriptorSpec.Name)
+		}
+	}
+	for _, toolName := range kernelToolNamesServedOutsideTheKernelProvider {
+		if _, isRegistered := visibilityByToolName[toolName]; isRegistered {
+			t.Fatalf("%s is named as served elsewhere but the kernel provider registers it", toolName)
+		}
+	}
+}
