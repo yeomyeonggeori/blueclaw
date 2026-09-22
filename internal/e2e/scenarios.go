@@ -1041,7 +1041,7 @@ func TaskHistoryQuestionAcceptanceScenario(artifactDirectoryPath string) Virtual
 	return VirtualSessionScenario{
 		Name:                  "task_history_question_acceptance",
 		ArtifactDirectoryPath: artifactDirectoryPath,
-		AllowedTools:          []string{"conversation_history", "memory_search"},
+		AllowedTools:          []string{"memory_search"},
 		Turns: []VirtualTurn{
 			{
 				Prompt:          "계약서 확인 요약 작업을 완료했다고 답해줘",
@@ -1058,16 +1058,12 @@ func TaskHistoryQuestionAcceptanceScenario(artifactDirectoryPath string) Virtual
 				Prompt:          "최근에 어떤 작업을 했는지 알려줘",
 				RouterTaskShape: agentcontract.TaskShapeResearchTask,
 				ActionResponses: []string{
-					actionCallTool("conversation_history", `{"limit":20}`),
-					actionFinishMessage("최근에는 계약서 확인 요약 작업을 완료했습니다.", "obs-001"),
+					actionFinishMessage("최근에는 계약서 확인 요약 작업을 완료했습니다."),
 				},
-				ExpectedToolCalls: []string{"conversation_history"},
-				ExpectedToolCallCounts: map[string]int{
-					"conversation_history": 1,
-				},
-				ExpectedEventCounts: []VirtualEventCount{
-					{Name: toolResultEventName("conversation_history"), BodyFragment: "계약서 확인 요약 작업", Count: 1},
-				},
+				ForbiddenExposedTools:  []string{"conversation_history"},
+				ForbidToolCalls:        true,
+				ForbiddenEvents:        []string{agentcontract.TaskEventAgentEvidenceMissing},
+				ExpectedModelContexts:  []string{"계약서 확인 요약 작업을 완료했습니다."},
 				ExpectedReplyFragments: []string{"계약서 확인 요약"},
 			},
 		},
