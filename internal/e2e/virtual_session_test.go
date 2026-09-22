@@ -1319,11 +1319,8 @@ func TestTaskHistoryQuestionAcceptance(t *testing.T) {
 		t.Fatalf("expected two turn results, got %d", len(result.TurnResults))
 	}
 	secondTurnResult := result.TurnResults[1]
-	if countEvents(secondTurnResult.Events, "tool.conversation_history.requested") != 1 {
-		t.Fatalf("expected one conversation_history request; events: %s", summarizeEvents(secondTurnResult.Events))
-	}
-	if !eventsContain(secondTurnResult.Events, "tool.conversation_history.result", "계약서 확인 요약 작업") {
-		t.Fatalf("expected conversation_history result to include prior task prompt; events: %s", summarizeEvents(secondTurnResult.Events))
+	if countEvents(secondTurnResult.Events, "tool.conversation_history.requested") != 0 {
+		t.Fatalf("conversation_history is an internal tool, so the model is never offered it; events: %s", summarizeEvents(secondTurnResult.Events))
 	}
 	if !strings.Contains(secondTurnResult.FinishMessage, "계약서 확인 요약") {
 		t.Fatalf("expected final reply to mention prior task, got %q", secondTurnResult.FinishMessage)
