@@ -155,7 +155,7 @@ func NewConnectorRuntime(identityService *identity.IdentityService, harness agen
 		logger = slog.Default()
 	}
 	toolCatalogBuilder := agentruntime.NewToolCatalogBuilder()
-	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, connectorRuntimeDefaultAllowedToolNames())
+	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, agentruntime.DefaultAllowedToolNames())
 
 	return &ConnectorRuntime{
 		identityService:       identityService,

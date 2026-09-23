@@ -68,13 +68,9 @@ func (connectorRuntime *ConnectorRuntime) UseCapabilityToolDescriptors(capabilit
 func (connectorRuntime *ConnectorRuntime) UseAllowedToolNames(allowedToolNames []string) {
 	trimmedToolNames := trimNonEmptyStrings(allowedToolNames)
 	if len(trimmedToolNames) == 0 {
-		trimmedToolNames = connectorRuntimeDefaultAllowedToolNames()
+		trimmedToolNames = agentruntime.DefaultAllowedToolNames()
 	}
 	connectorRuntime.toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, trimmedToolNames)
-}
-
-func connectorRuntimeDefaultAllowedToolNames() []string {
-	return append([]string{"conversation_history"}, agentruntime.DefaultAllowedToolNames()...)
 }
 
 func (connectorRuntime *ConnectorRuntime) UseAllowedToolNamesByProfile(allowedToolNamesByProfile map[string][]string, defaultAllowedToolNames []string) {
