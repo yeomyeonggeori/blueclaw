@@ -5,6 +5,7 @@ import { isElevatedIn, signingKeyring } from "../message-ownership.ts";
 import { isServedByTheRelay, readAuthorizationHeader } from "../adapters/buzz/blossom.ts";
 import type { OutgoingAttachment } from "../outgoing-attachment.ts";
 import { addReactionAsUser, removeReactionAsUser } from "../adapters/buzz/user-reactions.ts";
+import { mentionTags } from "../adapters/buzz/user-mentions.ts";
 import {
 	deleteChannelMessageAsUser,
 	editChannelMessageAsUser,
@@ -40,6 +41,7 @@ import {
 	type NewPersonalChannel,
 	type PersonalIdentity,
 	type PersonalFile,
+	type PersonalMentions,
 	type PersonalImage,
 	type PersonalMessage,
 	type PersonalMessagePage,
@@ -271,6 +273,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 				authorExternalID: message.authorPubkeyHex,
 				body: message.body,
 				postedAt: message.postedAt,
+				mentions: { externalIDs: message.mentions.pubkeyHexes, isEveryone: message.mentions.isEveryone },
 				reactions: message.reactions.map((reaction) => ({
 					emoji: reaction.emoji,
 					imageURL: reaction.imageURL,
@@ -294,6 +297,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 		body: string,
 		parentID?: string,
 		attachments: OutgoingAttachment[] = [],
+		mentions?: PersonalMentions,
 	): Promise<PersonalMessage> {
 		this.require(actor);
 		const sent = await sendChannelMessageAsUser({
@@ -303,6 +307,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 			message: body,
 			attachments,
 			replyToRootId: parentID,
+			extraTags: mentionTags(mentions && { pubkeyHexes: mentions.externalIDs, isEveryone: mentions.isEveryone }),
 			authTagJSON: this.settings.authTagJSON,
 		});
 		return {
@@ -312,6 +317,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 			authorExternalID: pubkeyFromSecret(actor.secret),
 			body: sent.body,
 			postedAt: new Date().toISOString(),
+			mentions,
 			reactions: [],
 			attachments: sent.attachments.map((attachment) => ({
 				id: attachment.url,
