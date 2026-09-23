@@ -1,0 +1,32 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+@import './theme.css';
+
+html {
+  scrollbar-gutter: stable;
+}
+
+html > body[data-scroll-locked] {
+  margin-right: 0px !important;
+  --removed-body-scroll-bar-size: 0px !important;
+}
+
+@font-face {
+  font-family: 'Cascadia Code';
+  src: url('/fonts/CascadiaCode.woff2') format('woff2');
+  font-weight: 200 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Cascadia Code';
+  src: url('/fonts/CascadiaCodeItalic.woff2') format('woff2');
+  font-weight: 200 700;
+  font-style: italic;
+  font-display: swap;
+}
+@theme {
+  --font-sans: 'Cascadia Code', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-mono: 'Cascadia Code', ui-monospace, SFMono-Regular, Menlo, monospace;
+}

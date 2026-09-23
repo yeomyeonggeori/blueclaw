@@ -1,0 +1,13 @@
+.DS_Store
+/node_modules/
+/.react-router/
+/build/
+.source
+/content/
+/app/theme.css
+/public/sitemap.xml
+/public/robots.txt
+/public/_redirects
+/public/favicon.svg
+/public/og.png
+/.wrangler/
