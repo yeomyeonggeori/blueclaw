@@ -1,12 +1,14 @@
 package integration
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/store/postgres"
+	"github.com/yeomyeonggeori/blueclaw/migrations"
 )
 
 func TestMigrationsApplyList(t *testing.T) {
@@ -15,8 +17,12 @@ func TestMigrationsApplyList(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected migrations to load: %v", errorValue)
 	}
-	if len(migrationPaths) != 35 {
-		t.Fatalf("expected 35 migration files, got %d", len(migrationPaths))
+	embeddedMigrations, errorValue := fs.ReadDir(migrations.Files, ".")
+	if errorValue != nil {
+		t.Fatalf("expected the embedded migrations to list: %v", errorValue)
+	}
+	if len(migrationPaths) == 0 || len(migrationPaths) != len(embeddedMigrations) {
+		t.Fatalf("expected the directory's %d migrations to be the %d the binary embeds", len(migrationPaths), len(embeddedMigrations))
 	}
 }
 

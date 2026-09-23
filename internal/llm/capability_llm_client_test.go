@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
+	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
 func TestCapabilityLLMClientSendsStructuredRequestWithoutAuthorization(t *testing.T) {
@@ -686,5 +687,22 @@ func TestCapabilityLLMClientSendsNoSessionIDWithoutAConversation(t *testing.T) {
 		if _, isPresent := body["sessionID"]; isPresent {
 			t.Errorf("%s invented a session: %v", path, body["sessionID"])
 		}
+	}
+}
+
+func TestCapabilityLLMClientHandsOnTheWireExchangeCapabilitydSaw(t *testing.T) {
+	httpClient := fakeCapabilityHTTPClient{handler: func(request *http.Request) (*http.Response, error) {
+		return jsonCapabilityResponse(http.StatusOK, `{"provider":"capabilityLLM","content":"{}","wireExchange":{"endpoint":"https://router.example.com/v1/chat/completions","request":"{\"seed\": 7}","response":"{\"provider\":\"Example\"}"}}`), nil
+	}}
+	client := CapabilityLLMClient{CapabilityClient: capability.Client{Endpoint: "http://internkim-capability", HTTPClient: httpClient}}
+	captureContext, capture := model.WithWireCapture(context.Background())
+
+	if _, errorValue := client.GenerateStructuredResponse(captureContext, buildTestStructuredResponseRequest()); errorValue != nil {
+		t.Fatalf("expected structured response: %v", errorValue)
+	}
+
+	exchange := capture.Exchange()
+	if exchange == nil || exchange.Endpoint != "https://router.example.com/v1/chat/completions" || exchange.Request != `{"seed": 7}` || exchange.Response != `{"provider":"Example"}` {
+		t.Fatalf("expected the exchange capabilityd put on the wire, got %+v", exchange)
 	}
 }

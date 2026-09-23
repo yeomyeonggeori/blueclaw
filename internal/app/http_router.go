@@ -12,6 +12,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/runtimecontrol"
 	"github.com/yeomyeonggeori/blueclaw/internal/sessionquery"
+	"github.com/yeomyeonggeori/blueclaw/internal/store/postgres"
 	"github.com/yeomyeonggeori/blueclaw/internal/userapi"
 )
 
@@ -43,6 +44,8 @@ func newRouterDependencies(components applicationComponents) httpserver.RouterDe
 		},
 		ScheduleHandler:       newScheduleHandler(runtimeConfiguration, services, directory),
 		ConnectorDiagnostics:  adminapi.ConnectorEventDiagnosticHandler{Repository: services.repositories.connectorEventDiagnostic},
+		LLMCallExchange:       llmCallExchangeHandler(services.repositories.llmCall),
+		TurnInput:             turnInputHandler(services.repositories.taskEvent),
 		ConversationReset:     adminapi.ConversationResetHandler{Repository: services.repositories.conversationReset},
 		MemoryHandler:         adminapi.MemoryHandler{Store: components.memory.store, IdentityService: directory.identityService},
 		BackupHandler:         adminapi.BackupHandler{Coordinator: components.backupCoordinator},
@@ -194,4 +197,18 @@ func newScheduleHandler(runtimeConfiguration config.RuntimeConfiguration, servic
 		RepairRepository:  services.repositories.scheduleCreatorRepair,
 		ReaderPersonID:    signedReader(runtimeConfiguration.Memory.AdminAssertionKeyPath, true),
 	}
+}
+
+func llmCallExchangeHandler(repository *postgres.LLMCallRepository) adminapi.LLMCallExchangeHandler {
+	if repository == nil {
+		return adminapi.LLMCallExchangeHandler{}
+	}
+	return adminapi.LLMCallExchangeHandler{Repository: repository}
+}
+
+func turnInputHandler(repository *postgres.TaskEventRepository) adminapi.TurnInputHandler {
+	if repository == nil {
+		return adminapi.TurnInputHandler{}
+	}
+	return adminapi.TurnInputHandler{Repository: repository}
 }

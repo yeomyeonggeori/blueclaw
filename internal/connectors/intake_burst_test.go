@@ -3,6 +3,7 @@ package connectors
 import (
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -314,15 +315,55 @@ func TestABurstRecordsItsOneDecisionCallInOneLedger(t *testing.T) {
 	}
 }
 
+func TestADecisionNoTaskClaimsIsRecordedAgainstItsMessage(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	connectorRuntime := NewConnectorRuntime(testConnectorIdentityService(), nil, taskRunService, task.NewTaskEventService(), nil)
+	connectorRuntime.UseTaskRunService(taskRunService)
+	connectorRuntime.RegisterAdapter(&testAdapter{senderEmail: "invited@example.com"})
+	connectorRuntime.UseIntakeDecider(&recordingCallLedgerDecider{})
+	tasklessSubjects := [][]string{}
+	connectorRuntime.UseTasklessLLMCallRecorder(func(subjects []string, _ agentcontract.LLMCallRecord) {
+		tasklessSubjects = append(tasklessSubjects, subjects)
+	})
+	receivedAt := time.Unix(1756800000, 0)
+	claimedEvents := []QueuedConnectorEvent{
+		burstChannelQueuedEvent("message-1", receivedAt, true, "이거 정리해줘"),
+		burstChannelQueuedEvent("message-2", receivedAt.Add(time.Second), true, "이어서 부탁해"),
+	}
+	unclaimedEvents := []QueuedConnectorEvent{
+		burstChannelQueuedEvent("message-3", receivedAt.Add(time.Minute), true, "다음 주 출시 확정됐어요!"),
+		burstChannelQueuedEvent("message-4", receivedAt.Add(time.Minute+time.Second), true, "다들 고생했어요"),
+	}
+
+	connectorRuntime.decideClaimedBurst(context.Background(), claimedEvents)
+	connectorRuntime.decideClaimedBurst(context.Background(), unclaimedEvents)
+	connectorRuntime.recordHeldIntakeCalls("task-1", claimedEvents[0].Event)
+	for _, queuedEvent := range append(claimedEvents, unclaimedEvents...) {
+		connectorRuntime.recordUnclaimedIntakeCalls(queuedEvent.Event)
+	}
+
+	if len(tasklessSubjects) != 1 || !slices.Equal(tasklessSubjects[0], []string{"message-3", "message-4"}) {
+		t.Fatalf("expected only the unclaimed decision recorded once against both messages it judged, got %v", tasklessSubjects)
+	}
+}
+
 type recordingCallLedgerDecider struct{}
 
 func (decider *recordingCallLedgerDecider) Decide(_ context.Context, request agentcontract.IntakeDecisionRequest, callLedger *agentcontract.IntakeCallLedger) (agentcontract.IntakeDecisions, error) {
 	if callLedger != nil {
-		callLedger.Records = append(callLedger.Records, agentcontract.LLMCallRecord{Model: "decision-model", DecidedMessageCount: len(request.Messages)})
+		callLedger.Records = append(callLedger.Records, agentcontract.LLMCallRecord{Model: "decision-model", DecidedMessageIDs: decisionMessageIDs(request.Messages)})
 	}
 	decisions := agentcontract.IntakeDecisions{}
 	for _, message := range request.Messages {
 		decisions.Messages = append(decisions.Messages, agentcontract.IntakeMessageDecision{MessageID: message.MessageID, Addressing: addressedToBot()})
 	}
 	return decisions, nil
+}
+
+func decisionMessageIDs(messages []agentcontract.IntakeDecisionMessage) []string {
+	messageIDs := []string{}
+	for _, message := range messages {
+		messageIDs = append(messageIDs, message.MessageID)
+	}
+	return messageIDs
 }

@@ -47,6 +47,9 @@ func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, agentHarne
 	logRejectedPersonaDocuments(logger, startupInstructions.RejectedDocuments)
 	taskTierLanguageModels, taskModelsError := resolveTaskTierLanguageModelProviders(runtimeConfiguration, logger)
 	intakeLanguageModel, intakeModelError := resolveIntakeLanguageModelProvider(runtimeConfiguration, logger)
+	recordTasklessCall := newTasklessLLMCallRecorder(services.repositories.llmCall, logger).observer()
+	taskTierLanguageModels = observedTaskTierLanguageModels(taskTierLanguageModels, recordTasklessCall)
+	intakeLanguageModel = observedLanguageModel(intakeLanguageModel, recordTasklessCall)
 	kernel := agentKernel{
 		instructionBundleLoader: func() agentcontract.InstructionBundle {
 			return loadAgentInstructionBundle(runtimeConfiguration, capabilityRegistry)

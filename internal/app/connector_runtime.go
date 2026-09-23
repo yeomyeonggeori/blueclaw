@@ -42,6 +42,7 @@ func newConnectorRuntime(runtimeConfiguration config.RuntimeConfiguration, found
 	connectorRuntime.UseCompanyLocaleProvider(directory.companyLocaleProvider)
 	connectorRuntime.UseTurnRouter(turnRouter)
 	connectorRuntime.UseIntakeDecider(decisionPlanner)
+	connectorRuntime.UseTasklessLLMCallRecorder(newTasklessLLMCallRecorder(services.repositories.llmCall, logger))
 	connectorRuntime.UseTaskLauncher(taskLauncher)
 	connectorRuntime.UseApprovalGate(kernel.toolCatalog.approvalGate)
 	connectorRuntime.UseAgentIdentityProvider(kernel.agentIdentityProvider)

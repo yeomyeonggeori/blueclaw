@@ -4,6 +4,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/backup"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/store/postgres"
+	"github.com/yeomyeonggeori/blueclaw/migrations"
 )
 
 func buildBackupManifest(runtimeConfiguration config.RuntimeConfiguration, database postgres.Database) backup.Manifest {
@@ -16,7 +17,7 @@ func buildBackupManifest(runtimeConfiguration config.RuntimeConfiguration, datab
 	return backup.Manifest{
 		ContractVersion: 1,
 		BlueclawVersion: "main",
-		SchemaVersion:   "034_drop_graphiti_memory",
+		SchemaVersion:   migrations.LatestVersion(),
 		PersistentDataRoots: []string{
 			"/workspace/.blueclaw",
 			runtimeConfiguration.Terminal.WorkspaceRootPath,

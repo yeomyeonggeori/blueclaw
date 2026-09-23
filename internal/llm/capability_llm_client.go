@@ -52,6 +52,7 @@ type capabilityChatCompletionRequestDocument struct {
 
 type capabilityChatCompletionResponseDocument struct {
 	ChatCompletionResponse
+	reportedWireExchange
 	UsedFallback   bool   `json:"usedFallback,omitempty"`
 	FallbackReason string `json:"fallbackReason,omitempty"`
 }
@@ -73,6 +74,7 @@ type capabilityStructuredResponseDocument struct {
 	Usage            Usage  `json:"usage"`
 	UsedFallback     bool   `json:"usedFallback,omitempty"`
 	FallbackReason   string `json:"fallbackReason,omitempty"`
+	reportedWireExchange
 }
 
 func (capabilityLLMClient CapabilityLLMClient) GenerateResponse(responseContext context.Context, prompt string) (string, error) {
@@ -202,6 +204,7 @@ func (capabilityLLMClient CapabilityLLMClient) generateResponse(responseContext 
 	if errorValue != nil {
 		return "", errorValue
 	}
+	responseDocument.record(responseContext)
 
 	return responseDocument.Content, nil
 }
@@ -221,6 +224,7 @@ func (capabilityLLMClient CapabilityLLMClient) GenerateStructuredResponse(respon
 	if errorValue != nil {
 		return StructuredResponse{}, errorValue
 	}
+	responseDocument.record(responseContext)
 
 	providerName := strings.TrimSpace(responseDocument.ProviderName)
 	if providerName == "" {
@@ -273,6 +277,7 @@ func (capabilityLLMClient CapabilityLLMClient) generateChatCompletion(responseCo
 	if errorValue != nil {
 		return ChatCompletionResponse{}, errorValue
 	}
+	responseDocument.record(responseContext)
 	response := responseDocument.ChatCompletionResponse
 	response.UsedFallback = responseDocument.UsedFallback
 	response.FallbackReason = responseDocument.FallbackReason

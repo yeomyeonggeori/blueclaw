@@ -27,6 +27,7 @@ type capabilityDecisionResponseDocument struct {
 	ProviderName     string                          `json:"providerName"`
 	UpstreamProvider string                          `json:"upstreamProvider"`
 	LatencyMS        int64                           `json:"latencyMs"`
+	reportedWireExchange
 }
 
 func (decisionClient CapabilityDecisionClient) Decide(responseContext context.Context, request model.DecisionRequest) (model.DecisionResponse, error) {
@@ -50,6 +51,7 @@ func (decisionClient CapabilityDecisionClient) Decide(responseContext context.Co
 	if len(responseDocument.Answers) == 0 {
 		return model.DecisionResponse{}, errors.New("the decision route answered no question")
 	}
+	responseDocument.record(responseContext)
 	return model.DecisionResponse{
 		Answers:          typedDecisionAnswers(responseDocument.Answers, request.Questions),
 		Usage:            decisionUsage(responseDocument.Usage),

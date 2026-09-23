@@ -9,14 +9,22 @@ import (
 )
 
 const defaultRetentionDays = 14
+const longestTasklessLLMCallRetentionDays = 30
+
+type LLMCallPruner interface {
+	PruneTasklessLLMCallsBefore(time.Time) (int64, error)
+	DeleteUnreferencedLedgerParts() (int64, error)
+}
 
 type TaskRetentionSweeper struct {
-	TaskRunService      *task.TaskRunService
-	TaskEventService    *task.TaskEventService
-	TaskStepService     *task.TaskStepService
-	TaskArtifactService *task.TaskArtifactService
-	Logger              *slog.Logger
-	RetentionDays       int
+	TaskRunService               *task.TaskRunService
+	TaskEventService             *task.TaskEventService
+	TaskStepService              *task.TaskStepService
+	TaskArtifactService          *task.TaskArtifactService
+	LLMCallPruner                LLMCallPruner
+	Logger                       *slog.Logger
+	RetentionDays                int
+	TasklessLLMCallRetentionDays int
 }
 
 func (sweeper TaskRetentionSweeper) Start(ctx context.Context, interval time.Duration) {
@@ -50,7 +58,35 @@ func (sweeper TaskRetentionSweeper) SweepOnce(now time.Time) int {
 	if len(prunedIDs) > 0 {
 		sweeper.logger().Info("task_retention.swept", "count", len(prunedIDs))
 	}
+	sweeper.pruneLLMCalls(now)
 	return len(prunedIDs)
+}
+
+func (sweeper TaskRetentionSweeper) pruneLLMCalls(now time.Time) {
+	if sweeper.LLMCallPruner == nil {
+		return
+	}
+	cutoff := now.AddDate(0, 0, -TasklessLLMCallRetentionDays(sweeper.TasklessLLMCallRetentionDays))
+	prunedCallCount, errorValue := sweeper.LLMCallPruner.PruneTasklessLLMCallsBefore(cutoff)
+	if errorValue != nil {
+		sweeper.logger().Warn("llm_call_retention.prune_failed", "error", errorValue.Error())
+		return
+	}
+	deletedPartCount, errorValue := sweeper.LLMCallPruner.DeleteUnreferencedLedgerParts()
+	if errorValue != nil {
+		sweeper.logger().Warn("llm_call_retention.part_sweep_failed", "error", errorValue.Error())
+		return
+	}
+	if prunedCallCount > 0 || deletedPartCount > 0 {
+		sweeper.logger().Info("llm_call_retention.swept", "tasklessCalls", prunedCallCount, "exchangeParts", deletedPartCount)
+	}
+}
+
+func TasklessLLMCallRetentionDays(configuredDays int) int {
+	if configuredDays <= 0 || configuredDays > longestTasklessLLMCallRetentionDays {
+		return longestTasklessLLMCallRetentionDays
+	}
+	return configuredDays
 }
 
 func (sweeper TaskRetentionSweeper) logger() *slog.Logger {

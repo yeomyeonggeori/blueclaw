@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -19,6 +18,10 @@ type IntakeDecider interface {
 
 func (connectorRuntime *ConnectorRuntime) UseIntakeDecider(intakeDecider IntakeDecider) {
 	connectorRuntime.intakeDecider = intakeDecider
+}
+
+func (connectorRuntime *ConnectorRuntime) UseTasklessLLMCallRecorder(recordTasklessLLMCall func(subjects []string, record agentcontract.LLMCallRecord)) {
+	connectorRuntime.recordTasklessLLMCall = recordTasklessLLMCall
 }
 
 type inboundDecision struct {
@@ -59,7 +62,7 @@ func (connectorRuntime *ConnectorRuntime) decideInboundMessageNow(ctx context.Co
 	callLedger := &agentcontract.IntakeCallLedger{}
 	decisions, errorValue := connectorRuntime.intakeDecider.Decide(ctx, decisionRequest, callLedger)
 	connectorRuntime.recordIntakeCalls(ledgerTaskRunID, callLedger.Records)
-	holdIntakeCallRecords(decisionMemo, ledgerTaskRunID, callLedger.Records)
+	connectorRuntime.holdIntakeCallRecords(decisionMemo, ledgerTaskRunID, event.MessageID, callLedger.Records)
 	if errorValue != nil {
 		return agentcontract.IntakeMessageDecision{}, errorValue
 	}
@@ -70,11 +73,41 @@ func (connectorRuntime *ConnectorRuntime) decideInboundMessageNow(ctx context.Co
 	return decision, nil
 }
 
-func holdIntakeCallRecords(decisionMemo *inboundDecision, ledgerTaskRunID string, callRecords []agentcontract.LLMCallRecord) {
-	if decisionMemo == nil || strings.TrimSpace(ledgerTaskRunID) != "" {
+func (connectorRuntime *ConnectorRuntime) holdIntakeCallRecords(decisionMemo *inboundDecision, ledgerTaskRunID string, messageID string, callRecords []agentcontract.LLMCallRecord) {
+	if strings.TrimSpace(ledgerTaskRunID) != "" {
+		return
+	}
+	if decisionMemo == nil {
+		connectorRuntime.recordTasklessIntakeCalls(messageID, callRecords)
 		return
 	}
 	decisionMemo.heldCalls = &heldIntakeCalls{records: callRecords}
+}
+
+func (connectorRuntime *ConnectorRuntime) recordUnclaimedIntakeCalls(event PlatformInboundEvent) {
+	if event.intakeDecision == nil || event.intakeDecision.heldCalls == nil {
+		return
+	}
+	heldCalls := event.intakeDecision.heldCalls
+	heldCalls.recordOnce.Do(func() {
+		connectorRuntime.recordTasklessIntakeCalls(event.MessageID, heldCalls.records)
+	})
+}
+
+func (connectorRuntime *ConnectorRuntime) recordTasklessIntakeCalls(messageID string, callRecords []agentcontract.LLMCallRecord) {
+	if connectorRuntime.recordTasklessLLMCall == nil {
+		return
+	}
+	for _, callRecord := range callRecords {
+		connectorRuntime.recordTasklessLLMCall(judgedMessageIDs(callRecord, messageID), callRecord)
+	}
+}
+
+func judgedMessageIDs(callRecord agentcontract.LLMCallRecord, messageID string) []string {
+	if len(callRecord.DecidedMessageIDs) > 0 {
+		return callRecord.DecidedMessageIDs
+	}
+	return []string{messageID}
 }
 
 func holdBurstIntakeCallRecords(events []PlatformInboundEvent, ledgerTaskRunID string, callRecords []agentcontract.LLMCallRecord) {
@@ -122,7 +155,7 @@ func heldIntakeDecisionAttributes(event PlatformInboundEvent) []any {
 		slog.String("decisionModel", callRecord.Model),
 		slog.Int64("decisionLatencyMs", callRecord.LatencyMS),
 		slog.Float64("decisionCostUSD", callRecord.CostUSD),
-		slog.Int("decidedMessageCount", callRecord.DecidedMessageCount),
+		slog.Int("decidedMessageCount", len(callRecord.DecidedMessageIDs)),
 	)
 }
 
@@ -132,7 +165,7 @@ func (connectorRuntime *ConnectorRuntime) recordIntakeCalls(taskRunID string, ca
 		return
 	}
 	for _, callRecord := range callRecords {
-		connectorRuntime.taskRunService.AppendTaskEvent(trimmedTaskRunID, agentcontract.TaskEventLLMCall, agentruntime.MarshalBody(callRecord))
+		connectorRuntime.taskRunService.AppendLLMCall(trimmedTaskRunID, callRecord)
 	}
 }
 

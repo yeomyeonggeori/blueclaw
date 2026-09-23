@@ -83,7 +83,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) appendSelectionCallRecords(toolCon
 		return
 	}
 	for _, record := range records {
-		toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventLLMCall, MarshalBody(record))
+		toolCatalogBuilder.taskRunService.AppendLLMCall(taskRunID, record)
 	}
 }
 
