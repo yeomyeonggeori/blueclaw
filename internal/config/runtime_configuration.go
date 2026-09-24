@@ -118,12 +118,13 @@ type LanguageModelConfiguration struct {
 // list of these, tried in order, and nothing in this repository decides what
 // goes in one.
 type ModelEndpointConfiguration struct {
-	Endpoint        string   `json:"endpoint"`
-	Model           string   `json:"model"`
-	APIKeyPath      string   `json:"apiKeyPath,omitempty"`
-	ProviderOrder   []string `json:"providerOrder,omitempty"`
-	ProviderSort    string   `json:"providerSort,omitempty"`
-	ReasoningEffort string   `json:"reasoningEffort,omitempty"`
+	Endpoint          string   `json:"endpoint"`
+	Model             string   `json:"model"`
+	APIKeyPath        string   `json:"apiKeyPath,omitempty"`
+	APIKeyEnvironment string   `json:"apiKeyEnvironment,omitempty"`
+	ProviderOrder     []string `json:"providerOrder,omitempty"`
+	ProviderSort      string   `json:"providerSort,omitempty"`
+	ReasoningEffort   string   `json:"reasoningEffort,omitempty"`
 }
 
 type LanguageModelCapabilityConfiguration struct {
@@ -233,6 +234,10 @@ type SchedulerConfiguration struct {
 
 func LoadRuntimeConfiguration(path string) (RuntimeConfiguration, error) {
 	document, errorValue := os.ReadFile(path)
+	if errorValue != nil {
+		return RuntimeConfiguration{}, errorValue
+	}
+	document, errorValue = expandEnvironmentReferences(document)
 	if errorValue != nil {
 		return RuntimeConfiguration{}, errorValue
 	}

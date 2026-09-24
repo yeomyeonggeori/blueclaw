@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
@@ -267,5 +268,23 @@ func TestDecisionEndpointWithoutAModelIsRefused(t *testing.T) {
 	}}
 	if _, errorValue := NewConfiguredDecisionModel(runtimeConfiguration); errorValue == nil {
 		t.Fatal("a decision endpoint that names no model must be refused")
+	}
+}
+
+func TestAnEndpointReadsItsKeyFromTheNamedEnvironmentVariable(t *testing.T) {
+	t.Setenv("EXAMPLE_MODEL_KEY", "a-key")
+	apiKey, errorValue := endpointAPIKey(config.ModelEndpointConfiguration{Endpoint: "https://example.com/v1", APIKeyEnvironment: "EXAMPLE_MODEL_KEY"})
+	if errorValue != nil || apiKey != "a-key" {
+		t.Fatalf("expected the key from EXAMPLE_MODEL_KEY, got %q, %v", apiKey, errorValue)
+	}
+}
+
+func TestAnEndpointRefusesAnUnsetKeyVariableAndASecondKeySource(t *testing.T) {
+	t.Setenv("EXAMPLE_MODEL_KEY", "a-key")
+	if _, errorValue := endpointAPIKey(config.ModelEndpointConfiguration{Endpoint: "https://example.com/v1", APIKeyEnvironment: "EXAMPLE_UNSET_KEY"}); errorValue == nil || !strings.Contains(errorValue.Error(), "EXAMPLE_UNSET_KEY") {
+		t.Fatalf("an unset key variable must be refused by name, got %v", errorValue)
+	}
+	if _, errorValue := endpointAPIKey(config.ModelEndpointConfiguration{Endpoint: "https://example.com/v1", APIKeyEnvironment: "EXAMPLE_MODEL_KEY", APIKeyPath: "/tmp/key"}); errorValue == nil {
+		t.Fatal("an endpoint naming both a key file and a key variable must be refused")
 	}
 }
