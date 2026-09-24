@@ -33,6 +33,8 @@ type taskRepositories struct {
 	conversationReset            adminapi.ConversationResetRepository
 	taskWaitToken                task.TaskWaitTokenRepository
 	scheduledDelivery            scheduler.ScheduleDeliveryRepository
+	llmCall                      *postgres.LLMCallRepository
+	taskEvent                    *postgres.TaskEventRepository
 }
 
 func newTaskServices(runtimeConfiguration config.RuntimeConfiguration, database postgres.Database, companyProvider func() agentcontract.CompanyContext, logger *slog.Logger) taskServices {
@@ -57,7 +59,11 @@ func newTaskRepositories(database postgres.Database, services taskServices, comp
 		return taskRepositories{}
 	}
 	personRepository := postgres.NewPersonRepository(database)
-	services.taskEventService.UseRepository(postgres.NewTaskEventRepository(database))
+	llmCallRepository := postgres.NewLLMCallRepository(database)
+	taskEventRepository := postgres.NewTaskEventRepository(database)
+	services.taskEventService.UseRepository(taskEventRepository)
+	services.taskEventService.UsePartedTaskEventRepository(taskEventRepository)
+	services.taskEventService.UseLLMCallRepository(llmCallRepository)
 	services.taskStepService.UseRepository(postgres.NewTaskStepRepository(database))
 	services.taskArtifactService.UseRepository(postgres.NewTaskArtifactRepository(database))
 	services.taskRunService.UseRepository(postgres.NewTaskRunRepository(database))
@@ -75,5 +81,7 @@ func newTaskRepositories(database postgres.Database, services taskServices, comp
 		conversationReset:            postgres.NewConversationResetRepository(database),
 		taskWaitToken:                postgres.NewTaskWaitTokenRepository(database),
 		scheduledDelivery:            postgres.NewRawEventRepository(database),
+		llmCall:                      &llmCallRepository,
+		taskEvent:                    &taskEventRepository,
 	}
 }

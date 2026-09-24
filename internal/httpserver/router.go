@@ -26,6 +26,8 @@ type RouterDependencies struct {
 	QuiesceHandler        adminapi.QuiesceHandler
 	ScheduleHandler       adminapi.ScheduleHandler
 	ConnectorDiagnostics  adminapi.ConnectorEventDiagnosticHandler
+	LLMCallExchange       adminapi.LLMCallExchangeHandler
+	TurnInput             adminapi.TurnInputHandler
 	ConversationReset     adminapi.ConversationResetHandler
 	BackupHandler         adminapi.BackupHandler
 	TaskInboxHandler      userapi.TaskInboxHandler
@@ -62,6 +64,8 @@ func NewRouter(routerDependencies RouterDependencies) http.Handler {
 	multiplexer.HandleFunc("GET /admin/api/run", routerDependencies.TaskMonitorHandler.HandleListTaskRun)
 	multiplexer.HandleFunc("GET /admin/api/run/search", routerDependencies.TaskSearchHandler.HandleSearchTaskRuns)
 	multiplexer.HandleFunc("GET /admin/api/run/detail", routerDependencies.TaskMonitorHandler.HandleGetTaskRun)
+	multiplexer.HandleFunc("GET /admin/api/run/llm-call", routerDependencies.LLMCallExchange.HandleGet)
+	multiplexer.HandleFunc("GET /admin/api/run/turn-input", routerDependencies.TurnInput.HandleGet)
 	multiplexer.HandleFunc("POST /admin/api/run/delete", routerDependencies.TaskMonitorHandler.HandleDeleteTaskRun)
 	multiplexer.HandleFunc("POST /admin/api/run/retry", routerDependencies.TaskMonitorHandler.HandleRetryTaskRun)
 	multiplexer.HandleFunc("POST /admin/api/run/start", routerDependencies.TaskRunHandler.HandleRunTask)

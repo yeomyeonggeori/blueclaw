@@ -24,4 +24,8 @@ type EventDiagnostic struct {
 	IngestedAt        time.Time       `json:"ingestedAt"`
 	StartedAt         *time.Time      `json:"startedAt,omitempty"`
 	CompletedAt       *time.Time      `json:"completedAt,omitempty"`
+	SenderName        string          `json:"senderName,omitempty"`
+	PromptPreview     string          `json:"promptPreview,omitempty"`
+	DecisionCallID    string          `json:"decisionCallID,omitempty"`
+	Decision          json.RawMessage `json:"decision,omitempty"`
 }

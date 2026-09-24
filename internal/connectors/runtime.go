@@ -118,6 +118,7 @@ type ConnectorRuntime struct {
 	unknownAccountResolver UnknownAccountResolver
 	harness                agentcontract.Harness
 	intakeDecider          IntakeDecider
+	recordTasklessLLMCall  func(subjects []string, record agentcontract.LLMCallRecord)
 	turnRouter             TurnRouter
 	replyGenerator         ReplyGenerator
 	launchFailureCompleter LaunchFailureCompleter
@@ -217,7 +218,7 @@ func (connectorRuntime *ConnectorRuntime) planTurn(ctx context.Context, taskRunI
 	turnDecision, errorValue := connectorRuntime.turnRouter.PlanObserved(ctx, request, callLedger)
 	if trimmedTaskRunID := strings.TrimSpace(taskRunID); trimmedTaskRunID != "" && connectorRuntime.taskRunService != nil {
 		for _, callRecord := range callLedger.Records {
-			connectorRuntime.taskRunService.AppendTaskEvent(trimmedTaskRunID, agentcontract.TaskEventLLMCall, agentruntime.MarshalBody(callRecord))
+			connectorRuntime.taskRunService.AppendLLMCall(trimmedTaskRunID, callRecord)
 		}
 	}
 	return turnDecision, errorValue
@@ -372,6 +373,7 @@ func (connectorRuntime *ConnectorRuntime) processInboundEvent(ctx context.Contex
 
 func (connectorRuntime *ConnectorRuntime) processInboundEventWithReplySender(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent, sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error)) (ConnectorRuntimeResult, error) {
 	event = withInboundDecision(event)
+	defer connectorRuntime.recordUnclaimedIntakeCalls(event)
 	ctx = withConnectorEvent(ctx, event)
 	if event.TaskRetry != nil {
 		return connectorRuntime.processTaskRetry(ctx, adapter, event, sendReply)

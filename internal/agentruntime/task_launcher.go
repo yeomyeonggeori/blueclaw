@@ -290,7 +290,7 @@ func (taskLauncher *TaskLauncher) appendTurnRouterCallRecords(taskRunID string, 
 		return
 	}
 	for _, callRecord := range callRecords {
-		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventLLMCall, MarshalBody(callRecord))
+		taskLauncher.taskRunService.AppendLLMCall(taskRunID, callRecord)
 	}
 }
 
@@ -580,7 +580,7 @@ func (step runTurnLaunchStep) Run(ctx context.Context, execution *taskLaunchExec
 	)
 	turnRequest.CarriedOutCalls = step.CarriedOutCalls
 	turnResult, errorValue := execution.Launcher.harness.RunTurn(ctx, turnRequest)
-	execution.Launcher.recordModelVisibleContext(turnResult.TaskRun.TaskRunID, turnRequest)
+	execution.Launcher.recordTurnInput(turnResult.TaskRun.TaskRunID, turnRequest)
 	return turnResult, errorValue
 }
 

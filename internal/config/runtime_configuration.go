@@ -227,6 +227,7 @@ type SchedulerConfiguration struct {
 	RetentionCheckIntervalMinute int `json:"retentionCheckIntervalMinute"`
 	SchedulePollIntervalSecond   int `json:"taskSchedulePollIntervalSecond"`
 	TaskRetentionDays            int `json:"taskRetentionDays"`
+	TasklessLLMCallRetentionDays int `json:"tasklessLLMCallRetentionDays"`
 }
 
 func LoadRuntimeConfiguration(path string) (RuntimeConfiguration, error) {

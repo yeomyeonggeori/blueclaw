@@ -19,7 +19,6 @@ var eventNamesWrittenOnBothSides = map[string]string{
 	"agent.limit_stop":            "the host, which sees every turn result",
 	"agent.goal.blocked":          "the host, which sees every turn result",
 	"task.stop.outbox_suppressed": "the host, which is what cancelled the run",
-	"llm.call":                    "undecided: the host records the calls it makes and the agent records its own, which may be two events of one kind rather than one event with two writers",
 }
 
 const taskEventNameDeclarationPath = "../../.dependency/bluecollar/agentcontract/task_event_name.go"

@@ -46,8 +46,16 @@ func (rawEventRepository RawEventRepository) ListConnectorEventDiagnostics(ctx c
 	rows, errorValue := rawEventRepository.database.SQL.QueryContext(ctx, `
 SELECT raw_event_id, platform, conversation_id, external_message_id, connector_status,
   connector_attempt_count, connector_error, connector_result_json, ingested_at,
-  connector_started_at, connector_completed_at
+  connector_started_at, connector_completed_at,
+  coalesce(connector_event_json->'event'->'context'->'sender'->>'name', ''),
+  left(coalesce(connector_event_json->'event'->>'prompt', ''), `+strconv.Itoa(promptPreviewCharacters)+`),
+  coalesce(decision.llm_call_id, ''), coalesce(decision.record, '')
 FROM raw_event
+LEFT JOIN LATERAL (
+  SELECT llm_call_id, record FROM llm_call
+  WHERE llm_call.subjects @> ARRAY[raw_event.external_message_id] AND llm_call.record::jsonb->>'kind' = 'decision'
+  ORDER BY llm_call.created_at DESC LIMIT 1
+) decision ON true
 WHERE `+strings.Join(conditions, " AND ")+`
 ORDER BY ingested_at DESC
 LIMIT $`+strconv.Itoa(len(arguments)), arguments...)
@@ -67,10 +75,13 @@ LIMIT $`+strconv.Itoa(len(arguments)), arguments...)
 	return diagnostics, rows.Err()
 }
 
+const promptPreviewCharacters = 280
+
 func scanConnectorEventDiagnostic(rows *sql.Rows) (connectors.EventDiagnostic, error) {
 	var diagnostic connectors.EventDiagnostic
 	var connectorError sql.NullString
 	var result []byte
+	var decision string
 	var startedAt sql.NullTime
 	var completedAt sql.NullTime
 	errorValue := rows.Scan(
@@ -85,12 +96,19 @@ func scanConnectorEventDiagnostic(rows *sql.Rows) (connectors.EventDiagnostic, e
 		&diagnostic.IngestedAt,
 		&startedAt,
 		&completedAt,
+		&diagnostic.SenderName,
+		&diagnostic.PromptPreview,
+		&diagnostic.DecisionCallID,
+		&decision,
 	)
 	if errorValue != nil {
 		return connectors.EventDiagnostic{}, errorValue
 	}
 	diagnostic.ConnectorError = strings.TrimSpace(connectorError.String)
 	diagnostic.Result = json.RawMessage(result)
+	if decision != "" {
+		diagnostic.Decision = json.RawMessage(decision)
+	}
 	if startedAt.Valid {
 		diagnostic.StartedAt = &startedAt.Time
 	}

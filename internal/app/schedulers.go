@@ -55,12 +55,17 @@ func newSchedulePoller(runtimeConfiguration config.RuntimeConfiguration, service
 }
 
 func newTaskRetentionSweeper(runtimeConfiguration config.RuntimeConfiguration, services taskServices, logger *slog.Logger) *scheduler.TaskRetentionSweeper {
-	return &scheduler.TaskRetentionSweeper{
-		TaskRunService:      services.taskRunService,
-		TaskEventService:    services.taskEventService,
-		TaskStepService:     services.taskStepService,
-		TaskArtifactService: services.taskArtifactService,
-		Logger:              logger,
-		RetentionDays:       runtimeConfiguration.Scheduler.TaskRetentionDays,
+	sweeper := &scheduler.TaskRetentionSweeper{
+		TaskRunService:               services.taskRunService,
+		TaskEventService:             services.taskEventService,
+		TaskStepService:              services.taskStepService,
+		TaskArtifactService:          services.taskArtifactService,
+		Logger:                       logger,
+		RetentionDays:                runtimeConfiguration.Scheduler.TaskRetentionDays,
+		TasklessLLMCallRetentionDays: runtimeConfiguration.Scheduler.TasklessLLMCallRetentionDays,
 	}
+	if services.repositories.llmCall != nil {
+		sweeper.LLMCallPruner = services.repositories.llmCall
+	}
+	return sweeper
 }
