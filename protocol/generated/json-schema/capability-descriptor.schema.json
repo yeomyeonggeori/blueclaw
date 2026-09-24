@@ -240,6 +240,11 @@
       "minLength": 1,
       "type": "string"
     },
+    "namespaceSummary": {
+      "description": "What the namespace lets a person get done, in one sentence the host writes once for the whole namespace. The agent reads it to know what it can do beyond the tools in hand.",
+      "minLength": 1,
+      "type": "string"
+    },
     "outputSchema": {
       "$ref": "#/$defs/canonical-strict-object-json-schema"
     },

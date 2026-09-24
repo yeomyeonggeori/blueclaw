@@ -234,6 +234,9 @@ export const capabilityDescriptorSchema = z.strictObject({
   name: unpaddedStringSchema,
   canonicalName: unpaddedStringSchema,
   namespace: unpaddedStringSchema,
+  namespaceSummary: nonBlankStringSchema.optional().describe(
+    'What the namespace lets a person get done, in one sentence the host writes once for the whole namespace. The agent reads it to know what it can do beyond the tools in hand.',
+  ),
   modelName: unpaddedStringSchema,
   modelVisibility: z.enum(CapabilityModelVisibility),
   modelVisible: z.boolean(),

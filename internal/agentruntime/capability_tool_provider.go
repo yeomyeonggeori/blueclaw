@@ -124,6 +124,7 @@ func boundToolFromDescriptor(
 			ID:                      toolID,
 			ProviderID:              providerID,
 			Namespace:               strings.TrimSpace(descriptor.Namespace),
+			NamespaceSummary:        strings.TrimSpace(descriptor.NamespaceSummary),
 			Name:                    strings.TrimSpace(descriptor.ModelName),
 			Description:             strings.TrimSpace(descriptor.Description),
 			PrivacyClass:            strings.TrimSpace(descriptor.PrivacyClass),
