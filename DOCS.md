@@ -52,7 +52,7 @@ Copy `config/policy.example.json` and add the people who may use the daemon. Eac
 ```json
 {
   "personID": "00000000-0000-0000-0000-000000000002",
-  "displayName": "이샘플",
+  "displayName": "Alex",
   "emails": ["sample@example.com"],
   "securityLevelName": "member",
   "securityLevelRank": 10,
