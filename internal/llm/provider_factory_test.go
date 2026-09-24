@@ -1,11 +1,16 @@
 package llm
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
+	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
 func endpointConfiguration(url string, modelName string) config.ModelEndpointConfiguration {
@@ -206,5 +211,61 @@ func TestEmbeddingProviderTakesTheCapabilityRouteWhenOnlyAModelIsNamed(t *testin
 func TestEmbeddingProviderIsRefusedWhenNoModelIsNamed(t *testing.T) {
 	if _, errorValue := NewConfiguredEmbeddingProvider(config.RuntimeConfiguration{}); errorValue == nil {
 		t.Fatal("an embedding provider with no model named must be refused")
+	}
+}
+
+func TestDecisionModelAsksTheEndpointWhenOneIsNamed(t *testing.T) {
+	var authorization, modelName string
+	decisionServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		var requestDocument struct {
+			Model string `json:"model"`
+		}
+		_ = json.NewDecoder(request.Body).Decode(&requestDocument)
+		authorization, modelName = request.Header.Get("Authorization"), requestDocument.Model
+		_, _ = responseWriter.Write([]byte(`{"answers":{"route":{"choice":"start_task","probabilities":{"start_task":0.9,"answer_question":0.1}}}}`))
+	}))
+	defer decisionServer.Close()
+	apiKeyPath := filepath.Join(t.TempDir(), "decision-key")
+	if errorValue := os.WriteFile(apiKeyPath, []byte("decision-key\n"), 0o600); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	runtimeConfiguration := config.RuntimeConfiguration{LanguageModel: config.LanguageModelConfiguration{
+		Decision: config.ModelEndpointConfiguration{Endpoint: decisionServer.URL + "/v1/systemone", Model: "kev-latest", APIKeyPath: apiKeyPath},
+	}}
+	decisionModel, errorValue := NewConfiguredDecisionModel(runtimeConfiguration)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	response, errorValue := decisionModel.Decide(context.Background(), model.DecisionRequest{
+		State:     "a message",
+		Questions: map[string]model.DecisionQuestion{"route": model.ChoiceQuestion{Instructions: "What now?", OptionDescriptions: map[string]string{"start_task": "work", "answer_question": "words"}}.Question()},
+	})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if authorization != "Bearer decision-key" || modelName != "kev-latest" || response.Answers["route"].Choice != "start_task" {
+		t.Fatalf("expected the configured endpoint, key and model to answer; got authorization %q, model %q, answers %+v", authorization, modelName, response.Answers)
+	}
+}
+
+func TestDecisionModelTakesTheCapabilityRouteWhenNoEndpointIsNamed(t *testing.T) {
+	runtimeConfiguration := config.RuntimeConfiguration{LanguageModel: config.LanguageModelConfiguration{
+		Capability: config.LanguageModelCapabilityConfiguration{DecisionModel: "example/decision", ExecutionMode: "auto"},
+	}}
+	decisionModel, errorValue := NewConfiguredDecisionModel(runtimeConfiguration)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if _, isCapabilityClient := decisionModel.(CapabilityDecisionClient); !isCapabilityClient {
+		t.Fatalf("a decision model with no endpoint is asked for through the capability route, got %T", decisionModel)
+	}
+}
+
+func TestDecisionEndpointWithoutAModelIsRefused(t *testing.T) {
+	runtimeConfiguration := config.RuntimeConfiguration{LanguageModel: config.LanguageModelConfiguration{
+		Decision: config.ModelEndpointConfiguration{Endpoint: "http://127.0.0.1:9/v1/systemone"},
+	}}
+	if _, errorValue := NewConfiguredDecisionModel(runtimeConfiguration); errorValue == nil {
+		t.Fatal("a decision endpoint that names no model must be refused")
 	}
 }
