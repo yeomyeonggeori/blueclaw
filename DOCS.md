@@ -86,9 +86,23 @@ Without `--runtime` and `--policy` the daemon reads `runtime.json` and `policy.j
 
 A model that fails to initialize shows in `languageModel.error`; health answers 503 and the task workers stay stopped while the HTTP surface stays up for diagnosis.
 
+### Ask it something
+
+The `api` connector needs no chat platform. Send a message as a person from your policy, then read the reply:
+
+```bash
+curl -s -X POST localhost:8081/connectors/api/events -H 'content-type: application/json' \
+  -d '{"conversationID":"dm:api:sample@example.com","messageID":"m1","senderID":"sample@example.com",
+       "replyTargetID":"dm:api:sample@example.com","prompt":"What is the capital of Australia?"}'
+
+curl -s 'localhost:8081/agent/api/replies?conversationID=dm:api:sample@example.com'
+```
+
+A reply arrives within seconds. Messages that arrive before the previous one is answered are read together as one turn.
+
 ### Turn on per-person isolation
 
-Until `terminal.posixHelperPath` is set, the daemon cannot act as anyone, and tools that touch the workspace as the requester fail closed. Build and install the setuid helper:
+This step needs Linux. Until `terminal.posixHelperPath` is set, the daemon cannot act as anyone, and tools that touch the workspace as the requester fail closed. Build and install the setuid helper:
 
 ```bash
 go build -o /usr/local/bin/blueclaw-posix-helper ./cmd/blueclaw-posix-helper
@@ -100,22 +114,17 @@ Set `terminal.posixHelperPath` to that path and restart. The daemon then creates
 
 ### Send work as two people
 
-The `api` connector needs no chat platform. Address two people from your policy by email:
+With the helper in place, address two people from your policy:
 
 ```bash
 for sender in sample@example.com example@example.com; do
   curl -s -X POST localhost:8081/connectors/api/events -H 'content-type: application/json' \
-    -d "{\"conversationID\":\"dm:api:$sender\",\"messageID\":\"m1\",\"senderID\":\"$sender\",
+    -d "{\"conversationID\":\"dm:api:$sender\",\"messageID\":\"m2\",\"senderID\":\"$sender\",
          \"replyTargetID\":\"dm:api:$sender\",\"prompt\":\"Write your name to a file in your home directory.\"}"
 done
-
-curl -s 'localhost:8081/agent/api/replies?conversationID=dm:api:sample@example.com'
 ```
 
 The two runs execute as different Linux users with different `0700` home directories, and neither can read the other's file.
-
-> [!NOTE]
-> Intake asks a decision model whether and how to answer each inbound message, and that model is named only by `languageModel.capability.decisionModel`. A configuration that names tiers alone has no decision model, and intake reports `intake decision model unavailable`. Running end to end needs a capability service; see [Capabilities](#capabilities).
 
 ### Watch it from a terminal
 
