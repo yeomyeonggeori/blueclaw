@@ -136,9 +136,12 @@ func newPolicyReloadHandler(components applicationComponents) func(policy.Policy
 	identityService := components.directory.identityService
 	policyProjectionService := components.directory.policyProjectionService
 	posixSynchronizer := components.foundation.posixSynchronizer
+	logger := components.foundation.logger
 	return func(policyDocument policy.PolicyDocument) {
 		if database.SQL != nil {
-			_ = personRepository.UpsertPeople(policyDocument)
+			if errorValue := personRepository.UpsertPeople(policyDocument); errorValue != nil {
+				logger.Error("policy.people_projection_failed", "error", errorValue)
+			}
 		}
 		identityService.ReloadPolicyProjection(policyProjectionService.ReplacePolicyProjectionTransactionally(policyDocument))
 		_ = posixSynchronizer.Synchronize(context.Background())
