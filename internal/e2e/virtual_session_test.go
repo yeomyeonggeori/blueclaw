@@ -1376,11 +1376,8 @@ func TestFailureExplanationAcceptance(t *testing.T) {
 	if secondTurnResult.TaskStatus != task.TaskStatusCompleted {
 		t.Fatalf("expected second turn success, got %s", secondTurnResult.TaskStatus)
 	}
-	if countEvents(secondTurnResult.Events, "tool.conversation_history.requested") != 1 {
-		t.Fatalf("expected one conversation_history request in second turn; events: %s", summarizeEvents(secondTurnResult.Events))
-	}
-	if !eventsContain(secondTurnResult.Events, "tool.conversation_history.result", "permission denied") {
-		t.Fatalf("expected conversation_history result to include failure reason; events: %s", summarizeEvents(secondTurnResult.Events))
+	if !strings.Contains(firstTurnResult.FinishMessage, "permission denied") {
+		t.Fatalf("expected the failure notice to name the cause, got %q", firstTurnResult.FinishMessage)
 	}
 	if !strings.Contains(secondTurnResult.FinishMessage, "permission denied") {
 		t.Fatalf("expected final reply to mention permission denied, got %q", secondTurnResult.FinishMessage)

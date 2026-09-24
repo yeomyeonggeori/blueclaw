@@ -1017,22 +1017,18 @@ func CapabilityQuestionAcceptanceScenario(artifactDirectoryPath string) VirtualS
 		Name:                  "capability_question_acceptance",
 		ArtifactDirectoryPath: artifactDirectoryPath,
 		Skills:                []agentcontract.SkillInstruction{presentationSkill(), scheduledTaskSkill(), sitePrototypeSkill()},
-		AllowedTools:          []string{"conversation_history", "memory_search", "skill_search"},
+		AllowedTools:          []string{"memory_search"},
 		Turns: []VirtualTurn{{
 			Prompt:          "너는 무엇을 할 수 있어?",
 			RouterTaskShape: agentcontract.TaskShapeResearchTask,
 			ActionResponses: []string{
-				actionCallTool("skill_search", `{}`),
-				actionFinishMessage("사용 가능한 skill에는 presentation, scheduled-task, site-prototype이 있습니다.", "obs-001"),
+				actionFinishMessage("발표 자료 같은 산출물, 일정 예약, 웹사이트 제작을 할 수 있습니다."),
 			},
-			ExpectedToolCalls: []string{"skill_search"},
-			ExpectedToolCallCounts: map[string]int{
-				"skill_search": 1,
-			},
-			ExpectedEventCounts: []VirtualEventCount{
-				{Name: toolResultEventName("skill_search"), BodyFragment: "presentation", Count: 1},
-			},
-			ExpectedReplyFragments: []string{"presentation"},
+			ForbiddenExposedTools:  []string{"skill_search"},
+			ForbidToolCalls:        true,
+			ForbiddenEvents:        []string{agentcontract.TaskEventAgentEvidenceMissing},
+			ExpectedModelContexts:  []string{"Your available capabilities span artifact, bash, browser, memory, schedule, site"},
+			ExpectedReplyFragments: []string{"일정 예약"},
 		}},
 	}
 }
@@ -1178,7 +1174,7 @@ func FailureExplanationAcceptanceScenario(artifactDirectoryPath string) VirtualS
 	return VirtualSessionScenario{
 		Name:                  "failure_explanation_acceptance",
 		ArtifactDirectoryPath: artifactDirectoryPath,
-		AllowedTools:          []string{"conversation_history", "memory_search", "bash"},
+		AllowedTools:          []string{"memory_search", "bash"},
 		TurnOptions: agentcontract.TurnOptions{
 			RecoveryBudget: agentcontract.RecoveryBudget{
 				CorrectedRetry: -1,
@@ -1205,13 +1201,12 @@ func FailureExplanationAcceptanceScenario(artifactDirectoryPath string) VirtualS
 				Prompt:          "왜 실패했어?",
 				RouterTaskShape: agentcontract.TaskShapeResearchTask,
 				ActionResponses: []string{
-					actionCallTool("conversation_history", `{"limit":20}`),
-					actionFinishMessage("shell 실행이 permission denied 때문에 실패했습니다.", "obs-001"),
+					actionFinishMessage("shell 실행이 permission denied 때문에 실패했습니다."),
 				},
-				ExpectedToolCalls: []string{"conversation_history"},
-				ExpectedEventCounts: []VirtualEventCount{
-					{Name: toolResultEventName("conversation_history"), BodyFragment: "permission denied", Count: 1},
-				},
+				ForbiddenExposedTools:  []string{"conversation_history"},
+				ForbidToolCalls:        true,
+				ForbiddenEvents:        []string{agentcontract.TaskEventAgentEvidenceMissing},
+				ExpectedModelContexts:  []string{"permission denied"},
 				ExpectedReplyFragments: []string{"permission denied"},
 			},
 		},
