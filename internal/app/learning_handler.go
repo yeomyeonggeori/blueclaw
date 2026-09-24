@@ -21,6 +21,15 @@ func openLearningStore(root string) (*learning.Store, error) {
 	return learning.Open(filepath.Join(root, ".blueclaw", "state", "learning", "skills.json"), learning.DefaultActiveLimit)
 }
 
+func newLearningHandler(components applicationComponents) adminapi.LearningHandler {
+	if components.learningCoordinator == nil {
+		return learningHandlerForStore(components.learningStore, components.directory, components.runtimeConfiguration.Memory.AdminAssertionKeyPath)
+	}
+	handler := learningHandlerForStore(components.learningStore, components.directory, components.runtimeConfiguration.Memory.AdminAssertionKeyPath, components.learningCoordinator)
+	handler.OverviewReader = components.learningCoordinator
+	return handler
+}
+
 func learningHandlerForStore(store *learning.Store, directory identityDirectory, keyPath string, soulReaders ...adminapi.SoulLearningReader) adminapi.LearningHandler {
 	handler := adminapi.LearningHandler{
 		Store:          store,

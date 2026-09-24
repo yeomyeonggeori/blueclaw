@@ -21,7 +21,7 @@ type ReviewRecord struct {
 	ID       string        `json:"id"`
 	Audience string        `json:"audience"`
 	Decision Decision      `json:"decision"`
-	Traces   []ReviewTrace `json:"traces"`
+	Traces   []ReviewTrace `json:"traces,omitempty"`
 	Error    string        `json:"error,omitempty"`
 }
 
@@ -360,4 +360,74 @@ func writePrivateJSON(path string, value interface{}) error {
 		return errorValue
 	}
 	return os.Rename(file.Name(), path)
+}
+
+type Overview struct {
+	Settings         Settings       `json:"settings"`
+	Skills           []Skill        `json:"skills"`
+	SoulHistory      []SoulRevision `json:"soulHistory"`
+	Reviews          []ReviewRecord `json:"reviews"`
+	PendingCount     int            `json:"pendingCount"`
+	ReviewedCount    int            `json:"reviewedCount"`
+	LastReview       time.Time      `json:"lastReview"`
+	LastObservedTask time.Time      `json:"lastObservedTask"`
+}
+
+func (coordinator *Coordinator) Overview() (Overview, error) {
+	soulHistory, errorValue := persona.ReadSoulHistory(coordinator.root)
+	if errorValue != nil {
+		return Overview{}, errorValue
+	}
+	reviews, errorValue := coordinator.readReviews()
+	if errorValue != nil {
+		return Overview{}, errorValue
+	}
+	coordinator.mutex.Lock()
+	state := coordinator.state
+	coordinator.mutex.Unlock()
+	return Overview{
+		Settings:         coordinator.store.Settings(),
+		Skills:           coordinator.store.ListEveryAudience(),
+		SoulHistory:      soulHistory,
+		Reviews:          reviews,
+		PendingCount:     len(state.Pending) + len(state.InFlight),
+		ReviewedCount:    len(state.ReviewedIDs),
+		LastReview:       state.LastReview,
+		LastObservedTask: state.LastObserved,
+	}, nil
+}
+
+func (coordinator *Coordinator) readReviews() ([]ReviewRecord, error) {
+	entries, errorValue := os.ReadDir(filepath.Join(coordinator.directory(), "reviews"))
+	if os.IsNotExist(errorValue) {
+		return []ReviewRecord{}, nil
+	}
+	if errorValue != nil {
+		return nil, errorValue
+	}
+	reviews := []ReviewRecord{}
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		review, errorValue := readReviewWithoutTraces(filepath.Join(coordinator.directory(), "reviews", entry.Name()))
+		if errorValue != nil {
+			return nil, errorValue
+		}
+		reviews = append(reviews, review)
+	}
+	return reviews, nil
+}
+
+func readReviewWithoutTraces(path string) (ReviewRecord, error) {
+	document, errorValue := os.ReadFile(path)
+	if errorValue != nil {
+		return ReviewRecord{}, errorValue
+	}
+	var review ReviewRecord
+	if errorValue := json.Unmarshal(document, &review); errorValue != nil {
+		return ReviewRecord{}, fmt.Errorf("learning review %s is invalid: %w", filepath.Base(path), errorValue)
+	}
+	review.Traces = nil
+	return review, nil
 }

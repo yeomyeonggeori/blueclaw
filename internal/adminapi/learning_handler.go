@@ -14,8 +14,13 @@ type SoulLearningReader interface {
 	SoulHistory(context.Context) ([]learning.SoulRevision, error)
 }
 
+type LearningOverviewReader interface {
+	Overview() (learning.Overview, error)
+}
+
 type LearningHandler struct {
 	Store           *learning.Store
+	OverviewReader  LearningOverviewReader
 	ReaderPersonID  func(*http.Request) string
 	ReaderAudience  func(string) string
 	IsAdministrator func(string) bool
@@ -57,6 +62,19 @@ func (handler LearningHandler) HandleSoul(responseWriter http.ResponseWriter, re
 		return
 	}
 	http.NotFound(responseWriter, request)
+}
+
+func (handler LearningHandler) HandleOverview(responseWriter http.ResponseWriter, request *http.Request) {
+	if handler.OverviewReader == nil {
+		http.Error(responseWriter, "agent learning is not configured on this runtime", http.StatusNotFound)
+		return
+	}
+	overview, errorValue := handler.OverviewReader.Overview()
+	if errorValue != nil {
+		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(responseWriter, http.StatusOK, overview)
 }
 
 func (handler LearningHandler) access(request *http.Request, mutation bool) (string, bool) {
