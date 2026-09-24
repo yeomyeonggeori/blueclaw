@@ -208,18 +208,11 @@ func TestCapabilityQuestionAcceptance(t *testing.T) {
 		t.Fatalf("expected one turn result, got %d", len(result.TurnResults))
 	}
 	turnResult := result.TurnResults[0]
-	requestedBodies := eventBodies(turnResult.Events, "tool.skill_search.requested")
-	if len(requestedBodies) != 1 {
-		t.Fatalf("expected one skill_search request, got events: %s", summarizeEvents(turnResult.Events))
+	if countEvents(turnResult.Events, "tool.skill_search.requested") != 0 {
+		t.Fatalf("skill_search is an internal tool, so the model is never offered it; events: %s", summarizeEvents(turnResult.Events))
 	}
-	if strings.Contains(requestedBodies[0], "queries") || strings.Contains(requestedBodies[0], "limit") {
-		t.Fatalf("expected empty skill_search input, got %s", requestedBodies[0])
-	}
-	if !eventsContain(turnResult.Events, "tool.skill_search.result", "presentation") {
-		t.Fatalf("expected skill_search result to include presentation; events: %s", summarizeEvents(turnResult.Events))
-	}
-	if !strings.Contains(turnResult.FinishMessage, "presentation") {
-		t.Fatalf("expected final reply to mention presentation, got %q", turnResult.FinishMessage)
+	if !strings.Contains(turnResult.FinishMessage, "일정 예약") {
+		t.Fatalf("expected final reply to name a capability from the loaded skills, got %q", turnResult.FinishMessage)
 	}
 }
 
