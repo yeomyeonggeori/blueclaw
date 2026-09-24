@@ -75,7 +75,7 @@ func endpointTierProviderFactory(tiers map[string][]config.ModelEndpointConfigur
 }
 
 func endpointProvider(endpointConfiguration config.ModelEndpointConfiguration) (LanguageModelProvider, error) {
-	apiKey, errorValue := readAPIKey(endpointConfiguration.APIKeyPath)
+	apiKey, errorValue := endpointAPIKey(endpointConfiguration)
 	if errorValue != nil {
 		return nil, errorValue
 	}
@@ -130,6 +130,21 @@ func capabilityTierModelName(capabilityConfiguration config.LanguageModelCapabil
 	}
 }
 
+func endpointAPIKey(endpointConfiguration config.ModelEndpointConfiguration) (string, error) {
+	environmentName := strings.TrimSpace(endpointConfiguration.APIKeyEnvironment)
+	if environmentName == "" {
+		return readAPIKey(endpointConfiguration.APIKeyPath)
+	}
+	if strings.TrimSpace(endpointConfiguration.APIKeyPath) != "" {
+		return "", errors.New("the model endpoint " + endpointConfiguration.Endpoint + " names both apiKeyPath and apiKeyEnvironment; it must name one")
+	}
+	apiKey := strings.TrimSpace(os.Getenv(environmentName))
+	if apiKey == "" {
+		return "", errors.New("the model endpoint " + endpointConfiguration.Endpoint + " reads its key from " + environmentName + ", which is not set")
+	}
+	return apiKey, nil
+}
+
 func readAPIKey(apiKeyPath string) (string, error) {
 	trimmedPath := strings.TrimSpace(apiKeyPath)
 	if trimmedPath == "" {
@@ -159,7 +174,7 @@ func NewConfiguredEmbeddingProvider(runtimeConfiguration config.RuntimeConfigura
 			ExecutionMode:    runtimeConfiguration.LanguageModel.Capability.ExecutionMode,
 		}, nil
 	}
-	apiKey, errorValue := readAPIKey(embeddingConfiguration.APIKeyPath)
+	apiKey, errorValue := endpointAPIKey(embeddingConfiguration)
 	if errorValue != nil {
 		return nil, errorValue
 	}
@@ -211,7 +226,7 @@ func endpointDecisionModel(decisionConfiguration config.ModelEndpointConfigurati
 	if modelName == "" {
 		return nil, errors.New("the decision endpoint " + decisionConfiguration.Endpoint + " names no model")
 	}
-	apiKey, errorValue := readAPIKey(decisionConfiguration.APIKeyPath)
+	apiKey, errorValue := endpointAPIKey(decisionConfiguration)
 	if errorValue != nil {
 		return nil, errorValue
 	}
