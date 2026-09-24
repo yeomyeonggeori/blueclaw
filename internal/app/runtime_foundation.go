@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -83,7 +84,9 @@ func newRuntimeFoundation(runtimeConfiguration config.RuntimeConfiguration, poli
 	}
 	logger.Info("application.initializing", "stage", "project_policy")
 	if database.SQL != nil {
-		_ = postgres.NewPersonRepository(database).UpsertPeople(policyDocument)
+		if errorValue := postgres.NewPersonRepository(database).UpsertPeople(policyDocument); errorValue != nil && startupError == nil {
+			startupError = fmt.Errorf("project the policy's people into the database: %w", errorValue)
+		}
 	}
 	return runtimeFoundation{
 		runtimeLogger:     runtimeLogger,

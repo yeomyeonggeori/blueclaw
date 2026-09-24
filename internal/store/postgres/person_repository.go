@@ -40,8 +40,8 @@ ON CONFLICT (person_id) DO UPDATE SET
 		personPolicy.DisplayName,
 		personPolicy.SecurityLevelName,
 		personPolicy.SecurityLevelRank,
-		personPolicy.GrantedClasses,
-		personPolicy.Circles,
+		emptyWhenNil(personPolicy.GrantedClasses),
+		emptyWhenNil(personPolicy.Circles),
 		personPolicy.IsAdmin,
 		now,
 	)
@@ -146,4 +146,11 @@ func (personRepository PersonRepository) hasTable(tableName string) (bool, error
 	var hasTable bool
 	errorValue := row.Scan(&hasTable)
 	return hasTable, errorValue
+}
+
+func emptyWhenNil(values []string) []string {
+	if values == nil {
+		return []string{}
+	}
+	return values
 }
