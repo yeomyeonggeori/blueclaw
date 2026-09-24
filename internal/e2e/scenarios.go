@@ -1027,7 +1027,7 @@ func CapabilityQuestionAcceptanceScenario(artifactDirectoryPath string) VirtualS
 			ForbiddenExposedTools:  []string{"skill_search"},
 			ForbidToolCalls:        true,
 			ForbiddenEvents:        []string{agentcontract.TaskEventAgentEvidenceMissing},
-			ExpectedModelContexts:  []string{"Your available capabilities span artifact, bash, browser, memory, schedule, site"},
+			ExpectedModelContexts:  []string{"- skills: memory, presentation, scheduled-task, website"},
 			ExpectedReplyFragments: []string{"일정 예약"},
 		}},
 	}

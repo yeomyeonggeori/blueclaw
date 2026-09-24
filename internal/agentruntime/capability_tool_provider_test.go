@@ -64,6 +64,7 @@ func TestCapabilityToolProviderRegistersCanonicalDescriptor(t *testing.T) {
 			Name:              "task_add",
 			CanonicalName:     "task_add",
 			Namespace:         "task",
+			NamespaceSummary:  "The team's work items.",
 			ModelName:         "task_add",
 			ModelVisibility:   toolcontract.ToolVisibilityModel,
 			Description:       "Create a task.",
@@ -100,6 +101,9 @@ func TestCapabilityToolProviderRegistersCanonicalDescriptor(t *testing.T) {
 	if descriptor.ResultContract == nil || descriptor.ResultContract.EvidenceCondition == nil ||
 		string(descriptor.ResultContract.EvidenceCondition.Equals) != `"task-1"` {
 		t.Fatalf("expected evidence condition to survive capability binding, got %+v", descriptor.ResultContract)
+	}
+	if descriptor.NamespaceSummary != "The team's work items." {
+		t.Fatalf("the namespace summary is what tells the model what it can do; binding dropped it: %q", descriptor.NamespaceSummary)
 	}
 	expectedInputIntentSchema := `{"additionalProperties":false,"properties":{"title":{"type":"string"}},"type":"object"}`
 	if string(descriptor.InputIntentSchema) != expectedInputIntentSchema {

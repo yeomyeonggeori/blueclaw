@@ -1,5 +1,5 @@
 {
-  "aggregateHash": "59313142691665d1fc17deada90953b6bafb61f5f151ad885b974c69e1476160",
+  "aggregateHash": "6f47a8c26355c67c969cac78131bedd34923b59f6fd0cd25dd0500239ad285d6",
   "protocolVersion": "0.4.0",
   "schemas": [
     {
@@ -19,12 +19,12 @@
     },
     {
       "fileName": "capability-descriptor.schema.json",
-      "hash": "06fadb905ceaada609b3de8eddf1d97bc884d75df3af304b7a12609579b56572",
+      "hash": "3f72f8b8c42f71fe7bd8f82c8d5895b956b1c3cb9b74772469de53afb535e9a1",
       "name": "capability-descriptor"
     },
     {
       "fileName": "capability-registry-response.schema.json",
-      "hash": "fa74b04046dfa92970c08d57cfd032bc73755e041fecb38519bab1b2a5bde23c",
+      "hash": "121992ca2c0d604db5ef553d9c412036132a092d4a516914b9bf8fb1e066b849",
       "name": "capability-registry-response"
     },
     {

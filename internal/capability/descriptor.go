@@ -10,6 +10,7 @@ type ToolDescriptor struct {
 	Name                     string              `json:"name"`
 	CanonicalName            string              `json:"canonicalName"`
 	Namespace                string              `json:"namespace"`
+	NamespaceSummary         string              `json:"namespaceSummary,omitempty"`
 	AnsweredBy               string              `json:"answeredBy,omitempty"`
 	ModelName                string              `json:"modelName"`
 	ModelVisibility          string              `json:"modelVisibility"`
