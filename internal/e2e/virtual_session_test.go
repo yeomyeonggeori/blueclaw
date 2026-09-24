@@ -13,6 +13,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -925,6 +926,18 @@ func TestVirtualMessageToolsUseGeneratedCanonicalContracts(t *testing.T) {
 		if len(descriptor.ResultContract.Effects) != 1 || descriptor.ResultContract.Effects[0] != expectedEffect {
 			t.Fatalf("expected canonical %s mutation contract, got %+v", toolName, descriptor)
 		}
+	}
+}
+
+func TestConfiguredDescriptorChangesOnlyTheFieldsItNames(t *testing.T) {
+	canonical := virtualCapabilityToolDescriptor("message_send")
+	expected := canonical
+	expected.Description = "Send it the configured way."
+
+	merged := mergeVirtualCapabilityToolDescriptor(canonical, agentruntime.CapabilityToolDescriptor{Name: "message_send", Description: expected.Description})
+
+	if !reflect.DeepEqual(merged, expected) {
+		t.Fatalf("a configured descriptor names what it changes; every field it leaves empty is the canonical one.\nexpected %+v\ngot      %+v", expected, merged)
 	}
 }
 

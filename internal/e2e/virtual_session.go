@@ -22,6 +22,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
 	"sort"
@@ -1120,27 +1121,23 @@ func virtualCapabilityCompletionEvidence(toolName string, sideEffectClass string
 }
 
 func mergeVirtualCapabilityToolDescriptor(base agentruntime.CapabilityToolDescriptor, override agentruntime.CapabilityToolDescriptor) agentruntime.CapabilityToolDescriptor {
-	override.Name = base.Name
-	override.CanonicalName = firstVirtualString(override.CanonicalName, base.CanonicalName)
-	override.Namespace = firstVirtualString(override.Namespace, base.Namespace)
-	override.ModelName = firstVirtualString(override.ModelName, base.ModelName)
-	override.ModelVisibility = firstVirtualString(override.ModelVisibility, base.ModelVisibility)
-	override.Description = firstVirtualString(override.Description, base.Description)
-	override.PrivacyClass = firstVirtualString(override.PrivacyClass, base.PrivacyClass)
-	override.InputSchema = firstVirtualSchema(override.InputSchema, base.InputSchema)
-	override.InputIntentSchema = firstVirtualSchema(override.InputIntentSchema, base.InputIntentSchema)
-	override.OutputSchema = firstVirtualSchema(override.OutputSchema, base.OutputSchema)
-	if override.ResultContract == nil {
-		override.ResultContract = base.ResultContract
+	merged := base
+	overlayNonZeroFields(reflect.ValueOf(&merged).Elem(), reflect.ValueOf(override))
+	merged.Name = base.Name
+	return merged
+}
+
+func overlayNonZeroFields(target reflect.Value, overlay reflect.Value) {
+	for index := range target.NumField() {
+		targetField, overlayField := target.Field(index), overlay.Field(index)
+		switch {
+		case overlayField.IsZero():
+		case targetField.Kind() == reflect.Struct:
+			overlayNonZeroFields(targetField, overlayField)
+		default:
+			targetField.Set(overlayField)
+		}
 	}
-	override.PolicyResource = firstVirtualString(override.PolicyResource, base.PolicyResource)
-	override.SideEffectClass = firstVirtualString(override.SideEffectClass, base.SideEffectClass)
-	override.Availability.State = firstVirtualString(override.Availability.State, base.Availability.State)
-	override.Idempotency.Scope = firstVirtualString(override.Idempotency.Scope, base.Idempotency.Scope)
-	if override.CompletionEvidence == nil {
-		override.CompletionEvidence = base.CompletionEvidence
-	}
-	return override
 }
 
 func virtualCapabilitySideEffectClass(toolName string) string {
@@ -1172,15 +1169,6 @@ func firstVirtualString(values ...string) string {
 		}
 	}
 	return ""
-}
-
-func firstVirtualSchema(values ...json.RawMessage) json.RawMessage {
-	for _, value := range values {
-		if len(value) > 0 {
-			return value
-		}
-	}
-	return nil
 }
 
 func loadVirtualSkillInstructions(scenario VirtualSessionScenario, workspacePath string) ([]agentcontract.SkillInstruction, error) {
