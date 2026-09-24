@@ -152,7 +152,7 @@ func calledToolNameFromRequestDocument(requestDocument map[string]any) string {
 	if forcedToolName := forcedToolNameFromRequestDocument(requestDocument); forcedToolName != "" {
 		return forcedToolName
 	}
-	return offeredFinishToolName(requestDocument)
+	return offeredReplyToolName(requestDocument)
 }
 
 func forcedToolNameFromRequestDocument(requestDocument map[string]any) string {
@@ -168,7 +168,7 @@ func forcedToolNameFromRequestDocument(requestDocument map[string]any) string {
 	return strings.TrimSpace(name)
 }
 
-func offeredFinishToolName(requestDocument map[string]any) string {
+func offeredReplyToolName(requestDocument map[string]any) string {
 	tools, isFound := requestDocument["tools"].([]any)
 	if !isFound || len(tools) == 0 {
 		return ""
@@ -182,8 +182,8 @@ func offeredFinishToolName(requestDocument map[string]any) string {
 		if !isFunction {
 			continue
 		}
-		if name, _ := function["name"].(string); strings.TrimSpace(name) == "finish" {
-			return "finish"
+		if name, _ := function["name"].(string); strings.TrimSpace(name) == "reply" {
+			return "reply"
 		}
 	}
 	return ""
@@ -205,7 +205,7 @@ func modelEndpointRequestDocument(request *http.Request) map[string]any {
 }
 
 func schemaNameForToolName(toolName string) string {
-	if toolName == "finish" {
+	if toolName == "reply" {
 		return "bluecollar_agent_turn_action"
 	}
 	return toolName
