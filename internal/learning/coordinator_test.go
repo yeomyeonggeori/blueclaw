@@ -377,3 +377,44 @@ func TestCoordinatorRetireUsesExpectedVersion(t *testing.T) {
 		t.Fatalf("stale retirement changed skill: %+v %v", active, errorValue)
 	}
 }
+
+func TestCoordinatorOverviewShowsEveryAudienceAndReviewsWithoutTraces(t *testing.T) {
+	root := t.TempDir()
+	store, errorValue := Open(filepath.Join(root, "skills.json"), 20)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	for _, audience := range []string{"person:first", "person:second"} {
+		if _, errorValue := store.Put(Skill{ID: audience + "-procedure", Audience: audience, Instruction: "Sample steps", Status: "active"}); errorValue != nil {
+			t.Fatal(errorValue)
+		}
+	}
+	if errorValue := store.UpdateSettings(Settings{Enabled: true, ActiveLimit: 20}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	keep := `{"action":"keep","skillID":"","expectedVersion":0,"replaceID":"","replaceVersion":0,"description":"","instruction":"","soulDocument":"","evidenceIDs":[],"reason":"no durable improvement"}`
+	coordinator, errorValue := NewCoordinator(root, store, Reviewer{Model: &syntheticReviewerModel{responses: []string{keep}}}, nil)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := coordinator.Observe(Experience{TaskID: "task-1", Audience: "person:first", Outcome: []byte(`{"ok":true}`)}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := coordinator.ReviewPending(context.Background(), time.Now().UTC().Add(2*time.Hour)); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	overview, errorValue := coordinator.Overview()
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(overview.Skills) != 2 {
+		t.Fatalf("overview skills = %d, want both audiences", len(overview.Skills))
+	}
+	if len(overview.Reviews) != 1 || overview.Reviews[0].Decision.Action != "keep" || overview.Reviews[0].Traces != nil {
+		t.Fatalf("overview reviews = %+v, want one keep decision without traces", overview.Reviews)
+	}
+	if !overview.Settings.Enabled || overview.ReviewedCount != 1 || overview.PendingCount != 0 {
+		t.Fatalf("overview activity = %+v", overview)
+	}
+}

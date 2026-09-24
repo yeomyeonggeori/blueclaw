@@ -74,6 +74,7 @@ func NewRouter(routerDependencies RouterDependencies) http.Handler {
 	multiplexer.HandleFunc("GET /admin/api/harness", routerDependencies.HarnessStatusHandler.HandleGetHarnessStatus)
 	multiplexer.HandleFunc("GET /admin/api/skills", routerDependencies.SkillInventoryHandler.HandleListSkills)
 	multiplexer.HandleFunc("GET /admin/api/tools", routerDependencies.ToolInventoryHandler.HandleListTools)
+	multiplexer.HandleFunc("GET /admin/api/agent-learning/overview", routerDependencies.LearningHandler.HandleOverview)
 	multiplexer.HandleFunc("GET /admin/api/agent-learning/skills", routerDependencies.LearningHandler.HandleList)
 	multiplexer.HandleFunc("GET /admin/api/agent-learning/skills/{id}", routerDependencies.LearningHandler.HandleGet)
 	multiplexer.HandleFunc("POST /admin/api/agent-learning/skills/retire", routerDependencies.LearningHandler.HandleMutation)

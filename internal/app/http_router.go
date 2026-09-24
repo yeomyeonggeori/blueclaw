@@ -35,7 +35,7 @@ func newRouterDependencies(components applicationComponents) httpserver.RouterDe
 		TaskRunHandler:        newTaskRunHandler(runtimeConfiguration, services, directory, components.taskLauncher, components.taskIntakeController),
 		HarnessStatusHandler:  newHarnessStatusHandler(runtimeConfiguration, kernel.harnessName),
 		SkillInventoryHandler: newSkillInventoryHandler(runtimeConfiguration, kernel.capabilityRegistry),
-		LearningHandler:       learningHandlerForStore(components.learningStore, directory, runtimeConfiguration.Memory.AdminAssertionKeyPath, components.learningCoordinator),
+		LearningHandler:       newLearningHandler(components),
 		ToolInventoryHandler:  adminapi.ToolInventoryHandler{ToolCatalogBuilder: components.toolCatalogBuilder},
 		TaskApprovalHandler:   newTaskApprovalHandler(services, directory, components.taskLauncher),
 		QuiesceHandler: adminapi.QuiesceHandler{

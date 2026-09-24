@@ -110,6 +110,19 @@ func (store *Store) List(audience string, includeRetired bool) []Skill {
 	return result
 }
 
+func (store *Store) ListEveryAudience() []Skill {
+	store.mutex.Lock()
+	defer store.mutex.Unlock()
+	result := []Skill{}
+	for _, versions := range store.skills {
+		if len(versions) > 0 {
+			result = append(result, cloneSkill(versions[len(versions)-1]))
+		}
+	}
+	sort.Slice(result, func(first, second int) bool { return result[first].UpdatedAt.After(result[second].UpdatedAt) })
+	return result
+}
+
 func (store *Store) Get(id string, audience string, includeHistory bool) ([]Skill, error) {
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
