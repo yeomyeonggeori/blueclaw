@@ -9,6 +9,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/model/decisions"
 	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
 )
 
@@ -190,6 +191,10 @@ func newCapabilityClient(runtimeConfiguration config.RuntimeConfiguration) capab
 }
 
 func NewConfiguredDecisionModel(runtimeConfiguration config.RuntimeConfiguration) (model.DecisionModel, error) {
+	decisionConfiguration := runtimeConfiguration.LanguageModel.Decision
+	if strings.TrimSpace(decisionConfiguration.Endpoint) != "" {
+		return endpointDecisionModel(decisionConfiguration)
+	}
 	modelName := strings.TrimSpace(runtimeConfiguration.LanguageModel.Capability.DecisionModel)
 	if modelName == "" {
 		return nil, errors.New("the capability language model configuration names no decision model")
@@ -199,4 +204,16 @@ func NewConfiguredDecisionModel(runtimeConfiguration config.RuntimeConfiguration
 		ModelName:        modelName,
 		ExecutionMode:    runtimeConfiguration.LanguageModel.Capability.ExecutionMode,
 	}}, nil
+}
+
+func endpointDecisionModel(decisionConfiguration config.ModelEndpointConfiguration) (model.DecisionModel, error) {
+	modelName := strings.TrimSpace(decisionConfiguration.Model)
+	if modelName == "" {
+		return nil, errors.New("the decision endpoint " + decisionConfiguration.Endpoint + " names no model")
+	}
+	apiKey, errorValue := readAPIKey(decisionConfiguration.APIKeyPath)
+	if errorValue != nil {
+		return nil, errorValue
+	}
+	return decisions.Endpoint{URL: decisionConfiguration.Endpoint, ModelName: modelName, APIKey: apiKey}.DecisionModel(), nil
 }

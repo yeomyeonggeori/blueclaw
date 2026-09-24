@@ -106,6 +106,7 @@ type AgentGenerationOptions struct {
 type LanguageModelConfiguration struct {
 	Tiers               map[string][]ModelEndpointConfiguration `json:"tiers,omitempty"`
 	Embedding           ModelEndpointConfiguration              `json:"embedding,omitempty"`
+	Decision            ModelEndpointConfiguration              `json:"decision,omitempty"`
 	MaximumModelTier    string                                  `json:"maximumModelTier,omitempty"`
 	MinimumModelTier    string                                  `json:"minimumModelTier,omitempty"`
 	ContextWindowTokens int                                     `json:"contextWindowTokens,omitempty"`
