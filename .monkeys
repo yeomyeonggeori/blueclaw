@@ -1,0 +1,8 @@
+@standalone
+OPENROUTER_API_KEY
+BLUECLAW_MODEL_ENDPOINT=https://openrouter.ai/api/v1
+BLUECLAW_MODEL=z-ai/glm-5.3-flash
+BLUECLAW_EMBEDDING_MODEL=baai/bge-m3
+BLUECLAW_DECISION_ENDPOINT=https://openrouter.ai/api/alpha/decisions
+BLUECLAW_DECISION_MODEL=~typesafe/jev-latest
+BLUECLAW_DATABASE_URL=postgres://blueclaw:blueclaw@127.0.0.1:5432/blueclaw?sslmode=disable
