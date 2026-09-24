@@ -32,7 +32,7 @@ func (connectorRuntime *ConnectorRuntime) findPendingAskInteraction(personID str
 		if taskRun.Status != task.TaskStatusWaitingUserInput {
 			continue
 		}
-		if taskRun.OriginConversationID != event.ConversationID {
+		if !taskRunMatchesMessageScope(taskRun, event) {
 			continue
 		}
 		interaction, isFound := latestAskInteraction(taskRun.TaskRunID, connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID))
@@ -68,7 +68,7 @@ func (connectorRuntime *ConnectorRuntime) findPendingApproval(personID string, _
 		if taskRun.Status != task.TaskStatusWaitingApproval {
 			continue
 		}
-		if taskRun.OriginConversationID != event.ConversationID {
+		if !taskRunMatchesMessageScope(taskRun, event) {
 			continue
 		}
 		if time.Since(taskRun.UpdatedAt) > 24*time.Hour {
@@ -122,7 +122,7 @@ func (connectorRuntime *ConnectorRuntime) findActiveGoal(personID string, _ stri
 		if !taskRunCanContinueGoal(taskRun, taskEvents) {
 			continue
 		}
-		if taskRun.OriginConversationID != event.ConversationID {
+		if !taskRunMatchesMessageScope(taskRun, event) {
 			continue
 		}
 		if time.Since(taskRun.UpdatedAt) > 24*time.Hour {
