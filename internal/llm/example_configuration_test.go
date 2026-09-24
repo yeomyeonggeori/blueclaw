@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
@@ -13,7 +14,27 @@ import (
 // The committed examples are the wire shape anything writing a runtime document
 // has to produce, and internkim's renderer is held to these same files. A field
 // renamed here without the examples following fails here rather than on a box.
+func setMonkeysEnvironment(t *testing.T) {
+	t.Helper()
+	document, errorValue := os.ReadFile("../../.monkeys")
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	for _, line := range strings.Split(string(document), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "@") || strings.HasPrefix(line, "+") {
+			continue
+		}
+		name, value, isPublic := strings.Cut(line, "=")
+		if !isPublic {
+			value = "a-secret"
+		}
+		t.Setenv(name, value)
+	}
+}
+
 func TestTheEndpointExampleNamesEveryTier(t *testing.T) {
+	setMonkeysEnvironment(t)
 	runtimeConfiguration, errorValue := config.LoadRuntimeConfiguration("../../config/runtime.standalone.example.json")
 	if errorValue != nil {
 		t.Fatal(errorValue)

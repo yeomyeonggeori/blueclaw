@@ -2,21 +2,75 @@
   "baseURL": "http://127.0.0.1:8081",
   "languageModel": {
     "tiers": {
-      "xlow": [{ "endpoint": "http://127.0.0.1:11434/v1", "model": "your-model", "reasoningEffort": "none" }],
-      "low": [{ "endpoint": "http://127.0.0.1:11434/v1", "model": "your-model", "reasoningEffort": "low" }],
-      "medium": [{ "endpoint": "http://127.0.0.1:11434/v1", "model": "your-model", "reasoningEffort": "medium" }],
-      "high": [{ "endpoint": "http://127.0.0.1:11434/v1", "model": "your-model", "reasoningEffort": "high" }],
-      "xhigh": [{ "endpoint": "http://127.0.0.1:11434/v1", "model": "your-model", "reasoningEffort": "xhigh" }],
-      "max": [{ "endpoint": "http://127.0.0.1:11434/v1", "model": "your-model", "reasoningEffort": "max" }]
+      "xlow": [
+        {
+          "endpoint": "${BLUECLAW_MODEL_ENDPOINT}",
+          "model": "${BLUECLAW_MODEL}",
+          "apiKeyEnvironment": "OPENROUTER_API_KEY",
+          "providerSort": "throughput",
+          "reasoningEffort": "minimal"
+        }
+      ],
+      "low": [
+        {
+          "endpoint": "${BLUECLAW_MODEL_ENDPOINT}",
+          "model": "${BLUECLAW_MODEL}",
+          "apiKeyEnvironment": "OPENROUTER_API_KEY",
+          "providerSort": "throughput",
+          "reasoningEffort": "low"
+        }
+      ],
+      "medium": [
+        {
+          "endpoint": "${BLUECLAW_MODEL_ENDPOINT}",
+          "model": "${BLUECLAW_MODEL}",
+          "apiKeyEnvironment": "OPENROUTER_API_KEY",
+          "providerSort": "throughput",
+          "reasoningEffort": "medium"
+        }
+      ],
+      "high": [
+        {
+          "endpoint": "${BLUECLAW_MODEL_ENDPOINT}",
+          "model": "${BLUECLAW_MODEL}",
+          "apiKeyEnvironment": "OPENROUTER_API_KEY",
+          "providerSort": "throughput",
+          "reasoningEffort": "high"
+        }
+      ],
+      "xhigh": [
+        {
+          "endpoint": "${BLUECLAW_MODEL_ENDPOINT}",
+          "model": "${BLUECLAW_MODEL}",
+          "apiKeyEnvironment": "OPENROUTER_API_KEY",
+          "providerSort": "throughput",
+          "reasoningEffort": "xhigh"
+        }
+      ],
+      "max": [
+        {
+          "endpoint": "${BLUECLAW_MODEL_ENDPOINT}",
+          "model": "${BLUECLAW_MODEL}",
+          "apiKeyEnvironment": "OPENROUTER_API_KEY",
+          "providerSort": "throughput",
+          "reasoningEffort": "max"
+        }
+      ]
     },
     "embedding": {
-      "endpoint": "http://127.0.0.1:11434/v1",
-      "model": "your-embedding-model"
+      "endpoint": "${BLUECLAW_MODEL_ENDPOINT}",
+      "model": "${BLUECLAW_EMBEDDING_MODEL}",
+      "apiKeyEnvironment": "OPENROUTER_API_KEY"
+    },
+    "decision": {
+      "endpoint": "${BLUECLAW_DECISION_ENDPOINT}",
+      "model": "${BLUECLAW_DECISION_MODEL}",
+      "apiKeyEnvironment": "OPENROUTER_API_KEY"
     }
   },
   "database": {
     "driver": "postgres",
-    "connectionString": "postgres://blueclaw:blueclaw@127.0.0.1:5432/blueclaw?sslmode=disable",
+    "connectionString": "${BLUECLAW_DATABASE_URL}",
     "migrationDirectoryPath": "migrations"
   },
   "agent": {
@@ -24,11 +78,7 @@
       "enabled": true,
       "executionMode": "auto"
     },
-    "defaultTaskLevel": "low",
-    "harness": {
-      "name": "claude-code",
-      "agentCommandPath": "/usr/local/bin/claude"
-    }
+    "defaultTaskLevel": "low"
   },
   "connectors": {},
   "logging": {

@@ -1,4 +1,8 @@
 {
+  "company": {
+    "name": "Example Co",
+    "timeZone": "UTC"
+  },
   "people": [
     {
       "personID": "00000000-0000-0000-0000-000000000001",

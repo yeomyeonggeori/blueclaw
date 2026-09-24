@@ -43,11 +43,24 @@ go build ./...
 
 ### Configure
 
-Copy `config/runtime.standalone.example.json` to `runtime.json`. It names six model tiers (`xlow` to `max`) against one local endpoint, a Postgres connection string and a workspace under `.local/blueclaw/workspace`. Replace `your-model` with a model your endpoint serves, and add `apiKeyPath` to an entry when the endpoint needs a key file.
+`config/runtime.standalone.example.json` names every model, the database and the key as references such as `${BLUECLAW_MODEL}`, and the loader fills each one in from the environment at boot. A reference whose variable is unset stops the daemon and names the variable. `.monkeys` at the repository root holds the values:
 
-The example selects the `claude-code` harness. Remove the `agent.harness` block to run the bundled bluecollar loop instead.
+```ini
+@standalone
+OPENROUTER_API_KEY
+BLUECLAW_MODEL_ENDPOINT=https://openrouter.ai/api/v1
+BLUECLAW_MODEL=z-ai/glm-5.3-flash
+BLUECLAW_EMBEDDING_MODEL=baai/bge-m3
+BLUECLAW_DECISION_ENDPOINT=https://openrouter.ai/api/alpha/decisions
+BLUECLAW_DECISION_MODEL=~typesafe/jev-latest
+BLUECLAW_DATABASE_URL=postgres://blueclaw:blueclaw@127.0.0.1:5432/blueclaw?sslmode=disable
+```
 
-Copy `config/policy.example.json` and add the people who may use the daemon. Each person needs a `personID`, `emails`, and the `circles` they belong to:
+[monkeys](https://github.com/eastriverlee/monkeys) keeps `OPENROUTER_API_KEY` in the operating system's keychain (`monkeys remember @standalone OPENROUTER_API_KEY` stores it once) and sets all of them for one command. Without it, export the same variables. A model entry names the variable that holds its key with `apiKeyEnvironment`; `apiKeyPath` reads a key file instead, and an entry may name only one of the two.
+
+One OpenRouter key reaches all three models. The decision model answers intake's closed questions. [Kev](https://github.com/jaredpalmer/kev) serves the same API on your own machine: point `BLUECLAW_DECISION_ENDPOINT` at its `/v1/systemone` and set `BLUECLAW_DECISION_MODEL` to `kev-latest`. A 4B chat model served locally is not enough, since intake asks the chat model for answers in a fixed schema that small models break.
+
+Copy `config/policy.example.json` to `policy.json` and add the people who may use the daemon. Each person needs a `personID`, `emails`, and the `circles` they belong to:
 
 ```json
 {
@@ -60,10 +73,12 @@ Copy `config/policy.example.json` and add the people who may use the daemon. Eac
 }
 ```
 
+`company.timeZone` in the same file sets the clock that schedules and relative dates read.
+
 ### Start the daemon
 
 ```bash
-go run ./cmd/blueclaw --runtime runtime.json --policy policy.json
+monkeys run go run ./cmd/blueclaw --runtime config/runtime.standalone.example.json --policy policy.json
 curl -s localhost:8081/admin/api/health | jq '.status, .languageModel, .protocolIdentity.passed'
 ```
 
@@ -469,8 +484,12 @@ The language model configuration says where each effort tier reaches a model; bl
 
 There are six tiers, `xlow`, `low`, `medium`, `high`, `xhigh` and `max`, and `maximumModelTier` and `minimumModelTier` bound where the runtime may move a task. Two shapes exist, and a configuration that names both is refused (`internal/llm/provider_factory.go`):
 
-- **`tiers`** maps each tier to an ordered list of endpoints. Each entry has `endpoint`, `model`, and optionally `apiKeyPath` (a file holding the key; the `Authorization` header is sent only when it is named), `reasoningEffort`, `providerOrder` and `providerSort`. Entries are tried in order, so a deployment writes its own fallbacks. A tier with no entry is an error.
+- **`tiers`** maps each tier to an ordered list of endpoints. Each entry has `endpoint`, `model`, and optionally one key source, `apiKeyEnvironment` (the name of an environment variable) or `apiKeyPath` (a file), then `reasoningEffort`, `providerOrder` and `providerSort`. The `Authorization` header is sent only when a key source is named. Entries are tried in order, so a deployment writes its own fallbacks. A tier with no entry is an error.
 - **`capability`** names a model per tier (`xlowModel` … `maxModel`), a `decisionModel` for intake, and an `executionMode`, and hands model choice, local runtimes and fallback to the capability service. No key appears in the file.
+
+`embedding` and `decision` are single entries of the same shape. Each is reached at its endpoint when it names one, and through the capability service otherwise. `decision` speaks the decisions API that Jev and Kev serve.
+
+Any string in the runtime file may contain `${NAME}`, filled in from the environment at load time; an unset or empty variable is refused by name. A `$` without braces is left as written.
 
 Every structured call leaves as a single function tool with `tool_choice` forcing it, and the runtime reads the call's arguments; it never sends `response_format`. Some local servers treat a forced choice as a hint, so a small model may answer in prose and fail the turn.
 
