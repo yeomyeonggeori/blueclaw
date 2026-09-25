@@ -236,12 +236,19 @@ func turnRouterLanguageModelProvider(taskTierLanguageModels agentcontract.TaskTi
 	return taskTierLanguageModels.High
 }
 
-func newDecisionPlanner(runtimeConfiguration config.RuntimeConfiguration, visionLanguageModel model.LanguageModelProvider, logger *slog.Logger) intake.DecisionPlanner {
+func newConfiguredDecisionModel(runtimeConfiguration config.RuntimeConfiguration, logger *slog.Logger) model.DecisionModel {
 	decisionModel, errorValue := llm.NewConfiguredDecisionModel(runtimeConfiguration)
 	if errorValue != nil {
 		if logger != nil {
-			logger.Error("intake decision model configuration failed", "error", errorValue.Error())
+			logger.Error("decision model configuration failed", "error", errorValue.Error())
 		}
+		return nil
+	}
+	return decisionModel
+}
+
+func newDecisionPlanner(decisionModel model.DecisionModel, visionLanguageModel model.LanguageModelProvider) intake.DecisionPlanner {
+	if decisionModel == nil {
 		return intake.DecisionPlanner{}
 	}
 	return intake.NewDecisionPlanner(decisionModel, newAttachmentDescriber(visionLanguageModel), nil)

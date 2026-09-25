@@ -23,6 +23,7 @@ type Dependencies struct {
 	TaskTierLanguageModels      agentcontract.TaskTierLanguageModels
 	IntakeLanguageModelProvider model.LanguageModelProvider
 	ToolSelector                agentcontract.ToolSelector
+	DecisionModel               model.DecisionModel
 
 	IntakeOptions       *agentcontract.IntakeOptions
 	TurnOptionOverrides agentcontract.TurnOptions

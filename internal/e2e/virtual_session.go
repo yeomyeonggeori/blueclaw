@@ -215,7 +215,8 @@ type VirtualTurn struct {
 	ContextMessages              []connectors.VisibleContextMessage
 	ContextMaterials             []connectors.InputAttachment
 	ActionResponses              []string
-	CompletionJudgeResponses     []string
+	ExpectedChangesResponses     []string
+	ChangeCheckAnswers           []map[string]float64
 	RouterRequiredEvidence       []string
 	RouterTaskShape              agentcontract.TaskShape
 	RouterSiteEvidence           string
@@ -341,6 +342,7 @@ type VirtualSessionHarness struct {
 	workspacePath    string
 	scriptedModel    *agenttest.ScriptedLanguageModel
 	turnScript       *scenarioTurnScript
+	changeChecks     *scenarioChangeChecks
 	requestRecorder  virtualLanguageModelRequestRecorder
 	callRecorder     virtualLanguageModelCallRecorder
 	taskRunService   *task.TaskRunService
@@ -749,6 +751,7 @@ var builtinScenarioFactories = map[string]func(string) VirtualSessionScenario{
 	"calendar_event_lifecycle_acceptance":       CalendarEventLifecycleAcceptanceScenario,
 	"calendar_false_finish_recovery_acceptance": CalendarFalseFinishRecoveryAcceptanceScenario,
 	"calendar_read_question_with_write_hint":    CalendarReadQuestionWithWriteHintScenario,
+	"change_check_recovery_acceptance":          ChangeCheckRecoveryAcceptanceScenario,
 	"ambient_duty_calendar_acceptance":          AmbientDutyCalendarAcceptanceScenario,
 	"ambient_duty_nothing_to_record":            AmbientDutyNothingToRecordScenario,
 	"ambient_duty_announcement_no_echo":         AmbientDutyAnnouncementNoEchoScenario,
@@ -867,6 +870,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	instructionBundleLoader := virtualInstructionBundleLoader(skillInstructions, workspacePath)
 	scenarioIntakeOptions := agentcontract.IntakeOptions{IsEnabled: true, DefaultTaskLevel: agentcontract.TaskLevelLow}
 	turnScript := scenarioTurnScriptFor(scriptedModel)
+	changeChecks := &scenarioChangeChecks{}
 	scenarioDecisionPlanner := intake.NewDecisionPlanner(newScenarioDecisionModel(turnScript, firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel), scenario.AddressingResponse), nil, nil)
 	agentHarness, skillRetriever := virtualSessionAgentHarnessFactory(harnessdriver.Dependencies{
 		TaskRunStore:      taskRunService,
@@ -887,6 +891,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 		EmbeddingProvider:           scenario.EmbeddingProvider,
 		EmbeddingModelName:          scenario.EmbeddingModel,
 		ToolSelector:                scenarioDecisionPlanner,
+		DecisionModel:               scenarioChangeCheckModel(scriptedModel, changeChecks),
 	})
 
 	identityService := identity.NewIdentityService(testPolicyProjection())
@@ -954,6 +959,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 		workspacePath:    workspacePath,
 		scriptedModel:    scriptedModel,
 		turnScript:       turnScript,
+		changeChecks:     changeChecks,
 		requestRecorder:  virtualRequestRecorder(languageModel),
 		callRecorder:     virtualCallRecorder(languageModel),
 		taskRunService:   taskRunService,
@@ -2719,8 +2725,9 @@ func (harness *VirtualSessionHarness) Run(ctx context.Context) (VirtualSessionRe
 			}
 			harness.turnScript.beginTurn(index+1, scenarioTurnScriptEntries(harness.scenario, virtualTurn))
 			harness.scriptedModel.SetActionResponses(materializeScriptedWorkspacePaths(harness.workspacePath, virtualTurn.ActionResponses)...)
-			if len(virtualTurn.CompletionJudgeResponses) > 0 {
-				harness.scriptedModel.EnqueueStructuredResponses("bluecollar_completion_judge", virtualTurn.CompletionJudgeResponses...)
+			harness.changeChecks.beginTurn(index+1, virtualTurn.ChangeCheckAnswers)
+			if len(virtualTurn.ExpectedChangesResponses) > 0 {
+				harness.scriptedModel.EnqueueStructuredResponses("bluecollar_expected_changes", virtualTurn.ExpectedChangesResponses...)
 			}
 		}
 		turnResults, errorValue := harness.runTurnBurst(ctx, messageIndex, virtualTurn)
@@ -2742,7 +2749,7 @@ func (harness *VirtualSessionHarness) Run(ctx context.Context) (VirtualSessionRe
 			if errorValue := assertScriptedControlCallsServed(finalTurnResult.LanguageModelCallEvents); errorValue != nil {
 				return result, fmt.Errorf("%s turn %d: %w", harness.scenario.Name, index+1, errorValue)
 			}
-			if errorValue := assertNoScriptedResponseResidue(harness.scriptedModel, harness.turnScript); errorValue != nil {
+			if errorValue := assertNoScriptedResponseResidue(harness.scriptedModel, harness.turnScript, harness.changeChecks); errorValue != nil {
 				return result, fmt.Errorf("%s turn %d: %w; events: %s", harness.scenario.Name, index+1, errorValue, summarizeEvents(finalTurnResult.Events))
 			}
 		}
@@ -2872,7 +2879,7 @@ func scenarioNeedsScriptedModel(scenario VirtualSessionScenario) bool {
 }
 
 func scenarioDefaultResponses(scenario VirtualSessionScenario) map[string]string {
-	defaultResponses := map[string]string{}
+	defaultResponses := map[string]string{"bluecollar_expected_changes": `{"expectedChanges":[]}`}
 	if virtualEvidenceRequiresExternalSend(scenario.RouterRequiredEvidence) {
 		defaultResponses["bluecollar_execution_plan"] = `{"originalInstruction":"scripted external send","summary":"scripted external send","targets":[],"schedule":"","startAt":"","endAt":"","cadence":"","externalSend":true,"thirdPartyExternalSend":true,"repeated":false,"highFrequency":false,"destructive":false,"permissionChange":false,"publicDeploy":false,"paidAction":false,"missingInformation":[],"continuationInstruction":"scripted external send"}`
 	}
@@ -2953,16 +2960,19 @@ func assertScriptedControlCallsServed(callEvents []VirtualLanguageModelCallEvent
 			continue
 		}
 		switch event.SchemaName {
-		case "bluecollar_turn_router", "bluecollar_completion_judge":
+		case "bluecollar_turn_router", "bluecollar_expected_changes", "bluecollar_change_check":
 			return fmt.Errorf("scripted %s call failed without an enqueued response: %s", event.SchemaName, event.Error)
 		}
 	}
 	return nil
 }
 
-func assertNoScriptedResponseResidue(scriptedModel *agenttest.ScriptedLanguageModel, turnScript *scenarioTurnScript) error {
+func assertNoScriptedResponseResidue(scriptedModel *agenttest.ScriptedLanguageModel, turnScript *scenarioTurnScript, changeChecks *scenarioChangeChecks) error {
 	if turnScript != nil && turnScript.pendingCount() > 0 {
 		return fmt.Errorf("scripted turns were left undecided after the turn: %d", turnScript.pendingCount())
+	}
+	if changeChecks.pendingCount() > 0 {
+		return fmt.Errorf("scripted change checks were left unasked after the turn: %d", changeChecks.pendingCount())
 	}
 	pendingCounts := scriptedModel.PendingResponseCounts()
 	if len(pendingCounts) == 0 {
