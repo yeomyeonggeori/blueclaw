@@ -91,6 +91,12 @@ var scheduleToolMutationOutputSchema = json.RawMessage(`{
 var scheduleToolCancelOutputSchema = json.RawMessage(`{
 	"type": "object",
 	"properties": {
+		"scheduleIDs": {
+			"type": "array",
+			"items": {"type": "string", "minLength": 1},
+			"minItems": 1,
+			"uniqueItems": true
+		},
 		"cancelled": {
 			"type": "array",
 			"items": {
@@ -104,6 +110,6 @@ var scheduleToolCancelOutputSchema = json.RawMessage(`{
 			}
 		}
 	},
-	"required": ["cancelled"],
+	"required": ["scheduleIDs", "cancelled"],
 	"additionalProperties": false
 }`)
