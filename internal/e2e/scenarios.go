@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"os"
@@ -88,12 +89,9 @@ func ScenarioSkillAvailability() (found []string, missing []string) {
 	return found, missing
 }
 
-func completionJudgeSatisfiedResponse() string {
-	return `{"satisfied":true,"missingWork":[],"reason":"요청한 작업 결과가 모두 기록되었습니다"}`
-}
-
-func completionJudgeUnrecordedWorkResponse(operationName string) string {
-	return `{"satisfied":false,"missingWork":["no successful ` + operationName + ` operation is recorded"],"reason":"the reply says the work was done and the ledger carries nothing that did it"}`
+func expectedChangeResponse(change string, asked string) string {
+	document, _ := json.Marshal(map[string]any{"expectedChanges": []map[string]string{{"change": change, "asked": asked}}})
+	return string(document)
 }
 
 func PresentationLocalMultiturnSuccessScenario(artifactDirectoryPath string) VirtualSessionScenario {
@@ -151,8 +149,7 @@ func MemoryGuidedFollowupScenario(artifactDirectoryPath string) VirtualSessionSc
 					actionCallTool("memory_remember", `{"content":"발표 자료는 짧은 문장과 한국어 제목을 선호한다"}`),
 					actionFinishMessage("기억해둘게요.", "obs-001"),
 				},
-				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-				ExpectedToolCalls:        []string{"memory_remember"},
+				ExpectedToolCalls: []string{"memory_remember"},
 				ExpectedEventCounts: []VirtualEventCount{
 					{Name: "tool.memory_remember.requested", BodyFragment: "한국어 제목", Count: 1},
 				},
@@ -271,9 +268,8 @@ func FileWriteAcceptanceScenario(artifactDirectoryPath string) VirtualSessionSce
 				actionCallTool("write", `{"path":"work/customer-support/faq-revision.json","content":"{\"title\":\"FAQ 개편\",\"owner\":\"고객지원팀\",\"status\":\"검토 중\"}\n"}`),
 				actionFinalReplyWithAttachment("JSON 메모 파일을 생성하고 첨부해 저장 결과를 확인했습니다.", "work/customer-support/faq-revision.json"),
 			},
-			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-			ExpectedToolCalls:        []string{"write", "file_deliver"},
-			ExpectedToolCallCounts:   map[string]int{"write": 1, "file_deliver": 1},
+			ExpectedToolCalls:      []string{"write", "file_deliver"},
+			ExpectedToolCallCounts: map[string]int{"write": 1, "file_deliver": 1},
 			ExpectedAttachmentFiles: []VirtualAttachmentFileExpectation{{
 				Suffix:            ".json",
 				ContainsFragments: []string{"FAQ 개편", "고객지원팀", "검토 중"},
@@ -488,8 +484,7 @@ func AttachmentCurrentImageInputScenario(artifactDirectoryPath string) VirtualSe
 				"url=https://mattermost.local/api/v4/files/file-current",
 				"mascot.png",
 			},
-			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-			ExpectedReplyFragments:   []string{"흰색 고양이", "김인턴", "이름표"},
+			ExpectedReplyFragments: []string{"흰색 고양이", "김인턴", "이름표"},
 			ForbiddenReplyFragments: []string{
 				"상세하게 설명드렸습니다",
 			},
@@ -547,8 +542,7 @@ func ScheduleCreateAcceptanceScenario(artifactDirectoryPath string) VirtualSessi
 				actionInvokeCapabilityTool("schedule_create", `{"description":"1분 알림","taskInstruction":"현재 대화에 \"1분 지났습니다\"라고 보낸다.","kind":"interval","intervalSecond":60,"maxRunCount":10,"repeatPolicy":"finite"}`),
 				actionFinishMessage("1분마다 알림을 보내도록 예약해둘게요.", "obs-001"),
 			},
-			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-			ExpectedSelectedSkills:   []string{"scheduled-task"},
+			ExpectedSelectedSkills: []string{"scheduled-task"},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: toolRequestedEventName("schedule_create"), BodyFragment: "schedule_create", Count: 1},
 				{Name: toolResultEventName("schedule_create"), BodyFragment: "intervalSecond", Count: 1},
@@ -581,8 +575,7 @@ func ScheduleLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSe
 					actionInvokeCapabilityTool("schedule_create", `{"description":"상태 확인 알림","taskInstruction":"현재 대화에 \"상태를 확인하세요\"라고 보낸다.","kind":"interval","intervalSecond":1800,"maxRunCount":3,"repeatPolicy":"finite"}`),
 					actionFinishMessage("30분마다 세 번 상태 확인 알림을 보내도록 예약해둘게요.", "obs-001"),
 				},
-				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-				ExpectedSelectedSkills:   []string{"scheduled-task"},
+				ExpectedSelectedSkills: []string{"scheduled-task"},
 				ExpectedEventCounts: []VirtualEventCount{
 					{Name: toolRequestedEventName("schedule_create"), BodyFragment: "schedule_create", Count: 1},
 					{Name: toolResultEventName("schedule_create"), BodyFragment: "intervalSecond", Count: 1},
@@ -596,7 +589,6 @@ func ScheduleLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSe
 					actionInvokeCapabilityTool("schedule_update", `{"scheduleHint":"virtual-schedule-001","intervalSecond":3600,"maxRunCount":5,"repeatPolicy":"finite"}`),
 					actionFinishMessage("예약을 1시간마다 다섯 번으로 수정했습니다.", "obs-001"),
 				},
-				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 				ExpectedEventCounts: []VirtualEventCount{
 					{Name: toolRequestedEventName("schedule_update"), BodyFragment: "schedule_update", Count: 1},
 					{Name: toolResultEventName("schedule_update"), BodyFragment: "intervalSecond", Count: 1},
@@ -609,7 +601,6 @@ func ScheduleLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSe
 					actionInvokeCapabilityTool("schedule_cancel", `{"scheduleHints":["virtual-schedule-001"]}`),
 					actionFinishMessage("예약을 삭제했습니다.", "obs-001"),
 				},
-				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 				ExpectedEventCounts: []VirtualEventCount{
 					{Name: toolRequestedEventName("schedule_cancel"), BodyFragment: "schedule_cancel", Count: 1},
 				},
@@ -634,8 +625,7 @@ func CalendarEventLifecycleAcceptanceScenario(artifactDirectoryPath string) Virt
 					actionInvokeCapabilityTool("event_add", `{"title":"제품 회고","startsAt":"2026-06-13T10:00:00+09:00","endsAt":"2026-06-13T11:00:00+09:00"}`),
 					actionFinishMessage("내일 오전 10시에 제품 회고 일정을 추가했습니다.", "obs-001"),
 				},
-				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-				ExpectedSelectedSkills:   []string{"calendar"},
+				ExpectedSelectedSkills: []string{"calendar"},
 				ExpectedEventCounts: []VirtualEventCount{
 					{Name: toolRequestedEventName("event_add"), BodyFragment: "event_add", Count: 1},
 				},
@@ -647,7 +637,6 @@ func CalendarEventLifecycleAcceptanceScenario(artifactDirectoryPath string) Virt
 					actionCallTool("event_update", `{"eventHint":"calendar-event-001","title":"제품 회고","startsAt":"2026-06-13T14:00:00+09:00","endsAt":"2026-06-13T15:00:00+09:00"}`),
 					actionFinishMessage("제품 회고 일정을 내일 오후 2시로 변경했습니다.", "obs-001"),
 				},
-				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 				ExpectedEventCounts: []VirtualEventCount{
 					{Name: toolRequestedEventName("event_update"), BodyFragment: "event_update", Count: 1},
 					{Name: toolRequestedEventName("event_update"), BodyFragment: "2026-06-13T14:00:00+09:00", Count: 1},
@@ -673,7 +662,6 @@ func CalendarEventLifecycleAcceptanceScenario(artifactDirectoryPath string) Virt
 				ActionResponses: []string{
 					actionFinishMessage("제품 회고 일정을 삭제했습니다.", "obs-002"),
 				},
-				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 				ExpectedEventCounts: []VirtualEventCount{
 					{Name: agentcontract.TaskEventApprovalExecuted, BodyFragment: `"event_delete"`, Count: 1},
 				},
@@ -700,19 +688,19 @@ func CalendarFalseFinishRecoveryAcceptanceScenario(artifactDirectoryPath string)
 				actionInvokeCapabilityTool("event_add", `{"title":"샨보장 미팅","startsAt":"2026-07-13T10:00:00+09:00","endsAt":"2026-07-13T11:00:00+09:00"}`),
 				actionFinishMessage("7월 13일 미팅을 오전 10시~11시로 등록했습니다.", "obs-002"),
 			},
-			CompletionJudgeResponses: []string{
-				completionJudgeUnrecordedWorkResponse("event_add"),
-				completionJudgeSatisfiedResponse(),
-			},
-			ExpectedSelectedSkills: []string{"calendar"},
-			ExpectedToolCalls:      []string{"event_add"},
+			ExpectedChangesResponses: []string{expectedChangeResponse("calendar created", "샨보장 미팅을 오전 10시부터 11시까지 등록해줘")},
+			ChangeCheckAnswers:       []map[string]float64{{"expected0": 0.9}},
+			ExpectedSelectedSkills:   []string{"calendar"},
+			ExpectedToolCalls:        []string{"event_add"},
 			ExpectedToolCallCounts: map[string]int{
 				"event_add": 1,
 			},
 			ExpectedEventCounts: []VirtualEventCount{
-				{Name: agentcontract.TaskEventAgentEvidenceMissing, BodyFragment: "event_add", Count: 1},
-				{Name: agentcontract.TaskEventAgentCompletionRequired, BodyFragment: "event_add", Count: 1},
+				{Name: agentcontract.TaskEventCompletionChangeCheck, BodyFragment: `"unrecorded":[{"change":"calendar created"`, Count: 1},
+				{Name: agentcontract.TaskEventAgentEvidenceMissing, BodyFragment: "no recorded change of this kind", Count: 1},
+				{Name: agentcontract.TaskEventAgentCompletionRequired, BodyFragment: "no recorded change of this kind", Count: 1},
 				{Name: toolRequestedEventName("event_add"), BodyFragment: "2026-07-13T10:00:00+09:00", Count: 1},
+				{Name: agentcontract.TaskEventCompletionChangeCheck, BodyFragment: `"carriedOut":{"expected0":0.9}`, Count: 1},
 			},
 			ExpectedReplyFragments: []string{"등록했습니다"},
 			ForbiddenEvents:        []string{agentcontract.TaskEventAgentNoProgressLoopStopped},
@@ -738,9 +726,8 @@ func CalendarReadQuestionWithWriteHintScenario(artifactDirectoryPath string) Vir
 				actionInvokeCapabilityTool("event_list", `{"startsAt":"2026-07-13","endsAt":"2026-07-14"}`),
 				actionFinishMessage("7월 13일에는 등록된 미팅이 없습니다.", "obs-001"),
 			},
-			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-			ExpectedSelectedSkills:   []string{"calendar"},
-			ExpectedToolCalls:        []string{"event_list"},
+			ExpectedSelectedSkills: []string{"calendar"},
+			ExpectedToolCalls:      []string{"event_list"},
 			ExpectedToolCallCounts: map[string]int{
 				"event_list": 1,
 				"event_add":  0,
@@ -774,9 +761,8 @@ func AmbientDutyCalendarAcceptanceScenario(artifactDirectoryPath string) Virtual
 				actionInvokeCapabilityTool("event_add", `{"title":"정기회의","startsAt":"2026-06-12T17:00:00+09:00","endsAt":"2026-06-12T18:00:00+09:00","participantPersonHints":["최견본","이샘플"]}`),
 				actionFinishMessage("정기회의 일정을 추가했습니다.", "obs-001"),
 			},
-			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-			ExpectedSelectedSkills:   []string{"calendar"},
-			ExpectedToolCalls:        []string{"event_add"},
+			ExpectedSelectedSkills: []string{"calendar"},
+			ExpectedToolCalls:      []string{"event_add"},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: agentcontract.TaskEventAgentAmbientDutyLaunch, BodyFragment: `"dutyName":"calendar_upkeep"`, Count: 1},
 				{Name: toolRequestedEventName("event_add"), BodyFragment: "2026-06-12T17:00:00+09:00", Count: 1},
@@ -814,11 +800,10 @@ func AmbientDutyAnnouncementNoEchoScenario(artifactDirectoryPath string) Virtual
 				actionInvokeCapabilityTool("event_add", `{"title":"라운지 촬영","startsAt":"2026-09-02T07:00:00+09:00","endsAt":"2026-09-02T10:00:00+09:00"}`),
 				actionFinishMessage("촬영 일정을 캘린더에 기록했습니다.", "obs-001"),
 			},
-			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-			ExpectedToolCalls:        []string{"event_add"},
-			ExpectedToolCallCounts:   map[string]int{"message_send": 0},
-			ForbiddenEvents:          []string{toolRequestedEventName("message_send")},
-			ForbiddenModelContexts:   []string{"message_send"},
+			ExpectedToolCalls:      []string{"event_add"},
+			ExpectedToolCallCounts: map[string]int{"message_send": 0},
+			ForbiddenEvents:        []string{toolRequestedEventName("message_send")},
+			ForbiddenModelContexts: []string{"message_send"},
 			ExpectedModelContexts: []string{
 				"Ambient duty context",
 				"Overheard message from",
@@ -881,8 +866,7 @@ func AmbientTaskCaptureAcceptanceScenario(artifactDirectoryPath string) VirtualS
 				actionInvokeCapabilityTool("task_add", `{"title":"신규 가입 플로우 점검","participantPersonHints":["예시"]}`),
 				actionFinishMessage("예시 님 업무로 추가했습니다.", "obs-001"),
 			},
-			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-			ExpectedToolCalls:        []string{"task_add"},
+			ExpectedToolCalls: []string{"task_add"},
 			ExpectedToolCallCounts: map[string]int{
 				"task_add": 1,
 				"bash":     0,
@@ -912,8 +896,7 @@ func AmbientTaskCaptureAcceptanceScenario(artifactDirectoryPath string) VirtualS
 				actionInvokeCapabilityTool("task_update", `{"taskHint":"task-1","endsAt":"2026-06-24"}`),
 				actionFinishMessage("예시 님 업무 마감을 수요일로 변경했습니다.", "obs-001"),
 			},
-			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-			ExpectedToolCalls:        []string{"task_update"},
+			ExpectedToolCalls: []string{"task_update"},
 			ExpectedToolCallCounts: map[string]int{
 				"task_add":    0,
 				"task_update": 1,
@@ -923,9 +906,9 @@ func AmbientTaskCaptureAcceptanceScenario(artifactDirectoryPath string) VirtualS
 	}
 }
 
-func CompletionJudgeRecoveryAcceptanceScenario(artifactDirectoryPath string) VirtualSessionScenario {
+func ChangeCheckRecoveryAcceptanceScenario(artifactDirectoryPath string) VirtualSessionScenario {
 	return VirtualSessionScenario{
-		Name:                  "completion_judge_recovery_acceptance",
+		Name:                  "change_check_recovery_acceptance",
 		ArtifactDirectoryPath: artifactDirectoryPath,
 		Skills:                []agentcontract.SkillInstruction{flowTaskSkill()},
 		AllowedTools:          []string{"conversation_history", "memory_search", "task_add", "task_list", "task_update"},
@@ -940,20 +923,18 @@ func CompletionJudgeRecoveryAcceptanceScenario(artifactDirectoryPath string) Vir
 				actionInvokeCapabilityTool("task_update", `{"taskHint":"task-1","endsAt":"2026-07-24"}`),
 				actionFinishMessage("마감일을 포함해 업무를 추가했습니다.", "obs-003"),
 			},
-			CompletionJudgeResponses: []string{
-				`{"satisfied":false,"missingWork":["마감일(endDate)이 누락되었습니다"],"reason":"업무에 요청된 마감일이 기록되지 않았습니다"}`,
-				`{"satisfied":true,"missingWork":[],"reason":"요청한 제목과 마감일이 모두 기록되었습니다"}`,
-			},
-			ExpectedToolCalls: []string{"task_add", "task_update"},
+			ExpectedChangesResponses: []string{expectedChangeResponse("task created", "분기 결산 누락 확인 업무를 7월 24일 마감으로 추가해줘")},
+			ChangeCheckAnswers:       []map[string]float64{{"expected0": 0.1}, {"expected0": 0.9}},
+			ExpectedToolCalls:        []string{"task_add", "task_update"},
 			ExpectedToolCallCounts: map[string]int{
 				"task_add":    1,
 				"task_update": 1,
 			},
 			ExpectedEventCounts: []VirtualEventCount{
-				{Name: agentcontract.TaskEventCompletionJudgeVerdict, BodyFragment: `"satisfied":false`, Count: 1},
-				{Name: agentcontract.TaskEventCompletionJudgeVerdict, BodyFragment: `"satisfied":true`, Count: 1},
-				{Name: agentcontract.TaskEventAgentEvidenceMissing, BodyFragment: "마감일", Count: 1},
-				{Name: agentcontract.TaskEventAgentCompletionRequired, BodyFragment: "마감일", Count: 1},
+				{Name: agentcontract.TaskEventCompletionChangeCheck, BodyFragment: `"unmet":[{"change":"task created"`, Count: 1},
+				{Name: agentcontract.TaskEventCompletionChangeCheck, BodyFragment: `"carriedOut":{"expected0":0.9}}`, Count: 1},
+				{Name: agentcontract.TaskEventAgentEvidenceMissing, BodyFragment: "7월 24일 마감", Count: 1},
+				{Name: agentcontract.TaskEventAgentCompletionRequired, BodyFragment: "7월 24일 마감", Count: 1},
 			},
 			ExpectedTaskStatus: task.TaskStatusCompleted,
 		}},
@@ -975,8 +956,7 @@ func SkillLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSessi
 					actionCallTool("skill_add", skillAddToolInput(skillName, skillContent)),
 					actionFinishMessage("memo-helper skill을 등록했습니다.", "obs-001"),
 				},
-				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-				ExpectedToolCalls:        []string{"skill_add"},
+				ExpectedToolCalls: []string{"skill_add"},
 				ExpectedToolCallCounts: map[string]int{
 					"skill_add":    1,
 					"skill_remove": 0,
@@ -997,8 +977,7 @@ func SkillLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSessi
 					actionCallTool("skill_remove", `{"name":"memo-helper"}`),
 					actionFinishMessage("memo-helper skill을 삭제했습니다.", "obs-001"),
 				},
-				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-				ExpectedToolCalls:        []string{"skill_remove"},
+				ExpectedToolCalls: []string{"skill_remove"},
 				ExpectedToolCallCounts: map[string]int{
 					"skill_add":    0,
 					"skill_remove": 1,
@@ -1079,8 +1058,7 @@ func MemoryExplicitToolAcceptanceScenario(artifactDirectoryPath string) VirtualS
 					actionCallTool("memory_remember", `{"content":"preferred language is Korean"}`),
 					actionFinishMessage("Remembered: your preferred language is Korean.", "obs-001"),
 				},
-				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-				ExpectedToolCalls:        []string{"memory_remember"},
+				ExpectedToolCalls: []string{"memory_remember"},
 				ExpectedToolCallCounts: map[string]int{
 					"memory_remember": 1,
 				},
@@ -1121,8 +1099,7 @@ func PersonaProfileUpdateAcceptanceScenario(artifactDirectoryPath string) Virtua
 					actionCallTool("persona_update", `{"target":"user","patch":{"language":{"default":"ko"}}}`),
 					actionFinishMessage("한국어 답변 설정을 저장했습니다.", "obs-001"),
 				},
-				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-				ExpectedToolCalls:        []string{"persona_update"},
+				ExpectedToolCalls: []string{"persona_update"},
 				ExpectedToolCallCounts: map[string]int{
 					"persona_update": 1,
 				},
@@ -1228,11 +1205,10 @@ func OneTimeScheduleAcceptanceScenario(artifactDirectoryPath string) VirtualSess
 				actionInvokeCapabilityTool("schedule_create", `{"description":"계약서 확인 알림","taskInstruction":"현재 대화에 \"계약서를 확인하세요\"라고 보낸다.","kind":"once","runAt":"2027-01-15T00:00:00Z"}`),
 				actionFinishMessage("2027년 1월 15일 오전 9시에 한 번 알림을 보내도록 예약해둘게요.", "obs-001"),
 			},
-			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-			ExpectedSelectedSkills:   []string{"scheduled-task"},
-			ExpectedToolCalls:        []string{"schedule_create"},
-			ExpectedModelContexts:    []string{"schedule_create", "runAt", "once"},
-			ExpectedReplyFragments:   []string{"2027년 1월 15일", "한 번"},
+			ExpectedSelectedSkills: []string{"scheduled-task"},
+			ExpectedToolCalls:      []string{"schedule_create"},
+			ExpectedModelContexts:  []string{"schedule_create", "runAt", "once"},
+			ExpectedReplyFragments: []string{"2027년 1월 15일", "한 번"},
 		}},
 	}
 }
@@ -1279,9 +1255,8 @@ func SitePrototypeAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 				actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/member/sites/local-fleet-studio/draft","mode":"publish"}`),
 				actionFinishMessage("Local Fleet Studio 웹사이트 프로토타입을 배포했습니다: https://local-fleet-studio.device.example.test", "obs-002"),
 			},
-			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-			ExpectedSelectedSkills:   []string{"website"},
-			ExpectedToolCallCounts:   map[string]int{"bash": 0},
+			ExpectedSelectedSkills: []string{"website"},
+			ExpectedToolCallCounts: map[string]int{"bash": 0},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: toolRequestedEventName("site_serve"), BodyFragment: "site_serve", Count: 1},
 				{Name: toolResultEventName("site_serve"), BodyFragment: "device.example.test", Count: 1},
@@ -1320,9 +1295,8 @@ func SiteEditRedeployAcceptanceScenario(artifactDirectoryPath string) VirtualSes
 					actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/member/sites/local-fleet-studio/draft","mode":"publish"}`),
 					actionFinishMessage("Deployed the Local Fleet Studio site: https://local-fleet-studio.device.example.test", "obs-002"),
 				},
-				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-				ExpectedSelectedSkills:   []string{"website"},
-				ExpectedToolCallCounts:   map[string]int{"bash": 0},
+				ExpectedSelectedSkills: []string{"website"},
+				ExpectedToolCallCounts: map[string]int{"bash": 0},
 				ExpectedEventCounts: []VirtualEventCount{
 					{Name: toolRequestedEventName("site_serve"), BodyFragment: "site_serve", Count: 1},
 					{Name: toolResultEventName("site_serve"), BodyFragment: "device.example.test", Count: 1},
@@ -1338,8 +1312,7 @@ func SiteEditRedeployAcceptanceScenario(artifactDirectoryPath string) VirtualSes
 					actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio Updated","sourceWorkspacePath":"/workspace/circles/member/sites/local-fleet-studio/draft","mode":"publish","siteReference":"local-fleet-studio"}`),
 					actionFinishMessage("Updated and redeployed the site: https://local-fleet-studio.device.example.test", "obs-002", "obs-003"),
 				},
-				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-				ExpectedToolCallCounts:   map[string]int{"bash": 0},
+				ExpectedToolCallCounts: map[string]int{"bash": 0},
 				ExpectedEventCounts: []VirtualEventCount{
 					{Name: toolRequestedEventName("site_list"), BodyFragment: "site_list", Count: 1},
 					{Name: toolRequestedEventName("write"), BodyFragment: "Local Fleet Studio Updated", Count: 1},
@@ -1379,8 +1352,7 @@ func SiteCustomStructureAcceptanceScenario(artifactDirectoryPath string) Virtual
 				actionCallTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/member/sites/demo/draft","mode":"publish","siteReference":"demo"}`),
 				actionFinishMessage("커스텀 레이아웃을 빌드하고 다시 배포했습니다: https://demo.device.example.test", "obs-005"),
 			},
-			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-			ExpectedToolCallCounts:   map[string]int{"bash": 1, "write": 1, "site_serve": 1},
+			ExpectedToolCallCounts: map[string]int{"bash": 1, "write": 1, "site_serve": 1},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: toolRequestedEventName("write"), BodyFragment: "custom-layout", Count: 1},
 				{Name: toolRequestedEventName("bash"), BodyFragment: "dist/index.html", Count: 1},
@@ -1421,8 +1393,7 @@ func SiteLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 					actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/member/sites/local-fleet-studio/draft","mode":"publish"}`),
 					actionFinishMessage("Local Fleet Studio 웹사이트를 배포했습니다: https://local-fleet-studio.device.example.test", "obs-002"),
 				},
-				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-				ExpectedSelectedSkills:   []string{"website"},
+				ExpectedSelectedSkills: []string{"website"},
 				ExpectedEventCounts: []VirtualEventCount{
 					{Name: toolRequestedEventName("site_serve"), BodyFragment: "site_serve", Count: 1},
 					{Name: toolResultEventName("site_serve"), BodyFragment: "device.example.test", Count: 1},
@@ -1445,7 +1416,6 @@ func SiteLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 					actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/member/sites/local-fleet-studio/draft","mode":"publish","siteReference":"local-fleet-studio"}`),
 					actionFinishMessage("Local Fleet Studio 웹사이트를 수정하고 다시 배포했습니다: https://local-fleet-studio.device.example.test", "obs-002", "obs-004"),
 				},
-				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 				ExpectedEventCounts: []VirtualEventCount{
 					{Name: toolRequestedEventName("site_list"), BodyFragment: "site_list", Count: 1},
 					{Name: toolRequestedEventName("write"), BodyFragment: "Local Fleet Studio Updated", Count: 1},
@@ -1480,7 +1450,6 @@ func SiteLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 				ActionResponses: []string{
 					actionFinishMessage("Local Fleet Studio 테스트 웹사이트를 삭제했습니다.", "obs-004"),
 				},
-				CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
 				ExpectedEventCounts: []VirtualEventCount{
 					{Name: toolRequestedEventName("site_unserve"), BodyFragment: "site_unserve", Count: 2},
 					{Name: toolResultEventName("site_unserve"), BodyFragment: "unserved", Count: 1},
@@ -1513,10 +1482,9 @@ func AskChoiceReplyAcceptanceScenario(artifactDirectoryPath string) VirtualSessi
 			ActionResponses: []string{
 				actionFinishMessage("두 번째로 진행하겠습니다."),
 			},
-			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-			ExpectedEvents:           []string{agentcontract.TaskEventAskResolved},
-			ExpectedReplyFragments:   []string{"두 번째"},
-			ExpectedModelContexts:    []string{"어느 쪽으로 진행할까요?"},
+			ExpectedEvents:         []string{agentcontract.TaskEventAskResolved},
+			ExpectedReplyFragments: []string{"두 번째"},
+			ExpectedModelContexts:  []string{"어느 쪽으로 진행할까요?"},
 		}},
 	}
 }
@@ -1560,8 +1528,7 @@ func DirectMessageSendConfirmAcceptanceScenario(artifactDirectoryPath string) Vi
 			ActionResponses: []string{
 				actionFinishMessage("테스트이에게 DM을 보냈습니다.", "obs-001"),
 			},
-			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-			ExpectedToolCalls:        []string{"message_send"},
+			ExpectedToolCalls: []string{"message_send"},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: toolRequestedEventName("message_send"), BodyFragment: `"targetType":"directMessage"`, Count: 2},
 				{Name: toolResultEventName("message_send"), BodyFragment: "virtual-platform-message-001", Count: 1},
@@ -1610,8 +1577,7 @@ func ChannelPostAcceptanceScenario(artifactDirectoryPath string) VirtualSessionS
 			ActionResponses: []string{
 				actionFinishMessage("announcements 채널에 공지를 올렸습니다.", "obs-001"),
 			},
-			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-			ExpectedToolCalls:        []string{"message_send"},
+			ExpectedToolCalls: []string{"message_send"},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: toolRequestedEventName("message_send"), BodyFragment: `"targetType":"channel"`, Count: 2},
 				{Name: toolRequestedEventName("message_send"), BodyFragment: `"channelName":"announcements"`, Count: 2},
@@ -1638,8 +1604,7 @@ func PlatformMessageEditAcceptanceScenario(artifactDirectoryPath string) Virtual
 				actionCallToolWithMessage("message_update", "공지 메시지 문구를 수정합니다.", `{"messageID":"virtual-platform-message-001","oldText":"오후 5시","newText":"오후 6시"}`),
 				actionFinishMessage("공지 메시지 문구를 수정했습니다.", "obs-002"),
 			},
-			CompletionJudgeResponses: []string{completionJudgeSatisfiedResponse()},
-			ExpectedToolCalls:        []string{"message_search", "message_update"},
+			ExpectedToolCalls: []string{"message_search", "message_update"},
 			ExpectedToolCallCounts: map[string]int{
 				"message_update": 1,
 			},

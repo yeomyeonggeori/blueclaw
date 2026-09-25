@@ -3884,10 +3884,8 @@ func (languageModel *recordingLanguageModel) GenerateStructuredResponse(_ contex
 	if structuredResponseRequest.StructuredOutputSchema.Name == "bluecollar_turn_router" {
 		return llm.StructuredResponse{Content: connectorDefaultTurnRouterResponse()}, nil
 	}
-	// A finish document parses as a verdict whose satisfied field is absent, so
-	// answering the judge with one refuses every finish it grades.
-	if structuredResponseRequest.StructuredOutputSchema.Name == "bluecollar_completion_judge" {
-		return llm.StructuredResponse{Content: `{"satisfied":true,"missingWork":[],"reason":"recorded"}`}, nil
+	if structuredResponseRequest.StructuredOutputSchema.Name == "bluecollar_expected_changes" {
+		return llm.StructuredResponse{Content: `{"expectedChanges":[]}`}, nil
 	}
 	languageModel.request = structuredResponseRequest
 	return llm.StructuredResponse{Content: connectorFinishMessage(languageModel.reply)}, nil

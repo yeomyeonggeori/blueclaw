@@ -37,6 +37,7 @@ func New(dependencies harnessdriver.Dependencies) (agentcontract.Harness, agentc
 	if dependencies.ToolSelector != nil {
 		agentKernel.UseToolSelector(dependencies.ToolSelector)
 	}
+	agentKernel.UseDecisionModel(dependencies.DecisionModel)
 	return agentKernel, skillRetriever
 }
 
