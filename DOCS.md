@@ -11,9 +11,9 @@ A company that runs one agent on one machine usually runs it as one Unix account
 
 ## What it is
 
-- **A host.** It owns connectors, identity, POSIX isolation, the task store, approvals, the tool catalog, capabilities, memory and delivery.
-- **A harness socket.** The agent loop sits behind one Go method, `agentcontract.Harness.RunTurn`. The bundled loop is [bluecollar](https://github.com/yeomyeonggeori/bluecollar); an ACP agent, Claude Code, Codex or Antigravity can take its place.
-- **POSIX as the boundary.** Ownership and mode bits decide what a tool call may touch. There is no executable allowlist, no denied path prefix and no prompt telling the model what it may not do.
+- A host owns connectors, identity, POSIX isolation, the task store, approvals, the tool catalog, capabilities, memory and delivery.
+- The harness port exposes the agent loop through one Go method, `agentcontract.Harness.RunTurn`. The bundled loop is [bluecollar](https://github.com/yeomyeonggeori/bluecollar); an ACP agent, Claude Code, Codex or Antigravity can take its place.
+- POSIX ownership and mode bits decide what a tool call may touch. The runtime has no executable allowlist or denied path prefix, and its prompt does not tell the model which paths it may use.
 
 ## What it is not
 
@@ -170,15 +170,15 @@ type Harness interface {
 
 The host opens the task run and hands the harness an `ExistingTaskRunID` to settle, so a first turn is recorded the same way whichever loop ran it. Everything else the host needs (events, cancellation, run lookup) it takes from the task store.
 
-Deciding whether an inbound message becomes a task at all is host policy. One call to the decision model answers every closed question about a message: who it is addressed to, whether it follows on from a running task, and how the turn should be routed. The answer is memoized on the inbound event (`internal/connectors/intake_decision.go`, implemented by bluecollar's `intake` package).
+Deciding whether an inbound message becomes a task at all is host policy. One call to the decision model answers every closed question about a message: who it is addressed to, whether it follows on from a running task, and how the turn should be routed. The answer is memoized on the inbound event in `internal/connectors/intake_decision.go`; the host gets its routing decision from bluecollar's `intake` package.
 
 ### The path of one message
 
-1. **Ingress.** A connector persists the raw event, resolves the sender to a person in the policy, and refuses accounts the policy does not know.
-2. **Decision.** Addressing is one of four outcomes: ignore, react only, reply, or react and reply. A message that is only an image is described by a vision model first.
-3. **Busy routing.** If the person already has an active task, the decision's `busyRoute` is one of `status`, `steer`, `replace`, `cancel`, `new_task` or `unrelated`.
-4. **Launch.** `TaskLauncher.Launch` (`internal/agentruntime/task_launcher.go`) runs nine steps, each recorded as an event so a failure names its step: resolve the requester's email, resolve the active circle, build the conversation's artifact manifest, provision the requester's workspace, build the tool set, audit the tool registry, load memory, carry out an approved call, run the turn.
-5. **Delivery.** The result is enqueued in the connector outbox and delivered.
+1. Ingress: A connector persists the raw event, resolves the sender to a person in the policy, and refuses accounts the policy does not know.
+2. Decision: Addressing is one of four outcomes: ignore, react only, reply, or react and reply. A message that is only an image is described by a vision model first.
+3. Busy routing: If the person already has an active task, the decision's `busyRoute` is one of `status`, `steer`, `replace`, `cancel`, `new_task` or `unrelated`.
+4. Launch: `TaskLauncher.Launch` (`internal/agentruntime/task_launcher.go`) runs nine steps, each recorded as an event so a failure names its step: resolve the requester's email, resolve the active circle, build the conversation's artifact manifest, provision the requester's workspace, build the tool set, audit the tool registry, load memory, carry out an approved call, run the turn.
+5. Delivery: The result is enqueued in the connector outbox and delivered.
 
 ### Choosing a harness
 
@@ -239,7 +239,7 @@ A task run is the durable record of one unit of work, from intake to its final r
 
 A run has one of nine statuses: `planned`, `running`, `waiting_user_input`, `waiting_approval`, `blocked`, `interrupted`, `completed`, `failed`, `cancelled` (declared in bluecollar's `agentcontract/task_run.go`). Every transition goes through `TransitionTaskRun`, which records a transition event.
 
-Restarts are explicit. Runs orphaned by a crash are interrupted at boot, runs in flight are interrupted before a planned shutdown (`POST /admin/api/runtime/prepare-shutdown`), and interrupted runs are claimed for auto-resume exactly once. A stale-task sweeper and a retention job run under `internal/scheduler`.
+Restarts are explicit. Runs orphaned by a crash are interrupted at boot, runs in flight are interrupted before shutdown (`POST /admin/api/runtime/prepare-shutdown`), and interrupted runs are claimed for auto-resume exactly once. A stale-task sweeper and a retention job run under `internal/scheduler`.
 
 Within a run the model works in steps. A step either calls a tool, speaks to the requester, or fails the task; a final reply closes the task and must cite the observations that prove the work happened (the completion gate in bluecollar).
 
@@ -493,8 +493,8 @@ The language model configuration says where each effort tier reaches a model; bl
 
 There are six tiers, `xlow`, `low`, `medium`, `high`, `xhigh` and `max`, and `maximumModelTier` and `minimumModelTier` bound where the runtime may move a task. Two shapes exist, and a configuration that names both is refused (`internal/llm/provider_factory.go`):
 
-- **`tiers`** maps each tier to an ordered list of endpoints. Each entry has `endpoint`, `model`, and optionally one key source, `apiKeyEnvironment` (the name of an environment variable) or `apiKeyPath` (a file), then `reasoningEffort`, `providerOrder` and `providerSort`. The `Authorization` header is sent only when a key source is named. Entries are tried in order, so a deployment writes its own fallbacks. A tier with no entry is an error.
-- **`capability`** names a model per tier (`xlowModel` … `maxModel`), a `decisionModel` for intake, and an `executionMode`, and hands model choice, local runtimes and fallback to the capability service. No key appears in the file.
+- `tiers` maps each tier to an ordered list of endpoints. Each entry has `endpoint`, `model`, and optionally one key source, `apiKeyEnvironment` (the name of an environment variable) or `apiKeyPath` (a file), then `reasoningEffort`, `providerOrder` and `providerSort`. The `Authorization` header is sent only when a key source is named. Entries are tried in order, so a deployment writes its own fallbacks. A tier with no entry is an error.
+- `capability` names a model per tier (`xlowModel` … `maxModel`), a `decisionModel` for intake, and an `executionMode`, and hands model choice, local runtimes and fallback to the capability service. No key appears in the file.
 
 `embedding` and `decision` are single entries of the same shape. Each is reached at its endpoint when it names one, and through the capability service otherwise. `decision` speaks the decisions API that Jev and Kev serve.
 

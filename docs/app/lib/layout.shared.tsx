@@ -6,7 +6,7 @@ export function baseOptions(): BaseLayoutProps {
     nav: {
       title: (
         <span className="flex items-center gap-2 font-semibold">
-          <img src="/favicon.svg" alt="" className="size-6" />
+          <img src="/logo.svg" alt="" className="size-6" />
           {appName}
         </span>
       ),
