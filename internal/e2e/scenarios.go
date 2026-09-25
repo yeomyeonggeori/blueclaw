@@ -289,6 +289,31 @@ func FileWriteAcceptanceScenario(artifactDirectoryPath string) VirtualSessionSce
 	}
 }
 
+func FileAttachmentChangeCheckScenario(artifactDirectoryPath string) VirtualSessionScenario {
+	return VirtualSessionScenario{
+		Name:                  "file_attachment_change_check",
+		ArtifactDirectoryPath: artifactDirectoryPath,
+		AllowedTools:          []string{"write", "file_deliver"},
+		InitialToolNames:      []string{"write"},
+		Turns: []VirtualTurn{{
+			Prompt: "FAQ 개편 JSON 메모 파일을 만들어서 이 DM에 첨부해줘",
+			ActionResponses: []string{
+				actionCallTool("write", `{"path":"work/customer-support/faq-revision.json","content":"{\"title\":\"FAQ 개편\"}\n"}`),
+				actionFinishMessage("JSON 메모 파일을 만들었습니다.", "obs-001"),
+				actionFinalReplyWithAttachment("JSON 메모 파일을 첨부했습니다.", "work/customer-support/faq-revision.json"),
+			},
+			ExpectedChangesResponses: []string{`{"expectedChanges":[{"change":"file created","asked":"FAQ 개편 JSON 메모 파일을 만들어서"},{"change":"file attached","asked":"이 DM에 첨부해줘"}]}`},
+			ChangeCheckAnswers:       []map[string]float64{{"expected0": 0.9, "expected1": 0.1}, {"expected0": 0.9, "expected1": 0.9}},
+			ExpectedToolCallCounts:   map[string]int{"write": 1, "file_deliver": 1},
+			ExpectedAttachmentFiles:  []VirtualAttachmentFileExpectation{{Suffix: ".json", ContainsFragments: []string{"FAQ 개편"}}},
+			ExpectedEventCounts: []VirtualEventCount{
+				{Name: agentcontract.TaskEventCompletionChangeCheck, BodyFragment: `"unmet":[{"change":"file attached"`, Count: 1},
+				{Name: agentcontract.TaskEventAgentCompletionRequired, BodyFragment: "이 DM에 첨부해줘", Count: 1},
+			},
+		}},
+	}
+}
+
 func DocumentCreateAcceptanceScenario(artifactDirectoryPath string) VirtualSessionScenario {
 	return VirtualSessionScenario{
 		Name:                  "document_create_acceptance",
@@ -697,8 +722,8 @@ func CalendarFalseFinishRecoveryAcceptanceScenario(artifactDirectoryPath string)
 			},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: agentcontract.TaskEventCompletionChangeCheck, BodyFragment: `"unrecorded":[{"change":"calendar created"`, Count: 1},
-				{Name: agentcontract.TaskEventAgentEvidenceMissing, BodyFragment: "no recorded change of this kind", Count: 1},
-				{Name: agentcontract.TaskEventAgentCompletionRequired, BodyFragment: "no recorded change of this kind", Count: 1},
+				{Name: agentcontract.TaskEventAgentEvidenceMissing, BodyFragment: "nothing recorded changed this kind of record", Count: 1},
+				{Name: agentcontract.TaskEventAgentCompletionRequired, BodyFragment: "nothing recorded changed this kind of record", Count: 1},
 				{Name: toolRequestedEventName("event_add"), BodyFragment: "2026-07-13T10:00:00+09:00", Count: 1},
 				{Name: agentcontract.TaskEventCompletionChangeCheck, BodyFragment: `"carriedOut":{"expected0":0.9}`, Count: 1},
 			},

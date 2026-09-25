@@ -752,6 +752,7 @@ var builtinScenarioFactories = map[string]func(string) VirtualSessionScenario{
 	"calendar_false_finish_recovery_acceptance": CalendarFalseFinishRecoveryAcceptanceScenario,
 	"calendar_read_question_with_write_hint":    CalendarReadQuestionWithWriteHintScenario,
 	"change_check_recovery_acceptance":          ChangeCheckRecoveryAcceptanceScenario,
+	"file_attachment_change_check":              FileAttachmentChangeCheckScenario,
 	"ambient_duty_calendar_acceptance":          AmbientDutyCalendarAcceptanceScenario,
 	"ambient_duty_nothing_to_record":            AmbientDutyNothingToRecordScenario,
 	"ambient_duty_announcement_no_echo":         AmbientDutyAnnouncementNoEchoScenario,
