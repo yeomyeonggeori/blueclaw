@@ -427,6 +427,21 @@ describe('closed protocol values', () => {
       ...descriptor,
       resultContract: { schema: settingsSchema, effects: [{ ...settingsEffect, effectIdentity: 'id' }] },
     }).success).toBe(false);
+    const attendanceSchema = {
+      type: 'object',
+      properties: { status: { type: 'string' }, eventID: { anyOf: [{ type: 'string' }, { type: 'null' }] } },
+      required: ['status', 'eventID'],
+      additionalProperties: false,
+    };
+    const attendanceEffect = { objectType: 'attendance', effect: 'created', resultField: 'eventID', effectIdentity: 'id', when: { resultField: 'status', equals: 'added' } };
+    expect(capabilityDescriptorSchema.safeParse({
+      ...descriptor,
+      resultContract: { schema: attendanceSchema, effects: [attendanceEffect] },
+    }).success).toBe(true);
+    expect(capabilityDescriptorSchema.safeParse({
+      ...descriptor,
+      resultContract: { schema: attendanceSchema, effects: [{ ...attendanceEffect, when: undefined }] },
+    }).success).toBe(false);
     const reviewResultContract = {
       schema: {
         type: 'object',

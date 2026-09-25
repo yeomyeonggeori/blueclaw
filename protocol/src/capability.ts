@@ -59,6 +59,18 @@ function schemaDefinesEffectIdentityField(schema: unknown, fieldName: string): b
     && objectField(property, 'uniqueItems') === true;
 }
 
+function schemaDefinesConditionalEffectIdentityField(schema: unknown, fieldName: string): boolean {
+  return schemaDefinesEffectIdentityField(schema, fieldName)
+    || schemaIsNullableString(objectField(objectField(schema, 'properties'), fieldName));
+}
+
+function schemaIsNullableString(property: unknown): boolean {
+  const alternatives = objectField(property, 'anyOf');
+  if (!Array.isArray(alternatives) || alternatives.length !== 2) return false;
+  const types = alternatives.map(alternative => objectField(alternative, 'type'));
+  return types.includes('string') && types.includes('null');
+}
+
 function isJSONSchema(value: unknown): value is Parameters<typeof z.fromJSONSchema>[0] {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
@@ -231,7 +243,7 @@ function effectIdentityFieldIssue(
   if (effect.when === undefined && !schemaRequiresEffectIdentityField(schema, effect.resultField)) {
     return 'resultField must name a required string or nonempty unique string array property';
   }
-  if (effect.when !== undefined && !schemaDefinesEffectIdentityField(schema, effect.resultField)) {
+  if (effect.when !== undefined && !schemaDefinesConditionalEffectIdentityField(schema, effect.resultField)) {
     return 'conditional effect resultField must name a string or nonempty unique string array property';
   }
   return undefined;
