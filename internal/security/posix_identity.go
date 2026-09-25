@@ -61,7 +61,7 @@ func ExecutionIdentityForPersonAccess(personAccess policy.PersonAccess, workspac
 	groupNames := []string{posixSharedGroupName}
 	for _, circleID := range personAccess.Circles {
 		normalizedCircleID := strings.ToLower(strings.TrimSpace(circleID))
-		if normalizedCircleID == "" || normalizedCircleID == "admin" {
+		if !isPOSIXCircle(normalizedCircleID) {
 			continue
 		}
 		groupNames = append(groupNames, LinuxCircleGroupName(normalizedCircleID))
@@ -176,7 +176,7 @@ func POSIXStateForPolicy(policyDocument policy.PolicyDocument, workspaceRootPath
 
 	for _, circlePolicy := range circlePoliciesWithMemberDefault(policyDocument.Circles, workspaceRootPath) {
 		circleID := strings.ToLower(strings.TrimSpace(circlePolicy.CircleID))
-		if circleID == "" {
+		if !isPOSIXCircle(circleID) {
 			continue
 		}
 		groupName := LinuxCircleGroupName(circleID)
@@ -317,11 +317,17 @@ func linuxNameValueWithSuffix(normalizedValue string, value string, maximumLengt
 }
 
 func effectivePersonCirclesForPOSIX(personPolicy policy.PersonPolicy) []string {
-	circles := append([]string{policy.MemberCircleID}, personPolicy.Circles...)
-	if personPolicy.IsAdmin {
-		circles = append(circles, policy.AdminCircleID)
+	circles := []string{}
+	for _, circleID := range normalizeStringList(append([]string{policy.MemberCircleID}, personPolicy.Circles...)) {
+		if isPOSIXCircle(circleID) {
+			circles = append(circles, circleID)
+		}
 	}
-	return uniqueStrings(normalizeStringList(circles))
+	return uniqueStrings(circles)
+}
+
+func isPOSIXCircle(normalizedCircleID string) bool {
+	return normalizedCircleID != "" && normalizedCircleID != policy.AdminCircleID
 }
 
 func circlePoliciesWithMemberDefault(circlePolicies []policy.CirclePolicy, workspaceRootPath string) []policy.CirclePolicy {

@@ -134,6 +134,33 @@ func TestPOSIXStateForPolicyGivesEveryPersonMemberAccess(t *testing.T) {
 	}
 }
 
+func TestPOSIXStateForPolicyNeverProjectsTheAdminCircle(t *testing.T) {
+	state := POSIXStateForPolicy(policy.PolicyDocument{
+		People: []policy.PersonPolicy{
+			{PersonID: "admin-1", IsAdmin: true},
+			{PersonID: "admin-2", Circles: []string{"Admin"}},
+		},
+		Circles: []policy.CirclePolicy{{
+			CircleID:               "admin",
+			WorkspaceDirectoryPath: "/workspace/circles/admin",
+		}},
+	}, "/workspace")
+
+	if hasPOSIXGroup(state, "bc_circle_admin") {
+		t.Fatalf("expected no admin circle group, got %+v", state.Groups)
+	}
+	for _, directory := range state.Directories {
+		if directory.Path == "/workspace/circles/admin" {
+			t.Fatalf("expected no admin circle directory, got %+v", directory)
+		}
+	}
+	for _, userName := range []string{"bc_person_admin-1", "bc_person_admin-2"} {
+		if hasPOSIXUserGroup(state, userName, "bc_circle_admin") {
+			t.Fatalf("expected %s to hold no admin group membership, got %+v", userName, state.Users)
+		}
+	}
+}
+
 func TestPOSIXStateForPolicyKeepsSharedRootReadOnlyButPublicAndCacheWritable(t *testing.T) {
 	state := POSIXStateForPolicy(policy.PolicyDocument{
 		People: []policy.PersonPolicy{{PersonID: "person-1"}},
