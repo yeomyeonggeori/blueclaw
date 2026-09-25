@@ -145,7 +145,7 @@ func policyDocumentWithPOSIXRequesterAccess(policyDocument policy.PolicyDocument
 func circlePoliciesWithRequesterCircles(circlePolicies []policy.CirclePolicy, circleIDs []string, workspaceRootPath string) []policy.CirclePolicy {
 	result := append([]policy.CirclePolicy{}, circlePolicies...)
 	for _, circleID := range circleIDs {
-		if circleID == policy.AdminCircleID || hasCirclePolicyID(result, circleID) {
+		if hasCirclePolicyID(result, circleID) {
 			continue
 		}
 		result = append(result, policy.CirclePolicy{
@@ -160,7 +160,7 @@ func posixCircleIDsForPersonAccess(personAccess policy.PersonAccess) []string {
 	circleIDs := []string{}
 	for _, circleID := range personAccess.Circles {
 		normalizedCircleID := strings.ToLower(strings.TrimSpace(circleID))
-		if normalizedCircleID == "" || normalizedCircleID == policy.AdminCircleID {
+		if !isPOSIXCircle(normalizedCircleID) {
 			continue
 		}
 		circleIDs = append(circleIDs, normalizedCircleID)
