@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { site } from '../site';
 
@@ -213,11 +213,9 @@ function writeTheme() {
 		join(app, 'theme.css'),
 		`:root {\n  --color-fd-primary: ${site.color.light};\n  --color-fd-primary-foreground: #ffffff;\n}\n.dark {\n  --color-fd-primary: ${site.color.dark};\n  --color-fd-primary-foreground: #0b1020;\n}\n`
 	);
-	const letter = site.name.slice(4, 5).toUpperCase();
-	writeFileSync(
-		join(assets, 'favicon.svg'),
-		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="${site.color.light}"/><text x="32" y="44" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="36" font-weight="700" fill="#ffffff">${letter}</text></svg>\n`
-	);
+	const logo = join(repository, 'assets', 'blueclaw.logo.svg');
+	copyFileSync(logo, join(assets, 'logo.svg'));
+	copyFileSync(logo, join(assets, 'favicon.svg'));
 }
 
 function writeCrawlerFiles() {

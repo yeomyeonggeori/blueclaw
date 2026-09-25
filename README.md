@@ -16,10 +16,9 @@
 git clone --recursive https://github.com/yeomyeonggeori/blueclaw.git
 cd blueclaw
 go build ./...
-go run ./cmd/blueclaw --runtime runtime.json --policy policy.json
 ```
 
-The documentation is [DOCS.md](DOCS.md), published at [blueclaw.intern.kim](https://blueclaw.intern.kim).
+The [quickstart](https://blueclaw.intern.kim/docs/quickstart) configures the standalone runtime and policy before starting the daemon. The full reference is [DOCS.md](DOCS.md), published at [blueclaw.intern.kim](https://blueclaw.intern.kim).
 
 | path | holds |
 |---|---|
