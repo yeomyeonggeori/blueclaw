@@ -2147,6 +2147,8 @@ func (service *virtualCapabilityService) scheduleResponse(toolName string, reque
 		return virtualCapabilityScheduleSuccess(toolName, "updated", service.schedules[index].ID, "updated virtual schedule", service.schedules[index].Values)
 	default:
 		cancelledSchedules := []map[string]any{}
+		cancelledScheduleIDs := []string{}
+		effects := []map[string]any{}
 		for _, scheduleHint := range stringSliceValue(input["scheduleHints"]) {
 			index := virtualCapabilityRecordIndexByHint(service.schedules, map[string]any{"scheduleHint": scheduleHint}, "scheduleHint", "description")
 			if index < 0 {
@@ -2158,8 +2160,19 @@ func (service *virtualCapabilityService) scheduleResponse(toolName string, reque
 				"scheduleID":  cancelledSchedule.ID,
 				"description": stringValue(cancelledSchedule.Values["description"]),
 			})
+			cancelledScheduleIDs = append(cancelledScheduleIDs, cancelledSchedule.ID)
+			effects = append(effects, map[string]any{"objectType": "schedule", "effect": "deleted", "id": cancelledSchedule.ID})
 		}
-		return virtualCapabilitySuccess(toolName, "cancelled virtual schedules", map[string]any{"cancelled": cancelledSchedules})
+		return virtualCapabilityJSON(map[string]any{
+			"provider":        "virtual",
+			"selectedBackend": "device",
+			"toolName":        toolName,
+			"outcome":         "succeeded",
+			"status":          "ok",
+			"content":         "cancelled virtual schedules",
+			"result":          map[string]any{"scheduleIDs": cancelledScheduleIDs, "cancelled": cancelledSchedules},
+			"effects":         effects,
+		})
 	}
 }
 

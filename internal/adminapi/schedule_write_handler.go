@@ -61,7 +61,8 @@ type cancelledScheduleItem struct {
 }
 
 type scheduleToolCancelResult struct {
-	Cancelled []cancelledScheduleItem `json:"cancelled"`
+	ScheduleIDs []string                `json:"scheduleIDs"`
+	Cancelled   []cancelledScheduleItem `json:"cancelled"`
 }
 
 type scheduleHintConflict struct {
@@ -195,7 +196,10 @@ func (scheduleHandler ScheduleHandler) HandleToolCancel(responseWriter http.Resp
 		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(responseWriter, http.StatusOK, scheduleToolCancelResult{Cancelled: cancelledScheduleItems(result.Schedules)})
+	writeJSON(responseWriter, http.StatusOK, scheduleToolCancelResult{
+		ScheduleIDs: cancelledScheduleIDs(result.Schedules),
+		Cancelled:   cancelledScheduleItems(result.Schedules),
+	})
 }
 
 func resolveEveryScheduleHint(hints []string, ownSchedules []task.Schedule) ([]string, string, task.ScheduleHintResolution) {
@@ -213,6 +217,14 @@ func resolveEveryScheduleHint(hints []string, ownSchedules []task.Schedule) ([]s
 		scheduleIDs = append(scheduleIDs, resolution.Match.ScheduleID)
 	}
 	return scheduleIDs, "", task.ScheduleHintResolution{}
+}
+
+func cancelledScheduleIDs(schedules []task.Schedule) []string {
+	scheduleIDs := make([]string, 0, len(schedules))
+	for _, schedule := range schedules {
+		scheduleIDs = append(scheduleIDs, schedule.ScheduleID)
+	}
+	return scheduleIDs
 }
 
 func cancelledScheduleItems(schedules []task.Schedule) []cancelledScheduleItem {
