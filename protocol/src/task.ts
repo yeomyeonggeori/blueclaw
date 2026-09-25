@@ -124,7 +124,6 @@ export enum TaskEventName {
   AgentPlanUpdated = 'agent.plan.updated',
   AgentQualityCriteria = 'agent.quality_criteria',
   AgentQualityReview = 'agent.quality_review',
-  AgentRecoverableFailRejected = 'agent.recoverable_fail_rejected',
   AgentRecoveryAttempt = 'agent.recovery_attempt',
   AgentRecoveryBudgetExhausted = 'agent.recovery_budget_exhausted',
   AgentRecoveryGenerationFailed = 'agent.recovery_generation_failed',

@@ -69,7 +69,6 @@
         "agent.plan.updated",
         "agent.quality_criteria",
         "agent.quality_review",
-        "agent.recoverable_fail_rejected",
         "agent.recovery_attempt",
         "agent.recovery_budget_exhausted",
         "agent.recovery_generation_failed",

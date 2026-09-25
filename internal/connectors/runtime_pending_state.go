@@ -302,10 +302,10 @@ func outcomeContractRequiresFileAttachment(contract agentcontract.OutcomeContrac
 	if len(contract.RequiredAttachmentSuffixes) > 0 {
 		return true
 	}
-	if toolNamesContain(contract.RequiredEvidenceTools, "file_attach") {
+	if toolNamesContain(contract.RequiredEvidenceTools, toolcontract.FileDeliverToolName) {
 		return true
 	}
-	if toolNameGroupsContain(contract.RequiredEvidenceAnyOf, "file_attach") {
+	if toolNameGroupsContain(contract.RequiredEvidenceAnyOf, toolcontract.FileDeliverToolName) {
 		return true
 	}
 	for _, result := range contract.ExpectedResults {
