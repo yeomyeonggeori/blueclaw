@@ -8,6 +8,7 @@ import {
   resourceScopeSchema,
 } from './common.ts';
 import { registerCanonicalClosedJSONSchema } from './json_schema.ts';
+import { schemaWithNullAsAbsent } from './null_as_absent.ts';
 
 const nonBlankStringSchema = z.string().trim().min(1);
 const unpaddedStringSchema = z.string().min(1).refine(value => value === value.trim(), {
@@ -57,18 +58,6 @@ function schemaDefinesEffectIdentityField(schema: unknown, fieldName: string): b
     && Number.isInteger(minimumItems)
     && minimumItems >= 1
     && objectField(property, 'uniqueItems') === true;
-}
-
-function schemaDefinesConditionalEffectIdentityField(schema: unknown, fieldName: string): boolean {
-  return schemaDefinesEffectIdentityField(schema, fieldName)
-    || schemaIsNullableString(objectField(objectField(schema, 'properties'), fieldName));
-}
-
-function schemaIsNullableString(property: unknown): boolean {
-  const alternatives = objectField(property, 'anyOf');
-  if (!Array.isArray(alternatives) || alternatives.length !== 2) return false;
-  const types = alternatives.map(alternative => objectField(alternative, 'type'));
-  return types.includes('string') && types.includes('null');
 }
 
 function isJSONSchema(value: unknown): value is Parameters<typeof z.fromJSONSchema>[0] {
@@ -209,29 +198,30 @@ export const toolResultContractSchema = z.strictObject({
   effects: z.array(resourceEffectContractSchema).optional(),
   evidenceCondition: evidenceConditionSchema.optional(),
 }).superRefine((contract, context) => {
+  const schema = schemaWithNullAsAbsent(contract.schema);
   const keys = contract.effects?.map(effect => `${effect.objectType}\u0000${effect.effect}\u0000${effect.effectIdentity}`) ?? [];
   if (new Set(keys).size !== keys.length) {
     context.addIssue({ code: 'custom', message: 'effects must be unique' });
   }
   for (const effect of contract.effects ?? []) {
-    const identityIssue = effectIdentityFieldIssue(contract.schema, effect);
+    const identityIssue = effectIdentityFieldIssue(schema, effect);
     if (identityIssue) {
       context.addIssue({ code: 'custom', message: identityIssue });
     }
     if (effect.when === undefined) {
       continue;
     }
-    if (!schemaAcceptsEvidenceCondition(contract.schema, effect.when)) {
+    if (!schemaAcceptsEvidenceCondition(schema, effect.when)) {
       context.addIssue({ code: 'custom', message: 'effect when condition must match a required result property' });
     }
   }
-  if (contract.evidenceCondition && !schemaAcceptsEvidenceCondition(contract.schema, contract.evidenceCondition)) {
+  if (contract.evidenceCondition && !schemaAcceptsEvidenceCondition(schema, contract.evidenceCondition)) {
     context.addIssue({ code: 'custom', message: 'evidenceCondition must match a required result property' });
   }
 });
 
 function effectIdentityFieldIssue(
-  schema: z.infer<typeof strictObjectJsonSchema>,
+  schema: unknown,
   effect: z.infer<typeof resourceEffectContractSchema>,
 ): string | undefined {
   if (effect.effectIdentity === ResourceEffectIdentity.Singleton) {
@@ -243,7 +233,7 @@ function effectIdentityFieldIssue(
   if (effect.when === undefined && !schemaRequiresEffectIdentityField(schema, effect.resultField)) {
     return 'resultField must name a required string or nonempty unique string array property';
   }
-  if (effect.when !== undefined && !schemaDefinesConditionalEffectIdentityField(schema, effect.resultField)) {
+  if (effect.when !== undefined && !schemaDefinesEffectIdentityField(schema, effect.resultField)) {
     return 'conditional effect resultField must name a string or nonempty unique string array property';
   }
   return undefined;
