@@ -295,7 +295,8 @@
                       "enum": [
                         "id",
                         "path",
-                        "url"
+                        "url",
+                        "singleton"
                       ],
                       "type": "string"
                     },
@@ -328,7 +329,6 @@
                   "required": [
                     "objectType",
                     "effect",
-                    "resultField",
                     "effectIdentity"
                   ],
                   "type": "object"
@@ -600,7 +600,8 @@
                       "enum": [
                         "id",
                         "path",
-                        "url"
+                        "url",
+                        "singleton"
                       ],
                       "type": "string"
                     },
@@ -633,7 +634,6 @@
                   "required": [
                     "objectType",
                     "effect",
-                    "resultField",
                     "effectIdentity"
                   ],
                   "type": "object"
@@ -908,7 +908,8 @@
                       "enum": [
                         "id",
                         "path",
-                        "url"
+                        "url",
+                        "singleton"
                       ],
                       "type": "string"
                     },
@@ -941,7 +942,6 @@
                   "required": [
                     "objectType",
                     "effect",
-                    "resultField",
                     "effectIdentity"
                   ],
                   "type": "object"

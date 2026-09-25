@@ -155,6 +155,7 @@ export enum ResourceEffectIdentity {
   ID = 'id',
   Path = 'path',
   URL = 'url',
+  Singleton = 'singleton',
 }
 
 export const completionEvidenceDescriptorSchema = z.strictObject({
@@ -171,7 +172,7 @@ export const evidenceConditionSchema = z.strictObject({
 export const resourceEffectContractSchema = z.strictObject({
   objectType: z.string().trim().min(1),
   effect: z.string().trim().min(1),
-  resultField: z.string().trim().min(1),
+  resultField: z.string().trim().min(1).optional(),
   effectIdentity: z.enum(ResourceEffectIdentity),
   when: evidenceConditionSchema.optional(),
 });
@@ -187,8 +188,8 @@ export const resourceEffectSchema = z.strictObject({
   filename: z.string().optional(),
   contentType: z.string().optional(),
   summary: z.string().optional(),
-}).refine(effect => Boolean(effect.id?.trim() || effect.path?.trim() || effect.url?.trim()), {
-  message: 'resource effect requires id, path, or url',
+}).refine(effect => [effect.id, effect.path, effect.url].filter(identity => identity?.trim()).length <= 1, {
+  message: 'resource effect carries at most one of id, path, or url',
 });
 
 export const toolResultContractSchema = z.strictObject({
@@ -201,14 +202,12 @@ export const toolResultContractSchema = z.strictObject({
     context.addIssue({ code: 'custom', message: 'effects must be unique' });
   }
   for (const effect of contract.effects ?? []) {
-    if (effect.when === undefined) {
-      if (!schemaRequiresEffectIdentityField(contract.schema, effect.resultField)) {
-        context.addIssue({ code: 'custom', message: 'resultField must name a required string or nonempty unique string array property' });
-      }
-      continue;
+    const identityIssue = effectIdentityFieldIssue(contract.schema, effect);
+    if (identityIssue) {
+      context.addIssue({ code: 'custom', message: identityIssue });
     }
-    if (!schemaDefinesEffectIdentityField(contract.schema, effect.resultField)) {
-      context.addIssue({ code: 'custom', message: 'conditional effect resultField must name a string or nonempty unique string array property' });
+    if (effect.when === undefined) {
+      continue;
     }
     if (!schemaAcceptsEvidenceCondition(contract.schema, effect.when)) {
       context.addIssue({ code: 'custom', message: 'effect when condition must match a required result property' });
@@ -218,6 +217,25 @@ export const toolResultContractSchema = z.strictObject({
     context.addIssue({ code: 'custom', message: 'evidenceCondition must match a required result property' });
   }
 });
+
+function effectIdentityFieldIssue(
+  schema: z.infer<typeof strictObjectJsonSchema>,
+  effect: z.infer<typeof resourceEffectContractSchema>,
+): string | undefined {
+  if (effect.effectIdentity === ResourceEffectIdentity.Singleton) {
+    return effect.resultField === undefined ? undefined : 'a singleton effect names no resultField';
+  }
+  if (effect.resultField === undefined) {
+    return 'resultField is required unless the effect is a singleton';
+  }
+  if (effect.when === undefined && !schemaRequiresEffectIdentityField(schema, effect.resultField)) {
+    return 'resultField must name a required string or nonempty unique string array property';
+  }
+  if (effect.when !== undefined && !schemaDefinesEffectIdentityField(schema, effect.resultField)) {
+    return 'conditional effect resultField must name a string or nonempty unique string array property';
+  }
+  return undefined;
+}
 
 export const capabilityAvailabilitySchema = z.strictObject({
   state: z.enum(CapabilityAvailabilityState),
