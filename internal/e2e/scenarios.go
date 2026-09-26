@@ -1551,7 +1551,7 @@ func DirectMessageSendConfirmAcceptanceScenario(artifactDirectoryPath string) Vi
 			Prompt:         "확인",
 			RouterApproval: "approve",
 			ActionResponses: []string{
-				actionFinishMessage("테스트이에게 DM을 보냈습니다.", "obs-001"),
+				actionFinishMessage("테스트이에게 DM을 보냈습니다.", "obs-002"),
 			},
 			ExpectedToolCalls: []string{"message_send"},
 			ExpectedEventCounts: []VirtualEventCount{
@@ -1600,7 +1600,7 @@ func ChannelPostAcceptanceScenario(artifactDirectoryPath string) VirtualSessionS
 			Prompt:         "확인",
 			RouterApproval: "approve",
 			ActionResponses: []string{
-				actionFinishMessage("announcements 채널에 공지를 올렸습니다.", "obs-001"),
+				actionFinishMessage("announcements 채널에 공지를 올렸습니다.", "obs-002"),
 			},
 			ExpectedToolCalls: []string{"message_send"},
 			ExpectedEventCounts: []VirtualEventCount{

@@ -54,7 +54,7 @@ func TestToolCatalogKeepsCapabilityInputSchemaAuthoritative(t *testing.T) {
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"task_add"})
 
 	toolSet := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{ProfileName: "default"})
-	actionSchema := loop.ActionSchemaForToolSet(toolSet, false, nil, false)
+	actionSchema := loop.ActionSchemaForToolSet(toolSet, false, false)
 
 	if !strings.Contains(actionSchema, `"title"`) || !strings.Contains(actionSchema, `"endDate"`) {
 		t.Fatalf("expected registered task_add schema, got %s", actionSchema)
@@ -343,7 +343,7 @@ func TestCanonicalReadDescriptorsExposePathOnlyInputAndResultContract(t *testing
 	})
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"document_read", "image_read"})
 	toolSet := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{ProfileName: "default"})
-	actionSchema := loop.ActionSchemaForToolSet(toolSet, false, nil, false)
+	actionSchema := loop.ActionSchemaForToolSet(toolSet, false, false)
 	if strings.Contains(actionSchema, "materialID") || !strings.Contains(actionSchema, "path") {
 		t.Fatalf("expected model action schema to expose exact path-only input, got %s", actionSchema)
 	}

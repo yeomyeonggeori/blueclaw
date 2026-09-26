@@ -196,7 +196,7 @@ func TestLanguageModelCallAssertionRejectsDeadlineDespiteElapsedCompletionEvent(
 		TaskStatus: task.TaskStatusCompleted,
 		Events: []task.TaskEvent{{
 			Name: "agent.limit_completed_from_evidence",
-			Body: `{"reason":"max_elapsed","source":"typed_evidence"}`,
+			Body: `{"reason":"max_elapsed","source":"expected_changes"}`,
 		}},
 		LanguageModelCallEvents: []VirtualLanguageModelCallEvent{{
 			Kind:               "structured",
