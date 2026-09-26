@@ -675,7 +675,7 @@ func TestCapabilityDescriptorAppearsInToolSetAndInvokesBridge(t *testing.T) {
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{ProfileName: "default"})
 
 	descriptions := toolRegistry.Descriptions()
-	actionSchema := loop.ActionSchemaForToolSet(toolRegistry, false, nil, false)
+	actionSchema := loop.ActionSchemaForToolSet(toolRegistry, false, false)
 	if !strings.Contains(descriptions, "Test capability browser_open") || strings.Contains(descriptions, `"url"`) {
 		t.Fatalf("expected concise descriptor description without duplicated schema, got %s", descriptions)
 	}
