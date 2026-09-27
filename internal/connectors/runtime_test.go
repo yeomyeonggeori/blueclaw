@@ -329,7 +329,7 @@ func TestConnectorRuntimeAmbiguousWaitDoesNotSelectNewest(t *testing.T) {
 		}
 	}
 	event := testInboundEvent("message-ambiguous")
-	event.ReplyTargetID = "unmatched-reply-target"
+	event.ReplyTargetID = event.MessageID
 
 	result, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, event)
 	if errorValue != nil {
@@ -368,7 +368,7 @@ func TestConnectorRuntimeSingleOpenWaitFallbackContinuesTask(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	event := testInboundEvent("message-single")
-	event.ReplyTargetID = "unmatched-reply-target"
+	event.ReplyTargetID = event.MessageID
 
 	result, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, event)
 	if errorValue != nil {

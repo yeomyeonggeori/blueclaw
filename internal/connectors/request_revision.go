@@ -24,7 +24,7 @@ func taskRunMatchesMessageScope(taskRun task.TaskRun, event PlatformInboundEvent
 	if event.IsThread == nil && !isMultiPersonConversation(event) {
 		return taskRun.OriginConversationID == event.ConversationID
 	}
-	return taskRunMatchesStopScope(taskRun, event)
+	return taskRunSharesMessageThread(taskRun, event)
 }
 
 func (connectorRuntime *ConnectorRuntime) restorePendingRequests() error {
