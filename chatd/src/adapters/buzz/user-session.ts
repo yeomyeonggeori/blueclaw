@@ -1,7 +1,14 @@
 import { getPublicKey } from "nostr-tools/pure";
 import { withRelayAs } from "./relay-pool.ts";
 import { BlobRefused, imetaTag, uploadBlob, type BlossomBlob } from "./blossom.ts";
-import { carriesTag, firstTagValue, threadTagsOf, type BuzzEvent } from "./types.ts";
+import {
+	EDIT_MESSAGE_KIND,
+	STREAM_MESSAGE_KIND,
+	carriesTag,
+	firstTagValue,
+	threadTagsOf,
+	type BuzzEvent,
+} from "./types.ts";
 import { rolesOnRoster } from "./user-channels.ts";
 import { DELETE_MESSAGE_KIND, takenBackIDs } from "./deletions.ts";
 import { reactionsTo, type UserMessageReaction } from "./user-reactions.ts";
@@ -13,8 +20,6 @@ import {
 	type OutgoingAttachment,
 } from "../../outgoing-attachment.ts";
 
-const STREAM_MESSAGE_KIND = 9;
-const EDIT_MESSAGE_KIND = 40003;
 const DM_OPEN_KIND = 41010;
 const GROUP_METADATA_KIND = 39000;
 const GROUP_MEMBERS_KIND = 39002;

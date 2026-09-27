@@ -1,5 +1,8 @@
 export const BUZZ_ADAPTER_NAME = "buzz";
 
+export const STREAM_MESSAGE_KIND = 9;
+export const EDIT_MESSAGE_KIND = 40003;
+
 export type BuzzThreadId = {
 	channelId: string;
 	rootEventId?: string;
@@ -28,6 +31,7 @@ export type BuzzAdapterConfig = {
 	accountLinksPath?: string;
 	authTagJSON?: string;
 	mirror?: import("../../mirror/inbound.ts").BuzzMirrorSink;
+	deliveredMessages?: import("../../delivered-messages.ts").DeliveredMessages;
 };
 
 export function firstTagValue(event: BuzzEvent, tagName: string): string | undefined {
