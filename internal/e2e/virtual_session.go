@@ -3113,7 +3113,7 @@ func (harness *VirtualSessionHarness) runTurn(ctx context.Context, index int, vi
 		Platform:       "virtual",
 		Source:         "e2e",
 		ConversationID: conversationID,
-		MessageID:      fmt.Sprintf("virtual-message-%03d", index+1),
+		MessageID:      virtualMessageID(index),
 		IsThread:       virtualTurn.IsThread,
 		SenderID:       "user-1",
 		ReplyTargetID:  virtualReplyTargetID(index, virtualTurn),
@@ -3185,7 +3185,11 @@ func virtualReplyTargetID(index int, virtualTurn VirtualTurn) string {
 	if strings.TrimSpace(virtualTurn.ReplyTargetID) != "" {
 		return strings.TrimSpace(virtualTurn.ReplyTargetID)
 	}
-	return fmt.Sprintf("virtual-reply-%03d", index+1)
+	return virtualMessageID(index)
+}
+
+func virtualMessageID(index int) string {
+	return fmt.Sprintf("virtual-message-%03d", index+1)
 }
 
 func (harness *VirtualSessionHarness) modelContextSince(startIndex int) string {
