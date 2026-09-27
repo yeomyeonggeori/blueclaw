@@ -101,7 +101,7 @@ func (connectorRuntime *ConnectorRuntime) latestStopScopedTask(personID string, 
 	var selectedTaskRun task.TaskRun
 	isSelected := false
 	for _, taskRun := range connectorRuntime.activeTaskRunsForPerson(personID) {
-		if !taskRunMatchesStopScope(taskRun, event) {
+		if !taskRunSharesMessageThread(taskRun, event) {
 			continue
 		}
 		if isSelected && !taskRun.UpdatedAt.After(selectedTaskRun.UpdatedAt) {
@@ -113,7 +113,7 @@ func (connectorRuntime *ConnectorRuntime) latestStopScopedTask(personID string, 
 	return selectedTaskRun, isSelected
 }
 
-func taskRunMatchesStopScope(taskRun task.TaskRun, event PlatformInboundEvent) bool {
+func taskRunSharesMessageThread(taskRun task.TaskRun, event PlatformInboundEvent) bool {
 	if taskRun.OriginConversationID != event.ConversationID {
 		return false
 	}

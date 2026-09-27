@@ -85,11 +85,12 @@ func (connectorRuntime *ConnectorRuntime) findInboundTaskWaitByDispatchID(person
 }
 
 func (connectorRuntime *ConnectorRuntime) findSingleInboundTaskWait(personID string, platform string, event PlatformInboundEvent) inboundTaskWaitResolution {
-	taskWaitTokens, errorValue := connectorRuntime.taskWaitTokenRepository.FindOpenByPersonAndConversation(personID, platform, event.ConversationID)
+	conversationTaskWaitTokens, errorValue := connectorRuntime.taskWaitTokenRepository.FindOpenByPersonAndConversation(personID, platform, event.ConversationID)
 	if errorValue != nil {
 		connectorRuntime.logger.Warn("connector."+platform+".wait.lookup_failed", slog.String("messageID", event.MessageID), slog.String("error", errorValue.Error()))
 		return inboundTaskWaitResolution{}
 	}
+	taskWaitTokens := connectorRuntime.taskWaitTokensInMessageThread(conversationTaskWaitTokens, event)
 	switch len(taskWaitTokens) {
 	case 0:
 		return inboundTaskWaitResolution{}
@@ -98,6 +99,17 @@ func (connectorRuntime *ConnectorRuntime) findSingleInboundTaskWait(personID str
 	default:
 		return inboundTaskWaitResolution{IsAmbiguous: true, AmbiguousTaskWaits: taskWaitTokens, Reason: "multiple_open_waits"}
 	}
+}
+
+func (connectorRuntime *ConnectorRuntime) taskWaitTokensInMessageThread(taskWaitTokens []task.TaskWaitToken, event PlatformInboundEvent) []task.TaskWaitToken {
+	tokensInThread := []task.TaskWaitToken{}
+	for _, taskWaitToken := range taskWaitTokens {
+		taskRun, isFound := connectorRuntime.taskRunService.FindTaskRun(taskWaitToken.TaskRunID)
+		if isFound && taskRunSharesMessageThread(taskRun, event) {
+			tokensInThread = append(tokensInThread, taskWaitToken)
+		}
+	}
+	return tokensInThread
 }
 
 func (connectorRuntime *ConnectorRuntime) findOpenTaskWait(find func() (task.TaskWaitToken, bool, error), personID string, reason string) inboundTaskWaitResolution {

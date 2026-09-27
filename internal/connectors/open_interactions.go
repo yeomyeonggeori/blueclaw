@@ -65,7 +65,7 @@ func latestTaskEventTime(taskEvents []task.TaskEvent, name string, fallback time
 func (connectorRuntime *ConnectorRuntime) exchangesSince(turn *inboundTurn, askedAt time.Time, askingTaskRunID string) int {
 	count := 0
 	for _, taskRun := range connectorRuntime.taskRunService.ListTaskRunByPersonID(turn.personID) {
-		if !taskRunMatchesMessageScope(taskRun, turn.event) || taskRun.TaskRunID == askingTaskRunID {
+		if !taskRunSharesMessageThread(taskRun, turn.event) || taskRun.TaskRunID == askingTaskRunID {
 			continue
 		}
 		if taskRun.CreatedAt.After(askedAt) {
