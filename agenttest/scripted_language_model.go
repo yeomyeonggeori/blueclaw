@@ -55,6 +55,10 @@ func (languageModel *ScriptedLanguageModel) TextChatCompleter() (model.ChatCompl
 	return scriptedChatCompleter{languageModel: languageModel}, true
 }
 
+func (languageModel *ScriptedLanguageModel) ChatCompleter() model.ChatCompleter {
+	return scriptedChatCompleter{languageModel: languageModel}
+}
+
 func (completer scriptedChatCompleter) GenerateChatCompletion(_ context.Context, request model.ChatCompletionRequest) (model.ChatCompletionResponse, error) {
 	languageModel := completer.languageModel
 	languageModel.mutex.Lock()
