@@ -20,6 +20,7 @@ export type ChatdConfiguration = {
   admindBaseURL: string | undefined;
   listenPort: number;
   listenHostname: string;
+  stateDirectory?: string;
   mattermost: MattermostConfiguration | undefined;
   buzz: BuzzConfiguration | undefined;
 };
@@ -37,6 +38,7 @@ export function loadConfiguration(environment: Record<string, string | undefined
     admindBaseURL: environment['CHATD_ADMIND_BASE_URL']?.trim() || undefined,
     listenPort: parseListenPort(environment['CHATD_LISTEN_PORT']),
     listenHostname: environment['CHATD_LISTEN_HOSTNAME']?.trim() || '127.0.0.1',
+    stateDirectory: environment['CHATD_STATE_DIRECTORY']?.trim() || undefined,
     mattermost: loadMattermostConfiguration(environment),
     buzz: loadBuzzConfiguration(environment),
   };

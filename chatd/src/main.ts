@@ -3,6 +3,7 @@ import { createMemoryState } from '@chat-adapter/state-memory';
 import { createBuzzAdapter } from './adapters/buzz/index.ts';
 import { createMattermostAdapter } from './adapters/mattermost/index.ts';
 import { loadConfiguration } from './configuration.ts';
+import { deliveredMessagesAt, deliveredMessagesInMemory } from './delivered-messages.ts';
 import { createBridge } from './bridge.ts';
 import { createOutboundHandler } from './outbound.ts';
 import { createRequestHandler } from './server.ts';
@@ -47,6 +48,7 @@ if (configuration.mattermost) {
 }
 if (configuration.buzz) {
   const buzzAdapter = createBuzzAdapter({
+    deliveredMessages: deliveredMessagesOf(configuration.stateDirectory),
     relayURL: configuration.buzz.relayURL,
     privateKeyHex: configuration.buzz.privateKeyHex,
     botDisplayName: configuration.botUserName,
@@ -66,7 +68,8 @@ if (configuration.buzz) {
 const chat = new Chat({
   userName: configuration.botUserName,
   state: createMemoryState(),
-  concurrency: 'queue',
+  concurrency: { strategy: 'concurrent', maxConcurrent: 1 },
+  dedupeTtlMs: 60_000,
   adapters,
 });
 
@@ -93,3 +96,9 @@ Bun.serve({
 
 await chat.initialize();
 connectedToTheRelay = true;
+
+function deliveredMessagesOf(stateDirectory: string | undefined) {
+  if (stateDirectory) return deliveredMessagesAt(stateDirectory, Math.floor(Date.now() / 1000));
+  console.warn('[chatd] CHATD_STATE_DIRECTORY is unset; messages missed while chatd was down are not caught up');
+  return deliveredMessagesInMemory();
+}

@@ -26,6 +26,8 @@ import { isServedByTheRelay, readAuthorizationHeader } from "./blossom.ts";
 import { createBuzzRelayClient, type BuzzRelayClient } from "./relay-client.ts";
 import {
 	BUZZ_ADAPTER_NAME,
+	EDIT_MESSAGE_KIND,
+	STREAM_MESSAGE_KIND,
 	firstTagValue,
 	threadTagsOf,
 	type BuzzAdapterConfig,
@@ -36,6 +38,8 @@ import {
 import type { NormalizedMessageEdit, ReactionSummary } from "../../visible-context.ts";
 import type { OutgoingAttachment } from "../../outgoing-attachment.ts";
 import { buildMessageBody, ensureUserDirectMessageChannel } from "./user-session.ts";
+import { catchUpIntervalMilliseconds, messagesSentSince } from "./catch-up.ts";
+import { deliveredMessagesInMemory, type DeliveredMessages } from "../../delivered-messages.ts";
 import { withRelayAs } from "./relay-pool.ts";
 import { DELETE_MESSAGE_KIND, REACTION_KIND, isAbout, takenBackIDs, takenBackReactionIDs } from "./deletions.ts";
 
@@ -44,7 +48,6 @@ import { rankBySearchScore } from "../../message-search.ts";
 import { originOfTags } from "../../mirror/origin.ts";
 import { reactionContentOf } from "../../mirror/reaction-emoji.ts";
 
-const STREAM_MESSAGE_KIND = 9;
 const TYPING_INDICATOR_KIND = 20002;
 const buzzMessageSearchScanLimit = 500;
 
@@ -85,7 +88,6 @@ const GROUP_MEMBERS_KIND = 39002;
 const elevatedChannelRoles = new Set(["owner", "admin"]);
 const CREATE_CHANNEL_KIND = 9007;
 const SET_TOPIC_KIND = 9002;
-const EDIT_MESSAGE_KIND = 40003;
 const MEMBER_ADDED_NOTIFICATION_KIND = 44100;
 const MEMBER_REMOVED_NOTIFICATION_KIND = 44101;
 
@@ -229,10 +231,17 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	private subscribedChannelIds = new Set<string>();
 	private elevatedPubkeysByChannel = new Map<string, Set<string>>();
 	private profileByPubkey = new Map<string, { name?: string; nip05?: string; picture?: string }>();
+	private readonly deliveredMessages: DeliveredMessages;
+	private readonly messagesInFlight = new Set<string>();
+	private isTakingABaseline: boolean;
+	private listeningSinceSeconds = 0;
+	private catchUpTimer: ReturnType<typeof setInterval> | undefined;
 
 	constructor(config: BuzzAdapterConfig) {
 		this.config = config;
 		this.userName = config.botDisplayName;
+		this.deliveredMessages = config.deliveredMessages ?? deliveredMessagesInMemory();
+		this.isTakingABaseline = this.deliveredMessages.startedEmpty;
 		this.relay = createBuzzRelayClient(config.relayURL, config.privateKeyHex, config.authTagJSON);
 	}
 
@@ -305,8 +314,51 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		this.chat = chat;
 		await this.relay.connect();
 		await this.refreshChannels();
+		this.listeningSinceSeconds = Math.floor(Date.now() / 1000);
 		this.subscribeToChannels();
 		this.subscribeToMembershipChanges();
+		this.keepCatchingUp();
+	}
+
+	private keepCatchingUp(): void {
+		const catchUp = () =>
+			void this.catchUpOnMissedMessages().catch((reason) => reportBuzzFailure("catching up on missed messages", reason));
+		catchUp();
+		this.catchUpTimer = setInterval(catchUp, catchUpIntervalMilliseconds);
+	}
+
+	async catchUpOnMissedMessages(): Promise<void> {
+		const nowSeconds = Math.floor(Date.now() / 1000);
+		const sent = await messagesSentSince(
+			this.relay,
+			[...this.channelsById.keys()],
+			this.deliveredMessages.oldestRememberedSeconds(nowSeconds),
+		);
+		const missed = sent.filter((event) => event.pubkey !== this.relay.pubkeyHex && !this.isHandledOrHandling(event));
+		if (this.isTakingABaseline) {
+			this.takeABaseline(missed);
+			return;
+		}
+		let handedOver = 0;
+		for (const event of missed) {
+			await this.dispatchIncomingEvent(event)
+				.then(() => handedOver++)
+				.catch((reason) => reportBuzzFailure(`catching up on message ${event.id}`, reason));
+		}
+		if (handedOver > 0) console.log(`[buzz] caught up on ${handedOver} message(s) that had not been handed over`);
+	}
+
+	private isHandledOrHandling(event: BuzzEvent): boolean {
+		return this.deliveredMessages.has(event.id) || this.messagesInFlight.has(event.id);
+	}
+
+	private takeABaseline(sentBeforeNow: BuzzEvent[]): void {
+		const alreadyThere = sentBeforeNow.filter((event) => event.created_at < this.listeningSinceSeconds);
+		for (const event of alreadyThere) this.deliveredMessages.record(event.id, event.created_at);
+		this.isTakingABaseline = false;
+		console.log(
+			`[buzz] no record of handed-over messages yet; counted ${alreadyThere.length} existing message(s) as handed over, so only later misses are caught up`,
+		);
 	}
 
 	async ensureChannel(spec: ManagedChannelSpec): Promise<ManagedChannel> {
@@ -384,6 +436,7 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	}
 
 	async disconnect(): Promise<void> {
+		clearInterval(this.catchUpTimer);
 		this.relay.disconnect();
 	}
 
@@ -467,6 +520,18 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 
 	private async dispatchIncomingEvent(event: BuzzEvent): Promise<void> {
 		if (!this.chat || event.pubkey === this.relay.pubkeyHex) return;
+		if (this.isHandledOrHandling(event)) return;
+		this.messagesInFlight.add(event.id);
+		try {
+			await this.handOver(event);
+			this.deliveredMessages.record(event.id, event.created_at);
+		} finally {
+			this.messagesInFlight.delete(event.id);
+		}
+	}
+
+	private async handOver(event: BuzzEvent): Promise<void> {
+		if (!this.chat) return;
 		const channelId = firstTagValue(event, "h");
 		if (!channelId) return;
 		if (!this.channelsById.has(channelId)) {

@@ -1,6 +1,5 @@
-import { threadTagsOf, type BuzzEvent } from "./types.ts";
+import { STREAM_MESSAGE_KIND, threadTagsOf, type BuzzEvent } from "./types.ts";
 
-const STREAM_MESSAGE_KIND = 9;
 const mostRepliesInAThread = 500;
 
 export type QueryingRelay = {
