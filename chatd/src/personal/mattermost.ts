@@ -238,6 +238,10 @@ class MattermostPersonalGateway implements PersonalGateway {
 		throw new UnsupportedByPlatform(this.platform, "delete a channel");
 	}
 
+	async markConversationRead(): Promise<void> {
+		throw new UnsupportedByPlatform(this.platform, "mark a conversation read");
+	}
+
 	async listMessages(
 		actor: ActorCredential,
 		conversationID: string,

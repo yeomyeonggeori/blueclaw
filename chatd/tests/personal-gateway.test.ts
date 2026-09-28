@@ -378,3 +378,45 @@ describe("an operation the platform never does", () => {
 		});
 	});
 });
+
+describe("person.read_state.mark", () => {
+	function recordingMarks(): { marks: { conversationID: string; readAt: string }[]; gateways: never } {
+		const marks: { conversationID: string; readAt: string }[] = [];
+		const gateways = {
+			mattermost: {
+				platform: "mattermost",
+				credentialKind: "mattermost-token",
+				markConversationRead: async (_actor: unknown, conversationID: string, readAt: Date) => {
+					marks.push({ conversationID, readAt: readAt.toISOString() });
+				},
+			},
+		} as never;
+		return { marks, gateways };
+	}
+
+	test("records the conversation as read up to the time it names", async () => {
+		const { marks, gateways: recording } = recordingMarks();
+		const answer = await call(
+			"person.read_state.mark",
+			{
+				actor: { kind: "mattermost-token", secret: "token" },
+				conversationID: "channel-1",
+				readAt: "2026-09-28T01:05:00Z",
+			},
+			recording,
+		);
+		expect(answer.status).toBe(200);
+		expect(marks).toEqual([{ conversationID: "channel-1", readAt: "2026-09-28T01:05:00.000Z" }]);
+	});
+
+	test("refuses a mark with no time, or a time that is not one", async () => {
+		const { marks, gateways: recording } = recordingMarks();
+		const actor = { kind: "mattermost-token", secret: "token" };
+		expect((await call("person.read_state.mark", { actor, conversationID: "channel-1" }, recording)).status).toBe(400);
+		expect(
+			(await call("person.read_state.mark", { actor, conversationID: "channel-1", readAt: "yesterday" }, recording))
+				.status,
+		).toBe(400);
+		expect(marks).toEqual([]);
+	});
+});

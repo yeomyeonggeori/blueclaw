@@ -11,6 +11,7 @@ import {
 	requireMessage,
 	requireLoopbackArrivalsURL,
 	requireName,
+	requireReadAt,
 } from "./parse.ts";
 
 // The agent's own account on the messenger, when the platform knows it. A
@@ -93,6 +94,11 @@ export const personCapabilities: Record<string, PersonCapability> = {
 	"person.channel.delete": async (gateway, body) => {
 		const request = parsePersonRequest(body);
 		await gateway.deleteChannel(request.actor, requireConversation(request));
+		return {};
+	},
+	"person.read_state.mark": async (gateway, body) => {
+		const request = parsePersonRequest(body);
+		await gateway.markConversationRead(request.actor, requireConversation(request), requireReadAt(request));
 		return {};
 	},
 	"person.messages.list": async (gateway, body) => {

@@ -25,6 +25,7 @@ export type PersonRequest = {
 	externalID?: string;
 	largestBytes?: number;
 	arrivalsURL?: string;
+	readAt?: string;
 	counterpartExternalIDs: string[];
 	attachments: OutgoingAttachment[];
 	mentions?: PersonalMentions;
@@ -71,6 +72,7 @@ export function parsePersonRequest(value: unknown): PersonRequest {
 		externalID: optionalText(record, "externalID"),
 		largestBytes: optionalCount(record, "largestBytes"),
 		arrivalsURL: optionalText(record, "arrivalsURL"),
+		readAt: optionalText(record, "readAt"),
 		counterpartExternalIDs: parseCounterparts(record),
 		attachments: parseAttachments(record),
 		mentions: parseMentions(record),
@@ -147,6 +149,13 @@ export function parseActor(record: Record<string, unknown>): ActorCredential {
 export function requireConversation(request: PersonRequest): string {
 	if (!request.conversationID) throw missing("conversationID");
 	return request.conversationID;
+}
+
+export function requireReadAt(request: PersonRequest): Date {
+	if (!request.readAt) throw missing("readAt");
+	const readAt = new Date(request.readAt);
+	if (Number.isNaN(readAt.getTime())) throw new MalformedRequest("readAt must be an ISO 8601 time");
+	return readAt;
 }
 
 export function requireMessage(request: PersonRequest): string {
