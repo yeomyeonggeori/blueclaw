@@ -6,6 +6,7 @@ import { isServedByTheRelay, readAuthorizationHeader } from "../adapters/buzz/bl
 import type { OutgoingAttachment } from "../outgoing-attachment.ts";
 import { addReactionAsUser, removeReactionAsUser } from "../adapters/buzz/user-reactions.ts";
 import { mentionTags } from "../adapters/buzz/user-mentions.ts";
+import { markConversationReadAsUser, unreadCountsAsUser } from "../adapters/buzz/user-read-state.ts";
 import {
 	deleteChannelMessageAsUser,
 	editChannelMessageAsUser,
@@ -105,6 +106,12 @@ class BuzzPersonalGateway implements PersonalGateway {
 	async listConversations(actor: ActorCredential): Promise<PersonalConversation[]> {
 		this.require(actor);
 		const conversations = await listUserConversations(this.settings.relayURL, actor.secret);
+		const unreadCounts = await unreadCountsAsUser({
+			relayURL: this.settings.relayURL,
+			userSecretHex: actor.secret,
+			channelIDs: conversations.map((conversation) => conversation.channelID),
+			authTagJSON: this.settings.authTagJSON,
+		});
 		return conversations.map((conversation) => ({
 			id: conversation.channelID,
 			name: conversation.name,
@@ -114,6 +121,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 			participantExternalIDs: conversation.participantPubkeyHexes,
 			description: conversation.description,
 			roleOfExternalID: conversation.roleOfPubkeyHex,
+			unreadCount: unreadCounts.get(conversation.channelID) ?? 0,
 		}));
 	}
 
@@ -248,6 +256,17 @@ class BuzzPersonalGateway implements PersonalGateway {
 	async deleteChannel(actor: ActorCredential, conversationID: string): Promise<void> {
 		this.require(actor);
 		await deleteChannelAsUser({ relayURL: this.settings.relayURL, userSecretHex: actor.secret, channelID: conversationID });
+	}
+
+	async markConversationRead(actor: ActorCredential, conversationID: string, readAt: Date): Promise<void> {
+		this.require(actor);
+		await markConversationReadAsUser({
+			relayURL: this.settings.relayURL,
+			userSecretHex: actor.secret,
+			channelID: conversationID,
+			readAtSeconds: Math.floor(readAt.getTime() / 1000),
+			authTagJSON: this.settings.authTagJSON,
+		});
 	}
 
 	async listMessages(

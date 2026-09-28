@@ -23,6 +23,7 @@ export type PersonalConversation = {
 	avatarURL?: string;
 	participantExternalIDs?: string[];
 	webURL?: string;
+	unreadCount?: number;
 };
 
 export type NewPersonalChannel = {
@@ -164,6 +165,7 @@ export interface PersonalGateway {
 	handOverChannel(actor: ActorCredential, conversationID: string, newOwnerExternalID: string): Promise<void>;
 	addChannelOwner(actor: ActorCredential, conversationID: string, externalID: string): Promise<void>;
 	deleteChannel(actor: ActorCredential, conversationID: string): Promise<void>;
+	markConversationRead(actor: ActorCredential, conversationID: string, readAt: Date): Promise<void>;
 	listMessages(
 		actor: ActorCredential,
 		conversationID: string,
