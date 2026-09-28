@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	acp "github.com/coder/acp-go-sdk"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
-	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -29,6 +29,7 @@ var (
 
 type TaskLauncher interface {
 	Launch(context.Context, agentruntime.TaskLaunchRequest) (agentruntime.TaskLaunchResult, error)
+	RouterRequest(agentruntime.TaskLaunchRequest) agentcontract.AgentRequest
 }
 
 type PersonDirectory interface {
@@ -57,7 +58,7 @@ type Agent struct {
 	directory       PersonDirectory
 	permissionRelay *PermissionRelay
 	turnRouter      TurnRouter
-	engagementGate  EngagementGate
+	intakeDecider   IntakeDecider
 	taskRunStore    taskstate.TaskRunStore
 	logger          *slog.Logger
 
@@ -66,17 +67,13 @@ type Agent struct {
 	sessions   map[acp.SessionId]openSession
 }
 
-type EngagementGate interface {
-	Resolve(ctx context.Context, platform string, request inboundengagement.Request) inboundengagement.Decision
-}
-
 func NewAgent(collaborators Collaborators, permissionRelay *PermissionRelay, logger *slog.Logger) *Agent {
 	return &Agent{
 		taskLauncher:    collaborators.TaskLauncher,
 		directory:       collaborators.Directory,
 		permissionRelay: permissionRelay,
 		turnRouter:      collaborators.TurnRouter,
-		engagementGate:  collaborators.EngagementGate,
+		intakeDecider:   collaborators.IntakeDecider,
 		taskRunStore:    collaborators.TaskRunStore,
 		logger:          logger,
 		sessions:        map[acp.SessionId]openSession{},
@@ -84,11 +81,11 @@ func NewAgent(collaborators Collaborators, permissionRelay *PermissionRelay, log
 }
 
 type Collaborators struct {
-	TaskLauncher   TaskLauncher
-	Directory      PersonDirectory
-	TurnRouter     TurnRouter
-	EngagementGate EngagementGate
-	TaskRunStore   taskstate.TaskRunStore
+	TaskLauncher  TaskLauncher
+	Directory     PersonDirectory
+	TurnRouter    TurnRouter
+	IntakeDecider IntakeDecider
+	TaskRunStore  taskstate.TaskRunStore
 }
 
 func (agent *Agent) UseConnection(connection *acp.AgentSideConnection) {
@@ -172,7 +169,8 @@ func (agent *Agent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.
 		return acp.PromptResponse{}, errPromptCarriesNothingToAnswer
 	}
 	messageContext := MessageContextFromMeta(request.Meta)
-	if reason := agent.reasonToLeaveItAlone(ctx, session, messageContext, prompt); reason != "" {
+	launchRequest, decided, reason := agent.decideOnce(ctx, session, messageContext, agent.taskLaunchRequestFor(session, request.SessionId, prompt, messageContext))
+	if reason != "" {
 		agent.logger.Info("acpsession.prompt.ignored",
 			"sessionID", string(request.SessionId),
 			"messageID", messageContext.MessageID,
@@ -180,32 +178,13 @@ func (agent *Agent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.
 		)
 		return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, nil
 	}
-	launchResult, errorValue := agent.taskLauncher.Launch(ctx, agent.taskLaunchRequestFor(session, request.SessionId, prompt, messageContext))
+	launchResult, errorValue := agent.taskLauncher.Launch(ctx, launchRequest)
 	if errorValue != nil {
 		return acp.PromptResponse{}, errorValue
 	}
+	agent.recordDecisionCalls(decided, launchResult.TurnResult.TaskRun.TaskRunID)
 	agent.sendReply(ctx, request.SessionId, launchResult.TurnResult)
 	return acp.PromptResponse{StopReason: stopReasonForTaskStatus(launchResult.TurnResult.TaskRun.Status)}, nil
-}
-
-func (agent *Agent) reasonToLeaveItAlone(ctx context.Context, session openSession, messageContext MessageContext, prompt string) string {
-	if agent.engagementGate == nil {
-		return ""
-	}
-	decision := agent.engagementGate.Resolve(ctx, session.context.Addressing.Platform, inboundengagement.Request{
-		Prompt:           prompt,
-		MessageID:        messageContext.MessageID,
-		ConversationType: messageContext.conversationType(session.context.Addressing),
-		BotMentioned:     messageContext.Context.Addressing.BotMentioned,
-		AttachmentsOnly:  messageContext.Context.AttachmentsOnly,
-		SenderName:       messageContext.Context.Sender.Name,
-		SenderHandle:     messageContext.Context.Sender.Handle,
-		VisibleContext:   messageContext.Context.ToAgentVisibleContext(),
-	})
-	if decision.ShouldLaunch {
-		return ""
-	}
-	return decision.IgnoreReason
 }
 
 func (agent *Agent) session(sessionID acp.SessionId) (openSession, bool) {
@@ -242,6 +221,7 @@ func (agent *Agent) taskLaunchRequestFor(session openSession, sessionID acp.Sess
 		VisibleContext:          messageContext.Context.ToAgentVisibleContext(),
 		PersonAccess:            agent.directory.ResolvePersonAccess(requester.PersonID),
 		CheckpointSender:        agent.checkpointSenderFor(sessionID),
+		TurnStartedAt:           time.Now(),
 	}
 }
 
