@@ -247,34 +247,6 @@ func (decider eventAddressingDecider) DecideAddressing(ctx context.Context, _ in
 	return decision.Addressing, errorValue
 }
 
-func (connectorRuntime *ConnectorRuntime) DecideAddressing(ctx context.Context, request inboundengagement.Request) (agentcontract.AddressingDecision, error) {
-	if connectorRuntime.intakeDecider == nil {
-		return agentcontract.AddressingDecision{}, errors.New("connector runtime has no intake decider configured")
-	}
-	decisions, errorValue := connectorRuntime.intakeDecider.Decide(ctx, agentcontract.IntakeDecisionRequest{
-		Messages: []agentcontract.IntakeDecisionMessage{{
-			MessageID:    request.MessageID,
-			Prompt:       request.Prompt,
-			SenderName:   request.SenderName,
-			SenderHandle: request.SenderHandle,
-			BotMentioned: request.BotMentioned,
-			SentAt:       request.MessageSentAt,
-		}},
-		ConversationType: request.ConversationType,
-		VisibleContext:   request.VisibleContext,
-		AgentIdentity:    connectorRuntime.agentIdentity(),
-		Company:          connectorRuntime.company(),
-		EnvironmentNow:   time.Now(),
-	}, nil)
-	if errorValue != nil {
-		return agentcontract.AddressingDecision{}, errorValue
-	}
-	if len(decisions.Messages) == 0 {
-		return agentcontract.AddressingDecision{}, errors.New("the intake decision answered about no message")
-	}
-	return decisions.Messages[0].Addressing, nil
-}
-
 func (connectorRuntime *ConnectorRuntime) relatesToActiveTask(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) bool {
 	decision, errorValue := connectorRuntime.decideInboundMessage(ctx, adapter, event)
 	if errorValue != nil {

@@ -882,23 +882,32 @@ func (step routerCallLaunchStep) Run(ctx context.Context, execution *taskLaunchE
 	routingContext, cancel := execution.Launcher.intakeRoutingContext(ctx, step.Request)
 	defer cancel()
 	callLedger := &agentcontract.IntakeCallLedger{}
-	turnDecision, errorValue := execution.Launcher.turnRouter.PlanObserved(routingContext, agentcontract.AgentRequest{
-		RequesterPersonID: step.Request.RequesterPersonID,
-		ConversationID:    step.Request.ConversationID,
-		Prompt:            step.Request.Prompt,
-		ResponseLanguage:  step.Request.ResponseLanguage,
-		VisibleContext:    step.Request.VisibleContext,
-		ScheduledRun:      step.Request.ScheduledRun,
-		ActiveGoal:        step.Request.ActiveGoal,
-		PriorTask:         step.Request.PriorTask,
-		TurnStartedAt:     step.Request.TurnStartedAt,
-		EnvironmentNow:    step.Request.TurnStartedAt,
-		Company:           execution.Launcher.company(),
-		ToolSet:           step.ToolSet,
-		DecidedTurnFields: step.Request.DecidedTurnFields,
-	}, callLedger)
+	turnDecision, errorValue := execution.Launcher.turnRouter.PlanObserved(routingContext, execution.Launcher.routerRequest(step.Request, step.ToolSet), callLedger)
 	result := routerCallResult{TurnDecision: turnDecision, CallRecords: callLedger.Records}
 	return result, errorValue
+}
+
+func (taskLauncher *TaskLauncher) RouterRequest(request TaskLaunchRequest) agentcontract.AgentRequest {
+	return taskLauncher.routerRequest(request, taskLauncher.RouterToolSet(request))
+}
+
+func (taskLauncher *TaskLauncher) routerRequest(request TaskLaunchRequest, toolSet *toolcontract.ToolSet) agentcontract.AgentRequest {
+	return agentcontract.AgentRequest{
+		RequesterPersonID: request.RequesterPersonID,
+		ConversationID:    request.ConversationID,
+		ConversationType:  request.ConversationType,
+		Prompt:            request.Prompt,
+		ResponseLanguage:  request.ResponseLanguage,
+		VisibleContext:    request.VisibleContext,
+		ScheduledRun:      request.ScheduledRun,
+		ActiveGoal:        request.ActiveGoal,
+		PriorTask:         request.PriorTask,
+		TurnStartedAt:     request.TurnStartedAt,
+		EnvironmentNow:    request.TurnStartedAt,
+		Company:           taskLauncher.company(),
+		ToolSet:           toolSet,
+		DecidedTurnFields: request.DecidedTurnFields,
+	}
 }
 
 func (taskLauncher *TaskLauncher) routedTurnDecision(ctx context.Context, request TaskLaunchRequest, profileName string) (*agentcontract.TurnDecision, routingOutcome) {

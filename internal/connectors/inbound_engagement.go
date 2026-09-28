@@ -14,10 +14,6 @@ func isMultiPersonConversation(event PlatformInboundEvent) bool {
 	return inboundengagement.IsMultiPersonConversation(event.Context.ConversationType)
 }
 
-func (connectorRuntime *ConnectorRuntime) EngagementGate() *inboundengagement.Gate {
-	return inboundengagement.NewGate(connectorRuntime, connectorRuntime.logger)
-}
-
 func (connectorRuntime *ConnectorRuntime) resolveInboundEngagement(ctx context.Context, adapter PlatformAdapter, platform string, event PlatformInboundEvent) inboundengagement.Decision {
 	gate := inboundengagement.NewGate(eventAddressingDecider{connectorRuntime: connectorRuntime, adapter: adapter, event: event}, connectorRuntime.logger)
 	return gate.Resolve(ctx, platform, engagementRequestForEvent(event))
