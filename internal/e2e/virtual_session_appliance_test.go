@@ -24,7 +24,7 @@ func TestPresentationScenarioDoesNotScriptToolCalls(t *testing.T) {
 }
 
 func presentationSkillPath() string {
-	return findScenarioSkillDirectory("presentation")
+	return findScenarioSkillDirectory("office")
 }
 
 func TestToolPermissionScenarioReturnsPlannedFallback(t *testing.T) {
@@ -62,8 +62,8 @@ func TestDocumentCreateAcceptanceUsesLiveCanonicalTools(t *testing.T) {
 	if !slices.Equal(scenario.CapabilityToolNames, []string{"document_read"}) {
 		t.Fatalf("expected canonical document capability, got %v", scenario.CapabilityToolNames)
 	}
-	if !slices.Equal(scenario.Turns[0].ExpectedSelectedSkills, []string{"document"}) {
-		t.Fatalf("expected document skill selection, got %v", scenario.Turns[0].ExpectedSelectedSkills)
+	if !slices.Equal(scenario.Turns[0].ExpectedSelectedSkills, []string{"office"}) {
+		t.Fatalf("expected office skill selection, got %v", scenario.Turns[0].ExpectedSelectedSkills)
 	}
 	if scenario.Turns[0].ExpectedToolCallCounts["file_deliver"] != 1 {
 		t.Fatalf("expected one final document delivery, got %+v", scenario.Turns[0].ExpectedToolCallCounts)
