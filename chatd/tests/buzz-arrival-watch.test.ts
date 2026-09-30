@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { BuzzArrivalWatch, type Arrival } from "../src/personal/buzz-arrival-watch.ts";
-import { MalformedRequest, parsePersonRequest, requireLoopbackArrivalsURL } from "../src/personal/parse.ts";
+import { BuzzArrivalWatch, type Arrival, type Typing } from "../src/personal/buzz-arrival-watch.ts";
+import {
+	MalformedRequest,
+	optionalLoopbackTypingURL,
+	parsePersonRequest,
+	requireLoopbackArrivalsURL,
+} from "../src/personal/parse.ts";
 import type { BuzzRelayClient } from "../src/adapters/buzz/relay-client.ts";
 import type { BuzzEvent } from "../src/adapters/buzz/types.ts";
 import type { UserConversation } from "../src/adapters/buzz/user-session.ts";
@@ -8,6 +13,7 @@ import type { UserConversation } from "../src/adapters/buzz/user-session.ts";
 const aliceSecret = "1".repeat(64);
 const bobSecret = "2".repeat(64);
 const arrivalsURL = "http://127.0.0.1:18091/arrived";
+const typingURL = "http://127.0.0.1:18091/typing";
 const startedAt = 1_800_000_000_000;
 
 type FakeRelay = BuzzRelayClient & {
@@ -59,6 +65,10 @@ function message(id: string, channelID: string, author: string, createdAtMillise
 	};
 }
 
+function typing(id: string, channelID: string, author: string, createdAtMilliseconds: number): BuzzEvent {
+	return { ...message(id, channelID, author, createdAtMilliseconds), kind: 20002, content: "" };
+}
+
 function deliverTo(relay: FakeRelay, channelID: string, event: BuzzEvent): void {
 	for (const subscription of relay.subscriptions) {
 		const [filter] = subscription.filters as { "#h"?: string[] }[];
@@ -69,6 +79,7 @@ function deliverTo(relay: FakeRelay, channelID: string, event: BuzzEvent): void 
 function harness(conversationsBySecret: Map<string, UserConversation[]>) {
 	const relays = new Map<string, FakeRelay>();
 	const told: Arrival[] = [];
+	const typed: Typing[] = [];
 	let now = startedAt;
 	const watch = new BuzzArrivalWatch({
 		openRelay: (secret) => {
@@ -80,12 +91,16 @@ function harness(conversationsBySecret: Map<string, UserConversation[]>) {
 		tell: async (_url, arrival) => {
 			told.push(arrival);
 		},
+		tellTyping: async (_url, typing) => {
+			typed.push(typing);
+		},
 		now: () => now,
 	});
 	return {
 		watch,
 		relays,
 		told,
+		typed,
 		advance: (milliseconds: number) => {
 			now += milliseconds;
 		},
@@ -229,5 +244,74 @@ describe("where arrivals are told", () => {
 		for (const offered of ["http://relay.example.com/arrived", "https://127.0.0.1/arrived", "not a url"]) {
 			expect(() => requireLoopbackArrivalsURL(parsePersonRequest({ actor, arrivalsURL: offered }))).toThrow(MalformedRequest);
 		}
+	});
+});
+
+describe("watching a person's conversations for someone typing", () => {
+	test("tells typing once, to everyone in the conversation, and never as a message", async () => {
+		const dm = conversation("dm-1", ["alice", "bob"]);
+		const { watch, relays, told, typed, now } = harness(
+			new Map([
+				[aliceSecret, [dm]],
+				[bobSecret, [dm]],
+			]),
+		);
+		await watch.watch(aliceSecret, arrivalsURL, typingURL);
+		await watch.watch(bobSecret, arrivalsURL, typingURL);
+
+		const heard = typing("t-1", "dm-1", "alice", now());
+		deliverTo(relays.get(aliceSecret)!, "dm-1", heard);
+		deliverTo(relays.get(bobSecret)!, "dm-1", heard);
+
+		expect(typed).toEqual([
+			{ conversationID: "dm-1", authorExternalID: "alice", recipientExternalIDs: ["alice", "bob"] },
+		]);
+		expect(told).toEqual([]);
+	});
+
+	test("typing older than the indicator lasts is not told", async () => {
+		const { watch, relays, typed, now } = harness(new Map([[aliceSecret, [conversation("dm-1", ["alice", "bob"])]]]));
+		await watch.watch(aliceSecret, arrivalsURL, typingURL);
+
+		deliverTo(relays.get(aliceSecret)!, "dm-1", typing("t-1", "dm-1", "bob", now() - 9_000));
+
+		expect(typed).toEqual([]);
+	});
+
+	test("typing inside a thread is not told as typing in the conversation", async () => {
+		const { watch, relays, typed, now } = harness(new Map([[aliceSecret, [conversation("dm-1", ["alice", "bob"])]]]));
+		await watch.watch(aliceSecret, arrivalsURL, typingURL);
+
+		const inThread = typing("t-1", "dm-1", "bob", now());
+		deliverTo(relays.get(aliceSecret)!, "dm-1", { ...inThread, tags: [...inThread.tags, ["e", "root-1", "", "reply"]] });
+
+		expect(typed).toEqual([]);
+	});
+
+	test("a relay that names nowhere to tell typing is not asked to watch for it", async () => {
+		const { watch, relays, typed, now } = harness(new Map([[aliceSecret, [conversation("dm-1", ["alice", "bob"])]]]));
+		await watch.watch(aliceSecret, arrivalsURL);
+
+		const [subscription] = relays.get(aliceSecret)!.subscriptions.filter(({ filters }) =>
+			(filters as { "#h"?: string[] }[])[0]?.["#h"]?.includes("dm-1"),
+		);
+		expect((subscription!.filters as { kinds: number[] }[])[0]!.kinds).toEqual([9]);
+		deliverTo(relays.get(aliceSecret)!, "dm-1", typing("t-1", "dm-1", "bob", now()));
+		expect(typed).toEqual([]);
+	});
+});
+
+describe("where typing is told", () => {
+	const actor = { kind: "buzz-secret", secret: aliceSecret };
+
+	test("is the relay on this machine, when the relay names a place", () => {
+		expect(optionalLoopbackTypingURL(parsePersonRequest({ actor, typingURL }))).toBe(typingURL);
+		expect(optionalLoopbackTypingURL(parsePersonRequest({ actor }))).toBeUndefined();
+	});
+
+	test("is never an address off this machine", () => {
+		expect(() =>
+			optionalLoopbackTypingURL(parsePersonRequest({ actor, typingURL: "http://relay.example.com/typing" })),
+		).toThrow(MalformedRequest);
 	});
 });
