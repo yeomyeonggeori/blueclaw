@@ -420,3 +420,41 @@ describe("person.read_state.mark", () => {
 		expect(marks).toEqual([]);
 	});
 });
+
+describe("person.typing.send", () => {
+	function recordingTyping(): { typed: string[]; gateways: never } {
+		const typed: string[] = [];
+		const gateways = {
+			mattermost: {
+				platform: "mattermost",
+				credentialKind: "mattermost-token",
+				announceTyping: async (_actor: unknown, conversationID: string) => {
+					typed.push(conversationID);
+				},
+			},
+		} as never;
+		return { typed, gateways };
+	}
+
+	test("announces typing in the conversation it names", async () => {
+		const { typed, gateways: recording } = recordingTyping();
+		const answer = await call(
+			"person.typing.send",
+			{ actor: { kind: "mattermost-token", secret: "token" }, conversationID: "channel-1" },
+			recording,
+		);
+		expect(answer.status).toBe(200);
+		expect(typed).toEqual(["channel-1"]);
+	});
+
+	test("refuses typing that names no conversation", async () => {
+		const { typed, gateways: recording } = recordingTyping();
+		const answer = await call(
+			"person.typing.send",
+			{ actor: { kind: "mattermost-token", secret: "token" } },
+			recording,
+		);
+		expect(answer.status).toBe(400);
+		expect(typed).toEqual([]);
+	});
+});

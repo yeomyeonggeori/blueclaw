@@ -1,6 +1,7 @@
 import type { PersonalGateway } from "./gateway.ts";
 import {
 	MalformedRequest,
+	optionalLoopbackTypingURL,
 	parseCredentialAnswers,
 	parseMemberExternalIDs,
 	parseNewChannel,
@@ -176,7 +177,16 @@ export const personCapabilities: Record<string, PersonCapability> = {
 	},
 	"person.arrivals.watch": async (gateway, body) => {
 		const request = parsePersonRequest(body);
-		await gateway.watchArrivals(request.actor, requireLoopbackArrivalsURL(request));
+		await gateway.watchArrivals(
+			request.actor,
+			requireLoopbackArrivalsURL(request),
+			optionalLoopbackTypingURL(request),
+		);
+		return {};
+	},
+	"person.typing.send": async (gateway, body) => {
+		const request = parsePersonRequest(body);
+		await gateway.announceTyping(request.actor, requireConversation(request));
 		return {};
 	},
 	"person.message.attachment": async (gateway, body) => {

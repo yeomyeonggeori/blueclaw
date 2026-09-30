@@ -1,12 +1,14 @@
 import { createBuzzRelayClient, type BuzzRelayClient } from "../adapters/buzz/relay-client.ts";
 import { listUserConversations, pubkeyFromSecret, type UserConversation } from "../adapters/buzz/user-session.ts";
-import { firstTagValue, type BuzzEvent } from "../adapters/buzz/types.ts";
+import { carriesTag, firstTagValue, type BuzzEvent } from "../adapters/buzz/types.ts";
+import { TYPING_INDICATOR_KIND } from "../adapters/buzz/user-typing.ts";
 
 const STREAM_MESSAGE_KIND = 9;
 const MEMBER_ADDED_NOTIFICATION_KIND = 44100;
 const renewalWindowMilliseconds = 10 * 60_000;
 const freshnessSeconds = 10 * 60;
-const rememberedMessageLimit = 10_000;
+const typingFreshnessSeconds = 8;
+const rememberedEventLimit = 10_000;
 
 export type Arrival = {
 	conversationID: string;
@@ -16,10 +18,17 @@ export type Arrival = {
 	preview: string;
 };
 
+export type Typing = {
+	conversationID: string;
+	authorExternalID: string;
+	recipientExternalIDs: string[];
+};
+
 export type ArrivalWatchDependencies = {
 	openRelay: (userSecretHex: string) => BuzzRelayClient;
 	listConversations: (userSecretHex: string) => Promise<UserConversation[]>;
 	tell: (arrivalsURL: string, arrival: Arrival) => Promise<void>;
+	tellTyping: (typingURL: string, typing: Typing) => Promise<void>;
 	now: () => number;
 };
 
@@ -37,20 +46,23 @@ export function createBuzzArrivalWatch(relayURL: string, authTagJSON: string | u
 	return new BuzzArrivalWatch({
 		openRelay: (userSecretHex) => createBuzzRelayClient(relayURL, userSecretHex, authTagJSON),
 		listConversations: (userSecretHex) => listUserConversations(relayURL, userSecretHex, { withProfiles: false }),
-		tell: postArrival,
+		tell: postToTheRelay,
+		tellTyping: postToTheRelay,
 		now: () => Date.now(),
 	});
 }
 
 export class BuzzArrivalWatch {
 	private readonly watchers = new Map<string, Watcher>();
-	private readonly toldMessageIDs = new Set<string>();
+	private readonly toldEventIDs = new Set<string>();
 	private arrivalsURL = "";
+	private typingURL = "";
 
 	constructor(private readonly dependencies: ArrivalWatchDependencies) {}
 
-	async watch(userSecretHex: string, arrivalsURL: string): Promise<void> {
+	async watch(userSecretHex: string, arrivalsURL: string, typingURL = ""): Promise<void> {
 		this.arrivalsURL = arrivalsURL;
+		this.typingURL = typingURL;
 		this.closeUnrenewed();
 		const pubkey = pubkeyFromSecret(userSecretHex);
 		const watcher = this.watchers.get(pubkey) ?? this.open(pubkey, userSecretHex);
@@ -113,17 +125,40 @@ export class BuzzArrivalWatch {
 		for (const channelID of joinedChannelIDs) watcher.subscribedChannelIDs.add(channelID);
 		if (joinedChannelIDs.length > 0) {
 			watcher.relay.subscribe(
-				[{ kinds: [STREAM_MESSAGE_KIND], "#h": joinedChannelIDs, since: watcher.listedAtSeconds }],
-				(event) => this.arrived(watcher, event),
+				[{ kinds: this.watchedKinds(), "#h": joinedChannelIDs, since: watcher.listedAtSeconds }],
+				(event) => this.heard(watcher, event),
 			);
 		}
 		watcher.listedAtSeconds = listingStartedAt;
 	}
 
-	private arrived(watcher: Watcher, event: BuzzEvent): void {
+	private watchedKinds(): number[] {
+		return this.typingURL ? [STREAM_MESSAGE_KIND, TYPING_INDICATOR_KIND] : [STREAM_MESSAGE_KIND];
+	}
+
+	private heard(watcher: Watcher, event: BuzzEvent): void {
 		const channelID = firstTagValue(event, "h");
 		if (!channelID || !watcher.participantsByChannel.has(channelID)) return;
-		if (event.kind !== STREAM_MESSAGE_KIND || this.toldMessageIDs.has(event.id)) return;
+		if (this.toldEventIDs.has(event.id)) return;
+		if (event.kind === STREAM_MESSAGE_KIND) this.arrived(watcher, channelID, event);
+		if (event.kind === TYPING_INDICATOR_KIND) this.typed(watcher, channelID, event);
+	}
+
+	private typed(watcher: Watcher, channelID: string, event: BuzzEvent): void {
+		if (!this.typingURL || carriesTag(event, "e")) return;
+		if (this.nowSeconds() - event.created_at > typingFreshnessSeconds) return;
+		this.remember(event.id);
+		const typing: Typing = {
+			conversationID: channelID,
+			authorExternalID: event.pubkey,
+			recipientExternalIDs: watcher.participantsByChannel.get(channelID) ?? [],
+		};
+		void this.dependencies
+			.tellTyping(this.typingURL, typing)
+			.catch((reason) => reportWatchFailure(`typing by ${event.pubkey} in ${channelID}`, reason));
+	}
+
+	private arrived(watcher: Watcher, channelID: string, event: BuzzEvent): void {
 		if (this.nowSeconds() - event.created_at > freshnessSeconds) return;
 		this.remember(event.id);
 		const arrival: Arrival = {
@@ -138,11 +173,11 @@ export class BuzzArrivalWatch {
 			.catch((reason) => reportWatchFailure(`message ${event.id} in ${channelID}`, reason));
 	}
 
-	private remember(messageID: string): void {
-		this.toldMessageIDs.add(messageID);
-		if (this.toldMessageIDs.size <= rememberedMessageLimit) return;
-		const oldest = this.toldMessageIDs.values().next().value;
-		if (oldest !== undefined) this.toldMessageIDs.delete(oldest);
+	private remember(eventID: string): void {
+		this.toldEventIDs.add(eventID);
+		if (this.toldEventIDs.size <= rememberedEventLimit) return;
+		const oldest = this.toldEventIDs.values().next().value;
+		if (oldest !== undefined) this.toldEventIDs.delete(oldest);
 	}
 
 	private closeUnrenewed(): void {
@@ -157,15 +192,15 @@ export class BuzzArrivalWatch {
 	}
 }
 
-async function postArrival(arrivalsURL: string, arrival: Arrival): Promise<void> {
-	const response = await fetch(arrivalsURL, {
+async function postToTheRelay(url: string, heard: Arrival | Typing): Promise<void> {
+	const response = await fetch(url, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify(arrival),
+		body: JSON.stringify(heard),
 		signal: AbortSignal.timeout(10_000),
 	});
 	if (response.ok) return;
-	throw new Error(`the relay answered ${response.status} to an arrival at ${arrivalsURL}: ${await response.text()}`);
+	throw new Error(`the relay answered ${response.status} at ${url}: ${await response.text()}`);
 }
 
 function reportWatchFailure(subject: string, reason: unknown): void {
