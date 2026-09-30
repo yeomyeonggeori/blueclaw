@@ -25,6 +25,7 @@ export type PersonRequest = {
 	externalID?: string;
 	largestBytes?: number;
 	arrivalsURL?: string;
+	typingURL?: string;
 	readAt?: string;
 	counterpartExternalIDs: string[];
 	attachments: OutgoingAttachment[];
@@ -72,6 +73,7 @@ export function parsePersonRequest(value: unknown): PersonRequest {
 		externalID: optionalText(record, "externalID"),
 		largestBytes: optionalCount(record, "largestBytes"),
 		arrivalsURL: optionalText(record, "arrivalsURL"),
+		typingURL: optionalText(record, "typingURL"),
 		readAt: optionalText(record, "readAt"),
 		counterpartExternalIDs: parseCounterparts(record),
 		attachments: parseAttachments(record),
@@ -182,9 +184,18 @@ const loopbackHostnames = new Set(["127.0.0.1", "localhost"]);
 
 export function requireLoopbackArrivalsURL(request: PersonRequest): string {
 	if (!request.arrivalsURL) throw missing("arrivalsURL");
-	const parsed = URL.parse(request.arrivalsURL);
+	return loopbackURL("arrivalsURL", request.arrivalsURL);
+}
+
+export function optionalLoopbackTypingURL(request: PersonRequest): string | undefined {
+	if (!request.typingURL) return undefined;
+	return loopbackURL("typingURL", request.typingURL);
+}
+
+function loopbackURL(field: string, offered: string): string {
+	const parsed = URL.parse(offered);
 	if (!parsed || parsed.protocol !== "http:" || !loopbackHostnames.has(parsed.hostname)) {
-		throw new MalformedRequest("arrivalsURL must be an http address on this machine's loopback");
+		throw new MalformedRequest(`${field} must be an http address on this machine's loopback`);
 	}
 	return parsed.toString();
 }

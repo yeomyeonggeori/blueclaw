@@ -214,7 +214,8 @@ export interface PersonalGateway {
 		externalID: string,
 		largestBytes: number,
 	): Promise<PersonalImage | null>;
-	watchArrivals(actor: ActorCredential, arrivalsURL: string): Promise<void>;
+	watchArrivals(actor: ActorCredential, arrivalsURL: string, typingURL?: string): Promise<void>;
+	announceTyping(actor: ActorCredential, conversationID: string): Promise<void>;
 }
 
 export class UnsupportedByPlatform extends Error {

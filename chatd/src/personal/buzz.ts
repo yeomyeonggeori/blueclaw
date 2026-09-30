@@ -7,6 +7,7 @@ import type { OutgoingAttachment } from "../outgoing-attachment.ts";
 import { addReactionAsUser, removeReactionAsUser } from "../adapters/buzz/user-reactions.ts";
 import { mentionTags } from "../adapters/buzz/user-mentions.ts";
 import { markConversationReadAsUser, unreadCountsAsUser } from "../adapters/buzz/user-read-state.ts";
+import { announceTypingAsUser } from "../adapters/buzz/user-typing.ts";
 import {
 	deleteChannelMessageAsUser,
 	editChannelMessageAsUser,
@@ -76,9 +77,19 @@ class BuzzPersonalGateway implements PersonalGateway {
 		this.arrivals = createBuzzArrivalWatch(settings.relayURL, settings.authTagJSON);
 	}
 
-	async watchArrivals(actor: ActorCredential, arrivalsURL: string): Promise<void> {
+	async watchArrivals(actor: ActorCredential, arrivalsURL: string, typingURL?: string): Promise<void> {
 		this.require(actor);
-		await this.arrivals.watch(actor.secret, arrivalsURL);
+		await this.arrivals.watch(actor.secret, arrivalsURL, typingURL);
+	}
+
+	async announceTyping(actor: ActorCredential, conversationID: string): Promise<void> {
+		this.require(actor);
+		await announceTypingAsUser({
+			relayURL: this.settings.relayURL,
+			userSecretHex: actor.secret,
+			channelID: conversationID,
+			authTagJSON: this.settings.authTagJSON,
+		});
 	}
 
 	credentialRequirement(): CredentialRequirement {
