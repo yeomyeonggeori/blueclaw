@@ -23,7 +23,7 @@ func TestPresentationScenarioDoesNotScriptToolCalls(t *testing.T) {
 	}
 }
 
-func presentationSkillPath() string {
+func officeSkillPath() string {
 	return findScenarioSkillDirectory("office")
 }
 
