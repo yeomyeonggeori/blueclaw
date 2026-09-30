@@ -17,17 +17,20 @@ const authGraceMilliseconds = 3_000;
 
 export type RelayClientTiming = {
 	resubscribeDelayMilliseconds: number;
+	loginRetryDelayMilliseconds: number;
 	livenessProbeIntervalMilliseconds: number;
 	livenessProbeTimeoutMilliseconds: number;
 };
 
 const defaultTiming: RelayClientTiming = {
 	resubscribeDelayMilliseconds: 1_000,
+	loginRetryDelayMilliseconds: 1_000,
 	livenessProbeIntervalMilliseconds: 30_000,
 	livenessProbeTimeoutMilliseconds: 10_000,
 };
 
 const maximumResubscribeDelayMilliseconds = 30_000;
+const maximumLoginRetryDelayMilliseconds = 30_000;
 
 export type EventSigner = {
 	pubkeyHex: string;
@@ -44,6 +47,7 @@ export function createRelayConnection(
 
 	let websocket: WebSocket | null = null;
 	let isAuthed = false;
+	let loginRefusal: Error | null = null;
 	let reconnectDelayMs = 1_000;
 	let shouldReconnect = true;
 	let subscriptionSerial = 0;
@@ -67,6 +71,7 @@ export function createRelayConnection(
 		websocket.onopen = () => {
 			reconnectDelayMs = 1_000;
 			isAuthed = false;
+			loginRefusal = null;
 			for (const [subscriptionID, subscription] of liveSubscriptions) {
 				send(["REQ", subscriptionID, ...subscription.filters]);
 			}
@@ -116,11 +121,13 @@ export function createRelayConnection(
 			pendingPublishes.set(authEvent.id, {
 				resolve: () => {
 					isAuthed = true;
+					loginRefusal = null;
 					for (const waiter of authWaiters) waiter();
 					authWaiters = [];
 				},
 				reject: (reason) => {
 					isAuthed = false;
+					loginRefusal = reason;
 					for (const waiter of authWaiters) waiter(reason);
 					authWaiters = [];
 				},
@@ -232,6 +239,7 @@ export function createRelayConnection(
 	// with no end would hold every message behind a handshake that is not coming.
 	async function waitForAuth(): Promise<void> {
 		if (isAuthed) return;
+		if (loginRefusal) throw loginRefusal;
 		await new Promise<void>((resolve, reject) => {
 			const settle = setTimeout(resolve, authGraceMilliseconds);
 			settle.unref?.();
@@ -243,6 +251,40 @@ export function createRelayConnection(
 		});
 	}
 
+	async function attemptConnection(): Promise<void> {
+		openSocket();
+		await waitForOpen();
+		await waitForAuth();
+	}
+
+	function abandonSocket(): void {
+		const abandoned = websocket;
+		if (!abandoned) return;
+		abandoned.onclose = null;
+		abandoned.close();
+		websocket = null;
+	}
+
+	function pause(milliseconds: number): Promise<void> {
+		return new Promise((resolve) => setTimeout(resolve, milliseconds));
+	}
+
+	async function connectUntilAdmitted(): Promise<void> {
+		let delay = timing.loginRetryDelayMilliseconds;
+		while (shouldReconnect) {
+			try {
+				await attemptConnection();
+				return;
+			} catch (refusal) {
+				const reason = refusal instanceof Error ? refusal.message : String(refusal);
+				console.error(`[buzz-relay] ${relayURL} refused the login (${reason}); trying again in ${delay}ms`);
+				abandonSocket();
+				await pause(delay);
+				delay = Math.min(delay * 2, maximumLoginRetryDelayMilliseconds);
+			}
+		}
+	}
+
 	async function waitForOpen(): Promise<void> {
 		if (websocket?.readyState === WebSocket.OPEN) return;
 		await new Promise<void>((resolve) => openWaiters.push(resolve));
@@ -252,10 +294,8 @@ export function createRelayConnection(
 		pubkeyHex,
 		async connect() {
 			shouldReconnect = true;
-			openSocket();
-			await waitForOpen();
-			await waitForAuth();
-			startLivenessProbes();
+			await connectUntilAdmitted();
+			if (shouldReconnect) startLivenessProbes();
 		},
 		disconnect() {
 			shouldReconnect = false;

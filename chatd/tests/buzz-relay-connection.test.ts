@@ -12,6 +12,7 @@ const signer = {
 const relayURL = "wss://relay.example.test";
 const timing: RelayClientTiming = {
 	resubscribeDelayMilliseconds: 5,
+	loginRetryDelayMilliseconds: 5,
 	livenessProbeIntervalMilliseconds: 10,
 	livenessProbeTimeoutMilliseconds: 10,
 };
