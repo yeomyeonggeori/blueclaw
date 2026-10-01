@@ -44,14 +44,14 @@ func TestAttentionHandlerReturnsMessageDecision(t *testing.T) {
 	handler := AttentionHandler{LanguageModel: &recordingAttentionLanguageModel{content: `{"status":"ATTENTION_MESSAGE","message":"This looks like it needs a check.","reason":"blocked"}`}}
 	request := httptest.NewRequest(http.MethodPost, "/admin/api/attention/run", strings.NewReader(`{
 		"jobID":"job-1",
-		"toolName":"browser_handoff",
+		"toolName":"browser_wait",
 		"localDecision":{
 			"shouldEscalate":true,
 			"importance":"high",
 			"confidence":0.95,
 			"reasonCodes":["blocked"],
-			"summaryForRemote":"Browser handoff is still waiting.",
-			"privacyClass":"user_browser"
+			"summaryForRemote":"The page is still loading.",
+			"privacyClass":"device_browser"
 		}
 	}`))
 	responseRecorder := httptest.NewRecorder()
