@@ -4588,7 +4588,7 @@ func TestANewRequestWhileAConfirmationIsPendingLeavesItPendingAndIsRoutedWithThe
 		},
 		ActionResponses: []string{
 			`{"action":"continue","toolName":"event_delete","toolInput":{"eventHint":"event-1"}}`,
-			`{"action":"reply","final":true,"message":"찬희 님의 연락처는 디렉터리에 없습니다."}`,
+			`{"action":"reply","final":true,"message":"최견본 님의 연락처는 디렉터리에 없습니다."}`,
 			connectorFinishMessageCiting("내일 휴가 일정을 캘린더에서 삭제했습니다.", "obs-002"),
 		},
 	})
@@ -4621,7 +4621,7 @@ func TestANewRequestWhileAConfirmationIsPendingLeavesItPendingAndIsRoutedWithThe
 	}
 
 	secondEvent := testInboundEvent("message-2")
-	secondEvent.Prompt = "찬희님 전화번호랑 이메일 좀"
+	secondEvent.Prompt = "최견본님 전화번호랑 이메일 좀"
 	secondResult, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, secondEvent)
 	if errorValue != nil {
 		t.Fatalf("expected the new request to be handled: %v", errorValue)
@@ -4736,7 +4736,7 @@ func TestOneDecisionPerMessageSeesHowManyExchangesFollowedTheConfirmation(t *tes
 		},
 		ActionResponses: []string{
 			`{"action":"continue","toolName":"event_delete","toolInput":{"eventHint":"event-1"}}`,
-			`{"action":"reply","final":true,"message":"찬희 님의 연락처는 디렉터리에 없습니다."}`,
+			`{"action":"reply","final":true,"message":"최견본 님의 연락처는 디렉터리에 없습니다."}`,
 		},
 	})
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
@@ -4755,7 +4755,7 @@ func TestOneDecisionPerMessageSeesHowManyExchangesFollowedTheConfirmation(t *tes
 		}),
 	}, []string{"event_delete"})
 
-	for index, prompt := range []string{"내일 휴가 일정을 캘린더에서 삭제해줘", "찬희님 전화번호랑 이메일 좀", "응"} {
+	for index, prompt := range []string{"내일 휴가 일정을 캘린더에서 삭제해줘", "최견본님 전화번호랑 이메일 좀", "응"} {
 		event := testInboundEvent("message-" + strconv.Itoa(index+1))
 		event.Prompt = prompt
 		if _, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, event); errorValue != nil {

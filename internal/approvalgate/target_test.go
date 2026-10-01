@@ -33,7 +33,7 @@ func resolvedTargetResolver() *recordingTargetResolver {
 	return &recordingTargetResolver{resolution: ApprovalTargetResolution{Target: ApprovalTarget{
 		InputField: "eventHint",
 		ID:         "event-1",
-		Title:      "상하이 edatec 미팅",
+		Title:      "부산 공급사 미팅",
 		StartsAt:   "2026-08-18T14:00:00+09:00",
 	}}}
 }
@@ -45,7 +45,7 @@ func unresolvedTargetResolver() *recordingTargetResolver {
 			toolcontract.FailureCodes.NotFound,
 			"target_resolution",
 			"no calendar event matched eventHint; the candidates list what exists, so use one of them or take another route",
-			json.RawMessage(`{"errorCode":"calendar_event_hint_unresolved","candidates":[{"eventID":"event-1","title":"상하이 edatec 미팅"}]}`),
+			json.RawMessage(`{"errorCode":"calendar_event_hint_unresolved","candidates":[{"eventID":"event-1","title":"부산 공급사 미팅"}]}`),
 		),
 	}}
 }
@@ -59,7 +59,7 @@ func hintApprovalRequest(taskRunID string) mcpserver.ApprovalRequest {
 
 func TestAnApprovalQuestionNamesTheTargetTheHintResolvedTo(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
-	languageModel := &wordingLanguageModel{question: "상하이 edatec 미팅 일정을 삭제할까요?"}
+	languageModel := &wordingLanguageModel{question: "부산 공급사 미팅 일정을 삭제할까요?"}
 	gate.UseLanguageModel(languageModel)
 	gate.UseApprovalTargetResolver(resolvedTargetResolver())
 
@@ -72,19 +72,19 @@ func TestAnApprovalQuestionNamesTheTargetTheHintResolvedTo(t *testing.T) {
 	}
 
 	wordingContext := marshalRequestMessages(languageModel.lastRequest)
-	for _, expectedFragment := range []string{"상하이 edatec 미팅", "2026-08-18T14:00:00+09:00"} {
+	for _, expectedFragment := range []string{"부산 공급사 미팅", "2026-08-18T14:00:00+09:00"} {
 		if !strings.Contains(wordingContext, expectedFragment) {
 			t.Fatalf("the question is worded from the resolved target, expected %q in %s", expectedFragment, wordingContext)
 		}
 	}
-	if !strings.Contains(heldCallEventBodyNamed(t, taskRunService, taskRun.TaskRunID, "confirmation.requested"), "상하이 edatec 미팅 일정을 삭제할까요?") {
+	if !strings.Contains(heldCallEventBodyNamed(t, taskRunService, taskRun.TaskRunID, "confirmation.requested"), "부산 공급사 미팅 일정을 삭제할까요?") {
 		t.Fatal("the requester is asked about the entity the hint resolved to")
 	}
 }
 
 func TestTheApprovalQuestionDoesNotRepeatTheSearchPhraseWhenATargetResolved(t *testing.T) {
 	gate, _, taskRun := gateFixture(t)
-	languageModel := &wordingLanguageModel{question: "상하이 edatec 미팅 일정을 삭제할까요?"}
+	languageModel := &wordingLanguageModel{question: "부산 공급사 미팅 일정을 삭제할까요?"}
 	gate.UseLanguageModel(languageModel)
 	gate.UseApprovalTargetResolver(resolvedTargetResolver())
 

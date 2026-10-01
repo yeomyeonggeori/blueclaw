@@ -72,7 +72,7 @@ func TestInterruptedTaskTurnDecisionDefaultsToStandardEffort(t *testing.T) {
 
 func TestAnAnswerReplacesTheObjectiveTheTaskStoppedOn(t *testing.T) {
 	stoppedToAsk := []task.TaskEvent{{Name: "agent.goal.waiting_user_input", Body: `{"goalID":"task-1","currentObjective":"the request lacks detail, so it has to be confirmed","status":"waiting_user_input"}`}}
-	answered := "register the 18 August Shanghai edatec meeting as a completed task"
+	answered := "register the 18 August Busan supplier meeting as a completed task"
 
 	activeGoal := interruptedTaskActiveGoalWithInstruction(task.TaskRun{TaskRunID: "task-1", Prompt: "해줘"}, stoppedToAsk, "note", answered)
 
