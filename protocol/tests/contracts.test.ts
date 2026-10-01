@@ -101,15 +101,15 @@ describe('closed protocol values', () => {
     }).success).toBe(false);
   });
 
-  test('keeps trusted site source transport outside model input', () => {
+  test('keeps trusted workspace file transport outside model input', () => {
     const request = {
-      toolName: 'site_serve',
-      input: { title: 'Site 1', sourceWorkspacePath: '~/sites/site-1', mode: 'publish' },
+      toolName: 'document_read',
+      input: { path: '~/reports/q3.pdf' },
       transport: {
-        siteSourceBundle: {
-          workspacePath: '~/sites/site-1',
-          contentBase64: 'YnVuZGxl',
-          format: 'tar.gz',
+        workspaceFile: {
+          workspacePath: '~/reports/q3.pdf',
+          filename: 'q3.pdf',
+          contentBase64: 'cmVwb3J0',
           sha256: 'a'.repeat(64),
         },
       },
@@ -119,9 +119,9 @@ describe('closed protocol values', () => {
     expect(toolInvokeRequestSchema.safeParse({
       ...request,
       transport: {
-        siteSourceBundle: {
-          ...request.transport.siteSourceBundle,
-          format: 'zip',
+        workspaceFile: {
+          ...request.transport.workspaceFile,
+          contentBase64: '',
         },
       },
     }).success).toBe(false);
@@ -601,7 +601,7 @@ describe('ledger event names', () => {
   });
 
   test('refuse a tool event whose tool name is not one segment or whose suffix is not declared', () => {
-    expect(ledgerEventNameSchema.safeParse('tool.site.app.publish.result').success).toBe(false);
+    expect(ledgerEventNameSchema.safeParse('tool.task.board.update.result').success).toBe(false);
     expect(ledgerEventNameSchema.safeParse('tool.bash.finished').success).toBe(false);
     expect(ledgerEventNameSchema.safeParse('tool..result').success).toBe(false);
   });

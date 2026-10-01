@@ -56,10 +56,6 @@ func (actor stubWorkspaceActor) ReadFile(context.Context, string, int64) ([]byte
 	return actor.factory.fileContent, nil
 }
 
-func (actor stubWorkspaceActor) BundleDirectory(context.Context, string, security.WorkspaceActorBundleOptions) (security.WorkspaceActorBundle, error) {
-	return security.WorkspaceActorBundle{}, nil
-}
-
 func (actor stubWorkspaceActor) ListDirectory(context.Context, string) ([]security.WorkspaceActorDirectoryEntry, error) {
 	return actor.factory.entries, nil
 }

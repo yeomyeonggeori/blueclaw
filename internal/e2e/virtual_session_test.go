@@ -3,14 +3,9 @@ package e2e
 import (
 	"archive/zip"
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -18,6 +13,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
@@ -666,194 +664,6 @@ func TestDOCXAttachmentValidationRejectsTextAndAcceptsCanonicalPackage(t *testin
 	writeCanonicalDOCX(t, validPath)
 	if errorValue := validateDOCXAttachment(validPath, toolcontract.FileAttachment{DevicePath: validPath}); errorValue != nil {
 		t.Fatalf("expected canonical docx package to pass validation: %v", errorValue)
-	}
-}
-
-func virtualServeRequestBody(input string) []byte {
-	content := []byte("virtual site bundle")
-	digest := sha256.Sum256(content)
-	return []byte(`{"input":` + input + `,"transport":{"siteSourceBundle":{"workspacePath":"~/sites/demo","contentBase64":"` +
-		base64.StdEncoding.EncodeToString(content) + `","format":"tar.gz","sha256":"` + hex.EncodeToString(digest[:]) + `"}}}`)
-}
-
-func TestVirtualSiteServeRequiresValidSourceBundle(t *testing.T) {
-	service := virtualCapabilityService{workspacePath: t.TempDir()}
-	input := `{"title":"Local Fleet Studio","sourceWorkspacePath":"~/sites/demo","mode":"publish"}`
-
-	withoutBundle := service.response("site_serve", []byte(`{"input":`+input+`}`))
-	if !strings.Contains(withoutBundle, `"status":"error"`) || service.sitePublished {
-		t.Fatalf("expected serve without a source bundle to fail closed, got %s", withoutBundle)
-	}
-
-	tamperedBundle := []byte(strings.Replace(string(virtualServeRequestBody(input)), `"sha256":"`, `"sha256":"0000`, 1))
-	tampered := service.response("site_serve", tamperedBundle)
-	if !strings.Contains(tampered, `"status":"error"`) || service.sitePublished {
-		t.Fatalf("expected serve with a tampered bundle hash to fail closed, got %s", tampered)
-	}
-
-	response := service.response("site_serve", virtualServeRequestBody(input))
-	if !strings.Contains(response, `"status":"published"`) ||
-		!strings.Contains(response, `"slug":"local-fleet-studio"`) ||
-		!strings.Contains(response, `"mode":"publish"`) ||
-		!strings.Contains(response, `"sourceSHA256"`) ||
-		!strings.Contains(response, `"objectType":"website"`) ||
-		!strings.Contains(response, `"effect":"published"`) ||
-		!strings.Contains(response, `"url":"https://local-fleet-studio.device.example.test"`) {
-		t.Fatalf("expected canonical serve publish result, got %s", response)
-	}
-	if strings.Contains(response, `"effect":"previewed"`) || strings.Contains(response, `"id":"site-1"`) {
-		t.Fatalf("expected only the mode-conditional URL effect, got %s", response)
-	}
-
-	previewInput := `{"title":"Local Fleet Studio","sourceWorkspacePath":"~/sites/demo","mode":"preview","siteReference":"local-fleet-studio"}`
-	previewResponse := service.response("site_serve", virtualServeRequestBody(previewInput))
-	if !strings.Contains(previewResponse, `"status":"previewed"`) ||
-		!strings.Contains(previewResponse, `"previewURL":"https://local-fleet-studio.device.example.test/__preview/preview-1"`) ||
-		!strings.Contains(previewResponse, `"effect":"previewed"`) {
-		t.Fatalf("expected canonical serve preview result, got %s", previewResponse)
-	}
-}
-
-func TestVirtualSiteOperationsNeverCreateMissingSites(t *testing.T) {
-	service := virtualCapabilityService{workspacePath: t.TempDir()}
-	requests := map[string][]byte{
-		"site_serve":   virtualServeRequestBody(`{"title":"Ghost","sourceWorkspacePath":"~/sites/demo","mode":"publish","siteReference":"missing-site"}`),
-		"site_list":    []byte(`{"input":{"siteReference":"missing-site"}}`),
-		"site_unserve": []byte(`{"input":{"siteReference":"missing-site"},"context":{"isApprovalContinuation":true}}`),
-	}
-
-	for toolName, requestBody := range requests {
-		response := service.response(toolName, requestBody)
-		if !strings.Contains(response, `"errorCode":"not_found"`) {
-			t.Fatalf("expected %s to reject a missing site, got %s", toolName, response)
-		}
-		if service.site != nil {
-			t.Fatalf("expected %s to leave the site store empty", toolName)
-		}
-	}
-}
-
-func TestVirtualSiteFixtureUsesExactIdentity(t *testing.T) {
-	service := virtualCapabilityService{workspacePath: t.TempDir()}
-	errorValue := service.loadInitialSite(&VirtualSiteFixture{
-		SiteID:      "site-1",
-		Slug:        "demo",
-		Title:       "Local Fleet Studio",
-		IsPublished: true,
-	})
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-
-	for _, siteReference := range []string{"site-1", "demo"} {
-		response := service.response("site_list", []byte(`{"input":{"siteReference":"`+siteReference+`"}}`))
-		if !strings.Contains(response, `"siteID":"site-1"`) || !strings.Contains(response, `"status":"published"`) {
-			t.Fatalf("expected fixture lookup by %s, got %s", siteReference, response)
-		}
-	}
-	response := service.response("site_serve", virtualServeRequestBody(`{"title":"Local Fleet Studio","sourceWorkspacePath":"~/sites/demo","mode":"publish","siteReference":"other-site"}`))
-	if !strings.Contains(response, `"errorCode":"not_found"`) {
-		t.Fatalf("expected serve with an unknown reference to fail exact lookup, got %s", response)
-	}
-
-	for _, initialSite := range []*VirtualSiteFixture{
-		{SiteID: " site-1", Slug: "demo", Title: "Local Fleet Studio"},
-		{SiteID: "site-1", Slug: "Demo", Title: "Local Fleet Studio"},
-		{SiteID: "site-1", Slug: "demo", Title: " Local Fleet Studio"},
-	} {
-		if errorValue := service.loadInitialSite(initialSite); errorValue == nil {
-			t.Fatalf("expected malformed fixture to fail: %+v", initialSite)
-		}
-	}
-}
-
-func TestVirtualSiteToolsUseCanonicalThreeToolContracts(t *testing.T) {
-	expectedToolNames := []string{"site_serve", "site_list", "site_unserve"}
-	if toolNames := sitePrototypeCapabilityToolNames(); !slices.Equal(toolNames, expectedToolNames) {
-		t.Fatalf("expected canonical site tool surface, got %v", toolNames)
-	}
-
-	listInputSchema := virtualCapabilityInputSchema("site_list")
-	if strings.Contains(listInputSchema, `"siteID"`) || strings.Contains(listInputSchema, `"checkLive"`) {
-		t.Fatalf("expected site_list to accept only an optional siteReference, got %s", listInputSchema)
-	}
-
-	expectedRequiredFields := map[string][]string{
-		"site_serve":   {"siteID", "slug", "mode", "sourceSHA256"},
-		"site_list":    {"sites"},
-		"site_unserve": {"siteID", "slug", "unserved"},
-	}
-	for _, toolName := range expectedToolNames {
-		descriptor := virtualCapabilityToolDescriptor(toolName)
-		if descriptor.SideEffectClass != toolcontract.ToolSideEffectRead && len(descriptor.InputIntentSchema) == 0 {
-			t.Fatalf("expected canonical %s input intent schema", toolName)
-		}
-		contract := virtualCapabilityToolResultContract(toolName)
-		if contract == nil {
-			t.Fatalf("expected %s result contract", toolName)
-		}
-		var resultSchema struct {
-			Required []string `json:"required"`
-		}
-		if errorValue := json.Unmarshal(contract.Schema, &resultSchema); errorValue != nil ||
-			!slices.Equal(resultSchema.Required, expectedRequiredFields[toolName]) {
-			t.Fatalf("expected exact %s required result fields, got %s", toolName, contract.Schema)
-		}
-	}
-
-	serveContract := virtualCapabilityToolResultContract("site_serve")
-	if len(serveContract.Effects) != 2 ||
-		serveContract.Effects[0].Effect != "previewed" ||
-		serveContract.Effects[0].ResultField != "previewURL" ||
-		serveContract.Effects[0].EffectIdentity != "url" ||
-		serveContract.Effects[0].When == nil ||
-		serveContract.Effects[0].When.ResultField != "mode" ||
-		string(serveContract.Effects[0].When.Equals) != `"preview"` ||
-		serveContract.Effects[1].Effect != "published" ||
-		serveContract.Effects[1].ResultField != "publishedURL" ||
-		serveContract.Effects[1].EffectIdentity != "url" ||
-		serveContract.Effects[1].When == nil ||
-		string(serveContract.Effects[1].When.Equals) != `"publish"` {
-		t.Fatalf("expected mode-conditional serve effects, got %+v", serveContract.Effects)
-	}
-	listContract := virtualCapabilityToolResultContract("site_list")
-	if len(listContract.Effects) != 0 {
-		t.Fatalf("expected site_list to have no effects, got %+v", listContract.Effects)
-	}
-	unserveContract := virtualCapabilityToolResultContract("site_unserve")
-	if len(unserveContract.Effects) != 1 ||
-		unserveContract.Effects[0].ObjectType != "website" ||
-		unserveContract.Effects[0].Effect != "deleted" ||
-		unserveContract.Effects[0].ResultField != "siteID" ||
-		unserveContract.Effects[0].EffectIdentity != "id" {
-		t.Fatalf("expected exact site_unserve effect contract, got %+v", unserveContract.Effects)
-	}
-
-	if descriptor := virtualCapabilityToolDescriptor("site_unserve"); !descriptor.RequiresApproval {
-		t.Fatal("expected site_unserve to require approval")
-	}
-	if descriptor := virtualCapabilityToolDescriptor("site_serve"); descriptor.SideEffectClass != toolcontract.ToolSideEffectSitePublish {
-		t.Fatalf("expected site_serve site publish semantics, got %+v", descriptor)
-	}
-	expectedCompletionActions := map[string]string{
-		"site_serve":   "serve_site",
-		"site_unserve": "delete_site",
-	}
-	for toolName, action := range expectedCompletionActions {
-		descriptor := virtualCapabilityToolDescriptor(toolName)
-		if descriptor.CompletionEvidence == nil ||
-			descriptor.CompletionEvidence.Action != action ||
-			descriptor.CompletionEvidence.TargetKind != "site" {
-			t.Fatalf("expected canonical %s completion evidence, got %+v", toolName, descriptor.CompletionEvidence)
-		}
-	}
-
-	for _, removedToolName := range []string{"site_create", "site_status", "site_preview", "site_publish", "site_delete", "site_history", "site_rollback", "site_repair"} {
-		if slices.Contains(sitePrototypeToolNames(), removedToolName) ||
-			slices.Contains(sitePrototypeCapabilityToolNames(), removedToolName) ||
-			virtualCapabilityToolResultContract(removedToolName) != nil {
-			t.Fatalf("expected removed site tool %s to stay outside the scripted surface", removedToolName)
-		}
 	}
 }
 

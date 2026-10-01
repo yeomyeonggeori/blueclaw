@@ -581,10 +581,6 @@ func capabilityToolRequest(toolContext context.Context, descriptor CapabilityToo
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) prepareCapabilityToolInput(toolContext context.Context, toolName string, request ToolCatalogRequest, toolInput json.RawMessage) (preparedCapabilityToolPayload, *toolcontract.ToolResult, error) {
-	if siteToolNeedsSourceBundle(toolName) {
-		transport, toolFailure, errorValue := toolCatalogBuilder.prepareSiteSourceBundle(toolContext, request, toolInput)
-		return preparedCapabilityToolPayload{Input: toolInput, Transport: transport}, toolFailure, errorValue
-	}
 	if capabilityToolReadsAWorkspaceFile(toolName) {
 		return toolCatalogBuilder.prepareWorkspaceFileRead(toolContext, toolName, request, toolInput)
 	}

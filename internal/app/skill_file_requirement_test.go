@@ -77,13 +77,13 @@ func TestStartupSaysEveryReasonASkillWasLeftOut(t *testing.T) {
 	logSkillsThisHostCannotSatisfy(logger, []skill.UnavailableSkill{
 		{Name: "internkim-api", Path: "/skills/internkim-api/SKILL.md", MissingEnvironmentVariables: []string{"INTERNKIM_TOKEN"}},
 		{Name: "pdf", Path: "/skills/pdf/SKILL.md", MissingAnyFilePaths: []string{"/usr/share/fonts/truetype/nanum/NanumGothic.ttf"}},
-		{Name: "website", Path: "/skills/website/SKILL.md", MissingToolNames: []string{"site_serve"}},
+		{Name: "calendar", Path: "/skills/calendar/SKILL.md", MissingToolNames: []string{"event_add"}},
 	})
 
 	for _, expectedText := range []string{
 		`skill.environment.missing`, `missingEnvironment=INTERNKIM_TOKEN`,
 		`skill.file.missing`, `anyOfTheseWouldHaveDone=/usr/share/fonts/truetype/nanum/NanumGothic.ttf`,
-		`skill.tools.missing`, `missingTools=site_serve`,
+		`skill.tools.missing`, `missingTools=event_add`,
 	} {
 		if !strings.Contains(logDocument.String(), expectedText) {
 			t.Fatalf("startup must say %q; it said:\n%s", expectedText, logDocument.String())

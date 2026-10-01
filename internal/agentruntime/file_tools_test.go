@@ -224,7 +224,7 @@ func TestFileDeliverAcceptsVirtualHomePathReturnedByFileRead(t *testing.T) {
 	}
 }
 
-func TestFileReadResolvesSiteRelativePathNativelyAndFailsAsNotFound(t *testing.T) {
+func TestFileReadResolvesRelativeProjectPathNativelyAndFailsAsNotFound(t *testing.T) {
 	workspacePath := t.TempDir()
 	toolCatalogBuilder := newFileToolTestCatalogBuilder(workspacePath)
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
@@ -247,48 +247,6 @@ func TestFileReadResolvesSiteRelativePathNativelyAndFailsAsNotFound(t *testing.T
 	}
 }
 
-func TestFileReadTreatsMissingSiteControlFileAsOptionalState(t *testing.T) {
-	workspacePath := t.TempDir()
-	toolCatalogBuilder := newFileToolTestCatalogBuilder(workspacePath)
-	toolCatalogBuilder.UseOptionalFileReadPathSuffixes([]string{".internkim/site.json", ".internkim/artifact-brief.md"})
-	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
-		ProfileName:       "default",
-		RequesterPersonID: "person-1",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
-	})
-
-	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "file_read",
-		Input: toolcontract.MarshalToolInput(map[string]string{
-			"path": "~/sites/site-1/.internkim/artifact-brief.md",
-		}),
-	})
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if result.Failed() {
-		t.Fatalf("expected missing optional site control file to be state, got %s", result.ContentText())
-	}
-	if !strings.Contains(result.ContentText(), `"exists":false`) ||
-		!strings.Contains(result.ContentText(), `"optional":true`) ||
-		!strings.Contains(result.ContentText(), `"recommendedWritePath":"/workspace/circles/member/sites/site-1/draft/.internkim/artifact-brief.md"`) {
-		t.Fatalf("expected optional missing control-file payload, got %s", result.ContentText())
-	}
-
-	missingResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "file_read",
-		Input: toolcontract.MarshalToolInput(map[string]string{
-			"path": "~/sites/site-1/app/src/App.tsx",
-		}),
-	})
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if !missingResult.Failed() || missingResult.FailureCode() != toolcontract.FailureCodes.NotFound.String() {
-		t.Fatalf("expected ordinary missing file_read to fail as not_found, got %+v", missingResult)
-	}
-}
-
 func TestFileWriteAcceptsPortablePathAndContent(t *testing.T) {
 	workspacePath := t.TempDir()
 	toolCatalogBuilder := newFileToolTestCatalogBuilder(workspacePath)
@@ -301,7 +259,7 @@ func TestFileWriteAcceptsPortablePathAndContent(t *testing.T) {
 	writeResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
 		ToolName: "write",
 		Input: toolcontract.MarshalToolInput(map[string]any{
-			"path":    "projects/site/index.html",
+			"path":    "projects/report/index.html",
 			"content": "<html>ready</html>",
 		}),
 	})
@@ -311,7 +269,7 @@ func TestFileWriteAcceptsPortablePathAndContent(t *testing.T) {
 	if writeResult.Failed() {
 		t.Fatalf("expected write success, got %s", writeResult.ContentText())
 	}
-	document, errorValue := os.ReadFile(filepath.Join(workspacePath, "private", "people", "person-1", "projects", "site", "index.html"))
+	document, errorValue := os.ReadFile(filepath.Join(workspacePath, "private", "people", "person-1", "projects", "report", "index.html"))
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -1502,7 +1460,7 @@ func TestFileDeliverNotFoundIncludesCandidateFiles(t *testing.T) {
 	}
 }
 
-func TestFileWriteAllowsManagedSitePackageManifest(t *testing.T) {
+func TestFileWriteAllowsUserOwnedPackageManifest(t *testing.T) {
 	workspacePath := t.TempDir()
 	toolCatalogBuilder := newFileToolTestCatalogBuilder(workspacePath)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"write"})
@@ -1515,7 +1473,7 @@ func TestFileWriteAllowsManagedSitePackageManifest(t *testing.T) {
 	managedResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
 		ToolName: "write",
 		Input: toolcontract.MarshalToolInput(map[string]string{
-			"path":    "~/sites/site-1/draft/app/package.json",
+			"path":    "~/reports/q3/app/package.json",
 			"content": `{"project":"user-owned package manifest"}`,
 		}),
 	})
@@ -1523,7 +1481,7 @@ func TestFileWriteAllowsManagedSitePackageManifest(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	if managedResult.Failed() {
-		t.Fatalf("expected the user-owned site manifest to be writable; build gates own the invariant, got %+v", managedResult)
+		t.Fatalf("expected the user-owned package manifest to be writable; build gates own the invariant, got %+v", managedResult)
 	}
 
 	tmpResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{

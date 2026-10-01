@@ -38,8 +38,6 @@ type approvalQuestionInput struct {
 	Summary        string   `json:"summary"`
 	Reason         string   `json:"reason"`
 	ApprovalReason string   `json:"approvalReason"`
-	Slug           string   `json:"slug"`
-	SiteID         string   `json:"siteID"`
 	EventHint      string   `json:"eventHint"`
 	Path           string   `json:"path"`
 	DevicePath     string   `json:"devicePath"`
@@ -77,7 +75,7 @@ func (gate *Gate) generateConfirmationWording(ctx context.Context, approvalReque
 				"When the action sends or posts content, quote the content verbatim in the question (a blockquote under one asking sentence works). Never paraphrase, summarize, or shorten it — what the user approves is exactly what will appear.",
 				"When the action replaces a span of text, show the span being replaced and its replacement, both verbatim.",
 				"When the action removes something, quote what will be removed — its text or the given preview — so the user can tell it from everything it is not.",
-				"Use the original request and action details to phrase the target, content, file, event, or site naturally.",
+				"Use the original request and action details to phrase the target, content, file, or event naturally.",
 				"When the action details name a resolved target or carry a target preview, show that and never repeat a search phrase the caller typed.",
 				"When the action changes or removes something that already exists, say what it affects, and never describe a whole-item replacement as if it only touched a part of it.",
 				"Keep the asking sentence short; the quoted content is as long as it is.",
@@ -150,8 +148,6 @@ func approvalQuestionActionDetails(toolInput json.RawMessage, target ApprovalTar
 	setApprovalQuestionDetail(details, "title", document.Title)
 	setApprovalQuestionDetail(details, "summary", document.Summary)
 	setApprovalQuestionDetail(details, "reason", firstNonEmpty(document.Reason, document.ApprovalReason))
-	setApprovalQuestionDetail(details, "slug", document.Slug)
-	setApprovalQuestionDetail(details, "siteID", document.SiteID)
 	setApprovalQuestionDetail(details, "eventHint", document.EventHint)
 	filePath := firstNonEmpty(document.Path, document.DevicePath, document.TargetPath)
 	setApprovalQuestionDetail(details, "path", filePath)

@@ -61,15 +61,14 @@ type AgentProfileConfiguration struct {
 type EvidenceCondition = capability.EvidenceCondition
 
 type AgentConfiguration struct {
-	Intake                       AgentIntakeConfiguration `json:"intake"`
-	DefaultTaskLevel             string                   `json:"defaultTaskLevel"`
-	SkillTaskLevelFloor          string                   `json:"skillTaskLevelFloor,omitempty"`
-	FailureRecovery              AgentFailureRecovery     `json:"failureRecovery"`
-	GenerationOptions            AgentGenerationOptions   `json:"generationOptions,omitempty"`
-	AdminTaskLinkBaseURL         string                   `json:"adminTaskLinkBaseURL,omitempty"`
-	AllowAdminTaskDiagnostic     bool                     `json:"allowAdminTaskDiagnostic"`
-	Harness                      HarnessConfiguration     `json:"harness,omitempty"`
-	OptionalFileReadPathSuffixes []string                 `json:"optionalFileReadPathSuffixes,omitempty"`
+	Intake                   AgentIntakeConfiguration `json:"intake"`
+	DefaultTaskLevel         string                   `json:"defaultTaskLevel"`
+	SkillTaskLevelFloor      string                   `json:"skillTaskLevelFloor,omitempty"`
+	FailureRecovery          AgentFailureRecovery     `json:"failureRecovery"`
+	GenerationOptions        AgentGenerationOptions   `json:"generationOptions,omitempty"`
+	AdminTaskLinkBaseURL     string                   `json:"adminTaskLinkBaseURL,omitempty"`
+	AllowAdminTaskDiagnostic bool                     `json:"allowAdminTaskDiagnostic"`
+	Harness                  HarnessConfiguration     `json:"harness,omitempty"`
 }
 
 type HarnessConfiguration struct {

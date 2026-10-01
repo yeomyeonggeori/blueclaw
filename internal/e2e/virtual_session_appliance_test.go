@@ -7,10 +7,11 @@ package e2e
 
 import (
 	"context"
-	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
 
 func TestPresentationScenarioDoesNotScriptToolCalls(t *testing.T) {
@@ -217,98 +218,5 @@ func TestOneTimeScheduleAcceptance(t *testing.T) {
 	}
 	if !eventsContain(turnResult.Events, "tool.schedule_create.result", "schedule_create") {
 		t.Fatalf("expected one-time schedule capability result; events: %s", summarizeEvents(turnResult.Events))
-	}
-}
-
-func TestSitePrototypeAcceptance(t *testing.T) {
-	result, errorValue := RunVirtualSession(context.Background(), SitePrototypeAcceptanceScenario(t.TempDir()))
-	if errorValue != nil {
-		t.Fatalf("expected site prototype acceptance scenario to pass: %v", errorValue)
-	}
-	turnResult := result.TurnResults[0]
-	if !eventsContain(turnResult.Events, "agent.instructions_loaded", "website") {
-		t.Fatal("expected site-prototype skill to be selected")
-	}
-	if !eventsContain(turnResult.Events, "tool.site_serve.result", "publishedURL") {
-		t.Fatalf("expected site publish result to include a public URL; events: %s", summarizeEvents(turnResult.Events))
-	}
-	if !strings.Contains(turnResult.ModelContext, "site_serve") || !strings.Contains(turnResult.ModelContext, "site_serve") {
-		t.Fatal("expected model context to document site app capabilities")
-	}
-}
-
-func TestSiteEditRedeployAcceptance(t *testing.T) {
-	result, errorValue := RunVirtualSession(context.Background(), SiteEditRedeployAcceptanceScenario(t.TempDir()))
-	if errorValue != nil {
-		t.Fatalf("expected site edit redeploy acceptance scenario to pass: %v", errorValue)
-	}
-	if len(result.TurnResults) != 2 {
-		t.Fatalf("expected two turn results, got %d", len(result.TurnResults))
-	}
-	secondTurnResult := result.TurnResults[1]
-	if secondTurnResult.TaskStatus != task.TaskStatusCompleted {
-		t.Fatalf("expected second turn success, got %s", secondTurnResult.TaskStatus)
-	}
-	if countEvents(secondTurnResult.Events, "tool.bash.requested") != 0 {
-		t.Fatalf("expected no shell for a content-only edit in turn two; events: %s", summarizeEvents(secondTurnResult.Events))
-	}
-	if countEventsWithFragment(secondTurnResult.Events, "tool.write.requested", "site-content.json") == 0 {
-		t.Fatalf("expected a content-only site-content.json edit in turn two; events: %s", summarizeEvents(secondTurnResult.Events))
-	}
-	if countEventsWithFragment(secondTurnResult.Events, "tool.site_serve.requested", "site_serve") == 0 {
-		t.Fatalf("expected site_serve capability invocation in turn two; events: %s", summarizeEvents(secondTurnResult.Events))
-	}
-	if !strings.Contains(secondTurnResult.FinishMessage, "https://") {
-		t.Fatalf("expected final assistant message to contain a URL, got %q", secondTurnResult.FinishMessage)
-	}
-}
-
-func TestSiteCustomStructureAcceptance(t *testing.T) {
-	result, errorValue := RunVirtualSession(context.Background(), SiteCustomStructureAcceptanceScenario(t.TempDir()))
-	if errorValue != nil {
-		t.Fatalf("expected site custom structure acceptance scenario to pass: %v", errorValue)
-	}
-	turnResult := result.TurnResults[0]
-	if turnResult.TaskStatus != task.TaskStatusCompleted {
-		t.Fatalf("expected completed turn, got %s", turnResult.TaskStatus)
-	}
-	if !eventsContain(turnResult.Events, "tool.site_serve.result", "app/dist") {
-		t.Fatalf("expected the first site_serve attempt to be rejected by the site owner for a missing build; events: %s", summarizeEvents(turnResult.Events))
-	}
-	if countEvents(turnResult.Events, "tool.bash.requested") != 1 {
-		t.Fatalf("expected exactly one shell build after the app/src change; events: %s", summarizeEvents(turnResult.Events))
-	}
-	if countEvents(turnResult.Events, "tool.site_serve.requested") != 2 {
-		t.Fatalf("expected site_serve to be attempted once before the build and once after; events: %s", summarizeEvents(turnResult.Events))
-	}
-	if !eventsContain(turnResult.Events, "tool.site_serve.result", "device.example.test") {
-		t.Fatalf("expected the rebuilt site_serve to publish; events: %s", summarizeEvents(turnResult.Events))
-	}
-	if !strings.Contains(turnResult.FinishMessage, "https://") {
-		t.Fatalf("expected final assistant message to contain a URL, got %q", turnResult.FinishMessage)
-	}
-}
-
-func TestSiteLifecycleAcceptance(t *testing.T) {
-	result, errorValue := RunVirtualSession(context.Background(), SiteLifecycleAcceptanceScenario(t.TempDir()))
-	if errorValue != nil {
-		t.Fatalf("expected site lifecycle acceptance scenario to pass: %v", errorValue)
-	}
-	if len(result.TurnResults) != 4 {
-		t.Fatalf("expected four turn results, got %d", len(result.TurnResults))
-	}
-	deleteRequestTurnResult := result.TurnResults[2]
-	if deleteRequestTurnResult.TaskStatus != task.TaskStatusWaitingApproval {
-		t.Fatalf("expected delete turn to wait for approval, got %s", deleteRequestTurnResult.TaskStatus)
-	}
-	if !eventsContain(deleteRequestTurnResult.Events, "approval.pending_call", "site_unserve") {
-		t.Fatalf("expected pending site_unserve approval; events: %s", summarizeEvents(deleteRequestTurnResult.Events))
-	}
-	deleteCompletionTurnResult := result.TurnResults[3]
-	if deleteCompletionTurnResult.TaskStatus != task.TaskStatusCompleted {
-		t.Fatalf("expected delete completion, got %s", deleteCompletionTurnResult.TaskStatus)
-	}
-	if !eventsContain(deleteCompletionTurnResult.Events, "tool.site_unserve.result", "deleted") {
-		t.Fatalf("expected site_unserve result; events: %s", summarizeEvents(deleteCompletionTurnResult.Events))
 	}
 }

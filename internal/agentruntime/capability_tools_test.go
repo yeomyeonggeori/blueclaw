@@ -21,10 +21,10 @@ import (
 func TestToolCatalogHidesPolicyDeniedCapabilityTools(t *testing.T) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
 	toolCatalogBuilder.UseTestCapabilityToolDescriptors(capability.Client{}, []CapabilityToolDescriptor{{
-		Name:           "site_serve",
-		Description:    "Create a site.",
-		PolicyResource: "tool:site_serve",
-		InputSchema:    json.RawMessage(`{"type":"object","properties":{"slug":{"type":"string"}},"required":["slug"],"additionalProperties":false}`),
+		Name:           "document_share",
+		Description:    "Share a document.",
+		PolicyResource: "tool:document_share",
+		InputSchema:    json.RawMessage(`{"type":"object","properties":{"documentID":{"type":"string"}},"required":["documentID"],"additionalProperties":false}`),
 	}})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName: "default",
@@ -32,15 +32,15 @@ func TestToolCatalogHidesPolicyDeniedCapabilityTools(t *testing.T) {
 			PersonID: "person-1",
 			Circles:  []string{"member"},
 			ResourceAccessRules: []policy.ResourceAccessPolicy{{
-				Resource: "tool:site_serve",
+				Resource: "tool:document_share",
 				Actions:  []string{"execute"},
 				Circles:  []string{"admin"},
 			}},
 		},
 	})
 
-	if strings.Contains(toolRegistry.Descriptions(), "site_serve") {
-		t.Fatalf("expected denied site tool to be omitted from catalog, got %s", toolRegistry.Descriptions())
+	if strings.Contains(toolRegistry.Descriptions(), "document_share") {
+		t.Fatalf("expected denied document_share tool to be omitted from catalog, got %s", toolRegistry.Descriptions())
 	}
 }
 
@@ -257,11 +257,11 @@ func TestCapabilityToolRequestIncludesTrustedExecutionContext(t *testing.T) {
 }
 
 func TestCapabilityToolRequestSeparatesModelInputFromTransport(t *testing.T) {
-	input := json.RawMessage(`{"siteID":"site-1"}`)
-	transport := map[string]any{"siteSourceBundle": map[string]any{"workspacePath": "/workspace/site"}}
+	input := json.RawMessage(`{"documentID":"document-1"}`)
+	transport := map[string]any{"workspaceFile": map[string]any{"workspacePath": "/workspace/reports/q3.pdf"}}
 	requestDocument := capabilityToolRequest(
 		context.Background(),
-		completeTestCapabilityToolDescriptor(CapabilityToolDescriptor{Name: "site_serve", CanonicalName: "site_serve"}),
+		completeTestCapabilityToolDescriptor(CapabilityToolDescriptor{Name: "document_share", CanonicalName: "document_share"}),
 		ToolCatalogRequest{},
 		preparedCapabilityToolPayload{Input: input, Transport: transport},
 	)
@@ -269,7 +269,7 @@ func TestCapabilityToolRequestSeparatesModelInputFromTransport(t *testing.T) {
 	if string(requestDocument["input"].(json.RawMessage)) != string(input) {
 		t.Fatalf("expected unchanged model input, got %+v", requestDocument["input"])
 	}
-	if requestDocument["transport"].(map[string]any)["siteSourceBundle"] == nil {
+	if requestDocument["transport"].(map[string]any)["workspaceFile"] == nil {
 		t.Fatalf("expected trusted transport payload, got %+v", requestDocument)
 	}
 }

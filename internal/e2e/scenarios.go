@@ -29,7 +29,7 @@ func workspaceSkillInstruction(skillName string) agentcontract.SkillInstruction 
 
 // ScenarioSkillNames are the skills these scenarios drive. They are the host's
 // to supply, so a standalone checkout finds none of them.
-var ScenarioSkillNames = []string{"office", "scheduled-task", "calendar", "internkim-task", "messages", "website"}
+var ScenarioSkillNames = []string{"office", "scheduled-task", "calendar", "internkim-task", "messages"}
 
 func rootWorkspaceSkillDirectoryPath(skillName string) string {
 	skillDirectoryPath := findScenarioSkillDirectory(skillName)
@@ -1059,18 +1059,18 @@ func CapabilityQuestionAcceptanceScenario(artifactDirectoryPath string) VirtualS
 	return VirtualSessionScenario{
 		Name:                  "capability_question_acceptance",
 		ArtifactDirectoryPath: artifactDirectoryPath,
-		Skills:                []agentcontract.SkillInstruction{officeSkill(), scheduledTaskSkill(), sitePrototypeSkill()},
+		Skills:                []agentcontract.SkillInstruction{officeSkill(), scheduledTaskSkill()},
 		AllowedTools:          []string{"memory_search"},
 		Turns: []VirtualTurn{{
 			Prompt:          "너는 무엇을 할 수 있어?",
 			RouterTaskShape: agentcontract.TaskShapeResearchTask,
 			ActionResponses: []string{
-				actionFinishMessage("발표 자료 같은 산출물, 일정 예약, 웹사이트 제작을 할 수 있습니다."),
+				actionFinishMessage("발표 자료 같은 산출물과 일정 예약을 할 수 있습니다."),
 			},
 			ForbiddenExposedTools:  []string{"skill_search"},
 			ForbidToolCalls:        true,
 			ForbiddenEvents:        []string{agentcontract.TaskEventAgentEvidenceMissing},
-			ExpectedModelContexts:  []string{"- skills: memory, office, scheduled-task, website"},
+			ExpectedModelContexts:  []string{"- skills: memory, office, scheduled-task"},
 			ExpectedReplyFragments: []string{"일정 예약"},
 		}},
 	}
@@ -1301,231 +1301,6 @@ func scheduledTaskSkill() agentcontract.SkillInstruction {
 	return workspaceSkillInstruction("scheduled-task")
 }
 
-func SitePrototypeAcceptanceScenario(artifactDirectoryPath string) VirtualSessionScenario {
-	return VirtualSessionScenario{
-		Name:                   "site_artifact_acceptance",
-		SkillSearchQueries:     []string{"create and publish a website prototype"},
-		ArtifactDirectoryPath:  artifactDirectoryPath,
-		RouterRequiredEvidence: []string{"site_serve"},
-		RouterSiteEvidence:     "Local Fleet Studio",
-		Skills:                 []agentcontract.SkillInstruction{sitePrototypeSkill()},
-		AllowedTools:           append(agentruntime.KernelToolNames(), sitePrototypeCapabilityToolNames()...),
-		CapabilityToolNames:    sitePrototypeCapabilityToolNames(),
-		InitialToolNames:       []string{"write", "site_serve"},
-		Turns: []VirtualTurn{{
-			Prompt: "테스트용 'Local Fleet Studio' 단일 페이지 소개 웹사이트를 만들어서 배포해줘. 첫 화면 제목은 'Local Fleet Studio', 보조 문구는 '로컬 플릿 웹사이트 생성 배포 테스트', 섹션은 서비스 소개, 장점 3개, 문의 CTA만 넣어줘. 추가 질문하지 말고 합리적인 기본값으로 진행해줘.",
-			ActionResponses: []string{
-				actionCallTool("write", `{"path":"/workspace/circles/member/sites/local-fleet-studio/draft/app/public/site-content.json","content":"{\"siteName\":\"Local Fleet Studio\",\"tagline\":\"로컬 플릿 웹사이트 생성 배포 테스트\",\"blocks\":[{\"variant\":\"hero\",\"title\":\"Local Fleet Studio\",\"body\":\"로컬 플릿 웹사이트 생성 배포 테스트\"},{\"variant\":\"prose\",\"title\":\"서비스 소개\",\"body\":\"Local Fleet Studio는 로컬 플릿 환경에서 웹사이트 생성과 배포 과정을 검증하는 테스트 서비스입니다.\"},{\"variant\":\"features\",\"title\":\"장점\",\"items\":[{\"title\":\"빠른 프로토타입\",\"body\":\"빠른 프로토타입 생성\"},{\"title\":\"안전한 검증\",\"body\":\"안전한 배포 검증\"},{\"title\":\"손쉬운 재배포\",\"body\":\"손쉬운 재배포\"}]},{\"variant\":\"cta\",\"title\":\"문의\",\"body\":\"자세한 내용이 궁금하시면 지금 바로 문의해 주세요.\"}]}"}`),
-				actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/member/sites/local-fleet-studio/draft","mode":"publish"}`),
-				actionFinishMessage("Local Fleet Studio 웹사이트 프로토타입을 배포했습니다: https://local-fleet-studio.device.example.test", "obs-002"),
-			},
-			ExpectedSelectedSkills: []string{"website"},
-			ExpectedToolCallCounts: map[string]int{"bash": 0},
-			ExpectedEventCounts: []VirtualEventCount{
-				{Name: toolRequestedEventName("site_serve"), BodyFragment: "site_serve", Count: 1},
-				{Name: toolResultEventName("site_serve"), BodyFragment: "device.example.test", Count: 1},
-			},
-			ExpectedModelContexts:  []string{"site_serve", "Local Fleet Studio"},
-			ForbiddenModelContexts: []string{"home/sites/site-1"},
-			ExpectedReplyFragments: []string{"https://local-fleet-studio.device.example.test"},
-			ForbiddenReplyFragments: []string{
-				"죄송",
-				"완료하지 못",
-				"기능은 제공",
-				"오류가 발생",
-				"다시 한번",
-				"어떤 웹사이트",
-				"무슨 웹사이트",
-			},
-		}},
-	}
-}
-
-func SiteEditRedeployAcceptanceScenario(artifactDirectoryPath string) VirtualSessionScenario {
-	return VirtualSessionScenario{
-		Name:                   "site_edit_redeploy_acceptance",
-		ArtifactDirectoryPath:  artifactDirectoryPath,
-		RouterRequiredEvidence: []string{"site_serve"},
-		RouterSiteEvidence:     "Local Fleet Studio website",
-		Skills:                 []agentcontract.SkillInstruction{sitePrototypeSkill()},
-		AllowedTools:           append(agentruntime.KernelToolNames(), sitePrototypeCapabilityToolNames()...),
-		CapabilityToolNames:    sitePrototypeCapabilityToolNames(),
-		InitialToolNames:       []string{"site_serve", "site_list", "write"},
-		Turns: []VirtualTurn{
-			{
-				Prompt: "Build and deploy a single-page Local Fleet Studio website. Use the heading 'Local Fleet Studio' and subtitle 'Local fleet create deploy test'. Include a short service overview and three feature bullets. Do not ask follow-up questions.",
-				ActionResponses: []string{
-					actionCallTool("write", `{"path":"/workspace/circles/member/sites/local-fleet-studio/draft/app/public/site-content.json","content":"{\"siteName\":\"Local Fleet Studio\",\"tagline\":\"Local fleet create deploy test\",\"blocks\":[{\"variant\":\"hero\",\"title\":\"Local Fleet Studio\",\"body\":\"Local fleet create deploy test\"},{\"variant\":\"prose\",\"title\":\"Overview\",\"body\":\"Local Fleet Studio validates local fleet website creation and deployment.\"},{\"variant\":\"features\",\"title\":\"Features\",\"items\":[{\"title\":\"Fast prototyping\",\"body\":\"Fast prototyping\"},{\"title\":\"Safe verification\",\"body\":\"Safe deploy verification\"},{\"title\":\"Easy redeploys\",\"body\":\"Easy redeploys\"}]}]}"}`),
-					actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/member/sites/local-fleet-studio/draft","mode":"publish"}`),
-					actionFinishMessage("Deployed the Local Fleet Studio site: https://local-fleet-studio.device.example.test", "obs-002"),
-				},
-				ExpectedSelectedSkills: []string{"website"},
-				ExpectedToolCallCounts: map[string]int{"bash": 0},
-				ExpectedEventCounts: []VirtualEventCount{
-					{Name: toolRequestedEventName("site_serve"), BodyFragment: "site_serve", Count: 1},
-					{Name: toolResultEventName("site_serve"), BodyFragment: "device.example.test", Count: 1},
-				},
-				ForbiddenModelContexts: []string{"home/sites/site-1"},
-				ExpectedReplyFragments: []string{"https://local-fleet-studio.device.example.test"},
-			},
-			{
-				Prompt: "Update the same Local Fleet Studio website heading to say 'Local Fleet Studio Updated' and add the subtitle 'Redeploy verification passed', then redeploy the same site. Do not create a new site.",
-				ActionResponses: []string{
-					actionCallTool("site_list", `{}`),
-					actionCallTool("write", `{"path":"/workspace/circles/member/sites/local-fleet-studio/draft/app/public/site-content.json","content":"{\"siteName\":\"Local Fleet Studio Updated\",\"tagline\":\"Redeploy verification passed\",\"blocks\":[{\"variant\":\"hero\",\"title\":\"Local Fleet Studio Updated\",\"body\":\"Redeploy verification passed\"}]}"}`),
-					actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio Updated","sourceWorkspacePath":"/workspace/circles/member/sites/local-fleet-studio/draft","mode":"publish","siteReference":"local-fleet-studio"}`),
-					actionFinishMessage("Updated and redeployed the site: https://local-fleet-studio.device.example.test", "obs-002", "obs-003"),
-				},
-				ExpectedToolCallCounts: map[string]int{"bash": 0},
-				ExpectedEventCounts: []VirtualEventCount{
-					{Name: toolRequestedEventName("site_list"), BodyFragment: "site_list", Count: 1},
-					{Name: toolRequestedEventName("write"), BodyFragment: "Local Fleet Studio Updated", Count: 1},
-					{Name: toolRequestedEventName("write"), BodyFragment: "blocks", Count: 1},
-					{Name: toolRequestedEventName("site_serve"), BodyFragment: "site_serve", Count: 1},
-					{Name: toolResultEventName("site_serve"), BodyFragment: "device.example.test", Count: 1},
-				},
-				ForbiddenModelContexts: []string{"home/sites/site-1"},
-				ExpectedReplyFragments: []string{"https://local-fleet-studio.device.example.test"},
-			},
-		},
-	}
-}
-
-func SiteCustomStructureAcceptanceScenario(artifactDirectoryPath string) VirtualSessionScenario {
-	return VirtualSessionScenario{
-		Name:                   "site_custom_structure_acceptance",
-		ArtifactDirectoryPath:  artifactDirectoryPath,
-		RouterRequiredEvidence: []string{"site_serve"},
-		RouterSiteEvidence:     "Local Fleet Studio",
-		Skills:                 []agentcontract.SkillInstruction{sitePrototypeSkill()},
-		AllowedTools:           append(agentruntime.KernelToolNames(), sitePrototypeCapabilityToolNames()...),
-		CapabilityToolNames:    sitePrototypeCapabilityToolNames(),
-		InitialToolNames:       []string{"site_serve", "write", "bash"},
-		InitialSite: &VirtualSiteFixture{
-			SiteID:      "site-1",
-			Slug:        "demo",
-			Title:       "Local Fleet Studio",
-			IsPublished: true,
-		},
-		Turns: []VirtualTurn{{
-			Prompt: "Local Fleet Studio 웹사이트 레이아웃을 두 칼럼 커스텀 구조로 바꿔서 다시 배포해줘.",
-			ActionResponses: []string{
-				actionCallTool("write", `{"path":"/workspace/circles/member/sites/demo/draft/app/src/App.tsx","content":"export default function App() {\n  return <main className=\"custom-layout\"><section className=\"column\">Local Fleet Studio</section><section className=\"column\">Two-column custom layout</section></main>;\n}\n"}`),
-				actionCallTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/member/sites/demo/draft","mode":"publish","siteReference":"demo"}`),
-				actionCallTool("bash", `{"command":"mkdir -p dist && printf '<!doctype html><html><body><main class=\"custom-layout\"><section>Local Fleet Studio</section><section>Two-column custom layout</section></main></body></html>' > dist/index.html","workingDirectoryPath":"/workspace/circles/member/sites/demo/draft/app","timeoutSecond":120}`),
-				actionCallTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/member/sites/demo/draft","mode":"publish","siteReference":"demo"}`),
-				actionFinishMessage("커스텀 레이아웃을 빌드하고 다시 배포했습니다: https://demo.device.example.test", "obs-005"),
-			},
-			ExpectedToolCallCounts: map[string]int{"bash": 1, "write": 1, "site_serve": 1},
-			ExpectedEventCounts: []VirtualEventCount{
-				{Name: toolRequestedEventName("write"), BodyFragment: "custom-layout", Count: 1},
-				{Name: toolRequestedEventName("bash"), BodyFragment: "dist/index.html", Count: 1},
-				{Name: toolResultEventName("site_serve"), BodyFragment: "app/dist", Count: 1},
-				{Name: toolResultEventName("site_serve"), BodyFragment: "device.example.test", Count: 1},
-			},
-			ExpectedModelContexts:  []string{"app/dist", "bun scripts/build.ts"},
-			ForbiddenModelContexts: []string{"home/sites/site-1"},
-			ExpectedReplyFragments: []string{"https://demo.device.example.test"},
-			ForbiddenReplyFragments: []string{
-				"죄송",
-				"완료하지 못",
-				"오류가 발생",
-			},
-		}},
-	}
-}
-
-func SiteLifecycleAcceptanceScenario(artifactDirectoryPath string) VirtualSessionScenario {
-	return VirtualSessionScenario{
-		Name:                      "site_lifecycle_acceptance",
-		SkillSearchQueries:        []string{"create and publish a website prototype"},
-		ArtifactDirectoryPath:     artifactDirectoryPath,
-		RouterSiteEvidence:        "Local Fleet Studio",
-		Skills:                    []agentcontract.SkillInstruction{sitePrototypeSkill()},
-		AllowedTools:              append(agentruntime.KernelToolNames(), sitePrototypeCapabilityToolNames()...),
-		CapabilityToolNames:       sitePrototypeCapabilityToolNames(),
-		CapabilityToolDescriptors: []agentruntime.CapabilityToolDescriptor{{Name: "site_unserve", RequiresApproval: true}},
-		InitialToolNames:          []string{"site_serve", "site_list", "site_unserve", "write", "bash"},
-		Turns: []VirtualTurn{
-			{
-				Prompt: "테스트용 'Local Fleet Studio' 단일 페이지 소개 웹사이트를 만들어서 배포해줘. 첫 화면 제목은 'Local Fleet Studio', 보조 문구는 '로컬 플릿 웹사이트 CRUD 테스트', 섹션은 서비스 소개, 장점 3개, 문의 CTA만 넣어줘. 추가 질문하지 말고 합리적인 기본값으로 진행해줘.",
-				RouterRequiredEvidence: []string{
-					"site_serve",
-				},
-				ActionResponses: []string{
-					actionCallTool("bash", `{"command":"mkdir -p dist && printf '<!doctype html><html><body><main><h1>Local Fleet Studio</h1><p>로컬 플릿 웹사이트 CRUD 테스트</p></main></body></html>' > dist/index.html","workingDirectoryPath":"/workspace/circles/member/sites/local-fleet-studio/draft/app","timeoutSecond":120}`),
-					actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/member/sites/local-fleet-studio/draft","mode":"publish"}`),
-					actionFinishMessage("Local Fleet Studio 웹사이트를 배포했습니다: https://local-fleet-studio.device.example.test", "obs-002"),
-				},
-				ExpectedSelectedSkills: []string{"website"},
-				ExpectedEventCounts: []VirtualEventCount{
-					{Name: toolRequestedEventName("site_serve"), BodyFragment: "site_serve", Count: 1},
-					{Name: toolResultEventName("site_serve"), BodyFragment: "device.example.test", Count: 1},
-				},
-				ExpectedReplyFragments: []string{"https://local-fleet-studio.device.example.test"},
-				ForbiddenReplyFragments: []string{
-					"어떤 웹사이트",
-					"무슨 웹사이트",
-				},
-			},
-			{
-				Prompt: "방금 만든 Local Fleet Studio 웹사이트의 첫 화면 제목을 'Local Fleet Studio Updated'로 바꾸고 보조 문구 '재배포 검증 완료'를 추가한 뒤 같은 사이트를 다시 배포해줘. 새 사이트는 만들지 마.",
-				RouterRequiredEvidence: []string{
-					"site_serve",
-				},
-				ActionResponses: []string{
-					actionCallTool("site_list", `{}`),
-					actionCallTool("write", `{"path":"/workspace/circles/member/sites/local-fleet-studio/draft/app/src/App.tsx","content":"export default function App() {\n  return <main><h1>Local Fleet Studio Updated</h1><p>재배포 검증 완료</p></main>;\n}\n"}`),
-					actionCallTool("bash", `{"command":"mkdir -p dist && printf '<!doctype html><html><body><main><h1>Local Fleet Studio Updated</h1><p>재배포 검증 완료</p></main></body></html>' > dist/index.html","workingDirectoryPath":"/workspace/circles/member/sites/local-fleet-studio/draft/app","timeoutSecond":120}`),
-					actionInvokeCapabilityTool("site_serve", `{"title":"Local Fleet Studio","sourceWorkspacePath":"/workspace/circles/member/sites/local-fleet-studio/draft","mode":"publish","siteReference":"local-fleet-studio"}`),
-					actionFinishMessage("Local Fleet Studio 웹사이트를 수정하고 다시 배포했습니다: https://local-fleet-studio.device.example.test", "obs-002", "obs-004"),
-				},
-				ExpectedEventCounts: []VirtualEventCount{
-					{Name: toolRequestedEventName("site_list"), BodyFragment: "site_list", Count: 1},
-					{Name: toolRequestedEventName("write"), BodyFragment: "Local Fleet Studio Updated", Count: 1},
-					{Name: toolRequestedEventName("bash"), BodyFragment: "dist/index.html", Count: 1},
-					{Name: toolRequestedEventName("site_serve"), BodyFragment: "site_serve", Count: 1},
-				},
-				ExpectedReplyFragments: []string{"https://local-fleet-studio.device.example.test"},
-			},
-			{
-				Prompt: "방금 배포한 Local Fleet Studio 테스트 웹사이트를 삭제해줘.",
-				RouterRequiredEvidence: []string{
-					"site_unserve",
-				},
-				ActionResponses: []string{
-					actionCallTool("site_list", `{}`),
-					actionCallToolWithMessage("site_unserve", "Local Fleet Studio 테스트 웹사이트를 삭제합니다.", `{"siteReference":"local-fleet-studio"}`),
-				},
-				ExpectedEventCounts: []VirtualEventCount{
-					{Name: toolRequestedEventName("site_list"), BodyFragment: "site_list", Count: 1},
-					{Name: toolRequestedEventName("site_unserve"), BodyFragment: "site_unserve", Count: 1},
-					{Name: toolResultEventName("site_unserve"), BodyFragment: "interaction_required", Count: 1},
-					{Name: agentcontract.TaskEventApprovalPendingCall, BodyFragment: `"site_unserve"`, Count: 1},
-					{Name: agentcontract.TaskEventAgentFailureDebtCreated, BodyFragment: "", Count: 0},
-				},
-				ExpectedEvents:         []string{agentcontract.TaskEventConfirmationRequested},
-				ExpectedReplyFragments: []string{"삭제"},
-				ExpectedTaskStatus:     task.TaskStatusWaitingApproval,
-			},
-			{
-				Prompt:         "확인",
-				RouterApproval: "approve",
-				ActionResponses: []string{
-					actionFinishMessage("Local Fleet Studio 테스트 웹사이트를 삭제했습니다.", "obs-004"),
-				},
-				ExpectedEventCounts: []VirtualEventCount{
-					{Name: toolRequestedEventName("site_unserve"), BodyFragment: "site_unserve", Count: 2},
-					{Name: toolResultEventName("site_unserve"), BodyFragment: "unserved", Count: 1},
-					{Name: agentcontract.TaskEventApprovalExecuted, BodyFragment: `"site_unserve"`, Count: 1},
-				},
-				ExpectedEvents:         []string{agentcontract.TaskEventConfirmationReplyClassified},
-				ExpectedReplyFragments: []string{"삭제했습니다"},
-			},
-		},
-	}
-}
-
 func AskChoiceReplyAcceptanceScenario(artifactDirectoryPath string) VirtualSessionScenario {
 	return VirtualSessionScenario{
 		Name:                  "ask_choice_reply_acceptance",
@@ -1688,29 +1463,4 @@ func PlatformMessageEditAcceptanceScenario(artifactDirectoryPath string) Virtual
 
 func officeSkill() agentcontract.SkillInstruction {
 	return workspaceSkillInstruction("office")
-}
-
-func sitePrototypeSkill() agentcontract.SkillInstruction {
-	return workspaceSkillInstruction("website")
-}
-
-func sitePrototypeToolNames() []string {
-	return []string{
-		"bash",
-		"read",
-		"write",
-		"edit",
-		"site_serve",
-		"site_list",
-		"site_unserve",
-		"user_confirm",
-	}
-}
-
-func sitePrototypeCapabilityToolNames() []string {
-	return []string{
-		"site_serve",
-		"site_list",
-		"site_unserve",
-	}
 }

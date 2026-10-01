@@ -1,15 +1,10 @@
 package agentruntime
 
 import (
-	"archive/tar"
-	"bytes"
-	"compress/gzip"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -312,31 +307,6 @@ func findToolDefinition(toolDefinitions []toolcontract.ToolDefinition, toolName 
 		}
 	}
 	return toolcontract.ToolDefinition{}, false
-}
-
-func siteSourceBundlePaths(t *testing.T, bundleBase64 string) []string {
-	t.Helper()
-	document, errorValue := base64.StdEncoding.DecodeString(bundleBase64)
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	gzipReader, errorValue := gzip.NewReader(bytes.NewReader(document))
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	defer gzipReader.Close()
-	tarReader := tar.NewReader(gzipReader)
-	paths := []string{}
-	for {
-		header, errorValue := tarReader.Next()
-		if errorValue == io.EOF {
-			return paths
-		}
-		if errorValue != nil {
-			t.Fatal(errorValue)
-		}
-		paths = append(paths, header.Name)
-	}
 }
 
 func userSkillDocument(skillName string) string {

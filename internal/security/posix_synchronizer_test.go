@@ -112,8 +112,8 @@ func TestPOSIXSynchronizerPassesComputedStateDocumentToHelper(t *testing.T) {
 	if errorValue := json.Unmarshal(observedDocument, &state); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if !containsPOSIXDirectory(state, "/workspace/circles/member/sites", "blueclaw", "bc_circle_member", "2770") {
-		t.Fatalf("expected member sites directory in state, got %+v", state.Directories)
+	if !containsPOSIXDirectory(state, "/workspace/circles/member", "blueclaw", "bc_circle_member", "2770") {
+		t.Fatalf("expected member circle directory in state, got %+v", state.Directories)
 	}
 }
 
@@ -188,8 +188,8 @@ esac
 	if hasPOSIXUserGroup(state, "bc_person_person-1", "bc_circle_admin") {
 		t.Fatalf("expected requester POSIX identity to omit admin group, got %+v", state.Users)
 	}
-	if !containsPOSIXDirectory(state, "/workspace/circles/member/sites", "blueclaw", "bc_circle_member", "2770") {
-		t.Fatalf("expected member sites directory, got %+v", state.Directories)
+	if !containsPOSIXDirectory(state, "/workspace/circles/member", "blueclaw", "bc_circle_member", "2770") {
+		t.Fatalf("expected member circle directory, got %+v", state.Directories)
 	}
 	if !containsPOSIXDirectory(state, "/workspace/circles/finance", "blueclaw", "bc_circle_finance", "2770") {
 		t.Fatalf("expected requester circle directory, got %+v", state.Directories)
