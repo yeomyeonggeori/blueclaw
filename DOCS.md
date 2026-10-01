@@ -289,7 +289,7 @@ A tool is a descriptor bound to a handler, and every behavior the runtime applie
 
 A `toolcontract.ToolDescriptor` declares its namespace and policy resource, a `SideEffectClass`, whether it needs approval and what a grant covers, whether it needs the requester present or their own device, its visibility, its idempotency, whether its result can serve as completion evidence, and a result contract. Nothing dispatches on a tool's name.
 
-The side effect classes are `none`, `read`, `computation`, `state_change`, `workspace_write`, `external_write`, `approval`, `connect`, `destructive`, `external_send`, `external_publish`, `local_file`, `platform_reply` and `site_publish`.
+The side effect classes are `none`, `read`, `computation`, `state_change`, `workspace_write`, `external_write`, `approval`, `connect`, `destructive`, `external_send`, `external_publish`, `local_file` and `platform_reply`.
 
 ### The catalog
 
@@ -437,7 +437,7 @@ A command the requester may not run fails at the kernel, as it would for that pe
 
 Two things in this path look like string filters and decide nothing: shell argument quoting is serialization, and matching stderr classifies a command that has already failed into a diagnostic code.
 
-Effects that leave the machine, such as sending a message or publishing a site, are judged by a person at the [approval](#approval) gate.
+Effects that leave the machine, such as sending a message, are judged by a person at the [approval](#approval) gate.
 
 ## Capability authorization
 
@@ -474,7 +474,7 @@ The runtime configuration is the JSON file passed as `--runtime`, and it holds e
 | `languageModel` | model tiers, embedding model, tier bounds, context window; see [Language models](#language-models) |
 | `database` | `driver`, `connectionString`, `migrationDirectoryPath`, `maxOpenConnections` |
 | `memory` | `embeddingModel`, `embeddingExecutionMode`, `extractionDisabled`, `adminAssertionKeyPath` |
-| `agent` | `intake`, `defaultTaskLevel`, `failureRecovery`, `harness`, `optionalFileReadPathSuffixes` |
+| `agent` | `intake`, `defaultTaskLevel`, `failureRecovery`, `harness` |
 | `agentProfiles` | named profiles with `allowedToolNames` |
 | `capabilities` | the capability service; see [Capabilities](#capabilities) |
 | `connectors` | `chatd` |
@@ -483,7 +483,7 @@ The runtime configuration is the JSON file passed as `--runtime`, and it holds e
 | `logging` | `directoryPath`, `retentionDays` |
 | `guest` | the virtual machine guest |
 
-`agent.defaultTaskLevel` is the effort a task starts at, `xlow` through `max`. `agent.harness` takes `name`, `agentCommandPath`, `agentArguments` and `toolCatalogURL`. `optionalFileReadPathSuffixes` names files whose absence is a normal state for a deployment.
+`agent.defaultTaskLevel` is the effort a task starts at, `xlow` through `max`. `agent.harness` takes `name`, `agentCommandPath`, `agentArguments` and `toolCatalogURL`.
 
 `config/runtime.standalone.example.json` is a single-process shape and `config/runtime.example.json` a guest-and-capability-service shape.
 

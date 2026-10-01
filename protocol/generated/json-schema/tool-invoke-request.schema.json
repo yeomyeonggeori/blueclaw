@@ -160,15 +160,14 @@
     "transport": {
       "additionalProperties": false,
       "properties": {
-        "siteSourceBundle": {
+        "workspaceFile": {
           "additionalProperties": false,
           "properties": {
             "contentBase64": {
               "minLength": 1,
               "type": "string"
             },
-            "format": {
-              "const": "tar.gz",
+            "filename": {
               "type": "string"
             },
             "sha256": {
@@ -182,11 +181,37 @@
           },
           "required": [
             "workspacePath",
-            "contentBase64",
-            "format",
-            "sha256"
+            "contentBase64"
           ],
           "type": "object"
+        },
+        "workspaceFiles": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "contentBase64": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "filename": {
+                "type": "string"
+              },
+              "sha256": {
+                "pattern": "^[a-f0-9]{64}$",
+                "type": "string"
+              },
+              "workspacePath": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "workspacePath",
+              "contentBase64"
+            ],
+            "type": "object"
+          },
+          "type": "array"
         }
       },
       "type": "object"

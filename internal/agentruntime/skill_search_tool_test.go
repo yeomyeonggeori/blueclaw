@@ -123,14 +123,14 @@ func TestSkillSearchSearchModeSlicesBoundedMatchesByRequestedLimit(t *testing.T)
 func TestSkillSearchNameModeReturnsCanonicalPromptMetadata(t *testing.T) {
 	longPrompt := strings.Repeat("a", maximumSkillSearchPromptLength+1)
 	toolSet := canonicalSkillSearchToolSet(&recordingSkillSearchRetriever{}, []agentcontract.SkillInstruction{{
-		Name:           "site-prototype",
-		Description:    "Create sites.",
+		Name:           "office",
+		Description:    "Create office documents.",
 		Prompt:         longPrompt,
 		ToolReferences: []string{"read"},
-		Source:         agentcontract.InstructionSource{Path: "/host/private/workspace/skills/site-prototype/SKILL.md"},
+		Source:         agentcontract.InstructionSource{Path: "/host/private/workspace/skills/office/SKILL.md"},
 	}})
 
-	result := invokeSkillSearch(t, toolSet, json.RawMessage(`{"name":"SITE-PROTOTYPE"}`))
+	result := invokeSkillSearch(t, toolSet, json.RawMessage(`{"name":"OFFICE"}`))
 
 	if result.Mode != skillSearchModeName || len(result.Skills) != 1 || result.TotalCount != 1 || result.HasMore {
 		t.Fatalf("expected one exact case-insensitive name result, got %+v", result)
@@ -142,7 +142,7 @@ func TestSkillSearchNameModeReturnsCanonicalPromptMetadata(t *testing.T) {
 	if strings.Contains(skill.Prompt, "skill_search truncated") {
 		t.Fatalf("expected prompt without prose suffix, got %q", skill.Prompt)
 	}
-	if skill.SourcePath != "/workspace/skills/site-prototype/SKILL.md" {
+	if skill.SourcePath != "/workspace/skills/office/SKILL.md" {
 		t.Fatalf("expected stable virtual source path, got %q", skill.SourcePath)
 	}
 }

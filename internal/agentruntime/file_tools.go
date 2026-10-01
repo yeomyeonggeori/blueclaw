@@ -399,9 +399,6 @@ func (toolCatalogBuilder *ToolCatalogBuilder) readFileTool(toolContext context.C
 		if result, fallbackError, isFound := toolCatalogBuilder.fileReadFallbackFromAttachmentMaterial(toolContext, path, input, handlerContext); isFound {
 			return result, fallbackError
 		}
-		if outcome.failureCode() == security.ActorErrorCodeNotFound && toolCatalogBuilder.isOptionalControlFilePath(path) {
-			return toolCatalogBuilder.optionalControlFileMissingResult(path, input, maxOutputBytes), nil
-		}
 		return outcome.toolFailure("read_file", stage, path), nil
 	}
 	originalSizeBytes, content, isParsed := parseFileReadShellOutput(outcome.CommandResult.Stdout)
@@ -426,62 +423,6 @@ func (toolCatalogBuilder *ToolCatalogBuilder) readFileTool(toolContext context.C
 		"sizeBytes":         originalSizeBytes,
 		"isTruncated":       isFileTruncated || readResult.IsTruncated,
 	}, readResult)), nil
-}
-
-func (toolCatalogBuilder *ToolCatalogBuilder) optionalControlFileMissingResult(path string, input fileReadToolInput, maxOutputBytes int) toolcontract.ToolResult {
-	readResult := fileReadResult("", input, maxOutputBytes)
-	readResult.ReadHint = "This control file is optional and is not present yet. Create or update it before source edits if it is relevant to the current workflow."
-	result := fileReadResultMap(map[string]any{
-		"path":              path,
-		"exists":            false,
-		"optional":          true,
-		"totalLinesKnown":   true,
-		"originalSizeBytes": 0,
-		"sizeBytes":         0,
-		"isTruncated":       false,
-	}, readResult)
-	if recommendedPath := toolCatalogBuilder.recommendedSiteControlWritePath(path); recommendedPath != "" {
-		result["recommendedWritePath"] = recommendedPath
-	}
-	return fileToolSuccess(result)
-}
-
-func (toolCatalogBuilder *ToolCatalogBuilder) isOptionalControlFilePath(path string) bool {
-	cleanPath := strings.Trim(filepath.ToSlash(strings.TrimSpace(path)), "/")
-	for _, suffix := range toolCatalogBuilder.optionalFileReadPathSuffixes {
-		if strings.HasSuffix(cleanPath, suffix) {
-			return true
-		}
-	}
-	return false
-}
-
-func (toolCatalogBuilder *ToolCatalogBuilder) recommendedSiteControlWritePath(path string) string {
-	cleanPath := strings.Trim(filepath.ToSlash(strings.TrimSpace(path)), "/")
-	for _, prefix := range []string{"~/sites/", "home/sites/", "workspace/circles/member/sites/"} {
-		if recommendedPath := toolCatalogBuilder.recommendedSiteControlWritePathForPrefix(cleanPath, prefix); recommendedPath != "" {
-			return recommendedPath
-		}
-	}
-	return ""
-}
-
-func (toolCatalogBuilder *ToolCatalogBuilder) recommendedSiteControlWritePathForPrefix(path string, prefix string) string {
-	if !strings.HasPrefix(path, prefix) {
-		return ""
-	}
-	remainder := strings.TrimPrefix(path, prefix)
-	siteID, relativePath, hasRelativePath := strings.Cut(remainder, "/")
-	if strings.TrimSpace(siteID) == "" || !hasRelativePath {
-		return ""
-	}
-	if strings.HasPrefix(relativePath, "draft/") {
-		return ""
-	}
-	if !toolCatalogBuilder.isOptionalControlFilePath(relativePath) {
-		return ""
-	}
-	return filepath.ToSlash(filepath.Join("/workspace", "circles", "member", "sites", siteID, "draft", relativePath))
 }
 
 func fileReadResultMap(base map[string]any, readResult fileReadOutput) map[string]any {

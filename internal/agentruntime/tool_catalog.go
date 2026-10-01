@@ -42,7 +42,6 @@ type ToolCatalogBuilder struct {
 	taskRunService               *task.TaskRunService
 	taskArtifactService          *task.TaskArtifactService
 	workspaceRootPath            string
-	optionalFileReadPathSuffixes []string
 	skillChangeHandler           func(context.Context)
 	skillRetriever               agentcontract.SkillRetriever
 	toolSelector                 agentcontract.ToolSelector
@@ -189,10 +188,6 @@ func (toolCatalogBuilder *ToolCatalogBuilder) UseWorkspaceRootPath(workspaceRoot
 	if trimmedWorkspaceRootPath != "" {
 		toolCatalogBuilder.workspaceRootPath = trimmedWorkspaceRootPath
 	}
-}
-
-func (toolCatalogBuilder *ToolCatalogBuilder) UseOptionalFileReadPathSuffixes(optionalFileReadPathSuffixes []string) {
-	toolCatalogBuilder.optionalFileReadPathSuffixes = trimNonEmptyStrings(optionalFileReadPathSuffixes)
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) UseSkillChangeHandler(skillChangeHandler func(context.Context)) {

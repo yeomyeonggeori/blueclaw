@@ -1,20 +1,14 @@
 package e2e
 
 import (
-	"archive/tar"
 	"archive/zip"
-	"compress/gzip"
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-	"github.com/yeomyeonggeori/bluememo"
-	"github.com/yeomyeonggeori/bluememo/bluememotest"
 	"io"
 	"log/slog"
 	"math"
@@ -23,12 +17,15 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"regexp"
 	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluememo"
+	"github.com/yeomyeonggeori/bluememo/bluememotest"
 
 	"github.com/yeomyeonggeori/blueclaw/agenttest"
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
@@ -74,7 +71,6 @@ type VirtualSessionScenario struct {
 	CapabilityToolNames       []string
 	CapabilityToolDescriptors []agentruntime.CapabilityToolDescriptor
 	InitialToolNames          []string
-	InitialSite               *VirtualSiteFixture
 	InitialMemoryFacts        []bluememo.Fact
 	RouterRequiredEvidence    []string
 	RouterTaskShape           agentcontract.TaskShape
@@ -82,22 +78,12 @@ type VirtualSessionScenario struct {
 	XLowTierVisionFallback    bool
 	AddressingResponse        string
 	SkillSearchQueries        []string
-	RouterSiteEvidence        string
 	ScriptedExecutionPlan     *agentcontract.ExecutionPlan
 	TurnOptions               agentcontract.TurnOptions
 	ProgressWriter            io.Writer
 	WritableWorkspacePaths    []string
 	Turns                     []VirtualTurn
 }
-
-type VirtualSiteFixture struct {
-	SiteID      string
-	Slug        string
-	Title       string
-	IsPublished bool
-}
-
-var virtualSiteSlugPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
 var virtualCanonicalMessageToolNames = []string{
 	"message_context",
@@ -132,9 +118,6 @@ var virtualGeneratedResultContractToolNames = []string{
 	"event_update",
 	"event_delete",
 	"web_search",
-	"site_serve",
-	"site_list",
-	"site_unserve",
 	"schedule_list",
 	"schedule_create",
 	"schedule_update",
@@ -224,7 +207,6 @@ type VirtualTurn struct {
 	ChangeCheckAnswers           []map[string]float64
 	RouterRequiredEvidence       []string
 	RouterTaskShape              agentcontract.TaskShape
-	RouterSiteEvidence           string
 	RouterApproval               string
 	ExpectedSelectedSkills       []string
 	ExpectedToolCalls            []string
@@ -770,10 +752,6 @@ var builtinScenarioFactories = map[string]func(string) VirtualSessionScenario{
 	"persona_profile_update_acceptance":         PersonaProfileUpdateAcceptanceScenario,
 	"failure_explanation_acceptance":            FailureExplanationAcceptanceScenario,
 	"one_time_schedule_acceptance":              OneTimeScheduleAcceptanceScenario,
-	"site_artifact_acceptance":                  SitePrototypeAcceptanceScenario,
-	"site_edit_redeploy_acceptance":             SiteEditRedeployAcceptanceScenario,
-	"site_custom_structure_acceptance":          SiteCustomStructureAcceptanceScenario,
-	"site_lifecycle_acceptance":                 SiteLifecycleAcceptanceScenario,
 	"ask_choice_reply_acceptance":               AskChoiceReplyAcceptanceScenario,
 	"dm_send_confirm_acceptance":                DirectMessageSendConfirmAcceptanceScenario,
 	"channel_post_acceptance":                   ChannelPostAcceptanceScenario,
@@ -923,7 +901,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	if len(capabilityToolNames) > 0 {
 		var capabilityCleanup func()
 		var errorValue error
-		capabilityClient, capabilityCleanup, errorValue = startVirtualCapabilityServer(capabilityToolNames, workspacePath, scenario.InitialSite)
+		capabilityClient, capabilityCleanup, errorValue = startVirtualCapabilityServer(capabilityToolNames, workspacePath)
 		if errorValue != nil {
 			return nil, errorValue
 		}
@@ -1099,7 +1077,6 @@ func virtualCapabilityToolDescriptor(toolName string) agentruntime.CapabilityToo
 		ResultContract:    virtualCapabilityToolResultContract(toolName),
 		PolicyResource:    "tool:" + toolName,
 		SideEffectClass:   sideEffectClass,
-		RequiresApproval:  toolName == "site_unserve",
 		Availability:      agentruntime.CapabilityAvailability{State: "ok"},
 		Idempotency:       agentruntime.CapabilityIdempotency{Scope: "operation"},
 	}
@@ -1120,13 +1097,6 @@ func virtualGeneratedToolDescriptor(toolName string) (agentruntime.CapabilityToo
 }
 
 func virtualCapabilityCompletionEvidence(toolName string, sideEffectClass string) *agentruntime.CapabilityCompletionEvidence {
-	siteActionByToolName := map[string]string{
-		"site_serve":   "serve_site",
-		"site_unserve": "delete_site",
-	}
-	if action := siteActionByToolName[toolName]; action != "" {
-		return &agentruntime.CapabilityCompletionEvidence{Mode: "success", Action: action, TargetKind: "site"}
-	}
 	if sideEffectClass == toolcontract.ToolSideEffectRead {
 		return nil
 	}
@@ -1155,14 +1125,12 @@ func overlayNonZeroFields(target reflect.Value, overlay reflect.Value) {
 
 func virtualCapabilitySideEffectClass(toolName string) string {
 	switch toolName {
-	case "web_search", "image_read", "document_read", "task_list", "event_list", "site_list":
+	case "web_search", "image_read", "document_read", "task_list", "event_list":
 		return toolcontract.ToolSideEffectRead
-	case "task_delete", "event_delete", "site_unserve", "message_delete":
+	case "task_delete", "event_delete", "message_delete":
 		return toolcontract.ToolSideEffectDestructive
 	case "message_send":
 		return toolcontract.ToolSideEffectExternalSend
-	case "site_serve":
-		return toolcontract.ToolSideEffectSitePublish
 	default:
 		return toolcontract.ToolSideEffectWorkspaceWrite
 	}
@@ -1389,9 +1357,8 @@ if __name__ == "__main__":
 `
 
 type virtualCapabilityRecord struct {
-	ID                  string
-	Values              map[string]any
-	SourceWorkspacePath string
+	ID     string
+	Values map[string]any
 }
 
 type virtualCapabilityService struct {
@@ -1403,11 +1370,9 @@ type virtualCapabilityService struct {
 	schedules        []virtualCapabilityRecord
 	calendarRevision int
 	scheduleRevision int
-	site             *virtualCapabilityRecord
-	sitePublished    bool
 }
 
-func startVirtualCapabilityServer(toolNames []string, workspacePath string, initialSite *VirtualSiteFixture) (capability.Client, func(), error) {
+func startVirtualCapabilityServer(toolNames []string, workspacePath string) (capability.Client, func(), error) {
 	toolNameByName := map[string]bool{}
 	for _, toolName := range toolNames {
 		trimmedToolName := strings.TrimSpace(toolName)
@@ -1416,35 +1381,11 @@ func startVirtualCapabilityServer(toolNames []string, workspacePath string, init
 		}
 	}
 	service := &virtualCapabilityService{toolNameByName: toolNameByName, workspacePath: workspacePath}
-	if errorValue := service.loadInitialSite(initialSite); errorValue != nil {
-		return capability.Client{}, nil, errorValue
-	}
 	server := httptest.NewServer(http.HandlerFunc(service.handleRequest))
 	return capability.Client{
 		Endpoint:   server.URL,
 		HTTPClient: server.Client(),
 	}, server.Close, nil
-}
-
-func (service *virtualCapabilityService) loadInitialSite(initialSite *VirtualSiteFixture) error {
-	if initialSite == nil {
-		return nil
-	}
-	if initialSite.SiteID == "" || strings.TrimSpace(initialSite.SiteID) != initialSite.SiteID {
-		return errors.New("virtual initial site requires an exact site ID")
-	}
-	if initialSite.Title == "" || strings.TrimSpace(initialSite.Title) != initialSite.Title {
-		return errors.New("virtual initial site requires an exact title")
-	}
-	if !virtualSiteSlugPattern.MatchString(initialSite.Slug) {
-		return errors.New("virtual initial site requires a DNS-safe slug")
-	}
-	service.site = &virtualCapabilityRecord{
-		ID:     initialSite.SiteID,
-		Values: map[string]any{"slug": initialSite.Slug, "title": initialSite.Title},
-	}
-	service.sitePublished = initialSite.IsPublished
-	return nil
 }
 
 func (service *virtualCapabilityService) handleRequest(responseWriter http.ResponseWriter, request *http.Request) {
@@ -1530,80 +1471,6 @@ func (service *virtualCapabilityService) response(toolName string, requestBody [
 		return service.calendarResponse(toolName, requestBody)
 	case "schedule_create", "schedule_list", "schedule_update", "schedule_cancel":
 		return service.scheduleResponse(toolName, requestBody)
-	case "site_serve":
-		input := virtualCapabilityInput(requestBody)
-		mode := stringValue(input["mode"])
-		if mode != "preview" && mode != "publish" {
-			return virtualCapabilityInvalidInput(toolName, `mode must be "preview" or "publish"`)
-		}
-		bundle, errorValue := virtualSiteServeBundle(requestBody)
-		if errorValue != nil {
-			return virtualCapabilityInvalidInput(toolName, errorValue.Error())
-		}
-		if staleBuildMessage := virtualSiteStaleBuildMessage(bundle); staleBuildMessage != "" {
-			return virtualCapabilityInvalidInput(toolName, staleBuildMessage)
-		}
-		if reference := stringValue(input["siteReference"]); reference != "" {
-			if !service.hasVirtualSiteReference(requestBody) {
-				return virtualCapabilityNotFound(toolName, "site")
-			}
-		} else {
-			title := strings.TrimSpace(stringValue(input["title"]))
-			if title == "" {
-				return virtualCapabilityInvalidInput(toolName, "title is required for a first serve")
-			}
-			if service.site != nil {
-				return virtualCapabilityInvalidInput(toolName, "virtual site already exists; pass siteReference to update it")
-			}
-			service.site = &virtualCapabilityRecord{ID: "site-1", Values: map[string]any{"slug": virtualSiteSlugFromTitle(title), "title": title}}
-		}
-		slug := stringValue(service.site.Values["slug"])
-		result := map[string]any{
-			"siteID":       service.site.ID,
-			"slug":         slug,
-			"mode":         mode,
-			"sourceSHA256": bundle.SHA256,
-		}
-		if mode == "publish" {
-			service.sitePublished = true
-			result["publishedURL"] = "https://" + slug + ".device.example.test"
-		} else {
-			result["previewURL"] = "https://" + slug + ".device.example.test/__preview/preview-1"
-		}
-		return virtualSiteServeSuccess(toolName, mode, result)
-	case "site_list":
-		input := virtualCapabilityInput(requestBody)
-		if reference := stringValue(input["siteReference"]); reference != "" && !service.hasVirtualSiteReference(requestBody) {
-			return virtualCapabilityNotFound(toolName, "site")
-		}
-		sites := []map[string]any{}
-		if service.site != nil {
-			entry := map[string]any{
-				"siteID": service.site.ID,
-				"slug":   stringValue(service.site.Values["slug"]),
-				"title":  firstVirtualString(stringValue(service.site.Values["title"]), stringValue(service.site.Values["slug"])),
-				"status": "draft",
-			}
-			if service.sitePublished {
-				entry["status"] = "published"
-				entry["publishedURL"] = "https://" + stringValue(service.site.Values["slug"]) + ".device.example.test"
-			}
-			sites = append(sites, entry)
-		}
-		return virtualCapabilitySuccess(toolName, "listed virtual sites", map[string]any{"sites": sites})
-	case "site_unserve":
-		if virtualCapabilityRequestNeedsApproval(requestBody) {
-			return virtualCapabilityApprovalRequired(toolName)
-		}
-		if !service.hasVirtualSiteReference(requestBody) {
-			return virtualCapabilityNotFound(toolName, "site")
-		}
-		unservedSiteID := service.site.ID
-		unservedSlug := stringValue(service.site.Values["slug"])
-		service.site = nil
-		service.sitePublished = false
-		result := map[string]any{"siteID": unservedSiteID, "slug": unservedSlug, "unserved": true}
-		return virtualCapabilityWebsiteSuccess(toolName, "deleted", unservedSiteID, result)
 	case "image_read":
 		path := stringValue(virtualCapabilityInput(requestBody)["path"])
 		result := map[string]any{"attachments": []map[string]any{{
@@ -1754,158 +1621,14 @@ func virtualMessageSearchResult(requestBody []byte) map[string]any {
 
 const virtualPlatformMessageText = "공지: 오늘 오후 5시에 전체 공지 회의가 있습니다. 회의실은 3층입니다."
 
-func (service *virtualCapabilityService) hasVirtualSiteReference(requestBody []byte) bool {
-	if service.site == nil {
-		return false
-	}
-	siteReference := stringValue(virtualCapabilityInput(requestBody)["siteReference"])
-	return siteReference == service.site.ID || siteReference == stringValue(service.site.Values["slug"])
-}
-
-func virtualSiteSlugFromTitle(title string) string {
-	var builder strings.Builder
-	previousWasHyphen := true
-	for _, character := range strings.ToLower(strings.TrimSpace(title)) {
-		isAllowed := character >= 'a' && character <= 'z' || character >= '0' && character <= '9'
-		if isAllowed {
-			builder.WriteRune(character)
-			previousWasHyphen = false
-			continue
-		}
-		if !previousWasHyphen {
-			builder.WriteByte('-')
-			previousWasHyphen = true
-		}
-	}
-	slug := strings.Trim(builder.String(), "-")
-	if slug == "" {
-		return "site"
-	}
-	return slug
-}
-
-type virtualSiteSourceBundle struct {
-	WorkspacePath string `json:"workspacePath"`
-	ContentBase64 string `json:"contentBase64"`
-	Format        string `json:"format"`
-	SHA256        string `json:"sha256"`
-}
-
-func virtualSiteStaleBuildMessage(bundle virtualSiteSourceBundle) string {
-	entries, errorValue := virtualSiteBundleEntryTimes(bundle)
-	if errorValue != nil {
-		return ""
-	}
-	newestSourcePath := ""
-	newestSourceTime := time.Time{}
-	oldestBuildTime := time.Time{}
-	for path, modifiedAt := range entries {
-		switch {
-		case virtualSiteBundlePathIsBuildOutput(path):
-			if oldestBuildTime.IsZero() || modifiedAt.Before(oldestBuildTime) {
-				oldestBuildTime = modifiedAt
-			}
-		case virtualSiteBundlePathNeedsBuild(path):
-			if newestSourceTime.IsZero() || modifiedAt.After(newestSourceTime) {
-				newestSourceTime, newestSourcePath = modifiedAt, path
-			}
-		}
-	}
-	if newestSourcePath == "" {
-		return ""
-	}
-	if oldestBuildTime.IsZero() {
-		return "site workspace app/dist is missing: " + newestSourcePath + " is a structural source file, so a build (bun scripts/build.ts in the app workspace) is needed before serving"
-	}
-	if newestSourceTime.After(oldestBuildTime) {
-		return "site workspace app/dist is stale: " + newestSourcePath + " changed at " + newestSourceTime.UTC().Format(time.RFC3339) + " after the build at " + oldestBuildTime.UTC().Format(time.RFC3339) + "; rebuild with bun scripts/build.ts"
-	}
-	return ""
-}
-
-func virtualSiteBundleEntryTimes(bundle virtualSiteSourceBundle) (map[string]time.Time, error) {
-	content, errorValue := base64.StdEncoding.DecodeString(bundle.ContentBase64)
-	if errorValue != nil {
-		return nil, errorValue
-	}
-	gzipReader, errorValue := gzip.NewReader(strings.NewReader(string(content)))
-	if errorValue != nil {
-		return nil, errorValue
-	}
-	defer gzipReader.Close()
-	entries := map[string]time.Time{}
-	tarReader := tar.NewReader(gzipReader)
-	for {
-		header, readError := tarReader.Next()
-		if readError == io.EOF {
-			break
-		}
-		if readError != nil {
-			return nil, readError
-		}
-		if header.Typeflag != tar.TypeReg {
-			continue
-		}
-		entries[filepath.ToSlash(header.Name)] = header.ModTime
-	}
-	return entries, nil
-}
-
-func virtualSiteBundlePathNeedsBuild(bundlePath string) bool {
-	relativePath, isUnderApp := virtualSiteApplicationRelativePath(bundlePath)
-	if !isUnderApp {
-		return false
-	}
-	return !strings.HasPrefix(relativePath, "public/") && !strings.HasPrefix(relativePath, "dist/")
-}
-
-func virtualSiteBundlePathIsBuildOutput(bundlePath string) bool {
-	relativePath, isUnderApp := virtualSiteApplicationRelativePath(bundlePath)
-	return isUnderApp && strings.HasPrefix(relativePath, "dist/")
-}
-
-func virtualSiteApplicationRelativePath(bundlePath string) (string, bool) {
-	segments := strings.Split(strings.TrimPrefix(filepath.ToSlash(bundlePath), "./"), "/")
-	for index, segment := range segments {
-		if segment == "app" && index+1 < len(segments) {
-			return strings.Join(segments[index+1:], "/"), true
-		}
-	}
-	return "", false
-}
-
-func virtualSiteServeBundle(requestBody []byte) (virtualSiteSourceBundle, error) {
-	var requestDocument struct {
-		Transport struct {
-			SiteSourceBundle *virtualSiteSourceBundle `json:"siteSourceBundle"`
-		} `json:"transport"`
-	}
-	if json.Unmarshal(requestBody, &requestDocument) != nil || requestDocument.Transport.SiteSourceBundle == nil {
-		return virtualSiteSourceBundle{}, errors.New("site source bundle transport is required")
-	}
-	bundle := *requestDocument.Transport.SiteSourceBundle
-	if bundle.Format != "tar.gz" {
-		return virtualSiteSourceBundle{}, errors.New("site source bundle format must be tar.gz")
-	}
-	content, errorValue := base64.StdEncoding.DecodeString(bundle.ContentBase64)
-	if errorValue != nil || len(content) == 0 {
-		return virtualSiteSourceBundle{}, errors.New("site source bundle content is invalid")
-	}
-	digest := sha256.Sum256(content)
-	if hex.EncodeToString(digest[:]) != bundle.SHA256 {
-		return virtualSiteSourceBundle{}, errors.New("site source bundle SHA-256 does not match its content")
-	}
-	return bundle, nil
-}
-
 func virtualWorkspacePathToLocalPath(workspacePath string, virtualPath string) (string, error) {
 	trimmedVirtualPath := strings.TrimSpace(virtualPath)
 	if !strings.HasPrefix(trimmedVirtualPath, "/workspace/") {
-		return "", errors.New("site source path must be rooted at /workspace")
+		return "", errors.New("workspace path must be rooted at /workspace")
 	}
 	relativePath := filepath.Clean(strings.TrimPrefix(trimmedVirtualPath, "/workspace/"))
 	if relativePath == "." || relativePath == ".." || strings.HasPrefix(relativePath, ".."+string(os.PathSeparator)) {
-		return "", errors.New("site source path escapes the workspace")
+		return "", errors.New("workspace path escapes the workspace")
 	}
 	return filepath.Join(workspacePath, relativePath), nil
 }
@@ -2623,38 +2346,6 @@ func virtualCapabilityMessageSuccess(toolName string, effect string, messageIDs 
 	})
 }
 
-func virtualCapabilityWebsiteSuccess(toolName string, effect string, siteID string, result any) string {
-	return virtualCapabilityJSON(map[string]any{
-		"provider":        "virtual",
-		"selectedBackend": "device",
-		"toolName":        toolName,
-		"outcome":         "succeeded",
-		"status":          effect,
-		"content":         virtualCapabilityJSON(result),
-		"result":          result,
-		"effects":         []map[string]any{{"objectType": "website", "effect": effect, "id": siteID}},
-	})
-}
-
-func virtualSiteServeSuccess(toolName string, mode string, result map[string]any) string {
-	effect := "previewed"
-	urlField := "previewURL"
-	if mode == "publish" {
-		effect = "published"
-		urlField = "publishedURL"
-	}
-	return virtualCapabilityJSON(map[string]any{
-		"provider":        "virtual",
-		"selectedBackend": "device",
-		"toolName":        toolName,
-		"outcome":         "succeeded",
-		"status":          effect,
-		"content":         virtualCapabilityJSON(result),
-		"result":          result,
-		"effects":         []map[string]any{{"objectType": "website", "effect": effect, "url": stringValue(result[urlField])}},
-	})
-}
-
 func virtualCapabilityApprovalRequired(toolName string) string {
 	result := map[string]any{"errorCode": "approval_required", "failureStage": "authorization", "message": "requires approval"}
 	return virtualCapabilityJSON(map[string]any{"provider": "virtual", "selectedBackend": "device", "toolName": toolName, "outcome": "denied", "status": "denied", "content": "requires approval", "message": "requires approval", "errorCode": "approval_required", "failureStage": "authorization", "result": result})
@@ -3060,10 +2751,6 @@ func scenarioTurnRouterResponse(scenario VirtualSessionScenario, virtualTurn Vir
 	if taskShape == agentcontract.TaskShapeImmediateReply {
 		classification = "quick_reply"
 	}
-	siteEvidence := scenario.RouterSiteEvidence
-	if strings.TrimSpace(virtualTurn.RouterSiteEvidence) != "" {
-		siteEvidence = virtualTurn.RouterSiteEvidence
-	}
 	route := "start_task"
 	if virtualTurnExpectsEvent(virtualTurn, agentcontract.TaskEventAskResolved) {
 		route = "continue_task"
@@ -3075,7 +2762,6 @@ func scenarioTurnRouterResponse(scenario VirtualSessionScenario, virtualTurn Vir
 		"level":                  string(taskLevel),
 		"requestedOutputFormats": nil,
 		"expectedResults":        []any{},
-		"siteRequestEvidence":    siteEvidence,
 		"responseLanguage":       "ko",
 		"reason":                 "scripted scenario default",
 		"userFacingReply":        "",
@@ -3091,7 +2777,7 @@ func scenarioTurnRouterResponse(scenario VirtualSessionScenario, virtualTurn Vir
 	}
 	encodedDocument, errorValue := json.Marshal(routerDocument)
 	if errorValue != nil {
-		return `{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"low","requestedOutputFormats":null,"expectedResults":[],"requiredEvidence":[],"siteRequestEvidence":"","responseLanguage":"ko","reason":"scripted scenario default","userFacingReply":"","initialToolNames":[],"priorTaskReference":"none"}`
+		return `{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"low","requestedOutputFormats":null,"expectedResults":[],"requiredEvidence":[],"responseLanguage":"ko","reason":"scripted scenario default","userFacingReply":"","initialToolNames":[],"priorTaskReference":"none"}`
 	}
 	return string(encodedDocument)
 }

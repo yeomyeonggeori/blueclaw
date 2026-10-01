@@ -52,10 +52,10 @@ func TestSkillSearchToolExactNameIncludesToolReferences(t *testing.T) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
 	toolCatalogBuilder.UseSkillSearch(skillSearchTestRetriever{}, func() agentcontract.InstructionBundle {
 		return agentcontract.InstructionBundle{Skills: []agentcontract.SkillInstruction{{
-			Name:           "site-prototype",
-			Description:    "Create sites.",
+			Name:           "office",
+			Description:    "Create office documents.",
 			ToolReferences: []string{"file_read"},
-			Source:         agentcontract.InstructionSource{Path: "skills/site-prototype/SKILL.md"},
+			Source:         agentcontract.InstructionSource{Path: "skills/office/SKILL.md"},
 		}}}
 	})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{ProfileName: "default"})
@@ -63,7 +63,7 @@ func TestSkillSearchToolExactNameIncludesToolReferences(t *testing.T) {
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
 		ToolName: "skill_search",
 		Input: toolcontract.MarshalToolInput(map[string]any{
-			"queries": []map[string]string{{"description": "site-prototype"}},
+			"queries": []map[string]string{{"description": "office"}},
 			"limit":   5,
 		}),
 	})
@@ -448,7 +448,7 @@ func TestSkillSearchToolListsAllSkillsWithoutQueries(t *testing.T) {
 	toolCatalogBuilder.UseSkillSearch(skillSearchTestRetriever{}, func() agentcontract.InstructionBundle {
 		return agentcontract.InstructionBundle{Skills: []agentcontract.SkillInstruction{
 			{Name: "mail", Description: "Email skill.", ToolReferences: []string{"file_read"}},
-			{Name: "site-prototype", Description: "Create sites.", ToolReferences: []string{"file_read"}},
+			{Name: "office", Description: "Create office documents.", ToolReferences: []string{"file_read"}},
 		}}
 	})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{ProfileName: "default"})
@@ -467,7 +467,7 @@ func TestSkillSearchToolListsAllSkillsWithoutQueries(t *testing.T) {
 	if errorValue := json.Unmarshal([]byte(result.ContentText()), &resultDocument); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if resultDocument.Mode != skillSearchModeList || resultDocument.TotalCount != 2 || len(resultDocument.Skills) != 2 || resultDocument.Skills[0].Name != "mail" || resultDocument.Skills[1].Name != "site-prototype" {
+	if resultDocument.Mode != skillSearchModeList || resultDocument.TotalCount != 2 || len(resultDocument.Skills) != 2 || resultDocument.Skills[0].Name != "mail" || resultDocument.Skills[1].Name != "office" {
 		t.Fatalf("expected full skill roster, got %+v", resultDocument.Skills)
 	}
 }
@@ -476,18 +476,18 @@ func TestSkillSearchToolNameLookupReturnsPromptBody(t *testing.T) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
 	toolCatalogBuilder.UseSkillSearch(skillSearchTestRetriever{}, func() agentcontract.InstructionBundle {
 		return agentcontract.InstructionBundle{Skills: []agentcontract.SkillInstruction{{
-			Name:           "site-prototype",
-			Description:    "Create sites.",
-			Prompt:         "Build the site, verify it, and attach promoted outputs.",
+			Name:           "office",
+			Description:    "Create office documents.",
+			Prompt:         "Build the document, verify it, and attach promoted outputs.",
 			ToolReferences: []string{"file_read"},
-			Source:         agentcontract.InstructionSource{Path: "skills/site-prototype/SKILL.md"},
+			Source:         agentcontract.InstructionSource{Path: "skills/office/SKILL.md"},
 		}}}
 	})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{ProfileName: "default"})
 
 	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
 		ToolName: "skill_search",
-		Input:    toolcontract.MarshalToolInput(map[string]any{"name": "SITE-PROTOTYPE"}),
+		Input:    toolcontract.MarshalToolInput(map[string]any{"name": "OFFICE"}),
 	})
 	if errorValue != nil {
 		t.Fatal(errorValue)
@@ -499,10 +499,10 @@ func TestSkillSearchToolNameLookupReturnsPromptBody(t *testing.T) {
 	if errorValue := json.Unmarshal([]byte(result.ContentText()), &resultDocument); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if resultDocument.Mode != skillSearchModeName || len(resultDocument.Skills) != 1 || resultDocument.Skills[0].Prompt != "Build the site, verify it, and attach promoted outputs." {
+	if resultDocument.Mode != skillSearchModeName || len(resultDocument.Skills) != 1 || resultDocument.Skills[0].Prompt != "Build the document, verify it, and attach promoted outputs." {
 		t.Fatalf("expected prompt body in name lookup, got %+v", resultDocument.Skills)
 	}
-	if resultDocument.Skills[0].SourcePath != "/workspace/skills/site-prototype/SKILL.md" {
+	if resultDocument.Skills[0].SourcePath != "/workspace/skills/office/SKILL.md" {
 		t.Fatalf("expected source path, got %+v", resultDocument.Skills[0])
 	}
 }

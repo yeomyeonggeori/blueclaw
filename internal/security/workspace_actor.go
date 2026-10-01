@@ -29,6 +29,8 @@ const (
 	ActorErrorCodeUnsupportedOperation = "unsupported_operation"
 )
 
+const fsHelperOperationTimeout = 30 * time.Second
+
 const (
 	actorDirectoryCreateMode os.FileMode = 0o2770
 	actorFileCreateMode      os.FileMode = 0o660
@@ -39,7 +41,6 @@ type WorkspaceActor interface {
 	MkdirAll(context.Context, string) error
 	WriteFile(context.Context, string, []byte) error
 	ReadFile(context.Context, string, int64) ([]byte, error)
-	BundleDirectory(context.Context, string, WorkspaceActorBundleOptions) (WorkspaceActorBundle, error)
 	ListDirectory(context.Context, string) ([]WorkspaceActorDirectoryEntry, error)
 	Stat(context.Context, string) (WorkspaceActorStat, error)
 }
@@ -77,18 +78,6 @@ type WorkspaceActorDirectoryEntry struct {
 	IsDirectory    bool   `json:"isDirectory"`
 	SizeBytes      int64  `json:"sizeBytes"`
 	ModifiedAtUnix int64  `json:"modifiedAtUnix"`
-}
-
-type WorkspaceActorBundleOptions struct {
-	Format       string
-	MaxBytes     int64
-	ExcludeNames []string
-}
-
-type WorkspaceActorBundle struct {
-	Format        string
-	ContentBase64 string
-	SizeBytes     int64
 }
 
 type POSIXWorkspaceActorFactory struct {
@@ -235,23 +224,6 @@ func (actor POSIXHelperWorkspaceActor) ListDirectory(ctx context.Context, path s
 	return response.Entries, nil
 }
 
-func (actor POSIXHelperWorkspaceActor) BundleDirectory(ctx context.Context, path string, options WorkspaceActorBundleOptions) (WorkspaceActorBundle, error) {
-	var response fsResponse
-	errorValue := actor.executeFSWithResponse(ctx, "bundle_directory", path, fsRequest{
-		Path:         path,
-		MaxBytes:     options.MaxBytes,
-		ExcludeNames: options.ExcludeNames,
-	}, nil, &response)
-	if errorValue != nil {
-		return WorkspaceActorBundle{}, errorValue
-	}
-	return WorkspaceActorBundle{
-		Format:        firstNonEmptyString(response.Format, "tar.gz"),
-		ContentBase64: response.ContentBase64,
-		SizeBytes:     response.SizeBytes,
-	}, nil
-}
-
 func (actor POSIXHelperWorkspaceActor) Stat(ctx context.Context, path string) (WorkspaceActorStat, error) {
 	var response fsResponse
 	errorValue := actor.executeFSWithResponse(ctx, "stat", path, fsRequest{Path: path}, nil, &response)
@@ -278,7 +250,7 @@ func (actor POSIXHelperWorkspaceActor) executeFSWithResponse(ctx context.Context
 		return actorError(operation, "resolve_identity", actor.executionIdentity, path, ActorErrorCodeIdentityMissing, errorValue.Error())
 	}
 	arguments := fsHelperArguments(operation, resolvedIdentity, request)
-	executionContext, cancelFunction := context.WithTimeout(ctx, fsHelperOperationTimeout(operation))
+	executionContext, cancelFunction := context.WithTimeout(ctx, fsHelperOperationTimeout)
 	defer cancelFunction()
 	command := exec.CommandContext(executionContext, actor.terminalConfiguration.POSIXHelperPath, arguments...)
 	if stdin != nil {
@@ -328,12 +300,11 @@ func isHelperExecutionFailure(errorValue error, stderr string) bool {
 }
 
 type fsRequest struct {
-	Path         string
-	Source       string
-	Mode         os.FileMode
-	MaxBytes     int64
-	Overwrite    bool
-	ExcludeNames []string
+	Path      string
+	Source    string
+	Mode      os.FileMode
+	MaxBytes  int64
+	Overwrite bool
 }
 
 type fsResponse struct {
@@ -343,15 +314,7 @@ type fsResponse struct {
 	ModifiedAtUnix int64                          `json:"modifiedAtUnix"`
 	Mode           os.FileMode                    `json:"mode"`
 	ContentBase64  string                         `json:"contentBase64"`
-	Format         string                         `json:"format"`
 	Entries        []WorkspaceActorDirectoryEntry `json:"entries"`
-}
-
-func fsHelperOperationTimeout(operation string) time.Duration {
-	if operation == "bundle_directory" {
-		return 180 * time.Second
-	}
-	return 30 * time.Second
 }
 
 func fsHelperArguments(operation string, identity ExecutionIdentity, request fsRequest) []string {
@@ -376,9 +339,6 @@ func fsHelperArguments(operation string, identity ExecutionIdentity, request fsR
 	}
 	if request.Overwrite {
 		arguments = append(arguments, "--overwrite")
-	}
-	if len(request.ExcludeNames) > 0 {
-		arguments = append(arguments, "--exclude-names", strings.Join(request.ExcludeNames, ","))
 	}
 	return arguments
 }

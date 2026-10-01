@@ -250,9 +250,6 @@ func (actor morningBriefingActor) WriteFile(context.Context, string, []byte) err
 func (actor morningBriefingActor) ReadFile(_ context.Context, path string, _ int64) ([]byte, error) {
 	return os.ReadFile(path)
 }
-func (actor morningBriefingActor) BundleDirectory(context.Context, string, security.WorkspaceActorBundleOptions) (security.WorkspaceActorBundle, error) {
-	return security.WorkspaceActorBundle{}, errors.New("unsupported")
-}
 func (actor morningBriefingActor) ListDirectory(context.Context, string) ([]security.WorkspaceActorDirectoryEntry, error) {
 	return nil, errors.New("unsupported")
 }

@@ -198,7 +198,7 @@ func terminalRuntimePathFailure(commandRequest security.CommandRequest, commandR
 		"executionUser":     commandRequest.ExecutionIdentity.UserName,
 		"workingDirectory":  commandRequest.WorkingDirectoryPath,
 		"commandResult":     commandResult,
-		"recommendedAction": "Fix Blueclaw runtime PATH propagation; do not change site source or ask the user to use external hosting.",
+		"recommendedAction": "Fix Blueclaw runtime PATH propagation.",
 	}))
 	result := toolcontract.ToolFailureWithOutput(toolcontract.FailureDependencyUnavailable, toolcontract.FailureCode("shell_runtime_path"), "shell_runtime_path", "terminal runtime PATH did not expose a managed executable", document)
 	result.Failure.Retryable = true

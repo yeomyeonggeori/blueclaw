@@ -30,7 +30,7 @@ func TestPlatformFromSourceReferenceRejectsResumePrefixes(t *testing.T) {
 func TestResumePausedTaskForSteerWithoutLaunchContextSendsNoticeWithoutOrphan(t *testing.T) {
 	connectorRuntime, _, harness := newStubbedTestConnectorRuntime(t)
 	harness.Reply = "저장된 컨텍스트에서 이 작업을 재개할 수 없습니다."
-	pausedTaskRun := seedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{ConversationID: "direct-1"}, "사이트 만들어")
+	pausedTaskRun := seedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{ConversationID: "direct-1"}, "보고서 만들어")
 	event := testInboundEvent("message-steer-resume")
 	sendReply := func(context.Context, ReplyTarget, OutboundReply) (string, error) {
 		return "dispatch-1", nil

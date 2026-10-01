@@ -201,7 +201,7 @@ func TestScheduleRunnerPreservesScheduledArtifactRouting(t *testing.T) {
 	agentKernel := loop.NewAgentKernel(taskRunService, task.NewTaskStepService())
 	languageModel := &capturingScheduleRuntimeLanguageModel{
 		content:       `{"action":"fail","reason":"artifact fixture stops after intake","goalStatus":"blocked","goalSatisfied":false}`,
-		routerContent: `{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"high","requestedOutputFormats":["pptx"],"requestedOutputEvidence":"발표자료","expectedResults":[{"id":"presentation","type":"file","description":"PPTX 발표자료","required":true}],"requiredEvidence":["file_deliver"],"siteRequestEvidence":"","responseLanguage":"ko","reason":"scheduled presentation","userFacingReply":"","initialToolNames":["file_deliver"],"priorTaskReference":"none"}`,
+		routerContent: `{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"high","requestedOutputFormats":["pptx"],"requestedOutputEvidence":"발표자료","expectedResults":[{"id":"presentation","type":"file","description":"PPTX 발표자료","required":true}],"requiredEvidence":["file_deliver"],"responseLanguage":"ko","reason":"scheduled presentation","userFacingReply":"","initialToolNames":["file_deliver"],"priorTaskReference":"none"}`,
 	}
 	useScheduledRuntimeLanguageModel(agentKernel, languageModel)
 	taskLauncher := routedTaskLauncher(agentKernel, taskRunService, NewToolCatalogBuilder(), languageModel)
@@ -254,7 +254,7 @@ func (languageModel *capturingScheduleRuntimeLanguageModel) GenerateStructuredRe
 }
 
 func scheduledRuntimeTurnRouterResponse() string {
-	return `{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"medium","requestedOutputFormats":null,"expectedResults":[],"requiredEvidence":[],"siteRequestEvidence":"","responseLanguage":"ko","reason":"scheduled objective","userFacingReply":"","initialToolNames":[],"priorTaskReference":"none"}`
+	return `{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"medium","requestedOutputFormats":null,"expectedResults":[],"requiredEvidence":[],"responseLanguage":"ko","reason":"scheduled objective","userFacingReply":"","initialToolNames":[],"priorTaskReference":"none"}`
 }
 
 func firstScheduleRuntimeRouterResponse(routerContent string) string {

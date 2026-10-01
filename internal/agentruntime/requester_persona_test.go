@@ -44,10 +44,6 @@ func (actor personaActor) ReadFile(_ context.Context, path string, _ int64) ([]b
 	return document, nil
 }
 
-func (actor personaActor) BundleDirectory(context.Context, string, security.WorkspaceActorBundleOptions) (security.WorkspaceActorBundle, error) {
-	return security.WorkspaceActorBundle{}, nil
-}
-
 func (actor personaActor) ListDirectory(context.Context, string) ([]security.WorkspaceActorDirectoryEntry, error) {
 	return nil, nil
 }

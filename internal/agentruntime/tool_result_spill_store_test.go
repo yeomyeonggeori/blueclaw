@@ -40,10 +40,6 @@ func (actor *spillWorkspaceActor) ReadFile(context.Context, string, int64) ([]by
 	return nil, nil
 }
 
-func (actor *spillWorkspaceActor) BundleDirectory(context.Context, string, security.WorkspaceActorBundleOptions) (security.WorkspaceActorBundle, error) {
-	return security.WorkspaceActorBundle{}, nil
-}
-
 func (actor *spillWorkspaceActor) ListDirectory(context.Context, string) ([]security.WorkspaceActorDirectoryEntry, error) {
 	return nil, nil
 }

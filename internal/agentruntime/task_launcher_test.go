@@ -337,8 +337,8 @@ func TestTaskLauncherProvisionsRequesterWorkspaceBeforeToolSet(t *testing.T) {
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	requesterSitePath := filepath.Join(requesterHomePath, "sites", "site-1")
-	if errorValue := workspaceActor.MkdirAll(context.Background(), requesterSitePath); errorValue != nil {
+	requesterReportPath := filepath.Join(requesterHomePath, "reports", "q3")
+	if errorValue := workspaceActor.MkdirAll(context.Background(), requesterReportPath); errorValue != nil {
 		t.Fatalf("expected requester actor mkdir to succeed after launch provisioning: %v", errorValue)
 	}
 	taskEvents := taskEventService.ListTaskEvent(launchResult.TurnResult.TaskRun.TaskRunID)

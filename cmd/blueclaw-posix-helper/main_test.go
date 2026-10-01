@@ -48,7 +48,7 @@ func TestLoadPOSIXStatePrefersStateDocument(t *testing.T) {
 	statePath := filepath.Join(rootPath, "state.json")
 	stateDocument, errorValue := json.Marshal(security.POSIXState{
 		Directories: []security.POSIXDirectory{{
-			Path:     "/workspace/circles/member/sites",
+			Path:     "/workspace/circles/member/reports",
 			Owner:    "blueclaw",
 			Group:    "bc_circle_member",
 			ModeText: "2770",
@@ -65,7 +65,7 @@ func TestLoadPOSIXStatePrefersStateDocument(t *testing.T) {
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if len(state.Directories) != 1 || state.Directories[0].Path != "/workspace/circles/member/sites" {
+	if len(state.Directories) != 1 || state.Directories[0].Path != "/workspace/circles/member/reports" {
 		t.Fatalf("expected state document to be loaded, got %+v", state.Directories)
 	}
 }
@@ -88,7 +88,7 @@ func TestPrepareExecProcessDropsIdentityBeforeChangingDirectory(t *testing.T) {
 		1001,
 		1001,
 		[]int{1001, 1002},
-		"/workspace/private/people/person-1/sites/site-1/app",
+		"/workspace/private/people/person-1/reports/q3/app",
 		func(userID uint, groupID uint, groupIDs []int) error {
 			steps = append(steps, "identity")
 			if userID != 1001 || groupID != 1001 || len(groupIDs) != 2 {
@@ -98,7 +98,7 @@ func TestPrepareExecProcessDropsIdentityBeforeChangingDirectory(t *testing.T) {
 		},
 		func(path string) error {
 			steps = append(steps, "chdir")
-			if path != "/workspace/private/people/person-1/sites/site-1/app" {
+			if path != "/workspace/private/people/person-1/reports/q3/app" {
 				t.Fatalf("unexpected cwd: %s", path)
 			}
 			return nil
@@ -212,7 +212,7 @@ func TestReconcileHomePathScopesToOnePrivateHome(t *testing.T) {
 	if homePath != filepath.Join("/workspace", "private", "people", "person-1") {
 		t.Fatalf("unexpected home path: %s", homePath)
 	}
-	for _, personID := range []string{"", "../person-1", "person-1/sites"} {
+	for _, personID := range []string{"", "../person-1", "person-1/reports"} {
 		if _, errorValue := reconcileHomePath("/workspace", personID); errorValue == nil {
 			t.Fatalf("expected person id %q to be rejected", personID)
 		}

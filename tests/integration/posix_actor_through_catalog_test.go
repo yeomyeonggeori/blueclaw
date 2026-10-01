@@ -62,9 +62,6 @@ func (actor *recordingWorkspaceActor) WriteFile(context.Context, string, []byte)
 func (actor *recordingWorkspaceActor) ReadFile(context.Context, string, int64) ([]byte, error) {
 	return nil, nil
 }
-func (actor *recordingWorkspaceActor) BundleDirectory(context.Context, string, security.WorkspaceActorBundleOptions) (security.WorkspaceActorBundle, error) {
-	return security.WorkspaceActorBundle{}, nil
-}
 func (actor *recordingWorkspaceActor) ListDirectory(context.Context, string) ([]security.WorkspaceActorDirectoryEntry, error) {
 	return nil, nil
 }

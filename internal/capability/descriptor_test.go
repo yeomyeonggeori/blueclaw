@@ -50,16 +50,16 @@ func TestTheDescriptorNamesEveryFieldTheCatalogWrites(t *testing.T) {
 
 func TestADecodedDescriptorKeepsWhatItWasGiven(t *testing.T) {
 	document := []byte(`{
-		"name": "site_serve",
-		"canonicalName": "site_serve",
-		"namespace": "site",
+		"name": "document_share",
+		"canonicalName": "document_share",
+		"namespace": "document",
 		"answeredBy": "company",
-		"modelName": "site_serve",
+		"modelName": "document_share",
 		"modelVisibility": "visible",
 		"modelVisible": true,
-		"description": "Serve a site.",
+		"description": "Share a document.",
 		"version": "1",
-		"privacyClass": "workspace_site",
+		"privacyClass": "workspace_document",
 		"estimatedLatency": "high",
 		"requiresUserPresence": true,
 		"approvalScope": "browser",
@@ -71,14 +71,14 @@ func TestADecodedDescriptorKeepsWhatItWasGiven(t *testing.T) {
 		"outputSchemaStrict": true,
 		"resultContract": {
 			"schema": {"type":"object"},
-			"effects": [{"objectType":"website","effect":"published","resultField":"publishedURL","effectIdentity":"url","when":{"resultField":"mode","equals":"\"publish\""}}],
+			"effects": [{"objectType":"document","effect":"published","resultField":"publishedURL","effectIdentity":"url","when":{"resultField":"mode","equals":"\"publish\""}}],
 			"evidenceCondition": {"resultField":"mode","equals":"\"publish\""}
 		},
-		"policyResource": "tool:site_serve",
-		"sideEffectClass": "site_publish",
-		"sideEffect": "site_publish",
+		"policyResource": "tool:document_share",
+		"sideEffectClass": "external_publish",
+		"sideEffect": "external_publish",
 		"requiresApproval": true,
-		"completionEvidence": {"mode":"success","action":"serve_site","targetKind":"website"},
+		"completionEvidence": {"mode":"success","action":"share_document","targetKind":"document"},
 		"availability": {"state":"ok","reason":"ready"},
 		"idempotency": {"supported":true,"required":true,"scope":"operation"}
 	}`)
@@ -97,7 +97,7 @@ func TestADecodedDescriptorKeepsWhatItWasGiven(t *testing.T) {
 		"estimatedLatency":     descriptor.EstimatedLatency == "high",
 		"inputSchemaStrict":    descriptor.InputSchemaStrict,
 		"outputSchemaStrict":   descriptor.OutputSchemaStrict,
-		"sideEffect":           descriptor.SideEffect == "site_publish",
+		"sideEffect":           descriptor.SideEffect == "external_publish",
 		"approvalScope":        descriptor.ApprovalScope == "browser",
 		"availability.reason":  descriptor.Availability.Reason == "ready",
 		"idempotency.required": descriptor.Idempotency.Required,
@@ -116,7 +116,7 @@ func TestADecodedDescriptorKeepsWhatItWasGiven(t *testing.T) {
 	if descriptor.ResultContract.EvidenceCondition == nil {
 		t.Error("the evidence condition was dropped")
 	}
-	if descriptor.CompletionEvidence == nil || descriptor.CompletionEvidence.Action != "serve_site" {
+	if descriptor.CompletionEvidence == nil || descriptor.CompletionEvidence.Action != "share_document" {
 		t.Errorf("the completion evidence was dropped: %#v", descriptor.CompletionEvidence)
 	}
 }

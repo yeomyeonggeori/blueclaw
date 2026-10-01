@@ -1,5 +1,5 @@
 {
-  "aggregateHash": "618129abe5d5344688fb921f44ac4894a5f88021789db21518fd6655bf94e325",
+  "aggregateHash": "9efaf6c90a34ed2aaa19f98d39e403c0a96c29d775a99cb8933e72ae18d8fbf7",
   "protocolVersion": "0.4.0",
   "schemas": [
     {
@@ -19,12 +19,12 @@
     },
     {
       "fileName": "capability-descriptor.schema.json",
-      "hash": "53519976398ac379754d5d3a74b9734b8cd86f912bea8e974c43a6c904a3444f",
+      "hash": "f551c11c91c38c6e41a4315b9451be449bc799d6e77330f4775abeac23c81688",
       "name": "capability-descriptor"
     },
     {
       "fileName": "capability-registry-response.schema.json",
-      "hash": "8c594b254f28bddb3a0cbba1e190069fbcc36bb6bcb1f42d66315facfd93ecd7",
+      "hash": "940b5f37b4b18d59038db0adad17b540d9b99a0982756fbcab4d93f3a9ff9859",
       "name": "capability-registry-response"
     },
     {
@@ -99,7 +99,7 @@
     },
     {
       "fileName": "tool-invoke-request.schema.json",
-      "hash": "0ea4cea1ddfb7f0bb8556be58d1afd8ff8a5ae5fb2ae66cef2a74f2db25442bf",
+      "hash": "a0fba8d30ccd46b01c54a6d1db0ffefedad5a65fc292ec4367289ad44c5ace98",
       "name": "tool-invoke-request"
     },
     {

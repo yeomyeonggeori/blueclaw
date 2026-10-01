@@ -477,8 +477,8 @@ func TestConnectorRuntimeWritesResolvesAndExpiresTaskWaitRecord(t *testing.T) {
 	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
 		StructuredResponsesBySchema: map[string][]string{
 			"bluecollar_turn_router": {
-				`{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"low","requestedOutputFormats":null,"siteRequestEvidence":"","responseLanguage":"ko","reason":"input needed","userFacingReply":"","initialToolNames":["ask_input"]}`,
-				`{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"low","requestedOutputFormats":null,"siteRequestEvidence":"","responseLanguage":"ko","reason":"input needed","userFacingReply":"","initialToolNames":["ask_input"]}`,
+				`{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"input needed","userFacingReply":"","initialToolNames":["ask_input"]}`,
+				`{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"input needed","userFacingReply":"","initialToolNames":["ask_input"]}`,
 			},
 		},
 		ActionResponses: []string{
@@ -696,7 +696,7 @@ func TestConnectorRuntimeInterruptsInactiveRunningTaskAndStartsNewTask(t *testin
 	connectorRuntime, adapter, taskEventService, harness := newStubbedRepositoryBackedTestConnectorRuntime(t, taskRunRepository)
 	harness.TurnDecision = startTaskTurnDecision()
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "새 작업으로 처리했습니다."}
-	taskEventService.AppendTaskEvent(orphanedTaskRun.TaskRunID, "tool.site_build.requested", `{"observationID":"observation-1","toolName":"site_build"}`)
+	taskEventService.AppendTaskEvent(orphanedTaskRun.TaskRunID, "tool.bash.requested", `{"observationID":"observation-1","toolName":"bash"}`)
 	event := testInboundEvent("message-after-stale-task")
 	event.Prompt = "다시 해줘"
 
@@ -716,7 +716,7 @@ func TestConnectorRuntimeInterruptsInactiveRunningTaskAndStartsNewTask(t *testin
 	if taskAttempt.Status != task.TaskAttemptStatusInterrupted {
 		t.Fatalf("attempt status = %s, want interrupted", taskAttempt.Status)
 	}
-	if !connectorTaskEventsContain(connectorRuntime, orphanedTaskRun.TaskRunID, "tool.site_build.cancelled", "cancelled_by_attempt_end") {
+	if !connectorTaskEventsContain(connectorRuntime, orphanedTaskRun.TaskRunID, "tool.bash.cancelled", "cancelled_by_attempt_end") {
 		t.Fatal("expected orphaned tool request to be cancelled")
 	}
 	if len(adapter.sentReplies) != 1 || adapter.sentReplies[0].message != "새 작업으로 처리했습니다." {
@@ -1021,25 +1021,25 @@ func TestConnectorRuntimeProvidesRecentPriorTaskContextWithoutTextInference(t *t
 	}
 }
 
-func TestConnectorRuntimeDoesNotContinueFailedSiteOnlyGoal(t *testing.T) {
+func TestConnectorRuntimeDoesNotContinueFailedLinkOnlyGoal(t *testing.T) {
 	connectorRuntime, _, _ := newStubbedTestConnectorRuntime(t)
 	taskRunService := connectorRuntime.taskRunService
-	taskRun := taskRunService.CreateTaskRunWithOrigin("person-1", task.TaskRunOrigin{ConversationID: "direct-1", ReplyTargetID: "origin-reply-target"}, "웹사이트 만들어줘")
+	taskRun := taskRunService.CreateTaskRunWithOrigin("person-1", task.TaskRunOrigin{ConversationID: "direct-1", ReplyTargetID: "origin-reply-target"}, "문서 공유해줘")
 	appendConnectorActiveGoal(t, taskRunService, taskRun, agentcontract.ActiveGoal{
 		TaskRunID:           taskRun.TaskRunID,
 		OriginalInstruction: taskRun.Prompt,
 		Status:              agentcontract.ActiveGoalStatusBlocked,
 		OutcomeContract: agentcontract.OutcomeContract{
-			RequiredEvidenceTools: []string{"site_serve"},
+			RequiredEvidenceTools: []string{"document_share"},
 			ExpectedResults: []agentcontract.ExpectedResult{{
-				ID:       "site-public-link",
+				ID:       "shared-document-link",
 				Type:     agentcontract.ExpectedResultTypeLink,
 				Required: true,
 			}},
 			ArtifactRequirement: agentcontract.ArtifactRequirementNone,
 		},
 	})
-	if _, errorValue := taskRunService.FailTaskRun(taskRun.TaskRunID, "publish failed"); errorValue != nil {
+	if _, errorValue := taskRunService.FailTaskRun(taskRun.TaskRunID, "share failed"); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	event := testInboundEvent("message-unrelated")
@@ -1048,7 +1048,7 @@ func TestConnectorRuntimeDoesNotContinueFailedSiteOnlyGoal(t *testing.T) {
 	_, isFound := connectorRuntime.findActiveGoal("person-1", "", event, inboundTaskWaitResolution{})
 
 	if isFound {
-		t.Fatal("expected failed site-only task not to continue through artifact recovery path")
+		t.Fatal("expected failed link-only task not to continue through artifact recovery path")
 	}
 }
 
@@ -1394,7 +1394,7 @@ func TestLatestAskInteractionSkipsResolvedInteraction(t *testing.T) {
 	taskEvents := []task.TaskEvent{{
 		TaskEventID: "ask-1",
 		Name:        "ask.requested",
-		Body:        `{"kind":"choice_single","question":"배포할 사이트를 선택해 주세요.","options":[{"key":"A","label":"첫 번째"},{"key":"B","label":"두 번째"}]}`,
+		Body:        `{"kind":"choice_single","question":"공유할 문서를 선택해 주세요.","options":[{"key":"A","label":"첫 번째"},{"key":"B","label":"두 번째"}]}`,
 	}, {
 		TaskEventID: "resolved-1",
 		Name:        "ask.resolved",
@@ -1426,7 +1426,7 @@ func TestLatestAskInteractionReturnsNewAskAfterEarlierResolution(t *testing.T) {
 	taskEvents := []task.TaskEvent{{
 		TaskEventID: "ask-1",
 		Name:        "ask.requested",
-		Body:        `{"kind":"choice_single","question":"배포할 사이트를 선택해 주세요.","options":[{"key":"A","label":"첫 번째"},{"key":"B","label":"두 번째"}]}`,
+		Body:        `{"kind":"choice_single","question":"공유할 문서를 선택해 주세요.","options":[{"key":"A","label":"첫 번째"},{"key":"B","label":"두 번째"}]}`,
 	}, {
 		TaskEventID: "resolved-1",
 		Name:        "ask.resolved",
@@ -4256,7 +4256,7 @@ func createWaitingInputTaskRunWithOptions(t *testing.T, taskRunService *task.Tas
 		"message":       prompt,
 		"selectionMode": "single",
 		"options": []AskChoiceOption{
-			{Key: "A", Label: "웹사이트", Value: "website"},
+			{Key: "A", Label: "보고서", Value: "report"},
 			{Key: "B", Label: "발표자료", Value: "slides"},
 		},
 		"responseLanguage": "ko",

@@ -78,13 +78,13 @@ func TestArtifactManifestIncludesTaskArtifactLedgerPath(t *testing.T) {
 	}
 }
 
-func createManifestTestArtifact(t *testing.T, workspaceDefaultPath string, slug string, modifiedAt time.Time) string {
+func createManifestTestArtifact(t *testing.T, workspaceDefaultPath string, artifactName string, modifiedAt time.Time) string {
 	t.Helper()
-	artifactDirectoryPath := filepath.Join(workspaceDefaultPath, "artifacts", slug)
+	artifactDirectoryPath := filepath.Join(workspaceDefaultPath, "artifacts", artifactName)
 	if errorValue := os.MkdirAll(artifactDirectoryPath, 0700); errorValue != nil {
 		t.Fatalf("failed to create artifact directory: %v", errorValue)
 	}
-	artifactPath := filepath.Join(artifactDirectoryPath, slug+".pptx")
+	artifactPath := filepath.Join(artifactDirectoryPath, artifactName+".pptx")
 	if errorValue := os.WriteFile(artifactPath, []byte("pptx"), 0600); errorValue != nil {
 		t.Fatalf("failed to write artifact: %v", errorValue)
 	}

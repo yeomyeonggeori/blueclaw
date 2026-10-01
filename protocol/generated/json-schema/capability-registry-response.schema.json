@@ -367,7 +367,6 @@
               "local_file",
               "platform_reply",
               "read",
-              "site_publish",
               "workspace_write"
             ],
             "type": "string"
@@ -384,7 +383,6 @@
               "local_file",
               "platform_reply",
               "read",
-              "site_publish",
               "workspace_write"
             ],
             "type": "string"
@@ -666,7 +664,6 @@
               "local_file",
               "platform_reply",
               "read",
-              "site_publish",
               "workspace_write"
             ],
             "type": "string"
@@ -683,7 +680,6 @@
               "local_file",
               "platform_reply",
               "read",
-              "site_publish",
               "workspace_write"
             ],
             "type": "string"

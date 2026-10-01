@@ -142,7 +142,6 @@ export enum CapabilitySideEffect {
   LocalFile = 'local_file',
   PlatformReply = 'platform_reply',
   Read = 'read',
-  SitePublish = 'site_publish',
   WorkspaceWrite = 'workspace_write',
 }
 
@@ -331,15 +330,16 @@ export const actorContextSchema = z.looseObject({
   isAdmin: z.boolean().optional(),
 });
 
-export const siteSourceBundleSchema = z.strictObject({
+export const workspaceFileSchema = z.strictObject({
   workspacePath: unpaddedStringSchema,
+  filename: z.string().optional(),
   contentBase64: nonBlankStringSchema,
-  format: z.literal('tar.gz'),
-  sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 });
 
 export const toolInvokeTransportSchema = z.strictObject({
-  siteSourceBundle: siteSourceBundleSchema.optional(),
+  workspaceFile: workspaceFileSchema.optional(),
+  workspaceFiles: z.array(workspaceFileSchema).optional(),
 });
 
 export const toolInvokeRequestSchema = z.looseObject({
@@ -386,7 +386,7 @@ export const approvalTargetSchema = z.strictObject({
 
 export type ApprovalTarget = z.infer<typeof approvalTargetSchema>;
 export type CapabilityDescriptor = z.infer<typeof capabilityDescriptorSchema>;
-export type SiteSourceBundle = z.infer<typeof siteSourceBundleSchema>;
+export type WorkspaceFile = z.infer<typeof workspaceFileSchema>;
 export type ToolInvokeTransport = z.infer<typeof toolInvokeTransportSchema>;
 export type ToolInvokeRequest = z.infer<typeof toolInvokeRequestSchema>;
 export type ToolInvokeResponse = z.infer<typeof toolInvokeResponseSchema>;
