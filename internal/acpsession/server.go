@@ -20,6 +20,8 @@ type Server struct {
 	listener        net.Listener
 }
 
+const socketMode = 0o660
+
 func NewServer(socketPath string, collaborators Collaborators, permissionRelay *PermissionRelay, logger *slog.Logger) *Server {
 	return &Server{
 		socketPath:      socketPath,
@@ -40,7 +42,7 @@ func (server *Server) Listen() error {
 	if errorValue != nil {
 		return errorValue
 	}
-	if errorValue := os.Chmod(server.socketPath, 0o600); errorValue != nil {
+	if errorValue := os.Chmod(server.socketPath, socketMode); errorValue != nil {
 		listener.Close()
 		return errorValue
 	}
