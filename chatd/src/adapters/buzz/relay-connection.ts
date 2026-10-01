@@ -1,3 +1,4 @@
+import { openRelaySocket } from "./relay-trust.ts";
 import type { BuzzEvent } from "./types.ts";
 import { verifiedEvent } from "./verified-event.ts";
 
@@ -73,7 +74,7 @@ export function createRelayConnection(
 	}
 
 	function openSocket(): void {
-		websocket = new WebSocket(relayURL);
+		websocket = openRelaySocket(relayURL);
 		websocket.onopen = () => {
 			reconnectDelayMs = 1_000;
 			isAuthed = false;

@@ -3,6 +3,7 @@ import { deleteThread } from "../adapters/buzz/thread-deletion.ts";
 import type { BuzzEvent } from "../adapters/buzz/types.ts";
 import { isElevatedIn, signingKeyring } from "../message-ownership.ts";
 import { isServedByTheRelay, readAuthorizationHeader } from "../adapters/buzz/blossom.ts";
+import { fetchFromRelay } from "../adapters/buzz/relay-trust.ts";
 import type { OutgoingAttachment } from "../outgoing-attachment.ts";
 import { addReactionAsUser, removeReactionAsUser } from "../adapters/buzz/user-reactions.ts";
 import { mentionTags } from "../adapters/buzz/user-mentions.ts";
@@ -579,7 +580,7 @@ async function readWithinLimit(
 	fallbackContentType: string,
 	headers: Record<string, string>,
 ): Promise<{ contentType: string; contentBase64: string } | null> {
-	const response = await fetch(url, { headers });
+	const response = await fetchFromRelay(url, { headers });
 	if (!response.ok) throw new ReadRefused("buzz", url, response.status);
 	const bytes = new Uint8Array(await response.arrayBuffer());
 	if (bytes.byteLength > largestBytes) return null;
