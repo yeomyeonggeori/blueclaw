@@ -27,11 +27,6 @@ func (toolCatalogBuilder *ToolCatalogBuilder) UseTestCapabilityTools(capabilityC
 		}
 		descriptors = append(descriptors, descriptor)
 	}
-	descriptors = append(descriptors, CapabilityToolDescriptor{
-		Name:                 "browser_handoff",
-		PrivacyClass:         "user_browser",
-		RequiresUserPresence: true,
-	})
 	toolCatalogBuilder.UseTestCapabilityToolDescriptors(capabilityClient, descriptors)
 }
 
