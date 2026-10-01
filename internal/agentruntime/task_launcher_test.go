@@ -440,161 +440,8 @@ func TestToolCatalogProfileFiltersBuiltInTerminalTools(t *testing.T) {
 	}
 }
 
-func TestInteractiveBrowserCapabilityUsesCompanion(t *testing.T) {
-	httpClient := &recordingHTTPClient{}
-	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTestCapabilityTools(capability.Client{Endpoint: "http://capability.local", HTTPClient: httpClient}, []string{"browser_open"})
-	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{
-		"default": {"browser_open"},
-	}, nil)
-	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
-		ProfileName:             "default",
-		Prompt:                  "로그인해서 계정을 확인해줘",
-		RequesterPersonID:       "person-1",
-		RequesterPlatformUserID: "mattermost-user-1",
-		ConversationID:          "conversation-1",
-		Platform:                "mattermost",
-	})
-
-	toolResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "browser_open",
-		Input:    json.RawMessage(`{"url":"https://example.com"}`),
-	})
-
-	if errorValue != nil {
-		t.Fatalf("expected browser capability result: %v", errorValue)
-	}
-	if toolResult.Failed() {
-		t.Fatalf("expected browser capability success, got %+v", toolResult)
-	}
-	var requestDocument struct {
-		ExecutionMode        string `json:"executionMode"`
-		RequiresUserPresence bool   `json:"requiresUserPresence"`
-		PrivacyClass         string `json:"privacyClass"`
-	}
-	if errorValue := json.Unmarshal([]byte(httpClient.requestBody), &requestDocument); errorValue != nil {
-		t.Fatalf("expected browser capability request json: %v", errorValue)
-	}
-	if requestDocument.ExecutionMode != "companion" || !requestDocument.RequiresUserPresence || requestDocument.PrivacyClass != "user_browser" {
-		t.Fatalf("expected interactive browser capability to require companion, got %+v body=%s", requestDocument, httpClient.requestBody)
-	}
-}
-
-func TestPublicBrowserCapabilityWithRequesterUsesCompanion(t *testing.T) {
-	httpClient := &recordingHTTPClient{}
-	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTestCapabilityTools(capability.Client{Endpoint: "http://capability.local", HTTPClient: httpClient}, []string{"browser_open"})
-	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{
-		"default": {"browser_open"},
-	}, nil)
-	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
-		ProfileName:             "default",
-		Prompt:                  "https://example.com 열어줘",
-		RequesterPersonID:       "person-1",
-		RequesterPlatformUserID: "mattermost-user-1",
-		ConversationID:          "conversation-1",
-		Platform:                "mattermost",
-	})
-
-	toolResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "browser_open",
-		Input:    json.RawMessage(`{"url":"https://example.com"}`),
-	})
-
-	if errorValue != nil {
-		t.Fatalf("expected browser capability result: %v", errorValue)
-	}
-	if toolResult.Failed() {
-		t.Fatalf("expected browser capability success, got %+v", toolResult)
-	}
-	var requestDocument struct {
-		ExecutionMode        string `json:"executionMode"`
-		RequiresUserPresence bool   `json:"requiresUserPresence"`
-		PrivacyClass         string `json:"privacyClass"`
-	}
-	if errorValue := json.Unmarshal([]byte(httpClient.requestBody), &requestDocument); errorValue != nil {
-		t.Fatalf("expected browser capability request json: %v", errorValue)
-	}
-	if requestDocument.ExecutionMode != "companion" || !requestDocument.RequiresUserPresence || requestDocument.PrivacyClass != "user_browser" {
-		t.Fatalf("expected public requester browser capability to require companion, got %+v body=%s", requestDocument, httpClient.requestBody)
-	}
-}
-
-func TestPrivateBrowserCapabilityUsesCompanion(t *testing.T) {
-	httpClient := &recordingHTTPClient{}
-	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTestCapabilityTools(capability.Client{Endpoint: "http://capability.local", HTTPClient: httpClient}, []string{"browser_open"})
-	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{
-		"default": {"browser_open"},
-	}, nil)
-	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{ProfileName: "default"})
-
-	toolResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "browser_open",
-		Input:    json.RawMessage(`{"url":"http://127.0.0.1:3000"}`),
-	})
-
-	if errorValue != nil {
-		t.Fatalf("expected browser capability result: %v", errorValue)
-	}
-	if toolResult.Failed() {
-		t.Fatalf("expected browser capability success, got %+v", toolResult)
-	}
-	var requestDocument struct {
-		ExecutionMode        string `json:"executionMode"`
-		RequiresUserPresence bool   `json:"requiresUserPresence"`
-		PrivacyClass         string `json:"privacyClass"`
-	}
-	if errorValue := json.Unmarshal([]byte(httpClient.requestBody), &requestDocument); errorValue != nil {
-		t.Fatalf("expected browser capability request json: %v", errorValue)
-	}
-	if requestDocument.ExecutionMode != "companion" || !requestDocument.RequiresUserPresence || requestDocument.PrivacyClass != "user_browser" {
-		t.Fatalf("expected private browser capability to require companion, got %+v body=%s", requestDocument, httpClient.requestBody)
-	}
-}
-
-func TestBrowserFollowUpWithSensitiveVisibleContextUsesCompanion(t *testing.T) {
-	httpClient := &recordingHTTPClient{}
-	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTestCapabilityTools(capability.Client{Endpoint: "http://capability.local", HTTPClient: httpClient}, []string{"browser_open"})
-	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{
-		"default": {"browser_open"},
-	}, nil)
-	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
-		ProfileName: "default",
-		Prompt:      "다시 열어봐",
-		VisibleContext: agentcontract.VisibleContext{Messages: []agentcontract.VisibleContextMessage{
-			{Speaker: "사용자", Text: "구글 클라우드 콘솔에서 credential.json 받는 거 도와줘"},
-			{Speaker: "김인턴", Text: "Companion 브라우저 연결이 필요합니다."},
-		}},
-	})
-
-	toolResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "browser_open",
-		Input:    json.RawMessage(`{"url":"https://console.cloud.google.com/"}`),
-	})
-
-	if errorValue != nil {
-		t.Fatalf("expected browser capability result: %v", errorValue)
-	}
-	if toolResult.Failed() {
-		t.Fatalf("expected browser capability success, got %+v", toolResult)
-	}
-	var requestDocument struct {
-		ExecutionMode        string `json:"executionMode"`
-		RequiresUserPresence bool   `json:"requiresUserPresence"`
-		PrivacyClass         string `json:"privacyClass"`
-	}
-	if errorValue := json.Unmarshal([]byte(httpClient.requestBody), &requestDocument); errorValue != nil {
-		t.Fatalf("expected browser capability request json: %v", errorValue)
-	}
-	if requestDocument.ExecutionMode != "companion" || !requestDocument.RequiresUserPresence || requestDocument.PrivacyClass != "user_browser" {
-		t.Fatalf("expected browser follow-up to require companion, got %+v body=%s", requestDocument, httpClient.requestBody)
-	}
-}
-
 func TestCapabilityDenialPreservesRecoveryAction(t *testing.T) {
-	httpClient := &recordingHTTPClient{responseBody: `{"provider":"companion","selectedBackend":"companion","toolName":"browser_open","outcome":"denied","status":"denied","content":"Companion이 연결되어 있지 않아 브라우저를 열 수 없습니다.","isError":true,"result":{"status":"denied","code":"not_connected","toolName":"browser_open","userReason":"Companion이 연결되어 있지 않아 브라우저를 열 수 없습니다.","recovery":{"kind":"companion_connect","delivery":"dm_preferred","downloadURL":"https://example.com/companion.dmg","connectCommand":"/connect"}}}`}
+	httpClient := &recordingHTTPClient{responseBody: `{"provider":"internkim","selectedBackend":"device","toolName":"browser_open","outcome":"denied","status":"denied","content":"브라우저가 연결되어 있지 않아 열 수 없습니다.","isError":true,"result":{"status":"denied","code":"not_connected","toolName":"browser_open","userReason":"브라우저가 연결되어 있지 않아 열 수 없습니다.","recovery":{"kind":"browser_connect","delivery":"dm_preferred","downloadURL":"https://example.com/setup","connectCommand":"/connect"}}}`}
 	toolCatalogBuilder := NewToolCatalogBuilder()
 	toolCatalogBuilder.UseTestCapabilityTools(capability.Client{Endpoint: "http://capability.local", HTTPClient: httpClient}, []string{"browser_open"})
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{
@@ -617,44 +464,11 @@ func TestCapabilityDenialPreservesRecoveryAction(t *testing.T) {
 		t.Fatalf("expected recovery action on denied tool result, got %+v", toolResult)
 	}
 	recoveryAction := toolResult.RecoveryActions[0]
-	if recoveryAction.Kind != "companion_connect" || recoveryAction.Delivery != "dm_preferred" || recoveryAction.ConnectCommand != "/connect" {
+	if recoveryAction.Kind != "browser_connect" || recoveryAction.Delivery != "dm_preferred" || recoveryAction.ConnectCommand != "/connect" {
 		t.Fatalf("unexpected recovery action: %+v", recoveryAction)
 	}
-	if len(toolResult.Failure.RecoveryHints) != 1 || toolResult.Failure.RecoveryHints[0].Action != "companion_connect" {
+	if len(toolResult.Failure.RecoveryHints) != 1 || toolResult.Failure.RecoveryHints[0].Action != "browser_connect" {
 		t.Fatalf("expected recovery hint normalized onto failure, got %+v", toolResult.Failure)
-	}
-}
-
-func TestPublicBrowserCapabilityUsesCompanion(t *testing.T) {
-	httpClient := &recordingHTTPClient{}
-	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseTestCapabilityTools(capability.Client{Endpoint: "http://capability.local", HTTPClient: httpClient}, []string{"browser_open"})
-	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{
-		"default": {"browser_open"},
-	}, nil)
-	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{ProfileName: "default"})
-
-	toolResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: "browser_open",
-		Input:    json.RawMessage(`{"url":"https://example.com"}`),
-	})
-
-	if errorValue != nil {
-		t.Fatalf("expected browser capability result: %v", errorValue)
-	}
-	if toolResult.Failed() {
-		t.Fatalf("expected browser capability success, got %+v", toolResult)
-	}
-	var requestDocument struct {
-		ExecutionMode        string `json:"executionMode"`
-		RequiresUserPresence bool   `json:"requiresUserPresence"`
-		PrivacyClass         string `json:"privacyClass"`
-	}
-	if errorValue := json.Unmarshal([]byte(httpClient.requestBody), &requestDocument); errorValue != nil {
-		t.Fatalf("expected browser capability request json: %v", errorValue)
-	}
-	if requestDocument.ExecutionMode != "companion" || !requestDocument.RequiresUserPresence || requestDocument.PrivacyClass != "user_browser" {
-		t.Fatalf("expected public browser capability to require companion, got %+v body=%s", requestDocument, httpClient.requestBody)
 	}
 }
 

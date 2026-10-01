@@ -2,7 +2,6 @@ import { z } from 'zod';
 
 export enum ExecutionMode {
   Device = 'device',
-  Companion = 'companion',
   Remote = 'remote',
   Auto = 'auto',
 }

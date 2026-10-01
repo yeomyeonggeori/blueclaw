@@ -269,7 +269,6 @@ export const capabilityDescriptorSchema = z.strictObject({
   ),
   requiresUserPresence: z.boolean(),
   requiresRequesterDevice: z.boolean().optional(),
-  requiresCompanionBrowser: z.boolean().optional(),
   worksOffline: z.boolean(),
   inputSchema: strictObjectJsonSchema,
   inputIntentSchema: strictObjectJsonSchema.optional(),
@@ -305,8 +304,6 @@ export const capabilityRegistryResponseSchema = protocolIdentitySchema.extend({
   localOnly: z.boolean(),
   routingCandidates: z.array(z.string()).nullable(),
   deviceCapabilities: z.array(capabilityDescriptorSchema).optional(),
-  companionStatus: z.string().optional(),
-  companionCapabilities: z.array(capabilityDescriptorSchema).optional(),
   capabilities: z.array(capabilityDescriptorSchema).optional(),
 });
 

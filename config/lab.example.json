@@ -1,10 +1,6 @@
 {
   "host": {
-    "mode": "single-mac",
-    "companion": {
-      "listenAddress": "127.0.0.1:7780",
-      "callbackBaseURL": "http://127.0.0.1:7780/callback"
-    }
+    "mode": "single-mac"
   },
   "vm": {
     "tart": {

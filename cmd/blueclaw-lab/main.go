@@ -90,8 +90,6 @@ func main() {
 		errorValue = service.VirtualMachineDown(ctx)
 	case "vm-ssh":
 		errorValue = service.VirtualMachineSSH(ctx, flag.Args()[1:])
-	case "scenario-browser-handoff":
-		errorValue = service.ScenarioBrowserHandoff(ctx)
 	case "scenario-mattermost":
 		errorValue = service.ScenarioMattermost(ctx)
 	case "scenario-slack":

@@ -10,11 +10,7 @@ func TestLoadConfigurationAppliesDefaults(t *testing.T) {
 	workspacePath := t.TempDir()
 	configurationPath := filepath.Join(workspacePath, "lab.json")
 	errorValue := os.WriteFile(configurationPath, []byte(`{
-  "host": {
-    "companion": {
-      "listenAddress": "127.0.0.1:7780"
-    }
-  },
+  "host": {},
   "vm": {
     "tart": {
       "name": "blueclaw-dev",

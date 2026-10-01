@@ -9,8 +9,8 @@ import (
 
 // Every axis the runtime reads has to survive runtime.json. A field that admind
 // writes and this struct omits reads as its zero value, which turns the behaviour
-// off with no error anywhere: the companion gate stops hiding browser tools, and
-// a session approval never covers a second call.
+// off with no error anywhere: a tool that needs the requester's own device stops
+// being hidden, and a session approval never covers a second call.
 
 func TestCapabilityToolDescriptorKeepsTheAxesTheRuntimeReads(t *testing.T) {
 	var configured config.CapabilityToolDescriptor
@@ -26,7 +26,7 @@ func TestCapabilityToolDescriptorKeepsTheAxesTheRuntimeReads(t *testing.T) {
 	}
 	descriptor := catalogDescriptors[0]
 	if !descriptor.RequiresRequesterDevice {
-		t.Error("expected requiresRequesterDevice to reach the companion availability gate")
+		t.Error("expected requiresRequesterDevice to reach the reachability gate")
 	}
 	if descriptor.ApprovalScope != "browser" {
 		t.Errorf("expected approvalScope to reach the session approval gate, got %q", descriptor.ApprovalScope)

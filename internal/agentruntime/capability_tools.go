@@ -577,9 +577,6 @@ func capabilityToolRequest(toolContext context.Context, descriptor CapabilityToo
 	if descriptor.RequiresUserPresence {
 		requestDocument["requiresUserPresence"] = true
 	}
-	if descriptor.PrivacyClass == "user_browser" {
-		requestDocument["executionMode"] = "companion"
-	}
 	return requestDocument
 }
 

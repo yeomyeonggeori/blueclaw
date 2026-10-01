@@ -8,7 +8,6 @@ import (
 const registryPath = "/v1/capabilities"
 
 type Registry struct {
-	CompanionStatus    string           `json:"companionStatus"`
 	DeviceCapabilities []ToolDescriptor `json:"deviceCapabilities"`
 }
 

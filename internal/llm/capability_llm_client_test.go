@@ -316,7 +316,7 @@ func TestCapabilityLLMClientSendsRequesterContext(t *testing.T) {
 		if errorValue := json.NewDecoder(request.Body).Decode(&receivedDocument); errorValue != nil {
 			t.Fatalf("expected request document to decode: %v", errorValue)
 		}
-		return jsonCapabilityResponse(http.StatusOK, `{"provider":"capabilityLLM","model":"gemma","content":"{\"reply\":\"ok\"}","selectedBackend":"companion_local"}`), nil
+		return jsonCapabilityResponse(http.StatusOK, `{"provider":"capabilityLLM","model":"gemma","content":"{\"reply\":\"ok\"}","selectedBackend":"device_local"}`), nil
 	}}
 	client := CapabilityLLMClient{
 		CapabilityClient: capability.Client{
@@ -642,7 +642,7 @@ func routeBodies(t *testing.T, ctx context.Context) map[string]map[string]any {
 		if request.URL.Path == "/v1/llm/chat" {
 			return jsonCapabilityResponse(http.StatusOK, `{"provider":"capabilityLLM","model":"gemma","finishReason":"stop","message":{"role":"assistant","content":"done"}}`), nil
 		}
-		return jsonCapabilityResponse(http.StatusOK, `{"provider":"capabilityLLM","model":"gemma","content":"{\"reply\":\"ok\"}","selectedBackend":"companion_local"}`), nil
+		return jsonCapabilityResponse(http.StatusOK, `{"provider":"capabilityLLM","model":"gemma","content":"{\"reply\":\"ok\"}","selectedBackend":"device_local"}`), nil
 	}}
 	client := CapabilityLLMClient{
 		CapabilityClient: capability.Client{

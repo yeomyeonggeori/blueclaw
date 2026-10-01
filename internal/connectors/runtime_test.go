@@ -1864,11 +1864,11 @@ func TestConnectorRuntimeAddsSenderToRecoveryActions(t *testing.T) {
 		"task-1",
 		ReplyTarget{ConversationID: "direct-1", ReplyTargetID: "reply-target-1"},
 		agentcontract.AgentTurnResult{
-			UserNotice: "Companion 연결이 필요합니다.",
+			UserNotice: "브라우저 연결이 필요합니다.",
 			RecoveryActions: []toolcontract.RecoveryAction{{
-				Kind:           "companion_connect",
+				Kind:           "browser_connect",
 				Delivery:       "dm_preferred",
-				DownloadURL:    "https://example.com/companion.dmg",
+				DownloadURL:    "https://example.com/setup",
 				ConnectCommand: "/connect",
 			}},
 		},
@@ -3217,7 +3217,7 @@ func TestConnectorRuntimeReadsTypedCapabilityToolResponse(t *testing.T) {
 			}
 			return &http.Response{
 				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(`{"provider":"companion","selectedBackend":"device","toolName":"browser_snapshot","outcome":"succeeded","status":"ok","result":{"url":"https://example.com","snapshotText":"Example","devicePath":"/tmp/internkim-companion-files/screen.png","filename":"screen.png","contentType":"image/png","sizeBytes":123}}`)),
+				Body:       io.NopCloser(strings.NewReader(`{"provider":"internkim","selectedBackend":"device","toolName":"browser_snapshot","outcome":"succeeded","status":"ok","result":{"url":"https://example.com","snapshotText":"Example","devicePath":"/tmp/device-browser/screen.png","filename":"screen.png","contentType":"image/png","sizeBytes":123}}`)),
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
 			}, nil
 		}),

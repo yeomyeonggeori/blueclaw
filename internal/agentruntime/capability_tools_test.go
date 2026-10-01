@@ -682,9 +682,9 @@ func TestCapabilityRecoveryHintsCarryTheToolNamesTheCapabilityNamed(t *testing.T
 }
 
 func TestCapabilityRecoveryHintsKeepTheLegacyRecoveryAction(t *testing.T) {
-	hints := capabilityRecoveryHints(json.RawMessage(`{"recovery":{"kind":"companion_connect","delivery":"direct_message"}}`))
+	hints := capabilityRecoveryHints(json.RawMessage(`{"recovery":{"kind":"browser_connect","delivery":"direct_message"}}`))
 
-	if len(hints) != 1 || hints[0].Action != "companion_connect" {
+	if len(hints) != 1 || hints[0].Action != "browser_connect" {
 		t.Fatalf("hints = %+v", hints)
 	}
 }
