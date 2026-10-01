@@ -29,7 +29,7 @@ func workspaceSkillInstruction(skillName string) agentcontract.SkillInstruction 
 
 // ScenarioSkillNames are the skills these scenarios drive. They are the host's
 // to supply, so a standalone checkout finds none of them.
-var ScenarioSkillNames = []string{"presentation", "scheduled-task", "calendar", "internkim-task", "messages", "website"}
+var ScenarioSkillNames = []string{"office", "scheduled-task", "calendar", "internkim-task", "messages", "website"}
 
 func rootWorkspaceSkillDirectoryPath(skillName string) string {
 	skillDirectoryPath := findScenarioSkillDirectory(skillName)
@@ -98,15 +98,15 @@ func PresentationLocalMultiturnSuccessScenario(artifactDirectoryPath string) Vir
 	return VirtualSessionScenario{
 		Name:                  "presentation_local_multiturn_success",
 		ArtifactDirectoryPath: artifactDirectoryPath,
-		Skills:                []agentcontract.SkillInstruction{presentationSkill()},
+		Skills:                []agentcontract.SkillInstruction{officeSkill()},
 		AllowedTools:          []string{"conversation_history", "memory_search", "bash", "write", "file_deliver"},
 		Turns: []VirtualTurn{{
 			Prompt:                 "너 뭐 할 수 있는지 8장 피피티 만들어서 보내줘봐",
-			ExpectedSelectedSkills: []string{"presentation"},
+			ExpectedSelectedSkills: []string{"office"},
 			ExpectedToolCalls:      []string{"bash", "file_deliver"},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: toolRequestedEventName("bash"), BodyFragment: "NAME=", Count: 1},
-				{Name: toolRequestedEventName("bash"), BodyFragment: "scripts/build.sh", MinCount: 1},
+				{Name: toolRequestedEventName("bash"), BodyFragment: "scripts/office deck build", MinCount: 1},
 				{Name: toolResultEventName("bash"), BodyFragment: "Building requested formats", MinCount: 1},
 				{Name: toolResultEventName("bash"), BodyFragment: "Slide render review", Count: 1},
 				{Name: toolResultEventName("file_deliver"), BodyFragment: `"output"`, Count: 1},
@@ -242,7 +242,7 @@ func ToolPermissionHidesSkillScenario(artifactDirectoryPath string) VirtualSessi
 	return VirtualSessionScenario{
 		Name:                  "tool_permission_hides_skill",
 		ArtifactDirectoryPath: artifactDirectoryPath,
-		Skills:                []agentcontract.SkillInstruction{presentationSkill()},
+		Skills:                []agentcontract.SkillInstruction{officeSkill()},
 		AllowedTools:          []string{"memory_search", "write"},
 		Turns: []VirtualTurn{{
 			Prompt:          "피피티 만들어줘",
@@ -323,7 +323,7 @@ func DocumentCreateAcceptanceScenario(artifactDirectoryPath string) VirtualSessi
 		InitialToolNames:      []string{"bash", "read", "write", "file_deliver"},
 		Turns: []VirtualTurn{{
 			Prompt:                 "운영팀과 재무팀이 함께 검토할 '분기 결산 운영 검토'라는 짧은 DOCX 문서를 작성해서 이 DM에 첨부해줘. 검토 목적과 다음 단계를 간단히 적고, 현재 상태는 초안, 담당은 운영팀이라고 표시해줘.",
-			ExpectedSelectedSkills: []string{"document"},
+			ExpectedSelectedSkills: []string{"office"},
 			ExpectedToolCalls:      []string{"write", "bash", "file_deliver"},
 			ExpectedToolCallCounts: map[string]int{"file_deliver": 1},
 			ExpectedEventCounts: []VirtualEventCount{
@@ -1020,7 +1020,7 @@ func CapabilityQuestionAcceptanceScenario(artifactDirectoryPath string) VirtualS
 	return VirtualSessionScenario{
 		Name:                  "capability_question_acceptance",
 		ArtifactDirectoryPath: artifactDirectoryPath,
-		Skills:                []agentcontract.SkillInstruction{presentationSkill(), scheduledTaskSkill(), sitePrototypeSkill()},
+		Skills:                []agentcontract.SkillInstruction{officeSkill(), scheduledTaskSkill(), sitePrototypeSkill()},
 		AllowedTools:          []string{"memory_search"},
 		Turns: []VirtualTurn{{
 			Prompt:          "너는 무엇을 할 수 있어?",
@@ -1031,7 +1031,7 @@ func CapabilityQuestionAcceptanceScenario(artifactDirectoryPath string) VirtualS
 			ForbiddenExposedTools:  []string{"skill_search"},
 			ForbidToolCalls:        true,
 			ForbiddenEvents:        []string{agentcontract.TaskEventAgentEvidenceMissing},
-			ExpectedModelContexts:  []string{"- skills: memory, presentation, scheduled-task, website"},
+			ExpectedModelContexts:  []string{"- skills: memory, office, scheduled-task, website"},
 			ExpectedReplyFragments: []string{"일정 예약"},
 		}},
 	}
@@ -1647,8 +1647,8 @@ func PlatformMessageEditAcceptanceScenario(artifactDirectoryPath string) Virtual
 	}
 }
 
-func presentationSkill() agentcontract.SkillInstruction {
-	return workspaceSkillInstruction("presentation")
+func officeSkill() agentcontract.SkillInstruction {
+	return workspaceSkillInstruction("office")
 }
 
 func sitePrototypeSkill() agentcontract.SkillInstruction {
