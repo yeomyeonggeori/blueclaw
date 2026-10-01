@@ -198,7 +198,7 @@ An external harness changes where the agent runs, how it reaches tools, and how 
 
 ### Serving ACP
 
-blueclaw can also be the agent. Started with `--acp-socket <path>`, it serves ACP on that unix socket (recreated at start, mode `0600`). `--inbound acp` makes ACP the only path that admits a message, and `POST /connectors/<platform>/events` then answers 409. See [ACP sessions](#acp-sessions).
+blueclaw can also be the agent. Started with `--acp-socket <path>`, it serves ACP on that unix socket, recreated at start with mode `0660`. The socket takes its group from the directory it is created in (on Linux, a setgid one), so the directory decides which account reaches the agent. `--inbound acp` makes ACP the only path that admits a message, and `POST /connectors/<platform>/events` then answers 409. See [ACP sessions](#acp-sessions).
 
 # Concepts
 
