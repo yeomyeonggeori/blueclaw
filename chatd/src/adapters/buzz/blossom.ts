@@ -1,4 +1,5 @@
 import { finalizeEvent } from "nostr-tools/pure";
+import { fetchFromRelay } from "./relay-trust.ts";
 
 export type BlossomBlob = {
 	url: string;
@@ -116,7 +117,7 @@ export async function uploadBlob(
 	const authorization = "Nostr " + Buffer.from(JSON.stringify(authEvent)).toString("base64");
 	const body = new ArrayBuffer(content.byteLength);
 	new Uint8Array(body).set(content);
-	const response = await fetch(blossomBaseURL(relayURL) + "/upload", {
+	const response = await fetchFromRelay(blossomBaseURL(relayURL) + "/upload", {
 		method: "PUT",
 		headers: {
 			Authorization: authorization,

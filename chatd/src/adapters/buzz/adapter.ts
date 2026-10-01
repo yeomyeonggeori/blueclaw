@@ -23,6 +23,7 @@ import {
 	type ManagedChannelSpec,
 } from "../../channels.ts";
 import { isServedByTheRelay, readAuthorizationHeader } from "./blossom.ts";
+import { fetchFromRelay } from "./relay-trust.ts";
 import { createBuzzRelayClient, type BuzzRelayClient } from "./relay-client.ts";
 import {
 	BUZZ_ADAPTER_NAME,
@@ -266,7 +267,7 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		if (!isServedByTheRelay(address, this.config.relayURL)) {
 			return new Response("attachment url is not served by this relay", { status: 400 });
 		}
-		return fetch(address, {
+		return fetchFromRelay(address, {
 			headers: { Authorization: readAuthorizationHeader(this.config.privateKeyHex, address) },
 		});
 	}
