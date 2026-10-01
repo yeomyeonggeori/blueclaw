@@ -265,10 +265,9 @@ export const capabilityDescriptorSchema = z.strictObject({
   privacyClass: nonBlankStringSchema,
   estimatedLatency: z.enum(CapabilityEstimatedLatency),
   answeredBy: z.enum(CapabilityAnsweredBy).describe(
-    'Which of three things holds the answer: the record, a service on the company machine, or a runtime beside the agent. Not whose machine, which requiresRequesterDevice states. A caller with no runtime of its own, a public API among them, refuses local rather than forwarding it.',
+    'Which of three things holds the answer: the record, a service on the company machine, or a runtime beside the agent. A caller with no runtime of its own, a public API among them, refuses local rather than forwarding it.',
   ),
   requiresUserPresence: z.boolean(),
-  requiresRequesterDevice: z.boolean().optional(),
   worksOffline: z.boolean(),
   inputSchema: strictObjectJsonSchema,
   inputIntentSchema: strictObjectJsonSchema.optional(),

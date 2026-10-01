@@ -13,9 +13,9 @@
       {
         "name": "browser_open",
         "version": "1",
-        "privacyClass": "user_browser",
+        "privacyClass": "device_browser",
         "estimatedLatency": "interactive",
-        "requiresUserPresence": true,
+        "requiresUserPresence": false,
         "worksOffline": false,
         "inputSchema": {
           "type": "object",

@@ -336,7 +336,7 @@ bluememo has since moved to one SQLite file per person. The blueclaw integration
 
 A capability is an operation a separate service performs on the agent's behalf, such as sending a message, changing a calendar, or running a model.
 
-blueclaw stays provider-neutral. It asks for a capability and passes an `executionMode` (`device`, `remote` or `auto`, default `auto`); the capability service decides where it runs. Descriptors mark tools that need the requester present (`requiresUserPresence`) or their own device (`requiresRequesterDevice`). Nothing reaches a requester's own device, so a tool that needs one is never offered to the model, and tools that need the user present are not registered for scheduled runs.
+blueclaw stays provider-neutral. It asks for a capability and passes an `executionMode` (`device`, `remote` or `auto`, default `auto`); the capability service decides where it runs. Descriptors mark tools that need the requester present (`requiresUserPresence`), and those are not registered for scheduled runs.
 
 The `capabilities` block names the service: `endpoint`, `unixSocketPath`, or `vsockCID` and `vsockPort` for a guest, plus `timeoutSecond`. The request and response shapes are Zod contracts in `protocol/` (`capability-descriptor`, `capability-registry-response`, `tool-invoke-request`, `tool-invoke-response`). A deployment without the block reports `capabilityd: not_configured` in health and runs without capability tools, capability-routed models, or memory embeddings.
 

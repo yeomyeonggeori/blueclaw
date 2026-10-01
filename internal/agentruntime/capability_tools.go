@@ -42,7 +42,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerCapabilityTools(
 		request:            request,
 		descriptors: toolCatalogBuilder.withoutToolNamesAlreadyRegistered(
 			toolRegistry,
-			toolCatalogBuilder.reachableCapabilityToolDefinitions(),
+			toolCatalogBuilder.capabilityToolDefinitions(),
 		),
 	}
 	quarantinedProviders, errorValue := toolRegistry.RegisterProviders(context.Background(), []toolcontract.ToolProviderRegistration{{

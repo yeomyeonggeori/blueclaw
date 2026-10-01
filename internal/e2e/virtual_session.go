@@ -115,6 +115,11 @@ var virtualGeneratedDescriptorToolNames = []string{
 	"message_delete",
 	"document_read",
 	"image_read",
+	"browser_open",
+	"browser_fill",
+	"browser_select",
+	"browser_press",
+	"browser_wait",
 }
 
 var virtualGeneratedResultContractToolNames = []string{
@@ -743,6 +748,7 @@ var builtinScenarioFactories = map[string]func(string) VirtualSessionScenario{
 	"request_revision_acceptance":               RequestRevisionAcceptanceScenario,
 	"plain_question_acceptance":                 PlainQuestionAcceptanceScenario,
 	"web_search_acceptance":                     WebSearchAcceptanceScenario,
+	"browser_form_acceptance":                   BrowserFormAcceptanceScenario,
 	"tool_permission_hides_skill":               ToolPermissionHidesSkillScenario,
 	"file_write_acceptance":                     FileWriteAcceptanceScenario,
 	"document_create_acceptance":                DocumentCreateAcceptanceScenario,
@@ -1639,6 +1645,8 @@ func (service *virtualCapabilityService) response(toolName string, requestBody [
 			}},
 		}
 		return virtualCapabilitySuccess(toolName, answer, result)
+	case "browser_open", "browser_fill", "browser_select", "browser_press", "browser_wait":
+		return virtualCapabilitySuccess(toolName, toolName+" completed in the company browser", virtualBrowserResult(toolName, virtualCapabilityInput(requestBody)))
 	case "message_context":
 		return virtualCapabilitySuccess(toolName, "virtual Mattermost conversation context", virtualMessageContextResult())
 	case "message_search":
@@ -1675,6 +1683,27 @@ func (service *virtualCapabilityService) response(toolName string, requestBody [
 		return virtualCapabilityMessageSuccess(toolName, "deleted", messageIDs, "deleted virtual platform messages", result)
 	default:
 		return virtualCapabilitySuccess(toolName, toolName+" completed", map[string]any{"toolName": toolName, "ok": true, "request": virtualCapabilityInput(requestBody)})
+	}
+}
+
+func virtualBrowserResult(toolName string, input map[string]any) map[string]any {
+	capturedAt := "2026-10-01T09:00:00Z"
+	target := firstVirtualString(stringValue(input["target"]), stringValue(input["ref"]), stringValue(input["selector"]))
+	switch toolName {
+	case "browser_open":
+		url := stringValue(input["url"])
+		return map[string]any{
+			"url":             url,
+			"requestedURL":    url,
+			"title":           "Signup",
+			"snapshotText":    "- textbox \"Name\" [ref=e2]\n- combobox \"Team\" [ref=e3]\n- button \"Send\" [ref=e1]",
+			"interactiveRefs": []string{"@e1", "@e2", "@e3"},
+			"capturedAt":      capturedAt,
+		}
+	case "browser_press":
+		return map[string]any{"ok": true, "action": "press", "capturedAt": capturedAt}
+	default:
+		return map[string]any{"ok": true, "action": strings.TrimPrefix(toolName, "browser_"), "target": target, "capturedAt": capturedAt}
 	}
 }
 

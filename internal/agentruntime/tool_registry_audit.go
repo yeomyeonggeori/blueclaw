@@ -242,14 +242,3 @@ func registryContainsString(values []string, expected string) bool {
 	}
 	return false
 }
-
-func (toolCatalogBuilder *ToolCatalogBuilder) reachableCapabilityToolDefinitions() []CapabilityToolDescriptor {
-	reachableDescriptors := []CapabilityToolDescriptor{}
-	for _, descriptor := range toolCatalogBuilder.capabilityToolDefinitions() {
-		if descriptor.RequiresRequesterDevice {
-			continue
-		}
-		reachableDescriptors = append(reachableDescriptors, descriptor)
-	}
-	return reachableDescriptors
-}
