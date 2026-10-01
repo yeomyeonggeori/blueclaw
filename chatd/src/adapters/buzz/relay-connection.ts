@@ -1,4 +1,5 @@
 import type { BuzzEvent } from "./types.ts";
+import { verifiedEvent } from "./verified-event.ts";
 
 type EventListener = (event: BuzzEvent) => void;
 
@@ -36,6 +37,11 @@ export type EventSigner = {
 	pubkeyHex: string;
 	signEvent: (kind: number, content: string, tags: string[][]) => BuzzEvent;
 };
+
+function describeEventID(value: unknown): string {
+	if (typeof value === "object" && value !== null && "id" in value && typeof value.id === "string") return value.id;
+	return "with no id";
+}
 
 export function createRelayConnection(
 	relayURL: string,
@@ -140,7 +146,11 @@ export function createRelayConnection(
 		}
 		if (frameType === "EVENT" && typeof rest[0] === "string") {
 			const subscriptionID = rest[0];
-			const event = rest[1] as BuzzEvent;
+			const event = verifiedEvent(rest[1]);
+			if (!event) {
+				console.error(`[buzz-relay] dropped event ${describeEventID(rest[1])} from ${relayURL}: its id or signature does not verify`);
+				return;
+			}
 			pendingQueries.get(subscriptionID)?.events.push(event);
 			liveSubscriptions.get(subscriptionID)?.onEvent(event);
 			return;

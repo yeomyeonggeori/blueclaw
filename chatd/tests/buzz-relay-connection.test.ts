@@ -162,3 +162,80 @@ describe("a relay that stops answering", () => {
 		client.disconnect();
 	});
 });
+
+describe("an event the relay delivers", () => {
+	function flipLastHexDigit(hex: string): string {
+		return hex.slice(0, -1) + (hex.endsWith("0") ? "1" : "0");
+	}
+
+	async function deliver(event: unknown): Promise<{ heard: BuzzEvent[]; logged: string[] }> {
+		const logged: string[] = [];
+		console.error = (line: string) => void logged.push(line);
+		const client = createRelayConnection(relayURL, signer, undefined, timing);
+		await client.connect();
+		const socket = FakeSocket.opened[0]!;
+		const heard: BuzzEvent[] = [];
+		client.subscribe([{ kinds: [9] }], (arrived) => heard.push(arrived));
+		socket.receive(["EVENT", socket.requests().at(-1)?.[1], event]);
+		client.disconnect();
+		return { heard, logged };
+	}
+
+	test("is handled when its id and signature verify", async () => {
+		const event = signer.signEvent(9, "hello", [["h", "room-1"]]);
+
+		const { heard, logged } = await deliver(event);
+
+		expect(heard.map((arrived) => arrived.id)).toEqual([event.id]);
+		expect(logged).toEqual([]);
+	});
+
+	test("is dropped, naming the event and the relay, when its content was altered", async () => {
+		const event = signer.signEvent(9, "hello", []);
+
+		const { heard, logged } = await deliver({ ...event, content: "forged" });
+
+		expect(heard).toEqual([]);
+		expect(logged).toEqual([`[buzz-relay] dropped event ${event.id} from ${relayURL}: its id or signature does not verify`]);
+	});
+
+	test("is dropped when its signature was altered", async () => {
+		const event = signer.signEvent(9, "hello", []);
+
+		const { heard } = await deliver({ ...event, sig: flipLastHexDigit(event.sig) });
+
+		expect(heard).toEqual([]);
+	});
+
+	test("is dropped when its id does not hash its content", async () => {
+		const event = signer.signEvent(9, "hello", []);
+
+		const { heard } = await deliver({ ...event, id: flipLastHexDigit(event.id) });
+
+		expect(heard).toEqual([]);
+	});
+
+	test("is dropped when it is not an event at all", async () => {
+		const { heard, logged } = await deliver({ id: 7 });
+
+		expect(heard).toEqual([]);
+		expect(logged).toHaveLength(1);
+	});
+
+	test("does not resolve a query with a forged event", async () => {
+		const client = createRelayConnection(relayURL, signer, undefined, timing);
+		await client.connect();
+		const socket = FakeSocket.opened[0]!;
+		const genuine = signer.signEvent(0, "profile", []);
+		const answer = client.query({ kinds: [0] });
+		await settle();
+		const queryID = socket.requests().at(-1)?.[1];
+
+		socket.receive(["EVENT", queryID, { ...genuine, content: "forged" }]);
+		socket.receive(["EVENT", queryID, genuine]);
+		socket.receive(["EOSE", queryID]);
+
+		expect((await answer).map((arrived) => arrived.id)).toEqual([genuine.id]);
+		client.disconnect();
+	});
+});
