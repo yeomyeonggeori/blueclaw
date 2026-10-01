@@ -207,7 +207,7 @@ func timePointer(value time.Time) *time.Time {
 }
 
 func terminalTestCanResolveBun() bool {
-	for _, path := range strings.Split(security.CanonicalRuntimePATH, ":") {
+	for _, path := range filepath.SplitList(security.RuntimePATH()) {
 		path = filepath.Join(path, "bun")
 		if information, errorValue := os.Stat(path); errorValue == nil && !information.IsDir() {
 			return true

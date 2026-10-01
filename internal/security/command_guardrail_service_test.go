@@ -61,8 +61,8 @@ func TestCommandPlanUsesPOSIXHelperForExecutionIdentity(t *testing.T) {
 	if commandPlan.EnvironmentVariables["HOME"] != workspaceRootPath {
 		t.Fatalf("expected POSIX HOME environment, got %+v", commandPlan.EnvironmentVariables)
 	}
-	if commandPlan.EnvironmentVariables["PATH"] != CanonicalRuntimePATH {
-		t.Fatalf("expected canonical runtime PATH, got %+v", commandPlan.EnvironmentVariables)
+	if commandPlan.EnvironmentVariables["PATH"] != RuntimePATH() {
+		t.Fatalf("expected the agent's own PATH, got %+v", commandPlan.EnvironmentVariables)
 	}
 	if _, isPresent := commandPlan.EnvironmentVariables["BLUECLAW_TASK_TMP"]; isPresent {
 		t.Fatalf("expected no task tmp environment outside a task run, got %+v", commandPlan.EnvironmentVariables)
@@ -84,7 +84,10 @@ func TestCommandPlanUsesPOSIXHelperForExecutionIdentity(t *testing.T) {
 	}
 }
 
+const supervisorPATH = "/opt/example/python/bin:/usr/bin:/bin"
+
 func TestSanitizeEnvironmentIgnoresRequesterPATH(t *testing.T) {
+	t.Setenv("PATH", supervisorPATH)
 	environmentVariables := sanitizeEnvironmentVariables(map[string]string{
 		"PATH":               "/workspace/private/people/person-1/bin",
 		"HOME":               "/workspace/private/people/person-1",
@@ -92,8 +95,8 @@ func TestSanitizeEnvironmentIgnoresRequesterPATH(t *testing.T) {
 		"OPENROUTER_API_KEY": "secret",
 	}, "/workspace")
 
-	if environmentVariables["PATH"] != CanonicalRuntimePATH {
-		t.Fatalf("expected requester PATH to be ignored, got %+v", environmentVariables)
+	if environmentVariables["PATH"] != supervisorPATH {
+		t.Fatalf("expected requester PATH to give way to the one the agent was started with, got %+v", environmentVariables)
 	}
 	if environmentVariables["XDG_CACHE_HOME"] != "/workspace/private/people/person-1/tmp/.runtime/cache" {
 		t.Fatalf("expected the workspace managed cache home to survive sanitization, got %+v", environmentVariables)
@@ -103,15 +106,16 @@ func TestSanitizeEnvironmentIgnoresRequesterPATH(t *testing.T) {
 	}
 }
 
-func TestApplyPOSIXEnvironmentPreservesCanonicalPATH(t *testing.T) {
+func TestApplyPOSIXEnvironmentGivesTheAgentsOwnPATH(t *testing.T) {
+	t.Setenv("PATH", supervisorPATH)
 	environmentVariables := applyPOSIXEnvironment(map[string]string{
 		"PATH": "/workspace/private/people/person-1/bin",
 	}, ExecutionIdentity{
 		HomeDirectoryPath: "/workspace/private/people/person-1",
 	})
 
-	if environmentVariables["PATH"] != CanonicalRuntimePATH {
-		t.Fatalf("expected canonical runtime PATH after POSIX environment, got %+v", environmentVariables)
+	if environmentVariables["PATH"] != supervisorPATH {
+		t.Fatalf("expected the agent's own PATH after POSIX environment, got %+v", environmentVariables)
 	}
 }
 

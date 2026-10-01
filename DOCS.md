@@ -411,7 +411,7 @@ Command execution is how a tool call becomes a process running as the requester.
 blueclaw-posix-helper exec --uid <uid> --gid <gid> --groups <gids> --cwd <dir> -- <argv>
 ```
 
-The helper is installed `root:root 4755` and accepts only a real UID of `root` or `blueclaw`. It calls `setgroups`, `setgid` and `setuid` in that order, then `exec`s with a canonical `PATH`, after which the process is the requester and cannot regain privilege. Its other commands are `capabilities`, `sync` (apply the projected users, groups and modes), `reconcile-home` and `fs` (one filesystem operation, after the same drop).
+The helper is installed `root:root 4755` and accepts only a real UID of `root` or `blueclaw`. It calls `setgroups`, `setgid` and `setuid` in that order, then `exec`s with the environment it was handed, after which the process is the requester and cannot regain privilege. Its other commands are `capabilities`, `sync` (apply the projected users, groups and modes), `reconcile-home` and `fs` (one filesystem operation, after the same drop).
 
 File tools are the same path. `read`, `write`, `edit`, `file_delete` and the rest build a shell command and run it through the requester's shell (`internal/agentruntime/requester_shell.go`), starting in the requester's `$HOME`, so tilde expansion, globs and relative paths behave as they would at that person's prompt.
 
@@ -431,7 +431,7 @@ A command the requester may not run fails at the kernel, as it would for that pe
 |---|---|
 | refuses to execute when the daemon is effectively root | `BuildCommandPlan` |
 | resolves the working directory against the workspace root | `resolveWorkingDirectoryPath` |
-| builds the environment from the identity and forces a canonical `PATH` | `sanitizeEnvironmentVariables`, `applyPOSIXEnvironment` |
+| builds the environment from the identity and gives it the agent's own `PATH`, the one its supervisor started it with | `sanitizeEnvironmentVariables`, `applyPOSIXEnvironment` |
 | caps the timeout | `timeoutSecond` |
 | requires bubblewrap when `terminal.mode` is `sandbox` | `BuildCommandPlan` |
 

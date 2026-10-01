@@ -323,7 +323,7 @@ func TestTerminalRunMaterializesRequesterRuntimeEnvironment(t *testing.T) {
 	requesterRootPath := filepath.Join(workspacePath, "private", "people", "person-1")
 	expectedValues := []string{
 		requesterRootPath,
-		security.CanonicalRuntimePATH,
+		security.RuntimePATH(),
 		filepath.Join(requesterRootPath, "tmp", ".runtime", "tmp"),
 		filepath.Join(requesterRootPath, "tmp", ".runtime", "bun", "tmp"),
 		filepath.Join(requesterRootPath, "tmp", ".runtime", "bun", "install"),
@@ -334,7 +334,7 @@ func TestTerminalRunMaterializesRequesterRuntimeEnvironment(t *testing.T) {
 		t.Fatalf("expected exact runtime environment paths %v, got %v", expectedValues, actualValues)
 	}
 	for _, expectedText := range expectedValues {
-		if expectedText == requesterRootPath || expectedText == security.CanonicalRuntimePATH {
+		if expectedText == requesterRootPath || expectedText == security.RuntimePATH() {
 			continue
 		}
 		if _, errorValue := os.Stat(expectedText); errorValue != nil {

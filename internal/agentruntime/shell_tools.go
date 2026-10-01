@@ -194,7 +194,7 @@ func terminalRuntimePathFailure(commandRequest security.CommandRequest, commandR
 		"failureClass":      "shell_runtime_path",
 		"command":           commandRequest.Command,
 		"actualPATH":        commandRequest.EnvironmentVariables["PATH"],
-		"canonicalPATH":     security.CanonicalRuntimePATH,
+		"runtimePATH":       security.RuntimePATH(),
 		"executionUser":     commandRequest.ExecutionIdentity.UserName,
 		"workingDirectory":  commandRequest.WorkingDirectoryPath,
 		"commandResult":     commandResult,
@@ -236,7 +236,7 @@ func requesterWorkspaceEnvironment(requesterHomePath string, workspaceRootPath s
 	environmentVariables := map[string]string{
 		"BLUECLAW_REQUESTER_ARTIFACTS": filepath.Join(requesterHomePath, "artifacts"),
 		"HOME":                         requesterHomePath,
-		"PATH":                         security.CanonicalRuntimePATH,
+		"PATH":                         security.RuntimePATH(),
 		"TMPDIR":                       filepath.Join(scratchRootPath, "tmp"),
 		"TMP":                          filepath.Join(scratchRootPath, "tmp"),
 		"TEMP":                         filepath.Join(scratchRootPath, "tmp"),

@@ -1,6 +1,15 @@
 package security
 
-const CanonicalRuntimePATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+import "os"
+
+// RuntimePATH is the PATH every command the agent runs is given: the one its
+// supervisor started it with. The unit that starts the agent is what knows
+// where this host keeps its programs, and a company host puts its own Python
+// first there, so a requester's `python3` is the host's interpreter rather than
+// whichever one the distribution ships.
+func RuntimePATH() string {
+	return os.Getenv("PATH")
+}
 
 var workspaceManagedEnvironmentNames = map[string]bool{
 	"BLUECLAW_TASK_TMP":            true,
@@ -23,10 +32,10 @@ func IsWorkspaceManagedEnvironmentName(name string) bool {
 	return workspaceManagedEnvironmentNames[name]
 }
 
-func enforceCanonicalRuntimePATH(environmentVariables map[string]string) map[string]string {
+func enforceRuntimePATH(environmentVariables map[string]string) map[string]string {
 	if environmentVariables == nil {
 		environmentVariables = map[string]string{}
 	}
-	environmentVariables["PATH"] = CanonicalRuntimePATH
+	environmentVariables["PATH"] = RuntimePATH()
 	return environmentVariables
 }
