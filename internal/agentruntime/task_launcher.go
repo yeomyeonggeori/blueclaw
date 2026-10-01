@@ -7,7 +7,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-	"github.com/yeomyeonggeori/bluememo"
 	"path/filepath"
 	"strings"
 	"time"
@@ -102,7 +101,6 @@ type TaskLaunchRequest struct {
 	HistoryProvider            HistoryProvider
 	AttachmentMaterialResolver AttachmentMaterialResolver
 	PersonAccess               policy.PersonAccess
-	MemoryLabel                bluememo.SecurityLabel
 	AccessibleConversationIDs  []string
 	CheckpointSender           agentcontract.AgentCheckpointSender
 	ArtifactManifest           []agentcontract.ArtifactManifestEntry
@@ -144,12 +142,12 @@ type launchStepRecord struct {
 }
 
 type launchMemoryResult struct {
-	Facts            []memory.MemoryFact
-	ProfileLineCount int
-	RecalledCount    int
-	Mode             string
-	DegradedReason   string
-	Error            string
+	Facts          []memory.MemoryFact
+	IdentityCount  int
+	RecalledCount  int
+	Mode           string
+	DegradedReason string
+	Error          string
 }
 
 type IntakeBudget struct {
@@ -401,7 +399,7 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 		if turnResult.TaskRun.TaskRunID != request.ExistingTaskRunID {
 			taskLauncher.taskRunService.AppendTaskEvent(turnResult.TaskRun.TaskRunID, agentcontract.TaskEventAgentTaskLaunched, marshalTaskLaunchEvent(request, normalizedProfileName, launchedToolNames, registryAudit, len(memoryResult.Facts)))
 		}
-		if taskLauncher.toolCatalogBuilder.memoryStore != nil {
+		if taskLauncher.toolCatalogBuilder.memoryStores != nil {
 			taskLauncher.appendStoreMemoryLaunchEvents(turnResult.TaskRun.TaskRunID, request, memoryResult)
 		}
 		taskLauncher.appendAmbientDutyLaunchEvent(turnResult.TaskRun.TaskRunID, request)
@@ -500,7 +498,7 @@ func (loadMemoryLaunchStep) Name() string {
 }
 
 func (loadMemoryLaunchStep) Run(ctx context.Context, execution *taskLaunchExecution) (launchMemoryResult, error) {
-	if execution.Launcher.toolCatalogBuilder.memoryStore == nil {
+	if execution.Launcher.toolCatalogBuilder.memoryStores == nil {
 		return launchMemoryResult{}, nil
 	}
 	return recallLaunchMemory(ctx, execution), nil
@@ -512,20 +510,22 @@ func recallLaunchMemory(ctx context.Context, execution *taskLaunchExecution) lau
 	request := execution.Request
 	recallContext, cancelRecall := context.WithTimeout(ctx, launchGraphMemorySearchTimeout)
 	defer cancelRecall()
-	recall, errorValue := execution.Launcher.toolCatalogBuilder.memoryStore.Recall(recallContext, bluememo.RecallRequest{
-		Reader: execution.Launcher.toolCatalogBuilder.memoryReader(request.PersonAccess),
-		Query:  request.Prompt,
-		Limit:  bluememo.DefaultSearchResultLimit,
-	})
+	builder := execution.Launcher.toolCatalogBuilder
+	recalled, errorValue := builder.memoryStores.RecallAcross(
+		recallContext,
+		builder.memoryScopes(request.PersonAccess),
+		request.Prompt,
+		memory.DefaultRecallLimit,
+	)
 	if errorValue != nil {
 		return launchMemoryResult{Error: errorValue.Error()}
 	}
 	return launchMemoryResult{
-		Facts:            memory.LoopMemoryFacts(recall, request.RequesterPersonID),
-		ProfileLineCount: len(recall.ProfileLines()),
-		RecalledCount:    len(recall.Facts),
-		Mode:             recall.Mode,
-		DegradedReason:   recall.DegradedReason,
+		Facts:          recalled.Facts,
+		IdentityCount:  memory.IdentityFactCount(recalled.Facts),
+		RecalledCount:  len(recalled.Facts),
+		Mode:           recalled.Mode,
+		DegradedReason: recalled.DegradedReason,
 	}
 }
 
@@ -534,20 +534,17 @@ func (taskLauncher *TaskLauncher) appendStoreMemoryLaunchEvents(taskRunID string
 		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "memory.recall_failed", memoryResult.Error)
 	} else {
 		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "memory.recall_injected", MarshalBody(map[string]any{
-			"profileLineCount": memoryResult.ProfileLineCount,
-			"recalledCount":    memoryResult.RecalledCount,
-			"characters":       memoryFactCharacterCount(memoryResult.Facts),
-			"mode":             memoryResult.Mode,
-			"degradedReason":   memoryResult.DegradedReason,
+			"identityCount":  memoryResult.IdentityCount,
+			"recalledCount":  memoryResult.RecalledCount,
+			"characters":     memoryFactCharacterCount(memoryResult.Facts),
+			"mode":           memoryResult.Mode,
+			"degradedReason": memoryResult.DegradedReason,
 		}))
 	}
-	label := memorySecurityLabelForRequest(ToolCatalogRequest{PersonAccess: request.PersonAccess, MemoryLabel: request.MemoryLabel})
 	taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "memory.extraction_context", MarshalBody(memory.ExtractionContext{
-		RequesterName:     request.RequesterName,
-		ActiveCircleID:    request.ActiveCircleID,
-		SecurityLevelRank: label.SecurityLevelRank,
-		RequiredClasses:   label.RequiredClasses,
-		Platform:          request.Platform,
+		RequesterName:  request.RequesterName,
+		ActiveCircleID: request.ActiveCircleID,
+		Platform:       request.Platform,
 	}))
 }
 
@@ -788,7 +785,6 @@ func (taskLauncher *TaskLauncher) toolCatalogRequestForLaunch(request TaskLaunch
 		HistoryProvider:            request.HistoryProvider,
 		AttachmentMaterialResolver: request.AttachmentMaterialResolver,
 		PersonAccess:               request.PersonAccess,
-		MemoryLabel:                request.MemoryLabel,
 		AccessibleConversationIDs:  request.AccessibleConversationIDs,
 		InputParts:                 append([]agentcontract.AgentPart{}, request.InputParts...),
 		ScheduledRun:               request.ScheduledRun,

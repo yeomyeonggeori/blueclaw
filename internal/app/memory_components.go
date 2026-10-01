@@ -2,59 +2,66 @@ package app
 
 import (
 	"log/slog"
+	"path/filepath"
+	"time"
 
 	"github.com/yeomyeonggeori/bluememo"
-	bluememopostgres "github.com/yeomyeonggeori/bluememo/postgres"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
-	"github.com/yeomyeonggeori/blueclaw/internal/store/postgres"
+)
+
+const (
+	defaultMemoryEmbeddingModelName = "text-embedding-3-small"
+	memoryEmbeddingDimensionCount   = 1536
+	memoryMaintenanceInterval       = time.Hour
 )
 
 type memoryComponents struct {
-	store     *bluememo.Store
-	ingester  *bluememo.Ingester
-	jobWorker *bluememo.JobWorker
+	stores *memory.Stores
 }
 
-func newMemoryComponents(runtimeConfiguration config.RuntimeConfiguration, database postgres.Database, kernel agentKernel, services taskServices, identityService *identity.IdentityService, logger *slog.Logger) memoryComponents {
+// memoryDirectory is service-owned: a person's memory is written on their
+// behalf and is not theirs to edit, so it lives beside the rest of what only
+// blueclaw opens rather than under their own workspace.
+func memoryDirectory(workspaceRootPath string) string {
+	return filepath.Join(workspaceRootPath, ".blueclaw", "memory")
+}
+
+func newMemoryComponents(runtimeConfiguration config.RuntimeConfiguration, kernel agentKernel, services taskServices, identityService *identity.IdentityService, logger *slog.Logger) memoryComponents {
 	logger.Info("application.initializing", "stage", "memory")
-	if database.SQL == nil {
-		logger.Info("application.memory.fact_store_not_configured", "reason", "no database")
-		return memoryComponents{}
-	}
-	embeddingModelName := firstNonEmptyString(runtimeConfiguration.Memory.EmbeddingModel, bluememo.DefaultEmbeddingModelName)
-	store := &bluememo.Store{
-		Facts:    bluememopostgres.NewFactRepository(database.SQL),
-		Profiles: bluememopostgres.NewProfileRepository(database.SQL),
-		Jobs:     bluememopostgres.NewJobRepository(database.SQL),
-		Triggers: bluememopostgres.NewTriggerRepository(database.SQL),
+	embeddingModelName := firstNonEmptyString(runtimeConfiguration.Memory.EmbeddingModel, defaultMemoryEmbeddingModelName)
+	configuration := bluememo.Configuration{
 		Embedder: llm.CapabilityEmbeddingClient{
 			CapabilityClient: kernel.capabilityClient,
 			ModelName:        embeddingModelName,
 			ExecutionMode:    firstNonEmptyString(runtimeConfiguration.Memory.EmbeddingExecutionMode, "auto"),
-			OutputDimensions: bluememo.EmbeddingDimensionCount,
+			OutputDimensions: memoryEmbeddingDimensionCount,
 		},
 		EmbeddingModel: embeddingModelName,
+		Model:          memory.LanguageModel{Provider: kernel.taskTierLanguageModels.Low},
+		RecallSources:  true,
 		Logger:         logger,
 	}
-	memoryModel := memory.LanguageModel{Provider: kernel.taskTierLanguageModels.Low}
-	ingester := &bluememo.Ingester{Store: *store, Model: memoryModel, People: identityService}
-	jobWorker := &bluememo.JobWorker{
-		Jobs:   store.Jobs,
-		Logger: logger,
-		Handlers: map[string]bluememo.JobHandler{
-			bluememo.JobKindExtract:  memory.ExtractJobHandler{Ingester: *ingester, TaskRuns: services.taskRunService, Steps: services.taskStepService, Access: identityService}.Handle,
-			bluememo.JobKindProfile:  bluememo.ProfileJobHandler{Builder: bluememo.ProfileBuilder{Store: *store, Model: memoryModel}, ResolveReader: memory.ProfileReaderResolver(identityService)}.Handle,
-			bluememo.JobKindReembed:  bluememo.ReembedJobHandler{Store: *store}.Handle,
-			bluememo.JobKindRehearse: bluememo.RehearseJobHandler{Rehearser: bluememo.Rehearser{Store: *store, Model: memoryModel}}.Handle,
-		},
+	if kernel.decisionModel != nil {
+		configuration.Judge = bluememo.DistributionJudge{Chooser: memory.Chooser{DecisionModel: kernel.decisionModel}}
 	}
+	directory := memoryDirectory(firstNonEmptyString(runtimeConfiguration.Terminal.WorkspaceRootPath, "/workspace"))
+	stores := memory.NewStores(directory, configuration)
 	if !runtimeConfiguration.Memory.ExtractionDisabled {
-		services.taskRunService.RegisterTaskRunTransitionObserver(memory.TaskRunTransitionObserver{Store: *store, Logger: logger}.Observe)
+		services.taskRunService.RegisterTaskRunTransitionObserver(memory.TaskRunTransitionObserver{
+			Stores:   stores,
+			TaskRuns: services.taskRunService,
+			Steps:    services.taskStepService,
+			Access:   identityService,
+			Logger:   logger,
+		}.Observe)
 	}
-	logger.Info("application.memory.fact_store_configured", "embeddingModel", embeddingModelName, "extractionDisabled", runtimeConfiguration.Memory.ExtractionDisabled)
-	return memoryComponents{store: store, ingester: ingester, jobWorker: jobWorker}
+	logger.Info("application.memory.store_configured",
+		"directory", directory,
+		"embeddingModel", embeddingModelName,
+		"extractionDisabled", runtimeConfiguration.Memory.ExtractionDisabled)
+	return memoryComponents{stores: stores}
 }

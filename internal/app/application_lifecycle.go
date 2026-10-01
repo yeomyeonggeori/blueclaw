@@ -12,7 +12,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/scheduler"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluememo"
 )
 
 func (application *Application) Start() error {
@@ -34,7 +33,7 @@ func (application *Application) Start() error {
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "log_retention")
 	application.startLogRetentionLoop()
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "memory_worker")
-	application.startMemoryJobWorker()
+	application.startMemoryMaintenance()
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "connector_runtime")
 	application.startConnectorRuntime()
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "connector_transports")
@@ -120,8 +119,8 @@ func (application *Application) Shutdown(ctx context.Context) error {
 	if application.logRetentionCancel != nil {
 		application.logRetentionCancel()
 	}
-	if application.memoryJobWorkerCancel != nil {
-		application.memoryJobWorkerCancel()
+	if application.memoryMaintenanceCancel != nil {
+		application.memoryMaintenanceCancel()
 	}
 	if application.learningCancel != nil {
 		application.learningCancel()
@@ -355,22 +354,27 @@ func (application *Application) taskRetentionIntervalMinuteOrDefault() int {
 	return 60
 }
 
-func (application *Application) startMemoryJobWorker() {
-	if application.memoryJobWorker == nil || application.memoryJobWorkerCancel != nil {
+func (application *Application) startMemoryMaintenance() {
+	if application.memoryStores == nil || application.memoryMaintenanceCancel != nil {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	application.memoryJobWorkerCancel = cancel
-	application.enqueueMemoryReembed(ctx)
-	go application.memoryJobWorker.Start(ctx, bluememo.DefaultJobWorkerInterval)
+	application.memoryMaintenanceCancel = cancel
+	go application.maintainMemory(ctx)
 }
 
-func (application *Application) enqueueMemoryReembed(ctx context.Context) {
-	if application.memoryStore == nil {
-		return
-	}
-	if _, _, errorValue := application.memoryStore.EnqueueReembed(ctx); errorValue != nil {
-		application.runtimeLogger.Logger.Warn("application.memory.reembed_enqueue_failed", "error", errorValue.Error())
+func (application *Application) maintainMemory(ctx context.Context) {
+	ticker := time.NewTicker(memoryMaintenanceInterval)
+	defer ticker.Stop()
+	for {
+		if errorValue := application.memoryStores.Maintain(ctx); errorValue != nil && ctx.Err() == nil {
+			application.runtimeLogger.Logger.Warn("application.memory.maintenance_failed", "error", errorValue.Error())
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
 	}
 }
 

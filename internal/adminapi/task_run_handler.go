@@ -10,7 +10,6 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
-	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -106,7 +105,6 @@ func (taskRunHandler TaskRunHandler) HandleRunTask(responseWriter http.ResponseW
 		SkipSkillSelection:         precomputedTurnDecision != nil,
 		UseEmptyToolCatalog:        precomputedTurnDecision != nil,
 		PersonAccess:               personAccess,
-		MemoryLabel:                memory.LabelForAccess(personAccess),
 		AccessibleConversationIDs:  []string{conversationID},
 	})
 	if errorValue != nil {
