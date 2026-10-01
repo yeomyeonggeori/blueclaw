@@ -1212,8 +1212,19 @@ func copyDirectory(sourcePath string, destinationPath string) error {
 		if errorValue != nil {
 			return errorValue
 		}
-		return os.WriteFile(destination, content, 0600)
+		information, errorValue := directoryEntry.Info()
+		if errorValue != nil {
+			return errorValue
+		}
+		return os.WriteFile(destination, content, copiedFileMode(information.Mode()))
 	})
+}
+
+func copiedFileMode(sourceMode os.FileMode) os.FileMode {
+	if sourceMode&0111 != 0 {
+		return 0700
+	}
+	return 0600
 }
 
 func fileSize(path string) int {

@@ -1446,6 +1446,32 @@ func TestVirtualPlatformImportsAnAttachmentAgainWithTheBytesThePersonSent(t *tes
 	}
 }
 
+func TestSkillCopyKeepsAScriptExecutable(t *testing.T) {
+	sourcePath := filepath.Join(t.TempDir(), "office")
+	if errorValue := os.MkdirAll(filepath.Join(sourcePath, "scripts"), 0o700); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := os.WriteFile(filepath.Join(sourcePath, "scripts", "office"), []byte("#!/bin/sh\n"), 0o755); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := os.WriteFile(filepath.Join(sourcePath, "SKILL.md"), []byte("# office\n"), 0o644); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	destinationPath := filepath.Join(t.TempDir(), "skills", "office")
+	if errorValue := copyDirectory(sourcePath, destinationPath); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	for relativePath, expectedMode := range map[string]os.FileMode{"scripts/office": 0o700, "SKILL.md": 0o600} {
+		information, errorValue := os.Stat(filepath.Join(destinationPath, relativePath))
+		if errorValue != nil {
+			t.Fatal(errorValue)
+		}
+		if information.Mode().Perm() != expectedMode {
+			t.Fatalf("expected %s copied with mode %o, got %o", relativePath, expectedMode, information.Mode().Perm())
+		}
+	}
+}
+
 func firstNonEmptyTestString(values ...string) string {
 	for _, value := range values {
 		trimmedValue := strings.TrimSpace(value)
