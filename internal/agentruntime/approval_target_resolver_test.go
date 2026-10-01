@@ -18,14 +18,14 @@ func targetResolverFixture(responseBody string) (approvalgate.ApprovalTargetReso
 func calendarDeleteTargetRequest() approvalgate.ApprovalTargetRequest {
 	return approvalgate.ApprovalTargetRequest{
 		ToolName:          "event_delete",
-		ToolInput:         json.RawMessage(`{"eventHint":"상하이 edatec 미팅"}`),
+		ToolInput:         json.RawMessage(`{"eventHint":"부산 공급사 미팅"}`),
 		RequesterPersonID: "person-1",
 		RequesterEmail:    "member@example.com",
 	}
 }
 
 func TestATargetIsResolvedOnTheToolsOwnResolutionEndpoint(t *testing.T) {
-	resolver, httpClient := targetResolverFixture(`{"provider":"internkim","selectedBackend":"device","toolName":"event_delete","outcome":"succeeded","status":"resolved","result":{"inputField":"eventHint","id":"event-1","title":"상하이 edatec 미팅","startsAt":"2026-08-18T14:00:00+09:00"}}`)
+	resolver, httpClient := targetResolverFixture(`{"provider":"internkim","selectedBackend":"device","toolName":"event_delete","outcome":"succeeded","status":"resolved","result":{"inputField":"eventHint","id":"event-1","title":"부산 공급사 미팅","startsAt":"2026-08-18T14:00:00+09:00"}}`)
 
 	resolution, errorValue := resolver.ResolveApprovalTarget(context.Background(), calendarDeleteTargetRequest())
 	if errorValue != nil {
@@ -38,7 +38,7 @@ func TestATargetIsResolvedOnTheToolsOwnResolutionEndpoint(t *testing.T) {
 	if !strings.Contains(httpClient.requestBody, "member@example.com") {
 		t.Fatalf("the same requester resolves the hint that would have run the call, got %s", httpClient.requestBody)
 	}
-	expectedTarget := approvalgate.ApprovalTarget{InputField: "eventHint", ID: "event-1", Title: "상하이 edatec 미팅", StartsAt: "2026-08-18T14:00:00+09:00"}
+	expectedTarget := approvalgate.ApprovalTarget{InputField: "eventHint", ID: "event-1", Title: "부산 공급사 미팅", StartsAt: "2026-08-18T14:00:00+09:00"}
 	if resolution.Target != expectedTarget {
 		t.Fatalf("the question and the approved call are both built from this, got %+v", resolution.Target)
 	}

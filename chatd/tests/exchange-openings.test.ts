@@ -8,7 +8,7 @@ function messageOf(id: string, text: string, rootId?: string) {
 	return {
 		id,
 		text,
-		author: { userId: "u-1", userName: "이동하", fullName: "이동하" },
+		author: { userId: "u-1", userName: "이샘플", fullName: "이샘플" },
 		metadata: { dateSent: new Date("2026-08-25T07:13:00Z") },
 		raw: { id, rootId } as Raw,
 	};

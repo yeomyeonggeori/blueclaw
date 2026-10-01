@@ -29,7 +29,7 @@ function messageEvent(id: string, text: string) {
 // being read after it was deleted.
 test("a message its author took back is not read back to the agent", async () => {
 	const adapter = adapterAnswering({
-		9: [messageEvent(KEPT, "목요일 팁스 연구노트 작성 일정 추가해줘"), messageEvent(TAKEN_BACK, "상하이 edatec 미팅을 찾지 못했습니다")],
+		9: [messageEvent(KEPT, "목요일 주간 보고서 작성 일정 추가해줘"), messageEvent(TAKEN_BACK, "부산 공급사 미팅을 찾지 못했습니다")],
 		9005: [{ id: "d".repeat(64), pubkey: "c".repeat(64), created_at: 1784900001, kind: 9005, tags: [["h", CHANNEL], ["e", TAKEN_BACK]], content: "", sig: "" }],
 	});
 
@@ -40,7 +40,7 @@ test("a message its author took back is not read back to the agent", async () =>
 
 test("nothing deleted leaves everything where it was", async () => {
 	const adapter = adapterAnswering({
-		9: [messageEvent(KEPT, "목요일 팁스 연구노트 작성 일정 추가해줘")],
+		9: [messageEvent(KEPT, "목요일 주간 보고서 작성 일정 추가해줘")],
 		9005: [],
 	});
 
