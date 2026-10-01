@@ -101,7 +101,7 @@ func TestBuildToolRegistryAuditDegradesWhenLiveCapabilityRegistryIsUnavailable(t
 func TestBuildToolRegistryAuditServesCachedSnapshotWhenLiveFetchFails(t *testing.T) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
 	toolCatalogBuilder.UseTestCapabilityToolDescriptors(capability.Client{}, []CapabilityToolDescriptor{{Name: "task_add"}})
-	toolCatalogBuilder.capabilityRegistry.keepLive([]CapabilityToolDescriptor{{Name: "task_add"}}, "snapshot-hash", "")
+	toolCatalogBuilder.capabilityRegistry.keepLive([]CapabilityToolDescriptor{{Name: "task_add"}}, "snapshot-hash")
 
 	audit, errorValue := toolCatalogBuilder.BuildToolRegistryAudit(context.Background(), toolcontract.NewToolSet(nil))
 
@@ -113,22 +113,15 @@ func TestBuildToolRegistryAuditServesCachedSnapshotWhenLiveFetchFails(t *testing
 	}
 }
 
-func TestReachableCapabilityToolDefinitionsGateBrowserOnCompanionStatus(t *testing.T) {
+func TestReachableCapabilityToolDefinitionsDropToolsThatNeedTheRequestersOwnDevice(t *testing.T) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
 	toolCatalogBuilder.UseCapabilityToolDescriptors(capability.Client{}, []CapabilityToolDescriptor{
 		{Name: "browser_open", Namespace: "browser", RequiresRequesterDevice: true},
 		{Name: "message_send", Namespace: "message"},
 	})
 
-	toolCatalogBuilder.UseCompanionStatus("unavailable")
-	gatedNames := capabilityDescriptorNames(toolCatalogBuilder.reachableCapabilityToolDefinitions())
-	if registryContainsString(gatedNames, "browser_open") || !registryContainsString(gatedNames, "message_send") {
-		t.Fatalf("expected browser tools hidden while the companion is unavailable, got %v", gatedNames)
-	}
-
-	toolCatalogBuilder.UseCompanionStatus("available")
-	openNames := capabilityDescriptorNames(toolCatalogBuilder.reachableCapabilityToolDefinitions())
-	if !registryContainsString(openNames, "browser_open") {
-		t.Fatalf("expected browser tools back when the companion is available, got %v", openNames)
+	reachableNames := capabilityDescriptorNames(toolCatalogBuilder.reachableCapabilityToolDefinitions())
+	if registryContainsString(reachableNames, "browser_open") || !registryContainsString(reachableNames, "message_send") {
+		t.Fatalf("expected only the tool that needs no requester device, got %v", reachableNames)
 	}
 }

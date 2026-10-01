@@ -224,7 +224,7 @@ describe('closed protocol values', () => {
       provider: 'provider',
       model: 'model',
       message: { role: 'assistant', content: 'done' },
-      selectedBackend: 'companion',
+      selectedBackend: 'elsewhere',
     }).success).toBe(false);
     expect(structuredResponseSchema.safeParse({
       provider: 'example-gateway',

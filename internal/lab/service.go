@@ -9,8 +9,6 @@ import (
 	"time"
 )
 
-var errorUnsupportedHostMode = errors.New("unsupported host mode")
-
 type Service struct {
 	configuration      Configuration
 	commandRunner      CommandRunner
@@ -65,18 +63,6 @@ func (service Service) VirtualMachineSSH(ctx context.Context, remoteArguments []
 		ExecutableName:       "ssh",
 		Arguments:            commandArguments,
 		WorkingDirectoryPath: service.repositoryRootPath,
-	})
-}
-
-func (service Service) ScenarioBrowserHandoff(ctx context.Context) error {
-	if service.configuration.Host.Mode != "single-mac" && service.configuration.Host.Mode != "dual-mac" {
-		return errorUnsupportedHostMode
-	}
-
-	return service.runScenarioScript(ctx, filepath.Join("lab", "scripts", "scenario-browser-handoff.sh"), []string{
-		service.configuration.Host.Mode,
-		service.configuration.Host.Companion.ListenAddress,
-		service.configuration.Host.Companion.CallbackBaseURL,
 	})
 }
 

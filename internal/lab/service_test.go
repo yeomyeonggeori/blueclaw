@@ -95,10 +95,6 @@ func buildTestConfiguration() Configuration {
 	return applyDefaultConfiguration(Configuration{
 		Host: HostConfiguration{
 			Mode: "single-mac",
-			Companion: CompanionConfiguration{
-				ListenAddress:   "127.0.0.1:7780",
-				CallbackBaseURL: "http://127.0.0.1:7780/callback",
-			},
 		},
 		VirtualMachine: VirtualMachineConfiguration{
 			Tart: TartConfiguration{

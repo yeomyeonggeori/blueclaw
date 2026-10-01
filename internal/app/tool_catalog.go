@@ -48,7 +48,7 @@ func newToolCatalogBuilder(runtimeConfiguration config.RuntimeConfiguration, ker
 	toolCatalogBuilder.UseRecordCatalogDivergenceReporter(func(divergence agentruntime.RecordCatalogDivergence) {
 		logRecordCatalogDivergence(logger, divergence)
 	})
-	seedCompanionStatus(kernel.capabilityRegistry)
+	warmCapabilityRegistry(kernel.capabilityRegistry)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(deriveAllowedToolNamesByProfile(runtimeConfiguration), agentruntime.AlwaysAllowedToolNames())
 	toolCatalogBuilder.UseSkillSearch(kernel.skillRetriever, kernel.instructionBundleLoader)
 	toolCatalogBuilder.UseTerminalService(kernel.terminalService)
@@ -92,10 +92,10 @@ func logRecordCatalogDivergence(logger *slog.Logger, divergence agentruntime.Rec
 	)
 }
 
-func seedCompanionStatus(capabilityRegistry *agentruntime.CapabilityRegistry) {
-	statusContext, cancelStatus := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancelStatus()
-	capabilityRegistry.Warm(statusContext)
+func warmCapabilityRegistry(capabilityRegistry *agentruntime.CapabilityRegistry) {
+	warmContext, cancelWarm := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancelWarm()
+	capabilityRegistry.Warm(warmContext)
 }
 
 func capabilityToolDescriptors(toolDescriptors []config.CapabilityToolDescriptor) []agentruntime.CapabilityToolDescriptor {

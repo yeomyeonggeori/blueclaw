@@ -11,13 +11,7 @@ type Configuration struct {
 }
 
 type HostConfiguration struct {
-	Mode      string                 `json:"mode"`
-	Companion CompanionConfiguration `json:"companion"`
-}
-
-type CompanionConfiguration struct {
-	ListenAddress   string `json:"listenAddress"`
-	CallbackBaseURL string `json:"callbackBaseURL"`
+	Mode string `json:"mode"`
 }
 
 type VirtualMachineConfiguration struct {

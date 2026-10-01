@@ -1323,7 +1323,7 @@ def require_argument(arguments, label):
 def descriptors(endpoint):
     document = get_json(endpoint, "/v1/capabilities")
     values = []
-    for key in ("capabilities", "deviceCapabilities", "companionCapabilities"):
+    for key in ("capabilities", "deviceCapabilities"):
         candidates = document.get(key)
         if isinstance(candidates, list):
             values.extend(item for item in candidates if isinstance(item, dict))

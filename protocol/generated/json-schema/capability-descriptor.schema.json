@@ -263,9 +263,6 @@
     "requiresApproval": {
       "type": "boolean"
     },
-    "requiresCompanionBrowser": {
-      "type": "boolean"
-    },
     "requiresRequesterDevice": {
       "type": "boolean"
     },

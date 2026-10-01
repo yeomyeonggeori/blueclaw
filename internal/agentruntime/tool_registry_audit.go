@@ -244,32 +244,12 @@ func registryContainsString(values []string, expected string) bool {
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) reachableCapabilityToolDefinitions() []CapabilityToolDescriptor {
-	descriptors := toolCatalogBuilder.capabilityToolDefinitions()
-	if !containsBrowserDescriptor(descriptors) || toolCatalogBuilder.companionBrowserAvailable() {
-		return descriptors
-	}
 	reachableDescriptors := []CapabilityToolDescriptor{}
-	for _, descriptor := range descriptors {
-		if descriptorIsBrowserCapability(descriptor) {
+	for _, descriptor := range toolCatalogBuilder.capabilityToolDefinitions() {
+		if descriptor.RequiresRequesterDevice {
 			continue
 		}
 		reachableDescriptors = append(reachableDescriptors, descriptor)
 	}
 	return reachableDescriptors
-}
-
-func containsBrowserDescriptor(descriptors []CapabilityToolDescriptor) bool {
-	for _, descriptor := range descriptors {
-		if descriptorIsBrowserCapability(descriptor) {
-			return true
-		}
-	}
-	return false
-}
-
-// The descriptor says whether a tool reaches the requester's own machine, which
-// is what the companion connection provides. Neither its name nor its namespace
-// can answer that question.
-func descriptorIsBrowserCapability(descriptor CapabilityToolDescriptor) bool {
-	return descriptor.RequiresRequesterDevice
 }

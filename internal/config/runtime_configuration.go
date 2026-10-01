@@ -16,7 +16,6 @@ type RuntimeConfiguration struct {
 	AgentProfiles []AgentProfileConfiguration `json:"agentProfiles"`
 	LanguageModel LanguageModelConfiguration  `json:"languageModel"`
 	Guest         GuestConfiguration          `json:"guest"`
-	Bridge        BridgeConfiguration         `json:"bridge"`
 	Database      DatabaseConfiguration       `json:"database"`
 	Memory        MemoryConfiguration         `json:"memory"`
 	Agent         AgentConfiguration          `json:"agent"`
@@ -175,13 +174,6 @@ type OutboundNetworkConfiguration struct {
 type GuestListenerProxyConfiguration struct {
 	GuestPort            uint32 `json:"guestPort"`
 	TargetUnixSocketPath string `json:"targetUnixSocketPath"`
-}
-
-type BridgeConfiguration struct {
-	Mode                     string `json:"mode"`
-	AuthMode                 string `json:"authMode"`
-	AuthorizedPublicKeysPath string `json:"authorizedPublicKeysPath"`
-	ListenAddress            string `json:"listenAddress"`
 }
 
 type DatabaseConfiguration struct {

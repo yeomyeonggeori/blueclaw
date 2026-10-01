@@ -1,5 +1,5 @@
 {
-  "aggregateHash": "e12424acabbad992f4ea38d5ff523fed7e365f9c64a59518abb6b3cf58ca8351",
+  "aggregateHash": "73b8436ca55d1c5cb6db30f86a2e967288fd766b7227dedbeeeec30b2893a11f",
   "protocolVersion": "0.4.0",
   "schemas": [
     {
@@ -19,17 +19,17 @@
     },
     {
       "fileName": "capability-descriptor.schema.json",
-      "hash": "10d4af6628d063684df0a42a62da9536297d3fbc7f1ff199a230e3f5cd954aaf",
+      "hash": "94c2fe998e710a5b8aaf61ae915bd969bdc4843f5114227b13a3707f8ecb0a77",
       "name": "capability-descriptor"
     },
     {
       "fileName": "capability-registry-response.schema.json",
-      "hash": "d179ba22fa5f54528fdf6f132d07b8b0eb952f9416fa53811a88a64ec230163f",
+      "hash": "1a8c4af280e6029ede609cdc77d893548a999f57f15f83c78f5f6188d9a58b46",
       "name": "capability-registry-response"
     },
     {
       "fileName": "chat-completion-request.schema.json",
-      "hash": "094beafd4fb3fa2c1ff68824793d123e8ef2a5180cd8c0702ee6299e3738af87",
+      "hash": "8040e21a0ee9c99da72b841d57b21b59ef472c1e4823d2c068dd3776dc56c1c8",
       "name": "chat-completion-request"
     },
     {
@@ -64,7 +64,7 @@
     },
     {
       "fileName": "structured-response-request.schema.json",
-      "hash": "539b6c43c8ece16c9adb33a92f371cfb90d74ff1f15e5ddf92978bad23b3a4b8",
+      "hash": "db90d9da8e3eea0292bd75d81bd90f71a9672f4a6660f362012e55f38ddcf035",
       "name": "structured-response-request"
     },
     {
@@ -99,7 +99,7 @@
     },
     {
       "fileName": "tool-invoke-request.schema.json",
-      "hash": "19a655fd0608da4d85e6201ccb2edee46b3900127757ef7710783d84475e4405",
+      "hash": "0ea4cea1ddfb7f0bb8556be58d1afd8ff8a5ae5fb2ae66cef2a74f2db25442bf",
       "name": "tool-invoke-request"
     },
     {

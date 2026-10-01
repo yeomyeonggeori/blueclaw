@@ -50,12 +50,6 @@ func TestLoadRuntimeConfigurationIncludesGuestAndBridge(t *testing.T) {
     "healthPortOrService": "8080",
     "logDirectoryPath": "/var/log/blueclaw"
   },
-  "bridge": {
-    "mode": "localAgent",
-    "authMode": "sshKeyReuse",
-    "authorizedPublicKeysPath": "/var/lib/blueclaw/authorized_companions",
-    "listenAddress": "127.0.0.1:7778"
-  },
   "database": {
     "driver": "postgres",
     "connectionString": "postgres://blueclaw@/blueclaw?host=/var/run/postgresql&sslmode=disable",
@@ -127,12 +121,6 @@ func TestLoadRuntimeConfigurationIncludesGuestAndBridge(t *testing.T) {
 	}
 	if runtimeConfiguration.Guest.VSockCID != 52 {
 		t.Fatalf("expected vsock cid to match, got %d", runtimeConfiguration.Guest.VSockCID)
-	}
-	if runtimeConfiguration.Bridge.AuthMode != "sshKeyReuse" {
-		t.Fatalf("expected bridge auth mode to match, got %q", runtimeConfiguration.Bridge.AuthMode)
-	}
-	if runtimeConfiguration.Bridge.ListenAddress != "127.0.0.1:7778" {
-		t.Fatalf("expected bridge listen address to match, got %q", runtimeConfiguration.Bridge.ListenAddress)
 	}
 	if runtimeConfiguration.Capabilities.Endpoint != "http://127.0.0.1:7781" {
 		t.Fatalf("expected capability endpoint to match, got %q", runtimeConfiguration.Capabilities.Endpoint)

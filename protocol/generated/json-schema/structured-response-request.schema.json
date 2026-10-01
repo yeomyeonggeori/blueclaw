@@ -126,7 +126,6 @@
     "executionMode": {
       "enum": [
         "device",
-        "companion",
         "remote",
         "auto"
       ],

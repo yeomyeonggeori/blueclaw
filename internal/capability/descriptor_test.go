@@ -63,7 +63,6 @@ func TestADecodedDescriptorKeepsWhatItWasGiven(t *testing.T) {
 		"estimatedLatency": "high",
 		"requiresUserPresence": true,
 		"requiresRequesterDevice": true,
-		"requiresCompanionBrowser": true,
 		"approvalScope": "browser",
 		"worksOffline": true,
 		"inputSchema": {"type":"object"},
@@ -93,17 +92,16 @@ func TestADecodedDescriptorKeepsWhatItWasGiven(t *testing.T) {
 	}
 
 	for fieldName, isKept := range map[string]bool{
-		"answeredBy":               descriptor.AnsweredBy == "company",
-		"modelVisible":             descriptor.ModelVisible,
-		"version":                  descriptor.Version == "1",
-		"estimatedLatency":         descriptor.EstimatedLatency == "high",
-		"requiresCompanionBrowser": descriptor.RequiresCompanionBrowser,
-		"inputSchemaStrict":        descriptor.InputSchemaStrict,
-		"outputSchemaStrict":       descriptor.OutputSchemaStrict,
-		"sideEffect":               descriptor.SideEffect == "site_publish",
-		"approvalScope":            descriptor.ApprovalScope == "browser",
-		"availability.reason":      descriptor.Availability.Reason == "ready",
-		"idempotency.required":     descriptor.Idempotency.Required,
+		"answeredBy":           descriptor.AnsweredBy == "company",
+		"modelVisible":         descriptor.ModelVisible,
+		"version":              descriptor.Version == "1",
+		"estimatedLatency":     descriptor.EstimatedLatency == "high",
+		"inputSchemaStrict":    descriptor.InputSchemaStrict,
+		"outputSchemaStrict":   descriptor.OutputSchemaStrict,
+		"sideEffect":           descriptor.SideEffect == "site_publish",
+		"approvalScope":        descriptor.ApprovalScope == "browser",
+		"availability.reason":  descriptor.Availability.Reason == "ready",
+		"idempotency.required": descriptor.Idempotency.Required,
 	} {
 		if !isKept {
 			t.Errorf("%s was given and did not survive the decode", fieldName)

@@ -3,7 +3,6 @@ package agentruntime
 import (
 	"context"
 	"errors"
-	"strings"
 	"sync"
 	"time"
 
@@ -27,7 +26,6 @@ type CapabilityRegistry struct {
 	liveDescriptors []CapabilityToolDescriptor
 	liveHash        string
 	readAt          time.Time
-	companionStatus string
 }
 
 func NewCapabilityRegistry(client capability.Client, stampedDescriptors []CapabilityToolDescriptor) *CapabilityRegistry {
@@ -86,7 +84,7 @@ func (registry *CapabilityRegistry) ReadLive(ctx context.Context) ([]CapabilityT
 		return nil, "", errorValue
 	}
 	hash := hashCapabilityDescriptors(served.DeviceCapabilities)
-	registry.keepLive(served.DeviceCapabilities, hash, served.CompanionStatus)
+	registry.keepLive(served.DeviceCapabilities, hash)
 	return served.DeviceCapabilities, hash, nil
 }
 
@@ -102,24 +100,6 @@ func (registry *CapabilityRegistry) CachedLive() ([]CapabilityToolDescriptor, st
 	return append([]CapabilityToolDescriptor{}, registry.liveDescriptors...), registry.liveHash, true
 }
 
-func (registry *CapabilityRegistry) CompanionStatus() string {
-	if registry == nil {
-		return ""
-	}
-	registry.mutex.Lock()
-	defer registry.mutex.Unlock()
-	return registry.companionStatus
-}
-
-func (registry *CapabilityRegistry) UseCompanionStatus(companionStatus string) {
-	if registry == nil {
-		return
-	}
-	registry.mutex.Lock()
-	defer registry.mutex.Unlock()
-	registry.companionStatus = strings.TrimSpace(companionStatus)
-}
-
 func (registry *CapabilityRegistry) freshLiveDescriptors() ([]CapabilityToolDescriptor, bool) {
 	registry.mutex.Lock()
 	defer registry.mutex.Unlock()
@@ -132,13 +112,12 @@ func (registry *CapabilityRegistry) freshLiveDescriptors() ([]CapabilityToolDesc
 	return append([]CapabilityToolDescriptor{}, registry.liveDescriptors...), true
 }
 
-func (registry *CapabilityRegistry) keepLive(descriptors []CapabilityToolDescriptor, hash string, companionStatus string) {
+func (registry *CapabilityRegistry) keepLive(descriptors []CapabilityToolDescriptor, hash string) {
 	registry.mutex.Lock()
 	defer registry.mutex.Unlock()
 	registry.liveDescriptors = append([]CapabilityToolDescriptor{}, descriptors...)
 	registry.liveHash = hash
 	registry.readAt = time.Now()
-	registry.companionStatus = strings.TrimSpace(companionStatus)
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) capabilityToolDefinitions() []CapabilityToolDescriptor {
@@ -155,16 +134,4 @@ func (toolCatalogBuilder *ToolCatalogBuilder) liveCapabilityToolDescriptors(ctx 
 
 func (toolCatalogBuilder *ToolCatalogBuilder) cachedLiveCapabilitySnapshot() ([]CapabilityToolDescriptor, string, bool) {
 	return toolCatalogBuilder.capabilityRegistry.CachedLive()
-}
-
-func (toolCatalogBuilder *ToolCatalogBuilder) UseCompanionStatus(companionStatus string) {
-	toolCatalogBuilder.capabilityRegistry.UseCompanionStatus(companionStatus)
-}
-
-func (toolCatalogBuilder *ToolCatalogBuilder) companionBrowserAvailable() bool {
-	companionStatus := toolCatalogBuilder.capabilityRegistry.CompanionStatus()
-	if companionStatus == "" {
-		return true
-	}
-	return companionStatus == "available"
 }

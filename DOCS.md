@@ -336,7 +336,7 @@ bluememo has since moved to one SQLite file per person. The blueclaw integration
 
 A capability is an operation a separate service performs on the agent's behalf, such as sending a message, changing a calendar, or running a model.
 
-blueclaw stays provider-neutral. It asks for a capability and passes an `executionMode` (`device`, `companion`, `remote` or `auto`, default `auto`); the capability service decides where it runs. The one choice blueclaw makes itself is sending `companion` for a tool whose `privacyClass` is `user_browser`. Descriptors mark tools that need the requester present (`requiresUserPresence`), their own device (`requiresRequesterDevice`) or a companion browser; tools that need the user present are not registered for scheduled runs.
+blueclaw stays provider-neutral. It asks for a capability and passes an `executionMode` (`device`, `remote` or `auto`, default `auto`); the capability service decides where it runs. Descriptors mark tools that need the requester present (`requiresUserPresence`) or their own device (`requiresRequesterDevice`). Nothing reaches a requester's own device, so a tool that needs one is never offered to the model, and tools that need the user present are not registered for scheduled runs.
 
 The `capabilities` block names the service: `endpoint`, `unixSocketPath`, or `vsockCID` and `vsockPort` for a guest, plus `timeoutSecond`. The request and response shapes are Zod contracts in `protocol/` (`capability-descriptor`, `capability-registry-response`, `tool-invoke-request`, `tool-invoke-response`). A deployment without the block reports `capabilityd: not_configured` in health and runs without capability tools, capability-routed models, or memory embeddings.
 
@@ -481,7 +481,7 @@ The runtime configuration is the JSON file passed as `--runtime`, and it holds e
 | `terminal` | the execution settings in [What is not enforced](#what-is-not-enforced) |
 | `scheduler` | `retentionCheckIntervalMinute`, `taskSchedulePollIntervalSecond` |
 | `logging` | `directoryPath`, `retentionDays` |
-| `guest`, `bridge` | the virtual machine guest and the companion bridge |
+| `guest` | the virtual machine guest |
 
 `agent.defaultTaskLevel` is the effort a task starts at, `xlow` through `max`. `agent.harness` takes `name`, `agentCommandPath`, `agentArguments` and `toolCatalogURL`. `optionalFileReadPathSuffixes` names files whose absence is a normal state for a deployment.
 
@@ -590,7 +590,7 @@ Scenarios are defined in `internal/e2e/scenarios.go`; `--scenario-file` loads on
 
 ### The lab
 
-`cmd/blueclaw-lab` also drives a full rig: an Apple Silicon Mac as the person's computer, a Tart ARM Linux VM, and blueclaw inside a guest that VM boots under Cloud Hypervisor. `config/lab.example.json` configures it and `lab/scripts/` holds provisioning and scenario scripts. The commands are `image-build`, `vm-up`, `vm-down`, `vm-ssh`, `scenario-mattermost`, `scenario-slack` and `scenario-browser-handoff`. Tart and a hardware-virtualized guest cannot start on a hosted CI runner, so the lab is not exercised by CI.
+`cmd/blueclaw-lab` also drives a full rig: an Apple Silicon Mac as the person's computer, a Tart ARM Linux VM, and blueclaw inside a guest that VM boots under Cloud Hypervisor. `config/lab.example.json` configures it and `lab/scripts/` holds provisioning and scenario scripts. The commands are `image-build`, `vm-up`, `vm-down`, `vm-ssh`, `scenario-mattermost` and `scenario-slack`. Tart and a hardware-virtualized guest cannot start on a hosted CI runner, so the lab is not exercised by CI.
 
 ### Screenshots
 
