@@ -164,7 +164,7 @@ func (commandGuardrailService CommandGuardrailService) resolveExecutablePath(exe
 		return filepath.EvalSymlinks(executableName)
 	}
 
-	for _, searchPath := range strings.Split(CanonicalRuntimePATH, ":") {
+	for _, searchPath := range filepath.SplitList(RuntimePATH()) {
 		candidatePath := filepath.Join(searchPath, executableName)
 		information, errorValue := os.Stat(candidatePath)
 		if errorValue == nil && !information.IsDir() {
@@ -172,7 +172,7 @@ func (commandGuardrailService CommandGuardrailService) resolveExecutablePath(exe
 		}
 	}
 
-	return "", errors.New("executable was not found in canonical runtime PATH")
+	return "", errors.New("executable was not found in the runtime PATH")
 }
 
 func joinCommandInput(command string, stdin string) string {
@@ -237,5 +237,5 @@ func sanitizeEnvironmentVariables(environmentVariables map[string]string, worksp
 		}
 	}
 
-	return enforceCanonicalRuntimePATH(sanitizedEnvironmentVariables)
+	return enforceRuntimePATH(sanitizedEnvironmentVariables)
 }

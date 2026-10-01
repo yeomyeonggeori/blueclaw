@@ -147,7 +147,7 @@ func applyPOSIXEnvironment(environmentVariables map[string]string, identity Exec
 	setDefaultEnvironmentValue(result, "PIP_CACHE_DIR", dependencyCachePath+"/pip")
 	setDefaultEnvironmentValue(result, "UV_CACHE_DIR", dependencyCachePath+"/uv")
 	setDefaultEnvironmentValue(result, "CARGO_HOME", dependencyCachePath+"/cargo")
-	return enforceCanonicalRuntimePATH(result)
+	return enforceRuntimePATH(result)
 }
 
 func setDefaultEnvironmentValue(environmentVariables map[string]string, name string, value string) {
