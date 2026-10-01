@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
@@ -2834,12 +2835,10 @@ func (harness *VirtualSessionHarness) runTurn(ctx context.Context, index int, vi
 		ReplyTargetID:  virtualReplyTargetID(index, virtualTurn),
 		Prompt:         virtualTurn.Prompt,
 		Context: connectors.VisibleContext{
-			Messages:      messages,
-			HasMoreBefore: len(messages) > 0,
-			HistoryCursor: historyCursor,
-			InputAttachments: append([]connectors.InputAttachment{},
-				virtualTurn.InputAttachments...,
-			),
+			Messages:         messages,
+			HasMoreBefore:    len(messages) > 0,
+			HistoryCursor:    historyCursor,
+			InputAttachments: virtualMessageAttachments(virtualMessageID(index), virtualTurn.InputAttachments),
 			Materials: append([]connectors.InputAttachment{},
 				virtualTurn.ContextMaterials...,
 			),
@@ -2917,11 +2916,24 @@ func (harness *VirtualSessionHarness) modelContextSince(startIndex int) string {
 			continue
 		}
 		for _, message := range request.Messages {
-			parts = append(parts, message.Role+": "+message.Content)
+			parts = append(parts, message.Role+": "+virtualMessageText(message))
 		}
 		parts = append(parts, request.StructuredOutputSchema.Document)
 	}
 	return strings.Join(parts, "\n")
+}
+
+func virtualMessageText(message model.Message) string {
+	texts := []string{}
+	if message.Content != "" {
+		texts = append(texts, message.Content)
+	}
+	for _, part := range message.Parts {
+		if part.Type == "text" {
+			texts = append(texts, part.Text)
+		}
+	}
+	return strings.Join(texts, "\n")
 }
 
 func (harness *VirtualSessionHarness) modelImagePartCountSince(startIndex int) int {
@@ -3934,9 +3946,12 @@ func (adapter *virtualAdapter) ImportInputAttachments(_ context.Context, request
 
 func (adapter *virtualAdapter) importInputAttachment(targetDirectoryPath string, attachment connectors.InputAttachment) (connectors.InputAttachment, error) {
 	filename := firstNonEmptyVirtualString(attachment.Filename, attachment.FileID, "attachment.bin")
+	content, errorValue := virtualAttachmentContent(attachment)
+	if errorValue != nil {
+		return connectors.InputAttachment{}, fmt.Errorf("attachment %s carries contentBase64 that is not base64: %w", filename, errorValue)
+	}
 	virtualPath := strings.TrimRight(targetDirectoryPath, "/") + "/" + filename
 	hostPath := filepath.Join(adapter.workspacePath, strings.TrimPrefix(virtualPath, "/workspace/"))
-	content := virtualAttachmentContent(attachment)
 	if errorValue := os.MkdirAll(filepath.Dir(hostPath), 0700); errorValue != nil {
 		return connectors.InputAttachment{}, errorValue
 	}
@@ -3944,13 +3959,21 @@ func (adapter *virtualAdapter) importInputAttachment(targetDirectoryPath string,
 		return connectors.InputAttachment{}, errorValue
 	}
 	attachment.Path = virtualPath
+	attachment.ContentBase64 = ""
 	attachment.IsAvailable = true
 	attachment.SizeBytes = int64(len(content))
 	attachment.ContentType = firstNonEmptyVirtualString(attachment.ContentType, "application/octet-stream")
 	return attachment, nil
 }
 
-func virtualAttachmentContent(attachment connectors.InputAttachment) []byte {
+func virtualAttachmentContent(attachment connectors.InputAttachment) ([]byte, error) {
+	if content := strings.TrimSpace(attachment.ContentBase64); content != "" {
+		return base64.StdEncoding.DecodeString(content)
+	}
+	return virtualPlaceholderContent(attachment), nil
+}
+
+func virtualPlaceholderContent(attachment connectors.InputAttachment) []byte {
 	contentType := strings.ToLower(strings.TrimSpace(attachment.ContentType))
 	if strings.Contains(contentType, "html") || strings.HasSuffix(strings.ToLower(strings.TrimSpace(attachment.Filename)), ".html") {
 		return []byte("<!doctype html><html><body><h1>Virtual HTML Title</h1><p>Automation workflow content</p></body></html>")
@@ -3962,12 +3985,21 @@ func virtualAttachmentContent(attachment connectors.InputAttachment) []byte {
 }
 
 func virtualInputParts(attachments []connectors.InputAttachment) []agentcontract.AgentPart {
-	parts := []agentcontract.AgentPart{}
+	parts := make([]agentcontract.AgentPart, 0, len(attachments))
 	for _, attachment := range attachments {
-		if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(attachment.ContentType)), "image/") {
-			continue
-		}
-		parts = append(parts, agentcontract.AgentPart{
+		parts = append(parts, virtualInputPart(attachment))
+	}
+	return parts
+}
+
+func virtualInputPart(attachment connectors.InputAttachment) agentcontract.AgentPart {
+	source := agentcontract.AgentPartSource{
+		Platform:  attachment.Platform,
+		MessageID: attachment.MessageID,
+		FileID:    attachment.FileID,
+	}
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(attachment.ContentType)), "image/") {
+		return agentcontract.AgentPart{
 			Type: agentcontract.AgentPartTypeImage,
 			Image: &agentcontract.AgentImagePart{
 				MimeType:   attachment.ContentType,
@@ -3975,14 +4007,32 @@ func virtualInputParts(attachments []connectors.InputAttachment) []agentcontract
 				Path:       attachment.Path,
 				Filename:   attachment.Filename,
 			},
-			Source: agentcontract.AgentPartSource{
-				Platform:  attachment.Platform,
-				MessageID: attachment.MessageID,
-				FileID:    attachment.FileID,
-			},
-		})
+			Source: source,
+		}
 	}
-	return parts
+	return agentcontract.AgentPart{
+		Type: agentcontract.AgentPartTypeFile,
+		File: &agentcontract.AgentFilePart{
+			Path:        attachment.Path,
+			Filename:    attachment.Filename,
+			ContentType: attachment.ContentType,
+			SizeBytes:   attachment.SizeBytes,
+		},
+		Source: source,
+	}
+}
+
+func virtualMessageAttachments(messageID string, attachments []connectors.InputAttachment) []connectors.InputAttachment {
+	result := make([]connectors.InputAttachment, 0, len(attachments))
+	for attachmentIndex, attachment := range attachments {
+		attachment.Platform = firstNonEmptyVirtualString(attachment.Platform, "virtual")
+		attachment.MessageID = firstNonEmptyVirtualString(attachment.MessageID, messageID)
+		if strings.TrimSpace(attachment.FileID) == "" && strings.TrimSpace(attachment.URL) == "" {
+			attachment.FileID = fmt.Sprintf("%s-file-%d", messageID, attachmentIndex+1)
+		}
+		result = append(result, attachment)
+	}
+	return result
 }
 
 func firstNonEmptyVirtualString(values ...string) string {

@@ -3,6 +3,7 @@ package e2e
 import (
 	"archive/zip"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
@@ -1367,6 +1369,44 @@ func TestAttachmentCurrentImageInput(t *testing.T) {
 	}
 	if len(turnResult.Attachments) != 0 {
 		t.Fatalf("expected current image input not to be reattached, got %+v", turnResult.Attachments)
+	}
+}
+
+func TestAttachedFileReachesTheAgentWithThePathItWasWrittenTo(t *testing.T) {
+	content := "월,지역,목표,실적\n2026-04,서울,6720,6200\n"
+	result, errorValue := RunVirtualSession(context.Background(), VirtualSessionScenario{
+		Name:                  "attached_file_path",
+		ArtifactDirectoryPath: t.TempDir(),
+		AllowedTools:          []string{"bash", "read"},
+		Turns: []VirtualTurn{{
+			Prompt:          "첨부한 CSV 요약해줘",
+			RouterTaskShape: agentcontract.TaskShapeImmediateReply,
+			InputAttachments: []connectors.InputAttachment{{
+				Filename:      "판매실적.csv",
+				ContentType:   "text/csv",
+				ContentBase64: base64.StdEncoding.EncodeToString([]byte(content)),
+				IsAvailable:   true,
+			}},
+			ActionResponses: []string{actionFinishMessage("요약했습니다.")},
+		}},
+	})
+	if errorValue != nil {
+		t.Fatalf("expected the attached file scenario to pass: %v", errorValue)
+	}
+	modelContext := result.TurnResults[0].ModelContext
+	attachedFile := "Attached file:\n- filename: 판매실적.csv\n- contentType: text/csv\n- path: "
+	pathStart := strings.Index(modelContext, attachedFile)
+	if pathStart < 0 {
+		t.Fatalf("expected the agent's user message to name the attached file and its path; context: %s", modelContext)
+	}
+	attachedPath, _, _ := strings.Cut(modelContext[pathStart+len(attachedFile):], "\n")
+	hostPath := filepath.Join(result.ArtifactDirectoryPath, "workspace", strings.TrimPrefix(attachedPath, "/workspace/"))
+	written, errorValue := os.ReadFile(hostPath)
+	if errorValue != nil {
+		t.Fatalf("expected the attached file at %s: %v", attachedPath, errorValue)
+	}
+	if string(written) != content {
+		t.Fatalf("expected the attached file to hold the bytes the person sent, got %q", written)
 	}
 }
 
