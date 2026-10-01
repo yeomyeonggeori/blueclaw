@@ -2825,6 +2825,10 @@ func (harness *VirtualSessionHarness) runTurn(ctx context.Context, index int, vi
 	if len(messages) > 0 {
 		historyCursor = conversationID
 	}
+	inputAttachments, errorValue := harness.adapter.receiveMessageAttachments(virtualMessageID(index), virtualTurn.InputAttachments)
+	if errorValue != nil {
+		return VirtualTurnResult{}, errorValue
+	}
 	event := connectors.PlatformInboundEvent{
 		Platform:       "virtual",
 		Source:         "e2e",
@@ -2838,7 +2842,7 @@ func (harness *VirtualSessionHarness) runTurn(ctx context.Context, index int, vi
 			Messages:         messages,
 			HasMoreBefore:    len(messages) > 0,
 			HistoryCursor:    historyCursor,
-			InputAttachments: virtualMessageAttachments(virtualMessageID(index), virtualTurn.InputAttachments),
+			InputAttachments: inputAttachments,
 			Materials: append([]connectors.InputAttachment{},
 				virtualTurn.ContextMaterials...,
 			),
@@ -3790,6 +3794,7 @@ type virtualAdapter struct {
 	replies         map[string]virtualReply
 	reactions       []connectors.ReactionTarget
 	history         []connectors.VisibleContextMessage
+	hostedContents  map[string][]byte
 }
 
 type virtualProgressBarrier struct {
@@ -3946,10 +3951,7 @@ func (adapter *virtualAdapter) ImportInputAttachments(_ context.Context, request
 
 func (adapter *virtualAdapter) importInputAttachment(targetDirectoryPath string, attachment connectors.InputAttachment) (connectors.InputAttachment, error) {
 	filename := firstNonEmptyVirtualString(attachment.Filename, attachment.FileID, "attachment.bin")
-	content, errorValue := virtualAttachmentContent(attachment)
-	if errorValue != nil {
-		return connectors.InputAttachment{}, fmt.Errorf("attachment %s carries contentBase64 that is not base64: %w", filename, errorValue)
-	}
+	content := adapter.hostedContent(attachment)
 	virtualPath := strings.TrimRight(targetDirectoryPath, "/") + "/" + filename
 	hostPath := filepath.Join(adapter.workspacePath, strings.TrimPrefix(virtualPath, "/workspace/"))
 	if errorValue := os.MkdirAll(filepath.Dir(hostPath), 0700); errorValue != nil {
@@ -3959,18 +3961,54 @@ func (adapter *virtualAdapter) importInputAttachment(targetDirectoryPath string,
 		return connectors.InputAttachment{}, errorValue
 	}
 	attachment.Path = virtualPath
-	attachment.ContentBase64 = ""
 	attachment.IsAvailable = true
 	attachment.SizeBytes = int64(len(content))
 	attachment.ContentType = firstNonEmptyVirtualString(attachment.ContentType, "application/octet-stream")
 	return attachment, nil
 }
 
-func virtualAttachmentContent(attachment connectors.InputAttachment) ([]byte, error) {
-	if content := strings.TrimSpace(attachment.ContentBase64); content != "" {
-		return base64.StdEncoding.DecodeString(content)
+func (adapter *virtualAdapter) hostedContent(attachment connectors.InputAttachment) []byte {
+	adapter.mutex.Lock()
+	defer adapter.mutex.Unlock()
+	if content, isHosted := adapter.hostedContents[virtualAttachmentKey(attachment)]; isHosted {
+		return content
 	}
-	return virtualPlaceholderContent(attachment), nil
+	return virtualPlaceholderContent(attachment)
+}
+
+func (adapter *virtualAdapter) receiveMessageAttachments(messageID string, attachments []connectors.InputAttachment) ([]connectors.InputAttachment, error) {
+	received := make([]connectors.InputAttachment, 0, len(attachments))
+	for attachmentIndex, attachment := range attachments {
+		attachment = virtualMessageAttachment(messageID, attachmentIndex, attachment)
+		if errorValue := adapter.hostContent(attachment); errorValue != nil {
+			return nil, errorValue
+		}
+		attachment.ContentBase64 = ""
+		received = append(received, attachment)
+	}
+	return received, nil
+}
+
+func (adapter *virtualAdapter) hostContent(attachment connectors.InputAttachment) error {
+	encoded := strings.TrimSpace(attachment.ContentBase64)
+	if encoded == "" {
+		return nil
+	}
+	content, errorValue := base64.StdEncoding.DecodeString(encoded)
+	if errorValue != nil {
+		return fmt.Errorf("attachment %s carries contentBase64 that is not base64: %w", attachment.Filename, errorValue)
+	}
+	adapter.mutex.Lock()
+	defer adapter.mutex.Unlock()
+	if adapter.hostedContents == nil {
+		adapter.hostedContents = map[string][]byte{}
+	}
+	adapter.hostedContents[virtualAttachmentKey(attachment)] = content
+	return nil
+}
+
+func virtualAttachmentKey(attachment connectors.InputAttachment) string {
+	return attachment.Platform + ":" + firstNonEmptyVirtualString(attachment.FileID, attachment.URL)
 }
 
 func virtualPlaceholderContent(attachment connectors.InputAttachment) []byte {
@@ -4022,17 +4060,13 @@ func virtualInputPart(attachment connectors.InputAttachment) agentcontract.Agent
 	}
 }
 
-func virtualMessageAttachments(messageID string, attachments []connectors.InputAttachment) []connectors.InputAttachment {
-	result := make([]connectors.InputAttachment, 0, len(attachments))
-	for attachmentIndex, attachment := range attachments {
-		attachment.Platform = firstNonEmptyVirtualString(attachment.Platform, "virtual")
-		attachment.MessageID = firstNonEmptyVirtualString(attachment.MessageID, messageID)
-		if strings.TrimSpace(attachment.FileID) == "" && strings.TrimSpace(attachment.URL) == "" {
-			attachment.FileID = fmt.Sprintf("%s-file-%d", messageID, attachmentIndex+1)
-		}
-		result = append(result, attachment)
+func virtualMessageAttachment(messageID string, attachmentIndex int, attachment connectors.InputAttachment) connectors.InputAttachment {
+	attachment.Platform = firstNonEmptyVirtualString(attachment.Platform, "virtual")
+	attachment.MessageID = firstNonEmptyVirtualString(attachment.MessageID, messageID)
+	if strings.TrimSpace(attachment.FileID) == "" && strings.TrimSpace(attachment.URL) == "" {
+		attachment.FileID = fmt.Sprintf("%s-file-%d", messageID, attachmentIndex+1)
 	}
-	return result
+	return attachment
 }
 
 func firstNonEmptyVirtualString(values ...string) string {

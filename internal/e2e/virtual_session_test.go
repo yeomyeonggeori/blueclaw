@@ -1380,20 +1380,27 @@ func TestAttachedFileReachesTheAgentWithThePathItWasWrittenTo(t *testing.T) {
 		AllowedTools:          []string{"bash", "read"},
 		Turns: []VirtualTurn{{
 			Prompt:          "첨부한 CSV 요약해줘",
-			RouterTaskShape: agentcontract.TaskShapeImmediateReply,
+			RouterTaskShape: agentcontract.TaskShapeResearchTask,
 			InputAttachments: []connectors.InputAttachment{{
 				Filename:      "판매실적.csv",
 				ContentType:   "text/csv",
 				ContentBase64: base64.StdEncoding.EncodeToString([]byte(content)),
 				IsAvailable:   true,
 			}},
-			ActionResponses: []string{actionFinishMessage("요약했습니다.")},
+			ActionResponses: []string{
+				actionCallTool("read", `{"path":"/workspace/circles/member/inbox/virtual/virtual-conversation-1/판매실적.csv"}`),
+				actionFinishMessage("요약했습니다.", "obs-001"),
+			},
 		}},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected the attached file scenario to pass: %v", errorValue)
 	}
-	modelContext := result.TurnResults[0].ModelContext
+	turnResult := result.TurnResults[0]
+	if !eventsContain(turnResult.Events, "tool.read.result", "2026-04,서울,6720,6200") {
+		t.Fatalf("expected reading the attachment to return the bytes the person sent; events: %s", summarizeEvents(turnResult.Events))
+	}
+	modelContext := turnResult.ModelContext
 	attachedFile := "Attached file:\n- filename: 판매실적.csv\n- contentType: text/csv\n- path: "
 	pathStart := strings.Index(modelContext, attachedFile)
 	if pathStart < 0 {
@@ -1407,6 +1414,35 @@ func TestAttachedFileReachesTheAgentWithThePathItWasWrittenTo(t *testing.T) {
 	}
 	if string(written) != content {
 		t.Fatalf("expected the attached file to hold the bytes the person sent, got %q", written)
+	}
+}
+
+func TestVirtualPlatformImportsAnAttachmentAgainWithTheBytesThePersonSent(t *testing.T) {
+	content := []byte("월,지역,목표,실적\n2026-04,서울,6720,6200\n")
+	adapter := &virtualAdapter{workspacePath: t.TempDir()}
+	received, errorValue := adapter.receiveMessageAttachments("virtual-message-001", []connectors.InputAttachment{{
+		Filename:      "판매실적.csv",
+		ContentType:   "text/csv",
+		ContentBase64: base64.StdEncoding.EncodeToString(content),
+	}})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	request := connectors.InputAttachmentImportRequest{TargetDirectoryPath: "/workspace/inbox", InputAttachments: received}
+	first, errorValue := adapter.ImportInputAttachments(context.Background(), request)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	request.InputAttachments = first.InputAttachments
+	if _, errorValue := adapter.ImportInputAttachments(context.Background(), request); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	written, errorValue := os.ReadFile(filepath.Join(adapter.workspacePath, "inbox", "판매실적.csv"))
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if string(written) != string(content) {
+		t.Fatalf("expected a second import, as the read tool's attachment fallback makes, to keep the sent bytes, got %q", written)
 	}
 }
 
