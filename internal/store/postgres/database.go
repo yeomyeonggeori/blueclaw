@@ -98,7 +98,7 @@ func (migrationRunner MigrationRunner) ApplyMigrations(ctx context.Context, data
 	if errorValue := bluememopostgres.ApplyMigrations(ctx, database.SQL); errorValue != nil {
 		return fmt.Errorf("apply memory library migrations: %w", errorValue)
 	}
-	return nil
+	return migrationRunner.ensureMemoryEmbeddings(ctx, database)
 }
 
 func (migrationRunner MigrationRunner) applyHostMigrations(ctx context.Context, database Database) error {
@@ -223,4 +223,11 @@ func (migrationRunner MigrationRunner) log(message string, arguments ...any) {
 		return
 	}
 	migrationRunner.Logger.Info(message, arguments...)
+}
+
+func (migrationRunner MigrationRunner) warn(message string, arguments ...any) {
+	if migrationRunner.Logger == nil {
+		return
+	}
+	migrationRunner.Logger.Warn(message, arguments...)
 }
