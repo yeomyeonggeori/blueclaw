@@ -112,16 +112,3 @@ func TestBuildToolRegistryAuditServesCachedSnapshotWhenLiveFetchFails(t *testing
 		t.Fatalf("expected the audit to use the cached snapshot, got %+v", audit)
 	}
 }
-
-func TestReachableCapabilityToolDefinitionsDropToolsThatNeedTheRequestersOwnDevice(t *testing.T) {
-	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseCapabilityToolDescriptors(capability.Client{}, []CapabilityToolDescriptor{
-		{Name: "browser_open", Namespace: "browser", RequiresRequesterDevice: true},
-		{Name: "message_send", Namespace: "message"},
-	})
-
-	reachableNames := capabilityDescriptorNames(toolCatalogBuilder.reachableCapabilityToolDefinitions())
-	if registryContainsString(reachableNames, "browser_open") || !registryContainsString(reachableNames, "message_send") {
-		t.Fatalf("expected only the tool that needs no requester device, got %v", reachableNames)
-	}
-}

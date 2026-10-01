@@ -62,10 +62,9 @@ func servableTool(toolDescriptor toolcontract.ToolDescriptor) (*mcp.Tool, bool) 
 		InputSchema: decodedSchema,
 		Annotations: toolAnnotations(toolDescriptor),
 		Meta: mcp.Meta{
-			"blueclaw/sideEffectClass":         toolDescriptor.SideEffectClass,
-			"blueclaw/approvalScope":           toolDescriptor.ApprovalScope,
-			"blueclaw/requiresApproval":        toolDescriptor.RequiresApproval,
-			"blueclaw/requiresRequesterDevice": toolDescriptor.RequiresRequesterDevice,
+			"blueclaw/sideEffectClass":  toolDescriptor.SideEffectClass,
+			"blueclaw/approvalScope":    toolDescriptor.ApprovalScope,
+			"blueclaw/requiresApproval": toolDescriptor.RequiresApproval,
 		},
 	}
 	var decodedOutputSchema map[string]any

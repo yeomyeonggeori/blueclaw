@@ -238,6 +238,45 @@ func WebSearchAcceptanceScenario(artifactDirectoryPath string) VirtualSessionSce
 	}
 }
 
+func BrowserFormAcceptanceScenario(artifactDirectoryPath string) VirtualSessionScenario {
+	browserToolNames := []string{"browser_open", "browser_fill", "browser_select", "browser_press", "browser_wait"}
+	return VirtualSessionScenario{
+		Name:                  "browser_form_acceptance",
+		ArtifactDirectoryPath: artifactDirectoryPath,
+		AllowedTools:          browserToolNames,
+		CapabilityToolNames:   browserToolNames,
+		InitialToolNames:      browserToolNames,
+		RouterTaskShape:       agentcontract.TaskShapeResearchTask,
+		Turns: []VirtualTurn{{
+			Prompt:                 "https://forms.example.test/signup 신청서에 이름은 이샘플, 팀은 지원으로 골라서 제출하고 접수 문구가 뜰 때까지 기다려줘",
+			RouterRequiredEvidence: browserToolNames,
+			ActionResponses: []string{
+				actionCallTool("browser_open", `{"url":"https://forms.example.test/signup"}`),
+				actionCallTool("browser_fill", `{"target":"@e2","text":"이샘플"}`),
+				actionCallTool("browser_select", `{"target":"@e3","value":"support"}`),
+				actionCallTool("browser_press", `{"key":"Enter"}`),
+				actionCallTool("browser_wait", `{"selector":"#received"}`),
+				actionFinishMessage("이샘플 이름으로 지원팀을 골라 제출했고 접수 문구를 확인했습니다.", "obs-002", "obs-003", "obs-004", "obs-005"),
+			},
+			ExpectedToolCalls: browserToolNames,
+			ExpectedSequence: []string{
+				toolRequestedEventName("browser_open"), toolResultEventName("browser_open"),
+				toolRequestedEventName("browser_fill"), toolResultEventName("browser_fill"),
+				toolRequestedEventName("browser_select"), toolResultEventName("browser_select"),
+				toolRequestedEventName("browser_press"), toolResultEventName("browser_press"),
+				toolRequestedEventName("browser_wait"), toolResultEventName("browser_wait"),
+			},
+			ExpectedEventCounts: []VirtualEventCount{
+				{Name: toolRequestedEventName("browser_fill"), BodyFragment: "이샘플", Count: 1},
+				{Name: toolRequestedEventName("browser_select"), BodyFragment: "support", Count: 1},
+			},
+			ForbiddenEvents:        []string{agentcontract.TaskEventAgentNoProgressLoopStopped},
+			ExpectedReplyFragments: []string{"접수"},
+			ExpectedTaskStatus:     task.TaskStatusCompleted,
+		}},
+	}
+}
+
 func ToolPermissionHidesSkillScenario(artifactDirectoryPath string) VirtualSessionScenario {
 	return VirtualSessionScenario{
 		Name:                  "tool_permission_hides_skill",

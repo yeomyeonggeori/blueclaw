@@ -62,7 +62,6 @@ func TestADecodedDescriptorKeepsWhatItWasGiven(t *testing.T) {
 		"privacyClass": "workspace_site",
 		"estimatedLatency": "high",
 		"requiresUserPresence": true,
-		"requiresRequesterDevice": true,
 		"approvalScope": "browser",
 		"worksOffline": true,
 		"inputSchema": {"type":"object"},
