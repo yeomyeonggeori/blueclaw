@@ -54,16 +54,6 @@ func (connectorRuntime *ConnectorRuntime) withAttachmentMaterials(ctx context.Co
 	return event
 }
 
-func (connectorRuntime *ConnectorRuntime) ImportMessageAttachments(ctx context.Context, event PlatformInboundEvent, personID string) (PlatformInboundEvent, agentruntime.AttachmentMaterialResolver) {
-	adapter, errorValue := connectorRuntime.findAdapter(event.Platform)
-	if errorValue != nil {
-		connectorRuntime.logger.Warn("connector.attachments.unimported", slog.String("platform", event.Platform), slog.String("messageID", event.MessageID), slog.String("error", errorValue.Error()))
-		return event, nil
-	}
-	imported := connectorRuntime.withAttachmentMaterials(ctx, adapter, event, personID)
-	return imported, connectorRuntime.attachmentMaterialResolverFor(adapter, personID, imported)
-}
-
 func (connectorRuntime *ConnectorRuntime) attachmentMaterialResolverFor(adapter PlatformAdapter, personID string, event PlatformInboundEvent) connectorAttachmentMaterialResolver {
 	return connectorAttachmentMaterialResolver{
 		adapter:          adapter,

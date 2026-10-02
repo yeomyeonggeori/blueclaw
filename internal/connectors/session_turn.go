@@ -23,17 +23,21 @@ func (connectorRuntime *ConnectorRuntime) OpenSessionTurn(ctx context.Context, e
 		connectorRuntime.logger.Warn("connector.session.adapter_missing", slog.String("platform", event.Platform), slog.String("messageID", event.MessageID), slog.String("error", errorValue.Error()))
 	}
 	replyTarget, _ := connectorRuntime.buildReplyTarget(ctx, adapter, event)
-	return &SessionTurn{connectorRuntime: connectorRuntime, turn: &inboundTurn{
+	turn := &inboundTurn{
 		adapter:     adapter,
 		platform:    event.Platform,
 		event:       event,
 		replyTarget: replyTarget,
 		sendReply:   sendReply,
 		personID:    personID,
-	}}
+	}
+	if adapter != nil && shouldStartProgressBeforeAddressing(event) {
+		connectorRuntime.showTurnProgress(ctx, turn)
+	}
+	return &SessionTurn{connectorRuntime: connectorRuntime, turn: turn}
 }
 
-func (sessionTurn *SessionTurn) ContinueOpenInteractions(ctx context.Context, launchRequest agentruntime.TaskLaunchRequest) (agentruntime.TaskLaunchRequest, bool, error) {
+func (sessionTurn *SessionTurn) PrepareLaunch(ctx context.Context, launchRequest agentruntime.TaskLaunchRequest) (agentruntime.TaskLaunchRequest, bool, error) {
 	connectorRuntime, turn := sessionTurn.connectorRuntime, sessionTurn.turn
 	if turn.adapter == nil {
 		return launchRequest, false, nil
@@ -43,9 +47,10 @@ func (sessionTurn *SessionTurn) ContinueOpenInteractions(ctx context.Context, la
 		return launchRequest, true, errorValue
 	}
 	connectorRuntime.resolveTurnActiveGoal(ctx, turn)
-	connectorRuntime.resolveTurnPriorTask(turn)
+	connectorRuntime.prepareTurnForLaunch(ctx, turn)
 	precomputedTurnDecision := precomputedTurnDecisionForLaunch(turn.turnDecision, turn.hasTurnDecision)
-	return withTurnContinuation(launchRequest, connectorRuntime.conversationTurnFor(turn, precomputedTurnDecision)), false, nil
+	conversationTurn := connectorRuntime.conversationTurnFor(turn, precomputedTurnDecision)
+	return withTurnContinuation(connectorRuntime.withTurnMessage(launchRequest, conversationTurn), conversationTurn), false, nil
 }
 
 func (sessionTurn *SessionTurn) DeliverReply(ctx context.Context, turnResult agentcontract.AgentTurnResult) error {
@@ -55,20 +60,6 @@ func (sessionTurn *SessionTurn) DeliverReply(ctx context.Context, turnResult age
 	return errorValue
 }
 
-func (sessionTurn *SessionTurn) ShowProgressBeforeAddressing(ctx context.Context) {
-	if !shouldStartProgressBeforeAddressing(sessionTurn.turn.event) {
-		return
-	}
-	sessionTurn.ShowProgress(ctx)
-}
-
-func (sessionTurn *SessionTurn) ShowProgress(ctx context.Context) {
-	if sessionTurn.turn.adapter == nil {
-		return
-	}
-	sessionTurn.connectorRuntime.showTurnProgress(ctx, sessionTurn.turn)
-}
-
-func (sessionTurn *SessionTurn) EndProgress() {
+func (sessionTurn *SessionTurn) End() {
 	sessionTurn.turn.endProgress()
 }
