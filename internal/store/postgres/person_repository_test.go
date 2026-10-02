@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
+	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
 
 func TestCanonicalPersonReferenceUpdateStatementsIncludeRuntimeIdentityTables(t *testing.T) {
@@ -190,4 +191,103 @@ func queryPersonIDs(t *testing.T, database Database, statement string, arguments
 		t.Fatal(errorValue)
 	}
 	return personIDs
+}
+
+func TestAPolicyThatDropsAPersonStopsTheirSchedulesAndBriefing(t *testing.T) {
+	database, _ := isolatedIntegrationDatabase(t, context.Background())
+	repository := NewPersonRepository(database)
+	replacePeople(t, repository, projectedPerson("person-kept", "kept@example.com"), projectedPerson("person-departed", "departed@example.com"))
+	upsertDueSchedule(t, database, "schedule-of-kept", "person-kept", "")
+	upsertDueSchedule(t, database, "schedule-of-departed", "person-departed", "")
+	reconcileDueMorningBriefing(t, database, "person-departed")
+
+	replacePeople(t, repository, projectedPerson("person-kept", "kept@example.com"))
+
+	if claimedScheduleIDs := claimDueScheduleIDs(t, database); strings.Join(claimedScheduleIDs, ",") != "schedule-of-kept" {
+		t.Fatalf("only the remaining person's schedule may fire, and it must still fire, got %v", claimedScheduleIDs)
+	}
+}
+
+func TestAStoppedScheduleKeepsItsRunHistory(t *testing.T) {
+	database, _ := isolatedIntegrationDatabase(t, context.Background())
+	repository := NewPersonRepository(database)
+	replacePeople(t, repository, projectedPerson("person-kept", "kept@example.com"), projectedPerson("person-departed", "departed@example.com"))
+	if _, errorValue := database.SQL.Exec(`
+INSERT INTO task_run (task_run_id, requester_person_id, current_agent_profile_name, status, prompt, created_at, updated_at)
+VALUES ('run-of-departed', 'person-departed', 'default', 'completed', 'scheduled', now(), now())`); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	upsertDueSchedule(t, database, "schedule-of-departed", "person-departed", "run-of-departed")
+
+	replacePeople(t, repository, projectedPerson("person-kept", "kept@example.com"))
+
+	var lastTaskRunID string
+	var isCancelled bool
+	if errorValue := database.SQL.QueryRow(`
+SELECT last_task_run_id, expires_at IS NOT NULL AND next_run_at IS NULL FROM schedule WHERE schedule_id = 'schedule-of-departed'`).Scan(&lastTaskRunID, &isCancelled); errorValue != nil {
+		t.Fatalf("a stopped schedule must stay on record: %v", errorValue)
+	}
+	if !isCancelled {
+		t.Fatal("a departed person's schedule must be cancelled the way its owner would cancel it")
+	}
+	if lastTaskRunID != "run-of-departed" {
+		t.Fatalf("a stopped schedule must keep naming its last run, got %q", lastTaskRunID)
+	}
+	var requesterPersonID string
+	if errorValue := database.SQL.QueryRow(`SELECT requester_person_id FROM task_run WHERE task_run_id = 'run-of-departed'`).Scan(&requesterPersonID); errorValue != nil {
+		t.Fatalf("the run a stopped schedule made must survive: %v", errorValue)
+	}
+	if requesterPersonID != "person-departed" {
+		t.Fatalf("the run must keep naming who it ran for, got %q", requesterPersonID)
+	}
+}
+
+func TestAReturningPersonsSchedulesStayStopped(t *testing.T) {
+	database, _ := isolatedIntegrationDatabase(t, context.Background())
+	repository := NewPersonRepository(database)
+	replacePeople(t, repository, projectedPerson("person-returning", "returning@example.com"))
+	upsertDueSchedule(t, database, "schedule-of-returning", "person-returning", "")
+	replacePeople(t, repository)
+
+	replacePeople(t, repository, projectedPerson("person-returning", "returning@example.com"))
+
+	if claimedScheduleIDs := claimDueScheduleIDs(t, database); len(claimedScheduleIDs) != 0 {
+		t.Fatalf("a schedule stopped by a departure must not come back with the person, got %v", claimedScheduleIDs)
+	}
+}
+
+func upsertDueSchedule(t *testing.T, database Database, scheduleID string, personID string, lastTaskRunID string) {
+	t.Helper()
+	dueAt := time.Now().UTC().Add(-time.Minute)
+	schedule := morningBriefingTestSchedule(personID, scheduleID, &dueAt)
+	schedule.Name = "Weekly report"
+	schedule.LastTaskRunID = lastTaskRunID
+	schedule.CreatedAt = dueAt
+	schedule.UpdatedAt = dueAt
+	if errorValue := NewScheduleRepository(database).UpsertSchedule(schedule); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+}
+
+func reconcileDueMorningBriefing(t *testing.T, database Database, personID string) {
+	t.Helper()
+	dueAt := time.Now().UTC().Add(-time.Minute)
+	briefing := morningBriefingTestSchedule(personID, task.MorningBriefingScheduleID(personID), &dueAt)
+	briefing.CreatedAt = dueAt
+	if errorValue := NewScheduleRepository(database).ReconcileMorningBriefings(context.Background(), []task.Schedule{briefing}, dueAt); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+}
+
+func claimDueScheduleIDs(t *testing.T, database Database) []string {
+	t.Helper()
+	schedules, errorValue := NewScheduleRepository(database).ClaimDueSchedules(10, time.Minute, time.Now().UTC(), "departure-test")
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	scheduleIDs := make([]string, 0, len(schedules))
+	for _, schedule := range schedules {
+		scheduleIDs = append(scheduleIDs, schedule.ScheduleID)
+	}
+	return scheduleIDs
 }

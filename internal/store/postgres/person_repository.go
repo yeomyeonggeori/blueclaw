@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
+	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
 
 const foreignKeyViolationCode = "23503"
@@ -106,6 +107,9 @@ func personIDsOutside(ctx context.Context, transaction *sql.Tx, namedPersonIDs [
 }
 
 func retirePerson(ctx context.Context, transaction *sql.Tx, personID string) error {
+	if errorValue := stopSchedulesOf(ctx, transaction, personID); errorValue != nil {
+		return errorValue
+	}
 	if _, errorValue := transaction.ExecContext(ctx, `DELETE FROM person_email WHERE person_id = $1`, personID); errorValue != nil {
 		return errorValue
 	}
@@ -122,6 +126,16 @@ func retirePerson(ctx context.Context, transaction *sql.Tx, personID string) err
 	}
 	_, errorValue := transaction.ExecContext(ctx, `RELEASE SAVEPOINT retire_person`)
 	return errorValue
+}
+
+func stopSchedulesOf(ctx context.Context, transaction *sql.Tx, personID string) error {
+	stoppedAt := time.Now().UTC()
+	if _, errorValue := cancelSchedules(ctx, transaction, task.ScheduleCancelRequest{
+		Scope: task.ScheduleCancelScopeMine, RequesterPersonID: personID, CancelledAt: stoppedAt,
+	}); errorValue != nil {
+		return errorValue
+	}
+	return deactivateMorningBriefing(ctx, transaction, personID, stoppedAt)
 }
 
 func isForeignKeyViolation(errorValue error) bool {
