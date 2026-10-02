@@ -4,6 +4,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"os/user"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"unicode"
@@ -173,6 +174,7 @@ func POSIXStateForPolicy(policyDocument policy.PolicyDocument, workspaceRootPath
 			{Path: workspaceRootPath + "/shared/cache/weather/open-meteo-v1", Owner: blueclawServiceUserName, Group: posixSharedGroupName, ModeText: "2775"},
 		},
 	}
+	state.Directories = appendProtectedDirectory(state.Directories, SharedMemoryPath(workspaceRootPath), posixSharedGroupName)
 
 	for _, circlePolicy := range circlePoliciesWithMemberDefault(policyDocument.Circles, workspaceRootPath) {
 		circleID := strings.ToLower(strings.TrimSpace(circlePolicy.CircleID))
@@ -188,6 +190,7 @@ func POSIXStateForPolicy(policyDocument policy.PolicyDocument, workspaceRootPath
 			Group:    groupName,
 			ModeText: "2770",
 		})
+		state.Directories = appendProtectedDirectory(state.Directories, CircleMemoryPath(workspaceRootPath, circleID), groupName)
 	}
 
 	for _, personPolicy := range policyDocument.People {
@@ -225,9 +228,26 @@ func POSIXStateForPolicy(policyDocument policy.PolicyDocument, workspaceRootPath
 			Group:    userName,
 			ModeText: "0700",
 		})
+		state.Directories = appendProtectedDirectory(state.Directories, PersonMemoryPath(workspaceRootPath, personID), userName)
 	}
 
 	return normalizePOSIXState(state)
+}
+
+// appendProtectedDirectory declares the directory that holds one subject's
+// memory file. The service owns it so the file is written on the subject's
+// behalf, the group reads it so the subject can open their own memory, and
+// setgid carries that group onto the file the library creates.
+func appendProtectedDirectory(directories []POSIXDirectory, memoryPath string, groupName string) []POSIXDirectory {
+	if strings.TrimSpace(memoryPath) == "" {
+		return directories
+	}
+	return append(directories, POSIXDirectory{
+		Path:     filepath.Dir(memoryPath),
+		Owner:    blueclawServiceUserName,
+		Group:    groupName,
+		ModeText: "2750",
+	})
 }
 
 func LinuxPersonUserName(personID string) string {

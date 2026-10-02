@@ -44,3 +44,37 @@ func (cleaner TaskTemporaryDirectoryCleaner) RemoveTaskTemporaryDirectory(reques
 	}
 	return os.RemoveAll(taskTemporaryDirectoryPath)
 }
+
+func ProtectedDirectoryPath(ownerDirectoryPath string) string {
+	if strings.TrimSpace(ownerDirectoryPath) == "" {
+		return ""
+	}
+	return filepath.Join(ownerDirectoryPath, ".protected")
+}
+
+func PersonMemoryPath(workspaceRootPath string, personID string) string {
+	return memoryPathUnder(PersonHomeDirectoryPath(workspaceRootPath, personID))
+}
+
+func CircleMemoryPath(workspaceRootPath string, circleID string) string {
+	trimmedCircleID := strings.TrimSpace(circleID)
+	if strings.TrimSpace(workspaceRootPath) == "" || trimmedCircleID == "" {
+		return ""
+	}
+	return memoryPathUnder(filepath.Join(workspaceRootPath, "circles", trimmedCircleID))
+}
+
+func SharedMemoryPath(workspaceRootPath string) string {
+	if strings.TrimSpace(workspaceRootPath) == "" {
+		return ""
+	}
+	return memoryPathUnder(filepath.Join(workspaceRootPath, "shared"))
+}
+
+func memoryPathUnder(ownerDirectoryPath string) string {
+	protectedPath := ProtectedDirectoryPath(ownerDirectoryPath)
+	if protectedPath == "" {
+		return ""
+	}
+	return filepath.Join(protectedPath, "memory.db")
+}

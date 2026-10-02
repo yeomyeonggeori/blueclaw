@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
+	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/bluememo"
 )
 
@@ -21,6 +22,10 @@ const (
 	ScopeCircle    = "circle"
 	ScopeWorkspace = "workspace"
 )
+
+// memoryFileMode lets the subject's group read a memory and nobody but the
+// service write it: a person's memory is kept on their behalf.
+const memoryFileMode = 0o640
 
 // Scope names one memory file. bluememo keeps a subject's memory in a file of
 // its own, so clearance is whether the service opens that file on a reader's
@@ -34,15 +39,24 @@ func PersonScope(personID string) Scope { return Scope{Kind: ScopePerson, ID: pe
 func CircleScope(circleID string) Scope { return Scope{Kind: ScopeCircle, ID: circleID} }
 func WorkspaceScope() Scope             { return Scope{Kind: ScopeWorkspace} }
 
-func (scope Scope) fileName() (string, error) {
+// pathUnder puts a subject's memory in that subject's own workspace
+// directory, under the .protected directory the service owns, so the
+// permissions the workspace already declares are what decide who opens it.
+func (scope Scope) pathUnder(workspaceRootPath string) (string, error) {
+	if strings.TrimSpace(workspaceRootPath) == "" {
+		return "", errors.New("memory has no workspace root to sit under")
+	}
 	switch scope.Kind {
 	case ScopeWorkspace:
-		return "workspace.db", nil
+		return security.SharedMemoryPath(workspaceRootPath), nil
 	case ScopePerson, ScopeCircle:
 		if !isStorageIdentifier(scope.ID) {
 			return "", fmt.Errorf("memory scope %s has an identifier a file name cannot carry: %q", scope.Kind, scope.ID)
 		}
-		return filepath.Join(scope.Kind+"s", scope.ID+".db"), nil
+		if scope.Kind == ScopePerson {
+			return security.PersonMemoryPath(workspaceRootPath, scope.ID), nil
+		}
+		return security.CircleMemoryPath(workspaceRootPath, scope.ID), nil
 	}
 	return "", fmt.Errorf("unknown memory scope %q", scope.Kind)
 }
@@ -66,35 +80,38 @@ func isStorageIdentifier(identifier string) bool {
 // Stores holds the memory files this company's agent reads and writes, opening
 // each on first use and keeping it for the life of the process.
 type Stores struct {
-	directory     string
-	configuration bluememo.Configuration
-	mutex         sync.Mutex
-	open          map[string]*bluememo.Store
+	workspaceRootPath string
+	configuration     bluememo.Configuration
+	mutex             sync.Mutex
+	open              map[string]*bluememo.Store
 }
 
-func NewStores(directory string, configuration bluememo.Configuration) *Stores {
-	return &Stores{directory: directory, configuration: configuration, open: map[string]*bluememo.Store{}}
+func NewStores(workspaceRootPath string, configuration bluememo.Configuration) *Stores {
+	return &Stores{workspaceRootPath: workspaceRootPath, configuration: configuration, open: map[string]*bluememo.Store{}}
 }
 
 func (stores *Stores) Store(ctx context.Context, scope Scope) (*bluememo.Store, error) {
-	fileName, errorValue := scope.fileName()
+	path, errorValue := stores.Path(scope)
 	if errorValue != nil {
 		return nil, errorValue
 	}
 	stores.mutex.Lock()
 	defer stores.mutex.Unlock()
-	if held, isOpen := stores.open[fileName]; isOpen {
+	if held, isOpen := stores.open[path]; isOpen {
 		return held, nil
 	}
-	path := filepath.Join(stores.directory, fileName)
-	if errorValue := os.MkdirAll(filepath.Dir(path), 0o700); errorValue != nil {
+	if errorValue := makeHoldingDirectory(path); errorValue != nil {
 		return nil, errorValue
 	}
 	opened, errorValue := bluememo.Open(ctx, path, stores.configuration)
 	if errorValue != nil {
 		return nil, errorValue
 	}
-	stores.open[fileName] = opened
+	if errorValue := os.Chmod(path, memoryFileMode); errorValue != nil {
+		_ = opened.Close()
+		return nil, fmt.Errorf("let the subject read %s: %w", path, errorValue)
+	}
+	stores.open[path] = opened
 	return opened, nil
 }
 
@@ -272,11 +289,11 @@ func (stores *Stores) Maintain(ctx context.Context) error {
 
 func (stores *Stores) storedScopes() ([]Scope, error) {
 	scopes := []Scope{}
-	if _, errorValue := os.Stat(filepath.Join(stores.directory, "workspace.db")); errorValue == nil {
+	if _, errorValue := os.Stat(filepath.Join(stores.workspaceRootPath, "workspace.db")); errorValue == nil {
 		scopes = append(scopes, WorkspaceScope())
 	}
 	for _, kind := range []string{ScopePerson, ScopeCircle} {
-		entries, errorValue := os.ReadDir(filepath.Join(stores.directory, kind+"s"))
+		entries, errorValue := os.ReadDir(filepath.Join(stores.workspaceRootPath, kind+"s"))
 		if errorValue != nil {
 			if os.IsNotExist(errorValue) {
 				continue
@@ -318,6 +335,9 @@ func (stores *Stores) MergePerson(ctx context.Context, fromPersonID string, toPe
 	stores.forget(PersonScope(fromPersonID))
 	if _, errorValue := os.Stat(toPath); errors.Is(errorValue, os.ErrNotExist) {
 		stores.forget(PersonScope(toPersonID))
+		if errorValue := makeHoldingDirectory(toPath); errorValue != nil {
+			return errorValue
+		}
 		return os.Rename(fromPath, toPath)
 	}
 	return stores.adoptEveryMemory(ctx, fromPersonID, toPersonID, fromPath)
@@ -349,23 +369,26 @@ func (stores *Stores) adoptEveryMemory(ctx context.Context, fromPersonID string,
 
 // forget drops a cached handle so the file underneath it can be moved.
 func (stores *Stores) forget(scope Scope) {
-	fileName, errorValue := scope.fileName()
+	path, errorValue := stores.Path(scope)
 	if errorValue != nil {
 		return
 	}
 	stores.mutex.Lock()
 	defer stores.mutex.Unlock()
-	if store, isOpen := stores.open[fileName]; isOpen {
+	if store, isOpen := stores.open[path]; isOpen {
 		store.Close()
-		delete(stores.open, fileName)
+		delete(stores.open, path)
 	}
 }
 
 // pathFor is where one scope's file lives, whether or not it exists yet.
+// makeHoldingDirectory stands in for the POSIX helper where there is none,
+// such as a test. On a host the helper has already made this directory
+// setgid to the subject's group, and this call changes nothing.
+func makeHoldingDirectory(memoryPath string) error {
+	return os.MkdirAll(filepath.Dir(memoryPath), 0o750)
+}
+
 func (stores *Stores) Path(scope Scope) (string, error) {
-	fileName, errorValue := scope.fileName()
-	if errorValue != nil {
-		return "", errorValue
-	}
-	return filepath.Join(stores.directory, fileName), nil
+	return scope.pathUnder(stores.workspaceRootPath)
 }

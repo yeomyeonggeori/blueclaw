@@ -2,7 +2,6 @@ package app
 
 import (
 	"log/slog"
-	"path/filepath"
 	"time"
 
 	"github.com/yeomyeonggeori/bluememo"
@@ -27,13 +26,6 @@ type memoryComponents struct {
 	stores *memory.Stores
 }
 
-// memoryDirectory is service-owned: a person's memory is written on their
-// behalf and is not theirs to edit, so it lives beside the rest of what only
-// blueclaw opens rather than under their own workspace.
-func memoryDirectory(workspaceRootPath string) string {
-	return filepath.Join(workspaceRootPath, ".blueclaw", "memory")
-}
-
 func newMemoryComponents(runtimeConfiguration config.RuntimeConfiguration, kernel agentKernel, services taskServices, identityService *identity.IdentityService, logger *slog.Logger) memoryComponents {
 	logger.Info("application.initializing", "stage", "memory")
 	embeddingModelName := firstNonEmptyString(runtimeConfiguration.Memory.EmbeddingModel, defaultMemoryEmbedding.ModelName)
@@ -52,8 +44,8 @@ func newMemoryComponents(runtimeConfiguration config.RuntimeConfiguration, kerne
 	if kernel.decisionModel != nil {
 		configuration.Judge = bluememo.DistributionJudge{Chooser: memory.Chooser{DecisionModel: kernel.decisionModel}}
 	}
-	directory := memoryDirectory(firstNonEmptyString(runtimeConfiguration.Terminal.WorkspaceRootPath, "/workspace"))
-	stores := memory.NewStores(directory, configuration)
+	workspaceRootPath := firstNonEmptyString(runtimeConfiguration.Terminal.WorkspaceRootPath, "/workspace")
+	stores := memory.NewStores(workspaceRootPath, configuration)
 	if !runtimeConfiguration.Memory.ExtractionDisabled {
 		services.taskRunService.RegisterTaskRunTransitionObserver(memory.TaskRunTransitionObserver{
 			Stores:   stores,
@@ -64,7 +56,7 @@ func newMemoryComponents(runtimeConfiguration config.RuntimeConfiguration, kerne
 		}.Observe)
 	}
 	logger.Info("application.memory.store_configured",
-		"directory", directory,
+		"workspaceRoot", workspaceRootPath,
 		"embeddingModel", embeddingModelName,
 		"embeddingDimensions", firstPositiveInteger(runtimeConfiguration.Memory.EmbeddingDimensions, defaultMemoryEmbedding.Dimensions),
 		"extractionDisabled", runtimeConfiguration.Memory.ExtractionDisabled)

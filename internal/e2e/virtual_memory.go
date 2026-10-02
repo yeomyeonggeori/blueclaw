@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"context"
-	"path/filepath"
 
 	"github.com/yeomyeonggeori/bluememo"
 	"github.com/yeomyeonggeori/bluememo/bluememotest"
@@ -20,7 +19,7 @@ type VirtualMemoryFact struct {
 }
 
 func openVirtualMemory(workspacePath string) *memory.Stores {
-	return memory.NewStores(filepath.Join(workspacePath, ".blueclaw", "memory"), bluememo.Configuration{
+	return memory.NewStores(workspacePath, bluememo.Configuration{
 		Embedder: &bluememotest.HashEmbedder{},
 		Model:    virtualMemoryModel{},
 		Judge:    bluememo.DistributionJudge{Chooser: bluememotest.ScriptedChooser{}},
