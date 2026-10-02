@@ -209,3 +209,29 @@ func hasTestString(values []string, expectedValue string) bool {
 	}
 	return false
 }
+
+func TestPOSIXStateGivesEachSubjectsMemoryADirectoryItsGroupCanRead(t *testing.T) {
+	state := POSIXStateForPolicy(policy.PolicyDocument{
+		People: []policy.PersonPolicy{{
+			PersonID: "person-1",
+			Circles:  []string{"finance"},
+		}},
+		Circles: []policy.CirclePolicy{{
+			CircleID:               "finance",
+			WorkspaceDirectoryPath: "/workspace/circles/finance",
+		}},
+	}, "/workspace")
+
+	for name, expectation := range map[string]struct {
+		path  string
+		group string
+	}{
+		"a person": {"/workspace/private/people/person-1/.protected", LinuxPersonUserName("person-1")},
+		"a circle": {"/workspace/circles/finance/.protected", LinuxCircleGroupName("finance")},
+		"everyone": {"/workspace/shared/.protected", posixSharedGroupName},
+	} {
+		if !hasPOSIXDirectory(state, expectation.path, blueclawServiceUserName, expectation.group, "2750") {
+			t.Fatalf("memory for %s has no directory the service owns and its group reads at %s, got %+v", name, expectation.path, state.Directories)
+		}
+	}
+}

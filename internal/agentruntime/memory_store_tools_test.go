@@ -101,7 +101,7 @@ func TestMemoryRememberToolFailsLoudlyWhenTheModelIsDown(t *testing.T) {
 		Embedder: &bluememotest.HashEmbedder{},
 		Model:    failingModel{},
 		Judge:    bluememo.DistributionJudge{Chooser: bluememotest.ScriptedChooser{}},
-	})
+	}, memorytest.ReadsInThisProcess())
 	t.Cleanup(func() { _ = stores.Close() })
 	fixture := newStoreToolFixtureWithStores(t, stores, "memory_remember")
 	result := fixture.invoke(t, "memory_remember", map[string]string{"content": "이샘플 prefers bullet summaries"})

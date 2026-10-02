@@ -163,7 +163,7 @@ func POSIXStateForPolicy(policyDocument policy.PolicyDocument, workspaceRootPath
 			{Path: workspaceRootPath + "/circles", Owner: blueclawServiceUserName, Group: blueclawServiceUserName, ModeText: "0711"},
 			{Path: workspaceRootPath + "/private", Owner: blueclawServiceUserName, Group: blueclawServiceUserName, ModeText: "0711"},
 			{Path: workspaceRootPath + "/private/people", Owner: blueclawServiceUserName, Group: blueclawServiceUserName, ModeText: "0711"},
-			{Path: workspaceRootPath + "/shared", Owner: blueclawServiceUserName, Group: posixSharedGroupName, ModeText: "2755"},
+			{Path: SharedDirectoryPath(workspaceRootPath), Owner: blueclawServiceUserName, Group: posixSharedGroupName, ModeText: "2755"},
 			{Path: workspaceRootPath + "/shared/public", Owner: blueclawServiceUserName, Group: posixSharedGroupName, ModeText: "2775"},
 			{Path: workspaceRootPath + "/shared/cache", Owner: blueclawServiceUserName, Group: posixSharedGroupName, ModeText: "2775"},
 			{Path: workspaceRootPath + "/shared/cache/dependencies", Owner: blueclawServiceUserName, Group: posixSharedGroupName, ModeText: "2775"},
@@ -173,6 +173,7 @@ func POSIXStateForPolicy(policyDocument policy.PolicyDocument, workspaceRootPath
 			{Path: workspaceRootPath + "/shared/cache/weather/open-meteo-v1", Owner: blueclawServiceUserName, Group: posixSharedGroupName, ModeText: "2775"},
 		},
 	}
+	state.Directories = appendProtectedDirectory(state.Directories, SharedDirectoryPath(workspaceRootPath), posixSharedGroupName)
 
 	for _, circlePolicy := range circlePoliciesWithMemberDefault(policyDocument.Circles, workspaceRootPath) {
 		circleID := strings.ToLower(strings.TrimSpace(circlePolicy.CircleID))
@@ -180,7 +181,7 @@ func POSIXStateForPolicy(policyDocument policy.PolicyDocument, workspaceRootPath
 			continue
 		}
 		groupName := LinuxCircleGroupName(circleID)
-		circleWorkspacePath := firstNonEmptyString(circlePolicy.WorkspaceDirectoryPath, workspaceRootPath+"/circles/"+circleID)
+		circleWorkspacePath := firstNonEmptyString(circlePolicy.WorkspaceDirectoryPath, CircleDirectoryPath(workspaceRootPath, circleID))
 		state.Groups = append(state.Groups, POSIXGroup{Name: groupName})
 		state.Directories = append(state.Directories, POSIXDirectory{
 			Path:     circleWorkspacePath,
@@ -188,6 +189,7 @@ func POSIXStateForPolicy(policyDocument policy.PolicyDocument, workspaceRootPath
 			Group:    groupName,
 			ModeText: "2770",
 		})
+		state.Directories = appendProtectedDirectory(state.Directories, circleWorkspacePath, groupName)
 	}
 
 	for _, personPolicy := range policyDocument.People {
@@ -225,9 +227,26 @@ func POSIXStateForPolicy(policyDocument policy.PolicyDocument, workspaceRootPath
 			Group:    userName,
 			ModeText: "0700",
 		})
+		state.Directories = appendProtectedDirectory(state.Directories, PersonHomeDirectoryPath(workspaceRootPath, personID), userName)
 	}
 
 	return normalizePOSIXState(state)
+}
+
+// appendProtectedDirectory declares where what is written on a subject's
+// behalf sits. The service owns it, the group reads it so the subject can open
+// what belongs to them, and setgid carries that group onto what is written.
+func appendProtectedDirectory(directories []POSIXDirectory, subjectDirectoryPath string, groupName string) []POSIXDirectory {
+	protectedPath := ProtectedDirectoryPath(subjectDirectoryPath)
+	if protectedPath == "" {
+		return directories
+	}
+	return append(directories, POSIXDirectory{
+		Path:     protectedPath,
+		Owner:    blueclawServiceUserName,
+		Group:    groupName,
+		ModeText: "2750",
+	})
 }
 
 func LinuxPersonUserName(personID string) string {
@@ -334,7 +353,7 @@ func circlePoliciesWithMemberDefault(circlePolicies []policy.CirclePolicy, works
 	if !hasMemberCircle {
 		result = append(result, policy.CirclePolicy{
 			CircleID:               policy.MemberCircleID,
-			WorkspaceDirectoryPath: workspaceRootPath + "/circles/" + policy.MemberCircleID,
+			WorkspaceDirectoryPath: CircleDirectoryPath(workspaceRootPath, policy.MemberCircleID),
 		})
 	}
 	return result

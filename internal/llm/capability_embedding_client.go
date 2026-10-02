@@ -10,6 +10,11 @@ import (
 
 const DefaultEmbeddingModelName = "baai/bge-m3"
 
+// DefaultEmbeddingDimensions is the width DefaultEmbeddingModelName answers
+// in. A store embedded at one width cannot be searched at another, so the
+// model and its width are declared together.
+const DefaultEmbeddingDimensions = 1024
+
 const (
 	EmbeddingInputTypeQuery    = "query"
 	EmbeddingInputTypeDocument = "document"
@@ -20,6 +25,10 @@ type CapabilityEmbeddingClient struct {
 	ModelName        string
 	ExecutionMode    string
 	OutputDimensions int
+}
+
+func (client CapabilityEmbeddingClient) EmbeddingModelName() string {
+	return client.ModelName
 }
 
 type EmbeddingInput struct {

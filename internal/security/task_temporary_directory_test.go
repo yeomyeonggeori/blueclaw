@@ -96,3 +96,17 @@ func TestPOSIXEnvironmentOmitsTaskTemporaryDirectoryWithoutATask(t *testing.T) {
 		t.Fatalf("expected person scoped scratch without a task, got %+v", environmentVariables)
 	}
 }
+
+func TestASubjectDirectoryAnswersWithNothingForAnIdentifierThatWalksUpwards(t *testing.T) {
+	for _, subjectID := range []string{"../../etc", "..", "a/b", "a b", ""} {
+		if path := CircleDirectoryPath("/workspace", subjectID); path != "" {
+			t.Fatalf("circle %q named the directory %q, which the helper would create and chown", subjectID, path)
+		}
+		if path := PersonHomeDirectoryPath("/workspace", subjectID); path != "" {
+			t.Fatalf("person %q named the directory %q", subjectID, path)
+		}
+	}
+	if path := CircleDirectoryPath("/workspace", "finance"); path != "/workspace/circles/finance" {
+		t.Fatalf("an ordinary circle named %q", path)
+	}
+}

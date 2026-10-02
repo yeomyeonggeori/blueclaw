@@ -13,6 +13,7 @@ import (
 	"github.com/yeomyeonggeori/bluememo/bluememotest"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
+	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 )
 
 // Open gives a Stores under the test's own directory, embedding by hash and
@@ -37,7 +38,7 @@ func open(t *testing.T, chooser bluememo.Chooser) *memory.Stores {
 		EmbeddingModel: "test-embed",
 		Model:          EchoModel{},
 		Judge:          bluememo.DistributionJudge{Chooser: chooser},
-	})
+	}, currentProcessActor{})
 	t.Cleanup(func() { _ = stores.Close() })
 	return stores
 }
@@ -137,7 +138,7 @@ func Count(t *testing.T, stores *memory.Stores, scope memory.Scope) int {
 // opens.
 func Recall(t *testing.T, stores *memory.Stores, scopes []memory.Scope, query string) []memory.MemoryFact {
 	t.Helper()
-	recalled, errorValue := stores.RecallAcross(context.Background(), scopes, query, memory.DefaultRecallLimit)
+	recalled, errorValue := stores.RecallAcross(context.Background(), policy.PersonAccess{PersonID: "reader"}, scopes, query, memory.DefaultRecallLimit)
 	if errorValue != nil {
 		t.Fatalf("recall %q: %v", query, errorValue)
 	}
