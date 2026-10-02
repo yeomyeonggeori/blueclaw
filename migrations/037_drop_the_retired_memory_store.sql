@@ -1,3 +1,6 @@
+DROP TABLE IF EXISTS memory_fact_trigger_embedding;
+DROP TABLE IF EXISTS memory_fact_trigger;
+DROP TABLE IF EXISTS memory_schema_migration;
 DROP TABLE IF EXISTS memory_fact_embedding;
 DROP TABLE IF EXISTS memory_fact_circle;
 DROP TABLE IF EXISTS memory_job;
