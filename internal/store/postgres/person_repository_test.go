@@ -2,12 +2,14 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
@@ -157,7 +159,7 @@ func projectedPerson(personID string, email string) policy.PersonPolicy {
 
 func replacePeople(t *testing.T, repository PersonRepository, people ...policy.PersonPolicy) {
 	t.Helper()
-	if errorValue := repository.ReplacePeople(policy.PolicyDocument{People: people}); errorValue != nil {
+	if errorValue := repository.ReplacePeople(policy.PolicyDocument{People: append([]policy.PersonPolicy{}, people...)}); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 }
@@ -290,4 +292,72 @@ func claimDueScheduleIDs(t *testing.T, database Database) []string {
 		scheduleIDs = append(scheduleIDs, schedule.ScheduleID)
 	}
 	return scheduleIDs
+}
+
+func TestARosterNotYetHandedOverRetiresNobody(t *testing.T) {
+	database, _ := isolatedIntegrationDatabase(t, context.Background())
+	repository := NewPersonRepository(database)
+	replacePeople(t, repository, projectedPerson("person-kept", "kept@example.com"))
+	upsertDueSchedule(t, database, "schedule-of-kept", "person-kept", "")
+	reconcileDueMorningBriefing(t, database, "person-kept")
+	var unreceivedRoster policy.PolicyDocument
+	if errorValue := json.Unmarshal([]byte(`{"circles":[],"circleSync":{},"resourceAccess":[],"channels":[],"retention":{}}`), &unreceivedRoster); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	if errorValue := repository.ReplacePeople(unreceivedRoster); errorValue != nil {
+		t.Fatalf("a roster nobody has handed over yet must project without error: %v", errorValue)
+	}
+
+	if personIDs := personIDsForEmail(t, database, "kept@example.com"); strings.Join(personIDs, ",") != "person-kept" {
+		t.Fatalf("a roster that names no people must leave the projected ones resolvable, got %v", personIDs)
+	}
+	claimedScheduleIDs := claimDueScheduleIDs(t, database)
+	if strings.Join(claimedScheduleIDs, ",") != "schedule-of-kept,"+task.MorningBriefingScheduleID("person-kept") {
+		t.Fatalf("a roster that names no people must stop nobody's schedules, got %v", claimedScheduleIDs)
+	}
+}
+
+func TestADepartedPersonsBriefingKeepsThemOnRecordWhicheverKeyRefusesFirst(t *testing.T) {
+	database, _ := isolatedIntegrationDatabase(t, context.Background())
+	repository := NewPersonRepository(database)
+	replacePeople(t, repository, projectedPerson("person-kept", "kept@example.com"), projectedPerson("person-departed", "departed@example.com"))
+	reconcileDueMorningBriefing(t, database, "person-departed")
+	checkTheBriefingKeyFirst(t, database)
+
+	replacePeople(t, repository, projectedPerson("person-kept", "kept@example.com"))
+
+	if projectedPersonIDs := projectedPersonIDs(t, database); strings.Join(projectedPersonIDs, ",") != "person-departed,person-kept" {
+		t.Fatalf("a departed person their briefing still names must stay on record, got %v", projectedPersonIDs)
+	}
+	if personIDs := personIDsForEmail(t, database, "departed@example.com"); len(personIDs) != 0 {
+		t.Fatalf("a departed person kept for their briefing must never resolve from an email, got %v", personIDs)
+	}
+	if claimedScheduleIDs := claimDueScheduleIDs(t, database); len(claimedScheduleIDs) != 0 {
+		t.Fatalf("a departed person's briefing must stop, got %v", claimedScheduleIDs)
+	}
+}
+
+// PostgreSQL fires a table's referential triggers in name order, and each name
+// carries its constraint's OID; pg_restore creates foreign keys table by table
+// in name order, so a restored database checks morning_briefing_schedule's key
+// before schedule's.
+func checkTheBriefingKeyFirst(t *testing.T, database Database) {
+	t.Helper()
+	if _, errorValue := database.SQL.Exec(`
+ALTER TABLE schedule DROP CONSTRAINT schedule_creator_person_id_fkey;
+ALTER TABLE schedule ADD CONSTRAINT schedule_creator_person_id_fkey FOREIGN KEY (creator_person_id) REFERENCES person(person_id)`); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+}
+
+func TestEitherWayPostgresRefusesADeleteForAReferenceKeepsThePerson(t *testing.T) {
+	for _, code := range []string{foreignKeyViolationCode, restrictViolationCode} {
+		if !isRefusedByAReference(&pgconn.PgError{Code: code}) {
+			t.Errorf("SQLSTATE %s refuses a delete because a row still references the person", code)
+		}
+	}
+	if isRefusedByAReference(&pgconn.PgError{Code: "23505"}) {
+		t.Error("a unique violation is not a reference refusing the delete")
+	}
 }

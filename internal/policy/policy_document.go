@@ -12,6 +12,13 @@ type PolicyDocument struct {
 	Metadata       PolicyMetadata         `json:"metadata"`
 }
 
+// NamesItsPeople is false for a document whose "people" key is absent or null,
+// which is how a host writes the roster it has not been handed yet. An empty
+// list names nobody.
+func (policyDocument PolicyDocument) NamesItsPeople() bool {
+	return policyDocument.People != nil
+}
+
 type PersonPolicy struct {
 	PersonID          string   `json:"personID"`
 	DisplayName       string   `json:"displayName"`

@@ -11,7 +11,10 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
 
-const foreignKeyViolationCode = "23503"
+const (
+	foreignKeyViolationCode = "23503"
+	restrictViolationCode   = "23001"
+)
 
 type personStatementExecutor interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
@@ -51,6 +54,9 @@ func (personRepository PersonRepository) UpsertPerson(personPolicy policy.Person
 }
 
 func (personRepository PersonRepository) ReplacePeople(policyDocument policy.PolicyDocument) error {
+	if !policyDocument.NamesItsPeople() {
+		return nil
+	}
 	ctx := context.Background()
 	transaction, errorValue := personRepository.database.SQL.BeginTx(ctx, nil)
 	if errorValue != nil {
@@ -117,7 +123,7 @@ func retirePerson(ctx context.Context, transaction *sql.Tx, personID string) err
 		return errorValue
 	}
 	_, deleteError := transaction.ExecContext(ctx, `DELETE FROM person WHERE person_id = $1`, personID)
-	if isForeignKeyViolation(deleteError) {
+	if isRefusedByAReference(deleteError) {
 		_, errorValue := transaction.ExecContext(ctx, `ROLLBACK TO SAVEPOINT retire_person`)
 		return errorValue
 	}
@@ -138,9 +144,14 @@ func stopSchedulesOf(ctx context.Context, transaction *sql.Tx, personID string) 
 	return deactivateMorningBriefing(ctx, transaction, personID, stoppedAt)
 }
 
-func isForeignKeyViolation(errorValue error) bool {
+// PostgreSQL 18 reports an ON DELETE RESTRICT key as restrict_violation (23001)
+// where earlier releases said foreign_key_violation (23503).
+func isRefusedByAReference(errorValue error) bool {
 	var postgresError *pgconn.PgError
-	return errors.As(errorValue, &postgresError) && postgresError.Code == foreignKeyViolationCode
+	if !errors.As(errorValue, &postgresError) {
+		return false
+	}
+	return postgresError.Code == foreignKeyViolationCode || postgresError.Code == restrictViolationCode
 }
 
 func (personRepository PersonRepository) upsertPerson(ctx context.Context, executor personStatementExecutor, personPolicy policy.PersonPolicy) error {
