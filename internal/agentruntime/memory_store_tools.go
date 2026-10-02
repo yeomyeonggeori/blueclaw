@@ -31,7 +31,7 @@ const (
 
 type memorySearchFact struct {
 	FactID     string    `json:"factID"`
-	CircleIDs  []string  `json:"circleIDs"`
+	ScopeType  string    `json:"scopeType"`
 	Content    string    `json:"content"`
 	SourceKind string    `json:"sourceKind"`
 	ValidAt    time.Time `json:"validAt"`
@@ -45,10 +45,10 @@ type memorySearchToolOutput struct {
 
 var (
 	memorySearchInputSchema         = json.RawMessage(`{"type":"object","properties":{"query":{"type":"string","minLength":1,"pattern":"\\S"}},"required":["query"],"additionalProperties":false}`)
-	memorySearchOutputSchema        = json.RawMessage(`{"type":"object","properties":{"facts":{"type":"array","items":{"type":"object","properties":{"factID":{"type":"string"},"circleIDs":{"type":"array","items":{"type":"string"}},"content":{"type":"string"},"sourceKind":{"type":"string","enum":["identity","preference","fact","episode","temporary"]},"validAt":{"type":"string","format":"date-time"},"score":{"type":"number"}},"required":["factID","circleIDs","content","sourceKind","validAt"],"additionalProperties":false}},"searchStatus":{"type":"string","enum":["complete","degraded"]}},"required":["facts","searchStatus"],"additionalProperties":false}`)
+	memorySearchOutputSchema        = json.RawMessage(`{"type":"object","properties":{"facts":{"type":"array","items":{"type":"object","properties":{"factID":{"type":"string"},"scopeType":{"type":"string","enum":["person","circle","workspace"]},"content":{"type":"string"},"sourceKind":{"type":"string","enum":["identity","fact"]},"validAt":{"type":"string","format":"date-time"},"score":{"type":"number"}},"required":["factID","scopeType","content","sourceKind","validAt"],"additionalProperties":false}},"searchStatus":{"type":"string","enum":["complete","degraded"]}},"required":["facts","searchStatus"],"additionalProperties":false}`)
 	memoryRememberInputSchema       = json.RawMessage(`{"type":"object","properties":{"content":{"type":"string","minLength":1,"maxLength":600,"pattern":"\\S"}},"required":["content"],"additionalProperties":false}`)
 	memoryRememberInputIntentSchema = json.RawMessage(`{"type":"object","properties":{"content":{"type":"string","minLength":1,"maxLength":600,"pattern":"\\S"}},"additionalProperties":false}`)
-	memoryRememberOutputSchema      = json.RawMessage(`{"type":"object","properties":{"accepted":{"type":"boolean"},"episodeID":{"type":"string","pattern":"\\S"},"factIDs":{"type":"array","items":{"type":"string"}},"supersededFactIDs":{"type":"array","items":{"type":"string"}},"reinforcedFactIDs":{"type":"array","items":{"type":"string"}},"failureCode":{"type":"string"}},"required":["accepted","episodeID","factIDs","supersededFactIDs","reinforcedFactIDs"],"additionalProperties":false}`)
+	memoryRememberOutputSchema      = json.RawMessage(`{"type":"object","properties":{"accepted":{"type":"boolean"},"groupID":{"type":"string","pattern":"\\S"},"inserted":{"type":"integer"},"superseded":{"type":"integer"},"reinforced":{"type":"integer"},"failureCode":{"type":"string"}},"required":["accepted","groupID","inserted","superseded","reinforced"],"additionalProperties":false}`)
 )
 
 type memoryForgetToolInput struct {
@@ -180,6 +180,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) searchStoreMemoryTool(ctx context.
 func projectStoreMemoryFact(fact memory.MemoryFact) memorySearchFact {
 	projected := memorySearchFact{
 		FactID:     fact.FactID,
+		ScopeType:  fact.ScopeType,
 		Content:    fact.Content,
 		SourceKind: fact.SourceKind,
 		ValidAt:    fact.ValidAt,

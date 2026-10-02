@@ -2,7 +2,8 @@ package agentruntime
 
 import (
 	"context"
-	"github.com/yeomyeonggeori/bluememo"
+	"github.com/yeomyeonggeori/blueclaw/internal/memory"
+	"github.com/yeomyeonggeori/blueclaw/internal/memory/memorytest"
 	"strings"
 	"testing"
 
@@ -15,12 +16,10 @@ import (
 func TestLaunchedAgentTurnRequestCarriesHostAssembledContext(t *testing.T) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	harness := harnesstest.New(taskRunService)
-	memoryStore := seededMemoryStore(t, "person-1", "The user leads the quarterly launch project.")
-	if errorValue := memoryStore.Profiles.SaveProfile(context.Background(), bluememo.Profile{PersonID: "person-1", CurrentLines: []string{"The user leads the quarterly launch project."}, SourceFactIDs: []string{"fact-seed-person-1-a"}, BuiltFromFactCount: 1}); errorValue != nil {
-		t.Fatal(errorValue)
-	}
+	memoryStores := memorytest.Open(t)
+	memorytest.Remember(t, memoryStores, memory.PersonScope("person-1"), "The user leads the quarterly launch project.")
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseMemoryStore(memoryStore, nil, nil)
+	toolCatalogBuilder.UseMemoryStores(memoryStores, nil)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{
 		"default": {"memory_search"},
 	}, nil)
@@ -66,15 +65,12 @@ func TestLaunchedAgentTurnRequestCarriesHostAssembledContext(t *testing.T) {
 	if len(turnRequest.VisibleContext.Materials) == 0 || turnRequest.VisibleContext.Materials[0].Filename != "quarterly.pdf" {
 		t.Fatalf("expected attachment materials on the turn request, got %+v", turnRequest.VisibleContext.Materials)
 	}
-	if len(turnRequest.MemoryFacts) != 2 {
-		t.Fatalf("expected the profile line and the recalled fact on the turn request, got %+v", turnRequest.MemoryFacts)
+	if len(turnRequest.MemoryFacts) != 1 {
+		t.Fatalf("expected the recalled memory on the turn request, got %+v", turnRequest.MemoryFacts)
 	}
-	if turnRequest.MemoryFacts[0].SourceKind != "profile" ||
+	if turnRequest.MemoryFacts[0].ScopeType != memory.ScopePerson ||
 		!strings.Contains(turnRequest.MemoryFacts[0].Content, "The user leads the quarterly launch project.") {
-		t.Fatalf("expected the profile first, got %+v", turnRequest.MemoryFacts)
-	}
-	if turnRequest.MemoryFacts[1].Content != "The user leads the quarterly launch project." {
-		t.Fatalf("expected the recalled fact after the profile, got %+v", turnRequest.MemoryFacts)
+		t.Fatalf("expected the memory from the person's own file, got %+v", turnRequest.MemoryFacts)
 	}
 	if turnRequest.ToolSet == nil || !containsString(turnRequest.ToolSet.ListToolNames(), "memory_search") {
 		t.Fatalf("expected the launch tool set on the turn request, got %+v", turnRequest.ToolSet)

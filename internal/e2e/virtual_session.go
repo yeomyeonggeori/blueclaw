@@ -3999,7 +3999,11 @@ func (virtualMemoryModel) GenerateStructured(_ context.Context, request bluememo
 	if request.SchemaName == "memory_trigger" {
 		return `{"phrases":[]}`, nil
 	}
-	content := strings.TrimSpace(request.Subject)
+	content := request.Subject
+	if marker := strings.LastIndex(content, "\nText\n"); marker >= 0 {
+		content = content[marker+len("\nText\n"):]
+	}
+	content = strings.TrimSpace(content)
 	if runes := []rune(content); len(runes) > bluememo.ContentCharacterLimit {
 		content = string(runes[:bluememo.ContentCharacterLimit])
 	}

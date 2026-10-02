@@ -3,8 +3,8 @@ package agentruntime
 import (
 	"context"
 	"encoding/json"
+	"github.com/yeomyeonggeori/blueclaw/internal/memory/memorytest"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-	"github.com/yeomyeonggeori/bluememo"
 	"strings"
 	"testing"
 )
@@ -87,7 +87,7 @@ func TestDeadCompatibilityToolsAreNotRegistered(t *testing.T) {
 
 func TestLocalToolProviderPreservesMemorySearchContract(t *testing.T) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseMemoryStore(&bluememo.Store{Facts: bluememo.NewInMemoryRepository()}, nil, nil)
+	toolCatalogBuilder.UseMemoryStores(memorytest.Open(t), nil)
 	handlerToolSet := toolcontract.NewToolSet(nil)
 	registerStoreMemoryTools(toolCatalogBuilder, handlerToolSet, ToolCatalogRequest{})
 
@@ -117,7 +117,7 @@ func TestLocalToolProviderPreservesMemorySearchContract(t *testing.T) {
 
 func TestLocalToolProviderPreservesMemoryRememberContract(t *testing.T) {
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseMemoryStore(&bluememo.Store{Facts: bluememo.NewInMemoryRepository()}, nil, nil)
+	toolCatalogBuilder.UseMemoryStores(memorytest.Open(t), nil)
 	handlerToolSet := toolcontract.NewToolSet(nil)
 	registerStoreMemoryTools(toolCatalogBuilder, handlerToolSet, ToolCatalogRequest{})
 
@@ -137,8 +137,8 @@ func TestLocalToolProviderPreservesMemoryRememberContract(t *testing.T) {
 	if !equalJSONSchema(descriptor.OutputSchema, memoryRememberOutputSchema) || !equalJSONSchema(descriptor.ResultContract.Schema, memoryRememberOutputSchema) {
 		t.Fatalf("expected canonical output schema preservation, got %+v", descriptor)
 	}
-	if len(descriptor.ResultContract.Effects) != 1 || descriptor.ResultContract.Effects[0].ResultField != "episodeID" {
-		t.Fatalf("expected the recorded episode effect, got %+v", descriptor.ResultContract)
+	if len(descriptor.ResultContract.Effects) != 1 || descriptor.ResultContract.Effects[0].ResultField != "groupID" {
+		t.Fatalf("expected the recorded note effect, got %+v", descriptor.ResultContract)
 	}
 	condition := descriptor.ResultContract.EvidenceCondition
 	if condition == nil || condition.ResultField != "accepted" || string(condition.Equals) != "true" {
