@@ -134,6 +134,7 @@
   },
   "memory": {
     "embeddingModel": "baai/bge-m3",
+    "embeddingDimensions": 1024,
     "embeddingExecutionMode": "auto",
     "extractionDisabled": false
   },
