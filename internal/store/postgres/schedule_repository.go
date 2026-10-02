@@ -512,6 +512,14 @@ WHERE schedule_id = $3`,
 }
 
 func (scheduleRepository ScheduleRepository) CancelSchedules(request task.ScheduleCancelRequest) (task.ScheduleCancelResult, error) {
+	return cancelSchedules(context.Background(), scheduleRepository.database.SQL, request)
+}
+
+type scheduleQueryExecutor interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}
+
+func cancelSchedules(ctx context.Context, executor scheduleQueryExecutor, request task.ScheduleCancelRequest) (task.ScheduleCancelResult, error) {
 	cancelledAt := request.CancelledAt
 	if cancelledAt.IsZero() {
 		cancelledAt = time.Now().UTC()
@@ -559,7 +567,7 @@ SET expires_at = $1,
   updated_at = $1
 WHERE ` + strings.Join(conditions, " AND ") + `
 RETURNING ` + scheduleReturningColumns()
-	rows, errorValue := scheduleRepository.database.SQL.QueryContext(context.Background(), query, arguments...)
+	rows, errorValue := executor.QueryContext(ctx, query, arguments...)
 	if errorValue != nil {
 		return task.ScheduleCancelResult{}, errorValue
 	}

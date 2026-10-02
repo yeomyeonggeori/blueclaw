@@ -234,14 +234,19 @@ func deactivateMissingMorningBriefings(ctx context.Context, transaction *sql.Tx,
 		return errorValue
 	}
 	for _, personID := range missingPeople {
-		if _, errorValue := transaction.ExecContext(ctx, `
-UPDATE schedule s
-SET next_run_at = NULL, updated_at = $1
-FROM morning_briefing_schedule m
-WHERE m.person_id = $2 AND s.schedule_id = m.schedule_id
-  AND (s.leased_until IS NULL OR s.leased_until <= $1)`, referenceTime, personID); errorValue != nil {
+		if errorValue := deactivateMorningBriefing(ctx, transaction, personID, referenceTime); errorValue != nil {
 			return errorValue
 		}
 	}
 	return rows.Err()
+}
+
+func deactivateMorningBriefing(ctx context.Context, transaction *sql.Tx, personID string, referenceTime time.Time) error {
+	_, errorValue := transaction.ExecContext(ctx, `
+UPDATE schedule s
+SET next_run_at = NULL, updated_at = $1
+FROM morning_briefing_schedule m
+WHERE m.person_id = $2 AND s.schedule_id = m.schedule_id
+  AND (s.leased_until IS NULL OR s.leased_until <= $1)`, referenceTime, personID)
+	return errorValue
 }
