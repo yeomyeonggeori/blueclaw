@@ -75,23 +75,3 @@ CREATE UNIQUE INDEX IF NOT EXISTS memory_job_pending_idx
 CREATE INDEX IF NOT EXISTS memory_job_due_idx
   ON memory_job (run_after)
   WHERE finished_at IS NULL;
-
-DO $$
-DECLARE
-  vector_version int[];
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'vector') THEN
-    RETURN;
-  END IF;
-  EXECUTE 'CREATE EXTENSION IF NOT EXISTS vector';
-  EXECUTE 'CREATE TABLE IF NOT EXISTS memory_fact_embedding (
-    fact_id text PRIMARY KEY REFERENCES memory_fact (fact_id) ON DELETE CASCADE,
-    embedding vector(1024) NOT NULL
-  )';
-  SELECT string_to_array(extversion, '.')::int[] INTO vector_version
-  FROM pg_extension WHERE extname = 'vector';
-  IF vector_version >= ARRAY[0, 5, 0] THEN
-    EXECUTE 'CREATE INDEX IF NOT EXISTS memory_fact_embedding_hnsw_idx
-      ON memory_fact_embedding USING hnsw (embedding vector_cosine_ops)';
-  END IF;
-END $$;
