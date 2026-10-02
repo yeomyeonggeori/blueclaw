@@ -46,11 +46,13 @@ type Placement struct {
 // one after it the mismatch.
 var ErrCarriedEmbeddingWidth = errors.New("a carried embedding is not the width the store expects")
 
-// ConversionReport counts what a conversion wrote.
+// ConversionReport counts what a conversion wrote, and what it found no
+// reader for, because a fact that lands nowhere is worth saying out loud.
 type ConversionReport struct {
 	Facts       int `json:"facts"`
 	Memories    int `json:"memories"`
 	AlreadyHeld int `json:"alreadyHeld"`
+	Unread      int `json:"unread"`
 }
 
 // PlanConversion works out who may read each fact today, by the rule the
@@ -83,6 +85,10 @@ func (stores *Stores) Convert(ctx context.Context, facts []LegacyFact, projectio
 	report := ConversionReport{}
 	for _, placement := range PlanConversion(facts, projection) {
 		fact := factByID[placement.FactID]
+		if len(placement.Destinations) == 0 {
+			report.Unread++
+			continue
+		}
 		for _, destination := range placement.Destinations {
 			store, errorValue := stores.Store(ctx, destination)
 			if errorValue != nil {
@@ -143,12 +149,17 @@ func adoptedFromLegacy(fact LegacyFact, destination Scope) bluememo.AdoptedMemor
 // factAudience reproduces the retired reader: an owner reads their own fact
 // whatever its rank, and everyone else needs a shared circle, the rank and
 // every required class.
+//
+// The seeded administrator is left out. It is an account rather than a person,
+// nothing is projected to a POSIX user for it, and so a file written on its
+// behalf is residue nobody can open.
 func factAudience(fact LegacyFact, projection policy.PolicyProjection, readableCircles map[string]map[string]bool) []string {
 	audience := map[string]bool{}
-	if fact.OwnerPersonID != "" {
+	if fact.OwnerPersonID != "" && fact.OwnerPersonID != policy.SeededAdminPersonID {
 		audience[fact.OwnerPersonID] = true
 	}
-	for personID, personAccess := range projection.PersonAccessByPersonID {
+	for personID := range readableCircles {
+		personAccess := projection.PersonAccessByPersonID[personID]
 		if !sharesACircle(fact.CircleIDs, readableCircles[personID]) {
 			continue
 		}
@@ -163,8 +174,9 @@ func factAudience(fact LegacyFact, projection policy.PolicyProjection, readableC
 	return sortedKeys(audience)
 }
 
-// placeFact chooses the narrowest boundary the new model already has. A single
-// reader is their own file. A circle whose members are exactly the audience is
+// placeFact chooses the narrowest boundary the new model already has. A fact
+// no one reads lands nowhere and is reported rather than dropped quietly. A
+// single reader is their own file. A circle whose members are exactly the audience is
 // that circle's file. Anything else is each reader's own file, which is how the
 // new model says that these particular people know a thing.
 func placeFact(fact LegacyFact, audience []string, membersByCircle map[string][]string) Placement {
@@ -172,6 +184,10 @@ func placeFact(fact LegacyFact, audience []string, membersByCircle map[string][]
 		FactID:   fact.FactID,
 		OldScope: legacyScopeName(fact),
 		Audience: audience,
+	}
+	if len(audience) == 0 {
+		placement.Boundary = "nobody reads it"
+		return placement
 	}
 	if len(audience) == 1 {
 		placement.Destinations = []Scope{PersonScope(audience[0])}
@@ -201,9 +217,16 @@ func legacyScopeName(fact LegacyFact) string {
 	return "circle:" + strings.Join(circleIDs, ",")
 }
 
+// readableCirclesByPerson is every person a fact can reach and the circles
+// each of them reads. It is the one place the roster is narrowed, because the
+// audience and a circle's membership are compared to each other: narrowing one
+// of them alone turns a circle file into one file per reader.
 func readableCirclesByPerson(projection policy.PolicyProjection) map[string]map[string]bool {
 	readable := map[string]map[string]bool{}
 	for personID, personAccess := range projection.PersonAccessByPersonID {
+		if personID == policy.SeededAdminPersonID {
+			continue
+		}
 		reached := map[string]bool{}
 		pending := append([]string{}, personAccess.Circles...)
 		for len(pending) > 0 {

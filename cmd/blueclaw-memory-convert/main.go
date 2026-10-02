@@ -73,8 +73,8 @@ func run(ctx context.Context, connectionString string, memoryDirectory string, e
 	if errorValue != nil {
 		return errorValue
 	}
-	fmt.Printf("\nCarried %d facts into %d memories (%d were already there).\n",
-		report.Facts, report.Memories, report.AlreadyHeld)
+	fmt.Printf("\nCarried %d facts into %d memories (%d were already there, %d had no reader).\n",
+		report.Facts, report.Memories, report.AlreadyHeld, report.Unread)
 	return nil
 }
 

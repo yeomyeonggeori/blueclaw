@@ -193,3 +193,87 @@ func TestConvertRefusesACarriedVectorOfTheWrongWidthBeforeWritingAnything(t *tes
 		t.Fatalf("holds %d memories, want none written", held)
 	}
 }
+
+func TestPlanLeavesTheSeededAdministratorOutOfEveryAudience(t *testing.T) {
+	projection := conversionProjection()
+	projection.PersonAccessByPersonID[policy.SeededAdminPersonID] = policy.PersonAccess{
+		PersonID:          policy.SeededAdminPersonID,
+		Circles:           []string{"member", "management"},
+		SecurityLevelRank: 100,
+		GrantedClasses:    []string{"internal", "executive"},
+	}
+	fact := legacyFact("fact-1", "The headcount plan is frozen until June.")
+	fact.CircleIDs = []string{"member"}
+	fact.SecurityLevelRank = 100
+	fact.RequiredClasses = []string{"internal", "executive"}
+
+	placements := memory.PlanConversion([]memory.LegacyFact{fact}, projection)
+
+	for _, personID := range placements[0].Audience {
+		if personID == policy.SeededAdminPersonID {
+			t.Fatalf("audience = %v, want the seeded administrator left out", placements[0].Audience)
+		}
+	}
+	for _, destination := range placements[0].Destinations {
+		if destination.ID == policy.SeededAdminPersonID {
+			t.Fatalf("destinations = %v, want no file for the seeded administrator", placements[0].Destinations)
+		}
+	}
+}
+
+func TestPlanOwnsUpToAFactNobodyReads(t *testing.T) {
+	projection := conversionProjection()
+	fact := legacyFact("fact-1", "이샘플 prefers the morning slot.")
+	fact.OwnerPersonID = policy.SeededAdminPersonID
+	fact.CircleIDs = []string{"a-circle-nobody-is-in"}
+
+	placements := memory.PlanConversion([]memory.LegacyFact{fact}, projection)
+
+	if len(placements[0].Audience) != 0 || len(placements[0].Destinations) != 0 {
+		t.Fatalf("placement = %+v, want no reader and no destination", placements[0])
+	}
+	if placements[0].Boundary != "nobody reads it" {
+		t.Errorf("boundary = %q, want it said out loud", placements[0].Boundary)
+	}
+}
+
+func TestConvertCountsAFactNobodyReadsRatherThanDroppingItQuietly(t *testing.T) {
+	stores := memorytest.Open(t)
+	fact := legacyFact("fact-1", "이샘플 prefers the morning slot.")
+	fact.OwnerPersonID = policy.SeededAdminPersonID
+	fact.CircleIDs = []string{"a-circle-nobody-is-in"}
+
+	report, errorValue := stores.Convert(context.Background(), []memory.LegacyFact{fact}, conversionProjection(), 0)
+
+	if errorValue != nil {
+		t.Fatalf("convert: %v", errorValue)
+	}
+	if report.Unread != 1 || report.Memories != 0 {
+		t.Fatalf("report = %+v, want one fact reported as read by nobody", report)
+	}
+}
+
+// Narrowing the roster is easy to half-do. Leaving the seeded administrator
+// out of an audience but not out of a circle's membership makes the two stop
+// matching, and a fact that belongs in one circle file silently becomes one
+// file per reader: fourteen files and ninety-eight memories where seven
+// belonged. Both sides have to come from the same roster.
+func TestPlanStillMatchesACircleWhenTheSeededAdministratorIsInIt(t *testing.T) {
+	projection := conversionProjection()
+	projection.PersonAccessByPersonID[policy.SeededAdminPersonID] = policy.PersonAccess{
+		PersonID:          policy.SeededAdminPersonID,
+		Circles:           []string{"member"},
+		SecurityLevelRank: 100,
+		GrantedClasses:    []string{"internal", "executive"},
+	}
+	fact := legacyFact("fact-1", "The all-hands moved to Thursday.")
+	fact.OwnerPersonID = ""
+	fact.CircleIDs = []string{"member"}
+
+	placements := memory.PlanConversion([]memory.LegacyFact{fact}, projection)
+
+	want := []memory.Scope{memory.CircleScope("member")}
+	if !sameScopes(placements[0].Destinations, want) {
+		t.Fatalf("destinations = %v, want the circle's own file", placements[0].Destinations)
+	}
+}

@@ -1,5 +1,10 @@
 package policy
 
+// SeededAdminPersonID is the administrator a policy is bootstrapped with. It
+// is an account rather than a person: nobody is projected to a POSIX user for
+// it, so nothing opens a file written on its behalf.
+const SeededAdminPersonID = "00000000-0000-0000-0000-000000000001"
+
 type PolicyDocument struct {
 	People         []PersonPolicy         `json:"people"`
 	Circles        []CirclePolicy         `json:"circles"`
