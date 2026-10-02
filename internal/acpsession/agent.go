@@ -3,6 +3,7 @@ package acpsession
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"path/filepath"
 	"strings"
@@ -34,6 +35,7 @@ type TaskLauncher interface {
 
 type PersonDirectory interface {
 	ResolvePersonIDByEmail(email string) (string, bool)
+	AwaitPersonIDByEmail(ctx context.Context, email string) (string, error)
 	ResolvePersonDisplayName(personID string) string
 	ResolvePersonAccess(personID string) policy.PersonAccess
 }
@@ -101,33 +103,36 @@ func (agent *Agent) Initialize(_ context.Context, request acp.InitializeRequest)
 	}, nil
 }
 
-func (agent *Agent) NewSession(_ context.Context, request acp.NewSessionRequest) (acp.NewSessionResponse, error) {
-	sessionID := acp.SessionId(newSessionIdentifier())
-	if _, errorValue := agent.openSessionAs(sessionID, request.Meta, request.Cwd, request.McpServers); errorValue != nil {
+func (agent *Agent) NewSession(ctx context.Context, request acp.NewSessionRequest) (acp.NewSessionResponse, error) {
+	sessionContext, errorValue := SessionContextFromMeta(request.Meta)
+	if errorValue != nil {
 		return acp.NewSessionResponse{}, errorValue
 	}
+	sessionContext.Requester.PersonID, errorValue = agent.awaitRequesterPersonID(ctx, sessionContext.Requester)
+	if errorValue != nil {
+		return acp.NewSessionResponse{}, errorValue
+	}
+	sessionID := acp.SessionId(newSessionIdentifier())
+	agent.openSession(sessionID, sessionContext, request.Cwd, request.McpServers)
 	return acp.NewSessionResponse{SessionId: sessionID}, nil
 }
 
 func (agent *Agent) LoadSession(ctx context.Context, request acp.LoadSessionRequest) (acp.LoadSessionResponse, error) {
-	sessionContext, errorValue := agent.openSessionAs(request.SessionId, request.Meta, request.Cwd, request.McpServers)
+	sessionContext, errorValue := SessionContextFromMeta(request.Meta)
 	if errorValue != nil {
 		return acp.LoadSessionResponse{}, errorValue
 	}
+	sessionContext.Requester.PersonID, errorValue = agent.resolveRequesterPersonID(sessionContext.Requester)
+	if errorValue != nil {
+		return acp.LoadSessionResponse{}, errorValue
+	}
+	agent.openSession(request.SessionId, sessionContext, request.Cwd, request.McpServers)
 	// A caller is blocked until this returns (agentclientprotocol.com/protocol/session-setup).
 	go agent.reissueHeldPermissions(context.WithoutCancel(ctx), request.SessionId, sessionContext)
 	return acp.LoadSessionResponse{}, nil
 }
 
-func (agent *Agent) openSessionAs(sessionID acp.SessionId, meta map[string]any, workspaceRootPath string, mcpServers []acp.McpServer) (SessionContext, error) {
-	sessionContext, errorValue := SessionContextFromMeta(meta)
-	if errorValue != nil {
-		return SessionContext{}, errorValue
-	}
-	sessionContext.Requester.PersonID, errorValue = agent.resolveRequesterPersonID(sessionContext.Requester)
-	if errorValue != nil {
-		return SessionContext{}, errorValue
-	}
+func (agent *Agent) openSession(sessionID acp.SessionId, sessionContext SessionContext, workspaceRootPath string, mcpServers []acp.McpServer) {
 	recordCatalog := mcp.NewRecordCatalog(recordCatalogAddressOf(mcpServers))
 	agent.mutex.Lock()
 	replaced := agent.sessions[sessionID]
@@ -145,7 +150,6 @@ func (agent *Agent) openSessionAs(sessionID acp.SessionId, meta map[string]any, 
 		"platform", sessionContext.Addressing.Platform,
 		"conversationID", sessionContext.Addressing.ConversationID,
 	)
-	return sessionContext, nil
 }
 
 func (agent *Agent) resolveRequesterPersonID(requester Requester) (string, error) {
@@ -156,6 +160,20 @@ func (agent *Agent) resolveRequesterPersonID(requester Requester) (string, error
 	if !isKnown {
 		return "", errSessionRequesterIsNotKnown
 	}
+	return personID, nil
+}
+
+func (agent *Agent) awaitRequesterPersonID(ctx context.Context, requester Requester) (string, error) {
+	personID, errorValue := agent.resolveRequesterPersonID(requester)
+	if errorValue == nil {
+		return personID, nil
+	}
+	agent.logger.Info("acpsession.requester.awaited", "email", requester.Email)
+	personID, errorValue = agent.directory.AwaitPersonIDByEmail(ctx, requester.Email)
+	if errorValue != nil {
+		return "", fmt.Errorf("%w; the session stopped waiting for the roster to name them: %w", errSessionRequesterIsNotKnown, errorValue)
+	}
+	agent.logger.Info("acpsession.requester.arrived", "email", requester.Email, "personID", personID)
 	return personID, nil
 }
 

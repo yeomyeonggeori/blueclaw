@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"context"
 	"strings"
 	"sync"
 
@@ -22,6 +23,7 @@ type IdentityService struct {
 	personIDByPlatformAccountKey map[string]string
 	containedCirclesByID         map[string][]string
 	platformAccountRepository    PlatformAccountRepository
+	rosterChanged                chan struct{}
 }
 
 func NewIdentityService(policyProjection policy.PolicyProjection) *IdentityService {
@@ -32,6 +34,7 @@ func NewIdentityService(policyProjection policy.PolicyProjection) *IdentityServi
 		personAccessByPersonID:       map[string]policy.PersonAccess{},
 		channelByCompositeKey:        map[string]policy.ChannelPolicy{},
 		personIDByPlatformAccountKey: map[string]string{},
+		rosterChanged:                make(chan struct{}),
 	}
 
 	identityService.reloadPolicyProjection(policyProjection)
@@ -51,6 +54,8 @@ func (identityService *IdentityService) ReloadPolicyProjection(policyProjection 
 	defer identityService.mutex.Unlock()
 	identityService.reloadPolicyProjection(policyProjection)
 	identityService.reloadPlatformAccounts()
+	close(identityService.rosterChanged)
+	identityService.rosterChanged = make(chan struct{})
 }
 
 func (identityService *IdentityService) reloadPolicyProjection(policyProjection policy.PolicyProjection) {
@@ -94,6 +99,23 @@ func (identityService *IdentityService) ResolvePersonIDByEmail(email string) (st
 
 	personID, isFound := identityService.personIDByEmail[strings.ToLower(strings.TrimSpace(email))]
 	return personID, isFound
+}
+
+func (identityService *IdentityService) AwaitPersonIDByEmail(ctx context.Context, email string) (string, error) {
+	for {
+		identityService.mutex.RLock()
+		personID, isFound := identityService.personIDByEmail[strings.ToLower(strings.TrimSpace(email))]
+		rosterChanged := identityService.rosterChanged
+		identityService.mutex.RUnlock()
+		if isFound {
+			return personID, nil
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-rosterChanged:
+		}
+	}
 }
 
 func (identityService *IdentityService) ResolvePersonIDByPlatformAccount(platform string, externalUserID string) (string, bool) {

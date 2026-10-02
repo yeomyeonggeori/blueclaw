@@ -1,7 +1,10 @@
 package identity
 
 import (
+	"context"
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 )
@@ -114,5 +117,38 @@ func TestIdentityServiceExposesContainedCircles(t *testing.T) {
 	contained["engineering"] = append(contained["engineering"], "tampered")
 	if len(identityService.ContainedCircles()["engineering"]) != 1 {
 		t.Fatal("expected the identity service to hand out a copy of the containment map")
+	}
+}
+
+func TestAwaitingAPersonReturnsOnceTheRosterNamesThem(t *testing.T) {
+	identityService := NewIdentityService(policy.PolicyProjection{})
+	found := make(chan string, 1)
+	go func() {
+		personID, _ := identityService.AwaitPersonIDByEmail(context.Background(), "Late@Example.com")
+		found <- personID
+	}()
+	select {
+	case personID := <-found:
+		t.Fatalf("the wait returned %q before the roster named anybody", personID)
+	case <-time.After(100 * time.Millisecond):
+	}
+	identityService.ReloadPolicyProjection(policy.PolicyProjection{PersonIDByEmail: map[string]string{"late@example.com": "person-late"}})
+	select {
+	case personID := <-found:
+		if personID != "person-late" {
+			t.Fatalf("the wait returned %q, want person-late", personID)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the wait did not return after the roster named the person")
+	}
+}
+
+func TestAwaitingAPersonTheRosterNeverNamesEndsWithTheCaller(t *testing.T) {
+	identityService := NewIdentityService(policy.PolicyProjection{})
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	identityService.ReloadPolicyProjection(policy.PolicyProjection{PersonIDByEmail: map[string]string{"other@example.com": "person-other"}})
+	if _, errorValue := identityService.AwaitPersonIDByEmail(ctx, "stranger@example.com"); !errors.Is(errorValue, context.DeadlineExceeded) {
+		t.Fatalf("the wait ended with %v, want the caller's deadline", errorValue)
 	}
 }
