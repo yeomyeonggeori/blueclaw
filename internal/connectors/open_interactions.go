@@ -27,6 +27,20 @@ func (open openInteractions) isEmpty() bool {
 	return !open.hasConfirmation && !open.hasAsk && !open.hasRunningTask
 }
 
+func (open openInteractions) confirmationChoice(exchangesSince int) (agentcontract.PendingChoiceContext, bool) {
+	if !open.hasConfirmation || len(open.confirmation.Choices) == 0 || open.hasAsk {
+		return agentcontract.PendingChoiceContext{}, false
+	}
+	return agentcontract.PendingChoiceContext{
+		TaskRunID:      open.confirmation.TaskRun.TaskRunID,
+		Question:       open.confirmation.ApprovalQuestion,
+		SelectionMode:  "single",
+		Options:        approvalgate.ChoiceReplyOptions(open.confirmation.Choices),
+		AskedAt:        open.confirmationAt,
+		ExchangesSince: exchangesSince,
+	}, true
+}
+
 func (open openInteractions) ledgerTaskRunID() string {
 	switch {
 	case open.hasConfirmation:
@@ -94,6 +108,9 @@ func (connectorRuntime *ConnectorRuntime) routeOpenInteractions(ctx context.Cont
 			ExchangesSince: connectorRuntime.exchangesSince(turn, open.confirmationAt, open.confirmation.TaskRun.TaskRunID),
 		}
 	}
+	if pendingChoice, isOffered := open.confirmationChoice(request.PendingConfirmation.ExchangesSince); isOffered {
+		request.PendingChoice = pendingChoice
+	}
 	if open.hasAsk {
 		exchanges := connectorRuntime.exchangesSince(turn, open.askAt, open.ask.TaskRunID)
 		if open.ask.Kind == "ask_input" {
@@ -119,6 +136,7 @@ func (connectorRuntime *ConnectorRuntime) recordOpenInteractionRouting(turn *inb
 			"messageID":   turn.event.MessageID,
 			"route":       decision.Route,
 			"approval":    decision.Approval,
+			"choices":     decision.Choices,
 			"reason":      decision.Reason,
 			"replyPrompt": strings.TrimSpace(turn.event.Prompt),
 		}))
@@ -168,6 +186,9 @@ func (connectorRuntime *ConnectorRuntime) settleOpenInteractions(ctx context.Con
 }
 
 func (connectorRuntime *ConnectorRuntime) settleConfirmation(ctx context.Context, turn *inboundTurn, confirmation pendingApproval, decision agentcontract.TurnDecision) (ConnectorRuntimeResult, bool, error) {
+	if len(confirmation.Choices) > 0 {
+		return connectorRuntime.settleChoiceConfirmation(ctx, turn, confirmation, decision)
+	}
 	approvalgate.RecordRequesterDecision(connectorRuntime.taskRunService, confirmation.TaskRun.TaskRunID, decision.Approval, "chat_reply")
 	turn.pendingApproval = confirmation
 	if decision.Approval != nil && agentcontract.IsApprovingSignal(*decision.Approval) {
@@ -238,4 +259,75 @@ func (connectorRuntime *ConnectorRuntime) settleFinishedTaskFollowUp(ctx context
 		return busyResult.connectorResult, true, nil
 	}
 	return ConnectorRuntimeResult{}, false, nil
+}
+
+func (connectorRuntime *ConnectorRuntime) settleChoiceConfirmation(ctx context.Context, turn *inboundTurn, confirmation pendingApproval, decision agentcontract.TurnDecision) (ConnectorRuntimeResult, bool, error) {
+	choice, isChosen := chosenApprovalChoice(decision.Choices, confirmation.Choices)
+	switch {
+	case isChosen && choice.DefersTheCall():
+		connectorRuntime.resolveTaskWaitToken(turn.taskWaitResolution)
+		turn.settledCalls = connectorRuntime.deferHeldCall(ctx, turn, confirmation, choice)
+		turn.pendingApproval = confirmation
+		turn.isApprovalContinuation = true
+		return ConnectorRuntimeResult{}, false, nil
+	case isChosen:
+		approval := agentcontract.ApprovalSignalApprove
+		decision.Approval = &approval
+	case selectsCancel(decision.Choices):
+		rejection := agentcontract.ApprovalSignalReject
+		decision.Approval = &rejection
+	default:
+		decision.Approval = keptUnlessRejected(decision.Approval)
+	}
+	confirmation.Choices = nil
+	return connectorRuntime.settleConfirmation(ctx, turn, confirmation, decision)
+}
+
+func chosenApprovalChoice(selected []string, choices []approvalgate.ApprovalChoice) (approvalgate.ApprovalChoice, bool) {
+	for _, selectedKey := range selected {
+		if choice, isOffered := approvalgate.ChoiceByKey(choices, selectedKey); isOffered {
+			return choice, true
+		}
+	}
+	return approvalgate.ApprovalChoice{}, false
+}
+
+func selectsCancel(selected []string) bool {
+	for _, selectedKey := range selected {
+		if strings.TrimSpace(selectedKey) == approvalgate.CancelChoiceKey {
+			return true
+		}
+	}
+	return false
+}
+
+func keptUnlessRejected(approval *agentcontract.ApprovalSignal) *agentcontract.ApprovalSignal {
+	if approval != nil && *approval == agentcontract.ApprovalSignalReject {
+		return approval
+	}
+	return nil
+}
+
+func (connectorRuntime *ConnectorRuntime) deferHeldCall(ctx context.Context, turn *inboundTurn, confirmation pendingApproval, choice approvalgate.ApprovalChoice) []agentcontract.CarriedOutCall {
+	taskRunID := confirmation.TaskRun.TaskRunID
+	heldCall, isHeld := approvalgate.PendingHeldCall(connectorRuntime.taskRunService.ListTaskEvent(taskRunID))
+	if !isHeld || connectorRuntime.approvalGate == nil {
+		return nil
+	}
+	result, errorValue := connectorRuntime.approvalGate.DeferApprovedCall(ctx, approvalgate.DeferralRequest{
+		TaskRunID:         taskRunID,
+		ToolName:          heldCall.ToolName,
+		ToolInput:         heldCall.ApprovedInput(),
+		RequesterPersonID: turn.personID,
+		Platform:          turn.platform,
+		ConversationID:    turn.event.ConversationID,
+		ReplyTargetID:     firstNonEmptyString(confirmation.TaskRun.OriginReplyTargetID, turn.event.ReplyTargetID),
+		Prompt:            confirmation.IntentPrompt,
+		Choice:            choice,
+		ReferenceTime:     time.Now().UTC(),
+	})
+	if errorValue != nil {
+		result = approvalgate.DeferralFailedResult(errorValue)
+	}
+	return []agentcontract.CarriedOutCall{{ToolName: heldCall.ToolName, ToolInput: heldCall.ApprovedInput(), Result: result}}
 }

@@ -80,7 +80,11 @@ func (response capabilityTargetResolveResponse) approvalTargetResolution() appro
 	if json.Unmarshal(response.Result, &target) != nil {
 		return approvalgate.ApprovalTargetResolution{}
 	}
-	return approvalgate.ApprovalTargetResolution{Target: target}
+	offered := struct {
+		Choices []approvalgate.ApprovalChoice `json:"choices"`
+	}{}
+	json.Unmarshal(response.Result, &offered)
+	return approvalgate.ApprovalTargetResolution{Target: target, Choices: offered.Choices}
 }
 
 func (response capabilityTargetResolveResponse) isFailed() bool {

@@ -308,25 +308,26 @@ func (scheduleHandler ScheduleHandler) HandleRepairCreator(responseWriter http.R
 }
 
 type scheduleListItem struct {
-	ScheduleID        string     `json:"taskScheduleID"`
-	CreatorPersonID   string     `json:"creatorPersonID"`
-	Name              string     `json:"name,omitempty"`
-	ExecutionMode     string     `json:"executionMode"`
-	Kind              string     `json:"kind"`
-	IntervalSecond    int        `json:"intervalSecond,omitempty"`
-	CronExpression    string     `json:"cronExpression,omitempty"`
-	MaxRunCount       int        `json:"maxRunCount,omitempty"`
-	CompletedRunCount int        `json:"completedRunCount"`
-	CreatedAt         time.Time  `json:"createdAt"`
-	UpdatedAt         time.Time  `json:"updatedAt"`
-	NextRunAt         *time.Time `json:"nextRunAt,omitempty"`
-	LastRunAt         *time.Time `json:"lastRunAt,omitempty"`
-	ExpiresAt         *time.Time `json:"expiresAt,omitempty"`
-	LastTaskRunID     string     `json:"lastTaskRunID,omitempty"`
-	FailureCount      int        `json:"failureCount"`
-	DeliveryChannelID string     `json:"deliveryChannelID"`
-	ReplyTargetID     string     `json:"replyTargetID,omitempty"`
-	PromptPreview     string     `json:"promptPreview"`
+	ScheduleID        string                     `json:"taskScheduleID"`
+	CreatorPersonID   string                     `json:"creatorPersonID"`
+	Name              string                     `json:"name,omitempty"`
+	ExecutionMode     string                     `json:"executionMode"`
+	Kind              string                     `json:"kind"`
+	IntervalSecond    int                        `json:"intervalSecond,omitempty"`
+	CronExpression    string                     `json:"cronExpression,omitempty"`
+	MaxRunCount       int                        `json:"maxRunCount,omitempty"`
+	CompletedRunCount int                        `json:"completedRunCount"`
+	CreatedAt         time.Time                  `json:"createdAt"`
+	UpdatedAt         time.Time                  `json:"updatedAt"`
+	NextRunAt         *time.Time                 `json:"nextRunAt,omitempty"`
+	LastRunAt         *time.Time                 `json:"lastRunAt,omitempty"`
+	ExpiresAt         *time.Time                 `json:"expiresAt,omitempty"`
+	LastTaskRunID     string                     `json:"lastTaskRunID,omitempty"`
+	FailureCount      int                        `json:"failureCount"`
+	DeliveryChannelID string                     `json:"deliveryChannelID"`
+	ReplyTargetID     string                     `json:"replyTargetID,omitempty"`
+	PromptPreview     string                     `json:"promptPreview"`
+	ApprovedCall      *task.ScheduleApprovedCall `json:"approvedCall,omitempty"`
 }
 
 func scheduleListRequestFromHTTP(request *http.Request) task.ScheduleListRequest {
@@ -403,6 +404,7 @@ func scheduleListItems(schedules []task.Schedule) []scheduleListItem {
 			DeliveryChannelID: schedule.ConversationID,
 			ReplyTargetID:     schedule.ReplyTargetID,
 			PromptPreview:     compactPromptPreview(schedule.Prompt, 160),
+			ApprovedCall:      schedule.ApprovedCall,
 		})
 	}
 	return items

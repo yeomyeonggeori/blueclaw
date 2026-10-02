@@ -31,6 +31,7 @@ type inboundTurn struct {
 	hasTurnDecision          bool
 	pendingApproval          pendingApproval
 	isApprovalContinuation   bool
+	settledCalls             []agentcontract.CarriedOutCall
 	pendingAskInteraction    AskInteraction
 	hasPendingAskInteraction bool
 	keptTaskRunIDs           []string
@@ -232,6 +233,7 @@ func (connectorRuntime *ConnectorRuntime) conversationTurnFor(turn *inboundTurn,
 		RequesterEmail:            turn.requesterEmail,
 		PersonAccess:              turn.personAccess,
 		IsApprovalContinuation:    turn.isApprovalContinuation,
+		SettledCalls:              turn.settledCalls,
 		ActiveGoal:                turn.activeGoal,
 		HasActiveGoal:             turn.hasActiveGoal,
 		PriorTask:                 turn.priorTask,

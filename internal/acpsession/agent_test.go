@@ -343,12 +343,12 @@ func TestHeldCallReachesTheRequesterOverTheSessionThatOwnsTheConversation(t *tes
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	approvalSignal, isAnswered := permissionRelay.AskPermission(ctx, approvalRequest, "박예시에게 보낼까요?")
+	answer, isAnswered := permissionRelay.AskPermission(ctx, approvalRequest, approvalgate.PermissionQuestion{Confirmation: "박예시에게 보낼까요?"})
 	if !isAnswered {
 		t.Fatal("nobody was asked, so the call would have been held instead of run")
 	}
-	if approvalSignal != agentcontract.ApprovalSignalApprove {
-		t.Fatalf("the answer read as %q, expected approve", approvalSignal)
+	if answer.Signal != agentcontract.ApprovalSignalApprove {
+		t.Fatalf("the answer read as %q, expected approve", answer.Signal)
 	}
 	client.mutex.Lock()
 	defer client.mutex.Unlock()
@@ -379,7 +379,7 @@ func TestACallInAConversationNoSessionOwnsIsNotAsked(t *testing.T) {
 		ConversationID: "conversation-nobody-opened",
 		TaskRunID:      "task-2",
 		ToolName:       "message_send",
-	}, "보낼까요?")
+	}, approvalgate.PermissionQuestion{Confirmation: "보낼까요?"})
 	if isAnswered {
 		t.Fatal("a call was answered by a session that owns another conversation")
 	}
@@ -392,19 +392,20 @@ func TestDecliningTheCallReadsAsReject(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	approvalSignal, isAnswered := permissionRelay.AskPermission(ctx, mcpserver.ApprovalRequest{
+	answer, isAnswered := permissionRelay.AskPermission(ctx, mcpserver.ApprovalRequest{
 		Platform:       "buzz",
 		ConversationID: "conversation-1",
 		TaskRunID:      "task-1",
 		ToolName:       "message_send",
-	}, "보낼까요?")
-	if !isAnswered || approvalSignal != agentcontract.ApprovalSignalReject {
-		t.Fatalf("declining read as %q answered=%v", approvalSignal, isAnswered)
+	}, approvalgate.PermissionQuestion{Confirmation: "보낼까요?"})
+	if !isAnswered || answer.Signal != agentcontract.ApprovalSignalReject {
+		t.Fatalf("declining read as %q answered=%v", answer.Signal, isAnswered)
 	}
 }
 
 type scriptedRouter struct {
 	approvalSignal *agentcontract.ApprovalSignal
+	choices        []string
 	planned        *[]agentcontract.AgentRequest
 }
 
@@ -412,7 +413,7 @@ func (router scriptedRouter) Plan(_ context.Context, request agentcontract.Agent
 	if router.planned != nil {
 		*router.planned = append(*router.planned, request)
 	}
-	return agentcontract.TurnDecision{Approval: router.approvalSignal}, nil
+	return agentcontract.TurnDecision{Approval: router.approvalSignal, Choices: router.choices}, nil
 }
 
 func approvalSignalPointer(approvalSignal agentcontract.ApprovalSignal) *agentcontract.ApprovalSignal {
@@ -454,10 +455,10 @@ func TestThePersonsWordsAreReadByTheRouterAndNotByTheRelay(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	approvalSignal, isAnswered := permissionRelay.AskPermission(ctx, approvalRequestForTest(), "박예시에게 보낼까요?")
+	answer, isAnswered := permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{Confirmation: "박예시에게 보낼까요?"})
 
-	if !isAnswered || approvalSignal != agentcontract.ApprovalSignalApprove {
-		t.Fatalf("the answer read as %q answered=%v", approvalSignal, isAnswered)
+	if !isAnswered || answer.Signal != agentcontract.ApprovalSignalApprove {
+		t.Fatalf("the answer read as %q answered=%v", answer.Signal, isAnswered)
 	}
 	if len(planned) != 1 {
 		t.Fatalf("the router was asked %d times, expected once", len(planned))
@@ -485,10 +486,10 @@ func TestAnAnswerTheRouterCannotReadIsNotAnApproval(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	approvalSignal, isAnswered := permissionRelay.AskPermission(ctx, approvalRequestForTest(), "보낼까요?")
+	answer, isAnswered := permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{Confirmation: "보낼까요?"})
 
-	if !isAnswered || approvalSignal != agentcontract.ApprovalSignalReject {
-		t.Fatalf("an unclear answer read as %q, and a call would run that nobody agreed to", approvalSignal)
+	if !isAnswered || answer.Signal != agentcontract.ApprovalSignalReject {
+		t.Fatalf("an unclear answer read as %q, and a call would run that nobody agreed to", answer.Signal)
 	}
 }
 
@@ -808,4 +809,49 @@ func (client *recordingClient) waitForResourceLink() string {
 		time.Sleep(10 * time.Millisecond)
 	}
 	return ""
+}
+
+func TestAChoiceIsReadFromThePersonsWordsAgainstTheOfferedOptions(t *testing.T) {
+	planned := []agentcontract.AgentRequest{}
+	client := &recordingClient{}
+	connection, permissionRelay := connectedPairWithRouter(t, &recordingLauncher{}, client, scriptedRouter{
+		choices: []string{"offHours"},
+		planned: &planned,
+	})
+	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
+	client.answerByAsking = answeringWithWords(t, connection, sessionID, "새벽에 해")
+	choices := []approvalgate.ApprovalChoice{{Key: "offHours", StartsAt: "2099-10-03T03:00:00+09:00"}, {Key: "now"}}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	answer, isAnswered := permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{Confirmation: "업데이트할까요?", Choices: choices})
+
+	if !isAnswered || answer.ChoiceKey != "offHours" {
+		t.Fatalf("the choice read as %+v answered=%v", answer, isAnswered)
+	}
+	asked := client.permissionAsked[0].Options
+	if len(asked) != 3 || asked[0].OptionId != "choose:offHours" || asked[1].OptionId != "choose:now" || asked[2].OptionId != rejectOnceOptionID {
+		t.Fatalf("the client was offered %+v, expected the later time, now, and declining, in that order", asked)
+	}
+	if len(planned) != 1 || len(planned[0].PendingChoice.Options) != 3 || planned[0].PendingConfirmation.TaskRunID != "" {
+		t.Fatalf("the router was asked %+v, expected one pending choice among the offered options and cancelling", planned)
+	}
+}
+
+func TestAChoiceNobodyOfferedIsNotAnApproval(t *testing.T) {
+	client := &recordingClient{}
+	connection, permissionRelay := connectedPairWithRouter(t, &recordingLauncher{}, client, scriptedRouter{choices: []string{"tomorrowNoon"}})
+	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
+	client.answerByAsking = answeringWithWords(t, connection, sessionID, "내일 점심에")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	answer, isAnswered := permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{
+		Confirmation: "업데이트할까요?",
+		Choices:      []approvalgate.ApprovalChoice{{Key: "offHours", StartsAt: "2099-10-03T03:00:00+09:00"}, {Key: "now"}},
+	})
+
+	if !isAnswered || answer.Signal != agentcontract.ApprovalSignalReject || answer.ChoiceKey != "" {
+		t.Fatalf("a choice nobody offered read as %+v", answer)
+	}
 }

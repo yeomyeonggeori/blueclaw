@@ -8,6 +8,7 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
@@ -66,21 +67,47 @@ func (agent *Agent) readApprovalReply(ctx context.Context, request ApprovalReply
 	if !isWaiting {
 		return "", errNoCallIsWaitingOnThat
 	}
-	turnDecision, errorValue := agent.turnRouter.Plan(ctx, agentcontract.AgentRequest{
-		RequesterPersonID: session.context.Requester.PersonID,
-		ConversationID:    session.context.Addressing.ConversationID,
-		Prompt:            reply,
-		ResponseLanguage:  session.context.Addressing.ResponseLanguage,
-		PendingConfirmation: agentcontract.PendingConfirmationContext{
-			TaskRunID: waiting.approvalRequest.TaskRunID,
-			Prompt:    waiting.approvalRequest.Prompt,
-			Question:  waiting.confirmation,
-		},
-	})
+	turnDecision, errorValue := agent.turnRouter.Plan(ctx, approvalReplyRequest(session.context, reply, waiting))
 	if errorValue != nil {
 		return "", errorValue
 	}
+	if len(waiting.choices) > 0 {
+		return permissionOptionForChoice(turnDecision.Choices, waiting.choices), nil
+	}
 	return permissionOptionForApprovalSignal(turnDecision.Approval), nil
+}
+
+func approvalReplyRequest(sessionContext SessionContext, reply string, waiting waitingCall) agentcontract.AgentRequest {
+	request := agentcontract.AgentRequest{
+		RequesterPersonID: sessionContext.Requester.PersonID,
+		ConversationID:    sessionContext.Addressing.ConversationID,
+		Prompt:            reply,
+		ResponseLanguage:  sessionContext.Addressing.ResponseLanguage,
+	}
+	if len(waiting.choices) > 0 {
+		request.PendingChoice = agentcontract.PendingChoiceContext{
+			TaskRunID:     waiting.approvalRequest.TaskRunID,
+			Question:      waiting.confirmation,
+			SelectionMode: "single",
+			Options:       approvalgate.ChoiceReplyOptions(waiting.choices),
+		}
+		return request
+	}
+	request.PendingConfirmation = agentcontract.PendingConfirmationContext{
+		TaskRunID: waiting.approvalRequest.TaskRunID,
+		Prompt:    waiting.approvalRequest.Prompt,
+		Question:  waiting.confirmation,
+	}
+	return request
+}
+
+func permissionOptionForChoice(selected []string, choices []approvalgate.ApprovalChoice) acp.PermissionOptionId {
+	for _, selectedKey := range selected {
+		if choice, isOffered := approvalgate.ChoiceByKey(choices, selectedKey); isOffered {
+			return choiceOptionID(choice.Key)
+		}
+	}
+	return rejectOnceOptionID
 }
 
 func permissionOptionForApprovalSignal(approvalSignal *agentcontract.ApprovalSignal) acp.PermissionOptionId {

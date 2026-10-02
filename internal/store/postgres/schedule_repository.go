@@ -47,8 +47,8 @@ INSERT INTO schedule (
   last_run_at, last_task_run_id, expires_at, created_at, updated_at,
   platform, delivery_conversation_id, reply_target_id, time_zone,
   lease_owner, leased_until, failure_count, last_error, next_attempt_at,
-  max_run_count, completed_run_count
-) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
+  max_run_count, completed_run_count, approved_call
+) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
 ON CONFLICT (schedule_id) DO UPDATE SET
   name = EXCLUDED.name,
   prompt = EXCLUDED.prompt,
@@ -105,6 +105,7 @@ WHERE NOT EXISTS (
 		firstNonNilScheduleTime(schedule.NextAttemptAt, schedule.CreatedAt),
 		zeroAsNil(schedule.MaxRunCount),
 		schedule.CompletedRunCount,
+		approvedCallDocument(schedule.ApprovedCall),
 	)
 	return errorValue
 }
@@ -787,6 +788,7 @@ func scanSchedule(scanner scheduleScanner) (task.Schedule, error) {
 	var leasedUntil sql.NullTime
 	var nextAttemptAt sql.NullTime
 	var expiresAt sql.NullTime
+	var approvedCall []byte
 	errorValue := scanner.Scan(
 		&schedule.ScheduleID,
 		&schedule.CreatorPersonID,
@@ -815,7 +817,9 @@ func scanSchedule(scanner scheduleScanner) (task.Schedule, error) {
 		&nextAttemptAt,
 		&maxRunCount,
 		&schedule.CompletedRunCount,
+		&approvedCall,
 	)
+	schedule.ApprovedCall = scannedApprovedCall(approvedCall)
 	schedule.ExecutionMode = task.ScheduleExecutionMode(normalizedScheduleExecutionMode(task.ScheduleExecutionMode(executionMode)))
 	schedule.Kind = task.ScheduleKind(kind)
 	if intervalSecond.Valid {
@@ -865,7 +869,29 @@ func scheduleReturningColumns() string {
   last_run_at, COALESCE(last_task_run_id, ''), expires_at, created_at, updated_at,
   platform, delivery_conversation_id, reply_target_id, time_zone,
   lease_owner, leased_until, failure_count, last_error, next_attempt_at,
-  max_run_count, completed_run_count`
+  max_run_count, completed_run_count, approved_call`
+}
+
+func approvedCallDocument(approvedCall *task.ScheduleApprovedCall) any {
+	if approvedCall == nil {
+		return nil
+	}
+	document, errorValue := json.Marshal(approvedCall)
+	if errorValue != nil {
+		return nil
+	}
+	return string(document)
+}
+
+func scannedApprovedCall(document []byte) *task.ScheduleApprovedCall {
+	if len(document) == 0 {
+		return nil
+	}
+	approvedCall := task.ScheduleApprovedCall{}
+	if json.Unmarshal(document, &approvedCall) != nil {
+		return nil
+	}
+	return &approvedCall
 }
 
 func scheduleExpiresAt(schedule task.Schedule) any {

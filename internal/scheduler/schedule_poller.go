@@ -163,6 +163,9 @@ func (schedulePoller SchedulePoller) runSchedule(ctx context.Context, schedule t
 	if errorValue := validateScheduleDeliveryTarget(schedule); errorValue != nil {
 		return errorValue
 	}
+	if errorValue := schedulePoller.spendAnApprovedCallBeforeItRuns(schedule, referenceTime); errorValue != nil {
+		return errorValue
+	}
 	result, errorValue := schedulePoller.executeSchedule(ctx, schedule, referenceTime)
 	if errorValue != nil {
 		return errorValue
@@ -186,6 +189,17 @@ func (schedulePoller SchedulePoller) runSchedule(ctx context.Context, schedule t
 		return errorValue
 	}
 	return nil
+}
+
+func (schedulePoller SchedulePoller) spendAnApprovedCallBeforeItRuns(schedule task.Schedule, referenceTime time.Time) error {
+	if !schedule.CarriesAnApprovedCall() {
+		return nil
+	}
+	spentSchedule, errorValue := (task.Scheduler{}).AdvanceSchedule(schedule, referenceTime)
+	if errorValue != nil {
+		return errorValue
+	}
+	return schedulePoller.ScheduleRepository.MarkScheduleSucceeded(spentSchedule)
 }
 
 func (schedulePoller SchedulePoller) pauseMorningBriefing(schedule task.Schedule, errorValue error) error {

@@ -50,6 +50,7 @@ type Schedule struct {
 	FailureCount      int                   `json:"failureCount"`
 	LastError         string                `json:"lastError"`
 	NextAttemptAt     *time.Time            `json:"nextAttemptAt"`
+	ApprovedCall      *ScheduleApprovedCall `json:"approvedCall,omitempty"`
 	CreatedAt         time.Time             `json:"createdAt"`
 	UpdatedAt         time.Time             `json:"updatedAt"`
 }

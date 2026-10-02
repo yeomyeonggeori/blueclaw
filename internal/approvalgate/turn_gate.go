@@ -70,6 +70,8 @@ func (turnGate turnToolCallGate) ReviewToolCall(ctx context.Context, toolInvocat
 		return toolcontract.ToolCallReview{Result: unanswerableCallResult()}, nil
 	case mcpserver.ApprovalDecisionUnresolvedTarget:
 		return toolcontract.ToolCallReview{Result: outcome.Failure}, nil
+	case mcpserver.ApprovalDecisionDeferred:
+		return toolcontract.ToolCallReview{Result: outcome.Deferral}, nil
 	}
 	return toolcontract.ToolCallReview{Result: HeldCallResult(outcome.Notice)}, nil
 }
