@@ -1,3 +1,5 @@
+import { relayURLOf } from './adapters/buzz/relay-trust.ts';
+
 export type MattermostConfiguration = {
   baseURL: string;
   botToken: string;
@@ -63,7 +65,7 @@ function loadMattermostConfiguration(environment: Record<string, string | undefi
 }
 
 function loadBuzzConfiguration(environment: Record<string, string | undefined>): BuzzConfiguration | undefined {
-  const relayURL = environment['CHATD_BUZZ_RELAY_URL']?.trim();
+  const relayURL = relayURLOf(environment);
   if (!relayURL) return undefined;
   const privateKeyHex = requireValue(environment, 'CHATD_BUZZ_PRIVATE_KEY').toLowerCase();
   if (!/^[0-9a-f]{64}$/.test(privateKeyHex)) {
