@@ -376,18 +376,14 @@ func (connectorRuntime *ConnectorRuntime) processInboundEventWithReplySender(ctx
 	if event.TaskRetry != nil {
 		return connectorRuntime.processTaskRetry(ctx, adapter, event, sendReply)
 	}
-	turn := &inboundTurn{adapter: adapter, platform: adapter.Name(), event: event, sendReply: sendReply, stopProgress: func() {}}
+	turn := &inboundTurn{adapter: adapter, platform: adapter.Name(), event: event, sendReply: sendReply}
 	connectorRuntime.logInboundEventReceived(turn)
 	if result, isHandled, errorValue := connectorRuntime.admitInboundTurn(ctx, turn); isHandled {
 		return result, errorValue
 	}
-	defer func() {
-		if turn.isProgressStarted {
-			turn.stopProgress()
-		}
-	}()
+	defer turn.endProgress()
 	if shouldStartProgressBeforeAddressing(turn.event) {
-		turn.startProgress(connectorRuntime.startProgressHeartbeat(ctx, turn.adapter, turn.replyTarget))
+		connectorRuntime.showTurnProgress(ctx, turn)
 	}
 	if errorValue := ctx.Err(); errorValue != nil {
 		return ConnectorRuntimeResult{}, errorValue
