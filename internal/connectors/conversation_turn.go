@@ -17,6 +17,7 @@ type ConversationTurn struct {
 	RequesterEmail            string
 	PersonAccess              policy.PersonAccess
 	IsApprovalContinuation    bool
+	SettledCalls              []agentcontract.CarriedOutCall
 	ActiveGoal                agentcontract.ActiveGoal
 	HasActiveGoal             bool
 	PriorTask                 agentcontract.PriorTaskContext
@@ -73,6 +74,7 @@ func (connectorRuntime *ConnectorRuntime) buildTaskLaunchRequest(turn Conversati
 		RequesterEmail:             turn.RequesterEmail,
 		RequesterPlatformUserID:    event.SenderID,
 		IsApprovalContinuation:     turn.IsApprovalContinuation,
+		SettledCalls:               turn.SettledCalls,
 		IsRuntimeRestartResume:     turn.IsBlockedContinuation,
 		ExistingTaskRunID:          existingGoalTaskRunIDFromTurn(turn),
 		OriginReplyTargetID:        event.ReplyTargetID,

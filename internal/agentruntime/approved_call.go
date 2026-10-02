@@ -5,9 +5,12 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
+
+const TaskEventScheduledApprovedCallCarriedOut = "approval.scheduled_call_carried_out"
 
 type carryOutApprovedCallLaunchStep struct {
 	ToolSet *toolcontract.ToolSet
@@ -18,22 +21,46 @@ func (carryOutApprovedCallLaunchStep) Name() string {
 }
 
 func (step carryOutApprovedCallLaunchStep) Run(ctx context.Context, execution *taskLaunchExecution) ([]agentcontract.CarriedOutCall, error) {
+	settledCalls := append([]agentcontract.CarriedOutCall{}, execution.Request.SettledCalls...)
+	if step.ToolSet == nil {
+		return settledCalls, nil
+	}
+	if scheduledCall := execution.Request.ScheduledApprovedCall; scheduledCall != nil {
+		return append(settledCalls, step.carryOutScheduledCall(ctx, execution, *scheduledCall)), nil
+	}
+	if carriedOutCall, isCarriedOut := step.carryOutAnsweredCall(ctx, execution); isCarriedOut {
+		return append(settledCalls, carriedOutCall), nil
+	}
+	return settledCalls, nil
+}
+
+func (step carryOutApprovedCallLaunchStep) carryOutAnsweredCall(ctx context.Context, execution *taskLaunchExecution) (agentcontract.CarriedOutCall, bool) {
 	taskRunID := strings.TrimSpace(execution.Request.ExistingTaskRunID)
 	taskRunService := execution.Launcher.taskRunService
-	if !execution.Request.IsApprovalContinuation || taskRunID == "" || taskRunService == nil || step.ToolSet == nil {
-		return nil, nil
+	if !execution.Request.IsApprovalContinuation || taskRunID == "" || taskRunService == nil {
+		return agentcontract.CarriedOutCall{}, false
 	}
 	approvedCall, isApproved := approvalgate.ApprovedPendingCall(taskRunService.ListTaskEvent(taskRunID))
 	if !isApproved {
-		return nil, nil
+		return agentcontract.CarriedOutCall{}, false
 	}
 	result := invokeApprovedCall(ctx, step.ToolSet, approvedCall)
 	approvalgate.RecordApprovalSpent(taskRunService, taskRunID, approvedCall.ToolName, approvedCall.ToolInput)
-	return []agentcontract.CarriedOutCall{{
-		ToolName:  approvedCall.ToolName,
-		ToolInput: approvedCall.ToolInput,
-		Result:    result,
-	}}, nil
+	return agentcontract.CarriedOutCall{ToolName: approvedCall.ToolName, ToolInput: approvedCall.ToolInput, Result: result}, true
+}
+
+func (step carryOutApprovedCallLaunchStep) carryOutScheduledCall(ctx context.Context, execution *taskLaunchExecution, scheduledCall task.ScheduleApprovedCall) agentcontract.CarriedOutCall {
+	approvedCall := approvalgate.ApprovedCall{ToolName: strings.TrimSpace(scheduledCall.ToolName), ToolInput: scheduledCall.ToolInput}
+	result := invokeApprovedCall(withScheduledApprovedCall(ctx, scheduledCall), step.ToolSet, approvedCall)
+	if taskRunID := strings.TrimSpace(execution.Request.ExistingTaskRunID); taskRunID != "" && execution.Launcher.taskRunService != nil {
+		execution.Launcher.taskRunService.AppendTaskEvent(taskRunID, TaskEventScheduledApprovedCallCarriedOut, MarshalBody(map[string]any{
+			"scheduleID": execution.Request.ScheduledRun.ScheduleID,
+			"toolName":   approvedCall.ToolName,
+			"toolInput":  approvedCall.ToolInput,
+			"isError":    result.Failure != nil,
+		}))
+	}
+	return agentcontract.CarriedOutCall{ToolName: approvedCall.ToolName, ToolInput: approvedCall.ToolInput, Result: result}
 }
 
 func invokeApprovedCall(ctx context.Context, toolSet *toolcontract.ToolSet, approvedCall approvalgate.ApprovedCall) toolcontract.ToolResult {
@@ -47,4 +74,15 @@ func invokeApprovedCall(ctx context.Context, toolSet *toolcontract.ToolSet, appr
 		return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, "approval", errorValue.Error())
 	}
 	return result
+}
+
+type scheduledApprovedCallKey struct{}
+
+func withScheduledApprovedCall(ctx context.Context, scheduledCall task.ScheduleApprovedCall) context.Context {
+	return context.WithValue(ctx, scheduledApprovedCallKey{}, scheduledCall)
+}
+
+func scheduledApprovedCallFrom(ctx context.Context) (task.ScheduleApprovedCall, bool) {
+	scheduledCall, isCarried := ctx.Value(scheduledApprovedCallKey{}).(task.ScheduleApprovedCall)
+	return scheduledCall, isCarried
 }

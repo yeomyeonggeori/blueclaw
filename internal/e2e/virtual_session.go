@@ -83,6 +83,7 @@ type VirtualSessionScenario struct {
 	TurnOptions               agentcontract.TurnOptions
 	ProgressWriter            io.Writer
 	WritableWorkspacePaths    []string
+	RequesterIsAdmin          bool
 	Turns                     []VirtualTurn
 }
 
@@ -209,6 +210,8 @@ type VirtualTurn struct {
 	RouterRequiredEvidence       []string
 	RouterTaskShape              agentcontract.TaskShape
 	RouterApproval               string
+	RouterChoice                 string
+	FiresDueApprovedSchedules    bool
 	ExpectedSelectedSkills       []string
 	ExpectedToolCalls            []string
 	ExpectedAnyToolCalls         []string
@@ -338,6 +341,9 @@ type VirtualSessionHarness struct {
 	runtime          *connectors.ConnectorRuntime
 	adapter          *virtualAdapter
 	cleanup          func()
+
+	approvedCallSchedules *virtualApprovedCallSchedules
+	scheduleRunner        agentruntime.ScheduleRunner
 }
 
 type virtualLanguageModelRequestRecorder interface {
@@ -762,6 +768,9 @@ var builtinScenarioFactories = map[string]func(string) VirtualSessionScenario{
 	"attachment_html_previous_preview_recovery": AttachmentHTMLPreviousPreviewRecoveryScenario,
 	"attachment_current_image_input":            AttachmentCurrentImageInputScenario,
 	"xlow_image_vision_fallback":                XLowImageVisionFallbackScenario,
+	"host_update_now_acceptance":                HostUpdateNowAcceptanceScenario,
+	"host_update_off_hours_acceptance":          HostUpdateOffHoursAcceptanceScenario,
+	"host_update_member_refused":                HostUpdateMemberRefusedScenario,
 }
 
 func BuiltinScenario(name string, artifactDirectoryPath string) (VirtualSessionScenario, error) {
@@ -880,7 +889,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 		DecisionModel:               scenarioChangeCheckModel(scriptedModel, changeChecks),
 	})
 
-	identityService := identity.NewIdentityService(testPolicyProjection())
+	identityService := identity.NewIdentityService(virtualPolicyProjection(scenario.RequesterIsAdmin))
 	runtime := connectors.NewConnectorRuntime(identityService, agentHarness, taskRunService, taskEventService, slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
 	adapter := &virtualAdapter{workspacePath: workspacePath}
 	runtime.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, highLanguageModel))
@@ -902,7 +911,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	if len(capabilityToolNames) > 0 {
 		var capabilityCleanup func()
 		var errorValue error
-		capabilityClient, capabilityCleanup, errorValue = startVirtualCapabilityServer(capabilityToolNames, workspacePath)
+		capabilityClient, capabilityCleanup, errorValue = startVirtualCapabilityServer(capabilityToolNames, workspacePath, virtualAdminPersonIDs(scenario))
 		if errorValue != nil {
 			return nil, errorValue
 		}
@@ -930,6 +939,9 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	virtualApprovalGate := approvalgate.New(taskRunService)
 	virtualApprovalGate.UseLanguageModel(highLanguageModel)
 	virtualApprovalGate.UseApprovalTargetResolver(agentruntime.NewCapabilityApprovalTargetResolver(capabilityClient))
+	approvedCallSchedules := &virtualApprovedCallSchedules{}
+	virtualApprovalGate.UseApprovedCallScheduler(approvedCallSchedules)
+	runtime.UseApprovalGate(virtualApprovalGate)
 	virtualTaskLauncher.UseApprovalGate(virtualApprovalGate)
 	virtualTaskLauncher.UseTurnRouter(scenarioTurnRouter)
 	virtualTaskLauncher.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, highLanguageModel))
@@ -950,6 +962,9 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 		runtime:          runtime,
 		adapter:          adapter,
 		cleanup:          cleanup,
+
+		approvedCallSchedules: approvedCallSchedules,
+		scheduleRunner:        agentruntime.NewScheduleRunner(virtualTaskLauncher),
 	}, nil
 }
 
@@ -1378,9 +1393,10 @@ type virtualCapabilityService struct {
 	schedules        []virtualCapabilityRecord
 	calendarRevision int
 	scheduleRevision int
+	adminPersonIDs   map[string]bool
 }
 
-func startVirtualCapabilityServer(toolNames []string, workspacePath string) (capability.Client, func(), error) {
+func startVirtualCapabilityServer(toolNames []string, workspacePath string, adminPersonIDs map[string]bool) (capability.Client, func(), error) {
 	toolNameByName := map[string]bool{}
 	for _, toolName := range toolNames {
 		trimmedToolName := strings.TrimSpace(toolName)
@@ -1388,7 +1404,7 @@ func startVirtualCapabilityServer(toolNames []string, workspacePath string) (cap
 			toolNameByName[trimmedToolName] = true
 		}
 	}
-	service := &virtualCapabilityService{toolNameByName: toolNameByName, workspacePath: workspacePath}
+	service := &virtualCapabilityService{toolNameByName: toolNameByName, workspacePath: workspacePath, adminPersonIDs: adminPersonIDs}
 	server := httptest.NewServer(http.HandlerFunc(service.handleRequest))
 	return capability.Client{
 		Endpoint:   server.URL,
@@ -1431,6 +1447,8 @@ func (service *virtualCapabilityService) targetResolveResponse(toolName string, 
 		return virtualCapabilityTargetResponse(toolName, service.tasks, input, "taskHint", "content", "task")
 	case "event_delete":
 		return virtualCapabilityTargetResponse(toolName, service.events, input, "eventHint", "title", "calendar event")
+	case virtualHostUpdateToolName:
+		return service.hostUpdateTargetResponse(requestBody)
 	}
 	return virtualCapabilitySuccess(toolName, "no virtual target to resolve", map[string]any{})
 }
@@ -1479,6 +1497,8 @@ func (service *virtualCapabilityService) response(toolName string, requestBody [
 		return service.calendarResponse(toolName, requestBody)
 	case "schedule_create", "schedule_list", "schedule_update", "schedule_cancel":
 		return service.scheduleResponse(toolName, requestBody)
+	case virtualHostUpdateToolName:
+		return service.hostUpdateResponse(requestBody)
 	case "image_read":
 		path := stringValue(virtualCapabilityInput(requestBody)["path"])
 		result := map[string]any{"attachments": []map[string]any{{
@@ -2652,6 +2672,9 @@ func scenarioRouterResponsesForTurn(scenario VirtualSessionScenario, virtualTurn
 	if strings.TrimSpace(virtualTurn.RouterApproval) != "" {
 		return []string{scenarioApprovalRouterResponse(virtualTurn.RouterApproval)}
 	}
+	if strings.TrimSpace(virtualTurn.RouterChoice) != "" {
+		return []string{scenarioChoiceRouterResponse(virtualTurn.RouterChoice)}
+	}
 	return []string{scenarioTurnRouterResponse(scenario, virtualTurn)}
 }
 
@@ -2718,6 +2741,24 @@ func virtualEvidenceRequiresExternalSend(requiredEvidence []string) bool {
 		}
 	}
 	return false
+}
+
+func scenarioChoiceRouterResponse(choiceKey string) string {
+	document, errorValue := json.Marshal(map[string]any{
+		"route":            "continue_task",
+		"classification":   "bounded_task",
+		"taskShape":        "maintenance_task",
+		"level":            "low",
+		"choices":          []string{strings.TrimSpace(choiceKey)},
+		"busyRoute":        string(agentcontract.BusyRouteNewTask),
+		"responseLanguage": "ko",
+		"reason":           "scripted choice reply classification",
+		"userFacingReply":  "",
+	})
+	if errorValue != nil {
+		return "{}"
+	}
+	return string(document)
 }
 
 func scenarioApprovalRouterResponse(approval string) string {
@@ -2816,6 +2857,9 @@ func virtualTurnExpectsEvent(virtualTurn VirtualTurn, eventName string) bool {
 }
 
 func (harness *VirtualSessionHarness) runTurn(ctx context.Context, index int, virtualTurn VirtualTurn) (VirtualTurnResult, error) {
+	if virtualTurn.FiresDueApprovedSchedules {
+		return harness.fireDueApprovedSchedules(ctx)
+	}
 	reactionStartIndex := harness.adapter.ReactionCount()
 	modelRequestStartIndex := 0
 	if harness.requestRecorder != nil {
@@ -3765,7 +3809,11 @@ func terminalConfiguration(workspacePath string) config.TerminalConfiguration {
 }
 
 func testPolicyProjection() policy.PolicyProjection {
-	policyDocument := policy.PolicyDocument{
+	return policy.PolicyProjectionService{}.ReplacePolicyProjectionTransactionally(testPolicyDocument())
+}
+
+func testPolicyDocument() policy.PolicyDocument {
+	return policy.PolicyDocument{
 		People: []policy.PersonPolicy{{
 			PersonID:          "person-1",
 			DisplayName:       "샘플",
@@ -3791,7 +3839,6 @@ func testPolicyProjection() policy.PolicyProjection {
 		}},
 		Retention: policy.RetentionPolicy{RawEventDays: 30},
 	}
-	return policy.PolicyProjectionService{}.ReplacePolicyProjectionTransactionally(policyDocument)
 }
 
 type virtualAdapter struct {

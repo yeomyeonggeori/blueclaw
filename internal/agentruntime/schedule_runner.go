@@ -73,6 +73,7 @@ func (scheduleRunner ScheduleRunner) RunIfDue(ctx context.Context, request Sched
 		Prompt:                    schedule.Prompt,
 		ResponseLanguage:          responseLanguage,
 		ScheduledRun:              scheduledRunContext(schedule, referenceTime),
+		ScheduledApprovedCall:     schedule.ApprovedCall,
 		PersonAccess:              request.PersonAccess,
 		AccessibleConversationIDs: []string{task.ScheduleSessionID(schedule.ScheduleID)},
 	})

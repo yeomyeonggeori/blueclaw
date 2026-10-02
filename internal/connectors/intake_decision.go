@@ -202,6 +202,9 @@ func (connectorRuntime *ConnectorRuntime) inboundDecisionRequest(ctx context.Con
 			ExchangesSince: connectorRuntime.exchangesSince(turn, open.confirmationAt, open.confirmation.TaskRun.TaskRunID),
 		}
 	}
+	if pendingChoice, isOffered := open.confirmationChoice(decisionRequest.PendingConfirmation.ExchangesSince); isOffered {
+		decisionRequest.PendingChoice = pendingChoice
+	}
 	if open.hasAsk {
 		decisionRequest.PendingChoice = agentcontract.PendingChoiceContext{
 			TaskRunID:      open.ask.TaskRunID,

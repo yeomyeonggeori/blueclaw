@@ -139,6 +139,9 @@ func InitializeScheduleCreate(input ScheduleCreateInput, createContext ScheduleC
 }
 
 func ApplyScheduleUpdate(schedule Schedule, input ScheduleUpdateInput, companyTimeZone string, referenceTime time.Time) (Schedule, error) {
+	if schedule.CarriesAnApprovedCall() {
+		return Schedule{}, ErrScheduleCarriesAnApproval
+	}
 	if input.Description != nil {
 		schedule.Name = strings.TrimSpace(*input.Description)
 	}
@@ -230,6 +233,8 @@ func IsScheduleWriteInputError(errorValue error) bool {
 		ErrScheduleFiniteBoundRequired,
 		ErrScheduleNoFutureRun,
 		ErrScheduleLimitReached,
+		ErrScheduleCarriesAnApproval,
+		ErrApprovedCallNeedsAFutureStart,
 		errorInvalidSchedule,
 		errorInvalidCronExpression,
 		errorUnableToFindNextTaskRun,

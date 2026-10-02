@@ -15,6 +15,7 @@ type ApprovalTarget = agentcontract.ApprovalTarget
 
 type ApprovalTargetResolution struct {
 	Target  ApprovalTarget
+	Choices []ApprovalChoice
 	Failure toolcontract.ToolResult
 }
 

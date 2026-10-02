@@ -13,6 +13,7 @@ import (
 	acp "github.com/coder/acp-go-sdk"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -56,13 +57,14 @@ func (session openSession) catalog() agentruntime.RecordCatalogClient {
 }
 
 type Agent struct {
-	taskLauncher    TaskLauncher
-	directory       PersonDirectory
-	permissionRelay *PermissionRelay
-	turnRouter      TurnRouter
-	intakeDecider   IntakeDecider
-	taskRunStore    taskstate.TaskRunStore
-	logger          *slog.Logger
+	taskLauncher     TaskLauncher
+	directory        PersonDirectory
+	permissionRelay  *PermissionRelay
+	approvalDeferrer ApprovalDeferrer
+	turnRouter       TurnRouter
+	intakeDecider    IntakeDecider
+	taskRunStore     taskstate.TaskRunStore
+	logger           *slog.Logger
 
 	connection *acp.AgentSideConnection
 	mutex      sync.RWMutex
@@ -71,23 +73,29 @@ type Agent struct {
 
 func NewAgent(collaborators Collaborators, permissionRelay *PermissionRelay, logger *slog.Logger) *Agent {
 	return &Agent{
-		taskLauncher:    collaborators.TaskLauncher,
-		directory:       collaborators.Directory,
-		permissionRelay: permissionRelay,
-		turnRouter:      collaborators.TurnRouter,
-		intakeDecider:   collaborators.IntakeDecider,
-		taskRunStore:    collaborators.TaskRunStore,
-		logger:          logger,
-		sessions:        map[acp.SessionId]openSession{},
+		taskLauncher:     collaborators.TaskLauncher,
+		directory:        collaborators.Directory,
+		permissionRelay:  permissionRelay,
+		approvalDeferrer: collaborators.ApprovalDeferrer,
+		turnRouter:       collaborators.TurnRouter,
+		intakeDecider:    collaborators.IntakeDecider,
+		taskRunStore:     collaborators.TaskRunStore,
+		logger:           logger,
+		sessions:         map[acp.SessionId]openSession{},
 	}
 }
 
+type ApprovalDeferrer interface {
+	DeferApprovedCall(context.Context, approvalgate.DeferralRequest) (toolcontract.ToolResult, error)
+}
+
 type Collaborators struct {
-	TaskLauncher  TaskLauncher
-	Directory     PersonDirectory
-	TurnRouter    TurnRouter
-	IntakeDecider IntakeDecider
-	TaskRunStore  taskstate.TaskRunStore
+	ApprovalDeferrer ApprovalDeferrer
+	TaskLauncher     TaskLauncher
+	Directory        PersonDirectory
+	TurnRouter       TurnRouter
+	IntakeDecider    IntakeDecider
+	TaskRunStore     taskstate.TaskRunStore
 }
 
 func (agent *Agent) UseConnection(connection *acp.AgentSideConnection) {

@@ -562,6 +562,14 @@ func capabilityToolRequest(toolContext context.Context, descriptor CapabilityToo
 	if approvedCallID := toolcontract.ApprovedCallIDFromContext(toolContext); approvedCallID != "" {
 		contextDocument["approvedCallID"] = approvedCallID
 	}
+	if scheduledCall, isCarried := scheduledApprovedCallFrom(toolContext); isCarried {
+		contextDocument["scheduledApprovedCall"] = map[string]any{
+			"toolName":         scheduledCall.ToolName,
+			"toolInput":        scheduledCall.ToolInput,
+			"approverPersonID": scheduledCall.ApproverPersonID,
+			"approvedAt":       scheduledCall.ApprovedAt,
+		}
+	}
 	requestDocument := map[string]any{
 		"toolName":       descriptor.CanonicalName,
 		"input":          payload.Input,

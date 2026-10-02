@@ -20,6 +20,7 @@ func newTaskLauncher(runtimeConfiguration config.RuntimeConfiguration, foundatio
 	taskLauncher.UseCompanyProvider(directory.companyProvider)
 	toolCatalogBuilder.UseCompanyProvider(directory.companyProvider)
 	taskLauncher.UseApprovalGate(kernel.toolCatalog.approvalGate)
+	kernel.toolCatalog.approvalGate.UseApprovedCallScheduler(approvedCallScheduler{repository: services.repositories.schedule, companyProvider: directory.companyProvider})
 	return taskLauncher
 }
 

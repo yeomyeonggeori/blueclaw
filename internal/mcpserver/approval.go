@@ -14,6 +14,7 @@ const (
 	ApprovalDecisionHeld         ApprovalDecision = "held"
 	ApprovalDecisionRejected     ApprovalDecision = "rejected"
 	ApprovalDecisionUnanswerable ApprovalDecision = "unanswerable"
+	ApprovalDecisionDeferred     ApprovalDecision = "deferred"
 
 	ApprovalDecisionUnresolvedTarget ApprovalDecision = "unresolved_target"
 )
@@ -41,6 +42,7 @@ type ApprovalOutcome struct {
 	Decision ApprovalDecision
 	Notice   string
 	Failure  toolcontract.ToolResult
+	Deferral toolcontract.ToolResult
 	// Names the held call an approved outcome spends, so a tool backend is told
 	// which approval it runs under rather than inferring it from the turn.
 	ApprovedCallID string

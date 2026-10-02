@@ -261,6 +261,8 @@ A held call pauses the run in `waiting_approval` and records `approval.pending_c
 
 A grant can cover the rest of the task when the tool declares an `ApprovalScope`.
 
+A capability's `target.resolve` answer may carry `choices`, each a `key` and an optional `startsAt` instant. The person is then asked to pick one of them or cancel, in the order given, and the reply is read against exactly those options (`approval.choices_offered`). A choice without `startsAt` runs the call now. A choice with `startsAt` runs nothing now: the gate writes a once schedule of the person who approved it, carrying the approved call in its `approved_call` column (`approval.deferred`), and the model is told the schedule's ID and time.
+
 ## Policy
 
 The policy document is the list of people and circles blueclaw serves, and the source every identity is derived from.
@@ -346,6 +348,8 @@ A schedule is a task that runs on its own at a set time.
 
 Schedules live in the `schedule` table and are polled every `scheduler.taskSchedulePollIntervalSecond`. The admin API lists, creates, updates, cancels and deletes them (`/admin/api/schedule/*`).
 
+A schedule that carries an approved call is marked run before its run starts, so a daemon that stops halfway never runs it twice. The run carries out exactly that call before the model takes a step, without asking again, and tells the capability so in `context.scheduledApprovedCall`. Such a schedule is always a once schedule, which the database enforces, and `schedule_update` refuses to change it; cancelling it cancels the call.
+
 ### Morning briefing
 
 The morning briefing is a managed daily schedule per person. `morningBriefing` in `user.json` defaults to `{"enabled": true, "time": "08:00"}`, in the company time zone, and changes only through `persona_update`. The generic schedule endpoints cannot edit it. A briefing run may call only `task_list`, `event_list`, `conversation_history`, `memory_search` and `persona_read`, is skipped when there is nothing on the task and event lists, and is delivered through the outbox under an occurrence key so it arrives once. After five failures the occurrence is retired and the next day's runs as usual.
@@ -364,7 +368,7 @@ An ACP session is a conversation an ACP client holds with blueclaw acting as the
 
 `session/new` and `session/load` read `_meta["kim.intern/session"]`, which carries the requester (`email`, `personID`, `name`, `callingName`, `handle`) and the addressing (`platform`, `conversationID`, `conversationType`, `replyTargetID`, `isThread`, `responseLanguage`); a session without a requester or conversation is refused. `session/new` for a requester the policy does not name yet waits until a policy reload names them, and ends only when the client cancels the request; `session/load` refuses one at once. Each `session/prompt` reads `_meta["kim.intern/message"]`, passes the same engagement gate the connectors use, and launches a task. Progress goes out as `agent_thought_chunk` and tool calls, the reply as `agent_message_chunk` with attachments as resource links.
 
-An approval on an ACP turn first pauses the run and records the held call, then asks through `session/request_permission` with the options `approve_once`, `approve_task` (only when the tool has an approval scope) and `reject_once`. The tool call ID is the held call's ID: `held-` and the first eight bytes of the SHA-256 of the canonical call. A free-text answer goes through the extension method `_kim.intern/approvalReply`, which the turn router reads. After `session/load`, every run of that requester and conversation still waiting on approval is asked again under the same ID.
+An approval on an ACP turn first pauses the run and records the held call, then asks through `session/request_permission` with the options `approve_once`, `approve_task` (only when the tool has an approval scope) and `reject_once`, or, when the call offers choices, one `choose:<key>` option per choice and `reject_once`. The tool call ID is the held call's ID: `held-` and the first eight bytes of the SHA-256 of the canonical call. A free-text answer goes through the extension method `_kim.intern/approvalReply`, which the turn router reads. After `session/load`, every run of that requester and conversation still waiting on approval is asked again under the same ID.
 
 # Boundaries
 

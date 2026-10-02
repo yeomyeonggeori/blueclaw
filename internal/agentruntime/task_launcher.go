@@ -90,6 +90,8 @@ type TaskLaunchRequest struct {
 	ActiveGoal                 agentcontract.ActiveGoal
 	PriorTask                  agentcontract.PriorTaskContext
 	ScheduledRun               agentcontract.ScheduledRunContext
+	ScheduledApprovedCall      *task.ScheduleApprovedCall
+	SettledCalls               []agentcontract.CarriedOutCall
 	PrecomputedTurnDecision    *agentcontract.TurnDecision
 	DecidedTurnFields          *agentcontract.TurnDecision
 	IsPrecomputedDecisionExact bool
