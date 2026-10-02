@@ -1219,6 +1219,20 @@ func TestAskChoiceReplyAcceptance(t *testing.T) {
 	}
 }
 
+func TestAnAnswerOverACPResumesTheRunThatAsked(t *testing.T) {
+	result, errorValue := RunVirtualSession(context.Background(), AskChoiceReplyOverACPScenario(t.TempDir()))
+	if errorValue != nil {
+		t.Fatalf("expected the answer to an ACP question to resume the asking run: %v", errorValue)
+	}
+	if len(result.TurnResults) != 2 {
+		t.Fatalf("expected two turns, got %+v", result)
+	}
+	asked, answered := result.TurnResults[0], result.TurnResults[1]
+	if answered.TaskRunID != asked.TaskRunID {
+		t.Fatalf("the answer ran on %s, expected the run that asked, %s", answered.TaskRunID, asked.TaskRunID)
+	}
+}
+
 func TestDirectMessageSendConfirmAcceptance(t *testing.T) {
 	result, errorValue := RunVirtualSession(context.Background(), DirectMessageSendConfirmAcceptanceScenario(t.TempDir()))
 	if errorValue != nil {

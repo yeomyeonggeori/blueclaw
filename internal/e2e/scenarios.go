@@ -1328,6 +1328,13 @@ func AskChoiceReplyAcceptanceScenario(artifactDirectoryPath string) VirtualSessi
 	}
 }
 
+func AskChoiceReplyOverACPScenario(artifactDirectoryPath string) VirtualSessionScenario {
+	scenario := AskChoiceReplyAcceptanceScenario(artifactDirectoryPath)
+	scenario.Name = "ask_choice_reply_over_acp"
+	scenario.IsDeliveredOverACP = true
+	return scenario
+}
+
 func DirectMessageSendConfirmAcceptanceScenario(artifactDirectoryPath string) VirtualSessionScenario {
 	return VirtualSessionScenario{
 		Name:                   "dm_send_confirm_acceptance",

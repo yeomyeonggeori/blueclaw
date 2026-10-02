@@ -15,11 +15,13 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
@@ -154,6 +156,14 @@ func approvalRequestForTest() mcpserver.ApprovalRequest {
 	}
 }
 
+func connectorRuntimeForTest(taskRunStore taskstate.TaskRunStore) *connectors.ConnectorRuntime {
+	taskRunService, isShared := taskRunStore.(*task.TaskRunService)
+	if !isShared {
+		taskRunService = task.NewTaskRunService(task.NewTaskEventService())
+	}
+	return connectors.NewConnectorRuntime(identity.NewIdentityService(policy.PolicyProjection{}), nil, taskRunService, task.NewTaskEventService(), silentLogger())
+}
+
 func silentLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
@@ -175,6 +185,9 @@ func connectedPairWithCollaborators(t *testing.T, client *recordingClient, colla
 	t.Helper()
 	agentSide, clientSide := net.Pipe()
 	permissionRelay := NewPermissionRelay(silentLogger())
+	if collaborators.SessionTurns == nil {
+		collaborators.SessionTurns = connectorRuntimeForTest(collaborators.TaskRunStore)
+	}
 	agent := NewAgent(collaborators, permissionRelay, silentLogger())
 	agentConnection := acp.NewAgentSideConnection(agent, agentSide, agentSide)
 	agent.UseConnection(agentConnection)

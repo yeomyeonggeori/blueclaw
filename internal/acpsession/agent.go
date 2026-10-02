@@ -39,6 +39,10 @@ type AttachmentImporter interface {
 	ImportMessageAttachments(context.Context, connectors.PlatformInboundEvent, string) (connectors.PlatformInboundEvent, agentruntime.AttachmentMaterialResolver)
 }
 
+type SessionTurnOpener interface {
+	OpenSessionTurn(context.Context, connectors.PlatformInboundEvent, string, connectors.ReplySender) *connectors.SessionTurn
+}
+
 type PersonDirectory interface {
 	ResolvePersonIDByEmail(email string) (string, bool)
 	AwaitPersonIDByEmail(ctx context.Context, email string) (string, error)
@@ -69,6 +73,7 @@ type Agent struct {
 	turnRouter         TurnRouter
 	intakeDecider      IntakeDecider
 	attachmentImporter AttachmentImporter
+	sessionTurns       SessionTurnOpener
 	taskRunStore       taskstate.TaskRunStore
 	logger             *slog.Logger
 
@@ -86,6 +91,7 @@ func NewAgent(collaborators Collaborators, permissionRelay *PermissionRelay, log
 		turnRouter:         collaborators.TurnRouter,
 		intakeDecider:      collaborators.IntakeDecider,
 		attachmentImporter: collaborators.AttachmentImporter,
+		sessionTurns:       collaborators.SessionTurns,
 		taskRunStore:       collaborators.TaskRunStore,
 		logger:             logger,
 		sessions:           map[acp.SessionId]openSession{},
@@ -103,6 +109,7 @@ type Collaborators struct {
 	TurnRouter         TurnRouter
 	IntakeDecider      IntakeDecider
 	AttachmentImporter AttachmentImporter
+	SessionTurns       SessionTurnOpener
 	TaskRunStore       taskstate.TaskRunStore
 }
 
@@ -212,13 +219,29 @@ func (agent *Agent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.
 		)
 		return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, nil
 	}
-	launchResult, errorValue := agent.taskLauncher.Launch(ctx, agent.withMessageAttachments(ctx, messageContext, launchRequest))
+	sessionTurn := agent.sessionTurns.OpenSessionTurn(ctx, inboundEventOf(messageContext, launchRequest), launchRequest.RequesterPersonID, agent.replySenderFor(request.SessionId))
+	launchRequest, isAnswered, errorValue := sessionTurn.ContinueOpenInteractions(ctx, launchRequest)
+	if errorValue != nil || isAnswered {
+		return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, errorValue
+	}
+	return agent.launchTurn(ctx, request.SessionId, sessionTurn, agent.withMessageAttachments(ctx, messageContext, launchRequest), decided)
+}
+
+func (agent *Agent) launchTurn(ctx context.Context, sessionID acp.SessionId, sessionTurn *connectors.SessionTurn, launchRequest agentruntime.TaskLaunchRequest, decided *messageDecision) (acp.PromptResponse, error) {
+	launchResult, errorValue := agent.taskLauncher.Launch(ctx, launchRequest)
 	if errorValue != nil {
 		return acp.PromptResponse{}, errorValue
 	}
-	agent.recordDecisionCalls(decided, launchResult.TurnResult.TaskRun.TaskRunID)
-	agent.sendReply(ctx, request.SessionId, launchResult.TurnResult)
-	return acp.PromptResponse{StopReason: stopReasonForTaskStatus(launchResult.TurnResult.TaskRun.Status)}, nil
+	turnResult := launchResult.TurnResult
+	agent.recordDecisionCalls(decided, turnResult.TaskRun.TaskRunID)
+	agent.deliverReply(ctx, sessionID, sessionTurn, turnResult)
+	return acp.PromptResponse{StopReason: stopReasonForTaskStatus(turnResult.TaskRun.Status)}, nil
+}
+
+func (agent *Agent) deliverReply(ctx context.Context, sessionID acp.SessionId, sessionTurn *connectors.SessionTurn, turnResult agentcontract.AgentTurnResult) {
+	if errorValue := sessionTurn.DeliverReply(ctx, turnResult); errorValue != nil {
+		agent.logger.Warn("acpsession.reply.undelivered", "sessionID", string(sessionID), "taskRunID", turnResult.TaskRun.TaskRunID, "error", errorValue.Error())
+	}
 }
 
 func (agent *Agent) session(sessionID acp.SessionId) (openSession, bool) {
@@ -273,11 +296,14 @@ func (agent *Agent) withMessageAttachments(ctx context.Context, messageContext M
 func inboundEventOf(messageContext MessageContext, launchRequest agentruntime.TaskLaunchRequest) connectors.PlatformInboundEvent {
 	visibleContext := messageContext.Context
 	visibleContext.ConversationType = launchRequest.ConversationType
+	isThread := launchRequest.OriginIsThread
 	return connectors.PlatformInboundEvent{
 		Platform:       launchRequest.Platform,
 		ConversationID: launchRequest.ConversationID,
 		MessageID:      messageContext.MessageID,
+		SenderID:       visibleContext.Sender.SenderID,
 		ReplyTargetID:  launchRequest.ReplyTargetID,
+		IsThread:       &isThread,
 		Prompt:         launchRequest.Prompt,
 		Context:        visibleContext,
 	}
@@ -336,20 +362,14 @@ func (agent *Agent) checkpointSenderFor(sessionID acp.SessionId) agentcontract.A
 	}
 }
 
-func (agent *Agent) sendReply(ctx context.Context, sessionID acp.SessionId, turnResult agentcontract.AgentTurnResult) {
-	reply := strings.TrimSpace(turnResult.FinishMessage)
-	if reply == "" {
-		reply = strings.TrimSpace(turnResult.UserNotice)
-	}
-	if reply == "" || turnResult.ReplySuppressed {
-		return
-	}
-	if errorValue := agent.notify(ctx, sessionID, acp.UpdateAgentMessageText(reply)); errorValue != nil {
-		agent.logger.Warn("acpsession.reply.undelivered", "sessionID", string(sessionID), "error", errorValue.Error())
-		return
-	}
-	if errorValue := agent.notifyAttachments(ctx, sessionID, turnResult.Attachments); errorValue != nil {
-		agent.logger.Warn("acpsession.attachments.undelivered", "sessionID", string(sessionID), "error", errorValue.Error())
+func (agent *Agent) replySenderFor(sessionID acp.SessionId) connectors.ReplySender {
+	return func(ctx context.Context, _ connectors.ReplyTarget, reply connectors.OutboundReply) (string, error) {
+		if message := strings.TrimSpace(reply.Message); message != "" {
+			if errorValue := agent.notify(ctx, sessionID, acp.UpdateAgentMessageText(message)); errorValue != nil {
+				return "", errorValue
+			}
+		}
+		return "", agent.notifyAttachments(ctx, sessionID, reply.Attachments)
 	}
 }
 

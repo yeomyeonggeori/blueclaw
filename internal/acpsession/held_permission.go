@@ -122,7 +122,7 @@ func (agent *Agent) deferHeldCall(ctx context.Context, sessionContext SessionCon
 func (agent *Agent) resumeAnsweredTaskRun(ctx context.Context, sessionID acp.SessionId, sessionContext SessionContext, taskRun agentcontract.TaskRun, settledCalls []agentcontract.CarriedOutCall) {
 	requester := sessionContext.Requester
 	addressing := sessionContext.Addressing
-	launchResult, errorValue := agent.taskLauncher.Launch(ctx, agentruntime.TaskLaunchRequest{
+	launchRequest := agentruntime.TaskLaunchRequest{
 		Source:                  agentruntime.TaskLaunchSourceConnector,
 		SourceReference:         "acp:reload:" + taskRun.TaskRunID,
 		RequesterPersonID:       requester.PersonID,
@@ -146,12 +146,14 @@ func (agent *Agent) resumeAnsweredTaskRun(ctx context.Context, sessionID acp.Ses
 		PrecomputedTurnDecision: carryingOnWithTheApprovedCall(addressing.ResponseLanguage),
 		PersonAccess:            agent.directory.ResolvePersonAccess(requester.PersonID),
 		CheckpointSender:        agent.checkpointSenderFor(sessionID),
-	})
+	}
+	launchResult, errorValue := agent.taskLauncher.Launch(ctx, launchRequest)
 	if errorValue != nil {
 		agent.logger.Warn("acpsession.permission.reissued_run_will_not_resume", "taskRunID", taskRun.TaskRunID, "error", errorValue.Error())
 		return
 	}
-	agent.sendReply(ctx, sessionID, launchResult.TurnResult)
+	sessionTurn := agent.sessionTurns.OpenSessionTurn(ctx, inboundEventOf(MessageContext{}, launchRequest), requester.PersonID, agent.replySenderFor(sessionID))
+	agent.deliverReply(ctx, sessionID, sessionTurn, launchResult.TurnResult)
 }
 
 // The task this resumes was already routed, and asking the router again would

@@ -25,6 +25,7 @@ func newACPSessionServer(inbound InboundOptions, kernel agentKernel, directory i
 		TurnRouter:         turnRouter,
 		IntakeDecider:      decisionPlanner,
 		AttachmentImporter: connectorRuntime,
+		SessionTurns:       connectorRuntime,
 		TaskRunStore:       taskRunService,
 	}, permissionRelay, logger)
 }

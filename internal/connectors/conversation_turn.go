@@ -57,7 +57,7 @@ func (connectorRuntime *ConnectorRuntime) buildTaskLaunchRequest(turn Conversati
 	if turn.AmbientDuty.IsMatch {
 		checkpointSender = nil
 	}
-	return agentruntime.TaskLaunchRequest{
+	return withTurnContinuation(agentruntime.TaskLaunchRequest{
 		Source:                     agentruntime.TaskLaunchSourceConnector,
 		SourceReference:            event.DedupeKey(),
 		RequesterPersonID:          turn.RequesterPersonID,
@@ -66,10 +66,6 @@ func (connectorRuntime *ConnectorRuntime) buildTaskLaunchRequest(turn Conversati
 		RequesterHandle:            event.Context.Sender.Handle,
 		RequesterEmail:             turn.RequesterEmail,
 		RequesterPlatformUserID:    event.SenderID,
-		IsApprovalContinuation:     turn.IsApprovalContinuation,
-		SettledCalls:               turn.SettledCalls,
-		IsRuntimeRestartResume:     turn.IsBlockedContinuation,
-		ExistingTaskRunID:          existingGoalTaskRunIDFromTurn(turn),
 		OriginReplyTargetID:        event.ReplyTargetID,
 		OriginIsThread:             eventIsThreadReply(event),
 		ProfileName:                "default",
@@ -83,9 +79,6 @@ func (connectorRuntime *ConnectorRuntime) buildTaskLaunchRequest(turn Conversati
 		InputParts:                 append([]agentcontract.AgentPart{}, event.InputParts...),
 		ResponseLanguage:           responseLanguageForEvent(event),
 		VisibleContext:             event.Context.ToAgentVisibleContext(),
-		ActiveGoal:                 activeGoalForLaunch(turn.ActiveGoal, turn.HasActiveGoal),
-		PriorTask:                  turn.PriorTask,
-		PrecomputedTurnDecision:    turnDecisionForTurn(turn),
 		DecidedTurnFields:          turn.DecidedTurnFields,
 		AmbientDuty:                turn.AmbientDuty,
 		HistoryProvider:            connectorHistoryProvider{adapter: turn.Adapter},
@@ -93,7 +86,18 @@ func (connectorRuntime *ConnectorRuntime) buildTaskLaunchRequest(turn Conversati
 		PersonAccess:               turn.PersonAccess,
 		AccessibleConversationIDs:  turn.AccessibleConversationIDs,
 		CheckpointSender:           checkpointSender,
-	}
+	}, turn)
+}
+
+func withTurnContinuation(request agentruntime.TaskLaunchRequest, turn ConversationTurn) agentruntime.TaskLaunchRequest {
+	request.IsApprovalContinuation = turn.IsApprovalContinuation
+	request.SettledCalls = turn.SettledCalls
+	request.IsRuntimeRestartResume = turn.IsBlockedContinuation
+	request.ExistingTaskRunID = existingGoalTaskRunIDFromTurn(turn)
+	request.ActiveGoal = activeGoalForLaunch(turn.ActiveGoal, turn.HasActiveGoal)
+	request.PriorTask = turn.PriorTask
+	request.PrecomputedTurnDecision = turnDecisionForTurn(turn)
+	return request
 }
 
 func eventIsThreadReply(event PlatformInboundEvent) bool {
