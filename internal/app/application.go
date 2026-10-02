@@ -129,6 +129,7 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 	components.services = newTaskServices(runtimeConfiguration, components.foundation.database, components.directory.companyProvider, logger)
 	components.kernel = newAgentKernel(runtimeConfiguration, agentHarnessFactory, components.services, components.directory.companyProvider, logger)
 	components.memory = newMemoryComponents(runtimeConfiguration, components.kernel, components.services, components.directory.identityService, logger)
+	useMemoryMergingPersonRepository(&components)
 	components.learningStore, components.startupError = openLearningStore(runtimeConfiguration.Terminal.WorkspaceRootPath)
 	learningCoordinator, learningError := newLearningCoordinator(runtimeConfiguration, components.learningStore, components.kernel.taskTierLanguageModels.Low, logger)
 	components.learningCoordinator = learningCoordinator
@@ -221,4 +222,16 @@ func firstNonEmptyString(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// useMemoryMergingPersonRepository hands the person repository the memory it
+// has to move when two records turn out to be the same person. It runs after
+// the memory components because they are what opens those files.
+func useMemoryMergingPersonRepository(components *applicationComponents) {
+	if components.foundation.database.SQL == nil || components.memory.stores == nil {
+		return
+	}
+	repository := postgres.NewPersonRepositoryMergingMemory(components.foundation.database, components.memory.stores)
+	components.services.repositories.person = repository
+	components.services.repositories.personReferenceCanonicalizer = repository
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -290,4 +291,81 @@ func (stores *Stores) storedScopes() ([]Scope, error) {
 		}
 	}
 	return scopes, nil
+}
+
+// MergePerson moves one person's memory into another's, for when two records
+// turn out to be the same person. The losing file is renamed when the survivor
+// has none, and its memories are adopted when both exist.
+//
+// Adopted memories arrive without their vectors, because a file does not hand
+// them back, so the maintenance pass reembeds them and until then they answer
+// on their wording.
+func (stores *Stores) MergePerson(ctx context.Context, fromPersonID string, toPersonID string) error {
+	if fromPersonID == "" || toPersonID == "" || fromPersonID == toPersonID {
+		return nil
+	}
+	fromPath, errorValue := stores.pathFor(PersonScope(fromPersonID))
+	if errorValue != nil {
+		return errorValue
+	}
+	if _, errorValue := os.Stat(fromPath); errors.Is(errorValue, os.ErrNotExist) {
+		return nil
+	}
+	toPath, errorValue := stores.pathFor(PersonScope(toPersonID))
+	if errorValue != nil {
+		return errorValue
+	}
+	stores.forget(PersonScope(fromPersonID))
+	if _, errorValue := os.Stat(toPath); errors.Is(errorValue, os.ErrNotExist) {
+		stores.forget(PersonScope(toPersonID))
+		return os.Rename(fromPath, toPath)
+	}
+	return stores.adoptEveryMemory(ctx, fromPersonID, toPersonID, fromPath)
+}
+
+func (stores *Stores) adoptEveryMemory(ctx context.Context, fromPersonID string, toPersonID string, fromPath string) error {
+	losing, errorValue := stores.Store(ctx, PersonScope(fromPersonID))
+	if errorValue != nil {
+		return errorValue
+	}
+	memories, errorValue := losing.Memories(ctx)
+	if errorValue != nil {
+		return errorValue
+	}
+	surviving, errorValue := stores.Store(ctx, PersonScope(toPersonID))
+	if errorValue != nil {
+		return errorValue
+	}
+	adopted := make([]bluememo.AdoptedMemory, 0, len(memories))
+	for _, memory := range memories {
+		adopted = append(adopted, bluememo.AdoptedMemory{Memory: memory})
+	}
+	if _, errorValue := surviving.Adopt(ctx, adopted); errorValue != nil {
+		return errorValue
+	}
+	stores.forget(PersonScope(fromPersonID))
+	return os.Remove(fromPath)
+}
+
+// forget drops a cached handle so the file underneath it can be moved.
+func (stores *Stores) forget(scope Scope) {
+	fileName, errorValue := scope.fileName()
+	if errorValue != nil {
+		return
+	}
+	stores.mutex.Lock()
+	defer stores.mutex.Unlock()
+	if store, isOpen := stores.open[fileName]; isOpen {
+		store.Close()
+		delete(stores.open, fileName)
+	}
+}
+
+// pathFor is where one scope's file lives, whether or not it exists yet.
+func (stores *Stores) pathFor(scope Scope) (string, error) {
+	fileName, errorValue := scope.fileName()
+	if errorValue != nil {
+		return "", errorValue
+	}
+	return filepath.Join(stores.directory, fileName), nil
 }

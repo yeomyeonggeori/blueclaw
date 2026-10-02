@@ -28,11 +28,6 @@ func (repository ConversationResetRepository) ResetMattermostDirectConversation(
 		   SELECT conversation_id FROM conversation
 		   WHERE platform = 'mattermost'
 		     AND (external_conversation_id = $1 OR external_conversation_id LIKE $2))`,
-		`UPDATE memory_fact SET forgotten_at = now(), forget_reason = 'conversation reset'
-		 WHERE forgotten_at IS NULL
-		   AND episode_id IN (
-		     SELECT episode_id FROM memory_episode
-		     WHERE conversation_id = $1 OR conversation_id LIKE $2)`,
 		`DELETE FROM conversation
 		 WHERE platform = 'mattermost'
 		   AND (external_conversation_id = $1 OR external_conversation_id LIKE $2)`,

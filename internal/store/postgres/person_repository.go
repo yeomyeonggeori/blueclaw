@@ -9,7 +9,15 @@ import (
 )
 
 type PersonRepository struct {
-	database Database
+	database     Database
+	memoryMerger PersonMemoryMerger
+}
+
+// PersonMemoryMerger moves a person's memory when two records turn out to be
+// the same person. Where that memory lives is not this repository's business,
+// so it is handed in.
+type PersonMemoryMerger interface {
+	MergePerson(ctx context.Context, fromPersonID string, toPersonID string) error
 }
 
 type canonicalPersonReferenceUpdate struct {
@@ -19,6 +27,12 @@ type canonicalPersonReferenceUpdate struct {
 
 func NewPersonRepository(database Database) PersonRepository {
 	return PersonRepository{database: database}
+}
+
+// NewPersonRepositoryMergingMemory is the repository a running host wants: a
+// merge moves the person's memory as well as the rows that name them.
+func NewPersonRepositoryMergingMemory(database Database, memoryMerger PersonMemoryMerger) PersonRepository {
+	return PersonRepository{database: database, memoryMerger: memoryMerger}
 }
 
 func (personRepository PersonRepository) UpsertPerson(personPolicy policy.PersonPolicy) error {
@@ -119,7 +133,10 @@ func (personRepository PersonRepository) canonicalizePersonReferences(legacyPers
 			return errorValue
 		}
 	}
-	return nil
+	if personRepository.memoryMerger == nil {
+		return nil
+	}
+	return personRepository.memoryMerger.MergePerson(context.Background(), legacyPersonID, personID)
 }
 
 func canonicalPersonReferenceUpdateStatements() []canonicalPersonReferenceUpdate {
@@ -134,10 +151,6 @@ func canonicalPersonReferenceUpdateStatements() []canonicalPersonReferenceUpdate
 		{tableName: "memory_record", statement: "UPDATE memory_record SET scope_person_id = $2 WHERE scope_person_id = $1"},
 		{tableName: "policy_revision", statement: "UPDATE policy_revision SET changed_by_person_id = $2 WHERE changed_by_person_id = $1"},
 		{tableName: "admin_audit_log", statement: "UPDATE admin_audit_log SET actor_person_id = $2 WHERE actor_person_id = $1"},
-		{tableName: "memory_episode", statement: "UPDATE memory_episode SET requester_person_id = $2 WHERE requester_person_id = $1"},
-		{tableName: "memory_fact", statement: "UPDATE memory_fact SET subject_person_id = $2 WHERE subject_person_id = $1"},
-		{tableName: "memory_fact", statement: "UPDATE memory_fact SET scope_id = $2 WHERE scope_type = 'private' AND scope_id = $1"},
-		{tableName: "memory_profile", statement: "UPDATE memory_profile SET person_id = $2 WHERE person_id = $1 AND NOT EXISTS (SELECT 1 FROM memory_profile existing WHERE existing.person_id = $2)"},
 	}
 }
 
