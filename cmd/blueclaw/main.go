@@ -14,11 +14,16 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/enrollment"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
+	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 )
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == mcpserver.StdioBridgeCommand {
 		runToolCatalogBridge()
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == memory.ReadCommand {
+		runMemoryRead()
 		return
 	}
 	home := enrollment.ResolveHome()
@@ -61,6 +66,12 @@ func runToolCatalogBridge() {
 		os.Getenv(mcpserver.CatalogTokenEnvironmentName),
 	)
 	if errorValue != nil {
+		log.Fatal(errorValue)
+	}
+}
+
+func runMemoryRead() {
+	if errorValue := memory.RunRead(context.Background(), os.Stdin, os.Stdout); errorValue != nil {
 		log.Fatal(errorValue)
 	}
 }

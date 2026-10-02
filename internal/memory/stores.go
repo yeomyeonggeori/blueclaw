@@ -304,14 +304,14 @@ func (stores *Stores) MergePerson(ctx context.Context, fromPersonID string, toPe
 	if fromPersonID == "" || toPersonID == "" || fromPersonID == toPersonID {
 		return nil
 	}
-	fromPath, errorValue := stores.pathFor(PersonScope(fromPersonID))
+	fromPath, errorValue := stores.Path(PersonScope(fromPersonID))
 	if errorValue != nil {
 		return errorValue
 	}
 	if _, errorValue := os.Stat(fromPath); errors.Is(errorValue, os.ErrNotExist) {
 		return nil
 	}
-	toPath, errorValue := stores.pathFor(PersonScope(toPersonID))
+	toPath, errorValue := stores.Path(PersonScope(toPersonID))
 	if errorValue != nil {
 		return errorValue
 	}
@@ -362,7 +362,7 @@ func (stores *Stores) forget(scope Scope) {
 }
 
 // pathFor is where one scope's file lives, whether or not it exists yet.
-func (stores *Stores) pathFor(scope Scope) (string, error) {
+func (stores *Stores) Path(scope Scope) (string, error) {
 	fileName, errorValue := scope.fileName()
 	if errorValue != nil {
 		return "", errorValue
