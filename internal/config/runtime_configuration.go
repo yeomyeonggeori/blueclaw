@@ -15,7 +15,6 @@ type RuntimeConfiguration struct {
 	Capabilities  CapabilityConfiguration     `json:"capabilities"`
 	AgentProfiles []AgentProfileConfiguration `json:"agentProfiles"`
 	LanguageModel LanguageModelConfiguration  `json:"languageModel"`
-	Guest         GuestConfiguration          `json:"guest"`
 	Database      DatabaseConfiguration       `json:"database"`
 	Memory        MemoryConfiguration         `json:"memory"`
 	Agent         AgentConfiguration          `json:"agent"`
@@ -27,11 +26,8 @@ type RuntimeConfiguration struct {
 
 type CapabilityConfiguration struct {
 	Endpoint              string                     `json:"endpoint"`
-	Transport             string                     `json:"transport"`
 	UnixSocketPath        string                     `json:"unixSocketPath"`
 	TimeoutSecond         int                        `json:"timeoutSecond"`
-	VSockCID              uint32                     `json:"vsockCID"`
-	VSockPort             uint32                     `json:"vsockPort"`
 	ProtocolVersion       string                     `json:"protocolVersion"`
 	AggregateProtocolHash string                     `json:"aggregateProtocolHash"`
 	ToolDescriptors       []CapabilityToolDescriptor `json:"toolDescriptors,omitempty"`
@@ -40,10 +36,7 @@ type CapabilityConfiguration struct {
 // IsConfigured reports whether a capability service is reachable. Without one
 // Blueclaw runs standalone and the capability protocol identity is meaningless.
 func (configuration CapabilityConfiguration) IsConfigured() bool {
-	if strings.TrimSpace(configuration.Endpoint) != "" || strings.TrimSpace(configuration.UnixSocketPath) != "" {
-		return true
-	}
-	return configuration.VSockCID > 0 && configuration.VSockPort > 0
+	return strings.TrimSpace(configuration.Endpoint) != "" || strings.TrimSpace(configuration.UnixSocketPath) != ""
 }
 
 type CapabilityToolDescriptor = capability.ToolDescriptor
@@ -135,44 +128,6 @@ type LanguageModelCapabilityConfiguration struct {
 	XLowModel     string `json:"xlowModel"`
 	DecisionModel string `json:"decisionModel"`
 	ExecutionMode string `json:"executionMode"`
-}
-
-type GuestConfiguration struct {
-	VirtualMachineMonitor  string                            `json:"virtualMachineMonitor"`
-	CloudHypervisorPath    string                            `json:"cloudHypervisorPath"`
-	VfkitPath              string                            `json:"vfkitPath"`
-	VirtiofsdPath          string                            `json:"virtiofsdPath"`
-	DeliveryDirectoryPath  string                            `json:"deliveryDirectoryPath"`
-	KernelImagePath        string                            `json:"kernelImagePath"`
-	RootfsImagePath        string                            `json:"rootfsImagePath"`
-	WorkspaceImagePath     string                            `json:"workspaceImagePath"`
-	WorkspaceMinimumBytes  int64                             `json:"workspaceMinimumBytes"`
-	HostWorkspacePath      string                            `json:"hostWorkspacePath"`
-	VCPUCount              int                               `json:"vcpuCount"`
-	MemoryMiB              int                               `json:"memoryMiB"`
-	VSockCID               uint32                            `json:"vsockCID"`
-	HealthPortOrService    string                            `json:"healthPortOrService"`
-	GuestHTTPPortOrService string                            `json:"guestHTTPPortOrService"`
-	HostHTTPListenAddress  string                            `json:"hostHTTPListenAddress"`
-	LogDirectoryPath       string                            `json:"logDirectoryPath"`
-	RuntimeDirectoryPath   string                            `json:"runtimeDirectoryPath"`
-	OutboundNetwork        OutboundNetworkConfiguration      `json:"outboundNetwork"`
-	GuestListenerProxies   []GuestListenerProxyConfiguration `json:"guestListenerProxies"`
-}
-
-type OutboundNetworkConfiguration struct {
-	Enabled          bool   `json:"enabled"`
-	HostDeviceName   string `json:"hostDeviceName"`
-	GuestMACAddress  string `json:"guestMACAddress"`
-	NetworkCIDR      string `json:"networkCIDR"`
-	HostAddressCIDR  string `json:"hostAddressCIDR"`
-	GuestAddressCIDR string `json:"guestAddressCIDR"`
-	GuestGateway     string `json:"guestGateway"`
-}
-
-type GuestListenerProxyConfiguration struct {
-	GuestPort            uint32 `json:"guestPort"`
-	TargetUnixSocketPath string `json:"targetUnixSocketPath"`
 }
 
 type DatabaseConfiguration struct {

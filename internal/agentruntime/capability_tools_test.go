@@ -706,7 +706,7 @@ func capabilityReadTestCatalogBuilder(t *testing.T) *ToolCatalogBuilder {
 	}
 	terminalService := security.NewShellService(config.TerminalConfiguration{
 		WorkspaceRootPath: workspacePath,
-		Mode:              "virtualMachineGuest",
+		Mode:              "native",
 		TimeoutSecond:     30,
 	})
 	toolCatalogBuilder := NewToolCatalogBuilder()

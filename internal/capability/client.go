@@ -17,10 +17,7 @@ const DefaultSocketEndpoint = "http://capability"
 
 type Configuration struct {
 	Endpoint       string
-	Transport      string
 	UnixSocketPath string
-	VSockCID       uint32
-	VSockPort      uint32
 	Timeout        time.Duration
 }
 
@@ -53,13 +50,7 @@ func Dial(configuration Configuration) (string, *http.Client) {
 	}
 
 	unixSocketPath := strings.TrimSpace(configuration.UnixSocketPath)
-	if strings.TrimSpace(configuration.Transport) == "vsock" {
-		transport, errorValue := newVSockTransport(configuration.VSockCID, configuration.VSockPort)
-		httpClient.Transport = transportWithError(transport, errorValue)
-		if strings.TrimSpace(configuration.Endpoint) == "" {
-			endpoint = DefaultSocketEndpoint
-		}
-	} else if unixSocketPath != "" {
+	if unixSocketPath != "" {
 		httpClient.Transport = newUnixSocketTransport(unixSocketPath)
 		if strings.TrimSpace(configuration.Endpoint) == "" {
 			endpoint = DefaultSocketEndpoint

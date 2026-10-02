@@ -152,10 +152,7 @@ func newCapabilityClient(runtimeConfiguration config.RuntimeConfiguration) capab
 func capabilityConfiguration(runtimeConfiguration config.RuntimeConfiguration) capability.Configuration {
 	return capability.Configuration{
 		Endpoint:       runtimeConfiguration.Capabilities.Endpoint,
-		Transport:      runtimeConfiguration.Capabilities.Transport,
 		UnixSocketPath: runtimeConfiguration.Capabilities.UnixSocketPath,
-		VSockCID:       runtimeConfiguration.Capabilities.VSockCID,
-		VSockPort:      runtimeConfiguration.Capabilities.VSockPort,
 		Timeout:        time.Duration(runtimeConfiguration.Capabilities.TimeoutSecond) * time.Second,
 	}
 }

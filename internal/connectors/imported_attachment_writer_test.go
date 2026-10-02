@@ -17,7 +17,7 @@ func attachmentWriterForTest(t *testing.T, personID string) (importedAttachmentW
 	workspacePath := t.TempDir()
 	terminalService := security.NewShellService(config.TerminalConfiguration{
 		WorkspaceRootPath: workspacePath,
-		Mode:              "virtualMachineGuest",
+		Mode:              "native",
 		TimeoutSecond:     30,
 	})
 	writer := importedAttachmentWriter{

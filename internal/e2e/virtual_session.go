@@ -3842,7 +3842,7 @@ func allowedToolsOrDefault(allowedTools []string) []string {
 
 func terminalConfiguration(workspacePath string) config.TerminalConfiguration {
 	return config.TerminalConfiguration{
-		Mode:                  "virtualMachineGuest",
+		Mode:                  "native",
 		WorkspaceRootPath:     workspacePath,
 		TimeoutSecond:         120,
 		OutputMaxBytes:        32768,

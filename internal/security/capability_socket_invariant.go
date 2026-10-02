@@ -32,7 +32,7 @@ func VerifyCapabilitySocketInvariant(socketPath string, resolveSocketGroup Capab
 	if trimmedSocketPath == "" {
 		return CapabilitySocketInvariantResult{
 			Skipped:    true,
-			SkipReason: "capabilities.unixSocketPath is not configured (vsock or HTTP transport in use)",
+			SkipReason: "capabilities.unixSocketPath is not configured (HTTP transport in use)",
 		}, nil
 	}
 

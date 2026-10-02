@@ -16,41 +16,17 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/bluecollarharness"
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/e2e"
-	"github.com/yeomyeonggeori/blueclaw/internal/lab"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
 )
 
-type PrintingCommandRunner struct{}
-
-func (printingCommandRunner PrintingCommandRunner) Run(ctx context.Context, executableCommand lab.ExecutableCommand) error {
-	_ = ctx
-	printExecutableCommand(executableCommand)
-	return nil
-}
-
-func (printingCommandRunner PrintingCommandRunner) Start(ctx context.Context, executableCommand lab.ExecutableCommand) error {
-	_ = ctx
-	printExecutableCommand(executableCommand)
-	return nil
-}
-
-func (printingCommandRunner PrintingCommandRunner) Output(ctx context.Context, executableCommand lab.ExecutableCommand) (string, error) {
-	_ = ctx
-	printExecutableCommand(executableCommand)
-	return "127.0.0.1", nil
-}
-
 func init() {
 	e2e.UseAgentHarnessFactory(bluecollarharness.New)
 }
 
 func main() {
-	configurationPath := flag.String("configuration", "config/lab.example.json", "lab configuration path")
-	mode := flag.String("mode", "", "lab mode override")
-	dryRun := flag.Bool("dry-run", false, "print commands without executing them")
 	virtualScenarioName := flag.String("scenario", "presentation", "virtual session scenario name")
 	virtualArtifactDirectoryPath := flag.String("artifact-dir", ".artifacts/blueclaw-e2e", "virtual session artifact directory")
 	flag.Parse()
@@ -59,59 +35,27 @@ func main() {
 		log.Fatal("lab command is required")
 	}
 
-	configuration, errorValue := lab.LoadConfiguration(*configurationPath)
-	if errorValue != nil {
-		log.Fatal(errorValue)
-	}
-	if *mode != "" {
-		configuration.Host.Mode = *mode
-	}
-
-	commandRunner := lab.CommandRunner(lab.OperatingSystemCommandRunner{})
-	if *dryRun {
-		commandRunner = PrintingCommandRunner{}
-	}
-
-	repositoryRootPath, errorValue := os.Getwd()
-	if errorValue != nil {
-		log.Fatal(errorValue)
-	}
-
-	service := lab.NewService(configuration, commandRunner, repositoryRootPath)
-	ctx := context.Background()
-
 	commandName := flag.Arg(0)
-	switch commandName {
-	case "image-build":
-		errorValue = service.ImageBuild(ctx)
-	case "vm-up":
-		errorValue = service.VirtualMachineUp(ctx)
-	case "vm-down":
-		errorValue = service.VirtualMachineDown(ctx)
-	case "vm-ssh":
-		errorValue = service.VirtualMachineSSH(ctx, flag.Args()[1:])
-	case "scenario-mattermost":
-		errorValue = service.ScenarioMattermost(ctx)
-	case "scenario-slack":
-		errorValue = service.ScenarioSlack(ctx)
-	case "virtual-session":
-		virtualSessionArguments, parseError := parseVirtualSessionArguments(flag.Args()[1:], *virtualScenarioName, *virtualArtifactDirectoryPath)
-		switch {
-		case parseError != nil:
-			errorValue = parseError
-		case virtualSessionArguments.ListScenarios:
-			for _, name := range e2e.BuiltinScenarioNames() {
-				fmt.Println(name)
-			}
-		default:
-			errorValue = runVirtualSession(ctx, virtualSessionArguments)
-		}
-	default:
-		errorValue = fmt.Errorf("unsupported lab command: %s", commandName)
+	if commandName != "virtual-session" {
+		log.Fatalf("unsupported lab command: %s", commandName)
 	}
-	if errorValue != nil {
+	if errorValue := runVirtualSessionCommand(context.Background(), flag.Args()[1:], *virtualScenarioName, *virtualArtifactDirectoryPath); errorValue != nil {
 		log.Fatal(errorValue)
 	}
+}
+
+func runVirtualSessionCommand(ctx context.Context, arguments []string, defaultScenarioName string, defaultArtifactDirectoryPath string) error {
+	virtualSessionArguments, errorValue := parseVirtualSessionArguments(arguments, defaultScenarioName, defaultArtifactDirectoryPath)
+	if errorValue != nil {
+		return errorValue
+	}
+	if virtualSessionArguments.ListScenarios {
+		for _, name := range e2e.BuiltinScenarioNames() {
+			fmt.Println(name)
+		}
+		return nil
+	}
+	return runVirtualSession(ctx, virtualSessionArguments)
 }
 
 // The tools these scenarios drive belong to a product, which offers its catalog
@@ -815,14 +759,4 @@ func firstNonEmptyString(values ...string) string {
 		}
 	}
 	return ""
-}
-
-func printExecutableCommand(executableCommand lab.ExecutableCommand) {
-	parts := []string{executableCommand.ExecutableName}
-	parts = append(parts, executableCommand.Arguments...)
-	if executableCommand.StandardInputPath != "" {
-		parts = append(parts, "<", executableCommand.StandardInputPath)
-	}
-
-	fmt.Println(strings.Join(parts, " "))
 }
