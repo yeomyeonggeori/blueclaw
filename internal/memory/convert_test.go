@@ -2,6 +2,7 @@ package memory_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -131,7 +132,7 @@ func TestConvertCarriesTheSentenceAndRunsTwiceWithoutDuplicating(t *testing.T) {
 	fact.EmbeddingModel = "the retired model"
 	facts := []memory.LegacyFact{fact}
 
-	report, errorValue := stores.Convert(ctx, facts, conversionProjection())
+	report, errorValue := stores.Convert(ctx, facts, conversionProjection(), len(fact.Embedding))
 	if errorValue != nil {
 		t.Fatalf("convert: %v", errorValue)
 	}
@@ -150,7 +151,7 @@ func TestConvertCarriesTheSentenceAndRunsTwiceWithoutDuplicating(t *testing.T) {
 		t.Errorf("origin = %q, want the fact it came from", carried[0].OriginID)
 	}
 
-	again, errorValue := stores.Convert(ctx, facts, conversionProjection())
+	again, errorValue := stores.Convert(ctx, facts, conversionProjection(), len(fact.Embedding))
 	if errorValue != nil {
 		t.Fatalf("second convert: %v", errorValue)
 	}
@@ -169,4 +170,26 @@ func sameScopes(left []memory.Scope, right []memory.Scope) bool {
 		}
 	}
 	return true
+}
+
+func TestConvertRefusesACarriedVectorOfTheWrongWidthBeforeWritingAnything(t *testing.T) {
+	stores := memorytest.Open(t)
+	ctx := context.Background()
+	narrow := legacyFact("fact-1", "이샘플 prefers the morning slot.")
+	narrow.Embedding = []float32{0.1, 0.2, 0.3}
+	narrow.EmbeddingModel = "the retired model"
+	wide := legacyFact("fact-2", "박예시 keeps the quarterly ledger.")
+	wide.Embedding = []float32{0.1, 0.2, 0.3, 0.4}
+	wide.EmbeddingModel = "the retired model"
+
+	_, errorValue := stores.Convert(ctx, []memory.LegacyFact{narrow, wide}, conversionProjection(), 3)
+
+	if !errors.Is(errorValue, memory.ErrCarriedEmbeddingWidth) {
+		t.Fatalf("error = %v, want ErrCarriedEmbeddingWidth", errorValue)
+	}
+	// The narrow one would have been written first and taught a fresh file
+	// that three is the width of that model.
+	if held := memorytest.Count(t, stores, memory.PersonScope("person-1")); held != 0 {
+		t.Fatalf("holds %d memories, want none written", held)
+	}
 }

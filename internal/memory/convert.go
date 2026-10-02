@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -39,6 +40,12 @@ type Placement struct {
 	Boundary     string
 }
 
+// ErrCarriedEmbeddingWidth reports a carried vector that is not the width the
+// store should hold. A fresh file takes the first width it is given as the one
+// for that model, so one wrong vector arriving first would make every correct
+// one after it the mismatch.
+var ErrCarriedEmbeddingWidth = errors.New("a carried embedding is not the width the store expects")
+
 // ConversionReport counts what a conversion wrote.
 type ConversionReport struct {
 	Facts       int `json:"facts"`
@@ -65,7 +72,10 @@ func PlanConversion(facts []LegacyFact, projection policy.PolicyProjection) []Pl
 // Convert writes the planned memories, carrying each sentence and its
 // embedding as they are. It is idempotent, so a conversion interrupted
 // halfway finishes by running again.
-func (stores *Stores) Convert(ctx context.Context, facts []LegacyFact, projection policy.PolicyProjection) (ConversionReport, error) {
+func (stores *Stores) Convert(ctx context.Context, facts []LegacyFact, projection policy.PolicyProjection, expectedEmbeddingWidth int) (ConversionReport, error) {
+	if errorValue := refuseUnexpectedEmbeddingWidth(facts, expectedEmbeddingWidth); errorValue != nil {
+		return ConversionReport{}, errorValue
+	}
 	factByID := map[string]LegacyFact{}
 	for _, fact := range facts {
 		factByID[fact.FactID] = fact
@@ -89,6 +99,22 @@ func (stores *Stores) Convert(ctx context.Context, facts []LegacyFact, projectio
 		report.Facts++
 	}
 	return report, nil
+}
+
+// refuseUnexpectedEmbeddingWidth checks every vector before the first write,
+// so a conversion that cannot carry the index does not carry half of it.
+func refuseUnexpectedEmbeddingWidth(facts []LegacyFact, expectedEmbeddingWidth int) error {
+	if expectedEmbeddingWidth <= 0 {
+		return nil
+	}
+	for _, fact := range facts {
+		if len(fact.Embedding) == 0 || len(fact.Embedding) == expectedEmbeddingWidth {
+			continue
+		}
+		return fmt.Errorf("%w: %s carries %d from %s, and the store holds %d",
+			ErrCarriedEmbeddingWidth, fact.FactID, len(fact.Embedding), fact.EmbeddingModel, expectedEmbeddingWidth)
+	}
+	return nil
 }
 
 // adoptedFromLegacy derives the memory identifier from the fact and its

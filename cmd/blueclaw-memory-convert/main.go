@@ -24,16 +24,17 @@ func main() {
 	connectionString := flag.String("postgres", os.Getenv("BLUECLAW_POSTGRES_URL"), "the database the retired memory lives in")
 	memoryDirectory := flag.String("memory-directory", "", "where the per-subject files go")
 	embeddingModel := flag.String("embedding-model", "", "the model the carried embeddings were made with, when it differs from the facts' own")
+	embeddingWidth := flag.Int("embedding-width", 1024, "the width the store should hold; a carried vector of any other width is refused before the first write")
 	apply := flag.Bool("apply", false, "write the memories, rather than only printing where they would go")
 	flag.Parse()
 
-	if errorValue := run(context.Background(), *connectionString, *memoryDirectory, *embeddingModel, *apply); errorValue != nil {
+	if errorValue := run(context.Background(), *connectionString, *memoryDirectory, *embeddingModel, *embeddingWidth, *apply); errorValue != nil {
 		fmt.Fprintf(os.Stderr, "blueclaw-memory-convert: %v\n", errorValue)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, connectionString string, memoryDirectory string, embeddingModel string, apply bool) error {
+func run(ctx context.Context, connectionString string, memoryDirectory string, embeddingModel string, expectedEmbeddingWidth int, apply bool) error {
 	database, errorValue := postgres.OpenDatabase(ctx, connectionString, 2)
 	if errorValue != nil {
 		return errorValue
@@ -68,7 +69,7 @@ func run(ctx context.Context, connectionString string, memoryDirectory string, e
 	}
 	stores := memory.NewStores(memoryDirectory, bluememo.Configuration{EmbeddingModel: embeddingModel})
 	defer stores.Close()
-	report, errorValue := stores.Convert(ctx, facts, roster)
+	report, errorValue := stores.Convert(ctx, facts, roster, expectedEmbeddingWidth)
 	if errorValue != nil {
 		return errorValue
 	}
