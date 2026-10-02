@@ -185,6 +185,7 @@ type DatabaseConfiguration struct {
 type MemoryConfiguration struct {
 	AdminAssertionKeyPath  string `json:"adminAssertionKeyPath"`
 	EmbeddingModel         string `json:"embeddingModel"`
+	EmbeddingDimensions    int    `json:"embeddingDimensions"`
 	EmbeddingExecutionMode string `json:"embeddingExecutionMode"`
 	ExtractionDisabled     bool   `json:"extractionDisabled"`
 }
