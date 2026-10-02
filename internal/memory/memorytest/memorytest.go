@@ -122,6 +122,12 @@ func (EchoModel) GenerateStructured(_ context.Context, request bluememo.Structur
 // something wrote none of its own.
 func Count(t *testing.T, stores *memory.Stores, scope memory.Scope) int {
 	t.Helper()
+	return len(Memories(t, stores, scope))
+}
+
+// Memories is everything one file holds, in the order the store lists it.
+func Memories(t *testing.T, stores *memory.Stores, scope memory.Scope) []bluememo.Memory {
+	t.Helper()
 	store, errorValue := stores.Store(context.Background(), scope)
 	if errorValue != nil {
 		t.Fatalf("open %s: %v", scope.Kind, errorValue)
@@ -130,7 +136,7 @@ func Count(t *testing.T, stores *memory.Stores, scope memory.Scope) int {
 	if errorValue != nil {
 		t.Fatalf("list %s: %v", scope.Kind, errorValue)
 	}
-	return len(memories)
+	return memories
 }
 
 // Recall is what a reader is shown for a query, across the files their access
