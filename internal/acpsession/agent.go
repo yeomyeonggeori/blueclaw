@@ -210,7 +210,11 @@ func (agent *Agent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.
 		return acp.PromptResponse{}, errPromptCarriesNothingToAnswer
 	}
 	messageContext := MessageContextFromMeta(request.Meta)
-	launchRequest, decided, reason := agent.decideOnce(ctx, session, messageContext, agent.taskLaunchRequestFor(session, request.SessionId, prompt, messageContext))
+	launchRequest := agent.taskLaunchRequestFor(session, request.SessionId, prompt, messageContext)
+	sessionTurn := agent.sessionTurns.OpenSessionTurn(ctx, inboundEventOf(messageContext, launchRequest), launchRequest.RequesterPersonID, agent.replySenderFor(request.SessionId))
+	defer sessionTurn.EndProgress()
+	sessionTurn.ShowProgressBeforeAddressing(ctx)
+	launchRequest, decided, reason := agent.decideOnce(ctx, session, messageContext, launchRequest)
 	if reason != "" {
 		agent.logger.Info("acpsession.prompt.ignored",
 			"sessionID", string(request.SessionId),
@@ -219,7 +223,7 @@ func (agent *Agent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.
 		)
 		return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, nil
 	}
-	sessionTurn := agent.sessionTurns.OpenSessionTurn(ctx, inboundEventOf(messageContext, launchRequest), launchRequest.RequesterPersonID, agent.replySenderFor(request.SessionId))
+	sessionTurn.ShowProgress(ctx)
 	launchRequest, isAnswered, errorValue := sessionTurn.ContinueOpenInteractions(ctx, launchRequest)
 	if errorValue != nil || isAnswered {
 		return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, errorValue

@@ -24,13 +24,12 @@ func (connectorRuntime *ConnectorRuntime) OpenSessionTurn(ctx context.Context, e
 	}
 	replyTarget, _ := connectorRuntime.buildReplyTarget(ctx, adapter, event)
 	return &SessionTurn{connectorRuntime: connectorRuntime, turn: &inboundTurn{
-		adapter:      adapter,
-		platform:     event.Platform,
-		event:        event,
-		replyTarget:  replyTarget,
-		sendReply:    sendReply,
-		personID:     personID,
-		stopProgress: func() {},
+		adapter:     adapter,
+		platform:    event.Platform,
+		event:       event,
+		replyTarget: replyTarget,
+		sendReply:   sendReply,
+		personID:    personID,
 	}}
 }
 
@@ -54,4 +53,22 @@ func (sessionTurn *SessionTurn) DeliverReply(ctx context.Context, turnResult age
 	connectorRuntime.recordHeldIntakeCalls(turnResult.TaskRun.TaskRunID, turn.event)
 	_, errorValue := connectorRuntime.dispatchTaskReply(ctx, turn.platform, turn.adapter, turn.event, turn.replyTarget, turnResult, turn.engagedAckEmojiName, turn.sendReply)
 	return errorValue
+}
+
+func (sessionTurn *SessionTurn) ShowProgressBeforeAddressing(ctx context.Context) {
+	if !shouldStartProgressBeforeAddressing(sessionTurn.turn.event) {
+		return
+	}
+	sessionTurn.ShowProgress(ctx)
+}
+
+func (sessionTurn *SessionTurn) ShowProgress(ctx context.Context) {
+	if sessionTurn.turn.adapter == nil {
+		return
+	}
+	sessionTurn.connectorRuntime.showTurnProgress(ctx, sessionTurn.turn)
+}
+
+func (sessionTurn *SessionTurn) EndProgress() {
+	sessionTurn.turn.endProgress()
 }

@@ -48,9 +48,19 @@ type inboundTurn struct {
 	isProgressStarted bool
 }
 
-func (turn *inboundTurn) startProgress(stopProgress func()) {
-	turn.stopProgress = stopProgress
+func (connectorRuntime *ConnectorRuntime) showTurnProgress(ctx context.Context, turn *inboundTurn) {
+	if turn.isProgressStarted {
+		return
+	}
+	turn.stopProgress = connectorRuntime.startProgressHeartbeat(ctx, turn.adapter, turn.replyTarget)
 	turn.isProgressStarted = true
+}
+
+func (turn *inboundTurn) endProgress() {
+	if !turn.isProgressStarted {
+		return
+	}
+	turn.stopProgress()
 }
 
 func (connectorRuntime *ConnectorRuntime) logInboundEventReceived(turn *inboundTurn) {
@@ -183,9 +193,7 @@ func (connectorRuntime *ConnectorRuntime) resolveTurnAddressing(ctx context.Cont
 }
 
 func (connectorRuntime *ConnectorRuntime) prepareTurnForLaunch(ctx context.Context, turn *inboundTurn) {
-	if !turn.isProgressStarted {
-		turn.startProgress(connectorRuntime.startProgressHeartbeat(ctx, turn.adapter, turn.replyTarget))
-	}
+	connectorRuntime.showTurnProgress(ctx, turn)
 	if ctx.Err() != nil {
 		return
 	}
