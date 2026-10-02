@@ -14,7 +14,7 @@ import (
 
 func TestReconcileMorningBriefingsPersistsLifecycleAndGuardsGenericMutations(t *testing.T) {
 	ctx := context.Background()
-	database, cleanup := morningBriefingIntegrationDatabase(t, ctx)
+	database, cleanup := isolatedIntegrationDatabase(t, ctx)
 	defer cleanup()
 	var errorValue error
 	repository := NewScheduleRepository(database)
@@ -138,7 +138,7 @@ VALUES ($1, '이샘플', 'member', 1, $2, $2)`, personID, now)
 	}
 }
 
-func morningBriefingIntegrationDatabase(t *testing.T, ctx context.Context) (Database, func()) {
+func isolatedIntegrationDatabase(t *testing.T, ctx context.Context) (Database, func()) {
 	t.Helper()
 	connectionString := os.Getenv("BLUECLAW_TEST_POSTGRES_URL")
 	if connectionString == "" {
@@ -155,7 +155,7 @@ func morningBriefingIntegrationDatabase(t *testing.T, ctx context.Context) (Data
 		t.Fatal(errorValue)
 	}
 	digest := sha256.Sum256([]byte(fmt.Sprintf("%s-%d", t.Name(), time.Now().UnixNano())))
-	databaseName := fmt.Sprintf("briefing_%x", digest[:6])
+	databaseName := fmt.Sprintf("isolated_%x", digest[:6])
 	if _, errorValue := adminDatabase.SQL.ExecContext(ctx, "CREATE DATABASE "+databaseName); errorValue != nil {
 		adminDatabase.Close()
 		t.Fatal(errorValue)

@@ -72,7 +72,7 @@ func newRuntimeFoundation(runtimeConfiguration config.RuntimeConfiguration, poli
 	}
 	logger.Info("application.initializing", "stage", "load_policy")
 	policyLoader := policy.PolicyLoader{}
-	policyDocument, _ := policyLoader.LoadPolicyDocument(policyPath)
+	policyDocument, policyLoadError := policyLoader.LoadPolicyDocument(policyPath)
 	logger.Info("application.initializing", "stage", "posix_synchronize")
 	posixSynchronizer := security.NewPOSIXSynchronizer(runtimeConfiguration.Terminal, policyPath)
 	if errorValue := posixSynchronizer.Synchronize(context.Background()); errorValue != nil && startupError == nil {
@@ -83,8 +83,8 @@ func newRuntimeFoundation(runtimeConfiguration config.RuntimeConfiguration, poli
 		startupError = errorValue
 	}
 	logger.Info("application.initializing", "stage", "project_policy")
-	if database.SQL != nil {
-		if errorValue := postgres.NewPersonRepository(database).UpsertPeople(policyDocument); errorValue != nil && startupError == nil {
+	if database.SQL != nil && policyLoadError == nil {
+		if errorValue := postgres.NewPersonRepository(database).ReplacePeople(policyDocument); errorValue != nil && startupError == nil {
 			startupError = fmt.Errorf("project the policy's people into the database: %w", errorValue)
 		}
 	}
