@@ -15,29 +15,38 @@ import (
 )
 
 type MemoryHandler struct {
-	Store           *bluememo.Store
+	Stores          *memory.Stores
 	IdentityService *identity.IdentityService
 }
 
 type memoryFactListResponse struct {
-	PersonID       string           `json:"personID"`
-	EmbeddingModel string           `json:"embeddingModel"`
-	Profile        bluememo.Profile `json:"profile"`
-	Facts          []memoryFactView `json:"facts"`
+	PersonID string           `json:"personID"`
+	Index    memoryIndexView  `json:"index"`
+	Facts    []memoryFactView `json:"facts"`
+}
+
+type memoryIndexView struct {
+	EmbeddingModel string `json:"embeddingModel"`
+	Current        int    `json:"current"`
+	Stale          int    `json:"stale"`
 }
 
 type memoryFactView struct {
-	FactID             string    `json:"factID"`
-	EpisodeID          string    `json:"episodeID"`
-	OwnerPersonID      string    `json:"ownerPersonID"`
-	CircleIDs          []string  `json:"circleIDs"`
-	Kind               string    `json:"kind"`
-	Content            string    `json:"content"`
-	ValidFrom          time.Time `json:"validFrom"`
-	ValidUntil         time.Time `json:"validUntil,omitzero"`
-	ReinforcementCount int       `json:"reinforcementCount"`
-	LastRecalledAt     time.Time `json:"lastRecalledAt,omitzero"`
-	TriggerPhrases     []string  `json:"triggerPhrases"`
+	FactID          string    `json:"factID"`
+	OriginID        string    `json:"originID"`
+	ScopeType       string    `json:"scopeType"`
+	ScopeID         string    `json:"scopeID,omitempty"`
+	IsStatic        bool      `json:"isStatic"`
+	Content         string    `json:"content"`
+	OccurredAt      time.Time `json:"occurredAt,omitzero"`
+	OccurredUntil   time.Time `json:"occurredUntil,omitzero"`
+	ValidUntil      time.Time `json:"validUntil,omitzero"`
+	Importance      int       `json:"importance"`
+	StorageStrength float64   `json:"storageStrength"`
+	CreatedAt       time.Time `json:"createdAt"`
+	LastRecalledAt  time.Time `json:"lastRecalledAt,omitzero"`
+	ColdSince       time.Time `json:"coldSince,omitzero"`
+	TriggerPhrases  []string  `json:"triggerPhrases"`
 }
 
 type memoryForgetRequest struct {
@@ -61,17 +70,65 @@ func (handler MemoryHandler) HandleListFacts(responseWriter http.ResponseWriter,
 		return
 	}
 	limit, _ := strconv.Atoi(request.URL.Query().Get("limit"))
-	profile, facts, errorValue := handler.Store.ListReadable(request.Context(), handler.reader(personID), limit)
+	views, index, errorValue := handler.readableFacts(request.Context(), personID, limit)
 	if errorValue != nil {
 		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(responseWriter, http.StatusOK, memoryFactListResponse{
-		PersonID:       personID,
-		EmbeddingModel: handler.Store.EmbeddingModel,
-		Profile:        profile,
-		Facts:          memoryFactViews(facts, handler.triggerPhrases(request.Context(), facts)),
-	})
+	writeJSON(responseWriter, http.StatusOK, memoryFactListResponse{PersonID: personID, Index: index, Facts: views})
+}
+
+func (handler MemoryHandler) readableFacts(ctx context.Context, personID string, limit int) ([]memoryFactView, memoryIndexView, error) {
+	views := []memoryFactView{}
+	index := memoryIndexView{}
+	for _, scope := range handler.scopes(personID) {
+		store, errorValue := handler.Stores.Store(ctx, scope)
+		if errorValue != nil {
+			return nil, index, errorValue
+		}
+		memories, errorValue := store.Memories(ctx)
+		if errorValue != nil {
+			return nil, index, errorValue
+		}
+		indexState, errorValue := store.IndexState(ctx)
+		if errorValue != nil {
+			return nil, index, errorValue
+		}
+		index.EmbeddingModel = indexState.EmbeddingModel
+		index.Current += indexState.Current
+		index.Stale += indexState.Stale
+		for _, held := range memories {
+			if limit > 0 && len(views) >= limit {
+				return views, index, nil
+			}
+			views = append(views, handler.factView(ctx, store, held, scope))
+		}
+	}
+	return views, index, nil
+}
+
+func (handler MemoryHandler) factView(ctx context.Context, store *bluememo.Store, held bluememo.Memory, scope memory.Scope) memoryFactView {
+	phrases, errorValue := store.TriggerPhrases(ctx, held.MemoryID)
+	if errorValue != nil {
+		phrases = nil
+	}
+	return memoryFactView{
+		FactID:          held.MemoryID,
+		OriginID:        held.OriginID,
+		ScopeType:       scope.Kind,
+		ScopeID:         scope.ID,
+		IsStatic:        held.IsStatic,
+		Content:         held.Content,
+		OccurredAt:      held.OccurredAt,
+		OccurredUntil:   held.OccurredUntil,
+		ValidUntil:      held.ValidUntil,
+		Importance:      held.Importance,
+		StorageStrength: held.StorageStrength,
+		CreatedAt:       held.CreatedAt,
+		LastRecalledAt:  held.LastRecalledAt,
+		ColdSince:       held.ColdSince,
+		TriggerPhrases:  nonNilStrings(phrases),
+	}
 }
 
 func (handler MemoryHandler) HandleForgetFacts(responseWriter http.ResponseWriter, request *http.Request) {
@@ -89,7 +146,7 @@ func (handler MemoryHandler) HandleForgetFacts(responseWriter http.ResponseWrite
 		http.Error(responseWriter, "readerPersonID and factIDs are required", http.StatusBadRequest)
 		return
 	}
-	forgottenFactIDs, errorValue := handler.Store.Forget(request.Context(), handler.reader(personID), forgetRequest.FactIDs, strings.TrimSpace(forgetRequest.Reason))
+	forgottenFactIDs, errorValue := handler.Stores.ForgetAcross(request.Context(), handler.scopes(personID), forgetRequest.FactIDs, strings.TrimSpace(forgetRequest.Reason))
 	if errorValue != nil {
 		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
 		return
@@ -102,47 +159,11 @@ func (handler MemoryHandler) HandleForgetFacts(responseWriter http.ResponseWrite
 }
 
 func (handler MemoryHandler) isConfigured() bool {
-	return handler.Store != nil && handler.Store.Facts != nil && handler.IdentityService != nil
+	return handler.Stores != nil && handler.IdentityService != nil
 }
 
-func (handler MemoryHandler) reader(personID string) bluememo.Reader {
-	return memory.ReaderForAccess(handler.IdentityService.ResolvePersonAccess(personID), handler.IdentityService.ContainedCircles())
-}
-
-func (handler MemoryHandler) triggerPhrases(ctx context.Context, facts []bluememo.Fact) map[string][]string {
-	if handler.Store.Triggers == nil || len(facts) == 0 {
-		return nil
-	}
-	factIDs := make([]string, 0, len(facts))
-	for _, fact := range facts {
-		factIDs = append(factIDs, fact.FactID)
-	}
-	phrases, errorValue := handler.Store.Triggers.ListTriggerPhrases(ctx, factIDs)
-	if errorValue != nil {
-		handler.Store.Logger.WarnContext(ctx, "memory.trigger_phrases_unavailable", "error", errorValue.Error())
-		return nil
-	}
-	return phrases
-}
-
-func memoryFactViews(facts []bluememo.Fact, triggerPhrases map[string][]string) []memoryFactView {
-	views := make([]memoryFactView, 0, len(facts))
-	for _, fact := range facts {
-		views = append(views, memoryFactView{
-			FactID:             fact.FactID,
-			EpisodeID:          fact.EpisodeID,
-			OwnerPersonID:      fact.OwnerPersonID,
-			CircleIDs:          nonNilStrings(fact.CircleIDs),
-			Kind:               fact.Kind,
-			Content:            fact.Content,
-			ValidFrom:          fact.ValidFrom,
-			ValidUntil:         fact.ValidUntil,
-			ReinforcementCount: fact.ReinforcementCount,
-			LastRecalledAt:     fact.LastRecalledAt,
-			TriggerPhrases:     nonNilStrings(triggerPhrases[fact.FactID]),
-		})
-	}
-	return views
+func (handler MemoryHandler) scopes(personID string) []memory.Scope {
+	return memory.ScopesForAccess(handler.IdentityService.ResolvePersonAccess(personID), handler.IdentityService.ContainedCircles())
 }
 
 func nonNilStrings(values []string) []string {

@@ -16,6 +16,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/harnessdriver"
 	"github.com/yeomyeonggeori/blueclaw/internal/httpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/learning"
+	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/protocolidentity"
 	runtimelogging "github.com/yeomyeonggeori/blueclaw/internal/runtime"
 	"github.com/yeomyeonggeori/blueclaw/internal/runtimecontrol"
@@ -24,7 +25,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/store/postgres"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/intake"
-	"github.com/yeomyeonggeori/bluememo"
 )
 
 const databaseInitializationTimeout = 240 * time.Second
@@ -47,14 +47,13 @@ type Application struct {
 	interruptedTaskResumeCancel context.CancelFunc
 	scheduleCancel              context.CancelFunc
 	logRetentionCancel          context.CancelFunc
-	memoryJobWorkerCancel       context.CancelFunc
+	memoryMaintenanceCancel     context.CancelFunc
 	learningCancel              context.CancelFunc
 	taskRetentionCancel         context.CancelFunc
 	staleTaskCancel             context.CancelFunc
 	schedulePoller              *scheduler.SchedulePoller
 	taskRetentionSweeper        *scheduler.TaskRetentionSweeper
-	memoryJobWorker             *bluememo.JobWorker
-	memoryStore                 *bluememo.Store
+	memoryStores                *memory.Stores
 	learningCoordinator         *learning.Coordinator
 	schedulePollSecond          int
 	taskRetentionIntervalMinute int
@@ -129,7 +128,7 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 	components.directory = newIdentityDirectory(components.foundation.database, components.foundation.policyDocument, logger)
 	components.services = newTaskServices(runtimeConfiguration, components.foundation.database, components.directory.companyProvider, logger)
 	components.kernel = newAgentKernel(runtimeConfiguration, agentHarnessFactory, components.services, components.directory.companyProvider, logger)
-	components.memory = newMemoryComponents(runtimeConfiguration, components.foundation.database, components.kernel, components.services, components.directory.identityService, logger)
+	components.memory = newMemoryComponents(runtimeConfiguration, components.kernel, components.services, components.directory.identityService, logger)
 	components.learningStore, components.startupError = openLearningStore(runtimeConfiguration.Terminal.WorkspaceRootPath)
 	learningCoordinator, learningError := newLearningCoordinator(runtimeConfiguration, components.learningStore, components.kernel.taskTierLanguageModels.Low, logger)
 	components.learningCoordinator = learningCoordinator
@@ -191,8 +190,7 @@ func newApplication(components applicationComponents) *Application {
 		startupError:                components.startupError,
 		schedulePoller:              components.schedulePoller,
 		taskRetentionSweeper:        components.taskRetentionSweeper,
-		memoryJobWorker:             components.memory.jobWorker,
-		memoryStore:                 components.memory.store,
+		memoryStores:                components.memory.stores,
 		learningCoordinator:         components.learningCoordinator,
 		schedulePollSecond:          components.runtimeConfiguration.Scheduler.SchedulePollIntervalSecond,
 		taskRetentionIntervalMinute: components.runtimeConfiguration.Scheduler.RetentionCheckIntervalMinute,

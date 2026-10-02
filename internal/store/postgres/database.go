@@ -11,7 +11,6 @@ import (
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
-	bluememopostgres "github.com/yeomyeonggeori/bluememo/postgres"
 )
 
 type Database struct {
@@ -95,10 +94,7 @@ func (migrationRunner MigrationRunner) ApplyMigrations(ctx context.Context, data
 	if errorValue := migrationRunner.applyHostMigrations(ctx, database); errorValue != nil {
 		return errorValue
 	}
-	if errorValue := bluememopostgres.ApplyMigrations(ctx, database.SQL); errorValue != nil {
-		return fmt.Errorf("apply memory library migrations: %w", errorValue)
-	}
-	return migrationRunner.ensureMemoryEmbeddings(ctx, database)
+	return nil
 }
 
 func (migrationRunner MigrationRunner) applyHostMigrations(ctx context.Context, database Database) error {
@@ -192,7 +188,6 @@ SELECT
   AND to_regclass('public.raw_event') IS NOT NULL
   AND to_regclass('public.connector_outbox') IS NOT NULL
   AND to_regclass('public.task_attempt') IS NOT NULL
-  AND to_regclass('public.memory_fact') IS NOT NULL
   AND to_regclass('public.schedule') IS NOT NULL
   AND to_regclass('public.graphiti_episode') IS NULL`)
 	var hasCurrentSchema bool

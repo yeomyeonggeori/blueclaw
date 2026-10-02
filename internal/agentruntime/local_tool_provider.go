@@ -69,9 +69,9 @@ var localToolDescriptorSpecs = []localToolDescriptorSpec{
 		ResultContract: &toolcontract.ToolResultContract{
 			Schema: memoryRememberOutputSchema,
 			Effects: []toolcontract.ResourceEffectContract{{
-				ObjectType:     "memory_episode",
+				ObjectType:     "memory_note",
 				Effect:         "recorded",
-				ResultField:    "episodeID",
+				ResultField:    "groupID",
 				EffectIdentity: "id",
 			}},
 			EvidenceCondition: &toolcontract.EvidenceCondition{

@@ -96,7 +96,6 @@ func (connectorRuntime *ConnectorRuntime) buildTaskLaunchRequest(turn Conversati
 		HistoryProvider:            connectorHistoryProvider{adapter: turn.Adapter},
 		AttachmentMaterialResolver: attachmentMaterialResolver,
 		PersonAccess:               turn.PersonAccess,
-		MemoryLabel:                connectorRuntime.memoryLabel(turn.PersonAccess, event),
 		AccessibleConversationIDs:  turn.AccessibleConversationIDs,
 		CheckpointSender:           checkpointSender,
 	}

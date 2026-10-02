@@ -13,8 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/memory"
+	"github.com/yeomyeonggeori/blueclaw/internal/memory/memorytest"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-	"github.com/yeomyeonggeori/bluememo"
 
 	"github.com/yeomyeonggeori/blueclaw/agenttest"
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
@@ -1962,10 +1963,9 @@ func TestConnectorRuntimeStartsDirectProgressBeforeInitialHistoryFetch(t *testin
 func TestConnectorRuntimeKeepsPinnedMemoryOutOfGreetingContext(t *testing.T) {
 	languageModel := &recordingLanguageModel{reply: "기억했습니다"}
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
-	memoryRepository := bluememo.NewInMemoryRepository()
-	saveConnectorProfile(t, memoryRepository, "person-1", "사용자는 fact 저장소 메모리 설계를 선택했다.")
+	stores := seedConnectorMemory(t, "person-1", "사용자는 fact 저장소 메모리 설계를 선택했다.")
 	toolCatalogBuilder := agentruntime.NewToolCatalogBuilder()
-	toolCatalogBuilder.UseMemoryStore(&bluememo.Store{Facts: memoryRepository, Profiles: memoryRepository, Jobs: memoryRepository}, nil, nil)
+	toolCatalogBuilder.UseMemoryStores(stores, nil)
 	connectorRuntime.UseTaskLauncher(connectorRuntime.routedTaskLauncherForTest(toolCatalogBuilder))
 
 	_, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, testInboundEvent("message-1"))
@@ -1992,10 +1992,9 @@ func TestConnectorRuntimeInjectsVisibleContextBeforeMemory(t *testing.T) {
 		HasMoreBefore: true,
 		HistoryCursor: "cursor-1",
 	}
-	memoryRepository := bluememo.NewInMemoryRepository()
-	saveConnectorProfile(t, memoryRepository, "person-1", "사용자는 간결한 설계를 선호한다.")
+	stores := seedConnectorMemory(t, "person-1", "사용자는 간결한 설계를 선호한다.")
 	toolCatalogBuilder := agentruntime.NewToolCatalogBuilder()
-	toolCatalogBuilder.UseMemoryStore(&bluememo.Store{Facts: memoryRepository, Profiles: memoryRepository, Jobs: memoryRepository}, nil, nil)
+	toolCatalogBuilder.UseMemoryStores(stores, nil)
 	connectorRuntime.UseTaskLauncher(connectorRuntime.routedTaskLauncherForTest(toolCatalogBuilder))
 
 	_, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, event)
@@ -3453,9 +3452,9 @@ func TestConnectorProgressHeartbeatIntervalMaintainsTypingIndicator(t *testing.T
 func TestConnectorRuntimeInjectsRecalledFactsAtLaunchAndNeverWritesMemoryItself(t *testing.T) {
 	languageModel := &recordingLanguageModel{reply: "ok"}
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
-	memoryRepository := seedConnectorMemory(t, "person-1", "사용자의 이름은 민수다.")
+	stores := seedConnectorMemory(t, "person-1", "사용자의 이름은 민수다.")
 	toolCatalogBuilder := agentruntime.NewToolCatalogBuilder()
-	toolCatalogBuilder.UseMemoryStore(&bluememo.Store{Facts: memoryRepository, Profiles: memoryRepository, Jobs: memoryRepository}, nil, nil)
+	toolCatalogBuilder.UseMemoryStores(stores, nil)
 	connectorRuntime.UseTaskLauncher(connectorRuntime.routedTaskLauncherForTest(toolCatalogBuilder))
 
 	channelEvent := testInboundEvent("message-1")
@@ -3470,8 +3469,8 @@ func TestConnectorRuntimeInjectsRecalledFactsAtLaunchAndNeverWritesMemoryItself(
 	if _, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, directEvent); errorValue != nil {
 		t.Fatalf("expected direct memory recall event to process: %v", errorValue)
 	}
-	if len(memoryRepository.AllFacts()) != 1 {
-		t.Fatalf("expected the connector to write no memory of its own, got %d facts", len(memoryRepository.AllFacts()))
+	if held := memorytest.Count(t, stores, memory.PersonScope("person-1")); held != 1 {
+		t.Fatalf("expected the connector to write no memory of its own, got %d memories", held)
 	}
 	if !structuredMessagesContain(languageModel.request.Messages, "민수") {
 		t.Fatalf("expected launch-time recall to surface the stored fact, got %+v", languageModel.request.Messages)
@@ -3479,44 +3478,19 @@ func TestConnectorRuntimeInjectsRecalledFactsAtLaunchAndNeverWritesMemoryItself(
 }
 
 func TestConnectorRuntimeDoesNotShareUserMemoryWithOtherPerson(t *testing.T) {
-	memoryRepository := seedConnectorMemory(t, "person-1", "사용자의 이름은 민수다.")
-	hits, errorValue := memoryRepository.SearchFacts(context.Background(), bluememo.FactSearchQuery{
-		Reader:        bluememo.NewReader("person-2", nil, nil, 100, []string{"internal"}),
-		Text:          "이름",
-		ReferenceTime: time.Now().UTC(),
-	})
-	if errorValue != nil {
-		t.Fatalf("expected memory search to succeed: %v", errorValue)
-	}
+	stores := seedConnectorMemory(t, "person-1", "사용자의 이름은 민수다.")
+	otherPersonScopes := memory.ScopesForAccess(policy.PersonAccess{PersonID: "person-2"}, nil)
+	hits := memorytest.Recall(t, stores, otherPersonScopes, "이름")
 	if len(hits) != 0 {
-		t.Fatalf("expected person-2 not to read person-1 private memory, got %d", len(hits))
+		t.Fatalf("expected person-2 never to open person-1's file, got %d", len(hits))
 	}
 }
 
-func seedConnectorMemory(t *testing.T, personID string, content string) *bluememo.InMemoryRepository {
+func seedConnectorMemory(t *testing.T, personID string, content string) *memory.Stores {
 	t.Helper()
-	memoryRepository := bluememo.NewInMemoryRepository()
-	now := time.Now().UTC()
-	episode := bluememo.Episode{EpisodeID: "episode-seed", SourceKind: bluememo.EpisodeSourceKindImport, SourceID: "seed", RequesterPersonID: personID, Content: "seed", OccurredAt: now}
-	fact := bluememo.Fact{FactID: "fact-seed", EpisodeID: "episode-seed", OwnerPersonID: personID, SubjectPersonID: personID, Kind: bluememo.FactKindIdentity, Content: content, ValidFrom: now}
-	if errorValue := memoryRepository.SaveEpisode(context.Background(), bluememo.EpisodeWrite{Episode: episode, Facts: []bluememo.FactWrite{{Fact: fact}}}); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	return memoryRepository
-}
-
-func saveConnectorProfile(t *testing.T, repository *bluememo.InMemoryRepository, personID string, identityLine string) {
-	t.Helper()
-	now := time.Now().UTC()
-	episode := bluememo.Episode{EpisodeID: bluememo.NewIdentifier(), SourceKind: bluememo.EpisodeSourceKindImport, SourceID: bluememo.NewIdentifier(), RequesterPersonID: personID, Content: identityLine, OccurredAt: now}
-	fact := bluememo.Fact{FactID: bluememo.NewIdentifier(), EpisodeID: episode.EpisodeID, OwnerPersonID: personID, SubjectPersonID: personID, Kind: bluememo.FactKindIdentity, Content: identityLine, ValidFrom: now}
-	if errorValue := repository.SaveEpisode(context.Background(), bluememo.EpisodeWrite{Episode: episode, Facts: []bluememo.FactWrite{{Fact: fact}}}); errorValue != nil {
-		t.Fatalf("expected memory source fact setup to succeed: %v", errorValue)
-	}
-	profile := bluememo.Profile{PersonID: personID, IdentityLines: []string{identityLine}, CurrentLines: []string{}, SourceFactIDs: []string{fact.FactID}, BuiltFromFactCount: 1, BuiltAt: now}
-	if errorValue := repository.SaveProfile(context.Background(), profile); errorValue != nil {
-		t.Fatalf("expected memory profile setup to succeed: %v", errorValue)
-	}
+	stores := memorytest.Open(t)
+	memorytest.Remember(t, stores, memory.PersonScope(personID), content)
+	return stores
 }
 
 func TestConnectorRuntimeRejectsMissingHistoryCursorWhenMoreContextExists(t *testing.T) {

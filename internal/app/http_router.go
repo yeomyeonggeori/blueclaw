@@ -47,7 +47,7 @@ func newRouterDependencies(components applicationComponents) httpserver.RouterDe
 		LLMCallExchange:       llmCallExchangeHandler(services.repositories.llmCall),
 		TurnInput:             turnInputHandler(services.repositories.taskEvent),
 		ConversationReset:     adminapi.ConversationResetHandler{Repository: services.repositories.conversationReset},
-		MemoryHandler:         adminapi.MemoryHandler{Store: components.memory.store, IdentityService: directory.identityService},
+		MemoryHandler:         adminapi.MemoryHandler{Stores: components.memory.stores, IdentityService: directory.identityService},
 		BackupHandler:         adminapi.BackupHandler{Coordinator: components.backupCoordinator},
 		TaskInboxHandler:      userapi.TaskInboxHandler{TaskRunService: services.taskRunService, TaskStepService: services.taskStepService, TaskAuthService: services.taskAuthService},
 		TaskActionHandler:     userapi.TaskActionHandler{TaskRunService: services.taskRunService, TaskAuthService: services.taskAuthService},

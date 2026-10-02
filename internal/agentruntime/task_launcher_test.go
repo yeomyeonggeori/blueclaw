@@ -11,10 +11,12 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"github.com/yeomyeonggeori/bluememo"
+
+	"github.com/yeomyeonggeori/blueclaw/internal/memory"
+	"github.com/yeomyeonggeori/blueclaw/internal/memory/memorytest"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/launchfailure"
@@ -33,17 +35,10 @@ func TestTaskLauncherCreatesAuditedAgentRun(t *testing.T) {
 	agentKernel := loop.NewAgentKernel(taskRunService, task.NewTaskStepService())
 	runtimeLanguageModel := staticRuntimeLanguageModel{content: runtimeFinishMessage("done")}
 	useRuntimeTestLanguageModel(agentKernel, runtimeFinishMessage("done"))
-	memoryRepository := bluememo.NewInMemoryRepository()
-	seed := bluememo.Episode{EpisodeID: "profile-source", SourceKind: bluememo.EpisodeSourceKindImport, SourceID: "profile-source", RequesterPersonID: "person-1", Content: "The reader likes slide presentations.", OccurredAt: time.Now().UTC()}
-	fact := bluememo.Fact{FactID: "profile-fact", EpisodeID: seed.EpisodeID, OwnerPersonID: "person-1", SubjectPersonID: "person-1", Kind: bluememo.FactKindPreference, Content: seed.Content, ValidFrom: seed.OccurredAt}
-	if errorValue := memoryRepository.SaveEpisode(context.Background(), bluememo.EpisodeWrite{Episode: seed, Facts: []bluememo.FactWrite{{Fact: fact}}}); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if errorValue := memoryRepository.SaveProfile(context.Background(), bluememo.Profile{PersonID: "person-1", IdentityLines: []string{"사용자는 발표자료 생성을 자주 요청한다."}, SourceFactIDs: []string{fact.FactID}, BuiltFromFactCount: 1}); errorValue != nil {
-		t.Fatalf("expected memory profile setup to succeed: %v", errorValue)
-	}
+	memoryStores := memorytest.Open(t)
+	memorytest.Remember(t, memoryStores, memory.PersonScope("person-1"), "사용자는 발표자료 생성을 자주 요청한다.")
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseMemoryStore(&bluememo.Store{Facts: memoryRepository, Profiles: memoryRepository, Jobs: memoryRepository}, nil, nil)
+	toolCatalogBuilder.UseMemoryStores(memoryStores, nil)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{
 		"default": {"conversation_history", "memory_search"},
 	}, nil)
@@ -370,7 +365,7 @@ func TestTaskLauncherAuditsRecallFailureAndRunsWithoutMemory(t *testing.T) {
 	taskRunService := task.NewTaskRunService(taskEventService)
 	harness := harnesstest.New(taskRunService)
 	toolCatalogBuilder := NewToolCatalogBuilder()
-	toolCatalogBuilder.UseMemoryStore(&bluememo.Store{Facts: failingFactRepository{errorValue: errors.New("database is away")}}, nil, nil)
+	toolCatalogBuilder.UseMemoryStores(failingRecallStores(t, errors.New("the memory file is away")), nil)
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{
 		"default": {"memory_search"},
 	}, nil)
@@ -390,11 +385,16 @@ func TestTaskLauncherAuditsRecallFailureAndRunsWithoutMemory(t *testing.T) {
 		t.Fatalf("expected launch to continue without memory: %v", errorValue)
 	}
 	if len(launchResult.MemoryFacts) != 0 {
-		t.Fatalf("expected no memory facts after a recall failure, got %+v", launchResult.MemoryFacts)
+		t.Fatalf("expected no memory facts when the files cannot be read, got %+v", launchResult.MemoryFacts)
 	}
-	taskEvents := taskEventService.ListTaskEvent(launchResult.TurnResult.TaskRun.TaskRunID)
-	if !containsTaskEvent(taskEvents, "memory.recall_failed") {
-		t.Fatalf("expected a recall failure event, got %+v", taskEvents)
+	recallBody := ""
+	for _, taskEvent := range taskEventService.ListTaskEvent(launchResult.TurnResult.TaskRun.TaskRunID) {
+		if taskEvent.Name == "memory.recall_injected" {
+			recallBody = taskEvent.Body
+		}
+	}
+	if !strings.Contains(recallBody, "the memory file is away") {
+		t.Fatalf("expected the launch to record why memory was thin, got %q", recallBody)
 	}
 }
 
@@ -773,17 +773,25 @@ func (provisioner *recordingRequesterWorkspaceProvisioner) ProvisionRequesterWor
 	return provisioner.provision(personAccess, workspaceRootPath)
 }
 
-type failingFactRepository struct {
-	bluememo.FactRepository
+type failingEmbedder struct {
 	errorValue error
 }
 
-func (repository failingFactRepository) HasVectorSearch(context.Context) (bool, error) {
-	return false, repository.errorValue
+func (embedder failingEmbedder) EmbedQuery(context.Context, string) ([]float32, error) {
+	return nil, embedder.errorValue
 }
 
-func (repository failingFactRepository) SearchFacts(context.Context, bluememo.FactSearchQuery) ([]bluememo.RankedFact, error) {
-	return nil, repository.errorValue
+func (embedder failingEmbedder) EmbedDocuments(context.Context, []string) ([][]float32, error) {
+	return nil, embedder.errorValue
+}
+
+// failingRecallStores gives memory files that cannot be read, so a launch has
+// to report the failure rather than run as though nothing was remembered.
+func failingRecallStores(t *testing.T, errorValue error) *memory.Stores {
+	t.Helper()
+	stores := memory.NewStores(t.TempDir(), bluememo.Configuration{Embedder: failingEmbedder{errorValue: errorValue}})
+	t.Cleanup(func() { _ = stores.Close() })
+	return stores
 }
 
 func runtimeFinishMessage(reply string) string {

@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -75,7 +74,6 @@ func (scheduleRunner ScheduleRunner) RunIfDue(ctx context.Context, request Sched
 		ResponseLanguage:          responseLanguage,
 		ScheduledRun:              scheduledRunContext(schedule, referenceTime),
 		PersonAccess:              request.PersonAccess,
-		MemoryLabel:               memory.LabelForAccess(request.PersonAccess),
 		AccessibleConversationIDs: []string{task.ScheduleSessionID(schedule.ScheduleID)},
 	})
 	if errorValue != nil {

@@ -56,8 +56,8 @@ func newToolCatalogBuilder(runtimeConfiguration config.RuntimeConfiguration, ker
 	toolCatalogBuilder.UseTaskArtifactService(services.taskArtifactService)
 	toolCatalogBuilder.UseWorkspaceRootPath(runtimeConfiguration.Terminal.WorkspaceRootPath)
 	toolCatalogBuilder.UseSkillChangeHandler(kernel.refreshSkillIndex)
-	if memoryComponents.store != nil {
-		toolCatalogBuilder.UseMemoryStore(memoryComponents.store, memoryComponents.ingester, directory.identityService)
+	if memoryComponents.stores != nil {
+		toolCatalogBuilder.UseMemoryStores(memoryComponents.stores, directory.identityService)
 	}
 	return toolCatalogBuilder
 }

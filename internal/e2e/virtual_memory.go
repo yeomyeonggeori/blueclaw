@@ -2,18 +2,35 @@ package e2e
 
 import (
 	"context"
-	"time"
+	"path/filepath"
 
 	"github.com/yeomyeonggeori/bluememo"
 	"github.com/yeomyeonggeori/bluememo/bluememotest"
+
+	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 )
 
-func seedVirtualMemory(repository *bluememo.InMemoryRepository, facts []bluememo.Fact) error {
+// VirtualMemoryFact is a memory a scenario starts from. The store settles what
+// it is told through a model that echoes one statement, so a scenario reads
+// back the sentence it wrote.
+type VirtualMemoryFact struct {
+	PersonID string
+	Content  string
+	IsStatic bool
+}
+
+func openVirtualMemory(workspacePath string) *memory.Stores {
+	return memory.NewStores(filepath.Join(workspacePath, ".blueclaw", "memory"), bluememo.Configuration{
+		Embedder: &bluememotest.HashEmbedder{},
+		Model:    virtualMemoryModel{},
+		Judge:    bluememo.DistributionJudge{Chooser: bluememotest.ScriptedChooser{}},
+	})
+}
+
+func seedVirtualMemory(ctx context.Context, stores *memory.Stores, facts []VirtualMemoryFact) error {
 	for _, fact := range facts {
-		episode := bluememo.Episode{EpisodeID: bluememo.NewIdentifier(), SourceKind: bluememo.EpisodeSourceKindImport, SourceID: fact.FactID, RequesterPersonID: fact.OwnerPersonID, Content: fact.Content, OccurredAt: time.Now().UTC()}
-		fact.EpisodeID = episode.EpisodeID
-		write := bluememo.EpisodeWrite{Episode: episode, Facts: []bluememo.FactWrite{{Fact: fact, Embedding: bluememotest.Embed(fact.Content)}}}
-		if errorValue := repository.SaveEpisode(context.Background(), write); errorValue != nil {
+		note := bluememo.Note{GroupID: memory.NewIdentifier(), Body: fact.Content, IsExplicit: true}
+		if _, errorValue := stores.Remember(ctx, memory.PersonScope(fact.PersonID), note); errorValue != nil {
 			return errorValue
 		}
 	}

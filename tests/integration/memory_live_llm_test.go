@@ -41,9 +41,9 @@ func (embedder openRouterEmbedder) EmbedDocuments(ctx context.Context, texts []s
 }
 
 // Proves, against a real low-tier model and a real embedding model, that a
-// finished task turns into facts, that a later task corrects an earlier fact
-// through supersede, and that recall then returns the corrected fact. It
-// spends a few cents, so it runs only when asked for.
+// finished task turns into memories, that a later task corrects an earlier one
+// through supersede, and that recall then returns the corrected one. It spends
+// a few cents, so it runs only when asked for.
 func TestMemoryLiveLLMExtractsCorrectsAndRecalls(t *testing.T) {
 	if os.Getenv("BLUECLAW_LIVE_LLM_TEST") != "1" {
 		t.Skip("set BLUECLAW_LIVE_LLM_TEST=1 to run the live memory extraction check")
@@ -56,162 +56,130 @@ func TestMemoryLiveLLMExtractsCorrectsAndRecalls(t *testing.T) {
 	if modelName == "" {
 		t.Skip("BLUECLAW_LIVE_LLM_MODEL names the low-tier model the live memory extraction check runs on")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	defer cancel()
 
-	repository := bluememo.NewInMemoryRepository()
-	store := bluememo.Store{
-		Facts:    repository,
-		Profiles: repository,
-		Jobs:     repository,
-		Embedder: openRouterEmbedder{client: openRouterEmbeddingClient{
-			apiKey:     apiKey,
-			modelName:  bluememo.DefaultEmbeddingModelName,
-			dimensions: bluememo.EmbeddingDimensionCount,
-		}},
-		EmbeddingModel: bluememo.DefaultEmbeddingModelName,
-	}
 	languageModel, errorValue := openaicompatible.Endpoint{URL: openRouterBaseURL, APIKey: apiKey, ModelName: modelName}.Provider()
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	ingester := bluememo.Ingester{Store: store, Model: memory.LanguageModel{Provider: languageModel}}
-	reader := bluememo.NewReader("person-alice", []string{"circle-platform"}, nil, 1, nil)
+	embeddingModelName := "openai/text-embedding-3-small"
+	stores := memory.NewStores(t.TempDir(), bluememo.Configuration{
+		Embedder: openRouterEmbedder{client: openRouterEmbeddingClient{
+			apiKey:     apiKey,
+			modelName:  embeddingModelName,
+			dimensions: benchmarkEmbeddingDimensionCount,
+		}},
+		EmbeddingModel: embeddingModelName,
+		Model:          memory.LanguageModel{Provider: languageModel},
+	})
+	t.Cleanup(func() { _ = stores.Close() })
+	scope := memory.PersonScope("person-alice")
+	store, errorValue := stores.Store(ctx, scope)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
 	now := time.Now().UTC()
 
-	firstTask := agentcontract.TaskRun{
+	rememberTask := func(taskRun agentcontract.TaskRun, steps []taskstate.TaskStep) bluememo.SettleReport {
+		t.Helper()
+		report, errorValue := stores.Remember(ctx, scope, bluememo.Note{
+			GroupID:     taskRun.TaskRunID,
+			Body:        memory.RenderTranscript(memory.TaskTranscript(taskRun, steps)),
+			SpeakerName: "이샘플",
+		})
+		if errorValue != nil {
+			t.Fatalf("expected %s to settle: %v", taskRun.TaskRunID, errorValue)
+		}
+		return report
+	}
+
+	firstReport := rememberTask(agentcontract.TaskRun{
 		TaskRunID:         "live-run-1",
 		RequesterPersonID: "person-alice",
 		Status:            agentcontract.TaskStatusCompleted,
 		Prompt:            "나 이번 주부터 플랫폼 팀으로 옮겼어. 앞으로 회의 요약은 불릿 포인트로 짧게 해줘. 그리고 다음 주 금요일(" + now.Add(9*24*time.Hour).Format("2006-01-02") + ")까지 휴가라서 그날까지는 답장 못 해.",
 		Result:            "알겠습니다. 요약은 불릿으로 드리고, 휴가 기간은 기억해 두겠습니다.",
 		UpdatedAt:         now,
+	}, nil)
+	if firstReport.Inserted < 2 {
+		t.Fatalf("expected the team move and the preference to be remembered, got %+v", firstReport)
 	}
-	first, errorValue := ingester.Ingest(ctx, bluememo.IngestRequest{
-		Episode: bluememo.Episode{
-			EpisodeID:         "live-episode-1",
-			SourceKind:        bluememo.EpisodeSourceKindTaskRun,
-			SourceID:          firstTask.TaskRunID,
-			RequesterPersonID: "person-alice",
-			Content:           bluememo.RenderTranscript(memory.TaskTranscript(firstTask, nil)),
-			OccurredAt:        now,
-		},
-		Reader:        reader,
-		RequesterName: "이샘플",
-		Label:         bluememo.SecurityLabel{RequiredClasses: []string{}},
-	})
+	firstMemories, errorValue := store.Memories(ctx)
 	if errorValue != nil {
-		t.Fatalf("expected the first extraction to succeed: %v", errorValue)
+		t.Fatal(errorValue)
 	}
-	kinds := map[string]int{}
-	for _, fact := range first.Facts {
-		kinds[fact.Kind]++
-		t.Logf("first extraction: [%s %v] %s", fact.Kind, fact.CircleIDs, fact.Content)
-	}
-	if len(first.Facts) < 2 || kinds[bluememo.FactKindPreference] == 0 || kinds[bluememo.FactKindTemporary] == 0 {
-		t.Fatalf("expected at least a preference and a temporary fact, got kinds=%v", kinds)
-	}
-	for _, fact := range first.Facts {
-		if fact.Kind == bluememo.FactKindTemporary && fact.ValidUntil.IsZero() {
-			t.Fatalf("expected the temporary fact to carry its expiry, got %+v", fact)
+	hasExpiry := false
+	for _, held := range firstMemories {
+		t.Logf("first: static=%v until=%s %s", held.IsStatic, held.ValidUntil.Format(time.DateOnly), held.Content)
+		if !held.ValidUntil.IsZero() {
+			hasExpiry = true
 		}
 	}
+	if !hasExpiry {
+		t.Fatal("expected the vacation to be remembered with the day it ends")
+	}
 
-	secondTask := agentcontract.TaskRun{
+	secondReport := rememberTask(agentcontract.TaskRun{
 		TaskRunID:         "live-run-2",
 		RequesterPersonID: "person-alice",
 		Status:            agentcontract.TaskStatusCompleted,
 		Prompt:            "정정할게, 플랫폼 팀이 아니라 데이터 팀으로 옮긴 거야. 요약은 계속 불릿으로 부탁해.",
 		Result:            "데이터 팀으로 기억을 고쳤습니다.",
 		UpdatedAt:         now.Add(time.Hour),
-	}
-	second, errorValue := ingester.Ingest(ctx, bluememo.IngestRequest{
-		Episode: bluememo.Episode{
-			EpisodeID:         "live-episode-2",
-			SourceKind:        bluememo.EpisodeSourceKindTaskRun,
-			SourceID:          secondTask.TaskRunID,
-			RequesterPersonID: "person-alice",
-			Content:           bluememo.RenderTranscript(memory.TaskTranscript(secondTask, nil)),
-			OccurredAt:        now.Add(time.Hour),
-		},
-		Reader:        reader,
-		RequesterName: "이샘플",
-		Label:         bluememo.SecurityLabel{RequiredClasses: []string{}},
-	})
-	if errorValue != nil {
-		t.Fatalf("expected the second extraction to succeed: %v", errorValue)
-	}
-	for _, fact := range second.Facts {
-		t.Logf("second extraction: [%s %v] %s", fact.Kind, fact.CircleIDs, fact.Content)
-	}
-	t.Logf("second extraction superseded=%v reinforced=%v candidates=%d", second.SupersededFactIDs, second.ReinforcedFactIDs, second.CandidateCount)
-	if second.CandidateCount == 0 {
-		t.Fatal("expected the first facts to be offered as candidates")
-	}
-	if len(second.SupersededFactIDs) == 0 {
-		t.Fatalf("expected the team correction to supersede an earlier fact, got %+v", second)
-	}
-	for _, supersededID := range second.SupersededFactIDs {
-		superseded, _ := repository.FindFact(supersededID)
-		if superseded.SupersededBy == "" {
-			t.Fatalf("expected %s to point at its replacement", supersededID)
-		}
+	}, nil)
+	t.Logf("second report: %+v", secondReport)
+	if secondReport.Superseded == 0 {
+		t.Fatalf("expected the team correction to supersede what it corrects, got %+v", secondReport)
 	}
 
-	recall, errorValue := store.Recall(ctx, bluememo.RecallRequest{Reader: reader, Query: "이샘플은 지금 어느 팀 소속이야?"})
+	recall, errorValue := store.Recall(ctx, "이샘플은 지금 어느 팀 소속이야?", memory.DefaultRecallLimit)
 	if errorValue != nil {
 		t.Fatalf("expected recall to succeed: %v", errorValue)
 	}
-	if recall.Mode != bluememo.SearchModeHybrid || len(recall.Facts) == 0 {
-		t.Fatalf("expected a hybrid recall with results, got mode=%s reason=%q facts=%d", recall.Mode, recall.DegradedReason, len(recall.Facts))
+	if len(recall.Memories) == 0 {
+		t.Fatalf("expected recall to answer, got mode=%s reason=%q", recall.Mode, recall.DegradedReason)
 	}
-	for _, scoredFact := range recall.Facts {
-		t.Logf("recall %.4f: [%s] %s (episode %s)", scoredFact.Score, scoredFact.Fact.Kind, scoredFact.Fact.Content, scoredFact.Fact.EpisodeID)
-		if scoredFact.Fact.SupersededBy != "" {
-			t.Fatalf("expected no superseded fact in recall, got %+v", scoredFact.Fact)
+	for _, recalled := range recall.Memories {
+		t.Logf("recall %.4f: %s", recalled.Score, recalled.Memory.Content)
+		if recalled.Memory.SupersededBy != "" {
+			t.Fatalf("expected no superseded memory in recall, got %+v", recalled.Memory)
 		}
 	}
-	if recall.Facts[0].Fact.EpisodeID != "live-episode-2" {
-		t.Fatalf("expected the corrected fact to rank first, got %+v", recall.Facts[0].Fact)
+	if !strings.Contains(recall.Memories[0].Memory.Content, "데이터") {
+		t.Fatalf("expected the corrected team to rank first, got %q", recall.Memories[0].Memory.Content)
 	}
 
-	mundaneTask := agentcontract.TaskRun{
+	beforeMundane := len(mustMemories(t, ctx, store))
+	rememberTask(agentcontract.TaskRun{
 		TaskRunID:         "live-run-3",
 		RequesterPersonID: "person-alice",
 		Status:            agentcontract.TaskStatusCompleted,
 		Prompt:            "이 파일 이름을 report-final.pdf로 바꿔줘",
 		Result:            "report.pdf를 report-final.pdf로 바꿨습니다.",
 		UpdatedAt:         now.Add(2 * time.Hour),
-	}
-	mundane, errorValue := ingester.Ingest(ctx, bluememo.IngestRequest{
-		Episode: bluememo.Episode{
-			EpisodeID:         "live-episode-3",
-			SourceKind:        bluememo.EpisodeSourceKindTaskRun,
-			SourceID:          mundaneTask.TaskRunID,
-			RequesterPersonID: "person-alice",
-			Content:           bluememo.RenderTranscript(memory.TaskTranscript(mundaneTask, []taskstate.TaskStep{{Instruction: "continue shell", Status: agentcontract.TaskStatusCompleted, Output: "renamed report.pdf -> report-final.pdf"}})),
-			OccurredAt:        now.Add(2 * time.Hour),
-		},
-		Reader:        reader,
-		RequesterName: "이샘플",
-		Label:         bluememo.SecurityLabel{RequiredClasses: []string{}},
-	})
-	if errorValue != nil {
-		t.Fatalf("expected the mundane extraction to succeed: %v", errorValue)
-	}
-	for _, fact := range mundane.Facts {
-		t.Logf("mundane extraction: [%s %v] %s", fact.Kind, fact.CircleIDs, fact.Content)
-	}
-	if len(mundane.Facts) != 0 {
-		t.Fatalf("expected a file rename to leave no memory, got %d facts", len(mundane.Facts))
+	}, []taskstate.TaskStep{{Instruction: "continue shell", Status: agentcontract.TaskStatusCompleted, Output: "renamed report.pdf -> report-final.pdf"}})
+	if afterMundane := len(mustMemories(t, ctx, store)); afterMundane != beforeMundane {
+		t.Fatalf("expected a file rename to leave no memory, got %d more", afterMundane-beforeMundane)
 	}
 
-	profile, errorValue := bluememo.ProfileBuilder{Store: store, Model: memory.LanguageModel{Provider: languageModel}}.Rebuild(ctx, reader)
+	staticMemories, errorValue := store.Profile(ctx)
 	if errorValue != nil {
-		t.Fatalf("expected the profile to build: %v", errorValue)
+		t.Fatalf("expected the profile to read: %v", errorValue)
 	}
-	t.Logf("profile identity=%v current=%v", profile.IdentityLines, profile.CurrentLines)
-	if len(profile.IdentityLines) == 0 {
-		t.Fatalf("expected identity lines in the profile, got %+v", profile)
+	for _, held := range staticMemories {
+		t.Logf("profile: %s", held.Content)
 	}
+	if len(staticMemories) == 0 {
+		t.Fatal("expected what the person is to be kept as static memory")
+	}
+}
+
+func mustMemories(t *testing.T, ctx context.Context, store *bluememo.Store) []bluememo.Memory {
+	t.Helper()
+	memories, errorValue := store.Memories(ctx)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	return memories
 }

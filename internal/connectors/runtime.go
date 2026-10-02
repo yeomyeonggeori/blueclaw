@@ -11,12 +11,10 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-	"github.com/yeomyeonggeori/bluememo"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
-	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
@@ -709,7 +707,6 @@ func (connectorRuntime *ConnectorRuntime) buildTurnToolSet(adapter PlatformAdapt
 		HistoryProvider:            connectorHistoryProvider{adapter: adapter},
 		AttachmentMaterialResolver: connectorAttachmentMaterialResolver{adapter: adapter, personID: personID, event: event, sentSources: connectorRuntime.sentAttachmentSources, attachmentWriter: connectorRuntime.attachmentWriterFor(personID)},
 		PersonAccess:               personAccess,
-		MemoryLabel:                connectorRuntime.memoryLabel(personAccess, event),
 		AccessibleConversationIDs:  []string{event.ConversationID},
 		InputParts:                 append([]agentcontract.AgentPart{}, event.InputParts...),
 	})
@@ -781,14 +778,6 @@ func detachedConnectorContext(ctx context.Context) context.Context {
 		return context.Background()
 	}
 	return context.WithoutCancel(ctx)
-}
-
-func (connectorRuntime *ConnectorRuntime) memoryLabel(personAccess policy.PersonAccess, event PlatformInboundEvent) bluememo.SecurityLabel {
-	channelPolicy, isFound := connectorRuntime.identityService.ResolveConversationPolicy(event.Platform, event.ConversationID)
-	if isPrivateConversationID(event.ConversationID) {
-		isFound = false
-	}
-	return memory.LabelForConversation(personAccess, channelPolicy, isFound)
 }
 
 func isPrivateConversationID(conversationID string) bool {

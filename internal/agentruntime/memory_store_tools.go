@@ -31,7 +31,7 @@ const (
 
 type memorySearchFact struct {
 	FactID     string    `json:"factID"`
-	CircleIDs  []string  `json:"circleIDs"`
+	ScopeType  string    `json:"scopeType"`
 	Content    string    `json:"content"`
 	SourceKind string    `json:"sourceKind"`
 	ValidAt    time.Time `json:"validAt"`
@@ -45,10 +45,10 @@ type memorySearchToolOutput struct {
 
 var (
 	memorySearchInputSchema         = json.RawMessage(`{"type":"object","properties":{"query":{"type":"string","minLength":1,"pattern":"\\S"}},"required":["query"],"additionalProperties":false}`)
-	memorySearchOutputSchema        = json.RawMessage(`{"type":"object","properties":{"facts":{"type":"array","items":{"type":"object","properties":{"factID":{"type":"string"},"circleIDs":{"type":"array","items":{"type":"string"}},"content":{"type":"string"},"sourceKind":{"type":"string","enum":["identity","preference","fact","episode","temporary"]},"validAt":{"type":"string","format":"date-time"},"score":{"type":"number"}},"required":["factID","circleIDs","content","sourceKind","validAt"],"additionalProperties":false}},"searchStatus":{"type":"string","enum":["complete","degraded"]}},"required":["facts","searchStatus"],"additionalProperties":false}`)
+	memorySearchOutputSchema        = json.RawMessage(`{"type":"object","properties":{"facts":{"type":"array","items":{"type":"object","properties":{"factID":{"type":"string"},"scopeType":{"type":"string","enum":["person","circle","workspace"]},"content":{"type":"string"},"sourceKind":{"type":"string","enum":["identity","fact"]},"validAt":{"type":"string","format":"date-time"},"score":{"type":"number"}},"required":["factID","scopeType","content","sourceKind","validAt"],"additionalProperties":false}},"searchStatus":{"type":"string","enum":["complete","degraded"]}},"required":["facts","searchStatus"],"additionalProperties":false}`)
 	memoryRememberInputSchema       = json.RawMessage(`{"type":"object","properties":{"content":{"type":"string","minLength":1,"maxLength":600,"pattern":"\\S"}},"required":["content"],"additionalProperties":false}`)
 	memoryRememberInputIntentSchema = json.RawMessage(`{"type":"object","properties":{"content":{"type":"string","minLength":1,"maxLength":600,"pattern":"\\S"}},"additionalProperties":false}`)
-	memoryRememberOutputSchema      = json.RawMessage(`{"type":"object","properties":{"accepted":{"type":"boolean"},"episodeID":{"type":"string","pattern":"\\S"},"factIDs":{"type":"array","items":{"type":"string"}},"supersededFactIDs":{"type":"array","items":{"type":"string"}},"reinforcedFactIDs":{"type":"array","items":{"type":"string"}},"failureCode":{"type":"string"}},"required":["accepted","episodeID","factIDs","supersededFactIDs","reinforcedFactIDs"],"additionalProperties":false}`)
+	memoryRememberOutputSchema      = json.RawMessage(`{"type":"object","properties":{"accepted":{"type":"boolean"},"groupID":{"type":"string","pattern":"\\S"},"inserted":{"type":"integer"},"superseded":{"type":"integer"},"reinforced":{"type":"integer"},"failureCode":{"type":"string"}},"required":["accepted","groupID","inserted","superseded","reinforced"],"additionalProperties":false}`)
 )
 
 type memoryForgetToolInput struct {
@@ -62,12 +62,12 @@ type memoryForgetToolOutput struct {
 }
 
 type memoryStoreRememberOutput struct {
-	Accepted          bool     `json:"accepted"`
-	EpisodeID         string   `json:"episodeID"`
-	FactIDs           []string `json:"factIDs"`
-	SupersededFactIDs []string `json:"supersededFactIDs"`
-	ReinforcedFactIDs []string `json:"reinforcedFactIDs"`
-	FailureCode       string   `json:"failureCode,omitempty"`
+	Accepted    bool   `json:"accepted"`
+	GroupID     string `json:"groupID"`
+	Inserted    int    `json:"inserted"`
+	Superseded  int    `json:"superseded"`
+	Reinforced  int    `json:"reinforced"`
+	FailureCode string `json:"failureCode,omitempty"`
 }
 
 var (
@@ -157,19 +157,19 @@ func (toolCatalogBuilder *ToolCatalogBuilder) searchStoreMemoryTool(ctx context.
 	if query == "" {
 		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "memory_search", "memory_search query is required")
 	}
-	searchResult, errorValue := toolCatalogBuilder.memoryStore.Search(ctx, toolCatalogBuilder.memoryReader(request.PersonAccess), query, bluememo.DefaultSearchResultLimit)
+	recalled, errorValue := toolCatalogBuilder.memoryStores.RecallAcross(ctx, toolCatalogBuilder.memoryScopes(request.PersonAccess), query, memory.DefaultRecallLimit)
 	if errorValue != nil {
 		return toolcontract.ToolFailureResult(toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "memory_search", "memory search failed: "+errorValue.Error())
 	}
-	facts := make([]memorySearchFact, 0, len(searchResult.Facts))
-	factIDs := make([]string, 0, len(searchResult.Facts))
-	for _, scoredFact := range searchResult.Facts {
-		facts = append(facts, projectStoreMemoryFact(scoredFact))
-		factIDs = append(factIDs, scoredFact.Fact.FactID)
+	facts := make([]memorySearchFact, 0, len(recalled.Facts))
+	factIDs := make([]string, 0, len(recalled.Facts))
+	for _, fact := range recalled.Facts {
+		facts = append(facts, projectStoreMemoryFact(fact))
+		factIDs = append(factIDs, fact.FactID)
 	}
 	surfaced.add(factIDs)
 	status := memorySearchComplete
-	if searchResult.Mode != bluememo.SearchModeHybrid {
+	if recalled.DegradedReason != "" {
 		status = memorySearchDegraded
 	}
 	output := memorySearchToolOutput{Facts: facts, SearchStatus: status}
@@ -177,16 +177,16 @@ func (toolCatalogBuilder *ToolCatalogBuilder) searchStoreMemoryTool(ctx context.
 	return toolcontract.ToolSuccessData(string(document), document)
 }
 
-func projectStoreMemoryFact(scoredFact bluememo.ScoredFact) memorySearchFact {
+func projectStoreMemoryFact(fact memory.MemoryFact) memorySearchFact {
 	projected := memorySearchFact{
-		FactID:     scoredFact.Fact.FactID,
-		CircleIDs:  append([]string{}, scoredFact.Fact.CircleIDs...),
-		Content:    scoredFact.Fact.Content,
-		SourceKind: scoredFact.Fact.Kind,
-		ValidAt:    scoredFact.Fact.ValidFrom,
+		FactID:     fact.FactID,
+		ScopeType:  fact.ScopeType,
+		Content:    fact.Content,
+		SourceKind: fact.SourceKind,
+		ValidAt:    fact.ValidAt,
 	}
-	if scoredFact.Score != 0 {
-		score := scoredFact.Score
+	if fact.Score != 0 {
+		score := fact.Score
 		projected.Score = &score
 	}
 	return projected
@@ -203,34 +203,29 @@ func (toolCatalogBuilder *ToolCatalogBuilder) rememberStoreMemoryTool(ctx contex
 	if request.ActiveCircleConflict {
 		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.Conflict, "memory_remember", "memory_remember has multiple active circle candidates")
 	}
-	if toolCatalogBuilder.memoryIngester == nil {
-		return memoryStoreRememberFailure("ingester_unavailable", "memory ingestion is not configured")
+	if toolCatalogBuilder.memoryStores == nil {
+		return memoryStoreRememberFailure("store_unavailable", "memory is not configured")
 	}
-	now := time.Now().UTC()
-	result, errorValue := toolCatalogBuilder.memoryIngester.Ingest(ctx, bluememo.IngestRequest{
-		Episode: bluememo.Episode{
-			EpisodeID:         bluememo.NewIdentifier(),
-			SourceKind:        bluememo.EpisodeSourceKindExplicit,
-			SourceID:          bluememo.NewIdentifier(),
-			RequesterPersonID: request.RequesterPersonID,
-			ConversationID:    request.ConversationID,
-			Content:           content,
-			OccurredAt:        now,
-		},
-		Reader:         toolCatalogBuilder.memoryReader(request.PersonAccess),
-		RequesterName:  request.RequesterName,
-		ActiveCircleID: strings.TrimSpace(request.ActiveCircleID),
-		Label:          memorySecurityLabelForRequest(request),
+	scope := memory.PersonScope(request.RequesterPersonID)
+	if activeCircleID := strings.TrimSpace(request.ActiveCircleID); activeCircleID != "" {
+		scope = memory.CircleScope(activeCircleID)
+	}
+	groupID := memory.NewIdentifier()
+	report, errorValue := toolCatalogBuilder.memoryStores.Remember(ctx, scope, bluememo.Note{
+		GroupID:     groupID,
+		Body:        content,
+		SpeakerName: request.RequesterName,
+		IsExplicit:  true,
 	})
 	if errorValue != nil {
-		return memoryStoreRememberFailure("ingest_failed", errorValue.Error())
+		return memoryStoreRememberFailure("remember_failed", errorValue.Error())
 	}
 	output := memoryStoreRememberOutput{
-		Accepted:          true,
-		EpisodeID:         result.EpisodeID,
-		FactIDs:           factIDsOf(result.Facts),
-		SupersededFactIDs: result.SupersededFactIDs,
-		ReinforcedFactIDs: result.ReinforcedFactIDs,
+		Accepted:   true,
+		GroupID:    groupID,
+		Inserted:   report.Inserted,
+		Superseded: report.Superseded,
+		Reinforced: report.Reinforced,
 	}
 	document := json.RawMessage(MarshalBody(output))
 	return toolcontract.ToolSuccessData(string(document), document)
@@ -238,12 +233,9 @@ func (toolCatalogBuilder *ToolCatalogBuilder) rememberStoreMemoryTool(ctx contex
 
 func memoryStoreRememberFailure(failureCode string, summary string) toolcontract.ToolResult {
 	output := memoryStoreRememberOutput{
-		Accepted:          false,
-		EpisodeID:         "none",
-		FactIDs:           []string{},
-		SupersededFactIDs: []string{},
-		ReinforcedFactIDs: []string{},
-		FailureCode:       failureCode,
+		Accepted:    false,
+		GroupID:     "none",
+		FailureCode: failureCode,
 	}
 	document := json.RawMessage(MarshalBody(output))
 	return toolcontract.ToolFailureData(toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "memory_remember", summary, document)
@@ -262,7 +254,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) forgetStoreMemoryTool(ctx context.
 			"memory_forget only accepts fact IDs memory_search returned in this task; unknown: "+strings.Join(unknownFactIDs, ", ")+"; known: "+strings.Join(surfaced.known(), ", "),
 		)
 	}
-	forgottenFactIDs, errorValue := toolCatalogBuilder.memoryStore.Forget(ctx, toolCatalogBuilder.memoryReader(request.PersonAccess), factIDs, strings.TrimSpace(input.Reason))
+	forgottenFactIDs, errorValue := toolCatalogBuilder.memoryStores.ForgetAcross(ctx, toolCatalogBuilder.memoryScopes(request.PersonAccess), factIDs, strings.TrimSpace(input.Reason))
 	if errorValue != nil {
 		return toolcontract.ToolFailureResult(toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "memory_forget", "memory forget failed: "+errorValue.Error())
 	}
@@ -272,19 +264,4 @@ func (toolCatalogBuilder *ToolCatalogBuilder) forgetStoreMemoryTool(ctx context.
 	output := memoryForgetToolOutput{ForgottenFactIDs: forgottenFactIDs, Reason: strings.TrimSpace(input.Reason)}
 	document := json.RawMessage(MarshalBody(output))
 	return toolcontract.ToolSuccessData(string(document), document)
-}
-
-func memorySecurityLabelForRequest(request ToolCatalogRequest) bluememo.SecurityLabel {
-	if request.MemoryLabel.RequiredClasses != nil {
-		return request.MemoryLabel
-	}
-	return memory.LabelForAccess(request.PersonAccess)
-}
-
-func factIDsOf(facts []bluememo.Fact) []string {
-	factIDs := make([]string, 0, len(facts))
-	for _, fact := range facts {
-		factIDs = append(factIDs, fact.FactID)
-	}
-	return factIDs
 }

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-	"github.com/yeomyeonggeori/bluememo"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -31,8 +30,7 @@ type AttachmentMaterialResolver interface {
 type ToolCatalogBuilder struct {
 	allowedToolNamesByProfile    map[string][]string
 	defaultAllowedToolNames      []string
-	memoryStore                  *bluememo.Store
-	memoryIngester               *bluememo.Ingester
+	memoryStores                 *memory.Stores
 	memoryCircles                memory.ContainedCircleResolver
 	capabilityClient             capability.Client
 	capabilityRegistry           *CapabilityRegistry
@@ -87,7 +85,6 @@ type ToolCatalogRequest struct {
 	HistoryProvider            HistoryProvider
 	AttachmentMaterialResolver AttachmentMaterialResolver
 	PersonAccess               policy.PersonAccess
-	MemoryLabel                bluememo.SecurityLabel
 	AccessibleConversationIDs  []string
 	InputParts                 []agentcontract.AgentPart
 	ScheduledRun               agentcontract.ScheduledRunContext
@@ -129,22 +126,21 @@ func (toolCatalogBuilder *ToolCatalogBuilder) UseAllowedToolNamesByProfile(allow
 	toolCatalogBuilder.defaultAllowedToolNames = trimNonEmptyStrings(defaultAllowedToolNames)
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) UseMemoryStore(memoryStore *bluememo.Store, memoryIngester *bluememo.Ingester, memoryCircles memory.ContainedCircleResolver) {
-	toolCatalogBuilder.memoryStore = memoryStore
-	toolCatalogBuilder.memoryIngester = memoryIngester
+func (toolCatalogBuilder *ToolCatalogBuilder) UseMemoryStores(memoryStores *memory.Stores, memoryCircles memory.ContainedCircleResolver) {
+	toolCatalogBuilder.memoryStores = memoryStores
 	toolCatalogBuilder.memoryCircles = memoryCircles
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) memoryReader(personAccess policy.PersonAccess) bluememo.Reader {
+func (toolCatalogBuilder *ToolCatalogBuilder) memoryScopes(personAccess policy.PersonAccess) []memory.Scope {
 	containedCircles := map[string][]string{}
 	if toolCatalogBuilder.memoryCircles != nil {
 		containedCircles = toolCatalogBuilder.memoryCircles.ContainedCircles()
 	}
-	return memory.ReaderForAccess(personAccess, containedCircles)
+	return memory.ScopesForAccess(personAccess, containedCircles)
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) MemoryStore() *bluememo.Store {
-	return toolCatalogBuilder.memoryStore
+func (toolCatalogBuilder *ToolCatalogBuilder) MemoryStores() *memory.Stores {
+	return toolCatalogBuilder.memoryStores
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) UseCapabilityQuarantineReporter(reporter func(toolcontract.QuarantinedToolProvider)) {
@@ -292,7 +288,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerHistoryTool(toolRegistry *
 
 func (toolCatalogBuilder *ToolCatalogBuilder) registerMemoryTool(toolRegistry *toolcontract.ToolSet, request ToolCatalogRequest) {
 	registerPersonaTools(toolCatalogBuilder, toolRegistry, request)
-	if toolCatalogBuilder.memoryStore == nil {
+	if toolCatalogBuilder.memoryStores == nil {
 		return
 	}
 	registerStoreMemoryTools(toolCatalogBuilder, toolRegistry, request)

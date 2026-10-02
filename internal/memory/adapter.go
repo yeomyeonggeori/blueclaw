@@ -6,42 +6,12 @@ import (
 
 	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluememo"
-
-	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 )
 
 const RememberContentRuneLimit = 600
 
 type ContainedCircleResolver interface {
 	ContainedCircles() map[string][]string
-}
-
-func ReaderForAccess(personAccess policy.PersonAccess, containedCircles map[string][]string) bluememo.Reader {
-	return bluememo.NewReader(personAccess.PersonID, personAccess.Circles, containedCircles, personAccess.SecurityLevelRank, personAccess.GrantedClasses)
-}
-
-type ProfileAccessResolver interface {
-	FindPersonAccess(string) (policy.PersonAccess, bool)
-	ContainedCircles() map[string][]string
-}
-
-func ProfileReaderResolver(access ProfileAccessResolver) func(context.Context, string) (bluememo.Reader, bool, error) {
-	return func(_ context.Context, personID string) (bluememo.Reader, bool, error) {
-		personAccess, isFound := access.FindPersonAccess(personID)
-		reader := ReaderForAccess(personAccess, access.ContainedCircles())
-		return reader, isFound, nil
-	}
-}
-
-func LabelForAccess(personAccess policy.PersonAccess) bluememo.SecurityLabel {
-	return bluememo.SecurityLabel{SecurityLevelRank: personAccess.SecurityLevelRank, RequiredClasses: append([]string{}, personAccess.GrantedClasses...)}
-}
-
-func LabelForConversation(personAccess policy.PersonAccess, channelPolicy policy.ChannelPolicy, isChannelPolicyFound bool) bluememo.SecurityLabel {
-	if isChannelPolicyFound {
-		return bluememo.SecurityLabel{SecurityLevelRank: channelPolicy.DefaultSecurityLevelRank, RequiredClasses: append([]string{}, channelPolicy.DefaultRequiredClasses...)}
-	}
-	return LabelForAccess(personAccess)
 }
 
 type LanguageModel struct {
@@ -75,38 +45,4 @@ func RememberContentGateMessage(content string) string {
 		return "memory_remember content must be a single compact fact"
 	}
 	return ""
-}
-
-func LoopScopeType(fact bluememo.Fact) string {
-	if fact.IsShared() {
-		return "circle"
-	}
-	return "user"
-}
-
-func LoopMemoryFacts(recall bluememo.Recall, requesterPersonID string) []MemoryFact {
-	facts := make([]MemoryFact, 0, len(recall.ProfileLines())+len(recall.Facts))
-	for index, line := range recall.ProfileLines() {
-		facts = append(facts, MemoryFact{
-			FactID:     "profile:" + requesterPersonID + ":" + string(rune('a'+index)),
-			ScopeType:  LoopScopeType(bluememo.Fact{}),
-			Content:    line,
-			SourceKind: "profile",
-			ValidAt:    recall.Profile.BuiltAt,
-		})
-	}
-	for _, scoredFact := range recall.Facts {
-		facts = append(facts, MemoryFact{
-			FactID:            scoredFact.Fact.FactID,
-			ScopeType:         LoopScopeType(scoredFact.Fact),
-			Content:           scoredFact.Fact.Content,
-			Score:             scoredFact.Score,
-			SourceEpisodeID:   scoredFact.Fact.EpisodeID,
-			SourceKind:        scoredFact.Fact.Kind,
-			ValidAt:           scoredFact.Fact.ValidFrom,
-			SecurityLevelRank: scoredFact.Fact.SecurityLevelRank,
-			RequiredClasses:   append([]string{}, scoredFact.Fact.RequiredClasses...),
-		})
-	}
-	return facts
 }

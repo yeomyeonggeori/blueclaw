@@ -9,8 +9,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/yeomyeonggeori/bluememo"
 )
 
 type benchmarkCandidateModel struct {
@@ -110,8 +108,10 @@ func TestMemoryEmbeddingBenchmark(t *testing.T) {
 	}
 }
 
+const benchmarkEmbeddingDimensionCount = 1536
+
 func benchmarkEmbeddingModel(ctx context.Context, apiKey string, candidate benchmarkCandidateModel) (float64, float64, float64, error) {
-	client := openRouterEmbeddingClient{apiKey: apiKey, modelName: candidate.name, dimensions: bluememo.EmbeddingDimensionCount}
+	client := openRouterEmbeddingClient{apiKey: apiKey, modelName: candidate.name, dimensions: benchmarkEmbeddingDimensionCount}
 	factEmbeddings := make([][]float32, 0, len(benchmarkFacts))
 	for _, fact := range benchmarkFacts {
 		embedding, errorValue := client.GenerateEmbedding(ctx, fact)
