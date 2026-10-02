@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -17,6 +18,10 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/model/decisions"
 	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
+	"github.com/yeomyeonggeori/bluememo"
+	"github.com/yeomyeonggeori/bluememo/bluememotest"
+
+	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 )
 
 type standIn struct {
@@ -311,4 +316,29 @@ func askEquals(left Ask, right Ask) bool {
 		left.SchemaName == right.SchemaName &&
 		slices.Equal(left.OfferedToolNames, right.OfferedToolNames) &&
 		left.AnsweredWith == right.AnsweredWith
+}
+
+func TestSettlingAMemoryNoteNeedsNoScriptBecauseTheStandInRemembersNothing(t *testing.T) {
+	running := startStandIn(t)
+	store, errorValue := bluememo.Open(context.Background(), filepath.Join(t.TempDir(), "memory.sqlite"), bluememo.Configuration{
+		Embedder: bluememotest.HashEmbedder{},
+		Model:    memory.LanguageModel{Provider: running.languageModel()},
+		Judge:    &bluememotest.ScriptedJudge{},
+	})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	t.Cleanup(func() { store.Close() })
+	if errorValue := store.Memorize(context.Background(), bluememo.Note{Body: "Asked: say hello"}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	report, errorValue := store.Settle(context.Background())
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if report.Groups != 1 || report.Proposed != 0 {
+		t.Fatalf("expected one group settled with nothing proposed, got %+v", report)
+	}
+	running.mustBeSettled(t)
 }
