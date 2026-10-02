@@ -14,6 +14,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
+	"github.com/yeomyeonggeori/blueclaw/internal/memory/memorytest"
 )
 
 // Qwen3 embedding models expect an instruction on the query side only; the
@@ -72,7 +73,7 @@ func TestMemoryLiveLLMExtractsCorrectsAndRecalls(t *testing.T) {
 		}},
 		EmbeddingModel: embeddingModelName,
 		Model:          memory.LanguageModel{Provider: languageModel},
-	})
+	}, memorytest.ReadsInThisProcess())
 	t.Cleanup(func() { _ = stores.Close() })
 	scope := memory.PersonScope("person-alice")
 	store, errorValue := stores.Store(ctx, scope)

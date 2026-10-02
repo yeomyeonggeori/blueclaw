@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/yeomyeonggeori/bluememo"
@@ -20,19 +21,25 @@ type ReadRequest struct {
 	EmbeddingModel string    `json:"embeddingModel"`
 	Limit          int       `json:"limit"`
 	LaneDepth      int       `json:"laneDepth"`
-	WantSources    bool      `json:"wantSources"`
+	RecallSources  bool      `json:"recallSources"`
 }
 
+// RunRead tells a memory nobody has written from one this reader may not
+// open: the first is nothing to recall, the second is a refusal, and a recall
+// that confused them would report every empty file as a failure.
 func RunRead(ctx context.Context, input io.Reader, output io.Writer) error {
 	request, errorValue := decodeReadRequest(input)
 	if errorValue != nil {
 		return errorValue
 	}
+	if _, errorValue := os.Stat(request.StorePath); errors.Is(errorValue, os.ErrNotExist) {
+		return json.NewEncoder(output).Encode(bluememo.RecallResult{})
+	}
 	store, errorValue := bluememo.Open(ctx, request.StorePath, bluememo.Configuration{
 		Embedder:       carriedVector{vector: request.QueryVector},
 		EmbeddingModel: request.EmbeddingModel,
 		LaneDepth:      request.LaneDepth,
-		RecallSources:  request.WantSources,
+		RecallSources:  request.RecallSources,
 	})
 	if errorValue != nil {
 		return fmt.Errorf("open %s: %w", request.StorePath, errorValue)

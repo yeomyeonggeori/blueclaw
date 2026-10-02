@@ -157,7 +157,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) searchStoreMemoryTool(ctx context.
 	if query == "" {
 		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "memory_search", "memory_search query is required")
 	}
-	recalled, errorValue := toolCatalogBuilder.memoryStores.RecallAcross(ctx, toolCatalogBuilder.memoryScopes(request.PersonAccess), query, memory.DefaultRecallLimit)
+	recalled, errorValue := toolCatalogBuilder.memoryStores.RecallAcross(ctx, request.PersonAccess, toolCatalogBuilder.memoryScopes(request.PersonAccess), query, memory.DefaultRecallLimit)
 	if errorValue != nil {
 		return toolcontract.ToolFailureResult(toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "memory_search", "memory search failed: "+errorValue.Error())
 	}

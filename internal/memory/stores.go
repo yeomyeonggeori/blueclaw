@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -26,13 +27,15 @@ const (
 // memoryFileMode lets the subject's group read a memory and nobody but the
 // service write it: a subject's memory is kept on their behalf.
 const (
-	memoryFileName = "memory.db"
-	memoryFileMode = 0o640
+	memoryFileName         = "memory.db"
+	memoryFileMode         = 0o640
+	readTimeoutSecond      = 20
+	readOutputMaximumBytes = 4 << 20
 )
 
-// Scope names one memory file. bluememo keeps a subject's memory in a file of
-// its own, so clearance is whether the service opens that file on a reader's
-// behalf rather than a label carried by every fact.
+// Scope names one memory file. A subject's memory is a file of their own, so
+// what a reader may read is which of those files their POSIX identity opens,
+// rather than a label carried by every fact.
 type Scope struct {
 	Kind string
 	ID   string
@@ -71,14 +74,16 @@ func (scope Scope) directoryUnder(workspaceRootPath string) string {
 // Stores holds the memory files this company's agent reads and writes, opening
 // each on first use and keeping it for the life of the process.
 type Stores struct {
+	actor             security.WorkspaceActorFactory
 	workspaceRootPath string
 	configuration     bluememo.Configuration
 	mutex             sync.Mutex
 	open              map[string]*bluememo.Store
 }
 
-func NewStores(workspaceRootPath string, configuration bluememo.Configuration) *Stores {
-	return &Stores{workspaceRootPath: workspaceRootPath, configuration: configuration, open: map[string]*bluememo.Store{}}
+func NewStores(workspaceRootPath string, configuration bluememo.Configuration, actor security.WorkspaceActorFactory) *Stores {
+	return &Stores{actor: actor,
+		workspaceRootPath: workspaceRootPath, configuration: configuration, open: map[string]*bluememo.Store{}}
 }
 
 func (stores *Stores) Store(ctx context.Context, scope Scope) (*bluememo.Store, error) {
@@ -121,6 +126,10 @@ func (stores *Stores) Close() error {
 
 // ScopesForAccess is every memory file a reader may be shown, in the order a
 // recall merges them.
+// ScopesForAccess says where to look for a reader's memory. It grants nothing:
+// a recall runs as that reader, so a file this list names and their identity
+// cannot open is refused by the kernel. A list too generous costs a refusal,
+// and a list too narrow costs a memory nobody finds.
 func ScopesForAccess(personAccess policy.PersonAccess, containedCircles map[string][]string) []Scope {
 	scopes := []Scope{}
 	if personAccess.PersonID != "" {
@@ -142,14 +151,20 @@ func ScopesForAccess(personAccess policy.PersonAccess, containedCircles map[stri
 // RecallAcross asks every file the reader may be shown and returns what the
 // agent loop reads, most relevant first. A scope with no file yet has nothing
 // to say, which is not a failure.
-func (stores *Stores) RecallAcross(ctx context.Context, scopes []Scope, query string, limit int) (Recalled, error) {
+// RecallAcross reads each file as the person the recall is for, so a file
+// their identity cannot open is refused by the kernel rather than by a list
+// this code keeps. The scopes say where to look; they decide nothing.
+func (stores *Stores) RecallAcross(ctx context.Context, personAccess policy.PersonAccess, scopes []Scope, query string, limit int) (Recalled, error) {
 	recalled := Recalled{Mode: "merged"}
+	if len(scopes) == 0 {
+		return recalled, nil
+	}
+	read, errorValue := stores.readerFor(ctx, personAccess, query)
+	if errorValue != nil {
+		return recalled, errorValue
+	}
 	for _, scope := range scopes {
-		store, errorValue := stores.Store(ctx, scope)
-		if errorValue != nil {
-			return recalled, errorValue
-		}
-		result, errorValue := store.Recall(ctx, query, limit)
+		result, errorValue := read(ctx, scope, limit)
 		if errorValue != nil {
 			return recalled, errorValue
 		}
@@ -356,6 +371,67 @@ func (stores *Stores) adoptEveryMemory(ctx context.Context, fromPersonID string,
 	}
 	stores.forget(PersonScope(fromPersonID))
 	return os.Remove(fromPath)
+}
+
+// readerFor embeds the query once, because the service holds the credentials
+// for that, and answers with a way to read one file under the reader's own
+// POSIX identity.
+func (stores *Stores) readerFor(ctx context.Context, personAccess policy.PersonAccess, query string) (func(context.Context, Scope, int) (bluememo.RecallResult, error), error) {
+	vector, errorValue := stores.configuration.Embedder.EmbedQuery(ctx, query)
+	if errorValue != nil {
+		return nil, fmt.Errorf("embed the recall query: %w", errorValue)
+	}
+	actor, errorValue := stores.actor.Requester(ctx, security.WorkspaceActorRequest{
+		PersonAccess:      personAccess,
+		WorkspaceRootPath: stores.workspaceRootPath,
+	})
+	if errorValue != nil {
+		return nil, fmt.Errorf("read memory as %s: %w", personAccess.PersonID, errorValue)
+	}
+	executablePath, errorValue := os.Executable()
+	if errorValue != nil {
+		return nil, fmt.Errorf("find the binary that serves a read: %w", errorValue)
+	}
+	return func(ctx context.Context, scope Scope, limit int) (bluememo.RecallResult, error) {
+		path, errorValue := stores.Path(scope)
+		if errorValue != nil {
+			return bluememo.RecallResult{}, errorValue
+		}
+		request, errorValue := json.Marshal(ReadRequest{
+			StorePath:      path,
+			Query:          query,
+			QueryVector:    vector,
+			EmbeddingModel: stores.configuration.EmbeddingModel,
+			Limit:          limit,
+			LaneDepth:      stores.configuration.LaneDepth,
+			RecallSources:  stores.configuration.RecallSources,
+		})
+		if errorValue != nil {
+			return bluememo.RecallResult{}, errorValue
+		}
+		return runRead(ctx, actor, executablePath, request)
+	}, nil
+}
+
+func runRead(ctx context.Context, actor security.WorkspaceActor, executablePath string, request []byte) (bluememo.RecallResult, error) {
+	result, errorValue := actor.Run(ctx, security.CommandRequest{
+		ExecutableName:     executablePath,
+		Arguments:          []string{ReadCommand},
+		Stdin:              string(request),
+		TimeoutSecond:      readTimeoutSecond,
+		OutputMaximumBytes: readOutputMaximumBytes,
+	})
+	if errorValue != nil {
+		return bluememo.RecallResult{}, errorValue
+	}
+	if result.ExitCode != 0 {
+		return bluememo.RecallResult{}, fmt.Errorf("a read refused: %s", strings.TrimSpace(result.Stderr))
+	}
+	var recalled bluememo.RecallResult
+	if errorValue := json.Unmarshal([]byte(result.Stdout), &recalled); errorValue != nil {
+		return bluememo.RecallResult{}, fmt.Errorf("decode what a read answered: %w", errorValue)
+	}
+	return recalled, nil
 }
 
 // forget drops a cached handle so the file underneath it can be moved.

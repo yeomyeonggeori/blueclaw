@@ -515,6 +515,7 @@ func recallLaunchMemory(ctx context.Context, execution *taskLaunchExecution) lau
 	builder := execution.Launcher.toolCatalogBuilder
 	recalled, errorValue := builder.memoryStores.RecallAcross(
 		recallContext,
+		request.PersonAccess,
 		builder.memoryScopes(request.PersonAccess),
 		request.Prompt,
 		memory.DefaultRecallLimit,

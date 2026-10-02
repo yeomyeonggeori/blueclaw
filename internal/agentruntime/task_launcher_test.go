@@ -389,12 +389,12 @@ func TestTaskLauncherAuditsRecallFailureAndRunsWithoutMemory(t *testing.T) {
 	}
 	recallBody := ""
 	for _, taskEvent := range taskEventService.ListTaskEvent(launchResult.TurnResult.TaskRun.TaskRunID) {
-		if taskEvent.Name == "memory.recall_injected" {
+		if taskEvent.Name == "memory.recall_failed" {
 			recallBody = taskEvent.Body
 		}
 	}
 	if !strings.Contains(recallBody, "the memory file is away") {
-		t.Fatalf("expected the launch to record why memory was thin, got %q", recallBody)
+		t.Fatalf("expected the launch to record why no memory could be read, got %q", recallBody)
 	}
 }
 
@@ -789,7 +789,7 @@ func (embedder failingEmbedder) EmbedDocuments(context.Context, []string) ([][]f
 // to report the failure rather than run as though nothing was remembered.
 func failingRecallStores(t *testing.T, errorValue error) *memory.Stores {
 	t.Helper()
-	stores := memory.NewStores(t.TempDir(), bluememo.Configuration{Embedder: failingEmbedder{errorValue: errorValue}})
+	stores := memory.NewStores(t.TempDir(), bluememo.Configuration{Embedder: failingEmbedder{errorValue: errorValue}}, memorytest.ReadsInThisProcess())
 	t.Cleanup(func() { _ = stores.Close() })
 	return stores
 }

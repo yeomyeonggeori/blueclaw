@@ -7,6 +7,7 @@ import (
 	"github.com/yeomyeonggeori/bluememo/bluememotest"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
+	"github.com/yeomyeonggeori/blueclaw/internal/memory/memorytest"
 )
 
 // VirtualMemoryFact is a memory a scenario starts from. The store settles what
@@ -23,7 +24,7 @@ func openVirtualMemory(workspacePath string) *memory.Stores {
 		Embedder: &bluememotest.HashEmbedder{},
 		Model:    virtualMemoryModel{},
 		Judge:    bluememo.DistributionJudge{Chooser: bluememotest.ScriptedChooser{}},
-	})
+	}, memorytest.ReadsInThisProcess())
 }
 
 func seedVirtualMemory(ctx context.Context, stores *memory.Stores, facts []VirtualMemoryFact) error {

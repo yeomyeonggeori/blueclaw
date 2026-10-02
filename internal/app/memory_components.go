@@ -45,7 +45,7 @@ func newMemoryComponents(runtimeConfiguration config.RuntimeConfiguration, kerne
 		configuration.Judge = bluememo.DistributionJudge{Chooser: memory.Chooser{DecisionModel: kernel.decisionModel}}
 	}
 	workspaceRootPath := firstNonEmptyString(runtimeConfiguration.Terminal.WorkspaceRootPath, "/workspace")
-	stores := memory.NewStores(workspaceRootPath, configuration)
+	stores := memory.NewStores(workspaceRootPath, configuration, kernel.terminalService.WorkspaceActorFactory())
 	if !runtimeConfiguration.Memory.ExtractionDisabled {
 		services.taskRunService.RegisterTaskRunTransitionObserver(memory.TaskRunTransitionObserver{
 			Stores:   stores,
