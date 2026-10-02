@@ -18,7 +18,6 @@ func TestCanonicalPersonReferenceUpdateStatementsIncludeRuntimeIdentityTables(t 
 		"UPDATE task_run SET requester_person_id",
 		"UPDATE platform_account SET person_id",
 		"UPDATE memory_record SET scope_person_id",
-		"UPDATE memory_fact SET subject_person_id",
 	}
 
 	for _, fragment := range expectedFragments {
@@ -28,6 +27,20 @@ func TestCanonicalPersonReferenceUpdateStatementsIncludeRuntimeIdentityTables(t 
 	}
 	if hasDuplicateCanonicalPersonReferenceStatements(statements) {
 		t.Fatalf("duplicate canonical person reference statement in %#v", statements)
+	}
+}
+
+// A merge used to rewrite the retired memory tables, which nothing reads any
+// more. Memory moves with the file now, so a statement naming one of those
+// tables is a write that goes nowhere.
+func TestCanonicalPersonReferenceUpdateStatementsLeaveTheRetiredMemoryTablesAlone(t *testing.T) {
+	retired := []string{"memory_fact", "memory_episode", "memory_profile", "memory_job"}
+	for _, updateStatement := range canonicalPersonReferenceUpdateStatements() {
+		for _, table := range retired {
+			if strings.Contains(updateStatement.statement, table) {
+				t.Errorf("statement writes the retired %s: %q", table, updateStatement.statement)
+			}
+		}
 	}
 }
 
