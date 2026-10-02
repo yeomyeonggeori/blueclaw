@@ -97,7 +97,7 @@ var localToolDescriptorSpecs = []localToolDescriptorSpec{
 		ResultContract: &toolcontract.ToolResultContract{
 			Schema: memoryForgetOutputSchema,
 			Effects: []toolcontract.ResourceEffectContract{{
-				ObjectType:     "memory_fact",
+				ObjectType:     "memory",
 				Effect:         "forgotten",
 				ResultField:    "forgottenFactIDs",
 				EffectIdentity: "id",
