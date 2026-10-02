@@ -24,8 +24,11 @@ const (
 )
 
 // memoryFileMode lets the subject's group read a memory and nobody but the
-// service write it: a person's memory is kept on their behalf.
-const memoryFileMode = 0o640
+// service write it: a subject's memory is kept on their behalf.
+const (
+	memoryFileName = "memory.db"
+	memoryFileMode = 0o640
+)
 
 // Scope names one memory file. bluememo keeps a subject's memory in a file of
 // its own, so clearance is whether the service opens that file on a reader's
@@ -40,41 +43,29 @@ func CircleScope(circleID string) Scope { return Scope{Kind: ScopeCircle, ID: ci
 func WorkspaceScope() Scope             { return Scope{Kind: ScopeWorkspace} }
 
 // pathUnder puts a subject's memory in that subject's own workspace
-// directory, under the .protected directory the service owns, so the
-// permissions the workspace already declares are what decide who opens it.
+// directory, where the permissions the workspace already declares are what
+// decide who opens it.
 func (scope Scope) pathUnder(workspaceRootPath string) (string, error) {
 	if strings.TrimSpace(workspaceRootPath) == "" {
 		return "", errors.New("memory has no workspace root to sit under")
 	}
-	switch scope.Kind {
-	case ScopeWorkspace:
-		return security.SharedMemoryPath(workspaceRootPath), nil
-	case ScopePerson, ScopeCircle:
-		if !isStorageIdentifier(scope.ID) {
-			return "", fmt.Errorf("memory scope %s has an identifier a file name cannot carry: %q", scope.Kind, scope.ID)
-		}
-		if scope.Kind == ScopePerson {
-			return security.PersonMemoryPath(workspaceRootPath, scope.ID), nil
-		}
-		return security.CircleMemoryPath(workspaceRootPath, scope.ID), nil
+	directory := scope.directoryUnder(workspaceRootPath)
+	if directory == "" {
+		return "", fmt.Errorf("memory scope %q with identifier %q names no directory", scope.Kind, scope.ID)
 	}
-	return "", fmt.Errorf("unknown memory scope %q", scope.Kind)
+	return filepath.Join(security.ProtectedDirectoryPath(directory), memoryFileName), nil
 }
 
-func isStorageIdentifier(identifier string) bool {
-	if identifier == "" {
-		return false
+func (scope Scope) directoryUnder(workspaceRootPath string) string {
+	switch scope.Kind {
+	case ScopePerson:
+		return security.PersonHomeDirectoryPath(workspaceRootPath, scope.ID)
+	case ScopeCircle:
+		return security.CircleDirectoryPath(workspaceRootPath, scope.ID)
+	case ScopeWorkspace:
+		return security.SharedDirectoryPath(workspaceRootPath)
 	}
-	for _, letter := range identifier {
-		isAllowed := (letter >= 'a' && letter <= 'z') ||
-			(letter >= 'A' && letter <= 'Z') ||
-			(letter >= '0' && letter <= '9') ||
-			letter == '-' || letter == '_'
-		if !isAllowed {
-			return false
-		}
-	}
-	return true
+	return ""
 }
 
 // Stores holds the memory files this company's agent reads and writes, opening

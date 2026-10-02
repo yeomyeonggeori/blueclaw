@@ -150,7 +150,7 @@ func circlePoliciesWithRequesterCircles(circlePolicies []policy.CirclePolicy, ci
 		}
 		result = append(result, policy.CirclePolicy{
 			CircleID:               circleID,
-			WorkspaceDirectoryPath: strings.TrimRight(workspaceRootPath, "/") + "/circles/" + circleID,
+			WorkspaceDirectoryPath: CircleDirectoryPath(workspaceRootPath, circleID),
 		})
 	}
 	return result
