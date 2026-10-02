@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
+	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 )
 
 // A store embedded at one width cannot be searched at another, so the example
@@ -20,19 +21,28 @@ func TestExampleConfigurationMatchesTheDefaultMemoryEmbedding(t *testing.T) {
 	if errorValue := json.Unmarshal(document, &runtimeConfiguration); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if runtimeConfiguration.Memory.EmbeddingModel != defaultMemoryEmbedding.ModelName {
-		t.Fatalf("expected the example to name %q, got %q", defaultMemoryEmbedding.ModelName, runtimeConfiguration.Memory.EmbeddingModel)
+	if runtimeConfiguration.Memory.EmbeddingModel != llm.DefaultEmbeddingModelName {
+		t.Fatalf("expected the example to name %q, got %q", llm.DefaultEmbeddingModelName, runtimeConfiguration.Memory.EmbeddingModel)
 	}
-	if runtimeConfiguration.Memory.EmbeddingDimensions != defaultMemoryEmbedding.Dimensions {
-		t.Fatalf("expected the example to ask for %d dimensions, got %d", defaultMemoryEmbedding.Dimensions, runtimeConfiguration.Memory.EmbeddingDimensions)
+	if runtimeConfiguration.Memory.EmbeddingDimensions != llm.DefaultEmbeddingDimensions {
+		t.Fatalf("expected the example to ask for %d dimensions, got %d", llm.DefaultEmbeddingDimensions, runtimeConfiguration.Memory.EmbeddingDimensions)
 	}
 }
 
 func TestConfiguredEmbeddingDimensionsWinOverTheDefault(t *testing.T) {
-	if width := firstPositiveInteger(768, defaultMemoryEmbedding.Dimensions); width != 768 {
+	if width := firstPositiveInteger(768, llm.DefaultEmbeddingDimensions); width != 768 {
 		t.Fatalf("expected a configured width to be used, got %d", width)
 	}
-	if width := firstPositiveInteger(0, defaultMemoryEmbedding.Dimensions); width != defaultMemoryEmbedding.Dimensions {
+	if width := firstPositiveInteger(0, llm.DefaultEmbeddingDimensions); width != llm.DefaultEmbeddingDimensions {
 		t.Fatalf("expected the default width when none is configured, got %d", width)
+	}
+}
+
+// The store reads the model name off the embedder, so the name it records and
+// the name the embedder asks for cannot be two different strings.
+func TestTheEmbedderNamesTheModelItWasConfiguredWith(t *testing.T) {
+	client := llm.CapabilityEmbeddingClient{ModelName: "some-other/embedder"}
+	if name := client.EmbeddingModelName(); name != "some-other/embedder" {
+		t.Fatalf("expected the embedder to name its configured model, got %q", name)
 	}
 }
