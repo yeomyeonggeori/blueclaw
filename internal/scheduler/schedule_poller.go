@@ -68,6 +68,16 @@ func (errorValue scheduleTerminalError) Error() string {
 	return errorValue.message
 }
 
+type scheduledRunFailedError struct {
+	message             string
+	notice              connectors.OutboundReply
+	missingNoticeReason string
+}
+
+func (errorValue scheduledRunFailedError) Error() string {
+	return errorValue.message
+}
+
 func (schedulePoller SchedulePoller) Start(ctx context.Context, interval time.Duration) {
 	if interval <= 0 {
 		interval = 30 * time.Second
@@ -138,6 +148,7 @@ const maxScheduleFailureCount = 5
 
 func (schedulePoller SchedulePoller) recordScheduleFailure(schedule task.Schedule, errorValue error, referenceTime time.Time) error {
 	if scheduleFailureIsTerminal(schedule, errorValue, referenceTime) {
+		schedulePoller.tellTheRequesterTheScheduleGaveUp(schedule, errorValue)
 		if task.IsMorningBriefing(schedule) {
 			if repository, isSupported := schedulePoller.ScheduleRepository.(MorningBriefingOccurrenceRepository); isSupported {
 				return repository.RetireMorningBriefingOccurrence(schedule, errorValue.Error(), referenceTime)
@@ -146,6 +157,21 @@ func (schedulePoller SchedulePoller) recordScheduleFailure(schedule task.Schedul
 		return schedulePoller.ScheduleRepository.ExpireSchedule(schedule, errorValue.Error(), referenceTime)
 	}
 	return schedulePoller.ScheduleRepository.MarkScheduleFailed(schedule, errorValue.Error(), referenceTime)
+}
+
+func (schedulePoller SchedulePoller) tellTheRequesterTheScheduleGaveUp(schedule task.Schedule, errorValue error) {
+	var failed scheduledRunFailedError
+	if !errors.As(errorValue, &failed) {
+		return
+	}
+	if failed.missingNoticeReason != "" {
+		schedulePoller.logger().Warn("task_schedule.failure_notice.skipped", "taskScheduleID", schedule.ScheduleID, "reason", failed.missingNoticeReason)
+		return
+	}
+	result := scheduleExecutionResult{Schedule: schedule, TaskRunID: failed.notice.TaskRunID}
+	if _, enqueueError := schedulePoller.enqueuePreparedScheduleReply(result, failed.notice); enqueueError != nil {
+		schedulePoller.logger().Error("task_schedule.failure_notice.enqueue_failed", "taskScheduleID", schedule.ScheduleID, "error", enqueueError.Error())
+	}
 }
 
 func scheduleFailureIsTerminal(schedule task.Schedule, errorValue error, _ time.Time) bool {
@@ -371,20 +397,25 @@ func scheduledTaskReply(result agentruntime.ScheduleRunResult) (connectors.Outbo
 	turnResult := result.LaunchResult.TurnResult
 	reply := strings.TrimSpace(turnResult.FinishMessage)
 	if turnResult.TaskRun.Status != task.TaskStatusCompleted {
-		reason := strings.TrimSpace(turnResult.TaskRun.FailureReason)
-		if reason != "" {
-			reason = " reason=" + reason
-		}
-		message := "scheduled task did not complete: taskRunID=" + turnResult.TaskRun.TaskRunID + " status=" + string(turnResult.TaskRun.Status) + reason
-		if taskStatusRequiresInteraction(turnResult.TaskRun.Status) {
-			return connectors.OutboundReply{}, scheduleTerminalError{message: message}
-		}
-		return connectors.OutboundReply{}, errors.New(message)
+		return connectors.OutboundReply{}, scheduledRunNotCompleted(turnResult)
 	}
 	if reply == "" {
 		return connectors.OutboundReply{}, errors.New("scheduled task completed without a reply")
 	}
 	return connectors.OutboundReply{Message: reply, TaskRunID: turnResult.TaskRun.TaskRunID, ReplyKind: "success", Attachments: turnResult.Attachments}, nil
+}
+
+func scheduledRunNotCompleted(turnResult agentcontract.AgentTurnResult) error {
+	reason := strings.TrimSpace(turnResult.TaskRun.FailureReason)
+	if reason != "" {
+		reason = " reason=" + reason
+	}
+	message := "scheduled task did not complete: taskRunID=" + turnResult.TaskRun.TaskRunID + " status=" + string(turnResult.TaskRun.Status) + reason
+	if taskStatusRequiresInteraction(turnResult.TaskRun.Status) {
+		return scheduleTerminalError{message: message}
+	}
+	notice, missingNoticeReason := connectors.UserNoticeReply(turnResult, turnResult.TaskRun.TaskRunID)
+	return scheduledRunFailedError{message: message, notice: notice, missingNoticeReason: missingNoticeReason}
 }
 
 func (schedulePoller SchedulePoller) hasActiveScheduleRun(schedule task.Schedule) bool {
