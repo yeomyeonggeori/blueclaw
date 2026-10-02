@@ -115,14 +115,14 @@ func (connectorRuntime *ConnectorRuntime) pendingApprovalForTaskRun(selectedTask
 
 func (connectorRuntime *ConnectorRuntime) findActiveGoal(personID string, _ string, event PlatformInboundEvent, taskWaitResolution inboundTaskWaitResolution) (agentcontract.ActiveGoal, bool) {
 	if taskWaitResolution.HasTaskWaitToken {
-		return connectorRuntime.findActiveGoalByTaskRunID(taskWaitResolution.TaskWaitToken.TaskRunID)
+		return connectorRuntime.findActiveGoalByTaskRunID(taskWaitResolution.TaskWaitToken.TaskRunID, event)
 	}
 	taskRuns := connectorRuntime.taskRunService.ListTaskRunByPersonID(personID)
 	var selectedTaskRun task.TaskRun
 	isSelected := false
 	for _, taskRun := range taskRuns {
 		taskEvents := connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID)
-		if !taskRunCanContinueGoal(taskRun, taskEvents) {
+		if !eventCanContinueGoal(event, taskRun, taskEvents) {
 			continue
 		}
 		if !taskRunSharesMessageThread(taskRun, event) {
@@ -143,13 +143,13 @@ func (connectorRuntime *ConnectorRuntime) findActiveGoal(personID string, _ stri
 	return connectorRuntime.activeGoalForTaskRun(selectedTaskRun), true
 }
 
-func (connectorRuntime *ConnectorRuntime) findActiveGoalByTaskRunID(taskRunID string) (agentcontract.ActiveGoal, bool) {
+func (connectorRuntime *ConnectorRuntime) findActiveGoalByTaskRunID(taskRunID string, event PlatformInboundEvent) (agentcontract.ActiveGoal, bool) {
 	taskRun, isFound := connectorRuntime.taskRunService.FindTaskRun(taskRunID)
 	if !isFound {
 		return agentcontract.ActiveGoal{}, false
 	}
 	taskEvents := connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID)
-	if !taskRunCanContinueGoal(taskRun, taskEvents) {
+	if !eventCanContinueGoal(event, taskRun, taskEvents) {
 		return agentcontract.ActiveGoal{}, false
 	}
 	return connectorRuntime.activeGoalForTaskRun(taskRun), true
@@ -273,6 +273,13 @@ func latestIntakeDecision(taskEvents []task.TaskEvent) agentcontract.IntakeDecis
 		return decision
 	}
 	return agentcontract.IntakeDecision{}
+}
+
+func eventCanContinueGoal(event PlatformInboundEvent, taskRun task.TaskRun, taskEvents []task.TaskEvent) bool {
+	if event.isApprovalAskedElsewhere && taskRun.Status == task.TaskStatusWaitingApproval {
+		return false
+	}
+	return taskRunCanContinueGoal(taskRun, taskEvents)
 }
 
 func taskRunCanContinueGoal(taskRun task.TaskRun, taskEvents []task.TaskEvent) bool {

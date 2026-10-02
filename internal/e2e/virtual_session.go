@@ -28,6 +28,7 @@ import (
 	"github.com/yeomyeonggeori/bluememo"
 
 	"github.com/yeomyeonggeori/blueclaw/agenttest"
+	"github.com/yeomyeonggeori/blueclaw/internal/acpsession"
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
@@ -84,6 +85,7 @@ type VirtualSessionScenario struct {
 	ProgressWriter            io.Writer
 	WritableWorkspacePaths    []string
 	RequesterIsAdmin          bool
+	IsDeliveredOverACP        bool
 	Turns                     []VirtualTurn
 }
 
@@ -340,6 +342,7 @@ type VirtualSessionHarness struct {
 	taskEventService *task.TaskEventService
 	runtime          *connectors.ConnectorRuntime
 	adapter          *virtualAdapter
+	acpSession       *virtualACPSession
 	cleanup          func()
 
 	approvedCallSchedules *virtualApprovedCallSchedules
@@ -760,6 +763,7 @@ var builtinScenarioFactories = map[string]func(string) VirtualSessionScenario{
 	"failure_explanation_acceptance":            FailureExplanationAcceptanceScenario,
 	"one_time_schedule_acceptance":              OneTimeScheduleAcceptanceScenario,
 	"ask_choice_reply_acceptance":               AskChoiceReplyAcceptanceScenario,
+	"ask_choice_reply_over_acp":                 AskChoiceReplyOverACPScenario,
 	"dm_send_confirm_acceptance":                DirectMessageSendConfirmAcceptanceScenario,
 	"channel_post_acceptance":                   ChannelPostAcceptanceScenario,
 	"platform_message_edit_acceptance":          PlatformMessageEditAcceptanceScenario,
@@ -947,6 +951,25 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	virtualTaskLauncher.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, highLanguageModel))
 	virtualTaskLauncher.UseRequesterEmailResolver(identityService)
 	runtime.UseTaskLauncher(virtualTaskLauncher)
+	var acpSession *virtualACPSession
+	if scenario.IsDeliveredOverACP {
+		var errorValue error
+		acpSession, errorValue = openVirtualACPSession(acpsession.Collaborators{
+			ApprovalDeferrer:   virtualApprovalGate,
+			TaskLauncher:       virtualTaskLauncher,
+			Directory:          identityService,
+			TurnRouter:         scenarioTurnRouter,
+			IntakeDecider:      scenarioDecisionPlanner,
+			AttachmentImporter: runtime,
+			SessionTurns:       runtime,
+			TaskRunStore:       taskRunService,
+		}, virtualConversationID)
+		if errorValue != nil {
+			cleanup()
+			return nil, errorValue
+		}
+		cleanup = closingBoth(acpSession.close, cleanup)
+	}
 
 	return &VirtualSessionHarness{
 		scenario:         scenario,
@@ -961,11 +984,21 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 		taskEventService: taskEventService,
 		runtime:          runtime,
 		adapter:          adapter,
+		acpSession:       acpSession,
 		cleanup:          cleanup,
 
 		approvedCallSchedules: approvedCallSchedules,
 		scheduleRunner:        agentruntime.NewScheduleRunner(virtualTaskLauncher),
 	}, nil
+}
+
+const virtualConversationID = "virtual-conversation-1"
+
+func closingBoth(first func(), second func()) func() {
+	return func() {
+		first()
+		second()
+	}
 }
 
 func observedVirtualLanguageModelOrDefault(provider llm.LanguageModelProvider, defaultProvider llm.LanguageModelProvider, store *virtualLanguageModelObservationStore) llm.LanguageModelProvider {
@@ -2871,7 +2904,7 @@ func (harness *VirtualSessionHarness) runTurn(ctx context.Context, index int, vi
 	}
 	messages := harness.adapter.VisibleHistory()
 	messages = append(messages, virtualTurn.ContextMessages...)
-	conversationID := "virtual-conversation-1"
+	conversationID := virtualConversationID
 	historyCursor := ""
 	if len(messages) > 0 {
 		historyCursor = conversationID
@@ -2912,21 +2945,20 @@ func (harness *VirtualSessionHarness) runTurn(ctx context.Context, index int, vi
 		},
 		RawReceivedAt: time.Now().UTC(),
 	}
+	if harness.acpSession != nil {
+		return harness.runTurnOverACP(ctx, event, func() VirtualTurnResult {
+			return harness.observedTurnResult(reactionStartIndex, modelCallStartIndex, modelRequestStartIndex)
+		})
+	}
 	runtimeResult, errorValue := harness.runtime.HandleInboundEvent(ctx, harness.adapter, event)
 	if errorValue != nil {
 		return VirtualTurnResult{}, errorValue
 	}
-	turnResult := VirtualTurnResult{
-		Handled:                 runtimeResult.Handled,
-		Ignored:                 runtimeResult.Ignored,
-		Reason:                  runtimeResult.Reason,
-		Reactions:               harness.adapter.ReactionsSince(reactionStartIndex),
-		TaskRunID:               runtimeResult.TaskRunID,
-		LanguageModelCallEvents: harness.modelCallsSince(modelCallStartIndex),
-		ModelContext:            harness.modelContextSince(modelRequestStartIndex),
-		ModelImagePartCount:     harness.modelImagePartCountSince(modelRequestStartIndex),
-		UserModelImagePartCount: harness.userModelImagePartCountSince(modelRequestStartIndex),
-	}
+	turnResult := harness.observedTurnResult(reactionStartIndex, modelCallStartIndex, modelRequestStartIndex)
+	turnResult.Handled = runtimeResult.Handled
+	turnResult.Ignored = runtimeResult.Ignored
+	turnResult.Reason = runtimeResult.Reason
+	turnResult.TaskRunID = runtimeResult.TaskRunID
 	if strings.TrimSpace(runtimeResult.TaskRunID) != "" {
 		taskRun, isFound := harness.taskRunService.FindTaskRun(runtimeResult.TaskRunID)
 		if !isFound {
@@ -2948,6 +2980,16 @@ func (harness *VirtualSessionHarness) runTurn(ctx context.Context, index int, vi
 	turnResult.ReplyTargetID = outboundReplyTarget.ReplyTargetID
 	turnResult.Attachments = outboundReply.Attachments
 	return turnResult, nil
+}
+
+func (harness *VirtualSessionHarness) observedTurnResult(reactionStartIndex int, modelCallStartIndex int, modelRequestStartIndex int) VirtualTurnResult {
+	return VirtualTurnResult{
+		Reactions:               harness.adapter.ReactionsSince(reactionStartIndex),
+		LanguageModelCallEvents: harness.modelCallsSince(modelCallStartIndex),
+		ModelContext:            harness.modelContextSince(modelRequestStartIndex),
+		ModelImagePartCount:     harness.modelImagePartCountSince(modelRequestStartIndex),
+		UserModelImagePartCount: harness.userModelImagePartCountSince(modelRequestStartIndex),
+	}
 }
 
 func virtualReplyTargetID(index int, virtualTurn VirtualTurn) string {

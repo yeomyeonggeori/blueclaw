@@ -54,7 +54,9 @@ func (open openInteractions) ledgerTaskRunID() string {
 
 func (connectorRuntime *ConnectorRuntime) readOpenInteractions(turn *inboundTurn) openInteractions {
 	open := openInteractions{}
-	open.confirmation, open.hasConfirmation = connectorRuntime.findPendingApproval(turn.personID, turn.platform, turn.event, turn.taskWaitResolution)
+	if !turn.event.isApprovalAskedElsewhere {
+		open.confirmation, open.hasConfirmation = connectorRuntime.findPendingApproval(turn.personID, turn.platform, turn.event, turn.taskWaitResolution)
+	}
 	if open.hasConfirmation {
 		open.confirmationAt = latestTaskEventTime(connectorRuntime.taskRunService.ListTaskEvent(open.confirmation.TaskRun.TaskRunID), agentcontract.TaskEventConfirmationRequested, open.confirmation.TaskRun.UpdatedAt)
 	}

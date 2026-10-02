@@ -190,12 +190,17 @@ func (connectorRuntime *ConnectorRuntime) prepareTurnForLaunch(ctx context.Conte
 		return
 	}
 	turn.event = connectorRuntime.withAttachmentMaterials(ctx, turn.adapter, turn.event, turn.personID)
-	if !turn.isApprovalContinuation && !turn.hasPendingAskInteraction && !turn.hasActiveGoal {
-		var hasRevisedPriorTask bool
-		turn.priorTask, hasRevisedPriorTask = connectorRuntime.revisedPriorTask(turn.personID, turn.event)
-		if !hasRevisedPriorTask {
-			turn.priorTask, _ = connectorRuntime.findPriorTaskContext(turn.personID, turn.event)
-		}
+	connectorRuntime.resolveTurnPriorTask(turn)
+}
+
+func (connectorRuntime *ConnectorRuntime) resolveTurnPriorTask(turn *inboundTurn) {
+	if turn.isApprovalContinuation || turn.hasPendingAskInteraction || turn.hasActiveGoal {
+		return
+	}
+	var hasRevisedPriorTask bool
+	turn.priorTask, hasRevisedPriorTask = connectorRuntime.revisedPriorTask(turn.personID, turn.event)
+	if !hasRevisedPriorTask {
+		turn.priorTask, _ = connectorRuntime.findPriorTaskContext(turn.personID, turn.event)
 	}
 }
 
