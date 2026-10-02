@@ -3,6 +3,7 @@ package e2e
 import (
 	"archive/zip"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
@@ -1367,6 +1369,106 @@ func TestAttachmentCurrentImageInput(t *testing.T) {
 	}
 	if len(turnResult.Attachments) != 0 {
 		t.Fatalf("expected current image input not to be reattached, got %+v", turnResult.Attachments)
+	}
+}
+
+func TestAttachedFileReachesTheAgentWithThePathItWasWrittenTo(t *testing.T) {
+	content := "월,지역,목표,실적\n2026-04,서울,6720,6200\n"
+	result, errorValue := RunVirtualSession(context.Background(), VirtualSessionScenario{
+		Name:                  "attached_file_path",
+		ArtifactDirectoryPath: t.TempDir(),
+		AllowedTools:          []string{"bash", "read"},
+		Turns: []VirtualTurn{{
+			Prompt:          "첨부한 CSV 요약해줘",
+			RouterTaskShape: agentcontract.TaskShapeResearchTask,
+			InputAttachments: []connectors.InputAttachment{{
+				Filename:      "판매실적.csv",
+				ContentType:   "text/csv",
+				ContentBase64: base64.StdEncoding.EncodeToString([]byte(content)),
+				IsAvailable:   true,
+			}},
+			ActionResponses: []string{
+				actionCallTool("read", `{"path":"/workspace/circles/member/inbox/virtual/virtual-conversation-1/판매실적.csv"}`),
+				actionFinishMessage("요약했습니다.", "obs-001"),
+			},
+		}},
+	})
+	if errorValue != nil {
+		t.Fatalf("expected the attached file scenario to pass: %v", errorValue)
+	}
+	turnResult := result.TurnResults[0]
+	if !eventsContain(turnResult.Events, "tool.read.result", "2026-04,서울,6720,6200") {
+		t.Fatalf("expected reading the attachment to return the bytes the person sent; events: %s", summarizeEvents(turnResult.Events))
+	}
+	modelContext := turnResult.ModelContext
+	attachedFile := "Attached file:\n- filename: 판매실적.csv\n- contentType: text/csv\n- path: "
+	pathStart := strings.Index(modelContext, attachedFile)
+	if pathStart < 0 {
+		t.Fatalf("expected the agent's user message to name the attached file and its path; context: %s", modelContext)
+	}
+	attachedPath, _, _ := strings.Cut(modelContext[pathStart+len(attachedFile):], "\n")
+	hostPath := filepath.Join(result.ArtifactDirectoryPath, "workspace", strings.TrimPrefix(attachedPath, "/workspace/"))
+	written, errorValue := os.ReadFile(hostPath)
+	if errorValue != nil {
+		t.Fatalf("expected the attached file at %s: %v", attachedPath, errorValue)
+	}
+	if string(written) != content {
+		t.Fatalf("expected the attached file to hold the bytes the person sent, got %q", written)
+	}
+}
+
+func TestVirtualPlatformImportsAnAttachmentAgainWithTheBytesThePersonSent(t *testing.T) {
+	content := []byte("월,지역,목표,실적\n2026-04,서울,6720,6200\n")
+	adapter := &virtualAdapter{workspacePath: t.TempDir()}
+	received, errorValue := adapter.receiveMessageAttachments("virtual-message-001", []connectors.InputAttachment{{
+		Filename:      "판매실적.csv",
+		ContentType:   "text/csv",
+		ContentBase64: base64.StdEncoding.EncodeToString(content),
+	}})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	request := connectors.InputAttachmentImportRequest{TargetDirectoryPath: "/workspace/inbox", InputAttachments: received}
+	first, errorValue := adapter.ImportInputAttachments(context.Background(), request)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	request.InputAttachments = first.InputAttachments
+	if _, errorValue := adapter.ImportInputAttachments(context.Background(), request); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	written, errorValue := os.ReadFile(filepath.Join(adapter.workspacePath, "inbox", "판매실적.csv"))
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if string(written) != string(content) {
+		t.Fatalf("expected a second import, as the read tool's attachment fallback makes, to keep the sent bytes, got %q", written)
+	}
+}
+
+func TestSkillCopyKeepsAScriptExecutable(t *testing.T) {
+	sourcePath := filepath.Join(t.TempDir(), "office")
+	if errorValue := os.MkdirAll(filepath.Join(sourcePath, "scripts"), 0o700); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := os.WriteFile(filepath.Join(sourcePath, "scripts", "office"), []byte("#!/bin/sh\n"), 0o755); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := os.WriteFile(filepath.Join(sourcePath, "SKILL.md"), []byte("# office\n"), 0o644); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	destinationPath := filepath.Join(t.TempDir(), "skills", "office")
+	if errorValue := copyDirectory(sourcePath, destinationPath); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	for relativePath, expectedMode := range map[string]os.FileMode{"scripts/office": 0o700, "SKILL.md": 0o600} {
+		information, errorValue := os.Stat(filepath.Join(destinationPath, relativePath))
+		if errorValue != nil {
+			t.Fatal(errorValue)
+		}
+		if information.Mode().Perm() != expectedMode {
+			t.Fatalf("expected %s copied with mode %o, got %o", relativePath, expectedMode, information.Mode().Perm())
+		}
 	}
 }
 
