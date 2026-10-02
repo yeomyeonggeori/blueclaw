@@ -1,14 +1,16 @@
 package httpserver
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,15 +18,13 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 )
 
-const workspaceDownloadMaximumBytes int64 = 64 * 1024 * 1024
-
 // A private home is owned by that person's POSIX user, so only a helper that can
 // act for people reads it. Saying the device needs a newer helper is the whole
 // diagnosis; the raw "permission denied" this replaces reads as broken ownership.
 const tooOldToReadAsThePerson = "this device's workspace helper cannot read a private home; it needs one that can act for a person"
 
-// WorkspaceFilesHandler serves read-only listings and downloads of the guest's
-// live workspace filesystem. The workspace lives inside the virtual-machine guest
+// WorkspaceFilesHandler serves listings, ranged downloads and streamed writes of
+// the guest's live workspace filesystem. The workspace lives inside the virtual-machine guest
 // image, so a host-side file browser cannot read it; admind proxies here to show
 // a person their own workspace. Every read runs as the person named by the
 // caller, because a private home is owned by that person's POSIX user and the
@@ -72,6 +72,11 @@ func (handler WorkspaceFilesHandler) HandleDownload(responseWriter http.Response
 	if !isResolved {
 		return
 	}
+	streamer, isStreamer := actor.(security.WorkspaceFileStreamer)
+	if !isStreamer {
+		http.Error(responseWriter, "this workspace actor cannot stream a file", http.StatusNotImplemented)
+		return
+	}
 	stat, errorValue := actor.Stat(request.Context(), hostPath)
 	if isPermissionDeniedActorError(errorValue) {
 		writeWorkspaceActorError(responseWriter, errorValue)
@@ -81,18 +86,82 @@ func (handler WorkspaceFilesHandler) HandleDownload(responseWriter http.Response
 		http.Error(responseWriter, "file not found", http.StatusNotFound)
 		return
 	}
-	if stat.SizeBytes > workspaceDownloadMaximumBytes {
-		http.Error(responseWriter, "file is too large to download through the workspace browser", http.StatusRequestEntityTooLarge)
-		return
-	}
-	content, errorValue := actor.ReadFile(request.Context(), hostPath, workspaceDownloadMaximumBytes)
-	if errorValue != nil {
-		writeWorkspaceActorError(responseWriter, errorValue)
+	fileRange, status, isSatisfiable := requestedFileRange(request.Header.Get("Range"), stat.SizeBytes)
+	responseWriter.Header().Set("Accept-Ranges", "bytes")
+	if !isSatisfiable {
+		responseWriter.Header().Set("Content-Range", "bytes */"+strconv.FormatInt(stat.SizeBytes, 10))
+		http.Error(responseWriter, "that range is past the end of the file", http.StatusRequestedRangeNotSatisfiable)
 		return
 	}
 	fileName := filepath.Base(hostPath)
+	responseWriter.Header().Set("Content-Type", "application/octet-stream")
+	responseWriter.Header().Set("Content-Length", strconv.FormatInt(fileRange.Length, 10))
 	responseWriter.Header().Set("Content-Disposition", "attachment; filename=\""+fileName+"\"")
-	http.ServeContent(responseWriter, request, fileName, time.Unix(stat.ModifiedAtUnix, 0), bytes.NewReader(content))
+	responseWriter.Header().Set("Last-Modified", time.Unix(stat.ModifiedAtUnix, 0).UTC().Format(http.TimeFormat))
+	if status == http.StatusPartialContent {
+		lastByte := fileRange.Offset + fileRange.Length - 1
+		responseWriter.Header().Set("Content-Range", "bytes "+strconv.FormatInt(fileRange.Offset, 10)+"-"+strconv.FormatInt(lastByte, 10)+"/"+strconv.FormatInt(stat.SizeBytes, 10))
+	}
+	responseWriter.WriteHeader(status)
+	if fileRange.Length == 0 {
+		return
+	}
+	_ = streamer.StreamFile(request.Context(), hostPath, fileRange, responseWriter)
+}
+
+var singleByteRangePattern = regexp.MustCompile(`^bytes=(\d+)-(\d*)$`)
+
+func requestedFileRange(rangeHeader string, sizeBytes int64) (security.WorkspaceFileRange, int, bool) {
+	matched := singleByteRangePattern.FindStringSubmatch(strings.TrimSpace(rangeHeader))
+	if matched == nil {
+		return security.WorkspaceFileRange{Length: sizeBytes}, http.StatusOK, true
+	}
+	firstByte, _ := strconv.ParseInt(matched[1], 10, 64)
+	if firstByte >= sizeBytes {
+		return security.WorkspaceFileRange{}, http.StatusRequestedRangeNotSatisfiable, false
+	}
+	lastByte := sizeBytes - 1
+	if matched[2] != "" {
+		askedLastByte, _ := strconv.ParseInt(matched[2], 10, 64)
+		lastByte = min(askedLastByte, lastByte)
+	}
+	if lastByte < firstByte {
+		return security.WorkspaceFileRange{}, http.StatusRequestedRangeNotSatisfiable, false
+	}
+	return security.WorkspaceFileRange{Offset: firstByte, Length: lastByte - firstByte + 1}, http.StatusPartialContent, true
+}
+
+func (handler WorkspaceFilesHandler) HandleUpload(responseWriter http.ResponseWriter, request *http.Request) {
+	actor, hostPath, isResolved := handler.resolveActorAndPath(responseWriter, request)
+	if !isResolved {
+		return
+	}
+	streamer, isStreamer := actor.(security.WorkspaceFileStreamer)
+	if !isStreamer {
+		http.Error(responseWriter, "this workspace actor cannot stream a file", http.StatusNotImplemented)
+		return
+	}
+	if errorValue := actor.MkdirAll(request.Context(), filepath.Dir(hostPath)); errorValue != nil {
+		writeWorkspaceActorError(responseWriter, errorValue)
+		return
+	}
+	counted := &countingReader{source: request.Body}
+	if errorValue := streamer.WriteFileFrom(request.Context(), hostPath, counted); errorValue != nil {
+		writeWorkspaceActorError(responseWriter, errorValue)
+		return
+	}
+	writeJSON(responseWriter, map[string]any{"name": filepath.Base(hostPath), "sizeBytes": counted.readBytes})
+}
+
+type countingReader struct {
+	source    io.Reader
+	readBytes int64
+}
+
+func (reader *countingReader) Read(buffer []byte) (int, error) {
+	readCount, errorValue := reader.source.Read(buffer)
+	reader.readBytes += int64(readCount)
+	return readCount, errorValue
 }
 
 // A helper too old to list a directory as its owner leaves the service read,

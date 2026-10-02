@@ -3,6 +3,7 @@ package security
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -89,6 +90,42 @@ func (actor DirectWorkspaceActor) ReadFile(ctx context.Context, path string, max
 		return nil, actor.actorError("read_file", "direct", path, errorValue)
 	}
 	return content, nil
+}
+
+func (actor DirectWorkspaceActor) StreamFile(ctx context.Context, path string, fileRange WorkspaceFileRange, destination io.Writer) error {
+	_ = ctx
+	sourceFile, errorValue := os.Open(path)
+	if errorValue != nil {
+		return actor.actorError("stream_file", "direct", path, errorValue)
+	}
+	defer sourceFile.Close()
+	if _, errorValue := sourceFile.Seek(fileRange.Offset, io.SeekStart); errorValue != nil {
+		return actor.actorError("stream_file", "direct", path, errorValue)
+	}
+	var source io.Reader = sourceFile
+	if fileRange.Length > 0 {
+		source = io.LimitReader(sourceFile, fileRange.Length)
+	}
+	if _, errorValue := io.Copy(destination, source); errorValue != nil {
+		return actor.actorError("stream_file", "direct", path, errorValue)
+	}
+	return nil
+}
+
+func (actor DirectWorkspaceActor) WriteFileFrom(ctx context.Context, path string, source io.Reader) error {
+	_ = ctx
+	destinationFile, errorValue := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o666)
+	if errorValue != nil {
+		return actor.actorError("write_file", "direct", path, errorValue)
+	}
+	if _, errorValue := io.Copy(destinationFile, source); errorValue != nil {
+		_ = destinationFile.Close()
+		return actor.actorError("write_file", "direct", path, errorValue)
+	}
+	if errorValue := destinationFile.Close(); errorValue != nil {
+		return actor.actorError("write_file", "direct", path, errorValue)
+	}
+	return nil
 }
 
 func (actor DirectWorkspaceActor) ListDirectory(ctx context.Context, path string) ([]WorkspaceActorDirectoryEntry, error) {

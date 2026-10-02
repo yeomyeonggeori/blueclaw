@@ -1,4 +1,4 @@
-import type { OutgoingAttachment } from "../outgoing-attachment.ts";
+import type { AttachmentAlreadyKept } from "../outgoing-attachment.ts";
 
 export type ActorCredential = {
 	kind: string;
@@ -132,11 +132,29 @@ export type PersonalImage = {
 	dataURL: string;
 };
 
-export type PersonalFile = {
-	filename: string;
+export type KeptMedia = {
+	address: string;
+	digest: string;
+	sizeBytes: number;
 	contentType: string;
-	contentBase64: string;
 };
+
+export type MediaSource = {
+	url: string;
+	contentType: string;
+};
+
+export class MediaRefused extends Error {
+	constructor(
+		readonly status: number,
+		readonly reason: string,
+		readonly digest: string,
+		readonly sizeBytes: number,
+	) {
+		super(`the messenger's file store refused this file (${status}: ${reason})`);
+		this.name = "MediaRefused";
+	}
+}
 
 export interface PersonalGateway {
 	readonly platform: string;
@@ -176,14 +194,11 @@ export interface PersonalGateway {
 		conversationID: string,
 		body: string,
 		parentID?: string,
-		attachments?: OutgoingAttachment[],
+		attachments?: AttachmentAlreadyKept[],
 		mentions?: PersonalMentions,
 	): Promise<PersonalMessage>;
-	readAttachment(
-		actor: ActorCredential,
-		attachmentID: string,
-		largestBytes: number,
-	): Promise<PersonalFile | null>;
+	readMedia(actor: ActorCredential, url: string, range: string): Promise<Response>;
+	uploadMedia(actor: ActorCredential, source: MediaSource): Promise<KeptMedia>;
 	editMessage(
 		actor: ActorCredential,
 		conversationID: string,

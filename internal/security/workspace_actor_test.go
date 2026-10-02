@@ -1,12 +1,15 @@
 package security
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/yeomyeonggeori/blueclaw/internal/config"
 )
 
 func TestHelperFailureDetailPreservesExecutionContext(t *testing.T) {
@@ -137,5 +140,52 @@ func TestDirectWorkspaceActorReportsPermissionDeniedForAnUnreadableDirectory(t *
 	var actorError WorkspaceActorError
 	if !errors.As(errorValue, &actorError) || actorError.Code != ActorErrorCodePermissionDenied {
 		t.Fatalf("expected a permission denied actor error, got %v", errorValue)
+	}
+}
+
+func fakeStreamingHelperActor(t *testing.T) (POSIXHelperWorkspaceActor, string) {
+	t.Helper()
+	directory := t.TempDir()
+	helperPath := filepath.Join(directory, "helper")
+	argumentsPath := filepath.Join(directory, "arguments")
+	writeFakeCapabilitiesHelper(t, helperPath, "#!/bin/sh\n"+
+		"echo \"$@\" >> "+argumentsPath+"\n"+
+		"while [ $# -gt 0 ]; do case \"$1\" in --operation) operation=$2; shift;; --path) target=$2; shift;; esac; shift; done\n"+
+		"case \"$operation\" in stream_file) cat \"$target\";; write_file) cat > \"$target\";; *) exit 3;; esac\n")
+	return POSIXHelperWorkspaceActor{terminalConfiguration: config.TerminalConfiguration{POSIXHelperPath: helperPath}}, argumentsPath
+}
+
+func TestPOSIXHelperActorStreamsAFileThroughTheHelper(t *testing.T) {
+	actor, argumentsPath := fakeStreamingHelperActor(t)
+	sourcePath := filepath.Join(t.TempDir(), "source.bin")
+	content := bytes.Repeat([]byte("stream"), 1<<16)
+	if errorValue := os.WriteFile(sourcePath, content, 0o600); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	var streamed bytes.Buffer
+	if errorValue := actor.StreamFile(context.Background(), sourcePath, WorkspaceFileRange{}, &streamed); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if !bytes.Equal(streamed.Bytes(), content) {
+		t.Fatalf("expected %d bytes, got %d", len(content), streamed.Len())
+	}
+	if arguments, _ := os.ReadFile(argumentsPath); !strings.Contains(string(arguments), "--operation stream_file") {
+		t.Fatalf("expected the stream_file operation, got %q", arguments)
+	}
+}
+
+func TestPOSIXHelperActorWritesWhatItIsHandedThroughTheHelper(t *testing.T) {
+	actor, argumentsPath := fakeStreamingHelperActor(t)
+	destinationPath := filepath.Join(t.TempDir(), "destination.bin")
+	content := bytes.Repeat([]byte("upload"), 1<<16)
+	if errorValue := actor.WriteFileFrom(context.Background(), destinationPath, bytes.NewReader(content)); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	written, errorValue := os.ReadFile(destinationPath)
+	if errorValue != nil || !bytes.Equal(written, content) {
+		t.Fatalf("expected %d bytes written, got %d (%v)", len(content), len(written), errorValue)
+	}
+	if arguments, _ := os.ReadFile(argumentsPath); !strings.Contains(string(arguments), "--operation write_file") {
+		t.Fatalf("expected the write_file operation, got %q", arguments)
 	}
 }

@@ -45,6 +45,16 @@ type WorkspaceActor interface {
 	Stat(context.Context, string) (WorkspaceActorStat, error)
 }
 
+type WorkspaceFileRange struct {
+	Offset int64
+	Length int64
+}
+
+type WorkspaceFileStreamer interface {
+	StreamFile(context.Context, string, WorkspaceFileRange, io.Writer) error
+	WriteFileFrom(context.Context, string, io.Reader) error
+}
+
 type WorkspaceActorFactory interface {
 	Requester(context.Context, WorkspaceActorRequest) (WorkspaceActor, error)
 	CanListDirectory(context.Context) bool
@@ -240,38 +250,29 @@ func (actor POSIXHelperWorkspaceActor) Stat(ctx context.Context, path string) (W
 	}, nil
 }
 
+func (actor POSIXHelperWorkspaceActor) StreamFile(ctx context.Context, path string, fileRange WorkspaceFileRange, destination io.Writer) error {
+	request := fsRequest{Path: path, Offset: fileRange.Offset, MaxBytes: fileRange.Length}
+	return actor.runFSHelper(ctx, "stream_file", path, request, nil, destination)
+}
+
+func (actor POSIXHelperWorkspaceActor) WriteFileFrom(ctx context.Context, path string, source io.Reader) error {
+	return actor.runFSHelper(ctx, "write_file", path, fsRequest{Path: path, Mode: actorFileCreateMode}, source, io.Discard)
+}
+
 func (actor POSIXHelperWorkspaceActor) executeFS(ctx context.Context, operation string, path string, request fsRequest, stdin io.Reader) error {
 	return actor.executeFSWithResponse(ctx, operation, path, request, stdin, nil)
 }
 
 func (actor POSIXHelperWorkspaceActor) executeFSWithResponse(ctx context.Context, operation string, path string, request fsRequest, stdin io.Reader, response *fsResponse) error {
-	resolvedIdentity, errorValue := ResolveExecutionIdentity(actor.executionIdentity)
-	if errorValue != nil {
-		return actorError(operation, "resolve_identity", actor.executionIdentity, path, ActorErrorCodeIdentityMissing, errorValue.Error())
-	}
-	arguments := fsHelperArguments(operation, resolvedIdentity, request)
 	executionContext, cancelFunction := context.WithTimeout(ctx, fsHelperOperationTimeout)
 	defer cancelFunction()
-	command := exec.CommandContext(executionContext, actor.terminalConfiguration.POSIXHelperPath, arguments...)
-	if stdin != nil {
-		command.Stdin = stdin
-	}
 	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	command.Stdout = &stdout
-	command.Stderr = &stderr
-	errorValue = command.Run()
+	errorValue := actor.runFSHelper(executionContext, operation, path, request, stdin, &stdout)
 	if executionContext.Err() == context.DeadlineExceeded {
 		return actorError(operation, "helper", actor.executionIdentity, path, ActorErrorCodeOperationFailed, "operation timed out")
 	}
 	if errorValue != nil {
-		detail := firstNonEmptyString(strings.TrimSpace(stderr.String()), errorValue.Error())
-		code := actorErrorCodeForDetail(detail)
-		if isHelperExecutionFailure(errorValue, stderr.String()) {
-			code = ActorErrorCodeRuntimeUnavailable
-			detail = helperFailureDetail(actor.terminalConfiguration.POSIXHelperPath, operation, detail, nil)
-		}
-		return actorError(operation, "helper", actor.executionIdentity, path, code, detail)
+		return errorValue
 	}
 	if response != nil {
 		if errorValue := json.Unmarshal(stdout.Bytes(), response); errorValue != nil {
@@ -279,6 +280,31 @@ func (actor POSIXHelperWorkspaceActor) executeFSWithResponse(ctx context.Context
 		}
 	}
 	return nil
+}
+
+func (actor POSIXHelperWorkspaceActor) runFSHelper(ctx context.Context, operation string, path string, request fsRequest, stdin io.Reader, stdout io.Writer) error {
+	resolvedIdentity, errorValue := ResolveExecutionIdentity(actor.executionIdentity)
+	if errorValue != nil {
+		return actorError(operation, "resolve_identity", actor.executionIdentity, path, ActorErrorCodeIdentityMissing, errorValue.Error())
+	}
+	command := exec.CommandContext(ctx, actor.terminalConfiguration.POSIXHelperPath, fsHelperArguments(operation, resolvedIdentity, request)...)
+	if stdin != nil {
+		command.Stdin = stdin
+	}
+	var stderr bytes.Buffer
+	command.Stdout = stdout
+	command.Stderr = &stderr
+	errorValue = command.Run()
+	if errorValue == nil {
+		return nil
+	}
+	detail := firstNonEmptyString(strings.TrimSpace(stderr.String()), errorValue.Error())
+	code := actorErrorCodeForDetail(detail)
+	if isHelperExecutionFailure(errorValue, stderr.String()) {
+		code = ActorErrorCodeRuntimeUnavailable
+		detail = helperFailureDetail(actor.terminalConfiguration.POSIXHelperPath, operation, detail, nil)
+	}
+	return actorError(operation, "helper", actor.executionIdentity, path, code, detail)
 }
 
 func helperFailureDetail(helperPath string, operation string, detail string, output []byte) string {
@@ -304,6 +330,7 @@ type fsRequest struct {
 	Source    string
 	Mode      os.FileMode
 	MaxBytes  int64
+	Offset    int64
 	Overwrite bool
 }
 
@@ -336,6 +363,9 @@ func fsHelperArguments(operation string, identity ExecutionIdentity, request fsR
 	}
 	if request.MaxBytes > 0 {
 		arguments = append(arguments, "--max-bytes", fmt.Sprintf("%d", request.MaxBytes))
+	}
+	if request.Offset > 0 {
+		arguments = append(arguments, "--offset", fmt.Sprintf("%d", request.Offset))
 	}
 	if request.Overwrite {
 		arguments = append(arguments, "--overwrite")

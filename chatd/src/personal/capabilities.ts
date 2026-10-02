@@ -9,6 +9,9 @@ import {
 	requireConversation,
 	requireExternalID,
 	requireLargestBytes,
+	requireMediaRange,
+	requireMediaSource,
+	requireMediaURL,
 	requireMessage,
 	requireLoopbackArrivalsURL,
 	requireName,
@@ -22,7 +25,7 @@ export type PersonCapability = (
 	gateway: PersonalGateway,
 	requestBody: unknown,
 	agentExternalID?: string,
-) => Promise<object>;
+) => Promise<object | Response>;
 
 export const personCapabilities: Record<string, PersonCapability> = {
 	"person.credential.requirement": async (gateway) => gateway.credentialRequirement(),
@@ -189,15 +192,13 @@ export const personCapabilities: Record<string, PersonCapability> = {
 		await gateway.announceTyping(request.actor, requireConversation(request));
 		return {};
 	},
-	"person.message.attachment": async (gateway, body) => {
+	"person.media.read": async (gateway, body) => {
 		const request = parsePersonRequest(body);
-		return {
-			file: await gateway.readAttachment(
-				request.actor,
-				requireMessage(request),
-				requireLargestBytes(request),
-			),
-		};
+		return await gateway.readMedia(request.actor, requireMediaURL(request), requireMediaRange(request));
+	},
+	"person.media.upload": async (gateway, body) => {
+		const request = parsePersonRequest(body);
+		return { media: await gateway.uploadMedia(request.actor, requireMediaSource(request)) };
 	},
 };
 

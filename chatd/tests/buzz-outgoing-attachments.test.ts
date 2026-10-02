@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { buildMessageBody } from "../src/adapters/buzz/user-session.ts";
 import { AttachmentRefused } from "../src/outgoing-attachment.ts";
-import { createOutboundHandler } from "../src/outbound.ts";
-import type { ChatdConfiguration } from "../src/configuration.ts";
 
 const relayURL = "http://relay.test";
 const userSecretHex = "11".repeat(32);
@@ -117,37 +115,5 @@ describe("a file the store will not take", () => {
 
 		expect(failure).not.toBeInstanceOf(AttachmentRefused);
 		expect((failure as Error).message).toContain("429");
-	});
-});
-
-describe("what the caller is told", () => {
-	test("a refusal answers 415 and names the attachments by position", async () => {
-		const refused = { index: 1, filename: "page.html", status: 415, reason: "disallowed content type: text/html" };
-		const refusing = {
-			sendMessage: async () => {
-				throw new AttachmentRefused([refused]);
-			},
-		};
-		const handler = createOutboundHandler({ buzz: {} } as never, {} as ChatdConfiguration, {
-			buzz: refusing,
-		} as never);
-
-		const response = await handler(
-			new Request("http://127.0.0.1/v1/platform/buzz/person.message.send", {
-				method: "POST",
-				body: JSON.stringify({
-					actor: { kind: "buzz-secret", secret: userSecretHex },
-					conversationID: "channel-1",
-					body: "here it is",
-					attachments: [
-						{ filename: "notes.pdf", contentType: "application/pdf", contentBase64: "AAAA" },
-						{ filename: "page.html", contentType: "text/html", contentBase64: "AAAA" },
-					],
-				}),
-			}),
-		);
-
-		expect(response.status).toBe(415);
-		expect((await response.json()) as unknown).toMatchObject({ refusedAttachments: [refused] });
 	});
 });

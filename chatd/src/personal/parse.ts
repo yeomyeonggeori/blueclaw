@@ -1,6 +1,6 @@
 import type { ActorCredential, NewPersonalChannel, PersonalMentions } from "./gateway.ts";
 import { canonicalChannelName } from "../channels.ts";
-import type { OutgoingAttachment } from "../outgoing-attachment.ts";
+import type { AttachmentAlreadyKept } from "../outgoing-attachment.ts";
 
 export class MalformedRequest extends Error {
 	constructor(message: string) {
@@ -27,8 +27,12 @@ export type PersonRequest = {
 	arrivalsURL?: string;
 	typingURL?: string;
 	readAt?: string;
+	mediaURL?: string;
+	range?: string;
+	sourceURL?: string;
+	contentType?: string;
 	counterpartExternalIDs: string[];
-	attachments: OutgoingAttachment[];
+	attachments: AttachmentAlreadyKept[];
 	mentions?: PersonalMentions;
 };
 
@@ -75,6 +79,10 @@ export function parsePersonRequest(value: unknown): PersonRequest {
 		arrivalsURL: optionalText(record, "arrivalsURL"),
 		typingURL: optionalText(record, "typingURL"),
 		readAt: optionalText(record, "readAt"),
+		mediaURL: optionalText(record, "mediaURL"),
+		range: optionalText(record, "range"),
+		sourceURL: optionalText(record, "sourceURL"),
+		contentType: optionalText(record, "contentType"),
 		counterpartExternalIDs: parseCounterparts(record),
 		attachments: parseAttachments(record),
 		mentions: parseMentions(record),
@@ -92,23 +100,17 @@ function parseMentions(record: Record<string, unknown>): PersonalMentions | unde
 	return { externalIDs: externalIDs as string[], isEveryone: mentions.isEveryone === true };
 }
 
-function parseAttachments(record: Record<string, unknown>): OutgoingAttachment[] {
+function parseAttachments(record: Record<string, unknown>): AttachmentAlreadyKept[] {
 	const given = record.attachments;
 	if (given === undefined) return [];
 	if (!Array.isArray(given)) throw new MalformedRequest("attachments must be a list");
 	return given.map((entry) => parseAttachment(asRecord(entry)));
 }
 
-function parseAttachment(attachment: Record<string, unknown>): OutgoingAttachment {
-	const named = {
+function parseAttachment(attachment: Record<string, unknown>): AttachmentAlreadyKept {
+	return {
 		filename: requiredText(attachment, "filename"),
 		contentType: requiredText(attachment, "contentType"),
-	};
-	if (attachment.address === undefined) {
-		return { ...named, contentBase64: requiredText(attachment, "contentBase64") };
-	}
-	return {
-		...named,
 		address: requiredText(attachment, "address"),
 		sizeBytes: requiredCount(attachment, "sizeBytes"),
 		digest: requiredText(attachment, "digest"),
@@ -173,6 +175,24 @@ export function requireName(request: PersonRequest): string {
 export function requireExternalID(request: PersonRequest): string {
 	if (!request.externalID) throw missing("externalID");
 	return request.externalID;
+}
+
+export function requireMediaURL(request: PersonRequest): string {
+	if (!request.mediaURL) throw missing("mediaURL");
+	return request.mediaURL;
+}
+
+const singleRangePattern = /^bytes=\d+-\d+$/;
+
+export function requireMediaRange(request: PersonRequest): string {
+	if (!request.range) throw missing("range");
+	if (!singleRangePattern.test(request.range)) throw new MalformedRequest("range must be one bytes=START-END range");
+	return request.range;
+}
+
+export function requireMediaSource(request: PersonRequest): { url: string; contentType: string } {
+	if (!request.sourceURL) throw missing("sourceURL");
+	return { url: request.sourceURL, contentType: request.contentType ?? "application/octet-stream" };
 }
 
 export function requireLargestBytes(request: PersonRequest): number {

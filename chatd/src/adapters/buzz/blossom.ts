@@ -99,7 +99,24 @@ export async function uploadBlob(
 	content: Uint8Array,
 	mimeType: string,
 ): Promise<BlossomBlob> {
+	const body = new ArrayBuffer(content.byteLength);
+	new Uint8Array(body).set(content);
 	const digestHex = new Bun.CryptoHasher("sha256").update(content).digest("hex");
+	return putBlob(relayURL, userSecretHex, { body, digestHex, sizeBytes: content.byteLength }, mimeType);
+}
+
+export type BlobBody = {
+	body: BodyInit;
+	digestHex: string;
+	sizeBytes: number;
+};
+
+export async function putBlob(
+	relayURL: string,
+	userSecretHex: string,
+	blob: BlobBody,
+	mimeType: string,
+): Promise<BlossomBlob> {
 	const nowSeconds = Math.floor(Date.now() / 1000);
 	const authEvent = finalizeEvent(
 		{
@@ -108,33 +125,32 @@ export async function uploadBlob(
 			created_at: nowSeconds,
 			tags: [
 				["t", "upload"],
-				["x", digestHex],
+				["x", blob.digestHex],
 				["expiration", String(nowSeconds + 3600)],
 			],
 		},
 		hexToBytes(userSecretHex),
 	);
 	const authorization = "Nostr " + Buffer.from(JSON.stringify(authEvent)).toString("base64");
-	const body = new ArrayBuffer(content.byteLength);
-	new Uint8Array(body).set(content);
 	const response = await fetchFromRelay(blossomBaseURL(relayURL) + "/upload", {
 		method: "PUT",
 		headers: {
 			Authorization: authorization,
 			"Content-Type": mimeType,
-			"X-SHA-256": digestHex,
+			"Content-Length": String(blob.sizeBytes),
+			"X-SHA-256": blob.digestHex,
 		},
-		body,
+		body: blob.body,
 	});
 	if (!response.ok) {
 		throw new BlobRefused(response.status, (await response.text()).trim());
 	}
-	const blob = parseBlobResponse(await response.json());
+	const answered = parseBlobResponse(await response.json());
 	return {
-		url: blob.url,
-		sha256: blob.sha256 || digestHex,
-		size: blob.size || content.byteLength,
-		mimeType: blob.mimeType || mimeType,
+		url: answered.url,
+		sha256: answered.sha256 || blob.digestHex,
+		size: answered.size || blob.sizeBytes,
+		mimeType: answered.mimeType || mimeType,
 	};
 }
 
