@@ -54,8 +54,17 @@ func NewServer(activityLog io.Writer) *Server {
 }
 
 func newScriptedLanguageModel() *agenttest.ScriptedLanguageModel {
-	return agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{ProviderName: "stand-in", ModelName: "stand-in"})
+	return agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
+		ProviderName:             "stand-in",
+		ModelName:                "stand-in",
+		DefaultResponsesBySchema: map[string]string{memoryDecompositionSchemaName: noPropositions},
+	})
 }
+
+const (
+	memoryDecompositionSchemaName = "memory_decomposition"
+	noPropositions                = `{"propositions":[]}`
+)
 
 func (server *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
