@@ -24,7 +24,8 @@ var defaultMemoryEmbedding = struct {
 }{ModelName: "baai/bge-m3", Dimensions: 1024}
 
 type memoryComponents struct {
-	stores *memory.Stores
+	stores         *memory.Stores
+	embeddingWidth int
 }
 
 // memoryDirectory is service-owned: a person's memory is written on their
@@ -37,12 +38,13 @@ func memoryDirectory(workspaceRootPath string) string {
 func newMemoryComponents(runtimeConfiguration config.RuntimeConfiguration, kernel agentKernel, services taskServices, identityService *identity.IdentityService, logger *slog.Logger) memoryComponents {
 	logger.Info("application.initializing", "stage", "memory")
 	embeddingModelName := firstNonEmptyString(runtimeConfiguration.Memory.EmbeddingModel, defaultMemoryEmbedding.ModelName)
+	embeddingWidth := firstPositiveInteger(runtimeConfiguration.Memory.EmbeddingDimensions, defaultMemoryEmbedding.Dimensions)
 	configuration := bluememo.Configuration{
 		Embedder: llm.CapabilityEmbeddingClient{
 			CapabilityClient: kernel.capabilityClient,
 			ModelName:        embeddingModelName,
 			ExecutionMode:    firstNonEmptyString(runtimeConfiguration.Memory.EmbeddingExecutionMode, "auto"),
-			OutputDimensions: firstPositiveInteger(runtimeConfiguration.Memory.EmbeddingDimensions, defaultMemoryEmbedding.Dimensions),
+			OutputDimensions: embeddingWidth,
 		},
 		EmbeddingModel: embeddingModelName,
 		Model:          memory.LanguageModel{Provider: kernel.taskTierLanguageModels.Low},
@@ -66,9 +68,9 @@ func newMemoryComponents(runtimeConfiguration config.RuntimeConfiguration, kerne
 	logger.Info("application.memory.store_configured",
 		"directory", directory,
 		"embeddingModel", embeddingModelName,
-		"embeddingDimensions", firstPositiveInteger(runtimeConfiguration.Memory.EmbeddingDimensions, defaultMemoryEmbedding.Dimensions),
+		"embeddingDimensions", embeddingWidth,
 		"extractionDisabled", runtimeConfiguration.Memory.ExtractionDisabled)
-	return memoryComponents{stores: stores}
+	return memoryComponents{stores: stores, embeddingWidth: embeddingWidth}
 }
 
 func firstPositiveInteger(values ...int) int {

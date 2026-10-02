@@ -54,6 +54,7 @@ type Application struct {
 	schedulePoller              *scheduler.SchedulePoller
 	taskRetentionSweeper        *scheduler.TaskRetentionSweeper
 	memoryStores                *memory.Stores
+	memoryEmbeddingWidth        int
 	learningCoordinator         *learning.Coordinator
 	schedulePollSecond          int
 	taskRetentionIntervalMinute int
@@ -191,6 +192,7 @@ func newApplication(components applicationComponents) *Application {
 		schedulePoller:              components.schedulePoller,
 		taskRetentionSweeper:        components.taskRetentionSweeper,
 		memoryStores:                components.memory.stores,
+		memoryEmbeddingWidth:        components.memory.embeddingWidth,
 		learningCoordinator:         components.learningCoordinator,
 		schedulePollSecond:          components.runtimeConfiguration.Scheduler.SchedulePollIntervalSecond,
 		taskRetentionIntervalMinute: components.runtimeConfiguration.Scheduler.RetentionCheckIntervalMinute,

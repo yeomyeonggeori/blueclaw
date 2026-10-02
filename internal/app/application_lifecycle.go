@@ -9,7 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/scheduler"
+	"github.com/yeomyeonggeori/blueclaw/internal/store/postgres"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -32,6 +34,8 @@ func (application *Application) Start() error {
 	application.startLearningCoordinator()
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "log_retention")
 	application.startLogRetentionLoop()
+	application.runtimeLogger.Logger.Info("application.starting", "stage", "memory_carry")
+	application.carryRetiredMemory()
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "memory_worker")
 	application.startMemoryMaintenance()
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "connector_runtime")
@@ -396,4 +400,46 @@ func deriveListenAddress(baseURL string) string {
 	}
 
 	return parsedURL.Host
+}
+
+// carryRetiredMemory moves what the retired store still holds into one file
+// per subject. It runs before the maintenance pass, so a reembed never races a
+// conversion, and it blocks rather than running behind: an agent that answered
+// while this was in flight would answer out of an empty memory.
+//
+// The conversion is idempotent, so the ordinary case is a start that finds
+// nothing and says nothing.
+func (application *Application) carryRetiredMemory() {
+	if application.memoryStores == nil || application.database.SQL == nil {
+		return
+	}
+	ctx := context.Background()
+	repository := postgres.NewLegacyMemoryRepository(application.database)
+	holdsMemory, errorValue := repository.HoldsMemory(ctx)
+	if errorValue != nil {
+		application.runtimeLogger.Logger.Warn("application.memory.retired_store_unreadable", "error", errorValue.Error())
+		return
+	}
+	if !holdsMemory {
+		return
+	}
+	report, errorValue := application.convertRetiredMemory(ctx, repository)
+	if errorValue != nil {
+		application.runtimeLogger.Logger.Error("application.memory.carry_failed", "error", errorValue.Error())
+		return
+	}
+	application.runtimeLogger.Logger.Info("application.memory.carried",
+		"facts", report.Facts, "memories", report.Memories, "alreadyHeld", report.AlreadyHeld)
+}
+
+func (application *Application) convertRetiredMemory(ctx context.Context, repository postgres.LegacyMemoryRepository) (memory.ConversionReport, error) {
+	facts, errorValue := repository.LiveFacts(ctx)
+	if errorValue != nil {
+		return memory.ConversionReport{}, errorValue
+	}
+	roster, errorValue := repository.Roster(ctx)
+	if errorValue != nil {
+		return memory.ConversionReport{}, errorValue
+	}
+	return application.memoryStores.Convert(ctx, facts, roster, application.memoryEmbeddingWidth)
 }
