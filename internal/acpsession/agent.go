@@ -14,6 +14,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -32,6 +33,10 @@ var (
 type TaskLauncher interface {
 	Launch(context.Context, agentruntime.TaskLaunchRequest) (agentruntime.TaskLaunchResult, error)
 	RouterRequest(agentruntime.TaskLaunchRequest) agentcontract.AgentRequest
+}
+
+type AttachmentImporter interface {
+	ImportMessageAttachments(context.Context, connectors.PlatformInboundEvent, string) (connectors.PlatformInboundEvent, agentruntime.AttachmentMaterialResolver)
 }
 
 type PersonDirectory interface {
@@ -57,14 +62,15 @@ func (session openSession) catalog() agentruntime.RecordCatalogClient {
 }
 
 type Agent struct {
-	taskLauncher     TaskLauncher
-	directory        PersonDirectory
-	permissionRelay  *PermissionRelay
-	approvalDeferrer ApprovalDeferrer
-	turnRouter       TurnRouter
-	intakeDecider    IntakeDecider
-	taskRunStore     taskstate.TaskRunStore
-	logger           *slog.Logger
+	taskLauncher       TaskLauncher
+	directory          PersonDirectory
+	permissionRelay    *PermissionRelay
+	approvalDeferrer   ApprovalDeferrer
+	turnRouter         TurnRouter
+	intakeDecider      IntakeDecider
+	attachmentImporter AttachmentImporter
+	taskRunStore       taskstate.TaskRunStore
+	logger             *slog.Logger
 
 	connection *acp.AgentSideConnection
 	mutex      sync.RWMutex
@@ -73,15 +79,16 @@ type Agent struct {
 
 func NewAgent(collaborators Collaborators, permissionRelay *PermissionRelay, logger *slog.Logger) *Agent {
 	return &Agent{
-		taskLauncher:     collaborators.TaskLauncher,
-		directory:        collaborators.Directory,
-		permissionRelay:  permissionRelay,
-		approvalDeferrer: collaborators.ApprovalDeferrer,
-		turnRouter:       collaborators.TurnRouter,
-		intakeDecider:    collaborators.IntakeDecider,
-		taskRunStore:     collaborators.TaskRunStore,
-		logger:           logger,
-		sessions:         map[acp.SessionId]openSession{},
+		taskLauncher:       collaborators.TaskLauncher,
+		directory:          collaborators.Directory,
+		permissionRelay:    permissionRelay,
+		approvalDeferrer:   collaborators.ApprovalDeferrer,
+		turnRouter:         collaborators.TurnRouter,
+		intakeDecider:      collaborators.IntakeDecider,
+		attachmentImporter: collaborators.AttachmentImporter,
+		taskRunStore:       collaborators.TaskRunStore,
+		logger:             logger,
+		sessions:           map[acp.SessionId]openSession{},
 	}
 }
 
@@ -90,12 +97,13 @@ type ApprovalDeferrer interface {
 }
 
 type Collaborators struct {
-	ApprovalDeferrer ApprovalDeferrer
-	TaskLauncher     TaskLauncher
-	Directory        PersonDirectory
-	TurnRouter       TurnRouter
-	IntakeDecider    IntakeDecider
-	TaskRunStore     taskstate.TaskRunStore
+	ApprovalDeferrer   ApprovalDeferrer
+	TaskLauncher       TaskLauncher
+	Directory          PersonDirectory
+	TurnRouter         TurnRouter
+	IntakeDecider      IntakeDecider
+	AttachmentImporter AttachmentImporter
+	TaskRunStore       taskstate.TaskRunStore
 }
 
 func (agent *Agent) UseConnection(connection *acp.AgentSideConnection) {
@@ -204,7 +212,7 @@ func (agent *Agent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.
 		)
 		return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, nil
 	}
-	launchResult, errorValue := agent.taskLauncher.Launch(ctx, launchRequest)
+	launchResult, errorValue := agent.taskLauncher.Launch(ctx, agent.withMessageAttachments(ctx, messageContext, launchRequest))
 	if errorValue != nil {
 		return acp.PromptResponse{}, errorValue
 	}
@@ -248,6 +256,30 @@ func (agent *Agent) taskLaunchRequestFor(session openSession, sessionID acp.Sess
 		PersonAccess:            agent.directory.ResolvePersonAccess(requester.PersonID),
 		CheckpointSender:        agent.checkpointSenderFor(sessionID),
 		TurnStartedAt:           time.Now(),
+	}
+}
+
+func (agent *Agent) withMessageAttachments(ctx context.Context, messageContext MessageContext, launchRequest agentruntime.TaskLaunchRequest) agentruntime.TaskLaunchRequest {
+	if agent.attachmentImporter == nil {
+		return launchRequest
+	}
+	imported, resolver := agent.attachmentImporter.ImportMessageAttachments(ctx, inboundEventOf(messageContext, launchRequest), launchRequest.RequesterPersonID)
+	launchRequest.InputParts = imported.InputParts
+	launchRequest.VisibleContext = imported.Context.ToAgentVisibleContext()
+	launchRequest.AttachmentMaterialResolver = resolver
+	return launchRequest
+}
+
+func inboundEventOf(messageContext MessageContext, launchRequest agentruntime.TaskLaunchRequest) connectors.PlatformInboundEvent {
+	visibleContext := messageContext.Context
+	visibleContext.ConversationType = launchRequest.ConversationType
+	return connectors.PlatformInboundEvent{
+		Platform:       launchRequest.Platform,
+		ConversationID: launchRequest.ConversationID,
+		MessageID:      messageContext.MessageID,
+		ReplyTargetID:  launchRequest.ReplyTargetID,
+		Prompt:         launchRequest.Prompt,
+		Context:        visibleContext,
 	}
 }
 

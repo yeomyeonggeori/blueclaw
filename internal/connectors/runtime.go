@@ -712,7 +712,7 @@ func (connectorRuntime *ConnectorRuntime) buildTurnToolSet(adapter PlatformAdapt
 		Platform:                   adapter.Name(),
 		HistoryCursor:              event.Context.HistoryCursor,
 		HistoryProvider:            connectorHistoryProvider{adapter: adapter},
-		AttachmentMaterialResolver: connectorAttachmentMaterialResolver{adapter: adapter, personID: personID, event: event, sentSources: connectorRuntime.sentAttachmentSources, attachmentWriter: connectorRuntime.attachmentWriterFor(personID)},
+		AttachmentMaterialResolver: connectorRuntime.attachmentMaterialResolverFor(adapter, personID, event),
 		PersonAccess:               personAccess,
 		AccessibleConversationIDs:  []string{event.ConversationID},
 		InputParts:                 append([]agentcontract.AgentPart{}, event.InputParts...),

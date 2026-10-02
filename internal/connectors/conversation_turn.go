@@ -57,13 +57,6 @@ func (connectorRuntime *ConnectorRuntime) buildTaskLaunchRequest(turn Conversati
 	if turn.AmbientDuty.IsMatch {
 		checkpointSender = nil
 	}
-	attachmentMaterialResolver := connectorAttachmentMaterialResolver{
-		adapter:          turn.Adapter,
-		personID:         turn.RequesterPersonID,
-		event:            event,
-		sentSources:      connectorRuntime.sentAttachmentSources,
-		attachmentWriter: connectorRuntime.attachmentWriterFor(turn.RequesterPersonID),
-	}
 	return agentruntime.TaskLaunchRequest{
 		Source:                     agentruntime.TaskLaunchSourceConnector,
 		SourceReference:            event.DedupeKey(),
@@ -96,7 +89,7 @@ func (connectorRuntime *ConnectorRuntime) buildTaskLaunchRequest(turn Conversati
 		DecidedTurnFields:          turn.DecidedTurnFields,
 		AmbientDuty:                turn.AmbientDuty,
 		HistoryProvider:            connectorHistoryProvider{adapter: turn.Adapter},
-		AttachmentMaterialResolver: attachmentMaterialResolver,
+		AttachmentMaterialResolver: connectorRuntime.attachmentMaterialResolverFor(turn.Adapter, turn.RequesterPersonID, event),
 		PersonAccess:               turn.PersonAccess,
 		AccessibleConversationIDs:  turn.AccessibleConversationIDs,
 		CheckpointSender:           checkpointSender,
