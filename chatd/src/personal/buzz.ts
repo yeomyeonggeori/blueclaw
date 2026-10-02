@@ -2,9 +2,12 @@ import type { BuzzAdapter } from "../adapters/buzz/adapter.ts";
 import { deleteThread } from "../adapters/buzz/thread-deletion.ts";
 import type { BuzzEvent } from "../adapters/buzz/types.ts";
 import { isElevatedIn, signingKeyring } from "../message-ownership.ts";
-import { isServedByTheRelay, readAuthorizationHeader } from "../adapters/buzz/blossom.ts";
+import { BlobRefused, isServedByTheRelay, putBlob, readAuthorizationHeader } from "../adapters/buzz/blossom.ts";
 import { fetchFromRelay } from "../adapters/buzz/relay-trust.ts";
-import type { OutgoingAttachment } from "../outgoing-attachment.ts";
+import type { AttachmentAlreadyKept } from "../outgoing-attachment.ts";
+import { withSpooledMedia } from "./media-spool.ts";
+import { rangesOf } from "./ranged-read.ts";
+import { MalformedRequest } from "./parse.ts";
 import { addReactionAsUser, removeReactionAsUser } from "../adapters/buzz/user-reactions.ts";
 import { mentionTags } from "../adapters/buzz/user-mentions.ts";
 import { markConversationReadAsUser, unreadCountsAsUser } from "../adapters/buzz/user-read-state.ts";
@@ -43,7 +46,9 @@ import {
 	type IssuedCredential,
 	type NewPersonalChannel,
 	type PersonalIdentity,
-	type PersonalFile,
+	type KeptMedia,
+	type MediaSource,
+	MediaRefused,
 	type PersonalMentions,
 	type PersonalImage,
 	type PersonalMessage,
@@ -327,7 +332,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 		conversationID: string,
 		body: string,
 		parentID?: string,
-		attachments: OutgoingAttachment[] = [],
+		attachments: AttachmentAlreadyKept[] = [],
 		mentions?: PersonalMentions,
 	): Promise<PersonalMessage> {
 		this.require(actor);
@@ -522,22 +527,38 @@ class BuzzPersonalGateway implements PersonalGateway {
 		return { dataURL: `data:${held.contentType};base64,${held.contentBase64}` };
 	}
 
-	// An attachment's id is the url the message named it by, so reading one is
-	// fetching what the message already points at rather than looking it up.
-	async readAttachment(
-		actor: ActorCredential,
-		attachmentID: string,
-		largestBytes: number,
-	): Promise<PersonalFile | null> {
+	async readMedia(actor: ActorCredential, url: string, range: string): Promise<Response> {
 		this.require(actor);
-		if (!isServedByTheRelay(attachmentID, this.settings.relayURL)) return null;
-		const held = await readWithinLimit(attachmentID, largestBytes, "application/octet-stream", this.relayReadHeaders(actor, attachmentID));
-		if (!held) return null;
-		return {
-			filename: attachmentID.slice(attachmentID.lastIndexOf("/") + 1),
-			contentType: held.contentType,
-			contentBase64: held.contentBase64,
-		};
+		if (!isServedByTheRelay(url, this.settings.relayURL)) {
+			throw new MalformedRequest(`${url} is not held by this messenger's file store`);
+		}
+		const response = await fetchFromRelay(url, { headers: { ...this.relayReadHeaders(actor, url), Range: range } });
+		if (response.status !== 206 && response.status !== 200 && response.status !== 416) {
+			throw new ReadRefused("buzz", url, response.status);
+		}
+		const headers = new Headers({
+			"Content-Type": response.headers.get("content-type") ?? "application/octet-stream",
+		});
+		for (const name of ["content-length", "content-range"]) {
+			const value = response.headers.get(name);
+			if (value) headers.set(name, value);
+		}
+		return new Response(response.body, { status: response.status, headers });
+	}
+
+	async uploadMedia(actor: ActorCredential, source: MediaSource): Promise<KeptMedia> {
+		this.require(actor);
+		const ranges = rangesOf((rangeHeader) => fetch(source.url, { headers: { Range: rangeHeader } }));
+		return withSpooledMedia(ranges, async (spooled) => {
+			const body = { body: Bun.file(spooled.path), digestHex: spooled.digestHex, sizeBytes: spooled.sizeBytes };
+			const blob = await putBlob(this.settings.relayURL, actor.secret, body, source.contentType).catch((error: unknown) => {
+				if (error instanceof BlobRefused && error.willRefuseAgain) {
+					throw new MediaRefused(error.status, error.reason, spooled.digestHex, spooled.sizeBytes);
+				}
+				throw error;
+			});
+			return { address: blob.url, digest: blob.sha256, sizeBytes: blob.size, contentType: blob.mimeType };
+		});
 	}
 
 	private relayReadHeaders(actor: ActorCredential, url: string): Record<string, string> {

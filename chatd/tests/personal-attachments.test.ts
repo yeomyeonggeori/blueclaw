@@ -64,21 +64,26 @@ afterEach(() => {
 });
 
 describe("sending a message that carries a file", () => {
-	test("the file is stored first, and the post names what came back", async () => {
+	test("mattermost refuses a file kept outside its own store, and posts nothing", async () => {
 		const seen = serveMattermost(11);
 
 		const response = await call("mattermost", "person.message.send", {
 			actor,
 			conversationID: "channel-1",
 			body: "here it is",
-			attachments: [{ filename: "evidence.png", contentType: "image/png", contentBase64: "AAAA" }],
+			attachments: [
+				{
+					filename: "evidence.png",
+					contentType: "image/png",
+					address: "https://company.supabase.co/storage/v1/object/asset/c/shared/attachment/9f2c.png",
+					sizeBytes: 11,
+					digest: "9f2c",
+				},
+			],
 		});
 
-		expect(response.status).toBe(200);
-		const upload = seen.find((request) => request.url.endsWith("/api/v4/files"));
-		expect((upload?.body as { channelID: string }).channelID).toBe("channel-1");
-		const post = seen.find((request) => request.url.endsWith("/posts"));
-		expect((post?.body as { file_ids: string[] }).file_ids).toEqual(["file-1"]);
+		expect(response.status).toBe(501);
+		expect(seen.some((request) => request.url.endsWith("/posts"))).toBe(false);
 	});
 
 	test("a message carrying none uploads nothing", async () => {
@@ -93,69 +98,17 @@ describe("sending a message that carries a file", () => {
 		expect(seen.some((request) => request.url.endsWith("/api/v4/files"))).toBe(false);
 	});
 
-	test("what comes back describes the file, without carrying it", async () => {
+	test("a file carried inside the call is no longer taken", async () => {
 		serveMattermost(11);
 
-		const response = await call("mattermost", "person.message.send", {
-			actor,
+		const response = await call("buzz", "person.message.send", {
+			actor: { kind: "buzz-secret", secret: "1".repeat(64) },
 			conversationID: "channel-1",
 			body: "here it is",
 			attachments: [{ filename: "evidence.png", contentType: "image/png", contentBase64: "AAAA" }],
 		});
 
-		const message = (await response.json()) as {
-			attachments: { id: string; filename: string; contentType: string; sizeBytes: number; digest: string }[];
-		};
-		expect(message.attachments).toEqual([
-			{ id: "file-1", filename: "evidence.png", contentType: "image/png", sizeBytes: 11, digest: "" },
-		]);
-	});
-
-	test("an image carries the proportions the messenger reported", async () => {
-		serveMattermost(11, { width: 1200, height: 1600 });
-
-		const response = await call("mattermost", "person.message.send", {
-			actor,
-			conversationID: "channel-1",
-			body: "here it is",
-			attachments: [{ filename: "evidence.png", contentType: "image/png", contentBase64: "AAAA" }],
-		});
-
-		const message = (await response.json()) as {
-			attachments: { widthPixels?: number; heightPixels?: number }[];
-		};
-		expect(message.attachments.map((attachment) => [attachment.widthPixels, attachment.heightPixels])).toEqual([
-			[1200, 1600],
-		]);
-	});
-});
-
-describe("reading one attachment", () => {
-	test("a file inside the limit comes back with its name and type", async () => {
-		serveMattermost(11);
-
-		const response = await call("mattermost", "person.message.attachment", {
-			actor,
-			messageID: "file-1",
-			largestBytes: 1_000,
-		});
-
-		const answer = (await response.json()) as { file: { filename: string; contentBase64: string } | null };
-		expect(answer.file?.filename).toBe("evidence.png");
-		expect(Buffer.from(answer.file?.contentBase64 ?? "", "base64")).toHaveLength(11);
-	});
-
-	test("a file past the limit is refused before its bytes are read", async () => {
-		const seen = serveMattermost(2_000);
-
-		const response = await call("mattermost", "person.message.attachment", {
-			actor,
-			messageID: "file-1",
-			largestBytes: 1_000,
-		});
-
-		const answer = (await response.json()) as { file: unknown };
-		expect(answer.file).toBeNull();
-		expect(seen.some((request) => request.url.endsWith("/files/file-1"))).toBe(false);
+		expect(response.status).toBe(400);
+		expect(((await response.json()) as { error: string }).error).toBe("missing required field address");
 	});
 });

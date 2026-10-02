@@ -55,7 +55,7 @@ func runAuthorized(run func([]string) error, arguments []string) error {
 func runCapabilities() error {
 	return json.NewEncoder(os.Stdout).Encode(map[string]any{
 		"version":      3,
-		"capabilities": []string{"exec", "fs", "fs.list_directory", "reconcile-home", "state-sync"},
+		"capabilities": []string{"exec", "fs", "fs.list_directory", "fs.stream_file", "reconcile-home", "state-sync"},
 	})
 }
 
@@ -186,6 +186,7 @@ func runFS(arguments []string) error {
 	source := flags.String("source", "", "source path")
 	modeText := flags.String("mode", "0660", "octal mode")
 	maxBytes := flags.Int64("max-bytes", 0, "maximum read bytes")
+	offset := flags.Int64("offset", 0, "first byte to stream")
 	overwrite := flags.Bool("overwrite", false, "overwrite destination")
 	if errorValue := flags.Parse(arguments); errorValue != nil {
 		return errorValue
@@ -210,6 +211,7 @@ func runFS(arguments []string) error {
 		Source:    *source,
 		Mode:      mode,
 		MaxBytes:  *maxBytes,
+		Offset:    *offset,
 		Overwrite: *overwrite,
 	})
 }
@@ -220,6 +222,7 @@ type fsOperationRequest struct {
 	Source    string
 	Mode      os.FileMode
 	MaxBytes  int64
+	Offset    int64
 	Overwrite bool
 }
 
@@ -242,6 +245,8 @@ func performFSOperation(request fsOperationRequest) error {
 		return writeFile(request.Path, request.Mode)
 	case "read_file":
 		return readFile(request.Path, request.MaxBytes)
+	case "stream_file":
+		return streamFile(request.Path, request.Offset, request.MaxBytes, os.Stdout)
 	case "copy_file":
 		return copyFile(request.Source, request.Path, request.Mode, request.Overwrite)
 	case "stat":
@@ -308,14 +313,41 @@ func writeFile(path string, mode os.FileMode) error {
 	if strings.TrimSpace(path) == "" {
 		return errors.New("path is required")
 	}
-	document, errorValue := io.ReadAll(os.Stdin)
+	destinationFile, errorValue := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode.Perm())
 	if errorValue != nil {
 		return errorValue
 	}
-	if errorValue := os.WriteFile(path, document, mode.Perm()); errorValue != nil {
+	if _, errorValue := io.Copy(destinationFile, os.Stdin); errorValue != nil {
+		_ = destinationFile.Close()
+		return errorValue
+	}
+	if errorValue := destinationFile.Close(); errorValue != nil {
 		return errorValue
 	}
 	return os.Chmod(path, mode.Perm())
+}
+
+func streamFile(path string, offset int64, length int64, destination io.Writer) error {
+	if _, errorValue := regularFileInformation(path); errorValue != nil {
+		return errorValue
+	}
+	sourceFile, errorValue := os.Open(path)
+	if errorValue != nil {
+		return errorValue
+	}
+	defer sourceFile.Close()
+	if _, errorValue := sourceFile.Seek(offset, io.SeekStart); errorValue != nil {
+		return errorValue
+	}
+	if length <= 0 {
+		_, errorValue = io.Copy(destination, sourceFile)
+		return errorValue
+	}
+	_, errorValue = io.CopyN(destination, sourceFile, length)
+	if errors.Is(errorValue, io.EOF) {
+		return nil
+	}
+	return errorValue
 }
 
 func readFile(path string, maxBytes int64) error {

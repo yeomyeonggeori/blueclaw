@@ -103,6 +103,7 @@ func NewRouter(routerDependencies RouterDependencies) http.Handler {
 	multiplexer.HandleFunc("POST /admin/api/conversation/reset", routerDependencies.ConversationReset.HandleReset)
 	multiplexer.HandleFunc("GET /admin/api/workspace/list", routerDependencies.WorkspaceFilesHandler.HandleList)
 	multiplexer.HandleFunc("GET /admin/api/workspace/download", routerDependencies.WorkspaceFilesHandler.HandleDownload)
+	multiplexer.HandleFunc("PUT /admin/api/workspace/file", routerDependencies.WorkspaceFilesHandler.HandleUpload)
 	multiplexer.HandleFunc("GET /admin/api/persona/user", routerDependencies.PersonaHandler.authorized(routerDependencies.PersonaHandler.HandleReadUser))
 	multiplexer.HandleFunc("GET /admin/api/persona/agent", routerDependencies.PersonaHandler.authorized(routerDependencies.PersonaHandler.HandleReadAgent))
 	multiplexer.HandleFunc("POST /admin/api/persona/agent", routerDependencies.PersonaHandler.authorized(routerDependencies.PersonaHandler.HandleSeedAgent))

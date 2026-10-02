@@ -41,6 +41,44 @@ func TestRunCapabilitiesReportsFilesystemSupport(t *testing.T) {
 	if !containsString(capabilities.Capabilities, "state-sync") {
 		t.Fatalf("expected helper state-sync capability, got %+v", capabilities)
 	}
+	if !containsString(capabilities.Capabilities, "fs.stream_file") {
+		t.Fatalf("expected helper fs.stream_file capability, got %+v", capabilities)
+	}
+}
+
+func TestStreamFileCopiesTheFileAsItIs(t *testing.T) {
+	sourcePath := filepath.Join(t.TempDir(), "large.bin")
+	content := bytes.Repeat([]byte{0, 1, 2, 250}, 1<<18)
+	if errorValue := os.WriteFile(sourcePath, content, 0o600); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	var streamed bytes.Buffer
+	if errorValue := streamFile(sourcePath, 0, 0, &streamed); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if !bytes.Equal(streamed.Bytes(), content) {
+		t.Fatalf("expected %d raw bytes, got %d", len(content), streamed.Len())
+	}
+	var ranged bytes.Buffer
+	if errorValue := streamFile(sourcePath, 1000, 4096, &ranged); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if !bytes.Equal(ranged.Bytes(), content[1000:1000+4096]) {
+		t.Fatalf("expected the asked range, got %d bytes", ranged.Len())
+	}
+	var tail bytes.Buffer
+	if errorValue := streamFile(sourcePath, int64(len(content)-10), 4096, &tail); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if !bytes.Equal(tail.Bytes(), content[len(content)-10:]) {
+		t.Fatalf("expected a range past the end to stop at the end, got %d bytes", tail.Len())
+	}
+}
+
+func TestStreamFileRefusesADirectory(t *testing.T) {
+	if errorValue := streamFile(t.TempDir(), 0, 0, &bytes.Buffer{}); errorValue == nil {
+		t.Fatal("expected a directory to be refused")
+	}
 }
 
 func TestLoadPOSIXStatePrefersStateDocument(t *testing.T) {
@@ -289,4 +327,30 @@ func captureFSOperationResponse(t *testing.T, request fsOperationRequest) fsOper
 		t.Fatal(errorValue)
 	}
 	return response
+}
+
+func TestWriteFileTakesWhatArrivesOnStandardInput(t *testing.T) {
+	destinationPath := filepath.Join(t.TempDir(), "arrived.bin")
+	content := bytes.Repeat([]byte("abc"), 1<<18)
+	readEnd, writeEnd, errorValue := os.Pipe()
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	previousInput := os.Stdin
+	os.Stdin = readEnd
+	defer func() { os.Stdin = previousInput }()
+	go func() {
+		_, _ = writeEnd.Write(content)
+		_ = writeEnd.Close()
+	}()
+	if errorValue := writeFile(destinationPath, 0o640); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	written, errorValue := os.ReadFile(destinationPath)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if !bytes.Equal(written, content) {
+		t.Fatalf("expected %d bytes written, got %d", len(content), len(written))
+	}
 }

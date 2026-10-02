@@ -1,8 +1,12 @@
 package httpserver
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -24,6 +28,9 @@ type stubWorkspaceActorFactory struct {
 	cannotListDirectory bool
 	entries             []security.WorkspaceActorDirectoryEntry
 	fileContent         []byte
+	permissionDenied    bool
+	writtenPath         string
+	writtenContent      []byte
 	recordedRequests    []recordedWorkspaceActorRequest
 }
 
@@ -61,7 +68,25 @@ func (actor stubWorkspaceActor) ListDirectory(context.Context, string) ([]securi
 }
 
 func (actor stubWorkspaceActor) Stat(_ context.Context, path string) (security.WorkspaceActorStat, error) {
+	if actor.factory.permissionDenied {
+		return security.WorkspaceActorStat{}, security.WorkspaceActorError{Operation: "stat", Code: security.ActorErrorCodePermissionDenied, Detail: "permission denied"}
+	}
 	return security.WorkspaceActorStat{Path: path, IsRegular: true, SizeBytes: int64(len(actor.factory.fileContent))}, nil
+}
+
+func (actor stubWorkspaceActor) StreamFile(_ context.Context, _ string, fileRange security.WorkspaceFileRange, destination io.Writer) error {
+	_, errorValue := destination.Write(actor.factory.fileContent[fileRange.Offset : fileRange.Offset+fileRange.Length])
+	return errorValue
+}
+
+func (actor stubWorkspaceActor) WriteFileFrom(_ context.Context, path string, source io.Reader) error {
+	if actor.factory.permissionDenied {
+		return security.WorkspaceActorError{Operation: "write_file", Code: security.ActorErrorCodePermissionDenied, Detail: "permission denied"}
+	}
+	content, errorValue := io.ReadAll(source)
+	actor.factory.writtenPath = path
+	actor.factory.writtenContent = content
+	return errorValue
 }
 
 type stubPersonAccessResolver struct{}
@@ -264,5 +289,121 @@ func TestWorkspaceFilesHandlerSaysAnOlderHelperCannotReadAPrivateHome(t *testing
 	}
 	if strings.Contains(recorder.Body.String(), workspaceRootPath) {
 		t.Fatalf("the answer named a guest path: %q", recorder.Body.String())
+	}
+}
+
+func TestWorkspaceFilesHandlerStreamsAFileLargerThanAnyBufferItKeeps(t *testing.T) {
+	rootPath := t.TempDir()
+	homePath := filepath.Join(rootPath, "private", "people", "person-1")
+	if errorValue := os.MkdirAll(homePath, 0o755); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	content := bytes.Repeat([]byte("0123456789abcdef"), 70<<16)
+	if errorValue := os.WriteFile(filepath.Join(homePath, "film.mov"), content, 0o644); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	handler := WorkspaceFilesHandler{
+		WorkspaceRootPath:     rootPath,
+		WorkspaceActorFactory: security.NewDirectWorkspaceActorFactory(),
+		PersonAccessResolver:  stubPersonAccessResolver{},
+	}
+	server := httptest.NewServer(http.HandlerFunc(handler.HandleDownload))
+	defer server.Close()
+
+	response, errorValue := http.Get(server.URL + "/admin/api/workspace/download?personID=person-1&path=/workspace/private/people/person-1/film.mov")
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", response.StatusCode)
+	}
+	if response.ContentLength != int64(len(content)) {
+		t.Fatalf("expected the length to be said up front, got %d", response.ContentLength)
+	}
+	hasher := sha256.New()
+	if _, errorValue := io.Copy(hasher, response.Body); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	expected := sha256.Sum256(content)
+	if hex.EncodeToString(hasher.Sum(nil)) != hex.EncodeToString(expected[:]) {
+		t.Fatal("the streamed file is not the file on disk")
+	}
+}
+
+func TestWorkspaceFilesHandlerRefusesADownloadTheOwnerMayNotRead(t *testing.T) {
+	factory := &stubWorkspaceActorFactory{fileContent: []byte("private"), permissionDenied: true}
+	handler := newWorkspaceFilesTestHandler(factory, t.TempDir())
+	recorder := httptest.NewRecorder()
+	handler.HandleDownload(recorder, httptest.NewRequest(http.MethodGet, "/admin/api/workspace/download?personID=person-2&path=/workspace/private/people/person-1/notes.md", nil))
+	if recorder.Code != http.StatusForbidden || strings.Contains(recorder.Body.String(), "private") {
+		t.Fatalf("status = %d body = %q", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestWorkspaceFilesHandlerWritesAnUploadAsThePersonNamed(t *testing.T) {
+	rootPath := t.TempDir()
+	factory := &stubWorkspaceActorFactory{}
+	handler := newWorkspaceFilesTestHandler(factory, rootPath)
+	recorder := httptest.NewRecorder()
+	handler.HandleUpload(recorder, httptest.NewRequest(http.MethodPut, "/admin/api/workspace/file?personID=person-1&path=/workspace/private/people/person-1/inbox/report.pdf", strings.NewReader("report-bytes")))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	if len(factory.recordedRequests) != 1 || factory.recordedRequests[0].personID != "person-1" {
+		t.Fatalf("expected the write to run as person-1, got %+v", factory.recordedRequests)
+	}
+	if factory.writtenPath != filepath.Join(rootPath, "private", "people", "person-1", "inbox", "report.pdf") || string(factory.writtenContent) != "report-bytes" {
+		t.Fatalf("wrote %q to %q", factory.writtenContent, factory.writtenPath)
+	}
+	var answer struct {
+		Name      string `json:"name"`
+		SizeBytes int64  `json:"sizeBytes"`
+	}
+	if errorValue := json.Unmarshal(recorder.Body.Bytes(), &answer); errorValue != nil || answer.Name != "report.pdf" || answer.SizeBytes != 12 {
+		t.Fatalf("answer %s: %v", recorder.Body.String(), errorValue)
+	}
+}
+
+func TestWorkspaceFilesHandlerRefusesAnUploadThePersonMayNotWrite(t *testing.T) {
+	factory := &stubWorkspaceActorFactory{permissionDenied: true}
+	handler := newWorkspaceFilesTestHandler(factory, t.TempDir())
+	recorder := httptest.NewRecorder()
+	handler.HandleUpload(recorder, httptest.NewRequest(http.MethodPut, "/admin/api/workspace/file?personID=person-2&path=/workspace/private/people/person-1/planted.txt", strings.NewReader("planted")))
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestWorkspaceFilesHandlerAnswersOneRangeOfAFile(t *testing.T) {
+	factory := &stubWorkspaceActorFactory{fileContent: []byte("0123456789")}
+	handler := newWorkspaceFilesTestHandler(factory, t.TempDir())
+	target := "/admin/api/workspace/download?personID=person-1&path=/workspace/private/people/person-1/digits.txt"
+
+	cases := []struct {
+		rangeHeader  string
+		status       int
+		body         string
+		contentRange string
+	}{
+		{"bytes=2-5", http.StatusPartialContent, "2345", "bytes 2-5/10"},
+		{"bytes=7-100", http.StatusPartialContent, "789", "bytes 7-9/10"},
+		{"bytes=4-", http.StatusPartialContent, "456789", "bytes 4-9/10"},
+		{"bytes=10-20", http.StatusRequestedRangeNotSatisfiable, "", "bytes */10"},
+		{"", http.StatusOK, "0123456789", ""},
+	}
+	for _, testCase := range cases {
+		request := httptest.NewRequest(http.MethodGet, target, nil)
+		if testCase.rangeHeader != "" {
+			request.Header.Set("Range", testCase.rangeHeader)
+		}
+		recorder := httptest.NewRecorder()
+		handler.HandleDownload(recorder, request)
+		if recorder.Code != testCase.status || recorder.Header().Get("Content-Range") != testCase.contentRange {
+			t.Fatalf("%q: status = %d content-range = %q", testCase.rangeHeader, recorder.Code, recorder.Header().Get("Content-Range"))
+		}
+		if testCase.status != http.StatusRequestedRangeNotSatisfiable && recorder.Body.String() != testCase.body {
+			t.Fatalf("%q: body = %q", testCase.rangeHeader, recorder.Body.String())
+		}
 	}
 }

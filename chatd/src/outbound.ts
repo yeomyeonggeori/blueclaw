@@ -36,8 +36,7 @@ import { MessageChangeRefused, isElevatedIn, signerForMessageChange, signingKeyr
 import { ThreadPartlyDeleted, deleteThread } from "./adapters/buzz/thread-deletion.ts";
 import { personCapabilities, type PersonCapability } from "./personal/capabilities.ts";
 import { MalformedRequest } from "./personal/parse.ts";
-import { CredentialRefused, UnsupportedByPlatform, type PersonalGateway } from "./personal/gateway.ts";
-import { AttachmentRefused } from "./outgoing-attachment.ts";
+import { CredentialRefused, MediaRefused, UnsupportedByPlatform, type PersonalGateway } from "./personal/gateway.ts";
 import {
 	LastOwnerCannotLeave,
 	NotChannelOwner,
@@ -177,7 +176,8 @@ async function answerAsPerson(
 		return jsonResponse(404, { error: `${platform} cannot act as a person` });
 	}
 	try {
-		return jsonResponse(200, await capability(gateway, requestDocument, agentExternalID));
+		const answered = await capability(gateway, requestDocument, agentExternalID);
+		return answered instanceof Response ? answered : jsonResponse(200, answered);
 	} catch (error) {
 		if (error instanceof MalformedRequest) {
 			return jsonResponse(400, { error: error.message });
@@ -185,8 +185,11 @@ async function answerAsPerson(
 		if (error instanceof CredentialRefused) {
 			return jsonResponse(401, { error: error.message });
 		}
-		if (error instanceof AttachmentRefused) {
-			return jsonResponse(415, { error: error.message, refusedAttachments: error.refusals });
+		if (error instanceof MediaRefused) {
+			return jsonResponse(415, {
+				error: error.message,
+				refused: { status: error.status, reason: error.reason, digest: error.digest, sizeBytes: error.sizeBytes },
+			});
 		}
 		if (error instanceof LastOwnerCannotLeave) {
 			return jsonResponse(409, { error: error.message, reason: error.reason });

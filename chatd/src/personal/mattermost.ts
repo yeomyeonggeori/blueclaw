@@ -1,4 +1,4 @@
-import { isAlreadyKept, type OutgoingAttachment } from "../outgoing-attachment.ts";
+import type { AttachmentAlreadyKept } from "../outgoing-attachment.ts";
 import {
 	CredentialRefused,
 	requireMatchingCredential,
@@ -14,7 +14,7 @@ import {
 	type PersonalImage,
 	type PersonalMessage,
 	type PersonalAttachment,
-	type PersonalFile,
+	type KeptMedia,
 	type PersonalMessagePage,
 	type PersonalPerson,
 	type PersonalReaction,
@@ -267,76 +267,27 @@ class MattermostPersonalGateway implements PersonalGateway {
 		conversationID: string,
 		body: string,
 		parentID?: string,
-		attachments: OutgoingAttachment[] = [],
+		attachments: AttachmentAlreadyKept[] = [],
 	): Promise<PersonalMessage> {
-		const fileIDs = await this.uploadAll(actor, conversationID, attachments);
+		if (attachments.length > 0) {
+			throw new UnsupportedByPlatform(this.platform, "post a file kept outside its own store");
+		}
 		const post = await this.ask<MattermostPost>(actor, "POST", "/posts", {
 			channel_id: conversationID,
 			message: body,
 			root_id: parentID ?? "",
-			file_ids: fileIDs,
 		});
 		return asMessage(post);
 	}
 
-	private async uploadAll(
-		actor: ActorCredential,
-		conversationID: string,
-		attachments: OutgoingAttachment[],
-	): Promise<string[]> {
-		const fileIDs: string[] = [];
-		for (const attachment of attachments) {
-			fileIDs.push(await this.upload(actor, conversationID, attachment));
-		}
-		return fileIDs;
-	}
-
-	private async upload(
-		actor: ActorCredential,
-		conversationID: string,
-		attachment: OutgoingAttachment,
-	): Promise<string> {
+	async readMedia(actor: ActorCredential): Promise<Response> {
 		requireMatchingCredential(this, actor);
-		if (isAlreadyKept(attachment)) {
-			throw new UnsupportedByPlatform(this.platform, "post a file it has not been handed");
-		}
-		const form = new FormData();
-		form.append("channel_id", conversationID);
-		form.append(
-			"files",
-			new Blob([Buffer.from(attachment.contentBase64, "base64")], { type: attachment.contentType }),
-			attachment.filename,
-		);
-		const response = await fetch(`${this.baseURL}/api/v4/files`, {
-			method: "POST",
-			headers: { Authorization: `Bearer ${actor.secret}` },
-			body: form,
-		});
-		if (!response.ok) {
-			throw new Error(`mattermost refused ${attachment.filename} (${response.status})`);
-		}
-		const uploaded = (await response.json()) as { file_infos?: { id?: string }[] };
-		const fileID = uploaded.file_infos?.[0]?.id;
-		if (!fileID) throw new Error(`mattermost stored ${attachment.filename} without naming it`);
-		return fileID;
+		throw new UnsupportedByPlatform(this.platform, "stream a file to the company's transfer store");
 	}
 
-	async readAttachment(
-		actor: ActorCredential,
-		attachmentID: string,
-		largestBytes: number,
-	): Promise<PersonalFile | null> {
-		const described = await this.readAsPerson(actor, `/files/${encodeURIComponent(attachmentID)}/info`);
-		const info = (await described.json()) as MattermostFileInfo;
-		if (info.size > largestBytes) return null;
-		const response = await this.readAsPerson(actor, `/files/${encodeURIComponent(attachmentID)}`);
-		const bytes = new Uint8Array(await response.arrayBuffer());
-		if (bytes.length === 0 || bytes.length > largestBytes) return null;
-		return {
-			filename: info.name,
-			contentType: info.mime_type || mediaTypeOfName(info.extension || info.name),
-			contentBase64: Buffer.from(bytes).toString("base64"),
-		};
+	async uploadMedia(actor: ActorCredential): Promise<KeptMedia> {
+		requireMatchingCredential(this, actor);
+		throw new UnsupportedByPlatform(this.platform, "take a file from the company's transfer store");
 	}
 
 	async editMessage(

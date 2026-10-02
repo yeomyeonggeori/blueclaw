@@ -139,12 +139,12 @@ describe("a person's assets are read with that person's own credential", () => {
 		const handler = createOutboundHandler(adapters, configuration, relayGateways);
 
 		const answer = await handler(
-			new Request("http://127.0.0.1/v1/platform/buzz/person.message.attachment", {
+			new Request("http://127.0.0.1/v1/platform/buzz/person.media.read", {
 				method: "POST",
 				body: JSON.stringify({
 					actor: { kind: "buzz-secret", secret: buzzSecretHex },
-					messageID: attachmentURL,
-					largestBytes: 100_000,
+					mediaURL: attachmentURL,
+					range: "bytes=0-15",
 				}),
 			}),
 		);
@@ -153,13 +153,18 @@ describe("a person's assets are read with that person's own credential", () => {
 		expect(await answer.json()).toEqual({ error: `buzz answered 401 for ${attachmentURL}` });
 	});
 
-	test("a relay-served attachment is read with a signed blossom get authorization", async () => {
+	test("a relay-served attachment is read one range at a time with a signed blossom get authorization", async () => {
 		const digest = "a".repeat(64);
 		const attachmentURL = `https://relay.test/media/${digest}.png`;
 		const seen: Seen[] = [];
+		const rangesAsked: (string | null)[] = [];
 		globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 			seen.push({ url: String(input), authorization: new Headers(init?.headers).get("Authorization") });
-			return new Response(new Uint8Array(16), { headers: { "content-type": "image/png" } });
+			rangesAsked.push(new Headers(init?.headers).get("Range"));
+			return new Response(new Uint8Array(16).fill(7), {
+				status: 206,
+				headers: { "content-type": "image/png", "content-length": "16", "content-range": "bytes 0-15/16" },
+			});
 		}) as typeof fetch;
 		const relayGateways = {
 			...gateways,
@@ -168,19 +173,22 @@ describe("a person's assets are read with that person's own credential", () => {
 		const handler = createOutboundHandler(adapters, configuration, relayGateways);
 
 		const answer = await handler(
-			new Request("http://127.0.0.1/v1/platform/buzz/person.message.attachment", {
+			new Request("http://127.0.0.1/v1/platform/buzz/person.media.read", {
 				method: "POST",
 				body: JSON.stringify({
 					actor: { kind: "buzz-secret", secret: buzzSecretHex },
-					messageID: attachmentURL,
-					largestBytes: 100_000,
+					mediaURL: attachmentURL,
+					range: "bytes=0-15",
 				}),
 			}),
 		);
 
-		const { file } = (await answer.json()) as { file: { contentType: string } };
-		expect(file.contentType).toBe("image/png");
+		expect(answer.headers.get("content-type")).toBe("image/png");
+		expect(answer.status).toBe(206);
+		expect(answer.headers.get("content-range")).toBe("bytes 0-15/16");
+		expect(new Uint8Array(await answer.arrayBuffer())).toEqual(new Uint8Array(16).fill(7));
 		expect(seen).toHaveLength(1);
+		expect(rangesAsked).toEqual(["bytes=0-15"]);
 		const authorization = seen[0]?.authorization ?? "";
 		expect(authorization.startsWith("Nostr ")).toBe(true);
 		const authEvent = JSON.parse(
