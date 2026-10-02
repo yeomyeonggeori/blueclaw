@@ -139,7 +139,7 @@ func newPolicyReloadHandler(components applicationComponents) func(policy.Policy
 	logger := components.foundation.logger
 	return func(policyDocument policy.PolicyDocument) {
 		if database.SQL != nil {
-			if errorValue := personRepository.UpsertPeople(policyDocument); errorValue != nil {
+			if errorValue := personRepository.ReplacePeople(policyDocument); errorValue != nil {
 				logger.Error("policy.people_projection_failed", "error", errorValue)
 			}
 		}

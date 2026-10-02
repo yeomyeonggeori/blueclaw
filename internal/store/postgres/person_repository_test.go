@@ -94,3 +94,100 @@ func TestAPersonWithoutGrantedClassesOrCirclesIsProjected(t *testing.T) {
 		t.Fatalf("expected no granted classes, got %d", grantedClassCount)
 	}
 }
+
+func TestAPolicyThatDropsAPersonRemovesThemFromLookup(t *testing.T) {
+	database, _ := isolatedIntegrationDatabase(t, context.Background())
+	repository := NewPersonRepository(database)
+	replacePeople(t, repository, projectedPerson("person-kept", "kept@example.com"), projectedPerson("person-dropped", "dropped@example.com"))
+
+	replacePeople(t, repository, projectedPerson("person-kept", "kept@example.com"))
+
+	if personIDs := personIDsForEmail(t, database, "dropped@example.com"); len(personIDs) != 0 {
+		t.Fatalf("an email of a person the policy no longer names must resolve to nobody, got %v", personIDs)
+	}
+	if projectedPersonIDs := projectedPersonIDs(t, database); strings.Join(projectedPersonIDs, ",") != "person-kept" {
+		t.Fatalf("the projection must be exactly the policy, got %v", projectedPersonIDs)
+	}
+}
+
+func TestAnEmailMovedToAnotherIDResolvesOnlyToTheCurrentID(t *testing.T) {
+	database, _ := isolatedIntegrationDatabase(t, context.Background())
+	repository := NewPersonRepository(database)
+	replacePeople(t, repository, projectedPerson("person-before", "moved@example.com"))
+
+	replacePeople(t, repository, projectedPerson("person-after", "moved@example.com"))
+
+	if personIDs := personIDsForEmail(t, database, "moved@example.com"); strings.Join(personIDs, ",") != "person-after" {
+		t.Fatalf("a moved email must resolve only to the id the policy names now, got %v", personIDs)
+	}
+	if projectedPersonIDs := projectedPersonIDs(t, database); strings.Join(projectedPersonIDs, ",") != "person-after" {
+		t.Fatalf("the id the email moved away from must leave the projection, got %v", projectedPersonIDs)
+	}
+}
+
+func TestAReferencedPersonsHistorySurvivesTheirRemoval(t *testing.T) {
+	database, _ := isolatedIntegrationDatabase(t, context.Background())
+	repository := NewPersonRepository(database)
+	replacePeople(t, repository, projectedPerson("person-kept", "kept@example.com"), projectedPerson("person-departed", "departed@example.com"))
+	if _, errorValue := database.SQL.Exec(`INSERT INTO task_session (task_session_id, person_id, expires_at) VALUES ('session-of-departed', 'person-departed', now())`); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	replacePeople(t, repository, projectedPerson("person-kept", "kept@example.com"))
+
+	var sessionPersonID string
+	if errorValue := database.SQL.QueryRow(`SELECT person_id FROM task_session WHERE task_session_id = 'session-of-departed'`).Scan(&sessionPersonID); errorValue != nil {
+		t.Fatalf("history naming a removed person must survive: %v", errorValue)
+	}
+	if sessionPersonID != "person-departed" {
+		t.Fatalf("history must keep naming the person it was about, got %q", sessionPersonID)
+	}
+	if personIDs := personIDsForEmail(t, database, "departed@example.com"); len(personIDs) != 0 {
+		t.Fatalf("a removed person kept for their history must never resolve from an email, got %v", personIDs)
+	}
+}
+
+func projectedPerson(personID string, email string) policy.PersonPolicy {
+	return policy.PersonPolicy{
+		PersonID: personID, DisplayName: "이샘플", SecurityLevelName: "member", SecurityLevelRank: 10,
+		Emails: []string{email},
+	}
+}
+
+func replacePeople(t *testing.T, repository PersonRepository, people ...policy.PersonPolicy) {
+	t.Helper()
+	if errorValue := repository.ReplacePeople(policy.PolicyDocument{People: people}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+}
+
+func personIDsForEmail(t *testing.T, database Database, email string) []string {
+	t.Helper()
+	return queryPersonIDs(t, database, `SELECT person_id FROM person_email WHERE email = $1 ORDER BY person_id`, email)
+}
+
+func projectedPersonIDs(t *testing.T, database Database) []string {
+	t.Helper()
+	return queryPersonIDs(t, database, `SELECT person_id FROM person ORDER BY person_id`)
+}
+
+func queryPersonIDs(t *testing.T, database Database, statement string, arguments ...any) []string {
+	t.Helper()
+	rows, errorValue := database.SQL.Query(statement, arguments...)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	defer rows.Close()
+	var personIDs []string
+	for rows.Next() {
+		var personID string
+		if errorValue := rows.Scan(&personID); errorValue != nil {
+			t.Fatal(errorValue)
+		}
+		personIDs = append(personIDs, personID)
+	}
+	if errorValue := rows.Err(); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	return personIDs
+}

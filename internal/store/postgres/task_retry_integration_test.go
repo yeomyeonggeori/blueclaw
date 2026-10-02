@@ -47,7 +47,7 @@ func (adapter retryIntegrationAdapter) SendReply(_ context.Context, _ connectors
 func TestTaskRetryAgainstPostgres(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	database, closeDatabase := morningBriefingIntegrationDatabase(t, context.Background())
+	database, closeDatabase := isolatedIntegrationDatabase(t, context.Background())
 	defer closeDatabase()
 	if _, errorValue := database.SQL.Exec("INSERT INTO person (person_id, display_name, security_level_name, security_level_rank, created_at, updated_at) VALUES ('retry-person', 'Sample', 'member', 0, now(), now())"); errorValue != nil {
 		t.Fatal(errorValue)
