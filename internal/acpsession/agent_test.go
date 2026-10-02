@@ -15,6 +15,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
@@ -55,6 +56,14 @@ func (staticDirectory) ResolvePersonIDByEmail(email string) (string, bool) {
 		return "person-sample", true
 	}
 	return "", false
+}
+
+func (directory staticDirectory) AwaitPersonIDByEmail(ctx context.Context, email string) (string, error) {
+	if personID, isKnown := directory.ResolvePersonIDByEmail(email); isKnown {
+		return personID, nil
+	}
+	<-ctx.Done()
+	return "", ctx.Err()
 }
 
 func (staticDirectory) ResolvePersonDisplayName(string) string { return "이샘플" }
@@ -254,21 +263,75 @@ func TestSessionThatNamesNobodyIsRefused(t *testing.T) {
 	}
 }
 
-func TestSessionForSomebodyTheCompanyDoesNotKnowIsRefused(t *testing.T) {
+func TestSessionForSomebodyTheRosterNeverNamesIsRefusedOnceItsCallerStopsWaiting(t *testing.T) {
+	launcher := &recordingLauncher{}
 	client := &recordingClient{}
-	connection, _ := connectedPair(t, &recordingLauncher{}, client)
+	connection, _ := connectedPair(t, launcher, client)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if _, errorValue := connection.Initialize(ctx, acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber}); errorValue != nil {
 		t.Fatalf("initialize: %v", errorValue)
 	}
-	_, errorValue := connection.NewSession(ctx, acp.NewSessionRequest{
+	waiting, stopWaiting := context.WithTimeout(ctx, 200*time.Millisecond)
+	defer stopWaiting()
+	_, errorValue := connection.NewSession(waiting, acp.NewSessionRequest{
 		Cwd:        "/workspace",
 		McpServers: []acp.McpServer{},
 		Meta:       sessionMeta("stranger@example.test", "conversation-1"),
 	})
 	if errorValue == nil {
 		t.Fatal("a session opened for somebody this company does not know")
+	}
+}
+
+type sessionOpening struct {
+	sessionID  acp.SessionId
+	errorValue error
+}
+
+func TestAMessageFromSomebodyTheRosterNamesOnlyLaterIsAnsweredOnceItDoes(t *testing.T) {
+	roster := identity.NewIdentityService(policy.PolicyProjection{})
+	launcher := &recordingLauncher{reply: "받았습니다"}
+	client := &recordingClient{}
+	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
+		TaskLauncher: launcher,
+		Directory:    roster,
+		TurnRouter:   scriptedRouter{},
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, errorValue := connection.Initialize(ctx, acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber}); errorValue != nil {
+		t.Fatalf("initialize: %v", errorValue)
+	}
+	opened := make(chan sessionOpening, 1)
+	go func() {
+		response, errorValue := connection.NewSession(ctx, acp.NewSessionRequest{
+			Cwd:        "/workspace",
+			McpServers: []acp.McpServer{},
+			Meta:       sessionMeta("late@example.test", "conversation-1"),
+		})
+		opened <- sessionOpening{sessionID: response.SessionId, errorValue: errorValue}
+	}()
+	select {
+	case opening := <-opened:
+		t.Fatalf("the session answered before the roster named its requester: %v", opening.errorValue)
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	roster.ReloadPolicyProjection(policy.PolicyProjection{PersonIDByEmail: map[string]string{"late@example.test": "person-late"}})
+	opening := <-opened
+	if opening.errorValue != nil {
+		t.Fatalf("the session did not open after the roster named its requester: %v", opening.errorValue)
+	}
+	promptForTest(t, connection, opening.sessionID)
+
+	if launched := theOnlyLaunch(t, launcher); launched.RequesterPersonID != "person-late" {
+		t.Fatalf("the turn ran for %q, expected person-late", launched.RequesterPersonID)
+	}
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	if strings.Join(client.messages, "") != "받았습니다" {
+		t.Fatalf("the client was told %v, expected the finish message", client.messages)
 	}
 }
 
