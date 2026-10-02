@@ -486,6 +486,37 @@ func TestSchedulePollerDoesNotDeliverFailedTaskReply(t *testing.T) {
 	}
 }
 
+func TestSchedulePollerTellsTheRequesterWhenAFailingScheduleGivesUp(t *testing.T) {
+	schedule := waitingSchedule(time.Now().UTC())
+	schedule.FailureCount = maxScheduleFailureCount - 1
+	repository := &pollerScheduleRepository{schedules: []task.Schedule{schedule}}
+	deliveryRepository := &pollerDeliveryRepository{}
+	scheduleRunner, harness, _ := scheduleRunnerWithHarness(task.TaskStatusFailed, "")
+	harness.TurnResult.FailureNotice = agentcontract.FailureNotice{Message: "The model provider refused the request, so I could not report the result.", IsSendable: true}
+	poller := SchedulePoller{
+		ScheduleRepository:   repository,
+		DeliveryRepository:   deliveryRepository,
+		ScheduleRunner:       scheduleRunner,
+		PersonAccessResolver: staticPersonAccessResolver{},
+	}
+
+	_, errorValue := poller.RunDue(context.Background(), *schedule.NextRunAt, 1)
+
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(deliveryRepository.replies) != 1 {
+		t.Fatalf("expected the failure notice once the schedule gives up, got %+v", deliveryRepository.replies)
+	}
+	reply := deliveryRepository.replies[0]
+	if reply.Message != harness.TurnResult.FailureNotice.Message || reply.ReplyKind != "user_notice" || reply.TaskRunID == "" {
+		t.Fatalf("expected the run's own failure notice as a user notice, got %+v", reply)
+	}
+	if len(repository.expired) != 1 {
+		t.Fatalf("expected the schedule to expire after its last failure, got expired=%+v failed=%+v", repository.expired, repository.failed)
+	}
+}
+
 func TestSchedulePollerExpiresOneTimeMessageWithInvalidDeliveryTarget(t *testing.T) {
 	runAt := time.Now().UTC().Add(-time.Minute)
 	repository := &pollerScheduleRepository{schedules: []task.Schedule{{

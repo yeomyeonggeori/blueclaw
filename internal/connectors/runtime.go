@@ -558,23 +558,16 @@ func (connectorRuntime *ConnectorRuntime) sendCheckpointReply(ctx context.Contex
 }
 
 func (connectorRuntime *ConnectorRuntime) sendUserNoticeReply(ctx context.Context, platform string, event PlatformInboundEvent, taskRunID string, replyTarget ReplyTarget, turnResult agentcontract.AgentTurnResult, sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error)) (string, bool) {
-	notice, failureNotice, missingReason := userNoticeReplyMessage(turnResult)
+	reply, missingReason := UserNoticeReply(turnResult, taskRunID)
 	if missingReason != "" {
 		connectorRuntime.appendConnectorReplyEvent(taskRunID, agentcontract.TaskEventConnectorReplySuppressed, connectorReplyEventBody(event, OutboundReply{TaskRunID: taskRunID, ReplyKind: connectorReplyKindUserNotice}, "", "", missingReason))
 		connectorRuntime.logger.Info("connector."+platform+".outbound.skipped", slog.String("messageID", event.MessageID), slog.String("taskRunID", taskRunID), slog.String("reason", missingReason))
 		return "", false
 	}
 	if taskStatusRequiresFailureNotice(turnResult.TaskRun.Status) {
-		notice += failureRunFooter(taskRunID, connectorRuntime.adminTaskLinkBaseURL)
+		reply.Message += failureRunFooter(taskRunID, connectorRuntime.adminTaskLinkBaseURL)
 	}
-	reply := OutboundReply{
-		Message:         notice,
-		TaskRunID:       taskRunID,
-		ReplyKind:       connectorReplyKindUserNotice,
-		Attachments:     turnResult.Attachments,
-		RecoveryActions: recoveryActionsForEvent(turnResult.RecoveryActions, event),
-		FailureNotice:   failureNotice,
-	}
+	reply.RecoveryActions = recoveryActionsForEvent(turnResult.RecoveryActions, event)
 	interaction, _ := latestAskInteraction(taskRunID, connectorRuntime.taskRunService.ListTaskEvent(taskRunID))
 	reply.Interaction = optionalAskInteraction(interaction, event.SenderID)
 	dispatchID, errorValue := sendReply(ctx, replyTarget, reply)
@@ -606,6 +599,20 @@ func failureRunFooter(taskRunID string, adminTaskLinkBaseURL string) string {
 		footer = "\n\n[`" + shortTaskRunID + "`](" + trimmedAdminTaskLinkBaseURL + "/tasks/" + trimmedTaskRunID + ")"
 	}
 	return footer
+}
+
+func UserNoticeReply(turnResult agentcontract.AgentTurnResult, taskRunID string) (OutboundReply, string) {
+	message, failureNotice, missingReason := userNoticeReplyMessage(turnResult)
+	if missingReason != "" {
+		return OutboundReply{}, missingReason
+	}
+	return OutboundReply{
+		Message:       message,
+		TaskRunID:     taskRunID,
+		ReplyKind:     connectorReplyKindUserNotice,
+		Attachments:   turnResult.Attachments,
+		FailureNotice: failureNotice,
+	}, ""
 }
 
 func userNoticeReplyMessage(turnResult agentcontract.AgentTurnResult) (string, agentcontract.FailureNotice, string) {
