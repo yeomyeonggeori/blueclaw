@@ -117,7 +117,8 @@ func (observer TaskRunTransitionObserver) Observe(taskRun agentcontract.TaskRun)
 func (observer TaskRunTransitionObserver) remember(taskRun agentcontract.TaskRun) {
 	ctx, cancel := context.WithTimeout(context.Background(), extractionTimeout)
 	defer cancel()
-	extractionContext, _ := findExtractionContext(observer.TaskRuns.ListTaskEvent(taskRun.TaskRunID))
+	events := observer.TaskRuns.ListTaskEvent(taskRun.TaskRunID)
+	extractionContext, _ := findExtractionContext(events)
 	stack := observer.stackFor(taskRun.RequesterPersonID, extractionContext.ActiveCircleID)
 	scope := stack[0]
 	note := bluememo.Note{
@@ -125,7 +126,7 @@ func (observer TaskRunTransitionObserver) remember(taskRun agentcontract.TaskRun
 		Body:        RenderTranscript(TaskTranscript(taskRun, observer.taskSteps(taskRun.TaskRunID))),
 		SpeakerName: extractionContext.RequesterName,
 	}
-	report, errorValue := observer.Stores.Remember(ctx, stack, note)
+	report, errorValue := observer.Stores.Remember(ctx, stack, note, answersOf(events))
 	if errorValue != nil {
 		observer.logger().Warn("memory.extraction.failed", "taskRunID", taskRun.TaskRunID, "scope", scope.Kind, "error", errorValue.Error())
 		observer.TaskRuns.AppendTaskEvent(taskRun.TaskRunID, "memory.extraction_failed", marshalEventBody(map[string]any{

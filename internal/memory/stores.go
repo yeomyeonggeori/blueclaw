@@ -269,8 +269,8 @@ func breadth(scope Scope) int {
 
 // Remember takes what was said into the top of a stack and settles it there,
 // so the caller's next recall can see it. What a layer beneath already knows
-// is not written again.
-func (stores *Stores) Remember(ctx context.Context, stack []Scope, note bluememo.Note) (bluememo.SettleReport, error) {
+// is not written again, including any layer the caller adds beneath the stack.
+func (stores *Stores) Remember(ctx context.Context, stack []Scope, note bluememo.Note, alsoBeneath ...bluememo.Known) (bluememo.SettleReport, error) {
 	if len(stack) == 0 {
 		return bluememo.SettleReport{}, errors.New("memory has no scope to remember into")
 	}
@@ -282,7 +282,7 @@ func (stores *Stores) Remember(ctx context.Context, stack []Scope, note bluememo
 	if errorValue != nil {
 		return bluememo.SettleReport{}, errorValue
 	}
-	layered := store.On(beneath...)
+	layered := store.On(append(beneath, alsoBeneath...)...)
 	if errorValue := layered.Memorize(ctx, note); errorValue != nil {
 		return bluememo.SettleReport{}, errorValue
 	}
