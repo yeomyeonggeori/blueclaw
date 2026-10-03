@@ -382,7 +382,24 @@ func (application *Application) carryMemoryForward() error {
 	if len(report.Removed) > 0 {
 		application.runtimeLogger.Logger.Info("application.memory.placeless_circle_removed", "folders", report.Removed)
 	}
+	if errorValue := application.carryMarkdownMemory(); errorValue != nil {
+		return errorValue
+	}
 	return application.removeRetiredCircleFolders()
+}
+
+func (application *Application) carryMarkdownMemory() error {
+	report, errorValue := application.memoryStores.CarryMarkdownMemory(context.Background(), application.isOnTheRoster)
+	if errorValue != nil {
+		return fmt.Errorf("carry the memory written as markdown: %w", errorValue)
+	}
+	if report.Carried > 0 {
+		application.runtimeLogger.Logger.Info("application.memory.markdown_carried", "people", report.Carried)
+	}
+	if len(report.Left) > 0 {
+		application.runtimeLogger.Logger.Warn("application.memory.markdown_left", "files", report.Left)
+	}
+	return nil
 }
 
 // retiredCircleIDs are the circles internkim made by default, or hosts were
