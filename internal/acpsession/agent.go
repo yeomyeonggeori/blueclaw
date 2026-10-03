@@ -35,10 +35,6 @@ type TaskLauncher interface {
 	RouterRequest(agentruntime.TaskLaunchRequest) agentcontract.AgentRequest
 }
 
-type AttachmentImporter interface {
-	ImportMessageAttachments(context.Context, connectors.PlatformInboundEvent, string) (connectors.PlatformInboundEvent, agentruntime.AttachmentMaterialResolver)
-}
-
 type SessionTurnOpener interface {
 	OpenSessionTurn(context.Context, connectors.PlatformInboundEvent, string, connectors.ReplySender) *connectors.SessionTurn
 }
@@ -66,16 +62,15 @@ func (session openSession) catalog() agentruntime.RecordCatalogClient {
 }
 
 type Agent struct {
-	taskLauncher       TaskLauncher
-	directory          PersonDirectory
-	permissionRelay    *PermissionRelay
-	approvalDeferrer   ApprovalDeferrer
-	turnRouter         TurnRouter
-	intakeDecider      IntakeDecider
-	attachmentImporter AttachmentImporter
-	sessionTurns       SessionTurnOpener
-	taskRunStore       taskstate.TaskRunStore
-	logger             *slog.Logger
+	taskLauncher     TaskLauncher
+	directory        PersonDirectory
+	permissionRelay  *PermissionRelay
+	approvalDeferrer ApprovalDeferrer
+	turnRouter       TurnRouter
+	intakeDecider    IntakeDecider
+	sessionTurns     SessionTurnOpener
+	taskRunStore     taskstate.TaskRunStore
+	logger           *slog.Logger
 
 	connection *acp.AgentSideConnection
 	mutex      sync.RWMutex
@@ -84,17 +79,16 @@ type Agent struct {
 
 func NewAgent(collaborators Collaborators, permissionRelay *PermissionRelay, logger *slog.Logger) *Agent {
 	return &Agent{
-		taskLauncher:       collaborators.TaskLauncher,
-		directory:          collaborators.Directory,
-		permissionRelay:    permissionRelay,
-		approvalDeferrer:   collaborators.ApprovalDeferrer,
-		turnRouter:         collaborators.TurnRouter,
-		intakeDecider:      collaborators.IntakeDecider,
-		attachmentImporter: collaborators.AttachmentImporter,
-		sessionTurns:       collaborators.SessionTurns,
-		taskRunStore:       collaborators.TaskRunStore,
-		logger:             logger,
-		sessions:           map[acp.SessionId]openSession{},
+		taskLauncher:     collaborators.TaskLauncher,
+		directory:        collaborators.Directory,
+		permissionRelay:  permissionRelay,
+		approvalDeferrer: collaborators.ApprovalDeferrer,
+		turnRouter:       collaborators.TurnRouter,
+		intakeDecider:    collaborators.IntakeDecider,
+		sessionTurns:     collaborators.SessionTurns,
+		taskRunStore:     collaborators.TaskRunStore,
+		logger:           logger,
+		sessions:         map[acp.SessionId]openSession{},
 	}
 }
 
@@ -103,14 +97,13 @@ type ApprovalDeferrer interface {
 }
 
 type Collaborators struct {
-	ApprovalDeferrer   ApprovalDeferrer
-	TaskLauncher       TaskLauncher
-	Directory          PersonDirectory
-	TurnRouter         TurnRouter
-	IntakeDecider      IntakeDecider
-	AttachmentImporter AttachmentImporter
-	SessionTurns       SessionTurnOpener
-	TaskRunStore       taskstate.TaskRunStore
+	ApprovalDeferrer ApprovalDeferrer
+	TaskLauncher     TaskLauncher
+	Directory        PersonDirectory
+	TurnRouter       TurnRouter
+	IntakeDecider    IntakeDecider
+	SessionTurns     SessionTurnOpener
+	TaskRunStore     taskstate.TaskRunStore
 }
 
 func (agent *Agent) UseConnection(connection *acp.AgentSideConnection) {
@@ -212,8 +205,7 @@ func (agent *Agent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.
 	messageContext := MessageContextFromMeta(request.Meta)
 	launchRequest := agent.taskLaunchRequestFor(session, request.SessionId, prompt, messageContext)
 	sessionTurn := agent.sessionTurns.OpenSessionTurn(ctx, inboundEventOf(messageContext, launchRequest), launchRequest.RequesterPersonID, agent.replySenderFor(request.SessionId))
-	defer sessionTurn.EndProgress()
-	sessionTurn.ShowProgressBeforeAddressing(ctx)
+	defer sessionTurn.End()
 	launchRequest, decided, reason := agent.decideOnce(ctx, session, messageContext, launchRequest)
 	if reason != "" {
 		agent.logger.Info("acpsession.prompt.ignored",
@@ -223,12 +215,11 @@ func (agent *Agent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.
 		)
 		return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, nil
 	}
-	sessionTurn.ShowProgress(ctx)
-	launchRequest, isAnswered, errorValue := sessionTurn.ContinueOpenInteractions(ctx, launchRequest)
+	launchRequest, isAnswered, errorValue := sessionTurn.PrepareLaunch(ctx, launchRequest)
 	if errorValue != nil || isAnswered {
 		return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, errorValue
 	}
-	return agent.launchTurn(ctx, request.SessionId, sessionTurn, agent.withMessageAttachments(ctx, messageContext, launchRequest), decided)
+	return agent.launchTurn(ctx, request.SessionId, sessionTurn, launchRequest, decided)
 }
 
 func (agent *Agent) launchTurn(ctx context.Context, sessionID acp.SessionId, sessionTurn *connectors.SessionTurn, launchRequest agentruntime.TaskLaunchRequest, decided *messageDecision) (acp.PromptResponse, error) {
@@ -284,17 +275,6 @@ func (agent *Agent) taskLaunchRequestFor(session openSession, sessionID acp.Sess
 		CheckpointSender:        agent.checkpointSenderFor(sessionID),
 		TurnStartedAt:           time.Now(),
 	}
-}
-
-func (agent *Agent) withMessageAttachments(ctx context.Context, messageContext MessageContext, launchRequest agentruntime.TaskLaunchRequest) agentruntime.TaskLaunchRequest {
-	if agent.attachmentImporter == nil {
-		return launchRequest
-	}
-	imported, resolver := agent.attachmentImporter.ImportMessageAttachments(ctx, inboundEventOf(messageContext, launchRequest), launchRequest.RequesterPersonID)
-	launchRequest.InputParts = imported.InputParts
-	launchRequest.VisibleContext = imported.Context.ToAgentVisibleContext()
-	launchRequest.AttachmentMaterialResolver = resolver
-	return launchRequest
 }
 
 func inboundEventOf(messageContext MessageContext, launchRequest agentruntime.TaskLaunchRequest) connectors.PlatformInboundEvent {
