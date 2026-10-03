@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 
@@ -132,10 +131,6 @@ func (stores *Stores) Close() error {
 	return firstFailure
 }
 
-// ScopesToSearch says where to look for a reader's memory. It grants nothing:
-// a recall runs as that reader, so a file this list names and their identity
-// cannot open is refused by the kernel. A list too generous costs a refusal,
-// and a list too narrow costs a memory nobody finds.
 // ScopeToRemember is where what a person says is written: the circle the
 // conversation belongs to when it belongs to one that has a directory, and the
 // person's own memory otherwise.
@@ -146,6 +141,10 @@ func ScopeToRemember(personID string, activeCircleID string) Scope {
 	return PersonScope(personID)
 }
 
+// ScopesToSearch says where to look for a reader's memory, nearest first. It grants nothing:
+// a recall runs as that reader, so a file this list names and their identity
+// cannot open is refused by the kernel. A list too generous costs a refusal,
+// and a list too narrow costs a memory nobody finds.
 func ScopesToSearch(personAccess policy.PersonAccess, containedCircles map[string][]string) []Scope {
 	scopes := []Scope{}
 	if personAccess.PersonID != "" {
@@ -164,40 +163,64 @@ func ScopesToSearch(personAccess policy.PersonAccess, containedCircles map[strin
 	return append(scopes, WorkspaceScope())
 }
 
-// RecallAcross returns what the agent loop reads, most relevant first. It
-// reads each file as the person the recall is for, so a file their identity
-// cannot open is refused by the kernel rather than by a list this code keeps:
-// the scopes say where to look and decide nothing. A scope with no file yet
-// has nothing to say, which is not a failure, while a file that exists and
-// will not open is.
+// RecallAcross returns what the agent loop reads: the scopes are a stack, the
+// person's own memory on top, and the read goes through all of it at once with
+// what is nearer the top first. It reads as the person the recall is for, so a
+// file their identity cannot open is refused by the kernel rather than by a
+// list this code keeps. A scope with no file yet has nothing to say, which is
+// not a failure, while a file that exists and will not open is.
 func (stores *Stores) RecallAcross(ctx context.Context, personAccess policy.PersonAccess, scopes []Scope, query string, limit int) (Recalled, error) {
 	recalled := Recalled{Mode: "merged"}
-	if len(scopes) == 0 {
-		return recalled, nil
+	held, errorValue := stores.kept(ctx, scopes)
+	if errorValue != nil || len(held) == 0 {
+		return recalled, errorValue
 	}
-	read, errorValue := stores.readerFor(ctx, personAccess, query)
+	result, errorValue := stores.readAs(ctx, personAccess, held, query, limit)
 	if errorValue != nil {
 		return recalled, errorValue
 	}
+	recalled.DegradedReason = result.Recall.DegradedReason
+	recalledIDs := map[Scope][]string{}
+	for index, entry := range result.Recall.Memories {
+		scope := held[result.Layers[index]]
+		recalled.Facts = append(recalled.Facts, memoryFactFrom(entry, scope))
+		recalledIDs[scope] = append(recalledIDs[scope], entry.Memory.MemoryID)
+	}
+	return recalled, stores.reinforce(ctx, recalledIDs)
+}
+
+// kept opens, as their keeper, the scopes that already hold a file, because a
+// reader that may not write a store reads it only while its keeper holds it
+// open. A scope with no file is left out rather than created.
+func (stores *Stores) kept(ctx context.Context, scopes []Scope) ([]Scope, error) {
+	held := []Scope{}
 	for _, scope := range scopes {
-		result, errorValue := read(ctx, scope, limit)
+		path, errorValue := stores.Path(scope)
 		if errorValue != nil {
-			return recalled, errorValue
+			return nil, errorValue
 		}
-		if result.DegradedReason != "" && recalled.DegradedReason == "" {
-			recalled.DegradedReason = result.DegradedReason
+		if _, errorValue := os.Stat(path); errors.Is(errorValue, os.ErrNotExist) {
+			continue
 		}
-		for _, entry := range result.Memories {
-			recalled.Facts = append(recalled.Facts, memoryFactFrom(entry, scope))
+		if _, errorValue := stores.Store(ctx, scope); errorValue != nil {
+			return nil, errorValue
+		}
+		held = append(held, scope)
+	}
+	return held, nil
+}
+
+func (stores *Stores) reinforce(ctx context.Context, recalledIDs map[Scope][]string) error {
+	for scope, memoryIDs := range recalledIDs {
+		store, errorValue := stores.Store(ctx, scope)
+		if errorValue != nil {
+			return errorValue
+		}
+		if errorValue := store.Reinforce(ctx, memoryIDs); errorValue != nil {
+			return fmt.Errorf("reinforce what was recalled from %s: %w", scope.Kind, errorValue)
 		}
 	}
-	sort.SliceStable(recalled.Facts, func(first, second int) bool {
-		return recalled.Facts[first].Score > recalled.Facts[second].Score
-	})
-	if len(recalled.Facts) > limit {
-		recalled.Facts = recalled.Facts[:limit]
-	}
-	return recalled, nil
+	return nil
 }
 
 // Recalled is what one agent turn reads out of memory.
@@ -227,17 +250,59 @@ func memoryFactFrom(entry bluememo.RecalledMemory, scope Scope) MemoryFact {
 	}
 }
 
-// Remember takes what was said into one scope's file and settles it, so the
-// caller's next recall can see it.
-func (stores *Stores) Remember(ctx context.Context, scope Scope, note bluememo.Note) (bluememo.SettleReport, error) {
-	store, errorValue := stores.Store(ctx, scope)
+// StackToRemember is the scope a statement is written into followed by the
+// layers it stands on: every searched scope broader than it. A person's memory
+// stands on their circles' and the company's, and a circle's on the company's.
+func StackToRemember(target Scope, searched []Scope) []Scope {
+	stack := []Scope{target}
+	for _, scope := range searched {
+		if breadth(scope) > breadth(target) {
+			stack = append(stack, scope)
+		}
+	}
+	return stack
+}
+
+func breadth(scope Scope) int {
+	return map[string]int{ScopePerson: 0, ScopeCircle: 1, ScopeWorkspace: 2}[scope.Kind]
+}
+
+// Remember takes what was said into the top of a stack and settles it there,
+// so the caller's next recall can see it. What a layer beneath already knows
+// is not written again.
+func (stores *Stores) Remember(ctx context.Context, stack []Scope, note bluememo.Note) (bluememo.SettleReport, error) {
+	if len(stack) == 0 {
+		return bluememo.SettleReport{}, errors.New("memory has no scope to remember into")
+	}
+	store, errorValue := stores.Store(ctx, stack[0])
 	if errorValue != nil {
 		return bluememo.SettleReport{}, errorValue
 	}
-	if errorValue := store.Memorize(ctx, note); errorValue != nil {
+	beneath, errorValue := stores.layers(ctx, stack[1:])
+	if errorValue != nil {
 		return bluememo.SettleReport{}, errorValue
 	}
-	return store.Settle(ctx)
+	layered := store.On(beneath...)
+	if errorValue := layered.Memorize(ctx, note); errorValue != nil {
+		return bluememo.SettleReport{}, errorValue
+	}
+	return layered.Settle(ctx)
+}
+
+func (stores *Stores) layers(ctx context.Context, scopes []Scope) ([]bluememo.Known, error) {
+	held, errorValue := stores.kept(ctx, scopes)
+	if errorValue != nil {
+		return nil, errorValue
+	}
+	layers := make([]bluememo.Known, 0, len(held))
+	for _, scope := range held {
+		store, errorValue := stores.Store(ctx, scope)
+		if errorValue != nil {
+			return nil, errorValue
+		}
+		layers = append(layers, store)
+	}
+	return layers, nil
 }
 
 const DefaultRecallLimit = 12
@@ -396,47 +461,46 @@ func memoriesIn(ctx context.Context, path string, configuration bluememo.Configu
 	return memories, errors.Join(errorValue, store.Close())
 }
 
-// readerFor embeds the query once, because the service holds the credentials
-// for that, and answers with a way to read one file under the reader's own
-// POSIX identity.
-func (stores *Stores) readerFor(ctx context.Context, personAccess policy.PersonAccess, query string) (func(context.Context, Scope, int) (bluememo.RecallResult, error), error) {
+// readAs embeds the query once, because the service holds the credentials for
+// that, and reads the stack under the reader's own POSIX identity.
+func (stores *Stores) readAs(ctx context.Context, personAccess policy.PersonAccess, scopes []Scope, query string, limit int) (ReadResult, error) {
 	vector, errorValue := stores.configuration.Embedder.EmbedQuery(ctx, query)
 	if errorValue != nil {
-		return nil, fmt.Errorf("embed the recall query: %w", errorValue)
+		return ReadResult{}, fmt.Errorf("embed the recall query: %w", errorValue)
+	}
+	paths := make([]string, len(scopes))
+	for index, scope := range scopes {
+		if paths[index], errorValue = stores.Path(scope); errorValue != nil {
+			return ReadResult{}, errorValue
+		}
+	}
+	request, errorValue := json.Marshal(ReadRequest{
+		StorePaths:     paths,
+		Query:          query,
+		QueryVector:    vector,
+		EmbeddingModel: stores.configuration.EmbeddingModel,
+		Limit:          limit,
+		LaneDepth:      stores.configuration.LaneDepth,
+		RecallSources:  stores.configuration.RecallSources,
+	})
+	if errorValue != nil {
+		return ReadResult{}, errorValue
 	}
 	actor, errorValue := stores.actor.Requester(ctx, security.WorkspaceActorRequest{
 		PersonAccess:      personAccess,
 		WorkspaceRootPath: stores.workspaceRootPath,
 	})
 	if errorValue != nil {
-		return nil, fmt.Errorf("read memory as %s: %w", personAccess.PersonID, errorValue)
+		return ReadResult{}, fmt.Errorf("read memory as %s: %w", personAccess.PersonID, errorValue)
 	}
 	executablePath, errorValue := os.Executable()
 	if errorValue != nil {
-		return nil, fmt.Errorf("find the binary that serves a read: %w", errorValue)
+		return ReadResult{}, fmt.Errorf("find the binary that serves a read: %w", errorValue)
 	}
-	return func(ctx context.Context, scope Scope, limit int) (bluememo.RecallResult, error) {
-		path, errorValue := stores.Path(scope)
-		if errorValue != nil {
-			return bluememo.RecallResult{}, errorValue
-		}
-		request, errorValue := json.Marshal(ReadRequest{
-			StorePath:      path,
-			Query:          query,
-			QueryVector:    vector,
-			EmbeddingModel: stores.configuration.EmbeddingModel,
-			Limit:          limit,
-			LaneDepth:      stores.configuration.LaneDepth,
-			RecallSources:  stores.configuration.RecallSources,
-		})
-		if errorValue != nil {
-			return bluememo.RecallResult{}, errorValue
-		}
-		return runRead(ctx, actor, executablePath, request)
-	}, nil
+	return runRead(ctx, actor, executablePath, request, len(paths))
 }
 
-func runRead(ctx context.Context, actor security.WorkspaceActor, executablePath string, request []byte) (bluememo.RecallResult, error) {
+func runRead(ctx context.Context, actor security.WorkspaceActor, executablePath string, request []byte, layerCount int) (ReadResult, error) {
 	result, errorValue := actor.Run(ctx, security.CommandRequest{
 		ExecutableName:     executablePath,
 		Arguments:          []string{ReadCommand},
@@ -445,16 +509,16 @@ func runRead(ctx context.Context, actor security.WorkspaceActor, executablePath 
 		OutputMaximumBytes: readOutputMaximumBytes,
 	})
 	if errorValue != nil {
-		return bluememo.RecallResult{}, errorValue
+		return ReadResult{}, errorValue
 	}
 	if result.ExitCode != 0 {
-		return bluememo.RecallResult{}, fmt.Errorf("a read refused: %s", strings.TrimSpace(result.Stderr))
+		return ReadResult{}, fmt.Errorf("a read refused: %s", strings.TrimSpace(result.Stderr))
 	}
-	var recalled bluememo.RecallResult
-	if errorValue := json.Unmarshal([]byte(result.Stdout), &recalled); errorValue != nil {
-		return bluememo.RecallResult{}, fmt.Errorf("decode what a read answered: %w", errorValue)
+	var read ReadResult
+	if errorValue := json.Unmarshal([]byte(result.Stdout), &read); errorValue != nil {
+		return ReadResult{}, fmt.Errorf("decode what a read answered: %w", errorValue)
 	}
-	return recalled, nil
+	return read, read.validate(layerCount)
 }
 
 // forget drops a cached handle so the file underneath it can be moved.
