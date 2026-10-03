@@ -391,6 +391,6 @@ export type ToolInvokeTransport = z.infer<typeof toolInvokeTransportSchema>;
 export type ToolInvokeRequest = z.infer<typeof toolInvokeRequestSchema>;
 export type ToolInvokeResponse = z.infer<typeof toolInvokeResponseSchema>;
 
-// The two _meta keys the catalog's MCP server and its callers agree on.
 export const capabilityDescriptorMetaKey = 'kim.intern/descriptor';
 export const capabilityRequesterMetaKey = 'kim.intern/requester';
+export const capabilityAnsweredFilesMetaKey = 'kim.intern/answered-files';

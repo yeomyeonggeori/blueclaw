@@ -157,6 +157,7 @@ type recordCatalogToolProvider struct {
 	recordCatalog RecordCatalogClient
 	request       ToolCatalogRequest
 	descriptors   []capability.ToolDescriptor
+	fileKeeper    answeredFileKeeper
 }
 
 func (provider recordCatalogToolProvider) ProviderID() string {
@@ -207,6 +208,7 @@ func (provider recordCatalogToolProvider) boundTool(descriptor capability.ToolDe
 			if errorValue != nil {
 				return toolcontract.ToolResult{}, errorValue
 			}
+			result = provider.fileKeeper.withFilesKept(toolContext, toolName, invocation.Input, result)
 			return recordCatalogToolResult(result, resultContract)
 		},
 	)
@@ -261,6 +263,11 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerRecordCatalogTools(
 			recordCatalog: request.RecordCatalog,
 			request:       request,
 			descriptors:   descriptors,
+			fileKeeper: answeredFileKeeper{
+				workspaceActorFactory: toolCatalogBuilder.workspaceActorFactory,
+				workspaceRootPath:     toolCatalogBuilder.workspaceRootPath,
+				personAccess:          requesterPersonAccess(request.RequesterPersonID, request.PersonAccess),
+			},
 		},
 		Trust: toolcontract.ToolProviderExternal,
 	}})
