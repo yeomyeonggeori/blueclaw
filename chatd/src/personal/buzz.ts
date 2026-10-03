@@ -178,7 +178,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 				name: channel.name,
 				description: channel.description,
 				visibility: channel.visibility,
-				memberPubkeyHexes: channel.memberExternalIDs,
+				memberPubkeyHexes: this.membersOfNewChannel(channel),
 			},
 		});
 		return {
@@ -189,6 +189,11 @@ class BuzzPersonalGateway implements PersonalGateway {
 			isPrivate: channel.visibility === "private",
 			uninvitedExternalIDs: created.uninvitedPubkeyHexes,
 		};
+	}
+
+	private membersOfNewChannel(channel: NewPersonalChannel): string[] {
+		if (channel.visibility !== "open") return channel.memberExternalIDs;
+		return [...new Set([...channel.memberExternalIDs, this.adapter.botPubkey])];
 	}
 
 	async listOpenChannels(actor: ActorCredential): Promise<PersonalConversation[]> {
