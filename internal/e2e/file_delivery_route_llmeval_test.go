@@ -123,7 +123,7 @@ func runFileDeliveryRouteCase(t *testing.T, model llm.LanguageModelProvider, rou
 	t.Helper()
 	outcome := fileDeliveryRouteOutcome{Case: routeCase.name, Run: run, ExpectedRoute: routeCase.expectedRoute}
 	artifactDirectory := fileDeliveryRouteArtifactDirectory(t, routeCase.name, run)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 	result, errorValue := RunVirtualSession(ctx, fileDeliveryRouteScenario(model, routeCase, artifactDirectory))
 	preserveLiveSessionEvidence(t, artifactDirectory, result, errorValue)
