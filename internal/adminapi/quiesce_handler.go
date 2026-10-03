@@ -48,25 +48,6 @@ func (quiesceHandler QuiesceHandler) HandlePost(responseWriter http.ResponseWrit
 	writeJSON(responseWriter, http.StatusOK, quiesceHandler.response())
 }
 
-type prepareShutdownResponse struct {
-	Quiesced             bool `json:"quiesced"`
-	InterruptedTaskCount int  `json:"interruptedTaskCount"`
-}
-
-func (quiesceHandler QuiesceHandler) HandlePrepareShutdown(responseWriter http.ResponseWriter, _ *http.Request) {
-	if quiesceHandler.Controller != nil {
-		quiesceHandler.Controller.SetQuiesced(true)
-	}
-	interruptedTaskCount := 0
-	if quiesceHandler.TaskRunService != nil {
-		interruptedTaskCount = len(quiesceHandler.TaskRunService.InterruptRuntimeTaskRunsForPlannedShutdown())
-	}
-	writeJSON(responseWriter, http.StatusOK, prepareShutdownResponse{
-		Quiesced:             quiesceHandler.isQuiesced(),
-		InterruptedTaskCount: interruptedTaskCount,
-	})
-}
-
 func (quiesceHandler QuiesceHandler) response() quiesceResponse {
 	return quiesceResponse{
 		Quiesced:        quiesceHandler.isQuiesced(),

@@ -239,7 +239,7 @@ A task run is the durable record of one unit of work, from intake to its final r
 
 A run has one of nine statuses: `planned`, `running`, `waiting_user_input`, `waiting_approval`, `blocked`, `interrupted`, `completed`, `failed`, `cancelled` (declared in bluecollar's `agentcontract/task_run.go`). Every transition goes through `TransitionTaskRun`, which records a transition event.
 
-Restarts are explicit. Runs orphaned by a crash are interrupted at boot, runs in flight are interrupted before shutdown (`POST /admin/api/runtime/prepare-shutdown`), and interrupted runs are claimed for auto-resume exactly once. A stale-task sweeper and a retention job run under `internal/scheduler`.
+Restarts are explicit. Runs left in flight by a restart or a crash are interrupted at boot, and interrupted runs are claimed for auto-resume exactly once. A stale-task sweeper and a retention job run under `internal/scheduler`.
 
 Within a run the model works in steps. A step either calls a tool, speaks to the requester, or fails the task; a final reply closes the task and must cite the observations that prove the work happened (the completion gate in bluecollar).
 
@@ -557,7 +557,7 @@ A build without it reports `unknown`, and a deploy check should refuse that.
 
 ### Restarting safely
 
-A running process keeps the configuration it started with. Before replacing the binary, call `POST /admin/api/runtime/prepare-shutdown` so runs in flight are interrupted and resumed once afterwards, or `POST /admin/api/quiesce` to stop taking new work. `/admin/api/backup/prepare` and `/complete` bracket a snapshot.
+A running process keeps the configuration it started with. Before replacing the binary, call `POST /admin/api/quiesce` to stop taking new work; runs still in flight are interrupted at the next boot and resumed once. `/admin/api/backup/prepare` and `/complete` bracket a snapshot.
 
 ## Development
 

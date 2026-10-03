@@ -4230,7 +4230,7 @@ func actionCallTool(toolName string, input string) string {
 	return `{"action":"continue","toolName":` + quote(toolName) + `,"toolInput":` + input + `}`
 }
 
-// Shell-native file tools resolve paths through the OS, so the harness rewrites the guest /workspace root onto its temporary host root.
+// Shell-native file tools resolve paths through the OS, so the harness rewrites the /workspace root onto its temporary host root.
 var shellNativeFileToolNames = map[string]bool{
 	"read":         true,
 	"write":        true,

@@ -86,7 +86,6 @@ func NewRouter(routerDependencies RouterDependencies) http.Handler {
 	multiplexer.HandleFunc("GET /admin/api/agent-learning/soul/history", routerDependencies.LearningHandler.HandleSoul)
 	multiplexer.HandleFunc("GET /admin/api/quiesce", routerDependencies.QuiesceHandler.HandleGet)
 	multiplexer.HandleFunc("POST /admin/api/quiesce", routerDependencies.QuiesceHandler.HandlePost)
-	multiplexer.HandleFunc("POST /admin/api/runtime/prepare-shutdown", routerDependencies.QuiesceHandler.HandlePrepareShutdown)
 	multiplexer.HandleFunc("GET /admin/api/memory/facts", routerDependencies.MemoryHandler.HandleListFacts)
 	multiplexer.HandleFunc("POST /admin/api/memory/facts/forget", routerDependencies.MemoryHandler.HandleForgetFacts)
 	multiplexer.HandleFunc("GET /admin/api/schedule", routerDependencies.ScheduleHandler.HandleList)

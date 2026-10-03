@@ -388,7 +388,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) bundledSkillRootPath() string {
 
 // Bundled skills come from the host and the agent may not create, overwrite or remove
 // one, so they can sit on a read-only share. The skills the agent writes stay in its own
-// workspace. guest-init names the delivered path when the monitor offers a share.
+// workspace.
 func BundledSkillRootPath(workspaceRootPath string) string {
 	if deliveredPath := strings.TrimSpace(os.Getenv("BLUECLAW_BUNDLED_SKILLS_PATH")); deliveredPath != "" {
 		return deliveredPath

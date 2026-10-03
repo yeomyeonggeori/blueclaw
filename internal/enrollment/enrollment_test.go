@@ -21,7 +21,6 @@ func completeAnswers(home Home) Answers {
 	return Answers{
 		DisplayName:              "정예시",
 		Email:                    "lee@example.com",
-		Mode:                     RunModeHost,
 		WorkspaceRootPath:        home.WorkspaceRootPath(),
 		DatabaseConnectionString: "postgres://blueclaw@127.0.0.1:5432/blueclaw?sslmode=disable",
 		LanguageModel: LanguageModelAccess{

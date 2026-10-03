@@ -31,7 +31,7 @@ The [quickstart](https://blueclaw.intern.kim/docs/quickstart) configures the sta
 | `chatd/` | the chat bridge and its Buzz and Mattermost adapters |
 | `admin/` | the Svelte admin and task console |
 | `config/` | example runtime and policy configuration |
-| `lab/` | scenario scripts for the Buzz messenger path |
+| `lab/` | a live task-classification scenario for `blueclaw-lab virtual-session --scenario-file` |
 | `tests/` | integration suite and fixtures |
 | `docs/` | the documentation site, generated from `DOCS.md`, and the generated tool catalog |
 

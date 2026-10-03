@@ -6,13 +6,6 @@ import (
 	"strings"
 )
 
-type RunMode string
-
-const (
-	RunModeHost  RunMode = "host"
-	RunModeGuest RunMode = "guest"
-)
-
 type Person struct {
 	PersonID    string
 	DisplayName string
@@ -37,7 +30,6 @@ type HarnessChoice struct {
 
 type Enrollment struct {
 	TenantID                 string
-	Mode                     RunMode
 	Operator                 Person
 	WorkspaceRootPath        string
 	DatabaseConnectionString string
@@ -57,9 +49,6 @@ func (enrollment Enrollment) Validate() error {
 	}
 	if strings.TrimSpace(enrollment.Operator.PersonID) == "" || strings.TrimSpace(enrollment.Operator.Email) == "" {
 		return errors.New("an enrollment needs the person the agent runs as, because tools execute under their identity")
-	}
-	if enrollment.Mode != RunModeHost && enrollment.Mode != RunModeGuest {
-		return errors.New("an enrollment needs a run mode, host or guest, because they join the workspace differently")
 	}
 	if strings.TrimSpace(enrollment.WorkspaceRootPath) == "" {
 		return errors.New("an enrollment needs a workspace root, because that is where the agent's work lives")

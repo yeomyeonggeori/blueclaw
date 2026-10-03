@@ -20,7 +20,6 @@ const (
 	setupFieldModelAPIKey
 	setupFieldEmbeddingModelName
 	setupFieldHarness
-	setupFieldMode
 )
 
 var setupFieldOrder = []setupFieldID{
@@ -33,7 +32,6 @@ var setupFieldOrder = []setupFieldID{
 	setupFieldModelAPIKey,
 	setupFieldEmbeddingModelName,
 	setupFieldHarness,
-	setupFieldMode,
 }
 
 type SetupModel struct {
@@ -90,8 +88,6 @@ func (setupModel SetupModel) fieldLabel(fieldID setupFieldID) string {
 		return "Embedding model"
 	case setupFieldHarness:
 		return "Harness"
-	case setupFieldMode:
-		return "Mode"
 	}
 	return ""
 }
@@ -116,8 +112,6 @@ func (setupModel SetupModel) fieldValue(fieldID setupFieldID) string {
 		return setupModel.answers.LanguageModel.EmbeddingModelName
 	case setupFieldHarness:
 		return setupModel.selectedHarnessLabel()
-	case setupFieldMode:
-		return string(setupModel.answers.Mode)
 	}
 	return ""
 }
@@ -207,12 +201,6 @@ func (setupModel *SetupModel) cycleSelectedChoice() {
 		}
 		setupModel.harnessIndex = (setupModel.harnessIndex + 1) % len(setupModel.availableHarness)
 		setupModel.answers.Harness = setupModel.availableHarness[setupModel.harnessIndex]
-	case setupFieldMode:
-		if setupModel.answers.Mode == enrollment.RunModeHost {
-			setupModel.answers.Mode = enrollment.RunModeGuest
-			return
-		}
-		setupModel.answers.Mode = enrollment.RunModeHost
 	}
 }
 

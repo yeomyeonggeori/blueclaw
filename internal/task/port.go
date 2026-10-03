@@ -35,23 +35,22 @@ type (
 )
 
 const (
-	TaskAttemptStatusCancelled         = agentcontract.TaskAttemptStatusCancelled
-	TaskAttemptStatusCompleted         = agentcontract.TaskAttemptStatusCompleted
-	TaskAttemptStatusFailed            = agentcontract.TaskAttemptStatusFailed
-	TaskAttemptStatusInterrupted       = agentcontract.TaskAttemptStatusInterrupted
-	TaskAttemptStatusRunning           = agentcontract.TaskAttemptStatusRunning
-	TaskAttemptStatusStarting          = agentcontract.TaskAttemptStatusStarting
-	TaskInterruptReasonPlannedShutdown = agentcontract.TaskInterruptReasonPlannedShutdown
-	TaskInterruptReasonRuntimeRestart  = agentcontract.TaskInterruptReasonRuntimeRestart
-	TaskStatusBlocked                  = agentcontract.TaskStatusBlocked
-	TaskStatusCancelled                = agentcontract.TaskStatusCancelled
-	TaskStatusCompleted                = agentcontract.TaskStatusCompleted
-	TaskStatusFailed                   = agentcontract.TaskStatusFailed
-	TaskStatusInterrupted              = agentcontract.TaskStatusInterrupted
-	TaskStatusPlanned                  = agentcontract.TaskStatusPlanned
-	TaskStatusRunning                  = agentcontract.TaskStatusRunning
-	TaskStatusWaitingApproval          = agentcontract.TaskStatusWaitingApproval
-	TaskStatusWaitingUserInput         = agentcontract.TaskStatusWaitingUserInput
+	TaskAttemptStatusCancelled        = agentcontract.TaskAttemptStatusCancelled
+	TaskAttemptStatusCompleted        = agentcontract.TaskAttemptStatusCompleted
+	TaskAttemptStatusFailed           = agentcontract.TaskAttemptStatusFailed
+	TaskAttemptStatusInterrupted      = agentcontract.TaskAttemptStatusInterrupted
+	TaskAttemptStatusRunning          = agentcontract.TaskAttemptStatusRunning
+	TaskAttemptStatusStarting         = agentcontract.TaskAttemptStatusStarting
+	TaskInterruptReasonRuntimeRestart = agentcontract.TaskInterruptReasonRuntimeRestart
+	TaskStatusBlocked                 = agentcontract.TaskStatusBlocked
+	TaskStatusCancelled               = agentcontract.TaskStatusCancelled
+	TaskStatusCompleted               = agentcontract.TaskStatusCompleted
+	TaskStatusFailed                  = agentcontract.TaskStatusFailed
+	TaskStatusInterrupted             = agentcontract.TaskStatusInterrupted
+	TaskStatusPlanned                 = agentcontract.TaskStatusPlanned
+	TaskStatusRunning                 = agentcontract.TaskStatusRunning
+	TaskStatusWaitingApproval         = agentcontract.TaskStatusWaitingApproval
+	TaskStatusWaitingUserInput        = agentcontract.TaskStatusWaitingUserInput
 )
 
 var (
