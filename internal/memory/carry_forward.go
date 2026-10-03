@@ -16,12 +16,12 @@ const carriedFileSuffix = ".carrying"
 
 // CarryReport is what one carry forward did.
 type CarryReport struct {
-	Carried   int      `json:"carried"`
-	AlreadyAt []string `json:"alreadyAt,omitempty"`
+	Carried int `json:"carried"`
+	Adopted int `json:"adopted"`
 }
 
 // CarryForward brings memory written where blueclaw kept every subject's file
-// together into the file inside that subject's own workspace directory. It is
+// together into that subject's protected directory. It is
 // how a host that wrote memory under the old layout keeps it: nothing else
 // looks at the old path, so a start that skipped this would answer from an
 // empty memory and say nothing.
@@ -37,9 +37,9 @@ type CarryReport struct {
 // to the group that reads it. Carrying the bytes keeps the embeddings a rename
 // would keep and a re-ingest would not.
 //
-// A file already at the destination is never overwritten: both are left where
-// they are and named in the report, so a start can be made again once someone
-// has decided which to keep.
+// A file already at the destination is never overwritten. Its store adopts
+// what the old file holds, the way two records of one person are merged, so
+// memory written at either path is kept.
 func (stores *Stores) CarryForward(ctx context.Context) (CarryReport, error) {
 	report := CarryReport{}
 	oldDirectory := filepath.Join(stores.workspaceRootPath, ".blueclaw", "memory")
@@ -54,7 +54,10 @@ func (stores *Stores) CarryForward(ctx context.Context) (CarryReport, error) {
 			return report, errorValue
 		}
 		if held {
-			report.AlreadyAt = append(report.AlreadyAt, destination)
+			if errorValue := stores.adoptFile(ctx, oldPath, scope.scope); errorValue != nil {
+				return report, fmt.Errorf("fold %s into %s: %w", oldPath, destination, errorValue)
+			}
+			report.Adopted++
 			continue
 		}
 		if errorValue := stores.carryOne(ctx, oldPath, destination); errorValue != nil {
@@ -105,11 +108,17 @@ func (stores *Stores) carryOne(ctx context.Context, oldPath string, destination 
 	if errorValue := copyFile(oldPath, destination); errorValue != nil {
 		return errorValue
 	}
+	return removeStoreFile(oldPath)
+}
+
+// removeStoreFile takes away a store file whose memory now lives elsewhere,
+// with the sidecars a WAL-mode file may have left beside it.
+func removeStoreFile(path string) error {
 	for _, sidecar := range []string{"-wal", "-shm"} {
-		_ = os.Remove(oldPath + sidecar)
+		_ = os.Remove(path + sidecar)
 	}
-	if errorValue := os.Remove(oldPath); errorValue != nil {
-		return fmt.Errorf("take %s away once it is carried: %w", oldPath, errorValue)
+	if errorValue := os.Remove(path); errorValue != nil {
+		return fmt.Errorf("take %s away once its memory lives elsewhere: %w", path, errorValue)
 	}
 	return nil
 }

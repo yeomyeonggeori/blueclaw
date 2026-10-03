@@ -45,28 +45,28 @@ func PersonScope(personID string) Scope { return Scope{Kind: ScopePerson, ID: pe
 func CircleScope(circleID string) Scope { return Scope{Kind: ScopeCircle, ID: circleID} }
 func WorkspaceScope() Scope             { return Scope{Kind: ScopeWorkspace} }
 
-// pathUnder puts a subject's memory in that subject's own workspace
-// directory, where the permissions the workspace already declares are what
-// decide who opens it.
+// pathUnder puts a subject's memory in that subject's protected directory,
+// where the permissions the workspace already declares are what decide who
+// opens it.
 func (scope Scope) pathUnder(workspaceRootPath string) (string, error) {
 	if strings.TrimSpace(workspaceRootPath) == "" {
 		return "", errors.New("memory has no workspace root to sit under")
 	}
-	directory := scope.directoryUnder(workspaceRootPath)
+	directory := scope.protectedDirectoryUnder(workspaceRootPath)
 	if directory == "" {
 		return "", fmt.Errorf("memory scope %q with identifier %q names no directory", scope.Kind, scope.ID)
 	}
-	return filepath.Join(security.ProtectedDirectoryPath(directory), memoryFileName), nil
+	return filepath.Join(directory, memoryFileName), nil
 }
 
-func (scope Scope) directoryUnder(workspaceRootPath string) string {
+func (scope Scope) protectedDirectoryUnder(workspaceRootPath string) string {
 	switch scope.Kind {
 	case ScopePerson:
-		return security.PersonHomeDirectoryPath(workspaceRootPath, scope.ID)
+		return security.PersonProtectedDirectoryPath(workspaceRootPath, scope.ID)
 	case ScopeCircle:
-		return security.CircleDirectoryPath(workspaceRootPath, scope.ID)
+		return security.ProtectedDirectoryPath(security.CircleDirectoryPath(workspaceRootPath, scope.ID))
 	case ScopeWorkspace:
-		return security.SharedDirectoryPath(workspaceRootPath)
+		return security.ProtectedDirectoryPath(security.SharedDirectoryPath(workspaceRootPath))
 	}
 	return ""
 }
@@ -353,19 +353,17 @@ func (stores *Stores) MergePerson(ctx context.Context, fromPersonID string, toPe
 		}
 		return os.Rename(fromPath, toPath)
 	}
-	return stores.adoptEveryMemory(ctx, fromPersonID, toPersonID, fromPath)
+	return stores.adoptFile(ctx, fromPath, PersonScope(toPersonID))
 }
 
-func (stores *Stores) adoptEveryMemory(ctx context.Context, fromPersonID string, toPersonID string, fromPath string) error {
-	losing, errorValue := stores.Store(ctx, PersonScope(fromPersonID))
+// adoptFile moves every memory one store file holds into a scope's store and
+// then takes the file away.
+func (stores *Stores) adoptFile(ctx context.Context, fromPath string, into Scope) error {
+	memories, errorValue := memoriesIn(ctx, fromPath, stores.configuration)
 	if errorValue != nil {
 		return errorValue
 	}
-	memories, errorValue := losing.Memories(ctx)
-	if errorValue != nil {
-		return errorValue
-	}
-	surviving, errorValue := stores.Store(ctx, PersonScope(toPersonID))
+	surviving, errorValue := stores.Store(ctx, into)
 	if errorValue != nil {
 		return errorValue
 	}
@@ -376,8 +374,16 @@ func (stores *Stores) adoptEveryMemory(ctx context.Context, fromPersonID string,
 	if _, errorValue := surviving.Adopt(ctx, adopted); errorValue != nil {
 		return errorValue
 	}
-	stores.forget(PersonScope(fromPersonID))
-	return os.Remove(fromPath)
+	return removeStoreFile(fromPath)
+}
+
+func memoriesIn(ctx context.Context, path string, configuration bluememo.Configuration) ([]bluememo.Memory, error) {
+	store, errorValue := bluememo.Open(ctx, path, configuration)
+	if errorValue != nil {
+		return nil, errorValue
+	}
+	memories, errorValue := store.Memories(ctx)
+	return memories, errors.Join(errorValue, store.Close())
 }
 
 // readerFor embeds the query once, because the service holds the credentials

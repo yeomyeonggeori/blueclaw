@@ -401,7 +401,10 @@ The workspace is the directory tree under `terminal.workspaceRootPath` where peo
 | `circles/<circleID>` | `blueclaw`:`bc_circle_<id>` | `2770` |
 | `shared` | `blueclaw`:`bc_shared` | `2755` |
 | `shared/public`, `shared/cache`, `shared/cache/dependencies/*` | `blueclaw`:`bc_shared` | `2775` |
-| `private`, `private/people`, `circles` | `blueclaw`:`blueclaw` | `0711` |
+| `private/protected/<personID>`, `circles/<circleID>/.protected`, `shared/.protected` | `blueclaw`:the subject's group | `2750` |
+| `private`, `private/people`, `private/protected`, `circles` | `blueclaw`:`blueclaw` | `0711` |
+
+A protected directory holds what the service writes on a subject's behalf, such as their `memory.db`. The service writes it and the subject's group reads it. A person's sits outside their home because the service cannot pass through a `0700` directory it does not own.
 
 `.blueclaw/` holds the daemon's state, logs, configuration and identity map. It appears in no projected entry, so it is never handed to a task user.
 

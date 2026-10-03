@@ -67,7 +67,7 @@ func TestASubjectsMemorySitsInTheirOwnWorkspaceUnderProtected(t *testing.T) {
 		scope  memory.Scope
 		suffix string
 	}{
-		"a person": {memory.PersonScope("person-1"), "/private/people/person-1/.protected/memory.db"},
+		"a person": {memory.PersonScope("person-1"), "/private/protected/person-1/memory.db"},
 		"a circle": {memory.CircleScope("member"), "/circles/member/.protected/memory.db"},
 		"everyone": {memory.WorkspaceScope(), "/shared/.protected/memory.db"},
 	} {
