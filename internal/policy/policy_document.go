@@ -8,7 +8,6 @@ type PolicyDocument struct {
 	Channels       []ChannelPolicy        `json:"channels"`
 	ResourceAccess []ResourceAccessPolicy `json:"resourceAccess"`
 	Retention      RetentionPolicy        `json:"retention"`
-	Rules          []TopicRule            `json:"rules"`
 	Metadata       PolicyMetadata         `json:"metadata"`
 }
 
@@ -20,17 +19,14 @@ func (policyDocument PolicyDocument) NamesItsPeople() bool {
 }
 
 type PersonPolicy struct {
-	PersonID          string   `json:"personID"`
-	DisplayName       string   `json:"displayName"`
-	Emails            []string `json:"emails"`
-	Circles           []string `json:"circles"`
-	SecurityLevelName string   `json:"securityLevelName"`
-	SecurityLevelRank int      `json:"securityLevelRank"`
-	GrantedClasses    []string `json:"grantedClasses"`
-	IsAdmin           bool     `json:"isAdmin"`
-	JobTitle          string   `json:"jobTitle,omitempty"`
-	Group             string   `json:"group,omitempty"`
-	SupervisorID      string   `json:"supervisorID,omitempty"`
+	PersonID     string   `json:"personID"`
+	DisplayName  string   `json:"displayName"`
+	Emails       []string `json:"emails"`
+	Circles      []string `json:"circles"`
+	IsAdmin      bool     `json:"isAdmin"`
+	JobTitle     string   `json:"jobTitle,omitempty"`
+	Group        string   `json:"group,omitempty"`
+	SupervisorID string   `json:"supervisorID,omitempty"`
 }
 
 type OrgGroupPolicy struct {
@@ -62,14 +58,12 @@ type CirclePolicy struct {
 }
 
 type ChannelPolicy struct {
-	Platform                 string   `json:"platform"`
-	ExternalConversationID   string   `json:"externalConversationID"`
-	ConversationType         string   `json:"conversationType"`
-	DisplayName              string   `json:"displayName"`
-	DefaultSecurityLevelRank int      `json:"defaultSecurityLevelRank"`
-	DefaultRequiredClasses   []string `json:"defaultRequiredClasses"`
-	IsCollectEnabled         bool     `json:"isCollectEnabled"`
-	IsReplyEnabled           bool     `json:"isReplyEnabled"`
+	Platform               string `json:"platform"`
+	ExternalConversationID string `json:"externalConversationID"`
+	ConversationType       string `json:"conversationType"`
+	DisplayName            string `json:"displayName"`
+	IsCollectEnabled       bool   `json:"isCollectEnabled"`
+	IsReplyEnabled         bool   `json:"isReplyEnabled"`
 }
 
 type ResourceAccessPolicy struct {
@@ -80,13 +74,6 @@ type ResourceAccessPolicy struct {
 
 type RetentionPolicy struct {
 	RawEventDays int `json:"rawEventDays"`
-}
-
-type TopicRule struct {
-	Name                string   `json:"name"`
-	TopicKeywords       []string `json:"topicKeywords"`
-	RequiredClasses     []string `json:"requiredClasses"`
-	MinimumSecurityRank int      `json:"minimumSecurityRank"`
 }
 
 type PolicyMetadata struct {

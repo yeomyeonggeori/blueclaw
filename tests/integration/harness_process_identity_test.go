@@ -69,7 +69,7 @@ func TestTheHarnessProcessItselfRunsAsTheRequester(t *testing.T) {
 		AllowNetwork:      true,
 		POSIXHelperPath:   posixHelperPath,
 	}
-	personAccess := policy.PersonAccess{PersonID: requesterPersonID, SecurityLevelRank: 100}
+	personAccess := policy.PersonAccess{PersonID: requesterPersonID}
 	synchronizer := security.NewPOSIXSynchronizer(terminalConfiguration, writePolicyDocument(t, requesterPersonID))
 	if errorValue := security.NewPOSIXRequesterWorkspaceProvisioner(synchronizer).ProvisionRequesterWorkspace(context.Background(), personAccess, workspaceRootPath); errorValue != nil {
 		t.Fatalf("expected the requester to be projected onto a linux user: %v", errorValue)

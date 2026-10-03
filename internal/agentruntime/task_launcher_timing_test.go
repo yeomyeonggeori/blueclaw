@@ -25,7 +25,7 @@ func TestTaskLauncherPersistsTimedPreRouterRecordsOnSuccess(t *testing.T) {
 		RequesterPersonID: "person-1",
 		ConversationID:    "conversation-1",
 		Prompt:            "오늘 무슨 요일이야?",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1"},
 	})
 	if errorValue != nil {
 		t.Fatal(errorValue)
@@ -46,7 +46,7 @@ func TestTaskLauncherPersistsTimedPreRouterRecordsOnFailure(t *testing.T) {
 		RequesterPersonID: "person-1",
 		ConversationID:    "conversation-1",
 		Prompt:            "오늘 무슨 요일이야?",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1"},
 	})
 	if errorValue != nil {
 		t.Fatal(errorValue)
@@ -114,7 +114,7 @@ func TestTaskLauncherSetsExecutionStartAfterRouting(t *testing.T) {
 		ConversationID:    "conversation-1",
 		Prompt:            "작업을 시작해",
 		TurnStartedAt:     turnStartedAt,
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1"},
 	}); errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -134,7 +134,7 @@ func TestTaskLauncherSetsExecutionStartAfterRouting(t *testing.T) {
 		TurnStartedAt:          turnStartedAt,
 		ExecutionStartedAt:     restartExecutionStartedAt,
 		IsRuntimeRestartResume: true,
-		PersonAccess:           policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+		PersonAccess:           policy.PersonAccess{PersonID: "person-1"},
 	}); errorValue != nil {
 		t.Fatal(errorValue)
 	}

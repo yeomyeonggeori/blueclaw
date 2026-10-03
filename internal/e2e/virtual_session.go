@@ -3859,12 +3859,10 @@ func testPolicyProjection() policy.PolicyProjection {
 func testPolicyDocument() policy.PolicyDocument {
 	return policy.PolicyDocument{
 		People: []policy.PersonPolicy{{
-			PersonID:          "person-1",
-			DisplayName:       "샘플",
-			Emails:            []string{"sample@example.com"},
-			Circles:           []string{"member"},
-			SecurityLevelRank: 0,
-			GrantedClasses:    []string{},
+			PersonID:    "person-1",
+			DisplayName: "샘플",
+			Emails:      []string{"sample@example.com"},
+			Circles:     []string{"member"},
 		}},
 		Circles: []policy.CirclePolicy{{
 			CircleID:               "member",
@@ -3872,14 +3870,12 @@ func testPolicyDocument() policy.PolicyDocument {
 			WorkspaceDirectoryPath: "/workspace/circles/member",
 		}},
 		Channels: []policy.ChannelPolicy{{
-			Platform:                 "virtual",
-			ExternalConversationID:   "virtual-conversation-1",
-			ConversationType:         "test",
-			DisplayName:              "Virtual Session",
-			DefaultSecurityLevelRank: 0,
-			DefaultRequiredClasses:   []string{},
-			IsCollectEnabled:         true,
-			IsReplyEnabled:           true,
+			Platform:               "virtual",
+			ExternalConversationID: "virtual-conversation-1",
+			ConversationType:       "test",
+			DisplayName:            "Virtual Session",
+			IsCollectEnabled:       true,
+			IsReplyEnabled:         true,
 		}},
 		Retention: policy.RetentionPolicy{RawEventDays: 30},
 	}

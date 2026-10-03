@@ -39,7 +39,7 @@ func TestScheduleRunnerLaunchesDueSchedule(t *testing.T) {
 			NextRunAt:       &runAt,
 		},
 		ReferenceTime: runAt,
-		PersonAccess:  policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+		PersonAccess:  policy.PersonAccess{PersonID: "person-1"},
 		WorkspaceID:   "workspace-1",
 	})
 	if errorValue != nil {
@@ -93,7 +93,7 @@ func TestScheduleRunnerAddsCronContextToLaunch(t *testing.T) {
 			CompletedRunCount: 3,
 		},
 		ReferenceTime: nextRunAt.Add(29 * time.Second),
-		PersonAccess:  policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+		PersonAccess:  policy.PersonAccess{PersonID: "person-1"},
 		WorkspaceID:   "workspace-1",
 	})
 	if errorValue != nil {
@@ -168,7 +168,7 @@ func TestScheduleRunnerForwardsRequesterLanguageToRouter(t *testing.T) {
 					NextRunAt:       &runAt,
 				},
 				ReferenceTime:    runAt,
-				PersonAccess:     policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+				PersonAccess:     policy.PersonAccess{PersonID: "person-1"},
 				WorkspaceID:      "workspace-1",
 				ResponseLanguage: testCase.runLanguage,
 			})
@@ -217,7 +217,7 @@ func TestScheduleRunnerPreservesScheduledArtifactRouting(t *testing.T) {
 			NextRunAt:       &runAt,
 		},
 		ReferenceTime: runAt,
-		PersonAccess:  policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+		PersonAccess:  policy.PersonAccess{PersonID: "person-1"},
 		WorkspaceID:   "workspace-1",
 	})
 	if errorValue != nil {

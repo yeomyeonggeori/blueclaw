@@ -45,7 +45,7 @@ func TestTheRouterThatDecidesTheTurnIsToldWhatDayItIs(t *testing.T) {
 		ConversationID:    "conversation-1",
 		Prompt:            "금요일에 휴가 쓸게",
 		ResponseLanguage:  "ko",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1"},
 	}); errorValue != nil {
 		t.Fatal(errorValue)
 	}

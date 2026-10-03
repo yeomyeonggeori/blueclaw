@@ -39,7 +39,7 @@ func launchThroughExternalHarness(t *testing.T) (*task.TaskEventService, *task.T
 		ProfileName:       "default",
 		ConversationID:    "channel-1",
 		Prompt:            "회의록 정리해줘",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1"},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected the turn to run: %v", errorValue)
@@ -145,7 +145,7 @@ func TestARunTheHostOpenedAndTheTurnAbandonedDoesNotSurviveTheLaunch(t *testing.
 		ProfileName:       "default",
 		ConversationID:    "channel-1",
 		Prompt:            "다시 해봐",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1"},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected the turn to run: %v", errorValue)

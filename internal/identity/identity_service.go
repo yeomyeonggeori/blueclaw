@@ -84,8 +84,6 @@ func (identityService *IdentityService) reloadPolicyProjection(policyProjection 
 			PersonID:            personAccess.PersonID,
 			Circles:             append([]string{}, personAccess.Circles...),
 			ResourceAccessRules: append([]policy.ResourceAccessPolicy{}, personAccess.ResourceAccessRules...),
-			SecurityLevelRank:   personAccess.SecurityLevelRank,
-			GrantedClasses:      append([]string{}, personAccess.GrantedClasses...),
 		}
 	}
 	for compositeKey, channelPolicy := range policyProjection.ChannelByCompositeKey {
@@ -141,7 +139,6 @@ func (identityService *IdentityService) ResolvePersonAccess(personID string) pol
 	}
 	personAccess.Circles = append([]string{}, personAccess.Circles...)
 	personAccess.ResourceAccessRules = append([]policy.ResourceAccessPolicy{}, personAccess.ResourceAccessRules...)
-	personAccess.GrantedClasses = append([]string{}, personAccess.GrantedClasses...)
 	return policy.EnsureRequesterDefaults(personAccess)
 }
 
@@ -154,7 +151,6 @@ func (identityService *IdentityService) FindPersonAccess(personID string) (polic
 	}
 	personAccess.Circles = append([]string{}, personAccess.Circles...)
 	personAccess.ResourceAccessRules = append([]policy.ResourceAccessPolicy{}, personAccess.ResourceAccessRules...)
-	personAccess.GrantedClasses = append([]string{}, personAccess.GrantedClasses...)
 	return policy.EnsureRequesterDefaults(personAccess), true
 }
 

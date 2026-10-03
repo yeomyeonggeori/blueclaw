@@ -45,7 +45,7 @@ func TestCronScheduleRunsDailyResearchPromptAndAdvancesToNextDay(t *testing.T) {
 			NextRunAt:        &nextRunAt,
 		},
 		ReferenceTime: runAt,
-		PersonAccess:  policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100, GrantedClasses: []string{"internal"}},
+		PersonAccess:  policy.PersonAccess{PersonID: "person-1"},
 		WorkspaceID:   "workspace-1",
 	})
 	if errorValue != nil {

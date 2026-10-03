@@ -67,7 +67,7 @@ func hasDuplicateCanonicalPersonReferenceStatements(statements []canonicalPerson
 	return false
 }
 
-func TestAPersonWithoutGrantedClassesOrCirclesIsProjected(t *testing.T) {
+func TestAPersonWithoutCirclesIsProjected(t *testing.T) {
 	connectionString := os.Getenv("BLUECLAW_TEST_POSTGRES_URL")
 	if connectionString == "" {
 		t.Skip("set BLUECLAW_TEST_POSTGRES_URL to run the disposable PostgreSQL regression")
@@ -85,16 +85,16 @@ func TestAPersonWithoutGrantedClassesOrCirclesIsProjected(t *testing.T) {
 	defer database.SQL.Exec(`DELETE FROM person WHERE person_id = $1`, personID)
 
 	if errorValue := NewPersonRepository(database).UpsertPerson(policy.PersonPolicy{
-		PersonID: personID, DisplayName: "Alex", SecurityLevelName: "member", SecurityLevelRank: 10,
+		PersonID: personID, DisplayName: "Alex",
 	}); errorValue != nil {
 		t.Fatalf("a person the policy names without optional lists must be stored: %v", errorValue)
 	}
-	var grantedClassCount int
-	if errorValue := database.SQL.QueryRow(`SELECT cardinality(granted_classes) FROM person WHERE person_id = $1`, personID).Scan(&grantedClassCount); errorValue != nil {
+	var circleCount int
+	if errorValue := database.SQL.QueryRow(`SELECT cardinality(circles) FROM person WHERE person_id = $1`, personID).Scan(&circleCount); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if grantedClassCount != 0 {
-		t.Fatalf("expected no granted classes, got %d", grantedClassCount)
+	if circleCount != 0 {
+		t.Fatalf("expected no circles, got %d", circleCount)
 	}
 }
 
@@ -152,7 +152,7 @@ func TestAReferencedPersonsHistorySurvivesTheirRemoval(t *testing.T) {
 
 func projectedPerson(personID string, email string) policy.PersonPolicy {
 	return policy.PersonPolicy{
-		PersonID: personID, DisplayName: "이샘플", SecurityLevelName: "member", SecurityLevelRank: 10,
+		PersonID: personID, DisplayName: "이샘플",
 		Emails: []string{email},
 	}
 }

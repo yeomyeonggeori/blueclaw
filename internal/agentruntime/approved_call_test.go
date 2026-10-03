@@ -30,7 +30,7 @@ func launchApprovalContinuation(t *testing.T, taskLauncher *TaskLauncher, taskRu
 		Prompt:                    "지난 분기 뭐였는지 찾아줘",
 		IsApprovalContinuation:    true,
 		ExistingTaskRunID:         taskRunID,
-		PersonAccess:              policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+		PersonAccess:              policy.PersonAccess{PersonID: "person-1"},
 		AccessibleConversationIDs: []string{"channel-1"},
 	})
 	if errorValue != nil {

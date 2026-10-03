@@ -29,7 +29,7 @@ func TestTaskRunHandlerLaunchesAdminTask(t *testing.T) {
 	identityService := identity.NewIdentityService(policy.PolicyProjection{
 		PersonIDByEmail: map[string]string{"admin@example.com": "person-1"},
 		PersonAccessByPersonID: map[string]policy.PersonAccess{
-			"person-1": {PersonID: "person-1", SecurityLevelRank: 100, GrantedClasses: []string{"internal"}},
+			"person-1": {PersonID: "person-1"},
 		},
 	})
 	handler := TaskRunHandler{
@@ -61,7 +61,7 @@ func TestTaskRunHandlerLaunchIgnoresClientCancellation(t *testing.T) {
 	identityService := identity.NewIdentityService(policy.PolicyProjection{
 		PersonIDByEmail: map[string]string{"admin@example.com": "person-1"},
 		PersonAccessByPersonID: map[string]policy.PersonAccess{
-			"person-1": {PersonID: "person-1", SecurityLevelRank: 100, GrantedClasses: []string{"internal"}},
+			"person-1": {PersonID: "person-1"},
 		},
 	})
 	handler := TaskRunHandler{
@@ -274,7 +274,7 @@ func presetTaskRunHandler(harness agentcontract.Harness, taskRunService *task.Ta
 	}, nil)
 	identityService := identity.NewIdentityService(policy.PolicyProjection{
 		PersonAccessByPersonID: map[string]policy.PersonAccess{
-			"person-1": {PersonID: "person-1", SecurityLevelRank: 100, GrantedClasses: []string{"internal"}},
+			"person-1": {PersonID: "person-1"},
 		},
 	})
 	return TaskRunHandler{

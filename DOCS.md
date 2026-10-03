@@ -67,8 +67,6 @@ Copy `config/policy.example.json` to `policy.json` and add the people who may us
   "personID": "00000000-0000-0000-0000-000000000002",
   "displayName": "Alex",
   "emails": ["sample@example.com"],
-  "securityLevelName": "member",
-  "securityLevelRank": 10,
   "circles": ["member"]
 }
 ```
@@ -267,7 +265,7 @@ A capability's `target.resolve` answer may carry `choices`, each a `key` and an 
 
 The policy document is the list of people and circles blueclaw serves, and the source every identity is derived from.
 
-It is the file passed as `--policy`. People carry a `personID`, `emails`, a security level (`securityLevelName`, `securityLevelRank`), `grantedClasses`, `circles` and `isAdmin`. Circles carry a `circleID`, a `workspaceDirectoryPath`, and optional `memberCircles` naming circles that belong to them. `resourceAccess` maps resources to actions and circles. The validator (`internal/policy/policy_validator.go`) checks IDs, emails, duplicates, circles (at most 10 per person), channels, resources and retention.
+It is the file passed as `--policy`. People carry a `personID`, `emails`, `circles` and `isAdmin`. Circles carry a `circleID`, a `workspaceDirectoryPath`, and optional `memberCircles` naming circles that belong to them. `resourceAccess` maps resources to actions and circles. The validator (`internal/policy/policy_validator.go`) checks IDs, emails, duplicates, circles (at most 10 per person), channels, resources and retention.
 
 At boot the daemon projects the policy into a read-only `person` table and into POSIX users and groups (see [POSIX identity](#posix-identity)). The admin API validates, saves and reloads it (`/admin/api/policy/*`) and invites or removes people (`/admin/api/people/*`).
 

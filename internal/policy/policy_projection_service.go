@@ -21,8 +21,6 @@ type PersonAccess struct {
 	PersonID            string
 	Circles             []string
 	ResourceAccessRules []ResourceAccessPolicy
-	SecurityLevelRank   int
-	GrantedClasses      []string
 }
 
 type PolicyProjectionService struct{}
@@ -47,8 +45,6 @@ func (policyProjectionService PolicyProjectionService) ReplacePolicyProjectionTr
 			PersonID:            personPolicy.PersonID,
 			Circles:             effectivePersonCircles(personPolicy),
 			ResourceAccessRules: append([]ResourceAccessPolicy{}, policyDocument.ResourceAccess...),
-			SecurityLevelRank:   personPolicy.SecurityLevelRank,
-			GrantedClasses:      append([]string{}, personPolicy.GrantedClasses...),
 		}
 		for _, email := range personPolicy.Emails {
 			policyProjection.PersonIDByEmail[strings.ToLower(email)] = personPolicy.PersonID

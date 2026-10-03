@@ -96,8 +96,8 @@ func ancestorsBelowTemporaryRoot(directoryPath string, temporaryRootPath string)
 func writeTwoPersonPolicy(t *testing.T) string {
 	t.Helper()
 	document := `{"people":[
-	  {"personID":"person-one","displayName":"One","emails":["one@example.com"],"securityLevelName":"member","securityLevelRank":50,"grantedClasses":["internal"],"circles":["member"]},
-	  {"personID":"person-two","displayName":"Two","emails":["two@example.com"],"securityLevelName":"member","securityLevelRank":50,"grantedClasses":["internal"],"circles":["member"]}
+	  {"personID":"person-one","displayName":"One","emails":["one@example.com"],"circles":["member"]},
+	  {"personID":"person-two","displayName":"Two","emails":["two@example.com"],"circles":["member"]}
 	],"circles":[{"circleID":"member","displayName":"Member"}]}`
 	policyPath := filepath.Join(t.TempDir(), "policy.json")
 	if errorValue := os.WriteFile(policyPath, []byte(document), 0o600); errorValue != nil {

@@ -3,9 +3,6 @@ export type PolicyDocument = {
     personID: string;
     displayName: string;
     emails: string[];
-    securityLevelName: string;
-    securityLevelRank: number;
-    grantedClasses: string[];
     circles: string[];
     isAdmin: boolean;
   }>;
@@ -25,8 +22,6 @@ export type PolicyDocument = {
     externalConversationID: string;
     conversationType: string;
     displayName: string;
-    defaultSecurityLevelRank: number;
-    defaultRequiredClasses: string[];
     isCollectEnabled: boolean;
     isReplyEnabled: boolean;
   }>;

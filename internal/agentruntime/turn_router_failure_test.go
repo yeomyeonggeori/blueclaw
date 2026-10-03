@@ -28,7 +28,7 @@ func TestTaskLauncherPersistsTurnRouterFailureWithoutFallbackRoute(t *testing.T)
 		RequesterPersonID: "person-1",
 		ConversationID:    "channel-1",
 		Prompt:            "오늘 무슨 요일이야?",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1"},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected persisted router failure result: %v", errorValue)
