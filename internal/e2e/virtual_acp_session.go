@@ -2,7 +2,9 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -34,6 +36,7 @@ func openVirtualACPSession(collaborators acpsession.Collaborators, conversationI
 	agent.UseConnection(agentConnection)
 	client := &virtualACPClient{}
 	connection := acp.NewClientSideConnection(client, clientSide, clientSide)
+	client.connection = connection
 	session := &virtualACPSession{
 		connection: connection,
 		client:     client,
@@ -125,8 +128,9 @@ func (harness *VirtualSessionHarness) latestTaskRunUpdatedSince(since time.Time)
 }
 
 type virtualACPClient struct {
-	mutex    sync.Mutex
-	messages []string
+	mutex      sync.Mutex
+	connection *acp.ClientSideConnection
+	messages   []string
 }
 
 func (client *virtualACPClient) messageCount() int {
@@ -141,19 +145,48 @@ func (client *virtualACPClient) messagesSince(index int) string {
 	return strings.Join(client.messages[index:], "")
 }
 
-func (client *virtualACPClient) SessionUpdate(_ context.Context, notification acp.SessionNotification) error {
+func (client *virtualACPClient) SessionUpdate(ctx context.Context, notification acp.SessionNotification) error {
 	chunk := notification.Update.AgentMessageChunk
-	if chunk == nil || chunk.Content.Text == nil {
+	if chunk == nil {
 		return nil
 	}
-	client.mutex.Lock()
-	defer client.mutex.Unlock()
-	client.messages = append(client.messages, chunk.Content.Text.Text)
+	if chunk.Content.Text != nil {
+		client.mutex.Lock()
+		client.messages = append(client.messages, chunk.Content.Text.Text)
+		client.mutex.Unlock()
+	}
+	go client.reportPosted(context.WithoutCancel(ctx), notification.Meta)
 	return nil
 }
 
-func (client *virtualACPClient) RequestPermission(context.Context, acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+func (client *virtualACPClient) reportPosted(ctx context.Context, meta map[string]any) {
+	deliveryID := deliveryIDNamedIn(meta)
+	if deliveryID == "" {
+		return
+	}
+	client.mutex.Lock()
+	messageID := fmt.Sprintf("virtual-message-%d", len(client.messages))
+	client.mutex.Unlock()
+	_, _ = client.connection.CallExtension(ctx, acpsession.DeliveredExtensionMethod, acpsession.DeliveredReport{DeliveryID: deliveryID, MessageID: messageID})
+}
+
+func (client *virtualACPClient) RequestPermission(ctx context.Context, request acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+	if deliveryID := deliveryIDNamedIn(request.Meta); deliveryID != "" {
+		_, _ = client.connection.CallExtension(ctx, acpsession.UndeliveredExtensionMethod, acpsession.UndeliveredReport{DeliveryID: deliveryID, Reason: "the virtual session puts no question to anybody"})
+	}
 	return acp.RequestPermissionResponse{Outcome: acp.NewRequestPermissionOutcomeCancelled()}, nil
+}
+
+func deliveryIDNamedIn(meta map[string]any) string {
+	document, errorValue := json.Marshal(meta[acpsession.DeliveryMetaKey])
+	if errorValue != nil {
+		return ""
+	}
+	delivery := acpsession.Delivery{}
+	if json.Unmarshal(document, &delivery) != nil {
+		return ""
+	}
+	return delivery.DeliveryID
 }
 
 func (client *virtualACPClient) ReadTextFile(context.Context, acp.ReadTextFileRequest) (acp.ReadTextFileResponse, error) {

@@ -76,6 +76,8 @@ type Agent struct {
 	sessionTurns       SessionTurnOpener
 	taskRunStore       taskstate.TaskRunStore
 	logger             *slog.Logger
+	deliveries         *awaitedDeliveries
+	deliveryReportWait time.Duration
 
 	connection *acp.AgentSideConnection
 	mutex      sync.RWMutex
@@ -94,6 +96,8 @@ func NewAgent(collaborators Collaborators, permissionRelay *PermissionRelay, log
 		sessionTurns:       collaborators.SessionTurns,
 		taskRunStore:       collaborators.TaskRunStore,
 		logger:             logger,
+		deliveries:         newAwaitedDeliveries(),
+		deliveryReportWait: defaultDeliveryReportWait,
 		sessions:           map[acp.SessionId]openSession{},
 	}
 }
@@ -135,7 +139,7 @@ func (agent *Agent) NewSession(ctx context.Context, request acp.NewSessionReques
 	if errorValue != nil {
 		return acp.NewSessionResponse{}, errorValue
 	}
-	sessionID := acp.SessionId(newSessionIdentifier())
+	sessionID := acp.SessionId(newRandomIdentifier())
 	agent.openSession(sessionID, sessionContext, request.Cwd, request.McpServers)
 	return acp.NewSessionResponse{SessionId: sessionID}, nil
 }
@@ -166,7 +170,7 @@ func (agent *Agent) openSession(sessionID acp.SessionId, sessionContext SessionC
 	}
 	agent.mutex.Unlock()
 	closeRecordCatalog(replaced.recordCatalog)
-	agent.permissionRelay.hold(sessionContext, sessionID, agent.connection)
+	agent.permissionRelay.hold(sessionContext, sessionID, agent)
 	agent.logger.Info("acpsession.opened",
 		"sessionID", string(sessionID),
 		"personID", sessionContext.Requester.PersonID,
@@ -355,8 +359,10 @@ func (agent *Agent) checkpointSenderFor(sessionID acp.SessionId) agentcontract.A
 				return errorValue
 			}
 		}
-		if errorValue := agent.notifyAttachments(checkpointContext, sessionID, checkpoint.Attachments); errorValue != nil {
-			return errorValue
+		for _, update := range attachmentUpdates(checkpoint.Attachments) {
+			if errorValue := agent.notify(checkpointContext, sessionID, update); errorValue != nil {
+				return errorValue
+			}
 		}
 		toolName := strings.TrimSpace(checkpoint.ToolName)
 		if toolName == "" {
@@ -367,17 +373,21 @@ func (agent *Agent) checkpointSenderFor(sessionID acp.SessionId) agentcontract.A
 }
 
 func (agent *Agent) replySenderFor(sessionID acp.SessionId) connectors.ReplySender {
-	return func(ctx context.Context, _ connectors.ReplyTarget, reply connectors.OutboundReply) (string, error) {
-		if message := strings.TrimSpace(reply.Message); message != "" {
-			if errorValue := agent.notify(ctx, sessionID, acp.UpdateAgentMessageText(message)); errorValue != nil {
-				return "", errorValue
-			}
-		}
-		return "", agent.notifyAttachments(ctx, sessionID, reply.Attachments)
+	return func(ctx context.Context, replyTarget connectors.ReplyTarget, reply connectors.OutboundReply) (string, error) {
+		return agent.deliverEach(ctx, sessionID, replyTarget.ReplyTargetID, replyUpdates(reply))
 	}
 }
 
-func (agent *Agent) notifyAttachments(ctx context.Context, sessionID acp.SessionId, attachments []toolcontract.FileAttachment) error {
+func replyUpdates(reply connectors.OutboundReply) []acp.SessionUpdate {
+	updates := []acp.SessionUpdate{}
+	if message := strings.TrimSpace(reply.Message); message != "" {
+		updates = append(updates, acp.UpdateAgentMessageText(message))
+	}
+	return append(updates, attachmentUpdates(reply.Attachments)...)
+}
+
+func attachmentUpdates(attachments []toolcontract.FileAttachment) []acp.SessionUpdate {
+	updates := []acp.SessionUpdate{}
 	for _, attachment := range attachments {
 		devicePath := strings.TrimSpace(attachment.DevicePath)
 		if devicePath == "" {
@@ -387,11 +397,9 @@ func (agent *Agent) notifyAttachments(ctx context.Context, sessionID acp.Session
 		if name == "" {
 			name = filepath.Base(devicePath)
 		}
-		if errorValue := agent.notify(ctx, sessionID, acp.UpdateAgentMessage(acp.ResourceLinkBlock(name, "file://"+devicePath))); errorValue != nil {
-			return errorValue
-		}
+		updates = append(updates, acp.UpdateAgentMessage(acp.ResourceLinkBlock(name, "file://"+devicePath)))
 	}
-	return nil
+	return updates
 }
 
 func (agent *Agent) notify(ctx context.Context, sessionID acp.SessionId, update acp.SessionUpdate) error {

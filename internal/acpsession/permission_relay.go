@@ -22,8 +22,8 @@ const (
 )
 
 type permissionRoute struct {
-	sessionID  acp.SessionId
-	connection *acp.AgentSideConnection
+	sessionID acp.SessionId
+	agent     *Agent
 }
 
 type waitingCall struct {
@@ -66,12 +66,12 @@ func (relay *PermissionRelay) waitingCall(toolCallID acp.ToolCallId) (waitingCal
 	return call, isWaiting
 }
 
-func (relay *PermissionRelay) hold(sessionContext SessionContext, sessionID acp.SessionId, connection *acp.AgentSideConnection) {
+func (relay *PermissionRelay) hold(sessionContext SessionContext, sessionID acp.SessionId, agent *Agent) {
 	relay.mutex.Lock()
 	defer relay.mutex.Unlock()
 	relay.routes[conversationKey(sessionContext.Addressing.Platform, sessionContext.Addressing.ConversationID)] = permissionRoute{
-		sessionID:  sessionID,
-		connection: connection,
+		sessionID: sessionID,
+		agent:     agent,
 	}
 }
 
@@ -113,7 +113,7 @@ func (relay *PermissionRelay) AskPermission(ctx context.Context, approvalRequest
 	toolCall := permissionToolCall(approvalRequest, question.Confirmation)
 	relay.holdWaitingCall(toolCall.ToolCallId, waitingCall{approvalRequest: approvalRequest, confirmation: question.Confirmation, choices: question.Choices})
 	defer relay.releaseWaitingCall(toolCall.ToolCallId)
-	response, errorValue := route.connection.RequestPermission(ctx, acp.RequestPermissionRequest{
+	response, errorValue := route.agent.askThePerson(ctx, approvalRequest, question.Confirmation, acp.RequestPermissionRequest{
 		SessionId: route.sessionID,
 		ToolCall:  toolCall,
 		Options:   permissionOptions(approvalRequest.ApprovalScope, question.Choices),
