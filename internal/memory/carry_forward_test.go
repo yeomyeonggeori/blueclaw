@@ -215,43 +215,71 @@ func TestTheAdminCirclesOldFileIsLeftWhereItIs(t *testing.T) {
 	}
 }
 
-func TestTheAdminCirclesFolderIsRemovedWhenItHoldsOnlyMemory(t *testing.T) {
+func emptyCircleStore(t *testing.T, root string, circleID string) string {
+	t.Helper()
+	protected := filepath.Join(root, "circles", circleID, ".protected")
+	if errorValue := os.MkdirAll(protected, 0o700); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	store, errorValue := bluememo.Open(context.Background(), filepath.Join(protected, "memory.db"), bluememo.Configuration{Embedder: bluememotest.HashEmbedder{}, EmbeddingModel: "carry-test"})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := store.Close(); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	return filepath.Join(root, "circles", circleID)
+}
+
+func TestTheAdminCirclesFolderIsRemovedWhenItsStoreKeepsNothing(t *testing.T) {
 	stores, root := memorytest.OpenWithRoot(t)
-	protected := filepath.Join(root, "circles", "admin", ".protected")
+	folder := emptyCircleStore(t, root, "admin")
+
+	report, errorValue := stores.CarryForward(context.Background())
+	if errorValue != nil {
+		t.Fatalf("carry the memory forward: %v", errorValue)
+	}
+	if _, errorValue := os.Stat(folder); !os.IsNotExist(errorValue) {
+		t.Fatalf("circles/admin is still there (%v); report %+v", errorValue, report)
+	}
+	if len(report.Removed) != 1 || report.Removed[0] != folder {
+		t.Fatalf("report %+v names no removed folder", report)
+	}
+}
+
+func TestACircleStoreHoldingAMemoryIsKept(t *testing.T) {
+	stores, root := memorytest.OpenWithRoot(t)
+	protected := filepath.Join(root, "circles", "c-level", ".protected")
 	if errorValue := os.MkdirAll(protected, 0o700); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	writeOldStore(t, filepath.Join(protected, "memory.db"), "the board meets on the first Monday")
 
-	report, errorValue := stores.CarryForward(context.Background())
+	report, errorValue := stores.RemoveRetiredCircleFolders(context.Background(), []string{"c-level"})
 	if errorValue != nil {
-		t.Fatalf("carry the memory forward: %v", errorValue)
+		t.Fatalf("remove retired circle folders: %v", errorValue)
 	}
-	if _, errorValue := os.Stat(filepath.Join(root, "circles", "admin")); !os.IsNotExist(errorValue) {
-		t.Fatalf("circles/admin is still there (%v); report %+v", errorValue, report)
+	if _, errorValue := os.Stat(filepath.Join(protected, "memory.db")); errorValue != nil {
+		t.Fatalf("a store that kept a memory was removed: %v", errorValue)
 	}
-	if len(report.Removed) != 1 {
-		t.Fatalf("report %+v names no removed folder", report)
+	if len(report.Left) != 1 || len(report.Removed) != 0 {
+		t.Fatalf("report %+v; a kept folder must be named and none removed", report)
 	}
 }
 
-func TestTheAdminCirclesFolderStaysWhenSomebodyPutAFileThere(t *testing.T) {
+func TestACircleFolderStaysWhenSomebodyPutAFileThere(t *testing.T) {
 	stores, root := memorytest.OpenWithRoot(t)
-	folder := filepath.Join(root, "circles", "admin")
-	if errorValue := os.MkdirAll(filepath.Join(folder, ".protected"), 0o700); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	writeOldStore(t, filepath.Join(folder, ".protected", "memory.db"), "the board meets on the first Monday")
+	folder := emptyCircleStore(t, root, "hr")
 	if errorValue := os.WriteFile(filepath.Join(folder, "agenda.md"), []byte("이샘플 presents"), 0o600); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 
-	report, errorValue := stores.CarryForward(context.Background())
+	report, errorValue := stores.RemoveRetiredCircleFolders(context.Background(), []string{"hr"})
 	if errorValue != nil {
-		t.Fatalf("carry the memory forward: %v", errorValue)
+		t.Fatalf("remove retired circle folders: %v", errorValue)
 	}
 	if _, errorValue := os.Stat(filepath.Join(folder, "agenda.md")); errorValue != nil {
-		t.Fatalf("a file somebody put in circles/admin was touched: %v", errorValue)
+		t.Fatalf("a file somebody put in circles/hr was touched: %v", errorValue)
 	}
 	if len(report.Left) != 1 || report.Left[0] != folder {
 		t.Fatalf("report %+v; the folder kept for its file must be named", report)

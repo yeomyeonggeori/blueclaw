@@ -382,6 +382,31 @@ func (application *Application) carryMemoryForward() error {
 	if len(report.Removed) > 0 {
 		application.runtimeLogger.Logger.Info("application.memory.placeless_circle_removed", "folders", report.Removed)
 	}
+	return application.removeRetiredCircleFolders()
+}
+
+// retiredCircleIDs are the circles internkim made by default, or hosts were
+// found carrying, before a circle became the data room role a person holds.
+var retiredCircleIDs = []string{"c-level", "representative", "hr", "staff", "hr-compensation"}
+
+func (application *Application) removeRetiredCircleFolders() error {
+	held := application.heldCircles()
+	unheld := []string{}
+	for _, circleID := range retiredCircleIDs {
+		if !held[circleID] {
+			unheld = append(unheld, circleID)
+		}
+	}
+	report, errorValue := application.memoryStores.RemoveRetiredCircleFolders(context.Background(), unheld)
+	if errorValue != nil {
+		return fmt.Errorf("remove the folders of circles nobody holds: %w", errorValue)
+	}
+	if len(report.Removed) > 0 {
+		application.runtimeLogger.Logger.Info("application.memory.retired_circle_removed", "folders", report.Removed)
+	}
+	if len(report.Left) > 0 {
+		application.runtimeLogger.Logger.Warn("application.memory.retired_circle_kept", "folders", report.Left)
+	}
 	return nil
 }
 

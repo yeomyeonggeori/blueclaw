@@ -76,17 +76,29 @@ func (stores *Stores) CarryForward(ctx context.Context) (CarryReport, error) {
 		}
 		report.Carried++
 	}
-	if errorValue := stores.removeTheFolderOfAPlacelessCircle(policy.AdminCircleID, &report); errorValue != nil {
+	if errorValue := stores.removeTheFolderOfACircle(ctx, policy.AdminCircleID, &report); errorValue != nil {
 		return report, errorValue
 	}
 	return report, nil
 }
 
-// removeTheFolderOfAPlacelessCircle takes away the folder an earlier carry
-// made for a circle that holds no directory. Only its memory files are
-// deleted; a folder that still holds anything else is left and named, so a
-// file a person put there is never removed.
-func (stores *Stores) removeTheFolderOfAPlacelessCircle(circleID string, report *CarryReport) error {
+// RemoveRetiredCircleFolders takes away the folders of circles nobody holds
+// any more, on the same terms as the admin circle's.
+func (stores *Stores) RemoveRetiredCircleFolders(ctx context.Context, circleIDs []string) (CarryReport, error) {
+	report := CarryReport{}
+	for _, circleID := range circleIDs {
+		if errorValue := stores.removeTheFolderOfACircle(ctx, circleID, &report); errorValue != nil {
+			return report, errorValue
+		}
+	}
+	return report, nil
+}
+
+// removeTheFolderOfACircle takes away a circle's folder. Its store is deleted
+// only when it keeps nothing, and the folder only when nothing else is in it;
+// otherwise the folder is left and named, so neither a memory nor a file a
+// person put there is ever removed.
+func (stores *Stores) removeTheFolderOfACircle(ctx context.Context, circleID string, report *CarryReport) error {
 	folder := security.CircleDirectoryPath(stores.workspaceRootPath, circleID)
 	if _, errorValue := os.Stat(folder); errors.Is(errorValue, os.ErrNotExist) {
 		return nil
@@ -94,9 +106,17 @@ func (stores *Stores) removeTheFolderOfAPlacelessCircle(circleID string, report 
 		return fmt.Errorf("look at %s: %w", folder, errorValue)
 	}
 	protected := security.ProtectedDirectoryPath(folder)
+	isEmpty, errorValue := stores.storeKeepsNothing(ctx, filepath.Join(protected, memoryFileName))
+	if errorValue != nil {
+		return fmt.Errorf("look into the memory of the %s circle: %w", circleID, errorValue)
+	}
+	if !isEmpty {
+		report.Left = append(report.Left, folder)
+		return nil
+	}
 	for _, name := range []string{memoryFileName, memoryFileName + "-wal", memoryFileName + "-shm", memoryFileName + carriedFileSuffix} {
 		if errorValue := os.Remove(filepath.Join(protected, name)); errorValue != nil && !errors.Is(errorValue, os.ErrNotExist) {
-			return fmt.Errorf("remove the memory of the %s circle, which has no place: %w", circleID, errorValue)
+			return fmt.Errorf("remove the memory of the %s circle: %w", circleID, errorValue)
 		}
 	}
 	for _, directory := range []string{protected, folder} {
@@ -176,6 +196,18 @@ func removeStoreFile(path string) error {
 
 // checkpoint opens a store only so that closing it folds what its log holds
 // into the database, leaving one file to carry.
+func (stores *Stores) storeKeepsNothing(ctx context.Context, path string) (bool, error) {
+	if held, errorValue := holdsFile(path); errorValue != nil || !held {
+		return errorValue == nil, errorValue
+	}
+	store, errorValue := bluememo.Open(ctx, path, stores.configuration)
+	if errorValue != nil {
+		return false, errorValue
+	}
+	defer store.Close()
+	return store.IsEmpty(ctx)
+}
+
 func checkpoint(ctx context.Context, path string, configuration bluememo.Configuration) error {
 	store, errorValue := bluememo.Open(ctx, path, configuration)
 	if errorValue != nil {

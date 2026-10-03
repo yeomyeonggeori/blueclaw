@@ -154,6 +154,20 @@ func (identityService *IdentityService) FindPersonAccess(personID string) (polic
 	return policy.EnsureRequesterDefaults(personAccess), true
 }
 
+// HeldCircles is every circle at least one person holds.
+func (identityService *IdentityService) HeldCircles() map[string]bool {
+	identityService.mutex.RLock()
+	defer identityService.mutex.RUnlock()
+
+	held := map[string]bool{}
+	for _, personAccess := range identityService.personAccessByPersonID {
+		for _, circleID := range personAccess.Circles {
+			held[strings.ToLower(strings.TrimSpace(circleID))] = true
+		}
+	}
+	return held
+}
+
 func (identityService *IdentityService) ContainedCircles() map[string][]string {
 	identityService.mutex.RLock()
 	defer identityService.mutex.RUnlock()
