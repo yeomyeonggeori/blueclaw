@@ -126,6 +126,9 @@ func TestARefusedReadFailsTheRecallRatherThanThinningIt(t *testing.T) {
 		Embedder: &bluememotest.HashEmbedder{},
 	}, refusingActor{})
 	t.Cleanup(func() { _ = stores.Close() })
+	if _, errorValue := stores.Store(context.Background(), memory.PersonScope("person-1")); errorValue != nil {
+		t.Fatalf("open the file the read is refused: %v", errorValue)
+	}
 
 	_, errorValue := stores.RecallAcross(
 		context.Background(),

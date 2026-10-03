@@ -30,7 +30,7 @@ func openVirtualMemory(workspacePath string) *memory.Stores {
 func seedVirtualMemory(ctx context.Context, stores *memory.Stores, facts []VirtualMemoryFact) error {
 	for _, fact := range facts {
 		note := bluememo.Note{GroupID: memory.NewIdentifier(), Body: fact.Content, IsExplicit: true}
-		if _, errorValue := stores.Remember(ctx, memory.PersonScope(fact.PersonID), note); errorValue != nil {
+		if _, errorValue := stores.Remember(ctx, []memory.Scope{memory.PersonScope(fact.PersonID)}, note); errorValue != nil {
 			return errorValue
 		}
 	}

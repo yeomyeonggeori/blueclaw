@@ -59,7 +59,7 @@ func TestAFileTheReadCannotOpenFailsRatherThanLookingEmpty(t *testing.T) {
 func TestAReadWithoutAPathOrAVectorIsRefused(t *testing.T) {
 	for name, request := range map[string]memory.ReadRequest{
 		"no path":   {QueryVector: []float32{0.1}},
-		"no vector": {StorePath: "/tmp/absent.db"},
+		"no vector": {StorePaths: []string{"/tmp/absent.db"}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			encoded, errorValue := json.Marshal(request)
@@ -79,11 +79,11 @@ func readFrom(t *testing.T, stores *memory.Stores, scope memory.Scope, query str
 	if errorValue := memory.RunRead(context.Background(), requestFor(t, pathOf(t, stores, scope), query), &output); errorValue != nil {
 		t.Fatalf("read: %v", errorValue)
 	}
-	var result bluememo.RecallResult
+	var result memory.ReadResult
 	if errorValue := json.Unmarshal(output.Bytes(), &result); errorValue != nil {
 		t.Fatalf("decode read result: %v", errorValue)
 	}
-	return result
+	return result.Recall
 }
 
 func pathOf(t *testing.T, stores *memory.Stores, scope memory.Scope) string {
@@ -102,7 +102,7 @@ func requestFor(t *testing.T, path string, query string) *bytes.Reader {
 		t.Fatalf("embed the query: %v", errorValue)
 	}
 	encoded, errorValue := json.Marshal(memory.ReadRequest{
-		StorePath:      path,
+		StorePaths:     []string{path},
 		Query:          query,
 		QueryVector:    vector,
 		EmbeddingModel: "test-embed",

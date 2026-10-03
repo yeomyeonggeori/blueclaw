@@ -785,12 +785,15 @@ func (embedder failingEmbedder) EmbedDocuments(context.Context, []string) ([][]f
 	return nil, embedder.errorValue
 }
 
-// failingRecallStores gives memory files that cannot be read, so a launch has
+// failingRecallStores gives a memory file that cannot be read, so a launch has
 // to report the failure rather than run as though nothing was remembered.
 func failingRecallStores(t *testing.T, errorValue error) *memory.Stores {
 	t.Helper()
 	stores := memory.NewStores(t.TempDir(), bluememo.Configuration{Embedder: failingEmbedder{errorValue: errorValue}}, memorytest.ReadsInThisProcess())
 	t.Cleanup(func() { _ = stores.Close() })
+	if _, openFailure := stores.Store(context.Background(), memory.PersonScope("person-1")); openFailure != nil {
+		t.Fatalf("open the memory the recall fails to read: %v", openFailure)
+	}
 	return stores
 }
 

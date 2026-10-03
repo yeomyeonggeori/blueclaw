@@ -84,7 +84,7 @@ func TestMemoryLiveLLMExtractsCorrectsAndRecalls(t *testing.T) {
 
 	rememberTask := func(taskRun agentcontract.TaskRun, steps []taskstate.TaskStep) bluememo.SettleReport {
 		t.Helper()
-		report, errorValue := stores.Remember(ctx, scope, bluememo.Note{
+		report, errorValue := stores.Remember(ctx, []memory.Scope{scope}, bluememo.Note{
 			GroupID:     taskRun.TaskRunID,
 			Body:        memory.RenderTranscript(memory.TaskTranscript(taskRun, steps)),
 			SpeakerName: "이샘플",

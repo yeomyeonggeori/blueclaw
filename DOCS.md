@@ -319,18 +319,18 @@ Every `SKILL.md` body a turn selects is charged on every step of that turn. Keep
 
 ## Memory
 
-Memory is what the agent keeps about the people it serves between tasks, stored by [bluememo](https://bluememo.intern.kim).
+Memory is what the agent keeps about the people it serves between tasks, stored by [bluememo](https://bluememo.intern.kim), which blueclaw embeds as a Go module pinned at `.dependency/bluememo`.
 
-blueclaw embeds bluememo as a Go module pinned at `.dependency/bluememo`, on the Postgres API that version provides. Its schema is copied verbatim into `migrations/033_memory_store.sql`. A fact is one sentence a low-tier model extracts from an episode (a finished task run, or something a person asked the agent to remember), owned by that person and labelled with the security rank and classes of the conversation it came from. A fact with no circles is its owner's alone; a fact that names circles is also read by their members, and `memberCircles` nests circles. Facts are retired by supersession, forgetting or expiry.
+Each subject has one SQLite file in a protected directory of its own: a person at `private/protected/<personID>/memory.db`, a circle at `circles/<circleID>/.protected/memory.db`, and the company at `shared/.protected/memory.db`. The service writes every file on its subject's behalf. A person reads under their own POSIX identity through `blueclaw memory-read`, so the files they may open are the ones whose group they are in, and a recall the kernel refuses fails rather than coming back empty.
+
+Memories are layered. A person's memory stands on the circles they read and on the company's, and a circle's stands on the company's. A statement a layer beneath already holds is not written again. A recall reads the whole stack in one pass, nearer layers first, and the service reinforces each recalled memory in the file that holds it.
 
 Around the store, `internal/memory` does the following:
 
-- Finished, failed and cancelled runs are queued for extraction unless `memory.extractionDisabled` is set.
-- Launch loads the requester's profile and a recall of the prompt under character budgets and records `memory.recall_injected`.
-- `memory_remember` stores one sentence and reports what it created, superseded or reinforced; `memory_forget` accepts only fact IDs that `memory_search` returned in the same task.
-- Embeddings go through the capability service at `memory.embeddingModel` with 1,024 dimensions, and a model change is a `reembed` job. Profile and rehearse jobs run on the same worker.
-
-bluememo has since moved to one SQLite file per person. The blueclaw integration will follow; until then it runs on the pinned Postgres version.
+- Finished, failed and cancelled runs are remembered unless `memory.extractionDisabled` is set: into the circle the conversation belongs to, or the requester's own memory otherwise.
+- Launch recalls the prompt and records `memory.recall_injected`, or `memory.recall_failed` with the reason.
+- `memory_remember` stores one sentence and reports what it created, superseded or reinforced; `memory_forget` accepts only memory IDs that `memory_search` returned in the same task.
+- Embeddings go through the capability service at `memory.embeddingModel`.
 
 ## Capabilities
 

@@ -206,9 +206,9 @@ func (toolCatalogBuilder *ToolCatalogBuilder) rememberStoreMemoryTool(ctx contex
 	if toolCatalogBuilder.memoryStores == nil {
 		return memoryStoreRememberFailure("store_unavailable", "memory is not configured")
 	}
-	scope := memory.ScopeToRemember(request.RequesterPersonID, request.ActiveCircleID)
+	stack := memory.StackToRemember(memory.ScopeToRemember(request.RequesterPersonID, request.ActiveCircleID), toolCatalogBuilder.memoryScopes(request.PersonAccess))
 	groupID := memory.NewIdentifier()
-	report, errorValue := toolCatalogBuilder.memoryStores.Remember(ctx, scope, bluememo.Note{
+	report, errorValue := toolCatalogBuilder.memoryStores.Remember(ctx, stack, bluememo.Note{
 		GroupID:     groupID,
 		Body:        content,
 		SpeakerName: request.RequesterName,

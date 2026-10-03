@@ -40,6 +40,14 @@ func OpenCorrecting(t *testing.T) *memory.Stores {
 	return open(t, chooserAnswering(relationUpdatesAnswer))
 }
 
+// OpenJudgingSame gives a Stores whose judge reads every new statement as
+// saying what its nearest candidate says, so a test can claim a statement was
+// recognized rather than written.
+func OpenJudgingSame(t *testing.T) *memory.Stores {
+	t.Helper()
+	return open(t, chooserAnswering(relationSameAnswer))
+}
+
 func open(t *testing.T, chooser bluememo.Chooser) *memory.Stores {
 	t.Helper()
 	return openUnder(t, t.TempDir(), chooser)
@@ -63,6 +71,7 @@ func openUnder(t *testing.T, root string, chooser bluememo.Chooser) *memory.Stor
 // The judge numbers its relation answers the way RelationInstruction lists
 // them.
 const (
+	relationSameAnswer      = "1"
 	relationUpdatesAnswer   = "2"
 	relationUnrelatedAnswer = "4"
 )
@@ -104,7 +113,7 @@ func Remember(t *testing.T, stores *memory.Stores, scope memory.Scope, sentences
 	t.Helper()
 	for _, sentence := range sentences {
 		note := bluememo.Note{GroupID: memory.NewIdentifier(), Body: sentence, IsExplicit: true}
-		if _, errorValue := stores.Remember(context.Background(), scope, note); errorValue != nil {
+		if _, errorValue := stores.Remember(context.Background(), []memory.Scope{scope}, note); errorValue != nil {
 			t.Fatalf("remember %q into %s: %v", sentence, scope.Kind, errorValue)
 		}
 	}

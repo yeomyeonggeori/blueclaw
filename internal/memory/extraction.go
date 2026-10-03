@@ -118,13 +118,14 @@ func (observer TaskRunTransitionObserver) remember(taskRun agentcontract.TaskRun
 	ctx, cancel := context.WithTimeout(context.Background(), extractionTimeout)
 	defer cancel()
 	extractionContext, _ := findExtractionContext(observer.TaskRuns.ListTaskEvent(taskRun.TaskRunID))
-	scope := ScopeToRemember(taskRun.RequesterPersonID, extractionContext.ActiveCircleID)
+	stack := observer.stackFor(taskRun.RequesterPersonID, extractionContext.ActiveCircleID)
+	scope := stack[0]
 	note := bluememo.Note{
 		GroupID:     taskRun.TaskRunID,
 		Body:        RenderTranscript(TaskTranscript(taskRun, observer.taskSteps(taskRun.TaskRunID))),
 		SpeakerName: extractionContext.RequesterName,
 	}
-	report, errorValue := observer.Stores.Remember(ctx, scope, note)
+	report, errorValue := observer.Stores.Remember(ctx, stack, note)
 	if errorValue != nil {
 		observer.logger().Warn("memory.extraction.failed", "taskRunID", taskRun.TaskRunID, "scope", scope.Kind, "error", errorValue.Error())
 		observer.TaskRuns.AppendTaskEvent(taskRun.TaskRunID, "memory.extraction_failed", marshalEventBody(map[string]any{
@@ -141,6 +142,14 @@ func (observer TaskRunTransitionObserver) remember(taskRun agentcontract.TaskRun
 		"superseded": report.Superseded,
 		"reinforced": report.Reinforced,
 	}))
+}
+
+func (observer TaskRunTransitionObserver) stackFor(personID string, activeCircleID string) []Scope {
+	target := ScopeToRemember(personID, activeCircleID)
+	if observer.Access == nil {
+		return []Scope{target}
+	}
+	return StackToRemember(target, ScopesToSearch(observer.Access.ResolvePersonAccess(personID), observer.Access.ContainedCircles()))
 }
 
 func (observer TaskRunTransitionObserver) taskSteps(taskRunID string) []taskstate.TaskStep {
