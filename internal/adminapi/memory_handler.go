@@ -163,7 +163,7 @@ func (handler MemoryHandler) isConfigured() bool {
 }
 
 func (handler MemoryHandler) scopes(personID string) []memory.Scope {
-	return memory.ScopesForAccess(handler.IdentityService.ResolvePersonAccess(personID), handler.IdentityService.ContainedCircles())
+	return memory.ScopesToSearch(handler.IdentityService.ResolvePersonAccess(personID), handler.IdentityService.ContainedCircles())
 }
 
 func nonNilStrings(values []string) []string {

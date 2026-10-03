@@ -136,7 +136,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) memoryScopes(personAccess policy.P
 	if toolCatalogBuilder.memoryCircles != nil {
 		containedCircles = toolCatalogBuilder.memoryCircles.ContainedCircles()
 	}
-	return memory.ScopesForAccess(personAccess, containedCircles)
+	return memory.ScopesToSearch(personAccess, containedCircles)
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) MemoryStores() *memory.Stores {

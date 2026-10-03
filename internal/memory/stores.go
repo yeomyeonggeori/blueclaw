@@ -73,6 +73,11 @@ func (scope Scope) directoryUnder(workspaceRootPath string) string {
 
 // Stores holds the memory files this company's agent reads and writes, opening
 // each on first use and keeping it for the life of the process.
+//
+// A recall runs as the person whose memory it is, so the kernel refuses the
+// files their identity cannot open. Everything else here runs as the service:
+// a subject's memory is kept on their behalf, which is why they read it and
+// do not write it.
 type Stores struct {
 	actor             security.WorkspaceActorFactory
 	workspaceRootPath string
@@ -86,6 +91,9 @@ func NewStores(workspaceRootPath string, configuration bluememo.Configuration, a
 		workspaceRootPath: workspaceRootPath, configuration: configuration, open: map[string]*bluememo.Store{}}
 }
 
+// Store opens one subject's file as the service, which is how a memory is
+// written on their behalf. A recall does not come through here: it runs as
+// the person, so that the kernel and not this process decides what opens.
 func (stores *Stores) Store(ctx context.Context, scope Scope) (*bluememo.Store, error) {
 	path, errorValue := stores.Path(scope)
 	if errorValue != nil {
@@ -124,13 +132,11 @@ func (stores *Stores) Close() error {
 	return firstFailure
 }
 
-// ScopesForAccess is every memory file a reader may be shown, in the order a
-// recall merges them.
-// ScopesForAccess says where to look for a reader's memory. It grants nothing:
+// ScopesToSearch says where to look for a reader's memory. It grants nothing:
 // a recall runs as that reader, so a file this list names and their identity
 // cannot open is refused by the kernel. A list too generous costs a refusal,
 // and a list too narrow costs a memory nobody finds.
-func ScopesForAccess(personAccess policy.PersonAccess, containedCircles map[string][]string) []Scope {
+func ScopesToSearch(personAccess policy.PersonAccess, containedCircles map[string][]string) []Scope {
 	scopes := []Scope{}
 	if personAccess.PersonID != "" {
 		scopes = append(scopes, PersonScope(personAccess.PersonID))
@@ -148,12 +154,12 @@ func ScopesForAccess(personAccess policy.PersonAccess, containedCircles map[stri
 	return append(scopes, WorkspaceScope())
 }
 
-// RecallAcross asks every file the reader may be shown and returns what the
-// agent loop reads, most relevant first. A scope with no file yet has nothing
-// to say, which is not a failure.
-// RecallAcross reads each file as the person the recall is for, so a file
-// their identity cannot open is refused by the kernel rather than by a list
-// this code keeps. The scopes say where to look; they decide nothing.
+// RecallAcross returns what the agent loop reads, most relevant first. It
+// reads each file as the person the recall is for, so a file their identity
+// cannot open is refused by the kernel rather than by a list this code keeps:
+// the scopes say where to look and decide nothing. A scope with no file yet
+// has nothing to say, which is not a failure, while a file that exists and
+// will not open is.
 func (stores *Stores) RecallAcross(ctx context.Context, personAccess policy.PersonAccess, scopes []Scope, query string, limit int) (Recalled, error) {
 	recalled := Recalled{Mode: "merged"}
 	if len(scopes) == 0 {
@@ -239,7 +245,8 @@ func IdentityFactCount(facts []MemoryFact) int {
 }
 
 // ForgetAcross forgets what the reader asked to forget, wherever among the
-// files they may be shown it is held.
+// files they searched it is held. It fails closed on an identifier no search
+// of theirs surfaced, so a reader can only forget what they were shown.
 func (stores *Stores) ForgetAcross(ctx context.Context, scopes []Scope, memoryIDs []string, requestPhrase string) ([]string, error) {
 	forgotten := []string{}
 	for _, scope := range scopes {

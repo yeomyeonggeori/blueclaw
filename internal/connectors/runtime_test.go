@@ -3479,7 +3479,7 @@ func TestConnectorRuntimeInjectsRecalledFactsAtLaunchAndNeverWritesMemoryItself(
 
 func TestConnectorRuntimeDoesNotShareUserMemoryWithOtherPerson(t *testing.T) {
 	stores := seedConnectorMemory(t, "person-1", "사용자의 이름은 민수다.")
-	otherPersonScopes := memory.ScopesForAccess(policy.PersonAccess{PersonID: "person-2"}, nil)
+	otherPersonScopes := memory.ScopesToSearch(policy.PersonAccess{PersonID: "person-2"}, nil)
 	hits := memorytest.Recall(t, stores, otherPersonScopes, "이름")
 	if len(hits) != 0 {
 		t.Fatalf("expected person-2 never to open person-1's file, got %d", len(hits))
