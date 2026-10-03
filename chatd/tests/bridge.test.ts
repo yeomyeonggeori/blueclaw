@@ -163,3 +163,71 @@ describe("normalized edit forwarding", () => {
 		expect(payload?.prompt).toBe("edited text");
 	});
 });
+
+describe("normalized message forwarding", () => {
+	async function forwardedThreadFlag(rootID: string | undefined, messageID: string): Promise<unknown> {
+		const adapter = new EditObservingBuzzAdapter({
+			relayURL: "ws://localhost:3000",
+			privateKeyHex: "1".repeat(64),
+			botDisplayName: "internkim",
+		});
+		createBridge(
+			{
+				onDirectMessage: () => undefined,
+				onNewMention: () => undefined,
+				onSubscribedMessage: () => undefined,
+				onAction: () => undefined,
+			},
+			{
+				botUserName: "internkim",
+				blueclawBaseURL: "http://blueclaw.test",
+				relayInboundURL: undefined,
+				listenHostname: "127.0.0.1",
+				blueclawIngressURL: undefined,
+				admindBaseURL: undefined,
+				listenPort: 18090,
+				mattermost: undefined,
+				buzz: undefined,
+			},
+			{ buzz: adapter },
+		);
+		const editHandler = adapter.editHandler;
+		if (!editHandler) throw new Error("expected edit handler registration");
+		const threadID = adapter.encodeThreadId({ channelId: channelID, rootEventId: rootID ?? messageID });
+		const forwarded = new Message({
+			id: messageID,
+			threadId: threadID,
+			text: "hello",
+			formatted: { type: "root", children: [] },
+			raw: message(messageID, rootID).raw,
+			author: { userId: senderID, userName: "sender", fullName: "Sender", isBot: false, isMe: false },
+			metadata: { dateSent: new Date(), edited: false },
+			attachments: [],
+		});
+		const originalFetch = globalThis.fetch;
+		let isThread: unknown;
+		globalThis.fetch = Object.assign(
+			async (_input: RequestInfo | URL, init?: RequestInit) => {
+				const document: unknown = JSON.parse(String(init?.body));
+				if (typeof document !== "object" || document === null) throw new Error("expected object payload");
+				isThread = "isThread" in document ? document.isThread : undefined;
+				return new Response("ok", { status: 200 });
+			},
+			{ preconnect: originalFetch.preconnect },
+		);
+		try {
+			await editHandler({ eventID: "edit-event", threadID, message: forwarded });
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+		return isThread;
+	}
+
+	test("says a message that opens its own exchange is not in a thread", async () => {
+		expect(await forwardedThreadFlag(undefined, rootTwoID)).toBe(false);
+	});
+
+	test("says a message written under a root is in that root's thread", async () => {
+		expect(await forwardedThreadFlag(rootOneID, "d".repeat(64))).toBe(true);
+	});
+});

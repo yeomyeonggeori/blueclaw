@@ -1,22 +1,18 @@
 package connectors
 
 import (
-	"context"
 	"log/slog"
 	"strings"
 	"time"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 type inboundTaskWaitResolution struct {
-	TaskWaitToken      task.TaskWaitToken
-	HasTaskWaitToken   bool
-	IsAmbiguous        bool
-	AmbiguousTaskWaits []task.TaskWaitToken
-	Reason             string
+	TaskWaitToken    task.TaskWaitToken
+	HasTaskWaitToken bool
+	Reason           string
 }
 
 func (connectorRuntime *ConnectorRuntime) resolveInboundTaskWait(personID string, platform string, event PlatformInboundEvent) inboundTaskWaitResolution {
@@ -32,10 +28,7 @@ func (connectorRuntime *ConnectorRuntime) resolveInboundTaskWait(personID string
 	if resolution := connectorRuntime.findInboundTaskWaitByThreadRoot(personID, platform, event); resolution.HasTaskWaitToken {
 		return resolution
 	}
-	if resolution := connectorRuntime.findInboundTaskWaitByDispatchID(personID, platform, event); resolution.HasTaskWaitToken {
-		return resolution
-	}
-	return connectorRuntime.findSingleInboundTaskWait(personID, platform, event)
+	return connectorRuntime.findInboundTaskWaitByDispatchID(personID, platform, event)
 }
 
 func (connectorRuntime *ConnectorRuntime) findInboundTaskWaitByPayload(personID string, event PlatformInboundEvent) inboundTaskWaitResolution {
@@ -84,34 +77,6 @@ func (connectorRuntime *ConnectorRuntime) findInboundTaskWaitByDispatchID(person
 	}, personID, "dispatch_id")
 }
 
-func (connectorRuntime *ConnectorRuntime) findSingleInboundTaskWait(personID string, platform string, event PlatformInboundEvent) inboundTaskWaitResolution {
-	conversationTaskWaitTokens, errorValue := connectorRuntime.taskWaitTokenRepository.FindOpenByPersonAndConversation(personID, platform, event.ConversationID)
-	if errorValue != nil {
-		connectorRuntime.logger.Warn("connector."+platform+".wait.lookup_failed", slog.String("messageID", event.MessageID), slog.String("error", errorValue.Error()))
-		return inboundTaskWaitResolution{}
-	}
-	taskWaitTokens := connectorRuntime.taskWaitTokensInMessageThread(conversationTaskWaitTokens, event)
-	switch len(taskWaitTokens) {
-	case 0:
-		return inboundTaskWaitResolution{}
-	case 1:
-		return inboundTaskWaitResolution{TaskWaitToken: taskWaitTokens[0], HasTaskWaitToken: true, Reason: "single_open_wait"}
-	default:
-		return inboundTaskWaitResolution{IsAmbiguous: true, AmbiguousTaskWaits: taskWaitTokens, Reason: "multiple_open_waits"}
-	}
-}
-
-func (connectorRuntime *ConnectorRuntime) taskWaitTokensInMessageThread(taskWaitTokens []task.TaskWaitToken, event PlatformInboundEvent) []task.TaskWaitToken {
-	tokensInThread := []task.TaskWaitToken{}
-	for _, taskWaitToken := range taskWaitTokens {
-		taskRun, isFound := connectorRuntime.taskRunService.FindTaskRun(taskWaitToken.TaskRunID)
-		if isFound && taskRunSharesMessageThread(taskRun, event) {
-			tokensInThread = append(tokensInThread, taskWaitToken)
-		}
-	}
-	return tokensInThread
-}
-
 func (connectorRuntime *ConnectorRuntime) findOpenTaskWait(find func() (task.TaskWaitToken, bool, error), personID string, reason string) inboundTaskWaitResolution {
 	taskWaitToken, isFound, errorValue := find()
 	if errorValue != nil {
@@ -157,69 +122,6 @@ func (connectorRuntime *ConnectorRuntime) resolveOpenTaskWaitsForTaskRun(personI
 			connectorRuntime.logger.Warn("connector.wait.resolve_failed", slog.String("waitID", taskWaitToken.WaitID), slog.String("error", errorValue.Error()))
 		}
 	}
-}
-
-func (connectorRuntime *ConnectorRuntime) handleAmbiguousTaskWait(
-	ctx context.Context,
-	platform string,
-	adapter PlatformAdapter,
-	event PlatformInboundEvent,
-	replyTarget ReplyTarget,
-	personID string,
-	requesterEmail string,
-	personAccess policy.PersonAccess,
-	taskWaitResolution inboundTaskWaitResolution,
-	engagedAckEmojiName string,
-	sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error),
-) (ConnectorRuntimeResult, error) {
-	turnDecision := ambiguousTaskWaitTurnDecision(taskWaitResolution.AmbiguousTaskWaits, responseLanguageForEvent(event))
-	conversationTurn := ConversationTurn{
-		Platform:                  platform,
-		Adapter:                   adapter,
-		Event:                     event,
-		ReplyTarget:               replyTarget,
-		RequesterPersonID:         personID,
-		RequesterEmail:            requesterEmail,
-		PersonAccess:              personAccess,
-		PrecomputedTurnDecision:   &turnDecision,
-		CheckpointSender:          connectorRuntime.checkpointSenderForTurn(platform, event, replyTarget, sendReply),
-		AccessibleConversationIDs: []string{event.ConversationID},
-	}
-	launchResult, errorValue := connectorRuntime.currentTaskLauncher().Launch(ctx, connectorRuntime.buildTaskLaunchRequest(conversationTurn))
-	if errorValue != nil {
-		return ConnectorRuntimeResult{}, errorValue
-	}
-	return connectorRuntime.dispatchTaskReply(ctx, platform, adapter, event, replyTarget, launchResult.TurnResult, engagedAckEmojiName, sendReply)
-}
-
-func ambiguousTaskWaitTurnDecision(taskWaitTokens []task.TaskWaitToken, responseLanguage string) agentcontract.TurnDecision {
-	return agentcontract.TurnDecision{
-		Route:                  agentcontract.TurnRouteClarify,
-		Classification:         agentcontract.IntakeClassificationNeedsConfirmation,
-		TaskShape:              agentcontract.TaskShapeApprovalGatedTask,
-		TaskLevel:              agentcontract.TaskLevelLow,
-		ResponseLanguage:       responseLanguage,
-		Reason:                 "ambiguous_wait_resolution",
-		ClarificationOptions:   taskWaitClarificationOptions(taskWaitTokens),
-		ExpectedResults:        []agentcontract.ExpectedResult{{ID: "wait-disambiguation", Type: "message", Description: "ask_choice", Required: true, AcceptanceHints: []string{"ask_choice"}}},
-		RequestedOutputFormats: nil,
-	}
-}
-
-func taskWaitClarificationOptions(taskWaitTokens []task.TaskWaitToken) []agentcontract.ClarificationOption {
-	options := []agentcontract.ClarificationOption{}
-	for index, taskWaitToken := range taskWaitTokens {
-		taskRunLabel := strings.TrimSpace(taskWaitToken.TaskRunID)
-		if len(taskRunLabel) > 8 {
-			taskRunLabel = taskRunLabel[:8]
-		}
-		options = append(options, agentcontract.ClarificationOption{
-			Key:   string(rune('A' + index)),
-			Label: taskRunLabel,
-			Value: taskWaitToken.WaitID,
-		})
-	}
-	return options
 }
 
 func (connectorRuntime *ConnectorRuntime) recordTaskWaitTokenForReply(platform string, event PlatformInboundEvent, replyTarget ReplyTarget, reply OutboundReply, dispatchID string) {

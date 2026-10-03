@@ -1233,6 +1233,30 @@ func TestAnAnswerOverACPResumesTheRunThatAsked(t *testing.T) {
 	}
 }
 
+func TestARootMessageStartsATaskWhileAnotherWaitsForAnAnswer(t *testing.T) {
+	for _, scenario := range []VirtualSessionScenario{
+		AskRootMessageStartsATaskScenario(t.TempDir()),
+		AskRootMessageStartsATaskOverACPScenario(t.TempDir()),
+	} {
+		t.Run(scenario.Name, func(t *testing.T) {
+			result, errorValue := RunVirtualSession(context.Background(), scenario)
+			if errorValue != nil {
+				t.Fatal(errorValue)
+			}
+			if len(result.TurnResults) != 3 {
+				t.Fatalf("expected three turns, got %+v", result)
+			}
+			asked, rootMessage, answered := result.TurnResults[0], result.TurnResults[1], result.TurnResults[2]
+			if rootMessage.TaskRunID == asked.TaskRunID {
+				t.Fatalf("the root message ran on the waiting run %s instead of starting its own", asked.TaskRunID)
+			}
+			if answered.TaskRunID != asked.TaskRunID {
+				t.Fatalf("the reply in the asking thread ran on %s, expected the run that asked, %s", answered.TaskRunID, asked.TaskRunID)
+			}
+		})
+	}
+}
+
 func TestDirectMessageSendConfirmAcceptance(t *testing.T) {
 	result, errorValue := RunVirtualSession(context.Background(), DirectMessageSendConfirmAcceptanceScenario(t.TempDir()))
 	if errorValue != nil {

@@ -20,13 +20,6 @@ type ConnectorRevisionRepository interface {
 const SupersededRequestReason = "superseded_by_new_message"
 const requestAlreadyRunningReason = "request_already_running"
 
-func taskRunMatchesMessageScope(taskRun task.TaskRun, event PlatformInboundEvent) bool {
-	if event.IsThread == nil && !isMultiPersonConversation(event) {
-		return taskRun.OriginConversationID == event.ConversationID
-	}
-	return taskRunSharesMessageThread(taskRun, event)
-}
-
 func (connectorRuntime *ConnectorRuntime) restorePendingRequests() error {
 	repository, isSupported := connectorRuntime.eventRepository.(ConnectorRevisionRepository)
 	if !isSupported {

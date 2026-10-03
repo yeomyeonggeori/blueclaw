@@ -48,6 +48,13 @@ func (messageContext MessageContext) responseLanguage(addressing Addressing) str
 	return addressing.ResponseLanguage
 }
 
+func (messageContext MessageContext) isThread(addressing Addressing) bool {
+	if messageContext.MessageID != "" {
+		return messageContext.IsThread
+	}
+	return addressing.IsThread
+}
+
 func (messageContext MessageContext) replyTargetID(addressing Addressing) string {
 	if messageContext.ReplyTargetID != "" {
 		return messageContext.ReplyTargetID
