@@ -14,12 +14,13 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 )
 
-// capabilityDescriptorMetaKey and capabilityRequesterMetaKey in
-// protocol/src/capability.ts, where the server reads them from.
 const (
-	DescriptorMetaKey = "kim.intern/descriptor"
-	RequesterMetaKey  = "kim.intern/requester"
+	DescriptorMetaKey    = "kim.intern/descriptor"
+	RequesterMetaKey     = "kim.intern/requester"
+	AnsweredFilesMetaKey = "kim.intern/answered-files"
 )
+
+const answeredFilesKept = "kept"
 
 const recordCatalogTimeout = 30 * time.Second
 
@@ -117,7 +118,7 @@ func (catalog *RecordCatalog) CallTool(
 		return ToolResult{}, errorValue
 	}
 	called, errorValue := session.CallTool(ctx, &sdkmcp.CallToolParams{
-		Meta:      requesterMeta(requesterEmail),
+		Meta:      callMeta(requesterEmail),
 		Name:      toolName,
 		Arguments: arguments,
 	})
@@ -173,6 +174,13 @@ func (catalog *RecordCatalog) forget(session *sdkmcp.ClientSession) {
 	}
 	catalog.mutex.Unlock()
 	_ = session.Close()
+}
+
+func callMeta(requesterEmail string) sdkmcp.Meta {
+	return sdkmcp.Meta{
+		RequesterMetaKey:     strings.ToLower(strings.TrimSpace(requesterEmail)),
+		AnsweredFilesMetaKey: answeredFilesKept,
+	}
 }
 
 func requesterMeta(requesterEmail string) sdkmcp.Meta {

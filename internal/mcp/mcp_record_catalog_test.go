@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
+	"regexp"
 	"testing"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -48,9 +51,10 @@ const companyDescriptor = `{
 }`
 
 type carriedMessages struct {
-	listedFor       string
-	calledFor       string
-	calledArguments json.RawMessage
+	listedFor         string
+	calledFor         string
+	calledArguments   json.RawMessage
+	callAnsweredFiles any
 }
 
 func documentOf(t *testing.T, written string) map[string]any {
@@ -74,6 +78,7 @@ func aCatalogOnAServer(t *testing.T) (*RecordCatalog, *carriedMessages) {
 				carried.listedFor = requesterOf(asked.Params.Meta)
 			case *sdkmcp.CallToolRequest:
 				carried.calledFor = requesterOf(asked.Params.Meta)
+				carried.callAnsweredFiles = asked.Params.Meta[AnsweredFilesMetaKey]
 				carried.calledArguments, _ = json.Marshal(asked.Params.Arguments)
 			}
 			return next(ctx, method, request)
@@ -205,5 +210,36 @@ func TestADescriptorNamingAnotherToolIsNotDiscovered(t *testing.T) {
 		Meta: sdkmcp.Meta{DescriptorMetaKey: documentOf(t, taskAddDescriptor)},
 	}); isCarried {
 		t.Fatal("a descriptor naming another tool was discovered")
+	}
+}
+
+func TestACallSaysTheFilesItIsAnsweredAreKeptAsFiles(t *testing.T) {
+	catalog, carried := aCatalogOnAServer(t)
+
+	if _, errorValue := catalog.CallTool(context.Background(), "sample@example.test", "task_add", json.RawMessage(`{"title":"쓰기"}`)); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	if carried.callAnsweredFiles != "kept" {
+		t.Fatalf("the call declared %v for the files it is answered", carried.callAnsweredFiles)
+	}
+}
+
+func TestTheMetaKeysAreTheOnesTheCatalogServerReads(t *testing.T) {
+	written, errorValue := os.ReadFile(filepath.Join("..", "..", "protocol", "src", "capability.ts"))
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	declared := map[string]string{}
+	for _, match := range regexp.MustCompile(`export const (capability\w+MetaKey) = '([^']+)';`).FindAllStringSubmatch(string(written), -1) {
+		declared[match[1]] = match[2]
+	}
+	expected := map[string]string{
+		"capabilityDescriptorMetaKey":    DescriptorMetaKey,
+		"capabilityRequesterMetaKey":     RequesterMetaKey,
+		"capabilityAnsweredFilesMetaKey": AnsweredFilesMetaKey,
+	}
+	if !reflect.DeepEqual(declared, expected) {
+		t.Fatalf("protocol/src/capability.ts declares %v, and the client sends %v", declared, expected)
 	}
 }
