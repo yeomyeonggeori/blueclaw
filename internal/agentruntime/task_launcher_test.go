@@ -51,7 +51,7 @@ func TestTaskLauncherCreatesAuditedAgentRun(t *testing.T) {
 		ConversationID:            "channel-1",
 		Prompt:                    "발표자료 만들어줘",
 		HistoryProvider:           staticHistoryProvider{},
-		PersonAccess:              policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+		PersonAccess:              policy.PersonAccess{PersonID: "person-1"},
 		AccessibleConversationIDs: []string{"channel-1"},
 	})
 	if errorValue != nil {
@@ -97,7 +97,7 @@ func TestTaskLauncherPersistsAuthoritativeRouterFailure(t *testing.T) {
 		RequesterPersonID: "person-1",
 		ConversationID:    "admin:person-1",
 		Prompt:            "run admin task",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1"},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected persisted router failure: %v", errorValue)
@@ -136,7 +136,7 @@ func TestTaskLauncherAuditsPlatformMessageRegistryFingerprint(t *testing.T) {
 		ProfileName:               "default",
 		ConversationID:            "channel-1",
 		Prompt:                    "너가 보낸 메시지 삭제해줘",
-		PersonAccess:              policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+		PersonAccess:              policy.PersonAccess{PersonID: "person-1"},
 		AccessibleConversationIDs: []string{"channel-1"},
 	})
 	if errorValue != nil {
@@ -187,7 +187,7 @@ func TestTaskLauncherAuditsPlatformMessageSchemaSkewWithoutBlocking(t *testing.T
 		ProfileName:               "default",
 		ConversationID:            "channel-1",
 		Prompt:                    "너가 보낸 메시지 삭제해줘",
-		PersonAccess:              policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+		PersonAccess:              policy.PersonAccess{PersonID: "person-1"},
 		AccessibleConversationIDs: []string{"channel-1"},
 	})
 	if errorValue != nil {
@@ -246,7 +246,7 @@ func TestTaskLauncherRejectsStaleMessageToolRegistryBeforeModelCall(t *testing.T
 		ProfileName:       "default",
 		ConversationID:    "channel-1",
 		Prompt:            "너가 보낸 메시지 삭제해줘",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1"},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected registry mismatch to return failed task result: %v", errorValue)
@@ -317,7 +317,7 @@ func TestTaskLauncherProvisionsRequesterWorkspaceBeforeToolSet(t *testing.T) {
 		ProfileName:       "default",
 		ConversationID:    "channel-1",
 		Prompt:            "prepare workspace",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1"},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected launch to succeed: %v", errorValue)
@@ -379,7 +379,7 @@ func TestTaskLauncherAuditsRecallFailureAndRunsWithoutMemory(t *testing.T) {
 		ProfileName:       "default",
 		ConversationID:    "channel-1",
 		Prompt:            "내 이름 뭐야?",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1"},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected launch to continue without memory: %v", errorValue)

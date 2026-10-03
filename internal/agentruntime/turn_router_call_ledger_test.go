@@ -80,7 +80,7 @@ func TestTaskLauncherPersistsTurnRouterLLMCall(t *testing.T) {
 		RequesterPersonID: "person-1",
 		ConversationID:    "conversation-1",
 		Prompt:            "오늘 무슨 요일이야?",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1"},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected bounded run to complete: %v", errorValue)

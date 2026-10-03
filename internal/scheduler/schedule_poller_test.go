@@ -720,7 +720,7 @@ func (repository *pollerAtomicScheduleRepository) hasDeliveryDeduplicationKey(de
 type staticPersonAccessResolver struct{}
 
 func (staticPersonAccessResolver) ResolvePersonAccess(personID string) policy.PersonAccess {
-	return policy.PersonAccess{PersonID: personID, SecurityLevelRank: 100, GrantedClasses: []string{"internal"}}
+	return policy.PersonAccess{PersonID: personID}
 }
 
 func testScheduleRunner(turnStatus task.TaskStatus, finishMessage string) agentruntime.ScheduleRunner {

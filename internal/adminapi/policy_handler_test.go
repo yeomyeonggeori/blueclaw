@@ -30,12 +30,9 @@ func TestInvitePersonRequiresPersonID(t *testing.T) {
 func TestInvitePersonRekeysExistingEmailToCanonicalPersonID(t *testing.T) {
 	policyDocument := policyHandlerTestPolicy()
 	policyDocument.People = []policy.PersonPolicy{{
-		PersonID:          "legacy-person",
-		DisplayName:       "Lee",
-		Emails:            []string{"lee@example.com"},
-		SecurityLevelName: "member",
-		SecurityLevelRank: 10,
-		GrantedClasses:    []string{"internal"},
+		PersonID:    "legacy-person",
+		DisplayName: "Lee",
+		Emails:      []string{"lee@example.com"},
 	}}
 	policyPath := writePolicyHandlerTestPolicy(t, policyDocument)
 	handler := PolicyHandler{

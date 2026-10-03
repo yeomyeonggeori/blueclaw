@@ -49,7 +49,7 @@ func TestTaskRetryAgainstPostgres(t *testing.T) {
 	defer cancel()
 	database, closeDatabase := isolatedIntegrationDatabase(t, context.Background())
 	defer closeDatabase()
-	if _, errorValue := database.SQL.Exec("INSERT INTO person (person_id, display_name, security_level_name, security_level_rank, created_at, updated_at) VALUES ('retry-person', 'Sample', 'member', 0, now(), now())"); errorValue != nil {
+	if _, errorValue := database.SQL.Exec("INSERT INTO person (person_id, display_name, created_at, updated_at) VALUES ('retry-person', 'Sample', now(), now())"); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	events := task.NewTaskEventService()

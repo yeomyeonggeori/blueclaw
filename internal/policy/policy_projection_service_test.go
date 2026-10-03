@@ -37,10 +37,9 @@ func TestPolicyProjectionGivesMemberToEveryPerson(t *testing.T) {
 func TestPolicyProjectionAddsAdminWithoutGrantingCLevel(t *testing.T) {
 	policyProjection := PolicyProjectionService{}.ReplacePolicyProjectionTransactionally(PolicyDocument{
 		People: []PersonPolicy{{
-			PersonID:       "admin-1",
-			Emails:         []string{"admin@example.com"},
-			IsAdmin:        true,
-			GrantedClasses: []string{"internal", "executive"},
+			PersonID: "admin-1",
+			Emails:   []string{"admin@example.com"},
+			IsAdmin:  true,
 		}},
 	})
 

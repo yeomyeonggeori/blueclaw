@@ -45,7 +45,7 @@ func TestLaunchedAgentTurnRequestCarriesHostAssembledContext(t *testing.T) {
 				{Filename: "quarterly.pdf", Path: "/workspace/private/people/person-1/quarterly.pdf", IsAvailable: true},
 			},
 		},
-		PersonAccess:              policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+		PersonAccess:              policy.PersonAccess{PersonID: "person-1"},
 		AccessibleConversationIDs: []string{"channel-1"},
 	})
 	if errorValue != nil {

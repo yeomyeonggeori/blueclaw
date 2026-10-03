@@ -90,7 +90,7 @@ func TestAToolCalledThroughTheCatalogReachesTheRequesterPOSIXActor(t *testing.T)
 		RequesterPersonID: "person-1",
 		ProfileName:       "default",
 		Prompt:            "워크스페이스 파일 목록 보여줘",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1"},
 	})
 
 	resolver := mcpserver.NewSessionTokenRequesterResolver(func() string { return "session-token" })

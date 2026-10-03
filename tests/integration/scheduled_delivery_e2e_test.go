@@ -78,7 +78,7 @@ func newScheduledDeliveryConnectorRuntime(languageModel staticScheduleLanguageMo
 	identityService := identity.NewIdentityService(policy.PolicyProjection{
 		PersonIDByEmail: map[string]string{"person@example.com": "person-1"},
 		PersonAccessByPersonID: map[string]policy.PersonAccess{
-			"person-1": {PersonID: "person-1", SecurityLevelRank: 100, GrantedClasses: []string{"internal"}},
+			"person-1": {PersonID: "person-1"},
 		},
 	})
 	taskEventService := task.NewTaskEventService()
@@ -312,5 +312,5 @@ func (adapter *scheduledDeliveryAdapter) FetchHistory(context.Context, string, i
 type scheduledDeliveryAccessResolver struct{}
 
 func (scheduledDeliveryAccessResolver) ResolvePersonAccess(personID string) policy.PersonAccess {
-	return policy.PersonAccess{PersonID: personID, SecurityLevelRank: 100, GrantedClasses: []string{"internal"}}
+	return policy.PersonAccess{PersonID: personID}
 }

@@ -328,10 +328,9 @@ func enqueueScheduledConnectorReplyWithTransaction(transaction *sql.Tx, schedule
 	_, errorValue = transaction.ExecContext(context.Background(), `
 INSERT INTO raw_event (
   raw_event_id, platform, conversation_id, external_message_id, event_type,
-  content_ciphertext, encryption_key_version, content_sha256, security_level_rank,
-  required_classes, occurred_at, ingested_at, expires_at,
+  content_ciphertext, encryption_key_version, content_sha256, occurred_at, ingested_at, expires_at,
   reply_target_id, visible_context_ciphertext, visible_context_sha256, has_more_before, history_cursor
-) VALUES ($1,$2,$3,$1,'scheduled_task',$4,1,$5,0,'{}',$6,$6,$7,$8,$9,$10,false,NULL)
+) VALUES ($1,$2,$3,$1,'scheduled_task',$4,1,$5,$6,$6,$7,$8,$9,$10,false,NULL)
 ON CONFLICT (raw_event_id) DO NOTHING`,
 		deliveryDeduplicationKey,
 		schedule.Platform,

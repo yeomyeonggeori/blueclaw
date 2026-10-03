@@ -27,8 +27,8 @@ func TestReconcileMorningBriefingsPersistsLifecycleAndGuardsGenericMutations(t *
 		_, _ = database.SQL.ExecContext(ctx, "DELETE FROM person WHERE person_id = $1", personID)
 	}()
 	_, errorValue = database.SQL.ExecContext(ctx, `
-INSERT INTO person (person_id, display_name, security_level_name, security_level_rank, created_at, updated_at)
-VALUES ($1, '이샘플', 'member', 1, $2, $2)`, personID, now)
+INSERT INTO person (person_id, display_name, created_at, updated_at)
+VALUES ($1, '이샘플', $2, $2)`, personID, now)
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}

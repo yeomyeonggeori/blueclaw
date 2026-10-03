@@ -4157,7 +4157,7 @@ func testConnectorIdentityService() *identity.IdentityService {
 	return identity.NewIdentityService(policy.PolicyProjection{
 		PersonIDByEmail: map[string]string{"invited@example.com": "person-1"},
 		PersonAccessByPersonID: map[string]policy.PersonAccess{
-			"person-1": {PersonID: "person-1", SecurityLevelRank: 100, GrantedClasses: []string{"internal", "finance"}},
+			"person-1": {PersonID: "person-1"},
 		},
 	})
 }

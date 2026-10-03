@@ -10,12 +10,6 @@
       "emails": [
         "admin@example.com"
       ],
-      "securityLevelName": "admin",
-      "securityLevelRank": 100,
-      "grantedClasses": [
-        "internal",
-        "executive"
-      ],
       "circles": [
         "member",
         "admin"
@@ -164,10 +158,6 @@
       "externalConversationID": "C123456",
       "conversationType": "channel",
       "displayName": "general",
-      "defaultSecurityLevelRank": 10,
-      "defaultRequiredClasses": [
-        "internal"
-      ],
       "isCollectEnabled": true,
       "isReplyEnabled": true
     }

@@ -43,7 +43,7 @@ func TestTaskLauncherRouterDeadlinePersistsOneBlockedTask(t *testing.T) {
 		Prompt:            "고객지원 업무를 정리해줘",
 		ResponseLanguage:  "ko",
 		TurnStartedAt:     time.Now().Add(-2 * time.Second),
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1", SecurityLevelRank: 100},
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1"},
 	})
 
 	if errorValue != nil {

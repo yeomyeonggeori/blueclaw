@@ -90,13 +90,11 @@ func writeModelAPIKey(home Home, access LanguageModelAccess) error {
 func policyDocumentFor(enrollment Enrollment) map[string]any {
 	return map[string]any{
 		"people": []map[string]any{{
-			"personID":          enrollment.Operator.PersonID,
-			"displayName":       enrollment.Operator.DisplayName,
-			"emails":            []string{enrollment.Operator.Email},
-			"securityLevelName": "admin",
-			"securityLevelRank": 100,
-			"circles":           []string{"member"},
-			"isAdmin":           true,
+			"personID":    enrollment.Operator.PersonID,
+			"displayName": enrollment.Operator.DisplayName,
+			"emails":      []string{enrollment.Operator.Email},
+			"circles":     []string{"member"},
+			"isAdmin":     true,
 		}},
 		"circles": []map[string]any{{
 			"circleID":               "member",

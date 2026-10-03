@@ -36,8 +36,8 @@ func TestAnApprovedCallIsStoredWithItsScheduleAndOnlyOnAOnceSchedule(t *testing.
 		_, _ = database.SQL.ExecContext(ctx, "DELETE FROM person WHERE person_id = $1", schedule.CreatorPersonID)
 	}()
 	if _, errorValue := database.SQL.ExecContext(ctx, `
-INSERT INTO person (person_id, display_name, security_level_name, security_level_rank, created_at, updated_at)
-VALUES ($1, '이샘플', 'member', 1, $2, $2)`, schedule.CreatorPersonID, referenceTime); errorValue != nil {
+INSERT INTO person (person_id, display_name, created_at, updated_at)
+VALUES ($1, '이샘플', $2, $2)`, schedule.CreatorPersonID, referenceTime); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	if errorValue := repository.UpsertSchedule(schedule); errorValue != nil {

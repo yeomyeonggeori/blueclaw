@@ -32,14 +32,11 @@ type PlatformAccountLinker interface {
 }
 
 type invitePersonRequest struct {
-	PersonID          string   `json:"personID"`
-	Email             string   `json:"email"`
-	DisplayName       string   `json:"displayName"`
-	IsAdmin           bool     `json:"isAdmin"`
-	Circles           []string `json:"circles"`
-	SecurityLevelName string   `json:"securityLevelName"`
-	SecurityLevelRank int      `json:"securityLevelRank"`
-	GrantedClasses    []string `json:"grantedClasses"`
+	PersonID    string   `json:"personID"`
+	Email       string   `json:"email"`
+	DisplayName string   `json:"displayName"`
+	IsAdmin     bool     `json:"isAdmin"`
+	Circles     []string `json:"circles"`
 }
 
 type canonicalizePersonReferencesRequest struct {
@@ -333,35 +330,17 @@ func (policyHandler PolicyHandler) savePolicyDocument(policyDocument policy.Poli
 }
 
 func createInvitedPersonPolicy(inviteRequest invitePersonRequest, email string) policy.PersonPolicy {
-	securityLevelName := strings.TrimSpace(inviteRequest.SecurityLevelName)
-	securityLevelRank := inviteRequest.SecurityLevelRank
-	grantedClasses := append([]string{}, inviteRequest.GrantedClasses...)
 	circles := normalizeCircles(append([]string{policy.MemberCircleID}, inviteRequest.Circles...))
 	if inviteRequest.IsAdmin {
-		securityLevelName = "admin"
-		securityLevelRank = 100
-		grantedClasses = []string{"internal", "executive"}
 		circles = normalizeCircles(append(circles, policy.AdminCircleID))
-	}
-	if securityLevelName == "" {
-		securityLevelName = "member"
-	}
-	if securityLevelRank == 0 {
-		securityLevelRank = 10
-	}
-	if len(grantedClasses) == 0 {
-		grantedClasses = []string{"internal"}
 	}
 
 	return policy.PersonPolicy{
-		PersonID:          strings.TrimSpace(inviteRequest.PersonID),
-		DisplayName:       displayNameForInvite(inviteRequest.DisplayName, email),
-		Emails:            []string{email},
-		Circles:           circles,
-		SecurityLevelName: securityLevelName,
-		SecurityLevelRank: securityLevelRank,
-		GrantedClasses:    grantedClasses,
-		IsAdmin:           inviteRequest.IsAdmin,
+		PersonID:    strings.TrimSpace(inviteRequest.PersonID),
+		DisplayName: displayNameForInvite(inviteRequest.DisplayName, email),
+		Emails:      []string{email},
+		Circles:     circles,
+		IsAdmin:     inviteRequest.IsAdmin,
 	}
 }
 

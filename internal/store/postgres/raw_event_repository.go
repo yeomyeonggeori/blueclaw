@@ -136,10 +136,9 @@ func (rawEventRepository RawEventRepository) TryInsertConnectorEvent(event conne
 	execResult, errorValue := rawEventRepository.database.SQL.ExecContext(context.Background(), `
 INSERT INTO raw_event (
   raw_event_id, platform, conversation_id, external_message_id, event_type,
-  content_ciphertext, encryption_key_version, content_sha256, security_level_rank,
-  required_classes, occurred_at, ingested_at, expires_at,
+  content_ciphertext, encryption_key_version, content_sha256, occurred_at, ingested_at, expires_at,
   reply_target_id, visible_context_ciphertext, visible_context_sha256, has_more_before, history_cursor
-) VALUES ($1,$2,$3,$4,'message',$5,1,$6,0,'{}',$7,$7,$8,$9,$10,$11,$12,$13)
+) VALUES ($1,$2,$3,$4,'message',$5,1,$6,$7,$7,$8,$9,$10,$11,$12,$13)
 ON CONFLICT (platform, conversation_id, external_message_id) DO NOTHING`,
 		rawEventID,
 		event.Platform,
@@ -190,11 +189,10 @@ func (rawEventRepository RawEventRepository) TryEnqueueConnectorEvent(event conn
 	execResult, errorValue := transaction.ExecContext(context.Background(), `
 INSERT INTO raw_event (
   raw_event_id, platform, conversation_id, external_message_id, event_type,
-  content_ciphertext, encryption_key_version, content_sha256, security_level_rank,
-  required_classes, occurred_at, ingested_at, expires_at,
+  content_ciphertext, encryption_key_version, content_sha256, occurred_at, ingested_at, expires_at,
   reply_target_id, visible_context_ciphertext, visible_context_sha256, has_more_before, history_cursor,
   connector_event_json, connector_status, connector_next_attempt_at
-) VALUES ($1,$2,$3,$4,'message',$5,1,$6,0,'{}',$7,$7,$8,$9,$10,$11,$12,$13,$14,'pending',$7)
+) VALUES ($1,$2,$3,$4,'message',$5,1,$6,$7,$7,$8,$9,$10,$11,$12,$13,$14,'pending',$7)
 ON CONFLICT (platform, conversation_id, external_message_id) DO NOTHING`,
 		rawEventID,
 		event.Platform,
@@ -489,10 +487,9 @@ func ensureSyntheticRawEvent(transaction *sql.Tx, event connectors.PlatformInbou
 	_, errorValue := transaction.ExecContext(context.Background(), `
 INSERT INTO raw_event (
   raw_event_id, platform, conversation_id, external_message_id, event_type,
-  content_ciphertext, encryption_key_version, content_sha256, security_level_rank,
-  required_classes, occurred_at, ingested_at, expires_at,
+  content_ciphertext, encryption_key_version, content_sha256, occurred_at, ingested_at, expires_at,
   reply_target_id, visible_context_ciphertext, visible_context_sha256, has_more_before, history_cursor
-) VALUES ($1,$2,$3,$4,'message',$5,1,$6,0,'{}',$7,$7,$8,$9,$10,$11,$12,$13)
+) VALUES ($1,$2,$3,$4,'message',$5,1,$6,$7,$7,$8,$9,$10,$11,$12,$13)
 ON CONFLICT (raw_event_id) DO NOTHING`,
 		rawEventID,
 		event.Platform,
@@ -559,10 +556,9 @@ func (rawEventRepository RawEventRepository) EnqueueScheduledConnectorReply(sche
 	_, errorValue = transaction.ExecContext(context.Background(), `
 INSERT INTO raw_event (
   raw_event_id, platform, conversation_id, external_message_id, event_type,
-  content_ciphertext, encryption_key_version, content_sha256, security_level_rank,
-  required_classes, occurred_at, ingested_at, expires_at,
+  content_ciphertext, encryption_key_version, content_sha256, occurred_at, ingested_at, expires_at,
   reply_target_id, visible_context_ciphertext, visible_context_sha256, has_more_before, history_cursor
-) VALUES ($1,$2,$3,$1,'scheduled_task',$4,1,$5,0,'{}',$6,$6,$7,$8,$9,$10,false,NULL)
+) VALUES ($1,$2,$3,$1,'scheduled_task',$4,1,$5,$6,$6,$7,$8,$9,$10,false,NULL)
 ON CONFLICT (raw_event_id) DO NOTHING`,
 		rawEventID,
 		schedule.Platform,
