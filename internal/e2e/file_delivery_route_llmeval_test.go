@@ -49,14 +49,10 @@ type fileDeliveryRouteOutcome struct {
 }
 
 func TestFileDeliveryRouteLive(t *testing.T) {
-	if !truthyEnvironmentValue(os.Getenv("BLUECLAW_E2E_LIVE")) {
-		t.Skip("set BLUECLAW_E2E_LIVE=1 to run the costed file delivery route evaluation")
-	}
+	requireLiveEvaluationConsent(t)
 	endpoint := strings.TrimSpace(os.Getenv("BLUECLAW_E2E_LLM_ENDPOINT"))
 	socketPath := strings.TrimSpace(os.Getenv("BLUECLAW_E2E_LLM_UNIX_SOCKET"))
-	if endpoint == "" && socketPath == "" {
-		t.Skip("set BLUECLAW_E2E_LLM_ENDPOINT or BLUECLAW_E2E_LLM_UNIX_SOCKET to run the file delivery route evaluation")
-	}
+	requireLanguageModelInput(t)
 	model := liveMemoryModel(t, endpoint, socketPath)
 	runCount := fileDeliveryRouteRunCount(t)
 	for _, routeCase := range fileDeliveryRouteCases() {

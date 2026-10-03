@@ -17,8 +17,7 @@ import (
 func TestMain(mainTesting *testing.M) {
 	foundTools, missingTools := ScenarioCapabilityAvailability()
 	if len(missingTools) > 0 && len(foundTools) == 0 {
-		fmt.Printf("skipping the appliance scenarios: %s names no capability tool catalog\n", ScenarioCapabilityCatalogVariable)
-		os.Exit(0)
+		exitWithoutEvaluationInput(ScenarioCapabilityCatalogVariable, capabilityCatalogHint, fmt.Sprintf("skipping the appliance scenarios: %s names no capability tool catalog", ScenarioCapabilityCatalogVariable))
 	}
 	if len(missingTools) > 0 {
 		fmt.Printf("the catalog in %s carries no descriptor for %s\n", ScenarioCapabilityCatalogVariable, strings.Join(missingTools, ", "))
@@ -26,8 +25,7 @@ func TestMain(mainTesting *testing.M) {
 	}
 	foundSkills, missingSkills := ScenarioSkillAvailability()
 	if len(missingSkills) > 0 && len(foundSkills) == 0 {
-		fmt.Printf("skipping the appliance scenarios: %s names no skill root\n", ScenarioSkillRootsVariable)
-		os.Exit(0)
+		exitWithoutEvaluationInput(ScenarioSkillRootsVariable, skillRootsHint, fmt.Sprintf("skipping the appliance scenarios: %s names no skill root", ScenarioSkillRootsVariable))
 	}
 	if len(missingSkills) > 0 {
 		fmt.Printf("the skill roots in %s carry no bundle for %s; they carry %s\n", ScenarioSkillRootsVariable, strings.Join(missingSkills, ", "), strings.Join(foundSkills, ", "))
