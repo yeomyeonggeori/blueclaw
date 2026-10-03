@@ -207,9 +207,7 @@ func (narrator *turnNarrator) startSaying(ctx context.Context, message string) {
 	narrator.mutex.Unlock()
 }
 
-func (narrator *turnNarrator) takeOverSending(
-	sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error),
-) func(context.Context, ReplyTarget, OutboundReply) (string, error) {
+func (narrator *turnNarrator) takeOverSending(sendReply ReplySender, recordingDelivery func(ReplySender) ReplySender) ReplySender {
 	if narrator == nil {
 		return sendReply
 	}
@@ -219,8 +217,11 @@ func (narrator *turnNarrator) takeOverSending(
 			return sendReply(ctx, replyTarget, reply)
 		}
 		if narrator.deleter == nil {
-			if replyIsOnlyWords(reply) && narrator.editor.EditReply(ctx, replyTarget, messageID, reply.Message) == nil {
-				return messageID, nil
+			if !replyIsOnlyWords(reply) {
+				return sendReply(ctx, replyTarget, reply)
+			}
+			if dispatchID, errorValue := recordingDelivery(narrator.editingInto(messageID))(ctx, replyTarget, reply); errorValue == nil {
+				return dispatchID, nil
 			}
 			return sendReply(ctx, replyTarget, reply)
 		}
@@ -230,6 +231,12 @@ func (narrator *turnNarrator) takeOverSending(
 		}
 		narrator.deleter.DeleteReply(ctx, replyTarget, messageID)
 		return dispatchID, nil
+	}
+}
+
+func (narrator *turnNarrator) editingInto(messageID string) ReplySender {
+	return func(ctx context.Context, replyTarget ReplyTarget, reply OutboundReply) (string, error) {
+		return messageID, narrator.editor.EditReply(ctx, replyTarget, messageID, reply.Message)
 	}
 }
 

@@ -1,12 +1,16 @@
 package adminapi
 
 import (
+	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
@@ -366,11 +370,62 @@ func TestARunWaitingWithAQuestionNobodySentIsReportedAsUndelivered(t *testing.T)
 	taskRunService.AppendTaskEvent(askedTaskRun.TaskRunID, agentcontract.TaskEventConnectorReplySent, `{"replyKind":"user_notice","dispatchID":"dispatch-1"}`)
 	unaskedTaskRun := parkedTaskRunAwaitingApproval(t, taskRunService, "unasked task")
 	handler := TaskMonitorHandler{TaskRunService: taskRunService, TaskEventService: taskEventService}
-	request := httptest.NewRequest(http.MethodGet, "/admin/api/task?status=waiting_approval", nil)
+
+	undeliveredByTaskRunID := listUndeliveredQuestions(t, handler, task.TaskStatusWaitingApproval)
+
+	if !undeliveredByTaskRunID[unaskedTaskRun.TaskRunID] {
+		t.Fatalf("expected a run whose question never went out to say so, got %v", undeliveredByTaskRunID)
+	}
+	if undeliveredByTaskRunID[askedTaskRun.TaskRunID] {
+		t.Fatalf("expected a run whose question was delivered not to be flagged, got %v", undeliveredByTaskRunID)
+	}
+}
+
+func TestARunWaitingOnAQuestionSentOverASessionIsNotReportedAsUndelivered(t *testing.T) {
+	taskEventService := task.NewTaskEventService()
+	taskRunService := task.NewTaskRunService(taskEventService)
+	connectorRuntime := connectors.NewConnectorRuntime(identity.NewIdentityService(policy.PolicyProjection{}), nil, taskRunService, taskEventService, slog.New(slog.DiscardHandler))
+	connectorRuntime.UseEventRepository(outboxThatSendsNothing{})
+	waiting := parkedTaskRunWaitingForInput(t, taskRunService, "clock me out")
+	isThread := false
+	sessionTurn := connectorRuntime.OpenSessionTurn(context.Background(), connectors.PlatformInboundEvent{
+		Platform:       "buzz",
+		ConversationID: "conversation-1",
+		MessageID:      "message-1",
+		ReplyTargetID:  "message-1",
+		IsThread:       &isThread,
+		Prompt:         "clock me out",
+	}, "person-1", func(context.Context, connectors.ReplyTarget, connectors.OutboundReply) (string, error) {
+		return "", nil
+	})
+	if errorValue := sessionTurn.DeliverReply(context.Background(), agentcontract.AgentTurnResult{TaskRun: waiting, UserNotice: "Which time should I record?"}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	handler := TaskMonitorHandler{TaskRunService: taskRunService, TaskEventService: taskEventService}
+
+	undeliveredByTaskRunID := listUndeliveredQuestions(t, handler, task.TaskStatusWaitingUserInput)
+
+	if isUndelivered, isListed := undeliveredByTaskRunID[waiting.TaskRunID]; !isListed || isUndelivered {
+		t.Fatalf("expected the run whose question the session sent to be listed as delivered, got %v", undeliveredByTaskRunID)
+	}
+}
+
+func parkedTaskRunWaitingForInput(t *testing.T, taskRunService *task.TaskRunService, prompt string) task.TaskRun {
+	t.Helper()
+	taskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", prompt)
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAskRequested, `{"kind":"input","question":"Which time should I record?"}`)
+	waiting, errorValue := taskRunService.PauseTaskRun(taskRun.TaskRunID, task.TaskStatusWaitingUserInput, "")
+	if errorValue != nil {
+		t.Fatalf("expected the run to park: %v", errorValue)
+	}
+	return waiting
+}
+
+func listUndeliveredQuestions(t *testing.T, handler TaskMonitorHandler, status task.TaskStatus) map[string]bool {
+	t.Helper()
+	request := httptest.NewRequest(http.MethodGet, "/admin/api/task?status="+string(status), nil)
 	responseRecorder := httptest.NewRecorder()
-
 	handler.HandleListTaskRun(responseRecorder, request)
-
 	listedTaskRuns := []struct {
 		TaskRunID              string `json:"taskRunID"`
 		HasUndeliveredQuestion bool   `json:"hasUndeliveredQuestion"`
@@ -382,10 +437,31 @@ func TestARunWaitingWithAQuestionNobodySentIsReportedAsUndelivered(t *testing.T)
 	for _, listedTaskRun := range listedTaskRuns {
 		undeliveredByTaskRunID[listedTaskRun.TaskRunID] = listedTaskRun.HasUndeliveredQuestion
 	}
-	if !undeliveredByTaskRunID[unaskedTaskRun.TaskRunID] {
-		t.Fatalf("expected a run whose question never went out to say so, got %s", responseRecorder.Body.String())
-	}
-	if undeliveredByTaskRunID[askedTaskRun.TaskRunID] {
-		t.Fatalf("expected a run whose question was delivered not to be flagged, got %s", responseRecorder.Body.String())
-	}
+	return undeliveredByTaskRunID
+}
+
+type outboxThatSendsNothing struct{}
+
+func (outboxThatSendsNothing) TryInsertConnectorEvent(connectors.PlatformInboundEvent) (bool, connectors.ConnectorRuntimeResult, error) {
+	return false, connectors.ConnectorRuntimeResult{}, nil
+}
+
+func (outboxThatSendsNothing) SaveConnectorResult(connectors.PlatformInboundEvent, connectors.ConnectorRuntimeResult) error {
+	return nil
+}
+
+func (outboxThatSendsNothing) EnqueueConnectorReply(connectors.PlatformInboundEvent, connectors.ReplyTarget, connectors.OutboundReply) (string, error) {
+	return "outbox-1", nil
+}
+
+func (outboxThatSendsNothing) ClaimPendingConnectorReplies(int, time.Duration) ([]connectors.QueuedConnectorReply, error) {
+	return nil, nil
+}
+
+func (outboxThatSendsNothing) MarkConnectorReplySent(connectors.QueuedConnectorReply, string) error {
+	return nil
+}
+
+func (outboxThatSendsNothing) MarkConnectorReplyFailed(connectors.QueuedConnectorReply, error, time.Time) error {
+	return nil
 }

@@ -131,9 +131,6 @@ func (connectorRuntime *ConnectorRuntime) sendCompletedTaskReply(
 		connectorRuntime.logger.Error("connector."+platform+".outbound.failed", "messageID", event.MessageID, "taskRunID", taskRunID, "error", errorValue.Error())
 		return ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: taskRunID, Reason: "reply_failed"}, nil
 	}
-	if connectorRuntime.outboxRepository() == nil {
-		connectorRuntime.appendConnectorReplyEvent(taskRunID, agentcontract.TaskEventConnectorReplySent, connectorReplyEventBody(event, OutboundReply{TaskRunID: taskRunID, ReplyKind: connectorReplyKindSuccess}, "", dispatchID, ""))
-	}
 	connectorRuntime.logger.Info("connector."+platform+".outbound.sent", "messageID", event.MessageID, "taskRunID", taskRunID, "replyDispatchID", dispatchID)
 	return ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: taskRunID, ReplyDispatchID: dispatchID}, nil
 }

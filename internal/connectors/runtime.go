@@ -343,7 +343,7 @@ func (connectorRuntime *ConnectorRuntime) handleInboundEventImmediately(ctx cont
 			connectorRuntime.logger.Info("connector."+adapter.Name()+".event.suppressed", slog.String("source", event.Source), slog.String("reason", "duplicate"), slog.String("messageID", event.MessageID))
 			return result, nil
 		}
-		result, errorValue = connectorRuntime.processPendingInboundEvent(ctx, adapter, event, adapter.SendReply, false)
+		result, errorValue = connectorRuntime.processPendingInboundEvent(ctx, adapter, event, connectorRuntime.recordingDelivery(adapter.SendReply), false)
 		if errorValue != nil {
 			return ConnectorRuntimeResult{}, errorValue
 		}
@@ -356,7 +356,7 @@ func (connectorRuntime *ConnectorRuntime) handleInboundEventImmediately(ctx cont
 		return result, nil
 	}
 
-	result, errorValue := connectorRuntime.processPendingInboundEvent(ctx, adapter, event, adapter.SendReply, false)
+	result, errorValue := connectorRuntime.processPendingInboundEvent(ctx, adapter, event, connectorRuntime.recordingDelivery(adapter.SendReply), false)
 	if errorValue != nil {
 		return ConnectorRuntimeResult{}, errorValue
 	}
@@ -366,7 +366,7 @@ func (connectorRuntime *ConnectorRuntime) handleInboundEventImmediately(ctx cont
 }
 
 func (connectorRuntime *ConnectorRuntime) processInboundEvent(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (ConnectorRuntimeResult, error) {
-	return connectorRuntime.processInboundEventWithReplySender(ctx, adapter, event, adapter.SendReply)
+	return connectorRuntime.processInboundEventWithReplySender(ctx, adapter, event, connectorRuntime.recordingDelivery(adapter.SendReply))
 }
 
 func (connectorRuntime *ConnectorRuntime) processInboundEventWithReplySender(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent, sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error)) (ConnectorRuntimeResult, error) {
@@ -546,9 +546,6 @@ func (connectorRuntime *ConnectorRuntime) sendCheckpointReply(ctx context.Contex
 		connectorRuntime.logger.Error("connector."+platform+".checkpoint.failed", slog.String("messageID", event.MessageID), slog.String("taskRunID", taskRunID), slog.String("error", errorValue.Error()))
 		return errorValue
 	}
-	if connectorRuntime.outboxRepository() == nil {
-		connectorRuntime.appendConnectorReplyEvent(taskRunID, agentcontract.TaskEventConnectorReplySent, connectorReplyEventBody(event, reply, "", dispatchID, ""))
-	}
 	connectorRuntime.logger.Info("connector."+platform+".checkpoint.sent", slog.String("messageID", event.MessageID), slog.String("taskRunID", taskRunID), slog.String("replyDispatchID", dispatchID))
 	return nil
 }
@@ -572,10 +569,6 @@ func (connectorRuntime *ConnectorRuntime) sendUserNoticeReply(ctx context.Contex
 		connectorRuntime.logger.Error("connector."+platform+".outbound.failed", slog.String("messageID", event.MessageID), slog.String("taskRunID", taskRunID), slog.String("error", errorValue.Error()))
 		return "", false
 	}
-	if connectorRuntime.outboxRepository() == nil {
-		connectorRuntime.appendConnectorReplyEvent(taskRunID, agentcontract.TaskEventConnectorReplySent, connectorReplyEventBody(event, reply, "", dispatchID, ""))
-	}
-	connectorRuntime.recordTaskWaitTokenForReply(platform, event, replyTarget, reply, dispatchID)
 	connectorRuntime.logger.Info("connector."+platform+".outbound.sent", slog.String("messageID", event.MessageID), slog.String("taskRunID", taskRunID), slog.String("replyDispatchID", dispatchID), slog.String("reason", "task_not_completed"))
 	return dispatchID, true
 }
