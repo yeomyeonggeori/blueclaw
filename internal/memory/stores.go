@@ -136,6 +136,16 @@ func (stores *Stores) Close() error {
 // a recall runs as that reader, so a file this list names and their identity
 // cannot open is refused by the kernel. A list too generous costs a refusal,
 // and a list too narrow costs a memory nobody finds.
+// ScopeToRemember is where what a person says is written: the circle the
+// conversation belongs to when it belongs to one that has a directory, and the
+// person's own memory otherwise.
+func ScopeToRemember(personID string, activeCircleID string) Scope {
+	if policy.CircleHoldsADirectory(activeCircleID) {
+		return CircleScope(strings.ToLower(strings.TrimSpace(activeCircleID)))
+	}
+	return PersonScope(personID)
+}
+
 func ScopesToSearch(personAccess policy.PersonAccess, containedCircles map[string][]string) []Scope {
 	scopes := []Scope{}
 	if personAccess.PersonID != "" {
@@ -144,7 +154,7 @@ func ScopesToSearch(personAccess policy.PersonAccess, containedCircles map[strin
 	seen := map[string]bool{}
 	for _, circleID := range personAccess.Circles {
 		for _, reachable := range append([]string{circleID}, containedCircles[circleID]...) {
-			if reachable == "" || seen[reachable] {
+			if !policy.CircleHoldsADirectory(reachable) || seen[reachable] {
 				continue
 			}
 			seen[reachable] = true

@@ -376,6 +376,9 @@ func (application *Application) carryMemoryForward() error {
 	if report.Carried > 0 || report.Adopted > 0 {
 		application.runtimeLogger.Logger.Info("application.memory.carried_forward", "carried", report.Carried, "adopted", report.Adopted)
 	}
+	if len(report.Left) > 0 {
+		application.runtimeLogger.Logger.Warn("application.memory.left_at_old_path", "files", report.Left)
+	}
 	return nil
 }
 

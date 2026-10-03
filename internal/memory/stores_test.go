@@ -3,6 +3,7 @@ package memory_test
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -154,4 +155,43 @@ func (refusingActor) CanListDirectory(context.Context) bool { return false }
 
 func (refusingActor) Run(context.Context, security.CommandRequest) (security.CommandResult, error) {
 	return security.CommandResult{ExitCode: 1, Stderr: "permission denied"}, nil
+}
+
+func TestEveryScopeAnAdministratorReachesSitsInADeclaredDirectory(t *testing.T) {
+	stores, root := memorytest.OpenWithRoot(t)
+	administrator := policy.PersonPolicy{PersonID: "person-1", Circles: []string{"sales"}, IsAdmin: true}
+	document := policy.CanonicalizePolicyDocument(policy.PolicyDocument{
+		People:  []policy.PersonPolicy{administrator},
+		Circles: []policy.CirclePolicy{{CircleID: "sales"}},
+	})
+	declared := map[string]bool{}
+	const hostRoot = "/workspace"
+	for _, directory := range security.POSIXStateForPolicy(document, hostRoot).Directories {
+		declared[directory.Path] = true
+	}
+	personAccess := policy.PolicyProjectionService{}.ReplacePolicyProjectionTransactionally(document).PersonAccessByPersonID["person-1"]
+
+	scopes := memory.ScopesToSearch(personAccess, nil)
+	for _, circleID := range personAccess.Circles {
+		scopes = append(scopes, memory.ScopeToRemember("person-1", circleID))
+	}
+	for _, scope := range scopes {
+		path, errorValue := stores.Path(scope)
+		if errorValue != nil {
+			t.Fatalf("path for %+v: %v", scope, errorValue)
+		}
+		directory := strings.Replace(filepath.Dir(path), root, hostRoot, 1)
+		if !declared[directory] {
+			t.Fatalf("memory for %s %q sits in %s, which no POSIX declaration sets up, so the person cannot open it", scope.Kind, scope.ID, directory)
+		}
+	}
+}
+
+func TestWhatIsSaidUnderTheAdminCircleIsRememberedForThePerson(t *testing.T) {
+	if scope := memory.ScopeToRemember("person-1", "admin"); scope != memory.PersonScope("person-1") {
+		t.Fatalf("remembered under %+v; the admin circle has no memory of its own", scope)
+	}
+	if scope := memory.ScopeToRemember("person-1", "Sales"); scope != memory.CircleScope("sales") {
+		t.Fatalf("remembered under %+v; a circle with a directory keeps what is said in it", scope)
+	}
 }

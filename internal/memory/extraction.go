@@ -118,10 +118,7 @@ func (observer TaskRunTransitionObserver) remember(taskRun agentcontract.TaskRun
 	ctx, cancel := context.WithTimeout(context.Background(), extractionTimeout)
 	defer cancel()
 	extractionContext, _ := findExtractionContext(observer.TaskRuns.ListTaskEvent(taskRun.TaskRunID))
-	scope := PersonScope(taskRun.RequesterPersonID)
-	if strings.TrimSpace(extractionContext.ActiveCircleID) != "" {
-		scope = CircleScope(extractionContext.ActiveCircleID)
-	}
+	scope := ScopeToRemember(taskRun.RequesterPersonID, extractionContext.ActiveCircleID)
 	note := bluememo.Note{
 		GroupID:     taskRun.TaskRunID,
 		Body:        RenderTranscript(TaskTranscript(taskRun, observer.taskSteps(taskRun.TaskRunID))),

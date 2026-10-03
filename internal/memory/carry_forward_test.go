@@ -197,3 +197,20 @@ func TestAHostThatNeverWroteAtTheOldPathCarriesNothing(t *testing.T) {
 		t.Fatalf("report %+v, wanted nothing to do", report)
 	}
 }
+
+func TestTheAdminCirclesOldFileIsLeftWhereItIs(t *testing.T) {
+	stores, root := memorytest.OpenWithRoot(t)
+	oldPath := oldPathOf(t, root, "circles", "admin.db")
+	writeOldStore(t, oldPath, "the board meets on the first Monday")
+
+	report, errorValue := stores.CarryForward(context.Background())
+	if errorValue != nil {
+		t.Fatalf("carry the memory forward: %v", errorValue)
+	}
+	if report.Carried != 0 || len(report.Left) != 1 || report.Left[0] != oldPath {
+		t.Fatalf("report %+v; the admin circle has no directory to carry into", report)
+	}
+	if _, errorValue := os.Stat(filepath.Join(root, "circles", "admin")); !os.IsNotExist(errorValue) {
+		t.Fatalf("circles/admin was made (%v); nothing sets up its group, so nobody could read it", errorValue)
+	}
+}
