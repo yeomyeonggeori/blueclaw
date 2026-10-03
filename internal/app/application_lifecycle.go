@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -32,6 +33,10 @@ func (application *Application) Start() error {
 	application.startLearningCoordinator()
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "log_retention")
 	application.startLogRetentionLoop()
+	application.runtimeLogger.Logger.Info("application.starting", "stage", "memory_carry_forward")
+	if errorValue := application.carryMemoryForward(); errorValue != nil {
+		return errorValue
+	}
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "memory_worker")
 	application.startMemoryMaintenance()
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "connector_runtime")
@@ -352,6 +357,29 @@ func (application *Application) taskRetentionIntervalMinuteOrDefault() int {
 		return application.taskRetentionIntervalMinute
 	}
 	return 60
+}
+
+// carryMemoryForward brings memory written under the layout that kept every
+// subject's file in one service-owned directory into the file inside each
+// subject's own workspace directory. Nothing else reads the old path, so a
+// start that carried nothing would answer from an empty memory without
+// saying so, which is why a failure here stops the start instead of being
+// logged and stepped over.
+func (application *Application) carryMemoryForward() error {
+	if application.memoryStores == nil {
+		return nil
+	}
+	report, errorValue := application.memoryStores.CarryForward(context.Background())
+	if errorValue != nil {
+		return fmt.Errorf("carry the memory written at the old path: %w", errorValue)
+	}
+	if report.Carried > 0 {
+		application.runtimeLogger.Logger.Info("application.memory.carried_forward", "carried", report.Carried)
+	}
+	for _, destination := range report.AlreadyAt {
+		application.runtimeLogger.Logger.Warn("application.memory.not_carried", "reason", "a file is already there", "destination", destination)
+	}
+	return nil
 }
 
 func (application *Application) startMemoryMaintenance() {
