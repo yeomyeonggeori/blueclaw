@@ -253,8 +253,10 @@ func LinuxPersonUserName(personID string) string {
 	return shortenedLinuxName("bc_person_", personID)
 }
 
+const LinuxCircleGroupPrefix = "bc_circle_"
+
 func LinuxCircleGroupName(circleID string) string {
-	return shortenedLinuxName("bc_circle_", circleID)
+	return shortenedLinuxName(LinuxCircleGroupPrefix, circleID)
 }
 
 func shortenedLinuxName(prefix string, value string) string {

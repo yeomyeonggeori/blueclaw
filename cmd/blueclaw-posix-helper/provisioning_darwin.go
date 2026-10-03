@@ -11,6 +11,10 @@ func createGroup(name string, groupID uint32) error {
 	return runDirectoryServiceCommands(createGroupCommands(name, groupID))
 }
 
+func deleteGroup(name string) error {
+	return runCommand("dscl", ".", "-delete", groupRecordPath(name))
+}
+
 func setGroupID(name string, groupID uint32) error {
 	return runCommand("dscl", ".", "-create", groupRecordPath(name), "PrimaryGroupID", formatID(groupID))
 }

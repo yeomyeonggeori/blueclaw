@@ -667,10 +667,60 @@ func applyPOSIXState(state security.POSIXState, workspacePath string) error {
 			return errorValue
 		}
 	}
+	if errorValue := removeRetiredCircleGroups(state, workspacePath); errorValue != nil {
+		return errorValue
+	}
 	if errorValue := healChangedGroupContent(state.Directories, changedGroups); errorValue != nil {
 		return errorValue
 	}
 	return allocations.persist()
+}
+
+func removeRetiredCircleGroups(state security.POSIXState, workspacePath string) error {
+	systemGroups, errorValue := readSystemGroups()
+	if errorValue != nil {
+		return errorValue
+	}
+	names := make([]string, 0, len(systemGroups))
+	for _, group := range systemGroups {
+		names = append(names, group.name)
+	}
+	folders, errorValue := os.ReadDir(filepath.Join(workspacePath, "circles"))
+	if errorValue != nil && !os.IsNotExist(errorValue) {
+		return errorValue
+	}
+	folderNames := []string{}
+	for _, folder := range folders {
+		if folder.IsDir() {
+			folderNames = append(folderNames, folder.Name())
+		}
+	}
+	for _, groupName := range retiredCircleGroups(names, groupNames(state.Groups), folderNames) {
+		if errorValue := deleteGroup(groupName); errorValue != nil {
+			return errorValue
+		}
+	}
+	return nil
+}
+
+// retiredCircleGroups names the circle groups the policy no longer declares
+// and no circle folder still uses. A folder that was kept because it holds
+// something keeps its group, so nobody loses a file they could open.
+func retiredCircleGroups(systemGroups []string, declaredGroups []string, circleFolders []string) []string {
+	inUse := map[string]bool{}
+	for _, name := range declaredGroups {
+		inUse[name] = true
+	}
+	for _, folder := range circleFolders {
+		inUse[security.LinuxCircleGroupName(folder)] = true
+	}
+	retired := []string{}
+	for _, name := range systemGroups {
+		if strings.HasPrefix(name, security.LinuxCircleGroupPrefix) && !inUse[name] {
+			retired = append(retired, name)
+		}
+	}
+	return retired
 }
 
 func groupNames(groups []security.POSIXGroup) []string {
