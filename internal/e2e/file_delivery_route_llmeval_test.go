@@ -24,7 +24,6 @@ const (
 	fileDeliveryRouteReplyAttachment = "reply attachment"
 	fileDeliveryRouteRequesterDM     = "message_send DM to the requester"
 	fileDeliveryRouteColleagueDM     = "message_send DM to 박예시"
-	fileDeliveryRouteOtherSend       = "message_send elsewhere"
 	fileDeliveryRouteNone            = "no delivery"
 )
 
@@ -219,7 +218,7 @@ func messageSendRoute(requestedBody string) string {
 	_ = json.Unmarshal([]byte(requestedBody), &requested)
 	input := requested.Input
 	if input.TargetType != "directMessage" {
-		return fileDeliveryRouteOtherSend
+		return "message_send " + input.TargetType
 	}
 	recipients := append([]string{input.PersonHint}, input.PersonHints...)
 	if strings.Contains(strings.Join(recipients, " "), "예시") {
@@ -228,7 +227,7 @@ func messageSendRoute(requestedBody string) string {
 	if strings.TrimSpace(strings.Join(recipients, "")) == "" || strings.Contains(strings.Join(recipients, " "), "샘플") {
 		return fileDeliveryRouteRequesterDM
 	}
-	return fileDeliveryRouteOtherSend
+	return "message_send DM to " + strings.Join(recipients, ", ")
 }
 
 func writeFileDeliveryRouteEvidence(t *testing.T, caseName string, outcomes []fileDeliveryRouteOutcome) {
