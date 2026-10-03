@@ -54,6 +54,7 @@ type Application struct {
 	schedulePoller              *scheduler.SchedulePoller
 	taskRetentionSweeper        *scheduler.TaskRetentionSweeper
 	memoryStores                *memory.Stores
+	heldCircles                 func() map[string]bool
 	learningCoordinator         *learning.Coordinator
 	schedulePollSecond          int
 	taskRetentionIntervalMinute int
@@ -192,6 +193,7 @@ func newApplication(components applicationComponents) *Application {
 		schedulePoller:              components.schedulePoller,
 		taskRetentionSweeper:        components.taskRetentionSweeper,
 		memoryStores:                components.memory.stores,
+		heldCircles:                 components.directory.identityService.HeldCircles,
 		learningCoordinator:         components.learningCoordinator,
 		schedulePollSecond:          components.runtimeConfiguration.Scheduler.SchedulePollIntervalSecond,
 		taskRetentionIntervalMinute: components.runtimeConfiguration.Scheduler.RetentionCheckIntervalMinute,
