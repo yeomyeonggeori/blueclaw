@@ -52,7 +52,18 @@ func (sessionTurn *SessionTurn) ContinueOpenInteractions(ctx context.Context, la
 func (sessionTurn *SessionTurn) DeliverReply(ctx context.Context, turnResult agentcontract.AgentTurnResult) error {
 	connectorRuntime, turn := sessionTurn.connectorRuntime, sessionTurn.turn
 	connectorRuntime.recordHeldIntakeCalls(turnResult.TaskRun.TaskRunID, turn.event)
-	_, errorValue := connectorRuntime.dispatchTaskReply(withConnectorEvent(ctx, turn.event), turn.platform, turn.adapter, turn.event, turn.replyTarget, turnResult, turn.engagedAckEmojiName, turn.sendReply)
+	notDelivered := []*FilesNotDelivered{}
+	sendNoting := func(ctx context.Context, replyTarget ReplyTarget, reply OutboundReply) (string, error) {
+		dispatchID, errorValue := turn.sendReply(ctx, replyTarget, reply)
+		if undelivered, isUndelivered := filesNotDeliveredIn(errorValue); isUndelivered {
+			notDelivered = append(notDelivered, undelivered)
+		}
+		return dispatchID, errorValue
+	}
+	_, errorValue := connectorRuntime.dispatchTaskReply(withConnectorEvent(ctx, turn.event), turn.platform, turn.adapter, turn.event, turn.replyTarget, turnResult, turn.engagedAckEmojiName, sendNoting)
+	for _, undelivered := range notDelivered {
+		connectorRuntime.tellOfFilesNotDelivered(ctx, turn, turnResult.TaskRun.TaskRunID, undelivered)
+	}
 	return errorValue
 }
 

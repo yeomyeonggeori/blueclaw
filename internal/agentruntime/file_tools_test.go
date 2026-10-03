@@ -1810,3 +1810,25 @@ func TestFileEditMatchFailureGuidanceAnchorsOnDistinctiveLineNotDelimiters(t *te
 		t.Fatalf("expected a copyable context window around the distinctive line, got %q", guidance)
 	}
 }
+
+func TestFileDeliverSaysTheFileIsStagedForTheFinalReply(t *testing.T) {
+	workspacePath := t.TempDir()
+	writeTestFile(t, filepath.Join(workspacePath, "private", "people", "person-1", "documents", "report.pdf"), "%PDF")
+	toolRegistry := newFileToolTestCatalogBuilder(workspacePath).BuildToolSet(ToolCatalogRequest{
+		ProfileName:       "default",
+		RequesterPersonID: "person-1",
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
+	})
+
+	result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
+		ToolName: toolcontract.FileDeliverToolName,
+		Input:    toolcontract.MarshalToolInput(map[string]any{"path": "documents/report.pdf"}),
+	})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	content := result.Output.Content
+	if !strings.Contains(content, "staged") || !strings.Contains(content, "final reply") {
+		t.Fatalf("file_deliver answered %q; it only stages the file for the final reply, and its result has to say so", content)
+	}
+}

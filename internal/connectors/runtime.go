@@ -19,6 +19,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
@@ -111,6 +112,7 @@ const ConnectorReplyKindProgress = "progress"
 const connectorReplyKindUserNotice = "user_notice"
 const connectorReplyKindPermissionNotice = "permission_notice"
 const connectorReplyKindApprovalQuestion = "approval_question"
+const connectorReplyKindDeliveryFailureNotice = "delivery_failure_notice"
 
 type ConnectorRuntime struct {
 	identityService        *identity.IdentityService
@@ -121,6 +123,7 @@ type ConnectorRuntime struct {
 	turnRouter             TurnRouter
 	replyGenerator         ReplyGenerator
 	launchFailureCompleter LaunchFailureCompleter
+	noticeLanguageModel    model.LanguageModelProvider
 	taskRunService         *taskstate.TaskRunService
 	taskEventService       *taskstate.TaskEventService
 	taskLauncher           *agentruntime.TaskLauncher

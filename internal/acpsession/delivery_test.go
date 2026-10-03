@@ -117,8 +117,8 @@ func TestAReplyCarryingAFileNamesItsTypeAndIsRecordedSentOnceTheRelayPostsEach(t
 		t.Fatalf("the relay was asked to confirm %d posts, expected the words and the file each", len(client.deliveries))
 	}
 	sent := connectorRepliesRecorded(t, taskRunService, answered.TaskRunID, agentcontract.TaskEventConnectorReplySent)
-	if len(sent) != 1 || sent[0].DispatchID != "posted-1" {
-		t.Fatalf("the reply is recorded as sent %+v, expected once, as the first message the relay posted", sent)
+	if len(sent) != 1 || sent[0].DispatchID != "posted-2" {
+		t.Fatalf("the reply is recorded as sent %+v, expected once, as the message carrying its words, posted after its file", sent)
 	}
 }
 
@@ -143,8 +143,11 @@ func TestAReplyWhoseFileTheRelayCouldNotPostIsRecordedUndelivered(t *testing.T) 
 		t.Fatalf("a file the relay could not post is recorded as sent: %+v", sent)
 	}
 	failed := connectorRepliesRecorded(t, taskRunService, answered.TaskRunID, agentcontract.TaskEventConnectorReplyFailed)
-	if len(failed) != 1 || !strings.Contains(failed[0].Reason, "refused report.pdf with 413") {
+	if replies := repliesOfKind(failed, "success"); len(replies) != 1 || !strings.Contains(replies[0].Reason, "refused report.pdf with 413") {
 		t.Fatalf("the reply is recorded as failed %+v, expected once, with the reason the relay gave", failed)
+	}
+	if notices := repliesOfKind(failed, "delivery_failure_notice"); len(notices) != 1 {
+		t.Fatalf("a relay that posts nothing failed the notice about the file %d times, expected the notice tried once and recorded failed", len(notices))
 	}
 }
 
@@ -319,5 +322,117 @@ func TestAReissuedQuestionNamesTheThreadItsRunWasAskedIn(t *testing.T) {
 	delivery, isNamed := deliveryNamedIn(asked.Meta)
 	if !isNamed || delivery.ReplyTargetID != "buzz:conversation-1:message-7" {
 		t.Fatalf("the reissued question named %+v, expected the thread its run was asked in", delivery)
+	}
+}
+
+type deliveryFailureReportRecord struct {
+	Phase  string                      `json:"phase"`
+	Report agentcontract.FailureReport `json:"report"`
+}
+
+func deliveryFailureReportsRecorded(t *testing.T, taskRunService *task.TaskRunService, taskRunID string) []agentcontract.FailureReport {
+	t.Helper()
+	reports := []agentcontract.FailureReport{}
+	for _, taskEvent := range taskRunService.ListTaskEvent(taskRunID) {
+		if taskEvent.Name != agentcontract.TaskEventAgentFailureReport {
+			continue
+		}
+		record := deliveryFailureReportRecord{}
+		if errorValue := json.Unmarshal([]byte(taskEvent.Body), &record); errorValue != nil {
+			t.Fatalf("failure report body: %v", errorValue)
+		}
+		if record.Phase == "delivery" {
+			reports = append(reports, record.Report)
+		}
+	}
+	return reports
+}
+
+func repliesOfKind(records []connectorReplyRecord, replyKind string) []connectorReplyRecord {
+	matching := []connectorReplyRecord{}
+	for _, record := range records {
+		if record.ReplyKind == replyKind {
+			matching = append(matching, record)
+		}
+	}
+	return matching
+}
+
+func promptForFiles(t *testing.T, client *recordingClient, taskRunService *task.TaskRunService, taskRunID string, words string, attachments []toolcontract.FileAttachment) {
+	t.Helper()
+	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
+		TaskLauncher: &recordingLauncher{reply: words, taskRunID: taskRunID, attachments: attachments},
+		Directory:    staticDirectory{},
+		TurnRouter:   scriptedRouter{},
+		TaskRunStore: taskRunService,
+	})
+	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
+	promptInThread(t, connection, sessionID, "buzz:conversation-1:message-7")
+}
+
+func samplePDF(filename string) toolcontract.FileAttachment {
+	return toolcontract.FileAttachment{DevicePath: "/workspace/private/people/person-sample/" + filename, Filename: filename, ContentType: "application/pdf"}
+}
+
+func TestAReplyPostsItsFilesBeforeTheWordsThatDescribeThem(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	answered := taskRunService.CreateTaskRun("person-sample", "conversation-1", "견적서와 거래명세서 만들어줘")
+	client := &recordingClient{}
+
+	promptForFiles(t, client, taskRunService, answered.TaskRunID, "두 파일을 첨부했습니다", []toolcontract.FileAttachment{samplePDF("quote.pdf"), samplePDF("statement.pdf")})
+
+	expected := []string{"file:quote.pdf", "file:statement.pdf", "words:두 파일을 첨부했습니다"}
+	if strings.Join(client.posted, "|") != strings.Join(expected, "|") {
+		t.Fatalf("the reply was posted as %v, expected its files before its words %v", client.posted, expected)
+	}
+	if sent := connectorRepliesRecorded(t, taskRunService, answered.TaskRunID, agentcontract.TaskEventConnectorReplySent); len(sent) != 1 || sent[0].DispatchID != "posted-3" {
+		t.Fatalf("the reply is recorded as sent %+v, expected once, as the message carrying its words (posted-3)", sent)
+	}
+}
+
+func TestAReplyWhoseFileDidNotReachThePersonPostsNoWordsAndANoticeNamingTheFile(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	answered := taskRunService.CreateTaskRun("person-sample", "conversation-1", "한 장짜리 PDF 만들어줘")
+	client := &recordingClient{refusedFiles: map[string]string{"report.pdf": "the messenger refused report.pdf with 413"}}
+
+	promptForFiles(t, client, taskRunService, answered.TaskRunID, "PDF를 첨부했습니다", []toolcontract.FileAttachment{samplePDF("report.pdf")})
+
+	for _, posted := range client.posted {
+		if posted == "words:PDF를 첨부했습니다" {
+			t.Fatalf("the words written for a file that never arrived were posted anyway: %v", client.posted)
+		}
+	}
+	failed := repliesOfKind(connectorRepliesRecorded(t, taskRunService, answered.TaskRunID, agentcontract.TaskEventConnectorReplyFailed), "success")
+	if len(failed) != 1 || !strings.Contains(failed[0].Reason, "refused report.pdf with 413") {
+		t.Fatalf("the reply is recorded as failed %+v, expected once, with the reason the relay gave", failed)
+	}
+	notices := repliesOfKind(connectorRepliesRecorded(t, taskRunService, answered.TaskRunID, agentcontract.TaskEventConnectorReplySent), "delivery_failure_notice")
+	if len(notices) != 1 {
+		t.Fatalf("the person was told of the missing file %d times, expected once", len(notices))
+	}
+	reports := deliveryFailureReportsRecorded(t, taskRunService, answered.TaskRunID)
+	if len(reports) != 1 {
+		t.Fatalf("the notice was written from %d delivery reports, expected one", len(reports))
+	}
+	report := reports[0]
+	if !report.ArtifactRequired || len(report.AttachmentFilenames) != 0 || !strings.Contains(report.SafeFailureSummary, "report.pdf") || report.OriginalRequest == "" {
+		t.Fatalf("the notice was handed %+v, expected it to name report.pdf as not delivered, nothing as delivered, and the request", report)
+	}
+}
+
+func TestAReplyWhoseSecondFileDidNotArriveNamesTheFirstAsDelivered(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	answered := taskRunService.CreateTaskRun("person-sample", "conversation-1", "계약서와 부속서 만들어줘")
+	client := &recordingClient{refusedFiles: map[string]string{"annex.pdf": "chatd did not answer"}}
+
+	promptForFiles(t, client, taskRunService, answered.TaskRunID, "두 파일을 첨부했습니다", []toolcontract.FileAttachment{samplePDF("contract.pdf"), samplePDF("annex.pdf")})
+
+	reports := deliveryFailureReportsRecorded(t, taskRunService, answered.TaskRunID)
+	if len(reports) != 1 {
+		t.Fatalf("the notice was written from %d delivery reports, expected one", len(reports))
+	}
+	report := reports[0]
+	if strings.Join(report.AttachmentFilenames, ",") != "contract.pdf" || !strings.Contains(report.SafeFailureSummary, "annex.pdf") || strings.Contains(report.SafeFailureSummary, "contract.pdf") {
+		t.Fatalf("the notice was handed %+v, expected contract.pdf as delivered and annex.pdf as not", report)
 	}
 }
