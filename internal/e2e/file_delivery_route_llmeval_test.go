@@ -21,10 +21,12 @@ import (
 )
 
 const (
-	fileDeliveryRouteReplyAttachment = "reply attachment"
-	fileDeliveryRouteRequesterDM     = "message_send DM to the requester"
-	fileDeliveryRouteColleagueDM     = "message_send DM to 박예시"
-	fileDeliveryRouteNone            = "no delivery"
+	fileDeliveryRouteReplyAttachment  = "reply attachment"
+	fileDeliveryRouteRequesterDM      = "message_send DM to the requester, no personHint"
+	fileDeliveryRouteNamedRequesterDM = "message_send DM to the requester by name"
+	fileDeliveryRouteColleagueDM      = "message_send DM to 박예시"
+	fileDeliveryRouteAskedFirst       = "asked the requester first"
+	fileDeliveryRouteNone             = "no delivery"
 )
 
 type fileDeliveryRouteCase struct {
@@ -207,41 +209,56 @@ func fileDeliveryRouteSkillDirectories() []string {
 	return directories
 }
 
+type fileDeliveryModelAction struct {
+	Action        string            `json:"action"`
+	ToolName      string            `json:"toolName"`
+	ToolInput     json.RawMessage   `json:"toolInput"`
+	Attachments   []json.RawMessage `json:"attachments"`
+	ExpectsAnswer bool              `json:"expectsAnswer"`
+}
+
 func fileDeliveryRouteTaken(events []task.TaskEvent) (string, string) {
-	messageSendRequested := agentcontract.ToolTaskEventName("message_send", agentcontract.ToolTaskEventRequestedSuffix)
-	fileDeliverRequested := agentcontract.ToolTaskEventName("file_deliver", agentcontract.ToolTaskEventRequestedSuffix)
 	for _, event := range events {
-		switch event.Name {
-		case fileDeliverRequested:
+		if event.Name != agentcontract.TaskEventAgentAction {
+			continue
+		}
+		var action fileDeliveryModelAction
+		if json.Unmarshal([]byte(event.Body), &action) != nil {
+			continue
+		}
+		isReply := action.Action == "reply" || action.Action == "finish"
+		switch {
+		case action.Action == "continue" && action.ToolName == "message_send":
+			return messageSendRoute(action.ToolInput), string(action.ToolInput)
+		case isReply && len(action.Attachments) > 0:
 			return fileDeliveryRouteReplyAttachment, ""
-		case messageSendRequested:
-			return messageSendRoute(event.Body), event.Body
+		case isReply && action.ExpectsAnswer:
+			return fileDeliveryRouteAskedFirst, ""
 		}
 	}
 	return fileDeliveryRouteNone, ""
 }
 
-func messageSendRoute(requestedBody string) string {
-	var requested struct {
-		Input struct {
-			TargetType  string   `json:"targetType"`
-			PersonHint  string   `json:"personHint"`
-			PersonHints []string `json:"personHints"`
-		} `json:"input"`
+func messageSendRoute(toolInput json.RawMessage) string {
+	var input struct {
+		TargetType  string   `json:"targetType"`
+		PersonHint  string   `json:"personHint"`
+		PersonHints []string `json:"personHints"`
 	}
-	_ = json.Unmarshal([]byte(requestedBody), &requested)
-	input := requested.Input
+	_ = json.Unmarshal(toolInput, &input)
 	if input.TargetType != "directMessage" {
 		return "message_send " + input.TargetType
 	}
-	recipients := append([]string{input.PersonHint}, input.PersonHints...)
-	if strings.Contains(strings.Join(recipients, " "), "예시") {
+	recipients := strings.TrimSpace(strings.Join(append([]string{input.PersonHint}, input.PersonHints...), " "))
+	switch {
+	case strings.Contains(recipients, "예시"):
 		return fileDeliveryRouteColleagueDM
-	}
-	if strings.TrimSpace(strings.Join(recipients, "")) == "" || strings.Contains(strings.Join(recipients, " "), "샘플") {
+	case recipients == "":
 		return fileDeliveryRouteRequesterDM
+	case strings.Contains(recipients, "샘플"):
+		return fileDeliveryRouteNamedRequesterDM
 	}
-	return "message_send DM to " + strings.Join(recipients, ", ")
+	return "message_send DM to " + recipients
 }
 
 func writeFileDeliveryRouteEvidence(t *testing.T, caseName string, outcomes []fileDeliveryRouteOutcome) {
