@@ -1,4 +1,4 @@
-import { MalformedRequest } from "./personal/parse.ts";
+import { MalformedRequest, parseKeptAttachment } from "./personal/parse.ts";
 import type {
 	AskChoiceOptionDocument,
 	AskInteractionDocument,
@@ -253,12 +253,14 @@ function parseInputAttachment(value: unknown): InputAttachmentDocument {
 
 export function parseMessagePostRequest(value: unknown): MessagePostRequest {
 	const record = requireRecord(value, "message.post request");
+	const attachments = optionalArray(record, "attachments").map((entry) => requireRecord(entry, "attachment"));
 	const request: MessagePostRequest = {
 		threadID: optionalString(record, "threadID"),
 		channelID: optionalString(record, "channelID"),
 		channelName: optionalString(record, "channelName"),
-		message: requireString(record, "message"),
-		attachments: optionalArray(record, "attachments").map(parseReplyAttachment),
+		message: attachments.length > 0 ? (optionalString(record, "message") ?? "") : requireString(record, "message"),
+		attachments: attachments.filter((entry) => !("address" in entry)).map(parseReplyAttachment),
+		keptAttachments: attachments.filter((entry) => "address" in entry).map(parseKeptAttachment),
 	};
 	if (!request.threadID && !request.channelID && !request.channelName) {
 		throw new Error("message.post requires threadID, channelID, or channelName");

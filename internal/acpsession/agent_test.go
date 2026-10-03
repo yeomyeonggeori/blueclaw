@@ -30,6 +30,7 @@ type recordingLauncher struct {
 	mutex          sync.Mutex
 	launched       []agentruntime.TaskLaunchRequest
 	reply          string
+	attachments    []toolcontract.FileAttachment
 	taskRunID      string
 	launchedSignal chan agentruntime.TaskLaunchRequest
 }
@@ -46,6 +47,7 @@ func (launcher *recordingLauncher) Launch(_ context.Context, request agentruntim
 	return agentruntime.TaskLaunchResult{TurnResult: agentcontract.AgentTurnResult{
 		TaskRun:       agentcontract.TaskRun{TaskRunID: firstNonEmpty(request.ExistingTaskRunID, launcher.taskRunID), Status: agentcontract.TaskStatusCompleted},
 		FinishMessage: launcher.reply,
+		Attachments:   launcher.attachments,
 	}}, nil
 }
 
@@ -81,7 +83,7 @@ type recordingClient struct {
 	connection            *acp.ClientSideConnection
 	messages              []string
 	thoughts              []string
-	resourceLinks         []string
+	resourceLinks         []acp.ContentBlockResourceLink
 	deliveries            []Delivery
 	postedMessages        int
 	undeliveredBecause    string
@@ -101,7 +103,7 @@ func (client *recordingClient) SessionUpdate(ctx context.Context, notification a
 		client.thoughts = append(client.thoughts, chunk.Content.Text.Text)
 	}
 	if chunk := notification.Update.AgentMessageChunk; chunk != nil && chunk.Content.ResourceLink != nil {
-		client.resourceLinks = append(client.resourceLinks, chunk.Content.ResourceLink.Uri)
+		client.resourceLinks = append(client.resourceLinks, *chunk.Content.ResourceLink)
 	}
 	client.mutex.Unlock()
 	go client.reportDelivery(context.WithoutCancel(ctx), notification.Meta)
@@ -867,10 +869,10 @@ func TestAProgressReplyHandsTheSessionTheFileItAnnounces(t *testing.T) {
 func (client *recordingClient) waitForResourceLink() string {
 	for attempt := 0; attempt < 100; attempt++ {
 		client.mutex.Lock()
-		links := append([]string{}, client.resourceLinks...)
+		links := append([]acp.ContentBlockResourceLink{}, client.resourceLinks...)
 		client.mutex.Unlock()
 		if len(links) > 0 {
-			return links[0]
+			return links[0].Uri
 		}
 		time.Sleep(10 * time.Millisecond)
 	}

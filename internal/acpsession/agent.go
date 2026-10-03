@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -393,13 +394,25 @@ func attachmentUpdates(attachments []toolcontract.FileAttachment) []acp.SessionU
 		if devicePath == "" {
 			continue
 		}
-		name := strings.TrimSpace(attachment.Filename)
-		if name == "" {
-			name = filepath.Base(devicePath)
-		}
-		updates = append(updates, acp.UpdateAgentMessage(acp.ResourceLinkBlock(name, "file://"+devicePath)))
+		updates = append(updates, acp.UpdateAgentMessage(resourceLinkOf(attachment, devicePath)))
 	}
 	return updates
+}
+
+func resourceLinkOf(attachment toolcontract.FileAttachment, devicePath string) acp.ContentBlock {
+	name := strings.TrimSpace(attachment.Filename)
+	if name == "" {
+		name = filepath.Base(devicePath)
+	}
+	link := acp.ResourceLinkBlock(name, (&url.URL{Scheme: "file", Path: devicePath}).String())
+	if contentType := strings.TrimSpace(attachment.ContentType); contentType != "" {
+		link.ResourceLink.MimeType = &contentType
+	}
+	if attachment.SizeBytes > 0 {
+		sizeBytes := int(attachment.SizeBytes)
+		link.ResourceLink.Size = &sizeBytes
+	}
+	return link
 }
 
 func (agent *Agent) notify(ctx context.Context, sessionID acp.SessionId, update acp.SessionUpdate) error {

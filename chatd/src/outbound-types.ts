@@ -1,3 +1,5 @@
+import type { AttachmentAlreadyKept } from "./outgoing-attachment.ts";
+
 import type { VisibleContextMessageDocument } from "./visible-context.ts";
 
 export interface ReplyAttachmentDocument {
@@ -262,6 +264,7 @@ export interface MessagePostRequest {
 	channelName?: string;
 	message: string;
 	attachments?: ReplyAttachmentDocument[];
+	keptAttachments: AttachmentAlreadyKept[];
 }
 
 export interface MessagePostResponse {

@@ -104,10 +104,10 @@ function parseAttachments(record: Record<string, unknown>): AttachmentAlreadyKep
 	const given = record.attachments;
 	if (given === undefined) return [];
 	if (!Array.isArray(given)) throw new MalformedRequest("attachments must be a list");
-	return given.map((entry) => parseAttachment(asRecord(entry)));
+	return given.map((entry) => parseKeptAttachment(asRecord(entry)));
 }
 
-function parseAttachment(attachment: Record<string, unknown>): AttachmentAlreadyKept {
+export function parseKeptAttachment(attachment: Record<string, unknown>): AttachmentAlreadyKept {
 	return {
 		filename: requiredText(attachment, "filename"),
 		contentType: requiredText(attachment, "contentType"),

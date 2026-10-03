@@ -594,11 +594,7 @@ async function historyThreadIdForChannel(
 	adapter: PlatformChatAdapter,
 	requestDocument: { channelID?: string; channelName?: string },
 ): Promise<string> {
-	const channelID = await resolveMessagePostChannelID(adapter, {
-		channelID: requestDocument.channelID,
-		channelName: requestDocument.channelName,
-		message: "",
-	});
+	const channelID = await resolveMessagePostChannelID(adapter, requestDocument);
 	return adapter.encodeThreadId({ channelId: channelID });
 }
 
@@ -794,21 +790,31 @@ async function handleMessagePost(
 	requestBody: unknown,
 ): Promise<MessagePostResponse> {
 	const requestDocument = parseMessagePostRequest(requestBody);
+	const keptAttachments = requestDocument.keptAttachments;
+	if (keptAttachments.length > 0 && !(adapter instanceof BuzzAdapter)) {
+		throw new MalformedRequest(`${adapter.name} cannot link a file its messenger already keeps`);
+	}
 	const fileUploads = await buildFileUploads(requestDocument.attachments ?? []);
 	const message: AdapterPostableMessage =
 		fileUploads.length > 0 ? { markdown: requestDocument.message, files: fileUploads } : requestDocument.message;
 	if (requestDocument.threadID) {
-		const posted = await adapter.postMessage(requestDocument.threadID, message);
+		const posted =
+			adapter instanceof BuzzAdapter
+				? await adapter.postMessage(requestDocument.threadID, message, [], keptAttachments)
+				: await adapter.postMessage(requestDocument.threadID, message);
 		return { messageID: posted.id };
 	}
 	const channelID = await resolveMessagePostChannelID(adapter, requestDocument);
-	const posted = await adapter.postChannelMessage(channelID, message);
+	const posted =
+		adapter instanceof BuzzAdapter
+			? await adapter.postChannelMessage(channelID, message, keptAttachments)
+			: await adapter.postChannelMessage(channelID, message);
 	return { messageID: posted.id, channelID };
 }
 
 async function resolveMessagePostChannelID(
 	adapter: PlatformChatAdapter,
-	requestDocument: MessagePostRequest,
+	requestDocument: Pick<MessagePostRequest, "channelID" | "channelName">,
 ): Promise<string> {
 	// A channelID arrives from a model that may have reused whatever id it last
 	// saw. When the caller also names the channel, the name is resolved and has
