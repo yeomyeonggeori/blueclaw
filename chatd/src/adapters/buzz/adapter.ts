@@ -37,7 +37,7 @@ import {
 	type BuzzThreadId,
 } from "./types.ts";
 import type { NormalizedMessageEdit, ReactionSummary } from "../../visible-context.ts";
-import type { OutgoingAttachment } from "../../outgoing-attachment.ts";
+import type { AttachmentAlreadyKept, OutgoingAttachment } from "../../outgoing-attachment.ts";
 import { buildMessageBody, ensureUserDirectMessageChannel } from "./user-session.ts";
 import { catchUpIntervalMilliseconds, messagesSentSince } from "./catch-up.ts";
 import { deliveredMessagesInMemory, type DeliveredMessages } from "../../delivered-messages.ts";
@@ -669,9 +669,10 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		threadId: string,
 		message: AdapterPostableMessage,
 		extraTags: string[][] = [],
+		keptAttachments: AttachmentAlreadyKept[] = [],
 	): Promise<RawMessage<BuzzEvent>> {
 		const decoded = this.decodeThreadId(threadId);
-		const { body, mediaTags } = await this.renderPostableWithFiles(message);
+		const { body, mediaTags } = await this.renderPostableWithFiles(message, this.config.privateKeyHex, keptAttachments);
 		const tags: string[][] = [["h", decoded.channelId], ...mediaTags];
 		tags.push(...(await this.threadTags(decoded, extraTags)));
 		const event = await this.relay.publish(STREAM_MESSAGE_KIND, body, tags);
@@ -686,11 +687,12 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	private async renderPostableWithFiles(
 		message: AdapterPostableMessage,
 		signerSecretHex: string = this.config.privateKeyHex,
+		keptAttachments: AttachmentAlreadyKept[] = [],
 	): Promise<{ body: string; mediaTags: string[][] }> {
 		const files = typeof message === "object" && "files" in message ? (message.files ?? []) : [];
 		const text = this.converter.renderPostable(message);
-		if (files.length === 0) return { body: text, mediaTags: [] };
-		const attachments: OutgoingAttachment[] = [];
+		if (files.length === 0 && keptAttachments.length === 0) return { body: text, mediaTags: [] };
+		const attachments: OutgoingAttachment[] = [...keptAttachments];
 		for (const file of files) {
 			attachments.push({
 				filename: file.filename,
@@ -731,8 +733,12 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		return (answered ? threadTagsOf(answered).rootEventId : undefined) ?? answeredId;
 	}
 
-	async postChannelMessage(channelId: string, message: AdapterPostableMessage): Promise<RawMessage<BuzzEvent>> {
-		return this.postMessage(this.encodeThreadId({ channelId }), message);
+	async postChannelMessage(
+		channelId: string,
+		message: AdapterPostableMessage,
+		keptAttachments: AttachmentAlreadyKept[] = [],
+	): Promise<RawMessage<BuzzEvent>> {
+		return this.postMessage(this.encodeThreadId({ channelId }), message, [], keptAttachments);
 	}
 
 	async editMessage(

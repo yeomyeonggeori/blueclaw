@@ -3,6 +3,7 @@ package acpsession
 import (
 	"context"
 	"encoding/json"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 type connectorReplyRecord struct {
@@ -75,6 +77,74 @@ func TestAReplyIsRecordedSentOnceWithTheMessageTheRelayPosted(t *testing.T) {
 	}
 	if len(client.deliveries) != 1 || client.deliveries[0].ReplyTargetID != "buzz:conversation-1:message-7" {
 		t.Fatalf("the reply named %+v, expected the thread of the message it answers", client.deliveries)
+	}
+}
+
+func TestAReplyCarryingAFileNamesItsTypeAndIsRecordedSentOnceTheRelayPostsEach(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	answered := taskRunService.CreateTaskRun("person-sample", "conversation-1", "한 장짜리 PDF 만들어줘")
+	client := &recordingClient{}
+	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
+		TaskLauncher: &recordingLauncher{
+			reply:     "만들었습니다",
+			taskRunID: answered.TaskRunID,
+			attachments: []toolcontract.FileAttachment{{
+				DevicePath:  "/workspace/private/people/person-sample/분기 보고 100%.pdf",
+				Filename:    "분기 보고 100%.pdf",
+				ContentType: "application/pdf",
+				SizeBytes:   2048,
+			}},
+		},
+		Directory:    staticDirectory{},
+		TurnRouter:   scriptedRouter{},
+		TaskRunStore: taskRunService,
+	})
+	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
+
+	promptInThread(t, connection, sessionID, "buzz:conversation-1:message-7")
+
+	if len(client.resourceLinks) != 1 {
+		t.Fatalf("the reply handed over %d files, expected the one it made", len(client.resourceLinks))
+	}
+	link := client.resourceLinks[0]
+	if link.Name != "분기 보고 100%.pdf" || link.MimeType == nil || *link.MimeType != "application/pdf" || link.Size == nil || *link.Size != 2048 {
+		t.Fatalf("the file was handed over as %+v, expected its name, application/pdf and 2048 bytes", link)
+	}
+	if located, errorValue := url.Parse(link.Uri); errorValue != nil || located.Scheme != "file" || located.Path != "/workspace/private/people/person-sample/분기 보고 100%.pdf" {
+		t.Fatalf("the file was named by %q, which does not read back as the path it lives at", link.Uri)
+	}
+	if len(client.deliveries) != 2 {
+		t.Fatalf("the relay was asked to confirm %d posts, expected the words and the file each", len(client.deliveries))
+	}
+	sent := connectorRepliesRecorded(t, taskRunService, answered.TaskRunID, agentcontract.TaskEventConnectorReplySent)
+	if len(sent) != 1 || sent[0].DispatchID != "posted-1" {
+		t.Fatalf("the reply is recorded as sent %+v, expected once, as the first message the relay posted", sent)
+	}
+}
+
+func TestAReplyWhoseFileTheRelayCouldNotPostIsRecordedUndelivered(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	answered := taskRunService.CreateTaskRun("person-sample", "conversation-1", "한 장짜리 PDF 만들어줘")
+	client := &recordingClient{undeliveredBecause: "the messenger refused report.pdf with 413"}
+	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
+		TaskLauncher: &recordingLauncher{
+			taskRunID:   answered.TaskRunID,
+			attachments: []toolcontract.FileAttachment{{DevicePath: "/workspace/private/people/person-sample/report.pdf", Filename: "report.pdf", ContentType: "application/pdf"}},
+		},
+		Directory:    staticDirectory{},
+		TurnRouter:   scriptedRouter{},
+		TaskRunStore: taskRunService,
+	})
+	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
+
+	promptInThread(t, connection, sessionID, "buzz:conversation-1:message-7")
+
+	if sent := connectorRepliesRecorded(t, taskRunService, answered.TaskRunID, agentcontract.TaskEventConnectorReplySent); len(sent) != 0 {
+		t.Fatalf("a file the relay could not post is recorded as sent: %+v", sent)
+	}
+	failed := connectorRepliesRecorded(t, taskRunService, answered.TaskRunID, agentcontract.TaskEventConnectorReplyFailed)
+	if len(failed) != 1 || !strings.Contains(failed[0].Reason, "refused report.pdf with 413") {
+		t.Fatalf("the reply is recorded as failed %+v, expected once, with the reason the relay gave", failed)
 	}
 }
 
