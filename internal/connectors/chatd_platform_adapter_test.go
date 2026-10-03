@@ -131,6 +131,9 @@ func TestChatdPlatformAdapterUsesChatdEndpointsWithoutAuthorization(t *testing.T
 			if requestDocument.ReplyTargetID != "reply-target-1" {
 				t.Fatalf("expected progress reply target id, got %q", requestDocument.ReplyTargetID)
 			}
+			if requestDocument.AnsweringMessageID != "m1" {
+				t.Fatalf("expected progress to name the message it answers, got %q", requestDocument.AnsweringMessageID)
+			}
 			return jsonCapabilityResponse(http.StatusOK, `{}`), nil
 		case "/v1/platform/mattermost/reply.send":
 			var requestDocument capabilityReplyRequest
@@ -168,7 +171,7 @@ func TestChatdPlatformAdapterUsesChatdEndpointsWithoutAuthorization(t *testing.T
 		Endpoint:   "http://127.0.0.1:18090",
 		HTTPClient: httpClient,
 	})
-	replyTarget := ReplyTarget{ConversationID: "channel-1", ReplyTargetID: "reply-target-1", DedupeKey: "mattermost:channel-1:m1"}
+	replyTarget := ReplyTarget{ConversationID: "channel-1", ReplyTargetID: "reply-target-1", AnsweringMessageID: "m1", DedupeKey: "mattermost:channel-1:m1"}
 
 	platformIdentity, errorValue := adapter.ResolveIdentity(context.Background(), "user-1")
 	if errorValue != nil {

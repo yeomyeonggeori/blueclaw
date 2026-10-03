@@ -52,6 +52,7 @@ export interface ReplySendResponse {
 
 export interface ProgressRequest {
 	replyTargetID: string;
+	answeringMessageID?: string;
 }
 
 export interface ReactionRequest {

@@ -62,6 +62,7 @@ import type {
 	MessageSearchCandidateDocument,
 	MessageSearchRequest,
 	MessageSearchResponse,
+	ProgressRequest,
 	ReplyAttachmentDocument,
 	ReplySendRequest,
 	ReplySendResponse,
@@ -304,8 +305,14 @@ async function handleProgressStart(
 	requestBody: unknown,
 ): Promise<Record<string, never>> {
 	const requestDocument = parseProgressRequest(requestBody);
-	await adapter.startTyping(requestDocument.replyTargetID);
+	await adapter.startTyping(threadHoldingTheAnsweredMessage(adapter, requestDocument));
 	return {};
+}
+
+function threadHoldingTheAnsweredMessage(adapter: PlatformChatAdapter, request: ProgressRequest): string {
+	const answered = request.answeringMessageID?.trim();
+	if (!answered || !(adapter instanceof BuzzAdapter)) return request.replyTargetID;
+	return adapter.historyScopeThreadId(request.replyTargetID, answered);
 }
 
 async function handleProgressStop(): Promise<Record<string, never>> {

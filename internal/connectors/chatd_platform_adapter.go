@@ -61,11 +61,15 @@ func (adapter ChatdPlatformAdapter) ResolveIdentity(ctx context.Context, senderU
 }
 
 func (adapter ChatdPlatformAdapter) StartProgress(ctx context.Context, replyTarget ReplyTarget) error {
-	return adapter.post(ctx, "progress.start", capabilityProgressRequest{ReplyTargetID: replyTarget.ReplyTargetID}, nil)
+	return adapter.post(ctx, "progress.start", progressRequestFor(replyTarget), nil)
 }
 
 func (adapter ChatdPlatformAdapter) StopProgress(ctx context.Context, replyTarget ReplyTarget) error {
-	return adapter.post(ctx, "progress.stop", capabilityProgressRequest{ReplyTargetID: replyTarget.ReplyTargetID}, nil)
+	return adapter.post(ctx, "progress.stop", progressRequestFor(replyTarget), nil)
+}
+
+func progressRequestFor(replyTarget ReplyTarget) capabilityProgressRequest {
+	return capabilityProgressRequest{ReplyTargetID: replyTarget.ReplyTargetID, AnsweringMessageID: replyTarget.AnsweringMessageID}
 }
 
 func (adapter ChatdPlatformAdapter) AddReaction(ctx context.Context, target ReactionTarget) error {
