@@ -1,0 +1,172 @@
+package memory
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/yeomyeonggeori/bluememo"
+)
+
+const carriedFileSuffix = ".carrying"
+
+// CarryReport is what one carry forward did.
+type CarryReport struct {
+	Carried   int      `json:"carried"`
+	AlreadyAt []string `json:"alreadyAt,omitempty"`
+}
+
+// CarryForward brings memory written where blueclaw kept every subject's file
+// together into the file inside that subject's own workspace directory. It is
+// how a host that wrote memory under the old layout keeps it: nothing else
+// looks at the old path, so a start that skipped this would answer from an
+// empty memory and say nothing.
+//
+// A store is checkpointed before it is carried, because a file opened in WAL
+// mode holds what was written since its last checkpoint in a sidecar, and
+// carrying the database alone would truncate it to that checkpoint rather than
+// lose it outright. The carry then copies one file, so no partial move can
+// leave a store split across two directories.
+//
+// The copy is created inside the destination directory, which the POSIX
+// synchronizer has already made setgid to the subject, so the new file belongs
+// to the group that reads it. Carrying the bytes keeps the embeddings a rename
+// would keep and a re-ingest would not.
+//
+// A file already at the destination is never overwritten: both are left where
+// they are and named in the report, so a start can be made again once someone
+// has decided which to keep.
+func (stores *Stores) CarryForward(ctx context.Context) (CarryReport, error) {
+	report := CarryReport{}
+	oldDirectory := filepath.Join(stores.workspaceRootPath, ".blueclaw", "memory")
+	for _, scope := range oldLayoutScopes(oldDirectory) {
+		oldPath := scope.oldPath
+		destination, errorValue := stores.Path(scope.scope)
+		if errorValue != nil {
+			return report, fmt.Errorf("where %s belongs now: %w", oldPath, errorValue)
+		}
+		held, errorValue := holdsFile(destination)
+		if errorValue != nil {
+			return report, errorValue
+		}
+		if held {
+			report.AlreadyAt = append(report.AlreadyAt, destination)
+			continue
+		}
+		if errorValue := stores.carryOne(ctx, oldPath, destination); errorValue != nil {
+			return report, errorValue
+		}
+		report.Carried++
+	}
+	return report, nil
+}
+
+type oldLayoutFile struct {
+	oldPath string
+	scope   Scope
+}
+
+func oldLayoutScopes(oldDirectory string) []oldLayoutFile {
+	files := []oldLayoutFile{}
+	workspacePath := filepath.Join(oldDirectory, "workspace.db")
+	if held, _ := holdsFile(workspacePath); held {
+		files = append(files, oldLayoutFile{oldPath: workspacePath, scope: WorkspaceScope()})
+	}
+	for directory, scopeOf := range map[string]func(string) Scope{"persons": PersonScope, "circles": CircleScope} {
+		entries, errorValue := os.ReadDir(filepath.Join(oldDirectory, directory))
+		if errorValue != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".db") {
+				continue
+			}
+			subject := strings.TrimSuffix(entry.Name(), ".db")
+			files = append(files, oldLayoutFile{
+				oldPath: filepath.Join(oldDirectory, directory, entry.Name()),
+				scope:   scopeOf(subject),
+			})
+		}
+	}
+	return files
+}
+
+func (stores *Stores) carryOne(ctx context.Context, oldPath string, destination string) error {
+	if errorValue := checkpoint(ctx, oldPath, stores.configuration); errorValue != nil {
+		return fmt.Errorf("settle what %s holds in its log before carrying it: %w", oldPath, errorValue)
+	}
+	if errorValue := os.MkdirAll(filepath.Dir(destination), 0o700); errorValue != nil {
+		return fmt.Errorf("make room for %s: %w", destination, errorValue)
+	}
+	if errorValue := copyFile(oldPath, destination); errorValue != nil {
+		return errorValue
+	}
+	for _, sidecar := range []string{"-wal", "-shm"} {
+		_ = os.Remove(oldPath + sidecar)
+	}
+	if errorValue := os.Remove(oldPath); errorValue != nil {
+		return fmt.Errorf("take %s away once it is carried: %w", oldPath, errorValue)
+	}
+	return nil
+}
+
+// checkpoint opens a store only so that closing it folds what its log holds
+// into the database, leaving one file to carry.
+func checkpoint(ctx context.Context, path string, configuration bluememo.Configuration) error {
+	store, errorValue := bluememo.Open(ctx, path, configuration)
+	if errorValue != nil {
+		return errorValue
+	}
+	return store.Close()
+}
+
+func copyFile(from string, to string) error {
+	source, errorValue := os.Open(from)
+	if errorValue != nil {
+		return fmt.Errorf("read %s: %w", from, errorValue)
+	}
+	defer source.Close()
+	carrying := to + carriedFileSuffix
+	destination, errorValue := os.OpenFile(carrying, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o640)
+	if errorValue != nil {
+		return fmt.Errorf("write %s: %w", carrying, errorValue)
+	}
+	if _, errorValue = io.Copy(destination, source); errorValue != nil {
+		destination.Close()
+		_ = os.Remove(carrying)
+		return fmt.Errorf("carry %s to %s: %w", from, to, errorValue)
+	}
+	if errorValue = destination.Sync(); errorValue != nil {
+		destination.Close()
+		_ = os.Remove(carrying)
+		return fmt.Errorf("put %s on disk: %w", carrying, errorValue)
+	}
+	if errorValue = destination.Close(); errorValue != nil {
+		_ = os.Remove(carrying)
+		return fmt.Errorf("close %s: %w", carrying, errorValue)
+	}
+	if errorValue = os.Chmod(carrying, 0o640); errorValue != nil {
+		_ = os.Remove(carrying)
+		return fmt.Errorf("let the subject's group read %s: %w", carrying, errorValue)
+	}
+	if errorValue = os.Rename(carrying, to); errorValue != nil {
+		_ = os.Remove(carrying)
+		return fmt.Errorf("put %s in place: %w", to, errorValue)
+	}
+	return nil
+}
+
+func holdsFile(path string) (bool, error) {
+	information, errorValue := os.Stat(path)
+	if errors.Is(errorValue, os.ErrNotExist) {
+		return false, nil
+	}
+	if errorValue != nil {
+		return false, fmt.Errorf("look at %s: %w", path, errorValue)
+	}
+	return !information.IsDir(), nil
+}

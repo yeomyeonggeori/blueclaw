@@ -21,7 +21,16 @@ import (
 // test writes relates to what is already held.
 func Open(t *testing.T) *memory.Stores {
 	t.Helper()
-	return open(t, chooserAnswering(relationUnrelatedAnswer))
+	stores, _ := OpenWithRoot(t)
+	return stores
+}
+
+// OpenWithRoot gives the same Stores and the workspace root it keeps its files
+// under, for a test that has to put a file somewhere itself.
+func OpenWithRoot(t *testing.T) (*memory.Stores, string) {
+	t.Helper()
+	root := t.TempDir()
+	return openUnder(t, root, chooserAnswering(relationUnrelatedAnswer)), root
 }
 
 // OpenCorrecting gives a Stores whose judge reads every new statement as a
@@ -33,7 +42,12 @@ func OpenCorrecting(t *testing.T) *memory.Stores {
 
 func open(t *testing.T, chooser bluememo.Chooser) *memory.Stores {
 	t.Helper()
-	stores := memory.NewStores(t.TempDir(), bluememo.Configuration{
+	return openUnder(t, t.TempDir(), chooser)
+}
+
+func openUnder(t *testing.T, root string, chooser bluememo.Chooser) *memory.Stores {
+	t.Helper()
+	stores := memory.NewStores(root, bluememo.Configuration{
 		Embedder:       &bluememotest.HashEmbedder{},
 		EmbeddingModel: "test-embed",
 		Model:          EchoModel{},
