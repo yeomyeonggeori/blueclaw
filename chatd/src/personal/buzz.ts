@@ -555,7 +555,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 		this.require(actor);
 		const ranges = rangesOf((rangeHeader) => fetch(source.url, { headers: { Range: rangeHeader } }));
 		return withSpooledMedia(ranges, async (spooled) => {
-			const body = { body: Bun.file(spooled.path), digestHex: spooled.digestHex, sizeBytes: spooled.sizeBytes };
+			const body = { body: Bun.file(spooled.path).stream(), digestHex: spooled.digestHex, sizeBytes: spooled.sizeBytes };
 			const blob = await putBlob(this.settings.relayURL, actor.secret, body, source.contentType).catch((error: unknown) => {
 				if (error instanceof BlobRefused && error.willRefuseAgain) {
 					throw new MediaRefused(error.status, error.reason, spooled.digestHex, spooled.sizeBytes);
