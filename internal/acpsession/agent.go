@@ -243,11 +243,11 @@ func (agent *Agent) launchTurn(ctx context.Context, sessionID acp.SessionId, ses
 	}
 	turnResult := launchResult.TurnResult
 	agent.recordDecisionCalls(decided, turnResult.TaskRun.TaskRunID)
-	agent.deliverReply(ctx, sessionID, sessionTurn, turnResult)
+	agent.deliverTurnReply(ctx, sessionID, sessionTurn, turnResult)
 	return acp.PromptResponse{StopReason: stopReasonForTaskStatus(turnResult.TaskRun.Status)}, nil
 }
 
-func (agent *Agent) deliverReply(ctx context.Context, sessionID acp.SessionId, sessionTurn *connectors.SessionTurn, turnResult agentcontract.AgentTurnResult) {
+func (agent *Agent) deliverTurnReply(ctx context.Context, sessionID acp.SessionId, sessionTurn *connectors.SessionTurn, turnResult agentcontract.AgentTurnResult) {
 	if errorValue := sessionTurn.DeliverReply(ctx, turnResult); errorValue != nil {
 		agent.logger.Warn("acpsession.reply.undelivered", "sessionID", string(sessionID), "taskRunID", turnResult.TaskRun.TaskRunID, "error", errorValue.Error())
 	}
@@ -307,14 +307,15 @@ func inboundEventOf(messageContext MessageContext, launchRequest agentruntime.Ta
 	visibleContext.ConversationType = launchRequest.ConversationType
 	isThread := launchRequest.OriginIsThread
 	return connectors.PlatformInboundEvent{
-		Platform:       launchRequest.Platform,
-		ConversationID: launchRequest.ConversationID,
-		MessageID:      messageContext.MessageID,
-		SenderID:       visibleContext.Sender.SenderID,
-		ReplyTargetID:  launchRequest.ReplyTargetID,
-		IsThread:       &isThread,
-		Prompt:         launchRequest.Prompt,
-		Context:        visibleContext,
+		Platform:         launchRequest.Platform,
+		ConversationID:   launchRequest.ConversationID,
+		MessageID:        messageContext.MessageID,
+		SenderID:         visibleContext.Sender.SenderID,
+		ReplyTargetID:    launchRequest.ReplyTargetID,
+		IsThread:         &isThread,
+		Prompt:           launchRequest.Prompt,
+		ResponseLanguage: launchRequest.ResponseLanguage,
+		Context:          visibleContext,
 	}
 }
 
@@ -375,16 +376,8 @@ func (agent *Agent) checkpointSenderFor(sessionID acp.SessionId) agentcontract.A
 
 func (agent *Agent) replySenderFor(sessionID acp.SessionId) connectors.ReplySender {
 	return func(ctx context.Context, replyTarget connectors.ReplyTarget, reply connectors.OutboundReply) (string, error) {
-		return agent.deliverEach(ctx, sessionID, replyTarget.ReplyTargetID, replyUpdates(reply))
+		return agent.deliverReply(ctx, sessionID, replyTarget.ReplyTargetID, reply)
 	}
-}
-
-func replyUpdates(reply connectors.OutboundReply) []acp.SessionUpdate {
-	updates := []acp.SessionUpdate{}
-	if message := strings.TrimSpace(reply.Message); message != "" {
-		updates = append(updates, acp.UpdateAgentMessageText(message))
-	}
-	return append(updates, attachmentUpdates(reply.Attachments)...)
 }
 
 func attachmentUpdates(attachments []toolcontract.FileAttachment) []acp.SessionUpdate {

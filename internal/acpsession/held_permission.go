@@ -154,7 +154,7 @@ func (agent *Agent) resumeAnsweredTaskRun(ctx context.Context, sessionID acp.Ses
 		return
 	}
 	sessionTurn := agent.sessionTurns.OpenSessionTurn(ctx, inboundEventOf(MessageContext{}, launchRequest), requester.PersonID, agent.replySenderFor(sessionID))
-	agent.deliverReply(ctx, sessionID, sessionTurn, launchResult.TurnResult)
+	agent.deliverTurnReply(ctx, sessionID, sessionTurn, launchResult.TurnResult)
 }
 
 // The task this resumes was already routed, and asking the router again would

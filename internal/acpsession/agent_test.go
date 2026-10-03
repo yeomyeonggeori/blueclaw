@@ -87,6 +87,8 @@ type recordingClient struct {
 	deliveries            []Delivery
 	postedMessages        int
 	undeliveredBecause    string
+	refusedFiles          map[string]string
+	posted                []string
 	isSilent              bool
 	permissionAsked       []acp.RequestPermissionRequest
 	permissionAskedSignal chan acp.RequestPermissionRequest
@@ -96,28 +98,32 @@ type recordingClient struct {
 
 func (client *recordingClient) SessionUpdate(ctx context.Context, notification acp.SessionNotification) error {
 	client.mutex.Lock()
+	refusal := ""
 	if chunk := notification.Update.AgentMessageChunk; chunk != nil && chunk.Content.Text != nil {
 		client.messages = append(client.messages, chunk.Content.Text.Text)
+		client.posted = append(client.posted, "words:"+chunk.Content.Text.Text)
 	}
 	if chunk := notification.Update.AgentThoughtChunk; chunk != nil && chunk.Content.Text != nil {
 		client.thoughts = append(client.thoughts, chunk.Content.Text.Text)
 	}
 	if chunk := notification.Update.AgentMessageChunk; chunk != nil && chunk.Content.ResourceLink != nil {
 		client.resourceLinks = append(client.resourceLinks, *chunk.Content.ResourceLink)
+		client.posted = append(client.posted, "file:"+chunk.Content.ResourceLink.Name)
+		refusal = client.refusedFiles[chunk.Content.ResourceLink.Name]
 	}
 	client.mutex.Unlock()
-	go client.reportDelivery(context.WithoutCancel(ctx), notification.Meta)
+	go client.reportDelivery(context.WithoutCancel(ctx), notification.Meta, refusal)
 	return nil
 }
 
-func (client *recordingClient) reportDelivery(ctx context.Context, meta map[string]any) {
+func (client *recordingClient) reportDelivery(ctx context.Context, meta map[string]any, refusal string) {
 	delivery, isNamed := deliveryNamedIn(meta)
 	if !isNamed || client.isSilent {
 		return
 	}
 	client.mutex.Lock()
 	client.deliveries = append(client.deliveries, delivery)
-	undeliveredBecause := client.undeliveredBecause
+	undeliveredBecause := firstNonEmpty(refusal, client.undeliveredBecause)
 	if undeliveredBecause == "" {
 		client.postedMessages++
 	}
@@ -148,7 +154,7 @@ func deliveryNamedIn(meta map[string]any) (Delivery, bool) {
 }
 
 func (client *recordingClient) RequestPermission(ctx context.Context, request acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
-	client.reportDelivery(ctx, request.Meta)
+	client.reportDelivery(ctx, request.Meta, "")
 	client.mutex.Lock()
 	client.permissionAsked = append(client.permissionAsked, request)
 	choice := client.permissionChoice

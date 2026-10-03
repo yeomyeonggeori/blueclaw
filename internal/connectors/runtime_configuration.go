@@ -10,6 +10,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
 func (connectorRuntime *ConnectorRuntime) UseUnknownAccountResolver(unknownAccountResolver UnknownAccountResolver) {
@@ -83,6 +84,10 @@ type LaunchFailureCompleter interface {
 
 func (connectorRuntime *ConnectorRuntime) UseLaunchFailureCompleter(launchFailureCompleter LaunchFailureCompleter) {
 	connectorRuntime.launchFailureCompleter = launchFailureCompleter
+}
+
+func (connectorRuntime *ConnectorRuntime) UseNoticeLanguageModel(languageModel model.LanguageModelProvider) {
+	connectorRuntime.noticeLanguageModel = languageModel
 }
 
 type ReplyGenerator interface {

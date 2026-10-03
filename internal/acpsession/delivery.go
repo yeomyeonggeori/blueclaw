@@ -13,6 +13,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 const (
@@ -43,6 +44,7 @@ var (
 	errReportNamesNoDelivery    = errors.New("a delivery report names no delivery")
 	errRelayLeftBeforeReporting = errors.New("the relay went away before it said whether the person was reached")
 	errAnsweredWithoutReporting = errors.New("the relay answered the question without saying whether it reached the person")
+	errFileHasNoPath            = errors.New("the file names no path on this machine, and the relay posts a file only by its path")
 )
 
 type deliveryOutcome struct {
@@ -106,18 +108,50 @@ func (agent *Agent) settleUndelivered(params json.RawMessage) (any, error) {
 	return map[string]any{}, agent.deliveries.settle(report.DeliveryID, deliveryOutcome{failure: failure})
 }
 
-func (agent *Agent) deliverEach(ctx context.Context, sessionID acp.SessionId, replyTargetID string, updates []acp.SessionUpdate) (string, error) {
+func (agent *Agent) deliverReply(ctx context.Context, sessionID acp.SessionId, replyTargetID string, reply connectors.OutboundReply) (string, error) {
+	fileMessageID, errorValue := agent.deliverFiles(ctx, sessionID, replyTargetID, reply.Attachments)
+	if errorValue != nil {
+		return "", errorValue
+	}
+	message := strings.TrimSpace(reply.Message)
+	if message == "" {
+		return fileMessageID, nil
+	}
+	return agent.deliver(ctx, sessionID, replyTargetID, acp.UpdateAgentMessageText(message))
+}
+
+func (agent *Agent) deliverFiles(ctx context.Context, sessionID acp.SessionId, replyTargetID string, attachments []toolcontract.FileAttachment) (string, error) {
 	firstMessageID := ""
-	for _, update := range updates {
-		messageID, errorValue := agent.deliver(ctx, sessionID, replyTargetID, update)
+	notDelivered := &connectors.FilesNotDelivered{}
+	for _, attachment := range attachments {
+		messageID, errorValue := agent.deliverFile(ctx, sessionID, replyTargetID, attachment)
 		if errorValue != nil {
-			return "", errorValue
+			notDelivered.Undelivered = append(notDelivered.Undelivered, attachment)
+			notDelivered.Reason = joinedReasons(notDelivered.Reason, errorValue.Error())
+			continue
 		}
-		if firstMessageID == "" {
-			firstMessageID = messageID
-		}
+		notDelivered.Delivered = append(notDelivered.Delivered, attachment)
+		firstMessageID = firstNonEmpty(firstMessageID, messageID)
+	}
+	if len(notDelivered.Undelivered) > 0 {
+		return "", notDelivered
 	}
 	return firstMessageID, nil
+}
+
+func (agent *Agent) deliverFile(ctx context.Context, sessionID acp.SessionId, replyTargetID string, attachment toolcontract.FileAttachment) (string, error) {
+	devicePath := strings.TrimSpace(attachment.DevicePath)
+	if devicePath == "" {
+		return "", errFileHasNoPath
+	}
+	return agent.deliver(ctx, sessionID, replyTargetID, acp.UpdateAgentMessage(resourceLinkOf(attachment, devicePath)))
+}
+
+func joinedReasons(reasons string, reason string) string {
+	if reasons == "" || strings.Contains(reasons, reason) {
+		return firstNonEmpty(reasons, reason)
+	}
+	return reasons + "; " + reason
 }
 
 func (agent *Agent) deliver(ctx context.Context, sessionID acp.SessionId, replyTargetID string, update acp.SessionUpdate) (string, error) {

@@ -1387,6 +1387,8 @@ func fileExactEditFailure(stage string, path string, editIndex int, matchCount i
 	return result
 }
 
+const fileDeliverStagedContent = "files staged: they go out with the final reply and have not reached the person yet"
+
 func (toolCatalogBuilder *ToolCatalogBuilder) attachFileTool(toolContext context.Context, input fileAttachToolInput, handlerContext toolHandlerContext) (toolcontract.ToolResult, error) {
 	attachmentInputs := normalizeFileAttachInputs(input)
 	if len(attachmentInputs) == 0 {
@@ -1407,7 +1409,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) attachFileTool(toolContext context
 		"attachmentCount": len(attachments),
 	}))
 	return toolcontract.ToolResult{
-		Output:      toolcontract.ToolOutput{Content: "files delivered", Data: data},
+		Output:      toolcontract.ToolOutput{Content: fileDeliverStagedContent, Data: data},
 		Attachments: attachments,
 	}, nil
 }
