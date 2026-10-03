@@ -269,7 +269,7 @@ func (agent *Agent) taskLaunchRequestFor(session openSession, sessionID acp.Sess
 		RequesterEmail:          requester.Email,
 		RecordCatalog:           session.catalog(),
 		OriginReplyTargetID:     replyTargetID,
-		OriginIsThread:          addressing.IsThread || messageContext.IsThread,
+		OriginIsThread:          messageContext.isThread(addressing),
 		ProfileName:             defaultProfileName,
 		Platform:                addressing.Platform,
 		ConversationID:          addressing.ConversationID,

@@ -164,10 +164,7 @@ func (connectorRuntime *ConnectorRuntime) findPriorTaskContext(personID string, 
 		if !taskRunCanProvidePriorContext(taskRun) {
 			continue
 		}
-		if taskRun.OriginConversationID != event.ConversationID {
-			continue
-		}
-		if !taskRunMatchesReplyTarget(taskRun, event) {
+		if !taskRunSharesMessageThread(taskRun, event) {
 			continue
 		}
 		if time.Since(taskRun.UpdatedAt) > 72*time.Hour {
@@ -210,15 +207,6 @@ func taskRunCanProvidePriorContext(taskRun task.TaskRun) bool {
 	default:
 		return false
 	}
-}
-
-func taskRunMatchesReplyTarget(taskRun task.TaskRun, event PlatformInboundEvent) bool {
-	eventReplyTargetID := strings.TrimSpace(event.ReplyTargetID)
-	taskReplyTargetID := strings.TrimSpace(taskRun.OriginReplyTargetID)
-	if eventReplyTargetID != "" {
-		return taskReplyTargetID == eventReplyTargetID
-	}
-	return taskReplyTargetID == ""
 }
 
 func priorTaskContextForTaskRun(taskRun task.TaskRun, taskEvents []task.TaskEvent) agentcontract.PriorTaskContext {

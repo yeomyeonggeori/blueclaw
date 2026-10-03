@@ -129,3 +129,125 @@ func TestTheOnlyOpenWaitInTheConversationIsNotTakenFromAnotherThread(t *testing.
 		t.Fatal("a reply in the patent thread did not find its wait")
 	}
 }
+
+func rootMessage(messageID string, replyTargetID string) PlatformInboundEvent {
+	event := testInboundEvent(messageID)
+	event.ConversationID = "direct-1"
+	event.ReplyTargetID = replyTargetID
+	isThread := false
+	event.IsThread = &isThread
+	return event
+}
+
+func seedWaitingQuestionAtRoot(t *testing.T, connectorRuntime *ConnectorRuntime, rootMessageID string) task.TaskRun {
+	t.Helper()
+	running := seedAbandonedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{
+		ConversationID: "direct-1",
+		ReplyTargetID:  rootMessageID,
+	}, "clock me out")
+	connectorRuntime.taskRunService.AppendTaskEvent(running.TaskRunID, agentcontract.TaskEventAskRequested, `{"kind":"input","question":"Which time should I record?"}`)
+	waiting, errorValue := connectorRuntime.taskRunService.PauseTaskRun(running.TaskRunID, task.TaskStatusWaitingUserInput, "")
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	return waiting
+}
+
+func TestARootMessageDoesNotContinueAWaitingRunStartedAtRoot(t *testing.T) {
+	connectorRuntime, _, _ := newStubbedTestConnectorRuntime(t)
+	taskWaitRepository := task.NewInMemoryTaskWaitTokenRepository()
+	connectorRuntime.UseTaskWaitTokenRepository(taskWaitRepository)
+	waiting := seedWaitingQuestionAtRoot(t, connectorRuntime, "message-clock-out")
+	now := time.Now().UTC()
+	if errorValue := taskWaitRepository.InsertTaskWaitToken(task.TaskWaitToken{
+		WaitID:         "wait-clock-out",
+		TaskRunID:      waiting.TaskRunID,
+		PersonID:       "person-1",
+		Platform:       "buzz",
+		ConversationID: "direct-1",
+		ReplyTargetID:  "dispatch-question",
+		ThreadRootID:   "message-clock-out",
+		Kind:           "input",
+		State:          "open",
+		ExpiresAt:      now.Add(time.Hour),
+		CreatedAt:      now,
+	}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	for _, root := range []PlatformInboundEvent{
+		rootMessage("message-weather", "message-weather"),
+		rootMessage("message-weather", "message-clock-out"),
+	} {
+		resolution := connectorRuntime.resolveInboundTaskWait("person-1", "buzz", root)
+		if resolution.HasTaskWaitToken {
+			t.Fatalf("a root message took the root-started run's wait: %+v", resolution)
+		}
+		if _, isFound := connectorRuntime.findPendingAskInteraction("person-1", "", root, resolution); isFound {
+			t.Fatal("a root message was offered as the answer to the root-started run's question")
+		}
+		if _, isFound := connectorRuntime.findActiveGoal("person-1", "", root, resolution); isFound {
+			t.Fatal("a root message inherited the root-started run's goal")
+		}
+	}
+
+	replyInThread := threadReply("message-time", "message-clock-out")
+	resolution := connectorRuntime.resolveInboundTaskWait("person-1", "buzz", replyInThread)
+	if !resolution.HasTaskWaitToken || resolution.TaskWaitToken.TaskRunID != waiting.TaskRunID {
+		t.Fatalf("a reply in the run's thread did not find its wait: %+v", resolution)
+	}
+	interaction, isFound := connectorRuntime.findPendingAskInteraction("person-1", "", replyInThread, resolution)
+	if !isFound || interaction.TaskRunID != waiting.TaskRunID {
+		t.Fatalf("a reply in the run's thread did not find its question: found=%v %+v", isFound, interaction)
+	}
+}
+
+func TestARootMessageDoesNotSteerARunStartedAtRoot(t *testing.T) {
+	connectorRuntime, _, _ := newStubbedTestConnectorRuntime(t)
+	running := seedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{
+		ConversationID: "direct-1",
+		ReplyTargetID:  "message-report",
+	}, "write the weekly report")
+
+	if _, isFound := connectorRuntime.latestRunningConversationTask("person-1", rootMessage("message-lunch", "message-lunch")); isFound {
+		t.Fatal("a root message was routed to the run another root message started")
+	}
+	found, isFound := connectorRuntime.latestRunningConversationTask("person-1", threadReply("message-shorter", "message-report"))
+	if !isFound || found.TaskRunID != running.TaskRunID {
+		t.Fatalf("a reply in the run's thread did not reach it: found=%v %+v", isFound, found)
+	}
+}
+
+func TestAnApprovalPayloadStillAnswersFromARootMessage(t *testing.T) {
+	connectorRuntime, _, _ := newStubbedTestConnectorRuntime(t)
+	taskWaitRepository := task.NewInMemoryTaskWaitTokenRepository()
+	connectorRuntime.UseTaskWaitTokenRepository(taskWaitRepository)
+	waiting := seedWaitingApprovalInThread(t, connectorRuntime, "thread-delete")
+	now := time.Now().UTC()
+	if errorValue := taskWaitRepository.InsertTaskWaitToken(task.TaskWaitToken{
+		WaitID:         "wait-delete",
+		TaskRunID:      waiting.TaskRunID,
+		PersonID:       "person-1",
+		Platform:       "buzz",
+		ConversationID: "direct-1",
+		ReplyTargetID:  "dispatch-approval",
+		ThreadRootID:   "thread-delete",
+		Kind:           "approval",
+		State:          "open",
+		ExpiresAt:      now.Add(time.Hour),
+		CreatedAt:      now,
+	}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	button := rootMessage("message-button", "message-button")
+	button.LegacyFields = map[string]interface{}{"waitID": "wait-delete"}
+
+	resolution := connectorRuntime.resolveInboundTaskWait("person-1", "buzz", button)
+	if !resolution.HasTaskWaitToken || resolution.Reason != "payload_wait_id" {
+		t.Fatalf("the approval payload did not resolve its wait: %+v", resolution)
+	}
+	approval, isFound := connectorRuntime.findPendingApproval("person-1", "", button, resolution)
+	if !isFound || approval.TaskRun.TaskRunID != waiting.TaskRunID {
+		t.Fatalf("the approval payload did not reach its approval: found=%v %+v", isFound, approval.TaskRun)
+	}
+}

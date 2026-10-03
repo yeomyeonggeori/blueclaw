@@ -4,6 +4,7 @@ export type NormalizedInboundEvent = {
   messageID: string;
   senderID: string;
   replyTargetID: string;
+  isThread: boolean;
   prompt: string;
   context: unknown;
 };

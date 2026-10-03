@@ -131,11 +131,7 @@ func (connectorRuntime *ConnectorRuntime) resolveOpenInteractions(ctx context.Co
 	turn.requesterEmail = connectorRuntime.requesterEmailForEvent(turn.personID, turn.event)
 	turn.taskWaitResolution = connectorRuntime.resolveInboundTaskWait(turn.personID, turn.platform, turn.event)
 	turn.engagedAckEmojiName = connectorRuntime.applyEngagedAckReaction(ctx, turn.platform, turn.adapter, turn.event,
-		turn.event.Context.Addressing.BotMentioned || turn.taskWaitResolution.HasTaskWaitToken || turn.taskWaitResolution.IsAmbiguous)
-	if turn.taskWaitResolution.IsAmbiguous {
-		result, errorValue := connectorRuntime.handleAmbiguousTaskWait(ctx, turn.platform, turn.adapter, turn.event, turn.replyTarget, turn.personID, turn.requesterEmail, turn.personAccess, turn.taskWaitResolution, turn.engagedAckEmojiName, turn.sendReply)
-		return result, true, errorValue
-	}
+		turn.event.Context.Addressing.BotMentioned || turn.taskWaitResolution.HasTaskWaitToken)
 	return connectorRuntime.settleOpenInteractions(ctx, turn)
 }
 

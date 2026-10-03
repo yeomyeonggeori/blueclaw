@@ -722,6 +722,8 @@ func CalendarEventLifecycleAcceptanceScenario(artifactDirectoryPath string) Virt
 			},
 			{
 				Prompt:         "확인",
+				ReplyTargetID:  "virtual-message-003",
+				IsThread:       threadReply(),
 				RouterApproval: "approve",
 				ActionResponses: []string{
 					actionFinishMessage("제품 회고 일정을 삭제했습니다.", "obs-002"),
@@ -1317,6 +1319,8 @@ func AskChoiceReplyAcceptanceScenario(artifactDirectoryPath string) VirtualSessi
 			ExpectedReplyFragments: []string{"어느 쪽으로 진행할까요?"},
 		}, {
 			Prompt:          "두 번째",
+			ReplyTargetID:   "virtual-message-001",
+			IsThread:        threadReply(),
 			RouterTaskShape: agentcontract.TaskShapeImmediateReply,
 			ActionResponses: []string{
 				actionFinishMessage("두 번째로 진행하겠습니다."),
@@ -1328,9 +1332,59 @@ func AskChoiceReplyAcceptanceScenario(artifactDirectoryPath string) VirtualSessi
 	}
 }
 
+func threadReply() *bool {
+	isThread := true
+	return &isThread
+}
+
 func AskChoiceReplyOverACPScenario(artifactDirectoryPath string) VirtualSessionScenario {
 	scenario := AskChoiceReplyAcceptanceScenario(artifactDirectoryPath)
 	scenario.Name = "ask_choice_reply_over_acp"
+	scenario.IsDeliveredOverACP = true
+	return scenario
+}
+
+func AskRootMessageStartsATaskScenario(artifactDirectoryPath string) VirtualSessionScenario {
+	return VirtualSessionScenario{
+		Name:                  "ask_root_message_starts_a_task",
+		ArtifactDirectoryPath: artifactDirectoryPath,
+		AllowedTools:          []string{"conversation_history", "memory_search", "ask_input"},
+		Turns: []VirtualTurn{{
+			Prompt:                 "둘 중 하나 고르게 해줘",
+			RouterRequiredEvidence: []string{toolcontract.AskInputToolName},
+			ActionResponses: []string{
+				actionReplyExpectingAnswer("어느 쪽으로 진행할까요? 첫 번째 또는 두 번째 중에서 알려 주세요."),
+			},
+			ExpectedToolCalls:  []string{"ask_input"},
+			ExpectedEvents:     []string{agentcontract.TaskEventAskRequested},
+			ExpectedTaskStatus: task.TaskStatusWaitingUserInput,
+		}, {
+			Prompt:       "두 번째",
+			RouterChoice: "두 번째",
+			ActionResponses: []string{
+				actionFinishMessage("새 요청으로 받았습니다."),
+			},
+			ForbiddenEvents:        []string{agentcontract.TaskEventAskResolved},
+			ExpectedReplyFragments: []string{"새 요청"},
+			ExpectedTaskStatus:     task.TaskStatusCompleted,
+		}, {
+			Prompt:          "두 번째",
+			ReplyTargetID:   "virtual-message-001",
+			IsThread:        threadReply(),
+			RouterTaskShape: agentcontract.TaskShapeImmediateReply,
+			ActionResponses: []string{
+				actionFinishMessage("두 번째로 진행하겠습니다."),
+			},
+			ExpectedEvents:         []string{agentcontract.TaskEventAskResolved},
+			ExpectedReplyFragments: []string{"두 번째"},
+			ExpectedTaskStatus:     task.TaskStatusCompleted,
+		}},
+	}
+}
+
+func AskRootMessageStartsATaskOverACPScenario(artifactDirectoryPath string) VirtualSessionScenario {
+	scenario := AskRootMessageStartsATaskScenario(artifactDirectoryPath)
+	scenario.Name = "ask_root_message_starts_a_task_over_acp"
 	scenario.IsDeliveredOverACP = true
 	return scenario
 }
@@ -1370,6 +1424,8 @@ func DirectMessageSendConfirmAcceptanceScenario(artifactDirectoryPath string) Vi
 			ExpectedTaskStatus:     task.TaskStatusWaitingApproval,
 		}, {
 			Prompt:         "확인",
+			ReplyTargetID:  "virtual-message-001",
+			IsThread:       threadReply(),
 			RouterApproval: "approve",
 			ActionResponses: []string{
 				actionFinishMessage("테스트이에게 DM을 보냈습니다.", "obs-002"),
@@ -1419,6 +1475,8 @@ func ChannelPostAcceptanceScenario(artifactDirectoryPath string) VirtualSessionS
 			ExpectedTaskStatus:     task.TaskStatusWaitingApproval,
 		}, {
 			Prompt:         "확인",
+			ReplyTargetID:  "virtual-message-001",
+			IsThread:       threadReply(),
 			RouterApproval: "approve",
 			ActionResponses: []string{
 				actionFinishMessage("announcements 채널에 공지를 올렸습니다.", "obs-002"),

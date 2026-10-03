@@ -300,7 +300,7 @@ func (connectorRuntime *ConnectorRuntime) latestRecentlyFinishedConversationTask
 	isFound := false
 	cutoff := time.Now().Add(-recentlyFinishedTaskFollowUpWindow)
 	for _, taskRun := range connectorRuntime.taskRunService.ListTaskRunByPersonID(personID) {
-		if !taskRunMatchesMessageScope(taskRun, event) {
+		if !taskRunSharesMessageThread(taskRun, event) {
 			continue
 		}
 		if isTaskControlActiveStatus(taskRun.Status) {
@@ -321,7 +321,7 @@ func (connectorRuntime *ConnectorRuntime) latestCurrentConversationActiveTask(pe
 	var latestTaskRun task.TaskRun
 	isFound := false
 	for _, taskRun := range connectorRuntime.activeTaskRunsForPerson(personID) {
-		if !taskRunMatchesMessageScope(taskRun, event) {
+		if !taskRunSharesMessageThread(taskRun, event) {
 			continue
 		}
 		if !isFound || taskRun.UpdatedAt.After(latestTaskRun.UpdatedAt) {
@@ -336,7 +336,7 @@ func (connectorRuntime *ConnectorRuntime) latestRunningConversationTask(personID
 	var latestTaskRun task.TaskRun
 	isFound := false
 	for _, taskRun := range connectorRuntime.activeTaskRunsForPerson(personID) {
-		if !taskRunMatchesMessageScope(taskRun, event) || taskRun.Status == task.TaskStatusWaitingApproval || taskRun.Status == task.TaskStatusWaitingUserInput {
+		if !taskRunSharesMessageThread(taskRun, event) || taskRun.Status == task.TaskStatusWaitingApproval || taskRun.Status == task.TaskStatusWaitingUserInput {
 			continue
 		}
 		if !isFound || taskRun.UpdatedAt.After(latestTaskRun.UpdatedAt) {

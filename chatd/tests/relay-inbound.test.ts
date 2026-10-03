@@ -16,6 +16,7 @@ function inboundEvent(): NormalizedInboundEvent {
     messageID: 'message-1',
     senderID: 'person-1',
     replyTargetID: 'buzz:room-1',
+    isThread: false,
     prompt: 'hello',
     context: { inputAttachments: [] },
   };

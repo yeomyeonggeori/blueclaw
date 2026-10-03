@@ -106,9 +106,8 @@ async function forwardNormalizedEvent(
   message: Message,
   eventID?: string,
 ): Promise<void> {
-  const scopeThreadId = adapter.historyScopeThreadId(thread.id, message.id);
-  const threadRootID = adapter.threadRootIdOf?.(message.raw);
-  const conversationID = adapter.historyScopeThreadId(thread.id, threadRootID ?? message.id);
+  const routing = normalizedInboundRoutingOf(adapter, thread, message);
+  const scopeThreadId = routing.historyScopeThreadID;
   // A message written under a root is read against that root and its replies. A
   // message that starts its own exchange is read against the other exchanges
   // this place holds, which is what they opened with and not what was said
@@ -122,10 +121,11 @@ async function forwardNormalizedEvent(
   const addressing = adapter.addressingOf(message.raw);
   const event: NormalizedInboundEvent & { eventID?: string } = {
     platform,
-    conversationID,
+    conversationID: routing.conversationID,
     messageID: message.id,
     senderID: message.author.userId,
-    replyTargetID: thread.id,
+    replyTargetID: routing.replyTargetID,
+    isThread: routing.isThread,
     prompt: message.text,
     context: {
       ...context,
