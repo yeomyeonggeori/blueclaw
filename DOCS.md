@@ -387,7 +387,7 @@ Names are lowercased, reduced to `[a-z0-9_-]` and capped at 31 characters, with 
 
 UIDs and GIDs are allocated from 100000 upward through a persisted table, which also adopts existing `bc_` users and groups, so a person keeps the same numeric identity across restarts and file ownership does not drift. Resolving an identity fails closed: an unknown user or group is an error and never falls back to the daemon's own identity.
 
-On macOS the helper creates identities through `dscl` and `dseditgroup` and reads accounts from Directory Service; projected people get `/usr/bin/false` as a shell and are hidden from the login window. On Linux it uses `useradd`, `groupadd` and `usermod`.
+On macOS the helper creates identities through `dscl` and `dseditgroup` and reads accounts from Directory Service; projected people get `/usr/bin/false` as a shell and are hidden from the login window. On Linux it uses `useradd`, `groupadd` and `usermod`. A circle group that the policy no longer declares and no `circles/<id>` folder still uses is deleted on the next sync (`groupdel`, or `dscl -delete` on macOS); a folder kept because it still holds something keeps its group.
 
 ## Workspace layout
 

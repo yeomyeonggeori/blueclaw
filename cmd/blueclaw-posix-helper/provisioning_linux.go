@@ -14,6 +14,10 @@ func createGroup(name string, groupID uint32) error {
 	return runCommand("groupadd", "--system", "--gid", formatID(groupID), name)
 }
 
+func deleteGroup(name string) error {
+	return runCommand("groupdel", name)
+}
+
 func setGroupID(name string, groupID uint32) error {
 	return runCommand("groupmod", "--gid", formatID(groupID), name)
 }
