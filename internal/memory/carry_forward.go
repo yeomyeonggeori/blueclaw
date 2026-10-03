@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
+	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/bluememo"
 )
 
@@ -20,6 +21,7 @@ type CarryReport struct {
 	Carried int      `json:"carried"`
 	Adopted int      `json:"adopted"`
 	Left    []string `json:"left"`
+	Removed []string `json:"removed"`
 }
 
 // CarryForward brings memory written where blueclaw kept every subject's file
@@ -74,7 +76,47 @@ func (stores *Stores) CarryForward(ctx context.Context) (CarryReport, error) {
 		}
 		report.Carried++
 	}
+	if errorValue := stores.removeTheFolderOfAPlacelessCircle(policy.AdminCircleID, &report); errorValue != nil {
+		return report, errorValue
+	}
 	return report, nil
+}
+
+// removeTheFolderOfAPlacelessCircle takes away the folder an earlier carry
+// made for a circle that holds no directory. Only its memory files are
+// deleted; a folder that still holds anything else is left and named, so a
+// file a person put there is never removed.
+func (stores *Stores) removeTheFolderOfAPlacelessCircle(circleID string, report *CarryReport) error {
+	folder := security.CircleDirectoryPath(stores.workspaceRootPath, circleID)
+	if _, errorValue := os.Stat(folder); errors.Is(errorValue, os.ErrNotExist) {
+		return nil
+	} else if errorValue != nil {
+		return fmt.Errorf("look at %s: %w", folder, errorValue)
+	}
+	protected := security.ProtectedDirectoryPath(folder)
+	for _, name := range []string{memoryFileName, memoryFileName + "-wal", memoryFileName + "-shm", memoryFileName + carriedFileSuffix} {
+		if errorValue := os.Remove(filepath.Join(protected, name)); errorValue != nil && !errors.Is(errorValue, os.ErrNotExist) {
+			return fmt.Errorf("remove the memory of the %s circle, which has no place: %w", circleID, errorValue)
+		}
+	}
+	for _, directory := range []string{protected, folder} {
+		entries, errorValue := os.ReadDir(directory)
+		if errors.Is(errorValue, os.ErrNotExist) {
+			continue
+		}
+		if errorValue != nil {
+			return errorValue
+		}
+		if len(entries) > 0 {
+			report.Left = append(report.Left, directory)
+			return nil
+		}
+		if errorValue := os.Remove(directory); errorValue != nil {
+			return fmt.Errorf("remove %s: %w", directory, errorValue)
+		}
+	}
+	report.Removed = append(report.Removed, folder)
+	return nil
 }
 
 type oldLayoutFile struct {

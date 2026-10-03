@@ -214,3 +214,46 @@ func TestTheAdminCirclesOldFileIsLeftWhereItIs(t *testing.T) {
 		t.Fatalf("circles/admin was made (%v); nothing sets up its group, so nobody could read it", errorValue)
 	}
 }
+
+func TestTheAdminCirclesFolderIsRemovedWhenItHoldsOnlyMemory(t *testing.T) {
+	stores, root := memorytest.OpenWithRoot(t)
+	protected := filepath.Join(root, "circles", "admin", ".protected")
+	if errorValue := os.MkdirAll(protected, 0o700); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	writeOldStore(t, filepath.Join(protected, "memory.db"), "the board meets on the first Monday")
+
+	report, errorValue := stores.CarryForward(context.Background())
+	if errorValue != nil {
+		t.Fatalf("carry the memory forward: %v", errorValue)
+	}
+	if _, errorValue := os.Stat(filepath.Join(root, "circles", "admin")); !os.IsNotExist(errorValue) {
+		t.Fatalf("circles/admin is still there (%v); report %+v", errorValue, report)
+	}
+	if len(report.Removed) != 1 {
+		t.Fatalf("report %+v names no removed folder", report)
+	}
+}
+
+func TestTheAdminCirclesFolderStaysWhenSomebodyPutAFileThere(t *testing.T) {
+	stores, root := memorytest.OpenWithRoot(t)
+	folder := filepath.Join(root, "circles", "admin")
+	if errorValue := os.MkdirAll(filepath.Join(folder, ".protected"), 0o700); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	writeOldStore(t, filepath.Join(folder, ".protected", "memory.db"), "the board meets on the first Monday")
+	if errorValue := os.WriteFile(filepath.Join(folder, "agenda.md"), []byte("이샘플 presents"), 0o600); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	report, errorValue := stores.CarryForward(context.Background())
+	if errorValue != nil {
+		t.Fatalf("carry the memory forward: %v", errorValue)
+	}
+	if _, errorValue := os.Stat(filepath.Join(folder, "agenda.md")); errorValue != nil {
+		t.Fatalf("a file somebody put in circles/admin was touched: %v", errorValue)
+	}
+	if len(report.Left) != 1 || report.Left[0] != folder {
+		t.Fatalf("report %+v; the folder kept for its file must be named", report)
+	}
+}
