@@ -70,6 +70,14 @@ func effectivePersonCircles(personPolicy PersonPolicy) []string {
 	return normalizePolicyStrings(circles)
 }
 
+// CircleHoldsADirectory says whether a circle is a place people share. The
+// admin circle says what a person may do and has no directory, group or
+// memory of its own.
+func CircleHoldsADirectory(circleID string) bool {
+	normalizedCircleID := strings.ToLower(strings.TrimSpace(circleID))
+	return normalizedCircleID != "" && normalizedCircleID != AdminCircleID
+}
+
 func EnsureRequesterDefaults(personAccess PersonAccess) PersonAccess {
 	personAccess.Circles = normalizePolicyStrings(append([]string{MemberCircleID}, personAccess.Circles...))
 	return personAccess

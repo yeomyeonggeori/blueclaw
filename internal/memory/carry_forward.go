@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/bluememo"
 )
 
@@ -16,8 +17,9 @@ const carriedFileSuffix = ".carrying"
 
 // CarryReport is what one carry forward did.
 type CarryReport struct {
-	Carried int `json:"carried"`
-	Adopted int `json:"adopted"`
+	Carried int      `json:"carried"`
+	Adopted int      `json:"adopted"`
+	Left    []string `json:"left"`
 }
 
 // CarryForward brings memory written where blueclaw kept every subject's file
@@ -40,11 +42,18 @@ type CarryReport struct {
 // A file already at the destination is never overwritten. Its store adopts
 // what the old file holds, the way two records of one person are merged, so
 // memory written at either path is kept.
+//
+// A circle that holds no directory, such as admin, has nowhere to be carried
+// to, so its old file is left where it is and named in the report.
 func (stores *Stores) CarryForward(ctx context.Context) (CarryReport, error) {
 	report := CarryReport{}
 	oldDirectory := filepath.Join(stores.workspaceRootPath, ".blueclaw", "memory")
 	for _, scope := range oldLayoutScopes(oldDirectory) {
 		oldPath := scope.oldPath
+		if scope.scope.Kind == ScopeCircle && !policy.CircleHoldsADirectory(scope.scope.ID) {
+			report.Left = append(report.Left, oldPath)
+			continue
+		}
 		destination, errorValue := stores.Path(scope.scope)
 		if errorValue != nil {
 			return report, fmt.Errorf("where %s belongs now: %w", oldPath, errorValue)

@@ -338,7 +338,7 @@ func effectivePersonCirclesForPOSIX(personPolicy policy.PersonPolicy) []string {
 }
 
 func isPOSIXCircle(normalizedCircleID string) bool {
-	return normalizedCircleID != "" && normalizedCircleID != policy.AdminCircleID
+	return policy.CircleHoldsADirectory(normalizedCircleID)
 }
 
 func circlePoliciesWithMemberDefault(circlePolicies []policy.CirclePolicy, workspaceRootPath string) []policy.CirclePolicy {
