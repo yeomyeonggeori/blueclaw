@@ -31,6 +31,7 @@ type fileDeliveryRouteCase struct {
 	name          string
 	setupPrompts  []string
 	context       []connectors.VisibleContextMessage
+	attachments   []connectors.InputAttachment
 	prompt        string
 	expectedRoute string
 }
@@ -112,12 +113,23 @@ func fileDeliveryRouteCases() []fileDeliveryRouteCase {
 		},
 		{
 			name:          "colleague_dm",
-			setupPrompts:  []string{"이번 주 회의 요약(예산 동결, 채용 2명, 워크숍 11월)을 한 페이지 PDF로 만들어줘"},
+			attachments:   []connectors.InputAttachment{weeklySummaryPDF()},
 			prompt:        "박예시 님에게 이 PDF DM으로 보내줘",
 			expectedRoute: fileDeliveryRouteColleagueDM,
 		},
 	}
 }
+
+func weeklySummaryPDF() connectors.InputAttachment {
+	return connectors.InputAttachment{
+		Filename:      "weekly-summary.pdf",
+		ContentType:   "application/pdf",
+		ContentBase64: weeklySummaryPDFBase64,
+		IsAvailable:   true,
+	}
+}
+
+const weeklySummaryPDFBase64 = "JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCA1OTUgODQyXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCA1MyA+PgpzdHJlYW0KQlQgL0YxIDEyIFRmIDcyIDc3MCBUZCAoV2Vla2x5IG1lZXRpbmcgc3VtbWFyeSkgVGogRVQKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjw8IC9UeXBlIC9Gb250IC9TdWJ0eXBlIC9UeXBlMSAvQmFzZUZvbnQgL0hlbHZldGljYSA+PgplbmRvYmoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNTggMDAwMDAgbiAKMDAwMDAwMDExNSAwMDAwMCBuIAowMDAwMDAwMjQxIDAwMDAwIG4gCjAwMDAwMDAzNDQgMDAwMDAgbiAKdHJhaWxlcgo8PCAvU2l6ZSA2IC9Sb290IDEgMCBSID4+CnN0YXJ0eHJlZgo0MTQKJSVFT0YK"
 
 func runFileDeliveryRouteCase(t *testing.T, model llm.LanguageModelProvider, routeCase fileDeliveryRouteCase, run int) fileDeliveryRouteOutcome {
 	t.Helper()
@@ -155,7 +167,9 @@ func fileDeliveryRouteScenario(model llm.LanguageModelProvider, routeCase fileDe
 	for _, setupPrompt := range routeCase.setupPrompts {
 		turns = append(turns, fileDeliveryRouteTurn(setupPrompt, nil))
 	}
-	turns = append(turns, fileDeliveryRouteTurn(routeCase.prompt, routeCase.context))
+	measuredTurn := fileDeliveryRouteTurn(routeCase.prompt, routeCase.context)
+	measuredTurn.InputAttachments = routeCase.attachments
+	turns = append(turns, measuredTurn)
 	return VirtualSessionScenario{
 		Name:                      "file_delivery_route_" + routeCase.name,
 		ArtifactDirectoryPath:     artifactDirectory,
