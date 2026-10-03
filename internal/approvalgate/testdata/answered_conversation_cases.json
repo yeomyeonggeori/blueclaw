@@ -1,0 +1,11 @@
+[
+  {"name": "a reply in the current thread", "conversationType": "channel", "channelID": "channel-1", "input": {"targetType": "currentThread", "message": "안내"}, "landsInTheAnsweredConversation": true},
+  {"name": "a post in the current channel", "conversationType": "channel", "channelID": "channel-1", "input": {"targetType": "currentChannel", "message": "안내"}, "landsInTheAnsweredConversation": true},
+  {"name": "the current channel named by its identifier", "conversationType": "channel", "channelID": "channel-1", "input": {"targetType": "channel", "channelID": "channel-1", "message": "안내"}, "landsInTheAnsweredConversation": true},
+  {"name": "another channel named by its identifier", "conversationType": "channel", "channelID": "channel-1", "input": {"targetType": "channel", "channelID": "channel-9", "message": "안내"}, "landsInTheAnsweredConversation": false},
+  {"name": "a channel named by its name", "conversationType": "channel", "channelID": "channel-1", "input": {"targetType": "channel", "channelName": "general", "message": "안내"}, "landsInTheAnsweredConversation": false},
+  {"name": "a direct message to the requester asked in their own direct conversation", "conversationType": "direct", "channelID": "channel-2", "input": {"targetType": "directMessage", "message": "안내", "attachments": ["~/documents/report.pdf"]}, "landsInTheAnsweredConversation": true},
+  {"name": "a direct message to the requester asked in a channel thread", "conversationType": "channel", "channelID": "channel-1", "input": {"targetType": "directMessage", "message": "안내"}, "landsInTheAnsweredConversation": false},
+  {"name": "a direct message to another person from the requester's direct conversation", "conversationType": "direct", "channelID": "channel-2", "input": {"targetType": "directMessage", "personHint": "박예시", "message": "안내"}, "landsInTheAnsweredConversation": false},
+  {"name": "a direct message to several people from the requester's direct conversation", "conversationType": "direct", "channelID": "channel-2", "input": {"targetType": "directMessage", "personHints": ["박예시", "최견본"], "message": "안내"}, "landsInTheAnsweredConversation": false}
+]

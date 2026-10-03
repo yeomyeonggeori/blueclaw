@@ -765,6 +765,8 @@ func (taskLauncher *TaskLauncher) toolCatalogRequestForLaunch(request TaskLaunch
 			Prompt:            request.Prompt,
 			Platform:          request.Platform,
 			ConversationID:    request.ConversationID,
+			ConversationType:  request.ConversationType,
+			ChannelID:         request.ConversationChannelID,
 			ReplyTargetID:     request.ReplyTargetID,
 		}),
 		VisibleContext:             request.VisibleContext,
