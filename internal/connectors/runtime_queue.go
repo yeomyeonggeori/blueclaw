@@ -155,11 +155,7 @@ func (connectorRuntime *ConnectorRuntime) enqueueConnectorReply(ctx context.Cont
 		if errorValue != nil {
 			return "", errorValue
 		}
-		dispatchID, errorValue := adapter.SendReply(ctx, replyTarget, reply)
-		if errorValue == nil {
-			connectorRuntime.sentAttachmentSources.RecordReply(event.Platform, dispatchID, reply.Attachments)
-		}
-		return dispatchID, errorValue
+		return connectorRuntime.recordingDelivery(adapter.SendReply)(ctx, replyTarget, reply)
 	}
 	outboxID, errorValue := outboxRepository.EnqueueConnectorReply(event, replyTarget, reply)
 	if errorValue == nil {
@@ -209,8 +205,8 @@ func (connectorRuntime *ConnectorRuntime) processQueuedConnectorReply(ctx contex
 	}
 	queuedReply.Reply.RawEventID = firstNonEmptyString(queuedReply.Reply.RawEventID, queuedReply.RawEventID)
 	queuedReply.Reply.OutboxID = firstNonEmptyString(queuedReply.Reply.OutboxID, queuedReply.OutboxID)
-	sendReply := connectorRuntime.pendingRequestReplySender(queuedReply.RawEventID, adapter.SendReply, true)
-	dispatchID, errorValue := sendReply(ctx, queuedReply.ReplyTarget, queuedReply.Reply)
+	sendReply := connectorRuntime.pendingRequestReplySender(queuedReply.RawEventID, connectorRuntime.recordingDelivery(adapter.SendReply), true)
+	dispatchID, errorValue := sendReply(withConnectorEvent(ctx, queuedReplyEvent(queuedReply)), queuedReply.ReplyTarget, queuedReply.Reply)
 	if dispatchID == "" && errorValue == nil && connectorRuntime.suppressSupersededQueuedReply(queuedReply) {
 		return
 	}
@@ -221,18 +217,13 @@ func (connectorRuntime *ConnectorRuntime) processQueuedConnectorReply(ctx contex
 		connectorRuntime.markQueuedConnectorReplyFailed(queuedReply, errorValue)
 		return
 	}
-	connectorRuntime.sentAttachmentSources.RecordReply(queuedReply.Platform, dispatchID, queuedReply.Reply.Attachments)
 	if errorValue := connectorRuntime.outboxRepository().MarkConnectorReplySent(queuedReply, dispatchID); errorValue != nil {
 		connectorRuntime.logger.Warn("connector."+queuedReply.Platform+".outbox.mark_sent_failed", slog.String("outboxID", queuedReply.OutboxID), slog.String("error", errorValue.Error()))
 	}
-	connectorRuntime.appendConnectorReplyEvent(queuedReply.Reply.TaskRunID, agentcontract.TaskEventConnectorReplySent, connectorReplyEventBody(PlatformInboundEvent{MessageID: queuedReply.RawEventID}, queuedReply.Reply, queuedReply.OutboxID, dispatchID, ""))
-	connectorRuntime.recordTaskWaitTokenForReply(
-		queuedReply.Platform,
-		PlatformInboundEvent{Platform: queuedReply.Platform, ConversationID: queuedReply.ReplyTarget.ConversationID, MessageID: queuedReply.RawEventID},
-		queuedReply.ReplyTarget,
-		queuedReply.Reply,
-		dispatchID,
-	)
+}
+
+func queuedReplyEvent(queuedReply QueuedConnectorReply) PlatformInboundEvent {
+	return PlatformInboundEvent{Platform: queuedReply.Platform, ConversationID: queuedReply.ReplyTarget.ConversationID, MessageID: queuedReply.RawEventID}
 }
 
 func shouldDeferQueuedConnectorEvent(result ConnectorRuntimeResult) bool {

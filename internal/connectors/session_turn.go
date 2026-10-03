@@ -28,7 +28,7 @@ func (connectorRuntime *ConnectorRuntime) OpenSessionTurn(ctx context.Context, e
 		platform:    event.Platform,
 		event:       event,
 		replyTarget: replyTarget,
-		sendReply:   sendReply,
+		sendReply:   connectorRuntime.recordingDelivery(sendReply),
 		personID:    personID,
 	}}
 }
@@ -38,6 +38,7 @@ func (sessionTurn *SessionTurn) ContinueOpenInteractions(ctx context.Context, la
 	if turn.adapter == nil {
 		return launchRequest, false, nil
 	}
+	ctx = withConnectorEvent(ctx, turn.event)
 	if _, isAnswered, errorValue := connectorRuntime.resolveOpenInteractions(ctx, turn); isAnswered {
 		connectorRuntime.recordUnclaimedIntakeCalls(turn.event)
 		return launchRequest, true, errorValue
@@ -51,7 +52,7 @@ func (sessionTurn *SessionTurn) ContinueOpenInteractions(ctx context.Context, la
 func (sessionTurn *SessionTurn) DeliverReply(ctx context.Context, turnResult agentcontract.AgentTurnResult) error {
 	connectorRuntime, turn := sessionTurn.connectorRuntime, sessionTurn.turn
 	connectorRuntime.recordHeldIntakeCalls(turnResult.TaskRun.TaskRunID, turn.event)
-	_, errorValue := connectorRuntime.dispatchTaskReply(ctx, turn.platform, turn.adapter, turn.event, turn.replyTarget, turnResult, turn.engagedAckEmojiName, turn.sendReply)
+	_, errorValue := connectorRuntime.dispatchTaskReply(withConnectorEvent(ctx, turn.event), turn.platform, turn.adapter, turn.event, turn.replyTarget, turnResult, turn.engagedAckEmojiName, turn.sendReply)
 	return errorValue
 }
 

@@ -1682,10 +1682,10 @@ func TestConnectorRuntimeSendsSafeUserNoticeForBlockedTask(t *testing.T) {
 		"task-1",
 		ReplyTarget{ConversationID: "direct-1", ReplyTargetID: "reply-target-1"},
 		agentcontract.AgentTurnResult{UserNotice: "PPTX를 만들지 못했습니다. 다시 시도해 주세요."},
-		func(_ context.Context, _ ReplyTarget, reply OutboundReply) (string, error) {
+		connectorRuntime.recordingDelivery(func(_ context.Context, _ ReplyTarget, reply OutboundReply) (string, error) {
 			sentReplies = append(sentReplies, reply)
 			return "dispatch-1", nil
-		},
+		}),
 	)
 
 	if !isSent || dispatchID != "dispatch-1" {
@@ -3385,7 +3385,7 @@ func TestConnectorRuntimeSendsCheckpointReplyKind(t *testing.T) {
 		TaskRunID: "task-1",
 		Message:   "작업 중입니다.",
 		ToolName:  "bash",
-	}, adapter.SendReply)
+	}, connectorRuntime.recordingDelivery(adapter.SendReply))
 	if errorValue != nil {
 		t.Fatalf("expected checkpoint reply to send: %v", errorValue)
 	}

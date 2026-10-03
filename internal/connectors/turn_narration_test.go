@@ -102,7 +102,7 @@ func TestTheAnswerArrivesWholeAndTheNarrationComesDown(t *testing.T) {
 	sendReply := narrator.takeOverSending(func(context.Context, ReplyTarget, OutboundReply) (string, error) {
 		sent++
 		return "answer-1", nil
-	})
+	}, deliveredUnrecorded)
 	messageID, errorValue := sendReply(context.Background(), ReplyTarget{}, OutboundReply{Message: "done"})
 
 	if errorValue != nil {
@@ -123,7 +123,7 @@ func TestAFailedAnswerLeavesTheNarrationStanding(t *testing.T) {
 
 	sendReply := narrator.takeOverSending(func(context.Context, ReplyTarget, OutboundReply) (string, error) {
 		return "", context.Canceled
-	})
+	}, deliveredUnrecorded)
 	sendReply(context.Background(), ReplyTarget{}, OutboundReply{Message: "done"})
 
 	if len(adapter.deletedMessages) != 0 {
@@ -142,10 +142,11 @@ func TestTheAnswerReplacesTheNarrationRatherThanFollowingIt(t *testing.T) {
 	narrator.observe(context.Background(), taskstate.RawTurnEvent{Name: "tool.bash.requested", Body: `{"input":{"command":"ls"}}`})
 
 	sent := 0
+	recordedDeliveries := []string{}
 	sendReply := narrator.takeOverSending(func(context.Context, ReplyTarget, OutboundReply) (string, error) {
 		sent++
 		return "message-2", nil
-	})
+	}, recordingDeliveriesInto(&recordedDeliveries))
 	messageID, errorValue := sendReply(context.Background(), ReplyTarget{}, OutboundReply{Message: "done"})
 
 	if errorValue != nil {
@@ -163,6 +164,25 @@ func TestTheAnswerReplacesTheNarrationRatherThanFollowingIt(t *testing.T) {
 	if last := adapter.editedMessages[len(adapter.editedMessages)-1]; last != "done" {
 		t.Fatalf("the narrated message reads %q, want the answer", last)
 	}
+	if len(recordedDeliveries) != 1 || recordedDeliveries[0] != "message-1" {
+		t.Fatalf("the answer edited into the narration was recorded as %v, want the narrated message once", recordedDeliveries)
+	}
+}
+
+func deliveredUnrecorded(deliver ReplySender) ReplySender {
+	return deliver
+}
+
+func recordingDeliveriesInto(recordedDeliveries *[]string) func(ReplySender) ReplySender {
+	return func(deliver ReplySender) ReplySender {
+		return func(ctx context.Context, replyTarget ReplyTarget, reply OutboundReply) (string, error) {
+			dispatchID, errorValue := deliver(ctx, replyTarget, reply)
+			if errorValue == nil {
+				*recordedDeliveries = append(*recordedDeliveries, dispatchID)
+			}
+			return dispatchID, errorValue
+		}
+	}
 }
 
 func TestAReplyCarryingMoreThanWordsIsSentWhole(t *testing.T) {
@@ -174,7 +194,7 @@ func TestAReplyCarryingMoreThanWordsIsSentWhole(t *testing.T) {
 	sendReply := narrator.takeOverSending(func(context.Context, ReplyTarget, OutboundReply) (string, error) {
 		sent++
 		return "message-2", nil
-	})
+	}, deliveredUnrecorded)
 	_, errorValue := sendReply(context.Background(), ReplyTarget{}, OutboundReply{
 		Message:     "here it is",
 		Attachments: []toolcontract.FileAttachment{{}},
@@ -194,7 +214,7 @@ func TestNarrationStopsOnceTheAnswerHasTakenTheMessage(t *testing.T) {
 	narrator.observe(context.Background(), taskstate.RawTurnEvent{Name: "tool.file_read.requested", Body: `{"input":{"path":"/a"}}`})
 	sendReply := narrator.takeOverSending(func(context.Context, ReplyTarget, OutboundReply) (string, error) {
 		return "message-2", nil
-	})
+	}, deliveredUnrecorded)
 	sendReply(context.Background(), ReplyTarget{}, OutboundReply{Message: "done"})
 
 	editsBefore := len(adapter.editedMessages)
