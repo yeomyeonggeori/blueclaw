@@ -269,6 +269,23 @@ describe("watching a person's conversations for someone typing", () => {
 		expect(told).toEqual([]);
 	});
 
+	test("a conversation opened after the watch started is followed when the relay says the person was added, so its first typing is told", async () => {
+		const conversations = new Map([[aliceSecret, [conversation("dm-1", ["alice", "bob"])]]]);
+		const { watch, relays, typed, now } = harness(conversations);
+		await watch.watch(aliceSecret, arrivalsURL, typingURL);
+		const relay = relays.get(aliceSecret)!;
+
+		conversations.set(aliceSecret, [conversation("dm-1", ["alice", "bob"]), conversation("dm-2", ["alice", "agent"])]);
+		const [membership] = relay.subscriptions.filter(({ filters }) =>
+			(filters as { kinds?: number[] }[])[0]?.kinds?.includes(44100),
+		);
+		membership!.onEvent({ ...message("added-1", "dm-2", "relay", now()), kind: 44100, tags: [["p", "alice"], ["h", "dm-2"]] });
+		await Bun.sleep(0);
+		deliverTo(relay, "dm-2", typing("t-1", "dm-2", "agent", now()));
+
+		expect(typed).toEqual([{ conversationID: "dm-2", authorExternalID: "agent", recipientExternalIDs: ["alice", "agent"] }]);
+	});
+
 	test("typing older than the indicator lasts is not told", async () => {
 		const { watch, relays, typed, now } = harness(new Map([[aliceSecret, [conversation("dm-1", ["alice", "bob"])]]]));
 		await watch.watch(aliceSecret, arrivalsURL, typingURL);
