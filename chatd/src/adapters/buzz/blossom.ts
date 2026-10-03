@@ -99,14 +99,21 @@ export async function uploadBlob(
 	content: Uint8Array,
 	mimeType: string,
 ): Promise<BlossomBlob> {
-	const body = new ArrayBuffer(content.byteLength);
-	new Uint8Array(body).set(content);
 	const digestHex = new Bun.CryptoHasher("sha256").update(content).digest("hex");
-	return putBlob(relayURL, userSecretHex, { body, digestHex, sizeBytes: content.byteLength }, mimeType);
+	return putBlob(relayURL, userSecretHex, { body: streamOf(content), digestHex, sizeBytes: content.byteLength }, mimeType);
+}
+
+function streamOf(content: Uint8Array): ReadableStream<Uint8Array> {
+	return new ReadableStream<Uint8Array>({
+		start(controller) {
+			controller.enqueue(content);
+			controller.close();
+		},
+	});
 }
 
 export type BlobBody = {
-	body: BodyInit;
+	body: ReadableStream<Uint8Array>;
 	digestHex: string;
 	sizeBytes: number;
 };
