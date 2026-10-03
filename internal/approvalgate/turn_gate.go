@@ -16,6 +16,8 @@ type TurnContext struct {
 	Prompt            string
 	Platform          string
 	ConversationID    string
+	ConversationType  string
+	ChannelID         string
 	ReplyTargetID     string
 	HarnessSession    mcpserver.HarnessSession
 }
@@ -33,7 +35,7 @@ func (turnGate turnToolCallGate) ReviewToolCall(ctx context.Context, toolInvocat
 	if !callNeedsApproval(toolDefinition, toolInvocation.Input) {
 		return toolcontract.ToolCallReview{MayProceed: true}, nil
 	}
-	if repliesIntoTheConversationItWasAskedIn(toolDefinition, toolInvocation.Input) {
+	if landsInTheConversationBeingAnswered(turnGate.turnContext, toolDefinition, toolInvocation.Input) {
 		return toolcontract.ToolCallReview{MayProceed: true}, nil
 	}
 	if toolcontract.IsDelegatedTurn(ctx) {
@@ -104,19 +106,32 @@ func inputSchemaAcceptsApprovalRequired(inputSchema json.RawMessage) bool {
 	return isDeclared
 }
 
-func repliesIntoTheConversationItWasAskedIn(toolDefinition toolcontract.ToolDefinition, toolInput json.RawMessage) bool {
+func landsInTheConversationBeingAnswered(turnContext TurnContext, toolDefinition toolcontract.ToolDefinition, toolInput json.RawMessage) bool {
 	if toolcontract.ToolDefinitionSideEffectClass(toolDefinition) != toolcontract.ToolSideEffectExternalSend {
 		return false
 	}
-	var document struct {
-		TargetType string `json:"targetType"`
+	return SendLandsInTheConversationBeingAnswered(turnContext.ConversationType, turnContext.ChannelID, toolInput)
+}
+
+func SendLandsInTheConversationBeingAnswered(conversationType string, conversationChannelID string, toolInput json.RawMessage) bool {
+	var target struct {
+		TargetType  string   `json:"targetType"`
+		ChannelID   string   `json:"channelID"`
+		PersonHint  string   `json:"personHint"`
+		PersonHints []string `json:"personHints"`
 	}
-	if len(toolInput) == 0 || json.Unmarshal(toolInput, &document) != nil {
+	if len(toolInput) == 0 || json.Unmarshal(toolInput, &target) != nil {
 		return false
 	}
-	switch strings.TrimSpace(document.TargetType) {
+	switch strings.TrimSpace(target.TargetType) {
 	case "currentThread", "currentChannel":
 		return true
+	case "channel":
+		channelID := strings.TrimSpace(target.ChannelID)
+		return channelID != "" && channelID == strings.TrimSpace(conversationChannelID)
+	case "directMessage":
+		addressesOnlyTheRequester := strings.TrimSpace(target.PersonHint) == "" && len(target.PersonHints) == 0
+		return addressesOnlyTheRequester && strings.EqualFold(strings.TrimSpace(conversationType), "direct")
 	}
 	return false
 }

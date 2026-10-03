@@ -12,7 +12,7 @@ catalog, so they appear here as one row with no description.
 | `(named by the device catalog)` | 0 | `capability_tools.go` |
 | `AskInputToolName` | 279 | `ask_tools.go` |
 | `EquipToolName` | 245 | `equip_tool.go` |
-| `FileDeliverToolName` | 69 | `file_tools.go` |
+| `FileDeliverToolName` | 150 | `file_tools.go` |
 | `PlanToolName` | 472 | `plan_tool.go` |
 | `ReadToolName` | 299 | `file_tools.go` |
 | `SkillSearchToolName` | 208 | `skill_search_tool.go` |
@@ -31,4 +31,4 @@ catalog, so they appear here as one row with no description.
 | `skill_remove` | 67 | `skill_management.go` |
 | `write` | 239 | `file_tools.go` |
 
-21 tools, 4950 bytes of description in total.
+21 tools, 5031 bytes of description in total.

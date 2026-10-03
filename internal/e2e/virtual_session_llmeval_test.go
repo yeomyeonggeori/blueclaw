@@ -16,7 +16,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
-	"github.com/yeomyeonggeori/bluememo"
 )
 
 func TestMemoryRecallWithoutConversationHistoryLive(t *testing.T) {
@@ -29,11 +28,9 @@ func TestMemoryRecallWithoutConversationHistoryLive(t *testing.T) {
 		t.Skip("set BLUECLAW_E2E_LLM_ENDPOINT or BLUECLAW_E2E_LLM_UNIX_SOCKET to run live memory evaluation")
 	}
 	model := liveMemoryModel(t, endpoint, socketPath)
-	remembered := runLiveMemoryTurn(t, model, []bluememo.Fact{{
-		FactID: "synthetic-memory-fact", OwnerPersonID: "person-1",
-		Content:   "The internal codename for the migration is Blue Lantern.",
-		Kind:      bluememo.FactKindFact,
-		ValidFrom: time.Now().UTC(),
+	remembered := runLiveMemoryTurn(t, model, []VirtualMemoryFact{{
+		PersonID: "person-1",
+		Content:  "The internal codename for the migration is Blue Lantern.",
 	}}, "What is the internal codename for the migration?", "Blue Lantern")
 	if !strings.Contains(remembered.FinishMessage, "Blue Lantern") {
 		t.Fatalf("memory-backed answer omitted the stored fact: %q", remembered.FinishMessage)
@@ -59,7 +56,7 @@ func liveMemoryModel(t *testing.T, endpoint string, socketPath string) llm.Langu
 	return llm.CapabilityLLMClient{CapabilityClient: capability.NewClient(capability.Configuration{Endpoint: endpoint, UnixSocketPath: socketPath}), ModelName: os.Getenv("BLUECLAW_E2E_LLM_MODEL"), ExecutionMode: firstNonEmptyTestString(os.Getenv("BLUECLAW_E2E_LLM_EXECUTION_MODE"), "auto")}
 }
 
-func runLiveMemoryTurn(t *testing.T, model llm.LanguageModelProvider, initialMemory []bluememo.Fact, prompt string, forbiddenAnswer string) VirtualTurnResult {
+func runLiveMemoryTurn(t *testing.T, model llm.LanguageModelProvider, initialMemory []VirtualMemoryFact, prompt string, forbiddenAnswer string) VirtualTurnResult {
 	t.Helper()
 	forbiddenReplyFragments := []string{}
 	if len(initialMemory) == 0 {

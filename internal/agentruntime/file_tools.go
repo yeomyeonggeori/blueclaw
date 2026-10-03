@@ -200,7 +200,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerFileTools(toolRegistry *to
 	toolcontract.RegisterToolFunction(toolRegistry, toolcontract.ToolFunction[fileAttachToolInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
 			Name:            toolcontract.FileDeliverToolName,
-			Description:     "Deliver one or more existing workspace files as final reply evidence.",
+			Description:     "Attach one or more existing workspace files to the reply the requester receives in this conversation. This is how a person gets a file they asked for.",
 			SideEffectClass: toolcontract.ToolSideEffectStateChange,
 			InputSchema:     json.RawMessage(`{"type":"object","properties":{"path":{"type":"string","description":"Workspace path to one finished file."},"filename":{"type":"string","description":"Optional display filename."},"contentType":{"type":"string","description":"Optional MIME type."},"title":{"type":"string","description":"Optional attachment title."},"files":{"type":"array","description":"One or more finished workspace files to deliver in this single call.","items":{"type":"object","properties":{"path":{"type":"string","description":"Workspace path to an existing file."},"filename":{"type":"string","description":"Optional display filename."},"contentType":{"type":"string","description":"Optional MIME type."},"title":{"type":"string","description":"Optional attachment title."}},"required":["path"],"additionalProperties":false}}},"additionalProperties":false}`),
 		},

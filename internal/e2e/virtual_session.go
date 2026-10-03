@@ -1702,10 +1702,6 @@ func validateVirtualMessageSendInput(input map[string]any) error {
 	}
 	switch stringValue(input["targetType"]) {
 	case "directMessage":
-		personHints, _ := input["personHints"].([]any)
-		if strings.TrimSpace(stringValue(input["personHint"])) == "" && len(personHints) == 0 {
-			return errors.New("personHint or personHints is required for directMessage")
-		}
 	case "channel":
 		if strings.TrimSpace(stringValue(input["channelName"])) == "" && strings.TrimSpace(stringValue(input["channelID"])) == "" {
 			return errors.New("channelName or channelID is required for channel")
@@ -2464,14 +2460,21 @@ func jsonObjectOrEmpty(document []byte) string {
 
 func virtualCapabilityRequestNeedsApproval(requestBody []byte) bool {
 	var requestDocument struct {
+		Input   json.RawMessage `json:"input"`
 		Context struct {
-			IsApprovalContinuation bool `json:"isApprovalContinuation"`
+			IsApprovalContinuation bool   `json:"isApprovalContinuation"`
+			ApprovedCallID         string `json:"approvedCallID"`
+			ConversationType       string `json:"conversationType"`
+			ChannelID              string `json:"channelID"`
 		} `json:"context"`
 	}
 	if len(requestBody) == 0 || json.Unmarshal(requestBody, &requestDocument) != nil {
 		return false
 	}
-	return !requestDocument.Context.IsApprovalContinuation
+	if requestDocument.Context.IsApprovalContinuation || strings.TrimSpace(requestDocument.Context.ApprovedCallID) != "" {
+		return false
+	}
+	return !approvalgate.SendLandsInTheConversationBeingAnswered(requestDocument.Context.ConversationType, requestDocument.Context.ChannelID, requestDocument.Input)
 }
 
 func streamProgressObserver(writer io.Writer) func(task.RawTurnEvent) {
