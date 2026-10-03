@@ -323,7 +323,7 @@ Memory is what the agent keeps about the people it serves between tasks, stored 
 
 Each subject has one SQLite file in a protected directory of its own: a person at `private/protected/<personID>/memory.db`, a circle at `circles/<circleID>/.protected/memory.db`, and the company at `shared/.protected/memory.db`. The service writes every file on its subject's behalf. A person reads under their own POSIX identity through `blueclaw memory-read`, so the files they may open are the ones whose group they are in, and a recall the kernel refuses fails rather than coming back empty.
 
-Memories are layered. A person's memory stands on the circles they read and on the company's, and a circle's stands on the company's. A statement a layer beneath already holds is not written again. A recall reads the whole stack in one pass, nearer layers first, and the service reinforces each recalled memory in the file that holds it.
+Memories are layered. A person's memory stands on the circles they read and on the company's, and a circle's stands on the company's. A statement a layer beneath already holds is not written again. When a finished run is remembered, what its tools answered is one more layer beneath: the record it read and the changes it made already live in the systems that answered, so a statement restating them is not kept. A recall reads the whole stack in one pass, nearer layers first, and the service reinforces each recalled memory in the file that holds it.
 
 Around the store, `internal/memory` does the following:
 
