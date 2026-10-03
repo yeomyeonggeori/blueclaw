@@ -14,9 +14,7 @@ import (
 )
 
 func TestUserProfileUpdateLive(t *testing.T) {
-	if !truthyEnvironmentValue(os.Getenv("BLUECLAW_E2E_LIVE")) {
-		t.Skip("set BLUECLAW_E2E_LIVE=1 to run the costed profile evaluation")
-	}
+	requireLiveEvaluationConsent(t)
 	model := liveMemoryModel(t, os.Getenv("BLUECLAW_E2E_LLM_ENDPOINT"), os.Getenv("BLUECLAW_E2E_LLM_UNIX_SOCKET"))
 	artifactRoot := filepath.Join("..", "..", ".artifacts", "persona-live")
 	if errorValue := os.MkdirAll(artifactRoot, 0700); errorValue != nil {

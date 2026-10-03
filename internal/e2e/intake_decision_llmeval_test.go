@@ -30,14 +30,10 @@ type intakeDecisionCase struct {
 }
 
 func TestIntakeDecisionCorpusLive(t *testing.T) {
-	if !truthyEnvironmentValue(os.Getenv("BLUECLAW_E2E_LIVE")) {
-		t.Skip("set BLUECLAW_E2E_LIVE=1 to run the costed intake decision evaluation")
-	}
+	requireLiveEvaluationConsent(t)
 	endpoint := strings.TrimSpace(os.Getenv("BLUECLAW_DECISION_ENDPOINT"))
 	socketPath := strings.TrimSpace(os.Getenv("BLUECLAW_DECISION_UNIX_SOCKET"))
-	if endpoint == "" && socketPath == "" {
-		t.Skip("set BLUECLAW_DECISION_ENDPOINT or BLUECLAW_DECISION_UNIX_SOCKET to run the intake decision evaluation")
-	}
+	requireDecisionModelInput(t)
 	decisionModel := llm.CapabilityDecisionClient{CapabilityLLMClient: llm.CapabilityLLMClient{
 		CapabilityClient: capability.NewClient(capability.Configuration{Endpoint: endpoint, UnixSocketPath: socketPath, Timeout: time.Minute}),
 		ModelName:        strings.TrimSpace(os.Getenv("BLUECLAW_DECISION_MODEL")),

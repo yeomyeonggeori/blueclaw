@@ -19,14 +19,10 @@ import (
 )
 
 func TestMemoryRecallWithoutConversationHistoryLive(t *testing.T) {
-	if !truthyEnvironmentValue(os.Getenv("BLUECLAW_E2E_LIVE")) {
-		t.Skip("set BLUECLAW_E2E_LIVE=1 to explicitly run costed live memory evaluation")
-	}
+	requireLiveEvaluationConsent(t)
 	endpoint := strings.TrimSpace(os.Getenv("BLUECLAW_E2E_LLM_ENDPOINT"))
 	socketPath := strings.TrimSpace(os.Getenv("BLUECLAW_E2E_LLM_UNIX_SOCKET"))
-	if endpoint == "" && socketPath == "" {
-		t.Skip("set BLUECLAW_E2E_LLM_ENDPOINT or BLUECLAW_E2E_LLM_UNIX_SOCKET to run live memory evaluation")
-	}
+	requireLanguageModelInput(t)
 	model := liveMemoryModel(t, endpoint, socketPath)
 	remembered := runLiveMemoryTurn(t, model, []VirtualMemoryFact{{
 		PersonID: "person-1",
@@ -117,14 +113,10 @@ func preserveLiveSessionEvidence(t *testing.T, directory string, result VirtualS
 }
 
 func TestPresentationLocalMultiturnSuccessLive(t *testing.T) {
-	if !truthyEnvironmentValue(os.Getenv("BLUECLAW_E2E_LIVE")) {
-		t.Skip("set BLUECLAW_E2E_LIVE=1 to explicitly run costed live slides virtual session")
-	}
+	requireLiveEvaluationConsent(t)
 	endpoint := strings.TrimSpace(os.Getenv("BLUECLAW_E2E_LLM_ENDPOINT"))
 	socketPath := strings.TrimSpace(os.Getenv("BLUECLAW_E2E_LLM_UNIX_SOCKET"))
-	if endpoint == "" && socketPath == "" {
-		t.Skip("set BLUECLAW_E2E_LLM_ENDPOINT or BLUECLAW_E2E_LLM_UNIX_SOCKET to run live slides virtual session")
-	}
+	requireLanguageModelInput(t)
 	scenario := PresentationLocalMultiturnSuccessScenario(t.TempDir())
 	if skillDirectoryPath := officeSkillPath(); skillDirectoryPath != "" {
 		scenario.Skills = nil
