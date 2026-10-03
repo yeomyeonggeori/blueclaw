@@ -18,7 +18,7 @@ func Preamble(request agentcontract.AgentTurnRequest, instructionPrompt string) 
 	if temporalContext := agentcontract.BuildTemporalContextDescription(request.EnvironmentNow, request.Company.TimeZone); temporalContext != "" {
 		sections = append(sections, temporalContext)
 	}
-	if facts := rememberedFacts(request.MemoryFacts); facts != "" {
+	if facts := agentcontract.BuildMemoryContext(request.MemoryFacts); facts != "" {
 		sections = append(sections, facts)
 	}
 	if carriedOut := callsAlreadyCarriedOut(request.CarriedOutCalls); carriedOut != "" {
@@ -71,17 +71,4 @@ func agentIntroduction(request agentcontract.AgentTurnRequest) string {
 		lines = append(lines, "Answer them in "+responseLanguage+".")
 	}
 	return strings.Join(lines, "\n")
-}
-
-func rememberedFacts(memoryFacts []agentcontract.MemoryFact) string {
-	statements := []string{}
-	for _, memoryFact := range memoryFacts {
-		if statement := strings.TrimSpace(memoryFact.Content); statement != "" {
-			statements = append(statements, "- "+statement)
-		}
-	}
-	if len(statements) == 0 {
-		return ""
-	}
-	return "What you already know:\n" + strings.Join(statements, "\n")
 }
