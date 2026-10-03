@@ -9,7 +9,7 @@ import (
 const taskTemporaryDirectoryName = "tasks"
 
 func PersonHomeDirectoryPath(workspaceRootPath string, personID string) string {
-	return subjectDirectoryPath(workspaceRootPath, personID, "private", "people")
+	return subjectDirectoryPath(underWorkspace(workspaceRootPath, "private", "people"), personID)
 }
 
 func RequesterTemporaryDirectoryPath(requesterHomePath string) string {
@@ -55,22 +55,39 @@ func ProtectedDirectoryPath(subjectDirectoryPath string) string {
 // in their home like a circle's does, because the home is theirs at 0700 and
 // the service that writes here could not pass through it.
 func PersonProtectedDirectoryPath(workspaceRootPath string, personID string) string {
-	return subjectDirectoryPath(workspaceRootPath, personID, "private", "protected")
+	return subjectDirectoryPath(PeopleProtectedDirectoryPath(workspaceRootPath), personID)
+}
+
+// PeopleProtectedDirectoryPath holds every person's protected directory.
+func PeopleProtectedDirectoryPath(workspaceRootPath string) string {
+	return underWorkspace(workspaceRootPath, "private", "protected")
 }
 
 func CircleDirectoryPath(workspaceRootPath string, circleID string) string {
-	return subjectDirectoryPath(workspaceRootPath, circleID, "circles")
+	return subjectDirectoryPath(CirclesDirectoryPath(workspaceRootPath), circleID)
+}
+
+// CirclesDirectoryPath holds every circle's directory.
+func CirclesDirectoryPath(workspaceRootPath string) string {
+	return underWorkspace(workspaceRootPath, "circles")
+}
+
+func underWorkspace(workspaceRootPath string, names ...string) string {
+	if strings.TrimSpace(workspaceRootPath) == "" {
+		return ""
+	}
+	return filepath.Join(append([]string{workspaceRootPath}, names...)...)
 }
 
 // subjectDirectoryPath answers with nothing for an identifier that cannot name
 // a directory, because filepath.Join reads "../.." as a walk upwards and would
 // hand back a path outside the workspace for the helper to create and chown.
-func subjectDirectoryPath(workspaceRootPath string, subjectID string, parents ...string) string {
+func subjectDirectoryPath(parentPath string, subjectID string) string {
 	trimmedSubjectID := strings.TrimSpace(subjectID)
-	if strings.TrimSpace(workspaceRootPath) == "" || !isDirectoryName(trimmedSubjectID) {
+	if parentPath == "" || !isDirectoryName(trimmedSubjectID) {
 		return ""
 	}
-	return filepath.Join(append([]string{workspaceRootPath}, append(parents, trimmedSubjectID)...)...)
+	return filepath.Join(parentPath, trimmedSubjectID)
 }
 
 func isDirectoryName(identifier string) bool {
@@ -90,8 +107,5 @@ func isDirectoryName(identifier string) bool {
 }
 
 func SharedDirectoryPath(workspaceRootPath string) string {
-	if strings.TrimSpace(workspaceRootPath) == "" {
-		return ""
-	}
-	return filepath.Join(workspaceRootPath, "shared")
+	return underWorkspace(workspaceRootPath, "shared")
 }

@@ -375,27 +375,41 @@ func (stores *Stores) Maintain(ctx context.Context) error {
 	return nil
 }
 
+// storedScopes lists the scopes that hold a file, by the directories their
+// subjects live in. A directory whose name names no subject holds no memory.
 func (stores *Stores) storedScopes() ([]Scope, error) {
-	scopes := []Scope{}
-	if _, errorValue := os.Stat(filepath.Join(stores.workspaceRootPath, "workspace.db")); errorValue == nil {
-		scopes = append(scopes, WorkspaceScope())
-	}
-	for _, kind := range []string{ScopePerson, ScopeCircle} {
-		entries, errorValue := os.ReadDir(filepath.Join(stores.workspaceRootPath, kind+"s"))
+	candidates := []Scope{WorkspaceScope()}
+	for _, subjects := range []struct {
+		directory string
+		scopeOf   func(string) Scope
+	}{
+		{security.PeopleProtectedDirectoryPath(stores.workspaceRootPath), PersonScope},
+		{security.CirclesDirectoryPath(stores.workspaceRootPath), CircleScope},
+	} {
+		entries, errorValue := os.ReadDir(subjects.directory)
+		if errors.Is(errorValue, os.ErrNotExist) {
+			continue
+		}
 		if errorValue != nil {
-			if os.IsNotExist(errorValue) {
-				continue
-			}
 			return nil, errorValue
 		}
 		for _, entry := range entries {
-			if entry.IsDir() || filepath.Ext(entry.Name()) != ".db" {
-				continue
+			if entry.IsDir() {
+				candidates = append(candidates, subjects.scopeOf(entry.Name()))
 			}
-			scopes = append(scopes, Scope{Kind: kind, ID: strings.TrimSuffix(entry.Name(), ".db")})
 		}
 	}
-	return scopes, nil
+	stored := []Scope{}
+	for _, scope := range candidates {
+		path, errorValue := stores.Path(scope)
+		if errorValue != nil {
+			continue
+		}
+		if _, errorValue := os.Stat(path); errorValue == nil {
+			stored = append(stored, scope)
+		}
+	}
+	return stored, nil
 }
 
 // MergePerson moves one person's memory into another's, for when two records
