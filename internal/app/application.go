@@ -55,6 +55,7 @@ type Application struct {
 	taskRetentionSweeper        *scheduler.TaskRetentionSweeper
 	memoryStores                *memory.Stores
 	heldCircles                 func() map[string]bool
+	isOnTheRoster               func(personID string) bool
 	learningCoordinator         *learning.Coordinator
 	schedulePollSecond          int
 	taskRetentionIntervalMinute int
@@ -182,18 +183,22 @@ func newApplication(components applicationComponents) *Application {
 			Addr:    deriveListenAddress(components.runtimeConfiguration.BaseURL),
 			Handler: components.router,
 		},
-		connectorRuntime:            components.connectorRuntime,
-		connectorTransports:         connectorTransports,
-		taskRunService:              components.services.taskRunService,
-		interruptedTaskResumer:      components.connectorRuntime,
-		runtimeLogger:               components.foundation.runtimeLogger,
-		terminalService:             components.kernel.terminalService,
-		database:                    components.foundation.database,
-		startupError:                components.startupError,
-		schedulePoller:              components.schedulePoller,
-		taskRetentionSweeper:        components.taskRetentionSweeper,
-		memoryStores:                components.memory.stores,
-		heldCircles:                 components.directory.identityService.HeldCircles,
+		connectorRuntime:       components.connectorRuntime,
+		connectorTransports:    connectorTransports,
+		taskRunService:         components.services.taskRunService,
+		interruptedTaskResumer: components.connectorRuntime,
+		runtimeLogger:          components.foundation.runtimeLogger,
+		terminalService:        components.kernel.terminalService,
+		database:               components.foundation.database,
+		startupError:           components.startupError,
+		schedulePoller:         components.schedulePoller,
+		taskRetentionSweeper:   components.taskRetentionSweeper,
+		memoryStores:           components.memory.stores,
+		heldCircles:            components.directory.identityService.HeldCircles,
+		isOnTheRoster: func(personID string) bool {
+			_, isFound := components.directory.identityService.FindPersonAccess(personID)
+			return isFound
+		},
 		learningCoordinator:         components.learningCoordinator,
 		schedulePollSecond:          components.runtimeConfiguration.Scheduler.SchedulePollIntervalSecond,
 		taskRetentionIntervalMinute: components.runtimeConfiguration.Scheduler.RetentionCheckIntervalMinute,
