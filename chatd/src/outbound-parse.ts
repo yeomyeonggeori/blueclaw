@@ -114,7 +114,10 @@ function hasFailureNotice(value: unknown): boolean {
 
 export function parseProgressRequest(value: unknown): ProgressRequest {
 	const record = requireRecord(value, "progress request");
-	return { replyTargetID: requireString(record, "replyTargetID") };
+	return {
+		replyTargetID: requireString(record, "replyTargetID"),
+		answeringMessageID: optionalString(record, "answeringMessageID"),
+	};
 }
 
 export function parseReactionRequest(value: unknown): ReactionRequest {

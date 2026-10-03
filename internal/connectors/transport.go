@@ -37,7 +37,8 @@ type capabilityIdentityRequest struct {
 }
 
 type capabilityProgressRequest struct {
-	ReplyTargetID string `json:"replyTargetID"`
+	ReplyTargetID      string `json:"replyTargetID"`
+	AnsweringMessageID string `json:"answeringMessageID,omitempty"`
 }
 
 type capabilityReactionRequest struct {
