@@ -1,0 +1,49 @@
+{
+  "personID": "person-alice",
+  "index": {
+    "embeddingModel": "baai/bge-m3",
+    "current": 3,
+    "stale": 0
+  },
+  "facts": [
+    {
+      "factID": "f1a2b3c4d5e6f708192a3b4c5d6e7f80",
+      "originID": "0a1b2c3d4e5f60718293a4b5c6d7e8f9",
+      "scopeType": "person",
+      "isStatic": true,
+      "content": "이샘플 prefers bullet summaries",
+      "importance": 4,
+      "storageStrength": 1.2,
+      "createdAt": "2026-10-01T09:00:00Z",
+      "lastRecalledAt": "2026-10-02T09:00:00Z",
+      "triggerPhrases": ["how should the summary look"]
+    },
+    {
+      "factID": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+      "originID": "1a2b3c4d5e6f708192a3b4c5d6e7f809",
+      "scopeType": "circle",
+      "scopeID": "leadership",
+      "isStatic": false,
+      "content": "The board meets on the first Monday of October",
+      "occurredAt": "2026-10-05T00:00:00Z",
+      "occurredUntil": "2026-10-05T23:59:59Z",
+      "validUntil": "2026-10-06T00:00:00Z",
+      "importance": 3,
+      "storageStrength": 1,
+      "createdAt": "2026-10-01T10:00:00Z",
+      "coldSince": "2026-10-03T00:00:00Z",
+      "triggerPhrases": []
+    },
+    {
+      "factID": "b1c2d3e4f5a60718293a4b5c6d7e8f91",
+      "originID": "2a3b4c5d6e7f8091a2b3c4d5e6f70819",
+      "scopeType": "workspace",
+      "isStatic": true,
+      "content": "The office is closed on public holidays",
+      "importance": 3,
+      "storageStrength": 1,
+      "createdAt": "2026-10-01T11:00:00Z",
+      "triggerPhrases": []
+    }
+  ]
+}
