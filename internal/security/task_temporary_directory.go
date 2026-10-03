@@ -51,6 +51,13 @@ func ProtectedDirectoryPath(subjectDirectoryPath string) string {
 	return filepath.Join(subjectDirectoryPath, ".protected")
 }
 
+// PersonProtectedDirectoryPath is a person's protected directory. It cannot sit
+// in their home like a circle's does, because the home is theirs at 0700 and
+// the service that writes here could not pass through it.
+func PersonProtectedDirectoryPath(workspaceRootPath string, personID string) string {
+	return subjectDirectoryPath(workspaceRootPath, personID, "private", "protected")
+}
+
 func CircleDirectoryPath(workspaceRootPath string, circleID string) string {
 	return subjectDirectoryPath(workspaceRootPath, circleID, "circles")
 }

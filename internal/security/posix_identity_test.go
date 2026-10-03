@@ -1,6 +1,8 @@
 package security
 
 import (
+	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
@@ -226,12 +228,49 @@ func TestPOSIXStateGivesEachSubjectsMemoryADirectoryItsGroupCanRead(t *testing.T
 		path  string
 		group string
 	}{
-		"a person": {"/workspace/private/people/person-1/.protected", LinuxPersonUserName("person-1")},
+		"a person": {"/workspace/private/protected/person-1", LinuxPersonUserName("person-1")},
 		"a circle": {"/workspace/circles/finance/.protected", LinuxCircleGroupName("finance")},
 		"everyone": {"/workspace/shared/.protected", posixSharedGroupName},
 	} {
 		if !hasPOSIXDirectory(state, expectation.path, blueclawServiceUserName, expectation.group, "2750") {
 			t.Fatalf("memory for %s has no directory the service owns and its group reads at %s, got %+v", name, expectation.path, state.Directories)
 		}
+	}
+}
+
+func TestTheServiceCanPassThroughToEveryDirectoryItOwns(t *testing.T) {
+	state := POSIXStateForPolicy(policy.PolicyDocument{
+		People:  []policy.PersonPolicy{{PersonID: "person-1", Circles: []string{"finance"}}},
+		Circles: []policy.CirclePolicy{{CircleID: "finance"}},
+	}, "/workspace")
+	declared := map[string]POSIXDirectory{}
+	for _, directory := range state.Directories {
+		declared[directory.Path] = directory
+	}
+	for _, owned := range state.Directories {
+		if owned.Owner != blueclawServiceUserName {
+			continue
+		}
+		for ancestorPath := filepath.Dir(owned.Path); ancestorPath != "/"; ancestorPath = filepath.Dir(ancestorPath) {
+			ancestor, isDeclared := declared[ancestorPath]
+			if isDeclared && !serviceCanPassThrough(ancestor) {
+				t.Fatalf("the service owns %s but cannot pass through %s, held %s:%s %s", owned.Path, ancestor.Path, ancestor.Owner, ancestor.Group, ancestor.ModeText)
+			}
+		}
+	}
+}
+
+func serviceCanPassThrough(directory POSIXDirectory) bool {
+	mode, errorValue := strconv.ParseUint(directory.ModeText, 8, 32)
+	if errorValue != nil {
+		return false
+	}
+	switch {
+	case directory.Owner == blueclawServiceUserName:
+		return mode&0o100 != 0
+	case directory.Group == blueclawServiceUserName:
+		return mode&0o010 != 0
+	default:
+		return mode&0o001 != 0
 	}
 }

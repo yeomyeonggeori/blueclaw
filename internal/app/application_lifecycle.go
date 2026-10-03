@@ -373,11 +373,8 @@ func (application *Application) carryMemoryForward() error {
 	if errorValue != nil {
 		return fmt.Errorf("carry the memory written at the old path: %w", errorValue)
 	}
-	if report.Carried > 0 {
-		application.runtimeLogger.Logger.Info("application.memory.carried_forward", "carried", report.Carried)
-	}
-	for _, destination := range report.AlreadyAt {
-		application.runtimeLogger.Logger.Warn("application.memory.not_carried", "reason", "a file is already there", "destination", destination)
+	if report.Carried > 0 || report.Adopted > 0 {
+		application.runtimeLogger.Logger.Info("application.memory.carried_forward", "carried", report.Carried, "adopted", report.Adopted)
 	}
 	return nil
 }

@@ -131,7 +131,7 @@ func TestWhatOnlyTheLogHeldIsCarriedRatherThanTruncatedAway(t *testing.T) {
 	}
 }
 
-func TestAFileAlreadyCarriedIsNotOverwrittenAndTheOldOneIsKept(t *testing.T) {
+func TestAnOldFileIsFoldedIntoTheFileAlreadyThere(t *testing.T) {
 	stores, root := memorytest.OpenWithRoot(t)
 	oldPath := oldPathOf(t, root, "persons", "person-1.db")
 	writeOldStore(t, oldPath, "what the old path holds")
@@ -141,18 +141,33 @@ func TestAFileAlreadyCarriedIsNotOverwrittenAndTheOldOneIsKept(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("carry the memory forward: %v", errorValue)
 	}
-	if report.Carried != 0 || len(report.AlreadyAt) != 1 {
-		t.Fatalf("report %+v, wanted nothing carried and one destination named", report)
+	if report.Carried != 0 || report.Adopted != 1 {
+		t.Fatalf("report %+v, wanted one file folded in", report)
 	}
-	if _, errorValue := os.Stat(oldPath); errorValue != nil {
-		t.Fatalf("the old file was taken away without being carried: %v", errorValue)
+	held := heldContent(t, stores, memory.PersonScope("person-1"))
+	if !held["what the old path holds"] || !held["what the new path holds"] {
+		t.Fatalf("the store holds %v, wanted what both paths held", held)
 	}
-	contents := recalledContent(t, stores, memory.PersonScope("person-1"), "what does the path hold")
-	for _, content := range contents {
-		if content == "what the old path holds" {
-			t.Fatal("the file already there was overwritten")
-		}
+	if _, errorValue := os.Stat(oldPath); !os.IsNotExist(errorValue) {
+		t.Fatal("the old file was left behind once its memory was folded in")
 	}
+}
+
+func heldContent(t *testing.T, stores *memory.Stores, scope memory.Scope) map[string]bool {
+	t.Helper()
+	store, errorValue := stores.Store(context.Background(), scope)
+	if errorValue != nil {
+		t.Fatalf("open the store: %v", errorValue)
+	}
+	memories, errorValue := store.Memories(context.Background())
+	if errorValue != nil {
+		t.Fatalf("read the store: %v", errorValue)
+	}
+	held := map[string]bool{}
+	for _, memory := range memories {
+		held[memory.Content] = true
+	}
+	return held
 }
 
 func TestCarryingForwardTwiceCarriesNothingTheSecondTime(t *testing.T) {
@@ -167,7 +182,7 @@ func TestCarryingForwardTwiceCarriesNothingTheSecondTime(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("second carry: %v", errorValue)
 	}
-	if second.Carried != 0 || len(second.AlreadyAt) != 0 {
+	if second.Carried != 0 || second.Adopted != 0 {
 		t.Fatalf("second carry %+v, wanted nothing to do", second)
 	}
 }
@@ -178,7 +193,7 @@ func TestAHostThatNeverWroteAtTheOldPathCarriesNothing(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("a fresh host is not a failure: %v", errorValue)
 	}
-	if report.Carried != 0 || len(report.AlreadyAt) != 0 {
+	if report.Carried != 0 || report.Adopted != 0 {
 		t.Fatalf("report %+v, wanted nothing to do", report)
 	}
 }
