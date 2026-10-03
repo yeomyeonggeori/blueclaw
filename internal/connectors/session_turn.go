@@ -56,6 +56,18 @@ func (sessionTurn *SessionTurn) DeliverReply(ctx context.Context, turnResult age
 	return errorValue
 }
 
+func (sessionTurn *SessionTurn) DeliverApprovalQuestion(ctx context.Context, taskRunID string, question string) {
+	connectorRuntime, turn := sessionTurn.connectorRuntime, sessionTurn.turn
+	reply := OutboundReply{Message: question, TaskRunID: taskRunID, ReplyKind: connectorReplyKindApprovalQuestion}
+	dispatchID, errorValue := turn.sendReply(withConnectorEvent(ctx, turn.event), turn.replyTarget, reply)
+	if errorValue != nil {
+		connectorRuntime.appendConnectorReplyEvent(taskRunID, agentcontract.TaskEventConnectorReplyFailed, connectorReplyEventBody(turn.event, reply, "", "", errorValue.Error()))
+		connectorRuntime.logger.Error("connector."+turn.platform+".outbound.failed", slog.String("taskRunID", taskRunID), slog.String("replyKind", reply.ReplyKind), slog.String("error", errorValue.Error()))
+		return
+	}
+	connectorRuntime.logger.Info("connector."+turn.platform+".outbound.sent", slog.String("taskRunID", taskRunID), slog.String("replyKind", reply.ReplyKind), slog.String("replyDispatchID", dispatchID))
+}
+
 func (sessionTurn *SessionTurn) ShowProgressBeforeAddressing(ctx context.Context) {
 	if !shouldStartProgressBeforeAddressing(sessionTurn.turn.event) {
 		return

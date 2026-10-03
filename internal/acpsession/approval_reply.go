@@ -35,9 +35,18 @@ var (
 )
 
 func (agent *Agent) HandleExtensionMethod(ctx context.Context, method string, params json.RawMessage) (any, error) {
-	if method != ApprovalReplyExtensionMethod {
-		return nil, acp.NewMethodNotFound(method)
+	switch method {
+	case ApprovalReplyExtensionMethod:
+		return agent.answerApprovalReply(ctx, params)
+	case DeliveredExtensionMethod:
+		return agent.settleDelivered(params)
+	case UndeliveredExtensionMethod:
+		return agent.settleUndelivered(params)
 	}
+	return nil, acp.NewMethodNotFound(method)
+}
+
+func (agent *Agent) answerApprovalReply(ctx context.Context, params json.RawMessage) (any, error) {
 	request := ApprovalReplyRequest{}
 	if errorValue := json.Unmarshal(params, &request); errorValue != nil {
 		return nil, errorValue

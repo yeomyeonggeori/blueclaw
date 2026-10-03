@@ -87,7 +87,7 @@ func (server *Server) Close() {
 	os.Remove(server.socketPath)
 }
 
-func newSessionIdentifier() string {
+func newRandomIdentifier() string {
 	identifier := make([]byte, 16)
 	rand.Read(identifier)
 	return hex.EncodeToString(identifier)

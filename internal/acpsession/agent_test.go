@@ -3,6 +3,7 @@ package acpsession
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -29,6 +30,7 @@ type recordingLauncher struct {
 	mutex          sync.Mutex
 	launched       []agentruntime.TaskLaunchRequest
 	reply          string
+	taskRunID      string
 	launchedSignal chan agentruntime.TaskLaunchRequest
 }
 
@@ -42,7 +44,7 @@ func (launcher *recordingLauncher) Launch(_ context.Context, request agentruntim
 	default:
 	}
 	return agentruntime.TaskLaunchResult{TurnResult: agentcontract.AgentTurnResult{
-		TaskRun:       agentcontract.TaskRun{Status: agentcontract.TaskStatusCompleted},
+		TaskRun:       agentcontract.TaskRun{TaskRunID: firstNonEmpty(request.ExistingTaskRunID, launcher.taskRunID), Status: agentcontract.TaskStatusCompleted},
 		FinishMessage: launcher.reply,
 	}}, nil
 }
@@ -76,18 +78,22 @@ func (staticDirectory) ResolvePersonAccess(personID string) policy.PersonAccess 
 
 type recordingClient struct {
 	mutex                 sync.Mutex
+	connection            *acp.ClientSideConnection
 	messages              []string
 	thoughts              []string
 	resourceLinks         []string
+	deliveries            []Delivery
+	postedMessages        int
+	undeliveredBecause    string
+	isSilent              bool
 	permissionAsked       []acp.RequestPermissionRequest
 	permissionAskedSignal chan acp.RequestPermissionRequest
 	permissionChoice      acp.PermissionOptionId
 	answerByAsking        func(acp.RequestPermissionRequest) acp.PermissionOptionId
 }
 
-func (client *recordingClient) SessionUpdate(_ context.Context, notification acp.SessionNotification) error {
+func (client *recordingClient) SessionUpdate(ctx context.Context, notification acp.SessionNotification) error {
 	client.mutex.Lock()
-	defer client.mutex.Unlock()
 	if chunk := notification.Update.AgentMessageChunk; chunk != nil && chunk.Content.Text != nil {
 		client.messages = append(client.messages, chunk.Content.Text.Text)
 	}
@@ -97,10 +103,50 @@ func (client *recordingClient) SessionUpdate(_ context.Context, notification acp
 	if chunk := notification.Update.AgentMessageChunk; chunk != nil && chunk.Content.ResourceLink != nil {
 		client.resourceLinks = append(client.resourceLinks, chunk.Content.ResourceLink.Uri)
 	}
+	client.mutex.Unlock()
+	go client.reportDelivery(context.WithoutCancel(ctx), notification.Meta)
 	return nil
 }
 
-func (client *recordingClient) RequestPermission(_ context.Context, request acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+func (client *recordingClient) reportDelivery(ctx context.Context, meta map[string]any) {
+	delivery, isNamed := deliveryNamedIn(meta)
+	if !isNamed || client.isSilent {
+		return
+	}
+	client.mutex.Lock()
+	client.deliveries = append(client.deliveries, delivery)
+	undeliveredBecause := client.undeliveredBecause
+	if undeliveredBecause == "" {
+		client.postedMessages++
+	}
+	posted := client.postedMessages
+	connection := client.connection
+	client.mutex.Unlock()
+	if delivery.DeliveryID == "" {
+		return
+	}
+	if undeliveredBecause != "" {
+		_, _ = connection.CallExtension(ctx, UndeliveredExtensionMethod, UndeliveredReport{DeliveryID: delivery.DeliveryID, Reason: undeliveredBecause})
+		return
+	}
+	_, _ = connection.CallExtension(ctx, DeliveredExtensionMethod, DeliveredReport{DeliveryID: delivery.DeliveryID, MessageID: fmt.Sprintf("posted-%d", posted)})
+}
+
+func deliveryNamedIn(meta map[string]any) (Delivery, bool) {
+	carried, isCarried := meta[DeliveryMetaKey]
+	if !isCarried {
+		return Delivery{}, false
+	}
+	document, errorValue := json.Marshal(carried)
+	if errorValue != nil {
+		return Delivery{}, false
+	}
+	delivery := Delivery{}
+	return delivery, json.Unmarshal(document, &delivery) == nil
+}
+
+func (client *recordingClient) RequestPermission(ctx context.Context, request acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+	client.reportDelivery(ctx, request.Meta)
 	client.mutex.Lock()
 	client.permissionAsked = append(client.permissionAsked, request)
 	choice := client.permissionChoice
@@ -183,20 +229,27 @@ func connectedPairWithRouter(t *testing.T, launcher TaskLauncher, client *record
 
 func connectedPairWithCollaborators(t *testing.T, client *recordingClient, collaborators Collaborators) (*acp.ClientSideConnection, *PermissionRelay) {
 	t.Helper()
-	agentSide, clientSide := net.Pipe()
 	permissionRelay := NewPermissionRelay(silentLogger())
 	if collaborators.SessionTurns == nil {
 		collaborators.SessionTurns = connectorRuntimeForTest(collaborators.TaskRunStore)
 	}
-	agent := NewAgent(collaborators, permissionRelay, silentLogger())
+	return connectAgentTo(t, NewAgent(collaborators, permissionRelay, silentLogger()), client), permissionRelay
+}
+
+func connectAgentTo(t *testing.T, agent *Agent, client *recordingClient) *acp.ClientSideConnection {
+	t.Helper()
+	agentSide, clientSide := net.Pipe()
 	agentConnection := acp.NewAgentSideConnection(agent, agentSide, agentSide)
 	agent.UseConnection(agentConnection)
 	clientConnection := acp.NewClientSideConnection(client, clientSide, clientSide)
+	client.mutex.Lock()
+	client.connection = clientConnection
+	client.mutex.Unlock()
 	t.Cleanup(func() {
 		agentSide.Close()
 		clientSide.Close()
 	})
-	return clientConnection, permissionRelay
+	return clientConnection
 }
 
 func sessionMeta(email string, conversationID string) map[string]any {

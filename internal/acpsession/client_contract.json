@@ -1,0 +1,34 @@
+{
+	"metaKeys": {
+		"delivery": "kim.intern/delivery",
+		"message": "kim.intern/message",
+		"session": "kim.intern/session"
+	},
+	"extensionMethods": {
+		"approvalReply": "_kim.intern/approvalReply",
+		"delivered": "_kim.intern/delivered",
+		"undelivered": "_kim.intern/undelivered"
+	},
+	"fields": {
+		"approvalReply": [
+			"sessionId",
+			"toolCallId",
+			"reply"
+		],
+		"approvalReplyAnswer": [
+			"optionId"
+		],
+		"delivered": [
+			"deliveryID",
+			"messageID"
+		],
+		"delivery": [
+			"deliveryID",
+			"replyTargetID"
+		],
+		"undelivered": [
+			"deliveryID",
+			"reason"
+		]
+	}
+}

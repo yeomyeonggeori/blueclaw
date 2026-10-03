@@ -110,6 +110,7 @@ const connectorReplyKindCheckpoint = "checkpoint"
 const ConnectorReplyKindProgress = "progress"
 const connectorReplyKindUserNotice = "user_notice"
 const connectorReplyKindPermissionNotice = "permission_notice"
+const connectorReplyKindApprovalQuestion = "approval_question"
 
 type ConnectorRuntime struct {
 	identityService        *identity.IdentityService
