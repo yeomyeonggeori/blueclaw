@@ -821,15 +821,13 @@ func bluecollarMemoryFacts(facts []memory.MemoryFact) []agentcontract.MemoryFact
 	converted := make([]agentcontract.MemoryFact, 0, len(facts))
 	for _, fact := range facts {
 		converted = append(converted, agentcontract.MemoryFact{
-			FactID:            fact.FactID,
-			ScopeType:         fact.ScopeType,
-			Content:           fact.Content,
-			Score:             fact.Score,
-			SourceEpisodeID:   fact.SourceEpisodeID,
-			SourceKind:        fact.SourceKind,
-			ValidAt:           fact.ValidAt,
-			SecurityLevelRank: fact.SecurityLevelRank,
-			RequiredClasses:   append([]string{}, fact.RequiredClasses...),
+			FactID:          fact.FactID,
+			ScopeType:       fact.ScopeType,
+			Content:         fact.Content,
+			Score:           fact.Score,
+			SourceEpisodeID: fact.SourceEpisodeID,
+			SourceKind:      fact.SourceKind,
+			ValidAt:         fact.ValidAt,
 		})
 	}
 	return converted

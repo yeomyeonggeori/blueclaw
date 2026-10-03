@@ -144,7 +144,7 @@ func TestReplyGeneratorInjectsMemoryIntoChatReplyRequest(t *testing.T) {
 	}
 }
 
-func TestReplyGeneratorInjectsCompactAttributedMemorySummary(t *testing.T) {
+func TestReplyGeneratorInjectsWhatIsRememberedAndNothingAboutHowItWasFound(t *testing.T) {
 	replyProvider := &capturingReplyProvider{content: "remembered"}
 	generator := NewGenerator(replyProvider, nil)
 	longContent := strings.Repeat("a detailed memory that needs summarizing ", 30) + "RAW_TAIL_SHOULD_NOT_APPEAR"
@@ -167,11 +167,16 @@ func TestReplyGeneratorInjectsCompactAttributedMemorySummary(t *testing.T) {
 	}
 
 	body := joinChatMessageContent(replyProvider.request.Messages)
-	if !strings.Contains(body, "Relevant memory") {
-		t.Fatalf("expected compact memory heading, got %q", body)
+	if !strings.Contains(body, "What you already know") {
+		t.Fatalf("expected the remembered statements to be headed, got %q", body)
 	}
-	if !strings.Contains(body, "score=0.87") || !strings.Contains(body, "source=episode-1") {
-		t.Fatalf("expected memory attribution, got %q", body)
+	if !strings.Contains(body, "[2026-05-01]") {
+		t.Fatalf("expected the date a fact is about, got %q", body)
+	}
+	for _, retrieval := range []string{"score=0.87", "source=episode-1", "0.87", "episode-1"} {
+		if strings.Contains(body, retrieval) {
+			t.Fatalf("expected %q to stay out of the prompt, got %q", retrieval, body)
+		}
 	}
 	if strings.Contains(body, "RAW_TAIL_SHOULD_NOT_APPEAR") {
 		t.Fatalf("expected long raw memory content to be compacted, got %q", body)
