@@ -110,6 +110,10 @@ func landsInTheConversationBeingAnswered(turnContext TurnContext, toolDefinition
 	if toolcontract.ToolDefinitionSideEffectClass(toolDefinition) != toolcontract.ToolSideEffectExternalSend {
 		return false
 	}
+	return SendLandsInTheConversationBeingAnswered(turnContext.ConversationType, turnContext.ChannelID, toolInput)
+}
+
+func SendLandsInTheConversationBeingAnswered(conversationType string, conversationChannelID string, toolInput json.RawMessage) bool {
 	var target struct {
 		TargetType  string   `json:"targetType"`
 		ChannelID   string   `json:"channelID"`
@@ -124,10 +128,10 @@ func landsInTheConversationBeingAnswered(turnContext TurnContext, toolDefinition
 		return true
 	case "channel":
 		channelID := strings.TrimSpace(target.ChannelID)
-		return channelID != "" && channelID == strings.TrimSpace(turnContext.ChannelID)
+		return channelID != "" && channelID == strings.TrimSpace(conversationChannelID)
 	case "directMessage":
 		addressesOnlyTheRequester := strings.TrimSpace(target.PersonHint) == "" && len(target.PersonHints) == 0
-		return addressesOnlyTheRequester && strings.EqualFold(strings.TrimSpace(turnContext.ConversationType), "direct")
+		return addressesOnlyTheRequester && strings.EqualFold(strings.TrimSpace(conversationType), "direct")
 	}
 	return false
 }
