@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestLoadRuntimeConfigurationIncludesGuestAndBridge(t *testing.T) {
+func TestLoadRuntimeConfigurationIncludesCapabilitiesAndBridge(t *testing.T) {
 	workspacePath := t.TempDir()
 	runtimeConfigurationPath := filepath.Join(workspacePath, "runtime.json")
 	runtimeConfigurationDocument := `{
@@ -38,17 +38,6 @@ func TestLoadRuntimeConfigurationIncludesGuestAndBridge(t *testing.T) {
       "model": "gemma-4-E4B-it",
       "executionMode": "auto"
     }
-  },
-  "guest": {
-    "cloudHypervisorPath": "/usr/bin/cloud-hypervisor",
-    "kernelImagePath": "/opt/kernel",
-    "rootfsImagePath": "/opt/rootfs.ext4",
-    "workspaceImagePath": "/var/lib/blueclaw/workspace.ext4",
-    "vcpuCount": 4,
-    "memoryMiB": 8192,
-    "vsockCID": 52,
-    "healthPortOrService": "8080",
-    "logDirectoryPath": "/var/log/blueclaw"
   },
   "database": {
     "driver": "postgres",
@@ -116,12 +105,6 @@ func TestLoadRuntimeConfigurationIncludesGuestAndBridge(t *testing.T) {
 		t.Fatalf("expected runtime configuration to load: %v", errorValue)
 	}
 
-	if runtimeConfiguration.Guest.VCPUCount != 4 {
-		t.Fatalf("expected vcpu count to match, got %d", runtimeConfiguration.Guest.VCPUCount)
-	}
-	if runtimeConfiguration.Guest.VSockCID != 52 {
-		t.Fatalf("expected vsock cid to match, got %d", runtimeConfiguration.Guest.VSockCID)
-	}
 	if runtimeConfiguration.Capabilities.Endpoint != "http://127.0.0.1:7781" {
 		t.Fatalf("expected capability endpoint to match, got %q", runtimeConfiguration.Capabilities.Endpoint)
 	}

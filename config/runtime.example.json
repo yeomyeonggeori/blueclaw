@@ -101,31 +101,6 @@
       "maxModel": "your-model"
     }
   },
-  "guest": {
-    "virtualMachineMonitor": "cloudHypervisor",
-    "cloudHypervisorPath": "/usr/local/bin/cloud-hypervisor",
-    "virtiofsdPath": "/usr/local/bin/virtiofsd",
-    "kernelImagePath": "/opt/blueclaw/blueclaw-runtime/vmlinux.bin",
-    "rootfsImagePath": "/opt/blueclaw/blueclaw-runtime/rootfs.ext4",
-    "workspaceImagePath": "/var/lib/blueclaw/workspace.ext4",
-    "vcpuCount": 4,
-    "memoryMiB": 8192,
-    "vsockCID": 52,
-    "healthPortOrService": "8082",
-    "guestHTTPPortOrService": "8081",
-    "hostHTTPListenAddress": "127.0.0.1:8080",
-    "logDirectoryPath": "/var/log/blueclaw-supervisor",
-    "runtimeDirectoryPath": "/var/lib/bc",
-    "outboundNetwork": {
-      "enabled": true,
-      "hostDeviceName": "bctap0",
-      "guestMACAddress": "AA:FC:00:00:00:01",
-      "networkCIDR": "172.31.0.0/30",
-      "hostAddressCIDR": "172.31.0.1/30",
-      "guestAddressCIDR": "172.31.0.2/30",
-      "guestGateway": "172.31.0.1"
-    }
-  },
   "database": {
     "driver": "postgres",
     "connectionString": "postgres://blueclaw@/blueclaw?host=/var/run/postgresql&sslmode=disable",
@@ -185,7 +160,7 @@
     }
   ],
   "terminal": {
-    "mode": "virtualMachineGuest",
+    "mode": "native",
     "workspaceRootPath": "/workspace",
     "timeoutSecond": 120,
     "outputMaxBytes": 32768,

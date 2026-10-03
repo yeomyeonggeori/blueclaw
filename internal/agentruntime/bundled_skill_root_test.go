@@ -13,8 +13,8 @@ func TestBundledSkillRootFollowsTheShareWhenOneIsDelivered(t *testing.T) {
 		t.Fatalf("without a delivered path the bundled skills stay in the workspace, got %q", toolCatalogBuilder.bundledSkillRootPath())
 	}
 
-	t.Setenv("BLUECLAW_BUNDLED_SKILLS_PATH", "/delivery/skills")
-	if toolCatalogBuilder.bundledSkillRootPath() != "/delivery/skills" {
+	t.Setenv("BLUECLAW_BUNDLED_SKILLS_PATH", "/opt/blueclaw/skills")
+	if toolCatalogBuilder.bundledSkillRootPath() != "/opt/blueclaw/skills" {
 		t.Fatalf("expected the delivered bundled skills, got %q", toolCatalogBuilder.bundledSkillRootPath())
 	}
 }

@@ -19,16 +19,14 @@ import (
 )
 
 // A private home is owned by that person's POSIX user, so only a helper that can
-// act for people reads it. Saying the device needs a newer helper is the whole
+// act for people reads it. Saying the host needs a newer helper is the whole
 // diagnosis; the raw "permission denied" this replaces reads as broken ownership.
-const tooOldToReadAsThePerson = "this device's workspace helper cannot read a private home; it needs one that can act for a person"
+const tooOldToReadAsThePerson = "this host's workspace helper cannot read a private home; it needs one that can act for a person"
 
 // WorkspaceFilesHandler serves listings, ranged downloads and streamed writes of
-// the guest's live workspace filesystem. The workspace lives inside the virtual-machine guest
-// image, so a host-side file browser cannot read it; admind proxies here to show
-// a person their own workspace. Every read runs as the person named by the
-// caller, because a private home is owned by that person's POSIX user and the
-// blueclaw service cannot read it.
+// the live workspace filesystem; admind proxies here to show a person their own
+// workspace. Every read runs as the person named by the caller, because a private
+// home is owned by that person's POSIX user and the blueclaw service cannot read it.
 type WorkspaceFilesHandler struct {
 	WorkspaceRootPath     string
 	WorkspaceActorFactory security.WorkspaceActorFactory

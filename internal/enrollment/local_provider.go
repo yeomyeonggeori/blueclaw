@@ -13,7 +13,6 @@ import (
 type Answers struct {
 	DisplayName              string
 	Email                    string
-	Mode                     RunMode
 	WorkspaceRootPath        string
 	DatabaseConnectionString string
 	LanguageModel            LanguageModelAccess
@@ -33,7 +32,6 @@ func (provider LocalProvider) Enroll(context.Context) (Enrollment, error) {
 	answers := provider.answers
 	enrollment := Enrollment{
 		TenantID:                 newIdentifier(),
-		Mode:                     firstNonEmptyMode(answers.Mode, RunModeHost),
 		Operator:                 Person{PersonID: newIdentifier(), DisplayName: answers.DisplayName, Email: answers.Email},
 		WorkspaceRootPath:        firstNonEmptyString(answers.WorkspaceRootPath, provider.home.WorkspaceRootPath()),
 		DatabaseConnectionString: answers.DatabaseConnectionString,
@@ -54,7 +52,6 @@ func SuggestedAnswers(home Home) Answers {
 	return Answers{
 		DisplayName:              accountName,
 		Email:                    accountName + "@localhost",
-		Mode:                     RunModeHost,
 		WorkspaceRootPath:        home.WorkspaceRootPath(),
 		DatabaseConnectionString: detectedDatabaseConnectionString(home),
 		LanguageModel:            detectedLanguageModelAccess(),
@@ -129,13 +126,4 @@ func firstNonEmptyString(candidates ...string) string {
 		}
 	}
 	return ""
-}
-
-func firstNonEmptyMode(candidates ...RunMode) RunMode {
-	for _, candidate := range candidates {
-		if strings.TrimSpace(string(candidate)) != "" {
-			return candidate
-		}
-	}
-	return RunModeHost
 }

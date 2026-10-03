@@ -22,7 +22,7 @@ The [quickstart](https://blueclaw.intern.kim/docs/quickstart) configures the sta
 
 | path | holds |
 |---|---|
-| `cmd/` | the daemon, the setuid POSIX helper, the terminal client, the guest supervisor, backup and restore, the lab runner |
+| `cmd/` | the daemon, the setuid POSIX helper, the terminal client, backup and restore, the scenario runner |
 | `internal/` | connectors, intake, agent runtime, approvals, security, policy, identity, memory, scheduler, HTTP |
 | `.dependency/bluecollar` | [bluecollar](https://github.com/yeomyeonggeori/bluecollar), the bundled agent loop and the shared `agentcontract` |
 | `.dependency/bluememo` | [bluememo](https://github.com/yeomyeonggeori/bluememo), the memory store |
@@ -30,8 +30,8 @@ The [quickstart](https://blueclaw.intern.kim/docs/quickstart) configures the sta
 | `protocol/` | Zod contracts shared across processes and the JSON Schemas generated from them |
 | `chatd/` | the chat bridge and its Buzz and Mattermost adapters |
 | `admin/` | the Svelte admin and task console |
-| `config/` | example runtime, policy and lab configuration |
-| `lab/` | provisioning and scenario scripts for the development VM |
+| `config/` | example runtime and policy configuration |
+| `lab/` | a live task-classification scenario for `blueclaw-lab virtual-session --scenario-file` |
 | `tests/` | integration suite and fixtures |
 | `docs/` | the documentation site, generated from `DOCS.md`, and the generated tool catalog |
 

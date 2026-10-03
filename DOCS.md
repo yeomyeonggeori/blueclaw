@@ -239,7 +239,7 @@ A task run is the durable record of one unit of work, from intake to its final r
 
 A run has one of nine statuses: `planned`, `running`, `waiting_user_input`, `waiting_approval`, `blocked`, `interrupted`, `completed`, `failed`, `cancelled` (declared in bluecollar's `agentcontract/task_run.go`). Every transition goes through `TransitionTaskRun`, which records a transition event.
 
-Restarts are explicit. Runs orphaned by a crash are interrupted at boot, runs in flight are interrupted before shutdown (`POST /admin/api/runtime/prepare-shutdown`), and interrupted runs are claimed for auto-resume exactly once. A stale-task sweeper and a retention job run under `internal/scheduler`.
+Restarts are explicit. Runs left in flight by a restart or a crash are interrupted at boot, and interrupted runs are claimed for auto-resume exactly once. A stale-task sweeper and a retention job run under `internal/scheduler`.
 
 Within a run the model works in steps. A step either calls a tool, speaks to the requester, or fails the task; a final reply closes the task and must cite the observations that prove the work happened (the completion gate in bluecollar).
 
@@ -340,7 +340,7 @@ A capability is an operation a separate service performs on the agent's behalf, 
 
 blueclaw stays provider-neutral. It asks for a capability and passes an `executionMode` (`device`, `remote` or `auto`, default `auto`); the capability service decides where it runs. Descriptors mark tools that need the requester present (`requiresUserPresence`), and those are not registered for scheduled runs.
 
-The `capabilities` block names the service: `endpoint`, `unixSocketPath`, or `vsockCID` and `vsockPort` for a guest, plus `timeoutSecond`. The request and response shapes are Zod contracts in `protocol/` (`capability-descriptor`, `capability-registry-response`, `tool-invoke-request`, `tool-invoke-response`). A deployment without the block reports `capabilityd: not_configured` in health and runs without capability tools, capability-routed models, or memory embeddings.
+The `capabilities` block names the service: `endpoint` or `unixSocketPath`, plus `timeoutSecond`. The request and response shapes are Zod contracts in `protocol/` (`capability-descriptor`, `capability-registry-response`, `tool-invoke-request`, `tool-invoke-response`). A deployment without the block reports `capabilityd: not_configured` in health and runs without capability tools, capability-routed models, or memory embeddings.
 
 ## Schedule
 
@@ -487,11 +487,10 @@ The runtime configuration is the JSON file passed as `--runtime`, and it holds e
 | `terminal` | the execution settings in [What is not enforced](#what-is-not-enforced) |
 | `scheduler` | `retentionCheckIntervalMinute`, `taskSchedulePollIntervalSecond` |
 | `logging` | `directoryPath`, `retentionDays` |
-| `guest` | the virtual machine guest |
 
 `agent.defaultTaskLevel` is the effort a task starts at, `xlow` through `max`. `agent.harness` takes `name`, `agentCommandPath`, `agentArguments` and `toolCatalogURL`.
 
-`config/runtime.standalone.example.json` is a single-process shape and `config/runtime.example.json` a guest-and-capability-service shape.
+`config/runtime.standalone.example.json` is a single-process shape and `config/runtime.example.json` a capability-service shape.
 
 ## Language models
 
@@ -536,17 +535,15 @@ The HTTP surface is every route the daemon serves, defined in `internal/httpserv
 
 A deployment is the daemon, Postgres, the setuid helper and, optionally, a capability service and `chatd` beside it.
 
-The simplest shape is `cmd/blueclaw` as an ordinary process. A stronger shape runs it inside a virtual machine guest under `cmd/blueclaw-supervisor`, which boots the guest under Cloud Hypervisor or vfkit, mounts the workspace, proxies host and guest HTTP over vsock, and restores the workspace image. Cloud Hypervisor disks are attached as `image_type=raw` with PCI left on, and the delivery directory is served over virtio-fs.
+`cmd/blueclaw` runs as an ordinary process on the host.
 
 | Binary | Purpose |
 |---|---|
 | `cmd/blueclaw` | the daemon |
 | `cmd/blueclaw-posix-helper` | setuid identity switch, POSIX state sync, filesystem operations |
 | `cmd/blueclaw-cli` | terminal client and enrollment |
-| `cmd/blueclaw-supervisor` | boots and watches the guest |
-| `cmd/blueclaw-guest-healthd`, `cmd/blueclaw-vsock-http-proxy` | guest health and host-to-guest transport |
 | `cmd/blueclaw-backup`, `cmd/blueclaw-restore` | workspace and database snapshot bundles |
-| `cmd/blueclaw-lab` | development VM lifecycle and scenario runner |
+| `cmd/blueclaw-lab` | virtual session scenario runner |
 
 ### Which revision is running
 
@@ -560,7 +557,7 @@ A build without it reports `unknown`, and a deploy check should refuse that.
 
 ### Restarting safely
 
-A running process keeps the configuration it started with. Before replacing the binary, call `POST /admin/api/runtime/prepare-shutdown` so runs in flight are interrupted and resumed once afterwards, or `POST /admin/api/quiesce` to stop taking new work. `/admin/api/backup/prepare` and `/complete` bracket a snapshot.
+A running process keeps the configuration it started with. Before replacing the binary, call `POST /admin/api/quiesce` to stop taking new work; runs still in flight are interrupted at the next boot and resumed once. `/admin/api/backup/prepare` and `/complete` bracket a snapshot.
 
 ## Development
 
@@ -593,10 +590,6 @@ go run ./cmd/blueclaw-lab virtual-session --scenario presentation \
 ```
 
 Scenarios are defined in `internal/e2e/scenarios.go`; `--scenario-file` loads one from JSON.
-
-### The lab
-
-`cmd/blueclaw-lab` also drives a full rig: an Apple Silicon Mac as the person's computer, a Tart ARM Linux VM, and blueclaw inside a guest that VM boots under Cloud Hypervisor. `config/lab.example.json` configures it and `lab/scripts/` holds provisioning and scenario scripts. The commands are `image-build`, `vm-up`, `vm-down`, `vm-ssh`, `scenario-mattermost` and `scenario-slack`. Tart and a hardware-virtualized guest cannot start on a hosted CI runner, so the lab is not exercised by CI.
 
 ### Screenshots
 

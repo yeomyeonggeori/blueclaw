@@ -288,7 +288,7 @@ func TestWorkspaceFilesHandlerSaysAnOlderHelperCannotReadAPrivateHome(t *testing
 		t.Fatalf("status = %d body = %q", recorder.Code, recorder.Body.String())
 	}
 	if strings.Contains(recorder.Body.String(), workspaceRootPath) {
-		t.Fatalf("the answer named a guest path: %q", recorder.Body.String())
+		t.Fatalf("the answer named a filesystem path: %q", recorder.Body.String())
 	}
 }
 

@@ -197,10 +197,7 @@ func NewCapabilityLLMClientForTier(runtimeConfiguration config.RuntimeConfigurat
 func newCapabilityClient(runtimeConfiguration config.RuntimeConfiguration) capability.Client {
 	return capability.NewClient(capability.Configuration{
 		Endpoint:       runtimeConfiguration.Capabilities.Endpoint,
-		Transport:      runtimeConfiguration.Capabilities.Transport,
 		UnixSocketPath: runtimeConfiguration.Capabilities.UnixSocketPath,
-		VSockCID:       runtimeConfiguration.Capabilities.VSockCID,
-		VSockPort:      runtimeConfiguration.Capabilities.VSockPort,
 		Timeout:        time.Duration(runtimeConfiguration.Capabilities.TimeoutSecond) * time.Second,
 	})
 }

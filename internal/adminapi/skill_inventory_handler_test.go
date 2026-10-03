@@ -16,7 +16,7 @@ func TestSkillInventoryNamesWhereEachSkillWasRead(t *testing.T) {
 			Name:           "presentation",
 			Description:    "builds decks",
 			ToolReferences: []string{"bash"},
-			Source:         agentcontract.InstructionSource{Path: "/delivery/skills/presentation/SKILL.md"},
+			Source:         agentcontract.InstructionSource{Path: "/opt/blueclaw/skills/presentation/SKILL.md"},
 		}}}
 	}}
 
@@ -30,7 +30,7 @@ func TestSkillInventoryNamesWhereEachSkillWasRead(t *testing.T) {
 	if len(document.Skills) != 1 {
 		t.Fatalf("expected the loaded skill, got %d", len(document.Skills))
 	}
-	if document.Skills[0].Path != "/delivery/skills/presentation/SKILL.md" {
+	if document.Skills[0].Path != "/opt/blueclaw/skills/presentation/SKILL.md" {
 		t.Fatalf("a host that ships a root the agent never opens is told apart by the path: %q", document.Skills[0].Path)
 	}
 }
@@ -51,7 +51,7 @@ func TestSkillInventoryNamesWhatAnUnavailableSkillLacks(t *testing.T) {
 	handler := SkillInventoryHandler{InventoryLoader: func() SkillInventory {
 		return SkillInventory{Unavailable: []skill.UnavailableSkill{{
 			Name:                        "internkim-api",
-			Path:                        "/delivery/skills/internkim-api/SKILL.md",
+			Path:                        "/opt/blueclaw/skills/internkim-api/SKILL.md",
 			MissingEnvironmentVariables: []string{"INTERNKIM_TOKEN"},
 		}}}
 	}}
