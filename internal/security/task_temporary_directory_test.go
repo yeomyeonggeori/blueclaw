@@ -1,7 +1,11 @@
 package security
 
 import (
+	"bytes"
+	"context"
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
@@ -42,8 +46,8 @@ func TestTaskTemporaryDirectoryCleanerRemovesOnlyTheTaskDirectory(t *testing.T) 
 		t.Fatal(errorValue)
 	}
 
-	cleaner := TaskTemporaryDirectoryCleaner{WorkspaceRootPath: workspaceRootPath}
-	if errorValue := cleaner.RemoveTaskTemporaryDirectory("person-1", "task-run-1"); errorValue != nil {
+	cleaner := TaskTemporaryDirectoryCleaner{WorkspaceRootPath: workspaceRootPath, Actors: commandRunningActors{}}
+	if errorValue := cleaner.RemoveTaskTemporaryDirectory(context.Background(), "person-1", "task-run-1"); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 
@@ -57,12 +61,38 @@ func TestTaskTemporaryDirectoryCleanerRemovesOnlyTheTaskDirectory(t *testing.T) 
 
 func TestTaskTemporaryDirectoryCleanerIgnoresUnknownRequester(t *testing.T) {
 	cleaner := TaskTemporaryDirectoryCleaner{WorkspaceRootPath: t.TempDir()}
-	if errorValue := cleaner.RemoveTaskTemporaryDirectory("", "task-run-1"); errorValue != nil {
+	if errorValue := cleaner.RemoveTaskTemporaryDirectory(context.Background(), "", "task-run-1"); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if errorValue := cleaner.RemoveTaskTemporaryDirectory("person-1", ""); errorValue != nil {
+	if errorValue := cleaner.RemoveTaskTemporaryDirectory(context.Background(), "person-1", ""); errorValue != nil {
 		t.Fatal(errorValue)
 	}
+}
+
+// commandRunningActors runs the command a cleaner asks for as this test
+// process, so the test exercises the real rm invocation without a helper to
+// switch identity.
+type commandRunningActors struct {
+	WorkspaceActor
+}
+
+func (commandRunningActors) Requester(context.Context, WorkspaceActorRequest) (WorkspaceActor, error) {
+	return commandRunningActors{}, nil
+}
+
+func (commandRunningActors) CanListDirectory(context.Context) bool { return false }
+
+func (commandRunningActors) Run(ctx context.Context, request CommandRequest) (CommandResult, error) {
+	var stderr bytes.Buffer
+	command := exec.CommandContext(ctx, request.ExecutableName, request.Arguments...)
+	command.Stderr = &stderr
+	var exitError *exec.ExitError
+	if errorValue := command.Run(); errors.As(errorValue, &exitError) {
+		return CommandResult{ExitCode: exitError.ExitCode(), Stderr: stderr.String()}, nil
+	} else if errorValue != nil {
+		return CommandResult{}, errorValue
+	}
+	return CommandResult{}, nil
 }
 
 func TestPOSIXEnvironmentKeepsTaskTemporaryDirectorySeparate(t *testing.T) {
