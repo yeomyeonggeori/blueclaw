@@ -1,6 +1,7 @@
 package task
 
 import (
+	"context"
 	"log/slog"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
@@ -11,9 +12,9 @@ type TaskTemporaryDirectoryReclaimer struct {
 	logger  *slog.Logger
 }
 
-func NewTaskTemporaryDirectoryReclaimer(workspaceRootPath string, logger *slog.Logger) TaskTemporaryDirectoryReclaimer {
+func NewTaskTemporaryDirectoryReclaimer(workspaceRootPath string, actors security.WorkspaceActorFactory, logger *slog.Logger) TaskTemporaryDirectoryReclaimer {
 	return TaskTemporaryDirectoryReclaimer{
-		cleaner: security.TaskTemporaryDirectoryCleaner{WorkspaceRootPath: workspaceRootPath},
+		cleaner: security.TaskTemporaryDirectoryCleaner{WorkspaceRootPath: workspaceRootPath, Actors: actors},
 		logger:  logger,
 	}
 }
@@ -22,7 +23,7 @@ func (reclaimer TaskTemporaryDirectoryReclaimer) Observe(taskRun TaskRun) {
 	if !taskRunHasEnded(taskRun.Status) {
 		return
 	}
-	errorValue := reclaimer.cleaner.RemoveTaskTemporaryDirectory(taskRun.RequesterPersonID, taskRun.TaskRunID)
+	errorValue := reclaimer.cleaner.RemoveTaskTemporaryDirectory(context.Background(), taskRun.RequesterPersonID, taskRun.TaskRunID)
 	if errorValue == nil {
 		return
 	}
