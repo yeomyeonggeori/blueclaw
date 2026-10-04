@@ -1398,20 +1398,26 @@ func (toolCatalogBuilder *ToolCatalogBuilder) attachFileTool(toolContext context
 	deliveredPaths := []string{}
 	claimChecks := []officeClaimCheck{}
 	visualReviews := []officeVisualReview{}
+	replyNotes := []string{}
 	for _, attachmentInput := range attachmentInputs {
 		concretePath := toolCatalogBuilder.nativeRequesterPath(handlerContext.request, strings.TrimSpace(attachmentInput.Path))
+		fileChecks := []officeClaimCheck{}
 		if check := toolCatalogBuilder.checkOfficeClaims(toolContext, handlerContext.request, concretePath); check != nil {
-			claimChecks = append(claimChecks, *check)
+			fileChecks = append(fileChecks, *check)
 		}
-		if review := toolCatalogBuilder.checkOfficeVisualReview(toolContext, handlerContext.request, concretePath); review != nil {
+		review := toolCatalogBuilder.checkOfficeVisualReview(toolContext, handlerContext.request, concretePath)
+		if review != nil {
 			visualReviews = append(visualReviews, *review)
-			claimChecks = appendedClaimRecheck(claimChecks, review)
+			fileChecks = appendedClaimRecheck(fileChecks, review)
 		}
+		claimChecks = append(claimChecks, fileChecks...)
 		attachment, failureResult := toolCatalogBuilder.fileAttachment(toolContext, attachmentInput, handlerContext)
 		if failureResult != nil {
 			return *failureResult, nil
 		}
-		attachment.Holds = toolCatalogBuilder.deliveredFileHolds(toolContext, handlerContext.request, concretePath)
+		snapshot := toolCatalogBuilder.deliveredSnapshot(toolContext, handlerContext.request, concretePath)
+		attachment.Holds = snapshotHolds(snapshot)
+		replyNotes = append(replyNotes, deliveredFileNotes(attachment.Filename, snapshotBlankLabels(snapshot), fileChecks, review)...)
 		attachments = append(attachments, attachment)
 		deliveredPaths = append(deliveredPaths, attachment.DevicePath)
 	}
@@ -1426,8 +1432,9 @@ func (toolCatalogBuilder *ToolCatalogBuilder) attachFileTool(toolContext context
 		data["visualReview"] = visualReviews
 	}
 	return toolcontract.ToolResult{
-		Output:      toolcontract.ToolOutput{Content: fileDeliverStagedContent + blankedClaimsContent(claimChecks) + visualReviewContent(visualReviews), Data: json.RawMessage(MarshalBody(data))},
+		Output:      toolcontract.ToolOutput{Content: strings.Join(append([]string{fileDeliverStagedContent}, replyNotes...), "; "), Data: json.RawMessage(MarshalBody(data))},
 		Attachments: attachments,
+		ReplyNotes:  replyNotes,
 	}, nil
 }
 
@@ -1498,13 +1505,27 @@ func (toolCatalogBuilder *ToolCatalogBuilder) fileDeliverReadFailure(toolContext
 	if outcome.failureCode() != security.ActorErrorCodeNotFound {
 		return result
 	}
-	candidateFiles := toolCatalogBuilder.fileDeliverCandidateFiles(toolContext, handlerContext, path)
-	if len(candidateFiles) == 0 {
-		return result
-	}
 	dataFields := actorFailureDataFields("read_file", "file_deliver", path, outcome.actorError("read_file", path))
-	dataFields["candidateFiles"] = candidateFiles
+	if isHomeRelativePath(path) {
+		homePath := toolCatalogBuilder.agentWorkspacePath(toolCatalogBuilder.nativeRequesterPath(handlerContext.request, "~"))
+		dataFields["readFrom"] = homePath
+		result = withFailureMessage(result, result.Failure.UserSafeSummary+". A relative path is read from "+homePath+", where every command starts, not from a directory an earlier command changed into; give the file's absolute path.")
+	}
+	if candidateFiles := toolCatalogBuilder.fileDeliverCandidateFiles(toolContext, handlerContext, path); len(candidateFiles) > 0 {
+		dataFields["candidateFiles"] = candidateFiles
+	}
 	result.Output.Data = json.RawMessage(MarshalBody(dataFields))
+	return result
+}
+
+func isHomeRelativePath(path string) bool {
+	trimmedPath := strings.TrimSpace(path)
+	return trimmedPath != "~" && !strings.HasPrefix(trimmedPath, "~/") && !filepath.IsAbs(trimmedPath)
+}
+
+func withFailureMessage(result toolcontract.ToolResult, message string) toolcontract.ToolResult {
+	result.Output.Content = message
+	result.Failure.UserSafeSummary = message
 	return result
 }
 
@@ -1529,6 +1550,9 @@ const deliveredDocumentsDirectoryPath = "~/documents"
 
 func (toolCatalogBuilder *ToolCatalogBuilder) fileDeliverCandidateDirectories(request ToolCatalogRequest, path string) []string {
 	requestedDirectoryPath := filepath.ToSlash(filepath.Dir(strings.TrimSpace(path)))
+	if isHomeRelativePath(requestedDirectoryPath) {
+		requestedDirectoryPath = filepath.ToSlash(filepath.Join("~", requestedDirectoryPath))
+	}
 	directoryPaths := []string{requestedDirectoryPath}
 	if toolCatalogBuilder.nativeRequesterPath(request, deliveredDocumentsDirectoryPath) != toolCatalogBuilder.nativeRequesterPath(request, requestedDirectoryPath) {
 		directoryPaths = append(directoryPaths, deliveredDocumentsDirectoryPath)

@@ -233,7 +233,7 @@ func TestAFixedSlidesNewSentenceIsJudgedAgainstTheSourcesAndBlanked(t *testing.T
 	if !strings.Contains(string(data["visualReview"]), `"recheckedClaims":1`) || !strings.Contains(string(data["claimChecks"]), `"outcome":"blanked"`) {
 		t.Fatalf("expected the recheck recorded, got %s and %s", data["visualReview"], data["claimChecks"])
 	}
-	if !strings.Contains(content, "deck.pptx: slide title") {
+	if !strings.Contains(content, "slide title (it said \"GOOD crowded 99%\"") {
 		t.Fatalf("expected the delivery to name the blank, got %s", content)
 	}
 	if snapshot := fixture.readFile(t, fixture.documentPath+officeContract.SourceSuffix); !strings.Contains(snapshot, `"label":"표지"`) {

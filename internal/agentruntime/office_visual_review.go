@@ -296,19 +296,6 @@ func officeRebuildWords(snapshot officeSnapshot) ([]string, error) {
 	return append(slices.Clone(command[1:]), snapshot.Arguments...), nil
 }
 
-func visualReviewContent(reviews []officeVisualReview) string {
-	parts := []string{}
-	for _, review := range reviews {
-		if review.Outcome == visualOutcomeLeftovers {
-			parts = append(parts, review.File+": "+leftoverSlideNames(review.Leftovers))
-		}
-	}
-	if len(parts) == 0 {
-		return ""
-	}
-	return "; slides that still show a defect after the visual review, for the reply to say what remains: " + strings.Join(parts, "; ")
-}
-
 func leftoverSlideNames(leftovers []officeVisualLeftover) string {
 	names := []string{}
 	for _, leftover := range leftovers {

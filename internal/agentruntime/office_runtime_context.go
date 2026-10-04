@@ -26,7 +26,8 @@ type officeHostContract struct {
 }
 
 type officeSourceContent struct {
-	Fields []string `json:"fields"`
+	Fields          []string `json:"fields"`
+	CompanionFields []string `json:"companionFields"`
 }
 
 var officeContract = parsedOfficeHostContract(officeHostContractDocument)

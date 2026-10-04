@@ -264,16 +264,3 @@ func verdictPlaces(verdicts []claimcheck.Verdict) []string {
 	}
 	return places
 }
-
-func blankedClaimsContent(checks []officeClaimCheck) string {
-	parts := []string{}
-	for _, check := range checks {
-		if check.Outcome == claimOutcomeBlanked {
-			parts = append(parts, check.File+": "+strings.Join(check.Blanked, ", "))
-		}
-	}
-	if len(parts) == 0 {
-		return ""
-	}
-	return "; left blank because nothing the person gave supports them, for the reply to offer to complete: " + strings.Join(parts, "; ")
-}

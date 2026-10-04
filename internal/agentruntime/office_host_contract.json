@@ -237,6 +237,84 @@
           ]
         }
       },
+      "slides": {
+        "type": "array",
+        "description": "a deck's slides as built from its source, in order: each one's number, layout, title, the rest of its text, its tables as rows of cell text, its charts' data and its icons; speaker notes are left out, and a value the claim check blanked is absent",
+        "items": {
+          "type": "object",
+          "properties": {
+            "slide": {
+              "type": "integer"
+            },
+            "layout": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "text": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "tables": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "charts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string"
+                  },
+                  "labels": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "values": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "series": {
+                    "type": "string"
+                  },
+                  "unit": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              }
+            },
+            "icons": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "slide",
+            "title"
+          ]
+        }
+      },
       "visualReview": {
         "type": "string",
         "description": "a deck's visual review: the absolute path of the JSON its build wrote, holding the question to ask of each slide render, the threshold, the rounds, the fixer's instructions and each slide's render, facts, <section> source and measured defects; absent for files that are not decks"
@@ -269,13 +347,16 @@
     ]
   },
   "sourceContent": {
-    "description": "the snapshot fields that say what the file holds; the host reads them as the person and hands them, with the delivered file, to the check that judges the file against the request",
+    "description": "the snapshot fields that say what the file holds; the host reads them as the person and hands them, with the delivered file, to the check that judges the file against the request. companionFields go with them and never alone: a snapshot holding none of fields says nothing of what the file holds, so the host hands no holds for it and the check reads the file's delivery record instead",
     "fields": [
       "schema",
       "given",
       "tables",
       "views",
       "charts",
+      "slides"
+    ],
+    "companionFields": [
       "blanks"
     ]
   }
