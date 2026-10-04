@@ -126,6 +126,22 @@ func TestTheShellIsToldWhereTheOfficeRuntimeContextIsAndFindsTheTaskFactsThere(t
 	}
 }
 
+func TestTheRuntimeContextSaysTheHostReviewsDeckRendersOnlyWhileBothReviewModelsAreSet(t *testing.T) {
+	fixture := newOfficeContextFixture(t)
+	if reviews := string(fixture.contextTheShellReads(t)["reviewsDeckRenders"]); reviews != "false" {
+		t.Fatalf("a host with no review models told the office it reviews deck renders: %s", reviews)
+	}
+	models := &deckModels{}
+	fixture.builder.UseVisualReviewModels(models, nil)
+	if reviews := string(fixture.contextTheShellReads(t)["reviewsDeckRenders"]); reviews != "false" {
+		t.Fatalf("a host with no fixer told the office it reviews deck renders: %s", reviews)
+	}
+	fixture.builder.UseVisualReviewModels(models, models)
+	if reviews := string(fixture.contextTheShellReads(t)["reviewsDeckRenders"]); reviews != "true" {
+		t.Fatalf("a host with both review models did not tell the office it reviews deck renders: %s", reviews)
+	}
+}
+
 func TestTheModelCannotPointTheOfficeAtAnotherRuntimeContext(t *testing.T) {
 	if !security.IsWorkspaceManagedEnvironmentName(officeContract.RuntimeContextVariable) {
 		t.Fatalf("%s is not managed by the workspace, so a command's own environment could replace it", officeContract.RuntimeContextVariable)

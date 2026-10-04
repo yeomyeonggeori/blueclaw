@@ -247,6 +247,17 @@ func newConfiguredDecisionModel(runtimeConfiguration config.RuntimeConfiguration
 	return decisionModel
 }
 
+func newConfiguredVisualReviewModel(runtimeConfiguration config.RuntimeConfiguration, logger *slog.Logger) model.DecisionModel {
+	visualReviewModel, errorValue := llm.NewConfiguredVisualReviewModel(runtimeConfiguration)
+	if errorValue != nil {
+		if logger != nil {
+			logger.Error("visual review model configuration failed", "error", errorValue.Error())
+		}
+		return nil
+	}
+	return visualReviewModel
+}
+
 func newDecisionPlanner(decisionModel model.DecisionModel, visionLanguageModel model.LanguageModelProvider) intake.DecisionPlanner {
 	if decisionModel == nil {
 		return intake.DecisionPlanner{}

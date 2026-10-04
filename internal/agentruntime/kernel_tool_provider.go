@@ -176,6 +176,40 @@ var (
 				},
 				"required":["file","asked","outcome"],
 				"additionalProperties":false
+			}},
+			"visualReview":{"type":"array","items":{
+				"type":"object",
+				"properties":{
+					"file":{"type":"string","minLength":1},
+					"roundsUsed":{"type":"integer","minimum":0},
+					"fixed":{"type":"array","items":{
+						"type":"object",
+						"properties":{
+							"number":{"type":"integer","minimum":1},
+							"change":{"type":"string"}
+						},
+						"required":["number","change"],
+						"additionalProperties":false
+					}},
+					"givenUp":{"type":"array","items":{"type":"integer","minimum":1}},
+					"leftovers":{"type":"array","items":{
+						"type":"object",
+						"properties":{
+							"number":{"type":"integer","minimum":1},
+							"findings":{"type":"array","items":{"type":"string"}},
+							"measured":{"type":"array","items":{"type":"string"}}
+						},
+						"required":["number"],
+						"additionalProperties":false
+					}},
+					"textChanged":{"type":"array","items":{"type":"integer","minimum":1}},
+					"recheckedClaims":{"type":"integer","minimum":0},
+					"costUSD":{"type":"number","minimum":0},
+					"outcome":{"type":"string","minLength":1},
+					"detail":{"type":"string"}
+				},
+				"required":["file","roundsUsed","recheckedClaims","costUSD","outcome"],
+				"additionalProperties":false
 			}}
 		},
 		"required":["deliveredPaths","attachmentCount"],

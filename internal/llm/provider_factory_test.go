@@ -288,3 +288,44 @@ func TestAnEndpointRefusesAnUnsetKeyVariableAndASecondKeySource(t *testing.T) {
 		t.Fatal("an endpoint naming both a key file and a key variable must be refused")
 	}
 }
+
+func TestVisualReviewModelAsksTheModelItsEndpointNames(t *testing.T) {
+	var modelName string
+	reviewServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		var requestDocument struct {
+			Model string `json:"model"`
+		}
+		_ = json.NewDecoder(request.Body).Decode(&requestDocument)
+		modelName = requestDocument.Model
+		_, _ = responseWriter.Write([]byte(`{"answers":{"visual_defect":{"choice":"none","probabilities":{"none":0.9,"crowded":0.1}}}}`))
+	}))
+	defer reviewServer.Close()
+	apiKeyPath := filepath.Join(t.TempDir(), "review-key")
+	if errorValue := os.WriteFile(apiKeyPath, []byte("review-key\n"), 0o600); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	runtimeConfiguration := config.RuntimeConfiguration{LanguageModel: config.LanguageModelConfiguration{
+		Decision:     config.ModelEndpointConfiguration{Endpoint: reviewServer.URL + "/decisions", Model: "decision-model", APIKeyPath: apiKeyPath},
+		VisualReview: config.ModelEndpointConfiguration{Endpoint: reviewServer.URL + "/decisions", Model: "vision-decision-model", APIKeyPath: apiKeyPath},
+	}}
+	reviewModel, errorValue := NewConfiguredVisualReviewModel(runtimeConfiguration)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if _, errorValue := reviewModel.Decide(context.Background(), model.DecisionRequest{
+		State:     "a slide",
+		Questions: map[string]model.DecisionQuestion{"visual_defect": model.ChoiceQuestion{Instructions: "Which defect?", OptionDescriptions: map[string]string{"none": "clean", "crowded": "packed"}}.Question()},
+	}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if modelName != "vision-decision-model" {
+		t.Fatalf("the visual review asks the model its own endpoint names, got %q", modelName)
+	}
+}
+
+func TestNoVisualReviewEndpointMeansNoVisualReview(t *testing.T) {
+	reviewModel, errorValue := NewConfiguredVisualReviewModel(config.RuntimeConfiguration{})
+	if errorValue != nil || reviewModel != nil {
+		t.Fatalf("an unconfigured visual review is off, got %v, %v", reviewModel, errorValue)
+	}
+}

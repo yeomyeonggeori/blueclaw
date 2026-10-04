@@ -68,6 +68,10 @@
           ],
           "additionalProperties": false
         }
+      },
+      "reviewsDeckRenders": {
+        "type": "boolean",
+        "description": "true when the host reviews every slide render of a delivered deck itself and repairs the slides it flags, so a deck build writes the review manifest for it"
       }
     },
     "required": [
@@ -75,7 +79,8 @@
       "today",
       "company",
       "registeredDocuments",
-      "attachments"
+      "attachments",
+      "reviewsDeckRenders"
     ],
     "additionalProperties": false
   },
@@ -231,6 +236,10 @@
             "type"
           ]
         }
+      },
+      "visualReview": {
+        "type": "string",
+        "description": "a deck's visual review: the absolute path of the JSON its build wrote, holding the question to ask of each slide render, the threshold, the rounds, the fixer's instructions and each slide's render, facts, <section> source and measured defects; absent for files that are not decks"
       }
     }
   },

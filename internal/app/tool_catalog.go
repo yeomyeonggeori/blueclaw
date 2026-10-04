@@ -57,6 +57,7 @@ func newToolCatalogBuilder(runtimeConfiguration config.RuntimeConfiguration, ker
 	toolCatalogBuilder.UseWorkspaceRootPath(runtimeConfiguration.Terminal.WorkspaceRootPath)
 	toolCatalogBuilder.UseSkillChangeHandler(kernel.refreshSkillIndex)
 	toolCatalogBuilder.UseClaimDecisionModel(kernel.decisionModel)
+	toolCatalogBuilder.UseVisualReviewModels(newConfiguredVisualReviewModel(runtimeConfiguration, logger), kernel.taskTierLanguageModels.Medium)
 	if memoryComponents.stores != nil {
 		toolCatalogBuilder.UseMemoryStores(memoryComponents.stores, directory.identityService)
 	}
