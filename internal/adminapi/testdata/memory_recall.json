@@ -1,0 +1,17 @@
+{
+  "facts": [
+    {
+      "factID": "f1a2b3c4d5e6f708192a3b4c5d6e7f80",
+      "scopeType": "person",
+      "scopeID": "person-alice",
+      "content": "이샘플 prefers bullet summaries"
+    },
+    {
+      "factID": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+      "scopeType": "circle",
+      "scopeID": "leadership",
+      "content": "The board meets on the first Monday of October"
+    }
+  ],
+  "degradedReason": "the reranker did not answer"
+}

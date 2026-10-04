@@ -2,8 +2,11 @@ package adminapi
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -115,4 +118,64 @@ func TestMemoryHandlerReportsAMissingStore(t *testing.T) {
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503 without a store, got %d", recorder.Code)
 	}
+}
+
+func TestMemoryHandlerListsTheStackThePersonStandsOnNearestFirst(t *testing.T) {
+	handler := memoryHandlerFixture(t)
+
+	response := listFacts(t, handler, "person-alice")
+
+	expected := []memoryLayerView{{ScopeType: memory.ScopePerson, ScopeID: "person-alice"}, {ScopeType: memory.ScopeCircle, ScopeID: "member"}, {ScopeType: memory.ScopeWorkspace}}
+	if !slices.Equal(response.Layers, expected) {
+		t.Fatalf("expected the stack %v, got %v", expected, response.Layers)
+	}
+	companyPath, errorValue := handler.Stores.Path(memory.WorkspaceScope())
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if _, statFailure := os.Stat(companyPath); !errors.Is(statFailure, os.ErrNotExist) {
+		t.Fatal("listing a person's memory created a file for a layer nobody had written to")
+	}
+}
+
+func TestMemoryHandlerPreviewsARecallWithoutReinforcingIt(t *testing.T) {
+	handler := memoryHandlerFixture(t)
+	recorder := httptest.NewRecorder()
+
+	handler.HandlePreviewRecall(recorder, httptest.NewRequest(http.MethodGet, "/admin/api/memory/recall?readerPersonID=person-alice&query=all-hands", nil))
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var response memoryRecallResponse
+	if errorValue := json.Unmarshal(recorder.Body.Bytes(), &response); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if !slices.Contains(response.Facts, memoryRecalledView{FactID: factIDOf(t, handler, "the all-hands is on Thursday"), ScopeType: memory.ScopeCircle, ScopeID: "member", Content: "the all-hands is on Thursday"}) {
+		t.Fatalf("expected the circle memory with its circle, got %+v", response.Facts)
+	}
+	for _, fact := range listFacts(t, handler, "person-alice").Facts {
+		if !fact.LastRecalledAt.IsZero() {
+			t.Fatalf("a preview reinforced %q", fact.Content)
+		}
+	}
+}
+
+func TestMemoryHandlerPreviewNeedsAQuestion(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	memoryHandlerFixture(t).HandlePreviewRecall(recorder, httptest.NewRequest(http.MethodGet, "/admin/api/memory/recall?readerPersonID=person-alice", nil))
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 without a question, got %d", recorder.Code)
+	}
+}
+
+func factIDOf(t *testing.T, handler MemoryHandler, content string) string {
+	t.Helper()
+	for _, fact := range listFacts(t, handler, "person-alice").Facts {
+		if fact.Content == content {
+			return fact.FactID
+		}
+	}
+	t.Fatalf("no fact says %q", content)
+	return ""
 }

@@ -170,14 +170,30 @@ func ScopesToSearch(personAccess policy.PersonAccess, containedCircles map[strin
 // list this code keeps. A scope with no file yet has nothing to say, which is
 // not a failure, while a file that exists and will not open is.
 func (stores *Stores) RecallAcross(ctx context.Context, personAccess policy.PersonAccess, scopes []Scope, query string, limit int) (Recalled, error) {
-	recalled := Recalled{Mode: "merged"}
-	held, errorValue := stores.kept(ctx, scopes)
-	if errorValue != nil || len(held) == 0 {
+	recalled, recalledIDs, errorValue := stores.readThrough(ctx, personAccess, scopes, query, limit)
+	if errorValue != nil {
 		return recalled, errorValue
+	}
+	return recalled, stores.reinforce(ctx, recalledIDs)
+}
+
+// PreviewAcross reads the stack the way RecallAcross does and leaves every
+// file as it was: a person looking up what would come to mind is not the agent
+// using a memory, so nothing is reinforced.
+func (stores *Stores) PreviewAcross(ctx context.Context, personAccess policy.PersonAccess, scopes []Scope, query string, limit int) (Recalled, error) {
+	recalled, _, errorValue := stores.readThrough(ctx, personAccess, scopes, query, limit)
+	return recalled, errorValue
+}
+
+func (stores *Stores) readThrough(ctx context.Context, personAccess policy.PersonAccess, scopes []Scope, query string, limit int) (Recalled, map[Scope][]string, error) {
+	recalled := Recalled{Mode: "merged"}
+	held, errorValue := stores.Held(ctx, scopes)
+	if errorValue != nil || len(held) == 0 {
+		return recalled, nil, errorValue
 	}
 	result, errorValue := stores.readAs(ctx, personAccess, held, query, limit)
 	if errorValue != nil {
-		return recalled, errorValue
+		return recalled, nil, errorValue
 	}
 	recalled.DegradedReason = result.Recall.DegradedReason
 	recalledIDs := map[Scope][]string{}
@@ -186,13 +202,13 @@ func (stores *Stores) RecallAcross(ctx context.Context, personAccess policy.Pers
 		recalled.Facts = append(recalled.Facts, memoryFactFrom(entry, scope))
 		recalledIDs[scope] = append(recalledIDs[scope], entry.Memory.MemoryID)
 	}
-	return recalled, stores.reinforce(ctx, recalledIDs)
+	return recalled, recalledIDs, nil
 }
 
-// kept opens, as their keeper, the scopes that already hold a file, because a
+// Held opens, as their keeper, the scopes that already hold a file, because a
 // reader that may not write a store reads it only while its keeper holds it
 // open. A scope with no file is left out rather than created.
-func (stores *Stores) kept(ctx context.Context, scopes []Scope) ([]Scope, error) {
+func (stores *Stores) Held(ctx context.Context, scopes []Scope) ([]Scope, error) {
 	held := []Scope{}
 	for _, scope := range scopes {
 		path, errorValue := stores.Path(scope)
@@ -242,6 +258,7 @@ func memoryFactFrom(entry bluememo.RecalledMemory, scope Scope) MemoryFact {
 	return MemoryFact{
 		FactID:          entry.Memory.MemoryID,
 		ScopeType:       scope.Kind,
+		ScopeID:         scope.ID,
 		Content:         entry.Memory.Content,
 		Score:           entry.Score,
 		SourceEpisodeID: entry.Memory.OriginID,
@@ -290,7 +307,7 @@ func (stores *Stores) Remember(ctx context.Context, stack []Scope, note bluememo
 }
 
 func (stores *Stores) layers(ctx context.Context, scopes []Scope) ([]bluememo.Known, error) {
-	held, errorValue := stores.kept(ctx, scopes)
+	held, errorValue := stores.Held(ctx, scopes)
 	if errorValue != nil {
 		return nil, errorValue
 	}

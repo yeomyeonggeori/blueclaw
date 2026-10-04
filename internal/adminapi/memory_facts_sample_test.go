@@ -10,35 +10,49 @@ import (
 	"testing"
 )
 
-const memoryFactsSamplePath = "testdata/memory_facts.json"
+const (
+	memoryFactsSamplePath  = "testdata/memory_facts.json"
+	memoryRecallSamplePath = "testdata/memory_recall.json"
+)
 
 func TestMemoryFactsSampleIsAnAnswerTheHandlerCanGive(t *testing.T) {
-	document, errorValue := os.ReadFile(filepath.FromSlash(memoryFactsSamplePath))
+	keys := decodeSample(t, memoryFactsSamplePath, &memoryFactListResponse{})
+	expectEveryField(t, memoryFactsSamplePath, reflect.TypeOf(memoryFactListResponse{}), []map[string]any{keys})
+	expectEveryField(t, memoryFactsSamplePath, reflect.TypeOf(memoryLayerView{}), objectsAt(t, keys, "layers"))
+	expectEveryField(t, memoryFactsSamplePath, reflect.TypeOf(memoryIndexView{}), []map[string]any{objectAt(t, keys, "index")})
+	expectEveryField(t, memoryFactsSamplePath, reflect.TypeOf(memoryFactView{}), objectsAt(t, keys, "facts"))
+}
+
+func TestMemoryRecallSampleIsAnAnswerTheHandlerCanGive(t *testing.T) {
+	keys := decodeSample(t, memoryRecallSamplePath, &memoryRecallResponse{})
+	expectEveryField(t, memoryRecallSamplePath, reflect.TypeOf(memoryRecallResponse{}), []map[string]any{keys})
+	expectEveryField(t, memoryRecallSamplePath, reflect.TypeOf(memoryRecalledView{}), objectsAt(t, keys, "facts"))
+}
+
+func decodeSample(t *testing.T, path string, into any) map[string]any {
+	t.Helper()
+	document, errorValue := os.ReadFile(filepath.FromSlash(path))
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	decoder := json.NewDecoder(bytes.NewReader(document))
 	decoder.DisallowUnknownFields()
-	var sample memoryFactListResponse
-	if errorValue := decoder.Decode(&sample); errorValue != nil {
-		t.Fatalf("%s names a field the handler never answers with: %v", memoryFactsSamplePath, errorValue)
+	if errorValue := decoder.Decode(into); errorValue != nil {
+		t.Fatalf("%s names a field the handler never answers with: %v", path, errorValue)
 	}
-
 	var keys map[string]any
 	if errorValue := json.Unmarshal(document, &keys); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	expectEveryField(t, reflect.TypeOf(memoryFactListResponse{}), []map[string]any{keys})
-	expectEveryField(t, reflect.TypeOf(memoryIndexView{}), []map[string]any{objectAt(t, keys, "index")})
-	expectEveryField(t, reflect.TypeOf(memoryFactView{}), objectsAt(t, keys, "facts"))
+	return keys
 }
 
-func expectEveryField(t *testing.T, structType reflect.Type, samples []map[string]any) {
+func expectEveryField(t *testing.T, path string, structType reflect.Type, samples []map[string]any) {
 	t.Helper()
 	for field := range structType.Fields() {
 		name := strings.Split(field.Tag.Get("json"), ",")[0]
 		if !anyHolds(samples, name) {
-			t.Errorf("%s never shows %s.%s; add it so the web schema meets it", memoryFactsSamplePath, structType.Name(), name)
+			t.Errorf("%s never shows %s.%s; add it so the web schema meets it", path, structType.Name(), name)
 		}
 	}
 }
@@ -56,7 +70,7 @@ func objectAt(t *testing.T, document map[string]any, key string) map[string]any 
 	t.Helper()
 	object, isObject := document[key].(map[string]any)
 	if !isObject {
-		t.Fatalf("%s has no %s object", memoryFactsSamplePath, key)
+		t.Fatalf("the sample has no %s object", key)
 	}
 	return object
 }
@@ -65,7 +79,7 @@ func objectsAt(t *testing.T, document map[string]any, key string) []map[string]a
 	t.Helper()
 	values, isArray := document[key].([]any)
 	if !isArray || len(values) == 0 {
-		t.Fatalf("%s has no %s", memoryFactsSamplePath, key)
+		t.Fatalf("the sample has no %s", key)
 	}
 	objects := []map[string]any{}
 	for _, value := range values {
