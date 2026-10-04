@@ -56,6 +56,7 @@ type ToolCatalogBuilder struct {
 
 	claimDecisionModel  model.DecisionModel
 	claimRecomputeModel model.LanguageModelProvider
+	claimRewriteModel   model.LanguageModelProvider
 
 	visualReviewDecisionModel model.DecisionModel
 	visualReviewLanguageModel model.LanguageModelProvider

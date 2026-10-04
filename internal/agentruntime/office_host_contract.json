@@ -322,7 +322,8 @@
     }
   },
   "blankCommand": {
-    "description": "how the host remakes a file with claims blank, run as the person: merge for a snapshot that names a schema, create for one that names a declaration or a deck; the snapshot stands in for the values or the declaration, a deck is rebuilt from its source, and each --blank names a claim path",
+    "description": "how the host remakes a file with claims blank, run as the person: merge for a snapshot that names a schema, create for one that names a declaration or a deck; the snapshot stands in for the values or the declaration, a deck is rebuilt from its source, and each --blank names a claim path; replaceFlag, passed as <replaceFlag> <path>=<text>, gives a claim path the text it takes instead, and a path both blanked and replaced is blanked",
+    "replaceFlag": "--replace",
     "merge": [
       "merge",
       "<schema>",
