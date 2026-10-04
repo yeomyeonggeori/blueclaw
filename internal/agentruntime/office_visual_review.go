@@ -59,8 +59,12 @@ func (toolCatalogBuilder *ToolCatalogBuilder) UseVisualReviewModels(decisionMode
 	toolCatalogBuilder.visualReviewLanguageModel = languageModel
 }
 
+func (toolCatalogBuilder *ToolCatalogBuilder) reviewsDeckRenders() bool {
+	return toolCatalogBuilder.visualReviewDecisionModel != nil && toolCatalogBuilder.visualReviewLanguageModel != nil
+}
+
 func (toolCatalogBuilder *ToolCatalogBuilder) checkOfficeVisualReview(ctx context.Context, request ToolCatalogRequest, concretePath string) *officeVisualReview {
-	if toolCatalogBuilder.visualReviewDecisionModel == nil || toolCatalogBuilder.visualReviewLanguageModel == nil {
+	if !toolCatalogBuilder.reviewsDeckRenders() {
 		return nil
 	}
 	actor, actorFailure := toolCatalogBuilder.workspaceActorForRequest(ctx, request)

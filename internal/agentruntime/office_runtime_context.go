@@ -54,6 +54,7 @@ type officeRuntimeContext struct {
 	Company             map[string]string          `json:"company"`
 	RegisteredDocuments []officeRegisteredDocument `json:"registeredDocuments"`
 	Attachments         []officeAttachment         `json:"attachments"`
+	ReviewsDeckRenders  bool                       `json:"reviewsDeckRenders"`
 }
 
 type officeRequester struct {
@@ -99,6 +100,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) officeRuntimeContextFor(request To
 		Company:             map[string]string{},
 		RegisteredDocuments: []officeRegisteredDocument{},
 		Attachments:         toolCatalogBuilder.officeAttachments(request),
+		ReviewsDeckRenders:  toolCatalogBuilder.reviewsDeckRenders(),
 	}
 }
 

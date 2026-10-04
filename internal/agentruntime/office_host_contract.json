@@ -68,6 +68,10 @@
           ],
           "additionalProperties": false
         }
+      },
+      "reviewsDeckRenders": {
+        "type": "boolean",
+        "description": "true when the host reviews every slide render of a delivered deck itself and repairs the slides it flags, so a deck build writes the review manifest for it"
       }
     },
     "required": [
@@ -75,7 +79,8 @@
       "today",
       "company",
       "registeredDocuments",
-      "attachments"
+      "attachments",
+      "reviewsDeckRenders"
     ],
     "additionalProperties": false
   },
