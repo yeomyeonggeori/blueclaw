@@ -8,11 +8,14 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
 
 	acp "github.com/coder/acp-go-sdk"
+
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/acpsession"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
@@ -28,7 +31,7 @@ type virtualACPSession struct {
 	close      func()
 }
 
-func openVirtualACPSession(collaborators acpsession.Collaborators, conversationID string) (*virtualACPSession, error) {
+func openVirtualACPSession(collaborators acpsession.Collaborators, conversationID string, recordCatalogURL string) (*virtualACPSession, error) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	agentSide, clientSide := net.Pipe()
 	agent := acpsession.NewAgent(collaborators, acpsession.NewPermissionRelay(logger), logger)
@@ -53,7 +56,7 @@ func openVirtualACPSession(collaborators acpsession.Collaborators, conversationI
 	}
 	opened, errorValue := connection.NewSession(ctx, acp.NewSessionRequest{
 		Cwd:        "/workspace",
-		McpServers: []acp.McpServer{},
+		McpServers: virtualRecordCatalogServers(recordCatalogURL),
 		Meta: map[string]any{acpsession.SessionMetaKey: acpsession.SessionContext{
 			Requester:  acpsession.Requester{Email: virtualACPRequesterEmail},
 			Addressing: acpsession.Addressing{Platform: "virtual", ConversationID: conversationID},
@@ -67,8 +70,16 @@ func openVirtualACPSession(collaborators acpsession.Collaborators, conversationI
 	return session, nil
 }
 
-func (session *virtualACPSession) prompt(ctx context.Context, event connectors.PlatformInboundEvent) (string, error) {
+func virtualRecordCatalogServers(recordCatalogURL string) []acp.McpServer {
+	if strings.TrimSpace(recordCatalogURL) == "" {
+		return []acp.McpServer{}
+	}
+	return []acp.McpServer{{Http: &acp.McpServerHttpInline{Type: "http", Name: "internkim", Url: recordCatalogURL, Headers: []acp.HttpHeader{}}}}
+}
+
+func (session *virtualACPSession) prompt(ctx context.Context, event connectors.PlatformInboundEvent) (string, []toolcontract.FileAttachment, error) {
 	messageCountBefore := session.client.messageCount()
+	fileCountBefore := session.client.fileCount()
 	isThread := event.IsThread != nil && *event.IsThread
 	_, errorValue := session.connection.Prompt(ctx, acp.PromptRequest{
 		SessionId: session.sessionID,
@@ -81,14 +92,14 @@ func (session *virtualACPSession) prompt(ctx context.Context, event connectors.P
 		}},
 	})
 	if errorValue != nil {
-		return "", errorValue
+		return "", nil, errorValue
 	}
-	return session.client.messagesSince(messageCountBefore), nil
+	return session.client.messagesSince(messageCountBefore), session.client.filesSince(fileCountBefore), nil
 }
 
 func (harness *VirtualSessionHarness) runTurnOverACP(ctx context.Context, event connectors.PlatformInboundEvent, observedTurnResult func() VirtualTurnResult) (VirtualTurnResult, error) {
 	updatedBefore := time.Now()
-	reply, errorValue := harness.acpSession.prompt(ctx, event)
+	reply, files, errorValue := harness.acpSession.prompt(ctx, event)
 	if errorValue != nil {
 		return VirtualTurnResult{}, errorValue
 	}
@@ -102,6 +113,7 @@ func (harness *VirtualSessionHarness) runTurnOverACP(ctx context.Context, event 
 	turnResult.TaskStatus = taskRun.Status
 	turnResult.FailureReason = taskRun.FailureReason
 	turnResult.Events = harness.taskEventService.ListTaskEvent(taskRun.TaskRunID)
+	turnResult.Attachments = files
 	if strings.TrimSpace(reply) == "" {
 		return turnResult, nil
 	}
@@ -131,12 +143,25 @@ type virtualACPClient struct {
 	mutex      sync.Mutex
 	connection *acp.ClientSideConnection
 	messages   []string
+	files      []toolcontract.FileAttachment
 }
 
 func (client *virtualACPClient) messageCount() int {
 	client.mutex.Lock()
 	defer client.mutex.Unlock()
 	return len(client.messages)
+}
+
+func (client *virtualACPClient) fileCount() int {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	return len(client.files)
+}
+
+func (client *virtualACPClient) filesSince(index int) []toolcontract.FileAttachment {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	return append([]toolcontract.FileAttachment{}, client.files[index:]...)
 }
 
 func (client *virtualACPClient) messagesSince(index int) string {
@@ -155,8 +180,27 @@ func (client *virtualACPClient) SessionUpdate(ctx context.Context, notification 
 		client.messages = append(client.messages, chunk.Content.Text.Text)
 		client.mutex.Unlock()
 	}
+	if chunk.Content.ResourceLink != nil {
+		client.mutex.Lock()
+		client.files = append(client.files, fileAttachmentLinkedBy(*chunk.Content.ResourceLink))
+		client.mutex.Unlock()
+	}
 	go client.reportPosted(context.WithoutCancel(ctx), notification.Meta)
 	return nil
+}
+
+func fileAttachmentLinkedBy(link acp.ContentBlockResourceLink) toolcontract.FileAttachment {
+	attachment := toolcontract.FileAttachment{Filename: link.Name}
+	if parsed, errorValue := url.Parse(link.Uri); errorValue == nil {
+		attachment.DevicePath = parsed.Path
+	}
+	if link.MimeType != nil {
+		attachment.ContentType = *link.MimeType
+	}
+	if link.Size != nil {
+		attachment.SizeBytes = int64(*link.Size)
+	}
+	return attachment
 }
 
 func (client *virtualACPClient) reportPosted(ctx context.Context, meta map[string]any) {
