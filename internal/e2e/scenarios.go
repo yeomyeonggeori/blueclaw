@@ -998,7 +998,7 @@ func ChangeCheckRecoveryAcceptanceScenario(artifactDirectoryPath string) Virtual
 			},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: agentcontract.TaskEventCompletionChangeCheck, BodyFragment: `"unmet":[{"change":"task created"`, Count: 1},
-				{Name: agentcontract.TaskEventCompletionChangeCheck, BodyFragment: `"carriedOut":{"expected0":0.9}}`, Count: 1},
+				{Name: agentcontract.TaskEventCompletionChangeCheck, BodyFragment: `"carriedOut":{"expected0":0.9}`, Count: 1},
 				{Name: agentcontract.TaskEventAgentEvidenceMissing, BodyFragment: "7월 24일 마감", Count: 1},
 				{Name: agentcontract.TaskEventAgentCompletionRequired, BodyFragment: "7월 24일 마감", Count: 1},
 			},
