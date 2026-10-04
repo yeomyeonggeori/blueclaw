@@ -344,6 +344,7 @@ func TestOfficeExampleLive(t *testing.T) {
 		ConfigureToolCatalog: func(builder *agentruntime.ToolCatalogBuilder) {
 			builder.UseClaimDecisionModel(&decisionRecorder{label: "claim", delegate: claimDecisions, directory: outputDirectory})
 			builder.UseVisualReviewModels(&decisionRecorder{label: "visual", delegate: visualDecisions, directory: outputDirectory}, languageRecorder{label: "fixer", delegate: medium, directory: outputDirectory})
+			builder.UseDeckDesignModel(&decisionRecorder{label: "design", delegate: claimDecisions, directory: outputDirectory})
 		},
 		Turns: []VirtualTurn{turn},
 	}

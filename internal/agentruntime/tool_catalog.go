@@ -60,6 +60,8 @@ type ToolCatalogBuilder struct {
 
 	visualReviewDecisionModel model.DecisionModel
 	visualReviewLanguageModel model.LanguageModelProvider
+
+	deckDesignModel model.DecisionModel
 }
 
 type toolHandlerContext struct {

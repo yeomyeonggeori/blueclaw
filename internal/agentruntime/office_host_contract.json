@@ -72,6 +72,102 @@
       "reviewsDeckRenders": {
         "type": "boolean",
         "description": "true when the host reviews every slide render of a delivered deck itself and repairs the slides it flags, so a deck build writes the review manifest for it"
+      },
+      "preparesDecks": {
+        "type": "boolean",
+        "description": "true when the host prepares a deck when asked: it answers the design questions of the request file the deckPreparation names in one decision call, and gathers the images the requester can use, before the next command runs"
+      },
+      "deckDesign": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "the host's answers to the deck design questions once the deck preparation ran, with its failure when no answer came; null until then",
+        "properties": {
+          "choices": {
+            "type": "object",
+            "description": "per question, the option chosen and every option's probability",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "option": {
+                  "type": "string"
+                },
+                "probabilities": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number"
+                  }
+                }
+              },
+              "required": [
+                "option",
+                "probabilities"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "model": {
+            "type": "string"
+          },
+          "costUSD": {
+            "type": "number"
+          },
+          "failure": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "choices"
+        ],
+        "additionalProperties": false
+      },
+      "images": {
+        "type": "array",
+        "description": "the data room images the requester can use in a deck, gathered as the requester when the deck preparation ran; empty until then",
+        "items": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "absolute path of the kept copy"
+            },
+            "name": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string",
+              "description": "dataroom or attachment"
+            },
+            "folder": {
+              "type": "string",
+              "description": "the data room category it is filed under"
+            },
+            "title": {
+              "type": "string"
+            },
+            "summary": {
+              "type": "string"
+            },
+            "date": {
+              "type": "string"
+            },
+            "width": {
+              "type": "integer"
+            },
+            "height": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "path",
+            "name",
+            "source",
+            "width",
+            "height"
+          ],
+          "additionalProperties": false
+        }
       }
     },
     "required": [
@@ -80,7 +176,10 @@
       "company",
       "registeredDocuments",
       "attachments",
-      "reviewsDeckRenders"
+      "reviewsDeckRenders",
+      "preparesDecks",
+      "deckDesign",
+      "images"
     ],
     "additionalProperties": false
   },
@@ -318,6 +417,10 @@
       "visualReview": {
         "type": "string",
         "description": "a deck's visual review: the absolute path of the JSON its build wrote, holding the question to ask of each slide render, the threshold, the rounds, the fixer's instructions and each slide's render, facts, <section> source and measured defects; absent for files that are not decks"
+      },
+      "design": {
+        "type": "object",
+        "description": "how a deck's design was chosen: per question the option, where it came from (source, decided or fallback) and its probabilities, the brand color taken from the logo, and the images and logo the deck could use"
       }
     }
   },
@@ -360,5 +463,9 @@
     "companionFields": [
       "blanks"
     ]
+  },
+  "deckPreparation": {
+    "requestFile": "deck-preparation.json",
+    "description": "office guide slides writes this file beside the runtime context when the host prepares decks and has not prepared this one; it names the design question file, whose instructions and options the host asks as one batch of choice questions with the request and the gathered images as state; the host removes the request after writing deckDesign and images into the runtime context"
   }
 }
