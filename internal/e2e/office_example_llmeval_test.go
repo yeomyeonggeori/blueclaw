@@ -8,16 +8,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"mime"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
-
-	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -27,19 +23,16 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
-	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
 
 const (
-	officeExampleModelEndpoint      = "https://openrouter.ai/api/v1"
-	officeExampleDecisionsEndpoint  = "https://openrouter.ai/api/alpha/decisions"
-	officeExamplePrimaryModel       = "z-ai/glm-5.3-flash"
-	officeExampleDecisionModel      = "~typesafe/jev-latest"
-	officeExampleVisualReviewModel  = "cloudflare/clef"
-	officeExampleProviderSort       = "throughput"
-	officeExampleCompanyInfoTool    = "company_info_get"
-	officeExampleCompanyProfileName = "company-profile.json"
+	officeExampleModelEndpoint     = "https://openrouter.ai/api/v1"
+	officeExampleDecisionsEndpoint = "https://openrouter.ai/api/alpha/decisions"
+	officeExamplePrimaryModel      = "z-ai/glm-5.3-flash"
+	officeExampleDecisionModel     = "~typesafe/jev-latest"
+	officeExampleVisualReviewModel = "cloudflare/clef"
+	officeExampleProviderSort      = "throughput"
 )
 
 type officeExampleRequest struct {
@@ -196,99 +189,6 @@ func readOfficeExampleRequest(t *testing.T, requestPath string) officeExampleReq
 	return request
 }
 
-func capabilityCatalogEntry(t *testing.T, toolName string) map[string]any {
-	t.Helper()
-	document, errorValue := os.ReadFile(scenarioCapabilityCatalogPath())
-	if errorValue != nil {
-		t.Fatalf("%s must name the capability catalog: %v", ScenarioCapabilityCatalogVariable, errorValue)
-	}
-	var catalog struct {
-		Tools []map[string]any `json:"tools"`
-	}
-	if errorValue := json.Unmarshal(document, &catalog); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	for _, entry := range catalog.Tools {
-		if entry["name"] == toolName {
-			return entry
-		}
-	}
-	t.Fatalf("the capability catalog carries no %s", toolName)
-	return nil
-}
-
-func readCompanyProfiles(t *testing.T, profilePath string) map[string]map[string]any {
-	t.Helper()
-	content, errorValue := os.ReadFile(profilePath)
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	profiles := map[string]map[string]any{}
-	if errorValue := json.Unmarshal(content, &profiles); errorValue != nil {
-		t.Fatalf("%s is not a profile per document language: %v", profilePath, errorValue)
-	}
-	return profiles
-}
-
-func companyProfileAsked(profiles map[string]map[string]any, arguments any) map[string]any {
-	encoded, _ := json.Marshal(arguments)
-	var asked struct {
-		Language string `json:"language"`
-	}
-	_ = json.Unmarshal(encoded, &asked)
-	if profile, isKnown := profiles[strings.ToLower(strings.TrimSpace(asked.Language))]; isKnown {
-		return profile
-	}
-	return profiles["ko"]
-}
-
-func companyInfoAnswer(profile map[string]any, keepsAnsweredFiles bool) (*sdkmcp.CallToolResult, error) {
-	body := map[string]any{"result": profile}
-	encodedBody, errorValue := json.Marshal(body)
-	if errorValue != nil {
-		return nil, errorValue
-	}
-	content := []sdkmcp.Content{&sdkmcp.TextContent{Text: string(encodedBody)}}
-	if keepsAnsweredFiles {
-		printed := map[string]any{"sealImage": "", "logoImage": ""}
-		for key, value := range profile {
-			printed[key] = value
-		}
-		encodedProfile, errorValue := json.MarshalIndent(printed, "", "  ")
-		if errorValue != nil {
-			return nil, errorValue
-		}
-		content = append(content, &sdkmcp.EmbeddedResource{Resource: &sdkmcp.ResourceContents{
-			URI:      "internkim://files/" + officeExampleCompanyProfileName,
-			MIMEType: "application/json",
-			Text:     string(encodedProfile),
-		}})
-	}
-	return &sdkmcp.CallToolResult{Content: content, StructuredContent: json.RawMessage(encodedBody)}, nil
-}
-
-func startCompanyRecordCatalog(t *testing.T, profilePath string) string {
-	t.Helper()
-	profiles := readCompanyProfiles(t, profilePath)
-	descriptor := capabilityCatalogEntry(t, officeExampleCompanyInfoTool)
-	description, _ := descriptor["description"].(string)
-	server := sdkmcp.NewServer(&sdkmcp.Implementation{Name: "internkim", Version: "1"}, nil)
-	server.AddTool(&sdkmcp.Tool{
-		Name:        officeExampleCompanyInfoTool,
-		Description: description,
-		InputSchema: descriptor["inputSchema"],
-		Meta:        sdkmcp.Meta{mcp.DescriptorMetaKey: descriptor},
-	}, func(_ context.Context, request *sdkmcp.CallToolRequest) (*sdkmcp.CallToolResult, error) {
-		return companyInfoAnswer(companyProfileAsked(profiles, request.Params.Arguments), request.Params.Meta[mcp.AnsweredFilesMetaKey] == "kept")
-	})
-	httpServer := httptest.NewServer(sdkmcp.NewStreamableHTTPHandler(
-		func(*http.Request) *sdkmcp.Server { return server },
-		&sdkmcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true},
-	))
-	t.Cleanup(httpServer.Close)
-	return httpServer.URL
-}
-
 func writeOfficeExampleModels(t *testing.T, outputDirectory string) {
 	t.Helper()
 	document, _ := json.MarshalIndent(officeExampleModels{Primary: officeExamplePrimaryModel, Decision: officeExampleDecisionModel, VisualReview: officeExampleVisualReviewModel}, "", "  ")
@@ -301,6 +201,7 @@ func TestOfficeExampleLive(t *testing.T) {
 	requestPath := os.Getenv("OFFICE_EXAMPLE_REQUEST")
 	outputDirectory := os.Getenv("OFFICE_EXAMPLE_OUTPUT")
 	profilePath := os.Getenv("OFFICE_EXAMPLE_COMPANY_PROFILE")
+	dataRoomPath := os.Getenv("OFFICE_EXAMPLE_DATA_ROOM")
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	if requestPath == "" || outputDirectory == "" || profilePath == "" || apiKey == "" {
 		t.Skip("OFFICE_EXAMPLE_REQUEST, OFFICE_EXAMPLE_OUTPUT, OFFICE_EXAMPLE_COMPANY_PROFILE and OPENROUTER_API_KEY are required")
@@ -337,9 +238,9 @@ func TestOfficeExampleLive(t *testing.T) {
 		DisableScriptedModel:  true,
 		UseLooseAssertions:    true,
 		IsDeliveredOverACP:    true,
-		RecordCatalogURL:      startCompanyRecordCatalog(t, profilePath),
+		RecordCatalogURL:      startCompanyRecordCatalog(t, profilePath, dataRoomPath),
 		SkillDirectoryPaths:   fileDeliveryRouteSkillDirectories(),
-		AllowedTools:          append(agentruntime.KernelToolNames(), officeExampleCompanyInfoTool),
+		AllowedTools:          append(agentruntime.KernelToolNames(), companyRecordToolNames...),
 		DecisionModel:         &decisionRecorder{label: "decision", delegate: loopDecisions, directory: outputDirectory},
 		ConfigureToolCatalog: func(builder *agentruntime.ToolCatalogBuilder) {
 			builder.UseClaimDecisionModel(&decisionRecorder{label: "claim", delegate: claimDecisions, directory: outputDirectory})

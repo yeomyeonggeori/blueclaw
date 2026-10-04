@@ -944,6 +944,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 		instructionBundleLoader,
 		agentHarness,
 	)
+	toolCatalogBuilder.UseToolSelector(scenarioDecisionPlanner)
 	virtualTaskLauncher := agentruntime.NewTaskLauncher(agentHarness, taskRunService, toolCatalogBuilder)
 	virtualApprovalGate := approvalgate.New(taskRunService)
 	virtualApprovalGate.UseLanguageModel(highLanguageModel)
