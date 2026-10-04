@@ -55,6 +55,9 @@ type ToolCatalogBuilder struct {
 	recordCatalogByRequester        map[string]discoveredCatalog
 
 	claimDecisionModel model.DecisionModel
+
+	visualReviewDecisionModel model.DecisionModel
+	visualReviewLanguageModel model.LanguageModelProvider
 }
 
 type toolHandlerContext struct {

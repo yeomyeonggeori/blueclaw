@@ -26,6 +26,16 @@ type officeSnapshot struct {
 	Deck        string             `json:"deck"`
 	Known       json.RawMessage    `json:"known"`
 	Claims      []claimcheck.Claim `json:"claims"`
+	Command     string             `json:"command"`
+	Arguments   []string           `json:"arguments"`
+	Blanks      []officeBlank      `json:"blanks"`
+
+	VisualReview string `json:"visualReview"`
+}
+
+type officeBlank struct {
+	Field string `json:"field"`
+	Label string `json:"label"`
 }
 
 type officeBlankCommands struct {
@@ -83,9 +93,13 @@ func (toolCatalogBuilder *ToolCatalogBuilder) checkOfficeClaims(ctx context.Cont
 	if !isRead || len(snapshot.Claims) == 0 {
 		return nil
 	}
+	return toolCatalogBuilder.judgeAndBlank(ctx, request, actor, concretePath, snapshot, snapshot.Claims)
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) judgeAndBlank(ctx context.Context, request ToolCatalogRequest, actor security.WorkspaceActor, concretePath string, snapshot officeSnapshot, claims []claimcheck.Claim) *officeClaimCheck {
 	check := &officeClaimCheck{File: filepath.Base(concretePath)}
 	sources, isEverySourceRead := toolCatalogBuilder.claimSources(ctx, request, snapshot)
-	judgment, errorValue := claimcheck.Judge(ctx, toolCatalogBuilder.claimDecisionModel, sources, snapshot.Claims)
+	judgment, errorValue := claimcheck.Judge(ctx, toolCatalogBuilder.claimDecisionModel, sources, claims)
 	if errorValue != nil {
 		check.Outcome, check.Detail = claimOutcomeJudgeFailed, errorValue.Error()
 		return check

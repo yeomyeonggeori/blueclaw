@@ -37,9 +37,13 @@ func (decisionClient CapabilityDecisionClient) Decide(responseContext context.Co
 	if len(request.Questions) == 0 {
 		return model.DecisionResponse{}, errors.New("a decision call carries no question")
 	}
+	wireState, errorValue := request.WireState()
+	if errorValue != nil {
+		return model.DecisionResponse{}, errorValue
+	}
 	requestDocument := capabilityDecisionRequestDocument{
 		Model:     firstNonEmpty(request.Model, decisionClient.ModelName),
-		State:     request.State,
+		State:     wireState,
 		Questions: request.Questions,
 		SessionID: request.SessionID,
 	}

@@ -231,6 +231,10 @@
             "type"
           ]
         }
+      },
+      "visualReview": {
+        "type": "string",
+        "description": "a deck's visual review: the absolute path of the JSON its build wrote, holding the question to ask of each slide render, the threshold, the rounds, the fixer's instructions and each slide's render, facts, <section> source and measured defects; absent for files that are not decks"
       }
     }
   },
