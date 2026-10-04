@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/claimcheck"
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
@@ -293,5 +294,43 @@ func TestAWrongDerivationFoundByRecomputingIsBlanked(t *testing.T) {
 	expected := []string{"merge", "letter", documentPath + officeContract.SourceSuffix, documentPath, "--blank", "sections[0].blocks[0].text#1"}
 	if calls := officeCalls(t, recordPath); strings.Join(calls, " ") != strings.Join(expected, " ") {
 		t.Fatalf("expected the remake %v, got %v", expected, calls)
+	}
+}
+
+func (fixture officeContextFixture) installFailingOfficeStandIn(t *testing.T) {
+	t.Helper()
+	entryPath := filepath.Join(BundledSkillRootPath(fixture.workspacePath), "office", "scripts", "office")
+	writeTestFile(t, entryPath, "#!/bin/sh\necho 'slide 2 needs a title' >&2\nexit 1\n")
+	if errorValue := os.Chmod(entryPath, 0o755); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+}
+
+func TestAFlaggedValueTheRemakeCouldNotBlankIsANoteForTheReplyNamingIt(t *testing.T) {
+	fixture := newOfficeContextFixture(t)
+	fixture.installFailingOfficeStandIn(t)
+	fixture.writeSnapshot(t, "notice.pdf", noticeSnapshot)
+
+	data := fixture.deliverWithJudge(t, &claimJudge{unsupportedText: "이전 기간에는 전화 응대가 어렵습니다."}, "notice.pdf")
+
+	if !strings.Contains(string(data["claimChecks"]), `"outcome":"remake_failed"`) {
+		t.Fatalf("expected the failed remake recorded, got %s", data["claimChecks"])
+	}
+	if !strings.Contains(string(data["claimChecks"]), "slide 2 needs a title") {
+		t.Fatalf("expected the remake's own message in the detail, got %s", data["claimChecks"])
+	}
+	content := string(data["content"])
+	if !strings.Contains(content, "1. 이전 안내") || !strings.Contains(content, "이전 기간에는 전화 응대가 어렵습니다.") || !strings.Contains(content, "still in the file") {
+		t.Fatalf("expected the reply note to name the unit left in the file, got %s", content)
+	}
+}
+
+func TestEveryFlaggedValueLeftInTheFileIsNamedWhateverStoppedTheBlank(t *testing.T) {
+	flagged := []claimcheck.Verdict{{Claim: claimcheck.Claim{Path: "slides[1].units[0]", At: "slide 2 title", Text: "2026 was a year of solid, profitable growth — now we choose the next frontier"}, Kind: "claim", Defect: "claim"}}
+	for _, outcome := range []string{claimOutcomeRemakeFailed, claimOutcomeNoRemakeCommand, claimOutcomeUnreadSources} {
+		notes := deliveredFileNotes("deck.pptx", nil, []officeClaimCheck{{File: "deck.pptx", Asked: 96, Flagged: flagged, Outcome: outcome, Detail: "exit status 1"}}, nil)
+		if len(notes) != 1 || !strings.Contains(notes[0], "slide 2 title") || !strings.Contains(notes[0], "solid, profitable growth") || !strings.Contains(notes[0], "still in the file") {
+			t.Fatalf("%s: expected a note naming the title left in the deck, got %q", outcome, notes)
+		}
 	}
 }

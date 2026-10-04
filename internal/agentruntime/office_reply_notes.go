@@ -12,6 +12,7 @@ func deliveredFileNotes(filename string, blankLabels []string, checks []officeCl
 	if blanks := blankDescriptions(blankLabels, checks); len(blanks) > 0 {
 		notes = append(notes, filename+": left blank, for the reply to offer to complete: "+strings.Join(blanks, ", "))
 	}
+	notes = append(notes, leftInFileNotes(filename, checks)...)
 	if review != nil && review.Outcome == visualOutcomeLeftovers {
 		notes = append(notes, filename+": slides that still show a defect after the visual review, for the reply to say what remains: "+leftoverSlideNames(review.Leftovers))
 	}
@@ -57,4 +58,31 @@ func flagReason(defect string) string {
 		return "which does not follow from what the person gave, or contradicts another part of the document: ask them to confirm"
 	}
 	return "which nothing the person gave supports"
+}
+
+func leftInFileNotes(filename string, checks []officeClaimCheck) []string {
+	notes := []string{}
+	for _, check := range checks {
+		if check.Outcome == claimOutcomeBlanked || check.Outcome == claimOutcomeSupported || len(check.Flagged) == 0 {
+			continue
+		}
+		units := []string{}
+		for _, verdict := range check.Flagged {
+			units = append(units, fmt.Sprintf("%s (it says %q, %s)", firstNonEmptyString(verdict.At, verdict.Path), verdict.Text, flagReason(verdict.Defect)))
+		}
+		notes = append(notes, fmt.Sprintf("%s: could not be blanked (%s), so these are still in the file and the reply must say so and offer to fix them: %s", filename, leftInFileCause(check), strings.Join(units, "; ")))
+	}
+	return notes
+}
+
+func leftInFileCause(check officeClaimCheck) string {
+	switch check.Outcome {
+	case claimOutcomeRemakeFailed:
+		return "the remake failed: " + check.Detail
+	case claimOutcomeNoRemakeCommand:
+		return "the file's snapshot names no command that remakes it"
+	case claimOutcomeUnreadSources:
+		return "an attachment was not read, so the check was not enforced"
+	}
+	return check.Outcome
 }

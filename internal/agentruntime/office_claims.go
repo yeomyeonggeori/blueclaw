@@ -249,10 +249,10 @@ func (toolCatalogBuilder *ToolCatalogBuilder) runOfficeCommand(ctx context.Conte
 		ExecutionIdentity:    toolCatalogBuilder.executionIdentityForRequester(request),
 	})
 	if errorValue != nil {
-		return errorValue.Error()
+		return firstNonEmptyString(strings.TrimSpace(commandResult.Stderr), strings.TrimSpace(commandResult.Stdout), errorValue.Error())
 	}
 	if commandResult.ExitCode != 0 {
-		return firstNonEmptyString(strings.TrimSpace(commandResult.Stdout), strings.TrimSpace(commandResult.Stderr), "the office command failed")
+		return firstNonEmptyString(strings.TrimSpace(commandResult.Stderr), strings.TrimSpace(commandResult.Stdout), "the office command failed")
 	}
 	return ""
 }
