@@ -1456,6 +1456,9 @@ func (toolCatalogBuilder *ToolCatalogBuilder) fileAttachment(toolContext context
 		return toolcontract.FileAttachment{}, &result
 	}
 	concretePath := toolCatalogBuilder.nativeRequesterPath(handlerContext.request, path)
+	if refusal := toolCatalogBuilder.unsourcedOfficeFileRefusal(toolContext, handlerContext.request, path, concretePath); refusal != nil {
+		return toolcontract.FileAttachment{}, refusal
+	}
 	filename := attachmentFilename(input, concretePath)
 	toolCatalogBuilder.persistDeliveredDocument(toolContext, handlerContext, path, filename, content)
 	contentType := firstNonEmptyString(input.ContentType, mime.TypeByExtension(filepath.Ext(filename)), "application/octet-stream")
