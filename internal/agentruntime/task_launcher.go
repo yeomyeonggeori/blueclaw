@@ -886,26 +886,25 @@ func (step routerCallLaunchStep) Run(ctx context.Context, execution *taskLaunchE
 	return result, errorValue
 }
 
-func (taskLauncher *TaskLauncher) RouterRequest(request TaskLaunchRequest) agentcontract.AgentRequest {
-	return taskLauncher.routerRequest(request, taskLauncher.RouterToolSet(request))
-}
-
 func (taskLauncher *TaskLauncher) routerRequest(request TaskLaunchRequest, toolSet *toolcontract.ToolSet) agentcontract.AgentRequest {
 	return agentcontract.AgentRequest{
-		RequesterPersonID: request.RequesterPersonID,
-		ConversationID:    request.ConversationID,
-		ConversationType:  request.ConversationType,
-		Prompt:            request.Prompt,
-		ResponseLanguage:  request.ResponseLanguage,
-		VisibleContext:    request.VisibleContext,
-		ScheduledRun:      request.ScheduledRun,
-		ActiveGoal:        request.ActiveGoal,
-		PriorTask:         request.PriorTask,
-		TurnStartedAt:     request.TurnStartedAt,
-		EnvironmentNow:    request.TurnStartedAt,
-		Company:           taskLauncher.company(),
-		ToolSet:           toolSet,
-		DecidedTurnFields: request.DecidedTurnFields,
+		RequesterPersonID:    request.RequesterPersonID,
+		RequesterCallingName: request.RequesterCallingName,
+		RequesterHandle:      request.RequesterHandle,
+		ConversationID:       request.ConversationID,
+		ConversationType:     request.ConversationType,
+		Prompt:               request.Prompt,
+		ResponseLanguage:     request.ResponseLanguage,
+		VisibleContext:       request.VisibleContext,
+		ScheduledRun:         request.ScheduledRun,
+		ActiveGoal:           request.ActiveGoal,
+		PriorTask:            request.PriorTask,
+		TurnStartedAt:        request.TurnStartedAt,
+		EnvironmentNow:       request.TurnStartedAt,
+		Company:              taskLauncher.company(),
+		AgentIdentity:        taskLauncher.agentIdentity(),
+		ToolSet:              toolSet,
+		DecidedTurnFields:    request.DecidedTurnFields,
 	}
 }
 

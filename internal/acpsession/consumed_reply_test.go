@@ -28,10 +28,6 @@ func (consumingLauncher) Launch(context.Context, agentruntime.TaskLaunchRequest)
 	}}, nil
 }
 
-func (consumingLauncher) RouterRequest(request agentruntime.TaskLaunchRequest) agentcontract.AgentRequest {
-	return agentcontract.AgentRequest{Prompt: request.Prompt, ConversationType: request.ConversationType}
-}
-
 type reactingAdapter struct {
 	mutex     sync.Mutex
 	reactions []connectors.ReactionTarget

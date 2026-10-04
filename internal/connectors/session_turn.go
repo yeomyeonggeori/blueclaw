@@ -24,13 +24,21 @@ func (connectorRuntime *ConnectorRuntime) OpenSessionTurn(ctx context.Context, e
 	}
 	replyTarget, _ := connectorRuntime.buildReplyTarget(ctx, adapter, event)
 	return &SessionTurn{connectorRuntime: connectorRuntime, turn: &inboundTurn{
-		adapter:     adapter,
-		platform:    event.Platform,
-		event:       event,
-		replyTarget: replyTarget,
-		sendReply:   connectorRuntime.recordingDelivery(sendReply),
-		personID:    personID,
+		adapter:        adapter,
+		platform:       event.Platform,
+		event:          event,
+		replyTarget:    replyTarget,
+		sendReply:      connectorRuntime.recordingDelivery(sendReply),
+		personID:       personID,
+		personAccess:   connectorRuntime.identityService.ResolvePersonAccess(personID),
+		requesterEmail: connectorRuntime.requesterEmailForEvent(personID, event),
 	}}
+}
+
+func (sessionTurn *SessionTurn) DecisionRequest(ctx context.Context) agentcontract.IntakeDecisionRequest {
+	connectorRuntime, turn := sessionTurn.connectorRuntime, sessionTurn.turn
+	request, _ := connectorRuntime.inboundDecisionRequestForTurn(withConnectorEvent(ctx, turn.event), turn)
+	return request
 }
 
 func (sessionTurn *SessionTurn) ContinueOpenInteractions(ctx context.Context, launchRequest agentruntime.TaskLaunchRequest) (agentruntime.TaskLaunchRequest, bool, error) {

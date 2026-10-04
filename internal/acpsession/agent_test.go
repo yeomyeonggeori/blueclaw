@@ -51,10 +51,6 @@ func (launcher *recordingLauncher) Launch(_ context.Context, request agentruntim
 	}}, nil
 }
 
-func (launcher *recordingLauncher) RouterRequest(request agentruntime.TaskLaunchRequest) agentcontract.AgentRequest {
-	return agentcontract.AgentRequest{Prompt: request.Prompt, ConversationType: request.ConversationType}
-}
-
 type staticDirectory struct{}
 
 func (staticDirectory) ResolvePersonIDByEmail(email string) (string, bool) {

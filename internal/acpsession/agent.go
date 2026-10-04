@@ -33,7 +33,6 @@ var (
 
 type TaskLauncher interface {
 	Launch(context.Context, agentruntime.TaskLaunchRequest) (agentruntime.TaskLaunchResult, error)
-	RouterRequest(agentruntime.TaskLaunchRequest) agentcontract.AgentRequest
 }
 
 type AttachmentImporter interface {
@@ -219,7 +218,7 @@ func (agent *Agent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.
 	sessionTurn := agent.sessionTurns.OpenSessionTurn(ctx, inboundEventOf(messageContext, launchRequest), launchRequest.RequesterPersonID, agent.replySenderFor(request.SessionId))
 	defer sessionTurn.EndProgress()
 	sessionTurn.ShowProgressBeforeAddressing(ctx)
-	launchRequest, decided, reason := agent.decideOnce(ctx, session, messageContext, launchRequest)
+	launchRequest, decided, reason := agent.decideOnce(ctx, session, messageContext, launchRequest, sessionTurn)
 	if reason != "" {
 		agent.logger.Info("acpsession.prompt.ignored",
 			"sessionID", string(request.SessionId),
@@ -305,6 +304,11 @@ func (agent *Agent) withMessageAttachments(ctx context.Context, messageContext M
 func inboundEventOf(messageContext MessageContext, launchRequest agentruntime.TaskLaunchRequest) connectors.PlatformInboundEvent {
 	visibleContext := messageContext.Context
 	visibleContext.ConversationType = launchRequest.ConversationType
+	visibleContext.Sender.Platform = firstNonEmpty(visibleContext.Sender.Platform, launchRequest.Platform)
+	visibleContext.Sender.SenderID = firstNonEmpty(visibleContext.Sender.SenderID, launchRequest.RequesterPlatformUserID)
+	visibleContext.Sender.Name = firstNonEmpty(visibleContext.Sender.Name, launchRequest.RequesterName)
+	visibleContext.Sender.CallingName = firstNonEmpty(visibleContext.Sender.CallingName, launchRequest.RequesterCallingName)
+	visibleContext.Sender.Handle = firstNonEmpty(visibleContext.Sender.Handle, launchRequest.RequesterHandle)
 	isThread := launchRequest.OriginIsThread
 	return connectors.PlatformInboundEvent{
 		Platform:         launchRequest.Platform,
@@ -314,6 +318,7 @@ func inboundEventOf(messageContext MessageContext, launchRequest agentruntime.Ta
 		ReplyTargetID:    launchRequest.ReplyTargetID,
 		IsThread:         &isThread,
 		Prompt:           launchRequest.Prompt,
+		InputParts:       append([]agentcontract.AgentPart{}, launchRequest.InputParts...),
 		ResponseLanguage: launchRequest.ResponseLanguage,
 		Context:          visibleContext,
 	}
