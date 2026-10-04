@@ -101,6 +101,35 @@ func TestAnUnsupportedClaimIsBlankedByRemakingTheFileAsThePerson(t *testing.T) {
 	}
 }
 
+func TestABlankedClaimIsANoteForTheReplyNamingWhatItSaid(t *testing.T) {
+	fixture := newOfficeContextFixture(t)
+	fixture.installOfficeStandIn(t)
+	fixture.writeSnapshot(t, "notice.pdf", noticeSnapshot)
+	fixture.builder.UseClaimDecisionModel(&claimJudge{unsupportedText: "이전 기간에는 전화 응대가 어렵습니다."})
+	fixture.request.Prompt = "사무실 이전 안내문 만들어 줘. 10월 20일 새 사무실로 이전합니다."
+
+	result := fixture.invoke(t, "file_deliver", map[string]string{"path": "documents/notice.pdf"})
+
+	expected := []string{`notice.pdf: left blank because nothing the person gave supports them, for the reply to offer to complete: 1. 이전 안내 (it said "이전 기간에는 전화 응대가 어렵습니다.")`}
+	if strings.Join(result.ReplyNotes, "\n") != strings.Join(expected, "\n") {
+		t.Fatalf("expected the reply note %q, got %q", expected, result.ReplyNotes)
+	}
+	if !strings.Contains(result.ContentText(), expected[0]) {
+		t.Fatalf("expected the model to read the same note, got %s", result.ContentText())
+	}
+}
+
+func TestASupportedFileHasNoNoteForTheReply(t *testing.T) {
+	fixture := newOfficeContextFixture(t)
+	fixture.installOfficeStandIn(t)
+	fixture.writeSnapshot(t, "notice.pdf", noticeSnapshot)
+	fixture.builder.UseClaimDecisionModel(&claimJudge{})
+
+	if result := fixture.invoke(t, "file_deliver", map[string]string{"path": "documents/notice.pdf"}); len(result.ReplyNotes) != 0 {
+		t.Fatalf("expected no note, got %q", result.ReplyNotes)
+	}
+}
+
 func TestASupportedFileIsDeliveredAsItIs(t *testing.T) {
 	fixture := newOfficeContextFixture(t)
 	recordPath := fixture.installOfficeStandIn(t)

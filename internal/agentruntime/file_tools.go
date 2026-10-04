@@ -1425,9 +1425,11 @@ func (toolCatalogBuilder *ToolCatalogBuilder) attachFileTool(toolContext context
 	if len(visualReviews) > 0 {
 		data["visualReview"] = visualReviews
 	}
+	replyNotes := append(blankedClaimsNotes(claimChecks), visualReviewNotes(visualReviews)...)
 	return toolcontract.ToolResult{
-		Output:      toolcontract.ToolOutput{Content: fileDeliverStagedContent + blankedClaimsContent(claimChecks) + visualReviewContent(visualReviews), Data: json.RawMessage(MarshalBody(data))},
+		Output:      toolcontract.ToolOutput{Content: strings.Join(append([]string{fileDeliverStagedContent}, replyNotes...), "; "), Data: json.RawMessage(MarshalBody(data))},
 		Attachments: attachments,
+		ReplyNotes:  replyNotes,
 	}, nil
 }
 
