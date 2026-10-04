@@ -48,6 +48,13 @@ func TestStandaloneRuntimeIsHealthyWithoutACapabilityService(t *testing.T) {
 
 func loadStandaloneRuntimeConfiguration(t *testing.T, connectionString string) config.RuntimeConfiguration {
 	t.Helper()
+	t.Setenv("BLUECLAW_DATABASE_URL", connectionString)
+	t.Setenv("BLUECLAW_MODEL_ENDPOINT", "http://127.0.0.1:1/v1")
+	t.Setenv("BLUECLAW_MODEL", "example/model")
+	t.Setenv("BLUECLAW_EMBEDDING_MODEL", "example/embedding")
+	t.Setenv("BLUECLAW_DECISION_ENDPOINT", "http://127.0.0.1:1/v1")
+	t.Setenv("BLUECLAW_DECISION_MODEL", "example/decision")
+	t.Setenv("OPENROUTER_API_KEY", "")
 	runtimeConfiguration, errorValue := config.LoadRuntimeConfiguration("../../config/runtime.standalone.example.json")
 	if errorValue != nil {
 		t.Fatalf("expected the standalone example configuration to load: %v", errorValue)
@@ -56,9 +63,16 @@ func loadStandaloneRuntimeConfiguration(t *testing.T, connectionString string) c
 		t.Fatal("expected the standalone example configuration to name no capability service")
 	}
 	workspaceRootPath := t.TempDir()
-	runtimeConfiguration.Database.ConnectionString = connectionString
 	runtimeConfiguration.Database.MigrationDirectoryPath = "../../migrations"
 	runtimeConfiguration.Terminal.WorkspaceRootPath = workspaceRootPath
 	runtimeConfiguration.Logging.DirectoryPath = filepath.Join(workspaceRootPath, "logs")
 	return runtimeConfiguration
+}
+
+func TestStandaloneRuntimeConfigurationLoadsWithItsDeclaredEnvironment(t *testing.T) {
+	connectionString := "postgres://sample:sample@127.0.0.1:5432/sample?sslmode=disable"
+	runtimeConfiguration := loadStandaloneRuntimeConfiguration(t, connectionString)
+	if runtimeConfiguration.Database.ConnectionString != connectionString {
+		t.Fatal("expected the standalone example to resolve the supplied database through its declared environment")
+	}
 }
