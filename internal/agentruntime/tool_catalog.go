@@ -54,7 +54,8 @@ type ToolCatalogBuilder struct {
 	recordCatalogMutex              sync.Mutex
 	recordCatalogByRequester        map[string]discoveredCatalog
 
-	claimDecisionModel model.DecisionModel
+	claimDecisionModel  model.DecisionModel
+	claimRecomputeModel model.LanguageModelProvider
 
 	visualReviewDecisionModel model.DecisionModel
 	visualReviewLanguageModel model.LanguageModelProvider
