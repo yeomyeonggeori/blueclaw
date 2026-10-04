@@ -19,9 +19,14 @@ import (
 var officeHostContractDocument []byte
 
 type officeHostContract struct {
-	RuntimeContextVariable string   `json:"runtimeContextVariable"`
-	SourceSuffix           string   `json:"sourceSuffix"`
-	DeliverableExtensions  []string `json:"deliverableExtensions"`
+	RuntimeContextVariable string              `json:"runtimeContextVariable"`
+	SourceSuffix           string              `json:"sourceSuffix"`
+	DeliverableExtensions  []string            `json:"deliverableExtensions"`
+	SourceContent          officeSourceContent `json:"sourceContent"`
+}
+
+type officeSourceContent struct {
+	Fields []string `json:"fields"`
 }
 
 var officeContract = parsedOfficeHostContract(officeHostContractDocument)

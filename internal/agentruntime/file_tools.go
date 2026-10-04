@@ -1406,6 +1406,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) attachFileTool(toolContext context
 		if failureResult != nil {
 			return *failureResult, nil
 		}
+		attachment.Holds = toolCatalogBuilder.deliveredFileHolds(toolContext, handlerContext.request, concretePath)
 		attachments = append(attachments, attachment)
 		deliveredPaths = append(deliveredPaths, attachment.DevicePath)
 	}
