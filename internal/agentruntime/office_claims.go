@@ -45,12 +45,13 @@ type officeBlankCommands struct {
 }
 
 type officeClaimCheck struct {
-	File        string               `json:"file"`
-	Asked       int                  `json:"asked"`
-	Unsupported []claimcheck.Verdict `json:"unsupported,omitempty"`
-	Blanked     []string             `json:"blanked,omitempty"`
-	Outcome     string               `json:"outcome"`
-	Detail      string               `json:"detail,omitempty"`
+	File    string               `json:"file"`
+	Asked   int                  `json:"asked"`
+	Flagged []claimcheck.Verdict `json:"flagged,omitempty"`
+	Hollow  []claimcheck.Verdict `json:"hollow,omitempty"`
+	Blanked []string             `json:"blanked,omitempty"`
+	Outcome string               `json:"outcome"`
+	Detail  string               `json:"detail,omitempty"`
 }
 
 const (
@@ -76,6 +77,10 @@ func parsedOfficeBlankCommands(document []byte) officeBlankCommands {
 
 func (toolCatalogBuilder *ToolCatalogBuilder) UseClaimDecisionModel(decisionModel model.DecisionModel) {
 	toolCatalogBuilder.claimDecisionModel = decisionModel
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) UseClaimRecompute(languageModel model.LanguageModelProvider) {
+	toolCatalogBuilder.claimRecomputeModel = languageModel
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) checkOfficeClaims(ctx context.Context, request ToolCatalogRequest, concretePath string) *officeClaimCheck {
@@ -104,13 +109,26 @@ func (toolCatalogBuilder *ToolCatalogBuilder) judgeAndBlank(ctx context.Context,
 		check.Outcome, check.Detail = claimOutcomeJudgeFailed, errorValue.Error()
 		return check
 	}
+	judgment, check.Detail = toolCatalogBuilder.withRecomputedDerivations(ctx, sources, judgment)
 	check.Asked = askedCount(judgment)
-	check.Unsupported = judgment.Unsupported()
-	return toolCatalogBuilder.actOnUnsupportedClaims(ctx, request, actor, concretePath, snapshot, check, isEverySourceRead)
+	check.Flagged = judgment.Treated(claimcheck.TreatmentBlank)
+	check.Hollow = judgment.Treated(claimcheck.TreatmentRewrite)
+	return toolCatalogBuilder.actOnFlaggedClaims(ctx, request, actor, concretePath, snapshot, check, isEverySourceRead)
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) actOnUnsupportedClaims(ctx context.Context, request ToolCatalogRequest, actor security.WorkspaceActor, concretePath string, snapshot officeSnapshot, check *officeClaimCheck, isEverySourceRead bool) *officeClaimCheck {
-	if len(check.Unsupported) == 0 {
+func (toolCatalogBuilder *ToolCatalogBuilder) withRecomputedDerivations(ctx context.Context, sources claimcheck.Sources, judgment claimcheck.Judgment) (claimcheck.Judgment, string) {
+	if toolCatalogBuilder.claimRecomputeModel == nil {
+		return judgment, ""
+	}
+	rechecked, errorValue := claimcheck.Recompute(ctx, claimcheck.CompactProfile, toolCatalogBuilder.claimRecomputeModel, sources, judgment)
+	if errorValue != nil {
+		return judgment, "recompute_failed: " + errorValue.Error()
+	}
+	return rechecked, ""
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) actOnFlaggedClaims(ctx context.Context, request ToolCatalogRequest, actor security.WorkspaceActor, concretePath string, snapshot officeSnapshot, check *officeClaimCheck, isEverySourceRead bool) *officeClaimCheck {
+	if len(check.Flagged) == 0 {
 		check.Outcome = claimOutcomeSupported
 		return check
 	}
@@ -118,7 +136,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) actOnUnsupportedClaims(ctx context
 		check.Outcome = claimOutcomeUnreadSources
 		return check
 	}
-	paths := verdictPaths(check.Unsupported)
+	paths := verdictPaths(check.Flagged)
 	words, hasCommand := officeRemakeWords(snapshot, concretePath, paths)
 	if !hasCommand {
 		check.Outcome = claimOutcomeNoRemakeCommand
@@ -128,7 +146,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) actOnUnsupportedClaims(ctx context
 		check.Outcome, check.Detail = claimOutcomeRemakeFailed, detail
 		return check
 	}
-	check.Outcome, check.Blanked = claimOutcomeBlanked, verdictPlaces(check.Unsupported)
+	check.Outcome, check.Blanked = claimOutcomeBlanked, verdictPlaces(check.Flagged)
 	return check
 }
 
@@ -231,10 +249,10 @@ func (toolCatalogBuilder *ToolCatalogBuilder) runOfficeCommand(ctx context.Conte
 		ExecutionIdentity:    toolCatalogBuilder.executionIdentityForRequester(request),
 	})
 	if errorValue != nil {
-		return errorValue.Error()
+		return firstNonEmptyString(strings.TrimSpace(commandResult.Stderr), strings.TrimSpace(commandResult.Stdout), errorValue.Error())
 	}
 	if commandResult.ExitCode != 0 {
-		return firstNonEmptyString(strings.TrimSpace(commandResult.Stdout), strings.TrimSpace(commandResult.Stderr), "the office command failed")
+		return firstNonEmptyString(strings.TrimSpace(commandResult.Stderr), strings.TrimSpace(commandResult.Stdout), "the office command failed")
 	}
 	return ""
 }

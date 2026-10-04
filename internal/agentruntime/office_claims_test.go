@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/claimcheck"
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
@@ -19,6 +20,7 @@ const noticeSnapshot = `{"schema":"letter","given":{},"known":{"documentNumber":
 
 type claimJudge struct {
 	unsupportedText string
+	kind            string
 	calls           int
 }
 
@@ -33,11 +35,12 @@ func (judge *claimJudge) Decide(_ context.Context, request model.DecisionRequest
 	_ = json.Unmarshal(state, &shown)
 	answers := map[string]model.DecisionAnswer{}
 	for key := range request.Questions {
+		kind := firstNonEmptyString(judge.kind, "claim")
 		probability := 0.05
 		if shown.Claims[key].Text == judge.unsupportedText {
 			probability = 0.9
 		}
-		answers[key] = model.DecisionAnswer{Type: model.DecisionQuestionTypeChoice, Choice: "claim", Probabilities: map[string]float64{"claim": probability}}
+		answers[key] = model.DecisionAnswer{Type: model.DecisionQuestionTypeChoice, Choice: kind, Probabilities: map[string]float64{kind: probability, "source": 1 - probability}}
 	}
 	return model.DecisionResponse{Answers: answers}, nil
 }
@@ -233,5 +236,101 @@ func TestASnapshotThePersonCannotReadIsNotJudged(t *testing.T) {
 
 	if judge.calls != 0 {
 		t.Fatal("expected the snapshot read to follow the person's file permissions")
+	}
+}
+
+func TestAMistakeIsBlankedAndTheNoteAsksThePersonToConfirm(t *testing.T) {
+	fixture := newOfficeContextFixture(t)
+	recordPath := fixture.installOfficeStandIn(t)
+	documentPath := fixture.writeSnapshot(t, "notice.pdf", noticeSnapshot)
+	fixture.builder.UseClaimDecisionModel(&claimJudge{unsupportedText: "10월 20일 새 사무실로 이전합니다.", kind: "mistake"})
+	fixture.request.Prompt = "사무실 이전 안내문 만들어 줘. 10월 21일 새 사무실로 이전합니다."
+
+	result := fixture.invoke(t, "file_deliver", map[string]string{"path": "documents/notice.pdf"})
+
+	expected := []string{"merge", "letter", documentPath + officeContract.SourceSuffix, documentPath, "--blank", "sections[0].blocks[0].text#0"}
+	if calls := officeCalls(t, recordPath); strings.Join(calls, " ") != strings.Join(expected, " ") {
+		t.Fatalf("expected the remake %v, got %v", expected, calls)
+	}
+	note := `notice.pdf: left blank, for the reply to offer to complete: 1. 이전 안내 (it said "10월 20일 새 사무실로 이전합니다.", which differs from what the person gave: ask them to confirm the right value)`
+	if strings.Join(result.ReplyNotes, "\n") != note {
+		t.Fatalf("expected the reply note %q, got %q", note, result.ReplyNotes)
+	}
+}
+
+func TestHollowIsRecordedAndNeverRewrittenOrBlanked(t *testing.T) {
+	fixture := newOfficeContextFixture(t)
+	recordPath := fixture.installOfficeStandIn(t)
+	fixture.writeSnapshot(t, "notice.pdf", noticeSnapshot)
+
+	data := fixture.deliverWithJudge(t, &claimJudge{unsupportedText: "이전 기간에는 전화 응대가 어렵습니다.", kind: "hollow"}, "notice.pdf")
+
+	if calls := officeCalls(t, recordPath); len(calls) != 0 {
+		t.Fatalf("expected no remake for hollow, got %v", calls)
+	}
+	if !strings.Contains(string(data["claimChecks"]), `"hollow":[`) || !strings.Contains(string(data["claimChecks"]), `"outcome":"supported"`) {
+		t.Fatalf("expected the hollow recorded and the file supported, got %s", data["claimChecks"])
+	}
+}
+
+type derivationWriter struct{ wrongKey string }
+
+func (writer derivationWriter) GenerateResponse(context.Context, string) (string, error) {
+	return "", nil
+}
+
+func (writer derivationWriter) GenerateStructuredResponse(context.Context, model.StructuredResponseRequest) (model.StructuredResponse, error) {
+	return model.StructuredResponse{Content: `{"checks":[{"key":"` + writer.wrongKey + `","working":"2+2=4","isWrong":true}]}`}, nil
+}
+
+func TestAWrongDerivationFoundByRecomputingIsBlanked(t *testing.T) {
+	fixture := newOfficeContextFixture(t)
+	recordPath := fixture.installOfficeStandIn(t)
+	documentPath := fixture.writeSnapshot(t, "notice.pdf", noticeSnapshot)
+	fixture.builder.UseClaimRecompute(derivationWriter{wrongKey: "claim1"})
+
+	fixture.deliverWithJudge(t, &claimJudge{kind: "derived"}, "notice.pdf")
+
+	expected := []string{"merge", "letter", documentPath + officeContract.SourceSuffix, documentPath, "--blank", "sections[0].blocks[0].text#1"}
+	if calls := officeCalls(t, recordPath); strings.Join(calls, " ") != strings.Join(expected, " ") {
+		t.Fatalf("expected the remake %v, got %v", expected, calls)
+	}
+}
+
+func (fixture officeContextFixture) installFailingOfficeStandIn(t *testing.T) {
+	t.Helper()
+	entryPath := filepath.Join(BundledSkillRootPath(fixture.workspacePath), "office", "scripts", "office")
+	writeTestFile(t, entryPath, "#!/bin/sh\necho 'slide 2 needs a title' >&2\nexit 1\n")
+	if errorValue := os.Chmod(entryPath, 0o755); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+}
+
+func TestAFlaggedValueTheRemakeCouldNotBlankIsANoteForTheReplyNamingIt(t *testing.T) {
+	fixture := newOfficeContextFixture(t)
+	fixture.installFailingOfficeStandIn(t)
+	fixture.writeSnapshot(t, "notice.pdf", noticeSnapshot)
+
+	data := fixture.deliverWithJudge(t, &claimJudge{unsupportedText: "이전 기간에는 전화 응대가 어렵습니다."}, "notice.pdf")
+
+	if !strings.Contains(string(data["claimChecks"]), `"outcome":"remake_failed"`) {
+		t.Fatalf("expected the failed remake recorded, got %s", data["claimChecks"])
+	}
+	if !strings.Contains(string(data["claimChecks"]), "slide 2 needs a title") {
+		t.Fatalf("expected the remake's own message in the detail, got %s", data["claimChecks"])
+	}
+	content := string(data["content"])
+	if !strings.Contains(content, "1. 이전 안내") || !strings.Contains(content, "이전 기간에는 전화 응대가 어렵습니다.") || !strings.Contains(content, "still in the file") {
+		t.Fatalf("expected the reply note to name the unit left in the file, got %s", content)
+	}
+}
+
+func TestEveryFlaggedValueLeftInTheFileIsNamedWhateverStoppedTheBlank(t *testing.T) {
+	flagged := []claimcheck.Verdict{{Claim: claimcheck.Claim{Path: "slides[1].units[0]", At: "slide 2 title", Text: "2026 was a year of solid, profitable growth — now we choose the next frontier"}, Kind: "claim", Defect: "claim"}}
+	for _, outcome := range []string{claimOutcomeRemakeFailed, claimOutcomeNoRemakeCommand, claimOutcomeUnreadSources} {
+		notes := deliveredFileNotes("deck.pptx", nil, []officeClaimCheck{{File: "deck.pptx", Asked: 96, Flagged: flagged, Outcome: outcome, Detail: "exit status 1"}}, nil)
+		if len(notes) != 1 || !strings.Contains(notes[0], "slide 2 title") || !strings.Contains(notes[0], "solid, profitable growth") || !strings.Contains(notes[0], "still in the file") {
+			t.Fatalf("%s: expected a note naming the title left in the deck, got %q", outcome, notes)
+		}
 	}
 }
