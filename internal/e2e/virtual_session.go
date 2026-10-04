@@ -86,7 +86,10 @@ type VirtualSessionScenario struct {
 	WritableWorkspacePaths    []string
 	RequesterIsAdmin          bool
 	IsDeliveredOverACP        bool
+	RecordCatalogURL          string
 	Turns                     []VirtualTurn
+	DecisionModel             model.DecisionModel
+	ConfigureToolCatalog      func(*agentruntime.ToolCatalogBuilder)
 }
 
 var virtualCanonicalMessageToolNames = []string{
@@ -872,7 +875,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	scenarioIntakeOptions := agentcontract.IntakeOptions{IsEnabled: true, DefaultTaskLevel: agentcontract.TaskLevelLow}
 	turnScript := scenarioTurnScriptFor(scriptedModel)
 	changeChecks := &scenarioChangeChecks{}
-	scenarioDecisionPlanner := intake.NewDecisionPlanner(newScenarioDecisionModel(turnScript, firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel), scenario.AddressingResponse), nil, nil)
+	scenarioDecisionPlanner := intake.NewDecisionPlanner(scenarioIntakeDecisionModel(scenario, turnScript, firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel)), nil, nil)
 	agentHarness, skillRetriever := virtualSessionAgentHarnessFactory(harnessdriver.Dependencies{
 		TaskRunStore:      taskRunService,
 		TaskStepStore:     taskStepService,
@@ -892,7 +895,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 		EmbeddingProvider:           scenario.EmbeddingProvider,
 		EmbeddingModelName:          scenario.EmbeddingModel,
 		ToolSelector:                scenarioDecisionPlanner,
-		DecisionModel:               scenarioChangeCheckModel(scriptedModel, changeChecks),
+		DecisionModel:               scenarioLoopDecisionModel(scenario, scriptedModel, changeChecks),
 	})
 
 	identityService := identity.NewIdentityService(virtualPolicyProjection(scenario.RequesterIsAdmin))
@@ -965,7 +968,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 			AttachmentImporter: runtime,
 			SessionTurns:       runtime,
 			TaskRunStore:       taskRunService,
-		}, virtualConversationID)
+		}, virtualConversationID, scenario.RecordCatalogURL)
 		if errorValue != nil {
 			cleanup()
 			return nil, errorValue
@@ -1066,7 +1069,24 @@ func virtualToolCatalogBuilder(
 	if len(scenario.CapabilityToolNames) > 0 || len(scenario.CapabilityToolDescriptors) > 0 {
 		toolCatalogBuilder.UseCapabilityToolDescriptors(capabilityClient, virtualCapabilityToolDescriptors(scenario))
 	}
+	if scenario.ConfigureToolCatalog != nil {
+		scenario.ConfigureToolCatalog(toolCatalogBuilder)
+	}
 	return toolCatalogBuilder
+}
+
+func scenarioIntakeDecisionModel(scenario VirtualSessionScenario, turnScript *scenarioTurnScript, intakeLanguageModel model.LanguageModelProvider) model.DecisionModel {
+	if scenario.DecisionModel != nil {
+		return scenario.DecisionModel
+	}
+	return newScenarioDecisionModel(turnScript, intakeLanguageModel, scenario.AddressingResponse)
+}
+
+func scenarioLoopDecisionModel(scenario VirtualSessionScenario, scriptedModel *agenttest.ScriptedLanguageModel, changeChecks *scenarioChangeChecks) model.DecisionModel {
+	if scenario.DecisionModel != nil {
+		return scenario.DecisionModel
+	}
+	return scenarioChangeCheckModel(scriptedModel, changeChecks)
 }
 
 func virtualCapabilityToolNames(scenario VirtualSessionScenario) []string {

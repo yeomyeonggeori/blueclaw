@@ -1233,6 +1233,19 @@ func TestAnAnswerOverACPResumesTheRunThatAsked(t *testing.T) {
 	}
 }
 
+func TestAFileDeliveredOverACPReachesTheTurnResult(t *testing.T) {
+	scenario := FileAttachmentChangeCheckScenario(t.TempDir())
+	scenario.IsDeliveredOverACP = true
+	result, errorValue := RunVirtualSession(context.Background(), scenario)
+	if errorValue != nil {
+		t.Fatalf("expected the file delivered over ACP to reach the turn result: %v", errorValue)
+	}
+	delivered := result.TurnResults[len(result.TurnResults)-1].Attachments
+	if len(delivered) != 1 || !strings.HasSuffix(delivered[0].DevicePath, "faq-revision.json") {
+		t.Fatalf("expected faq-revision.json delivered over ACP, got %+v", delivered)
+	}
+}
+
 func TestARootMessageStartsATaskWhileAnotherWaitsForAnAnswer(t *testing.T) {
 	for _, scenario := range []VirtualSessionScenario{
 		AskRootMessageStartsATaskScenario(t.TempDir()),
