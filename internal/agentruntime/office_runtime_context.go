@@ -19,10 +19,15 @@ import (
 var officeHostContractDocument []byte
 
 type officeHostContract struct {
-	RuntimeContextVariable string              `json:"runtimeContextVariable"`
-	SourceSuffix           string              `json:"sourceSuffix"`
-	DeliverableExtensions  []string            `json:"deliverableExtensions"`
-	SourceContent          officeSourceContent `json:"sourceContent"`
+	RuntimeContextVariable string                    `json:"runtimeContextVariable"`
+	DeckPreparation        officeDeckPreparationFile `json:"deckPreparation"`
+	SourceSuffix           string                    `json:"sourceSuffix"`
+	DeliverableExtensions  []string                  `json:"deliverableExtensions"`
+	SourceContent          officeSourceContent       `json:"sourceContent"`
+}
+
+type officeDeckPreparationFile struct {
+	RequestFile string `json:"requestFile"`
 }
 
 type officeSourceContent struct {
@@ -56,6 +61,9 @@ type officeRuntimeContext struct {
 	RegisteredDocuments []officeRegisteredDocument `json:"registeredDocuments"`
 	Attachments         []officeAttachment         `json:"attachments"`
 	ReviewsDeckRenders  bool                       `json:"reviewsDeckRenders"`
+	PreparesDecks       bool                       `json:"preparesDecks"`
+	DeckDesign          *officeDeckDesign          `json:"deckDesign"`
+	Images              []officeImage              `json:"images"`
 }
 
 type officeRequester struct {
@@ -102,6 +110,8 @@ func (toolCatalogBuilder *ToolCatalogBuilder) officeRuntimeContextFor(request To
 		RegisteredDocuments: []officeRegisteredDocument{},
 		Attachments:         toolCatalogBuilder.officeAttachments(request),
 		ReviewsDeckRenders:  toolCatalogBuilder.reviewsDeckRenders(),
+		PreparesDecks:       toolCatalogBuilder.preparesDecks(),
+		Images:              []officeImage{},
 	}
 }
 
@@ -118,6 +128,9 @@ func (runtimeContext *officeRuntimeContext) keepRecordedFrom(ctx context.Context
 		runtimeContext.Company[language] = profilePath
 	}
 	runtimeContext.RegisteredDocuments = append(runtimeContext.RegisteredDocuments, recorded.RegisteredDocuments...)
+	if recorded.DeckDesign != nil {
+		runtimeContext.DeckDesign, runtimeContext.Images = recorded.DeckDesign, recorded.Images
+	}
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) taskStartedAt(taskRunID string) time.Time {
