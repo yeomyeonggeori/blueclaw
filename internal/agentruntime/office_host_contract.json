@@ -140,6 +140,97 @@
       "deck": {
         "type": "string",
         "description": "the deck source a deck was built from, present only in a deck's snapshot"
+      },
+      "schema": {
+        "type": "string",
+        "description": "the schema a merged document was drawn from"
+      },
+      "given": {
+        "type": "object",
+        "description": "the values a merged document was given, as the model wrote them"
+      },
+      "tables": {
+        "type": "array",
+        "description": "a declared workbook's source tables: each one's name, column headers and number of records",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "columns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "rowCount": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "name",
+            "columns",
+            "rowCount"
+          ]
+        }
+      },
+      "views": {
+        "type": "array",
+        "description": "a declared workbook's views as they display: each one's title, sheet, rows of shown cell text with the header first, and the notes under it",
+        "items": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "sheet": {
+              "type": "string"
+            },
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "title",
+            "sheet",
+            "rows"
+          ]
+        }
+      },
+      "charts": {
+        "type": "array",
+        "description": "a declared workbook's charts as declared: the view each draws, its type and title",
+        "items": {
+          "type": "object",
+          "properties": {
+            "view": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "view",
+            "type"
+          ]
+        }
       }
     }
   },
@@ -166,6 +257,17 @@
       "<deck>",
       "--blank",
       "<path>"
+    ]
+  },
+  "sourceContent": {
+    "description": "the snapshot fields that say what the file holds; the host reads them as the person and hands them, with the delivered file, to the check that judges the file against the request",
+    "fields": [
+      "schema",
+      "given",
+      "tables",
+      "views",
+      "charts",
+      "blanks"
     ]
   }
 }

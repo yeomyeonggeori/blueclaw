@@ -128,12 +128,17 @@ func (toolCatalogBuilder *ToolCatalogBuilder) isWrittenInThisTask(ctx context.Co
 }
 
 func readOfficeSnapshot(ctx context.Context, actor security.WorkspaceActor, concretePath string) (officeSnapshot, bool) {
-	content, errorValue := actor.ReadFile(ctx, concretePath+officeContract.SourceSuffix, officeSnapshotReadLimit)
-	if errorValue != nil {
+	content, isRead := readOfficeSnapshotDocument(ctx, actor, concretePath)
+	if !isRead {
 		return officeSnapshot{}, false
 	}
 	var snapshot officeSnapshot
 	return snapshot, json.Unmarshal(content, &snapshot) == nil
+}
+
+func readOfficeSnapshotDocument(ctx context.Context, actor security.WorkspaceActor, concretePath string) ([]byte, bool) {
+	content, errorValue := actor.ReadFile(ctx, concretePath+officeContract.SourceSuffix, officeSnapshotReadLimit)
+	return content, errorValue == nil
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) claimSources(ctx context.Context, request ToolCatalogRequest, snapshot officeSnapshot) (claimcheck.Sources, bool) {
