@@ -1465,6 +1465,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) fileAttachment(toolContext context
 		ContentType:   contentType,
 		SizeBytes:     sizeBytes,
 		Title:         strings.TrimSpace(input.Title),
+		Source:        toolCatalogBuilder.deliveredSource(toolContext, handlerContext.request, path),
 		ContentBase64: base64.StdEncoding.EncodeToString([]byte(content)),
 	}, nil
 }
