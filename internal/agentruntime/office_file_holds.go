@@ -20,12 +20,23 @@ func (toolCatalogBuilder *ToolCatalogBuilder) deliveredFileHolds(ctx context.Con
 	if json.Unmarshal(content, &fields) != nil {
 		return nil
 	}
-	held := map[string]json.RawMessage{}
-	for _, name := range officeContract.SourceContent.Fields {
-		if value, isPresent := fields[name]; isPresent {
-			held[name] = value
-		}
+	held := presentFields(fields, officeContract.SourceContent.Fields)
+	if len(held) == 0 {
+		return nil
+	}
+	for name, value := range presentFields(fields, officeContract.SourceContent.CompanionFields) {
+		held[name] = value
 	}
 	holds, _ := toolcontract.FileHoldsOf(held)
 	return holds
+}
+
+func presentFields(fields map[string]json.RawMessage, names []string) map[string]json.RawMessage {
+	present := map[string]json.RawMessage{}
+	for _, name := range names {
+		if value, isPresent := fields[name]; isPresent {
+			present[name] = value
+		}
+	}
+	return present
 }

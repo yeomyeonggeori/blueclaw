@@ -1498,13 +1498,27 @@ func (toolCatalogBuilder *ToolCatalogBuilder) fileDeliverReadFailure(toolContext
 	if outcome.failureCode() != security.ActorErrorCodeNotFound {
 		return result
 	}
-	candidateFiles := toolCatalogBuilder.fileDeliverCandidateFiles(toolContext, handlerContext, path)
-	if len(candidateFiles) == 0 {
-		return result
-	}
 	dataFields := actorFailureDataFields("read_file", "file_deliver", path, outcome.actorError("read_file", path))
-	dataFields["candidateFiles"] = candidateFiles
+	if isHomeRelativePath(path) {
+		homePath := toolCatalogBuilder.agentWorkspacePath(toolCatalogBuilder.nativeRequesterPath(handlerContext.request, "~"))
+		dataFields["readFrom"] = homePath
+		result = withFailureMessage(result, result.Failure.UserSafeSummary+". A relative path is read from "+homePath+", where every command starts, not from a directory an earlier command changed into; give the file's absolute path.")
+	}
+	if candidateFiles := toolCatalogBuilder.fileDeliverCandidateFiles(toolContext, handlerContext, path); len(candidateFiles) > 0 {
+		dataFields["candidateFiles"] = candidateFiles
+	}
 	result.Output.Data = json.RawMessage(MarshalBody(dataFields))
+	return result
+}
+
+func isHomeRelativePath(path string) bool {
+	trimmedPath := strings.TrimSpace(path)
+	return trimmedPath != "~" && !strings.HasPrefix(trimmedPath, "~/") && !filepath.IsAbs(trimmedPath)
+}
+
+func withFailureMessage(result toolcontract.ToolResult, message string) toolcontract.ToolResult {
+	result.Output.Content = message
+	result.Failure.UserSafeSummary = message
 	return result
 }
 
@@ -1529,6 +1543,9 @@ const deliveredDocumentsDirectoryPath = "~/documents"
 
 func (toolCatalogBuilder *ToolCatalogBuilder) fileDeliverCandidateDirectories(request ToolCatalogRequest, path string) []string {
 	requestedDirectoryPath := filepath.ToSlash(filepath.Dir(strings.TrimSpace(path)))
+	if isHomeRelativePath(requestedDirectoryPath) {
+		requestedDirectoryPath = filepath.ToSlash(filepath.Join("~", requestedDirectoryPath))
+	}
 	directoryPaths := []string{requestedDirectoryPath}
 	if toolCatalogBuilder.nativeRequesterPath(request, deliveredDocumentsDirectoryPath) != toolCatalogBuilder.nativeRequesterPath(request, requestedDirectoryPath) {
 		directoryPaths = append(directoryPaths, deliveredDocumentsDirectoryPath)

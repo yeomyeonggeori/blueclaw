@@ -54,6 +54,37 @@ func TestHoldsAreReadAfterTheClaimRemakeRewroteTheSnapshot(t *testing.T) {
 	}
 }
 
+const showcaseDeckSnapshotWithoutSlides = `{"command":"office create","deck":"/home/sample/documents/q3-review/slides.html",` +
+	`"claims":[{"path":"slides[0].units[0]","at":"슬라이드 1 제목","text":"3분기 업무 리뷰"}],"blanks":[]}`
+
+const deckSnapshot = `{"command":"office create","deck":"/home/sample/documents/q3-review/slides.html",` +
+	`"claims":[{"path":"slides[0].units[0]","at":"슬라이드 1 제목","text":"3분기 업무 리뷰"}],` +
+	`"slides":[{"slide":1,"layout":"cover","title":"3분기 업무 리뷰","text":["발표 이샘플"]},` +
+	`{"slide":2,"layout":"chart","title":"매출 달성률 90%","charts":[{"type":"column","labels":["목표","실적"],"values":["12","10.8"],"unit":"억 원"}],"icons":["target"]}],` +
+	`"blanks":[]}`
+
+func TestADeckSnapshotHoldingOnlyItsBlanksCarriesNoHolds(t *testing.T) {
+	fixture := newOfficeContextFixture(t)
+	fixture.writeSnapshot(t, "q3-review.pptx", showcaseDeckSnapshotWithoutSlides)
+
+	if holds := fixture.deliveredHolds(t, "q3-review.pptx"); holds != "" {
+		t.Fatalf("expected a snapshot that says nothing of what the deck holds to give no holds, got %s", holds)
+	}
+}
+
+func TestADeckCarriesItsSlidesAndBlanks(t *testing.T) {
+	fixture := newOfficeContextFixture(t)
+	fixture.writeSnapshot(t, "q3-review.pptx", deckSnapshot)
+
+	holds := fixture.deliveredHolds(t, "q3-review.pptx")
+
+	expected := `{"blanks":[],"slides":[{"slide":1,"layout":"cover","title":"3분기 업무 리뷰","text":["발표 이샘플"]},` +
+		`{"slide":2,"layout":"chart","title":"매출 달성률 90%","charts":[{"type":"column","labels":["목표","실적"],"values":["12","10.8"],"unit":"억 원"}],"icons":["target"]}]}`
+	if holds != expected {
+		t.Fatalf("expected the deck's slides and blanks, got %s", holds)
+	}
+}
+
 func TestAFileWithoutASnapshotCarriesNoHolds(t *testing.T) {
 	fixture := newOfficeContextFixture(t)
 	documentPath := filepath.Join(fixture.homePath(), "documents", "notes.txt")

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -1457,6 +1458,49 @@ func TestFileDeliverNotFoundIncludesCandidateFiles(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected candidateFiles to include %q, got %+v", expectedCandidatePath, failureData.CandidateFiles)
+	}
+}
+
+func TestFileDeliverNotFoundForARelativePathSaysWhereItWasRead(t *testing.T) {
+	workspacePath := t.TempDir()
+	toolCatalogBuilder := newTerminalToolTestCatalogBuilder(workspacePath)
+	request := ToolCatalogRequest{
+		ProfileName:       "default",
+		RequesterPersonID: "person-1",
+		ConversationID:    "dm:channel-1",
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
+	}
+	toolRegistry := toolCatalogBuilder.BuildToolSet(request)
+	homePath := toolCatalogBuilder.agentWorkspacePath(toolCatalogBuilder.nativeRequesterPath(request, "~"))
+	if result, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
+		ToolName: "bash",
+		Input:    toolcontract.MarshalToolInput(map[string]any{"command": "printf '{}' > notice_letter_values.json && cd .. && printf pdf-bytes > '사무실 이전 안내문.pdf'"}),
+	}); errorValue != nil || result.Failed() {
+		t.Fatalf("expected shell success, got %v %s", errorValue, result.ContentText())
+	}
+
+	deliverResult, errorValue := toolRegistry.Invoke(context.Background(), toolcontract.ToolInvocation{
+		ToolName: toolcontract.FileDeliverToolName,
+		Input:    toolcontract.MarshalToolInput(map[string]any{"files": []map[string]string{{"path": "사무실 이전 안내문.pdf", "filename": "사무실 이전 안내문.pdf"}}}),
+	})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if !deliverResult.Failed() || deliverResult.Failure.Code != "not_found" {
+		t.Fatalf("expected not_found failure, got %+v", deliverResult)
+	}
+	if !strings.Contains(deliverResult.ContentText(), "read from "+homePath) || !strings.Contains(deliverResult.Failure.UserSafeSummary, "absolute path") {
+		t.Fatalf("expected the failure to say the relative path was read from %s and to ask for an absolute path, got %q / %q", homePath, deliverResult.ContentText(), deliverResult.Failure.UserSafeSummary)
+	}
+	var failureData struct {
+		ReadFrom       string   `json:"readFrom"`
+		CandidateFiles []string `json:"candidateFiles"`
+	}
+	if errorValue := json.Unmarshal(deliverResult.Output.Data, &failureData); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if failureData.ReadFrom != homePath || !slices.Contains(failureData.CandidateFiles, "~/notice_letter_values.json") {
+		t.Fatalf("expected readFrom %s and candidates named from ~, got %+v", homePath, failureData)
 	}
 }
 
