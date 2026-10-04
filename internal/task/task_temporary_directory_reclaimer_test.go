@@ -1,8 +1,10 @@
 package task
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
@@ -10,10 +12,63 @@ import (
 
 func newReclaimingTaskRunService(t *testing.T) (*TaskRunService, string) {
 	t.Helper()
-	workspaceRootPath := t.TempDir()
-	taskRunService := NewTaskRunService(NewTaskEventService())
-	taskRunService.RegisterTaskRunTransitionObserver(NewTaskTemporaryDirectoryReclaimer(workspaceRootPath, nil).Observe)
+	taskRunService, workspaceRootPath, _ := newReclaimingTaskRunServiceWithOwners(t)
 	return taskRunService, workspaceRootPath
+}
+
+func newReclaimingTaskRunServiceWithOwners(t *testing.T) (*TaskRunService, string, *ownerActors) {
+	t.Helper()
+	workspaceRootPath := t.TempDir()
+	owners := &ownerActors{}
+	taskRunService := NewTaskRunService(NewTaskEventService())
+	taskRunService.RegisterTaskRunTransitionObserver(NewTaskTemporaryDirectoryReclaimer(workspaceRootPath, owners, nil).Observe)
+	return taskRunService, workspaceRootPath, owners
+}
+
+// ownerActors stands in for the POSIX helper: it records whose identity a
+// command ran as and carries out a removal the way rm would.
+type ownerActors struct {
+	security.WorkspaceActor
+	ranAs []string
+	ran   [][]string
+}
+
+func (owners *ownerActors) Requester(_ context.Context, request security.WorkspaceActorRequest) (security.WorkspaceActor, error) {
+	owners.ranAs = append(owners.ranAs, request.PersonAccess.PersonID)
+	return owners, nil
+}
+
+func (owners *ownerActors) CanListDirectory(context.Context) bool { return false }
+
+func (owners *ownerActors) Run(_ context.Context, request security.CommandRequest) (security.CommandResult, error) {
+	owners.ran = append(owners.ran, append([]string{request.ExecutableName}, request.Arguments...))
+	if request.ExecutableName != "rm" || len(request.Arguments) != 3 {
+		return security.CommandResult{ExitCode: 1, Stderr: "unexpected command"}, nil
+	}
+	if errorValue := os.RemoveAll(request.Arguments[2]); errorValue != nil {
+		return security.CommandResult{ExitCode: 1, Stderr: errorValue.Error()}, nil
+	}
+	return security.CommandResult{}, nil
+}
+
+func TestAFinishedTaskDirectoryIsRemovedAsThePersonItBelongsTo(t *testing.T) {
+	taskRunService, workspaceRootPath, owners := newReclaimingTaskRunServiceWithOwners(t)
+	taskRun := taskRunService.CreateTaskRun("person-1", "dm:channel-1", "render the deck")
+	taskTemporaryDirectoryPath := createTaskTemporaryDirectory(t, workspaceRootPath, "person-1", taskRun.TaskRunID)
+	if _, errorValue := taskRunService.AdvanceTaskRun(taskRun.TaskRunID, "default"); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	if _, errorValue := taskRunService.CompleteTaskRun(taskRun.TaskRunID, "done"); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	if !slices.Equal(owners.ranAs, []string{"person-1"}) {
+		t.Fatalf("the directory was removed as %v, not as the person whose home holds it", owners.ranAs)
+	}
+	if len(owners.ran) != 1 || !slices.Equal(owners.ran[0], []string{"rm", "-rf", "--", taskTemporaryDirectoryPath}) {
+		t.Fatalf("the removal ran %v", owners.ran)
+	}
 }
 
 func createTaskTemporaryDirectory(t *testing.T, workspaceRootPath string, requesterPersonID string, taskRunID string) string {

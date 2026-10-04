@@ -14,6 +14,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/harnessselection"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
+	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -75,6 +76,7 @@ func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, agentHarne
 	kernel.decisionModel = newConfiguredDecisionModel(runtimeConfiguration, logger)
 	kernel.decisionPlanner = newDecisionPlanner(kernel.decisionModel, turnRouterLanguageModelProvider(taskTierLanguageModels, intakeLanguageModel))
 	kernel.terminalService = security.NewShellService(runtimeConfiguration.Terminal)
+	services.taskRunService.RegisterTaskRunTransitionObserver(task.NewTaskTemporaryDirectoryReclaimer(runtimeConfiguration.Terminal.WorkspaceRootPath, kernel.terminalService.WorkspaceActorFactory(), logger).Observe)
 	kernel.toolCatalog = newToolCatalogEndpoint(services.taskRunService, kernel.taskTierLanguageModels.High, kernel.capabilityClient)
 	harnessFactory, harnessName, selectionError := selectAgentHarness(runtimeConfiguration, agentHarnessFactory, kernel, logger)
 	kernel.harnessName = harnessName

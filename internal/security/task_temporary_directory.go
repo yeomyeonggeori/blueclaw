@@ -1,9 +1,13 @@
 package security
 
 import (
-	"os"
+	"context"
+	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 )
 
 const taskTemporaryDirectoryName = "tasks"
@@ -28,17 +32,44 @@ func TaskTemporaryDirectoryPath(requesterHomePath string, taskRunID string) stri
 	return filepath.Join(requesterTemporaryDirectoryPath, taskTemporaryDirectoryName, trimmedTaskRunID)
 }
 
+// TaskTemporaryDirectoryCleaner removes a finished task's directory as the
+// person it belongs to: it sits in their home, which only they may enter, so
+// the service removing it itself is refused by the kernel.
 type TaskTemporaryDirectoryCleaner struct {
 	WorkspaceRootPath string
+	Actors            WorkspaceActorFactory
 }
 
-func (cleaner TaskTemporaryDirectoryCleaner) RemoveTaskTemporaryDirectory(requesterPersonID string, taskRunID string) error {
+const taskTemporaryDirectoryRemovalTimeoutSecond = 30
+
+func (cleaner TaskTemporaryDirectoryCleaner) RemoveTaskTemporaryDirectory(ctx context.Context, requesterPersonID string, taskRunID string) error {
 	requesterHomePath := PersonHomeDirectoryPath(cleaner.WorkspaceRootPath, requesterPersonID)
 	taskTemporaryDirectoryPath := TaskTemporaryDirectoryPath(requesterHomePath, taskRunID)
 	if taskTemporaryDirectoryPath == "" {
 		return nil
 	}
-	return os.RemoveAll(taskTemporaryDirectoryPath)
+	if cleaner.Actors == nil {
+		return errors.New("no workspace identity to remove a task directory as")
+	}
+	actor, errorValue := cleaner.Actors.Requester(ctx, WorkspaceActorRequest{
+		PersonAccess:      policy.PersonAccess{PersonID: requesterPersonID},
+		WorkspaceRootPath: cleaner.WorkspaceRootPath,
+	})
+	if errorValue != nil {
+		return errorValue
+	}
+	result, errorValue := actor.Run(ctx, CommandRequest{
+		ExecutableName: "rm",
+		Arguments:      []string{"-rf", "--", taskTemporaryDirectoryPath},
+		TimeoutSecond:  taskTemporaryDirectoryRemovalTimeoutSecond,
+	})
+	if errorValue != nil {
+		return errorValue
+	}
+	if result.ExitCode != 0 {
+		return fmt.Errorf("remove %s as its owner: %s", taskTemporaryDirectoryPath, strings.TrimSpace(result.Stderr))
+	}
+	return nil
 }
 
 // ProtectedDirectoryPath is where a subject's own directory keeps what is

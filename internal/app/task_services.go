@@ -45,8 +45,6 @@ func newTaskServices(runtimeConfiguration config.RuntimeConfiguration, database 
 		taskArtifactService: task.NewTaskArtifactService(),
 	}
 	services.taskRunService = task.NewTaskRunService(services.taskEventService)
-	taskTemporaryDirectoryReclaimer := task.NewTaskTemporaryDirectoryReclaimer(runtimeConfiguration.Terminal.WorkspaceRootPath, logger)
-	services.taskRunService.RegisterTaskRunTransitionObserver(taskTemporaryDirectoryReclaimer.Observe)
 	services.repositories = newTaskRepositories(database, services, companyProvider, logger)
 	magicLinkService := auth.NewMagicLinkService()
 	sessionService := auth.NewSessionService()
