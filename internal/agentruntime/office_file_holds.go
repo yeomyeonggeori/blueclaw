@@ -7,7 +7,11 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
-func (toolCatalogBuilder *ToolCatalogBuilder) deliveredFileHolds(ctx context.Context, request ToolCatalogRequest, concretePath string) json.RawMessage {
+type officeSnapshotBlank struct {
+	Label string `json:"label"`
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) deliveredSnapshot(ctx context.Context, request ToolCatalogRequest, concretePath string) map[string]json.RawMessage {
 	actor, actorFailure := toolCatalogBuilder.workspaceActorForRequest(ctx, request)
 	if actorFailure != nil {
 		return nil
@@ -20,6 +24,10 @@ func (toolCatalogBuilder *ToolCatalogBuilder) deliveredFileHolds(ctx context.Con
 	if json.Unmarshal(content, &fields) != nil {
 		return nil
 	}
+	return fields
+}
+
+func snapshotHolds(fields map[string]json.RawMessage) json.RawMessage {
 	held := presentFields(fields, officeContract.SourceContent.Fields)
 	if len(held) == 0 {
 		return nil
@@ -39,4 +47,16 @@ func presentFields(fields map[string]json.RawMessage, names []string) map[string
 		}
 	}
 	return present
+}
+
+func snapshotBlankLabels(fields map[string]json.RawMessage) []string {
+	var blanks []officeSnapshotBlank
+	if json.Unmarshal(fields["blanks"], &blanks) != nil {
+		return nil
+	}
+	labels := []string{}
+	for _, blank := range blanks {
+		labels = appendUniqueString(labels, blank.Label)
+	}
+	return labels
 }

@@ -1398,20 +1398,26 @@ func (toolCatalogBuilder *ToolCatalogBuilder) attachFileTool(toolContext context
 	deliveredPaths := []string{}
 	claimChecks := []officeClaimCheck{}
 	visualReviews := []officeVisualReview{}
+	replyNotes := []string{}
 	for _, attachmentInput := range attachmentInputs {
 		concretePath := toolCatalogBuilder.nativeRequesterPath(handlerContext.request, strings.TrimSpace(attachmentInput.Path))
+		fileChecks := []officeClaimCheck{}
 		if check := toolCatalogBuilder.checkOfficeClaims(toolContext, handlerContext.request, concretePath); check != nil {
-			claimChecks = append(claimChecks, *check)
+			fileChecks = append(fileChecks, *check)
 		}
-		if review := toolCatalogBuilder.checkOfficeVisualReview(toolContext, handlerContext.request, concretePath); review != nil {
+		review := toolCatalogBuilder.checkOfficeVisualReview(toolContext, handlerContext.request, concretePath)
+		if review != nil {
 			visualReviews = append(visualReviews, *review)
-			claimChecks = appendedClaimRecheck(claimChecks, review)
+			fileChecks = appendedClaimRecheck(fileChecks, review)
 		}
+		claimChecks = append(claimChecks, fileChecks...)
 		attachment, failureResult := toolCatalogBuilder.fileAttachment(toolContext, attachmentInput, handlerContext)
 		if failureResult != nil {
 			return *failureResult, nil
 		}
-		attachment.Holds = toolCatalogBuilder.deliveredFileHolds(toolContext, handlerContext.request, concretePath)
+		snapshot := toolCatalogBuilder.deliveredSnapshot(toolContext, handlerContext.request, concretePath)
+		attachment.Holds = snapshotHolds(snapshot)
+		replyNotes = append(replyNotes, deliveredFileNotes(attachment.Filename, snapshotBlankLabels(snapshot), fileChecks, review)...)
 		attachments = append(attachments, attachment)
 		deliveredPaths = append(deliveredPaths, attachment.DevicePath)
 	}
@@ -1425,7 +1431,6 @@ func (toolCatalogBuilder *ToolCatalogBuilder) attachFileTool(toolContext context
 	if len(visualReviews) > 0 {
 		data["visualReview"] = visualReviews
 	}
-	replyNotes := append(blankedClaimsNotes(claimChecks), visualReviewNotes(visualReviews)...)
 	return toolcontract.ToolResult{
 		Output:      toolcontract.ToolOutput{Content: strings.Join(append([]string{fileDeliverStagedContent}, replyNotes...), "; "), Data: json.RawMessage(MarshalBody(data))},
 		Attachments: attachments,

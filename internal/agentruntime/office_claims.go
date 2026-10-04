@@ -3,7 +3,6 @@ package agentruntime
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -264,22 +263,4 @@ func verdictPlaces(verdicts []claimcheck.Verdict) []string {
 		places = append(places, firstNonEmptyString(verdict.At, verdict.Path))
 	}
 	return places
-}
-
-func blankedClaimsNotes(checks []officeClaimCheck) []string {
-	notes := []string{}
-	for _, check := range checks {
-		if check.Outcome == claimOutcomeBlanked {
-			notes = append(notes, check.File+": left blank because nothing the person gave supports them, for the reply to offer to complete: "+strings.Join(blankedClaimsSaid(check.Unsupported), ", "))
-		}
-	}
-	return notes
-}
-
-func blankedClaimsSaid(verdicts []claimcheck.Verdict) []string {
-	said := []string{}
-	for _, verdict := range verdicts {
-		said = append(said, fmt.Sprintf("%s (it said %q)", firstNonEmptyString(verdict.At, verdict.Path), verdict.Text))
-	}
-	return said
 }
