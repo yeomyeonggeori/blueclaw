@@ -33,7 +33,7 @@ VALUES ($1, '이샘플', $2, $2)`, personID, now)
 		t.Fatal(errorValue)
 	}
 	desired := morningBriefingTestSchedule(personID, scheduleID, timePointer(now.Add(time.Hour)))
-	if errorValue := repository.ReconcileMorningBriefings(ctx, []task.Schedule{desired}, now); errorValue != nil {
+	if errorValue := repository.ReconcileMorningBriefings(ctx, []task.Schedule{desired}, nil, now); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	var storedNextRunAt time.Time
@@ -47,7 +47,7 @@ VALUES ($1, '이샘플', $2, $2)`, personID, now)
 		t.Fatal(errorValue)
 	}
 	desired.NextRunAt = timePointer(now.Add(2 * time.Hour))
-	if errorValue := repository.ReconcileMorningBriefings(ctx, []task.Schedule{desired}, now); errorValue != nil {
+	if errorValue := repository.ReconcileMorningBriefings(ctx, []task.Schedule{desired}, nil, now); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	if errorValue := database.SQL.QueryRowContext(ctx, "SELECT next_run_at FROM schedule WHERE schedule_id = $1", scheduleID).Scan(&storedNextRunAt); errorValue != nil {
@@ -68,7 +68,7 @@ VALUES ($1, '이샘플', $2, $2)`, personID, now)
 		t.Fatalf("expected managed cancel guard, got %+v (%v)", cancelled, errorValue)
 	}
 	desired.NextRunAt = nil
-	if errorValue := repository.ReconcileMorningBriefings(ctx, []task.Schedule{desired}, now); errorValue != nil {
+	if errorValue := repository.ReconcileMorningBriefings(ctx, []task.Schedule{desired}, nil, now); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	var isDisabled bool
@@ -79,7 +79,7 @@ VALUES ($1, '이샘플', $2, $2)`, personID, now)
 		t.Fatalf("expected disabled schedule to have no next run")
 	}
 	desired.NextRunAt = timePointer(now.Add(3 * time.Hour))
-	if errorValue := repository.ReconcileMorningBriefings(ctx, []task.Schedule{desired}, now); errorValue != nil {
+	if errorValue := repository.ReconcileMorningBriefings(ctx, []task.Schedule{desired}, nil, now); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	if errorValue := database.SQL.QueryRowContext(ctx, "SELECT next_run_at IS NOT NULL FROM schedule WHERE schedule_id = $1", scheduleID).Scan(&isDisabled); errorValue != nil || !isDisabled {
@@ -88,7 +88,7 @@ VALUES ($1, '이샘플', $2, $2)`, personID, now)
 	if _, errorValue := database.SQL.ExecContext(ctx, "UPDATE schedule SET expires_at = $1, next_run_at = NULL WHERE schedule_id = $2", now.Add(-time.Minute), scheduleID); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if errorValue := repository.ReconcileMorningBriefings(ctx, []task.Schedule{desired}, now); errorValue != nil {
+	if errorValue := repository.ReconcileMorningBriefings(ctx, []task.Schedule{desired}, nil, now); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	var isUnexpired bool
@@ -98,7 +98,7 @@ VALUES ($1, '이샘플', $2, $2)`, personID, now)
 	if errorValue := repository.UpsertSchedule(desired); errorValue != errManagedScheduleMutation {
 		t.Fatalf("expected generic upsert guard, got %v", errorValue)
 	}
-	if errorValue := repository.ReconcileMorningBriefings(ctx, nil, now); errorValue != nil {
+	if errorValue := repository.ReconcileMorningBriefings(ctx, nil, nil, now); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	if errorValue := database.SQL.QueryRowContext(ctx, "SELECT next_run_at IS NULL FROM schedule WHERE schedule_id = $1", scheduleID).Scan(&isDisabled); errorValue != nil {
@@ -185,5 +185,40 @@ func morningBriefingTestSchedule(personID string, scheduleID string, nextRunAt *
 		ExecutionMode: task.ScheduleExecutionModeAgent, AgentProfileName: "default", Platform: "mattermost",
 		ConversationID: "conversation", ReplyTargetID: "reply", TimeZone: "Asia/Seoul", Kind: task.ScheduleKindCron,
 		CronExpression: "0 8 * * *", NextRunAt: nextRunAt, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}
+}
+
+func TestReconcileMorningBriefingsKeepsAnUnsettledPersonsSchedule(t *testing.T) {
+	ctx := context.Background()
+	database, cleanup := isolatedIntegrationDatabase(t, ctx)
+	defer cleanup()
+	repository := NewScheduleRepository(database)
+	personID := "morning-briefing-unsettled-person"
+	scheduleID := task.MorningBriefingScheduleID(personID)
+	now := time.Date(2026, 9, 7, 1, 0, 0, 0, time.UTC)
+	nextRunAt := now.Add(time.Hour)
+	defer func() {
+		_, _ = database.SQL.ExecContext(ctx, "DELETE FROM morning_briefing_schedule WHERE person_id = $1", personID)
+		_, _ = database.SQL.ExecContext(ctx, "DELETE FROM schedule WHERE schedule_id = $1", scheduleID)
+		_, _ = database.SQL.ExecContext(ctx, "DELETE FROM person WHERE person_id = $1", personID)
+	}()
+	if _, errorValue := database.SQL.ExecContext(ctx, `
+INSERT INTO person (person_id, display_name, created_at, updated_at)
+VALUES ($1, '박예시', $2, $2)`, personID, now); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	desired := morningBriefingTestSchedule(personID, scheduleID, timePointer(nextRunAt))
+	if errorValue := repository.ReconcileMorningBriefings(ctx, []task.Schedule{desired}, nil, now); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := repository.ReconcileMorningBriefings(ctx, nil, []string{personID}, now.Add(time.Minute)); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	var storedNextRunAt *time.Time
+	if errorValue := database.SQL.QueryRowContext(ctx, "SELECT next_run_at FROM schedule WHERE schedule_id = $1", scheduleID).Scan(&storedNextRunAt); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if storedNextRunAt == nil || !storedNextRunAt.Equal(nextRunAt) {
+		t.Fatalf("expected the unsettled person's briefing to keep its next run at %v, got %v", nextRunAt, storedNextRunAt)
 	}
 }

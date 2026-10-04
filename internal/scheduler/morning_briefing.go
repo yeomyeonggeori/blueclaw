@@ -17,7 +17,7 @@ import (
 )
 
 type MorningBriefingRepository interface {
-	ReconcileMorningBriefings(context.Context, []task.Schedule, time.Time) error
+	ReconcileMorningBriefings(ctx context.Context, desired []task.Schedule, unsettledPeople []string, referenceTime time.Time) error
 }
 
 type MorningBriefingAccounts interface {
@@ -54,15 +54,17 @@ func (briefing *MorningBriefing) Reconcile(ctx context.Context, referenceTime ti
 		return errorValue
 	}
 	schedules := make([]task.Schedule, 0, len(document.People))
+	unsettledPeople := []string{}
 	for _, person := range document.People {
 		schedule, errorValue := briefing.personSchedule(ctx, person, accounts, document.Company.TimeZone, referenceTime)
 		if errorValue != nil {
-			briefing.Logger.Error("morning_briefing.configuration_failed", "personID", person.PersonID, "error", errorValue)
+			briefing.Logger.Warn("morning_briefing.configuration_failed", "personID", person.PersonID, "error", errorValue)
+			unsettledPeople = append(unsettledPeople, person.PersonID)
 			continue
 		}
 		schedules = append(schedules, schedule)
 	}
-	return briefing.Repository.ReconcileMorningBriefings(ctx, schedules, referenceTime)
+	return briefing.Repository.ReconcileMorningBriefings(ctx, schedules, unsettledPeople, referenceTime)
 }
 
 func (briefing *MorningBriefing) personSchedule(ctx context.Context, person policy.PersonPolicy, accounts []identity.PlatformAccountIdentity, timeZone string, referenceTime time.Time) (task.Schedule, error) {

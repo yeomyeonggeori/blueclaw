@@ -31,7 +31,7 @@ type managedMorningBriefingSchedule struct {
 	leasedUntil      *time.Time
 }
 
-func (repository ScheduleRepository) ReconcileMorningBriefings(ctx context.Context, desired []task.Schedule, referenceTime time.Time) error {
+func (repository ScheduleRepository) ReconcileMorningBriefings(ctx context.Context, desired []task.Schedule, unsettledPeople []string, referenceTime time.Time) error {
 	if referenceTime.IsZero() {
 		referenceTime = time.Now().UTC()
 	}
@@ -40,6 +40,10 @@ func (repository ScheduleRepository) ReconcileMorningBriefings(ctx context.Conte
 		return errorValue
 	}
 	defer transaction.Rollback()
+	keptPeople := make(map[string]struct{}, len(desired)+len(unsettledPeople))
+	for _, personID := range unsettledPeople {
+		keptPeople[personID] = struct{}{}
+	}
 	desiredPeople := make(map[string]struct{}, len(desired))
 	for _, schedule := range desired {
 		if schedule.CreatorPersonID == "" {
@@ -49,11 +53,12 @@ func (repository ScheduleRepository) ReconcileMorningBriefings(ctx context.Conte
 			return fmt.Errorf("duplicate morning briefing schedule for person %s", schedule.CreatorPersonID)
 		}
 		desiredPeople[schedule.CreatorPersonID] = struct{}{}
+		keptPeople[schedule.CreatorPersonID] = struct{}{}
 		if errorValue := reconcileMorningBriefingSchedule(ctx, transaction, schedule, referenceTime); errorValue != nil {
 			return errorValue
 		}
 	}
-	if errorValue := deactivateMissingMorningBriefings(ctx, transaction, desiredPeople, referenceTime); errorValue != nil {
+	if errorValue := deactivateMissingMorningBriefings(ctx, transaction, keptPeople, referenceTime); errorValue != nil {
 		return errorValue
 	}
 	return transaction.Commit()
@@ -211,7 +216,7 @@ func morningBriefingConfigurationChanged(existing managedMorningBriefingSchedule
 		cadenceChanged, cadenceChanged
 }
 
-func deactivateMissingMorningBriefings(ctx context.Context, transaction *sql.Tx, desiredPeople map[string]struct{}, referenceTime time.Time) error {
+func deactivateMissingMorningBriefings(ctx context.Context, transaction *sql.Tx, keptPeople map[string]struct{}, referenceTime time.Time) error {
 	rows, errorValue := transaction.QueryContext(ctx, `SELECT person_id FROM morning_briefing_schedule FOR UPDATE`)
 	if errorValue != nil {
 		return errorValue
@@ -222,7 +227,7 @@ func deactivateMissingMorningBriefings(ctx context.Context, transaction *sql.Tx,
 		if errorValue := rows.Scan(&personID); errorValue != nil {
 			return errorValue
 		}
-		if _, exists := desiredPeople[personID]; !exists {
+		if _, exists := keptPeople[personID]; !exists {
 			missingPeople = append(missingPeople, personID)
 		}
 	}

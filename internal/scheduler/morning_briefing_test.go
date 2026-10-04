@@ -174,6 +174,40 @@ func TestMorningBriefingCanRunReflectsChangedSettings(t *testing.T) {
 	}
 }
 
+func TestMorningBriefingReconcileLeavesAPersonUnsettledWhenTheMessengerIsNotUp(t *testing.T) {
+	rootPath := t.TempDir()
+	settings := persona.DefaultMorningBriefing()
+	document, errorValue := persona.CanonicalUser(persona.User{MorningBriefing: &settings})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	writePersonaUser(t, rootPath, "person-1", document)
+	repository := &recordingMorningBriefingRepository{}
+	briefing := &MorningBriefing{
+		Repository: repository,
+		Accounts:   recordingMorningBriefingAccounts{accounts: []identity.PlatformAccountIdentity{{Platform: "buzz", ExternalUserID: "user-1", PersonID: "person-1"}}},
+		PolicyDocument: func() policy.PolicyDocument {
+			return policy.PolicyDocument{Company: policy.CompanyPolicy{TimeZone: "Asia/Seoul"}, People: []policy.PersonPolicy{{PersonID: "person-1"}}}
+		},
+		PersonAccessResolver: morningBriefingPersonAccessResolver{},
+		ActorFactory:         morningBriefingActorFactory{rootPath: rootPath},
+		WorkspaceRootPath:    rootPath,
+		OpenDirectMessage: func(context.Context, string, string) (string, string, error) {
+			return "", "", errors.New("dial tcp 127.0.0.1:18090: connect: connection refused")
+		},
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	if errorValue := briefing.Reconcile(context.Background(), time.Date(2026, 9, 7, 0, 0, 0, 0, time.UTC)); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(repository.schedules) != 0 {
+		t.Fatalf("expected no settled schedule while the messenger is down, got %+v", repository.schedules)
+	}
+	if len(repository.unsettledPeople) != 1 || repository.unsettledPeople[0] != "person-1" {
+		t.Fatalf("expected person-1 to be left unsettled rather than removed, got %v", repository.unsettledPeople)
+	}
+}
+
 func TestMorningBriefingReconcileReturnsUserReadError(t *testing.T) {
 	briefing := &MorningBriefing{
 		Repository: &recordingMorningBriefingRepository{},
@@ -201,10 +235,14 @@ func writePersonaUser(t *testing.T, rootPath string, personID string, document [
 	}
 }
 
-type recordingMorningBriefingRepository struct{ schedules []task.Schedule }
+type recordingMorningBriefingRepository struct {
+	schedules       []task.Schedule
+	unsettledPeople []string
+}
 
-func (repository *recordingMorningBriefingRepository) ReconcileMorningBriefings(_ context.Context, schedules []task.Schedule, _ time.Time) error {
+func (repository *recordingMorningBriefingRepository) ReconcileMorningBriefings(_ context.Context, schedules []task.Schedule, unsettledPeople []string, _ time.Time) error {
 	repository.schedules = schedules
+	repository.unsettledPeople = unsettledPeople
 	return nil
 }
 

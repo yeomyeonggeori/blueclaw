@@ -276,7 +276,7 @@ func reconcileDueMorningBriefing(t *testing.T, database Database, personID strin
 	dueAt := time.Now().UTC().Add(-time.Minute)
 	briefing := morningBriefingTestSchedule(personID, task.MorningBriefingScheduleID(personID), &dueAt)
 	briefing.CreatedAt = dueAt
-	if errorValue := NewScheduleRepository(database).ReconcileMorningBriefings(context.Background(), []task.Schedule{briefing}, dueAt); errorValue != nil {
+	if errorValue := NewScheduleRepository(database).ReconcileMorningBriefings(context.Background(), []task.Schedule{briefing}, nil, dueAt); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 }
