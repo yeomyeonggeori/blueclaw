@@ -1,0 +1,116 @@
+{
+  "runtimeContextVariable": "OFFICE_RUNTIME_CONTEXT",
+  "runtimeContext": {
+    "type": "object",
+    "description": "what the host knows about the task, written by the host into the file the runtimeContextVariable names; the model never writes it",
+    "properties": {
+      "requester": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "email"
+        ],
+        "additionalProperties": false,
+        "description": "the person the task works for"
+      },
+      "today": {
+        "type": "string",
+        "description": "the task's date in the company's time zone, YYYY-MM-DD"
+      },
+      "company": {
+        "type": "object",
+        "description": "per document language (ko, en), the absolute path of the company-profile.json that company_info_get kept in the task directory, its seal and logo beside it",
+        "additionalProperties": {
+          "type": "string"
+        }
+      },
+      "registeredDocuments": {
+        "type": "array",
+        "description": "each document company_document_register recorded in this task, oldest first",
+        "items": {
+          "type": "object",
+          "properties": {
+            "documentNumber": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "documentNumber"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "attachments": {
+        "type": "array",
+        "description": "each file the person attached to the task's messages",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string",
+              "description": "absolute path"
+            }
+          },
+          "required": [
+            "name",
+            "path"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "requester",
+      "today",
+      "company",
+      "registeredDocuments",
+      "attachments"
+    ],
+    "additionalProperties": false
+  },
+  "sourceSuffix": ".source.json",
+  "deliverableExtensions": [
+    ".docx",
+    ".xlsx",
+    ".pptx",
+    ".pdf"
+  ],
+  "source": {
+    "type": "object",
+    "description": "the snapshot an office command writes beside each file it writes, named <file><sourceSuffix>; the host delivers a new file with a deliverable extension only when this snapshot is beside it, and reads its blanks into the delivery result",
+    "properties": {
+      "blanks": {
+        "type": "array",
+        "description": "every value the file leaves blank for the person to fill or send; absent when the command does not know its blanks",
+        "items": {
+          "type": "object",
+          "properties": {
+            "field": {
+              "type": "string",
+              "description": "the field path or cell"
+            },
+            "label": {
+              "type": "string",
+              "description": "how the reply names it"
+            }
+          },
+          "required": [
+            "field",
+            "label"
+          ]
+        }
+      }
+    }
+  }
+}

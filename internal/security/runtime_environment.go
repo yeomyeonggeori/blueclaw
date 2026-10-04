@@ -26,6 +26,7 @@ var workspaceManagedEnvironmentNames = map[string]bool{
 	"BUN_INSTALL":                  true,
 	"BUN_INSTALL_CACHE_DIR":        true,
 	"npm_config_cache":             true,
+	"OFFICE_RUNTIME_CONTEXT":       true,
 }
 
 func IsWorkspaceManagedEnvironmentName(name string) bool {

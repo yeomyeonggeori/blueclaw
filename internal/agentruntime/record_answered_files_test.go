@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -92,7 +93,7 @@ func TestAFileTheRecordAnswersIsKeptInTheTaskDirectoryAsTheRequester(t *testing.
 
 	result, factory := callingTheCompanyProfile(t, aCompanyProfileAnswer(), actor, "task-3")
 
-	if len(factory.requestedPersons) != 1 || factory.requestedPersons[0] != "person-7" {
+	if len(factory.requestedPersons) == 0 || slices.ContainsFunc(factory.requestedPersons, func(person string) bool { return person != "person-7" }) {
 		t.Fatalf("the files were written as %v", factory.requestedPersons)
 	}
 	directory := "/workspace/private/people/person-7/tmp/tasks/task-3/answered/company_info_get-"

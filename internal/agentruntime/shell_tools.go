@@ -78,6 +78,9 @@ func (toolCatalogBuilder *ToolCatalogBuilder) runTerminalTool(toolContext contex
 		return *toolFailure, nil
 	}
 	slog.Info("shell runtime directories materialized", "durationMs", time.Since(materializeStartedAt).Milliseconds())
+	if errorValue := toolCatalogBuilder.writeOfficeRuntimeContext(toolContext, workspaceActor, handlerContext.request, func(*officeRuntimeContext) {}); errorValue != nil {
+		return actorToolFailure("write_file", "office_runtime_context", input.EnvironmentVariables[officeContract.RuntimeContextVariable], errorValue), nil
+	}
 	input.ExecutionIdentity = toolCatalogBuilder.executionIdentityForRequester(handlerContext.request)
 	runStartedAt := time.Now()
 	stopHeartbeat := toolCatalogBuilder.startTerminalRunHeartbeat(toolContext, input.Command)
@@ -250,6 +253,7 @@ func requesterWorkspaceEnvironment(requesterHomePath string, workspaceRootPath s
 	}
 	if taskTmpPath != "" {
 		environmentVariables["BLUECLAW_TASK_TMP"] = taskTmpPath
+		environmentVariables[officeContract.RuntimeContextVariable] = officeRuntimeContextPath(taskTmpPath)
 	}
 	return environmentVariables
 }
