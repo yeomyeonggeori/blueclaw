@@ -20,10 +20,32 @@ type MemoryHandler struct {
 }
 
 type memoryFactListResponse struct {
-	PersonID string           `json:"personID"`
-	Index    memoryIndexView  `json:"index"`
-	Facts    []memoryFactView `json:"facts"`
+	PersonID string            `json:"personID"`
+	Layers   []memoryLayerView `json:"layers"`
+	Index    memoryIndexView   `json:"index"`
+	Facts    []memoryFactView  `json:"facts"`
 }
+
+// memoryLayerView is one layer of the stack a person's memory stands on,
+// nearest first, whether or not anything has been written to it yet.
+type memoryLayerView struct {
+	ScopeType string `json:"scopeType"`
+	ScopeID   string `json:"scopeID,omitempty"`
+}
+
+type memoryRecallResponse struct {
+	Facts          []memoryRecalledView `json:"facts"`
+	DegradedReason string               `json:"degradedReason,omitempty"`
+}
+
+type memoryRecalledView struct {
+	FactID    string `json:"factID"`
+	ScopeType string `json:"scopeType"`
+	ScopeID   string `json:"scopeID,omitempty"`
+	Content   string `json:"content"`
+}
+
+const memoryRecallPreviewLimit = 5
 
 type memoryIndexView struct {
 	EmbeddingModel string `json:"embeddingModel"`
@@ -75,13 +97,50 @@ func (handler MemoryHandler) HandleListFacts(responseWriter http.ResponseWriter,
 		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(responseWriter, http.StatusOK, memoryFactListResponse{PersonID: personID, Index: index, Facts: views})
+	writeJSON(responseWriter, http.StatusOK, memoryFactListResponse{PersonID: personID, Layers: layerViews(handler.scopes(personID)), Index: index, Facts: views})
+}
+
+func layerViews(scopes []memory.Scope) []memoryLayerView {
+	views := make([]memoryLayerView, len(scopes))
+	for index, scope := range scopes {
+		views[index] = memoryLayerView{ScopeType: scope.Kind, ScopeID: scope.ID}
+	}
+	return views
+}
+
+// HandlePreviewRecall answers what would come to mind for a question, read
+// through the person's stack the way a task reads it, without reinforcing it.
+func (handler MemoryHandler) HandlePreviewRecall(responseWriter http.ResponseWriter, request *http.Request) {
+	if !handler.isConfigured() {
+		http.Error(responseWriter, "memory store is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	personID := strings.TrimSpace(request.URL.Query().Get("readerPersonID"))
+	query := strings.TrimSpace(request.URL.Query().Get("query"))
+	if personID == "" || query == "" {
+		http.Error(responseWriter, "readerPersonID and query are required", http.StatusBadRequest)
+		return
+	}
+	recalled, errorValue := handler.Stores.PreviewAcross(request.Context(), handler.IdentityService.ResolvePersonAccess(personID), handler.scopes(personID), query, memoryRecallPreviewLimit)
+	if errorValue != nil {
+		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
+		return
+	}
+	views := make([]memoryRecalledView, len(recalled.Facts))
+	for index, fact := range recalled.Facts {
+		views[index] = memoryRecalledView{FactID: fact.FactID, ScopeType: fact.ScopeType, ScopeID: fact.ScopeID, Content: fact.Content}
+	}
+	writeJSON(responseWriter, http.StatusOK, memoryRecallResponse{Facts: views, DegradedReason: recalled.DegradedReason})
 }
 
 func (handler MemoryHandler) readableFacts(ctx context.Context, personID string, limit int) ([]memoryFactView, memoryIndexView, error) {
 	views := []memoryFactView{}
 	index := memoryIndexView{}
-	for _, scope := range handler.scopes(personID) {
+	held, errorValue := handler.Stores.Held(ctx, handler.scopes(personID))
+	if errorValue != nil {
+		return nil, index, errorValue
+	}
+	for _, scope := range held {
 		store, errorValue := handler.Stores.Store(ctx, scope)
 		if errorValue != nil {
 			return nil, index, errorValue

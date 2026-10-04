@@ -1,5 +1,10 @@
 {
   "personID": "person-alice",
+  "layers": [
+    { "scopeType": "person", "scopeID": "person-alice" },
+    { "scopeType": "circle", "scopeID": "leadership" },
+    { "scopeType": "workspace" }
+  ],
   "index": {
     "embeddingModel": "baai/bge-m3",
     "current": 3,

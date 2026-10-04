@@ -88,6 +88,7 @@ func NewRouter(routerDependencies RouterDependencies) http.Handler {
 	multiplexer.HandleFunc("POST /admin/api/quiesce", routerDependencies.QuiesceHandler.HandlePost)
 	multiplexer.HandleFunc("GET /admin/api/memory/facts", routerDependencies.MemoryHandler.HandleListFacts)
 	multiplexer.HandleFunc("POST /admin/api/memory/facts/forget", routerDependencies.MemoryHandler.HandleForgetFacts)
+	multiplexer.HandleFunc("GET /admin/api/memory/recall", routerDependencies.MemoryHandler.HandlePreviewRecall)
 	multiplexer.HandleFunc("GET /admin/api/schedule", routerDependencies.ScheduleHandler.HandleList)
 	multiplexer.HandleFunc("POST /admin/api/schedule/tool-list", routerDependencies.ScheduleHandler.HandleToolList)
 	multiplexer.HandleFunc("POST /admin/api/schedule/tool-create", routerDependencies.ScheduleHandler.HandleToolCreate)
