@@ -889,6 +889,7 @@ func (step routerCallLaunchStep) Run(ctx context.Context, execution *taskLaunchE
 func (taskLauncher *TaskLauncher) routerRequest(request TaskLaunchRequest, toolSet *toolcontract.ToolSet) agentcontract.AgentRequest {
 	return agentcontract.AgentRequest{
 		RequesterPersonID:    request.RequesterPersonID,
+		RequesterName:        request.RequesterName,
 		RequesterCallingName: request.RequesterCallingName,
 		RequesterHandle:      request.RequesterHandle,
 		ConversationID:       request.ConversationID,

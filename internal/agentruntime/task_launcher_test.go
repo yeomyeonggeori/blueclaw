@@ -941,6 +941,15 @@ func TestRouterRequestCarriesConfiguredAgentAndRequesterIdentity(t *testing.T) {
 	}
 }
 
+func TestRouterRequestCarriesFormalRequesterNameWithoutCallingName(t *testing.T) {
+	taskLauncher := NewTaskLauncher(nil, nil, NewToolCatalogBuilder())
+	request := taskLauncher.routerRequest(TaskLaunchRequest{RequesterName: "Example Requester"}, nil)
+
+	if request.RequesterName != "Example Requester" {
+		t.Fatalf("the router request lost the formal requester name: %+v", request)
+	}
+}
+
 func TestAgentTurnRequestWithoutIdentityProviderStaysEmpty(t *testing.T) {
 	taskLauncher := NewTaskLauncher(nil, nil, nil)
 
