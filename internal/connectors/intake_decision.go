@@ -174,11 +174,19 @@ func (connectorRuntime *ConnectorRuntime) inboundDecisionRequest(ctx context.Con
 	turn := &inboundTurn{
 		adapter:        adapter,
 		platform:       event.Platform,
-		event:          connectorRuntime.withInitialVisibleContext(ctx, adapter, event),
+		event:          event,
 		personID:       personID,
 		personAccess:   connectorRuntime.identityService.ResolvePersonAccess(personID),
 		requesterEmail: connectorRuntime.requesterEmailForEvent(personID, event),
 	}
+	return connectorRuntime.inboundDecisionRequestForTurn(ctx, turn)
+}
+
+func (connectorRuntime *ConnectorRuntime) inboundDecisionRequestForTurn(ctx context.Context, turn *inboundTurn) (agentcontract.IntakeDecisionRequest, string) {
+	if turn.adapter != nil {
+		turn.event = connectorRuntime.withInitialVisibleContext(ctx, turn.adapter, turn.event)
+	}
+	personID := turn.personID
 	turn.taskWaitResolution = connectorRuntime.resolveInboundTaskWait(personID, turn.platform, turn.event)
 	open := connectorRuntime.readOpenInteractions(turn)
 	priorTask, _ := connectorRuntime.findPriorTaskContext(personID, turn.event)

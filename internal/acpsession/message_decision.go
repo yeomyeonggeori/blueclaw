@@ -7,9 +7,9 @@ import (
 	"sync"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/intake"
 )
 
 type IntakeDecider interface {
@@ -18,7 +18,7 @@ type IntakeDecider interface {
 
 type messageDecision struct {
 	intakeDecider  IntakeDecider
-	decisionInput  func() agentcontract.IntakeDecisionRequest
+	decisionInput  func(context.Context) agentcontract.IntakeDecisionRequest
 	once           sync.Once
 	decision       agentcontract.IntakeMessageDecision
 	callRecords    []agentcontract.LLMCallRecord
@@ -26,13 +26,9 @@ type messageDecision struct {
 	wasEverDecided bool
 }
 
-func (agent *Agent) newMessageDecision(launchRequest agentruntime.TaskLaunchRequest, messageContext MessageContext) *messageDecision {
-	decisionInput := func() agentcontract.IntakeDecisionRequest {
-		request := intake.TurnRequestDecisionRequest(agent.taskLauncher.RouterRequest(launchRequest))
-		request.Messages[0].MessageID = messageContext.MessageID
-		request.Messages[0].BotMentioned = messageContext.Context.Addressing.BotMentioned
-		request.Messages[0].IsAttachmentsOnly = messageContext.Context.AttachmentsOnly
-		return request
+func (agent *Agent) newMessageDecision(sessionTurn *connectors.SessionTurn) *messageDecision {
+	decisionInput := func(ctx context.Context) agentcontract.IntakeDecisionRequest {
+		return sessionTurn.DecisionRequest(ctx)
 	}
 	return &messageDecision{intakeDecider: agent.intakeDecider, decisionInput: decisionInput}
 }
@@ -46,7 +42,7 @@ func (memo *messageDecision) decide(ctx context.Context) (agentcontract.IntakeMe
 	memo.once.Do(func() {
 		memo.wasEverDecided = true
 		callLedger := &agentcontract.IntakeCallLedger{}
-		decisions, errorValue := memo.intakeDecider.Decide(ctx, memo.decisionInput(), callLedger)
+		decisions, errorValue := memo.intakeDecider.Decide(ctx, memo.decisionInput(ctx), callLedger)
 		memo.callRecords = callLedger.Records
 		memo.decision, memo.errorValue = firstMessageDecision(decisions, errorValue)
 	})
@@ -71,11 +67,11 @@ func (memo *messageDecision) decidedTurnFields() *agentcontract.TurnDecision {
 	return &turnFields
 }
 
-func (agent *Agent) decideOnce(ctx context.Context, session openSession, messageContext MessageContext, launchRequest agentruntime.TaskLaunchRequest) (agentruntime.TaskLaunchRequest, *messageDecision, string) {
+func (agent *Agent) decideOnce(ctx context.Context, session openSession, messageContext MessageContext, launchRequest agentruntime.TaskLaunchRequest, sessionTurn *connectors.SessionTurn) (agentruntime.TaskLaunchRequest, *messageDecision, string) {
 	if agent.intakeDecider == nil {
 		return launchRequest, nil, ""
 	}
-	memo := agent.newMessageDecision(launchRequest, messageContext)
+	memo := agent.newMessageDecision(sessionTurn)
 	gate := inboundengagement.NewGate(memo, agent.logger)
 	engagement := gate.Resolve(ctx, session.context.Addressing.Platform, inboundengagement.Request{
 		Prompt:           launchRequest.Prompt,

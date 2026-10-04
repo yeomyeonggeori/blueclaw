@@ -6,26 +6,31 @@ import {
 	type ContextCapableAdapter,
 } from "../src/visible-context.ts";
 
-function contextMessage(id: string, text: string, sentAtSecond: number) {
+function contextMessage(id: string, text: string, sentAtSecond: number, threadRootId = id) {
 	return {
 		id,
 		text,
 		author: { userId: `user-${id}`, userName: `handle-${id}`, fullName: `Name ${id}` },
 		metadata: { dateSent: new Date(sentAtSecond * 1000) },
+		raw: { threadRootId },
 	};
 }
 
-function fakeAdapter(messages: ReturnType<typeof contextMessage>[]): ContextCapableAdapter {
+function fakeAdapter(messages: ReturnType<typeof contextMessage>[], isDM = false): ContextCapableAdapter {
 	return {
 		name: "fake",
 		async fetchMessages() {
 			return { messages };
 		},
 		async fetchThread(threadId: string) {
-			return { id: threadId, channelId: "channel-1", channelName: "general", isDM: false, metadata: {} };
+			return { id: threadId, channelId: "channel-1", channelName: "general", isDM, metadata: {} };
 		},
 		async getUser(userId: string) {
 			return { userId, userName: "sender-handle", fullName: "Sender Name", email: "sender@test", isBot: false };
+		},
+		threadRootIdOf(raw: unknown) {
+			if (typeof raw !== "object" || raw === null || !("threadRootId" in raw)) return undefined;
+			return typeof raw.threadRootId === "string" ? raw.threadRootId : undefined;
 		},
 	};
 }
@@ -89,5 +94,61 @@ describe("buildVisibleContext", () => {
 		const adapter = fakeAdapter([contextMessage("a", "first", 100)]);
 		const context = await buildVisibleContext(adapter, "fake:channel-1", { beforeMessageId: "missing" });
 		expect(context.messages.map((message) => message.text)).toEqual(["first"]);
+	});
+
+	test("keeps recent replies in direct conversation history", async () => {
+		const adapter = fakeAdapter(
+			[
+				contextMessage("root-a", "old root", 100),
+				contextMessage("reply-a", "old reply", 200, "root-a"),
+				contextMessage("root-b", "recent root", 300),
+				contextMessage("reply-b", "recent reply", 400, "root-b"),
+				contextMessage("trigger", "new question", 500, "root-b"),
+			],
+			true,
+		);
+		const context = await buildVisibleContext(adapter, "fake:dm-1", {
+			beforeMessageId: "trigger",
+			onlyExchangeOpenings: true,
+		});
+
+		expect(context.messages.map((message) => message.id)).toEqual(["root-a", "reply-a", "root-b", "reply-b"]);
+		expect(context.messagesOpenOtherExchanges).toBe(false);
+		expect(context.conversationType).toBe("direct");
+	});
+
+	test("keeps channel history limited to exchange openings", async () => {
+		const adapter = fakeAdapter([
+			contextMessage("root-a", "old root", 100),
+			contextMessage("reply-a", "old reply", 200, "root-a"),
+			contextMessage("root-b", "recent root", 300),
+			contextMessage("reply-b", "recent reply", 400, "root-b"),
+			contextMessage("trigger", "new question", 500, "root-b"),
+		]);
+		const context = await buildVisibleContext(adapter, "fake:channel-1", {
+			beforeMessageId: "trigger",
+			onlyExchangeOpenings: true,
+		});
+
+		expect(context.messages.map((message) => message.id)).toEqual(["root-a", "root-b"]);
+		expect(context.messagesOpenOtherExchanges).toBe(true);
+	});
+
+	test("keeps a scoped direct thread within the fetched thread history", async () => {
+		const adapter = fakeAdapter(
+			[
+				contextMessage("root-b", "recent root", 300),
+				contextMessage("reply-b", "recent reply", 400, "root-b"),
+				contextMessage("trigger", "new question", 500, "root-b"),
+			],
+			true,
+		);
+		const context = await buildVisibleContext(adapter, "fake:dm-thread-b", {
+			beforeMessageId: "trigger",
+			onlyExchangeOpenings: true,
+		});
+
+		expect(context.messages.map((message) => message.id)).toEqual(["root-b", "reply-b"]);
+		expect(context.messagesOpenOtherExchanges).toBe(false);
 	});
 });

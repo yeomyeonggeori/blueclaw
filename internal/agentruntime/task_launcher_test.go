@@ -922,6 +922,25 @@ func TestLaunchedAgentTurnRequestCarriesConfiguredAgentIdentity(t *testing.T) {
 	}
 }
 
+func TestRouterRequestCarriesConfiguredAgentAndRequesterIdentity(t *testing.T) {
+	taskLauncher := NewTaskLauncher(nil, nil, NewToolCatalogBuilder())
+	taskLauncher.UseAgentIdentityProvider(func() agentcontract.AgentIdentity {
+		return agentcontract.AgentIdentity{Name: "김인턴", Handle: "internkim"}
+	})
+
+	request := taskLauncher.routerRequest(TaskLaunchRequest{
+		RequesterCallingName: "샘플",
+		RequesterHandle:      "sample",
+	}, nil)
+
+	if request.AgentIdentity.Name != "김인턴" || request.AgentIdentity.Handle != "internkim" {
+		t.Fatalf("the router request lost configured agent identity: %+v", request.AgentIdentity)
+	}
+	if request.RequesterCallingName != "샘플" || request.RequesterHandle != "sample" {
+		t.Fatalf("the router request lost requester identity: %+v", request)
+	}
+}
+
 func TestAgentTurnRequestWithoutIdentityProviderStaysEmpty(t *testing.T) {
 	taskLauncher := NewTaskLauncher(nil, nil, nil)
 
