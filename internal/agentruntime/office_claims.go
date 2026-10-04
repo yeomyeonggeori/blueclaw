@@ -39,9 +39,10 @@ type officeBlank struct {
 }
 
 type officeBlankCommands struct {
-	Merge  []string `json:"merge"`
-	Create []string `json:"create"`
-	Deck   []string `json:"deck"`
+	ReplaceFlag string   `json:"replaceFlag"`
+	Merge       []string `json:"merge"`
+	Create      []string `json:"create"`
+	Deck        []string `json:"deck"`
 }
 
 type officeClaimCheck struct {
@@ -57,6 +58,7 @@ type officeClaimCheck struct {
 const (
 	claimOutcomeSupported       = "supported"
 	claimOutcomeBlanked         = "blanked"
+	claimOutcomeRewritten       = "rewritten"
 	claimOutcomeUnreadSources   = "not_enforced_unread_attachment"
 	claimOutcomeJudgeFailed     = "judge_failed"
 	claimOutcomeRemakeFailed    = "remake_failed"
@@ -77,6 +79,10 @@ func parsedOfficeBlankCommands(document []byte) officeBlankCommands {
 
 func (toolCatalogBuilder *ToolCatalogBuilder) UseClaimDecisionModel(decisionModel model.DecisionModel) {
 	toolCatalogBuilder.claimDecisionModel = decisionModel
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) UseClaimRewrite(languageModel model.LanguageModelProvider) {
+	toolCatalogBuilder.claimRewriteModel = languageModel
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) UseClaimRecompute(languageModel model.LanguageModelProvider) {
@@ -104,16 +110,51 @@ func (toolCatalogBuilder *ToolCatalogBuilder) checkOfficeClaims(ctx context.Cont
 func (toolCatalogBuilder *ToolCatalogBuilder) judgeAndBlank(ctx context.Context, request ToolCatalogRequest, actor security.WorkspaceActor, concretePath string, snapshot officeSnapshot, claims []claimcheck.Claim) *officeClaimCheck {
 	check := &officeClaimCheck{File: filepath.Base(concretePath)}
 	sources, isEverySourceRead := toolCatalogBuilder.claimSources(ctx, request, snapshot)
-	judgment, errorValue := claimcheck.Judge(ctx, toolCatalogBuilder.claimDecisionModel, sources, claims)
+	judgment, errorValue := claimcheck.Judge(ctx, toolCatalogBuilder.claimDecisionModel, sources, claimsMarkedFree(claims))
 	if errorValue != nil {
 		check.Outcome, check.Detail = claimOutcomeJudgeFailed, errorValue.Error()
 		return check
 	}
 	judgment, check.Detail = toolCatalogBuilder.withRecomputedDerivations(ctx, sources, judgment)
 	check.Asked = askedCount(judgment)
-	check.Flagged = judgment.Treated(claimcheck.TreatmentBlank)
 	check.Hollow = judgment.Treated(claimcheck.TreatmentRewrite)
-	return toolCatalogBuilder.actOnFlaggedClaims(ctx, request, actor, concretePath, snapshot, check, isEverySourceRead)
+	treated := toolCatalogBuilder.treatedClaims(ctx, sources, judgment, check)
+	check.Flagged = treated.Blank
+	return toolCatalogBuilder.actOnFlaggedClaims(ctx, request, actor, concretePath, snapshot, check, treated, isEverySourceRead)
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) treatedClaims(ctx context.Context, sources claimcheck.Sources, judgment claimcheck.Judgment, check *officeClaimCheck) claimcheck.Outcome {
+	if toolCatalogBuilder.claimRewriteModel == nil {
+		return claimcheck.Outcome{Blank: judgment.Treated(claimcheck.TreatmentBlank)}
+	}
+	treated, errorValue := claimcheck.Treat(ctx, claimcheck.CompactProfile, toolCatalogBuilder.claimDecisionModel, toolCatalogBuilder.claimRewriteModel, sources, judgment)
+	if errorValue != nil {
+		check.Detail = firstNonEmptyString(check.Detail, "rewrite_failed: "+errorValue.Error())
+		return claimcheck.Outcome{Blank: judgment.Treated(claimcheck.TreatmentBlank)}
+	}
+	return treated
+}
+
+func claimsMarkedFree(claims []claimcheck.Claim) []claimcheck.Claim {
+	marked := make([]claimcheck.Claim, 0, len(claims))
+	for _, claim := range claims {
+		claim.IsFree = isSentencePath(claim.Path)
+		marked = append(marked, claim)
+	}
+	return marked
+}
+
+func isSentencePath(path string) bool {
+	_, sentence, isSentence := strings.Cut(path, "#")
+	if !isSentence || sentence == "" {
+		return false
+	}
+	for _, character := range sentence {
+		if character < '0' || character > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) withRecomputedDerivations(ctx context.Context, sources claimcheck.Sources, judgment claimcheck.Judgment) (claimcheck.Judgment, string) {
@@ -127,8 +168,8 @@ func (toolCatalogBuilder *ToolCatalogBuilder) withRecomputedDerivations(ctx cont
 	return rechecked, ""
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) actOnFlaggedClaims(ctx context.Context, request ToolCatalogRequest, actor security.WorkspaceActor, concretePath string, snapshot officeSnapshot, check *officeClaimCheck, isEverySourceRead bool) *officeClaimCheck {
-	if len(check.Flagged) == 0 {
+func (toolCatalogBuilder *ToolCatalogBuilder) actOnFlaggedClaims(ctx context.Context, request ToolCatalogRequest, actor security.WorkspaceActor, concretePath string, snapshot officeSnapshot, check *officeClaimCheck, treated claimcheck.Outcome, isEverySourceRead bool) *officeClaimCheck {
+	if len(treated.Blank) == 0 && len(treated.Removed) == 0 && len(treated.Replaced) == 0 {
 		check.Outcome = claimOutcomeSupported
 		return check
 	}
@@ -136,8 +177,8 @@ func (toolCatalogBuilder *ToolCatalogBuilder) actOnFlaggedClaims(ctx context.Con
 		check.Outcome = claimOutcomeUnreadSources
 		return check
 	}
-	paths := verdictPaths(check.Flagged)
-	words, hasCommand := officeRemakeWords(snapshot, concretePath, paths)
+	paths := append(verdictPaths(treated.Blank), verdictPaths(treated.Removed)...)
+	words, hasCommand := officeRemakeWords(snapshot, concretePath, paths, treated.Replaced)
 	if !hasCommand {
 		check.Outcome = claimOutcomeNoRemakeCommand
 		return check
@@ -146,7 +187,10 @@ func (toolCatalogBuilder *ToolCatalogBuilder) actOnFlaggedClaims(ctx context.Con
 		check.Outcome, check.Detail = claimOutcomeRemakeFailed, detail
 		return check
 	}
-	check.Outcome, check.Blanked = claimOutcomeBlanked, verdictPlaces(check.Flagged)
+	check.Outcome, check.Blanked = claimOutcomeBlanked, verdictPlaces(treated.Blank)
+	if len(paths) == 0 {
+		check.Outcome = claimOutcomeRewritten
+	}
 	return check
 }
 
@@ -204,7 +248,7 @@ func requestWordings(request ToolCatalogRequest) []string {
 	return wordings
 }
 
-func officeRemakeWords(snapshot officeSnapshot, concretePath string, paths []string) ([]string, bool) {
+func officeRemakeWords(snapshot officeSnapshot, concretePath string, paths []string, replacements []claimcheck.Claim) ([]string, bool) {
 	template, values := []string(nil), map[string]string{"<file>": concretePath, "<sourceSuffix>": officeContract.SourceSuffix}
 	switch {
 	case snapshot.Schema != "":
@@ -223,6 +267,9 @@ func officeRemakeWords(snapshot officeSnapshot, concretePath string, paths []str
 	}
 	for _, path := range paths {
 		words = append(words, template[len(template)-2], path)
+	}
+	for _, replacement := range replacements {
+		words = append(words, officeBlankCommand.ReplaceFlag, replacement.Path+"="+replacement.Text)
 	}
 	return words, true
 }

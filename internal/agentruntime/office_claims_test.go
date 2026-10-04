@@ -21,6 +21,7 @@ const noticeSnapshot = `{"schema":"letter","given":{},"known":{"documentNumber":
 type claimJudge struct {
 	unsupportedText string
 	kind            string
+	kindOfText      map[string]string
 	calls           int
 }
 
@@ -39,6 +40,9 @@ func (judge *claimJudge) Decide(_ context.Context, request model.DecisionRequest
 		probability := 0.05
 		if shown.Claims[key].Text == judge.unsupportedText {
 			probability = 0.9
+		}
+		if text, isNamed := judge.kindOfText[shown.Claims[key].Text]; isNamed {
+			kind, probability = text, 0.9
 		}
 		answers[key] = model.DecisionAnswer{Type: model.DecisionQuestionTypeChoice, Choice: kind, Probabilities: map[string]float64{kind: probability, "source": 1 - probability}}
 	}
@@ -332,5 +336,69 @@ func TestEveryFlaggedValueLeftInTheFileIsNamedWhateverStoppedTheBlank(t *testing
 		if len(notes) != 1 || !strings.Contains(notes[0], "slide 2 title") || !strings.Contains(notes[0], "solid, profitable growth") || !strings.Contains(notes[0], "still in the file") {
 			t.Fatalf("%s: expected a note naming the title left in the deck, got %q", outcome, notes)
 		}
+	}
+}
+
+type rewriteWriter struct {
+	content string
+	calls   int
+}
+
+func (writer *rewriteWriter) GenerateResponse(context.Context, string) (string, error) {
+	return "", nil
+}
+
+func (writer *rewriteWriter) GenerateStructuredResponse(context.Context, model.StructuredResponseRequest) (model.StructuredResponse, error) {
+	writer.calls++
+	return model.StructuredResponse{Content: writer.content}, nil
+}
+
+const hollowSentence = "이전 기간에는 전화 응대가 어렵습니다."
+
+func (fixture officeContextFixture) deliverHollow(t *testing.T, writer *rewriteWriter, kindOfText map[string]string) []string {
+	t.Helper()
+	recordPath := fixture.installOfficeStandIn(t)
+	fixture.writeSnapshot(t, "notice.pdf", noticeSnapshot)
+	fixture.builder.UseClaimRewrite(writer)
+	fixture.deliverWithJudge(t, &claimJudge{unsupportedText: hollowSentence, kind: "hollow", kindOfText: kindOfText}, "notice.pdf")
+	return officeCalls(t, recordPath)
+}
+
+func TestAHollowSentenceIsReplacedByItsCleanRewriteWhenTheFileIsRemade(t *testing.T) {
+	fixture := newOfficeContextFixture(t)
+	calls := fixture.deliverHollow(t, &rewriteWriter{content: `{"text":"이전 기간에는 전화가 연결되지 않습니다."}`}, map[string]string{"이전 기간에는 전화가 연결되지 않습니다.": "source"})
+	if len(calls) < 2 || strings.Join(calls[len(calls)-2:], " ") != "--replace sections[0].blocks[0].text#1=이전 기간에는 전화가 연결되지 않습니다." {
+		t.Fatalf("expected the remake to carry the replacement, got %v", calls)
+	}
+}
+
+func TestAHollowSentenceWithAnEmptyRewriteIsBlankedBecauseASentenceMayGo(t *testing.T) {
+	fixture := newOfficeContextFixture(t)
+	calls := fixture.deliverHollow(t, &rewriteWriter{content: `{"text":""}`}, nil)
+	if len(calls) < 2 || strings.Join(calls[len(calls)-2:], " ") != "--blank sections[0].blocks[0].text#1" {
+		t.Fatalf("expected the sentence blanked, got %v", calls)
+	}
+}
+
+func TestAHollowSentenceStaysWhenItsRewriteIsUnreadable(t *testing.T) {
+	fixture := newOfficeContextFixture(t)
+	if calls := fixture.deliverHollow(t, &rewriteWriter{content: "그냥 문장입니다."}, nil); len(calls) != 0 {
+		t.Fatalf("expected no remake, got %v", calls)
+	}
+}
+
+func TestAHollowSentenceStaysWhenItsRewriteIsJudgedWrong(t *testing.T) {
+	fixture := newOfficeContextFixture(t)
+	if calls := fixture.deliverHollow(t, &rewriteWriter{content: `{"text":"전화는 3일간 불가합니다."}`}, map[string]string{"전화는 3일간 불가합니다.": "claim"}); len(calls) != 0 {
+		t.Fatalf("expected no remake, got %v", calls)
+	}
+}
+
+func TestOnlyASentenceOfAParagraphMayBeDroppedForBeingHollow(t *testing.T) {
+	if isSentencePath("sections[0].title") || isSentencePath("slides[3].units[2]") {
+		t.Fatalf("a title or a whole unit is a required slot")
+	}
+	if !isSentencePath("slides[3].units[2]#0") || !isSentencePath("sections[0].blocks[0].text#1") {
+		t.Fatalf("a sentence of a paragraph ends in #<index>")
 	}
 }
