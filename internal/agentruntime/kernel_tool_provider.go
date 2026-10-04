@@ -151,7 +151,32 @@ var (
 		"type":"object",
 		"properties":{
 			"deliveredPaths":{"type":"array","items":{"type":"string","minLength":1},"minItems":1,"uniqueItems":true},
-			"attachmentCount":{"type":"integer","minimum":1}
+			"attachmentCount":{"type":"integer","minimum":1},
+			"claimChecks":{"type":"array","items":{
+				"type":"object",
+				"properties":{
+					"file":{"type":"string","minLength":1},
+					"asked":{"type":"integer","minimum":0},
+					"unsupported":{"type":"array","items":{
+						"type":"object",
+						"properties":{
+							"path":{"type":"string"},
+							"at":{"type":"string"},
+							"text":{"type":"string"},
+							"kind":{"type":"string"},
+							"claimProbability":{"type":"number"},
+							"copied":{"type":"boolean"}
+						},
+						"required":["path","text","kind","claimProbability"],
+						"additionalProperties":false
+					}},
+					"blanked":{"type":"array","items":{"type":"string"}},
+					"outcome":{"type":"string","minLength":1},
+					"detail":{"type":"string"}
+				},
+				"required":["file","asked","outcome"],
+				"additionalProperties":false
+			}}
 		},
 		"required":["deliveredPaths","attachmentCount"],
 		"additionalProperties":false

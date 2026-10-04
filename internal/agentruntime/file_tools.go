@@ -1396,7 +1396,12 @@ func (toolCatalogBuilder *ToolCatalogBuilder) attachFileTool(toolContext context
 	}
 	attachments := []toolcontract.FileAttachment{}
 	deliveredPaths := []string{}
+	claimChecks := []officeClaimCheck{}
 	for _, attachmentInput := range attachmentInputs {
+		concretePath := toolCatalogBuilder.nativeRequesterPath(handlerContext.request, strings.TrimSpace(attachmentInput.Path))
+		if check := toolCatalogBuilder.checkOfficeClaims(toolContext, handlerContext.request, concretePath); check != nil {
+			claimChecks = append(claimChecks, *check)
+		}
 		attachment, failureResult := toolCatalogBuilder.fileAttachment(toolContext, attachmentInput, handlerContext)
 		if failureResult != nil {
 			return *failureResult, nil
@@ -1404,12 +1409,15 @@ func (toolCatalogBuilder *ToolCatalogBuilder) attachFileTool(toolContext context
 		attachments = append(attachments, attachment)
 		deliveredPaths = append(deliveredPaths, attachment.DevicePath)
 	}
-	data := json.RawMessage(MarshalBody(map[string]any{
+	data := map[string]any{
 		"deliveredPaths":  deliveredPaths,
 		"attachmentCount": len(attachments),
-	}))
+	}
+	if len(claimChecks) > 0 {
+		data["claimChecks"] = claimChecks
+	}
 	return toolcontract.ToolResult{
-		Output:      toolcontract.ToolOutput{Content: fileDeliverStagedContent, Data: data},
+		Output:      toolcontract.ToolOutput{Content: fileDeliverStagedContent + blankedClaimsContent(claimChecks), Data: json.RawMessage(MarshalBody(data))},
 		Attachments: attachments,
 	}, nil
 }

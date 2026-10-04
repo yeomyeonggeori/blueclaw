@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"path/filepath"
 	"strings"
@@ -52,6 +53,8 @@ type ToolCatalogBuilder struct {
 	recordCatalogDivergenceReporter func(RecordCatalogDivergence)
 	recordCatalogMutex              sync.Mutex
 	recordCatalogByRequester        map[string]discoveredCatalog
+
+	claimDecisionModel model.DecisionModel
 }
 
 type toolHandlerContext struct {

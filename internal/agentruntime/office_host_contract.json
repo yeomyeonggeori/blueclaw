@@ -88,7 +88,7 @@
   ],
   "source": {
     "type": "object",
-    "description": "the snapshot an office command writes beside each file it writes, named <file><sourceSuffix>; the host delivers a new file with a deliverable extension only when this snapshot is beside it, and reads its blanks into the delivery result",
+    "description": "the snapshot an office command writes beside each file it writes, named <file><sourceSuffix>; the host delivers a new file with a deliverable extension only when this snapshot is beside it, and reads its blanks into the delivery result; the host also asks of each claim whether the request, its attachments and the runtime facts support it, and remakes the file from its snapshot with each claim it finds unsupported blank",
     "properties": {
       "blanks": {
         "type": "array",
@@ -110,7 +110,62 @@
             "label"
           ]
         }
+      },
+      "claims": {
+        "type": "array",
+        "description": "every value the model composed as text: in a file drawn from a schema or a declaration, one entry per paragraph sentence, item text, owner, text cell and text field; in a deck, one per title, sentence, list item, figure, table cell, chart caption and chart",
+        "items": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "where the value sits in the given values; a sentence of a paragraph ends in #<index>"
+            },
+            "at": {
+              "type": "string",
+              "description": "where it sits, as a person would name it"
+            },
+            "text": {
+              "type": "string",
+              "description": "the value as written"
+            }
+          },
+          "required": [
+            "path",
+            "at",
+            "text"
+          ]
+        }
+      },
+      "deck": {
+        "type": "string",
+        "description": "the deck source a deck was built from, present only in a deck's snapshot"
       }
     }
+  },
+  "blankCommand": {
+    "description": "how the host remakes a file with claims blank, run as the person: merge for a snapshot that names a schema, create for one that names a declaration or a deck; the snapshot stands in for the values or the declaration, a deck is rebuilt from its source, and each --blank names a claim path",
+    "merge": [
+      "merge",
+      "<schema>",
+      "<file><sourceSuffix>",
+      "<file>",
+      "--blank",
+      "<path>"
+    ],
+    "create": [
+      "create",
+      "<file>",
+      "<file><sourceSuffix>",
+      "--blank",
+      "<path>"
+    ],
+    "deck": [
+      "create",
+      "<file>",
+      "<deck>",
+      "--blank",
+      "<path>"
+    ]
   }
 }
