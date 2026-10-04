@@ -48,7 +48,7 @@ type officeClaimCheck struct {
 	File    string               `json:"file"`
 	Asked   int                  `json:"asked"`
 	Flagged []claimcheck.Verdict `json:"flagged,omitempty"`
-	Slop    []claimcheck.Verdict `json:"slop,omitempty"`
+	Hollow  []claimcheck.Verdict `json:"hollow,omitempty"`
 	Blanked []string             `json:"blanked,omitempty"`
 	Outcome string               `json:"outcome"`
 	Detail  string               `json:"detail,omitempty"`
@@ -112,7 +112,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) judgeAndBlank(ctx context.Context,
 	judgment, check.Detail = toolCatalogBuilder.withRecomputedDerivations(ctx, sources, judgment)
 	check.Asked = askedCount(judgment)
 	check.Flagged = judgment.Treated(claimcheck.TreatmentBlank)
-	check.Slop = judgment.Treated(claimcheck.TreatmentRewrite)
+	check.Hollow = judgment.Treated(claimcheck.TreatmentRewrite)
 	return toolCatalogBuilder.actOnFlaggedClaims(ctx, request, actor, concretePath, snapshot, check, isEverySourceRead)
 }
 

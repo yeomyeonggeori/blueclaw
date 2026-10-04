@@ -257,18 +257,18 @@ func TestAMistakeIsBlankedAndTheNoteAsksThePersonToConfirm(t *testing.T) {
 	}
 }
 
-func TestSlopIsRecordedAndNeverRewrittenOrBlanked(t *testing.T) {
+func TestHollowIsRecordedAndNeverRewrittenOrBlanked(t *testing.T) {
 	fixture := newOfficeContextFixture(t)
 	recordPath := fixture.installOfficeStandIn(t)
 	fixture.writeSnapshot(t, "notice.pdf", noticeSnapshot)
 
-	data := fixture.deliverWithJudge(t, &claimJudge{unsupportedText: "이전 기간에는 전화 응대가 어렵습니다.", kind: "slop"}, "notice.pdf")
+	data := fixture.deliverWithJudge(t, &claimJudge{unsupportedText: "이전 기간에는 전화 응대가 어렵습니다.", kind: "hollow"}, "notice.pdf")
 
 	if calls := officeCalls(t, recordPath); len(calls) != 0 {
-		t.Fatalf("expected no remake for slop, got %v", calls)
+		t.Fatalf("expected no remake for hollow, got %v", calls)
 	}
-	if !strings.Contains(string(data["claimChecks"]), `"slop":[`) || !strings.Contains(string(data["claimChecks"]), `"outcome":"supported"`) {
-		t.Fatalf("expected the slop recorded and the file supported, got %s", data["claimChecks"])
+	if !strings.Contains(string(data["claimChecks"]), `"hollow":[`) || !strings.Contains(string(data["claimChecks"]), `"outcome":"supported"`) {
+		t.Fatalf("expected the hollow recorded and the file supported, got %s", data["claimChecks"])
 	}
 }
 

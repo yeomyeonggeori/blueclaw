@@ -166,14 +166,14 @@ var (
 							"free":{"type":"boolean"},
 							"kind":{"type":"string"},
 							"defect":{"type":"string"},
-							"probabilities":{"type":"object","properties":{"source":{"type":"number"},"derived":{"type":"number"},"expression":{"type":"number"},"claim":{"type":"number"},"mistake":{"type":"number"},"error":{"type":"number"},"slop":{"type":"number"}},"additionalProperties":false},
+							"probabilities":{"type":"object","properties":{"source":{"type":"number"},"derived":{"type":"number"},"expression":{"type":"number"},"claim":{"type":"number"},"mistake":{"type":"number"},"error":{"type":"number"},"hollow":{"type":"number"}},"additionalProperties":false},
 							"treatment":{"type":"string"},
 							"copied":{"type":"boolean"}
 						},
 						"required":["path","text","kind"],
 						"additionalProperties":false
 					}},
-					"slop":{"type":"array","items":{
+					"hollow":{"type":"array","items":{
 						"type":"object",
 						"properties":{
 							"path":{"type":"string"},
@@ -182,7 +182,7 @@ var (
 							"free":{"type":"boolean"},
 							"kind":{"type":"string"},
 							"defect":{"type":"string"},
-							"probabilities":{"type":"object","properties":{"source":{"type":"number"},"derived":{"type":"number"},"expression":{"type":"number"},"claim":{"type":"number"},"mistake":{"type":"number"},"error":{"type":"number"},"slop":{"type":"number"}},"additionalProperties":false},
+							"probabilities":{"type":"object","properties":{"source":{"type":"number"},"derived":{"type":"number"},"expression":{"type":"number"},"claim":{"type":"number"},"mistake":{"type":"number"},"error":{"type":"number"},"hollow":{"type":"number"}},"additionalProperties":false},
 							"treatment":{"type":"string"},
 							"copied":{"type":"boolean"}
 						},
