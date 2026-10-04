@@ -218,6 +218,14 @@ func NewConfiguredDecisionModel(runtimeConfiguration config.RuntimeConfiguration
 	}}, nil
 }
 
+func NewConfiguredVisualReviewModel(runtimeConfiguration config.RuntimeConfiguration) (model.DecisionModel, error) {
+	visualReviewConfiguration := runtimeConfiguration.LanguageModel.VisualReview
+	if strings.TrimSpace(visualReviewConfiguration.Endpoint) == "" {
+		return nil, nil
+	}
+	return endpointDecisionModel(visualReviewConfiguration)
+}
+
 func endpointDecisionModel(decisionConfiguration config.ModelEndpointConfiguration) (model.DecisionModel, error) {
 	modelName := strings.TrimSpace(decisionConfiguration.Model)
 	if modelName == "" {
