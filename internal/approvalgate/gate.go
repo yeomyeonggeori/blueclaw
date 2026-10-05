@@ -62,7 +62,7 @@ func (gate *Gate) holdCall(taskRunID string, approvalRequest mcpserver.ApprovalR
 
 func (gate *Gate) approvedOutcome(taskRunID string, approvalRequest mcpserver.ApprovalRequest) mcpserver.ApprovalOutcome {
 	holdID := RecordApprovalSpent(gate.taskRunService, taskRunID, approvalRequest.ToolName, approvalRequest.ToolInput)
-	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionApproved, ApprovedCallID: holdID}
+	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionApproved, HoldID: holdID}
 }
 
 func (gate *Gate) taskHasApprovedScope(taskRunID string, approvalScope string) bool {

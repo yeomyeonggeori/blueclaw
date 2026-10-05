@@ -2515,7 +2515,7 @@ func virtualCapabilityRequestNeedsApproval(requestBody []byte) bool {
 		Input   json.RawMessage `json:"input"`
 		Context struct {
 			IsApprovalContinuation bool   `json:"isApprovalContinuation"`
-			ApprovedCallID         string `json:"approvedCallID"`
+			HoldID                 string `json:"holdID"`
 			ConversationType       string `json:"conversationType"`
 			ChannelID              string `json:"channelID"`
 		} `json:"context"`
@@ -2523,7 +2523,7 @@ func virtualCapabilityRequestNeedsApproval(requestBody []byte) bool {
 	if len(requestBody) == 0 || json.Unmarshal(requestBody, &requestDocument) != nil {
 		return false
 	}
-	if requestDocument.Context.IsApprovalContinuation || strings.TrimSpace(requestDocument.Context.ApprovedCallID) != "" {
+	if requestDocument.Context.IsApprovalContinuation || strings.TrimSpace(requestDocument.Context.HoldID) != "" {
 		return false
 	}
 	return !approvalgate.SendLandsInTheConversationBeingAnswered(requestDocument.Context.ConversationType, requestDocument.Context.ChannelID, requestDocument.Input)

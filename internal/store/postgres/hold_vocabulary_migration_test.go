@@ -14,6 +14,8 @@ import (
 
 const holdVocabularyMigrationName = "040_one_hold_vocabulary.sql"
 
+var runsWaitingForApproval = map[string]bool{"run-e": true}
+
 type storedEvent struct {
 	id   string
 	run  string
@@ -35,7 +37,13 @@ var oldShapeEvents = []storedEvent{
 	{"d-opened", "run-d", "approval.pending_call", `{"holdID":"hold-d","toolName":"event_delete","toolInput":{"eventID":"event-1"}}`},
 	{"d-offered", "run-d", "approval.choices_offered", `{"toolName":"event_update","toolInput":{"eventID":"event-1"},"choices":[{"key":"now"}]}`},
 	{"e-minted", "run-e", "approval.held_call", `{"approvalToken":"loop-token-3","toolName":"message_send","toolInput":{"to":["bob"]},"confirmation":"Send it?"}`},
-	{"e-spent", "run-e", "approval.executed", `{"approvalToken":"loop-token-3","toolName":"message_send","toolInput":{"to":["bob"]}}`},
+	{"g-minted", "run-g", "approval.held_call", `{"approvalToken":"loop-token-4","toolName":"message_send","toolInput":{"to":["bob"]},"confirmation":"Send it?"}`},
+	{"g-spent", "run-g", "approval.executed", `{"approvalToken":"loop-token-4","toolName":"message_send","toolInput":{"to":["bob"]}}`},
+	{"l-open-1", "run-l", "approval.pending_call", `{"toolName":"event_delete","toolInput":{"eventID":"event-1"},"confirmation":"Delete 1?"}`},
+	{"l-open-2", "run-l", "approval.pending_call", `{"toolName":"event_delete","toolInput":{"eventID":"event-2"},"confirmation":"Delete 2?"}`},
+	{"l-decided-1", "run-l", "approval.decided", `{"decision":"cancel","source":"chat_reply"}`},
+	{"l-decided-2", "run-l", "approval.decided", `{"decision":"confirm","source":"chat_reply"}`},
+	{"l-spent", "run-l", "approval.executed", `{"toolName":"event_delete","toolInput":{"eventID":"event-1"}}`},
 	{"f-paused", "run-f", "task.paused", `Send the message to someone?`},
 }
 
@@ -92,7 +100,7 @@ func insertOldShapeEvents(t *testing.T, ctx context.Context, database Database) 
 			insertedRuns[event.run] = true
 			if errorValue := database.Exec(ctx, `
 INSERT INTO task_run (task_run_id, current_agent_profile_name, status, prompt, created_at, updated_at)
-VALUES ($1, 'assistant', 'completed', 'hold vocabulary fixture', now(), now())`, event.run); errorValue != nil {
+VALUES ($1, 'assistant', $2, 'hold vocabulary fixture', now(), now())`, event.run, statusOfFixtureRun(event.run)); errorValue != nil {
 				t.Fatal(errorValue)
 			}
 		}
@@ -102,6 +110,13 @@ VALUES ($1, $2, $3, $4, $5)`, event.id, event.run, event.name, event.body, creat
 			t.Fatal(errorValue)
 		}
 	}
+}
+
+func statusOfFixtureRun(run string) string {
+	if runsWaitingForApproval[run] {
+		return "waiting_approval"
+	}
+	return "completed"
 }
 
 func applyHoldVocabularyMigration(t *testing.T, ctx context.Context, database Database) {
@@ -164,7 +179,7 @@ func bodyOf(t *testing.T, event storedEvent) map[string]any {
 
 func assertMigratedShape(t *testing.T, migrated map[string]storedEvent) {
 	t.Helper()
-	for _, goneID := range []string{"a-offered", "a-minted", "d-offered"} {
+	for _, goneID := range []string{"a-offered", "a-minted", "d-offered", "g-minted"} {
 		if _, isPresent := migrated[goneID]; isPresent {
 			t.Fatalf("%s should be folded into its hold or deleted, and it is still stored", goneID)
 		}
@@ -172,7 +187,9 @@ func assertMigratedShape(t *testing.T, migrated map[string]storedEvent) {
 	expectedNames := map[string]string{
 		"a-opened": "approval.hold_opened", "a-spent": "approval.hold_spent",
 		"b-opened": "approval.hold_opened", "c-opened": "approval.hold_opened",
-		"d-opened": "approval.hold_opened", "e-minted": "approval.hold_opened", "e-spent": "approval.hold_spent",
+		"d-opened": "approval.hold_opened", "e-minted": "approval.hold_opened", "g-spent": "approval.hold_spent",
+		"l-open-1": "approval.hold_opened", "l-open-2": "approval.hold_opened", "l-decided-1": "approval.decided",
+		"l-decided-2": "approval.decided", "l-spent": "approval.hold_spent",
 		"a-decided": "approval.decided", "b-decided": "approval.decided", "c-decided": "approval.decided",
 		"b-drift": "approval.unheld_call_carried_out", "f-paused": "task.paused",
 	}
@@ -190,14 +207,16 @@ func assertMigratedShape(t *testing.T, migrated map[string]storedEvent) {
 		"a-opened": "hold-a", "a-decided": "hold-a", "a-spent": "hold-a",
 		"b-opened": "b-opened", "b-decided": "b-opened",
 		"c-opened": "hold-c", "c-decided": "hold-c", "d-opened": "hold-d",
-		"e-minted": "loop-token-3", "e-spent": "loop-token-3",
+		"e-minted": "loop-token-3", "g-spent": "loop-token-4",
+		"l-open-1": "l-open-1", "l-open-2": "l-open-2",
+		"l-decided-1": "l-open-2", "l-decided-2": "l-open-1", "l-spent": "l-open-1",
 	}
 	for id, expectedHoldID := range expectedHoldIDs {
 		if actual := bodyOf(t, migrated[id])["holdID"]; actual != expectedHoldID {
 			t.Fatalf("event %s has holdID %v, expected %q: %s", id, actual, expectedHoldID, migrated[id].body)
 		}
 	}
-	expectedDecisions := map[string]string{"a-decided": "approve", "b-decided": "reject", "c-decided": "approve"}
+	expectedDecisions := map[string]string{"a-decided": "approve", "b-decided": "reject", "c-decided": "approve", "l-decided-1": "reject", "l-decided-2": "approve"}
 	for id, expectedDecision := range expectedDecisions {
 		if actual := bodyOf(t, migrated[id])["decision"]; actual != expectedDecision {
 			t.Fatalf("event %s decided %v, expected %q", id, actual, expectedDecision)
@@ -238,7 +257,14 @@ func assertMigratedHoldsReadBack(t *testing.T, ctx context.Context, database Dat
 		t.Fatalf("run-c should read back as an approved hold, got %+v", holdC)
 	}
 	holdE := holdsOf("run-e")
-	if len(holdE) != 1 || holdE[0].ID != "loop-token-3" || holdE[0].State != approvalrecord.StateSpent {
-		t.Fatalf("run-e kept only the loop's record, which becomes its hold, got %+v", holdE)
+	if len(holdE) != 1 || holdE[0].ID != "loop-token-3" || holdE[0].State != approvalrecord.StatePending {
+		t.Fatalf("run-e is still waiting and kept only the loop's record, which becomes its pending hold, got %+v", holdE)
+	}
+	if holdG := holdsOf("run-g"); len(holdG) != 0 {
+		t.Fatalf("run-g finished, so the loop's record must not become a hold, got %+v", holdG)
+	}
+	holdL := holdsOf("run-l")
+	if len(holdL) != 2 || holdL[0].ID != "l-open-1" || holdL[0].State != approvalrecord.StateSpent || holdL[1].ID != "l-open-2" || holdL[1].State != approvalrecord.StateRejected {
+		t.Fatalf("run-l was written before hold ids: its decisions and spend must settle the holds, not leave them pending, got %+v", holdL)
 	}
 }

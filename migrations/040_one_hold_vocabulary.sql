@@ -38,6 +38,12 @@ DELETE FROM task_event WHERE name = 'approval.choices_offered';
 UPDATE task_event
 SET name = 'approval.hold_opened'
 WHERE name = 'approval.held_call'
+  AND EXISTS (
+    SELECT 1
+    FROM task_run
+    WHERE task_run.task_run_id = task_event.task_run_id
+      AND task_run.status = 'waiting_approval'
+  )
   AND NOT EXISTS (
     SELECT 1
     FROM task_event other_hold
@@ -100,5 +106,75 @@ WHERE name = 'approval.unheld_call_carried_out'
     hold_vocabulary_json(body) ? 'presentedToken'
     OR hold_vocabulary_json(body) ? 'awaitingHeldCallIDs'
   );
+
+DO $$
+DECLARE
+  legacy record;
+  paired_hold_id text;
+BEGIN
+  FOR legacy IN
+    SELECT task_event_id, task_run_id, name, created_at, hold_vocabulary_json(body) AS record
+    FROM task_event
+    WHERE name IN ('approval.decided', 'approval.hold_spent')
+      AND hold_vocabulary_json(body) IS NOT NULL
+      AND coalesce(hold_vocabulary_json(body) ->> 'holdID', '') = ''
+    ORDER BY created_at, task_event_id
+  LOOP
+    paired_hold_id := NULL;
+    IF legacy.name = 'approval.decided' THEN
+      SELECT hold.record ->> 'holdID' INTO paired_hold_id
+      FROM (
+        SELECT task_event_id, created_at, hold_vocabulary_json(body) AS record
+        FROM task_event
+        WHERE name = 'approval.hold_opened'
+          AND task_run_id = legacy.task_run_id
+          AND (created_at, task_event_id) < (legacy.created_at, legacy.task_event_id)
+      ) hold
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM task_event earlier
+        WHERE earlier.name = 'approval.decided'
+          AND earlier.task_run_id = legacy.task_run_id
+          AND (earlier.created_at, earlier.task_event_id) < (legacy.created_at, legacy.task_event_id)
+          AND hold_vocabulary_json(earlier.body) ->> 'holdID' = hold.record ->> 'holdID'
+      )
+      ORDER BY hold.created_at DESC, hold.task_event_id DESC
+      LIMIT 1;
+    ELSE
+      SELECT hold.record ->> 'holdID' INTO paired_hold_id
+      FROM (
+        SELECT task_event_id, created_at, hold_vocabulary_json(body) AS record
+        FROM task_event
+        WHERE name = 'approval.hold_opened'
+          AND task_run_id = legacy.task_run_id
+          AND (created_at, task_event_id) < (legacy.created_at, legacy.task_event_id)
+      ) hold
+      WHERE btrim(coalesce(hold.record ->> 'toolName', '')) = btrim(coalesce(legacy.record ->> 'toolName', ''))
+        AND EXISTS (
+          SELECT 1
+          FROM task_event approval
+          WHERE approval.name = 'approval.decided'
+            AND approval.task_run_id = legacy.task_run_id
+            AND hold_vocabulary_json(approval.body) ->> 'holdID' = hold.record ->> 'holdID'
+            AND hold_vocabulary_json(approval.body) ->> 'decision' = 'approve'
+        )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM task_event spent
+          WHERE spent.name = 'approval.hold_spent'
+            AND spent.task_run_id = legacy.task_run_id
+            AND hold_vocabulary_json(spent.body) ->> 'holdID' = hold.record ->> 'holdID'
+        )
+      ORDER BY hold.created_at DESC, hold.task_event_id DESC
+      LIMIT 1;
+    END IF;
+    IF paired_hold_id IS NOT NULL THEN
+      UPDATE task_event
+      SET body = (hold_vocabulary_json(body) || jsonb_build_object('holdID', paired_hold_id))::text
+      WHERE task_event_id = legacy.task_event_id;
+    END IF;
+  END LOOP;
+END
+$$;
 
 DROP FUNCTION hold_vocabulary_json(text);

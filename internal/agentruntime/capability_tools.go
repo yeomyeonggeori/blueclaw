@@ -559,8 +559,8 @@ func capabilityToolRequest(toolContext context.Context, descriptor CapabilityToo
 	if responseLanguage := toolcontract.ResponseLanguageFromContext(toolContext); responseLanguage != "" {
 		contextDocument["responseLanguage"] = responseLanguage
 	}
-	if approvedCallID := toolcontract.ApprovedCallIDFromContext(toolContext); approvedCallID != "" {
-		contextDocument["approvedCallID"] = approvedCallID
+	if holdID := toolcontract.HoldIDFromContext(toolContext); holdID != "" {
+		contextDocument["holdID"] = holdID
 	}
 	if scheduledCall, isCarried := scheduledApprovedCallFrom(toolContext); isCarried {
 		contextDocument["scheduledApprovedCall"] = map[string]any{
