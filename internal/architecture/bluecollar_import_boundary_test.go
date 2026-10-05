@@ -22,10 +22,6 @@ var defaultHarnessWiringPackages = []string{
 	"internal/e2e",
 }
 
-var pendingMigrationPackages = []string{
-	"internal/connectors",
-}
-
 type listedPackage struct {
 	ImportPath string
 	Imports    []string
@@ -33,7 +29,7 @@ type listedPackage struct {
 
 func TestOnlyDefaultHarnessWiringImportsBluecollarJudgment(t *testing.T) {
 	importedJudgmentByPackage := judgmentImportsByPackage(t)
-	permitted := toSet(append(append([]string{}, defaultHarnessWiringPackages...), pendingMigrationPackages...))
+	permitted := toSet(defaultHarnessWiringPackages)
 
 	for _, packagePath := range sortedKeys(importedJudgmentByPackage) {
 		if !permitted[packagePath] {
@@ -45,9 +41,9 @@ func TestOnlyDefaultHarnessWiringImportsBluecollarJudgment(t *testing.T) {
 func TestEveryPermittedImporterStillImportsBluecollarJudgment(t *testing.T) {
 	importedJudgmentByPackage := judgmentImportsByPackage(t)
 
-	for _, packagePath := range append(append([]string{}, defaultHarnessWiringPackages...), pendingMigrationPackages...) {
+	for _, packagePath := range defaultHarnessWiringPackages {
 		if len(importedJudgmentByPackage[packagePath]) == 0 {
-			t.Errorf("%s no longer imports bluecollar judgment; remove it from the permitted lists", packagePath)
+			t.Errorf("%s no longer imports bluecollar judgment; remove it from defaultHarnessWiringPackages", packagePath)
 		}
 	}
 }

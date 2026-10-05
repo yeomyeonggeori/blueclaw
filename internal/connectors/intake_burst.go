@@ -7,12 +7,9 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/intake"
 )
 
 const connectorDecisionBurstSize = 4
-
-const connectorDecisionRequestByteCeiling = 80000
 
 const connectorDecisionBurstWindow = 30 * time.Second
 
@@ -31,7 +28,7 @@ func (connectorRuntime *ConnectorRuntime) decideInboundBurst(ctx context.Context
 		return
 	}
 	decisionRequest, ledgerTaskRunID := connectorRuntime.inboundDecisionRequest(ctx, adapter, events[len(events)-1])
-	for _, fittingEvents := range burstsWithinTheRequestCeiling(decisionRequest, events) {
+	for _, fittingEvents := range connectorRuntime.burstsWithinTheRequestBudget(decisionRequest, events) {
 		if len(fittingEvents) < 2 {
 			continue
 		}
@@ -48,12 +45,12 @@ func (connectorRuntime *ConnectorRuntime) decideFittingBurst(ctx context.Context
 	holdBurstIntakeCallRecords(events, ledgerTaskRunID, callRecords)
 }
 
-func burstsWithinTheRequestCeiling(decisionRequest agentcontract.IntakeDecisionRequest, events []PlatformInboundEvent) [][]PlatformInboundEvent {
+func (connectorRuntime *ConnectorRuntime) burstsWithinTheRequestBudget(decisionRequest agentcontract.IntakeDecisionRequest, events []PlatformInboundEvent) [][]PlatformInboundEvent {
 	bursts := [][]PlatformInboundEvent{}
 	burst := []PlatformInboundEvent{}
 	for _, event := range events {
 		candidateBurst := append(append([]PlatformInboundEvent{}, burst...), event)
-		if len(burst) > 0 && !decisionRequestFitsTheCeiling(decisionRequest, candidateBurst) {
+		if len(burst) > 0 && !connectorRuntime.decisionRequestFitsTheBudget(decisionRequest, candidateBurst) {
 			bursts = append(bursts, burst)
 			burst = []PlatformInboundEvent{event}
 			continue
@@ -63,9 +60,9 @@ func burstsWithinTheRequestCeiling(decisionRequest agentcontract.IntakeDecisionR
 	return append(bursts, burst)
 }
 
-func decisionRequestFitsTheCeiling(decisionRequest agentcontract.IntakeDecisionRequest, events []PlatformInboundEvent) bool {
+func (connectorRuntime *ConnectorRuntime) decisionRequestFitsTheBudget(decisionRequest agentcontract.IntakeDecisionRequest, events []PlatformInboundEvent) bool {
 	decisionRequest.Messages = burstDecisionMessages(events)
-	return intake.DecisionRequestByteCount(decisionRequest) <= connectorDecisionRequestByteCeiling
+	return connectorRuntime.intakeDecider == nil || connectorRuntime.intakeDecider.FitsBurstBudget(decisionRequest)
 }
 
 func (connectorRuntime *ConnectorRuntime) decideBurst(ctx context.Context, decisionRequest agentcontract.IntakeDecisionRequest, ledgerTaskRunID string) (agentcontract.IntakeDecisions, []agentcontract.LLMCallRecord, error) {

@@ -10,6 +10,7 @@ import (
 )
 
 type blockingIntakeDecider struct {
+	unlimitedBurstBudget
 	mutex      sync.Mutex
 	callCount  int
 	entered    chan struct{}
