@@ -240,7 +240,7 @@ func runVirtualSession(ctx context.Context, arguments virtualSessionArguments) e
 		scenario.FailOnLanguageModelError = arguments.StrictAssertions
 		scenario.ProgressWriter = os.Stderr
 		delayLiveVirtualSession()
-	} else if isLiveVirtualScenario(scenario) {
+	} else if scenario.NeedsLiveLanguageModel() {
 		return errors.New("virtual-session scenario needs live LLM calls; pass --live-llm or set BLUECLAW_E2E_LIVE=1")
 	}
 	if arguments.LiveLanguageModel {
@@ -723,15 +723,6 @@ func truthyEnvironmentValue(value string) bool {
 
 func endpointForVirtualSession(arguments virtualSessionArguments) string {
 	return strings.TrimSpace(arguments.LanguageModelEndpoint)
-}
-
-func isLiveVirtualScenario(scenario e2e.VirtualSessionScenario) bool {
-	for _, virtualTurn := range scenario.Turns {
-		if len(virtualTurn.ActionResponses) > 0 {
-			return false
-		}
-	}
-	return true
 }
 
 func liveSkillDirectoryPaths(arguments virtualSessionArguments, scenario e2e.VirtualSessionScenario) []string {

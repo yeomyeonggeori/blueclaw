@@ -809,6 +809,15 @@ func BuiltinScenarioNames() []string {
 	return names
 }
 
+func (scenario VirtualSessionScenario) NeedsLiveLanguageModel() bool {
+	for _, virtualTurn := range scenario.Turns {
+		if len(virtualTurn.ActionResponses) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
 var virtualSessionAgentHarnessFactory harnessdriver.Factory
 
 func UseAgentHarnessFactory(factory harnessdriver.Factory) {
