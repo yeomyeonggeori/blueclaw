@@ -1,6 +1,6 @@
 # Overview
 
-blueclaw is a self-hosted Go daemon that runs an AI agent on behalf of the several people who share one machine. It executes each requester's tool calls as that person's own unprivileged POSIX user, holds side-effecting calls at an approval gate, and writes every step of every task to a durable event ledger in Postgres.
+blueclaw is a self-hosted meta-harness: a Go daemon that runs agent harnesses on behalf of the several people who share one machine. The harness does the agent's work. blueclaw executes each requester's tool calls as that person's own unprivileged POSIX user, carries questions to the person who must answer them, and writes every step of every task to a durable event ledger in Postgres.
 
 > [!WARNING]
 > blueclaw is pre-alpha. The interfaces, the wire grammar, the configuration keys and the database schema change without notice, and there is no release or upgrade path between commits. Pin a commit and expect to read diffs.
@@ -11,20 +11,21 @@ A company that runs one agent on one machine usually runs it as one Unix account
 
 ## What it is
 
-- A host owns connectors, identity, POSIX isolation, the task store, approvals, the tool catalog, capabilities, memory and delivery.
-- The harness port exposes the agent loop through one Go method, `agentcontract.Harness.RunTurn`. The bundled loop is [bluecollar](https://github.com/yeomyeonggeori/bluecollar); an ACP agent, Claude Code, Codex or Antigravity can take its place.
+- A harness runs an agent loop for the person at its terminal. A meta-harness runs harnesses, and owns what a single harness lacks once many people share it: connectors, identity, POSIX isolation, the task store, approvals, the tool catalog, capabilities, memory and delivery.
+- The harness port exposes the agent loop through one Go method, `agentcontract.Harness.RunTurn`. The default harness is [bluecollar](https://github.com/yeomyeonggeori/bluecollar); an ACP agent, Claude Code, Codex or Antigravity can take its place.
+- When a good harness already does something, blueclaw leaves the job to it. A feature that only works by reaching inside one harness belongs in that harness.
 - POSIX ownership and mode bits decide what a tool call may touch. The runtime has no executable allowlist or denied path prefix, and its prompt does not tell the model which paths it may use.
 
 ## What it is not
 
 It is not an agent, a model or a chat client. It does not sandbox the agent from the machine; it separates the people using the machine from each other, and a container or VM around it composes with that. There are no binary releases: you build it from source.
 
-blueclaw is the agent host inside [InternKim](https://intern.kim).
+blueclaw is the meta-harness inside [InternKim](https://intern.kim).
 
 ## Where to go next
 
 - [Quickstart](#quickstart) builds the daemon and drives a task over HTTP.
-- [Architecture](#architecture) shows how host, harness and contract divide the work.
+- [Architecture](#architecture) shows how meta-harness, harness and contract divide the work.
 - [Concepts](#concepts) defines tasks, approvals, policy, skills and memory.
 - [Boundaries](#boundaries) states the security model in detail.
 - [Operations](#operations) covers configuration, the database and deployment.
@@ -139,7 +140,7 @@ blueclaw is split into three parts that compile against each other.
 
 | Part | Owns | Where |
 |---|---|---|
-| Host (blueclaw) | connectors, policy, identity, POSIX isolation, task store, approvals, tool catalog, capabilities, memory, delivery | this repository |
+| Meta-harness (blueclaw) | connectors, policy, identity, POSIX isolation, task store, approvals, tool catalog, capabilities, memory, delivery | this repository |
 | Harness | the agent loop: run a turn and report what happened | bluecollar at `.dependency/bluecollar`, or an external agent through `internal/acpharness` and `internal/cliharness` |
 | Contract | the types both sides compile against, and the harness port | `agentcontract` and `toolcontract` in the bluecollar module |
 
@@ -652,7 +653,7 @@ No. The `api` connector accepts a JSON POST and serves replies over HTTP. Postgr
 
 ### Can a harness call tools in parallel?
 
-The bundled loop uses native tool calling, and several calls in one model response run as a batch in order, stopping at the first failure. A call whose input depends on an earlier result still costs a round trip; letting the model write code that calls tools would remove that, but only with a new privileged channel from the requester's process into the runtime, which the POSIX model avoids.
+The default harness uses native tool calling, and several calls in one model response run as a batch in order, stopping at the first failure. A call whose input depends on an earlier result still costs a round trip; letting the model write code that calls tools would remove that, but only with a new privileged channel from the requester's process into the runtime, which the POSIX model avoids.
 
 ### Is there a binary release or a Docker image?
 
