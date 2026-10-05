@@ -12,6 +12,8 @@ type FallbackLanguageModelProvider struct {
 	PrimaryLabel     string
 	FallbackLabel    string
 	Logger           *slog.Logger
+
+	FallbackServesTheSameTier bool
 }
 
 func (fallbackLanguageModelProvider FallbackLanguageModelProvider) GenerateResponse(responseContext context.Context, prompt string) (string, error) {
@@ -43,7 +45,7 @@ func (fallbackLanguageModelProvider FallbackLanguageModelProvider) GenerateStruc
 	if errorValue == nil || fallbackLanguageModelProvider.FallbackProvider == nil {
 		return structuredResponse, errorValue
 	}
-	if _, isCorrectable := StructuredOutputCorrectionFromError(errorValue); isCorrectable {
+	if fallbackLanguageModelProvider.leavesCorrectionToTheCaller(errorValue) {
 		return structuredResponse, errorValue
 	}
 
@@ -177,6 +179,14 @@ func (fallbackLanguageModelProvider FallbackLanguageModelProvider) GenerateLocal
 	fallbackResponse.UsedFallback = true
 	fallbackResponse.FallbackReason = errorValue.Error()
 	return fallbackResponse, nil
+}
+
+func (fallbackLanguageModelProvider FallbackLanguageModelProvider) leavesCorrectionToTheCaller(errorValue error) bool {
+	if fallbackLanguageModelProvider.FallbackServesTheSameTier {
+		return false
+	}
+	_, isCorrectable := StructuredOutputCorrectionFromError(errorValue)
+	return isCorrectable
 }
 
 func contextFailure(responseContext context.Context, primaryError error) error {

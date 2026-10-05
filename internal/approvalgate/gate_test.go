@@ -272,6 +272,20 @@ func TestAnUnwordableCallStillReachesTheRequesterAsTheCallItself(t *testing.T) {
 	}
 }
 
+func TestAnUnwordableCallRecordsWhyNoModelWordedIt(t *testing.T) {
+	gate, taskRunService, taskRun := gateFixture(t)
+	gate.UseLanguageModel(&wordingLanguageModel{failure: errors.New("the language model is unreachable")})
+
+	gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
+
+	failureBody := heldCallEventBodyNamed(t, taskRunService, taskRun.TaskRunID, TaskEventApprovalWordingFailed)
+	for _, expectedFragment := range []string{"event_delete", "the language model is unreachable"} {
+		if !strings.Contains(failureBody, expectedFragment) {
+			t.Fatalf("a requester asked in a raw call must leave the reason no model worded it, expected %q in %s", expectedFragment, failureBody)
+		}
+	}
+}
+
 func marshalRequestMessages(request model.StructuredResponseRequest) string {
 	messages := []string{}
 	for _, message := range request.Messages {

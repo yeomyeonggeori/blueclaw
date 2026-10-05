@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -45,12 +46,28 @@ type approvalQuestionInput struct {
 	TargetPath     string   `json:"targetPath"`
 }
 
+const TaskEventApprovalWordingFailed = "approval.wording_failed"
+
 func (gate *Gate) confirmationWording(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, resolution ApprovalTargetResolution) string {
 	question, errorValue := gate.generateConfirmationWording(ctx, approvalRequest, resolution)
 	if errorValue == nil {
 		return question
 	}
+	gate.recordWordingFailure(approvalRequest, errorValue)
 	return rawApprovalSummary(approvalRequest, resolution)
+}
+
+func (gate *Gate) recordWordingFailure(approvalRequest mcpserver.ApprovalRequest, errorValue error) {
+	taskRunID := strings.TrimSpace(approvalRequest.TaskRunID)
+	toolName := strings.TrimSpace(approvalRequest.ToolName)
+	slog.Warn("approvalgate.wording_failed", "taskRunID", taskRunID, "toolName", toolName, "error", errorValue.Error())
+	if taskRunID == "" {
+		return
+	}
+	gate.taskRunService.AppendTaskEvent(taskRunID, TaskEventApprovalWordingFailed, marshalEventBody(map[string]string{
+		"toolName": toolName,
+		"error":    errorValue.Error(),
+	}))
 }
 
 func (gate *Gate) generateConfirmationWording(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, resolution ApprovalTargetResolution) (string, error) {
