@@ -20,6 +20,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/agenttest"
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/launchfailure"
@@ -2542,6 +2543,7 @@ func TestConnectorRuntimeClassifiesConfirmationReplyBeforeResumingPendingTask(t 
 	invokedTools := []string{}
 	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
 		StructuredResponsesBySchema: map[string][]string{
+			"blueclaw_approval_reply": {`{"answer":"approve"}`},
 			"bluecollar_turn_router": {
 				`{"route":"start_task","classification":"bounded_task","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"calendar delete needs approval first","userFacingReply":""}`,
 				`{"route":"start_task","classification":"bounded_task","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"calendar delete needs approval first","userFacingReply":""}`,
@@ -2623,12 +2625,84 @@ func TestConnectorRuntimeClassifiesConfirmationReplyBeforeResumingPendingTask(t 
 	}
 }
 
+func TestAnApprovalAnsweredBesideAnotherRunningTaskResumesTheWaitingRun(t *testing.T) {
+	invokedTools := []string{}
+	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
+		StructuredResponsesBySchema: map[string][]string{
+			"blueclaw_approval_reply": {`{"answer":"approve"}`},
+			"bluecollar_turn_router": {
+				`{"route":"start_task","classification":"bounded_task","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"calendar delete needs approval first","userFacingReply":""}`,
+				`{"route":"start_task","classification":"bounded_task","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"calendar delete needs approval first","userFacingReply":""}`,
+			},
+			"bluecollar_execution_plan": {
+				`{"originalInstruction":"내일 휴가 일정을 캘린더에서 삭제해줘","summary":"내일 휴가 일정을 삭제합니다.","targets":["calendar event"],"schedule":"","startAt":"","endAt":"","cadence":"","externalSend":false,"thirdPartyExternalSend":false,"repeated":false,"highFrequency":false,"destructive":true,"permissionChange":false,"publicDeploy":false,"paidAction":false,"missingInformation":[],"continuationInstruction":"내일 휴가 일정을 캘린더에서 삭제합니다. 이미 사용자가 확인했습니다."}`,
+			},
+			"blueclaw_approval_question": {
+				`{"question":"내일 휴가 일정을 캘린더에서 삭제하는 것으로 이해했습니다. 승인하면 바로 진행하겠습니다."}`,
+			},
+		},
+		ActionResponses: []string{
+			`{"action":"continue","toolName":"event_delete","toolInput":{"eventHint":"event-1","userConfirmed":true}}`,
+			connectorFinishMessageCiting("내일 휴가 일정을 캘린더에서 삭제했습니다.", "obs-002"),
+		},
+	})
+	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
+	connectorRuntimeAgentKernel(connectorRuntime).UseIntakeLanguageModelProvider(languageModel)
+	connectorRuntimeAgentKernel(connectorRuntime).UseIntakeOptions(agentcontract.IntakeOptions{IsEnabled: true})
+	useTestConnectorSkill(connectorRuntime, connectorCalendarSkill())
+	connectorRuntime.UseAllowedToolNames([]string{"conversation_history", "memory_search", "ask_confirm", "event_add", "event_delete"})
+	connectorRuntime.UseTestCapabilityTools(capability.Client{
+		Endpoint: "http://capability.test",
+		HTTPClient: testHTTPDoer(func(request *http.Request) (*http.Response, error) {
+			if request.URL.Path == "/v1/capabilities" {
+				return testCapabilityRegistrySelfHealResponse(), nil
+			}
+			invokedTools = append(invokedTools, strings.TrimPrefix(request.URL.Path, "/v1/tools/"))
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(`{"provider":"capabilityd","selectedBackend":"device","toolName":"event_delete","outcome":"succeeded","status":"ok","content":"calendar event deleted","result":{"eventID":"event-1"}}`)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		}),
+	}, []string{"event_add", "event_delete"})
+	firstEvent := testInboundEvent("message-1")
+	firstEvent.Prompt = "내일 휴가 일정을 캘린더에서 삭제해줘"
+
+	firstResult, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, firstEvent)
+	if errorValue != nil {
+		t.Fatalf("expected first event to process: %v", errorValue)
+	}
+	if firstResult.TaskRunID == "" {
+		t.Fatal("expected first task run id")
+	}
+	if len(adapter.sentReplies) != 1 || adapter.sentReplies[0].message != "내일 휴가 일정을 캘린더에서 삭제하는 것으로 이해했습니다. 승인하면 바로 진행하겠습니다." {
+		t.Fatalf("expected confirmation reply, got %+v", adapter.sentReplies)
+	}
+
+	seedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{ConversationID: "direct-1", ReplyTargetID: "reply-target-1"}, "다른 보고서 작성")
+
+	secondEvent := testInboundEvent("message-2")
+	secondEvent.Prompt = "응 맞아 삭제해"
+	secondResult, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, secondEvent)
+	if errorValue != nil {
+		t.Fatalf("expected approval reply to process: %v", errorValue)
+	}
+
+	if secondResult.TaskRunID != firstResult.TaskRunID || secondResult.TaskRunID == "" {
+		t.Fatalf("an answered approval resumes the run that asked, got first=%q second=%q reason=%q", firstResult.TaskRunID, secondResult.TaskRunID, secondResult.Reason)
+	}
+	if len(invokedTools) != 1 {
+		t.Fatalf("expected the approved call to run once, got %+v", invokedTools)
+	}
+}
+
 func TestConnectorRuntimeClassifiesNaturalLanguageConfirmationRejection(t *testing.T) {
 	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
 		ChatResponsesBySchema: map[string][]string{
 			"blueclaw_reply": {"알겠습니다. 이번에는 삭제하지 않겠습니다."},
 		},
 		StructuredResponsesBySchema: map[string][]string{
+			"blueclaw_approval_reply": {`{"answer":"reject"}`},
 			"bluecollar_turn_router": {
 				`{"route":"start_task","classification":"bounded_task","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"calendar delete needs approval first","userFacingReply":""}`,
 				`{"route":"start_task","classification":"bounded_task","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"calendar delete needs approval first","userFacingReply":""}`,
@@ -2646,7 +2720,6 @@ func TestConnectorRuntimeClassifiesNaturalLanguageConfirmationRejection(t *testi
 		},
 	})
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
-	intakeDecisions := recordIntakeDecisions(connectorRuntime)
 	connectorRuntimeAgentKernel(connectorRuntime).UseIntakeLanguageModelProvider(languageModel)
 	connectorRuntimeAgentKernel(connectorRuntime).UseIntakeOptions(agentcontract.IntakeOptions{IsEnabled: true})
 	useTestConnectorSkill(connectorRuntime, connectorCalendarSkill())
@@ -2681,10 +2754,10 @@ func TestConnectorRuntimeClassifiesNaturalLanguageConfirmationRejection(t *testi
 	if secondResult.TaskRunID != firstResult.TaskRunID || secondResult.Reason != "confirmation_rejected" {
 		t.Fatalf("expected pending confirmation rejection, got %+v", secondResult)
 	}
-	if _, isDecided := intakeDecisions.decidedPrompt("아니, 이번에는 하지 마"); !isDecided {
-		t.Fatalf("expected exact rejection text in the intake decision, got %+v", intakeDecisions.requests)
-	}
 	requests := languageModel.Requests()
+	if !structuredMessagesContain(requests[connectorSchemaIndexAfter(requests, "bluecollar_turn_router", connectorSchemaIndexAfter(requests, "blueclaw_approval_question", -1))].Messages, "아니, 이번에는 하지 마") {
+		t.Fatalf("expected exact rejection text in the pending answer decision, got %+v", connectorRequestSchemaNames(requests))
+	}
 	approvalQuestionIndex := connectorSchemaIndexAfter(requests, "blueclaw_approval_question", -1)
 	if connectorSchemaIndexAfter(requests, "bluecollar_agent_turn_action", approvalQuestionIndex) >= 0 {
 		t.Fatalf("expected rejection not to execute an agent action, got %+v", connectorRequestSchemaNames(requests))
@@ -2695,6 +2768,7 @@ func TestConnectorRuntimeRoutesShortConfirmationReplyThroughRouter(t *testing.T)
 	invokedTools := []string{}
 	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
 		StructuredResponsesBySchema: map[string][]string{
+			"blueclaw_approval_reply": {`{"answer":"approve"}`},
 			"bluecollar_turn_router": {
 				`{"route":"start_task","classification":"bounded_task","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"calendar delete needs approval first","userFacingReply":""}`,
 				`{"route":"start_task","classification":"bounded_task","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"calendar delete needs approval first","userFacingReply":""}`,
@@ -2767,6 +2841,7 @@ func TestConnectorRuntimeAnswersPendingConfirmationQuestionAsItsOwnTurn(t *testi
 			"blueclaw_reply": {"삭제는 되돌릴 수 없어서 확인을 받습니다."},
 		},
 		StructuredResponsesBySchema: map[string][]string{
+			"blueclaw_approval_reply": {`{"answer":"other"}`},
 			"bluecollar_turn_router": {
 				`{"route":"start_task","classification":"bounded_task","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"calendar delete needs approval first","userFacingReply":""}`,
 				`{"route":"start_task","classification":"bounded_task","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"calendar delete needs approval first","userFacingReply":""}`,
@@ -2836,6 +2911,7 @@ func TestConnectorRuntimeAnswersPendingConfirmationQuestionAsItsOwnTurn(t *testi
 func TestConnectorRuntimeRoutesPendingConfirmationRevisionAsNewTask(t *testing.T) {
 	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
 		StructuredResponsesBySchema: map[string][]string{
+			"blueclaw_approval_reply": {`{"answer":"other"}`},
 			"bluecollar_turn_router": {
 				`{"route":"start_task","classification":"bounded_task","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"calendar delete needs approval first","userFacingReply":""}`,
 				`{"route":"start_task","classification":"bounded_task","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"calendar delete needs approval first","userFacingReply":""}`,
@@ -2919,6 +2995,7 @@ func TestConnectorRuntimeInteractiveConfirmRestoresPersistedIntakeState(t *testi
 	invokedTools := []string{}
 	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
 		StructuredResponsesBySchema: map[string][]string{
+			"blueclaw_approval_reply": {`{"answer":"approve"}`},
 			"bluecollar_turn_router": {
 				`{"route":"start_task","classification":"bounded_task","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"calendar delete needs approval first","userFacingReply":""}`,
 				`{"route":"start_task","classification":"bounded_task","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"calendar delete needs approval first","userFacingReply":""}`,
@@ -3096,7 +3173,7 @@ func TestConnectorRuntimeContinuesWaitingUserInputGoal(t *testing.T) {
 	}
 }
 
-func TestConnectorRuntimeStartsNewTaskForClearNewRequest(t *testing.T) {
+func TestConnectorRuntimeContinuesAClarifiedTaskWithTheNextMessage(t *testing.T) {
 	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
 		StructuredResponsesBySchema: map[string][]string{
 			"bluecollar_turn_router": {
@@ -3138,15 +3215,8 @@ func TestConnectorRuntimeStartsNewTaskForClearNewRequest(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected new request to process: %v", errorValue)
 	}
-	if secondResult.TaskRunID == "" || secondResult.TaskRunID == firstResult.TaskRunID {
-		t.Fatalf("expected clear new request to start a new task, first=%q second=%q", firstResult.TaskRunID, secondResult.TaskRunID)
-	}
-	actionRequest, isFound := connectorFirstRequestBySchema(languageModel.Requests(), "bluecollar_agent_turn_action")
-	if !isFound {
-		t.Fatalf("expected action request, got schemas=%+v", connectorRequestSchemaNames(languageModel.Requests()))
-	}
-	if structuredMessagesContain(actionRequest.Messages, "샘플에게 DM 보내줘") {
-		t.Fatalf("expected new request not to inherit previous goal, got %+v", actionRequest.Messages)
+	if secondResult.TaskRunID == "" || secondResult.TaskRunID != firstResult.TaskRunID {
+		t.Fatalf("expected the message after a clarification to continue the task that asked, first=%q second=%q", firstResult.TaskRunID, secondResult.TaskRunID)
 	}
 }
 
@@ -4074,6 +4144,7 @@ func connectorRuntimeForHarness(t *testing.T, harness agentcontract.Harness, int
 	testApprovalGate := approvalgate.New(taskRunService)
 	testApprovalGate.UseLanguageModel(languageModel)
 	connectorRuntime.UseApprovalGate(testApprovalGate)
+	connectorRuntime.UseApprovalReplyReader(approvalreply.NewLanguageModelReader(languageModel))
 	adapter := &testAdapter{senderEmail: "invited@example.com"}
 	connectorRuntime.RegisterAdapter(adapter)
 	return connectorRuntime, adapter
@@ -4551,6 +4622,7 @@ func TestANewRequestWhileAConfirmationIsPendingLeavesItPendingAndIsRoutedWithThe
 			"blueclaw_reply": {"누구의 연락처가 필요하신가요?"},
 		},
 		StructuredResponsesBySchema: map[string][]string{
+			"blueclaw_approval_reply": {`{"answer":"other"}`, `{"answer":"approve"}`},
 			"bluecollar_turn_router": {
 				`{"route":"start_task","classification":"bounded_task","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"calendar delete needs approval first","userFacingReply":""}`,
 				`{"route":"start_task","classification":"bounded_task","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"calendar delete needs approval first","userFacingReply":""}`,
@@ -4642,6 +4714,7 @@ func TestAQuestionAboutThePendingConfirmationLeavesItPending(t *testing.T) {
 			"blueclaw_reply": {"내일 휴가로 등록된 일정 하나입니다."},
 		},
 		StructuredResponsesBySchema: map[string][]string{
+			"blueclaw_approval_reply": {`{"answer":"other"}`},
 			"bluecollar_turn_router": {
 				`{"route":"start_task","classification":"bounded_task","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"calendar delete needs approval first","userFacingReply":""}`,
 				`{"route":"start_task","classification":"bounded_task","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"calendar delete needs approval first","userFacingReply":""}`,
@@ -4700,6 +4773,7 @@ func TestAQuestionAboutThePendingConfirmationLeavesItPending(t *testing.T) {
 func TestOneDecisionPerMessageSeesHowManyExchangesFollowedTheConfirmation(t *testing.T) {
 	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
 		StructuredResponsesBySchema: map[string][]string{
+			"blueclaw_approval_reply": {`{"answer":"other"}`, `{"answer":"approve"}`},
 			"bluecollar_turn_router": {
 				`{"route":"start_task","classification":"bounded_task","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"calendar delete needs approval first","userFacingReply":""}`,
 				`{"route":"start_task","classification":"bounded_task","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"calendar delete needs approval first","userFacingReply":""}`,

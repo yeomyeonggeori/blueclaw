@@ -16,6 +16,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
@@ -219,15 +220,15 @@ func silentLogger() *slog.Logger {
 }
 
 func connectedPair(t *testing.T, launcher TaskLauncher, client *recordingClient) (*acp.ClientSideConnection, *PermissionRelay) {
-	return connectedPairWithRouter(t, launcher, client, scriptedRouter{})
+	return connectedPairWithReader(t, launcher, client, scriptedReader{})
 }
 
-func connectedPairWithRouter(t *testing.T, launcher TaskLauncher, client *recordingClient, turnRouter TurnRouter) (*acp.ClientSideConnection, *PermissionRelay) {
+func connectedPairWithReader(t *testing.T, launcher TaskLauncher, client *recordingClient, replyReader approvalreply.Reader) (*acp.ClientSideConnection, *PermissionRelay) {
 	t.Helper()
 	return connectedPairWithCollaborators(t, client, Collaborators{
 		TaskLauncher: launcher,
 		Directory:    staticDirectory{},
-		TurnRouter:   turnRouter,
+		ReplyReader:  replyReader,
 	})
 }
 
@@ -366,7 +367,7 @@ func TestAMessageFromSomebodyTheRosterNamesOnlyLaterIsAnsweredOnceItDoes(t *test
 	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
 		TaskLauncher: launcher,
 		Directory:    roster,
-		TurnRouter:   scriptedRouter{},
+		ReplyReader:  scriptedReader{},
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -432,8 +433,8 @@ func TestHeldCallReachesTheRequesterOverTheSessionThatOwnsTheConversation(t *tes
 	if asked.ToolCall.Title == nil || *asked.ToolCall.Title != "박예시에게 보낼까요?" {
 		t.Fatal("the question the runtime worded is not the question the person was asked")
 	}
-	if len(asked.Options) != 3 {
-		t.Fatalf("the person was offered %d options, expected approve, approve-task and decline", len(asked.Options))
+	if len(asked.Options) != 2 {
+		t.Fatalf("the person was offered %d options, expected approve and decline", len(asked.Options))
 	}
 }
 
@@ -473,17 +474,17 @@ func TestDecliningTheCallReadsAsReject(t *testing.T) {
 	}
 }
 
-type scriptedRouter struct {
-	approvalSignal *agentcontract.ApprovalSignal
-	choices        []string
-	planned        *[]agentcontract.AgentRequest
+type scriptedReader struct {
+	optionID string
+	asked    *[]approvalreply.Question
 }
 
-func (router scriptedRouter) Plan(_ context.Context, request agentcontract.AgentRequest) (agentcontract.TurnDecision, error) {
-	if router.planned != nil {
-		*router.planned = append(*router.planned, request)
+func (reader scriptedReader) Read(_ context.Context, question approvalreply.Question, reply string, observe agentcontract.LLMCallObserver) (string, bool, error) {
+	if reader.asked != nil {
+		*reader.asked = append(*reader.asked, question)
 	}
-	return agentcontract.TurnDecision{Approval: router.approvalSignal, Choices: router.choices}, nil
+	observe(agentcontract.LLMCallRecord{Kind: agentcontract.LLMCallKindDecision, DecidedMessageIDs: []string{reply}})
+	return reader.optionID, reader.optionID != "", nil
 }
 
 func approvalSignalPointer(approvalSignal agentcontract.ApprovalSignal) *agentcontract.ApprovalSignal {
@@ -492,14 +493,17 @@ func approvalSignalPointer(approvalSignal agentcontract.ApprovalSignal) *agentco
 
 func answeringWithWords(t *testing.T, connection *acp.ClientSideConnection, sessionID acp.SessionId, words string) func(acp.RequestPermissionRequest) acp.PermissionOptionId {
 	t.Helper()
+	return answeringWithReply(t, connection, sessionID, ApprovalReplyRequest{Reply: words})
+}
+
+func answeringWithReply(t *testing.T, connection *acp.ClientSideConnection, sessionID acp.SessionId, reply ApprovalReplyRequest) func(acp.RequestPermissionRequest) acp.PermissionOptionId {
+	t.Helper()
 	return func(request acp.RequestPermissionRequest) acp.PermissionOptionId {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		answer, errorValue := connection.CallExtension(ctx, ApprovalReplyExtensionMethod, ApprovalReplyRequest{
-			SessionID:  string(sessionID),
-			ToolCallID: string(request.ToolCall.ToolCallId),
-			Reply:      words,
-		})
+		reply.SessionID = string(sessionID)
+		reply.ToolCallID = string(request.ToolCall.ToolCallId)
+		answer, errorValue := connection.CallExtension(ctx, ApprovalReplyExtensionMethod, reply)
 		if errorValue != nil {
 			t.Errorf("approval reply: %v", errorValue)
 			return rejectOnceOptionID
@@ -514,12 +518,9 @@ func answeringWithWords(t *testing.T, connection *acp.ClientSideConnection, sess
 }
 
 func TestThePersonsWordsAreReadByTheRouterAndNotByTheRelay(t *testing.T) {
-	planned := []agentcontract.AgentRequest{}
+	asked := []approvalreply.Question{}
 	client := &recordingClient{}
-	connection, permissionRelay := connectedPairWithRouter(t, &recordingLauncher{}, client, scriptedRouter{
-		approvalSignal: approvalSignalPointer(agentcontract.ApprovalSignalApprove),
-		planned:        &planned,
-	})
+	connection, permissionRelay := connectedPairWithReader(t, &recordingLauncher{}, client, scriptedReader{optionID: approvalreply.ApproveOptionID, asked: &asked})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 	client.answerByAsking = answeringWithWords(t, connection, sessionID, "응 보내줘")
 
@@ -530,27 +531,14 @@ func TestThePersonsWordsAreReadByTheRouterAndNotByTheRelay(t *testing.T) {
 	if !isAnswered || answer.Signal != agentcontract.ApprovalSignalApprove {
 		t.Fatalf("the answer read as %q answered=%v", answer.Signal, isAnswered)
 	}
-	if len(planned) != 1 {
-		t.Fatalf("the router was asked %d times, expected once", len(planned))
-	}
-	if planned[0].Prompt != "응 보내줘" {
-		t.Fatalf("the router was given %q, and the person's own words are what it has to read", planned[0].Prompt)
-	}
-	// The router offers an approval at all only when it is told which call is
-	// waiting, so a request without the task run can never come back approved.
-	if planned[0].PendingConfirmation.TaskRunID != "task-1" {
-		t.Fatalf("the router was not told which call is waiting (%q), so it was never offered an approval to give", planned[0].PendingConfirmation.TaskRunID)
-	}
-	if planned[0].PendingConfirmation.Question != "박예시에게 보낼까요?" {
-		t.Fatalf("the router was asked about %q, not the question the person answered", planned[0].PendingConfirmation.Question)
+	if len(asked) != 1 || asked[0].Text != "박예시에게 보낼까요?" {
+		t.Fatalf("the reader was asked %+v, expected once about the question the person answered", asked)
 	}
 }
 
-func TestAnAnswerTheRouterCannotReadIsNotAnApproval(t *testing.T) {
+func TestAnAnswerTheReaderCannotReadIsNotAnAnswer(t *testing.T) {
 	client := &recordingClient{}
-	connection, permissionRelay := connectedPairWithRouter(t, &recordingLauncher{}, client, scriptedRouter{
-		approvalSignal: approvalSignalPointer(agentcontract.ApprovalSignalUnclear),
-	})
+	connection, permissionRelay := connectedPairWithReader(t, &recordingLauncher{}, client, scriptedReader{})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 	client.answerByAsking = answeringWithWords(t, connection, sessionID, "음")
 
@@ -558,16 +546,62 @@ func TestAnAnswerTheRouterCannotReadIsNotAnApproval(t *testing.T) {
 	defer cancel()
 	answer, isAnswered := permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{Confirmation: "보낼까요?"})
 
-	if !isAnswered || answer.Signal != agentcontract.ApprovalSignalReject {
-		t.Fatalf("an unclear answer read as %q, and a call would run that nobody agreed to", answer.Signal)
+	if isAnswered {
+		t.Fatalf("a reply the reader could not read decided the call as %q", answer.Signal)
+	}
+}
+
+func TestAReplyOutsideTheQuestionsThreadIsNotAnAnswerAndIsNotRead(t *testing.T) {
+	asked := []approvalreply.Question{}
+	client := &recordingClient{}
+	connection, permissionRelay := connectedPairWithReader(t, &recordingLauncher{}, client, scriptedReader{optionID: approvalreply.ApproveOptionID, asked: &asked})
+	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
+	client.answerByAsking = answeringWithReply(t, connection, sessionID, ApprovalReplyRequest{Reply: "ㅇ", ReplyTargetID: "conversation-1:other-root", IsThread: true})
+	approvalRequest := approvalRequestForTest()
+	approvalRequest.ReplyTargetID = "conversation-1:question-root"
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, isAnswered := permissionRelay.AskPermission(ctx, approvalRequest, approvalgate.PermissionQuestion{Confirmation: "보낼까요?"})
+
+	if isAnswered || len(asked) != 0 {
+		t.Fatalf("a reply in another thread answered=%v and the reader was asked %d times", isAnswered, len(asked))
+	}
+}
+
+func TestTheCallThatReadAReplyIsRecordedInTheWaitingRunsLedger(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	taskRun := taskRunService.CreateTaskRun("person-sample", "conversation-1", "박예시한테 DM 보내줘")
+	client := &recordingClient{}
+	connection, permissionRelay := connectedPairWithCollaborators(t, client, Collaborators{
+		TaskLauncher: &recordingLauncher{},
+		Directory:    staticDirectory{},
+		ReplyReader:  scriptedReader{optionID: approvalreply.ApproveOptionID},
+		TaskRunStore: taskRunService,
+	})
+	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
+	client.answerByAsking = answeringWithReply(t, connection, sessionID, ApprovalReplyRequest{Reply: "ㅇ", MessageID: "message-reply"})
+	approvalRequest := approvalRequestForTest()
+	approvalRequest.TaskRunID = taskRun.TaskRunID
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	permissionRelay.AskPermission(ctx, approvalRequest, approvalgate.PermissionQuestion{Confirmation: "보낼까요?"})
+
+	calls := []agentcontract.TaskEvent{}
+	for _, taskEvent := range taskRunService.ListTaskEvent(taskRun.TaskRunID) {
+		if taskEvent.Name == agentcontract.TaskEventLLMCall {
+			calls = append(calls, taskEvent)
+		}
+	}
+	if len(calls) != 1 || !strings.Contains(calls[0].Body, "ㅇ") {
+		t.Fatalf("the ledger of the run that asked holds %+v, expected the call that read the reply", calls)
 	}
 }
 
 func TestAnAnswerToACallNobodyIsWaitingOnIsRefused(t *testing.T) {
 	client := &recordingClient{}
-	connection, _ := connectedPairWithRouter(t, &recordingLauncher{}, client, scriptedRouter{
-		approvalSignal: approvalSignalPointer(agentcontract.ApprovalSignalApprove),
-	})
+	connection, _ := connectedPairWithReader(t, &recordingLauncher{}, client, scriptedReader{optionID: approvalreply.ApproveOptionID})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -610,7 +644,7 @@ func reconnectedPair(t *testing.T, launcher TaskLauncher, client *recordingClien
 	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
 		TaskLauncher: launcher,
 		Directory:    staticDirectory{},
-		TurnRouter:   scriptedRouter{},
+		ReplyReader:  scriptedReader{},
 		TaskRunStore: taskRunService,
 	})
 	return connection
@@ -684,6 +718,52 @@ func TestLoadingASessionAsksAgainAboutTheCallItsRunStoppedOn(t *testing.T) {
 	expectNobodyIsAskedAgain(t, client)
 }
 
+func TestAReissuedQuestionThatWasNeverPostedIsLeftForTheRelayToPost(t *testing.T) {
+	asked := reissuedQuestionAfterRecording(t, nil)
+
+	if deliveryOf(t, asked).AlreadyPosted {
+		t.Fatal("a question nobody posted was reissued as already posted, so nobody would ever see it")
+	}
+}
+
+func TestAReissuedQuestionThatWasPostedIsNotPostedTwice(t *testing.T) {
+	asked := reissuedQuestionAfterRecording(t, func(taskRunService *task.TaskRunService, taskRunID string) {
+		taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventConnectorReplySent, `{"replyKind":"approval_question","dispatchID":"question-message"}`)
+	})
+
+	if !deliveryOf(t, asked).AlreadyPosted {
+		t.Fatal("a question the person already has was reissued without saying so, so it is posted a second time")
+	}
+}
+
+func reissuedQuestionAfterRecording(t *testing.T, record func(*task.TaskRunService, string)) acp.RequestPermissionRequest {
+	t.Helper()
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	waitingRun := runWaitingOnAHeldCall(t, taskRunService, "conversation-1", heldCallForTest())
+	if record != nil {
+		record(taskRunService, waitingRun.TaskRunID)
+	}
+	client := &recordingClient{permissionAskedSignal: make(chan acp.RequestPermissionRequest, 4)}
+	connection := reconnectedPair(t, &recordingLauncher{}, client, taskRunService)
+	if errorValue := loadSessionForTest(t, connection, "session-the-relay-still-holds", sessionMeta("sample@example.test", "conversation-1")); errorValue != nil {
+		t.Fatalf("load session: %v", errorValue)
+	}
+	return awaitPermissionRequest(t, client)
+}
+
+func deliveryOf(t *testing.T, request acp.RequestPermissionRequest) Delivery {
+	t.Helper()
+	document, errorValue := json.Marshal(request.Meta[DeliveryMetaKey])
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	delivery := Delivery{}
+	if errorValue := json.Unmarshal(document, &delivery); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	return delivery
+}
+
 func TestApprovingTheReissuedQuestionResumesTheRunItBelongsTo(t *testing.T) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	waitingRun := runWaitingOnAHeldCall(t, taskRunService, "conversation-1", heldCallForTest())
@@ -734,7 +814,7 @@ func TestACallHeldInAnotherConversationIsNotReissued(t *testing.T) {
 func TestACallTheRequesterAlreadyAnsweredIsNotAskedAgain(t *testing.T) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	answeredRun := runWaitingOnAHeldCall(t, taskRunService, "conversation-1", heldCallForTest())
-	taskRunService.AppendTaskEvent(answeredRun.TaskRunID, agentcontract.TaskEventApprovalDecided, `{"decision":"confirm","source":"acp_permission"}`)
+	approvalgate.RecordRequesterDecision(taskRunService, answeredRun.TaskRunID, approvalSignalPointer(agentcontract.ApprovalSignalApprove), "acp_permission")
 	client := &recordingClient{permissionAskedSignal: make(chan acp.RequestPermissionRequest, 4)}
 	connection := reconnectedPair(t, &recordingLauncher{}, client, taskRunService)
 
@@ -882,12 +962,9 @@ func (client *recordingClient) waitForResourceLink() string {
 }
 
 func TestAChoiceIsReadFromThePersonsWordsAgainstTheOfferedOptions(t *testing.T) {
-	planned := []agentcontract.AgentRequest{}
+	asked := []approvalreply.Question{}
 	client := &recordingClient{}
-	connection, permissionRelay := connectedPairWithRouter(t, &recordingLauncher{}, client, scriptedRouter{
-		choices: []string{"offHours"},
-		planned: &planned,
-	})
+	connection, permissionRelay := connectedPairWithReader(t, &recordingLauncher{}, client, scriptedReader{optionID: "offHours", asked: &asked})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 	client.answerByAsking = answeringWithWords(t, connection, sessionID, "새벽에 해")
 	choices := []approvalgate.ApprovalChoice{{Key: "offHours", StartsAt: "2099-10-03T03:00:00+09:00"}, {Key: "now"}}
@@ -899,29 +976,25 @@ func TestAChoiceIsReadFromThePersonsWordsAgainstTheOfferedOptions(t *testing.T) 
 	if !isAnswered || answer.ChoiceKey != "offHours" {
 		t.Fatalf("the choice read as %+v answered=%v", answer, isAnswered)
 	}
-	asked := client.permissionAsked[0].Options
-	if len(asked) != 3 || asked[0].OptionId != "choose:offHours" || asked[1].OptionId != "choose:now" || asked[2].OptionId != rejectOnceOptionID {
-		t.Fatalf("the client was offered %+v, expected the later time, now, and declining, in that order", asked)
+	offered := client.permissionAsked[0].Options
+	if len(offered) != 3 || offered[0].OptionId != "choose:offHours" || offered[1].OptionId != "choose:now" || offered[2].OptionId != rejectOnceOptionID {
+		t.Fatalf("the client was offered %+v, expected the later time, now, and declining, in that order", offered)
 	}
-	if len(planned) != 1 || len(planned[0].PendingChoice.Options) != 3 || planned[0].PendingConfirmation.TaskRunID != "" {
-		t.Fatalf("the router was asked %+v, expected one pending choice among the offered options and cancelling", planned)
+	if len(asked) != 1 || len(asked[0].Options) != 3 {
+		t.Fatalf("the reader was asked %+v, expected one question among the offered options and cancelling", asked)
 	}
 }
 
-func TestAChoiceNobodyOfferedIsNotAnApproval(t *testing.T) {
-	client := &recordingClient{}
-	connection, permissionRelay := connectedPairWithRouter(t, &recordingLauncher{}, client, scriptedRouter{choices: []string{"tomorrowNoon"}})
-	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
-	client.answerByAsking = answeringWithWords(t, connection, sessionID, "내일 점심에")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	answer, isAnswered := permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{
-		Confirmation: "업데이트할까요?",
-		Choices:      []approvalgate.ApprovalChoice{{Key: "offHours", StartsAt: "2099-10-03T03:00:00+09:00"}, {Key: "now"}},
-	})
-
-	if !isAnswered || answer.Signal != agentcontract.ApprovalSignalReject || answer.ChoiceKey != "" {
-		t.Fatalf("a choice nobody offered read as %+v", answer)
+func TestEveryReaderOptionMapsToAnAcpOption(t *testing.T) {
+	testCases := map[string]acp.PermissionOptionId{
+		approvalreply.ApproveOptionID: approveOnceOptionID,
+		approvalreply.RejectOptionID:  rejectOnceOptionID,
+		approvalgate.CancelChoiceKey:  rejectOnceOptionID,
+		"offHours":                    "choose:offHours",
+	}
+	for optionID, expected := range testCases {
+		if actual := permissionOptionFor(optionID); actual != expected {
+			t.Fatalf("%q mapped to %q, expected %q", optionID, actual, expected)
+		}
 	}
 }

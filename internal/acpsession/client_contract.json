@@ -13,9 +13,13 @@
 		"approvalReply": [
 			"sessionId",
 			"toolCallId",
-			"reply"
+			"reply",
+			"messageId",
+			"replyTargetId",
+			"isThread"
 		],
 		"approvalReplyAnswer": [
+			"isAnswer",
 			"optionId"
 		],
 		"delivered": [
@@ -24,7 +28,8 @@
 		],
 		"delivery": [
 			"deliveryID",
-			"replyTargetID"
+			"replyTargetID",
+			"alreadyPosted"
 		],
 		"undelivered": [
 			"deliveryID",

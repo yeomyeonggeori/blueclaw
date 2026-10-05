@@ -14,6 +14,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
@@ -128,6 +129,7 @@ type ConnectorRuntime struct {
 	taskEventService       *taskstate.TaskEventService
 	taskLauncher           *agentruntime.TaskLauncher
 	approvalGate           *approvalgate.Gate
+	approvalReplyReader    approvalreply.Reader
 	toolCatalogBuilder     *agentruntime.ToolCatalogBuilder
 	workspaceActorFactory  security.WorkspaceActorFactory
 	agentIdentityProvider  func() agentcontract.AgentIdentity
@@ -1015,28 +1017,4 @@ func taskEventSourceReference(taskEvent task.TaskEvent) string {
 		return ""
 	}
 	return strings.TrimSpace(document.SourceReference)
-}
-
-func (connectorRuntime *ConnectorRuntime) grantApprovalScopeForTask(taskRunID string) {
-	scope := pendingApprovalScope(connectorRuntime.taskRunService.ListTaskEvent(taskRunID))
-	if scope == "" {
-		return
-	}
-	connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalScopeGranted, agentruntime.MarshalBody(map[string]string{"scope": scope}))
-}
-
-func pendingApprovalScope(taskEvents []agentcontract.TaskEvent) string {
-	for index := len(taskEvents) - 1; index >= 0; index-- {
-		if taskEvents[index].Name != agentcontract.TaskEventAskRequested {
-			continue
-		}
-		var body struct {
-			ApprovalScope string `json:"approvalScope"`
-		}
-		if json.Unmarshal([]byte(taskEvents[index].Body), &body) != nil {
-			continue
-		}
-		return strings.TrimSpace(body.ApprovalScope)
-	}
-	return ""
 }

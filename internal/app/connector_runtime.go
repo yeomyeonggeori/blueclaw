@@ -46,6 +46,7 @@ func newConnectorRuntime(runtimeConfiguration config.RuntimeConfiguration, found
 	connectorRuntime.UseTasklessLLMCallRecorder(newTasklessLLMCallRecorder(services.repositories.llmCall, logger))
 	connectorRuntime.UseTaskLauncher(taskLauncher)
 	connectorRuntime.UseApprovalGate(kernel.toolCatalog.approvalGate)
+	connectorRuntime.UseApprovalReplyReader(kernel.toolCatalog.replyReader)
 	connectorRuntime.UseAgentIdentityProvider(kernel.agentIdentityProvider)
 	connectorRuntime.UseAllowedToolNamesByProfile(deriveAllowedToolNamesByProfile(runtimeConfiguration), agentruntime.AlwaysAllowedToolNames())
 	connectorRuntime.UseAdminTaskLinkBaseURL(runtimeConfiguration.Agent.AdminTaskLinkBaseURL)

@@ -15,6 +15,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
@@ -70,7 +71,7 @@ type Agent struct {
 	directory          PersonDirectory
 	permissionRelay    *PermissionRelay
 	approvalDeferrer   ApprovalDeferrer
-	turnRouter         TurnRouter
+	replyReader        approvalreply.Reader
 	intakeDecider      IntakeDecider
 	attachmentImporter AttachmentImporter
 	sessionTurns       SessionTurnOpener
@@ -90,7 +91,7 @@ func NewAgent(collaborators Collaborators, permissionRelay *PermissionRelay, log
 		directory:          collaborators.Directory,
 		permissionRelay:    permissionRelay,
 		approvalDeferrer:   collaborators.ApprovalDeferrer,
-		turnRouter:         collaborators.TurnRouter,
+		replyReader:        collaborators.ReplyReader,
 		intakeDecider:      collaborators.IntakeDecider,
 		attachmentImporter: collaborators.AttachmentImporter,
 		sessionTurns:       collaborators.SessionTurns,
@@ -110,7 +111,7 @@ type Collaborators struct {
 	ApprovalDeferrer   ApprovalDeferrer
 	TaskLauncher       TaskLauncher
 	Directory          PersonDirectory
-	TurnRouter         TurnRouter
+	ReplyReader        approvalreply.Reader
 	IntakeDecider      IntakeDecider
 	AttachmentImporter AttachmentImporter
 	SessionTurns       SessionTurnOpener

@@ -2,7 +2,6 @@ package acpsession
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -53,6 +52,7 @@ func (agent *Agent) reissueHeldPermission(ctx context.Context, sessionID acp.Ses
 		"toolCallID", string(toolCallID),
 	)
 	title := strings.TrimSpace(heldCall.Confirmation)
+	replyTargetID := firstNonEmpty(taskRun.OriginReplyTargetID, sessionContext.Addressing.ReplyTargetID)
 	choices := approvalgate.OfferedChoices(agent.taskRunStore.ListTaskEvent(taskRun.TaskRunID))
 	// The client answers with the person's words, and the router that reads them
 	// is only offered an approval when the runtime can say which call is waiting.
@@ -66,6 +66,7 @@ func (agent *Agent) reissueHeldPermission(ctx context.Context, sessionID acp.Ses
 			Prompt:            taskRun.Prompt,
 			Platform:          sessionContext.Addressing.Platform,
 			ConversationID:    sessionContext.Addressing.ConversationID,
+			ReplyTargetID:     replyTargetID,
 		},
 		confirmation: title,
 		choices:      choices,
@@ -74,8 +75,8 @@ func (agent *Agent) reissueHeldPermission(ctx context.Context, sessionID acp.Ses
 	response, errorValue := agent.connection.RequestPermission(ctx, acp.RequestPermissionRequest{
 		SessionId: sessionID,
 		ToolCall:  acp.ToolCallUpdate{ToolCallId: toolCallID, Title: &title},
-		Options:   permissionOptions(heldCall.ApprovalScope, choices),
-		Meta:      deliveryMeta(Delivery{ReplyTargetID: firstNonEmpty(taskRun.OriginReplyTargetID, sessionContext.Addressing.ReplyTargetID)}),
+		Options:   permissionOptions(choices),
+		Meta:      deliveryMeta(Delivery{ReplyTargetID: replyTargetID, AlreadyPosted: agent.postedQuestionMessageID(taskRun.TaskRunID) != ""}),
 	})
 	if errorValue != nil {
 		agent.logger.Warn("acpsession.permission.reissue_unanswered", "taskRunID", taskRun.TaskRunID, "error", errorValue.Error())
@@ -90,9 +91,6 @@ func (agent *Agent) reissueHeldPermission(ctx context.Context, sessionID acp.Ses
 		return
 	}
 	approvalgate.RecordRequesterDecision(agent.taskRunStore, taskRun.TaskRunID, &answer.Signal, "acp_permission_reload")
-	if answer.Signal == agentcontract.ApprovalSignalApproveTask && strings.TrimSpace(heldCall.ApprovalScope) != "" {
-		agent.taskRunStore.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalScopeGranted, approvalScopeGrantBody(heldCall.ApprovalScope))
-	}
 	agent.resumeAnsweredTaskRun(ctx, sessionID, sessionContext, taskRun, nil)
 }
 
@@ -167,14 +165,6 @@ func carryingOnWithTheApprovedCall(responseLanguage string) *agentcontract.TurnD
 		ResponseLanguage: responseLanguage,
 		Reason:           "acp_permission_reload",
 	}
-}
-
-func approvalScopeGrantBody(approvalScope string) string {
-	document, errorValue := json.Marshal(map[string]string{"scope": strings.TrimSpace(approvalScope)})
-	if errorValue != nil {
-		return ""
-	}
-	return string(document)
 }
 
 func firstNonEmpty(values ...string) string {

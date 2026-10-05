@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -137,4 +138,38 @@ func scenarioAddressingDecision(addressingResponse string) agentcontract.Address
 		return agentcontract.AddressingDecision{}
 	}
 	return decision
+}
+
+type scenarioReplyReader struct {
+	decisionModel *scenarioDecisionModel
+}
+
+func (reader scenarioReplyReader) Read(_ context.Context, question approvalreply.Question, _ string, _ agentcontract.LLMCallObserver) (string, bool, error) {
+	if reader.decisionModel == nil {
+		return "", false, nil
+	}
+	outcome, isDecided := reader.decisionModel.decidedTurn()
+	if !isDecided {
+		return "", false, nil
+	}
+	optionID := scriptedOptionID(outcome.TurnDecision)
+	for _, option := range question.Options {
+		if option.ID == optionID {
+			return optionID, true, nil
+		}
+	}
+	return "", false, nil
+}
+
+func scriptedOptionID(turnDecision agentcontract.TurnDecision) string {
+	if turnDecision.Approval != nil && *turnDecision.Approval == agentcontract.ApprovalSignalApprove {
+		return approvalreply.ApproveOptionID
+	}
+	if turnDecision.Approval != nil && *turnDecision.Approval == agentcontract.ApprovalSignalReject {
+		return approvalreply.RejectOptionID
+	}
+	if len(turnDecision.Choices) > 0 {
+		return turnDecision.Choices[0]
+	}
+	return ""
 }

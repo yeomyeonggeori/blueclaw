@@ -12,7 +12,17 @@ import (
 )
 
 func RecordApprovalSpent(taskRunStore taskstate.TaskRunStore, taskRunID string, toolName string, toolInput json.RawMessage) string {
+	approvedHold, _ := approvedHoldForCall(holdsOf(taskRunStore.ListTaskEvent(taskRunID)), toolName, toolInput)
+	return recordSpent(taskRunStore, taskRunID, approvedHold.ID, toolName, toolInput)
+}
+
+func RecordApprovedCallSpent(taskRunStore taskstate.TaskRunStore, taskRunID string, approvedCall ApprovedCall) string {
+	return recordSpent(taskRunStore, taskRunID, approvedCall.HoldID, approvedCall.ToolName, approvedCall.ToolInput)
+}
+
+func recordSpent(taskRunStore taskstate.TaskRunStore, taskRunID string, holdID string, toolName string, toolInput json.RawMessage) string {
 	body := spentApprovalBody(taskRunStore, taskRunID, toolName, toolInput)
+	body["holdID"] = holdID
 	taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalExecuted, marshalEventBody(body))
 	approvalToken, _ := body["approvalToken"].(string)
 	return approvalToken
@@ -57,9 +67,9 @@ func HeldCallID(toolName string, toolInput json.RawMessage) string {
 	return "held-" + hex.EncodeToString(digest[:8])
 }
 
-func (gate *Gate) mintHeldCallApproval(taskRunID string, approvalRequest mcpserver.ApprovalRequest) {
+func (gate *Gate) mintHeldCallApproval(taskRunID string, holdID string, approvalRequest mcpserver.ApprovalRequest) {
 	gate.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalHeldCall, marshalEventBody(agentcontract.HeldCall{
-		ApprovalToken: HeldCallID(approvalRequest.ToolName, approvalRequest.ToolInput),
+		ApprovalToken: holdID,
 		ToolName:      strings.TrimSpace(approvalRequest.ToolName),
 		ToolInput:     approvalRequest.ToolInput,
 	}))

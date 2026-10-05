@@ -45,7 +45,7 @@ func (step carryOutApprovedCallLaunchStep) carryOutAnsweredCall(ctx context.Cont
 		return agentcontract.CarriedOutCall{}, false
 	}
 	result := invokeApprovedCall(ctx, step.ToolSet, approvedCall)
-	approvalgate.RecordApprovalSpent(taskRunService, taskRunID, approvedCall.ToolName, approvedCall.ToolInput)
+	approvalgate.RecordApprovedCallSpent(taskRunService, taskRunID, approvedCall)
 	return agentcontract.CarriedOutCall{ToolName: approvedCall.ToolName, ToolInput: approvedCall.ToolInput, Result: result}, true
 }
 

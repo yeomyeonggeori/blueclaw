@@ -30,7 +30,6 @@ func TestFilterWaitingApprovalReturnsEmptySliceNotNil(testInstance *testing.T) {
 func TestApprovalDecisionForKeyMapsShortcuts(testInstance *testing.T) {
 	testCases := map[string]string{
 		"y": ApprovalDecisionConfirm,
-		"a": ApprovalDecisionConfirmTask,
 		"n": ApprovalDecisionCancel,
 	}
 	for key, expectedDecision := range testCases {

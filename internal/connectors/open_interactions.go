@@ -99,19 +99,9 @@ func (connectorRuntime *ConnectorRuntime) routeOpenInteractions(ctx context.Cont
 		ResponseLanguage:  responseLanguageForEvent(turn.event),
 		VisibleContext:    turn.event.Context.ToAgentVisibleContext(),
 		ToolSet:           turn.routerToolSet,
-		DecidedTurnFields: connectorRuntime.decidedTurnFields(ctx, turn.adapter, turn.event),
 	}
-	if open.hasConfirmation {
-		request.PendingConfirmation = agentcontract.PendingConfirmationContext{
-			TaskRunID:      open.confirmation.TaskRun.TaskRunID,
-			Prompt:         open.confirmation.IntentPrompt,
-			Question:       open.confirmation.ApprovalQuestion,
-			AskedAt:        open.confirmationAt,
-			ExchangesSince: connectorRuntime.exchangesSince(turn, open.confirmationAt, open.confirmation.TaskRun.TaskRunID),
-		}
-	}
-	if pendingChoice, isOffered := open.confirmationChoice(request.PendingConfirmation.ExchangesSince); isOffered {
-		request.PendingChoice = pendingChoice
+	if !open.hasAsk {
+		request.DecidedTurnFields = connectorRuntime.decidedTurnFields(ctx, turn.adapter, turn.event)
 	}
 	if open.hasAsk {
 		exchanges := connectorRuntime.exchangesSince(turn, open.askAt, open.ask.TaskRunID)
@@ -124,12 +114,22 @@ func (connectorRuntime *ConnectorRuntime) routeOpenInteractions(ctx context.Cont
 	if open.hasRunningTask {
 		request.ActiveTask = connectorRuntime.activeTaskContext(open.runningTask)
 	}
-	decision, errorValue := connectorRuntime.planTurn(ctx, open.ledgerTaskRunID(), request)
+	decision, errorValue := connectorRuntime.decideOpenInteractions(ctx, turn, open, request)
 	if errorValue != nil {
 		return agentcontract.TurnDecision{}, errorValue
 	}
 	connectorRuntime.recordOpenInteractionRouting(turn, open, decision)
 	return decision, nil
+}
+
+func (connectorRuntime *ConnectorRuntime) decideOpenInteractions(ctx context.Context, turn *inboundTurn, open openInteractions, request agentcontract.AgentRequest) (agentcontract.TurnDecision, error) {
+	if open.hasConfirmation {
+		decision, isAnswer, errorValue := connectorRuntime.readApprovalReply(ctx, turn, open.confirmation)
+		if errorValue != nil || isAnswer {
+			return decision, errorValue
+		}
+	}
+	return connectorRuntime.planTurn(ctx, open.ledgerTaskRunID(), request)
 }
 
 func (connectorRuntime *ConnectorRuntime) recordOpenInteractionRouting(turn *inboundTurn, open openInteractions, decision agentcontract.TurnDecision) {
@@ -193,10 +193,7 @@ func (connectorRuntime *ConnectorRuntime) settleConfirmation(ctx context.Context
 	}
 	approvalgate.RecordRequesterDecision(connectorRuntime.taskRunService, confirmation.TaskRun.TaskRunID, decision.Approval, "chat_reply")
 	turn.pendingApproval = confirmation
-	if decision.Approval != nil && agentcontract.IsApprovingSignal(*decision.Approval) {
-		if *decision.Approval == agentcontract.ApprovalSignalApproveTask {
-			connectorRuntime.grantApprovalScopeForTask(confirmation.TaskRun.TaskRunID)
-		}
+	if decision.Approval != nil && *decision.Approval == agentcontract.ApprovalSignalApprove {
 		connectorRuntime.logger.Info("connector."+turn.platform+".confirmation.accepted", slog.String("messageID", turn.event.MessageID), slog.String("taskRunID", confirmation.TaskRun.TaskRunID))
 		connectorRuntime.resolveTaskWaitToken(turn.taskWaitResolution)
 		turn.isApprovalContinuation = true

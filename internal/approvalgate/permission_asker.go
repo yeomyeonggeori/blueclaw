@@ -34,7 +34,7 @@ func (gate *Gate) askedOutcome(ctx context.Context, taskRunID string, approvalRe
 		slog.Warn("approvalgate.call_is_unanswerable", "taskRunID", taskRunID, "toolName", strings.TrimSpace(approvalRequest.ToolName), "reason", errorValue.Error())
 		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionUnanswerable}, true
 	}
-	gate.recordHeldCall(taskRunID, approvalRequest, confirmation, resolution)
+	holdID := gate.recordHeldCall(taskRunID, approvalRequest, confirmation, resolution)
 
 	answer, isAnswered := gate.permissionAsker.AskPermission(ctx, approvalRequest, PermissionQuestion{Confirmation: confirmation, Choices: resolution.Choices})
 	if !isAnswered {
@@ -47,15 +47,10 @@ func (gate *Gate) askedOutcome(ctx context.Context, taskRunID string, approvalRe
 	if choice, isChosen := answer.ChosenFrom(resolution.Choices); isChosen && choice.DefersTheCall() {
 		return gate.deferredOutcome(ctx, taskRunID, approvalRequest, resolution, choice), true
 	}
-	gate.mintHeldCallApproval(taskRunID, approvalRequest)
+	gate.mintHeldCallApproval(taskRunID, holdID, approvalRequest)
 	RecordRequesterDecision(gate.taskRunService, taskRunID, &answer.Signal, "acp_permission")
 	if answer.Signal == agentcontract.ApprovalSignalReject {
 		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionRejected}, true
-	}
-	if answer.Signal == agentcontract.ApprovalSignalApproveTask {
-		gate.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalScopeGranted, marshalEventBody(map[string]string{
-			"scope": approvalRequest.ApprovalScope,
-		}))
 	}
 	return gate.approvedOutcome(taskRunID, approvalRequest), true
 }

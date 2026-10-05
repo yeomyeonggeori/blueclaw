@@ -25,6 +25,7 @@ const (
 type Delivery struct {
 	DeliveryID    string `json:"deliveryID,omitempty"`
 	ReplyTargetID string `json:"replyTargetID,omitempty"`
+	AlreadyPosted bool   `json:"alreadyPosted,omitempty"`
 }
 
 type DeliveredReport struct {

@@ -14,6 +14,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
@@ -24,6 +25,7 @@ type toolCatalogEndpoint struct {
 	resolver     *mcpserver.SessionTokenRequesterResolver
 	handler      http.Handler
 	approvalGate *approvalgate.Gate
+	replyReader  approvalreply.LanguageModelReader
 }
 
 func newToolCatalogEndpoint(taskRunService *task.TaskRunService, approvalLanguageModel model.LanguageModelProvider, capabilityClient capability.Client) toolCatalogEndpoint {
@@ -32,7 +34,7 @@ func newToolCatalogEndpoint(taskRunService *task.TaskRunService, approvalLanguag
 	approvalGate := approvalgate.New(taskRunService)
 	approvalGate.UseLanguageModel(approvalLanguageModel)
 	approvalGate.UseApprovalTargetResolver(agentruntime.NewCapabilityApprovalTargetResolver(capabilityClient))
-	return toolCatalogEndpoint{resolver: resolver, handler: handler, approvalGate: approvalGate}
+	return toolCatalogEndpoint{resolver: resolver, handler: handler, approvalGate: approvalGate, replyReader: approvalreply.NewLanguageModelReader(approvalLanguageModel)}
 }
 
 func newToolCatalogBuilder(runtimeConfiguration config.RuntimeConfiguration, kernel agentKernel, services taskServices, directory identityDirectory, memoryComponents memoryComponents, logger *slog.Logger) *agentruntime.ToolCatalogBuilder {

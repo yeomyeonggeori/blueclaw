@@ -46,9 +46,6 @@ func (handler TaskApprovalHandler) HandleApproveTaskRun(responseWriter http.Resp
 		writeApprovalError(responseWriter, http.StatusBadRequest, errorValue.Error())
 		return
 	}
-	if turnDecision.Approval != nil && *turnDecision.Approval == agentcontract.ApprovalSignalApproveTask {
-		handler.grantApprovalScope(taskRun.TaskRunID)
-	}
 	approvalgate.RecordRequesterDecision(handler.TaskRunService, taskRun.TaskRunID, turnDecision.Approval, "operator_terminal")
 	launchResult, errorValue := handler.TaskLauncher.Launch(context.Background(), agentruntime.TaskLaunchRequest{
 		Source:                     agentruntime.TaskLaunchSourceAdmin,
@@ -97,9 +94,6 @@ func approvalTurnDecision(decision string) (agentcontract.TurnDecision, error) {
 	case "confirm":
 		approvalSignal := agentcontract.ApprovalSignalApprove
 		return continueTaskDecision(approvalSignal, "terminal_confirm"), nil
-	case "confirm_task":
-		approvalSignal := agentcontract.ApprovalSignalApproveTask
-		return continueTaskDecision(approvalSignal, "terminal_confirm_task"), nil
 	case "cancel":
 		approvalSignal := agentcontract.ApprovalSignalReject
 		return agentcontract.TurnDecision{
@@ -111,7 +105,7 @@ func approvalTurnDecision(decision string) (agentcontract.TurnDecision, error) {
 			Reason:         "terminal_cancel",
 		}, nil
 	default:
-		return agentcontract.TurnDecision{}, errors.New(`decision must be one of "confirm", "confirm_task", "cancel"`)
+		return agentcontract.TurnDecision{}, errors.New(`decision must be one of "confirm", "cancel"`)
 	}
 }
 
@@ -124,29 +118,6 @@ func continueTaskDecision(approvalSignal agentcontract.ApprovalSignal, reason st
 		TaskLevel:      agentcontract.TaskLevelLow,
 		Reason:         reason,
 	}
-}
-
-func (handler TaskApprovalHandler) grantApprovalScope(taskRunID string) {
-	scope := pendingApprovalScopeForTaskRun(handler.TaskRunService.ListTaskEvent(taskRunID))
-	if scope == "" {
-		return
-	}
-	handler.TaskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalScopeGranted, marshalApprovalEventBody(map[string]string{"scope": scope}))
-}
-
-func pendingApprovalScopeForTaskRun(taskEvents []task.TaskEvent) string {
-	for index := len(taskEvents) - 1; index >= 0; index-- {
-		if taskEvents[index].Name != agentcontract.TaskEventAskRequested {
-			continue
-		}
-		var askBody struct {
-			ApprovalScope string `json:"approvalScope"`
-		}
-		if json.Unmarshal([]byte(taskEvents[index].Body), &askBody) == nil {
-			return strings.TrimSpace(askBody.ApprovalScope)
-		}
-	}
-	return ""
 }
 
 func (handler TaskApprovalHandler) personAccess(personID string) policy.PersonAccess {

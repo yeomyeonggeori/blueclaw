@@ -1,6 +1,7 @@
 package approvalgate
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -18,7 +19,7 @@ func taskRunWithHeldCall(t *testing.T) (*task.TaskRunService, string) {
 
 func TestAnApprovedCallIsHandedBackWithTheInputItWasApprovedWith(t *testing.T) {
 	taskRunService, taskRunID := taskRunWithHeldCall(t)
-	taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalDecided, `{"decision":"confirm"}`)
+	recordHoldDecision(taskRunService, taskRunID, "confirm", "test")
 
 	approvedCall, isApproved := ApprovedPendingCall(taskRunService.ListTaskEvent(taskRunID))
 	if !isApproved || approvedCall.ToolName != "event_delete" {
@@ -31,8 +32,8 @@ func TestAnApprovedCallIsHandedBackWithTheInputItWasApprovedWith(t *testing.T) {
 
 func TestACallThatAlreadyRanIsNotHandedBackAgain(t *testing.T) {
 	taskRunService, taskRunID := taskRunWithHeldCall(t)
-	taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalDecided, `{"decision":"confirm"}`)
-	taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalExecuted, `{"toolName":"event_delete"}`)
+	recordHoldDecision(taskRunService, taskRunID, "confirm", "test")
+	RecordApprovalSpent(taskRunService, taskRunID, "event_delete", json.RawMessage(`{"eventHint":"내일 회의"}`))
 
 	if _, isApproved := ApprovedPendingCall(taskRunService.ListTaskEvent(taskRunID)); isApproved {
 		t.Fatal("expected a call that already ran to stay carried out")
@@ -41,8 +42,8 @@ func TestACallThatAlreadyRanIsNotHandedBackAgain(t *testing.T) {
 
 func TestANewHeldCallDoesNotInheritTheDecisionMadeAboutTheLastOne(t *testing.T) {
 	taskRunService, taskRunID := taskRunWithHeldCall(t)
-	taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalDecided, `{"decision":"confirm"}`)
-	taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalExecuted, `{"toolName":"event_delete"}`)
+	recordHoldDecision(taskRunService, taskRunID, "confirm", "test")
+	RecordApprovalSpent(taskRunService, taskRunID, "event_delete", json.RawMessage(`{"eventHint":"내일 회의"}`))
 	taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalPendingCall, `{"toolName":"message_send","toolInput":{"message":"보냅니다"},"confirmation":"보낼까요?"}`)
 
 	if _, isApproved := ApprovedPendingCall(taskRunService.ListTaskEvent(taskRunID)); isApproved {
@@ -52,7 +53,7 @@ func TestANewHeldCallDoesNotInheritTheDecisionMadeAboutTheLastOne(t *testing.T) 
 
 func TestADeclinedCallIsReportedAsDeclinedRatherThanLeftSilent(t *testing.T) {
 	taskRunService, taskRunID := taskRunWithHeldCall(t)
-	taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalDecided, `{"decision":"cancel"}`)
+	recordHoldDecision(taskRunService, taskRunID, "cancel", "test")
 
 	declinedCallNote := DeclinedCallNote(taskRunService.ListTaskEvent(taskRunID))
 	if !strings.Contains(declinedCallNote, "declined") {
@@ -78,7 +79,6 @@ func TestEverySurfaceRecordsTheRequesterDecisionUnderOneName(t *testing.T) {
 		expectedDecision string
 	}{
 		{agentcontract.ApprovalSignalApprove, "confirm"},
-		{agentcontract.ApprovalSignalApproveTask, "confirm_task"},
 		{agentcontract.ApprovalSignalReject, "cancel"},
 	}
 	for _, testCase := range testCases {
@@ -98,9 +98,7 @@ func TestEverySurfaceRecordsTheRequesterDecisionUnderOneName(t *testing.T) {
 
 func TestAnUnclearReplyDecidesNothing(t *testing.T) {
 	taskRunService, taskRunID := taskRunWithHeldCall(t)
-	unclearSignal := agentcontract.ApprovalSignalUnclear
 
-	RecordRequesterDecision(taskRunService, taskRunID, &unclearSignal, "chat_reply")
 	RecordRequesterDecision(taskRunService, taskRunID, nil, "chat_reply")
 
 	for _, taskEvent := range taskRunService.ListTaskEvent(taskRunID) {

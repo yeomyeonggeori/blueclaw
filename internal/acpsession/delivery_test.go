@@ -64,7 +64,7 @@ func TestAReplyIsRecordedSentOnceWithTheMessageTheRelayPosted(t *testing.T) {
 	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
 		TaskLauncher: &recordingLauncher{reply: "보냈습니다", taskRunID: answered.TaskRunID},
 		Directory:    staticDirectory{},
-		TurnRouter:   scriptedRouter{},
+		ReplyReader:  scriptedReader{},
 		TaskRunStore: taskRunService,
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
@@ -96,7 +96,7 @@ func TestAReplyCarryingAFileNamesItsTypeAndIsRecordedSentOnceTheRelayPostsEach(t
 			}},
 		},
 		Directory:    staticDirectory{},
-		TurnRouter:   scriptedRouter{},
+		ReplyReader:  scriptedReader{},
 		TaskRunStore: taskRunService,
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
@@ -132,7 +132,7 @@ func TestAReplyWhoseFileTheRelayCouldNotPostIsRecordedUndelivered(t *testing.T) 
 			attachments: []toolcontract.FileAttachment{{DevicePath: "/workspace/private/people/person-sample/report.pdf", Filename: "report.pdf", ContentType: "application/pdf"}},
 		},
 		Directory:    staticDirectory{},
-		TurnRouter:   scriptedRouter{},
+		ReplyReader:  scriptedReader{},
 		TaskRunStore: taskRunService,
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
@@ -158,7 +158,7 @@ func TestAReplyTheRelayCouldNotPostIsRecordedUndeliveredNotSent(t *testing.T) {
 	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
 		TaskLauncher: &recordingLauncher{reply: "보냈습니다", taskRunID: answered.TaskRunID},
 		Directory:    staticDirectory{},
-		TurnRouter:   scriptedRouter{},
+		ReplyReader:  scriptedReader{},
 		TaskRunStore: taskRunService,
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
@@ -215,7 +215,7 @@ func TestAnApprovalQuestionNamesItsThreadAndIsRecordedSentOnceTheRelayPostsIt(t 
 	connection, permissionRelay := connectedPairWithCollaborators(t, client, Collaborators{
 		TaskLauncher: &recordingLauncher{},
 		Directory:    staticDirectory{},
-		TurnRouter:   scriptedRouter{},
+		ReplyReader:  scriptedReader{},
 		TaskRunStore: taskRunService,
 	})
 	openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
@@ -245,7 +245,7 @@ func TestAnApprovalQuestionTheRelayCouldNotPostIsRecordedUndelivered(t *testing.
 	connection, permissionRelay := connectedPairWithCollaborators(t, client, Collaborators{
 		TaskLauncher: &recordingLauncher{},
 		Directory:    staticDirectory{},
-		TurnRouter:   scriptedRouter{},
+		ReplyReader:  scriptedReader{},
 		TaskRunStore: taskRunService,
 	})
 	openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
@@ -272,7 +272,7 @@ func TestAReplyTheRelayNeverReportsOnIsRecordedUndelivered(t *testing.T) {
 	agent := NewAgent(Collaborators{
 		TaskLauncher: &recordingLauncher{reply: "보냈습니다", taskRunID: answered.TaskRunID},
 		Directory:    staticDirectory{},
-		TurnRouter:   scriptedRouter{},
+		ReplyReader:  scriptedReader{},
 		TaskRunStore: taskRunService,
 		SessionTurns: connectorRuntimeForTest(taskRunService),
 	}, NewPermissionRelay(silentLogger()), silentLogger())
@@ -363,7 +363,7 @@ func promptForFiles(t *testing.T, client *recordingClient, taskRunService *task.
 	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
 		TaskLauncher: &recordingLauncher{reply: words, taskRunID: taskRunID, attachments: attachments},
 		Directory:    staticDirectory{},
-		TurnRouter:   scriptedRouter{},
+		ReplyReader:  scriptedReader{},
 		TaskRunStore: taskRunService,
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))

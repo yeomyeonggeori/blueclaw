@@ -18,8 +18,6 @@ func ApprovalDecisionForKey(key string) (string, bool) {
 	switch key {
 	case "y":
 		return ApprovalDecisionConfirm, true
-	case "a":
-		return ApprovalDecisionConfirmTask, true
 	case "n":
 		return ApprovalDecisionCancel, true
 	default:
