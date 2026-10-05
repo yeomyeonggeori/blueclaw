@@ -23,7 +23,7 @@ type RequesterToolSet struct {
 	ResponseLanguage  string
 	Prompt            string
 
-	ObserveToolInvocation func(toolName string, isSucceeded bool)
+	ObserveToolInvocation func(toolName string, toolResult toolcontract.ToolResult, isSucceeded bool)
 }
 
 func NewToolCatalogServer(requesterToolSet RequesterToolSet, version string) (*mcp.Server, error) {
@@ -99,7 +99,7 @@ func invokeThroughToolSet(requesterToolSet RequesterToolSet, toolDescriptor tool
 			Input:    request.Params.Arguments,
 		})
 		if requesterToolSet.ObserveToolInvocation != nil {
-			requesterToolSet.ObserveToolInvocation(toolDescriptor.Name, errorValue == nil && toolResult.Failure == nil)
+			requesterToolSet.ObserveToolInvocation(toolDescriptor.Name, toolResult, errorValue == nil && toolResult.Failure == nil)
 		}
 		if errorValue != nil {
 			return nil, errorValue

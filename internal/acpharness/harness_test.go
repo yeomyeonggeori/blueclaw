@@ -422,3 +422,63 @@ func TestATurnWithNothingCarriedOutSendsNoHandback(t *testing.T) {
 		t.Fatalf("expected an ordinary turn to carry no handback, got %+v", agent.observedPromptMeta)
 	}
 }
+
+func fileDeliverToolSet(t *testing.T, attachments []toolcontract.FileAttachment) *toolcontract.ToolSet {
+	t.Helper()
+	toolSet := toolcontract.NewToolSet([]string{"file_deliver"})
+	toolSet.AllowTestReplacement()
+	errorValue := toolSet.RegisterTool(toolcontract.ToolDefinition{
+		ID:              "test:file_deliver",
+		Name:            "file_deliver",
+		Description:     "stage a file for the reply",
+		Visibility:      toolcontract.ToolVisibilityModel,
+		InputSchema:     json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}}}`),
+		SideEffectClass: toolcontract.ToolSideEffectStateChange,
+		ResultContract:  &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`)},
+	}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		result := toolcontract.ToolSuccessData("files staged", json.RawMessage(`{}`))
+		result.Attachments = attachments
+		return result, nil
+	})
+	if errorValue != nil {
+		t.Fatalf("expected the tool to register: %v", errorValue)
+	}
+	return toolSet
+}
+
+func TestAFileAnExternalAgentDeliversThroughTheCatalogReachesTheTurnsReply(t *testing.T) {
+	stagedFile := toolcontract.FileAttachment{Filename: "quarterly-report.pptx", DevicePath: "/workspace/private/people/person-1/quarterly-report.pptx"}
+	agent := &externalAgent{toolNameToCall: "file_deliver", toolArguments: map[string]any{"path": stagedFile.DevicePath}}
+	harness := New(&inProcessAgentProcess{agent: agent}, newPublishedToolCatalog(t), nil)
+
+	turnResult, errorValue := harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
+		RequesterPersonID: "person-1",
+		Prompt:            "send me the quarterly report",
+		WorkspaceRootPath: t.TempDir(),
+		ToolSet:           fileDeliverToolSet(t, []toolcontract.FileAttachment{stagedFile}),
+	})
+	if errorValue != nil {
+		t.Fatalf("expected the external agent turn to run: %v", errorValue)
+	}
+	if len(turnResult.Attachments) != 1 || turnResult.Attachments[0].DevicePath != stagedFile.DevicePath {
+		t.Fatalf("expected the staged file on the turn's reply, got %+v", turnResult.Attachments)
+	}
+}
+
+func TestATurnThatStagedNothingCarriesNoAttachments(t *testing.T) {
+	agent := &externalAgent{toolNameToCall: "file_deliver", toolArguments: map[string]any{"path": "/workspace/none"}}
+	harness := New(&inProcessAgentProcess{agent: agent}, newPublishedToolCatalog(t), nil)
+
+	turnResult, errorValue := harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
+		RequesterPersonID: "person-1",
+		Prompt:            "send me nothing",
+		WorkspaceRootPath: t.TempDir(),
+		ToolSet:           fileDeliverToolSet(t, nil),
+	})
+	if errorValue != nil {
+		t.Fatalf("expected the external agent turn to run: %v", errorValue)
+	}
+	if len(turnResult.Attachments) != 0 {
+		t.Fatalf("expected no attachments, got %+v", turnResult.Attachments)
+	}
+}

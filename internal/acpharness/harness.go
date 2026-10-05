@@ -219,6 +219,7 @@ func (harness *Harness) turnResult(ctx context.Context, request agentcontract.Ag
 		FinishMessage: finishMessage,
 		UserNotice:    finishMessage,
 		ToolNames:     calledToolNames,
+		Attachments:   succeededToolRecorder.StagedAttachments(),
 	}
 }
 
