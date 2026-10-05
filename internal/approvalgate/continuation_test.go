@@ -107,3 +107,24 @@ func TestAnUnclearReplyDecidesNothing(t *testing.T) {
 		}
 	}
 }
+
+func eventNamesAfterDecision(t *testing.T, approvalSignal agentcontract.ApprovalSignal) []string {
+	t.Helper()
+	taskRunService, taskRunID := taskRunWithHeldCall(t)
+	heldEventCount := len(taskRunService.ListTaskEvent(taskRunID))
+	RecordRequesterDecision(taskRunService, taskRunID, &approvalSignal, "chat_reply")
+	names := []string{}
+	for _, taskEvent := range taskRunService.ListTaskEvent(taskRunID)[heldEventCount:] {
+		names = append(names, taskEvent.Name)
+	}
+	return names
+}
+
+func TestAnApprovalWritesOnlyTheEventsItAlwaysDid(t *testing.T) {
+	if names := eventNamesAfterDecision(t, agentcontract.ApprovalSignalApprove); strings.Join(names, ",") != "approval.decided" {
+		t.Fatalf("expected the decision alone, got %v", names)
+	}
+	if names := eventNamesAfterDecision(t, agentcontract.ApprovalSignalReject); strings.Join(names, ",") != "approval.decided" {
+		t.Fatalf("expected the decision alone, got %v", names)
+	}
+}

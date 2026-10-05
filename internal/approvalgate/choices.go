@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
@@ -17,7 +18,6 @@ const (
 	TaskEventApprovalDeferred       = "approval.deferred"
 
 	CancelChoiceKey   = "cancel"
-	deferredDecision  = "defer"
 	deferredEffect    = "created"
 	deferredObjectKey = "schedule"
 )
@@ -150,7 +150,7 @@ func (gate *Gate) DeferApprovedCall(ctx context.Context, request DeferralRequest
 		ScheduleID: schedule.ScheduleID,
 		StartsAt:   startsAt.Format(time.RFC3339),
 	}
-	recordHoldDecision(gate.taskRunService, request.TaskRunID, deferredDecision, "approval_choice")
+	recordHoldDecision(gate.taskRunService, request.TaskRunID, approvalrecord.DecisionDefer, "approval_choice")
 	gate.taskRunService.AppendTaskEvent(request.TaskRunID, TaskEventApprovalDeferred, marshalEventBody(record))
 	return deferredCallResult(record), nil
 }

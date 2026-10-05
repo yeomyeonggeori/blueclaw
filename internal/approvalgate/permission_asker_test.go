@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -78,7 +79,7 @@ func TestAnAnsweredCallRunsInsideTheTurnAndReadsTheSameOnTheLedger(t *testing.T)
 	if carriesEvent(names, agentcontract.TaskEventApprovalHeldCall) {
 		t.Fatalf("the gate identifies the call by its hold, so it writes no second record of it, got %v", names)
 	}
-	if holds := holdsOf(taskRunService.ListTaskEvent(taskRun.TaskRunID)); len(holds) != 1 || outcome.ApprovedCallID != holds[0].ID {
+	if holds := approvalrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID)); len(holds) != 1 || outcome.ApprovedCallID != holds[0].ID {
 		t.Fatalf("the approved call is named by the hold that was answered, got %q for %+v", outcome.ApprovedCallID, holds)
 	}
 }

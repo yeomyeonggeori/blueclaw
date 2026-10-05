@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -76,11 +77,11 @@ func (gate *Gate) taskHasApprovedScope(taskRunID string, approvalScope string) b
 	return false
 }
 
-func (gate *Gate) approvedHold(taskRunID string, approvalRequest mcpserver.ApprovalRequest) (hold, bool) {
+func (gate *Gate) approvedHold(taskRunID string, approvalRequest mcpserver.ApprovalRequest) (approvalrecord.Hold, bool) {
 	if taskRunID == "" {
-		return hold{}, false
+		return approvalrecord.Hold{}, false
 	}
-	return approvedHoldForCall(holdsOf(gate.taskRunService.ListTaskEvent(taskRunID)), approvalRequest.ToolName, approvalRequest.ToolInput)
+	return approvalrecord.ApprovedHoldForCall(approvalrecord.Holds(gate.taskRunService.ListTaskEvent(taskRunID)), approvalRequest.ToolName, approvalRequest.ToolInput)
 }
 
 func unmarshalEventBody(body string, target any) {
@@ -95,17 +96,14 @@ func decodeHeldCallEventBody(body string) agentcontract.HeldCall {
 }
 
 func (gate *Gate) recordHeldCall(taskRunID string, approvalRequest mcpserver.ApprovalRequest, confirmation string, resolution ApprovalTargetResolution) {
-	gate.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalPendingCall, marshalEventBody(heldCallRecord{
-		HoldID: newHoldID(),
-		HeldCall: agentcontract.HeldCall{
-			ToolName:          approvalRequest.ToolName,
-			ToolInput:         approvalRequest.ToolInput,
-			ApprovedToolInput: narrowedToolInput(approvalRequest.ToolInput, resolution.Target),
-			ApprovalScope:     approvalRequest.ApprovalScope,
-			Confirmation:      confirmation,
-			HarnessSession:    approvalRequest.HarnessSession,
-		},
-	}))
+	approvalrecord.Open(gate.taskRunService, taskRunID, agentcontract.HeldCall{
+		ToolName:          approvalRequest.ToolName,
+		ToolInput:         approvalRequest.ToolInput,
+		ApprovedToolInput: narrowedToolInput(approvalRequest.ToolInput, resolution.Target),
+		ApprovalScope:     approvalRequest.ApprovalScope,
+		Confirmation:      confirmation,
+		HarnessSession:    approvalRequest.HarnessSession,
+	})
 	if len(resolution.Choices) > 0 {
 		gate.taskRunService.AppendTaskEvent(taskRunID, TaskEventApprovalChoicesOffered, offeredChoicesBody(approvalRequest.ToolName, approvalRequest.ToolInput, resolution.Choices))
 	}
