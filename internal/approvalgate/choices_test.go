@@ -3,6 +3,7 @@ package approvalgate
 import (
 	"context"
 	"encoding/json"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"testing"
 	"time"
 
@@ -16,7 +17,7 @@ const laterStartsAt = "2099-10-03T03:00:00+09:00"
 
 type choosingAsker struct {
 	answer          ApprovalAnswer
-	offeredChoices  []ApprovalChoice
+	offeredChoices  []approvalrecord.Choice
 	offeredQuestion string
 }
 
@@ -53,7 +54,7 @@ func hostUpdateRequest(taskRunID string) mcpserver.ApprovalRequest {
 func choiceResolver() *recordingTargetResolver {
 	return &recordingTargetResolver{resolution: ApprovalTargetResolution{
 		Target: ApprovalTarget{InputField: "targetVersion", ID: "v2026.10.02.090000", Title: "v2026.10.01.203142 → v2026.10.02.090000"},
-		Choices: []ApprovalChoice{
+		Choices: []approvalrecord.Choice{
 			{Key: "offHours", StartsAt: laterStartsAt},
 			{Key: "now"},
 		},
@@ -80,7 +81,7 @@ func TestTheRequesterIsOfferedEveryChoiceTheTargetCarriesInItsOrder(t *testing.T
 	if len(asker.offeredChoices) != 2 || asker.offeredChoices[0].Key != "offHours" || asker.offeredChoices[1].Key != "now" {
 		t.Fatalf("the requester was offered %+v, expected the later time first and now second", asker.offeredChoices)
 	}
-	recorded := OfferedChoices(taskRunService.ListTaskEvent(taskRun.TaskRunID))
+	recorded := approvalrecord.OfferedChoices(taskRunService.ListTaskEvent(taskRun.TaskRunID))
 	if len(recorded) != 2 || recorded[0].StartsAt != laterStartsAt {
 		t.Fatalf("the ledger kept %+v, so a reply read after a restart is read against nothing", recorded)
 	}

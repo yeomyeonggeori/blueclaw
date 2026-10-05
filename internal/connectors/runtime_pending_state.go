@@ -2,7 +2,7 @@ package connectors
 
 import (
 	"encoding/json"
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"strings"
 	"time"
 
@@ -19,7 +19,7 @@ type pendingApproval struct {
 	ResponseLanguage        string
 	ContinuationInstruction string
 	ActiveGoal              agentcontract.ActiveGoal
-	Choices                 []approvalgate.ApprovalChoice
+	Choices                 []approvalrecord.Choice
 }
 
 func (connectorRuntime *ConnectorRuntime) findPendingAskInteraction(personID string, _ string, event PlatformInboundEvent, taskWaitResolution inboundTaskWaitResolution) (AskInteraction, bool) {
@@ -103,7 +103,7 @@ func (connectorRuntime *ConnectorRuntime) pendingApprovalForTaskRun(selectedTask
 	continuationInstruction := latestConfirmationContinuationInstruction(taskEvents)
 	activeGoal := latestActiveGoal(taskEvents)
 	return pendingApproval{
-		Choices:                 approvalgate.OfferedChoices(taskEvents),
+		Choices:                 approvalrecord.OfferedChoices(taskEvents),
 		TaskRun:                 selectedTaskRun,
 		IntentPrompt:            strings.TrimSpace(selectedTaskRun.Prompt),
 		ApprovalQuestion:        approvalQuestion,

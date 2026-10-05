@@ -970,7 +970,7 @@ func TestAChoiceIsReadFromThePersonsWordsAgainstTheOfferedOptions(t *testing.T) 
 	connection, permissionRelay := connectedPairWithReader(t, &recordingLauncher{}, client, scriptedReader{optionID: "choose:offHours", asked: &asked})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 	client.answerByAsking = answeringWithWords(t, connection, sessionID, "새벽에 해")
-	choices := []approvalgate.ApprovalChoice{{Key: "offHours", StartsAt: "2099-10-03T03:00:00+09:00"}, {Key: "now"}}
+	choices := []approvalrecord.Choice{{Key: "offHours", StartsAt: "2099-10-03T03:00:00+09:00"}, {Key: "now"}}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"net/url"
 	"strings"
 
@@ -81,7 +82,7 @@ func (response capabilityTargetResolveResponse) approvalTargetResolution() appro
 		return approvalgate.ApprovalTargetResolution{}
 	}
 	offered := struct {
-		Choices []approvalgate.ApprovalChoice `json:"choices"`
+		Choices []approvalrecord.Choice `json:"choices"`
 	}{}
 	json.Unmarshal(response.Result, &offered)
 	return approvalgate.ApprovalTargetResolution{Target: target, Choices: offered.Choices}
