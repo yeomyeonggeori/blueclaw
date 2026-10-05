@@ -21,6 +21,8 @@ var officeHostContractDocument []byte
 type officeHostContract struct {
 	RuntimeContextVariable string                    `json:"runtimeContextVariable"`
 	DeckPreparation        officeDeckPreparationFile `json:"deckPreparation"`
+	DraftClaims            officeDraftClaimsFiles    `json:"draftClaims"`
+	DeckLayouts            officeDeckPreparationFile `json:"deckLayouts"`
 	SourceSuffix           string                    `json:"sourceSuffix"`
 	DeliverableExtensions  []string                  `json:"deliverableExtensions"`
 	SourceContent          officeSourceContent       `json:"sourceContent"`
@@ -28,6 +30,11 @@ type officeHostContract struct {
 
 type officeDeckPreparationFile struct {
 	RequestFile string `json:"requestFile"`
+}
+
+type officeDraftClaimsFiles struct {
+	RequestFile  string `json:"requestFile"`
+	ReportedFile string `json:"reportedFile"`
 }
 
 type officeSourceContent struct {
@@ -64,6 +71,16 @@ type officeRuntimeContext struct {
 	PreparesDecks       bool                       `json:"preparesDecks"`
 	DeckDesign          *officeDeckDesign          `json:"deckDesign"`
 	Images              []officeImage              `json:"images"`
+	Fonts               []officeFont               `json:"fonts"`
+	JudgesDraftClaims   bool                       `json:"judgesDraftClaims"`
+	DraftClaims         *officeDraftClaims         `json:"draftClaims"`
+	ChoosesDeckLayouts  bool                       `json:"choosesDeckLayouts"`
+	DeckLayouts         *officeDeckLayouts         `json:"deckLayouts"`
+}
+
+type officeFont struct {
+	Path string `json:"path"`
+	Name string `json:"name"`
 }
 
 type officeRequester struct {
@@ -112,6 +129,9 @@ func (toolCatalogBuilder *ToolCatalogBuilder) officeRuntimeContextFor(request To
 		ReviewsDeckRenders:  toolCatalogBuilder.reviewsDeckRenders(),
 		PreparesDecks:       toolCatalogBuilder.preparesDecks(),
 		Images:              []officeImage{},
+		Fonts:               []officeFont{},
+		JudgesDraftClaims:   toolCatalogBuilder.claimDecisionModel != nil,
+		ChoosesDeckLayouts:  toolCatalogBuilder.choosesDeckLayouts(),
 	}
 }
 
@@ -128,8 +148,13 @@ func (runtimeContext *officeRuntimeContext) keepRecordedFrom(ctx context.Context
 		runtimeContext.Company[language] = profilePath
 	}
 	runtimeContext.RegisteredDocuments = append(runtimeContext.RegisteredDocuments, recorded.RegisteredDocuments...)
+	runtimeContext.DraftClaims = recorded.DraftClaims
+	runtimeContext.DeckLayouts = recorded.DeckLayouts
 	if recorded.DeckDesign != nil {
 		runtimeContext.DeckDesign, runtimeContext.Images = recorded.DeckDesign, recorded.Images
+		if recorded.Fonts != nil {
+			runtimeContext.Fonts = recorded.Fonts
+		}
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,14 +55,13 @@ func (models *deckModels) GenerateStructuredResponse(_ context.Context, request 
 	var payload struct {
 		Section string `json:"section"`
 	}
-	if errorValue := json.Unmarshal([]byte(request.Messages[1].Parts[1].Text), &payload); errorValue != nil {
+	if errorValue := json.Unmarshal([]byte(request.Messages[1].Parts[0].Text), &payload); errorValue != nil {
 		return model.StructuredResponse{}, errorValue
 	}
 	models.mutex.Lock()
 	models.repairedSections++
 	models.mutex.Unlock()
-	rewrite := strings.ReplaceAll(payload.Section, "BAD", "GOOD")
-	content, errorValue := json.Marshal(map[string]string{"section": rewrite, "change": "spread the text over two columns"})
+	content, errorValue := json.Marshal(map[string]string{"section": strings.ReplaceAll(payload.Section, "BAD", "GOOD"), "change": "spread the text over two columns"})
 	return model.StructuredResponse{Content: string(content), Usage: model.Usage{CostUSD: 0.007}}, errorValue
 }
 
@@ -76,17 +76,21 @@ func (fixture deckFixture) path(name string) string {
 	return filepath.Join(fixture.directoryPath, name)
 }
 
+func (fixture deckFixture) pagePath(number int) string {
+	return filepath.Join(fixture.directoryPath, "pages", fmt.Sprintf("%02d.html", number))
+}
+
 func (fixture deckFixture) manifestJSON(sections []string, renders []string) string {
 	slides := []map[string]any{}
 	for index, section := range sections {
-		slides = append(slides, map[string]any{"number": index + 1, "image": fixture.path(renders[index]), "state": map[string]any{"number": index + 1}, "section": section, "measured": []any{}})
+		slides = append(slides, map[string]any{"number": index + 1, "image": fixture.path(renders[index]), "state": map[string]any{"number": index + 1}, "section": section, "source": fixture.pagePath(index + 1), "measured": []any{}})
 	}
 	return MarshalBody(map[string]any{
 		"question":  map[string]any{"instructions": "Which defect?", "options": map[string]string{"none": "clean", "crowded": "packed densely"}, "cleanOption": "none"},
 		"threshold": 0.3,
 		"rounds":    2,
-		"fixer":     map[string]string{"instructions": "Repair the slide.", "kitGuide": "layouts: split"},
-		"source":    fixture.path("slides.html"),
+		"fixer":     map[string]string{"instructions": "Repair the slide."},
+		"source":    fixture.directoryPath,
 		"slides":    slides,
 	})
 }
@@ -98,8 +102,8 @@ func (fixture deckFixture) snapshotJSON(claimTexts []string, blanks []map[string
 	}
 	document := map[string]any{
 		"command":      "office create",
-		"arguments":    []string{fixture.documentPath, fixture.path("slides.html")},
-		"deck":         fixture.path("slides.html"),
+		"arguments":    []string{fixture.documentPath, fixture.directoryPath},
+		"deck":         fixture.directoryPath,
 		"claims":       claims,
 		"visualReview": fixture.path("manifest.json"),
 	}
@@ -115,7 +119,8 @@ func newDeckFixture(t *testing.T) deckFixture {
 	directoryPath := filepath.Join(base.homePath(), "artifacts", "deck")
 	fixture := deckFixture{officeContextFixture: base, directoryPath: directoryPath, documentPath: filepath.Join(base.homePath(), "documents", "deck.pptx")}
 	writeTestFile(t, fixture.documentPath, "deck-bytes")
-	writeTestFile(t, fixture.path("slides.html"), "<html><body>\n"+coverSection+"\n"+flawedSection+"\n</body></html>")
+	writeTestFile(t, fixture.pagePath(1), coverSection+"\n")
+	writeTestFile(t, fixture.pagePath(2), flawedSection+"\n")
 	writeTestFile(t, fixture.path("render-1.png"), "COVER")
 	writeTestFile(t, fixture.path("render-2.png"), "BAD")
 	writeTestFile(t, fixture.path("manifest.json"), fixture.manifestJSON([]string{coverSection, flawedSection}, []string{"render-1.png", "render-2.png"}))
@@ -171,11 +176,13 @@ func TestAFlaggedSlideIsRewrittenInTheSourceAndTheDeckRebuiltAsThePerson(t *test
 
 	data, _ := fixture.deliver(t, models)
 
-	source := fixture.readFile(t, fixture.path("slides.html"))
-	if !strings.Contains(source, repairedSection) || strings.Contains(source, "BAD") || !strings.Contains(source, coverSection) {
-		t.Fatalf("expected only the second section replaced, got %s", source)
+	if page := fixture.readFile(t, fixture.pagePath(2)); page != repairedSection+"\n" {
+		t.Fatalf("expected the second page file rewritten, got %s", page)
 	}
-	expectedCall := []string{"create", fixture.documentPath, fixture.path("slides.html")}
+	if page := fixture.readFile(t, fixture.pagePath(1)); page != coverSection+"\n" {
+		t.Fatalf("expected the cover page file left alone, got %s", page)
+	}
+	expectedCall := []string{"create", fixture.documentPath, fixture.directoryPath}
 	if calls := officeCalls(t, fixture.recordPath); strings.Join(calls, " ") != strings.Join(expectedCall, " ") {
 		t.Fatalf("expected the deck rebuilt with its recorded command %v, got %v", expectedCall, calls)
 	}
@@ -189,19 +196,6 @@ func TestAFlaggedSlideIsRewrittenInTheSourceAndTheDeckRebuiltAsThePerson(t *test
 func (fixture deckFixture) writeDeckSnapshot(t *testing.T, blanks []map[string]string) {
 	t.Helper()
 	writeTestFile(t, fixture.documentPath+officeContract.SourceSuffix, fixture.snapshotJSON([]string{"Cover", "BAD crowded 99%"}, blanks))
-}
-
-func TestTheBlanksOfTheSnapshotSurviveTheRebuild(t *testing.T) {
-	fixture := newDeckFixture(t)
-	blanks := []map[string]string{{"field": "slides[1].units[2]", "label": "시장 점유율"}}
-	fixture.writeDeckSnapshot(t, blanks)
-	fixture.installDeckOffice(t, []map[string]string{}, []string{"Cover", "GOOD crowded 99%"}, "0")
-
-	fixture.deliver(t, &deckModels{})
-
-	if snapshot := fixture.readFile(t, fixture.documentPath+officeContract.SourceSuffix); !strings.Contains(snapshot, `"blanks":[{"field":"slides[1].units[2]","label":"시장 점유율"}]`) {
-		t.Fatalf("expected the blank written back into the rebuilt snapshot, got %s", snapshot)
-	}
 }
 
 func TestADeckWithoutBlanksIsLeftWithoutThem(t *testing.T) {
@@ -219,13 +213,13 @@ func TestADeckWithoutBlanksIsLeftWithoutThem(t *testing.T) {
 func TestAFixedSlidesNewSentenceIsJudgedAgainstTheSourcesAndBlanked(t *testing.T) {
 	fixture := newDeckFixture(t)
 	fixture.writeDeckSnapshot(t, []map[string]string{{"field": "slides[0].title", "label": "표지"}})
-	fixture.installDeckOffice(t, []map[string]string{}, []string{"Cover", "GOOD crowded 99%"}, "0")
+	fixture.installDeckOffice(t, []map[string]string{{"field": "slides[0].title", "label": "표지"}}, []string{"Cover", "GOOD crowded 99%"}, "0")
 	models := &deckModels{claimJudge: claimJudge{unsupportedText: "GOOD crowded 99%"}}
 	fixture.builder.UseClaimDecisionModel(models)
 
 	data, content := fixture.deliver(t, models)
 
-	expectedBlankCall := []string{"create", fixture.documentPath, fixture.path("slides.html"), "--blank", "slides[1].title"}
+	expectedBlankCall := []string{"create", fixture.documentPath, fixture.directoryPath, "--blank", "slides[1].title"}
 	calls := officeCalls(t, fixture.recordPath)
 	if len(calls) != 8 || strings.Join(calls[3:], " ") != strings.Join(expectedBlankCall, " ") {
 		t.Fatalf("expected the rebuild and then the blank of the new sentence, got %v", calls)
@@ -258,20 +252,18 @@ func TestACleanDeckIsDeliveredWithoutAFixOrARebuild(t *testing.T) {
 	}
 }
 
-func TestAFailedRebuildDeliversTheDeckAndRestoresItsSource(t *testing.T) {
+func TestARefusedRebuildDeliversTheDeckKeepsTheSlideFlaggedAndRestoresItsSource(t *testing.T) {
 	fixture := newDeckFixture(t)
 	fixture.writeDeckSnapshot(t, nil)
 	fixture.installDeckOffice(t, nil, nil, "1")
 
 	data, _ := fixture.deliver(t, &deckModels{})
 
-	if source := fixture.readFile(t, fixture.path("slides.html")); !strings.Contains(source, flawedSection) {
-		t.Fatalf("expected the source put back when the rebuild failed, got %s", source)
+	if page := fixture.readFile(t, fixture.pagePath(2)); page != flawedSection+"\n" {
+		t.Fatalf("expected the page file put back when the rebuild failed, got %s", page)
 	}
-	for _, expected := range []string{`"outcome":"review_failed"`, "the deck rebuild failed"} {
-		if !strings.Contains(string(data["visualReview"]), expected) {
-			t.Fatalf("expected %s recorded, got %s", expected, data["visualReview"])
-		}
+	if !strings.Contains(string(data["visualReview"]), `"outcome":"leftovers"`) || strings.Contains(string(data["visualReview"]), "review_failed") {
+		t.Fatalf("expected the refused slide left over and not a failed review, got %s", data["visualReview"])
 	}
 }
 
@@ -296,18 +288,5 @@ func TestAFileWithoutAVisualReviewIsNotLookedAt(t *testing.T) {
 
 	if data["visualReview"] != nil || len(models.reviewedImages) != 0 {
 		t.Fatalf("expected a file with no review manifest left alone, got %s", data["visualReview"])
-	}
-}
-
-func TestSectionsAreReplacedBySlideNumberInDocumentOrder(t *testing.T) {
-	source := "<body><section>one</section>\n<SECTION class=\"x\">two</SECTION><section>three</section></body>"
-
-	replaced, errorValue := withReplacedSections(source, map[int]string{2: "<section>TWO</section>", 3: "<section>THREE</section>"})
-
-	if errorValue != nil || replaced != "<body><section>one</section>\n<section>TWO</section><section>THREE</section></body>" {
-		t.Fatalf("expected the second and third replaced, got %q (%v)", replaced, errorValue)
-	}
-	if _, errorValue := withReplacedSections(source, map[int]string{4: "<section>four</section>"}); errorValue == nil {
-		t.Fatal("expected a slide past the last section refused")
 	}
 }

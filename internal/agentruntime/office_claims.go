@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/claimcheck"
@@ -18,6 +19,7 @@ const (
 	officeBlankCommandTimeout  = 180
 	officeBlankCommandMaxBytes = 65536
 	officeEntryRelativePath    = "office/scripts/office"
+	maximumWithdrawalPasses    = 2
 )
 
 type officeSnapshot struct {
@@ -120,7 +122,77 @@ func (toolCatalogBuilder *ToolCatalogBuilder) judgeAndBlank(ctx context.Context,
 	check.Hollow = judgment.Treated(claimcheck.TreatmentRewrite)
 	treated := toolCatalogBuilder.treatedClaims(ctx, sources, judgment, check)
 	check.Flagged = treated.Blank
-	return toolCatalogBuilder.actOnFlaggedClaims(ctx, request, actor, concretePath, snapshot, check, treated, isEverySourceRead)
+	check = toolCatalogBuilder.actOnFlaggedClaims(ctx, request, actor, concretePath, snapshot, check, treated, isEverySourceRead)
+	return toolCatalogBuilder.judgeWhatTheBlanksLeft(ctx, request, actor, concretePath, sources, check, slices.Concat(treated.Blank, treated.Removed))
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) judgeWhatTheBlanksLeft(ctx context.Context, request ToolCatalogRequest, actor security.WorkspaceActor, concretePath string, sources claimcheck.Sources, check *officeClaimCheck, newlyRemoved []claimcheck.Verdict) *officeClaimCheck {
+	removed := verdictClaims(newlyRemoved)
+	for pass := 0; pass < maximumWithdrawalPasses && check.Outcome == claimOutcomeBlanked && len(newlyRemoved) > 0; pass++ {
+		snapshot, isRead := readOfficeSnapshot(ctx, actor, concretePath)
+		neighbors := claimsMarkedFree(claimsSharingAParent(newlyRemoved, removed, snapshot.Claims))
+		if !isRead || len(neighbors) == 0 {
+			return check
+		}
+		judgment, errorValue := claimcheck.Judge(ctx, toolCatalogBuilder.claimDecisionModel, claimcheck.Sources{Request: sources.Request, Attachments: sources.Attachments, RuntimeFacts: sources.RuntimeFacts, Removed: removed}, neighbors)
+		if errorValue != nil {
+			check.Detail = "the statements left beside the blanks were not re-judged: " + errorValue.Error()
+			return check
+		}
+		check.Asked += askedCount(judgment)
+		newlyRemoved = judgment.Treated(claimcheck.TreatmentBlank)
+		if len(newlyRemoved) == 0 {
+			return check
+		}
+		words, hasCommand := officeRemakeWords(snapshot, concretePath, verdictPaths(newlyRemoved), nil)
+		if detail := toolCatalogBuilder.runOfficeCommand(ctx, request, actor, words); !hasCommand || detail != "" {
+			check.Detail = "the statements left beside the blanks could not be blanked: " + detail
+			return check
+		}
+		removed = append(removed, verdictClaims(newlyRemoved)...)
+		check.Flagged = append(check.Flagged, newlyRemoved...)
+		check.Blanked = append(check.Blanked, verdictPlaces(newlyRemoved)...)
+	}
+	return check
+}
+
+func verdictClaims(verdicts []claimcheck.Verdict) []claimcheck.Claim {
+	claims := []claimcheck.Claim{}
+	for _, verdict := range verdicts {
+		claims = append(claims, verdict.Claim)
+	}
+	return claims
+}
+
+func claimsSharingAParent(newlyRemoved []claimcheck.Verdict, removedSoFar []claimcheck.Claim, remaining []claimcheck.Claim) []claimcheck.Claim {
+	parents := map[string]bool{}
+	for _, verdict := range newlyRemoved {
+		parents[parentPath(verdict.Path)] = true
+	}
+	neighbors := []claimcheck.Claim{}
+	for _, claim := range remaining {
+		if parents[parentPath(claim.Path)] && !isAmongClaims(claim, removedSoFar) {
+			neighbors = append(neighbors, claim)
+		}
+	}
+	return neighbors
+}
+
+func isAmongClaims(claim claimcheck.Claim, claims []claimcheck.Claim) bool {
+	return slices.ContainsFunc(claims, func(other claimcheck.Claim) bool {
+		return other.Path == claim.Path && other.At == claim.At && other.Text == claim.Text
+	})
+}
+
+func parentPath(path string) string {
+	withoutPiece, _, _ := strings.Cut(path, "#")
+	if index := strings.LastIndex(withoutPiece, "["); index >= 0 {
+		withoutPiece = withoutPiece[:index]
+	}
+	if index := strings.LastIndex(withoutPiece, "."); index >= 0 {
+		return withoutPiece[:index]
+	}
+	return ""
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) treatedClaims(ctx context.Context, sources claimcheck.Sources, judgment claimcheck.Judgment, check *officeClaimCheck) claimcheck.Outcome {
