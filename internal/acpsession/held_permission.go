@@ -51,7 +51,7 @@ func (agent *Agent) reissueHeldPermission(ctx context.Context, sessionID acp.Ses
 	)
 	title := strings.TrimSpace(heldCall.Confirmation)
 	replyTargetID := firstNonEmpty(taskRun.OriginReplyTargetID, sessionContext.Addressing.ReplyTargetID)
-	choices := approvalgate.OfferedChoices(agent.taskRunStore.ListTaskEvent(taskRun.TaskRunID))
+	choices := approvalrecord.OfferedChoices(agent.taskRunStore.ListTaskEvent(taskRun.TaskRunID))
 	options := permissionOptions(choices)
 	// The client answers with the person's words, and the router that reads them
 	// is only offered an approval when the runtime can say which call is waiting.
@@ -93,7 +93,7 @@ func (agent *Agent) reissueHeldPermission(ctx context.Context, sessionID acp.Ses
 	agent.resumeAnsweredTaskRun(ctx, sessionID, sessionContext, taskRun, nil)
 }
 
-func (agent *Agent) deferHeldCall(ctx context.Context, sessionContext SessionContext, taskRun agentcontract.TaskRun, heldCall agentcontract.HeldCall, choice approvalgate.ApprovalChoice) []agentcontract.CarriedOutCall {
+func (agent *Agent) deferHeldCall(ctx context.Context, sessionContext SessionContext, taskRun agentcontract.TaskRun, heldCall agentcontract.HeldCall, choice approvalrecord.Choice) []agentcontract.CarriedOutCall {
 	return []agentcontract.CarriedOutCall{approvalgate.DeferHeldCall(ctx, agent.approvalDeferrer, heldCall, approvalgate.DeferralRequest{
 		TaskRunID:         taskRun.TaskRunID,
 		RequesterPersonID: sessionContext.Requester.PersonID,

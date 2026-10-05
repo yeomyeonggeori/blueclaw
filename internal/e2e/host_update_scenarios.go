@@ -42,7 +42,7 @@ func HostUpdateNowAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 		ExpectedEventCounts: []VirtualEventCount{
 			{Name: toolRequestedEventName(virtualHostUpdateToolName), Count: 1},
 			{Name: agentcontract.TaskEventApprovalPendingCall, BodyFragment: `"targetVersion":"` + virtualHostLatestVersion + `"`, Count: 1},
-			{Name: approvalgate.TaskEventApprovalChoicesOffered, BodyFragment: `"choices":[{"key":"now"},{"key":"offHours","startsAt":"` + virtualHostOffHoursStartsAt + `"}]`, Count: 1},
+			{Name: agentcontract.TaskEventApprovalPendingCall, BodyFragment: `"choices":[{"key":"now"},{"key":"offHours","startsAt":"` + virtualHostOffHoursStartsAt + `"}]`, Count: 1},
 		},
 		ExpectedEvents:     []string{agentcontract.TaskEventConfirmationRequested},
 		ExpectedTaskStatus: task.TaskStatusWaitingApproval,
@@ -70,7 +70,7 @@ func HostUpdateOffHoursAcceptanceScenario(artifactDirectoryPath string) VirtualS
 			actionCallTool(virtualHostUpdateToolName, `{}`),
 		},
 		ExpectedEventCounts: []VirtualEventCount{
-			{Name: approvalgate.TaskEventApprovalChoicesOffered, BodyFragment: `"choices":[{"key":"offHours","startsAt":"` + virtualHostOffHoursStartsAt + `"},{"key":"now"}]`, Count: 1},
+			{Name: agentcontract.TaskEventApprovalPendingCall, BodyFragment: `"choices":[{"key":"offHours","startsAt":"` + virtualHostOffHoursStartsAt + `"},{"key":"now"}]`, Count: 1},
 		},
 		ExpectedEvents:     []string{agentcontract.TaskEventConfirmationRequested},
 		ExpectedTaskStatus: task.TaskStatusWaitingApproval,

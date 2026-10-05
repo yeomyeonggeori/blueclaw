@@ -14,82 +14,21 @@ import (
 )
 
 const (
-	TaskEventApprovalChoicesOffered = "approval.choices_offered"
-	TaskEventApprovalDeferred       = "approval.deferred"
+	TaskEventApprovalDeferred = "approval.deferred"
 
-	CancelChoiceKey   = "cancel"
 	deferredEffect    = "created"
 	deferredObjectKey = "schedule"
 )
 
 var errChoiceStartsAtUnreadable = errors.New("an approval choice's startsAt is not an RFC 3339 instant")
 
-type ApprovalChoice struct {
-	Key      string `json:"key"`
-	StartsAt string `json:"startsAt,omitempty"`
-}
-
-func (choice ApprovalChoice) DefersTheCall() bool {
-	return strings.TrimSpace(choice.StartsAt) != ""
-}
-
 type ApprovalAnswer struct {
 	Signal    agentcontract.ApprovalSignal
 	ChoiceKey string
 }
 
-func (answer ApprovalAnswer) ChosenFrom(choices []ApprovalChoice) (ApprovalChoice, bool) {
-	return ChoiceByKey(choices, answer.ChoiceKey)
-}
-
-func ChoiceReplyOptions(choices []ApprovalChoice) []agentcontract.ChoiceReplyOption {
-	options := []agentcontract.ChoiceReplyOption{}
-	for _, choice := range choices {
-		options = append(options, agentcontract.ChoiceReplyOption{Key: strings.TrimSpace(choice.Key), Label: choiceReplyLabel(choice)})
-	}
-	return append(options, agentcontract.ChoiceReplyOption{Key: CancelChoiceKey, Label: "cancel, do not run it"})
-}
-
-func choiceReplyLabel(choice ApprovalChoice) string {
-	if choice.DefersTheCall() {
-		return "run it at " + strings.TrimSpace(choice.StartsAt)
-	}
-	return "run it now"
-}
-
-func ChoiceByKey(choices []ApprovalChoice, key string) (ApprovalChoice, bool) {
-	trimmedKey := strings.TrimSpace(key)
-	for _, choice := range choices {
-		if strings.TrimSpace(choice.Key) == trimmedKey && trimmedKey != "" {
-			return choice, true
-		}
-	}
-	return ApprovalChoice{}, false
-}
-
-type offeredChoices struct {
-	ToolName  string           `json:"toolName"`
-	ToolInput json.RawMessage  `json:"toolInput,omitempty"`
-	Choices   []ApprovalChoice `json:"choices"`
-}
-
-func OfferedChoices(taskEvents []agentcontract.TaskEvent) []ApprovalChoice {
-	heldCallKey := ""
-	choices := []ApprovalChoice(nil)
-	for _, taskEvent := range taskEvents {
-		switch taskEvent.Name {
-		case agentcontract.TaskEventApprovalPendingCall:
-			heldCallKey = decodeHeldCallEventBody(taskEvent.Body).CanonicalCallKey()
-			choices = nil
-		case TaskEventApprovalChoicesOffered:
-			offered := offeredChoices{}
-			unmarshalEventBody(taskEvent.Body, &offered)
-			if agentcontract.CanonicalToolCallKey(offered.ToolName, offered.ToolInput) == heldCallKey {
-				choices = offered.Choices
-			}
-		}
-	}
-	return choices
+func (answer ApprovalAnswer) ChosenFrom(choices []approvalrecord.Choice) (approvalrecord.Choice, bool) {
+	return approvalrecord.ChoiceByKey(choices, answer.ChoiceKey)
 }
 
 type ApprovedCallScheduler interface {
@@ -109,7 +48,7 @@ type DeferralRequest struct {
 	ConversationID    string
 	ReplyTargetID     string
 	Prompt            string
-	Choice            ApprovalChoice
+	Choice            approvalrecord.Choice
 	ReferenceTime     time.Time
 }
 
@@ -169,14 +108,6 @@ func deferredCallResult(record deferredCallRecord) toolcontract.ToolResult {
 	)
 	result.Effects = []toolcontract.ResourceEffect{{ObjectType: deferredObjectKey, Effect: deferredEffect, ID: record.ScheduleID}}
 	return result
-}
-
-func offeredChoicesBody(toolName string, toolInput json.RawMessage, choices []ApprovalChoice) string {
-	return marshalEventBody(offeredChoices{
-		ToolName:  strings.TrimSpace(toolName),
-		ToolInput: toolInput,
-		Choices:   choices,
-	})
 }
 
 var errNoDeferrer = errors.New("this agent was started without a scheduler for approved calls")

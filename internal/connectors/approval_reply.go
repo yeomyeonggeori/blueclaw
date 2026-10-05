@@ -3,8 +3,8 @@ package connectors
 import (
 	"context"
 	"errors"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -37,7 +37,7 @@ func (connectorRuntime *ConnectorRuntime) readApprovalReply(ctx context.Context,
 	return answeredDecision(optionID), true, nil
 }
 
-func approvalQuestionFor(text string, choices []approvalgate.ApprovalChoice) approvalreply.Question {
+func approvalQuestionFor(text string, choices []approvalrecord.Choice) approvalreply.Question {
 	if len(choices) == 0 {
 		return approvalreply.Question{Text: text, Options: []approvalreply.Option{
 			{ID: ApproveOptionID, Meaning: approvalreply.AllowMeaning(approveOptionName)},
@@ -45,14 +45,14 @@ func approvalQuestionFor(text string, choices []approvalgate.ApprovalChoice) app
 		}}
 	}
 	options := []approvalreply.Option{}
-	for _, replyOption := range approvalgate.ChoiceReplyOptions(choices) {
+	for _, replyOption := range approvalrecord.ChoiceReplyOptions(choices) {
 		options = append(options, approvalreply.Option{ID: replyOption.Key, Meaning: choiceMeaning(replyOption)})
 	}
 	return approvalreply.Question{Text: text, Options: options}
 }
 
 func choiceMeaning(replyOption agentcontract.ChoiceReplyOption) string {
-	if replyOption.Key == approvalgate.CancelChoiceKey {
+	if replyOption.Key == approvalrecord.CancelChoiceKey {
 		return approvalreply.RejectMeaning
 	}
 	return approvalreply.AllowMeaning(replyOption.Label)

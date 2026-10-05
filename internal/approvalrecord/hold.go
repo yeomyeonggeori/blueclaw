@@ -29,14 +29,16 @@ var stateAfterDecision = map[string]State{
 }
 
 type Hold struct {
-	ID    string
-	Call  agentcontract.HeldCall
-	State State
+	ID      string
+	Call    agentcontract.HeldCall
+	Choices []Choice
+	State   State
 }
 
 type heldCallRecord struct {
 	agentcontract.HeldCall
-	HoldID string `json:"holdID"`
+	HoldID  string   `json:"holdID"`
+	Choices []Choice `json:"choices,omitempty"`
 }
 
 type decidedRecord struct {
@@ -49,9 +51,9 @@ type spentRecord struct {
 	HoldID string `json:"holdID"`
 }
 
-func Open(taskRunStore taskstate.TaskRunStore, taskRunID string, call agentcontract.HeldCall) string {
+func Open(taskRunStore taskstate.TaskRunStore, taskRunID string, call agentcontract.HeldCall, choices []Choice) string {
 	holdID := taskstate.NewIdentifier()
-	taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalPendingCall, marshal(heldCallRecord{HoldID: holdID, HeldCall: call}))
+	taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalPendingCall, marshal(heldCallRecord{HoldID: holdID, HeldCall: call, Choices: choices}))
 	return holdID
 }
 
@@ -140,7 +142,7 @@ func Holds(taskEvents []agentcontract.TaskEvent) []Hold {
 func holdFromEvent(taskEvent agentcontract.TaskEvent) Hold {
 	record := decode[heldCallRecord](taskEvent.Body)
 	record.ToolName = strings.TrimSpace(record.ToolName)
-	return Hold{ID: firstNonEmpty(record.HoldID, taskEvent.TaskEventID), Call: record.HeldCall, State: StatePending}
+	return Hold{ID: firstNonEmpty(record.HoldID, taskEvent.TaskEventID), Call: record.HeldCall, Choices: record.Choices, State: StatePending}
 }
 
 func update(holds []Hold, holdID string, change func(*Hold)) {

@@ -45,12 +45,19 @@ func (gate *Gate) AwaitApproval(ctx context.Context, approvalRequest mcpserver.A
 	if outcome, isAnswered := gate.askedOutcome(ctx, taskRunID, approvalRequest, confirmation, resolution); isAnswered {
 		return outcome, nil
 	}
-	if _, errorValue := gate.taskRunService.PauseTaskRun(taskRunID, agentcontract.TaskStatusWaitingApproval, confirmation); errorValue != nil {
-		slog.Warn("approvalgate.call_is_unanswerable", "taskRunID", taskRunID, "toolName", strings.TrimSpace(approvalRequest.ToolName), "reason", errorValue.Error())
+	if !gate.holdCall(taskRunID, approvalRequest, confirmation, resolution) {
 		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionUnanswerable}, nil
 	}
-	gate.recordHeldCall(taskRunID, approvalRequest, confirmation, resolution)
 	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionHeld, Notice: confirmation}, nil
+}
+
+func (gate *Gate) holdCall(taskRunID string, approvalRequest mcpserver.ApprovalRequest, confirmation string, resolution ApprovalTargetResolution) bool {
+	if _, errorValue := gate.taskRunService.PauseTaskRun(taskRunID, agentcontract.TaskStatusWaitingApproval, confirmation); errorValue != nil {
+		slog.Warn("approvalgate.call_is_unanswerable", "taskRunID", taskRunID, "toolName", strings.TrimSpace(approvalRequest.ToolName), "reason", errorValue.Error())
+		return false
+	}
+	gate.recordHeldCall(taskRunID, approvalRequest, confirmation, resolution)
+	return true
 }
 
 func (gate *Gate) approvedOutcome(taskRunID string, approvalRequest mcpserver.ApprovalRequest) mcpserver.ApprovalOutcome {
@@ -103,10 +110,7 @@ func (gate *Gate) recordHeldCall(taskRunID string, approvalRequest mcpserver.App
 		ApprovalScope:     approvalRequest.ApprovalScope,
 		Confirmation:      confirmation,
 		HarnessSession:    approvalRequest.HarnessSession,
-	})
-	if len(resolution.Choices) > 0 {
-		gate.taskRunService.AppendTaskEvent(taskRunID, TaskEventApprovalChoicesOffered, offeredChoicesBody(approvalRequest.ToolName, approvalRequest.ToolInput, resolution.Choices))
-	}
+	}, resolution.Choices)
 	gate.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventConfirmationRequested, marshalEventBody(map[string]string{
 		"userFacingMessage": confirmation,
 		"message":           confirmation,

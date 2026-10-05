@@ -18,7 +18,7 @@ type PermissionAsker interface {
 
 type PermissionQuestion struct {
 	Confirmation string
-	Choices      []ApprovalChoice
+	Choices      []approvalrecord.Choice
 }
 
 func (gate *Gate) UsePermissionAsker(permissionAsker PermissionAsker) {
@@ -30,11 +30,9 @@ func (gate *Gate) askedOutcome(ctx context.Context, taskRunID string, approvalRe
 		return mcpserver.ApprovalOutcome{}, false
 	}
 	profileName := gate.currentAgentProfileName(taskRunID)
-	if _, errorValue := gate.taskRunService.PauseTaskRun(taskRunID, agentcontract.TaskStatusWaitingApproval, confirmation); errorValue != nil {
-		slog.Warn("approvalgate.call_is_unanswerable", "taskRunID", taskRunID, "toolName", strings.TrimSpace(approvalRequest.ToolName), "reason", errorValue.Error())
+	if !gate.holdCall(taskRunID, approvalRequest, confirmation, resolution) {
 		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionUnanswerable}, true
 	}
-	gate.recordHeldCall(taskRunID, approvalRequest, confirmation, resolution)
 
 	answer, isAnswered := gate.permissionAsker.AskPermission(ctx, approvalRequest, PermissionQuestion{Confirmation: confirmation, Choices: resolution.Choices})
 	if !isAnswered {
@@ -54,7 +52,7 @@ func (gate *Gate) askedOutcome(ctx context.Context, taskRunID string, approvalRe
 	return gate.approvedOutcome(taskRunID, approvalRequest), true
 }
 
-func (gate *Gate) deferredOutcome(ctx context.Context, taskRunID string, approvalRequest mcpserver.ApprovalRequest, resolution ApprovalTargetResolution, choice ApprovalChoice) mcpserver.ApprovalOutcome {
+func (gate *Gate) deferredOutcome(ctx context.Context, taskRunID string, approvalRequest mcpserver.ApprovalRequest, resolution ApprovalTargetResolution, choice approvalrecord.Choice) mcpserver.ApprovalOutcome {
 	heldCall := agentcontract.HeldCall{
 		ToolName:          approvalRequest.ToolName,
 		ToolInput:         approvalRequest.ToolInput,

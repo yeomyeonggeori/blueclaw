@@ -12,7 +12,7 @@ func openedHold(t *testing.T) (*task.TaskRunService, string, string) {
 	t.Helper()
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	taskRunID := taskRunService.CreateTaskRun("person-1", "conversation-1", "delete it").TaskRunID
-	holdID := Open(taskRunService, taskRunID, agentcontract.HeldCall{ToolName: "event_delete", ToolInput: json.RawMessage(`{"eventID":"event-1"}`)})
+	holdID := Open(taskRunService, taskRunID, agentcontract.HeldCall{ToolName: "event_delete", ToolInput: json.RawMessage(`{"eventID":"event-1"}`)}, nil)
 	return taskRunService, taskRunID, holdID
 }
 
@@ -132,7 +132,7 @@ func namelessHold(t *testing.T, input string) (*task.TaskRunService, string) {
 	t.Helper()
 	ledger := task.NewTaskRunService(task.NewTaskEventService())
 	taskRunID := ledger.CreateTaskRun("person-1", "conversation-1", "run it").TaskRunID
-	holdID := Open(ledger, taskRunID, agentcontract.HeldCall{ToolInput: json.RawMessage(input)})
+	holdID := Open(ledger, taskRunID, agentcontract.HeldCall{ToolInput: json.RawMessage(input)}, nil)
 	Decide(ledger, taskRunID, holdID, DecisionConfirm, "harness_permission")
 	return ledger, taskRunID
 }
@@ -159,7 +159,7 @@ func scopedHold(t *testing.T) (*task.TaskRunService, string, string) {
 	t.Helper()
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	taskRunID := taskRunService.CreateTaskRun("person-1", "conversation-1", "send it").TaskRunID
-	holdID := Open(taskRunService, taskRunID, agentcontract.HeldCall{ToolName: "message_send", ApprovalScope: "message_send:team"})
+	holdID := Open(taskRunService, taskRunID, agentcontract.HeldCall{ToolName: "message_send", ApprovalScope: "message_send:team"}, nil)
 	return taskRunService, taskRunID, holdID
 }
 
@@ -205,5 +205,29 @@ func TestSettlingTheLatestHoldLeavesAnAlreadyDecidedHoldAlone(t *testing.T) {
 
 	if len(taskRunService.ListTaskEvent(taskRunID)) != eventCount {
 		t.Fatal("a decided hold must not be decided again")
+	}
+}
+
+func TestTheChoicesOfferedWithAHoldTravelWithIt(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	taskRunID := taskRunService.CreateTaskRun("person-1", "conversation-1", "update").TaskRunID
+	offered := []Choice{{Key: "offHours", StartsAt: "2099-10-03T03:00:00+09:00"}, {Key: "now"}}
+	Open(taskRunService, taskRunID, agentcontract.HeldCall{ToolName: "host_update"}, offered)
+
+	recorded := OfferedChoices(taskRunService.ListTaskEvent(taskRunID))
+
+	if len(recorded) != 2 || recorded[0] != offered[0] || recorded[1] != offered[1] {
+		t.Fatalf("expected the offered choices in their order, got %+v", recorded)
+	}
+}
+
+func TestALaterHoldDoesNotInheritTheChoicesOfAnEarlierOne(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	taskRunID := taskRunService.CreateTaskRun("person-1", "conversation-1", "update").TaskRunID
+	Open(taskRunService, taskRunID, agentcontract.HeldCall{ToolName: "host_update"}, []Choice{{Key: "now"}})
+	Open(taskRunService, taskRunID, agentcontract.HeldCall{ToolName: "event_delete"}, nil)
+
+	if recorded := OfferedChoices(taskRunService.ListTaskEvent(taskRunID)); len(recorded) != 0 {
+		t.Fatalf("expected no choices for a hold that offered none, got %+v", recorded)
 	}
 }

@@ -44,14 +44,6 @@ func chosen(optionID acp.PermissionOptionId) acp.RequestPermissionOutcome {
 	return acp.RequestPermissionOutcome{Selected: &acp.RequestPermissionOutcomeSelected{Outcome: "selected", OptionId: optionID}}
 }
 
-func eventNames(taskEvents []agentcontract.TaskEvent) []string {
-	names := []string{}
-	for _, taskEvent := range taskEvents {
-		names = append(names, taskEvent.Name)
-	}
-	return names
-}
-
 func TestAHarnessQuestionIsRecordedAsAHoldBeforeAnyoneIsAsked(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
 	asker := &harnessAskerDouble{}

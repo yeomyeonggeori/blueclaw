@@ -36,7 +36,7 @@ func (open openInteractions) confirmationChoice(exchangesSince int) (agentcontra
 		TaskRunID:      open.confirmation.TaskRun.TaskRunID,
 		Question:       open.confirmation.ApprovalQuestion,
 		SelectionMode:  "single",
-		Options:        approvalgate.ChoiceReplyOptions(open.confirmation.Choices),
+		Options:        approvalrecord.ChoiceReplyOptions(open.confirmation.Choices),
 		AskedAt:        open.confirmationAt,
 		ExchangesSince: exchangesSince,
 	}, true
@@ -283,18 +283,18 @@ func (connectorRuntime *ConnectorRuntime) settleChoiceConfirmation(ctx context.C
 	return connectorRuntime.settleConfirmation(ctx, turn, confirmation, decision)
 }
 
-func chosenApprovalChoice(selected []string, choices []approvalgate.ApprovalChoice) (approvalgate.ApprovalChoice, bool) {
+func chosenApprovalChoice(selected []string, choices []approvalrecord.Choice) (approvalrecord.Choice, bool) {
 	for _, selectedKey := range selected {
-		if choice, isOffered := approvalgate.ChoiceByKey(choices, selectedKey); isOffered {
+		if choice, isOffered := approvalrecord.ChoiceByKey(choices, selectedKey); isOffered {
 			return choice, true
 		}
 	}
-	return approvalgate.ApprovalChoice{}, false
+	return approvalrecord.Choice{}, false
 }
 
 func selectsCancel(selected []string) bool {
 	for _, selectedKey := range selected {
-		if strings.TrimSpace(selectedKey) == approvalgate.CancelChoiceKey {
+		if strings.TrimSpace(selectedKey) == approvalrecord.CancelChoiceKey {
 			return true
 		}
 	}
@@ -308,7 +308,7 @@ func keptUnlessRejected(approval *agentcontract.ApprovalSignal) *agentcontract.A
 	return nil
 }
 
-func (connectorRuntime *ConnectorRuntime) deferHeldCall(ctx context.Context, turn *inboundTurn, confirmation pendingApproval, choice approvalgate.ApprovalChoice) []agentcontract.CarriedOutCall {
+func (connectorRuntime *ConnectorRuntime) deferHeldCall(ctx context.Context, turn *inboundTurn, confirmation pendingApproval, choice approvalrecord.Choice) []agentcontract.CarriedOutCall {
 	taskRunID := confirmation.TaskRun.TaskRunID
 	heldCall, isHeld := approvalgate.PendingHeldCall(connectorRuntime.taskRunService.ListTaskEvent(taskRunID))
 	if !isHeld || connectorRuntime.approvalGate == nil {

@@ -43,7 +43,7 @@ func (gate *Gate) AskHarnessPermission(ctx context.Context, approvalRequest mcps
 		slog.Warn("approvalgate.harness_permission_is_unanswerable", "taskRunID", taskRunID, "reason", errorValue.Error())
 		return acp.RequestPermissionOutcome{}, false
 	}
-	holdID := approvalrecord.Open(gate.taskRunService, taskRunID, heldCall)
+	holdID := approvalrecord.Open(gate.taskRunService, taskRunID, heldCall, nil)
 	outcome, isAnswered := harnessAsker.AskHarnessPermission(ctx, approvalRequest, question)
 	if !isAnswered {
 		return acp.RequestPermissionOutcome{}, false

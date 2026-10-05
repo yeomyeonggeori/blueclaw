@@ -3,6 +3,7 @@ package acpsession
 import (
 	"context"
 	"encoding/json"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"log/slog"
 	"strings"
 	"sync"
@@ -164,7 +165,7 @@ func permissionToolCall(approvalRequest mcpserver.ApprovalRequest, confirmation 
 	return toolCall
 }
 
-func permissionOptions(choices []approvalgate.ApprovalChoice) []acp.PermissionOption {
+func permissionOptions(choices []approvalrecord.Choice) []acp.PermissionOption {
 	if len(choices) > 0 {
 		return choicePermissionOptions(choices)
 	}
@@ -175,7 +176,7 @@ func permissionOptions(choices []approvalgate.ApprovalChoice) []acp.PermissionOp
 	}, rejectOption()}
 }
 
-func choicePermissionOptions(choices []approvalgate.ApprovalChoice) []acp.PermissionOption {
+func choicePermissionOptions(choices []approvalrecord.Choice) []acp.PermissionOption {
 	options := []acp.PermissionOption{}
 	for _, choice := range choices {
 		options = append(options, acp.PermissionOption{
@@ -191,7 +192,7 @@ func choiceOptionID(choiceKey string) acp.PermissionOptionId {
 	return acp.PermissionOptionId(chooseOptionIDPrefix + strings.TrimSpace(choiceKey))
 }
 
-func choiceOptionName(choice approvalgate.ApprovalChoice) string {
+func choiceOptionName(choice approvalrecord.Choice) string {
 	if choice.DefersTheCall() {
 		return "approve this call to run at " + strings.TrimSpace(choice.StartsAt)
 	}
