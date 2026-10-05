@@ -16,6 +16,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
@@ -816,7 +817,7 @@ func TestACallHeldInAnotherConversationIsNotReissued(t *testing.T) {
 func TestACallTheRequesterAlreadyAnsweredIsNotAskedAgain(t *testing.T) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	answeredRun := runWaitingOnAHeldCall(t, taskRunService, "conversation-1", heldCallForTest())
-	approvalgate.RecordRequesterDecision(taskRunService, answeredRun.TaskRunID, approvalSignalPointer(agentcontract.ApprovalSignalApprove), "acp_permission")
+	approvalrecord.SettleSignal(taskRunService, answeredRun.TaskRunID, approvalSignalPointer(agentcontract.ApprovalSignalApprove), "acp_permission")
 	client := &recordingClient{permissionAskedSignal: make(chan acp.RequestPermissionRequest, 4)}
 	connection := reconnectedPair(t, &recordingLauncher{}, client, taskRunService)
 

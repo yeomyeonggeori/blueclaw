@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -43,7 +43,7 @@ func taskRunAwaitingApprovalOf(t *testing.T, taskRunService *task.TaskRunService
 	t.Helper()
 	taskRun := taskRunService.CreateTaskRun("person-1", "channel-1", "지난 분기 뭐였는지 찾아줘")
 	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalPendingCall, `{"toolName":"memory_search","toolInput":{"query":"quarterly launch"},"confirmation":"기억을 찾아볼까요?"}`)
-	approvalgate.RecordRequesterDecision(taskRunService, taskRun.TaskRunID, &decision, "test")
+	approvalrecord.SettleSignal(taskRunService, taskRun.TaskRunID, &decision, "test")
 	return taskRun.TaskRunID
 }
 

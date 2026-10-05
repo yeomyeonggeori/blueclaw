@@ -2,52 +2,10 @@ package approvalgate
 
 import (
 	"encoding/json"
-	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
-
-func RecordRequesterDecision(taskRunStore taskstate.TaskRunStore, taskRunID string, approvalSignal *agentcontract.ApprovalSignal, source string) {
-	if approvalSignal == nil || strings.TrimSpace(taskRunID) == "" {
-		return
-	}
-	decision := decisionForApprovalSignal(*approvalSignal)
-	if decision == "" {
-		return
-	}
-	recordHoldDecision(taskRunStore, taskRunID, decision, source)
-}
-
-func recordHoldDecision(taskRunStore taskstate.TaskRunStore, taskRunID string, decision string, source string) {
-	pendingHold, isPending := approvalrecord.LatestHold(approvalrecord.Holds(taskRunStore.ListTaskEvent(taskRunID)), approvalrecord.StatePending)
-	if !isPending {
-		return
-	}
-	approvalrecord.Decide(taskRunStore, taskRunID, pendingHold.ID, decision, source)
-	if decision == approvalrecord.DecisionConfirm {
-		grantHoldScope(taskRunStore, taskRunID, pendingHold)
-	}
-}
-
-func grantHoldScope(taskRunStore taskstate.TaskRunStore, taskRunID string, approvedHold approvalrecord.Hold) {
-	approvalScope := strings.TrimSpace(approvedHold.Call.ApprovalScope)
-	if approvalScope == "" {
-		return
-	}
-	taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalScopeGranted, marshalEventBody(map[string]string{"scope": approvalScope}))
-}
-
-func decisionForApprovalSignal(approvalSignal agentcontract.ApprovalSignal) string {
-	switch approvalSignal {
-	case agentcontract.ApprovalSignalApprove:
-		return approvalrecord.DecisionConfirm
-	case agentcontract.ApprovalSignalReject:
-		return approvalrecord.DecisionCancel
-	}
-	return ""
-}
 
 type ApprovedCall struct {
 	HoldID    string
