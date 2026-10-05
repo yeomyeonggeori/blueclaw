@@ -2,11 +2,11 @@ package approvalgate
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"strings"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
@@ -47,7 +47,7 @@ func (gate *Gate) askedOutcome(ctx context.Context, taskRunID string, approvalRe
 	if choice, isChosen := answer.ChosenFrom(resolution.Choices); isChosen && choice.DefersTheCall() {
 		return gate.deferredOutcome(ctx, taskRunID, approvalRequest, resolution, choice), true
 	}
-	RecordRequesterDecision(gate.taskRunService, taskRunID, &answer.Signal, "acp_permission")
+	approvalrecord.SettleSignal(gate.taskRunService, taskRunID, &answer.Signal, "acp_permission")
 	if answer.Signal == agentcontract.ApprovalSignalReject {
 		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionRejected}, true
 	}
@@ -55,10 +55,13 @@ func (gate *Gate) askedOutcome(ctx context.Context, taskRunID string, approvalRe
 }
 
 func (gate *Gate) deferredOutcome(ctx context.Context, taskRunID string, approvalRequest mcpserver.ApprovalRequest, resolution ApprovalTargetResolution, choice ApprovalChoice) mcpserver.ApprovalOutcome {
-	deferral, errorValue := gate.DeferApprovedCall(ctx, DeferralRequest{
-		TaskRunID:         taskRunID,
+	heldCall := agentcontract.HeldCall{
 		ToolName:          approvalRequest.ToolName,
-		ToolInput:         firstNonEmptyInput(narrowedToolInput(approvalRequest.ToolInput, resolution.Target), approvalRequest.ToolInput),
+		ToolInput:         approvalRequest.ToolInput,
+		ApprovedToolInput: narrowedToolInput(approvalRequest.ToolInput, resolution.Target),
+	}
+	carriedOutCall := DeferHeldCall(ctx, gate, heldCall, DeferralRequest{
+		TaskRunID:         taskRunID,
 		RequesterPersonID: approvalRequest.RequesterPersonID,
 		Platform:          approvalRequest.Platform,
 		ConversationID:    approvalRequest.ConversationID,
@@ -67,23 +70,11 @@ func (gate *Gate) deferredOutcome(ctx context.Context, taskRunID string, approva
 		Choice:            choice,
 		ReferenceTime:     time.Now().UTC(),
 	})
-	if errorValue != nil {
-		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionDeferred, Deferral: DeferralFailedResult(errorValue)}
-	}
-	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionDeferred, Deferral: deferral}
+	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionDeferred, Deferral: carriedOutCall.Result}
 }
 
 func DeferralFailedResult(errorValue error) toolcontract.ToolResult {
 	return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, "approval", "The requester chose to run this call later, and it could not be scheduled, so nothing will run: "+errorValue.Error())
-}
-
-func firstNonEmptyInput(inputs ...json.RawMessage) json.RawMessage {
-	for _, input := range inputs {
-		if len(input) > 0 {
-			return input
-		}
-	}
-	return nil
 }
 
 func (gate *Gate) currentAgentProfileName(taskRunID string) string {

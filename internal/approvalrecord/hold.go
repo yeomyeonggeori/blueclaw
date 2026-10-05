@@ -56,7 +56,51 @@ func Open(taskRunStore taskstate.TaskRunStore, taskRunID string, call agentcontr
 }
 
 func Decide(taskRunStore taskstate.TaskRunStore, taskRunID string, holdID string, decision string, source string) {
+	pendingHold, isPending := pendingHoldByID(taskRunStore.ListTaskEvent(taskRunID), holdID)
 	taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalDecided, marshal(decidedRecord{HoldID: holdID, Decision: decision, Source: source}))
+	if isPending && decision == DecisionConfirm {
+		grantScope(taskRunStore, taskRunID, pendingHold)
+	}
+}
+
+func SettleLatest(taskRunStore taskstate.TaskRunStore, taskRunID string, decision string, source string) {
+	if strings.TrimSpace(taskRunID) == "" {
+		return
+	}
+	pendingHold, isPending := LatestHold(Holds(taskRunStore.ListTaskEvent(taskRunID)), StatePending)
+	if !isPending {
+		return
+	}
+	Decide(taskRunStore, taskRunID, pendingHold.ID, decision, source)
+}
+
+func SettleSignal(taskRunStore taskstate.TaskRunStore, taskRunID string, approvalSignal *agentcontract.ApprovalSignal, source string) {
+	if approvalSignal == nil {
+		return
+	}
+	switch *approvalSignal {
+	case agentcontract.ApprovalSignalApprove:
+		SettleLatest(taskRunStore, taskRunID, DecisionConfirm, source)
+	case agentcontract.ApprovalSignalReject:
+		SettleLatest(taskRunStore, taskRunID, DecisionCancel, source)
+	}
+}
+
+func pendingHoldByID(taskEvents []agentcontract.TaskEvent, holdID string) (Hold, bool) {
+	for _, held := range Holds(taskEvents) {
+		if held.ID == holdID && held.State == StatePending {
+			return held, true
+		}
+	}
+	return Hold{}, false
+}
+
+func grantScope(taskRunStore taskstate.TaskRunStore, taskRunID string, approvedHold Hold) {
+	approvalScope := strings.TrimSpace(approvedHold.Call.ApprovalScope)
+	if approvalScope == "" {
+		return
+	}
+	taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalScopeGranted, marshal(map[string]string{"scope": approvalScope}))
 }
 
 func Spend(taskRunStore taskstate.TaskRunStore, taskRunID string, holdID string, body map[string]any) {

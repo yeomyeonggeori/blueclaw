@@ -8,6 +8,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -191,7 +192,7 @@ func (connectorRuntime *ConnectorRuntime) settleConfirmation(ctx context.Context
 	if len(confirmation.Choices) > 0 {
 		return connectorRuntime.settleChoiceConfirmation(ctx, turn, confirmation, decision)
 	}
-	approvalgate.RecordRequesterDecision(connectorRuntime.taskRunService, confirmation.TaskRun.TaskRunID, decision.Approval, "chat_reply")
+	approvalrecord.SettleSignal(connectorRuntime.taskRunService, confirmation.TaskRun.TaskRunID, decision.Approval, "chat_reply")
 	turn.pendingApproval = confirmation
 	if decision.Approval != nil && *decision.Approval == agentcontract.ApprovalSignalApprove {
 		connectorRuntime.logger.Info("connector."+turn.platform+".confirmation.accepted", slog.String("messageID", turn.event.MessageID), slog.String("taskRunID", confirmation.TaskRun.TaskRunID))
@@ -313,10 +314,8 @@ func (connectorRuntime *ConnectorRuntime) deferHeldCall(ctx context.Context, tur
 	if !isHeld || connectorRuntime.approvalGate == nil {
 		return nil
 	}
-	result, errorValue := connectorRuntime.approvalGate.DeferApprovedCall(ctx, approvalgate.DeferralRequest{
+	return []agentcontract.CarriedOutCall{approvalgate.DeferHeldCall(ctx, connectorRuntime.approvalGate, heldCall, approvalgate.DeferralRequest{
 		TaskRunID:         taskRunID,
-		ToolName:          heldCall.ToolName,
-		ToolInput:         heldCall.ApprovedInput(),
 		RequesterPersonID: turn.personID,
 		Platform:          turn.platform,
 		ConversationID:    turn.event.ConversationID,
@@ -324,9 +323,5 @@ func (connectorRuntime *ConnectorRuntime) deferHeldCall(ctx context.Context, tur
 		Prompt:            confirmation.IntentPrompt,
 		Choice:            choice,
 		ReferenceTime:     time.Now().UTC(),
-	})
-	if errorValue != nil {
-		result = approvalgate.DeferralFailedResult(errorValue)
-	}
-	return []agentcontract.CarriedOutCall{{ToolName: heldCall.ToolName, ToolInput: heldCall.ApprovedInput(), Result: result}}
+	})}
 }

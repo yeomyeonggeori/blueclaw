@@ -154,3 +154,56 @@ func TestAHoldOpenedWithoutAToolNameAndWithoutInputAnswersNothing(t *testing.T) 
 		}
 	}
 }
+
+func scopedHold(t *testing.T) (*task.TaskRunService, string, string) {
+	t.Helper()
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	taskRunID := taskRunService.CreateTaskRun("person-1", "conversation-1", "send it").TaskRunID
+	holdID := Open(taskRunService, taskRunID, agentcontract.HeldCall{ToolName: "message_send", ApprovalScope: "message_send:team"})
+	return taskRunService, taskRunID, holdID
+}
+
+func scopeGrantCount(taskRunService *task.TaskRunService, taskRunID string) int {
+	count := 0
+	for _, taskEvent := range taskRunService.ListTaskEvent(taskRunID) {
+		if taskEvent.Name == agentcontract.TaskEventApprovalScopeGranted {
+			count++
+		}
+	}
+	return count
+}
+
+func TestConfirmingAHoldGrantsItsScopeOnce(t *testing.T) {
+	taskRunService, taskRunID, holdID := scopedHold(t)
+
+	Decide(taskRunService, taskRunID, holdID, DecisionConfirm, "chat_reply")
+	Decide(taskRunService, taskRunID, holdID, DecisionConfirm, "chat_reply")
+
+	if grants := scopeGrantCount(taskRunService, taskRunID); grants != 1 {
+		t.Fatalf("expected one scope grant, got %d", grants)
+	}
+}
+
+func TestRejectingOrDeferringAHoldGrantsNoScope(t *testing.T) {
+	for _, decision := range []string{DecisionCancel, DecisionDefer} {
+		taskRunService, taskRunID, _ := scopedHold(t)
+
+		SettleLatest(taskRunService, taskRunID, decision, "chat_reply")
+
+		if grants := scopeGrantCount(taskRunService, taskRunID); grants != 0 {
+			t.Fatalf("%s must not grant scope, got %d grants", decision, grants)
+		}
+	}
+}
+
+func TestSettlingTheLatestHoldLeavesAnAlreadyDecidedHoldAlone(t *testing.T) {
+	taskRunService, taskRunID, holdID := scopedHold(t)
+	Decide(taskRunService, taskRunID, holdID, DecisionConfirm, "chat_reply")
+	eventCount := len(taskRunService.ListTaskEvent(taskRunID))
+
+	SettleLatest(taskRunService, taskRunID, DecisionCancel, "chat_reply")
+
+	if len(taskRunService.ListTaskEvent(taskRunID)) != eventCount {
+		t.Fatal("a decided hold must not be decided again")
+	}
+}

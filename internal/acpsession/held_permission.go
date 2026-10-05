@@ -2,7 +2,6 @@ package acpsession
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"time"
 
@@ -10,11 +9,10 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
-
-var errNoDeferrer = errors.New("this agent was started without a scheduler for approved calls")
 
 func (agent *Agent) reissueHeldPermissions(ctx context.Context, sessionID acp.SessionId, sessionContext SessionContext) {
 	if agent.taskRunStore == nil {
@@ -91,32 +89,21 @@ func (agent *Agent) reissueHeldPermission(ctx context.Context, sessionID acp.Ses
 		agent.resumeAnsweredTaskRun(ctx, sessionID, sessionContext, taskRun, agent.deferHeldCall(ctx, sessionContext, taskRun, heldCall, choice))
 		return
 	}
-	approvalgate.RecordRequesterDecision(agent.taskRunStore, taskRun.TaskRunID, &answer.Signal, "acp_permission_reload")
+	approvalrecord.SettleSignal(agent.taskRunStore, taskRun.TaskRunID, &answer.Signal, "acp_permission_reload")
 	agent.resumeAnsweredTaskRun(ctx, sessionID, sessionContext, taskRun, nil)
 }
 
 func (agent *Agent) deferHeldCall(ctx context.Context, sessionContext SessionContext, taskRun agentcontract.TaskRun, heldCall agentcontract.HeldCall, choice approvalgate.ApprovalChoice) []agentcontract.CarriedOutCall {
-	approvedInput := heldCall.ApprovedInput()
-	result := approvalgate.DeferralFailedResult(errNoDeferrer)
-	if agent.approvalDeferrer != nil {
-		deferral, errorValue := agent.approvalDeferrer.DeferApprovedCall(ctx, approvalgate.DeferralRequest{
-			TaskRunID:         taskRun.TaskRunID,
-			ToolName:          heldCall.ToolName,
-			ToolInput:         approvedInput,
-			RequesterPersonID: sessionContext.Requester.PersonID,
-			Platform:          sessionContext.Addressing.Platform,
-			ConversationID:    sessionContext.Addressing.ConversationID,
-			ReplyTargetID:     firstNonEmpty(taskRun.OriginReplyTargetID, sessionContext.Addressing.ReplyTargetID),
-			Prompt:            taskRun.Prompt,
-			Choice:            choice,
-			ReferenceTime:     time.Now().UTC(),
-		})
-		result = deferral
-		if errorValue != nil {
-			result = approvalgate.DeferralFailedResult(errorValue)
-		}
-	}
-	return []agentcontract.CarriedOutCall{{ToolName: heldCall.ToolName, ToolInput: approvedInput, Result: result}}
+	return []agentcontract.CarriedOutCall{approvalgate.DeferHeldCall(ctx, agent.approvalDeferrer, heldCall, approvalgate.DeferralRequest{
+		TaskRunID:         taskRun.TaskRunID,
+		RequesterPersonID: sessionContext.Requester.PersonID,
+		Platform:          sessionContext.Addressing.Platform,
+		ConversationID:    sessionContext.Addressing.ConversationID,
+		ReplyTargetID:     firstNonEmpty(taskRun.OriginReplyTargetID, sessionContext.Addressing.ReplyTargetID),
+		Prompt:            taskRun.Prompt,
+		Choice:            choice,
+		ReferenceTime:     time.Now().UTC(),
+	})}
 }
 
 func (agent *Agent) resumeAnsweredTaskRun(ctx context.Context, sessionID acp.SessionId, sessionContext SessionContext, taskRun agentcontract.TaskRun, settledCalls []agentcontract.CarriedOutCall) {

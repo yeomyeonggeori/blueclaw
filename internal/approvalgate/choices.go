@@ -150,7 +150,7 @@ func (gate *Gate) DeferApprovedCall(ctx context.Context, request DeferralRequest
 		ScheduleID: schedule.ScheduleID,
 		StartsAt:   startsAt.Format(time.RFC3339),
 	}
-	recordHoldDecision(gate.taskRunService, request.TaskRunID, approvalrecord.DecisionDefer, "approval_choice")
+	approvalrecord.SettleLatest(gate.taskRunService, request.TaskRunID, approvalrecord.DecisionDefer, "approval_choice")
 	gate.taskRunService.AppendTaskEvent(request.TaskRunID, TaskEventApprovalDeferred, marshalEventBody(record))
 	return deferredCallResult(record), nil
 }
@@ -177,4 +177,27 @@ func offeredChoicesBody(toolName string, toolInput json.RawMessage, choices []Ap
 		ToolInput: toolInput,
 		Choices:   choices,
 	})
+}
+
+var errNoDeferrer = errors.New("this agent was started without a scheduler for approved calls")
+
+type ApprovedCallDeferrer interface {
+	DeferApprovedCall(context.Context, DeferralRequest) (toolcontract.ToolResult, error)
+}
+
+func DeferHeldCall(ctx context.Context, deferrer ApprovedCallDeferrer, heldCall agentcontract.HeldCall, request DeferralRequest) agentcontract.CarriedOutCall {
+	request.ToolName = heldCall.ToolName
+	request.ToolInput = heldCall.ApprovedInput()
+	return agentcontract.CarriedOutCall{ToolName: request.ToolName, ToolInput: request.ToolInput, Result: deferralResult(ctx, deferrer, request)}
+}
+
+func deferralResult(ctx context.Context, deferrer ApprovedCallDeferrer, request DeferralRequest) toolcontract.ToolResult {
+	if deferrer == nil {
+		return DeferralFailedResult(errNoDeferrer)
+	}
+	result, errorValue := deferrer.DeferApprovedCall(ctx, request)
+	if errorValue != nil {
+		return DeferralFailedResult(errorValue)
+	}
+	return result
 }
