@@ -121,13 +121,7 @@ func taskRunMatchesStopScope(taskRun task.TaskRun, event PlatformInboundEvent) b
 }
 
 func taskRunSharesMessageThread(taskRun task.TaskRun, event PlatformInboundEvent) bool {
-	if taskRun.OriginConversationID != event.ConversationID {
-		return false
-	}
-	if !eventIsThreadReply(event) {
-		return false
-	}
-	return taskRun.OriginReplyTargetID == event.ReplyTargetID
+	return isReplyInThread(taskRun.OriginConversationID, taskRun.OriginReplyTargetID, placementOf(event))
 }
 
 func (connectorRuntime *ConnectorRuntime) activeTaskRunsForPerson(personID string) []task.TaskRun {

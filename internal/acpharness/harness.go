@@ -14,6 +14,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
+	"github.com/yeomyeonggeori/blueclaw/internal/toolcallprogress"
 	"github.com/yeomyeonggeori/blueclaw/internal/turnbriefing"
 	"github.com/yeomyeonggeori/blueclaw/internal/turnoutcome"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -121,7 +122,7 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 	}
 	defer func() { _ = waitForAgent() }()
 
-	turnObserver := &sessionObserver{taskRunStore: harness.taskRunStore, taskRunID: request.ExistingTaskRunID}
+	turnObserver := &sessionObserver{taskRunStore: harness.taskRunStore, taskRunID: request.ExistingTaskRunID, toolCallObserver: toolcallprogress.ObserverFrom(ctx)}
 	connection := acp.NewClientSideConnection(turnObserver, agentInput, agentOutput)
 	initializeResponse, errorValue := connection.Initialize(ctx, acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber})
 	if errorValue != nil {
@@ -222,11 +223,12 @@ func taskStatusForStopReason(stopReason acp.StopReason) agentcontract.TaskStatus
 }
 
 type sessionObserver struct {
-	mutex           sync.Mutex
-	messageSegments []string
-	toolNames       []string
-	taskRunStore    taskstate.TaskRunStore
-	taskRunID       string
+	mutex            sync.Mutex
+	messageSegments  []string
+	toolNames        []string
+	taskRunStore     taskstate.TaskRunStore
+	taskRunID        string
+	toolCallObserver toolcallprogress.Observer
 }
 
 func (observer *sessionObserver) recordPermissionDecision(eventName string, toolCall acp.ToolCallUpdate, grantedPermission acp.PermissionOptionKind) {
@@ -253,6 +255,13 @@ func (observer *sessionObserver) recordPermissionDecision(eventName string, tool
 	observer.taskRunStore.AppendTaskEvent(observer.taskRunID, eventName, string(encodedRecord))
 }
 
+func (observer *sessionObserver) forwardToolCall(update acp.SessionUpdate) {
+	if observer.toolCallObserver == nil || (update.ToolCall == nil && update.ToolCallUpdate == nil) {
+		return
+	}
+	observer.toolCallObserver(update)
+}
+
 func (observer *sessionObserver) agentMessage() string {
 	observer.mutex.Lock()
 	defer observer.mutex.Unlock()
@@ -266,6 +275,7 @@ func (observer *sessionObserver) calledToolNames() []string {
 }
 
 func (observer *sessionObserver) SessionUpdate(_ context.Context, notification acp.SessionNotification) error {
+	observer.forwardToolCall(notification.Update)
 	observer.mutex.Lock()
 	defer observer.mutex.Unlock()
 	if agentMessage := notification.Update.AgentMessageChunk; agentMessage != nil && agentMessage.Content.Text != nil {

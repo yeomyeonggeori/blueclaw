@@ -15,6 +15,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/launchfailure"
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
+	"github.com/yeomyeonggeori/blueclaw/internal/toolcallprogress"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
@@ -105,6 +106,7 @@ type TaskLaunchRequest struct {
 	PersonAccess               policy.PersonAccess
 	AccessibleConversationIDs  []string
 	CheckpointSender           agentcontract.AgentCheckpointSender
+	ToolCallObserver           toolcallprogress.Observer
 	ArtifactManifest           []agentcontract.ArtifactManifestEntry
 	TurnStartedAt              time.Time
 	ExecutionStartedAt         time.Time
@@ -126,6 +128,7 @@ type taskLaunchExecution struct {
 	Launcher              *TaskLauncher
 	Request               TaskLaunchRequest
 	NormalizedProfileName string
+	TaskEvents            *taskEventSubscription
 }
 
 const (
@@ -342,11 +345,14 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 	openedTaskRun := taskLauncher.openTaskRunForLaunch(request)
 	request.ExistingTaskRunID = openedTaskRun.TaskRunID
 	request.IsTaskRunOpenedForThisTurn = openedTaskRun.IsOpenedByHost
+	taskEvents := subscribeToTaskRun(taskLauncher.taskRunService, request.ToolCallObserver, request.ExistingTaskRunID)
+	defer taskEvents.stop()
 	request.VisibleContext = taskLauncher.visibleContextWithArtifactManifest(request.VisibleContext, request.ArtifactManifest)
 	execution := &taskLaunchExecution{
 		Launcher:              taskLauncher,
 		Request:               request,
 		NormalizedProfileName: normalizedProfileName,
+		TaskEvents:            taskEvents,
 	}
 	_, record = runLaunchStep(ctx, execution, provisionRequesterWorkspaceLaunchStep{})
 	launchRecords = append(launchRecords, record)
@@ -579,7 +585,8 @@ func (step runTurnLaunchStep) Run(ctx context.Context, execution *taskLaunchExec
 		step.ConversationScope,
 	)
 	turnRequest.CarriedOutCalls = step.CarriedOutCalls
-	turnResult, errorValue := execution.Launcher.harness.RunTurn(ctx, turnRequest)
+	turnRequest.TaskRunChosen = execution.TaskEvents.follow
+	turnResult, errorValue := execution.Launcher.harness.RunTurn(toolcallprogress.WithObserver(ctx, execution.Request.ToolCallObserver), turnRequest)
 	execution.Launcher.recordTurnInput(turnResult.TaskRun.TaskRunID, turnRequest)
 	return turnResult, errorValue
 }

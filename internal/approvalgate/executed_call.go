@@ -6,16 +6,24 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 func RecordApprovalSpent(taskRunStore taskstate.TaskRunStore, taskRunID string, toolName string, toolInput json.RawMessage) string {
+	approvedHold, _ := approvedHoldForCall(holdsOf(taskRunStore.ListTaskEvent(taskRunID)), toolName, toolInput)
+	recordSpent(taskRunStore, taskRunID, approvedHold.ID, toolName, toolInput)
+	return approvedHold.ID
+}
+
+func RecordApprovedCallSpent(taskRunStore taskstate.TaskRunStore, taskRunID string, approvedCall ApprovedCall) {
+	recordSpent(taskRunStore, taskRunID, approvedCall.HoldID, approvedCall.ToolName, approvedCall.ToolInput)
+}
+
+func recordSpent(taskRunStore taskstate.TaskRunStore, taskRunID string, holdID string, toolName string, toolInput json.RawMessage) {
 	body := spentApprovalBody(taskRunStore, taskRunID, toolName, toolInput)
+	body["holdID"] = holdID
 	taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalExecuted, marshalEventBody(body))
-	approvalToken, _ := body["approvalToken"].(string)
-	return approvalToken
 }
 
 func spentApprovalBody(taskRunStore taskstate.TaskRunStore, taskRunID string, toolName string, toolInput json.RawMessage) map[string]any {
@@ -55,12 +63,4 @@ func unspentHeldCallToken(taskEvents []agentcontract.TaskEvent, toolName string)
 func HeldCallID(toolName string, toolInput json.RawMessage) string {
 	digest := sha256.Sum256([]byte(agentcontract.CanonicalToolCallKey(toolName, toolInput)))
 	return "held-" + hex.EncodeToString(digest[:8])
-}
-
-func (gate *Gate) mintHeldCallApproval(taskRunID string, approvalRequest mcpserver.ApprovalRequest) {
-	gate.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalHeldCall, marshalEventBody(agentcontract.HeldCall{
-		ApprovalToken: HeldCallID(approvalRequest.ToolName, approvalRequest.ToolInput),
-		ToolName:      strings.TrimSpace(approvalRequest.ToolName),
-		ToolInput:     approvalRequest.ToolInput,
-	}))
 }

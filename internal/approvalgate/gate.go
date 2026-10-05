@@ -33,11 +33,8 @@ func (gate *Gate) AwaitApproval(ctx context.Context, approvalRequest mcpserver.A
 	if gate.taskHasApprovedScope(taskRunID, approvalRequest.ApprovalScope) {
 		return gate.approvedOutcome(taskRunID, approvalRequest), nil
 	}
-	if decision, isDecided := gate.recordedDecision(taskRunID, approvalRequest); isDecided {
-		if decision == mcpserver.ApprovalDecisionApproved {
-			return gate.approvedOutcome(taskRunID, approvalRequest), nil
-		}
-		return mcpserver.ApprovalOutcome{Decision: decision}, nil
+	if _, isApproved := gate.approvedHold(taskRunID, approvalRequest); isApproved {
+		return gate.approvedOutcome(taskRunID, approvalRequest), nil
 	}
 	resolution := gate.resolveApprovalTarget(ctx, approvalRequest)
 	if resolution.namesNothingThatExists() {
@@ -56,8 +53,8 @@ func (gate *Gate) AwaitApproval(ctx context.Context, approvalRequest mcpserver.A
 }
 
 func (gate *Gate) approvedOutcome(taskRunID string, approvalRequest mcpserver.ApprovalRequest) mcpserver.ApprovalOutcome {
-	approvalToken := RecordApprovalSpent(gate.taskRunService, taskRunID, approvalRequest.ToolName, approvalRequest.ToolInput)
-	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionApproved, ApprovedCallID: approvalToken}
+	holdID := RecordApprovalSpent(gate.taskRunService, taskRunID, approvalRequest.ToolName, approvalRequest.ToolInput)
+	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionApproved, ApprovedCallID: holdID}
 }
 
 func (gate *Gate) taskHasApprovedScope(taskRunID string, approvalScope string) bool {
@@ -79,47 +76,11 @@ func (gate *Gate) taskHasApprovedScope(taskRunID string, approvalScope string) b
 	return false
 }
 
-func (gate *Gate) recordedDecision(taskRunID string, approvalRequest mcpserver.ApprovalRequest) (mcpserver.ApprovalDecision, bool) {
+func (gate *Gate) approvedHold(taskRunID string, approvalRequest mcpserver.ApprovalRequest) (hold, bool) {
 	if taskRunID == "" {
-		return "", false
+		return hold{}, false
 	}
-	decision := mcpserver.ApprovalDecision("")
-	isDecided := false
-	heldCallKey := ""
-	decidedCallKey := ""
-	for _, taskEvent := range gate.taskRunService.ListTaskEvent(taskRunID) {
-		switch taskEvent.Name {
-		case agentcontract.TaskEventApprovalPendingCall:
-			heldCallKey = decodeHeldCallEventBody(taskEvent.Body).CanonicalCallKey()
-		case agentcontract.TaskEventApprovalDecided:
-			decision, isDecided = decisionFromEventBody(taskEvent.Body)
-			decidedCallKey = heldCallKey
-		case agentcontract.TaskEventApprovalExecuted:
-			if executedToolName(taskEvent.Body) == strings.TrimSpace(approvalRequest.ToolName) {
-				decision, isDecided = "", false
-			}
-		}
-	}
-	if !isDecided || decidedCallKey != agentcontract.CanonicalToolCallKey(approvalRequest.ToolName, approvalRequest.ToolInput) {
-		return "", false
-	}
-	return decision, true
-}
-
-func decisionFromEventBody(body string) (mcpserver.ApprovalDecision, bool) {
-	decidedBody := struct {
-		Decision string `json:"decision"`
-	}{}
-	if json.Unmarshal([]byte(body), &decidedBody) != nil {
-		return "", false
-	}
-	switch strings.TrimSpace(decidedBody.Decision) {
-	case "confirm", "confirm_task":
-		return mcpserver.ApprovalDecisionApproved, true
-	case "cancel":
-		return mcpserver.ApprovalDecisionRejected, true
-	}
-	return "", false
+	return approvedHoldForCall(holdsOf(gate.taskRunService.ListTaskEvent(taskRunID)), approvalRequest.ToolName, approvalRequest.ToolInput)
 }
 
 func unmarshalEventBody(body string, target any) {
@@ -133,22 +94,17 @@ func decodeHeldCallEventBody(body string) agentcontract.HeldCall {
 	return decodedBody
 }
 
-func executedToolName(body string) string {
-	executedBody := struct {
-		ToolName string `json:"toolName"`
-	}{}
-	json.Unmarshal([]byte(body), &executedBody)
-	return strings.TrimSpace(executedBody.ToolName)
-}
-
 func (gate *Gate) recordHeldCall(taskRunID string, approvalRequest mcpserver.ApprovalRequest, confirmation string, resolution ApprovalTargetResolution) {
-	gate.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalPendingCall, marshalEventBody(agentcontract.HeldCall{
-		ToolName:          approvalRequest.ToolName,
-		ToolInput:         approvalRequest.ToolInput,
-		ApprovedToolInput: narrowedToolInput(approvalRequest.ToolInput, resolution.Target),
-		ApprovalScope:     approvalRequest.ApprovalScope,
-		Confirmation:      confirmation,
-		HarnessSession:    approvalRequest.HarnessSession,
+	gate.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalPendingCall, marshalEventBody(heldCallRecord{
+		HoldID: newHoldID(),
+		HeldCall: agentcontract.HeldCall{
+			ToolName:          approvalRequest.ToolName,
+			ToolInput:         approvalRequest.ToolInput,
+			ApprovedToolInput: narrowedToolInput(approvalRequest.ToolInput, resolution.Target),
+			ApprovalScope:     approvalRequest.ApprovalScope,
+			Confirmation:      confirmation,
+			HarnessSession:    approvalRequest.HarnessSession,
+		},
 	}))
 	if len(resolution.Choices) > 0 {
 		gate.taskRunService.AppendTaskEvent(taskRunID, TaskEventApprovalChoicesOffered, offeredChoicesBody(approvalRequest.ToolName, approvalRequest.ToolInput, resolution.Choices))
@@ -172,18 +128,13 @@ func approvalReasonCode(approvalRequest mcpserver.ApprovalRequest) string {
 }
 
 func askRecord(approvalRequest mcpserver.ApprovalRequest, confirmation string) map[string]any {
-	record := map[string]any{
+	return map[string]any{
 		"kind":             "ask_confirm",
 		"message":          confirmation,
 		"reasonCode":       approvalReasonCode(approvalRequest),
 		"reasonDetail":     "approval gate for " + approvalRequest.ToolName,
 		"responseLanguage": approvalRequest.ResponseLanguage,
 	}
-	if approvalScope := strings.TrimSpace(approvalRequest.ApprovalScope); approvalScope != "" {
-		record["approvalScope"] = approvalScope
-		record["sessionApprovable"] = true
-	}
-	return record
 }
 
 func marshalEventBody(value any) string {

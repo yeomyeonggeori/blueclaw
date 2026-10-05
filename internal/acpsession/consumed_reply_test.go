@@ -78,7 +78,7 @@ func TestAConsumedMessageIsAcknowledgedOnTheMessageItself(t *testing.T) {
 	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
 		TaskLauncher: consumingLauncher{},
 		Directory:    staticDirectory{},
-		TurnRouter:   scriptedRouter{},
+		ReplyReader:  scriptedReader{},
 		SessionTurns: connectorRuntime,
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
@@ -98,7 +98,7 @@ func TestAConsumedDirectMessageNothingCanReactToIsAnsweredInWords(t *testing.T) 
 	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
 		TaskLauncher: consumingLauncher{},
 		Directory:    staticDirectory{},
-		TurnRouter:   scriptedRouter{},
+		ReplyReader:  scriptedReader{},
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 

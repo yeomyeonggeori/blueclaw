@@ -16,81 +16,61 @@ func RecordRequesterDecision(taskRunStore taskstate.TaskRunStore, taskRunID stri
 	if decision == "" {
 		return
 	}
-	taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalDecided, marshalEventBody(map[string]string{
-		"decision": decision,
-		"source":   source,
-	}))
+	recordHoldDecision(taskRunStore, taskRunID, decision, source)
+}
+
+func recordHoldDecision(taskRunStore taskstate.TaskRunStore, taskRunID string, decision string, source string) {
+	pendingHold, isPending := latestHold(holdsOf(taskRunStore.ListTaskEvent(taskRunID)), holdPending)
+	if !isPending {
+		return
+	}
+	taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalDecided, marshalEventBody(decidedRecord{HoldID: pendingHold.ID, Decision: decision, Source: source}))
+	if decision == decisionConfirm {
+		grantHoldScope(taskRunStore, taskRunID, pendingHold)
+	}
+}
+
+func grantHoldScope(taskRunStore taskstate.TaskRunStore, taskRunID string, approvedHold hold) {
+	approvalScope := strings.TrimSpace(approvedHold.Call.ApprovalScope)
+	if approvalScope == "" {
+		return
+	}
+	taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalScopeGranted, marshalEventBody(map[string]string{"scope": approvalScope}))
 }
 
 func decisionForApprovalSignal(approvalSignal agentcontract.ApprovalSignal) string {
 	switch approvalSignal {
 	case agentcontract.ApprovalSignalApprove:
-		return "confirm"
-	case agentcontract.ApprovalSignalApproveTask:
-		return "confirm_task"
+		return decisionConfirm
 	case agentcontract.ApprovalSignalReject:
-		return "cancel"
+		return decisionCancel
 	}
 	return ""
 }
 
 type ApprovedCall struct {
+	HoldID    string
 	ToolName  string
 	ToolInput json.RawMessage
 }
 
 func ApprovedPendingCall(taskEvents []agentcontract.TaskEvent) (ApprovedCall, bool) {
-	heldCall, decision := undecidedHeldCall(taskEvents)
-	if heldCall.ToolName == "" || !isApprovingDecision(decision) {
+	approvedHold, isApproved := latestHold(holdsOf(taskEvents), holdApproved)
+	if !isApproved {
 		return ApprovedCall{}, false
 	}
-	return ApprovedCall{ToolName: heldCall.ToolName, ToolInput: heldCall.ApprovedInput()}, true
+	return ApprovedCall{HoldID: approvedHold.ID, ToolName: approvedHold.Call.ToolName, ToolInput: approvedHold.Call.ApprovedInput()}, true
 }
 
 func PendingHeldCall(taskEvents []agentcontract.TaskEvent) (agentcontract.HeldCall, bool) {
-	heldCall, decision := undecidedHeldCall(taskEvents)
-	if heldCall.ToolName == "" || decision != "" {
-		return agentcontract.HeldCall{}, false
-	}
-	return heldCall, true
+	pendingHold, isPending := latestHold(holdsOf(taskEvents), holdPending)
+	return pendingHold.Call, isPending
 }
 
 func DeclinedCallNote(taskEvents []agentcontract.TaskEvent) string {
-	heldCall, decision := undecidedHeldCall(taskEvents)
-	if heldCall.ToolName == "" || decision != "cancel" {
+	holds := holdsOf(taskEvents)
+	if len(holds) == 0 || holds[len(holds)-1].State != holdRejected {
 		return ""
 	}
-	return "The requester declined the " + heldCall.ToolName + " call you asked about. Do not attempt it again; continue without it or stop and say why you cannot."
-}
-
-func undecidedHeldCall(taskEvents []agentcontract.TaskEvent) (agentcontract.HeldCall, string) {
-	heldCall := agentcontract.HeldCall{}
-	decision := ""
-	for _, taskEvent := range taskEvents {
-		switch taskEvent.Name {
-		case agentcontract.TaskEventApprovalPendingCall:
-			heldCall = decodeHeldCallEventBody(taskEvent.Body)
-			decision = ""
-		case agentcontract.TaskEventApprovalDecided:
-			decision = decodedDecision(taskEvent.Body)
-		case agentcontract.TaskEventApprovalExecuted:
-			if executedToolName(taskEvent.Body) == heldCall.ToolName {
-				heldCall = agentcontract.HeldCall{}
-				decision = ""
-			}
-		}
-	}
-	return heldCall, decision
-}
-
-func isApprovingDecision(decision string) bool {
-	return decision == "confirm" || decision == "confirm_task"
-}
-
-func decodedDecision(body string) string {
-	decidedBody := struct {
-		Decision string `json:"decision"`
-	}{}
-	unmarshalEventBody(body, &decidedBody)
-	return strings.TrimSpace(decidedBody.Decision)
+	return "The requester declined the " + holds[len(holds)-1].Call.ToolName + " call you asked about. Do not attempt it again; continue without it or stop and say why you cannot."
 }

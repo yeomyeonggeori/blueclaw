@@ -10,9 +10,16 @@ import (
 	"testing"
 )
 
+const approvalGateWritersReason = "one approval gate is installed per harness, so the host gate and bluecollar's approval package never write in the same task run; the meta-harness migration removes the host gate"
+
 var eventNamesWrittenOnBothSides = map[string]string{
 	"ask.requested":               "undecided: the host writes the approval question and the loop writes its own ask_input question, which may be two events of one kind rather than one event with two writers",
-	"approval.held_call":          "the host gate, which is what holds a call; the loop writes it only for the connectors path 3c deletes",
+	"approval.decided":            approvalGateWritersReason,
+	"approval.executed":           approvalGateWritersReason,
+	"approval.pending_call":       approvalGateWritersReason,
+	"approval.scope_granted":      approvalGateWritersReason,
+	"approval.wording_failed":     approvalGateWritersReason,
+	"confirmation.requested":      approvalGateWritersReason,
 	"agent.failure_reply":         "the host, which sees every turn result",
 	"agent.failure_report":        "the host, which sees every turn result",
 	"agent.limit_reply":           "the host, which sees every turn result",

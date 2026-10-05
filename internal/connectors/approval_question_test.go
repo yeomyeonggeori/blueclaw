@@ -40,9 +40,3 @@ func TestACallHeldByTheHostGateReachesTheRequesterAsAQuestion(t *testing.T) {
 		t.Fatal("the language the requester is asked in was lost between the gate and the connector")
 	}
 }
-
-func TestACallHeldByTheHostGateCanBeApprovedForTheWholeTask(t *testing.T) {
-	if approvalScope := pendingApprovalScope(heldCallTaskEvents(t)); approvalScope != "calendar" {
-		t.Fatalf("confirm_task grants the scope this reader finds, so an empty one makes it a no-op, got %q", approvalScope)
-	}
-}

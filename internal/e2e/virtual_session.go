@@ -875,7 +875,10 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	scenarioIntakeOptions := agentcontract.IntakeOptions{IsEnabled: true, DefaultTaskLevel: agentcontract.TaskLevelLow}
 	turnScript := scenarioTurnScriptFor(scriptedModel)
 	changeChecks := &scenarioChangeChecks{}
-	scenarioDecisionPlanner := intake.NewDecisionPlanner(scenarioIntakeDecisionModel(scenario, turnScript, firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel)), nil, nil)
+	intakeDecisionModel := scenarioIntakeDecisionModel(scenario, turnScript, firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel))
+	scenarioDecisionPlanner := intake.NewDecisionPlanner(intakeDecisionModel, nil, nil)
+	scriptedDecisionModel, _ := intakeDecisionModel.(*scenarioDecisionModel)
+	scenarioReader := scenarioReplyReader{decisionModel: scriptedDecisionModel}
 	agentHarness, skillRetriever := virtualSessionAgentHarnessFactory(harnessdriver.Dependencies{
 		TaskRunStore:      taskRunService,
 		TaskStepStore:     taskStepService,
@@ -906,6 +909,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	scenarioTurnRouter := intake.NewTurnRouter(firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel), scenarioDecisionPlanner, agentcontract.IntakeOptions{IsEnabled: true, DefaultTaskLevel: agentcontract.TaskLevelLow})
 	runtime.UseTurnRouter(scenarioTurnRouter)
 	runtime.UseIntakeDecider(scenarioDecisionPlanner)
+	runtime.UseApprovalReplyReader(scenarioReader)
 	runtime.RegisterAdapter(adapter)
 	runtime.UseWorkspaceID("e2e")
 	runtime.UseWorkspaceRootPath(workspacePath)
@@ -963,7 +967,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 			ApprovalDeferrer:   virtualApprovalGate,
 			TaskLauncher:       virtualTaskLauncher,
 			Directory:          identityService,
-			TurnRouter:         scenarioTurnRouter,
+			ReplyReader:        scenarioReader,
 			IntakeDecider:      scenarioDecisionPlanner,
 			AttachmentImporter: runtime,
 			SessionTurns:       runtime,

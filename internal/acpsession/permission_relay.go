@@ -16,7 +16,6 @@ import (
 
 const (
 	approveOnceOptionID  = acp.PermissionOptionId("approve_once")
-	approveTaskOptionID  = acp.PermissionOptionId("approve_task")
 	rejectOnceOptionID   = acp.PermissionOptionId("reject_once")
 	chooseOptionIDPrefix = "choose:"
 )
@@ -29,7 +28,7 @@ type permissionRoute struct {
 type waitingCall struct {
 	approvalRequest mcpserver.ApprovalRequest
 	confirmation    string
-	choices         []approvalgate.ApprovalChoice
+	options         []acp.PermissionOption
 }
 
 type PermissionRelay struct {
@@ -111,12 +110,13 @@ func (relay *PermissionRelay) AskPermission(ctx context.Context, approvalRequest
 		return approvalgate.ApprovalAnswer{}, false
 	}
 	toolCall := permissionToolCall(approvalRequest, question.Confirmation)
-	relay.holdWaitingCall(toolCall.ToolCallId, waitingCall{approvalRequest: approvalRequest, confirmation: question.Confirmation, choices: question.Choices})
+	options := permissionOptions(question.Choices)
+	relay.holdWaitingCall(toolCall.ToolCallId, waitingCall{approvalRequest: approvalRequest, confirmation: question.Confirmation, options: options})
 	defer relay.releaseWaitingCall(toolCall.ToolCallId)
 	response, errorValue := route.agent.askThePerson(ctx, approvalRequest, question.Confirmation, acp.RequestPermissionRequest{
 		SessionId: route.sessionID,
 		ToolCall:  toolCall,
-		Options:   permissionOptions(approvalRequest.ApprovalScope, question.Choices),
+		Options:   options,
 	})
 	if errorValue != nil {
 		relay.logger.Warn("acpsession.permission.unanswered", "toolName", approvalRequest.ToolName, "taskRunID", approvalRequest.TaskRunID, "error", errorValue.Error())
@@ -138,23 +138,15 @@ func permissionToolCall(approvalRequest mcpserver.ApprovalRequest, confirmation 
 	return toolCall
 }
 
-func permissionOptions(approvalScope string, choices []approvalgate.ApprovalChoice) []acp.PermissionOption {
+func permissionOptions(choices []approvalgate.ApprovalChoice) []acp.PermissionOption {
 	if len(choices) > 0 {
 		return choicePermissionOptions(choices)
 	}
-	options := []acp.PermissionOption{{
+	return []acp.PermissionOption{{
 		OptionId: approveOnceOptionID,
 		Kind:     acp.PermissionOptionKindAllowOnce,
 		Name:     "approve this call",
-	}}
-	if strings.TrimSpace(approvalScope) != "" {
-		options = append(options, acp.PermissionOption{
-			OptionId: approveTaskOptionID,
-			Kind:     acp.PermissionOptionKindAllowAlways,
-			Name:     "approve this call and the rest of this task",
-		})
-	}
-	return append(options, rejectOption())
+	}, rejectOption()}
 }
 
 func choicePermissionOptions(choices []approvalgate.ApprovalChoice) []acp.PermissionOption {
@@ -199,8 +191,6 @@ func approvalAnswerForOutcome(outcome acp.RequestPermissionOutcome) (approvalgat
 	switch outcome.Selected.OptionId {
 	case approveOnceOptionID:
 		return approvalgate.ApprovalAnswer{Signal: agentcontract.ApprovalSignalApprove}, true
-	case approveTaskOptionID:
-		return approvalgate.ApprovalAnswer{Signal: agentcontract.ApprovalSignalApproveTask}, true
 	case rejectOnceOptionID:
 		return approvalgate.ApprovalAnswer{Signal: agentcontract.ApprovalSignalReject}, true
 	}

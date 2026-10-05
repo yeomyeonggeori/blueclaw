@@ -5,8 +5,11 @@ import (
 	"flag"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
+
+	acp "github.com/coder/acp-go-sdk"
 )
 
 const clientContractPath = "client_contract.json"
@@ -17,6 +20,15 @@ type clientContract struct {
 	MetaKeys         map[string]string   `json:"metaKeys"`
 	ExtensionMethods map[string]string   `json:"extensionMethods"`
 	Fields           map[string][]string `json:"fields"`
+	ToolCalls        toolCallContract    `json:"toolCalls"`
+}
+
+type toolCallContract struct {
+	StartKind    string   `json:"startKind"`
+	StartFields  []string `json:"startFields"`
+	UpdateKind   string   `json:"updateKind"`
+	UpdateFields []string `json:"updateFields"`
+	Statuses     []string `json:"statuses"`
 }
 
 func clientContractDeclared() clientContract {
@@ -38,7 +50,52 @@ func clientContractDeclared() clientContract {
 			"approvalReply":       jsonFieldNamesOf(ApprovalReplyRequest{}),
 			"approvalReplyAnswer": jsonFieldNamesOf(ApprovalReplyResponse{}),
 		},
+		ToolCalls: toolCallContract{
+			StartKind:    wireKindOf(startedToolCallForContract()),
+			StartFields:  wireFieldNamesOf(startedToolCallForContract()),
+			UpdateKind:   wireKindOf(completedToolCallForContract()),
+			UpdateFields: wireFieldNamesOf(completedToolCallForContract()),
+			Statuses: []string{
+				string(acp.ToolCallStatusPending),
+				string(acp.ToolCallStatusInProgress),
+				string(acp.ToolCallStatusCompleted),
+				string(acp.ToolCallStatusFailed),
+			},
+		},
 	}
+}
+
+func startedToolCallForContract() acp.SessionUpdate {
+	return acp.StartToolCall("call-1", "title", acp.WithStartStatus(acp.ToolCallStatusPending))
+}
+
+func completedToolCallForContract() acp.SessionUpdate {
+	return acp.UpdateToolCall("call-1", acp.WithUpdateStatus(acp.ToolCallStatusCompleted))
+}
+
+func wireKindOf(update acp.SessionUpdate) string {
+	document, _ := json.Marshal(update)
+	wire := struct {
+		SessionUpdate string `json:"sessionUpdate"`
+	}{}
+	json.Unmarshal(document, &wire)
+	return wire.SessionUpdate
+}
+
+func wireOf(update acp.SessionUpdate) map[string]any {
+	document, _ := json.Marshal(update)
+	wire := map[string]any{}
+	json.Unmarshal(document, &wire)
+	return wire
+}
+
+func wireFieldNamesOf(update acp.SessionUpdate) []string {
+	names := []string{}
+	for name := range wireOf(update) {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	return names
 }
 
 func jsonFieldNamesOf(value any) []string {

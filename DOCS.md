@@ -1,6 +1,6 @@
 # Overview
 
-blueclaw is a self-hosted Go daemon that runs an AI agent on behalf of the several people who share one machine. It executes each requester's tool calls as that person's own unprivileged POSIX user, holds side-effecting calls at an approval gate, and writes every step of every task to a durable event ledger in Postgres.
+blueclaw is a self-hosted meta-harness: a Go daemon that runs agent harnesses on behalf of the several people who share one machine. The harness does the agent's work. blueclaw executes each requester's tool calls as that person's own unprivileged POSIX user, carries questions to the person who must answer them, and writes every step of every task to a durable event ledger in Postgres.
 
 > [!WARNING]
 > blueclaw is pre-alpha. The interfaces, the wire grammar, the configuration keys and the database schema change without notice, and there is no release or upgrade path between commits. Pin a commit and expect to read diffs.
@@ -11,20 +11,21 @@ A company that runs one agent on one machine usually runs it as one Unix account
 
 ## What it is
 
-- A host owns connectors, identity, POSIX isolation, the task store, approvals, the tool catalog, capabilities, memory and delivery.
-- The harness port exposes the agent loop through one Go method, `agentcontract.Harness.RunTurn`. The bundled loop is [bluecollar](https://github.com/yeomyeonggeori/bluecollar); an ACP agent, Claude Code, Codex or Antigravity can take its place.
+- A harness runs an agent loop for the person at its terminal. A meta-harness runs harnesses, and owns what a single harness lacks once many people share it: connectors, identity, POSIX isolation, the task store, approvals, the tool catalog, capabilities, memory and delivery.
+- The harness port exposes the agent loop through one Go method, `agentcontract.Harness.RunTurn`. The default harness is [bluecollar](https://github.com/yeomyeonggeori/bluecollar); an ACP agent, Claude Code, Codex or Antigravity can take its place.
+- When a good harness already does something, blueclaw leaves the job to it. A feature that only works by reaching inside one harness belongs in that harness.
 - POSIX ownership and mode bits decide what a tool call may touch. The runtime has no executable allowlist or denied path prefix, and its prompt does not tell the model which paths it may use.
 
 ## What it is not
 
 It is not an agent, a model or a chat client. It does not sandbox the agent from the machine; it separates the people using the machine from each other, and a container or VM around it composes with that. There are no binary releases: you build it from source.
 
-blueclaw is the agent host inside [InternKim](https://intern.kim).
+blueclaw is the meta-harness inside [InternKim](https://intern.kim).
 
 ## Where to go next
 
 - [Quickstart](#quickstart) builds the daemon and drives a task over HTTP.
-- [Architecture](#architecture) shows how host, harness and contract divide the work.
+- [Architecture](#architecture) shows how meta-harness, harness and contract divide the work.
 - [Concepts](#concepts) defines tasks, approvals, policy, skills and memory.
 - [Boundaries](#boundaries) states the security model in detail.
 - [Operations](#operations) covers configuration, the database and deployment.
@@ -139,7 +140,7 @@ blueclaw is split into three parts that compile against each other.
 
 | Part | Owns | Where |
 |---|---|---|
-| Host (blueclaw) | connectors, policy, identity, POSIX isolation, task store, approvals, tool catalog, capabilities, memory, delivery | this repository |
+| Meta-harness (blueclaw) | connectors, policy, identity, POSIX isolation, task store, approvals, tool catalog, capabilities, memory, delivery | this repository |
 | Harness | the agent loop: run a turn and report what happened | bluecollar at `.dependency/bluecollar`, or an external agent through `internal/acpharness` and `internal/cliharness` |
 | Contract | the types both sides compile against, and the harness port | `agentcontract` and `toolcontract` in the bluecollar module |
 
@@ -257,7 +258,7 @@ The gate belongs to the host. `approvalgate.Gate.TurnGate` is installed as the `
 
 A held call pauses the run in `waiting_approval` and records `approval.pending_call` with the exact call, so the approval survives a restart and blocks no live request. The question the person sees is written by the model. Once approved, the host carries out the recorded call verbatim in the `carryOutApprovedCall` launch step (`internal/agentruntime/approved_call.go`) and hands the result to the harness as `CarriedOutCalls`. A changed call is a new approval.
 
-A grant can cover the rest of the task when the tool declares an `ApprovalScope`.
+Approving a call to a tool that declares an `ApprovalScope` grants that scope for the rest of the task, and the question says what the scope covers. Each hold has an id, `approval.decided` and `approval.executed` name the hold they settle, and only an approved, unspent hold answers an identical call.
 
 A capability's `target.resolve` answer may carry `choices`, each a `key` and an optional `startsAt` instant. The person is then asked to pick one of them or cancel, in the order given, and the reply is read against exactly those options (`approval.choices_offered`). A choice without `startsAt` runs the call now. A choice with `startsAt` runs nothing now: the gate writes a once schedule of the person who approved it, carrying the approved call in its `approved_call` column (`approval.deferred`), and the model is told the schedule's ID and time.
 
@@ -366,7 +367,7 @@ An ACP session is a conversation an ACP client holds with blueclaw acting as the
 
 `session/new` and `session/load` read `_meta["kim.intern/session"]`, which carries the requester (`email`, `personID`, `name`, `callingName`, `handle`) and the addressing (`platform`, `conversationID`, `conversationType`, `replyTargetID`, `isThread`, `responseLanguage`); a session without a requester or conversation is refused. `session/new` for a requester the policy does not name yet waits until a policy reload names them, and ends only when the client cancels the request; `session/load` refuses one at once. Each `session/prompt` reads `_meta["kim.intern/message"]`, passes the same engagement gate the connectors use, and launches a task. The attachments its `context.inputAttachments` names are imported into the requester's workspace through that platform's chatd adapter before the task starts, the way a connector turn's are, so the turn reads a picture from its inbox path and never fetches the messenger's address itself. While the turn runs, its conversation is told the agent is typing through the same adapter, on the connector rule: a direct message or a mention shows it at once, any other message once the gate lets it in. What the conversation is waiting on is settled through the connector runtime too: a message that answers the agent's question resumes the run that asked it, and the turn's outcome is delivered by the connector's reply rules, so a consumed message is acknowledged with a reaction on the messenger, or in words in a direct conversation when it cannot be reacted to. A run waiting on an approval is left to `session/request_permission`. Progress goes out as `agent_thought_chunk` and tool calls, the reply as `agent_message_chunk` with each attachment as a resource link: its name, a `file:` URI of its workspace path, and its `mimeType` and `size` when known. The file's bytes never travel over the socket; a client reads the file as the requester, through the workspace, before it posts it.
 
-An approval on an ACP turn first pauses the run and records the held call, then asks through `session/request_permission` with the options `approve_once`, `approve_task` (only when the tool has an approval scope) and `reject_once`, or, when the call offers choices, one `choose:<key>` option per choice and `reject_once`. The tool call ID is the held call's ID: `held-` and the first eight bytes of the SHA-256 of the canonical call. A free-text answer goes through the extension method `_kim.intern/approvalReply`, which the turn router reads. After `session/load`, every run of that requester and conversation still waiting on approval is asked again under the same ID.
+An approval on an ACP turn first pauses the run and records the held call, then asks through `session/request_permission` with the options `approve_once` and `reject_once`, or, when the call offers choices, one `choose:<key>` option per choice and `reject_once`. The tool call ID is the held call's ID: `held-` and the first eight bytes of the SHA-256 of the canonical call. A free-text answer goes through the extension method `_kim.intern/approvalReply`. The request carries `sessionId`, `toolCallId`, `reply`, `messageId`, `replyTargetId` and `isThread`, and the response is `{isAnswer, optionId}`. A reply outside the question's thread is not an answer and is not read; a reply inside it is read by one strict structured-output call that picks one offered option or `other`, recorded in the waiting run's ledger, and a reading that is not an answer leaves the permission open. The chat path reads replies through the same reader. After `session/load`, every run of that requester and conversation still waiting on approval is asked again under the same ID, with `alreadyPosted` on the `kim.intern/delivery` meta when its question was already posted.
 
 A reply counts as sent when the client says it reached the person. Each `agent_message_chunk` of a reply and each `session/request_permission` asked during a turn carries `_meta["kim.intern/delivery"]`: a `deliveryID`, and the `replyTargetID` of the thread it belongs in, so a client with no prompt open still posts it in the right place. The client answers each one with `_kim.intern/delivered` (`deliveryID`, `messageID`) or `_kim.intern/undelivered` (`deliveryID`, `reason`). Only `delivered` records `connector.reply.sent`, with the posted message ID as the dispatch ID. An `undelivered` report, a closed connection, or a minute without a report records `connector.reply.failed` with the reason. An approval question is recorded the same way under the reply kind `approval_question`. A question asked again after `session/load` names its thread but no `deliveryID`, since it was recorded when it was first asked. `internal/acpsession/client_contract.json` lists these names for clients written in other languages to check against, and a test fails when it disagrees with the Go declarations.
 
@@ -652,7 +653,7 @@ No. The `api` connector accepts a JSON POST and serves replies over HTTP. Postgr
 
 ### Can a harness call tools in parallel?
 
-The bundled loop uses native tool calling, and several calls in one model response run as a batch in order, stopping at the first failure. A call whose input depends on an earlier result still costs a round trip; letting the model write code that calls tools would remove that, but only with a new privileged channel from the requester's process into the runtime, which the POSIX model avoids.
+The default harness uses native tool calling, and several calls in one model response run as a batch in order, stopping at the first failure. A call whose input depends on an earlier result still costs a round trip; letting the model write code that calls tools would remove that, but only with a new privileged channel from the requester's process into the runtime, which the POSIX model avoids.
 
 ### Is there a binary release or a Docker image?
 

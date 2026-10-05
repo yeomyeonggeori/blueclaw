@@ -75,6 +75,12 @@ func TestAnAnsweredCallRunsInsideTheTurnAndReadsTheSameOnTheLedger(t *testing.T)
 	if taskRunStatus(t, taskRunService, taskRun.TaskRunID) == agentcontract.TaskStatusWaitingApproval {
 		t.Fatal("the run was paused for an approval that had already been answered")
 	}
+	if carriesEvent(names, agentcontract.TaskEventApprovalHeldCall) {
+		t.Fatalf("the gate identifies the call by its hold, so it writes no second record of it, got %v", names)
+	}
+	if holds := holdsOf(taskRunService.ListTaskEvent(taskRun.TaskRunID)); len(holds) != 1 || outcome.ApprovedCallID != holds[0].ID {
+		t.Fatalf("the approved call is named by the hold that was answered, got %q for %+v", outcome.ApprovedCallID, holds)
+	}
 }
 
 func TestACallNobodyCanBeAskedAboutIsStillHeld(t *testing.T) {

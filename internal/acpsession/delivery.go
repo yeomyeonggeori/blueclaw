@@ -25,6 +25,8 @@ const (
 type Delivery struct {
 	DeliveryID    string `json:"deliveryID,omitempty"`
 	ReplyTargetID string `json:"replyTargetID,omitempty"`
+	AlreadyPosted bool   `json:"alreadyPosted,omitempty"`
+	Final         bool   `json:"final,omitempty"`
 }
 
 type DeliveredReport struct {
@@ -63,11 +65,15 @@ func newAwaitedDeliveries() *awaitedDeliveries {
 
 func (deliveries *awaitedDeliveries) expect() (string, <-chan deliveryOutcome) {
 	deliveryID := newRandomIdentifier()
+	return deliveryID, deliveries.expectDelivery(deliveryID)
+}
+
+func (deliveries *awaitedDeliveries) expectDelivery(deliveryID string) <-chan deliveryOutcome {
 	outcome := make(chan deliveryOutcome, 1)
 	deliveries.mutex.Lock()
 	defer deliveries.mutex.Unlock()
 	deliveries.waiting[deliveryID] = outcome
-	return deliveryID, outcome
+	return outcome
 }
 
 func (deliveries *awaitedDeliveries) forget(deliveryID string) {
@@ -108,8 +114,8 @@ func (agent *Agent) settleUndelivered(params json.RawMessage) (any, error) {
 	return map[string]any{}, agent.deliveries.settle(report.DeliveryID, deliveryOutcome{failure: failure})
 }
 
-func (agent *Agent) deliverReply(ctx context.Context, sessionID acp.SessionId, replyTargetID string, reply connectors.OutboundReply) (string, error) {
-	fileMessageID, errorValue := agent.deliverFiles(ctx, sessionID, replyTargetID, reply.Attachments)
+func (agent *Agent) deliverReply(ctx context.Context, sessionID acp.SessionId, delivery Delivery, reply connectors.OutboundReply) (string, error) {
+	fileMessageID, errorValue := agent.deliverFiles(ctx, sessionID, delivery, reply.Attachments)
 	if errorValue != nil {
 		return "", errorValue
 	}
@@ -117,14 +123,14 @@ func (agent *Agent) deliverReply(ctx context.Context, sessionID acp.SessionId, r
 	if message == "" {
 		return fileMessageID, nil
 	}
-	return agent.deliver(ctx, sessionID, replyTargetID, acp.UpdateAgentMessageText(message))
+	return agent.deliver(ctx, sessionID, delivery, acp.UpdateAgentMessageText(message))
 }
 
-func (agent *Agent) deliverFiles(ctx context.Context, sessionID acp.SessionId, replyTargetID string, attachments []toolcontract.FileAttachment) (string, error) {
+func (agent *Agent) deliverFiles(ctx context.Context, sessionID acp.SessionId, delivery Delivery, attachments []toolcontract.FileAttachment) (string, error) {
 	firstMessageID := ""
 	notDelivered := &connectors.FilesNotDelivered{}
 	for _, attachment := range attachments {
-		messageID, errorValue := agent.deliverFile(ctx, sessionID, replyTargetID, attachment)
+		messageID, errorValue := agent.deliverFile(ctx, sessionID, delivery, attachment)
 		if errorValue != nil {
 			notDelivered.Undelivered = append(notDelivered.Undelivered, attachment)
 			notDelivered.Reason = joinedReasons(notDelivered.Reason, errorValue.Error())
@@ -139,12 +145,12 @@ func (agent *Agent) deliverFiles(ctx context.Context, sessionID acp.SessionId, r
 	return firstMessageID, nil
 }
 
-func (agent *Agent) deliverFile(ctx context.Context, sessionID acp.SessionId, replyTargetID string, attachment toolcontract.FileAttachment) (string, error) {
+func (agent *Agent) deliverFile(ctx context.Context, sessionID acp.SessionId, delivery Delivery, attachment toolcontract.FileAttachment) (string, error) {
 	devicePath := strings.TrimSpace(attachment.DevicePath)
 	if devicePath == "" {
 		return "", errFileHasNoPath
 	}
-	return agent.deliver(ctx, sessionID, replyTargetID, acp.UpdateAgentMessage(resourceLinkOf(attachment, devicePath)))
+	return agent.deliver(ctx, sessionID, delivery, acp.UpdateAgentMessage(resourceLinkOf(attachment, devicePath)))
 }
 
 func joinedReasons(reasons string, reason string) string {
@@ -154,18 +160,21 @@ func joinedReasons(reasons string, reason string) string {
 	return reasons + "; " + reason
 }
 
-func (agent *Agent) deliver(ctx context.Context, sessionID acp.SessionId, replyTargetID string, update acp.SessionUpdate) (string, error) {
-	deliveryID, outcome := agent.deliveries.expect()
-	defer agent.deliveries.forget(deliveryID)
-	notification := acp.SessionNotification{
-		SessionId: sessionID,
-		Update:    update,
-		Meta:      deliveryMeta(Delivery{DeliveryID: deliveryID, ReplyTargetID: replyTargetID}),
-	}
-	if errorValue := agent.connection.SessionUpdate(ctx, notification); errorValue != nil {
+func (agent *Agent) deliver(ctx context.Context, sessionID acp.SessionId, delivery Delivery, update acp.SessionUpdate) (string, error) {
+	outcome := agent.deliveries.expectDelivery(delivery.DeliveryID)
+	defer agent.deliveries.forget(delivery.DeliveryID)
+	if errorValue := agent.notifyDelivery(ctx, sessionID, delivery, update); errorValue != nil {
 		return "", errorValue
 	}
 	return agent.awaitDelivery(ctx, outcome, nil)
+}
+
+func (agent *Agent) notifyDelivery(ctx context.Context, sessionID acp.SessionId, delivery Delivery, update acp.SessionUpdate) error {
+	return agent.connection.SessionUpdate(ctx, acp.SessionNotification{
+		SessionId: sessionID,
+		Update:    update,
+		Meta:      deliveryMeta(delivery),
+	})
 }
 
 func (agent *Agent) awaitDelivery(ctx context.Context, outcome <-chan deliveryOutcome, askingEnded <-chan struct{}) (string, error) {

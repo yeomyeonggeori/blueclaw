@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -137,4 +138,39 @@ func scenarioAddressingDecision(addressingResponse string) agentcontract.Address
 		return agentcontract.AddressingDecision{}
 	}
 	return decision
+}
+
+type scenarioReplyReader struct {
+	decisionModel *scenarioDecisionModel
+}
+
+func (reader scenarioReplyReader) Read(_ context.Context, question approvalreply.Question, _ string, _ agentcontract.LLMCallObserver) (string, bool, error) {
+	if reader.decisionModel == nil {
+		return "", false, nil
+	}
+	outcome, isDecided := reader.decisionModel.decidedTurn()
+	if !isDecided {
+		return "", false, nil
+	}
+	return scriptedOption(question.Options, outcome.TurnDecision)
+}
+
+func scriptedOption(options []approvalreply.Option, turnDecision agentcontract.TurnDecision) (string, bool, error) {
+	for _, option := range options {
+		if isScriptedOption(option, turnDecision) {
+			return option.ID, true, nil
+		}
+	}
+	return "", false, nil
+}
+
+func isScriptedOption(option approvalreply.Option, turnDecision agentcontract.TurnDecision) bool {
+	if len(turnDecision.Choices) > 0 {
+		return option.ID == turnDecision.Choices[0] || strings.HasSuffix(option.ID, ":"+turnDecision.Choices[0])
+	}
+	isRejecting := option.Meaning == approvalreply.RejectMeaning
+	if turnDecision.Approval == nil {
+		return false
+	}
+	return isRejecting == (*turnDecision.Approval == agentcontract.ApprovalSignalReject)
 }

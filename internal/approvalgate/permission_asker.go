@@ -47,15 +47,9 @@ func (gate *Gate) askedOutcome(ctx context.Context, taskRunID string, approvalRe
 	if choice, isChosen := answer.ChosenFrom(resolution.Choices); isChosen && choice.DefersTheCall() {
 		return gate.deferredOutcome(ctx, taskRunID, approvalRequest, resolution, choice), true
 	}
-	gate.mintHeldCallApproval(taskRunID, approvalRequest)
 	RecordRequesterDecision(gate.taskRunService, taskRunID, &answer.Signal, "acp_permission")
 	if answer.Signal == agentcontract.ApprovalSignalReject {
 		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionRejected}, true
-	}
-	if answer.Signal == agentcontract.ApprovalSignalApproveTask {
-		gate.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalScopeGranted, marshalEventBody(map[string]string{
-			"scope": approvalRequest.ApprovalScope,
-		}))
 	}
 	return gate.approvedOutcome(taskRunID, approvalRequest), true
 }

@@ -10,7 +10,6 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 func approvalTestTaskRunService(t *testing.T) (*task.TaskRunService, *task.TaskEventService) {
@@ -59,7 +58,7 @@ func TestApprovalRefusesAnUnknownTaskRunAndAnUnknownDecision(t *testing.T) {
 		t.Fatalf("expected an unknown task run to be refused, got %d", responseRecorder.Code)
 	}
 	responseRecorder := postApproval(t, handler, `{"taskRunID":"`+taskRun.TaskRunID+`","decision":"looks good"}`)
-	if responseRecorder.Code != http.StatusBadRequest || !strings.Contains(responseRecorder.Body.String(), "confirm_task") {
+	if responseRecorder.Code != http.StatusBadRequest || !strings.Contains(responseRecorder.Body.String(), "cancel") {
 		t.Fatalf("expected a free-text decision to be refused with the allowed set, got %d %s", responseRecorder.Code, responseRecorder.Body.String())
 	}
 }
@@ -83,29 +82,8 @@ func TestApprovalRefusesWhenNoLauncherCanCarryTheDecision(t *testing.T) {
 	}
 }
 
-func TestApprovalScopeIsGrantedOnlyWhenApprovingTheWholeTask(t *testing.T) {
-	taskRunService, _ := approvalTestTaskRunService(t)
-	taskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "캘린더 정리")
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAskRequested, `{"approvalScope":"calendar"}`)
-	handler := TaskApprovalHandler{TaskRunService: taskRunService}
-
-	handler.grantApprovalScope(taskRun.TaskRunID)
-	grantedScopes := 0
-	for _, taskEvent := range taskRunService.ListTaskEvent(taskRun.TaskRunID) {
-		if taskEvent.Name == "approval.scope_granted" {
-			grantedScopes++
-			if !strings.Contains(taskEvent.Body, "calendar") {
-				t.Fatalf("expected the pending scope to be the granted one, got %s", taskEvent.Body)
-			}
-		}
-	}
-	if grantedScopes != 1 {
-		t.Fatalf("expected exactly one scope grant, got %d", grantedScopes)
-	}
-}
-
 func TestApprovalDecisionMapsToTheApprovalSignalTheGateExpects(t *testing.T) {
-	for decision, expectedSignal := range map[string]string{"confirm": "approve", "confirm_task": "approve_task", "cancel": "reject"} {
+	for decision, expectedSignal := range map[string]string{"confirm": "approve", "cancel": "reject"} {
 		turnDecision, errorValue := approvalTurnDecision(decision)
 		if errorValue != nil {
 			t.Fatalf("expected %q to map: %v", decision, errorValue)

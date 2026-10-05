@@ -19,6 +19,7 @@ type approvalQuestionContext struct {
 	OriginalRequest  string            `json:"originalRequest,omitempty"`
 	ModelDraft       string            `json:"modelDraft,omitempty"`
 	Operation        string            `json:"operation,omitempty"`
+	ApprovalScope    string            `json:"approvalScope,omitempty"`
 	ActionDetails    map[string]string `json:"actionDetails,omitempty"`
 	Choices          []ApprovalChoice  `json:"choices,omitempty"`
 }
@@ -79,6 +80,7 @@ func (gate *Gate) generateConfirmationWording(ctx context.Context, approvalReque
 		OriginalRequest:  strings.TrimSpace(approvalRequest.Prompt),
 		ModelDraft:       strings.TrimSpace(approvalRequest.ModelDraft),
 		Operation:        strings.TrimSpace(approvalRequest.ToolName),
+		ApprovalScope:    strings.TrimSpace(approvalRequest.ApprovalScope),
 		ActionDetails:    approvalQuestionActionDetails(approvalRequest.ToolInput, resolution.Target),
 		Choices:          resolution.Choices,
 	})
@@ -102,6 +104,7 @@ func (gate *Gate) generateConfirmationWording(ctx context.Context, approvalReque
 				"Do not answer the question, report status, or explain the policy.",
 				"The question covers this one action and nothing after it. The original request is there to name what the action touches, never to describe the work it is a step toward.",
 				"Never promise a later step this action does not perform. Approving it must not read as approving anything that has to happen afterwards.",
+				"When an approvalScope is given, approving this action also approves every later action of that scope for the rest of this task, and the question must say so in plain words, naming what the scope covers. Do not mention the scope when none is given.",
 				"When the target preview lists what the action will cause, state each of those consequences plainly; a requester approving it must know them.",
 				"When choices are given, the question offers exactly those choices, in the order given, followed by cancelling, as a short numbered list the requester can answer by number. A choice with startsAt runs the action at that moment, written as a local date and time; a choice without startsAt runs it now. Offer no choice that is not given.",
 			}, "\n")},

@@ -150,10 +150,7 @@ func (gate *Gate) DeferApprovedCall(ctx context.Context, request DeferralRequest
 		ScheduleID: schedule.ScheduleID,
 		StartsAt:   startsAt.Format(time.RFC3339),
 	}
-	gate.taskRunService.AppendTaskEvent(request.TaskRunID, agentcontract.TaskEventApprovalDecided, marshalEventBody(map[string]string{
-		"decision": deferredDecision,
-		"source":   "approval_choice",
-	}))
+	recordHoldDecision(gate.taskRunService, request.TaskRunID, deferredDecision, "approval_choice")
 	gate.taskRunService.AppendTaskEvent(request.TaskRunID, TaskEventApprovalDeferred, marshalEventBody(record))
 	return deferredCallResult(record), nil
 }

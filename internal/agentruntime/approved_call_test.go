@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -38,18 +39,18 @@ func launchApprovalContinuation(t *testing.T, taskLauncher *TaskLauncher, taskRu
 	}
 }
 
-func taskRunAwaitingApprovalOf(t *testing.T, taskRunService *task.TaskRunService, decision string) string {
+func taskRunAwaitingApprovalOf(t *testing.T, taskRunService *task.TaskRunService, decision agentcontract.ApprovalSignal) string {
 	t.Helper()
 	taskRun := taskRunService.CreateTaskRun("person-1", "channel-1", "지난 분기 뭐였는지 찾아줘")
 	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalPendingCall, `{"toolName":"memory_search","toolInput":{"query":"quarterly launch"},"confirmation":"기억을 찾아볼까요?"}`)
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalDecided, `{"decision":"`+decision+`"}`)
+	approvalgate.RecordRequesterDecision(taskRunService, taskRun.TaskRunID, &decision, "test")
 	return taskRun.TaskRunID
 }
 
 func TestTheHostCarriesOutTheApprovedCallAndHandsTheResultToTheHarness(t *testing.T) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	taskLauncher, harness := approvalContinuationLauncher(t, taskRunService)
-	taskRunID := taskRunAwaitingApprovalOf(t, taskRunService, "confirm")
+	taskRunID := taskRunAwaitingApprovalOf(t, taskRunService, agentcontract.ApprovalSignalApprove)
 
 	launchApprovalContinuation(t, taskLauncher, taskRunID)
 
@@ -68,7 +69,7 @@ func TestTheHostCarriesOutTheApprovedCallAndHandsTheResultToTheHarness(t *testin
 func TestADeclinedCallIsNotCarriedOut(t *testing.T) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	taskLauncher, harness := approvalContinuationLauncher(t, taskRunService)
-	taskRunID := taskRunAwaitingApprovalOf(t, taskRunService, "cancel")
+	taskRunID := taskRunAwaitingApprovalOf(t, taskRunService, agentcontract.ApprovalSignalReject)
 
 	launchApprovalContinuation(t, taskLauncher, taskRunID)
 
@@ -84,7 +85,7 @@ func TestACallIsCarriedOutOnceAndNotAgainOnTheNextResume(t *testing.T) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	taskLauncher, harness := approvalContinuationLauncher(t, taskRunService)
 	harness.TurnStatus = agentcontract.TaskStatusWaitingApproval
-	taskRunID := taskRunAwaitingApprovalOf(t, taskRunService, "confirm")
+	taskRunID := taskRunAwaitingApprovalOf(t, taskRunService, agentcontract.ApprovalSignalApprove)
 
 	launchApprovalContinuation(t, taskLauncher, taskRunID)
 	launchApprovalContinuation(t, taskLauncher, taskRunID)

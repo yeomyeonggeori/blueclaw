@@ -11,7 +11,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/intake"
 )
 
-func newACPSessionServer(inbound InboundOptions, kernel agentKernel, directory identityDirectory, taskLauncher *agentruntime.TaskLauncher, turnRouter intake.TurnRouter, decisionPlanner intake.DecisionPlanner, connectorRuntime *connectors.ConnectorRuntime, taskRunService *task.TaskRunService, logger *slog.Logger) *acpsession.Server {
+func newACPSessionServer(inbound InboundOptions, kernel agentKernel, directory identityDirectory, taskLauncher *agentruntime.TaskLauncher, decisionPlanner intake.DecisionPlanner, connectorRuntime *connectors.ConnectorRuntime, taskRunService *task.TaskRunService, logger *slog.Logger) *acpsession.Server {
 	socketPath := strings.TrimSpace(inbound.ACPSocketPath)
 	if socketPath == "" {
 		return nil
@@ -22,7 +22,7 @@ func newACPSessionServer(inbound InboundOptions, kernel agentKernel, directory i
 		ApprovalDeferrer:   kernel.toolCatalog.approvalGate,
 		TaskLauncher:       taskLauncher,
 		Directory:          directory.identityService,
-		TurnRouter:         turnRouter,
+		ReplyReader:        kernel.toolCatalog.replyReader,
 		IntakeDecider:      decisionPlanner,
 		AttachmentImporter: connectorRuntime,
 		SessionTurns:       connectorRuntime,

@@ -87,7 +87,7 @@ func aDecidingPlane(t *testing.T) decidingPlane {
 	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
 		TaskLauncher:  taskLauncher,
 		Directory:     staticDirectory{},
-		TurnRouter:    turnRouter,
+		ReplyReader:   scriptedReader{},
 		IntakeDecider: planner,
 		TaskRunStore:  taskRunService,
 	})

@@ -213,10 +213,11 @@ func (connectorRuntime *ConnectorRuntime) launchTurn(ctx context.Context, turn *
 	precomputedTurnDecision := precomputedTurnDecisionForLaunch(turn.turnDecision, turn.hasTurnDecision)
 	taskStartedAt := time.Now()
 	conversationTurn := connectorRuntime.conversationTurnFor(turn, precomputedTurnDecision)
-	narrator := connectorRuntime.startNarrating(ctx, turn.adapter, turn.replyTarget)
-	defer narrator.stop()
+	narrator := newTurnNarrator(turn.adapter, turn.replyTarget)
 	turn.sendReply = narrator.takeOverSending(turn.sendReply, connectorRuntime.recordingDelivery)
-	launchResult, errorValue := connectorRuntime.currentTaskLauncher().Launch(ctx, connectorRuntime.buildTaskLaunchRequest(conversationTurn))
+	launchRequest := connectorRuntime.buildTaskLaunchRequest(conversationTurn)
+	launchRequest.ToolCallObserver = narrator.toolCallObserver(ctx)
+	launchResult, errorValue := connectorRuntime.currentTaskLauncher().Launch(ctx, launchRequest)
 	if errorValue != nil {
 		return connectorRuntime.completeTurnLaunchFailure(ctx, turn, errorValue)
 	}

@@ -2,17 +2,14 @@ package connectors
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"sync"
 
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	acp "github.com/coder/acp-go-sdk"
+
+	"github.com/yeomyeonggeori/blueclaw/internal/toolcallprogress"
 )
 
-const narrationEventPrefix = "tool."
-const narrationRequestedSuffix = ".requested"
-const narrationResultSuffix = ".result"
-const narrationSubjectLimit = 48
 const narrationLineLimit = 6
 
 type narratedCall struct {
@@ -26,86 +23,6 @@ const narrationOutcomeFailed = " ✗"
 
 func (call narratedCall) String() string {
 	return call.label + call.outcome
-}
-
-func narrationOfTurnEvent(rawTurnEvent taskstate.RawTurnEvent) (narratedCall, bool) {
-	toolName, isRequest := toolNameOfNarrationEvent(rawTurnEvent.Name, narrationRequestedSuffix)
-	if !isRequest {
-		return narratedCall{}, false
-	}
-	label := toolName
-	if subject := narrationSubject(rawTurnEvent.Body); subject != "" {
-		label = toolName + "(" + subject + ")"
-	}
-	return narratedCall{callID: narrationCallID(rawTurnEvent.Body), label: label}, true
-}
-
-type narratedOutcome struct {
-	callID  string
-	outcome string
-}
-
-func narrationOutcomeOfTurnEvent(rawTurnEvent taskstate.RawTurnEvent) (narratedOutcome, bool) {
-	if _, isResult := toolNameOfNarrationEvent(rawTurnEvent.Name, narrationResultSuffix); !isResult {
-		return narratedOutcome{}, false
-	}
-	outcome := narrationOutcomeDone
-	if narrationCallFailed(rawTurnEvent.Body) {
-		outcome = narrationOutcomeFailed
-	}
-	return narratedOutcome{callID: narrationCallID(rawTurnEvent.Body), outcome: outcome}, true
-}
-
-func toolNameOfNarrationEvent(eventName string, suffix string) (string, bool) {
-	if !strings.HasPrefix(eventName, narrationEventPrefix) || !strings.HasSuffix(eventName, suffix) {
-		return "", false
-	}
-	toolName := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(eventName, narrationEventPrefix), suffix))
-	return toolName, toolName != ""
-}
-
-func narrationCallID(body string) string {
-	decoded := struct {
-		ObservationID string `json:"observationID"`
-	}{}
-	json.Unmarshal([]byte(body), &decoded)
-	return strings.TrimSpace(decoded.ObservationID)
-}
-
-func narrationCallFailed(body string) bool {
-	decoded := struct {
-		Failure *json.RawMessage `json:"failure"`
-	}{}
-	return json.Unmarshal([]byte(body), &decoded) == nil && decoded.Failure != nil
-}
-
-var narrationSubjectFields = []string{"path", "filePath", "query", "command", "title", "name", "url"}
-
-func narrationSubject(body string) string {
-	decoded := struct {
-		Input map[string]any `json:"input"`
-	}{}
-	if json.Unmarshal([]byte(body), &decoded) != nil {
-		return ""
-	}
-	for _, fieldName := range narrationSubjectFields {
-		if subject := narrationText(decoded.Input[fieldName]); subject != "" {
-			return subject
-		}
-	}
-	return ""
-}
-
-func narrationText(value any) string {
-	text, isText := value.(string)
-	if !isText {
-		return ""
-	}
-	text = strings.TrimSpace(strings.ReplaceAll(text, "\n", " "))
-	if len(text) <= narrationSubjectLimit {
-		return text
-	}
-	return strings.TrimSpace(text[:narrationSubjectLimit]) + "…"
 }
 
 func narrationMessage(calls []narratedCall) string {
@@ -129,18 +46,10 @@ type turnNarrator struct {
 	adapter     PlatformAdapter
 	replyTarget ReplyTarget
 
-	mutex         sync.Mutex
-	calls         []narratedCall
-	messageID     string
-	isHandedOver  bool
-	stopObserving func()
-}
-
-func (narrator *turnNarrator) stop() {
-	if narrator == nil || narrator.stopObserving == nil {
-		return
-	}
-	narrator.stopObserving()
+	mutex        sync.Mutex
+	calls        []narratedCall
+	messageID    string
+	isHandedOver bool
 }
 
 func newTurnNarrator(adapter PlatformAdapter, replyTarget ReplyTarget) *turnNarrator {
@@ -152,11 +61,17 @@ func newTurnNarrator(adapter PlatformAdapter, replyTarget ReplyTarget) *turnNarr
 	return &turnNarrator{editor: editor, deleter: deleter, adapter: adapter, replyTarget: replyTarget}
 }
 
-func (narrator *turnNarrator) observe(ctx context.Context, rawTurnEvent taskstate.RawTurnEvent) {
+func (narrator *turnNarrator) toolCallObserver(ctx context.Context) toolcallprogress.Observer {
 	if narrator == nil {
-		return
+		return nil
 	}
-	message, messageID, hasNews := narrator.record(rawTurnEvent)
+	return func(update acp.SessionUpdate) {
+		narrator.observe(ctx, update)
+	}
+}
+
+func (narrator *turnNarrator) observe(ctx context.Context, update acp.SessionUpdate) {
+	message, messageID, hasNews := narrator.record(update)
 	if !hasNews {
 		return
 	}
@@ -167,32 +82,46 @@ func (narrator *turnNarrator) observe(ctx context.Context, rawTurnEvent taskstat
 	narrator.editor.EditReply(ctx, narrator.replyTarget, messageID, message)
 }
 
-func (narrator *turnNarrator) record(rawTurnEvent taskstate.RawTurnEvent) (string, string, bool) {
+func (narrator *turnNarrator) record(update acp.SessionUpdate) (string, string, bool) {
 	narrator.mutex.Lock()
 	defer narrator.mutex.Unlock()
-	if narrator.isHandedOver || !narrator.take(rawTurnEvent) {
+	if narrator.isHandedOver || !narrator.take(update) {
 		return "", "", false
 	}
 	return narrationMessage(narrator.calls), narrator.messageID, true
 }
 
-func (narrator *turnNarrator) take(rawTurnEvent taskstate.RawTurnEvent) bool {
-	if call, isCall := narrationOfTurnEvent(rawTurnEvent); isCall {
-		narrator.calls = append(narrator.calls, call)
+func (narrator *turnNarrator) take(update acp.SessionUpdate) bool {
+	if toolCall := update.ToolCall; toolCall != nil {
+		narrator.calls = append(narrator.calls, narratedCall{callID: string(toolCall.ToolCallId), label: toolCall.Title})
 		return true
 	}
-	result, isOutcome := narrationOutcomeOfTurnEvent(rawTurnEvent)
-	if !isOutcome || result.callID == "" {
+	toolCallUpdate := update.ToolCallUpdate
+	if toolCallUpdate == nil || toolCallUpdate.Status == nil {
+		return false
+	}
+	outcome, isOutcome := narrationOutcomeOf(*toolCallUpdate.Status)
+	if !isOutcome {
 		return false
 	}
 	for index := range narrator.calls {
-		if narrator.calls[index].callID != result.callID {
+		if narrator.calls[index].callID != string(toolCallUpdate.ToolCallId) {
 			continue
 		}
-		narrator.calls[index].outcome = result.outcome
+		narrator.calls[index].outcome = outcome
 		return true
 	}
 	return false
+}
+
+func narrationOutcomeOf(status acp.ToolCallStatus) (string, bool) {
+	switch status {
+	case acp.ToolCallStatusCompleted:
+		return narrationOutcomeDone, true
+	case acp.ToolCallStatusFailed:
+		return narrationOutcomeFailed, true
+	}
+	return "", false
 }
 
 func (narrator *turnNarrator) startSaying(ctx context.Context, message string) {

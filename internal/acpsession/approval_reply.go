@@ -8,29 +8,29 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
+	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 const ApprovalReplyExtensionMethod = "_kim.intern/approvalReply"
 
-type TurnRouter interface {
-	Plan(context.Context, agentcontract.AgentRequest) (agentcontract.TurnDecision, error)
-}
-
 type ApprovalReplyRequest struct {
-	SessionID  string `json:"sessionId"`
-	ToolCallID string `json:"toolCallId"`
-	Reply      string `json:"reply"`
+	SessionID     string `json:"sessionId"`
+	ToolCallID    string `json:"toolCallId"`
+	Reply         string `json:"reply"`
+	MessageID     string `json:"messageId"`
+	ReplyTargetID string `json:"replyTargetId"`
+	IsThread      bool   `json:"isThread"`
 }
 
 type ApprovalReplyResponse struct {
-	OptionID string `json:"optionId"`
+	IsAnswer bool   `json:"isAnswer"`
+	OptionID string `json:"optionId,omitempty"`
 }
 
 var (
-	errNoRouterCanReadTheReply = errors.New("this daemon has no turn router, so a person's answer to an approval cannot be read")
-	errReplyCarriesNoWords     = errors.New("an approval reply with no words says nothing to read")
+	errNoReaderCanReadTheReply = errors.New("this daemon has no approval reply reader, so a person's answer to an approval cannot be read")
 	errNoCallIsWaitingOnThat   = errors.New("no held call by that tool call id is waiting for an answer")
 )
 
@@ -51,83 +51,78 @@ func (agent *Agent) answerApprovalReply(ctx context.Context, params json.RawMess
 	if errorValue := json.Unmarshal(params, &request); errorValue != nil {
 		return nil, errorValue
 	}
-	optionID, errorValue := agent.readApprovalReply(ctx, request)
-	if errorValue != nil {
-		return nil, errorValue
-	}
-	return ApprovalReplyResponse{OptionID: string(optionID)}, nil
+	return agent.readApprovalReply(ctx, request)
 }
 
-func (agent *Agent) readApprovalReply(ctx context.Context, request ApprovalReplyRequest) (acp.PermissionOptionId, error) {
-	if agent.turnRouter == nil {
-		return "", errNoRouterCanReadTheReply
-	}
-	reply := strings.TrimSpace(request.Reply)
-	if reply == "" {
-		return "", errReplyCarriesNoWords
+func (agent *Agent) readApprovalReply(ctx context.Context, request ApprovalReplyRequest) (ApprovalReplyResponse, error) {
+	if agent.replyReader == nil {
+		return ApprovalReplyResponse{}, errNoReaderCanReadTheReply
 	}
 	session, isOpen := agent.session(acp.SessionId(request.SessionID))
 	if !isOpen {
-		return "", errSessionIsNotOpen
+		return ApprovalReplyResponse{}, errSessionIsNotOpen
 	}
-	// The router offers an approval only when it is told which call is waiting,
-	// so the held call is looked up here rather than restated by the client.
 	waiting, isWaiting := agent.permissionRelay.waitingCall(acp.ToolCallId(request.ToolCallID))
 	if !isWaiting {
-		return "", errNoCallIsWaitingOnThat
+		return ApprovalReplyResponse{}, errNoCallIsWaitingOnThat
 	}
-	turnDecision, errorValue := agent.turnRouter.Plan(ctx, approvalReplyRequest(session.context, reply, waiting))
+	if !agent.postedQuestionOf(session.context, waiting).IsAnsweredBy(replyPlacementOf(session.context, request)) {
+		return ApprovalReplyResponse{}, nil
+	}
+	question := approvalreply.Question{Text: waiting.confirmation, Options: readerOptionsOf(waiting.options)}
+	optionID, isAnswer, errorValue := agent.replyReader.Read(ctx, question, request.Reply, agent.ledgerObserver(waiting.approvalRequest.TaskRunID))
 	if errorValue != nil {
-		return "", errorValue
+		return ApprovalReplyResponse{}, errorValue
 	}
-	if len(waiting.choices) > 0 {
-		return permissionOptionForChoice(turnDecision.Choices, waiting.choices), nil
+	if !isAnswer {
+		return ApprovalReplyResponse{}, nil
 	}
-	return permissionOptionForApprovalSignal(turnDecision.Approval), nil
+	return ApprovalReplyResponse{IsAnswer: true, OptionID: optionID}, nil
 }
 
-func approvalReplyRequest(sessionContext SessionContext, reply string, waiting waitingCall) agentcontract.AgentRequest {
-	request := agentcontract.AgentRequest{
-		RequesterPersonID: sessionContext.Requester.PersonID,
-		ConversationID:    sessionContext.Addressing.ConversationID,
-		Prompt:            reply,
-		ResponseLanguage:  sessionContext.Addressing.ResponseLanguage,
+func (agent *Agent) postedQuestionOf(sessionContext SessionContext, waiting waitingCall) connectors.PostedQuestion {
+	return connectors.PostedQuestion{
+		ConversationID: sessionContext.Addressing.ConversationID,
+		ReplyTargetID:  waiting.approvalRequest.ReplyTargetID,
+		MessageID:      agent.postedQuestionMessageID(waiting.approvalRequest.TaskRunID),
 	}
-	if len(waiting.choices) > 0 {
-		request.PendingChoice = agentcontract.PendingChoiceContext{
-			TaskRunID:     waiting.approvalRequest.TaskRunID,
-			Question:      waiting.confirmation,
-			SelectionMode: "single",
-			Options:       approvalgate.ChoiceReplyOptions(waiting.choices),
+}
+
+func (agent *Agent) postedQuestionMessageID(taskRunID string) string {
+	if agent.taskRunStore == nil {
+		return ""
+	}
+	return connectors.PostedApprovalQuestionMessageID(agent.taskRunStore.ListTaskEvent(taskRunID))
+}
+
+func replyPlacementOf(sessionContext SessionContext, request ApprovalReplyRequest) connectors.MessagePlacement {
+	return connectors.MessagePlacement{
+		ConversationID: sessionContext.Addressing.ConversationID,
+		ReplyTargetID:  strings.TrimSpace(request.ReplyTargetID),
+		IsThread:       request.IsThread,
+	}
+}
+
+func (agent *Agent) ledgerObserver(taskRunID string) agentcontract.LLMCallObserver {
+	return func(callRecord agentcontract.LLMCallRecord) {
+		if agent.taskRunStore != nil {
+			agent.taskRunStore.AppendLLMCall(taskRunID, callRecord)
 		}
-		return request
 	}
-	request.PendingConfirmation = agentcontract.PendingConfirmationContext{
-		TaskRunID: waiting.approvalRequest.TaskRunID,
-		Prompt:    waiting.approvalRequest.Prompt,
-		Question:  waiting.confirmation,
-	}
-	return request
 }
 
-func permissionOptionForChoice(selected []string, choices []approvalgate.ApprovalChoice) acp.PermissionOptionId {
-	for _, selectedKey := range selected {
-		if choice, isOffered := approvalgate.ChoiceByKey(choices, selectedKey); isOffered {
-			return choiceOptionID(choice.Key)
-		}
+func readerOptionsOf(permissionOptions []acp.PermissionOption) []approvalreply.Option {
+	options := make([]approvalreply.Option, 0, len(permissionOptions))
+	for _, permissionOption := range permissionOptions {
+		options = append(options, approvalreply.Option{ID: string(permissionOption.OptionId), Meaning: meaningOf(permissionOption)})
 	}
-	return rejectOnceOptionID
+	return options
 }
 
-func permissionOptionForApprovalSignal(approvalSignal *agentcontract.ApprovalSignal) acp.PermissionOptionId {
-	if approvalSignal == nil {
-		return rejectOnceOptionID
+func meaningOf(permissionOption acp.PermissionOption) string {
+	switch permissionOption.Kind {
+	case acp.PermissionOptionKindRejectOnce, acp.PermissionOptionKindRejectAlways:
+		return approvalreply.RejectMeaning
 	}
-	switch *approvalSignal {
-	case agentcontract.ApprovalSignalApprove:
-		return approveOnceOptionID
-	case agentcontract.ApprovalSignalApproveTask:
-		return approveTaskOptionID
-	}
-	return rejectOnceOptionID
+	return approvalreply.AllowMeaning(permissionOption.Name)
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
+	"github.com/yeomyeonggeori/blueclaw/internal/toolcallprogress"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
@@ -105,11 +106,13 @@ type externalAgent struct {
 	observedToolCatalog      acp.McpServer
 	observedPrompt           string
 	observedPromptMeta       map[string]any
+	toolCallUpdates          []acp.SessionUpdate
+	connection               *acp.AgentSideConnection
 }
 
 func (agent *externalAgent) serve(ctx context.Context, output io.Writer, input io.Reader) {
-	connection := acp.NewAgentSideConnection(agent, output, input)
-	<-connection.Done()
+	agent.connection = acp.NewAgentSideConnection(agent, output, input)
+	<-agent.connection.Done()
 	_ = ctx
 }
 
@@ -158,8 +161,13 @@ func (agent *externalAgent) NewSession(ctx context.Context, request acp.NewSessi
 	return acp.NewSessionResponse{SessionId: "session-1"}, nil
 }
 
-func (agent *externalAgent) Prompt(_ context.Context, request acp.PromptRequest) (acp.PromptResponse, error) {
+func (agent *externalAgent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.PromptResponse, error) {
 	agent.observedPromptMeta = request.Meta
+	for _, update := range agent.toolCallUpdates {
+		if errorValue := agent.connection.SessionUpdate(ctx, acp.SessionNotification{SessionId: request.SessionId, Update: update}); errorValue != nil {
+			return acp.PromptResponse{}, errorValue
+		}
+	}
 	for _, contentBlock := range request.Prompt {
 		if contentBlock.Text != nil {
 			agent.observedPrompt += contentBlock.Text.Text
@@ -229,6 +237,30 @@ func TestHarnessRunsAnOutOfProcessAgentWhoseToolCallsExecuteInsideTheDaemon(t *t
 	}
 	if toolCatalog.revokeCount != 1 {
 		t.Fatalf("expected the tool catalog session to be revoked after the turn, got %d", toolCatalog.revokeCount)
+	}
+}
+
+func TestAnExternalAgentsToolCallsAreForwardedToTheTurnsToolCallObserver(t *testing.T) {
+	executed := []daemonExecutedTool{}
+	started := acp.StartToolCall("call-1", "Read notes.md", acp.WithStartStatus(acp.ToolCallStatusInProgress))
+	finished := acp.UpdateToolCall("call-1", acp.WithUpdateStatus(acp.ToolCallStatusCompleted))
+	agent := &externalAgent{toolCallUpdates: []acp.SessionUpdate{started, finished}}
+	harness := New(&inProcessAgentProcess{agent: agent}, newPublishedToolCatalog(t), nil)
+	observed := []acp.SessionUpdate{}
+	ctx := toolcallprogress.WithObserver(context.Background(), func(update acp.SessionUpdate) { observed = append(observed, update) })
+
+	_, errorValue := harness.RunTurn(ctx, agentcontract.AgentTurnRequest{
+		RequesterPersonID: "person-1",
+		Prompt:            "회의록 정리해줘",
+		WorkspaceRootPath: t.TempDir(),
+		ToolSet:           requesterToolSet(t, "person-1", &executed),
+	})
+
+	if errorValue != nil {
+		t.Fatalf("expected the turn to run: %v", errorValue)
+	}
+	if len(observed) != 2 || observed[0].ToolCall == nil || observed[0].ToolCall.Title != "Read notes.md" || observed[1].ToolCallUpdate == nil || *observed[1].ToolCallUpdate.Status != acp.ToolCallStatusCompleted {
+		t.Fatalf("the observer was told %+v, expected the agent's tool_call then tool_call_update", observed)
 	}
 }
 
