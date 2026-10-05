@@ -1341,6 +1341,7 @@ func AskChoiceReplyOverACPScenario(artifactDirectoryPath string) VirtualSessionS
 	scenario := AskChoiceReplyAcceptanceScenario(artifactDirectoryPath)
 	scenario.Name = "ask_choice_reply_over_acp"
 	scenario.IsDeliveredOverACP = true
+	scenario.Turns[1].ReadsNoIntakeDecision = true
 	return scenario
 }
 
@@ -1386,6 +1387,7 @@ func AskRootMessageStartsATaskOverACPScenario(artifactDirectoryPath string) Virt
 	scenario := AskRootMessageStartsATaskScenario(artifactDirectoryPath)
 	scenario.Name = "ask_root_message_starts_a_task_over_acp"
 	scenario.IsDeliveredOverACP = true
+	scenario.Turns[2].ReadsNoIntakeDecision = true
 	return scenario
 }
 

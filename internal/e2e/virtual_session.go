@@ -216,6 +216,7 @@ type VirtualTurn struct {
 	RouterTaskShape              agentcontract.TaskShape
 	RouterApproval               string
 	RouterChoice                 string
+	ReadsNoIntakeDecision        bool
 	FiresDueApprovedSchedules    bool
 	ExpectedSelectedSkills       []string
 	ExpectedToolCalls            []string
@@ -2531,7 +2532,7 @@ func (harness *VirtualSessionHarness) Run(ctx context.Context) (VirtualSessionRe
 	messageIndex := 0
 	for index, virtualTurn := range harness.scenario.Turns {
 		if harness.scriptedModel != nil {
-			for range scenarioRouterResponsesForTurn(harness.scenario, virtualTurn) {
+			for range scenarioTurnRouterCalls(harness.scenario, virtualTurn) {
 				harness.scriptedModel.EnqueueStructuredResponses("bluecollar_turn_router", scenarioTurnWordsResponse())
 			}
 			harness.turnScript.beginTurn(index+1, scenarioTurnScriptEntries(harness.scenario, virtualTurn))
@@ -2740,7 +2741,17 @@ func scenarioRouterResponsesForTurn(scenario VirtualSessionScenario, virtualTurn
 	return []string{scenarioTurnRouterResponse(scenario, virtualTurn)}
 }
 
+func scenarioTurnRouterCalls(scenario VirtualSessionScenario, virtualTurn VirtualTurn) []string {
+	if strings.TrimSpace(virtualTurn.RouterApproval) != "" {
+		return nil
+	}
+	return scenarioRouterResponsesForTurn(scenario, virtualTurn)
+}
+
 func scenarioTurnScriptEntries(scenario VirtualSessionScenario, virtualTurn VirtualTurn) []string {
+	if virtualTurn.ReadsNoIntakeDecision {
+		return nil
+	}
 	scriptedTurns := scenarioRouterResponsesForTurn(scenario, virtualTurn)
 	if len(scriptedTurns) == 0 {
 		return []string{scenarioAddressingOnlyTurn}
