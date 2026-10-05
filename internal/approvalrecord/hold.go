@@ -130,13 +130,28 @@ func LatestHold(holds []Hold, state State) (Hold, bool) {
 }
 
 func ApprovedHoldForCall(holds []Hold, toolName string, toolInput json.RawMessage) (Hold, bool) {
-	callKey := agentcontract.CanonicalToolCallKey(toolName, toolInput)
 	for _, held := range holds {
-		if held.State == StateApproved && held.Call.CanonicalCallKey() == callKey {
+		if held.State == StateApproved && held.answersCall(toolName, toolInput) {
 			return held, true
 		}
 	}
 	return Hold{}, false
+}
+
+func (held Hold) answersCall(toolName string, toolInput json.RawMessage) bool {
+	canonicalInput := agentcontract.CanonicalToolInput(toolInput)
+	if canonicalInput != agentcontract.CanonicalToolInput(held.Call.ToolInput) {
+		return false
+	}
+	heldToolName := strings.TrimSpace(held.Call.ToolName)
+	if heldToolName != "" {
+		return heldToolName == strings.TrimSpace(toolName)
+	}
+	return hasArguments(canonicalInput)
+}
+
+func hasArguments(canonicalInput string) bool {
+	return canonicalInput != "{}" && canonicalInput != "null"
 }
 
 func marshal(value any) string {
