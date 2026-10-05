@@ -30,7 +30,7 @@ func TestMorningBriefingIsEmptyRequiresCompleteTaskCount(t *testing.T) {
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			toolSet := morningBriefingTestToolSet(testCase.tasks, `{"events":[]}`, nil)
-			_, errorValue := morningBriefingIsEmpty(context.Background(), toolSet, "sample@example.test", "Asia/Seoul", time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC))
+			_, errorValue := morningBriefingIsEmpty(context.Background(), toolSet, sampleBriefingRequester, "Asia/Seoul", time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC))
 			if errorValue == nil || !strings.Contains(errorValue.Error(), testCase.expect) {
 				t.Fatalf("expected malformed task response error, got %v", errorValue)
 			}
@@ -57,7 +57,7 @@ func TestMorningBriefingIsEmptyRequiresSuccessfulReads(t *testing.T) {
 				}
 				return toolcontract.ToolSuccessData("ok", json.RawMessage(`{"tasks":[],"count":0,"unfinishedCount":0}`))
 			})
-			_, errorValue := morningBriefingIsEmpty(context.Background(), toolSet, "sample@example.test", "Asia/Seoul", time.Now())
+			_, errorValue := morningBriefingIsEmpty(context.Background(), toolSet, sampleBriefingRequester, "Asia/Seoul", time.Now())
 			if errorValue == nil {
 				t.Fatal("expected failed tool read to prevent skipping")
 			}
@@ -78,7 +78,7 @@ func TestMorningBriefingIsEmptyKeepsNonEmptyWorkAndCalendar(t *testing.T) {
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			toolSet := morningBriefingTestToolSet(testCase.tasks, testCase.events, nil)
-			isEmpty, errorValue := morningBriefingIsEmpty(context.Background(), toolSet, "sample@example.test", "Asia/Seoul", time.Now())
+			isEmpty, errorValue := morningBriefingIsEmpty(context.Background(), toolSet, sampleBriefingRequester, "Asia/Seoul", time.Now())
 			if errorValue != nil {
 				t.Fatal(errorValue)
 			}
@@ -112,7 +112,7 @@ func TestMorningBriefingPreflightScopesBothReadsToRequester(t *testing.T) {
 			return toolcontract.ToolSuccessData("events", json.RawMessage(`{"events":[]}`)), nil
 		})
 	}
-	if isEmpty, errorValue := morningBriefingIsEmpty(context.Background(), toolSet, "sample@example.test", "Asia/Seoul", time.Now()); errorValue != nil || !isEmpty {
+	if isEmpty, errorValue := morningBriefingIsEmpty(context.Background(), toolSet, sampleBriefingRequester, "Asia/Seoul", time.Now()); errorValue != nil || !isEmpty {
 		t.Fatalf("expected empty preflight, got empty=%v error=%v", isEmpty, errorValue)
 	}
 	if len(inputs) != 2 {
@@ -121,13 +121,13 @@ func TestMorningBriefingPreflightScopesBothReadsToRequester(t *testing.T) {
 	for _, input := range inputs {
 		var document struct {
 			PersonHints []string `json:"personHints"`
-			Limit       int      `json:"limit"`
 		}
 		if errorValue := json.Unmarshal(input, &document); errorValue != nil {
 			t.Fatal(errorValue)
 		}
-		if len(document.PersonHints) != 1 || document.PersonHints[0] != "sample@example.test" || document.Limit != 1 {
-			t.Fatalf("expected requester-scoped limit-one input, got %s", input)
+		isTaskRead := len(document.PersonHints) > 0
+		if isTaskRead && (len(document.PersonHints) != 1 || document.PersonHints[0] != "sample@example.test") {
+			t.Fatalf("expected the task read scoped to the requester, got %s", input)
 		}
 	}
 }
@@ -144,19 +144,18 @@ func TestMorningBriefingCalendarInputUsesLocalDayAcrossDST(t *testing.T) {
 		{name: "DST spring day", timeZone: "America/New_York", reference: time.Date(2026, 3, 8, 16, 0, 0, 0, time.UTC), start: "2026-03-08T00:00:00-05:00", end: "2026-03-09T00:00:00-04:00"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			input, errorValue := morningBriefingCalendarInput("sample@example.test", testCase.timeZone, testCase.reference)
+			input, errorValue := morningBriefingCalendarInput(testCase.timeZone, testCase.reference)
 			if errorValue != nil {
 				t.Fatal(errorValue)
 			}
 			var calendarInput struct {
-				PersonHints []string `json:"personHints"`
-				StartsAt    string   `json:"startsAt"`
-				EndsAt      string   `json:"endsAt"`
+				StartsAt string `json:"startsAt"`
+				EndsAt   string `json:"endsAt"`
 			}
 			if errorValue := json.Unmarshal(input, &calendarInput); errorValue != nil {
 				t.Fatal(errorValue)
 			}
-			if len(calendarInput.PersonHints) != 1 || calendarInput.PersonHints[0] != "sample@example.test" || calendarInput.StartsAt != testCase.start || calendarInput.EndsAt != testCase.end {
+			if calendarInput.StartsAt != testCase.start || calendarInput.EndsAt != testCase.end {
 				t.Fatalf("expected %s through %s, got %s through %s", testCase.start, testCase.end, calendarInput.StartsAt, calendarInput.EndsAt)
 			}
 		})
@@ -165,17 +164,82 @@ func TestMorningBriefingCalendarInputUsesLocalDayAcrossDST(t *testing.T) {
 
 func TestMorningBriefingPreflightRequiresRequesterEmail(t *testing.T) {
 	toolSet := morningBriefingTestToolSet(`{"tasks":[],"count":0,"unfinishedCount":0}`, `{"events":[]}`, nil)
-	if _, errorValue := morningBriefingIsEmpty(context.Background(), toolSet, "", "Asia/Seoul", time.Now()); errorValue == nil {
+	if _, errorValue := morningBriefingIsEmpty(context.Background(), toolSet, morningBriefingRequester{personID: "person-1"}, "Asia/Seoul", time.Now()); errorValue == nil {
 		t.Fatal("expected a missing requester email to fail closed")
 	}
 }
 
 func TestMorningBriefingCalendarInputRejectsMissingOrUnknownTimezone(t *testing.T) {
 	for _, timeZone := range []string{"", "Mars/Olympus"} {
-		if _, errorValue := morningBriefingCalendarInput("sample@example.test", timeZone, time.Now()); errorValue == nil {
+		if _, errorValue := morningBriefingCalendarInput(timeZone, time.Now()); errorValue == nil {
 			t.Fatalf("expected timezone %q to fail", timeZone)
 		}
 	}
+}
+
+var sampleBriefingRequester = morningBriefingRequester{personID: "person-1", email: "sample@example.test"}
+
+func TestMorningBriefingIsEmptyCountsWhatIsOnTheRequestersScheduleToday(t *testing.T) {
+	const noTasks = `{"tasks":[],"count":0,"unfinishedCount":0}`
+	ownEvent := `{"source":"event","participants":[{"personID":"person-1","email":"sample@example.test"}]}`
+	otherEvent := `{"source":"event","participants":[{"personID":"person-2","email":"other@example.test"}]}`
+	otherLeave := `{"source":"leave","participants":[{"personID":"person-2","email":"other@example.test"}]}`
+	companyEvent := `{"source":"event","participants":[]}`
+	for _, testCase := range []struct {
+		name        string
+		calendar    []string
+		expectEmpty bool
+	}{
+		{name: "nothing on the calendar", calendar: nil, expectEmpty: true},
+		{name: "only another person's event and leave", calendar: []string{otherEvent, otherLeave}, expectEmpty: true},
+		{name: "the requester's own event", calendar: []string{otherEvent, ownEvent}},
+		{name: "an event open to the whole company", calendar: []string{companyEvent}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			toolSet := morningBriefingHostToolSet(noTasks, testCase.calendar)
+			isEmpty, errorValue := morningBriefingIsEmpty(context.Background(), toolSet, sampleBriefingRequester, "Asia/Seoul", time.Now())
+			if errorValue != nil {
+				t.Fatal(errorValue)
+			}
+			if isEmpty != testCase.expectEmpty {
+				t.Fatalf("expected empty=%v, got %v", testCase.expectEmpty, isEmpty)
+			}
+		})
+	}
+}
+
+func morningBriefingHostToolSet(tasks string, calendar []string) *toolcontract.ToolSet {
+	toolSet := toolcontract.NewToolSet([]string{"task_list", "event_list"})
+	for _, toolName := range []string{"task_list", "event_list"} {
+		_ = toolSet.RegisterTool(toolcontract.ToolDefinition{
+			Name:            toolName,
+			Visibility:      toolcontract.ToolVisibilityModel,
+			SideEffectClass: toolcontract.ToolSideEffectRead,
+			ResultContract:  &toolcontract.ToolResultContract{Schema: json.RawMessage(`{}`)},
+		}, func(_ context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+			if invocation.ToolName == "task_list" {
+				return toolcontract.ToolSuccessData("tasks", json.RawMessage(tasks)), nil
+			}
+			return toolcontract.ToolSuccessData("events", hostEventList(invocation.Input, calendar)), nil
+		})
+	}
+	return toolSet
+}
+
+func hostEventList(input json.RawMessage, calendar []string) json.RawMessage {
+	var request struct {
+		PersonHints []string `json:"personHints"`
+	}
+	_ = json.Unmarshal(input, &request)
+	events := []string{}
+	for _, entry := range calendar {
+		isNamed := len(request.PersonHints) == 0 || strings.Contains(entry, request.PersonHints[0])
+		if !isNamed {
+			continue
+		}
+		events = append(events, entry)
+	}
+	return json.RawMessage(`{"events":[` + strings.Join(events, ",") + `]}`)
 }
 
 func morningBriefingTestToolSet(tasks string, events string, replacement func(string) toolcontract.ToolResult) *toolcontract.ToolSet {
