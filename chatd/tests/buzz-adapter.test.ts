@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { createMemoryState } from "@chat-adapter/state-memory";
 import { BuzzAdapter } from "../src/adapters/buzz/adapter.ts";
 import { reactionContentOf } from "../src/mirror/reaction-emoji.ts";
@@ -31,7 +32,29 @@ function createEvent(overrides: Partial<BuzzEvent> = {}): BuzzEvent {
 	};
 }
 
+type ThreadReplyTargetCase = {
+	name: string;
+	channelId: string;
+	rootMessageId: string;
+	conversationId: string;
+	threadReplyTargetId: string;
+};
+
+const threadReplyTargetCases: ThreadReplyTargetCase[] = JSON.parse(
+	readFileSync(`${import.meta.dir}/../../protocol/fixtures/thread-reply-targets.json`, "utf8"),
+);
+
 describe("buzz thread id codec", () => {
+	for (const targetCase of threadReplyTargetCases) {
+		test(`addresses a thread the way the daemon matches replies: ${targetCase.name}`, () => {
+			const adapter = createAdapter();
+			expect(adapter.encodeThreadId({ channelId: targetCase.channelId })).toBe(targetCase.conversationId);
+			expect(adapter.encodeThreadId({ channelId: targetCase.channelId, rootEventId: targetCase.rootMessageId })).toBe(
+				targetCase.threadReplyTargetId,
+			);
+		});
+	}
+
 	test("round-trips channel and root", () => {
 		const adapter = createAdapter();
 		const threadId = adapter.encodeThreadId({ channelId: CHANNEL_UUID, rootEventId: ROOT_EVENT_ID });

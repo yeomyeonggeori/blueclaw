@@ -1,0 +1,16 @@
+[
+  {
+    "name": "a channel and the message that roots its thread",
+    "channelId": "8f14e45f-ea3c-4c2d-9d4b-1a2b3c4d5e6f",
+    "rootMessageId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "conversationId": "buzz:8f14e45f-ea3c-4c2d-9d4b-1a2b3c4d5e6f",
+    "threadReplyTargetId": "buzz:8f14e45f-ea3c-4c2d-9d4b-1a2b3c4d5e6f:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  {
+    "name": "another channel and another root",
+    "channelId": "channel-2",
+    "rootMessageId": "root-2",
+    "conversationId": "buzz:channel-2",
+    "threadReplyTargetId": "buzz:channel-2:root-2"
+  }
+]
