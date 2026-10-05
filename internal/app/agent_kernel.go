@@ -77,7 +77,7 @@ func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, agentHarne
 	kernel.decisionPlanner = newDecisionPlanner(kernel.decisionModel, turnRouterLanguageModelProvider(taskTierLanguageModels, intakeLanguageModel))
 	kernel.terminalService = security.NewShellService(runtimeConfiguration.Terminal)
 	services.taskRunService.RegisterTaskRunTransitionObserver(task.NewTaskTemporaryDirectoryReclaimer(runtimeConfiguration.Terminal.WorkspaceRootPath, kernel.terminalService.WorkspaceActorFactory(), logger).Observe)
-	kernel.toolCatalog = newToolCatalogEndpoint(services.taskRunService, kernel.taskTierLanguageModels.High, kernel.capabilityClient)
+	kernel.toolCatalog = newToolCatalogEndpoint(services.taskRunService, kernel.taskTierLanguageModels.High, kernel.decisionModel, kernel.capabilityClient)
 	harnessFactory, harnessName, selectionError := selectAgentHarness(runtimeConfiguration, agentHarnessFactory, kernel, logger)
 	kernel.harnessName = harnessName
 	kernel.startupError = selectionError

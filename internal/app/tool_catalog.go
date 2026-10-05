@@ -25,16 +25,16 @@ type toolCatalogEndpoint struct {
 	resolver     *mcpserver.SessionTokenRequesterResolver
 	handler      http.Handler
 	approvalGate *approvalgate.Gate
-	replyReader  approvalreply.LanguageModelReader
+	replyReader  approvalreply.DecisionModelReader
 }
 
-func newToolCatalogEndpoint(taskRunService *task.TaskRunService, approvalLanguageModel model.LanguageModelProvider, capabilityClient capability.Client) toolCatalogEndpoint {
+func newToolCatalogEndpoint(taskRunService *task.TaskRunService, approvalLanguageModel model.LanguageModelProvider, decisionModel model.DecisionModel, capabilityClient capability.Client) toolCatalogEndpoint {
 	resolver := mcpserver.NewSessionTokenRequesterResolver(newToolCatalogSessionToken)
 	handler := mcpserver.NewToolCatalogHandler(resolver, "1")
 	approvalGate := approvalgate.New(taskRunService)
 	approvalGate.UseLanguageModel(approvalLanguageModel)
 	approvalGate.UseApprovalTargetResolver(agentruntime.NewCapabilityApprovalTargetResolver(capabilityClient))
-	return toolCatalogEndpoint{resolver: resolver, handler: handler, approvalGate: approvalGate, replyReader: approvalreply.NewLanguageModelReader(approvalLanguageModel)}
+	return toolCatalogEndpoint{resolver: resolver, handler: handler, approvalGate: approvalGate, replyReader: approvalreply.NewDecisionModelReader(decisionModel)}
 }
 
 func newToolCatalogBuilder(runtimeConfiguration config.RuntimeConfiguration, kernel agentKernel, services taskServices, directory identityDirectory, memoryComponents memoryComponents, logger *slog.Logger) *agentruntime.ToolCatalogBuilder {

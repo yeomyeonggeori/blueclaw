@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -16,13 +17,16 @@ const (
 	RejectOptionID  = "reject"
 	otherOptionID   = "other"
 
-	schemaName = "blueclaw_approval_reply"
+	answerQuestionName = "answer"
 )
 
-const systemPrompt = `A person was asked a question and replied. Choose which of the offered options the reply picks, or "other".
-Choose an option only when the reply plainly picks it, in any language, spelling or brevity: a short affirmative such as "yes" or "ok" accepts, a plain refusal declines, naming a choice or its number picks that choice.
-Choose "other" when the reply asks something, changes the request, gives new instructions, or says anything unrelated to the question, and when it is too vague to tell which option it picks.
-Do not invent an option the list does not offer, and do not add requirements the question does not state. Politeness, wording, typos and formatting never make a plain reply "other".`
+const instructions = `The state holds a question a person was asked (postedQuestion) and their reply (reply). Which option does the reply pick? Read the reply as an answer to that question, by what the person means, in any language and any script. A reply to a question is usually brief: a word, a bit of shorthand or a single character is a full answer, and polite or friendly words around it do not change it. Choose other only when the reply does not pick any of the options.`
+
+const (
+	approveMeaning = "the person agrees to the action as asked, however briefly or informally, alone or with thanks, politeness or a remark that leaves what would be done exactly as asked"
+	rejectMeaning  = "the person declines, cancels or halts the action, with or without a reason"
+	otherMeaning   = "the reply picks none of the options: it asks something, leaves the decision open, adds to or changes what would be done (target, recipients, content, scope, time or conditions), or is an unrelated request"
+)
 
 var errReplyCarriesNoWords = errors.New("an approval reply with no words says nothing to read")
 
@@ -40,88 +44,96 @@ type Reader interface {
 	Read(ctx context.Context, question Question, reply string, observe agentcontract.LLMCallObserver) (string, bool, error)
 }
 
-type LanguageModelReader struct {
-	languageModel model.LanguageModelProvider
+type DecisionModelReader struct {
+	decisionModel model.DecisionModel
 }
 
-func NewLanguageModelReader(languageModel model.LanguageModelProvider) LanguageModelReader {
-	return LanguageModelReader{languageModel: languageModel}
+func NewDecisionModelReader(decisionModel model.DecisionModel) DecisionModelReader {
+	return DecisionModelReader{decisionModel: decisionModel}
 }
 
 func QuestionFor(text string, choices []approvalgate.ApprovalChoice) Question {
 	if len(choices) == 0 {
 		return Question{Text: text, Options: []Option{
-			{ID: ApproveOptionID, Meaning: "go ahead with the action"},
-			{ID: RejectOptionID, Meaning: "do not do the action"},
+			{ID: ApproveOptionID, Meaning: approveMeaning},
+			{ID: RejectOptionID, Meaning: rejectMeaning},
 		}}
 	}
 	options := []Option{}
 	for _, replyOption := range approvalgate.ChoiceReplyOptions(choices) {
-		options = append(options, Option{ID: replyOption.Key, Meaning: replyOption.Label})
+		options = append(options, Option{ID: replyOption.Key, Meaning: "the reply picks this choice: " + replyOption.Label})
 	}
 	return Question{Text: text, Options: options}
 }
 
-func (reader LanguageModelReader) Read(ctx context.Context, question Question, reply string, observe agentcontract.LLMCallObserver) (string, bool, error) {
-	if reader.languageModel == nil {
-		return "", false, errors.New("reading an approval reply needs a language model provider and none is configured")
+type readState struct {
+	PostedQuestion string `json:"postedQuestion"`
+	Reply          string `json:"reply"`
+}
+
+func (reader DecisionModelReader) Read(ctx context.Context, question Question, reply string, observe agentcontract.LLMCallObserver) (string, bool, error) {
+	if reader.decisionModel == nil {
+		return "", false, errors.New("reading an approval reply needs a decision model and none is configured")
 	}
 	trimmedReply := strings.TrimSpace(reply)
 	if trimmedReply == "" {
 		return "", false, errReplyCarriesNoWords
 	}
-	request, errorValue := readRequest(question, trimmedReply)
+	request := readRequest(question, trimmedReply)
+	startedAt := time.Now()
+	response, errorValue := reader.decisionModel.Decide(ctx, request)
+	if observe != nil {
+		observe(callRecord(request, response, time.Since(startedAt), errorValue))
+	}
 	if errorValue != nil {
 		return "", false, errorValue
 	}
-	response, errorValue := agentcontract.ObserveLanguageModel(reader.languageModel, observe).GenerateStructuredResponse(ctx, request)
-	if errorValue != nil {
-		return "", false, errorValue
-	}
-	return offeredOption(question, response.Content)
+	return offeredOption(question, response)
 }
 
-func readRequest(question Question, reply string) (model.StructuredResponseRequest, error) {
-	schemaDocument, errorValue := schemaFor(question)
-	if errorValue != nil {
-		return model.StructuredResponseRequest{}, errorValue
-	}
-	askedDocument, errorValue := json.Marshal(map[string]any{"question": question.Text, "options": question.Options, "reply": reply})
-	if errorValue != nil {
-		return model.StructuredResponseRequest{}, errorValue
-	}
-	return model.StructuredResponseRequest{
-		Messages: []model.Message{
-			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: string(askedDocument)},
-		},
-		StructuredOutputSchema: model.StructuredOutputSchema{Name: schemaName, Document: schemaDocument, IsStrictlyEnforced: true},
-	}, nil
-}
-
-func schemaFor(question Question) (string, error) {
-	optionIDs := []string{}
+func readRequest(question Question, reply string) model.DecisionRequest {
+	descriptions := map[string]string{otherOptionID: otherMeaning}
 	for _, option := range question.Options {
-		optionIDs = append(optionIDs, option.ID)
+		descriptions[option.ID] = option.Meaning
 	}
-	document, errorValue := json.Marshal(map[string]any{
-		"type":                 "object",
-		"properties":           map[string]any{"answer": map[string]any{"type": "string", "enum": append(optionIDs, otherOptionID)}},
-		"required":             []string{"answer"},
-		"additionalProperties": false,
-	})
-	return string(document), errorValue
+	return model.DecisionRequest{
+		State:     readState{PostedQuestion: question.Text, Reply: reply},
+		Questions: map[string]model.DecisionQuestion{answerQuestionName: model.ChoiceQuestion{Instructions: instructions, OptionDescriptions: descriptions}.Question()},
+	}
 }
 
-func offeredOption(question Question, content string) (string, bool, error) {
-	answer := struct {
-		Answer string `json:"answer"`
-	}{}
-	if errorValue := json.Unmarshal([]byte(content), &answer); errorValue != nil {
-		return "", false, errorValue
+func callRecord(request model.DecisionRequest, response model.DecisionResponse, latency time.Duration, errorValue error) agentcontract.LLMCallRecord {
+	stateBytes, _ := json.Marshal(request.State)
+	questionBytes, _ := json.Marshal(request.Questions)
+	record := agentcontract.LLMCallRecord{
+		Kind:             agentcontract.LLMCallKindDecision,
+		Transport:        "decisions",
+		Provider:         response.ProviderName,
+		UpstreamProvider: response.UpstreamProvider,
+		Model:            response.ModelName,
+		LatencyMS:        latency.Milliseconds(),
+		PromptBytes:      len(stateBytes),
+		SchemaBytes:      len(questionBytes),
+		QuestionCount:    len(request.Questions),
+		PromptTokens:     response.Usage.PromptTokens,
+		CompletionTokens: response.Usage.CompletionTokens,
+		TotalTokens:      response.Usage.TotalTokens,
+		CostUSD:          response.Usage.CostUSD,
+		DecisionAnswers:  response.Answers,
+	}
+	if errorValue != nil {
+		record.IsError, record.Error = true, errorValue.Error()
+	}
+	return record
+}
+
+func offeredOption(question Question, response model.DecisionResponse) (string, bool, error) {
+	answer, isAnswered := response.Answers[answerQuestionName]
+	if !isAnswered || strings.TrimSpace(answer.Choice) == "" {
+		return "", false, errors.New("the decision model answered no choice for the approval reply")
 	}
 	for _, option := range question.Options {
-		if option.ID == answer.Answer {
+		if option.ID == strings.TrimSpace(answer.Choice) {
 			return option.ID, true, nil
 		}
 	}

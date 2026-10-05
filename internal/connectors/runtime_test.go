@@ -33,6 +33,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
 	"github.com/yeomyeonggeori/bluecollar/loop"
+	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
 func TestConnectorRuntimeProcessesInvitedMessageAndDeduplicates(t *testing.T) {
@@ -4144,7 +4145,7 @@ func connectorRuntimeForHarness(t *testing.T, harness agentcontract.Harness, int
 	testApprovalGate := approvalgate.New(taskRunService)
 	testApprovalGate.UseLanguageModel(languageModel)
 	connectorRuntime.UseApprovalGate(testApprovalGate)
-	connectorRuntime.UseApprovalReplyReader(approvalreply.NewLanguageModelReader(languageModel))
+	connectorRuntime.UseApprovalReplyReader(approvalreply.NewDecisionModelReader(approvalReplyDecisionModel{languageModel: languageModel}))
 	adapter := &testAdapter{senderEmail: "invited@example.com"}
 	connectorRuntime.RegisterAdapter(adapter)
 	return connectorRuntime, adapter
@@ -4827,4 +4828,22 @@ func TestOneDecisionPerMessageSeesHowManyExchangesFollowedTheConfirmation(t *tes
 	if intakeDecisions.requests[2].PendingConfirmation.ExchangesSince != 1 {
 		t.Fatalf("the decision sees that an exchange followed the question, got %+v", intakeDecisions.requests[2].PendingConfirmation)
 	}
+}
+
+type approvalReplyDecisionModel struct {
+	languageModel llm.LanguageModelProvider
+}
+
+func (decisionModel approvalReplyDecisionModel) Decide(ctx context.Context, request model.DecisionRequest) (model.DecisionResponse, error) {
+	response, errorValue := decisionModel.languageModel.GenerateStructuredResponse(ctx, llm.StructuredResponseRequest{StructuredOutputSchema: llm.StructuredOutputSchema{Name: "blueclaw_approval_reply"}})
+	if errorValue != nil {
+		return model.DecisionResponse{}, errorValue
+	}
+	answer := struct {
+		Answer string `json:"answer"`
+	}{}
+	if errorValue := json.Unmarshal([]byte(response.Content), &answer); errorValue != nil {
+		return model.DecisionResponse{}, errorValue
+	}
+	return model.DecisionResponse{Answers: map[string]model.DecisionAnswer{"answer": {Type: model.DecisionQuestionTypeChoice, Choice: answer.Answer}}}, nil
 }
