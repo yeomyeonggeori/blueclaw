@@ -681,7 +681,10 @@ func CalendarEventLifecycleAcceptanceScenario(artifactDirectoryPath string) Virt
 		Skills:                []agentcontract.SkillInstruction{calendarSkill()},
 		AllowedTools:          append(agentruntime.KernelToolNames(), "event_add", "event_update", "event_delete"),
 		CapabilityToolNames:   []string{"event_add", "event_update", "event_delete"},
-		InitialToolNames:      []string{"event_add"},
+		CapabilityToolDescriptors: []agentruntime.CapabilityToolDescriptor{
+			{Name: "event_delete", RequiresApproval: true},
+		},
+		InitialToolNames: []string{"event_add"},
 		Turns: []VirtualTurn{
 			{
 				Prompt:                 "내일 오전 10시에 제품 회고 일정을 캘린더에 추가해줘",
@@ -718,8 +721,9 @@ func CalendarEventLifecycleAcceptanceScenario(artifactDirectoryPath string) Virt
 					{Name: toolRequestedEventName("event_delete"), BodyFragment: "event_delete", Count: 1},
 					{Name: agentcontract.TaskEventApprovalPendingCall, BodyFragment: `"event_delete"`, Count: 1},
 				},
-				ExpectedEvents:     []string{agentcontract.TaskEventConfirmationRequested},
-				ExpectedTaskStatus: task.TaskStatusWaitingApproval,
+				ExpectedEvents:        []string{agentcontract.TaskEventConfirmationRequested},
+				ExpectedModelContexts: []string{"Do not ask for that approval yourself"},
+				ExpectedTaskStatus:    task.TaskStatusWaitingApproval,
 			},
 			{
 				Prompt:         "확인",
