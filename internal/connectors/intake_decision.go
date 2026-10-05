@@ -14,6 +14,7 @@ import (
 
 type IntakeDecider interface {
 	Decide(context.Context, agentcontract.IntakeDecisionRequest, *agentcontract.IntakeCallLedger) (agentcontract.IntakeDecisions, error)
+	FitsBurstBudget(agentcontract.IntakeDecisionRequest) bool
 }
 
 func (connectorRuntime *ConnectorRuntime) UseIntakeDecider(intakeDecider IntakeDecider) {

@@ -99,8 +99,28 @@ func TestAMessageOutsideTheBurstWindowIsDecidedOnItsOwn(t *testing.T) {
 	}
 }
 
+type unlimitedBurstBudget struct{}
+
+func (unlimitedBurstBudget) FitsBurstBudget(agentcontract.IntakeDecisionRequest) bool {
+	return true
+}
+
+const testBurstPromptByteBudget = 80000
+
 type burstIntakeDecider struct {
 	requests []agentcontract.IntakeDecisionRequest
+}
+
+func (decider *burstIntakeDecider) FitsBurstBudget(request agentcontract.IntakeDecisionRequest) bool {
+	return promptByteCount(request) <= testBurstPromptByteBudget
+}
+
+func promptByteCount(request agentcontract.IntakeDecisionRequest) int {
+	byteCount := 0
+	for _, message := range request.Messages {
+		byteCount += len(message.Prompt)
+	}
+	return byteCount
 }
 
 func (decider *burstIntakeDecider) Decide(_ context.Context, request agentcontract.IntakeDecisionRequest, _ *agentcontract.IntakeCallLedger) (agentcontract.IntakeDecisions, error) {
@@ -120,7 +140,7 @@ func TestABurstIsSplitSoEveryDecisionRequestFitsTheCeiling(t *testing.T) {
 	recorder := &burstIntakeDecider{}
 	connectorRuntime.UseIntakeDecider(recorder)
 	receivedAt := time.Unix(1756800000, 0)
-	longPrompt := strings.Repeat("a", connectorDecisionRequestByteCeiling/4)
+	longPrompt := strings.Repeat("a", testBurstPromptByteBudget/2-1)
 	queuedEvents := []QueuedConnectorEvent{}
 	for index := 1; index <= 4; index++ {
 		queuedEvent := burstQueuedEvent("message-"+strconv.Itoa(index), "direct-1", "sender-user", receivedAt.Add(time.Duration(index)*time.Second))
@@ -135,9 +155,8 @@ func TestABurstIsSplitSoEveryDecisionRequestFitsTheCeiling(t *testing.T) {
 	}
 	decidedMessageIDs := []string{}
 	for _, request := range recorder.requests {
-		byteCount := intake.DecisionRequestByteCount(request)
-		if byteCount > connectorDecisionRequestByteCeiling {
-			t.Fatalf("expected every decision request to fit %d bytes, got %d", connectorDecisionRequestByteCeiling, byteCount)
+		if byteCount := promptByteCount(request); byteCount > testBurstPromptByteBudget {
+			t.Fatalf("expected every decision request to fit %d bytes, got %d", testBurstPromptByteBudget, byteCount)
 		}
 		for _, message := range request.Messages {
 			decidedMessageIDs = append(decidedMessageIDs, message.MessageID)
@@ -276,6 +295,7 @@ func TestAClaimedBurstIsDecidedOnceAndProcessedInArrivalOrder(t *testing.T) {
 }
 
 type reactingBurstDecider struct {
+	unlimitedBurstBudget
 	requests []agentcontract.IntakeDecisionRequest
 }
 
@@ -347,7 +367,7 @@ func TestADecisionNoTaskClaimsIsRecordedAgainstItsMessage(t *testing.T) {
 	}
 }
 
-type recordingCallLedgerDecider struct{}
+type recordingCallLedgerDecider struct{ unlimitedBurstBudget }
 
 func (decider *recordingCallLedgerDecider) Decide(_ context.Context, request agentcontract.IntakeDecisionRequest, callLedger *agentcontract.IntakeCallLedger) (agentcontract.IntakeDecisions, error) {
 	if callLedger != nil {

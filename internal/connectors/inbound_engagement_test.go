@@ -10,6 +10,7 @@ import (
 )
 
 type intakeDecisionRecorder struct {
+	unlimitedBurstBudget
 	lastRequest agentcontract.IntakeDecisionRequest
 }
 
@@ -112,6 +113,7 @@ func TestOneMessageIsDecidedOnce(t *testing.T) {
 }
 
 type countingIntakeDecider struct {
+	unlimitedBurstBudget
 	callCount int
 }
 

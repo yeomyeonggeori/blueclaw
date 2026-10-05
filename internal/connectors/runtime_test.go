@@ -4152,6 +4152,7 @@ func connectorRuntimeForHarness(t *testing.T, harness agentcontract.Harness, int
 }
 
 type scriptedIntakeDecider struct {
+	unlimitedBurstBudget
 	addressing agentcontract.AddressingDecision
 	turnFields agentcontract.TurnDecision
 	errorValue error
@@ -4175,6 +4176,7 @@ func (decider *scriptedIntakeDecider) Decide(_ context.Context, request agentcon
 }
 
 type recordingIntakeDecider struct {
+	unlimitedBurstBudget
 	decider  IntakeDecider
 	requests []agentcontract.IntakeDecisionRequest
 }
