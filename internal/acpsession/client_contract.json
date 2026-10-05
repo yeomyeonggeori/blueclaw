@@ -29,11 +29,33 @@
 		"delivery": [
 			"deliveryID",
 			"replyTargetID",
-			"alreadyPosted"
+			"alreadyPosted",
+			"final"
 		],
 		"undelivered": [
 			"deliveryID",
 			"reason"
+		]
+	},
+	"toolCalls": {
+		"startKind": "tool_call",
+		"startFields": [
+			"sessionUpdate",
+			"status",
+			"title",
+			"toolCallId"
+		],
+		"updateKind": "tool_call_update",
+		"updateFields": [
+			"sessionUpdate",
+			"status",
+			"toolCallId"
+		],
+		"statuses": [
+			"pending",
+			"in_progress",
+			"completed",
+			"failed"
 		]
 	}
 }

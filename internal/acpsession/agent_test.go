@@ -78,6 +78,7 @@ func (staticDirectory) ResolvePersonAccess(personID string) policy.PersonAccess 
 type recordingClient struct {
 	mutex                 sync.Mutex
 	connection            *acp.ClientSideConnection
+	notifications         []acp.SessionNotification
 	messages              []string
 	thoughts              []string
 	resourceLinks         []acp.ContentBlockResourceLink
@@ -95,6 +96,7 @@ type recordingClient struct {
 
 func (client *recordingClient) SessionUpdate(ctx context.Context, notification acp.SessionNotification) error {
 	client.mutex.Lock()
+	client.notifications = append(client.notifications, notification)
 	refusal := ""
 	if chunk := notification.Update.AgentMessageChunk; chunk != nil && chunk.Content.Text != nil {
 		client.messages = append(client.messages, chunk.Content.Text.Text)

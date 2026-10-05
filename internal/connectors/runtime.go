@@ -858,18 +858,6 @@ func (connectorRuntime *ConnectorRuntime) buildReplyTarget(ctx context.Context, 
 	}, nil
 }
 
-func (connectorRuntime *ConnectorRuntime) startNarrating(ctx context.Context, adapter PlatformAdapter, replyTarget ReplyTarget) *turnNarrator {
-	narrator := newTurnNarrator(adapter, replyTarget)
-	if narrator == nil || connectorRuntime.taskEventService == nil {
-		return nil
-	}
-	stopObserving := connectorRuntime.taskEventService.RegisterTurnObserver(func(rawTurnEvent taskstate.RawTurnEvent) {
-		narrator.observe(ctx, rawTurnEvent)
-	})
-	narrator.stopObserving = stopObserving
-	return narrator
-}
-
 func (connectorRuntime *ConnectorRuntime) startProgress(ctx context.Context, adapter PlatformAdapter, replyTarget ReplyTarget) func() {
 	return connectorRuntime.startProgressHeartbeat(ctx, adapter, replyTarget)
 }

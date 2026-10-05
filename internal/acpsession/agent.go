@@ -216,7 +216,8 @@ func (agent *Agent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.
 	}
 	messageContext := MessageContextFromMeta(request.Meta)
 	launchRequest := agent.taskLaunchRequestFor(session, request.SessionId, prompt, messageContext)
-	sessionTurn := agent.sessionTurns.OpenSessionTurn(ctx, inboundEventOf(messageContext, launchRequest), launchRequest.RequesterPersonID, agent.replySenderFor(request.SessionId))
+	delivery := Delivery{DeliveryID: newRandomIdentifier(), ReplyTargetID: launchRequest.ReplyTargetID}
+	sessionTurn := agent.sessionTurns.OpenSessionTurn(ctx, inboundEventOf(messageContext, launchRequest), launchRequest.RequesterPersonID, agent.replySenderForDelivery(request.SessionId, delivery.DeliveryID))
 	defer sessionTurn.EndProgress()
 	sessionTurn.ShowProgressBeforeAddressing(ctx)
 	launchRequest, decided, reason := agent.decideOnce(ctx, session, messageContext, launchRequest, sessionTurn)
@@ -233,7 +234,9 @@ func (agent *Agent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.
 	if errorValue != nil || isAnswered {
 		return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, errorValue
 	}
-	return agent.launchTurn(ctx, request.SessionId, sessionTurn, agent.withMessageAttachments(ctx, messageContext, launchRequest), decided)
+	launchRequest = agent.withMessageAttachments(ctx, messageContext, launchRequest)
+	launchRequest.ToolCallObserver = agent.toolCallObserverFor(ctx, request.SessionId, delivery)
+	return agent.launchTurn(ctx, request.SessionId, sessionTurn, launchRequest, decided)
 }
 
 func (agent *Agent) launchTurn(ctx context.Context, sessionID acp.SessionId, sessionTurn *connectors.SessionTurn, launchRequest agentruntime.TaskLaunchRequest, decided *messageDecision) (acp.PromptResponse, error) {
@@ -381,8 +384,12 @@ func (agent *Agent) checkpointSenderFor(sessionID acp.SessionId) agentcontract.A
 }
 
 func (agent *Agent) replySenderFor(sessionID acp.SessionId) connectors.ReplySender {
+	return agent.replySenderForDelivery(sessionID, newRandomIdentifier())
+}
+
+func (agent *Agent) replySenderForDelivery(sessionID acp.SessionId, deliveryID string) connectors.ReplySender {
 	return func(ctx context.Context, replyTarget connectors.ReplyTarget, reply connectors.OutboundReply) (string, error) {
-		return agent.deliverReply(ctx, sessionID, replyTarget.ReplyTargetID, reply)
+		return agent.deliverReply(ctx, sessionID, Delivery{DeliveryID: deliveryID, ReplyTargetID: replyTarget.ReplyTargetID, Final: true}, reply)
 	}
 }
 

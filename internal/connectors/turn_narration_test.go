@@ -4,53 +4,14 @@ import (
 	"context"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	acp "github.com/coder/acp-go-sdk"
+
+	"github.com/yeomyeonggeori/blueclaw/internal/task"
+	"github.com/yeomyeonggeori/blueclaw/internal/toolcallprogress"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract/harnesstest"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
-
-func TestNarrationNamesTheToolAndWhatItWasPointedAt(t *testing.T) {
-	for _, testCase := range []struct {
-		name     string
-		event    taskstate.RawTurnEvent
-		expected string
-	}{
-		{
-			name:     "a path is what a file tool is about",
-			event:    taskstate.RawTurnEvent{Name: "tool.file_read.requested", Body: `{"input":{"path":"/workspace/notes.md"}}`},
-			expected: "file_read(/workspace/notes.md)",
-		},
-		{
-			name:     "a command is what the terminal is about",
-			event:    taskstate.RawTurnEvent{Name: "tool.bash.requested", Body: `{"input":{"command":"bun test"}}`},
-			expected: "bash(bun test)",
-		},
-		{
-			name:     "a call with nothing worth showing is still worth naming",
-			event:    taskstate.RawTurnEvent{Name: "tool.memory_search.requested", Body: `{"input":{"limit":5}}`},
-			expected: "memory_search",
-		},
-		{
-			name:     "a result is not something in progress",
-			event:    taskstate.RawTurnEvent{Name: "tool.file_read.result", Body: `{"input":{"path":"/workspace/notes.md"}}`},
-			expected: "",
-		},
-		{
-			name:     "an event that is not a tool call says nothing",
-			event:    taskstate.RawTurnEvent{Name: "llm.call", Body: `{"input":{"path":"/x"}}`},
-			expected: "",
-		},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			call, isCall := narrationOfTurnEvent(testCase.event)
-			if !isCall {
-				call = narratedCall{}
-			}
-			if call.label != testCase.expected {
-				t.Fatalf("narration = %q, want %q", call.label, testCase.expected)
-			}
-		})
-	}
-}
 
 func TestNarrationShowsOnlyTheLastLines(t *testing.T) {
 	calls := []narratedCall{}
@@ -96,7 +57,7 @@ func (adapter *deletingNarrationAdapter) DeleteReply(_ context.Context, _ ReplyT
 func TestTheAnswerArrivesWholeAndTheNarrationComesDown(t *testing.T) {
 	adapter := &deletingNarrationAdapter{recordingNarrationAdapter: recordingNarrationAdapter{sentID: "narration-1"}}
 	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"})
-	narrator.observe(context.Background(), taskstate.RawTurnEvent{Name: "tool.file_read.requested", Body: `{"input":{"path":"/a"}}`})
+	narrator.observe(context.Background(), acp.StartToolCall("call-a", "file_read(/a)"))
 
 	sent := 0
 	sendReply := narrator.takeOverSending(func(context.Context, ReplyTarget, OutboundReply) (string, error) {
@@ -119,7 +80,7 @@ func TestTheAnswerArrivesWholeAndTheNarrationComesDown(t *testing.T) {
 func TestAFailedAnswerLeavesTheNarrationStanding(t *testing.T) {
 	adapter := &deletingNarrationAdapter{recordingNarrationAdapter: recordingNarrationAdapter{sentID: "narration-1"}}
 	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"})
-	narrator.observe(context.Background(), taskstate.RawTurnEvent{Name: "tool.file_read.requested", Body: `{"input":{"path":"/a"}}`})
+	narrator.observe(context.Background(), acp.StartToolCall("call-a", "file_read(/a)"))
 
 	sendReply := narrator.takeOverSending(func(context.Context, ReplyTarget, OutboundReply) (string, error) {
 		return "", context.Canceled
@@ -138,8 +99,8 @@ func TestTheAnswerReplacesTheNarrationRatherThanFollowingIt(t *testing.T) {
 		t.Fatal("an adapter that can edit should be narrated for")
 	}
 
-	narrator.observe(context.Background(), taskstate.RawTurnEvent{Name: "tool.file_read.requested", Body: `{"input":{"path":"/a"}}`})
-	narrator.observe(context.Background(), taskstate.RawTurnEvent{Name: "tool.bash.requested", Body: `{"input":{"command":"ls"}}`})
+	narrator.observe(context.Background(), acp.StartToolCall("call-a", "file_read(/a)"))
+	narrator.observe(context.Background(), acp.StartToolCall("call-b", "bash(ls)"))
 
 	sent := 0
 	recordedDeliveries := []string{}
@@ -188,7 +149,7 @@ func recordingDeliveriesInto(recordedDeliveries *[]string) func(ReplySender) Rep
 func TestAReplyCarryingMoreThanWordsIsSentWhole(t *testing.T) {
 	adapter := &recordingNarrationAdapter{sentID: "message-1"}
 	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"})
-	narrator.observe(context.Background(), taskstate.RawTurnEvent{Name: "tool.file_read.requested", Body: `{"input":{"path":"/a"}}`})
+	narrator.observe(context.Background(), acp.StartToolCall("call-a", "file_read(/a)"))
 
 	sent := 0
 	sendReply := narrator.takeOverSending(func(context.Context, ReplyTarget, OutboundReply) (string, error) {
@@ -211,14 +172,14 @@ func TestAReplyCarryingMoreThanWordsIsSentWhole(t *testing.T) {
 func TestNarrationStopsOnceTheAnswerHasTakenTheMessage(t *testing.T) {
 	adapter := &recordingNarrationAdapter{sentID: "message-1"}
 	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"})
-	narrator.observe(context.Background(), taskstate.RawTurnEvent{Name: "tool.file_read.requested", Body: `{"input":{"path":"/a"}}`})
+	narrator.observe(context.Background(), acp.StartToolCall("call-a", "file_read(/a)"))
 	sendReply := narrator.takeOverSending(func(context.Context, ReplyTarget, OutboundReply) (string, error) {
 		return "message-2", nil
 	}, deliveredUnrecorded)
 	sendReply(context.Background(), ReplyTarget{}, OutboundReply{Message: "done"})
 
 	editsBefore := len(adapter.editedMessages)
-	narrator.observe(context.Background(), taskstate.RawTurnEvent{Name: "tool.bash.requested", Body: `{"input":{"command":"ls"}}`})
+	narrator.observe(context.Background(), acp.StartToolCall("call-b", "bash(ls)"))
 
 	if len(adapter.editedMessages) != editsBefore {
 		t.Fatalf("the answer was overwritten by a later tool call")
@@ -232,22 +193,10 @@ func TestALineSaysHowTheCallTurnedOut(t *testing.T) {
 	adapter := &recordingNarrationAdapter{sentID: "message-1"}
 	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"})
 
-	narrator.observe(context.Background(), taskstate.RawTurnEvent{
-		Name: "tool.file_read.requested",
-		Body: `{"observationID":"call-1","input":{"path":"/a"}}`,
-	})
-	narrator.observe(context.Background(), taskstate.RawTurnEvent{
-		Name: "tool.bash.requested",
-		Body: `{"observationID":"call-2","input":{"command":"ls"}}`,
-	})
-	narrator.observe(context.Background(), taskstate.RawTurnEvent{
-		Name: "tool.file_read.result",
-		Body: `{"observationID":"call-1"}`,
-	})
-	narrator.observe(context.Background(), taskstate.RawTurnEvent{
-		Name: "tool.bash.result",
-		Body: `{"observationID":"call-2","failure":{"reason":"exit 1"}}`,
-	})
+	narrator.observe(context.Background(), acp.StartToolCall("call-1", "file_read(/a)"))
+	narrator.observe(context.Background(), acp.StartToolCall("call-2", "bash(ls)"))
+	narrator.observe(context.Background(), acp.UpdateToolCall("call-1", acp.WithUpdateStatus(acp.ToolCallStatusCompleted)))
+	narrator.observe(context.Background(), acp.UpdateToolCall("call-2", acp.WithUpdateStatus(acp.ToolCallStatusFailed)))
 
 	last := adapter.editedMessages[len(adapter.editedMessages)-1]
 	if want := "_file_read(/a) ✓_\n_bash(ls) ✗_"; last != want {
@@ -255,16 +204,75 @@ func TestALineSaysHowTheCallTurnedOut(t *testing.T) {
 	}
 }
 
+func TestAnUpdateThatSaysNothingOfTheOutcomeChangesNothing(t *testing.T) {
+	adapter := &recordingNarrationAdapter{sentID: "message-1"}
+	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"})
+	narrator.observe(context.Background(), acp.StartToolCall("call-1", "file_read(/a)"))
+	editsBefore := len(adapter.editedMessages)
+
+	narrator.observe(context.Background(), acp.UpdateToolCall("call-1", acp.WithUpdateStatus(acp.ToolCallStatusInProgress)))
+	narrator.observe(context.Background(), acp.UpdateToolCall("call-1"))
+
+	if len(adapter.editedMessages) != editsBefore {
+		t.Fatal("an update with no outcome edited the narration")
+	}
+}
+
 func TestAResultForACallNobodyNarratedChangesNothing(t *testing.T) {
 	adapter := &recordingNarrationAdapter{sentID: "message-1"}
 	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"})
 
-	narrator.observe(context.Background(), taskstate.RawTurnEvent{
-		Name: "tool.file_read.result",
-		Body: `{"observationID":"call-9"}`,
-	})
+	narrator.observe(context.Background(), acp.UpdateToolCall("call-9", acp.WithUpdateStatus(acp.ToolCallStatusCompleted)))
 
 	if len(adapter.sentMessages) != 0 || len(adapter.editedMessages) != 0 {
 		t.Fatal("a result on its own started a narration")
+	}
+}
+
+type editingTestAdapter struct {
+	*testAdapter
+	editedMessages []string
+}
+
+func (adapter *editingTestAdapter) EditReply(_ context.Context, _ ReplyTarget, _ string, message string) error {
+	adapter.editedMessages = append(adapter.editedMessages, message)
+	return nil
+}
+
+type externalHarnessDouble struct {
+	*harnesstest.Harness
+}
+
+func (harness externalHarnessDouble) RunTurn(ctx context.Context, request agentcontract.AgentTurnRequest) (agentcontract.AgentTurnResult, error) {
+	observer := toolcallprogress.ObserverFrom(ctx)
+	observer(acp.StartToolCall("call-1", "Read notes.md", acp.WithStartStatus(acp.ToolCallStatusInProgress)))
+	observer(acp.UpdateToolCall("call-1", acp.WithUpdateStatus(acp.ToolCallStatusCompleted)))
+	return harness.Harness.RunTurn(ctx, request)
+}
+
+func TestAnExternalHarnessToolCallShowsAsAProgressLine(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	baseHarness := harnesstest.New(taskRunService)
+	baseHarness.TurnDecision = startTaskTurnDecision()
+	baseHarness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "done"}
+	connectorRuntime, baseAdapter := connectorRuntimeForHarness(t, externalHarnessDouble{baseHarness}, baseHarness, baseHarness, baseHarness, taskRunService, testLanguageModel{reply: "stub"})
+	adapter := &editingTestAdapter{testAdapter: baseAdapter}
+	connectorRuntime.RegisterAdapter(adapter)
+
+	if _, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, testInboundEvent("message-1")); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	progressLines := []string{}
+	for _, reply := range baseAdapter.sentReplies {
+		if reply.replyKind == ConnectorReplyKindProgress {
+			progressLines = append(progressLines, reply.message)
+		}
+	}
+	if len(progressLines) != 1 || progressLines[0] != "_Read notes.md_" {
+		t.Fatalf("progress lines = %q, want the external harness's tool call once", progressLines)
+	}
+	if last := adapter.editedMessages[len(adapter.editedMessages)-1]; last != "done" {
+		t.Fatalf("the progress line ends as %q, want the answer", last)
 	}
 }
