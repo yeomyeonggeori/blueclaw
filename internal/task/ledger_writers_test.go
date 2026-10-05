@@ -12,6 +12,12 @@ import (
 
 var eventNamesWrittenOnBothSides = map[string]string{
 	"ask.requested":               "undecided: the host writes the approval question and the loop writes its own ask_input question, which may be two events of one kind rather than one event with two writers",
+	"approval.decided":            "the host gate, which spends the hold a reply answered; bluecollar's own approval package writes it for a harness that asks without the host",
+	"approval.executed":           "the host gate, which records the call a hold let through; bluecollar's own approval package writes it for a harness that asks without the host",
+	"approval.pending_call":       "the host gate; bluecollar's own approval package writes it for a harness that asks without the host",
+	"approval.scope_granted":      "the host gate; bluecollar's own approval package writes it for a harness that asks without the host",
+	"approval.wording_failed":     "the host gate; bluecollar's own approval package writes it for a harness that asks without the host",
+	"confirmation.requested":      "the host gate; bluecollar's own approval package writes it for a harness that asks without the host",
 	"approval.held_call":          "the host gate, which is what holds a call; the loop writes it only for the connectors path 3c deletes",
 	"agent.failure_reply":         "the host, which sees every turn result",
 	"agent.failure_report":        "the host, which sees every turn result",

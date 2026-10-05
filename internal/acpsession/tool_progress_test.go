@@ -33,7 +33,7 @@ func toolCallingSession(t *testing.T, launcher *toolCallingLauncher) (*recording
 	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
 		TaskLauncher: launcher,
 		Directory:    staticDirectory{},
-		TurnRouter:   scriptedRouter{},
+		ReplyReader:  scriptedReader{},
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 	return client, func() {
