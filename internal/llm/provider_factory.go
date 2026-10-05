@@ -64,10 +64,11 @@ func endpointTierProviderFactory(tiers map[string][]config.ModelEndpointConfigur
 				continue
 			}
 			provider = FallbackLanguageModelProvider{
-				PrimaryProvider:  rungProvider,
-				FallbackProvider: provider,
-				PrimaryLabel:     modelTier,
-				FallbackLabel:    modelTier,
+				PrimaryProvider:           rungProvider,
+				FallbackProvider:          provider,
+				PrimaryLabel:              modelTier,
+				FallbackLabel:             modelTier,
+				FallbackServesTheSameTier: true,
 			}
 		}
 		return TierProvider{Provider: provider, Reaches: strings.Join(reached, ", ")}, nil
