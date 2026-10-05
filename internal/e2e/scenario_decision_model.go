@@ -152,24 +152,25 @@ func (reader scenarioReplyReader) Read(_ context.Context, question approvalreply
 	if !isDecided {
 		return "", false, nil
 	}
-	optionID := scriptedOptionID(outcome.TurnDecision)
-	for _, option := range question.Options {
-		if option.ID == optionID {
-			return optionID, true, nil
+	return scriptedOption(question.Options, outcome.TurnDecision)
+}
+
+func scriptedOption(options []approvalreply.Option, turnDecision agentcontract.TurnDecision) (string, bool, error) {
+	for _, option := range options {
+		if isScriptedOption(option, turnDecision) {
+			return option.ID, true, nil
 		}
 	}
 	return "", false, nil
 }
 
-func scriptedOptionID(turnDecision agentcontract.TurnDecision) string {
-	if turnDecision.Approval != nil && *turnDecision.Approval == agentcontract.ApprovalSignalApprove {
-		return approvalreply.ApproveOptionID
-	}
-	if turnDecision.Approval != nil && *turnDecision.Approval == agentcontract.ApprovalSignalReject {
-		return approvalreply.RejectOptionID
-	}
+func isScriptedOption(option approvalreply.Option, turnDecision agentcontract.TurnDecision) bool {
 	if len(turnDecision.Choices) > 0 {
-		return turnDecision.Choices[0]
+		return option.ID == turnDecision.Choices[0] || strings.HasSuffix(option.ID, ":"+turnDecision.Choices[0])
 	}
-	return ""
+	isRejecting := option.Meaning == approvalreply.RejectMeaning
+	if turnDecision.Approval == nil {
+		return false
+	}
+	return isRejecting == (*turnDecision.Approval == agentcontract.ApprovalSignalReject)
 }

@@ -8,7 +8,6 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -70,14 +69,15 @@ func (agent *Agent) readApprovalReply(ctx context.Context, request ApprovalReply
 	if !agent.postedQuestionOf(session.context, waiting).IsAnsweredBy(replyPlacementOf(session.context, request)) {
 		return ApprovalReplyResponse{}, nil
 	}
-	optionID, isAnswer, errorValue := agent.replyReader.Read(ctx, approvalreply.QuestionFor(waiting.confirmation, waiting.choices), request.Reply, agent.ledgerObserver(waiting.approvalRequest.TaskRunID))
+	question := approvalreply.Question{Text: waiting.confirmation, Options: readerOptionsOf(waiting.options)}
+	optionID, isAnswer, errorValue := agent.replyReader.Read(ctx, question, request.Reply, agent.ledgerObserver(waiting.approvalRequest.TaskRunID))
 	if errorValue != nil {
 		return ApprovalReplyResponse{}, errorValue
 	}
 	if !isAnswer {
 		return ApprovalReplyResponse{}, nil
 	}
-	return ApprovalReplyResponse{IsAnswer: true, OptionID: string(permissionOptionFor(optionID))}, nil
+	return ApprovalReplyResponse{IsAnswer: true, OptionID: optionID}, nil
 }
 
 func (agent *Agent) postedQuestionOf(sessionContext SessionContext, waiting waitingCall) connectors.PostedQuestion {
@@ -111,12 +111,18 @@ func (agent *Agent) ledgerObserver(taskRunID string) agentcontract.LLMCallObserv
 	}
 }
 
-func permissionOptionFor(optionID string) acp.PermissionOptionId {
-	switch optionID {
-	case approvalreply.ApproveOptionID:
-		return approveOnceOptionID
-	case approvalreply.RejectOptionID, approvalgate.CancelChoiceKey:
-		return rejectOnceOptionID
+func readerOptionsOf(permissionOptions []acp.PermissionOption) []approvalreply.Option {
+	options := make([]approvalreply.Option, 0, len(permissionOptions))
+	for _, permissionOption := range permissionOptions {
+		options = append(options, approvalreply.Option{ID: string(permissionOption.OptionId), Meaning: meaningOf(permissionOption)})
 	}
-	return choiceOptionID(optionID)
+	return options
+}
+
+func meaningOf(permissionOption acp.PermissionOption) string {
+	switch permissionOption.Kind {
+	case acp.PermissionOptionKindRejectOnce, acp.PermissionOptionKindRejectAlways:
+		return approvalreply.RejectMeaning
+	}
+	return approvalreply.AllowMeaning(permissionOption.Name)
 }

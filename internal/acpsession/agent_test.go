@@ -522,7 +522,7 @@ func answeringWithReply(t *testing.T, connection *acp.ClientSideConnection, sess
 func TestThePersonsWordsAreReadByTheRouterAndNotByTheRelay(t *testing.T) {
 	asked := []approvalreply.Question{}
 	client := &recordingClient{}
-	connection, permissionRelay := connectedPairWithReader(t, &recordingLauncher{}, client, scriptedReader{optionID: approvalreply.ApproveOptionID, asked: &asked})
+	connection, permissionRelay := connectedPairWithReader(t, &recordingLauncher{}, client, scriptedReader{optionID: string(approveOnceOptionID), asked: &asked})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 	client.answerByAsking = answeringWithWords(t, connection, sessionID, "응 보내줘")
 
@@ -556,7 +556,7 @@ func TestAnAnswerTheReaderCannotReadIsNotAnAnswer(t *testing.T) {
 func TestAReplyOutsideTheQuestionsThreadIsNotAnAnswerAndIsNotRead(t *testing.T) {
 	asked := []approvalreply.Question{}
 	client := &recordingClient{}
-	connection, permissionRelay := connectedPairWithReader(t, &recordingLauncher{}, client, scriptedReader{optionID: approvalreply.ApproveOptionID, asked: &asked})
+	connection, permissionRelay := connectedPairWithReader(t, &recordingLauncher{}, client, scriptedReader{optionID: string(approveOnceOptionID), asked: &asked})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 	client.answerByAsking = answeringWithReply(t, connection, sessionID, ApprovalReplyRequest{Reply: "ㅇ", ReplyTargetID: "conversation-1:other-root", IsThread: true})
 	approvalRequest := approvalRequestForTest()
@@ -578,7 +578,7 @@ func TestTheCallThatReadAReplyIsRecordedInTheWaitingRunsLedger(t *testing.T) {
 	connection, permissionRelay := connectedPairWithCollaborators(t, client, Collaborators{
 		TaskLauncher: &recordingLauncher{},
 		Directory:    staticDirectory{},
-		ReplyReader:  scriptedReader{optionID: approvalreply.ApproveOptionID},
+		ReplyReader:  scriptedReader{optionID: string(approveOnceOptionID)},
 		TaskRunStore: taskRunService,
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
@@ -603,7 +603,7 @@ func TestTheCallThatReadAReplyIsRecordedInTheWaitingRunsLedger(t *testing.T) {
 
 func TestAnAnswerToACallNobodyIsWaitingOnIsRefused(t *testing.T) {
 	client := &recordingClient{}
-	connection, _ := connectedPairWithReader(t, &recordingLauncher{}, client, scriptedReader{optionID: approvalreply.ApproveOptionID})
+	connection, _ := connectedPairWithReader(t, &recordingLauncher{}, client, scriptedReader{optionID: string(approveOnceOptionID)})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -966,7 +966,7 @@ func (client *recordingClient) waitForResourceLink() string {
 func TestAChoiceIsReadFromThePersonsWordsAgainstTheOfferedOptions(t *testing.T) {
 	asked := []approvalreply.Question{}
 	client := &recordingClient{}
-	connection, permissionRelay := connectedPairWithReader(t, &recordingLauncher{}, client, scriptedReader{optionID: "offHours", asked: &asked})
+	connection, permissionRelay := connectedPairWithReader(t, &recordingLauncher{}, client, scriptedReader{optionID: "choose:offHours", asked: &asked})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 	client.answerByAsking = answeringWithWords(t, connection, sessionID, "새벽에 해")
 	choices := []approvalgate.ApprovalChoice{{Key: "offHours", StartsAt: "2099-10-03T03:00:00+09:00"}, {Key: "now"}}
@@ -987,16 +987,15 @@ func TestAChoiceIsReadFromThePersonsWordsAgainstTheOfferedOptions(t *testing.T) 
 	}
 }
 
-func TestEveryReaderOptionMapsToAnAcpOption(t *testing.T) {
-	testCases := map[string]acp.PermissionOptionId{
-		approvalreply.ApproveOptionID: approveOnceOptionID,
-		approvalreply.RejectOptionID:  rejectOnceOptionID,
-		approvalgate.CancelChoiceKey:  rejectOnceOptionID,
-		"offHours":                    "choose:offHours",
+func TestTheReaderIsOfferedTheOptionsTheClientWasSentWithTheirMeanings(t *testing.T) {
+	sent := permissionOptions(nil)
+
+	offered := readerOptionsOf(sent)
+
+	if len(offered) != 2 || offered[0].ID != string(approveOnceOptionID) || offered[1].ID != string(rejectOnceOptionID) {
+		t.Fatalf("expected the ids the client was sent, got %+v", offered)
 	}
-	for optionID, expected := range testCases {
-		if actual := permissionOptionFor(optionID); actual != expected {
-			t.Fatalf("%q mapped to %q, expected %q", optionID, actual, expected)
-		}
+	if offered[0].Meaning != approvalreply.AllowMeaning(sent[0].Name) || offered[1].Meaning != approvalreply.RejectMeaning {
+		t.Fatalf("expected an allowing option to mean going ahead with its name and a rejecting one to mean declining, got %+v", offered)
 	}
 }

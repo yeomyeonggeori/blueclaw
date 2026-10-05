@@ -54,6 +54,7 @@ func (agent *Agent) reissueHeldPermission(ctx context.Context, sessionID acp.Ses
 	title := strings.TrimSpace(heldCall.Confirmation)
 	replyTargetID := firstNonEmpty(taskRun.OriginReplyTargetID, sessionContext.Addressing.ReplyTargetID)
 	choices := approvalgate.OfferedChoices(agent.taskRunStore.ListTaskEvent(taskRun.TaskRunID))
+	options := permissionOptions(choices)
 	// The client answers with the person's words, and the router that reads them
 	// is only offered an approval when the runtime can say which call is waiting.
 	agent.permissionRelay.holdWaitingCall(toolCallID, waitingCall{
@@ -69,13 +70,13 @@ func (agent *Agent) reissueHeldPermission(ctx context.Context, sessionID acp.Ses
 			ReplyTargetID:     replyTargetID,
 		},
 		confirmation: title,
-		choices:      choices,
+		options:      options,
 	})
 	defer agent.permissionRelay.releaseWaitingCall(toolCallID)
 	response, errorValue := agent.connection.RequestPermission(ctx, acp.RequestPermissionRequest{
 		SessionId: sessionID,
 		ToolCall:  acp.ToolCallUpdate{ToolCallId: toolCallID, Title: &title},
-		Options:   permissionOptions(choices),
+		Options:   options,
 		Meta:      deliveryMeta(Delivery{ReplyTargetID: replyTargetID, AlreadyPosted: agent.postedQuestionMessageID(taskRun.TaskRunID) != ""}),
 	})
 	if errorValue != nil {

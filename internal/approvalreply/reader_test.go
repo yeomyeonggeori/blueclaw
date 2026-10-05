@@ -6,7 +6,6 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
@@ -21,6 +20,18 @@ func (decisionModel *answeringModel) Decide(_ context.Context, request model.Dec
 	return model.DecisionResponse{Answers: map[string]model.DecisionAnswer{answerQuestionName: {Type: model.DecisionQuestionTypeChoice, Choice: decisionModel.choice}}}, nil
 }
 
+const (
+	approveOptionID = "approve"
+	rejectOptionID  = "reject"
+)
+
+func approvalQuestion(text string) Question {
+	return Question{Text: text, Options: []Option{
+		{ID: approveOptionID, Meaning: AllowMeaning("approve this call")},
+		{ID: rejectOptionID, Meaning: RejectMeaning},
+	}}
+}
+
 type failingModel struct{}
 
 func (failingModel) Decide(context.Context, model.DecisionRequest) (model.DecisionResponse, error) {
@@ -28,16 +39,16 @@ func (failingModel) Decide(context.Context, model.DecisionRequest) (model.Decisi
 }
 
 func TestAnOfferedOptionIsTheAnswer(t *testing.T) {
-	optionID, isAnswer, errorValue := NewDecisionModelReader(&answeringModel{choice: "approve"}).Read(context.Background(), QuestionFor("보낼까요?", nil), "ㅇ", nil)
+	optionID, isAnswer, errorValue := NewDecisionModelReader(&answeringModel{choice: "approve"}).Read(context.Background(), approvalQuestion("보낼까요?"), "ㅇ", nil)
 
-	if errorValue != nil || !isAnswer || optionID != ApproveOptionID {
+	if errorValue != nil || !isAnswer || optionID != approveOptionID {
 		t.Fatalf("read %q answered=%v: %v", optionID, isAnswer, errorValue)
 	}
 }
 
 func TestOtherAndAnOptionNobodyOfferedAreNotAnAnswer(t *testing.T) {
 	for _, choice := range []string{"other", "tomorrowNoon"} {
-		_, isAnswer, errorValue := NewDecisionModelReader(&answeringModel{choice: choice}).Read(context.Background(), QuestionFor("보낼까요?", nil), "음", nil)
+		_, isAnswer, errorValue := NewDecisionModelReader(&answeringModel{choice: choice}).Read(context.Background(), approvalQuestion("보낼까요?"), "음", nil)
 		if errorValue != nil || isAnswer {
 			t.Fatalf("%s read as an answer=%v: %v", choice, isAnswer, errorValue)
 		}
@@ -46,9 +57,13 @@ func TestOtherAndAnOptionNobodyOfferedAreNotAnAnswer(t *testing.T) {
 
 func TestTheQuestionOffersExactlyTheOptionsAndOtherAndNothingElse(t *testing.T) {
 	decisionModel := &answeringModel{choice: "other"}
-	choices := []approvalgate.ApprovalChoice{{Key: "now"}, {Key: "offHours", StartsAt: "2099-10-03T03:00:00+09:00"}}
+	question := Question{Text: "언제 할까요?", Options: []Option{
+		{ID: "now", Meaning: AllowMeaning("run it now")},
+		{ID: "offHours", Meaning: AllowMeaning("run it at 03:00")},
+		{ID: "cancel", Meaning: RejectMeaning},
+	}}
 
-	NewDecisionModelReader(decisionModel).Read(context.Background(), QuestionFor("언제 할까요?", choices), "새벽에", nil)
+	NewDecisionModelReader(decisionModel).Read(context.Background(), question, "새벽에", nil)
 
 	if len(decisionModel.requests) != 1 || len(decisionModel.requests[0].Questions) != 1 {
 		t.Fatalf("expected one call with one question, got %+v", decisionModel.requests)
@@ -76,10 +91,10 @@ func TestTheQuestionOffersExactlyTheOptionsAndOtherAndNothingElse(t *testing.T) 
 func TestAPlainApprovalQuestionOffersApproveRejectAndOther(t *testing.T) {
 	decisionModel := &answeringModel{choice: "approve"}
 
-	NewDecisionModelReader(decisionModel).Read(context.Background(), QuestionFor("보낼까요?", nil), "ㅇ", nil)
+	NewDecisionModelReader(decisionModel).Read(context.Background(), approvalQuestion("보낼까요?"), "ㅇ", nil)
 
 	criteria, _ := decisionModel.requests[0].Questions[answerQuestionName].Criteria.(map[string]string)
-	if len(criteria) != 3 || criteria[ApproveOptionID] == "" || criteria[RejectOptionID] == "" || criteria[otherOptionID] == "" {
+	if len(criteria) != 3 || criteria[approveOptionID] == "" || criteria[rejectOptionID] == "" || criteria[otherOptionID] == "" {
 		t.Fatalf("expected approve, reject and other, got %+v", criteria)
 	}
 }
@@ -87,7 +102,7 @@ func TestAPlainApprovalQuestionOffersApproveRejectAndOther(t *testing.T) {
 func TestTheStateCarriesOnlyThePostedQuestionAndTheReply(t *testing.T) {
 	decisionModel := &answeringModel{choice: "approve"}
 
-	NewDecisionModelReader(decisionModel).Read(context.Background(), QuestionFor("보낼까요?", nil), "  ㅇ  ", nil)
+	NewDecisionModelReader(decisionModel).Read(context.Background(), approvalQuestion("보낼까요?"), "  ㅇ  ", nil)
 
 	state, isReadState := decisionModel.requests[0].State.(readState)
 	if !isReadState || state != (readState{PostedQuestion: "보낼까요?", Reply: "ㅇ"}) {
@@ -98,7 +113,7 @@ func TestTheStateCarriesOnlyThePostedQuestionAndTheReply(t *testing.T) {
 func TestAnEmptyReplyIsNotSentToTheModel(t *testing.T) {
 	decisionModel := &answeringModel{choice: "approve"}
 
-	_, isAnswer, errorValue := NewDecisionModelReader(decisionModel).Read(context.Background(), QuestionFor("보낼까요?", nil), "  ", nil)
+	_, isAnswer, errorValue := NewDecisionModelReader(decisionModel).Read(context.Background(), approvalQuestion("보낼까요?"), "  ", nil)
 
 	if errorValue == nil || isAnswer || len(decisionModel.requests) != 0 {
 		t.Fatalf("an empty reply reached the model: answered=%v error=%v", isAnswer, errorValue)
@@ -106,7 +121,7 @@ func TestAnEmptyReplyIsNotSentToTheModel(t *testing.T) {
 }
 
 func TestAMissingDecisionModelIsAnError(t *testing.T) {
-	_, _, errorValue := NewDecisionModelReader(nil).Read(context.Background(), QuestionFor("보낼까요?", nil), "ㅇ", nil)
+	_, _, errorValue := NewDecisionModelReader(nil).Read(context.Background(), approvalQuestion("보낼까요?"), "ㅇ", nil)
 
 	if errorValue == nil {
 		t.Fatal("a reader with no decision model answered")
@@ -115,7 +130,7 @@ func TestAMissingDecisionModelIsAnError(t *testing.T) {
 
 func TestTheCallIsHandedToTheObserver(t *testing.T) {
 	observed := []agentcontract.LLMCallRecord{}
-	NewDecisionModelReader(&answeringModel{choice: "reject"}).Read(context.Background(), QuestionFor("보낼까요?", nil), "싫어", func(record agentcontract.LLMCallRecord) {
+	NewDecisionModelReader(&answeringModel{choice: "reject"}).Read(context.Background(), approvalQuestion("보낼까요?"), "싫어", func(record agentcontract.LLMCallRecord) {
 		observed = append(observed, record)
 	})
 
@@ -126,7 +141,7 @@ func TestTheCallIsHandedToTheObserver(t *testing.T) {
 
 func TestAFailedCallIsObservedAndReturned(t *testing.T) {
 	observed := []agentcontract.LLMCallRecord{}
-	_, _, errorValue := NewDecisionModelReader(failingModel{}).Read(context.Background(), QuestionFor("보낼까요?", nil), "ㅇ", func(record agentcontract.LLMCallRecord) {
+	_, _, errorValue := NewDecisionModelReader(failingModel{}).Read(context.Background(), approvalQuestion("보낼까요?"), "ㅇ", func(record agentcontract.LLMCallRecord) {
 		observed = append(observed, record)
 	})
 

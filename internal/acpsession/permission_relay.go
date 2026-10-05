@@ -28,7 +28,7 @@ type permissionRoute struct {
 type waitingCall struct {
 	approvalRequest mcpserver.ApprovalRequest
 	confirmation    string
-	choices         []approvalgate.ApprovalChoice
+	options         []acp.PermissionOption
 }
 
 type PermissionRelay struct {
@@ -110,12 +110,13 @@ func (relay *PermissionRelay) AskPermission(ctx context.Context, approvalRequest
 		return approvalgate.ApprovalAnswer{}, false
 	}
 	toolCall := permissionToolCall(approvalRequest, question.Confirmation)
-	relay.holdWaitingCall(toolCall.ToolCallId, waitingCall{approvalRequest: approvalRequest, confirmation: question.Confirmation, choices: question.Choices})
+	options := permissionOptions(question.Choices)
+	relay.holdWaitingCall(toolCall.ToolCallId, waitingCall{approvalRequest: approvalRequest, confirmation: question.Confirmation, options: options})
 	defer relay.releaseWaitingCall(toolCall.ToolCallId)
 	response, errorValue := route.agent.askThePerson(ctx, approvalRequest, question.Confirmation, acp.RequestPermissionRequest{
 		SessionId: route.sessionID,
 		ToolCall:  toolCall,
-		Options:   permissionOptions(question.Choices),
+		Options:   options,
 	})
 	if errorValue != nil {
 		relay.logger.Warn("acpsession.permission.unanswered", "toolName", approvalRequest.ToolName, "taskRunID", approvalRequest.TaskRunID, "error", errorValue.Error())
