@@ -95,13 +95,6 @@ func unmarshalEventBody(body string, target any) {
 	json.Unmarshal([]byte(body), target)
 }
 
-func decodeHeldCallEventBody(body string) agentcontract.HeldCall {
-	decodedBody := agentcontract.HeldCall{}
-	unmarshalEventBody(body, &decodedBody)
-	decodedBody.ToolName = strings.TrimSpace(decodedBody.ToolName)
-	return decodedBody
-}
-
 func (gate *Gate) recordHeldCall(taskRunID string, approvalRequest mcpserver.ApprovalRequest, confirmation string, resolution ApprovalTargetResolution) {
 	approvalrecord.Open(gate.taskRunService, taskRunID, agentcontract.HeldCall{
 		ToolName:          approvalRequest.ToolName,

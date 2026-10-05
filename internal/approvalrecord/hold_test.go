@@ -32,7 +32,7 @@ func TestAnOpenHoldIsPendingAndAnswersNoCall(t *testing.T) {
 
 func TestAnApprovedHoldIsSpentByTheExactCallOnce(t *testing.T) {
 	ledger, taskRunID, holdID := openedHold(t)
-	Decide(ledger, taskRunID, holdID, DecisionConfirm, "chat_reply")
+	Decide(ledger, taskRunID, holdID, DecisionApprove, "chat_reply")
 
 	spent, isSpent := SpendApprovedCall(ledger, taskRunID, "event_delete", eventDeleteInput)
 	if !isSpent || spent.ID != holdID {
@@ -45,7 +45,7 @@ func TestAnApprovedHoldIsSpentByTheExactCallOnce(t *testing.T) {
 
 func TestADifferentCallIsNotCoveredAndLeavesTheApprovalUnspent(t *testing.T) {
 	ledger, taskRunID, holdID := openedHold(t)
-	Decide(ledger, taskRunID, holdID, DecisionConfirm, "chat_reply")
+	Decide(ledger, taskRunID, holdID, DecisionApprove, "chat_reply")
 
 	for _, call := range []struct{ toolName, toolInput string }{{"event_delete", `{"eventID":"event-2"}`}, {"event_update", `{"eventID":"event-1"}`}} {
 		if _, isSpent := SpendApprovedCall(ledger, taskRunID, call.toolName, json.RawMessage(call.toolInput)); isSpent {
@@ -59,7 +59,7 @@ func TestADifferentCallIsNotCoveredAndLeavesTheApprovalUnspent(t *testing.T) {
 
 func TestARejectedHoldAnswersNoCall(t *testing.T) {
 	ledger, taskRunID, holdID := openedHold(t)
-	Decide(ledger, taskRunID, holdID, DecisionCancel, "chat_reply")
+	Decide(ledger, taskRunID, holdID, DecisionReject, "chat_reply")
 
 	if _, isSpent := SpendApprovedCall(ledger, taskRunID, "event_delete", eventDeleteInput); isSpent {
 		t.Fatal("a rejection is not an approval")
@@ -68,7 +68,7 @@ func TestARejectedHoldAnswersNoCall(t *testing.T) {
 
 func TestAnApprovalInAnotherTaskRunIsNotCovered(t *testing.T) {
 	ledger, taskRunID, holdID := openedHold(t)
-	Decide(ledger, taskRunID, holdID, DecisionConfirm, "chat_reply")
+	Decide(ledger, taskRunID, holdID, DecisionApprove, "chat_reply")
 	otherTaskRunID := ledger.CreateTaskRun("person-1", "conversation-2", "other").TaskRunID
 
 	if _, isSpent := SpendApprovedCall(ledger, otherTaskRunID, "event_delete", eventDeleteInput); isSpent {
@@ -87,7 +87,7 @@ func replayed(source *task.TaskRunService, taskRunID string) (*task.TaskRunServi
 
 func TestAnApprovalAndItsSpendingSurviveARestart(t *testing.T) {
 	ledger, taskRunID, holdID := openedHold(t)
-	Decide(ledger, taskRunID, holdID, DecisionConfirm, "chat_reply")
+	Decide(ledger, taskRunID, holdID, DecisionApprove, "chat_reply")
 
 	reopened, reopenedID := replayed(ledger, taskRunID)
 	if _, isSpent := SpendApprovedCall(reopened, reopenedID, "event_delete", eventDeleteInput); !isSpent {
@@ -101,14 +101,14 @@ func TestAnApprovalAndItsSpendingSurviveARestart(t *testing.T) {
 
 func TestTheRecordWritesOnlyTheEventNamesTheLedgerAlreadyHad(t *testing.T) {
 	ledger, taskRunID, holdID := openedHold(t)
-	Decide(ledger, taskRunID, holdID, DecisionConfirm, "chat_reply")
+	Decide(ledger, taskRunID, holdID, DecisionApprove, "chat_reply")
 	SpendApprovedCall(ledger, taskRunID, "event_delete", eventDeleteInput)
 
 	names := []string{}
 	for _, taskEvent := range ledger.ListTaskEvent(taskRunID)[1:] {
 		names = append(names, taskEvent.Name)
 	}
-	expected := []string{agentcontract.TaskEventApprovalPendingCall, agentcontract.TaskEventApprovalDecided, agentcontract.TaskEventApprovalExecuted}
+	expected := []string{agentcontract.TaskEventApprovalHoldOpened, agentcontract.TaskEventApprovalDecided, agentcontract.TaskEventApprovalHoldSpent}
 	if len(names) < 3 {
 		t.Fatalf("got %v", names)
 	}
@@ -121,7 +121,7 @@ func TestTheRecordWritesOnlyTheEventNamesTheLedgerAlreadyHad(t *testing.T) {
 
 func TestAHoldWithAKnownToolNameAnswersOnlyThatTool(t *testing.T) {
 	ledger, taskRunID, holdID := openedHold(t)
-	Decide(ledger, taskRunID, holdID, DecisionConfirm, "chat_reply")
+	Decide(ledger, taskRunID, holdID, DecisionApprove, "chat_reply")
 
 	if _, isSpent := SpendApprovedCall(ledger, taskRunID, "event_update", eventDeleteInput); isSpent {
 		t.Fatal("a hold that names its tool answers no other tool")
@@ -133,7 +133,7 @@ func namelessHold(t *testing.T, input string) (*task.TaskRunService, string) {
 	ledger := task.NewTaskRunService(task.NewTaskEventService())
 	taskRunID := ledger.CreateTaskRun("person-1", "conversation-1", "run it").TaskRunID
 	holdID := Open(ledger, taskRunID, agentcontract.HeldCall{ToolInput: json.RawMessage(input)}, nil)
-	Decide(ledger, taskRunID, holdID, DecisionConfirm, "harness_permission")
+	Decide(ledger, taskRunID, holdID, DecisionApprove, "harness_permission")
 	return ledger, taskRunID
 }
 
@@ -176,8 +176,8 @@ func scopeGrantCount(taskRunService *task.TaskRunService, taskRunID string) int 
 func TestConfirmingAHoldGrantsItsScopeOnce(t *testing.T) {
 	taskRunService, taskRunID, holdID := scopedHold(t)
 
-	Decide(taskRunService, taskRunID, holdID, DecisionConfirm, "chat_reply")
-	Decide(taskRunService, taskRunID, holdID, DecisionConfirm, "chat_reply")
+	Decide(taskRunService, taskRunID, holdID, DecisionApprove, "chat_reply")
+	Decide(taskRunService, taskRunID, holdID, DecisionApprove, "chat_reply")
 
 	if grants := scopeGrantCount(taskRunService, taskRunID); grants != 1 {
 		t.Fatalf("expected one scope grant, got %d", grants)
@@ -185,7 +185,7 @@ func TestConfirmingAHoldGrantsItsScopeOnce(t *testing.T) {
 }
 
 func TestRejectingOrDeferringAHoldGrantsNoScope(t *testing.T) {
-	for _, decision := range []string{DecisionCancel, DecisionDefer} {
+	for _, decision := range []string{DecisionReject, DecisionDefer} {
 		taskRunService, taskRunID, _ := scopedHold(t)
 
 		SettleLatest(taskRunService, taskRunID, decision, "chat_reply")
@@ -198,10 +198,10 @@ func TestRejectingOrDeferringAHoldGrantsNoScope(t *testing.T) {
 
 func TestSettlingTheLatestHoldLeavesAnAlreadyDecidedHoldAlone(t *testing.T) {
 	taskRunService, taskRunID, holdID := scopedHold(t)
-	Decide(taskRunService, taskRunID, holdID, DecisionConfirm, "chat_reply")
+	Decide(taskRunService, taskRunID, holdID, DecisionApprove, "chat_reply")
 	eventCount := len(taskRunService.ListTaskEvent(taskRunID))
 
-	SettleLatest(taskRunService, taskRunID, DecisionCancel, "chat_reply")
+	SettleLatest(taskRunService, taskRunID, DecisionReject, "chat_reply")
 
 	if len(taskRunService.ListTaskEvent(taskRunID)) != eventCount {
 		t.Fatal("a decided hold must not be decided again")

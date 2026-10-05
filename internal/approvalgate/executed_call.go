@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -13,50 +12,12 @@ import (
 
 func RecordApprovalSpent(taskRunStore taskstate.TaskRunStore, taskRunID string, toolName string, toolInput json.RawMessage) string {
 	approvedHold, _ := approvalrecord.ApprovedHoldForCall(approvalrecord.Holds(taskRunStore.ListTaskEvent(taskRunID)), toolName, toolInput)
-	recordSpent(taskRunStore, taskRunID, approvedHold.ID, toolName, toolInput)
+	approvalrecord.Spend(taskRunStore, taskRunID, approvedHold.ID, toolName, toolInput)
 	return approvedHold.ID
 }
 
 func RecordApprovedCallSpent(taskRunStore taskstate.TaskRunStore, taskRunID string, approvedCall ApprovedCall) {
-	recordSpent(taskRunStore, taskRunID, approvedCall.HoldID, approvedCall.ToolName, approvedCall.ToolInput)
-}
-
-func recordSpent(taskRunStore taskstate.TaskRunStore, taskRunID string, holdID string, toolName string, toolInput json.RawMessage) {
-	approvalrecord.Spend(taskRunStore, taskRunID, holdID, spentApprovalBody(taskRunStore, taskRunID, toolName, toolInput))
-}
-
-func spentApprovalBody(taskRunStore taskstate.TaskRunStore, taskRunID string, toolName string, toolInput json.RawMessage) map[string]any {
-	body := map[string]any{"toolName": strings.TrimSpace(toolName)}
-	if len(toolInput) > 0 {
-		body["toolInput"] = toolInput
-	}
-	if approvalToken := unspentHeldCallToken(taskRunStore.ListTaskEvent(taskRunID), toolName); approvalToken != "" {
-		body["approvalToken"] = approvalToken
-	}
-	return body
-}
-
-func unspentHeldCallToken(taskEvents []agentcontract.TaskEvent, toolName string) string {
-	trimmedToolName := strings.TrimSpace(toolName)
-	mintedTokens := []string{}
-	spentTokens := map[string]bool{}
-	for _, taskEvent := range taskEvents {
-		switch taskEvent.Name {
-		case agentcontract.TaskEventApprovalHeldCall:
-			heldCall := decodeHeldCallEventBody(taskEvent.Body)
-			if heldCall.ToolName == trimmedToolName && heldCall.ApprovalToken != "" {
-				mintedTokens = append(mintedTokens, heldCall.ApprovalToken)
-			}
-		case agentcontract.TaskEventApprovalExecuted:
-			spentTokens[decodeHeldCallEventBody(taskEvent.Body).ApprovalToken] = true
-		}
-	}
-	for _, approvalToken := range mintedTokens {
-		if !spentTokens[approvalToken] {
-			return approvalToken
-		}
-	}
-	return ""
+	approvalrecord.Spend(taskRunStore, taskRunID, approvedCall.HoldID, approvedCall.ToolName, approvedCall.ToolInput)
 }
 
 func HeldCallID(toolName string, toolInput json.RawMessage) string {

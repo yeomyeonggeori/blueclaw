@@ -76,10 +76,10 @@ func (gate *Gate) spendApprovedHarnessCall(taskRunID string, heldCall agentcontr
 
 func (gate *Gate) settleHarnessHold(taskRunID string, holdID string, options []acp.PermissionOption, outcome acp.RequestPermissionOutcome) {
 	if outcome.Selected == nil || !isAllowOption(options, outcome.Selected.OptionId) {
-		approvalrecord.Decide(gate.taskRunService, taskRunID, holdID, approvalrecord.DecisionCancel, harnessPermissionSource)
+		approvalrecord.Decide(gate.taskRunService, taskRunID, holdID, approvalrecord.DecisionReject, harnessPermissionSource)
 		return
 	}
-	approvalrecord.Decide(gate.taskRunService, taskRunID, holdID, approvalrecord.DecisionConfirm, harnessPermissionSource)
+	approvalrecord.Decide(gate.taskRunService, taskRunID, holdID, approvalrecord.DecisionApprove, harnessPermissionSource)
 }
 
 func optionOfKind(options []acp.PermissionOption, kind acp.PermissionOptionKind) (acp.PermissionOption, bool) {

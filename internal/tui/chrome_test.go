@@ -64,7 +64,7 @@ func TestEveryTimelineEntryHasTheSameShape(testInstance *testing.T) {
 		{Kind: TimelineEntryToolCall, Time: entryTime, ToolName: "bash", HasResult: true, ResultIsFailure: true, ResultSummary: "exit 1"},
 		{Kind: TimelineEntryAgentMessage, Time: entryTime, Message: "reading the ledger"},
 		{Kind: TimelineEntryApprovalPending, Time: entryTime, Message: "send the summary"},
-		{Kind: TimelineEntryApprovalExecuted, Time: entryTime, ToolName: "message_send"},
+		{Kind: TimelineEntryApprovalHoldSpent, Time: entryTime, ToolName: "message_send"},
 		{Time: entryTime, RawEventName: "task.started"},
 	}
 	shape := regexp.MustCompile(`^14:03:09 \S `)

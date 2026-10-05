@@ -638,7 +638,7 @@ func runWaitingOnAHeldCall(t *testing.T, taskRunService *task.TaskRunService, co
 	if errorValue != nil {
 		t.Fatalf("held call body: %v", errorValue)
 	}
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalPendingCall, string(body))
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalHoldOpened, string(body))
 	return taskRun
 }
 

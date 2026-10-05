@@ -41,8 +41,8 @@ func HostUpdateNowAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 		},
 		ExpectedEventCounts: []VirtualEventCount{
 			{Name: toolRequestedEventName(virtualHostUpdateToolName), Count: 1},
-			{Name: agentcontract.TaskEventApprovalPendingCall, BodyFragment: `"targetVersion":"` + virtualHostLatestVersion + `"`, Count: 1},
-			{Name: agentcontract.TaskEventApprovalPendingCall, BodyFragment: `"choices":[{"key":"now"},{"key":"offHours","startsAt":"` + virtualHostOffHoursStartsAt + `"}]`, Count: 1},
+			{Name: agentcontract.TaskEventApprovalHoldOpened, BodyFragment: `"targetVersion":"` + virtualHostLatestVersion + `"`, Count: 1},
+			{Name: agentcontract.TaskEventApprovalHoldOpened, BodyFragment: `"choices":[{"key":"now"},{"key":"offHours","startsAt":"` + virtualHostOffHoursStartsAt + `"}]`, Count: 1},
 		},
 		ExpectedEvents:     []string{agentcontract.TaskEventConfirmationRequested},
 		ExpectedTaskStatus: task.TaskStatusWaitingApproval,
@@ -58,7 +58,7 @@ func HostUpdateNowAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 		ExpectedToolCalls: []string{virtualHostUpdateToolName},
 		ExpectedEventCounts: []VirtualEventCount{
 			{Name: toolResultEventName(virtualHostUpdateToolName), BodyFragment: `"status":"started"`, Count: 1},
-			{Name: agentcontract.TaskEventApprovalExecuted, BodyFragment: virtualHostLatestVersion, Count: 1},
+			{Name: agentcontract.TaskEventApprovalHoldSpent, BodyFragment: virtualHostLatestVersion, Count: 1},
 			{Name: approvalgate.TaskEventApprovalDeferred, Count: 0},
 		},
 		ExpectedEvents:         []string{agentcontract.TaskEventConfirmationReplyClassified},
@@ -73,7 +73,7 @@ func HostUpdateOffHoursAcceptanceScenario(artifactDirectoryPath string) VirtualS
 			actionCallTool(virtualHostUpdateToolName, `{}`),
 		},
 		ExpectedEventCounts: []VirtualEventCount{
-			{Name: agentcontract.TaskEventApprovalPendingCall, BodyFragment: `"choices":[{"key":"offHours","startsAt":"` + virtualHostOffHoursStartsAt + `"},{"key":"now"}]`, Count: 1},
+			{Name: agentcontract.TaskEventApprovalHoldOpened, BodyFragment: `"choices":[{"key":"offHours","startsAt":"` + virtualHostOffHoursStartsAt + `"},{"key":"now"}]`, Count: 1},
 		},
 		ExpectedEvents:     []string{agentcontract.TaskEventConfirmationRequested},
 		ExpectedTaskStatus: task.TaskStatusWaitingApproval,
@@ -89,7 +89,7 @@ func HostUpdateOffHoursAcceptanceScenario(artifactDirectoryPath string) VirtualS
 		ExpectedEventCounts: []VirtualEventCount{
 			{Name: approvalgate.TaskEventApprovalDeferred, BodyFragment: `"startsAt":"` + virtualHostOffHoursStartsAt + `"`, Count: 1},
 			{Name: toolResultEventName(virtualHostUpdateToolName), BodyFragment: `"status":"started"`, Count: 0},
-			{Name: agentcontract.TaskEventApprovalExecuted, Count: 0},
+			{Name: agentcontract.TaskEventApprovalHoldSpent, Count: 0},
 		},
 		ExpectedModelContexts:  []string{"has not run yet"},
 		ExpectedReplyFragments: []string{"새벽 3시"},
@@ -101,7 +101,7 @@ func HostUpdateOffHoursAcceptanceScenario(artifactDirectoryPath string) VirtualS
 		ExpectedEventCounts: []VirtualEventCount{
 			{Name: agentruntime.TaskEventScheduledApprovedCallCarriedOut, BodyFragment: `"targetVersion":"` + virtualHostLatestVersion + `"`, Count: 1},
 			{Name: toolResultEventName(virtualHostUpdateToolName), BodyFragment: `"isScheduled":true`, Count: 1},
-			{Name: agentcontract.TaskEventApprovalPendingCall, Count: 0},
+			{Name: agentcontract.TaskEventApprovalHoldOpened, Count: 0},
 			{Name: agentcontract.TaskEventConfirmationRequested, Count: 0},
 		},
 		ExpectedReplyFragments: []string{"업데이트"},
@@ -118,7 +118,7 @@ func HostUpdateMemberRefusedScenario(artifactDirectoryPath string) VirtualSessio
 		ExpectedEventCounts: []VirtualEventCount{
 			{Name: toolResultEventName(virtualHostUpdateToolName), BodyFragment: "administrator", Count: 1},
 			{Name: toolResultEventName(virtualHostUpdateToolName), BodyFragment: `"status":"started"`, Count: 0},
-			{Name: agentcontract.TaskEventApprovalPendingCall, Count: 0},
+			{Name: agentcontract.TaskEventApprovalHoldOpened, Count: 0},
 			{Name: agentcontract.TaskEventConfirmationRequested, Count: 0},
 		},
 		ExpectedReplyFragments: []string{"관리자"},

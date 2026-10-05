@@ -1332,7 +1332,7 @@ func TestPlatformMessageEditAcceptance(t *testing.T) {
 		t.Fatalf("expected the edit to finish in one turn, got %+v", result)
 	}
 	turnResult := result.TurnResults[0]
-	if eventsContain(turnResult.Events, "approval.pending_call", `"message_update"`) {
+	if eventsContain(turnResult.Events, "approval.hold_opened", `"message_update"`) {
 		t.Fatalf("expected no approval hold on an edit of the assistant's own message; events: %s", summarizeEvents(turnResult.Events))
 	}
 	if countEventsWithFragment(turnResult.Events, "tool.message_update.result", `"deliveryStatus":"updated"`) != 1 {

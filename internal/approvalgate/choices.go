@@ -119,7 +119,7 @@ type ApprovedCallDeferrer interface {
 func DeferHeldCall(ctx context.Context, deferrer ApprovedCallDeferrer, heldCall agentcontract.HeldCall, request DeferralRequest) agentcontract.CarriedOutCall {
 	request.ToolName = heldCall.ToolName
 	request.ToolInput = heldCall.ApprovedInput()
-	return agentcontract.CarriedOutCall{ToolName: request.ToolName, ToolInput: request.ToolInput, Result: deferralResult(ctx, deferrer, request)}
+	return agentcontract.CarriedOutCall{ToolName: request.ToolName, ToolInput: request.ToolInput, HoldID: heldCall.HoldID, Result: deferralResult(ctx, deferrer, request)}
 }
 
 func deferralResult(ctx context.Context, deferrer ApprovedCallDeferrer, request DeferralRequest) toolcontract.ToolResult {

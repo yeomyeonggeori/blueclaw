@@ -17,16 +17,10 @@ const (
 	StateDeferred State = "deferred"
 	StateSpent    State = "spent"
 
-	DecisionConfirm = "confirm"
-	DecisionCancel  = "cancel"
+	DecisionApprove = string(agentcontract.ApprovalSignalApprove)
+	DecisionReject  = string(agentcontract.ApprovalSignalReject)
 	DecisionDefer   = "defer"
 )
-
-var stateAfterDecision = map[string]State{
-	DecisionConfirm: StateApproved,
-	DecisionCancel:  StateRejected,
-	DecisionDefer:   StateDeferred,
-}
 
 type Hold struct {
 	ID      string
@@ -37,7 +31,6 @@ type Hold struct {
 
 type heldCallRecord struct {
 	agentcontract.HeldCall
-	HoldID  string   `json:"holdID"`
 	Choices []Choice `json:"choices,omitempty"`
 }
 
@@ -48,19 +41,22 @@ type decidedRecord struct {
 }
 
 type spentRecord struct {
-	HoldID string `json:"holdID"`
+	HoldID    string          `json:"holdID"`
+	ToolName  string          `json:"toolName"`
+	ToolInput json.RawMessage `json:"toolInput,omitempty"`
 }
 
 func Open(taskRunStore taskstate.TaskRunStore, taskRunID string, call agentcontract.HeldCall, choices []Choice) string {
 	holdID := taskstate.NewIdentifier()
-	taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalPendingCall, marshal(heldCallRecord{HoldID: holdID, HeldCall: call, Choices: choices}))
+	call.HoldID = holdID
+	taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalHoldOpened, marshal(heldCallRecord{HeldCall: call, Choices: choices}))
 	return holdID
 }
 
 func Decide(taskRunStore taskstate.TaskRunStore, taskRunID string, holdID string, decision string, source string) {
 	pendingHold, isPending := pendingHoldByID(taskRunStore.ListTaskEvent(taskRunID), holdID)
 	taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalDecided, marshal(decidedRecord{HoldID: holdID, Decision: decision, Source: source}))
-	if isPending && decision == DecisionConfirm {
+	if isPending && decision == DecisionApprove {
 		grantScope(taskRunStore, taskRunID, pendingHold)
 	}
 }
@@ -80,12 +76,10 @@ func SettleSignal(taskRunStore taskstate.TaskRunStore, taskRunID string, approva
 	if approvalSignal == nil {
 		return
 	}
-	switch *approvalSignal {
-	case agentcontract.ApprovalSignalApprove:
-		SettleLatest(taskRunStore, taskRunID, DecisionConfirm, source)
-	case agentcontract.ApprovalSignalReject:
-		SettleLatest(taskRunStore, taskRunID, DecisionCancel, source)
+	if !agentcontract.IsApprovalSignalName(string(*approvalSignal)) {
+		return
 	}
+	SettleLatest(taskRunStore, taskRunID, string(*approvalSignal), source)
 }
 
 func pendingHoldByID(taskEvents []agentcontract.TaskEvent, holdID string) (Hold, bool) {
@@ -105,9 +99,8 @@ func grantScope(taskRunStore taskstate.TaskRunStore, taskRunID string, approvedH
 	taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalScopeGranted, marshal(map[string]string{"scope": approvalScope}))
 }
 
-func Spend(taskRunStore taskstate.TaskRunStore, taskRunID string, holdID string, body map[string]any) {
-	body["holdID"] = holdID
-	taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalExecuted, marshal(body))
+func Spend(taskRunStore taskstate.TaskRunStore, taskRunID string, holdID string, toolName string, toolInput json.RawMessage) {
+	taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalHoldSpent, marshal(spentRecord{HoldID: holdID, ToolName: strings.TrimSpace(toolName), ToolInput: toolInput}))
 }
 
 func SpendApprovedCall(taskRunStore taskstate.TaskRunStore, taskRunID string, toolName string, toolInput json.RawMessage) (Hold, bool) {
@@ -115,11 +108,7 @@ func SpendApprovedCall(taskRunStore taskstate.TaskRunStore, taskRunID string, to
 	if !isApproved {
 		return Hold{}, false
 	}
-	body := map[string]any{"toolName": strings.TrimSpace(toolName)}
-	if len(toolInput) > 0 {
-		body["toolInput"] = toolInput
-	}
-	Spend(taskRunStore, taskRunID, approved.ID, body)
+	Spend(taskRunStore, taskRunID, approved.ID, toolName, toolInput)
 	return approved, true
 }
 
@@ -127,12 +116,12 @@ func Holds(taskEvents []agentcontract.TaskEvent) []Hold {
 	holds := []Hold{}
 	for _, taskEvent := range taskEvents {
 		switch taskEvent.Name {
-		case agentcontract.TaskEventApprovalPendingCall:
+		case agentcontract.TaskEventApprovalHoldOpened:
 			holds = append(holds, holdFromEvent(taskEvent))
 		case agentcontract.TaskEventApprovalDecided:
 			decided := decode[decidedRecord](taskEvent.Body)
 			update(holds, decided.HoldID, func(held *Hold) { held.decide(decided.Decision) })
-		case agentcontract.TaskEventApprovalExecuted:
+		case agentcontract.TaskEventApprovalHoldSpent:
 			update(holds, decode[spentRecord](taskEvent.Body).HoldID, func(held *Hold) { held.spend() })
 		}
 	}
@@ -142,7 +131,7 @@ func Holds(taskEvents []agentcontract.TaskEvent) []Hold {
 func holdFromEvent(taskEvent agentcontract.TaskEvent) Hold {
 	record := decode[heldCallRecord](taskEvent.Body)
 	record.ToolName = strings.TrimSpace(record.ToolName)
-	return Hold{ID: firstNonEmpty(record.HoldID, taskEvent.TaskEventID), Call: record.HeldCall, Choices: record.Choices, State: StatePending}
+	return Hold{ID: record.HoldID, Call: record.HeldCall, Choices: record.Choices, State: StatePending}
 }
 
 func update(holds []Hold, holdID string, change func(*Hold)) {
@@ -155,8 +144,16 @@ func update(holds []Hold, holdID string, change func(*Hold)) {
 }
 
 func (held *Hold) decide(decision string) {
-	if state, isKnown := stateAfterDecision[decision]; isKnown && held.State == StatePending {
-		held.State = state
+	if held.State != StatePending {
+		return
+	}
+	switch decision {
+	case DecisionApprove:
+		held.State = StateApproved
+	case DecisionReject:
+		held.State = StateRejected
+	case DecisionDefer:
+		held.State = StateDeferred
 	}
 }
 
@@ -212,13 +209,4 @@ func decode[Body any](body string) Body {
 	var decoded Body
 	json.Unmarshal([]byte(body), &decoded)
 	return decoded
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if trimmed := strings.TrimSpace(value); trimmed != "" {
-			return trimmed
-		}
-	}
-	return ""
 }

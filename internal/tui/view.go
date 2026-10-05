@@ -278,7 +278,7 @@ func timelineEntryParts(entry TimelineEntry) (string, lipgloss.Style, string) {
 		return "▸", styleAccent, truncateText(entry.Message, 100)
 	case TimelineEntryApprovalPending:
 		return "?", styleWarning, "approval requested: " + truncateText(entry.Message, 100)
-	case TimelineEntryApprovalExecuted:
+	case TimelineEntryApprovalHoldSpent:
 		return "✓", styleSuccess, "approval resolved for " + entry.ToolName
 	default:
 		return "·", styleMuted, styleMuted.Render(entry.RawEventName)
@@ -316,7 +316,7 @@ func (model Model) renderApprovalsScreen() string {
 		if question, hasQuestion := LatestApprovalQuestion(approvalDetail.TaskEvents); hasQuestion {
 			panelLines = append(panelLines, question)
 		} else {
-			panelLines = append(panelLines, styleMuted.Render("no approval.pending_call event found in this run's ledger"))
+			panelLines = append(panelLines, styleMuted.Render("no approval.hold_opened event found in this run's ledger"))
 		}
 	} else {
 		panelLines = append(panelLines, styleMuted.Render("loading…"))

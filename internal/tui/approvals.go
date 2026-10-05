@@ -17,9 +17,9 @@ func FilterWaitingApproval(taskRuns []TaskRun) []TaskRun {
 func ApprovalDecisionForKey(key string) (string, bool) {
 	switch key {
 	case "y":
-		return ApprovalDecisionConfirm, true
+		return ApprovalDecisionApprove, true
 	case "n":
-		return ApprovalDecisionCancel, true
+		return ApprovalDecisionReject, true
 	default:
 		return "", false
 	}

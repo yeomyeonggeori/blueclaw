@@ -23,7 +23,7 @@ DEMO_TASK_EVENTS = [
     (38, "tool.conversation_history.requested", {"toolName": "conversation_history"}),
     (38, "tool.conversation_history.result", {"summary": "read 20 messages from #ops"}),
     (74, "tool.message_send.requested", {"toolName": "message_send"}),
-    (75, "approval.pending_call", {"toolName": "message_send", "confirmation": "Post the Q3 rollout summary to #ops?"}),
+    (75, "approval.hold_opened", {"toolName": "message_send", "confirmation": "Post the Q3 rollout summary to #ops?"}),
 ]
 
 DEMO_HARNESS = {

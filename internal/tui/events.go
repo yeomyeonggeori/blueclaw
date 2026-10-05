@@ -12,11 +12,11 @@ import (
 type TimelineEntryKind string
 
 const (
-	TimelineEntryToolCall         TimelineEntryKind = "tool_call"
-	TimelineEntryAgentMessage     TimelineEntryKind = "agent_message"
-	TimelineEntryApprovalPending  TimelineEntryKind = "approval_pending"
-	TimelineEntryApprovalExecuted TimelineEntryKind = "approval_executed"
-	TimelineEntryOther            TimelineEntryKind = "other"
+	TimelineEntryToolCall          TimelineEntryKind = "tool_call"
+	TimelineEntryAgentMessage      TimelineEntryKind = "agent_message"
+	TimelineEntryApprovalPending   TimelineEntryKind = "approval_pending"
+	TimelineEntryApprovalHoldSpent TimelineEntryKind = "approval_hold_spent"
+	TimelineEntryOther             TimelineEntryKind = "other"
 )
 
 // TimelineEntry is a display-friendly grouping of one or more raw task
@@ -109,7 +109,7 @@ func BuildTimeline(taskEvents []TaskEvent) []TimelineEntry {
 				Message:      checkpointBody.Message,
 			})
 
-		case taskEvent.Name == agentcontract.TaskEventApprovalPendingCall:
+		case taskEvent.Name == agentcontract.TaskEventApprovalHoldOpened:
 			pendingBody := decodeEventBody[agentcontract.HeldCall](taskEvent.Body)
 			timelineEntries = append(timelineEntries, TimelineEntry{
 				Kind:         TimelineEntryApprovalPending,
@@ -119,10 +119,10 @@ func BuildTimeline(taskEvents []TaskEvent) []TimelineEntry {
 				Message:      pendingBody.Confirmation,
 			})
 
-		case taskEvent.Name == agentcontract.TaskEventApprovalExecuted:
+		case taskEvent.Name == agentcontract.TaskEventApprovalHoldSpent:
 			executedBody := decodeEventBody[approvalExecutedEventBody](taskEvent.Body)
 			timelineEntries = append(timelineEntries, TimelineEntry{
-				Kind:         TimelineEntryApprovalExecuted,
+				Kind:         TimelineEntryApprovalHoldSpent,
 				Time:         taskEvent.CreatedAt,
 				RawEventName: taskEvent.Name,
 				ToolName:     executedBody.ToolName,
@@ -142,12 +142,12 @@ func BuildTimeline(taskEvents []TaskEvent) []TimelineEntry {
 }
 
 // LatestApprovalQuestion returns the confirmation wording from the most
-// recent unresolved approval.pending_call event, if any.
+// recent unresolved approval.hold_opened event, if any.
 func LatestApprovalQuestion(taskEvents []TaskEvent) (string, bool) {
 	timelineEntries := BuildTimeline(taskEvents)
 	for entryIndex := len(timelineEntries) - 1; entryIndex >= 0; entryIndex-- {
 		entry := timelineEntries[entryIndex]
-		if entry.Kind == TimelineEntryApprovalExecuted {
+		if entry.Kind == TimelineEntryApprovalHoldSpent {
 			return "", false
 		}
 		if entry.Kind == TimelineEntryApprovalPending {

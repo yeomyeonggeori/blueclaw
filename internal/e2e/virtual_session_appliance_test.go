@@ -162,7 +162,7 @@ func TestCalendarEventLifecycleAcceptance(t *testing.T) {
 	if countEventsWithFragment(thirdTurnResult.Events, "tool.event_delete.requested", "event_delete") != 1 {
 		t.Fatalf("expected one calendar delete request; events: %s", summarizeEvents(thirdTurnResult.Events))
 	}
-	if !eventsContain(approvalTurnResult.Events, "approval.executed", "event_delete") {
+	if !eventsContain(approvalTurnResult.Events, "approval.hold_spent", "event_delete") {
 		t.Fatalf("expected approved calendar delete execution; events: %s", summarizeEvents(approvalTurnResult.Events))
 	}
 }

@@ -15,8 +15,8 @@ const approvalGateWritersReason = "one approval gate is installed per harness, s
 var eventNamesWrittenOnBothSides = map[string]string{
 	"ask.requested":               "undecided: the host writes the approval question and the loop writes its own ask_input question, which may be two events of one kind rather than one event with two writers",
 	"approval.decided":            approvalGateWritersReason,
-	"approval.executed":           approvalGateWritersReason,
-	"approval.pending_call":       approvalGateWritersReason,
+	"approval.hold_spent":         approvalGateWritersReason,
+	"approval.hold_opened":        approvalGateWritersReason,
 	"approval.scope_granted":      approvalGateWritersReason,
 	"approval.wording_failed":     approvalGateWritersReason,
 	"confirmation.requested":      approvalGateWritersReason,

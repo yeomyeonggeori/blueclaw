@@ -95,7 +95,7 @@ func TestARetryOfAnApprovedHarnessCallIsNotAskedAgainAndSpendsTheApprovalOnce(t 
 	gate.UsePermissionAsker(asker)
 	input := map[string]any{"branch": "main"}
 	gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(input))
-	recordDecision(taskRunService, taskRun.TaskRunID, "confirm")
+	recordDecision(taskRunService, taskRun.TaskRunID, "approve")
 	asker.questions = nil
 
 	outcome, isAnswered := gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(input))
@@ -114,7 +114,7 @@ func TestADifferentHarnessCallIsNotCoveredByAnApproval(t *testing.T) {
 	asker := &harnessAskerDouble{}
 	gate.UsePermissionAsker(asker)
 	gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(map[string]any{"branch": "main"}))
-	recordDecision(taskRunService, taskRun.TaskRunID, "confirm")
+	recordDecision(taskRunService, taskRun.TaskRunID, "approve")
 	asker.questions = nil
 
 	gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(map[string]any{"branch": "release"}))

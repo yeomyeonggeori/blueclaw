@@ -37,7 +37,7 @@ func TestApprovalRefusesATaskRunThatIsNotWaitingForApproval(t *testing.T) {
 	taskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "캘린더 정리")
 	handler := configuredApprovalHandler(taskRunService)
 
-	responseRecorder := postApproval(t, handler, `{"taskRunID":"`+taskRun.TaskRunID+`","decision":"confirm"}`)
+	responseRecorder := postApproval(t, handler, `{"taskRunID":"`+taskRun.TaskRunID+`","decision":"approve"}`)
 	if responseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected a running task run to be unapprovable, got %d", responseRecorder.Code)
 	}
@@ -54,11 +54,11 @@ func TestApprovalRefusesAnUnknownTaskRunAndAnUnknownDecision(t *testing.T) {
 	}
 	handler := configuredApprovalHandler(taskRunService)
 
-	if responseRecorder := postApproval(t, handler, `{"taskRunID":"missing","decision":"confirm"}`); responseRecorder.Code != http.StatusBadRequest {
+	if responseRecorder := postApproval(t, handler, `{"taskRunID":"missing","decision":"approve"}`); responseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected an unknown task run to be refused, got %d", responseRecorder.Code)
 	}
 	responseRecorder := postApproval(t, handler, `{"taskRunID":"`+taskRun.TaskRunID+`","decision":"looks good"}`)
-	if responseRecorder.Code != http.StatusBadRequest || !strings.Contains(responseRecorder.Body.String(), "cancel") {
+	if responseRecorder.Code != http.StatusBadRequest || !strings.Contains(responseRecorder.Body.String(), "reject") {
 		t.Fatalf("expected a free-text decision to be refused with the allowed set, got %d %s", responseRecorder.Code, responseRecorder.Body.String())
 	}
 }
@@ -71,7 +71,7 @@ func TestApprovalRefusesWhenNoLauncherCanCarryTheDecision(t *testing.T) {
 	}
 	handler := TaskApprovalHandler{TaskRunService: taskRunService}
 
-	responseRecorder := postApproval(t, handler, `{"taskRunID":"`+taskRun.TaskRunID+`","decision":"confirm"}`)
+	responseRecorder := postApproval(t, handler, `{"taskRunID":"`+taskRun.TaskRunID+`","decision":"approve"}`)
 	if responseRecorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected an unconfigured approval path to refuse rather than silently accept, got %d", responseRecorder.Code)
 	}
@@ -83,7 +83,7 @@ func TestApprovalRefusesWhenNoLauncherCanCarryTheDecision(t *testing.T) {
 }
 
 func TestApprovalDecisionMapsToTheApprovalSignalTheGateExpects(t *testing.T) {
-	for decision, expectedSignal := range map[string]string{"confirm": "approve", "cancel": "reject"} {
+	for decision, expectedSignal := range map[string]string{"approve": "approve", "reject": "reject"} {
 		turnDecision, errorValue := approvalTurnDecision(decision)
 		if errorValue != nil {
 			t.Fatalf("expected %q to map: %v", decision, errorValue)

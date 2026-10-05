@@ -78,8 +78,8 @@ func TestBuildTimelinePairsCallsInFIFOOrderPerToolName(testInstance *testing.T) 
 func TestBuildTimelineRendersCheckpointAndApprovalEvents(testInstance *testing.T) {
 	taskEvents := []TaskEvent{
 		{Name: "agent.checkpoint.sent", Body: `{"toolName":"bash","message":"running the build"}`, CreatedAt: time.Unix(0, 0)},
-		{Name: "approval.pending_call", Body: `{"toolName":"message_send","confirmation":"Send this message to the team?"}`, CreatedAt: time.Unix(1, 0)},
-		{Name: "approval.executed", Body: `{"toolName":"message_send"}`, CreatedAt: time.Unix(2, 0)},
+		{Name: "approval.hold_opened", Body: `{"toolName":"message_send","confirmation":"Send this message to the team?"}`, CreatedAt: time.Unix(1, 0)},
+		{Name: "approval.hold_spent", Body: `{"toolName":"message_send"}`, CreatedAt: time.Unix(2, 0)},
 	}
 
 	timelineEntries := BuildTimeline(taskEvents)
@@ -93,7 +93,7 @@ func TestBuildTimelineRendersCheckpointAndApprovalEvents(testInstance *testing.T
 	if timelineEntries[1].Kind != TimelineEntryApprovalPending || timelineEntries[1].Message != "Send this message to the team?" {
 		testInstance.Fatalf("unexpected approval pending entry: %+v", timelineEntries[1])
 	}
-	if timelineEntries[2].Kind != TimelineEntryApprovalExecuted || timelineEntries[2].ToolName != "message_send" {
+	if timelineEntries[2].Kind != TimelineEntryApprovalHoldSpent || timelineEntries[2].ToolName != "message_send" {
 		testInstance.Fatalf("unexpected approval executed entry: %+v", timelineEntries[2])
 	}
 }
@@ -128,9 +128,9 @@ func TestBuildTimelineOrdersEventsByCreatedAtRegardlessOfInputOrder(testInstance
 
 func TestLatestApprovalQuestionReturnsMostRecentUnresolvedPendingCall(testInstance *testing.T) {
 	taskEvents := []TaskEvent{
-		{Name: "approval.pending_call", Body: `{"confirmation":"resolved one, ignore"}`, CreatedAt: time.Unix(0, 0)},
-		{Name: "approval.executed", Body: `{}`, CreatedAt: time.Unix(1, 0)},
-		{Name: "approval.pending_call", Body: `{"confirmation":"delete the report file?"}`, CreatedAt: time.Unix(2, 0)},
+		{Name: "approval.hold_opened", Body: `{"confirmation":"resolved one, ignore"}`, CreatedAt: time.Unix(0, 0)},
+		{Name: "approval.hold_spent", Body: `{}`, CreatedAt: time.Unix(1, 0)},
+		{Name: "approval.hold_opened", Body: `{"confirmation":"delete the report file?"}`, CreatedAt: time.Unix(2, 0)},
 	}
 
 	question, hasQuestion := LatestApprovalQuestion(taskEvents)
@@ -142,8 +142,8 @@ func TestLatestApprovalQuestionReturnsMostRecentUnresolvedPendingCall(testInstan
 
 func TestLatestApprovalQuestionReturnsFalseWhenNoneOutstanding(testInstance *testing.T) {
 	taskEvents := []TaskEvent{
-		{Name: "approval.pending_call", Body: `{"confirmation":"resolved"}`, CreatedAt: time.Unix(0, 0)},
-		{Name: "approval.executed", Body: `{}`, CreatedAt: time.Unix(1, 0)},
+		{Name: "approval.hold_opened", Body: `{"confirmation":"resolved"}`, CreatedAt: time.Unix(0, 0)},
+		{Name: "approval.hold_spent", Body: `{}`, CreatedAt: time.Unix(1, 0)},
 	}
 
 	_, hasQuestion := LatestApprovalQuestion(taskEvents)

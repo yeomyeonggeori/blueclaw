@@ -64,10 +64,10 @@ func TestAnAnsweredCallRunsInsideTheTurnAndReadsTheSameOnTheLedger(t *testing.T)
 	}
 	names := recordedEventNames(taskRunService, taskRun.TaskRunID)
 	for _, wanted := range []string{
-		agentcontract.TaskEventApprovalPendingCall,
+		agentcontract.TaskEventApprovalHoldOpened,
 		agentcontract.TaskEventConfirmationRequested,
 		agentcontract.TaskEventApprovalDecided,
-		agentcontract.TaskEventApprovalExecuted,
+		agentcontract.TaskEventApprovalHoldSpent,
 	} {
 		if !carriesEvent(names, wanted) {
 			t.Fatalf("the ledger carries %v and not %s, so an acp-answered turn reads differently from a chat-answered one", names, wanted)
@@ -75,9 +75,6 @@ func TestAnAnsweredCallRunsInsideTheTurnAndReadsTheSameOnTheLedger(t *testing.T)
 	}
 	if taskRunStatus(t, taskRunService, taskRun.TaskRunID) == agentcontract.TaskStatusWaitingApproval {
 		t.Fatal("the run was paused for an approval that had already been answered")
-	}
-	if carriesEvent(names, agentcontract.TaskEventApprovalHeldCall) {
-		t.Fatalf("the gate identifies the call by its hold, so it writes no second record of it, got %v", names)
 	}
 	if holds := approvalrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID)); len(holds) != 1 || outcome.ApprovedCallID != holds[0].ID {
 		t.Fatalf("the approved call is named by the hold that was answered, got %q for %+v", outcome.ApprovedCallID, holds)
@@ -111,7 +108,7 @@ func TestADeclinedCallIsRejectedAndNotRecordedAsExecuted(t *testing.T) {
 	if outcome.Decision != mcpserver.ApprovalDecisionRejected {
 		t.Fatalf("the declined call decided %q, expected rejected", outcome.Decision)
 	}
-	if carriesEvent(recordedEventNames(taskRunService, taskRun.TaskRunID), agentcontract.TaskEventApprovalExecuted) {
+	if carriesEvent(recordedEventNames(taskRunService, taskRun.TaskRunID), agentcontract.TaskEventApprovalHoldSpent) {
 		t.Fatal("a declined call was recorded as executed")
 	}
 }
@@ -157,7 +154,7 @@ func TestTheRunWaitsAndTheCallIsHeldWhileTheQuestionIsStillOutstanding(t *testin
 	if asker.statusWhileAsking != agentcontract.TaskStatusWaitingApproval {
 		t.Fatalf("the run read %q while the person was being asked, so a restart here finds nothing waiting", asker.statusWhileAsking)
 	}
-	if !carriesEvent(asker.eventsWhileAsking, agentcontract.TaskEventApprovalPendingCall) {
+	if !carriesEvent(asker.eventsWhileAsking, agentcontract.TaskEventApprovalHoldOpened) {
 		t.Fatalf("the ledger carried %v while the person was being asked, so a restart here cannot say which call was held", asker.eventsWhileAsking)
 	}
 }
