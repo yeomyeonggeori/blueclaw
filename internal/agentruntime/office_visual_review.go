@@ -9,9 +9,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/claimcheck"
+	"github.com/yeomyeonggeori/blueclaw/internal/officeclaimcheck"
+	"github.com/yeomyeonggeori/blueclaw/internal/officevisualcheck"
 	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/visualcheck"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 )
@@ -37,16 +37,16 @@ type officeVisualLeftover struct {
 }
 
 type officeVisualReview struct {
-	File            string                 `json:"file"`
-	RoundsUsed      int                    `json:"roundsUsed"`
-	Fixed           []visualcheck.Fixed    `json:"fixed,omitempty"`
-	GivenUp         []int                  `json:"givenUp,omitempty"`
-	Leftovers       []officeVisualLeftover `json:"leftovers,omitempty"`
-	TextChanged     []int                  `json:"textChanged,omitempty"`
-	RecheckedClaims int                    `json:"recheckedClaims"`
-	CostUSD         float64                `json:"costUSD"`
-	Outcome         string                 `json:"outcome"`
-	Detail          string                 `json:"detail,omitempty"`
+	File            string                    `json:"file"`
+	RoundsUsed      int                       `json:"roundsUsed"`
+	Fixed           []officevisualcheck.Fixed `json:"fixed,omitempty"`
+	GivenUp         []int                     `json:"givenUp,omitempty"`
+	Leftovers       []officeVisualLeftover    `json:"leftovers,omitempty"`
+	TextChanged     []int                     `json:"textChanged,omitempty"`
+	RecheckedClaims int                       `json:"recheckedClaims"`
+	CostUSD         float64                   `json:"costUSD"`
+	Outcome         string                    `json:"outcome"`
+	Detail          string                    `json:"detail,omitempty"`
 
 	claimRecheck *officeClaimCheck
 }
@@ -84,7 +84,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) checkOfficeVisualReview(ctx contex
 
 func (toolCatalogBuilder *ToolCatalogBuilder) reviewDeck(ctx context.Context, request ToolCatalogRequest, actor security.WorkspaceActor, concretePath string, before officeSnapshot, review *officeVisualReview) error {
 	deck := &officeDeck{toolCatalogBuilder: toolCatalogBuilder, request: request, actor: actor, snapshot: before, concretePath: concretePath}
-	report, errorValue := visualcheck.Run(ctx, toolCatalogBuilder.visualReviewDecisionModel, toolCatalogBuilder.visualReviewLanguageModel, deck)
+	report, errorValue := officevisualcheck.Run(ctx, toolCatalogBuilder.visualReviewDecisionModel, toolCatalogBuilder.visualReviewLanguageModel, deck)
 	review.recordReport(report)
 	if errorValue != nil {
 		return errorValue
@@ -99,7 +99,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) reviewDeck(ctx context.Context, re
 	return nil
 }
 
-func (review *officeVisualReview) recordReport(report visualcheck.Report) {
+func (review *officeVisualReview) recordReport(report officevisualcheck.Report) {
 	review.RoundsUsed = report.RoundsUsed
 	review.Fixed = report.Fixed
 	review.GivenUp = report.GivenUp
@@ -109,7 +109,7 @@ func (review *officeVisualReview) recordReport(report visualcheck.Report) {
 	review.Outcome = visualOutcomeOf(report)
 }
 
-func visualOutcomeOf(report visualcheck.Report) string {
+func visualOutcomeOf(report officevisualcheck.Report) string {
 	switch {
 	case len(report.Leftovers) > 0:
 		return visualOutcomeLeftovers
@@ -119,7 +119,7 @@ func visualOutcomeOf(report visualcheck.Report) string {
 	return visualOutcomeClean
 }
 
-func leftoversOf(report visualcheck.Report) []officeVisualLeftover {
+func leftoversOf(report officevisualcheck.Report) []officeVisualLeftover {
 	leftovers := []officeVisualLeftover{}
 	for _, slide := range report.Slides {
 		if !slices.Contains(report.Leftovers, slide.Number) {
@@ -143,14 +143,14 @@ func (toolCatalogBuilder *ToolCatalogBuilder) recheckChangedClaims(ctx context.C
 	review.claimRecheck = toolCatalogBuilder.judgeAndBlank(ctx, request, actor, concretePath, after, changed)
 }
 
-func newOrChangedClaims(before []claimcheck.Claim, after []claimcheck.Claim) []claimcheck.Claim {
-	known := map[claimcheck.Claim]bool{}
+func newOrChangedClaims(before []officeclaimcheck.Claim, after []officeclaimcheck.Claim) []officeclaimcheck.Claim {
+	known := map[officeclaimcheck.Claim]bool{}
 	for _, claim := range before {
-		known[claimcheck.Claim{Path: claim.Path, Text: claim.Text}] = true
+		known[officeclaimcheck.Claim{Path: claim.Path, Text: claim.Text}] = true
 	}
-	changed := []claimcheck.Claim{}
+	changed := []officeclaimcheck.Claim{}
 	for _, claim := range after {
-		if !known[claimcheck.Claim{Path: claim.Path, Text: claim.Text}] {
+		if !known[officeclaimcheck.Claim{Path: claim.Path, Text: claim.Text}] {
 			changed = append(changed, claim)
 		}
 	}
@@ -165,57 +165,57 @@ type officeDeck struct {
 	concretePath       string
 }
 
-func (deck *officeDeck) Manifest(ctx context.Context) (visualcheck.Manifest, error) {
+func (deck *officeDeck) Manifest(ctx context.Context) (officevisualcheck.Manifest, error) {
 	content, errorValue := deck.actor.ReadFile(ctx, deck.snapshot.VisualReview, officeVisualManifestReadLimit)
 	if errorValue != nil {
-		return visualcheck.Manifest{}, errorValue
+		return officevisualcheck.Manifest{}, errorValue
 	}
-	return visualcheck.ParseManifest(content)
+	return officevisualcheck.ParseManifest(content)
 }
 
 func (deck *officeDeck) Image(ctx context.Context, path string) ([]byte, error) {
 	return deck.actor.ReadFile(ctx, path, officeVisualImageReadLimit)
 }
 
-func (deck *officeDeck) Rebuild(ctx context.Context, replacements map[int]string) (visualcheck.Manifest, error) {
+func (deck *officeDeck) Rebuild(ctx context.Context, replacements map[int]string) (officevisualcheck.Manifest, error) {
 	words, errorValue := officeRebuildWords(deck.snapshot)
 	if errorValue != nil {
-		return visualcheck.Manifest{}, errorValue
+		return officevisualcheck.Manifest{}, errorValue
 	}
 	manifest, errorValue := deck.Manifest(ctx)
 	if errorValue != nil {
-		return visualcheck.Manifest{}, errorValue
+		return officevisualcheck.Manifest{}, errorValue
 	}
 	originals, errorValue := deck.writePages(ctx, manifest, replacements)
 	if errorValue != nil {
 		deck.restorePages(ctx, originals)
-		return visualcheck.Manifest{}, errorValue
+		return officevisualcheck.Manifest{}, errorValue
 	}
 	if detail := deck.toolCatalogBuilder.runOfficeCommand(ctx, deck.request, deck.actor, words); detail != "" {
 		deck.restorePages(ctx, originals)
-		return visualcheck.Manifest{}, errors.New("the deck rebuild failed: " + detail)
+		return officevisualcheck.Manifest{}, errors.New("the deck rebuild failed: " + detail)
 	}
 	return deck.rebuiltManifest(ctx)
 }
 
-func (deck *officeDeck) rebuiltManifest(ctx context.Context) (visualcheck.Manifest, error) {
+func (deck *officeDeck) rebuiltManifest(ctx context.Context) (officevisualcheck.Manifest, error) {
 	snapshotPath := deck.concretePath + officeContract.SourceSuffix
 	content, errorValue := deck.actor.ReadFile(ctx, snapshotPath, officeSnapshotReadLimit)
 	if errorValue != nil {
-		return visualcheck.Manifest{}, errorValue
+		return officevisualcheck.Manifest{}, errorValue
 	}
 	var rebuilt officeSnapshot
 	if errorValue := json.Unmarshal(content, &rebuilt); errorValue != nil {
-		return visualcheck.Manifest{}, errorValue
+		return officevisualcheck.Manifest{}, errorValue
 	}
 	if rebuilt.VisualReview == "" {
-		return visualcheck.Manifest{}, errors.New("the rebuilt deck names no visual review")
+		return officevisualcheck.Manifest{}, errors.New("the rebuilt deck names no visual review")
 	}
 	deck.snapshot = rebuilt
 	return deck.Manifest(ctx)
 }
 
-func (deck *officeDeck) writePages(ctx context.Context, manifest visualcheck.Manifest, replacements map[int]string) (map[string][]byte, error) {
+func (deck *officeDeck) writePages(ctx context.Context, manifest officevisualcheck.Manifest, replacements map[int]string) (map[string][]byte, error) {
 	originals := map[string][]byte{}
 	for number, section := range replacements {
 		pagePath := manifest.PageSource(number)

@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/claimcheck"
+	"github.com/yeomyeonggeori/blueclaw/internal/officeclaimcheck"
 	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
@@ -23,14 +23,14 @@ const (
 )
 
 type officeSnapshot struct {
-	Schema      string             `json:"schema"`
-	Declaration string             `json:"declaration"`
-	Deck        string             `json:"deck"`
-	Known       json.RawMessage    `json:"known"`
-	Claims      []claimcheck.Claim `json:"claims"`
-	Command     string             `json:"command"`
-	Arguments   []string           `json:"arguments"`
-	Blanks      []officeBlank      `json:"blanks"`
+	Schema      string                   `json:"schema"`
+	Declaration string                   `json:"declaration"`
+	Deck        string                   `json:"deck"`
+	Known       json.RawMessage          `json:"known"`
+	Claims      []officeclaimcheck.Claim `json:"claims"`
+	Command     string                   `json:"command"`
+	Arguments   []string                 `json:"arguments"`
+	Blanks      []officeBlank            `json:"blanks"`
 
 	VisualReview string `json:"visualReview"`
 }
@@ -48,13 +48,13 @@ type officeBlankCommands struct {
 }
 
 type officeClaimCheck struct {
-	File    string               `json:"file"`
-	Asked   int                  `json:"asked"`
-	Flagged []claimcheck.Verdict `json:"flagged,omitempty"`
-	Hollow  []claimcheck.Verdict `json:"hollow,omitempty"`
-	Blanked []string             `json:"blanked,omitempty"`
-	Outcome string               `json:"outcome"`
-	Detail  string               `json:"detail,omitempty"`
+	File    string                     `json:"file"`
+	Asked   int                        `json:"asked"`
+	Flagged []officeclaimcheck.Verdict `json:"flagged,omitempty"`
+	Hollow  []officeclaimcheck.Verdict `json:"hollow,omitempty"`
+	Blanked []string                   `json:"blanked,omitempty"`
+	Outcome string                     `json:"outcome"`
+	Detail  string                     `json:"detail,omitempty"`
 }
 
 const (
@@ -109,24 +109,24 @@ func (toolCatalogBuilder *ToolCatalogBuilder) checkOfficeClaims(ctx context.Cont
 	return toolCatalogBuilder.judgeAndBlank(ctx, request, actor, concretePath, snapshot, snapshot.Claims)
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) judgeAndBlank(ctx context.Context, request ToolCatalogRequest, actor security.WorkspaceActor, concretePath string, snapshot officeSnapshot, claims []claimcheck.Claim) *officeClaimCheck {
+func (toolCatalogBuilder *ToolCatalogBuilder) judgeAndBlank(ctx context.Context, request ToolCatalogRequest, actor security.WorkspaceActor, concretePath string, snapshot officeSnapshot, claims []officeclaimcheck.Claim) *officeClaimCheck {
 	check := &officeClaimCheck{File: filepath.Base(concretePath)}
 	sources, isEverySourceRead := toolCatalogBuilder.claimSources(ctx, request, snapshot)
-	judgment, errorValue := claimcheck.Judge(ctx, toolCatalogBuilder.claimDecisionModel, sources, claimsMarkedFree(claims))
+	judgment, errorValue := officeclaimcheck.Judge(ctx, toolCatalogBuilder.claimDecisionModel, sources, claimsMarkedFree(claims))
 	if errorValue != nil {
 		check.Outcome, check.Detail = claimOutcomeJudgeFailed, errorValue.Error()
 		return check
 	}
 	judgment, check.Detail = toolCatalogBuilder.withRecomputedDerivations(ctx, sources, judgment)
 	check.Asked = askedCount(judgment)
-	check.Hollow = judgment.Treated(claimcheck.TreatmentRewrite)
+	check.Hollow = judgment.Treated(officeclaimcheck.TreatmentRewrite)
 	treated := toolCatalogBuilder.treatedClaims(ctx, sources, judgment, check)
 	check.Flagged = treated.Blank
 	check = toolCatalogBuilder.actOnFlaggedClaims(ctx, request, actor, concretePath, snapshot, check, treated, isEverySourceRead)
 	return toolCatalogBuilder.judgeWhatTheBlanksLeft(ctx, request, actor, concretePath, sources, check, slices.Concat(treated.Blank, treated.Removed))
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) judgeWhatTheBlanksLeft(ctx context.Context, request ToolCatalogRequest, actor security.WorkspaceActor, concretePath string, sources claimcheck.Sources, check *officeClaimCheck, newlyRemoved []claimcheck.Verdict) *officeClaimCheck {
+func (toolCatalogBuilder *ToolCatalogBuilder) judgeWhatTheBlanksLeft(ctx context.Context, request ToolCatalogRequest, actor security.WorkspaceActor, concretePath string, sources officeclaimcheck.Sources, check *officeClaimCheck, newlyRemoved []officeclaimcheck.Verdict) *officeClaimCheck {
 	removed := verdictClaims(newlyRemoved)
 	for pass := 0; pass < maximumWithdrawalPasses && check.Outcome == claimOutcomeBlanked && len(newlyRemoved) > 0; pass++ {
 		snapshot, isRead := readOfficeSnapshot(ctx, actor, concretePath)
@@ -134,13 +134,13 @@ func (toolCatalogBuilder *ToolCatalogBuilder) judgeWhatTheBlanksLeft(ctx context
 		if !isRead || len(neighbors) == 0 {
 			return check
 		}
-		judgment, errorValue := claimcheck.Judge(ctx, toolCatalogBuilder.claimDecisionModel, claimcheck.Sources{Request: sources.Request, Attachments: sources.Attachments, RuntimeFacts: sources.RuntimeFacts, Removed: removed}, neighbors)
+		judgment, errorValue := officeclaimcheck.Judge(ctx, toolCatalogBuilder.claimDecisionModel, officeclaimcheck.Sources{Request: sources.Request, Attachments: sources.Attachments, RuntimeFacts: sources.RuntimeFacts, Removed: removed}, neighbors)
 		if errorValue != nil {
 			check.Detail = "the statements left beside the blanks were not re-judged: " + errorValue.Error()
 			return check
 		}
 		check.Asked += askedCount(judgment)
-		newlyRemoved = judgment.Treated(claimcheck.TreatmentBlank)
+		newlyRemoved = judgment.Treated(officeclaimcheck.TreatmentBlank)
 		if len(newlyRemoved) == 0 {
 			return check
 		}
@@ -156,20 +156,20 @@ func (toolCatalogBuilder *ToolCatalogBuilder) judgeWhatTheBlanksLeft(ctx context
 	return check
 }
 
-func verdictClaims(verdicts []claimcheck.Verdict) []claimcheck.Claim {
-	claims := []claimcheck.Claim{}
+func verdictClaims(verdicts []officeclaimcheck.Verdict) []officeclaimcheck.Claim {
+	claims := []officeclaimcheck.Claim{}
 	for _, verdict := range verdicts {
 		claims = append(claims, verdict.Claim)
 	}
 	return claims
 }
 
-func claimsSharingAParent(newlyRemoved []claimcheck.Verdict, removedSoFar []claimcheck.Claim, remaining []claimcheck.Claim) []claimcheck.Claim {
+func claimsSharingAParent(newlyRemoved []officeclaimcheck.Verdict, removedSoFar []officeclaimcheck.Claim, remaining []officeclaimcheck.Claim) []officeclaimcheck.Claim {
 	parents := map[string]bool{}
 	for _, verdict := range newlyRemoved {
 		parents[parentPath(verdict.Path)] = true
 	}
-	neighbors := []claimcheck.Claim{}
+	neighbors := []officeclaimcheck.Claim{}
 	for _, claim := range remaining {
 		if parents[parentPath(claim.Path)] && !isAmongClaims(claim, removedSoFar) {
 			neighbors = append(neighbors, claim)
@@ -178,8 +178,8 @@ func claimsSharingAParent(newlyRemoved []claimcheck.Verdict, removedSoFar []clai
 	return neighbors
 }
 
-func isAmongClaims(claim claimcheck.Claim, claims []claimcheck.Claim) bool {
-	return slices.ContainsFunc(claims, func(other claimcheck.Claim) bool {
+func isAmongClaims(claim officeclaimcheck.Claim, claims []officeclaimcheck.Claim) bool {
+	return slices.ContainsFunc(claims, func(other officeclaimcheck.Claim) bool {
 		return other.Path == claim.Path && other.At == claim.At && other.Text == claim.Text
 	})
 }
@@ -195,20 +195,20 @@ func parentPath(path string) string {
 	return ""
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) treatedClaims(ctx context.Context, sources claimcheck.Sources, judgment claimcheck.Judgment, check *officeClaimCheck) claimcheck.Outcome {
+func (toolCatalogBuilder *ToolCatalogBuilder) treatedClaims(ctx context.Context, sources officeclaimcheck.Sources, judgment officeclaimcheck.Judgment, check *officeClaimCheck) officeclaimcheck.Outcome {
 	if toolCatalogBuilder.claimRewriteModel == nil {
-		return claimcheck.Outcome{Blank: judgment.Treated(claimcheck.TreatmentBlank)}
+		return officeclaimcheck.Outcome{Blank: judgment.Treated(officeclaimcheck.TreatmentBlank)}
 	}
-	treated, errorValue := claimcheck.Treat(ctx, claimcheck.CompactProfile, toolCatalogBuilder.claimDecisionModel, toolCatalogBuilder.claimRewriteModel, sources, judgment)
+	treated, errorValue := officeclaimcheck.Treat(ctx, officeclaimcheck.CompactProfile, toolCatalogBuilder.claimDecisionModel, toolCatalogBuilder.claimRewriteModel, sources, judgment)
 	if errorValue != nil {
 		check.Detail = firstNonEmptyString(check.Detail, "rewrite_failed: "+errorValue.Error())
-		return claimcheck.Outcome{Blank: judgment.Treated(claimcheck.TreatmentBlank)}
+		return officeclaimcheck.Outcome{Blank: judgment.Treated(officeclaimcheck.TreatmentBlank)}
 	}
 	return treated
 }
 
-func claimsMarkedFree(claims []claimcheck.Claim) []claimcheck.Claim {
-	marked := make([]claimcheck.Claim, 0, len(claims))
+func claimsMarkedFree(claims []officeclaimcheck.Claim) []officeclaimcheck.Claim {
+	marked := make([]officeclaimcheck.Claim, 0, len(claims))
 	for _, claim := range claims {
 		claim.IsFree = isSentencePath(claim.Path)
 		marked = append(marked, claim)
@@ -229,18 +229,18 @@ func isSentencePath(path string) bool {
 	return true
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) withRecomputedDerivations(ctx context.Context, sources claimcheck.Sources, judgment claimcheck.Judgment) (claimcheck.Judgment, string) {
+func (toolCatalogBuilder *ToolCatalogBuilder) withRecomputedDerivations(ctx context.Context, sources officeclaimcheck.Sources, judgment officeclaimcheck.Judgment) (officeclaimcheck.Judgment, string) {
 	if toolCatalogBuilder.claimRecomputeModel == nil {
 		return judgment, ""
 	}
-	rechecked, errorValue := claimcheck.Recompute(ctx, claimcheck.CompactProfile, toolCatalogBuilder.claimRecomputeModel, sources, judgment)
+	rechecked, errorValue := officeclaimcheck.Recompute(ctx, officeclaimcheck.CompactProfile, toolCatalogBuilder.claimRecomputeModel, sources, judgment)
 	if errorValue != nil {
 		return judgment, "recompute_failed: " + errorValue.Error()
 	}
 	return rechecked, ""
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) actOnFlaggedClaims(ctx context.Context, request ToolCatalogRequest, actor security.WorkspaceActor, concretePath string, snapshot officeSnapshot, check *officeClaimCheck, treated claimcheck.Outcome, isEverySourceRead bool) *officeClaimCheck {
+func (toolCatalogBuilder *ToolCatalogBuilder) actOnFlaggedClaims(ctx context.Context, request ToolCatalogRequest, actor security.WorkspaceActor, concretePath string, snapshot officeSnapshot, check *officeClaimCheck, treated officeclaimcheck.Outcome, isEverySourceRead bool) *officeClaimCheck {
 	if len(treated.Blank) == 0 && len(treated.Removed) == 0 && len(treated.Replaced) == 0 {
 		check.Outcome = claimOutcomeSupported
 		return check
@@ -289,20 +289,20 @@ func readOfficeSnapshotDocument(ctx context.Context, actor security.WorkspaceAct
 	return content, errorValue == nil
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) claimSources(ctx context.Context, request ToolCatalogRequest, snapshot officeSnapshot) (claimcheck.Sources, bool) {
+func (toolCatalogBuilder *ToolCatalogBuilder) claimSources(ctx context.Context, request ToolCatalogRequest, snapshot officeSnapshot) (officeclaimcheck.Sources, bool) {
 	runtimeContext := toolCatalogBuilder.officeRuntimeContextFor(request, toolcontract.TaskRunIDFromContext(ctx))
 	facts := map[string]any{"today": runtimeContext.Today, "requester": runtimeContext.Requester}
 	if len(snapshot.Known) > 0 && string(snapshot.Known) != "null" {
 		facts["known"] = snapshot.Known
 	}
-	sources := claimcheck.Sources{Request: requestWordings(request), RuntimeFacts: json.RawMessage(MarshalBody(facts))}
+	sources := officeclaimcheck.Sources{Request: requestWordings(request), RuntimeFacts: json.RawMessage(MarshalBody(facts))}
 	isEveryAttachmentRead := true
 	for _, material := range request.VisibleContext.CurrentMaterials {
 		if strings.TrimSpace(material.MarkdownPreview) == "" {
 			isEveryAttachmentRead = false
 			continue
 		}
-		sources.Attachments = append(sources.Attachments, claimcheck.Attachment{Name: material.Filename, Text: material.MarkdownPreview})
+		sources.Attachments = append(sources.Attachments, officeclaimcheck.Attachment{Name: material.Filename, Text: material.MarkdownPreview})
 	}
 	return sources, isEveryAttachmentRead
 }
@@ -320,7 +320,7 @@ func requestWordings(request ToolCatalogRequest) []string {
 	return wordings
 }
 
-func officeRemakeWords(snapshot officeSnapshot, concretePath string, paths []string, replacements []claimcheck.Claim) ([]string, bool) {
+func officeRemakeWords(snapshot officeSnapshot, concretePath string, paths []string, replacements []officeclaimcheck.Claim) ([]string, bool) {
 	template, values := []string(nil), map[string]string{"<file>": concretePath, "<sourceSuffix>": officeContract.SourceSuffix}
 	switch {
 	case snapshot.Schema != "":
@@ -376,7 +376,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) runOfficeCommand(ctx context.Conte
 	return ""
 }
 
-func askedCount(judgment claimcheck.Judgment) int {
+func askedCount(judgment officeclaimcheck.Judgment) int {
 	asked := 0
 	for _, verdict := range judgment.Verdicts {
 		if !verdict.IsCopied {
@@ -386,7 +386,7 @@ func askedCount(judgment claimcheck.Judgment) int {
 	return asked
 }
 
-func verdictPaths(verdicts []claimcheck.Verdict) []string {
+func verdictPaths(verdicts []officeclaimcheck.Verdict) []string {
 	paths := []string{}
 	for _, verdict := range verdicts {
 		paths = append(paths, verdict.Path)
@@ -394,7 +394,7 @@ func verdictPaths(verdicts []claimcheck.Verdict) []string {
 	return paths
 }
 
-func verdictPlaces(verdicts []claimcheck.Verdict) []string {
+func verdictPlaces(verdicts []officeclaimcheck.Verdict) []string {
 	places := []string{}
 	for _, verdict := range verdicts {
 		places = append(places, firstNonEmptyString(verdict.At, verdict.Path))

@@ -23,7 +23,6 @@ var defaultHarnessWiringPackages = []string{
 }
 
 var pendingMigrationPackages = []string{
-	"internal/agentruntime",
 	"internal/connectors",
 }
 
