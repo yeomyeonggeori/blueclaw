@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/claimcheck"
+	"github.com/yeomyeonggeori/blueclaw/internal/officeclaimcheck"
 )
 
 func deliveredFileNotes(filename string, blankLabels []string, checks []officeClaimCheck, review *officeVisualReview) []string {
@@ -20,7 +20,7 @@ func deliveredFileNotes(filename string, blankLabels []string, checks []officeCl
 }
 
 func blankDescriptions(labels []string, checks []officeClaimCheck) []string {
-	flaggedVerdict := map[string]claimcheck.Verdict{}
+	flaggedVerdict := map[string]officeclaimcheck.Verdict{}
 	flaggedPlaces := []string{}
 	for _, check := range checks {
 		if check.Outcome != claimOutcomeBlanked {
@@ -52,9 +52,9 @@ func blankDescriptions(labels []string, checks []officeClaimCheck) []string {
 
 func flagReason(defect string) string {
 	switch defect {
-	case claimcheck.KindMistake:
+	case officeclaimcheck.KindMistake:
 		return "which differs from what the person gave: ask them to confirm the right value"
-	case claimcheck.KindError:
+	case officeclaimcheck.KindError:
 		return "which does not follow from what the person gave, or contradicts another part of the document: ask them to confirm"
 	}
 	return "which nothing the person gave supports"

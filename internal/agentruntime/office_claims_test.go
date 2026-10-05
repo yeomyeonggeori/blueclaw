@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/officeclaimcheck"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/claimcheck"
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
@@ -334,7 +334,7 @@ func TestAFlaggedValueTheRemakeCouldNotBlankIsANoteForTheReplyNamingIt(t *testin
 }
 
 func TestEveryFlaggedValueLeftInTheFileIsNamedWhateverStoppedTheBlank(t *testing.T) {
-	flagged := []claimcheck.Verdict{{Claim: claimcheck.Claim{Path: "slides[1].units[0]", At: "slide 2 title", Text: "2026 was a year of solid, profitable growth — now we choose the next frontier"}, Kind: "claim", Defect: "claim"}}
+	flagged := []officeclaimcheck.Verdict{{Claim: officeclaimcheck.Claim{Path: "slides[1].units[0]", At: "slide 2 title", Text: "2026 was a year of solid, profitable growth — now we choose the next frontier"}, Kind: "claim", Defect: "claim"}}
 	for _, outcome := range []string{claimOutcomeRemakeFailed, claimOutcomeNoRemakeCommand, claimOutcomeUnreadSources} {
 		notes := deliveredFileNotes("deck.pptx", nil, []officeClaimCheck{{File: "deck.pptx", Asked: 96, Flagged: flagged, Outcome: outcome, Detail: "exit status 1"}}, nil)
 		if len(notes) != 1 || !strings.Contains(notes[0], "slide 2 title") || !strings.Contains(notes[0], "solid, profitable growth") || !strings.Contains(notes[0], "still in the file") {

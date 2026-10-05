@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"path/filepath"
 
-	"github.com/yeomyeonggeori/bluecollar/claimcheck"
+	"github.com/yeomyeonggeori/blueclaw/internal/officeclaimcheck"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
@@ -17,8 +17,8 @@ import (
 const officeDraftClaimsReadLimit = 1 << 20
 
 type officeDraftClaims struct {
-	Digest      string             `json:"digest"`
-	Unsupported []claimcheck.Claim `json:"unsupported"`
+	Digest      string                   `json:"digest"`
+	Unsupported []officeclaimcheck.Claim `json:"unsupported"`
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) judgeRequestedDraftClaims(ctx context.Context, actor security.WorkspaceActor, request ToolCatalogRequest) {
@@ -44,10 +44,10 @@ func (toolCatalogBuilder *ToolCatalogBuilder) judgeRequestedDraftClaims(ctx cont
 	}
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) unsupportedDraftClaims(ctx context.Context, request ToolCatalogRequest, requestContent []byte) []claimcheck.Claim {
-	unsupported := []claimcheck.Claim{}
+func (toolCatalogBuilder *ToolCatalogBuilder) unsupportedDraftClaims(ctx context.Context, request ToolCatalogRequest, requestContent []byte) []officeclaimcheck.Claim {
+	unsupported := []officeclaimcheck.Claim{}
 	var draft struct {
-		Claims []claimcheck.Claim `json:"claims"`
+		Claims []officeclaimcheck.Claim `json:"claims"`
 	}
 	if json.Unmarshal(requestContent, &draft) != nil || len(draft.Claims) == 0 {
 		return unsupported
@@ -56,12 +56,12 @@ func (toolCatalogBuilder *ToolCatalogBuilder) unsupportedDraftClaims(ctx context
 	if !isEverySourceRead {
 		return unsupported
 	}
-	judgment, errorValue := claimcheck.Judge(ctx, toolCatalogBuilder.claimDecisionModel, sources, draft.Claims)
+	judgment, errorValue := officeclaimcheck.Judge(ctx, toolCatalogBuilder.claimDecisionModel, sources, draft.Claims)
 	if errorValue != nil {
 		slog.Warn("draft claims were not judged", "error", errorValue)
 		return unsupported
 	}
-	for _, verdict := range judgment.Treated(claimcheck.TreatmentBlank) {
+	for _, verdict := range judgment.Treated(officeclaimcheck.TreatmentBlank) {
 		unsupported = append(unsupported, verdict.Claim)
 	}
 	return unsupported
