@@ -53,8 +53,8 @@ func (gate *Gate) AwaitApproval(ctx context.Context, approvalRequest mcpserver.A
 }
 
 func (gate *Gate) approvedOutcome(taskRunID string, approvalRequest mcpserver.ApprovalRequest) mcpserver.ApprovalOutcome {
-	approvalToken := RecordApprovalSpent(gate.taskRunService, taskRunID, approvalRequest.ToolName, approvalRequest.ToolInput)
-	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionApproved, ApprovedCallID: approvalToken}
+	holdID := RecordApprovalSpent(gate.taskRunService, taskRunID, approvalRequest.ToolName, approvalRequest.ToolInput)
+	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionApproved, ApprovedCallID: holdID}
 }
 
 func (gate *Gate) taskHasApprovedScope(taskRunID string, approvalScope string) bool {
@@ -94,10 +94,9 @@ func decodeHeldCallEventBody(body string) agentcontract.HeldCall {
 	return decodedBody
 }
 
-func (gate *Gate) recordHeldCall(taskRunID string, approvalRequest mcpserver.ApprovalRequest, confirmation string, resolution ApprovalTargetResolution) string {
-	holdID := newHoldID()
+func (gate *Gate) recordHeldCall(taskRunID string, approvalRequest mcpserver.ApprovalRequest, confirmation string, resolution ApprovalTargetResolution) {
 	gate.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalPendingCall, marshalEventBody(heldCallRecord{
-		HoldID: holdID,
+		HoldID: newHoldID(),
 		HeldCall: agentcontract.HeldCall{
 			ToolName:          approvalRequest.ToolName,
 			ToolInput:         approvalRequest.ToolInput,
@@ -119,7 +118,6 @@ func (gate *Gate) recordHeldCall(taskRunID string, approvalRequest mcpserver.App
 		"source":            "tool_catalog",
 	}))
 	gate.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventAskRequested, marshalEventBody(askRecord(approvalRequest, confirmation)))
-	return holdID
 }
 
 func approvalReasonCode(approvalRequest mcpserver.ApprovalRequest) string {
