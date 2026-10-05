@@ -32,7 +32,6 @@ type ApprovalReplyResponse struct {
 
 var (
 	errNoReaderCanReadTheReply = errors.New("this daemon has no approval reply reader, so a person's answer to an approval cannot be read")
-	errReplyCarriesNoWords     = errors.New("an approval reply with no words says nothing to read")
 	errNoCallIsWaitingOnThat   = errors.New("no held call by that tool call id is waiting for an answer")
 )
 
@@ -60,10 +59,6 @@ func (agent *Agent) readApprovalReply(ctx context.Context, request ApprovalReply
 	if agent.replyReader == nil {
 		return ApprovalReplyResponse{}, errNoReaderCanReadTheReply
 	}
-	reply := strings.TrimSpace(request.Reply)
-	if reply == "" {
-		return ApprovalReplyResponse{}, errReplyCarriesNoWords
-	}
 	session, isOpen := agent.session(acp.SessionId(request.SessionID))
 	if !isOpen {
 		return ApprovalReplyResponse{}, errSessionIsNotOpen
@@ -75,7 +70,7 @@ func (agent *Agent) readApprovalReply(ctx context.Context, request ApprovalReply
 	if !agent.postedQuestionOf(session.context, waiting).IsAnsweredBy(replyPlacementOf(session.context, request)) {
 		return ApprovalReplyResponse{}, nil
 	}
-	optionID, isAnswer, errorValue := agent.replyReader.Read(ctx, approvalreply.QuestionFor(waiting.confirmation, waiting.choices), reply, agent.ledgerObserver(waiting.approvalRequest.TaskRunID))
+	optionID, isAnswer, errorValue := agent.replyReader.Read(ctx, approvalreply.QuestionFor(waiting.confirmation, waiting.choices), request.Reply, agent.ledgerObserver(waiting.approvalRequest.TaskRunID))
 	if errorValue != nil {
 		return ApprovalReplyResponse{}, errorValue
 	}
