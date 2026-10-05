@@ -172,7 +172,7 @@ func (harness *Harness) turnResult(ctx context.Context, request agentcontract.Ag
 			taskRun = existingTaskRun
 		}
 	}
-	return agentcontract.AgentTurnResult{TaskRun: taskRun, FinishMessage: finishMessage, UserNotice: finishMessage}
+	return agentcontract.AgentTurnResult{TaskRun: taskRun, FinishMessage: finishMessage, UserNotice: finishMessage, Attachments: succeededToolRecorder.StagedAttachments()}
 }
 
 func (harness *Harness) outcomeForEndedTurn(ctx context.Context, request agentcontract.AgentTurnRequest, finishMessage string, succeededToolNames []string) (agentcontract.TaskStatus, string) {

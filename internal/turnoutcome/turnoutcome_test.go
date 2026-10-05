@@ -8,6 +8,7 @@ import (
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 type stubLanguageModel struct {
@@ -78,12 +79,27 @@ func TestAnUnconfiguredClassifierRefusesRatherThanGuessing(t *testing.T) {
 func TestOnlySucceededToolsAreRecorded(t *testing.T) {
 	recorder := &SucceededToolRecorder{}
 
-	recorder.Observe("message_send", true)
-	recorder.Observe("message_send", true)
-	recorder.Observe("document_create", false)
+	recorder.Observe("message_send", toolcontract.ToolResult{}, true)
+	recorder.Observe("message_send", toolcontract.ToolResult{}, true)
+	recorder.Observe("document_create", toolcontract.ToolResult{}, false)
 
 	recordedToolNames := recorder.SucceededToolNames()
 	if len(recordedToolNames) != 1 || recordedToolNames[0] != "message_send" {
 		t.Fatalf("expected only the one succeeded tool, got %v", recordedToolNames)
+	}
+}
+
+func TestOnlyFilesFromSucceededToolsAreStagedOnceEach(t *testing.T) {
+	recorder := &SucceededToolRecorder{}
+	stagedFile := toolcontract.FileAttachment{Filename: "report.pdf", DevicePath: "/workspace/report.pdf"}
+	rejectedFile := toolcontract.FileAttachment{Filename: "draft.pdf", DevicePath: "/workspace/draft.pdf"}
+
+	recorder.Observe("file_deliver", toolcontract.ToolResult{Attachments: []toolcontract.FileAttachment{stagedFile}}, true)
+	recorder.Observe("file_deliver", toolcontract.ToolResult{Attachments: []toolcontract.FileAttachment{stagedFile}}, true)
+	recorder.Observe("file_deliver", toolcontract.ToolResult{Attachments: []toolcontract.FileAttachment{rejectedFile}}, false)
+
+	stagedAttachments := recorder.StagedAttachments()
+	if len(stagedAttachments) != 1 || stagedAttachments[0].DevicePath != stagedFile.DevicePath {
+		t.Fatalf("expected the one succeeded file, got %+v", stagedAttachments)
 	}
 }
