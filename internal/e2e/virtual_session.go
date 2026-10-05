@@ -84,6 +84,7 @@ type VirtualSessionScenario struct {
 	TurnOptions               agentcontract.TurnOptions
 	ProgressWriter            io.Writer
 	WritableWorkspacePaths    []string
+	InitialWorkspaceFiles     map[string]string
 	RequesterIsAdmin          bool
 	IsDeliveredOverACP        bool
 	RecordCatalogURL          string
@@ -217,6 +218,7 @@ type VirtualTurn struct {
 	RouterApproval               string
 	RouterChoice                 string
 	ReadsNoIntakeDecision        bool
+	AnswersApprovalHold          bool
 	FiresDueApprovedSchedules    bool
 	ExpectedSelectedSkills       []string
 	ExpectedToolCalls            []string
@@ -807,6 +809,15 @@ func BuiltinScenarioNames() []string {
 	return names
 }
 
+func (scenario VirtualSessionScenario) NeedsLiveLanguageModel() bool {
+	for _, virtualTurn := range scenario.Turns {
+		if len(virtualTurn.ActionResponses) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
 var virtualSessionAgentHarnessFactory harnessdriver.Factory
 
 func UseAgentHarnessFactory(factory harnessdriver.Factory) {
@@ -837,6 +848,9 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 		return nil, errorValue
 	}
 	if errorValue := materializeVirtualCapabilityCLI(workspacePath); errorValue != nil {
+		return nil, errorValue
+	}
+	if errorValue := materializeInitialWorkspaceFiles(workspacePath, scenario.InitialWorkspaceFiles); errorValue != nil {
 		return nil, errorValue
 	}
 
@@ -1313,6 +1327,19 @@ func fileSHA256(path string) string {
 	}
 	sum := sha256.Sum256(content)
 	return hex.EncodeToString(sum[:])
+}
+
+func materializeInitialWorkspaceFiles(workspacePath string, documentsByPath map[string]string) error {
+	for relativePath, document := range documentsByPath {
+		localPath := filepath.Join(workspacePath, relativePath)
+		if errorValue := os.MkdirAll(filepath.Dir(localPath), 0700); errorValue != nil {
+			return errorValue
+		}
+		if errorValue := os.WriteFile(localPath, []byte(document), 0600); errorValue != nil {
+			return errorValue
+		}
+	}
+	return nil
 }
 
 func materializeVirtualCapabilityCLI(workspacePath string) error {
@@ -2742,7 +2769,7 @@ func scenarioRouterResponsesForTurn(scenario VirtualSessionScenario, virtualTurn
 }
 
 func scenarioTurnRouterCalls(scenario VirtualSessionScenario, virtualTurn VirtualTurn) []string {
-	if strings.TrimSpace(virtualTurn.RouterApproval) != "" {
+	if strings.TrimSpace(virtualTurn.RouterApproval) != "" || virtualTurn.AnswersApprovalHold {
 		return nil
 	}
 	return scenarioRouterResponsesForTurn(scenario, virtualTurn)
