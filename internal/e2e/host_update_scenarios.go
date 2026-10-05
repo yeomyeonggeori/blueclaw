@@ -47,8 +47,11 @@ func HostUpdateNowAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 		ExpectedEvents:     []string{agentcontract.TaskEventConfirmationRequested},
 		ExpectedTaskStatus: task.TaskStatusWaitingApproval,
 	}, {
-		Prompt:       "1번, 지금 해",
-		RouterChoice: virtualHostNowChoiceKey,
+		Prompt:              "1번, 지금 해",
+		ReplyTargetID:       "virtual-message-001",
+		IsThread:            threadReply(),
+		AnswersApprovalHold: true,
+		RouterChoice:        virtualHostNowChoiceKey,
 		ActionResponses: []string{
 			actionFinishMessage("업데이트를 시작했어요.", "obs-002"),
 		},
@@ -75,8 +78,11 @@ func HostUpdateOffHoursAcceptanceScenario(artifactDirectoryPath string) VirtualS
 		ExpectedEvents:     []string{agentcontract.TaskEventConfirmationRequested},
 		ExpectedTaskStatus: task.TaskStatusWaitingApproval,
 	}, {
-		Prompt:       "새벽에 해줘",
-		RouterChoice: virtualHostOffHoursChoiceKey,
+		Prompt:              "새벽에 해줘",
+		ReplyTargetID:       "virtual-message-001",
+		IsThread:            threadReply(),
+		AnswersApprovalHold: true,
+		RouterChoice:        virtualHostOffHoursChoiceKey,
 		ActionResponses: []string{
 			actionFinishMessage("새벽 3시에 업데이트하도록 잡아 두었어요.", "obs-002"),
 		},

@@ -10,6 +10,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
+	"github.com/yeomyeonggeori/blueclaw/internal/persona"
 	"github.com/yeomyeonggeori/blueclaw/internal/skill"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -1157,6 +1158,7 @@ func PersonaProfileUpdateAcceptanceScenario(artifactDirectoryPath string) Virtua
 		ArtifactDirectoryPath:  artifactDirectoryPath,
 		AllowedTools:           []string{"persona_read", "persona_update"},
 		WritableWorkspacePaths: []string{"private/people/person-1/.internkim/user.json", ".blueclaw/state/persona-backup/people/person-1/user.json"},
+		InitialWorkspaceFiles:  map[string]string{persona.SoulFileName: `{"schemaVersion":1}`},
 		Turns: []VirtualTurn{
 			{
 				Prompt:                 "내가 앞으로 한국어로 답변받기를 원한다는 설정을 저장해줘",
