@@ -1,0 +1,120 @@
+package approvalrecord
+
+import (
+	"encoding/json"
+	"testing"
+
+	"github.com/yeomyeonggeori/blueclaw/internal/task"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+)
+
+func openedHold(t *testing.T) (*task.TaskRunService, string, string) {
+	t.Helper()
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	taskRunID := taskRunService.CreateTaskRun("person-1", "conversation-1", "delete it").TaskRunID
+	holdID := Open(taskRunService, taskRunID, agentcontract.HeldCall{ToolName: "event_delete", ToolInput: json.RawMessage(`{"eventID":"event-1"}`)})
+	return taskRunService, taskRunID, holdID
+}
+
+var eventDeleteInput = json.RawMessage(`{ "eventID": "event-1" }`)
+
+func TestAnOpenHoldIsPendingAndAnswersNoCall(t *testing.T) {
+	ledger, taskRunID, holdID := openedHold(t)
+	holds := Holds(ledger.ListTaskEvent(taskRunID))
+
+	if len(holds) != 1 || holds[0].ID != holdID || holds[0].State != StatePending {
+		t.Fatalf("expected one pending hold, got %+v", holds)
+	}
+	if _, isSpent := SpendApprovedCall(ledger, taskRunID, "event_delete", eventDeleteInput); isSpent {
+		t.Fatal("a hold nobody approved must not answer the call")
+	}
+}
+
+func TestAnApprovedHoldIsSpentByTheExactCallOnce(t *testing.T) {
+	ledger, taskRunID, holdID := openedHold(t)
+	Decide(ledger, taskRunID, holdID, DecisionConfirm, "chat_reply")
+
+	spent, isSpent := SpendApprovedCall(ledger, taskRunID, "event_delete", eventDeleteInput)
+	if !isSpent || spent.ID != holdID {
+		t.Fatalf("expected the approved hold to answer the call, got %+v %v", spent, isSpent)
+	}
+	if _, isSpentTwice := SpendApprovedCall(ledger, taskRunID, "event_delete", eventDeleteInput); isSpentTwice {
+		t.Fatal("a spent approval must not answer a second call")
+	}
+}
+
+func TestADifferentCallIsNotCoveredAndLeavesTheApprovalUnspent(t *testing.T) {
+	ledger, taskRunID, holdID := openedHold(t)
+	Decide(ledger, taskRunID, holdID, DecisionConfirm, "chat_reply")
+
+	for _, call := range []struct{ toolName, toolInput string }{{"event_delete", `{"eventID":"event-2"}`}, {"event_update", `{"eventID":"event-1"}`}} {
+		if _, isSpent := SpendApprovedCall(ledger, taskRunID, call.toolName, json.RawMessage(call.toolInput)); isSpent {
+			t.Fatalf("%+v must not spend the approval", call)
+		}
+	}
+	if _, isSpent := SpendApprovedCall(ledger, taskRunID, "event_delete", eventDeleteInput); !isSpent {
+		t.Fatal("a refused different call must leave the approval spendable")
+	}
+}
+
+func TestARejectedHoldAnswersNoCall(t *testing.T) {
+	ledger, taskRunID, holdID := openedHold(t)
+	Decide(ledger, taskRunID, holdID, DecisionCancel, "chat_reply")
+
+	if _, isSpent := SpendApprovedCall(ledger, taskRunID, "event_delete", eventDeleteInput); isSpent {
+		t.Fatal("a rejection is not an approval")
+	}
+}
+
+func TestAnApprovalInAnotherTaskRunIsNotCovered(t *testing.T) {
+	ledger, taskRunID, holdID := openedHold(t)
+	Decide(ledger, taskRunID, holdID, DecisionConfirm, "chat_reply")
+	otherTaskRunID := ledger.CreateTaskRun("person-1", "conversation-2", "other").TaskRunID
+
+	if _, isSpent := SpendApprovedCall(ledger, otherTaskRunID, "event_delete", eventDeleteInput); isSpent {
+		t.Fatal("an approval belongs to the task run it was given in")
+	}
+}
+
+func replayed(source *task.TaskRunService, taskRunID string) (*task.TaskRunService, string) {
+	reopened := task.NewTaskRunService(task.NewTaskEventService())
+	reopenedID := reopened.CreateTaskRun("person-1", "conversation-1", "delete it").TaskRunID
+	for _, taskEvent := range source.ListTaskEvent(taskRunID) {
+		reopened.AppendTaskEvent(reopenedID, taskEvent.Name, taskEvent.Body)
+	}
+	return reopened, reopenedID
+}
+
+func TestAnApprovalAndItsSpendingSurviveARestart(t *testing.T) {
+	ledger, taskRunID, holdID := openedHold(t)
+	Decide(ledger, taskRunID, holdID, DecisionConfirm, "chat_reply")
+
+	reopened, reopenedID := replayed(ledger, taskRunID)
+	if _, isSpent := SpendApprovedCall(reopened, reopenedID, "event_delete", eventDeleteInput); !isSpent {
+		t.Fatal("an approval read back from stored events must be spendable")
+	}
+	reopenedAgain, againID := replayed(reopened, reopenedID)
+	if _, isSpent := SpendApprovedCall(reopenedAgain, againID, "event_delete", eventDeleteInput); isSpent {
+		t.Fatal("a spend read back from stored events must stay spent")
+	}
+}
+
+func TestTheRecordWritesOnlyTheEventNamesTheLedgerAlreadyHad(t *testing.T) {
+	ledger, taskRunID, holdID := openedHold(t)
+	Decide(ledger, taskRunID, holdID, DecisionConfirm, "chat_reply")
+	SpendApprovedCall(ledger, taskRunID, "event_delete", eventDeleteInput)
+
+	names := []string{}
+	for _, taskEvent := range ledger.ListTaskEvent(taskRunID)[1:] {
+		names = append(names, taskEvent.Name)
+	}
+	expected := []string{agentcontract.TaskEventApprovalPendingCall, agentcontract.TaskEventApprovalDecided, agentcontract.TaskEventApprovalExecuted}
+	if len(names) < 3 {
+		t.Fatalf("got %v", names)
+	}
+	for index, name := range expected {
+		if names[len(names)-3+index] != name {
+			t.Fatalf("expected %v, got %v", expected, names)
+		}
+	}
+}

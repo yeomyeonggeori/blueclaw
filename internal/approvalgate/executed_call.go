@@ -6,12 +6,13 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 func RecordApprovalSpent(taskRunStore taskstate.TaskRunStore, taskRunID string, toolName string, toolInput json.RawMessage) string {
-	approvedHold, _ := approvedHoldForCall(holdsOf(taskRunStore.ListTaskEvent(taskRunID)), toolName, toolInput)
+	approvedHold, _ := approvalrecord.ApprovedHoldForCall(approvalrecord.Holds(taskRunStore.ListTaskEvent(taskRunID)), toolName, toolInput)
 	recordSpent(taskRunStore, taskRunID, approvedHold.ID, toolName, toolInput)
 	return approvedHold.ID
 }
@@ -21,9 +22,7 @@ func RecordApprovedCallSpent(taskRunStore taskstate.TaskRunStore, taskRunID stri
 }
 
 func recordSpent(taskRunStore taskstate.TaskRunStore, taskRunID string, holdID string, toolName string, toolInput json.RawMessage) {
-	body := spentApprovalBody(taskRunStore, taskRunID, toolName, toolInput)
-	body["holdID"] = holdID
-	taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalExecuted, marshalEventBody(body))
+	approvalrecord.Spend(taskRunStore, taskRunID, holdID, spentApprovalBody(taskRunStore, taskRunID, toolName, toolInput))
 }
 
 func spentApprovalBody(taskRunStore taskstate.TaskRunStore, taskRunID string, toolName string, toolInput json.RawMessage) map[string]any {
