@@ -15,13 +15,14 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/blueclaw/internal/toolcallprogress"
+	"github.com/yeomyeonggeori/blueclaw/internal/toolcatalogtrust"
 	"github.com/yeomyeonggeori/blueclaw/internal/turnbriefing"
 	"github.com/yeomyeonggeori/blueclaw/internal/turnoutcome"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
-const toolCatalogServerName = "blueclaw"
+const ToolCatalogServerName = "blueclaw"
 
 type ToolCatalogPublisher interface {
 	PublishToolCatalog(requesterToolSet mcpserver.RequesterToolSet) (endpointURL string, bearerToken string, revoke func(), errorValue error)
@@ -43,6 +44,8 @@ type Harness struct {
 	agentProcess           AgentProcess
 	toolCatalogPublisher   ToolCatalogPublisher
 	taskRunStore           taskstate.TaskRunStore
+	permissionAsker        approvalgate.HarnessPermissionAsker
+	toolCatalogTrust       toolcatalogtrust.Trust
 	requesterProcessRunner RequesterProcessRunner
 	workspaceRootPath      string
 	outcomeClassifier      turnoutcome.Classifier
@@ -57,6 +60,26 @@ func New(agentProcess AgentProcess, toolCatalogPublisher ToolCatalogPublisher, t
 
 func (harness *Harness) UseOutcomeClassifier(outcomeClassifier turnoutcome.Classifier) {
 	harness.outcomeClassifier = outcomeClassifier
+}
+
+func (harness *Harness) UseToolCatalogTrust(toolCatalogTrust toolcatalogtrust.Trust) {
+	harness.toolCatalogTrust = toolCatalogTrust
+}
+
+func (harness *Harness) UsePermissionAsker(permissionAsker approvalgate.HarnessPermissionAsker) {
+	harness.permissionAsker = permissionAsker
+}
+
+func approvalRequestOf(request agentcontract.AgentTurnRequest) mcpserver.ApprovalRequest {
+	return mcpserver.ApprovalRequest{
+		RequesterPersonID: request.RequesterPersonID,
+		TaskRunID:         request.ExistingTaskRunID,
+		Prompt:            request.Prompt,
+		ResponseLanguage:  request.ResponseLanguage,
+		Platform:          request.Platform,
+		ConversationID:    request.ConversationID,
+		ReplyTargetID:     request.OriginReplyTargetID,
+	}
 }
 
 func (harness *Harness) UseToolCatalogBridge(commandPath string) {
@@ -122,7 +145,7 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 	}
 	defer func() { _ = waitForAgent() }()
 
-	turnObserver := &sessionObserver{taskRunStore: harness.taskRunStore, taskRunID: request.ExistingTaskRunID, toolCallObserver: toolcallprogress.ObserverFrom(ctx)}
+	turnObserver := &sessionObserver{taskRunStore: harness.taskRunStore, taskRunID: request.ExistingTaskRunID, toolCallObserver: toolcallprogress.ObserverFrom(ctx), permissionAsker: harness.permissionAsker, approvalRequest: approvalRequestOf(request)}
 	connection := acp.NewClientSideConnection(turnObserver, agentInput, agentOutput)
 	initializeResponse, errorValue := connection.Initialize(ctx, acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber})
 	if errorValue != nil {
@@ -135,6 +158,7 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 	newSession, errorValue := connection.NewSession(ctx, acp.NewSessionRequest{
 		Cwd:        request.WorkspaceRootPath,
 		McpServers: []acp.McpServer{toolCatalogServer},
+		Meta:       harness.toolCatalogTrust.SessionMeta,
 	})
 	if errorValue != nil {
 		return agentcontract.AgentTurnResult{}, errorValue
@@ -154,7 +178,7 @@ func (harness *Harness) toolCatalogServer(agentCapabilities acp.McpCapabilities,
 	if agentCapabilities.Http {
 		return acp.McpServer{Http: &acp.McpServerHttpInline{
 			Type:    "http",
-			Name:    toolCatalogServerName,
+			Name:    ToolCatalogServerName,
 			Url:     endpointURL,
 			Headers: []acp.HttpHeader{{Name: "Authorization", Value: "Bearer " + bearerToken}},
 		}}, nil
@@ -164,7 +188,7 @@ func (harness *Harness) toolCatalogServer(agentCapabilities acp.McpCapabilities,
 		return acp.McpServer{}, errors.New("this agent takes tool catalogs over stdio, which every agent must, and no catalog bridge command is configured; running it without a catalog would answer from no tools at all")
 	}
 	return acp.McpServer{Stdio: &acp.McpServerStdio{
-		Name:    toolCatalogServerName,
+		Name:    ToolCatalogServerName,
 		Command: bridgeCommandPath,
 		Args:    []string{mcpserver.StdioBridgeCommand},
 		Env: []acp.EnvVariable{
@@ -229,6 +253,8 @@ type sessionObserver struct {
 	taskRunStore     taskstate.TaskRunStore
 	taskRunID        string
 	toolCallObserver toolcallprogress.Observer
+	permissionAsker  approvalgate.HarnessPermissionAsker
+	approvalRequest  mcpserver.ApprovalRequest
 }
 
 func (observer *sessionObserver) recordPermissionDecision(eventName string, toolCall acp.ToolCallUpdate, grantedPermission acp.PermissionOptionKind) {
@@ -317,22 +343,85 @@ func (observer *sessionObserver) WaitForTerminalExit(context.Context, acp.WaitFo
 	return acp.WaitForTerminalExitResponse{}, errFilesystemAndTerminalGoThroughTheToolCatalog
 }
 
-func (observer *sessionObserver) RequestPermission(_ context.Context, request acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+func (observer *sessionObserver) RequestPermission(ctx context.Context, request acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+	if observer.permissionAsker == nil {
+		return observer.allowWithoutAsking(request), nil
+	}
+	return observer.askThePerson(ctx, request), nil
+}
+
+func (observer *sessionObserver) allowWithoutAsking(request acp.RequestPermissionRequest) acp.RequestPermissionResponse {
 	for _, allowedKind := range []acp.PermissionOptionKind{acp.PermissionOptionKindAllowAlways, acp.PermissionOptionKindAllowOnce} {
 		for _, permissionOption := range request.Options {
 			if permissionOption.Kind != allowedKind {
 				continue
 			}
 			observer.recordPermissionDecision(agentcontract.TaskEventHarnessToolPermitted, request.ToolCall, permissionOption.Kind)
-			return acp.RequestPermissionResponse{Outcome: acp.RequestPermissionOutcome{
-				Selected: &acp.RequestPermissionOutcomeSelected{Outcome: "selected", OptionId: permissionOption.OptionId},
-			}}, nil
+			return selectedResponse(permissionOption.OptionId)
 		}
 	}
 	observer.recordPermissionDecision(agentcontract.TaskEventHarnessToolRefused, request.ToolCall, "")
+	return cancelledResponse()
+}
+
+func (observer *sessionObserver) askThePerson(ctx context.Context, request acp.RequestPermissionRequest) acp.RequestPermissionResponse {
+	question := ""
+	if request.ToolCall.Title != nil {
+		question = strings.TrimSpace(*request.ToolCall.Title)
+	}
+	if question == "" || len(request.Options) == 0 {
+		observer.recordPermissionDecision(agentcontract.TaskEventHarnessToolRefused, request.ToolCall, "")
+		return cancelledResponse()
+	}
+	outcome, isAnswered := observer.permissionAsker.AskHarnessPermission(ctx, observer.approvalRequestFor(request.ToolCall, question), approvalgate.HarnessPermissionQuestion{
+		Text:     question,
+		ToolCall: request.ToolCall,
+		Options:  request.Options,
+	})
+	if !isAnswered || outcome.Selected == nil {
+		observer.recordPermissionDecision(agentcontract.TaskEventHarnessToolRefused, request.ToolCall, "")
+		return cancelledResponse()
+	}
+	observer.recordSelectedOption(request, outcome.Selected.OptionId)
+	return selectedResponse(outcome.Selected.OptionId)
+}
+
+func (observer *sessionObserver) recordSelectedOption(request acp.RequestPermissionRequest, optionID acp.PermissionOptionId) {
+	for _, permissionOption := range request.Options {
+		if permissionOption.OptionId != optionID {
+			continue
+		}
+		if isAllowKind(permissionOption.Kind) {
+			observer.recordPermissionDecision(agentcontract.TaskEventHarnessToolPermitted, request.ToolCall, permissionOption.Kind)
+			return
+		}
+	}
+	observer.recordPermissionDecision(agentcontract.TaskEventHarnessToolRefused, request.ToolCall, "")
+}
+
+func isAllowKind(optionKind acp.PermissionOptionKind) bool {
+	return optionKind == acp.PermissionOptionKindAllowOnce || optionKind == acp.PermissionOptionKindAllowAlways
+}
+
+func (observer *sessionObserver) approvalRequestFor(toolCall acp.ToolCallUpdate, question string) mcpserver.ApprovalRequest {
+	approvalRequest := observer.approvalRequest
+	approvalRequest.ToolName = question
+	if toolInput, errorValue := json.Marshal(toolCall.RawInput); errorValue == nil && toolCall.RawInput != nil {
+		approvalRequest.ToolInput = toolInput
+	}
+	return approvalRequest
+}
+
+func selectedResponse(optionID acp.PermissionOptionId) acp.RequestPermissionResponse {
+	return acp.RequestPermissionResponse{Outcome: acp.RequestPermissionOutcome{
+		Selected: &acp.RequestPermissionOutcomeSelected{Outcome: "selected", OptionId: optionID},
+	}}
+}
+
+func cancelledResponse() acp.RequestPermissionResponse {
 	return acp.RequestPermissionResponse{Outcome: acp.RequestPermissionOutcome{
 		Cancelled: &acp.RequestPermissionOutcomeCancelled{Outcome: "cancelled"},
-	}}, nil
+	}}
 }
 
 func promptMetaForTurn(request agentcontract.AgentTurnRequest) map[string]any {

@@ -7,9 +7,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,6 +21,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
+	"github.com/yeomyeonggeori/blueclaw/internal/toolcatalogtrust"
 	"github.com/yeomyeonggeori/blueclaw/internal/turnbriefing"
 	"github.com/yeomyeonggeori/blueclaw/internal/turnoutcome"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -42,7 +45,8 @@ type AgentCommand struct {
 	ParseAgentOutput                func(standardOutput string) (finishMessage string, capturedSessionIdentity string)
 	PromptArguments                 []string
 	ToolCatalogArguments            func(toolCatalogConfigurationPath string) []string
-	ToolCatalogInlineArguments      func(endpointURL string, bearerTokenEnvironmentName string) []string
+	ToolCatalogInlineArguments      func(endpointURL string, bearerTokenEnvironmentName string, serverSettings map[string]string) []string
+	ToolCatalogTrust                toolcatalogtrust.Trust
 	PromptArgumentsWithPrompt       func(prompt string) []string
 	ToolCatalogWorkspaceFile        func(endpointURL string, bearerToken string) (relativePath string, document any)
 	Environment                     []string
@@ -124,6 +128,7 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 	}
 
 	arguments := append([]string{}, harness.agentCommand.PromptArguments...)
+	arguments = append(arguments, harness.agentCommand.ToolCatalogTrust.Arguments...)
 	if harness.agentCommand.SessionArguments != nil && harnessSession.IsResumable {
 		arguments = append(arguments, harness.agentCommand.SessionArguments(harnessSession.SessionID, harness.isResumingTurn(request, identityKey))...)
 	}
@@ -131,7 +136,7 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 		arguments = append(arguments, harness.agentCommand.ToolCatalogArguments(configurationPath)...)
 	}
 	if harness.agentCommand.ToolCatalogInlineArguments != nil {
-		arguments = append(arguments, harness.agentCommand.ToolCatalogInlineArguments(endpointURL, toolCatalogTokenEnvironmentName)...)
+		arguments = append(arguments, harness.agentCommand.ToolCatalogInlineArguments(endpointURL, toolCatalogTokenEnvironmentName, harness.agentCommand.ToolCatalogTrust.ServerSettings)...)
 	}
 	agentPrompt := harness.promptForTurn(request)
 	agentStandardInput := agentPrompt
@@ -215,7 +220,8 @@ func ClaudeCodeAgentCommand(commandPath string) AgentCommand {
 			}
 			return []string{"--session-id", sessionID}
 		},
-		PromptArguments: []string{"--print", "--strict-mcp-config", "--allowedTools", "mcp__" + toolCatalogServerName},
+		PromptArguments:  []string{"--print", "--strict-mcp-config"},
+		ToolCatalogTrust: toolcatalogtrust.Trust{Arguments: []string{"--allowedTools", "mcp__" + toolCatalogServerName}},
 		ToolCatalogArguments: func(toolCatalogConfigurationPath string) []string {
 			return []string{"--mcp-config", toolCatalogConfigurationPath}
 		},
@@ -341,8 +347,13 @@ func CodexAgentCommand(commandPath string) AgentCommand {
 		ToolCatalogArguments: func(toolCatalogConfigurationPath string) []string {
 			return nil
 		},
-		ToolCatalogInlineArguments: func(endpointURL string, bearerTokenEnvironmentName string) []string {
-			return []string{"-c", "mcp_servers." + toolCatalogServerName + "={url=" + strconv.Quote(endpointURL) + ",bearer_token_env_var=" + strconv.Quote(bearerTokenEnvironmentName) + "}"}
+		ToolCatalogTrust: toolcatalogtrust.Trust{ServerSettings: map[string]string{"default_tools_approval_mode": strconv.Quote("approve")}},
+		ToolCatalogInlineArguments: func(endpointURL string, bearerTokenEnvironmentName string, serverSettings map[string]string) []string {
+			fields := []string{"url=" + strconv.Quote(endpointURL), "bearer_token_env_var=" + strconv.Quote(bearerTokenEnvironmentName)}
+			for _, settingName := range slices.Sorted(maps.Keys(serverSettings)) {
+				fields = append(fields, settingName+"="+serverSettings[settingName])
+			}
+			return []string{"-c", "mcp_servers." + toolCatalogServerName + "={" + strings.Join(fields, ",") + "}"}
 		},
 	}
 }

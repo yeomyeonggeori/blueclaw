@@ -107,6 +107,9 @@ type externalAgent struct {
 	observedPrompt           string
 	observedPromptMeta       map[string]any
 	toolCallUpdates          []acp.SessionUpdate
+	permissionRequest        *acp.RequestPermissionRequest
+	observedSessionMeta      map[string]any
+	permissionOutcome        acp.RequestPermissionOutcome
 	connection               *acp.AgentSideConnection
 }
 
@@ -128,6 +131,7 @@ func (agent *externalAgent) NewSession(ctx context.Context, request acp.NewSessi
 		return acp.NewSessionResponse{}, io.ErrUnexpectedEOF
 	}
 	agent.observedToolCatalog = request.McpServers[0]
+	agent.observedSessionMeta = request.Meta
 	if request.McpServers[0].Http == nil {
 		return acp.NewSessionResponse{SessionId: "session-1"}, nil
 	}
@@ -167,6 +171,15 @@ func (agent *externalAgent) Prompt(ctx context.Context, request acp.PromptReques
 		if errorValue := agent.connection.SessionUpdate(ctx, acp.SessionNotification{SessionId: request.SessionId, Update: update}); errorValue != nil {
 			return acp.PromptResponse{}, errorValue
 		}
+	}
+	if agent.permissionRequest != nil {
+		permissionRequest := *agent.permissionRequest
+		permissionRequest.SessionId = request.SessionId
+		response, errorValue := agent.connection.RequestPermission(ctx, permissionRequest)
+		if errorValue != nil {
+			return acp.PromptResponse{}, errorValue
+		}
+		agent.permissionOutcome = response.Outcome
 	}
 	for _, contentBlock := range request.Prompt {
 		if contentBlock.Text != nil {

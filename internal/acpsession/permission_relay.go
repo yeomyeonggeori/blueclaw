@@ -98,6 +98,34 @@ func (relay *PermissionRelay) conversationsHeld() []string {
 }
 
 func (relay *PermissionRelay) AskPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question approvalgate.PermissionQuestion) (approvalgate.ApprovalAnswer, bool) {
+	outcome, isAnswered := relay.askOutcome(ctx, approvalRequest, question.Confirmation, permissionToolCall(approvalRequest, question.Confirmation), permissionOptions(question.Choices))
+	if !isAnswered {
+		return approvalgate.ApprovalAnswer{}, false
+	}
+	return approvalAnswerForOutcome(outcome)
+}
+
+func (relay *PermissionRelay) AskHarnessPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question approvalgate.HarnessPermissionQuestion) (acp.RequestPermissionOutcome, bool) {
+	outcome, isAnswered := relay.askOutcome(ctx, approvalRequest, question.Text, question.ToolCall, question.Options)
+	if !isAnswered || !selectsOneOf(outcome, question.Options) {
+		return acp.RequestPermissionOutcome{}, false
+	}
+	return outcome, true
+}
+
+func selectsOneOf(outcome acp.RequestPermissionOutcome, options []acp.PermissionOption) bool {
+	if outcome.Selected == nil {
+		return false
+	}
+	for _, permissionOption := range options {
+		if permissionOption.OptionId == outcome.Selected.OptionId {
+			return true
+		}
+	}
+	return false
+}
+
+func (relay *PermissionRelay) askOutcome(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, confirmation string, toolCall acp.ToolCallUpdate, options []acp.PermissionOption) (acp.RequestPermissionOutcome, bool) {
 	route, isFound := relay.routeFor(approvalRequest.Platform, approvalRequest.ConversationID)
 	if !isFound {
 		relay.logger.Info("acpsession.permission.nobody_to_ask",
@@ -107,22 +135,20 @@ func (relay *PermissionRelay) AskPermission(ctx context.Context, approvalRequest
 			"conversationID", approvalRequest.ConversationID,
 			"conversationsHeld", relay.conversationsHeld(),
 		)
-		return approvalgate.ApprovalAnswer{}, false
+		return acp.RequestPermissionOutcome{}, false
 	}
-	toolCall := permissionToolCall(approvalRequest, question.Confirmation)
-	options := permissionOptions(question.Choices)
-	relay.holdWaitingCall(toolCall.ToolCallId, waitingCall{approvalRequest: approvalRequest, confirmation: question.Confirmation, options: options})
+	relay.holdWaitingCall(toolCall.ToolCallId, waitingCall{approvalRequest: approvalRequest, confirmation: confirmation, options: options})
 	defer relay.releaseWaitingCall(toolCall.ToolCallId)
-	response, errorValue := route.agent.askThePerson(ctx, approvalRequest, question.Confirmation, acp.RequestPermissionRequest{
+	response, errorValue := route.agent.askThePerson(ctx, approvalRequest, confirmation, acp.RequestPermissionRequest{
 		SessionId: route.sessionID,
 		ToolCall:  toolCall,
 		Options:   options,
 	})
 	if errorValue != nil {
 		relay.logger.Warn("acpsession.permission.unanswered", "toolName", approvalRequest.ToolName, "taskRunID", approvalRequest.TaskRunID, "error", errorValue.Error())
-		return approvalgate.ApprovalAnswer{}, false
+		return acp.RequestPermissionOutcome{}, false
 	}
-	return approvalAnswerForOutcome(response.Outcome)
+	return response.Outcome, true
 }
 
 func permissionToolCall(approvalRequest mcpserver.ApprovalRequest, confirmation string) acp.ToolCallUpdate {

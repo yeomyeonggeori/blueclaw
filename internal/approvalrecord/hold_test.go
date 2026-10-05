@@ -118,3 +118,39 @@ func TestTheRecordWritesOnlyTheEventNamesTheLedgerAlreadyHad(t *testing.T) {
 		}
 	}
 }
+
+func TestAHoldWithAKnownToolNameAnswersOnlyThatTool(t *testing.T) {
+	ledger, taskRunID, holdID := openedHold(t)
+	Decide(ledger, taskRunID, holdID, DecisionConfirm, "chat_reply")
+
+	if _, isSpent := SpendApprovedCall(ledger, taskRunID, "event_update", eventDeleteInput); isSpent {
+		t.Fatal("a hold that names its tool answers no other tool")
+	}
+}
+
+func namelessHold(t *testing.T, input string) (*task.TaskRunService, string) {
+	t.Helper()
+	ledger := task.NewTaskRunService(task.NewTaskEventService())
+	taskRunID := ledger.CreateTaskRun("person-1", "conversation-1", "run it").TaskRunID
+	holdID := Open(ledger, taskRunID, agentcontract.HeldCall{ToolInput: json.RawMessage(input)})
+	Decide(ledger, taskRunID, holdID, DecisionConfirm, "harness_permission")
+	return ledger, taskRunID
+}
+
+func TestAHoldOpenedWithoutAToolNameAnswersTheCallWithTheSameInput(t *testing.T) {
+	ledger, taskRunID := namelessHold(t, `{"eventID":"event-1"}`)
+
+	if _, isSpent := SpendApprovedCall(ledger, taskRunID, "event_delete", eventDeleteInput); !isSpent {
+		t.Fatal("a hold known only by its input answers the call with that input")
+	}
+}
+
+func TestAHoldOpenedWithoutAToolNameAndWithoutInputAnswersNothing(t *testing.T) {
+	for _, input := range []string{``, `{}`, `null`} {
+		ledger, taskRunID := namelessHold(t, input)
+
+		if _, isSpent := SpendApprovedCall(ledger, taskRunID, "event_delete", json.RawMessage(input)); isSpent {
+			t.Fatalf("input %q would let one approval cover every call that takes no arguments", input)
+		}
+	}
+}

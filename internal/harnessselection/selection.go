@@ -13,6 +13,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/harnessdriver"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
+	"github.com/yeomyeonggeori/blueclaw/internal/toolcatalogtrust"
 	"github.com/yeomyeonggeori/blueclaw/internal/turnoutcome"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -24,6 +25,10 @@ const (
 	CodexHarnessName       = "codex"
 	AntigravityHarnessName = "antigravity"
 )
+
+var externalAgentToolCatalogTrust = toolcatalogtrust.Trust{
+	SessionMeta: map[string]any{"claudeCode": map[string]any{"options": map[string]any{"allowedTools": []string{"mcp__" + acpharness.ToolCatalogServerName}}}},
+}
 
 type ToolCatalogEndpoint struct {
 	URL          string
@@ -82,6 +87,10 @@ func externalHarnessFactory(harnessConfiguration config.HarnessConfiguration, to
 	return func(dependencies harnessdriver.Dependencies) (agentcontract.Harness, agentcontract.SkillRetriever) {
 		harness := acpharness.New(agentCommand, publisher, dependencies.TaskRunStore)
 		harness.UseToolCatalogBridge(toolCatalogEndpoint.BridgeCommandPath)
+		harness.UseToolCatalogTrust(externalAgentToolCatalogTrust)
+		if toolCatalogEndpoint.ApprovalGate != nil {
+			harness.UsePermissionAsker(toolCatalogEndpoint.ApprovalGate)
+		}
 		harness.UseInstructionBundleLoader(dependencies.InstructionBundleLoader)
 		harness.UseRequesterProcessRunner(processBoundary.Runner, processBoundary.WorkspaceRootPath)
 		harness.UseOutcomeClassifier(turnoutcome.NewClassifier(dependencies.IntakeLanguageModelProvider))
