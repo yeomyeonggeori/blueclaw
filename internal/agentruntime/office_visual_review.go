@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 
@@ -30,8 +29,6 @@ const (
 	visualOutcomeLeftovers    = "leftovers"
 	visualOutcomeReviewFailed = "review_failed"
 )
-
-var slideSectionPattern = regexp.MustCompile(`(?is)<section[\s>].*?</section\s*>`)
 
 type officeVisualLeftover struct {
 	Number   int      `json:"number"`
@@ -99,7 +96,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) reviewDeck(ctx context.Context, re
 	if len(report.TextChanged) > 0 {
 		toolCatalogBuilder.recheckChangedClaims(ctx, request, actor, concretePath, before, after, review)
 	}
-	return restoreOfficeBlanks(ctx, actor, concretePath, before.Blanks)
+	return nil
 }
 
 func (review *officeVisualReview) recordReport(report visualcheck.Report) {
@@ -160,43 +157,6 @@ func newOrChangedClaims(before []claimcheck.Claim, after []claimcheck.Claim) []c
 	return changed
 }
 
-func restoreOfficeBlanks(ctx context.Context, actor security.WorkspaceActor, concretePath string, blanksBefore []officeBlank) error {
-	if len(blanksBefore) == 0 {
-		return nil
-	}
-	snapshotPath := concretePath + officeContract.SourceSuffix
-	content, errorValue := actor.ReadFile(ctx, snapshotPath, officeSnapshotReadLimit)
-	if errorValue != nil {
-		return fmt.Errorf("read the snapshot to restore its blanks: %w", errorValue)
-	}
-	document := map[string]json.RawMessage{}
-	if errorValue := json.Unmarshal(content, &document); errorValue != nil {
-		return fmt.Errorf("parse the snapshot to restore its blanks: %w", errorValue)
-	}
-	var blanksAfter []officeBlank
-	if raw, hasBlanks := document["blanks"]; hasBlanks {
-		if errorValue := json.Unmarshal(raw, &blanksAfter); errorValue != nil {
-			return fmt.Errorf("parse the rebuilt snapshot's blanks: %w", errorValue)
-		}
-	}
-	merged := mergedOfficeBlanks(blanksBefore, blanksAfter)
-	if len(merged) == len(blanksAfter) {
-		return nil
-	}
-	document["blanks"] = json.RawMessage(MarshalBody(merged))
-	return actor.WriteFile(ctx, snapshotPath, []byte(MarshalBody(document)))
-}
-
-func mergedOfficeBlanks(first []officeBlank, second []officeBlank) []officeBlank {
-	merged := slices.Clone(first)
-	for _, blank := range second {
-		if !slices.ContainsFunc(first, func(known officeBlank) bool { return known.Field == blank.Field }) {
-			merged = append(merged, blank)
-		}
-	}
-	return merged
-}
-
 type officeDeck struct {
 	toolCatalogBuilder *ToolCatalogBuilder
 	request            ToolCatalogRequest
@@ -226,12 +186,13 @@ func (deck *officeDeck) Rebuild(ctx context.Context, replacements map[int]string
 	if errorValue != nil {
 		return visualcheck.Manifest{}, errorValue
 	}
-	original, errorValue := deck.replaceSections(ctx, manifest.Source, replacements)
+	originals, errorValue := deck.writePages(ctx, manifest, replacements)
 	if errorValue != nil {
+		deck.restorePages(ctx, originals)
 		return visualcheck.Manifest{}, errorValue
 	}
 	if detail := deck.toolCatalogBuilder.runOfficeCommand(ctx, deck.request, deck.actor, words); detail != "" {
-		_ = deck.actor.WriteFile(ctx, manifest.Source, original)
+		deck.restorePages(ctx, originals)
 		return visualcheck.Manifest{}, errors.New("the deck rebuild failed: " + detail)
 	}
 	return deck.rebuiltManifest(ctx)
@@ -254,38 +215,29 @@ func (deck *officeDeck) rebuiltManifest(ctx context.Context) (visualcheck.Manife
 	return deck.Manifest(ctx)
 }
 
-func (deck *officeDeck) replaceSections(ctx context.Context, sourcePath string, replacements map[int]string) ([]byte, error) {
-	source, errorValue := deck.actor.ReadFile(ctx, sourcePath, officeVisualSourceReadLimit)
-	if errorValue != nil {
-		return nil, errorValue
+func (deck *officeDeck) writePages(ctx context.Context, manifest visualcheck.Manifest, replacements map[int]string) (map[string][]byte, error) {
+	originals := map[string][]byte{}
+	for number, section := range replacements {
+		pagePath := manifest.PageSource(number)
+		if pagePath == "" {
+			return originals, fmt.Errorf("slide %d names no page file", number)
+		}
+		original, errorValue := deck.actor.ReadFile(ctx, pagePath, officeVisualSourceReadLimit)
+		if errorValue != nil {
+			return originals, errorValue
+		}
+		originals[pagePath] = original
+		if errorValue := deck.actor.WriteFile(ctx, pagePath, []byte(section+"\n")); errorValue != nil {
+			return originals, errorValue
+		}
 	}
-	replaced, errorValue := withReplacedSections(string(source), replacements)
-	if errorValue != nil {
-		return nil, errorValue
-	}
-	return source, deck.actor.WriteFile(ctx, sourcePath, []byte(replaced))
+	return originals, nil
 }
 
-func withReplacedSections(source string, replacements map[int]string) (string, error) {
-	spans := slideSectionPattern.FindAllStringIndex(source, -1)
-	for number := range replacements {
-		if number < 1 || number > len(spans) {
-			return "", fmt.Errorf("slide %d is not a section of the deck source", number)
-		}
+func (deck *officeDeck) restorePages(ctx context.Context, originals map[string][]byte) {
+	for pagePath, original := range originals {
+		_ = deck.actor.WriteFile(ctx, pagePath, original)
 	}
-	var builder strings.Builder
-	cursor := 0
-	for index, span := range spans {
-		replacement, isReplaced := replacements[index+1]
-		if !isReplaced {
-			continue
-		}
-		builder.WriteString(source[cursor:span[0]])
-		builder.WriteString(replacement)
-		cursor = span[1]
-	}
-	builder.WriteString(source[cursor:])
-	return builder.String(), nil
 }
 
 func officeRebuildWords(snapshot officeSnapshot) ([]string, error) {

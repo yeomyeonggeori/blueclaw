@@ -60,9 +60,13 @@ func (fixture officeContextFixture) installOfficeStandIn(t *testing.T) string {
 	return recordPath
 }
 
-func (fixture officeContextFixture) deliverWithJudge(t *testing.T, judge *claimJudge, name string) map[string]json.RawMessage {
+func (fixture officeContextFixture) deliverWithJudge(t *testing.T, judge *claimJudge, name string, otherJudge ...model.DecisionModel) map[string]json.RawMessage {
 	t.Helper()
-	fixture.builder.UseClaimDecisionModel(judge)
+	if len(otherJudge) > 0 {
+		fixture.builder.UseClaimDecisionModel(otherJudge[0])
+	} else {
+		fixture.builder.UseClaimDecisionModel(judge)
+	}
 	fixture.request.Prompt = "사무실 이전 안내문 만들어 줘. 10월 20일 새 사무실로 이전합니다."
 	result := fixture.invoke(t, "file_deliver", map[string]string{"path": "documents/" + name})
 	if result.Failed() || len(result.Attachments) != 1 {
@@ -400,5 +404,83 @@ func TestOnlyASentenceOfAParagraphMayBeDroppedForBeingHollow(t *testing.T) {
 	}
 	if !isSentencePath("slides[3].units[2]#0") || !isSentencePath("sections[0].blocks[0].text#1") {
 		t.Fatalf("a sentence of a paragraph ends in #<index>")
+	}
+}
+
+const decisionsDeckSnapshot = `{"command":"office create","deck":"/home/sample/documents/decisions/slides.html","claims":[` +
+	`{"path":"slides[0].units[0]","at":"slide 1","text":"Three decisions today"},` +
+	`{"path":"slides[0].units[1]","at":"slide 1","text":"Approve the budget"},` +
+	`{"path":"slides[0].units[2]","at":"slide 1","text":"Sign the lease"},` +
+	`{"path":"slides[1].units[0]","at":"slide 2","text":"Thank you for your time"}]}`
+
+const decisionsDeckAfterBlank = `{"command":"office create","deck":"/home/sample/documents/decisions/slides.html","claims":[` +
+	`{"path":"slides[0].units[0]","at":"slide 1","text":"Three decisions today"},` +
+	`{"path":"slides[0].units[1]","at":"slide 1","text":"Sign the lease"},` +
+	`{"path":"slides[1].units[0]","at":"slide 2","text":"Thank you for your time"}]}`
+
+type countingJudge struct {
+	askedPerCall [][]string
+	removedSeen  [][]string
+}
+
+func (judge *countingJudge) Decide(_ context.Context, request model.DecisionRequest) (model.DecisionResponse, error) {
+	state, _ := json.Marshal(request.State)
+	var shown struct {
+		Claims  map[string]struct{ Text string } `json:"claims"`
+		Removed []struct{ Text string }          `json:"removed"`
+	}
+	_ = json.Unmarshal(state, &shown)
+	asked, removed := []string{}, []string{}
+	for _, item := range shown.Removed {
+		removed = append(removed, item.Text)
+	}
+	answers := map[string]model.DecisionAnswer{}
+	for key := range request.Questions {
+		text := shown.Claims[key].Text
+		asked = append(asked, text)
+		probability := 0.05
+		if text == "Approve the budget" || (text == "Three decisions today" && len(removed) > 0) {
+			probability = 0.9
+		}
+		answers[key] = model.DecisionAnswer{Type: model.DecisionQuestionTypeChoice, Choice: "claim", Probabilities: map[string]float64{"claim": probability}}
+	}
+	judge.askedPerCall = append(judge.askedPerCall, asked)
+	judge.removedSeen = append(judge.removedSeen, removed)
+	return model.DecisionResponse{Answers: answers}, nil
+}
+
+func (fixture officeContextFixture) installRewritingOfficeStandIn(t *testing.T, snapshotPath string, afterSnapshot string) string {
+	t.Helper()
+	recordPath := filepath.Join(fixture.workspacePath, "office-calls.txt")
+	afterPath := filepath.Join(fixture.workspacePath, "after-snapshot.json")
+	writeTestFile(t, afterPath, afterSnapshot)
+	entryPath := filepath.Join(BundledSkillRootPath(fixture.workspacePath), "office", "scripts", "office")
+	writeTestFile(t, entryPath, "#!/bin/sh\nprintf '%s\\n' \"$@\" >> "+shellSingleQuoted(recordPath)+"\ncp "+shellSingleQuoted(afterPath)+" "+shellSingleQuoted(snapshotPath)+"\n")
+	if errorValue := os.Chmod(entryPath, 0o755); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	return recordPath
+}
+
+func TestAStatementLeftBesideBlankedValuesIsJudgedAgainstWhatWasRemoved(t *testing.T) {
+	fixture := newOfficeContextFixture(t)
+	documentPath := fixture.writeSnapshot(t, "decisions.pptx", decisionsDeckSnapshot)
+	recordPath := fixture.installRewritingOfficeStandIn(t, documentPath+officeContract.SourceSuffix, decisionsDeckAfterBlank)
+	judge := &countingJudge{}
+
+	data := fixture.deliverWithJudge(t, nil, "decisions.pptx", judge)
+
+	if len(judge.askedPerCall) < 2 || len(judge.askedPerCall[0]) != 4 || strings.Join(judge.askedPerCall[1], "|") != "Three decisions today|Sign the lease" && strings.Join(judge.askedPerCall[1], "|") != "Sign the lease|Three decisions today" {
+		t.Fatalf("judged %v", judge.askedPerCall)
+	}
+	if strings.Join(judge.removedSeen[1], "|") != "Approve the budget" || strings.Join(judge.removedSeen[len(judge.removedSeen)-1], "|") != "Approve the budget|Three decisions today" || len(judge.removedSeen[0]) != 0 {
+		t.Fatalf("removed shown as %v", judge.removedSeen)
+	}
+	calls := strings.Join(officeCalls(t, recordPath), " ")
+	if !strings.Contains(calls, "--blank slides[0].units[1]") || !strings.Contains(calls, "--blank slides[0].units[0]") {
+		t.Fatalf("remakes %s", calls)
+	}
+	if !strings.Contains(string(data["claimChecks"]), "slide 1") || !strings.Contains(string(data["claimChecks"]), `"outcome":"blanked"`) {
+		t.Fatalf("check %s", data["claimChecks"])
 	}
 }

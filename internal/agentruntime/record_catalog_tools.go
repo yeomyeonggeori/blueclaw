@@ -252,6 +252,14 @@ func resultInsideTheEnvelope(structuredContent json.RawMessage) json.RawMessage 
 	return envelope.Result
 }
 
+func (toolCatalogBuilder *ToolCatalogBuilder) recordFileKeeper(request ToolCatalogRequest) answeredFileKeeper {
+	return answeredFileKeeper{
+		workspaceActorFactory: toolCatalogBuilder.workspaceActorFactory,
+		workspaceRootPath:     toolCatalogBuilder.workspaceRootPath,
+		personAccess:          requesterPersonAccess(request.RequesterPersonID, request.PersonAccess),
+	}
+}
+
 func (toolCatalogBuilder *ToolCatalogBuilder) registerRecordCatalogTools(
 	toolRegistry *toolcontract.ToolSet,
 	request ToolCatalogRequest,
@@ -265,11 +273,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerRecordCatalogTools(
 			recordCatalog: request.RecordCatalog,
 			request:       request,
 			descriptors:   descriptors,
-			fileKeeper: answeredFileKeeper{
-				workspaceActorFactory: toolCatalogBuilder.workspaceActorFactory,
-				workspaceRootPath:     toolCatalogBuilder.workspaceRootPath,
-				personAccess:          requesterPersonAccess(request.RequesterPersonID, request.PersonAccess),
-			},
+			fileKeeper:    toolCatalogBuilder.recordFileKeeper(request),
 			officeFacts: func(ctx context.Context, toolName string, input json.RawMessage, result mcp.ToolResult) {
 				toolCatalogBuilder.recordOfficeFacts(ctx, request, toolName, input, result)
 			},

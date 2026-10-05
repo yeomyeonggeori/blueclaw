@@ -78,6 +78,9 @@ func (toolCatalogBuilder *ToolCatalogBuilder) runTerminalTool(toolContext contex
 		return *toolFailure, nil
 	}
 	slog.Info("shell runtime directories materialized", "durationMs", time.Since(materializeStartedAt).Milliseconds())
+	toolCatalogBuilder.prepareRequestedDeck(toolContext, workspaceActor, handlerContext.request)
+	toolCatalogBuilder.chooseRequestedDeckLayouts(toolContext, workspaceActor, handlerContext.request)
+	toolCatalogBuilder.judgeRequestedDraftClaims(toolContext, workspaceActor, handlerContext.request)
 	if errorValue := toolCatalogBuilder.writeOfficeRuntimeContext(toolContext, workspaceActor, handlerContext.request, func(*officeRuntimeContext) {}); errorValue != nil {
 		return actorToolFailure("write_file", "office_runtime_context", input.EnvironmentVariables[officeContract.RuntimeContextVariable], errorValue), nil
 	}

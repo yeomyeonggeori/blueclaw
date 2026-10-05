@@ -72,6 +72,219 @@
       "reviewsDeckRenders": {
         "type": "boolean",
         "description": "true when the host reviews every slide render of a delivered deck itself and repairs the slides it flags, so a deck build writes the review manifest for it"
+      },
+      "preparesDecks": {
+        "type": "boolean",
+        "description": "true when the host prepares a deck when asked: it answers the typeface question of the request file the deckPreparation names in one decision call, and gathers the images the requester can use, before the next command runs"
+      },
+      "deckDesign": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "the host's answer to the deck's typeface question once the deck preparation ran, with its failure when no answer came; null until then",
+        "properties": {
+          "choices": {
+            "type": "object",
+            "description": "per question, the option chosen and every option's probability",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "option": {
+                  "type": "string"
+                },
+                "probabilities": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number"
+                  }
+                }
+              },
+              "required": [
+                "option",
+                "probabilities"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "model": {
+            "type": "string"
+          },
+          "costUSD": {
+            "type": "number"
+          },
+          "failure": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "choices"
+        ],
+        "additionalProperties": false
+      },
+      "images": {
+        "type": "array",
+        "description": "the data room images the requester can use in a deck, gathered as the requester when the deck preparation ran; empty until then",
+        "items": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "absolute path of the kept copy"
+            },
+            "name": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string",
+              "description": "dataroom or attachment"
+            },
+            "folder": {
+              "type": "string",
+              "description": "the data room category it is filed under"
+            },
+            "title": {
+              "type": "string"
+            },
+            "summary": {
+              "type": "string"
+            },
+            "date": {
+              "type": "string"
+            },
+            "width": {
+              "type": "integer"
+            },
+            "height": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "path",
+            "name",
+            "source",
+            "width",
+            "height"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "fonts": {
+        "type": "array",
+        "description": "font files the requester can read in the data room, as the requester; a deck set in a font the person asked for finds it here, among the attachments, in the font cache or on Google Fonts",
+        "items": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "absolute path of the kept copy"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "name"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "judgesDraftClaims": {
+        "type": "boolean",
+        "description": "true when the host judges the claims of a deck draft between commands: office check and office create write them to the draftClaims request file, and the host answers in draftClaims before the next command"
+      },
+      "draftClaims": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "the host's judgment of the last draft claims request: the draft's digest and the units the request, its attachments and the runtime facts do not support; null until a draft was judged",
+        "properties": {
+          "digest": {
+            "type": "string"
+          },
+          "unsupported": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "at": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "text"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "digest",
+          "unsupported"
+        ],
+        "additionalProperties": false
+      },
+      "choosesDeckLayouts": {
+        "type": "boolean",
+        "description": "true when the host chooses each outline page's layout: office check outline.json writes the deckLayouts request file, and the host answers its questions in one decision call before the next command"
+      },
+      "deckLayouts": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "the host's answers to the last deckLayouts request: the request's digest, per page question the option chosen and every option's probability, with its failure when no answer came; null until a request was answered",
+        "properties": {
+          "digest": {
+            "type": "string"
+          },
+          "choices": {
+            "type": "object",
+            "description": "per question, the option chosen and every option's probability",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "option": {
+                  "type": "string"
+                },
+                "probabilities": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number"
+                  }
+                }
+              },
+              "required": [
+                "option",
+                "probabilities"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "model": {
+            "type": "string"
+          },
+          "costUSD": {
+            "type": "number"
+          },
+          "failure": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "digest",
+          "choices"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [
@@ -80,7 +293,15 @@
       "company",
       "registeredDocuments",
       "attachments",
-      "reviewsDeckRenders"
+      "reviewsDeckRenders",
+      "preparesDecks",
+      "deckDesign",
+      "images",
+      "fonts",
+      "judgesDraftClaims",
+      "draftClaims",
+      "choosesDeckLayouts",
+      "deckLayouts"
     ],
     "additionalProperties": false
   },
@@ -317,12 +538,16 @@
       },
       "visualReview": {
         "type": "string",
-        "description": "a deck's visual review: the absolute path of the JSON its build wrote, holding the question to ask of each slide render, the threshold, the rounds, the fixer's instructions and each slide's render, facts, <section> source and measured defects; absent for files that are not decks"
+        "description": "a deck's visual review: the absolute path of the JSON its build wrote, holding the question to ask of each slide render, the question to ask of one contact sheet of all the renders, the threshold and per-option thresholds, the rounds, the fixer's instructions and each slide's render, facts, page file (source) and its text (section), measured defects, and recompose when the claim check took text out of that page; the host writes a repaired slide's section into its source and rebuilds; absent for files that are not decks"
+      },
+      "design": {
+        "type": "object",
+        "description": "how a deck's design was chosen: per question the option, where it came from (source, decided or fallback) and its probabilities, the brand color taken from the logo, and the images and logo the deck could use"
       }
     }
   },
   "blankCommand": {
-    "description": "how the host remakes a file with claims blank, run as the person: merge for a snapshot that names a schema, create for one that names a declaration or a deck; the snapshot stands in for the values or the declaration, a deck is rebuilt from its source, and each --blank names a claim path; replaceFlag, passed as <replaceFlag> <path>=<text>, gives a claim path the text it takes instead, and a path both blanked and replaced is blanked",
+    "description": "how the host remakes a file with claims blank, run as the person: merge for a snapshot that names a schema, create for one that names a declaration or a deck; the snapshot stands in for the values or the declaration, a deck is rebuilt from its outline with each blanked unit taken out of its page and the outline, and the visual review asked to recompose those pages, and each --blank names a claim path; replaceFlag, passed as <replaceFlag> <path>=<text>, gives a claim path the text it takes instead, and a path both blanked and replaced is blanked",
     "replaceFlag": "--replace",
     "merge": [
       "merge",
@@ -360,5 +585,18 @@
     "companionFields": [
       "blanks"
     ]
+  },
+  "deckPreparation": {
+    "requestFile": "deck-preparation.json",
+    "description": "office guide slides writes this file beside the runtime context when the host prepares decks and has not prepared this one; it names the typeface question file, whose instructions and options the host asks as one batch of choice questions with the request and the gathered images as state; the host removes the request after writing deckDesign and images into the runtime context"
+  },
+  "draftClaims": {
+    "requestFile": "draft-claims-request.json",
+    "reportedFile": "draft-claims-reported.json",
+    "description": "office check and office create write the claims of the deck draft, the outline's core hook, titles and briefs and the text of every page written so far, to requestFile beside the runtime context when the host judges drafts; before the next command the host judges them the way it judges a delivered file's claims and writes draftClaims into the runtime context; the next office check or create refuses each unit named there that the outline or a page still holds, once, and records the refused texts in reportedFile beside the context so a unit is never refused twice"
+  },
+  "deckLayouts": {
+    "requestFile": "deck-layouts-request.json",
+    "description": "office check outline.json writes this file beside the runtime context when the host chooses deck layouts: one choice question per outline page, the page's title, brief and photo count in its instructions and the layouts its type takes as options, in the shape of the deckPreparation question file; before the next command the host asks them in one decision call with the request as state and writes deckLayouts with the sha-256 digest of the file's bytes"
   }
 }
