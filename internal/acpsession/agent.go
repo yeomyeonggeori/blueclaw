@@ -76,6 +76,7 @@ type Agent struct {
 	attachmentImporter AttachmentImporter
 	sessionTurns       SessionTurnOpener
 	taskRunStore       taskstate.TaskRunStore
+	tasklessCalls      TasklessCallRecorder
 	logger             *slog.Logger
 	deliveries         *awaitedDeliveries
 	deliveryReportWait time.Duration
@@ -96,6 +97,7 @@ func NewAgent(collaborators Collaborators, permissionRelay *PermissionRelay, log
 		attachmentImporter: collaborators.AttachmentImporter,
 		sessionTurns:       collaborators.SessionTurns,
 		taskRunStore:       collaborators.TaskRunStore,
+		tasklessCalls:      collaborators.TasklessCalls,
 		logger:             logger,
 		deliveries:         newAwaitedDeliveries(),
 		deliveryReportWait: defaultDeliveryReportWait,
@@ -116,7 +118,10 @@ type Collaborators struct {
 	AttachmentImporter AttachmentImporter
 	SessionTurns       SessionTurnOpener
 	TaskRunStore       taskstate.TaskRunStore
+	TasklessCalls      TasklessCallRecorder
 }
+
+type TasklessCallRecorder func(subjects []string, record agentcontract.LLMCallRecord)
 
 func (agent *Agent) UseConnection(connection *acp.AgentSideConnection) {
 	agent.connection = connection
@@ -221,6 +226,7 @@ func (agent *Agent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.
 	defer sessionTurn.EndProgress()
 	sessionTurn.ShowProgressBeforeAddressing(ctx)
 	launchRequest, decided, reason := agent.decideOnce(ctx, session, messageContext, launchRequest, sessionTurn)
+	defer agent.recordDecisionCalls(decided, "")
 	if reason != "" {
 		agent.logger.Info("acpsession.prompt.ignored",
 			"sessionID", string(request.SessionId),

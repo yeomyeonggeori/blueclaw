@@ -167,7 +167,7 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 	components.agentReplyStore = newAgentReplyStore(runtimeConfiguration)
 	components.connectorRuntime.RegisterAdapter(apiconnector.NewAdapter(components.directory.identityService, components.agentReplyStore))
 	components.connectorEventHandler = httpserver.NewConnectorEventHandler(components.connectorRuntime, inbound.admitsConnectorHTTPEvent())
-	components.acpSessionServer = newACPSessionServer(inbound, components.kernel, components.directory, components.taskLauncher, components.decisionPlanner, components.connectorRuntime, components.services.taskRunService, logger)
+	components.acpSessionServer = newACPSessionServer(inbound, components.kernel, components.directory, components.taskLauncher, components.decisionPlanner, components.connectorRuntime, components.services.taskRunService, components.services.repositories.llmCall, logger)
 	logger.Info("application.initializing", "stage", "router")
 	components.protocolIdentity = newProtocolIdentity(runtimeConfiguration, components.kernel.capabilityClient)
 	components.startupError = firstNonNilError(components.foundation.startupError, components.kernel.startupError, components.startupError)
