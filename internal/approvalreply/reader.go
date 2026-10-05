@@ -2,7 +2,6 @@ package approvalreply
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -83,7 +82,7 @@ func (reader DecisionModelReader) Read(ctx context.Context, question Question, r
 	startedAt := time.Now()
 	response, errorValue := reader.decisionModel.Decide(ctx, request)
 	if observe != nil {
-		observe(callRecord(request, response, time.Since(startedAt), errorValue))
+		observe(agentcontract.DecisionCallRecord(request, response, time.Since(startedAt), errorValue))
 	}
 	if errorValue != nil {
 		return "", false, errorValue
@@ -100,31 +99,6 @@ func readRequest(question Question, reply string) model.DecisionRequest {
 		State:     readState{PostedQuestion: question.Text, Reply: reply},
 		Questions: map[string]model.DecisionQuestion{answerQuestionName: model.ChoiceQuestion{Instructions: instructions, OptionDescriptions: descriptions}.Question()},
 	}
-}
-
-func callRecord(request model.DecisionRequest, response model.DecisionResponse, latency time.Duration, errorValue error) agentcontract.LLMCallRecord {
-	stateBytes, _ := json.Marshal(request.State)
-	questionBytes, _ := json.Marshal(request.Questions)
-	record := agentcontract.LLMCallRecord{
-		Kind:             agentcontract.LLMCallKindDecision,
-		Transport:        "decisions",
-		Provider:         response.ProviderName,
-		UpstreamProvider: response.UpstreamProvider,
-		Model:            response.ModelName,
-		LatencyMS:        latency.Milliseconds(),
-		PromptBytes:      len(stateBytes),
-		SchemaBytes:      len(questionBytes),
-		QuestionCount:    len(request.Questions),
-		PromptTokens:     response.Usage.PromptTokens,
-		CompletionTokens: response.Usage.CompletionTokens,
-		TotalTokens:      response.Usage.TotalTokens,
-		CostUSD:          response.Usage.CostUSD,
-		DecisionAnswers:  response.Answers,
-	}
-	if errorValue != nil {
-		record.IsError, record.Error = true, errorValue.Error()
-	}
-	return record
 }
 
 func offeredOption(question Question, response model.DecisionResponse) (string, bool, error) {
