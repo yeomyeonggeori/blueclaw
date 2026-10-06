@@ -83,7 +83,7 @@
   "connectors": {},
   "inbound": {
     "connectors": {
-      "askInThread": false
+      "askInThread": true
     }
   },
   "logging": {

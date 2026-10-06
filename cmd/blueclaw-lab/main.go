@@ -34,10 +34,10 @@ func init() {
 
 func useHarness(harnessName string) error {
 	switch harnessName {
-	case "", bluecollarHarnessName:
+	case bluecollarHarnessName:
 		e2e.UseAgentHarnessFactory(bluecollarharness.New)
 		return nil
-	case bluecollarACPHarnessName:
+	case "", bluecollarACPHarnessName:
 		return e2e.UseBundledACPHarness(bluecollaracp.NewFactory)
 	}
 	return fmt.Errorf("unknown harness %q; known harnesses are %q and %q", harnessName, bluecollarHarnessName, bluecollarACPHarnessName)
@@ -166,8 +166,8 @@ func parseVirtualSessionArguments(arguments []string, defaultScenarioName string
 	validateOnly := flagSet.Bool("validate-only", false, "validate the scenario file without running it")
 	maximumModelTier := flagSet.String("maximum-model-tier", "", "maximum live model tier, one of "+strings.Join(llm.ModelTiers, ", "))
 	realModelTiers := flagSet.Bool("real-model-tiers", false, "use the production model tier configuration without a ceiling")
-	askInThread := flagSet.Bool("ask-in-thread", false, "ask an approval in the thread and wait for the reply, as inbound.connectors.askInThread does, instead of parking the run")
-	harnessName := flagSet.String("harness", firstNonEmptyString(os.Getenv("BLUECLAW_E2E_HARNESS"), bluecollarHarnessName), "agent harness the scenario runs under: "+bluecollarHarnessName+" or "+bluecollarACPHarnessName)
+	askInThread := flagSet.Bool("ask-in-thread", true, "ask an approval in the thread and wait for the reply, as inbound.connectors.askInThread does, instead of parking the run")
+	harnessName := flagSet.String("harness", firstNonEmptyString(os.Getenv("BLUECLAW_E2E_HARNESS"), bluecollarACPHarnessName), "agent harness the scenario runs under: "+bluecollarHarnessName+" or "+bluecollarACPHarnessName)
 	listScenarios := flagSet.Bool("list-scenarios", false, "print every scenario name BuiltinScenario accepts, one per line, and exit")
 	flagSet.Usage = func() {
 		fmt.Fprintln(flagSet.Output(), "Usage: blueclaw-lab virtual-session [flags]")

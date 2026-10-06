@@ -61,7 +61,7 @@ func newConnectorRuntime(runtimeConfiguration config.RuntimeConfiguration, found
 }
 
 func useAskInThread(connectorRuntime *connectors.ConnectorRuntime, runtimeConfiguration config.RuntimeConfiguration, inbound InboundOptions, approvalGate *approvalgate.Gate, directory identityDirectory) {
-	connectorRuntime.UseAskInThread(runtimeConfiguration.Inbound.Connectors.AskInThread && inbound.admitsConnectorHTTPEvent())
+	connectorRuntime.UseAskInThread(runtimeConfiguration.Inbound.Connectors.AsksInThread() && inbound.admitsConnectorHTTPEvent())
 	approvalGate.UsePermissionAsker(connectorRuntime.ThreadPermissionAsker())
 	if directory.platformAccountLister != nil {
 		connectorRuntime.UseRequesterDirectMessages(newDirectMessageOpener(newChatdClient(runtimeConfiguration)), directory.platformAccountLister)
