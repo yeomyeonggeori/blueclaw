@@ -44,6 +44,7 @@ type officeExampleRequest struct {
 	Name           string   `json:"name"`
 	Text           string   `json:"text"`
 	Attachments    []string `json:"attachments"`
+	Deliverable    string   `json:"deliverable"`
 	TimeoutSeconds int      `json:"timeoutSeconds"`
 }
 
@@ -191,7 +192,31 @@ func readOfficeExampleRequest(t *testing.T, requestPath string) officeExampleReq
 	if errorValue := json.Unmarshal(content, &request); errorValue != nil {
 		t.Fatal(errorValue)
 	}
+	if deliverableExtension(request) == "." {
+		t.Fatalf("%s must name in deliverable the extension of the file the task delivers", requestPath)
+	}
 	return request
+}
+
+func deliverableExtension(request officeExampleRequest) string {
+	return "." + strings.ToLower(strings.TrimPrefix(strings.TrimSpace(request.Deliverable), "."))
+}
+
+func officeExampleShortfall(request officeExampleRequest, result VirtualSessionResult) string {
+	if len(result.TurnResults) == 0 {
+		return "the session ran no turn"
+	}
+	turn := result.TurnResults[len(result.TurnResults)-1]
+	extension := deliverableExtension(request)
+	if turn.TaskStatus != task.TaskStatusCompleted {
+		return fmt.Sprintf("the task ended %s (%s) instead of completing with a %s file", turn.TaskStatus, turn.FailureReason, extension)
+	}
+	for _, attachment := range turn.Attachments {
+		if strings.ToLower(filepath.Ext(attachment.Filename)) == extension {
+			return ""
+		}
+	}
+	return fmt.Sprintf("the task completed without delivering a %s file", extension)
 }
 
 func capabilityCatalogEntry(t *testing.T, toolName string) map[string]any {
@@ -358,4 +383,10 @@ func TestOfficeExampleLive(t *testing.T) {
 	result, runError := RunVirtualSession(ctx, scenario)
 	preserveLiveSessionEvidence(t, outputDirectory, result, runError)
 	t.Logf("office example %s finished in %.0fs, error %v", request.Name, time.Since(started).Seconds(), runError)
+	if runError != nil {
+		t.Fatal(runError)
+	}
+	if shortfall := officeExampleShortfall(request, result); shortfall != "" {
+		t.Fatalf("office example %s: %s", request.Name, shortfall)
+	}
 }
