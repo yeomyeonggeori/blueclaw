@@ -237,6 +237,16 @@ export enum TaskEventName {
 export const taskEventNameSchema = z.enum(TaskEventName);
 
 export enum HostTaskEventName {
+  ApprovalExpired = 'approval.expired',
+  ApprovalUnreachable = 'approval.unreachable',
+  ApprovalWordingFailed = 'approval.wording_failed',
+  BlueclawConnectorFilesUndelivered = 'blueclaw.connector.files_undelivered',
+  BlueclawConnectorStopOutboxSuppressed = 'blueclaw.connector.stop_outbox_suppressed',
+  BlueclawLaunchFailureReply = 'blueclaw.launch.failure_reply',
+  BlueclawLaunchFailureReport = 'blueclaw.launch.failure_report',
+  BlueclawLaunchGoalBlocked = 'blueclaw.launch.goal_blocked',
+  BlueclawLaunchLimitReply = 'blueclaw.launch.limit_reply',
+  BlueclawLaunchLimitStop = 'blueclaw.launch.limit_stop',
   BlueclawTaskExecutionDuration = 'blueclaw.task.execution_duration',
 }
 

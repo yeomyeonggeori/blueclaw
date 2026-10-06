@@ -182,6 +182,16 @@
     },
     {
       "enum": [
+        "approval.expired",
+        "approval.unreachable",
+        "approval.wording_failed",
+        "blueclaw.connector.files_undelivered",
+        "blueclaw.connector.stop_outbox_suppressed",
+        "blueclaw.launch.failure_reply",
+        "blueclaw.launch.failure_report",
+        "blueclaw.launch.goal_blocked",
+        "blueclaw.launch.limit_reply",
+        "blueclaw.launch.limit_stop",
         "blueclaw.task.execution_duration"
       ],
       "type": "string"
