@@ -106,7 +106,6 @@
         "ask.requested",
         "ask.resolved",
         "ask.superseded_by_message",
-        "blueclaw.task.execution_duration",
         "completion.change_check",
         "completion.check_degraded",
         "completion.expected_changes",
@@ -174,6 +173,12 @@
         "tool.crashed",
         "tool.result_spill_failed",
         "tool.result_spilled"
+      ],
+      "type": "string"
+    },
+    {
+      "enum": [
+        "blueclaw.task.execution_duration"
       ],
       "type": "string"
     },
