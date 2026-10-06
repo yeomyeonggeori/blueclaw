@@ -131,6 +131,8 @@ type ConnectorRuntime struct {
 	approvalGate           *approvalgate.Gate
 	approvalReplyReader    approvalreply.Reader
 	askingThreads          *askingThreads
+	directMessageOpener    DirectMessageOpener
+	directMessageAccounts  DirectMessageAccounts
 	toolCatalogBuilder     *agentruntime.ToolCatalogBuilder
 	workspaceActorFactory  security.WorkspaceActorFactory
 	agentIdentityProvider  func() agentcontract.AgentIdentity

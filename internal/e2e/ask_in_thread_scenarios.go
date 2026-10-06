@@ -3,6 +3,7 @@ package e2e
 import (
 	"strings"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
@@ -51,4 +52,40 @@ func askedOnceEventCounts(expectedEventCounts []VirtualEventCount) []VirtualEven
 
 func isToolRequestedEvent(eventName string) bool {
 	return strings.HasPrefix(eventName, agentcontract.ToolTaskEventPrefix) && strings.HasSuffix(eventName, agentcontract.ToolTaskEventRequestedSuffix)
+}
+
+func ScheduledRunAsksInDirectMessageScenario(artifactDirectoryPath string) VirtualSessionScenario {
+	scenario := hostUpdateScenario("scheduled_run_asks_in_direct_message", artifactDirectoryPath, true, []VirtualTurn{{
+		Prompt:           "지금 바로 업데이트해줘",
+		RunsScheduledRun: true,
+		ActionResponses: []string{
+			actionCallTool(virtualHostUpdateToolName, `{"isRequestedNow":true}`),
+		},
+		ExpectedEventCounts: []VirtualEventCount{
+			{Name: toolRequestedEventName(virtualHostUpdateToolName), Count: 1},
+			{Name: agentcontract.TaskEventApprovalHoldOpened, BodyFragment: `"targetVersion":"` + virtualHostLatestVersion + `"`, Count: 1},
+		},
+		ExpectedEvents:        []string{agentcontract.TaskEventConfirmationRequested},
+		ExpectedReplyTargetID: virtualDirectConversationID,
+		ExpectedTaskStatus:    task.TaskStatusWaitingApproval,
+	}, {
+		Prompt:                 "1번, 지금 해",
+		RepliesInDirectMessage: true,
+		AnswersApprovalHold:    true,
+		RouterChoice:           virtualHostNowChoiceKey,
+		ExpectedResponse:       VirtualResponseBackgroundAction,
+		ActionResponses: []string{
+			actionFinishMessage("업데이트를 시작했어요.", observationOfTheCallInPlace),
+		},
+		ExpectedEventCounts: []VirtualEventCount{
+			{Name: toolRequestedEventName(virtualHostUpdateToolName), Count: 1},
+			{Name: toolResultEventName(virtualHostUpdateToolName), BodyFragment: `"status":"started"`, Count: 1},
+			{Name: agentcontract.TaskEventApprovalHoldSpent, BodyFragment: virtualHostLatestVersion, Count: 1},
+			{Name: agentcontract.TaskEventApprovalHoldOpened, Count: 1},
+		},
+		ExpectedEvents:     []string{agentcontract.TaskEventConfirmationReplyClassified},
+		ExpectedTaskStatus: task.TaskStatusCompleted,
+	}})
+	scenario.AskInThread = true
+	return scenario
 }

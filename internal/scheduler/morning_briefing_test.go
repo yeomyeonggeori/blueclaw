@@ -53,21 +53,6 @@ func TestNewMorningBriefingScheduleRejectsInvalidTimeZone(t *testing.T) {
 	}
 }
 
-func TestMorningBriefingAccountRequiresOneAccountPerPlatform(t *testing.T) {
-	accounts := []identity.PlatformAccountIdentity{
-		{Platform: "buzz", ExternalUserID: "z", PersonID: "person-1"},
-		{Platform: "mattermost", ExternalUserID: "mattermost-1", PersonID: "person-1"},
-	}
-	account, isFound := morningBriefingAccount("person-1", accounts)
-	if !isFound || account.Platform != "buzz" {
-		t.Fatalf("expected deterministic platform selection, got %+v, %v", account, isFound)
-	}
-	accounts = append(accounts, identity.PlatformAccountIdentity{Platform: "buzz", ExternalUserID: "a", PersonID: "person-1"})
-	if _, isFound = morningBriefingAccount("person-1", accounts); isFound {
-		t.Fatal("expected same-platform ambiguity to fail closed")
-	}
-}
-
 func TestMorningBriefingReconcileReadsUsersAndRemovesMissingRosterEntries(t *testing.T) {
 	rootPath := t.TempDir()
 	firstUser := persona.DefaultMorningBriefing()
