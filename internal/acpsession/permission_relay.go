@@ -159,13 +159,13 @@ func (relay *PermissionRelay) askOutcome(ctx context.Context, approvalRequest mc
 	})
 	if errorValue != nil {
 		relay.logger.Warn("acpsession.permission.unanswered", "toolName", approvalRequest.ToolName, "taskRunID", approvalRequest.TaskRunID, "error", errorValue.Error())
-		return acp.RequestPermissionOutcome{}, statusOfFailedAsk(ctx)
+		return acp.RequestPermissionOutcome{}, statusOfFailedAsk(ctx, route.agent)
 	}
 	return response.Outcome, approvalgate.AskAnswered
 }
 
-func statusOfFailedAsk(ctx context.Context) approvalgate.AskStatus {
-	if ctx.Err() != nil {
+func statusOfFailedAsk(ctx context.Context, asking *Agent) approvalgate.AskStatus {
+	if ctx.Err() != nil || asking.hasLostItsClient() {
 		return approvalgate.AskInterrupted
 	}
 	return approvalgate.AskUnreachable

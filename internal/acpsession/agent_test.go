@@ -448,6 +448,48 @@ func TestHeldCallReachesTheRequesterOverTheSessionThatOwnsTheConversation(t *tes
 	}
 }
 
+func TestAnAskWhoseClientWentAwayLeavesTheHoldPendingInsteadOfRefusingTheCall(t *testing.T) {
+	released := make(chan struct{})
+	client := &recordingClient{
+		permissionAskedSignal: make(chan acp.RequestPermissionRequest, 1),
+		answerByAsking: func(acp.RequestPermissionRequest) acp.PermissionOptionId {
+			<-released
+			return approveOnceOptionID
+		},
+	}
+	permissionRelay := NewPermissionRelay(silentLogger())
+	agent := NewAgent(Collaborators{TaskLauncher: &recordingLauncher{}, Directory: staticDirectory{}, ReplyReader: scriptedReader{}, SessionTurns: connectorRuntimeForTest(nil)}, permissionRelay, silentLogger())
+	agentSide, clientSide := net.Pipe()
+	agent.UseConnection(acp.NewAgentSideConnection(agent, agentSide, agentSide))
+	connection := acp.NewClientSideConnection(client, clientSide, clientSide)
+	client.mutex.Lock()
+	client.connection = connection
+	client.mutex.Unlock()
+	t.Cleanup(func() {
+		close(released)
+		agentSide.Close()
+		clientSide.Close()
+	})
+	openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
+	statuses := make(chan approvalgate.AskStatus, 1)
+	go func() {
+		_, status := permissionRelay.AskPermission(context.Background(), approvalRequestForTest(), approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "보낼까요?"})
+		statuses <- status
+	}()
+	<-client.permissionAskedSignal
+
+	clientSide.Close()
+
+	select {
+	case status := <-statuses:
+		if status != approvalgate.AskInterrupted {
+			t.Fatalf("a question whose client left was %q, expected it to stay pending as interrupted", status)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the ask never ended after its client left")
+	}
+}
+
 func TestACallInAConversationNoSessionOwnsIsNotAsked(t *testing.T) {
 	client := &recordingClient{permissionChoice: approveOnceOptionID}
 	connection, permissionRelay := connectedPair(t, &recordingLauncher{}, client)
