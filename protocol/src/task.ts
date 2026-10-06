@@ -161,7 +161,6 @@ export enum TaskEventName {
   AskRequested = 'ask.requested',
   AskResolved = 'ask.resolved',
   AskSupersededByMessage = 'ask.superseded_by_message',
-  BlueclawTaskExecutionDuration = 'blueclaw.task.execution_duration',
   CompletionChangeCheck = 'completion.change_check',
   CompletionCheckDegraded = 'completion.check_degraded',
   CompletionExpectedChanges = 'completion.expected_changes',
@@ -233,6 +232,12 @@ export enum TaskEventName {
 
 export const taskEventNameSchema = z.enum(TaskEventName);
 
+export enum HostTaskEventName {
+  BlueclawTaskExecutionDuration = 'blueclaw.task.execution_duration',
+}
+
+export const hostTaskEventNameSchema = z.enum(HostTaskEventName);
+
 export const toolTaskEventPrefix = 'tool.';
 
 export enum ToolTaskEventSuffix {
@@ -247,7 +252,7 @@ export const toolTaskEventNamePattern = buildToolTaskEventNamePattern();
 
 export const toolTaskEventNameSchema = z.string().regex(new RegExp(toolTaskEventNamePattern));
 
-export const ledgerEventNameSchema = z.union([taskEventNameSchema, toolTaskEventNameSchema]);
+export const ledgerEventNameSchema = z.union([taskEventNameSchema, hostTaskEventNameSchema, toolTaskEventNameSchema]);
 
 function buildToolTaskEventNamePattern(): string {
   const suffixes = Object.values(ToolTaskEventSuffix).map(escapeRegularExpression).join('|');

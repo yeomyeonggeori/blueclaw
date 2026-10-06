@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import {
   askInteractionSchema,
   ledgerEventNameSchema,
+  HostTaskEventName,
   TaskEventName,
   ToolTaskEventSuffix,
   toolTaskEventPrefix,
@@ -589,7 +590,7 @@ describe('closed protocol values', () => {
 
 describe('ledger event names', () => {
   test('accept every declared fixed name', () => {
-    for (const name of Object.values(TaskEventName)) {
+    for (const name of [...Object.values(TaskEventName), ...Object.values(HostTaskEventName)]) {
       expect(ledgerEventNameSchema.safeParse(name).success).toBe(true);
     }
   });
