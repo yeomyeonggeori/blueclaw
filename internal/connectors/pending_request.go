@@ -181,6 +181,14 @@ func revisedRequestEvent(event PlatformInboundEvent) PlatformInboundEvent {
 	return event
 }
 
+func revisedRequestEventKeepingTheDecision(requested PlatformInboundEvent, claimed PlatformInboundEvent) PlatformInboundEvent {
+	revised := revisedRequestEvent(requested)
+	if revised.Prompt == claimed.Prompt && revised.gatewayDecision == nil {
+		revised.gatewayDecision = claimed.gatewayDecision
+	}
+	return revised
+}
+
 func currentRequestMessages(event PlatformInboundEvent) []PendingRequestMessage {
 	messages := append(append([]PendingRequestMessage{}, event.PreviousMessages...), pendingMessageFromEvent(event))
 	latestIndexes := map[string]int{}

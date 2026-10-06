@@ -15,8 +15,10 @@ func isMultiPersonConversation(event PlatformInboundEvent) bool {
 }
 
 func (connectorRuntime *ConnectorRuntime) resolveInboundEngagement(ctx context.Context, adapter PlatformAdapter, platform string, event PlatformInboundEvent) inboundengagement.Decision {
-	gate := inboundengagement.NewGate(eventAddressingDecider{connectorRuntime: connectorRuntime, adapter: adapter, event: event}, connectorRuntime.logger)
-	return gate.Resolve(ctx, platform, engagementRequestForEvent(event))
+	judge := func(ctx context.Context) (inboundengagement.Judgment, error) {
+		return connectorRuntime.judgeInboundMessage(ctx, adapter, event)
+	}
+	return inboundengagement.NewGate(judgmentAddressingDecider{judge: judge}, connectorRuntime.logger).Resolve(ctx, platform, engagementRequestForEvent(event))
 }
 
 func engagementRequestForEvent(event PlatformInboundEvent) inboundengagement.Request {
@@ -31,4 +33,8 @@ func engagementRequestForEvent(event PlatformInboundEvent) inboundengagement.Req
 		SenderHandle:     event.Context.Sender.Handle,
 		VisibleContext:   event.Context.ToAgentVisibleContext(),
 	}
+}
+
+func isIgnoredWithoutDeciding(event PlatformInboundEvent) bool {
+	return inboundengagement.IsIgnoredWithoutDeciding(engagementRequestForEvent(event))
 }

@@ -9,23 +9,6 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
-type intakeDecisionRecorder struct {
-	unlimitedBurstBudget
-	lastRequest agentcontract.IntakeDecisionRequest
-}
-
-func (recorder *intakeDecisionRecorder) Decide(_ context.Context, request agentcontract.IntakeDecisionRequest, _ *agentcontract.IntakeCallLedger) (agentcontract.IntakeDecisions, error) {
-	recorder.lastRequest = request
-	decisions := agentcontract.IntakeDecisions{}
-	for _, message := range request.Messages {
-		decisions.Messages = append(decisions.Messages, agentcontract.IntakeMessageDecision{
-			MessageID:  message.MessageID,
-			Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true},
-		})
-	}
-	return decisions, nil
-}
-
 func channelMentionEvent() PlatformInboundEvent {
 	return PlatformInboundEvent{
 		Platform: "mattermost",
@@ -37,48 +20,48 @@ func channelMentionEvent() PlatformInboundEvent {
 	}
 }
 
-func recordingIntakeDecisionRuntime(t *testing.T) (*ConnectorRuntime, *intakeDecisionRecorder, *testAdapter) {
+func recordingGatewayDecisionRuntime(t *testing.T) (*ConnectorRuntime, *scriptedGatewayDecider, *testAdapter) {
 	t.Helper()
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
-	recorder := &intakeDecisionRecorder{}
+	recorder := &scriptedGatewayDecider{addressing: addressedToBot()}
 	connectorRuntime := NewConnectorRuntime(testConnectorIdentityService(), nil, taskRunService, task.NewTaskEventService(), nil)
 	connectorRuntime.UseTaskRunService(taskRunService)
-	connectorRuntime.UseIntakeDecider(recorder)
+	connectorRuntime.UseGatewayDecider(recorder)
 	adapter := &testAdapter{senderEmail: "invited@example.com"}
 	connectorRuntime.RegisterAdapter(adapter)
 	return connectorRuntime, recorder, adapter
 }
 
-func TestIntakeDecisionCarriesConfiguredAgentIdentity(t *testing.T) {
-	connectorRuntime, recorder, adapter := recordingIntakeDecisionRuntime(t)
+func TestGatewayDecisionCarriesConfiguredAgentIdentity(t *testing.T) {
+	connectorRuntime, recorder, adapter := recordingGatewayDecisionRuntime(t)
 	connectorRuntime.UseAgentIdentityProvider(func() agentcontract.AgentIdentity {
 		return agentcontract.AgentIdentity{Name: "김인턴", Handle: "internkim"}
 	})
 
-	connectorRuntime.resolveInboundEngagement(context.Background(), adapter, "mattermost", withInboundDecision(channelMentionEvent()))
+	connectorRuntime.resolveInboundEngagement(context.Background(), adapter, "mattermost", withGatewayDecision(channelMentionEvent()))
 
-	if recorder.lastRequest.AgentIdentity.Name != "김인턴" || recorder.lastRequest.AgentIdentity.Handle != "internkim" {
-		t.Fatalf("expected the configured agent identity to reach the intake decision, got %+v", recorder.lastRequest.AgentIdentity)
+	if recorder.lastFacts().AgentIdentity.Name != "김인턴" || recorder.lastFacts().AgentIdentity.Handle != "internkim" {
+		t.Fatalf("expected the configured agent identity to reach the intake decision, got %+v", recorder.lastFacts().AgentIdentity)
 	}
 }
 
-func TestIntakeDecisionCarriesInboundEventFields(t *testing.T) {
-	connectorRuntime, recorder, adapter := recordingIntakeDecisionRuntime(t)
+func TestGatewayDecisionCarriesInboundEventFields(t *testing.T) {
+	connectorRuntime, recorder, adapter := recordingGatewayDecisionRuntime(t)
 
 	event := channelMentionEvent()
 	event.MessageID = "message-1"
 	event.RawReceivedAt = time.Unix(1756800000, 0)
 	event.Context.Sender = VisibleContextSender{Name: "이샘플", Handle: "sample"}
 
-	connectorRuntime.resolveInboundEngagement(context.Background(), adapter, "mattermost", withInboundDecision(event))
+	connectorRuntime.resolveInboundEngagement(context.Background(), adapter, "mattermost", withGatewayDecision(event))
 
-	if recorder.lastRequest.ConversationType != "O" {
-		t.Fatalf("expected the conversation type to reach the intake decision, got %q", recorder.lastRequest.ConversationType)
+	if recorder.lastFacts().ConversationType != "O" {
+		t.Fatalf("expected the conversation type to reach the intake decision, got %q", recorder.lastFacts().ConversationType)
 	}
-	if len(recorder.lastRequest.Messages) != 1 {
-		t.Fatalf("expected one message to be decided, got %d", len(recorder.lastRequest.Messages))
+	if len(recorder.lastFacts().Messages) != 1 {
+		t.Fatalf("expected one message to be decided, got %d", len(recorder.lastFacts().Messages))
 	}
-	message := recorder.lastRequest.Messages[0]
+	message := recorder.lastFacts().Messages[0]
 	if message.MessageID != "message-1" || message.Prompt != event.Prompt || !message.BotMentioned {
 		t.Fatalf("expected the inbound event's message to reach the decision, got %+v", message)
 	}
@@ -87,41 +70,27 @@ func TestIntakeDecisionCarriesInboundEventFields(t *testing.T) {
 	}
 }
 
-func TestIntakeDecisionWithoutIdentityProviderStaysEmpty(t *testing.T) {
-	connectorRuntime, recorder, adapter := recordingIntakeDecisionRuntime(t)
+func TestGatewayDecisionWithoutIdentityProviderStaysEmpty(t *testing.T) {
+	connectorRuntime, recorder, adapter := recordingGatewayDecisionRuntime(t)
 
-	connectorRuntime.resolveInboundEngagement(context.Background(), adapter, "mattermost", withInboundDecision(channelMentionEvent()))
+	connectorRuntime.resolveInboundEngagement(context.Background(), adapter, "mattermost", withGatewayDecision(channelMentionEvent()))
 
-	if recorder.lastRequest.AgentIdentity != (agentcontract.AgentIdentity{}) {
-		t.Fatalf("expected an empty agent identity without a provider, got %+v", recorder.lastRequest.AgentIdentity)
+	if recorder.lastFacts().AgentIdentity != (agentcontract.AgentIdentity{}) {
+		t.Fatalf("expected an empty agent identity without a provider, got %+v", recorder.lastFacts().AgentIdentity)
 	}
 }
 
 func TestOneMessageIsDecidedOnce(t *testing.T) {
-	connectorRuntime, _, adapter := recordingIntakeDecisionRuntime(t)
-	countingDecider := &countingIntakeDecider{}
-	connectorRuntime.UseIntakeDecider(countingDecider)
-	event := withInboundDecision(channelMentionEvent())
+	connectorRuntime, _, adapter := recordingGatewayDecisionRuntime(t)
+	countingDecider := &scriptedGatewayDecider{}
+	connectorRuntime.UseGatewayDecider(countingDecider)
+	event := withGatewayDecision(channelMentionEvent())
 
 	connectorRuntime.resolveInboundEngagement(context.Background(), adapter, "mattermost", event)
-	connectorRuntime.decidedTurnFields(context.Background(), adapter, event)
+	connectorRuntime.judgeInboundMessage(context.Background(), adapter, event)
 	connectorRuntime.relatesToActiveTask(context.Background(), adapter, event)
 
-	if countingDecider.callCount != 1 {
-		t.Fatalf("expected the gate, the router and the follow-up check to share one decision call, got %d", countingDecider.callCount)
+	if countingDecider.calls() != 1 {
+		t.Fatalf("expected the gate, the router and the follow-up check to share one decision call, got %d", countingDecider.calls())
 	}
-}
-
-type countingIntakeDecider struct {
-	unlimitedBurstBudget
-	callCount int
-}
-
-func (decider *countingIntakeDecider) Decide(_ context.Context, request agentcontract.IntakeDecisionRequest, _ *agentcontract.IntakeCallLedger) (agentcontract.IntakeDecisions, error) {
-	decider.callCount++
-	decisions := agentcontract.IntakeDecisions{}
-	for _, message := range request.Messages {
-		decisions.Messages = append(decisions.Messages, agentcontract.IntakeMessageDecision{MessageID: message.MessageID})
-	}
-	return decisions, nil
 }

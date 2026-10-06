@@ -10,6 +10,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/agenttest"
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract/harnesstest"
@@ -28,7 +29,7 @@ func (decisionModel *answerPerCallDecisionModel) Decide(_ context.Context, reque
 	decisionModel.mutex.Lock()
 	defer decisionModel.mutex.Unlock()
 	decisionModel.requests = append(decisionModel.requests, request)
-	outcome := decisionModel.outcomes[min(countTurnDecisions(decisionModel.requests), len(decisionModel.outcomes))-1]
+	outcome := decisionModel.outcomes[max(min(countTurnDecisions(decisionModel.requests), len(decisionModel.outcomes))-1, 0)]
 	return model.DecisionResponse{Answers: intaketest.Answers(request.Questions, func(string) intaketest.Outcome { return outcome })}, nil
 }
 
@@ -41,7 +42,19 @@ func (decisionModel *answerPerCallDecisionModel) turnDecisionCount() int {
 func countTurnDecisions(requests []model.DecisionRequest) int {
 	count := 0
 	for _, request := range requests {
-		if _, asksAddressing := request.Questions["m1."+agentcontract.IntakeQuestionTarget]; asksAddressing {
+		if _, asksRoute := request.Questions["m1."+agentcontract.IntakeQuestionRoute]; asksRoute {
+			count++
+		}
+	}
+	return count
+}
+
+func (decisionModel *answerPerCallDecisionModel) gatewayCallCount() int {
+	decisionModel.mutex.Lock()
+	defer decisionModel.mutex.Unlock()
+	count := 0
+	for _, request := range decisionModel.requests {
+		if inboundengagement.AsksOnlyGatewayQuestions(request.Questions) {
 			count++
 		}
 	}
@@ -85,11 +98,11 @@ func aDecidingPlane(t *testing.T) decidingPlane {
 	taskLauncher.UseTurnRouter(turnRouter)
 	client := &recordingClient{}
 	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
-		TaskLauncher:  taskLauncher,
-		Directory:     staticDirectory{},
-		ReplyReader:   scriptedReader{},
-		IntakeDecider: planner,
-		TaskRunStore:  taskRunService,
+		TaskLauncher: taskLauncher,
+		Directory:    staticDirectory{},
+		ReplyReader:  scriptedReader{},
+		SessionTurns: connectorRuntimeDeciding(taskRunService, inboundengagement.NewDecisionModelDecider(decisionModel, nil)),
+		TaskRunStore: taskRunService,
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-room"))
 	return decidingPlane{decisionModel: decisionModel, harness: harness, connection: connection, sessionID: sessionID}
@@ -115,19 +128,22 @@ func (plane decidingPlane) promptInTheRoom(t *testing.T, words string) {
 	}
 }
 
-func TestAMessageInARoomIsDecidedOnceAndRunsOnThatDecision(t *testing.T) {
+func TestAMessageInARoomIsJudgedByTheGatewayAndPlannedOnItsOwn(t *testing.T) {
 	plane := aDecidingPlane(t)
 
 	plane.promptInTheRoom(t, "인턴킴, 이번 주 정산 정리해줘")
 
+	if count := plane.decisionModel.gatewayCallCount(); count != 1 {
+		t.Fatalf("one message in a room was judged by the gateway %d times, expected once", count)
+	}
 	if count := plane.decisionModel.turnDecisionCount(); count != 1 {
-		t.Fatalf("one message in a room was decided %d times, expected once", count)
+		t.Fatalf("one message in a room was planned %d times, expected once", count)
 	}
 	if plane.harness.RunTurnCallCount() != 1 {
 		t.Fatalf("the turn ran %d times, expected once", plane.harness.RunTurnCallCount())
 	}
-	routed := plane.harness.LastTurnRequest().PrecomputedTurnDecision
-	if routed == nil || routed.TaskLevel != agentcontract.TaskLevelMedium {
-		t.Fatalf("the turn ran on %+v, expected the %q level of the answer the message was let in on", routed, agentcontract.TaskLevelMedium)
+	planned := plane.harness.LastTurnRequest().PrecomputedTurnDecision
+	if planned == nil || planned.TaskLevel != agentcontract.TaskLevelMedium {
+		t.Fatalf("the turn ran on %+v, expected the %q level of the plan the launch asked for", planned, agentcontract.TaskLevelMedium)
 	}
 }

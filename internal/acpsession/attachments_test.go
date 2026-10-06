@@ -10,6 +10,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
@@ -94,7 +95,7 @@ func TestAMessageTheAgentIgnoresImportsNothing(t *testing.T) {
 		TaskLauncher:       launcher,
 		Directory:          staticDirectory{},
 		ReplyReader:        scriptedReader{},
-		IntakeDecider:      addressedToSomebodyElse{},
+		SessionTurns:       connectorRuntimeDeciding(nil, addressedToSomebodyElse{}),
 		AttachmentImporter: importer,
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
@@ -108,15 +109,36 @@ func TestAMessageTheAgentIgnoresImportsNothing(t *testing.T) {
 
 type addressedToSomebodyElse struct{}
 
-func (addressedToSomebodyElse) Decide(_ context.Context, request agentcontract.IntakeDecisionRequest, _ *agentcontract.IntakeCallLedger) (agentcontract.IntakeDecisions, error) {
-	decisions := agentcontract.IntakeDecisions{}
-	for _, message := range request.Messages {
-		decisions.Messages = append(decisions.Messages, agentcontract.IntakeMessageDecision{
+func (addressedToSomebodyElse) Decide(_ context.Context, facts inboundengagement.Facts, _ agentcontract.LLMCallObserver) ([]inboundengagement.Judgment, error) {
+	judgments := []inboundengagement.Judgment{}
+	for _, message := range facts.Messages {
+		judgments = append(judgments, inboundengagement.Judgment{
 			MessageID:  message.MessageID,
 			Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetHuman},
 		})
 	}
-	return decisions, nil
+	return judgments, nil
+}
+
+func (addressedToSomebodyElse) FitsBurstBudget(inboundengagement.Facts) bool {
+	return true
+}
+
+type addressedToTheAgent struct{}
+
+func (addressedToTheAgent) Decide(_ context.Context, facts inboundengagement.Facts, _ agentcontract.LLMCallObserver) ([]inboundengagement.Judgment, error) {
+	judgments := []inboundengagement.Judgment{}
+	for _, message := range facts.Messages {
+		judgments = append(judgments, inboundengagement.Judgment{
+			MessageID:  message.MessageID,
+			Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true},
+		})
+	}
+	return judgments, nil
+}
+
+func (addressedToTheAgent) FitsBurstBudget(inboundengagement.Facts) bool {
+	return true
 }
 
 func promptWithPicture(t *testing.T, connection *acp.ClientSideConnection, sessionID acp.SessionId, conversationType string) {

@@ -25,7 +25,7 @@ func (approvingTurnRouter) PlanObserved(context.Context, agentcontract.AgentRequ
 func TestASessionTurnLeavesARunWaitingOnApprovalToTheSessionThatAsked(t *testing.T) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	harness := harnesstest.New(taskRunService)
-	connectorRuntime, _ := connectorRuntimeForHarness(t, harness, harness, harness, approvingTurnRouter{}, taskRunService, testLanguageModel{reply: "stub"})
+	connectorRuntime, _ := connectorRuntimeForHarness(t, harness, harnessGateway(harness), harness, approvingTurnRouter{}, taskRunService, testLanguageModel{reply: "stub"})
 	running := seedAbandonedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{ConversationID: "direct-1"}, "박예시한테 DM 보내줘")
 	if _, errorValue := connectorRuntime.taskRunService.PauseTaskRun(running.TaskRunID, task.TaskStatusWaitingApproval, "박예시에게 보낼까요?"); errorValue != nil {
 		t.Fatal(errorValue)
@@ -49,7 +49,7 @@ func TestASessionTurnLeavesARunWaitingOnApprovalToTheSessionThatAsked(t *testing
 	}
 }
 
-func TestSessionTurnDecisionRequestMatchesConnectorFactsAndScopesOpenTasks(t *testing.T) {
+func TestSessionTurnGatewayFactsMatchConnectorFactsAndScopeOpenTasks(t *testing.T) {
 	connectorRuntime, adapter, _ := newStubbedTestConnectorRuntime(t)
 	connectorRuntime.UseAgentIdentityProvider(func() agentcontract.AgentIdentity {
 		return agentcontract.AgentIdentity{Name: "김인턴", Handle: "internkim"}
@@ -65,7 +65,7 @@ func TestSessionTurnDecisionRequestMatchesConnectorFactsAndScopesOpenTasks(t *te
 	if _, errorValue := connectorRuntime.taskRunService.CompleteTaskRun(priorTask.TaskRunID, "완료"); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	waiting := seedWaitingQuestionInThread(t, connectorRuntime, "thread-current")
+	seedWaitingQuestionInThread(t, connectorRuntime, "thread-current")
 	event := threadReply("message-current", "thread-current")
 	event.Context = VisibleContext{
 		ConversationType: "direct",
@@ -84,34 +84,34 @@ func TestSessionTurnDecisionRequestMatchesConnectorFactsAndScopesOpenTasks(t *te
 		File: &agentcontract.AgentFilePart{Filename: "report.csv", ContentType: "text/csv", SizeBytes: 42},
 	}}
 
-	sessionRequest := connectorRuntime.OpenSessionTurn(context.Background(), event, "person-1", nil).DecisionRequest(context.Background())
-	connectorRequest, _ := connectorRuntime.inboundDecisionRequest(context.Background(), adapter, event)
+	sessionFacts := connectorRuntime.gatewayFactsForTurn(context.Background(), connectorRuntime.OpenSessionTurn(context.Background(), event, "person-1", nil).turn)
+	connectorFacts := connectorRuntime.inboundGatewayFacts(context.Background(), adapter, event)
 
-	if !reflect.DeepEqual(sessionRequest.AgentIdentity, connectorRequest.AgentIdentity) || sessionRequest.AgentIdentity.Name != "김인턴" || sessionRequest.AgentIdentity.Handle != "internkim" {
-		t.Fatalf("the session decision lost the configured agent identity: %+v", sessionRequest.AgentIdentity)
+	if !reflect.DeepEqual(sessionFacts.AgentIdentity, connectorFacts.AgentIdentity) || sessionFacts.AgentIdentity.Name != "김인턴" || sessionFacts.AgentIdentity.Handle != "internkim" {
+		t.Fatalf("the session facts lost the configured agent identity: %+v", sessionFacts.AgentIdentity)
 	}
-	if !reflect.DeepEqual(sessionRequest.Messages, connectorRequest.Messages) {
-		t.Fatalf("the session decision facts differed from connector intake: session=%+v connector=%+v", sessionRequest.Messages, connectorRequest.Messages)
+	if !reflect.DeepEqual(sessionFacts.Messages, connectorFacts.Messages) {
+		t.Fatalf("the session facts differed from the connector's: session=%+v connector=%+v", sessionFacts.Messages, connectorFacts.Messages)
 	}
-	if sessionRequest.Messages[0].SenderName != "이샘플" || sessionRequest.Messages[0].SenderHandle != "sample" || len(sessionRequest.Messages[0].InputParts) != 1 || len(sessionRequest.Messages[0].Attachments) != 1 {
-		t.Fatalf("the session decision lost sender or attachment facts: %+v", sessionRequest.Messages[0])
+	if sessionFacts.Messages[0].SenderName != "이샘플" || sessionFacts.Messages[0].SenderHandle != "sample" || len(sessionFacts.Messages[0].InputParts) != 1 || len(sessionFacts.Messages[0].Attachments) != 1 {
+		t.Fatalf("the session facts lost sender or attachment facts: %+v", sessionFacts.Messages[0])
 	}
-	if !reflect.DeepEqual(sessionRequest.VisibleContext, event.Context.ToAgentVisibleContext()) || !reflect.DeepEqual(sessionRequest.Company, company) {
-		t.Fatalf("the session decision lost the current context or company: context=%+v company=%+v", sessionRequest.VisibleContext, sessionRequest.Company)
+	if !reflect.DeepEqual(sessionFacts.VisibleContext, event.Context.ToAgentVisibleContext()) || !reflect.DeepEqual(sessionFacts.Company, company) {
+		t.Fatalf("the session facts lost the current context or company: context=%+v company=%+v", sessionFacts.VisibleContext, sessionFacts.Company)
 	}
-	if sessionRequest.PendingChoice.TaskRunID != waiting.TaskRunID || sessionRequest.PriorTask.TaskRunID != priorTask.TaskRunID {
-		t.Fatalf("the session decision lost pending or prior task context: pending=%+v prior=%+v", sessionRequest.PendingChoice, sessionRequest.PriorTask)
+	if sessionFacts.OpenTask == nil || sessionFacts.OpenTask.PostedQuestion != "Set a Monday reminder to send it?" || sessionFacts.FinishedTask != nil {
+		t.Fatalf("the session facts lost the waiting question: open=%+v finished=%+v", sessionFacts.OpenTask, sessionFacts.FinishedTask)
 	}
 
 	rootEvent := event
 	isThread := false
 	rootEvent.IsThread = &isThread
 	rootEvent.ReplyTargetID = "message-root"
-	rootRequest := connectorRuntime.OpenSessionTurn(context.Background(), rootEvent, "person-1", nil).DecisionRequest(context.Background())
-	if rootRequest.PendingChoice.TaskRunID != "" || rootRequest.PriorTask.TaskRunID != "" {
-		t.Fatalf("a root message inherited another thread's task context: pending=%+v prior=%+v", rootRequest.PendingChoice, rootRequest.PriorTask)
+	rootFacts := connectorRuntime.gatewayFactsForTurn(context.Background(), connectorRuntime.OpenSessionTurn(context.Background(), rootEvent, "person-1", nil).turn)
+	if rootFacts.OpenTask != nil || rootFacts.FinishedTask != nil {
+		t.Fatalf("a root message inherited another thread's task: open=%+v finished=%+v", rootFacts.OpenTask, rootFacts.FinishedTask)
 	}
-	if !reflect.DeepEqual(rootRequest.Messages, sessionRequest.Messages) || !reflect.DeepEqual(rootRequest.VisibleContext, sessionRequest.VisibleContext) {
-		t.Fatalf("changing thread scope changed the current message facts: messages=%+v context=%+v", rootRequest.Messages, rootRequest.VisibleContext)
+	if !reflect.DeepEqual(rootFacts.Messages, sessionFacts.Messages) || !reflect.DeepEqual(rootFacts.VisibleContext, sessionFacts.VisibleContext) {
+		t.Fatalf("changing thread scope changed the current message facts: messages=%+v context=%+v", rootFacts.Messages, rootFacts.VisibleContext)
 	}
 }

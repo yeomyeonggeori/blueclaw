@@ -2,7 +2,6 @@ package connectors
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
@@ -15,11 +14,28 @@ const connectorDecisionBurstWindow = 30 * time.Second
 
 func (connectorRuntime *ConnectorRuntime) decideClaimedBurst(ctx context.Context, queuedEvents []QueuedConnectorEvent) {
 	for index := range queuedEvents {
-		queuedEvents[index].Event = withInboundDecision(queuedEvents[index].Event)
+		queuedEvents[index].Event = withGatewayDecision(queuedEvents[index].Event)
 	}
-	for _, burst := range inboundDecisionBursts(queuedEvents) {
+	for _, burst := range inboundDecisionBursts(connectorRuntime.eventsNeedingTheGateway(queuedEvents)) {
 		connectorRuntime.decideInboundBurst(ctx, burst)
 	}
+}
+
+func (connectorRuntime *ConnectorRuntime) eventsNeedingTheGateway(queuedEvents []QueuedConnectorEvent) []QueuedConnectorEvent {
+	needing := []QueuedConnectorEvent{}
+	for _, queuedEvent := range queuedEvents {
+		if !connectorRuntime.isDecidedBeforeTheGateway(queuedEvent.Event) {
+			needing = append(needing, queuedEvent)
+		}
+	}
+	return needing
+}
+
+func (connectorRuntime *ConnectorRuntime) isDecidedBeforeTheGateway(event PlatformInboundEvent) bool {
+	if exactTaskControlIntent(event.Prompt) != agentcontract.TaskControlIntentNone {
+		return true
+	}
+	return connectorRuntime.isReplyToAskingThread(event)
 }
 
 func (connectorRuntime *ConnectorRuntime) decideInboundBurst(ctx context.Context, events []PlatformInboundEvent) {
@@ -27,30 +43,32 @@ func (connectorRuntime *ConnectorRuntime) decideInboundBurst(ctx context.Context
 	if errorValue != nil {
 		return
 	}
-	decisionRequest, ledgerTaskRunID := connectorRuntime.inboundDecisionRequest(ctx, adapter, events[len(events)-1])
-	for _, fittingEvents := range connectorRuntime.burstsWithinTheRequestBudget(decisionRequest, events) {
+	facts := connectorRuntime.inboundGatewayFacts(ctx, adapter, events[len(events)-1])
+	if isDirectMessageWithNothingOpen(facts) {
+		return
+	}
+	for _, fittingEvents := range connectorRuntime.burstsWithinTheRequestBudget(facts, events) {
 		if len(fittingEvents) < 2 {
 			continue
 		}
-		connectorRuntime.decideFittingBurst(ctx, decisionRequest, ledgerTaskRunID, fittingEvents)
+		connectorRuntime.decideFittingBurst(ctx, facts, fittingEvents)
 	}
 }
 
-func (connectorRuntime *ConnectorRuntime) decideFittingBurst(ctx context.Context, decisionRequest agentcontract.IntakeDecisionRequest, ledgerTaskRunID string, events []PlatformInboundEvent) {
-	decisionRequest.Messages = burstDecisionMessages(events)
-	decisions, callRecords, errorValue := connectorRuntime.decideBurst(ctx, decisionRequest, ledgerTaskRunID)
+func (connectorRuntime *ConnectorRuntime) decideFittingBurst(ctx context.Context, facts inboundengagement.Facts, events []PlatformInboundEvent) {
+	facts.Messages = burstDecisionMessages(events)
+	judgments, errorValue := connectorRuntime.judgeFacts(ctx, facts)
 	for _, event := range events {
-		seedInboundDecision(event, decisions, errorValue)
+		seedInboundDecision(event, judgments, errorValue)
 	}
-	holdBurstIntakeCallRecords(events, ledgerTaskRunID, callRecords)
 }
 
-func (connectorRuntime *ConnectorRuntime) burstsWithinTheRequestBudget(decisionRequest agentcontract.IntakeDecisionRequest, events []PlatformInboundEvent) [][]PlatformInboundEvent {
+func (connectorRuntime *ConnectorRuntime) burstsWithinTheRequestBudget(facts inboundengagement.Facts, events []PlatformInboundEvent) [][]PlatformInboundEvent {
 	bursts := [][]PlatformInboundEvent{}
 	burst := []PlatformInboundEvent{}
 	for _, event := range events {
 		candidateBurst := append(append([]PlatformInboundEvent{}, burst...), event)
-		if len(burst) > 0 && !connectorRuntime.decisionRequestFitsTheBudget(decisionRequest, candidateBurst) {
+		if len(burst) > 0 && !connectorRuntime.decisionRequestFitsTheBudget(facts, candidateBurst) {
 			bursts = append(bursts, burst)
 			burst = []PlatformInboundEvent{event}
 			continue
@@ -60,19 +78,9 @@ func (connectorRuntime *ConnectorRuntime) burstsWithinTheRequestBudget(decisionR
 	return append(bursts, burst)
 }
 
-func (connectorRuntime *ConnectorRuntime) decisionRequestFitsTheBudget(decisionRequest agentcontract.IntakeDecisionRequest, events []PlatformInboundEvent) bool {
-	decisionRequest.Messages = burstDecisionMessages(events)
-	return connectorRuntime.intakeDecider == nil || connectorRuntime.intakeDecider.FitsBurstBudget(decisionRequest)
-}
-
-func (connectorRuntime *ConnectorRuntime) decideBurst(ctx context.Context, decisionRequest agentcontract.IntakeDecisionRequest, ledgerTaskRunID string) (agentcontract.IntakeDecisions, []agentcontract.LLMCallRecord, error) {
-	if connectorRuntime.intakeDecider == nil {
-		return agentcontract.IntakeDecisions{}, nil, errors.New("connector runtime has no intake decider configured")
-	}
-	callLedger := &agentcontract.IntakeCallLedger{}
-	decisions, errorValue := connectorRuntime.intakeDecider.Decide(ctx, decisionRequest, callLedger)
-	connectorRuntime.recordIntakeCalls(ledgerTaskRunID, callLedger.Records)
-	return decisions, callLedger.Records, errorValue
+func (connectorRuntime *ConnectorRuntime) decisionRequestFitsTheBudget(facts inboundengagement.Facts, events []PlatformInboundEvent) bool {
+	facts.Messages = burstDecisionMessages(events)
+	return connectorRuntime.gatewayDecider == nil || connectorRuntime.gatewayDecider.FitsBurstBudget(facts)
 }
 
 func burstDecisionMessages(events []PlatformInboundEvent) []agentcontract.IntakeDecisionMessage {
@@ -83,21 +91,16 @@ func burstDecisionMessages(events []PlatformInboundEvent) []agentcontract.Intake
 	return messages
 }
 
-func seedInboundDecision(event PlatformInboundEvent, decisions agentcontract.IntakeDecisions, burstError error) {
-	if event.intakeDecision == nil {
+func seedInboundDecision(event PlatformInboundEvent, judgments []inboundengagement.Judgment, burstError error) {
+	if event.gatewayDecision == nil {
 		return
 	}
-	event.intakeDecision.once.Do(func() {
+	event.gatewayDecision.once.Do(func() {
 		if burstError != nil {
-			event.intakeDecision.errorValue = burstError
+			event.gatewayDecision.errorValue = burstError
 			return
 		}
-		decision, isDecided := decisions.ForMessage(event.MessageID)
-		if !isDecided {
-			event.intakeDecision.errorValue = errors.New("the intake decision answered about no message " + event.MessageID)
-			return
-		}
-		event.intakeDecision.decision = decision
+		event.gatewayDecision.judgment, event.gatewayDecision.errorValue = judgmentForMessage(judgments, event.MessageID)
 	})
 }
 
@@ -125,7 +128,7 @@ func isBurstDecidableEvent(event PlatformInboundEvent) bool {
 	if event.TaskRetry != nil || event.MessageID == "" || event.SenderID == "" || event.ConversationID == "" {
 		return false
 	}
-	return !inboundengagement.IsIgnoredWithoutDeciding(engagementRequestForEvent(event))
+	return !isIgnoredWithoutDeciding(event)
 }
 
 func inboundDecisionBurstKey(event PlatformInboundEvent) string {
@@ -168,4 +171,21 @@ func burstsOfSeveralMessages(bursts [][]PlatformInboundEvent) [][]PlatformInboun
 		}
 	}
 	return burstsWorthBatching
+}
+
+func (connectorRuntime *ConnectorRuntime) isReplyToAskingThread(event PlatformInboundEvent) bool {
+	personID, isFound := connectorRuntime.identityService.ResolvePersonIDByPlatformAccount(event.Platform, event.SenderID)
+	if !isFound {
+		return false
+	}
+	for _, thread := range connectorRuntime.askingThreads.awaiting(event.Platform, event.ConversationID, personID) {
+		if connectorRuntime.postedQuestionOf(thread).IsAnsweredBy(placementOf(event)) {
+			return true
+		}
+	}
+	return false
+}
+
+func isDirectMessageWithNothingOpen(facts inboundengagement.Facts) bool {
+	return !inboundengagement.IsMultiPersonConversation(facts.ConversationType) && facts.OpenTask == nil && facts.FinishedTask == nil
 }

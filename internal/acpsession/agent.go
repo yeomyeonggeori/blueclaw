@@ -72,11 +72,9 @@ type Agent struct {
 	permissionRelay    *PermissionRelay
 	approvalDeferrer   ApprovalDeferrer
 	replyReader        approvalreply.Reader
-	intakeDecider      IntakeDecider
 	attachmentImporter AttachmentImporter
 	sessionTurns       SessionTurnOpener
 	taskRunStore       taskstate.TaskRunStore
-	tasklessCalls      TasklessCallRecorder
 	logger             *slog.Logger
 	deliveries         *awaitedDeliveries
 	deliveryReportWait time.Duration
@@ -93,11 +91,9 @@ func NewAgent(collaborators Collaborators, permissionRelay *PermissionRelay, log
 		permissionRelay:    permissionRelay,
 		approvalDeferrer:   collaborators.ApprovalDeferrer,
 		replyReader:        collaborators.ReplyReader,
-		intakeDecider:      collaborators.IntakeDecider,
 		attachmentImporter: collaborators.AttachmentImporter,
 		sessionTurns:       collaborators.SessionTurns,
 		taskRunStore:       collaborators.TaskRunStore,
-		tasklessCalls:      collaborators.TasklessCalls,
 		logger:             logger,
 		deliveries:         newAwaitedDeliveries(),
 		deliveryReportWait: defaultDeliveryReportWait,
@@ -114,14 +110,10 @@ type Collaborators struct {
 	TaskLauncher       TaskLauncher
 	Directory          PersonDirectory
 	ReplyReader        approvalreply.Reader
-	IntakeDecider      IntakeDecider
 	AttachmentImporter AttachmentImporter
 	SessionTurns       SessionTurnOpener
 	TaskRunStore       taskstate.TaskRunStore
-	TasklessCalls      TasklessCallRecorder
 }
-
-type TasklessCallRecorder func(subjects []string, record agentcontract.LLMCallRecord)
 
 func (agent *Agent) UseConnection(connection *acp.AgentSideConnection) {
 	agent.connection = connection
@@ -225,13 +217,11 @@ func (agent *Agent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.
 	sessionTurn := agent.sessionTurns.OpenSessionTurn(ctx, inboundEventOf(messageContext, launchRequest), launchRequest.RequesterPersonID, agent.replySenderForDelivery(request.SessionId, delivery.DeliveryID))
 	defer sessionTurn.EndProgress()
 	sessionTurn.ShowProgressBeforeAddressing(ctx)
-	launchRequest, decided, reason := agent.decideOnce(ctx, session, messageContext, launchRequest, sessionTurn)
-	defer agent.recordDecisionCalls(decided, "")
-	if reason != "" {
+	if engagement := sessionTurn.ResolveEngagement(ctx); !engagement.ShouldLaunch {
 		agent.logger.Info("acpsession.prompt.ignored",
 			"sessionID", string(request.SessionId),
 			"messageID", messageContext.MessageID,
-			"reason", reason,
+			"reason", engagement.IgnoreReason,
 		)
 		return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, nil
 	}
@@ -242,16 +232,15 @@ func (agent *Agent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.
 	}
 	launchRequest = agent.withMessageAttachments(ctx, messageContext, launchRequest)
 	launchRequest.ToolCallObserver = agent.toolCallObserverFor(ctx, request.SessionId, delivery)
-	return agent.launchTurn(ctx, request.SessionId, sessionTurn, launchRequest, decided)
+	return agent.launchTurn(ctx, request.SessionId, sessionTurn, launchRequest)
 }
 
-func (agent *Agent) launchTurn(ctx context.Context, sessionID acp.SessionId, sessionTurn *connectors.SessionTurn, launchRequest agentruntime.TaskLaunchRequest, decided *messageDecision) (acp.PromptResponse, error) {
+func (agent *Agent) launchTurn(ctx context.Context, sessionID acp.SessionId, sessionTurn *connectors.SessionTurn, launchRequest agentruntime.TaskLaunchRequest) (acp.PromptResponse, error) {
 	launchResult, errorValue := agent.taskLauncher.Launch(ctx, launchRequest)
 	if errorValue != nil {
 		return acp.PromptResponse{}, errorValue
 	}
 	turnResult := launchResult.TurnResult
-	agent.recordDecisionCalls(decided, turnResult.TaskRun.TaskRunID)
 	agent.deliverTurnReply(ctx, sessionID, sessionTurn, turnResult)
 	return acp.PromptResponse{StopReason: stopReasonForTaskStatus(turnResult.TaskRun.Status)}, nil
 }

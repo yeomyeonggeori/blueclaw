@@ -1,7 +1,9 @@
 package inboundengagement
 
 import (
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -30,6 +32,30 @@ var reactionEmojiDescriptions = map[string]string{
 	"bulb":                   "a good idea",
 	"sob":                    "sympathy for bad news",
 	"sweat_smile":            "an awkward or self-deprecating joke",
+}
+
+var gatewayQuestionNames = []string{
+	agentcontract.IntakeQuestionTarget,
+	agentcontract.IntakeQuestionShouldRespond,
+	agentcontract.IntakeQuestionReaction,
+	agentcontract.IntakeQuestionReactionEmoji,
+	agentcontract.IntakeQuestionDuty,
+	agentcontract.IntakeQuestionRelatesToActiveTask,
+	agentcontract.IntakeQuestionBusyRoute,
+}
+
+func AsksOnlyGatewayQuestions(questions map[string]model.DecisionQuestion) bool {
+	for questionName := range questions {
+		if !slices.Contains(gatewayQuestionNames, questionNameWithoutMessageKey(questionName)) {
+			return false
+		}
+	}
+	return len(questions) > 0
+}
+
+func questionNameWithoutMessageKey(questionName string) string {
+	_, name, _ := strings.Cut(questionName, ".")
+	return name
 }
 
 func messageKey(index int) string {

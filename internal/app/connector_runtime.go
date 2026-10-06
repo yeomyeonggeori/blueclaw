@@ -14,6 +14,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	apiconnector "github.com/yeomyeonggeori/blueclaw/internal/connectors/api"
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/launchfailure"
 	"github.com/yeomyeonggeori/blueclaw/internal/reply"
 	"github.com/yeomyeonggeori/blueclaw/internal/runtimecontrol"
@@ -22,7 +23,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/intake"
 )
 
-func newConnectorRuntime(runtimeConfiguration config.RuntimeConfiguration, foundation runtimeFoundation, directory identityDirectory, kernel agentKernel, services taskServices, taskLauncher *agentruntime.TaskLauncher, turnRouter intake.TurnRouter, decisionPlanner intake.DecisionPlanner, backupCoordinator *backup.Coordinator, taskIntakeController *runtimecontrol.TaskIntakeController) *connectors.ConnectorRuntime {
+func newConnectorRuntime(runtimeConfiguration config.RuntimeConfiguration, foundation runtimeFoundation, directory identityDirectory, kernel agentKernel, services taskServices, taskLauncher *agentruntime.TaskLauncher, turnRouter intake.TurnRouter, backupCoordinator *backup.Coordinator, taskIntakeController *runtimecontrol.TaskIntakeController) *connectors.ConnectorRuntime {
 	logger := foundation.logger
 	languageModelProvider := kernel.taskTierLanguageModels.High
 	connectorRuntime := connectors.NewConnectorRuntime(
@@ -43,7 +44,7 @@ func newConnectorRuntime(runtimeConfiguration config.RuntimeConfiguration, found
 	connectorRuntime.UseCompanyProvider(directory.companyProvider)
 	connectorRuntime.UseCompanyLocaleProvider(directory.companyLocaleProvider)
 	connectorRuntime.UseTurnRouter(turnRouter)
-	connectorRuntime.UseIntakeDecider(decisionPlanner)
+	connectorRuntime.UseGatewayDecider(inboundengagement.NewDecisionModelDecider(kernel.decisionModel, nil))
 	connectorRuntime.UseTasklessLLMCallRecorder(newTasklessLLMCallRecorder(services.repositories.llmCall, logger))
 	connectorRuntime.UseTaskLauncher(taskLauncher)
 	connectorRuntime.UseApprovalGate(kernel.toolCatalog.approvalGate)

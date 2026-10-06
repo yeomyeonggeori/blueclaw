@@ -16,6 +16,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
@@ -119,7 +120,7 @@ type ConnectorRuntime struct {
 	identityService        *identity.IdentityService
 	unknownAccountResolver UnknownAccountResolver
 	harness                agentcontract.Harness
-	intakeDecider          IntakeDecider
+	gatewayDecider         inboundengagement.Decider
 	recordTasklessLLMCall  func(subjects []string, record agentcontract.LLMCallRecord)
 	turnRouter             TurnRouter
 	replyGenerator         ReplyGenerator
@@ -207,29 +208,6 @@ func (connectorRuntime *ConnectorRuntime) waitForIngressGate(ctx context.Context
 		}
 	}
 	return false
-}
-
-func (connectorRuntime *ConnectorRuntime) planTurn(ctx context.Context, taskRunID string, request agentcontract.AgentRequest) (agentcontract.TurnDecision, error) {
-	if connectorRuntime.turnRouter == nil {
-		return agentcontract.TurnDecision{}, errors.New("connector runtime has no turn router configured")
-	}
-	if request.TurnStartedAt.IsZero() {
-		request.TurnStartedAt = time.Now()
-	}
-	if request.EnvironmentNow.IsZero() {
-		request.EnvironmentNow = request.TurnStartedAt
-	}
-	if request.Company.IsEmpty() {
-		request.Company = connectorRuntime.company()
-	}
-	callLedger := &agentcontract.IntakeCallLedger{}
-	turnDecision, errorValue := connectorRuntime.turnRouter.PlanObserved(ctx, request, callLedger)
-	if trimmedTaskRunID := strings.TrimSpace(taskRunID); trimmedTaskRunID != "" && connectorRuntime.taskRunService != nil {
-		for _, callRecord := range callLedger.Records {
-			connectorRuntime.taskRunService.AppendLLMCall(trimmedTaskRunID, callRecord)
-		}
-	}
-	return turnDecision, errorValue
 }
 
 func (connectorRuntime *ConnectorRuntime) Start(ctx context.Context) {
@@ -381,8 +359,7 @@ func (connectorRuntime *ConnectorRuntime) processInboundEvent(ctx context.Contex
 }
 
 func (connectorRuntime *ConnectorRuntime) processInboundEventWithReplySender(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent, sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error)) (ConnectorRuntimeResult, error) {
-	event = withInboundDecision(event)
-	defer connectorRuntime.recordUnclaimedIntakeCalls(event)
+	event = withGatewayDecision(event)
 	ctx = withConnectorEvent(ctx, event)
 	if event.TaskRetry != nil {
 		return connectorRuntime.processTaskRetry(ctx, adapter, event, sendReply)

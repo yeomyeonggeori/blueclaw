@@ -2,6 +2,7 @@ package inboundengagement
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math/rand"
 	"strings"
@@ -41,6 +42,7 @@ type Judgment struct {
 
 type Decider interface {
 	Decide(ctx context.Context, facts Facts, observe agentcontract.LLMCallObserver) ([]Judgment, error)
+	FitsBurstBudget(facts Facts) bool
 }
 
 type DecisionModelDecider struct {
@@ -69,12 +71,29 @@ func (decider DecisionModelDecider) Decide(ctx context.Context, facts Facts, obs
 	startedAt := time.Now()
 	response, errorValue := decider.decisionModel.Decide(ctx, request)
 	if observe != nil {
-		observe(agentcontract.DecisionCallRecord(request, response, time.Since(startedAt), errorValue))
+		callRecord := agentcontract.DecisionCallRecord(request, response, time.Since(startedAt), errorValue)
+		callRecord.DecidedMessageIDs = decidedMessageIDs(facts)
+		observe(callRecord)
 	}
 	if errorValue != nil {
 		return nil, errorValue
 	}
 	return decider.readJudgments(facts, response.Answers)
+}
+
+const burstRequestByteBudget = 80000
+
+func (decider DecisionModelDecider) FitsBurstBudget(facts Facts) bool {
+	document, errorValue := json.Marshal(newDecisionRequest(facts))
+	return errorValue == nil && len(document) <= burstRequestByteBudget
+}
+
+func decidedMessageIDs(facts Facts) []string {
+	messageIDs := make([]string, 0, len(facts.Messages))
+	for _, message := range facts.Messages {
+		messageIDs = append(messageIDs, strings.TrimSpace(message.MessageID))
+	}
+	return messageIDs
 }
 
 func (decider DecisionModelDecider) readJudgments(facts Facts, answers map[string]model.DecisionAnswer) ([]Judgment, error) {

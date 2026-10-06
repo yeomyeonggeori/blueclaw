@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
@@ -16,7 +17,7 @@ type SessionTurn struct {
 }
 
 func (connectorRuntime *ConnectorRuntime) OpenSessionTurn(ctx context.Context, event PlatformInboundEvent, personID string, sendReply ReplySender) *SessionTurn {
-	event = withInboundDecision(event)
+	event = withGatewayDecision(event)
 	adapter, errorValue := connectorRuntime.findAdapter(event.Platform)
 	if errorValue != nil {
 		connectorRuntime.logger.Warn("connector.session.adapter_missing", slog.String("platform", event.Platform), slog.String("messageID", event.MessageID), slog.String("error", errorValue.Error()))
@@ -34,10 +35,12 @@ func (connectorRuntime *ConnectorRuntime) OpenSessionTurn(ctx context.Context, e
 	}}
 }
 
-func (sessionTurn *SessionTurn) DecisionRequest(ctx context.Context) agentcontract.IntakeDecisionRequest {
+func (sessionTurn *SessionTurn) ResolveEngagement(ctx context.Context) inboundengagement.Decision {
 	connectorRuntime, turn := sessionTurn.connectorRuntime, sessionTurn.turn
-	request, _ := connectorRuntime.inboundDecisionRequestForTurn(withConnectorEvent(ctx, turn.event), turn)
-	return request
+	judge := func(ctx context.Context) (inboundengagement.Judgment, error) {
+		return connectorRuntime.judgeTurn(withConnectorEvent(ctx, turn.event), turn)
+	}
+	return inboundengagement.NewGate(judgmentAddressingDecider{judge: judge}, connectorRuntime.logger).Resolve(ctx, turn.platform, engagementRequestForEvent(turn.event))
 }
 
 func (sessionTurn *SessionTurn) ContinueOpenInteractions(ctx context.Context, launchRequest agentruntime.TaskLaunchRequest) (agentruntime.TaskLaunchRequest, bool, error) {
@@ -47,7 +50,6 @@ func (sessionTurn *SessionTurn) ContinueOpenInteractions(ctx context.Context, la
 	}
 	ctx = withConnectorEvent(ctx, turn.event)
 	if _, isAnswered, errorValue := connectorRuntime.resolveOpenInteractions(ctx, turn); isAnswered {
-		connectorRuntime.recordUnclaimedIntakeCalls(turn.event)
 		return launchRequest, true, errorValue
 	}
 	connectorRuntime.resolveTurnActiveGoal(ctx, turn)
@@ -58,7 +60,6 @@ func (sessionTurn *SessionTurn) ContinueOpenInteractions(ctx context.Context, la
 
 func (sessionTurn *SessionTurn) DeliverReply(ctx context.Context, turnResult agentcontract.AgentTurnResult) error {
 	connectorRuntime, turn := sessionTurn.connectorRuntime, sessionTurn.turn
-	connectorRuntime.recordHeldIntakeCalls(turnResult.TaskRun.TaskRunID, turn.event)
 	notDelivered := []*FilesNotDelivered{}
 	sendNoting := func(ctx context.Context, replyTarget ReplyTarget, reply OutboundReply) (string, error) {
 		dispatchID, errorValue := turn.sendReply(ctx, replyTarget, reply)

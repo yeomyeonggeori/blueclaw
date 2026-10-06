@@ -93,7 +93,6 @@ type TaskLaunchRequest struct {
 	ScheduledApprovedCall      *task.ScheduleApprovedCall
 	SettledCalls               []agentcontract.CarriedOutCall
 	PrecomputedTurnDecision    *agentcontract.TurnDecision
-	DecidedTurnFields          *agentcontract.TurnDecision
 	IsPrecomputedDecisionExact bool
 	SkipSkillSelection         bool
 	UseEmptyToolCatalog        bool
@@ -909,7 +908,6 @@ func (taskLauncher *TaskLauncher) routerRequest(request TaskLaunchRequest, toolS
 		Company:              taskLauncher.company(),
 		AgentIdentity:        taskLauncher.agentIdentity(),
 		ToolSet:              toolSet,
-		DecidedTurnFields:    request.DecidedTurnFields,
 	}
 }
 

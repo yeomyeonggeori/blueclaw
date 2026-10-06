@@ -85,7 +85,7 @@ func (connectorRuntime *ConnectorRuntime) processPendingInboundEvent(ctx context
 		return connectorRuntime.interruptedPendingRequestResult(event, requestContext)
 	}
 	guardedSender := connectorRuntime.pendingRequestReplySender(event.DedupeKey(), sendReply, !isQueued)
-	result, errorValue := connectorRuntime.processInboundEventWithReplySender(requestContext, adapter, revisedRequestEvent(request.event), guardedSender)
+	result, errorValue := connectorRuntime.processInboundEventWithReplySender(requestContext, adapter, revisedRequestEventKeepingTheDecision(request.event, event), guardedSender)
 	if connectorRuntime.pendingRequests.isSuperseded(event.DedupeKey()) {
 		return ConnectorRuntimeResult{Handled: true, Platform: event.Platform, TaskRunID: result.TaskRunID, Reason: SupersededRequestReason}, nil
 	}

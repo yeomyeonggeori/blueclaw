@@ -184,7 +184,7 @@ func TestRetryTaskRunResumesStartedChildThroughRuntimeRecovery(t *testing.T) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	baseHarness := harnesstest.New(taskRunService)
 	harness := &interruptedRetryHarness{Harness: baseHarness, testing: t, taskRunService: taskRunService, isFirstTurn: true}
-	connectorRuntime, adapter := connectorRuntimeForHarness(t, harness, baseHarness, baseHarness, baseHarness, taskRunService, testLanguageModel{reply: "stub"})
+	connectorRuntime, adapter := connectorRuntimeForHarness(t, harness, harnessGateway(baseHarness), baseHarness, baseHarness, taskRunService, testLanguageModel{reply: "stub"})
 	queueRepository := newRetryQueueRepository()
 	connectorRuntime.UseEventRepository(queueRepository)
 	sourceTaskRun := seedRetrySourceTaskRun(t, connectorRuntime)
