@@ -1,8 +1,11 @@
 package mcpserver
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -85,7 +88,7 @@ func TestToolCatalogServerPublishesTheRequesterToolSetWithItsDescriptorAxes(t *t
 	if !publishedTools["file_read"].Annotations.ReadOnlyHint || publishedTools["event_add"].Annotations.ReadOnlyHint {
 		t.Fatalf("expected the side effect class to reach the harness as a read-only hint, got %+v", publishedTools)
 	}
-	if publishedTools["event_add"].Meta["blueclaw/approvalScope"] != "calendar" {
+	if publishedTools["event_add"].Meta[toolcontract.MetaKeyApprovalScope] != "calendar" {
 		t.Fatalf("expected the approval scope to survive as metadata, got %+v", publishedTools["event_add"].Meta)
 	}
 }
@@ -154,5 +157,81 @@ func TestToolCatalogServerTellsTheGateWhichTaskRunTheCallBelongsTo(t *testing.T)
 
 	if gate.invocationTaskRunID != "task-run-1" {
 		t.Fatalf("expected an out-of-process call to carry its task run the same way the bundled loop does, got %q", gate.invocationTaskRunID)
+	}
+}
+
+func TestAHarnessReadsBackTheApprovalFactsAGatedScopedToolPublished(t *testing.T) {
+	published := toolcontract.ToolDefinition{
+		ID:                   "test:event_delete",
+		Name:                 "event_delete",
+		Description:          "event_delete description",
+		Visibility:           toolcontract.ToolVisibilityModel,
+		InputSchema:          json.RawMessage(`{"type":"object","properties":{"eventHint":{"type":"string"}}}`),
+		SideEffectClass:      toolcontract.ToolSideEffectDestructive,
+		RequiresApproval:     true,
+		ApprovalScope:        "calendar",
+		ApprovalScopeSummary: "every change to the team calendar",
+		ApprovalInputFields:  []string{"eventHint", "reason"},
+		ResultContract:       &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)},
+	}
+	toolSet := toolcontract.NewToolSet([]string{"event_delete"})
+	toolSet.AllowTestReplacement()
+	handler := func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		return toolcontract.ToolSuccessData("deleted", json.RawMessage(`{}`)), nil
+	}
+	if errorValue := toolSet.RegisterTool(published, handler); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	clientSession := connectedCatalogSession(t, RequesterToolSet{RequesterPersonID: "person-1", ToolSet: toolSet})
+
+	toolList, errorValue := clientSession.ListTools(context.Background(), nil)
+	if errorValue != nil || len(toolList.Tools) != 1 {
+		t.Fatalf("expected the gated tool to be listed: %+v, %v", toolList, errorValue)
+	}
+	var read toolcontract.ToolDescriptor
+	toolcontract.ApplyDescriptorMeta(&read, toolList.Tools[0].Meta)
+
+	if read.SideEffectClass != published.SideEffectClass || !read.RequiresApproval || read.ApprovalScope != published.ApprovalScope ||
+		read.ApprovalScopeSummary != published.ApprovalScopeSummary || !reflect.DeepEqual(read.ApprovalInputFields, published.ApprovalInputFields) {
+		t.Fatalf("the harness did not read back what the tool published: %+v", read)
+	}
+}
+
+func TestAnImageAToolReadReachesTheHarnessAsMCPImageContent(t *testing.T) {
+	picture := []byte{0x89, 'P', 'N', 'G', 0x01, 0x02}
+	toolSet := toolcontract.NewToolSet([]string{"image_read"})
+	toolSet.AllowTestReplacement()
+	errorValue := toolSet.RegisterTool(toolcontract.ToolDefinition{
+		ID:              "test:image_read",
+		Name:            "image_read",
+		Description:     "image_read description",
+		Visibility:      toolcontract.ToolVisibilityModel,
+		InputSchema:     json.RawMessage(`{"type":"object"}`),
+		SideEffectClass: toolcontract.ToolSideEffectRead,
+		ResultContract:  &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)},
+	}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		result := toolcontract.ToolSuccessData("a chart", json.RawMessage(`{}`))
+		result.Attachments = []toolcontract.FileAttachment{
+			{ContentType: "image/png", ContentBase64: base64.StdEncoding.EncodeToString(picture)},
+			{ContentType: "application/pdf", ContentBase64: "JVBERg=="},
+		}
+		return result, nil
+	})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	clientSession := connectedCatalogSession(t, RequesterToolSet{RequesterPersonID: "person-1", ToolSet: toolSet})
+
+	callResult, errorValue := clientSession.CallTool(context.Background(), &mcp.CallToolParams{Name: "image_read", Arguments: map[string]any{}})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	if len(callResult.Content) != 2 {
+		t.Fatalf("expected the text and one image, got %+v", callResult.Content)
+	}
+	image, isImage := callResult.Content[1].(*mcp.ImageContent)
+	if !isImage || image.MIMEType != "image/png" || !bytes.Equal(image.Data, picture) {
+		t.Fatalf("the picture changed on the way: %+v", callResult.Content[1])
 	}
 }
