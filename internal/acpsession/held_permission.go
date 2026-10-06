@@ -8,6 +8,7 @@ import (
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
@@ -122,6 +123,7 @@ func (agent *Agent) resumeAnsweredTaskRun(ctx context.Context, sessionID acp.Ses
 		IsRuntimeRestartResume: true,
 		ExistingTaskRunID:      taskRun.TaskRunID,
 		SettledCalls:           settledCalls,
+		ActiveGoal:             connectors.ActiveGoalOfARunResumedOnItsHeldCall(taskRun, agent.taskRunStore.ListTaskEvent(taskRun.TaskRunID)),
 		OriginReplyTargetID:    firstNonEmpty(taskRun.OriginReplyTargetID, addressing.ReplyTargetID),
 		OriginIsThread:         taskRun.OriginIsThread || addressing.IsThread,
 		ProfileName:            defaultProfileName,

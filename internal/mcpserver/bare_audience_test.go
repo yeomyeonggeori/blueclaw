@@ -63,11 +63,17 @@ func TestTheLoopIsOfferedTheKernelToolsAndTheHiddenOnesItCallsOnTheModelsBehalf(
 	}
 }
 
-func TestTheLoopIsNotOfferedAToolTheProfileDoesNotAllow(t *testing.T) {
+func TestAToolTheProfileDoesNotAllowIsOfferedOnRequestNotPreloaded(t *testing.T) {
 	_, tools := bareAudienceSession(t)
 
-	if tools["memory_forget"] != nil {
-		t.Fatal("a tool outside the profile's allowed names is still outside it when the harness is the bundled agent")
+	if tools["memory_forget"] == nil {
+		t.Fatal("the agent plans its own turn, so a tool outside the profile has to be published for its router to choose it")
+	}
+	if tools["memory_forget"].Meta[toolcontract.MetaKeyOfferedOnRequest] != true {
+		t.Fatalf("a tool outside the profile must be marked, or the agent pins it to every turn, got %v", tools["memory_forget"].Meta)
+	}
+	if tools["event_add"].Meta[toolcontract.MetaKeyOfferedOnRequest] == true {
+		t.Fatal("a tool the profile allows is preloaded and carries no mark")
 	}
 }
 

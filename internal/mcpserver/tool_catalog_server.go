@@ -36,6 +36,7 @@ func NewToolCatalogServer(requesterToolSet RequesterToolSet, version string) (*m
 	}
 	server := mcp.NewServer(&mcp.Implementation{Name: toolCatalogServerName, Version: version}, nil)
 	publishedDescriptors := publishedToolDescriptors(requesterToolSet)
+	publishedDescriptors = markedOfferedOnRequest(requesterToolSet, publishedDescriptors)
 	requesterToolSet.ToolSet = toolSetAllowingEveryPublishedTool(requesterToolSet, publishedDescriptors)
 	for _, toolDescriptor := range publishedDescriptors {
 		tool, isServable := servableTool(markedHostGated(toolDescriptor, requesterToolSet.ToolSet))
@@ -49,7 +50,7 @@ func NewToolCatalogServer(requesterToolSet RequesterToolSet, version string) (*m
 
 func publishedToolDescriptors(requesterToolSet RequesterToolSet) []toolcontract.ToolDescriptor {
 	if requesterToolSet.ToolAudience == ToolAudienceBare {
-		return callableToolDescriptors(requesterToolSet.ToolSet)
+		return callableAndSelectableToolDescriptors(requesterToolSet.ToolSet)
 	}
 	publishedDescriptors := []toolcontract.ToolDescriptor{}
 	for _, toolDescriptor := range requesterToolSet.ToolSet.ListDescribedToolDefinitions() {
@@ -60,14 +61,26 @@ func publishedToolDescriptors(requesterToolSet RequesterToolSet) []toolcontract.
 	return publishedDescriptors
 }
 
-func callableToolDescriptors(toolSet *toolcontract.ToolSet) []toolcontract.ToolDescriptor {
-	callableDescriptors := []toolcontract.ToolDescriptor{}
+func markedOfferedOnRequest(requesterToolSet RequesterToolSet, publishedDescriptors []toolcontract.ToolDescriptor) []toolcontract.ToolDescriptor {
+	if requesterToolSet.ToolAudience != ToolAudienceBare {
+		return publishedDescriptors
+	}
+	marked := make([]toolcontract.ToolDescriptor, 0, len(publishedDescriptors))
+	for _, toolDescriptor := range publishedDescriptors {
+		toolDescriptor.IsOfferedOnRequest = !isCallableByTheLoop(requesterToolSet.ToolSet, toolDescriptor)
+		marked = append(marked, toolDescriptor)
+	}
+	return marked
+}
+
+func callableAndSelectableToolDescriptors(toolSet *toolcontract.ToolSet) []toolcontract.ToolDescriptor {
+	descriptors := []toolcontract.ToolDescriptor{}
 	for _, toolDescriptor := range toolSet.ListRegisteredToolDefinitions() {
-		if isCallableByTheLoop(toolSet, toolDescriptor) {
-			callableDescriptors = append(callableDescriptors, toolDescriptor)
+		if isCallableByTheLoop(toolSet, toolDescriptor) || toolSet.CanExpose(toolDescriptor.Name) {
+			descriptors = append(descriptors, toolDescriptor)
 		}
 	}
-	return callableDescriptors
+	return descriptors
 }
 
 func isCallableByTheLoop(toolSet *toolcontract.ToolSet, toolDescriptor toolcontract.ToolDescriptor) bool {

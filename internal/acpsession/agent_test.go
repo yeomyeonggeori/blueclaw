@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -1103,4 +1104,40 @@ func TestAQuestionsOptionsReachTheClientUnderTheirOwnWordsAndTheAnswerNamesTheKe
 
 func answered[Answer any](answer Answer, status approvalgate.AskStatus) (Answer, bool) {
 	return answer, status == approvalgate.AskAnswered
+}
+
+func TestARunResumedOnAnAnsweredReissuedQuestionOwesTheCallItWasHeldOn(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	heldCall := heldCallForTest()
+	runWaitingOnAHeldCall(t, taskRunService, "conversation-1", heldCall)
+	launcher := &recordingLauncher{}
+	client := &recordingClient{permissionAskedSignal: make(chan acp.RequestPermissionRequest, 4)}
+	connection := reconnectedPairWithReader(t, launcher, client, taskRunService, scriptedReader{optionID: string(approveOnceOptionID)})
+	sessionID := acp.SessionId("session-the-relay-still-holds")
+	client.answerByAsking = answeringWithReply(t, connection, sessionID, ApprovalReplyRequest{Reply: "응 보내줘", ReplyTargetID: "question-message"})
+
+	if errorValue := loadSessionForTest(t, connection, sessionID, sessionMeta("sample@example.test", "conversation-1")); errorValue != nil {
+		t.Fatalf("load session: %v", errorValue)
+	}
+
+	waitForLaunch(t, launcher)
+	launched := theOnlyLaunch(t, launcher)
+	if !slices.Contains(launched.ActiveGoal.OutcomeContract.RequiredEvidenceTools, heldCall.ToolName) {
+		t.Fatalf("the resumed run does not owe %q, so the loop refuses the call the person approved: %+v", heldCall.ToolName, launched.ActiveGoal.OutcomeContract)
+	}
+}
+
+func waitForLaunch(t *testing.T, launcher *recordingLauncher) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		launcher.mutex.Lock()
+		launchCount := len(launcher.launched)
+		launcher.mutex.Unlock()
+		if launchCount > 0 {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("the answered question never resumed its run")
 }
