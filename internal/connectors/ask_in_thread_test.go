@@ -306,6 +306,31 @@ func TestAnAnswerAfterARestartApprovesTheHoldAndResumesTheRunWhichSpendsIt(t *te
 	}
 }
 
+func TestAnAnswerAfterARestartThatArrivesAsASessionPromptApprovesTheHold(t *testing.T) {
+	script := deleteApprovalScript(`{"answer":"approve"}`)
+	script.actions = []string{script.actions[0], connectorFinishMessageCiting("내일 휴가 일정을 캘린더에서 삭제했습니다.", "obs-001")}
+	fixture := newThreadAskFixture(t, script)
+	taskRun := restartedRunHoldingTheCall(t, fixture)
+	fixture.connectorRuntime.appendConnectorReplyEvent(taskRun.TaskRunID, agentcontract.TaskEventConnectorReplySent, map[string]string{"replyKind": connectorReplyKindApprovalQuestion, "dispatchID": "dispatch-before-restart"})
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	finished := make(chan struct{})
+	go func() {
+		fixture.connectorRuntime.reawaitHold(ctx, taskRun)
+		close(finished)
+	}()
+	fixture.awaitQuestionOnTheThread(t)
+	sessionTurn := fixture.connectorRuntime.OpenSessionTurn(ctx, threadReplyEvent("message-2", "ㅇ"), "person-1", fixture.adapter.SendReply)
+
+	isAnswer, errorValue := sessionTurn.AnswersAwaitedQuestion(ctx)
+	awaitFinished(t, finished)
+
+	resumed, _ := fixture.connectorRuntime.taskRunService.FindTaskRun(taskRun.TaskRunID)
+	if errorValue != nil || !isAnswer || resumed.Status != task.TaskStatusCompleted || fixture.invokedToolCount() != 1 {
+		t.Fatalf("answered=%v error=%v status=%s calls=%v: expected a reply to the awaited question to settle it and resume the run", isAnswer, errorValue, resumed.Status, fixture.invokedTools)
+	}
+}
+
 func TestARunWhoseThreadCannotBeReopenedAfterARestartIsEndedNotParked(t *testing.T) {
 	fixture := newThreadAskFixture(t, deleteApprovalScript())
 	taskRun := fixture.connectorRuntime.taskRunService.CreateTaskRunWithOrigin("person-1", task.TaskRunOrigin{ConversationID: "schedule:morning"}, "scheduled run")
