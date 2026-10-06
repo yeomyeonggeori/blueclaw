@@ -54,17 +54,20 @@ func choiceMeaning(replyOption agentcontract.ChoiceReplyOption) string {
 	return approvalreply.AllowMeaning(replyOption.Label)
 }
 
-func answeredDecision(optionID string) agentcontract.TurnDecision {
-	decision := agentcontract.TurnDecision{Route: agentcontract.TurnRouteContinueTask}
+type answeredOption struct {
+	Approval *agentcontract.ApprovalSignal
+	Choices  []string
+}
+
+func answeredDecision(optionID string) answeredOption {
 	switch optionID {
 	case ApproveOptionID:
 		approval := agentcontract.ApprovalSignalApprove
-		decision.Approval = &approval
+		return answeredOption{Approval: &approval}
 	case RejectOptionID:
 		rejection := agentcontract.ApprovalSignalReject
-		decision.Approval = &rejection
+		return answeredOption{Approval: &rejection}
 	default:
-		decision.Choices = []string{optionID}
+		return answeredOption{Choices: []string{optionID}}
 	}
-	return decision
 }

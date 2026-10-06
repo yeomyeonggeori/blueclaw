@@ -1,5 +1,5 @@
 {
-  "aggregateHash": "7da9b29dd40d0cd8f0228f57b6ad8d469c451138caff1ed3e6451978cb38df50",
+  "aggregateHash": "3f497442fd7a14f95c57842b249acf94f608ad18bfb2178de874b030c30573a4",
   "protocolVersion": "0.4.0",
   "schemas": [
     {
@@ -84,7 +84,7 @@
     },
     {
       "fileName": "task-event-name.schema.json",
-      "hash": "b5332f28b4f60ac153d41e2fac634c39eb0180080df444d3e83f61c64f38c857",
+      "hash": "2cb59a7f61efddb57950947abc024ed56c4593d905bcfb987f05f95dd0e171dc",
       "name": "task-event-name"
     },
     {

@@ -99,15 +99,6 @@ func (connectorRuntime *ConnectorRuntime) UseReplyGenerator(replyGenerator Reply
 	connectorRuntime.replyGenerator = replyGenerator
 }
 
-type TurnRouter interface {
-	Plan(context.Context, agentcontract.AgentRequest) (agentcontract.TurnDecision, error)
-	PlanObserved(context.Context, agentcontract.AgentRequest, *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error)
-}
-
-func (connectorRuntime *ConnectorRuntime) UseTurnRouter(turnRouter TurnRouter) {
-	connectorRuntime.turnRouter = turnRouter
-}
-
 func (connectorRuntime *ConnectorRuntime) UseTaskLauncher(taskLauncher *agentruntime.TaskLauncher) {
 	connectorRuntime.taskLauncher = taskLauncher
 }

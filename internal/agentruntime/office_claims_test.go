@@ -49,7 +49,7 @@ func (judge *claimJudge) Decide(_ context.Context, request model.DecisionRequest
 	return model.DecisionResponse{Answers: answers}, nil
 }
 
-func (fixture officeContextFixture) installOfficeStandIn(t *testing.T) string {
+func (fixture taskFixture) installOfficeStandIn(t *testing.T) string {
 	t.Helper()
 	recordPath := filepath.Join(fixture.workspacePath, "office-calls.txt")
 	entryPath := filepath.Join(BundledSkillRootPath(fixture.workspacePath), "office", "scripts", "office")
@@ -60,7 +60,7 @@ func (fixture officeContextFixture) installOfficeStandIn(t *testing.T) string {
 	return recordPath
 }
 
-func (fixture officeContextFixture) deliverWithJudge(t *testing.T, judge *claimJudge, name string, otherJudge ...model.DecisionModel) map[string]json.RawMessage {
+func (fixture taskFixture) deliverWithJudge(t *testing.T, judge *claimJudge, name string, otherJudge ...model.DecisionModel) map[string]json.RawMessage {
 	t.Helper()
 	if len(otherJudge) > 0 {
 		fixture.builder.UseClaimDecisionModel(otherJudge[0])
@@ -77,9 +77,9 @@ func (fixture officeContextFixture) deliverWithJudge(t *testing.T, judge *claimJ
 	return data
 }
 
-func (fixture officeContextFixture) writeSnapshot(t *testing.T, name string, snapshot string) string {
+func (fixture taskFixture) writeSnapshot(t *testing.T, name string, snapshot string) string {
 	t.Helper()
-	documentPath := fixture.writeDocument(t, name, false)
+	documentPath := fixture.writeDocument(t, name)
 	writeTestFile(t, documentPath+officeContract.SourceSuffix, snapshot)
 	return documentPath
 }
@@ -97,7 +97,7 @@ func officeCalls(t *testing.T, recordPath string) []string {
 }
 
 func TestAnUnsupportedClaimIsBlankedByRemakingTheFileAsThePerson(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	recordPath := fixture.installOfficeStandIn(t)
 	documentPath := fixture.writeSnapshot(t, "notice.pdf", noticeSnapshot)
 
@@ -113,7 +113,7 @@ func TestAnUnsupportedClaimIsBlankedByRemakingTheFileAsThePerson(t *testing.T) {
 }
 
 func TestABlankedClaimIsANoteForTheReplyNamingWhatItSaid(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	fixture.installOfficeStandIn(t)
 	fixture.writeSnapshot(t, "notice.pdf", noticeSnapshot)
 	fixture.builder.UseClaimDecisionModel(&claimJudge{unsupportedText: "이전 기간에는 전화 응대가 어렵습니다."})
@@ -131,7 +131,7 @@ func TestABlankedClaimIsANoteForTheReplyNamingWhatItSaid(t *testing.T) {
 }
 
 func TestABlankAnEarlierRemakeLeftIsStillANoteForTheReply(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	fixture.installOfficeStandIn(t)
 	fixture.writeSnapshot(t, "q3-business-review.pptx", `{"command":"office create","deck":"/home/sample/documents/q3/slides.html","claims":[],`+
 		`"slides":[{"slide":6,"layout":"cards","title":""}],"blanks":[{"field":"slides[5].units[0]","label":"슬라이드 6 제목"},{"field":"slides[5].units[3]","label":"슬라이드 6 본문"}]}`)
@@ -146,7 +146,7 @@ func TestABlankAnEarlierRemakeLeftIsStillANoteForTheReply(t *testing.T) {
 }
 
 func TestASupportedFileHasNoNoteForTheReply(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	fixture.installOfficeStandIn(t)
 	fixture.writeSnapshot(t, "notice.pdf", noticeSnapshot)
 	fixture.builder.UseClaimDecisionModel(&claimJudge{})
@@ -157,7 +157,7 @@ func TestASupportedFileHasNoNoteForTheReply(t *testing.T) {
 }
 
 func TestASupportedFileIsDeliveredAsItIs(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	recordPath := fixture.installOfficeStandIn(t)
 	fixture.writeSnapshot(t, "notice.pdf", noticeSnapshot)
 
@@ -172,7 +172,7 @@ func TestASupportedFileIsDeliveredAsItIs(t *testing.T) {
 }
 
 func TestAClaimCopiedFromTheRequestIsNotAsked(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	fixture.installOfficeStandIn(t)
 	fixture.writeSnapshot(t, "notice.pdf", noticeSnapshot)
 
@@ -184,7 +184,7 @@ func TestAClaimCopiedFromTheRequestIsNotAsked(t *testing.T) {
 }
 
 func TestADeckIsRebuiltFromItsSourceWithTheBlank(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	recordPath := fixture.installOfficeStandIn(t)
 	deckPath := filepath.Join(fixture.homePath(), "artifacts", "deck", "slides.html")
 	documentPath := fixture.writeSnapshot(t, "deck.pdf", `{"command":"office create","deck":"`+deckPath+`","claims":[{"path":"slides[1].units[2]","at":"슬라이드 2 항목","text":"국내 시장 점유율 1위"}]}`)
@@ -198,7 +198,7 @@ func TestADeckIsRebuiltFromItsSourceWithTheBlank(t *testing.T) {
 }
 
 func TestAFileFromBeforeTheTaskIsNotJudgedAgainstThisRequest(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	fixture.installOfficeStandIn(t)
 	documentPath := fixture.writeSnapshot(t, "notice.pdf", noticeSnapshot)
 	earlier := fixture.taskRun.CreatedAt.Add(-time.Hour)
@@ -215,7 +215,7 @@ func TestAFileFromBeforeTheTaskIsNotJudgedAgainstThisRequest(t *testing.T) {
 }
 
 func TestAClaimIsNotBlankedWhenAnAttachmentCouldNotBeRead(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	recordPath := fixture.installOfficeStandIn(t)
 	fixture.writeSnapshot(t, "notice.pdf", noticeSnapshot)
 	fixture.request.VisibleContext = agentcontract.VisibleContext{CurrentMaterials: []agentcontract.VisibleContextMaterial{{MaterialID: "m-1", Filename: "scan.pdf", IsAvailable: true}}}
@@ -231,7 +231,7 @@ func TestAClaimIsNotBlankedWhenAnAttachmentCouldNotBeRead(t *testing.T) {
 }
 
 func TestASnapshotThePersonCannotReadIsNotJudged(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	documentPath := fixture.writeSnapshot(t, "notice.pdf", noticeSnapshot)
 	snapshotPath := documentPath + officeContract.SourceSuffix
 	if errorValue := os.Chmod(snapshotPath, 0o000); errorValue != nil {
@@ -248,7 +248,7 @@ func TestASnapshotThePersonCannotReadIsNotJudged(t *testing.T) {
 }
 
 func TestAMistakeIsBlankedAndTheNoteAsksThePersonToConfirm(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	recordPath := fixture.installOfficeStandIn(t)
 	documentPath := fixture.writeSnapshot(t, "notice.pdf", noticeSnapshot)
 	fixture.builder.UseClaimDecisionModel(&claimJudge{unsupportedText: "10월 20일 새 사무실로 이전합니다.", kind: "mistake"})
@@ -267,7 +267,7 @@ func TestAMistakeIsBlankedAndTheNoteAsksThePersonToConfirm(t *testing.T) {
 }
 
 func TestHollowIsRecordedAndNeverRewrittenOrBlanked(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	recordPath := fixture.installOfficeStandIn(t)
 	fixture.writeSnapshot(t, "notice.pdf", noticeSnapshot)
 
@@ -292,7 +292,7 @@ func (writer derivationWriter) GenerateStructuredResponse(context.Context, model
 }
 
 func TestAWrongDerivationFoundByRecomputingIsBlanked(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	recordPath := fixture.installOfficeStandIn(t)
 	documentPath := fixture.writeSnapshot(t, "notice.pdf", noticeSnapshot)
 	fixture.builder.UseClaimRecompute(derivationWriter{wrongKey: "claim1"})
@@ -305,7 +305,7 @@ func TestAWrongDerivationFoundByRecomputingIsBlanked(t *testing.T) {
 	}
 }
 
-func (fixture officeContextFixture) installFailingOfficeStandIn(t *testing.T) {
+func (fixture taskFixture) installFailingOfficeStandIn(t *testing.T) {
 	t.Helper()
 	entryPath := filepath.Join(BundledSkillRootPath(fixture.workspacePath), "office", "scripts", "office")
 	writeTestFile(t, entryPath, "#!/bin/sh\necho 'slide 2 needs a title' >&2\nexit 1\n")
@@ -315,7 +315,7 @@ func (fixture officeContextFixture) installFailingOfficeStandIn(t *testing.T) {
 }
 
 func TestAFlaggedValueTheRemakeCouldNotBlankIsANoteForTheReplyNamingIt(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	fixture.installFailingOfficeStandIn(t)
 	fixture.writeSnapshot(t, "notice.pdf", noticeSnapshot)
 
@@ -359,7 +359,7 @@ func (writer *rewriteWriter) GenerateStructuredResponse(context.Context, model.S
 
 const hollowSentence = "이전 기간에는 전화 응대가 어렵습니다."
 
-func (fixture officeContextFixture) deliverHollow(t *testing.T, writer *rewriteWriter, kindOfText map[string]string) []string {
+func (fixture taskFixture) deliverHollow(t *testing.T, writer *rewriteWriter, kindOfText map[string]string) []string {
 	t.Helper()
 	recordPath := fixture.installOfficeStandIn(t)
 	fixture.writeSnapshot(t, "notice.pdf", noticeSnapshot)
@@ -369,7 +369,7 @@ func (fixture officeContextFixture) deliverHollow(t *testing.T, writer *rewriteW
 }
 
 func TestAHollowSentenceIsReplacedByItsCleanRewriteWhenTheFileIsRemade(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	calls := fixture.deliverHollow(t, &rewriteWriter{content: `{"text":"이전 기간에는 전화가 연결되지 않습니다."}`}, map[string]string{"이전 기간에는 전화가 연결되지 않습니다.": "source"})
 	if len(calls) < 2 || strings.Join(calls[len(calls)-2:], " ") != "--replace sections[0].blocks[0].text#1=이전 기간에는 전화가 연결되지 않습니다." {
 		t.Fatalf("expected the remake to carry the replacement, got %v", calls)
@@ -377,7 +377,7 @@ func TestAHollowSentenceIsReplacedByItsCleanRewriteWhenTheFileIsRemade(t *testin
 }
 
 func TestAHollowSentenceWithAnEmptyRewriteIsBlankedBecauseASentenceMayGo(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	calls := fixture.deliverHollow(t, &rewriteWriter{content: `{"text":""}`}, nil)
 	if len(calls) < 2 || strings.Join(calls[len(calls)-2:], " ") != "--blank sections[0].blocks[0].text#1" {
 		t.Fatalf("expected the sentence blanked, got %v", calls)
@@ -385,14 +385,14 @@ func TestAHollowSentenceWithAnEmptyRewriteIsBlankedBecauseASentenceMayGo(t *test
 }
 
 func TestAHollowSentenceStaysWhenItsRewriteIsUnreadable(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	if calls := fixture.deliverHollow(t, &rewriteWriter{content: "그냥 문장입니다."}, nil); len(calls) != 0 {
 		t.Fatalf("expected no remake, got %v", calls)
 	}
 }
 
 func TestAHollowSentenceStaysWhenItsRewriteIsJudgedWrong(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	if calls := fixture.deliverHollow(t, &rewriteWriter{content: `{"text":"전화는 3일간 불가합니다."}`}, map[string]string{"전화는 3일간 불가합니다.": "claim"}); len(calls) != 0 {
 		t.Fatalf("expected no remake, got %v", calls)
 	}
@@ -449,7 +449,7 @@ func (judge *countingJudge) Decide(_ context.Context, request model.DecisionRequ
 	return model.DecisionResponse{Answers: answers}, nil
 }
 
-func (fixture officeContextFixture) installRewritingOfficeStandIn(t *testing.T, snapshotPath string, afterSnapshot string) string {
+func (fixture taskFixture) installRewritingOfficeStandIn(t *testing.T, snapshotPath string, afterSnapshot string) string {
 	t.Helper()
 	recordPath := filepath.Join(fixture.workspacePath, "office-calls.txt")
 	afterPath := filepath.Join(fixture.workspacePath, "after-snapshot.json")
@@ -463,7 +463,7 @@ func (fixture officeContextFixture) installRewritingOfficeStandIn(t *testing.T, 
 }
 
 func TestAStatementLeftBesideBlankedValuesIsJudgedAgainstWhatWasRemoved(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	documentPath := fixture.writeSnapshot(t, "decisions.pptx", decisionsDeckSnapshot)
 	recordPath := fixture.installRewritingOfficeStandIn(t, documentPath+officeContract.SourceSuffix, decisionsDeckAfterBlank)
 	judge := &countingJudge{}

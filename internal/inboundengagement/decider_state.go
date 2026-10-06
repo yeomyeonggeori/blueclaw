@@ -111,7 +111,7 @@ func decisionMessages(facts Facts) []decisionMessage {
 	return messages
 }
 
-func decisionDuties(duties []agentcontract.StandingDuty) []decisionDuty {
+func decisionDuties(duties []StandingDuty) []decisionDuty {
 	described := make([]decisionDuty, 0, len(duties))
 	for _, duty := range duties {
 		described = append(described, decisionDuty{Name: duty.Name, Description: duty.Description})

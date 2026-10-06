@@ -55,8 +55,6 @@ type EvidenceCondition = capability.EvidenceCondition
 
 type AgentConfiguration struct {
 	Intake                   AgentIntakeConfiguration `json:"intake"`
-	DefaultTaskLevel         string                   `json:"defaultTaskLevel"`
-	SkillTaskLevelFloor      string                   `json:"skillTaskLevelFloor,omitempty"`
 	FailureRecovery          AgentFailureRecovery     `json:"failureRecovery"`
 	GenerationOptions        AgentGenerationOptions   `json:"generationOptions,omitempty"`
 	AdminTaskLinkBaseURL     string                   `json:"adminTaskLinkBaseURL,omitempty"`

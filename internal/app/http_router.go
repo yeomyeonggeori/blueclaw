@@ -26,6 +26,7 @@ func newRouterDependencies(components applicationComponents) httpserver.RouterDe
 		WorkspaceFilesHandler: newWorkspaceFilesHandler(runtimeConfiguration, kernel, directory),
 		PersonaHandler:        newPersonaHandler(runtimeConfiguration, kernel, directory),
 		ToolCatalogHandler:    kernel.toolCatalog.handler,
+		ScriptHostHandler:     kernel.toolCatalog.scriptHost.Handler(),
 		PolicyHandler:         newPolicyHandler(components),
 		IdentityResolve:       adminapi.IdentityResolveHandler{PolicyWatcher: directory.policyWatcher, PlatformAccountLister: directory.platformAccountLister},
 		AuditHandler:          services.auditHandler,
@@ -73,7 +74,7 @@ func languageModelHealth(kernel agentKernel) httpserver.LanguageModelHealth {
 	if kernel.languageModelError != nil {
 		return httpserver.LanguageModelHealth{Error: kernel.languageModelError.Error()}
 	}
-	return httpserver.LanguageModelHealth{Configured: turnRouterLanguageModelProvider(kernel.taskTierLanguageModels, kernel.intakeLanguageModelProvider) != nil}
+	return httpserver.LanguageModelHealth{Configured: kernel.intakeLanguageModelProvider != nil || kernel.taskTierLanguageModels.High != nil}
 }
 
 func newWorkspaceFilesHandler(runtimeConfiguration config.RuntimeConfiguration, kernel agentKernel, directory identityDirectory) httpserver.WorkspaceFilesHandler {

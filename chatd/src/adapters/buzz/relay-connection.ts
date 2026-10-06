@@ -17,6 +17,13 @@ export type RelayConnection = {
 
 const authGraceMilliseconds = 3_000;
 
+type PendingQuery = {
+	events: BuzzEvent[];
+	filter?: object;
+	isAskedAfterLogin?: boolean;
+	resolve: (events: BuzzEvent[], complete: boolean) => void;
+};
+
 export type RelayClientTiming = {
 	resubscribeDelayMilliseconds: number;
 	loginRetryDelayMilliseconds: number;
@@ -61,7 +68,7 @@ export function createRelayConnection(
 	let livenessProbeTimer: ReturnType<typeof setInterval> | null = null;
 	const liveSubscriptions = new Map<string, { filters: object[]; onEvent: EventListener }>();
 	const resubscribeDelays = new Map<string, number>();
-	const pendingQueries = new Map<string, { events: BuzzEvent[]; resolve: (events: BuzzEvent[]) => void }>();
+	const pendingQueries = new Map<string, PendingQuery>();
 	const pendingPublishes = new Map<string, { resolve: (message: string) => void; reject: (error: Error) => void }>();
 	let openWaiters: Array<() => void> = [];
 	let authWaiters: Array<(reason?: Error) => void> = [];
@@ -162,7 +169,7 @@ export function createRelayConnection(
 			if (query) {
 				pendingQueries.delete(rest[0]);
 				send(["CLOSE", rest[0]]);
-				query.resolve(query.events);
+				query.resolve(query.events, true);
 			}
 			return;
 		}
@@ -190,8 +197,13 @@ export function createRelayConnection(
 	function handleClosedSubscription(subscriptionID: string, reason: string): void {
 		const query = pendingQueries.get(subscriptionID);
 		if (query) {
+			if (query.filter && !query.isAskedAfterLogin && reason.startsWith("auth-required")) {
+				void requestQueryAgainAfterLogin(subscriptionID, query);
+				return;
+			}
 			pendingQueries.delete(subscriptionID);
-			query.resolve(query.events);
+			console.error(`[buzz-relay] ${relayURL} closed query ${subscriptionID}: ${reason}`);
+			query.resolve(query.events, false);
 			return;
 		}
 		if (!liveSubscriptions.has(subscriptionID)) return;
@@ -200,6 +212,13 @@ export function createRelayConnection(
 		resubscribeDelays.set(subscriptionID, Math.min(delay * 2, maximumResubscribeDelayMilliseconds));
 		const retry = setTimeout(() => void requestSubscriptionAgain(subscriptionID, reason), delay);
 		retry.unref?.();
+	}
+
+	async function requestQueryAgainAfterLogin(subscriptionID: string, query: PendingQuery): Promise<void> {
+		query.isAskedAfterLogin = true;
+		await waitForAuth().catch(() => void 0);
+		if (pendingQueries.get(subscriptionID) !== query) return;
+		send(["REQ", subscriptionID, query.filter]);
 	}
 
 	async function requestSubscriptionAgain(subscriptionID: string, reason: string): Promise<void> {
@@ -349,9 +368,11 @@ export function createRelayConnection(
 			}, timeoutMs);
 			pendingQueries.set(subscriptionID, {
 				events: [],
-				resolve: (events) => {
+				filter,
+				isAskedAfterLogin: false,
+				resolve: (events, complete) => {
 					clearTimeout(timeoutHandle);
-					resolve({ events, complete: true });
+					resolve({ events, complete });
 				},
 			});
 			send(["REQ", subscriptionID, filter]);

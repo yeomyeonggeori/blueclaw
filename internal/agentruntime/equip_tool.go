@@ -63,13 +63,13 @@ func (toolCatalogBuilder *ToolCatalogBuilder) equip(toolContext context.Context,
 	if strings.TrimSpace(input.Need) == "" {
 		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, toolcontract.EquipToolName, "need must say what the tool has to do"), nil
 	}
-	callLedger := &agentcontract.IntakeCallLedger{}
+	callRecords := []agentcontract.LLMCallRecord{}
 	selectedTools, errorValue := toolCatalogBuilder.toolSelector.SelectToolNames(toolContext, agentcontract.ToolSelectionNeed{
-		Need:       input.Need,
-		ToolSet:    availableToolSet,
-		CallLedger: callLedger,
+		Need:         input.Need,
+		ToolSet:      availableToolSet,
+		CallObserver: func(record agentcontract.LLMCallRecord) { callRecords = append(callRecords, record) },
 	})
-	toolCatalogBuilder.appendSelectionCallRecords(toolContext, callLedger.Records)
+	toolCatalogBuilder.appendSelectionCallRecords(toolContext, callRecords)
 	if errorValue != nil {
 		return toolcontract.ToolFailureResult(toolcontract.FailureDependencyUnavailable, toolcontract.FailureCodes.Unavailable, toolcontract.EquipToolName, "tool selection failed: "+errorValue.Error()), nil
 	}

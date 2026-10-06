@@ -11,10 +11,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/model/decisions"
 	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
@@ -92,22 +91,34 @@ func replyTool() model.ChatCompletionTool {
 	return model.ChatCompletionTool{Type: "function", Function: model.ChatCompletionFunction{Name: "reply", Parameters: json.RawMessage(`{"type":"object"}`)}}
 }
 
-func addressedChannelMessage() agentcontract.IntakeDecisionRequest {
-	return agentcontract.IntakeDecisionRequest{
-		Messages: []agentcontract.IntakeDecisionMessage{{
-			MessageID:    "message-1",
-			Prompt:       "업무로 남겨줘",
-			SenderName:   "이샘플",
-			BotMentioned: true,
-			SentAt:       time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC),
-		}},
-		ConversationType:  "channel",
-		AgentIdentity:     agentcontract.AgentIdentity{Name: "인턴"},
-		Company:           agentcontract.CompanyContext{Name: "평면 점검", TimeZone: "UTC"},
-		ResponseLanguage:  "ko",
-		CallableToolNames: []string{"message_send", "task_add"},
-		EnvironmentNow:    time.Date(2026, 9, 28, 10, 0, 1, 0, time.UTC),
+type plannedAnswers struct {
+	route     string
+	toolNames []string
+}
+
+func planTheAddressedMessage(running standIn) (plannedAnswers, error) {
+	state := map[string]any{"messages": []map[string]string{{"text": "업무로 남겨줘"}}}
+	decisionModel := running.decisionModel()
+	routeResponse, errorValue := decisionModel.Decide(context.Background(), model.DecisionRequest{State: state, Questions: map[string]model.DecisionQuestion{
+		"m1." + agentcontract.IntakeQuestionRoute: model.ChoiceQuestion{Instructions: "route"}.Question(),
+	}})
+	if errorValue != nil {
+		return plannedAnswers{}, errorValue
 	}
+	toolResponse, errorValue := decisionModel.Decide(context.Background(), model.DecisionRequest{State: state, Questions: map[string]model.DecisionQuestion{
+		"m1.tool.task_add":     model.NoulQuestion{Instructions: "task_add"}.Question(),
+		"m1.tool.message_send": model.NoulQuestion{Instructions: "message_send"}.Question(),
+	}})
+	if errorValue != nil {
+		return plannedAnswers{}, errorValue
+	}
+	planned := plannedAnswers{route: routeResponse.Answers["m1."+agentcontract.IntakeQuestionRoute].Choice}
+	for _, toolName := range []string{"task_add", "message_send"} {
+		if toolResponse.Answers["m1.tool."+toolName].Noul >= 0.5 {
+			planned.toolNames = append(planned.toolNames, toolName)
+		}
+	}
+	return planned, nil
 }
 
 func TestAStructuredCallIsAnsweredWithTheDocumentScriptedForItsSchema(t *testing.T) {
@@ -192,16 +203,15 @@ func TestIntakeReadsTheScriptedTurnAndItsToolsThroughTheDecisionsEndpoint(t *tes
 		"turnDecision": map[string]any{"route": "start_task", "classification": "bounded_task", "initialToolNames": []string{"task_add"}},
 	})
 
-	decided, errorValue := intake.NewDecisionPlanner(running.decisionModel(), nil, nil).Decide(context.Background(), addressedChannelMessage(), nil)
+	planned, errorValue := planTheAddressedMessage(running)
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	message := decided.Messages[0]
-	if !message.Addressing.ShouldRespond || message.TurnFields.Route != agentcontract.TurnRouteStartTask {
-		t.Fatalf("expected an addressed start_task turn, got %+v", message)
+	if planned.route != string(agentcontract.TurnRouteStartTask) {
+		t.Fatalf("expected a start_task turn, got %+v", planned)
 	}
-	if !slices.Contains(message.TurnFields.InitialToolNames, "task_add") || slices.Contains(message.TurnFields.InitialToolNames, "message_send") {
-		t.Fatalf("expected the scripted tool and no other, got %v", message.TurnFields.InitialToolNames)
+	if !slices.Equal(planned.toolNames, []string{"task_add"}) {
+		t.Fatalf("expected the scripted tool and no other, got %v", planned.toolNames)
 	}
 	if asked := running.server.asked; len(asked) != 2 || !slices.Contains(asked[1].QuestionNames, "m1.tool.task_add") {
 		t.Fatalf("expected the turn and then its tool selection to be asked, got %+v", asked)
@@ -209,10 +219,56 @@ func TestIntakeReadsTheScriptedTurnAndItsToolsThroughTheDecisionsEndpoint(t *tes
 	running.mustBeSettled(t)
 }
 
+func TestTheGatewayReadsTheScriptedAddressingAndLeavesTheTurnToBePlanned(t *testing.T) {
+	running := startStandIn(t)
+	running.mustScript(t, "/script/turn", map[string]any{
+		"message":      "업무로 남겨줘",
+		"addressing":   map[string]any{"target": "bot", "shouldRespond": true},
+		"turnDecision": map[string]any{"route": "start_task", "classification": "bounded_task"},
+	})
+	decider := inboundengagement.NewDecisionModelDecider(running.decisionModel(), nil)
+
+	judgments, errorValue := decider.Decide(context.Background(), aChannelMessageFacts("업무로 남겨줘"), nil)
+
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(judgments) != 1 || !judgments[0].Addressing.ShouldRespond {
+		t.Fatalf("expected the scripted addressing, got %+v", judgments)
+	}
+	if unconsumed := running.server.Leftovers().Unconsumed[unconsumedTurnsName]; unconsumed != 1 {
+		t.Fatalf("expected the turn to wait for its plan, got %d unconsumed", unconsumed)
+	}
+}
+
+func TestAnOverheardMessageSettlesItsScriptAtTheGateway(t *testing.T) {
+	running := startStandIn(t)
+	running.mustScript(t, "/script/turn", map[string]any{"message": "점심 뭐 먹지", "addressing": map[string]any{"target": "anyone", "shouldRespond": false}})
+	decider := inboundengagement.NewDecisionModelDecider(running.decisionModel(), nil)
+
+	judgments, errorValue := decider.Decide(context.Background(), aChannelMessageFacts("점심 뭐 먹지"), nil)
+
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(judgments) != 1 || judgments[0].Addressing.ShouldRespond {
+		t.Fatalf("expected the scripted overheard judgment, got %+v", judgments)
+	}
+	running.mustBeSettled(t)
+}
+
+func aChannelMessageFacts(words string) inboundengagement.Facts {
+	return inboundengagement.Facts{
+		ConversationType: "channel",
+		AgentIdentity:    agentcontract.AgentIdentity{Name: "인턴"},
+		Messages:         []inboundengagement.Message{{MessageID: "message-1", Prompt: words, SenderName: "이샘플"}},
+	}
+}
+
 func TestATurnNoScriptDecidedIsRefused(t *testing.T) {
 	running := startStandIn(t)
 
-	_, errorValue := intake.NewDecisionPlanner(running.decisionModel(), nil, nil).Decide(context.Background(), addressedChannelMessage(), nil)
+	_, errorValue := planTheAddressedMessage(running)
 	if errorValue == nil {
 		t.Fatal("expected a turn nobody scripted to fail")
 	}
@@ -275,7 +331,7 @@ func TestATurnScriptedForAnotherMessageIsRefusedWithoutBeingSpent(t *testing.T) 
 	running := startStandIn(t)
 	running.mustScript(t, "/script/turn", map[string]any{"message": "응 보내줘", "turnDecision": map[string]any{"route": "continue_task"}})
 
-	_, errorValue := intake.NewDecisionPlanner(running.decisionModel(), nil, nil).Decide(context.Background(), addressedChannelMessage(), nil)
+	_, errorValue := planTheAddressedMessage(running)
 	if errorValue == nil {
 		t.Fatal("expected a turn scripted for another message to fail")
 	}

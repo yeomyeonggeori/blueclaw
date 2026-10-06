@@ -16,9 +16,8 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/scheduler"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
+	"github.com/yeomyeonggeori/bluecollar/intake/routedharness"
 	"github.com/yeomyeonggeori/bluecollar/loop"
 )
 
@@ -85,14 +84,11 @@ func newScheduledDeliveryConnectorRuntime(languageModel staticScheduleLanguageMo
 	taskRunService := task.NewTaskRunService(taskEventService)
 	agentKernel := loop.NewAgentKernel(taskRunService, task.NewTaskStepService())
 	useScheduleTestLanguageModel(agentKernel, languageModel)
-	connectorRuntime := connectors.NewConnectorRuntime(identityService, agentKernel, taskRunService, taskEventService, nil)
-	turnRouter := intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(&intaketest.LanguageModelDecisionModel{LanguageModel: languageModel}, nil, nil), agentcontract.IntakeOptions{IsEnabled: true})
+	connectorRuntime := connectors.NewConnectorRuntime(identityService, routedharness.New(agentKernel, taskRunService, languageModel, &intaketest.LanguageModelDecisionModel{LanguageModel: languageModel}), taskRunService, taskEventService, nil)
 	launchFailureCompleter := launchfailure.NewCompleter(taskRunService, languageModel)
-	connectorRuntime.UseTurnRouter(turnRouter)
 	connectorRuntime.UseLaunchFailureCompleter(launchFailureCompleter)
 	toolCatalogBuilder := agentruntime.NewToolCatalogBuilder()
-	taskLauncher := agentruntime.NewTaskLauncher(agentKernel, taskRunService, toolCatalogBuilder)
-	taskLauncher.UseTurnRouter(turnRouter)
+	taskLauncher := agentruntime.NewTaskLauncher(routedharness.New(agentKernel, taskRunService, languageModel, &intaketest.LanguageModelDecisionModel{LanguageModel: languageModel}), taskRunService, toolCatalogBuilder)
 	taskLauncher.UseLaunchFailureCompleter(launchFailureCompleter)
 	connectorRuntime.UseTaskLauncher(taskLauncher)
 	connectorRuntime.RegisterAdapter(adapter)
@@ -109,8 +105,7 @@ func newScheduledDeliveryPoller(languageModel staticScheduleLanguageModel, repos
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(map[string][]string{
 		"default": {"memory_search"},
 	}, nil)
-	taskLauncher := agentruntime.NewTaskLauncher(agentKernel, taskRunService, toolCatalogBuilder)
-	taskLauncher.UseTurnRouter(intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(&intaketest.LanguageModelDecisionModel{LanguageModel: languageModel}, nil, nil), agentcontract.IntakeOptions{IsEnabled: true}))
+	taskLauncher := agentruntime.NewTaskLauncher(routedharness.New(agentKernel, taskRunService, languageModel, &intaketest.LanguageModelDecisionModel{LanguageModel: languageModel}), taskRunService, toolCatalogBuilder)
 	taskLauncher.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, languageModel))
 	return scheduler.SchedulePoller{
 		ScheduleRepository:   repository,

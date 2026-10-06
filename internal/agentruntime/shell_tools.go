@@ -3,12 +3,14 @@ package agentruntime
 import (
 	"context"
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"log/slog"
+	"maps"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 )
@@ -82,10 +84,16 @@ func (toolCatalogBuilder *ToolCatalogBuilder) runTerminalTool(toolContext contex
 	toolCatalogBuilder.prepareRequestedDeck(toolContext, workspaceActor, handlerContext.request)
 	toolCatalogBuilder.chooseRequestedDeckLayouts(toolContext, workspaceActor, handlerContext.request)
 	toolCatalogBuilder.judgeRequestedDraftClaims(toolContext, workspaceActor, handlerContext.request)
+	if errorValue := toolCatalogBuilder.writeTaskContext(toolContext, workspaceActor, handlerContext.request); errorValue != nil {
+		return actorToolFailure("write_file", "task_context", input.EnvironmentVariables[TaskContextEnvironmentName], errorValue), nil
+	}
 	if errorValue := toolCatalogBuilder.writeOfficeRuntimeContext(toolContext, workspaceActor, handlerContext.request, func(*officeRuntimeContext) {}); errorValue != nil {
 		return actorToolFailure("write_file", "office_runtime_context", input.EnvironmentVariables[officeContract.RuntimeContextVariable], errorValue), nil
 	}
 	input.ExecutionIdentity = toolCatalogBuilder.executionIdentityForRequester(handlerContext.request)
+	scriptHostEnvironment, revokeScriptHost := toolCatalogBuilder.grantScriptHost(toolContext, handlerContext.request)
+	defer revokeScriptHost()
+	maps.Copy(input.EnvironmentVariables, scriptHostEnvironment)
 	runStartedAt := time.Now()
 	stopHeartbeat := toolCatalogBuilder.startTerminalRunHeartbeat(toolContext, input.Command)
 	commandResult, errorValue := workspaceActor.Run(toolContext, input)
@@ -257,6 +265,7 @@ func requesterWorkspaceEnvironment(requesterHomePath string, workspaceRootPath s
 	}
 	if taskTmpPath != "" {
 		environmentVariables["BLUECLAW_TASK_TMP"] = taskTmpPath
+		environmentVariables[TaskContextEnvironmentName] = taskContextPath(taskTmpPath)
 		environmentVariables[officeContract.RuntimeContextVariable] = officeRuntimeContextPath(taskTmpPath)
 	}
 	return environmentVariables

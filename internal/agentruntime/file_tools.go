@@ -1418,6 +1418,11 @@ func (toolCatalogBuilder *ToolCatalogBuilder) attachFileTool(toolContext context
 		snapshot := toolCatalogBuilder.deliveredSnapshot(toolContext, handlerContext.request, concretePath)
 		attachment.Holds = snapshotHolds(snapshot)
 		replyNotes = append(replyNotes, deliveredFileNotes(attachment.Filename, snapshotBlankLabels(snapshot), fileChecks, review)...)
+		metadata := toolCatalogBuilder.deliveredMetadata(toolContext, handlerContext.request, concretePath)
+		if len(metadata.Holds) > 0 {
+			attachment.Holds = metadata.Holds
+		}
+		replyNotes = append(replyNotes, metadata.Notes...)
 		attachments = append(attachments, attachment)
 		deliveredPaths = append(deliveredPaths, attachment.DevicePath)
 	}
@@ -1480,9 +1485,6 @@ func (toolCatalogBuilder *ToolCatalogBuilder) fileAttachment(toolContext context
 		return toolcontract.FileAttachment{}, &result
 	}
 	concretePath := toolCatalogBuilder.nativeRequesterPath(handlerContext.request, path)
-	if refusal := toolCatalogBuilder.unsourcedOfficeFileRefusal(toolContext, handlerContext.request, path, concretePath); refusal != nil {
-		return toolcontract.FileAttachment{}, refusal
-	}
 	filename := attachmentFilename(input, concretePath)
 	toolCatalogBuilder.persistDeliveredDocument(toolContext, handlerContext, path, filename, content)
 	contentType := firstNonEmptyString(input.ContentType, mime.TypeByExtension(filepath.Ext(filename)), "application/octet-stream")

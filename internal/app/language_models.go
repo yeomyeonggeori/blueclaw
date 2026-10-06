@@ -7,7 +7,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
@@ -229,13 +228,6 @@ func classificationLanguageModelProvider(taskTierLanguageModels agentcontract.Ta
 	return taskTierLanguageModels.High
 }
 
-func turnRouterLanguageModelProvider(taskTierLanguageModels agentcontract.TaskTierLanguageModels, intakeLanguageModelProvider model.LanguageModelProvider) model.LanguageModelProvider {
-	if intakeLanguageModelProvider != nil {
-		return intakeLanguageModelProvider
-	}
-	return taskTierLanguageModels.High
-}
-
 func newConfiguredDecisionModel(runtimeConfiguration config.RuntimeConfiguration, logger *slog.Logger) model.DecisionModel {
 	decisionModel, errorValue := llm.NewConfiguredDecisionModel(runtimeConfiguration)
 	if errorValue != nil {
@@ -258,9 +250,9 @@ func newConfiguredVisualReviewModel(runtimeConfiguration config.RuntimeConfigura
 	return visualReviewModel
 }
 
-func newDecisionPlanner(decisionModel model.DecisionModel, visionLanguageModel model.LanguageModelProvider) intake.DecisionPlanner {
-	if decisionModel == nil {
-		return intake.DecisionPlanner{}
+func newToolSelector(newBundledToolSelector BundledToolSelectorFactory, decisionModel model.DecisionModel) agentcontract.ToolSelector {
+	if newBundledToolSelector == nil || decisionModel == nil {
+		return nil
 	}
-	return intake.NewDecisionPlanner(decisionModel, newAttachmentDescriber(visionLanguageModel), nil)
+	return newBundledToolSelector(decisionModel)
 }

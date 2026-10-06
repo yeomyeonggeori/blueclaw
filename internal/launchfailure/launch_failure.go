@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
-	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -111,106 +110,4 @@ func marshalEventBody(value any) string {
 		return ""
 	}
 	return string(body)
-}
-
-type IntakeLimit struct {
-	TaskLevel         string
-	MaxIterationCount int
-	MaxToolCallCount  int
-	MaxElapsedSecond  int
-	TurnStartedAt     time.Time
-	WorkDeadline      time.Time
-}
-
-func (completer *Completer) CompleteIntakeElapsed(responseContext context.Context, request agentcontract.AgentTurnRequest, intakeLimit IntakeLimit) agentcontract.AgentTurnResult {
-	taskRun := completer.taskRunForIntakeLimit(request)
-	completer.taskRunService.AppendTaskEvent(taskRun.TaskRunID, task.TaskEventLaunchLimitStop, marshalEventBody(intakeLimitEventBody(intakeLimit)))
-	blockedTaskRun, errorValue := completer.taskRunService.PauseTaskRun(taskRun.TaskRunID, agentcontract.TaskStatusBlocked, "max_elapsed")
-	if errorValue != nil {
-		taskRun.Status = agentcontract.TaskStatusBlocked
-		taskRun.FailureReason = "max_elapsed"
-		blockedTaskRun = taskRun
-	}
-	elapsedSecond := 0.0
-	if !intakeLimit.TurnStartedAt.IsZero() {
-		elapsedSecond = time.Since(intakeLimit.TurnStartedAt).Seconds()
-	}
-	carriedOutToolNames := make([]string, 0, len(request.CarriedOutCalls))
-	for _, carriedOutCall := range request.CarriedOutCalls {
-		carriedOutToolNames = append(carriedOutToolNames, carriedOutCall.ToolName)
-	}
-	failureReport := agentcontract.BuildIntakeFailureReport(agentcontract.IntakeFailureReportInput{
-		OriginalRequest:        request.Prompt,
-		ResponseLanguage:       request.ResponseLanguage,
-		DiagnosticEventID:      taskRun.TaskRunID + ":intake_limit",
-		MaxIterationCount:      intakeLimit.MaxIterationCount,
-		MaxToolCallCount:       intakeLimit.MaxToolCallCount,
-		MaxElapsedSecond:       intakeLimit.MaxElapsedSecond,
-		ElapsedSecond:          elapsedSecond,
-		CarriedOutToolNames:    carriedOutToolNames,
-		PriorTaskID:            request.PriorTask.TaskRunID,
-		PriorTaskStatus:        request.PriorTask.Status,
-		PriorTaskResult:        request.PriorTask.Result,
-		PriorTaskFailureReason: request.PriorTask.FailureReason,
-	})
-	failureNotice, noticeStatus := (agentcontract.FailureNoticeGenerator{LanguageModel: completer.languageModel}).Generate(responseContext, failureReport)
-	completer.taskRunService.AppendTaskEvent(taskRun.TaskRunID, task.TaskEventLaunchLimitReply, marshalEventBody(map[string]any{
-		"source":            noticeStatus.Source,
-		"reason":            noticeStatus.Reason,
-		"textRecoveryError": noticeStatus.TextRecoveryError,
-	}))
-	completer.taskRunService.AppendTaskEvent(taskRun.TaskRunID, task.TaskEventLaunchFailureReport, marshalEventBody(map[string]any{
-		"phase":      "limit",
-		"report":     failureReport,
-		"generation": noticeStatus,
-	}))
-	blockedTaskRun = persistTaskRunResult(completer.taskRunService, blockedTaskRun, failureNotice.SendableMessage())
-	completer.taskRunService.AppendTaskEvent(blockedTaskRun.TaskRunID, task.TaskEventLaunchGoalBlocked, marshalEventBody(agentcontract.ActiveGoal{
-		GoalID:              blockedTaskRun.TaskRunID,
-		TaskRunID:           blockedTaskRun.TaskRunID,
-		OriginalInstruction: strings.TrimSpace(request.Prompt),
-		Status:              agentcontract.ActiveGoalStatusBlocked,
-	}))
-	return agentcontract.AgentTurnResult{
-		TaskRun:       blockedTaskRun,
-		UserNotice:    failureNotice.SendableMessage(),
-		FailureNotice: failureNotice,
-		ToolNames:     toolNamesForEvent(request.ToolSet),
-	}
-}
-
-func (completer *Completer) taskRunForIntakeLimit(request agentcontract.AgentTurnRequest) agentcontract.TaskRun {
-	if taskRunID := strings.TrimSpace(request.ExistingTaskRunID); taskRunID != "" {
-		if taskRun, isFound := completer.taskRunService.FindTaskRun(taskRunID); isFound {
-			return taskRun
-		}
-	}
-	taskRun, _ := completer.taskRunService.CreateTaskRunWithOriginAndError(request.RequesterPersonID, taskstate.TaskRunOrigin{
-		ConversationID: request.ConversationID,
-		ReplyTargetID:  request.OriginReplyTargetID,
-		IsThread:       request.OriginIsThread,
-	}, request.Prompt)
-	return taskRun
-}
-
-func intakeLimitEventBody(intakeLimit IntakeLimit) map[string]any {
-	body := map[string]any{
-		"phase":              "intake",
-		"taskLevel":          intakeLimit.TaskLevel,
-		"maxIterationCount":  intakeLimit.MaxIterationCount,
-		"maxElapsedSecond":   intakeLimit.MaxElapsedSecond,
-		"maxToolCallCount":   intakeLimit.MaxToolCallCount,
-		"usedIterationCount": 0,
-		"usedToolCallCount":  0,
-		"limitStopReason":    "max_elapsed",
-		"anchorClamped":      false,
-		"nowUnixMs":          time.Now().UnixMilli(),
-	}
-	if !intakeLimit.TurnStartedAt.IsZero() {
-		body["turnStartedAtUnixMs"] = intakeLimit.TurnStartedAt.UnixMilli()
-	}
-	if !intakeLimit.WorkDeadline.IsZero() {
-		body["workDeadlineUnixMs"] = intakeLimit.WorkDeadline.UnixMilli()
-	}
-	return body
 }

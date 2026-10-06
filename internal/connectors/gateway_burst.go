@@ -83,8 +83,8 @@ func (connectorRuntime *ConnectorRuntime) decisionRequestFitsTheBudget(facts inb
 	return connectorRuntime.gatewayDecider == nil || connectorRuntime.gatewayDecider.FitsBurstBudget(facts)
 }
 
-func burstDecisionMessages(events []PlatformInboundEvent) []agentcontract.IntakeDecisionMessage {
-	messages := []agentcontract.IntakeDecisionMessage{}
+func burstDecisionMessages(events []PlatformInboundEvent) []inboundengagement.Message {
+	messages := []inboundengagement.Message{}
 	for _, event := range events {
 		messages = append(messages, inboundDecisionMessage(event))
 	}

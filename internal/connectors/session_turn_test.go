@@ -11,21 +11,10 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/agentcontract/harnesstest"
 )
 
-type approvingTurnRouter struct{}
-
-func (router approvingTurnRouter) Plan(ctx context.Context, request agentcontract.AgentRequest) (agentcontract.TurnDecision, error) {
-	return router.PlanObserved(ctx, request, nil)
-}
-
-func (approvingTurnRouter) PlanObserved(context.Context, agentcontract.AgentRequest, *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error) {
-	approval := agentcontract.ApprovalSignalApprove
-	return agentcontract.TurnDecision{Route: agentcontract.TurnRouteContinueTask, Approval: &approval}, nil
-}
-
 func TestASessionTurnLeavesARunWaitingOnApprovalToTheSessionThatAsked(t *testing.T) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	harness := harnesstest.New(taskRunService)
-	connectorRuntime, _ := connectorRuntimeForHarness(t, harness, harnessGateway(harness), harness, approvingTurnRouter{}, taskRunService, testLanguageModel{reply: "stub"})
+	connectorRuntime, _ := connectorRuntimeForHarness(t, harness, harnessGateway(harness), harness, taskRunService, testLanguageModel{reply: "stub"})
 	running := seedAbandonedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{ConversationID: "direct-1"}, "박예시한테 DM 보내줘")
 	if _, errorValue := connectorRuntime.taskRunService.PauseTaskRun(running.TaskRunID, task.TaskStatusWaitingApproval, "박예시에게 보낼까요?"); errorValue != nil {
 		t.Fatal(errorValue)

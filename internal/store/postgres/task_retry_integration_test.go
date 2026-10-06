@@ -63,7 +63,6 @@ func TestTaskRetryAgainstPostgres(t *testing.T) {
 	runtime := connectors.NewConnectorRuntime(identities, harness, runs, events, nil)
 	runtime.UseWorkspaceRootPath(t.TempDir())
 	runtime.UseReplyGenerator(harness.Harness)
-	runtime.UseTurnRouter(harness.Harness)
 	runtime.UseLaunchFailureCompleter(harness.Harness)
 	runtime.UseEventRepository(NewRawEventRepository(database))
 	runtime.RegisterAdapter(adapter)

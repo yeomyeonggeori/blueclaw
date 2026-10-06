@@ -11,8 +11,8 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
+	"github.com/yeomyeonggeori/bluecollar/intake/routedharness"
 	"github.com/yeomyeonggeori/bluecollar/loop"
 )
 
@@ -29,8 +29,7 @@ func TestCronScheduleRunsDailyResearchPromptAndAdvancesToNextDay(t *testing.T) {
 	runAt := time.Date(2026, 5, 6, 9, 0, 0, 0, time.UTC)
 	nextRunAt := runAt
 
-	taskLauncher := agentruntime.NewTaskLauncher(agentKernel, taskRunService, toolCatalogBuilder)
-	taskLauncher.UseTurnRouter(intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(&intaketest.LanguageModelDecisionModel{LanguageModel: languageModel}, nil, nil), agentcontract.IntakeOptions{IsEnabled: true}))
+	taskLauncher := agentruntime.NewTaskLauncher(routedharness.New(agentKernel, taskRunService, languageModel, &intaketest.LanguageModelDecisionModel{LanguageModel: languageModel}), taskRunService, toolCatalogBuilder)
 	taskLauncher.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, languageModel))
 	result, errorValue := agentruntime.NewScheduleRunner(taskLauncher).RunIfDue(context.Background(), agentruntime.ScheduleRunRequest{
 		Schedule: task.Schedule{

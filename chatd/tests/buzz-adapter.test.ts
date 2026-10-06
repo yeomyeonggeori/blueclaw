@@ -151,7 +151,7 @@ describe("buzz history scope", () => {
 describe("buzz reactions", () => {
 	test("maps every name in the blueclaw reaction vocabulary to unicode", async () => {
 		const vocabularySource = await Bun.file(
-			new URL("../../.dependency/bluecollar/agentcontract/reaction_emoji.go", import.meta.url),
+			new URL("../../internal/inboundengagement/reaction_emoji.go", import.meta.url),
 		).text();
 		const names = [...vocabularySource.matchAll(/"([^"]+)"/g)].map((match) => match[1] ?? "");
 		expect(names.length).toBeGreaterThan(10);

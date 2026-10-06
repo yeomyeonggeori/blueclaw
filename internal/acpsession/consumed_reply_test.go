@@ -20,11 +20,10 @@ type consumingLauncher struct{}
 
 func (consumingLauncher) Launch(context.Context, agentruntime.TaskLaunchRequest) (agentruntime.TaskLaunchResult, error) {
 	return agentruntime.TaskLaunchResult{TurnResult: agentcontract.AgentTurnResult{
-		TaskRun:           agentcontract.TaskRun{TaskRunID: "task-consumed", Status: agentcontract.TaskStatusCompleted, Result: "consumed"},
-		TurnRoute:         agentcontract.TurnRouteConsume,
-		ReactionEmojiName: "thumbsup",
-		FinishMessage:     "알겠습니다.",
-		ReplySuppressed:   true,
+		TaskRun:         agentcontract.TaskRun{TaskRunID: "task-consumed", Status: agentcontract.TaskStatusCompleted, Result: "consumed"},
+		TurnRoute:       agentcontract.TurnRouteConsume,
+		FinishMessage:   "알겠습니다.",
+		ReplySuppressed: true,
 	}}, nil
 }
 
@@ -85,8 +84,8 @@ func TestAConsumedMessageIsAcknowledgedOnTheMessageItself(t *testing.T) {
 
 	promptDirectMessage(t, connection, sessionID, "message-answer")
 
-	if len(adapter.reactions) != 1 || adapter.reactions[0].MessageID != "message-answer" || adapter.reactions[0].EmojiName != "thumbsup" {
-		t.Fatalf("the consumed message got reactions %+v, expected thumbsup on message-answer", adapter.reactions)
+	if len(adapter.reactions) != 1 || adapter.reactions[0].MessageID != "message-answer" {
+		t.Fatalf("the consumed message got reactions %+v, expected a reaction on message-answer", adapter.reactions)
 	}
 	if len(client.messages) != 0 {
 		t.Fatalf("a message acknowledged with a reaction was also answered with %q", client.messages)

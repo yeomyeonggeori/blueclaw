@@ -3,10 +3,15 @@
 package main
 
 import (
+	"github.com/yeomyeonggeori/blueclaw/internal/app"
 	"github.com/yeomyeonggeori/blueclaw/internal/bluecollaracp"
 	"github.com/yeomyeonggeori/blueclaw/internal/harnessdriver"
 )
 
 func bundledACPFactory() harnessdriver.ACPFactory {
 	return bluecollaracp.NewFactory
+}
+
+func bundledToolSelector() app.BundledToolSelectorFactory {
+	return bluecollaracp.NewToolSelector
 }

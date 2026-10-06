@@ -307,19 +307,6 @@ func (toolCatalogBuilder *ToolCatalogBuilder) claimSources(ctx context.Context, 
 	return sources, isEveryAttachmentRead
 }
 
-func requestWordings(request ToolCatalogRequest) []string {
-	wordings := []string{}
-	for _, message := range request.VisibleContext.Messages {
-		if text := strings.TrimSpace(message.Text); text != "" {
-			wordings = append(wordings, text)
-		}
-	}
-	if prompt := strings.TrimSpace(request.Prompt); prompt != "" {
-		wordings = append(wordings, prompt)
-	}
-	return wordings
-}
-
 func officeRemakeWords(snapshot officeSnapshot, concretePath string, paths []string, replacements []officeclaimcheck.Claim) ([]string, bool) {
 	template, values := []string(nil), map[string]string{"<file>": concretePath, "<sourceSuffix>": officeContract.SourceSuffix}
 	switch {

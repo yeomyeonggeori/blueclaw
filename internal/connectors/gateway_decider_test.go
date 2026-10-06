@@ -10,8 +10,8 @@ import (
 )
 
 type scriptedGatewayDecider struct {
-	addressing          agentcontract.AddressingDecision
-	busyRoute           agentcontract.BusyRoute
+	addressing          inboundengagement.AddressingDecision
+	busyRoute           inboundengagement.BusyRoute
 	relatesToActiveTask bool
 	errorValue          error
 
@@ -60,7 +60,7 @@ func (decider *scriptedGatewayDecider) decidedPrompt(prompt string) (inboundenga
 	return inboundengagement.Facts{}, false
 }
 
-func judgmentsFor(facts inboundengagement.Facts, addressing agentcontract.AddressingDecision, busyRoute agentcontract.BusyRoute, relatesToActiveTask bool) []inboundengagement.Judgment {
+func judgmentsFor(facts inboundengagement.Facts, addressing inboundengagement.AddressingDecision, busyRoute inboundengagement.BusyRoute, relatesToActiveTask bool) []inboundengagement.Judgment {
 	judgments := []inboundengagement.Judgment{}
 	for _, message := range facts.Messages {
 		judgment := inboundengagement.Judgment{MessageID: message.MessageID, Addressing: addressing}
@@ -76,16 +76,27 @@ func judgmentsFor(facts inboundengagement.Facts, addressing agentcontract.Addres
 	return judgments
 }
 
-type harnessGatewayDecider struct {
-	harness *harnesstest.Harness
+type scriptedHarness struct {
+	*harnesstest.Harness
+	AddressingDecision   inboundengagement.AddressingDecision
+	BusyRoute            inboundengagement.BusyRoute
+	IsActiveTaskFollowUp bool
 }
 
-func harnessGateway(harness *harnesstest.Harness) harnessGatewayDecider {
+type harnessGatewayDecider struct {
+	harness agentcontract.Harness
+}
+
+func harnessGateway(harness agentcontract.Harness) harnessGatewayDecider {
 	return harnessGatewayDecider{harness: harness}
 }
 
 func (decider harnessGatewayDecider) Decide(_ context.Context, facts inboundengagement.Facts, _ agentcontract.LLMCallObserver) ([]inboundengagement.Judgment, error) {
-	return judgmentsFor(facts, decider.harness.AddressingDecision, decider.harness.TurnDecision.BusyRoute, decider.harness.IsActiveTaskFollowUp), nil
+	scripted, isScripted := decider.harness.(*scriptedHarness)
+	if !isScripted {
+		return judgmentsFor(facts, inboundengagement.AddressingDecision{}, "", false), nil
+	}
+	return judgmentsFor(facts, scripted.AddressingDecision, scripted.BusyRoute, scripted.IsActiveTaskFollowUp), nil
 }
 
 func (decider harnessGatewayDecider) FitsBurstBudget(inboundengagement.Facts) bool {

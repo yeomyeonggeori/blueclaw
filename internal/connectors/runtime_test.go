@@ -32,15 +32,14 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract/harnesstest"
-	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
+	"github.com/yeomyeonggeori/bluecollar/intake/routedharness"
 	"github.com/yeomyeonggeori/bluecollar/loop"
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
 func TestConnectorRuntimeProcessesInvitedMessageAndDeduplicates(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnDecision = startTaskTurnDecision()
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "안녕하세요"}
 	event := testInboundEvent("message-1")
 
@@ -437,14 +436,6 @@ func TestConnectorRuntimeDeliversAReplyToAWaitingQuestionAsTheNextPromptWithoutR
 
 func TestConnectorRuntimePendingInputStartTaskLeavesTheWaitingTaskWaiting(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnDecision = agentcontract.TurnDecision{
-		Route:            agentcontract.TurnRouteStartTask,
-		Classification:   agentcontract.IntakeClassificationQuickReply,
-		TaskShape:        agentcontract.TaskShapeImmediateReply,
-		TaskLevel:        agentcontract.TaskLevelXLow,
-		ResponseLanguage: "ko",
-		Reason:           "latest message is an independent question",
-	}
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "휴게소 들러도 괜찮습니다."}
 	taskWaitRepository := task.NewInMemoryTaskWaitTokenRepository()
 	connectorRuntime.UseTaskWaitTokenRepository(taskWaitRepository)
@@ -651,7 +642,7 @@ func TestConnectorRuntimeStopCommandAtChannelRootCancelsLatestRootScopedTask(t *
 
 func TestConnectorRuntimeBusyStatusDoesNotCreateNewTask(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnDecision = agentcontract.TurnDecision{Route: agentcontract.TurnRouteAnswerQuestion, BusyRoute: agentcontract.BusyRouteStatus, Reason: "user asked for progress"}
+	harness.BusyRoute = inboundengagement.BusyRouteStatus
 	harness.Reply = "지금 처리 중입니다."
 	activeTaskRun := seedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{ConversationID: "direct-1", ReplyTargetID: "reply-target-1"}, "보고서 작성")
 	if _, isFound := connectorRuntime.latestCurrentConversationActiveTask("person-1", testInboundEvent("scope")); !isFound {
@@ -681,9 +672,9 @@ func TestConnectorRuntimeBusyStatusDoesNotCreateNewTask(t *testing.T) {
 
 func TestTheBusyRouteComesFromTheGatewayJudgmentAndNotFromTheLaunchPlan(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnDecision = agentcontract.TurnDecision{Route: agentcontract.TurnRouteConsume, BusyRoute: agentcontract.BusyRouteCancel}
+	harness.BusyRoute = inboundengagement.BusyRouteCancel
 	harness.Reply = "지금 처리 중입니다."
-	gatewayDecider := &scriptedGatewayDecider{addressing: addressedToBot(), busyRoute: agentcontract.BusyRouteStatus}
+	gatewayDecider := &scriptedGatewayDecider{addressing: addressedToBot(), busyRoute: inboundengagement.BusyRouteStatus}
 	connectorRuntime.UseGatewayDecider(gatewayDecider)
 	activeTaskRun := seedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{ConversationID: "direct-1", ReplyTargetID: "reply-target-1"}, "보고서 작성")
 	event := testInboundEvent("message-busy-status")
@@ -741,7 +732,6 @@ func TestConnectorRuntimeInterruptsInactiveRunningTaskAndStartsNewTask(t *testin
 		StartedAt:     now.Add(-time.Minute),
 	}
 	connectorRuntime, adapter, taskEventService, harness := newStubbedRepositoryBackedTestConnectorRuntime(t, taskRunRepository)
-	harness.TurnDecision = startTaskTurnDecision()
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "새 작업으로 처리했습니다."}
 	taskEventService.AppendTaskEvent(orphanedTaskRun.TaskRunID, "tool.bash.requested", `{"observationID":"observation-1","toolName":"bash"}`)
 	event := testInboundEvent("message-after-stale-task")
@@ -773,7 +763,7 @@ func TestConnectorRuntimeInterruptsInactiveRunningTaskAndStartsNewTask(t *testin
 
 func TestConnectorRuntimeBusySteerAppendsInstructionWithoutNewTask(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnDecision = agentcontract.TurnDecision{Route: agentcontract.TurnRouteReviseTask, BusyRoute: agentcontract.BusyRouteSteer, Reason: "user corrected active task"}
+	harness.BusyRoute = inboundengagement.BusyRouteSteer
 	harness.Reply = "방향 수정 내용을 현재 작업에 반영하겠습니다."
 	activeTaskRun := seedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{ConversationID: "direct-1", ReplyTargetID: "reply-target-1"}, "PDF 보고서 작성")
 	if _, isFound := connectorRuntime.latestCurrentConversationActiveTask("person-1", testInboundEvent("scope")); !isFound {
@@ -803,7 +793,7 @@ func TestConnectorRuntimeBusySteerAppendsInstructionWithoutNewTask(t *testing.T)
 
 func TestConnectorRuntimeBusyCancelStopsActiveTaskWithoutNewTask(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnDecision = agentcontract.TurnDecision{Route: agentcontract.TurnRouteConsume, BusyRoute: agentcontract.BusyRouteCancel, Reason: "user asked to cancel active task"}
+	harness.BusyRoute = inboundengagement.BusyRouteCancel
 	harness.Reply = "진행 중인 작업을 중단했습니다."
 	activeTaskRun := seedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{ConversationID: "direct-1", ReplyTargetID: "reply-target-1"}, "긴 작업")
 	event := testInboundEvent("message-busy-cancel")
@@ -883,7 +873,6 @@ func TestConnectorRuntimeUnrelatedMessageAfterFinishedTaskStartsNewTask(t *testi
 	taskRunRepository.taskRuns[finishedTaskRun.TaskRunID] = finishedTaskRun
 	connectorRuntime, adapter, _, harness := newStubbedRepositoryBackedTestConnectorRuntime(t, taskRunRepository)
 	harness.IsActiveTaskFollowUp = false
-	harness.TurnDecision = startTaskTurnDecision()
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "새 주제로 진행했습니다."}
 
 	event := testInboundEvent("message-new-topic")
@@ -901,7 +890,7 @@ func TestConnectorRuntimeUnrelatedMessageAfterFinishedTaskStartsNewTask(t *testi
 
 func TestConnectorRuntimeBusyReplaceCancelsActiveTaskAndStartsNewTask(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnDecision = agentcontract.TurnDecision{Route: agentcontract.TurnRouteStartTask, BusyRoute: agentcontract.BusyRouteReplace, Reason: "user replaced active task"}
+	harness.BusyRoute = inboundengagement.BusyRouteReplace
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "새 작업으로 진행했습니다."}
 	activeTaskRun := seedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{ConversationID: "direct-1", ReplyTargetID: "reply-target-1"}, "기존 작업")
 	event := testInboundEvent("message-busy-replace")
@@ -929,7 +918,7 @@ func TestConnectorRuntimeBusyReplaceCancelsActiveTaskAndStartsNewTask(t *testing
 
 func TestConnectorRuntimeBusyNewTaskSupersedesActiveTaskAndStartsNewTask(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnDecision = agentcontract.TurnDecision{Route: agentcontract.TurnRouteStartTask, BusyRoute: agentcontract.BusyRouteNewTask, Reason: "latest message is independent"}
+	harness.BusyRoute = inboundengagement.BusyRouteNewTask
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "휴게소 들러도 괜찮습니다."}
 	activeTaskRun := seedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{ConversationID: "direct-1", ReplyTargetID: "reply-target-1"}, "경산 영남대 근처 맛집 추천")
 	event := testInboundEvent("message-independent-question")
@@ -1287,7 +1276,6 @@ func TestADirectMessageWithNothingOpenMakesNoGatewayCall(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
 	gatewayDecider := &scriptedGatewayDecider{addressing: addressedToBot()}
 	connectorRuntime.UseGatewayDecider(gatewayDecider)
-	harness.TurnDecision = startTaskTurnDecision()
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "ok"}
 	event := testInboundEvent("message-1")
 	event.Context.ConversationType = "D"
@@ -1307,7 +1295,7 @@ func TestADirectMessageWithNothingOpenMakesNoGatewayCall(t *testing.T) {
 
 func TestConnectorRuntimeReactsToConsumedAddressedMessageWithoutReply(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnResult = agentcontract.AgentTurnResult{TurnRoute: agentcontract.TurnRouteConsume, ReactionEmojiName: "tada"}
+	harness.TurnResult = agentcontract.AgentTurnResult{TurnRoute: agentcontract.TurnRouteConsume}
 	event := testInboundEvent("message-consume")
 
 	result, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, event)
@@ -1325,17 +1313,17 @@ func TestConnectorRuntimeReactsToConsumedAddressedMessageWithoutReply(t *testing
 		t.Fatalf("expected one reaction, got %+v", adapter.reactions)
 	}
 	reaction := adapter.reactions[0]
-	if reaction.MessageID != event.MessageID || reaction.EmojiName != "tada" || reaction.Reason != "consume" {
+	if reaction.MessageID != event.MessageID || reaction.EmojiName != inboundengagement.DefaultReactionEmojiName || reaction.Reason != "consume" {
 		t.Fatalf("unexpected consume reaction: %+v", reaction)
 	}
-	if !connectorTaskEventsContain(connectorRuntime, result.TaskRunID, "connector.reaction.sent", "tada") {
+	if !connectorTaskEventsContain(connectorRuntime, result.TaskRunID, "connector.reaction.sent", inboundengagement.DefaultReactionEmojiName) {
 		t.Fatal("expected reaction event")
 	}
 }
 
 func TestConnectorRuntimeDirectConsumeFallsBackToReplyWhenReactionFails(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnResult = agentcontract.AgentTurnResult{TurnRoute: agentcontract.TurnRouteConsume, ReactionEmojiName: "tada", FinishMessage: "알겠습니다."}
+	harness.TurnResult = agentcontract.AgentTurnResult{TurnRoute: agentcontract.TurnRouteConsume, FinishMessage: "알겠습니다."}
 	adapter.reactionError = errors.New("reaction failed")
 	event := testInboundEvent("message-direct-consume")
 	event.Context.ConversationType = "D"
@@ -1358,7 +1346,7 @@ func TestConnectorRuntimeDirectConsumeFallsBackToReplyWhenReactionFails(t *testi
 
 func TestConnectorRuntimeDirectConsumeFallsBackWithoutReactionAdapter(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnResult = agentcontract.AgentTurnResult{TurnRoute: agentcontract.TurnRouteConsume, ReactionEmojiName: "white_check_mark", FinishMessage: "확인했습니다."}
+	harness.TurnResult = agentcontract.AgentTurnResult{TurnRoute: agentcontract.TurnRouteConsume, FinishMessage: "확인했습니다."}
 	event := testInboundEvent("message-direct-consume")
 	event.Context.ConversationType = "D"
 
@@ -1495,7 +1483,7 @@ func TestLatestAskInteractionReturnsNewAskAfterEarlierResolution(t *testing.T) {
 }
 
 func TestConnectorRuntimeProcessesABotMentionTheIntakeDecisionAddressesToIt(t *testing.T) {
-	connectorRuntime, adapter := newAddressedTestConnectorRuntime(t, agentcontract.AddressingTargetBot)
+	connectorRuntime, adapter := newAddressedTestConnectorRuntime(t, inboundengagement.AddressingTargetBot)
 	event := testChannelInboundEvent("message-1")
 	event.Context.Addressing.BotMentioned = true
 
@@ -1510,7 +1498,7 @@ func TestConnectorRuntimeProcessesABotMentionTheIntakeDecisionAddressesToIt(t *t
 }
 
 func TestConnectorRuntimeIgnoresOtherPersonMentionWithoutDuty(t *testing.T) {
-	connectorRuntime, adapter := newAddressedTestConnectorRuntime(t, agentcontract.AddressingTargetHuman)
+	connectorRuntime, adapter := newAddressedTestConnectorRuntime(t, inboundengagement.AddressingTargetHuman)
 	event := testChannelInboundEvent("message-1")
 	event.Context.Addressing.OtherPersonMentioned = true
 
@@ -1531,7 +1519,7 @@ func TestConnectorRuntimeIgnoresOtherPersonMentionWithoutDuty(t *testing.T) {
 }
 
 func TestConnectorRuntimeProcessesAssistantRequestedAmbiguousChannelMessage(t *testing.T) {
-	connectorRuntime, adapter := newAddressedTestConnectorRuntime(t, agentcontract.AddressingTargetBot)
+	connectorRuntime, adapter := newAddressedTestConnectorRuntime(t, inboundengagement.AddressingTargetBot)
 
 	result, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, testChannelInboundEvent("message-1"))
 	if errorValue != nil {
@@ -1565,19 +1553,19 @@ func TestConnectorRuntimeJudgesTheGatewayWithItsOwnDecider(t *testing.T) {
 func TestConnectorRuntimeIgnoresNonAssistantAddressingClasses(t *testing.T) {
 	tests := []struct {
 		name             string
-		addressingTarget agentcontract.AddressingTarget
+		addressingTarget inboundengagement.AddressingTarget
 		reason           string
 	}{
-		{name: "human", addressingTarget: agentcontract.AddressingTargetHuman, reason: "addressing_human dutyMatch=false"},
-		{name: "anyone", addressingTarget: agentcontract.AddressingTargetAnyone, reason: "addressing_anyone dutyMatch=false"},
-		{name: "none", addressingTarget: agentcontract.AddressingTargetNone, reason: "addressing_none dutyMatch=false"},
-		{name: "unclear", addressingTarget: agentcontract.AddressingTargetUnclear, reason: "addressing_unclear dutyMatch=false"},
+		{name: "human", addressingTarget: inboundengagement.AddressingTargetHuman, reason: "addressing_human dutyMatch=false"},
+		{name: "anyone", addressingTarget: inboundengagement.AddressingTargetAnyone, reason: "addressing_anyone dutyMatch=false"},
+		{name: "none", addressingTarget: inboundengagement.AddressingTargetNone, reason: "addressing_none dutyMatch=false"},
+		{name: "unclear", addressingTarget: inboundengagement.AddressingTargetUnclear, reason: "addressing_unclear dutyMatch=false"},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-			harness.AddressingDecision = agentcontract.AddressingDecision{Target: test.addressingTarget}
+			harness.AddressingDecision = inboundengagement.AddressingDecision{Target: test.addressingTarget}
 
 			result, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, testChannelInboundEvent("message-1"))
 			if errorValue != nil {
@@ -1596,7 +1584,7 @@ func TestConnectorRuntimeIgnoresNonAssistantAddressingClasses(t *testing.T) {
 
 func TestConnectorRuntimeIgnoresUninvitedAmbiguousChannelMessageWithoutReply(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.AddressingDecision = agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true}
+	harness.AddressingDecision = inboundengagement.AddressingDecision{Target: inboundengagement.AddressingTargetBot, ShouldRespond: true}
 	adapter.senderEmail = "outside@example.com"
 
 	result, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, testChannelInboundEvent("message-1"))
@@ -1953,9 +1941,6 @@ func TestConnectorRuntimeSendsFailureNoticeWhenTurnReturnsError(t *testing.T) {
 	if adapter.sentReplies[0].failureNotice.Source != "generated" {
 		t.Fatalf("expected LLM-authored failure notice, got %+v", adapter.sentReplies[0].failureNotice)
 	}
-	if !connectorTaskEventsContain(connectorRuntime, result.TaskRunID, "llm.call", `"isError":true`) {
-		t.Fatal("expected persisted router call error")
-	}
 }
 
 func TestConnectorRuntimeSendsNoticeWhenLaunchReturnsNoTask(t *testing.T) {
@@ -1976,7 +1961,6 @@ func TestConnectorRuntimeSendsNoticeWhenLaunchReturnsNoTask(t *testing.T) {
 
 func TestConnectorRuntimeUsesOpaqueReplyTarget(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnDecision = startTaskTurnDecision()
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "reply"}
 	event := testInboundEvent("message-1")
 	event.ReplyTargetID = "opaque-reply-target"
@@ -1993,7 +1977,6 @@ func TestConnectorRuntimeUsesOpaqueReplyTarget(t *testing.T) {
 
 func TestConnectorRuntimeStartsDirectProgressBeforeInitialHistoryFetch(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnDecision = startTaskTurnDecision()
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "reply"}
 	event := testInboundEvent("message-1")
 	event.Context.HasMoreBefore = true
@@ -2679,7 +2662,7 @@ func TestConnectorRuntimeContinuesWaitingUserInputGoal(t *testing.T) {
 		t.Fatalf("expected action request, got schemas=%+v", connectorRequestSchemaNames(languageModel.Requests()))
 	}
 	if !structuredMessagesContain(actionRequest.Messages, "샘플에게 DM 보내줘") {
-		t.Fatalf("expected active goal original instruction in action context, got %+v", actionRequest.Messages)
+		t.Fatalf("expected active goal original instruction in action context, got %s", strings.Join(connectorMessageContents(actionRequest.Messages), "\n=====\n"))
 	}
 	if userMessageIndex(actionRequest.Messages, "우선 진행해") < 0 {
 		t.Fatalf("expected latest user message to stay intact, got %+v", actionRequest.Messages)
@@ -2842,7 +2825,6 @@ func structuredRequestsContainMessage(requests []llm.StructuredResponseRequest, 
 
 func TestConnectorRuntimeDetachesHTTPEventFromCanceledRequestContext(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnDecision = startTaskTurnDecision()
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "ok"}
 	request, errorValue := http.NewRequest(http.MethodPost, "/connectors/test/events", strings.NewReader(`{}`))
 	if errorValue != nil {
@@ -2867,7 +2849,6 @@ func TestConnectorRuntimeDetachesHTTPEventFromCanceledRequestContext(t *testing.
 
 func TestConnectorRuntimeQueuesHTTPEventAndSendsReplyThroughOutbox(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnDecision = startTaskTurnDecision()
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "queued reply"}
 	repository := &testConnectorQueueRepository{}
 	connectorRuntime.UseEventRepository(repository)
@@ -2925,7 +2906,6 @@ func TestConnectorRuntimeQueuesHTTPEventAndSendsReplyThroughOutbox(t *testing.T)
 
 func TestConnectorRuntimeRecordsQueuedOutboxSendFailure(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnDecision = startTaskTurnDecision()
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "queued reply"}
 	repository := &testConnectorQueueRepository{}
 	connectorRuntime.UseEventRepository(repository)
@@ -3619,7 +3599,8 @@ func appendConnectorActiveGoal(t *testing.T, taskRunService *task.TaskRunService
 }
 
 func connectorRuntimeAgentKernel(connectorRuntime *ConnectorRuntime) *loop.AgentKernel {
-	agentKernel, _ := connectorRuntime.harness.(*loop.AgentKernel)
+	routed, _ := connectorRuntime.harness.(routedharness.Harness)
+	agentKernel, _ := routed.Inner.(*loop.AgentKernel)
 	return agentKernel
 }
 
@@ -3633,26 +3614,25 @@ func newTestConnectorRuntimeRoutingWith(t *testing.T, languageModel llm.Language
 	t.Helper()
 
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
-	return connectorRuntimeForHarness(t, testConnectorAgentKernel(taskRunService, languageModel), &scriptedGatewayDecider{addressing: addressedToBot()}, reply.NewGenerator(languageModel, nil), intake.NewTurnRouter(routerLanguageModel, intake.NewDecisionPlanner(&intaketest.LanguageModelDecisionModel{LanguageModel: routerLanguageModel, Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true}}, nil, nil), agentcontract.IntakeOptions{IsEnabled: true}), taskRunService, languageModel)
+	return connectorRuntimeForHarness(t, routedConnectorAgentKernel(taskRunService, languageModel, routerLanguageModel), &scriptedGatewayDecider{addressing: addressedToBot()}, reply.NewGenerator(languageModel, nil), taskRunService, languageModel)
 }
 
-func newStubbedTestConnectorRuntime(t *testing.T) (*ConnectorRuntime, *testAdapter, *harnesstest.Harness) {
+func newStubbedTestConnectorRuntime(t *testing.T) (*ConnectorRuntime, *testAdapter, *scriptedHarness) {
 	t.Helper()
 
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
-	harness := harnesstest.New(taskRunService)
-	connectorRuntime, adapter := connectorRuntimeForHarness(t, harness, harnessGateway(harness), harness, harness, taskRunService, testLanguageModel{reply: "stub"})
+	harness := &scriptedHarness{Harness: harnesstest.New(taskRunService)}
+	connectorRuntime, adapter := connectorRuntimeForHarness(t, harness, harnessGateway(harness), harness, taskRunService, testLanguageModel{reply: "stub"})
 	return connectorRuntime, adapter, harness
 }
 
-func connectorRuntimeForHarness(t *testing.T, harness agentcontract.Harness, gatewayDecider inboundengagement.Decider, replyGenerator ReplyGenerator, turnRouter TurnRouter, taskRunService *task.TaskRunService, languageModel llm.LanguageModelProvider) (*ConnectorRuntime, *testAdapter) {
+func connectorRuntimeForHarness(t *testing.T, harness agentcontract.Harness, gatewayDecider inboundengagement.Decider, replyGenerator ReplyGenerator, taskRunService *task.TaskRunService, languageModel llm.LanguageModelProvider) (*ConnectorRuntime, *testAdapter) {
 	t.Helper()
 
 	connectorRuntime := NewConnectorRuntime(testConnectorIdentityService(), harness, taskRunService, task.NewTaskEventService(), nil)
 	connectorRuntime.UseGatewayDecider(gatewayDecider)
 	connectorRuntime.UseReplyGenerator(replyGenerator)
 	connectorRuntime.UseTaskRunService(taskRunService)
-	connectorRuntime.UseTurnRouter(turnRouter)
 	connectorRuntime.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, languageModel))
 	testApprovalGate := approvalgate.New(taskRunService)
 	testApprovalGate.UseQuestionWorder(approval.NewWorder(languageModel))
@@ -3663,27 +3643,17 @@ func connectorRuntimeForHarness(t *testing.T, harness agentcontract.Harness, gat
 	return connectorRuntime, adapter
 }
 
-func addressedToBot() agentcontract.AddressingDecision {
-	return agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true}
+func addressedToBot() inboundengagement.AddressingDecision {
+	return inboundengagement.AddressingDecision{Target: inboundengagement.AddressingTargetBot, ShouldRespond: true}
 }
 
-func newAddressedTestConnectorRuntime(t *testing.T, addressingTarget agentcontract.AddressingTarget) (*ConnectorRuntime, *testAdapter) {
+func newAddressedTestConnectorRuntime(t *testing.T, addressingTarget inboundengagement.AddressingTarget) (*ConnectorRuntime, *testAdapter) {
 	t.Helper()
 	connectorRuntime, adapter := newTestConnectorRuntime(t, testLanguageModel{reply: "ok"})
 	connectorRuntime.UseGatewayDecider(&scriptedGatewayDecider{
-		addressing: agentcontract.AddressingDecision{Target: addressingTarget, ShouldRespond: addressingTarget == agentcontract.AddressingTargetBot},
+		addressing: inboundengagement.AddressingDecision{Target: addressingTarget, ShouldRespond: addressingTarget == inboundengagement.AddressingTargetBot},
 	})
 	return connectorRuntime, adapter
-}
-
-func startTaskTurnDecision() agentcontract.TurnDecision {
-	return agentcontract.TurnDecision{
-		Route:            agentcontract.TurnRouteStartTask,
-		Classification:   agentcontract.IntakeClassificationBoundedTask,
-		TaskShape:        agentcontract.TaskShapeResearchTask,
-		TaskLevel:        agentcontract.TaskLevelLow,
-		ResponseLanguage: "ko",
-	}
 }
 
 func testConnectorIdentityService() *identity.IdentityService {
@@ -3693,6 +3663,10 @@ func testConnectorIdentityService() *identity.IdentityService {
 			"person-1": {PersonID: "person-1"},
 		},
 	})
+}
+
+func routedConnectorAgentKernel(taskRunService *task.TaskRunService, languageModel llm.LanguageModelProvider, routerLanguageModel llm.LanguageModelProvider) routedharness.Harness {
+	return routedharness.New(testConnectorAgentKernel(taskRunService, languageModel), taskRunService, routerLanguageModel, &intaketest.LanguageModelDecisionModel{LanguageModel: routerLanguageModel})
 }
 
 func testConnectorAgentKernel(taskRunService *task.TaskRunService, languageModel llm.LanguageModelProvider) *loop.AgentKernel {
@@ -3732,7 +3706,7 @@ func newWaitRoutingTestConnectorRuntime(t *testing.T, languageModel llm.Language
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	taskWaitRepository := task.NewInMemoryTaskWaitTokenRepository()
 
-	connectorRuntime, adapter := connectorRuntimeForHarness(t, testConnectorAgentKernel(taskRunService, languageModel), &scriptedGatewayDecider{addressing: addressedToBot()}, reply.NewGenerator(languageModel, nil), intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(&intaketest.LanguageModelDecisionModel{LanguageModel: languageModel, Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true}}, nil, nil), agentcontract.IntakeOptions{IsEnabled: true}), taskRunService, languageModel)
+	connectorRuntime, adapter := connectorRuntimeForHarness(t, routedConnectorAgentKernel(taskRunService, languageModel, languageModel), &scriptedGatewayDecider{addressing: addressedToBot()}, reply.NewGenerator(languageModel, nil), taskRunService, languageModel)
 	connectorRuntime.UseTaskWaitTokenRepository(taskWaitRepository)
 	return connectorRuntime, adapter, taskRunService, taskWaitRepository
 }
@@ -3797,15 +3771,15 @@ func waitRoutingTaskWaitToken(taskRun task.TaskRun, dispatchID string, interacti
 	}
 }
 
-func newStubbedRepositoryBackedTestConnectorRuntime(t *testing.T, taskRunRepository *testTaskRunRepository) (*ConnectorRuntime, *testAdapter, *task.TaskEventService, *harnesstest.Harness) {
+func newStubbedRepositoryBackedTestConnectorRuntime(t *testing.T, taskRunRepository *testTaskRunRepository) (*ConnectorRuntime, *testAdapter, *task.TaskEventService, *scriptedHarness) {
 	t.Helper()
 
 	taskEventService := task.NewTaskEventService()
 	taskRunService := task.NewTaskRunService(taskEventService)
 	taskRunService.UseRepository(taskRunRepository)
 
-	harness := harnesstest.New(taskRunService)
-	connectorRuntime, adapter := connectorRuntimeForHarness(t, harness, harnessGateway(harness), harness, harness, taskRunService, testLanguageModel{reply: "stub"})
+	harness := &scriptedHarness{Harness: harnesstest.New(taskRunService)}
+	connectorRuntime, adapter := connectorRuntimeForHarness(t, harness, harnessGateway(harness), harness, taskRunService, testLanguageModel{reply: "stub"})
 	return connectorRuntime, adapter, taskEventService, harness
 }
 
@@ -4007,8 +3981,7 @@ func TestLatestActiveGoalFailsClosedOnMalformedNewestEvent(t *testing.T) {
 
 func TestConnectorRuntimeAcknowledgesBotMentionAndClearsAckAfterReply(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.AddressingDecision = agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true}
-	harness.TurnDecision = startTaskTurnDecision()
+	harness.AddressingDecision = inboundengagement.AddressingDecision{Target: inboundengagement.AddressingTargetBot, ShouldRespond: true}
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "ok"}
 	event := testChannelInboundEvent("message-1")
 	event.Context.Addressing.BotMentioned = true
@@ -4030,8 +4003,7 @@ func TestConnectorRuntimeAcknowledgesBotMentionAndClearsAckAfterReply(t *testing
 
 func TestConnectorRuntimeSkipsEngagedAckForDirectMessages(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.AddressingDecision = agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true}
-	harness.TurnDecision = startTaskTurnDecision()
+	harness.AddressingDecision = inboundengagement.AddressingDecision{Target: inboundengagement.AddressingTargetBot, ShouldRespond: true}
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "ok"}
 	event := testInboundEvent("message-direct-ack")
 
@@ -4046,7 +4018,6 @@ func TestConnectorRuntimeSkipsEngagedAckForDirectMessages(t *testing.T) {
 
 func (connectorRuntime *ConnectorRuntime) routedTaskLauncherForTest(toolCatalogBuilder *agentruntime.ToolCatalogBuilder) *agentruntime.TaskLauncher {
 	taskLauncher := agentruntime.NewTaskLauncher(connectorRuntime.harness, connectorRuntime.taskRunService, toolCatalogBuilder)
-	taskLauncher.UseTurnRouter(connectorRuntime.turnRouter)
 	taskLauncher.UseLaunchFailureCompleter(connectorRuntime.launchFailureCompleter)
 	return taskLauncher
 }
@@ -4095,25 +4066,23 @@ func (decisionModel approvalReplyDecisionModel) Decide(ctx context.Context, requ
 	return model.DecisionResponse{Answers: map[string]model.DecisionAnswer{"answer": {Type: model.DecisionQuestionTypeChoice, Choice: answer.Answer}}}, nil
 }
 
-type routerThatMustNotBeAskedAboutAnAnswer struct {
-	TurnRouter
-	pendingInputPlans int
+type pendingInputRecordingHarness struct {
+	agentcontract.Harness
+	pendingTaskRunIDs []string
 }
 
-func (router *routerThatMustNotBeAskedAboutAnAnswer) PlanObserved(ctx context.Context, request agentcontract.AgentRequest, callLedger *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error) {
-	if request.PendingInput.TaskRunID != "" || request.PendingChoice.TaskRunID != "" {
-		router.pendingInputPlans++
-	}
-	return router.TurnRouter.PlanObserved(ctx, request, callLedger)
+func (harness *pendingInputRecordingHarness) RunTurn(ctx context.Context, request agentcontract.AgentTurnRequest) (agentcontract.AgentTurnResult, error) {
+	harness.pendingTaskRunIDs = append(harness.pendingTaskRunIDs, request.PendingInput.TaskRunID)
+	return harness.Harness.RunTurn(ctx, request)
 }
 
-func TestAReplyToAWaitingQuestionIsNeverOfferedToTheRouterAsPendingInput(t *testing.T) {
+func TestAReplyToAWaitingQuestionReachesTheAgentAsThePendingInputOfThatRun(t *testing.T) {
 	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
 		ActionResponses: []string{connectorFinishMessage("진행했습니다.")},
 	})
 	connectorRuntime, adapter, taskRunService, taskWaitRepository := newWaitRoutingTestConnectorRuntime(t, languageModel)
-	router := &routerThatMustNotBeAskedAboutAnAnswer{TurnRouter: connectorRuntime.turnRouter}
-	connectorRuntime.UseTurnRouter(router)
+	recording := &pendingInputRecordingHarness{Harness: connectorRuntime.harness}
+	connectorRuntime.harness = recording
 	waitingTaskRun := createWaitingInputTaskRunWithOptions(t, taskRunService, "어떤 형식으로 만들까요?", "input-options")
 	if errorValue := taskWaitRepository.InsertTaskWaitToken(waitRoutingTaskWaitToken(waitingTaskRun, "input-dispatch", "input-options")); errorValue != nil {
 		t.Fatal(errorValue)
@@ -4127,7 +4096,15 @@ func TestAReplyToAWaitingQuestionIsNeverOfferedToTheRouterAsPendingInput(t *test
 	if errorValue != nil || result.TaskRunID != waitingTaskRun.TaskRunID {
 		t.Fatalf("expected the waiting run to take the reply, got %+v %v", result, errorValue)
 	}
-	if router.pendingInputPlans != 0 {
-		t.Fatalf("a reply in the thread of a question answers it, and the router was asked to read it %d times", router.pendingInputPlans)
+	if len(recording.pendingTaskRunIDs) != 1 || recording.pendingTaskRunIDs[0] != waitingTaskRun.TaskRunID {
+		t.Fatalf("a reply in the thread of a question answers it, and the agent was told the pending run %v instead of %s", recording.pendingTaskRunIDs, waitingTaskRun.TaskRunID)
 	}
+}
+
+func connectorMessageContents(messages []llm.Message) []string {
+	contents := []string{}
+	for _, message := range messages {
+		contents = append(contents, message.Role+": "+message.Content)
+	}
+	return contents
 }

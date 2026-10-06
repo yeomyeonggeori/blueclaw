@@ -75,13 +75,13 @@ func (connectorRuntime *ConnectorRuntime) judgeFacts(ctx context.Context, facts 
 	if connectorRuntime.gatewayDecider == nil {
 		return nil, errors.New("connector runtime has no gateway decider configured")
 	}
-	callLedger := &agentcontract.IntakeCallLedger{}
-	judgments, errorValue := connectorRuntime.gatewayDecider.Decide(ctx, facts, callLedger.Observe)
-	connectorRuntime.recordTasklessGatewayCalls(facts.Messages, callLedger.Records)
+	callRecords := []agentcontract.LLMCallRecord{}
+	judgments, errorValue := connectorRuntime.gatewayDecider.Decide(ctx, facts, func(record agentcontract.LLMCallRecord) { callRecords = append(callRecords, record) })
+	connectorRuntime.recordTasklessGatewayCalls(facts.Messages, callRecords)
 	return judgments, errorValue
 }
 
-func (connectorRuntime *ConnectorRuntime) recordTasklessGatewayCalls(messages []agentcontract.IntakeDecisionMessage, callRecords []agentcontract.LLMCallRecord) {
+func (connectorRuntime *ConnectorRuntime) recordTasklessGatewayCalls(messages []inboundengagement.Message, callRecords []agentcontract.LLMCallRecord) {
 	if connectorRuntime.recordTasklessLLMCall == nil {
 		return
 	}
@@ -90,7 +90,7 @@ func (connectorRuntime *ConnectorRuntime) recordTasklessGatewayCalls(messages []
 	}
 }
 
-func JudgedMessageIDs(callRecord agentcontract.LLMCallRecord, messages []agentcontract.IntakeDecisionMessage) []string {
+func JudgedMessageIDs(callRecord agentcontract.LLMCallRecord, messages []inboundengagement.Message) []string {
 	if len(callRecord.DecidedMessageIDs) > 0 {
 		return callRecord.DecidedMessageIDs
 	}
@@ -146,13 +146,13 @@ func (connectorRuntime *ConnectorRuntime) gatewayFactsForTurn(ctx context.Contex
 	turn.taskWaitResolution = connectorRuntime.resolveInboundTaskWait(turn.personID, turn.platform, turn.event)
 	open := connectorRuntime.readOpenInteractions(turn)
 	facts := inboundengagement.Facts{
-		Messages:         []agentcontract.IntakeDecisionMessage{inboundDecisionMessage(turn.event)},
+		Messages:         []inboundengagement.Message{inboundDecisionMessage(turn.event)},
 		ConversationType: turn.event.Context.ConversationType,
 		VisibleContext:   turn.event.Context.ToAgentVisibleContext(),
 		AgentIdentity:    connectorRuntime.agentIdentity(),
 		Company:          connectorRuntime.company(),
 		OpenTask:         connectorRuntime.openTaskFacts(open),
-		Duties:           agentcontract.StandingDuties(),
+		Duties:           inboundengagement.StandingDuties(),
 		EnvironmentNow:   time.Now(),
 	}
 	if facts.OpenTask == nil {
@@ -183,8 +183,8 @@ func (connectorRuntime *ConnectorRuntime) finishedTaskFacts(personID string, eve
 	return &taskFacts
 }
 
-func inboundDecisionMessage(event PlatformInboundEvent) agentcontract.IntakeDecisionMessage {
-	return agentcontract.IntakeDecisionMessage{
+func inboundDecisionMessage(event PlatformInboundEvent) inboundengagement.Message {
+	return inboundengagement.Message{
 		MessageID:         event.MessageID,
 		Prompt:            event.Prompt,
 		SenderName:        event.Context.Sender.Name,
@@ -201,7 +201,7 @@ type judgmentAddressingDecider struct {
 	judge func(context.Context) (inboundengagement.Judgment, error)
 }
 
-func (decider judgmentAddressingDecider) DecideAddressing(ctx context.Context, _ inboundengagement.Request) (agentcontract.AddressingDecision, error) {
+func (decider judgmentAddressingDecider) DecideAddressing(ctx context.Context, _ inboundengagement.Request) (inboundengagement.AddressingDecision, error) {
 	judgment, errorValue := decider.judge(ctx)
 	return judgment.Addressing, errorValue
 }

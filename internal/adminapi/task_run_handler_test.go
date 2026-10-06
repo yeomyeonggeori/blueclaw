@@ -2,7 +2,6 @@ package adminapi
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,12 +9,10 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
-	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract/harnesstest"
-	"github.com/yeomyeonggeori/bluecollar/loop"
 )
 
 func TestTaskRunHandlerLaunchesAdminTask(t *testing.T) {
@@ -85,15 +82,10 @@ func TestTaskRunHandlerLaunchIgnoresClientCancellation(t *testing.T) {
 	}
 }
 
-func TestTaskRunHandlerUsesModelPathPresetWithoutIntakeCall(t *testing.T) {
-	handler, taskRunService, taskEventService, languageModel := newPresetTaskRunHandler(true)
-	presetDecision, _, errorValue := handler.resolveTaskDecisionPreset(modelPathTaskDecisionPreset)
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if presetDecision.TaskLevel != agentcontract.TaskLevelXLow {
-		t.Fatalf("expected xlow diagnostic task level, got %s", presetDecision.TaskLevel)
-	}
+func TestTaskRunHandlerHandsTheModelPathPresetToTheAgentAsAFact(t *testing.T) {
+	handler, taskRunService := newStubbedPresetTaskRunHandler(true)
+	harness := harnesstest.New(taskRunService)
+	handler.TaskLauncher = agentruntime.NewTaskLauncher(harness, taskRunService, agentruntime.NewToolCatalogBuilder())
 	request := httptest.NewRequest(http.MethodPost, "/admin/api/run/start", strings.NewReader(`{"requesterPersonID":"person-1","prompt":"reply exactly","taskDecisionPreset":"model_path"}`))
 	responseRecorder := httptest.NewRecorder()
 
@@ -102,23 +94,12 @@ func TestTaskRunHandlerUsesModelPathPresetWithoutIntakeCall(t *testing.T) {
 	if responseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected ok response, got %d: %s", responseRecorder.Code, responseRecorder.Body.String())
 	}
-	if len(languageModel.schemaNames) != 1 || languageModel.schemaNames[0] != "bluecollar_agent_turn_action" {
-		t.Fatalf("expected only agent action schema, got %v", languageModel.schemaNames)
+	turnRequest := harness.LastTurnRequest()
+	if turnRequest.TaskLevel != agentcontract.TaskLevelXLow {
+		t.Fatalf("expected the xlow diagnostic task level as a fact, got %q", turnRequest.TaskLevel)
 	}
-	if languageModel.schemaDocumentContains("bash") {
-		t.Fatalf("expected diagnostic profile without tool schemas, got %+v", languageModel.schemaDocuments)
-	}
-	var responseDocument struct {
-		TaskRun task.TaskRun `json:"taskRun"`
-	}
-	if errorValue := json.Unmarshal(responseRecorder.Body.Bytes(), &responseDocument); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if _, isFound := taskRunService.FindTaskRun(responseDocument.TaskRun.TaskRunID); !isFound {
-		t.Fatalf("expected persisted task run, got %+v", responseDocument.TaskRun)
-	}
-	if !taskEventsContainBody(taskEventService.ListTaskEvent(responseDocument.TaskRun.TaskRunID), "agent.task_launched", `"isIntakePrecomputed":true`) {
-		t.Fatal("expected precomputed intake audit event")
+	if turnRequest.PrecomputedTurnDecision != nil {
+		t.Fatalf("expected no host-built decision, got %+v", turnRequest.PrecomputedTurnDecision)
 	}
 }
 
@@ -230,36 +211,6 @@ func TestTaskRunHandlerStopsRequesterTasksOnly(t *testing.T) {
 	if !strings.Contains(responseRecorder.Body.String(), `"scheduleTouched":false`) {
 		t.Fatalf("expected scheduleTouched false in response, got %s", responseRecorder.Body.String())
 	}
-}
-
-type schemaRecordingAdminLanguageModel struct {
-	schemaNames     []string
-	schemaDocuments []string
-}
-
-func (languageModel *schemaRecordingAdminLanguageModel) GenerateResponse(context.Context, string) (string, error) {
-	return "", nil
-}
-
-func (languageModel *schemaRecordingAdminLanguageModel) GenerateStructuredResponse(_ context.Context, request llm.StructuredResponseRequest) (llm.StructuredResponse, error) {
-	languageModel.schemaNames = append(languageModel.schemaNames, request.StructuredOutputSchema.Name)
-	languageModel.schemaDocuments = append(languageModel.schemaDocuments, request.StructuredOutputSchema.Document)
-	return llm.StructuredResponse{Content: `{"action":"reply","final":true,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[],"message":"diagnostic done"}`}, nil
-}
-
-func (languageModel *schemaRecordingAdminLanguageModel) schemaDocumentContains(fragment string) bool {
-	return strings.Contains(strings.Join(languageModel.schemaDocuments, "\n"), fragment)
-}
-
-func newPresetTaskRunHandler(isPresetAllowed bool) (TaskRunHandler, *task.TaskRunService, *task.TaskEventService, *schemaRecordingAdminLanguageModel) {
-	taskEventService := task.NewTaskEventService()
-	taskRunService := task.NewTaskRunService(taskEventService)
-	agentKernel := loop.NewAgentKernel(taskRunService, task.NewTaskStepService())
-	languageModel := &schemaRecordingAdminLanguageModel{}
-	agentKernel.UseLanguageModelProvider(languageModel)
-	agentKernel.UseIntakeLanguageModelProvider(languageModel)
-	agentKernel.UseIntakeOptions(agentcontract.IntakeOptions{IsEnabled: true, DefaultTaskLevel: agentcontract.TaskLevelLow})
-	return presetTaskRunHandler(agentKernel, taskRunService, isPresetAllowed), taskRunService, taskEventService, languageModel
 }
 
 func newStubbedPresetTaskRunHandler(isPresetAllowed bool) (TaskRunHandler, *task.TaskRunService) {

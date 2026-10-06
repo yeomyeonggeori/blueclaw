@@ -113,28 +113,27 @@ func (agent *Agent) resumeAnsweredTaskRun(ctx context.Context, sessionID acp.Ses
 	requester := sessionContext.Requester
 	addressing := sessionContext.Addressing
 	launchRequest := agentruntime.TaskLaunchRequest{
-		Source:                  agentruntime.TaskLaunchSourceConnector,
-		SourceReference:         "acp:reload:" + taskRun.TaskRunID,
-		RequesterPersonID:       requester.PersonID,
-		RequesterName:           agent.requesterName(requester),
-		RequesterCallingName:    requester.CallingName,
-		RequesterHandle:         requester.Handle,
-		RequesterEmail:          requester.Email,
-		IsRuntimeRestartResume:  true,
-		ExistingTaskRunID:       taskRun.TaskRunID,
-		SettledCalls:            settledCalls,
-		OriginReplyTargetID:     firstNonEmpty(taskRun.OriginReplyTargetID, addressing.ReplyTargetID),
-		OriginIsThread:          taskRun.OriginIsThread || addressing.IsThread,
-		ProfileName:             defaultProfileName,
-		Platform:                addressing.Platform,
-		ConversationID:          addressing.ConversationID,
-		ConversationType:        addressing.ConversationType,
-		ReplyTargetID:           firstNonEmpty(taskRun.OriginReplyTargetID, addressing.ReplyTargetID),
-		Prompt:                  taskRun.Prompt,
-		ResponseLanguage:        addressing.ResponseLanguage,
-		PrecomputedTurnDecision: carryingOnWithTheApprovedCall(addressing.ResponseLanguage),
-		PersonAccess:            agent.directory.ResolvePersonAccess(requester.PersonID),
-		CheckpointSender:        agent.checkpointSenderFor(sessionID),
+		Source:                 agentruntime.TaskLaunchSourceConnector,
+		SourceReference:        "acp:reload:" + taskRun.TaskRunID,
+		RequesterPersonID:      requester.PersonID,
+		RequesterName:          agent.requesterName(requester),
+		RequesterCallingName:   requester.CallingName,
+		RequesterHandle:        requester.Handle,
+		RequesterEmail:         requester.Email,
+		IsRuntimeRestartResume: true,
+		ExistingTaskRunID:      taskRun.TaskRunID,
+		SettledCalls:           settledCalls,
+		OriginReplyTargetID:    firstNonEmpty(taskRun.OriginReplyTargetID, addressing.ReplyTargetID),
+		OriginIsThread:         taskRun.OriginIsThread || addressing.IsThread,
+		ProfileName:            defaultProfileName,
+		Platform:               addressing.Platform,
+		ConversationID:         addressing.ConversationID,
+		ConversationType:       addressing.ConversationType,
+		ReplyTargetID:          firstNonEmpty(taskRun.OriginReplyTargetID, addressing.ReplyTargetID),
+		Prompt:                 taskRun.Prompt,
+		ResponseLanguage:       addressing.ResponseLanguage,
+		PersonAccess:           agent.directory.ResolvePersonAccess(requester.PersonID),
+		CheckpointSender:       agent.checkpointSenderFor(sessionID),
 	}
 	launchResult, errorValue := agent.taskLauncher.Launch(ctx, launchRequest)
 	if errorValue != nil {
@@ -143,18 +142,6 @@ func (agent *Agent) resumeAnsweredTaskRun(ctx context.Context, sessionID acp.Ses
 	}
 	sessionTurn := agent.sessionTurns.OpenSessionTurn(ctx, inboundEventOf(MessageContext{}, launchRequest), requester.PersonID, agent.replySenderFor(sessionID))
 	agent.deliverTurnReply(ctx, sessionID, sessionTurn, launchResult.TurnResult)
-}
-
-// The task this resumes was already routed, and asking the router again would
-// re-decide a turn the requester has just answered a question about.
-func carryingOnWithTheApprovedCall(responseLanguage string) *agentcontract.TurnDecision {
-	return &agentcontract.TurnDecision{
-		Route:            agentcontract.TurnRouteContinueTask,
-		Classification:   agentcontract.IntakeClassificationBoundedTask,
-		TaskShape:        agentcontract.TaskShapeMaintenanceTask,
-		ResponseLanguage: responseLanguage,
-		Reason:           "acp_permission_reload",
-	}
 }
 
 func firstNonEmpty(values ...string) string {

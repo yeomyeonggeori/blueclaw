@@ -5,6 +5,8 @@ import "github.com/yeomyeonggeori/bluecollar/agentcontract"
 const (
 	TaskEventBlueclawTaskExecutionDuration = "blueclaw.task.execution_duration"
 
+	TaskEventAmbientDutyLaunch = "agent.ambient_duty_launch"
+
 	TaskEventLaunchFailureReply  = "blueclaw.launch.failure_reply"
 	TaskEventLaunchFailureReport = "blueclaw.launch.failure_report"
 	TaskEventLaunchLimitReply    = "blueclaw.launch.limit_reply"

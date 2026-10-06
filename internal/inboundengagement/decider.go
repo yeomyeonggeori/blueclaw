@@ -20,24 +20,24 @@ type TaskFacts struct {
 }
 
 type Facts struct {
-	Messages         []agentcontract.IntakeDecisionMessage
+	Messages         []Message
 	ConversationType string
 	VisibleContext   agentcontract.VisibleContext
 	AgentIdentity    agentcontract.AgentIdentity
 	Company          agentcontract.CompanyContext
 	OpenTask         *TaskFacts
 	FinishedTask     *TaskFacts
-	Duties           []agentcontract.StandingDuty
+	Duties           []StandingDuty
 	EnvironmentNow   time.Time
 }
 
 type Judgment struct {
 	MessageID              string
-	Addressing             agentcontract.AddressingDecision
+	Addressing             AddressingDecision
 	ReactionProbability    float64
 	HasRelatesToActiveTask bool
 	RelatesToActiveTask    bool
-	BusyRoute              agentcontract.BusyRoute
+	BusyRoute              BusyRoute
 }
 
 type Decider interface {
@@ -108,8 +108,8 @@ func (decider DecisionModelDecider) readJudgments(facts Facts, answers map[strin
 	return judgments, nil
 }
 
-func (decider DecisionModelDecider) readJudgment(facts Facts, reader answerReader, message agentcontract.IntakeDecisionMessage) (Judgment, error) {
-	judgment := Judgment{MessageID: strings.TrimSpace(message.MessageID), Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true}}
+func (decider DecisionModelDecider) readJudgment(facts Facts, reader answerReader, message Message) (Judgment, error) {
+	judgment := Judgment{MessageID: strings.TrimSpace(message.MessageID), Addressing: AddressingDecision{Target: AddressingTargetBot, ShouldRespond: true}}
 	if asksAddressing(facts) {
 		addressing, reactionProbability, errorValue := decider.readAddressing(reader, facts, message)
 		if errorValue != nil {
@@ -118,57 +118,57 @@ func (decider DecisionModelDecider) readJudgment(facts Facts, reader answerReade
 		judgment.Addressing = addressing
 		judgment.ReactionProbability = reactionProbability
 	}
-	if relatesAnswer, isAnswered := reader.answers[reader.questionKey(agentcontract.IntakeQuestionRelatesToActiveTask)]; asksRelatesToActiveTask(facts) && isAnswered {
+	if relatesAnswer, isAnswered := reader.answers[reader.questionKey(QuestionRelatesToActiveTask)]; asksRelatesToActiveTask(facts) && isAnswered {
 		judgment.HasRelatesToActiveTask = true
 		judgment.RelatesToActiveTask = relatesAnswer.IsYes()
 	}
 	if asksBusyRoute(facts) {
-		busyRoute, errorValue := reader.choice(agentcontract.IntakeQuestionBusyRoute)
+		busyRoute, errorValue := reader.choice(QuestionBusyRoute)
 		if errorValue != nil {
 			return Judgment{}, errorValue
 		}
-		judgment.BusyRoute = agentcontract.BusyRoute(busyRoute)
+		judgment.BusyRoute = BusyRoute(busyRoute)
 	}
 	return judgment, nil
 }
 
-func (decider DecisionModelDecider) readAddressing(reader answerReader, facts Facts, message agentcontract.IntakeDecisionMessage) (agentcontract.AddressingDecision, float64, error) {
-	target, errorValue := reader.choice(agentcontract.IntakeQuestionTarget)
+func (decider DecisionModelDecider) readAddressing(reader answerReader, facts Facts, message Message) (AddressingDecision, float64, error) {
+	target, errorValue := reader.choice(QuestionTarget)
 	if errorValue != nil {
-		return agentcontract.AddressingDecision{}, 0, errorValue
+		return AddressingDecision{}, 0, errorValue
 	}
-	shouldRespondAnswer, isAnswered := reader.answers[reader.questionKey(agentcontract.IntakeQuestionShouldRespond)]
+	shouldRespondAnswer, isAnswered := reader.answers[reader.questionKey(QuestionShouldRespond)]
 	if !isAnswered {
-		return agentcontract.AddressingDecision{}, 0, errors.New("the gateway decision is missing an answer for " + reader.questionKey(agentcontract.IntakeQuestionShouldRespond))
+		return AddressingDecision{}, 0, errors.New("the gateway decision is missing an answer for " + reader.questionKey(QuestionShouldRespond))
 	}
-	addressing := agentcontract.AddressingDecision{Target: agentcontract.AddressingTarget(target), ShouldRespond: shouldRespondAnswer.IsYes()}
-	reactionAnswer, errorValue := reader.choiceAnswer(agentcontract.IntakeQuestionReaction)
+	addressing := AddressingDecision{Target: AddressingTarget(target), ShouldRespond: shouldRespondAnswer.IsYes()}
+	reactionAnswer, errorValue := reader.choiceAnswer(QuestionReaction)
 	if errorValue != nil {
-		return agentcontract.AddressingDecision{}, 0, errorValue
+		return AddressingDecision{}, 0, errorValue
 	}
-	reactionProbability := reactionAnswer.ChoiceProbability(agentcontract.IntakeReactionOptionReact)
+	reactionProbability := reactionAnswer.ChoiceProbability(ReactionOptionReact)
 	if decider.randomSource() < reactionProbability {
-		reactionEmoji, errorValue := reader.choice(agentcontract.IntakeQuestionReactionEmoji)
+		reactionEmoji, errorValue := reader.choice(QuestionReactionEmoji)
 		if errorValue != nil {
-			return agentcontract.AddressingDecision{}, 0, errorValue
+			return AddressingDecision{}, 0, errorValue
 		}
 		addressing.ReactionEmoji = knownReactionEmoji(reactionEmoji)
 	}
 	if asksDuty(facts, message) {
-		dutyAnswer, errorValue := reader.choiceAnswer(agentcontract.IntakeQuestionDuty)
+		dutyAnswer, errorValue := reader.choiceAnswer(QuestionDuty)
 		if errorValue != nil {
-			return agentcontract.AddressingDecision{}, 0, errorValue
+			return AddressingDecision{}, 0, errorValue
 		}
 		addressing = withDuty(addressing, dutyAnswer)
 	}
-	if addressing.Target == agentcontract.AddressingTargetHuman {
+	if addressing.Target == AddressingTargetHuman {
 		addressing.ShouldRespond = false
 	}
 	return addressing, reactionProbability, nil
 }
 
-func withDuty(addressing agentcontract.AddressingDecision, dutyAnswer model.DecisionAnswer) agentcontract.AddressingDecision {
-	duty, isDuty := agentcontract.StandingDutyByName(dutyAnswer.Choice)
+func withDuty(addressing AddressingDecision, dutyAnswer model.DecisionAnswer) AddressingDecision {
+	duty, isDuty := StandingDutyByName(dutyAnswer.Choice)
 	if !isDuty {
 		return addressing
 	}
@@ -180,7 +180,7 @@ func withDuty(addressing agentcontract.AddressingDecision, dutyAnswer model.Deci
 
 func knownReactionEmoji(name string) string {
 	normalizedName := strings.ToLower(strings.TrimSpace(name))
-	for _, allowedName := range agentcontract.ReactionEmojiNames {
+	for _, allowedName := range ReactionEmojiNames {
 		if allowedName == normalizedName {
 			return allowedName
 		}

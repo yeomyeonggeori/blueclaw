@@ -77,8 +77,7 @@
     "intake": {
       "enabled": true,
       "executionMode": "auto"
-    },
-    "defaultTaskLevel": "low"
+    }
   },
   "connectors": {},
   "logging": {

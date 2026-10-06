@@ -151,7 +151,6 @@ func (connectorRuntime *ConnectorRuntime) interruptedTaskLaunchRequest(taskRun t
 		ResponseLanguage:           event.Context.ResponseLanguage,
 		VisibleContext:             event.Context.ToAgentVisibleContext(),
 		ActiveGoal:                 interruptedTaskActiveGoalWithInstruction(taskRun, taskEvents, profile.guidanceNote, profile.instruction),
-		PrecomputedTurnDecision:    interruptedTaskTurnDecision(taskEvents, event.Context.ResponseLanguage),
 		PersonAccess:               personAccess,
 		AccessibleConversationIDs:  []string{conversationID},
 		HistoryProvider:            connectorHistoryProvider{adapter: adapter},
@@ -240,41 +239,6 @@ func userSteerTaskProfile(platform string, taskRunID string, instruction string)
 		guidanceNote:    "The user asked to continue this paused task. Assess prior progress from the task event ledger and restored observations, follow the latest steering instruction, and finish only the work that is still missing.",
 		instruction:     instruction,
 	}
-}
-
-func interruptedTaskTurnDecision(taskEvents []task.TaskEvent, responseLanguage string) *agentcontract.TurnDecision {
-	decision := agentcontract.TurnDecision{
-		Route:            agentcontract.TurnRouteContinueTask,
-		Classification:   agentcontract.IntakeClassificationBoundedTask,
-		TaskShape:        agentcontract.TaskShapeMaintenanceTask,
-		ResponseLanguage: responseLanguage,
-		Reason:           "runtime_restart_auto_resume",
-	}.WithRestoredIntakeState(latestIntakeDecision(taskEvents))
-	decision.TaskLevel = highestRecordedTaskLevel(taskEvents)
-	return &decision
-}
-
-func highestRecordedTaskLevel(taskEvents []task.TaskEvent) agentcontract.TaskLevel {
-	taskLevel := agentcontract.TaskLevelLow
-	for _, taskEvent := range taskEvents {
-		var body struct {
-			Level          string `json:"level"`
-			NewTaskLevel   string `json:"newTaskLevel"`
-			EffortLevel    string `json:"effortLevel"`
-			NewEffortLevel string `json:"newEffortLevel"`
-			TaskComplexity string `json:"taskComplexity"`
-		}
-		switch taskEvent.Name {
-		case agentcontract.TaskEventAgentIntake:
-			if json.Unmarshal([]byte(taskEvent.Body), &body) != nil {
-				continue
-			}
-			for _, recordedLevel := range []string{body.Level, body.NewTaskLevel, body.EffortLevel, body.NewEffortLevel, body.TaskComplexity} {
-				taskLevel = agentcontract.LargerTaskLevel(taskLevel, agentcontract.NormalizeTaskLevel(recordedLevel))
-			}
-		}
-	}
-	return taskLevel
 }
 
 func platformFromSourceReference(sourceReference string) string {
