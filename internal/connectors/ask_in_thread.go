@@ -169,7 +169,7 @@ func approvalAnswerOfOption(optionID string) approvalgate.ApprovalAnswer {
 }
 
 func (connectorRuntime *ConnectorRuntime) askInThread(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, confirmation string, question approvalreply.Question) (string, bool) {
-	turn, isReady := connectorRuntime.questionTurn(ctx)
+	turn, isReady := connectorRuntime.questionTurn(ctx, approvalRequest)
 	if !isReady {
 		return "", false
 	}
@@ -178,7 +178,7 @@ func (connectorRuntime *ConnectorRuntime) askInThread(ctx context.Context, appro
 		requesterPersonID: approvalRequest.RequesterPersonID,
 		platform:          turn.platform,
 		conversationID:    turn.event.ConversationID,
-		replyTargetID:     approvalRequest.ReplyTargetID,
+		replyTargetID:     turn.event.ReplyTargetID,
 		question:          question,
 		answers:           make(chan string, 1),
 	}
@@ -191,10 +191,10 @@ func (connectorRuntime *ConnectorRuntime) askInThread(ctx context.Context, appro
 	return connectorRuntime.awaitAnswer(ctx, thread)
 }
 
-func (connectorRuntime *ConnectorRuntime) questionTurn(ctx context.Context) (*inboundTurn, bool) {
+func (connectorRuntime *ConnectorRuntime) questionTurn(ctx context.Context, approvalRequest mcpserver.ApprovalRequest) (*inboundTurn, bool) {
 	event, isFound := connectorEventFromContext(ctx)
 	if !isFound {
-		return nil, false
+		return connectorRuntime.requesterDirectMessageTurn(ctx, approvalRequest.RequesterPersonID)
 	}
 	adapter, errorValue := connectorRuntime.findAdapter(event.Platform)
 	if errorValue != nil {

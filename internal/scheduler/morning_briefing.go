@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
-	"sort"
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
@@ -77,7 +76,7 @@ func (briefing *MorningBriefing) personSchedule(ctx context.Context, person poli
 	if errorValue != nil || !settings.Enabled {
 		return schedule, errorValue
 	}
-	account, isFound := morningBriefingAccount(person.PersonID, accounts)
+	account, isFound := identity.DirectMessageAccount(person.PersonID, accounts)
 	if !isFound {
 		schedule.NextRunAt = nil
 		return schedule, nil
@@ -124,28 +123,6 @@ func (briefing *MorningBriefing) readUser(ctx context.Context, personID string) 
 		}
 	}
 	return user, nil
-}
-
-func morningBriefingAccount(personID string, accounts []identity.PlatformAccountIdentity) (identity.PlatformAccountIdentity, bool) {
-	matching := make([]identity.PlatformAccountIdentity, 0)
-	for _, account := range accounts {
-		if account.PersonID == personID && account.ExternalUserID != "" && account.Platform != "" && account.Platform != "api" {
-			matching = append(matching, account)
-		}
-	}
-	sort.Slice(matching, func(first int, second int) bool {
-		if matching[first].Platform != matching[second].Platform {
-			return matching[first].Platform < matching[second].Platform
-		}
-		return matching[first].ExternalUserID < matching[second].ExternalUserID
-	})
-	if len(matching) == 0 {
-		return identity.PlatformAccountIdentity{}, false
-	}
-	if len(matching) > 1 && matching[0].Platform == matching[1].Platform && matching[0].ExternalUserID != matching[1].ExternalUserID {
-		return identity.PlatformAccountIdentity{}, false
-	}
-	return matching[0], true
 }
 
 func newMorningBriefingSchedule(personID string, settings persona.MorningBriefing, timeZone string, referenceTime time.Time) (task.Schedule, error) {
@@ -211,7 +188,7 @@ func (briefing *MorningBriefing) CanRun(ctx context.Context, schedule task.Sched
 		if errorValue != nil {
 			return false, errorValue
 		}
-		account, isFound := morningBriefingAccount(person.PersonID, accounts)
+		account, isFound := identity.DirectMessageAccount(person.PersonID, accounts)
 		if !isFound || account.Platform != schedule.Platform {
 			return false, nil
 		}

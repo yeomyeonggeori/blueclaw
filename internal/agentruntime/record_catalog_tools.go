@@ -154,11 +154,12 @@ func modelNameOf(descriptor capability.ToolDescriptor) string {
 }
 
 type recordCatalogToolProvider struct {
-	recordCatalog RecordCatalogClient
-	request       ToolCatalogRequest
-	descriptors   []capability.ToolDescriptor
-	fileKeeper    answeredFileKeeper
-	officeFacts   func(context.Context, string, json.RawMessage, mcp.ToolResult)
+	recordCatalog      RecordCatalogClient
+	request            ToolCatalogRequest
+	descriptors        []capability.ToolDescriptor
+	fileKeeper         answeredFileKeeper
+	officeFacts        func(context.Context, string, json.RawMessage, mcp.ToolResult)
+	inputUnderApproval func(context.Context, json.RawMessage) json.RawMessage
 }
 
 func (provider recordCatalogToolProvider) ProviderID() string {
@@ -200,17 +201,18 @@ func (provider recordCatalogToolProvider) boundTool(descriptor capability.ToolDe
 					"current account cannot execute this tool",
 				), nil
 			}
+			input := provider.inputUnderApproval(toolContext, invocation.Input)
 			result, errorValue := provider.recordCatalog.CallTool(
 				toolContext,
 				provider.request.RequesterEmail,
 				toolName,
-				invocation.Input,
+				input,
 			)
 			if errorValue != nil {
 				return toolcontract.ToolResult{}, errorValue
 			}
-			result = provider.fileKeeper.withFilesKept(toolContext, toolName, invocation.Input, result)
-			provider.officeFacts(toolContext, toolName, invocation.Input, result)
+			result = provider.fileKeeper.withFilesKept(toolContext, toolName, input, result)
+			provider.officeFacts(toolContext, toolName, input, result)
 			return recordCatalogToolResult(result, resultContract)
 		},
 	)
@@ -270,10 +272,11 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerRecordCatalogTools(
 	}
 	quarantinedProviders, errorValue := toolRegistry.RegisterProviders(context.Background(), []toolcontract.ToolProviderRegistration{{
 		Provider: recordCatalogToolProvider{
-			recordCatalog: request.RecordCatalog,
-			request:       request,
-			descriptors:   descriptors,
-			fileKeeper:    toolCatalogBuilder.recordFileKeeper(request),
+			recordCatalog:      request.RecordCatalog,
+			request:            request,
+			descriptors:        descriptors,
+			fileKeeper:         toolCatalogBuilder.recordFileKeeper(request),
+			inputUnderApproval: toolCatalogBuilder.inputUnderApproval,
 			officeFacts: func(ctx context.Context, toolName string, input json.RawMessage, result mcp.ToolResult) {
 				toolCatalogBuilder.recordOfficeFacts(ctx, request, toolName, input, result)
 			},
