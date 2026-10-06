@@ -68,13 +68,13 @@ func (connectorRuntime *ConnectorRuntime) findPendingApproval(personID string, _
 	var selectedTaskRun task.TaskRun
 	isSelected := false
 	for _, taskRun := range taskRuns {
-		if taskRun.Status != task.TaskStatusWaitingApproval {
+		if taskRun.Status != task.TaskStatusWaitingApproval || connectorRuntime.isAwaitedInThread(taskRun.TaskRunID) {
 			continue
 		}
 		if !taskRunSharesMessageThread(taskRun, event) {
 			continue
 		}
-		if time.Since(taskRun.UpdatedAt) > 24*time.Hour {
+		if time.Since(taskRun.UpdatedAt) > approvalExpiry {
 			continue
 		}
 		if isSelected && !taskRun.UpdatedAt.After(selectedTaskRun.UpdatedAt) {
@@ -91,7 +91,7 @@ func (connectorRuntime *ConnectorRuntime) findPendingApproval(personID string, _
 
 func (connectorRuntime *ConnectorRuntime) findPendingApprovalByTaskRunID(taskRunID string) (pendingApproval, bool) {
 	taskRun, isFound := connectorRuntime.taskRunService.FindTaskRun(taskRunID)
-	if !isFound || taskRun.Status != task.TaskStatusWaitingApproval {
+	if !isFound || taskRun.Status != task.TaskStatusWaitingApproval || connectorRuntime.isAwaitedInThread(taskRun.TaskRunID) {
 		return pendingApproval{}, false
 	}
 	return connectorRuntime.pendingApprovalForTaskRun(taskRun), true
@@ -123,13 +123,13 @@ func (connectorRuntime *ConnectorRuntime) findActiveGoal(personID string, _ stri
 	isSelected := false
 	for _, taskRun := range taskRuns {
 		taskEvents := connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID)
-		if !eventCanContinueGoal(event, taskRun, taskEvents) {
+		if !eventCanContinueGoal(event, taskRun, taskEvents) || connectorRuntime.isAwaitedInThread(taskRun.TaskRunID) {
 			continue
 		}
 		if !taskRunSharesMessageThread(taskRun, event) {
 			continue
 		}
-		if time.Since(taskRun.UpdatedAt) > 24*time.Hour {
+		if time.Since(taskRun.UpdatedAt) > approvalExpiry {
 			continue
 		}
 		if isSelected && !taskRun.UpdatedAt.After(selectedTaskRun.UpdatedAt) {
@@ -150,7 +150,7 @@ func (connectorRuntime *ConnectorRuntime) findActiveGoalByTaskRunID(taskRunID st
 		return agentcontract.ActiveGoal{}, false
 	}
 	taskEvents := connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID)
-	if !eventCanContinueGoal(event, taskRun, taskEvents) {
+	if !eventCanContinueGoal(event, taskRun, taskEvents) || connectorRuntime.isAwaitedInThread(taskRun.TaskRunID) {
 		return agentcontract.ActiveGoal{}, false
 	}
 	return connectorRuntime.activeGoalForTaskRun(taskRun), true

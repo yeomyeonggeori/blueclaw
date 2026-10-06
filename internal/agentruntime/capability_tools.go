@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/access"
@@ -95,7 +96,8 @@ func (toolCatalogBuilder *ToolCatalogBuilder) reportCapabilityQuarantines(quaran
 	}
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) invokeCapabilityOperation(toolContext context.Context, operation string, toolDescriptor CapabilityToolDescriptor, request ToolCatalogRequest, rawInput json.RawMessage) (toolcontract.ToolResult, error) {
+func (toolCatalogBuilder *ToolCatalogBuilder) invokeCapabilityOperation(toolContext context.Context, operation string, toolDescriptor CapabilityToolDescriptor, request ToolCatalogRequest, requestedInput json.RawMessage) (toolcontract.ToolResult, error) {
+	rawInput := toolCatalogBuilder.inputUnderApproval(toolContext, requestedInput)
 	var response struct {
 		Provider        string                        `json:"provider"`
 		SelectedBackend string                        `json:"selectedBackend"`
@@ -142,14 +144,28 @@ func (toolCatalogBuilder *ToolCatalogBuilder) invokeCapabilityOperation(toolCont
 		content = string(response.Result)
 	}
 	result := capabilityToolResult(content, response.Result, response.Effects, isError, response.Message, response.ErrorCode, response.FailureStage, response.Retryable, response.SafeRetry)
-	return reviewCapabilityApprovalRefusal(toolContext, request, toolDescriptor, toolInput, result), nil
+	return toolCatalogBuilder.settleApprovalRefusal(toolContext, operation, toolDescriptor, request, rawInput, toolInput, result)
 }
 
-func reviewCapabilityApprovalRefusal(ctx context.Context, request ToolCatalogRequest, toolDescriptor CapabilityToolDescriptor, toolInput json.RawMessage, result toolcontract.ToolResult) toolcontract.ToolResult {
-	if result.Failure == nil || !result.Failure.RequiresApproval || request.ToolCallGate == nil {
-		return result
+func (toolCatalogBuilder *ToolCatalogBuilder) inputUnderApproval(toolContext context.Context, requestedInput json.RawMessage) json.RawMessage {
+	holdID := toolcontract.HoldIDFromContext(toolContext)
+	taskRunID := toolcontract.TaskRunIDFromContext(toolContext)
+	if holdID == "" || taskRunID == "" || toolCatalogBuilder.taskRunService == nil {
+		return requestedInput
 	}
-	review, errorValue := request.ToolCallGate.ReviewToolCall(ctx, toolcontract.ToolInvocation{
+	for _, hold := range holdrecord.Holds(toolCatalogBuilder.taskRunService.ListTaskEvent(taskRunID)) {
+		if hold.ID == holdID {
+			return hold.Call.ApprovedInput()
+		}
+	}
+	return requestedInput
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) settleApprovalRefusal(toolContext context.Context, operation string, toolDescriptor CapabilityToolDescriptor, request ToolCatalogRequest, rawInput json.RawMessage, toolInput json.RawMessage, result toolcontract.ToolResult) (toolcontract.ToolResult, error) {
+	if result.Failure == nil || !result.Failure.RequiresApproval || request.ToolCallGate == nil || toolcontract.HoldIDFromContext(toolContext) != "" {
+		return result, nil
+	}
+	review, errorValue := request.ToolCallGate.ReviewToolCall(toolContext, toolcontract.ToolInvocation{
 		ToolName: toolDescriptor.Name,
 		Input:    toolInput,
 	}, toolcontract.ToolDefinition{
@@ -158,10 +174,16 @@ func reviewCapabilityApprovalRefusal(ctx context.Context, request ToolCatalogReq
 		ApprovalScope:    toolDescriptor.ApprovalScope,
 		SideEffectClass:  toolDescriptor.SideEffectClass,
 	})
-	if errorValue != nil || review.MayProceed {
-		return result
+	if errorValue != nil {
+		return result, nil
 	}
-	return review.Result
+	if !review.MayProceed {
+		return review.Result, nil
+	}
+	if review.HoldID == "" {
+		return result, nil
+	}
+	return toolCatalogBuilder.invokeCapabilityOperation(toolcontract.WithHoldID(toolContext, review.HoldID), operation, toolDescriptor, request, rawInput)
 }
 
 func validateCapabilityResultIdentity(operation string, provider string, selectedBackend string, toolName string, outcome string, isError bool) error {

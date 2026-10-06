@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/backup"
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
@@ -57,6 +58,11 @@ func newConnectorRuntime(runtimeConfiguration config.RuntimeConfiguration, found
 		connectorRuntime.UseEventRepository(postgres.NewRawEventRepository(foundation.database))
 	}
 	return connectorRuntime
+}
+
+func useAskInThread(connectorRuntime *connectors.ConnectorRuntime, runtimeConfiguration config.RuntimeConfiguration, inbound InboundOptions, approvalGate *approvalgate.Gate) {
+	connectorRuntime.UseAskInThread(runtimeConfiguration.Inbound.Connectors.AskInThread && inbound.admitsConnectorHTTPEvent())
+	approvalGate.UsePermissionAsker(connectorRuntime.ThreadPermissionAsker())
 }
 
 func registerChatdAdapters(connectorRuntime *connectors.ConnectorRuntime, runtimeConfiguration config.RuntimeConfiguration, logger *slog.Logger) {

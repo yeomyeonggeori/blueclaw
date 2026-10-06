@@ -43,6 +43,11 @@ func (connectorRuntime *ConnectorRuntime) restorePendingRequests() error {
 }
 
 func (connectorRuntime *ConnectorRuntime) processPendingInboundEvent(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent, sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error), isQueued bool) (ConnectorRuntimeResult, error) {
+	if !isQueued {
+		if result, isAnswer, errorValue := connectorRuntime.answerAskingThread(ctx, adapter, event); isAnswer || errorValue != nil {
+			return result, errorValue
+		}
+	}
 	if event.TaskRetry != nil {
 		return connectorRuntime.processInboundEventWithReplySender(ctx, adapter, event, sendReply)
 	}

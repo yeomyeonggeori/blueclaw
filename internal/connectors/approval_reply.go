@@ -24,18 +24,22 @@ func (connectorRuntime *ConnectorRuntime) UseApprovalReplyReader(approvalReplyRe
 }
 
 func (connectorRuntime *ConnectorRuntime) readApprovalReply(ctx context.Context, turn *inboundTurn, confirmation pendingApproval) (agentcontract.TurnDecision, bool, error) {
-	if connectorRuntime.approvalReplyReader == nil {
-		return agentcontract.TurnDecision{}, false, errNoApprovalReplyReader
-	}
 	question := approvalQuestionFor(confirmation.ApprovalQuestion, confirmation.Choices)
-	observe := func(callRecord agentcontract.LLMCallRecord) {
-		connectorRuntime.recordIntakeCalls(confirmation.TaskRun.TaskRunID, []agentcontract.LLMCallRecord{callRecord})
-	}
-	optionID, isAnswer, errorValue := connectorRuntime.approvalReplyReader.Read(ctx, question, turn.event.Prompt, observe)
+	optionID, isAnswer, errorValue := connectorRuntime.readReplyToQuestion(ctx, confirmation.TaskRun.TaskRunID, question, turn.event.Prompt)
 	if errorValue != nil || !isAnswer {
 		return agentcontract.TurnDecision{}, false, errorValue
 	}
 	return answeredDecision(optionID), true, nil
+}
+
+func (connectorRuntime *ConnectorRuntime) readReplyToQuestion(ctx context.Context, taskRunID string, question approvalreply.Question, reply string) (string, bool, error) {
+	if connectorRuntime.approvalReplyReader == nil {
+		return "", false, errNoApprovalReplyReader
+	}
+	observe := func(callRecord agentcontract.LLMCallRecord) {
+		connectorRuntime.recordIntakeCalls(taskRunID, []agentcontract.LLMCallRecord{callRecord})
+	}
+	return connectorRuntime.approvalReplyReader.Read(ctx, question, reply, observe)
 }
 
 func approvalQuestionFor(text string, choices []holdrecord.Choice) approvalreply.Question {

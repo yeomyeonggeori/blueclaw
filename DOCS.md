@@ -258,6 +258,8 @@ The gate belongs to the host. `approvalgate.Gate.TurnGate` is installed as the `
 
 A held call pauses the run in `waiting_approval` and records `approval.hold_opened` with the exact call, so the approval survives a restart and blocks no live request. The question the person sees is written by the model. Once approved, the host carries out the recorded call verbatim in the `carryOutApprovedCall` launch step (`internal/agentruntime/approved_call.go`) and hands the result to the harness as `CarriedOutCalls`. A changed call is a new approval.
 
+With `inbound.connectors.askInThread` set, which it is not by default, a chat turn asks the question in its thread and waits there for the answer, as an ACP turn does, and the approved call runs in place with its approved input. A reply in that thread is read by the same reader against the offered options. A reply that is not an answer leaves the call open and is routed as a new message, and a reply outside the thread is never read. The waiting run holds neither an inbox worker nor the conversation, and its typing indicator stops. The wait ends after 24 hours, and the run stays held as it is without the setting. After a restart, a held call whose question was never posted is posted once, and an answer to a posted one reaches the held call the usual way.
+
 Approving a call to a tool that declares an `ApprovalScope` grants that scope for the rest of the task, and the question says what the scope covers. Each hold has an id, `approval.decided` and `approval.hold_spent` name the hold they settle, and only an approved, unspent hold answers an identical call.
 
 A capability's `target.resolve` answer may carry `choices`, each a `key` and an optional `startsAt` instant. The person is then asked to pick one of them or cancel, in the order given, and the reply is read against exactly those options (carried on the `approval.hold_opened` record). A choice without `startsAt` runs the call now. A choice with `startsAt` runs nothing now: the gate writes a once schedule of the person who approved it, carrying the approved call in its `approved_call` column (`approval.deferred`), and the model is told the schedule's ID and time.
@@ -486,6 +488,7 @@ The runtime configuration is the JSON file passed as `--runtime`, and it holds e
 | `agentProfiles` | named profiles with `allowedToolNames` |
 | `capabilities` | the capability service; see [Capabilities](#capabilities) |
 | `connectors` | `chatd` |
+| `inbound` | `connectors.askInThread` |
 | `terminal` | the execution settings in [What is not enforced](#what-is-not-enforced) |
 | `scheduler` | `retentionCheckIntervalMinute`, `taskSchedulePollIntervalSecond` |
 | `logging` | `directoryPath`, `retentionDays` |

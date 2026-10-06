@@ -1027,7 +1027,7 @@ func TestAChoiceIsReadFromThePersonsWordsAgainstTheOfferedOptions(t *testing.T) 
 func TestTheReaderIsOfferedTheOptionsTheClientWasSentWithTheirMeanings(t *testing.T) {
 	sent := permissionOptions(nil)
 
-	offered := readerOptionsOf(sent)
+	offered := approvalgate.ReplyOptionsOf(sent)
 
 	if len(offered) != 2 || offered[0].ID != string(approveOnceOptionID) || offered[1].ID != string(rejectOnceOptionID) {
 		t.Fatalf("expected the ids the client was sent, got %+v", offered)

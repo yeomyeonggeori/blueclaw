@@ -75,16 +75,20 @@ func (sessionTurn *SessionTurn) DeliverReply(ctx context.Context, turnResult age
 	return errorValue
 }
 
-func (sessionTurn *SessionTurn) DeliverApprovalQuestion(ctx context.Context, taskRunID string, question string) {
-	connectorRuntime, turn := sessionTurn.connectorRuntime, sessionTurn.turn
+func (sessionTurn *SessionTurn) DeliverApprovalQuestion(ctx context.Context, taskRunID string, question string) error {
+	return sessionTurn.connectorRuntime.deliverApprovalQuestion(ctx, sessionTurn.turn, taskRunID, question)
+}
+
+func (connectorRuntime *ConnectorRuntime) deliverApprovalQuestion(ctx context.Context, turn *inboundTurn, taskRunID string, question string) error {
 	reply := OutboundReply{Message: question, TaskRunID: taskRunID, ReplyKind: connectorReplyKindApprovalQuestion}
 	dispatchID, errorValue := turn.sendReply(withConnectorEvent(ctx, turn.event), turn.replyTarget, reply)
 	if errorValue != nil {
 		connectorRuntime.appendConnectorReplyEvent(taskRunID, agentcontract.TaskEventConnectorReplyFailed, connectorReplyEventBody(turn.event, reply, "", "", errorValue.Error()))
 		connectorRuntime.logger.Error("connector."+turn.platform+".outbound.failed", slog.String("taskRunID", taskRunID), slog.String("replyKind", reply.ReplyKind), slog.String("error", errorValue.Error()))
-		return
+		return errorValue
 	}
 	connectorRuntime.logger.Info("connector."+turn.platform+".outbound.sent", slog.String("taskRunID", taskRunID), slog.String("replyKind", reply.ReplyKind), slog.String("replyDispatchID", dispatchID))
+	return nil
 }
 
 func (sessionTurn *SessionTurn) ShowProgressBeforeAddressing(ctx context.Context) {

@@ -130,6 +130,7 @@ type ConnectorRuntime struct {
 	taskLauncher           *agentruntime.TaskLauncher
 	approvalGate           *approvalgate.Gate
 	approvalReplyReader    approvalreply.Reader
+	askingThreads          *askingThreads
 	toolCatalogBuilder     *agentruntime.ToolCatalogBuilder
 	workspaceActorFactory  security.WorkspaceActorFactory
 	agentIdentityProvider  func() agentcontract.AgentIdentity
@@ -233,6 +234,7 @@ func (connectorRuntime *ConnectorRuntime) Start(ctx context.Context) {
 		connectorRuntime.logger.Error("connector.requests.restore_failed", slog.String("error", errorValue.Error()))
 		return
 	}
+	go connectorRuntime.reissuePendingApprovalQuestions(ctx)
 	if connectorRuntime.queueRepository() != nil {
 		connectorRuntime.prepareConnectorWorkers("inbox", connectorInboxWorkerCount)
 		for index := 0; index < connectorInboxWorkerCount; index++ {
@@ -383,6 +385,7 @@ func (connectorRuntime *ConnectorRuntime) processInboundEventWithReplySender(ctx
 		return connectorRuntime.processTaskRetry(ctx, adapter, event, sendReply)
 	}
 	turn := &inboundTurn{adapter: adapter, platform: adapter.Name(), event: event, sendReply: sendReply}
+	ctx = withWaitHandoff(ctx, waitHandoffFrom(ctx).pausingProgressOf(connectorRuntime, ctx, turn))
 	connectorRuntime.logInboundEventReceived(turn)
 	if result, isHandled, errorValue := connectorRuntime.admitInboundTurn(ctx, turn); isHandled {
 		return result, errorValue

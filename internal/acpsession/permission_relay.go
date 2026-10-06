@@ -88,6 +88,11 @@ func (relay *PermissionRelay) routeFor(platform string, conversationID string) (
 	return route, isFound
 }
 
+func (relay *PermissionRelay) Serves(platform string, conversationID string) bool {
+	_, isFound := relay.routeFor(platform, conversationID)
+	return isFound
+}
+
 func (relay *PermissionRelay) conversationsHeld() []string {
 	relay.mutex.RLock()
 	defer relay.mutex.RUnlock()

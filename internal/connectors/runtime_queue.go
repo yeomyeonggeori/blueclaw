@@ -57,9 +57,7 @@ func (connectorRuntime *ConnectorRuntime) processNextQueuedConnectorEvent(ctx co
 		return false
 	}
 	connectorRuntime.decideClaimedBurst(ctx, queuedEvents)
-	for _, queuedEvent := range queuedEvents {
-		connectorRuntime.processQueuedConnectorEvent(ctx, queuedEvent)
-	}
+	connectorRuntime.processClaimedEvents(ctx, &claimedEvents{pending: queuedEvents})
 	return true
 }
 
@@ -73,6 +71,9 @@ func (connectorRuntime *ConnectorRuntime) processQueuedConnectorEvent(ctx contex
 	event = withInboundDecision(event)
 	queuedEvent.Event = event
 	connectorRuntime.logConnectorQueueWait(event)
+	if connectorRuntime.settleAnswerInThread(ctx, adapter, queuedEvent) {
+		return
+	}
 	lock := connectorRuntime.conversationLock(event.Platform + ":" + event.ConversationID)
 	if event.TaskRetry == nil && (connectorRuntime.pendingRequests.isSuperseded(event.DedupeKey()) || (len(event.PreviousMessages) == 0 && connectorRuntime.shouldProcessBeforeConversationLock(ctx, adapter, event))) {
 		connectorRuntime.processQueuedConnectorEventWithAdapter(ctx, adapter, queuedEvent)
@@ -83,7 +84,19 @@ func (connectorRuntime *ConnectorRuntime) processQueuedConnectorEvent(ctx contex
 		return
 	}
 	defer lock.Unlock()
-	connectorRuntime.processQueuedConnectorEventWithAdapter(ctx, adapter, queuedEvent)
+	connectorRuntime.processQueuedConnectorEventWithAdapter(withWaitHandoff(ctx, waitHandoffFrom(ctx).holdingConversation(lock)), adapter, queuedEvent)
+}
+
+func (connectorRuntime *ConnectorRuntime) settleAnswerInThread(ctx context.Context, adapter PlatformAdapter, queuedEvent QueuedConnectorEvent) bool {
+	result, isAnswer, errorValue := connectorRuntime.answerAskingThread(ctx, adapter, queuedEvent.Event)
+	if errorValue != nil {
+		connectorRuntime.markQueuedConnectorEventFailed(queuedEvent, errorValue)
+		return true
+	}
+	if isAnswer {
+		connectorRuntime.markQueuedConnectorEventSucceeded(queuedEvent.Event, result)
+	}
+	return isAnswer
 }
 
 func (connectorRuntime *ConnectorRuntime) releaseQueuedConnectorEventToTheConversationInFlight(queuedEvent QueuedConnectorEvent) {
@@ -136,6 +149,10 @@ func (connectorRuntime *ConnectorRuntime) processQueuedConnectorEventWithAdapter
 		connectorRuntime.logger.Info("connector."+event.Platform+".inbox.deferred", slog.String("messageID", event.MessageID), slog.String("reason", result.Reason))
 		return
 	}
+	connectorRuntime.markQueuedConnectorEventSucceeded(event, result)
+}
+
+func (connectorRuntime *ConnectorRuntime) markQueuedConnectorEventSucceeded(event PlatformInboundEvent, result ConnectorRuntimeResult) {
 	if errorValue := connectorRuntime.queueRepository().MarkConnectorEventSucceeded(event, result); errorValue != nil {
 		connectorRuntime.logger.Warn("connector."+event.Platform+".inbox.mark_succeeded_failed", slog.String("messageID", event.MessageID), slog.String("error", errorValue.Error()))
 	}

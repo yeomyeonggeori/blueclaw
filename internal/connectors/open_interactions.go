@@ -136,14 +136,7 @@ func (connectorRuntime *ConnectorRuntime) decideOpenInteractions(ctx context.Con
 
 func (connectorRuntime *ConnectorRuntime) recordOpenInteractionRouting(turn *inboundTurn, open openInteractions, decision agentcontract.TurnDecision) {
 	if open.hasConfirmation {
-		connectorRuntime.taskRunService.AppendTaskEvent(open.confirmation.TaskRun.TaskRunID, agentcontract.TaskEventConfirmationReplyClassified, agentruntime.MarshalBody(map[string]any{
-			"messageID":   turn.event.MessageID,
-			"route":       decision.Route,
-			"approval":    decision.Approval,
-			"choices":     decision.Choices,
-			"reason":      decision.Reason,
-			"replyPrompt": strings.TrimSpace(turn.event.Prompt),
-		}))
+		connectorRuntime.recordConfirmationReplyClassified(open.confirmation.TaskRun.TaskRunID, turn.event, decision)
 	}
 	if open.hasAsk {
 		connectorRuntime.taskRunService.AppendTaskEvent(open.ask.TaskRunID, agentcontract.TaskEventAskReplyClassified, agentruntime.MarshalBody(map[string]any{
@@ -161,6 +154,17 @@ func (connectorRuntime *ConnectorRuntime) recordOpenInteractionRouting(turn *inb
 			"latestUserInput": strings.TrimSpace(turn.event.Prompt),
 		}))
 	}
+}
+
+func (connectorRuntime *ConnectorRuntime) recordConfirmationReplyClassified(taskRunID string, event PlatformInboundEvent, decision agentcontract.TurnDecision) {
+	connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventConfirmationReplyClassified, agentruntime.MarshalBody(map[string]any{
+		"messageID":   event.MessageID,
+		"route":       decision.Route,
+		"approval":    decision.Approval,
+		"choices":     decision.Choices,
+		"reason":      decision.Reason,
+		"replyPrompt": strings.TrimSpace(event.Prompt),
+	}))
 }
 
 func (connectorRuntime *ConnectorRuntime) settleOpenInteractions(ctx context.Context, turn *inboundTurn) (ConnectorRuntimeResult, bool, error) {
