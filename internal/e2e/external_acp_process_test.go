@@ -4,10 +4,7 @@ package e2e
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"net/http/httptest"
 	"os"
 	"os/exec"
@@ -189,68 +186,17 @@ func externalProcessFactory(t *testing.T, binaryPath string) harnessdriver.Facto
 		endpoint := scenarioModelEndpoint{languageModel: dependencies.TaskTierLanguageModels.Low, decisionModel: dependencies.DecisionModel}
 		server := httptest.NewServer(endpoint.handler())
 		t.Cleanup(server.Close)
-		return externalScenarioProcess{binaryPath: binaryPath, serverURL: server.URL, dependencies: dependencies}
+		return acpharness.AgentCommand{
+			Path:        binaryPath,
+			Arguments:   []string{"-endpoint", server.URL + "/v1", "-model", scriptedModelName, "-structured-output-only"},
+			Environment: append(os.Environ(), decisionEnvironment(server.URL, dependencies)...),
+		}
 	}
 	factory, errorValue := bundledACPHarnessFactory(bluecollaracp.NewFactoryOverProcess(processFor))
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	return factory
-}
-
-type externalScenarioProcess struct {
-	binaryPath   string
-	serverURL    string
-	dependencies harnessdriver.Dependencies
-}
-
-func (process externalScenarioProcess) Start(ctx context.Context) (io.Writer, io.Reader, func() error, error) {
-	request, isPresent := acpharness.TurnRequestFrom(ctx)
-	if !isPresent {
-		return nil, nil, nil, errors.New("the external agent starts for a turn, and this start carried none")
-	}
-	bundlePath, errorValue := writeInstructionBundle(process.dependencies.InstructionBundleLoader())
-	if errorValue != nil {
-		return nil, nil, nil, errorValue
-	}
-	input, output, wait, errorValue := process.command(bundlePath, request).Start(ctx)
-	if errorValue != nil {
-		_ = os.Remove(bundlePath)
-		return nil, nil, nil, errorValue
-	}
-	return input, output, func() error {
-		defer os.Remove(bundlePath)
-		return wait()
-	}, nil
-}
-
-func (process externalScenarioProcess) command(bundlePath string, request agentcontract.AgentTurnRequest) acpharness.AgentCommand {
-	return acpharness.AgentCommand{
-		Path: process.binaryPath,
-		Arguments: []string{
-			"-endpoint", process.serverURL + "/v1",
-			"-model", scriptedModelName,
-			"-structured-output-only",
-			"-instruction-bundle", bundlePath,
-			"-host-checked-tools", strings.Join(bluecollaracp.HostCheckedToolNames(request), ","),
-			"-pinned-skills", strings.Join(request.PinnedSkillNames, ","),
-		},
-		Environment: append(os.Environ(), decisionEnvironment(process.serverURL, process.dependencies)...),
-	}
-}
-
-func writeInstructionBundle(bundle agentcontract.InstructionBundle) (string, error) {
-	document, errorValue := json.Marshal(bundle)
-	if errorValue != nil {
-		return "", errorValue
-	}
-	file, errorValue := os.CreateTemp("", "instruction-bundle-*.json")
-	if errorValue != nil {
-		return "", errorValue
-	}
-	defer file.Close()
-	_, errorValue = file.Write(document)
-	return file.Name(), errorValue
 }
 
 func decisionEnvironment(serverURL string, dependencies harnessdriver.Dependencies) []string {

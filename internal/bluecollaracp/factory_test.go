@@ -41,14 +41,6 @@ func toolSetWithOneGatedTool(t *testing.T) *toolcontract.ToolSet {
 	return toolSet
 }
 
-func TestOnlyTheToolsTheHostGatesAreLeftForTheHostToCheck(t *testing.T) {
-	toolNames := HostCheckedToolNames(agentcontract.AgentTurnRequest{ToolSet: toolSetWithOneGatedTool(t)})
-
-	if !slices.Equal(toolNames, []string{"event_add"}) {
-		t.Fatalf("the agent asks again about a call the host already holds for approval, and skips asking about a call only it would gate, got %v", toolNames)
-	}
-}
-
 func TestThePromptMetaNamesTheRunAndHandsOverTheRequestWithoutWhatTheAgentOwns(t *testing.T) {
 	request := agentcontract.AgentTurnRequest{
 		ExistingTaskRunID: "run-7",
@@ -62,7 +54,7 @@ func TestThePromptMetaNamesTheRunAndHandsOverTheRequestWithoutWhatTheAgentOwns(t
 		},
 	}
 
-	meta := promptMeta(request)
+	meta := promptMetaFor(harnessdriver.Dependencies{})(request)
 
 	if meta[acpagent.TaskRunMetaKey] != "run-7" {
 		t.Fatalf("the agent adopts the run the host named, got %+v", meta)
@@ -80,7 +72,7 @@ func TestThePromptMetaNamesTheRunAndHandsOverTheRequestWithoutWhatTheAgentOwns(t
 }
 
 func TestATurnWithNoRunNamesNoneToTheAgent(t *testing.T) {
-	if _, isNamed := promptMeta(agentcontract.AgentTurnRequest{})[acpagent.TaskRunMetaKey]; isNamed {
+	if _, isNamed := promptMetaFor(harnessdriver.Dependencies{})(agentcontract.AgentTurnRequest{})[acpagent.TaskRunMetaKey]; isNamed {
 		t.Fatal("an empty run name would make the agent adopt a run called nothing")
 	}
 }

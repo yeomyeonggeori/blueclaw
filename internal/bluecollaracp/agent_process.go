@@ -41,21 +41,6 @@ func (process agentProcess) optionsFor(request agentcontract.AgentTurnRequest) a
 		LanguageModels:    process.dependencies.TaskTierLanguageModels,
 		DecisionModel:     process.dependencies.DecisionModel,
 		LLMCallRepository: process.dependencies.LLMCallRepository,
-		Skills: acpagent.Skills{
-			InstructionBundleLoader: process.dependencies.InstructionBundleLoader,
-			Retriever:               process.skillRetriever,
-			PinnedSkillNames:        request.PinnedSkillNames,
-		},
-		HostCheckedToolNames: HostCheckedToolNames(request),
+		Skills:            acpagent.Skills{Retriever: process.skillRetriever},
 	}
-}
-
-func HostCheckedToolNames(request agentcontract.AgentTurnRequest) []string {
-	toolNames := []string{}
-	for _, toolDefinition := range request.ToolSet.ListDescribedToolDefinitions() {
-		if toolDefinition.RequiresApproval {
-			toolNames = append(toolNames, toolDefinition.Name)
-		}
-	}
-	return toolNames
 }
