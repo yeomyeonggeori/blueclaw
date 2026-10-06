@@ -270,8 +270,12 @@ type routingEvidence struct {
 
 func evaluateGatewayRouting(t *testing.T, judgeName string, newJudge routingJudgeFactory) routingEvidence {
 	t.Helper()
+	return evaluateGatewayRoutingCases(t, judgeName, selectedRoutingCases(t), newJudge)
+}
+
+func evaluateGatewayRoutingCases(t *testing.T, judgeName string, cases []routingCase, newJudge routingJudgeFactory) routingEvidence {
+	t.Helper()
 	decisionModel, endpoint := routingDecisionModel(t)
-	cases := selectedRoutingCases(t)
 	evidence := routingEvidence{Judge: judgeName, DecisionURL: endpoint.URL, ModelName: endpoint.ModelName, GeneratedAt: time.Now().UTC().Format(time.RFC3339), Split: strings.TrimSpace(os.Getenv(routingSplitVariable))}
 	for run := 1; run <= routingRunCount(t); run++ {
 		outcomes := judgeEveryCase(cases, decisionModel, newJudge)

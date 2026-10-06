@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -16,8 +17,6 @@ import (
 const scenarioIgnoringAddressingResponse = `{"target":"anyone","shouldRespond":false,"dutyMatch":false,"dutyName":"","dutyConfidence":0}`
 
 const scenarioDecisionModelName = "scenario-decision-model"
-
-const scenarioAddressingOnlyTurn = "addressing_only"
 
 type scenarioTurnScript struct {
 	turnIndex     int
@@ -69,18 +68,15 @@ func (decisionModel *scenarioDecisionModel) Decide(ctx context.Context, request 
 	if decisionModel.turnScript == nil {
 		return decisionModel.languageModelTurn.Decide(ctx, request)
 	}
+	if inboundengagement.AsksOnlyGatewayQuestions(request.Questions) {
+		return decisionModel.answersFrom(request, decisionModel.gatewayOutcome()), nil
+	}
 	if outcome, isDecided := decisionModel.decidedTurn(); isDecided && asksOnlyAboutTools(request.Questions) {
 		return decisionModel.answersFrom(request, outcome), nil
 	}
 	turnDocument, errorValue := decisionModel.turnScript.next()
 	if errorValue != nil {
 		return model.DecisionResponse{}, errorValue
-	}
-	if strings.TrimSpace(turnDocument) == scenarioAddressingOnlyTurn {
-		return model.DecisionResponse{
-			Answers:   intaketest.Answers(request.Questions, decisionModel.addressingOnlyOutcome),
-			ModelName: scenarioDecisionModelName,
-		}, nil
 	}
 	var turnDecision agentcontract.TurnDecision
 	if errorValue := json.Unmarshal([]byte(strings.TrimSpace(turnDocument)), &turnDecision); errorValue != nil {
@@ -111,7 +107,7 @@ func (decisionModel *scenarioDecisionModel) decidedTurnReadingTheScript() (intak
 
 func (decisionModel *scenarioDecisionModel) decideNextScriptedTurn() {
 	turnDocument, errorValue := decisionModel.turnScript.next()
-	if errorValue != nil || strings.TrimSpace(turnDocument) == scenarioAddressingOnlyTurn {
+	if errorValue != nil {
 		return
 	}
 	var turnDecision agentcontract.TurnDecision
@@ -143,8 +139,11 @@ func asksOnlyAboutTools(questions map[string]model.DecisionQuestion) bool {
 	return len(questions) > 0
 }
 
-func (decisionModel *scenarioDecisionModel) addressingOnlyOutcome(string) intaketest.Outcome {
-	return intaketest.Outcome{Addressing: decisionModel.addressing}
+func (decisionModel *scenarioDecisionModel) gatewayOutcome() intaketest.Outcome {
+	return intaketest.Outcome{
+		Addressing:   decisionModel.addressing,
+		TurnDecision: agentcontract.TurnDecision{BusyRoute: agentcontract.BusyRouteNewTask},
+	}
 }
 
 func scenarioAddressingDecision(addressingResponse string) agentcontract.AddressingDecision {

@@ -14,7 +14,10 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
-const baselineEvidencePath = "testdata/gateway_routing_baseline_evidence.json"
+const (
+	baselineEvidencePath = "testdata/gateway_routing_baseline_evidence.json"
+	deciderEvidencePath  = "testdata/gateway_routing_decider_evidence.json"
+)
 
 func TestGatewayRoutingDeciderLive(t *testing.T) {
 	evidence := evaluateGatewayRouting(t, "decider", func(decisionModel model.DecisionModel) routingJudge {
@@ -86,19 +89,24 @@ func deciderFactsFor(routing routingCase) inboundengagement.Facts {
 
 func baselineRunsFor(t *testing.T, split string) []routingRunSummary {
 	t.Helper()
-	document, errorValue := os.ReadFile(baselineEvidencePath)
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	baseline := routingEvidence{}
-	if errorValue := json.Unmarshal(document, &baseline); errorValue != nil {
-		t.Fatal(errorValue)
-	}
 	runs := []routingRunSummary{}
-	for index, outcomes := range baseline.Outcomes {
+	for index, outcomes := range readRoutingEvidence(t, baselineEvidencePath).Outcomes {
 		runs = append(runs, summarizeRoutingRun(index+1, outcomesOfSplit(outcomes, split)))
 	}
 	return runs
+}
+
+func readRoutingEvidence(t *testing.T, evidencePath string) routingEvidence {
+	t.Helper()
+	document, errorValue := os.ReadFile(evidencePath)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	evidence := routingEvidence{}
+	if errorValue := json.Unmarshal(document, &evidence); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	return evidence
 }
 
 func outcomesOfSplit(outcomes []routingCaseOutcome, split string) []routingCaseOutcome {

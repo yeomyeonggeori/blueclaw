@@ -3,13 +3,11 @@ package connectors
 import (
 	"context"
 	"log/slog"
-	"slices"
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 type inboundTurn struct {
@@ -26,21 +24,18 @@ type inboundTurn struct {
 	taskWaitResolution  inboundTaskWaitResolution
 	engagedAckEmojiName string
 
-	routerToolSet            *toolcontract.ToolSet
 	turnDecision             agentcontract.TurnDecision
 	hasTurnDecision          bool
 	settledCalls             []agentcontract.CarriedOutCall
 	pendingAskInteraction    AskInteraction
 	hasPendingAskInteraction bool
-	keptTaskRunIDs           []string
 	clearsActiveGoal         bool
 
 	activeGoal    agentcontract.ActiveGoal
 	hasActiveGoal bool
 
-	addressingLaunch  inboundengagement.Decision
-	decidedTurnFields *agentcontract.TurnDecision
-	priorTask         agentcontract.PriorTaskContext
+	addressingLaunch inboundengagement.Decision
+	priorTask        agentcontract.PriorTaskContext
 
 	stopProgress      func()
 	isProgressStarted bool
@@ -133,21 +128,13 @@ func (connectorRuntime *ConnectorRuntime) resolveOpenInteractions(ctx context.Co
 	return connectorRuntime.settleOpenInteractions(ctx, turn)
 }
 
-func (connectorRuntime *ConnectorRuntime) routerToolSetForTurn(turn *inboundTurn) *toolcontract.ToolSet {
-	return connectorRuntime.currentTaskLauncher().RouterToolSet(connectorRuntime.buildTaskLaunchRequest(connectorRuntime.conversationTurnFor(turn, nil)))
-}
-
 func (connectorRuntime *ConnectorRuntime) resolveTurnActiveGoal(ctx context.Context, turn *inboundTurn) {
 	turn.activeGoal, turn.hasActiveGoal = connectorRuntime.findActiveGoal(turn.personID, turn.platform, turn.event, turn.taskWaitResolution)
-	if turn.hasActiveGoal && (turn.clearsActiveGoal || slices.Contains(turn.keptTaskRunIDs, turn.activeGoal.TaskRunID)) {
+	if turn.hasActiveGoal && (turn.clearsActiveGoal) {
 		turn.activeGoal = agentcontract.ActiveGoal{}
 		turn.hasActiveGoal = false
 	}
 	if len(turn.event.PreviousMessages) > 0 {
-		turn.activeGoal = agentcontract.ActiveGoal{}
-		turn.hasActiveGoal = false
-	}
-	if turn.hasActiveGoal && turn.turnDecision.Route == agentcontract.TurnRouteStartTask {
 		turn.activeGoal = agentcontract.ActiveGoal{}
 		turn.hasActiveGoal = false
 	}
@@ -169,11 +156,10 @@ func (connectorRuntime *ConnectorRuntime) resolveTurnAddressing(ctx context.Cont
 	}
 	if !turn.addressingLaunch.ShouldLaunch {
 		reason := firstNonEmptyString(turn.addressingLaunch.IgnoreReason, "addressing_react_only")
-		ignoredAttributes := append([]any{slog.String("messageID", turn.event.MessageID), slog.String("reason", reason)}, heldIntakeDecisionAttributes(turn.event)...)
+		ignoredAttributes := append([]any{slog.String("messageID", turn.event.MessageID), slog.String("reason", reason)}, heldGatewayDecisionAttributes(turn.event)...)
 		connectorRuntime.logger.Info("connector."+turn.platform+".ingress.ignored", ignoredAttributes...)
 		return ConnectorRuntimeResult{Handled: true, Platform: turn.platform, Ignored: true, Reason: reason}, true
 	}
-	turn.decidedTurnFields = connectorRuntime.decidedTurnFields(ctx, turn.adapter, turn.event)
 	if connectorRuntime.shouldDeferNewTaskLaunch(turn.hasPendingAskInteraction, turn.hasActiveGoal) {
 		connectorRuntime.logger.Info("connector."+turn.platform+".ingress.deferred", slog.String("messageID", turn.event.MessageID), slog.String("reason", "task_intake_quiesced"))
 		return ConnectorRuntimeResult{Handled: true, Platform: turn.platform, Ignored: true, Reason: "task_intake_quiesced"}, true
@@ -219,7 +205,6 @@ func (connectorRuntime *ConnectorRuntime) launchTurn(ctx context.Context, turn *
 		turnResult.ReplySuppressionReason = "ambient_duty_no_reply"
 	}
 	taskRunID := turnResult.TaskRun.TaskRunID
-	connectorRuntime.recordHeldIntakeCalls(taskRunID, turn.event)
 	taskDuration := time.Since(taskStartedAt)
 	connectorRuntime.logger.Info("connector."+turn.platform+".agent.completed", slog.String("messageID", turn.event.MessageID), slog.String("taskRunID", taskRunID), slog.Int64("duration_ms", taskDuration.Milliseconds()))
 	connectorRuntime.appendTaskExecutionDuration(taskRunID, taskDuration)
@@ -240,7 +225,6 @@ func (connectorRuntime *ConnectorRuntime) conversationTurnFor(turn *inboundTurn,
 		HasActiveGoal:             turn.hasActiveGoal,
 		PriorTask:                 turn.priorTask,
 		PrecomputedTurnDecision:   precomputedTurnDecision,
-		DecidedTurnFields:         turn.decidedTurnFields,
 		AmbientDuty:               turn.addressingLaunch.AmbientDuty,
 		CheckpointSender:          connectorRuntime.checkpointSenderForTurn(turn.platform, turn.event, turn.replyTarget, turn.sendReply),
 		AccessibleConversationIDs: []string{turn.event.ConversationID},

@@ -68,7 +68,7 @@ func (connectorRuntime *ConnectorRuntime) processQueuedConnectorEvent(ctx contex
 		connectorRuntime.markQueuedConnectorEventFailed(queuedEvent, errorValue)
 		return
 	}
-	event = withInboundDecision(event)
+	event = withGatewayDecision(event)
 	queuedEvent.Event = event
 	connectorRuntime.logConnectorQueueWait(event)
 	if connectorRuntime.settleAnswerInThread(ctx, adapter, queuedEvent) {

@@ -320,3 +320,45 @@ func TestAChannelMessageWithoutADecisionModelIsAnError(t *testing.T) {
 		t.Fatal("expected an error when a call is needed and no model is configured")
 	}
 }
+
+func TestACallRecordNamesEveryMessageItJudged(t *testing.T) {
+	observedRecords := []agentcontract.LLMCallRecord{}
+
+	_, errorValue := NewDecisionModelDecider(defaultAnswers(), nil).Decide(context.Background(), messageFacts("O", true, "a", "b"), func(record agentcontract.LLMCallRecord) { observedRecords = append(observedRecords, record) })
+
+	if errorValue != nil || len(observedRecords) != 1 {
+		t.Fatalf("expected one call record, got %+v: %v", observedRecords, errorValue)
+	}
+	if strings.Join(observedRecords[0].DecidedMessageIDs, ",") != "message-a,message-b" {
+		t.Fatalf("expected the record to name both messages, got %v", observedRecords[0].DecidedMessageIDs)
+	}
+}
+
+func TestABurstFitsTheBudgetUntilItsRequestOutgrowsIt(t *testing.T) {
+	decider := NewDecisionModelDecider(defaultAnswers(), nil)
+
+	if !decider.FitsBurstBudget(messageFacts("O", true, "short")) {
+		t.Fatal("a short message should fit the burst budget")
+	}
+	if decider.FitsBurstBudget(messageFacts("O", true, strings.Repeat("a", burstRequestByteBudget))) {
+		t.Fatal("a message as long as the whole budget should not fit")
+	}
+}
+
+func TestOnlyARequestOfGatewayQuestionsIsAGatewayRequest(t *testing.T) {
+	gatewayRequest := newDecisionRequest(withOpenTask(messageFacts("O", true, "a"), "running"))
+	planningQuestions := map[string]model.DecisionQuestion{"m1." + agentcontract.IntakeQuestionRoute: model.ChoiceQuestion{}.Question()}
+	for questionName, question := range gatewayRequest.Questions {
+		planningQuestions[questionName] = question
+	}
+
+	if !AsksOnlyGatewayQuestions(gatewayRequest.Questions) {
+		t.Fatalf("expected the decider's own questions to be gateway questions: %v", gatewayRequest.Questions)
+	}
+	if AsksOnlyGatewayQuestions(planningQuestions) {
+		t.Fatal("a request that also asks for the route is a planning request")
+	}
+	if AsksOnlyGatewayQuestions(nil) {
+		t.Fatal("a request with no questions is not a gateway request")
+	}
+}

@@ -28,7 +28,7 @@ func (connectorRuntime *ConnectorRuntime) readReplyToQuestion(ctx context.Contex
 		return "", false, errNoApprovalReplyReader
 	}
 	observe := func(callRecord agentcontract.LLMCallRecord) {
-		connectorRuntime.recordIntakeCalls(taskRunID, []agentcontract.LLMCallRecord{callRecord})
+		connectorRuntime.recordCallsOnTask(taskRunID, []agentcontract.LLMCallRecord{callRecord})
 	}
 	return connectorRuntime.approvalReplyReader.Read(ctx, question, reply, observe)
 }

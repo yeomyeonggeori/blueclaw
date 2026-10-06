@@ -28,14 +28,14 @@ func (router *countingTurnRouter) PlanObserved(ctx context.Context, request agen
 	return router.inner.PlanObserved(ctx, request, callLedger)
 }
 
-func TestAFailedDecisionIsLoggedAndLeavesTheRouterOneDecision(t *testing.T) {
+func TestAFailedGatewayDecisionIsLoggedAndLeavesTheRouterOneDecision(t *testing.T) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	connectorRuntimeHarness := harnesstest.New(taskRunService)
 	router := &countingTurnRouter{inner: connectorRuntimeHarness}
 	connectorRuntime, adapter := connectorRuntimeForHarness(
 		t,
 		connectorRuntimeHarness,
-		&scriptedIntakeDecider{errorValue: errors.New("decision model unavailable")},
+		&scriptedGatewayDecider{errorValue: errors.New("decision model unavailable")},
 		connectorRuntimeHarness,
 		router,
 		taskRunService,
@@ -44,12 +44,14 @@ func TestAFailedDecisionIsLoggedAndLeavesTheRouterOneDecision(t *testing.T) {
 	loggedLines := &strings.Builder{}
 	connectorRuntime.logger = slog.New(slog.NewTextHandler(loggedLines, &slog.HandlerOptions{Level: slog.LevelWarn}))
 
-	if _, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, testInboundEvent("message-1")); errorValue != nil {
+	mentionedEvent := testChannelInboundEvent("message-1")
+	mentionedEvent.Context.Addressing.BotMentioned = true
+	if _, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, mentionedEvent); errorValue != nil {
 		t.Fatalf("expected the turn to launch through the router: %v", errorValue)
 	}
 
 	logged := loggedLines.String()
-	if !strings.Contains(logged, "connector.test.intake.decision_failed") {
+	if !strings.Contains(logged, "connector.test.addressing.decision_failed") {
 		t.Fatalf("expected the failed decision to be logged, got %q", logged)
 	}
 	if !strings.Contains(logged, "message-1") || !strings.Contains(logged, "decision model unavailable") {

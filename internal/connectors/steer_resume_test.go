@@ -36,7 +36,7 @@ func TestResumePausedTaskForSteerWithoutLaunchContextSendsNoticeWithoutOrphan(t 
 		return "dispatch-1", nil
 	}
 
-	result, errorValue := connectorRuntime.resumePausedTaskForSteer(context.Background(), "test", event, ReplyTarget{}, pausedTaskRun, "이어서 해", agentcontract.TurnDecision{}, sendReply)
+	result, errorValue := connectorRuntime.resumePausedTaskForSteer(context.Background(), "test", event, ReplyTarget{}, pausedTaskRun, "이어서 해", sendReply)
 
 	if errorValue != nil {
 		t.Fatalf("missing launch context must be handled with a notice, got error %v", errorValue)
@@ -152,7 +152,7 @@ func TestResumePausedTaskForSteerImportsVisibleAttachments(t *testing.T) {
 	}}
 	sendReply := func(context.Context, ReplyTarget, OutboundReply) (string, error) { return "dispatch-1", nil }
 
-	_, errorValue := connectorRuntime.resumePausedTaskForSteer(context.Background(), "test", event, ReplyTarget{}, pausedTaskRun, "원본 이미지를 넣어서 수정해줘", agentcontract.TurnDecision{}, sendReply)
+	_, errorValue := connectorRuntime.resumePausedTaskForSteer(context.Background(), "test", event, ReplyTarget{}, pausedTaskRun, "원본 이미지를 넣어서 수정해줘", sendReply)
 
 	if errorValue != nil {
 		t.Fatal(errorValue)

@@ -3,55 +3,42 @@ package connectors
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
-type blockingIntakeDecider struct {
-	unlimitedBurstBudget
-	mutex      sync.Mutex
-	callCount  int
-	entered    chan struct{}
-	release    chan struct{}
-	addressing agentcontract.AddressingDecision
-	turnFields agentcontract.TurnDecision
+type blockingGatewayDecider struct {
+	scriptedGatewayDecider
+	entered chan struct{}
+	release chan struct{}
+
+	hasBlockedACall atomic.Bool
 }
 
-func (decider *blockingIntakeDecider) Decide(_ context.Context, request agentcontract.IntakeDecisionRequest, _ *agentcontract.IntakeCallLedger) (agentcontract.IntakeDecisions, error) {
-	decider.mutex.Lock()
-	decider.callCount++
-	isFirstCall := decider.callCount == 1
-	decider.mutex.Unlock()
-	if isFirstCall {
+func (decider *blockingGatewayDecider) Decide(ctx context.Context, facts inboundengagement.Facts, observe agentcontract.LLMCallObserver) ([]inboundengagement.Judgment, error) {
+	if decider.hasBlockedACall.CompareAndSwap(false, true) {
 		close(decider.entered)
 		<-decider.release
 	}
-	decisions := agentcontract.IntakeDecisions{}
-	for _, message := range request.Messages {
-		decisions.Messages = append(decisions.Messages, agentcontract.IntakeMessageDecision{
-			MessageID:  message.MessageID,
-			Addressing: decider.addressing,
-			TurnFields: decider.turnFields,
-		})
-	}
-	return decisions, nil
+	return decider.scriptedGatewayDecider.Decide(ctx, facts, observe)
 }
 
-func TestASlowIntakeCallDoesNotParkTheNextMessageOnTheConversationLock(t *testing.T) {
+func TestASlowGatewayCallDoesNotParkTheNextMessageOnTheConversationLock(t *testing.T) {
 	connectorRuntime, _ := newTestConnectorRuntime(t, testLanguageModel{reply: "ok"})
-	decider := &blockingIntakeDecider{
-		entered:    make(chan struct{}),
-		release:    make(chan struct{}),
-		addressing: addressedToBot(),
-		turnFields: startTaskTurnDecision(),
+	decider := &blockingGatewayDecider{
+		scriptedGatewayDecider: scriptedGatewayDecider{addressing: addressedToBot()},
+		entered:                make(chan struct{}),
+		release:                make(chan struct{}),
 	}
-	connectorRuntime.UseIntakeDecider(decider)
+	connectorRuntime.UseGatewayDecider(decider)
 	repository := &testConnectorQueueRepository{}
 	connectorRuntime.UseEventRepository(repository)
-	releaseIntake := sync.OnceFunc(func() { close(decider.release) })
-	t.Cleanup(releaseIntake)
+	releaseGateway := sync.OnceFunc(func() { close(decider.release) })
+	t.Cleanup(releaseGateway)
 
 	firstEvent := testChannelInboundEvent("first")
 	secondEvent := testChannelInboundEvent("second")
@@ -66,7 +53,7 @@ func TestASlowIntakeCallDoesNotParkTheNextMessageOnTheConversationLock(t *testin
 	select {
 	case <-decider.entered:
 	case <-time.After(5 * time.Second):
-		t.Fatal("expected the first message to reach the intake model")
+		t.Fatal("expected the first message to reach the gateway model")
 	}
 
 	secondReturned := make(chan struct{})
@@ -77,7 +64,7 @@ func TestASlowIntakeCallDoesNotParkTheNextMessageOnTheConversationLock(t *testin
 	select {
 	case <-secondReturned:
 	case <-time.After(2 * time.Second):
-		t.Fatal("the second message parked its inbox worker on the conversation lock while the first message's intake call was still in flight")
+		t.Fatal("the second message parked its inbox worker on the conversation lock while the first message's gateway call was still in flight")
 	}
 
 	repository.mutex.Lock()
@@ -87,11 +74,11 @@ func TestASlowIntakeCallDoesNotParkTheNextMessageOnTheConversationLock(t *testin
 		t.Fatalf("expected the second message handed back to the queue instead of held, got %+v", releasedEvents)
 	}
 
-	releaseIntake()
+	releaseGateway()
 	select {
 	case <-firstFinished:
 	case <-time.After(5 * time.Second):
-		t.Fatal("expected the first message to finish once the intake model answered")
+		t.Fatal("expected the first message to finish once the gateway model answered")
 	}
 
 	claimedEvents, errorValue := repository.ClaimPendingConnectorEvents(1, connectorClaimLeaseDuration)

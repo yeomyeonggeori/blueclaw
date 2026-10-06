@@ -10,6 +10,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
@@ -62,6 +63,7 @@ func TestATurnShowsItsConversationThatTheAgentIsWorkingUntilItAnswers(t *testing
 	for _, conversationType := range []string{"dm", "channel"} {
 		t.Run(conversationType, func(t *testing.T) {
 			connectorRuntime, adapter := progressRecordingConnectorRuntime()
+			connectorRuntime.UseGatewayDecider(addressedToTheAgent{})
 			launcher := &progressWitnessingLauncher{recordingLauncher: &recordingLauncher{reply: "확인했습니다"}, adapter: adapter}
 			connection, _ := connectedPairWithCollaborators(t, &recordingClient{}, Collaborators{
 				TaskLauncher: launcher,
@@ -92,12 +94,12 @@ func TestATurnShowsItsConversationThatTheAgentIsWorkingUntilItAnswers(t *testing
 
 func TestAMessageTheAgentIgnoresShowsNoProgress(t *testing.T) {
 	connectorRuntime, adapter := progressRecordingConnectorRuntime()
+	connectorRuntime.UseGatewayDecider(addressedToSomebodyElse{})
 	connection, _ := connectedPairWithCollaborators(t, &recordingClient{}, Collaborators{
-		TaskLauncher:  &recordingLauncher{},
-		Directory:     staticDirectory{},
-		ReplyReader:   scriptedReader{},
-		IntakeDecider: addressedToSomebodyElse{},
-		SessionTurns:  connectorRuntime,
+		TaskLauncher: &recordingLauncher{},
+		Directory:    staticDirectory{},
+		ReplyReader:  scriptedReader{},
+		SessionTurns: connectorRuntime,
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 
@@ -115,21 +117,21 @@ type progressWitnessingDecider struct {
 	hasDecided           bool
 }
 
-func (decider *progressWitnessingDecider) Decide(ctx context.Context, request agentcontract.IntakeDecisionRequest, ledger *agentcontract.IntakeCallLedger) (agentcontract.IntakeDecisions, error) {
+func (decider *progressWitnessingDecider) Decide(ctx context.Context, facts inboundengagement.Facts, observe agentcontract.LLMCallObserver) ([]inboundengagement.Judgment, error) {
 	decider.wasShowingAtDecision = decider.adapter.isShowing()
 	decider.hasDecided = true
-	return decider.addressedToSomebodyElse.Decide(ctx, request, ledger)
+	return decider.addressedToSomebodyElse.Decide(ctx, facts, observe)
 }
 
 func TestAMentionInARoomShowsProgressWhileTheAgentDecidesWhetherToAnswer(t *testing.T) {
 	connectorRuntime, adapter := progressRecordingConnectorRuntime()
 	decider := &progressWitnessingDecider{adapter: adapter}
+	connectorRuntime.UseGatewayDecider(decider)
 	connection, _ := connectedPairWithCollaborators(t, &recordingClient{}, Collaborators{
-		TaskLauncher:  &recordingLauncher{},
-		Directory:     staticDirectory{},
-		ReplyReader:   scriptedReader{},
-		IntakeDecider: decider,
-		SessionTurns:  connectorRuntime,
+		TaskLauncher: &recordingLauncher{},
+		Directory:    staticDirectory{},
+		ReplyReader:  scriptedReader{},
+		SessionTurns: connectorRuntime,
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 

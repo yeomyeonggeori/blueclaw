@@ -21,6 +21,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
@@ -217,6 +218,12 @@ func connectorRuntimeForTest(taskRunStore taskstate.TaskRunStore) *connectors.Co
 		taskRunService = task.NewTaskRunService(task.NewTaskEventService())
 	}
 	return connectors.NewConnectorRuntime(identity.NewIdentityService(policy.PolicyProjection{}), nil, taskRunService, task.NewTaskEventService(), silentLogger())
+}
+
+func connectorRuntimeDeciding(taskRunStore taskstate.TaskRunStore, gatewayDecider inboundengagement.Decider) *connectors.ConnectorRuntime {
+	connectorRuntime := connectorRuntimeForTest(taskRunStore)
+	connectorRuntime.UseGatewayDecider(gatewayDecider)
+	return connectorRuntime
 }
 
 func silentLogger() *slog.Logger {

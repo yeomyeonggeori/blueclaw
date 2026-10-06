@@ -255,7 +255,7 @@ func TestAnExternalHarnessToolCallShowsAsAProgressLine(t *testing.T) {
 	baseHarness := harnesstest.New(taskRunService)
 	baseHarness.TurnDecision = startTaskTurnDecision()
 	baseHarness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "done"}
-	connectorRuntime, baseAdapter := connectorRuntimeForHarness(t, externalHarnessDouble{baseHarness}, baseHarness, baseHarness, baseHarness, taskRunService, testLanguageModel{reply: "stub"})
+	connectorRuntime, baseAdapter := connectorRuntimeForHarness(t, externalHarnessDouble{baseHarness}, harnessGateway(baseHarness), baseHarness, baseHarness, taskRunService, testLanguageModel{reply: "stub"})
 	adapter := &editingTestAdapter{testAdapter: baseAdapter}
 	connectorRuntime.RegisterAdapter(adapter)
 

@@ -925,7 +925,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	runtime.UseReplyGenerator(reply.NewGenerator(highLanguageModel, instructionBundleLoader))
 	scenarioTurnRouter := intake.NewTurnRouter(firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel), scenarioDecisionPlanner, agentcontract.IntakeOptions{IsEnabled: true, DefaultTaskLevel: agentcontract.TaskLevelLow})
 	runtime.UseTurnRouter(scenarioTurnRouter)
-	runtime.UseIntakeDecider(scenarioDecisionPlanner)
+	runtime.UseGatewayDecider(inboundengagement.NewDecisionModelDecider(intakeDecisionModel, nil))
 	runtime.UseApprovalReplyReader(scenarioReader)
 	runtime.RegisterAdapter(adapter)
 	runtime.UseWorkspaceID("e2e")
@@ -987,7 +987,6 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 			TaskLauncher:       virtualTaskLauncher,
 			Directory:          identityService,
 			ReplyReader:        scenarioReader,
-			IntakeDecider:      scenarioDecisionPlanner,
 			AttachmentImporter: runtime,
 			SessionTurns:       runtime,
 			TaskRunStore:       taskRunService,
@@ -2794,11 +2793,7 @@ func scenarioTurnScriptEntries(scenario VirtualSessionScenario, virtualTurn Virt
 	if virtualTurn.ReadsNoIntakeDecision {
 		return nil
 	}
-	scriptedTurns := scenarioRouterResponsesForTurn(scenario, virtualTurn)
-	if len(scriptedTurns) == 0 {
-		return []string{scenarioAddressingOnlyTurn}
-	}
-	return scriptedTurns
+	return scenarioRouterResponsesForTurn(scenario, virtualTurn)
 }
 
 func scenarioTurnWordsResponse() string {
