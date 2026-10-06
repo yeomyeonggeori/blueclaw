@@ -1,0 +1,102 @@
+{"id": "c01", "category": "affirmative_ko", "question": "내일 오후 3시 '분기 리뷰' 일정을 캘린더에서 삭제할까요?", "reply": "ㅇ", "expected": "approve"}
+{"id": "c02", "category": "affirmative_ko", "question": "박예시 님(park@example.com)에게 견적서 메일을 보낼까요?", "reply": "ㅇㅇ", "expected": "approve"}
+{"id": "c03", "category": "affirmative_ko", "question": "'2분기 보고서.pdf'를 공개 폴더에 게시할까요?", "reply": "ㅇㅋ", "expected": "approve"}
+{"id": "c04", "category": "affirmative_ko", "question": "이샘플 님께 보내는 휴가 승인 메시지를 지금 전송할까요?", "reply": "네", "expected": "approve"}
+{"id": "c05", "category": "affirmative_ko", "question": "지난달 회의록 파일 3개를 휴지통으로 옮길까요?", "reply": "넵", "expected": "approve"}
+{"id": "c06", "category": "affirmative_ko", "question": "외부 주소 partner@example.com으로 계약서 초안을 보내도 될까요?", "reply": "응", "expected": "approve"}
+{"id": "c07", "category": "affirmative_ko", "question": "금요일 팀 회식 일정을 새로 만들고 참석자 5명에게 초대장을 보낼까요?", "reply": "그래", "expected": "approve"}
+{"id": "c08", "category": "affirmative_ko", "question": "공유 문서 '온보딩 가이드'의 편집 권한을 전체 직원에게 열까요?", "reply": "해줘", "expected": "approve"}
+{"id": "c09", "category": "affirmative_ko", "question": "월요일 10시 정기 회의를 취소하고 참석자에게 알릴까요?", "reply": "좋아요", "expected": "approve"}
+{"id": "c10", "category": "affirmative_ko", "question": "고객 목록 시트에서 중복된 행 12개를 삭제할까요?", "reply": "진행해", "expected": "approve"}
+{"id": "c11", "category": "affirmative_ko", "question": "이번 주 근태 요약을 이샘플 님에게 메일로 보낼까요?", "reply": "네 부탁드려요", "expected": "approve"}
+{"id": "c12", "category": "affirmative_ko", "question": "웹사이트에 '공지사항' 페이지를 지금 공개할까요?", "reply": "ㅇㅇ 해줘", "expected": "approve"}
+{"id": "c13", "category": "affirmative_ko", "question": "내일 오후 3시 '분기 리뷰' 일정을 캘린더에서 삭제할까요?", "reply": "응응", "expected": "approve"}
+{"id": "c14", "category": "affirmative_ko", "question": "박예시 님(park@example.com)에게 견적서 메일을 보낼까요?", "reply": "오케이", "expected": "approve"}
+{"id": "c15", "category": "affirmative_ko", "question": "'2분기 보고서.pdf'를 공개 폴더에 게시할까요?", "reply": "ㅇㅇ ㄱㄱ", "expected": "approve"}
+{"id": "c16", "category": "affirmative_ko", "question": "이샘플 님께 보내는 휴가 승인 메시지를 지금 전송할까요?", "reply": "네 그렇게 해주세요", "expected": "approve"}
+{"id": "c17", "category": "affirmative_en", "question": "지난달 회의록 파일 3개를 휴지통으로 옮길까요?", "reply": "yes", "expected": "approve"}
+{"id": "c18", "category": "affirmative_en", "question": "외부 주소 partner@example.com으로 계약서 초안을 보내도 될까요?", "reply": "ok", "expected": "approve"}
+{"id": "c19", "category": "affirmative_en", "question": "금요일 팀 회식 일정을 새로 만들고 참석자 5명에게 초대장을 보낼까요?", "reply": "Yes please", "expected": "approve"}
+{"id": "c20", "category": "affirmative_en", "question": "공유 문서 '온보딩 가이드'의 편집 권한을 전체 직원에게 열까요?", "reply": "go ahead", "expected": "approve"}
+{"id": "c21", "category": "rejection", "question": "월요일 10시 정기 회의를 취소하고 참석자에게 알릴까요?", "reply": "아니", "expected": "reject"}
+{"id": "c22", "category": "rejection", "question": "고객 목록 시트에서 중복된 행 12개를 삭제할까요?", "reply": "아니요", "expected": "reject"}
+{"id": "c23", "category": "rejection", "question": "이번 주 근태 요약을 이샘플 님에게 메일로 보낼까요?", "reply": "ㄴㄴ", "expected": "reject"}
+{"id": "c24", "category": "rejection", "question": "웹사이트에 '공지사항' 페이지를 지금 공개할까요?", "reply": "취소", "expected": "reject"}
+{"id": "c25", "category": "rejection", "question": "내일 오후 3시 '분기 리뷰' 일정을 캘린더에서 삭제할까요?", "reply": "하지마", "expected": "reject"}
+{"id": "c26", "category": "rejection", "question": "박예시 님(park@example.com)에게 견적서 메일을 보낼까요?", "reply": "잠깐 멈춰", "expected": "reject"}
+{"id": "c27", "category": "rejection", "question": "'2분기 보고서.pdf'를 공개 폴더에 게시할까요?", "reply": "아니 보내지 마", "expected": "reject"}
+{"id": "c28", "category": "rejection", "question": "이샘플 님께 보내는 휴가 승인 메시지를 지금 전송할까요?", "reply": "싫어", "expected": "reject"}
+{"id": "c29", "category": "rejection", "question": "지난달 회의록 파일 3개를 휴지통으로 옮길까요?", "reply": "no", "expected": "reject"}
+{"id": "c30", "category": "rejection", "question": "외부 주소 partner@example.com으로 계약서 초안을 보내도 될까요?", "reply": "그만해", "expected": "reject"}
+{"id": "c31", "category": "ambiguous", "question": "금요일 팀 회식 일정을 새로 만들고 참석자 5명에게 초대장을 보낼까요?", "reply": "음 잠깐만", "expected": "other"}
+{"id": "c32", "category": "ambiguous", "question": "공유 문서 '온보딩 가이드'의 편집 권한을 전체 직원에게 열까요?", "reply": "근데 그 메일 누구한테 가는 거야?", "expected": "other"}
+{"id": "c33", "category": "ambiguous", "question": "월요일 10시 정기 회의를 취소하고 참석자에게 알릴까요?", "reply": "글쎄", "expected": "other"}
+{"id": "c34", "category": "ambiguous", "question": "고객 목록 시트에서 중복된 행 12개를 삭제할까요?", "reply": "나중에 할게", "expected": "other"}
+{"id": "c35", "category": "ambiguous", "question": "이번 주 근태 요약을 이샘플 님에게 메일로 보낼까요?", "reply": "이거 되돌릴 수 있어?", "expected": "other"}
+{"id": "c36", "category": "ambiguous", "question": "웹사이트에 '공지사항' 페이지를 지금 공개할까요?", "reply": "음...", "expected": "other"}
+{"id": "c37", "category": "ambiguous", "question": "내일 오후 3시 '분기 리뷰' 일정을 캘린더에서 삭제할까요?", "reply": "수신자는 박예시로 바꿔서 보내줘", "expected": "other"}
+{"id": "c38", "category": "ambiguous", "question": "박예시 님(park@example.com)에게 견적서 메일을 보낼까요?", "reply": "내용 먼저 보여줘", "expected": "other"}
+{"id": "c39", "category": "ambiguous", "question": "'2분기 보고서.pdf'를 공개 폴더에 게시할까요?", "reply": "ㅇ?", "expected": "other"}
+{"id": "c40", "category": "ambiguous", "question": "이샘플 님께 보내는 휴가 승인 메시지를 지금 전송할까요?", "reply": "내일 아침에 다시 물어봐줘", "expected": "other"}
+{"id": "c41", "category": "new_request", "question": "지난달 회의록 파일 3개를 휴지통으로 옮길까요?", "reply": "내일 날씨 알려줘", "expected": "other"}
+{"id": "c42", "category": "new_request", "question": "외부 주소 partner@example.com으로 계약서 초안을 보내도 될까요?", "reply": "회의록 정리해줘", "expected": "other"}
+{"id": "c43", "category": "new_request", "question": "금요일 팀 회식 일정을 새로 만들고 참석자 5명에게 초대장을 보낼까요?", "reply": "이샘플 님 전화번호 알려줘", "expected": "other"}
+{"id": "c44", "category": "new_request", "question": "공유 문서 '온보딩 가이드'의 편집 권한을 전체 직원에게 열까요?", "reply": "오늘 점심 메뉴 추천해줘", "expected": "other"}
+{"id": "c45", "category": "new_request", "question": "월요일 10시 정기 회의를 취소하고 참석자에게 알릴까요?", "reply": "이번 주 일정 보여줘", "expected": "other"}
+{"id": "c46", "category": "new_request", "question": "고객 목록 시트에서 중복된 행 12개를 삭제할까요?", "reply": "영어로 번역해줘", "expected": "other"}
+{"id": "c47", "category": "approve_with_remark", "question": "이번 주 근태 요약을 이샘플 님에게 메일로 보낼까요?", "reply": "응 근데 제목은 그대로 둬", "expected": "approve"}
+{"id": "c48", "category": "approve_with_remark", "question": "웹사이트에 '공지사항' 페이지를 지금 공개할까요?", "reply": "네 감사합니다", "expected": "approve"}
+{"id": "c49", "category": "approve_with_remark", "question": "내일 오후 3시 '분기 리뷰' 일정을 캘린더에서 삭제할까요?", "reply": "ㅇㅇ 빨리 해줘", "expected": "approve"}
+{"id": "c50", "category": "approve_with_remark", "question": "박예시 님(park@example.com)에게 견적서 메일을 보낼까요?", "reply": "좋아요 부탁해요", "expected": "approve"}
+{"id": "c51", "category": "approve_with_remark", "question": "'2분기 보고서.pdf'를 공개 폴더에 게시할까요?", "reply": "해줘 고마워", "expected": "approve"}
+{"id": "c52", "category": "approve_with_remark", "question": "이샘플 님께 보내는 휴가 승인 메시지를 지금 전송할까요?", "reply": "넵 확인했습니다", "expected": "approve"}
+{"id": "c53", "category": "approve_with_remark", "question": "지난달 회의록 파일 3개를 휴지통으로 옮길까요?", "reply": "그래 진행해 고마워", "expected": "approve"}
+{"id": "c54", "category": "approve_with_remark", "question": "외부 주소 partner@example.com으로 계약서 초안을 보내도 될까요?", "reply": "ㅇㅋ 수고했어", "expected": "approve"}
+{"id": "c55", "category": "reject_with_remark", "question": "금요일 팀 회식 일정을 새로 만들고 참석자 5명에게 초대장을 보낼까요?", "reply": "아니요 그건 제가 직접 할게요", "expected": "reject"}
+{"id": "c56", "category": "reject_with_remark", "question": "공유 문서 '온보딩 가이드'의 편집 권한을 전체 직원에게 열까요?", "reply": "ㄴㄴ 아직 이르잖아", "expected": "reject"}
+{"id": "c57", "category": "reject_with_remark", "question": "'2분기 보고서.pdf'를 공개 폴더에 게시할까요?", "reply": "취소해줘 내용이 틀렸어", "expected": "reject"}
+{"id": "c58", "category": "condition_on_approval", "question": "고객 목록 시트에서 중복된 행 12개를 삭제할까요?", "reply": "응 근데 수신자는 박예시로 바꿔", "expected": "other"}
+{"id": "c59", "category": "condition_on_approval", "question": "이번 주 근태 요약을 이샘플 님에게 메일로 보낼까요?", "reply": "좋아요 대신 제목을 바꿔줘", "expected": "other"}
+{"id": "c60", "category": "condition_on_approval", "question": "웹사이트에 '공지사항' 페이지를 지금 공개할까요?", "reply": "네 근데 내일로 미뤄줘", "expected": "other"}
+{"id": "h01", "category": "affirmative_ko", "question": "오늘 오후 5시 '주간 보고' 일정에서 박예시 님을 제외할까요?", "reply": "ㅇㅇㅇ", "expected": "approve"}
+{"id": "h02", "category": "affirmative_ko", "question": "이샘플 님에게 지난달 청구서를 example.com 주소로 다시 보낼까요?", "reply": "ㅇㅇ ㅇㅋ", "expected": "approve"}
+{"id": "h03", "category": "affirmative_ko", "question": "'제품 소개서 최종.pptx'를 외부 공유 링크로 열어둘까요?", "reply": "넹", "expected": "approve"}
+{"id": "h04", "category": "affirmative_ko", "question": "받은편지함에서 광고 메일 20통을 보관함으로 옮길까요?", "reply": "예", "expected": "approve"}
+{"id": "h05", "category": "affirmative_ko", "question": "내일 오전 9시 면접 일정을 다른 시간으로 옮기고 지원자에게 알릴까요?", "reply": "그렇게 해주세요", "expected": "approve"}
+{"id": "h06", "category": "affirmative_ko", "question": "팀 채널에 '점검 예정 안내' 공지를 올릴까요?", "reply": "웅", "expected": "approve"}
+{"id": "h07", "category": "affirmative_ko", "question": "'고객 의견.xlsx' 파일을 영구 삭제할까요?", "reply": "ㄱㄱ", "expected": "approve"}
+{"id": "h08", "category": "affirmative_ko", "question": "이번 달 휴가 신청서를 인사팀 hr@example.com으로 전달할까요?", "reply": "그래요", "expected": "approve"}
+{"id": "h09", "category": "affirmative_ko", "question": "새 폴더 '2026 계약'을 만들고 파일 4개를 옮길까요?", "reply": "좋아", "expected": "approve"}
+{"id": "h10", "category": "affirmative_ko", "question": "박예시 님의 공유 문서 편집 권한을 해제할까요?", "reply": "해주세요", "expected": "approve"}
+{"id": "h11", "category": "affirmative_ko", "question": "다음 주 수요일 워크숍 초대장을 전 직원에게 발송할까요?", "reply": "ㅇㅋㅇㅋ", "expected": "approve"}
+{"id": "h12", "category": "affirmative_en", "question": "저장된 메모 '아이디어 모음'을 삭제할까요?", "reply": "sure", "expected": "approve"}
+{"id": "h13", "category": "affirmative_en", "question": "오늘 오후 5시 '주간 보고' 일정에서 박예시 님을 제외할까요?", "reply": "yep", "expected": "approve"}
+{"id": "h14", "category": "affirmative_en", "question": "이샘플 님에게 지난달 청구서를 example.com 주소로 다시 보낼까요?", "reply": "okay", "expected": "approve"}
+{"id": "h15", "category": "rejection", "question": "'제품 소개서 최종.pptx'를 외부 공유 링크로 열어둘까요?", "reply": "아니야", "expected": "reject"}
+{"id": "h16", "category": "rejection", "question": "받은편지함에서 광고 메일 20통을 보관함으로 옮길까요?", "reply": "안 돼", "expected": "reject"}
+{"id": "h17", "category": "rejection", "question": "내일 오전 9시 면접 일정을 다른 시간으로 옮기고 지원자에게 알릴까요?", "reply": "노노", "expected": "reject"}
+{"id": "h18", "category": "rejection", "question": "팀 채널에 '점검 예정 안내' 공지를 올릴까요?", "reply": "ㄴㄴㄴ", "expected": "reject"}
+{"id": "h19", "category": "rejection", "question": "'고객 의견.xlsx' 파일을 영구 삭제할까요?", "reply": "보내지 마", "expected": "reject"}
+{"id": "h20", "category": "rejection", "question": "이번 달 휴가 신청서를 인사팀 hr@example.com으로 전달할까요?", "reply": "하지 말아줘", "expected": "reject"}
+{"id": "h21", "category": "rejection", "question": "새 폴더 '2026 계약'을 만들고 파일 4개를 옮길까요?", "reply": "그건 아니야", "expected": "reject"}
+{"id": "h22", "category": "rejection", "question": "박예시 님의 공유 문서 편집 권한을 해제할까요?", "reply": "stop", "expected": "reject"}
+{"id": "h23", "category": "ambiguous", "question": "다음 주 수요일 워크숍 초대장을 전 직원에게 발송할까요?", "reply": "잠시만요", "expected": "other"}
+{"id": "h24", "category": "ambiguous", "question": "저장된 메모 '아이디어 모음'을 삭제할까요?", "reply": "누구한테 가는지 먼저 알려줘", "expected": "other"}
+{"id": "h25", "category": "ambiguous", "question": "오늘 오후 5시 '주간 보고' 일정에서 박예시 님을 제외할까요?", "reply": "흠", "expected": "other"}
+{"id": "h26", "category": "ambiguous", "question": "이샘플 님에게 지난달 청구서를 example.com 주소로 다시 보낼까요?", "reply": "생각 좀 해볼게", "expected": "other"}
+{"id": "h27", "category": "ambiguous", "question": "'제품 소개서 최종.pptx'를 외부 공유 링크로 열어둘까요?", "reply": "이거 복구할 수 있어?", "expected": "other"}
+{"id": "h28", "category": "ambiguous", "question": "받은편지함에서 광고 메일 20통을 보관함으로 옮길까요?", "reply": "첨부파일도 같이 가?", "expected": "other"}
+{"id": "h29", "category": "new_request", "question": "내일 오전 9시 면접 일정을 다른 시간으로 옮기고 지원자에게 알릴까요?", "reply": "오늘 일정 알려줘", "expected": "other"}
+{"id": "h30", "category": "new_request", "question": "팀 채널에 '점검 예정 안내' 공지를 올릴까요?", "reply": "이 문서 요약해줘", "expected": "other"}
+{"id": "h31", "category": "new_request", "question": "'고객 의견.xlsx' 파일을 영구 삭제할까요?", "reply": "내일 회의 몇 시야?", "expected": "other"}
+{"id": "h32", "category": "new_request", "question": "이번 달 휴가 신청서를 인사팀 hr@example.com으로 전달할까요?", "reply": "메일 초안 써줘", "expected": "other"}
+{"id": "h33", "category": "approve_with_remark", "question": "새 폴더 '2026 계약'을 만들고 파일 4개를 옮길까요?", "reply": "응 근데 제목은 건드리지 마", "expected": "approve"}
+{"id": "h34", "category": "approve_with_remark", "question": "박예시 님의 공유 문서 편집 권한을 해제할까요?", "reply": "네 감사해요", "expected": "approve"}
+{"id": "h35", "category": "approve_with_remark", "question": "다음 주 수요일 워크숍 초대장을 전 직원에게 발송할까요?", "reply": "ㅇㅇ 서둘러줘", "expected": "approve"}
+{"id": "h36", "category": "approve_with_remark", "question": "저장된 메모 '아이디어 모음'을 삭제할까요?", "reply": "좋아요 그대로 진행해주세요", "expected": "approve"}
+{"id": "h37", "category": "approve_with_remark", "question": "오늘 오후 5시 '주간 보고' 일정에서 박예시 님을 제외할까요?", "reply": "넵 ㄱㅅ", "expected": "approve"}
+{"id": "h38", "category": "reject_with_remark", "question": "이샘플 님에게 지난달 청구서를 example.com 주소로 다시 보낼까요?", "reply": "아니요 내가 직접 보낼게요", "expected": "reject"}
+{"id": "h39", "category": "reject_with_remark", "question": "'제품 소개서 최종.pptx'를 외부 공유 링크로 열어둘까요?", "reply": "하지마 아직 아냐", "expected": "reject"}
+{"id": "h40", "category": "condition_on_approval", "question": "받은편지함에서 광고 메일 20통을 보관함으로 옮길까요?", "reply": "응 근데 참조에 이샘플 넣어줘", "expected": "other"}
+{"id": "h41", "category": "condition_on_approval", "question": "내일 오전 9시 면접 일정을 다른 시간으로 옮기고 지원자에게 알릴까요?", "reply": "네 대신 다음 주로 해줘", "expected": "other"}
+{"id": "h42", "category": "condition_on_approval", "question": "팀 채널에 '점검 예정 안내' 공지를 올릴까요?", "reply": "좋아요 파일명은 바꿔서", "expected": "other"}

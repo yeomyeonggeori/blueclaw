@@ -39,10 +39,13 @@ func (process agentProcess) Start(ctx context.Context) (io.Writer, io.Reader, fu
 
 func (process agentProcess) optionsFor(request agentcontract.AgentTurnRequest) acpagent.Options {
 	return acpagent.Options{
-		AgentName:         request.AgentIdentity.Name,
-		LanguageModels:    process.dependencies.TaskTierLanguageModels,
-		DecisionModel:     process.dependencies.DecisionModel,
-		LLMCallRepository: process.dependencies.LLMCallRepository,
-		Skills:            acpagent.Skills{Retriever: process.skillRetriever},
+		AgentName:           request.AgentIdentity.Name,
+		LanguageModels:      process.dependencies.TaskTierLanguageModels,
+		DecisionModel:       process.dependencies.DecisionModel,
+		LLMCallRepository:   process.dependencies.LLMCallRepository,
+		Skills:              acpagent.Skills{Retriever: process.skillRetriever},
+		TurnOptions:         turnOptionsOf(process.dependencies.RuntimeConfiguration),
+		CompanyProvider:     process.dependencies.CompanyProvider,
+		RouterLanguageModel: process.dependencies.IntakeLanguageModelProvider,
 	}
 }
