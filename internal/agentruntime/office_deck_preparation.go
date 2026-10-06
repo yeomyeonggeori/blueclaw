@@ -20,8 +20,6 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/access"
-	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 )
@@ -298,29 +296,8 @@ func downloadImage(ctx context.Context, address string) ([]byte, error) {
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) callRecordTool(ctx context.Context, request ToolCatalogRequest, toolName string, input json.RawMessage) (mcp.ToolResult, bool) {
-	if request.RecordCatalog == nil {
-		return mcp.ToolResult{}, false
-	}
-	descriptor, isDiscovered := discoveredDescriptorNamed(toolCatalogBuilder.discoveredRecordTools(request), toolName)
-	if !isDiscovered || !access.CanAccess(access.Request{PersonAccess: request.PersonAccess, Action: access.ActionExecute, Resource: descriptor.PolicyResource}) {
-		return mcp.ToolResult{}, false
-	}
-	result, errorValue := request.RecordCatalog.CallTool(ctx, request.RequesterEmail, toolName, input)
-	if errorValue != nil || result.IsError {
-		return mcp.ToolResult{}, false
-	}
-	result = toolCatalogBuilder.recordFileKeeper(request).withFilesKept(ctx, toolName, input, result)
-	toolCatalogBuilder.recordOfficeFacts(ctx, request, toolName, input, result)
-	return result, true
-}
-
-func discoveredDescriptorNamed(descriptors []capability.ToolDescriptor, toolName string) (capability.ToolDescriptor, bool) {
-	for _, descriptor := range descriptors {
-		if modelNameOf(descriptor) == toolName {
-			return descriptor, true
-		}
-	}
-	return capability.ToolDescriptor{}, false
+	result, errorValue := toolCatalogBuilder.callRecordToolAsRequester(ctx, request, toolName, input)
+	return result, errorValue == nil && !result.IsError
 }
 
 func textOf(value *string) string {

@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/adminapi"
+	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/userapi"
 )
 
@@ -39,6 +40,7 @@ type RouterDependencies struct {
 	PersonaHandler        PersonaHandler
 	LearningHandler       adminapi.LearningHandler
 	ToolCatalogHandler    http.Handler
+	ScriptHostHandler     http.Handler
 }
 
 func NewRouter(routerDependencies RouterDependencies) http.Handler {
@@ -47,6 +49,9 @@ func NewRouter(routerDependencies RouterDependencies) http.Handler {
 	if routerDependencies.ToolCatalogHandler != nil {
 		multiplexer.Handle("/harness/tool-catalog", routerDependencies.ToolCatalogHandler)
 		multiplexer.Handle("/harness/tool-catalog/", routerDependencies.ToolCatalogHandler)
+	}
+	if routerDependencies.ScriptHostHandler != nil {
+		multiplexer.Handle(agentruntime.ScriptHostPath+"/", http.StripPrefix(agentruntime.ScriptHostPath, routerDependencies.ScriptHostHandler))
 	}
 	multiplexer.HandleFunc("GET /admin/api/health", routerDependencies.HealthHandler.HandleHealth)
 	multiplexer.HandleFunc("GET /debug/pprof/", pprof.Index)

@@ -69,7 +69,7 @@ func samplePNG(t *testing.T, width int, height int) []byte {
 }
 
 type deckPreparationFixture struct {
-	officeContextFixture
+	taskFixture
 	dataRoom  *dataRoomStandIn
 	decisions *designDecisionStandIn
 }
@@ -77,7 +77,7 @@ type deckPreparationFixture struct {
 func newDeckPreparationFixture(t *testing.T) deckPreparationFixture {
 	t.Helper()
 	descriptors := []capability.ToolDescriptor{dataRoomDescriptor(companyDocumentListToolName), dataRoomDescriptor(companyDocumentDownloadToolName)}
-	fixture := newOfficeContextFixture(t, descriptors...)
+	fixture := newTaskFixture(t, descriptors...)
 	photo := samplePNG(t, 30, 20)
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) { _, _ = writer.Write(photo) }))
 	t.Cleanup(server.Close)
@@ -91,7 +91,7 @@ func newDeckPreparationFixture(t *testing.T) deckPreparationFixture {
 	fixture.request.Prompt = "딸기 농가 지원사업 발표자료를 만들어 주세요"
 	decisions := &designDecisionStandIn{}
 	fixture.builder.UseDeckDesignModel(decisions)
-	return deckPreparationFixture{officeContextFixture: fixture, dataRoom: dataRoom, decisions: decisions}
+	return deckPreparationFixture{taskFixture: fixture, dataRoom: dataRoom, decisions: decisions}
 }
 
 func (fixture deckPreparationFixture) requestPreparation(t *testing.T) {
@@ -112,7 +112,7 @@ func (fixture deckPreparationFixture) requestPreparation(t *testing.T) {
 }
 
 func TestTheRuntimeContextSaysTheHostPreparesDecksOnlyWithADesignModel(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	if prepares := string(fixture.contextTheShellReads(t)["preparesDecks"]); prepares != "false" {
 		t.Fatalf("a host with no design model told the office it prepares decks: %s", prepares)
 	}

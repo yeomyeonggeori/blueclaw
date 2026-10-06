@@ -9,7 +9,7 @@ import (
 
 const deckLayoutsRequest = `{"instructions":"Choose the layout of each page.","questions":{"page_01":{"instructions":"Page 1 of 2, a cover page.","options":{"cover_dark_minimal":"dark","cover_typography_hero":"type"}},"page_02":{"instructions":"Page 2 of 2, a content page.","options":{"hero_big_number":"number","three_column_cards":"three"}}}}`
 
-func (fixture officeContextFixture) writeDeckLayoutsRequest(t *testing.T, content string) {
+func (fixture taskFixture) writeDeckLayoutsRequest(t *testing.T, content string) {
 	t.Helper()
 	result := fixture.invoke(t, "bash", map[string]any{"command": `printf '%s' '` + content + `' > "$(dirname "$OFFICE_RUNTIME_CONTEXT")/` + officeContract.DeckLayouts.RequestFile + `"`})
 	if result.Failed() {
@@ -18,7 +18,7 @@ func (fixture officeContextFixture) writeDeckLayoutsRequest(t *testing.T, conten
 }
 
 func TestTheHostChoosesEveryPagesLayoutInOneDecisionAndAnswersWithTheRequestsDigest(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	decisions := &designDecisionStandIn{}
 	fixture.builder.UseDeckDesignModel(decisions)
 	fixture.request.Prompt = "Make a strategy deck."
@@ -43,7 +43,7 @@ func TestTheHostChoosesEveryPagesLayoutInOneDecisionAndAnswersWithTheRequestsDig
 }
 
 func TestLayoutsTheHostAlreadyChoseForTheSameOutlineAreNotAskedAgain(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	decisions := &designDecisionStandIn{}
 	fixture.builder.UseDeckDesignModel(decisions)
 	fixture.writeDeckLayoutsRequest(t, deckLayoutsRequest)
@@ -57,7 +57,7 @@ func TestLayoutsTheHostAlreadyChoseForTheSameOutlineAreNotAskedAgain(t *testing.
 }
 
 func TestAHostWithoutADeckDesignModelNeitherChoosesLayoutsNorAnnouncesIt(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	fixture.writeDeckLayoutsRequest(t, deckLayoutsRequest)
 	document := fixture.contextTheShellReads(t)
 	if string(document["choosesDeckLayouts"]) != "false" || string(document["deckLayouts"]) != "null" {

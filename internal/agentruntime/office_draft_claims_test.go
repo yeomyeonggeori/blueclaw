@@ -9,7 +9,7 @@ import (
 
 const draftClaimsRequest = `{"claims":[{"path":"slides[0].units[0]","at":"slide 1 title","text":"Three bets for 2027"},{"path":"slides[0].units[1]","at":"slide 1 text","text":"Churn fell to 1.2 percent after the pilot."}]}`
 
-func (fixture officeContextFixture) writeDraftClaimsRequest(t *testing.T, content string) {
+func (fixture taskFixture) writeDraftClaimsRequest(t *testing.T, content string) {
 	t.Helper()
 	result := fixture.invoke(t, "bash", map[string]any{"command": `printf '%s' '` + content + `' > "$(dirname "$OFFICE_RUNTIME_CONTEXT")/` + officeContract.DraftClaims.RequestFile + `"`})
 	if result.Failed() {
@@ -18,7 +18,7 @@ func (fixture officeContextFixture) writeDraftClaimsRequest(t *testing.T, conten
 }
 
 func TestTheHostJudgesTheClaimsOfADraftBeforeTheNextCommandAndAnswersInTheRuntimeContext(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	judge := &claimJudge{unsupportedText: "Churn fell to 1.2 percent after the pilot."}
 	fixture.builder.UseClaimDecisionModel(judge)
 	fixture.request.Prompt = "Make a strategy deck. Three bets for 2027."
@@ -46,7 +46,7 @@ func TestTheHostJudgesTheClaimsOfADraftBeforeTheNextCommandAndAnswersInTheRuntim
 }
 
 func TestADraftTheHostAlreadyJudgedIsNotJudgedAgain(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	judge := &claimJudge{}
 	fixture.builder.UseClaimDecisionModel(judge)
 	fixture.writeDraftClaimsRequest(t, draftClaimsRequest)
@@ -61,7 +61,7 @@ func TestADraftTheHostAlreadyJudgedIsNotJudgedAgain(t *testing.T) {
 }
 
 func TestAHostWithoutAClaimJudgeNeitherJudgesNorAnnouncesIt(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	fixture.writeDraftClaimsRequest(t, draftClaimsRequest)
 	document := fixture.contextTheShellReads(t)
 	if string(document["judgesDraftClaims"]) != "false" || string(document["draftClaims"]) != "null" {
@@ -70,7 +70,7 @@ func TestAHostWithoutAClaimJudgeNeitherJudgesNorAnnouncesIt(t *testing.T) {
 }
 
 func TestADraftWhoseAttachmentCouldNotBeReadIsJudgedUnsupportedOfNothing(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	fixture.request.VisibleContext = agentcontract.VisibleContext{CurrentMaterials: []agentcontract.VisibleContextMaterial{{MaterialID: "m-1", Filename: "scan.pdf", Path: "/inbox/scan.pdf", IsAvailable: true}}}
 	fixture.builder.UseClaimDecisionModel(&claimJudge{unsupportedText: "Churn fell to 1.2 percent after the pilot."})
 	fixture.writeDraftClaimsRequest(t, draftClaimsRequest)

@@ -3,6 +3,7 @@ package agentruntime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sort"
 	"strings"
 	"time"
@@ -158,7 +159,7 @@ type recordCatalogToolProvider struct {
 	request            ToolCatalogRequest
 	descriptors        []capability.ToolDescriptor
 	fileKeeper         answeredFileKeeper
-	officeFacts        func(context.Context, string, json.RawMessage, mcp.ToolResult)
+	answered           func(context.Context, string, json.RawMessage, mcp.ToolResult)
 	inputUnderApproval func(context.Context, json.RawMessage) json.RawMessage
 }
 
@@ -212,7 +213,7 @@ func (provider recordCatalogToolProvider) boundTool(descriptor capability.ToolDe
 				return toolcontract.ToolResult{}, errorValue
 			}
 			result = provider.fileKeeper.withFilesKept(toolContext, toolName, input, result)
-			provider.officeFacts(toolContext, toolName, input, result)
+			provider.answered(toolContext, toolName, input, result)
 			return recordCatalogToolResult(result, resultContract)
 		},
 	)
@@ -277,8 +278,9 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerRecordCatalogTools(
 			descriptors:        descriptors,
 			fileKeeper:         toolCatalogBuilder.recordFileKeeper(request),
 			inputUnderApproval: toolCatalogBuilder.inputUnderApproval,
-			officeFacts: func(ctx context.Context, toolName string, input json.RawMessage, result mcp.ToolResult) {
+			answered: func(ctx context.Context, toolName string, input json.RawMessage, result mcp.ToolResult) {
 				toolCatalogBuilder.recordOfficeFacts(ctx, request, toolName, input, result)
+				toolCatalogBuilder.recordAnsweredRecordTool(ctx, request, toolName, input, result)
 			},
 		},
 		Trust: toolcontract.ToolProviderExternal,
@@ -287,4 +289,33 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerRecordCatalogTools(
 		panic(errorValue)
 	}
 	toolCatalogBuilder.reportCapabilityQuarantines(quarantinedProviders)
+}
+
+var errRecordToolUnavailable = errors.New("the requester has no record tool by that name")
+
+func (toolCatalogBuilder *ToolCatalogBuilder) callRecordToolAsRequester(ctx context.Context, request ToolCatalogRequest, toolName string, input json.RawMessage) (mcp.ToolResult, error) {
+	if request.RecordCatalog == nil {
+		return mcp.ToolResult{}, errRecordToolUnavailable
+	}
+	descriptor, isDiscovered := discoveredDescriptorNamed(toolCatalogBuilder.discoveredRecordTools(request), toolName)
+	if !isDiscovered || !access.CanAccess(access.Request{PersonAccess: request.PersonAccess, Action: access.ActionExecute, Resource: descriptor.PolicyResource}) {
+		return mcp.ToolResult{}, errRecordToolUnavailable
+	}
+	result, errorValue := request.RecordCatalog.CallTool(ctx, request.RequesterEmail, toolName, input)
+	if errorValue != nil {
+		return mcp.ToolResult{}, errorValue
+	}
+	result = toolCatalogBuilder.recordFileKeeper(request).withFilesKept(ctx, toolName, input, result)
+	toolCatalogBuilder.recordOfficeFacts(ctx, request, toolName, input, result)
+	toolCatalogBuilder.recordAnsweredRecordTool(ctx, request, toolName, input, result)
+	return result, nil
+}
+
+func discoveredDescriptorNamed(descriptors []capability.ToolDescriptor, toolName string) (capability.ToolDescriptor, bool) {
+	for _, descriptor := range descriptors {
+		if modelNameOf(descriptor) == toolName {
+			return descriptor, true
+		}
+	}
+	return capability.ToolDescriptor{}, false
 }

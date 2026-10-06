@@ -10,11 +10,11 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"github.com/yeomyeonggeori/bluecollar/approval"
 	"io"
 	"log/slog"
 	"maps"
 	"math"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -25,6 +25,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/yeomyeonggeori/bluecollar/approval"
 
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"github.com/yeomyeonggeori/bluememo"
@@ -1092,10 +1094,21 @@ func virtualToolCatalogBuilder(
 	if len(scenario.CapabilityToolNames) > 0 || len(scenario.CapabilityToolDescriptors) > 0 {
 		toolCatalogBuilder.UseCapabilityToolDescriptors(capabilityClient, virtualCapabilityToolDescriptors(scenario))
 	}
+	serveScriptHost(toolCatalogBuilder)
 	if scenario.ConfigureToolCatalog != nil {
 		scenario.ConfigureToolCatalog(toolCatalogBuilder)
 	}
 	return toolCatalogBuilder
+}
+
+func serveScriptHost(toolCatalogBuilder *agentruntime.ToolCatalogBuilder) {
+	listener, errorValue := net.Listen("tcp", "127.0.0.1:0")
+	if errorValue != nil {
+		return
+	}
+	scriptHost := agentruntime.NewScriptHost()
+	go func() { _ = http.Serve(listener, scriptHost.Handler()) }()
+	toolCatalogBuilder.UseScriptHost(scriptHost, "http://"+listener.Addr().String())
 }
 
 func scenarioIntakeDecisionModel(scenario VirtualSessionScenario, turnScript *scenarioTurnScript, intakeLanguageModel model.LanguageModelProvider) model.DecisionModel {

@@ -12,7 +12,7 @@ const workbookSnapshot = `{"declaration":"/home/sample/documents/sales.workbook.
 	`"views":[{"title":"By quarter","sheet":"Summary","rows":[["Quarter","Revenue"],["Q1","1,230"]]}],` +
 	`"charts":[{"view":"By quarter","type":"line","title":"Revenue trend"}]}`
 
-func (fixture officeContextFixture) deliveredHolds(t *testing.T, name string) string {
+func (fixture taskFixture) deliveredHolds(t *testing.T, name string) string {
 	t.Helper()
 	result := fixture.invoke(t, "file_deliver", map[string]string{"path": "documents/" + name})
 	if result.Failed() || len(result.Attachments) != 1 {
@@ -22,7 +22,7 @@ func (fixture officeContextFixture) deliveredHolds(t *testing.T, name string) st
 }
 
 func TestADeliveredFileCarriesWhatItsSnapshotSaysItHolds(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	fixture.writeSnapshot(t, "sales.xlsx", workbookSnapshot)
 
 	holds := fixture.deliveredHolds(t, "sales.xlsx")
@@ -36,7 +36,7 @@ func TestADeliveredFileCarriesWhatItsSnapshotSaysItHolds(t *testing.T) {
 }
 
 func TestHoldsAreReadAfterTheClaimRemakeRewroteTheSnapshot(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	documentPath := fixture.writeSnapshot(t, "notice.pdf", noticeSnapshot)
 	entryPath := filepath.Join(BundledSkillRootPath(fixture.workspacePath), "office", "scripts", "office")
 	remade := `{"schema":"letter","given":{"title":null},"blanks":[{"field":"sections[0].blocks[0].text#1","label":"1. 이전 안내"}]}`
@@ -64,7 +64,7 @@ const deckSnapshot = `{"command":"office create","deck":"/home/sample/documents/
 	`"blanks":[]}`
 
 func TestADeckSnapshotHoldingOnlyItsBlanksCarriesNoHolds(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	fixture.writeSnapshot(t, "q3-review.pptx", showcaseDeckSnapshotWithoutSlides)
 
 	if holds := fixture.deliveredHolds(t, "q3-review.pptx"); holds != "" {
@@ -73,7 +73,7 @@ func TestADeckSnapshotHoldingOnlyItsBlanksCarriesNoHolds(t *testing.T) {
 }
 
 func TestADeckCarriesItsSlidesAndBlanks(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	fixture.writeSnapshot(t, "q3-review.pptx", deckSnapshot)
 
 	holds := fixture.deliveredHolds(t, "q3-review.pptx")
@@ -86,7 +86,7 @@ func TestADeckCarriesItsSlidesAndBlanks(t *testing.T) {
 }
 
 func TestAFileWithoutASnapshotCarriesNoHolds(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	documentPath := filepath.Join(fixture.homePath(), "documents", "notes.txt")
 	writeTestFile(t, documentPath, "notes")
 
@@ -96,7 +96,7 @@ func TestAFileWithoutASnapshotCarriesNoHolds(t *testing.T) {
 }
 
 func TestHoldsFollowThePersonsFilePermissions(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	documentPath := fixture.writeSnapshot(t, "sales.xlsx", workbookSnapshot)
 	snapshotPath := documentPath + officeContract.SourceSuffix
 	if errorValue := os.Chmod(snapshotPath, 0o000); errorValue != nil {

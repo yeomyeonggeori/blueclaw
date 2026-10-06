@@ -157,30 +157,6 @@ func (runtimeContext *officeRuntimeContext) keepRecordedFrom(ctx context.Context
 	}
 }
 
-func (toolCatalogBuilder *ToolCatalogBuilder) taskStartedAt(taskRunID string) time.Time {
-	createdAt, isKnown := toolCatalogBuilder.taskRunCreatedAt(taskRunID)
-	if !isKnown {
-		return time.Now()
-	}
-	return createdAt
-}
-
-func (toolCatalogBuilder *ToolCatalogBuilder) taskRunCreatedAt(taskRunID string) (time.Time, bool) {
-	if toolCatalogBuilder.taskRunService == nil || strings.TrimSpace(taskRunID) == "" {
-		return time.Time{}, false
-	}
-	taskRun, isFound := toolCatalogBuilder.taskRunService.FindTaskRun(taskRunID)
-	return taskRun.CreatedAt, isFound && !taskRun.CreatedAt.IsZero()
-}
-
-func (toolCatalogBuilder *ToolCatalogBuilder) companyLocation() *time.Location {
-	location, errorValue := time.LoadLocation(strings.TrimSpace(toolCatalogBuilder.companyTimeZone()))
-	if errorValue != nil {
-		return time.UTC
-	}
-	return location
-}
-
 func (toolCatalogBuilder *ToolCatalogBuilder) officeAttachments(request ToolCatalogRequest) []officeAttachment {
 	attachments := []officeAttachment{}
 	for _, material := range visibleAttachmentMaterials(request.VisibleContext) {

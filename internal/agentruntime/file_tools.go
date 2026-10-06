@@ -1418,6 +1418,11 @@ func (toolCatalogBuilder *ToolCatalogBuilder) attachFileTool(toolContext context
 		snapshot := toolCatalogBuilder.deliveredSnapshot(toolContext, handlerContext.request, concretePath)
 		attachment.Holds = snapshotHolds(snapshot)
 		replyNotes = append(replyNotes, deliveredFileNotes(attachment.Filename, snapshotBlankLabels(snapshot), fileChecks, review)...)
+		metadata := toolCatalogBuilder.deliveredMetadata(toolContext, handlerContext.request, concretePath)
+		if len(metadata.Holds) > 0 {
+			attachment.Holds = metadata.Holds
+		}
+		replyNotes = append(replyNotes, metadata.Notes...)
 		attachments = append(attachments, attachment)
 		deliveredPaths = append(deliveredPaths, attachment.DevicePath)
 	}

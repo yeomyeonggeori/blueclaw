@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func (fixture officeContextFixture) writeDocument(t *testing.T, name string) string {
+func (fixture taskFixture) writeDocument(t *testing.T, name string) string {
 	t.Helper()
 	documentPath := filepath.Join(fixture.homePath(), "documents", name)
 	if errorValue := os.MkdirAll(filepath.Dir(documentPath), 0o700); errorValue != nil {
@@ -17,14 +17,14 @@ func (fixture officeContextFixture) writeDocument(t *testing.T, name string) str
 	return documentPath
 }
 
-func (fixture officeContextFixture) deliver(t *testing.T, path string) (bool, string) {
+func (fixture taskFixture) deliver(t *testing.T, path string) (bool, string) {
 	t.Helper()
 	result := fixture.invoke(t, "file_deliver", map[string]string{"path": path})
 	return !result.Failed() && len(result.Attachments) == 1, result.ContentText()
 }
 
 func TestADocumentThisTaskWroteWithoutASkillIsDeliveredLikeAnyFile(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	fixture.writeDocument(t, "native_install_rig_final.pdf")
 
 	isDelivered, content := fixture.deliver(t, "documents/native_install_rig_final.pdf")

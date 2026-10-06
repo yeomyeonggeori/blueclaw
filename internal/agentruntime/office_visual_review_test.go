@@ -66,7 +66,7 @@ func (models *deckModels) GenerateStructuredResponse(_ context.Context, request 
 }
 
 type deckFixture struct {
-	officeContextFixture
+	taskFixture
 	directoryPath string
 	documentPath  string
 	recordPath    string
@@ -115,9 +115,9 @@ func (fixture deckFixture) snapshotJSON(claimTexts []string, blanks []map[string
 
 func newDeckFixture(t *testing.T) deckFixture {
 	t.Helper()
-	base := newOfficeContextFixture(t)
+	base := newTaskFixture(t)
 	directoryPath := filepath.Join(base.homePath(), "artifacts", "deck")
-	fixture := deckFixture{officeContextFixture: base, directoryPath: directoryPath, documentPath: filepath.Join(base.homePath(), "documents", "deck.pptx")}
+	fixture := deckFixture{taskFixture: base, directoryPath: directoryPath, documentPath: filepath.Join(base.homePath(), "documents", "deck.pptx")}
 	writeTestFile(t, fixture.documentPath, "deck-bytes")
 	writeTestFile(t, fixture.pagePath(1), coverSection+"\n")
 	writeTestFile(t, fixture.pagePath(2), flawedSection+"\n")
