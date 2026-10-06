@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func (runner ScheduleRunner) skipEmptyMorningBriefing(ctx context.Context, request ScheduleRunRequest, referenceTime time.Time) bool {

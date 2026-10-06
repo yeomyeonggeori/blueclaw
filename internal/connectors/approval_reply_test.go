@@ -1,11 +1,11 @@
 package connectors
 
 import (
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
-	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"testing"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
+	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 )
 
 func TestAPlainApprovalIsOfferedAsApproveAndReject(t *testing.T) {

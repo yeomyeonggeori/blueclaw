@@ -32,7 +32,7 @@ import {
 
 const fixturesDirectory = fileURLToPath(new URL('../fixtures/', import.meta.url));
 const taskEventNameDeclarationPath = fileURLToPath(
-  new URL('../../.dependency/bluecollar/agentcontract/task_event_name.go', import.meta.url),
+  new URL('../../.dependency/blueprotocol/agentcontract/task_event_name.go', import.meta.url),
 );
 const taskEventNameDeclaration = /^\s*(?:TaskEvent[A-Za-z0-9]+)\s+= "(?<eventName>[a-z0-9_.]+)"$/gm;
 

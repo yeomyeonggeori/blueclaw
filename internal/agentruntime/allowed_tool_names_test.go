@@ -3,7 +3,7 @@ package agentruntime
 import (
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func TestTheAllowedBaselineNamesEachToolOnce(t *testing.T) {

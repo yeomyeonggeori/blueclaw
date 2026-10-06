@@ -1,3 +1,5 @@
+//go:build !nobundledharness
+
 package main
 
 import (
@@ -13,13 +15,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/bluecollaracp"
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
-	"github.com/yeomyeonggeori/blueclaw/internal/e2e"
+	"github.com/yeomyeonggeori/blueclaw/internal/defaultharness"
+	"github.com/yeomyeonggeori/blueclaw/internal/defaultharness/e2e"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model/openaicompatible"
 )
 
 func main() {
@@ -191,7 +193,7 @@ func parseVirtualSessionArguments(arguments []string, defaultScenarioName string
 }
 
 func runVirtualSession(ctx context.Context, arguments virtualSessionArguments) error {
-	if errorValue := e2e.UseBundledACPHarness(bluecollaracp.NewFactory); errorValue != nil {
+	if errorValue := e2e.UseBundledACPHarness(defaultharness.NewFactory); errorValue != nil {
 		return errorValue
 	}
 	if skipReason := virtualSessionSkipReason(); skipReason != "" {

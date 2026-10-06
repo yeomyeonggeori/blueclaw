@@ -7,14 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/bluememo"
-
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
-
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/memory/memorytest"
+	"github.com/yeomyeonggeori/bluememo"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model/openaicompatible"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 )
 
 // Qwen3 embedding models expect an instruction on the query side only; the

@@ -3,10 +3,11 @@ package agentruntime
 import (
 	"context"
 	"encoding/json"
-	"github.com/yeomyeonggeori/blueclaw/internal/memory/memorytest"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 	"testing"
+
+	"github.com/yeomyeonggeori/blueclaw/internal/memory/memorytest"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func TestLocalToolProviderUsesCanonicalDescriptors(t *testing.T) {

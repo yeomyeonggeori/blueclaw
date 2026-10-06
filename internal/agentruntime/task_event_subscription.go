@@ -4,8 +4,8 @@ import (
 	"sync"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/toolcallprogress"
-	"github.com/yeomyeonggeori/bluecollar/acpupdate"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/acpupdate"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 )
 
 type taskEventSubscription struct {

@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluememo"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 // runAnswers is the layer of what a task run's tools answered. The record a

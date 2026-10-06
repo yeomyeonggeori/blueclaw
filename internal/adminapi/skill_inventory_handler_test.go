@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/skill"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func TestSkillInventoryNamesWhereEachSkillWasRead(t *testing.T) {

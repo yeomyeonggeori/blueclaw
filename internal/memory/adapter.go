@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluememo"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 const RememberContentRuneLimit = 600

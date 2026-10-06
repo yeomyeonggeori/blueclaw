@@ -48,7 +48,7 @@ func main() {
 		log.Fatal(errorValue)
 	}
 
-	application := app.NewApplication(runtimeConfiguration, *policyPath, app.InboundOptions{ACPSocketPath: *acpSocketPath, InboundPath: *inboundPath}, app.WithBundledACPFactory(bundledACPFactory()), app.WithBundledToolSelector(bundledToolSelector()))
+	application := app.NewApplication(runtimeConfiguration, *policyPath, app.InboundOptions{ACPSocketPath: *acpSocketPath, InboundPath: *inboundPath}, app.WithBundledACPFactory(bundledACPFactory()), app.WithBundledToolSelector(bundledToolSelector()), app.WithQuestionWorder(bundledQuestionWorder()))
 	log.Fatal(application.Start())
 }
 

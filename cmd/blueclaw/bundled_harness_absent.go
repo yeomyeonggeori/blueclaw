@@ -11,6 +11,10 @@ func bundledACPFactory() harnessdriver.ACPFactory {
 	return nil
 }
 
+func bundledQuestionWorder() app.QuestionWorderFactory {
+	return nil
+}
+
 func bundledToolSelector() app.BundledToolSelectorFactory {
 	return nil
 }

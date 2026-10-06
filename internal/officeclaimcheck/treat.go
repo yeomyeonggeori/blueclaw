@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 const rewriteSchema = `{"type":"object","properties":{"text":{"type":"string","description":"the rewritten unit, nothing else"}},"required":["text"],"additionalProperties":false}`

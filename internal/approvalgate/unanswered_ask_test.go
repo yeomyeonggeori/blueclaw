@@ -1,3 +1,5 @@
+//go:build !nobundledharness
+
 package approvalgate
 
 import (
@@ -6,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/holdrecord"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 )
 
 type endingAsker struct{ status AskStatus }

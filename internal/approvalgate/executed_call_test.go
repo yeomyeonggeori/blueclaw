@@ -1,14 +1,16 @@
+//go:build !nobundledharness
+
 package approvalgate
 
 import (
 	"context"
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"strings"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 )
 
 func spentApprovalEventBodies(taskRunService *task.TaskRunService, taskRunID string) []string {

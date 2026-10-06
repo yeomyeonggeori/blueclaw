@@ -1,9 +1,10 @@
+//go:build !nobundledharness
+
 package agentruntime
 
 import (
 	"context"
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"os"
 	"path/filepath"
 	"slices"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func TestTerminalRunTranslatesAgentWorkspacePaths(t *testing.T) {

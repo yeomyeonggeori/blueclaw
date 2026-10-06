@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 const ambientDutyLaunchConfidenceThreshold = 0.7

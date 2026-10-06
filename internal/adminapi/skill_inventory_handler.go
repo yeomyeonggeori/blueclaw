@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/skill"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 type SkillInventory struct {

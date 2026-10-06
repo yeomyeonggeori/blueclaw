@@ -1,3 +1,5 @@
+//go:build !nobundledharness
+
 package integration
 
 import (
@@ -10,10 +12,10 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
 	"github.com/yeomyeonggeori/bluecollar/intake/routedharness"
 	"github.com/yeomyeonggeori/bluecollar/loop"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func TestCronScheduleRunsDailyResearchPromptAndAdvancesToNextDay(t *testing.T) {

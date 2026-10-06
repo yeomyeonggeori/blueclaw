@@ -1,12 +1,14 @@
+//go:build !nobundledharness
+
 package agentruntime
 
 import (
 	"context"
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func TestHashCapabilityDescriptorsIncludesBroadenedFields(t *testing.T) {

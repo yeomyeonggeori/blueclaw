@@ -11,9 +11,8 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/officeclaimcheck"
 	"github.com/yeomyeonggeori/blueclaw/internal/officevisualcheck"
-	"github.com/yeomyeonggeori/bluecollar/model"
-
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 const (

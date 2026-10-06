@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/yeomyeonggeori/bluecollar/model"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/persona"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 type failingLearningModel struct{}

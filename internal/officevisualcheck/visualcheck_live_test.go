@@ -8,8 +8,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/evaltest"
-	"github.com/yeomyeonggeori/bluecollar/model/decisions"
+	"github.com/yeomyeonggeori/blueprotocol/evaltest"
+	"github.com/yeomyeonggeori/blueprotocol/model/decisions"
 )
 
 const manifestVariable = "VISUALCHECK_MANIFEST"

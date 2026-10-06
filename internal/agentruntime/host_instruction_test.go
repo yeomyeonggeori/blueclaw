@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func TestTheHostDescribesItsOwnToolsAndNothingElse(t *testing.T) {

@@ -6,14 +6,12 @@ import (
 )
 
 func TestTheApprovalBoundaryCallsNoLanguageModelItself(t *testing.T) {
-	for _, listed := range listProductionPackages(t) {
-		if !strings.HasSuffix(listed.ImportPath, "/internal/approvalgate") {
+	for _, file := range listSourceFiles(t) {
+		if file.isTest || !strings.HasPrefix(file.path, "internal/approvalgate/") {
 			continue
 		}
-		for _, importPath := range listed.Imports {
-			if importPath == bluecollarModulePath+"model" {
-				t.Errorf("%s imports %s; the approval question is worded by bluecollar's approval.Worder, handed over as a holdrecord.QuestionWorder (#537)", listed.ImportPath, importPath)
-			}
+		if file.importsModel {
+			t.Errorf("%s imports the language model port; the approval question is worded by the QuestionWorder the host hands over (#537)", file.path)
 		}
 	}
 }

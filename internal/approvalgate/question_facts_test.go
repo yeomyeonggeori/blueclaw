@@ -1,3 +1,5 @@
+//go:build !nobundledharness
+
 package approvalgate
 
 import (
@@ -7,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/bluecollar/approval"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func TestTheWordingIsHandedTheInputsTheToolDeclaresAndTheModelsDraft(t *testing.T) {

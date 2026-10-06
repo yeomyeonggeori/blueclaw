@@ -12,8 +12,8 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract/harnesstest"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract/harnesstest"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func TestMorningBriefingIsEmptyRequiresCompleteTaskCount(t *testing.T) {

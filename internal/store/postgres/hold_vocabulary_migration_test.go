@@ -3,12 +3,13 @@ package postgres
 import (
 	"context"
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 )
 
 const holdVocabularyMigrationName = "040_one_hold_vocabulary.sql"

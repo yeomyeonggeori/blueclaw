@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { documentWithNullAsAbsent, schemaWithNullAsAbsent } from '../src/null_as_absent.ts';
 
-const casesPath = fileURLToPath(new URL('../../.dependency/bluecollar/toolcontract/testdata/null-as-absent.json', import.meta.url));
+const casesPath = fileURLToPath(new URL('../../.dependency/blueprotocol/toolcontract/testdata/null-as-absent.json', import.meta.url));
 
 type NullAsAbsentCases = {
   schemas: Array<{ schema: unknown; absentWhenNull: unknown }>;

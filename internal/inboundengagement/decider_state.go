@@ -3,7 +3,7 @@ package inboundengagement
 import (
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 const visibleContextMessageBudget = 8

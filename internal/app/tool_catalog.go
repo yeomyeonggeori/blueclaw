@@ -4,14 +4,10 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"github.com/yeomyeonggeori/bluecollar/approval"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
@@ -20,6 +16,8 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type toolCatalogEndpoint struct {
@@ -30,11 +28,13 @@ type toolCatalogEndpoint struct {
 	scriptHost   *agentruntime.ScriptHost
 }
 
-func newToolCatalogEndpoint(taskRunService *task.TaskRunService, approvalLanguageModel model.LanguageModelProvider, decisionModel model.DecisionModel, capabilityClient capability.Client) toolCatalogEndpoint {
+func newToolCatalogEndpoint(taskRunService *task.TaskRunService, newQuestionWorder QuestionWorderFactory, approvalLanguageModel model.LanguageModelProvider, decisionModel model.DecisionModel, capabilityClient capability.Client) toolCatalogEndpoint {
 	resolver := mcpserver.NewSessionTokenRequesterResolver(newToolCatalogSessionToken)
 	handler := mcpserver.NewToolCatalogHandler(resolver, "1")
 	approvalGate := approvalgate.New(taskRunService)
-	approvalGate.UseQuestionWorder(approval.NewWorder(approvalLanguageModel))
+	if newQuestionWorder != nil {
+		approvalGate.UseQuestionWorder(newQuestionWorder(approvalLanguageModel))
+	}
 	approvalGate.UseApprovalTargetResolver(agentruntime.NewCapabilityApprovalTargetResolver(capabilityClient))
 	return toolCatalogEndpoint{resolver: resolver, handler: handler, approvalGate: approvalGate, replyReader: approvalreply.NewDecisionModelReader(decisionModel), scriptHost: agentruntime.NewScriptHost()}
 }

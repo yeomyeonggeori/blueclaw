@@ -3,7 +3,7 @@ package persona
 import (
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func AgentIdentityOf(identity Identity) agentcontract.AgentIdentity {

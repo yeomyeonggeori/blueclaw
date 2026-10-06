@@ -1,3 +1,5 @@
+//go:build !nobundledharness
+
 package main
 
 import (
@@ -13,12 +15,12 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/bluecollaracp"
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
-	"github.com/yeomyeonggeori/blueclaw/internal/e2e"
+	"github.com/yeomyeonggeori/blueclaw/internal/defaultharness"
+	"github.com/yeomyeonggeori/blueclaw/internal/defaultharness/e2e"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func TestValidateStrictEmbeddingRetrievalRequiresReadyEmbeddingMode(t *testing.T) {
@@ -609,7 +611,7 @@ func TestVirtualModelCeilingDoesNotReduceTaskWorkDuration(t *testing.T) {
 		}},
 	}
 	configureVirtualScenarioModelTiers(&scenario, "low", providerFactory)
-	if errorValue := e2e.UseBundledACPHarness(bluecollaracp.NewFactory); errorValue != nil {
+	if errorValue := e2e.UseBundledACPHarness(defaultharness.NewFactory); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 

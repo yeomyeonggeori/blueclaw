@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/yeomyeonggeori/blueclaw/internal/buildflavor"
 )
 
 const revisionSymbol = "github.com/yeomyeonggeori/blueclaw/internal/buildrevision.injected"
@@ -12,7 +14,7 @@ const revisionSymbol = "github.com/yeomyeonggeori/blueclaw/internal/buildrevisio
 func buildBlueclaw(t *testing.T, arguments ...string) string {
 	t.Helper()
 	binaryPath := filepath.Join(t.TempDir(), "blueclaw")
-	command := exec.Command("go", append(append([]string{"build", "-o", binaryPath}, arguments...), ".")...)
+	command := exec.Command("go", append(append(append([]string{"build"}, buildflavor.GoFlags()...), "-o", binaryPath), append(arguments, ".")...)...)
 	if output, errorValue := command.CombinedOutput(); errorValue != nil {
 		t.Fatalf("building the binary failed: %v\n%s", errorValue, output)
 	}

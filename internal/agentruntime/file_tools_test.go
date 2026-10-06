@@ -1,10 +1,11 @@
+//go:build !nobundledharness
+
 package agentruntime
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -15,7 +16,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func assertFileResourceEffect(t *testing.T, result toolcontract.ToolResult, objectType string, effect string, path string) {

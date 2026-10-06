@@ -41,7 +41,8 @@ The [quickstart](https://blueclaw.intern.kim/docs/quickstart) configures the sta
 |---|---|
 | `cmd/` | the daemon, the setuid POSIX helper, the terminal client, backup and restore, the scenario runner |
 | `internal/` | connectors, intake, agent runtime, approvals, security, policy, identity, memory, scheduler, HTTP |
-| `.dependency/bluecollar` | [bluecollar](https://github.com/yeomyeonggeori/bluecollar), the default harness and the shared `agentcontract` |
+| `.dependency/bluecollar` | [bluecollar](https://github.com/yeomyeonggeori/bluecollar), the default harness |
+| `.dependency/blueprotocol` | [blueprotocol](https://github.com/yeomyeonggeori/blueprotocol), the contract types host and harness share |
 | `.dependency/bluememo` | [bluememo](https://github.com/yeomyeonggeori/bluememo), the memory store |
 | `migrations/` | Postgres migrations, embedded and applied in order at boot |
 | `protocol/` | Zod contracts shared across processes and the JSON Schemas generated from them |

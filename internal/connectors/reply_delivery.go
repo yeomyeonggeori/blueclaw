@@ -3,7 +3,7 @@ package connectors
 import (
 	"context"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func (connectorRuntime *ConnectorRuntime) recordingDelivery(deliver ReplySender) ReplySender {

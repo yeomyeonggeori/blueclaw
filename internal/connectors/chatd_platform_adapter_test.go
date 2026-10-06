@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func TestChatdPlatformAdapterParsesNormalizedHTTPEvent(t *testing.T) {

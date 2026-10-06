@@ -15,7 +15,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/blueclaw/internal/toolcatalogtrust"
 	"github.com/yeomyeonggeori/blueclaw/internal/turnoutcome"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 const (

@@ -1,3 +1,5 @@
+//go:build !nobundledharness
+
 package main
 
 import (
@@ -8,7 +10,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/modelstandin"
+	"github.com/yeomyeonggeori/blueclaw/internal/defaultharness/modelstandin"
 )
 
 func main() {

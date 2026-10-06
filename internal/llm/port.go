@@ -1,6 +1,8 @@
 package llm
 
-import "github.com/yeomyeonggeori/bluecollar/model"
+import (
+	"github.com/yeomyeonggeori/blueprotocol/model"
+)
 
 type (
 	ChatCompleterAccessor              = model.ChatCompleterAccessor

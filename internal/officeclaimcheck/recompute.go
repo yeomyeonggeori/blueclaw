@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 const recomputeSchema = `{"type":"object","properties":{"checks":{"type":"array","items":{"type":"object","properties":{"key":{"type":"string"},"working":{"type":"string","description":"the recomputation from the sources' values, step by step, ending in your result"},"isWrong":{"type":"boolean","description":"true only when your result differs from the unit's stated value"}},"required":["key","working","isWrong"],"additionalProperties":false}}},"required":["checks"],"additionalProperties":false}`

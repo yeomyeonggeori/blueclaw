@@ -6,10 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/memory/memorytest"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func TestWhatARunsToolAlreadyAnsweredIsNotRememberedForThePerson(t *testing.T) {

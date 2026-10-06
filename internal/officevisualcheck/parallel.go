@@ -3,7 +3,7 @@ package officevisualcheck
 import (
 	"sync"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 const maximumParallelCalls = 16

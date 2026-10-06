@@ -11,7 +11,7 @@ import (
 	"math"
 	"strconv"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 const (

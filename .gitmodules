@@ -6,3 +6,7 @@
 	path = .dependency/bluememo
 	url = https://github.com/yeomyeonggeori/bluememo.git
 	branch = main
+[submodule ".dependency/blueprotocol"]
+	path = .dependency/blueprotocol
+	url = https://github.com/yeomyeonggeori/blueprotocol.git
+	branch = main

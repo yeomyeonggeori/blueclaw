@@ -12,8 +12,8 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/learning"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 func newLearningCoordinator(runtimeConfiguration config.RuntimeConfiguration, store *learning.Store, languageModel model.LanguageModelProvider, logger *slog.Logger) (*learning.Coordinator, error) {
