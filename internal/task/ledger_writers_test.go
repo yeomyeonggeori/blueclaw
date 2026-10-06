@@ -10,8 +10,6 @@ import (
 	"testing"
 )
 
-const approvalGateWritersReason = "one approval gate is installed per harness, so the host gate and bluecollar's approval package never write in the same task run; the meta-harness migration removes the host gate"
-
 const holdRecordPackagePath = "../../.dependency/bluecollar/holdrecord"
 
 var eventNamesOwnedByTheHoldRecord = []string{
@@ -19,19 +17,6 @@ var eventNamesOwnedByTheHoldRecord = []string{
 	"approval.decided",
 	"approval.hold_spent",
 	"approval.scope_granted",
-}
-
-var eventNamesWrittenOnBothSides = map[string]string{
-	"ask.requested":               "undecided: the host writes the approval question and the loop writes its own ask_input question, which may be two events of one kind rather than one event with two writers",
-	"approval.wording_failed":     approvalGateWritersReason,
-	"confirmation.requested":      approvalGateWritersReason,
-	"agent.failure_reply":         "the host, which sees every turn result",
-	"agent.failure_report":        "the host, which sees every turn result",
-	"agent.limit_reply":           "the host, which sees every turn result",
-	"agent.limit_stop":            "the host, which sees every turn result",
-	"agent.goal.blocked":          "the host, which sees every turn result",
-	"task.stop.outbox_suppressed": "the host, which is what cancelled the run",
-	"task.steer.requested":        "a run's ledger holds one record per steer, the host's. The two writers are the host (connectors busy_message appends it to the run) and bluecollar's ACP agent (acpagent steer.go appends its own copy to the agent's private store when the host forwards the steer; the in-process loop no longer writes it, but acpagent still does, so the two writers remain); the mirror skips the name (internal/bluecollaracp), so the agent's copy never reaches the run",
 }
 
 const taskEventNameDeclarationPath = "../../.dependency/bluecollar/agentcontract/task_event_name.go"
@@ -92,7 +77,7 @@ func eventNamesWrittenUnderExcept(t *testing.T, rootPath string, skippedPath str
 	return writtenNames
 }
 
-func TestNoNewEventNameGainsASecondWriter(t *testing.T) {
+func TestEveryEventNameHasOneWriter(t *testing.T) {
 	hostNames := eventNamesWrittenUnder(t, "../../internal")
 	for name := range eventNamesWrittenUnder(t, "../../cmd") {
 		hostNames[name] = true
@@ -107,16 +92,8 @@ func TestNoNewEventNameGainsASecondWriter(t *testing.T) {
 	}
 	sort.Strings(writtenOnBothSides)
 
-	for _, name := range writtenOnBothSides {
-		if _, isKnown := eventNamesWrittenOnBothSides[name]; !isKnown {
-			t.Fatalf("%q is now written by the host and by the agent loop, so which one fires depends on the configured harness; give it one owner or add it to eventNamesWrittenOnBothSides with where that owner will be", name)
-		}
-	}
-	for name := range eventNamesWrittenOnBothSides {
-		if hostNames[name] && loopNames[name] {
-			continue
-		}
-		t.Fatalf("%q has one writer again; drop it from eventNamesWrittenOnBothSides", name)
+	if len(writtenOnBothSides) > 0 {
+		t.Fatalf("%v are written by the host and by the agent loop, so which one fires depends on the configured harness; give each one owner and the other a name of its own", writtenOnBothSides)
 	}
 }
 

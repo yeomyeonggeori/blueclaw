@@ -15,7 +15,12 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
+type LiveHolds interface {
+	AnswerAwaitedHold(taskRunID string, signal agentcontract.ApprovalSignal) (bool, error)
+}
+
 type TaskApprovalHandler struct {
+	LiveHolds       LiveHolds
 	TaskLauncher    *agentruntime.TaskLauncher
 	TaskRunService  *task.TaskRunService
 	IdentityService *identity.IdentityService
@@ -46,6 +51,13 @@ func (handler TaskApprovalHandler) HandleApproveTaskRun(responseWriter http.Resp
 		writeApprovalError(responseWriter, http.StatusBadRequest, errorValue.Error())
 		return
 	}
+	if isAnswered, errorValue := handler.answerLiveWaiter(taskRun, turnDecision); errorValue != nil {
+		writeApprovalError(responseWriter, http.StatusConflict, errorValue.Error())
+		return
+	} else if isAnswered {
+		writeApprovalResponse(responseWriter, taskApprovalResponse{TaskRunID: taskRun.TaskRunID, Status: "answered_in_place"})
+		return
+	}
 	approvalrecord.SettleSignal(handler.TaskRunService, taskRun.TaskRunID, turnDecision.Approval, "operator_terminal")
 	launchResult, errorValue := handler.TaskLauncher.Launch(context.Background(), agentruntime.TaskLaunchRequest{
 		Source:                     agentruntime.TaskLaunchSourceAdmin,
@@ -68,6 +80,13 @@ func (handler TaskApprovalHandler) HandleApproveTaskRun(responseWriter http.Resp
 		TaskRunID: taskRun.TaskRunID,
 		Status:    string(launchResult.TurnResult.TaskRun.Status),
 	})
+}
+
+func (handler TaskApprovalHandler) answerLiveWaiter(taskRun task.TaskRun, turnDecision agentcontract.TurnDecision) (bool, error) {
+	if handler.LiveHolds == nil || turnDecision.Approval == nil {
+		return false, nil
+	}
+	return handler.LiveHolds.AnswerAwaitedHold(taskRun.TaskRunID, *turnDecision.Approval)
 }
 
 func (handler TaskApprovalHandler) resolveApproval(approvalRequest taskApprovalRequest) (task.TaskRun, agentcontract.TurnDecision, error) {

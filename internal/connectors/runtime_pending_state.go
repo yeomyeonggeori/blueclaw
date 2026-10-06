@@ -216,7 +216,7 @@ func taskRunCanContinueGoal(taskRun task.TaskRun, taskEvents []task.TaskEvent) b
 func taskRunHasLimitStop(taskEvents []task.TaskEvent) bool {
 	for index := len(taskEvents) - 1; index >= 0; index-- {
 		taskEvent := taskEvents[index]
-		if taskEvent.Name == agentcontract.TaskEventAgentLimitStop {
+		if taskEvent.Name == agentcontract.TaskEventAgentLimitStop || taskEvent.Name == task.TaskEventLaunchLimitStop {
 			return true
 		}
 	}

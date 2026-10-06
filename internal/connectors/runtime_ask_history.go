@@ -62,7 +62,7 @@ func latestAskInteraction(taskRunID string, taskEvents []task.TaskEvent) (AskInt
 			}
 			continue
 		}
-		if taskEvent.Name != agentcontract.TaskEventAskRequested {
+		if !task.IsAskRequestedEvent(taskEvent.Name) {
 			continue
 		}
 		var interaction struct {
@@ -111,7 +111,7 @@ func askResolvedInteractionID(taskEvent task.TaskEvent) string {
 func latestAskInteractionID(taskEvents []task.TaskEvent) string {
 	for index := len(taskEvents) - 1; index >= 0; index-- {
 		taskEvent := taskEvents[index]
-		if taskEvent.Name == agentcontract.TaskEventAskRequested {
+		if task.IsAskRequestedEvent(taskEvent.Name) {
 			return strings.TrimSpace(taskEvent.TaskEventID)
 		}
 	}

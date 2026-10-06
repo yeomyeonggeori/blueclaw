@@ -57,10 +57,10 @@ func TestTaskLauncherRouterDeadlinePersistsOneBlockedTask(t *testing.T) {
 		t.Fatalf("expected blocked max elapsed task, got %+v", launchResult.TurnResult.TaskRun)
 	}
 	taskEvents := taskRunService.ListTaskEvent(launchResult.TurnResult.TaskRun.TaskRunID)
-	if countTaskEventsNamed(taskEvents, "agent.limit_stop") != 1 || countTaskEventsNamed(taskEvents, "agent.goal.blocked") != 1 {
+	if countTaskEventsNamed(taskEvents, "blueclaw.launch.limit_stop") != 1 || countTaskEventsNamed(taskEvents, "blueclaw.launch.goal_blocked") != 1 {
 		t.Fatalf("expected one limit and goal event, got %+v", taskEvents)
 	}
-	if !taskEventsCarry(taskEvents, "agent.limit_stop", `"phase":"intake"`) {
+	if !taskEventsCarry(taskEvents, "blueclaw.launch.limit_stop", `"phase":"intake"`) {
 		t.Fatal("expected observable intake max elapsed event")
 	}
 	if countTaskEventsNamed(taskEvents, "agent.intake") != 0 {

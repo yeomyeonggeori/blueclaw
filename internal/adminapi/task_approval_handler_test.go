@@ -137,3 +137,58 @@ func TestApprovingAHeldCallDecidesTheHoldAndResumesTheRunWithoutCarryingTheCallO
 		t.Fatalf("expected a restart resume of the held run that carries nothing out, got %+v", request)
 	}
 }
+
+type recordedLiveHolds struct {
+	isAwaited bool
+	answers   []agentcontract.ApprovalSignal
+}
+
+func (holds *recordedLiveHolds) AnswerAwaitedHold(_ string, signal agentcontract.ApprovalSignal) (bool, error) {
+	holds.answers = append(holds.answers, signal)
+	return holds.isAwaited, nil
+}
+
+func heldRunWithAdminHandler(t *testing.T, liveHolds LiveHolds) (TaskApprovalHandler, *harnesstest.Harness, task.TaskRun, *task.TaskRunService) {
+	t.Helper()
+	taskRunService, _ := approvalTestTaskRunService(t)
+	harness := harnesstest.New(taskRunService)
+	handler := TaskApprovalHandler{
+		LiveHolds:      liveHolds,
+		TaskRunService: taskRunService,
+		TaskLauncher:   agentruntime.NewTaskLauncher(harness, taskRunService, agentruntime.NewToolCatalogBuilder()),
+	}
+	taskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "일정 삭제")
+	holdrecord.Open(taskRunService, taskRun.TaskRunID, agentcontract.HeldCall{ToolName: "event_delete", ToolInput: json.RawMessage(`{"eventHint":"event-1"}`), Confirmation: "삭제할까요?"}, nil)
+	if _, errorValue := taskRunService.PauseTaskRun(taskRun.TaskRunID, agentcontract.TaskStatusWaitingApproval, "삭제할까요?"); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	return handler, harness, taskRun, taskRunService
+}
+
+func TestAnApprovalWhileTheAskingTurnIsStillWaitingIsHandedToThatTurnAndNothingIsResumed(t *testing.T) {
+	liveHolds := &recordedLiveHolds{isAwaited: true}
+	handler, harness, taskRun, taskRunService := heldRunWithAdminHandler(t, liveHolds)
+
+	responseRecorder := postApproval(t, handler, `{"taskRunID":"`+taskRun.TaskRunID+`","decision":"approve"}`)
+
+	if responseRecorder.Code != http.StatusOK || len(liveHolds.answers) != 1 || liveHolds.answers[0] != agentcontract.ApprovalSignalApprove {
+		t.Fatalf("expected the live waiter to be answered once, got %d %+v", responseRecorder.Code, liveHolds.answers)
+	}
+	if harness.RunTurnCallCount() != 0 {
+		t.Fatal("a second turn was launched beside the one still waiting on the hold")
+	}
+	if holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID)); len(holds) != 1 || holds[0].State != holdrecord.StatePending {
+		t.Fatalf("the waiting turn settles the hold itself, got %+v", holds)
+	}
+}
+
+func TestAnApprovalWithNoTurnWaitingOnTheHoldResumesTheRunAsARestartResume(t *testing.T) {
+	liveHolds := &recordedLiveHolds{isAwaited: false}
+	handler, harness, taskRun, _ := heldRunWithAdminHandler(t, liveHolds)
+
+	responseRecorder := postApproval(t, handler, `{"taskRunID":"`+taskRun.TaskRunID+`","decision":"approve"}`)
+
+	if responseRecorder.Code != http.StatusOK || !harness.LastTurnRequest().IsRuntimeRestartResume {
+		t.Fatalf("expected the run resumed as a restart resume, got %d %+v", responseRecorder.Code, harness.LastTurnRequest())
+	}
+}

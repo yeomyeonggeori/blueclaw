@@ -216,11 +216,11 @@ func isTaskRunWaitingForTheRequester(status task.TaskStatus) bool {
 
 func taskRunHasUndeliveredQuestion(taskEvents []task.TaskEvent) bool {
 	for index := len(taskEvents) - 1; index >= 0; index-- {
-		switch taskEvents[index].Name {
-		case agentcontract.TaskEventConnectorReplySent:
-			return false
-		case agentcontract.TaskEventAskRequested:
+		if task.IsAskRequestedEvent(taskEvents[index].Name) {
 			return true
+		}
+		if taskEvents[index].Name == agentcontract.TaskEventConnectorReplySent {
+			return false
 		}
 	}
 	return false

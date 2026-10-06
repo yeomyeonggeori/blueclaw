@@ -37,15 +37,15 @@ func (connectorRuntime *ConnectorRuntime) readOpenInteractions(turn *inboundTurn
 	open.ask, open.hasAsk = connectorRuntime.findPendingAskInteraction(turn.personID, turn.platform, turn.event, turn.taskWaitResolution)
 	if open.hasAsk {
 		askTaskRun, _ := connectorRuntime.taskRunService.FindTaskRun(open.ask.TaskRunID)
-		open.askAt = latestTaskEventTime(connectorRuntime.taskRunService.ListTaskEvent(open.ask.TaskRunID), agentcontract.TaskEventAskRequested, askTaskRun.UpdatedAt)
+		open.askAt = latestAskRequestedTime(connectorRuntime.taskRunService.ListTaskEvent(open.ask.TaskRunID), askTaskRun.UpdatedAt)
 	}
 	open.runningTask, open.hasRunningTask = connectorRuntime.latestRunningConversationTask(turn.personID, turn.event)
 	return open
 }
 
-func latestTaskEventTime(taskEvents []task.TaskEvent, name string, fallback time.Time) time.Time {
+func latestAskRequestedTime(taskEvents []task.TaskEvent, fallback time.Time) time.Time {
 	for index := len(taskEvents) - 1; index >= 0; index-- {
-		if taskEvents[index].Name == name {
+		if task.IsAskRequestedEvent(taskEvents[index].Name) {
 			return taskEvents[index].CreatedAt
 		}
 	}

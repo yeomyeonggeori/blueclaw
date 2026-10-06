@@ -1,5 +1,5 @@
 {
-  "aggregateHash": "25718597ea5b889390e54db4e52bc80aa1e5dec4e9688e7a44cc2402000777c3",
+  "aggregateHash": "524ddcb10b4e204ef386a5af893909f6d6a630fe52ea2797e26d73a4ae9365a1",
   "protocolVersion": "0.4.0",
   "schemas": [
     {
@@ -54,7 +54,7 @@
     },
     {
       "fileName": "platform-inbound-event.schema.json",
-      "hash": "2fe719ec9e286d3a4c4574e0aa6629dd6b3bb0fb74888a4930d961c8c09836fc",
+      "hash": "de56c9405247e93744643e1a30738efcbab2d7acab784f799172789684bb0ff7",
       "name": "platform-inbound-event"
     },
     {
@@ -74,27 +74,27 @@
     },
     {
       "fileName": "task-attempt.schema.json",
-      "hash": "cd60f390023fe2d217abee57a702e12e92ccd88b44849d7db4a4360dc2f70d45",
+      "hash": "15c0434d0b155a90bee900998829cad3e129aeecc1a2792501cd8ebb41b360bb",
       "name": "task-attempt"
     },
     {
       "fileName": "task-event.schema.json",
-      "hash": "2d9911b24f70a7044787188243143021b680fafe0879d8f710bb8553a7bad8ba",
+      "hash": "93c5e4d48c47fb09c8ec2d6f5c4f42d3feb076997cfbdafda6caf82b1a108991",
       "name": "task-event"
     },
     {
       "fileName": "task-event-name.schema.json",
-      "hash": "9057233b11c2dda1cfa0b1803de8a2b32836999d71f6470fcce8c3fdd999026f",
+      "hash": "15cb3f6b7a8d8dd26ade9d98e62ebc299c90da5b8f4727ad8ff48bf551c887b2",
       "name": "task-event-name"
     },
     {
       "fileName": "task-run.schema.json",
-      "hash": "f3f278b7a02601c19575aaf5645f52f082ef576137d9b51c69b761d23ce14725",
+      "hash": "4b59a910cf967d373ff05e502c1bd29eb6ba0373636b64ee75a3104b61277326",
       "name": "task-run"
     },
     {
       "fileName": "task-schedule.schema.json",
-      "hash": "0ee6c5670f082ee96a4d00cbbb5c5dae559498995f55c5c120bd0a4e8664fb70",
+      "hash": "316e13f6ad18aa1e36a691fca1a230ea07a5da058330e3c132717365bcebbcc3",
       "name": "task-schedule"
     },
     {

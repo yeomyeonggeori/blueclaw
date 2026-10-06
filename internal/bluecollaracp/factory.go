@@ -10,10 +10,6 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
-var ledgerEventNamesBlueclawWritesItself = []string{
-	agentcontract.TaskEventTaskSteerRequested,
-}
-
 func NewFactory(toolCatalogPublisher acpharness.ToolCatalogPublisher) harnessdriver.Factory {
 	return func(dependencies harnessdriver.Dependencies) (agentcontract.Harness, agentcontract.SkillRetriever) {
 		skillRetriever := newSkillRetriever(dependencies)
@@ -68,7 +64,7 @@ func partsWithoutImages(parts []agentcontract.AgentPart) []agentcontract.AgentPa
 }
 
 func skippedLedgerEventNames(dependencies harnessdriver.Dependencies) []string {
-	skippedNames := append([]string{}, ledgerEventNamesBlueclawWritesItself...)
+	skippedNames := []string{}
 	if dependencies.LLMCallRepository != nil {
 		skippedNames = append(skippedNames, agentcontract.TaskEventLLMCall)
 	}

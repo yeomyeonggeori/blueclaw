@@ -517,3 +517,65 @@ func TestTheTypingIndicatorStopsWhileTheRunWaitsForAnAnswer(t *testing.T) {
 		t.Fatalf("progress started %d times and is running=%v, expected it to resume once the answer came", starts, counting.isRunning())
 	}
 }
+
+func TestAnOperatorApprovalSettlesTheLiveWaiterAndTheAskingTurnContinuesInPlace(t *testing.T) {
+	fixture := newThreadAskFixture(t, deleteApprovalScript())
+	asking := fixture.send(context.Background(), threadReplyEvent("message-1", threadAskRequest))
+	taskRunID := fixture.awaitQuestionOnTheThread(t)
+
+	isAnswered, errorValue := fixture.connectorRuntime.AnswerAwaitedHold(taskRunID, agentcontract.ApprovalSignalApprove)
+	result := fixture.await(t, asking)
+
+	taskRun, _ := fixture.connectorRuntime.taskRunService.FindTaskRun(taskRunID)
+	if errorValue != nil || !isAnswered || result.TaskRunID != taskRunID || fixture.taskRunCount() != 1 {
+		t.Fatalf("answered=%v error=%v result=%+v runs=%d: expected the waiting run to continue alone", isAnswered, errorValue, result, fixture.taskRunCount())
+	}
+	if taskRun.Status != task.TaskStatusCompleted || fixture.invokedToolCount() != 1 {
+		t.Fatalf("status %s with calls %v, expected one call on a completed run", taskRun.Status, fixture.invokedTools)
+	}
+}
+
+func TestAnOperatorRejectionSettlesTheLiveWaiterWithoutRunningTheCall(t *testing.T) {
+	script := deleteApprovalScript()
+	script.actions = []string{script.actions[0], connectorFinishMessageCiting("승인되지 않아 삭제하지 않았습니다.", "obs-001")}
+	fixture := newThreadAskFixture(t, script)
+	asking := fixture.send(context.Background(), threadReplyEvent("message-1", threadAskRequest))
+	taskRunID := fixture.awaitQuestionOnTheThread(t)
+
+	isAnswered, _ := fixture.connectorRuntime.AnswerAwaitedHold(taskRunID, agentcontract.ApprovalSignalReject)
+	fixture.await(t, asking)
+
+	holds := holdrecord.Holds(fixture.connectorRuntime.taskRunService.ListTaskEvent(taskRunID))
+	if !isAnswered || len(holds) != 1 || holds[0].State != holdrecord.StateRejected || fixture.invokedToolCount() != 0 {
+		t.Fatalf("answered=%v holds %+v calls %v: expected the hold rejected and nothing run", isAnswered, holds, fixture.invokedTools)
+	}
+}
+
+func TestAnOperatorAnswerForARunNobodyIsWaitingOnIsNotSettledHere(t *testing.T) {
+	fixture := newThreadAskFixture(t, deleteApprovalScript())
+	taskRun := restartedRunHoldingTheCall(t, fixture)
+
+	isAnswered, errorValue := fixture.connectorRuntime.AnswerAwaitedHold(taskRun.TaskRunID, agentcontract.ApprovalSignalApprove)
+
+	if isAnswered || errorValue != nil {
+		t.Fatalf("answered=%v error=%v: with no live waiter the caller resumes the run itself", isAnswered, errorValue)
+	}
+}
+
+func TestAHoldOlderThanTheExpiryAtBootRecordsTheExpiryAndTellsTheRequester(t *testing.T) {
+	fixture := newThreadAskFixture(t, deleteApprovalScript())
+	taskRun := restartedRunHoldingTheCall(t, fixture)
+	fixture.connectorRuntime.askingThreads.expiry = time.Millisecond
+	time.Sleep(5 * time.Millisecond)
+
+	fixture.connectorRuntime.reawaitHold(context.Background(), taskRun)
+
+	ended, _ := fixture.connectorRuntime.taskRunService.FindTaskRun(taskRun.TaskRunID)
+	holds := holdrecord.Holds(fixture.connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID))
+	if len(holds) != 1 || holds[0].State != holdrecord.StateRejected || !connectorTaskEventsContain(fixture.connectorRuntime, taskRun.TaskRunID, approvalgate.TaskEventApprovalExpired, "") {
+		t.Fatalf("holds %+v: expected the hold rejected with approval.expired recorded as the live expiry does", holds)
+	}
+	if ended.Status != task.TaskStatusFailed || len(fixture.adapter.sentReplies) != 1 || fixture.adapter.sentReplies[0].message == "" {
+		t.Fatalf("status %s with %d replies: expected the run failed and one model-worded notice sent to the thread", ended.Status, len(fixture.adapter.sentReplies))
+	}
+}
