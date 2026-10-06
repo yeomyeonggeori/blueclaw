@@ -46,11 +46,11 @@ func (process agentProcess) optionsFor(request agentcontract.AgentTurnRequest) a
 			Retriever:               process.skillRetriever,
 			PinnedSkillNames:        request.PinnedSkillNames,
 		},
-		HostCheckedToolNames: hostCheckedToolNames(request),
+		HostCheckedToolNames: HostCheckedToolNames(request),
 	}
 }
 
-func hostCheckedToolNames(request agentcontract.AgentTurnRequest) []string {
+func HostCheckedToolNames(request agentcontract.AgentTurnRequest) []string {
 	toolNames := []string{}
 	for _, toolDefinition := range request.ToolSet.ListDescribedToolDefinitions() {
 		if toolDefinition.RequiresApproval {

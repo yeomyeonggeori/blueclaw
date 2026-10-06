@@ -10,10 +10,26 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
+type ProcessFor func(dependencies harnessdriver.Dependencies, skillRetriever agentcontract.SkillRetriever) acpharness.AgentProcess
+
 func NewFactory(toolCatalogPublisher acpharness.ToolCatalogPublisher) harnessdriver.Factory {
+	return NewFactoryOverProcess(inProcessAgent)(toolCatalogPublisher)
+}
+
+func NewFactoryOverProcess(processFor ProcessFor) harnessdriver.ACPFactory {
+	return func(toolCatalogPublisher acpharness.ToolCatalogPublisher) harnessdriver.Factory {
+		return factoryOver(processFor, toolCatalogPublisher)
+	}
+}
+
+func inProcessAgent(dependencies harnessdriver.Dependencies, skillRetriever agentcontract.SkillRetriever) acpharness.AgentProcess {
+	return agentProcess{dependencies: dependencies, skillRetriever: skillRetriever}
+}
+
+func factoryOver(processFor ProcessFor, toolCatalogPublisher acpharness.ToolCatalogPublisher) harnessdriver.Factory {
 	return func(dependencies harnessdriver.Dependencies) (agentcontract.Harness, agentcontract.SkillRetriever) {
 		skillRetriever := newSkillRetriever(dependencies)
-		harness := acpharness.New(agentProcess{dependencies: dependencies, skillRetriever: skillRetriever}, toolCatalogPublisher, dependencies.TaskRunStore)
+		harness := acpharness.New(processFor(dependencies, skillRetriever), toolCatalogPublisher, dependencies.TaskRunStore)
 		harness.UseToolAudience(mcpserver.ToolAudienceBare)
 		harness.UseInstructionBundleLoader(dependencies.InstructionBundleLoader)
 		harness.UseHostInstruction()

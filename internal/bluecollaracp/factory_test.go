@@ -42,7 +42,7 @@ func toolSetWithOneGatedTool(t *testing.T) *toolcontract.ToolSet {
 }
 
 func TestOnlyTheToolsTheHostGatesAreLeftForTheHostToCheck(t *testing.T) {
-	toolNames := hostCheckedToolNames(agentcontract.AgentTurnRequest{ToolSet: toolSetWithOneGatedTool(t)})
+	toolNames := HostCheckedToolNames(agentcontract.AgentTurnRequest{ToolSet: toolSetWithOneGatedTool(t)})
 
 	if !slices.Equal(toolNames, []string{"event_add"}) {
 		t.Fatalf("the agent asks again about a call the host already holds for approval, and skips asking about a call only it would gate, got %v", toolNames)
