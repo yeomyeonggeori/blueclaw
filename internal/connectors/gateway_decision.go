@@ -75,9 +75,9 @@ func (connectorRuntime *ConnectorRuntime) judgeFacts(ctx context.Context, facts 
 	if connectorRuntime.gatewayDecider == nil {
 		return nil, errors.New("connector runtime has no gateway decider configured")
 	}
-	callLedger := &agentcontract.IntakeCallLedger{}
-	judgments, errorValue := connectorRuntime.gatewayDecider.Decide(ctx, facts, callLedger.Observe)
-	connectorRuntime.recordTasklessGatewayCalls(facts.Messages, callLedger.Records)
+	callRecords := []agentcontract.LLMCallRecord{}
+	judgments, errorValue := connectorRuntime.gatewayDecider.Decide(ctx, facts, func(record agentcontract.LLMCallRecord) { callRecords = append(callRecords, record) })
+	connectorRuntime.recordTasklessGatewayCalls(facts.Messages, callRecords)
 	return judgments, errorValue
 }
 

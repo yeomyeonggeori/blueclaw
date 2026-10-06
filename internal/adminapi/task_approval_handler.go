@@ -46,19 +46,19 @@ func (handler TaskApprovalHandler) HandleApproveTaskRun(responseWriter http.Resp
 		writeApprovalError(responseWriter, http.StatusBadRequest, "invalid task approval request")
 		return
 	}
-	taskRun, turnDecision, errorValue := handler.resolveApproval(approvalRequest)
+	taskRun, approvalSignal, errorValue := handler.resolveApproval(approvalRequest)
 	if errorValue != nil {
 		writeApprovalError(responseWriter, http.StatusBadRequest, errorValue.Error())
 		return
 	}
-	if isAnswered, errorValue := handler.answerLiveWaiter(taskRun, turnDecision); errorValue != nil {
+	if isAnswered, errorValue := handler.answerLiveWaiter(taskRun, approvalSignal); errorValue != nil {
 		writeApprovalError(responseWriter, http.StatusConflict, errorValue.Error())
 		return
 	} else if isAnswered {
 		writeApprovalResponse(responseWriter, taskApprovalResponse{TaskRunID: taskRun.TaskRunID, Status: "answered_in_place"})
 		return
 	}
-	approvalgate.SettleSignal(handler.TaskRunService, taskRun.TaskRunID, turnDecision.Approval, "operator_terminal")
+	approvalgate.SettleSignal(handler.TaskRunService, taskRun.TaskRunID, &approvalSignal, "operator_terminal")
 	launchResult, errorValue := handler.TaskLauncher.Launch(context.Background(), agentruntime.TaskLaunchRequest{
 		Source:                 agentruntime.TaskLaunchSourceAdmin,
 		SourceReference:        "terminal:" + taskRun.TaskRunID,
@@ -80,60 +80,40 @@ func (handler TaskApprovalHandler) HandleApproveTaskRun(responseWriter http.Resp
 	})
 }
 
-func (handler TaskApprovalHandler) answerLiveWaiter(taskRun task.TaskRun, turnDecision agentcontract.TurnDecision) (bool, error) {
-	if handler.LiveHolds == nil || turnDecision.Approval == nil {
+func (handler TaskApprovalHandler) answerLiveWaiter(taskRun task.TaskRun, approvalSignal agentcontract.ApprovalSignal) (bool, error) {
+	if handler.LiveHolds == nil {
 		return false, nil
 	}
-	return handler.LiveHolds.AnswerAwaitedHold(taskRun.TaskRunID, *turnDecision.Approval)
+	return handler.LiveHolds.AnswerAwaitedHold(taskRun.TaskRunID, approvalSignal)
 }
 
-func (handler TaskApprovalHandler) resolveApproval(approvalRequest taskApprovalRequest) (task.TaskRun, agentcontract.TurnDecision, error) {
+func (handler TaskApprovalHandler) resolveApproval(approvalRequest taskApprovalRequest) (task.TaskRun, agentcontract.ApprovalSignal, error) {
 	taskRunID := strings.TrimSpace(approvalRequest.TaskRunID)
 	if taskRunID == "" {
-		return task.TaskRun{}, agentcontract.TurnDecision{}, errors.New("taskRunID is required")
+		return task.TaskRun{}, "", errors.New("taskRunID is required")
 	}
 	taskRun, isFound := handler.TaskRunService.FindTaskRun(taskRunID)
 	if !isFound {
-		return task.TaskRun{}, agentcontract.TurnDecision{}, errors.New("task run not found")
+		return task.TaskRun{}, "", errors.New("task run not found")
 	}
 	if taskRun.Status != task.TaskStatusWaitingApproval {
-		return task.TaskRun{}, agentcontract.TurnDecision{}, errors.New("task run is not waiting for approval")
+		return task.TaskRun{}, "", errors.New("task run is not waiting for approval")
 	}
-	turnDecision, errorValue := approvalTurnDecision(approvalRequest.Decision)
+	approvalSignal, errorValue := approvalSignalOf(approvalRequest.Decision)
 	if errorValue != nil {
-		return task.TaskRun{}, agentcontract.TurnDecision{}, errorValue
+		return task.TaskRun{}, "", errorValue
 	}
-	return taskRun, turnDecision, nil
+	return taskRun, approvalSignal, nil
 }
 
-func approvalTurnDecision(decision string) (agentcontract.TurnDecision, error) {
+func approvalSignalOf(decision string) (agentcontract.ApprovalSignal, error) {
 	switch strings.TrimSpace(decision) {
 	case "approve":
-		approvalSignal := agentcontract.ApprovalSignalApprove
-		return continueTaskDecision(approvalSignal, "terminal_approve"), nil
+		return agentcontract.ApprovalSignalApprove, nil
 	case "reject":
-		approvalSignal := agentcontract.ApprovalSignalReject
-		return agentcontract.TurnDecision{
-			Route:          agentcontract.TurnRouteConsume,
-			Approval:       &approvalSignal,
-			Classification: agentcontract.IntakeClassificationQuickReply,
-			TaskShape:      agentcontract.TaskShapeImmediateReply,
-			TaskLevel:      agentcontract.TaskLevelXLow,
-			Reason:         "terminal_reject",
-		}, nil
+		return agentcontract.ApprovalSignalReject, nil
 	default:
-		return agentcontract.TurnDecision{}, errors.New(`decision must be one of "approve", "reject"`)
-	}
-}
-
-func continueTaskDecision(approvalSignal agentcontract.ApprovalSignal, reason string) agentcontract.TurnDecision {
-	return agentcontract.TurnDecision{
-		Route:          agentcontract.TurnRouteContinueTask,
-		Approval:       &approvalSignal,
-		Classification: agentcontract.IntakeClassificationBoundedTask,
-		TaskShape:      agentcontract.TaskShapeMaintenanceTask,
-		TaskLevel:      agentcontract.TaskLevelLow,
-		Reason:         reason,
+		return "", errors.New(`decision must be one of "approve", "reject"`)
 	}
 }
 
