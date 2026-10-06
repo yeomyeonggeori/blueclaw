@@ -324,6 +324,16 @@ The prompt carries a compact index of candidate skills, retrieved by BM25 and ca
 
 Every `SKILL.md` body a turn selects is charged on every step of that turn. Keep a normal skill under 8 KB and a complex artifact skill under 12 KB, and put long references, scripts and assets in `references/`, `scripts/` and `assets/` beside it to be read or run when the task needs them. blueclaw does not enforce a size limit on these files.
 
+### What a skill's scripts get from the host
+
+Every `bash` command runs with three things a script may use and the model never writes. A script that finds none of them is on another host and carries on without them.
+
+| Variable or file | What it holds |
+| --- | --- |
+| `BLUECLAW_TASK_CONTEXT` | the path of `task-context.json` in the task's directory: the requester, the task's date in the company's time zone, the request's wording, each attachment with its path when it is on disk and the text the host read from it, and every record tool call that answered in this task with its input, result and the files it kept |
+| `BLUECLAW_SCRIPT_HOST_URL`, `BLUECLAW_SCRIPT_HOST_TOKEN` | the script host, granted to this one command and revoked when it exits. `POST /decide` takes a decision request (state, questions, optional images) and answers it with the decision model, or with the image model when it carries images. `POST /generate` takes a system text, a prompt, optional images and a JSON schema, and answers with the medium tier's JSON. `POST /tools/<name>` calls a record tool as the requester, under the same policy and file keeping as the model's own call. Each answer is recorded in the ledger as `script_host.answered` with its model and cost |
+| `<file>.meta.json` | written beside a file a script made. `file_deliver` passes its `holds` to the check that judges the delivered file against the request and its `notes` to the reply, and ignores it when the file is newer than it |
+
 ## Memory
 
 Memory is what the agent keeps about the people it serves between tasks, stored by [bluememo](https://bluememo.intern.kim), which blueclaw embeds as a Go module pinned at `.dependency/bluememo`.
