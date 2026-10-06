@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -192,7 +193,7 @@ type splitDecisionModel struct {
 }
 
 func scenarioHarnessDecisionModel(scenario VirtualSessionScenario, planning model.DecisionModel, loop model.DecisionModel) model.DecisionModel {
-	if scenario.DecisionModel != nil || loop == nil {
+	if scenario.DecisionModel != nil {
 		return planning
 	}
 	return splitDecisionModel{planning: planning, loop: loop}
@@ -201,6 +202,9 @@ func scenarioHarnessDecisionModel(scenario VirtualSessionScenario, planning mode
 func (decisionModel splitDecisionModel) Decide(ctx context.Context, request model.DecisionRequest) (model.DecisionResponse, error) {
 	if asksPlanningQuestions(request.Questions) {
 		return decisionModel.planning.Decide(ctx, request)
+	}
+	if decisionModel.loop == nil {
+		return model.DecisionResponse{}, errors.New("decision model is not configured")
 	}
 	return decisionModel.loop.Decide(ctx, request)
 }

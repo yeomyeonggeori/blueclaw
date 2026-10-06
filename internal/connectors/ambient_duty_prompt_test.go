@@ -51,3 +51,14 @@ func TestAnAddressedMessageCarriesNoTaskLevelForTheAgentToPlanFrom(t *testing.T)
 		t.Fatalf("expected an addressed message to leave the level to the agent, got %q", taskLevel)
 	}
 }
+
+func TestAnOverheardMessageLaunchesWithTheAmbientTaskLevel(t *testing.T) {
+	connectorRuntime, _, _ := newStubbedTestConnectorRuntime(t)
+	turn := overheardTurn(inboundengagement.AmbientDutyContext{IsMatch: true, Name: "calendar_upkeep", Confidence: 0.92})
+
+	launchRequest := connectorRuntime.buildTaskLaunchRequest(turn)
+
+	if launchRequest.TaskLevel != ambientDutyTaskLevel {
+		t.Fatalf("expected the launch to hand the agent the ambient level, got %q", launchRequest.TaskLevel)
+	}
+}
