@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -625,5 +626,16 @@ func TestAHoldOlderThanTheExpiryAtBootRecordsTheExpiryAndTellsTheRequester(t *te
 	}
 	if ended.Status != task.TaskStatusFailed || len(fixture.adapter.sentReplies) != 1 || fixture.adapter.sentReplies[0].message == "" {
 		t.Fatalf("status %s with %d replies: expected the run failed and one model-worded notice sent to the thread", ended.Status, len(fixture.adapter.sentReplies))
+	}
+}
+
+func TestARunResumedOnAHeldCallOwesThatCallSoTheLoopDoesNotRefuseItAsUnrequested(t *testing.T) {
+	fixture := newThreadAskFixture(t, deleteApprovalScript())
+	taskRun := restartedRunHoldingTheCall(t, fixture)
+
+	activeGoal := interruptedTaskActiveGoal(taskRun, fixture.connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID), "")
+
+	if !slices.Contains(activeGoal.OutcomeContract.RequiredEvidenceTools, "event_delete") {
+		t.Fatalf("the resumed goal requires %v, and a send or delete the goal does not require is refused by the loop as unrequested", activeGoal.OutcomeContract.RequiredEvidenceTools)
 	}
 }

@@ -9,6 +9,8 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 type interruptedTaskLaunchContext struct {
@@ -216,6 +218,7 @@ func interruptedTaskActiveGoalWithInstruction(taskRun task.TaskRun, taskEvents [
 	}
 	activeGoal.CurrentObjective = firstNonEmptyString(activeGoal.CurrentObjective, taskRun.Prompt)
 	activeGoal.KnownContext = append(activeGoal.KnownContext, guidanceNote)
+	activeGoal.OutcomeContract.RequiredEvidenceTools = toolcontract.AppendUniqueStrings(activeGoal.OutcomeContract.RequiredEvidenceTools, heldToolNames(taskEvents)...)
 	activeGoal.Status = agentcontract.ActiveGoalStatusActive
 	return activeGoal
 }
@@ -239,6 +242,14 @@ func userSteerTaskProfile(platform string, taskRunID string, instruction string)
 		guidanceNote:    "The user asked to continue this paused task. Assess prior progress from the task event ledger and restored observations, follow the latest steering instruction, and finish only the work that is still missing.",
 		instruction:     instruction,
 	}
+}
+
+func heldToolNames(taskEvents []task.TaskEvent) []string {
+	toolNames := []string{}
+	for _, hold := range holdrecord.Holds(taskEvents) {
+		toolNames = append(toolNames, hold.Call.ToolName)
+	}
+	return toolNames
 }
 
 func platformFromSourceReference(sourceReference string) string {
