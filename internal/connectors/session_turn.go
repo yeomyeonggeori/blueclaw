@@ -35,6 +35,16 @@ func (connectorRuntime *ConnectorRuntime) OpenSessionTurn(ctx context.Context, e
 	}}
 }
 
+func (sessionTurn *SessionTurn) AnswersAwaitedQuestion(ctx context.Context) (bool, error) {
+	connectorRuntime, turn := sessionTurn.connectorRuntime, sessionTurn.turn
+	if turn.adapter == nil {
+		return false, nil
+	}
+	connectorRuntime.reawaitHeldQuestionsIn(ctx, turn.personID, turn.event.ConversationID)
+	_, isAnswer, errorValue := connectorRuntime.answerAwaitingThreads(withConnectorEvent(ctx, turn.event), turn.platform, turn.personID, turn.event)
+	return isAnswer, errorValue
+}
+
 func (sessionTurn *SessionTurn) ResolveEngagement(ctx context.Context) inboundengagement.Decision {
 	connectorRuntime, turn := sessionTurn.connectorRuntime, sessionTurn.turn
 	judge := func(ctx context.Context) (inboundengagement.Judgment, error) {

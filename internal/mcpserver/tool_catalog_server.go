@@ -149,7 +149,7 @@ func invokeThroughToolSet(requesterToolSet RequesterToolSet, toolDescriptor tool
 
 func callToolResult(toolResult toolcontract.ToolResult, hasOutputSchema bool, toolName string) *mcp.CallToolResult {
 	result := &mcp.CallToolResult{
-		Content: append([]mcp.Content{&mcp.TextContent{Text: resultText(toolResult)}}, imageContents(toolResult)...),
+		Content: append(append([]mcp.Content{&mcp.TextContent{Text: resultText(toolResult)}}, imageContents(toolResult)...), fileContents(toolResult)...),
 		IsError: toolResult.Failed(),
 		Meta:    toolcontract.ResultMeta(toolResult),
 	}
@@ -177,6 +177,26 @@ func imageContents(toolResult toolcontract.ToolResult) []mcp.Content {
 		images = append(images, &mcp.ImageContent{Data: data, MIMEType: strings.TrimSpace(attachment.ContentType), Meta: toolcontract.AttachmentMeta(attachment)})
 	}
 	return images
+}
+
+func fileContents(toolResult toolcontract.ToolResult) []mcp.Content {
+	files := []mcp.Content{}
+	for _, attachment := range toolResult.Attachments {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(attachment.ContentType)), "image/") || strings.TrimSpace(attachment.DevicePath) == "" {
+			continue
+		}
+		data, errorValue := base64.StdEncoding.DecodeString(strings.TrimSpace(attachment.ContentBase64))
+		if errorValue != nil || len(data) == 0 {
+			continue
+		}
+		files = append(files, &mcp.EmbeddedResource{Resource: &mcp.ResourceContents{
+			URI:      "file://" + attachment.DevicePath,
+			MIMEType: strings.TrimSpace(attachment.ContentType),
+			Blob:     data,
+			Meta:     toolcontract.AttachmentMeta(attachment),
+		}})
+	}
+	return files
 }
 
 func missingStructuredContentResult(toolName string) *mcp.CallToolResult {
