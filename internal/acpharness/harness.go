@@ -55,6 +55,7 @@ type Harness struct {
 	toolAudience                 mcpserver.ToolAudience
 	promptMetaProvider           func(agentcontract.AgentTurnRequest) map[string]any
 	checkpointMarkerKey          string
+	offeredOnRequestMetaKey      string
 	ledgerExchange               *ledgerExchange
 	turnResultMetaKey            string
 	steerExtension               *steerExtension
@@ -76,6 +77,10 @@ func (harness *Harness) UsePromptMeta(promptMetaProvider func(agentcontract.Agen
 
 func (harness *Harness) UseCheckpointMarker(metaKey string) {
 	harness.checkpointMarkerKey = metaKey
+}
+
+func (harness *Harness) UseOfferedOnRequestMarker(metaKey string) {
+	harness.offeredOnRequestMetaKey = metaKey
 }
 
 func (harness *Harness) UseHostInstruction() {
@@ -150,14 +155,15 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 	}
 	succeededToolRecorder := &turnoutcome.SucceededToolRecorder{}
 	endpointURL, bearerToken, revokeToolCatalog, errorValue := harness.toolCatalogPublisher.PublishToolCatalog(mcpserver.RequesterToolSet{
-		ObserveToolInvocation: succeededToolRecorder.Observe,
-		RequesterPersonID:     request.RequesterPersonID,
-		TaskRunID:             request.ExistingTaskRunID,
-		ToolSet:               request.ToolSet,
-		ResponseLanguage:      request.ResponseLanguage,
-		Prompt:                request.Prompt,
-		ToolAudience:          harness.toolAudience,
-		TurnContext:           harness.turnContextForToolCalls(ctx),
+		ObserveToolInvocation:   succeededToolRecorder.Observe,
+		RequesterPersonID:       request.RequesterPersonID,
+		TaskRunID:               request.ExistingTaskRunID,
+		ToolSet:                 request.ToolSet,
+		ResponseLanguage:        request.ResponseLanguage,
+		Prompt:                  request.Prompt,
+		ToolAudience:            harness.toolAudience,
+		OfferedOnRequestMetaKey: harness.offeredOnRequestMetaKey,
+		TurnContext:             harness.turnContextForToolCalls(ctx),
 	})
 	if errorValue != nil {
 		return agentcontract.AgentTurnResult{}, errorValue

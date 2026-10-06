@@ -9,6 +9,8 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
+const offeredOnRequestMetaKey = "test.dev/offered-on-request"
+
 func toolSetWithTheLoopsOwnTools(t *testing.T) *toolcontract.ToolSet {
 	t.Helper()
 	toolSet := toolcontract.NewToolSet([]string{"event_add"})
@@ -41,7 +43,7 @@ func toolSetWithTheLoopsOwnTools(t *testing.T) *toolcontract.ToolSet {
 
 func bareAudienceSession(t *testing.T) (*mcp.ClientSession, map[string]*mcp.Tool) {
 	t.Helper()
-	clientSession := connectedCatalogSession(t, RequesterToolSet{RequesterPersonID: "person-1", ToolSet: toolSetWithTheLoopsOwnTools(t), ToolAudience: ToolAudienceBare})
+	clientSession := connectedCatalogSession(t, RequesterToolSet{RequesterPersonID: "person-1", ToolSet: toolSetWithTheLoopsOwnTools(t), ToolAudience: ToolAudienceBare, OfferedOnRequestMetaKey: offeredOnRequestMetaKey})
 	toolList, errorValue := clientSession.ListTools(context.Background(), nil)
 	if errorValue != nil {
 		t.Fatalf("expected the catalog to list: %v", errorValue)
@@ -63,11 +65,17 @@ func TestTheLoopIsOfferedTheKernelToolsAndTheHiddenOnesItCallsOnTheModelsBehalf(
 	}
 }
 
-func TestTheLoopIsNotOfferedAToolTheProfileDoesNotAllow(t *testing.T) {
+func TestAToolTheProfileDoesNotAllowIsOfferedOnRequestNotPreloaded(t *testing.T) {
 	_, tools := bareAudienceSession(t)
 
-	if tools["memory_forget"] != nil {
-		t.Fatal("a tool outside the profile's allowed names is still outside it when the harness is the bundled agent")
+	if tools["memory_forget"] == nil {
+		t.Fatal("the agent plans its own turn, so a tool outside the profile has to be published for its router to choose it")
+	}
+	if tools["memory_forget"].Meta[offeredOnRequestMetaKey] != true {
+		t.Fatalf("a tool outside the profile must be marked, or the agent pins it to every turn, got %v", tools["memory_forget"].Meta)
+	}
+	if tools["event_add"].Meta[offeredOnRequestMetaKey] != nil {
+		t.Fatal("a tool the profile allows is preloaded and carries no mark")
 	}
 }
 
