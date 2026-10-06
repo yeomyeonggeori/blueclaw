@@ -6,7 +6,6 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
-	"github.com/yeomyeonggeori/bluecollar/acpagent"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
@@ -251,9 +250,9 @@ func newConfiguredVisualReviewModel(runtimeConfiguration config.RuntimeConfigura
 	return visualReviewModel
 }
 
-func newToolSelector(decisionModel model.DecisionModel) agentcontract.ToolSelector {
-	if decisionModel == nil {
+func newToolSelector(newBundledToolSelector BundledToolSelectorFactory, decisionModel model.DecisionModel) agentcontract.ToolSelector {
+	if newBundledToolSelector == nil || decisionModel == nil {
 		return nil
 	}
-	return acpagent.NewToolSelector(decisionModel)
+	return newBundledToolSelector(decisionModel)
 }

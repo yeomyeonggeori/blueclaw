@@ -2766,7 +2766,7 @@ func scenarioTurnScriptFor(scriptedModel *agenttest.ScriptedLanguageModel) *scen
 }
 
 func scenarioRouterResponsesForTurn(scenario VirtualSessionScenario, virtualTurn VirtualTurn) []string {
-	if !virtualTurnReachesRouter(virtualTurn) || scenarioLaunchesAmbientDuty(scenario) {
+	if !virtualTurnReachesRouter(virtualTurn) {
 		return nil
 	}
 	if strings.TrimSpace(virtualTurn.RouterApproval) != "" {
@@ -2794,14 +2794,6 @@ func scenarioTurnScriptEntries(scenario VirtualSessionScenario, virtualTurn Virt
 
 func scenarioTurnWordsResponse() string {
 	return `{"reason":"scripted scenario default","userFacingReply":"","clarificationQuestion":"","clarificationOptions":[],"busyInstruction":"","expectedResults":[]}`
-}
-
-func scenarioLaunchesAmbientDuty(scenario VirtualSessionScenario) bool {
-	var decision inboundengagement.AddressingDecision
-	if json.Unmarshal([]byte(scenario.AddressingResponse), &decision) != nil {
-		return false
-	}
-	return inboundengagement.AmbientDutyLaunchesWithoutReply(decision)
 }
 
 func virtualTurnReachesRouter(virtualTurn VirtualTurn) bool {

@@ -8,6 +8,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/bluecollar/acpagent"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
 func NewFactory(toolCatalogPublisher acpharness.ToolCatalogPublisher) harnessdriver.Factory {
@@ -69,4 +70,8 @@ func skippedLedgerEventNames(dependencies harnessdriver.Dependencies) []string {
 		skippedNames = append(skippedNames, agentcontract.TaskEventLLMCall)
 	}
 	return skippedNames
+}
+
+func NewToolSelector(decisionModel model.DecisionModel) agentcontract.ToolSelector {
+	return acpagent.NewToolSelector(decisionModel)
 }

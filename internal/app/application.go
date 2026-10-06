@@ -119,7 +119,12 @@ type applicationComponents struct {
 type ApplicationOption func(*applicationOptions)
 
 type applicationOptions struct {
-	bundledACPFactory harnessdriver.ACPFactory
+	bundledACPFactory       harnessdriver.ACPFactory
+	bundledToolSelectorMake BundledToolSelectorFactory
+}
+
+func WithBundledToolSelector(newBundledToolSelector BundledToolSelectorFactory) ApplicationOption {
+	return func(options *applicationOptions) { options.bundledToolSelectorMake = newBundledToolSelector }
 }
 
 func WithBundledACPFactory(bundledACPFactory harnessdriver.ACPFactory) ApplicationOption {
@@ -140,7 +145,7 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 	logger := components.foundation.logger
 	components.directory = newIdentityDirectory(components.foundation.database, components.foundation.policyDocument, logger)
 	components.services = newTaskServices(runtimeConfiguration, components.foundation.database, components.directory.companyProvider, logger)
-	components.kernel = newAgentKernel(runtimeConfiguration, options.bundledACPFactory, components.services, components.directory.companyProvider, logger)
+	components.kernel = newAgentKernel(runtimeConfiguration, options.bundledACPFactory, options.bundledToolSelectorMake, components.services, components.directory.companyProvider, logger)
 	components.memory = newMemoryComponents(runtimeConfiguration, components.kernel, components.services, components.directory.identityService, logger)
 	useMemoryMergingPersonRepository(&components)
 	components.learningStore, components.startupError = openLearningStore(runtimeConfiguration.Terminal.WorkspaceRootPath)
