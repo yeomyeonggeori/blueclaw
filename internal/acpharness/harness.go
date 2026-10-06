@@ -58,6 +58,8 @@ type Harness struct {
 	checkpointMarkerKey          string
 	ledgerExchange               *ledgerExchange
 	turnResultMetaKey            string
+	steerExtension               *steerExtension
+	carriesTurnContextToTools    bool
 	includesHostInstruction      bool
 }
 
@@ -156,6 +158,7 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 		ResponseLanguage:      request.ResponseLanguage,
 		Prompt:                request.Prompt,
 		ToolAudience:          harness.toolAudience,
+		TurnContext:           harness.turnContextForToolCalls(ctx),
 	})
 	if errorValue != nil {
 		return agentcontract.AgentTurnResult{}, errorValue
@@ -187,7 +190,10 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 		return agentcontract.AgentTurnResult{}, errorValue
 	}
 	harness.advanceTaskRun(request)
-	promptResponse, errorValue := connection.Prompt(ctx, acp.PromptRequest{
+	turnControl := harness.newTurnControl(ctx, connection, newSession.SessionId, request, turnObserver.isMirroring)
+	defer turnControl.stop()
+	turnObserver.onToolCallEnded = turnControl.toolCallEnded
+	promptResponse, errorValue := turnControl.converse(ctx, acp.PromptRequest{
 		SessionId: newSession.SessionId,
 		Prompt:    harness.promptBlocksForTurn(request, initializeResponse.AgentCapabilities.PromptCapabilities.Image),
 		Meta:      harness.promptMetaForTurn(request),
@@ -251,10 +257,18 @@ func (harness *Harness) turnResult(ctx context.Context, request agentcontract.Ag
 	return agentcontract.AgentTurnResult{
 		TaskRun:       taskRun,
 		FinishMessage: finishMessage,
-		UserNotice:    finishMessage,
+		UserNotice:    userNoticeOf(taskRun, finishMessage),
 		ToolNames:     calledToolNames,
 		Attachments:   succeededToolRecorder.StagedAttachments(),
 	}
+}
+
+func userNoticeOf(taskRun agentcontract.TaskRun, finishMessage string) string {
+	isWaiting := taskRun.Status == agentcontract.TaskStatusWaitingApproval || taskRun.Status == agentcontract.TaskStatusWaitingUserInput
+	if isWaiting && strings.TrimSpace(finishMessage) == "" {
+		return taskRun.FailureReason
+	}
+	return finishMessage
 }
 
 func (harness *Harness) outcomeForEndedTurn(ctx context.Context, request agentcontract.AgentTurnRequest, finishMessage string, calledToolNames []string) (agentcontract.TaskStatus, string) {
@@ -291,6 +305,8 @@ type sessionObserver struct {
 	permissionAsker     approvalgate.HarnessPermissionAsker
 	approvalRequest     mcpserver.ApprovalRequest
 	ledgerMirror        ledgerMirror
+	isMirroring         *mirroringFlag
+	onToolCallEnded     func()
 	checkpointMarkerKey string
 	checkpointSender    agentcontract.AgentCheckpointSender
 }
@@ -302,6 +318,7 @@ func (harness *Harness) newSessionObserver(ctx context.Context, request agentcon
 		toolCallObserver:    toolcallprogress.ObserverFrom(ctx),
 		permissionAsker:     harness.permissionAsker,
 		approvalRequest:     approvalRequestOf(request),
+		isMirroring:         &mirroringFlag{},
 		ledgerMirror:        ledgerMirror{exchange: harness.ledgerExchange, taskRunStore: harness.taskRunStore, taskRunID: request.ExistingTaskRunID},
 		checkpointMarkerKey: harness.checkpointMarkerKey,
 		checkpointSender:    request.CheckpointSender,
@@ -358,7 +375,18 @@ func (observer *sessionObserver) SessionUpdate(ctx context.Context, notification
 	}
 	observer.routeCheckpoint(ctx, update)
 	observer.record(update)
+	observer.noteToolCallEnded(update)
 	return nil
+}
+
+func (observer *sessionObserver) noteToolCallEnded(update acp.SessionUpdate) {
+	toolCallUpdate := update.ToolCallUpdate
+	if observer.onToolCallEnded == nil || toolCallUpdate == nil || toolCallUpdate.Status == nil {
+		return
+	}
+	if *toolCallUpdate.Status == acp.ToolCallStatusCompleted || *toolCallUpdate.Status == acp.ToolCallStatusFailed {
+		observer.onToolCallEnded()
+	}
 }
 
 func (observer *sessionObserver) mirrorLedger(update acp.SessionUpdate) bool {
@@ -369,6 +397,8 @@ func (observer *sessionObserver) mirrorLedger(update acp.SessionUpdate) bool {
 	if !isRecorded {
 		return false
 	}
+	observer.isMirroring.enter()
+	defer observer.isMirroring.leave()
 	observer.ledgerMirror.take(record)
 	return true
 }
@@ -565,4 +595,15 @@ func (harness *Harness) instructionPrompt() string {
 
 func (harness *Harness) UseInstructionBundleLoader(instructionBundleLoader func() agentcontract.InstructionBundle) {
 	harness.instructionBundleLoader = instructionBundleLoader
+}
+
+func (harness *Harness) UseTurnContextOnToolCalls() {
+	harness.carriesTurnContextToTools = true
+}
+
+func (harness *Harness) turnContextForToolCalls(ctx context.Context) context.Context {
+	if !harness.carriesTurnContextToTools {
+		return nil
+	}
+	return ctx
 }

@@ -101,8 +101,29 @@ func (mirror ledgerMirror) isActive() bool {
 }
 
 func (mirror ledgerMirror) take(record agentcontract.LedgerRecord) {
-	if !mirror.isActive() || mirror.exchange.skippedEventNames[record.Name] {
+	if !mirror.isActive() || mirror.exchange.skippedEventNames[record.Name] || mirror.hostRecordedTheCancellation(record) {
 		return
 	}
 	mirror.taskRunStore.AppendTaskEvent(mirror.taskRunID, record.Name, record.EventBody())
+}
+
+func (mirror ledgerMirror) hostRecordedTheCancellation(record agentcontract.LedgerRecord) bool {
+	if !strings.HasPrefix(record.Name, agentcontract.ToolTaskEventPrefix) || !strings.HasSuffix(record.Name, agentcontract.ToolTaskEventCancelledSuffix) {
+		return false
+	}
+	observationID := observationIDOf(record.EventBody())
+	for _, taskEvent := range mirror.taskRunStore.ListTaskEvent(mirror.taskRunID) {
+		if taskEvent.Name == record.Name && observationIDOf(taskEvent.Body) == observationID {
+			return true
+		}
+	}
+	return false
+}
+
+func observationIDOf(eventBody string) string {
+	document := struct {
+		ObservationID string `json:"observationID"`
+	}{}
+	_ = json.Unmarshal([]byte(eventBody), &document)
+	return document.ObservationID
 }

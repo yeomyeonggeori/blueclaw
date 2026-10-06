@@ -130,3 +130,50 @@ func TestARunOpenedForThisTurnHasNothingToReplay(t *testing.T) {
 		t.Fatalf("replaying a run's own launch records tells the agent it was restarted, got %+v", records)
 	}
 }
+
+func mirrorACancellation(t *testing.T, hostRecordedIt bool) []string {
+	t.Helper()
+	taskRuns, taskRunID := newTaskRunStore()
+	if hostRecordedIt {
+		taskRuns.AppendTaskEvent(taskRunID, "tool.note_write.cancelled", `{"observationID":"obs-001","reason":"cancelled_by_attempt_end"}`)
+	}
+	mirror := ledgerMirror{exchange: newLedgerExchange(nil), taskRunStore: taskRuns, taskRunID: taskRunID}
+	mirror.take(agentcontract.LedgerRecord{Name: "tool.note_write.cancelled", Body: json.RawMessage(`{"observationID":"obs-001","reason":"cancelled_by_attempt_end"}`)})
+	return eventNamesOf(taskRuns, taskRunID)
+}
+
+func TestACancellationTheHostAlreadyRecordedIsNotMirroredASecondTime(t *testing.T) {
+	cancellations := 0
+	for _, name := range mirrorACancellation(t, true) {
+		if name == "tool.note_write.cancelled" {
+			cancellations++
+		}
+	}
+	if cancellations != 1 {
+		t.Fatalf("the host ended the attempt that held the call and wrote the cancellation, so the agent's is the same fact, got %d", cancellations)
+	}
+}
+
+func TestACancellationOnlyTheAgentRecordedIsMirrored(t *testing.T) {
+	cancellations := 0
+	for _, name := range mirrorACancellation(t, false) {
+		if name == "tool.note_write.cancelled" {
+			cancellations++
+		}
+	}
+	if cancellations != 1 {
+		t.Fatalf("a cancellation nobody else wrote is the agent's to report, got %d", cancellations)
+	}
+}
+
+func TestACancellationOfAnotherCallIsMirroredBesideTheHostsOwn(t *testing.T) {
+	taskRuns, taskRunID := newTaskRunStore()
+	taskRuns.AppendTaskEvent(taskRunID, "tool.note_write.cancelled", `{"observationID":"obs-001"}`)
+	mirror := ledgerMirror{exchange: newLedgerExchange(nil), taskRunStore: taskRuns, taskRunID: taskRunID}
+
+	mirror.take(agentcontract.LedgerRecord{Name: "tool.note_write.cancelled", Body: json.RawMessage(`{"observationID":"obs-002"}`)})
+
+	if len(eventNamesOf(taskRuns, taskRunID)) != 3 {
+		t.Fatalf("each call's cancellation is its own record, got %v", eventNamesOf(taskRuns, taskRunID))
+	}
+}

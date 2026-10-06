@@ -1210,7 +1210,6 @@ func TestFailureExplanationAcceptance(t *testing.T) {
 }
 
 func TestAskChoiceReplyAcceptance(t *testing.T) {
-	skipWhereTheHarnessCannotEndTheTurnOnAParkedRun(t, "ask_choice_reply_acceptance")
 	result, errorValue := RunVirtualSession(context.Background(), AskChoiceReplyAcceptanceScenario(t.TempDir()))
 	if errorValue != nil {
 		t.Fatalf("expected ask choice reply acceptance scenario to pass: %v", errorValue)
@@ -1221,7 +1220,6 @@ func TestAskChoiceReplyAcceptance(t *testing.T) {
 }
 
 func TestAnAnswerOverACPResumesTheRunThatAsked(t *testing.T) {
-	skipWhereTheHarnessCannotEndTheTurnOnAParkedRun(t, "ask_choice_reply_over_acp")
 	result, errorValue := RunVirtualSession(context.Background(), AskChoiceReplyOverACPScenario(t.TempDir()))
 	if errorValue != nil {
 		t.Fatalf("expected the answer to an ACP question to resume the asking run: %v", errorValue)
@@ -1254,7 +1252,6 @@ func TestARootMessageStartsATaskWhileAnotherWaitsForAnAnswer(t *testing.T) {
 		AskRootMessageStartsATaskOverACPScenario(t.TempDir()),
 	} {
 		t.Run(scenario.Name, func(t *testing.T) {
-			skipWhereTheHarnessCannotEndTheTurnOnAParkedRun(t, scenario.Name)
 			result, errorValue := RunVirtualSession(context.Background(), scenario)
 			if errorValue != nil {
 				t.Fatal(errorValue)
@@ -1274,7 +1271,6 @@ func TestARootMessageStartsATaskWhileAnotherWaitsForAnAnswer(t *testing.T) {
 }
 
 func TestDirectMessageSendConfirmAcceptance(t *testing.T) {
-	skipWhereTheHarnessCannotEndTheTurnOnAParkedRun(t, "dm_send_confirm_acceptance")
 	result, errorValue := RunVirtualSession(context.Background(), DirectMessageSendConfirmAcceptanceScenario(t.TempDir()))
 	if errorValue != nil {
 		t.Fatalf("expected direct message send confirm acceptance scenario to pass: %v", errorValue)
@@ -1305,7 +1301,6 @@ func TestDirectMessageSendConfirmAcceptance(t *testing.T) {
 }
 
 func TestChannelPostAcceptance(t *testing.T) {
-	skipWhereTheHarnessCannotEndTheTurnOnAParkedRun(t, "channel_post_acceptance")
 	result, errorValue := RunVirtualSession(context.Background(), ChannelPostAcceptanceScenario(t.TempDir()))
 	if errorValue != nil {
 		t.Fatalf("expected channel post acceptance scenario to pass: %v", errorValue)

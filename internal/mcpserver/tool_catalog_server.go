@@ -23,6 +23,7 @@ type RequesterToolSet struct {
 	ToolAudience      ToolAudience
 	ResponseLanguage  string
 	Prompt            string
+	TurnContext       context.Context
 
 	ObserveToolInvocation func(toolName string, toolResult toolcontract.ToolResult, isSucceeded bool)
 }
@@ -127,7 +128,7 @@ func leavesEnvironmentUnchanged(sideEffectClass string) bool {
 
 func invokeThroughToolSet(requesterToolSet RequesterToolSet, toolDescriptor toolcontract.ToolDescriptor, hasOutputSchema bool) mcp.ToolHandler {
 	return func(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		invocationContext := toolcontract.WithTaskRunID(ctx, strings.TrimSpace(requesterToolSet.TaskRunID))
+		invocationContext := toolcontract.WithTaskRunID(contextCarryingValuesOf(requesterToolSet.TurnContext, ctx), strings.TrimSpace(requesterToolSet.TaskRunID))
 		toolResult, errorValue := requesterToolSet.ToolSet.Invoke(invocationContext, toolcontract.ToolInvocation{
 			ToolName: toolDescriptor.Name,
 			Input:    request.Params.Arguments,

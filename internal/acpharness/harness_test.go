@@ -114,6 +114,11 @@ type externalAgent struct {
 	declaresImages           bool
 	observedPromptBlocks     []acp.ContentBlock
 	promptResponseMeta       map[string]any
+	promptScripts            []func(ctx context.Context, request acp.PromptRequest) acp.StopReason
+	promptTexts              []string
+	cancelled                chan struct{}
+	extensionMethods         []string
+	extensionParams          []json.RawMessage
 }
 
 func (agent *externalAgent) serve(ctx context.Context, output io.Writer, input io.Reader) {
@@ -172,6 +177,11 @@ func (agent *externalAgent) NewSession(ctx context.Context, request acp.NewSessi
 }
 
 func (agent *externalAgent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.PromptResponse, error) {
+	promptNumber := len(agent.promptTexts)
+	agent.promptTexts = append(agent.promptTexts, textOfPromptBlocks(request.Prompt))
+	if promptNumber < len(agent.promptScripts) {
+		return acp.PromptResponse{StopReason: agent.promptScripts[promptNumber](ctx, request), Meta: agent.promptResponseMeta}, nil
+	}
 	agent.observedPromptMeta = request.Meta
 	agent.observedPromptBlocks = request.Prompt
 	for _, update := range agent.toolCallUpdates {
@@ -196,7 +206,31 @@ func (agent *externalAgent) Prompt(ctx context.Context, request acp.PromptReques
 	return acp.PromptResponse{StopReason: acp.StopReasonEndTurn, Meta: agent.promptResponseMeta}, nil
 }
 
-func (agent *externalAgent) Cancel(context.Context, acp.CancelNotification) error { return nil }
+func (agent *externalAgent) Cancel(context.Context, acp.CancelNotification) error {
+	if agent.cancelled != nil {
+		agent.cancelled <- struct{}{}
+	}
+	return nil
+}
+
+func (agent *externalAgent) HandleExtensionMethod(_ context.Context, method string, params json.RawMessage) (any, error) {
+	agent.extensionMethods = append(agent.extensionMethods, method)
+	agent.extensionParams = append(agent.extensionParams, params)
+	if agent.cancelled != nil {
+		agent.cancelled <- struct{}{}
+	}
+	return map[string]any{}, nil
+}
+
+func textOfPromptBlocks(blocks []acp.ContentBlock) string {
+	text := ""
+	for _, block := range blocks {
+		if block.Text != nil {
+			text += block.Text.Text
+		}
+	}
+	return text
+}
 func (agent *externalAgent) Authenticate(context.Context, acp.AuthenticateRequest) (acp.AuthenticateResponse, error) {
 	return acp.AuthenticateResponse{}, nil
 }
