@@ -240,3 +240,46 @@ func TestAnImageAToolReadReachesTheHarnessAsMCPImageContent(t *testing.T) {
 		t.Fatalf("the picture lost the path it can be reloaded from: %+v", image.Meta)
 	}
 }
+
+func TestAFileAToolDeliveredReachesTheHarnessWithItsBytesAndPath(t *testing.T) {
+	body := []byte("plane attachment body")
+	toolSet := toolcontract.NewToolSet([]string{"file_deliver"})
+	toolSet.AllowTestReplacement()
+	errorValue := toolSet.RegisterTool(toolcontract.ToolDefinition{
+		ID:              "test:file_deliver",
+		Name:            "file_deliver",
+		Description:     "file_deliver description",
+		Visibility:      toolcontract.ToolVisibilityModel,
+		InputSchema:     json.RawMessage(`{"type":"object"}`),
+		SideEffectClass: toolcontract.ToolSideEffectRead,
+		ResultContract:  &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)},
+	}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		result := toolcontract.ToolSuccessData("delivered", json.RawMessage(`{}`))
+		result.Attachments = []toolcontract.FileAttachment{
+			{DevicePath: "/workspace/note.txt", ContentType: "text/plain", ContentBase64: base64.StdEncoding.EncodeToString(body)},
+		}
+		return result, nil
+	})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	clientSession := connectedCatalogSession(t, RequesterToolSet{RequesterPersonID: "person-1", ToolSet: toolSet})
+
+	callResult, errorValue := clientSession.CallTool(context.Background(), &mcp.CallToolParams{Name: "file_deliver", Arguments: map[string]any{}})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	if len(callResult.Content) != 2 {
+		t.Fatalf("expected the text and one file, got %+v", callResult.Content)
+	}
+	file, isFile := callResult.Content[1].(*mcp.EmbeddedResource)
+	if !isFile || file.Resource == nil || !bytes.Equal(file.Resource.Blob, body) || file.Resource.MIMEType != "text/plain" {
+		t.Fatalf("the file changed on the way: %+v", callResult.Content[1])
+	}
+	var read toolcontract.FileAttachment
+	toolcontract.ApplyAttachmentMeta(&read, file.Resource.Meta)
+	if read.DevicePath != "/workspace/note.txt" {
+		t.Fatalf("the file lost the path the loop matches it by: %+v", file.Resource.Meta)
+	}
+}
