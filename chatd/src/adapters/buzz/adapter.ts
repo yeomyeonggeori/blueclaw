@@ -25,6 +25,7 @@ import {
 import { isServedByTheRelay, readAuthorizationHeader } from "./blossom.ts";
 import { fetchFromRelay } from "./relay-trust.ts";
 import { createBuzzRelayClient, type BuzzRelayClient } from "./relay-client.ts";
+import { profileEventsOrNone } from "./relay-connection.ts";
 import {
 	BUZZ_ADAPTER_NAME,
 	EDIT_MESSAGE_KIND,
@@ -648,7 +649,8 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	private async fetchProfile(pubkey: string): Promise<{ name?: string; nip05?: string; picture?: string }> {
 		const cached = this.profileByPubkey.get(pubkey);
 		if (cached) return cached;
-		const events = await this.relay.query({ kinds: [PROFILE_KIND], authors: [pubkey], limit: 1 });
+		const events = await profileEventsOrNone(this.relay, { kinds: [PROFILE_KIND], authors: [pubkey], limit: 1 });
+		if (events === null) return {};
 		let profile: { name?: string; nip05?: string; picture?: string } = {};
 		const content = events.at(-1)?.content;
 		if (content) {

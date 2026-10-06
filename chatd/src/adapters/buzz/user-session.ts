@@ -1,5 +1,6 @@
 import { getPublicKey } from "nostr-tools/pure";
 import { withRelayAs } from "./relay-pool.ts";
+import { profileEventsOrNone } from "./relay-connection.ts";
 import { BlobRefused, imetaTag, uploadBlob, type BlossomBlob } from "./blossom.ts";
 import {
 	EDIT_MESSAGE_KIND,
@@ -52,7 +53,7 @@ async function fetchProfileAsUser(
 	relay: { query: (filter: object) => Promise<BuzzEvent[]> },
 	pubkey: string,
 ): Promise<{ name?: string; picture?: string }> {
-	const events = await relay.query({ kinds: [PROFILE_KIND], authors: [pubkey], limit: 5 });
+	const events = (await profileEventsOrNone(relay, { kinds: [PROFILE_KIND], authors: [pubkey], limit: 5 })) ?? [];
 	const latest = events.sort((first, second) => second.created_at - first.created_at)[0];
 	if (!latest?.content) return {};
 	try {
