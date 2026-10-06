@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -754,6 +755,7 @@ var builtinScenarioFactories = map[string]func(string) VirtualSessionScenario{
 	"schedule_lifecycle_acceptance":             ScheduleLifecycleAcceptanceScenario,
 	"calendar_event_lifecycle_acceptance":       CalendarEventLifecycleAcceptanceScenario,
 	"calendar_false_finish_recovery_acceptance": CalendarFalseFinishRecoveryAcceptanceScenario,
+	"calendar_change_already_in_place":          CalendarChangeAlreadyInPlaceScenario,
 	"calendar_read_question_with_write_hint":    CalendarReadQuestionWithWriteHintScenario,
 	"change_check_recovery_acceptance":          ChangeCheckRecoveryAcceptanceScenario,
 	"file_attachment_change_check":              FileAttachmentChangeCheckScenario,
@@ -1223,6 +1225,9 @@ func virtualCapabilitySideEffectClass(toolName string) string {
 }
 
 func virtualCapabilityNamespace(toolName string) string {
+	if descriptor, isFound := virtualCanonicalCapabilityToolDescriptor(toolName); isFound && strings.TrimSpace(descriptor.Namespace) != "" {
+		return strings.TrimSpace(descriptor.Namespace)
+	}
 	if separator := strings.IndexByte(toolName, '.'); separator > 0 {
 		return toolName[:separator]
 	}
@@ -2167,12 +2172,19 @@ func virtualCalendarEventList(records []virtualCapabilityRecord, input map[strin
 		if !virtualCalendarEventOverlapsWindow(record.Values, start, end) {
 			continue
 		}
-		events = append(events, record.Values)
+		events = append(events, listedVirtualCalendarEvent(record.Values))
 		if limit > 0 && float64(len(events)) >= limit {
 			break
 		}
 	}
 	return events, nil
+}
+
+func listedVirtualCalendarEvent(event map[string]any) map[string]any {
+	listed := maps.Clone(event)
+	listed["source"] = "event"
+	listed["readOnly"] = false
+	return listed
 }
 
 func virtualCalendarEventMatches(event map[string]any, query string) bool {
