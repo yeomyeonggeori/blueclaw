@@ -127,8 +127,8 @@ func (control *turnControl) steer(ctx context.Context, eventBody string) {
 		return
 	}
 	control.mutex.Lock()
+	defer control.mutex.Unlock()
 	control.pendingSteers = append(control.pendingSteers, steer)
-	control.mutex.Unlock()
 	_ = control.connection.Cancel(context.WithoutCancel(ctx), acp.CancelNotification{SessionId: control.sessionID})
 }
 
@@ -156,7 +156,7 @@ func (control *turnControl) nextSteer() (SteerRequest, bool) {
 func (control *turnControl) converse(ctx context.Context, promptRequest acp.PromptRequest) (acp.PromptResponse, error) {
 	for {
 		promptResponse, errorValue := control.connection.Prompt(ctx, promptRequest)
-		if errorValue != nil || promptResponse.StopReason != acp.StopReasonCancelled {
+		if errorValue != nil {
 			return promptResponse, errorValue
 		}
 		steer, isSteered := control.nextSteer()

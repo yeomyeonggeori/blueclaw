@@ -105,8 +105,8 @@ func assertOneDeliveryClosedByTheLastNotification(t *testing.T, deliveries []Del
 		if delivery.DeliveryID != deliveries[0].DeliveryID || delivery.ReplyTargetID != "reply-target-1" {
 			t.Fatalf("notification %d carries %+v, expected the delivery %q at reply-target-1 of the first", index, delivery, deliveries[0].DeliveryID)
 		}
-		if delivery.Final != (index == last) {
-			t.Fatalf("notification %d has final=%t, only the last notification closes the delivery", index, delivery.Final)
+		if delivery.IsFinal != (index == last) {
+			t.Fatalf("notification %d has isFinal=%t, only the last notification closes the delivery", index, delivery.IsFinal)
 		}
 	}
 }

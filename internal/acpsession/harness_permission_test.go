@@ -197,7 +197,7 @@ func TestAHarnessQuestionThatWasPostedIsNotPostedAgainAfterARestart(t *testing.T
 		t.Fatalf("load session: %v", errorValue)
 	}
 
-	if !deliveryOf(t, awaitPermissionRequest(t, client)).AlreadyPosted {
+	if !deliveryOf(t, awaitPermissionRequest(t, client)).IsAlreadyPosted {
 		t.Fatal("a question the person already has was reissued as unposted")
 	}
 }

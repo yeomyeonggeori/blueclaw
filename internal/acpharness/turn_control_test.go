@@ -161,6 +161,32 @@ func TestASteerReachesAnyOtherAgentAsACancelAndANewPrompt(t *testing.T) {
 	}
 }
 
+func TestASteerReachesAnAgentThatEndsItsTurnInsteadOfCancelling(t *testing.T) {
+	taskRuns, taskRunID := newTaskRunStore()
+	agent := &externalAgent{cancelled: make(chan struct{}, 4)}
+	var sessionIDs []acp.SessionId
+	agent.promptScripts = []func(context.Context, acp.PromptRequest) acp.StopReason{
+		func(_ context.Context, request acp.PromptRequest) acp.StopReason {
+			sessionIDs = append(sessionIDs, request.SessionId)
+			taskRuns.AppendTaskEvent(taskRunID, agentcontract.TaskEventTaskSteerRequested, steerEventBody())
+			return acp.StopReasonEndTurn
+		},
+		func(_ context.Context, request acp.PromptRequest) acp.StopReason {
+			sessionIDs = append(sessionIDs, request.SessionId)
+			return acp.StopReasonEndTurn
+		},
+	}
+
+	runControlledTurn(t, agent, taskRuns, taskRunID, func(*Harness) {})
+
+	if len(agent.promptTexts) != 2 || !strings.Contains(agent.promptTexts[1], "make it shorter") {
+		t.Fatalf("a steer that lands as the agent finishes still has to reach it, got %v", agent.promptTexts)
+	}
+	if sessionIDs[0] != sessionIDs[1] {
+		t.Fatalf("the steer continues the session it interrupts, got %v", sessionIDs)
+	}
+}
+
 func TestASteerThatArrivesAfterTheRunParkedIsNotPromptedIn(t *testing.T) {
 	taskRuns, taskRunID := newTaskRunStore()
 	agent := &externalAgent{cancelled: make(chan struct{}, 4)}
