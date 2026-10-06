@@ -40,6 +40,7 @@ func (sessionTurn *SessionTurn) AnswersAwaitedQuestion(ctx context.Context) (boo
 	if turn.adapter == nil {
 		return false, nil
 	}
+	connectorRuntime.reawaitHeldQuestionsIn(ctx, turn.personID, turn.event.ConversationID)
 	_, isAnswer, errorValue := connectorRuntime.answerAwaitingThreads(withConnectorEvent(ctx, turn.event), turn.platform, turn.personID, turn.event)
 	return isAnswer, errorValue
 }

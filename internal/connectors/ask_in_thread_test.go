@@ -331,6 +331,29 @@ func TestAnAnswerAfterARestartThatArrivesAsASessionPromptApprovesTheHold(t *test
 	}
 }
 
+func TestAnAnswerToAHoldNobodyAwaitsYetIsStillTakenFromTheSessionPromptThatCarriesIt(t *testing.T) {
+	script := deleteApprovalScript(`{"answer":"approve"}`)
+	script.actions = []string{script.actions[0], connectorFinishMessageCiting("내일 휴가 일정을 캘린더에서 삭제했습니다.", "obs-001")}
+	fixture := newThreadAskFixture(t, script)
+	taskRun := restartedRunHoldingTheCall(t, fixture)
+	fixture.connectorRuntime.appendConnectorReplyEvent(taskRun.TaskRunID, agentcontract.TaskEventConnectorReplySent, map[string]string{"replyKind": connectorReplyKindApprovalQuestion, "dispatchID": "dispatch-before-the-restart"})
+	sessionTurn := fixture.connectorRuntime.OpenSessionTurn(context.Background(), threadReplyEvent("message-2", "ㅇ"), "person-1", fixture.adapter.SendReply)
+
+	isAnswer, errorValue := sessionTurn.AnswersAwaitedQuestion(context.Background())
+
+	if errorValue != nil || !isAnswer {
+		t.Fatalf("answered=%v error=%v: expected the prompt to settle a hold the start-up pass had not yet awaited", isAnswer, errorValue)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if resumed, _ := fixture.connectorRuntime.taskRunService.FindTaskRun(taskRun.TaskRunID); resumed.Status == task.TaskStatusCompleted {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("the run never completed after its hold was answered: calls %v", fixture.invokedTools)
+}
+
 func TestARunWhoseThreadCannotBeReopenedAfterARestartIsEndedNotParked(t *testing.T) {
 	fixture := newThreadAskFixture(t, deleteApprovalScript())
 	taskRun := fixture.connectorRuntime.taskRunService.CreateTaskRunWithOrigin("person-1", task.TaskRunOrigin{ConversationID: "schedule:morning"}, "scheduled run")
