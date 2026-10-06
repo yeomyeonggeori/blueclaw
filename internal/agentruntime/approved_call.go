@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
@@ -44,9 +45,16 @@ func (step carryOutApprovedCallLaunchStep) carryOutAnsweredCall(ctx context.Cont
 	if !isApproved {
 		return agentcontract.CarriedOutCall{}, false
 	}
-	result := invokeApprovedCall(ctx, step.ToolSet, approvedCall)
+	result := step.carriedOutResult(ctx, taskRunService.ListTaskEvent(taskRunID), approvedCall)
 	approvalgate.RecordApprovedCallSpent(taskRunService, taskRunID, approvedCall)
 	return agentcontract.CarriedOutCall{ToolName: approvedCall.ToolName, ToolInput: approvedCall.ToolInput, Result: result}, true
+}
+
+func (step carryOutApprovedCallLaunchStep) carriedOutResult(ctx context.Context, taskEvents []agentcontract.TaskEvent, approvedCall approvalgate.ApprovedCall) toolcontract.ToolResult {
+	if approvedCall.ToolName == toolcontract.AskInputToolName {
+		return approvalrecord.ChosenAnswerResult(taskEvents, approvedCall.ToolInput)
+	}
+	return invokeApprovedCall(ctx, step.ToolSet, approvedCall)
 }
 
 func (step carryOutApprovedCallLaunchStep) carryOutScheduledCall(ctx context.Context, execution *taskLaunchExecution, scheduledCall task.ScheduleApprovedCall) agentcontract.CarriedOutCall {

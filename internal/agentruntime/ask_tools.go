@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
 
@@ -27,7 +28,7 @@ type askInputResult struct {
 var (
 	askInputSchema       = json.RawMessage(`{"type":"object","properties":{"question":{"type":"string","minLength":1,"pattern":"\\S"},"choices":{"type":"array","items":{"type":"string","minLength":1,"pattern":"\\S"},"uniqueItems":true}},"required":["question"],"additionalProperties":false}`)
 	askInputIntentSchema = json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`)
-	askInputResultSchema = json.RawMessage(`{"type":"object","properties":{"taskRunID":{"type":"string","minLength":1,"pattern":"\\S"},"status":{"const":"waiting_user_input"},"question":{"type":"string","minLength":1,"pattern":"\\S"},"kind":{"const":"ask_input"},"options":{"type":"array","items":{"type":"object","properties":{"key":{"type":"string","minLength":1,"pattern":"\\S"},"label":{"type":"string","minLength":1,"pattern":"\\S"},"value":{"type":"string","minLength":1,"pattern":"\\S"}},"required":["key","label","value"],"additionalProperties":false}}},"required":["taskRunID","status","question","kind","options"],"additionalProperties":false}`)
+	askInputResultSchema = json.RawMessage(`{"type":"object","properties":{"taskRunID":{"type":"string","minLength":1,"pattern":"\\S"},"status":{"type":"string","enum":["waiting_user_input","answered"]},"question":{"type":"string","minLength":1,"pattern":"\\S"},"kind":{"const":"ask_input"},"choiceKey":{"type":"string","minLength":1},"answer":{"type":"string","minLength":1},"options":{"type":"array","items":{"type":"object","properties":{"key":{"type":"string","minLength":1,"pattern":"\\S"},"label":{"type":"string","minLength":1,"pattern":"\\S"},"value":{"type":"string","minLength":1,"pattern":"\\S"}},"required":["key","label","value"],"additionalProperties":false}}},"required":["status","question"],"additionalProperties":false}`)
 )
 
 func (toolCatalogBuilder *ToolCatalogBuilder) registerAskInputTool(toolRegistry *toolcontract.ToolSet) {
@@ -50,6 +51,9 @@ func (toolCatalogBuilder *ToolCatalogBuilder) askInputTool(toolContext context.C
 	question := strings.TrimSpace(input.Question)
 	if question == "" {
 		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, toolcontract.AskInputToolName, "ask_input requires a nonblank question"), nil
+	}
+	if len(trimNonEmptyStrings(input.Choices)) > 0 {
+		return approvalrecord.ChosenAnswerResult(toolCatalogBuilder.taskRunService.ListTaskEvent(taskRunID), json.RawMessage(MarshalBody(input))), nil
 	}
 	_, errorValue := toolCatalogBuilder.taskRunService.PauseTaskRun(taskRunID, task.TaskStatusWaitingUserInput, question)
 	if errorValue != nil {

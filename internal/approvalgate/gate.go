@@ -37,11 +37,14 @@ func (gate *Gate) AwaitApproval(ctx context.Context, approvalRequest mcpserver.A
 	if _, isApproved := gate.approvedHold(taskRunID, approvalRequest); isApproved {
 		return gate.approvedOutcome(taskRunID, approvalRequest), nil
 	}
-	resolution := gate.resolveApprovalTarget(ctx, approvalRequest)
-	if resolution.namesNothingThatExists() {
-		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionUnresolvedTarget, Failure: resolution.Failure}, nil
+	resolution, confirmation, isQuestion := gate.questionToAsk(approvalRequest)
+	if !isQuestion {
+		resolution = gate.resolveApprovalTarget(ctx, approvalRequest)
+		if resolution.namesNothingThatExists() {
+			return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionUnresolvedTarget, Failure: resolution.Failure}, nil
+		}
+		confirmation = gate.confirmationWording(ctx, approvalRequest, resolution)
 	}
-	confirmation := gate.confirmationWording(ctx, approvalRequest, resolution)
 	if outcome, isAnswered := gate.askedOutcome(ctx, taskRunID, approvalRequest, confirmation, resolution); isAnswered {
 		return outcome, nil
 	}

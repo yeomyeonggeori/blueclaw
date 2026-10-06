@@ -393,16 +393,11 @@ func TestConnectorRuntimeReplyInTheWaitingTasksThreadContinuesIt(t *testing.T) {
 	}
 }
 
-func TestConnectorRuntimePreservesNaturalLanguageOptionReply(t *testing.T) {
+func TestConnectorRuntimeDeliversAReplyToAWaitingQuestionAsTheNextPromptWithoutReadingIt(t *testing.T) {
 	const replyText = "발표자료로 만들어 주세요"
 	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
-		StructuredResponsesBySchema: map[string][]string{
-			"bluecollar_turn_router": {
-				`{"route":"continue_task","classification":"bounded_task","taskShape":"research_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"natural-language reply selects the slides option","userFacingReply":"","choices":["B"]}`,
-				`{"route":"continue_task","classification":"bounded_task","taskShape":"research_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"natural-language reply selects the slides option","userFacingReply":"","choices":["B"]}`,
-			},
-		},
-		ActionResponses: []string{connectorFinishMessage("발표자료로 진행했습니다.")},
+		StructuredResponsesBySchema: map[string][]string{},
+		ActionResponses:             []string{connectorFinishMessage("발표자료로 진행했습니다.")},
 	})
 	connectorRuntime, adapter, taskRunService, taskWaitRepository := newWaitRoutingTestConnectorRuntime(t, languageModel)
 	intakeDecisions := recordIntakeDecisions(connectorRuntime)
@@ -429,8 +424,8 @@ func TestConnectorRuntimePreservesNaturalLanguageOptionReply(t *testing.T) {
 	if actionIndex < 0 || !structuredMessagesContain(requests[actionIndex].Messages, replyText) {
 		t.Fatalf("expected exact natural-language reply in resumed agent request, got %+v", requests)
 	}
-	if !connectorTaskEventsContain(connectorRuntime, waitingTaskRun.TaskRunID, "ask.resolved", `"choices":["B"]`) {
-		t.Fatalf("expected selected option key in ask resolution, taskRunID=%s", waitingTaskRun.TaskRunID)
+	if !connectorTaskEventsContain(connectorRuntime, waitingTaskRun.TaskRunID, "ask.resolved", `"route":"continue_task"`) {
+		t.Fatalf("expected the question resolved by the reply, taskRunID=%s", waitingTaskRun.TaskRunID)
 	}
 	if structuredMessagesContain(requests[actionIndex].Messages, "User selected:") {
 		t.Fatalf("expected no synthetic choice prompt, got %+v", requests[actionIndex].Messages)
@@ -4848,4 +4843,41 @@ func (decisionModel approvalReplyDecisionModel) Decide(ctx context.Context, requ
 		return model.DecisionResponse{}, errorValue
 	}
 	return model.DecisionResponse{Answers: map[string]model.DecisionAnswer{"answer": {Type: model.DecisionQuestionTypeChoice, Choice: answer.Answer}}}, nil
+}
+
+type routerThatMustNotBeAskedAboutAnAnswer struct {
+	TurnRouter
+	pendingInputPlans int
+}
+
+func (router *routerThatMustNotBeAskedAboutAnAnswer) PlanObserved(ctx context.Context, request agentcontract.AgentRequest, callLedger *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error) {
+	if request.PendingInput.TaskRunID != "" || request.PendingChoice.TaskRunID != "" {
+		router.pendingInputPlans++
+	}
+	return router.TurnRouter.PlanObserved(ctx, request, callLedger)
+}
+
+func TestAReplyToAWaitingQuestionIsNeverOfferedToTheRouterAsPendingInput(t *testing.T) {
+	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
+		ActionResponses: []string{connectorFinishMessage("진행했습니다.")},
+	})
+	connectorRuntime, adapter, taskRunService, taskWaitRepository := newWaitRoutingTestConnectorRuntime(t, languageModel)
+	router := &routerThatMustNotBeAskedAboutAnAnswer{TurnRouter: connectorRuntime.turnRouter}
+	connectorRuntime.UseTurnRouter(router)
+	waitingTaskRun := createWaitingInputTaskRunWithOptions(t, taskRunService, "어떤 형식으로 만들까요?", "input-options")
+	if errorValue := taskWaitRepository.InsertTaskWaitToken(waitRoutingTaskWaitToken(waitingTaskRun, "input-dispatch", "input-options")); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	event := testInboundEvent("message-answer")
+	event.Prompt = "발표자료로 만들어 주세요"
+	event.ReplyTargetID = "input-dispatch"
+
+	result, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, event)
+
+	if errorValue != nil || result.TaskRunID != waitingTaskRun.TaskRunID {
+		t.Fatalf("expected the waiting run to take the reply, got %+v %v", result, errorValue)
+	}
+	if router.pendingInputPlans != 0 {
+		t.Fatalf("a reply in the thread of a question answers it, and the router was asked to read it %d times", router.pendingInputPlans)
+	}
 }

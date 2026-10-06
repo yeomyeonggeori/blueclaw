@@ -105,14 +105,6 @@ func (connectorRuntime *ConnectorRuntime) routeOpenInteractions(ctx context.Cont
 	if !open.hasAsk {
 		request.DecidedTurnFields = connectorRuntime.decidedTurnFields(ctx, turn.adapter, turn.event)
 	}
-	if open.hasAsk {
-		exchanges := connectorRuntime.exchangesSince(turn, open.askAt, open.ask.TaskRunID)
-		if open.ask.Kind == "ask_input" {
-			request.PendingInput = agentcontract.PendingInputContext{TaskRunID: open.ask.TaskRunID, Question: open.ask.Question, SelectionMode: open.ask.SelectionMode, Options: choiceReplyOptions(open.ask.Options), AskedAt: open.askAt, ExchangesSince: exchanges}
-		} else {
-			request.PendingChoice = agentcontract.PendingChoiceContext{TaskRunID: open.ask.TaskRunID, Question: open.ask.Question, SelectionMode: open.ask.SelectionMode, Options: choiceReplyOptions(open.ask.Options), AskedAt: open.askAt, ExchangesSince: exchanges}
-		}
-	}
 	if open.hasRunningTask {
 		request.ActiveTask = connectorRuntime.activeTaskContext(open.runningTask)
 	}
@@ -131,7 +123,20 @@ func (connectorRuntime *ConnectorRuntime) decideOpenInteractions(ctx context.Con
 			return decision, errorValue
 		}
 	}
+	if open.hasAsk {
+		return answeringTheQuestionTheRunAsked(turn.event), nil
+	}
 	return connectorRuntime.planTurn(ctx, open.ledgerTaskRunID(), request)
+}
+
+func answeringTheQuestionTheRunAsked(event PlatformInboundEvent) agentcontract.TurnDecision {
+	return agentcontract.TurnDecision{
+		Route:            agentcontract.TurnRouteContinueTask,
+		Classification:   agentcontract.IntakeClassificationBoundedTask,
+		TaskShape:        agentcontract.TaskShapeMaintenanceTask,
+		ResponseLanguage: responseLanguageForEvent(event),
+		Reason:           "a reply in the thread the run asked its question in",
+	}
 }
 
 func (connectorRuntime *ConnectorRuntime) recordOpenInteractionRouting(turn *inboundTurn, open openInteractions, decision agentcontract.TurnDecision) {
@@ -276,6 +281,7 @@ func (connectorRuntime *ConnectorRuntime) settleChoiceConfirmation(ctx context.C
 		turn.isApprovalContinuation = true
 		return ConnectorRuntimeResult{}, false, nil
 	case isChosen:
+		approvalrecord.RecordChoiceAnswer(connectorRuntime.taskRunService, confirmation.TaskRun.TaskRunID, choice)
 		approval := agentcontract.ApprovalSignalApprove
 		decision.Approval = &approval
 	case selectsCancel(decision.Choices):

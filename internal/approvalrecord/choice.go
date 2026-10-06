@@ -18,6 +18,9 @@ func ChoiceReplyOptions(choices []holdrecord.Choice) []agentcontract.ChoiceReply
 }
 
 func choiceReplyLabel(choice holdrecord.Choice) string {
+	if choice.IsAnAnswer() {
+		return strings.TrimSpace(choice.Label)
+	}
 	if choice.DefersTheCall() {
 		return "run it at " + strings.TrimSpace(choice.StartsAt)
 	}

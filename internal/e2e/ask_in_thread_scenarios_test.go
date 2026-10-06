@@ -11,6 +11,7 @@ var scenariosThatAskForApproval = []string{
 	"channel_post_acceptance",
 	"host_update_now_acceptance",
 	"host_update_off_hours_acceptance",
+	"ask_choice_hold_acceptance",
 }
 
 func TestApprovalAndChoiceScenariosEndTheSameWhenTheQuestionIsAskedInTheThread(t *testing.T) {

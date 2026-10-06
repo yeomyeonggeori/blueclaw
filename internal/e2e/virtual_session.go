@@ -778,6 +778,7 @@ var builtinScenarioFactories = map[string]func(string) VirtualSessionScenario{
 	"one_time_schedule_acceptance":              OneTimeScheduleAcceptanceScenario,
 	"ask_choice_reply_acceptance":               AskChoiceReplyAcceptanceScenario,
 	"ask_choice_reply_over_acp":                 AskChoiceReplyOverACPScenario,
+	"ask_choice_hold_acceptance":                AskChoiceHoldAcceptanceScenario,
 	"ask_root_message_starts_a_task":            AskRootMessageStartsATaskScenario,
 	"ask_root_message_starts_a_task_over_acp":   AskRootMessageStartsATaskOverACPScenario,
 	"dm_send_confirm_acceptance":                DirectMessageSendConfirmAcceptanceScenario,
@@ -2793,7 +2794,7 @@ func scenarioRouterResponsesForTurn(scenario VirtualSessionScenario, virtualTurn
 }
 
 func scenarioTurnRouterCalls(scenario VirtualSessionScenario, virtualTurn VirtualTurn) []string {
-	if strings.TrimSpace(virtualTurn.RouterApproval) != "" || virtualTurn.AnswersApprovalHold {
+	if strings.TrimSpace(virtualTurn.RouterApproval) != "" || virtualTurn.AnswersApprovalHold || virtualTurn.ReadsNoIntakeDecision {
 		return nil
 	}
 	return scenarioRouterResponsesForTurn(scenario, virtualTurn)

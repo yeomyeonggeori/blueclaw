@@ -28,3 +28,13 @@ func TestAChoiceQuestionOffersEachChoiceAndCancelAsDeclining(t *testing.T) {
 		t.Fatalf("expected only cancel to mean declining, got %+v", question.Options)
 	}
 }
+
+func TestAnAnswerOptionIsOfferedToTheReaderUnderItsOwnWords(t *testing.T) {
+	choices := []holdrecord.Choice{{Key: "1", Label: "회의실 A"}, {Key: "2", Label: "회의실 B"}}
+
+	question := approvalQuestionFor("어느 방으로 할까요?", choices)
+
+	if len(question.Options) != 3 || question.Options[1].ID != "2" || question.Options[1].Meaning != approvalreply.AllowMeaning("회의실 B") {
+		t.Fatalf("the reader reads the person's words against the options' own words, got %+v", question.Options)
+	}
+}
