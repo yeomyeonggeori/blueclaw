@@ -24,22 +24,46 @@ func (connectorRuntime *ConnectorRuntime) reawaitPendingHolds(ctx context.Contex
 }
 
 func (connectorRuntime *ConnectorRuntime) reawaitHold(ctx context.Context, taskRun task.TaskRun) {
+	if awaitAnswer, isAwaiting := connectorRuntime.beginReawaiting(ctx, taskRun); isAwaiting {
+		awaitAnswer()
+	}
+}
+
+func (connectorRuntime *ConnectorRuntime) reawaitHeldQuestionsIn(ctx context.Context, personID string, conversationID string) {
+	for _, taskRun := range connectorRuntime.taskRunService.ListTaskRunByPersonID(personID) {
+		if taskRun.Status != task.TaskStatusWaitingApproval || taskRun.OriginConversationID != conversationID {
+			continue
+		}
+		if awaitAnswer, isAwaiting := connectorRuntime.beginReawaiting(context.WithoutCancel(ctx), taskRun); isAwaiting {
+			go awaitAnswer()
+		}
+	}
+}
+
+func (connectorRuntime *ConnectorRuntime) beginReawaiting(ctx context.Context, taskRun task.TaskRun) (func(), bool) {
 	taskEvents := connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID)
 	heldCall, isHeld := approvalgate.PendingHeldCall(taskEvents)
 	if !isHeld || connectorRuntime.isAwaitedInThread(taskRun.TaskRunID) {
-		return
+		return nil, false
 	}
 	turn, isReady := connectorRuntime.restartedQuestionTurn(ctx, taskRun, taskEvents)
 	if !isReady {
 		connectorRuntime.endUnansweredHold(ctx, taskRun, nil, approvalgate.AskUnreachable)
-		return
+		return nil, false
 	}
 	if time.Since(taskRun.UpdatedAt) > connectorRuntime.askingThreads.expiry {
 		connectorRuntime.endUnansweredHold(ctx, taskRun, turn, approvalgate.AskExpired)
-		return
+		return nil, false
 	}
 	thread := connectorRuntime.restartedThread(taskRun, turn, heldCall.Confirmation, taskEvents)
-	defer connectorRuntime.askingThreads.join(thread)()
+	leave := connectorRuntime.askingThreads.join(thread)
+	return func() {
+		defer leave()
+		connectorRuntime.awaitReawakenedThread(ctx, taskRun, taskEvents, turn, thread, heldCall)
+	}, true
+}
+
+func (connectorRuntime *ConnectorRuntime) awaitReawakenedThread(ctx context.Context, taskRun task.TaskRun, taskEvents []task.TaskEvent, turn *inboundTurn, thread *askingThread, heldCall agentcontract.HeldCall) {
 	if !approvalQuestionIsPosted(taskEvents) && connectorRuntime.deliverApprovalQuestion(ctx, turn, taskRun.TaskRunID, heldCall.Confirmation) != nil {
 		connectorRuntime.endUnansweredHold(ctx, taskRun, turn, approvalgate.AskUnreachable)
 		return
