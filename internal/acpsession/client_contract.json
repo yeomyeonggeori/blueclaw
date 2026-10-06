@@ -29,7 +29,7 @@
 		"delivery": [
 			"deliveryID",
 			"replyTargetID",
-			"alreadyPosted",
+			"isAlreadyPosted",
 			"final"
 		],
 		"undelivered": [
