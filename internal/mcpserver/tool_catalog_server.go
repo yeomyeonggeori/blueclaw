@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -61,11 +62,7 @@ func servableTool(toolDescriptor toolcontract.ToolDescriptor) (*mcp.Tool, bool) 
 		Description: toolDescriptor.Description,
 		InputSchema: decodedSchema,
 		Annotations: toolAnnotations(toolDescriptor),
-		Meta: mcp.Meta{
-			"blueclaw/sideEffectClass":  toolDescriptor.SideEffectClass,
-			"blueclaw/approvalScope":    toolDescriptor.ApprovalScope,
-			"blueclaw/requiresApproval": toolDescriptor.RequiresApproval,
-		},
+		Meta:        toolcontract.DescriptorMeta(toolDescriptor),
 	}
 	var decodedOutputSchema map[string]any
 	if len(toolDescriptor.OutputSchema) > 0 && json.Unmarshal(toolDescriptor.OutputSchema, &decodedOutputSchema) == nil {
@@ -110,7 +107,7 @@ func invokeThroughToolSet(requesterToolSet RequesterToolSet, toolDescriptor tool
 
 func callToolResult(toolResult toolcontract.ToolResult, hasOutputSchema bool, toolName string) *mcp.CallToolResult {
 	result := &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: resultText(toolResult)}},
+		Content: append([]mcp.Content{&mcp.TextContent{Text: resultText(toolResult)}}, imageContents(toolResult)...),
 		IsError: toolResult.Failed(),
 	}
 	if !hasOutputSchema || toolResult.Failed() {
@@ -122,6 +119,21 @@ func callToolResult(toolResult toolcontract.ToolResult, hasOutputSchema bool, to
 	}
 	result.StructuredContent = structuredContent
 	return result
+}
+
+func imageContents(toolResult toolcontract.ToolResult) []mcp.Content {
+	images := []mcp.Content{}
+	for _, attachment := range toolResult.Attachments {
+		if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(attachment.ContentType)), "image/") {
+			continue
+		}
+		data, errorValue := base64.StdEncoding.DecodeString(strings.TrimSpace(attachment.ContentBase64))
+		if errorValue != nil || len(data) == 0 {
+			continue
+		}
+		images = append(images, &mcp.ImageContent{Data: data, MIMEType: strings.TrimSpace(attachment.ContentType), Meta: toolcontract.AttachmentMeta(attachment)})
+	}
+	return images
 }
 
 func missingStructuredContentResult(toolName string) *mcp.CallToolResult {
