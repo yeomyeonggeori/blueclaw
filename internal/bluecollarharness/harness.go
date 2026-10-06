@@ -25,8 +25,7 @@ func New(dependencies harnessdriver.Dependencies) (agentcontract.Harness, agentc
 		agentKernel.UseLanguageModelProvider(taskTierLanguageModels.Low)
 		agentKernel.UseTaskTierLanguageModels(taskTierLanguageModels)
 	}
-	skillRetriever := loop.NewEmbeddingSkillRetriever(dependencies.EmbeddingProvider, dependencies.SkillIndexPath)
-	skillRetriever.EmbeddingModel = dependencies.EmbeddingModelName
+	skillRetriever := NewSkillRetriever(dependencies)
 	agentKernel.UseSkillRetriever(skillRetriever)
 	if dependencies.CompanyProvider != nil {
 		agentKernel.UseCompanyProvider(dependencies.CompanyProvider)
@@ -39,6 +38,12 @@ func New(dependencies harnessdriver.Dependencies) (agentcontract.Harness, agentc
 	}
 	agentKernel.UseDecisionModel(dependencies.DecisionModel)
 	return agentKernel, skillRetriever
+}
+
+func NewSkillRetriever(dependencies harnessdriver.Dependencies) agentcontract.SkillRetriever {
+	skillRetriever := loop.NewEmbeddingSkillRetriever(dependencies.EmbeddingProvider, dependencies.SkillIndexPath)
+	skillRetriever.EmbeddingModel = dependencies.EmbeddingModelName
+	return skillRetriever
 }
 
 func deriveTurnOptions(runtimeConfiguration config.RuntimeConfiguration) agentcontract.TurnOptions {

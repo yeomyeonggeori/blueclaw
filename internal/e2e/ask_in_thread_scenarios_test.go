@@ -21,6 +21,7 @@ func TestApprovalAndChoiceScenariosEndTheSameWhenTheQuestionIsAskedInTheThread(t
 				label = scenarioName + "/asked_in_thread"
 			}
 			t.Run(label, func(t *testing.T) {
+				skipWhereTheHarnessCannotEndTheTurnOnAParkedRun(t, scenarioName)
 				scenario, errorValue := BuiltinScenario(scenarioName, t.TempDir())
 				if errorValue != nil {
 					t.Fatal(errorValue)

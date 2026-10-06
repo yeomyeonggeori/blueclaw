@@ -29,7 +29,9 @@ type ToolAudience string
 const (
 	// ToolAudienceSelfEquipped is a harness with its own shell and file tools.
 	ToolAudienceSelfEquipped ToolAudience = "self_equipped"
-	// ToolAudienceBare is a harness with no tools of its own.
+	// ToolAudienceBare is a harness with no tools of its own. It is offered
+	// every tool it may call, the hidden ones the loop calls on the model's
+	// behalf included.
 	ToolAudienceBare ToolAudience = "bare"
 )
 

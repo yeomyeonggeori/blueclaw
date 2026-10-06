@@ -119,17 +119,31 @@ type applicationComponents struct {
 	learningCoordinator   *learning.Coordinator
 }
 
-func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath string, agentHarnessFactory harnessdriver.Factory, inbound InboundOptions) *Application {
-	return newApplication(newApplicationComponents(runtimeConfiguration, policyPath, agentHarnessFactory, inbound))
+type ApplicationOption func(*applicationOptions)
+
+type applicationOptions struct {
+	bundledACPFactory harnessdriver.ACPFactory
 }
 
-func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, policyPath string, agentHarnessFactory harnessdriver.Factory, inbound InboundOptions) applicationComponents {
+func WithBundledACPFactory(bundledACPFactory harnessdriver.ACPFactory) ApplicationOption {
+	return func(options *applicationOptions) { options.bundledACPFactory = bundledACPFactory }
+}
+
+func NewApplication(runtimeConfiguration config.RuntimeConfiguration, policyPath string, agentHarnessFactory harnessdriver.Factory, inbound InboundOptions, options ...ApplicationOption) *Application {
+	return newApplication(newApplicationComponents(runtimeConfiguration, policyPath, agentHarnessFactory, inbound, options))
+}
+
+func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, policyPath string, agentHarnessFactory harnessdriver.Factory, inbound InboundOptions, applicationOptionList []ApplicationOption) applicationComponents {
+	options := applicationOptions{}
+	for _, option := range applicationOptionList {
+		option(&options)
+	}
 	components := applicationComponents{runtimeConfiguration: runtimeConfiguration, policyPath: policyPath}
 	components.foundation = newRuntimeFoundation(runtimeConfiguration, policyPath)
 	logger := components.foundation.logger
 	components.directory = newIdentityDirectory(components.foundation.database, components.foundation.policyDocument, logger)
 	components.services = newTaskServices(runtimeConfiguration, components.foundation.database, components.directory.companyProvider, logger)
-	components.kernel = newAgentKernel(runtimeConfiguration, agentHarnessFactory, components.services, components.directory.companyProvider, logger)
+	components.kernel = newAgentKernel(runtimeConfiguration, agentHarnessFactory, options.bundledACPFactory, components.services, components.directory.companyProvider, logger)
 	components.memory = newMemoryComponents(runtimeConfiguration, components.kernel, components.services, components.directory.identityService, logger)
 	useMemoryMergingPersonRepository(&components)
 	components.learningStore, components.startupError = openLearningStore(runtimeConfiguration.Terminal.WorkspaceRootPath)

@@ -20,6 +20,7 @@ import (
 
 const (
 	BundledHarnessName     = "bluecollar"
+	BundledACPHarnessName  = "bluecollar-acp"
 	ExternalHarnessName    = "acp"
 	ClaudeCodeHarnessName  = "claude-code"
 	CodexHarnessName       = "codex"
@@ -48,7 +49,21 @@ type SandboxProcessBoundary struct {
 	WorkspaceRootPath string
 }
 
-func Select(harnessConfiguration config.HarnessConfiguration, bundledHarnessFactory harnessdriver.Factory, toolCatalogEndpoint ToolCatalogEndpoint, processBoundary SandboxProcessBoundary) (harnessdriver.Factory, error) {
+type Option func(*selectionConfiguration)
+
+type selectionConfiguration struct {
+	bundledACPFactory harnessdriver.ACPFactory
+}
+
+func WithBundledACPFactory(bundledACPFactory harnessdriver.ACPFactory) Option {
+	return func(configuration *selectionConfiguration) { configuration.bundledACPFactory = bundledACPFactory }
+}
+
+func Select(harnessConfiguration config.HarnessConfiguration, bundledHarnessFactory harnessdriver.Factory, toolCatalogEndpoint ToolCatalogEndpoint, processBoundary SandboxProcessBoundary, options ...Option) (harnessdriver.Factory, error) {
+	configuration := selectionConfiguration{}
+	for _, option := range options {
+		option(&configuration)
+	}
 	harnessName := strings.TrimSpace(harnessConfiguration.Name)
 	switch harnessName {
 	case "", BundledHarnessName:
@@ -56,6 +71,8 @@ func Select(harnessConfiguration config.HarnessConfiguration, bundledHarnessFact
 			return nil, fmt.Errorf("no harness is configured and this build ships none; set agent.harness.name to %q with an agent command", ExternalHarnessName)
 		}
 		return bundledHarnessFactory, nil
+	case BundledACPHarnessName:
+		return bundledACPHarnessFactory(configuration.bundledACPFactory, toolCatalogEndpoint)
 	case ExternalHarnessName:
 		return externalHarnessFactory(harnessConfiguration, toolCatalogEndpoint, processBoundary)
 	case ClaudeCodeHarnessName:
@@ -65,7 +82,7 @@ func Select(harnessConfiguration config.HarnessConfiguration, bundledHarnessFact
 	case AntigravityHarnessName:
 		return commandHarnessFactory(AntigravityHarnessName, cliharness.AntigravityAgentCommand(strings.TrimSpace(harnessConfiguration.AgentCommandPath)), harnessConfiguration, toolCatalogEndpoint, processBoundary)
 	default:
-		return nil, fmt.Errorf("unknown harness %q; known harnesses are %q, %q, %q, %q and %q", harnessName, BundledHarnessName, ExternalHarnessName, ClaudeCodeHarnessName, CodexHarnessName, AntigravityHarnessName)
+		return nil, fmt.Errorf("unknown harness %q; known harnesses are %q, %q, %q, %q, %q and %q", harnessName, BundledHarnessName, BundledACPHarnessName, ExternalHarnessName, ClaudeCodeHarnessName, CodexHarnessName, AntigravityHarnessName)
 	}
 }
 
@@ -138,4 +155,27 @@ func commandHarnessFactory(harnessName string, agentCommand cliharness.AgentComm
 		}
 		return harness, nil
 	}, nil
+}
+
+func bundledACPHarnessFactory(bundledACPFactory harnessdriver.ACPFactory, toolCatalogEndpoint ToolCatalogEndpoint) (harnessdriver.Factory, error) {
+	if bundledACPFactory == nil {
+		return nil, fmt.Errorf("harness %q is not part of this build", BundledACPHarnessName)
+	}
+	if toolCatalogEndpoint.Resolver == nil || strings.TrimSpace(toolCatalogEndpoint.URL) == "" {
+		return nil, fmt.Errorf("harness %q needs a published tool catalog; without one the agent would have no tools to run as the requester", BundledACPHarnessName)
+	}
+	return bundledACPFactory(grantingPublisher{endpointURL: toolCatalogEndpoint.URL, resolver: toolCatalogEndpoint.Resolver}), nil
+}
+
+type grantingPublisher struct {
+	endpointURL string
+	resolver    *mcpserver.SessionTokenRequesterResolver
+}
+
+func (publisher grantingPublisher) PublishToolCatalog(requesterToolSet mcpserver.RequesterToolSet) (string, string, func(), error) {
+	sessionToken, errorValue := publisher.resolver.GrantSessionToken(requesterToolSet)
+	if errorValue != nil {
+		return "", "", func() {}, errorValue
+	}
+	return publisher.endpointURL, sessionToken, func() { publisher.resolver.RevokeSessionToken(sessionToken) }, nil
 }

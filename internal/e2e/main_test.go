@@ -31,5 +31,5 @@ func TestMain(mainTesting *testing.M) {
 		fmt.Printf("the skill roots in %s carry no bundle for %s; they carry %s\n", ScenarioSkillRootsVariable, strings.Join(missingSkills, ", "), strings.Join(foundSkills, ", "))
 		os.Exit(1)
 	}
-	os.Exit(mainTesting.Run())
+	os.Exit(runUnderEveryHarness(mainTesting))
 }

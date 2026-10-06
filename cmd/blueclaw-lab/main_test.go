@@ -715,3 +715,19 @@ func allStringsEqual(values []string, expectedValue string) bool {
 	}
 	return true
 }
+
+func TestTheLabRefusesAHarnessItDoesNotKnow(t *testing.T) {
+	if errorValue := useHarness("claude-code"); errorValue == nil {
+		t.Fatal("a harness the lab cannot build must not fall back to the default, because the run would be reported under the wrong one")
+	}
+}
+
+func TestTheLabRunsUnderTheHarnessTheOperatorNamed(t *testing.T) {
+	arguments, errorValue := parseVirtualSessionArguments([]string{"--harness", "bluecollar-acp"}, "plain_question_acceptance", t.TempDir())
+	if errorValue != nil || arguments.HarnessName != "bluecollar-acp" {
+		t.Fatalf("expected the named harness, got %+v, %v", arguments, errorValue)
+	}
+	if errorValue := useHarness(arguments.HarnessName); errorValue != nil {
+		t.Fatalf("expected the bundled ACP harness to be available to the lab: %v", errorValue)
+	}
+}

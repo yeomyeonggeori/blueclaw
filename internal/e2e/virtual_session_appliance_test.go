@@ -136,6 +136,7 @@ func TestScheduleLifecycleAcceptance(t *testing.T) {
 }
 
 func TestCalendarEventLifecycleAcceptance(t *testing.T) {
+	skipWhereTheHarnessCannotEndTheTurnOnAParkedRun(t, "calendar_event_lifecycle_acceptance")
 	result, errorValue := RunVirtualSession(context.Background(), CalendarEventLifecycleAcceptanceScenario(t.TempDir()))
 	if errorValue != nil {
 		t.Fatalf("expected calendar event lifecycle acceptance scenario to pass: %v", errorValue)

@@ -111,6 +111,9 @@ type externalAgent struct {
 	observedSessionMeta      map[string]any
 	permissionOutcome        acp.RequestPermissionOutcome
 	connection               *acp.AgentSideConnection
+	declaresImages           bool
+	observedPromptBlocks     []acp.ContentBlock
+	promptResponseMeta       map[string]any
 }
 
 func (agent *externalAgent) serve(ctx context.Context, output io.Writer, input io.Reader) {
@@ -121,8 +124,11 @@ func (agent *externalAgent) serve(ctx context.Context, output io.Writer, input i
 
 func (agent *externalAgent) Initialize(_ context.Context, request acp.InitializeRequest) (acp.InitializeResponse, error) {
 	return acp.InitializeResponse{
-		ProtocolVersion:   request.ProtocolVersion,
-		AgentCapabilities: acp.AgentCapabilities{McpCapabilities: acp.McpCapabilities{Http: !agent.acceptsNoHTTPToolCatalog}},
+		ProtocolVersion: request.ProtocolVersion,
+		AgentCapabilities: acp.AgentCapabilities{
+			McpCapabilities:    acp.McpCapabilities{Http: !agent.acceptsNoHTTPToolCatalog},
+			PromptCapabilities: acp.PromptCapabilities{Image: agent.declaresImages},
+		},
 	}, nil
 }
 
@@ -167,6 +173,7 @@ func (agent *externalAgent) NewSession(ctx context.Context, request acp.NewSessi
 
 func (agent *externalAgent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.PromptResponse, error) {
 	agent.observedPromptMeta = request.Meta
+	agent.observedPromptBlocks = request.Prompt
 	for _, update := range agent.toolCallUpdates {
 		if errorValue := agent.connection.SessionUpdate(ctx, acp.SessionNotification{SessionId: request.SessionId, Update: update}); errorValue != nil {
 			return acp.PromptResponse{}, errorValue
@@ -186,7 +193,7 @@ func (agent *externalAgent) Prompt(ctx context.Context, request acp.PromptReques
 			agent.observedPrompt += contentBlock.Text.Text
 		}
 	}
-	return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, nil
+	return acp.PromptResponse{StopReason: acp.StopReasonEndTurn, Meta: agent.promptResponseMeta}, nil
 }
 
 func (agent *externalAgent) Cancel(context.Context, acp.CancelNotification) error { return nil }
