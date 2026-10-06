@@ -39,7 +39,7 @@ func NewToolCatalogServer(requesterToolSet RequesterToolSet, version string) (*m
 	publishedDescriptors := publishedToolDescriptors(requesterToolSet)
 	requesterToolSet.ToolSet = toolSetAllowingEveryPublishedTool(requesterToolSet, publishedDescriptors)
 	for _, toolDescriptor := range publishedDescriptors {
-		tool, isServable := servableTool(toolDescriptor)
+		tool, isServable := servableTool(markedHostGated(toolDescriptor, requesterToolSet.ToolSet))
 		if !isServable {
 			continue
 		}
@@ -84,6 +84,11 @@ func toolSetAllowingEveryPublishedTool(requesterToolSet RequesterToolSet, publis
 		toolNames = append(toolNames, toolDescriptor.Name)
 	}
 	return requesterToolSet.ToolSet.WithAllowedToolNames(toolNames)
+}
+
+func markedHostGated(toolDescriptor toolcontract.ToolDescriptor, toolSet *toolcontract.ToolSet) toolcontract.ToolDescriptor {
+	toolDescriptor.IsHostGated = toolDescriptor.RequiresApproval && toolSet.HasToolCallGate()
+	return toolDescriptor
 }
 
 func servableTool(toolDescriptor toolcontract.ToolDescriptor) (*mcp.Tool, bool) {

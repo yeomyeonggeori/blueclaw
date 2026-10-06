@@ -197,6 +197,54 @@ func TestAHarnessReadsBackTheApprovalFactsAGatedScopedToolPublished(t *testing.T
 	}
 }
 
+type allowingGate struct{}
+
+func (allowingGate) ReviewToolCall(context.Context, toolcontract.ToolInvocation, toolcontract.ToolDefinition) (toolcontract.ToolCallReview, error) {
+	return toolcontract.ToolCallReview{MayProceed: true}, nil
+}
+
+func publishedHostGatedFacts(t *testing.T, gate toolcontract.ToolCallGate) map[string]bool {
+	t.Helper()
+	toolSet := toolcontract.NewToolSet([]string{"event_delete", "file_read"})
+	toolSet.AllowTestReplacement()
+	for name, requiresApproval := range map[string]bool{"event_delete": true, "file_read": false} {
+		errorValue := toolSet.RegisterTool(toolcontract.ToolDefinition{
+			ID: "test:" + name, Name: name, Description: name, Visibility: toolcontract.ToolVisibilityModel,
+			InputSchema:      json.RawMessage(`{"type":"object"}`),
+			RequiresApproval: requiresApproval,
+			ResultContract:   &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)},
+		}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+			return toolcontract.ToolSuccess("ok"), nil
+		})
+		if errorValue != nil {
+			t.Fatal(errorValue)
+		}
+	}
+	if gate != nil {
+		toolSet.UseToolCallGate(gate)
+	}
+	toolList, errorValue := connectedCatalogSession(t, RequesterToolSet{RequesterPersonID: "person-1", ToolSet: toolSet}).ListTools(context.Background(), nil)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	facts := map[string]bool{}
+	for _, tool := range toolList.Tools {
+		var read toolcontract.ToolDescriptor
+		toolcontract.ApplyDescriptorMeta(&read, tool.Meta)
+		facts[tool.Name] = read.IsHostGated
+	}
+	return facts
+}
+
+func TestOnlyAToolTheHostGatesIsPublishedAsHostGated(t *testing.T) {
+	if gated := publishedHostGatedFacts(t, allowingGate{}); !gated["event_delete"] || gated["file_read"] {
+		t.Fatalf("the approval-requiring tool is the one the host gates, got %v", gated)
+	}
+	if ungated := publishedHostGatedFacts(t, nil); ungated["event_delete"] || ungated["file_read"] {
+		t.Fatalf("with no gate on the tool set nothing is held for the host, got %v", ungated)
+	}
+}
+
 func TestAnImageAToolReadReachesTheHarnessAsMCPImageContent(t *testing.T) {
 	picture := []byte{0x89, 'P', 'N', 'G', 0x01, 0x02}
 	toolSet := toolcontract.NewToolSet([]string{"image_read"})

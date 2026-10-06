@@ -11,14 +11,30 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
+type ProcessFor func(dependencies harnessdriver.Dependencies, skillRetriever agentcontract.SkillRetriever) acpharness.AgentProcess
+
 func NewFactory(toolCatalogPublisher acpharness.ToolCatalogPublisher) harnessdriver.Factory {
+	return NewFactoryOverProcess(inProcessAgent)(toolCatalogPublisher)
+}
+
+func NewFactoryOverProcess(processFor ProcessFor) harnessdriver.ACPFactory {
+	return func(toolCatalogPublisher acpharness.ToolCatalogPublisher) harnessdriver.Factory {
+		return factoryOver(processFor, toolCatalogPublisher)
+	}
+}
+
+func inProcessAgent(dependencies harnessdriver.Dependencies, skillRetriever agentcontract.SkillRetriever) acpharness.AgentProcess {
+	return agentProcess{dependencies: dependencies, skillRetriever: skillRetriever}
+}
+
+func factoryOver(processFor ProcessFor, toolCatalogPublisher acpharness.ToolCatalogPublisher) harnessdriver.Factory {
 	return func(dependencies harnessdriver.Dependencies) (agentcontract.Harness, agentcontract.SkillRetriever) {
 		skillRetriever := newSkillRetriever(dependencies)
-		harness := acpharness.New(agentProcess{dependencies: dependencies, skillRetriever: skillRetriever}, toolCatalogPublisher, dependencies.TaskRunStore)
+		harness := acpharness.New(processFor(dependencies, skillRetriever), toolCatalogPublisher, dependencies.TaskRunStore)
 		harness.UseToolAudience(mcpserver.ToolAudienceBare)
 		harness.UseInstructionBundleLoader(dependencies.InstructionBundleLoader)
 		harness.UseHostInstruction()
-		harness.UsePromptMeta(promptMeta)
+		harness.UsePromptMeta(promptMetaFor(dependencies))
 		harness.UseCheckpointMarker(acpagent.CheckpointMetaKey)
 		harness.UseTurnResultMeta(acpagent.TurnResultMetaKey)
 		harness.UseLedgerExchange(skippedLedgerEventNames(dependencies))
@@ -32,19 +48,23 @@ func steerNotification(sessionID acp.SessionId, steer acpharness.SteerRequest) a
 	return acpagent.SteerNotification{SessionID: sessionID, Instruction: steer.Instruction, Reason: steer.Reason, MessageID: steer.MessageID}
 }
 
-func promptMeta(request agentcontract.AgentTurnRequest) map[string]any {
-	promptMeta := map[string]any{acpagent.TurnRequestMetaKey: handedOverRequest(request)}
-	if request.ExistingTaskRunID != "" {
-		promptMeta[acpagent.TaskRunMetaKey] = request.ExistingTaskRunID
+func promptMetaFor(dependencies harnessdriver.Dependencies) func(agentcontract.AgentTurnRequest) map[string]any {
+	return func(request agentcontract.AgentTurnRequest) map[string]any {
+		promptMeta := map[string]any{acpagent.TurnRequestMetaKey: handedOverRequest(request)}
+		if request.ExistingTaskRunID != "" {
+			promptMeta[acpagent.TaskRunMetaKey] = request.ExistingTaskRunID
+		}
+		if dependencies.InstructionBundleLoader != nil {
+			promptMeta[acpagent.InstructionBundleMetaKey] = dependencies.InstructionBundleLoader()
+		}
+		return promptMeta
 	}
-	return promptMeta
 }
 
 func handedOverRequest(request agentcontract.AgentTurnRequest) agentcontract.AgentTurnRequest {
 	request.ToolSet = nil
 	request.AvailableSkills = nil
 	request.PinnedToolNames = nil
-	request.PinnedSkillNames = nil
 	request.HostInstruction = ""
 	request.InstructionPrompt = ""
 	request.InstructionSources = nil
