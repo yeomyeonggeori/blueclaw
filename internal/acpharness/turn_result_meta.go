@@ -32,6 +32,9 @@ func (harness *Harness) carriedTurnResult(promptResponse acp.PromptResponse) (ag
 
 func (harness *Harness) settledTurnResult(request agentcontract.AgentTurnRequest, carried agentcontract.AgentTurnResult) agentcontract.AgentTurnResult {
 	taskRunID := strings.TrimSpace(request.ExistingTaskRunID)
+	if harness.taskRunStore != nil && taskRunID != "" && isParked(harness.taskRunStore, taskRunID) {
+		return parkedTurnResult(harness.taskRunStore, taskRunID, carried)
+	}
 	if harness.taskRunStore != nil && taskRunID != "" {
 		carried.TaskRun = settleTaskRun(harness.taskRunStore, taskRunID, carried.TaskRun)
 	}
@@ -51,4 +54,14 @@ func settleTaskRun(taskRunStore taskstate.TaskRunStore, taskRunID string, carrie
 		return storedTaskRun
 	}
 	return carried
+}
+
+func parkedTurnResult(taskRunStore taskstate.TaskRunStore, taskRunID string, carried agentcontract.AgentTurnResult) agentcontract.AgentTurnResult {
+	parkedTaskRun, _ := taskRunStore.FindTaskRun(taskRunID)
+	return agentcontract.AgentTurnResult{
+		TaskRun:     parkedTaskRun,
+		UserNotice:  parkedTaskRun.FailureReason,
+		ToolNames:   carried.ToolNames,
+		Attachments: carried.Attachments,
+	}
 }

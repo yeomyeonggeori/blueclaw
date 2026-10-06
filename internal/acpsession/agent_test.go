@@ -1036,3 +1036,23 @@ func TestTheReaderIsOfferedTheOptionsTheClientWasSentWithTheirMeanings(t *testin
 		t.Fatalf("expected an allowing option to mean going ahead with its name and a rejecting one to mean declining, got %+v", offered)
 	}
 }
+
+func TestAQuestionsOptionsReachTheClientUnderTheirOwnWordsAndTheAnswerNamesTheKey(t *testing.T) {
+	client := &recordingClient{}
+	connection, permissionRelay := connectedPairWithReader(t, &recordingLauncher{}, client, scriptedReader{optionID: "choose:2", asked: &[]approvalreply.Question{}})
+	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
+	client.answerByAsking = answeringWithWords(t, connection, sessionID, "두 번째")
+	choices := []holdrecord.Choice{{Key: "1", Label: "회의실 A"}, {Key: "2", Label: "회의실 B"}}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	answer, isAnswered := permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "어느 방으로 할까요?", Choices: choices})
+
+	if !isAnswered || answer.ChoiceKey != "2" || answer.Signal != agentcontract.ApprovalSignalApprove {
+		t.Fatalf("the pick read as %+v answered=%v", answer, isAnswered)
+	}
+	offered := client.permissionAsked[0].Options
+	if len(offered) != 3 || offered[0].Name != "회의실 A" || offered[1].OptionId != "choose:2" || offered[1].Name != "회의실 B" {
+		t.Fatalf("the client was offered %+v, expected each option under its own words", offered)
+	}
+}

@@ -11,6 +11,7 @@ var scenariosThatAskForApproval = []string{
 	"channel_post_acceptance",
 	"host_update_now_acceptance",
 	"host_update_off_hours_acceptance",
+	"ask_choice_hold_acceptance",
 }
 
 func TestApprovalAndChoiceScenariosEndTheSameWhenTheQuestionIsAskedInTheThread(t *testing.T) {
@@ -21,7 +22,6 @@ func TestApprovalAndChoiceScenariosEndTheSameWhenTheQuestionIsAskedInTheThread(t
 				label = scenarioName + "/asked_in_thread"
 			}
 			t.Run(label, func(t *testing.T) {
-				skipWhereTheHarnessCannotEndTheTurnOnAParkedRun(t, scenarioName)
 				scenario, errorValue := BuiltinScenario(scenarioName, t.TempDir())
 				if errorValue != nil {
 					t.Fatal(errorValue)

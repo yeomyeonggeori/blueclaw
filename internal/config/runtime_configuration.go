@@ -156,7 +156,11 @@ type InboundConfiguration struct {
 }
 
 type InboundConnectorsConfiguration struct {
-	AskInThread bool `json:"askInThread"`
+	AskInThread *bool `json:"askInThread,omitempty"`
+}
+
+func (configuration InboundConnectorsConfiguration) AsksInThread() bool {
+	return configuration.AskInThread == nil || *configuration.AskInThread
 }
 
 type ChatdConnectorConfiguration struct {

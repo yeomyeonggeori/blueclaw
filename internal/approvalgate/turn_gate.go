@@ -83,7 +83,7 @@ func taskRunIDForCall(ctx context.Context) string {
 }
 
 func callNeedsApproval(toolDefinition toolcontract.ToolDefinition, toolInput json.RawMessage) bool {
-	if toolDefinition.RequiresApproval {
+	if toolDefinition.RequiresApproval || OffersChoices(toolDefinition, toolInput) {
 		return true
 	}
 	if !inputSchemaAcceptsApprovalRequired(toolDefinition.InputSchema) {

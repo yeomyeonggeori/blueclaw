@@ -8,7 +8,6 @@ import (
 func TestEveryBuiltinScenarioPassesAgainstItsScriptedModel(t *testing.T) {
 	for _, scenarioName := range BuiltinScenarioNames() {
 		t.Run(scenarioName, func(t *testing.T) {
-			skipWhereTheHarnessCannotEndTheTurnOnAParkedRun(t, scenarioName)
 			scenario, errorValue := BuiltinScenario(scenarioName, t.TempDir())
 			if errorValue != nil {
 				t.Fatal(errorValue)

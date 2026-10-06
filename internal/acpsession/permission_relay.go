@@ -198,6 +198,9 @@ func choiceOptionID(choiceKey string) acp.PermissionOptionId {
 }
 
 func choiceOptionName(choice holdrecord.Choice) string {
+	if choice.IsAnAnswer() {
+		return strings.TrimSpace(choice.Label)
+	}
 	if choice.DefersTheCall() {
 		return "approve this call to run at " + strings.TrimSpace(choice.StartsAt)
 	}

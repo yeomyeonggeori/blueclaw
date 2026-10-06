@@ -238,6 +238,7 @@ type VirtualTurn struct {
 	ExpectedWorkspaceFiles       []VirtualWorkspaceFileExpectation
 	ForbiddenWorkspaceFiles      []string
 	ExpectedModelContexts        []string
+	SteerAfterFirstAction        string
 	ForbiddenModelContexts       []string
 	ExpectedReplyTargetID        string
 	ExpectedReplyFragments       []string
@@ -748,6 +749,7 @@ var builtinScenarioFactories = map[string]func(string) VirtualSessionScenario{
 	defaultBuiltinScenarioName:                  PresentationLocalMultiturnSuccessScenario,
 	"memory":                                    MemoryGuidedFollowupScenario,
 	"memory_guided_followup":                    MemoryGuidedFollowupScenario,
+	"steer_while_running_acceptance":            SteerWhileRunningAcceptanceScenario,
 	"request_revision_acceptance":               RequestRevisionAcceptanceScenario,
 	"plain_question_acceptance":                 PlainQuestionAcceptanceScenario,
 	"web_search_acceptance":                     WebSearchAcceptanceScenario,
@@ -776,6 +778,7 @@ var builtinScenarioFactories = map[string]func(string) VirtualSessionScenario{
 	"one_time_schedule_acceptance":              OneTimeScheduleAcceptanceScenario,
 	"ask_choice_reply_acceptance":               AskChoiceReplyAcceptanceScenario,
 	"ask_choice_reply_over_acp":                 AskChoiceReplyOverACPScenario,
+	"ask_choice_hold_acceptance":                AskChoiceHoldAcceptanceScenario,
 	"ask_root_message_starts_a_task":            AskRootMessageStartsATaskScenario,
 	"ask_root_message_starts_a_task_over_acp":   AskRootMessageStartsATaskOverACPScenario,
 	"dm_send_confirm_acceptance":                DirectMessageSendConfirmAcceptanceScenario,
@@ -2585,6 +2588,7 @@ func (harness *VirtualSessionHarness) Run(ctx context.Context) (VirtualSessionRe
 			}
 			harness.turnScript.beginTurn(index+1, scenarioTurnScriptEntries(harness.scenario, virtualTurn))
 			harness.scriptedModel.SetActionResponses(materializeScriptedWorkspacePaths(harness.workspacePath, virtualTurn.ActionResponses)...)
+			harness.scriptedModel.UseActionServedObserver(harness.steerAfterFirstAction(virtualTurn.SteerAfterFirstAction))
 			harness.changeChecks.beginTurn(index+1, virtualTurn.ChangeCheckAnswers)
 			if len(virtualTurn.ExpectedChangesResponses) > 0 {
 				harness.scriptedModel.EnqueueStructuredResponses("bluecollar_expected_changes", virtualTurn.ExpectedChangesResponses...)
@@ -2790,7 +2794,7 @@ func scenarioRouterResponsesForTurn(scenario VirtualSessionScenario, virtualTurn
 }
 
 func scenarioTurnRouterCalls(scenario VirtualSessionScenario, virtualTurn VirtualTurn) []string {
-	if strings.TrimSpace(virtualTurn.RouterApproval) != "" || virtualTurn.AnswersApprovalHold {
+	if strings.TrimSpace(virtualTurn.RouterApproval) != "" || virtualTurn.AnswersApprovalHold || virtualTurn.ReadsNoIntakeDecision {
 		return nil
 	}
 	return scenarioRouterResponsesForTurn(scenario, virtualTurn)

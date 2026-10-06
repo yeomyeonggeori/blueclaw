@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	acp "github.com/coder/acp-go-sdk"
+
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
@@ -101,5 +103,34 @@ func TestAFileTheAgentReadIsNotAttachedToItsReply(t *testing.T) {
 
 	if errorValue != nil || len(turnResult.Attachments) != 0 {
 		t.Fatalf("what the loop attaches is what it delivered, and a file a tool read is not delivered, got %+v, %v", turnResult.Attachments, errorValue)
+	}
+}
+
+func TestATurnTheStoreHoldsParkedReturnsParkedWhateverTheAgentReports(t *testing.T) {
+	taskRuns, taskRunID := newTaskRunStore()
+	agent := &externalAgent{cancelled: make(chan struct{}, 4), promptResponseMeta: map[string]any{turnResultMetaKey: agentcontract.AgentTurnResult{
+		TaskRun: agentcontract.TaskRun{Status: agentcontract.TaskStatusCompleted, Result: "done"},
+	}}}
+	agent.promptScripts = []func(context.Context, acp.PromptRequest) acp.StopReason{func(context.Context, acp.PromptRequest) acp.StopReason {
+		taskRuns.PauseTaskRun(taskRunID, agentcontract.TaskStatusWaitingApproval, "approve the send?")
+		return acp.StopReasonEndTurn
+	}}
+	harness := New(&inProcessAgentProcess{agent: agent}, newPublishedToolCatalog(t), taskRuns)
+	harness.UseTurnResultMeta(turnResultMetaKey)
+	executed := []daemonExecutedTool{}
+
+	turnResult, errorValue := harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
+		RequesterPersonID: "person-1",
+		ExistingTaskRunID: taskRunID,
+		Prompt:            "회의록 정리해줘",
+		WorkspaceRootPath: t.TempDir(),
+		ToolSet:           requesterToolSet(t, "person-1", &executed),
+	})
+	if errorValue != nil {
+		t.Fatalf("expected the turn to run: %v", errorValue)
+	}
+
+	if turnResult.TaskRun.Status != agentcontract.TaskStatusWaitingApproval || turnResult.UserNotice != "approve the send?" {
+		t.Fatalf("the store says the run waits, so the agent's own verdict does not stand, got %q and %q", turnResult.TaskRun.Status, turnResult.UserNotice)
 	}
 }

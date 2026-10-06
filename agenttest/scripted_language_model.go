@@ -29,6 +29,8 @@ type ScriptedLanguageModel struct {
 	requests                    []model.StructuredResponseRequest
 	providerName                string
 	modelName                   string
+	actionsServed               int
+	onActionServed              func(actionsServed int)
 }
 
 type scriptedChatCompleter struct {
@@ -180,6 +182,13 @@ func structuredRequestFromChat(request model.ChatCompletionRequest) model.Struct
 
 func NewActionScriptedLanguageModel(actionResponses ...string) *ScriptedLanguageModel {
 	return NewScriptedLanguageModel(ScriptedLanguageModelOptions{ActionResponses: actionResponses})
+}
+
+func (languageModel *ScriptedLanguageModel) UseActionServedObserver(observer func(actionsServed int)) {
+	languageModel.mutex.Lock()
+	defer languageModel.mutex.Unlock()
+	languageModel.actionsServed = 0
+	languageModel.onActionServed = observer
 }
 
 func (languageModel *ScriptedLanguageModel) EnqueueActionResponses(actionResponses ...string) {
@@ -345,6 +354,10 @@ func (languageModel *ScriptedLanguageModel) popActionResponse() (string, error) 
 			continue
 		}
 		languageModel.actionResponses = append(languageModel.actionResponses[:index], languageModel.actionResponses[index+1:]...)
+		languageModel.actionsServed++
+		if languageModel.onActionServed != nil {
+			languageModel.onActionServed(languageModel.actionsServed)
+		}
 		return response, nil
 	}
 	return "", fmt.Errorf("scripted language model action response queue is empty")

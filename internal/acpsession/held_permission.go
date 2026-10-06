@@ -90,6 +90,9 @@ func (agent *Agent) reissueHeldPermission(ctx context.Context, sessionID acp.Ses
 		agent.resumeAnsweredTaskRun(ctx, sessionID, sessionContext, taskRun, agent.deferHeldCall(ctx, sessionContext, taskRun, heldCall, choice))
 		return
 	}
+	if choice, isChosen := answer.ChosenFrom(choices); isChosen {
+		approvalrecord.RecordChoiceAnswer(agent.taskRunStore, taskRun.TaskRunID, choice)
+	}
 	approvalrecord.SettleSignal(agent.taskRunStore, taskRun.TaskRunID, &answer.Signal, "acp_permission_reload")
 	agent.resumeAnsweredTaskRun(ctx, sessionID, sessionContext, taskRun, nil)
 }

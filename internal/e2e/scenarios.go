@@ -1365,10 +1365,10 @@ func AskChoiceReplyAcceptanceScenario(artifactDirectoryPath string) VirtualSessi
 			ExpectedEvents:         []string{agentcontract.TaskEventAskRequested},
 			ExpectedReplyFragments: []string{"어느 쪽으로 진행할까요?"},
 		}, {
-			Prompt:          "두 번째",
-			ReplyTargetID:   "virtual-message-001",
-			IsThread:        threadReply(),
-			RouterTaskShape: agentcontract.TaskShapeImmediateReply,
+			Prompt:                "두 번째",
+			ReplyTargetID:         "virtual-message-001",
+			IsThread:              threadReply(),
+			ReadsNoIntakeDecision: true,
 			ActionResponses: []string{
 				actionFinishMessage("두 번째로 진행하겠습니다."),
 			},
@@ -1388,7 +1388,6 @@ func AskChoiceReplyOverACPScenario(artifactDirectoryPath string) VirtualSessionS
 	scenario := AskChoiceReplyAcceptanceScenario(artifactDirectoryPath)
 	scenario.Name = "ask_choice_reply_over_acp"
 	scenario.IsDeliveredOverACP = true
-	scenario.Turns[1].ReadsNoIntakeDecision = true
 	return scenario
 }
 
@@ -1416,10 +1415,10 @@ func AskRootMessageStartsATaskScenario(artifactDirectoryPath string) VirtualSess
 			ExpectedReplyFragments: []string{"새 요청"},
 			ExpectedTaskStatus:     task.TaskStatusCompleted,
 		}, {
-			Prompt:          "두 번째",
-			ReplyTargetID:   "virtual-message-001",
-			IsThread:        threadReply(),
-			RouterTaskShape: agentcontract.TaskShapeImmediateReply,
+			Prompt:                "두 번째",
+			ReplyTargetID:         "virtual-message-001",
+			IsThread:              threadReply(),
+			ReadsNoIntakeDecision: true,
 			ActionResponses: []string{
 				actionFinishMessage("두 번째로 진행하겠습니다."),
 			},
@@ -1434,7 +1433,6 @@ func AskRootMessageStartsATaskOverACPScenario(artifactDirectoryPath string) Virt
 	scenario := AskRootMessageStartsATaskScenario(artifactDirectoryPath)
 	scenario.Name = "ask_root_message_starts_a_task_over_acp"
 	scenario.IsDeliveredOverACP = true
-	scenario.Turns[2].ReadsNoIntakeDecision = true
 	return scenario
 }
 

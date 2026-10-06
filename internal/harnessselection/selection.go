@@ -66,12 +66,12 @@ func Select(harnessConfiguration config.HarnessConfiguration, bundledHarnessFact
 	}
 	harnessName := strings.TrimSpace(harnessConfiguration.Name)
 	switch harnessName {
-	case "", BundledHarnessName:
+	case BundledHarnessName:
 		if bundledHarnessFactory == nil {
-			return nil, fmt.Errorf("no harness is configured and this build ships none; set agent.harness.name to %q with an agent command", ExternalHarnessName)
+			return nil, fmt.Errorf("harness %q is not shipped by this build; set agent.harness.name to %q with an agent command", BundledHarnessName, ExternalHarnessName)
 		}
 		return bundledHarnessFactory, nil
-	case BundledACPHarnessName:
+	case "", BundledACPHarnessName:
 		return bundledACPHarnessFactory(configuration.bundledACPFactory, toolCatalogEndpoint)
 	case ExternalHarnessName:
 		return externalHarnessFactory(harnessConfiguration, toolCatalogEndpoint, processBoundary)
@@ -159,7 +159,7 @@ func commandHarnessFactory(harnessName string, agentCommand cliharness.AgentComm
 
 func bundledACPHarnessFactory(bundledACPFactory harnessdriver.ACPFactory, toolCatalogEndpoint ToolCatalogEndpoint) (harnessdriver.Factory, error) {
 	if bundledACPFactory == nil {
-		return nil, fmt.Errorf("harness %q is not part of this build", BundledACPHarnessName)
+		return nil, fmt.Errorf("harness %q is not part of this build; set agent.harness.name to %q with an agent command", BundledACPHarnessName, ExternalHarnessName)
 	}
 	if toolCatalogEndpoint.Resolver == nil || strings.TrimSpace(toolCatalogEndpoint.URL) == "" {
 		return nil, fmt.Errorf("harness %q needs a published tool catalog; without one the agent would have no tools to run as the requester", BundledACPHarnessName)

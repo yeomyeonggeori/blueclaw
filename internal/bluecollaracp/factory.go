@@ -1,6 +1,8 @@
 package bluecollaracp
 
 import (
+	acp "github.com/coder/acp-go-sdk"
+
 	"github.com/yeomyeonggeori/blueclaw/internal/acpharness"
 	"github.com/yeomyeonggeori/blueclaw/internal/bluecollarharness"
 	"github.com/yeomyeonggeori/blueclaw/internal/harnessdriver"
@@ -24,8 +26,14 @@ func NewFactory(toolCatalogPublisher acpharness.ToolCatalogPublisher) harnessdri
 		harness.UseCheckpointMarker(acpagent.CheckpointMetaKey)
 		harness.UseTurnResultMeta(acpagent.TurnResultMetaKey)
 		harness.UseLedgerExchange(skippedLedgerEventNames(dependencies))
+		harness.UseTurnContextOnToolCalls()
+		harness.UseSteerExtension(acpagent.SteerMethod, steerNotification)
 		return harness, skillRetriever
 	}
+}
+
+func steerNotification(sessionID acp.SessionId, steer acpharness.SteerRequest) any {
+	return acpagent.SteerNotification{SessionID: sessionID, Instruction: steer.Instruction, Reason: steer.Reason, MessageID: steer.MessageID}
 }
 
 func promptMeta(request agentcontract.AgentTurnRequest) map[string]any {
