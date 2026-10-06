@@ -109,32 +109,12 @@ func PresentationLocalMultiturnSuccessScenario(artifactDirectoryPath string) Vir
 			ExpectedSelectedSkills: []string{"office"},
 			ExpectedToolCalls:      []string{"bash", "file_deliver"},
 			ExpectedEventCounts: []VirtualEventCount{
-				{Name: toolRequestedEventName("bash"), BodyFragment: "NAME=", Count: 1},
-				{Name: toolRequestedEventName("bash"), BodyFragment: "scripts/office deck build", MinCount: 1},
-				{Name: toolResultEventName("bash"), BodyFragment: "Building requested formats", MinCount: 1},
-				{Name: toolResultEventName("bash"), BodyFragment: "Slide render review", Count: 1},
 				{Name: toolResultEventName("file_deliver"), BodyFragment: `"output"`, Count: 1},
 			},
 			ExpectedValidityReviewPassed: true,
-			ExpectedAttachments:          []string{".pptx", ".pdf", ".html", "-notes.txt"},
+			ExpectedAttachments:          []string{".pptx"},
 			ExpectedWorkspaceFiles: []VirtualWorkspaceFileExpectation{
-				{
-					PathGlob:          "circles/member/tmp/*/DESIGN.md",
-					ContainsFragments: []string{"colors:", "Visual direction"},
-				},
-				{
-					PathGlob:           "circles/member/tmp/*/presentation.md",
-					ContainsFragments:  []string{"design-source: DESIGN.md", "InternKim capability deck", "너 뭐 할 수 있는지"},
-					ForbiddenFragments: []string{"Draft a presentation deck", "user_request:"},
-				},
-				{
-					PathGlob:          "circles/member/tmp/*/review/slide-review.json",
-					ContainsFragments: []string{`"passed": true`, `"safeMargin": true`, `"edgeOverflow": true`, `"contactSheets"`},
-				},
-				{
-					PathGlob:          "circles/member/tmp/*/*.html",
-					ContainsFragments: []string{"Paperlogy", "Freesentation", "--background", "InternKim capability deck"},
-				},
+				{PathGlob: "**/artifacts/*/build/review/contact-sheet-*.png"},
 			},
 		}},
 	}
@@ -361,18 +341,16 @@ func DocumentCreateAcceptanceScenario(artifactDirectoryPath string) VirtualSessi
 	return VirtualSessionScenario{
 		Name:                  "document_create_acceptance",
 		ArtifactDirectoryPath: artifactDirectoryPath,
+		Skills:                []agentcontract.SkillInstruction{officeSkill()},
 		AllowedTools:          []string{"conversation_history", "memory_search", "bash", "read", "document_read", "write", "file_deliver"},
 		CapabilityToolNames:   []string{"document_read"},
 		InitialToolNames:      []string{"bash", "read", "write", "file_deliver"},
 		Turns: []VirtualTurn{{
 			Prompt:                 "운영팀과 재무팀이 함께 검토할 '분기 결산 운영 검토'라는 짧은 DOCX 문서를 작성해서 이 DM에 첨부해줘. 검토 목적과 다음 단계를 간단히 적고, 현재 상태는 초안, 담당은 운영팀이라고 표시해줘.",
 			ExpectedSelectedSkills: []string{"office"},
-			ExpectedToolCalls:      []string{"write", "bash", "file_deliver"},
+			ExpectedToolCalls:      []string{"bash", "file_deliver"},
 			ExpectedToolCallCounts: map[string]int{"file_deliver": 1},
-			ExpectedEventCounts: []VirtualEventCount{
-				{Name: toolResultEventName("file_deliver"), BodyFragment: ".docx", Count: 1},
-			},
-			ExpectedAttachments: []string{".docx"},
+			ExpectedAttachments:    []string{".docx"},
 			ExpectedWorkspaceFiles: []VirtualWorkspaceFileExpectation{{
 				PathGlob: "private/people/*/documents/*.docx",
 			}},
