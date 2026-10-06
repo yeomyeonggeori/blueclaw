@@ -18,6 +18,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 type agentKernel struct {
@@ -41,7 +42,7 @@ type agentKernel struct {
 	languageModelError                error
 }
 
-func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, agentHarnessFactory harnessdriver.Factory, services taskServices, companyProvider func() agentcontract.CompanyContext, logger *slog.Logger) agentKernel {
+func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, agentHarnessFactory harnessdriver.Factory, bundledACPFactory harnessdriver.ACPFactory, services taskServices, companyProvider func() agentcontract.CompanyContext, logger *slog.Logger) agentKernel {
 	logger.Info("application.initializing", "stage", "agent_kernel")
 	capabilityClient := newCapabilityClient(runtimeConfiguration)
 	capabilityRegistry := agentruntime.NewCapabilityRegistry(capabilityClient, capabilityToolDescriptors(runtimeConfiguration.Capabilities.ToolDescriptors))
@@ -78,7 +79,7 @@ func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, agentHarne
 	kernel.terminalService = security.NewShellService(runtimeConfiguration.Terminal)
 	services.taskRunService.RegisterTaskRunTransitionObserver(task.NewTaskTemporaryDirectoryReclaimer(runtimeConfiguration.Terminal.WorkspaceRootPath, kernel.terminalService.WorkspaceActorFactory(), logger).Observe)
 	kernel.toolCatalog = newToolCatalogEndpoint(services.taskRunService, kernel.taskTierLanguageModels.High, kernel.decisionModel, kernel.capabilityClient)
-	harnessFactory, harnessName, selectionError := selectAgentHarness(runtimeConfiguration, agentHarnessFactory, kernel, logger)
+	harnessFactory, harnessName, selectionError := selectAgentHarness(runtimeConfiguration, agentHarnessFactory, bundledACPFactory, kernel, logger)
 	kernel.harnessName = harnessName
 	kernel.startupError = selectionError
 	kernel.harness, kernel.skillRetriever = startAgentHarness(runtimeConfiguration, harnessFactory, kernel, services, companyProvider)
@@ -95,7 +96,7 @@ func newSkillIndexRefresher(skillRetriever agentcontract.SkillRetriever, instruc
 	}
 }
 
-func selectAgentHarness(runtimeConfiguration config.RuntimeConfiguration, agentHarnessFactory harnessdriver.Factory, kernel agentKernel, logger *slog.Logger) (harnessdriver.Factory, string, error) {
+func selectAgentHarness(runtimeConfiguration config.RuntimeConfiguration, agentHarnessFactory harnessdriver.Factory, bundledACPFactory harnessdriver.ACPFactory, kernel agentKernel, logger *slog.Logger) (harnessdriver.Factory, string, error) {
 	selectedHarnessFactory, harnessSelectionError := harnessselection.Select(runtimeConfiguration.Agent.Harness, agentHarnessFactory, harnessselection.ToolCatalogEndpoint{
 		URL:               toolCatalogURL(runtimeConfiguration),
 		Resolver:          kernel.toolCatalog.resolver,
@@ -105,7 +106,7 @@ func selectAgentHarness(runtimeConfiguration config.RuntimeConfiguration, agentH
 	}, harnessselection.SandboxProcessBoundary{
 		Runner:            kernel.terminalService.WorkspaceActorFactory(),
 		WorkspaceRootPath: runtimeConfiguration.Terminal.WorkspaceRootPath,
-	})
+	}, harnessselection.WithBundledACPFactory(bundledACPFactory))
 	selectedHarnessName := strings.TrimSpace(runtimeConfiguration.Agent.Harness.Name)
 	if selectedHarnessName == "" {
 		selectedHarnessName = harnessselection.BundledHarnessName
@@ -144,7 +145,15 @@ func startAgentHarness(runtimeConfiguration config.RuntimeConfiguration, harness
 		IntakeLanguageModelProvider: kernel.intakeLanguageModelProvider,
 		ToolSelector:                kernel.decisionPlanner,
 		DecisionModel:               kernel.decisionModel,
+		LLMCallRepository:           llmCallRepositoryOf(services),
 	})
+}
+
+func llmCallRepositoryOf(services taskServices) taskstate.LLMCallRepository {
+	if services.repositories.llmCall == nil {
+		return nil
+	}
+	return services.repositories.llmCall
 }
 
 func newCapabilityClient(runtimeConfiguration config.RuntimeConfiguration) capability.Client {

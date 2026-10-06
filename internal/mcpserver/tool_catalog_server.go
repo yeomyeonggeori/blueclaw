@@ -35,10 +35,9 @@ func NewToolCatalogServer(requesterToolSet RequesterToolSet, version string) (*m
 		return nil, errors.New("tool catalog server requires a tool set")
 	}
 	server := mcp.NewServer(&mcp.Implementation{Name: toolCatalogServerName, Version: version}, nil)
-	for _, toolDescriptor := range requesterToolSet.ToolSet.ListDescribedToolDefinitions() {
-		if !isPublishedToAudience(toolDescriptor, requesterToolSet.ToolAudience) {
-			continue
-		}
+	publishedDescriptors := publishedToolDescriptors(requesterToolSet)
+	requesterToolSet.ToolSet = toolSetAllowingEveryPublishedTool(requesterToolSet, publishedDescriptors)
+	for _, toolDescriptor := range publishedDescriptors {
 		tool, isServable := servableTool(toolDescriptor)
 		if !isServable {
 			continue
@@ -46,6 +45,44 @@ func NewToolCatalogServer(requesterToolSet RequesterToolSet, version string) (*m
 		server.AddTool(tool, invokeThroughToolSet(requesterToolSet, toolDescriptor, tool.OutputSchema != nil))
 	}
 	return server, nil
+}
+
+func publishedToolDescriptors(requesterToolSet RequesterToolSet) []toolcontract.ToolDescriptor {
+	if requesterToolSet.ToolAudience == ToolAudienceBare {
+		return callableToolDescriptors(requesterToolSet.ToolSet)
+	}
+	publishedDescriptors := []toolcontract.ToolDescriptor{}
+	for _, toolDescriptor := range requesterToolSet.ToolSet.ListDescribedToolDefinitions() {
+		if isPublishedToAudience(toolDescriptor, requesterToolSet.ToolAudience) {
+			publishedDescriptors = append(publishedDescriptors, toolDescriptor)
+		}
+	}
+	return publishedDescriptors
+}
+
+func callableToolDescriptors(toolSet *toolcontract.ToolSet) []toolcontract.ToolDescriptor {
+	callableDescriptors := []toolcontract.ToolDescriptor{}
+	for _, toolDescriptor := range toolSet.ListRegisteredToolDefinitions() {
+		if isCallableByTheLoop(toolSet, toolDescriptor) {
+			callableDescriptors = append(callableDescriptors, toolDescriptor)
+		}
+	}
+	return callableDescriptors
+}
+
+func isCallableByTheLoop(toolSet *toolcontract.ToolSet, toolDescriptor toolcontract.ToolDescriptor) bool {
+	return toolSet.IsAllowed(toolDescriptor.Name) || toolSet.IsBuiltInTool(toolDescriptor.Name) || toolDescriptor.Visibility == toolcontract.ToolVisibilityInternal
+}
+
+func toolSetAllowingEveryPublishedTool(requesterToolSet RequesterToolSet, publishedDescriptors []toolcontract.ToolDescriptor) *toolcontract.ToolSet {
+	if requesterToolSet.ToolAudience != ToolAudienceBare {
+		return requesterToolSet.ToolSet
+	}
+	toolNames := make([]string, 0, len(publishedDescriptors))
+	for _, toolDescriptor := range publishedDescriptors {
+		toolNames = append(toolNames, toolDescriptor.Name)
+	}
+	return requesterToolSet.ToolSet.WithAllowedToolNames(toolNames)
 }
 
 func servableTool(toolDescriptor toolcontract.ToolDescriptor) (*mcp.Tool, bool) {
@@ -109,6 +146,7 @@ func callToolResult(toolResult toolcontract.ToolResult, hasOutputSchema bool, to
 	result := &mcp.CallToolResult{
 		Content: append([]mcp.Content{&mcp.TextContent{Text: resultText(toolResult)}}, imageContents(toolResult)...),
 		IsError: toolResult.Failed(),
+		Meta:    toolcontract.ResultMeta(toolResult),
 	}
 	if !hasOutputSchema || toolResult.Failed() {
 		return result

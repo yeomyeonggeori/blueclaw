@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"strings"
 	"sync"
 
@@ -52,10 +53,32 @@ type Harness struct {
 
 	toolCatalogBridgeCommandPath string
 	instructionBundleLoader      func() agentcontract.InstructionBundle
+	toolAudience                 mcpserver.ToolAudience
+	promptMetaProvider           func(agentcontract.AgentTurnRequest) map[string]any
+	checkpointMarkerKey          string
+	ledgerExchange               *ledgerExchange
+	turnResultMetaKey            string
+	includesHostInstruction      bool
 }
 
 func New(agentProcess AgentProcess, toolCatalogPublisher ToolCatalogPublisher, taskRunStore taskstate.TaskRunStore) *Harness {
-	return &Harness{agentProcess: agentProcess, toolCatalogPublisher: toolCatalogPublisher, taskRunStore: taskRunStore}
+	return &Harness{agentProcess: agentProcess, toolCatalogPublisher: toolCatalogPublisher, taskRunStore: taskRunStore, toolAudience: mcpserver.ToolAudienceSelfEquipped}
+}
+
+func (harness *Harness) UseToolAudience(toolAudience mcpserver.ToolAudience) {
+	harness.toolAudience = toolAudience
+}
+
+func (harness *Harness) UsePromptMeta(promptMetaProvider func(agentcontract.AgentTurnRequest) map[string]any) {
+	harness.promptMetaProvider = promptMetaProvider
+}
+
+func (harness *Harness) UseCheckpointMarker(metaKey string) {
+	harness.checkpointMarkerKey = metaKey
+}
+
+func (harness *Harness) UseHostInstruction() {
+	harness.includesHostInstruction = true
 }
 
 func (harness *Harness) UseOutcomeClassifier(outcomeClassifier turnoutcome.Classifier) {
@@ -132,20 +155,20 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 		ToolSet:               request.ToolSet,
 		ResponseLanguage:      request.ResponseLanguage,
 		Prompt:                request.Prompt,
-		ToolAudience:          mcpserver.ToolAudienceSelfEquipped,
+		ToolAudience:          harness.toolAudience,
 	})
 	if errorValue != nil {
 		return agentcontract.AgentTurnResult{}, errorValue
 	}
 	defer revokeToolCatalog()
 
-	agentInput, agentOutput, waitForAgent, errorValue := harness.startAgent(ctx, request)
+	agentInput, agentOutput, waitForAgent, errorValue := harness.startAgent(WithTurnRequest(ctx, request), request)
 	if errorValue != nil {
 		return agentcontract.AgentTurnResult{}, errorValue
 	}
 	defer func() { _ = waitForAgent() }()
 
-	turnObserver := &sessionObserver{taskRunStore: harness.taskRunStore, taskRunID: request.ExistingTaskRunID, toolCallObserver: toolcallprogress.ObserverFrom(ctx), permissionAsker: harness.permissionAsker, approvalRequest: approvalRequestOf(request)}
+	turnObserver := harness.newSessionObserver(ctx, request)
 	connection := acp.NewClientSideConnection(turnObserver, agentInput, agentOutput)
 	initializeResponse, errorValue := connection.Initialize(ctx, acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber})
 	if errorValue != nil {
@@ -163,15 +186,26 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 	if errorValue != nil {
 		return agentcontract.AgentTurnResult{}, errorValue
 	}
+	harness.advanceTaskRun(request)
 	promptResponse, errorValue := connection.Prompt(ctx, acp.PromptRequest{
 		SessionId: newSession.SessionId,
-		Prompt:    []acp.ContentBlock{acp.TextBlock(harness.promptForTurn(request))},
-		Meta:      promptMetaForTurn(request),
+		Prompt:    harness.promptBlocksForTurn(request, initializeResponse.AgentCapabilities.PromptCapabilities.Image),
+		Meta:      harness.promptMetaForTurn(request),
 	})
 	if errorValue != nil {
 		return agentcontract.AgentTurnResult{}, errorValue
 	}
+	if carriedTurnResult, isCarried := harness.carriedTurnResult(promptResponse); isCarried {
+		return harness.settledTurnResult(request, carriedTurnResult), nil
+	}
 	return harness.turnResult(ctx, request, turnObserver, succeededToolRecorder, promptResponse.StopReason), nil
+}
+
+func (harness *Harness) advanceTaskRun(request agentcontract.AgentTurnRequest) {
+	if harness.turnResultMetaKey == "" || harness.taskRunStore == nil || strings.TrimSpace(request.ExistingTaskRunID) == "" {
+		return
+	}
+	harness.taskRunStore.AdvanceTaskRun(request.ExistingTaskRunID, request.ProfileName)
 }
 
 func (harness *Harness) toolCatalogServer(agentCapabilities acp.McpCapabilities, endpointURL string, bearerToken string) (acp.McpServer, error) {
@@ -248,14 +282,30 @@ func taskStatusForStopReason(stopReason acp.StopReason) agentcontract.TaskStatus
 }
 
 type sessionObserver struct {
-	mutex            sync.Mutex
-	messageSegments  []string
-	toolNames        []string
-	taskRunStore     taskstate.TaskRunStore
-	taskRunID        string
-	toolCallObserver toolcallprogress.Observer
-	permissionAsker  approvalgate.HarnessPermissionAsker
-	approvalRequest  mcpserver.ApprovalRequest
+	mutex               sync.Mutex
+	messageSegments     []string
+	toolNames           []string
+	taskRunStore        taskstate.TaskRunStore
+	taskRunID           string
+	toolCallObserver    toolcallprogress.Observer
+	permissionAsker     approvalgate.HarnessPermissionAsker
+	approvalRequest     mcpserver.ApprovalRequest
+	ledgerMirror        ledgerMirror
+	checkpointMarkerKey string
+	checkpointSender    agentcontract.AgentCheckpointSender
+}
+
+func (harness *Harness) newSessionObserver(ctx context.Context, request agentcontract.AgentTurnRequest) *sessionObserver {
+	return &sessionObserver{
+		taskRunStore:        harness.taskRunStore,
+		taskRunID:           request.ExistingTaskRunID,
+		toolCallObserver:    toolcallprogress.ObserverFrom(ctx),
+		permissionAsker:     harness.permissionAsker,
+		approvalRequest:     approvalRequestOf(request),
+		ledgerMirror:        ledgerMirror{exchange: harness.ledgerExchange, taskRunStore: harness.taskRunStore, taskRunID: request.ExistingTaskRunID},
+		checkpointMarkerKey: harness.checkpointMarkerKey,
+		checkpointSender:    request.CheckpointSender,
+	}
 }
 
 func (observer *sessionObserver) recordPermissionDecision(eventName string, toolCall acp.ToolCallUpdate, grantedPermission acp.PermissionOptionKind) {
@@ -301,17 +351,59 @@ func (observer *sessionObserver) calledToolNames() []string {
 	return append([]string{}, observer.toolNames...)
 }
 
-func (observer *sessionObserver) SessionUpdate(_ context.Context, notification acp.SessionNotification) error {
-	observer.forwardToolCall(notification.Update)
+func (observer *sessionObserver) SessionUpdate(ctx context.Context, notification acp.SessionNotification) error {
+	update := notification.Update
+	if !observer.mirrorLedger(update) {
+		observer.forwardToolCall(update)
+	}
+	observer.routeCheckpoint(ctx, update)
+	observer.record(update)
+	return nil
+}
+
+func (observer *sessionObserver) mirrorLedger(update acp.SessionUpdate) bool {
+	if !observer.ledgerMirror.isActive() {
+		return false
+	}
+	record, isRecorded := ledgerRecordOfUpdate(update)
+	if !isRecorded {
+		return false
+	}
+	observer.ledgerMirror.take(record)
+	return true
+}
+
+func (observer *sessionObserver) routeCheckpoint(ctx context.Context, update acp.SessionUpdate) {
+	thought := update.AgentThoughtChunk
+	if observer.checkpointSender == nil || observer.checkpointMarkerKey == "" || thought == nil || thought.Content.Text == nil {
+		return
+	}
+	marker, isMarked := thought.Meta[observer.checkpointMarkerKey].(map[string]any)
+	if !isMarked {
+		return
+	}
+	toolName, _ := marker["toolName"].(string)
+	_ = observer.checkpointSender(ctx, agentcontract.AgentCheckpoint{TaskRunID: observer.taskRunID, Message: thought.Content.Text.Text, ToolName: toolName})
+}
+
+func (observer *sessionObserver) record(update acp.SessionUpdate) {
 	observer.mutex.Lock()
 	defer observer.mutex.Unlock()
-	if agentMessage := notification.Update.AgentMessageChunk; agentMessage != nil && agentMessage.Content.Text != nil {
+	if agentMessage := update.AgentMessageChunk; agentMessage != nil && agentMessage.Content.Text != nil {
 		observer.messageSegments = append(observer.messageSegments, agentMessage.Content.Text.Text)
 	}
-	if toolCall := notification.Update.ToolCall; toolCall != nil {
-		observer.toolNames = append(observer.toolNames, toolCall.Title)
+	if toolCall := update.ToolCall; toolCall != nil {
+		observer.toolNames = append(observer.toolNames, toolNameOf(*toolCall))
 	}
-	return nil
+}
+
+func toolNameOf(toolCall acp.SessionUpdateToolCall) string {
+	if record, isRecorded := ledgerRecordOfMeta(toolCall.Meta); isRecorded {
+		if toolName, isRequest := agentcontract.ToolTaskEventToolName(record.Name, agentcontract.ToolTaskEventRequestedSuffix); isRequest {
+			return toolName
+		}
+	}
+	return toolCall.Title
 }
 
 var errFilesystemAndTerminalGoThroughTheToolCatalog = errors.New("this client does not serve fs or terminal over ACP; blueclaw's file and terminal tools are published on the MCP tool catalog, where they execute as the requester's POSIX user under the approval gate and the event ledger")
@@ -425,17 +517,28 @@ func cancelledResponse() acp.RequestPermissionResponse {
 	}}
 }
 
-func promptMetaForTurn(request agentcontract.AgentTurnRequest) map[string]any {
-	if len(request.CarriedOutCalls) == 0 {
+func (harness *Harness) promptMetaForTurn(request agentcontract.AgentTurnRequest) map[string]any {
+	promptMeta := map[string]any{}
+	if len(request.CarriedOutCalls) > 0 {
+		promptMeta[agentcontract.CarriedOutCallMetaKey] = request.CarriedOutCalls
+	}
+	if harness.promptMetaProvider != nil {
+		maps.Copy(promptMeta, harness.promptMetaProvider(request))
+	}
+	maps.Copy(promptMeta, harness.ledgerExchange.replayMeta(harness.taskRunStore, request))
+	if len(promptMeta) == 0 {
 		return nil
 	}
-	return map[string]any{agentcontract.CarriedOutCallMetaKey: request.CarriedOutCalls}
+	return promptMeta
 }
 
 func (harness *Harness) promptForTurn(request agentcontract.AgentTurnRequest) string {
 	sections := []string{}
 	if preamble := turnbriefing.Preamble(request, harness.instructionPrompt()); preamble != "" {
 		sections = append(sections, preamble)
+	}
+	if hostInstruction := harness.hostInstruction(request); hostInstruction != "" {
+		sections = append(sections, hostInstruction)
 	}
 	sections = append(sections, request.Prompt)
 	if harness.taskRunStore != nil && strings.TrimSpace(request.ExistingTaskRunID) != "" {
@@ -444,6 +547,13 @@ func (harness *Harness) promptForTurn(request agentcontract.AgentTurnRequest) st
 		}
 	}
 	return strings.Join(sections, "\n\n")
+}
+
+func (harness *Harness) hostInstruction(request agentcontract.AgentTurnRequest) string {
+	if !harness.includesHostInstruction {
+		return ""
+	}
+	return strings.TrimSpace(request.HostInstruction)
 }
 
 func (harness *Harness) instructionPrompt() string {

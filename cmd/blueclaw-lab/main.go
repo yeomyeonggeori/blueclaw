@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/bluecollaracp"
 	"github.com/yeomyeonggeori/blueclaw/internal/bluecollarharness"
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/e2e"
@@ -22,8 +23,24 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
 )
 
+const (
+	bluecollarHarnessName    = "bluecollar"
+	bluecollarACPHarnessName = "bluecollar-acp"
+)
+
 func init() {
 	e2e.UseAgentHarnessFactory(bluecollarharness.New)
+}
+
+func useHarness(harnessName string) error {
+	switch harnessName {
+	case "", bluecollarHarnessName:
+		e2e.UseAgentHarnessFactory(bluecollarharness.New)
+		return nil
+	case bluecollarACPHarnessName:
+		return e2e.UseBundledACPHarness(bluecollaracp.NewFactory)
+	}
+	return fmt.Errorf("unknown harness %q; known harnesses are %q and %q", harnessName, bluecollarHarnessName, bluecollarACPHarnessName)
 }
 
 func main() {
@@ -94,6 +111,7 @@ type virtualSessionArguments struct {
 	RealModelTiers        bool
 	ListScenarios         bool
 	AskInThread           bool
+	HarnessName           string
 }
 
 type virtualSessionEvidence struct {
@@ -149,6 +167,7 @@ func parseVirtualSessionArguments(arguments []string, defaultScenarioName string
 	maximumModelTier := flagSet.String("maximum-model-tier", "", "maximum live model tier, one of "+strings.Join(llm.ModelTiers, ", "))
 	realModelTiers := flagSet.Bool("real-model-tiers", false, "use the production model tier configuration without a ceiling")
 	askInThread := flagSet.Bool("ask-in-thread", false, "ask an approval in the thread and wait for the reply, as inbound.connectors.askInThread does, instead of parking the run")
+	harnessName := flagSet.String("harness", firstNonEmptyString(os.Getenv("BLUECLAW_E2E_HARNESS"), bluecollarHarnessName), "agent harness the scenario runs under: "+bluecollarHarnessName+" or "+bluecollarACPHarnessName)
 	listScenarios := flagSet.Bool("list-scenarios", false, "print every scenario name BuiltinScenario accepts, one per line, and exit")
 	flagSet.Usage = func() {
 		fmt.Fprintln(flagSet.Output(), "Usage: blueclaw-lab virtual-session [flags]")
@@ -194,10 +213,14 @@ func parseVirtualSessionArguments(arguments []string, defaultScenarioName string
 		MaximumModelTier:      normalizedMaximumModelTier,
 		RealModelTiers:        *realModelTiers,
 		AskInThread:           *askInThread,
+		HarnessName:           strings.TrimSpace(*harnessName),
 	}, nil
 }
 
 func runVirtualSession(ctx context.Context, arguments virtualSessionArguments) error {
+	if errorValue := useHarness(arguments.HarnessName); errorValue != nil {
+		return errorValue
+	}
 	if skipReason := virtualSessionSkipReason(); skipReason != "" {
 		fmt.Fprintln(os.Stderr, skipReason)
 		return nil

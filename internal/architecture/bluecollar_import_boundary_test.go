@@ -14,10 +14,11 @@ const (
 	bluecollarModulePath = "github.com/yeomyeonggeori/bluecollar/"
 )
 
-var judgmentPackages = []string{"intake", "loop", "approval", "claimcheck", "visualcheck"}
+var judgmentPackages = []string{"intake", "loop", "approval", "claimcheck", "visualcheck", "acpagent"}
 
 var defaultHarnessWiringPackages = []string{
 	"internal/app",
+	"internal/bluecollaracp",
 	"internal/bluecollarharness",
 	"internal/e2e",
 }
