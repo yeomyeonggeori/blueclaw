@@ -16,13 +16,46 @@ export type RelayConnection = {
 };
 
 const authGraceMilliseconds = 3_000;
+const defaultRateLimitRetryMilliseconds = 1_000;
+
+export class RelayQueryIncomplete extends Error {
+	constructor(readonly relayURL: string, readonly reason: string) {
+		super(`${relayURL} did not answer a query in full: ${reason}`);
+		this.name = "RelayQueryIncomplete";
+	}
+}
+
+export async function profileEventsOrNone(
+	relay: { query: (filter: object) => Promise<BuzzEvent[]> },
+	filter: object,
+): Promise<BuzzEvent[] | null> {
+	try {
+		return await relay.query(filter);
+	} catch (thrown) {
+		if (thrown instanceof RelayQueryIncomplete) return null;
+		throw thrown;
+	}
+}
+
+function authorsThatAreNotPublicKeys(filter: object): unknown[] {
+	const authors: unknown = "authors" in filter ? filter.authors : [];
+	if (!Array.isArray(authors)) return [authors];
+	return authors.filter((author) => typeof author !== "string" || !/^[0-9a-f]{64}$/.test(author));
+}
 
 type PendingQuery = {
 	events: BuzzEvent[];
 	filter?: object;
-	isAskedAfterLogin?: boolean;
-	resolve: (events: BuzzEvent[], complete: boolean) => void;
+	isAskedAgain?: boolean;
+	resolve: (events: BuzzEvent[], complete: boolean, reason?: string) => void;
 };
+
+type QueryAnswer = { events: BuzzEvent[]; complete: boolean; reason: string };
+
+function retryDelayStatedIn(reason: string): number {
+	const stated = /retry in (\d+)s/.exec(reason);
+	return stated ? Number(stated[1]) * 1_000 : defaultRateLimitRetryMilliseconds;
+}
 
 export type RelayClientTiming = {
 	resubscribeDelayMilliseconds: number;
@@ -197,13 +230,17 @@ export function createRelayConnection(
 	function handleClosedSubscription(subscriptionID: string, reason: string): void {
 		const query = pendingQueries.get(subscriptionID);
 		if (query) {
-			if (query.filter && !query.isAskedAfterLogin && reason.startsWith("auth-required")) {
+			if (query.filter && !query.isAskedAgain && reason.startsWith("auth-required")) {
 				void requestQueryAgainAfterLogin(subscriptionID, query);
+				return;
+			}
+			if (query.filter && !query.isAskedAgain && reason.startsWith("rate-limited:")) {
+				requestQueryAgainAfter(subscriptionID, query, retryDelayStatedIn(reason));
 				return;
 			}
 			pendingQueries.delete(subscriptionID);
 			console.error(`[buzz-relay] ${relayURL} closed query ${subscriptionID}: ${reason}`);
-			query.resolve(query.events, false);
+			query.resolve(query.events, false, reason);
 			return;
 		}
 		if (!liveSubscriptions.has(subscriptionID)) return;
@@ -215,10 +252,20 @@ export function createRelayConnection(
 	}
 
 	async function requestQueryAgainAfterLogin(subscriptionID: string, query: PendingQuery): Promise<void> {
-		query.isAskedAfterLogin = true;
+		query.isAskedAgain = true;
 		await waitForAuth().catch(() => void 0);
 		if (pendingQueries.get(subscriptionID) !== query) return;
 		send(["REQ", subscriptionID, query.filter]);
+	}
+
+	function requestQueryAgainAfter(subscriptionID: string, query: PendingQuery, delayMilliseconds: number): void {
+		query.isAskedAgain = true;
+		query.events = [];
+		const retry = setTimeout(() => {
+			if (pendingQueries.get(subscriptionID) !== query) return;
+			send(["REQ", subscriptionID, query.filter]);
+		}, delayMilliseconds);
+		retry.unref?.();
 	}
 
 	async function requestSubscriptionAgain(subscriptionID: string, reason: string): Promise<void> {
@@ -340,7 +387,9 @@ export function createRelayConnection(
 			}
 		},
 		async query(filter, timeoutMs = 8_000) {
-			return (await queryForCompleteness(filter, timeoutMs)).events;
+			const answer = await queryForCompleteness(filter, timeoutMs);
+			if (!answer.complete) throw new RelayQueryIncomplete(relayURL, answer.reason);
+			return answer.events;
 		},
 		async queryComplete(filter, timeoutMs = 8_000) {
 			return queryForCompleteness(filter, timeoutMs);
@@ -353,26 +402,29 @@ export function createRelayConnection(
 		},
 	};
 
-	async function queryForCompleteness(
-		filter: object,
-		timeoutMs: number,
-	): Promise<{ events: BuzzEvent[]; complete: boolean }> {
+	async function queryForCompleteness(filter: object, timeoutMs: number): Promise<QueryAnswer> {
+		const notPublicKeys = authorsThatAreNotPublicKeys(filter);
+		if (notPublicKeys.length > 0) {
+			const reason = `authors holds what is not a public key: ${JSON.stringify(notPublicKeys)}`;
+			console.error(`[buzz-relay] not asking ${relayURL}: ${reason}`);
+			return { events: [], complete: false, reason };
+		}
 		await waitForOpen();
 		const subscriptionID = `query-${subscriptionSerial++}`;
-		return await new Promise<{ events: BuzzEvent[]; complete: boolean }>((resolve) => {
+		return await new Promise<QueryAnswer>((resolve) => {
 			const timeoutHandle = setTimeout(() => {
 				const query = pendingQueries.get(subscriptionID);
 				pendingQueries.delete(subscriptionID);
 				send(["CLOSE", subscriptionID]);
-				resolve({ events: query?.events ?? [], complete: false });
+				resolve({ events: query?.events ?? [], complete: false, reason: `no answer within ${timeoutMs}ms` });
 			}, timeoutMs);
 			pendingQueries.set(subscriptionID, {
 				events: [],
 				filter,
-				isAskedAfterLogin: false,
-				resolve: (events, complete) => {
+				isAskedAgain: false,
+				resolve: (events, complete, reason = "") => {
 					clearTimeout(timeoutHandle);
-					resolve({ events, complete });
+					resolve({ events, complete, reason });
 				},
 			});
 			send(["REQ", subscriptionID, filter]);
