@@ -80,14 +80,8 @@ func (toolCatalogBuilder *ToolCatalogBuilder) runTerminalTool(toolContext contex
 		return *toolFailure, nil
 	}
 	slog.Info("shell runtime directories materialized", "durationMs", time.Since(materializeStartedAt).Milliseconds())
-	toolCatalogBuilder.prepareRequestedDeck(toolContext, workspaceActor, handlerContext.request)
-	toolCatalogBuilder.chooseRequestedDeckLayouts(toolContext, workspaceActor, handlerContext.request)
-	toolCatalogBuilder.judgeRequestedDraftClaims(toolContext, workspaceActor, handlerContext.request)
 	if errorValue := toolCatalogBuilder.writeTaskContext(toolContext, workspaceActor, handlerContext.request); errorValue != nil {
 		return actorToolFailure("write_file", "task_context", input.EnvironmentVariables[TaskContextEnvironmentName], errorValue), nil
-	}
-	if errorValue := toolCatalogBuilder.writeOfficeRuntimeContext(toolContext, workspaceActor, handlerContext.request, func(*officeRuntimeContext) {}); errorValue != nil {
-		return actorToolFailure("write_file", "office_runtime_context", input.EnvironmentVariables[officeContract.RuntimeContextVariable], errorValue), nil
 	}
 	input.ExecutionIdentity = toolCatalogBuilder.executionIdentityForRequester(handlerContext.request)
 	scriptHostEnvironment, revokeScriptHost := toolCatalogBuilder.grantScriptHost(toolContext, handlerContext.request)
@@ -265,7 +259,6 @@ func requesterWorkspaceEnvironment(requesterHomePath string, workspaceRootPath s
 	if taskTmpPath != "" {
 		environmentVariables["BLUECLAW_TASK_TMP"] = taskTmpPath
 		environmentVariables[TaskContextEnvironmentName] = taskContextPath(taskTmpPath)
-		environmentVariables[officeContract.RuntimeContextVariable] = officeRuntimeContextPath(taskTmpPath)
 	}
 	return environmentVariables
 }

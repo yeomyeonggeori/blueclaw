@@ -309,7 +309,7 @@ func TestOfficeExampleLive(t *testing.T) {
 	}
 	writeOfficeExampleModels(t, outputDirectory)
 	loopDecisions := decisions.Endpoint{URL: officeExampleDecisionsEndpoint, ModelName: officeExampleDecisionModel, APIKey: apiKey}.DecisionModel()
-	claimDecisions := decisions.Endpoint{URL: officeExampleDecisionsEndpoint, ModelName: officeExampleDecisionModel, APIKey: apiKey}.DecisionModel()
+	scriptDecisions := decisions.Endpoint{URL: officeExampleDecisionsEndpoint, ModelName: officeExampleDecisionModel, APIKey: apiKey}.DecisionModel()
 	visualDecisions := decisions.Endpoint{URL: officeExampleDecisionsEndpoint, ModelName: officeExampleVisualReviewModel, APIKey: apiKey}.DecisionModel()
 	medium := officeExampleTierModel(t, apiKey, "medium")
 	turn := VirtualTurn{
@@ -340,9 +340,11 @@ func TestOfficeExampleLive(t *testing.T) {
 		AllowedTools:          append(agentruntime.KernelToolNames(), officeExampleCompanyInfoTool),
 		DecisionModel:         &decisionRecorder{label: "decision", delegate: loopDecisions, directory: outputDirectory},
 		ConfigureToolCatalog: func(builder *agentruntime.ToolCatalogBuilder) {
-			builder.UseClaimDecisionModel(&decisionRecorder{label: "claim", delegate: claimDecisions, directory: outputDirectory})
-			builder.UseVisualReviewModels(&decisionRecorder{label: "visual", delegate: visualDecisions, directory: outputDirectory}, languageRecorder{label: "fixer", delegate: medium, directory: outputDirectory})
-			builder.UseDeckDesignModel(&decisionRecorder{label: "design", delegate: claimDecisions, directory: outputDirectory})
+			builder.UseScriptModels(
+				&decisionRecorder{label: "script", delegate: scriptDecisions, directory: outputDirectory},
+				&decisionRecorder{label: "visual", delegate: visualDecisions, directory: outputDirectory},
+				languageRecorder{label: "generate", delegate: medium, directory: outputDirectory},
+			)
 		},
 		Turns: []VirtualTurn{turn},
 	}

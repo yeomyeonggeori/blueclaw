@@ -56,15 +56,6 @@ type ToolCatalogBuilder struct {
 
 	taskContextMutex sync.Mutex
 
-	claimDecisionModel  model.DecisionModel
-	claimRecomputeModel model.LanguageModelProvider
-	claimRewriteModel   model.LanguageModelProvider
-
-	visualReviewDecisionModel model.DecisionModel
-	visualReviewLanguageModel model.LanguageModelProvider
-
-	deckDesignModel model.DecisionModel
-
 	scriptHost               *ScriptHost
 	scriptHostURL            string
 	scriptDecisionModel      model.DecisionModel

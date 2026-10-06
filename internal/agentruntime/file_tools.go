@@ -1396,32 +1396,15 @@ func (toolCatalogBuilder *ToolCatalogBuilder) attachFileTool(toolContext context
 	}
 	attachments := []toolcontract.FileAttachment{}
 	deliveredPaths := []string{}
-	claimChecks := []officeClaimCheck{}
-	visualReviews := []officeVisualReview{}
 	replyNotes := []string{}
 	for _, attachmentInput := range attachmentInputs {
 		concretePath := toolCatalogBuilder.nativeRequesterPath(handlerContext.request, strings.TrimSpace(attachmentInput.Path))
-		fileChecks := []officeClaimCheck{}
-		if check := toolCatalogBuilder.checkOfficeClaims(toolContext, handlerContext.request, concretePath); check != nil {
-			fileChecks = append(fileChecks, *check)
-		}
-		review := toolCatalogBuilder.checkOfficeVisualReview(toolContext, handlerContext.request, concretePath)
-		if review != nil {
-			visualReviews = append(visualReviews, *review)
-			fileChecks = appendedClaimRecheck(fileChecks, review)
-		}
-		claimChecks = append(claimChecks, fileChecks...)
 		attachment, failureResult := toolCatalogBuilder.fileAttachment(toolContext, attachmentInput, handlerContext)
 		if failureResult != nil {
 			return *failureResult, nil
 		}
-		snapshot := toolCatalogBuilder.deliveredSnapshot(toolContext, handlerContext.request, concretePath)
-		attachment.Holds = snapshotHolds(snapshot)
-		replyNotes = append(replyNotes, deliveredFileNotes(attachment.Filename, snapshotBlankLabels(snapshot), fileChecks, review)...)
 		metadata := toolCatalogBuilder.deliveredMetadata(toolContext, handlerContext.request, concretePath)
-		if len(metadata.Holds) > 0 {
-			attachment.Holds = metadata.Holds
-		}
+		attachment.Holds = metadata.Holds
 		replyNotes = append(replyNotes, metadata.Notes...)
 		attachments = append(attachments, attachment)
 		deliveredPaths = append(deliveredPaths, attachment.DevicePath)
@@ -1429,12 +1412,6 @@ func (toolCatalogBuilder *ToolCatalogBuilder) attachFileTool(toolContext context
 	data := map[string]any{
 		"deliveredPaths":  deliveredPaths,
 		"attachmentCount": len(attachments),
-	}
-	if len(claimChecks) > 0 {
-		data["claimChecks"] = claimChecks
-	}
-	if len(visualReviews) > 0 {
-		data["visualReview"] = visualReviews
 	}
 	return toolcontract.ToolResult{
 		Output:      toolcontract.ToolOutput{Content: strings.Join(append([]string{fileDeliverStagedContent}, replyNotes...), "; "), Data: json.RawMessage(MarshalBody(data))},

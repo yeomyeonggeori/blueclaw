@@ -278,7 +278,6 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerRecordCatalogTools(
 			fileKeeper:         toolCatalogBuilder.recordFileKeeper(request),
 			inputUnderApproval: toolCatalogBuilder.inputUnderApproval,
 			answered: func(ctx context.Context, toolName string, input json.RawMessage, result mcp.ToolResult) {
-				toolCatalogBuilder.recordOfficeFacts(ctx, request, toolName, input, result)
 				toolCatalogBuilder.recordAnsweredRecordTool(ctx, request, toolName, input, result)
 			},
 		},
@@ -305,7 +304,6 @@ func (toolCatalogBuilder *ToolCatalogBuilder) callRecordToolAsRequester(ctx cont
 		return mcp.ToolResult{}, errorValue
 	}
 	result = toolCatalogBuilder.recordFileKeeper(request).withFilesKept(ctx, toolName, input, result)
-	toolCatalogBuilder.recordOfficeFacts(ctx, request, toolName, input, result)
 	toolCatalogBuilder.recordAnsweredRecordTool(ctx, request, toolName, input, result)
 	return result, nil
 }

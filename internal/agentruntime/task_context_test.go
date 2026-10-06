@@ -9,9 +9,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func (fixture taskFixture) taskContextTheShellReads(t *testing.T) taskContext {
@@ -99,4 +101,22 @@ func TestTheModelCannotPointACommandAtAnotherTaskContext(t *testing.T) {
 	if !security.IsWorkspaceManagedEnvironmentName(TaskContextEnvironmentName) {
 		t.Fatalf("%s is not managed by the workspace, so a command's own environment could replace it", TaskContextEnvironmentName)
 	}
+}
+
+func companyInfoGetDescriptor() capability.ToolDescriptor {
+	descriptor := aDescriptor("company_info_get", capability.AnsweredByRecord)
+	descriptor.SideEffectClass = toolcontract.ToolSideEffectRead
+	descriptor.InputSchema = json.RawMessage(`{"type":"object","properties":{"language":{"type":"string"}},"additionalProperties":false}`)
+	descriptor.InputIntentSchema = descriptor.InputSchema
+	descriptor.ResultContract = &capability.ToolResultContract{Schema: json.RawMessage(`{"type":"object","properties":{"name":{"type":"string"},"sealImage":{"type":"string"}},"additionalProperties":false}`)}
+	return descriptor
+}
+
+func companyDocumentRegisterDescriptor() capability.ToolDescriptor {
+	descriptor := aDescriptor("company_document_register", capability.AnsweredByRecord)
+	descriptor.SideEffectClass = toolcontract.ToolSideEffectStateChange
+	descriptor.InputSchema = json.RawMessage(`{"type":"object","properties":{"documentType":{"type":"string"}},"additionalProperties":false}`)
+	descriptor.InputIntentSchema = descriptor.InputSchema
+	descriptor.ResultContract = &capability.ToolResultContract{Schema: json.RawMessage(`{"type":"object","properties":{"documentID":{"type":"string"},"documentNumber":{"type":["string","null"]}},"additionalProperties":false}`)}
+	return descriptor
 }
