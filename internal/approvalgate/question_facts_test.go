@@ -71,3 +71,16 @@ func registerDeletingTool(t *testing.T, toolSet *toolcontract.ToolSet) {
 		t.Fatalf("expected the tool to register: %v", errorValue)
 	}
 }
+
+func TestTheChoicesATargetCarriesAreHandedToTheWording(t *testing.T) {
+	gate, _, taskRun, _, _ := choiceGate(t, ApprovalAnswer{})
+	languageModel := &wordingLanguageModel{question: "지금 업데이트할까요?"}
+	gate.UseQuestionWorder(approval.NewWorder(languageModel))
+
+	gate.AwaitApproval(context.Background(), hostUpdateRequest(taskRun.TaskRunID))
+
+	wordingContext := marshalRequestMessages(languageModel.lastRequest)
+	if !strings.Contains(wordingContext, `"key":"offHours"`) || !strings.Contains(wordingContext, laterStartsAt) {
+		t.Fatalf("the question offers exactly the choices the host computed, got %s", wordingContext)
+	}
+}
