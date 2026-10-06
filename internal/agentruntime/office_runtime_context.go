@@ -24,7 +24,6 @@ type officeHostContract struct {
 	DraftClaims            officeDraftClaimsFiles    `json:"draftClaims"`
 	DeckLayouts            officeDeckPreparationFile `json:"deckLayouts"`
 	SourceSuffix           string                    `json:"sourceSuffix"`
-	DeliverableExtensions  []string                  `json:"deliverableExtensions"`
 	SourceContent          officeSourceContent       `json:"sourceContent"`
 }
 

@@ -79,7 +79,7 @@ func (fixture officeContextFixture) deliverWithJudge(t *testing.T, judge *claimJ
 
 func (fixture officeContextFixture) writeSnapshot(t *testing.T, name string, snapshot string) string {
 	t.Helper()
-	documentPath := fixture.writeDocument(t, name, false)
+	documentPath := fixture.writeDocument(t, name)
 	writeTestFile(t, documentPath+officeContract.SourceSuffix, snapshot)
 	return documentPath
 }
