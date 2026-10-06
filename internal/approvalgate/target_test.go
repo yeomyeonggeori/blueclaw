@@ -248,3 +248,24 @@ func TestAnUnresolvableTargetStopsTheCallWithoutHoldingIt(t *testing.T) {
 		t.Fatalf("no approval is spent on a target that does not exist, got %+v", taskEventNames(taskRunService, taskRun.TaskRunID))
 	}
 }
+
+func TestAnApprovedCallIsCarriedOutAgainstEveryIdentityAListResolvedTo(t *testing.T) {
+	gate, taskRunService, taskRun := gateFixture(t)
+	gate.UseApprovalTargetResolver(&recordingTargetResolver{resolution: ApprovalTargetResolution{Target: ApprovalTarget{
+		InputField: "personHints",
+		Title:      "박예시, 이샘플",
+		IDs:        []string{"person-yesi", "person-sample"},
+	}}})
+	approvalRequest := approvalRequestFixture(taskRun.TaskRunID)
+	approvalRequest.ToolInput = json.RawMessage(`{"personHints":["예시","샘플"],"message":"안녕"}`)
+	gate.AwaitApproval(context.Background(), approvalRequest)
+	recordDecision(taskRunService, taskRun.TaskRunID, "approve")
+
+	approvedCall, isApproved := ApprovedPendingCall(taskRunService.ListTaskEvent(taskRun.TaskRunID))
+	if !isApproved {
+		t.Fatal("expected the approved call to be carried out")
+	}
+	if string(approvedCall.ToolInput) != `{"message":"안녕","personHints":["person-yesi","person-sample"]}` {
+		t.Fatalf("consent binds to every identity the requester saw, got %s", approvedCall.ToolInput)
+	}
+}

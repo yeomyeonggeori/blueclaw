@@ -481,7 +481,7 @@ func buildVirtualTurnMetrics(turnNumber int, turnResult e2e.VirtualTurnResult) v
 		if strings.HasPrefix(event.Name, agentcontract.ToolTaskEventPrefix) && strings.HasSuffix(event.Name, agentcontract.ToolTaskEventRequestedSuffix) {
 			metrics.ToolCallCount++
 		}
-		if event.Name == agentcontract.TaskEventBlueclawTaskExecutionDuration {
+		if event.Name == task.TaskEventBlueclawTaskExecutionDuration {
 			metrics.TaskDurationMS = taskDurationMilliseconds(event.Body)
 		}
 	}
