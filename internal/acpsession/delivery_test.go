@@ -334,7 +334,7 @@ func deliveryFailureReportsRecorded(t *testing.T, taskRunService *task.TaskRunSe
 	t.Helper()
 	reports := []agentcontract.FailureReport{}
 	for _, taskEvent := range taskRunService.ListTaskEvent(taskRunID) {
-		if taskEvent.Name != agentcontract.TaskEventAgentFailureReport {
+		if taskEvent.Name != task.TaskEventConnectorFilesUndelivered {
 			continue
 		}
 		record := deliveryFailureReportRecord{}

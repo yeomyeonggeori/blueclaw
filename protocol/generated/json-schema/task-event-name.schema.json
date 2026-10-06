@@ -6,7 +6,10 @@
       "enum": [
         "agent.action",
         "agent.ambient_duty_launch",
+        "agent.approval_ask_requested",
+        "agent.approval_confirmation_requested",
         "agent.approval_user_facing_message_missing",
+        "agent.approval_wording_failed",
         "agent.artifact_attach_rejected",
         "agent.budget_extended_one_level",
         "agent.budget_update_sent",
@@ -51,6 +54,7 @@
         "agent.goal.waiting_approval",
         "agent.goal.waiting_user_input",
         "agent.identical_output",
+        "agent.input_requested",
         "agent.instructions_loaded",
         "agent.intake",
         "agent.launch_step.error",
@@ -80,6 +84,7 @@
         "agent.stall_exit_directive",
         "agent.stall_pause_reply",
         "agent.stall_recovery_directive",
+        "agent.steer_received",
         "agent.step_tools.selected",
         "agent.step_working_set",
         "agent.suggested_next_tool_directive",
@@ -101,7 +106,6 @@
         "approval.hold_spent",
         "approval.scope_granted",
         "approval.unheld_call_carried_out",
-        "approval.wording_failed",
         "ask.reply_classified",
         "ask.requested",
         "ask.resolved",
@@ -178,6 +182,16 @@
     },
     {
       "enum": [
+        "approval.expired",
+        "approval.unreachable",
+        "approval.wording_failed",
+        "blueclaw.connector.files_undelivered",
+        "blueclaw.connector.stop_outbox_suppressed",
+        "blueclaw.launch.failure_reply",
+        "blueclaw.launch.failure_report",
+        "blueclaw.launch.goal_blocked",
+        "blueclaw.launch.limit_reply",
+        "blueclaw.launch.limit_stop",
         "blueclaw.task.execution_duration"
       ],
       "type": "string"

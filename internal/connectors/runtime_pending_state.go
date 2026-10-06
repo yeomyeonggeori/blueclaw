@@ -216,7 +216,7 @@ func taskRunCanContinueGoal(taskRun task.TaskRun, taskEvents []task.TaskEvent) b
 func taskRunHasLimitStop(taskEvents []task.TaskEvent) bool {
 	for index := len(taskEvents) - 1; index >= 0; index-- {
 		taskEvent := taskEvents[index]
-		if taskEvent.Name == agentcontract.TaskEventAgentLimitStop {
+		if taskEvent.Name == agentcontract.TaskEventAgentLimitStop || taskEvent.Name == task.TaskEventLaunchLimitStop {
 			return true
 		}
 	}
@@ -267,7 +267,7 @@ func toolNameGroupsContain(toolNameGroups [][]string, expectedToolName string) b
 func latestActiveGoal(taskEvents []task.TaskEvent) agentcontract.ActiveGoal {
 	for index := len(taskEvents) - 1; index >= 0; index-- {
 		taskEvent := taskEvents[index]
-		if !strings.HasPrefix(taskEvent.Name, agentcontract.AgentGoalTaskEventPrefix) {
+		if !strings.HasPrefix(taskEvent.Name, agentcontract.AgentGoalTaskEventPrefix) && taskEvent.Name != task.TaskEventLaunchGoalBlocked {
 			continue
 		}
 		var activeGoal agentcontract.ActiveGoal

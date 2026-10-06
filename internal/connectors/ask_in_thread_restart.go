@@ -3,6 +3,7 @@ package connectors
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"strings"
 	"time"
@@ -19,10 +20,6 @@ func (connectorRuntime *ConnectorRuntime) reawaitPendingHolds(ctx context.Contex
 		if taskRun.Status != task.TaskStatusWaitingApproval {
 			continue
 		}
-		if time.Since(taskRun.UpdatedAt) > approvalExpiry {
-			connectorRuntime.endHoldQuietly(taskRun, approvalgate.AskExpired)
-			continue
-		}
 		go connectorRuntime.reawaitHold(ctx, taskRun)
 	}
 }
@@ -35,23 +32,27 @@ func (connectorRuntime *ConnectorRuntime) reawaitHold(ctx context.Context, taskR
 	}
 	turn, isReady := connectorRuntime.restartedQuestionTurn(ctx, taskRun, taskEvents)
 	if !isReady {
-		connectorRuntime.endHoldQuietly(taskRun, approvalgate.AskUnreachable)
+		connectorRuntime.endUnansweredHold(ctx, taskRun, nil, approvalgate.AskUnreachable)
+		return
+	}
+	if time.Since(taskRun.UpdatedAt) > connectorRuntime.askingThreads.expiry {
+		connectorRuntime.endUnansweredHold(ctx, taskRun, turn, approvalgate.AskExpired)
 		return
 	}
 	thread := connectorRuntime.restartedThread(taskRun, turn, heldCall.Confirmation, taskEvents)
 	defer connectorRuntime.askingThreads.join(thread)()
 	if !approvalQuestionIsPosted(taskEvents) && connectorRuntime.deliverApprovalQuestion(ctx, turn, taskRun.TaskRunID, heldCall.Confirmation) != nil {
-		connectorRuntime.endHoldQuietly(taskRun, approvalgate.AskUnreachable)
+		connectorRuntime.endUnansweredHold(ctx, taskRun, turn, approvalgate.AskUnreachable)
 		return
 	}
 	connectorRuntime.logger.Info("connector."+turn.platform+".approval.question_awaited_after_restart", "taskRunID", taskRun.TaskRunID)
 	connectorRuntime.askingThreads.markPosted(thread)
-	optionID, status := connectorRuntime.awaitAnswer(ctx, thread, approvalExpiry-time.Since(taskRun.UpdatedAt))
+	optionID, status := connectorRuntime.awaitAnswer(ctx, thread, connectorRuntime.askingThreads.expiry-time.Since(taskRun.UpdatedAt))
 	switch status {
 	case approvalgate.AskAnswered:
 		connectorRuntime.resumeAnsweredHold(ctx, taskRun, taskEvents, turn, optionID)
 	case approvalgate.AskExpired:
-		connectorRuntime.endExpiredHold(ctx, taskRun, turn, heldCall.Confirmation)
+		connectorRuntime.endUnansweredHold(ctx, taskRun, turn, approvalgate.AskExpired)
 	}
 }
 
@@ -63,6 +64,7 @@ func (connectorRuntime *ConnectorRuntime) restartedThread(taskRun task.TaskRun, 
 		conversationID:    turn.event.ConversationID,
 		replyTargetID:     turn.event.ReplyTargetID,
 		question:          approvalQuestionFor(confirmation, approvalrecord.OfferedChoices(taskEvents)),
+		operatorOptions:   operatorOptionsOfApproval(approvalrecord.OfferedChoices(taskEvents)),
 		answers:           make(chan string, 1),
 	}
 }
@@ -126,23 +128,31 @@ func (connectorRuntime *ConnectorRuntime) restartedApprovalRequest(taskRun task.
 	}
 }
 
-func (connectorRuntime *ConnectorRuntime) endExpiredHold(ctx context.Context, taskRun task.TaskRun, turn *inboundTurn, confirmation string) {
-	connectorRuntime.endHoldQuietly(taskRun, approvalgate.AskExpired)
-	reply, errorValue := connectorRuntime.replyGenerator.GenerateReply(ctx, expiredApprovalReplyPrompt(confirmation, latestApprovalResponseLanguage(connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID))))
-	if errorValue != nil {
-		connectorRuntime.logger.Warn("connector."+turn.platform+".approval.expiry_reply_failed", slog.String("taskRunID", taskRun.TaskRunID), slog.String("error", errorValue.Error()))
-		return
-	}
-	if _, errorValue := turn.sendReply(withConnectorEvent(ctx, turn.event), turn.replyTarget, OutboundReply{Message: reply, TaskRunID: taskRun.TaskRunID}); errorValue != nil {
-		connectorRuntime.logger.Error("connector."+turn.platform+".outbound.failed", slog.String("taskRunID", taskRun.TaskRunID), slog.String("error", errorValue.Error()))
-	}
-}
-
-func (connectorRuntime *ConnectorRuntime) endHoldQuietly(taskRun task.TaskRun, status approvalgate.AskStatus) {
+func (connectorRuntime *ConnectorRuntime) endUnansweredHold(ctx context.Context, taskRun task.TaskRun, turn *inboundTurn, status approvalgate.AskStatus) {
 	rejection := agentcontract.ApprovalSignalReject
 	approvalrecord.SettleSignal(connectorRuntime.taskRunService, taskRun.TaskRunID, &rejection, string(status))
 	connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, endedHoldEventName(status), marshalApprovalEnd(taskRun, status))
-	_, _ = connectorRuntime.taskRunService.CancelTaskRunWithReason(taskRun.TaskRunID, taskRun.RequesterPersonID, "approval."+string(status))
+	turnResult := connectorRuntime.launchFailureCompleter.CompleteLaunchFailure(ctx, agentcontract.AgentTurnRequest{
+		RequesterPersonID:   taskRun.RequesterPersonID,
+		RequesterEmail:      connectorRuntime.identityService.ResolvePersonPrimaryEmail(taskRun.RequesterPersonID),
+		ExistingTaskRunID:   taskRun.TaskRunID,
+		OriginReplyTargetID: taskRun.OriginReplyTargetID,
+		OriginIsThread:      taskRun.OriginIsThread,
+		ConversationID:      taskRun.OriginConversationID,
+		Prompt:              taskRun.Prompt,
+		ResponseLanguage:    latestApprovalResponseLanguage(connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID)),
+	}, "approval", "approval_"+string(status), errors.New(unansweredHoldReasons[status]))
+	if turn == nil {
+		return
+	}
+	if _, errorValue := connectorRuntime.dispatchTaskReply(withConnectorEvent(ctx, turn.event), turn.platform, turn.adapter, turn.event, turn.replyTarget, turnResult, "", turn.sendReply); errorValue != nil {
+		connectorRuntime.logger.Error("connector."+turn.platform+".approval.end_notice_failed", slog.String("taskRunID", taskRun.TaskRunID), slog.String("error", errorValue.Error()))
+	}
+}
+
+var unansweredHoldReasons = map[approvalgate.AskStatus]string{
+	approvalgate.AskExpired:     "nobody answered the approval question within 24 hours, so the call was not approved and did not run",
+	approvalgate.AskUnreachable: "the approval question could not be put to the requester, so the call was not approved and did not run",
 }
 
 func endedHoldEventName(status approvalgate.AskStatus) string {
@@ -155,14 +165,6 @@ func endedHoldEventName(status approvalgate.AskStatus) string {
 func marshalApprovalEnd(taskRun task.TaskRun, status approvalgate.AskStatus) string {
 	document, _ := json.Marshal(map[string]string{"requesterPersonID": taskRun.RequesterPersonID, "reason": string(status)})
 	return string(document)
-}
-
-func expiredApprovalReplyPrompt(confirmation string, responseLanguage string) string {
-	return strings.Join([]string{
-		connectorResponseLanguageInstruction(responseLanguage),
-		"Nobody answered this approval question within 24 hours, so the action was not carried out. Write one brief user-facing reply saying that it did not run for that reason.",
-		"The question was: " + strings.TrimSpace(confirmation),
-	}, "\n")
 }
 
 func approvalQuestionIsPosted(taskEvents []task.TaskEvent) bool {

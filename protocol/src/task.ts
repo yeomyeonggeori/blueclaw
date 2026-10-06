@@ -61,7 +61,10 @@ export const taskAttemptSchema = z.looseObject({
 export enum TaskEventName {
   AgentAction = 'agent.action',
   AgentAmbientDutyLaunch = 'agent.ambient_duty_launch',
+  AgentApprovalAskRequested = 'agent.approval_ask_requested',
+  AgentApprovalConfirmationRequested = 'agent.approval_confirmation_requested',
   AgentApprovalUserFacingMessageMissing = 'agent.approval_user_facing_message_missing',
+  AgentApprovalWordingFailed = 'agent.approval_wording_failed',
   AgentArtifactAttachRejected = 'agent.artifact_attach_rejected',
   AgentBudgetExtendedOneLevel = 'agent.budget_extended_one_level',
   AgentBudgetUpdateSent = 'agent.budget_update_sent',
@@ -106,6 +109,7 @@ export enum TaskEventName {
   AgentGoalWaitingApproval = 'agent.goal.waiting_approval',
   AgentGoalWaitingUserInput = 'agent.goal.waiting_user_input',
   AgentIdenticalOutput = 'agent.identical_output',
+  AgentInputRequested = 'agent.input_requested',
   AgentInstructionsLoaded = 'agent.instructions_loaded',
   AgentIntake = 'agent.intake',
   AgentLaunchStepError = 'agent.launch_step.error',
@@ -135,6 +139,7 @@ export enum TaskEventName {
   AgentStallExitDirective = 'agent.stall_exit_directive',
   AgentStallPauseReply = 'agent.stall_pause_reply',
   AgentStallRecoveryDirective = 'agent.stall_recovery_directive',
+  AgentSteerReceived = 'agent.steer_received',
   AgentStepToolsSelected = 'agent.step_tools.selected',
   AgentStepWorkingSet = 'agent.step_working_set',
   AgentSuggestedNextToolDirective = 'agent.suggested_next_tool_directive',
@@ -156,7 +161,6 @@ export enum TaskEventName {
   ApprovalHoldSpent = 'approval.hold_spent',
   ApprovalScopeGranted = 'approval.scope_granted',
   ApprovalUnheldCallCarriedOut = 'approval.unheld_call_carried_out',
-  ApprovalWordingFailed = 'approval.wording_failed',
   AskReplyClassified = 'ask.reply_classified',
   AskRequested = 'ask.requested',
   AskResolved = 'ask.resolved',
@@ -233,6 +237,16 @@ export enum TaskEventName {
 export const taskEventNameSchema = z.enum(TaskEventName);
 
 export enum HostTaskEventName {
+  ApprovalExpired = 'approval.expired',
+  ApprovalUnreachable = 'approval.unreachable',
+  ApprovalWordingFailed = 'approval.wording_failed',
+  BlueclawConnectorFilesUndelivered = 'blueclaw.connector.files_undelivered',
+  BlueclawConnectorStopOutboxSuppressed = 'blueclaw.connector.stop_outbox_suppressed',
+  BlueclawLaunchFailureReply = 'blueclaw.launch.failure_reply',
+  BlueclawLaunchFailureReport = 'blueclaw.launch.failure_report',
+  BlueclawLaunchGoalBlocked = 'blueclaw.launch.goal_blocked',
+  BlueclawLaunchLimitReply = 'blueclaw.launch.limit_reply',
+  BlueclawLaunchLimitStop = 'blueclaw.launch.limit_stop',
   BlueclawTaskExecutionDuration = 'blueclaw.task.execution_duration',
 }
 

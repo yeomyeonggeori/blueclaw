@@ -95,7 +95,7 @@ func TestTheCallsTableIsMirroredOnlyWhenTheAgentDoesNotWriteItsOwn(t *testing.T)
 	if !slices.Contains(withRepository, agentcontract.TaskEventLLMCall) {
 		t.Fatal("the agent writes its model calls to llm_call itself, and mirroring them as events shows each twice")
 	}
-	if !slices.Contains(withoutRepository, agentcontract.TaskEventTaskSteerRequested) {
-		t.Fatal("a steer the host appended comes back from the agent and would be recorded twice")
+	if slices.Contains(withoutRepository, agentcontract.TaskEventAgentSteerReceived) {
+		t.Fatal("the agent's record that it received a steer is its own fact and reaches the run beside the host's record of the request")
 	}
 }

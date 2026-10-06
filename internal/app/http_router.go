@@ -37,7 +37,7 @@ func newRouterDependencies(components applicationComponents) httpserver.RouterDe
 		SkillInventoryHandler: newSkillInventoryHandler(runtimeConfiguration, kernel.capabilityRegistry),
 		LearningHandler:       newLearningHandler(components),
 		ToolInventoryHandler:  adminapi.ToolInventoryHandler{ToolCatalogBuilder: components.toolCatalogBuilder},
-		TaskApprovalHandler:   newTaskApprovalHandler(services, directory, components.taskLauncher),
+		TaskApprovalHandler:   newTaskApprovalHandler(services, directory, components.taskLauncher, components.connectorRuntime),
 		QuiesceHandler: adminapi.QuiesceHandler{
 			Controller:     components.taskIntakeController,
 			TaskRunService: services.taskRunService,
@@ -184,8 +184,9 @@ func newSkillInventoryHandler(runtimeConfiguration config.RuntimeConfiguration, 
 	}}
 }
 
-func newTaskApprovalHandler(services taskServices, directory identityDirectory, taskLauncher *agentruntime.TaskLauncher) adminapi.TaskApprovalHandler {
+func newTaskApprovalHandler(services taskServices, directory identityDirectory, taskLauncher *agentruntime.TaskLauncher, liveHolds adminapi.LiveHolds) adminapi.TaskApprovalHandler {
 	return adminapi.TaskApprovalHandler{
+		LiveHolds:       liveHolds,
 		TaskLauncher:    taskLauncher,
 		TaskRunService:  services.taskRunService,
 		IdentityService: directory.identityService,

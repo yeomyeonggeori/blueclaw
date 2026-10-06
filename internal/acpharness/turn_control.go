@@ -79,7 +79,7 @@ func (control *turnControl) stop() {
 
 func (control *turnControl) observe(ctx context.Context, rawTurnEvent taskstate.RawTurnEvent) {
 	switch rawTurnEvent.Name {
-	case agentcontract.TaskEventAskRequested:
+	case agentcontract.TaskEventAskRequested, agentcontract.TaskEventAgentInputRequested:
 		control.noteParking(ctx)
 	case agentcontract.TaskEventTaskSteerRequested:
 		control.steer(ctx, rawTurnEvent.Body)

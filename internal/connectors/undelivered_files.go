@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
@@ -32,7 +33,7 @@ func filesNotDeliveredIn(errorValue error) (*FilesNotDelivered, bool) {
 func (connectorRuntime *ConnectorRuntime) tellOfFilesNotDelivered(ctx context.Context, turn *inboundTurn, taskRunID string, notDelivered *FilesNotDelivered) {
 	report := deliveryFailureReport(turn.event, taskRunID, notDelivered)
 	notice, generation := (agentcontract.FailureNoticeGenerator{LanguageModel: connectorRuntime.noticeLanguageModel}).Generate(ctx, report)
-	connectorRuntime.appendTaskEvent(taskRunID, agentcontract.TaskEventAgentFailureReport, map[string]any{
+	connectorRuntime.appendTaskEvent(taskRunID, task.TaskEventConnectorFilesUndelivered, map[string]any{
 		"phase":      deliveryNoticePhase,
 		"report":     report,
 		"generation": generation,

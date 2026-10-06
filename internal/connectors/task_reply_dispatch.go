@@ -83,7 +83,7 @@ func (connectorRuntime *ConnectorRuntime) dispatchTaskReply(
 		}))
 		return ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: taskRunID, Reason: decision.Reason}, nil
 	case taskReplyDecisionSuppressCancelled:
-		connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventTaskStopOutboxSuppressed, agentruntime.MarshalBody(map[string]string{
+		connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, task.TaskEventConnectorStopOutboxSuppressed, agentruntime.MarshalBody(map[string]string{
 			"messageID": event.MessageID,
 			"reason":    "task was cancelled before final reply send",
 		}))

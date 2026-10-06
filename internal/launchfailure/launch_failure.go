@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
@@ -44,8 +45,8 @@ func (completer *Completer) CompleteLaunchFailure(responseContext context.Contex
 		DiagnosticEventID:  agentcontract.DiagnosticEventID(request, taskRun.TaskRunID, phase),
 	}
 	failureNotice, noticeStatus := (agentcontract.FailureNoticeGenerator{LanguageModel: completer.languageModel}).Generate(responseContext, launchFailureReport)
-	completer.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentFailureReply, marshalEventBody(noticeStatus))
-	completer.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentFailureReport, marshalEventBody(map[string]any{
+	completer.taskRunService.AppendTaskEvent(taskRun.TaskRunID, task.TaskEventLaunchFailureReply, marshalEventBody(noticeStatus))
+	completer.taskRunService.AppendTaskEvent(taskRun.TaskRunID, task.TaskEventLaunchFailureReport, marshalEventBody(map[string]any{
 		"phase":      phase,
 		"report":     launchFailureReport,
 		"generation": noticeStatus,
@@ -123,7 +124,7 @@ type IntakeLimit struct {
 
 func (completer *Completer) CompleteIntakeElapsed(responseContext context.Context, request agentcontract.AgentTurnRequest, intakeLimit IntakeLimit) agentcontract.AgentTurnResult {
 	taskRun := completer.taskRunForIntakeLimit(request)
-	completer.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentLimitStop, marshalEventBody(intakeLimitEventBody(intakeLimit)))
+	completer.taskRunService.AppendTaskEvent(taskRun.TaskRunID, task.TaskEventLaunchLimitStop, marshalEventBody(intakeLimitEventBody(intakeLimit)))
 	blockedTaskRun, errorValue := completer.taskRunService.PauseTaskRun(taskRun.TaskRunID, agentcontract.TaskStatusBlocked, "max_elapsed")
 	if errorValue != nil {
 		taskRun.Status = agentcontract.TaskStatusBlocked
@@ -153,18 +154,18 @@ func (completer *Completer) CompleteIntakeElapsed(responseContext context.Contex
 		PriorTaskFailureReason: request.PriorTask.FailureReason,
 	})
 	failureNotice, noticeStatus := (agentcontract.FailureNoticeGenerator{LanguageModel: completer.languageModel}).Generate(responseContext, failureReport)
-	completer.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentLimitReply, marshalEventBody(map[string]any{
+	completer.taskRunService.AppendTaskEvent(taskRun.TaskRunID, task.TaskEventLaunchLimitReply, marshalEventBody(map[string]any{
 		"source":            noticeStatus.Source,
 		"reason":            noticeStatus.Reason,
 		"textRecoveryError": noticeStatus.TextRecoveryError,
 	}))
-	completer.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentFailureReport, marshalEventBody(map[string]any{
+	completer.taskRunService.AppendTaskEvent(taskRun.TaskRunID, task.TaskEventLaunchFailureReport, marshalEventBody(map[string]any{
 		"phase":      "limit",
 		"report":     failureReport,
 		"generation": noticeStatus,
 	}))
 	blockedTaskRun = persistTaskRunResult(completer.taskRunService, blockedTaskRun, failureNotice.SendableMessage())
-	completer.taskRunService.AppendTaskEvent(blockedTaskRun.TaskRunID, agentcontract.TaskEventAgentGoalBlocked, marshalEventBody(agentcontract.ActiveGoal{
+	completer.taskRunService.AppendTaskEvent(blockedTaskRun.TaskRunID, task.TaskEventLaunchGoalBlocked, marshalEventBody(agentcontract.ActiveGoal{
 		GoalID:              blockedTaskRun.TaskRunID,
 		TaskRunID:           blockedTaskRun.TaskRunID,
 		OriginalInstruction: strings.TrimSpace(request.Prompt),
