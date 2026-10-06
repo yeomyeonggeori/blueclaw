@@ -26,6 +26,7 @@ func newRouterDependencies(components applicationComponents) httpserver.RouterDe
 		WorkspaceFilesHandler: newWorkspaceFilesHandler(runtimeConfiguration, kernel, directory),
 		PersonaHandler:        newPersonaHandler(runtimeConfiguration, kernel, directory),
 		ToolCatalogHandler:    kernel.toolCatalog.handler,
+		ScriptHostHandler:     kernel.toolCatalog.scriptHost.Handler(),
 		PolicyHandler:         newPolicyHandler(components),
 		IdentityResolve:       adminapi.IdentityResolveHandler{PolicyWatcher: directory.policyWatcher, PlatformAccountLister: directory.platformAccountLister},
 		AuditHandler:          services.auditHandler,

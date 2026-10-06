@@ -27,6 +27,7 @@ type toolCatalogEndpoint struct {
 	handler      http.Handler
 	approvalGate *approvalgate.Gate
 	replyReader  approvalreply.DecisionModelReader
+	scriptHost   *agentruntime.ScriptHost
 }
 
 func newToolCatalogEndpoint(taskRunService *task.TaskRunService, approvalLanguageModel model.LanguageModelProvider, decisionModel model.DecisionModel, capabilityClient capability.Client) toolCatalogEndpoint {
@@ -35,7 +36,7 @@ func newToolCatalogEndpoint(taskRunService *task.TaskRunService, approvalLanguag
 	approvalGate := approvalgate.New(taskRunService)
 	approvalGate.UseQuestionWorder(approval.NewWorder(approvalLanguageModel))
 	approvalGate.UseApprovalTargetResolver(agentruntime.NewCapabilityApprovalTargetResolver(capabilityClient))
-	return toolCatalogEndpoint{resolver: resolver, handler: handler, approvalGate: approvalGate, replyReader: approvalreply.NewDecisionModelReader(decisionModel)}
+	return toolCatalogEndpoint{resolver: resolver, handler: handler, approvalGate: approvalGate, replyReader: approvalreply.NewDecisionModelReader(decisionModel), scriptHost: agentruntime.NewScriptHost()}
 }
 
 func newToolCatalogBuilder(runtimeConfiguration config.RuntimeConfiguration, kernel agentKernel, services taskServices, directory identityDirectory, memoryComponents memoryComponents, logger *slog.Logger) *agentruntime.ToolCatalogBuilder {
@@ -59,11 +60,14 @@ func newToolCatalogBuilder(runtimeConfiguration config.RuntimeConfiguration, ker
 	toolCatalogBuilder.UseTaskArtifactService(services.taskArtifactService)
 	toolCatalogBuilder.UseWorkspaceRootPath(runtimeConfiguration.Terminal.WorkspaceRootPath)
 	toolCatalogBuilder.UseSkillChangeHandler(kernel.refreshSkillIndex)
+	visualReviewModel := newConfiguredVisualReviewModel(runtimeConfiguration, logger)
 	toolCatalogBuilder.UseClaimDecisionModel(kernel.decisionModel)
 	toolCatalogBuilder.UseClaimRecompute(kernel.taskTierLanguageModels.Medium)
 	toolCatalogBuilder.UseClaimRewrite(kernel.taskTierLanguageModels.Medium)
-	toolCatalogBuilder.UseVisualReviewModels(newConfiguredVisualReviewModel(runtimeConfiguration, logger), kernel.taskTierLanguageModels.Medium)
+	toolCatalogBuilder.UseVisualReviewModels(visualReviewModel, kernel.taskTierLanguageModels.Medium)
 	toolCatalogBuilder.UseDeckDesignModel(kernel.decisionModel)
+	toolCatalogBuilder.UseScriptHost(kernel.toolCatalog.scriptHost, scriptHostURL(runtimeConfiguration))
+	toolCatalogBuilder.UseScriptModels(kernel.decisionModel, visualReviewModel, kernel.taskTierLanguageModels.Medium)
 	if memoryComponents.stores != nil {
 		toolCatalogBuilder.UseMemoryStores(memoryComponents.stores, directory.identityService)
 	}
@@ -168,6 +172,10 @@ func newToolCatalogSessionToken() string {
 		return ""
 	}
 	return hex.EncodeToString(sessionToken)
+}
+
+func scriptHostURL(runtimeConfiguration config.RuntimeConfiguration) string {
+	return "http://" + deriveListenAddress(runtimeConfiguration.BaseURL) + agentruntime.ScriptHostPath
 }
 
 func toolCatalogURL(runtimeConfiguration config.RuntimeConfiguration) string {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -199,10 +200,12 @@ func TestAnAnswerWithNoFileIsLeftAsItCame(t *testing.T) {
 		StructuredContent: json.RawMessage(`{"tool":"company_info_get","result":{"name":"주식회사 예시"}}`),
 	}
 
-	result, factory := callingTheCompanyProfile(t, answered, actor, "task-3")
+	result, _ := callingTheCompanyProfile(t, answered, actor, "task-3")
 
-	if len(factory.requestedPersons) != 0 || len(actor.written) != 0 {
-		t.Fatalf("an answer with no file wrote %v", keysOf(actor.written))
+	for path := range actor.written {
+		if filepath.Base(path) != taskContextFileName {
+			t.Fatalf("an answer with no file wrote %v", keysOf(actor.written))
+		}
 	}
 	if !strings.Contains(result.Output.Content, `{"type":"text","text":"{}"}`) {
 		t.Fatalf("the answer changed: %s", result.Output.Content)

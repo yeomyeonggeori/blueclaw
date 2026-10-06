@@ -1,7 +1,6 @@
 package agentruntime
 
 import (
-	"context"
 	"encoding/json"
 	"maps"
 	"os"
@@ -15,79 +14,12 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
-	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
-	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
 
-type officeContextFixture struct {
-	workspacePath string
-	builder       *ToolCatalogBuilder
-	request       ToolCatalogRequest
-	taskRun       agentcontract.TaskRun
-	standIn       *recordCatalogStandIn
-}
-
-func newOfficeContextFixture(t *testing.T, descriptors ...capability.ToolDescriptor) officeContextFixture {
-	t.Helper()
-	workspacePath := t.TempDir()
-	terminalService := security.NewShellService(config.TerminalConfiguration{
-		WorkspaceRootPath:     workspacePath,
-		Mode:                  "native",
-		TimeoutSecond:         5,
-		OutputMaxBytes:        65536,
-		SessionMaxCount:       2,
-		AllowInteractiveShell: true,
-	})
-	builder, _ := aBuilderWith(descriptors...)
-	builder.UseWorkspaceRootPath(workspacePath)
-	builder.UseTerminalService(terminalService)
-	builder.UseWorkspaceActorFactory(security.NewDirectWorkspaceActorFactory(terminalService))
-	allowedToolNames := internalTestToolNames()
-	for _, descriptor := range descriptors {
-		allowedToolNames = append(allowedToolNames, descriptor.Name)
-	}
-	builder.UseAllowedToolNamesByProfile(nil, allowedToolNames)
-	builder.UseCompanyProvider(func() agentcontract.CompanyContext { return agentcontract.CompanyContext{TimeZone: "Asia/Seoul"} })
-	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
-	builder.UseTaskRunService(taskRunService)
-	standIn := &recordCatalogStandIn{discovered: descriptors}
-	request := aRequestFrom(standIn, "sample@example.com")
-	request.ProfileName = "default"
-	request.RequesterPersonID = "person-1"
-	request.RequesterName = "이샘플"
-	request.ConversationID = "dm:channel-1"
-	request.PersonAccess = policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}}
-	return officeContextFixture{
-		workspacePath: workspacePath,
-		builder:       builder,
-		request:       request,
-		taskRun:       taskRunService.CreateTaskRun("person-1", "dm:channel-1", "견적서 만들어 줘"),
-		standIn:       standIn,
-	}
-}
-
-func (fixture officeContextFixture) homePath() string {
-	return filepath.Join(fixture.workspacePath, "private", "people", "person-1")
-}
-
-func (fixture officeContextFixture) taskContext() context.Context {
-	return toolcontract.WithTaskRunID(context.Background(), fixture.taskRun.TaskRunID)
-}
-
-func (fixture officeContextFixture) invoke(t *testing.T, toolName string, input any) toolcontract.ToolResult {
-	t.Helper()
-	toolSet := fixture.builder.BuildToolSet(fixture.request)
-	result, errorValue := toolSet.InvokeInternal(fixture.taskContext(), toolcontract.ToolInvocation{ToolName: toolName, Input: toolcontract.MarshalToolInput(input)})
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	return result
-}
-
-func (fixture officeContextFixture) contextTheShellReads(t *testing.T) map[string]json.RawMessage {
+func (fixture taskFixture) contextTheShellReads(t *testing.T) map[string]json.RawMessage {
 	t.Helper()
 	result := fixture.invoke(t, "bash", map[string]any{"command": `cat "$OFFICE_RUNTIME_CONTEXT"`})
 	if result.Failed() {
@@ -105,7 +37,7 @@ func (fixture officeContextFixture) contextTheShellReads(t *testing.T) map[strin
 }
 
 func TestTheShellIsToldWhereTheOfficeRuntimeContextIsAndFindsTheTaskFactsThere(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	attachmentPath := filepath.Join(fixture.homePath(), "inbox", "budget.csv")
 	fixture.request.VisibleContext = agentcontract.VisibleContext{CurrentMaterials: []agentcontract.VisibleContextMaterial{{MaterialID: "m-1", Filename: "budget.csv", Path: attachmentPath, IsAvailable: true}}}
 
@@ -127,7 +59,7 @@ func TestTheShellIsToldWhereTheOfficeRuntimeContextIsAndFindsTheTaskFactsThere(t
 }
 
 func TestTheRuntimeContextSaysTheHostReviewsDeckRendersOnlyWhileBothReviewModelsAreSet(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	if reviews := string(fixture.contextTheShellReads(t)["reviewsDeckRenders"]); reviews != "false" {
 		t.Fatalf("a host with no review models told the office it reviews deck renders: %s", reviews)
 	}
@@ -167,7 +99,7 @@ func companyDocumentRegisterDescriptor() capability.ToolDescriptor {
 }
 
 func TestTheCompanyProfileARecordAnswerKeptIsBoundForItsLanguage(t *testing.T) {
-	fixture := newOfficeContextFixture(t, companyInfoGetDescriptor())
+	fixture := newTaskFixture(t, companyInfoGetDescriptor())
 	fixture.standIn.answered = aCompanyProfileAnswer()
 
 	if result := fixture.invoke(t, companyInfoGetToolName, map[string]string{"language": "en"}); result.Failed() {
@@ -186,7 +118,7 @@ func TestTheCompanyProfileARecordAnswerKeptIsBoundForItsLanguage(t *testing.T) {
 }
 
 func TestEachDocumentNumberTheRecordRegistersIsAppendedInOrder(t *testing.T) {
-	fixture := newOfficeContextFixture(t, companyDocumentRegisterDescriptor())
+	fixture := newTaskFixture(t, companyDocumentRegisterDescriptor())
 	for _, documentNumber := range []string{"QT-2026-0001", "QT-2026-0002"} {
 		fixture.standIn.answered = mcp.ToolResult{StructuredContent: json.RawMessage(`{"tool":"company_document_register","result":{"documentID":"d","documentNumber":"` + documentNumber + `"}}`)}
 		if result := fixture.invoke(t, companyDocumentRegisterToolName, map[string]string{"documentType": "quote"}); result.Failed() {
@@ -276,7 +208,7 @@ func (repository fixedTaskRunRepository) FindTaskRun(taskRunID string) (agentcon
 }
 
 func TestTodayIsTheDateInTheCompanysTimeZoneWhenTheTaskStarted(t *testing.T) {
-	fixture := newOfficeContextFixture(t)
+	fixture := newTaskFixture(t)
 	startedAt := fixture.taskRun
 	startedAt.CreatedAt = time.Date(2026, 10, 4, 2, 0, 0, 0, time.UTC)
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())

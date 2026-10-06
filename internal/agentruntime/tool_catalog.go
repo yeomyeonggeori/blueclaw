@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/learning"
@@ -54,6 +55,8 @@ type ToolCatalogBuilder struct {
 	recordCatalogMutex              sync.Mutex
 	recordCatalogByRequester        map[string]discoveredCatalog
 
+	taskContextMutex sync.Mutex
+
 	claimDecisionModel  model.DecisionModel
 	claimRecomputeModel model.LanguageModelProvider
 	claimRewriteModel   model.LanguageModelProvider
@@ -62,6 +65,12 @@ type ToolCatalogBuilder struct {
 	visualReviewLanguageModel model.LanguageModelProvider
 
 	deckDesignModel model.DecisionModel
+
+	scriptHost               *ScriptHost
+	scriptHostURL            string
+	scriptDecisionModel      model.DecisionModel
+	scriptImageDecisionModel model.DecisionModel
+	scriptGenerationModel    model.LanguageModelProvider
 }
 
 type toolHandlerContext struct {
