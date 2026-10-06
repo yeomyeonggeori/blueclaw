@@ -212,6 +212,28 @@ func TestLanguageModelCallAssertionRejectsDeadlineDespiteElapsedCompletionEvent(
 	}
 }
 
+func TestLanguageModelCallAssertionAllowsADeadlineTheRuntimeCutOnPurpose(t *testing.T) {
+	cutCall := VirtualLanguageModelCallEvent{
+		Kind:               "chat",
+		SchemaName:         "bluecollar_agent_turn_action",
+		IsError:            true,
+		IsDeadlineExceeded: true,
+		Error:              context.DeadlineExceeded.Error(),
+	}
+	turnResult := VirtualTurnResult{
+		TaskStatus:              task.TaskStatusCompleted,
+		Events:                  []task.TaskEvent{{Name: agentcontract.TaskEventAgentModelCallCut, Body: `{"patienceSeconds":60}`}},
+		LanguageModelCallEvents: []VirtualLanguageModelCallEvent{cutCall},
+	}
+	if errorValue := assertLanguageModelCallsSucceeded(turnResult); errorValue != nil {
+		t.Fatalf("expected the call the runtime cut and retried to pass: %v", errorValue)
+	}
+	turnResult.LanguageModelCallEvents = []VirtualLanguageModelCallEvent{cutCall, cutCall}
+	if errorValue := assertLanguageModelCallsSucceeded(turnResult); errorValue == nil {
+		t.Fatal("expected a deadline with no matching cut event to fail strict assertion")
+	}
+}
+
 func TestVirtualObservedLanguageModelPreservesChatCapabilityAndMetadata(t *testing.T) {
 	observed := newVirtualObservedLanguageModel(virtualChatTestProvider{})
 	if _, isDirectChat := observed.(llm.ChatCompleter); isDirectChat {
@@ -1520,6 +1542,32 @@ func TestSkillCopyKeepsAScriptExecutable(t *testing.T) {
 		if information.Mode().Perm() != expectedMode {
 			t.Fatalf("expected %s copied with mode %o, got %o", relativePath, expectedMode, information.Mode().Perm())
 		}
+	}
+}
+
+func TestSkillCopyKeepsModificationTimesSoPreparedBytecodeStaysValid(t *testing.T) {
+	sourcePath := filepath.Join(t.TempDir(), "office")
+	scriptPath := filepath.Join(sourcePath, "scripts", "check.py")
+	if errorValue := os.MkdirAll(filepath.Dir(scriptPath), 0o700); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := os.WriteFile(scriptPath, []byte("print()\n"), 0o644); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	preparedAt := time.Now().Add(-48 * time.Hour).Truncate(time.Second)
+	if errorValue := os.Chtimes(scriptPath, preparedAt, preparedAt); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	destinationPath := filepath.Join(t.TempDir(), "skills", "office")
+	if errorValue := copyDirectory(sourcePath, destinationPath); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	information, errorValue := os.Stat(filepath.Join(destinationPath, "scripts", "check.py"))
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if !information.ModTime().Equal(preparedAt) {
+		t.Fatalf("expected the copy to keep modification time %v, got %v", preparedAt, information.ModTime())
 	}
 }
 

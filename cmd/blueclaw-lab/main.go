@@ -649,10 +649,21 @@ func createLiveLanguageModel(arguments virtualSessionArguments) (llm.LanguageMod
 
 func liveLanguageModelEndpoint(arguments virtualSessionArguments) openaicompatible.Endpoint {
 	return openaicompatible.Endpoint{
-		URL:       firstNonEmptyString(arguments.LanguageModelEndpoint, os.Getenv("BLUECOLLAR_MODEL_ENDPOINT")),
-		ModelName: strings.TrimSpace(arguments.LanguageModelName),
-		APIKey:    strings.TrimSpace(os.Getenv("BLUECOLLAR_MODEL_API_KEY")),
+		URL:           firstNonEmptyString(arguments.LanguageModelEndpoint, os.Getenv("BLUECOLLAR_MODEL_ENDPOINT")),
+		ModelName:     strings.TrimSpace(arguments.LanguageModelName),
+		APIKey:        strings.TrimSpace(os.Getenv("BLUECOLLAR_MODEL_API_KEY")),
+		ProviderOrder: providerOrder(os.Getenv("BLUECLAW_E2E_LLM_PROVIDER_ORDER")),
 	}
+}
+
+func providerOrder(commaSeparatedProviders string) []string {
+	providers := []string{}
+	for _, provider := range strings.Split(commaSeparatedProviders, ",") {
+		if trimmedProvider := strings.TrimSpace(provider); trimmedProvider != "" {
+			providers = append(providers, trimmedProvider)
+		}
+	}
+	return providers
 }
 
 func liveEndpointLanguageModel(arguments virtualSessionArguments) (llm.LanguageModelProvider, error) {

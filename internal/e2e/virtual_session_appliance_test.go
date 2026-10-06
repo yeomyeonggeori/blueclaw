@@ -66,6 +66,9 @@ func TestDocumentCreateAcceptanceUsesLiveCanonicalTools(t *testing.T) {
 	if !slices.Equal(scenario.Turns[0].ExpectedSelectedSkills, []string{"office"}) {
 		t.Fatalf("expected office skill selection, got %v", scenario.Turns[0].ExpectedSelectedSkills)
 	}
+	if len(scenario.Skills) != 1 || scenario.Skills[0].Name != "office" {
+		t.Fatalf("the live run offers a skill directory only for the skills a scenario declares, so the document scenario must declare office, got %+v", scenario.Skills)
+	}
 	if scenario.Turns[0].ExpectedToolCallCounts["file_deliver"] != 1 {
 		t.Fatalf("expected one final document delivery, got %+v", scenario.Turns[0].ExpectedToolCallCounts)
 	}
@@ -218,5 +221,20 @@ func TestOneTimeScheduleAcceptance(t *testing.T) {
 	}
 	if !eventsContain(turnResult.Events, "tool.schedule_create.result", "schedule_create") {
 		t.Fatalf("expected one-time schedule capability result; events: %s", summarizeEvents(turnResult.Events))
+	}
+}
+
+func TestPresentationScenarioAsksForOutcomesNotForTheSkillsWording(t *testing.T) {
+	turn := PresentationLocalMultiturnSuccessScenario(t.TempDir()).Turns[0]
+	if !slices.Equal(turn.ExpectedAttachments, []string{".pptx"}) {
+		t.Fatalf("the deck is a delivered, valid .pptx, got %v", turn.ExpectedAttachments)
+	}
+	if len(turn.ExpectedWorkspaceFiles) != 1 || !strings.Contains(turn.ExpectedWorkspaceFiles[0].PathGlob, "contact-sheet") {
+		t.Fatalf("the deck must leave the render evidence the skill's build writes, got %+v", turn.ExpectedWorkspaceFiles)
+	}
+	for _, expectedCount := range turn.ExpectedEventCounts {
+		if expectedCount.BodyFragment != `"output"` {
+			t.Fatalf("the scenario pins a string the plugin may reword: %q", expectedCount.BodyFragment)
+		}
 	}
 }

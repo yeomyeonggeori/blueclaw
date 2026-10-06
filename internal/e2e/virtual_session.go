@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"github.com/yeomyeonggeori/bluecollar/approval"
 	"io"
+	"io/fs"
 	"log/slog"
 	"maps"
 	"math"
@@ -1308,7 +1309,10 @@ func copyDirectory(sourcePath string, destinationPath string) error {
 		if errorValue != nil {
 			return errorValue
 		}
-		return os.WriteFile(destination, content, copiedFileMode(information.Mode()))
+		if errorValue := os.WriteFile(destination, content, copiedFileMode(information.Mode())); errorValue != nil {
+			return errorValue
+		}
+		return os.Chtimes(destination, information.ModTime(), information.ModTime())
 	})
 }
 
@@ -3369,8 +3373,13 @@ func assertReplyContentExpectations(virtualTurn VirtualTurn, turnResult VirtualT
 }
 
 func assertLanguageModelCallsSucceeded(turnResult VirtualTurnResult) error {
+	remainingCuts := countEvents(turnResult.Events, agentcontract.TaskEventAgentModelCallCut)
 	for _, event := range turnResult.LanguageModelCallEvents {
 		if !event.IsError || event.WasCorrected {
+			continue
+		}
+		if event.IsDeadlineExceeded && remainingCuts > 0 {
+			remainingCuts--
 			continue
 		}
 		return fmt.Errorf("language model call failed: %s", strings.TrimSpace(strings.Join([]string{event.Kind, event.SchemaName, event.Error}, " ")))
@@ -3514,8 +3523,7 @@ func checkpointRepliesContain(events []task.TaskEvent, fragment string) bool {
 }
 
 func validateExpectedWorkspaceFile(workspacePath string, expectation VirtualWorkspaceFileExpectation) error {
-	pattern := filepath.Join(workspacePath, expectation.PathGlob)
-	matches, errorValue := filepath.Glob(pattern)
+	matches, errorValue := globWorkspace(workspacePath, expectation.PathGlob)
 	if errorValue != nil {
 		return errorValue
 	}
@@ -3544,6 +3552,25 @@ func validateExpectedWorkspaceFile(workspacePath string, expectation VirtualWork
 		}
 	}
 	return nil
+}
+
+const anyDepthGlobSegment = "**/"
+
+func globWorkspace(workspacePath string, pathGlob string) ([]string, error) {
+	prefix, suffix, isAnyDepth := strings.Cut(pathGlob, anyDepthGlobSegment)
+	if !isAnyDepth {
+		return filepath.Glob(filepath.Join(workspacePath, pathGlob))
+	}
+	matches := []string{}
+	errorValue := filepath.WalkDir(filepath.Join(workspacePath, prefix), func(path string, entry fs.DirEntry, walkError error) error {
+		if walkError != nil || !entry.IsDir() {
+			return walkError
+		}
+		found, globError := filepath.Glob(filepath.Join(path, suffix))
+		matches = append(matches, found...)
+		return globError
+	})
+	return matches, errorValue
 }
 
 func validateForbiddenWorkspaceFile(workspacePath string, pathGlob string) error {
