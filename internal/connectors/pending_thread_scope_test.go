@@ -173,3 +173,56 @@ func TestARootMessageDoesNotSteerARunStartedAtRoot(t *testing.T) {
 		t.Fatalf("a reply in the run's thread did not reach it: found=%v %+v", isFound, found)
 	}
 }
+
+func seedOpenWaitForRootRun(t *testing.T, connectorRuntime *ConnectorRuntime, waiting task.TaskRun) {
+	t.Helper()
+	taskWaitRepository := task.NewInMemoryTaskWaitTokenRepository()
+	connectorRuntime.UseTaskWaitTokenRepository(taskWaitRepository)
+	now := time.Now().UTC()
+	if errorValue := taskWaitRepository.InsertTaskWaitToken(task.TaskWaitToken{
+		WaitID:         "wait-clock-out",
+		TaskRunID:      waiting.TaskRunID,
+		InteractionID:  "interaction-clock-out",
+		PersonID:       "person-1",
+		Platform:       "buzz",
+		ConversationID: "direct-1",
+		ReplyTargetID:  "dispatch-question",
+		ThreadRootID:   "message-clock-out",
+		Kind:           "input",
+		State:          "open",
+		ExpiresAt:      now.Add(time.Hour),
+		CreatedAt:      now,
+	}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+}
+
+func TestAnAnswerPayloadReachesItsWaitingRunFromARootMessage(t *testing.T) {
+	payloads := map[string]struct {
+		legacyFields func(waiting task.TaskRun) map[string]interface{}
+		reason       string
+	}{
+		"wait id": {func(task.TaskRun) map[string]interface{} { return map[string]interface{}{"waitID": "wait-clock-out"} }, "payload_wait_id"},
+		"task run and interaction": {func(waiting task.TaskRun) map[string]interface{} {
+			return map[string]interface{}{"taskRunID": waiting.TaskRunID, "interactionID": "interaction-clock-out"}
+		}, "payload_task_interaction"},
+	}
+	for name, payload := range payloads {
+		t.Run(name, func(t *testing.T) {
+			connectorRuntime, _, _ := newStubbedTestConnectorRuntime(t)
+			waiting := seedWaitingQuestionAtRoot(t, connectorRuntime, "message-clock-out")
+			seedOpenWaitForRootRun(t, connectorRuntime, waiting)
+			button := rootMessage("message-button", "message-button")
+			button.LegacyFields = payload.legacyFields(waiting)
+
+			resolution := connectorRuntime.resolveInboundTaskWait("person-1", "buzz", button)
+			if !resolution.HasTaskWaitToken || resolution.Reason != payload.reason {
+				t.Fatalf("the payload did not resolve its wait: %+v", resolution)
+			}
+			interaction, isFound := connectorRuntime.findPendingAskInteraction("person-1", "", button, resolution)
+			if !isFound || interaction.TaskRunID != waiting.TaskRunID {
+				t.Fatalf("the payload did not reach its question: found=%v %+v", isFound, interaction)
+			}
+		})
+	}
+}

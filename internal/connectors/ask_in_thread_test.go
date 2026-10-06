@@ -579,3 +579,23 @@ func TestAHoldOlderThanTheExpiryAtBootRecordsTheExpiryAndTellsTheRequester(t *te
 		t.Fatalf("status %s with %d replies: expected the run failed and one model-worded notice sent to the thread", ended.Status, len(fixture.adapter.sentReplies))
 	}
 }
+
+func TestAReplyInTheQuestionsThreadDecliningTheCallSettlesItWithoutRunningIt(t *testing.T) {
+	fixture := newThreadAskFixture(t, deleteApprovalScript(`{"answer":"reject"}`))
+
+	asking := fixture.send(context.Background(), threadReplyEvent("message-1", threadAskRequest))
+	taskRunID := fixture.awaitQuestionOnTheThread(t)
+	answer := fixture.await(t, fixture.send(context.Background(), threadReplyEvent("message-2", "아니, 이번에는 하지 마")))
+	result := fixture.await(t, asking)
+
+	if answer.Reason != ApprovalAnsweredInThreadReason || answer.TaskRunID != taskRunID || result.TaskRunID != taskRunID {
+		t.Fatalf("the reply settled %+v and the run ended as %+v, expected both on the run that asked", answer, result)
+	}
+	taskRun, _ := fixture.connectorRuntime.taskRunService.FindTaskRun(taskRunID)
+	if fixture.invokedToolCount() != 0 || fixture.taskRunCount() != 1 {
+		t.Fatalf("status %s with calls %v among %d runs, expected the declined call never to run", taskRun.Status, fixture.invokedTools, fixture.taskRunCount())
+	}
+	if fixture.connectorRuntime.isAwaitedInThread(taskRunID) {
+		t.Fatal("the question was still awaited after it was declined")
+	}
+}
