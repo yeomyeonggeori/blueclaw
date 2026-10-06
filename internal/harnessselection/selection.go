@@ -19,7 +19,6 @@ import (
 )
 
 const (
-	BundledHarnessName     = "bluecollar"
 	BundledACPHarnessName  = "bluecollar-acp"
 	ExternalHarnessName    = "acp"
 	ClaudeCodeHarnessName  = "claude-code"
@@ -59,18 +58,13 @@ func WithBundledACPFactory(bundledACPFactory harnessdriver.ACPFactory) Option {
 	return func(configuration *selectionConfiguration) { configuration.bundledACPFactory = bundledACPFactory }
 }
 
-func Select(harnessConfiguration config.HarnessConfiguration, bundledHarnessFactory harnessdriver.Factory, toolCatalogEndpoint ToolCatalogEndpoint, processBoundary SandboxProcessBoundary, options ...Option) (harnessdriver.Factory, error) {
+func Select(harnessConfiguration config.HarnessConfiguration, toolCatalogEndpoint ToolCatalogEndpoint, processBoundary SandboxProcessBoundary, options ...Option) (harnessdriver.Factory, error) {
 	configuration := selectionConfiguration{}
 	for _, option := range options {
 		option(&configuration)
 	}
 	harnessName := strings.TrimSpace(harnessConfiguration.Name)
 	switch harnessName {
-	case BundledHarnessName:
-		if bundledHarnessFactory == nil {
-			return nil, fmt.Errorf("harness %q is not shipped by this build; set agent.harness.name to %q with an agent command", BundledHarnessName, ExternalHarnessName)
-		}
-		return bundledHarnessFactory, nil
 	case "", BundledACPHarnessName:
 		return bundledACPHarnessFactory(configuration.bundledACPFactory, toolCatalogEndpoint)
 	case ExternalHarnessName:
@@ -82,7 +76,7 @@ func Select(harnessConfiguration config.HarnessConfiguration, bundledHarnessFact
 	case AntigravityHarnessName:
 		return commandHarnessFactory(AntigravityHarnessName, cliharness.AntigravityAgentCommand(strings.TrimSpace(harnessConfiguration.AgentCommandPath)), harnessConfiguration, toolCatalogEndpoint, processBoundary)
 	default:
-		return nil, fmt.Errorf("unknown harness %q; known harnesses are %q, %q, %q, %q, %q and %q", harnessName, BundledHarnessName, BundledACPHarnessName, ExternalHarnessName, ClaudeCodeHarnessName, CodexHarnessName, AntigravityHarnessName)
+		return nil, fmt.Errorf("unknown harness %q; known harnesses are %q, %q, %q, %q and %q", harnessName, BundledACPHarnessName, ExternalHarnessName, ClaudeCodeHarnessName, CodexHarnessName, AntigravityHarnessName)
 	}
 }
 

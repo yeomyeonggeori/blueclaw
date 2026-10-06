@@ -42,7 +42,7 @@ type agentKernel struct {
 	languageModelError                error
 }
 
-func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, agentHarnessFactory harnessdriver.Factory, bundledACPFactory harnessdriver.ACPFactory, services taskServices, companyProvider func() agentcontract.CompanyContext, logger *slog.Logger) agentKernel {
+func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, bundledACPFactory harnessdriver.ACPFactory, services taskServices, companyProvider func() agentcontract.CompanyContext, logger *slog.Logger) agentKernel {
 	logger.Info("application.initializing", "stage", "agent_kernel")
 	capabilityClient := newCapabilityClient(runtimeConfiguration)
 	capabilityRegistry := agentruntime.NewCapabilityRegistry(capabilityClient, capabilityToolDescriptors(runtimeConfiguration.Capabilities.ToolDescriptors))
@@ -79,7 +79,7 @@ func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, agentHarne
 	kernel.terminalService = security.NewShellService(runtimeConfiguration.Terminal)
 	services.taskRunService.RegisterTaskRunTransitionObserver(task.NewTaskTemporaryDirectoryReclaimer(runtimeConfiguration.Terminal.WorkspaceRootPath, kernel.terminalService.WorkspaceActorFactory(), logger).Observe)
 	kernel.toolCatalog = newToolCatalogEndpoint(services.taskRunService, kernel.taskTierLanguageModels.High, kernel.decisionModel, kernel.capabilityClient)
-	harnessFactory, harnessName, selectionError := selectAgentHarness(runtimeConfiguration, agentHarnessFactory, bundledACPFactory, kernel, logger)
+	harnessFactory, harnessName, selectionError := selectAgentHarness(runtimeConfiguration, bundledACPFactory, kernel, logger)
 	kernel.harnessName = harnessName
 	kernel.startupError = selectionError
 	kernel.harness, kernel.skillRetriever = startAgentHarness(runtimeConfiguration, harnessFactory, kernel, services, companyProvider)
@@ -96,8 +96,8 @@ func newSkillIndexRefresher(skillRetriever agentcontract.SkillRetriever, instruc
 	}
 }
 
-func selectAgentHarness(runtimeConfiguration config.RuntimeConfiguration, agentHarnessFactory harnessdriver.Factory, bundledACPFactory harnessdriver.ACPFactory, kernel agentKernel, logger *slog.Logger) (harnessdriver.Factory, string, error) {
-	selectedHarnessFactory, harnessSelectionError := harnessselection.Select(runtimeConfiguration.Agent.Harness, agentHarnessFactory, harnessselection.ToolCatalogEndpoint{
+func selectAgentHarness(runtimeConfiguration config.RuntimeConfiguration, bundledACPFactory harnessdriver.ACPFactory, kernel agentKernel, logger *slog.Logger) (harnessdriver.Factory, string, error) {
+	selectedHarnessFactory, harnessSelectionError := harnessselection.Select(runtimeConfiguration.Agent.Harness, harnessselection.ToolCatalogEndpoint{
 		URL:               toolCatalogURL(runtimeConfiguration),
 		Resolver:          kernel.toolCatalog.resolver,
 		Handler:           kernel.toolCatalog.handler,
@@ -114,7 +114,6 @@ func selectAgentHarness(runtimeConfiguration config.RuntimeConfiguration, agentH
 	if harnessSelectionError != nil {
 		selectedHarnessName = "unavailable"
 		logger.Error("application.harness.unavailable", "error", harnessSelectionError)
-		selectedHarnessFactory = agentHarnessFactory
 	}
 	if selectedHarnessFactory == nil {
 		selectedHarnessFactory = func(harnessdriver.Dependencies) (agentcontract.Harness, agentcontract.SkillRetriever) {
@@ -126,24 +125,14 @@ func selectAgentHarness(runtimeConfiguration config.RuntimeConfiguration, agentH
 
 func startAgentHarness(runtimeConfiguration config.RuntimeConfiguration, harnessFactory harnessdriver.Factory, kernel agentKernel, services taskServices, companyProvider func() agentcontract.CompanyContext) (agentcontract.Harness, agentcontract.SkillRetriever) {
 	return harnessFactory(harnessdriver.Dependencies{
-		RuntimeConfiguration: runtimeConfiguration,
-		TaskRunStore:         services.taskRunService,
-		TaskStepStore:        services.taskStepService,
-		TaskArtifactStore:    services.taskArtifactService,
-		ToolResultSpillStore: agentruntime.NewRequesterToolResultSpillStore(kernel.terminalService.WorkspaceActorFactory(), services.taskRunService),
-		ToolResultImageSource: agentruntime.NewRequesterToolResultImageSource(
-			kernel.terminalService.WorkspaceActorFactory(),
-			services.taskRunService,
-			runtimeConfiguration.Terminal.WorkspaceRootPath,
-		),
+		RuntimeConfiguration:        runtimeConfiguration,
+		TaskRunStore:                services.taskRunService,
 		InstructionBundleLoader:     kernel.instructionBundleLoader,
-		CompanyProvider:             companyProvider,
 		EmbeddingProvider:           kernel.embeddingClient,
 		EmbeddingModelName:          runtimeConfiguration.LanguageModel.Embedding.Model,
 		SkillIndexPath:              skillIndexPath(runtimeConfiguration),
 		TaskTierLanguageModels:      kernel.taskTierLanguageModels,
 		IntakeLanguageModelProvider: kernel.intakeLanguageModelProvider,
-		ToolSelector:                kernel.decisionPlanner,
 		DecisionModel:               kernel.decisionModel,
 		LLMCallRepository:           llmCallRepositoryOf(services),
 	})

@@ -68,7 +68,6 @@ type TaskLaunchRequest struct {
 	RequesterEmail             string
 	RecordCatalog              RecordCatalogClient
 	RequesterPlatformUserID    string
-	IsApprovalContinuation     bool
 	IsRuntimeRestartResume     bool
 	ExistingTaskRunID          string
 	IsTaskRunOpenedForThisTurn bool
@@ -656,7 +655,6 @@ func (taskLauncher *TaskLauncher) agentTurnRequestForLaunch(request TaskLaunchRe
 		RequesterName:              request.RequesterName,
 		RequesterPlatformUserID:    request.RequesterPlatformUserID,
 		SourceReference:            request.SourceReference,
-		IsApprovalContinuation:     request.IsApprovalContinuation,
 		IsRuntimeRestartResume:     request.IsRuntimeRestartResume,
 		ExistingTaskRunID:          request.ExistingTaskRunID,
 		IsTaskRunOpenedForThisTurn: request.IsTaskRunOpenedForThisTurn,
@@ -783,7 +781,6 @@ func (taskLauncher *TaskLauncher) toolCatalogRequestForLaunch(request TaskLaunch
 		RequesterPlatformUserID:    request.RequesterPlatformUserID,
 		TaskSource:                 request.Source,
 		IsScheduledRun:             request.Source == TaskLaunchSourceScheduled,
-		IsApprovalContinuation:     request.IsApprovalContinuation,
 		ConversationID:             request.ConversationID,
 		DeliveryConversationID:     request.DeliveryConversationID,
 		ConversationType:           request.ConversationType,

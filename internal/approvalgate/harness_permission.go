@@ -22,13 +22,13 @@ type HarnessPermissionQuestion struct {
 }
 
 type HarnessPermissionAsker interface {
-	AskHarnessPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question HarnessPermissionQuestion) (acp.RequestPermissionOutcome, bool)
+	AskHarnessPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question HarnessPermissionQuestion) (acp.RequestPermissionOutcome, AskStatus)
 }
 
-func (gate *Gate) AskHarnessPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question HarnessPermissionQuestion) (acp.RequestPermissionOutcome, bool) {
+func (gate *Gate) AskHarnessPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question HarnessPermissionQuestion) (acp.RequestPermissionOutcome, AskStatus) {
 	harnessAsker, canAskHarnessPermission := gate.permissionAsker.(HarnessPermissionAsker)
 	if !canAskHarnessPermission {
-		return acp.RequestPermissionOutcome{}, false
+		return acp.RequestPermissionOutcome{}, AskUnreachable
 	}
 	taskRunID := strings.TrimSpace(approvalRequest.TaskRunID)
 	if taskRunID == "" {
@@ -36,23 +36,28 @@ func (gate *Gate) AskHarnessPermission(ctx context.Context, approvalRequest mcps
 	}
 	heldCall := heldCallOfHarnessQuestion(question)
 	if outcome, isApproved := gate.spendApprovedHarnessCall(taskRunID, heldCall, question.Options); isApproved {
-		return outcome, true
+		return outcome, AskAnswered
 	}
 	profileName := gate.currentAgentProfileName(taskRunID)
 	if _, errorValue := gate.taskRunService.PauseTaskRun(taskRunID, agentcontract.TaskStatusWaitingApproval, question.Text); errorValue != nil {
 		slog.Warn("approvalgate.harness_permission_is_unanswerable", "taskRunID", taskRunID, "reason", errorValue.Error())
-		return acp.RequestPermissionOutcome{}, false
+		return acp.RequestPermissionOutcome{}, AskUnreachable
 	}
 	hold := holdrecord.Open(gate.taskRunService, taskRunID, heldCall, nil)
-	outcome, isAnswered := harnessAsker.AskHarnessPermission(ctx, approvalRequest, question)
-	if !isAnswered {
-		return acp.RequestPermissionOutcome{}, false
+	outcome, status := harnessAsker.AskHarnessPermission(ctx, approvalRequest, question)
+	switch status {
+	case AskAnswered:
+		gate.settleHarnessHold(taskRunID, hold.ID, question.Options, outcome)
+	case AskUnreachable, AskExpired:
+		gate.endUnansweredHold(taskRunID, profileName, status)
+		return acp.RequestPermissionOutcome{}, status
+	default:
+		return acp.RequestPermissionOutcome{}, status
 	}
-	gate.settleHarnessHold(taskRunID, hold.ID, question.Options, outcome)
 	if _, errorValue := gate.taskRunService.AdvanceTaskRun(taskRunID, profileName); errorValue != nil {
 		slog.Warn("approvalgate.answered_run_will_not_advance", "taskRunID", taskRunID, "reason", errorValue.Error())
 	}
-	return outcome, true
+	return outcome, AskAnswered
 }
 
 func heldCallOfHarnessQuestion(question HarnessPermissionQuestion) agentcontract.HeldCall {

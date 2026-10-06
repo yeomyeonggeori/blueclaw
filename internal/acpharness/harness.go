@@ -496,12 +496,12 @@ func (observer *sessionObserver) askThePerson(ctx context.Context, request acp.R
 		observer.recordPermissionDecision(agentcontract.TaskEventHarnessToolRefused, request.ToolCall, "")
 		return cancelledResponse()
 	}
-	outcome, isAnswered := observer.permissionAsker.AskHarnessPermission(ctx, observer.approvalRequestFor(request.ToolCall, question), approvalgate.HarnessPermissionQuestion{
+	outcome, status := observer.permissionAsker.AskHarnessPermission(ctx, observer.approvalRequestFor(request.ToolCall, question), approvalgate.HarnessPermissionQuestion{
 		Text:     question,
 		ToolCall: request.ToolCall,
 		Options:  request.Options,
 	})
-	if !isAnswered || outcome.Selected == nil {
+	if status != approvalgate.AskAnswered || outcome.Selected == nil {
 		observer.recordPermissionDecision(agentcontract.TaskEventHarnessToolRefused, request.ToolCall, "")
 		return cancelledResponse()
 	}

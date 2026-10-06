@@ -44,7 +44,7 @@ func TestASessionTurnLeavesARunWaitingOnApprovalToTheSessionThatAsked(t *testing
 	if errorValue != nil || isAnswered {
 		t.Fatalf("the turn ended in settlement: answered=%v error=%v", isAnswered, errorValue)
 	}
-	if launchRequest.IsApprovalContinuation || launchRequest.ExistingTaskRunID != "" {
+	if launchRequest.ExistingTaskRunID != "" {
 		t.Fatalf("the message continued %q as an approval, which would carry out a call the session is still asking about", launchRequest.ExistingTaskRunID)
 	}
 }

@@ -121,7 +121,6 @@ func (agent *Agent) resumeAnsweredTaskRun(ctx context.Context, sessionID acp.Ses
 		RequesterCallingName:    requester.CallingName,
 		RequesterHandle:         requester.Handle,
 		RequesterEmail:          requester.Email,
-		IsApprovalContinuation:  true,
 		IsRuntimeRestartResume:  true,
 		ExistingTaskRunID:       taskRun.TaskRunID,
 		SettledCalls:            settledCalls,

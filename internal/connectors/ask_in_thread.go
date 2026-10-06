@@ -106,25 +106,11 @@ func (threads *askingThreads) claim(thread *askingThread) bool {
 	return true
 }
 
-func (connectorRuntime *ConnectorRuntime) UseAskInThread(isEnabled bool) {
-	if !isEnabled {
-		connectorRuntime.askingThreads = nil
-		return
-	}
-	connectorRuntime.askingThreads = &askingThreads{expiry: approvalExpiry}
-}
-
 func (connectorRuntime *ConnectorRuntime) ThreadPermissionAsker() approvalgate.PermissionAsker {
-	if connectorRuntime.askingThreads == nil {
-		return nil
-	}
 	return threadPermissionAsker{connectorRuntime: connectorRuntime}
 }
 
 func (connectorRuntime *ConnectorRuntime) AwaitedQuestion() (taskRunID string, dispatchID string, isAwaited bool) {
-	if connectorRuntime.askingThreads == nil {
-		return "", "", false
-	}
 	thread, isAwaited := connectorRuntime.askingThreads.firstPosted()
 	if !isAwaited {
 		return "", "", false
@@ -133,28 +119,28 @@ func (connectorRuntime *ConnectorRuntime) AwaitedQuestion() (taskRunID string, d
 }
 
 func (connectorRuntime *ConnectorRuntime) isAwaitedInThread(taskRunID string) bool {
-	return connectorRuntime.askingThreads != nil && connectorRuntime.askingThreads.isAwaiting(taskRunID)
+	return connectorRuntime.askingThreads.isAwaiting(taskRunID)
 }
 
 type threadPermissionAsker struct {
 	connectorRuntime *ConnectorRuntime
 }
 
-func (asker threadPermissionAsker) AskPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question approvalgate.PermissionQuestion) (approvalgate.ApprovalAnswer, bool) {
-	optionID, isAnswered := asker.connectorRuntime.askInThread(ctx, approvalRequest, question.Confirmation, approvalQuestionFor(question.Confirmation, question.Choices))
-	if !isAnswered {
-		return approvalgate.ApprovalAnswer{}, false
+func (asker threadPermissionAsker) AskPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question approvalgate.PermissionQuestion) (approvalgate.ApprovalAnswer, approvalgate.AskStatus) {
+	optionID, status := asker.connectorRuntime.askWhereTheyAre(ctx, approvalRequest, question.Confirmation, approvalQuestionFor(question.Confirmation, question.Choices))
+	if status != approvalgate.AskAnswered {
+		return approvalgate.ApprovalAnswer{}, status
 	}
-	return approvalAnswerOfOption(optionID), true
+	return approvalAnswerOfOption(optionID), approvalgate.AskAnswered
 }
 
-func (asker threadPermissionAsker) AskHarnessPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question approvalgate.HarnessPermissionQuestion) (acp.RequestPermissionOutcome, bool) {
+func (asker threadPermissionAsker) AskHarnessPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question approvalgate.HarnessPermissionQuestion) (acp.RequestPermissionOutcome, approvalgate.AskStatus) {
 	readerQuestion := approvalreply.Question{Text: question.Text, Options: approvalgate.ReplyOptionsOf(question.Options)}
-	optionID, isAnswered := asker.connectorRuntime.askInThread(ctx, approvalRequest, question.Text, readerQuestion)
-	if !isAnswered {
-		return acp.RequestPermissionOutcome{}, false
+	optionID, status := asker.connectorRuntime.askWhereTheyAre(ctx, approvalRequest, question.Text, readerQuestion)
+	if status != approvalgate.AskAnswered {
+		return acp.RequestPermissionOutcome{}, status
 	}
-	return acp.RequestPermissionOutcome{Selected: &acp.RequestPermissionOutcomeSelected{Outcome: "selected", OptionId: acp.PermissionOptionId(optionID)}}, true
+	return acp.RequestPermissionOutcome{Selected: &acp.RequestPermissionOutcomeSelected{Outcome: "selected", OptionId: acp.PermissionOptionId(optionID)}}, approvalgate.AskAnswered
 }
 
 func approvalAnswerOfOption(optionID string) approvalgate.ApprovalAnswer {
@@ -168,10 +154,10 @@ func approvalAnswerOfOption(optionID string) approvalgate.ApprovalAnswer {
 	return approvalgate.ApprovalAnswer{Signal: agentcontract.ApprovalSignalApprove, ChoiceKey: optionID}
 }
 
-func (connectorRuntime *ConnectorRuntime) askInThread(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, confirmation string, question approvalreply.Question) (string, bool) {
+func (connectorRuntime *ConnectorRuntime) askWhereTheyAre(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, confirmation string, question approvalreply.Question) (string, approvalgate.AskStatus) {
 	turn, isReady := connectorRuntime.questionTurn(ctx, approvalRequest)
 	if !isReady {
-		return "", false
+		return "", approvalgate.AskUnreachable
 	}
 	thread := &askingThread{
 		taskRunID:         approvalRequest.TaskRunID,
@@ -184,11 +170,11 @@ func (connectorRuntime *ConnectorRuntime) askInThread(ctx context.Context, appro
 	}
 	defer connectorRuntime.askingThreads.join(thread)()
 	if connectorRuntime.deliverApprovalQuestion(ctx, turn, approvalRequest.TaskRunID, confirmation) != nil {
-		return "", false
+		return "", approvalgate.AskUnreachable
 	}
 	connectorRuntime.askingThreads.markPosted(thread)
 	defer waitHandoffFrom(ctx).begin()()
-	return connectorRuntime.awaitAnswer(ctx, thread)
+	return connectorRuntime.awaitAnswer(ctx, thread, connectorRuntime.askingThreads.expiry)
 }
 
 func (connectorRuntime *ConnectorRuntime) questionTurn(ctx context.Context, approvalRequest mcpserver.ApprovalRequest) (*inboundTurn, bool) {
@@ -210,21 +196,21 @@ func (connectorRuntime *ConnectorRuntime) questionTurn(ctx context.Context, appr
 	}, true
 }
 
-func (connectorRuntime *ConnectorRuntime) awaitAnswer(ctx context.Context, thread *askingThread) (string, bool) {
-	expiry := time.NewTimer(connectorRuntime.askingThreads.expiry)
+func (connectorRuntime *ConnectorRuntime) awaitAnswer(ctx context.Context, thread *askingThread, patience time.Duration) (string, approvalgate.AskStatus) {
+	expiry := time.NewTimer(patience)
 	defer expiry.Stop()
 	select {
 	case optionID := <-thread.answers:
-		return optionID, true
+		return optionID, approvalgate.AskAnswered
 	case <-ctx.Done():
-		return "", false
+		return "", approvalgate.AskInterrupted
 	case <-expiry.C:
-		return "", false
+		return "", approvalgate.AskExpired
 	}
 }
 
 func (connectorRuntime *ConnectorRuntime) answerAskingThread(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (ConnectorRuntimeResult, bool, error) {
-	if connectorRuntime.askingThreads == nil || event.TaskRetry != nil || exactTaskControlIntent(event.Prompt) != agentcontract.TaskControlIntentNone {
+	if event.TaskRetry != nil || exactTaskControlIntent(event.Prompt) != agentcontract.TaskControlIntentNone {
 		return ConnectorRuntimeResult{}, false, nil
 	}
 	personID, isFound := connectorRuntime.identityService.ResolvePersonIDByPlatformAccount(adapter.Name(), event.SenderID)

@@ -153,7 +153,7 @@ bluecollar is a separate repository pinned as a submodule and pulled in through 
   blueclaw daemon
     connectors · intake · policy · task store · approvals · tool catalog · POSIX projection
             |
-            +-- agentcontract.Harness --+-- bluecollar (Go, in process)
+            +-- agentcontract.Harness --+-- bluecollar over ACP (Go, served in process)
             |                           +-- ACP or CLI agent, started as the requester
             |
             +-- tool execution --> blueclaw-posix-helper --> the requester's UID, GID and groups
@@ -186,7 +186,6 @@ Deciding whether an inbound message becomes a task at all is host policy. One ca
 | Name | What runs |
 |---|---|
 | `bluecollar-acp` (default) | the bundled agent served over ACP like any other harness |
-| `bluecollar` | the bundled loop run in process |
 | `acp` | any [Agent Client Protocol](https://agentclientprotocol.com) agent at `agentCommandPath` |
 | `claude-code` | the `claude` CLI in headless mode |
 | `codex` | the `codex` CLI |
@@ -257,9 +256,13 @@ An approval is a person's answer to a tool call the host held before it ran.
 
 The gate belongs to the host. `approvalgate.Gate.TurnGate` is installed as the `ToolCallGate` on every harness's tool set, so every harness meets the same gate on the same calls. A call is held when its descriptor sets `RequiresApproval`, or when the tool's input schema declares an `approvalRequired` field and the call sets it. An `external_send` that lands in the conversation being answered proceeds without asking: `targetType` `currentThread` or `currentChannel`, a `channel` named by the current channel's ID, or a `directMessage` with no recipient asked from the requester's own direct conversation. `internal/approvalgate/testdata/answered_conversation_cases.json` lists the cases, and InternKim's capabilityd is tested against the same file. A delegated turn cannot ask and is denied.
 
-A held call pauses the run in `waiting_approval` and records `approval.hold_opened` with the exact call, so the approval survives a restart and blocks no live request. The question the person sees is written by the model. Once approved, the host carries out the recorded call verbatim in the `carryOutApprovedCall` launch step (`internal/agentruntime/approved_call.go`) and hands the result to the harness as `CarriedOutCalls`. A changed call is a new approval.
+A held call pauses the run in `waiting_approval` and records `approval.hold_opened` with the exact call. The question the person sees is written by the model. The same turn asks it where the person is and waits for the answer there, and the approved call runs in place when the harness's call reaches the gate with an approved hold for the identical call; a changed call is a new approval.
 
-Unless `inbound.connectors.askInThread` is set to `false`, a chat turn asks the question in its thread and waits there for the answer, as an ACP turn does, and the approved call runs in place with its approved input. A reply in that thread is read by the same reader against the offered options. A reply that is not an answer leaves the call open and is routed as a new message, and a reply outside the thread is never read. The waiting run holds neither an inbox worker nor the conversation, and its typing indicator stops. A call with no connector event in its context, a scheduled run or a foreign harness reaching the tool catalog over MCP, asks in the requester's direct conversation on their first messenger account, the one a scheduled briefing is delivered to; a reply in that conversation, or in the question's thread, answers it. A requester with no such account, or a conversation that cannot be opened, leaves the call held as it is with the setting off. The wait ends after 24 hours, and the run stays held as it is with the setting off. After a restart, a held call whose question was never posted is posted once, and an answer to a posted one reaches the held call the usual way.
+A chat turn asks in its thread. A reply in that thread is read by the reader against the offered options. A reply that is not an answer leaves the call open and is routed as a new message, and a reply outside the thread is never read. The waiting run holds neither an inbox worker nor the conversation, and its typing indicator stops. A call with no connector event in its context, a scheduled run or a foreign harness reaching the tool catalog over MCP, asks in the requester's direct conversation on their first messenger account, the one a scheduled briefing is delivered to; a reply in that conversation, or in the question's thread, answers it.
+
+A requester with no such account, or a conversation that cannot be opened, cannot be asked. The hold is rejected, the call is refused with a result the model reads, and `approval.unreachable` records why. Nothing waits for an answer nobody can give. The wait ends after 24 hours: the hold is rejected, the model is told the question went unanswered, and `approval.expired` records it.
+
+After a restart, a pending hold is awaited again in the thread or conversation it was asked in, and its question is posted again only if it was never posted. An answer decides the hold through the hold record and resumes the run as a restart resume; the harness repeats the call and the approved hold is spent by that call. The host carries nothing out. A hold older than 24 hours at start is rejected and its run cancelled without a message. The admin approval endpoint decides the hold the same way and resumes the run.
 
 Approving a call to a tool that declares an `ApprovalScope` grants that scope for the rest of the task, and the question says what the scope covers. Each hold has an id, `approval.decided` and `approval.hold_spent` name the hold they settle, and only an approved, unspent hold answers an identical call.
 
@@ -489,7 +492,6 @@ The runtime configuration is the JSON file passed as `--runtime`, and it holds e
 | `agentProfiles` | named profiles with `allowedToolNames` |
 | `capabilities` | the capability service; see [Capabilities](#capabilities) |
 | `connectors` | `chatd` |
-| `inbound` | `connectors.askInThread` |
 | `terminal` | the execution settings in [What is not enforced](#what-is-not-enforced) |
 | `scheduler` | `retentionCheckIntervalMinute`, `taskSchedulePollIntervalSecond` |
 | `logging` | `directoryPath`, `retentionDays` |

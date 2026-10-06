@@ -52,7 +52,7 @@ func (handler TaskApprovalHandler) HandleApproveTaskRun(responseWriter http.Resp
 		SourceReference:            "terminal:" + taskRun.TaskRunID,
 		RequesterPersonID:          taskRun.RequesterPersonID,
 		RequesterEmail:             handler.requesterEmail(taskRun.RequesterPersonID),
-		IsApprovalContinuation:     true,
+		IsRuntimeRestartResume:     true,
 		ExistingTaskRunID:          taskRun.TaskRunID,
 		ConversationID:             taskRun.OriginConversationID,
 		Prompt:                     taskRun.Prompt,

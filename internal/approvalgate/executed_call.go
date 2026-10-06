@@ -19,7 +19,3 @@ func approvedInputOf(approvedHold holdrecord.Hold, requestedInput json.RawMessag
 	}
 	return approvedHold.Call.ApprovedInput()
 }
-
-func RecordApprovedCallSpent(taskRunStore taskstate.TaskRunStore, taskRunID string, approvedCall ApprovedCall) {
-	holdrecord.Spend(taskRunStore, taskRunID, approvedCall.HoldID, approvedCall.ToolName, approvedCall.ToolInput)
-}

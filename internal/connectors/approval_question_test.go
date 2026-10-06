@@ -15,6 +15,7 @@ func heldCallTaskEvents(t *testing.T) []task.TaskEvent {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	taskRun := taskRunService.CreateTaskRun("person-1", "channel-1", "내일 회의 지워줘")
 	gate := approvalgate.New(taskRunService)
+	gate.UsePermissionAsker(restartedAsker{})
 
 	if _, errorValue := gate.AwaitApproval(context.Background(), mcpserver.ApprovalRequest{
 		RequesterPersonID: "person-1",
@@ -39,4 +40,10 @@ func TestACallHeldByTheHostGateReachesTheRequesterAsAQuestion(t *testing.T) {
 	if responseLanguage := latestApprovalResponseLanguage(taskEvents); responseLanguage == "" {
 		t.Fatal("the language the requester is asked in was lost between the gate and the connector")
 	}
+}
+
+type restartedAsker struct{}
+
+func (restartedAsker) AskPermission(context.Context, mcpserver.ApprovalRequest, approvalgate.PermissionQuestion) (approvalgate.ApprovalAnswer, approvalgate.AskStatus) {
+	return approvalgate.ApprovalAnswer{}, approvalgate.AskInterrupted
 }

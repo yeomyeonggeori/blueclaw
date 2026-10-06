@@ -20,7 +20,15 @@ func gateFixture(t *testing.T) (*Gate, *task.TaskRunService, task.TaskRun) {
 	t.Helper()
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	taskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "내일 회의 지워줘")
-	return New(taskRunService), taskRunService, taskRun
+	gate := New(taskRunService)
+	gate.UsePermissionAsker(interruptedAsker{})
+	return gate, taskRunService, taskRun
+}
+
+type interruptedAsker struct{}
+
+func (interruptedAsker) AskPermission(context.Context, mcpserver.ApprovalRequest, PermissionQuestion) (ApprovalAnswer, AskStatus) {
+	return ApprovalAnswer{}, AskInterrupted
 }
 
 func approvalRequestFixture(taskRunID string) mcpserver.ApprovalRequest {

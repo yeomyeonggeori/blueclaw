@@ -26,11 +26,10 @@ const (
 )
 
 type virtualInvokeContext struct {
-	RequesterPersonID      string          `json:"requesterPersonID"`
-	IsApprovalContinuation bool            `json:"isApprovalContinuation"`
-	HoldID                 string          `json:"holdID"`
-	IsScheduledRun         bool            `json:"isScheduledRun"`
-	ScheduledApprovedCall  json.RawMessage `json:"scheduledApprovedCall"`
+	RequesterPersonID     string          `json:"requesterPersonID"`
+	HoldID                string          `json:"holdID"`
+	IsScheduledRun        bool            `json:"isScheduledRun"`
+	ScheduledApprovedCall json.RawMessage `json:"scheduledApprovedCall"`
 }
 
 func virtualInvokeContextOf(requestBody []byte) virtualInvokeContext {
@@ -42,7 +41,7 @@ func virtualInvokeContextOf(requestBody []byte) virtualInvokeContext {
 }
 
 func (invokeContext virtualInvokeContext) carriesAnApproval() bool {
-	return invokeContext.IsApprovalContinuation || invokeContext.IsScheduledRun || strings.TrimSpace(invokeContext.HoldID) != ""
+	return strings.TrimSpace(invokeContext.HoldID) != "" || len(invokeContext.ScheduledApprovedCall) > 0 && string(invokeContext.ScheduledApprovedCall) != "null"
 }
 
 func (service *virtualCapabilityService) isAdmin(personID string) bool {

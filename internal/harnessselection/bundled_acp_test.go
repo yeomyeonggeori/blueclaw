@@ -18,28 +18,28 @@ func bundledACP() harnessdriver.ACPFactory {
 }
 
 func TestSelectRefusesTheBundledACPHarnessInABuildThatShipsNone(t *testing.T) {
-	_, errorValue := Select(config.HarnessConfiguration{Name: BundledACPHarnessName}, bundledFactory(), publishedCatalog(), SandboxProcessBoundary{})
+	_, errorValue := Select(config.HarnessConfiguration{Name: BundledACPHarnessName}, publishedCatalog(), SandboxProcessBoundary{})
 	if errorValue == nil || !strings.Contains(errorValue.Error(), BundledACPHarnessName) {
 		t.Fatalf("expected the build that leaves the loop out to say it has no %q, got %v", BundledACPHarnessName, errorValue)
 	}
 }
 
 func TestSelectRefusesTheBundledACPHarnessWithoutAPublishedCatalog(t *testing.T) {
-	_, errorValue := Select(config.HarnessConfiguration{Name: BundledACPHarnessName}, bundledFactory(), ToolCatalogEndpoint{}, SandboxProcessBoundary{}, WithBundledACPFactory(bundledACP()))
+	_, errorValue := Select(config.HarnessConfiguration{Name: BundledACPHarnessName}, ToolCatalogEndpoint{}, SandboxProcessBoundary{}, WithBundledACPFactory(bundledACP()))
 	if errorValue == nil {
 		t.Fatal("expected the agent to be refused without a catalog, because it owns no tools")
 	}
 }
 
 func TestSelectBuildsTheBundledACPHarnessWithoutAnOsBoundaryItNeedsNoneOf(t *testing.T) {
-	selectedFactory, errorValue := Select(config.HarnessConfiguration{Name: BundledACPHarnessName}, bundledFactory(), publishedCatalog(), SandboxProcessBoundary{}, WithBundledACPFactory(bundledACP()))
+	selectedFactory, errorValue := Select(config.HarnessConfiguration{Name: BundledACPHarnessName}, publishedCatalog(), SandboxProcessBoundary{}, WithBundledACPFactory(bundledACP()))
 	if errorValue != nil || selectedFactory == nil {
 		t.Fatalf("the agent runs no process of its own and every tool executes in the host, got %v", errorValue)
 	}
 }
 
 func TestTheBundledDefaultHarnessStaysTheDefault(t *testing.T) {
-	selectedFactory, errorValue := Select(config.HarnessConfiguration{}, bundledFactory(), publishedCatalog(), SandboxProcessBoundary{}, WithBundledACPFactory(bundledACP()))
+	selectedFactory, errorValue := Select(config.HarnessConfiguration{}, publishedCatalog(), SandboxProcessBoundary{}, WithBundledACPFactory(bundledACP()))
 	if errorValue != nil || selectedFactory == nil {
 		t.Fatalf("an unset harness is still the in-process one, got %v", errorValue)
 	}

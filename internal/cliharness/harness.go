@@ -419,7 +419,7 @@ func (harness *Harness) harnessSessionForTurn(request agentcontract.AgentTurnReq
 }
 
 func (harness *Harness) isResumingTurn(request agentcontract.AgentTurnRequest, identityKey string) bool {
-	if request.IsApprovalContinuation || request.IsRuntimeRestartResume {
+	if request.IsRuntimeRestartResume {
 		return true
 	}
 	return harness.hasConversationStarted(identityKey)

@@ -19,7 +19,6 @@ var judgmentPackages = []string{"intake", "loop", "approval", "claimcheck", "vis
 var defaultHarnessWiringPackages = []string{
 	"internal/app",
 	"internal/bluecollaracp",
-	"internal/bluecollarharness",
 	"internal/e2e",
 }
 

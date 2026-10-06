@@ -29,8 +29,6 @@ type inboundTurn struct {
 	routerToolSet            *toolcontract.ToolSet
 	turnDecision             agentcontract.TurnDecision
 	hasTurnDecision          bool
-	pendingApproval          pendingApproval
-	isApprovalContinuation   bool
 	settledCalls             []agentcontract.CarriedOutCall
 	pendingAskInteraction    AskInteraction
 	hasPendingAskInteraction bool
@@ -149,18 +147,13 @@ func (connectorRuntime *ConnectorRuntime) resolveTurnActiveGoal(ctx context.Cont
 		turn.activeGoal = agentcontract.ActiveGoal{}
 		turn.hasActiveGoal = false
 	}
-	if !turn.isApprovalContinuation && turn.hasActiveGoal && turn.turnDecision.Route == agentcontract.TurnRouteStartTask {
+	if turn.hasActiveGoal && turn.turnDecision.Route == agentcontract.TurnRouteStartTask {
 		turn.activeGoal = agentcontract.ActiveGoal{}
 		turn.hasActiveGoal = false
 	}
-	if turn.isApprovalContinuation {
-		turn.event = approvedContinuationEvent(turn.event, turn.pendingApproval)
-		turn.activeGoal = pendingApprovalActiveGoal(turn.pendingApproval, turn.event.Prompt)
-		turn.hasActiveGoal = true
-	}
 	if turn.engagedAckEmojiName == "" {
 		turn.engagedAckEmojiName = connectorRuntime.applyEngagedAckReaction(ctx, turn.platform, turn.adapter, turn.event,
-			turn.isApprovalContinuation || turn.hasPendingAskInteraction || turn.hasActiveGoal)
+			turn.hasPendingAskInteraction || turn.hasActiveGoal)
 	}
 }
 
@@ -181,7 +174,7 @@ func (connectorRuntime *ConnectorRuntime) resolveTurnAddressing(ctx context.Cont
 		return ConnectorRuntimeResult{Handled: true, Platform: turn.platform, Ignored: true, Reason: reason}, true
 	}
 	turn.decidedTurnFields = connectorRuntime.decidedTurnFields(ctx, turn.adapter, turn.event)
-	if connectorRuntime.shouldDeferNewTaskLaunch(turn.isApprovalContinuation, turn.hasPendingAskInteraction, turn.hasActiveGoal) {
+	if connectorRuntime.shouldDeferNewTaskLaunch(turn.hasPendingAskInteraction, turn.hasActiveGoal) {
 		connectorRuntime.logger.Info("connector."+turn.platform+".ingress.deferred", slog.String("messageID", turn.event.MessageID), slog.String("reason", "task_intake_quiesced"))
 		return ConnectorRuntimeResult{Handled: true, Platform: turn.platform, Ignored: true, Reason: "task_intake_quiesced"}, true
 	}
@@ -198,7 +191,7 @@ func (connectorRuntime *ConnectorRuntime) prepareTurnForLaunch(ctx context.Conte
 }
 
 func (connectorRuntime *ConnectorRuntime) resolveTurnPriorTask(turn *inboundTurn) {
-	if turn.isApprovalContinuation || turn.hasPendingAskInteraction || turn.hasActiveGoal {
+	if turn.hasPendingAskInteraction || turn.hasActiveGoal {
 		return
 	}
 	var hasRevisedPriorTask bool
@@ -242,7 +235,6 @@ func (connectorRuntime *ConnectorRuntime) conversationTurnFor(turn *inboundTurn,
 		RequesterPersonID:         turn.personID,
 		RequesterEmail:            turn.requesterEmail,
 		PersonAccess:              turn.personAccess,
-		IsApprovalContinuation:    turn.isApprovalContinuation,
 		SettledCalls:              turn.settledCalls,
 		ActiveGoal:                turn.activeGoal,
 		HasActiveGoal:             turn.hasActiveGoal,

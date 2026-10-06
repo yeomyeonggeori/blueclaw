@@ -82,7 +82,6 @@ func TestTheExternalHarnessOpensItsSessionWithTheTrustLineItsDefinitionDeclares(
 	resolver := mcpserver.NewSessionTokenRequesterResolver(func() string { return "session-token" })
 	selectedFactory, errorValue := Select(
 		config.HarnessConfiguration{Name: ExternalHarnessName, AgentCommandPath: "/usr/bin/true"},
-		nil,
 		ToolCatalogEndpoint{URL: "http://127.0.0.1:1/catalog", Resolver: resolver},
 		SandboxProcessBoundary{Runner: inProcessAgentRunner{agent: agent}, WorkspaceRootPath: "/workspace"},
 	)

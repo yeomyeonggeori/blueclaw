@@ -182,7 +182,6 @@ func steeredTaskLaunchRequest(launchRequest agentruntime.TaskLaunchRequest, even
 	}
 	launchRequest.Prompt = steeredPrompt
 	launchRequest.PrecomputedTurnDecision = nil
-	launchRequest.IsApprovalContinuation = false
 	launchRequest.IsRuntimeRestartResume = false
 	return launchRequest
 }

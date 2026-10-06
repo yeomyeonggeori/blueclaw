@@ -70,7 +70,7 @@ func checkLanguageModel(access LanguageModelAccess) CheckResult {
 }
 
 func checkHarness(harness HarnessChoice) CheckResult {
-	if strings.TrimSpace(harness.Name) == "" || harness.Name == "bluecollar" {
+	if strings.TrimSpace(harness.Name) == "" || harness.Name == "bluecollar-acp" {
 		return CheckResult{Name: CheckHarness, IsReady: true, Detail: "bluecollar (built in)"}
 	}
 	commandPath := strings.TrimSpace(harness.AgentCommandPath)

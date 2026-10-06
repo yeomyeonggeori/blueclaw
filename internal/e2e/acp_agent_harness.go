@@ -30,7 +30,6 @@ func bundledACPHarnessFactory(bundledACPFactory harnessdriver.ACPFactory) (harne
 	go func() { _ = http.Serve(listener, mcpserver.NewToolCatalogHandler(resolver, "e2e")) }()
 	return harnessselection.Select(
 		config.HarnessConfiguration{Name: harnessselection.BundledACPHarnessName},
-		nil,
 		harnessselection.ToolCatalogEndpoint{URL: "http://" + listener.Addr().String(), Resolver: resolver},
 		harnessselection.SandboxProcessBoundary{},
 		harnessselection.WithBundledACPFactory(bundledACPFactory),

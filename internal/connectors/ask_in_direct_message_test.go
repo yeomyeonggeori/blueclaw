@@ -35,24 +35,26 @@ func openRequesterDirectMessage(context.Context, string, string) (string, string
 }
 
 type askingWithoutAnEvent struct {
-	fixture *askInThreadFixture
-	answers chan approvalgate.ApprovalAnswer
-	taskRun task.TaskRun
+	fixture  *threadAskFixture
+	answers  chan approvalgate.ApprovalAnswer
+	statuses chan approvalgate.AskStatus
+	taskRun  task.TaskRun
 }
 
-func askWithoutAnEvent(t *testing.T, fixture *askInThreadFixture) *askingWithoutAnEvent {
+func askWithoutAnEvent(t *testing.T, fixture *threadAskFixture) *askingWithoutAnEvent {
 	t.Helper()
-	fixture.askInThread()
 	fixture.connectorRuntime.identityService.RememberPlatformAccount(identity.PlatformAccountIdentity{Platform: "test", ExternalUserID: "sender-user", Email: "invited@example.com"})
 	asking := &askingWithoutAnEvent{
-		fixture: fixture,
-		answers: make(chan approvalgate.ApprovalAnswer, 1),
-		taskRun: fixture.connectorRuntime.taskRunService.CreateTaskRunWithOrigin("person-1", task.TaskRunOrigin{ConversationID: "schedule:morning"}, "scheduled run"),
+		fixture:  fixture,
+		answers:  make(chan approvalgate.ApprovalAnswer, 1),
+		statuses: make(chan approvalgate.AskStatus, 1),
+		taskRun:  fixture.connectorRuntime.taskRunService.CreateTaskRunWithOrigin("person-1", task.TaskRunOrigin{ConversationID: "schedule:morning"}, "scheduled run"),
 	}
 	approvalRequest := mcpserver.ApprovalRequest{RequesterPersonID: "person-1", TaskRunID: asking.taskRun.TaskRunID, Platform: "test", ConversationID: "schedule:morning"}
 	go func() {
-		answer, isAnswered := fixture.connectorRuntime.ThreadPermissionAsker().AskPermission(context.Background(), approvalRequest, approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "내일 휴가 일정을 삭제할까요?"})
-		if isAnswered {
+		answer, status := fixture.connectorRuntime.ThreadPermissionAsker().AskPermission(context.Background(), approvalRequest, approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "내일 휴가 일정을 삭제할까요?"})
+		asking.statuses <- status
+		if status == approvalgate.AskAnswered {
 			asking.answers <- answer
 		}
 		close(asking.answers)
@@ -86,7 +88,7 @@ func replyInTheQuestionsThread(messageID string, prompt string) PlatformInboundE
 }
 
 func TestARunWithoutAnEventAsksInTheRequestersDirectMessageAndIsAnsweredThere(t *testing.T) {
-	fixture := newAskInThreadFixture(t, askInThreadScript{approvalReplies: []string{`{"answer":"approve"}`}})
+	fixture := newThreadAskFixture(t, threadAskScript{approvalReplies: []string{`{"answer":"approve"}`}})
 	fixture.connectorRuntime.UseRequesterDirectMessages(openRequesterDirectMessage, requesterAccountsOnThePlatform())
 	asking := askWithoutAnEvent(t, fixture)
 	fixture.awaitQuestionOnTheThread(t)
@@ -106,7 +108,7 @@ func TestARunWithoutAnEventAsksInTheRequestersDirectMessageAndIsAnsweredThere(t 
 }
 
 func TestAReplyInTheQuestionsThreadInTheDirectMessageAnswersToo(t *testing.T) {
-	fixture := newAskInThreadFixture(t, askInThreadScript{approvalReplies: []string{`{"answer":"approve"}`}})
+	fixture := newThreadAskFixture(t, threadAskScript{approvalReplies: []string{`{"answer":"approve"}`}})
 	fixture.connectorRuntime.UseRequesterDirectMessages(openRequesterDirectMessage, requesterAccountsOnThePlatform())
 	asking := askWithoutAnEvent(t, fixture)
 	fixture.awaitQuestionOnTheThread(t)
@@ -119,7 +121,7 @@ func TestAReplyInTheQuestionsThreadInTheDirectMessageAnswersToo(t *testing.T) {
 }
 
 func TestAReplyInAnotherConversationIsNotOfferedTheDirectMessageQuestion(t *testing.T) {
-	fixture := newAskInThreadFixture(t, askInThreadScript{approvalReplies: []string{`{"answer":"approve"}`}})
+	fixture := newThreadAskFixture(t, threadAskScript{approvalReplies: []string{`{"answer":"approve"}`}})
 	fixture.connectorRuntime.UseRequesterDirectMessages(openRequesterDirectMessage, requesterAccountsOnThePlatform())
 	askWithoutAnEvent(t, fixture)
 	fixture.awaitQuestionOnTheThread(t)
@@ -137,18 +139,18 @@ func TestARunWithoutAnEventAndWithoutADirectMessageAsksNothing(t *testing.T) {
 		},
 	} {
 		t.Run(label, func(t *testing.T) {
-			fixture := newAskInThreadFixture(t, askInThreadScript{})
+			fixture := newThreadAskFixture(t, threadAskScript{})
 			fixture.connectorRuntime.UseRequesterDirectMessages(opener, requesterAccountsOnThePlatform())
 			asking := askWithoutAnEvent(t, fixture)
 
-			if _, isAnswered := asking.awaitAnswer(t); isAnswered || fixture.questionsPosted() != 0 {
-				t.Fatalf("answered=%v with %d questions posted, expected a run that could not ask to stay held", isAnswered, fixture.questionsPosted())
+			if status := <-asking.statuses; status != approvalgate.AskUnreachable || fixture.questionsPosted() != 0 {
+				t.Fatalf("status %q with %d questions posted, expected a requester who cannot be asked to be reported unreachable", status, fixture.questionsPosted())
 			}
 		})
 	}
 }
 
-func connectedCatalogSessionGatedBy(t *testing.T, fixture *askInThreadFixture, taskRunID string, invokedCount *atomic.Int32) *mcp.ClientSession {
+func connectedCatalogSessionGatedBy(t *testing.T, fixture *threadAskFixture, taskRunID string, invokedCount *atomic.Int32) *mcp.ClientSession {
 	t.Helper()
 	toolSet := toolcontract.NewToolSet([]string{"calendar_event_delete"})
 	toolSet.AllowTestReplacement()
@@ -185,11 +187,10 @@ func connectedCatalogSessionGatedBy(t *testing.T, fixture *askInThreadFixture, t
 }
 
 func TestAForeignHarnessCallThroughTheCatalogServerIsAskedInTheDirectMessageNotParked(t *testing.T) {
-	fixture := newAskInThreadFixture(t, askInThreadScript{approvalReplies: []string{`{"answer":"approve"}`}, turnRouters: nil})
-	fixture.askInThread()
+	fixture := newThreadAskFixture(t, threadAskScript{approvalReplies: []string{`{"answer":"approve"}`}, turnRouters: nil})
 	fixture.connectorRuntime.UseRequesterDirectMessages(openRequesterDirectMessage, requesterAccountsOnThePlatform())
 	fixture.connectorRuntime.identityService.RememberPlatformAccount(identity.PlatformAccountIdentity{Platform: "test", ExternalUserID: "sender-user", Email: "invited@example.com"})
-	taskRun := fixture.connectorRuntime.taskRunService.CreateTaskRunWithOrigin("person-1", task.TaskRunOrigin{ConversationID: "direct-1"}, askInThreadRequest)
+	taskRun := fixture.connectorRuntime.taskRunService.CreateTaskRunWithOrigin("person-1", task.TaskRunOrigin{ConversationID: "direct-1"}, threadAskRequest)
 	invokedCount := &atomic.Int32{}
 	session := connectedCatalogSessionGatedBy(t, fixture, taskRun.TaskRunID, invokedCount)
 	called := make(chan *mcp.CallToolResult, 1)

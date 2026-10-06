@@ -539,7 +539,7 @@ func TestVirtualTaskCapabilityPreservesLifecycleState(t *testing.T) {
 	updateResponse := service.response("task_update", []byte(fmt.Sprintf(`{"input":{"taskHint":%q,"title":"비용 테스트 회귀 확인 완료 준비"},"context":{}}`, taskID)))
 	listResponse := service.response("task_list", []byte(`{"input":{},"context":{}}`))
 	approvalResponse := service.response("task_delete", []byte(fmt.Sprintf(`{"input":{"taskHint":%q},"context":{}}`, taskID)))
-	deleteResponse := service.response("task_delete", []byte(fmt.Sprintf(`{"input":{"taskHint":%q},"context":{"isApprovalContinuation":true}}`, taskID)))
+	deleteResponse := service.response("task_delete", []byte(fmt.Sprintf(`{"input":{"taskHint":%q},"context":{"holdID":"hold-test"}}`, taskID)))
 	emptyListResponse := service.response("task_list", []byte(`{"input":{},"context":{}}`))
 
 	var addDocument struct {
@@ -635,7 +635,7 @@ func TestVirtualTaskMutationRejectsUnknownTaskID(t *testing.T) {
 
 	for _, response := range []string{
 		service.response("task_update", []byte(`{"input":{"taskHint":"task-missing","title":"변경됨"},"context":{}}`)),
-		service.response("task_delete", []byte(`{"input":{"taskHint":"task-missing"},"context":{"isApprovalContinuation":true}}`)),
+		service.response("task_delete", []byte(`{"input":{"taskHint":"task-missing"},"context":{"holdID":"hold-test"}}`)),
 	} {
 		if !strings.Contains(response, `"errorCode":"not_found"`) {
 			t.Fatalf("expected mutation without a resolvable taskHint to fail, got %s", response)
@@ -793,7 +793,7 @@ func TestVirtualMessageServiceReturnsCanonicalContextSearchDeleteAndChannelResul
 	}
 	deleteResult, deleteEffects := virtualCapabilityResponseResult(t, service.response(
 		"message_delete",
-		[]byte(`{"input":{"messageIDs":["virtual-platform-message-001","virtual-platform-message-002"]},"context":{"isApprovalContinuation":true}}`),
+		[]byte(`{"input":{"messageIDs":["virtual-platform-message-001","virtual-platform-message-002"]},"context":{"holdID":"hold-test"}}`),
 	))
 	if deleteResult["deliveryStatus"] != "deleted" ||
 		!slices.Equal(stringSliceValue(deleteResult["messageIDs"]), []string{"virtual-platform-message-001", "virtual-platform-message-002"}) ||
@@ -1027,7 +1027,7 @@ func TestVirtualCalendarMutationUsesExactEventHint(t *testing.T) {
 	if !strings.Contains(queryResponse, `"status":"error"`) || !strings.Contains(queryResponse, `not found`) {
 		t.Fatalf("expected query update without eventHint to fail, got %s", queryResponse)
 	}
-	deleteResponse := service.calendarResponse("event_delete", []byte(`{"input":{"eventHint":"calendar-event-001"},"context":{"isApprovalContinuation":true}}`))
+	deleteResponse := service.calendarResponse("event_delete", []byte(`{"input":{"eventHint":"calendar-event-001"},"context":{"holdID":"hold-test"}}`))
 	if !strings.Contains(deleteResponse, `"eventID":"calendar-event-001"`) ||
 		!strings.Contains(deleteResponse, `"deleted":true`) ||
 		!strings.Contains(deleteResponse, `"effect":"deleted"`) {

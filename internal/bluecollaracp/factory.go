@@ -4,7 +4,6 @@ import (
 	acp "github.com/coder/acp-go-sdk"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/acpharness"
-	"github.com/yeomyeonggeori/blueclaw/internal/bluecollarharness"
 	"github.com/yeomyeonggeori/blueclaw/internal/harnessdriver"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/bluecollar/acpagent"
@@ -17,7 +16,7 @@ var ledgerEventNamesBlueclawWritesItself = []string{
 
 func NewFactory(toolCatalogPublisher acpharness.ToolCatalogPublisher) harnessdriver.Factory {
 	return func(dependencies harnessdriver.Dependencies) (agentcontract.Harness, agentcontract.SkillRetriever) {
-		skillRetriever := bluecollarharness.NewSkillRetriever(dependencies)
+		skillRetriever := newSkillRetriever(dependencies)
 		harness := acpharness.New(agentProcess{dependencies: dependencies, skillRetriever: skillRetriever}, toolCatalogPublisher, dependencies.TaskRunStore)
 		harness.UseToolAudience(mcpserver.ToolAudienceBare)
 		harness.UseInstructionBundleLoader(dependencies.InstructionBundleLoader)

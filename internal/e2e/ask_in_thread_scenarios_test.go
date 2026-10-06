@@ -14,25 +14,16 @@ var scenariosThatAskForApproval = []string{
 	"ask_choice_hold_acceptance",
 }
 
-func TestApprovalAndChoiceScenariosEndTheSameWhenTheQuestionIsAskedInTheThread(t *testing.T) {
+func TestApprovalAndChoiceScenariosEndAsExpectedWhenTheQuestionIsAskedInTheThread(t *testing.T) {
 	for _, scenarioName := range scenariosThatAskForApproval {
-		for _, isAskedInThread := range []bool{false, true} {
-			label := scenarioName + "/parked"
-			if isAskedInThread {
-				label = scenarioName + "/asked_in_thread"
+		t.Run(scenarioName, func(t *testing.T) {
+			scenario, errorValue := BuiltinScenario(scenarioName, t.TempDir())
+			if errorValue != nil {
+				t.Fatal(errorValue)
 			}
-			t.Run(label, func(t *testing.T) {
-				scenario, errorValue := BuiltinScenario(scenarioName, t.TempDir())
-				if errorValue != nil {
-					t.Fatal(errorValue)
-				}
-				if isAskedInThread {
-					scenario = AskedInThread(scenario)
-				}
-				if _, errorValue := RunVirtualSession(context.Background(), scenario); errorValue != nil {
-					t.Fatalf("%s: %v", label, errorValue)
-				}
-			})
-		}
+			if _, errorValue := RunVirtualSession(context.Background(), scenario); errorValue != nil {
+				t.Fatalf("%s: %v", scenarioName, errorValue)
+			}
+		})
 	}
 }

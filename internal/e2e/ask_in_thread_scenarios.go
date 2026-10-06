@@ -12,8 +12,7 @@ const (
 	observationOfTheCallInPlace    = "obs-001"
 )
 
-func AskedInThread(scenario VirtualSessionScenario) VirtualSessionScenario {
-	scenario.AskInThread = true
+func askedInThread(scenario VirtualSessionScenario) VirtualSessionScenario {
 	turns := make([]VirtualTurn, len(scenario.Turns))
 	for index, virtualTurn := range scenario.Turns {
 		turns[index] = virtualTurn
@@ -55,7 +54,7 @@ func isToolRequestedEvent(eventName string) bool {
 }
 
 func ScheduledRunAsksInDirectMessageScenario(artifactDirectoryPath string) VirtualSessionScenario {
-	scenario := hostUpdateScenario("scheduled_run_asks_in_direct_message", artifactDirectoryPath, true, []VirtualTurn{{
+	return hostUpdateScenario("scheduled_run_asks_in_direct_message", artifactDirectoryPath, true, []VirtualTurn{{
 		Prompt:           "지금 바로 업데이트해줘",
 		RunsScheduledRun: true,
 		ActionResponses: []string{
@@ -86,6 +85,4 @@ func ScheduledRunAsksInDirectMessageScenario(artifactDirectoryPath string) Virtu
 		ExpectedEvents:     []string{agentcontract.TaskEventConfirmationReplyClassified},
 		ExpectedTaskStatus: task.TaskStatusCompleted,
 	}})
-	scenario.AskInThread = true
-	return scenario
 }

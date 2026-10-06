@@ -45,13 +45,7 @@ func (gate *Gate) AwaitApproval(ctx context.Context, approvalRequest mcpserver.A
 		}
 		confirmation = gate.confirmationWording(ctx, approvalRequest, resolution)
 	}
-	if outcome, isAnswered := gate.askedOutcome(ctx, taskRunID, approvalRequest, confirmation, resolution); isAnswered {
-		return outcome, nil
-	}
-	if _, isHeld := gate.holdCall(taskRunID, approvalRequest, confirmation, resolution); !isHeld {
-		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionUnanswerable}, nil
-	}
-	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionHeld, Notice: confirmation}, nil
+	return gate.askedOutcome(ctx, taskRunID, approvalRequest, confirmation, resolution), nil
 }
 
 func (gate *Gate) holdCall(taskRunID string, approvalRequest mcpserver.ApprovalRequest, confirmation string, resolution ApprovalTargetResolution) (holdrecord.Hold, bool) {

@@ -17,7 +17,6 @@ type SessionTurn struct {
 
 func (connectorRuntime *ConnectorRuntime) OpenSessionTurn(ctx context.Context, event PlatformInboundEvent, personID string, sendReply ReplySender) *SessionTurn {
 	event = withInboundDecision(event)
-	event.isApprovalAskedElsewhere = true
 	adapter, errorValue := connectorRuntime.findAdapter(event.Platform)
 	if errorValue != nil {
 		connectorRuntime.logger.Warn("connector.session.adapter_missing", slog.String("platform", event.Platform), slog.String("messageID", event.MessageID), slog.String("error", errorValue.Error()))

@@ -20,23 +20,23 @@ func (asker namedAsker) Serves(_ string, conversationID string) bool {
 	return conversationID == asker.servedConversation
 }
 
-func (asker namedAsker) AskPermission(context.Context, mcpserver.ApprovalRequest, PermissionQuestion) (ApprovalAnswer, bool) {
+func (asker namedAsker) AskPermission(context.Context, mcpserver.ApprovalRequest, PermissionQuestion) (ApprovalAnswer, AskStatus) {
 	*asker.asked = append(*asker.asked, asker.name)
-	return ApprovalAnswer{Signal: agentcontract.ApprovalSignalApprove}, true
+	return ApprovalAnswer{Signal: agentcontract.ApprovalSignalApprove}, AskAnswered
 }
 
-func (asker namedAsker) AskHarnessPermission(context.Context, mcpserver.ApprovalRequest, HarnessPermissionQuestion) (acp.RequestPermissionOutcome, bool) {
+func (asker namedAsker) AskHarnessPermission(context.Context, mcpserver.ApprovalRequest, HarnessPermissionQuestion) (acp.RequestPermissionOutcome, AskStatus) {
 	*asker.asked = append(*asker.asked, asker.name)
-	return acp.RequestPermissionOutcome{}, true
+	return acp.RequestPermissionOutcome{}, AskAnswered
 }
 
 type plainAsker struct {
 	asked *[]string
 }
 
-func (asker plainAsker) AskPermission(context.Context, mcpserver.ApprovalRequest, PermissionQuestion) (ApprovalAnswer, bool) {
+func (asker plainAsker) AskPermission(context.Context, mcpserver.ApprovalRequest, PermissionQuestion) (ApprovalAnswer, AskStatus) {
 	*asker.asked = append(*asker.asked, "plain")
-	return ApprovalAnswer{}, true
+	return ApprovalAnswer{}, AskAnswered
 }
 
 func TestAConversationTheRelayServesIsAskedThroughTheRelayAndAnyOtherInTheThread(t *testing.T) {
@@ -55,10 +55,10 @@ func TestAHarnessQuestionInAConversationTheThreadAskerCannotCarryIsLeftUnanswere
 	asked := []string{}
 	routed := AskerRoutedBy(namedAsker{name: "relay", servedConversation: "acp-conversation", asked: &asked}, plainAsker{asked: &asked})
 
-	_, isAnswered := routed.(HarnessPermissionAsker).AskHarnessPermission(context.Background(), mcpserver.ApprovalRequest{ConversationID: "chat-conversation"}, HarnessPermissionQuestion{})
+	_, status := routed.(HarnessPermissionAsker).AskHarnessPermission(context.Background(), mcpserver.ApprovalRequest{ConversationID: "chat-conversation"}, HarnessPermissionQuestion{})
 
-	if isAnswered || len(asked) != 0 {
-		t.Fatalf("a harness question reached %v and was answered=%v", asked, isAnswered)
+	if status == AskAnswered || len(asked) != 0 {
+		t.Fatalf("a harness question reached %v and was answered=%v", asked, (status == AskAnswered))
 	}
 }
 

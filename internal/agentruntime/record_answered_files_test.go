@@ -17,8 +17,26 @@ import (
 )
 
 type keptFilesActor struct {
-	spillWorkspaceActor
-	written map[string][]byte
+	written    map[string][]byte
+	writeError error
+}
+
+func (actor *keptFilesActor) Run(context.Context, security.CommandRequest) (security.CommandResult, error) {
+	return security.CommandResult{}, nil
+}
+
+func (actor *keptFilesActor) MkdirAll(context.Context, string) error { return nil }
+
+func (actor *keptFilesActor) ReadFile(context.Context, string, int64) ([]byte, error) {
+	return nil, nil
+}
+
+func (actor *keptFilesActor) ListDirectory(context.Context, string) ([]security.WorkspaceActorDirectoryEntry, error) {
+	return nil, nil
+}
+
+func (actor *keptFilesActor) Stat(context.Context, string) (security.WorkspaceActorStat, error) {
+	return security.WorkspaceActorStat{}, nil
 }
 
 func (actor *keptFilesActor) WriteFile(_ context.Context, filePath string, content []byte) error {
