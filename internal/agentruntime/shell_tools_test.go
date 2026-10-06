@@ -13,8 +13,8 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
-	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func TestTerminalRunTranslatesAgentWorkspacePaths(t *testing.T) {
