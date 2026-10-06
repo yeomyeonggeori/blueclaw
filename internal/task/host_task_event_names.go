@@ -1,3 +1,5 @@
 package task
 
-const TaskEventBlueclawTaskExecutionDuration = "blueclaw.task.execution_duration"
+const (
+	TaskEventBlueclawTaskExecutionDuration = "blueclaw.task.execution_duration"
+)
