@@ -52,24 +52,6 @@ func TestResumePausedTaskForSteerWithoutLaunchContextSendsNoticeWithoutOrphan(t 
 	}
 }
 
-func TestInterruptedTaskTurnDecisionInheritsHighestRecordedEffort(t *testing.T) {
-	taskEvents := []task.TaskEvent{
-		{Name: "agent.intake", Body: `{"effortLevel":"deep","taskComplexity":"complex"}`},
-		{Name: "agent.intake", Body: `{"effortLevel":"standard","taskComplexity":"normal","reason":"runtime_restart_auto_resume"}`},
-	}
-	decision := interruptedTaskTurnDecision(taskEvents, "ko")
-	if decision.TaskLevel != agentcontract.TaskLevelMedium {
-		t.Fatalf("resumed task must inherit the highest recorded task level, got %q", decision.TaskLevel)
-	}
-}
-
-func TestInterruptedTaskTurnDecisionDefaultsToStandardEffort(t *testing.T) {
-	decision := interruptedTaskTurnDecision([]task.TaskEvent{{Name: "agent.intake", Body: "not-json"}}, "ko")
-	if decision.TaskLevel != agentcontract.TaskLevelLow {
-		t.Fatalf("resumed task without recorded task level must default to low, got %q", decision.TaskLevel)
-	}
-}
-
 func TestAnAnswerReplacesTheObjectiveTheTaskStoppedOn(t *testing.T) {
 	stoppedToAsk := []task.TaskEvent{{Name: "agent.goal.waiting_user_input", Body: `{"goalID":"task-1","currentObjective":"the request lacks detail, so it has to be confirmed","status":"waiting_user_input"}`}}
 	answered := "register the 18 August Busan supplier meeting as a completed task"
@@ -99,9 +81,8 @@ func TestARestartCarriesNoAnswerAndKeepsTheObjective(t *testing.T) {
 // carried over.
 func TestASteerWithNewWordsLaunchesThroughIntakeAgain(t *testing.T) {
 	launchRequest := agentruntime.TaskLaunchRequest{
-		Prompt:                  "두 번째로 중복 올린 글 삭제해줘.",
-		IsRuntimeRestartResume:  true,
-		PrecomputedTurnDecision: &agentcontract.TurnDecision{Route: agentcontract.TurnRouteContinueTask},
+		Prompt:                 "두 번째로 중복 올린 글 삭제해줘.",
+		IsRuntimeRestartResume: true,
 	}
 	event := PlatformInboundEvent{Prompt: "삭제가 아니라 글을 수정해서 원본 이미지도 넣어줘"}
 
@@ -110,9 +91,6 @@ func TestASteerWithNewWordsLaunchesThroughIntakeAgain(t *testing.T) {
 	if steered.Prompt != "삭제가 아니라 글을 수정해서 원본 이미지도 넣어줘" {
 		t.Fatalf("the person's own words must drive the re-intake, got %q", steered.Prompt)
 	}
-	if steered.PrecomputedTurnDecision != nil {
-		t.Fatal("a steered launch must not carry a precomputed route; intake decides refine versus revise")
-	}
 	if steered.IsRuntimeRestartResume {
 		t.Fatal("a steered launch is a new ask, not a restart resume")
 	}
@@ -120,14 +98,13 @@ func TestASteerWithNewWordsLaunchesThroughIntakeAgain(t *testing.T) {
 
 func TestASteerWithNothingNewKeepsTheResumeShape(t *testing.T) {
 	launchRequest := agentruntime.TaskLaunchRequest{
-		Prompt:                  "해줘",
-		IsRuntimeRestartResume:  true,
-		PrecomputedTurnDecision: &agentcontract.TurnDecision{Route: agentcontract.TurnRouteContinueTask},
+		Prompt:                 "해줘",
+		IsRuntimeRestartResume: true,
 	}
 
 	steered := steeredTaskLaunchRequest(launchRequest, PlatformInboundEvent{}, "")
 
-	if steered.PrecomputedTurnDecision == nil || !steered.IsRuntimeRestartResume {
+	if !steered.IsRuntimeRestartResume {
 		t.Fatal("a steer that says nothing new resumes the task as it was")
 	}
 }

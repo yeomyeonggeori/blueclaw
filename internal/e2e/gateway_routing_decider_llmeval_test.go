@@ -74,7 +74,7 @@ func deciderFactsFor(routing routingCase) inboundengagement.Facts {
 		VisibleContext:   request.VisibleContext,
 		AgentIdentity:    request.AgentIdentity,
 		Company:          request.Company,
-		Duties:           agentcontract.StandingDuties(),
+		Duties:           inboundengagement.StandingDuties(),
 		EnvironmentNow:   request.EnvironmentNow,
 	}
 	taskFacts := inboundengagement.TaskFacts{Prompt: routing.Task.Prompt, Status: request.ActiveTask.Status, Summary: routing.Task.Summary, PostedQuestion: routing.Task.PostedQuestion}

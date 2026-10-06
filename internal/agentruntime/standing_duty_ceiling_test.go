@@ -8,7 +8,7 @@ import (
 )
 
 func TestStandingDutyToolNamesExcludeOutwardAndSystemTools(t *testing.T) {
-	for _, duty := range agentcontract.StandingDuties() {
+	for _, duty := range inboundengagement.StandingDuties() {
 		allowed := map[string]bool{}
 		for _, toolName := range duty.ToolNames {
 			allowed[toolName] = true

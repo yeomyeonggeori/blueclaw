@@ -6,12 +6,31 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement/gatewaytest"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
 )
 
 type turnScript struct {
 	Message string `json:"message"`
 	intaketest.Outcome
+	Addressing          inboundengagement.AddressingDecision `json:"addressing"`
+	ReactionProbability float64                              `json:"reactionProbability"`
+	RelatesToActiveTask bool                                 `json:"relatesToActiveTask"`
+	BusyRoute           inboundengagement.BusyRoute          `json:"busyRoute"`
+}
+
+func (script turnScript) gatewayOutcome() gatewaytest.Outcome {
+	return gatewaytest.Outcome{
+		Addressing:          script.Addressing,
+		ReactionProbability: script.ReactionProbability,
+		BusyRoute:           script.BusyRoute,
+		RelatesToActiveTask: script.RelatesToActiveTask,
+	}
+}
+
+func (script turnScript) plansATurn() bool {
+	return script.TurnDecision.Route != ""
 }
 
 type structuredScript struct {

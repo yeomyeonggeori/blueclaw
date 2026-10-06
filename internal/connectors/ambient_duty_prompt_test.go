@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 func overheardTurn(ambientDuty inboundengagement.AmbientDutyContext) ConversationTurn {
@@ -37,26 +36,18 @@ func TestAddressedMessageStaysTheInstruction(t *testing.T) {
 	}
 }
 
-func TestOverheardMessageIsNeverRoutedAsAReply(t *testing.T) {
+func TestAnOverheardMessageHandsTheAgentTheAmbientTaskLevelAsAFact(t *testing.T) {
 	turn := overheardTurn(inboundengagement.AmbientDutyContext{IsMatch: true, Name: "calendar_upkeep", Confidence: 0.92})
 
-	turnDecision := turnDecisionForTurn(turn)
-
-	if turnDecision == nil {
-		t.Fatalf("expected an ambient launch to carry its own turn decision")
-	}
-	if turnDecision.TaskShape == agentcontract.TaskShapeImmediateReply {
-		t.Fatalf("expected an ambient launch never to route as a reply, got %+v", turnDecision)
-	}
-	if turnDecision.Classification == agentcontract.IntakeClassificationQuickReply {
-		t.Fatalf("expected an ambient launch never to classify as quick_reply, got %+v", turnDecision)
+	if taskLevel := taskLevelForTurn(turn); taskLevel != ambientDutyTaskLevel {
+		t.Fatalf("expected an ambient launch to carry the %q level, got %q", ambientDutyTaskLevel, taskLevel)
 	}
 }
 
-func TestAddressedMessageStillAsksTheTurnRouter(t *testing.T) {
+func TestAnAddressedMessageCarriesNoTaskLevelForTheAgentToPlanFrom(t *testing.T) {
 	turn := overheardTurn(inboundengagement.AmbientDutyContext{})
 
-	if turnDecision := turnDecisionForTurn(turn); turnDecision != nil {
-		t.Fatalf("expected an addressed message to keep going through the turn router, got %+v", turnDecision)
+	if taskLevel := taskLevelForTurn(turn); taskLevel != "" {
+		t.Fatalf("expected an addressed message to leave the level to the agent, got %q", taskLevel)
 	}
 }

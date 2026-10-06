@@ -35,7 +35,6 @@ func revisionInboundEvent(messageID string, prompt string) PlatformInboundEvent 
 
 func TestConnectorRevisionCoalescesQueuedMessagesBeforeLaunch(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnDecision = startTaskTurnDecision()
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "combined result"}
 	repository := &revisionTestRepository{}
 	connectorRuntime.UseEventRepository(repository)
@@ -71,7 +70,6 @@ func TestConnectorRevisionCoalescesQueuedMessagesBeforeLaunch(t *testing.T) {
 
 func TestConnectorRevisionSuppressesCompletedButUndeliveredReply(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnDecision = startTaskTurnDecision()
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "obsolete result"}
 	repository := &revisionTestRepository{}
 	connectorRuntime.UseEventRepository(repository)
@@ -207,7 +205,6 @@ func TestConnectorRevisionReclaimedEventKeepsOriginalReplyOwner(t *testing.T) {
 
 func TestConnectorRevisionRestoreRetainsPersistedMessageHistory(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnDecision = startTaskTurnDecision()
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "final result"}
 	first := revisionInboundEvent("first", "Summarize the meeting")
 	second := revisionInboundEvent("second", "in Korean")
@@ -229,7 +226,6 @@ func TestConnectorRevisionRestoreRetainsPersistedMessageHistory(t *testing.T) {
 
 func TestConnectorRevisionUsesLatestEditedMessageOnce(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnDecision = startTaskTurnDecision()
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "latest version"}
 	repository := &revisionTestRepository{}
 	connectorRuntime.UseEventRepository(repository)

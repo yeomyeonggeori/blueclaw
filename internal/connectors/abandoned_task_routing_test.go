@@ -14,9 +14,7 @@ import (
 
 func TestAMessageIsNotRoutedIntoARunningTaskNoTurnIsWorkingOn(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	busyCapableDecision := startTaskTurnDecision()
-	busyCapableDecision.BusyRoute = inboundengagement.BusyRouteStatus
-	harness.TurnDecision = busyCapableDecision
+	harness.BusyRoute = inboundengagement.BusyRouteStatus
 	harness.Reply = "아직 그 작업을 하고 있습니다."
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "새 작업으로 처리했습니다."}
 	abandonedTaskRun := seedAbandonedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{ConversationID: "direct-1"}, "멈춘 작업")

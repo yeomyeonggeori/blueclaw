@@ -82,7 +82,7 @@ func withFinishedTask(facts Facts) Facts {
 }
 
 func withDuties(facts Facts) Facts {
-	facts.Duties = agentcontract.StandingDuties()
+	facts.Duties = StandingDuties()
 	return facts
 }
 
