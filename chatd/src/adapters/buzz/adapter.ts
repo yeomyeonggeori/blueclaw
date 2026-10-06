@@ -403,7 +403,7 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		return { channelID: channelId, replyTargetID: this.encodeThreadId({ channelId }), created };
 	}
 
-	private async findChannelIdByName(name: string): Promise<string | undefined> {
+	async listChannels(): Promise<Array<{ channelID: string; name: string }>> {
 		const metadataEvents = await this.relay.query({ kinds: [GROUP_METADATA_KIND], limit: 500 });
 		const latestByChannel = new Map<string, BuzzEvent>();
 		for (const event of metadataEvents) {
@@ -412,11 +412,17 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 			const known = latestByChannel.get(channelId);
 			if (!known || event.created_at > known.created_at) latestByChannel.set(channelId, event);
 		}
+		const channels: Array<{ channelID: string; name: string }> = [];
 		for (const [channelId, event] of latestByChannel) {
 			if (firstTagValue(event, "archived") === "true") continue;
-			if (canonicalChannelName(firstTagValue(event, "name") ?? "") === name) return channelId;
+			channels.push({ channelID: channelId, name: canonicalChannelName(firstTagValue(event, "name") ?? "") });
 		}
-		return undefined;
+		return channels;
+	}
+
+	private async findChannelIdByName(name: string): Promise<string | undefined> {
+		const channels = await this.listChannels();
+		return channels.find((channel) => channel.name === name)?.channelID;
 	}
 
 	private subscribeToMembershipChanges(): void {

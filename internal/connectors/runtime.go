@@ -424,7 +424,7 @@ func (connectorRuntime *ConnectorRuntime) appendTaskExecutionDuration(taskRunID 
 	if strings.TrimSpace(taskRunID) == "" {
 		return
 	}
-	connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventBlueclawTaskExecutionDuration, agentruntime.MarshalBody(map[string]any{
+	connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, task.TaskEventBlueclawTaskExecutionDuration, agentruntime.MarshalBody(map[string]any{
 		"durationMs": duration.Milliseconds(),
 	}))
 }

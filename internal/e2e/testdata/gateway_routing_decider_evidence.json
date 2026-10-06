@@ -1,0 +1,7523 @@
+{
+ "judge": "decider",
+ "decisionEndpoint": "https://openrouter.ai/api/alpha/decisions",
+ "decisionModel": "~typesafe/jev-latest",
+ "generatedAt": "2026-10-06T06:15:56Z",
+ "split": "",
+ "runs": [
+  {
+   "run": 1,
+   "primary": {
+    "correct": 180,
+    "total": 184
+   },
+   "primaryAccuracy": 0.9782608695652174,
+   "dev": {
+    "correct": 126,
+    "total": 130
+   },
+   "held": {
+    "correct": 54,
+    "total": 54
+   },
+   "secondary": {
+    "correct": 13,
+    "total": 13
+   },
+   "casesRight": 83,
+   "caseCount": 86,
+   "wrongWayCount": 0,
+   "byGroup": {
+    "burst": {
+     "correct": 42,
+     "total": 42
+    },
+    "busy-running": {
+     "correct": 34,
+     "total": 34
+    },
+    "busy-waiting-answer": {
+     "correct": 14,
+     "total": 17
+    },
+    "busy-waiting-approval": {
+     "correct": 19,
+     "total": 20
+    },
+    "channel-addressing": {
+     "correct": 46,
+     "total": 46
+    },
+    "direct-nothing-open": {
+     "correct": 8,
+     "total": 8
+    },
+    "finished-follow-up": {
+     "correct": 17,
+     "total": 17
+    }
+   },
+   "callCount": 81,
+   "meanLatencyMs": 188,
+   "meanPromptTokens": 1208.3456790123457,
+   "retriedCallCount": 0,
+   "failedCaseCount": 0,
+   "meanLatencyPerCaseMs": 177.06976744186048,
+   "meanPromptTokensPerCase": 1138.093023255814
+  },
+  {
+   "run": 2,
+   "primary": {
+    "correct": 180,
+    "total": 184
+   },
+   "primaryAccuracy": 0.9782608695652174,
+   "dev": {
+    "correct": 126,
+    "total": 130
+   },
+   "held": {
+    "correct": 54,
+    "total": 54
+   },
+   "secondary": {
+    "correct": 13,
+    "total": 13
+   },
+   "casesRight": 83,
+   "caseCount": 86,
+   "wrongWayCount": 0,
+   "byGroup": {
+    "burst": {
+     "correct": 42,
+     "total": 42
+    },
+    "busy-running": {
+     "correct": 34,
+     "total": 34
+    },
+    "busy-waiting-answer": {
+     "correct": 14,
+     "total": 17
+    },
+    "busy-waiting-approval": {
+     "correct": 19,
+     "total": 20
+    },
+    "channel-addressing": {
+     "correct": 46,
+     "total": 46
+    },
+    "direct-nothing-open": {
+     "correct": 8,
+     "total": 8
+    },
+    "finished-follow-up": {
+     "correct": 17,
+     "total": 17
+    }
+   },
+   "callCount": 81,
+   "meanLatencyMs": 346.4567901234568,
+   "meanPromptTokens": 1208.3456790123457,
+   "retriedCallCount": 0,
+   "failedCaseCount": 0,
+   "meanLatencyPerCaseMs": 326.3139534883721,
+   "meanPromptTokensPerCase": 1138.093023255814
+  },
+  {
+   "run": 3,
+   "primary": {
+    "correct": 180,
+    "total": 184
+   },
+   "primaryAccuracy": 0.9782608695652174,
+   "dev": {
+    "correct": 126,
+    "total": 130
+   },
+   "held": {
+    "correct": 54,
+    "total": 54
+   },
+   "secondary": {
+    "correct": 13,
+    "total": 13
+   },
+   "casesRight": 83,
+   "caseCount": 86,
+   "wrongWayCount": 0,
+   "byGroup": {
+    "burst": {
+     "correct": 42,
+     "total": 42
+    },
+    "busy-running": {
+     "correct": 34,
+     "total": 34
+    },
+    "busy-waiting-answer": {
+     "correct": 14,
+     "total": 17
+    },
+    "busy-waiting-approval": {
+     "correct": 19,
+     "total": 20
+    },
+    "channel-addressing": {
+     "correct": 46,
+     "total": 46
+    },
+    "direct-nothing-open": {
+     "correct": 8,
+     "total": 8
+    },
+    "finished-follow-up": {
+     "correct": 17,
+     "total": 17
+    }
+   },
+   "callCount": 81,
+   "meanLatencyMs": 516.3333333333334,
+   "meanPromptTokens": 1208.3456790123457,
+   "retriedCallCount": 0,
+   "failedCaseCount": 0,
+   "meanLatencyPerCaseMs": 486.3139534883721,
+   "meanPromptTokensPerCase": 1138.093023255814
+  }
+ ],
+ "outcomes": [
+  [
+   {
+    "name": "mention with a work request (ko)",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "duty",
+      "expected": "none",
+      "actual": "none",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 226,
+      "promptTokens": 1337,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "mention with a question (en)",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 89,
+      "promptTokens": 1335,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "the agent called by name without a mention",
+    "group": "channel-addressing",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 146,
+      "promptTokens": 1627,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "mention with a one-word request",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 82,
+      "promptTokens": 1330,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a question about policy aimed at the agent",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 95,
+      "promptTokens": 1339,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a greeting aimed at the agent",
+    "group": "channel-addressing",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 99,
+      "promptTokens": 1335,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "colleague to colleague about a document (ko)",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 86,
+      "promptTokens": 1635,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "colleague to colleague with a request (en)",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 112,
+      "promptTokens": 1630,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a short confirmation to a colleague",
+    "group": "channel-addressing",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 80,
+      "promptTokens": 1692,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "thanks between two colleagues",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "reaction",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 99,
+      "promptTokens": 1632,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "work coordination between colleagues",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "reaction",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 97,
+      "promptTokens": 1634,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an announcement to the room (ko)",
+    "group": "channel-addressing",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "anyone",
+      "actual": "anyone",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 89,
+      "promptTokens": 1633,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an announcement to the room (en)",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "anyone",
+      "actual": "anyone",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 71,
+      "promptTokens": 1631,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "laughter aimed at nobody",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "none",
+      "actual": "none",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 155,
+      "promptTokens": 1620,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a self note",
+    "group": "channel-addressing",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "none",
+      "actual": "none",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 153,
+      "promptTokens": 1626,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "filler (en)",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "none",
+      "actual": "none",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 147,
+      "promptTokens": 1617,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a closing thanks to the agent (ko)",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "reaction",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 122,
+      "promptTokens": 1330,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a closing thanks to the agent (en)",
+    "group": "channel-addressing",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "reaction",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 187,
+      "promptTokens": 1333,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "good news for the room",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "anyone",
+      "actual": "anyone",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "reaction",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 102,
+      "promptTokens": 1627,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a concrete meeting stated to the room",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "anyone",
+      "actual": "anyone",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "duty",
+      "expected": "calendar_upkeep",
+      "actual": "calendar_upkeep",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 95,
+      "promptTokens": 1626,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a concrete meeting stated to the room (en)",
+    "group": "channel-addressing",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "anyone",
+      "actual": "anyone",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "duty",
+      "expected": "calendar_upkeep",
+      "actual": "calendar_upkeep",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 221,
+      "promptTokens": 1630,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a task assignment stated to the room",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "anyone",
+      "actual": "anyone",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "duty",
+      "expected": "team_flow_update",
+      "actual": "team_flow_update",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 143,
+      "promptTokens": 1637,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a vague wish to meet records nothing",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "duty",
+      "expected": "none",
+      "actual": "none",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 124,
+      "promptTokens": 1628,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an open question to the room records nothing",
+    "group": "channel-addressing",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "duty",
+      "expected": "none",
+      "actual": "none",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 177,
+      "promptTokens": 1623,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "direct request with nothing open (ko)",
+    "group": "direct-nothing-open",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": null
+   },
+   {
+    "name": "direct question with nothing open (ko)",
+    "group": "direct-nothing-open",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": null
+   },
+   {
+    "name": "direct question about the agent (ko)",
+    "group": "direct-nothing-open",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": null
+   },
+   {
+    "name": "direct request with nothing open (en)",
+    "group": "direct-nothing-open",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": null
+   },
+   {
+    "name": "progress question (ko)",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 251,
+      "promptTokens": 834,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "progress question, short",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 192,
+      "promptTokens": 834,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "progress question (en)",
+    "group": "busy-running",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 278,
+      "promptTokens": 832,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an addition to the running task",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 196,
+      "promptTokens": 840,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a format change to the running task",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 81,
+      "promptTokens": 844,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an addition (en)",
+    "group": "busy-running",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 88,
+      "promptTokens": 834,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an addition, short",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 253,
+      "promptTokens": 832,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a replacement instruction (ko)",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "replace",
+      "actual": "replace",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 99,
+      "promptTokens": 842,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a replacement instruction (en)",
+    "group": "busy-running",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "replace",
+      "actual": "replace",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 167,
+      "promptTokens": 839,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a stop request, short",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "cancel",
+      "actual": "cancel",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 245,
+      "promptTokens": 832,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a cancel request (ko)",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "cancel",
+      "actual": "cancel",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 226,
+      "promptTokens": 832,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a stop request (en)",
+    "group": "busy-running",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "cancel",
+      "actual": "cancel",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 255,
+      "promptTokens": 833,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an independent request alongside (ko)",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "new_task",
+      "actual": "new_task",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 259,
+      "promptTokens": 847,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an independent request alongside (en)",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "new_task",
+      "actual": "new_task",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 279,
+      "promptTokens": 842,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "thanks while it runs",
+    "group": "busy-running",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "busyRoute",
+      "expected": "unrelated",
+      "actual": "unrelated",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 202,
+      "promptTokens": 833,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a laugh while it runs",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "busyRoute",
+      "expected": "unrelated",
+      "actual": "unrelated",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 101,
+      "promptTokens": 828,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "channel mention steers the running task",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 142,
+      "promptTokens": 1745,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "revise: another target instead (ko)",
+    "group": "busy-waiting-approval",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 128,
+      "promptTokens": 866,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "revise: another day (ko)",
+    "group": "busy-waiting-approval",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 96,
+      "promptTokens": 863,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "revise (en)",
+    "group": "busy-waiting-approval",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 194,
+      "promptTokens": 862,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "ask what would be deleted (ko)",
+    "group": "busy-waiting-approval",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 183,
+      "promptTokens": 868,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "ask what would be deleted (en)",
+    "group": "busy-waiting-approval",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 193,
+      "promptTokens": 859,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "ask why approval is needed",
+    "group": "busy-waiting-approval",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 182,
+      "promptTokens": 863,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "ask whether it is still waiting",
+    "group": "busy-waiting-approval",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 180,
+      "promptTokens": 865,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "unrelated request (ko)",
+    "group": "busy-waiting-approval",
+    "split": "dev",
+    "isRight": false,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "new_task",
+      "actual": "steer",
+      "isCorrect": false
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 180,
+      "promptTokens": 870,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "unrelated request (en)",
+    "group": "busy-waiting-approval",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "new_task",
+      "actual": "new_task",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 239,
+      "promptTokens": 867,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "chatter (ko)",
+    "group": "busy-waiting-approval",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "busyRoute",
+      "expected": "unrelated",
+      "actual": "unrelated",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 176,
+      "promptTokens": 863,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "chatter (en)",
+    "group": "busy-waiting-approval",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "busyRoute",
+      "expected": "unrelated",
+      "actual": "unrelated",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 188,
+      "promptTokens": 859,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "revise: another topic (ko)",
+    "group": "busy-waiting-answer",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 188,
+      "promptTokens": 875,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "revise: another topic (en)",
+    "group": "busy-waiting-answer",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 182,
+      "promptTokens": 864,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "revise: a length",
+    "group": "busy-waiting-answer",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 230,
+      "promptTokens": 867,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "ask the difference between the options (ko)",
+    "group": "busy-waiting-answer",
+    "split": "dev",
+    "isRight": false,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "unrelated",
+      "isCorrect": false
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 224,
+      "promptTokens": 872,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "ask the difference between the options (en)",
+    "group": "busy-waiting-answer",
+    "split": "dev",
+    "isRight": false,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "false",
+      "isCorrect": false
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "unrelated",
+      "isCorrect": false
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 211,
+      "promptTokens": 862,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "ask what it waits for",
+    "group": "busy-waiting-answer",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 191,
+      "promptTokens": 867,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "unrelated request (ko)",
+    "group": "busy-waiting-answer",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "new_task",
+      "actual": "new_task",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 250,
+      "promptTokens": 868,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "unrelated request (en)",
+    "group": "busy-waiting-answer",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "new_task",
+      "actual": "new_task",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 84,
+      "promptTokens": 865,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "chatter",
+    "group": "busy-waiting-answer",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "busyRoute",
+      "expected": "unrelated",
+      "actual": "unrelated",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 287,
+      "promptTokens": 864,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a correction to the delivered table",
+    "group": "finished-follow-up",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 274,
+      "promptTokens": 600,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a format request for the delivered table",
+    "group": "finished-follow-up",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 182,
+      "promptTokens": 590,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an addition to the delivered table (en)",
+    "group": "finished-follow-up",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 322,
+      "promptTokens": 591,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "thanks plus a follow-up",
+    "group": "finished-follow-up",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 134,
+      "promptTokens": 596,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a follow-up, short",
+    "group": "finished-follow-up",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 126,
+      "promptTokens": 582,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a new request (ko)",
+    "group": "finished-follow-up",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 248,
+      "promptTokens": 593,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a new request (en)",
+    "group": "finished-follow-up",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 239,
+      "promptTokens": 590,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a new question (ko)",
+    "group": "finished-follow-up",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 212,
+      "promptTokens": 588,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "channel follow-up with a mention",
+    "group": "finished-follow-up",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 254,
+      "promptTokens": 1501,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "channel new request with a mention",
+    "group": "finished-follow-up",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 305,
+      "promptTokens": 1498,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "channel chatter after a delivered task",
+    "group": "finished-follow-up",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 208,
+      "promptTokens": 1787,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "channel burst: chatter then a request",
+    "group": "burst",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 229,
+      "promptTokens": 2617,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "channel burst: laugh, request, thanks to a colleague",
+    "group": "burst",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "none",
+      "actual": "none",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 450,
+      "promptTokens": 3782,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "channel burst: colleagues arranging lunch, then a booking (en)",
+    "group": "burst",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 302,
+      "promptTokens": 3783,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "channel burst: two standing duties",
+    "group": "burst",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "anyone",
+      "actual": "anyone",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "duty",
+      "expected": "calendar_upkeep",
+      "actual": "calendar_upkeep",
+      "isCorrect": true
+     },
+     {
+      "field": "target",
+      "expected": "anyone",
+      "actual": "anyone",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "duty",
+      "expected": "team_flow_update",
+      "actual": "team_flow_update",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 220,
+      "promptTokens": 2811,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "running burst: two additions",
+    "group": "burst",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 292,
+      "promptTokens": 1268,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "running burst: progress and an independent request",
+    "group": "burst",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "new_task",
+      "actual": "new_task",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 186,
+      "promptTokens": 1262,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "running burst: progress and an addition (en)",
+    "group": "burst",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 303,
+      "promptTokens": 1264,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "waiting burst: a change in two parts",
+    "group": "burst",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 346,
+      "promptTokens": 1288,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "finished burst: a correction and a new request",
+    "group": "burst",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 299,
+      "promptTokens": 766,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "direct burst with nothing open",
+    "group": "burst",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": null
+   }
+  ],
+  [
+   {
+    "name": "mention with a work request (ko)",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "duty",
+      "expected": "none",
+      "actual": "none",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 383,
+      "promptTokens": 1337,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "mention with a question (en)",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 521,
+      "promptTokens": 1335,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "the agent called by name without a mention",
+    "group": "channel-addressing",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 418,
+      "promptTokens": 1627,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "mention with a one-word request",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 564,
+      "promptTokens": 1330,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a question about policy aimed at the agent",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 431,
+      "promptTokens": 1339,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a greeting aimed at the agent",
+    "group": "channel-addressing",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 392,
+      "promptTokens": 1335,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "colleague to colleague about a document (ko)",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 456,
+      "promptTokens": 1635,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "colleague to colleague with a request (en)",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 134,
+      "promptTokens": 1630,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a short confirmation to a colleague",
+    "group": "channel-addressing",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 227,
+      "promptTokens": 1692,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "thanks between two colleagues",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "reaction",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 177,
+      "promptTokens": 1632,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "work coordination between colleagues",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "reaction",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 323,
+      "promptTokens": 1634,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an announcement to the room (ko)",
+    "group": "channel-addressing",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "anyone",
+      "actual": "anyone",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 360,
+      "promptTokens": 1633,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an announcement to the room (en)",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "anyone",
+      "actual": "anyone",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 344,
+      "promptTokens": 1631,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "laughter aimed at nobody",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "none",
+      "actual": "none",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 419,
+      "promptTokens": 1620,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a self note",
+    "group": "channel-addressing",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "none",
+      "actual": "none",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 337,
+      "promptTokens": 1626,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "filler (en)",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "none",
+      "actual": "none",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 238,
+      "promptTokens": 1617,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a closing thanks to the agent (ko)",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "reaction",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 180,
+      "promptTokens": 1330,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a closing thanks to the agent (en)",
+    "group": "channel-addressing",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "reaction",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 238,
+      "promptTokens": 1333,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "good news for the room",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "anyone",
+      "actual": "anyone",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "reaction",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 97,
+      "promptTokens": 1627,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a concrete meeting stated to the room",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "anyone",
+      "actual": "anyone",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "duty",
+      "expected": "calendar_upkeep",
+      "actual": "calendar_upkeep",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 110,
+      "promptTokens": 1626,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a concrete meeting stated to the room (en)",
+    "group": "channel-addressing",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "anyone",
+      "actual": "anyone",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "duty",
+      "expected": "calendar_upkeep",
+      "actual": "calendar_upkeep",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 204,
+      "promptTokens": 1630,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a task assignment stated to the room",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "anyone",
+      "actual": "anyone",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "duty",
+      "expected": "team_flow_update",
+      "actual": "team_flow_update",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 252,
+      "promptTokens": 1637,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a vague wish to meet records nothing",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "duty",
+      "expected": "none",
+      "actual": "none",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 239,
+      "promptTokens": 1628,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an open question to the room records nothing",
+    "group": "channel-addressing",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "duty",
+      "expected": "none",
+      "actual": "none",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 228,
+      "promptTokens": 1623,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "direct request with nothing open (ko)",
+    "group": "direct-nothing-open",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": null
+   },
+   {
+    "name": "direct question with nothing open (ko)",
+    "group": "direct-nothing-open",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": null
+   },
+   {
+    "name": "direct question about the agent (ko)",
+    "group": "direct-nothing-open",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": null
+   },
+   {
+    "name": "direct request with nothing open (en)",
+    "group": "direct-nothing-open",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": null
+   },
+   {
+    "name": "progress question (ko)",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 251,
+      "promptTokens": 834,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "progress question, short",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 233,
+      "promptTokens": 834,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "progress question (en)",
+    "group": "busy-running",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 268,
+      "promptTokens": 832,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an addition to the running task",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 265,
+      "promptTokens": 840,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a format change to the running task",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 392,
+      "promptTokens": 844,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an addition (en)",
+    "group": "busy-running",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 499,
+      "promptTokens": 834,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an addition, short",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 528,
+      "promptTokens": 832,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a replacement instruction (ko)",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "replace",
+      "actual": "replace",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 489,
+      "promptTokens": 842,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a replacement instruction (en)",
+    "group": "busy-running",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "replace",
+      "actual": "replace",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 378,
+      "promptTokens": 839,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a stop request, short",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "cancel",
+      "actual": "cancel",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 542,
+      "promptTokens": 832,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a cancel request (ko)",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "cancel",
+      "actual": "cancel",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 282,
+      "promptTokens": 832,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a stop request (en)",
+    "group": "busy-running",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "cancel",
+      "actual": "cancel",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 476,
+      "promptTokens": 833,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an independent request alongside (ko)",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "new_task",
+      "actual": "new_task",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 114,
+      "promptTokens": 847,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an independent request alongside (en)",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "new_task",
+      "actual": "new_task",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 108,
+      "promptTokens": 842,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "thanks while it runs",
+    "group": "busy-running",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "busyRoute",
+      "expected": "unrelated",
+      "actual": "unrelated",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 189,
+      "promptTokens": 833,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a laugh while it runs",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "busyRoute",
+      "expected": "unrelated",
+      "actual": "unrelated",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 277,
+      "promptTokens": 828,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "channel mention steers the running task",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 215,
+      "promptTokens": 1745,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "revise: another target instead (ko)",
+    "group": "busy-waiting-approval",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 290,
+      "promptTokens": 866,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "revise: another day (ko)",
+    "group": "busy-waiting-approval",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 434,
+      "promptTokens": 863,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "revise (en)",
+    "group": "busy-waiting-approval",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 447,
+      "promptTokens": 862,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "ask what would be deleted (ko)",
+    "group": "busy-waiting-approval",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 324,
+      "promptTokens": 868,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "ask what would be deleted (en)",
+    "group": "busy-waiting-approval",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 260,
+      "promptTokens": 859,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "ask why approval is needed",
+    "group": "busy-waiting-approval",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 274,
+      "promptTokens": 863,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "ask whether it is still waiting",
+    "group": "busy-waiting-approval",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 335,
+      "promptTokens": 865,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "unrelated request (ko)",
+    "group": "busy-waiting-approval",
+    "split": "dev",
+    "isRight": false,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "new_task",
+      "actual": "steer",
+      "isCorrect": false
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 287,
+      "promptTokens": 870,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "unrelated request (en)",
+    "group": "busy-waiting-approval",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "new_task",
+      "actual": "new_task",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 353,
+      "promptTokens": 867,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "chatter (ko)",
+    "group": "busy-waiting-approval",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "busyRoute",
+      "expected": "unrelated",
+      "actual": "unrelated",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 330,
+      "promptTokens": 863,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "chatter (en)",
+    "group": "busy-waiting-approval",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "busyRoute",
+      "expected": "unrelated",
+      "actual": "unrelated",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 234,
+      "promptTokens": 859,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "revise: another topic (ko)",
+    "group": "busy-waiting-answer",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 355,
+      "promptTokens": 875,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "revise: another topic (en)",
+    "group": "busy-waiting-answer",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 254,
+      "promptTokens": 864,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "revise: a length",
+    "group": "busy-waiting-answer",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 241,
+      "promptTokens": 867,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "ask the difference between the options (ko)",
+    "group": "busy-waiting-answer",
+    "split": "dev",
+    "isRight": false,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "unrelated",
+      "isCorrect": false
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 405,
+      "promptTokens": 872,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "ask the difference between the options (en)",
+    "group": "busy-waiting-answer",
+    "split": "dev",
+    "isRight": false,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "false",
+      "isCorrect": false
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "unrelated",
+      "isCorrect": false
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 356,
+      "promptTokens": 862,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "ask what it waits for",
+    "group": "busy-waiting-answer",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 381,
+      "promptTokens": 867,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "unrelated request (ko)",
+    "group": "busy-waiting-answer",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "new_task",
+      "actual": "new_task",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 331,
+      "promptTokens": 868,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "unrelated request (en)",
+    "group": "busy-waiting-answer",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "new_task",
+      "actual": "new_task",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 372,
+      "promptTokens": 865,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "chatter",
+    "group": "busy-waiting-answer",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "busyRoute",
+      "expected": "unrelated",
+      "actual": "unrelated",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 313,
+      "promptTokens": 864,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a correction to the delivered table",
+    "group": "finished-follow-up",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 394,
+      "promptTokens": 600,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a format request for the delivered table",
+    "group": "finished-follow-up",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 392,
+      "promptTokens": 590,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an addition to the delivered table (en)",
+    "group": "finished-follow-up",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 540,
+      "promptTokens": 591,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "thanks plus a follow-up",
+    "group": "finished-follow-up",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 418,
+      "promptTokens": 596,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a follow-up, short",
+    "group": "finished-follow-up",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 376,
+      "promptTokens": 582,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a new request (ko)",
+    "group": "finished-follow-up",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 370,
+      "promptTokens": 593,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a new request (en)",
+    "group": "finished-follow-up",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 487,
+      "promptTokens": 590,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a new question (ko)",
+    "group": "finished-follow-up",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 454,
+      "promptTokens": 588,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "channel follow-up with a mention",
+    "group": "finished-follow-up",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 454,
+      "promptTokens": 1501,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "channel new request with a mention",
+    "group": "finished-follow-up",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 442,
+      "promptTokens": 1498,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "channel chatter after a delivered task",
+    "group": "finished-follow-up",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 443,
+      "promptTokens": 1787,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "channel burst: chatter then a request",
+    "group": "burst",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 479,
+      "promptTokens": 2617,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "channel burst: laugh, request, thanks to a colleague",
+    "group": "burst",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "none",
+      "actual": "none",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 487,
+      "promptTokens": 3782,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "channel burst: colleagues arranging lunch, then a booking (en)",
+    "group": "burst",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 487,
+      "promptTokens": 3783,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "channel burst: two standing duties",
+    "group": "burst",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "anyone",
+      "actual": "anyone",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "duty",
+      "expected": "calendar_upkeep",
+      "actual": "calendar_upkeep",
+      "isCorrect": true
+     },
+     {
+      "field": "target",
+      "expected": "anyone",
+      "actual": "anyone",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "duty",
+      "expected": "team_flow_update",
+      "actual": "team_flow_update",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 440,
+      "promptTokens": 2811,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "running burst: two additions",
+    "group": "burst",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 357,
+      "promptTokens": 1268,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "running burst: progress and an independent request",
+    "group": "burst",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "new_task",
+      "actual": "new_task",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 413,
+      "promptTokens": 1262,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "running burst: progress and an addition (en)",
+    "group": "burst",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 417,
+      "promptTokens": 1264,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "waiting burst: a change in two parts",
+    "group": "burst",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 430,
+      "promptTokens": 1288,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "finished burst: a correction and a new request",
+    "group": "burst",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 429,
+      "promptTokens": 766,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "direct burst with nothing open",
+    "group": "burst",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": null
+   }
+  ],
+  [
+   {
+    "name": "mention with a work request (ko)",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "duty",
+      "expected": "none",
+      "actual": "none",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 557,
+      "promptTokens": 1337,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "mention with a question (en)",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 527,
+      "promptTokens": 1335,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "the agent called by name without a mention",
+    "group": "channel-addressing",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 611,
+      "promptTokens": 1627,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "mention with a one-word request",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 640,
+      "promptTokens": 1330,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a question about policy aimed at the agent",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 467,
+      "promptTokens": 1339,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a greeting aimed at the agent",
+    "group": "channel-addressing",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 514,
+      "promptTokens": 1335,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "colleague to colleague about a document (ko)",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 513,
+      "promptTokens": 1635,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "colleague to colleague with a request (en)",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 524,
+      "promptTokens": 1630,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a short confirmation to a colleague",
+    "group": "channel-addressing",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 515,
+      "promptTokens": 1692,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "thanks between two colleagues",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "reaction",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 507,
+      "promptTokens": 1632,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "work coordination between colleagues",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "reaction",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 543,
+      "promptTokens": 1634,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an announcement to the room (ko)",
+    "group": "channel-addressing",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "anyone",
+      "actual": "anyone",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 539,
+      "promptTokens": 1633,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an announcement to the room (en)",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "anyone",
+      "actual": "anyone",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 539,
+      "promptTokens": 1631,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "laughter aimed at nobody",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "none",
+      "actual": "none",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 517,
+      "promptTokens": 1620,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a self note",
+    "group": "channel-addressing",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "none",
+      "actual": "none",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 641,
+      "promptTokens": 1626,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "filler (en)",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "none",
+      "actual": "none",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 550,
+      "promptTokens": 1617,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a closing thanks to the agent (ko)",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "reaction",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 556,
+      "promptTokens": 1330,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a closing thanks to the agent (en)",
+    "group": "channel-addressing",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "reaction",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 508,
+      "promptTokens": 1333,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "good news for the room",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "anyone",
+      "actual": "anyone",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "reaction",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 538,
+      "promptTokens": 1627,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a concrete meeting stated to the room",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "anyone",
+      "actual": "anyone",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "duty",
+      "expected": "calendar_upkeep",
+      "actual": "calendar_upkeep",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 434,
+      "promptTokens": 1626,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a concrete meeting stated to the room (en)",
+    "group": "channel-addressing",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "anyone",
+      "actual": "anyone",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "duty",
+      "expected": "calendar_upkeep",
+      "actual": "calendar_upkeep",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 511,
+      "promptTokens": 1630,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a task assignment stated to the room",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "anyone",
+      "actual": "anyone",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "duty",
+      "expected": "team_flow_update",
+      "actual": "team_flow_update",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 386,
+      "promptTokens": 1637,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a vague wish to meet records nothing",
+    "group": "channel-addressing",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "duty",
+      "expected": "none",
+      "actual": "none",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 386,
+      "promptTokens": 1628,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an open question to the room records nothing",
+    "group": "channel-addressing",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "duty",
+      "expected": "none",
+      "actual": "none",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 521,
+      "promptTokens": 1623,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "direct request with nothing open (ko)",
+    "group": "direct-nothing-open",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": null
+   },
+   {
+    "name": "direct question with nothing open (ko)",
+    "group": "direct-nothing-open",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": null
+   },
+   {
+    "name": "direct question about the agent (ko)",
+    "group": "direct-nothing-open",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": null
+   },
+   {
+    "name": "direct request with nothing open (en)",
+    "group": "direct-nothing-open",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": null
+   },
+   {
+    "name": "progress question (ko)",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 484,
+      "promptTokens": 834,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "progress question, short",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 459,
+      "promptTokens": 834,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "progress question (en)",
+    "group": "busy-running",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 458,
+      "promptTokens": 832,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an addition to the running task",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 386,
+      "promptTokens": 840,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a format change to the running task",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 588,
+      "promptTokens": 844,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an addition (en)",
+    "group": "busy-running",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 430,
+      "promptTokens": 834,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an addition, short",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 433,
+      "promptTokens": 832,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a replacement instruction (ko)",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "replace",
+      "actual": "replace",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 589,
+      "promptTokens": 842,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a replacement instruction (en)",
+    "group": "busy-running",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "replace",
+      "actual": "replace",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 367,
+      "promptTokens": 839,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a stop request, short",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "cancel",
+      "actual": "cancel",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 550,
+      "promptTokens": 832,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a cancel request (ko)",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "cancel",
+      "actual": "cancel",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 571,
+      "promptTokens": 832,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a stop request (en)",
+    "group": "busy-running",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "cancel",
+      "actual": "cancel",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 513,
+      "promptTokens": 833,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an independent request alongside (ko)",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "new_task",
+      "actual": "new_task",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 458,
+      "promptTokens": 847,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an independent request alongside (en)",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "new_task",
+      "actual": "new_task",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 529,
+      "promptTokens": 842,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "thanks while it runs",
+    "group": "busy-running",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "busyRoute",
+      "expected": "unrelated",
+      "actual": "unrelated",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 511,
+      "promptTokens": 833,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a laugh while it runs",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "busyRoute",
+      "expected": "unrelated",
+      "actual": "unrelated",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 537,
+      "promptTokens": 828,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "channel mention steers the running task",
+    "group": "busy-running",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 572,
+      "promptTokens": 1745,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "revise: another target instead (ko)",
+    "group": "busy-waiting-approval",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 587,
+      "promptTokens": 866,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "revise: another day (ko)",
+    "group": "busy-waiting-approval",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 539,
+      "promptTokens": 863,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "revise (en)",
+    "group": "busy-waiting-approval",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 603,
+      "promptTokens": 862,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "ask what would be deleted (ko)",
+    "group": "busy-waiting-approval",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 572,
+      "promptTokens": 868,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "ask what would be deleted (en)",
+    "group": "busy-waiting-approval",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 568,
+      "promptTokens": 859,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "ask why approval is needed",
+    "group": "busy-waiting-approval",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 528,
+      "promptTokens": 863,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "ask whether it is still waiting",
+    "group": "busy-waiting-approval",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 554,
+      "promptTokens": 865,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "unrelated request (ko)",
+    "group": "busy-waiting-approval",
+    "split": "dev",
+    "isRight": false,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "new_task",
+      "actual": "steer",
+      "isCorrect": false
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 598,
+      "promptTokens": 870,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "unrelated request (en)",
+    "group": "busy-waiting-approval",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "new_task",
+      "actual": "new_task",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 578,
+      "promptTokens": 867,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "chatter (ko)",
+    "group": "busy-waiting-approval",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "busyRoute",
+      "expected": "unrelated",
+      "actual": "unrelated",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 531,
+      "promptTokens": 863,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "chatter (en)",
+    "group": "busy-waiting-approval",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "busyRoute",
+      "expected": "unrelated",
+      "actual": "unrelated",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 750,
+      "promptTokens": 859,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "revise: another topic (ko)",
+    "group": "busy-waiting-answer",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 591,
+      "promptTokens": 875,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "revise: another topic (en)",
+    "group": "busy-waiting-answer",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 678,
+      "promptTokens": 864,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "revise: a length",
+    "group": "busy-waiting-answer",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 498,
+      "promptTokens": 867,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "ask the difference between the options (ko)",
+    "group": "busy-waiting-answer",
+    "split": "dev",
+    "isRight": false,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "unrelated",
+      "isCorrect": false
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 422,
+      "promptTokens": 872,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "ask the difference between the options (en)",
+    "group": "busy-waiting-answer",
+    "split": "dev",
+    "isRight": false,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "false",
+      "isCorrect": false
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "unrelated",
+      "isCorrect": false
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 400,
+      "promptTokens": 862,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "ask what it waits for",
+    "group": "busy-waiting-answer",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 396,
+      "promptTokens": 867,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "unrelated request (ko)",
+    "group": "busy-waiting-answer",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "new_task",
+      "actual": "new_task",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 365,
+      "promptTokens": 868,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "unrelated request (en)",
+    "group": "busy-waiting-answer",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "new_task",
+      "actual": "new_task",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 558,
+      "promptTokens": 865,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "chatter",
+    "group": "busy-waiting-answer",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "busyRoute",
+      "expected": "unrelated",
+      "actual": "unrelated",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 441,
+      "promptTokens": 864,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a correction to the delivered table",
+    "group": "finished-follow-up",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 430,
+      "promptTokens": 600,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a format request for the delivered table",
+    "group": "finished-follow-up",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 494,
+      "promptTokens": 590,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "an addition to the delivered table (en)",
+    "group": "finished-follow-up",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 429,
+      "promptTokens": 591,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "thanks plus a follow-up",
+    "group": "finished-follow-up",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 408,
+      "promptTokens": 596,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a follow-up, short",
+    "group": "finished-follow-up",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 459,
+      "promptTokens": 582,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a new request (ko)",
+    "group": "finished-follow-up",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 445,
+      "promptTokens": 593,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a new request (en)",
+    "group": "finished-follow-up",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 433,
+      "promptTokens": 590,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "a new question (ko)",
+    "group": "finished-follow-up",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 440,
+      "promptTokens": 588,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "channel follow-up with a mention",
+    "group": "finished-follow-up",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 453,
+      "promptTokens": 1501,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "channel new request with a mention",
+    "group": "finished-follow-up",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 450,
+      "promptTokens": 1498,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "channel chatter after a delivered task",
+    "group": "finished-follow-up",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 521,
+      "promptTokens": 1787,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "channel burst: chatter then a request",
+    "group": "burst",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 510,
+      "promptTokens": 2617,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "channel burst: laugh, request, thanks to a colleague",
+    "group": "burst",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "none",
+      "actual": "none",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 507,
+      "promptTokens": 3782,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "channel burst: colleagues arranging lunch, then a booking (en)",
+    "group": "burst",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "target",
+      "expected": "human",
+      "actual": "human",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 526,
+      "promptTokens": 3783,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "channel burst: two standing duties",
+    "group": "burst",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "anyone",
+      "actual": "anyone",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "duty",
+      "expected": "calendar_upkeep",
+      "actual": "calendar_upkeep",
+      "isCorrect": true
+     },
+     {
+      "field": "target",
+      "expected": "anyone",
+      "actual": "anyone",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "duty",
+      "expected": "team_flow_update",
+      "actual": "team_flow_update",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 533,
+      "promptTokens": 2811,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "running burst: two additions",
+    "group": "burst",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 528,
+      "promptTokens": 1268,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "running burst: progress and an independent request",
+    "group": "burst",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "new_task",
+      "actual": "new_task",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 522,
+      "promptTokens": 1262,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "running burst: progress and an addition (en)",
+    "group": "burst",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "status",
+      "actual": "status",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 665,
+      "promptTokens": 1264,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "waiting burst: a change in two parts",
+    "group": "burst",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "busyRoute",
+      "expected": "steer",
+      "actual": "steer",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 666,
+      "promptTokens": 1288,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "finished burst: a correction and a new request",
+    "group": "burst",
+    "split": "held",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "relatesToActiveTask",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "relatesToActiveTask",
+      "expected": "false",
+      "actual": "false",
+      "isCorrect": true
+     }
+    ],
+    "calls": [
+     {
+      "latencyMs": 668,
+      "promptTokens": 766,
+      "attempts": 1
+     }
+    ]
+   },
+   {
+    "name": "direct burst with nothing open",
+    "group": "burst",
+    "split": "dev",
+    "isRight": true,
+    "checks": [
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     },
+     {
+      "field": "target",
+      "expected": "bot",
+      "actual": "bot",
+      "isCorrect": true
+     },
+     {
+      "field": "shouldRespond",
+      "expected": "true",
+      "actual": "true",
+      "isCorrect": true
+     }
+    ],
+    "calls": null
+   }
+  ]
+ ]
+}
