@@ -208,6 +208,10 @@ func interruptedTaskResumeEvent(taskRun task.TaskRun, launchContext interruptedT
 	}
 }
 
+func ActiveGoalOfARunResumedOnItsHeldCall(taskRun task.TaskRun, taskEvents []task.TaskEvent) agentcontract.ActiveGoal {
+	return interruptedTaskActiveGoal(taskRun, taskEvents, autoResumeTaskProfile(taskRun.TaskRunID).guidanceNote)
+}
+
 func interruptedTaskActiveGoal(taskRun task.TaskRun, taskEvents []task.TaskEvent, guidanceNote string) agentcontract.ActiveGoal {
 	return interruptedTaskActiveGoalWithInstruction(taskRun, taskEvents, guidanceNote, "")
 }
