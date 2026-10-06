@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -58,9 +59,13 @@ func decidedMessageText(state json.RawMessage) string {
 		Messages []struct {
 			Text string `json:"text"`
 		} `json:"messages"`
+		Reply string `json:"reply"`
 	}
 	if json.Unmarshal(state, &decisionState) != nil {
 		return ""
+	}
+	if len(decisionState.Messages) == 0 {
+		return decisionState.Reply
 	}
 	texts := []string{}
 	for _, message := range decisionState.Messages {
@@ -72,6 +77,9 @@ func decidedMessageText(state json.RawMessage) string {
 func (server *Server) decide(document decisionRequestDocument) (map[string]model.DecisionAnswer, error) {
 	if len(document.Questions) == 0 {
 		return nil, errors.New("a decision request asked no question")
+	}
+	if isApprovalReading(document.Questions) {
+		return server.readApprovalReply(document)
 	}
 	if _, unknownQuestionNames := intaketest.AnswersAndUnknownQuestions(document.Questions, noOutcome); len(unknownQuestionNames) > 0 {
 		return nil, fmt.Errorf("no script answers the decision questions %s", strings.Join(unknownQuestionNames, ", "))
@@ -99,15 +107,66 @@ func (server *Server) outcomeFor(document decisionRequestDocument) (intaketest.O
 	if len(server.turns) == 0 {
 		return intaketest.Outcome{}, fmt.Errorf("a turn no script decided asked about %q: %s", decidedMessageText(document.State), strings.Join(sortedQuestionNames(document.Questions), ", "))
 	}
-	nextTurn := server.turns[0]
-	if askedAbout := decidedMessageText(document.State); askedAbout != nextTurn.Message {
-		return intaketest.Outcome{}, fmt.Errorf("the next scripted turn decides %q, but intake asked about %q", nextTurn.Message, askedAbout)
+	nextTurn, errorValue := server.popTurnDeciding(decidedMessageText(document.State))
+	if errorValue != nil {
+		return intaketest.Outcome{}, errorValue
 	}
-	server.turns = server.turns[1:]
 	outcome := nextTurn.Outcome
 	outcome.PendingChoiceKeys = intaketest.PendingChoiceKeys(document.State)
 	server.decidedTurn = &outcome
 	return outcome, nil
+}
+
+func (server *Server) popTurnDeciding(askedAbout string) (turnScript, error) {
+	nextTurn := server.turns[0]
+	if askedAbout != nextTurn.Message {
+		return turnScript{}, fmt.Errorf("the next scripted turn decides %q, but intake asked about %q", nextTurn.Message, askedAbout)
+	}
+	server.turns = server.turns[1:]
+	return nextTurn, nil
+}
+
+func isApprovalReading(questions map[string]model.DecisionQuestion) bool {
+	_, isAsked := questions[approvalreply.AnswerQuestionName]
+	return isAsked && len(questions) == 1
+}
+
+func (server *Server) readApprovalReply(document decisionRequestDocument) (map[string]model.DecisionAnswer, error) {
+	reply := decidedMessageText(document.State)
+	server.mutex.Lock()
+	defer server.mutex.Unlock()
+	if len(server.turns) == 0 {
+		return nil, fmt.Errorf("a reply no script decided was read as an answer to an approval question: %q", reply)
+	}
+	scriptedTurn, errorValue := server.popTurnDeciding(reply)
+	if errorValue != nil {
+		return nil, errorValue
+	}
+	options := approvalOptions(document.Questions[approvalreply.AnswerQuestionName])
+	chosenOptionID, isScripted := approvalreply.ScriptedOptionID(options, scriptedTurn.TurnDecision)
+	if !isScripted {
+		chosenOptionID = approvalreply.OtherOptionID
+	}
+	return map[string]model.DecisionAnswer{approvalreply.AnswerQuestionName: {
+		Type:          model.DecisionQuestionTypeChoice,
+		Choice:        chosenOptionID,
+		Probabilities: map[string]float64{chosenOptionID: 1},
+		Confidence:    1,
+	}}, nil
+}
+
+func approvalOptions(question model.DecisionQuestion) []approvalreply.Option {
+	meaningByOptionID, _ := question.Criteria.(map[string]any)
+	options := []approvalreply.Option{}
+	for optionID, meaning := range meaningByOptionID {
+		if optionID == approvalreply.OtherOptionID {
+			continue
+		}
+		meaningText, _ := meaning.(string)
+		options = append(options, approvalreply.Option{ID: optionID, Meaning: meaningText})
+	}
+	sort.Slice(options, func(first int, second int) bool { return options[first].ID < options[second].ID })
+	return options
 }
 
 func selectsToolsOnly(questions map[string]model.DecisionQuestion) bool {
