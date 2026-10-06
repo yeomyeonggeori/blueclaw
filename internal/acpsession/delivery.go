@@ -23,10 +23,10 @@ const (
 )
 
 type Delivery struct {
-	DeliveryID    string `json:"deliveryID,omitempty"`
-	ReplyTargetID string `json:"replyTargetID,omitempty"`
-	AlreadyPosted bool   `json:"alreadyPosted,omitempty"`
-	Final         bool   `json:"final,omitempty"`
+	DeliveryID      string `json:"deliveryID,omitempty"`
+	ReplyTargetID   string `json:"replyTargetID,omitempty"`
+	IsAlreadyPosted bool   `json:"isAlreadyPosted,omitempty"`
+	IsFinal         bool   `json:"isFinal,omitempty"`
 }
 
 type DeliveredReport struct {

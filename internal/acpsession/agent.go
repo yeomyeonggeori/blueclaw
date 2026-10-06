@@ -395,7 +395,7 @@ func (agent *Agent) replySenderFor(sessionID acp.SessionId) connectors.ReplySend
 
 func (agent *Agent) replySenderForDelivery(sessionID acp.SessionId, deliveryID string) connectors.ReplySender {
 	return func(ctx context.Context, replyTarget connectors.ReplyTarget, reply connectors.OutboundReply) (string, error) {
-		return agent.deliverReply(ctx, sessionID, Delivery{DeliveryID: deliveryID, ReplyTargetID: replyTarget.ReplyTargetID, Final: true}, reply)
+		return agent.deliverReply(ctx, sessionID, Delivery{DeliveryID: deliveryID, ReplyTargetID: replyTarget.ReplyTargetID, IsFinal: true}, reply)
 	}
 }
 

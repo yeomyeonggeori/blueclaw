@@ -312,7 +312,15 @@ export const toolInvokeContextSchema = z.looseObject({
   requesterPlatformUserID: z.string().optional(),
   taskSource: z.string().optional(),
   isScheduledRun: z.boolean().optional(),
-  isApprovalContinuation: z.boolean().optional(),
+  holdID: z.string().optional(),
+  scheduledApprovedCall: z
+    .looseObject({
+      toolName: z.string(),
+      toolInput: z.unknown().optional(),
+      approverPersonID: z.string().optional(),
+      approvedAt: z.string().optional(),
+    })
+    .optional(),
   conversationID: z.string().optional(),
   conversationType: z.string().optional(),
   channelID: z.string().optional(),

@@ -1,5 +1,5 @@
 {
-  "aggregateHash": "9fc825cfe22a47be46281b7faa461537bd071c33af0a3ea3e5ddc8a98b2c224f",
+  "aggregateHash": "25718597ea5b889390e54db4e52bc80aa1e5dec4e9688e7a44cc2402000777c3",
   "protocolVersion": "0.4.0",
   "schemas": [
     {
@@ -99,7 +99,7 @@
     },
     {
       "fileName": "tool-invoke-request.schema.json",
-      "hash": "a0fba8d30ccd46b01c54a6d1db0ffefedad5a65fc292ec4367289ad44c5ace98",
+      "hash": "c4783a7a849f6ee2d82a1a5dabd854f83c034996f74227e923334341f5ccef2d",
       "name": "tool-invoke-request"
     },
     {

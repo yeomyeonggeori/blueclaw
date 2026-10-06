@@ -29,8 +29,8 @@
 		"delivery": [
 			"deliveryID",
 			"replyTargetID",
-			"alreadyPosted",
-			"final"
+			"isAlreadyPosted",
+			"isFinal"
 		],
 		"undelivered": [
 			"deliveryID",

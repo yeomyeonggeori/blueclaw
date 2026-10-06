@@ -78,8 +78,8 @@
         "conversationType": {
           "type": "string"
         },
-        "isApprovalContinuation": {
-          "type": "boolean"
+        "holdID": {
+          "type": "string"
         },
         "isScheduledRun": {
           "type": "boolean"
@@ -101,6 +101,25 @@
         },
         "requesterPlatformUserID": {
           "type": "string"
+        },
+        "scheduledApprovedCall": {
+          "additionalProperties": {},
+          "properties": {
+            "approvedAt": {
+              "type": "string"
+            },
+            "approverPersonID": {
+              "type": "string"
+            },
+            "toolInput": {},
+            "toolName": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "toolName"
+          ],
+          "type": "object"
         },
         "taskSource": {
           "type": "string"
