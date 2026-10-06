@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { finalizeEvent, getPublicKey } from "nostr-tools/pure";
-import { createRelayConnection, type RelayClientTiming } from "../src/adapters/buzz/relay-connection.ts";
+import { createRelayConnection, RelayQueryIncomplete, type RelayClientTiming } from "../src/adapters/buzz/relay-connection.ts";
 import type { BuzzEvent } from "../src/adapters/buzz/types.ts";
 
 const secretKey = Uint8Array.from({ length: 32 }, () => 1);
@@ -115,17 +115,52 @@ describe("a subscription the relay closes", () => {
 		client.disconnect();
 	});
 
-	test("that was a query resolves with what arrived", async () => {
+	test("that was a query is a refusal rather than an empty answer", async () => {
 		const client = createRelayConnection(relayURL, signer, undefined, timing);
 		await client.connect();
 		const socket = FakeSocket.opened[0]!;
-		const answer = client.query({ kinds: [0] });
+		const answer = client.query({ kinds: [0] }).catch((thrown: unknown) => thrown);
 		await settle();
 		const queryID = socket.requests().at(-1)?.[1];
 
 		socket.receive(["CLOSED", queryID, "error: database error"]);
 
-		expect(await answer).toEqual([]);
+		expect(await answer).toBeInstanceOf(RelayQueryIncomplete);
+		client.disconnect();
+	});
+
+	test("for being over quota is asked again once after the wait the relay states", async () => {
+		const client = createRelayConnection(relayURL, signer, undefined, timing);
+		await client.connect();
+		const socket = FakeSocket.opened[0]!;
+		const answer = client.query({ kinds: [9], "#h": ["room-1"] });
+		await settle();
+		const queryID = socket.requests().at(-1)?.[1];
+		const message = signer.signEvent(9, "hello", [["h", "room-1"]]);
+
+		socket.receive(["CLOSED", queryID, "rate-limited: quota exceeded; retry in 0s"]);
+		await settle(5);
+		socket.receive(["EVENT", queryID, message]);
+		socket.receive(["EOSE", queryID]);
+
+		expect((await answer).map((event) => event.id)).toEqual([message.id]);
+		expect(socket.requests().filter((frame) => frame[0] === "REQ" && frame[1] === queryID)).toHaveLength(2);
+		client.disconnect();
+	});
+
+	test("for being over quota twice is a refusal", async () => {
+		const client = createRelayConnection(relayURL, signer, undefined, timing);
+		await client.connect();
+		const socket = FakeSocket.opened[0]!;
+		const answer = client.query({ kinds: [9] }).catch((thrown: unknown) => thrown);
+		await settle();
+		const queryID = socket.requests().at(-1)?.[1];
+
+		socket.receive(["CLOSED", queryID, "rate-limited: quota exceeded; retry in 0s"]);
+		await settle(5);
+		socket.receive(["CLOSED", queryID, "rate-limited: quota exceeded; retry in 0s"]);
+
+		expect(await answer).toBeInstanceOf(RelayQueryIncomplete);
 		client.disconnect();
 	});
 
@@ -178,6 +213,32 @@ describe("a subscription the relay closes", () => {
 
 		expect((await answer).complete).toBe(false);
 		expect(socket.requests().filter((frame) => frame[1] === queryID)).toHaveLength(2);
+		client.disconnect();
+	});
+});
+
+describe("a query the relay never finishes", () => {
+	test("is a refusal once its time is up", async () => {
+		const client = createRelayConnection(relayURL, signer, undefined, timing);
+		await client.connect();
+		const answer = client.query({ kinds: [9] }, 20).catch((thrown: unknown) => thrown);
+
+		expect(await answer).toBeInstanceOf(RelayQueryIncomplete);
+		client.disconnect();
+	});
+});
+
+describe("a query for authors that are not public keys", () => {
+	test("is refused before it reaches the relay", async () => {
+		const client = createRelayConnection(relayURL, signer, undefined, timing);
+		await client.connect();
+		const socket = FakeSocket.opened[0]!;
+		const asked = socket.requests().length;
+
+		const answer = await client.query({ kinds: [0], authors: ["npub1notahexkey"] }).catch((thrown: unknown) => thrown);
+
+		expect(answer).toBeInstanceOf(RelayQueryIncomplete);
+		expect(socket.requests()).toHaveLength(asked);
 		client.disconnect();
 	});
 });

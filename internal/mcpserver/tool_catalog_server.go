@@ -15,15 +15,14 @@ import (
 const toolCatalogServerName = "blueclaw-tool-catalog"
 
 type RequesterToolSet struct {
-	RequesterPersonID       string
-	TaskRunID               string
-	ToolSet                 *toolcontract.ToolSet
-	OfferedOnRequestMetaKey string
-	HarnessSession          HarnessSession
-	ToolAudience            ToolAudience
-	ResponseLanguage        string
-	Prompt                  string
-	TurnContext             context.Context
+	RequesterPersonID string
+	TaskRunID         string
+	ToolSet           *toolcontract.ToolSet
+	HarnessSession    HarnessSession
+	ToolAudience      ToolAudience
+	ResponseLanguage  string
+	Prompt            string
+	TurnContext       context.Context
 
 	ObserveToolInvocation func(toolName string, toolResult toolcontract.ToolResult, isSucceeded bool)
 }
@@ -37,15 +36,12 @@ func NewToolCatalogServer(requesterToolSet RequesterToolSet, version string) (*m
 	}
 	server := mcp.NewServer(&mcp.Implementation{Name: toolCatalogServerName, Version: version}, nil)
 	publishedDescriptors := publishedToolDescriptors(requesterToolSet)
-	offeredOnRequest := namesOfferedOnRequest(requesterToolSet, publishedDescriptors)
+	publishedDescriptors = markedOfferedOnRequest(requesterToolSet, publishedDescriptors)
 	requesterToolSet.ToolSet = toolSetAllowingEveryPublishedTool(requesterToolSet, publishedDescriptors)
 	for _, toolDescriptor := range publishedDescriptors {
 		tool, isServable := servableTool(markedHostGated(toolDescriptor, requesterToolSet.ToolSet))
 		if !isServable {
 			continue
-		}
-		if offeredOnRequest[toolDescriptor.Name] {
-			tool.Meta[requesterToolSet.OfferedOnRequestMetaKey] = true
 		}
 		server.AddTool(tool, invokeThroughToolSet(requesterToolSet, toolDescriptor, tool.OutputSchema != nil))
 	}
@@ -65,15 +61,16 @@ func publishedToolDescriptors(requesterToolSet RequesterToolSet) []toolcontract.
 	return publishedDescriptors
 }
 
-func namesOfferedOnRequest(requesterToolSet RequesterToolSet, publishedDescriptors []toolcontract.ToolDescriptor) map[string]bool {
-	offeredOnRequest := map[string]bool{}
-	if requesterToolSet.ToolAudience != ToolAudienceBare || requesterToolSet.OfferedOnRequestMetaKey == "" {
-		return offeredOnRequest
+func markedOfferedOnRequest(requesterToolSet RequesterToolSet, publishedDescriptors []toolcontract.ToolDescriptor) []toolcontract.ToolDescriptor {
+	if requesterToolSet.ToolAudience != ToolAudienceBare {
+		return publishedDescriptors
 	}
+	marked := make([]toolcontract.ToolDescriptor, 0, len(publishedDescriptors))
 	for _, toolDescriptor := range publishedDescriptors {
-		offeredOnRequest[toolDescriptor.Name] = !isCallableByTheLoop(requesterToolSet.ToolSet, toolDescriptor)
+		toolDescriptor.IsOfferedOnRequest = !isCallableByTheLoop(requesterToolSet.ToolSet, toolDescriptor)
+		marked = append(marked, toolDescriptor)
 	}
-	return offeredOnRequest
+	return marked
 }
 
 func callableAndSelectableToolDescriptors(toolSet *toolcontract.ToolSet) []toolcontract.ToolDescriptor {

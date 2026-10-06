@@ -37,7 +37,6 @@ func factoryOver(processFor ProcessFor, toolCatalogPublisher acpharness.ToolCata
 		harness.UseHostInstruction()
 		harness.UsePromptMeta(promptMetaFor(dependencies))
 		harness.UseCheckpointMarker(acpagent.CheckpointMetaKey)
-		harness.UseOfferedOnRequestMarker(acpagent.OfferedOnRequestMetaKey)
 		harness.UseTurnResultMeta(acpagent.TurnResultMetaKey)
 		harness.UseLedgerExchange(skippedLedgerEventNames(dependencies))
 		harness.UseTurnContextOnToolCalls()
