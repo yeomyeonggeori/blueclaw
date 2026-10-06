@@ -69,7 +69,7 @@ func newThreadAskFixture(t *testing.T, script threadAskScript) *threadAskFixture
 			"bluecollar_execution_plan": {
 				`{"originalInstruction":"내일 휴가 일정을 캘린더에서 삭제해줘","summary":"내일 휴가 일정을 삭제합니다.","targets":["calendar event"],"schedule":"","startAt":"","endAt":"","cadence":"","externalSend":false,"thirdPartyExternalSend":false,"repeated":false,"highFrequency":false,"destructive":true,"permissionChange":false,"publicDeploy":false,"paidAction":false,"missingInformation":[],"continuationInstruction":"내일 휴가 일정을 캘린더에서 삭제합니다."}`,
 			},
-			"blueclaw_approval_question": {`{"question":"내일 휴가 일정을 삭제할까요?"}`},
+			"approval_question": {`{"question":"내일 휴가 일정을 삭제할까요?"}`},
 		},
 		ActionResponses: script.actions,
 	})

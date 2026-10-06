@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/yeomyeonggeori/bluecollar/approval"
 	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"strings"
 	"testing"
@@ -297,7 +298,7 @@ func (languageModel *wordingLanguageModel) GenerateStructuredResponse(_ context.
 func TestTheRequesterIsAskedInWordsTheModelChose(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
 	languageModel := &wordingLanguageModel{question: "내일 팀 회의를 캘린더에서 지울까요?"}
-	gate.UseLanguageModel(languageModel)
+	gate.UseQuestionWorder(approval.NewWorder(languageModel))
 
 	gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
 
@@ -311,7 +312,7 @@ func TestTheRequesterIsAskedInWordsTheModelChose(t *testing.T) {
 
 func TestAnUnwordableCallStillReachesTheRequesterAsTheCallItself(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
-	gate.UseLanguageModel(&wordingLanguageModel{failure: errors.New("the language model is unreachable")})
+	gate.UseQuestionWorder(approval.NewWorder(&wordingLanguageModel{failure: errors.New("the language model is unreachable")}))
 
 	heldOutcome, _ := gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
 
@@ -328,7 +329,7 @@ func TestAnUnwordableCallStillReachesTheRequesterAsTheCallItself(t *testing.T) {
 
 func TestAnUnwordableCallRecordsWhyNoModelWordedIt(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
-	gate.UseLanguageModel(&wordingLanguageModel{failure: errors.New("the language model is unreachable")})
+	gate.UseQuestionWorder(approval.NewWorder(&wordingLanguageModel{failure: errors.New("the language model is unreachable")}))
 
 	gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
 
@@ -432,7 +433,7 @@ func TestARunThatCannotBeParkedIsNeverToldItWasAsked(t *testing.T) {
 func TestTheQuestionIsToldWhatTheApprovalScopeCovers(t *testing.T) {
 	gate, _, taskRun := gateFixture(t)
 	languageModel := &wordingLanguageModel{question: "지울까요?"}
-	gate.UseLanguageModel(languageModel)
+	gate.UseQuestionWorder(approval.NewWorder(languageModel))
 
 	gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
 
@@ -440,7 +441,7 @@ func TestTheQuestionIsToldWhatTheApprovalScopeCovers(t *testing.T) {
 	for _, message := range languageModel.lastRequest.Messages {
 		messages += message.Content + "\n"
 	}
-	if !strings.Contains(messages, `"approvalScope":"calendar"`) || !strings.Contains(messages, "approvalScope is given") {
+	if !strings.Contains(messages, `"approvalScope":{"name":"calendar"`) || !strings.Contains(messages, "approves every action of that scope") {
 		t.Fatalf("the wording model was not told what approving this call also approves, got %s", messages)
 	}
 }

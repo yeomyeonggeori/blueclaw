@@ -1,6 +1,7 @@
 package approvalgate
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -77,7 +78,7 @@ func (gate *Gate) DeferApprovedCall(ctx context.Context, request DeferralRequest
 			OriginTaskRunID:  request.TaskRunID,
 		},
 		StartsAt:      startsAt,
-		Prompt:        firstNonEmpty(request.Prompt, request.ToolName),
+		Prompt:        cmp.Or(strings.TrimSpace(request.Prompt), strings.TrimSpace(request.ToolName)),
 		Delivery:      task.ScheduleDeliveryBinding{Platform: request.Platform, ConversationID: request.ConversationID, ReplyTargetID: request.ReplyTargetID},
 		ReferenceTime: request.ReferenceTime,
 	})
