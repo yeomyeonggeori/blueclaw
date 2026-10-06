@@ -115,6 +115,18 @@ type Collaborators struct {
 	TaskRunStore       taskstate.TaskRunStore
 }
 
+func (agent *Agent) hasLostItsClient() bool {
+	if agent.connection == nil {
+		return false
+	}
+	select {
+	case <-agent.connection.Done():
+		return true
+	default:
+		return false
+	}
+}
+
 func (agent *Agent) UseConnection(connection *acp.AgentSideConnection) {
 	agent.connection = connection
 }

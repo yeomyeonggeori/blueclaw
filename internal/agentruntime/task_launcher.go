@@ -390,6 +390,9 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 	})
 	launchRecords = append(launchRecords, record)
 	taskLauncher.closeAbandonedLaunchTaskRun(openedTaskRun, turnResult.TaskRun.TaskRunID, request.RequesterPersonID)
+	if heldRun, isLeftHeld := taskLauncher.runLeftHeldByItsClient(ctx, record, request.ExistingTaskRunID); isLeftHeld {
+		return TaskLaunchResult{TurnResult: agentcontract.AgentTurnResult{TaskRun: heldRun}, ToolNames: toolNames, NormalizedProfileName: normalizedProfileName}, routerCallRecords, nil
+	}
 	if record.Error != "" {
 		if taskRunID := strings.TrimSpace(turnResult.TaskRun.TaskRunID); taskRunID != "" {
 			request.ExistingTaskRunID = taskRunID
@@ -417,6 +420,14 @@ func (taskLauncher *TaskLauncher) launchRoutedTask(ctx context.Context, request 
 		ToolNames:             launchedToolNames,
 		NormalizedProfileName: normalizedProfileName,
 	}, routerCallRecords, nil
+}
+
+func (taskLauncher *TaskLauncher) runLeftHeldByItsClient(ctx context.Context, record launchStepRecord, taskRunID string) (agentcontract.TaskRun, bool) {
+	if record.Error == "" || ctx.Err() == nil || strings.TrimSpace(taskRunID) == "" {
+		return agentcontract.TaskRun{}, false
+	}
+	taskRun, isFound := taskLauncher.taskRunService.FindTaskRun(taskRunID)
+	return taskRun, isFound && taskRun.Status == agentcontract.TaskStatusWaitingApproval
 }
 
 type provisionRequesterWorkspaceLaunchStep struct{}
