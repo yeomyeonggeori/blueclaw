@@ -379,6 +379,7 @@ export const toolInvokeResponseSchema = z.strictObject({
 export const approvalTargetSchema = z.strictObject({
   inputField: z.string().optional(),
   id: z.string().optional(),
+  ids: z.array(z.string()).optional(),
   title: z.string().optional(),
   startsAt: z.string().optional(),
   preview: z.string().optional(),
