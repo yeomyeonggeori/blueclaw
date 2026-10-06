@@ -21,6 +21,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/turnoutcome"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 const ToolCatalogServerName = "blueclaw"
@@ -154,7 +155,7 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 		ObserveToolInvocation: succeededToolRecorder.Observe,
 		RequesterPersonID:     request.RequesterPersonID,
 		TaskRunID:             request.ExistingTaskRunID,
-		ToolSet:               request.ToolSet,
+		ToolSet:               toolSetWithTheToolsTheTurnChose(request),
 		ResponseLanguage:      request.ResponseLanguage,
 		Prompt:                request.Prompt,
 		ToolAudience:          harness.toolAudience,
@@ -205,6 +206,13 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 		return harness.settledTurnResult(request, carriedTurnResult), nil
 	}
 	return harness.turnResult(ctx, request, turnObserver, succeededToolRecorder, promptResponse.StopReason), nil
+}
+
+func toolSetWithTheToolsTheTurnChose(request agentcontract.AgentTurnRequest) *toolcontract.ToolSet {
+	if request.PrecomputedTurnDecision == nil {
+		return request.ToolSet
+	}
+	return request.ToolSet.WithAdditionalAllowedToolNames(request.PrecomputedTurnDecision.InitialToolNames)
 }
 
 func (harness *Harness) advanceTaskRun(request agentcontract.AgentTurnRequest) {

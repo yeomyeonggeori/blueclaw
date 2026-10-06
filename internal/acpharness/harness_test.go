@@ -318,6 +318,28 @@ func TestAnExternalAgentsToolCallsAreForwardedToTheTurnsToolCallObserver(t *test
 	}
 }
 
+func TestACatalogOffersTheToolsTheTurnChoseBesideTheProfilesAllowedOnes(t *testing.T) {
+	executed := []daemonExecutedTool{}
+	toolCatalog := newPublishedToolCatalog(t)
+	harness := New(&inProcessAgentProcess{agent: &externalAgent{}}, toolCatalog, nil)
+	toolSet := requesterToolSet(t, "person-1", &executed).WithAllowedToolNames([]string{"memory_search"})
+
+	harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
+		RequesterPersonID:       "person-1",
+		Prompt:                  "회의록 정리해줘",
+		WorkspaceRootPath:       t.TempDir(),
+		ToolSet:                 toolSet,
+		PrecomputedTurnDecision: &agentcontract.TurnDecision{InitialToolNames: []string{"note_write"}},
+	})
+
+	if !toolCatalog.publishedToolSet.ToolSet.IsAllowed("note_write") {
+		t.Fatal("a tool the router chose for this turn must be published, or the agent has no way to call it")
+	}
+	if toolSet.IsAllowed("note_write") {
+		t.Fatal("choosing a tool for one turn must not widen the tool set the caller holds")
+	}
+}
+
 func TestAnAgentThatBringsItsOwnShellIsNotHandedOurs(t *testing.T) {
 	executed := []daemonExecutedTool{}
 	toolCatalog := newPublishedToolCatalog(t)
