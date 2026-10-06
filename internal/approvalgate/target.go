@@ -73,7 +73,7 @@ func narrowedToolInput(toolInput json.RawMessage, target ApprovalTarget) json.Ra
 	if json.Unmarshal(toolInput, &document) != nil {
 		return nil
 	}
-	identity, errorValue := json.Marshal(strings.TrimSpace(target.ID))
+	identity, errorValue := json.Marshal(narrowedIdentity(target))
 	if errorValue != nil {
 		return nil
 	}
@@ -83,4 +83,11 @@ func narrowedToolInput(toolInput json.RawMessage, target ApprovalTarget) json.Ra
 		return nil
 	}
 	return narrowedInput
+}
+
+func narrowedIdentity(target ApprovalTarget) any {
+	if len(target.IDs) > 0 {
+		return target.IDs
+	}
+	return strings.TrimSpace(target.ID)
 }

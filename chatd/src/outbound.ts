@@ -94,6 +94,7 @@ const capabilityHandlers: Record<string, CapabilityHandler> = {
 	"dm.post": handleDirectMessagePost,
 	"dm.send": handleDirectMessageSend,
 	"conversations.list": handleConversationsList,
+	"channels.list": handleChannelsList,
 	"people.list": handlePeopleList,
 	"message.edit": handleMessageEdit,
 	"message.post": handleMessagePost,
@@ -393,6 +394,17 @@ async function handleDirectMessageOpen(
 		conversationID: adapter.channelIdFromThreadId(threadID),
 		replyTargetID: threadID,
 	};
+}
+
+async function handleChannelsList(
+	adapter: PlatformChatAdapter,
+	_configuration: ChatdConfiguration,
+	_requestBody: unknown,
+): Promise<{ channels: Array<{ channelID: string; name: string }> }> {
+	if (!(adapter instanceof BuzzAdapter)) {
+		throw new MalformedRequest(`platform ${adapter.name} has no channel directory`);
+	}
+	return { channels: await adapter.listChannels() };
 }
 
 async function handleConversationsList(
