@@ -60,7 +60,6 @@ export const taskAttemptSchema = z.looseObject({
 
 export enum TaskEventName {
   AgentAction = 'agent.action',
-  AgentAmbientDutyLaunch = 'agent.ambient_duty_launch',
   AgentApprovalAskRequested = 'agent.approval_ask_requested',
   AgentApprovalConfirmationRequested = 'agent.approval_confirmation_requested',
   AgentApprovalUserFacingMessageMissing = 'agent.approval_user_facing_message_missing',
@@ -237,6 +236,7 @@ export enum TaskEventName {
 export const taskEventNameSchema = z.enum(TaskEventName);
 
 export enum HostTaskEventName {
+  AgentAmbientDutyLaunch = 'agent.ambient_duty_launch',
   ApprovalExpired = 'approval.expired',
   ApprovalUnreachable = 'approval.unreachable',
   ApprovalWordingFailed = 'approval.wording_failed',
