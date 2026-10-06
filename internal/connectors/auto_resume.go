@@ -9,6 +9,8 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 type interruptedTaskLaunchContext struct {
@@ -217,6 +219,7 @@ func interruptedTaskActiveGoalWithInstruction(taskRun task.TaskRun, taskEvents [
 	}
 	activeGoal.CurrentObjective = firstNonEmptyString(activeGoal.CurrentObjective, taskRun.Prompt)
 	activeGoal.KnownContext = append(activeGoal.KnownContext, guidanceNote)
+	activeGoal.OutcomeContract.RequiredEvidenceTools = toolcontract.AppendUniqueStrings(activeGoal.OutcomeContract.RequiredEvidenceTools, heldToolNames(taskEvents)...)
 	activeGoal.Status = agentcontract.ActiveGoalStatusActive
 	return activeGoal
 }
@@ -251,7 +254,16 @@ func interruptedTaskTurnDecision(taskEvents []task.TaskEvent, responseLanguage s
 		Reason:           "runtime_restart_auto_resume",
 	}.WithRestoredIntakeState(latestIntakeDecision(taskEvents))
 	decision.TaskLevel = highestRecordedTaskLevel(taskEvents)
+	decision.InitialToolNames = toolcontract.AppendUniqueStrings(decision.InitialToolNames, heldToolNames(taskEvents)...)
 	return &decision
+}
+
+func heldToolNames(taskEvents []task.TaskEvent) []string {
+	toolNames := []string{}
+	for _, hold := range holdrecord.Holds(taskEvents) {
+		toolNames = append(toolNames, hold.Call.ToolName)
+	}
+	return toolNames
 }
 
 func highestRecordedTaskLevel(taskEvents []task.TaskEvent) agentcontract.TaskLevel {
