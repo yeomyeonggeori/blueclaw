@@ -25,8 +25,8 @@ const (
 )
 
 const (
-	ApprovalDecisionConfirm = "confirm"
-	ApprovalDecisionCancel  = "cancel"
+	ApprovalDecisionApprove = "approve"
+	ApprovalDecisionReject  = "reject"
 )
 
 type TaskRun struct {

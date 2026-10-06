@@ -48,3 +48,14 @@ func TestADeferralThatCannotBeScheduledFailsLoudly(t *testing.T) {
 		t.Fatalf("expected both to report that nothing will run, got %+v %+v", failing.Result, unconfigured.Result)
 	}
 }
+
+func TestADeferredCallNamesTheHoldItSettles(t *testing.T) {
+	heldCall := narrowedHeldCall
+	heldCall.HoldID = "hold-1"
+
+	carriedOutCall := DeferHeldCall(context.Background(), &recordingDeferrer{result: toolcontract.ToolSuccessData("scheduled", nil)}, heldCall, DeferralRequest{})
+
+	if carriedOutCall.HoldID != "hold-1" {
+		t.Fatalf("the loop matches a carried-out call to its hold by id, got %q", carriedOutCall.HoldID)
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"testing"
 	"time"
 
@@ -17,7 +18,7 @@ const laterStartsAt = "2099-10-03T03:00:00+09:00"
 
 type choosingAsker struct {
 	answer          ApprovalAnswer
-	offeredChoices  []approvalrecord.Choice
+	offeredChoices  []holdrecord.Choice
 	offeredQuestion string
 }
 
@@ -54,7 +55,7 @@ func hostUpdateRequest(taskRunID string) mcpserver.ApprovalRequest {
 func choiceResolver() *recordingTargetResolver {
 	return &recordingTargetResolver{resolution: ApprovalTargetResolution{
 		Target: ApprovalTarget{InputField: "targetVersion", ID: "v2026.10.02.090000", Title: "v2026.10.01.203142 → v2026.10.02.090000"},
-		Choices: []approvalrecord.Choice{
+		Choices: []holdrecord.Choice{
 			{Key: "offHours", StartsAt: laterStartsAt},
 			{Key: "now"},
 		},

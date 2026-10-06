@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"io"
 	"log/slog"
 	"net"
@@ -417,7 +418,7 @@ func TestHeldCallReachesTheRequesterOverTheSessionThatOwnsTheConversation(t *tes
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	answer, isAnswered := permissionRelay.AskPermission(ctx, approvalRequest, approvalgate.PermissionQuestion{Confirmation: "박예시에게 보낼까요?"})
+	answer, isAnswered := permissionRelay.AskPermission(ctx, approvalRequest, approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "박예시에게 보낼까요?"})
 	if !isAnswered {
 		t.Fatal("nobody was asked, so the call would have been held instead of run")
 	}
@@ -430,8 +431,8 @@ func TestHeldCallReachesTheRequesterOverTheSessionThatOwnsTheConversation(t *tes
 		t.Fatalf("the client was asked %d times, expected once", len(client.permissionAsked))
 	}
 	asked := client.permissionAsked[0]
-	if asked.ToolCall.ToolCallId != acp.ToolCallId(approvalgate.HeldCallID(approvalRequest.ToolName, approvalRequest.ToolInput)) {
-		t.Fatalf("the question carried tool call id %q, which no restart could recompute", asked.ToolCall.ToolCallId)
+	if asked.ToolCall.ToolCallId != "hold-1" {
+		t.Fatalf("the question carried tool call id %q, expected the id of its hold", asked.ToolCall.ToolCallId)
 	}
 	if asked.ToolCall.Title == nil || *asked.ToolCall.Title != "박예시에게 보낼까요?" {
 		t.Fatal("the question the runtime worded is not the question the person was asked")
@@ -453,7 +454,7 @@ func TestACallInAConversationNoSessionOwnsIsNotAsked(t *testing.T) {
 		ConversationID: "conversation-nobody-opened",
 		TaskRunID:      "task-2",
 		ToolName:       "message_send",
-	}, approvalgate.PermissionQuestion{Confirmation: "보낼까요?"})
+	}, approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "보낼까요?"})
 	if isAnswered {
 		t.Fatal("a call was answered by a session that owns another conversation")
 	}
@@ -471,7 +472,7 @@ func TestDecliningTheCallReadsAsReject(t *testing.T) {
 		ConversationID: "conversation-1",
 		TaskRunID:      "task-1",
 		ToolName:       "message_send",
-	}, approvalgate.PermissionQuestion{Confirmation: "보낼까요?"})
+	}, approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "보낼까요?"})
 	if !isAnswered || answer.Signal != agentcontract.ApprovalSignalReject {
 		t.Fatalf("declining read as %q answered=%v", answer.Signal, isAnswered)
 	}
@@ -529,7 +530,7 @@ func TestThePersonsWordsAreReadByTheRouterAndNotByTheRelay(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	answer, isAnswered := permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{Confirmation: "박예시에게 보낼까요?"})
+	answer, isAnswered := permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "박예시에게 보낼까요?"})
 
 	if !isAnswered || answer.Signal != agentcontract.ApprovalSignalApprove {
 		t.Fatalf("the answer read as %q answered=%v", answer.Signal, isAnswered)
@@ -547,7 +548,7 @@ func TestAnAnswerTheReaderCannotReadIsNotAnAnswer(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	answer, isAnswered := permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{Confirmation: "보낼까요?"})
+	answer, isAnswered := permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "보낼까요?"})
 
 	if isAnswered {
 		t.Fatalf("a reply the reader could not read decided the call as %q", answer.Signal)
@@ -565,7 +566,7 @@ func TestAReplyOutsideTheQuestionsThreadIsNotAnAnswerAndIsNotRead(t *testing.T) 
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, isAnswered := permissionRelay.AskPermission(ctx, approvalRequest, approvalgate.PermissionQuestion{Confirmation: "보낼까요?"})
+	_, isAnswered := permissionRelay.AskPermission(ctx, approvalRequest, approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "보낼까요?"})
 
 	if isAnswered || len(asked) != 0 {
 		t.Fatalf("a reply in another thread answered=%v and the reader was asked %d times", isAnswered, len(asked))
@@ -589,7 +590,7 @@ func TestTheCallThatReadAReplyIsRecordedInTheWaitingRunsLedger(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	permissionRelay.AskPermission(ctx, approvalRequest, approvalgate.PermissionQuestion{Confirmation: "보낼까요?"})
+	permissionRelay.AskPermission(ctx, approvalRequest, approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "보낼까요?"})
 
 	calls := []agentcontract.TaskEvent{}
 	for _, taskEvent := range taskRunService.ListTaskEvent(taskRun.TaskRunID) {
@@ -621,6 +622,7 @@ func TestAnAnswerToACallNobodyIsWaitingOnIsRefused(t *testing.T) {
 
 func heldCallForTest() agentcontract.HeldCall {
 	return agentcontract.HeldCall{
+		HoldID:        "hold-stored-before-the-deploy",
 		ToolName:      "message_send",
 		ToolInput:     json.RawMessage(`{"targetType":"directMessage"}`),
 		ApprovalScope: "message_send",
@@ -638,16 +640,21 @@ func runWaitingOnAHeldCall(t *testing.T, taskRunService *task.TaskRunService, co
 	if errorValue != nil {
 		t.Fatalf("held call body: %v", errorValue)
 	}
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalPendingCall, string(body))
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalHoldOpened, string(body))
 	return taskRun
 }
 
 func reconnectedPair(t *testing.T, launcher TaskLauncher, client *recordingClient, taskRunService *task.TaskRunService) *acp.ClientSideConnection {
 	t.Helper()
+	return reconnectedPairWithReader(t, launcher, client, taskRunService, scriptedReader{})
+}
+
+func reconnectedPairWithReader(t *testing.T, launcher TaskLauncher, client *recordingClient, taskRunService *task.TaskRunService, replyReader approvalreply.Reader) *acp.ClientSideConnection {
+	t.Helper()
 	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
 		TaskLauncher: launcher,
 		Directory:    staticDirectory{},
-		ReplyReader:  scriptedReader{},
+		ReplyReader:  replyReader,
 		TaskRunStore: taskRunService,
 	})
 	return connection
@@ -712,13 +719,42 @@ func TestLoadingASessionAsksAgainAboutTheCallItsRunStoppedOn(t *testing.T) {
 	}
 
 	asked := awaitPermissionRequest(t, client)
-	if asked.ToolCall.ToolCallId != acp.ToolCallId(approvalgate.HeldCallID(heldCall.ToolName, heldCall.ToolInput)) {
-		t.Fatalf("the question carried tool call id %q, which is not the one the client already has open", asked.ToolCall.ToolCallId)
+	if asked.ToolCall.ToolCallId != acp.ToolCallId(heldCall.HoldID) {
+		t.Fatalf("the question carried tool call id %q, expected the id its hold was stored with", asked.ToolCall.ToolCallId)
 	}
 	if asked.ToolCall.Title == nil || *asked.ToolCall.Title != heldCall.Confirmation {
 		t.Fatal("the person was asked something other than the question the run stopped on")
 	}
 	expectNobodyIsAskedAgain(t, client)
+}
+
+func TestAQuestionPostedBeforeTheDeployIsAnsweredAfterItUnderTheHoldsStoredId(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	heldCall := heldCallForTest()
+	waitingRun := runWaitingOnAHeldCall(t, taskRunService, "conversation-1", heldCall)
+	taskRunService.AppendTaskEvent(waitingRun.TaskRunID, agentcontract.TaskEventConnectorReplySent, `{"replyKind":"approval_question","dispatchID":"question-message"}`)
+	launcher := &recordingLauncher{}
+	client := &recordingClient{permissionAskedSignal: make(chan acp.RequestPermissionRequest, 4)}
+	connection := reconnectedPairWithReader(t, launcher, client, taskRunService, scriptedReader{optionID: string(approveOnceOptionID)})
+	sessionID := acp.SessionId("session-the-relay-still-holds")
+	client.answerByAsking = answeringWithReply(t, connection, sessionID, ApprovalReplyRequest{Reply: "응 보내줘", ReplyTargetID: "question-message"})
+
+	if errorValue := loadSessionForTest(t, connection, sessionID, sessionMeta("sample@example.test", "conversation-1")); errorValue != nil {
+		t.Fatalf("load session: %v", errorValue)
+	}
+
+	asked := awaitPermissionRequest(t, client)
+	if asked.ToolCall.ToolCallId != acp.ToolCallId(heldCall.HoldID) {
+		t.Fatalf("the question carried tool call id %q, expected the hold's stored id", asked.ToolCall.ToolCallId)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if holds := holdrecord.Holds(taskRunService.ListTaskEvent(waitingRun.TaskRunID)); len(holds) == 1 && holds[0].ID == heldCall.HoldID && holds[0].State == holdrecord.StateApproved {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("the answer to the reissued question did not settle the hold stored before the deploy: %+v", holdrecord.Holds(taskRunService.ListTaskEvent(waitingRun.TaskRunID)))
 }
 
 func TestAReissuedQuestionThatWasNeverPostedIsLeftForTheRelayToPost(t *testing.T) {
@@ -970,11 +1006,11 @@ func TestAChoiceIsReadFromThePersonsWordsAgainstTheOfferedOptions(t *testing.T) 
 	connection, permissionRelay := connectedPairWithReader(t, &recordingLauncher{}, client, scriptedReader{optionID: "choose:offHours", asked: &asked})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 	client.answerByAsking = answeringWithWords(t, connection, sessionID, "새벽에 해")
-	choices := []approvalrecord.Choice{{Key: "offHours", StartsAt: "2099-10-03T03:00:00+09:00"}, {Key: "now"}}
+	choices := []holdrecord.Choice{{Key: "offHours", StartsAt: "2099-10-03T03:00:00+09:00"}, {Key: "now"}}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	answer, isAnswered := permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{Confirmation: "업데이트할까요?", Choices: choices})
+	answer, isAnswered := permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "업데이트할까요?", Choices: choices})
 
 	if !isAnswered || answer.ChoiceKey != "offHours" {
 		t.Fatalf("the choice read as %+v answered=%v", answer, isAnswered)

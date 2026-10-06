@@ -55,7 +55,7 @@ func PostedApprovalQuestionMessageID(taskEvents []task.TaskEvent) string {
 	messageID := ""
 	for _, taskEvent := range taskEvents {
 		switch taskEvent.Name {
-		case agentcontract.TaskEventApprovalPendingCall:
+		case agentcontract.TaskEventApprovalHoldOpened:
 			messageID = ""
 		case agentcontract.TaskEventConnectorReplySent:
 			messageID = firstNonEmptyString(approvalQuestionDispatchID(taskEvent.Body), messageID)

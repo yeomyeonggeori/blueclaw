@@ -45,5 +45,5 @@ type ApprovalOutcome struct {
 	Deferral toolcontract.ToolResult
 	// Names the held call an approved outcome spends, so a tool backend is told
 	// which approval it runs under rather than inferring it from the turn.
-	ApprovedCallID string
+	HoldID string
 }

@@ -2,11 +2,11 @@ package approvalgate
 
 import (
 	"context"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"testing"
 
 	acp "github.com/coder/acp-go-sdk"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -51,8 +51,8 @@ func TestAHarnessQuestionIsRecordedAsAHoldBeforeAnyoneIsAsked(t *testing.T) {
 
 	_, isAnswered := gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(map[string]any{"branch": "main"}))
 
-	holds := approvalrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID))
-	if isAnswered || len(holds) != 1 || holds[0].State != approvalrecord.StatePending || holds[0].Call.Confirmation != "Force-push the branch?" || holds[0].Call.ToolName != "" {
+	holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID))
+	if isAnswered || len(holds) != 1 || holds[0].State != holdrecord.StatePending || holds[0].Call.Confirmation != "Force-push the branch?" || holds[0].Call.ToolName != "" {
 		t.Fatalf("an unanswered harness question must stay a pending hold a restart can reissue, got %+v answered=%v", holds, isAnswered)
 	}
 	if taskRunStatus(t, taskRunService, taskRun.TaskRunID) != agentcontract.TaskStatusWaitingApproval {
@@ -69,8 +69,8 @@ func TestAnAnsweredHarnessQuestionSettlesItsHoldAndTheRunContinues(t *testing.T)
 	if !isAnswered || outcome.Selected == nil || outcome.Selected.OptionId != "allow-once" {
 		t.Fatalf("expected the answer to pass through, got %+v", outcome)
 	}
-	holds := approvalrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID))
-	if len(holds) != 1 || holds[0].State != approvalrecord.StateApproved {
+	holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID))
+	if len(holds) != 1 || holds[0].State != holdrecord.StateApproved {
 		t.Fatalf("an approval stays unspent until exactly one call spends it, got %+v", holds)
 	}
 	if taskRunStatus(t, taskRunService, taskRun.TaskRunID) == agentcontract.TaskStatusWaitingApproval {
@@ -84,7 +84,7 @@ func TestARejectedHarnessQuestionIsARejectedHold(t *testing.T) {
 
 	gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(nil))
 
-	if holds := approvalrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID)); len(holds) != 1 || holds[0].State != approvalrecord.StateRejected {
+	if holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID)); len(holds) != 1 || holds[0].State != holdrecord.StateRejected {
 		t.Fatalf("expected a rejected hold, got %+v", holds)
 	}
 }
@@ -95,7 +95,7 @@ func TestARetryOfAnApprovedHarnessCallIsNotAskedAgainAndSpendsTheApprovalOnce(t 
 	gate.UsePermissionAsker(asker)
 	input := map[string]any{"branch": "main"}
 	gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(input))
-	recordDecision(taskRunService, taskRun.TaskRunID, "confirm")
+	recordDecision(taskRunService, taskRun.TaskRunID, "approve")
 	asker.questions = nil
 
 	outcome, isAnswered := gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(input))
@@ -114,7 +114,7 @@ func TestADifferentHarnessCallIsNotCoveredByAnApproval(t *testing.T) {
 	asker := &harnessAskerDouble{}
 	gate.UsePermissionAsker(asker)
 	gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(map[string]any{"branch": "main"}))
-	recordDecision(taskRunService, taskRun.TaskRunID, "confirm")
+	recordDecision(taskRunService, taskRun.TaskRunID, "approve")
 	asker.questions = nil
 
 	gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(map[string]any{"branch": "release"}))
@@ -176,7 +176,7 @@ func TestAGatedCallNoHarnessAskedAboutIsAskedOnce(t *testing.T) {
 
 	gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
 
-	holds := approvalrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID))
+	holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID))
 	if asker.gateQuestionCount != 1 || len(holds) != 1 || holds[0].Call.ToolName != "event_delete" {
 		t.Fatalf("expected one question held under the tool's name, got %d questions and %+v", asker.gateQuestionCount, holds)
 	}

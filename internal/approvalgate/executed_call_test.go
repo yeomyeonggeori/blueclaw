@@ -3,6 +3,7 @@ package approvalgate
 import (
 	"context"
 	"encoding/json"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"strings"
 	"testing"
 
@@ -13,19 +14,18 @@ import (
 func spentApprovalEventBodies(taskRunService *task.TaskRunService, taskRunID string) []string {
 	bodies := []string{}
 	for _, taskEvent := range taskRunService.ListTaskEvent(taskRunID) {
-		if taskEvent.Name == agentcontract.TaskEventApprovalExecuted {
+		if taskEvent.Name == agentcontract.TaskEventApprovalHoldSpent {
 			bodies = append(bodies, taskEvent.Body)
 		}
 	}
 	return bodies
 }
 
-func TestTheSpentApprovalCarriesTheCallAndTheTokenTheLoopIsWaitingOn(t *testing.T) {
+func TestTheSpentApprovalCarriesTheCallAndTheHoldItSpent(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
 	gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalHeldCall,
-		`{"approvalToken":"token-1","toolName":"event_delete","toolInput":{"eventID":"event-1"},"observationID":"obs-1"}`)
-	recordDecision(taskRunService, taskRun.TaskRunID, "confirm")
+	holdID := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID))[0].ID
+	recordDecision(taskRunService, taskRun.TaskRunID, "approve")
 
 	gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
 
@@ -33,30 +33,29 @@ func TestTheSpentApprovalCarriesTheCallAndTheTokenTheLoopIsWaitingOn(t *testing.
 	if len(bodies) != 1 {
 		t.Fatalf("one approval is spent once, and by one writer: %v", bodies)
 	}
-	for _, expectedFragment := range []string{`"toolName":"event_delete"`, `"eventID":"event-1"`, `"approvalToken":"token-1"`} {
+	for _, expectedFragment := range []string{`"toolName":"event_delete"`, `"eventID":"event-1"`, `"holdID":"` + holdID + `"`} {
 		if !strings.Contains(bodies[0], expectedFragment) {
 			t.Fatalf("expected the spent approval to carry %q, got %s", expectedFragment, bodies[0])
 		}
 	}
+	if strings.Contains(bodies[0], "approvalToken") {
+		t.Fatalf("a hold has one id, got %s", bodies[0])
+	}
 }
 
-func TestATokenIsSpentOnceSoASecondApprovalDoesNotClaimIt(t *testing.T) {
+func TestAHoldIsSpentOnceSoASecondCallDoesNotClaimIt(t *testing.T) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	taskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "내일 회의 지워줘")
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalHeldCall,
-		`{"approvalToken":"token-1","toolName":"event_delete","toolInput":{"eventID":"event-1"},"observationID":"obs-1"}`)
+	holdID := holdrecord.Open(taskRunService, taskRun.TaskRunID, agentcontract.HeldCall{ToolName: "event_delete", ToolInput: json.RawMessage(`{"eventID":"event-1"}`)}, nil).ID
+	holdrecord.Decide(taskRunService, taskRun.TaskRunID, holdID, holdrecord.DecisionApprove, "chat_reply")
 
-	RecordApprovalSpent(taskRunService, taskRun.TaskRunID, "event_delete", json.RawMessage(`{"eventID":"event-1"}`))
-	RecordApprovalSpent(taskRunService, taskRun.TaskRunID, "event_delete", json.RawMessage(`{"eventID":"event-2"}`))
+	firstHoldID := RecordApprovalSpent(taskRunService, taskRun.TaskRunID, "event_delete", json.RawMessage(`{"eventID":"event-1"}`))
+	secondHoldID := RecordApprovalSpent(taskRunService, taskRun.TaskRunID, "event_delete", json.RawMessage(`{"eventID":"event-2"}`))
 
-	bodies := spentApprovalEventBodies(taskRunService, taskRun.TaskRunID)
-	if len(bodies) != 2 {
+	if firstHoldID != holdID || secondHoldID != "" {
+		t.Fatalf("the first call spends the approved hold and the next claims none, got %q then %q", firstHoldID, secondHoldID)
+	}
+	if bodies := spentApprovalEventBodies(taskRunService, taskRun.TaskRunID); len(bodies) != 2 {
 		t.Fatalf("expected both calls to be recorded, got %v", bodies)
-	}
-	if !strings.Contains(bodies[0], `"approvalToken":"token-1"`) {
-		t.Fatalf("expected the first call to spend the hold that was waiting, got %s", bodies[0])
-	}
-	if strings.Contains(bodies[1], "approvalToken") {
-		t.Fatalf("a hold that is already spent is not spent again by the next call, got %s", bodies[1])
 	}
 }

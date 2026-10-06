@@ -91,10 +91,10 @@ func (handler TaskApprovalHandler) resolveApproval(approvalRequest taskApprovalR
 
 func approvalTurnDecision(decision string) (agentcontract.TurnDecision, error) {
 	switch strings.TrimSpace(decision) {
-	case "confirm":
+	case "approve":
 		approvalSignal := agentcontract.ApprovalSignalApprove
-		return continueTaskDecision(approvalSignal, "terminal_confirm"), nil
-	case "cancel":
+		return continueTaskDecision(approvalSignal, "terminal_approve"), nil
+	case "reject":
 		approvalSignal := agentcontract.ApprovalSignalReject
 		return agentcontract.TurnDecision{
 			Route:          agentcontract.TurnRouteConsume,
@@ -102,10 +102,10 @@ func approvalTurnDecision(decision string) (agentcontract.TurnDecision, error) {
 			Classification: agentcontract.IntakeClassificationQuickReply,
 			TaskShape:      agentcontract.TaskShapeImmediateReply,
 			TaskLevel:      agentcontract.TaskLevelXLow,
-			Reason:         "terminal_cancel",
+			Reason:         "terminal_reject",
 		}, nil
 	default:
-		return agentcontract.TurnDecision{}, errors.New(`decision must be one of "confirm", "cancel"`)
+		return agentcontract.TurnDecision{}, errors.New(`decision must be one of "approve", "reject"`)
 	}
 }
 

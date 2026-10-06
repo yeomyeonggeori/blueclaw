@@ -12,6 +12,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 )
 
 func (agent *Agent) reissueHeldPermissions(ctx context.Context, sessionID acp.SessionId, sessionContext SessionContext) {
@@ -42,7 +43,7 @@ func (agent *Agent) taskRunsWaitingForAnAnswer(sessionContext SessionContext) []
 }
 
 func (agent *Agent) reissueHeldPermission(ctx context.Context, sessionID acp.SessionId, sessionContext SessionContext, taskRun agentcontract.TaskRun, heldCall agentcontract.HeldCall) {
-	toolCallID := acp.ToolCallId(approvalgate.HeldCallID(heldCall.ToolName, heldCall.ToolInput))
+	toolCallID := acp.ToolCallId(heldCall.HoldID)
 	agent.logger.Info("acpsession.permission.reissued",
 		"sessionID", string(sessionID),
 		"taskRunID", taskRun.TaskRunID,
@@ -93,7 +94,7 @@ func (agent *Agent) reissueHeldPermission(ctx context.Context, sessionID acp.Ses
 	agent.resumeAnsweredTaskRun(ctx, sessionID, sessionContext, taskRun, nil)
 }
 
-func (agent *Agent) deferHeldCall(ctx context.Context, sessionContext SessionContext, taskRun agentcontract.TaskRun, heldCall agentcontract.HeldCall, choice approvalrecord.Choice) []agentcontract.CarriedOutCall {
+func (agent *Agent) deferHeldCall(ctx context.Context, sessionContext SessionContext, taskRun agentcontract.TaskRun, heldCall agentcontract.HeldCall, choice holdrecord.Choice) []agentcontract.CarriedOutCall {
 	return []agentcontract.CarriedOutCall{approvalgate.DeferHeldCall(ctx, agent.approvalDeferrer, heldCall, approvalgate.DeferralRequest{
 		TaskRunID:         taskRun.TaskRunID,
 		RequesterPersonID: sessionContext.Requester.PersonID,

@@ -179,7 +179,7 @@ func TestADelegatedTurnIsDeniedRatherThanHeld(t *testing.T) {
 		t.Fatal("a run left waiting for an approval nobody was asked for is a run a later approve can hijack")
 	}
 	for _, taskEvent := range taskRunService.ListTaskEvent(taskRun.TaskRunID) {
-		if taskEvent.Name == "approval.pending_call" {
+		if taskEvent.Name == "approval.hold_opened" {
 			t.Fatalf("a denied call is not a held call, and the ledger must not offer one to resume: %s", taskEvent.Body)
 		}
 	}

@@ -12,12 +12,17 @@ import (
 
 const approvalGateWritersReason = "one approval gate is installed per harness, so the host gate and bluecollar's approval package never write in the same task run; the meta-harness migration removes the host gate"
 
+const holdRecordPackagePath = "../../.dependency/bluecollar/holdrecord"
+
+var eventNamesOwnedByTheHoldRecord = []string{
+	"approval.hold_opened",
+	"approval.decided",
+	"approval.hold_spent",
+	"approval.scope_granted",
+}
+
 var eventNamesWrittenOnBothSides = map[string]string{
 	"ask.requested":               "undecided: the host writes the approval question and the loop writes its own ask_input question, which may be two events of one kind rather than one event with two writers",
-	"approval.decided":            approvalGateWritersReason,
-	"approval.executed":           approvalGateWritersReason,
-	"approval.pending_call":       approvalGateWritersReason,
-	"approval.scope_granted":      approvalGateWritersReason,
 	"approval.wording_failed":     approvalGateWritersReason,
 	"confirmation.requested":      approvalGateWritersReason,
 	"agent.failure_reply":         "the host, which sees every turn result",
@@ -52,11 +57,19 @@ func declaredTaskEventNames(t *testing.T) map[string]string {
 
 func eventNamesWrittenUnder(t *testing.T, rootPath string) map[string]bool {
 	t.Helper()
+	return eventNamesWrittenUnderExcept(t, rootPath, "")
+}
+
+func eventNamesWrittenUnderExcept(t *testing.T, rootPath string, skippedPath string) map[string]bool {
+	t.Helper()
 	declaredNames := declaredTaskEventNames(t)
 	writtenNames := map[string]bool{}
 	errorValue := filepath.WalkDir(rootPath, func(path string, entry fs.DirEntry, walkError error) error {
 		if walkError != nil {
 			return walkError
+		}
+		if entry.IsDir() && skippedPath != "" && filepath.Clean(path) == filepath.Clean(skippedPath) {
+			return filepath.SkipDir
 		}
 		if entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			return nil
@@ -103,5 +116,24 @@ func TestNoNewEventNameGainsASecondWriter(t *testing.T) {
 			continue
 		}
 		t.Fatalf("%q has one writer again; drop it from eventNamesWrittenOnBothSides", name)
+	}
+}
+
+func TestTheHoldEventsAreWrittenOnlyByTheHoldRecord(t *testing.T) {
+	writtenOutsideTheRecord := eventNamesWrittenUnder(t, "../../internal")
+	for name := range eventNamesWrittenUnder(t, "../../cmd") {
+		writtenOutsideTheRecord[name] = true
+	}
+	bluecollarWriters := eventNamesWrittenUnderExcept(t, "../../.dependency/bluecollar", holdRecordPackagePath)
+	for name := range bluecollarWriters {
+		writtenOutsideTheRecord[name] = true
+	}
+	for _, name := range eventNamesOwnedByTheHoldRecord {
+		if writtenOutsideTheRecord[name] {
+			t.Fatalf("%q is written outside bluecollar's holdrecord; open, decide and spend a hold through that package", name)
+		}
+	}
+	if recordWrites := eventNamesWrittenUnder(t, holdRecordPackagePath); len(recordWrites) != len(eventNamesOwnedByTheHoldRecord) {
+		t.Fatalf("holdrecord writes %v, expected exactly %v", recordWrites, eventNamesOwnedByTheHoldRecord)
 	}
 }

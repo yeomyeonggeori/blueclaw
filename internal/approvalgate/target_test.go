@@ -113,7 +113,7 @@ func TestAHintThatResolvesToNothingIsReportedToTheAgentInsteadOfAskedAbout(t *te
 	if !strings.Contains(string(outcome.Failure.Output.Data), "candidates") {
 		t.Fatalf("the candidates are what let the agent take another route, got %s", outcome.Failure.Output.Data)
 	}
-	for _, questionEventName := range []string{"approval.pending_call", "confirmation.requested", "ask.requested"} {
+	for _, questionEventName := range []string{"approval.hold_opened", "confirmation.requested", "ask.requested"} {
 		if hasTaskEventNamed(taskRunService, taskRun.TaskRunID, questionEventName) {
 			t.Fatalf("nobody is asked about a target that does not exist, got %+v", taskEventNames(taskRunService, taskRun.TaskRunID))
 		}
@@ -150,7 +150,7 @@ func TestAnApprovedCallIsCarriedOutAgainstTheResolvedIdentity(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
 	gate.UseApprovalTargetResolver(resolvedTargetResolver())
 	gate.AwaitApproval(context.Background(), hintApprovalRequest(taskRun.TaskRunID))
-	recordDecision(taskRunService, taskRun.TaskRunID, "confirm")
+	recordDecision(taskRunService, taskRun.TaskRunID, "approve")
 
 	approvedCall, isApproved := ApprovedPendingCall(taskRunService.ListTaskEvent(taskRun.TaskRunID))
 	if !isApproved {
@@ -165,7 +165,7 @@ func TestTheApprovalDecisionStillMatchesTheCallTheModelReissuesUnchanged(t *test
 	gate, taskRunService, taskRun := gateFixture(t)
 	gate.UseApprovalTargetResolver(resolvedTargetResolver())
 	gate.AwaitApproval(context.Background(), hintApprovalRequest(taskRun.TaskRunID))
-	recordDecision(taskRunService, taskRun.TaskRunID, "confirm")
+	recordDecision(taskRunService, taskRun.TaskRunID, "approve")
 
 	reissuedOutcome, _ := gate.AwaitApproval(context.Background(), hintApprovalRequest(taskRun.TaskRunID))
 	if reissuedOutcome.Decision != mcpserver.ApprovalDecisionApproved {
@@ -183,7 +183,7 @@ func TestAToolWithNoResolvableTargetIsStillAskedAboutFromItsInput(t *testing.T) 
 	if outcome.Decision != mcpserver.ApprovalDecisionHeld {
 		t.Fatalf("a tool that resolves nothing ahead keeps the behaviour it has today, got %+v", outcome)
 	}
-	if !hasTaskEventNamed(taskRunService, taskRun.TaskRunID, "approval.pending_call") {
+	if !hasTaskEventNamed(taskRunService, taskRun.TaskRunID, "approval.hold_opened") {
 		t.Fatalf("expected the call to be held as before, got %+v", taskEventNames(taskRunService, taskRun.TaskRunID))
 	}
 }
@@ -198,7 +198,7 @@ func TestAResolverThatCannotBeReachedAsksFromTheInputRatherThanBlockingTheDelete
 	if outcome.Decision != mcpserver.ApprovalDecisionHeld {
 		t.Fatalf("a capabilityd hiccup must not block every delete, got %+v", outcome)
 	}
-	if !hasTaskEventNamed(taskRunService, taskRun.TaskRunID, "approval.pending_call") {
+	if !hasTaskEventNamed(taskRunService, taskRun.TaskRunID, "approval.hold_opened") {
 		t.Fatalf("expected the call to be held from its input as before, got %+v", taskEventNames(taskRunService, taskRun.TaskRunID))
 	}
 }
@@ -244,7 +244,7 @@ func TestAnUnresolvableTargetStopsTheCallWithoutHoldingIt(t *testing.T) {
 	if result.Failure == nil || !strings.Contains(result.UserSafeFailureSummary(), "no calendar event matched eventHint") {
 		t.Fatalf("the agent is handed the capability's own failure so it can choose another route, got %+v", result)
 	}
-	if hasTaskEventNamed(taskRunService, taskRun.TaskRunID, "approval.pending_call") {
+	if hasTaskEventNamed(taskRunService, taskRun.TaskRunID, "approval.hold_opened") {
 		t.Fatalf("no approval is spent on a target that does not exist, got %+v", taskEventNames(taskRunService, taskRun.TaskRunID))
 	}
 }

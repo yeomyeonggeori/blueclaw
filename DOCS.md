@@ -246,7 +246,7 @@ Within a run the model works in steps. A step either calls a tool, speaks to the
 
 The event ledger is the append-only list of events that belong to one task run.
 
-Every model call, tool call, approval, tool exposure decision and launch step lands in it, which makes it the place to reconstruct what happened. Event names follow a fixed grammar declared in bluecollar's `agentcontract/task_event_name.go` and generated into `protocol/` as `task-event-name`: for example `tool.<name>.requested`, `tool.<name>.result`, `approval.pending_call`, `approval.executed`, `agent.instructions_loaded` and `llm.call`.
+Every model call, tool call, approval, tool exposure decision and launch step lands in it, which makes it the place to reconstruct what happened. Event names follow a fixed grammar declared in bluecollar's `agentcontract/task_event_name.go` and generated into `protocol/` as `task-event-name`: for example `tool.<name>.requested`, `tool.<name>.result`, `approval.hold_opened`, `approval.hold_spent`, `agent.instructions_loaded` and `llm.call`.
 
 `GET /admin/api/run/detail?taskRunID=<id>` returns a run with its ledger, and `GET /tasks/api/events` streams one person's events over SSE.
 
@@ -256,11 +256,11 @@ An approval is a person's answer to a tool call the host held before it ran.
 
 The gate belongs to the host. `approvalgate.Gate.TurnGate` is installed as the `ToolCallGate` on every harness's tool set, so every harness meets the same gate on the same calls. A call is held when its descriptor sets `RequiresApproval`, or when the tool's input schema declares an `approvalRequired` field and the call sets it. An `external_send` that lands in the conversation being answered proceeds without asking: `targetType` `currentThread` or `currentChannel`, a `channel` named by the current channel's ID, or a `directMessage` with no recipient asked from the requester's own direct conversation. `internal/approvalgate/testdata/answered_conversation_cases.json` lists the cases, and InternKim's capabilityd is tested against the same file. A delegated turn cannot ask and is denied.
 
-A held call pauses the run in `waiting_approval` and records `approval.pending_call` with the exact call, so the approval survives a restart and blocks no live request. The question the person sees is written by the model. Once approved, the host carries out the recorded call verbatim in the `carryOutApprovedCall` launch step (`internal/agentruntime/approved_call.go`) and hands the result to the harness as `CarriedOutCalls`. A changed call is a new approval.
+A held call pauses the run in `waiting_approval` and records `approval.hold_opened` with the exact call, so the approval survives a restart and blocks no live request. The question the person sees is written by the model. Once approved, the host carries out the recorded call verbatim in the `carryOutApprovedCall` launch step (`internal/agentruntime/approved_call.go`) and hands the result to the harness as `CarriedOutCalls`. A changed call is a new approval.
 
-Approving a call to a tool that declares an `ApprovalScope` grants that scope for the rest of the task, and the question says what the scope covers. Each hold has an id, `approval.decided` and `approval.executed` name the hold they settle, and only an approved, unspent hold answers an identical call.
+Approving a call to a tool that declares an `ApprovalScope` grants that scope for the rest of the task, and the question says what the scope covers. Each hold has an id, `approval.decided` and `approval.hold_spent` name the hold they settle, and only an approved, unspent hold answers an identical call.
 
-A capability's `target.resolve` answer may carry `choices`, each a `key` and an optional `startsAt` instant. The person is then asked to pick one of them or cancel, in the order given, and the reply is read against exactly those options (`approval.choices_offered`). A choice without `startsAt` runs the call now. A choice with `startsAt` runs nothing now: the gate writes a once schedule of the person who approved it, carrying the approved call in its `approved_call` column (`approval.deferred`), and the model is told the schedule's ID and time.
+A capability's `target.resolve` answer may carry `choices`, each a `key` and an optional `startsAt` instant. The person is then asked to pick one of them or cancel, in the order given, and the reply is read against exactly those options (carried on the `approval.hold_opened` record). A choice without `startsAt` runs the call now. A choice with `startsAt` runs nothing now: the gate writes a once schedule of the person who approved it, carrying the approved call in its `approved_call` column (`approval.deferred`), and the model is told the schedule's ID and time.
 
 ## Policy
 

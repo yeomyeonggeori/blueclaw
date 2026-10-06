@@ -58,7 +58,7 @@ func TestClientGetTaskRunDetailDecodesTaskRunAndEvents(testInstance *testing.T) 
 		responseWriter.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(responseWriter).Encode(TaskRunDetail{
 			TaskRun:    TaskRun{TaskRunID: "task-1", Status: TaskStatusWaitingApproval},
-			TaskEvents: []TaskEvent{{TaskEventID: "event-1", TaskRunID: "task-1", Name: "approval.pending_call"}},
+			TaskEvents: []TaskEvent{{TaskEventID: "event-1", TaskRunID: "task-1", Name: "approval.hold_opened"}},
 		})
 	}))
 	defer server.Close()
@@ -71,7 +71,7 @@ func TestClientGetTaskRunDetailDecodesTaskRunAndEvents(testInstance *testing.T) 
 	if detail.TaskRun.TaskRunID != "task-1" {
 		testInstance.Fatalf("unexpected task run: %+v", detail.TaskRun)
 	}
-	if len(detail.TaskEvents) != 1 || detail.TaskEvents[0].Name != "approval.pending_call" {
+	if len(detail.TaskEvents) != 1 || detail.TaskEvents[0].Name != "approval.hold_opened" {
 		testInstance.Fatalf("unexpected task events: %+v", detail.TaskEvents)
 	}
 }
@@ -108,11 +108,11 @@ func TestClientSubmitApprovalSendsDecisionAndDecodesStatus(testInstance *testing
 	defer server.Close()
 
 	client := NewClient(server.URL, nil)
-	approvalResult, errorValue := client.SubmitApproval(context.Background(), "task-1", ApprovalDecisionConfirm)
+	approvalResult, errorValue := client.SubmitApproval(context.Background(), "task-1", ApprovalDecisionApprove)
 	if errorValue != nil {
 		testInstance.Fatalf("unexpected error: %v", errorValue)
 	}
-	if capturedRequestBody.TaskRunID != "task-1" || capturedRequestBody.Decision != ApprovalDecisionConfirm {
+	if capturedRequestBody.TaskRunID != "task-1" || capturedRequestBody.Decision != ApprovalDecisionApprove {
 		testInstance.Fatalf("unexpected captured request: %+v", capturedRequestBody)
 	}
 	if approvalResult.Status != TaskStatusRunning {
@@ -129,7 +129,7 @@ func TestClientSubmitApprovalReturnsApplicationErrorOnRefusal(testInstance *test
 	defer server.Close()
 
 	client := NewClient(server.URL, nil)
-	_, errorValue := client.SubmitApproval(context.Background(), "task-1", ApprovalDecisionCancel)
+	_, errorValue := client.SubmitApproval(context.Background(), "task-1", ApprovalDecisionReject)
 	applicationError, isApplicationError := errorValue.(ApplicationError)
 	if !isApplicationError {
 		testInstance.Fatalf("expected ApplicationError, got %T: %v", errorValue, errorValue)

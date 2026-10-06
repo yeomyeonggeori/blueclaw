@@ -36,7 +36,7 @@ func TestAReplyAnswersAQuestionOnlyInItsPlace(t *testing.T) {
 
 func TestAQuestionPostedForAnEarlierCallIsNotThePostedQuestionOfTheCurrentOne(t *testing.T) {
 	posted := task.TaskEvent{Name: agentcontract.TaskEventConnectorReplySent, Body: `{"replyKind":"approval_question","dispatchID":"question-1"}`}
-	pending := task.TaskEvent{Name: agentcontract.TaskEventApprovalPendingCall}
+	pending := task.TaskEvent{Name: agentcontract.TaskEventApprovalHoldOpened}
 	notAQuestion := task.TaskEvent{Name: agentcontract.TaskEventConnectorReplySent, Body: `{"replyKind":"user_notice","dispatchID":"notice-1"}`}
 
 	if messageID := PostedApprovalQuestionMessageID([]task.TaskEvent{pending, posted}); messageID != "question-1" {

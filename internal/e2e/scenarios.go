@@ -716,7 +716,7 @@ func CalendarEventLifecycleAcceptanceScenario(artifactDirectoryPath string) Virt
 				},
 				ExpectedEventCounts: []VirtualEventCount{
 					{Name: toolRequestedEventName("event_delete"), BodyFragment: "event_delete", Count: 1},
-					{Name: agentcontract.TaskEventApprovalPendingCall, BodyFragment: `"event_delete"`, Count: 1},
+					{Name: agentcontract.TaskEventApprovalHoldOpened, BodyFragment: `"event_delete"`, Count: 1},
 				},
 				ExpectedEvents:     []string{agentcontract.TaskEventConfirmationRequested},
 				ExpectedTaskStatus: task.TaskStatusWaitingApproval,
@@ -730,7 +730,7 @@ func CalendarEventLifecycleAcceptanceScenario(artifactDirectoryPath string) Virt
 					actionFinishMessage("제품 회고 일정을 삭제했습니다.", "obs-002"),
 				},
 				ExpectedEventCounts: []VirtualEventCount{
-					{Name: agentcontract.TaskEventApprovalExecuted, BodyFragment: `"event_delete"`, Count: 1},
+					{Name: agentcontract.TaskEventApprovalHoldSpent, BodyFragment: `"event_delete"`, Count: 1},
 				},
 				ExpectedEvents:         []string{agentcontract.TaskEventConfirmationReplyClassified},
 				ExpectedReplyFragments: []string{"삭제했습니다"},
@@ -1420,7 +1420,7 @@ func DirectMessageSendConfirmAcceptanceScenario(artifactDirectoryPath string) Vi
 			},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: toolRequestedEventName("message_send"), BodyFragment: `"targetType":"directMessage"`, Count: 1},
-				{Name: agentcontract.TaskEventApprovalPendingCall, BodyFragment: `"message_send"`, Count: 1},
+				{Name: agentcontract.TaskEventApprovalHoldOpened, BodyFragment: `"message_send"`, Count: 1},
 				{Name: agentcontract.TaskEventAgentFailureDebtCreated, BodyFragment: "", Count: 0},
 			},
 			ExpectedEvents:         []string{agentcontract.TaskEventConfirmationRequested},
@@ -1438,7 +1438,7 @@ func DirectMessageSendConfirmAcceptanceScenario(artifactDirectoryPath string) Vi
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: toolRequestedEventName("message_send"), BodyFragment: `"targetType":"directMessage"`, Count: 2},
 				{Name: toolResultEventName("message_send"), BodyFragment: "virtual-platform-message-001", Count: 1},
-				{Name: agentcontract.TaskEventApprovalExecuted, BodyFragment: `"message_send"`, Count: 1},
+				{Name: agentcontract.TaskEventApprovalHoldSpent, BodyFragment: `"message_send"`, Count: 1},
 			},
 			ExpectedEvents:         []string{agentcontract.TaskEventConfirmationReplyClassified},
 			ExpectedModelContexts:  []string{"virtual-platform-message-001"},
@@ -1472,7 +1472,7 @@ func ChannelPostAcceptanceScenario(artifactDirectoryPath string) VirtualSessionS
 			},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: toolRequestedEventName("message_send"), BodyFragment: `"targetType":"channel"`, Count: 1},
-				{Name: agentcontract.TaskEventApprovalPendingCall, BodyFragment: `"message_send"`, Count: 1},
+				{Name: agentcontract.TaskEventApprovalHoldOpened, BodyFragment: `"message_send"`, Count: 1},
 			},
 			ExpectedEvents:         []string{agentcontract.TaskEventConfirmationRequested},
 			ExpectedReplyFragments: []string{"announcements", "오늘 5시"},
@@ -1490,7 +1490,7 @@ func ChannelPostAcceptanceScenario(artifactDirectoryPath string) VirtualSessionS
 				{Name: toolRequestedEventName("message_send"), BodyFragment: `"targetType":"channel"`, Count: 2},
 				{Name: toolRequestedEventName("message_send"), BodyFragment: `"channelName":"announcements"`, Count: 2},
 				{Name: toolRequestedEventName("message_send"), BodyFragment: `"targetType":"directMessage"`, Count: 0},
-				{Name: agentcontract.TaskEventApprovalExecuted, BodyFragment: `"message_send"`, Count: 1},
+				{Name: agentcontract.TaskEventApprovalHoldSpent, BodyFragment: `"message_send"`, Count: 1},
 			},
 			ExpectedReplyFragments: []string{"채널", "올렸습니다"},
 		}},
@@ -1523,7 +1523,7 @@ func PlatformMessageEditAcceptanceScenario(artifactDirectoryPath string) Virtual
 				{Name: toolRequestedEventName("message_update"), BodyFragment: `"newText":"오후 6시"`, Count: 1},
 				{Name: toolResultEventName("message_update"), BodyFragment: `"messageUpdated":true`, Count: 1},
 			},
-			ForbiddenEvents:        []string{agentcontract.TaskEventConfirmationRequested, agentcontract.TaskEventApprovalPendingCall},
+			ForbiddenEvents:        []string{agentcontract.TaskEventConfirmationRequested, agentcontract.TaskEventApprovalHoldOpened},
 			ExpectedReplyFragments: []string{"수정했습니다"},
 			ExpectedTaskStatus:     task.TaskStatusCompleted,
 		}},

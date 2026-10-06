@@ -42,7 +42,7 @@ func launchApprovalContinuation(t *testing.T, taskLauncher *TaskLauncher, taskRu
 func taskRunAwaitingApprovalOf(t *testing.T, taskRunService *task.TaskRunService, decision agentcontract.ApprovalSignal) string {
 	t.Helper()
 	taskRun := taskRunService.CreateTaskRun("person-1", "channel-1", "지난 분기 뭐였는지 찾아줘")
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalPendingCall, `{"toolName":"memory_search","toolInput":{"query":"quarterly launch"},"confirmation":"기억을 찾아볼까요?"}`)
+	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalHoldOpened, `{"toolName":"memory_search","toolInput":{"query":"quarterly launch"},"confirmation":"기억을 찾아볼까요?"}`)
 	approvalrecord.SettleSignal(taskRunService, taskRun.TaskRunID, &decision, "test")
 	return taskRun.TaskRunID
 }
@@ -61,7 +61,7 @@ func TestTheHostCarriesOutTheApprovedCallAndHandsTheResultToTheHarness(t *testin
 	if carriedOutCalls[0].Result.Failed() {
 		t.Fatalf("expected the carried out call to have run, got %+v", carriedOutCalls[0].Result)
 	}
-	if !containsTaskEvent(taskRunService.ListTaskEvent(taskRunID), "approval.executed") {
+	if !containsTaskEvent(taskRunService.ListTaskEvent(taskRunID), "approval.hold_spent") {
 		t.Fatal("expected the ledger to record that the held call ran")
 	}
 }
@@ -76,7 +76,7 @@ func TestADeclinedCallIsNotCarriedOut(t *testing.T) {
 	if carriedOutCalls := harness.LastTurnRequest().CarriedOutCalls; len(carriedOutCalls) != 0 {
 		t.Fatalf("expected a declined call to stay uncarried, got %+v", carriedOutCalls)
 	}
-	if containsTaskEvent(taskRunService.ListTaskEvent(taskRunID), "approval.executed") {
+	if containsTaskEvent(taskRunService.ListTaskEvent(taskRunID), "approval.hold_spent") {
 		t.Fatal("expected no execution record for a call the requester declined")
 	}
 }

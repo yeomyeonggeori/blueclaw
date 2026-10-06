@@ -182,7 +182,7 @@ func TestAReplyFromARunResumedWithNoTurnOpenNamesItsOwnThreadAndIsRecordedSent(t
 		t.Fatalf("pause task run: %v", errorValue)
 	}
 	heldBody, _ := json.Marshal(heldCall)
-	taskRunService.AppendTaskEvent(waitingRun.TaskRunID, agentcontract.TaskEventApprovalPendingCall, string(heldBody))
+	taskRunService.AppendTaskEvent(waitingRun.TaskRunID, agentcontract.TaskEventApprovalHoldOpened, string(heldBody))
 	launcher := &recordingLauncher{reply: "보냈습니다", launchedSignal: make(chan agentruntime.TaskLaunchRequest, 4)}
 	client := &recordingClient{permissionChoice: approveOnceOptionID}
 	connection := reconnectedPair(t, launcher, client, taskRunService)
@@ -310,7 +310,7 @@ func TestAReissuedQuestionNamesTheThreadItsRunWasAskedIn(t *testing.T) {
 		t.Fatalf("pause task run: %v", errorValue)
 	}
 	heldBody, _ := json.Marshal(heldCall)
-	taskRunService.AppendTaskEvent(waitingRun.TaskRunID, agentcontract.TaskEventApprovalPendingCall, string(heldBody))
+	taskRunService.AppendTaskEvent(waitingRun.TaskRunID, agentcontract.TaskEventApprovalHoldOpened, string(heldBody))
 	client := &recordingClient{permissionAskedSignal: make(chan acp.RequestPermissionRequest, 4)}
 	connection := reconnectedPair(t, &recordingLauncher{}, client, taskRunService)
 

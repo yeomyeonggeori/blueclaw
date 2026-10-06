@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -37,7 +38,7 @@ func (connectorRuntime *ConnectorRuntime) readApprovalReply(ctx context.Context,
 	return answeredDecision(optionID), true, nil
 }
 
-func approvalQuestionFor(text string, choices []approvalrecord.Choice) approvalreply.Question {
+func approvalQuestionFor(text string, choices []holdrecord.Choice) approvalreply.Question {
 	if len(choices) == 0 {
 		return approvalreply.Question{Text: text, Options: []approvalreply.Option{
 			{ID: ApproveOptionID, Meaning: approvalreply.AllowMeaning(approveOptionName)},

@@ -3057,7 +3057,7 @@ func TestConnectorRuntimeInteractiveConfirmRestoresPersistedIntakeState(t *testi
 	if len(invokedTools) != 1 || invokedTools[0] != "event_delete/invoke" {
 		t.Fatalf("expected exactly one held calendar delete execution, got %+v", invokedTools)
 	}
-	if !connectorTaskEventsContain(connectorRuntime, secondResult.TaskRunID, "approval.decided", `"decision":"confirm"`) {
+	if !connectorTaskEventsContain(connectorRuntime, secondResult.TaskRunID, "approval.decided", `"decision":"approve"`) {
 		t.Fatalf("a decision the ledger does not carry is a decision the approval gate cannot act on, events: %+v", connectorRuntime.taskRunService.ListTaskEvent(secondResult.TaskRunID))
 	}
 	if connectorSchemaIndexAfter(languageModel.Requests(), "bluecollar_turn_router", 1) < 0 {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"strings"
 	"time"
 
@@ -27,7 +28,7 @@ type ApprovalAnswer struct {
 	ChoiceKey string
 }
 
-func (answer ApprovalAnswer) ChosenFrom(choices []approvalrecord.Choice) (approvalrecord.Choice, bool) {
+func (answer ApprovalAnswer) ChosenFrom(choices []holdrecord.Choice) (holdrecord.Choice, bool) {
 	return approvalrecord.ChoiceByKey(choices, answer.ChoiceKey)
 }
 
@@ -48,7 +49,7 @@ type DeferralRequest struct {
 	ConversationID    string
 	ReplyTargetID     string
 	Prompt            string
-	Choice            approvalrecord.Choice
+	Choice            holdrecord.Choice
 	ReferenceTime     time.Time
 }
 
@@ -89,7 +90,7 @@ func (gate *Gate) DeferApprovedCall(ctx context.Context, request DeferralRequest
 		ScheduleID: schedule.ScheduleID,
 		StartsAt:   startsAt.Format(time.RFC3339),
 	}
-	approvalrecord.SettleLatest(gate.taskRunService, request.TaskRunID, approvalrecord.DecisionDefer, "approval_choice")
+	approvalrecord.SettleLatest(gate.taskRunService, request.TaskRunID, holdrecord.DecisionDefer, "approval_choice")
 	gate.taskRunService.AppendTaskEvent(request.TaskRunID, TaskEventApprovalDeferred, marshalEventBody(record))
 	return deferredCallResult(record), nil
 }
@@ -119,7 +120,7 @@ type ApprovedCallDeferrer interface {
 func DeferHeldCall(ctx context.Context, deferrer ApprovedCallDeferrer, heldCall agentcontract.HeldCall, request DeferralRequest) agentcontract.CarriedOutCall {
 	request.ToolName = heldCall.ToolName
 	request.ToolInput = heldCall.ApprovedInput()
-	return agentcontract.CarriedOutCall{ToolName: request.ToolName, ToolInput: request.ToolInput, Result: deferralResult(ctx, deferrer, request)}
+	return agentcontract.CarriedOutCall{ToolName: request.ToolName, ToolInput: request.ToolInput, HoldID: heldCall.HoldID, Result: deferralResult(ctx, deferrer, request)}
 }
 
 func deferralResult(ctx context.Context, deferrer ApprovedCallDeferrer, request DeferralRequest) toolcontract.ToolResult {

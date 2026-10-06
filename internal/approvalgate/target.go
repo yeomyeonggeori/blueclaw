@@ -3,7 +3,7 @@ package approvalgate
 import (
 	"context"
 	"encoding/json"
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"log/slog"
 	"strings"
 
@@ -16,7 +16,7 @@ type ApprovalTarget = agentcontract.ApprovalTarget
 
 type ApprovalTargetResolution struct {
 	Target  ApprovalTarget
-	Choices []approvalrecord.Choice
+	Choices []holdrecord.Choice
 	Failure toolcontract.ToolResult
 }
 
