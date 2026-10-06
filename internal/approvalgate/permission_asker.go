@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
@@ -86,14 +85,14 @@ func (gate *Gate) SettleAnswer(ctx context.Context, approvalRequest mcpserver.Ap
 		return AnswerSettlement{}, errorValue
 	}
 	heldCall, _ := PendingHeldCall(taskEvents)
-	choice, isChosen := answer.ChosenFrom(approvalrecord.OfferedChoices(taskEvents))
+	choice, isChosen := answer.ChosenFrom(OfferedChoices(taskEvents))
 	if isChosen && choice.DefersTheCall() {
 		return AnswerSettlement{Signal: answer.Signal, DeferredCall: gate.deferHeldCall(ctx, approvalRequest, heldCall, choice)}, nil
 	}
 	if isChosen {
-		approvalrecord.RecordChoiceAnswer(gate.taskRunService, taskRunID, choice)
+		RecordChoiceAnswer(gate.taskRunService, taskRunID, choice)
 	}
-	approvalrecord.SettleSignal(gate.taskRunService, taskRunID, &answer.Signal, "acp_permission")
+	SettleSignal(gate.taskRunService, taskRunID, &answer.Signal, "acp_permission")
 	return AnswerSettlement{Signal: answer.Signal}, nil
 }
 
@@ -113,7 +112,7 @@ func (gate *Gate) deferHeldCall(ctx context.Context, approvalRequest mcpserver.A
 
 func (gate *Gate) endUnansweredHold(taskRunID string, profileName string, status AskStatus) {
 	rejection := agentcontract.ApprovalSignalReject
-	approvalrecord.SettleSignal(gate.taskRunService, taskRunID, &rejection, string(status))
+	SettleSignal(gate.taskRunService, taskRunID, &rejection, string(status))
 	if _, errorValue := gate.taskRunService.AdvanceTaskRun(taskRunID, profileName); errorValue != nil {
 		slog.Warn("approvalgate.unanswered_run_will_not_advance", "taskRunID", taskRunID, "status", string(status), "reason", errorValue.Error())
 	}

@@ -3,7 +3,7 @@ package connectors
 import (
 	"context"
 	"errors"
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
@@ -41,14 +41,14 @@ func approvalQuestionFor(text string, choices []holdrecord.Choice) approvalreply
 		}}
 	}
 	options := []approvalreply.Option{}
-	for _, replyOption := range approvalrecord.ChoiceReplyOptions(choices) {
+	for _, replyOption := range approvalgate.ChoiceReplyOptions(choices) {
 		options = append(options, approvalreply.Option{ID: replyOption.Key, Meaning: choiceMeaning(replyOption)})
 	}
 	return approvalreply.Question{Text: text, Options: options}
 }
 
 func choiceMeaning(replyOption agentcontract.ChoiceReplyOption) string {
-	if replyOption.Key == approvalrecord.CancelChoiceKey {
+	if replyOption.Key == approvalgate.CancelChoiceKey {
 		return approvalreply.RejectMeaning
 	}
 	return approvalreply.AllowMeaning(replyOption.Label)

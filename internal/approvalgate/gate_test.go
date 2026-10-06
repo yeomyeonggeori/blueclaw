@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -91,7 +90,7 @@ func TestACallWithNoTaskRunToAnswerOnIsUnanswerableRatherThanHeld(t *testing.T) 
 }
 
 func recordDecision(taskRunService *task.TaskRunService, taskRunID string, decision string) {
-	approvalrecord.SettleLatest(taskRunService, taskRunID, decision, "test")
+	SettleLatest(taskRunService, taskRunID, decision, "test")
 }
 
 func TestTheSameCallRunsOnceTheRequesterHasApprovedIt(t *testing.T) {
@@ -170,7 +169,7 @@ func TestAFreshCallAfterARejectionAsksAgain(t *testing.T) {
 func TestAReloadCancellationDoesNotAnswerALaterIdenticalCall(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
 	gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
-	approvalrecord.SettleLatest(taskRunService, taskRun.TaskRunID, holdrecord.DecisionReject, "acp_permission_reload")
+	SettleLatest(taskRunService, taskRun.TaskRunID, holdrecord.DecisionReject, "acp_permission_reload")
 
 	freshOutcome, _ := gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
 

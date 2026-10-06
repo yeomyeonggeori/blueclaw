@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
 
@@ -53,7 +53,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) askInputTool(toolContext context.C
 		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, toolcontract.AskInputToolName, "ask_input requires a nonblank question"), nil
 	}
 	if len(trimNonEmptyStrings(input.Choices)) > 0 {
-		return approvalrecord.ChosenAnswerResult(toolCatalogBuilder.taskRunService.ListTaskEvent(taskRunID), json.RawMessage(MarshalBody(input))), nil
+		return approvalgate.ChosenAnswerResult(toolCatalogBuilder.taskRunService.ListTaskEvent(taskRunID), json.RawMessage(MarshalBody(input))), nil
 	}
 	_, errorValue := toolCatalogBuilder.taskRunService.PauseTaskRun(taskRunID, task.TaskStatusWaitingUserInput, question)
 	if errorValue != nil {

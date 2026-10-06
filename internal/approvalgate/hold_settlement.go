@@ -1,4 +1,4 @@
-package approvalrecord
+package approvalgate
 
 import (
 	"strings"

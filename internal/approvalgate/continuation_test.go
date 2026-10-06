@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/holdrecord"
@@ -21,7 +20,7 @@ func taskRunWithHeldCall(t *testing.T) (*task.TaskRunService, string) {
 
 func TestAnApprovedCallIsHandedBackWithTheInputItWasApprovedWith(t *testing.T) {
 	taskRunService, taskRunID := taskRunWithHeldCall(t)
-	approvalrecord.SettleLatest(taskRunService, taskRunID, "approve", "test")
+	SettleLatest(taskRunService, taskRunID, "approve", "test")
 
 	approvedCall, isApproved := ApprovedPendingCall(taskRunService.ListTaskEvent(taskRunID))
 	if !isApproved || approvedCall.ToolName != "event_delete" {
@@ -34,7 +33,7 @@ func TestAnApprovedCallIsHandedBackWithTheInputItWasApprovedWith(t *testing.T) {
 
 func TestACallThatAlreadyRanIsNotHandedBackAgain(t *testing.T) {
 	taskRunService, taskRunID := taskRunWithHeldCall(t)
-	approvalrecord.SettleLatest(taskRunService, taskRunID, "approve", "test")
+	SettleLatest(taskRunService, taskRunID, "approve", "test")
 	RecordApprovalSpent(taskRunService, taskRunID, "event_delete", json.RawMessage(`{"eventHint":"내일 회의"}`))
 
 	if _, isApproved := ApprovedPendingCall(taskRunService.ListTaskEvent(taskRunID)); isApproved {
@@ -44,7 +43,7 @@ func TestACallThatAlreadyRanIsNotHandedBackAgain(t *testing.T) {
 
 func TestANewHeldCallDoesNotInheritTheDecisionMadeAboutTheLastOne(t *testing.T) {
 	taskRunService, taskRunID := taskRunWithHeldCall(t)
-	approvalrecord.SettleLatest(taskRunService, taskRunID, "approve", "test")
+	SettleLatest(taskRunService, taskRunID, "approve", "test")
 	RecordApprovalSpent(taskRunService, taskRunID, "event_delete", json.RawMessage(`{"eventHint":"내일 회의"}`))
 	taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalHoldOpened, `{"toolName":"message_send","toolInput":{"message":"보냅니다"},"confirmation":"보낼까요?"}`)
 
@@ -55,7 +54,7 @@ func TestANewHeldCallDoesNotInheritTheDecisionMadeAboutTheLastOne(t *testing.T) 
 
 func TestADeclinedCallIsReportedAsDeclinedRatherThanLeftSilent(t *testing.T) {
 	taskRunService, taskRunID := taskRunWithHeldCall(t)
-	approvalrecord.SettleLatest(taskRunService, taskRunID, "reject", "test")
+	SettleLatest(taskRunService, taskRunID, "reject", "test")
 
 	declinedCallNote := DeclinedCallNote(taskRunService.ListTaskEvent(taskRunID))
 	if !strings.Contains(declinedCallNote, "declined") {
@@ -87,7 +86,7 @@ func TestEverySurfaceRecordsTheRequesterDecisionUnderOneName(t *testing.T) {
 		t.Run(string(testCase.approvalSignal), func(t *testing.T) {
 			taskRunService, taskRunID := taskRunWithHeldCall(t)
 
-			approvalrecord.SettleSignal(taskRunService, taskRunID, &testCase.approvalSignal, "chat_reply")
+			SettleSignal(taskRunService, taskRunID, &testCase.approvalSignal, "chat_reply")
 
 			taskEvents := taskRunService.ListTaskEvent(taskRunID)
 			decidedEvent := taskEvents[len(taskEvents)-1]
@@ -101,7 +100,7 @@ func TestEverySurfaceRecordsTheRequesterDecisionUnderOneName(t *testing.T) {
 func TestAnUnclearReplyDecidesNothing(t *testing.T) {
 	taskRunService, taskRunID := taskRunWithHeldCall(t)
 
-	approvalrecord.SettleSignal(taskRunService, taskRunID, nil, "chat_reply")
+	SettleSignal(taskRunService, taskRunID, nil, "chat_reply")
 
 	for _, taskEvent := range taskRunService.ListTaskEvent(taskRunID) {
 		if taskEvent.Name == "approval.decided" {
@@ -114,7 +113,7 @@ func eventNamesAfterDecision(t *testing.T, approvalSignal agentcontract.Approval
 	t.Helper()
 	taskRunService, taskRunID := taskRunWithHeldCall(t)
 	heldEventCount := len(taskRunService.ListTaskEvent(taskRunID))
-	approvalrecord.SettleSignal(taskRunService, taskRunID, &approvalSignal, "chat_reply")
+	SettleSignal(taskRunService, taskRunID, &approvalSignal, "chat_reply")
 	names := []string{}
 	for _, taskEvent := range taskRunService.ListTaskEvent(taskRunID)[heldEventCount:] {
 		names = append(names, taskEvent.Name)
