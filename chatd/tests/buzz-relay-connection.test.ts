@@ -128,6 +128,58 @@ describe("a subscription the relay closes", () => {
 		expect(await answer).toEqual([]);
 		client.disconnect();
 	});
+
+	test("that was a query is not reported complete", async () => {
+		const client = createRelayConnection(relayURL, signer, undefined, timing);
+		await client.connect();
+		const socket = FakeSocket.opened[0]!;
+		const answer = client.queryComplete({ kinds: [0] });
+		await settle();
+		const queryID = socket.requests().at(-1)?.[1];
+
+		socket.receive(["CLOSED", queryID, "error: database error"]);
+
+		expect((await answer).complete).toBe(false);
+		client.disconnect();
+	});
+
+	test("that was a query refused before the login is asked again once, and its answer is complete", async () => {
+		const client = createRelayConnection(relayURL, signer, undefined, timing);
+		await client.connect();
+		const socket = FakeSocket.opened[0]!;
+		const filter = { kinds: [39000], "#d": ["room-1"] };
+		const answer = client.queryComplete(filter);
+		await settle();
+		const queryID = socket.requests().at(-1)?.[1];
+
+		socket.receive(["CLOSED", queryID, "auth-required: sign in first"]);
+		await settle();
+		socket.receive(["EOSE", queryID]);
+
+		expect(socket.requests().filter((frame) => frame[1] === queryID)).toEqual([
+			["REQ", queryID, filter],
+			["REQ", queryID, filter],
+		]);
+		expect((await answer).complete).toBe(true);
+		client.disconnect();
+	});
+
+	test("that was a query refused for login twice resolves incomplete instead of asking forever", async () => {
+		const client = createRelayConnection(relayURL, signer, undefined, timing);
+		await client.connect();
+		const socket = FakeSocket.opened[0]!;
+		const answer = client.queryComplete({ kinds: [39000] });
+		await settle();
+		const queryID = socket.requests().at(-1)?.[1];
+
+		socket.receive(["CLOSED", queryID, "auth-required: sign in first"]);
+		await settle();
+		socket.receive(["CLOSED", queryID, "auth-required: sign in first"]);
+
+		expect((await answer).complete).toBe(false);
+		expect(socket.requests().filter((frame) => frame[1] === queryID)).toHaveLength(2);
+		client.disconnect();
+	});
 });
 
 describe("a relay that stops answering", () => {
