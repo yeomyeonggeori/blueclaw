@@ -11,6 +11,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement/gatewaytest"
+	"github.com/yeomyeonggeori/blueclaw/internal/modelstandin"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -164,7 +165,7 @@ func (reader scenarioReplyReader) Read(_ context.Context, question approvalreply
 	if !isDecided {
 		return "", false, nil
 	}
-	optionID, isScripted := approvalreply.ScriptedOptionID(question.Options, outcome.TurnDecision)
+	optionID, isScripted := modelstandin.ScriptedOptionID(question.Options, outcome.TurnDecision.Choices, outcome.TurnDecision.Approval)
 	return optionID, isScripted, nil
 }
 

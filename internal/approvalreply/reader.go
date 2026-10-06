@@ -99,23 +99,3 @@ func offeredOption(question Question, response model.DecisionResponse) (string, 
 	}
 	return "", false, nil
 }
-
-func ScriptedOptionID(options []Option, scriptedDecision agentcontract.TurnDecision) (string, bool) {
-	for _, option := range options {
-		if isScriptedOption(option, scriptedDecision) {
-			return option.ID, true
-		}
-	}
-	return "", false
-}
-
-func isScriptedOption(option Option, scriptedDecision agentcontract.TurnDecision) bool {
-	if len(scriptedDecision.Choices) > 0 {
-		return option.ID == scriptedDecision.Choices[0] || strings.HasSuffix(option.ID, ":"+scriptedDecision.Choices[0])
-	}
-	if scriptedDecision.Approval == nil {
-		return false
-	}
-	isRejecting := option.Meaning == RejectMeaning
-	return isRejecting == (*scriptedDecision.Approval == agentcontract.ApprovalSignalReject)
-}

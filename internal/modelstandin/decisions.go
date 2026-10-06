@@ -163,7 +163,7 @@ func (server *Server) readApprovalReply(document decisionRequestDocument) (map[s
 		return nil, errorValue
 	}
 	options := approvalOptions(document.Questions[approvalreply.AnswerQuestionName])
-	chosenOptionID, isScripted := approvalreply.ScriptedOptionID(options, scriptedTurn.TurnDecision)
+	chosenOptionID, isScripted := ScriptedOptionID(options, scriptedTurn.TurnDecision.Choices, scriptedTurn.TurnDecision.Approval)
 	if !isScripted {
 		chosenOptionID = approvalreply.OtherOptionID
 	}
