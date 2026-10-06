@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	TaskContextEnvironmentName  = "BLUECLAW_TASK_CONTEXT"
+	TaskContextEnvironmentName  = "SKILL_TASK_CONTEXT"
 	taskContextFileName         = "task-context.json"
 	taskContextReadLimit        = 8 << 20
 	taskRecordResultLimit       = 64 << 10

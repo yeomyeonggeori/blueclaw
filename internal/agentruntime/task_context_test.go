@@ -18,7 +18,7 @@ import (
 
 func (fixture taskFixture) taskContextTheShellReads(t *testing.T) taskContext {
 	t.Helper()
-	output := fixture.shellOutput(t, `cat "$BLUECLAW_TASK_CONTEXT"`)
+	output := fixture.shellOutput(t, `cat "$SKILL_TASK_CONTEXT"`)
 	var document taskContext
 	if errorValue := json.Unmarshal([]byte(output), &document); errorValue != nil {
 		t.Fatalf("the task context is not JSON: %q", output)
