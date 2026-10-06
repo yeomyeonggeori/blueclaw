@@ -760,7 +760,7 @@ func TestAQuestionPostedBeforeTheDeployIsAnsweredAfterItUnderTheHoldsStoredId(t 
 func TestAReissuedQuestionThatWasNeverPostedIsLeftForTheRelayToPost(t *testing.T) {
 	asked := reissuedQuestionAfterRecording(t, nil)
 
-	if deliveryOf(t, asked).AlreadyPosted {
+	if deliveryOf(t, asked).IsAlreadyPosted {
 		t.Fatal("a question nobody posted was reissued as already posted, so nobody would ever see it")
 	}
 }
@@ -770,7 +770,7 @@ func TestAReissuedQuestionThatWasPostedIsNotPostedTwice(t *testing.T) {
 		taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventConnectorReplySent, `{"replyKind":"approval_question","dispatchID":"question-message"}`)
 	})
 
-	if !deliveryOf(t, asked).AlreadyPosted {
+	if !deliveryOf(t, asked).IsAlreadyPosted {
 		t.Fatal("a question the person already has was reissued without saying so, so it is posted a second time")
 	}
 }

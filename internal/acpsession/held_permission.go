@@ -76,7 +76,7 @@ func (agent *Agent) reissueHeldPermission(ctx context.Context, sessionID acp.Ses
 		SessionId: sessionID,
 		ToolCall:  acp.ToolCallUpdate{ToolCallId: toolCallID, Title: &title},
 		Options:   options,
-		Meta:      deliveryMeta(Delivery{ReplyTargetID: replyTargetID, AlreadyPosted: agent.postedQuestionMessageID(taskRun.TaskRunID) != ""}),
+		Meta:      deliveryMeta(Delivery{ReplyTargetID: replyTargetID, IsAlreadyPosted: agent.postedQuestionMessageID(taskRun.TaskRunID) != ""}),
 	})
 	if errorValue != nil {
 		agent.logger.Warn("acpsession.permission.reissue_unanswered", "taskRunID", taskRun.TaskRunID, "error", errorValue.Error())
