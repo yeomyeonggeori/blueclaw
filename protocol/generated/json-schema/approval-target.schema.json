@@ -6,6 +6,12 @@
     "id": {
       "type": "string"
     },
+    "ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
     "inputField": {
       "type": "string"
     },

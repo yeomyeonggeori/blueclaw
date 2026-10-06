@@ -1,0 +1,192 @@
+package inboundengagement
+
+import (
+	"context"
+	"errors"
+	"math/rand"
+	"strings"
+	"time"
+
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/model"
+)
+
+type TaskFacts struct {
+	Prompt         string `json:"prompt,omitempty"`
+	Status         string `json:"status,omitempty"`
+	Summary        string `json:"summary,omitempty"`
+	PostedQuestion string `json:"postedQuestion,omitempty"`
+}
+
+type Facts struct {
+	Messages         []agentcontract.IntakeDecisionMessage
+	ConversationType string
+	VisibleContext   agentcontract.VisibleContext
+	AgentIdentity    agentcontract.AgentIdentity
+	Company          agentcontract.CompanyContext
+	OpenTask         *TaskFacts
+	FinishedTask     *TaskFacts
+	Duties           []agentcontract.StandingDuty
+	EnvironmentNow   time.Time
+}
+
+type Judgment struct {
+	MessageID              string
+	Addressing             agentcontract.AddressingDecision
+	ReactionProbability    float64
+	HasRelatesToActiveTask bool
+	RelatesToActiveTask    bool
+	BusyRoute              agentcontract.BusyRoute
+}
+
+type Decider interface {
+	Decide(ctx context.Context, facts Facts, observe agentcontract.LLMCallObserver) ([]Judgment, error)
+}
+
+type DecisionModelDecider struct {
+	decisionModel model.DecisionModel
+	randomSource  func() float64
+}
+
+func NewDecisionModelDecider(decisionModel model.DecisionModel, randomSource func() float64) DecisionModelDecider {
+	if randomSource == nil {
+		randomSource = rand.Float64
+	}
+	return DecisionModelDecider{decisionModel: decisionModel, randomSource: randomSource}
+}
+
+func (decider DecisionModelDecider) Decide(ctx context.Context, facts Facts, observe agentcontract.LLMCallObserver) ([]Judgment, error) {
+	if len(facts.Messages) == 0 {
+		return nil, errors.New("a gateway decision needs at least one message")
+	}
+	request := newDecisionRequest(facts)
+	if len(request.Questions) == 0 {
+		return decider.readJudgments(facts, nil)
+	}
+	if decider.decisionModel == nil {
+		return nil, errors.New("deciding where a message goes needs a decision model and none is configured")
+	}
+	startedAt := time.Now()
+	response, errorValue := decider.decisionModel.Decide(ctx, request)
+	if observe != nil {
+		observe(agentcontract.DecisionCallRecord(request, response, time.Since(startedAt), errorValue))
+	}
+	if errorValue != nil {
+		return nil, errorValue
+	}
+	return decider.readJudgments(facts, response.Answers)
+}
+
+func (decider DecisionModelDecider) readJudgments(facts Facts, answers map[string]model.DecisionAnswer) ([]Judgment, error) {
+	judgments := make([]Judgment, 0, len(facts.Messages))
+	for index, message := range facts.Messages {
+		judgment, errorValue := decider.readJudgment(facts, answerReader{answers: answers, messageKey: messageKey(index)}, message)
+		if errorValue != nil {
+			return nil, errorValue
+		}
+		judgments = append(judgments, judgment)
+	}
+	return judgments, nil
+}
+
+func (decider DecisionModelDecider) readJudgment(facts Facts, reader answerReader, message agentcontract.IntakeDecisionMessage) (Judgment, error) {
+	judgment := Judgment{MessageID: strings.TrimSpace(message.MessageID), Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true}}
+	if asksAddressing(facts) {
+		addressing, reactionProbability, errorValue := decider.readAddressing(reader, facts, message)
+		if errorValue != nil {
+			return Judgment{}, errorValue
+		}
+		judgment.Addressing = addressing
+		judgment.ReactionProbability = reactionProbability
+	}
+	if relatesAnswer, isAnswered := reader.answers[reader.questionKey(agentcontract.IntakeQuestionRelatesToActiveTask)]; asksRelatesToActiveTask(facts) && isAnswered {
+		judgment.HasRelatesToActiveTask = true
+		judgment.RelatesToActiveTask = relatesAnswer.IsYes()
+	}
+	if asksBusyRoute(facts) {
+		busyRoute, errorValue := reader.choice(agentcontract.IntakeQuestionBusyRoute)
+		if errorValue != nil {
+			return Judgment{}, errorValue
+		}
+		judgment.BusyRoute = agentcontract.BusyRoute(busyRoute)
+	}
+	return judgment, nil
+}
+
+func (decider DecisionModelDecider) readAddressing(reader answerReader, facts Facts, message agentcontract.IntakeDecisionMessage) (agentcontract.AddressingDecision, float64, error) {
+	target, errorValue := reader.choice(agentcontract.IntakeQuestionTarget)
+	if errorValue != nil {
+		return agentcontract.AddressingDecision{}, 0, errorValue
+	}
+	shouldRespondAnswer, isAnswered := reader.answers[reader.questionKey(agentcontract.IntakeQuestionShouldRespond)]
+	if !isAnswered {
+		return agentcontract.AddressingDecision{}, 0, errors.New("the gateway decision is missing an answer for " + reader.questionKey(agentcontract.IntakeQuestionShouldRespond))
+	}
+	addressing := agentcontract.AddressingDecision{Target: agentcontract.AddressingTarget(target), ShouldRespond: shouldRespondAnswer.IsYes()}
+	reactionAnswer, errorValue := reader.choiceAnswer(agentcontract.IntakeQuestionReaction)
+	if errorValue != nil {
+		return agentcontract.AddressingDecision{}, 0, errorValue
+	}
+	reactionProbability := reactionAnswer.ChoiceProbability(agentcontract.IntakeReactionOptionReact)
+	if decider.randomSource() < reactionProbability {
+		reactionEmoji, errorValue := reader.choice(agentcontract.IntakeQuestionReactionEmoji)
+		if errorValue != nil {
+			return agentcontract.AddressingDecision{}, 0, errorValue
+		}
+		addressing.ReactionEmoji = knownReactionEmoji(reactionEmoji)
+	}
+	if asksDuty(facts, message) {
+		dutyAnswer, errorValue := reader.choiceAnswer(agentcontract.IntakeQuestionDuty)
+		if errorValue != nil {
+			return agentcontract.AddressingDecision{}, 0, errorValue
+		}
+		addressing = withDuty(addressing, dutyAnswer)
+	}
+	if addressing.Target == agentcontract.AddressingTargetHuman {
+		addressing.ShouldRespond = false
+	}
+	return addressing, reactionProbability, nil
+}
+
+func withDuty(addressing agentcontract.AddressingDecision, dutyAnswer model.DecisionAnswer) agentcontract.AddressingDecision {
+	duty, isDuty := agentcontract.StandingDutyByName(dutyAnswer.Choice)
+	if !isDuty {
+		return addressing
+	}
+	addressing.DutyMatch = true
+	addressing.DutyName = duty.Name
+	addressing.DutyConfidence = min(max(dutyAnswer.Confidence, 0), 1)
+	return addressing
+}
+
+func knownReactionEmoji(name string) string {
+	normalizedName := strings.ToLower(strings.TrimSpace(name))
+	for _, allowedName := range agentcontract.ReactionEmojiNames {
+		if allowedName == normalizedName {
+			return allowedName
+		}
+	}
+	return ""
+}
+
+type answerReader struct {
+	answers    map[string]model.DecisionAnswer
+	messageKey string
+}
+
+func (reader answerReader) questionKey(questionName string) string {
+	return reader.messageKey + "." + questionName
+}
+
+func (reader answerReader) choiceAnswer(questionName string) (model.DecisionAnswer, error) {
+	answer, isAnswered := reader.answers[reader.questionKey(questionName)]
+	if !isAnswered || strings.TrimSpace(answer.Choice) == "" {
+		return model.DecisionAnswer{}, errors.New("the gateway decision answered " + reader.questionKey(questionName) + " with no choice")
+	}
+	return answer, nil
+}
+
+func (reader answerReader) choice(questionName string) (string, error) {
+	answer, errorValue := reader.choiceAnswer(questionName)
+	return strings.TrimSpace(answer.Choice), errorValue
+}
