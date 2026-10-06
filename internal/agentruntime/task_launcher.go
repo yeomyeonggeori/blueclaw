@@ -339,7 +339,7 @@ func (taskLauncher *TaskLauncher) launchTask(ctx context.Context, request TaskLa
 	launchRecords = append(launchRecords, record)
 	taskLauncher.closeAbandonedLaunchTaskRun(openedTaskRun, turnResult.TaskRun.TaskRunID, request.RequesterPersonID)
 	if heldRun, isLeftHeld := taskLauncher.runLeftHeldByItsClient(ctx, record, request.ExistingTaskRunID); isLeftHeld {
-		return TaskLaunchResult{TurnResult: agentcontract.AgentTurnResult{TaskRun: heldRun}, ToolNames: toolNames, NormalizedProfileName: normalizedProfileName}, routerCallRecords, nil
+		return TaskLaunchResult{TurnResult: agentcontract.AgentTurnResult{TaskRun: heldRun}, ToolNames: toolNames, NormalizedProfileName: normalizedProfileName}, nil
 	}
 	if record.Error != "" {
 		if taskRunID := strings.TrimSpace(turnResult.TaskRun.TaskRunID); taskRunID != "" {
