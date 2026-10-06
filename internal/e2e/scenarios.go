@@ -775,6 +775,51 @@ func CalendarFalseFinishRecoveryAcceptanceScenario(artifactDirectoryPath string)
 	}
 }
 
+func CalendarChangeAlreadyInPlaceScenario(artifactDirectoryPath string) VirtualSessionScenario {
+	return VirtualSessionScenario{
+		Name:                  "calendar_change_already_in_place",
+		ArtifactDirectoryPath: artifactDirectoryPath,
+		Skills:                []agentcontract.SkillInstruction{calendarSkill()},
+		AllowedTools:          append(agentruntime.KernelToolNames(), "event_add", "event_list", "event_update"),
+		CapabilityToolNames:   []string{"event_add", "event_list", "event_update"},
+		InitialToolNames:      []string{"event_add", "event_list", "event_update"},
+		Turns: []VirtualTurn{
+			{
+				Prompt:                 "10월 5일부터 17일까지 미국 출장 일정 잡아줘",
+				RouterRequiredEvidence: []string{"event_add"},
+				ActionResponses: []string{
+					actionInvokeCapabilityTool("event_add", `{"title":"미국 출장","startsAt":"2026-10-05T09:00:00+09:00","endsAt":"2026-10-17T18:00:00+09:00"}`),
+					actionFinishMessage("미국 출장 일정을 10월 5일부터 17일까지로 등록했습니다.", "obs-001"),
+				},
+				ExpectedSelectedSkills: []string{"calendar"},
+			},
+			{
+				Prompt:                 "다시. 근데 미국 시간으로 15일 비행기라 한국 돌아오면 결국 17일이긴 하더라.",
+				RouterRequiredEvidence: []string{"event_update"},
+				ActionResponses: []string{
+					actionInvokeCapabilityTool("event_list", `{"startsAt":"2026-10-01","endsAt":"2026-10-31"}`),
+					actionFinishMessage("미국 출장 일정은 이미 10월 17일까지로 되어 있습니다.", "obs-001"),
+				},
+				ExpectedChangesResponses: []string{expectedChangeResponse("calendar updated", "한국 돌아오면 결국 17일이긴 하더라")},
+				ChangeCheckAnswers:       []map[string]float64{{"expected0": 0.9}},
+				ExpectedToolCallCounts: map[string]int{
+					"event_list":   1,
+					"event_update": 0,
+				},
+				ExpectedEventCounts: []VirtualEventCount{
+					{Name: agentcontract.TaskEventCompletionChangeCheck, BodyFragment: `"carriedOut":{"expected0":0.9}`, Count: 1},
+				},
+				ExpectedTaskStatus:     task.TaskStatusCompleted,
+				ExpectedReplyFragments: []string{"이미 10월 17일까지"},
+				ForbiddenEvents: []string{
+					agentcontract.TaskEventAgentCompletionRequired,
+					agentcontract.TaskEventAgentNoProgressLoopStopped,
+				},
+			},
+		},
+	}
+}
+
 // Intake hands a read question a working set that carries the write tool next to
 // the read one. Nothing in the request asks for a change and the answer is the
 // reply itself, so no evidence rule may stand between this turn and finishing.
