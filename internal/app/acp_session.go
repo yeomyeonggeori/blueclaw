@@ -6,6 +6,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/acpsession"
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/store/postgres"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
@@ -18,7 +19,7 @@ func newACPSessionServer(inbound InboundOptions, kernel agentKernel, directory i
 		return nil
 	}
 	permissionRelay := acpsession.NewPermissionRelay(logger)
-	kernel.toolCatalog.approvalGate.UsePermissionAsker(permissionRelay)
+	kernel.toolCatalog.approvalGate.UsePermissionAsker(approvalgate.AskerRoutedBy(permissionRelay, connectorRuntime.ThreadPermissionAsker()))
 	return acpsession.NewServer(socketPath, acpsession.Collaborators{
 		ApprovalDeferrer:   kernel.toolCatalog.approvalGate,
 		TaskLauncher:       taskLauncher,

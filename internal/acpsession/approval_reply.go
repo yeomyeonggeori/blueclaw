@@ -8,6 +8,7 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -69,7 +70,7 @@ func (agent *Agent) readApprovalReply(ctx context.Context, request ApprovalReply
 	if !agent.postedQuestionOf(session.context, waiting).IsAnsweredBy(replyPlacementOf(session.context, request)) {
 		return ApprovalReplyResponse{}, nil
 	}
-	question := approvalreply.Question{Text: waiting.confirmation, Options: readerOptionsOf(waiting.options)}
+	question := approvalreply.Question{Text: waiting.confirmation, Options: approvalgate.ReplyOptionsOf(waiting.options)}
 	optionID, isAnswer, errorValue := agent.replyReader.Read(ctx, question, request.Reply, agent.ledgerObserver(waiting.approvalRequest.TaskRunID))
 	if errorValue != nil {
 		return ApprovalReplyResponse{}, errorValue
@@ -109,20 +110,4 @@ func (agent *Agent) ledgerObserver(taskRunID string) agentcontract.LLMCallObserv
 			agent.taskRunStore.AppendLLMCall(taskRunID, callRecord)
 		}
 	}
-}
-
-func readerOptionsOf(permissionOptions []acp.PermissionOption) []approvalreply.Option {
-	options := make([]approvalreply.Option, 0, len(permissionOptions))
-	for _, permissionOption := range permissionOptions {
-		options = append(options, approvalreply.Option{ID: string(permissionOption.OptionId), Meaning: meaningOf(permissionOption)})
-	}
-	return options
-}
-
-func meaningOf(permissionOption acp.PermissionOption) string {
-	switch permissionOption.Kind {
-	case acp.PermissionOptionKindRejectOnce, acp.PermissionOptionKindRejectAlways:
-		return approvalreply.RejectMeaning
-	}
-	return approvalreply.AllowMeaning(permissionOption.Name)
 }

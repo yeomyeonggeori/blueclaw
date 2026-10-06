@@ -31,6 +31,7 @@ var eventNamesWrittenOnBothSides = map[string]string{
 	"agent.limit_stop":            "the host, which sees every turn result",
 	"agent.goal.blocked":          "the host, which sees every turn result",
 	"task.stop.outbox_suppressed": "the host, which is what cancelled the run",
+	"task.steer.requested":        "one inbound path admits a deployment's messages, so the connector steering a paused run and the ACP agent steering a session never write in the same task run",
 }
 
 const taskEventNameDeclarationPath = "../../.dependency/bluecollar/agentcontract/task_event_name.go"

@@ -93,6 +93,7 @@ type virtualSessionArguments struct {
 	MaximumModelTier      string
 	RealModelTiers        bool
 	ListScenarios         bool
+	AskInThread           bool
 }
 
 type virtualSessionEvidence struct {
@@ -147,6 +148,7 @@ func parseVirtualSessionArguments(arguments []string, defaultScenarioName string
 	validateOnly := flagSet.Bool("validate-only", false, "validate the scenario file without running it")
 	maximumModelTier := flagSet.String("maximum-model-tier", "", "maximum live model tier, one of "+strings.Join(llm.ModelTiers, ", "))
 	realModelTiers := flagSet.Bool("real-model-tiers", false, "use the production model tier configuration without a ceiling")
+	askInThread := flagSet.Bool("ask-in-thread", false, "ask an approval in the thread and wait for the reply, as inbound.connectors.askInThread does, instead of parking the run")
 	listScenarios := flagSet.Bool("list-scenarios", false, "print every scenario name BuiltinScenario accepts, one per line, and exit")
 	flagSet.Usage = func() {
 		fmt.Fprintln(flagSet.Output(), "Usage: blueclaw-lab virtual-session [flags]")
@@ -191,6 +193,7 @@ func parseVirtualSessionArguments(arguments []string, defaultScenarioName string
 		ValidateOnly:          *validateOnly,
 		MaximumModelTier:      normalizedMaximumModelTier,
 		RealModelTiers:        *realModelTiers,
+		AskInThread:           *askInThread,
 	}, nil
 }
 
@@ -624,6 +627,14 @@ func virtualModelTierRank(modelTier string) int {
 }
 
 func loadVirtualSessionScenario(arguments virtualSessionArguments) (e2e.VirtualSessionScenario, error) {
+	scenario, errorValue := namedVirtualSessionScenario(arguments)
+	if errorValue != nil || !arguments.AskInThread {
+		return scenario, errorValue
+	}
+	return e2e.AskedInThread(scenario), nil
+}
+
+func namedVirtualSessionScenario(arguments virtualSessionArguments) (e2e.VirtualSessionScenario, error) {
 	if strings.TrimSpace(arguments.ScenarioFilePath) != "" {
 		return e2e.LoadScenarioFile(arguments.ScenarioFilePath, arguments.ArtifactDirectoryPath)
 	}

@@ -19,6 +19,7 @@ type RuntimeConfiguration struct {
 	Memory        MemoryConfiguration         `json:"memory"`
 	Agent         AgentConfiguration          `json:"agent"`
 	Connectors    ConnectorConfiguration      `json:"connectors"`
+	Inbound       InboundConfiguration        `json:"inbound"`
 	Logging       LoggingConfiguration        `json:"logging"`
 	Terminal      TerminalConfiguration       `json:"terminal"`
 	Scheduler     SchedulerConfiguration      `json:"scheduler"`
@@ -148,6 +149,14 @@ type MemoryConfiguration struct {
 
 type ConnectorConfiguration struct {
 	Chatd ChatdConnectorConfiguration `json:"chatd"`
+}
+
+type InboundConfiguration struct {
+	Connectors InboundConnectorsConfiguration `json:"connectors"`
+}
+
+type InboundConnectorsConfiguration struct {
+	AskInThread bool `json:"askInThread"`
 }
 
 type ChatdConnectorConfiguration struct {

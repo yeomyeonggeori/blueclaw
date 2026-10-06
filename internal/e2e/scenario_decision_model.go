@@ -102,6 +102,25 @@ func (decisionModel *scenarioDecisionModel) answersFrom(request model.DecisionRe
 	}
 }
 
+func (decisionModel *scenarioDecisionModel) decidedTurnReadingTheScript() (intaketest.Outcome, bool) {
+	if decisionModel.turnScript != nil && decisionModel.turnScript.pendingCount() > 0 {
+		decisionModel.decideNextScriptedTurn()
+	}
+	return decisionModel.decidedTurn()
+}
+
+func (decisionModel *scenarioDecisionModel) decideNextScriptedTurn() {
+	turnDocument, errorValue := decisionModel.turnScript.next()
+	if errorValue != nil || strings.TrimSpace(turnDocument) == scenarioAddressingOnlyTurn {
+		return
+	}
+	var turnDecision agentcontract.TurnDecision
+	if json.Unmarshal([]byte(strings.TrimSpace(turnDocument)), &turnDecision) != nil {
+		return
+	}
+	decisionModel.rememberDecidedTurn(intaketest.Outcome{Addressing: decisionModel.addressing, TurnDecision: turnDecision})
+}
+
 func (decisionModel *scenarioDecisionModel) decidedTurn() (intaketest.Outcome, bool) {
 	decisionModel.mutex.Lock()
 	defer decisionModel.mutex.Unlock()
@@ -148,7 +167,7 @@ func (reader scenarioReplyReader) Read(_ context.Context, question approvalreply
 	if reader.decisionModel == nil {
 		return "", false, nil
 	}
-	outcome, isDecided := reader.decisionModel.decidedTurn()
+	outcome, isDecided := reader.decisionModel.decidedTurnReadingTheScript()
 	if !isDecided {
 		return "", false, nil
 	}

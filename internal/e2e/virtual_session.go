@@ -88,6 +88,7 @@ type VirtualSessionScenario struct {
 	InitialWorkspaceFiles     map[string]string
 	RequesterIsAdmin          bool
 	IsDeliveredOverACP        bool
+	AskInThread               bool
 	RecordCatalogURL          string
 	Turns                     []VirtualTurn
 	DecisionModel             model.DecisionModel
@@ -350,6 +351,7 @@ type VirtualSessionHarness struct {
 	runtime          *connectors.ConnectorRuntime
 	adapter          *virtualAdapter
 	acpSession       *virtualACPSession
+	askingTurn       *askingTurn
 	cleanup          func()
 
 	approvedCallSchedules *virtualApprovedCallSchedules
@@ -972,6 +974,8 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	approvedCallSchedules := &virtualApprovedCallSchedules{}
 	virtualApprovalGate.UseApprovedCallScheduler(approvedCallSchedules)
 	runtime.UseApprovalGate(virtualApprovalGate)
+	runtime.UseAskInThread(scenario.AskInThread)
+	virtualApprovalGate.UsePermissionAsker(runtime.ThreadPermissionAsker())
 	virtualTaskLauncher.UseApprovalGate(virtualApprovalGate)
 	virtualTaskLauncher.UseTurnRouter(scenarioTurnRouter)
 	virtualTaskLauncher.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, highLanguageModel))
@@ -2556,6 +2560,7 @@ func (harness *VirtualSessionHarness) Run(ctx context.Context) (VirtualSessionRe
 	if harness.cleanup != nil {
 		defer harness.cleanup()
 	}
+	defer harness.stopAskingTurn()
 	if harness.scenario.ProgressWriter != nil {
 		unregisterProgress := harness.taskEventService.RegisterTurnObserver(streamProgressObserver(harness.scenario.ProgressWriter))
 		defer unregisterProgress()
@@ -3029,7 +3034,7 @@ func (harness *VirtualSessionHarness) runTurn(ctx context.Context, index int, vi
 			return harness.observedTurnResult(reactionStartIndex, modelCallStartIndex, modelRequestStartIndex)
 		})
 	}
-	runtimeResult, errorValue := harness.runtime.HandleInboundEvent(ctx, harness.adapter, event)
+	runtimeResult, errorValue := harness.handleInboundEvent(ctx, event)
 	if errorValue != nil {
 		return VirtualTurnResult{}, errorValue
 	}
