@@ -20,6 +20,7 @@ import (
 	"github.com/yeomyeonggeori/bluememo"
 	"github.com/yeomyeonggeori/bluememo/bluememotest"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 )
 
@@ -257,12 +258,40 @@ func TestAnOverheardMessageSettlesItsScriptAtTheGateway(t *testing.T) {
 	running.mustBeSettled(t)
 }
 
+func TestAnApprovalReplyIsReadAsTheOptionTheScriptedApprovalPicks(t *testing.T) {
+	running := startStandIn(t)
+	running.mustScript(t, "/script/turn", map[string]any{"message": "응 보내줘", "turnDecision": map[string]any{"route": "continue_task", "approval": "approve"}})
+	question := approvalreply.Question{Text: "send it?", Options: []approvalreply.Option{
+		{ID: "approve", Meaning: approvalreply.AllowMeaning("send it")},
+		{ID: "reject", Meaning: approvalreply.RejectMeaning},
+	}}
+
+	optionID, isAnswer, errorValue := approvalreply.NewDecisionModelReader(running.decisionModel()).Read(context.Background(), question, "응 보내줘", nil)
+
+	if errorValue != nil || !isAnswer || optionID != "approve" {
+		t.Fatalf("expected the reply to be read as approve, got %q %v %v", optionID, isAnswer, errorValue)
+	}
+	running.mustBeSettled(t)
+}
+
 func aChannelMessageFacts(words string) inboundengagement.Facts {
 	return inboundengagement.Facts{
 		ConversationType: "channel",
 		AgentIdentity:    agentcontract.AgentIdentity{Name: "인턴"},
 		Messages:         []inboundengagement.Message{{MessageID: "message-1", Prompt: words, SenderName: "이샘플"}},
 	}
+}
+
+func TestAnApprovalReplyNoScriptDecidedIsRefused(t *testing.T) {
+	running := startStandIn(t)
+	question := approvalreply.Question{Text: "send it?", Options: []approvalreply.Option{{ID: "approve", Meaning: approvalreply.AllowMeaning("send it")}}}
+
+	_, _, errorValue := approvalreply.NewDecisionModelReader(running.decisionModel()).Read(context.Background(), question, "응 보내줘", nil)
+
+	if errorValue == nil {
+		t.Fatal("expected a reply nobody scripted to fail")
+	}
+	running.mustHaveRefused(t, `a reply no script decided was read as an answer to an approval question: "응 보내줘"`)
 }
 
 func TestATurnNoScriptDecidedIsRefused(t *testing.T) {
