@@ -75,6 +75,18 @@ func (roundTripper roundTripError) RoundTrip(*http.Request) (*http.Response, err
 	return nil, roundTripper.errorValue
 }
 
+type TransportError struct {
+	Cause error
+}
+
+func (transportError TransportError) Error() string {
+	return transportError.Cause.Error()
+}
+
+func (transportError TransportError) Unwrap() error {
+	return transportError.Cause
+}
+
 func (client Client) PostJSON(ctx context.Context, path string, requestDocument any, responseDocument any) error {
 	if client.HTTPClient == nil {
 		return errors.New("capability http client is not configured")
@@ -99,7 +111,7 @@ func (client Client) PostJSON(ctx context.Context, path string, requestDocument 
 
 	httpResponse, errorValue := client.HTTPClient.Do(httpRequest)
 	if errorValue != nil {
-		return errorValue
+		return TransportError{Cause: errorValue}
 	}
 	defer httpResponse.Body.Close()
 

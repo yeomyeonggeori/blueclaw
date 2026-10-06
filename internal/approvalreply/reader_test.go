@@ -17,7 +17,7 @@ type answeringModel struct {
 
 func (decisionModel *answeringModel) Decide(_ context.Context, request model.DecisionRequest) (model.DecisionResponse, error) {
 	decisionModel.requests = append(decisionModel.requests, request)
-	return model.DecisionResponse{Answers: map[string]model.DecisionAnswer{answerQuestionName: {Type: model.DecisionQuestionTypeChoice, Choice: decisionModel.choice}}}, nil
+	return model.DecisionResponse{Answers: map[string]model.DecisionAnswer{AnswerQuestionName: {Type: model.DecisionQuestionTypeChoice, Choice: decisionModel.choice}}}, nil
 }
 
 const (
@@ -68,7 +68,7 @@ func TestTheQuestionOffersExactlyTheOptionsAndOtherAndNothingElse(t *testing.T) 
 	if len(decisionModel.requests) != 1 || len(decisionModel.requests[0].Questions) != 1 {
 		t.Fatalf("expected one call with one question, got %+v", decisionModel.requests)
 	}
-	criteria, isDescribed := decisionModel.requests[0].Questions[answerQuestionName].Criteria.(map[string]string)
+	criteria, isDescribed := decisionModel.requests[0].Questions[AnswerQuestionName].Criteria.(map[string]string)
 	if !isDescribed {
 		t.Fatalf("the question carries no option descriptions: %+v", decisionModel.requests[0].Questions)
 	}
@@ -93,8 +93,8 @@ func TestAPlainApprovalQuestionOffersApproveRejectAndOther(t *testing.T) {
 
 	NewDecisionModelReader(decisionModel).Read(context.Background(), approvalQuestion("보낼까요?"), "ㅇ", nil)
 
-	criteria, _ := decisionModel.requests[0].Questions[answerQuestionName].Criteria.(map[string]string)
-	if len(criteria) != 3 || criteria[approveOptionID] == "" || criteria[rejectOptionID] == "" || criteria[otherOptionID] == "" {
+	criteria, _ := decisionModel.requests[0].Questions[AnswerQuestionName].Criteria.(map[string]string)
+	if len(criteria) != 3 || criteria[approveOptionID] == "" || criteria[rejectOptionID] == "" || criteria[OtherOptionID] == "" {
 		t.Fatalf("expected approve, reject and other, got %+v", criteria)
 	}
 }

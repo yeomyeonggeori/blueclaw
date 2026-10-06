@@ -7,6 +7,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract/harnesstest"
 )
 
@@ -47,5 +48,26 @@ func TestTaskLauncherSetsExecutionStartWhenTheTurnLaunches(t *testing.T) {
 	turnRequest = harness.LastTurnRequest()
 	if turnRequest.ExecutionStartedAt != restartExecutionStartedAt {
 		t.Fatalf("expected restart execution start to remain unchanged, got %s", turnRequest.ExecutionStartedAt)
+	}
+}
+
+func TestARunWaitingOnApprovalIsNotFailedWhenItsClientLeavesMidTurn(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	taskLauncher := NewTaskLauncher(harnesstest.New(taskRunService), taskRunService, NewToolCatalogBuilder())
+	taskRun := taskRunService.CreateTaskRun("person-1", "보낼까요?", "default")
+	if _, errorValue := taskRunService.PauseTaskRun(taskRun.TaskRunID, agentcontract.TaskStatusWaitingApproval, "보낼까요?"); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	clientLeft, leave := context.WithCancel(context.Background())
+	leave()
+
+	heldRun, isLeftHeld := taskLauncher.runLeftHeldByItsClient(clientLeft, launchStepRecord{Error: "peer connection closed"}, taskRun.TaskRunID)
+	_, isLeftHeldWithClientPresent := taskLauncher.runLeftHeldByItsClient(context.Background(), launchStepRecord{Error: "peer connection closed"}, taskRun.TaskRunID)
+
+	if !isLeftHeld || heldRun.TaskRunID != taskRun.TaskRunID {
+		t.Fatalf("a run waiting on approval whose client left was treated as failed: %+v", heldRun)
+	}
+	if isLeftHeldWithClientPresent {
+		t.Fatal("a turn that failed while its client was still there was treated as held")
 	}
 }

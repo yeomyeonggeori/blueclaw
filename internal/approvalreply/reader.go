@@ -11,9 +11,9 @@ import (
 )
 
 const (
-	otherOptionID = "other"
+	OtherOptionID = "other"
 
-	answerQuestionName = "answer"
+	AnswerQuestionName = "answer"
 )
 
 const instructions = `The state holds a question a person was asked (postedQuestion) and their reply (reply). Which option does the reply pick? Read the reply as an answer to that question, by what the person means, in any language and any script. A reply to a question is usually brief: a word, a bit of shorthand or a single character is a full answer, and polite or friendly words around it do not change it. Choose other only when the reply does not pick any of the options.`
@@ -77,18 +77,18 @@ func (reader DecisionModelReader) Read(ctx context.Context, question Question, r
 }
 
 func readRequest(question Question, reply string) model.DecisionRequest {
-	descriptions := map[string]string{otherOptionID: otherMeaning}
+	descriptions := map[string]string{OtherOptionID: otherMeaning}
 	for _, option := range question.Options {
 		descriptions[option.ID] = option.Meaning
 	}
 	return model.DecisionRequest{
 		State:     readState{PostedQuestion: question.Text, Reply: reply},
-		Questions: map[string]model.DecisionQuestion{answerQuestionName: model.ChoiceQuestion{Instructions: instructions, OptionDescriptions: descriptions}.Question()},
+		Questions: map[string]model.DecisionQuestion{AnswerQuestionName: model.ChoiceQuestion{Instructions: instructions, OptionDescriptions: descriptions}.Question()},
 	}
 }
 
 func offeredOption(question Question, response model.DecisionResponse) (string, bool, error) {
-	answer, isAnswered := response.Answers[answerQuestionName]
+	answer, isAnswered := response.Answers[AnswerQuestionName]
 	if !isAnswered || strings.TrimSpace(answer.Choice) == "" {
 		return "", false, errors.New("the decision model answered no choice for the approval reply")
 	}

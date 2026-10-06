@@ -4,8 +4,10 @@ package connectors
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -307,6 +309,54 @@ func TestAnAnswerAfterARestartApprovesTheHoldAndResumesTheRunWhichSpendsIt(t *te
 	}
 }
 
+func TestAnAnswerAfterARestartThatArrivesAsASessionPromptApprovesTheHold(t *testing.T) {
+	script := deleteApprovalScript(`{"answer":"approve"}`)
+	script.actions = []string{script.actions[0], connectorFinishMessageCiting("내일 휴가 일정을 캘린더에서 삭제했습니다.", "obs-001")}
+	fixture := newThreadAskFixture(t, script)
+	taskRun := restartedRunHoldingTheCall(t, fixture)
+	fixture.connectorRuntime.appendConnectorReplyEvent(taskRun.TaskRunID, agentcontract.TaskEventConnectorReplySent, map[string]string{"replyKind": connectorReplyKindApprovalQuestion, "dispatchID": "dispatch-before-restart"})
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	finished := make(chan struct{})
+	go func() {
+		fixture.connectorRuntime.reawaitHold(ctx, taskRun)
+		close(finished)
+	}()
+	fixture.awaitQuestionOnTheThread(t)
+	sessionTurn := fixture.connectorRuntime.OpenSessionTurn(ctx, threadReplyEvent("message-2", "ㅇ"), "person-1", fixture.adapter.SendReply)
+
+	isAnswer, errorValue := sessionTurn.AnswersAwaitedQuestion(ctx)
+	awaitFinished(t, finished)
+
+	resumed, _ := fixture.connectorRuntime.taskRunService.FindTaskRun(taskRun.TaskRunID)
+	if errorValue != nil || !isAnswer || resumed.Status != task.TaskStatusCompleted || fixture.invokedToolCount() != 1 {
+		t.Fatalf("answered=%v error=%v status=%s calls=%v: expected a reply to the awaited question to settle it and resume the run", isAnswer, errorValue, resumed.Status, fixture.invokedTools)
+	}
+}
+
+func TestAnAnswerToAHoldNobodyAwaitsYetIsStillTakenFromTheSessionPromptThatCarriesIt(t *testing.T) {
+	script := deleteApprovalScript(`{"answer":"approve"}`)
+	script.actions = []string{script.actions[0], connectorFinishMessageCiting("내일 휴가 일정을 캘린더에서 삭제했습니다.", "obs-001")}
+	fixture := newThreadAskFixture(t, script)
+	taskRun := restartedRunHoldingTheCall(t, fixture)
+	fixture.connectorRuntime.appendConnectorReplyEvent(taskRun.TaskRunID, agentcontract.TaskEventConnectorReplySent, map[string]string{"replyKind": connectorReplyKindApprovalQuestion, "dispatchID": "dispatch-before-the-restart"})
+	sessionTurn := fixture.connectorRuntime.OpenSessionTurn(context.Background(), threadReplyEvent("message-2", "ㅇ"), "person-1", fixture.adapter.SendReply)
+
+	isAnswer, errorValue := sessionTurn.AnswersAwaitedQuestion(context.Background())
+
+	if errorValue != nil || !isAnswer {
+		t.Fatalf("answered=%v error=%v: expected the prompt to settle a hold the start-up pass had not yet awaited", isAnswer, errorValue)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if resumed, _ := fixture.connectorRuntime.taskRunService.FindTaskRun(taskRun.TaskRunID); resumed.Status == task.TaskStatusCompleted {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("the run never completed after its hold was answered: calls %v", fixture.invokedTools)
+}
+
 func TestARunWhoseThreadCannotBeReopenedAfterARestartIsEndedNotParked(t *testing.T) {
 	fixture := newThreadAskFixture(t, deleteApprovalScript())
 	taskRun := fixture.connectorRuntime.taskRunService.CreateTaskRunWithOrigin("person-1", task.TaskRunOrigin{ConversationID: "schedule:morning"}, "scheduled run")
@@ -578,5 +628,85 @@ func TestAHoldOlderThanTheExpiryAtBootRecordsTheExpiryAndTellsTheRequester(t *te
 	}
 	if ended.Status != task.TaskStatusFailed || len(fixture.adapter.sentReplies) != 1 || fixture.adapter.sentReplies[0].message == "" {
 		t.Fatalf("status %s with %d replies: expected the run failed and one model-worded notice sent to the thread", ended.Status, len(fixture.adapter.sentReplies))
+	}
+}
+
+func TestARunResumedOnAHeldCallOwesThatCallSoTheLoopDoesNotRefuseItAsUnrequested(t *testing.T) {
+	fixture := newThreadAskFixture(t, deleteApprovalScript())
+	taskRun := restartedRunHoldingTheCall(t, fixture)
+
+	activeGoal := interruptedTaskActiveGoal(taskRun, fixture.connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID), "")
+
+	if !slices.Contains(activeGoal.OutcomeContract.RequiredEvidenceTools, "event_delete") {
+		t.Fatalf("the resumed goal requires %v, and a send or delete the goal does not require is refused by the loop as unrequested", activeGoal.OutcomeContract.RequiredEvidenceTools)
+	}
+}
+
+func interruptedRunHoldingTheCall(t *testing.T, fixture *threadAskFixture) task.TaskRun {
+	t.Helper()
+	taskRun := fixture.connectorRuntime.taskRunService.CreateTaskRunWithOrigin("person-1", task.TaskRunOrigin{ConversationID: "direct-1", ReplyTargetID: "reply-target-1", IsThread: true}, threadAskRequest)
+	fixture.connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentTaskLaunched, `{"platform":"test","conversationID":"direct-1","replyTargetID":"reply-target-1","sourceReference":"test:direct-1:message-1"}`)
+	holdrecord.Open(fixture.connectorRuntime.taskRunService, taskRun.TaskRunID, agentcontract.HeldCall{ToolName: "event_delete", ToolInput: []byte(`{"eventHint":"event-1"}`), Confirmation: "내일 휴가 일정을 삭제할까요?"}, nil)
+	interrupted, isInterrupted := fixture.connectorRuntime.taskRunService.InterruptInactiveTaskRun(taskRun.TaskRunID, agentcontract.TaskInterruptReasonPlannedShutdown)
+	if !isInterrupted {
+		t.Fatal("the run was not interrupted")
+	}
+	return interrupted
+}
+
+func TestARunKilledAfterItsHoldOpenedBeforeTheQuestionWasPostedIsAwaitedAndAskedOnce(t *testing.T) {
+	fixture := newThreadAskFixture(t, deleteApprovalScript())
+	taskRun := interruptedRunHoldingTheCall(t, fixture)
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+
+	_, errorValue := fixture.connectorRuntime.ResumeInterruptedTaskRun(ctx, taskRun)
+	fixture.awaitQuestionOnTheThread(t)
+
+	if errorValue != nil || fixture.questionsPosted() != 1 || fixture.taskRunCount() != 1 || fixture.invokedToolCount() != 0 {
+		t.Fatalf("error=%v questions=%d runs=%d calls=%v: expected the open hold awaited and asked once, with no second run", errorValue, fixture.questionsPosted(), fixture.taskRunCount(), fixture.invokedTools)
+	}
+}
+
+func TestARunKilledAfterItsQuestionWasPostedIsAwaitedWithoutAskingAgain(t *testing.T) {
+	fixture := newThreadAskFixture(t, deleteApprovalScript())
+	taskRun := interruptedRunHoldingTheCall(t, fixture)
+	fixture.connectorRuntime.appendConnectorReplyEvent(taskRun.TaskRunID, agentcontract.TaskEventConnectorReplySent, map[string]string{"replyKind": connectorReplyKindApprovalQuestion, "dispatchID": "dispatch-before-the-kill"})
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+
+	_, errorValue := fixture.connectorRuntime.ResumeInterruptedTaskRun(ctx, taskRun)
+	fixture.awaitQuestionOnTheThread(t)
+
+	if errorValue != nil || fixture.questionsPosted() != 0 || fixture.taskRunCount() != 1 {
+		t.Fatalf("error=%v questions=%d runs=%d: expected the posted question awaited, not posted again and not relaunched", errorValue, fixture.questionsPosted(), fixture.taskRunCount())
+	}
+}
+
+func askWhileTheMessengerFailsWith(t *testing.T, deliveryError error) (*threadAskFixture, task.TaskRun) {
+	t.Helper()
+	fixture := newThreadAskFixture(t, deleteApprovalScript())
+	fixture.adapter.sendReplyError = deliveryError
+	fixture.await(t, fixture.send(context.Background(), threadReplyEvent("message-1", threadAskRequest)))
+	taskRuns := fixture.connectorRuntime.taskRunService.ListTaskRunByPersonID("person-1")
+	if len(taskRuns) != 1 {
+		t.Fatalf("expected one run, found %d", len(taskRuns))
+	}
+	return fixture, taskRuns[0]
+}
+
+func TestAQuestionTheMessengerCouldNotCarryBecauseItIsDownStaysPendingForTheReconnect(t *testing.T) {
+	fixture, taskRun := askWhileTheMessengerFailsWith(t, capability.TransportError{Cause: errors.New("dial unix: connect: connection refused")})
+
+	if taskRun.Status != task.TaskStatusWaitingApproval || connectorTaskEventsContain(fixture.connectorRuntime, taskRun.TaskRunID, approvalgate.TaskEventApprovalUnreachable, "") {
+		t.Fatalf("a messenger that is down left the run %s with an unreachable verdict, expected it to wait for the reconnect", taskRun.Status)
+	}
+}
+
+func TestAQuestionToARequesterTheMessengerRefusesIsUnreachable(t *testing.T) {
+	fixture, taskRun := askWhileTheMessengerFailsWith(t, errors.New("no direct conversation with this person"))
+
+	if taskRun.Status == task.TaskStatusWaitingApproval || !connectorTaskEventsContain(fixture.connectorRuntime, taskRun.TaskRunID, approvalgate.TaskEventApprovalUnreachable, "") {
+		t.Fatalf("a refused question left the run %s without an unreachable verdict", taskRun.Status)
 	}
 }

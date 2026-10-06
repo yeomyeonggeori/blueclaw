@@ -114,6 +114,18 @@ type Collaborators struct {
 	TaskRunStore       taskstate.TaskRunStore
 }
 
+func (agent *Agent) hasLostItsClient() bool {
+	if agent.connection == nil {
+		return false
+	}
+	select {
+	case <-agent.connection.Done():
+		return true
+	default:
+		return false
+	}
+}
+
 func (agent *Agent) UseConnection(connection *acp.AgentSideConnection) {
 	agent.connection = connection
 }
@@ -215,6 +227,9 @@ func (agent *Agent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.
 	delivery := Delivery{DeliveryID: newRandomIdentifier(), ReplyTargetID: launchRequest.ReplyTargetID}
 	sessionTurn := agent.sessionTurns.OpenSessionTurn(ctx, inboundEventOf(messageContext, launchRequest), launchRequest.RequesterPersonID, agent.replySenderForDelivery(request.SessionId, delivery.DeliveryID))
 	defer sessionTurn.EndProgress()
+	if isAnswer, errorValue := sessionTurn.AnswersAwaitedQuestion(ctx); errorValue != nil || isAnswer {
+		return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, errorValue
+	}
 	sessionTurn.ShowProgressBeforeAddressing(ctx)
 	if engagement := sessionTurn.ResolveEngagement(ctx); !engagement.ShouldLaunch {
 		agent.logger.Info("acpsession.prompt.ignored",

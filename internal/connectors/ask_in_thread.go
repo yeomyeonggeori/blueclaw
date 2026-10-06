@@ -10,6 +10,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
+	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
@@ -188,12 +189,20 @@ func (connectorRuntime *ConnectorRuntime) askWhereTheyAre(ctx context.Context, a
 		answers:           make(chan string, 1),
 	}
 	defer connectorRuntime.askingThreads.join(thread)()
-	if connectorRuntime.deliverApprovalQuestion(ctx, turn, approvalRequest.TaskRunID, confirmation) != nil {
-		return "", approvalgate.AskUnreachable
+	if errorValue := connectorRuntime.deliverApprovalQuestion(ctx, turn, approvalRequest.TaskRunID, confirmation); errorValue != nil {
+		return "", statusOfFailedQuestionDelivery(errorValue)
 	}
 	connectorRuntime.askingThreads.markPosted(thread)
 	defer waitHandoffFrom(ctx).begin()()
 	return connectorRuntime.awaitAnswer(ctx, thread, connectorRuntime.askingThreads.expiry)
+}
+
+func statusOfFailedQuestionDelivery(deliveryError error) approvalgate.AskStatus {
+	var transportError capability.TransportError
+	if errors.As(deliveryError, &transportError) {
+		return approvalgate.AskInterrupted
+	}
+	return approvalgate.AskUnreachable
 }
 
 func (connectorRuntime *ConnectorRuntime) questionTurn(ctx context.Context, approvalRequest mcpserver.ApprovalRequest) (*inboundTurn, bool) {
@@ -229,14 +238,18 @@ func (connectorRuntime *ConnectorRuntime) awaitAnswer(ctx context.Context, threa
 }
 
 func (connectorRuntime *ConnectorRuntime) answerAskingThread(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (ConnectorRuntimeResult, bool, error) {
-	if event.TaskRetry != nil || exactTaskControlIntent(event.Prompt) != agentcontract.TaskControlIntentNone {
-		return ConnectorRuntimeResult{}, false, nil
-	}
 	personID, isFound := connectorRuntime.identityService.ResolvePersonIDByPlatformAccount(adapter.Name(), event.SenderID)
 	if !isFound {
 		return ConnectorRuntimeResult{}, false, nil
 	}
-	for _, thread := range connectorRuntime.askingThreads.awaiting(adapter.Name(), event.ConversationID, personID) {
+	return connectorRuntime.answerAwaitingThreads(ctx, adapter.Name(), personID, event)
+}
+
+func (connectorRuntime *ConnectorRuntime) answerAwaitingThreads(ctx context.Context, platform string, personID string, event PlatformInboundEvent) (ConnectorRuntimeResult, bool, error) {
+	if event.TaskRetry != nil || exactTaskControlIntent(event.Prompt) != agentcontract.TaskControlIntentNone {
+		return ConnectorRuntimeResult{}, false, nil
+	}
+	for _, thread := range connectorRuntime.askingThreads.awaiting(platform, event.ConversationID, personID) {
 		result, isAnswer, errorValue := connectorRuntime.offerReplyToThread(ctx, thread, event)
 		if isAnswer || errorValue != nil {
 			return result, isAnswer, errorValue
