@@ -14,6 +14,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
+	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
 
 func TestTerminalRunTranslatesAgentWorkspacePaths(t *testing.T) {
@@ -480,5 +481,45 @@ func TestTerminalRunFailsWhenPOSIXDeniesCircleWorkingDirectory(t *testing.T) {
 	}
 	if !result.Failed() || !strings.Contains(strings.ToLower(result.ContentText()), "permission denied") {
 		t.Fatalf("expected the OS denial on the circle working directory to fail shell, got %+v", result)
+	}
+}
+
+func TestAFileAShellLeavesInItsTemporaryDirectoryGoesWhenTheTaskEnds(t *testing.T) {
+	workspacePath := t.TempDir()
+	toolCatalogBuilder := newTerminalToolTestCatalogBuilderWithNetwork(workspacePath, true)
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	taskRunService.RegisterTaskRunTransitionObserver(task.NewTaskTemporaryDirectoryReclaimer(workspacePath, toolCatalogBuilder.workspaceActorFactory, nil).Observe)
+	taskRun := taskRunService.CreateTaskRun("person-1", "dm:channel-1", "read the build log")
+	if _, errorValue := taskRunService.AdvanceTaskRun(taskRun.TaskRunID, "default"); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
+		ProfileName:       "default",
+		RequesterPersonID: "person-1",
+		ConversationID:    "dm:channel-1",
+		PersonAccess:      policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
+	})
+	result, errorValue := toolRegistry.Invoke(toolcontract.WithTaskRunID(context.Background(), taskRun.TaskRunID), toolcontract.ToolInvocation{
+		ToolName: "bash",
+		Input:    toolcontract.MarshalToolInput(map[string]any{"command": `f="$(mktemp "${TMPDIR:-/tmp}/terminal-output-XXXXXX")" && printf spilled > "$f" && printf '%s' "$f"`}),
+	})
+	if errorValue != nil || result.Failed() {
+		t.Fatalf("expected the shell to write a file: %v %s", errorValue, result.ContentText())
+	}
+	var commandResult security.CommandResult
+	if errorValue := json.Unmarshal([]byte(result.ContentText()), &commandResult); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	taskDirectoryPath := security.TaskTemporaryDirectoryPath(security.PersonHomeDirectoryPath(workspacePath, "person-1"), taskRun.TaskRunID)
+	if !strings.HasPrefix(commandResult.Stdout, taskDirectoryPath+string(filepath.Separator)) {
+		t.Fatalf("a file outside the task temporary directory is never reclaimed, got %q", commandResult.Stdout)
+	}
+
+	if _, errorValue := taskRunService.CompleteTaskRun(taskRun.TaskRunID, "done"); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	if _, errorValue := os.Stat(commandResult.Stdout); !os.IsNotExist(errorValue) {
+		t.Fatalf("expected the file to be removed with the task, got %v", errorValue)
 	}
 }

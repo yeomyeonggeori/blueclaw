@@ -268,6 +268,10 @@ func newFileToolTestCatalogBuilder(workspacePath string) *ToolCatalogBuilder {
 }
 
 func newTerminalToolTestCatalogBuilder(workspacePath string) *ToolCatalogBuilder {
+	return newTerminalToolTestCatalogBuilderWithNetwork(workspacePath, false)
+}
+
+func newTerminalToolTestCatalogBuilderWithNetwork(workspacePath string, allowNetwork bool) *ToolCatalogBuilder {
 	terminalService := security.NewShellService(config.TerminalConfiguration{
 		WorkspaceRootPath:     workspacePath,
 		Mode:                  "native",
@@ -275,6 +279,7 @@ func newTerminalToolTestCatalogBuilder(workspacePath string) *ToolCatalogBuilder
 		OutputMaxBytes:        4096,
 		SessionMaxCount:       2,
 		AllowInteractiveShell: true,
+		AllowNetwork:          allowNetwork,
 	})
 	toolCatalogBuilder := NewToolCatalogBuilder()
 	toolCatalogBuilder.UseWorkspaceRootPath(workspacePath)
