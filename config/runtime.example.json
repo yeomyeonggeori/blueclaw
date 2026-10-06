@@ -118,7 +118,6 @@
       "enabled": true,
       "executionMode": "auto"
     },
-    "defaultTaskLevel": "low",
     "failureRecovery": {
       "failureDebtFinalizationGate": true,
       "attemptFingerprint": "tool_input_error_code",

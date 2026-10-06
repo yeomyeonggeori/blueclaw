@@ -488,7 +488,7 @@ The runtime configuration is the JSON file passed as `--runtime`, and it holds e
 | `languageModel` | model tiers, embedding model, tier bounds, context window; see [Language models](#language-models) |
 | `database` | `driver`, `connectionString`, `migrationDirectoryPath`, `maxOpenConnections` |
 | `memory` | `embeddingModel`, `embeddingExecutionMode`, `extractionDisabled`, `adminAssertionKeyPath` |
-| `agent` | `intake`, `defaultTaskLevel`, `failureRecovery`, `harness` |
+| `agent` | `intake`, `failureRecovery`, `harness` |
 | `agentProfiles` | named profiles with `allowedToolNames` |
 | `capabilities` | the capability service; see [Capabilities](#capabilities) |
 | `connectors` | `chatd` |
@@ -496,7 +496,7 @@ The runtime configuration is the JSON file passed as `--runtime`, and it holds e
 | `scheduler` | `retentionCheckIntervalMinute`, `taskSchedulePollIntervalSecond` |
 | `logging` | `directoryPath`, `retentionDays` |
 
-`agent.defaultTaskLevel` is the effort a task starts at, `xlow` through `max`. `agent.harness` takes `name`, `agentCommandPath`, `agentArguments` and `toolCatalogURL`.
+`agent.harness` takes `name`, `agentCommandPath`, `agentArguments` and `toolCatalogURL`.
 
 `config/runtime.standalone.example.json` is a single-process shape and `config/runtime.example.json` a capability-service shape.
 
