@@ -222,3 +222,19 @@ func TestAStatementThatCountsOrNamesRemovedValuesIsDefinedAsAClaim(t *testing.T)
 		t.Fatalf("the preface does not explain removed: %q", about)
 	}
 }
+
+func TestAnOriginOrTaglineTheSourcesDoNotGiveIsDefinedAsAClaimAndANamedOneAsSource(t *testing.T) {
+	for _, profile := range []Profile{TodayProfile, CompactProfile} {
+		for _, part := range []string{"named as where a figure comes from", "even when the figure itself is in the sources", "tagline"} {
+			if !strings.Contains(profile.Kinds[KindClaim], part) {
+				t.Fatalf("%s: expected the claim kind to hold %q, got %q", profile.Name, part, profile.Kinds[KindClaim])
+			}
+		}
+		if !strings.Contains(profile.Guard, "credit to an origin") || !strings.Contains(profile.Guard, "without crediting an origin is not claim") {
+			t.Fatalf("%s: the question does not judge a credit to an origin on its own: %q", profile.Name, profile.Guard)
+		}
+		if !strings.Contains(profile.Kinds[KindSource], "an origin the sources name as its origin") {
+			t.Fatalf("%s: the source kind does not keep an origin the sources name: %q", profile.Name, profile.Kinds[KindSource])
+		}
+	}
+}
