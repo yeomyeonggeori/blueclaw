@@ -3,6 +3,7 @@ package agentruntime
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -39,7 +40,7 @@ func TestATargetIsResolvedOnTheToolsOwnResolutionEndpoint(t *testing.T) {
 		t.Fatalf("the same requester resolves the hint that would have run the call, got %s", httpClient.requestBody)
 	}
 	expectedTarget := approvalgate.ApprovalTarget{InputField: "eventHint", ID: "event-1", Title: "부산 공급사 미팅", StartsAt: "2026-08-18T14:00:00+09:00"}
-	if resolution.Target != expectedTarget {
+	if !reflect.DeepEqual(resolution.Target, expectedTarget) {
 		t.Fatalf("the question and the approved call are both built from this, got %+v", resolution.Target)
 	}
 }
@@ -83,5 +84,18 @@ func TestAResolutionAnsweredForAnotherToolIsRefused(t *testing.T) {
 
 	if errorValue == nil {
 		t.Fatal("a target resolved for another tool must never name the call the requester is asked about")
+	}
+}
+
+func TestAResolvedListOfIdentitiesReachesTheHold(t *testing.T) {
+	resolver, _ := targetResolverFixture(`{"provider":"internkim","selectedBackend":"device","toolName":"event_delete","outcome":"succeeded","status":"resolved","result":{"inputField":"personHints","ids":["person-yesi","person-sample"],"title":"박예시, 이샘플"}}`)
+
+	resolution, errorValue := resolver.ResolveApprovalTarget(context.Background(), calendarDeleteTargetRequest())
+	if errorValue != nil {
+		t.Fatalf("expected the resolution to answer: %v", errorValue)
+	}
+
+	if !reflect.DeepEqual(resolution.Target.IDs, []string{"person-yesi", "person-sample"}) || !resolution.Target.IsResolved() {
+		t.Fatalf("every identity survives the wire, got %+v", resolution.Target)
 	}
 }
