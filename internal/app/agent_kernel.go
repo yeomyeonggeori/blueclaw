@@ -109,7 +109,7 @@ func selectAgentHarness(runtimeConfiguration config.RuntimeConfiguration, agentH
 	}, harnessselection.WithBundledACPFactory(bundledACPFactory))
 	selectedHarnessName := strings.TrimSpace(runtimeConfiguration.Agent.Harness.Name)
 	if selectedHarnessName == "" {
-		selectedHarnessName = harnessselection.BundledHarnessName
+		selectedHarnessName = harnessselection.BundledACPHarnessName
 	}
 	if harnessSelectionError != nil {
 		selectedHarnessName = "unavailable"

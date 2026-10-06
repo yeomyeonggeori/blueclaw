@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/acpharness"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/harnessdriver"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
@@ -23,12 +24,31 @@ func publishedCatalog() ToolCatalogEndpoint {
 	return ToolCatalogEndpoint{URL: "http://127.0.0.1:0/tools", Resolver: mcpserver.NewSessionTokenRequesterResolver(func() string { return "session-token" })}
 }
 
-func TestSelectFallsBackToTheBundledHarness(t *testing.T) {
-	for _, harnessName := range []string{"", BundledHarnessName} {
-		selectedFactory, errorValue := Select(config.HarnessConfiguration{Name: harnessName}, bundledFactory(), publishedCatalog(), SandboxProcessBoundary{})
-		if errorValue != nil || selectedFactory == nil {
-			t.Fatalf("expected the bundled harness for %q, got %v", harnessName, errorValue)
-		}
+func TestSelectNamesTheBundledAgentOverACPWhenNothingIsConfigured(t *testing.T) {
+	servedOverACP := false
+	acpFactory := func(toolCatalogPublisher acpharness.ToolCatalogPublisher) harnessdriver.Factory {
+		servedOverACP = true
+		return bundledFactory()
+	}
+
+	selectedFactory, errorValue := Select(config.HarnessConfiguration{}, bundledFactory(), publishedCatalog(), SandboxProcessBoundary{}, WithBundledACPFactory(acpFactory))
+
+	if errorValue != nil || selectedFactory == nil || !servedOverACP {
+		t.Fatalf("an unconfigured harness is the bundled agent over ACP, got served=%v %v", servedOverACP, errorValue)
+	}
+}
+
+func TestSelectKeepsTheInProcessLoopForItsName(t *testing.T) {
+	servedOverACP := false
+	acpFactory := func(toolCatalogPublisher acpharness.ToolCatalogPublisher) harnessdriver.Factory {
+		servedOverACP = true
+		return bundledFactory()
+	}
+
+	selectedFactory, errorValue := Select(config.HarnessConfiguration{Name: BundledHarnessName}, bundledFactory(), publishedCatalog(), SandboxProcessBoundary{}, WithBundledACPFactory(acpFactory))
+
+	if errorValue != nil || selectedFactory == nil || servedOverACP {
+		t.Fatalf("the name bluecollar still runs the loop in process, got served=%v %v", servedOverACP, errorValue)
 	}
 }
 
