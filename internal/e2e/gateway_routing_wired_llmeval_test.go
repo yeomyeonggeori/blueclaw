@@ -245,7 +245,6 @@ func newWiredRuntime(taskRunService *task.TaskRunService, recorder *recordingGat
 	runtime.UseGatewayDecider(recorder)
 	runtime.UseReplyGenerator(harness)
 	runtime.UseTaskRunService(taskRunService)
-	runtime.UseTurnRouter(harness)
 	runtime.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, nil))
 	runtime.UseEventRepository(queue)
 	runtime.RegisterAdapter(&virtualAdapter{})

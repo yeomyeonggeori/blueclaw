@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 func TestStandingDutyToolNamesExcludeOutwardAndSystemTools(t *testing.T) {

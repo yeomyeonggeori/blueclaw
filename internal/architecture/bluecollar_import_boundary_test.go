@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os/exec"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -44,6 +45,14 @@ func TestEveryPermittedImporterStillImportsBluecollarJudgment(t *testing.T) {
 	for _, packagePath := range defaultHarnessWiringPackages {
 		if len(importedJudgmentByPackage[packagePath]) == 0 {
 			t.Errorf("%s no longer imports bluecollar judgment; remove it from defaultHarnessWiringPackages", packagePath)
+		}
+	}
+}
+
+func TestNothingImportsBluecollarIntake(t *testing.T) {
+	for packagePath, imported := range judgmentImportsByPackage(t) {
+		if slices.Contains(imported, "intake") {
+			t.Errorf("%s imports bluecollar intake; the agent plans its own turn and the host hands it facts (#543)", packagePath)
 		}
 	}
 }

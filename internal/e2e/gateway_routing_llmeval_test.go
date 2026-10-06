@@ -18,7 +18,6 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/model/decisions"
 )
@@ -127,12 +126,6 @@ func isKnownOpenState(state string) bool {
 		return true
 	}
 	return false
-}
-
-func TestGatewayRoutingBaselineLive(t *testing.T) {
-	evaluateGatewayRouting(t, "baseline", func(decisionModel model.DecisionModel) routingJudge {
-		return plannerRoutingJudge{planner: intake.NewDecisionPlanner(decisionModel, nil, nil)}
-	})
 }
 
 func loadRoutingCases(t *testing.T) []routingCase {
@@ -520,65 +513,42 @@ func writeRoutingEvidence(t *testing.T, judgeName string, evidence routingEviden
 	t.Logf("gateway routing evidence: %s", evidencePath)
 }
 
-type plannerRoutingJudge struct {
-	planner intake.DecisionPlanner
-}
-
-func (judge plannerRoutingJudge) Judge(ctx context.Context, routing routingCase) (routingJudgement, error) {
-	decisions, errorValue := judge.planner.Decide(ctx, plannerRequestFor(routing), &agentcontract.IntakeCallLedger{})
-	if errorValue != nil {
-		return routingJudgement{}, errorValue
-	}
-	verdicts := []routingVerdict{}
-	for index := range routing.Messages {
-		decision, isDecided := decisions.ForMessage(plannerMessageID(index))
-		if !isDecided {
-			return routingJudgement{}, fmt.Errorf("the planner answered about no message %d", index)
-		}
-		verdicts = append(verdicts, plannerVerdict(decision))
-	}
-	return routingJudgement{Verdicts: verdicts}, nil
-}
-
-func plannerVerdict(decision agentcontract.IntakeMessageDecision) routingVerdict {
-	duty := "none"
-	if decision.Addressing.DutyMatch {
-		duty = decision.Addressing.DutyName
-	}
-	return routingVerdict{
-		Target:              string(decision.Addressing.Target),
-		ShouldRespond:       decision.Addressing.ShouldRespond,
-		HasRelatesToTask:    decision.HasRelatesToActiveTask,
-		RelatesToActiveTask: decision.RelatesToActiveTask,
-		BusyRoute:           string(decision.TurnFields.BusyRoute),
-		Duty:                duty,
-		ReactionProbability: decision.ReactionProbability,
-	}
-}
-
 func plannerMessageID(index int) string {
 	return "message-" + strconv.Itoa(index+1)
 }
 
-func plannerRequestFor(routing routingCase) agentcontract.IntakeDecisionRequest {
+func deciderFactsFor(routing routingCase) inboundengagement.Facts {
 	now := time.Now()
-	request := agentcontract.IntakeDecisionRequest{
-		Messages:         plannerMessages(routing, now),
+	facts := inboundengagement.Facts{
+		Messages:         gatewayMessages(routing, now),
 		ConversationType: routing.Conversation,
 		VisibleContext:   visibleContextFor(routing, now),
 		AgentIdentity:    agentcontract.AgentIdentity{Name: "김인턴", Handle: "internkim"},
 		Company:          agentcontract.CompanyContext{Name: "예시상사", TimeZone: "Asia/Seoul"},
-		ResponseLanguage: routing.Language,
-		AllowGiveUp:      true,
+		Duties:           inboundengagement.StandingDuties(),
 		EnvironmentNow:   now,
 	}
-	return withOpenTask(request, routing, now)
+	taskFacts := inboundengagement.TaskFacts{Prompt: routing.Task.Prompt, Status: openTaskStatus(routing), Summary: routing.Task.Summary, PostedQuestion: routing.Task.PostedQuestion}
+	switch {
+	case routing.Finished:
+		facts.FinishedTask = &taskFacts
+	case routing.Open != "":
+		facts.OpenTask = &taskFacts
+	}
+	return facts
 }
 
-func plannerMessages(routing routingCase, now time.Time) []agentcontract.IntakeDecisionMessage {
-	messages := []agentcontract.IntakeDecisionMessage{}
+func openTaskStatus(routing routingCase) string {
+	if routing.Finished {
+		return "completed"
+	}
+	return routing.Open
+}
+
+func gatewayMessages(routing routingCase, now time.Time) []inboundengagement.Message {
+	messages := []inboundengagement.Message{}
 	for index, message := range routing.Messages {
-		messages = append(messages, agentcontract.IntakeDecisionMessage{
+		messages = append(messages, inboundengagement.Message{
 			MessageID:    plannerMessageID(index),
 			Prompt:       message.Text,
 			SenderName:   message.Sender,
@@ -600,32 +570,4 @@ func visibleContextFor(routing routingCase, now time.Time) agentcontract.Visible
 		})
 	}
 	return visibleContext
-}
-
-func withOpenTask(request agentcontract.IntakeDecisionRequest, routing routingCase, now time.Time) agentcontract.IntakeDecisionRequest {
-	if routing.Open == "" && !routing.Finished {
-		return request
-	}
-	status := routing.Open
-	if routing.Finished {
-		status = "completed"
-		request.IsTaskRecentlyFinished = true
-	}
-	request.ActiveTask = agentcontract.ActiveTaskContext{TaskRunID: "task-open", Prompt: routing.Task.Prompt, Status: status, Summary: routing.Task.Summary}
-	askedAt := now.Add(-time.Minute)
-	switch routing.Open {
-	case string(agentcontract.TaskStatusWaitingApproval):
-		request.PendingConfirmation = agentcontract.PendingConfirmationContext{TaskRunID: "task-open", Prompt: routing.Task.Prompt, Question: routing.Task.PostedQuestion, AskedAt: askedAt}
-	case string(agentcontract.TaskStatusWaitingUserInput):
-		request.PendingChoice = agentcontract.PendingChoiceContext{TaskRunID: "task-open", Question: routing.Task.PostedQuestion, SelectionMode: "single", Options: choiceOptionsFor(routing.Task.Options), AskedAt: askedAt}
-	}
-	return request
-}
-
-func choiceOptionsFor(labels []string) []agentcontract.ChoiceReplyOption {
-	options := []agentcontract.ChoiceReplyOption{}
-	for index, label := range labels {
-		options = append(options, agentcontract.ChoiceReplyOption{Key: string(rune('A' + index)), Label: label})
-	}
-	return options
 }

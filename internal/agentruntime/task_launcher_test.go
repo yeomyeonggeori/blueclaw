@@ -83,37 +83,6 @@ func TestTaskLauncherCreatesAuditedAgentRun(t *testing.T) {
 	}
 }
 
-func TestTaskLauncherPersistsAuthoritativeRouterFailure(t *testing.T) {
-	taskEventService := task.NewTaskEventService()
-	taskRunService := task.NewTaskRunService(taskEventService)
-	noticeAuthoringLanguageModel := authoredRuntimeFailureLanguageModel{reply: "요청을 분류하지 못해 작업을 시작하지 못했습니다. 다시 요청해 주세요."}
-	agentKernel := loop.NewAgentKernel(taskRunService, task.NewTaskStepService())
-	agentKernel.UseLanguageModelProvider(noticeAuthoringLanguageModel)
-	agentKernel.UseIntakeLanguageModelProvider(failingRuntimeRouterLanguageModel{errorValue: errors.New("router unavailable")})
-	agentKernel.UseIntakeOptions(agentcontract.IntakeOptions{IsEnabled: true})
-
-	launchResult, errorValue := routedTaskLauncherAuthoringNoticesWith(agentKernel, taskRunService, NewToolCatalogBuilder(), failingRuntimeRouterLanguageModel{errorValue: errors.New("router unavailable")}, noticeAuthoringLanguageModel).Launch(context.Background(), TaskLaunchRequest{
-		Source:            TaskLaunchSourceAdmin,
-		RequesterPersonID: "person-1",
-		ConversationID:    "admin:person-1",
-		Prompt:            "run admin task",
-		PersonAccess:      policy.PersonAccess{PersonID: "person-1"},
-	})
-	if errorValue != nil {
-		t.Fatalf("expected persisted router failure: %v", errorValue)
-	}
-	if launchResult.TurnResult.TaskRun.Status != task.TaskStatusFailed || launchResult.TurnResult.FailureNotice.Source != "generated" {
-		t.Fatalf("expected LLM-authored failed task, got %+v", launchResult.TurnResult)
-	}
-	taskEvents := taskEventService.ListTaskEvent(launchResult.TurnResult.TaskRun.TaskRunID)
-	if llmCallEvent := findTaskEvent(taskEvents, "llm.call"); !strings.Contains(llmCallEvent.Body, `"isError":true`) {
-		t.Fatalf("expected persisted router call error, got %+v", taskEvents)
-	}
-	if !containsTaskEvent(taskEvents, "agent.task_launched") {
-		t.Fatalf("expected launch audit for failed task, got %+v", taskEvents)
-	}
-}
-
 func TestTaskLauncherAuditsPlatformMessageRegistryFingerprint(t *testing.T) {
 	taskEventService := task.NewTaskEventService()
 	taskRunService := task.NewTaskRunService(taskEventService)
@@ -922,31 +891,26 @@ func TestLaunchedAgentTurnRequestCarriesConfiguredAgentIdentity(t *testing.T) {
 	}
 }
 
-func TestRouterRequestCarriesConfiguredAgentAndRequesterIdentity(t *testing.T) {
-	taskLauncher := NewTaskLauncher(nil, nil, NewToolCatalogBuilder())
-	taskLauncher.UseAgentIdentityProvider(func() agentcontract.AgentIdentity {
-		return agentcontract.AgentIdentity{Name: "김인턴", Handle: "internkim"}
-	})
+func TestLaunchedAgentTurnRequestCarriesRequesterIdentity(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	harness := harnesstest.New(taskRunService)
+	taskLauncher := NewTaskLauncher(harness, taskRunService, NewToolCatalogBuilder())
 
-	request := taskLauncher.routerRequest(TaskLaunchRequest{
+	if _, errorValue := taskLauncher.Launch(context.Background(), TaskLaunchRequest{
+		Source:               TaskLaunchSourceConnector,
+		RequesterPersonID:    "person-1",
+		RequesterName:        "Example Requester",
 		RequesterCallingName: "샘플",
 		RequesterHandle:      "sample",
-	}, nil)
-
-	if request.AgentIdentity.Name != "김인턴" || request.AgentIdentity.Handle != "internkim" {
-		t.Fatalf("the router request lost configured agent identity: %+v", request.AgentIdentity)
+		ConversationID:       "channel-1",
+		Prompt:               "너 누구야?",
+	}); errorValue != nil {
+		t.Fatalf("expected launch to succeed: %v", errorValue)
 	}
-	if request.RequesterCallingName != "샘플" || request.RequesterHandle != "sample" {
-		t.Fatalf("the router request lost requester identity: %+v", request)
-	}
-}
 
-func TestRouterRequestCarriesFormalRequesterNameWithoutCallingName(t *testing.T) {
-	taskLauncher := NewTaskLauncher(nil, nil, NewToolCatalogBuilder())
-	request := taskLauncher.routerRequest(TaskLaunchRequest{RequesterName: "Example Requester"}, nil)
-
-	if request.RequesterName != "Example Requester" {
-		t.Fatalf("the router request lost the formal requester name: %+v", request)
+	request := harness.LastTurnRequest()
+	if request.RequesterName != "Example Requester" || request.RequesterCallingName != "샘플" || request.RequesterHandle != "sample" {
+		t.Fatalf("the turn request lost requester identity: %+v", request)
 	}
 }
 

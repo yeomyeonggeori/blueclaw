@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
@@ -64,27 +63,6 @@ func deciderVerdict(judgment inboundengagement.Judgment) routingVerdict {
 		Duty:                duty,
 		ReactionProbability: judgment.ReactionProbability,
 	}
-}
-
-func deciderFactsFor(routing routingCase) inboundengagement.Facts {
-	request := plannerRequestFor(routing)
-	facts := inboundengagement.Facts{
-		Messages:         request.Messages,
-		ConversationType: request.ConversationType,
-		VisibleContext:   request.VisibleContext,
-		AgentIdentity:    request.AgentIdentity,
-		Company:          request.Company,
-		Duties:           inboundengagement.StandingDuties(),
-		EnvironmentNow:   request.EnvironmentNow,
-	}
-	taskFacts := inboundengagement.TaskFacts{Prompt: routing.Task.Prompt, Status: request.ActiveTask.Status, Summary: routing.Task.Summary, PostedQuestion: routing.Task.PostedQuestion}
-	switch {
-	case routing.Finished:
-		facts.FinishedTask = &taskFacts
-	case routing.Open != "":
-		facts.OpenTask = &taskFacts
-	}
-	return facts
 }
 
 func baselineRunsFor(t *testing.T, split string) []routingRunSummary {
