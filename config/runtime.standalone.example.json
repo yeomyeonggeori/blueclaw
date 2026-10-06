@@ -81,11 +81,6 @@
     "defaultTaskLevel": "low"
   },
   "connectors": {},
-  "inbound": {
-    "connectors": {
-      "askInThread": true
-    }
-  },
   "logging": {
     "directoryPath": ".local/blueclaw/logs",
     "retentionDays": 7

@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
@@ -29,32 +28,7 @@ func (step carryOutApprovedCallLaunchStep) Run(ctx context.Context, execution *t
 	if scheduledCall := execution.Request.ScheduledApprovedCall; scheduledCall != nil {
 		return append(settledCalls, step.carryOutScheduledCall(ctx, execution, *scheduledCall)), nil
 	}
-	if carriedOutCall, isCarriedOut := step.carryOutAnsweredCall(ctx, execution); isCarriedOut {
-		return append(settledCalls, carriedOutCall), nil
-	}
 	return settledCalls, nil
-}
-
-func (step carryOutApprovedCallLaunchStep) carryOutAnsweredCall(ctx context.Context, execution *taskLaunchExecution) (agentcontract.CarriedOutCall, bool) {
-	taskRunID := strings.TrimSpace(execution.Request.ExistingTaskRunID)
-	taskRunService := execution.Launcher.taskRunService
-	if !execution.Request.IsApprovalContinuation || taskRunID == "" || taskRunService == nil {
-		return agentcontract.CarriedOutCall{}, false
-	}
-	approvedCall, isApproved := approvalgate.ApprovedPendingCall(taskRunService.ListTaskEvent(taskRunID))
-	if !isApproved {
-		return agentcontract.CarriedOutCall{}, false
-	}
-	result := step.carriedOutResult(ctx, taskRunService.ListTaskEvent(taskRunID), approvedCall)
-	approvalgate.RecordApprovedCallSpent(taskRunService, taskRunID, approvedCall)
-	return agentcontract.CarriedOutCall{ToolName: approvedCall.ToolName, ToolInput: approvedCall.ToolInput, Result: result}, true
-}
-
-func (step carryOutApprovedCallLaunchStep) carriedOutResult(ctx context.Context, taskEvents []agentcontract.TaskEvent, approvedCall approvalgate.ApprovedCall) toolcontract.ToolResult {
-	if approvedCall.ToolName == toolcontract.AskInputToolName {
-		return approvalrecord.ChosenAnswerResult(taskEvents, approvedCall.ToolInput)
-	}
-	return invokeApprovedCall(ctx, step.ToolSet, approvedCall)
 }
 
 func (step carryOutApprovedCallLaunchStep) carryOutScheduledCall(ctx context.Context, execution *taskLaunchExecution, scheduledCall task.ScheduleApprovedCall) agentcontract.CarriedOutCall {

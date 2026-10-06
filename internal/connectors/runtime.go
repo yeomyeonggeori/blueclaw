@@ -177,6 +177,7 @@ func NewConnectorRuntime(identityService *identity.IdentityService, harness agen
 		conversationLocks:     map[string]*sync.Mutex{},
 		pendingRequests:       newPendingRequestStore(),
 		sentAttachmentSources: newSentAttachmentSourceStore(),
+		askingThreads:         &askingThreads{expiry: approvalExpiry},
 	}
 }
 
@@ -236,7 +237,7 @@ func (connectorRuntime *ConnectorRuntime) Start(ctx context.Context) {
 		connectorRuntime.logger.Error("connector.requests.restore_failed", slog.String("error", errorValue.Error()))
 		return
 	}
-	go connectorRuntime.reissuePendingApprovalQuestions(ctx)
+	connectorRuntime.reawaitPendingHolds(ctx)
 	if connectorRuntime.queueRepository() != nil {
 		connectorRuntime.prepareConnectorWorkers("inbox", connectorInboxWorkerCount)
 		for index := 0; index < connectorInboxWorkerCount; index++ {
@@ -413,11 +414,11 @@ func (connectorRuntime *ConnectorRuntime) processInboundEventWithReplySender(ctx
 	return connectorRuntime.launchTurn(ctx, turn)
 }
 
-func (connectorRuntime *ConnectorRuntime) shouldDeferNewTaskLaunch(isApprovalContinuation bool, hasPendingAskInteraction bool, hasActiveGoal bool) bool {
+func (connectorRuntime *ConnectorRuntime) shouldDeferNewTaskLaunch(hasPendingAskInteraction bool, hasActiveGoal bool) bool {
 	if connectorRuntime.taskIntakeGate == nil || !connectorRuntime.taskIntakeGate.IsQuiesced() {
 		return false
 	}
-	return !isApprovalContinuation && !hasPendingAskInteraction && !hasActiveGoal
+	return !hasPendingAskInteraction && !hasActiveGoal
 }
 
 func (connectorRuntime *ConnectorRuntime) appendTaskExecutionDuration(taskRunID string, duration time.Duration) {
@@ -442,24 +443,11 @@ func choiceReplyOptions(options []AskChoiceOption) []agentcontract.ChoiceReplyOp
 	return replyOptions
 }
 
-func confirmationWasRejected(decision agentcontract.TurnDecision) bool {
-	return decision.Approval != nil && *decision.Approval == agentcontract.ApprovalSignalReject
-}
-
 func precomputedTurnDecisionForLaunch(decision agentcontract.TurnDecision, hasDecision bool) *agentcontract.TurnDecision {
 	if !hasDecision {
 		return nil
 	}
 	return &decision
-}
-
-func (connectorRuntime *ConnectorRuntime) cancelPendingConfirmation(event PlatformInboundEvent, approval pendingApproval, decision agentcontract.TurnDecision) {
-	_, _ = connectorRuntime.taskRunService.CancelTaskRunWithReason(approval.TaskRun.TaskRunID, approval.TaskRun.RequesterPersonID, "confirmation.replaced")
-	connectorRuntime.taskRunService.AppendTaskEvent(approval.TaskRun.TaskRunID, agentcontract.TaskEventConfirmationReplaced, agentruntime.MarshalBody(map[string]string{
-		"messageID": event.MessageID,
-		"route":     string(decision.Route),
-		"reason":    strings.TrimSpace(decision.Reason),
-	}))
 }
 
 func (connectorRuntime *ConnectorRuntime) appendAskResolvedEvent(interaction AskInteraction, event PlatformInboundEvent, decision agentcontract.TurnDecision) {
@@ -473,51 +461,11 @@ func (connectorRuntime *ConnectorRuntime) appendAskResolvedEvent(interaction Ask
 	}))
 }
 
-func (connectorRuntime *ConnectorRuntime) handleRejectedConfirmation(ctx context.Context, platform string, adapter PlatformAdapter, event PlatformInboundEvent, replyTarget ReplyTarget, approval pendingApproval, decision agentcontract.ConfirmationReplyDecision, sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error)) (ConnectorRuntimeResult, error) {
-	_, _ = connectorRuntime.taskRunService.CancelTaskRunWithReason(approval.TaskRun.TaskRunID, approval.TaskRun.RequesterPersonID, "confirmation.rejected")
-	connectorRuntime.taskRunService.AppendTaskEvent(approval.TaskRun.TaskRunID, agentcontract.TaskEventConfirmationRejected, agentruntime.MarshalBody(map[string]string{
-		"messageID": event.MessageID,
-		"reason":    decision.Reason,
-	}))
-	reply, errorValue := connectorRuntime.replyGenerator.GenerateReply(ctx, rejectedConfirmationReplyPrompt(event.Prompt, approval.ResponseLanguage))
-	if errorValue != nil {
-		connectorRuntime.logger.Warn("connector."+platform+".confirmation.reject_reply_failed", slog.String("messageID", event.MessageID), slog.String("taskRunID", approval.TaskRun.TaskRunID), slog.String("error", errorValue.Error()))
-		return ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: approval.TaskRun.TaskRunID, Reason: "confirmation_rejected"}, nil
-	}
-	dispatchID, errorValue := sendReply(ctx, replyTarget, OutboundReply{Message: reply})
-	if errorValue != nil {
-		connectorRuntime.logger.Error("connector."+platform+".outbound.failed", slog.String("messageID", event.MessageID), slog.String("taskRunID", approval.TaskRun.TaskRunID), slog.String("error", errorValue.Error()))
-		return ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: approval.TaskRun.TaskRunID, Reason: "reply_failed"}, nil
-	}
-	connectorRuntime.logger.Info("connector."+adapter.Name()+".confirmation.rejected", slog.String("messageID", event.MessageID), slog.String("taskRunID", approval.TaskRun.TaskRunID), slog.String("replyDispatchID", dispatchID))
-	return ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: approval.TaskRun.TaskRunID, Reason: "confirmation_rejected", ReplyDispatchID: dispatchID}, nil
-}
-
-func rejectedConfirmationReplyPrompt(reply string, responseLanguage string) string {
-	return strings.Join([]string{
-		connectorResponseLanguageInstruction(responseLanguage),
-		"The user rejected a pending confirmation. Write one brief user-facing reply saying the pending action has been cancelled.",
-		"Latest user reply: " + strings.TrimSpace(reply),
-	}, "\n")
-}
-
 func connectorResponseLanguageInstruction(responseLanguage string) string {
 	if toolcontract.ResolveResponseLanguage(responseLanguage) == toolcontract.ResponseLanguageEnglish {
 		return "Write in English."
 	}
 	return "Write in Korean."
-}
-
-func (connectorRuntime *ConnectorRuntime) completeApprovedPendingTask(pendingTaskRun task.TaskRun, continuationTaskRunID string, finishMessage string) {
-	result := strings.TrimSpace(finishMessage)
-	if result == "" {
-		result = "Approved and continued in task " + continuationTaskRunID + "."
-	}
-	connectorRuntime.taskRunService.AppendTaskEvent(pendingTaskRun.TaskRunID, agentcontract.TaskEventApprovalContinued, agentruntime.MarshalBody(map[string]string{
-		"continuationTaskRunID": continuationTaskRunID,
-		"result":                result,
-	}))
-	_, _ = connectorRuntime.taskRunService.CompleteTaskRun(pendingTaskRun.TaskRunID, result)
 }
 
 func connectorReplyEventBody(event PlatformInboundEvent, reply OutboundReply, outboxID string, dispatchID string, reason string) map[string]string {

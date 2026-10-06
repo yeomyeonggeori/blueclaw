@@ -22,10 +22,10 @@ type choosingAsker struct {
 	offeredQuestion string
 }
 
-func (asker *choosingAsker) AskPermission(_ context.Context, _ mcpserver.ApprovalRequest, question PermissionQuestion) (ApprovalAnswer, bool) {
+func (asker *choosingAsker) AskPermission(_ context.Context, _ mcpserver.ApprovalRequest, question PermissionQuestion) (ApprovalAnswer, AskStatus) {
 	asker.offeredChoices = question.Choices
 	asker.offeredQuestion = question.Confirmation
-	return asker.answer, true
+	return asker.answer, AskAnswered
 }
 
 type recordingScheduler struct {

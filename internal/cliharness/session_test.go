@@ -130,7 +130,7 @@ func TestResumingAnApprovedCallReopensTheSameConversation(t *testing.T) {
 
 	request := agentcontract.AgentTurnRequest{RequesterPersonID: "person-1", ExistingTaskRunID: "task-run-1", Prompt: "첫 턴"}
 	firstOutput := runEchoingTurn(t, harness, request)
-	request.IsApprovalContinuation = true
+	request.IsRuntimeRestartResume = true
 	resumedOutput := runEchoingTurn(t, harness, request)
 
 	if !strings.Contains(firstOutput, "fresh") || !strings.Contains(resumedOutput, "resumed") {

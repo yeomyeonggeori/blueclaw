@@ -10,6 +10,9 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract/harnesstest"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 )
 
 func approvalTestTaskRunService(t *testing.T) (*task.TaskRunService, *task.TaskEventService) {
@@ -104,5 +107,33 @@ func TestApprovalRequestRejectsAMalformedBody(t *testing.T) {
 	responseRecorder := postApproval(t, handler, `{}`)
 	if json.Unmarshal(responseRecorder.Body.Bytes(), &decoded) != nil || decoded["error"] == "" {
 		t.Fatalf("expected a JSON error body, got %s", responseRecorder.Body.String())
+	}
+}
+
+func TestApprovingAHeldCallDecidesTheHoldAndResumesTheRunWithoutCarryingTheCallOut(t *testing.T) {
+	taskRunService, _ := approvalTestTaskRunService(t)
+	harness := harnesstest.New(taskRunService)
+	handler := TaskApprovalHandler{
+		TaskRunService: taskRunService,
+		TaskLauncher:   agentruntime.NewTaskLauncher(harness, taskRunService, agentruntime.NewToolCatalogBuilder()),
+	}
+	taskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "일정 삭제")
+	holdrecord.Open(taskRunService, taskRun.TaskRunID, agentcontract.HeldCall{ToolName: "event_delete", ToolInput: json.RawMessage(`{"eventHint":"event-1"}`), Confirmation: "삭제할까요?"}, nil)
+	if _, errorValue := taskRunService.PauseTaskRun(taskRun.TaskRunID, agentcontract.TaskStatusWaitingApproval, "삭제할까요?"); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	responseRecorder := postApproval(t, handler, `{"taskRunID":"`+taskRun.TaskRunID+`","decision":"approve"}`)
+
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected the approval to resume the run, got %d %s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+	holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID))
+	if len(holds) != 1 || holds[0].State != holdrecord.StateApproved {
+		t.Fatalf("expected the hold approved and left for the harness's repeated call to spend, got %+v", holds)
+	}
+	request := harness.LastTurnRequest()
+	if !request.IsRuntimeRestartResume || request.ExistingTaskRunID != taskRun.TaskRunID || len(request.CarriedOutCalls) != 0 {
+		t.Fatalf("expected a restart resume of the held run that carries nothing out, got %+v", request)
 	}
 }

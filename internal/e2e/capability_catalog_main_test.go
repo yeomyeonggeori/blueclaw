@@ -24,5 +24,5 @@ func TestMain(mainTesting *testing.M) {
 		fmt.Printf("the catalog in %s carries no descriptor for %s; it carries %s\n", ScenarioCapabilityCatalogVariable, strings.Join(missingTools, ", "), strings.Join(foundTools, ", "))
 		os.Exit(1)
 	}
-	os.Exit(runUnderEveryHarness(mainTesting))
+	os.Exit(runUnderBundledHarness(mainTesting))
 }

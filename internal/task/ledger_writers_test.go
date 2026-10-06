@@ -31,7 +31,7 @@ var eventNamesWrittenOnBothSides = map[string]string{
 	"agent.limit_stop":            "the host, which sees every turn result",
 	"agent.goal.blocked":          "the host, which sees every turn result",
 	"task.stop.outbox_suppressed": "the host, which is what cancelled the run",
-	"task.steer.requested":        "a run's ledger holds one record per steer, the host's. The two writers are the host (connectors busy_message appends it to the run under either harness) and bluecollar's ACP agent (acpagent steer.go appends its own copy to the agent's private store, reached only under bluecollar-acp when the host forwards the steer); the mirror skips the name (internal/bluecollaracp), so the agent's copy never reaches the run",
+	"task.steer.requested":        "a run's ledger holds one record per steer, the host's. The two writers are the host (connectors busy_message appends it to the run) and bluecollar's ACP agent (acpagent steer.go appends its own copy to the agent's private store when the host forwards the steer; the in-process loop no longer writes it, but acpagent still does, so the two writers remain); the mirror skips the name (internal/bluecollaracp), so the agent's copy never reaches the run",
 }
 
 const taskEventNameDeclarationPath = "../../.dependency/bluecollar/agentcontract/task_event_name.go"

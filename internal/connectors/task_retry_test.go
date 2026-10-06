@@ -60,7 +60,7 @@ func TestRetryTaskRunQueuesOneChildAndPreservesSource(t *testing.T) {
 	if request.ExistingTaskRunID != childTaskRun.TaskRunID || !request.IsTaskRunOpenedForThisTurn {
 		t.Fatalf("retry did not use reserved child: %+v", request)
 	}
-	if request.IsApprovalContinuation || request.IsRuntimeRestartResume {
+	if request.IsRuntimeRestartResume {
 		t.Fatalf("retry inherited continuation state: %+v", request)
 	}
 	if request.OriginReplyTargetID != sourceTaskRun.OriginReplyTargetID || !request.OriginIsThread {

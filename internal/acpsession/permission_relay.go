@@ -103,20 +103,27 @@ func (relay *PermissionRelay) conversationsHeld() []string {
 	return held
 }
 
-func (relay *PermissionRelay) AskPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question approvalgate.PermissionQuestion) (approvalgate.ApprovalAnswer, bool) {
-	outcome, isAnswered := relay.askOutcome(ctx, approvalRequest, question.Confirmation, permissionToolCall(approvalRequest, question), permissionOptions(question.Choices))
-	if !isAnswered {
-		return approvalgate.ApprovalAnswer{}, false
+func (relay *PermissionRelay) AskPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question approvalgate.PermissionQuestion) (approvalgate.ApprovalAnswer, approvalgate.AskStatus) {
+	outcome, status := relay.askOutcome(ctx, approvalRequest, question.Confirmation, permissionToolCall(approvalRequest, question), permissionOptions(question.Choices))
+	if status != approvalgate.AskAnswered {
+		return approvalgate.ApprovalAnswer{}, status
 	}
-	return approvalAnswerForOutcome(outcome)
+	answer, isAnswer := approvalAnswerForOutcome(outcome)
+	if !isAnswer {
+		return approvalgate.ApprovalAnswer{}, approvalgate.AskInterrupted
+	}
+	return answer, approvalgate.AskAnswered
 }
 
-func (relay *PermissionRelay) AskHarnessPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question approvalgate.HarnessPermissionQuestion) (acp.RequestPermissionOutcome, bool) {
-	outcome, isAnswered := relay.askOutcome(ctx, approvalRequest, question.Text, question.ToolCall, question.Options)
-	if !isAnswered || !selectsOneOf(outcome, question.Options) {
-		return acp.RequestPermissionOutcome{}, false
+func (relay *PermissionRelay) AskHarnessPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question approvalgate.HarnessPermissionQuestion) (acp.RequestPermissionOutcome, approvalgate.AskStatus) {
+	outcome, status := relay.askOutcome(ctx, approvalRequest, question.Text, question.ToolCall, question.Options)
+	if status != approvalgate.AskAnswered {
+		return acp.RequestPermissionOutcome{}, status
 	}
-	return outcome, true
+	if !selectsOneOf(outcome, question.Options) {
+		return acp.RequestPermissionOutcome{}, approvalgate.AskInterrupted
+	}
+	return outcome, approvalgate.AskAnswered
 }
 
 func selectsOneOf(outcome acp.RequestPermissionOutcome, options []acp.PermissionOption) bool {
@@ -131,7 +138,7 @@ func selectsOneOf(outcome acp.RequestPermissionOutcome, options []acp.Permission
 	return false
 }
 
-func (relay *PermissionRelay) askOutcome(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, confirmation string, toolCall acp.ToolCallUpdate, options []acp.PermissionOption) (acp.RequestPermissionOutcome, bool) {
+func (relay *PermissionRelay) askOutcome(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, confirmation string, toolCall acp.ToolCallUpdate, options []acp.PermissionOption) (acp.RequestPermissionOutcome, approvalgate.AskStatus) {
 	route, isFound := relay.routeFor(approvalRequest.Platform, approvalRequest.ConversationID)
 	if !isFound {
 		relay.logger.Info("acpsession.permission.nobody_to_ask",
@@ -141,7 +148,7 @@ func (relay *PermissionRelay) askOutcome(ctx context.Context, approvalRequest mc
 			"conversationID", approvalRequest.ConversationID,
 			"conversationsHeld", relay.conversationsHeld(),
 		)
-		return acp.RequestPermissionOutcome{}, false
+		return acp.RequestPermissionOutcome{}, approvalgate.AskUnreachable
 	}
 	relay.holdWaitingCall(toolCall.ToolCallId, waitingCall{approvalRequest: approvalRequest, confirmation: confirmation, options: options})
 	defer relay.releaseWaitingCall(toolCall.ToolCallId)
@@ -152,9 +159,16 @@ func (relay *PermissionRelay) askOutcome(ctx context.Context, approvalRequest mc
 	})
 	if errorValue != nil {
 		relay.logger.Warn("acpsession.permission.unanswered", "toolName", approvalRequest.ToolName, "taskRunID", approvalRequest.TaskRunID, "error", errorValue.Error())
-		return acp.RequestPermissionOutcome{}, false
+		return acp.RequestPermissionOutcome{}, statusOfFailedAsk(ctx)
 	}
-	return response.Outcome, true
+	return response.Outcome, approvalgate.AskAnswered
+}
+
+func statusOfFailedAsk(ctx context.Context) approvalgate.AskStatus {
+	if ctx.Err() != nil {
+		return approvalgate.AskInterrupted
+	}
+	return approvalgate.AskUnreachable
 }
 
 func permissionToolCall(approvalRequest mcpserver.ApprovalRequest, question approvalgate.PermissionQuestion) acp.ToolCallUpdate {

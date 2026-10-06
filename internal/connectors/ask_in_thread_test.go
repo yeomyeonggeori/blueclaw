@@ -21,9 +21,9 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 )
 
-const askInThreadRequest = "내일 휴가 일정을 캘린더에서 삭제해줘"
+const threadAskRequest = "내일 휴가 일정을 캘린더에서 삭제해줘"
 
-type askInThreadFixture struct {
+type threadAskFixture struct {
 	connectorRuntime *ConnectorRuntime
 	adapter          *testAdapter
 	through          PlatformAdapter
@@ -31,19 +31,19 @@ type askInThreadFixture struct {
 	invokedTools     []string
 }
 
-func (fixture *askInThreadFixture) recordInvokedTool(toolName string) {
+func (fixture *threadAskFixture) recordInvokedTool(toolName string) {
 	fixture.mutex.Lock()
 	defer fixture.mutex.Unlock()
 	fixture.invokedTools = append(fixture.invokedTools, toolName)
 }
 
-func (fixture *askInThreadFixture) invokedToolCount() int {
+func (fixture *threadAskFixture) invokedToolCount() int {
 	fixture.mutex.Lock()
 	defer fixture.mutex.Unlock()
 	return len(fixture.invokedTools)
 }
 
-type askInThreadScript struct {
+type threadAskScript struct {
 	approvalReplies []string
 	turnRouters     []string
 	actions         []string
@@ -57,7 +57,7 @@ func answerQuestionRoute(reason string) string {
 	return `{"route":"answer_question","classification":"quick_reply","taskShape":"immediate_reply","level":"xlow","requestedOutputFormats":null,"responseLanguage":"ko","reason":"` + reason + `","userFacingReply":"","approval":"unclear"}`
 }
 
-func newAskInThreadFixture(t *testing.T, script askInThreadScript) *askInThreadFixture {
+func newThreadAskFixture(t *testing.T, script threadAskScript) *threadAskFixture {
 	t.Helper()
 	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
 		ChatResponsesBySchema: map[string][]string{
@@ -74,7 +74,7 @@ func newAskInThreadFixture(t *testing.T, script askInThreadScript) *askInThreadF
 		ActionResponses: script.actions,
 	})
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
-	fixture := &askInThreadFixture{connectorRuntime: connectorRuntime, adapter: adapter, through: adapter}
+	fixture := &threadAskFixture{connectorRuntime: connectorRuntime, adapter: adapter, through: adapter}
 	connectorRuntimeAgentKernel(connectorRuntime).UseIntakeLanguageModelProvider(languageModel)
 	connectorRuntimeAgentKernel(connectorRuntime).UseIntakeOptions(agentcontract.IntakeOptions{IsEnabled: true})
 	useTestConnectorSkill(connectorRuntime, connectorCalendarSkill())
@@ -89,12 +89,8 @@ func newAskInThreadFixture(t *testing.T, script askInThreadScript) *askInThreadF
 			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"provider":"capabilityd","selectedBackend":"device","toolName":"event_delete","outcome":"succeeded","status":"ok","content":"calendar event deleted","result":{"eventID":"event-1"}}`)), Header: http.Header{"Content-Type": []string{"application/json"}}}, nil
 		}),
 	}, []string{"event_delete"})
+	connectorRuntime.approvalGate.UsePermissionAsker(connectorRuntime.ThreadPermissionAsker())
 	return fixture
-}
-
-func (fixture *askInThreadFixture) askInThread() {
-	fixture.connectorRuntime.UseAskInThread(true)
-	fixture.connectorRuntime.approvalGate.UsePermissionAsker(fixture.connectorRuntime.ThreadPermissionAsker())
 }
 
 type handledEvent struct {
@@ -102,7 +98,7 @@ type handledEvent struct {
 	err    error
 }
 
-func (fixture *askInThreadFixture) send(ctx context.Context, event PlatformInboundEvent) <-chan handledEvent {
+func (fixture *threadAskFixture) send(ctx context.Context, event PlatformInboundEvent) <-chan handledEvent {
 	handled := make(chan handledEvent, 1)
 	go func() {
 		result, errorValue := fixture.connectorRuntime.HandleInboundEvent(ctx, fixture.through, event)
@@ -111,7 +107,7 @@ func (fixture *askInThreadFixture) send(ctx context.Context, event PlatformInbou
 	return handled
 }
 
-func (fixture *askInThreadFixture) await(t *testing.T, handled <-chan handledEvent) ConnectorRuntimeResult {
+func (fixture *threadAskFixture) await(t *testing.T, handled <-chan handledEvent) ConnectorRuntimeResult {
 	t.Helper()
 	select {
 	case outcome := <-handled:
@@ -125,7 +121,7 @@ func (fixture *askInThreadFixture) await(t *testing.T, handled <-chan handledEve
 	}
 }
 
-func (fixture *askInThreadFixture) awaitQuestionOnTheThread(t *testing.T) string {
+func (fixture *threadAskFixture) awaitQuestionOnTheThread(t *testing.T) string {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
@@ -140,7 +136,7 @@ func (fixture *askInThreadFixture) awaitQuestionOnTheThread(t *testing.T) string
 	return ""
 }
 
-func (fixture *askInThreadFixture) questionsPosted() int {
+func (fixture *threadAskFixture) questionsPosted() int {
 	count := 0
 	for _, reply := range fixture.adapter.sentReplies {
 		if reply.replyKind == connectorReplyKindApprovalQuestion {
@@ -150,7 +146,7 @@ func (fixture *askInThreadFixture) questionsPosted() int {
 	return count
 }
 
-func (fixture *askInThreadFixture) taskRunCount() int {
+func (fixture *threadAskFixture) taskRunCount() int {
 	return len(fixture.connectorRuntime.taskRunService.ListTaskRunByPersonID("person-1"))
 }
 
@@ -166,8 +162,8 @@ func rootReplyEvent(messageID string, prompt string) PlatformInboundEvent {
 	return event
 }
 
-func deleteApprovalScript(approvalReplies ...string) askInThreadScript {
-	return askInThreadScript{
+func deleteApprovalScript(approvalReplies ...string) threadAskScript {
+	return threadAskScript{
 		approvalReplies: approvalReplies,
 		turnRouters:     []string{startTaskRoute("calendar delete needs approval first"), startTaskRoute("calendar delete needs approval first")},
 		actions: []string{
@@ -178,10 +174,9 @@ func deleteApprovalScript(approvalReplies ...string) askInThreadScript {
 }
 
 func TestAReplyInTheQuestionsThreadApprovesTheCallInPlace(t *testing.T) {
-	fixture := newAskInThreadFixture(t, deleteApprovalScript(`{"answer":"approve"}`))
-	fixture.askInThread()
+	fixture := newThreadAskFixture(t, deleteApprovalScript(`{"answer":"approve"}`))
 
-	asking := fixture.send(context.Background(), threadReplyEvent("message-1", askInThreadRequest))
+	asking := fixture.send(context.Background(), threadReplyEvent("message-1", threadAskRequest))
 	taskRunID := fixture.awaitQuestionOnTheThread(t)
 	answer := fixture.await(t, fixture.send(context.Background(), threadReplyEvent("message-2", "ㅇ")))
 	result := fixture.await(t, asking)
@@ -201,10 +196,9 @@ func TestAReplyInTheQuestionsThreadApprovesTheCallInPlace(t *testing.T) {
 func TestARootReplyToAThreadQuestionIsNotAnAnswer(t *testing.T) {
 	script := deleteApprovalScript()
 	script.turnRouters = append(script.turnRouters, answerQuestionRoute("a question beside the waiting call"), answerQuestionRoute("a question beside the waiting call"))
-	fixture := newAskInThreadFixture(t, script)
-	fixture.askInThread()
+	fixture := newThreadAskFixture(t, script)
 	askingContext, stopAsking := context.WithCancel(context.Background())
-	asking := fixture.send(askingContext, threadReplyEvent("message-1", askInThreadRequest))
+	asking := fixture.send(askingContext, threadReplyEvent("message-1", threadAskRequest))
 	taskRunID := fixture.awaitQuestionOnTheThread(t)
 
 	rootResult := fixture.await(t, fixture.send(context.Background(), rootReplyEvent("message-2", "ㅇ")))
@@ -227,9 +221,8 @@ func TestAReplyAfterAnotherExchangeStillContinuesTheRunThatAsked(t *testing.T) {
 		connectorFinishMessage("내일 휴가로 등록된 일정 하나입니다."),
 		script.actions[1],
 	}
-	fixture := newAskInThreadFixture(t, script)
-	fixture.askInThread()
-	asking := fixture.send(context.Background(), threadReplyEvent("message-1", askInThreadRequest))
+	fixture := newThreadAskFixture(t, script)
+	asking := fixture.send(context.Background(), threadReplyEvent("message-1", threadAskRequest))
 	taskRunID := fixture.awaitQuestionOnTheThread(t)
 
 	between := fixture.await(t, fixture.send(context.Background(), threadReplyEvent("message-2", "그게 어떤 일정이었지?")))
@@ -248,33 +241,83 @@ func TestAReplyAfterAnotherExchangeStillContinuesTheRunThatAsked(t *testing.T) {
 	}
 }
 
-func TestAPendingQuestionIsReissuedOnceAfterARestart(t *testing.T) {
-	fixture := newAskInThreadFixture(t, deleteApprovalScript())
-	taskRun := fixture.connectorRuntime.taskRunService.CreateTaskRunWithOrigin("person-1", task.TaskRunOrigin{ConversationID: "direct-1", ReplyTargetID: "reply-target-1", IsThread: true}, askInThreadRequest)
+func restartedRunHoldingTheCall(t *testing.T, fixture *threadAskFixture) task.TaskRun {
+	t.Helper()
+	taskRun := fixture.connectorRuntime.taskRunService.CreateTaskRunWithOrigin("person-1", task.TaskRunOrigin{ConversationID: "direct-1", ReplyTargetID: "reply-target-1", IsThread: true}, threadAskRequest)
 	fixture.connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentTaskLaunched, `{"platform":"test","conversationID":"direct-1","replyTargetID":"reply-target-1","sourceReference":"test:direct-1:message-1"}`)
 	holdPendingCall(t, fixture.connectorRuntime, taskRun.TaskRunID)
-	fixture.askInThread()
+	taskRun, _ = fixture.connectorRuntime.taskRunService.FindTaskRun(taskRun.TaskRunID)
+	return taskRun
+}
 
-	fixture.connectorRuntime.reissuePendingApprovalQuestions(context.Background())
-	fixture.connectorRuntime.reissuePendingApprovalQuestions(context.Background())
+func TestAPendingQuestionIsPostedOnceAndAwaitedAfterARestart(t *testing.T) {
+	fixture := newThreadAskFixture(t, deleteApprovalScript())
+	taskRun := restartedRunHoldingTheCall(t, fixture)
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+
+	go fixture.connectorRuntime.reawaitHold(ctx, taskRun)
+	fixture.awaitQuestionOnTheThread(t)
+	fixture.connectorRuntime.reawaitHold(ctx, taskRun)
 
 	if fixture.questionsPosted() != 1 {
 		t.Fatalf("a hold whose question was never posted was asked %d times, expected once", fixture.questionsPosted())
 	}
 }
 
-func TestAQuestionAlreadyPostedBeforeARestartIsNotPostedAgain(t *testing.T) {
-	fixture := newAskInThreadFixture(t, deleteApprovalScript())
-	taskRun := fixture.connectorRuntime.taskRunService.CreateTaskRunWithOrigin("person-1", task.TaskRunOrigin{ConversationID: "direct-1", ReplyTargetID: "reply-target-1", IsThread: true}, askInThreadRequest)
-	fixture.connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentTaskLaunched, `{"platform":"test","conversationID":"direct-1","replyTargetID":"reply-target-1","sourceReference":"test:direct-1:message-1"}`)
-	holdPendingCall(t, fixture.connectorRuntime, taskRun.TaskRunID)
+func TestAQuestionAlreadyPostedBeforeARestartIsAwaitedButNotPostedAgain(t *testing.T) {
+	fixture := newThreadAskFixture(t, deleteApprovalScript())
+	taskRun := restartedRunHoldingTheCall(t, fixture)
 	fixture.connectorRuntime.appendConnectorReplyEvent(taskRun.TaskRunID, agentcontract.TaskEventConnectorReplySent, map[string]string{"replyKind": connectorReplyKindApprovalQuestion, "dispatchID": "dispatch-before-restart"})
-	fixture.askInThread()
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
 
-	fixture.connectorRuntime.reissuePendingApprovalQuestions(context.Background())
+	go fixture.connectorRuntime.reawaitHold(ctx, taskRun)
+	fixture.awaitQuestionOnTheThread(t)
 
 	if fixture.questionsPosted() != 0 {
 		t.Fatalf("a question posted before the restart was posted %d more times", fixture.questionsPosted())
+	}
+}
+
+func TestAnAnswerAfterARestartApprovesTheHoldAndResumesTheRunWhichSpendsIt(t *testing.T) {
+	script := deleteApprovalScript(`{"answer":"approve"}`)
+	script.actions = []string{script.actions[0], connectorFinishMessageCiting("내일 휴가 일정을 캘린더에서 삭제했습니다.", "obs-001")}
+	fixture := newThreadAskFixture(t, script)
+	fixture.connectorRuntime.identityService.RememberPlatformAccount(identity.PlatformAccountIdentity{Platform: "test", ExternalUserID: "sender-user", Email: "invited@example.com"})
+	taskRun := restartedRunHoldingTheCall(t, fixture)
+	fixture.connectorRuntime.appendConnectorReplyEvent(taskRun.TaskRunID, agentcontract.TaskEventConnectorReplySent, map[string]string{"replyKind": connectorReplyKindApprovalQuestion, "dispatchID": "dispatch-before-restart"})
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	finished := make(chan struct{})
+	go func() {
+		fixture.connectorRuntime.reawaitHold(ctx, taskRun)
+		close(finished)
+	}()
+	fixture.awaitQuestionOnTheThread(t)
+
+	fixture.await(t, fixture.send(context.Background(), threadReplyEvent("message-2", "ㅇ")))
+	awaitFinished(t, finished)
+
+	resumed, _ := fixture.connectorRuntime.taskRunService.FindTaskRun(taskRun.TaskRunID)
+	holds := holdrecord.Holds(fixture.connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID))
+	if len(holds) != 1 || holds[0].State != holdrecord.StateSpent || fixture.invokedToolCount() != 1 || resumed.Status != task.TaskStatusCompleted {
+		t.Fatalf("holds %+v, calls %v, status %s: expected the harness's repeated call to spend the approved hold once on a completed run", holds, fixture.invokedTools, resumed.Status)
+	}
+}
+
+func TestARunWhoseThreadCannotBeReopenedAfterARestartIsEndedNotParked(t *testing.T) {
+	fixture := newThreadAskFixture(t, deleteApprovalScript())
+	taskRun := fixture.connectorRuntime.taskRunService.CreateTaskRunWithOrigin("person-1", task.TaskRunOrigin{ConversationID: "schedule:morning"}, "scheduled run")
+	holdPendingCall(t, fixture.connectorRuntime, taskRun.TaskRunID)
+	taskRun, _ = fixture.connectorRuntime.taskRunService.FindTaskRun(taskRun.TaskRunID)
+
+	fixture.connectorRuntime.reawaitHold(context.Background(), taskRun)
+
+	ended, _ := fixture.connectorRuntime.taskRunService.FindTaskRun(taskRun.TaskRunID)
+	events := fixture.connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID)
+	if ended.Status == task.TaskStatusWaitingApproval || !connectorTaskEventsContain(fixture.connectorRuntime, taskRun.TaskRunID, approvalgate.TaskEventApprovalUnreachable, "") || len(events) == 0 {
+		t.Fatalf("a run nobody can be asked about was left %s", ended.Status)
 	}
 }
 
@@ -294,13 +337,12 @@ func TestAWaitingRunLeavesTheWorkersAndTheConversationFreeForOtherMessages(t *te
 		connectorFinishMessage("내일 휴가로 등록된 일정 하나입니다."),
 		script.actions[1],
 	}
-	fixture := newAskInThreadFixture(t, script)
-	fixture.askInThread()
+	fixture := newThreadAskFixture(t, script)
 	repository := &testConnectorQueueRepository{}
 	fixture.connectorRuntime.UseEventRepository(repository)
 	otherThread := threadReplyEvent("message-2", "그게 어떤 일정이었지?")
 	otherThread.ReplyTargetID = "reply-target-2"
-	queueEvents(t, fixture, threadReplyEvent("message-1", askInThreadRequest), otherThread)
+	queueEvents(t, fixture, threadReplyEvent("message-1", threadAskRequest), otherThread)
 	asking := runNextQueuedEvent(fixture.connectorRuntime)
 
 	taskRunID := fixture.awaitQuestionOnTheThread(t)
@@ -317,7 +359,7 @@ func TestAWaitingRunLeavesTheWorkersAndTheConversationFreeForOtherMessages(t *te
 	}
 }
 
-func queueEvents(t *testing.T, fixture *askInThreadFixture, events ...PlatformInboundEvent) {
+func queueEvents(t *testing.T, fixture *threadAskFixture, events ...PlatformInboundEvent) {
 	t.Helper()
 	for _, event := range events {
 		result, errorValue := fixture.connectorRuntime.HandleInboundEvent(context.Background(), fixture.adapter, event)
@@ -360,31 +402,29 @@ func awaitSucceededEvents(t *testing.T, repository *testConnectorQueueRepository
 	t.Fatalf("fewer than %d queued events reached an outcome", count)
 }
 
-func TestAQuestionNobodyAnsweredInTimeStaysHeldForTheLaterReplyToTheOldPath(t *testing.T) {
-	script := deleteApprovalScript(`{"answer":"approve"}`)
-	script.actions = []string{script.actions[0], connectorFinishMessageCiting("내일 휴가 일정을 캘린더에서 삭제했습니다.", "obs-002")}
-	fixture := newAskInThreadFixture(t, script)
-	fixture.askInThread()
+func TestAQuestionNobodyAnsweredInTimeRejectsTheHoldAndTheRunEndsTellingWhy(t *testing.T) {
+	script := deleteApprovalScript()
+	script.actions = []string{script.actions[0], connectorFinishMessageCiting("승인이 없어 일정을 삭제하지 않았습니다.", "obs-001")}
+	fixture := newThreadAskFixture(t, script)
 	fixture.connectorRuntime.askingThreads.expiry = 50 * time.Millisecond
 
-	expired := fixture.await(t, fixture.send(context.Background(), threadReplyEvent("message-1", askInThreadRequest)))
+	expired := fixture.await(t, fixture.send(context.Background(), threadReplyEvent("message-1", threadAskRequest)))
 
 	taskRun, _ := fixture.connectorRuntime.taskRunService.FindTaskRun(expired.TaskRunID)
-	if taskRun.Status != task.TaskStatusWaitingApproval || fixture.invokedToolCount() != 0 || fixture.connectorRuntime.isAwaitedInThread(expired.TaskRunID) {
-		t.Fatalf("after the expiry the run is %s with calls %v and awaited=%v, expected it held and let go", taskRun.Status, fixture.invokedTools, fixture.connectorRuntime.isAwaitedInThread(expired.TaskRunID))
+	holds := holdrecord.Holds(fixture.connectorRuntime.taskRunService.ListTaskEvent(expired.TaskRunID))
+	if taskRun.Status == task.TaskStatusWaitingApproval || fixture.invokedToolCount() != 0 || fixture.connectorRuntime.isAwaitedInThread(expired.TaskRunID) {
+		t.Fatalf("after the expiry the run is %s with calls %v and awaited=%v, expected it ended without the call", taskRun.Status, fixture.invokedTools, fixture.connectorRuntime.isAwaitedInThread(expired.TaskRunID))
 	}
-	later := fixture.await(t, fixture.send(context.Background(), threadReplyEvent("message-2", "ㅇ")))
-	if later.TaskRunID != expired.TaskRunID || fixture.invokedToolCount() != 1 {
-		t.Fatalf("the late reply settled %+v with calls %v, expected the held run to carry the call out once", later, fixture.invokedTools)
+	if len(holds) != 1 || holds[0].State != holdrecord.StateRejected || !connectorTaskEventsContain(fixture.connectorRuntime, expired.TaskRunID, approvalgate.TaskEventApprovalExpired, "") {
+		t.Fatalf("holds %+v: expected the hold rejected with an expiry event", holds)
 	}
 }
 
 func TestAHarnessPermissionRequestIsAskedInTheThreadAndAnsweredWithTheOfferedOption(t *testing.T) {
-	fixture := newAskInThreadFixture(t, askInThreadScript{approvalReplies: []string{`{"answer":"allow-once"}`}})
-	fixture.askInThread()
+	fixture := newThreadAskFixture(t, threadAskScript{approvalReplies: []string{`{"answer":"allow-once"}`}})
 	fixture.connectorRuntime.identityService.RememberPlatformAccount(identity.PlatformAccountIdentity{Platform: "test", ExternalUserID: "sender-user", Email: "invited@example.com"})
-	taskRun := fixture.connectorRuntime.taskRunService.CreateTaskRunWithOrigin("person-1", task.TaskRunOrigin{ConversationID: "direct-1", ReplyTargetID: "reply-target-1", IsThread: true}, askInThreadRequest)
-	askingEvent := threadReplyEvent("message-1", askInThreadRequest)
+	taskRun := fixture.connectorRuntime.taskRunService.CreateTaskRunWithOrigin("person-1", task.TaskRunOrigin{ConversationID: "direct-1", ReplyTargetID: "reply-target-1", IsThread: true}, threadAskRequest)
+	askingEvent := threadReplyEvent("message-1", threadAskRequest)
 	approvalRequest := mcpserver.ApprovalRequest{RequesterPersonID: "person-1", TaskRunID: taskRun.TaskRunID, Platform: "test", ConversationID: "direct-1", ReplyTargetID: "reply-target-1"}
 	question := approvalgate.HarnessPermissionQuestion{Text: "파일을 지울까요?", Options: []acp.PermissionOption{
 		{OptionId: "allow-once", Kind: acp.PermissionOptionKindAllowOnce, Name: "allow"},
@@ -455,12 +495,11 @@ func (adapter *progressCountingAdapter) isRunning() bool {
 }
 
 func TestTheTypingIndicatorStopsWhileTheRunWaitsForAnAnswer(t *testing.T) {
-	fixture := newAskInThreadFixture(t, deleteApprovalScript(`{"answer":"approve"}`))
-	fixture.askInThread()
+	fixture := newThreadAskFixture(t, deleteApprovalScript(`{"answer":"approve"}`))
 	counting := &progressCountingAdapter{testAdapter: fixture.adapter}
 	fixture.connectorRuntime.RegisterAdapter(counting)
 	fixture.through = counting
-	asking := fixture.send(context.Background(), threadReplyEvent("message-1", askInThreadRequest))
+	asking := fixture.send(context.Background(), threadReplyEvent("message-1", threadAskRequest))
 	fixture.awaitQuestionOnTheThread(t)
 
 	deadline := time.Now().Add(10 * time.Second)

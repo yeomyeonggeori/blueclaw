@@ -31,19 +31,6 @@ func threadReply(messageID string, threadRootID string) PlatformInboundEvent {
 	return event
 }
 
-func TestAReplyInAnotherThreadDoesNotAnswerThisThreadsApproval(t *testing.T) {
-	connectorRuntime, _, _ := newStubbedTestConnectorRuntime(t)
-	waiting := seedWaitingApprovalInThread(t, connectorRuntime, "thread-delete")
-
-	if _, isFound := connectorRuntime.findPendingApproval("person-1", "", threadReply("message-other", "thread-attendance"), inboundTaskWaitResolution{}); isFound {
-		t.Fatal("a reply in the attendance thread was taken as the answer to the delete thread's approval")
-	}
-	approval, isFound := connectorRuntime.findPendingApproval("person-1", "", threadReply("message-yes", "thread-delete"), inboundTaskWaitResolution{})
-	if !isFound || approval.TaskRun.TaskRunID != waiting.TaskRunID {
-		t.Fatalf("a reply in the delete thread did not find its approval: found=%v %+v", isFound, approval.TaskRun)
-	}
-}
-
 func TestWorkInAnotherThreadDoesNotCountAsAnExchangeAfterTheQuestion(t *testing.T) {
 	connectorRuntime, _, _ := newStubbedTestConnectorRuntime(t)
 	waiting := seedWaitingApprovalInThread(t, connectorRuntime, "thread-delete")
@@ -215,39 +202,5 @@ func TestARootMessageDoesNotSteerARunStartedAtRoot(t *testing.T) {
 	found, isFound := connectorRuntime.latestRunningConversationTask("person-1", threadReply("message-shorter", "message-report"))
 	if !isFound || found.TaskRunID != running.TaskRunID {
 		t.Fatalf("a reply in the run's thread did not reach it: found=%v %+v", isFound, found)
-	}
-}
-
-func TestAnApprovalPayloadStillAnswersFromARootMessage(t *testing.T) {
-	connectorRuntime, _, _ := newStubbedTestConnectorRuntime(t)
-	taskWaitRepository := task.NewInMemoryTaskWaitTokenRepository()
-	connectorRuntime.UseTaskWaitTokenRepository(taskWaitRepository)
-	waiting := seedWaitingApprovalInThread(t, connectorRuntime, "thread-delete")
-	now := time.Now().UTC()
-	if errorValue := taskWaitRepository.InsertTaskWaitToken(task.TaskWaitToken{
-		WaitID:         "wait-delete",
-		TaskRunID:      waiting.TaskRunID,
-		PersonID:       "person-1",
-		Platform:       "buzz",
-		ConversationID: "direct-1",
-		ReplyTargetID:  "dispatch-approval",
-		ThreadRootID:   "thread-delete",
-		Kind:           "approval",
-		State:          "open",
-		ExpiresAt:      now.Add(time.Hour),
-		CreatedAt:      now,
-	}); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	button := rootMessage("message-button", "message-button")
-	button.LegacyFields = map[string]interface{}{"waitID": "wait-delete"}
-
-	resolution := connectorRuntime.resolveInboundTaskWait("person-1", "buzz", button)
-	if !resolution.HasTaskWaitToken || resolution.Reason != "payload_wait_id" {
-		t.Fatalf("the approval payload did not resolve its wait: %+v", resolution)
-	}
-	approval, isFound := connectorRuntime.findPendingApproval("person-1", "", button, resolution)
-	if !isFound || approval.TaskRun.TaskRunID != waiting.TaskRunID {
-		t.Fatalf("the approval payload did not reach its approval: found=%v %+v", isFound, approval.TaskRun)
 	}
 }

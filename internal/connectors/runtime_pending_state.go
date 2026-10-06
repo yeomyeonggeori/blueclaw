@@ -2,8 +2,6 @@ package connectors
 
 import (
 	"encoding/json"
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
-	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"strings"
 	"time"
 
@@ -12,16 +10,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
-
-type pendingApproval struct {
-	TaskRun                 task.TaskRun
-	IntentPrompt            string
-	ApprovalQuestion        string
-	ResponseLanguage        string
-	ContinuationInstruction string
-	ActiveGoal              agentcontract.ActiveGoal
-	Choices                 []holdrecord.Choice
-}
 
 func (connectorRuntime *ConnectorRuntime) findPendingAskInteraction(personID string, _ string, event PlatformInboundEvent, taskWaitResolution inboundTaskWaitResolution) (AskInteraction, bool) {
 	if taskWaitResolution.HasTaskWaitToken {
@@ -58,60 +46,6 @@ func (connectorRuntime *ConnectorRuntime) findPendingAskInteractionByTaskRunID(t
 		return AskInteraction{}, false
 	}
 	return latestAskInteraction(taskRun.TaskRunID, connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID))
-}
-
-func (connectorRuntime *ConnectorRuntime) findPendingApproval(personID string, _ string, event PlatformInboundEvent, taskWaitResolution inboundTaskWaitResolution) (pendingApproval, bool) {
-	if taskWaitResolution.HasTaskWaitToken {
-		return connectorRuntime.findPendingApprovalByTaskRunID(taskWaitResolution.TaskWaitToken.TaskRunID)
-	}
-	taskRuns := connectorRuntime.taskRunService.ListTaskRunByPersonID(personID)
-	var selectedTaskRun task.TaskRun
-	isSelected := false
-	for _, taskRun := range taskRuns {
-		if taskRun.Status != task.TaskStatusWaitingApproval || connectorRuntime.isAwaitedInThread(taskRun.TaskRunID) {
-			continue
-		}
-		if !taskRunSharesMessageThread(taskRun, event) {
-			continue
-		}
-		if time.Since(taskRun.UpdatedAt) > approvalExpiry {
-			continue
-		}
-		if isSelected && !taskRun.UpdatedAt.After(selectedTaskRun.UpdatedAt) {
-			continue
-		}
-		selectedTaskRun = taskRun
-		isSelected = true
-	}
-	if !isSelected {
-		return pendingApproval{}, false
-	}
-	return connectorRuntime.pendingApprovalForTaskRun(selectedTaskRun), true
-}
-
-func (connectorRuntime *ConnectorRuntime) findPendingApprovalByTaskRunID(taskRunID string) (pendingApproval, bool) {
-	taskRun, isFound := connectorRuntime.taskRunService.FindTaskRun(taskRunID)
-	if !isFound || taskRun.Status != task.TaskStatusWaitingApproval || connectorRuntime.isAwaitedInThread(taskRun.TaskRunID) {
-		return pendingApproval{}, false
-	}
-	return connectorRuntime.pendingApprovalForTaskRun(taskRun), true
-}
-
-func (connectorRuntime *ConnectorRuntime) pendingApprovalForTaskRun(selectedTaskRun task.TaskRun) pendingApproval {
-	taskEvents := connectorRuntime.taskRunService.ListTaskEvent(selectedTaskRun.TaskRunID)
-	approvalQuestion := latestApprovalQuestion(taskEvents)
-	responseLanguage := latestApprovalResponseLanguage(taskEvents)
-	continuationInstruction := latestConfirmationContinuationInstruction(taskEvents)
-	activeGoal := latestActiveGoal(taskEvents)
-	return pendingApproval{
-		Choices:                 approvalrecord.OfferedChoices(taskEvents),
-		TaskRun:                 selectedTaskRun,
-		IntentPrompt:            strings.TrimSpace(selectedTaskRun.Prompt),
-		ApprovalQuestion:        approvalQuestion,
-		ResponseLanguage:        responseLanguage,
-		ContinuationInstruction: continuationInstruction,
-		ActiveGoal:              activeGoal,
-	}
 }
 
 func (connectorRuntime *ConnectorRuntime) findActiveGoal(personID string, _ string, event PlatformInboundEvent, taskWaitResolution inboundTaskWaitResolution) (agentcontract.ActiveGoal, bool) {
@@ -265,9 +199,6 @@ func latestIntakeDecision(taskEvents []task.TaskEvent) agentcontract.IntakeDecis
 }
 
 func eventCanContinueGoal(event PlatformInboundEvent, taskRun task.TaskRun, taskEvents []task.TaskEvent) bool {
-	if event.isApprovalAskedElsewhere && taskRun.Status == task.TaskStatusWaitingApproval {
-		return false
-	}
 	return taskRunCanContinueGoal(taskRun, taskEvents)
 }
 
@@ -381,44 +312,9 @@ func activeGoalStatusForTaskRun(taskRun task.TaskRun) agentcontract.ActiveGoalSt
 	}
 }
 
-func approvedContinuationEvent(event PlatformInboundEvent, approval pendingApproval) PlatformInboundEvent {
-	event.ResponseLanguage = toolcontract.ResolveResponseLanguage(event.ResponseLanguage, approval.ResponseLanguage)
-	return event
-}
-
-func pendingApprovalActiveGoal(approval pendingApproval, approvalReply string) agentcontract.ActiveGoal {
-	activeGoal := approval.ActiveGoal
-	activeGoal.GoalID = firstNonEmptyString(activeGoal.GoalID, approval.TaskRun.TaskRunID)
-	activeGoal.TaskRunID = firstNonEmptyString(activeGoal.TaskRunID, approval.TaskRun.TaskRunID)
-	activeGoal.OriginalInstruction = firstNonEmptyString(activeGoal.OriginalInstruction, approval.IntentPrompt)
-	approvedAction := firstNonEmptyString(activeGoal.CurrentObjective, approval.ContinuationInstruction, approval.IntentPrompt)
-	executionDirective := "The user already approved this action; perform it now and do not call ask_confirm again."
-	activeGoal.CurrentObjective = strings.TrimSpace(approvedAction + " " + executionDirective)
-	activeGoal.KnownContext = append(activeGoal.KnownContext, "The user approved the pending action in the latest message: "+strings.TrimSpace(approvalReply))
-	activeGoal.Status = agentcontract.ActiveGoalStatusActive
-	return activeGoal
-}
-
 func activeGoalForLaunch(activeGoal agentcontract.ActiveGoal, hasActiveGoal bool) agentcontract.ActiveGoal {
 	if !hasActiveGoal {
 		return agentcontract.ActiveGoal{}
 	}
 	return activeGoal
-}
-
-func pendingConfirmationTaskRunID(approval pendingApproval, isApprovalContinuation bool) string {
-	if !isApprovalContinuation {
-		return ""
-	}
-	return strings.TrimSpace(approval.TaskRun.TaskRunID)
-}
-
-func existingGoalTaskRunID(approval pendingApproval, isApprovalContinuation bool, activeGoal agentcontract.ActiveGoal, hasActiveGoal bool) string {
-	if isApprovalContinuation {
-		return pendingConfirmationTaskRunID(approval, true)
-	}
-	if !hasActiveGoal {
-		return ""
-	}
-	return strings.TrimSpace(activeGoal.TaskRunID)
 }

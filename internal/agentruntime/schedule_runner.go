@@ -64,7 +64,6 @@ func (scheduleRunner ScheduleRunner) RunIfDue(ctx context.Context, request Sched
 		Source:                    TaskLaunchSourceScheduled,
 		SourceReference:           schedule.ScheduleID,
 		RequesterPersonID:         schedule.CreatorPersonID,
-		IsApprovalContinuation:    true,
 		ProfileName:               schedule.AgentProfileName,
 		Platform:                  schedule.Platform,
 		ConversationID:            task.ScheduleSessionID(schedule.ScheduleID),

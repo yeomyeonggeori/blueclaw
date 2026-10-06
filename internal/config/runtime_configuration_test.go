@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -234,28 +233,5 @@ func TestLoadRuntimeConfigurationTakesACapabilityEndpointThatStampsNothing(t *te
 	}
 	if len(runtimeConfiguration.Capabilities.ToolDescriptors) != 0 {
 		t.Fatalf("expected no stamped descriptors, got %+v", runtimeConfiguration.Capabilities.ToolDescriptors)
-	}
-}
-
-func TestAskingInTheThreadIsOnUnlessTheConfigurationTurnsItOff(t *testing.T) {
-	for _, examplePath := range []string{"../../config/runtime.example.json", "../../config/runtime.standalone.example.json"} {
-		document, errorValue := os.ReadFile(examplePath)
-		if errorValue != nil {
-			t.Fatal(errorValue)
-		}
-		var configuration RuntimeConfiguration
-		if errorValue := json.Unmarshal(document, &configuration); errorValue != nil {
-			t.Fatalf("%s did not read: %v", examplePath, errorValue)
-		}
-		if !configuration.Inbound.Connectors.AsksInThread() {
-			t.Fatalf("%s turns off asking in the thread", examplePath)
-		}
-	}
-	var configuration RuntimeConfiguration
-	if errorValue := json.Unmarshal([]byte(`{"inbound":{"connectors":{"askInThread":false}}}`), &configuration); errorValue != nil || configuration.Inbound.Connectors.AsksInThread() {
-		t.Fatalf("inbound.connectors.askInThread false did not turn it off: %+v %v", configuration.Inbound, errorValue)
-	}
-	if (RuntimeConfiguration{}).Inbound.Connectors.AsksInThread() == false {
-		t.Fatal("a configuration that says nothing asks in the thread")
 	}
 }

@@ -81,7 +81,6 @@ type ToolCatalogRequest struct {
 	RequesterPlatformUserID    string
 	TaskSource                 TaskLaunchSource
 	IsScheduledRun             bool
-	IsApprovalContinuation     bool
 	ConversationID             string
 	DeliveryConversationID     string
 	ConversationType           string

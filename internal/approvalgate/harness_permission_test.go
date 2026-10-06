@@ -18,14 +18,14 @@ type harnessAskerDouble struct {
 	isAnswered        bool
 }
 
-func (asker *harnessAskerDouble) AskPermission(context.Context, mcpserver.ApprovalRequest, PermissionQuestion) (ApprovalAnswer, bool) {
+func (asker *harnessAskerDouble) AskPermission(context.Context, mcpserver.ApprovalRequest, PermissionQuestion) (ApprovalAnswer, AskStatus) {
 	asker.gateQuestionCount++
-	return ApprovalAnswer{}, false
+	return ApprovalAnswer{}, AskInterrupted
 }
 
-func (asker *harnessAskerDouble) AskHarnessPermission(_ context.Context, _ mcpserver.ApprovalRequest, question HarnessPermissionQuestion) (acp.RequestPermissionOutcome, bool) {
+func (asker *harnessAskerDouble) AskHarnessPermission(_ context.Context, _ mcpserver.ApprovalRequest, question HarnessPermissionQuestion) (acp.RequestPermissionOutcome, AskStatus) {
 	asker.questions = append(asker.questions, question)
-	return asker.outcome, asker.isAnswered
+	return asker.outcome, statusOfAnswered(asker.isAnswered)
 }
 
 func harnessQuestion(rawInput map[string]any) HarnessPermissionQuestion {
@@ -49,11 +49,11 @@ func TestAHarnessQuestionIsRecordedAsAHoldBeforeAnyoneIsAsked(t *testing.T) {
 	asker := &harnessAskerDouble{}
 	gate.UsePermissionAsker(asker)
 
-	_, isAnswered := gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(map[string]any{"branch": "main"}))
+	_, status := gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(map[string]any{"branch": "main"}))
 
 	holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID))
-	if isAnswered || len(holds) != 1 || holds[0].State != holdrecord.StatePending || holds[0].Call.Confirmation != "Force-push the branch?" || holds[0].Call.ToolName != "" {
-		t.Fatalf("an unanswered harness question must stay a pending hold a restart can reissue, got %+v answered=%v", holds, isAnswered)
+	if (status == AskAnswered) || len(holds) != 1 || holds[0].State != holdrecord.StatePending || holds[0].Call.Confirmation != "Force-push the branch?" || holds[0].Call.ToolName != "" {
+		t.Fatalf("an unanswered harness question must stay a pending hold a restart can reissue, got %+v answered=%v", holds, (status == AskAnswered))
 	}
 	if taskRunStatus(t, taskRunService, taskRun.TaskRunID) != agentcontract.TaskStatusWaitingApproval {
 		t.Fatal("the run must wait for the answer the reissue will collect")
@@ -64,9 +64,9 @@ func TestAnAnsweredHarnessQuestionSettlesItsHoldAndTheRunContinues(t *testing.T)
 	gate, taskRunService, taskRun := gateFixture(t)
 	gate.UsePermissionAsker(&harnessAskerDouble{outcome: chosen("allow-once"), isAnswered: true})
 
-	outcome, isAnswered := gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(map[string]any{"branch": "main"}))
+	outcome, status := gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(map[string]any{"branch": "main"}))
 
-	if !isAnswered || outcome.Selected == nil || outcome.Selected.OptionId != "allow-once" {
+	if status != AskAnswered || outcome.Selected == nil || outcome.Selected.OptionId != "allow-once" {
 		t.Fatalf("expected the answer to pass through, got %+v", outcome)
 	}
 	holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID))
@@ -98,9 +98,9 @@ func TestARetryOfAnApprovedHarnessCallIsNotAskedAgainAndSpendsTheApprovalOnce(t 
 	recordDecision(taskRunService, taskRun.TaskRunID, "approve")
 	asker.questions = nil
 
-	outcome, isAnswered := gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(input))
+	outcome, status := gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(input))
 
-	if !isAnswered || outcome.Selected == nil || outcome.Selected.OptionId != "allow-once" || len(asker.questions) != 0 {
+	if status != AskAnswered || outcome.Selected == nil || outcome.Selected.OptionId != "allow-once" || len(asker.questions) != 0 {
 		t.Fatalf("the approved call must run without a second question, got %+v asked %d", outcome, len(asker.questions))
 	}
 	gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(input))

@@ -8,6 +8,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 )
 
 func taskRunWithHeldCall(t *testing.T) (*task.TaskRunService, string) {
@@ -128,4 +129,12 @@ func TestAnApprovalWritesOnlyTheEventsItAlwaysDid(t *testing.T) {
 	if names := eventNamesAfterDecision(t, agentcontract.ApprovalSignalReject); strings.Join(names, ",") != "approval.decided" {
 		t.Fatalf("expected the decision alone, got %v", names)
 	}
+}
+
+func ApprovedPendingCall(taskEvents []agentcontract.TaskEvent) (ApprovedCall, bool) {
+	approvedHold, isApproved := holdrecord.LatestHold(holdrecord.Holds(taskEvents), holdrecord.StateApproved)
+	if !isApproved {
+		return ApprovedCall{}, false
+	}
+	return ApprovedCall{HoldID: approvedHold.ID, ToolName: approvedHold.Call.ToolName, ToolInput: approvedHold.Call.ApprovedInput()}, true
 }

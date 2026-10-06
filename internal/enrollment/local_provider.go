@@ -87,7 +87,7 @@ func detectedHarness() HarnessChoice {
 }
 
 func AvailableHarnesses() []HarnessChoice {
-	available := []HarnessChoice{{Name: "bluecollar"}}
+	available := []HarnessChoice{{Name: "bluecollar-acp"}}
 	for _, candidate := range harnessCommandNames {
 		if commandPath, errorValue := exec.LookPath(candidate.commandName); errorValue == nil {
 			available = append(available, HarnessChoice{Name: candidate.harnessName, AgentCommandPath: commandPath})

@@ -185,22 +185,3 @@ func normalizedAskInteractionKind(kind string) string {
 		return strings.TrimSpace(kind)
 	}
 }
-
-func latestConfirmationContinuationInstruction(taskEvents []task.TaskEvent) string {
-	for index := len(taskEvents) - 1; index >= 0; index-- {
-		taskEvent := taskEvents[index]
-		if taskEvent.Name != agentcontract.TaskEventConfirmationRequested {
-			continue
-		}
-		var request struct {
-			ContinuationInstruction string `json:"continuationInstruction"`
-		}
-		if errorValue := json.Unmarshal([]byte(taskEvent.Body), &request); errorValue != nil {
-			continue
-		}
-		if instruction := strings.TrimSpace(request.ContinuationInstruction); instruction != "" {
-			return instruction
-		}
-	}
-	return ""
-}

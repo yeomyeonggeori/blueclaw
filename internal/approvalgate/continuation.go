@@ -13,14 +13,6 @@ type ApprovedCall struct {
 	ToolInput json.RawMessage
 }
 
-func ApprovedPendingCall(taskEvents []agentcontract.TaskEvent) (ApprovedCall, bool) {
-	approvedHold, isApproved := holdrecord.LatestHold(holdrecord.Holds(taskEvents), holdrecord.StateApproved)
-	if !isApproved {
-		return ApprovedCall{}, false
-	}
-	return ApprovedCall{HoldID: approvedHold.ID, ToolName: approvedHold.Call.ToolName, ToolInput: approvedHold.Call.ApprovedInput()}, true
-}
-
 func PendingHeldCall(taskEvents []agentcontract.TaskEvent) (agentcontract.HeldCall, bool) {
 	pendingHold, isPending := holdrecord.LatestHold(holdrecord.Holds(taskEvents), holdrecord.StatePending)
 	return pendingHold.Call, isPending

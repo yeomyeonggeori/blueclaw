@@ -141,11 +141,6 @@
       "enabledPlatforms": []
     }
   },
-  "inbound": {
-    "connectors": {
-      "askInThread": true
-    }
-  },
   "logging": {
     "directoryPath": "/workspace/.blueclaw/logs",
     "retentionDays": 7

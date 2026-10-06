@@ -23,15 +23,6 @@ func (connectorRuntime *ConnectorRuntime) UseApprovalReplyReader(approvalReplyRe
 	connectorRuntime.approvalReplyReader = approvalReplyReader
 }
 
-func (connectorRuntime *ConnectorRuntime) readApprovalReply(ctx context.Context, turn *inboundTurn, confirmation pendingApproval) (agentcontract.TurnDecision, bool, error) {
-	question := approvalQuestionFor(confirmation.ApprovalQuestion, confirmation.Choices)
-	optionID, isAnswer, errorValue := connectorRuntime.readReplyToQuestion(ctx, confirmation.TaskRun.TaskRunID, question, turn.event.Prompt)
-	if errorValue != nil || !isAnswer {
-		return agentcontract.TurnDecision{}, false, errorValue
-	}
-	return answeredDecision(optionID), true, nil
-}
-
 func (connectorRuntime *ConnectorRuntime) readReplyToQuestion(ctx context.Context, taskRunID string, question approvalreply.Question, reply string) (string, bool, error) {
 	if connectorRuntime.approvalReplyReader == nil {
 		return "", false, errNoApprovalReplyReader

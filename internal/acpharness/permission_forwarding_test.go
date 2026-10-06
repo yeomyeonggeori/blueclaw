@@ -21,10 +21,13 @@ type relayDouble struct {
 	isAnswered    bool
 }
 
-func (relay *relayDouble) AskHarnessPermission(_ context.Context, approvalRequest mcpserver.ApprovalRequest, question approvalgate.HarnessPermissionQuestion) (acp.RequestPermissionOutcome, bool) {
+func (relay *relayDouble) AskHarnessPermission(_ context.Context, approvalRequest mcpserver.ApprovalRequest, question approvalgate.HarnessPermissionQuestion) (acp.RequestPermissionOutcome, approvalgate.AskStatus) {
 	relay.asked = append(relay.asked, question)
 	relay.approvalAsked = append(relay.approvalAsked, approvalRequest)
-	return relay.outcome, relay.isAnswered
+	if relay.isAnswered {
+		return relay.outcome, approvalgate.AskAnswered
+	}
+	return relay.outcome, approvalgate.AskInterrupted
 }
 
 func selectedOutcome(optionID acp.PermissionOptionId) acp.RequestPermissionOutcome {

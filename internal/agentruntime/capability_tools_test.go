@@ -220,10 +220,6 @@ func TestPlatformDMSendAvailabilityDependsOnTrustedContext(t *testing.T) {
 	if strings.Contains(scheduledToolSet.Descriptions(), "ask approval before invoking") {
 		t.Fatalf("expected scheduled DM to be available, got %s", scheduledToolSet.Descriptions())
 	}
-	approvedToolSet := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{ProfileName: "default", IsApprovalContinuation: true})
-	if strings.Contains(approvedToolSet.Descriptions(), "ask approval before invoking") {
-		t.Fatalf("expected approved continuation DM to be available, got %s", approvedToolSet.Descriptions())
-	}
 }
 
 func TestCapabilityToolRequestIncludesTrustedExecutionContext(t *testing.T) {
@@ -236,7 +232,6 @@ func TestCapabilityToolRequestIncludesTrustedExecutionContext(t *testing.T) {
 	requestDocument := capabilityToolRequest(context.Background(), descriptor, ToolCatalogRequest{
 		TaskSource:              TaskLaunchSourceScheduled,
 		IsScheduledRun:          true,
-		IsApprovalContinuation:  true,
 		RequesterPersonID:       "person-1",
 		RequesterPlatformUserID: "mattermost-user-1",
 		ConversationID:          "conversation-1",
@@ -248,7 +243,7 @@ func TestCapabilityToolRequestIncludesTrustedExecutionContext(t *testing.T) {
 	if !isFound {
 		t.Fatalf("expected context document, got %+v", requestDocument)
 	}
-	if contextDocument["taskSource"] != string(TaskLaunchSourceScheduled) || contextDocument["isScheduledRun"] != true || contextDocument["isApprovalContinuation"] != true {
+	if contextDocument["taskSource"] != string(TaskLaunchSourceScheduled) || contextDocument["isScheduledRun"] != true {
 		t.Fatalf("expected trusted execution context, got %+v", contextDocument)
 	}
 	if contextDocument["replyTargetID"] != "reply-target-1" {

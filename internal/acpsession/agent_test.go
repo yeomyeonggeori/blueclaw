@@ -418,7 +418,7 @@ func TestHeldCallReachesTheRequesterOverTheSessionThatOwnsTheConversation(t *tes
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	answer, isAnswered := permissionRelay.AskPermission(ctx, approvalRequest, approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "박예시에게 보낼까요?"})
+	answer, isAnswered := answered(permissionRelay.AskPermission(ctx, approvalRequest, approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "박예시에게 보낼까요?"}))
 	if !isAnswered {
 		t.Fatal("nobody was asked, so the call would have been held instead of run")
 	}
@@ -449,12 +449,12 @@ func TestACallInAConversationNoSessionOwnsIsNotAsked(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, isAnswered := permissionRelay.AskPermission(ctx, mcpserver.ApprovalRequest{
+	_, isAnswered := answered(permissionRelay.AskPermission(ctx, mcpserver.ApprovalRequest{
 		Platform:       "buzz",
 		ConversationID: "conversation-nobody-opened",
 		TaskRunID:      "task-2",
 		ToolName:       "message_send",
-	}, approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "보낼까요?"})
+	}, approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "보낼까요?"}))
 	if isAnswered {
 		t.Fatal("a call was answered by a session that owns another conversation")
 	}
@@ -467,12 +467,12 @@ func TestDecliningTheCallReadsAsReject(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	answer, isAnswered := permissionRelay.AskPermission(ctx, mcpserver.ApprovalRequest{
+	answer, isAnswered := answered(permissionRelay.AskPermission(ctx, mcpserver.ApprovalRequest{
 		Platform:       "buzz",
 		ConversationID: "conversation-1",
 		TaskRunID:      "task-1",
 		ToolName:       "message_send",
-	}, approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "보낼까요?"})
+	}, approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "보낼까요?"}))
 	if !isAnswered || answer.Signal != agentcontract.ApprovalSignalReject {
 		t.Fatalf("declining read as %q answered=%v", answer.Signal, isAnswered)
 	}
@@ -530,7 +530,7 @@ func TestThePersonsWordsAreReadByTheRouterAndNotByTheRelay(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	answer, isAnswered := permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "박예시에게 보낼까요?"})
+	answer, isAnswered := answered(permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "박예시에게 보낼까요?"}))
 
 	if !isAnswered || answer.Signal != agentcontract.ApprovalSignalApprove {
 		t.Fatalf("the answer read as %q answered=%v", answer.Signal, isAnswered)
@@ -548,7 +548,7 @@ func TestAnAnswerTheReaderCannotReadIsNotAnAnswer(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	answer, isAnswered := permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "보낼까요?"})
+	answer, isAnswered := answered(permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "보낼까요?"}))
 
 	if isAnswered {
 		t.Fatalf("a reply the reader could not read decided the call as %q", answer.Signal)
@@ -566,7 +566,7 @@ func TestAReplyOutsideTheQuestionsThreadIsNotAnAnswerAndIsNotRead(t *testing.T) 
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, isAnswered := permissionRelay.AskPermission(ctx, approvalRequest, approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "보낼까요?"})
+	_, isAnswered := answered(permissionRelay.AskPermission(ctx, approvalRequest, approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "보낼까요?"}))
 
 	if isAnswered || len(asked) != 0 {
 		t.Fatalf("a reply in another thread answered=%v and the reader was asked %d times", isAnswered, len(asked))
@@ -823,9 +823,6 @@ func TestApprovingTheReissuedQuestionResumesTheRunItBelongsTo(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("the answered call never resumed, so the approval was collected and thrown away")
 	}
-	if !resumed.IsApprovalContinuation {
-		t.Fatal("the resumed turn does not carry the approval, so the call would be asked about all over again")
-	}
 	if !resumed.IsRuntimeRestartResume {
 		t.Fatal("the resumed turn does not read as a restart resume, so it looks like a fresh request")
 	}
@@ -1010,7 +1007,7 @@ func TestAChoiceIsReadFromThePersonsWordsAgainstTheOfferedOptions(t *testing.T) 
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	answer, isAnswered := permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "업데이트할까요?", Choices: choices})
+	answer, isAnswered := answered(permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "업데이트할까요?", Choices: choices}))
 
 	if !isAnswered || answer.ChoiceKey != "offHours" {
 		t.Fatalf("the choice read as %+v answered=%v", answer, isAnswered)
@@ -1046,7 +1043,7 @@ func TestAQuestionsOptionsReachTheClientUnderTheirOwnWordsAndTheAnswerNamesTheKe
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	answer, isAnswered := permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "어느 방으로 할까요?", Choices: choices})
+	answer, isAnswered := answered(permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "어느 방으로 할까요?", Choices: choices}))
 
 	if !isAnswered || answer.ChoiceKey != "2" || answer.Signal != agentcontract.ApprovalSignalApprove {
 		t.Fatalf("the pick read as %+v answered=%v", answer, isAnswered)
@@ -1055,4 +1052,8 @@ func TestAQuestionsOptionsReachTheClientUnderTheirOwnWordsAndTheAnswerNamesTheKe
 	if len(offered) != 3 || offered[0].Name != "회의실 A" || offered[1].OptionId != "choose:2" || offered[1].Name != "회의실 B" {
 		t.Fatalf("the client was offered %+v, expected each option under its own words", offered)
 	}
+}
+
+func answered[Answer any](answer Answer, status approvalgate.AskStatus) (Answer, bool) {
+	return answer, status == approvalgate.AskAnswered
 }

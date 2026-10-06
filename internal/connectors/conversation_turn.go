@@ -16,7 +16,6 @@ type ConversationTurn struct {
 	RequesterPersonID         string
 	RequesterEmail            string
 	PersonAccess              policy.PersonAccess
-	IsApprovalContinuation    bool
 	SettledCalls              []agentcontract.CarriedOutCall
 	ActiveGoal                agentcontract.ActiveGoal
 	HasActiveGoal             bool
@@ -90,7 +89,6 @@ func (connectorRuntime *ConnectorRuntime) buildTaskLaunchRequest(turn Conversati
 }
 
 func withTurnContinuation(request agentruntime.TaskLaunchRequest, turn ConversationTurn) agentruntime.TaskLaunchRequest {
-	request.IsApprovalContinuation = turn.IsApprovalContinuation
 	request.SettledCalls = turn.SettledCalls
 	request.IsRuntimeRestartResume = turn.IsBlockedContinuation
 	request.ExistingTaskRunID = existingGoalTaskRunIDFromTurn(turn)
@@ -108,9 +106,6 @@ func eventIsThreadReply(event PlatformInboundEvent) bool {
 }
 
 func existingGoalTaskRunIDFromTurn(turn ConversationTurn) string {
-	if turn.IsApprovalContinuation {
-		return turn.ActiveGoal.TaskRunID
-	}
 	if turn.HasActiveGoal {
 		return turn.ActiveGoal.TaskRunID
 	}

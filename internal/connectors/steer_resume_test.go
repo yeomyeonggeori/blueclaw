@@ -100,7 +100,6 @@ func TestARestartCarriesNoAnswerAndKeepsTheObjective(t *testing.T) {
 func TestASteerWithNewWordsLaunchesThroughIntakeAgain(t *testing.T) {
 	launchRequest := agentruntime.TaskLaunchRequest{
 		Prompt:                  "두 번째로 중복 올린 글 삭제해줘.",
-		IsApprovalContinuation:  true,
 		IsRuntimeRestartResume:  true,
 		PrecomputedTurnDecision: &agentcontract.TurnDecision{Route: agentcontract.TurnRouteContinueTask},
 	}
@@ -114,9 +113,6 @@ func TestASteerWithNewWordsLaunchesThroughIntakeAgain(t *testing.T) {
 	if steered.PrecomputedTurnDecision != nil {
 		t.Fatal("a steered launch must not carry a precomputed route; intake decides refine versus revise")
 	}
-	if steered.IsApprovalContinuation {
-		t.Fatal("a call approved for the old objective must not be carried out under the new one")
-	}
 	if steered.IsRuntimeRestartResume {
 		t.Fatal("a steered launch is a new ask, not a restart resume")
 	}
@@ -125,14 +121,13 @@ func TestASteerWithNewWordsLaunchesThroughIntakeAgain(t *testing.T) {
 func TestASteerWithNothingNewKeepsTheResumeShape(t *testing.T) {
 	launchRequest := agentruntime.TaskLaunchRequest{
 		Prompt:                  "해줘",
-		IsApprovalContinuation:  true,
 		IsRuntimeRestartResume:  true,
 		PrecomputedTurnDecision: &agentcontract.TurnDecision{Route: agentcontract.TurnRouteContinueTask},
 	}
 
 	steered := steeredTaskLaunchRequest(launchRequest, PlatformInboundEvent{}, "")
 
-	if steered.PrecomputedTurnDecision == nil || !steered.IsApprovalContinuation || !steered.IsRuntimeRestartResume {
+	if steered.PrecomputedTurnDecision == nil || !steered.IsRuntimeRestartResume {
 		t.Fatal("a steer that says nothing new resumes the task as it was")
 	}
 }

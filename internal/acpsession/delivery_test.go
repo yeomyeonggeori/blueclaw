@@ -225,7 +225,7 @@ func TestAnApprovalQuestionNamesItsThreadAndIsRecordedSentOnceTheRelayPostsIt(t 
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if _, isAnswered := permissionRelay.AskPermission(ctx, approvalRequest, approvalgate.PermissionQuestion{Confirmation: "박예시에게 보낼까요?"}); !isAnswered {
+	if _, isAnswered := answered(permissionRelay.AskPermission(ctx, approvalRequest, approvalgate.PermissionQuestion{Confirmation: "박예시에게 보낼까요?"})); !isAnswered {
 		t.Fatal("nobody was asked")
 	}
 

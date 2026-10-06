@@ -30,7 +30,6 @@ func TestSelectedExternalHarnessPublishesTheRequesterCatalogAtTheRoutedEndpoint(
 
 	selectedFactory, errorValue := Select(
 		config.HarnessConfiguration{Name: ExternalHarnessName, AgentCommandPath: "/usr/bin/true"},
-		nil,
 		ToolCatalogEndpoint{URL: catalogServer.URL, Resolver: resolver},
 		SandboxProcessBoundary{Runner: refusingProcessRunner{}, WorkspaceRootPath: "/workspace"},
 	)

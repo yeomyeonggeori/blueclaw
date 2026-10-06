@@ -22,9 +22,6 @@ type askingTurn struct {
 }
 
 func (harness *VirtualSessionHarness) handleInboundEvent(ctx context.Context, event connectors.PlatformInboundEvent) (connectors.ConnectorRuntimeResult, error) {
-	if !harness.scenario.AskInThread {
-		return harness.runtime.HandleInboundEvent(ctx, harness.adapter, event)
-	}
 	if harness.askingTurn == nil {
 		return harness.startTurnThatMayAsk(ctx, event)
 	}

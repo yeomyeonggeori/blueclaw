@@ -88,7 +88,6 @@ type VirtualSessionScenario struct {
 	InitialWorkspaceFiles     map[string]string
 	RequesterIsAdmin          bool
 	IsDeliveredOverACP        bool
-	AskInThread               bool
 	RecordCatalogURL          string
 	Turns                     []VirtualTurn
 	DecisionModel             model.DecisionModel
@@ -843,6 +842,7 @@ func RunVirtualSession(ctx context.Context, scenario VirtualSessionScenario) (Vi
 }
 
 func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionHarness, error) {
+	scenario = askedInThread(scenario)
 	if virtualSessionAgentHarnessFactory == nil {
 		return nil, errors.New("virtual session requires a registered agent harness factory")
 	}
@@ -871,8 +871,6 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 
 	taskEventService := task.NewTaskEventService()
 	taskRunService := task.NewTaskRunService(taskEventService)
-	taskStepService := task.NewTaskStepService()
-	taskArtifactService := task.NewTaskArtifactService()
 	scriptedModel := actionScriptedLanguageModelForScenario(scenario)
 	baseLanguageModel := scenario.LanguageModel
 	if scriptedModel != nil {
@@ -897,7 +895,6 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 		}
 	}
 	instructionBundleLoader := virtualInstructionBundleLoader(skillInstructions, workspacePath)
-	scenarioIntakeOptions := agentcontract.IntakeOptions{IsEnabled: true, DefaultTaskLevel: agentcontract.TaskLevelLow}
 	turnScript := scenarioTurnScriptFor(scriptedModel)
 	changeChecks := &scenarioChangeChecks{}
 	intakeDecisionModel := scenarioIntakeDecisionModel(scenario, turnScript, firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel))
@@ -905,9 +902,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	scriptedDecisionModel, _ := intakeDecisionModel.(*scenarioDecisionModel)
 	scenarioReader := scenarioReplyReader{decisionModel: scriptedDecisionModel}
 	agentHarness, skillRetriever := virtualSessionAgentHarnessFactory(harnessdriver.Dependencies{
-		TaskRunStore:      taskRunService,
-		TaskStepStore:     taskStepService,
-		TaskArtifactStore: taskArtifactService,
+		TaskRunStore: taskRunService,
 		TaskTierLanguageModels: agentcontract.TaskTierLanguageModels{
 			Low:    lowLanguageModel,
 			XLow:   xLowLanguageModel,
@@ -917,12 +912,9 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 			Max:    maxLanguageModel,
 		},
 		IntakeLanguageModelProvider: intakeLanguageModel,
-		IntakeOptions:               &scenarioIntakeOptions,
-		TurnOptionOverrides:         scenario.TurnOptions,
 		InstructionBundleLoader:     instructionBundleLoader,
 		EmbeddingProvider:           scenario.EmbeddingProvider,
 		EmbeddingModelName:          scenario.EmbeddingModel,
-		ToolSelector:                scenarioDecisionPlanner,
 		DecisionModel:               scenarioLoopDecisionModel(scenario, scriptedModel, changeChecks),
 	})
 
@@ -980,7 +972,6 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	approvedCallSchedules := &virtualApprovedCallSchedules{}
 	virtualApprovalGate.UseApprovedCallScheduler(approvedCallSchedules)
 	runtime.UseApprovalGate(virtualApprovalGate)
-	runtime.UseAskInThread(scenario.AskInThread)
 	useVirtualDirectMessages(runtime, identityService)
 	virtualApprovalGate.UsePermissionAsker(runtime.ThreadPermissionAsker())
 	virtualTaskLauncher.UseApprovalGate(virtualApprovalGate)
@@ -2537,16 +2528,15 @@ func virtualCapabilityRequestNeedsApproval(requestBody []byte) bool {
 	var requestDocument struct {
 		Input   json.RawMessage `json:"input"`
 		Context struct {
-			IsApprovalContinuation bool   `json:"isApprovalContinuation"`
-			HoldID                 string `json:"holdID"`
-			ConversationType       string `json:"conversationType"`
-			ChannelID              string `json:"channelID"`
+			HoldID           string `json:"holdID"`
+			ConversationType string `json:"conversationType"`
+			ChannelID        string `json:"channelID"`
 		} `json:"context"`
 	}
 	if len(requestBody) == 0 || json.Unmarshal(requestBody, &requestDocument) != nil {
 		return false
 	}
-	if requestDocument.Context.IsApprovalContinuation || strings.TrimSpace(requestDocument.Context.HoldID) != "" {
+	if strings.TrimSpace(requestDocument.Context.HoldID) != "" {
 		return false
 	}
 	return !approvalgate.SendLandsInTheConversationBeingAnswered(requestDocument.Context.ConversationType, requestDocument.Context.ChannelID, requestDocument.Input)

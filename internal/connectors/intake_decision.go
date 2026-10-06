@@ -202,18 +202,6 @@ func (connectorRuntime *ConnectorRuntime) inboundDecisionRequestForTurn(ctx cont
 		ResponseLanguage: responseLanguageForEvent(turn.event),
 		EnvironmentNow:   time.Now(),
 	}
-	if open.hasConfirmation {
-		decisionRequest.PendingConfirmation = agentcontract.PendingConfirmationContext{
-			TaskRunID:      open.confirmation.TaskRun.TaskRunID,
-			Prompt:         open.confirmation.IntentPrompt,
-			Question:       open.confirmation.ApprovalQuestion,
-			AskedAt:        open.confirmationAt,
-			ExchangesSince: connectorRuntime.exchangesSince(turn, open.confirmationAt, open.confirmation.TaskRun.TaskRunID),
-		}
-	}
-	if pendingChoice, isOffered := open.confirmationChoice(decisionRequest.PendingConfirmation.ExchangesSince); isOffered {
-		decisionRequest.PendingChoice = pendingChoice
-	}
 	if open.hasAsk {
 		decisionRequest.PendingChoice = agentcontract.PendingChoiceContext{
 			TaskRunID:      open.ask.TaskRunID,

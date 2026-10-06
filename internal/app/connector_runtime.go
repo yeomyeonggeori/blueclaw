@@ -60,9 +60,8 @@ func newConnectorRuntime(runtimeConfiguration config.RuntimeConfiguration, found
 	return connectorRuntime
 }
 
-func useAskInThread(connectorRuntime *connectors.ConnectorRuntime, runtimeConfiguration config.RuntimeConfiguration, inbound InboundOptions, approvalGate *approvalgate.Gate, directory identityDirectory) {
-	connectorRuntime.UseAskInThread(runtimeConfiguration.Inbound.Connectors.AsksInThread() && inbound.admitsConnectorHTTPEvent())
-	approvalGate.UsePermissionAsker(connectorRuntime.ThreadPermissionAsker())
+func installThreadAsker(connectorRuntime *connectors.ConnectorRuntime, runtimeConfiguration config.RuntimeConfiguration, inbound InboundOptions, approvalGate *approvalgate.Gate, directory identityDirectory) {
+	approvalGate.UsePermissionAsker(threadPermissionAskerFor(inbound, connectorRuntime))
 	if directory.platformAccountLister != nil {
 		connectorRuntime.UseRequesterDirectMessages(newDirectMessageOpener(newChatdClient(runtimeConfiguration)), directory.platformAccountLister)
 	}
@@ -108,4 +107,11 @@ func platformsChatdServesBeyondTheProtocol(chatdConfiguration config.ChatdConnec
 		platforms = append(platforms, platform)
 	}
 	return platforms
+}
+
+func threadPermissionAskerFor(inbound InboundOptions, connectorRuntime *connectors.ConnectorRuntime) approvalgate.PermissionAsker {
+	if !inbound.admitsConnectorHTTPEvent() {
+		return nil
+	}
+	return connectorRuntime.ThreadPermissionAsker()
 }

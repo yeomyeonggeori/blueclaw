@@ -2,51 +2,29 @@ package connectors
 
 import (
 	"context"
-	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 type openInteractions struct {
-	confirmation    pendingApproval
-	confirmationAt  time.Time
-	hasConfirmation bool
-	ask             AskInteraction
-	askAt           time.Time
-	hasAsk          bool
-	runningTask     task.TaskRun
-	hasRunningTask  bool
+	ask            AskInteraction
+	askAt          time.Time
+	hasAsk         bool
+	runningTask    task.TaskRun
+	hasRunningTask bool
 }
 
 func (open openInteractions) isEmpty() bool {
-	return !open.hasConfirmation && !open.hasAsk && !open.hasRunningTask
-}
-
-func (open openInteractions) confirmationChoice(exchangesSince int) (agentcontract.PendingChoiceContext, bool) {
-	if !open.hasConfirmation || len(open.confirmation.Choices) == 0 || open.hasAsk {
-		return agentcontract.PendingChoiceContext{}, false
-	}
-	return agentcontract.PendingChoiceContext{
-		TaskRunID:      open.confirmation.TaskRun.TaskRunID,
-		Question:       open.confirmation.ApprovalQuestion,
-		SelectionMode:  "single",
-		Options:        approvalrecord.ChoiceReplyOptions(open.confirmation.Choices),
-		AskedAt:        open.confirmationAt,
-		ExchangesSince: exchangesSince,
-	}, true
+	return !open.hasAsk && !open.hasRunningTask
 }
 
 func (open openInteractions) ledgerTaskRunID() string {
 	switch {
-	case open.hasConfirmation:
-		return open.confirmation.TaskRun.TaskRunID
 	case open.hasAsk:
 		return open.ask.TaskRunID
 	default:
@@ -56,12 +34,6 @@ func (open openInteractions) ledgerTaskRunID() string {
 
 func (connectorRuntime *ConnectorRuntime) readOpenInteractions(turn *inboundTurn) openInteractions {
 	open := openInteractions{}
-	if !turn.event.isApprovalAskedElsewhere {
-		open.confirmation, open.hasConfirmation = connectorRuntime.findPendingApproval(turn.personID, turn.platform, turn.event, turn.taskWaitResolution)
-	}
-	if open.hasConfirmation {
-		open.confirmationAt = latestTaskEventTime(connectorRuntime.taskRunService.ListTaskEvent(open.confirmation.TaskRun.TaskRunID), agentcontract.TaskEventConfirmationRequested, open.confirmation.TaskRun.UpdatedAt)
-	}
 	open.ask, open.hasAsk = connectorRuntime.findPendingAskInteraction(turn.personID, turn.platform, turn.event, turn.taskWaitResolution)
 	if open.hasAsk {
 		askTaskRun, _ := connectorRuntime.taskRunService.FindTaskRun(open.ask.TaskRunID)
@@ -117,12 +89,6 @@ func (connectorRuntime *ConnectorRuntime) routeOpenInteractions(ctx context.Cont
 }
 
 func (connectorRuntime *ConnectorRuntime) decideOpenInteractions(ctx context.Context, turn *inboundTurn, open openInteractions, request agentcontract.AgentRequest) (agentcontract.TurnDecision, error) {
-	if open.hasConfirmation {
-		decision, isAnswer, errorValue := connectorRuntime.readApprovalReply(ctx, turn, open.confirmation)
-		if errorValue != nil || isAnswer {
-			return decision, errorValue
-		}
-	}
 	if open.hasAsk {
 		return answeringTheQuestionTheRunAsked(turn.event), nil
 	}
@@ -140,9 +106,6 @@ func answeringTheQuestionTheRunAsked(event PlatformInboundEvent) agentcontract.T
 }
 
 func (connectorRuntime *ConnectorRuntime) recordOpenInteractionRouting(turn *inboundTurn, open openInteractions, decision agentcontract.TurnDecision) {
-	if open.hasConfirmation {
-		connectorRuntime.recordConfirmationReplyClassified(open.confirmation.TaskRun.TaskRunID, turn.event, decision)
-	}
 	if open.hasAsk {
 		connectorRuntime.taskRunService.AppendTaskEvent(open.ask.TaskRunID, agentcontract.TaskEventAskReplyClassified, agentruntime.MarshalBody(map[string]any{
 			"messageID": turn.event.MessageID,
@@ -184,45 +147,12 @@ func (connectorRuntime *ConnectorRuntime) settleOpenInteractions(ctx context.Con
 	}
 	turn.turnDecision = decision
 	turn.hasTurnDecision = true
-	if open.hasConfirmation {
-		if result, isHandled, errorValue := connectorRuntime.settleConfirmation(ctx, turn, open.confirmation, decision); isHandled {
-			return result, true, errorValue
-		}
-	}
 	if open.hasAsk {
 		connectorRuntime.settleAsk(turn, open.ask, decision)
 	}
-	if open.hasRunningTask && !turn.isApprovalContinuation && !turn.hasPendingAskInteraction && len(turn.event.PreviousMessages) == 0 {
+	if open.hasRunningTask && !turn.hasPendingAskInteraction && len(turn.event.PreviousMessages) == 0 {
 		return connectorRuntime.settleRunningTask(ctx, turn, open.runningTask, decision)
 	}
-	return ConnectorRuntimeResult{}, false, nil
-}
-
-func (connectorRuntime *ConnectorRuntime) settleConfirmation(ctx context.Context, turn *inboundTurn, confirmation pendingApproval, decision agentcontract.TurnDecision) (ConnectorRuntimeResult, bool, error) {
-	if len(confirmation.Choices) > 0 {
-		return connectorRuntime.settleChoiceConfirmation(ctx, turn, confirmation, decision)
-	}
-	approvalrecord.SettleSignal(connectorRuntime.taskRunService, confirmation.TaskRun.TaskRunID, decision.Approval, "chat_reply")
-	turn.pendingApproval = confirmation
-	if decision.Approval != nil && *decision.Approval == agentcontract.ApprovalSignalApprove {
-		connectorRuntime.logger.Info("connector."+turn.platform+".confirmation.accepted", slog.String("messageID", turn.event.MessageID), slog.String("taskRunID", confirmation.TaskRun.TaskRunID))
-		connectorRuntime.resolveTaskWaitToken(turn.taskWaitResolution)
-		turn.isApprovalContinuation = true
-		return ConnectorRuntimeResult{}, false, nil
-	}
-	if decision.Approval != nil && *decision.Approval == agentcontract.ApprovalSignalReject {
-		connectorRuntime.resolveTaskWaitToken(turn.taskWaitResolution)
-		rejection := agentcontract.ConfirmationReplyDecision{Decision: string(agentcontract.ApprovalSignalReject), Reason: decision.Reason}
-		result, errorValue := connectorRuntime.handleRejectedConfirmation(ctx, turn.platform, turn.adapter, turn.event, turn.replyTarget, confirmation, rejection, turn.sendReply)
-		return result, true, errorValue
-	}
-	if decision.Route == agentcontract.TurnRouteReviseTask {
-		connectorRuntime.resolveTaskWaitToken(turn.taskWaitResolution)
-		connectorRuntime.cancelPendingConfirmation(turn.event, confirmation, decision)
-		return ConnectorRuntimeResult{}, false, nil
-	}
-	connectorRuntime.logger.Info("connector."+turn.platform+".confirmation.kept", slog.String("messageID", turn.event.MessageID), slog.String("taskRunID", confirmation.TaskRun.TaskRunID), slog.String("route", string(decision.Route)))
-	turn.keptTaskRunIDs = append(turn.keptTaskRunIDs, confirmation.TaskRun.TaskRunID)
 	return ConnectorRuntimeResult{}, false, nil
 }
 
@@ -269,70 +199,4 @@ func (connectorRuntime *ConnectorRuntime) settleFinishedTaskFollowUp(ctx context
 		return busyResult.connectorResult, true, nil
 	}
 	return ConnectorRuntimeResult{}, false, nil
-}
-
-func (connectorRuntime *ConnectorRuntime) settleChoiceConfirmation(ctx context.Context, turn *inboundTurn, confirmation pendingApproval, decision agentcontract.TurnDecision) (ConnectorRuntimeResult, bool, error) {
-	choice, isChosen := chosenApprovalChoice(decision.Choices, confirmation.Choices)
-	switch {
-	case isChosen && choice.DefersTheCall():
-		connectorRuntime.resolveTaskWaitToken(turn.taskWaitResolution)
-		turn.settledCalls = connectorRuntime.deferHeldCall(ctx, turn, confirmation, choice)
-		turn.pendingApproval = confirmation
-		turn.isApprovalContinuation = true
-		return ConnectorRuntimeResult{}, false, nil
-	case isChosen:
-		approvalrecord.RecordChoiceAnswer(connectorRuntime.taskRunService, confirmation.TaskRun.TaskRunID, choice)
-		approval := agentcontract.ApprovalSignalApprove
-		decision.Approval = &approval
-	case selectsCancel(decision.Choices):
-		rejection := agentcontract.ApprovalSignalReject
-		decision.Approval = &rejection
-	default:
-		decision.Approval = keptUnlessRejected(decision.Approval)
-	}
-	confirmation.Choices = nil
-	return connectorRuntime.settleConfirmation(ctx, turn, confirmation, decision)
-}
-
-func chosenApprovalChoice(selected []string, choices []holdrecord.Choice) (holdrecord.Choice, bool) {
-	for _, selectedKey := range selected {
-		if choice, isOffered := approvalrecord.ChoiceByKey(choices, selectedKey); isOffered {
-			return choice, true
-		}
-	}
-	return holdrecord.Choice{}, false
-}
-
-func selectsCancel(selected []string) bool {
-	for _, selectedKey := range selected {
-		if strings.TrimSpace(selectedKey) == approvalrecord.CancelChoiceKey {
-			return true
-		}
-	}
-	return false
-}
-
-func keptUnlessRejected(approval *agentcontract.ApprovalSignal) *agentcontract.ApprovalSignal {
-	if approval != nil && *approval == agentcontract.ApprovalSignalReject {
-		return approval
-	}
-	return nil
-}
-
-func (connectorRuntime *ConnectorRuntime) deferHeldCall(ctx context.Context, turn *inboundTurn, confirmation pendingApproval, choice holdrecord.Choice) []agentcontract.CarriedOutCall {
-	taskRunID := confirmation.TaskRun.TaskRunID
-	heldCall, isHeld := approvalgate.PendingHeldCall(connectorRuntime.taskRunService.ListTaskEvent(taskRunID))
-	if !isHeld || connectorRuntime.approvalGate == nil {
-		return nil
-	}
-	return []agentcontract.CarriedOutCall{approvalgate.DeferHeldCall(ctx, connectorRuntime.approvalGate, heldCall, approvalgate.DeferralRequest{
-		TaskRunID:         taskRunID,
-		RequesterPersonID: turn.personID,
-		Platform:          turn.platform,
-		ConversationID:    turn.event.ConversationID,
-		ReplyTargetID:     firstNonEmptyString(confirmation.TaskRun.OriginReplyTargetID, turn.event.ReplyTargetID),
-		Prompt:            confirmation.IntentPrompt,
-		Choice:            choice,
-		ReferenceTime:     time.Now().UTC(),
-	})}
 }

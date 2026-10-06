@@ -28,8 +28,7 @@ type PlatformInboundEvent struct {
 	LegacyFields     map[string]interface{}    `json:"legacyFields,omitempty"`
 	TaskRetry        *TaskRetryReference       `json:"taskRetry,omitempty"`
 
-	intakeDecision           *inboundDecision
-	isApprovalAskedElsewhere bool
+	intakeDecision *inboundDecision
 }
 
 type TaskRetryReference struct {

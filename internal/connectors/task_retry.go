@@ -172,7 +172,6 @@ func (connectorRuntime *ConnectorRuntime) interruptedRetryLaunchRequest(sourceTa
 	request := connectorRuntime.interruptedTaskLaunchRequest(sourceTaskRun, events, launchContext, event, adapter, taskResumeProfile{sourceReference: event.DedupeKey()}, sendReply)
 	request.ExistingTaskRunID = childTaskRun.TaskRunID
 	request.IsTaskRunOpenedForThisTurn = true
-	request.IsApprovalContinuation = false
 	request.IsRuntimeRestartResume = false
 	request.ActiveGoal = agentcontract.ActiveGoal{}
 	request.PriorTask = priorTaskContextForTaskRun(sourceTaskRun, events)

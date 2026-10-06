@@ -2,7 +2,6 @@ package harnessdriver
 
 import (
 	"github.com/yeomyeonggeori/blueclaw/internal/acpharness"
-	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -12,10 +11,6 @@ import (
 type Dependencies struct {
 	RuntimeConfiguration        config.RuntimeConfiguration
 	TaskRunStore                taskstate.TaskRunStore
-	TaskStepStore               taskstate.TaskStepStore
-	TaskArtifactStore           taskstate.TaskArtifactStore
-	ToolResultSpillStore        agentruntime.ToolResultSpillStore
-	ToolResultImageSource       agentruntime.ToolResultImageSource
 	InstructionBundleLoader     func() agentcontract.InstructionBundle
 	CompanyProvider             func() agentcontract.CompanyContext
 	EmbeddingProvider           model.EmbeddingProvider
@@ -23,12 +18,8 @@ type Dependencies struct {
 	SkillIndexPath              string
 	TaskTierLanguageModels      agentcontract.TaskTierLanguageModels
 	IntakeLanguageModelProvider model.LanguageModelProvider
-	ToolSelector                agentcontract.ToolSelector
 	DecisionModel               model.DecisionModel
 	LLMCallRepository           taskstate.LLMCallRepository
-
-	IntakeOptions       *agentcontract.IntakeOptions
-	TurnOptionOverrides agentcontract.TurnOptions
 }
 
 type Factory func(Dependencies) (agentcontract.Harness, agentcontract.SkillRetriever)

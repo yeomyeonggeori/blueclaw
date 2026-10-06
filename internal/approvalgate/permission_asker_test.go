@@ -16,9 +16,16 @@ type scriptedAsker struct {
 	askedCount int
 }
 
-func (asker *scriptedAsker) AskPermission(context.Context, mcpserver.ApprovalRequest, PermissionQuestion) (ApprovalAnswer, bool) {
+func (asker *scriptedAsker) AskPermission(context.Context, mcpserver.ApprovalRequest, PermissionQuestion) (ApprovalAnswer, AskStatus) {
 	asker.askedCount++
-	return ApprovalAnswer{Signal: asker.answer}, asker.isAnswered
+	return ApprovalAnswer{Signal: asker.answer}, statusOfAnswered(asker.isAnswered)
+}
+
+func statusOfAnswered(isAnswered bool) AskStatus {
+	if isAnswered {
+		return AskAnswered
+	}
+	return AskInterrupted
 }
 
 func recordedEventNames(taskRunService *task.TaskRunService, taskRunID string) []string {
@@ -134,9 +141,9 @@ type inspectingAsker struct {
 	eventsWhileAsking []string
 }
 
-func (asker *inspectingAsker) AskPermission(context.Context, mcpserver.ApprovalRequest, PermissionQuestion) (ApprovalAnswer, bool) {
+func (asker *inspectingAsker) AskPermission(context.Context, mcpserver.ApprovalRequest, PermissionQuestion) (ApprovalAnswer, AskStatus) {
 	asker.inspect()
-	return ApprovalAnswer{Signal: agentcontract.ApprovalSignalApprove}, true
+	return ApprovalAnswer{Signal: agentcontract.ApprovalSignalApprove}, AskAnswered
 }
 
 func TestTheRunWaitsAndTheCallIsHeldWhileTheQuestionIsStillOutstanding(t *testing.T) {

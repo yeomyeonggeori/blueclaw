@@ -10,6 +10,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -34,7 +35,7 @@ type harnessAnswer struct {
 func askHarnessPermissionInBackground(permissionRelay *PermissionRelay, ctx context.Context) <-chan harnessAnswer {
 	answers := make(chan harnessAnswer, 1)
 	go func() {
-		outcome, isAnswered := permissionRelay.AskHarnessPermission(ctx, approvalRequestForTest(), harnessQuestionForTest())
+		outcome, isAnswered := answered(permissionRelay.AskHarnessPermission(ctx, approvalRequestForTest(), harnessQuestionForTest()))
 		answers <- harnessAnswer{outcome: outcome, isAnswered: isAnswered}
 	}()
 	return answers
@@ -73,7 +74,7 @@ func TestTheOptionThePersonChoseIsReturnedToTheHarness(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	outcome, isAnswered := permissionRelay.AskHarnessPermission(ctx, approvalRequestForTest(), harnessQuestionForTest())
+	outcome, isAnswered := answered(permissionRelay.AskHarnessPermission(ctx, approvalRequestForTest(), harnessQuestionForTest()))
 
 	if !isAnswered || outcome.Selected == nil || outcome.Selected.OptionId != "allow-once" {
 		t.Fatalf("expected the harness to be answered with allow-once, got %+v answered=%v", outcome, isAnswered)
@@ -88,7 +89,7 @@ func TestAnAnswerNamingNoOptionTheHarnessOfferedIsNotAnAnswer(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	outcome, isAnswered := permissionRelay.AskHarnessPermission(ctx, approvalRequestForTest(), harnessQuestionForTest())
+	outcome, isAnswered := answered(permissionRelay.AskHarnessPermission(ctx, approvalRequestForTest(), harnessQuestionForTest()))
 
 	if isAnswered {
 		t.Fatalf("an option the harness never offered decided its call: %+v", outcome)
@@ -124,7 +125,7 @@ func TestAReplyThatIsNotAnAnswerKeepsTheHarnessQuestionOpen(t *testing.T) {
 func TestAHarnessQuestionNobodyCanBeAskedIsNotAnswered(t *testing.T) {
 	permissionRelay := NewPermissionRelay(silentLogger())
 
-	outcome, isAnswered := permissionRelay.AskHarnessPermission(context.Background(), approvalRequestForTest(), harnessQuestionForTest())
+	outcome, isAnswered := answered(permissionRelay.AskHarnessPermission(context.Background(), approvalRequestForTest(), harnessQuestionForTest()))
 
 	if isAnswered {
 		t.Fatalf("a conversation nobody holds answered: %+v", outcome)
@@ -135,11 +136,11 @@ func runWithAnUnansweredHarnessQuestion(t *testing.T, taskRunService *task.TaskR
 	t.Helper()
 	taskRun := taskRunService.CreateTaskRun("person-sample", "conversation-1", "push the branch")
 	gate := approvalgate.New(taskRunService)
-	gate.UsePermissionAsker(NewPermissionRelay(silentLogger()))
+	gate.UsePermissionAsker(processEndedMidQuestion{})
 	approvalRequest := approvalRequestForTest()
 	approvalRequest.TaskRunID = taskRun.TaskRunID
-	if _, isAnswered := gate.AskHarnessPermission(context.Background(), approvalRequest, harnessQuestionForTest()); isAnswered {
-		t.Fatal("nobody holds the conversation, so nobody could answer")
+	if _, isAnswered := answered(gate.AskHarnessPermission(context.Background(), approvalRequest, harnessQuestionForTest())); isAnswered {
+		t.Fatal("the process ended before anyone could answer")
 	}
 	return taskRun.TaskRunID
 }
@@ -200,4 +201,14 @@ func TestAHarnessQuestionThatWasPostedIsNotPostedAgainAfterARestart(t *testing.T
 	if !deliveryOf(t, awaitPermissionRequest(t, client)).IsAlreadyPosted {
 		t.Fatal("a question the person already has was reissued as unposted")
 	}
+}
+
+type processEndedMidQuestion struct{}
+
+func (processEndedMidQuestion) AskPermission(context.Context, mcpserver.ApprovalRequest, approvalgate.PermissionQuestion) (approvalgate.ApprovalAnswer, approvalgate.AskStatus) {
+	return approvalgate.ApprovalAnswer{}, approvalgate.AskInterrupted
+}
+
+func (processEndedMidQuestion) AskHarnessPermission(context.Context, mcpserver.ApprovalRequest, approvalgate.HarnessPermissionQuestion) (acp.RequestPermissionOutcome, approvalgate.AskStatus) {
+	return acp.RequestPermissionOutcome{}, approvalgate.AskInterrupted
 }

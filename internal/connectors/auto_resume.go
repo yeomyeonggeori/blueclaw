@@ -50,6 +50,10 @@ func (connectorRuntime *ConnectorRuntime) ResumeInterruptedTaskRun(ctx context.C
 	if errorValue != nil {
 		return ConnectorRuntimeResult{}, errorValue
 	}
+	return connectorRuntime.resumeTaskRun(ctx, taskRun, taskEvents, launchContext, adapter, nil)
+}
+
+func (connectorRuntime *ConnectorRuntime) resumeTaskRun(ctx context.Context, taskRun task.TaskRun, taskEvents []task.TaskEvent, launchContext interruptedTaskLaunchContext, adapter PlatformAdapter, settledCalls []agentcontract.CarriedOutCall) (ConnectorRuntimeResult, error) {
 	event := interruptedTaskResumeEvent(taskRun, launchContext)
 	replyTarget := ReplyTarget{
 		ConversationID: event.ConversationID,
@@ -59,7 +63,9 @@ func (connectorRuntime *ConnectorRuntime) ResumeInterruptedTaskRun(ctx context.C
 	sendReply := func(replyContext context.Context, target ReplyTarget, reply OutboundReply) (string, error) {
 		return connectorRuntime.enqueueConnectorReply(withConnectorEvent(replyContext, event), target, reply)
 	}
-	launchResult, errorValue := connectorRuntime.currentTaskLauncher().Launch(ctx, connectorRuntime.interruptedTaskLaunchRequest(taskRun, taskEvents, launchContext, event, adapter, autoResumeTaskProfile(taskRun.TaskRunID), sendReply))
+	launchRequest := connectorRuntime.interruptedTaskLaunchRequest(taskRun, taskEvents, launchContext, event, adapter, autoResumeTaskProfile(taskRun.TaskRunID), sendReply)
+	launchRequest.SettledCalls = settledCalls
+	launchResult, errorValue := connectorRuntime.currentTaskLauncher().Launch(ctx, launchRequest)
 	if errorValue != nil {
 		return connectorRuntime.completeInterruptedTaskResumeLaunchFailure(ctx, taskRun, launchContext, event, replyTarget, adapter, sendReply, errorValue)
 	}
@@ -105,19 +111,18 @@ func (connectorRuntime *ConnectorRuntime) failUnresumedTaskWithoutReplyChannel(c
 
 func (connectorRuntime *ConnectorRuntime) completeInterruptedTaskResumeLaunchFailure(ctx context.Context, taskRun task.TaskRun, launchContext interruptedTaskLaunchContext, event PlatformInboundEvent, replyTarget ReplyTarget, adapter PlatformAdapter, sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error), errorValue error) (ConnectorRuntimeResult, error) {
 	turnResult := connectorRuntime.launchFailureCompleter.CompleteLaunchFailure(ctx, agentcontract.AgentTurnRequest{
-		RequesterPersonID:      taskRun.RequesterPersonID,
-		RequesterEmail:         connectorRuntime.identityService.ResolvePersonPrimaryEmail(taskRun.RequesterPersonID),
-		IsApprovalContinuation: true,
-		ExistingTaskRunID:      taskRun.TaskRunID,
-		OriginReplyTargetID:    replyTarget.ReplyTargetID,
-		OriginIsThread:         taskRun.OriginIsThread || launchContext.IsThread,
-		ProfileName:            launchContext.ProfileName,
-		Platform:               launchContext.Platform,
-		ConversationID:         event.ConversationID,
-		Prompt:                 taskRun.Prompt,
-		ResponseLanguage:       event.Context.ResponseLanguage,
-		VisibleContext:         event.Context.ToAgentVisibleContext(),
-		ActiveGoal:             interruptedTaskActiveGoal(taskRun, connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID), autoResumeTaskProfile(taskRun.TaskRunID).guidanceNote),
+		RequesterPersonID:   taskRun.RequesterPersonID,
+		RequesterEmail:      connectorRuntime.identityService.ResolvePersonPrimaryEmail(taskRun.RequesterPersonID),
+		ExistingTaskRunID:   taskRun.TaskRunID,
+		OriginReplyTargetID: replyTarget.ReplyTargetID,
+		OriginIsThread:      taskRun.OriginIsThread || launchContext.IsThread,
+		ProfileName:         launchContext.ProfileName,
+		Platform:            launchContext.Platform,
+		ConversationID:      event.ConversationID,
+		Prompt:              taskRun.Prompt,
+		ResponseLanguage:    event.Context.ResponseLanguage,
+		VisibleContext:      event.Context.ToAgentVisibleContext(),
+		ActiveGoal:          interruptedTaskActiveGoal(taskRun, connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID), autoResumeTaskProfile(taskRun.TaskRunID).guidanceNote),
 	}, "launch", "auto_resume", errorValue)
 	return connectorRuntime.dispatchTaskReply(withConnectorEvent(ctx, event), adapter.Name(), adapter, event, replyTarget, turnResult, "", sendReply)
 }
@@ -131,7 +136,6 @@ func (connectorRuntime *ConnectorRuntime) interruptedTaskLaunchRequest(taskRun t
 		RequesterPersonID:          taskRun.RequesterPersonID,
 		RequesterName:              connectorRuntime.identityService.ResolvePersonDisplayName(taskRun.RequesterPersonID),
 		RequesterEmail:             connectorRuntime.identityService.ResolvePersonPrimaryEmail(taskRun.RequesterPersonID),
-		IsApprovalContinuation:     true,
 		IsRuntimeRestartResume:     true,
 		ExistingTaskRunID:          taskRun.TaskRunID,
 		OriginReplyTargetID:        firstNonEmptyString(taskRun.OriginReplyTargetID, launchContext.ReplyTargetID),

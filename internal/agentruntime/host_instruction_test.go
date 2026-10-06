@@ -21,15 +21,3 @@ func TestTheHostDescribesItsOwnToolsAndNothingElse(t *testing.T) {
 		}
 	}
 }
-
-func TestAnApprovalContinuationIsNamedToTheAgent(t *testing.T) {
-	withContinuation := hostInstructionForRequest(agentcontract.AgentTurnRequest{IsApprovalContinuation: true})
-	withoutContinuation := hostInstructionForRequest(agentcontract.AgentTurnRequest{})
-
-	if !strings.Contains(withContinuation, "just approved") {
-		t.Fatal("an agent resuming after an approval has to be told the approval already happened")
-	}
-	if strings.Contains(withoutContinuation, "just approved") {
-		t.Fatal("and told nothing of the sort when it did not")
-	}
-}
