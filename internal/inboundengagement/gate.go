@@ -14,7 +14,7 @@ const ambientDutyLaunchConfidenceThreshold = 0.7
 const attachmentsOnlyUninvitedReason = "attachments_only_uninvited"
 
 type AddressingDecider interface {
-	DecideAddressing(context.Context, Request) (agentcontract.AddressingDecision, error)
+	DecideAddressing(context.Context, Request) (AddressingDecision, error)
 }
 
 type Decision struct {
@@ -22,7 +22,7 @@ type Decision struct {
 	SuppressReply bool
 	ReactionEmoji string
 	IgnoreReason  string
-	AmbientDuty   agentcontract.AmbientDutyContext
+	AmbientDuty   AmbientDutyContext
 }
 
 type Request struct {
@@ -97,15 +97,15 @@ func IsMultiPersonConversation(conversationType string) bool {
 	return true
 }
 
-func AmbientDutyLaunchesWithoutReply(decision agentcontract.AddressingDecision) bool {
+func AmbientDutyLaunchesWithoutReply(decision AddressingDecision) bool {
 	return !decision.ShouldRespond && ambientDutyContextFromAddressingDecision(decision).IsMatch
 }
 
-func ambientDutyContextFromAddressingDecision(decision agentcontract.AddressingDecision) agentcontract.AmbientDutyContext {
+func ambientDutyContextFromAddressingDecision(decision AddressingDecision) AmbientDutyContext {
 	if !decision.DutyMatch || decision.DutyConfidence < ambientDutyLaunchConfidenceThreshold {
-		return agentcontract.AmbientDutyContext{}
+		return AmbientDutyContext{}
 	}
-	return (agentcontract.AmbientDutyContext{
+	return (AmbientDutyContext{
 		IsMatch:    true,
 		Name:       decision.DutyName,
 		Confidence: decision.DutyConfidence,

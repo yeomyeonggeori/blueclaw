@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement/gatewaytest"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -73,6 +75,9 @@ func (server *Server) decide(document decisionRequestDocument) (map[string]model
 	if len(document.Questions) == 0 {
 		return nil, errors.New("a decision request asked no question")
 	}
+	if inboundengagement.AsksOnlyGatewayQuestions(document.Questions) {
+		return server.decideGateway(document)
+	}
 	if _, unknownQuestionNames := intaketest.AnswersAndUnknownQuestions(document.Questions, noOutcome); len(unknownQuestionNames) > 0 {
 		return nil, fmt.Errorf("no script answers the decision questions %s", strings.Join(unknownQuestionNames, ", "))
 	}
@@ -81,6 +86,22 @@ func (server *Server) decide(document decisionRequestDocument) (map[string]model
 		return nil, errorValue
 	}
 	return intaketest.Answers(document.Questions, func(string) intaketest.Outcome { return outcome }), nil
+}
+
+func (server *Server) decideGateway(document decisionRequestDocument) (map[string]model.DecisionAnswer, error) {
+	server.mutex.Lock()
+	defer server.mutex.Unlock()
+	if len(server.turns) == 0 {
+		return nil, fmt.Errorf("a message no script decided asked the gateway about %q: %s", decidedMessageText(document.State), strings.Join(sortedQuestionNames(document.Questions), ", "))
+	}
+	nextTurn := server.turns[0]
+	if askedAbout := decidedMessageText(document.State); askedAbout != nextTurn.Message {
+		return nil, fmt.Errorf("the next scripted turn decides %q, but the gateway asked about %q", nextTurn.Message, askedAbout)
+	}
+	if !nextTurn.plansATurn() {
+		server.turns = server.turns[1:]
+	}
+	return gatewaytest.Answers(document.Questions, nextTurn.gatewayOutcome()), nil
 }
 
 func noOutcome(string) intaketest.Outcome {
@@ -105,7 +126,6 @@ func (server *Server) outcomeFor(document decisionRequestDocument) (intaketest.O
 	}
 	server.turns = server.turns[1:]
 	outcome := nextTurn.Outcome
-	outcome.PendingChoiceKeys = intaketest.PendingChoiceKeys(document.State)
 	server.decidedTurn = &outcome
 	return outcome, nil
 }

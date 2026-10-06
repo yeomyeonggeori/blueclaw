@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -20,15 +21,15 @@ type ConversationTurn struct {
 	ActiveGoal                agentcontract.ActiveGoal
 	HasActiveGoal             bool
 	PriorTask                 agentcontract.PriorTaskContext
-	PrecomputedTurnDecision   *agentcontract.TurnDecision
-	AmbientDuty               agentcontract.AmbientDutyContext
+	PendingInput              agentcontract.PendingInputContext
+	AmbientDuty               inboundengagement.AmbientDutyContext
 	CheckpointSender          agentcontract.AgentCheckpointSender
 	AccessibleConversationIDs []string
 	IsBlockedContinuation     bool
 }
 
-func ambientDutyForTurn(turn ConversationTurn) (agentcontract.StandingDuty, bool) {
-	duty, isKnownDuty := agentcontract.StandingDutyByName(turn.AmbientDuty.Name)
+func ambientDutyForTurn(turn ConversationTurn) (inboundengagement.StandingDuty, bool) {
+	duty, isKnownDuty := inboundengagement.StandingDutyByName(turn.AmbientDuty.Name)
 	return duty, turn.AmbientDuty.IsMatch && isKnownDuty
 }
 
@@ -37,16 +38,29 @@ func promptForTurn(turn ConversationTurn) string {
 	if !isAmbientDuty {
 		return turn.Event.Prompt
 	}
-	return agentcontract.AmbientDutyInstructionPrompt(duty, turn.Event.Prompt, turn.Event.Context.Sender.Name)
+	return inboundengagement.AmbientDutyInstructionPrompt(duty, turn.Event.Prompt, turn.Event.Context.Sender.Name)
 }
 
-func turnDecisionForTurn(turn ConversationTurn) *agentcontract.TurnDecision {
-	duty, isAmbientDuty := ambientDutyForTurn(turn)
-	if !isAmbientDuty || turn.PrecomputedTurnDecision != nil {
-		return turn.PrecomputedTurnDecision
+const ambientDutyTaskLevel = agentcontract.TaskLevelLow
+
+func taskLevelForTurn(turn ConversationTurn) agentcontract.TaskLevel {
+	if _, isAmbientDuty := ambientDutyForTurn(turn); isAmbientDuty {
+		return ambientDutyTaskLevel
 	}
-	turnDecision := agentcontract.AmbientDutyTurnDecision(duty, responseLanguageForEvent(turn.Event))
-	return &turnDecision
+	return ""
+}
+
+func pendingInputOf(turn *inboundTurn) agentcontract.PendingInputContext {
+	if !turn.hasPendingAskInteraction {
+		return agentcontract.PendingInputContext{}
+	}
+	ask := turn.pendingAskInteraction
+	return agentcontract.PendingInputContext{
+		TaskRunID:     ask.TaskRunID,
+		Question:      ask.Question,
+		SelectionMode: ask.SelectionMode,
+		Options:       choiceReplyOptions(ask.Options),
+	}
 }
 
 func (connectorRuntime *ConnectorRuntime) buildTaskLaunchRequest(turn ConversationTurn) agentruntime.TaskLaunchRequest {
@@ -92,7 +106,8 @@ func withTurnContinuation(request agentruntime.TaskLaunchRequest, turn Conversat
 	request.ExistingTaskRunID = existingGoalTaskRunIDFromTurn(turn)
 	request.ActiveGoal = activeGoalForLaunch(turn.ActiveGoal, turn.HasActiveGoal)
 	request.PriorTask = turn.PriorTask
-	request.PrecomputedTurnDecision = turnDecisionForTurn(turn)
+	request.PendingInput = turn.PendingInput
+	request.TaskLevel = taskLevelForTurn(turn)
 	return request
 }
 

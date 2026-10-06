@@ -122,7 +122,6 @@ type ConnectorRuntime struct {
 	harness                agentcontract.Harness
 	gatewayDecider         inboundengagement.Decider
 	recordTasklessLLMCall  func(subjects []string, record agentcontract.LLMCallRecord)
-	turnRouter             TurnRouter
 	replyGenerator         ReplyGenerator
 	launchFailureCompleter LaunchFailureCompleter
 	noticeLanguageModel    model.LanguageModelProvider
@@ -420,21 +419,14 @@ func choiceReplyOptions(options []AskChoiceOption) []agentcontract.ChoiceReplyOp
 	return replyOptions
 }
 
-func precomputedTurnDecisionForLaunch(decision agentcontract.TurnDecision, hasDecision bool) *agentcontract.TurnDecision {
-	if !hasDecision {
-		return nil
-	}
-	return &decision
-}
-
-func (connectorRuntime *ConnectorRuntime) appendAskResolvedEvent(interaction AskInteraction, event PlatformInboundEvent, decision agentcontract.TurnDecision) {
+func (connectorRuntime *ConnectorRuntime) appendAskResolvedEvent(interaction AskInteraction, event PlatformInboundEvent) {
 	connectorRuntime.taskRunService.AppendTaskEvent(interaction.TaskRunID, agentcontract.TaskEventAskResolved, agentruntime.MarshalBody(map[string]any{
 		"interactionID": strings.TrimSpace(interaction.InteractionID),
 		"kind":          strings.TrimSpace(interaction.Kind),
 		"messageID":     strings.TrimSpace(event.MessageID),
-		"choices":       append([]string{}, decision.Choices...),
-		"route":         strings.TrimSpace(string(decision.Route)),
-		"reason":        strings.TrimSpace(decision.Reason),
+		"choices":       []string{},
+		"route":         string(agentcontract.TurnRouteContinueTask),
+		"reason":        askReplyReason,
 	}))
 }
 
@@ -666,7 +658,6 @@ func (connectorRuntime *ConnectorRuntime) currentTaskLauncher() *agentruntime.Ta
 	taskLauncher := agentruntime.NewTaskLauncher(connectorRuntime.harness, connectorRuntime.taskRunService, connectorRuntime.toolCatalogBuilder)
 	taskLauncher.UseApprovalGate(connectorRuntime.approvalGate)
 	taskLauncher.UseLaunchFailureCompleter(connectorRuntime.launchFailureCompleter)
-	taskLauncher.UseTurnRouter(connectorRuntime.turnRouter)
 	taskLauncher.UseRequesterEmailResolver(connectorRuntime.identityService)
 	taskLauncher.UseAgentIdentityProvider(connectorRuntime.agentIdentityProvider)
 	return taskLauncher

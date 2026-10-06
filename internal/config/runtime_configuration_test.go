@@ -54,7 +54,6 @@ func TestLoadRuntimeConfigurationIncludesCapabilitiesAndBridge(t *testing.T) {
       "enabled": true,
       "executionMode": "auto"
     },
-    "defaultTaskLevel": "low",
     "generationOptions": {
       "seed": 41,
       "temperature": 0
@@ -161,9 +160,6 @@ func TestLoadRuntimeConfigurationIncludesCapabilitiesAndBridge(t *testing.T) {
 	}
 	if runtimeConfiguration.Agent.Intake.ExecutionMode != "auto" {
 		t.Fatalf("expected agent intake execution mode to match, got %q", runtimeConfiguration.Agent.Intake.ExecutionMode)
-	}
-	if runtimeConfiguration.Agent.DefaultTaskLevel != "low" {
-		t.Fatalf("expected agent default task level to match, got %q", runtimeConfiguration.Agent.DefaultTaskLevel)
 	}
 	if runtimeConfiguration.Agent.GenerationOptions.Seed == nil || *runtimeConfiguration.Agent.GenerationOptions.Seed != 41 {
 		t.Fatalf("expected agent generation seed to load, got %+v", runtimeConfiguration.Agent.GenerationOptions)

@@ -4,19 +4,17 @@ import (
 	"context"
 	"strings"
 	"testing"
-
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 type scriptedAddressingDecider struct {
-	decision agentcontract.AddressingDecision
+	decision AddressingDecision
 }
 
-func (decider scriptedAddressingDecider) DecideAddressing(context.Context, Request) (agentcontract.AddressingDecision, error) {
+func (decider scriptedAddressingDecider) DecideAddressing(context.Context, Request) (AddressingDecision, error) {
 	return decider.decision, nil
 }
 
-func gateReturning(decision agentcontract.AddressingDecision) *Gate {
+func gateReturning(decision AddressingDecision) *Gate {
 	return NewGate(scriptedAddressingDecider{decision: decision}, nil)
 }
 
@@ -25,7 +23,7 @@ func channelRequest() Request {
 }
 
 func TestResolveIgnoresUninvitedAttachmentsOnly(t *testing.T) {
-	gate := gateReturning(agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true})
+	gate := gateReturning(AddressingDecision{Target: AddressingTargetBot, ShouldRespond: true})
 
 	uninvitedRequest := Request{Prompt: "User attached file(s).", ConversationType: "O", AttachmentsOnly: true}
 	decision := gate.Resolve(context.Background(), "mattermost", uninvitedRequest)
@@ -48,7 +46,7 @@ func TestResolveIgnoresUninvitedAttachmentsOnly(t *testing.T) {
 }
 
 func TestResolveReactOnly(t *testing.T) {
-	gate := gateReturning(agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetAnyone, ShouldRespond: false, ReactionEmoji: "eyes"})
+	gate := gateReturning(AddressingDecision{Target: AddressingTargetAnyone, ShouldRespond: false, ReactionEmoji: "eyes"})
 
 	decision := gate.Resolve(context.Background(), "mattermost", channelRequest())
 
@@ -61,7 +59,7 @@ func TestResolveReactOnly(t *testing.T) {
 }
 
 func TestResolveReactAndRespond(t *testing.T) {
-	gate := gateReturning(agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true, ReactionEmoji: "+1"})
+	gate := gateReturning(AddressingDecision{Target: AddressingTargetBot, ShouldRespond: true, ReactionEmoji: "+1"})
 
 	decision := gate.Resolve(context.Background(), "mattermost", channelRequest())
 

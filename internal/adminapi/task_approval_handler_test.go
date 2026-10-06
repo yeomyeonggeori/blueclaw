@@ -87,12 +87,12 @@ func TestApprovalRefusesWhenNoLauncherCanCarryTheDecision(t *testing.T) {
 
 func TestApprovalDecisionMapsToTheApprovalSignalTheGateExpects(t *testing.T) {
 	for decision, expectedSignal := range map[string]string{"approve": "approve", "reject": "reject"} {
-		turnDecision, errorValue := approvalTurnDecision(decision)
+		approvalSignal, errorValue := approvalSignalOf(decision)
 		if errorValue != nil {
 			t.Fatalf("expected %q to map: %v", decision, errorValue)
 		}
-		if turnDecision.Approval == nil || string(*turnDecision.Approval) != expectedSignal {
-			t.Fatalf("expected %q to carry the %q signal, got %+v", decision, expectedSignal, turnDecision.Approval)
+		if string(approvalSignal) != expectedSignal {
+			t.Fatalf("expected %q to carry the %q signal, got %q", decision, expectedSignal, approvalSignal)
 		}
 	}
 }

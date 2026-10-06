@@ -5,7 +5,6 @@
     {
       "enum": [
         "agent.action",
-        "agent.ambient_duty_launch",
         "agent.approval_ask_requested",
         "agent.approval_confirmation_requested",
         "agent.approval_user_facing_message_missing",
@@ -182,6 +181,7 @@
     },
     {
       "enum": [
+        "agent.ambient_duty_launch",
         "approval.expired",
         "approval.unreachable",
         "approval.wording_failed",

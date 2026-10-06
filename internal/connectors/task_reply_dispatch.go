@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -64,8 +65,8 @@ func (connectorRuntime *ConnectorRuntime) dispatchTaskReply(
 	decision := decideTaskReply(turnResult, connectorRuntime.taskRunWasCancelled(taskRunID), connectorRuntime.agentAlreadyReplied(taskRunID, event.ConversationID, replyTarget.ConversationID, replyTarget.ReplyTargetID))
 	switch decision.Kind {
 	case taskReplyDecisionConsume:
-		reason := connectorRuntime.addConsumeReaction(ctx, platform, adapter, event, taskRunID, turnResult.ReactionEmojiName)
-		if reason == "consume_reacted" && engagedAckEmojiName != "" && engagedAckEmojiName != consumeReactionEmojiName(turnResult.ReactionEmojiName) {
+		reason := connectorRuntime.addConsumeReaction(ctx, platform, adapter, event, taskRunID)
+		if reason == "consume_reacted" && engagedAckEmojiName != "" && engagedAckEmojiName != inboundengagement.DefaultReactionEmojiName {
 			connectorRuntime.clearEngagedAckReaction(ctx, platform, adapter, event, engagedAckEmojiName)
 		}
 		if reason != "consume_reacted" && !isMultiPersonConversation(event) && strings.TrimSpace(turnResult.FinishMessage) != "" {

@@ -876,7 +876,7 @@ func AmbientDutyCalendarAcceptanceScenario(artifactDirectoryPath string) Virtual
 			ExpectedSelectedSkills: []string{"calendar"},
 			ExpectedToolCalls:      []string{"event_add"},
 			ExpectedEventCounts: []VirtualEventCount{
-				{Name: agentcontract.TaskEventAgentAmbientDutyLaunch, BodyFragment: `"dutyName":"calendar_upkeep"`, Count: 1},
+				{Name: task.TaskEventAmbientDutyLaunch, BodyFragment: `"dutyName":"calendar_upkeep"`, Count: 1},
 				{Name: toolRequestedEventName("event_add"), BodyFragment: "2026-06-12T17:00:00+09:00", Count: 1},
 				{Name: toolRequestedEventName("event_add"), BodyFragment: "최견본", Count: 1},
 				{Name: toolRequestedEventName("event_add"), BodyFragment: "이샘플", Count: 1},
@@ -921,7 +921,7 @@ func AmbientDutyAnnouncementNoEchoScenario(artifactDirectoryPath string) Virtual
 				"Overheard message from",
 			},
 			ExpectedEventCounts: []VirtualEventCount{
-				{Name: agentcontract.TaskEventAgentAmbientDutyLaunch, BodyFragment: `"dutyName":"calendar_upkeep"`, Count: 1},
+				{Name: task.TaskEventAmbientDutyLaunch, BodyFragment: `"dutyName":"calendar_upkeep"`, Count: 1},
 			},
 		}},
 	}
@@ -984,7 +984,7 @@ func AmbientTaskCaptureAcceptanceScenario(artifactDirectoryPath string) VirtualS
 				"bash":     0,
 			},
 			ExpectedEventCounts: []VirtualEventCount{
-				{Name: agentcontract.TaskEventAgentAmbientDutyLaunch, BodyFragment: `"dutyName":"team_flow_update"`, Count: 1},
+				{Name: task.TaskEventAmbientDutyLaunch, BodyFragment: `"dutyName":"team_flow_update"`, Count: 1},
 				{Name: toolRequestedEventName("task_add"), BodyFragment: "예시", Count: 1},
 				{Name: toolResultEventName("task_add"), BodyFragment: `"ownerName":"예시"`, Count: 1},
 				{Name: toolResultEventName("task_add"), BodyFragment: `"effect":"created"`, Count: 1},

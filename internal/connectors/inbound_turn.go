@@ -24,8 +24,6 @@ type inboundTurn struct {
 	taskWaitResolution  inboundTaskWaitResolution
 	engagedAckEmojiName string
 
-	turnDecision             agentcontract.TurnDecision
-	hasTurnDecision          bool
 	settledCalls             []agentcontract.CarriedOutCall
 	pendingAskInteraction    AskInteraction
 	hasPendingAskInteraction bool
@@ -189,9 +187,8 @@ func (connectorRuntime *ConnectorRuntime) resolveTurnPriorTask(turn *inboundTurn
 
 func (connectorRuntime *ConnectorRuntime) launchTurn(ctx context.Context, turn *inboundTurn) (ConnectorRuntimeResult, error) {
 	connectorRuntime.logger.Info("connector."+turn.platform+".agent.started", slog.String("messageID", turn.event.MessageID))
-	precomputedTurnDecision := precomputedTurnDecisionForLaunch(turn.turnDecision, turn.hasTurnDecision)
 	taskStartedAt := time.Now()
-	conversationTurn := connectorRuntime.conversationTurnFor(turn, precomputedTurnDecision)
+	conversationTurn := connectorRuntime.conversationTurnFor(turn)
 	narrator := newTurnNarrator(turn.adapter, turn.replyTarget)
 	turn.sendReply = narrator.takeOverSending(turn.sendReply, connectorRuntime.recordingDelivery)
 	launchRequest := connectorRuntime.buildTaskLaunchRequest(conversationTurn)
@@ -211,7 +208,7 @@ func (connectorRuntime *ConnectorRuntime) launchTurn(ctx context.Context, turn *
 	return connectorRuntime.dispatchTaskReply(ctx, turn.platform, turn.adapter, turn.event, turn.replyTarget, turnResult, turn.engagedAckEmojiName, turn.sendReply)
 }
 
-func (connectorRuntime *ConnectorRuntime) conversationTurnFor(turn *inboundTurn, precomputedTurnDecision *agentcontract.TurnDecision) ConversationTurn {
+func (connectorRuntime *ConnectorRuntime) conversationTurnFor(turn *inboundTurn) ConversationTurn {
 	return ConversationTurn{
 		Platform:                  turn.platform,
 		Adapter:                   turn.adapter,
@@ -224,7 +221,7 @@ func (connectorRuntime *ConnectorRuntime) conversationTurnFor(turn *inboundTurn,
 		ActiveGoal:                turn.activeGoal,
 		HasActiveGoal:             turn.hasActiveGoal,
 		PriorTask:                 turn.priorTask,
-		PrecomputedTurnDecision:   precomputedTurnDecision,
+		PendingInput:              pendingInputOf(turn),
 		AmbientDuty:               turn.addressingLaunch.AmbientDuty,
 		CheckpointSender:          connectorRuntime.checkpointSenderForTurn(turn.platform, turn.event, turn.replyTarget, turn.sendReply),
 		AccessibleConversationIDs: []string{turn.event.ConversationID},

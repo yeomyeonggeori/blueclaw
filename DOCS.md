@@ -59,7 +59,7 @@ BLUECLAW_DATABASE_URL=postgres://blueclaw:blueclaw@127.0.0.1:5432/blueclaw?sslmo
 
 [monkeys](https://github.com/eastriverlee/monkeys) keeps `OPENROUTER_API_KEY` in the operating system's keychain (`monkeys remember @standalone OPENROUTER_API_KEY` stores it once) and sets all of them for one command. Without it, export the same variables. A model entry names the variable that holds its key with `apiKeyEnvironment`; `apiKeyPath` reads a key file instead, and an entry may name only one of the two.
 
-One OpenRouter key reaches all three models. The decision model answers intake's closed questions. [Kev](https://github.com/jaredpalmer/kev) serves the same API on your own machine: point `BLUECLAW_DECISION_ENDPOINT` at its `/v1/systemone` and set `BLUECLAW_DECISION_MODEL` to `kev-latest`. A 4B chat model served locally is not enough, since intake asks the chat model for answers in a fixed schema that small models break.
+One OpenRouter key reaches all three models. The decision model answers the closed questions about each inbound message and each turn's plan. [Kev](https://github.com/jaredpalmer/kev) serves the same API on your own machine: point `BLUECLAW_DECISION_ENDPOINT` at its `/v1/systemone` and set `BLUECLAW_DECISION_MODEL` to `kev-latest`. A 4B chat model served locally is not enough, since intake asks the chat model for answers in a fixed schema that small models break.
 
 Copy `config/policy.example.json` to `policy.json` and add the people who may use the daemon. Each person needs a `personID`, `emails`, and the `circles` they belong to:
 
@@ -169,7 +169,7 @@ type Harness interface {
 
 The host opens the task run and hands the harness an `ExistingTaskRunID` to settle, so a first turn is recorded the same way whichever loop ran it. Everything else the host needs (events, cancellation, run lookup) it takes from the task store.
 
-Deciding whether an inbound message becomes a task at all is host policy. One call to the decision model answers every closed question about a message: who it is addressed to, whether it follows on from a running task, and how the turn should be routed. The answer is memoized on the inbound event in `internal/connectors/intake_decision.go`; the host gets its routing decision from bluecollar's `intake` package.
+Deciding whether an inbound message becomes a task at all is host policy. One call to the decision model answers the closed questions about a message: who it is addressed to, whether it follows on from a running task, and what to do with it while a task is running. `internal/inboundengagement` asks them. The host then hands the agent the facts of the turn and the agent plans it; blueclaw does not call bluecollar's turn router.
 
 ### The path of one message
 
@@ -498,7 +498,7 @@ The runtime configuration is the JSON file passed as `--runtime`, and it holds e
 | `languageModel` | model tiers, embedding model, tier bounds, context window; see [Language models](#language-models) |
 | `database` | `driver`, `connectionString`, `migrationDirectoryPath`, `maxOpenConnections` |
 | `memory` | `embeddingModel`, `embeddingExecutionMode`, `extractionDisabled`, `adminAssertionKeyPath` |
-| `agent` | `intake`, `defaultTaskLevel`, `failureRecovery`, `harness` |
+| `agent` | `intake`, `failureRecovery`, `harness` |
 | `agentProfiles` | named profiles with `allowedToolNames` |
 | `capabilities` | the capability service; see [Capabilities](#capabilities) |
 | `connectors` | `chatd` |
@@ -506,7 +506,7 @@ The runtime configuration is the JSON file passed as `--runtime`, and it holds e
 | `scheduler` | `retentionCheckIntervalMinute`, `taskSchedulePollIntervalSecond` |
 | `logging` | `directoryPath`, `retentionDays` |
 
-`agent.defaultTaskLevel` is the effort a task starts at, `xlow` through `max`. `agent.harness` takes `name`, `agentCommandPath`, `agentArguments` and `toolCatalogURL`.
+`agent.harness` takes `name`, `agentCommandPath`, `agentArguments` and `toolCatalogURL`.
 
 `config/runtime.standalone.example.json` is a single-process shape and `config/runtime.example.json` a capability-service shape.
 
@@ -628,7 +628,7 @@ monkeys run @standalone sh -c '
   go test -tags "appliance llmeval" -run TestFileDeliveryRouteLive -v ./internal/e2e'
 ```
 
-This checkout declares only `@standalone` in `.monkeys`; it holds the model endpoint, model name, decision endpoint and `OPENROUTER_API_KEY` that the command forwards. `TestIntakeDecisionCorpusLive` also reads `BLUECLAW_DECISION_ENDPOINT` and `BLUECLAW_DECISION_MODEL`, both set by `@standalone`.
+This checkout declares only `@standalone` in `.monkeys`; it holds the model endpoint, model name, decision endpoint and `OPENROUTER_API_KEY` that the command forwards. `TestGatewayRoutingWiredLive` also reads `BLUECLAW_DECISION_ENDPOINT` and `BLUECLAW_DECISION_MODEL`, both set by `@standalone`.
 
 | Variable | Needed for |
 |---|---|

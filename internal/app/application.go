@@ -24,7 +24,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/blueclaw/internal/store/postgres"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/intake"
 )
 
 const databaseInitializationTimeout = 240 * time.Second
@@ -103,8 +102,6 @@ type applicationComponents struct {
 	backupCoordinator     *backup.Coordinator
 	taskIntakeController  *runtimecontrol.TaskIntakeController
 	toolCatalogBuilder    *agentruntime.ToolCatalogBuilder
-	turnRouter            intake.TurnRouter
-	decisionPlanner       intake.DecisionPlanner
 	taskLauncher          *agentruntime.TaskLauncher
 	schedulePoller        *scheduler.SchedulePoller
 	taskRetentionSweeper  *scheduler.TaskRetentionSweeper
@@ -122,7 +119,12 @@ type applicationComponents struct {
 type ApplicationOption func(*applicationOptions)
 
 type applicationOptions struct {
-	bundledACPFactory harnessdriver.ACPFactory
+	bundledACPFactory       harnessdriver.ACPFactory
+	bundledToolSelectorMake BundledToolSelectorFactory
+}
+
+func WithBundledToolSelector(newBundledToolSelector BundledToolSelectorFactory) ApplicationOption {
+	return func(options *applicationOptions) { options.bundledToolSelectorMake = newBundledToolSelector }
 }
 
 func WithBundledACPFactory(bundledACPFactory harnessdriver.ACPFactory) ApplicationOption {
@@ -143,7 +145,7 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 	logger := components.foundation.logger
 	components.directory = newIdentityDirectory(components.foundation.database, components.foundation.policyDocument, logger)
 	components.services = newTaskServices(runtimeConfiguration, components.foundation.database, components.directory.companyProvider, logger)
-	components.kernel = newAgentKernel(runtimeConfiguration, options.bundledACPFactory, components.services, components.directory.companyProvider, logger)
+	components.kernel = newAgentKernel(runtimeConfiguration, options.bundledACPFactory, options.bundledToolSelectorMake, components.services, components.directory.companyProvider, logger)
 	components.memory = newMemoryComponents(runtimeConfiguration, components.kernel, components.services, components.directory.identityService, logger)
 	useMemoryMergingPersonRepository(&components)
 	components.learningStore, components.startupError = openLearningStore(runtimeConfiguration.Terminal.WorkspaceRootPath)
@@ -167,16 +169,14 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 			logger.Error("learning.review_failed", "error", errorValue.Error())
 		}
 	}
-	components.decisionPlanner = components.kernel.decisionPlanner
-	components.toolCatalogBuilder.UseToolSelector(components.decisionPlanner)
-	components.turnRouter = intake.NewTurnRouter(turnRouterLanguageModelProvider(components.kernel.taskTierLanguageModels, components.kernel.intakeLanguageModelProvider), components.decisionPlanner, deriveIntakeOptions(runtimeConfiguration))
-	components.taskLauncher = newTaskLauncher(runtimeConfiguration, components.foundation, components.directory, components.kernel, components.services, components.toolCatalogBuilder, components.turnRouter)
+	components.toolCatalogBuilder.UseToolSelector(components.kernel.toolSelector)
+	components.taskLauncher = newTaskLauncher(runtimeConfiguration, components.foundation, components.directory, components.kernel, components.services, components.toolCatalogBuilder)
 	components.taskLauncher.UseTaskObserver(learningTaskObserver(components.learningCoordinator, components.services.taskRunService))
 	components.schedulePoller = newSchedulePoller(runtimeConfiguration, components.services, components.directory.identityService, components.taskLauncher, components.taskIntakeController, logger)
 	configureMorningBriefing(components.schedulePoller, runtimeConfiguration, components.directory, components.kernel, logger)
 	logger.Info("application.initializing", "stage", "connector_runtime")
 	components.taskRetentionSweeper = newTaskRetentionSweeper(runtimeConfiguration, components.services, logger)
-	components.connectorRuntime = newConnectorRuntime(runtimeConfiguration, components.foundation, components.directory, components.kernel, components.services, components.taskLauncher, components.turnRouter, components.backupCoordinator, components.taskIntakeController)
+	components.connectorRuntime = newConnectorRuntime(runtimeConfiguration, components.foundation, components.directory, components.kernel, components.services, components.taskLauncher, components.backupCoordinator, components.taskIntakeController)
 	installThreadAsker(components.connectorRuntime, runtimeConfiguration, inbound, components.kernel.toolCatalog.approvalGate, components.directory)
 	registerChatdAdapters(components.connectorRuntime, runtimeConfiguration, logger)
 	components.agentReplyStore = newAgentReplyStore(runtimeConfiguration)

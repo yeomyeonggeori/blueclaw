@@ -175,14 +175,6 @@ func outputFormatsFromAttachmentSuffixes(suffixes []string) []string {
 	return formats
 }
 
-func (connectorRuntime *ConnectorRuntime) withPersistedIntakeState(taskRunID string, decision agentcontract.TurnDecision) agentcontract.TurnDecision {
-	if decision.Route != agentcontract.TurnRouteContinueTask {
-		return decision
-	}
-	taskEvents := connectorRuntime.taskRunService.ListTaskEvent(taskRunID)
-	return decision.WithRestoredIntakeState(latestIntakeDecision(taskEvents))
-}
-
 func latestIntakeDecision(taskEvents []task.TaskEvent) agentcontract.IntakeDecision {
 	for index := len(taskEvents) - 1; index >= 0; index-- {
 		taskEvent := taskEvents[index]

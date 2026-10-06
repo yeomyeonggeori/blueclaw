@@ -120,9 +120,6 @@ func TestScheduleRunnerAddsCronContextToLaunch(t *testing.T) {
 			t.Fatalf("expected launch request to include %q, got %s", expected, requestText)
 		}
 	}
-	if !hasStructuredRequest(languageModel.requests, "bluecollar_turn_router") {
-		t.Fatal("expected scheduled objective to use semantic routing")
-	}
 
 	taskLaunchEvent := findTaskEvent(taskEventService.ListTaskEvent(result.LaunchResult.TurnResult.TaskRun.TaskRunID), "agent.task_launched")
 	if !strings.Contains(taskLaunchEvent.Body, `"scheduledRun"`) || !strings.Contains(taskLaunchEvent.Body, `"scheduleID":"schedule-briefing"`) {
@@ -130,7 +127,7 @@ func TestScheduleRunnerAddsCronContextToLaunch(t *testing.T) {
 	}
 }
 
-func TestScheduleRunnerForwardsRequesterLanguageToRouter(t *testing.T) {
+func TestScheduleRunnerForwardsRequesterLanguageToTheAgent(t *testing.T) {
 	for _, testCase := range []struct {
 		name             string
 		profileLanguage  string
@@ -143,9 +140,7 @@ func TestScheduleRunnerForwardsRequesterLanguageToRouter(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			taskEventService := task.NewTaskEventService()
 			taskRunService := task.NewTaskRunService(taskEventService)
-			agentKernel := loop.NewAgentKernel(taskRunService, task.NewTaskStepService())
-			languageModel := &capturingScheduleRuntimeLanguageModel{content: runtimeFinishMessage("scheduled done")}
-			useScheduledRuntimeLanguageModel(agentKernel, languageModel)
+			harness := harnesstest.New(taskRunService)
 			toolCatalogBuilder := NewToolCatalogBuilder()
 			workspacePath := t.TempDir()
 			toolCatalogBuilder.UseWorkspaceRootPath(workspacePath)
@@ -153,9 +148,7 @@ func TestScheduleRunnerForwardsRequesterLanguageToRouter(t *testing.T) {
 			toolCatalogBuilder.UseWorkspaceActorFactory(&personaActorFactory{documents: map[string][]byte{
 				documentPath: []byte(`{"schemaVersion": 1, "language": {"default": "` + testCase.profileLanguage + `"}}`),
 			}})
-			router := &scheduleLanguageRecordingTurnRouter{}
-			taskLauncher := NewTaskLauncher(agentKernel, taskRunService, toolCatalogBuilder)
-			taskLauncher.UseTurnRouter(router)
+			taskLauncher := NewTaskLauncher(harness, taskRunService, toolCatalogBuilder)
 			runAt := time.Date(2026, 6, 15, 23, 0, 0, 0, time.UTC)
 
 			_, errorValue := NewScheduleRunner(taskLauncher).RunIfDue(context.Background(), ScheduleRunRequest{
@@ -175,24 +168,11 @@ func TestScheduleRunnerForwardsRequesterLanguageToRouter(t *testing.T) {
 			if errorValue != nil {
 				t.Fatal(errorValue)
 			}
-			if router.request.ResponseLanguage != testCase.expectedLanguage {
-				t.Fatalf("expected router request language %q, got %q", testCase.expectedLanguage, router.request.ResponseLanguage)
+			if language := harness.LastTurnRequest().ResponseLanguage; language != testCase.expectedLanguage {
+				t.Fatalf("expected turn request language %q, got %q", testCase.expectedLanguage, language)
 			}
 		})
 	}
-}
-
-type scheduleLanguageRecordingTurnRouter struct {
-	request agentcontract.AgentRequest
-}
-
-func (router *scheduleLanguageRecordingTurnRouter) Plan(context.Context, agentcontract.AgentRequest) (agentcontract.TurnDecision, error) {
-	return agentcontract.TurnDecision{Route: agentcontract.TurnRouteStartTask}, nil
-}
-
-func (router *scheduleLanguageRecordingTurnRouter) PlanObserved(_ context.Context, request agentcontract.AgentRequest, _ *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error) {
-	router.request = request
-	return agentcontract.TurnDecision{Route: agentcontract.TurnRouteStartTask}, nil
 }
 
 func TestScheduleRunnerPreservesScheduledArtifactRouting(t *testing.T) {

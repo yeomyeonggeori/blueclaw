@@ -20,10 +20,9 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/runtimecontrol"
 	"github.com/yeomyeonggeori/blueclaw/internal/store/postgres"
 	capabilitycatalog "github.com/yeomyeonggeori/blueclaw/protocol/generated"
-	"github.com/yeomyeonggeori/bluecollar/intake"
 )
 
-func newConnectorRuntime(runtimeConfiguration config.RuntimeConfiguration, foundation runtimeFoundation, directory identityDirectory, kernel agentKernel, services taskServices, taskLauncher *agentruntime.TaskLauncher, turnRouter intake.TurnRouter, backupCoordinator *backup.Coordinator, taskIntakeController *runtimecontrol.TaskIntakeController) *connectors.ConnectorRuntime {
+func newConnectorRuntime(runtimeConfiguration config.RuntimeConfiguration, foundation runtimeFoundation, directory identityDirectory, kernel agentKernel, services taskServices, taskLauncher *agentruntime.TaskLauncher, backupCoordinator *backup.Coordinator, taskIntakeController *runtimecontrol.TaskIntakeController) *connectors.ConnectorRuntime {
 	logger := foundation.logger
 	languageModelProvider := kernel.taskTierLanguageModels.High
 	connectorRuntime := connectors.NewConnectorRuntime(
@@ -43,7 +42,6 @@ func newConnectorRuntime(runtimeConfiguration config.RuntimeConfiguration, found
 	connectorRuntime.UseReplyGenerator(replyGenerator)
 	connectorRuntime.UseCompanyProvider(directory.companyProvider)
 	connectorRuntime.UseCompanyLocaleProvider(directory.companyLocaleProvider)
-	connectorRuntime.UseTurnRouter(turnRouter)
 	connectorRuntime.UseGatewayDecider(inboundengagement.NewDecisionModelDecider(kernel.decisionModel, nil))
 	connectorRuntime.UseTasklessLLMCallRecorder(newTasklessLLMCallRecorder(services.repositories.llmCall, logger))
 	connectorRuntime.UseTaskLauncher(taskLauncher)

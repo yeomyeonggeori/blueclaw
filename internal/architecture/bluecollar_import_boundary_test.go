@@ -3,7 +3,13 @@ package architecture
 import (
 	"bytes"
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io/fs"
 	"os/exec"
+	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -44,6 +50,14 @@ func TestEveryPermittedImporterStillImportsBluecollarJudgment(t *testing.T) {
 	for _, packagePath := range defaultHarnessWiringPackages {
 		if len(importedJudgmentByPackage[packagePath]) == 0 {
 			t.Errorf("%s no longer imports bluecollar judgment; remove it from defaultHarnessWiringPackages", packagePath)
+		}
+	}
+}
+
+func TestNothingImportsBluecollarIntake(t *testing.T) {
+	for packagePath, imported := range judgmentImportsByPackage(t) {
+		if slices.Contains(imported, "intake") {
+			t.Errorf("%s imports bluecollar intake; the agent plans its own turn and the host hands it facts (#543)", packagePath)
 		}
 	}
 }
@@ -108,4 +122,83 @@ func sortedKeys(values map[string][]string) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+var planningVocabulary = []string{"TurnDecision", "IntakeDecisionRequest", "IntakeDecisions", "IntakeCallLedger"}
+
+func TestOnlyDefaultHarnessWiringNamesBluecollarPlanningTypes(t *testing.T) {
+	permitted := toSet(defaultHarnessWiringPackages)
+	agentcontractPath := bluecollarModulePath + "agentcontract"
+	for _, use := range planningVocabularyUses(t, agentcontractPath) {
+		if !permitted[use.packagePath] {
+			t.Errorf("%s names agentcontract.%s at %s; the host hands the agent facts and never a decision (#543)", use.packagePath, use.name, use.position)
+		}
+	}
+}
+
+type vocabularyUse struct {
+	packagePath string
+	name        string
+	position    string
+}
+
+func planningVocabularyUses(t *testing.T, agentcontractPath string) []vocabularyUse {
+	t.Helper()
+	root := "../.."
+	uses := []vocabularyUse{}
+	errorValue := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkError error) error {
+		if walkError != nil {
+			return walkError
+		}
+		if entry.IsDir() {
+			if name := entry.Name(); name == ".dependency" || name == ".git" || name == "node_modules" || name == "testdata" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		fileSet := token.NewFileSet()
+		file, parseError := parser.ParseFile(fileSet, path, nil, 0)
+		if parseError != nil {
+			return parseError
+		}
+		packagePath, _ := filepath.Rel(root, filepath.Dir(path))
+		uses = append(uses, vocabularyUsesIn(fileSet, file, filepath.ToSlash(packagePath), agentcontractPath)...)
+		return nil
+	})
+	if errorValue != nil {
+		t.Fatalf("walking the module failed: %v", errorValue)
+	}
+	return uses
+}
+
+func vocabularyUsesIn(fileSet *token.FileSet, file *ast.File, packagePath string, agentcontractPath string) []vocabularyUse {
+	localName := ""
+	for _, spec := range file.Imports {
+		if strings.Trim(spec.Path.Value, `"`) != agentcontractPath {
+			continue
+		}
+		localName = "agentcontract"
+		if spec.Name != nil {
+			localName = spec.Name.Name
+		}
+	}
+	uses := []vocabularyUse{}
+	if localName == "" {
+		return uses
+	}
+	ast.Inspect(file, func(node ast.Node) bool {
+		selector, isSelector := node.(*ast.SelectorExpr)
+		if !isSelector {
+			return true
+		}
+		qualifier, isIdentifier := selector.X.(*ast.Ident)
+		if isIdentifier && qualifier.Name == localName && slices.Contains(planningVocabulary, selector.Sel.Name) {
+			uses = append(uses, vocabularyUse{packagePath: packagePath, name: selector.Sel.Name, position: fileSet.Position(selector.Pos()).String()})
+		}
+		return true
+	})
+	return uses
 }

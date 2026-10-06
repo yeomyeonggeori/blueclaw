@@ -3,11 +3,11 @@ package agentruntime
 import (
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 )
 
 func TestStandingDutyToolNamesExcludeOutwardAndSystemTools(t *testing.T) {
-	for _, duty := range agentcontract.StandingDuties() {
+	for _, duty := range inboundengagement.StandingDuties() {
 		allowed := map[string]bool{}
 		for _, toolName := range duty.ToolNames {
 			allowed[toolName] = true
@@ -24,13 +24,13 @@ func TestStandingDutyToolNamesExcludeOutwardAndSystemTools(t *testing.T) {
 }
 
 func TestAmbientLaunchCeilingComesFromTheMatchedDuty(t *testing.T) {
-	duty, isKnownDuty := agentcontract.StandingDutyByName("calendar_upkeep")
+	duty, isKnownDuty := inboundengagement.StandingDutyByName("calendar_upkeep")
 	if !isKnownDuty {
 		t.Fatalf("expected calendar_upkeep to be a registered standing duty")
 	}
 
 	ceiling := registeredToolNameCeilingForLaunch(TaskLaunchRequest{
-		AmbientDuty: agentcontract.AmbientDutyContext{IsMatch: true, Name: "calendar_upkeep"},
+		AmbientDuty: inboundengagement.AmbientDutyContext{IsMatch: true, Name: "calendar_upkeep"},
 	})
 
 	if len(ceiling) != len(duty.ToolNames) {
@@ -50,7 +50,7 @@ func TestAddressedLaunchHasNoToolCeiling(t *testing.T) {
 }
 
 func TestUnknownDutyNameLeavesNoCeilingAndNoMatch(t *testing.T) {
-	ambientDuty := agentcontract.AmbientDutyContext{IsMatch: true, Name: "invented_duty", Confidence: 0.99}
+	ambientDuty := inboundengagement.AmbientDutyContext{IsMatch: true, Name: "invented_duty", Confidence: 0.99}
 
 	if normalized := ambientDuty.Normalized(); normalized.IsMatch {
 		t.Fatalf("expected an unregistered duty name to be dropped, got %+v", normalized)
