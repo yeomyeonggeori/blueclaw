@@ -114,7 +114,7 @@ func (addressedToSomebodyElse) Decide(_ context.Context, facts inboundengagement
 	for _, message := range facts.Messages {
 		judgments = append(judgments, inboundengagement.Judgment{
 			MessageID:  message.MessageID,
-			Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetHuman},
+			Addressing: inboundengagement.AddressingDecision{Target: inboundengagement.AddressingTargetHuman},
 		})
 	}
 	return judgments, nil
@@ -131,7 +131,7 @@ func (addressedToTheAgent) Decide(_ context.Context, facts inboundengagement.Fac
 	for _, message := range facts.Messages {
 		judgments = append(judgments, inboundengagement.Judgment{
 			MessageID:  message.MessageID,
-			Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true},
+			Addressing: inboundengagement.AddressingDecision{Target: inboundengagement.AddressingTargetBot, ShouldRespond: true},
 		})
 	}
 	return judgments, nil

@@ -54,8 +54,7 @@ func (sessionTurn *SessionTurn) ContinueOpenInteractions(ctx context.Context, la
 	}
 	connectorRuntime.resolveTurnActiveGoal(ctx, turn)
 	connectorRuntime.resolveTurnPriorTask(turn)
-	precomputedTurnDecision := precomputedTurnDecisionForLaunch(turn.turnDecision, turn.hasTurnDecision)
-	return withTurnContinuation(launchRequest, connectorRuntime.conversationTurnFor(turn, precomputedTurnDecision)), false, nil
+	return withTurnContinuation(launchRequest, connectorRuntime.conversationTurnFor(turn)), false, nil
 }
 
 func (sessionTurn *SessionTurn) DeliverReply(ctx context.Context, turnResult agentcontract.AgentTurnResult) error {

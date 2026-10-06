@@ -105,7 +105,6 @@ func (server *Server) outcomeFor(document decisionRequestDocument) (intaketest.O
 	}
 	server.turns = server.turns[1:]
 	outcome := nextTurn.Outcome
-	outcome.PendingChoiceKeys = intaketest.PendingChoiceKeys(document.State)
 	server.decidedTurn = &outcome
 	return outcome, nil
 }

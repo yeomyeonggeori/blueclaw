@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
@@ -62,7 +63,7 @@ func (connectorRuntime *ConnectorRuntime) addAddressingReaction(ctx context.Cont
 		Platform:       platform,
 		ConversationID: event.ConversationID,
 		MessageID:      event.MessageID,
-		EmojiName:      consumeReactionEmojiName(reactionEmojiName),
+		EmojiName:      reactionEmojiName,
 		Reason:         "addressing_ack",
 	}
 	if errorValue := reactionAdapter.AddReaction(ctx, target); errorValue != nil {
@@ -70,7 +71,7 @@ func (connectorRuntime *ConnectorRuntime) addAddressingReaction(ctx context.Cont
 	}
 }
 
-func (connectorRuntime *ConnectorRuntime) addConsumeReaction(ctx context.Context, platform string, adapter PlatformAdapter, event PlatformInboundEvent, taskRunID string, reactionEmojiName string) string {
+func (connectorRuntime *ConnectorRuntime) addConsumeReaction(ctx context.Context, platform string, adapter PlatformAdapter, event PlatformInboundEvent, taskRunID string) string {
 	reactionAdapter, isSupported := adapter.(MessageReactionAdapter)
 	if !isSupported {
 		connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventConnectorReactionSkipped, agentruntime.MarshalBody(map[string]string{
@@ -83,7 +84,7 @@ func (connectorRuntime *ConnectorRuntime) addConsumeReaction(ctx context.Context
 		Platform:       platform,
 		ConversationID: event.ConversationID,
 		MessageID:      event.MessageID,
-		EmojiName:      consumeReactionEmojiName(reactionEmojiName),
+		EmojiName:      inboundengagement.DefaultReactionEmojiName,
 		Reason:         "consume",
 	}
 	if errorValue := reactionAdapter.AddReaction(ctx, target); errorValue != nil {
@@ -101,12 +102,4 @@ func (connectorRuntime *ConnectorRuntime) addConsumeReaction(ctx context.Context
 		"reason":    target.Reason,
 	}))
 	return "consume_reacted"
-}
-
-func consumeReactionEmojiName(reactionEmojiName string) string {
-	reactionEmojiName = strings.TrimSpace(reactionEmojiName)
-	if reactionEmojiName == "" {
-		return agentcontract.DefaultReactionEmojiName
-	}
-	return reactionEmojiName
 }

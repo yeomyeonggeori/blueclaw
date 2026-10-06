@@ -10,8 +10,8 @@ import (
 )
 
 type scriptedGatewayDecider struct {
-	addressing          agentcontract.AddressingDecision
-	busyRoute           agentcontract.BusyRoute
+	addressing          inboundengagement.AddressingDecision
+	busyRoute           inboundengagement.BusyRoute
 	relatesToActiveTask bool
 	errorValue          error
 
@@ -60,7 +60,7 @@ func (decider *scriptedGatewayDecider) decidedPrompt(prompt string) (inboundenga
 	return inboundengagement.Facts{}, false
 }
 
-func judgmentsFor(facts inboundengagement.Facts, addressing agentcontract.AddressingDecision, busyRoute agentcontract.BusyRoute, relatesToActiveTask bool) []inboundengagement.Judgment {
+func judgmentsFor(facts inboundengagement.Facts, addressing inboundengagement.AddressingDecision, busyRoute inboundengagement.BusyRoute, relatesToActiveTask bool) []inboundengagement.Judgment {
 	judgments := []inboundengagement.Judgment{}
 	for _, message := range facts.Messages {
 		judgment := inboundengagement.Judgment{MessageID: message.MessageID, Addressing: addressing}

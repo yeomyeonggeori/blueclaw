@@ -248,7 +248,7 @@ func TestAnAttachmentsOnlyGroupMessageIsProcessedWithoutBeingDecided(t *testing.
 
 func TestAClaimedBurstIsDecidedOnceAndProcessedInArrivalOrder(t *testing.T) {
 	connectorRuntime, _, adapter := recordingGatewayDecisionRuntime(t)
-	recorder := &scriptedGatewayDecider{addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetHuman, ReactionEmoji: "eyes"}}
+	recorder := &scriptedGatewayDecider{addressing: inboundengagement.AddressingDecision{Target: inboundengagement.AddressingTargetHuman, ReactionEmoji: "eyes"}}
 	connectorRuntime.UseGatewayDecider(recorder)
 	repository := &testConnectorQueueRepository{}
 	connectorRuntime.UseEventRepository(repository)
@@ -304,7 +304,7 @@ func TestABurstRecordsItsOneDecisionCallOnceAgainstEveryMessageItJudged(t *testi
 
 func TestACallOnARunningTasksMessageIsRecordedAgainstTheMessageAndNotOnTheTask(t *testing.T) {
 	connectorRuntime, adapter, _ := newStubbedTestConnectorRuntime(t)
-	connectorRuntime.UseGatewayDecider(&recordingCallLedgerDecider{scriptedGatewayDecider: scriptedGatewayDecider{addressing: addressedToBot(), busyRoute: agentcontract.BusyRouteStatus}})
+	connectorRuntime.UseGatewayDecider(&recordingCallLedgerDecider{scriptedGatewayDecider: scriptedGatewayDecider{addressing: addressedToBot(), busyRoute: inboundengagement.BusyRouteStatus}})
 	recordedSubjects := [][]string{}
 	connectorRuntime.UseTasklessLLMCallRecorder(func(subjects []string, _ agentcontract.LLMCallRecord) {
 		recordedSubjects = append(recordedSubjects, subjects)
@@ -330,7 +330,7 @@ func TestACallOnARunningTasksMessageIsRecordedAgainstTheMessageAndNotOnTheTask(t
 
 func TestAMessageForARunningTaskIsJudgedOnceThroughTheQueue(t *testing.T) {
 	connectorRuntime, adapter, _ := newStubbedTestConnectorRuntime(t)
-	gatewayDecider := &scriptedGatewayDecider{addressing: addressedToBot(), busyRoute: agentcontract.BusyRouteStatus, relatesToActiveTask: true}
+	gatewayDecider := &scriptedGatewayDecider{addressing: addressedToBot(), busyRoute: inboundengagement.BusyRouteStatus, relatesToActiveTask: true}
 	connectorRuntime.UseGatewayDecider(gatewayDecider)
 	repository := &testConnectorQueueRepository{}
 	connectorRuntime.UseEventRepository(repository)
@@ -358,7 +358,7 @@ func (decider *recordingCallLedgerDecider) Decide(ctx context.Context, facts inb
 	return decider.scriptedGatewayDecider.Decide(ctx, facts, observe)
 }
 
-func decisionMessageIDs(messages []agentcontract.IntakeDecisionMessage) []string {
+func decisionMessageIDs(messages []inboundengagement.Message) []string {
 	messageIDs := []string{}
 	for _, message := range messages {
 		messageIDs = append(messageIDs, message.MessageID)
@@ -415,7 +415,7 @@ func TestAStopCommandIsLeftOutOfTheBurst(t *testing.T) {
 
 func TestAnAttachmentsOnlyGroupMessageDuringARunningTaskMakesNoGatewayCall(t *testing.T) {
 	connectorRuntime, adapter, _ := newStubbedTestConnectorRuntime(t)
-	gatewayDecider := &scriptedGatewayDecider{addressing: addressedToBot(), busyRoute: agentcontract.BusyRouteSteer}
+	gatewayDecider := &scriptedGatewayDecider{addressing: addressedToBot(), busyRoute: inboundengagement.BusyRouteSteer}
 	connectorRuntime.UseGatewayDecider(gatewayDecider)
 	event := burstChannelQueuedEvent("message-attachment", time.Unix(1756800000, 0), false, "").Event
 	event.Prompt = "[image board.png]"

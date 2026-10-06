@@ -63,7 +63,7 @@ func (decisionModel *answerPerCallDecisionModel) gatewayCallCount() int {
 
 func addressedWorkAtLevel(taskLevel agentcontract.TaskLevel) intaketest.Outcome {
 	return intaketest.Outcome{
-		Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true},
+		Addressing: inboundengagement.AddressingDecision{Target: inboundengagement.AddressingTargetBot, ShouldRespond: true},
 		TurnDecision: agentcontract.TurnDecision{
 			Route:            agentcontract.TurnRouteStartTask,
 			Classification:   agentcontract.IntakeClassificationBoundedTask,

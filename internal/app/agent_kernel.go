@@ -16,7 +16,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
@@ -31,7 +30,7 @@ type agentKernel struct {
 	embeddingClient                   llm.EmbeddingProvider
 	intakeLanguageModelProvider       llm.LanguageModelProvider
 	decisionModel                     model.DecisionModel
-	decisionPlanner                   intake.DecisionPlanner
+	toolSelector                      agentcontract.ToolSelector
 	terminalService                   *security.ShellService
 	toolCatalog                       toolCatalogEndpoint
 	harness                           agentcontract.Harness
@@ -75,7 +74,7 @@ func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, bundledACP
 	}
 	kernel.embeddingClient = embeddingProvider
 	kernel.decisionModel = newConfiguredDecisionModel(runtimeConfiguration, logger)
-	kernel.decisionPlanner = newDecisionPlanner(kernel.decisionModel, turnRouterLanguageModelProvider(taskTierLanguageModels, intakeLanguageModel))
+	kernel.toolSelector = newToolSelector(kernel.decisionModel)
 	kernel.terminalService = security.NewShellService(runtimeConfiguration.Terminal)
 	services.taskRunService.RegisterTaskRunTransitionObserver(task.NewTaskTemporaryDirectoryReclaimer(runtimeConfiguration.Terminal.WorkspaceRootPath, kernel.terminalService.WorkspaceActorFactory(), logger).Observe)
 	kernel.toolCatalog = newToolCatalogEndpoint(services.taskRunService, kernel.taskTierLanguageModels.High, kernel.decisionModel, kernel.capabilityClient)

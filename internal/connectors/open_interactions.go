@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -31,26 +32,18 @@ func (connectorRuntime *ConnectorRuntime) readOpenInteractions(turn *inboundTurn
 	return open
 }
 
-func answeringTheQuestionTheRunAsked(event PlatformInboundEvent) agentcontract.TurnDecision {
-	return agentcontract.TurnDecision{
-		Route:            agentcontract.TurnRouteContinueTask,
-		Classification:   agentcontract.IntakeClassificationBoundedTask,
-		TaskShape:        agentcontract.TaskShapeMaintenanceTask,
-		ResponseLanguage: responseLanguageForEvent(event),
-		Reason:           "a reply in the thread the run asked its question in",
-	}
-}
+const askReplyReason = "a reply in the thread the run asked its question in"
 
-func (connectorRuntime *ConnectorRuntime) recordAskReplyClassified(turn *inboundTurn, ask AskInteraction, decision agentcontract.TurnDecision) {
+func (connectorRuntime *ConnectorRuntime) recordAskReplyClassified(turn *inboundTurn, ask AskInteraction) {
 	connectorRuntime.taskRunService.AppendTaskEvent(ask.TaskRunID, agentcontract.TaskEventAskReplyClassified, agentruntime.MarshalBody(map[string]any{
 		"messageID": turn.event.MessageID,
-		"choices":   decision.Choices,
-		"route":     decision.Route,
-		"reason":    decision.Reason,
+		"choices":   []string{},
+		"route":     agentcontract.TurnRouteContinueTask,
+		"reason":    askReplyReason,
 	}))
 }
 
-func (connectorRuntime *ConnectorRuntime) recordBusyRoute(turn *inboundTurn, runningTask task.TaskRun, busyRoute agentcontract.BusyRoute) {
+func (connectorRuntime *ConnectorRuntime) recordBusyRoute(turn *inboundTurn, runningTask task.TaskRun, busyRoute inboundengagement.BusyRoute) {
 	connectorRuntime.taskRunService.AppendTaskEvent(runningTask.TaskRunID, agentcontract.TaskEventTaskBusyMessageRouted, agentruntime.MarshalBody(map[string]string{
 		"messageID":       turn.event.MessageID,
 		"busyRoute":       string(busyRoute),
@@ -87,12 +80,9 @@ func (connectorRuntime *ConnectorRuntime) settleOpenInteractions(ctx context.Con
 }
 
 func (connectorRuntime *ConnectorRuntime) settleAsk(turn *inboundTurn, ask AskInteraction) {
-	decision := answeringTheQuestionTheRunAsked(turn.event)
-	connectorRuntime.recordAskReplyClassified(turn, ask, decision)
-	connectorRuntime.appendAskResolvedEvent(ask, turn.event, decision)
+	connectorRuntime.recordAskReplyClassified(turn, ask)
+	connectorRuntime.appendAskResolvedEvent(ask, turn.event)
 	connectorRuntime.resolveTaskWaitToken(turn.taskWaitResolution)
-	turn.turnDecision = decision
-	turn.hasTurnDecision = true
 	turn.pendingAskInteraction = ask
 	turn.hasPendingAskInteraction = true
 }

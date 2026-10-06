@@ -4,17 +4,18 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
-func overheardTurn(ambientDuty agentcontract.AmbientDutyContext) ConversationTurn {
+func overheardTurn(ambientDuty inboundengagement.AmbientDutyContext) ConversationTurn {
 	event := PlatformInboundEvent{Prompt: "9월 2일 오전 7시부터 라운지에서 촬영이 있습니다."}
 	event.Context.Sender.Name = "이샘플"
 	return ConversationTurn{Event: event, AmbientDuty: ambientDuty}
 }
 
 func TestOverheardMessageNeverBecomesTheInstruction(t *testing.T) {
-	turn := overheardTurn(agentcontract.AmbientDutyContext{IsMatch: true, Name: "calendar_upkeep", Confidence: 0.92})
+	turn := overheardTurn(inboundengagement.AmbientDutyContext{IsMatch: true, Name: "calendar_upkeep", Confidence: 0.92})
 
 	prompt := promptForTurn(turn)
 
@@ -29,7 +30,7 @@ func TestOverheardMessageNeverBecomesTheInstruction(t *testing.T) {
 }
 
 func TestAddressedMessageStaysTheInstruction(t *testing.T) {
-	turn := overheardTurn(agentcontract.AmbientDutyContext{})
+	turn := overheardTurn(inboundengagement.AmbientDutyContext{})
 
 	if prompt := promptForTurn(turn); prompt != turn.Event.Prompt {
 		t.Fatalf("expected an addressed message to reach the agent unchanged, got %q", prompt)
@@ -37,7 +38,7 @@ func TestAddressedMessageStaysTheInstruction(t *testing.T) {
 }
 
 func TestOverheardMessageIsNeverRoutedAsAReply(t *testing.T) {
-	turn := overheardTurn(agentcontract.AmbientDutyContext{IsMatch: true, Name: "calendar_upkeep", Confidence: 0.92})
+	turn := overheardTurn(inboundengagement.AmbientDutyContext{IsMatch: true, Name: "calendar_upkeep", Confidence: 0.92})
 
 	turnDecision := turnDecisionForTurn(turn)
 
@@ -53,7 +54,7 @@ func TestOverheardMessageIsNeverRoutedAsAReply(t *testing.T) {
 }
 
 func TestAddressedMessageStillAsksTheTurnRouter(t *testing.T) {
-	turn := overheardTurn(agentcontract.AmbientDutyContext{})
+	turn := overheardTurn(inboundengagement.AmbientDutyContext{})
 
 	if turnDecision := turnDecisionForTurn(turn); turnDecision != nil {
 		t.Fatalf("expected an addressed message to keep going through the turn router, got %+v", turnDecision)

@@ -9,6 +9,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement/gatewaytest"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -44,7 +45,7 @@ func (turnScript *scenarioTurnScript) pendingCount() int {
 type scenarioDecisionModel struct {
 	turnScript        *scenarioTurnScript
 	languageModelTurn *intaketest.LanguageModelDecisionModel
-	addressing        agentcontract.AddressingDecision
+	addressing        inboundengagement.AddressingDecision
 
 	mutex          sync.Mutex
 	decidedOutcome intaketest.Outcome
@@ -57,7 +58,6 @@ func newScenarioDecisionModel(turnScript *scenarioTurnScript, languageModel mode
 		turnScript: turnScript,
 		languageModelTurn: &intaketest.LanguageModelDecisionModel{
 			LanguageModel: languageModel,
-			Addressing:    addressing,
 			ModelName:     scenarioDecisionModelName,
 		},
 		addressing: addressing,
@@ -69,7 +69,7 @@ func (decisionModel *scenarioDecisionModel) Decide(ctx context.Context, request 
 		return decisionModel.languageModelTurn.Decide(ctx, request)
 	}
 	if inboundengagement.AsksOnlyGatewayQuestions(request.Questions) {
-		return decisionModel.answersFrom(request, decisionModel.gatewayOutcome()), nil
+		return model.DecisionResponse{Answers: gatewaytest.Answers(request.Questions, decisionModel.gatewayOutcome()), ModelName: scenarioDecisionModelName}, nil
 	}
 	if outcome, isDecided := decisionModel.decidedTurn(); isDecided && asksOnlyAboutTools(request.Questions) {
 		return decisionModel.answersFrom(request, outcome), nil
@@ -82,11 +82,7 @@ func (decisionModel *scenarioDecisionModel) Decide(ctx context.Context, request 
 	if errorValue := json.Unmarshal([]byte(strings.TrimSpace(turnDocument)), &turnDecision); errorValue != nil {
 		return model.DecisionResponse{}, errorValue
 	}
-	outcome := intaketest.Outcome{
-		Addressing:        decisionModel.addressing,
-		TurnDecision:      turnDecision,
-		PendingChoiceKeys: intaketest.PendingChoiceKeys(request.State),
-	}
+	outcome := intaketest.Outcome{TurnDecision: turnDecision}
 	decisionModel.rememberDecidedTurn(outcome)
 	return decisionModel.answersFrom(request, outcome), nil
 }
@@ -114,7 +110,7 @@ func (decisionModel *scenarioDecisionModel) decideNextScriptedTurn() {
 	if json.Unmarshal([]byte(strings.TrimSpace(turnDocument)), &turnDecision) != nil {
 		return
 	}
-	decisionModel.rememberDecidedTurn(intaketest.Outcome{Addressing: decisionModel.addressing, TurnDecision: turnDecision})
+	decisionModel.rememberDecidedTurn(intaketest.Outcome{TurnDecision: turnDecision})
 }
 
 func (decisionModel *scenarioDecisionModel) decidedTurn() (intaketest.Outcome, bool) {
@@ -139,21 +135,18 @@ func asksOnlyAboutTools(questions map[string]model.DecisionQuestion) bool {
 	return len(questions) > 0
 }
 
-func (decisionModel *scenarioDecisionModel) gatewayOutcome() intaketest.Outcome {
-	return intaketest.Outcome{
-		Addressing:   decisionModel.addressing,
-		TurnDecision: agentcontract.TurnDecision{BusyRoute: agentcontract.BusyRouteNewTask},
-	}
+func (decisionModel *scenarioDecisionModel) gatewayOutcome() gatewaytest.Outcome {
+	return gatewaytest.Outcome{Addressing: decisionModel.addressing, BusyRoute: inboundengagement.BusyRouteNewTask}
 }
 
-func scenarioAddressingDecision(addressingResponse string) agentcontract.AddressingDecision {
+func scenarioAddressingDecision(addressingResponse string) inboundengagement.AddressingDecision {
 	document := strings.TrimSpace(addressingResponse)
 	if document == "" {
 		document = scenarioIgnoringAddressingResponse
 	}
-	var decision agentcontract.AddressingDecision
+	var decision inboundengagement.AddressingDecision
 	if errorValue := json.Unmarshal([]byte(document), &decision); errorValue != nil {
-		return agentcontract.AddressingDecision{}
+		return inboundengagement.AddressingDecision{}
 	}
 	return decision
 }
@@ -191,4 +184,32 @@ func isScriptedOption(option approvalreply.Option, turnDecision agentcontract.Tu
 		return false
 	}
 	return isRejecting == (*turnDecision.Approval == agentcontract.ApprovalSignalReject)
+}
+
+type splitDecisionModel struct {
+	planning model.DecisionModel
+	loop     model.DecisionModel
+}
+
+func scenarioHarnessDecisionModel(scenario VirtualSessionScenario, planning model.DecisionModel, loop model.DecisionModel) model.DecisionModel {
+	if scenario.DecisionModel != nil || loop == nil {
+		return planning
+	}
+	return splitDecisionModel{planning: planning, loop: loop}
+}
+
+func (decisionModel splitDecisionModel) Decide(ctx context.Context, request model.DecisionRequest) (model.DecisionResponse, error) {
+	if asksPlanningQuestions(request.Questions) {
+		return decisionModel.planning.Decide(ctx, request)
+	}
+	return decisionModel.loop.Decide(ctx, request)
+}
+
+func asksPlanningQuestions(questions map[string]model.DecisionQuestion) bool {
+	for questionName := range questions {
+		if strings.Contains(questionName, ".") {
+			return true
+		}
+	}
+	return false
 }

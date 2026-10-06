@@ -73,12 +73,13 @@ func (taskRunHandler TaskRunHandler) HandleRunTask(responseWriter http.ResponseW
 		http.Error(responseWriter, "prompt is required", http.StatusBadRequest)
 		return
 	}
-	precomputedTurnDecision, statusCode, errorValue := taskRunHandler.resolveTaskDecisionPreset(runRequest.TaskDecisionPreset)
+	presetTaskLevel, statusCode, errorValue := taskRunHandler.resolveTaskDecisionPreset(runRequest.TaskDecisionPreset)
 	if errorValue != nil {
 		http.Error(responseWriter, errorValue.Error(), statusCode)
 		return
 	}
-	if precomputedTurnDecision != nil {
+	hasPreset := presetTaskLevel != ""
+	if hasPreset {
 		if hasTaskDecisionPresetOverrides(runRequest) {
 			http.Error(responseWriter, "task decision preset does not accept profile, tool, or skill overrides", http.StatusBadRequest)
 			return
@@ -88,24 +89,23 @@ func (taskRunHandler TaskRunHandler) HandleRunTask(responseWriter http.ResponseW
 	personAccess := taskRunHandler.IdentityService.ResolvePersonAccess(runRequest.RequesterPersonID)
 	conversationID := firstNonEmptyAdminString(runRequest.ConversationID, "admin:"+runRequest.RequesterPersonID)
 	launchResult, errorValue := taskRunHandler.TaskLauncher.Launch(context.Background(), agentruntime.TaskLaunchRequest{
-		Source:                     agentruntime.TaskLaunchSourceAdmin,
-		SourceReference:            "admin:" + runRequest.RequesterPersonID,
-		RequesterPersonID:          runRequest.RequesterPersonID,
-		RequesterName:              runRequest.RequesterName,
-		RequesterCallingName:       runRequest.RequesterCallingName,
-		RequesterHandle:            runRequest.RequesterHandle,
-		RequesterEmail:             taskRunHandler.IdentityService.ResolvePersonPrimaryEmail(runRequest.RequesterPersonID),
-		ProfileName:                runRequest.ProfileName,
-		ConversationID:             conversationID,
-		Prompt:                     runRequest.Prompt,
-		PinnedToolNames:            append([]string{}, runRequest.PinnedToolNames...),
-		PinnedSkillNames:           append([]string{}, runRequest.PinnedSkillNames...),
-		PrecomputedTurnDecision:    precomputedTurnDecision,
-		IsPrecomputedDecisionExact: precomputedTurnDecision != nil,
-		SkipSkillSelection:         precomputedTurnDecision != nil,
-		UseEmptyToolCatalog:        precomputedTurnDecision != nil,
-		PersonAccess:               personAccess,
-		AccessibleConversationIDs:  []string{conversationID},
+		Source:                    agentruntime.TaskLaunchSourceAdmin,
+		SourceReference:           "admin:" + runRequest.RequesterPersonID,
+		RequesterPersonID:         runRequest.RequesterPersonID,
+		RequesterName:             runRequest.RequesterName,
+		RequesterCallingName:      runRequest.RequesterCallingName,
+		RequesterHandle:           runRequest.RequesterHandle,
+		RequesterEmail:            taskRunHandler.IdentityService.ResolvePersonPrimaryEmail(runRequest.RequesterPersonID),
+		ProfileName:               runRequest.ProfileName,
+		ConversationID:            conversationID,
+		Prompt:                    runRequest.Prompt,
+		PinnedToolNames:           append([]string{}, runRequest.PinnedToolNames...),
+		PinnedSkillNames:          append([]string{}, runRequest.PinnedSkillNames...),
+		TaskLevel:                 presetTaskLevel,
+		SkipSkillSelection:        hasPreset,
+		UseEmptyToolCatalog:       hasPreset,
+		PersonAccess:              personAccess,
+		AccessibleConversationIDs: []string{conversationID},
 	})
 	if errorValue != nil {
 		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
@@ -124,25 +124,18 @@ func hasTaskDecisionPresetOverrides(runRequest taskRunRequest) bool {
 		len(runRequest.PinnedSkillNames) > 0
 }
 
-func (taskRunHandler TaskRunHandler) resolveTaskDecisionPreset(preset string) (*agentcontract.TurnDecision, int, error) {
+func (taskRunHandler TaskRunHandler) resolveTaskDecisionPreset(preset string) (agentcontract.TaskLevel, int, error) {
 	normalizedPreset := strings.TrimSpace(preset)
 	if normalizedPreset == "" {
-		return nil, 0, nil
+		return "", 0, nil
 	}
 	if !taskRunHandler.AllowTaskDecisionPreset {
-		return nil, http.StatusForbidden, errors.New("task decision presets are disabled")
+		return "", http.StatusForbidden, errors.New("task decision presets are disabled")
 	}
 	if normalizedPreset != modelPathTaskDecisionPreset {
-		return nil, http.StatusBadRequest, errors.New("task decision preset is unsupported")
+		return "", http.StatusBadRequest, errors.New("task decision preset is unsupported")
 	}
-	return &agentcontract.TurnDecision{
-		Route:              agentcontract.TurnRouteStartTask,
-		Classification:     agentcontract.IntakeClassificationQuickReply,
-		TaskShape:          agentcontract.TaskShapeImmediateReply,
-		TaskLevel:          agentcontract.TaskLevelXLow,
-		PriorTaskReference: agentcontract.PriorTaskReferenceNone,
-		Reason:             "model path diagnostic",
-	}, 0, nil
+	return agentcontract.TaskLevelXLow, 0, nil
 }
 
 func (taskRunHandler TaskRunHandler) HandleCancelTaskRun(responseWriter http.ResponseWriter, request *http.Request) {

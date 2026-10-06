@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -418,12 +419,12 @@ func wrongWayErrors(message routingMessage, verdict routingVerdict) []string {
 }
 
 func isGentleBusyRoute(route string) bool {
-	return route == string(agentcontract.BusyRouteSteer) || route == string(agentcontract.BusyRouteStatus)
+	return route == string(inboundengagement.BusyRouteSteer) || route == string(inboundengagement.BusyRouteStatus)
 }
 
 func isDestructiveBusyRoute(route string) bool {
 	switch route {
-	case string(agentcontract.BusyRouteCancel), string(agentcontract.BusyRouteReplace), string(agentcontract.BusyRouteNewTask):
+	case string(inboundengagement.BusyRouteCancel), string(inboundengagement.BusyRouteReplace), string(inboundengagement.BusyRouteNewTask):
 		return true
 	}
 	return false

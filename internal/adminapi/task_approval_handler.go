@@ -60,17 +60,15 @@ func (handler TaskApprovalHandler) HandleApproveTaskRun(responseWriter http.Resp
 	}
 	approvalgate.SettleSignal(handler.TaskRunService, taskRun.TaskRunID, turnDecision.Approval, "operator_terminal")
 	launchResult, errorValue := handler.TaskLauncher.Launch(context.Background(), agentruntime.TaskLaunchRequest{
-		Source:                     agentruntime.TaskLaunchSourceAdmin,
-		SourceReference:            "terminal:" + taskRun.TaskRunID,
-		RequesterPersonID:          taskRun.RequesterPersonID,
-		RequesterEmail:             handler.requesterEmail(taskRun.RequesterPersonID),
-		IsRuntimeRestartResume:     true,
-		ExistingTaskRunID:          taskRun.TaskRunID,
-		ConversationID:             taskRun.OriginConversationID,
-		Prompt:                     taskRun.Prompt,
-		PrecomputedTurnDecision:    &turnDecision,
-		IsPrecomputedDecisionExact: true,
-		PersonAccess:               handler.personAccess(taskRun.RequesterPersonID),
+		Source:                 agentruntime.TaskLaunchSourceAdmin,
+		SourceReference:        "terminal:" + taskRun.TaskRunID,
+		RequesterPersonID:      taskRun.RequesterPersonID,
+		RequesterEmail:         handler.requesterEmail(taskRun.RequesterPersonID),
+		IsRuntimeRestartResume: true,
+		ExistingTaskRunID:      taskRun.TaskRunID,
+		ConversationID:         taskRun.OriginConversationID,
+		Prompt:                 taskRun.Prompt,
+		PersonAccess:           handler.personAccess(taskRun.RequesterPersonID),
 	})
 	if errorValue != nil {
 		writeApprovalError(responseWriter, http.StatusInternalServerError, errorValue.Error())

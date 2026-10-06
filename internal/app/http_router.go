@@ -73,7 +73,7 @@ func languageModelHealth(kernel agentKernel) httpserver.LanguageModelHealth {
 	if kernel.languageModelError != nil {
 		return httpserver.LanguageModelHealth{Error: kernel.languageModelError.Error()}
 	}
-	return httpserver.LanguageModelHealth{Configured: turnRouterLanguageModelProvider(kernel.taskTierLanguageModels, kernel.intakeLanguageModelProvider) != nil}
+	return httpserver.LanguageModelHealth{Configured: kernel.intakeLanguageModelProvider != nil || kernel.taskTierLanguageModels.High != nil}
 }
 
 func newWorkspaceFilesHandler(runtimeConfiguration config.RuntimeConfiguration, kernel agentKernel, directory identityDirectory) httpserver.WorkspaceFilesHandler {

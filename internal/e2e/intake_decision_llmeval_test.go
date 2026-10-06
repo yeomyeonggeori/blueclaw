@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake"
@@ -22,7 +23,7 @@ type intakeDecisionCase struct {
 	name                string
 	request             agentcontract.IntakeDecisionRequest
 	expectedRoute       agentcontract.TurnRoute
-	expectedTarget      agentcontract.AddressingTarget
+	expectedTarget      inboundengagement.AddressingTarget
 	expectedRespond     bool
 	expectedApproval    agentcontract.ApprovalSignal
 	expectedChoiceKeys  []string
@@ -126,68 +127,68 @@ func intakeDecisionCorpus() []intakeDecisionCase {
 			name:            "a direct request starts work",
 			request:         intakeDecisionRequestFor("message-1", "내일 오후 3시에 팀 회의 잡아줘", "D", false),
 			expectedRoute:   agentcontract.TurnRouteStartTask,
-			expectedTarget:  agentcontract.AddressingTargetBot,
+			expectedTarget:  inboundengagement.AddressingTargetBot,
 			expectedRespond: true,
 		},
 		{
 			name:            "a question is answered in words",
 			request:         intakeDecisionRequestFor("message-2", "연차는 며칠까지 쓸 수 있어?", "D", false),
 			expectedRoute:   agentcontract.TurnRouteAnswerQuestion,
-			expectedTarget:  agentcontract.AddressingTargetBot,
+			expectedTarget:  inboundengagement.AddressingTargetBot,
 			expectedRespond: true,
 		},
 		{
 			name:            "a question about the agent itself is a meta answer",
 			request:         intakeDecisionRequestFor("message-3", "너는 무슨 일을 할 수 있어?", "D", false),
 			expectedRoute:   agentcontract.TurnRouteAnswerMeta,
-			expectedTarget:  agentcontract.AddressingTargetBot,
+			expectedTarget:  inboundengagement.AddressingTargetBot,
 			expectedRespond: true,
 		},
 		{
 			name:            "two colleagues talking in a channel are not addressing the agent",
 			request:         intakeDecisionRequestFor("message-4", "박예시 님, 어제 보내주신 자료 잘 받았습니다", "O", false),
-			expectedTarget:  agentcontract.AddressingTargetHuman,
+			expectedTarget:  inboundengagement.AddressingTargetHuman,
 			expectedRespond: false,
 		},
 		{
 			name:            "a mention in a channel is addressed to the agent",
 			request:         intakeDecisionRequestFor("message-5", "@internkim 이번 주 회의록 정리해줘", "O", true),
 			expectedRoute:   agentcontract.TurnRouteStartTask,
-			expectedTarget:  agentcontract.AddressingTargetBot,
+			expectedTarget:  inboundengagement.AddressingTargetBot,
 			expectedRespond: true,
 		},
 		{
 			name:            "an impossible request is refused rather than started",
 			request:         intakeDecisionRequestFor("message-6", "어제로 돌아가서 그 메일을 보내지 않은 걸로 해줘", "D", false),
 			expectedRoute:   agentcontract.TurnRouteGiveUp,
-			expectedTarget:  agentcontract.AddressingTargetBot,
+			expectedTarget:  inboundengagement.AddressingTargetBot,
 			expectedRespond: true,
 		},
 		{
 			name:             "a bare yes approves the pending action",
 			request:          intakeDecisionRequestWithPendingConfirmation("message-7", "응 해줘"),
-			expectedTarget:   agentcontract.AddressingTargetBot,
+			expectedTarget:   inboundengagement.AddressingTargetBot,
 			expectedRespond:  true,
 			expectedApproval: agentcontract.ApprovalSignalApprove,
 		},
 		{
 			name:             "a refusal in ordinary words rejects the pending action",
 			request:          intakeDecisionRequestWithPendingConfirmation("message-8", "아니 이번에는 하지 마"),
-			expectedTarget:   agentcontract.AddressingTargetBot,
+			expectedTarget:   inboundengagement.AddressingTargetBot,
 			expectedRespond:  true,
 			expectedApproval: agentcontract.ApprovalSignalReject,
 		},
 		{
 			name:               "a natural-language reply selects the pending option",
 			request:            intakeDecisionRequestWithPendingChoice("message-9", "발표자료로 만들어 주세요"),
-			expectedTarget:     agentcontract.AddressingTargetBot,
+			expectedTarget:     inboundengagement.AddressingTargetBot,
 			expectedRespond:    true,
 			expectedChoiceKeys: []string{"B"},
 		},
 		{
 			name:                "an addition while work runs belongs to the running task",
 			request:             intakeDecisionRequestWithActiveTask("message-10", "아 그리고 작년 수치도 같이 넣어줘"),
-			expectedTarget:      agentcontract.AddressingTargetBot,
+			expectedTarget:      inboundengagement.AddressingTargetBot,
 			expectedRespond:     true,
 			expectedRelatesTask: true,
 		},

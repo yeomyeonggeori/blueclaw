@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -14,7 +15,7 @@ import (
 func TestAMessageIsNotRoutedIntoARunningTaskNoTurnIsWorkingOn(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
 	busyCapableDecision := startTaskTurnDecision()
-	busyCapableDecision.BusyRoute = agentcontract.BusyRouteStatus
+	busyCapableDecision.BusyRoute = inboundengagement.BusyRouteStatus
 	harness.TurnDecision = busyCapableDecision
 	harness.Reply = "아직 그 작업을 하고 있습니다."
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "새 작업으로 처리했습니다."}

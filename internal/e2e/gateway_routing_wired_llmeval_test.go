@@ -63,14 +63,14 @@ func TestTheWiredJudgeReadsTheJudgmentsOfTheWiredPath(t *testing.T) {
 		Task:         routingTask{Prompt: "build the sales table", Summary: "halfway"},
 		Messages:     []routingMessage{{Text: "how far along is it?", Sender: "Sample", Expect: routingExpectation{}}},
 	}
-	decisionModel := &routingScriptedDecisionModel{busyRoute: string(agentcontract.BusyRouteStatus), relates: true}
+	decisionModel := &routingScriptedDecisionModel{busyRoute: string(inboundengagement.BusyRouteStatus), relates: true}
 
 	judgement, errorValue := wiredRoutingJudge{decisionModel: decisionModel}.Judge(context.Background(), routing)
 
 	if errorValue != nil || len(judgement.Verdicts) != 1 {
 		t.Fatalf("expected one verdict: %+v %v", judgement, errorValue)
 	}
-	if judgement.Verdicts[0].BusyRoute != string(agentcontract.BusyRouteStatus) || !judgement.Verdicts[0].RelatesToActiveTask {
+	if judgement.Verdicts[0].BusyRoute != string(inboundengagement.BusyRouteStatus) || !judgement.Verdicts[0].RelatesToActiveTask {
 		t.Fatalf("expected the wired path to put the running task in the facts and read the decider's answers, got %+v", judgement.Verdicts[0])
 	}
 	if decisionModel.sawOpenTask != "build the sales table" {
@@ -89,7 +89,7 @@ func TestADirectMessageWithNothingOpenReachesNoDecisionInTheWiredPath(t *testing
 
 	judgement, errorValue := wiredRoutingJudge{decisionModel: decisionModel}.Judge(context.Background(), routing)
 
-	if errorValue != nil || len(judgement.Verdicts) != 1 || judgement.Verdicts[0].Target != string(agentcontract.AddressingTargetBot) || !judgement.Verdicts[0].ShouldRespond {
+	if errorValue != nil || len(judgement.Verdicts) != 1 || judgement.Verdicts[0].Target != string(inboundengagement.AddressingTargetBot) || !judgement.Verdicts[0].ShouldRespond {
 		t.Fatalf("expected the message to go to the agent: %+v %v", judgement, errorValue)
 	}
 	if decisionModel.callCount() != 0 {
@@ -137,18 +137,18 @@ func activeTaskPromptOf(state any) string {
 func (decisionModel *routingScriptedDecisionModel) answerTo(questionName string, question model.DecisionQuestion) model.DecisionAnswer {
 	_, shortName, _ := strings.Cut(questionName, ".")
 	switch shortName {
-	case agentcontract.IntakeQuestionRelatesToActiveTask:
+	case inboundengagement.QuestionRelatesToActiveTask:
 		return model.DecisionAnswer{Type: question.Type, Noul: boolProbability(decisionModel.relates)}
-	case agentcontract.IntakeQuestionShouldRespond:
+	case inboundengagement.QuestionShouldRespond:
 		return model.DecisionAnswer{Type: question.Type, Noul: 1}
-	case agentcontract.IntakeQuestionBusyRoute:
+	case inboundengagement.QuestionBusyRoute:
 		return model.DecisionAnswer{Type: question.Type, Choice: decisionModel.busyRoute}
-	case agentcontract.IntakeQuestionReaction:
-		return model.DecisionAnswer{Type: question.Type, Choice: agentcontract.IntakeReactionOptionNone, Probabilities: map[string]float64{agentcontract.IntakeReactionOptionNone: 1}}
-	case agentcontract.IntakeQuestionDuty:
-		return model.DecisionAnswer{Type: question.Type, Choice: agentcontract.IntakeDutyOptionNone}
-	case agentcontract.IntakeQuestionTarget:
-		return model.DecisionAnswer{Type: question.Type, Choice: string(agentcontract.AddressingTargetBot)}
+	case inboundengagement.QuestionReaction:
+		return model.DecisionAnswer{Type: question.Type, Choice: inboundengagement.ReactionOptionNone, Probabilities: map[string]float64{inboundengagement.ReactionOptionNone: 1}}
+	case inboundengagement.QuestionDuty:
+		return model.DecisionAnswer{Type: question.Type, Choice: inboundengagement.DutyOptionNone}
+	case inboundengagement.QuestionTarget:
+		return model.DecisionAnswer{Type: question.Type, Choice: string(inboundengagement.AddressingTargetBot)}
 	default:
 		return model.DecisionAnswer{Type: question.Type, Choice: "eyes"}
 	}
@@ -320,7 +320,7 @@ func wiredVerdicts(routing routingCase, events []connectors.PlatformInboundEvent
 	for _, event := range events {
 		judgment, isJudged := recorder.judgmentFor(event.MessageID)
 		if !isJudged {
-			verdicts = append(verdicts, routingVerdict{Target: string(agentcontract.AddressingTargetBot), ShouldRespond: true})
+			verdicts = append(verdicts, routingVerdict{Target: string(inboundengagement.AddressingTargetBot), ShouldRespond: true})
 			continue
 		}
 		verdicts = append(verdicts, deciderVerdict(judgment))

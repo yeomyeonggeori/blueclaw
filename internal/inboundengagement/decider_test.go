@@ -36,7 +36,7 @@ func (decisionModel *answeringModel) answerFor(questionKey string, question mode
 	if question.Type == model.DecisionQuestionTypeNoul {
 		return model.DecisionAnswer{Type: question.Type, Noul: decisionModel.noul[questionName]}
 	}
-	return model.DecisionAnswer{Type: question.Type, Choice: decisionModel.choices[questionName], Probabilities: map[string]float64{agentcontract.IntakeReactionOptionReact: 0.9}}
+	return model.DecisionAnswer{Type: question.Type, Choice: decisionModel.choices[questionName], Probabilities: map[string]float64{ReactionOptionReact: 0.9}}
 }
 
 func (decisionModel *answeringModel) askedQuestionNames() []string {
@@ -53,20 +53,20 @@ func (decisionModel *answeringModel) askedQuestionNames() []string {
 func defaultAnswers() *answeringModel {
 	return &answeringModel{
 		choices: map[string]string{
-			agentcontract.IntakeQuestionTarget:        string(agentcontract.AddressingTargetBot),
-			agentcontract.IntakeQuestionReaction:      agentcontract.IntakeReactionOptionNone,
-			agentcontract.IntakeQuestionReactionEmoji: "eyes",
-			agentcontract.IntakeQuestionDuty:          agentcontract.IntakeDutyOptionNone,
-			agentcontract.IntakeQuestionBusyRoute:     string(agentcontract.BusyRouteSteer),
+			QuestionTarget:        string(AddressingTargetBot),
+			QuestionReaction:      ReactionOptionNone,
+			QuestionReactionEmoji: "eyes",
+			QuestionDuty:          DutyOptionNone,
+			QuestionBusyRoute:     string(BusyRouteSteer),
 		},
-		noul: map[string]float64{agentcontract.IntakeQuestionShouldRespond: 1},
+		noul: map[string]float64{QuestionShouldRespond: 1},
 	}
 }
 
 func messageFacts(conversationType string, isMentioned bool, texts ...string) Facts {
 	facts := Facts{ConversationType: conversationType, AgentIdentity: agentcontract.AgentIdentity{Name: "김인턴", Handle: "internkim"}}
 	for _, text := range texts {
-		facts.Messages = append(facts.Messages, agentcontract.IntakeDecisionMessage{MessageID: "message-" + text, Prompt: text, SenderName: "이샘플", BotMentioned: isMentioned})
+		facts.Messages = append(facts.Messages, Message{MessageID: "message-" + text, Prompt: text, SenderName: "이샘플", BotMentioned: isMentioned})
 	}
 	return facts
 }
@@ -103,7 +103,7 @@ func TestADirectMessageWithNothingOpenMakesNoCall(t *testing.T) {
 	if len(decisionModel.requests) != 0 {
 		t.Fatalf("expected no call, got %d", len(decisionModel.requests))
 	}
-	if len(judgments) != 1 || judgments[0].Addressing.Target != agentcontract.AddressingTargetBot || !judgments[0].Addressing.ShouldRespond {
+	if len(judgments) != 1 || judgments[0].Addressing.Target != AddressingTargetBot || !judgments[0].Addressing.ShouldRespond {
 		t.Fatalf("a direct message goes to the agent: %+v", judgments)
 	}
 }
@@ -219,10 +219,10 @@ func TestTheBusyRouteOffersTheSameSixRoutesForARunningAndAWaitingTask(t *testing
 	question := busyRouteQuestion("")
 
 	criteria, isDescribed := question.Criteria.(map[string]string)
-	if !isDescribed || len(criteria) != len(agentcontract.BusyRouteNames) {
-		t.Fatalf("expected a description for each of %v, got %+v", agentcontract.BusyRouteNames, question.Criteria)
+	if !isDescribed || len(criteria) != len(BusyRouteNames) {
+		t.Fatalf("expected a description for each of %v, got %+v", BusyRouteNames, question.Criteria)
 	}
-	for _, routeName := range agentcontract.BusyRouteNames {
+	for _, routeName := range BusyRouteNames {
 		if criteria[routeName] == "" {
 			t.Fatalf("route %s has no description", routeName)
 		}
@@ -234,7 +234,7 @@ func TestTheBusyRouteOffersTheSameSixRoutesForARunningAndAWaitingTask(t *testing
 
 func TestAHumanTargetNeverGetsAReply(t *testing.T) {
 	decisionModel := defaultAnswers()
-	decisionModel.choices[agentcontract.IntakeQuestionTarget] = string(agentcontract.AddressingTargetHuman)
+	decisionModel.choices[QuestionTarget] = string(AddressingTargetHuman)
 
 	judgments := decideWith(t, decisionModel, messageFacts("O", false, "박예시 님 감사합니다"))
 
@@ -259,7 +259,7 @@ func TestAReactionEmojiIsReadOnlyWhenTheDrawFallsInsideTheProbability(t *testing
 
 func TestADutyMatchCarriesItsNameAndBoundedConfidence(t *testing.T) {
 	decisionModel := defaultAnswers()
-	decisionModel.choices[agentcontract.IntakeQuestionDuty] = "calendar_upkeep"
+	decisionModel.choices[QuestionDuty] = "calendar_upkeep"
 
 	judgments := decideWith(t, decisionModel, withDuties(messageFacts("O", false, "내일 3시 회의")))
 
@@ -271,13 +271,13 @@ func TestADutyMatchCarriesItsNameAndBoundedConfidence(t *testing.T) {
 
 func TestTheOpenTaskAnswersAreReadIntoTheJudgment(t *testing.T) {
 	decisionModel := defaultAnswers()
-	decisionModel.choices[agentcontract.IntakeQuestionBusyRoute] = string(agentcontract.BusyRouteStatus)
-	decisionModel.noul[agentcontract.IntakeQuestionRelatesToActiveTask] = 1
+	decisionModel.choices[QuestionBusyRoute] = string(BusyRouteStatus)
+	decisionModel.noul[QuestionRelatesToActiveTask] = 1
 
 	judgments := decideWith(t, decisionModel, withOpenTask(messageFacts("D", false, "아직이야?"), "waiting_approval"))
 
 	judgment := judgments[0]
-	if judgment.BusyRoute != agentcontract.BusyRouteStatus || !judgment.HasRelatesToActiveTask || !judgment.RelatesToActiveTask {
+	if judgment.BusyRoute != BusyRouteStatus || !judgment.HasRelatesToActiveTask || !judgment.RelatesToActiveTask {
 		t.Fatalf("expected status and a relation, got %+v", judgment)
 	}
 }
@@ -292,7 +292,7 @@ func TestAFinishedTaskAsksNoBusyRoute(t *testing.T) {
 
 func TestAMissingAnswerIsAnError(t *testing.T) {
 	decisionModel := defaultAnswers()
-	decisionModel.choices[agentcontract.IntakeQuestionTarget] = ""
+	decisionModel.choices[QuestionTarget] = ""
 
 	_, errorValue := NewDecisionModelDecider(decisionModel, nil).Decide(context.Background(), messageFacts("O", true, "a"), nil)
 

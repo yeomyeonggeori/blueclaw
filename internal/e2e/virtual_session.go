@@ -48,7 +48,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/skill"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
@@ -899,7 +898,6 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	turnScript := scenarioTurnScriptFor(scriptedModel)
 	changeChecks := &scenarioChangeChecks{}
 	intakeDecisionModel := scenarioIntakeDecisionModel(scenario, turnScript, firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel))
-	scenarioDecisionPlanner := intake.NewDecisionPlanner(intakeDecisionModel, nil, nil)
 	scriptedDecisionModel, _ := intakeDecisionModel.(*scenarioDecisionModel)
 	scenarioReader := scenarioReplyReader{decisionModel: scriptedDecisionModel}
 	agentHarness, skillRetriever := virtualSessionAgentHarnessFactory(harnessdriver.Dependencies{
@@ -916,7 +914,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 		InstructionBundleLoader:     instructionBundleLoader,
 		EmbeddingProvider:           scenario.EmbeddingProvider,
 		EmbeddingModelName:          scenario.EmbeddingModel,
-		DecisionModel:               scenarioLoopDecisionModel(scenario, scriptedModel, changeChecks),
+		DecisionModel:               scenarioHarnessDecisionModel(scenario, intakeDecisionModel, scenarioLoopDecisionModel(scenario, scriptedModel, changeChecks)),
 	})
 
 	identityService := identity.NewIdentityService(virtualPolicyProjection(scenario.RequesterIsAdmin))
@@ -924,8 +922,6 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	adapter := &virtualAdapter{workspacePath: workspacePath}
 	runtime.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, highLanguageModel))
 	runtime.UseReplyGenerator(reply.NewGenerator(highLanguageModel, instructionBundleLoader))
-	scenarioTurnRouter := intake.NewTurnRouter(firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel), scenarioDecisionPlanner, agentcontract.IntakeOptions{IsEnabled: true, DefaultTaskLevel: agentcontract.TaskLevelLow})
-	runtime.UseTurnRouter(scenarioTurnRouter)
 	runtime.UseGatewayDecider(inboundengagement.NewDecisionModelDecider(intakeDecisionModel, nil))
 	runtime.UseApprovalReplyReader(scenarioReader)
 	runtime.RegisterAdapter(adapter)
@@ -976,7 +972,6 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	useVirtualDirectMessages(runtime, identityService)
 	virtualApprovalGate.UsePermissionAsker(runtime.ThreadPermissionAsker())
 	virtualTaskLauncher.UseApprovalGate(virtualApprovalGate)
-	virtualTaskLauncher.UseTurnRouter(scenarioTurnRouter)
 	virtualTaskLauncher.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, highLanguageModel))
 	virtualTaskLauncher.UseRequesterEmailResolver(identityService)
 	runtime.UseTaskLauncher(virtualTaskLauncher)
@@ -2802,7 +2797,7 @@ func scenarioTurnWordsResponse() string {
 }
 
 func scenarioLaunchesAmbientDuty(scenario VirtualSessionScenario) bool {
-	var decision agentcontract.AddressingDecision
+	var decision inboundengagement.AddressingDecision
 	if json.Unmarshal([]byte(scenario.AddressingResponse), &decision) != nil {
 		return false
 	}
@@ -2861,7 +2856,7 @@ func scenarioChoiceRouterResponse(choiceKey string) string {
 		"taskShape":        "maintenance_task",
 		"level":            "low",
 		"choices":          []string{strings.TrimSpace(choiceKey)},
-		"busyRoute":        string(agentcontract.BusyRouteNewTask),
+		"busyRoute":        string(inboundengagement.BusyRouteNewTask),
 		"responseLanguage": "ko",
 		"reason":           "scripted choice reply classification",
 		"userFacingReply":  "",
@@ -2879,7 +2874,7 @@ func scenarioApprovalRouterResponse(approval string) string {
 		"taskShape":        "maintenance_task",
 		"level":            "low",
 		"approval":         strings.TrimSpace(approval),
-		"busyRoute":        string(agentcontract.BusyRouteNewTask),
+		"busyRoute":        string(inboundengagement.BusyRouteNewTask),
 		"responseLanguage": "ko",
 		"reason":           "scripted approval reply classification",
 		"userFacingReply":  "",
@@ -2927,7 +2922,7 @@ func scenarioTurnRouterResponse(scenario VirtualSessionScenario, virtualTurn Vir
 		"userFacingReply":        "",
 		"initialToolNames":       appendUniqueScenarioToolNames(scenario.InitialToolNames, requiredEvidence),
 		"priorTaskReference":     "none",
-		"busyRoute":              string(agentcontract.BusyRouteNewTask),
+		"busyRoute":              string(inboundengagement.BusyRouteNewTask),
 	}
 	if scenario.ScriptedExecutionPlan != nil && (scenario.ScriptedExecutionPlan.ExternalSend || scenario.ScriptedExecutionPlan.ThirdPartyExternalSend) {
 		routerDocument["isExternalSendRequested"] = true

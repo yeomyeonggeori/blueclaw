@@ -25,23 +25,23 @@ func (connectorRuntime *ConnectorRuntime) settleBusyDecision(
 	event PlatformInboundEvent,
 	replyTarget ReplyTarget,
 	activeTaskRun task.TaskRun,
-	busyRoute agentcontract.BusyRoute,
+	busyRoute inboundengagement.BusyRoute,
 	sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error),
 ) (busyMessageResult, error) {
 	switch busyRoute {
-	case agentcontract.BusyRouteStatus:
+	case inboundengagement.BusyRouteStatus:
 		return connectorRuntime.handleBusyStatusMessage(ctx, platform, event, replyTarget, activeTaskRun, sendReply)
-	case agentcontract.BusyRouteSteer:
+	case inboundengagement.BusyRouteSteer:
 		return connectorRuntime.handleBusySteerMessage(ctx, platform, event, replyTarget, activeTaskRun, sendReply)
-	case agentcontract.BusyRouteReplace:
+	case inboundengagement.BusyRouteReplace:
 		connectorRuntime.replaceBusyTask(event, activeTaskRun)
 		return busyMessageResult{clearActiveGoal: true}, nil
-	case agentcontract.BusyRouteCancel:
+	case inboundengagement.BusyRouteCancel:
 		return connectorRuntime.handleBusyCancelMessage(ctx, platform, event, replyTarget, activeTaskRun, sendReply)
-	case agentcontract.BusyRouteNewTask:
+	case inboundengagement.BusyRouteNewTask:
 		connectorRuntime.supersedeBusyTask(event, platform, activeTaskRun)
 		return busyMessageResult{clearActiveGoal: true}, nil
-	case agentcontract.BusyRouteUnrelated:
+	case inboundengagement.BusyRouteUnrelated:
 		return busyMessageResult{connectorResult: ConnectorRuntimeResult{Handled: true, Platform: platform, Ignored: true, Reason: "busy_unrelated"}, isHandled: true}, nil
 	default:
 		return busyMessageResult{}, errors.New("the gateway decision returned an invalid busy route")
@@ -176,7 +176,6 @@ func steeredTaskLaunchRequest(launchRequest agentruntime.TaskLaunchRequest, even
 		return launchRequest
 	}
 	launchRequest.Prompt = steeredPrompt
-	launchRequest.PrecomputedTurnDecision = nil
 	launchRequest.IsRuntimeRestartResume = false
 	return launchRequest
 }
