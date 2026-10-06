@@ -708,6 +708,8 @@ func TestAQuestionToARequesterTheMessengerRefusesIsUnreachable(t *testing.T) {
 
 	if taskRun.Status == task.TaskStatusWaitingApproval || !connectorTaskEventsContain(fixture.connectorRuntime, taskRun.TaskRunID, approvalgate.TaskEventApprovalUnreachable, "") {
 		t.Fatalf("a refused question left the run %s without an unreachable verdict", taskRun.Status)
+	}
+}
 
 func TestAReplyInTheQuestionsThreadDecliningTheCallSettlesItWithoutRunningIt(t *testing.T) {
 	fixture := newThreadAskFixture(t, deleteApprovalScript(`{"answer":"reject"}`))
