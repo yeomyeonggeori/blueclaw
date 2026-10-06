@@ -222,6 +222,8 @@ type VirtualTurn struct {
 	ReadsNoIntakeDecision        bool
 	AnswersApprovalHold          bool
 	FiresDueApprovedSchedules    bool
+	RunsScheduledRun             bool
+	RepliesInDirectMessage       bool
 	ExpectedSelectedSkills       []string
 	ExpectedToolCalls            []string
 	ExpectedAnyToolCalls         []string
@@ -787,6 +789,7 @@ var builtinScenarioFactories = map[string]func(string) VirtualSessionScenario{
 	"host_update_now_acceptance":                HostUpdateNowAcceptanceScenario,
 	"host_update_off_hours_acceptance":          HostUpdateOffHoursAcceptanceScenario,
 	"host_update_member_refused":                HostUpdateMemberRefusedScenario,
+	"scheduled_run_asks_in_direct_message":      ScheduledRunAsksInDirectMessageScenario,
 }
 
 func BuiltinScenario(name string, artifactDirectoryPath string) (VirtualSessionScenario, error) {
@@ -975,6 +978,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	virtualApprovalGate.UseApprovedCallScheduler(approvedCallSchedules)
 	runtime.UseApprovalGate(virtualApprovalGate)
 	runtime.UseAskInThread(scenario.AskInThread)
+	useVirtualDirectMessages(runtime, identityService)
 	virtualApprovalGate.UsePermissionAsker(runtime.ThreadPermissionAsker())
 	virtualTaskLauncher.UseApprovalGate(virtualApprovalGate)
 	virtualTaskLauncher.UseTurnRouter(scenarioTurnRouter)
@@ -2989,6 +2993,9 @@ func (harness *VirtualSessionHarness) runTurn(ctx context.Context, index int, vi
 	messages := harness.adapter.VisibleHistory()
 	messages = append(messages, virtualTurn.ContextMessages...)
 	conversationID := virtualConversationID
+	if virtualTurn.RepliesInDirectMessage {
+		conversationID = virtualDirectConversationID
+	}
 	historyCursor := ""
 	if len(messages) > 0 {
 		historyCursor = conversationID
@@ -3034,7 +3041,7 @@ func (harness *VirtualSessionHarness) runTurn(ctx context.Context, index int, vi
 			return harness.observedTurnResult(reactionStartIndex, modelCallStartIndex, modelRequestStartIndex)
 		})
 	}
-	runtimeResult, errorValue := harness.handleInboundEvent(ctx, event)
+	runtimeResult, errorValue := harness.handleTurn(ctx, virtualTurn, event)
 	if errorValue != nil {
 		return VirtualTurnResult{}, errorValue
 	}

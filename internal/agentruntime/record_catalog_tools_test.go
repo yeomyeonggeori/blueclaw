@@ -8,10 +8,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
+	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
 
 type recordCatalogStandIn struct {
@@ -244,5 +247,103 @@ func TestATurnNobodyAskedForDiscoversNothing(t *testing.T) {
 	stamped, isFound := toolSet.ToolDefinition("task_add")
 	if !isFound || stamped.ProviderID != "capabilityd" {
 		t.Fatalf("task_add came from %q, found %v", stamped.ProviderID, isFound)
+	}
+}
+
+func aMessageSendDescriptor() capability.ToolDescriptor {
+	descriptor := aDescriptor("message_send", capability.AnsweredByRecord)
+	descriptor.InputSchema = json.RawMessage(`{"type":"object","properties":{"personHint":{"type":"string"},"message":{"type":"string"}},"required":["personHint","message"],"additionalProperties":false}`)
+	descriptor.InputIntentSchema = json.RawMessage(`{"type":"object","properties":{"personHint":{"type":"string"},"message":{"type":"string"}},"additionalProperties":false}`)
+	descriptor.RequiresApproval = true
+	descriptor.SideEffectClass = toolcontract.ToolSideEffectExternalSend
+	return descriptor
+}
+
+func aHoldOnAMessageToPerson(t *testing.T, taskRunService *task.TaskRunService) (string, string) {
+	t.Helper()
+	taskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "send the message")
+	hold := holdrecord.Open(taskRunService, taskRun.TaskRunID, agentcontract.HeldCall{
+		ToolName:          "message_send",
+		ToolInput:         json.RawMessage(`{"personHint":"박예시","message":"내일 만나요"}`),
+		ApprovedToolInput: json.RawMessage(`{"personHint":"person-2","message":"내일 만나요"}`),
+	}, nil)
+	return taskRun.TaskRunID, hold.ID
+}
+
+func TestARecordToolRunsTheInputTheHoldApprovedNotTheInputTheModelSendsLater(t *testing.T) {
+	standIn := &recordCatalogStandIn{
+		discovered: []capability.ToolDescriptor{aMessageSendDescriptor()},
+		answered:   mcp.ToolResult{StructuredContent: json.RawMessage(`{"tool":"message_send","result":{}}`)},
+	}
+	toolCatalogBuilder, _ := aBuilderWith(aMessageSendDescriptor())
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	toolCatalogBuilder.UseTaskRunService(taskRunService)
+	taskRunID, holdID := aHoldOnAMessageToPerson(t, taskRunService)
+	toolSet := toolCatalogBuilder.BuildToolSet(aRequestFrom(standIn, "sample@example.test"))
+	approvedContext := toolcontract.WithHoldID(toolcontract.WithTaskRunID(context.Background(), taskRunID), holdID)
+
+	_, errorValue := toolSet.InvokeInternal(approvedContext, toolcontract.ToolInvocation{
+		ToolName: "message_send",
+		Input:    json.RawMessage(`{"personHint":"최견본","message":"지금 만나요"}`),
+	})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	if agentcontract.CanonicalToolInput(standIn.calledWith) != `{"message":"내일 만나요","personHint":"person-2"}` {
+		t.Fatalf("the record was called with %s, expected the input the hold approved", standIn.calledWith)
+	}
+}
+
+func TestARecordToolWithNoHoldRunsTheInputItWasGiven(t *testing.T) {
+	standIn := &recordCatalogStandIn{
+		discovered: []capability.ToolDescriptor{aMessageSendDescriptor()},
+		answered:   mcp.ToolResult{StructuredContent: json.RawMessage(`{"tool":"message_send","result":{}}`)},
+	}
+	toolCatalogBuilder, _ := aBuilderWith(aMessageSendDescriptor())
+	toolCatalogBuilder.UseTaskRunService(task.NewTaskRunService(task.NewTaskEventService()))
+	toolSet := toolCatalogBuilder.BuildToolSet(aRequestFrom(standIn, "sample@example.test"))
+
+	_, errorValue := toolSet.InvokeInternal(context.Background(), toolcontract.ToolInvocation{
+		ToolName: "message_send",
+		Input:    json.RawMessage(`{"personHint":"최견본","message":"지금 만나요"}`),
+	})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	if agentcontract.CanonicalToolInput(standIn.calledWith) != `{"message":"지금 만나요","personHint":"최견본"}` {
+		t.Fatalf("the record was called with %s", standIn.calledWith)
+	}
+}
+
+func TestAPlatformMessageCapabilityRunsTheInputTheHoldApproved(t *testing.T) {
+	httpClient := &recordingHTTPClient{}
+	toolCatalogBuilder := NewToolCatalogBuilder()
+	toolCatalogBuilder.UseTestCapabilityToolDescriptors(capability.Client{Endpoint: "http://capability.local", HTTPClient: httpClient}, []CapabilityToolDescriptor{{
+		Name:        "message_send",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"personHint":{"type":"string"},"message":{"type":"string"}},"required":["personHint","message"],"additionalProperties":false}`),
+	}})
+	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"message_send"})
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	toolCatalogBuilder.UseTaskRunService(taskRunService)
+	taskRunID, holdID := aHoldOnAMessageToPerson(t, taskRunService)
+	toolSet := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{ProfileName: "default"})
+	approvedContext := toolcontract.WithHoldID(toolcontract.WithTaskRunID(context.Background(), taskRunID), holdID)
+
+	_, errorValue := toolSet.Invoke(approvedContext, toolcontract.ToolInvocation{
+		ToolName: "message_send",
+		Input:    json.RawMessage(`{"personHint":"최견본","message":"지금 만나요"}`),
+	})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	var sent struct {
+		Input json.RawMessage `json:"input"`
+	}
+	json.Unmarshal([]byte(httpClient.requestBody), &sent)
+	if agentcontract.CanonicalToolInput(sent.Input) != `{"message":"내일 만나요","personHint":"person-2"}` {
+		t.Fatalf("the capability was asked to run %s, expected the input the hold approved", sent.Input)
 	}
 }

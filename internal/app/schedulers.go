@@ -6,6 +6,7 @@ import (
 	"net/url"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/runtimecontrol"
@@ -27,14 +28,18 @@ func configureMorningBriefing(poller *scheduler.SchedulePoller, configuration co
 		PersonAccessResolver: directory.identityService,
 		ActorFactory:         kernel.terminalService.WorkspaceActorFactory(),
 		WorkspaceRootPath:    configuration.Terminal.WorkspaceRootPath, Logger: logger,
-		OpenDirectMessage: func(ctx context.Context, platform string, externalUserID string) (string, string, error) {
-			var response struct {
-				ConversationID string `json:"conversationID"`
-				ReplyTargetID  string `json:"replyTargetID"`
-			}
-			errorValue := client.PostJSON(ctx, "/v1/platform/"+url.PathEscape(platform)+"/dm.open", map[string]string{"externalUserID": externalUserID}, &response)
-			return response.ConversationID, response.ReplyTargetID, errorValue
-		},
+		OpenDirectMessage: newDirectMessageOpener(client),
+	}
+}
+
+func newDirectMessageOpener(client capability.Client) func(context.Context, string, string) (string, string, error) {
+	return func(ctx context.Context, platform string, externalUserID string) (string, string, error) {
+		var response struct {
+			ConversationID string `json:"conversationID"`
+			ReplyTargetID  string `json:"replyTargetID"`
+		}
+		errorValue := client.PostJSON(ctx, "/v1/platform/"+url.PathEscape(platform)+"/dm.open", map[string]string{"externalUserID": externalUserID}, &response)
+		return response.ConversationID, response.ReplyTargetID, errorValue
 	}
 }
 
