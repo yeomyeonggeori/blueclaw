@@ -756,14 +756,14 @@ func CalendarFalseFinishRecoveryAcceptanceScenario(artifactDirectoryPath string)
 				actionFinishMessage("7월 13일 미팅을 오전 10시~11시로 등록했습니다.", "obs-002"),
 			},
 			ExpectedChangesResponses: []string{expectedChangeResponse("calendar created", "샨보장 미팅을 오전 10시부터 11시까지 등록해줘")},
-			ChangeCheckAnswers:       []map[string]float64{{"expected0": 0.9}},
+			ChangeCheckAnswers:       []map[string]float64{{"expected0": 0.1}, {"expected0": 0.9}},
 			ExpectedSelectedSkills:   []string{"calendar"},
 			ExpectedToolCalls:        []string{"event_add"},
 			ExpectedToolCallCounts: map[string]int{
 				"event_add": 1,
 			},
 			ExpectedEventCounts: []VirtualEventCount{
-				{Name: agentcontract.TaskEventCompletionChangeCheck, BodyFragment: `"unrecorded":[{"change":"calendar created"`, Count: 1},
+				{Name: agentcontract.TaskEventCompletionChangeCheck, BodyFragment: `"carriedOut":{"expected0":0.1},"unrecorded":[{"change":"calendar created"`, Count: 1},
 				{Name: agentcontract.TaskEventAgentEvidenceMissing, BodyFragment: "nothing recorded changed this kind of record", Count: 1},
 				{Name: agentcontract.TaskEventAgentCompletionRequired, BodyFragment: "nothing recorded changed this kind of record", Count: 1},
 				{Name: toolRequestedEventName("event_add"), BodyFragment: "2026-07-13T10:00:00+09:00", Count: 1},
