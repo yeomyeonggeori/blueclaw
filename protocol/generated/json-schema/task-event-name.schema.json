@@ -106,7 +106,6 @@
         "approval.hold_spent",
         "approval.scope_granted",
         "approval.unheld_call_carried_out",
-        "approval.wording_failed",
         "ask.reply_classified",
         "ask.requested",
         "ask.resolved",

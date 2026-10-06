@@ -161,7 +161,6 @@ export enum TaskEventName {
   ApprovalHoldSpent = 'approval.hold_spent',
   ApprovalScopeGranted = 'approval.scope_granted',
   ApprovalUnheldCallCarriedOut = 'approval.unheld_call_carried_out',
-  ApprovalWordingFailed = 'approval.wording_failed',
   AskReplyClassified = 'ask.reply_classified',
   AskRequested = 'ask.requested',
   AskResolved = 'ask.resolved',
