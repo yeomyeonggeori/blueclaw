@@ -212,7 +212,7 @@ func TestAnImageAToolReadReachesTheHarnessAsMCPImageContent(t *testing.T) {
 	}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		result := toolcontract.ToolSuccessData("a chart", json.RawMessage(`{}`))
 		result.Attachments = []toolcontract.FileAttachment{
-			{ContentType: "image/png", ContentBase64: base64.StdEncoding.EncodeToString(picture)},
+			{DevicePath: "/workspace/chart.png", ContentType: "image/png", ContentBase64: base64.StdEncoding.EncodeToString(picture)},
 			{ContentType: "application/pdf", ContentBase64: "JVBERg=="},
 		}
 		return result, nil
@@ -233,5 +233,10 @@ func TestAnImageAToolReadReachesTheHarnessAsMCPImageContent(t *testing.T) {
 	image, isImage := callResult.Content[1].(*mcp.ImageContent)
 	if !isImage || image.MIMEType != "image/png" || !bytes.Equal(image.Data, picture) {
 		t.Fatalf("the picture changed on the way: %+v", callResult.Content[1])
+	}
+	var read toolcontract.FileAttachment
+	toolcontract.ApplyAttachmentMeta(&read, image.Meta)
+	if read.DevicePath != "/workspace/chart.png" {
+		t.Fatalf("the picture lost the path it can be reloaded from: %+v", image.Meta)
 	}
 }

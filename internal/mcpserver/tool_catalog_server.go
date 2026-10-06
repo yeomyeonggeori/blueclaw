@@ -131,7 +131,7 @@ func imageContents(toolResult toolcontract.ToolResult) []mcp.Content {
 		if errorValue != nil || len(data) == 0 {
 			continue
 		}
-		images = append(images, &mcp.ImageContent{Data: data, MIMEType: strings.TrimSpace(attachment.ContentType)})
+		images = append(images, &mcp.ImageContent{Data: data, MIMEType: strings.TrimSpace(attachment.ContentType), Meta: toolcontract.AttachmentMeta(attachment)})
 	}
 	return images
 }
