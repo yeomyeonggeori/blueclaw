@@ -22,15 +22,17 @@ type messageDecision struct {
 	once           sync.Once
 	decision       agentcontract.IntakeMessageDecision
 	callRecords    []agentcontract.LLMCallRecord
+	messageID      string
+	recordOnce     sync.Once
 	errorValue     error
 	wasEverDecided bool
 }
 
-func (agent *Agent) newMessageDecision(sessionTurn *connectors.SessionTurn) *messageDecision {
+func (agent *Agent) newMessageDecision(sessionTurn *connectors.SessionTurn, messageID string) *messageDecision {
 	decisionInput := func(ctx context.Context) agentcontract.IntakeDecisionRequest {
 		return sessionTurn.DecisionRequest(ctx)
 	}
-	return &messageDecision{intakeDecider: agent.intakeDecider, decisionInput: decisionInput}
+	return &messageDecision{intakeDecider: agent.intakeDecider, decisionInput: decisionInput, messageID: messageID}
 }
 
 func (memo *messageDecision) DecideAddressing(ctx context.Context, _ inboundengagement.Request) (agentcontract.AddressingDecision, error) {
@@ -71,7 +73,7 @@ func (agent *Agent) decideOnce(ctx context.Context, session openSession, message
 	if agent.intakeDecider == nil {
 		return launchRequest, nil, ""
 	}
-	memo := agent.newMessageDecision(sessionTurn)
+	memo := agent.newMessageDecision(sessionTurn, messageContext.MessageID)
 	gate := inboundengagement.NewGate(memo, agent.logger)
 	engagement := gate.Resolve(ctx, session.context.Addressing.Platform, inboundengagement.Request{
 		Prompt:           launchRequest.Prompt,
@@ -91,10 +93,28 @@ func (agent *Agent) decideOnce(ctx context.Context, session openSession, message
 }
 
 func (agent *Agent) recordDecisionCalls(memo *messageDecision, taskRunID string) {
-	if memo == nil || agent.taskRunStore == nil || strings.TrimSpace(taskRunID) == "" {
+	if memo == nil {
+		return
+	}
+	memo.recordOnce.Do(func() {
+		if strings.TrimSpace(taskRunID) == "" {
+			agent.recordTasklessDecisionCalls(memo)
+			return
+		}
+		if agent.taskRunStore == nil {
+			return
+		}
+		for _, callRecord := range memo.callRecords {
+			agent.taskRunStore.AppendLLMCall(taskRunID, callRecord)
+		}
+	})
+}
+
+func (agent *Agent) recordTasklessDecisionCalls(memo *messageDecision) {
+	if agent.tasklessCalls == nil {
 		return
 	}
 	for _, callRecord := range memo.callRecords {
-		agent.taskRunStore.AppendLLMCall(taskRunID, callRecord)
+		agent.tasklessCalls(connectors.JudgedMessageIDs(callRecord, memo.messageID), callRecord)
 	}
 }

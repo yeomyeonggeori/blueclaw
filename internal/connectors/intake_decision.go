@@ -100,11 +100,11 @@ func (connectorRuntime *ConnectorRuntime) recordTasklessIntakeCalls(messageID st
 		return
 	}
 	for _, callRecord := range callRecords {
-		connectorRuntime.recordTasklessLLMCall(judgedMessageIDs(callRecord, messageID), callRecord)
+		connectorRuntime.recordTasklessLLMCall(JudgedMessageIDs(callRecord, messageID), callRecord)
 	}
 }
 
-func judgedMessageIDs(callRecord agentcontract.LLMCallRecord, messageID string) []string {
+func JudgedMessageIDs(callRecord agentcontract.LLMCallRecord, messageID string) []string {
 	if len(callRecord.DecidedMessageIDs) > 0 {
 		return callRecord.DecidedMessageIDs
 	}
