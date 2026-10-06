@@ -178,6 +178,87 @@ func TestMorningBriefingCalendarInputRejectsMissingOrUnknownTimezone(t *testing.
 	}
 }
 
+func TestMorningBriefingIsEmptyCountsWhatTheScheduleReadReturns(t *testing.T) {
+	const noTasks = `{"tasks":[],"count":0,"unfinishedCount":0}`
+	ownEvent := scheduleEntry{Source: "event", Participants: []string{"sample@example.test"}}
+	otherEvent := scheduleEntry{Source: "event", Participants: []string{"other@example.test"}}
+	otherLeave := scheduleEntry{Source: "leave", Participants: []string{"other@example.test"}}
+	companyEvent := scheduleEntry{Source: "event"}
+	for _, testCase := range []struct {
+		name        string
+		calendar    []scheduleEntry
+		expectEmpty bool
+	}{
+		{name: "nothing on the calendar", expectEmpty: true},
+		{name: "only another person's event and leave", calendar: []scheduleEntry{otherEvent, otherLeave}, expectEmpty: true},
+		{name: "the requester's own event", calendar: []scheduleEntry{otherEvent, ownEvent}},
+		{name: "an event open to the whole company", calendar: []scheduleEntry{companyEvent}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			toolSet := morningBriefingScheduleToolSet(noTasks, testCase.calendar)
+			isEmpty, errorValue := morningBriefingIsEmpty(context.Background(), toolSet, "sample@example.test", "Asia/Seoul", time.Now())
+			if errorValue != nil {
+				t.Fatal(errorValue)
+			}
+			if isEmpty != testCase.expectEmpty {
+				t.Fatalf("expected empty=%v, got %v", testCase.expectEmpty, isEmpty)
+			}
+		})
+	}
+}
+
+type scheduleEntry struct {
+	Source       string   `json:"source"`
+	Participants []string `json:"participants"`
+}
+
+func (entry scheduleEntry) isOnScheduleOf(personHint string) bool {
+	if entry.Source == "event" && len(entry.Participants) == 0 {
+		return true
+	}
+	for _, participant := range entry.Participants {
+		if participant == personHint {
+			return true
+		}
+	}
+	return false
+}
+
+func morningBriefingScheduleToolSet(tasks string, calendar []scheduleEntry) *toolcontract.ToolSet {
+	toolSet := toolcontract.NewToolSet([]string{"task_list", "event_list"})
+	for _, toolName := range []string{"task_list", "event_list"} {
+		_ = toolSet.RegisterTool(toolcontract.ToolDefinition{
+			Name:            toolName,
+			Visibility:      toolcontract.ToolVisibilityModel,
+			SideEffectClass: toolcontract.ToolSideEffectRead,
+			ResultContract:  &toolcontract.ToolResultContract{Schema: json.RawMessage(`{}`)},
+		}, func(_ context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+			if invocation.ToolName == "task_list" {
+				return toolcontract.ToolSuccessData("tasks", json.RawMessage(tasks)), nil
+			}
+			return toolcontract.ToolSuccessData("events", eventListAnswer(invocation.Input, calendar)), nil
+		})
+	}
+	return toolSet
+}
+
+func eventListAnswer(input json.RawMessage, calendar []scheduleEntry) json.RawMessage {
+	var request struct {
+		PersonHints []string `json:"personHints"`
+	}
+	_ = json.Unmarshal(input, &request)
+	events := []scheduleEntry{}
+	for _, entry := range calendar {
+		if len(request.PersonHints) == 0 || entry.isOnScheduleOf(request.PersonHints[0]) {
+			events = append(events, entry)
+		}
+	}
+	answer, _ := json.Marshal(struct {
+		Events []scheduleEntry `json:"events"`
+	}{events})
+	return answer
+}
+
 func morningBriefingTestToolSet(tasks string, events string, replacement func(string) toolcontract.ToolResult) *toolcontract.ToolSet {
 	toolSet := toolcontract.NewToolSet([]string{"task_list", "event_list"})
 	for _, toolName := range []string{"task_list", "event_list"} {
