@@ -51,20 +51,25 @@ const about = "The sources are request (the requester's own words), attachments 
 	"Each claim is one value the writer put into a delivered document; at says where it sits. All claims belong to one document, so a claim can be checked against the others. " +
 	"removed, when present, lists values that were taken out of the document because the sources did not support them; the document no longer holds them."
 
-const sourceKind = "says what the request, attachments or runtimeFacts say, in other words, shortened or merged, with the same values, owners and status"
+const sourceKind = "says what the request, attachments or runtimeFacts say, in other words, shortened or merged, with the same values, owners and status; a figure credited to an origin the sources name as its origin is source"
 const derivedKind = "follows correctly from the sources by arithmetic or the calendar (a total, a share, a multiple, a duration, a weekday), is a heading or label naming what the sources hold, or summarizes them adding nothing"
 const expressionKind = "a unit with a relational role: a greeting, thanks, an apology, sympathy, an invitation to get in touch, a closing wish; a formulaic line that does a social or legal job (a business-letter greeting or closing, a contract recital, an agreement preamble, an offer-letter welcome, a proposal closing); or emphasis on, or an interpretation of, this document's own facts that adds no fact of its own (growth called fast when the sources give the figures, demand called proven when the sources show it). A line that does none of these jobs and only sounds weighty is hollow"
 
+const originGuard = "A credit to an origin, such as a Source line, is judged on its own: choose claim when the sources do not name that origin, even when the figures beside it are in the sources; a heading or label that names what the sources hold without crediting an origin is not claim. "
+
 const guardToday = "Wording, tone, emphasis and formatting are never claim, and whether the tone suits the kind of document is not this question. " +
-	"Choose claim only for content the sources do not hold, or hold with a weaker status."
+	originGuard + "Choose claim only for content the sources do not hold, or hold with a weaker status."
 
 const guardKinds = "Wording, tone, emphasis, formatting and where a value sits in a list are never a defect: choose source, derived or expression when the claim says what the sources say, however differently. " +
-	"Choose claim for content the sources do not hold, and do not require a unit to be wrong to be a claim. " +
+	"Choose claim for content the sources do not hold, and do not require a unit to be wrong to be a claim. " + originGuard +
 	"Choose mistake or error only when you can name the exact source value or other claim it conflicts with; do not add a requirement the sources do not state."
+
+const inventedFraming = "an origin named as where a figure comes from (a source line, a report, survey, dataset, internal system or metrics) that the sources do not state as that figure's origin, even when the figure itself is in the sources: a figure the request gives has no origin unless the request names one; " +
+	"a slogan or tagline presented as the company's or product's own that the sources do not state; "
 
 const removedReference = "a count, total, ordinal or reference that includes or names a value listed under removed, since the document no longer holds that value"
 
-const claimKind = "a specific, checkable fact, number, name, customer, ranking, date, promise, condition, cause or availability that no source holds and that no source contradicts; a new obligation; an evaluation of a person or of a quality stated as attested fact; or " + removedReference
+const claimKind = "a specific, checkable fact, number, name, customer, ranking, date, promise, condition, cause or availability that no source holds and that no source contradicts; " + inventedFraming + "a new obligation; an evaluation of a person or of a quality stated as attested fact; or " + removedReference
 
 const hollowKind = "a unit that spends the reader's attention and trust while giving nothing back: it conveys none of this document's facts, grounds for judgment, requests or relational gestures, and instead asserts a vague value or significance that cannot be checked, or manufactures weight through rhetorical form alone. " +
 	"Such text dilutes the real information, reads as machine-written so that the reader trusts even the true facts less, and signals that the writer did not think about this reader and situation. " +
@@ -84,7 +89,7 @@ var (
 			KindExpression: expressionKind,
 			KindClaim: "anything else: a fact, number, name, customer, ranking, date, promise, condition, cause or availability the sources lack; " +
 				"a source fact stated with a stronger status (a forecast or target as achieved or confirmed, some as all, planned as done, an estimate or average as exact or guaranteed); " +
-				"a new obligation; an evaluation of a person or of a quality stated as attested fact; or " + removedReference,
+				inventedFraming + "a new obligation; an evaluation of a person or of a quality stated as attested fact; or " + removedReference,
 		},
 		Guard:      guardToday,
 		Treatments: map[string]Treatment{KindClaim: TreatmentBlank},
