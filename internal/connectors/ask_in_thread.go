@@ -230,14 +230,18 @@ func (connectorRuntime *ConnectorRuntime) awaitAnswer(ctx context.Context, threa
 }
 
 func (connectorRuntime *ConnectorRuntime) answerAskingThread(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (ConnectorRuntimeResult, bool, error) {
-	if event.TaskRetry != nil || exactTaskControlIntent(event.Prompt) != agentcontract.TaskControlIntentNone {
-		return ConnectorRuntimeResult{}, false, nil
-	}
 	personID, isFound := connectorRuntime.identityService.ResolvePersonIDByPlatformAccount(adapter.Name(), event.SenderID)
 	if !isFound {
 		return ConnectorRuntimeResult{}, false, nil
 	}
-	for _, thread := range connectorRuntime.askingThreads.awaiting(adapter.Name(), event.ConversationID, personID) {
+	return connectorRuntime.answerAwaitingThreads(ctx, adapter.Name(), personID, event)
+}
+
+func (connectorRuntime *ConnectorRuntime) answerAwaitingThreads(ctx context.Context, platform string, personID string, event PlatformInboundEvent) (ConnectorRuntimeResult, bool, error) {
+	if event.TaskRetry != nil || exactTaskControlIntent(event.Prompt) != agentcontract.TaskControlIntentNone {
+		return ConnectorRuntimeResult{}, false, nil
+	}
+	for _, thread := range connectorRuntime.askingThreads.awaiting(platform, event.ConversationID, personID) {
 		result, isAnswer, errorValue := connectorRuntime.offerReplyToThread(ctx, thread, event)
 		if isAnswer || errorValue != nil {
 			return result, isAnswer, errorValue
