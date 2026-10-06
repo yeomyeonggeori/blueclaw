@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
@@ -58,7 +58,7 @@ func (handler TaskApprovalHandler) HandleApproveTaskRun(responseWriter http.Resp
 		writeApprovalResponse(responseWriter, taskApprovalResponse{TaskRunID: taskRun.TaskRunID, Status: "answered_in_place"})
 		return
 	}
-	approvalrecord.SettleSignal(handler.TaskRunService, taskRun.TaskRunID, turnDecision.Approval, "operator_terminal")
+	approvalgate.SettleSignal(handler.TaskRunService, taskRun.TaskRunID, turnDecision.Approval, "operator_terminal")
 	launchResult, errorValue := handler.TaskLauncher.Launch(context.Background(), agentruntime.TaskLaunchRequest{
 		Source:                     agentruntime.TaskLaunchSourceAdmin,
 		SourceReference:            "terminal:" + taskRun.TaskRunID,

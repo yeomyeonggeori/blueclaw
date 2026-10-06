@@ -9,20 +9,15 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 type Gate struct {
 	taskRunService         taskstate.TaskRunStore
-	languageModel          model.LanguageModelProvider
+	questionWorder         holdrecord.QuestionWorder
 	approvalTargetResolver ApprovalTargetResolver
 	permissionAsker        PermissionAsker
 	approvedCallScheduler  ApprovedCallScheduler
-}
-
-func (gate *Gate) UseLanguageModel(languageModel model.LanguageModelProvider) {
-	gate.languageModel = languageModel
 }
 
 func New(taskRunService taskstate.TaskRunStore) *Gate {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/yeomyeonggeori/bluecollar/approval"
 	"io"
 	"net/http"
 	"slices"
@@ -2623,7 +2624,7 @@ func TestConnectorRuntimeContinuesWaitingUserInputGoal(t *testing.T) {
 			"bluecollar_execution_plan": {
 				`{"originalInstruction":"샘플에게 DM 보내줘","summary":"샘플에게 DM을 보냅니다.","targets":["샘플"],"schedule":"","startAt":"","endAt":"","cadence":"","externalSend":true,"thirdPartyExternalSend":true,"repeated":false,"highFrequency":false,"destructive":false,"permissionChange":false,"publicDeploy":false,"paidAction":false,"missingInformation":["보낼 메시지"],"continuationInstruction":"샘플에게 DM을 보냅니다."}`,
 			},
-			"blueclaw_approval_question": {
+			"approval_question": {
 				`{"question":"핵심 사업 내용을 알려주시면 더 정확히 작성하겠습니다."}`,
 			},
 		},
@@ -2697,7 +2698,7 @@ func TestConnectorRuntimeContinuesAClarifiedTaskWithTheNextMessage(t *testing.T)
 			"bluecollar_execution_plan": {
 				`{"originalInstruction":"샘플에게 DM 보내줘","summary":"샘플에게 DM을 보냅니다.","targets":["샘플"],"schedule":"","startAt":"","endAt":"","cadence":"","externalSend":true,"thirdPartyExternalSend":true,"repeated":false,"highFrequency":false,"destructive":false,"permissionChange":false,"publicDeploy":false,"paidAction":false,"missingInformation":["보낼 메시지"],"continuationInstruction":"샘플에게 DM을 보냅니다."}`,
 			},
-			"blueclaw_approval_question": {
+			"approval_question": {
 				`{"question":"보낼 메시지를 알려주세요."}`,
 			},
 		},
@@ -3654,7 +3655,7 @@ func connectorRuntimeForHarness(t *testing.T, harness agentcontract.Harness, gat
 	connectorRuntime.UseTurnRouter(turnRouter)
 	connectorRuntime.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, languageModel))
 	testApprovalGate := approvalgate.New(taskRunService)
-	testApprovalGate.UseLanguageModel(languageModel)
+	testApprovalGate.UseQuestionWorder(approval.NewWorder(languageModel))
 	connectorRuntime.UseApprovalGate(testApprovalGate)
 	connectorRuntime.UseApprovalReplyReader(approvalreply.NewDecisionModelReader(approvalReplyDecisionModel{languageModel: languageModel}))
 	adapter := &testAdapter{senderEmail: "invited@example.com"}

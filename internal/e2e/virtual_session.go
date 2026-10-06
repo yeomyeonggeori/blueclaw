@@ -10,6 +10,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"github.com/yeomyeonggeori/bluecollar/approval"
 	"io"
 	"log/slog"
 	"maps"
@@ -967,7 +968,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	)
 	virtualTaskLauncher := agentruntime.NewTaskLauncher(agentHarness, taskRunService, toolCatalogBuilder)
 	virtualApprovalGate := approvalgate.New(taskRunService)
-	virtualApprovalGate.UseLanguageModel(highLanguageModel)
+	virtualApprovalGate.UseQuestionWorder(approval.NewWorder(highLanguageModel))
 	virtualApprovalGate.UseApprovalTargetResolver(agentruntime.NewCapabilityApprovalTargetResolver(capabilityClient))
 	approvedCallSchedules := &virtualApprovedCallSchedules{}
 	virtualApprovalGate.UseApprovedCallScheduler(approvedCallSchedules)

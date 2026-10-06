@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
 
@@ -64,7 +64,7 @@ func askWithChoices(t *testing.T, recordAnswer func(*task.TaskRunService, string
 
 func TestAskInputWithChoicesAnswersWithTheChoiceTheRequesterPicked(t *testing.T) {
 	result, taskRunService, taskRunID := askWithChoices(t, func(taskRunService *task.TaskRunService, taskRunID string) {
-		approvalrecord.RecordChoiceAnswer(taskRunService, taskRunID, holdrecord.Choice{Key: "2", Label: "Second"})
+		approvalgate.RecordChoiceAnswer(taskRunService, taskRunID, holdrecord.Choice{Key: "2", Label: "Second"})
 	})
 
 	if result.Failed() || !strings.Contains(result.ContentText(), "Second") {

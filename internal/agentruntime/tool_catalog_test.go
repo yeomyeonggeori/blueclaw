@@ -371,3 +371,13 @@ func (skillSearchTestRetriever) Search(_ context.Context, _ agentcontract.AgentR
 }
 
 func (skillSearchTestRetriever) Refresh(context.Context, []agentcontract.SkillInstruction) {}
+
+func TestBashApprovalIsAskedAboutTheCommandAndNotTheReasonForRunningIt(t *testing.T) {
+	toolSet := newFileToolTestCatalogBuilder(t.TempDir()).BuildToolSet(ToolCatalogRequest{ProfileName: "default"})
+
+	toolDefinition, isFound := findToolDefinition(toolSet.ListRegisteredToolDefinitions(), "bash")
+
+	if !isFound || len(toolDefinition.ApprovalInputFields) != 1 || toolDefinition.ApprovalInputFields[0] != "command" {
+		t.Fatalf("a reason states where the agent is heading, so the approval question must describe the command alone, got %+v", toolDefinition.ApprovalInputFields)
+	}
+}

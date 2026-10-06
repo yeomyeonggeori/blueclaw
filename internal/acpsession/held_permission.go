@@ -9,7 +9,6 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/holdrecord"
@@ -52,7 +51,7 @@ func (agent *Agent) reissueHeldPermission(ctx context.Context, sessionID acp.Ses
 	)
 	title := strings.TrimSpace(heldCall.Confirmation)
 	replyTargetID := firstNonEmpty(taskRun.OriginReplyTargetID, sessionContext.Addressing.ReplyTargetID)
-	choices := approvalrecord.OfferedChoices(agent.taskRunStore.ListTaskEvent(taskRun.TaskRunID))
+	choices := approvalgate.OfferedChoices(agent.taskRunStore.ListTaskEvent(taskRun.TaskRunID))
 	options := permissionOptions(choices)
 	// The client answers with the person's words, and the router that reads them
 	// is only offered an approval when the runtime can say which call is waiting.
@@ -91,9 +90,9 @@ func (agent *Agent) reissueHeldPermission(ctx context.Context, sessionID acp.Ses
 		return
 	}
 	if choice, isChosen := answer.ChosenFrom(choices); isChosen {
-		approvalrecord.RecordChoiceAnswer(agent.taskRunStore, taskRun.TaskRunID, choice)
+		approvalgate.RecordChoiceAnswer(agent.taskRunStore, taskRun.TaskRunID, choice)
 	}
-	approvalrecord.SettleSignal(agent.taskRunStore, taskRun.TaskRunID, &answer.Signal, "acp_permission_reload")
+	approvalgate.SettleSignal(agent.taskRunStore, taskRun.TaskRunID, &answer.Signal, "acp_permission_reload")
 	agent.resumeAnsweredTaskRun(ctx, sessionID, sessionContext, taskRun, nil)
 }
 

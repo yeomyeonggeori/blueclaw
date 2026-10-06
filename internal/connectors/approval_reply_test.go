@@ -1,7 +1,7 @@
 package connectors
 
 import (
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"testing"
 
@@ -21,7 +21,7 @@ func TestAChoiceQuestionOffersEachChoiceAndCancelAsDeclining(t *testing.T) {
 
 	question := approvalQuestionFor("언제 할까요?", choices)
 
-	if len(question.Options) != 3 || question.Options[0].ID != "now" || question.Options[1].ID != "offHours" || question.Options[2].ID != approvalrecord.CancelChoiceKey {
+	if len(question.Options) != 3 || question.Options[0].ID != "now" || question.Options[1].ID != "offHours" || question.Options[2].ID != approvalgate.CancelChoiceKey {
 		t.Fatalf("expected the choices and cancel, got %+v", question.Options)
 	}
 	if question.Options[2].Meaning != approvalreply.RejectMeaning || question.Options[1].Meaning == approvalreply.RejectMeaning {

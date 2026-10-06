@@ -1,7 +1,7 @@
 package e2e
 
 import (
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
@@ -38,7 +38,7 @@ func AskChoiceHoldAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 			ActionResponses: []string{
 				actionFinishMessage("회의실 B로 잡았습니다.", "obs-002"),
 			},
-			ExpectedEvents:         []string{agentcontract.TaskEventConfirmationReplyClassified, approvalrecord.TaskEventChoiceAnswered},
+			ExpectedEvents:         []string{agentcontract.TaskEventConfirmationReplyClassified, approvalgate.TaskEventChoiceAnswered},
 			ExpectedModelContexts:  []string{"The requester chose: 회의실 B"},
 			ExpectedReplyFragments: []string{"회의실 B"},
 			ExpectedTaskStatus:     task.TaskStatusCompleted,

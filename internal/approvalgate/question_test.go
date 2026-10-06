@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
@@ -32,7 +31,7 @@ func TestAQuestionWithChoicesIsHeldWithItsOptionsAsLabelledChoices(t *testing.T)
 	if !strings.Contains(outcome.Notice, "어느 방으로 할까요?") || !strings.Contains(outcome.Notice, "2. 회의실 B") {
 		t.Fatalf("the person reads the question and every option, got %q", outcome.Notice)
 	}
-	offered := approvalrecord.OfferedChoices(taskRunService.ListTaskEvent(taskRun.TaskRunID))
+	offered := OfferedChoices(taskRunService.ListTaskEvent(taskRun.TaskRunID))
 	if len(offered) != 2 || offered[0].Label != "회의실 A" || offered[1].Key != "2" {
 		t.Fatalf("the ledger keeps the options so a reply read after a restart is read against them, got %+v", offered)
 	}
@@ -47,7 +46,7 @@ func TestAQuestionAskedInTheThreadIsAnsweredByThePickedOption(t *testing.T) {
 	if errorValue != nil || outcome.Decision != mcpserver.ApprovalDecisionApproved {
 		t.Fatalf("a picked option answers the question, got %+v %v", outcome, errorValue)
 	}
-	chosen, isChosen := approvalrecord.AnswerChosen(taskRunService.ListTaskEvent(taskRun.TaskRunID), approvalrecord.AskedChoices("ask_input", roomQuestion("").ToolInput))
+	chosen, isChosen := AnswerChosen(taskRunService.ListTaskEvent(taskRun.TaskRunID), AskedChoices("ask_input", roomQuestion("").ToolInput))
 	if !isChosen || chosen.Label != "회의실 B" {
 		t.Fatalf("the pick is recorded for the tool that returns it, got %+v %v", chosen, isChosen)
 	}

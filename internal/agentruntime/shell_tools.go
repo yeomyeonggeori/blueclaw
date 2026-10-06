@@ -35,7 +35,8 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerTerminalTools(toolRegistry
 				UseWhen:    "You need to execute a toolchain command, build, render, test, list files, or inspect environment state.",
 				AvoidWhen:  "A dedicated bundled skill script or typed capability tool can perform the action more directly.",
 			},
-			InputSchema: terminalRunInputSchema,
+			InputSchema:         terminalRunInputSchema,
+			ApprovalInputFields: []string{"command"},
 		},
 		Handler: func(toolContext context.Context, input terminalRunToolInput) (toolcontract.ToolResult, error) {
 			return toolCatalogBuilder.runTerminalRunTool(toolContext, input, handlerContext)

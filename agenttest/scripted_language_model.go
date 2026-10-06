@@ -280,7 +280,7 @@ func (languageModel *ScriptedLanguageModel) GenerateStructuredResponse(_ context
 			}
 			return languageModel.structuredResponse(response), nil
 		}
-		if schemaName == "blueclaw_approval_question" {
+		if schemaName == "approval_question" {
 			return languageModel.structuredResponse(defaultApprovalQuestionResponse(request)), nil
 		}
 		return model.StructuredResponse{}, noScriptedResponseError{schemaName: schemaName}
@@ -396,22 +396,29 @@ func mergeDefaultResponses(defaultResponses map[string]string) map[string]string
 }
 
 type approvalQuestionContextDocument struct {
-	OriginalRequest string            `json:"originalRequest"`
-	ModelDraft      string            `json:"modelDraft"`
-	ActionDetails   map[string]string `json:"actionDetails"`
+	OriginalRequest string                     `json:"originalRequest"`
+	ModelDraft      string                     `json:"modelDraft"`
+	ActionDetails   map[string]json.RawMessage `json:"actionDetails"`
 }
 
 func defaultApprovalQuestionResponse(request model.StructuredResponseRequest) string {
 	contextDocument := approvalQuestionContextFromRequest(request)
-	details := contextDocument.ActionDetails
-	target := strings.TrimSpace(details["target"])
-	content := strings.TrimSpace(firstNonEmpty(details["message"], details["content"], details["title"], details["reason"]))
+	target := firstNonEmpty(actionDetail(contextDocument, "resolvedTarget"), actionDetail(contextDocument, "personHint"), actionDetail(contextDocument, "channelName"))
+	content := firstNonEmpty(actionDetail(contextDocument, "message"), actionDetail(contextDocument, "subject"), actionDetail(contextDocument, "body"), actionDetail(contextDocument, "title"), actionDetail(contextDocument, "summary"), actionDetail(contextDocument, "reason"), actionDetail(contextDocument, "approvalReason"))
 	question := defaultApprovalQuestionFromContext(contextDocument, target, content)
 	document, errorValue := json.Marshal(map[string]string{"question": question})
 	if errorValue != nil {
 		return `{"question":"should this be approved?"}`
 	}
 	return string(document)
+}
+
+func actionDetail(contextDocument approvalQuestionContextDocument, name string) string {
+	var value string
+	if json.Unmarshal(contextDocument.ActionDetails[name], &value) != nil {
+		return ""
+	}
+	return strings.TrimSpace(value)
 }
 
 func defaultApprovalQuestionFromContext(contextDocument approvalQuestionContextDocument, target string, content string) string {

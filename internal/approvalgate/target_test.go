@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/yeomyeonggeori/bluecollar/approval"
 	"strings"
 	"testing"
 
@@ -60,7 +61,7 @@ func hintApprovalRequest(taskRunID string) mcpserver.ApprovalRequest {
 func TestAnApprovalQuestionNamesTheTargetTheHintResolvedTo(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
 	languageModel := &wordingLanguageModel{question: "부산 공급사 미팅 일정을 삭제할까요?"}
-	gate.UseLanguageModel(languageModel)
+	gate.UseQuestionWorder(approval.NewWorder(languageModel))
 	gate.UseApprovalTargetResolver(resolvedTargetResolver())
 
 	outcome, errorValue := gate.AwaitApproval(context.Background(), hintApprovalRequest(taskRun.TaskRunID))
@@ -85,7 +86,7 @@ func TestAnApprovalQuestionNamesTheTargetTheHintResolvedTo(t *testing.T) {
 func TestTheApprovalQuestionDoesNotRepeatTheSearchPhraseWhenATargetResolved(t *testing.T) {
 	gate, _, taskRun := gateFixture(t)
 	languageModel := &wordingLanguageModel{question: "부산 공급사 미팅 일정을 삭제할까요?"}
-	gate.UseLanguageModel(languageModel)
+	gate.UseQuestionWorder(approval.NewWorder(languageModel))
 	gate.UseApprovalTargetResolver(resolvedTargetResolver())
 
 	gate.AwaitApproval(context.Background(), hintApprovalRequest(taskRun.TaskRunID))
@@ -97,7 +98,7 @@ func TestTheApprovalQuestionDoesNotRepeatTheSearchPhraseWhenATargetResolved(t *t
 
 func TestAHintThatResolvesToNothingIsReportedToTheAgentInsteadOfAskedAbout(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
-	gate.UseLanguageModel(&wordingLanguageModel{question: "삭제할까요?"})
+	gate.UseQuestionWorder(approval.NewWorder(&wordingLanguageModel{question: "삭제할까요?"}))
 	gate.UseApprovalTargetResolver(unresolvedTargetResolver())
 
 	outcome, errorValue := gate.AwaitApproval(context.Background(), hintApprovalRequest(taskRun.TaskRunID))
@@ -175,7 +176,7 @@ func TestTheApprovalDecisionStillMatchesTheCallTheModelReissuesUnchanged(t *test
 
 func TestAToolWithNoResolvableTargetIsStillAskedAboutFromItsInput(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
-	gate.UseLanguageModel(&wordingLanguageModel{question: "메시지를 보낼까요?"})
+	gate.UseQuestionWorder(approval.NewWorder(&wordingLanguageModel{question: "메시지를 보낼까요?"}))
 	gate.UseApprovalTargetResolver(&recordingTargetResolver{})
 
 	outcome, _ := gate.AwaitApproval(context.Background(), hintApprovalRequest(taskRun.TaskRunID))
@@ -190,7 +191,7 @@ func TestAToolWithNoResolvableTargetIsStillAskedAboutFromItsInput(t *testing.T) 
 
 func TestAResolverThatCannotBeReachedAsksFromTheInputRatherThanBlockingTheDelete(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
-	gate.UseLanguageModel(&wordingLanguageModel{question: "삭제할까요?"})
+	gate.UseQuestionWorder(approval.NewWorder(&wordingLanguageModel{question: "삭제할까요?"}))
 	gate.UseApprovalTargetResolver(&recordingTargetResolver{failure: errors.New("capabilityd is unreachable")})
 
 	outcome, _ := gate.AwaitApproval(context.Background(), hintApprovalRequest(taskRun.TaskRunID))

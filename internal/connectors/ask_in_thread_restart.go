@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -63,8 +62,8 @@ func (connectorRuntime *ConnectorRuntime) restartedThread(taskRun task.TaskRun, 
 		platform:          turn.platform,
 		conversationID:    turn.event.ConversationID,
 		replyTargetID:     turn.event.ReplyTargetID,
-		question:          approvalQuestionFor(confirmation, approvalrecord.OfferedChoices(taskEvents)),
-		operatorOptions:   operatorOptionsOfApproval(approvalrecord.OfferedChoices(taskEvents)),
+		question:          approvalQuestionFor(confirmation, approvalgate.OfferedChoices(taskEvents)),
+		operatorOptions:   operatorOptionsOfApproval(approvalgate.OfferedChoices(taskEvents)),
 		answers:           make(chan string, 1),
 	}
 }
@@ -130,7 +129,7 @@ func (connectorRuntime *ConnectorRuntime) restartedApprovalRequest(taskRun task.
 
 func (connectorRuntime *ConnectorRuntime) endUnansweredHold(ctx context.Context, taskRun task.TaskRun, turn *inboundTurn, status approvalgate.AskStatus) {
 	rejection := agentcontract.ApprovalSignalReject
-	approvalrecord.SettleSignal(connectorRuntime.taskRunService, taskRun.TaskRunID, &rejection, string(status))
+	approvalgate.SettleSignal(connectorRuntime.taskRunService, taskRun.TaskRunID, &rejection, string(status))
 	connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, endedHoldEventName(status), marshalApprovalEnd(taskRun, status))
 	turnResult := connectorRuntime.launchFailureCompleter.CompleteLaunchFailure(ctx, agentcontract.AgentTurnRequest{
 		RequesterPersonID:   taskRun.RequesterPersonID,

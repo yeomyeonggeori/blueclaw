@@ -10,7 +10,6 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -168,7 +167,7 @@ func approvalAnswerOfOption(optionID string) approvalgate.ApprovalAnswer {
 	if decision.Approval != nil {
 		return approvalgate.ApprovalAnswer{Signal: *decision.Approval}
 	}
-	if optionID == approvalrecord.CancelChoiceKey {
+	if optionID == approvalgate.CancelChoiceKey {
 		return approvalgate.ApprovalAnswer{Signal: agentcontract.ApprovalSignalReject}
 	}
 	return approvalgate.ApprovalAnswer{Signal: agentcontract.ApprovalSignalApprove, ChoiceKey: optionID}
@@ -270,7 +269,7 @@ func (connectorRuntime *ConnectorRuntime) postedQuestionOf(thread *askingThread)
 
 func operatorOptionsOfApproval(choices []holdrecord.Choice) operatorOptions {
 	if len(choices) > 0 {
-		return operatorOptions{rejectOptionID: approvalrecord.CancelChoiceKey}
+		return operatorOptions{rejectOptionID: approvalgate.CancelChoiceKey}
 	}
 	return operatorOptions{approveOptionID: ApproveOptionID, rejectOptionID: RejectOptionID}
 }

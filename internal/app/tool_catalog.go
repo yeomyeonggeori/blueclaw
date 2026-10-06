@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"github.com/yeomyeonggeori/bluecollar/approval"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -32,7 +33,7 @@ func newToolCatalogEndpoint(taskRunService *task.TaskRunService, approvalLanguag
 	resolver := mcpserver.NewSessionTokenRequesterResolver(newToolCatalogSessionToken)
 	handler := mcpserver.NewToolCatalogHandler(resolver, "1")
 	approvalGate := approvalgate.New(taskRunService)
-	approvalGate.UseLanguageModel(approvalLanguageModel)
+	approvalGate.UseQuestionWorder(approval.NewWorder(approvalLanguageModel))
 	approvalGate.UseApprovalTargetResolver(agentruntime.NewCapabilityApprovalTargetResolver(capabilityClient))
 	return toolCatalogEndpoint{resolver: resolver, handler: handler, approvalGate: approvalGate, replyReader: approvalreply.NewDecisionModelReader(decisionModel)}
 }

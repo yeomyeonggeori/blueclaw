@@ -3,7 +3,6 @@ package approvalgate
 import (
 	"context"
 	"encoding/json"
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"testing"
 	"time"
@@ -82,7 +81,7 @@ func TestTheRequesterIsOfferedEveryChoiceTheTargetCarriesInItsOrder(t *testing.T
 	if len(asker.offeredChoices) != 2 || asker.offeredChoices[0].Key != "offHours" || asker.offeredChoices[1].Key != "now" {
 		t.Fatalf("the requester was offered %+v, expected the later time first and now second", asker.offeredChoices)
 	}
-	recorded := approvalrecord.OfferedChoices(taskRunService.ListTaskEvent(taskRun.TaskRunID))
+	recorded := OfferedChoices(taskRunService.ListTaskEvent(taskRun.TaskRunID))
 	if len(recorded) != 2 || recorded[0].StartsAt != laterStartsAt {
 		t.Fatalf("the ledger kept %+v, so a reply read after a restart is read against nothing", recorded)
 	}

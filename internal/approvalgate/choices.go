@@ -1,6 +1,7 @@
 package approvalgate
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
@@ -29,7 +29,7 @@ type ApprovalAnswer struct {
 }
 
 func (answer ApprovalAnswer) ChosenFrom(choices []holdrecord.Choice) (holdrecord.Choice, bool) {
-	return approvalrecord.ChoiceByKey(choices, answer.ChoiceKey)
+	return ChoiceByKey(choices, answer.ChoiceKey)
 }
 
 type ApprovedCallScheduler interface {
@@ -77,7 +77,7 @@ func (gate *Gate) DeferApprovedCall(ctx context.Context, request DeferralRequest
 			OriginTaskRunID:  request.TaskRunID,
 		},
 		StartsAt:      startsAt,
-		Prompt:        firstNonEmpty(request.Prompt, request.ToolName),
+		Prompt:        cmp.Or(strings.TrimSpace(request.Prompt), strings.TrimSpace(request.ToolName)),
 		Delivery:      task.ScheduleDeliveryBinding{Platform: request.Platform, ConversationID: request.ConversationID, ReplyTargetID: request.ReplyTargetID},
 		ReferenceTime: request.ReferenceTime,
 	})
@@ -90,7 +90,7 @@ func (gate *Gate) DeferApprovedCall(ctx context.Context, request DeferralRequest
 		ScheduleID: schedule.ScheduleID,
 		StartsAt:   startsAt.Format(time.RFC3339),
 	}
-	approvalrecord.SettleLatest(gate.taskRunService, request.TaskRunID, holdrecord.DecisionDefer, "approval_choice")
+	SettleLatest(gate.taskRunService, request.TaskRunID, holdrecord.DecisionDefer, "approval_choice")
 	gate.taskRunService.AppendTaskEvent(request.TaskRunID, TaskEventApprovalDeferred, marshalEventBody(record))
 	return deferredCallResult(record), nil
 }
