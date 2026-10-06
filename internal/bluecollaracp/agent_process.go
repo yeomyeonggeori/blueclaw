@@ -47,6 +47,10 @@ func (process agentProcess) optionsFor(request agentcontract.AgentTurnRequest) a
 			PinnedSkillNames:        request.PinnedSkillNames,
 		},
 		HostCheckedToolNames: hostCheckedToolNames(request),
+		TurnOptions:          turnOptionsOf(process.dependencies.RuntimeConfiguration),
+		IntakeOptions:        intakeOptionsOf(process.dependencies.RuntimeConfiguration),
+		CompanyProvider:      process.dependencies.CompanyProvider,
+		RouterLanguageModel:  process.dependencies.IntakeLanguageModelProvider,
 	}
 }
 
