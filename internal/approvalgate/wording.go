@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"log/slog"
 	"path/filepath"
 	"strconv"
@@ -16,13 +16,13 @@ import (
 )
 
 type approvalQuestionContext struct {
-	ResponseLanguage string                  `json:"responseLanguage,omitempty"`
-	OriginalRequest  string                  `json:"originalRequest,omitempty"`
-	ModelDraft       string                  `json:"modelDraft,omitempty"`
-	Operation        string                  `json:"operation,omitempty"`
-	ApprovalScope    string                  `json:"approvalScope,omitempty"`
-	ActionDetails    map[string]string       `json:"actionDetails,omitempty"`
-	Choices          []approvalrecord.Choice `json:"choices,omitempty"`
+	ResponseLanguage string              `json:"responseLanguage,omitempty"`
+	OriginalRequest  string              `json:"originalRequest,omitempty"`
+	ModelDraft       string              `json:"modelDraft,omitempty"`
+	Operation        string              `json:"operation,omitempty"`
+	ApprovalScope    string              `json:"approvalScope,omitempty"`
+	ActionDetails    map[string]string   `json:"actionDetails,omitempty"`
+	Choices          []holdrecord.Choice `json:"choices,omitempty"`
 }
 
 type approvalQuestionInput struct {

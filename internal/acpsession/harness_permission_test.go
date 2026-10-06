@@ -2,6 +2,7 @@ package acpsession
 
 import (
 	"context"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"testing"
 	"time"
 
@@ -9,7 +10,6 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -180,8 +180,8 @@ func TestApprovingTheReissuedHarnessQuestionRecordsItAndResumesTheRun(t *testing
 	case <-time.After(5 * time.Second):
 		t.Fatal("the answered question never resumed its run")
 	}
-	holds := approvalrecord.Holds(taskRunService.ListTaskEvent(taskRunID))
-	if len(holds) != 1 || holds[0].State != approvalrecord.StateApproved {
+	holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRunID))
+	if len(holds) != 1 || holds[0].State != holdrecord.StateApproved {
 		t.Fatalf("expected the hold approved so the harness's retry runs on it, got %+v", holds)
 	}
 }

@@ -2,8 +2,8 @@ package approvalgate
 
 import (
 	"encoding/json"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
@@ -14,7 +14,7 @@ type ApprovedCall struct {
 }
 
 func ApprovedPendingCall(taskEvents []agentcontract.TaskEvent) (ApprovedCall, bool) {
-	approvedHold, isApproved := approvalrecord.LatestHold(approvalrecord.Holds(taskEvents), approvalrecord.StateApproved)
+	approvedHold, isApproved := holdrecord.LatestHold(holdrecord.Holds(taskEvents), holdrecord.StateApproved)
 	if !isApproved {
 		return ApprovedCall{}, false
 	}
@@ -22,13 +22,13 @@ func ApprovedPendingCall(taskEvents []agentcontract.TaskEvent) (ApprovedCall, bo
 }
 
 func PendingHeldCall(taskEvents []agentcontract.TaskEvent) (agentcontract.HeldCall, bool) {
-	pendingHold, isPending := approvalrecord.LatestHold(approvalrecord.Holds(taskEvents), approvalrecord.StatePending)
+	pendingHold, isPending := holdrecord.LatestHold(holdrecord.Holds(taskEvents), holdrecord.StatePending)
 	return pendingHold.Call, isPending
 }
 
 func DeclinedCallNote(taskEvents []agentcontract.TaskEvent) string {
-	holds := approvalrecord.Holds(taskEvents)
-	if len(holds) == 0 || holds[len(holds)-1].State != approvalrecord.StateRejected {
+	holds := holdrecord.Holds(taskEvents)
+	if len(holds) == 0 || holds[len(holds)-1].State != holdrecord.StateRejected {
 		return ""
 	}
 	return "The requester declined the " + holds[len(holds)-1].Call.ToolName + " call you asked about. Do not attempt it again; continue without it or stop and say why you cannot."

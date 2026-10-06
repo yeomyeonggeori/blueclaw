@@ -2,9 +2,9 @@ package approvalgate
 
 import (
 	"context"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"testing"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -76,7 +76,7 @@ func TestAnAnsweredCallRunsInsideTheTurnAndReadsTheSameOnTheLedger(t *testing.T)
 	if taskRunStatus(t, taskRunService, taskRun.TaskRunID) == agentcontract.TaskStatusWaitingApproval {
 		t.Fatal("the run was paused for an approval that had already been answered")
 	}
-	if holds := approvalrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID)); len(holds) != 1 || outcome.HoldID != holds[0].ID {
+	if holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID)); len(holds) != 1 || outcome.HoldID != holds[0].ID {
 		t.Fatalf("the approved call is named by the hold that was answered, got %q for %+v", outcome.HoldID, holds)
 	}
 }

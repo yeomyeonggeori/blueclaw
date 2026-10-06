@@ -2,6 +2,7 @@ package connectors
 
 import (
 	"context"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"log/slog"
 	"strings"
 	"time"
@@ -283,13 +284,13 @@ func (connectorRuntime *ConnectorRuntime) settleChoiceConfirmation(ctx context.C
 	return connectorRuntime.settleConfirmation(ctx, turn, confirmation, decision)
 }
 
-func chosenApprovalChoice(selected []string, choices []approvalrecord.Choice) (approvalrecord.Choice, bool) {
+func chosenApprovalChoice(selected []string, choices []holdrecord.Choice) (holdrecord.Choice, bool) {
 	for _, selectedKey := range selected {
 		if choice, isOffered := approvalrecord.ChoiceByKey(choices, selectedKey); isOffered {
 			return choice, true
 		}
 	}
-	return approvalrecord.Choice{}, false
+	return holdrecord.Choice{}, false
 }
 
 func selectsCancel(selected []string) bool {
@@ -308,7 +309,7 @@ func keptUnlessRejected(approval *agentcontract.ApprovalSignal) *agentcontract.A
 	return nil
 }
 
-func (connectorRuntime *ConnectorRuntime) deferHeldCall(ctx context.Context, turn *inboundTurn, confirmation pendingApproval, choice approvalrecord.Choice) []agentcontract.CarriedOutCall {
+func (connectorRuntime *ConnectorRuntime) deferHeldCall(ctx context.Context, turn *inboundTurn, confirmation pendingApproval, choice holdrecord.Choice) []agentcontract.CarriedOutCall {
 	taskRunID := confirmation.TaskRun.TaskRunID
 	heldCall, isHeld := approvalgate.PendingHeldCall(connectorRuntime.taskRunService.ListTaskEvent(taskRunID))
 	if !isHeld || connectorRuntime.approvalGate == nil {

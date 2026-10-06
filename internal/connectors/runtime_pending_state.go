@@ -3,6 +3,7 @@ package connectors
 import (
 	"encoding/json"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"strings"
 	"time"
 
@@ -19,7 +20,7 @@ type pendingApproval struct {
 	ResponseLanguage        string
 	ContinuationInstruction string
 	ActiveGoal              agentcontract.ActiveGoal
-	Choices                 []approvalrecord.Choice
+	Choices                 []holdrecord.Choice
 }
 
 func (connectorRuntime *ConnectorRuntime) findPendingAskInteraction(personID string, _ string, event PlatformInboundEvent, taskWaitResolution inboundTaskWaitResolution) (AskInteraction, bool) {

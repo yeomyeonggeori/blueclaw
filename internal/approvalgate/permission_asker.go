@@ -2,6 +2,7 @@ package approvalgate
 
 import (
 	"context"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"log/slog"
 	"strings"
 	"time"
@@ -17,8 +18,9 @@ type PermissionAsker interface {
 }
 
 type PermissionQuestion struct {
+	HoldID       string
 	Confirmation string
-	Choices      []approvalrecord.Choice
+	Choices      []holdrecord.Choice
 }
 
 func (gate *Gate) UsePermissionAsker(permissionAsker PermissionAsker) {
@@ -30,11 +32,12 @@ func (gate *Gate) askedOutcome(ctx context.Context, taskRunID string, approvalRe
 		return mcpserver.ApprovalOutcome{}, false
 	}
 	profileName := gate.currentAgentProfileName(taskRunID)
-	if !gate.holdCall(taskRunID, approvalRequest, confirmation, resolution) {
+	hold, isHeld := gate.holdCall(taskRunID, approvalRequest, confirmation, resolution)
+	if !isHeld {
 		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionUnanswerable}, true
 	}
 
-	answer, isAnswered := gate.permissionAsker.AskPermission(ctx, approvalRequest, PermissionQuestion{Confirmation: confirmation, Choices: resolution.Choices})
+	answer, isAnswered := gate.permissionAsker.AskPermission(ctx, approvalRequest, PermissionQuestion{HoldID: hold.ID, Confirmation: confirmation, Choices: resolution.Choices})
 	if !isAnswered {
 		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionHeld, Notice: confirmation}, true
 	}
@@ -52,7 +55,7 @@ func (gate *Gate) askedOutcome(ctx context.Context, taskRunID string, approvalRe
 	return gate.approvedOutcome(taskRunID, approvalRequest), true
 }
 
-func (gate *Gate) deferredOutcome(ctx context.Context, taskRunID string, approvalRequest mcpserver.ApprovalRequest, resolution ApprovalTargetResolution, choice approvalrecord.Choice) mcpserver.ApprovalOutcome {
+func (gate *Gate) deferredOutcome(ctx context.Context, taskRunID string, approvalRequest mcpserver.ApprovalRequest, resolution ApprovalTargetResolution, choice holdrecord.Choice) mcpserver.ApprovalOutcome {
 	heldCall := agentcontract.HeldCall{
 		ToolName:          approvalRequest.ToolName,
 		ToolInput:         approvalRequest.ToolInput,

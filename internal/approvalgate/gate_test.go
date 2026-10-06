@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"strings"
 	"testing"
 
@@ -91,7 +92,7 @@ func TestTheSameCallRunsOnceTheRequesterHasApprovedIt(t *testing.T) {
 		t.Fatalf("expected the first call to be held, got %+v", heldOutcome)
 	}
 
-	recordDecision(taskRunService, taskRun.TaskRunID, approvalrecord.DecisionApprove)
+	recordDecision(taskRunService, taskRun.TaskRunID, holdrecord.DecisionApprove)
 
 	approvedOutcome, _ := gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
 	if approvedOutcome.Decision != mcpserver.ApprovalDecisionApproved {
@@ -102,7 +103,7 @@ func TestTheSameCallRunsOnceTheRequesterHasApprovedIt(t *testing.T) {
 func TestAnApprovalIsSpentOnTheCallItAnsweredAndNotTheNextOne(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
 	gate.AwaitApproval(context.Background(), unscopedApprovalRequest(taskRun.TaskRunID, `{"eventID":"event-1"}`))
-	recordDecision(taskRunService, taskRun.TaskRunID, approvalrecord.DecisionApprove)
+	recordDecision(taskRunService, taskRun.TaskRunID, holdrecord.DecisionApprove)
 	gate.AwaitApproval(context.Background(), unscopedApprovalRequest(taskRun.TaskRunID, `{"eventID":"event-1"}`))
 
 	repeatedOutcome, _ := gate.AwaitApproval(context.Background(), unscopedApprovalRequest(taskRun.TaskRunID, `{"eventID":"event-1"}`))
@@ -126,7 +127,7 @@ func approvalRequestForEvent(taskRunID string, toolInput string) mcpserver.Appro
 func TestAnApprovalDoesNotCarryOverToACallTheRequesterNeverSaw(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
 	gate.AwaitApproval(context.Background(), unscopedApprovalRequest(taskRun.TaskRunID, `{"eventID":"event-1"}`))
-	recordDecision(taskRunService, taskRun.TaskRunID, approvalrecord.DecisionApprove)
+	recordDecision(taskRunService, taskRun.TaskRunID, holdrecord.DecisionApprove)
 
 	substitutedOutcome, _ := gate.AwaitApproval(context.Background(), unscopedApprovalRequest(taskRun.TaskRunID, `{"eventID":"event-2"}`))
 	if substitutedOutcome.Decision == mcpserver.ApprovalDecisionApproved {
@@ -137,7 +138,7 @@ func TestAnApprovalDoesNotCarryOverToACallTheRequesterNeverSaw(t *testing.T) {
 func TestAnApprovedCallIsStillRecognisedWhenTheAgentReordersItsInput(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
 	gate.AwaitApproval(context.Background(), approvalRequestForEvent(taskRun.TaskRunID, `{"eventID":"event-1","calendarID":"team"}`))
-	recordDecision(taskRunService, taskRun.TaskRunID, approvalrecord.DecisionApprove)
+	recordDecision(taskRunService, taskRun.TaskRunID, holdrecord.DecisionApprove)
 
 	reorderedOutcome, _ := gate.AwaitApproval(context.Background(), approvalRequestForEvent(taskRun.TaskRunID, `{"calendarID":"team","eventID":"event-1"}`))
 	if reorderedOutcome.Decision != mcpserver.ApprovalDecisionApproved {
@@ -148,7 +149,7 @@ func TestAnApprovedCallIsStillRecognisedWhenTheAgentReordersItsInput(t *testing.
 func TestAFreshCallAfterARejectionAsksAgain(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
 	gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
-	recordDecision(taskRunService, taskRun.TaskRunID, approvalrecord.DecisionReject)
+	recordDecision(taskRunService, taskRun.TaskRunID, holdrecord.DecisionReject)
 
 	freshOutcome, _ := gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
 
@@ -160,7 +161,7 @@ func TestAFreshCallAfterARejectionAsksAgain(t *testing.T) {
 func TestAReloadCancellationDoesNotAnswerALaterIdenticalCall(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
 	gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
-	approvalrecord.SettleLatest(taskRunService, taskRun.TaskRunID, approvalrecord.DecisionReject, "acp_permission_reload")
+	approvalrecord.SettleLatest(taskRunService, taskRun.TaskRunID, holdrecord.DecisionReject, "acp_permission_reload")
 
 	freshOutcome, _ := gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
 
@@ -175,7 +176,7 @@ func TestAReloadCancellationDoesNotAnswerALaterIdenticalCall(t *testing.T) {
 func TestAnApprovalIsSpentByTheCallItAnswered(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
 	gate.AwaitApproval(context.Background(), unscopedApprovalRequest(taskRun.TaskRunID, `{"eventID":"event-1"}`))
-	recordDecision(taskRunService, taskRun.TaskRunID, approvalrecord.DecisionApprove)
+	recordDecision(taskRunService, taskRun.TaskRunID, holdrecord.DecisionApprove)
 
 	firstOutcome, _ := gate.AwaitApproval(context.Background(), unscopedApprovalRequest(taskRun.TaskRunID, `{"eventID":"event-1"}`))
 	secondOutcome, _ := gate.AwaitApproval(context.Background(), unscopedApprovalRequest(taskRun.TaskRunID, `{"eventID":"event-1"}`))
@@ -226,7 +227,7 @@ func TestApprovingAScopedCallGrantsItsScope(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
 	gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
 
-	recordDecision(taskRunService, taskRun.TaskRunID, approvalrecord.DecisionApprove)
+	recordDecision(taskRunService, taskRun.TaskRunID, holdrecord.DecisionApprove)
 
 	if grantBody := heldCallEventBodyNamed(t, taskRunService, taskRun.TaskRunID, agentcontract.TaskEventApprovalScopeGranted); !strings.Contains(grantBody, `"scope":"calendar"`) {
 		t.Fatalf("approving the call approves its scope, got %s", grantBody)
@@ -239,7 +240,7 @@ func TestApprovingAnUnscopedCallGrantsNothing(t *testing.T) {
 	approvalRequest.ApprovalScope = ""
 	gate.AwaitApproval(context.Background(), approvalRequest)
 
-	recordDecision(taskRunService, taskRun.TaskRunID, approvalrecord.DecisionApprove)
+	recordDecision(taskRunService, taskRun.TaskRunID, holdrecord.DecisionApprove)
 
 	if carriesEvent(recordedEventNames(taskRunService, taskRun.TaskRunID), agentcontract.TaskEventApprovalScopeGranted) {
 		t.Fatal("a call with no approval scope granted one")

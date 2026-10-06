@@ -3,10 +3,10 @@ package approvalgate
 import (
 	"context"
 	"encoding/json"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"log/slog"
 	"strings"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -45,19 +45,18 @@ func (gate *Gate) AwaitApproval(ctx context.Context, approvalRequest mcpserver.A
 	if outcome, isAnswered := gate.askedOutcome(ctx, taskRunID, approvalRequest, confirmation, resolution); isAnswered {
 		return outcome, nil
 	}
-	if !gate.holdCall(taskRunID, approvalRequest, confirmation, resolution) {
+	if _, isHeld := gate.holdCall(taskRunID, approvalRequest, confirmation, resolution); !isHeld {
 		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionUnanswerable}, nil
 	}
 	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionHeld, Notice: confirmation}, nil
 }
 
-func (gate *Gate) holdCall(taskRunID string, approvalRequest mcpserver.ApprovalRequest, confirmation string, resolution ApprovalTargetResolution) bool {
+func (gate *Gate) holdCall(taskRunID string, approvalRequest mcpserver.ApprovalRequest, confirmation string, resolution ApprovalTargetResolution) (holdrecord.Hold, bool) {
 	if _, errorValue := gate.taskRunService.PauseTaskRun(taskRunID, agentcontract.TaskStatusWaitingApproval, confirmation); errorValue != nil {
 		slog.Warn("approvalgate.call_is_unanswerable", "taskRunID", taskRunID, "toolName", strings.TrimSpace(approvalRequest.ToolName), "reason", errorValue.Error())
-		return false
+		return holdrecord.Hold{}, false
 	}
-	gate.recordHeldCall(taskRunID, approvalRequest, confirmation, resolution)
-	return true
+	return gate.recordHeldCall(taskRunID, approvalRequest, confirmation, resolution), true
 }
 
 func (gate *Gate) approvedOutcome(taskRunID string, approvalRequest mcpserver.ApprovalRequest) mcpserver.ApprovalOutcome {
@@ -66,37 +65,21 @@ func (gate *Gate) approvedOutcome(taskRunID string, approvalRequest mcpserver.Ap
 }
 
 func (gate *Gate) taskHasApprovedScope(taskRunID string, approvalScope string) bool {
-	requestedScope := strings.TrimSpace(approvalScope)
-	if taskRunID == "" || requestedScope == "" {
+	if taskRunID == "" {
 		return false
 	}
-	for _, taskEvent := range gate.taskRunService.ListTaskEvent(taskRunID) {
-		if taskEvent.Name != agentcontract.TaskEventApprovalScopeGranted {
-			continue
-		}
-		grant := struct {
-			Scope string `json:"scope"`
-		}{}
-		if json.Unmarshal([]byte(taskEvent.Body), &grant) == nil && strings.TrimSpace(grant.Scope) == requestedScope {
-			return true
-		}
-	}
-	return false
+	return holdrecord.LedgerOf(gate.taskRunService.ListTaskEvent(taskRunID)).GrantsScope(approvalScope)
 }
 
-func (gate *Gate) approvedHold(taskRunID string, approvalRequest mcpserver.ApprovalRequest) (approvalrecord.Hold, bool) {
+func (gate *Gate) approvedHold(taskRunID string, approvalRequest mcpserver.ApprovalRequest) (holdrecord.Hold, bool) {
 	if taskRunID == "" {
-		return approvalrecord.Hold{}, false
+		return holdrecord.Hold{}, false
 	}
-	return approvalrecord.ApprovedHoldForCall(approvalrecord.Holds(gate.taskRunService.ListTaskEvent(taskRunID)), approvalRequest.ToolName, approvalRequest.ToolInput)
+	return holdrecord.ApprovedHoldForCall(holdrecord.Holds(gate.taskRunService.ListTaskEvent(taskRunID)), approvalRequest.ToolName, approvalRequest.ToolInput)
 }
 
-func unmarshalEventBody(body string, target any) {
-	json.Unmarshal([]byte(body), target)
-}
-
-func (gate *Gate) recordHeldCall(taskRunID string, approvalRequest mcpserver.ApprovalRequest, confirmation string, resolution ApprovalTargetResolution) {
-	approvalrecord.Open(gate.taskRunService, taskRunID, agentcontract.HeldCall{
+func (gate *Gate) recordHeldCall(taskRunID string, approvalRequest mcpserver.ApprovalRequest, confirmation string, resolution ApprovalTargetResolution) holdrecord.Hold {
+	hold := holdrecord.Open(gate.taskRunService, taskRunID, agentcontract.HeldCall{
 		ToolName:          approvalRequest.ToolName,
 		ToolInput:         approvalRequest.ToolInput,
 		ApprovedToolInput: narrowedToolInput(approvalRequest.ToolInput, resolution.Target),
@@ -113,6 +96,7 @@ func (gate *Gate) recordHeldCall(taskRunID string, approvalRequest mcpserver.App
 		"source":            "tool_catalog",
 	}))
 	gate.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventAskRequested, marshalEventBody(askRecord(approvalRequest, confirmation)))
+	return hold
 }
 
 func approvalReasonCode(approvalRequest mcpserver.ApprovalRequest) string {

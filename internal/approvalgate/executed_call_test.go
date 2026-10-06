@@ -3,10 +3,10 @@ package approvalgate
 import (
 	"context"
 	"encoding/json"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -24,7 +24,7 @@ func spentApprovalEventBodies(taskRunService *task.TaskRunService, taskRunID str
 func TestTheSpentApprovalCarriesTheCallAndTheHoldItSpent(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
 	gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
-	holdID := approvalrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID))[0].ID
+	holdID := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID))[0].ID
 	recordDecision(taskRunService, taskRun.TaskRunID, "approve")
 
 	gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
@@ -46,8 +46,8 @@ func TestTheSpentApprovalCarriesTheCallAndTheHoldItSpent(t *testing.T) {
 func TestAHoldIsSpentOnceSoASecondCallDoesNotClaimIt(t *testing.T) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	taskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "내일 회의 지워줘")
-	holdID := approvalrecord.Open(taskRunService, taskRun.TaskRunID, agentcontract.HeldCall{ToolName: "event_delete", ToolInput: json.RawMessage(`{"eventID":"event-1"}`)}, nil)
-	approvalrecord.Decide(taskRunService, taskRun.TaskRunID, holdID, approvalrecord.DecisionApprove, "chat_reply")
+	holdID := holdrecord.Open(taskRunService, taskRun.TaskRunID, agentcontract.HeldCall{ToolName: "event_delete", ToolInput: json.RawMessage(`{"eventID":"event-1"}`)}, nil).ID
+	holdrecord.Decide(taskRunService, taskRun.TaskRunID, holdID, holdrecord.DecisionApprove, "chat_reply")
 
 	firstHoldID := RecordApprovalSpent(taskRunService, taskRun.TaskRunID, "event_delete", json.RawMessage(`{"eventID":"event-1"}`))
 	secondHoldID := RecordApprovalSpent(taskRunService, taskRun.TaskRunID, "event_delete", json.RawMessage(`{"eventID":"event-2"}`))

@@ -3,13 +3,12 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
 )
 
 const holdVocabularyMigrationName = "040_one_hold_vocabulary.sql"
@@ -237,34 +236,34 @@ func assertMigratedShape(t *testing.T, migrated map[string]storedEvent) {
 func assertMigratedHoldsReadBack(t *testing.T, ctx context.Context, database Database) {
 	t.Helper()
 	repository := NewTaskEventRepository(database)
-	holdsOf := func(runID string) []approvalrecord.Hold {
+	holdsOf := func(runID string) []holdrecord.Hold {
 		taskEvents, errorValue := repository.ListTaskEvent(runID)
 		if errorValue != nil {
 			t.Fatal(errorValue)
 		}
-		return approvalrecord.Holds(taskEvents)
+		return holdrecord.Holds(taskEvents)
 	}
 	holdA := holdsOf("run-a")
-	if len(holdA) != 1 || holdA[0].ID != "hold-a" || holdA[0].State != approvalrecord.StateSpent || len(holdA[0].Choices) != 2 || holdA[0].Choices[1].StartsAt == "" {
+	if len(holdA) != 1 || holdA[0].ID != "hold-a" || holdA[0].State != holdrecord.StateSpent || len(holdA[0].Choices) != 2 || holdA[0].Choices[1].StartsAt == "" {
 		t.Fatalf("run-a should read back as one spent hold carrying its two choices, got %+v", holdA)
 	}
 	holdB := holdsOf("run-b")
-	if len(holdB) != 1 || holdB[0].ID != "b-opened" || holdB[0].State != approvalrecord.StateRejected {
+	if len(holdB) != 1 || holdB[0].ID != "b-opened" || holdB[0].State != holdrecord.StateRejected {
 		t.Fatalf("run-b should read back as a rejected hold known by its event id, got %+v", holdB)
 	}
 	holdC := holdsOf("run-c")
-	if len(holdC) != 1 || holdC[0].ID != "hold-c" || holdC[0].State != approvalrecord.StateApproved {
+	if len(holdC) != 1 || holdC[0].ID != "hold-c" || holdC[0].State != holdrecord.StateApproved {
 		t.Fatalf("run-c should read back as an approved hold, got %+v", holdC)
 	}
 	holdE := holdsOf("run-e")
-	if len(holdE) != 1 || holdE[0].ID != "loop-token-3" || holdE[0].State != approvalrecord.StatePending {
+	if len(holdE) != 1 || holdE[0].ID != "loop-token-3" || holdE[0].State != holdrecord.StatePending {
 		t.Fatalf("run-e is still waiting and kept only the loop's record, which becomes its pending hold, got %+v", holdE)
 	}
 	if holdG := holdsOf("run-g"); len(holdG) != 0 {
 		t.Fatalf("run-g finished, so the loop's record must not become a hold, got %+v", holdG)
 	}
 	holdL := holdsOf("run-l")
-	if len(holdL) != 2 || holdL[0].ID != "l-open-1" || holdL[0].State != approvalrecord.StateSpent || holdL[1].ID != "l-open-2" || holdL[1].State != approvalrecord.StateRejected {
+	if len(holdL) != 2 || holdL[0].ID != "l-open-1" || holdL[0].State != holdrecord.StateSpent || holdL[1].ID != "l-open-2" || holdL[1].State != holdrecord.StateRejected {
 		t.Fatalf("run-l was written before hold ids: its decisions and spend must settle the holds, not leave them pending, got %+v", holdL)
 	}
 }

@@ -2,6 +2,7 @@ package connectors
 
 import (
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
@@ -16,7 +17,7 @@ func TestAPlainApprovalIsOfferedAsApproveAndReject(t *testing.T) {
 }
 
 func TestAChoiceQuestionOffersEachChoiceAndCancelAsDeclining(t *testing.T) {
-	choices := []approvalrecord.Choice{{Key: "now"}, {Key: "offHours", StartsAt: "2099-10-03T03:00:00+09:00"}}
+	choices := []holdrecord.Choice{{Key: "now"}, {Key: "offHours", StartsAt: "2099-10-03T03:00:00+09:00"}}
 
 	question := approvalQuestionFor("언제 할까요?", choices)
 

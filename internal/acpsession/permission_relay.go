@@ -3,7 +3,7 @@ package acpsession
 import (
 	"context"
 	"encoding/json"
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalrecord"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"log/slog"
 	"strings"
 	"sync"
@@ -99,7 +99,7 @@ func (relay *PermissionRelay) conversationsHeld() []string {
 }
 
 func (relay *PermissionRelay) AskPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question approvalgate.PermissionQuestion) (approvalgate.ApprovalAnswer, bool) {
-	outcome, isAnswered := relay.askOutcome(ctx, approvalRequest, question.Confirmation, permissionToolCall(approvalRequest, question.Confirmation), permissionOptions(question.Choices))
+	outcome, isAnswered := relay.askOutcome(ctx, approvalRequest, question.Confirmation, permissionToolCall(approvalRequest, question), permissionOptions(question.Choices))
 	if !isAnswered {
 		return approvalgate.ApprovalAnswer{}, false
 	}
@@ -152,10 +152,10 @@ func (relay *PermissionRelay) askOutcome(ctx context.Context, approvalRequest mc
 	return response.Outcome, true
 }
 
-func permissionToolCall(approvalRequest mcpserver.ApprovalRequest, confirmation string) acp.ToolCallUpdate {
-	title := confirmation
+func permissionToolCall(approvalRequest mcpserver.ApprovalRequest, question approvalgate.PermissionQuestion) acp.ToolCallUpdate {
+	title := question.Confirmation
 	toolCall := acp.ToolCallUpdate{
-		ToolCallId: acp.ToolCallId(approvalgate.HeldCallID(approvalRequest.ToolName, approvalRequest.ToolInput)),
+		ToolCallId: acp.ToolCallId(question.HoldID),
 		Title:      &title,
 	}
 	rawInput := map[string]any{}
@@ -165,7 +165,7 @@ func permissionToolCall(approvalRequest mcpserver.ApprovalRequest, confirmation 
 	return toolCall
 }
 
-func permissionOptions(choices []approvalrecord.Choice) []acp.PermissionOption {
+func permissionOptions(choices []holdrecord.Choice) []acp.PermissionOption {
 	if len(choices) > 0 {
 		return choicePermissionOptions(choices)
 	}
@@ -176,7 +176,7 @@ func permissionOptions(choices []approvalrecord.Choice) []acp.PermissionOption {
 	}, rejectOption()}
 }
 
-func choicePermissionOptions(choices []approvalrecord.Choice) []acp.PermissionOption {
+func choicePermissionOptions(choices []holdrecord.Choice) []acp.PermissionOption {
 	options := []acp.PermissionOption{}
 	for _, choice := range choices {
 		options = append(options, acp.PermissionOption{
@@ -192,7 +192,7 @@ func choiceOptionID(choiceKey string) acp.PermissionOptionId {
 	return acp.PermissionOptionId(chooseOptionIDPrefix + strings.TrimSpace(choiceKey))
 }
 
-func choiceOptionName(choice approvalrecord.Choice) string {
+func choiceOptionName(choice holdrecord.Choice) string {
 	if choice.DefersTheCall() {
 		return "approve this call to run at " + strings.TrimSpace(choice.StartsAt)
 	}
