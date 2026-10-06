@@ -149,3 +149,20 @@ func TestAFailedCallIsObservedAndReturned(t *testing.T) {
 		t.Fatalf("expected the error and an errored record, got %v %+v", errorValue, observed)
 	}
 }
+
+func TestAnOptionsLabelIsNotWhatTheOnlyWayToGoAheadMeans(t *testing.T) {
+	labelled := OptionsOf([]Offer{{ID: "allow", Name: "Allow"}, {ID: "reject", Name: "Reject", IsDeclining: true}})
+	renamed := OptionsOf([]Offer{{ID: "allow", Name: "approve this call as asked"}, {ID: "reject", IsDeclining: true}})
+
+	if labelled[0].Meaning != renamed[0].Meaning || labelled[1].Meaning != RejectMeaning {
+		t.Fatalf("expected one reading of a lone allowing option whatever it is called, got %+v and %+v", labelled, renamed)
+	}
+}
+
+func TestSeveralAllowingOptionsAreToldApartByTheirOwnWords(t *testing.T) {
+	options := OptionsOf([]Offer{{ID: "now", Name: "run it now"}, {ID: "later", Name: "run it at 03:00"}, {ID: "cancel", IsDeclining: true}})
+
+	if options[0].Meaning != AllowMeaning("run it now") || options[1].Meaning != AllowMeaning("run it at 03:00") || options[2].Meaning != RejectMeaning {
+		t.Fatalf("expected each allowing option to keep its name and declining to mean declining, got %+v", options)
+	}
+}

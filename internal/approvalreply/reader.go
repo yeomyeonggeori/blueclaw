@@ -27,11 +27,48 @@ func AllowMeaning(optionName string) string {
 	return "the person agrees to go ahead with \"" + optionName + "\" as asked, however briefly or informally, alone or with thanks, politeness or a remark that leaves what would be done exactly as asked"
 }
 
+const allowAsAskedMeaning = "the person agrees to go ahead with what the question asks, however briefly or informally, alone or with thanks, politeness or a remark that leaves what would be done exactly as asked"
+
 var errReplyCarriesNoWords = errors.New("an approval reply with no words says nothing to read")
 
 type Option struct {
 	ID      string `json:"id"`
 	Meaning string `json:"meaning"`
+}
+
+type Offer struct {
+	ID          string
+	Name        string
+	IsDeclining bool
+}
+
+func OptionsOf(offers []Offer) []Option {
+	isOnlyWayToGoAhead := countAllowing(offers) == 1
+	options := make([]Option, 0, len(offers))
+	for _, offer := range offers {
+		options = append(options, Option{ID: offer.ID, Meaning: meaningOf(offer, isOnlyWayToGoAhead)})
+	}
+	return options
+}
+
+func countAllowing(offers []Offer) int {
+	count := 0
+	for _, offer := range offers {
+		if !offer.IsDeclining {
+			count++
+		}
+	}
+	return count
+}
+
+func meaningOf(offer Offer, isOnlyWayToGoAhead bool) string {
+	if offer.IsDeclining {
+		return RejectMeaning
+	}
+	if isOnlyWayToGoAhead {
+		return allowAsAskedMeaning
+	}
+	return AllowMeaning(offer.Name)
 }
 
 type Question struct {

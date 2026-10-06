@@ -13,8 +13,6 @@ import (
 const (
 	ApproveOptionID = "approve"
 	RejectOptionID  = "reject"
-
-	approveOptionName = "approve this call as asked"
 )
 
 var errNoApprovalReplyReader = errors.New("connector runtime has no approval reply reader configured")
@@ -34,24 +32,21 @@ func (connectorRuntime *ConnectorRuntime) readReplyToQuestion(ctx context.Contex
 }
 
 func approvalQuestionFor(text string, choices []holdrecord.Choice) approvalreply.Question {
-	if len(choices) == 0 {
-		return approvalreply.Question{Text: text, Options: []approvalreply.Option{
-			{ID: ApproveOptionID, Meaning: approvalreply.AllowMeaning(approveOptionName)},
-			{ID: RejectOptionID, Meaning: approvalreply.RejectMeaning},
-		}}
-	}
-	options := []approvalreply.Option{}
-	for _, replyOption := range approvalgate.ChoiceReplyOptions(choices) {
-		options = append(options, approvalreply.Option{ID: replyOption.Key, Meaning: choiceMeaning(replyOption)})
-	}
-	return approvalreply.Question{Text: text, Options: options}
+	return approvalreply.Question{Text: text, Options: approvalreply.OptionsOf(offersOf(choices))}
 }
 
-func choiceMeaning(replyOption agentcontract.ChoiceReplyOption) string {
-	if replyOption.Key == approvalgate.CancelChoiceKey {
-		return approvalreply.RejectMeaning
+func offersOf(choices []holdrecord.Choice) []approvalreply.Offer {
+	if len(choices) == 0 {
+		return []approvalreply.Offer{
+			{ID: ApproveOptionID},
+			{ID: RejectOptionID, IsDeclining: true},
+		}
 	}
-	return approvalreply.AllowMeaning(replyOption.Label)
+	offers := []approvalreply.Offer{}
+	for _, replyOption := range approvalgate.ChoiceReplyOptions(choices) {
+		offers = append(offers, approvalreply.Offer{ID: replyOption.Key, Name: replyOption.Label, IsDeclining: replyOption.Key == approvalgate.CancelChoiceKey})
+	}
+	return offers
 }
 
 func answeredDecision(optionID string) agentcontract.TurnDecision {
