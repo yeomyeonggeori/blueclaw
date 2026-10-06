@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/holdrecord"
@@ -43,6 +44,10 @@ func (connectorRuntime *ConnectorRuntime) ResumeInterruptedTaskRun(ctx context.C
 	taskEvents := connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID)
 	if sourceTaskRun, isRetry := connectorRuntime.pendingRetrySource(taskEvents); isRetry {
 		return connectorRuntime.resumePendingTaskRetry(ctx, sourceTaskRun, taskRun)
+	}
+	if _, isHeld := approvalgate.PendingHeldCall(taskEvents); isHeld {
+		go connectorRuntime.reawaitHold(ctx, taskRun)
+		return ConnectorRuntimeResult{Handled: true, TaskRunID: taskRun.TaskRunID, Reason: "open_hold_awaited_again"}, nil
 	}
 	launchContext, isFound := interruptedTaskLaunchContextFromEvents(taskRun, taskEvents)
 	if !isFound {

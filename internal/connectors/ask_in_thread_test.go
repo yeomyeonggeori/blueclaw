@@ -2,6 +2,7 @@ package connectors
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"slices"
@@ -637,5 +638,74 @@ func TestARunResumedOnAHeldCallOwesThatCallSoTheLoopDoesNotRefuseItAsUnrequested
 
 	if !slices.Contains(activeGoal.OutcomeContract.RequiredEvidenceTools, "event_delete") {
 		t.Fatalf("the resumed goal requires %v, and a send or delete the goal does not require is refused by the loop as unrequested", activeGoal.OutcomeContract.RequiredEvidenceTools)
+	}
+}
+
+func interruptedRunHoldingTheCall(t *testing.T, fixture *threadAskFixture) task.TaskRun {
+	t.Helper()
+	taskRun := fixture.connectorRuntime.taskRunService.CreateTaskRunWithOrigin("person-1", task.TaskRunOrigin{ConversationID: "direct-1", ReplyTargetID: "reply-target-1", IsThread: true}, threadAskRequest)
+	fixture.connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentTaskLaunched, `{"platform":"test","conversationID":"direct-1","replyTargetID":"reply-target-1","sourceReference":"test:direct-1:message-1"}`)
+	holdrecord.Open(fixture.connectorRuntime.taskRunService, taskRun.TaskRunID, agentcontract.HeldCall{ToolName: "event_delete", ToolInput: []byte(`{"eventHint":"event-1"}`), Confirmation: "내일 휴가 일정을 삭제할까요?"}, nil)
+	interrupted, isInterrupted := fixture.connectorRuntime.taskRunService.InterruptInactiveTaskRun(taskRun.TaskRunID, agentcontract.TaskInterruptReasonPlannedShutdown)
+	if !isInterrupted {
+		t.Fatal("the run was not interrupted")
+	}
+	return interrupted
+}
+
+func TestARunKilledAfterItsHoldOpenedBeforeTheQuestionWasPostedIsAwaitedAndAskedOnce(t *testing.T) {
+	fixture := newThreadAskFixture(t, deleteApprovalScript())
+	taskRun := interruptedRunHoldingTheCall(t, fixture)
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+
+	_, errorValue := fixture.connectorRuntime.ResumeInterruptedTaskRun(ctx, taskRun)
+	fixture.awaitQuestionOnTheThread(t)
+
+	if errorValue != nil || fixture.questionsPosted() != 1 || fixture.taskRunCount() != 1 || fixture.invokedToolCount() != 0 {
+		t.Fatalf("error=%v questions=%d runs=%d calls=%v: expected the open hold awaited and asked once, with no second run", errorValue, fixture.questionsPosted(), fixture.taskRunCount(), fixture.invokedTools)
+	}
+}
+
+func TestARunKilledAfterItsQuestionWasPostedIsAwaitedWithoutAskingAgain(t *testing.T) {
+	fixture := newThreadAskFixture(t, deleteApprovalScript())
+	taskRun := interruptedRunHoldingTheCall(t, fixture)
+	fixture.connectorRuntime.appendConnectorReplyEvent(taskRun.TaskRunID, agentcontract.TaskEventConnectorReplySent, map[string]string{"replyKind": connectorReplyKindApprovalQuestion, "dispatchID": "dispatch-before-the-kill"})
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+
+	_, errorValue := fixture.connectorRuntime.ResumeInterruptedTaskRun(ctx, taskRun)
+	fixture.awaitQuestionOnTheThread(t)
+
+	if errorValue != nil || fixture.questionsPosted() != 0 || fixture.taskRunCount() != 1 {
+		t.Fatalf("error=%v questions=%d runs=%d: expected the posted question awaited, not posted again and not relaunched", errorValue, fixture.questionsPosted(), fixture.taskRunCount())
+	}
+}
+
+func askWhileTheMessengerFailsWith(t *testing.T, deliveryError error) (*threadAskFixture, task.TaskRun) {
+	t.Helper()
+	fixture := newThreadAskFixture(t, deleteApprovalScript())
+	fixture.adapter.sendReplyError = deliveryError
+	fixture.await(t, fixture.send(context.Background(), threadReplyEvent("message-1", threadAskRequest)))
+	taskRuns := fixture.connectorRuntime.taskRunService.ListTaskRunByPersonID("person-1")
+	if len(taskRuns) != 1 {
+		t.Fatalf("expected one run, found %d", len(taskRuns))
+	}
+	return fixture, taskRuns[0]
+}
+
+func TestAQuestionTheMessengerCouldNotCarryBecauseItIsDownStaysPendingForTheReconnect(t *testing.T) {
+	fixture, taskRun := askWhileTheMessengerFailsWith(t, capability.TransportError{Cause: errors.New("dial unix: connect: connection refused")})
+
+	if taskRun.Status != task.TaskStatusWaitingApproval || connectorTaskEventsContain(fixture.connectorRuntime, taskRun.TaskRunID, approvalgate.TaskEventApprovalUnreachable, "") {
+		t.Fatalf("a messenger that is down left the run %s with an unreachable verdict, expected it to wait for the reconnect", taskRun.Status)
+	}
+}
+
+func TestAQuestionToARequesterTheMessengerRefusesIsUnreachable(t *testing.T) {
+	fixture, taskRun := askWhileTheMessengerFailsWith(t, errors.New("no direct conversation with this person"))
+
+	if taskRun.Status == task.TaskStatusWaitingApproval || !connectorTaskEventsContain(fixture.connectorRuntime, taskRun.TaskRunID, approvalgate.TaskEventApprovalUnreachable, "") {
+		t.Fatalf("a refused question left the run %s without an unreachable verdict", taskRun.Status)
 	}
 }

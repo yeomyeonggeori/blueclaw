@@ -16,11 +16,15 @@ import (
 
 func (connectorRuntime *ConnectorRuntime) reawaitPendingHolds(ctx context.Context) {
 	for _, taskRun := range connectorRuntime.taskRunService.ListTaskRun() {
-		if taskRun.Status != task.TaskStatusWaitingApproval {
+		if !isAwaitingAnAnswer(taskRun) {
 			continue
 		}
 		go connectorRuntime.reawaitHold(ctx, taskRun)
 	}
+}
+
+func isAwaitingAnAnswer(taskRun task.TaskRun) bool {
+	return taskRun.Status == task.TaskStatusWaitingApproval || taskRun.Status == task.TaskStatusInterrupted
 }
 
 func (connectorRuntime *ConnectorRuntime) reawaitHold(ctx context.Context, taskRun task.TaskRun) {
@@ -31,7 +35,7 @@ func (connectorRuntime *ConnectorRuntime) reawaitHold(ctx context.Context, taskR
 
 func (connectorRuntime *ConnectorRuntime) reawaitHeldQuestionsIn(ctx context.Context, personID string, conversationID string) {
 	for _, taskRun := range connectorRuntime.taskRunService.ListTaskRunByPersonID(personID) {
-		if taskRun.Status != task.TaskStatusWaitingApproval || taskRun.OriginConversationID != conversationID {
+		if !isAwaitingAnAnswer(taskRun) || taskRun.OriginConversationID != conversationID {
 			continue
 		}
 		if awaitAnswer, isAwaiting := connectorRuntime.beginReawaiting(context.WithoutCancel(ctx), taskRun); isAwaiting {

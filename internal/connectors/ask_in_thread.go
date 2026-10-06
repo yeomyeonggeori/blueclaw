@@ -11,6 +11,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
+	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/holdrecord"
@@ -189,12 +190,20 @@ func (connectorRuntime *ConnectorRuntime) askWhereTheyAre(ctx context.Context, a
 		answers:           make(chan string, 1),
 	}
 	defer connectorRuntime.askingThreads.join(thread)()
-	if connectorRuntime.deliverApprovalQuestion(ctx, turn, approvalRequest.TaskRunID, confirmation) != nil {
-		return "", approvalgate.AskUnreachable
+	if errorValue := connectorRuntime.deliverApprovalQuestion(ctx, turn, approvalRequest.TaskRunID, confirmation); errorValue != nil {
+		return "", statusOfFailedQuestionDelivery(errorValue)
 	}
 	connectorRuntime.askingThreads.markPosted(thread)
 	defer waitHandoffFrom(ctx).begin()()
 	return connectorRuntime.awaitAnswer(ctx, thread, connectorRuntime.askingThreads.expiry)
+}
+
+func statusOfFailedQuestionDelivery(deliveryError error) approvalgate.AskStatus {
+	var transportError capability.TransportError
+	if errors.As(deliveryError, &transportError) {
+		return approvalgate.AskInterrupted
+	}
+	return approvalgate.AskUnreachable
 }
 
 func (connectorRuntime *ConnectorRuntime) questionTurn(ctx context.Context, approvalRequest mcpserver.ApprovalRequest) (*inboundTurn, bool) {
