@@ -1,3 +1,5 @@
+//go:build !nobundledharness
+
 package agentruntime
 
 import (
@@ -10,8 +12,8 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/officeclaimcheck"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 const noticeSnapshot = `{"schema":"letter","given":{},"known":{"documentNumber":"SAMPLE-20261004-001"},"claims":[` +

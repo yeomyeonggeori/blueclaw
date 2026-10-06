@@ -1,3 +1,5 @@
+//go:build !nobundledharness
+
 package connectors
 
 import (
@@ -5,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func countConnectorTaskEvents(connectorRuntime *ConnectorRuntime, taskRunID string, name string) int {

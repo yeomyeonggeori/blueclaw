@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 type PendingRequestMessage struct {

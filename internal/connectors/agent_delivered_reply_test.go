@@ -3,7 +3,7 @@ package connectors
 import (
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func messageSendEvents(targetField string, targetValue string, isFailure bool) []agentcontract.TaskEvent {

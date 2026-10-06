@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func (taskLauncher *TaskLauncher) recordTurnInput(taskRunID string, request agentcontract.AgentTurnRequest) {

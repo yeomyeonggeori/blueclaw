@@ -8,10 +8,9 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/officeclaimcheck"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 const (

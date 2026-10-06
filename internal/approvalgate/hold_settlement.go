@@ -3,9 +3,9 @@ package approvalgate
 import (
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/holdrecord"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 )
 
 func SettleLatest(taskRunStore taskstate.TaskRunStore, taskRunID string, decision string, source string) {

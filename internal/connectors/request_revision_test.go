@@ -1,3 +1,5 @@
+//go:build !nobundledharness
+
 package connectors
 
 import (
@@ -8,7 +10,7 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 type revisionTestRepository struct {

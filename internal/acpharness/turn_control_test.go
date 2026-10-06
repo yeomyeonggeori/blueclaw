@@ -8,10 +8,9 @@ import (
 	"time"
 
 	acp "github.com/coder/acp-go-sdk"
-
 	"github.com/yeomyeonggeori/blueclaw/internal/toolcallprogress"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 )
 
 const waitForTheAgent = 5 * time.Second

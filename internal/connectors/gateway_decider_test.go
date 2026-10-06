@@ -5,8 +5,8 @@ import (
 	"sync"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract/harnesstest"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract/harnesstest"
 )
 
 type scriptedGatewayDecider struct {

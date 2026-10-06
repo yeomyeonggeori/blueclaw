@@ -1,3 +1,5 @@
+//go:build !nobundledharness
+
 package connectors
 
 import (
@@ -10,15 +12,14 @@ import (
 	"time"
 
 	acp "github.com/coder/acp-go-sdk"
-
 	"github.com/yeomyeonggeori/blueclaw/agenttest"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/holdrecord"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 )
 
 const threadAskRequest = "내일 휴가 일정을 캘린더에서 삭제해줘"

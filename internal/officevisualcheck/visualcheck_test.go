@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 const cleanOption = "none"

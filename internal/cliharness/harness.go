@@ -24,8 +24,8 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/toolcatalogtrust"
 	"github.com/yeomyeonggeori/blueclaw/internal/turnbriefing"
 	"github.com/yeomyeonggeori/blueclaw/internal/turnoutcome"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 )
 
 const (

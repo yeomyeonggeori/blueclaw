@@ -9,7 +9,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func attachmentWriterForTest(t *testing.T, personID string) (importedAttachmentWriter, string) {

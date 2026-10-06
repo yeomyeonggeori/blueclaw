@@ -5,8 +5,7 @@ import (
 	"testing"
 
 	acp "github.com/coder/acp-go-sdk"
-
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 const checkpointMarkerKey = "example.com/checkpoint"

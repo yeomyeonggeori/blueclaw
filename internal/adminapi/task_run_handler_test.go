@@ -11,8 +11,8 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract/harnesstest"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract/harnesstest"
 )
 
 func TestTaskRunHandlerLaunchesAdminTask(t *testing.T) {
@@ -97,9 +97,6 @@ func TestTaskRunHandlerHandsTheModelPathPresetToTheAgentAsAFact(t *testing.T) {
 	turnRequest := harness.LastTurnRequest()
 	if turnRequest.TaskLevel != agentcontract.TaskLevelXLow {
 		t.Fatalf("expected the xlow diagnostic task level as a fact, got %q", turnRequest.TaskLevel)
-	}
-	if turnRequest.PrecomputedTurnDecision != nil {
-		t.Fatalf("expected no host-built decision, got %+v", turnRequest.PrecomputedTurnDecision)
 	}
 }
 

@@ -1,3 +1,5 @@
+//go:build !nobundledharness
+
 package agentruntime
 
 import (
@@ -8,8 +10,8 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 // The reference vocabulary is a workspace path or an attachment's url. A url

@@ -9,9 +9,8 @@ import (
 	"path/filepath"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/officeclaimcheck"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 const officeDraftClaimsReadLimit = 1 << 20

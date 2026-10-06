@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func TestMorningBriefingScheduledLaunchHasReadOnlyToolCeiling(t *testing.T) {

@@ -1,3 +1,5 @@
+//go:build !nobundledharness
+
 package agentruntime
 
 import (
@@ -8,13 +10,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/holdrecord"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type recordCatalogStandIn struct {

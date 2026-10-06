@@ -1,10 +1,11 @@
+//go:build !nobundledharness
+
 package app
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -17,15 +18,16 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
-	"github.com/yeomyeonggeori/blueclaw/internal/bluecollaracp"
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
+	"github.com/yeomyeonggeori/blueclaw/internal/defaultharness"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/protocolidentity"
 	"github.com/yeomyeonggeori/blueclaw/internal/runtimecontrol"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	capabilitycatalog "github.com/yeomyeonggeori/blueclaw/protocol/generated"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func TestTaskIntakeControllerStartsUnquiesced(t *testing.T) {
@@ -316,7 +318,7 @@ func TestNewApplicationRegistersSecretlessConnectorTransports(t *testing.T) {
 	runtimeConfiguration := config.RuntimeConfiguration{}
 	runtimeConfiguration.Logging.DirectoryPath = t.TempDir()
 
-	application := NewApplication(runtimeConfiguration, "", InboundOptions{}, WithBundledACPFactory(bluecollaracp.NewFactory))
+	application := NewApplication(runtimeConfiguration, "", InboundOptions{}, WithBundledACPFactory(defaultharness.NewFactory))
 
 	transportNames := strings.Join(application.connectorTransportNames(), ",")
 	for _, platform := range capabilitycatalog.MessengerPlatformNames() {
@@ -346,7 +348,7 @@ func TestApplicationChecksProtocolIdentityOnceAndStoresResult(t *testing.T) {
 	runtimeConfiguration.Capabilities.Endpoint = server.URL
 	runtimeConfiguration.Capabilities.ProtocolVersion = protocolVersion
 	runtimeConfiguration.Capabilities.AggregateProtocolHash = aggregateProtocolHash
-	application := NewApplication(runtimeConfiguration, "", InboundOptions{}, WithBundledACPFactory(bluecollaracp.NewFactory))
+	application := NewApplication(runtimeConfiguration, "", InboundOptions{}, WithBundledACPFactory(defaultharness.NewFactory))
 	application.protocolIdentityExpected = protocolidentity.Identity{
 		ProtocolVersion:       protocolVersion,
 		AggregateProtocolHash: aggregateProtocolHash,
@@ -684,7 +686,7 @@ func TestApplicationServesHealthWhenProtocolIdentityDisagrees(t *testing.T) {
 	runtimeConfiguration := config.RuntimeConfiguration{}
 	runtimeConfiguration.Logging.DirectoryPath = t.TempDir()
 	runtimeConfiguration.Capabilities.Endpoint = server.URL
-	application := NewApplication(runtimeConfiguration, "", InboundOptions{}, WithBundledACPFactory(bluecollaracp.NewFactory))
+	application := NewApplication(runtimeConfiguration, "", InboundOptions{}, WithBundledACPFactory(defaultharness.NewFactory))
 	application.httpServer.Addr = "127.0.0.1:0"
 	application.protocolIdentityExpected = protocolidentity.Identity{
 		ProtocolVersion:       "0.4.0",

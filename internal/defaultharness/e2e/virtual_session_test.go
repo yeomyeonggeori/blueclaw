@@ -1,0 +1,1575 @@
+//go:build !nobundledharness
+
+package e2e
+
+import (
+	"archive/zip"
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
+	"github.com/yeomyeonggeori/blueclaw/internal/llm"
+	"github.com/yeomyeonggeori/blueclaw/internal/task"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
+)
+
+func TestRequestRevisionBurstProducesOneReply(t *testing.T) {
+	scenario := RequestRevisionAcceptanceScenario(t.TempDir())
+
+	result, errorValue := RunVirtualSession(context.Background(), scenario)
+	if errorValue != nil {
+		t.Fatalf("expected request revision burst to pass: %v", errorValue)
+	}
+	if len(result.TurnResults) != 6 {
+		t.Fatalf("expected six inbound results from two bursts, got %d", len(result.TurnResults))
+	}
+	replyCount := 0
+	for _, turnResult := range result.TurnResults {
+		if turnResult.DidReply {
+			replyCount++
+		}
+	}
+	if replyCount != 2 || !result.TurnResults[2].DidReply || !result.TurnResults[5].DidReply {
+		t.Fatalf("expected one final reply per burst, got %+v", result.TurnResults)
+	}
+}
+
+type virtualStructuredOutputCorrectionTestError struct{}
+
+func (virtualStructuredOutputCorrectionTestError) Error() string {
+	return "structured output invalid"
+}
+
+func (virtualStructuredOutputCorrectionTestError) StructuredOutputCorrection() (llm.StructuredOutputCorrection, bool) {
+	return llm.StructuredOutputCorrection{
+		Code: "structured_output_invalid",
+		Diagnostic: llm.StructuredOutputDiagnostic{
+			Category:     llm.StructuredOutputDiagnosticFinishReason,
+			FinishReason: llm.StructuredOutputDiagnosticFinishStop,
+		},
+	}, true
+}
+
+func TestDefaultToolPaletteUsesCanonicalNames(t *testing.T) {
+	toolNames := allowedToolsOrDefault(nil)
+	for _, toolName := range []string{"bash", "ask_input", "file_deliver"} {
+		if !slices.Contains(toolNames, toolName) {
+			t.Fatalf("expected canonical tool %s, got %+v", toolName, toolNames)
+		}
+	}
+	for _, toolName := range []string{"shell_session", "browser_handoff_openURL", "ask_choice", "file_promote", "file_attach", "task_history", "db_sql"} {
+		if slices.Contains(toolNames, toolName) {
+			t.Fatalf("expected dead tool %s to be absent, got %+v", toolName, toolNames)
+		}
+	}
+}
+
+func TestExpectedEventCountRejectsRepeatedReadResults(t *testing.T) {
+	virtualTurn := VirtualTurn{
+		ExpectedEventCounts: []VirtualEventCount{{
+			Name:         "tool.task_list.result",
+			BodyFragment: "customer task",
+			Count:        1,
+		}},
+	}
+	turnResult := VirtualTurnResult{
+		FinishMessage: "found",
+		Events: []task.TaskEvent{
+			{Name: "tool.task_list.result", Body: `{"title":"customer task"}`},
+			{Name: "tool.task_list.result", Body: `{"title":"customer task"}`},
+		},
+	}
+	errorValue := assertTurnResult(t.TempDir(), virtualTurn, turnResult)
+	if errorValue == nil || !strings.Contains(errorValue.Error(), "expected=1 actual=2") {
+		t.Fatalf("expected the exact event count assertion to reject the duplicate read, got %v", errorValue)
+	}
+	assertions := informationalAssertionResults(virtualTurn, turnResult)
+	if len(assertions) != 1 || assertions[0].Satisfied {
+		t.Fatalf("expected the duplicate read to remain an informational efficiency mismatch: %+v", assertions)
+	}
+}
+
+func TestLanguageModelCallAssertionRejectsError(t *testing.T) {
+	errorValue := assertLanguageModelCallsSucceeded(VirtualTurnResult{
+		LanguageModelCallEvents: []VirtualLanguageModelCallEvent{{
+			Kind:       "structured",
+			SchemaName: "bluecollar_turn_router",
+			IsError:    true,
+			Error:      "truncated",
+		}},
+	})
+
+	if errorValue == nil || !strings.Contains(errorValue.Error(), "bluecollar_turn_router") {
+		t.Fatalf("expected strict assertion to reject the model error, got %v", errorValue)
+	}
+}
+
+func TestLanguageModelCallAssertionAllowsCorrectedTypedError(t *testing.T) {
+	observed := &virtualObservedLanguageModel{store: &virtualLanguageModelObservationStore{}}
+	request := llm.ChatCompletionRequest{SchemaName: "bluecollar_agent_turn_action"}
+	observed.appendCall(virtualChatCallEvent(
+		"chat",
+		request,
+		llm.ChatCompletionResponse{},
+		time.Now(),
+		virtualStructuredOutputCorrectionTestError{},
+	))
+	observed.appendCall(VirtualLanguageModelCallEvent{
+		Kind:         "chat",
+		SchemaName:   "bluecollar_agent_turn_action",
+		FinishReason: "tool_calls",
+	})
+
+	calls := observed.CallsSince(0)
+	if len(calls) != 2 || !calls[0].IsError || !calls[0].WasCorrected {
+		t.Fatalf("expected corrected error evidence to remain visible, got %+v", calls)
+	}
+	if errorValue := assertLanguageModelCallsSucceeded(VirtualTurnResult{LanguageModelCallEvents: calls}); errorValue != nil {
+		t.Fatalf("expected corrected typed error to pass strict assertion: %v", errorValue)
+	}
+}
+
+func TestLanguageModelCallAssertionAllowsCorrectedTypedErrorChain(t *testing.T) {
+	observed := &virtualObservedLanguageModel{store: &virtualLanguageModelObservationStore{}}
+	request := llm.ChatCompletionRequest{SchemaName: "bluecollar_agent_turn_action"}
+	for range 2 {
+		observed.appendCall(virtualChatCallEvent(
+			"chat",
+			request,
+			llm.ChatCompletionResponse{},
+			time.Now(),
+			virtualStructuredOutputCorrectionTestError{},
+		))
+	}
+	observed.appendCall(VirtualLanguageModelCallEvent{
+		Kind:         "chat",
+		SchemaName:   "bluecollar_agent_turn_action",
+		FinishReason: "tool_calls",
+	})
+
+	calls := observed.CallsSince(0)
+	if len(calls) != 3 || !calls[0].WasCorrected || !calls[1].WasCorrected {
+		t.Fatalf("expected both typed errors to be corrected, got %+v", calls)
+	}
+	if errorValue := assertLanguageModelCallsSucceeded(VirtualTurnResult{LanguageModelCallEvents: calls}); errorValue != nil {
+		t.Fatalf("expected corrected typed error chain to pass strict assertion: %v", errorValue)
+	}
+}
+
+func TestLanguageModelCallAssertionRejectsUnrecoveredTypedError(t *testing.T) {
+	observed := &virtualObservedLanguageModel{store: &virtualLanguageModelObservationStore{}}
+	observed.appendCall(VirtualLanguageModelCallEvent{
+		Kind:                       "chat",
+		SchemaName:                 "bluecollar_agent_turn_action",
+		IsError:                    true,
+		Error:                      "structured output invalid",
+		StructuredOutputCorrection: &llm.StructuredOutputCorrection{},
+	})
+	observed.appendCall(VirtualLanguageModelCallEvent{
+		Kind:         "chat",
+		SchemaName:   "bluecollar_agent_turn_action",
+		FinishReason: "stop",
+	})
+
+	calls := observed.CallsSince(0)
+	if calls[0].WasCorrected {
+		t.Fatalf("expected non-tool response not to correct the error, got %+v", calls)
+	}
+	if errorValue := assertLanguageModelCallsSucceeded(VirtualTurnResult{LanguageModelCallEvents: calls}); errorValue == nil {
+		t.Fatal("expected unrecovered typed error to fail strict assertion")
+	}
+}
+
+func TestLanguageModelCallAssertionRejectsDeadlineDespiteElapsedCompletionEvent(t *testing.T) {
+	turnResult := VirtualTurnResult{
+		TaskStatus: task.TaskStatusCompleted,
+		Events: []task.TaskEvent{{
+			Name: "agent.limit_completed_from_evidence",
+			Body: `{"reason":"max_elapsed","source":"expected_changes"}`,
+		}},
+		LanguageModelCallEvents: []VirtualLanguageModelCallEvent{{
+			Kind:               "structured",
+			SchemaName:         "bluecollar_turn_router",
+			IsError:            true,
+			IsDeadlineExceeded: true,
+			Error:              context.DeadlineExceeded.Error(),
+		}},
+	}
+
+	if errorValue := assertLanguageModelCallsSucceeded(turnResult); errorValue == nil {
+		t.Fatal("expected elapsed completion event not to hide a language model deadline")
+	}
+}
+
+func TestVirtualObservedLanguageModelPreservesChatCapabilityAndMetadata(t *testing.T) {
+	observed := newVirtualObservedLanguageModel(virtualChatTestProvider{})
+	if _, isDirectChat := observed.(llm.ChatCompleter); isDirectChat {
+		t.Fatal("expected virtual observer to expose ChatCompleter only through the optional accessor")
+	}
+	chatCompleter, isAvailable := llm.ResolveTextChatCompleter(observed)
+	if !isAvailable {
+		t.Fatal("expected virtual observer chat capability")
+	}
+	response, errorValue := chatCompleter.GenerateChatCompletion(context.Background(), llm.ChatCompletionRequest{
+		Messages: []llm.ChatCompletionMessage{{Role: "user", Content: "reply"}},
+	})
+	if errorValue != nil || response.Message.Content != "virtual reply" {
+		t.Fatalf("expected virtual chat response, got %+v %v", response, errorValue)
+	}
+	recorder, isRecorder := observed.(virtualLanguageModelCallRecorder)
+	if !isRecorder {
+		t.Fatal("expected virtual observer call recorder")
+	}
+	calls := recorder.CallsSince(0)
+	if len(calls) != 1 || calls[0].Kind != "chat" || calls[0].Provider != "virtual-provider" || calls[0].Model != "virtual-model" || calls[0].SelectedBackend != "device" || calls[0].FinishReason != "stop" || !calls[0].UsedFallback {
+		t.Fatalf("expected exact virtual chat metadata, got %+v", calls)
+	}
+}
+
+func TestVirtualChatCallEventDerivesActionSchemaForForcedChatOnly(t *testing.T) {
+	actionEvent := virtualChatCallEvent("chat", virtualActionChatRequest(), llm.ChatCompletionResponse{
+		ProviderName:    "capability",
+		ModelName:       "low-model",
+		SelectedBackend: "device",
+		FinishReason:    "tool_calls",
+		UsedFallback:    true,
+	}, time.Now(), nil)
+	plainEvent := virtualChatCallEvent("chat", llm.ChatCompletionRequest{}, llm.ChatCompletionResponse{
+		ProviderName:    "capability",
+		ModelName:       "low-model",
+		SelectedBackend: "device",
+		FinishReason:    "stop",
+	}, time.Now(), nil)
+	if actionEvent.SchemaName != "bluecollar_agent_turn_action" || plainEvent.SchemaName != "" {
+		t.Fatalf("expected only forced action chat to carry schema, got %+v %+v", actionEvent, plainEvent)
+	}
+}
+
+func virtualActionChatRequest() llm.ChatCompletionRequest {
+	return llm.ChatCompletionRequest{
+		SchemaName: "bluecollar_agent_turn_action",
+		Tools: []llm.ChatCompletionTool{{
+			Type:     "function",
+			Function: llm.ChatCompletionFunction{Name: "bluecollar_agent_turn_action"},
+		}},
+		ToolChoice: json.RawMessage(`{"type":"function","function":{"name":"bluecollar_agent_turn_action"}}`),
+	}
+}
+
+func TestVirtualObservedLanguageModelResolvesNestedChatAccessors(t *testing.T) {
+	inner := newVirtualObservedLanguageModel(virtualChatTestProvider{})
+	outer := newVirtualObservedLanguageModel(inner)
+	if _, isDirectChat := outer.(llm.ChatCompleter); isDirectChat {
+		t.Fatal("expected nested virtual observer to expose ChatCompleter only through the optional accessor")
+	}
+	chatCompleter, isAvailable := llm.ResolveTextChatCompleter(outer)
+	if !isAvailable {
+		t.Fatal("expected nested virtual observer chat capability")
+	}
+	response, errorValue := chatCompleter.GenerateChatCompletion(context.Background(), llm.ChatCompletionRequest{})
+	if errorValue != nil || response.Message.Content != "virtual reply" {
+		t.Fatalf("expected nested virtual chat response, got %+v %v", response, errorValue)
+	}
+	for name, provider := range map[string]llm.LanguageModelProvider{"outer": outer, "inner": inner} {
+		recorder, isRecorder := provider.(virtualLanguageModelCallRecorder)
+		if !isRecorder {
+			t.Fatalf("expected %s virtual observer call recorder", name)
+		}
+		calls := recorder.CallsSince(0)
+		if len(calls) != 1 || calls[0].Kind != "chat" || calls[0].Provider != "virtual-provider" || calls[0].Model != "virtual-model" || calls[0].SelectedBackend != "device" || calls[0].FinishReason != "stop" || !calls[0].UsedFallback {
+			t.Fatalf("expected exact %s nested virtual chat metadata, got %+v", name, calls)
+		}
+	}
+}
+
+func TestVirtualObservedLanguageModelDoesNotInventChatCapability(t *testing.T) {
+	observed := newVirtualObservedLanguageModel(virtualPlainTestProvider{})
+	if _, isAvailable := llm.ResolveTextChatCompleter(observed); isAvailable {
+		t.Fatal("expected virtual observer without ChatCompleter to remain unavailable")
+	}
+	if _, isAvailable := llm.ResolveRecoveryChatCompleter(observed); isAvailable {
+		t.Fatal("expected virtual observer without RecoveryChatCompleter to remain unavailable")
+	}
+	if _, isAvailable := llm.ResolveLocalRecoveryChatCompleter(observed); isAvailable {
+		t.Fatal("expected virtual observer without LocalRecoveryChatCompleter to remain unavailable")
+	}
+}
+
+func TestVirtualObservedLanguageModelPreservesNestedRecoveryChatCapabilities(t *testing.T) {
+	inner := newVirtualObservedLanguageModel(virtualChatTestProvider{})
+	outer := newVirtualObservedLanguageModel(inner)
+
+	recoveryProvider, hasRecoveryChat := llm.ResolveRecoveryChatCompleter(outer)
+	if !hasRecoveryChat {
+		t.Fatal("expected nested virtual recovery chat capability")
+	}
+	localRecoveryProvider, hasLocalRecoveryChat := llm.ResolveLocalRecoveryChatCompleter(outer)
+	if !hasLocalRecoveryChat {
+		t.Fatal("expected nested virtual local recovery chat capability")
+	}
+	request := llm.ChatCompletionRequest{Messages: []llm.ChatCompletionMessage{{Role: "user", Content: "failure"}}}
+	response, errorValue := recoveryProvider.GenerateRecoveryChatCompletion(context.Background(), request)
+	if errorValue != nil || response.Message.Content != "virtual recovery reply" {
+		t.Fatalf("expected nested virtual recovery response, got %+v %v", response, errorValue)
+	}
+	response, errorValue = localRecoveryProvider.GenerateLocalRecoveryChatCompletion(context.Background(), request)
+	if errorValue != nil || response.Message.Content != "virtual local recovery reply" {
+		t.Fatalf("expected nested virtual local recovery response, got %+v %v", response, errorValue)
+	}
+	assertVirtualRecoveryChatCall(t, inner, "inner")
+	assertVirtualRecoveryChatCall(t, outer, "outer")
+}
+
+func assertVirtualRecoveryChatCall(t *testing.T, provider llm.LanguageModelProvider, label string) {
+	t.Helper()
+	recorder, isRecorder := provider.(virtualLanguageModelCallRecorder)
+	if !isRecorder {
+		t.Fatalf("expected %s virtual observer call recorder", label)
+	}
+	calls := recorder.CallsSince(0)
+	if len(calls) != 2 {
+		t.Fatalf("expected two %s recovery calls, got %+v", label, calls)
+	}
+	for index, call := range calls {
+		expectedKind := []string{"recovery_chat", "local_recovery_chat"}[index]
+		if call.Kind != expectedKind {
+			t.Fatalf("expected %s recovery kind %q, got %+v", label, expectedKind, call)
+		}
+		if call.Provider != "virtual-recovery-provider" || call.Model != "virtual-recovery-model" || call.SelectedBackend != "remote" || call.FinishReason != "stop" || call.UsedFallback {
+			t.Fatalf("expected %s recovery routing metadata, got %+v", label, call)
+		}
+	}
+}
+
+func TestVirtualObservedLanguageModelRecordsChatErrors(t *testing.T) {
+	observed := newVirtualObservedLanguageModel(virtualChatErrorTestProvider{})
+	chatCompleter, isAvailable := llm.ResolveTextChatCompleter(observed)
+	if !isAvailable {
+		t.Fatal("expected virtual observer chat capability")
+	}
+	_, errorValue := chatCompleter.GenerateChatCompletion(context.Background(), llm.ChatCompletionRequest{})
+	if errorValue == nil {
+		t.Fatal("expected virtual chat error")
+	}
+	recorder, isRecorder := observed.(virtualLanguageModelCallRecorder)
+	if !isRecorder {
+		t.Fatal("expected virtual observer call recorder")
+	}
+	calls := recorder.CallsSince(0)
+	if len(calls) != 1 || !calls[0].IsError || calls[0].Error != "virtual chat failed" || calls[0].Provider != "virtual-provider" || calls[0].Model != "virtual-model" || calls[0].SelectedBackend != "remote" || calls[0].FinishReason != "error" || !calls[0].UsedFallback {
+		t.Fatalf("expected exact virtual chat error metadata, got %+v", calls)
+	}
+}
+
+type virtualPlainTestProvider struct{}
+
+func (virtualPlainTestProvider) GenerateResponse(context.Context, string) (string, error) {
+	return "", nil
+}
+
+func (virtualPlainTestProvider) GenerateStructuredResponse(context.Context, llm.StructuredResponseRequest) (llm.StructuredResponse, error) {
+	return llm.StructuredResponse{}, nil
+}
+
+type virtualChatTestProvider struct{}
+
+func (virtualChatTestProvider) GenerateResponse(context.Context, string) (string, error) {
+	return "", nil
+}
+
+func (virtualChatTestProvider) GenerateStructuredResponse(context.Context, llm.StructuredResponseRequest) (llm.StructuredResponse, error) {
+	return llm.StructuredResponse{}, nil
+}
+
+func (virtualChatTestProvider) GenerateChatCompletion(context.Context, llm.ChatCompletionRequest) (llm.ChatCompletionResponse, error) {
+	return llm.ChatCompletionResponse{
+		FinishReason:    "stop",
+		ProviderName:    "virtual-provider",
+		ModelName:       "virtual-model",
+		SelectedBackend: "device",
+		UsedFallback:    true,
+		Message:         llm.ChatCompletionMessage{Role: "assistant", Content: "virtual reply"},
+	}, nil
+}
+
+func (virtualChatTestProvider) GenerateRecoveryChatCompletion(context.Context, llm.ChatCompletionRequest) (llm.ChatCompletionResponse, error) {
+	return llm.ChatCompletionResponse{
+		FinishReason:    "stop",
+		ProviderName:    "virtual-recovery-provider",
+		ModelName:       "virtual-recovery-model",
+		SelectedBackend: "remote",
+		Message:         llm.ChatCompletionMessage{Role: "assistant", Content: "virtual recovery reply"},
+	}, nil
+}
+
+func (virtualChatTestProvider) GenerateLocalRecoveryChatCompletion(context.Context, llm.ChatCompletionRequest) (llm.ChatCompletionResponse, error) {
+	return llm.ChatCompletionResponse{
+		FinishReason:    "stop",
+		ProviderName:    "virtual-recovery-provider",
+		ModelName:       "virtual-recovery-model",
+		SelectedBackend: "remote",
+		Message:         llm.ChatCompletionMessage{Role: "assistant", Content: "virtual local recovery reply"},
+	}, nil
+}
+
+type virtualChatErrorTestProvider struct{}
+
+func (virtualChatErrorTestProvider) GenerateResponse(context.Context, string) (string, error) {
+	return "", nil
+}
+
+func (virtualChatErrorTestProvider) GenerateStructuredResponse(context.Context, llm.StructuredResponseRequest) (llm.StructuredResponse, error) {
+	return llm.StructuredResponse{}, nil
+}
+
+func (virtualChatErrorTestProvider) GenerateChatCompletion(context.Context, llm.ChatCompletionRequest) (llm.ChatCompletionResponse, error) {
+	return llm.ChatCompletionResponse{
+		FinishReason:    "error",
+		ProviderName:    "virtual-provider",
+		ModelName:       "virtual-model",
+		SelectedBackend: "remote",
+		UsedFallback:    true,
+	}, errors.New("virtual chat failed")
+}
+
+func TestMemoryGuidedFollowup(t *testing.T) {
+	result, errorValue := RunVirtualSession(context.Background(), MemoryGuidedFollowupScenario(t.TempDir()))
+	if errorValue != nil {
+		t.Fatalf("expected memory scenario to pass: %v", errorValue)
+	}
+	if len(result.TurnResults) != 2 {
+		t.Fatalf("expected two turn results, got %d", len(result.TurnResults))
+	}
+	secondTurn := result.TurnResults[1]
+	if !eventsContain(secondTurn.Events, "agent.task_launched", `"memoryFactCount":`) {
+		t.Fatal("expected task launch memory fact count")
+	}
+	if strings.Contains(secondTurn.FinishMessage, "아까") {
+		t.Fatalf("expected concrete recalled preference, got %q", secondTurn.FinishMessage)
+	}
+}
+
+func TestPlainQuestionAcceptance(t *testing.T) {
+	result, errorValue := RunVirtualSession(context.Background(), PlainQuestionAcceptanceScenario(t.TempDir()))
+	if errorValue != nil {
+		t.Fatalf("expected plain question acceptance scenario to pass: %v", errorValue)
+	}
+	if len(result.TurnResults) != 1 {
+		t.Fatalf("expected one turn result, got %d", len(result.TurnResults))
+	}
+	turnResult := result.TurnResults[0]
+	if strings.TrimSpace(turnResult.FinishMessage) == "" {
+		t.Fatal("expected non-empty final reply")
+	}
+	if toolEventCount(turnResult.Events) != 0 {
+		t.Fatalf("expected no tool events, got events: %s", summarizeEvents(turnResult.Events))
+	}
+	if failureEventCount(turnResult.Events) != 0 {
+		t.Fatalf("expected no failure events, got events: %s", summarizeEvents(turnResult.Events))
+	}
+}
+
+func TestPlainQuestionAcceptsEquivalentWordingAndRejectsToolWork(t *testing.T) {
+	turn := PlainQuestionAcceptanceScenario(t.TempDir()).Turns[0]
+	result := VirtualTurnResult{TaskStatus: task.TaskStatusCompleted, DidReply: true, FinishMessage: "무엇을 정했는지, 누가 언제까지 실행할지를 짧게 정리하세요."}
+	if errorValue := assertTurnResult(t.TempDir(), turn, result); errorValue != nil {
+		t.Fatalf("a different wording failed acceptance: %v", errorValue)
+	}
+	result.Events = []task.TaskEvent{{Name: toolRequestedEventName("write")}}
+	if errorValue := assertStructuralTurnExpectations(turn, result); errorValue == nil {
+		t.Fatal("a no-tools request accepted a file write")
+	}
+}
+
+func TestFailedAssertionReturnsObservedTurnResult(t *testing.T) {
+	scenario := PlainQuestionAcceptanceScenario(t.TempDir())
+	scenario.Turns[0].ExpectedTaskStatus = task.TaskStatusFailed
+
+	result, errorValue := RunVirtualSession(context.Background(), scenario)
+
+	if errorValue == nil {
+		t.Fatal("expected task status assertion to fail")
+	}
+	if len(result.TurnResults) != 1 {
+		t.Fatalf("expected failing turn result to remain observable, got %d", len(result.TurnResults))
+	}
+	if result.TurnResults[0].TaskStatus != task.TaskStatusCompleted {
+		t.Fatalf("expected observed completed status, got %q", result.TurnResults[0].TaskStatus)
+	}
+}
+
+func TestAllowedTaskStatusesKeepUnexpectedFailuresRejected(t *testing.T) {
+	result := VirtualTurnResult{TaskRunID: "status-test", TaskStatus: task.TaskStatusFailed}
+	turn := VirtualTurn{AllowedTaskStatuses: []task.TaskStatus{task.TaskStatusCompleted, task.TaskStatusWaitingUserInput}}
+	if errorValue := assertTaskDidNotFailUnexpectedly(turn, result); errorValue == nil {
+		t.Fatal("expected an unlisted failure to remain rejected")
+	}
+	if errorValue := assertStructuralTurnExpectations(turn, result); errorValue == nil {
+		t.Fatal("expected the status constraint to reject an unlisted failure")
+	}
+	turn.AllowedTaskStatuses = append(turn.AllowedTaskStatuses, task.TaskStatusFailed)
+	if errorValue := assertTaskDidNotFailUnexpectedly(turn, result); errorValue != nil {
+		t.Fatalf("expected an explicitly allowed failure: %v", errorValue)
+	}
+	if errorValue := assertStructuralTurnExpectations(turn, result); errorValue != nil {
+		t.Fatalf("expected an explicitly allowed terminal status: %v", errorValue)
+	}
+	turn.ExpectedTaskStatus = task.TaskStatusCompleted
+	if errorValue := assertStructuralTurnExpectations(turn, result); errorValue == nil {
+		t.Fatal("expected an exact status constraint to remain enforced")
+	}
+}
+
+func TestVirtualTaskCapabilityPreservesLifecycleState(t *testing.T) {
+	service := virtualCapabilityService{}
+	addResponse := service.response("task_add", []byte(`{"input":{"title":"비용 테스트 회귀 확인","size":"S","participantPersonHints":["예시","샘플"]},"context":{}}`))
+	discoveryResponse := service.response("task_list", []byte(`{"input":{"query":"비용 테스트 회귀 확인"},"context":{}}`))
+	taskID := virtualTaskID(t, discoveryResponse)
+	updateResponse := service.response("task_update", []byte(fmt.Sprintf(`{"input":{"taskHint":%q,"title":"비용 테스트 회귀 확인 완료 준비"},"context":{}}`, taskID)))
+	listResponse := service.response("task_list", []byte(`{"input":{},"context":{}}`))
+	approvalResponse := service.response("task_delete", []byte(fmt.Sprintf(`{"input":{"taskHint":%q},"context":{}}`, taskID)))
+	deleteResponse := service.response("task_delete", []byte(fmt.Sprintf(`{"input":{"taskHint":%q},"context":{"holdID":"hold-test"}}`, taskID)))
+	emptyListResponse := service.response("task_list", []byte(`{"input":{},"context":{}}`))
+
+	var addDocument struct {
+		Result  map[string]any                `json:"result"`
+		Effects []toolcontract.ResourceEffect `json:"effects"`
+	}
+	if errorValue := json.Unmarshal([]byte(addResponse), &addDocument); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if addDocument.Result["taskID"] != "task-1" ||
+		addDocument.Result["content"] != "비용 테스트 회귀 확인" ||
+		addDocument.Result["size"] != "S" ||
+		addDocument.Result["ownerName"] != "예시" {
+		t.Fatalf("expected canonical created task result, got %s", addResponse)
+	}
+	if _, isFound := addDocument.Result["participantPersonHints"]; isFound {
+		t.Fatalf("task_add result must not expose input-only participantPersonHints: %s", addResponse)
+	}
+	if participantNames := stringSliceValue(addDocument.Result["participantNames"]); !slices.Equal(participantNames, []string{"예시", "샘플"}) {
+		t.Fatalf("expected canonical participant names, got %s", addResponse)
+	}
+	if len(addDocument.Effects) != 1 || addDocument.Effects[0] != (toolcontract.ResourceEffect{ObjectType: "task", Effect: "created", ID: "task-1"}) {
+		t.Fatalf("expected canonical task_add effect, got %s", addResponse)
+	}
+	if !strings.Contains(updateResponse, `"content":"비용 테스트 회귀 확인 완료 준비"`) {
+		t.Fatalf("expected updated title, got %s", updateResponse)
+	}
+	if !strings.Contains(listResponse, `"content":"비용 테스트 회귀 확인 완료 준비"`) {
+		t.Fatalf("expected list to return updated task, got %s", listResponse)
+	}
+	if !strings.Contains(approvalResponse, `"errorCode":"approval_required"`) {
+		t.Fatalf("expected delete approval gate, got %s", approvalResponse)
+	}
+	if !strings.Contains(deleteResponse, `"deleted":true`) {
+		t.Fatalf("expected approved delete, got %s", deleteResponse)
+	}
+	if strings.Contains(emptyListResponse, `"taskID":"task-1"`) {
+		t.Fatalf("expected deleted task to be absent, got %s", emptyListResponse)
+	}
+}
+
+func TestVirtualTaskListUsesCanonicalLabels(t *testing.T) {
+	service := virtualCapabilityService{}
+	listResponse := service.response("task_list", []byte(`{"input":{},"context":{}}`))
+	var listDocument struct {
+		Result struct {
+			RegisteredLabels struct {
+				Businesses []map[string]any `json:"businesses"`
+				Types      []map[string]any `json:"types"`
+				Sizes      []string         `json:"sizes"`
+				Statuses   []string         `json:"statuses"`
+			} `json:"registeredLabels"`
+		} `json:"result"`
+	}
+	if errorValue := json.Unmarshal([]byte(listResponse), &listDocument); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if _, isFound := virtualCanonicalCapabilityToolDescriptor("task_add"); !isFound {
+		t.Fatal("expected the canonical task_add descriptor to be loaded")
+	}
+	if listDocument.Result.RegisteredLabels.Businesses == nil || listDocument.Result.RegisteredLabels.Types == nil || len(listDocument.Result.RegisteredLabels.Sizes) == 0 || len(listDocument.Result.RegisteredLabels.Statuses) == 0 {
+		t.Fatal("expected complete registered labels, including explicit empty company label lists")
+	}
+	if !slices.Equal(listDocument.Result.RegisteredLabels.Sizes, virtualTaskEnumValues("task_add", "size")) ||
+		!slices.Equal(listDocument.Result.RegisteredLabels.Statuses, virtualTaskEnumValues("task_update", "status")) {
+		t.Fatalf("expected registered labels to match canonical enums, got sizes=%v statuses=%v", listDocument.Result.RegisteredLabels.Sizes, listDocument.Result.RegisteredLabels.Statuses)
+	}
+}
+
+func virtualTaskID(t *testing.T, response string) string {
+	t.Helper()
+	var document struct {
+		Result struct {
+			Tasks []map[string]any `json:"tasks"`
+		} `json:"result"`
+	}
+	if errorValue := json.Unmarshal([]byte(response), &document); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(document.Result.Tasks) != 1 {
+		t.Fatalf("expected one discovered task, got %s", response)
+	}
+	taskID := strings.TrimSpace(stringValue(document.Result.Tasks[0]["taskID"]))
+	if taskID == "" {
+		t.Fatalf("expected discovered task ID, got %s", response)
+	}
+	return taskID
+}
+
+func TestVirtualTaskMutationRejectsUnknownTaskID(t *testing.T) {
+	service := virtualCapabilityService{}
+	service.response("task_add", []byte(`{"input":{"title":"비용 테스트 회귀 확인"},"context":{}}`))
+
+	for _, response := range []string{
+		service.response("task_update", []byte(`{"input":{"taskHint":"task-missing","title":"변경됨"},"context":{}}`)),
+		service.response("task_delete", []byte(`{"input":{"taskHint":"task-missing"},"context":{"holdID":"hold-test"}}`)),
+	} {
+		if !strings.Contains(response, `"errorCode":"not_found"`) {
+			t.Fatalf("expected mutation without a resolvable taskHint to fail, got %s", response)
+		}
+	}
+}
+
+func TestDOCXAttachmentValidationRejectsTextAndAcceptsCanonicalPackage(t *testing.T) {
+	invalidPath := filepath.Join(t.TempDir(), "document.docx")
+	if errorValue := os.WriteFile(invalidPath, []byte("plain text renamed as docx"), 0600); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := validateDOCXAttachment(invalidPath, toolcontract.FileAttachment{DevicePath: invalidPath}); errorValue == nil {
+		t.Fatal("expected renamed text file to fail docx validation")
+	}
+
+	placeholderPath := filepath.Join(t.TempDir(), "placeholder.docx")
+	writeDOCX(t, placeholderPath, map[string]string{
+		"[Content_Types].xml":          "<xml/>",
+		"word/document.xml":            "<xml/>",
+		"word/_rels/document.xml.rels": "<xml/>",
+	})
+	if errorValue := validateDOCXAttachment(placeholderPath, toolcontract.FileAttachment{DevicePath: placeholderPath}); errorValue == nil {
+		t.Fatal("expected placeholder XML to fail docx validation")
+	}
+
+	validPath := filepath.Join(t.TempDir(), "document.docx")
+	writeCanonicalDOCX(t, validPath)
+	if errorValue := validateDOCXAttachment(validPath, toolcontract.FileAttachment{DevicePath: validPath}); errorValue != nil {
+		t.Fatalf("expected canonical docx package to pass validation: %v", errorValue)
+	}
+}
+
+func TestVirtualDomainToolsUseGeneratedResultContracts(t *testing.T) {
+	for _, toolName := range virtualGeneratedResultContractToolNames {
+		generatedDescriptor, isFound := virtualCanonicalCapabilityToolDescriptor(toolName)
+		if !isFound || generatedDescriptor.ResultContract == nil {
+			t.Fatalf("expected generated result contract for %s", toolName)
+		}
+		generatedDocument, errorValue := json.Marshal(generatedDescriptor.ResultContract)
+		if errorValue != nil {
+			t.Fatal(errorValue)
+		}
+		virtualDocument, errorValue := json.Marshal(virtualCapabilityToolResultContract(toolName))
+		if errorValue != nil {
+			t.Fatal(errorValue)
+		}
+		if string(virtualDocument) != string(generatedDocument) {
+			t.Fatalf("expected %s to use its generated result contract", toolName)
+		}
+	}
+}
+
+func TestVirtualMessageToolsUseGeneratedCanonicalContracts(t *testing.T) {
+	expectedRequiredFields := map[string][]string{
+		"message_context": {"platform", "conversationID", "conversationType", "channelID", "channelName", "replyTargetID", "rootMessageID", "currentMessageID", "requesterPersonID", "requesterPlatformUserID", "botUserID", "botUsername"},
+		"message_search":  {"scope", "queries", "authoredBy", "messageIDs", "candidates", "hasMore"},
+		"message_send":    {"messageIDs", "deliveryStatus"},
+		"message_update":  {"messageID", "deliveryStatus", "messageUpdated"},
+		"message_delete":  {"messageIDs", "deliveryStatus"},
+	}
+	approvalGatedToolNames := map[string]bool{
+		"message_send":   true,
+		"message_update": false,
+		"message_delete": true,
+	}
+	expectedEffects := map[string]agentruntime.CapabilityResourceEffectContract{
+		"message_send":   {ObjectType: "message", Effect: "sent", ResultField: "messageIDs", EffectIdentity: "id"},
+		"message_update": {ObjectType: "message", Effect: "updated", ResultField: "messageID", EffectIdentity: "id"},
+		"message_delete": {ObjectType: "message", Effect: "deleted", ResultField: "messageIDs", EffectIdentity: "id"},
+	}
+
+	for _, toolName := range virtualCanonicalMessageToolNames {
+		descriptor := virtualCapabilityToolDescriptor(toolName)
+		if strings.HasPrefix(descriptor.Description, "Virtual capability") || descriptor.ResultContract == nil {
+			t.Fatalf("expected generated canonical descriptor for %s, got %+v", toolName, descriptor)
+		}
+		var resultSchema struct {
+			Required []string `json:"required"`
+		}
+		if errorValue := json.Unmarshal(descriptor.ResultContract.Schema, &resultSchema); errorValue != nil {
+			t.Fatal(errorValue)
+		}
+		if !slices.Equal(resultSchema.Required, expectedRequiredFields[toolName]) {
+			t.Fatalf("expected canonical %s result fields, got %v", toolName, resultSchema.Required)
+		}
+		expectedEffect, hasEffect := expectedEffects[toolName]
+		if !hasEffect {
+			if len(descriptor.ResultContract.Effects) != 0 {
+				t.Fatalf("expected read-only %s contract, got %+v", toolName, descriptor.ResultContract.Effects)
+			}
+			continue
+		}
+		if len(descriptor.InputIntentSchema) == 0 {
+			t.Fatalf("expected canonical %s input intent schema", toolName)
+		}
+		if descriptor.RequiresApproval != approvalGatedToolNames[toolName] {
+			t.Fatalf("expected %s approval gate to be %v, got %+v", toolName, approvalGatedToolNames[toolName], descriptor)
+		}
+		if len(descriptor.ResultContract.Effects) != 1 || descriptor.ResultContract.Effects[0] != expectedEffect {
+			t.Fatalf("expected canonical %s mutation contract, got %+v", toolName, descriptor)
+		}
+	}
+}
+
+func TestConfiguredDescriptorChangesOnlyTheFieldsItNames(t *testing.T) {
+	canonical := virtualCapabilityToolDescriptor("message_send")
+	expected := canonical
+	expected.Description = "Send it the configured way."
+
+	merged := mergeVirtualCapabilityToolDescriptor(canonical, agentruntime.CapabilityToolDescriptor{Name: "message_send", Description: expected.Description})
+
+	if !reflect.DeepEqual(merged, expected) {
+		t.Fatalf("a configured descriptor names what it changes; every field it leaves empty is the canonical one.\nexpected %+v\ngot      %+v", expected, merged)
+	}
+}
+
+func TestVirtualCapabilityDescriptorMergePreservesCanonicalInputIntentSchema(t *testing.T) {
+	descriptor := mergeVirtualCapabilityToolDescriptor(
+		virtualCapabilityToolDescriptor("task_update"),
+		agentruntime.CapabilityToolDescriptor{Name: "task_update", RequiresApproval: true},
+	)
+	if len(descriptor.InputIntentSchema) == 0 || !descriptor.RequiresApproval {
+		t.Fatalf("expected canonical intent and configured approval, got %+v", descriptor)
+	}
+
+	overrideSchema := json.RawMessage(`{"type":"object","properties":{"taskID":{"type":"string"}},"additionalProperties":false}`)
+	descriptor = mergeVirtualCapabilityToolDescriptor(
+		descriptor,
+		agentruntime.CapabilityToolDescriptor{Name: "task_update", InputIntentSchema: overrideSchema},
+	)
+	if string(descriptor.InputIntentSchema) != string(overrideSchema) {
+		t.Fatalf("expected explicit input intent override, got %s", descriptor.InputIntentSchema)
+	}
+}
+
+func TestVirtualMessageServiceReturnsCanonicalContextSearchDeleteAndChannelResults(t *testing.T) {
+	service := virtualCapabilityService{}
+
+	contextResult, contextEffects := virtualCapabilityResponseResult(t, service.response("message_context", []byte(`{"input":{}}`)))
+	if contextResult["platform"] != "mattermost" || contextResult["conversationID"] != "virtual-conversation-1" || len(contextEffects) != 0 {
+		t.Fatalf("unexpected message context result=%+v effects=%+v", contextResult, contextEffects)
+	}
+
+	searchResult, searchEffects := virtualCapabilityResponseResult(t, service.response("message_search", []byte(`{"input":{"scope":"currentChannel","queries":["공지"],"authoredBy":"assistant"}}`)))
+	if !slices.Equal(stringSliceValue(searchResult["messageIDs"]), []string{"virtual-platform-message-001"}) ||
+		searchResult["scope"] != "currentChannel" ||
+		len(searchEffects) != 0 {
+		t.Fatalf("unexpected message search result=%+v effects=%+v", searchResult, searchEffects)
+	}
+
+	approvalResponse := service.response("message_delete", []byte(`{"input":{"messageIDs":["virtual-platform-message-001"]},"context":{}}`))
+	if !strings.Contains(approvalResponse, `"errorCode":"approval_required"`) {
+		t.Fatalf("expected message delete approval, got %s", approvalResponse)
+	}
+	deleteResult, deleteEffects := virtualCapabilityResponseResult(t, service.response(
+		"message_delete",
+		[]byte(`{"input":{"messageIDs":["virtual-platform-message-001","virtual-platform-message-002"]},"context":{"holdID":"hold-test"}}`),
+	))
+	if deleteResult["deliveryStatus"] != "deleted" ||
+		!slices.Equal(stringSliceValue(deleteResult["messageIDs"]), []string{"virtual-platform-message-001", "virtual-platform-message-002"}) ||
+		len(deleteEffects) != 2 {
+		t.Fatalf("unexpected message delete result=%+v effects=%+v", deleteResult, deleteEffects)
+	}
+}
+
+func virtualCapabilityResponseResult(t *testing.T, response string) (map[string]any, []toolcontract.ResourceEffect) {
+	t.Helper()
+	var document struct {
+		Result  map[string]any                `json:"result"`
+		Effects []toolcontract.ResourceEffect `json:"effects"`
+	}
+	if errorValue := json.Unmarshal([]byte(response), &document); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	return document.Result, document.Effects
+}
+
+func TestVirtualDocumentReadReturnsCanonicalWorkspaceContent(t *testing.T) {
+	workspacePath := t.TempDir()
+	documentsPath := filepath.Join(workspacePath, "documents")
+	if errorValue := os.MkdirAll(documentsPath, 0700); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	markdownPath := filepath.Join(documentsPath, "review.md")
+	if errorValue := os.WriteFile(markdownPath, []byte("# 분기 결산\n상태: 초안"), 0600); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	docxPath := filepath.Join(documentsPath, "review.docx")
+	writeDOCX(t, docxPath, map[string]string{
+		"[Content_Types].xml":          `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`,
+		"word/document.xml":            `<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>분기 결산</w:t></w:r><w:r><w:t>검토 완료</w:t></w:r></w:p></w:body></w:document>`,
+		"word/_rels/document.xml.rels": `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="test" Target="document.xml"/></Relationships>`,
+	})
+	service := virtualCapabilityService{workspacePath: workspacePath}
+
+	testCases := []struct {
+		path     string
+		contains []string
+	}{
+		{path: "/workspace/documents/review.md", contains: []string{"분기 결산", "상태: 초안"}},
+		{path: "/workspace/documents/review.docx", contains: []string{"분기 결산", "검토 완료"}},
+	}
+	for _, testCase := range testCases {
+		result, effects := virtualCapabilityResponseResult(t, service.response(
+			"document_read",
+			[]byte(`{"input":{"path":`+quote(testCase.path)+`}}`),
+		))
+		if result["status"] != "ok" || result["path"] != testCase.path || result["format"] != "markdown" || result["truncated"] != false {
+			t.Fatalf("unexpected canonical document result for %s: %+v", testCase.path, result)
+		}
+		content := stringValue(result["content"])
+		for _, fragment := range testCase.contains {
+			if !strings.Contains(content, fragment) {
+				t.Fatalf("document result for %s is missing %q: %+v", testCase.path, fragment, result)
+			}
+		}
+		if len(effects) != 0 {
+			t.Fatalf("document_read must remain read-only, got %+v", effects)
+		}
+	}
+}
+
+func writeCanonicalDOCX(t *testing.T, path string) {
+	writeDOCX(t, path, map[string]string{
+		"[Content_Types].xml":          `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`,
+		"word/document.xml":            `<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Test</w:t></w:r></w:p></w:body></w:document>`,
+		"word/_rels/document.xml.rels": `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="document.xml"/></Relationships>`,
+	})
+}
+
+func writeDOCX(t *testing.T, path string, entries map[string]string) {
+	t.Helper()
+	file, errorValue := os.Create(path)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	archive := zip.NewWriter(file)
+	for name, content := range entries {
+		entry, entryError := archive.Create(name)
+		if entryError != nil {
+			_ = file.Close()
+			t.Fatal(entryError)
+		}
+		if _, entryError = entry.Write([]byte(content)); entryError != nil {
+			_ = file.Close()
+			t.Fatal(entryError)
+		}
+	}
+	if errorValue := archive.Close(); errorValue != nil {
+		_ = file.Close()
+		t.Fatal(errorValue)
+	}
+	if errorValue := file.Close(); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+}
+
+func TestVirtualCapabilityCatalogUsesOperationSchemas(t *testing.T) {
+	var catalog struct {
+		DeviceCapabilities []struct {
+			Name        string `json:"name"`
+			InputSchema struct {
+				Properties map[string]json.RawMessage `json:"properties"`
+				Required   []string                   `json:"required"`
+			} `json:"inputSchema"`
+		} `json:"deviceCapabilities"`
+	}
+	if errorValue := json.Unmarshal([]byte(virtualCapabilityCatalogResponse(map[string]bool{"task_update": true, "task_delete": true})), &catalog); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(catalog.DeviceCapabilities) != 2 {
+		t.Fatalf("expected two descriptors, got %+v", catalog.DeviceCapabilities)
+	}
+	for _, descriptor := range catalog.DeviceCapabilities {
+		if _, hasTaskHint := descriptor.InputSchema.Properties["taskHint"]; !hasTaskHint || !slices.Contains(descriptor.InputSchema.Required, "taskHint") {
+			t.Fatalf("%s input schema must require taskHint", descriptor.Name)
+		}
+		if _, hasQuery := descriptor.InputSchema.Properties["query"]; hasQuery {
+			t.Fatalf("%s input schema must not expose query", descriptor.Name)
+		}
+		if _, hasPersonHint := descriptor.InputSchema.Properties["targetPersonHint"]; hasPersonHint {
+			t.Fatalf("%s input schema must not expose targetPersonHint", descriptor.Name)
+		}
+	}
+	updateSchema := catalog.DeviceCapabilities[1].InputSchema.Properties
+	if _, hasTitle := updateSchema["title"]; !hasTitle {
+		updateSchema = catalog.DeviceCapabilities[0].InputSchema.Properties
+	}
+	if _, hasTitle := updateSchema["title"]; !hasTitle {
+		t.Fatal("task_update input schema must expose title")
+	}
+	if _, hasEndsAt := updateSchema["endsAt"]; !hasEndsAt {
+		t.Fatal("task_update input schema must expose endsAt")
+	}
+}
+
+func TestWebSearchAcceptance(t *testing.T) {
+	result, errorValue := RunVirtualSession(context.Background(), WebSearchAcceptanceScenario(t.TempDir()))
+	if errorValue != nil {
+		t.Fatalf("expected web search acceptance scenario to pass: %v", errorValue)
+	}
+	if len(result.TurnResults) != 1 {
+		t.Fatalf("expected one turn result, got %d", len(result.TurnResults))
+	}
+	turnResult := result.TurnResults[0]
+	if countEvents(turnResult.Events, "tool.web_search.requested") != 1 {
+		t.Fatalf("expected one web_search request, got events: %s", summarizeEvents(turnResult.Events))
+	}
+	if !strings.Contains(turnResult.FinishMessage, "BlueclawSearchStubToken") {
+		t.Fatalf("expected final reply to contain search stub token, got %q", turnResult.FinishMessage)
+	}
+}
+
+func TestFileWriteAcceptance(t *testing.T) {
+	result, errorValue := RunVirtualSession(context.Background(), FileWriteAcceptanceScenario(t.TempDir()))
+	if errorValue != nil {
+		t.Fatalf("expected file write scenario to pass: %v", errorValue)
+	}
+	turnResult := result.TurnResults[0]
+	if turnResult.TaskStatus != task.TaskStatusCompleted {
+		t.Fatalf("expected completed turn, got %s", turnResult.TaskStatus)
+	}
+	if countEvents(turnResult.Events, "tool.write.requested") != 1 {
+		t.Fatalf("expected one write request, got events: %s", summarizeEvents(turnResult.Events))
+	}
+	if countEvents(turnResult.Events, "tool.file_deliver.requested") != 1 {
+		t.Fatalf("expected one file_deliver request, got events: %s", summarizeEvents(turnResult.Events))
+	}
+	if countEvents(turnResult.Events, "tool.bash.requested") != 0 {
+		t.Fatalf("write result contract must avoid redundant terminal verification, got events: %s", summarizeEvents(turnResult.Events))
+	}
+}
+
+func TestFileWriteAcceptanceRejectsWrongPersistedContent(t *testing.T) {
+	scenario := FileWriteAcceptanceScenario(t.TempDir())
+	scenario.Turns[0].ActionResponses[0] = actionCallTool("write", `{"path":"work/customer-support/faq-revision.json","content":"{}\n"}`)
+
+	_, errorValue := RunVirtualSession(context.Background(), scenario)
+	if errorValue == nil || !strings.Contains(errorValue.Error(), "FAQ 개편") {
+		t.Fatalf("expected attached JSON content validation failure, got %v", errorValue)
+	}
+}
+
+func TestVirtualSessionAcceptsReactionOnlyTurn(t *testing.T) {
+	scenario := VirtualSessionScenario{
+		Name:                  "reaction-only",
+		ArtifactDirectoryPath: t.TempDir(),
+		AddressingResponse:    `{"target":"anyone","shouldRespond":false,"reactionEmoji":"eyes","dutyMatch":false,"dutyName":"","dutyConfidence":0}`,
+		Turns: []VirtualTurn{{
+			Prompt:           "참고로 공유합니다.",
+			ExpectedResponse: VirtualResponseReact,
+			ConversationType: "channel",
+		}},
+	}
+
+	result, errorValue := RunVirtualSession(context.Background(), scenario)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(result.TurnResults[0].Reactions) != 1 || result.TurnResults[0].Reactions[0].EmojiName != "eyes" {
+		t.Fatalf("expected eyes reaction, got %+v", result.TurnResults[0].Reactions)
+	}
+}
+
+func TestVirtualCalendarMutationUsesExactEventHint(t *testing.T) {
+	service := virtualCapabilityService{}
+	addResponse := service.calendarResponse("event_add", []byte(`{"input":{"title":"비용 테스트 일정","startsAt":"2026-07-16T10:00:00+09:00","endsAt":"2026-07-16T11:00:00+09:00","participantPersonHints":["지원팀"]},"context":{"requesterPersonID":"person-1","requesterName":"이수현","requesterEmail":"soohyun@example.com"}}`))
+	if !strings.Contains(addResponse, `"eventID":"calendar-event-001"`) ||
+		!strings.Contains(addResponse, `"objectType":"calendar"`) ||
+		!strings.Contains(addResponse, `"effect":"created"`) ||
+		!strings.Contains(addResponse, `"name":"지원팀"`) ||
+		!strings.Contains(addResponse, `"name":"이수현"`) {
+		t.Fatalf("expected canonical created event and effect, got %s", addResponse)
+	}
+	updateResponse := service.calendarResponse("event_update", []byte(`{"input":{"eventHint":"calendar-event-001","startsAt":"2026-07-16T14:00:00+09:00","endsAt":"2026-07-16T15:00:00+09:00"}}`))
+	if !strings.Contains(updateResponse, `"status":"ok"`) || !strings.Contains(updateResponse, `T14:00:00+09:00`) {
+		t.Fatalf("expected exact-ID hint update, got %s", updateResponse)
+	}
+	titleUpdateResponse := service.calendarResponse("event_update", []byte(`{"input":{"eventHint":"비용 테스트 일정","title":"비용 테스트 일정 완료"}}`))
+	if !strings.Contains(titleUpdateResponse, `"status":"ok"`) || !strings.Contains(titleUpdateResponse, `"title":"비용 테스트 일정 완료"`) {
+		t.Fatalf("expected exact-title hint update, got %s", titleUpdateResponse)
+	}
+	noPatchResponse := service.calendarResponse("event_update", []byte(`{"input":{"eventHint":"calendar-event-001"}}`))
+	if !strings.Contains(noPatchResponse, `"errorCode":"invalid_input"`) {
+		t.Fatalf("expected hint-only update to fail, got %s", noPatchResponse)
+	}
+	queryResponse := service.calendarResponse("event_update", []byte(`{"input":{"query":"비용 테스트","title":"새 일정 이름"}}`))
+	if !strings.Contains(queryResponse, `"status":"error"`) || !strings.Contains(queryResponse, `not found`) {
+		t.Fatalf("expected query update without eventHint to fail, got %s", queryResponse)
+	}
+	deleteResponse := service.calendarResponse("event_delete", []byte(`{"input":{"eventHint":"calendar-event-001"},"context":{"holdID":"hold-test"}}`))
+	if !strings.Contains(deleteResponse, `"eventID":"calendar-event-001"`) ||
+		!strings.Contains(deleteResponse, `"deleted":true`) ||
+		!strings.Contains(deleteResponse, `"effect":"deleted"`) {
+		t.Fatalf("expected canonical deleted event and effect, got %s", deleteResponse)
+	}
+}
+
+func TestVirtualCalendarListHonorsWindowQueryAndLimit(t *testing.T) {
+	service := virtualCapabilityService{}
+	for _, input := range []string{
+		`{"title":"비용 점검 A","startsAt":"2026-07-16T10:00:00+09:00","endsAt":"2026-07-16T11:00:00+09:00"}`,
+		`{"title":"채용 점검","startsAt":"2026-07-16T12:00:00+09:00","endsAt":"2026-07-16T13:00:00+09:00"}`,
+		`{"title":"비용 점검 B","startsAt":"2026-07-17T10:00:00+09:00","endsAt":"2026-07-17T11:00:00+09:00"}`,
+	} {
+		service.calendarResponse("event_add", []byte(`{"input":`+input+`}`))
+	}
+	response := service.calendarResponse("event_list", []byte(`{"input":{"startsAt":"2026-07-16T00:00:00+09:00","endsAt":"2026-07-17T00:00:00+09:00","query":"비용","limit":1}}`))
+	if !strings.Contains(response, `"eventID":"calendar-event-001"`) ||
+		strings.Contains(response, `"eventID":"calendar-event-002"`) ||
+		strings.Contains(response, `"eventID":"calendar-event-003"`) {
+		t.Fatalf("expected bounded calendar listing, got %s", response)
+	}
+	for _, input := range []string{
+		`{"startsAt":"2026-07-16T00:00:00+09:00"}`,
+		`{"limit":1.5}`,
+	} {
+		response = service.calendarResponse("event_list", []byte(`{"input":`+input+`}`))
+		if !strings.Contains(response, `"errorCode":"invalid_input"`) {
+			t.Fatalf("expected invalid bounded listing for %s, got %s", input, response)
+		}
+	}
+}
+
+func TestVirtualTaskUpdateRequiresHintAndPatch(t *testing.T) {
+	service := virtualCapabilityService{}
+	service.taskResponse("task_add", []byte(`{"input":{"title":"고객지원 결산"}}`))
+	response := service.taskResponse("task_update", []byte(`{"input":{"taskHint":"task-1"}}`))
+	if !strings.Contains(response, `"errorCode":"invalid_input"`) {
+		t.Fatalf("expected hint-only task update to fail, got %s", response)
+	}
+}
+
+func TestVirtualCapabilityCatalogUsesRuntimeRegistryContract(t *testing.T) {
+	var catalog struct {
+		DeviceCapabilities []struct {
+			Name           string                                     `json:"name"`
+			InputSchema    json.RawMessage                            `json:"inputSchema"`
+			ResultContract *agentruntime.CapabilityToolResultContract `json:"resultContract"`
+		} `json:"deviceCapabilities"`
+	}
+	document := virtualCapabilityCatalogResponse(map[string]bool{
+		"event_list":   true,
+		"event_update": true,
+		"event_delete": true,
+	})
+	if errorValue := json.Unmarshal([]byte(document), &catalog); errorValue != nil {
+		t.Fatalf("expected valid capability catalog, got %v: %s", errorValue, document)
+	}
+	if len(catalog.DeviceCapabilities) != 3 {
+		t.Fatalf("expected runtime device capability descriptor, got %+v", catalog.DeviceCapabilities)
+	}
+	var schema struct {
+		Properties           map[string]json.RawMessage `json:"properties"`
+		Required             []string                   `json:"required"`
+		AdditionalProperties *bool                      `json:"additionalProperties"`
+		MinimumProperties    int                        `json:"minProperties"`
+	}
+	if errorValue := json.Unmarshal(catalog.DeviceCapabilities[2].InputSchema, &schema); errorValue != nil {
+		t.Fatalf("expected calendar update schema, got %v", errorValue)
+	}
+	if schema.AdditionalProperties == nil || *schema.AdditionalProperties ||
+		schema.MinimumProperties != 2 ||
+		len(schema.Required) != 1 ||
+		schema.Required[0] != "eventHint" ||
+		schema.Properties["query"] != nil {
+		t.Fatalf("expected exact calendar update schema, got %s", catalog.DeviceCapabilities[2].InputSchema)
+	}
+	updateContract := catalog.DeviceCapabilities[2].ResultContract
+	if updateContract == nil || len(updateContract.Effects) != 1 ||
+		updateContract.Effects[0].ObjectType != "calendar" ||
+		updateContract.Effects[0].ResultField != "eventID" {
+		t.Fatalf("expected exact calendar update result contract, got %+v", updateContract)
+	}
+}
+
+func TestSkillLifecycleAcceptance(t *testing.T) {
+	result, errorValue := RunVirtualSession(context.Background(), SkillLifecycleAcceptanceScenario(t.TempDir()))
+	if errorValue != nil {
+		t.Fatalf("expected skill lifecycle acceptance scenario to pass: %v", errorValue)
+	}
+	if len(result.TurnResults) != 2 {
+		t.Fatalf("expected two turn results, got %d", len(result.TurnResults))
+	}
+	firstTurnResult := result.TurnResults[0]
+	secondTurnResult := result.TurnResults[1]
+	if countEvents(firstTurnResult.Events, "tool.skill_add.requested") != 1 {
+		t.Fatalf("expected one skill_add request; events: %s", summarizeEvents(firstTurnResult.Events))
+	}
+	if countEvents(secondTurnResult.Events, "tool.skill_remove.requested") != 1 {
+		t.Fatalf("expected one skill_remove request; events: %s", summarizeEvents(secondTurnResult.Events))
+	}
+	skillDirectoryPath := filepath.Join(result.ArtifactDirectoryPath, "workspace", ".agents", "skills", "memo-helper")
+	if _, errorValue := os.Stat(skillDirectoryPath); !os.IsNotExist(errorValue) {
+		t.Fatalf("expected memo-helper skill directory to be removed, got %v", errorValue)
+	}
+}
+
+func TestTaskHistoryQuestionAcceptance(t *testing.T) {
+	result, errorValue := RunVirtualSession(context.Background(), TaskHistoryQuestionAcceptanceScenario(t.TempDir()))
+	if errorValue != nil {
+		t.Fatalf("expected task history question acceptance scenario to pass: %v", errorValue)
+	}
+	if len(result.TurnResults) != 2 {
+		t.Fatalf("expected two turn results, got %d", len(result.TurnResults))
+	}
+	secondTurnResult := result.TurnResults[1]
+	if countEvents(secondTurnResult.Events, "tool.conversation_history.requested") != 0 {
+		t.Fatalf("conversation_history is an internal tool, so the model is never offered it; events: %s", summarizeEvents(secondTurnResult.Events))
+	}
+	if !strings.Contains(secondTurnResult.FinishMessage, "계약서 확인 요약") {
+		t.Fatalf("expected final reply to mention prior task, got %q", secondTurnResult.FinishMessage)
+	}
+}
+
+func TestMemoryExplicitToolAcceptance(t *testing.T) {
+	result, errorValue := RunVirtualSession(context.Background(), MemoryExplicitToolAcceptanceScenario(t.TempDir()))
+	if errorValue != nil {
+		t.Fatalf("expected memory explicit tool acceptance scenario to pass: %v", errorValue)
+	}
+	if len(result.TurnResults) != 2 {
+		t.Fatalf("expected two turn results, got %d", len(result.TurnResults))
+	}
+	firstTurnResult := result.TurnResults[0]
+	secondTurnResult := result.TurnResults[1]
+	if firstTurnResult.TaskStatus != task.TaskStatusCompleted {
+		t.Fatalf("expected first turn success, got %s", firstTurnResult.TaskStatus)
+	}
+	if secondTurnResult.TaskStatus != task.TaskStatusCompleted {
+		t.Fatalf("expected second turn success, got %s", secondTurnResult.TaskStatus)
+	}
+	if countEvents(firstTurnResult.Events, "tool.memory_remember.requested")+countEvents(secondTurnResult.Events, "tool.memory_remember.requested") != 1 {
+		t.Fatalf("expected exactly one memory_remember request; first events: %s second events: %s", summarizeEvents(firstTurnResult.Events), summarizeEvents(secondTurnResult.Events))
+	}
+	if !eventsContain(firstTurnResult.Events, "tool.memory_remember.requested", "Korean") {
+		t.Fatalf("expected memory_remember input to include Korean; events: %s", summarizeEvents(firstTurnResult.Events))
+	}
+	if countEvents(firstTurnResult.Events, "tool.memory_search.requested")+countEvents(secondTurnResult.Events, "tool.memory_search.requested") != 1 {
+		t.Fatalf("expected exactly one memory_search request; first events: %s second events: %s", summarizeEvents(firstTurnResult.Events), summarizeEvents(secondTurnResult.Events))
+	}
+	if !strings.Contains(secondTurnResult.FinishMessage, "Korean") {
+		t.Fatalf("expected final reply to mention Korean, got %q", secondTurnResult.FinishMessage)
+	}
+}
+
+func TestFailureExplanationAcceptance(t *testing.T) {
+	result, errorValue := RunVirtualSession(context.Background(), FailureExplanationAcceptanceScenario(t.TempDir()))
+	if errorValue != nil {
+		t.Fatalf("expected failure explanation acceptance scenario to pass: %v", errorValue)
+	}
+	if len(result.TurnResults) != 2 {
+		t.Fatalf("expected two turn results, got %d", len(result.TurnResults))
+	}
+	firstTurnResult := result.TurnResults[0]
+	secondTurnResult := result.TurnResults[1]
+	if firstTurnResult.TaskStatus != task.TaskStatusFailed {
+		t.Fatalf("expected first turn failure, got %s", firstTurnResult.TaskStatus)
+	}
+	if !strings.Contains(firstTurnResult.FailureReason, "permission denied") {
+		t.Fatalf("expected failure reason to mention permission denied, got %q", firstTurnResult.FailureReason)
+	}
+	if secondTurnResult.TaskStatus != task.TaskStatusCompleted {
+		t.Fatalf("expected second turn success, got %s", secondTurnResult.TaskStatus)
+	}
+	if !strings.Contains(firstTurnResult.FinishMessage, "permission denied") {
+		t.Fatalf("expected the failure notice to name the cause, got %q", firstTurnResult.FinishMessage)
+	}
+	if !strings.Contains(secondTurnResult.FinishMessage, "permission denied") {
+		t.Fatalf("expected final reply to mention permission denied, got %q", secondTurnResult.FinishMessage)
+	}
+}
+
+func TestAskChoiceReplyAcceptance(t *testing.T) {
+	result, errorValue := RunVirtualSession(context.Background(), AskChoiceReplyAcceptanceScenario(t.TempDir()))
+	if errorValue != nil {
+		t.Fatalf("expected ask choice reply acceptance scenario to pass: %v", errorValue)
+	}
+	if len(result.TurnResults) != 2 {
+		t.Fatalf("expected two turns, got %+v", result)
+	}
+}
+
+func TestAnAnswerOverACPResumesTheRunThatAsked(t *testing.T) {
+	result, errorValue := RunVirtualSession(context.Background(), AskChoiceReplyOverACPScenario(t.TempDir()))
+	if errorValue != nil {
+		t.Fatalf("expected the answer to an ACP question to resume the asking run: %v", errorValue)
+	}
+	if len(result.TurnResults) != 2 {
+		t.Fatalf("expected two turns, got %+v", result)
+	}
+	asked, answered := result.TurnResults[0], result.TurnResults[1]
+	if answered.TaskRunID != asked.TaskRunID {
+		t.Fatalf("the answer ran on %s, expected the run that asked, %s", answered.TaskRunID, asked.TaskRunID)
+	}
+}
+
+func TestAFileDeliveredOverACPReachesTheTurnResult(t *testing.T) {
+	scenario := FileAttachmentChangeCheckScenario(t.TempDir())
+	scenario.IsDeliveredOverACP = true
+	result, errorValue := RunVirtualSession(context.Background(), scenario)
+	if errorValue != nil {
+		t.Fatalf("expected the file delivered over ACP to reach the turn result: %v", errorValue)
+	}
+	delivered := result.TurnResults[len(result.TurnResults)-1].Attachments
+	if len(delivered) != 1 || !strings.HasSuffix(delivered[0].DevicePath, "faq-revision.json") {
+		t.Fatalf("expected faq-revision.json delivered over ACP, got %+v", delivered)
+	}
+}
+
+func TestARootMessageStartsATaskWhileAnotherWaitsForAnAnswer(t *testing.T) {
+	for _, scenario := range []VirtualSessionScenario{
+		AskRootMessageStartsATaskScenario(t.TempDir()),
+		AskRootMessageStartsATaskOverACPScenario(t.TempDir()),
+	} {
+		t.Run(scenario.Name, func(t *testing.T) {
+			result, errorValue := RunVirtualSession(context.Background(), scenario)
+			if errorValue != nil {
+				t.Fatal(errorValue)
+			}
+			if len(result.TurnResults) != 3 {
+				t.Fatalf("expected three turns, got %+v", result)
+			}
+			asked, rootMessage, answered := result.TurnResults[0], result.TurnResults[1], result.TurnResults[2]
+			if rootMessage.TaskRunID == asked.TaskRunID {
+				t.Fatalf("the root message ran on the waiting run %s instead of starting its own", asked.TaskRunID)
+			}
+			if answered.TaskRunID != asked.TaskRunID {
+				t.Fatalf("the reply in the asking thread ran on %s, expected the run that asked, %s", answered.TaskRunID, asked.TaskRunID)
+			}
+		})
+	}
+}
+
+func TestDirectMessageSendConfirmAcceptance(t *testing.T) {
+	result, errorValue := RunVirtualSession(context.Background(), DirectMessageSendConfirmAcceptanceScenario(t.TempDir()))
+	if errorValue != nil {
+		t.Fatalf("expected direct message send confirm acceptance scenario to pass: %v", errorValue)
+	}
+	if len(result.TurnResults) != 2 {
+		t.Fatalf("expected two turns, got %+v", result)
+	}
+	firstTurnResult := result.TurnResults[0]
+	secondTurnResult := result.TurnResults[1]
+	if !eventsContain(firstTurnResult.Events, "confirmation.requested", "external_send") {
+		t.Fatalf("expected confirmation request before send; events: %s", summarizeEvents(firstTurnResult.Events))
+	}
+	if eventsContain(firstTurnResult.Events, "tool.message_send.result", "virtual-platform-message-001") {
+		t.Fatalf("expected nothing delivered before the requester confirmed; events: %s", summarizeEvents(firstTurnResult.Events))
+	}
+	if countEventsWithFragment(secondTurnResult.Events, "tool.message_send.result", `"messageIDs":["virtual-platform-message-001"]`) != 1 {
+		t.Fatalf("expected exactly one message to reach the platform; events: %s", summarizeEvents(secondTurnResult.Events))
+	}
+	if !eventsContain(secondTurnResult.Events, "tool.message_send.result", "virtual-platform-message-001") {
+		t.Fatalf("expected send result message id observation; events: %s", summarizeEvents(secondTurnResult.Events))
+	}
+	if !eventsContain(secondTurnResult.Events, "tool.message_send.result", `"messageIDs":["virtual-platform-message-001"]`) {
+		t.Fatalf("expected canonical messageIDs result; events: %s", summarizeEvents(secondTurnResult.Events))
+	}
+	if !strings.Contains(secondTurnResult.FinishMessage, "보냈습니다") {
+		t.Fatalf("expected successful delivery reply, got %q", secondTurnResult.FinishMessage)
+	}
+}
+
+func TestChannelPostAcceptance(t *testing.T) {
+	result, errorValue := RunVirtualSession(context.Background(), ChannelPostAcceptanceScenario(t.TempDir()))
+	if errorValue != nil {
+		t.Fatalf("expected channel post acceptance scenario to pass: %v", errorValue)
+	}
+	if len(result.TurnResults) != 2 {
+		t.Fatalf("expected confirmation and execution turns, got %+v", result)
+	}
+	if eventsContain(result.TurnResults[0].Events, "tool.message_send.result", "virtual-platform-message-001") {
+		t.Fatalf("expected nothing posted before the requester confirmed; events: %s", summarizeEvents(result.TurnResults[0].Events))
+	}
+	turnResult := result.TurnResults[1]
+	if countEventsWithFragment(turnResult.Events, "tool.message_send.result", `"messageIDs":["virtual-platform-message-001"]`) != 1 {
+		t.Fatalf("expected exactly one message to reach the platform, got events: %s", summarizeEvents(turnResult.Events))
+	}
+	if !eventsContain(turnResult.Events, "tool.message_send.requested", `"targetType":"channel"`) {
+		t.Fatalf("expected channel delivery target; events: %s", summarizeEvents(turnResult.Events))
+	}
+	if eventsContain(turnResult.Events, "tool.message_send.requested", `"targetType":"directMessage"`) {
+		t.Fatalf("expected no direct message target; events: %s", summarizeEvents(turnResult.Events))
+	}
+}
+
+func TestPlatformMessageEditAcceptance(t *testing.T) {
+	result, errorValue := RunVirtualSession(context.Background(), PlatformMessageEditAcceptanceScenario(t.TempDir()))
+	if errorValue != nil {
+		t.Fatalf("expected platform message edit acceptance scenario to pass: %v", errorValue)
+	}
+	if len(result.TurnResults) != 1 {
+		t.Fatalf("expected the edit to finish in one turn, got %+v", result)
+	}
+	turnResult := result.TurnResults[0]
+	if eventsContain(turnResult.Events, "approval.hold_opened", `"message_update"`) {
+		t.Fatalf("expected no approval hold on an edit of the assistant's own message; events: %s", summarizeEvents(turnResult.Events))
+	}
+	if countEventsWithFragment(turnResult.Events, "tool.message_update.result", `"deliveryStatus":"updated"`) != 1 {
+		t.Fatalf("expected exactly one edit to reach the platform; events: %s", summarizeEvents(turnResult.Events))
+	}
+	if !eventsContain(turnResult.Events, "tool.message_update.requested", `"messageID":"virtual-platform-message-001"`) {
+		t.Fatalf("expected message ID in update input; events: %s", summarizeEvents(turnResult.Events))
+	}
+	if !eventsContain(turnResult.Events, "tool.message_update.requested", `"oldText":"오후 5시"`) {
+		t.Fatalf("expected the quoted span in update input; events: %s", summarizeEvents(turnResult.Events))
+	}
+	if !eventsContain(turnResult.Events, "tool.message_update.requested", `"newText":"오후 6시"`) {
+		t.Fatalf("expected the replacement span in update input; events: %s", summarizeEvents(turnResult.Events))
+	}
+	if !eventsContain(turnResult.Events, "tool.message_update.result", `"messageUpdated":true`) {
+		t.Fatalf("expected canonical update result; events: %s", summarizeEvents(turnResult.Events))
+	}
+}
+
+func TestAttachmentMaterialRead(t *testing.T) {
+	result, errorValue := RunVirtualSession(context.Background(), AttachmentMaterialReadScenario(t.TempDir()))
+	if errorValue != nil {
+		t.Fatalf("expected attachment material read scenario to pass: %v", errorValue)
+	}
+	turnResult := result.TurnResults[0]
+	if !eventsContain(turnResult.Events, "tool.read.requested", `"path":"https://mattermost.local/api/v4/files/file-1"`) {
+		t.Fatalf("expected read to name the attachment by its url; events: %s", summarizeEvents(turnResult.Events))
+	}
+	if eventsContain(turnResult.Events, "tool.bash.requested", "bash") {
+		t.Fatalf("expected attachment read not to search the workspace; events: %s", summarizeEvents(turnResult.Events))
+	}
+	if turnResult.UserModelImagePartCount == 0 {
+		t.Fatalf("expected the read result to reach the model as a user image part; context: %s", turnResult.ModelContext)
+	}
+	if len(turnResult.Attachments) != 0 {
+		t.Fatalf("expected the read result not to be reattached, got %+v", turnResult.Attachments)
+	}
+}
+
+func TestAttachmentHTMLPreviewRecovery(t *testing.T) {
+	result, errorValue := RunVirtualSession(context.Background(), AttachmentHTMLPreviewRecoveryScenario(t.TempDir()))
+	if errorValue != nil {
+		t.Fatalf("expected attachment html preview recovery scenario to pass: %v", errorValue)
+	}
+	turnResult := result.TurnResults[0]
+	if eventsContain(turnResult.Events, "tool.bash.requested", "bash") {
+		t.Fatalf("expected html attachment preview not to search the workspace; events: %s", summarizeEvents(turnResult.Events))
+	}
+	if !eventsContain(turnResult.Events, "tool.read.result", "Virtual HTML Title") {
+		t.Fatalf("expected html preview content in tool result; events: %s", summarizeEvents(turnResult.Events))
+	}
+}
+
+func TestAttachmentHTMLPreviousPreviewRecovery(t *testing.T) {
+	result, errorValue := RunVirtualSession(context.Background(), AttachmentHTMLPreviousPreviewRecoveryScenario(t.TempDir()))
+	if errorValue != nil {
+		t.Fatalf("expected previous attachment html preview recovery scenario to pass: %v", errorValue)
+	}
+	turnResult := result.TurnResults[0]
+	if eventsContain(turnResult.Events, "tool.bash.requested", "bash") {
+		t.Fatalf("expected previous html attachment preview not to search the workspace; events: %s", summarizeEvents(turnResult.Events))
+	}
+	if !eventsContain(turnResult.Events, "tool.read.result", "Virtual HTML Title") {
+		t.Fatalf("expected previous html preview content in tool result; events: %s", summarizeEvents(turnResult.Events))
+	}
+}
+
+func TestAttachmentCurrentImageInput(t *testing.T) {
+	result, errorValue := RunVirtualSession(context.Background(), AttachmentCurrentImageInputScenario(t.TempDir()))
+	if errorValue != nil {
+		t.Fatalf("expected current image input scenario to pass: %v", errorValue)
+	}
+	turnResult := result.TurnResults[0]
+	if turnResult.ModelImagePartCount == 0 {
+		t.Fatalf("expected current image attachment to reach model input; context: %s", turnResult.ModelContext)
+	}
+	if turnResult.UserModelImagePartCount == 0 {
+		t.Fatalf("expected current image attachment to reach the model as a user image part; context: %s", turnResult.ModelContext)
+	}
+	if eventsContain(turnResult.Events, "tool.read.requested", "read") {
+		t.Fatalf("expected current image input not to require a read call; events: %s", summarizeEvents(turnResult.Events))
+	}
+	if eventsContain(turnResult.Events, "tool.bash.requested", "bash") {
+		t.Fatalf("expected current image input not to search the workspace; events: %s", summarizeEvents(turnResult.Events))
+	}
+	if len(turnResult.Attachments) != 0 {
+		t.Fatalf("expected current image input not to be reattached, got %+v", turnResult.Attachments)
+	}
+}
+
+func TestAttachedFileReachesTheAgentWithThePathItWasWrittenTo(t *testing.T) {
+	content := "월,지역,목표,실적\n2026-04,서울,6720,6200\n"
+	result, errorValue := RunVirtualSession(context.Background(), VirtualSessionScenario{
+		Name:                  "attached_file_path",
+		ArtifactDirectoryPath: t.TempDir(),
+		AllowedTools:          []string{"bash", "read"},
+		Turns: []VirtualTurn{{
+			Prompt:          "첨부한 CSV 요약해줘",
+			RouterTaskShape: agentcontract.TaskShapeResearchTask,
+			InputAttachments: []connectors.InputAttachment{{
+				Filename:      "판매실적.csv",
+				ContentType:   "text/csv",
+				ContentBase64: base64.StdEncoding.EncodeToString([]byte(content)),
+				IsAvailable:   true,
+			}},
+			ActionResponses: []string{
+				actionCallTool("read", `{"path":"/workspace/circles/member/inbox/virtual/virtual-conversation-1/판매실적.csv"}`),
+				actionFinishMessage("요약했습니다.", "obs-001"),
+			},
+		}},
+	})
+	if errorValue != nil {
+		t.Fatalf("expected the attached file scenario to pass: %v", errorValue)
+	}
+	turnResult := result.TurnResults[0]
+	if !eventsContain(turnResult.Events, "tool.read.result", "2026-04,서울,6720,6200") {
+		t.Fatalf("expected reading the attachment to return the bytes the person sent; events: %s", summarizeEvents(turnResult.Events))
+	}
+	modelContext := turnResult.ModelContext
+	attachedFile := "Attached file:\n- filename: 판매실적.csv\n- contentType: text/csv\n- path: "
+	pathStart := strings.Index(modelContext, attachedFile)
+	if pathStart < 0 {
+		t.Fatalf("expected the agent's user message to name the attached file and its path; context: %s", modelContext)
+	}
+	attachedPath, _, _ := strings.Cut(modelContext[pathStart+len(attachedFile):], "\n")
+	hostPath := filepath.Join(result.ArtifactDirectoryPath, "workspace", strings.TrimPrefix(attachedPath, "/workspace/"))
+	written, errorValue := os.ReadFile(hostPath)
+	if errorValue != nil {
+		t.Fatalf("expected the attached file at %s: %v", attachedPath, errorValue)
+	}
+	if string(written) != content {
+		t.Fatalf("expected the attached file to hold the bytes the person sent, got %q", written)
+	}
+}
+
+func TestVirtualPlatformImportsAnAttachmentAgainWithTheBytesThePersonSent(t *testing.T) {
+	content := []byte("월,지역,목표,실적\n2026-04,서울,6720,6200\n")
+	adapter := &virtualAdapter{workspacePath: t.TempDir()}
+	received, errorValue := adapter.receiveMessageAttachments("virtual-message-001", []connectors.InputAttachment{{
+		Filename:      "판매실적.csv",
+		ContentType:   "text/csv",
+		ContentBase64: base64.StdEncoding.EncodeToString(content),
+	}})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	request := connectors.InputAttachmentImportRequest{TargetDirectoryPath: "/workspace/inbox", InputAttachments: received}
+	first, errorValue := adapter.ImportInputAttachments(context.Background(), request)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	request.InputAttachments = first.InputAttachments
+	if _, errorValue := adapter.ImportInputAttachments(context.Background(), request); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	written, errorValue := os.ReadFile(filepath.Join(adapter.workspacePath, "inbox", "판매실적.csv"))
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if string(written) != string(content) {
+		t.Fatalf("expected a second import, as the read tool's attachment fallback makes, to keep the sent bytes, got %q", written)
+	}
+}
+
+func TestSkillCopyKeepsAScriptExecutable(t *testing.T) {
+	sourcePath := filepath.Join(t.TempDir(), "office")
+	if errorValue := os.MkdirAll(filepath.Join(sourcePath, "scripts"), 0o700); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := os.WriteFile(filepath.Join(sourcePath, "scripts", "office"), []byte("#!/bin/sh\n"), 0o755); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if errorValue := os.WriteFile(filepath.Join(sourcePath, "SKILL.md"), []byte("# office\n"), 0o644); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	destinationPath := filepath.Join(t.TempDir(), "skills", "office")
+	if errorValue := copyDirectory(sourcePath, destinationPath); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	for relativePath, expectedMode := range map[string]os.FileMode{"scripts/office": 0o700, "SKILL.md": 0o600} {
+		information, errorValue := os.Stat(filepath.Join(destinationPath, relativePath))
+		if errorValue != nil {
+			t.Fatal(errorValue)
+		}
+		if information.Mode().Perm() != expectedMode {
+			t.Fatalf("expected %s copied with mode %o, got %o", relativePath, expectedMode, information.Mode().Perm())
+		}
+	}
+}
+
+func firstNonEmptyTestString(values ...string) string {
+	for _, value := range values {
+		trimmedValue := strings.TrimSpace(value)
+		if trimmedValue != "" {
+			return trimmedValue
+		}
+	}
+	return ""
+}
+
+func truthyEnvironmentValue(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "y", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+func toolEventCount(events []task.TaskEvent) int {
+	count := 0
+	for _, event := range events {
+		if strings.HasPrefix(event.Name, agentcontract.ToolTaskEventPrefix) {
+			count++
+		}
+	}
+	return count
+}
+
+func failureEventCount(events []task.TaskEvent) int {
+	count := 0
+	for _, event := range events {
+		normalizedName := strings.ToLower(event.Name)
+		if strings.Contains(normalizedName, "fail") || strings.Contains(normalizedName, "error") {
+			count++
+		}
+	}
+	return count
+}
+
+func eventBodies(events []task.TaskEvent, name string) []string {
+	bodies := []string{}
+	for _, event := range events {
+		if event.Name == name {
+			bodies = append(bodies, event.Body)
+		}
+	}
+	return bodies
+}

@@ -1,8 +1,9 @@
 package connectors
 
 import (
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"testing"
+
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func directMessageResolverForPerson(personID string, store *sentAttachmentSourceStore) connectorAttachmentMaterialResolver {

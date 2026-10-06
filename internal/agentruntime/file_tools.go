@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"mime"
 	"net/url"
 	"path/filepath"
@@ -14,7 +13,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 const inlineAttachmentMaximumBytes = 25 * 1024 * 1024

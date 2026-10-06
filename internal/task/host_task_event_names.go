@@ -1,6 +1,8 @@
 package task
 
-import "github.com/yeomyeonggeori/bluecollar/agentcontract"
+import (
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+)
 
 const (
 	TaskEventBlueclawTaskExecutionDuration = "blueclaw.task.execution_duration"

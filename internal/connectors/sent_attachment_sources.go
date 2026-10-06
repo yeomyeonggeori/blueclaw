@@ -1,9 +1,10 @@
 package connectors
 
 import (
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 	"sync"
+
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 const sentAttachmentSourceCapacity = 512

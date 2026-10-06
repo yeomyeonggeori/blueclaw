@@ -10,7 +10,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/httpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueclaw/internal/tui"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func terminalOperatorDaemon(t *testing.T) (*httptest.Server, *task.TaskRunService) {

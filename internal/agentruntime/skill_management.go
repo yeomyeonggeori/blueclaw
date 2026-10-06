@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -12,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/skill"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 const maximumSkillNameLength = 64

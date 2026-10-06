@@ -23,7 +23,7 @@ its surroundings.
   definition, add a conformance test that reads the canonical source and
   fails on drift, instead of keeping a second hand-edited copy
   (`chatd/tests/buzz-adapter.test.ts` reads
-  `.dependency/bluecollar/agentcontract/reaction_emoji.go`).
+  `.dependency/blueprotocol/agentcontract/reaction_emoji.go`).
 - On discovering duplicated sources of truth, merge them as part of the
   change that touched them; do not extend a duplicate.
 

@@ -1,16 +1,18 @@
+//go:build !nobundledharness
+
 package agentruntime
 
 import (
 	"context"
-	"github.com/yeomyeonggeori/blueclaw/internal/memory"
-	"github.com/yeomyeonggeori/blueclaw/internal/memory/memorytest"
 	"strings"
 	"testing"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/memory"
+	"github.com/yeomyeonggeori/blueclaw/internal/memory/memorytest"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract/harnesstest"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract/harnesstest"
 )
 
 func TestLaunchedAgentTurnRequestCarriesHostAssembledContext(t *testing.T) {

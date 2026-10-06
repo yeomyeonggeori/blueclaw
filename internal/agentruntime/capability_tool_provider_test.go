@@ -1,13 +1,16 @@
+//go:build !nobundledharness
+
 package agentruntime
 
 import (
 	"context"
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 // The catalog belongs to whatever product binds tools here, offered through

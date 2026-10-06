@@ -1,3 +1,5 @@
+//go:build !nobundledharness
+
 package agentruntime
 
 import (
@@ -12,9 +14,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
-
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 type answeringDecisionModel struct {

@@ -1,3 +1,5 @@
+//go:build !nobundledharness
+
 package connectors
 
 import (
@@ -9,13 +11,11 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 const requesterDirectConversationID = "direct-message-1"

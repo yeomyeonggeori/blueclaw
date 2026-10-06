@@ -6,9 +6,8 @@ import (
 	"testing"
 
 	acp "github.com/coder/acp-go-sdk"
-
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func runTurnWithImage(t *testing.T, agent *externalAgent) {

@@ -12,7 +12,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/scheduler"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func (application *Application) Start() error {

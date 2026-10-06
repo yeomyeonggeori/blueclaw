@@ -14,8 +14,8 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/acpharness"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func buildExternalAgentBinary(t *testing.T) string {

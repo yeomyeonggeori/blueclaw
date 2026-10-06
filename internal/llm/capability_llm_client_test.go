@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 func TestCapabilityLLMClientSendsStructuredRequestWithoutAuthorization(t *testing.T) {

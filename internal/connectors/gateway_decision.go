@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func (connectorRuntime *ConnectorRuntime) UseGatewayDecider(gatewayDecider inboundengagement.Decider) {

@@ -6,33 +6,22 @@ import (
 	"testing"
 )
 
-const bundledHarnessPackage = "github.com/yeomyeonggeori/bluecollar/loop"
+const bluecollarModulePrefix = "github.com/yeomyeonggeori/bluecollar/"
 
-func TestTheNoBundledHarnessBuildLeavesTheAgentLoopOut(testInstance *testing.T) {
-	if linkedPackages(testInstance, "nobundledharness")[bundledHarnessPackage] {
-		testInstance.Fatalf("a -tags nobundledharness build still links %s; something imports the loop outside cmd/blueclaw/bundled_harness.go", bundledHarnessPackage)
+func TestTheNoBundledHarnessBuildLinksNothingFromBluecollar(testInstance *testing.T) {
+	for _, packagePath := range listedDependencies(testInstance, "-tags", "nobundledharness", "../...") {
+		if strings.HasPrefix(packagePath, bluecollarModulePrefix) {
+			testInstance.Errorf("a -tags nobundledharness build of ./cmd/... still depends on %s; something imports bluecollar outside internal/defaultharness", packagePath)
+		}
 	}
 }
 
-func TestTheDefaultBuildStillShipsTheBundledHarness(testInstance *testing.T) {
-	if !linkedPackages(testInstance)[bundledHarnessPackage] {
-		testInstance.Fatalf("the default build no longer links %s, so the bundled harness would be unreachable", bundledHarnessPackage)
-	}
-}
-
-func linkedPackages(testInstance *testing.T, buildTags ...string) map[string]bool {
+func listedDependencies(testInstance *testing.T, arguments ...string) []string {
 	testInstance.Helper()
-	arguments := []string{"list", "-deps"}
-	for _, buildTag := range buildTags {
-		arguments = append(arguments, "-tags", buildTag)
-	}
-	output, errorValue := exec.Command("go", append(arguments, ".")...).Output()
+	command := append([]string{"list", "-deps"}, arguments...)
+	output, errorValue := exec.Command("go", command...).Output()
 	if errorValue != nil {
-		testInstance.Fatalf("go %s: %v", strings.Join(arguments, " "), errorValue)
+		testInstance.Fatalf("go %s: %v", strings.Join(command, " "), errorValue)
 	}
-	linked := map[string]bool{}
-	for _, packagePath := range strings.Fields(string(output)) {
-		linked[packagePath] = true
-	}
-	return linked
+	return strings.Fields(string(output))
 }

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func OffersChoices(toolDefinition toolcontract.ToolDefinition, toolInput json.RawMessage) bool {

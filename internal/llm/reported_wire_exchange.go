@@ -3,7 +3,7 @@ package llm
 import (
 	"context"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 type reportedWireExchange struct {

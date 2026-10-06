@@ -7,9 +7,8 @@ import (
 	"sync"
 
 	acp "github.com/coder/acp-go-sdk"
-
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 )
 
 type SteerRequest struct {

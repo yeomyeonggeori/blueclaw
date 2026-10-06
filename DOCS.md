@@ -142,9 +142,9 @@ blueclaw is split into three parts that compile against each other.
 |---|---|---|
 | Meta-harness (blueclaw) | connectors, policy, identity, POSIX isolation, task store, approvals, tool catalog, capabilities, memory, delivery | this repository |
 | Harness | the agent loop: run a turn and report what happened | bluecollar at `.dependency/bluecollar`, or an external agent through `internal/acpharness` and `internal/cliharness` |
-| Contract | the types both sides compile against, and the harness port | `agentcontract` and `toolcontract` in the bluecollar module |
+| Contract | the types both sides compile against, and the harness port | the blueprotocol module at `.dependency/blueprotocol` |
 
-bluecollar is a separate repository pinned as a submodule and pulled in through a `replace` directive in `go.mod`. `agentcontract` travels with it because both sides need identical types. Building with `-tags nobundledharness` leaves the loop out of the binary; `agent.harness.name` must then name an external harness, and a test in `cmd/blueclaw` fails if the loop creeps back in.
+bluecollar and blueprotocol are separate repositories pinned as submodules and pulled in through `replace` directives in `go.mod`. Only `internal/defaultharness` imports bluecollar; everything else compiles against blueprotocol. Building with `-tags nobundledharness` leaves bluecollar out of the binary; `agent.harness.name` must then name an external harness. `go.nobundled.mod` is `go.mod` without the bluecollar lines, so `go build -modfile=go.nobundled.mod -tags nobundledharness ./...` works with `.dependency/bluecollar` absent. Tests in `internal/architecture` and `cmd/blueclaw` fail if bluecollar creeps back in, if the two module files drift, or if blueclaw and bluecollar pin different blueprotocol revisions.
 
 ```text
   chat platform (via chatd) / HTTP / ACP client
@@ -474,7 +474,7 @@ POSIX decides what a process may touch on this machine. It cannot decide whether
 These are the places where the boundary above does not hold as stated.
 
 - With `terminal.posixHelperPath` empty there is no projection. Requester tools fail closed, and any command the guardrail still runs runs as the daemon user.
-- The virtual-session scripted harness (`internal/e2e/virtual_session.go`) uses `DirectWorkspaceActorFactory`, which has no projection, because one scenario in one workspace has no second person to isolate. A deployment must never use it.
+- The virtual-session scripted harness (`internal/defaultharness/e2e/virtual_session.go`) uses `DirectWorkspaceActorFactory`, which has no projection, because one scenario in one workspace has no second person to isolate. A deployment must never use it.
 - The POSIX separation tests need root and an installed helper, so an ordinary `go test ./...` skips them. They run on Linux and macOS when `BLUECLAW_TEST_POSIX_HELPER` or `BLUECLAW_TEST_POSIX_HELPER_PATH` is set (`tests/integration/`).
 - The admin API (`/admin/api/*`) has no session authentication of its own; it rejects cross-origin mutating requests, and the persona, schedule-tool and learning endpoints require a signed assertion. Keep the listen address on loopback or behind something that authenticates.
 
@@ -607,11 +607,11 @@ go run ./cmd/blueclaw-lab virtual-session --scenario presentation \
   --artifact-dir .artifacts/blueclaw-e2e --live-llm
 ```
 
-Scenarios are defined in `internal/e2e/scenarios.go`; `--scenario-file` loads one from JSON.
+Scenarios are defined in `internal/defaultharness/e2e/scenarios.go`; `--scenario-file` loads one from JSON.
 
 ### Live model evaluations
 
-The `*_llmeval_test.go` files in `internal/e2e` build only with `-tags "appliance llmeval"`. Building them is the request to run them, so a missing input fails the test and names the variable. Without the `llmeval` tag, `go test ./...` skips what it cannot offer, as before.
+The `*_llmeval_test.go` files in `internal/defaultharness/e2e` build only with `-tags "appliance llmeval"`. Building them is the request to run them, so a missing input fails the test and names the variable. Without the `llmeval` tag, `go test ./...` skips what it cannot offer, as before.
 
 The scenarios drive a product's tools and skills, which this checkout does not carry. From a checkout of internkim, with `.dependency/blueclaw` as the working directory, or from a standalone checkout with `INTERNKIM` pointing at one:
 
@@ -625,7 +625,7 @@ monkeys run @standalone sh -c '
   BLUECOLLAR_MODEL_API_KEY=$OPENROUTER_API_KEY \
   BLUECLAW_SCENARIO_CAPABILITY_CATALOG=$INTERNKIM/pkg/capabilityprotocol/generated/capability-tools.json \
   BLUECLAW_SCENARIO_SKILL_ROOTS=$INTERNKIM/.dependency/internkim-plugin/skills \
-  go test -tags "appliance llmeval" -run TestFileDeliveryRouteLive -v ./internal/e2e'
+  go test -tags "appliance llmeval" -run TestFileDeliveryRouteLive -v ./internal/defaultharness/e2e'
 ```
 
 This checkout declares only `@standalone` in `.monkeys`; it holds the model endpoint, model name, decision endpoint and `OPENROUTER_API_KEY` that the command forwards. `TestGatewayRoutingWiredLive` also reads `BLUECLAW_DECISION_ENDPOINT` and `BLUECLAW_DECISION_MODEL`, both set by `@standalone`.
@@ -637,7 +637,7 @@ This checkout declares only `@standalone` in `.monkeys`; it holds the model endp
 | `BLUECLAW_SCENARIO_CAPABILITY_CATALOG` | the product's tool catalog |
 | `BLUECLAW_SCENARIO_SKILL_ROOTS` | the product's skill directories |
 
-`requireEvaluationInput` and the other `require*` helpers in `internal/e2e/evaluation_inputs_test.go` are the one place that decides to fail; a new evaluation calls them instead of `t.Skip`.
+`requireEvaluationInput` and the other `require*` helpers in `internal/defaultharness/e2e/evaluation_inputs_test.go` are the one place that decides to fail; a new evaluation calls them instead of `t.Skip`.
 
 ### Screenshots
 

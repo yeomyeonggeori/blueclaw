@@ -3,7 +3,7 @@ package agentruntime
 import (
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func hostInstructionForRequest(request agentcontract.AgentTurnRequest) string {

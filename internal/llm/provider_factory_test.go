@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 func endpointConfiguration(url string, modelName string) config.ModelEndpointConfiguration {

@@ -10,7 +10,8 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueclaw/internal/buildflavor"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func publishedCatalogForBridge(t *testing.T) (string, string) {
@@ -44,7 +45,7 @@ func publishedCatalogForBridge(t *testing.T) (string, string) {
 func buildBridgeCommand(t *testing.T) string {
 	t.Helper()
 	commandPath := filepath.Join(t.TempDir(), "blueclaw")
-	build := exec.Command("go", "build", "-o", commandPath, "../../cmd/blueclaw")
+	build := exec.Command("go", append(append([]string{"build"}, buildflavor.GoFlags()...), "-o", commandPath, "../../cmd/blueclaw")...)
 	if output, errorValue := build.CombinedOutput(); errorValue != nil {
 		t.Fatalf("building the daemon binary: %v\n%s", errorValue, output)
 	}

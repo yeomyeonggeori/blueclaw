@@ -8,13 +8,12 @@ import (
 	"time"
 
 	acp "github.com/coder/acp-go-sdk"
-
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement/gatewaytest"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract/harnesstest"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract/harnesstest"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 type gatewayOnlyDecisionModel struct {

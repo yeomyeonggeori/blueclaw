@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 type ScriptedLanguageModelOptions struct {

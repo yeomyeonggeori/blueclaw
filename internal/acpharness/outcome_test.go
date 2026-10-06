@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/turnoutcome"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 type stubOutcomeLanguageModel struct {

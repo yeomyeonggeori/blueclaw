@@ -10,7 +10,9 @@ import (
 	"testing"
 )
 
-const holdRecordPackagePath = "../../.dependency/bluecollar/holdrecord"
+const holdRecordPackagePath = "../../.dependency/blueprotocol/holdrecord"
+
+const bundledHarnessPath = "../../.dependency/bluecollar"
 
 var eventNamesOwnedByTheHoldRecord = []string{
 	"approval.hold_opened",
@@ -19,7 +21,7 @@ var eventNamesOwnedByTheHoldRecord = []string{
 	"approval.scope_granted",
 }
 
-const taskEventNameDeclarationPath = "../../.dependency/bluecollar/agentcontract/task_event_name.go"
+const taskEventNameDeclarationPath = "../../.dependency/blueprotocol/agentcontract/task_event_name.go"
 
 var taskEventWriteCall = regexp.MustCompile(`(?s:(?:AppendTaskEvent|appendEvent|appendTaskEvent)\(\s*[^,]+,\s*(?:agentcontract\.)?(TaskEvent[A-Za-z0-9]+))`)
 
@@ -57,6 +59,9 @@ func eventNamesWrittenUnderExcept(t *testing.T, rootPath string, skippedPath str
 		if entry.IsDir() && skippedPath != "" && filepath.Clean(path) == filepath.Clean(skippedPath) {
 			return filepath.SkipDir
 		}
+		if entry.IsDir() && entry.Name() == ".dependency" && filepath.Clean(path) != filepath.Clean(rootPath) {
+			return filepath.SkipDir
+		}
 		if entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
@@ -82,7 +87,7 @@ func TestEveryEventNameHasOneWriter(t *testing.T) {
 	for name := range eventNamesWrittenUnder(t, "../../cmd") {
 		hostNames[name] = true
 	}
-	loopNames := eventNamesWrittenUnder(t, "../../.dependency/bluecollar")
+	loopNames := eventNamesWrittenUnderBundledHarness(t)
 
 	writtenOnBothSides := []string{}
 	for name := range hostNames {
@@ -102,16 +107,32 @@ func TestTheHoldEventsAreWrittenOnlyByTheHoldRecord(t *testing.T) {
 	for name := range eventNamesWrittenUnder(t, "../../cmd") {
 		writtenOutsideTheRecord[name] = true
 	}
-	bluecollarWriters := eventNamesWrittenUnderExcept(t, "../../.dependency/bluecollar", holdRecordPackagePath)
+	bluecollarWriters := eventNamesWrittenUnderBundledHarnessExcept(t, holdRecordPackagePath)
 	for name := range bluecollarWriters {
 		writtenOutsideTheRecord[name] = true
 	}
 	for _, name := range eventNamesOwnedByTheHoldRecord {
 		if writtenOutsideTheRecord[name] {
-			t.Fatalf("%q is written outside bluecollar's holdrecord; open, decide and spend a hold through that package", name)
+			t.Fatalf("%q is written outside blueprotocol's holdrecord; open, decide and spend a hold through that package", name)
 		}
 	}
 	if recordWrites := eventNamesWrittenUnder(t, holdRecordPackagePath); len(recordWrites) != len(eventNamesOwnedByTheHoldRecord) {
 		t.Fatalf("holdrecord writes %v, expected exactly %v", recordWrites, eventNamesOwnedByTheHoldRecord)
 	}
+}
+
+func eventNamesWrittenUnderBundledHarness(t *testing.T) map[string]bool {
+	t.Helper()
+	if _, statError := os.Stat(bundledHarnessPath); statError != nil {
+		return map[string]bool{}
+	}
+	return eventNamesWrittenUnder(t, bundledHarnessPath)
+}
+
+func eventNamesWrittenUnderBundledHarnessExcept(t *testing.T, excludedPath string) map[string]bool {
+	t.Helper()
+	if _, statError := os.Stat(bundledHarnessPath); statError != nil {
+		return map[string]bool{}
+	}
+	return eventNamesWrittenUnderExcept(t, bundledHarnessPath, excludedPath)
 }

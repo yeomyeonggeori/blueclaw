@@ -2,10 +2,10 @@ package agentruntime
 
 import (
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 var testCapabilityInputSchema = json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`)

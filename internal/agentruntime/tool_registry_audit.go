@@ -6,10 +6,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 const toolRegistryVersion = "platform-message-v1"

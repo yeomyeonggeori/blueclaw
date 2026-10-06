@@ -1,10 +1,12 @@
+//go:build !nobundledharness
+
 package agentruntime
 
 import (
 	"encoding/json"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 const draftClaimsRequest = `{"claims":[{"path":"slides[0].units[0]","at":"slide 1 title","text":"Three bets for 2027"},{"path":"slides[0].units[1]","at":"slide 1 text","text":"Churn fell to 1.2 percent after the pilot."}]}`

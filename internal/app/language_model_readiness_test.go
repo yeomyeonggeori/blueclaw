@@ -1,3 +1,5 @@
+//go:build !nobundledharness
+
 package app
 
 import (

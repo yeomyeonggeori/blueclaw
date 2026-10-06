@@ -15,9 +15,10 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 )
 
 type agentKernel struct {
@@ -43,7 +44,9 @@ type agentKernel struct {
 
 type BundledToolSelectorFactory func(model.DecisionModel) agentcontract.ToolSelector
 
-func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, bundledACPFactory harnessdriver.ACPFactory, newBundledToolSelector BundledToolSelectorFactory, services taskServices, companyProvider func() agentcontract.CompanyContext, logger *slog.Logger) agentKernel {
+type QuestionWorderFactory func(model.LanguageModelProvider) holdrecord.QuestionWorder
+
+func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, bundledACPFactory harnessdriver.ACPFactory, newBundledToolSelector BundledToolSelectorFactory, newQuestionWorder QuestionWorderFactory, services taskServices, companyProvider func() agentcontract.CompanyContext, logger *slog.Logger) agentKernel {
 	logger.Info("application.initializing", "stage", "agent_kernel")
 	capabilityClient := newCapabilityClient(runtimeConfiguration)
 	capabilityRegistry := agentruntime.NewCapabilityRegistry(capabilityClient, capabilityToolDescriptors(runtimeConfiguration.Capabilities.ToolDescriptors))
@@ -79,7 +82,7 @@ func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, bundledACP
 	kernel.toolSelector = newToolSelector(newBundledToolSelector, kernel.decisionModel)
 	kernel.terminalService = security.NewShellService(runtimeConfiguration.Terminal)
 	services.taskRunService.RegisterTaskRunTransitionObserver(task.NewTaskTemporaryDirectoryReclaimer(runtimeConfiguration.Terminal.WorkspaceRootPath, kernel.terminalService.WorkspaceActorFactory(), logger).Observe)
-	kernel.toolCatalog = newToolCatalogEndpoint(services.taskRunService, kernel.taskTierLanguageModels.High, kernel.decisionModel, kernel.capabilityClient)
+	kernel.toolCatalog = newToolCatalogEndpoint(services.taskRunService, newQuestionWorder, kernel.taskTierLanguageModels.High, kernel.decisionModel, kernel.capabilityClient)
 	harnessFactory, harnessName, selectionError := selectAgentHarness(runtimeConfiguration, bundledACPFactory, kernel, logger)
 	kernel.harnessName = harnessName
 	kernel.startupError = selectionError

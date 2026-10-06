@@ -8,9 +8,9 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/model/decisions"
-	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/model/decisions"
+	"github.com/yeomyeonggeori/blueprotocol/model/openaicompatible"
 )
 
 var ModelTiers = []string{"xlow", "low", "medium", "high", "xhigh", "max"}

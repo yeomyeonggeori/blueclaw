@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 const (

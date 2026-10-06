@@ -2,8 +2,7 @@ package acpharness
 
 import (
 	acp "github.com/coder/acp-go-sdk"
-
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func (harness *Harness) promptBlocksForTurn(request agentcontract.AgentTurnRequest, agentAcceptsImages bool) []acp.ContentBlock {

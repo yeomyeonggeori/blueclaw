@@ -2,9 +2,9 @@ package approvalgate
 
 import (
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 )
 
 func RecordApprovalSpent(taskRunStore taskstate.TaskRunStore, taskRunID string, toolName string, toolInput json.RawMessage) string {

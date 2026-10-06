@@ -45,6 +45,45 @@ jobs:
         env:
           BLUECLAW_TEST_POSTGRES_URL: postgres://blueclaw:blueclaw@127.0.0.1:5432/blueclaw?sslmode=disable
 
+  no-bundled-harness:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: blueclaw
+          POSTGRES_PASSWORD: blueclaw
+          POSTGRES_DB: blueclaw
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U blueclaw"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.SUBMODULE_READ_TOKEN || secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: no command depends on bluecollar
+        run: |
+          dependencies="$(go list -deps -tags nobundledharness ./cmd/...)"
+          if echo "$dependencies" | grep 'yeomyeonggeori/bluecollar/'; then
+            echo "a -tags nobundledharness build of ./cmd/... depends on bluecollar"
+            exit 1
+          fi
+      - name: remove the bluecollar submodule
+        run: rm -rf .dependency/bluecollar
+      - run: go build -modfile=go.nobundled.mod -tags nobundledharness ./...
+      - run: go vet -modfile=go.nobundled.mod -tags nobundledharness ./...
+      - run: go test -modfile=go.nobundled.mod -tags nobundledharness ./...
+        env:
+          BLUECLAW_TEST_POSTGRES_URL: postgres://blueclaw:blueclaw@127.0.0.1:5432/blueclaw?sslmode=disable
+
   typescript:
     runs-on: ubuntu-latest
     steps:

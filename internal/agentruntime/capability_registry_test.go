@@ -8,9 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type countingCapabilityRegistryClient struct {
