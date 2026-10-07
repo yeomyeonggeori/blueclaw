@@ -1399,6 +1399,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) attachFileTool(toolContext context
 	replyNotes := []string{}
 	for _, attachmentInput := range attachmentInputs {
 		concretePath := toolCatalogBuilder.nativeRequesterPath(handlerContext.request, strings.TrimSpace(attachmentInput.Path))
+		replyNotes = append(replyNotes, toolCatalogBuilder.runDeliveryChecks(toolContext, handlerContext, concretePath)...)
 		attachment, failureResult := toolCatalogBuilder.fileAttachment(toolContext, attachmentInput, handlerContext)
 		if failureResult != nil {
 			return *failureResult, nil

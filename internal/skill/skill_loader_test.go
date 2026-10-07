@@ -188,3 +188,13 @@ Use the evaluator.
 		t.Fatalf("a skill that has to satisfy the Agent Skills schema declares its tools here, got %+v", toolNames)
 	}
 }
+
+func TestSkillLoaderReadsTheDeliveryCheckFromTheMetadataMap(t *testing.T) {
+	bundle, errorValue := ParseDocument("---\nname: checker\ndescription: checks files\nmetadata:\n  kim.intern.delivery-check: \"scripts/check deliver\"\n---\n\n# Checker\n")
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if bundle.DeliveryCheck != "scripts/check deliver" {
+		t.Fatalf("the delivery check was %q", bundle.DeliveryCheck)
+	}
+}
