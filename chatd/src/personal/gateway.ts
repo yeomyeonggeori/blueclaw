@@ -1,4 +1,14 @@
 import type { AttachmentAlreadyKept } from "../outgoing-attachment.ts";
+import type { PersonalMentions, PersonalMessage } from "@blueclaw/protocol";
+
+export type {
+	PersonalAttachment,
+	PersonalMentions,
+	PersonalMessage,
+	PersonalReaction,
+	PersonEvent,
+	PersonEventDelivery,
+} from "@blueclaw/protocol";
 
 export type ActorCredential = {
 	kind: string;
@@ -41,46 +51,6 @@ export type PersonalPerson = {
 	externalID: string;
 	name: string;
 	avatarURL?: string;
-};
-
-// A platform that keeps its custom emoji in a registry leaves the picture out
-// and answers for the name separately; one that puts it on the reaction says so
-// here.
-export type PersonalReaction = {
-	emoji: string;
-	imageURL?: string;
-	byExternalIDs: string[];
-};
-
-// A store that addresses a file by the hash of its contents says so here, so a
-// reader that keeps its own copy can tell it already has these bytes without
-// fetching them again. Empty when the platform names files some other way.
-export type PersonalAttachment = {
-	id: string;
-	filename: string;
-	contentType: string;
-	sizeBytes: number;
-	digest: string;
-	widthPixels?: number;
-	heightPixels?: number;
-};
-
-export type PersonalMentions = {
-	externalIDs: string[];
-	isEveryone: boolean;
-};
-
-export type PersonalMessage = {
-	id: string;
-	conversationID: string;
-	parentID?: string;
-	authorExternalID: string;
-	body: string;
-	postedAt: string;
-	editedAt?: string;
-	mentions?: PersonalMentions;
-	reactions: PersonalReaction[];
-	attachments: PersonalAttachment[];
 };
 
 export type PersonalMessagePage = {
@@ -229,7 +199,7 @@ export interface PersonalGateway {
 		externalID: string,
 		largestBytes: number,
 	): Promise<PersonalImage | null>;
-	watchArrivals(actor: ActorCredential, arrivalsURL: string, typingURL?: string): Promise<void>;
+	watchEvents(actor: ActorCredential, eventsURL: string): Promise<void>;
 	announceTyping(actor: ActorCredential, conversationID: string): Promise<void>;
 }
 

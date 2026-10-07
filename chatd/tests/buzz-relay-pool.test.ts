@@ -17,7 +17,7 @@ const client = {
 };
 mock.module("../src/adapters/buzz/relay-client.ts", () => ({ createBuzzRelayClient: () => client }));
 
-const { withRelayAs, closeEveryPooledRelay } = await import("../src/adapters/buzz/relay-pool.ts");
+const { withRelayAs, holdRelayAs, closeEveryPooledRelay } = await import("../src/adapters/buzz/relay-pool.ts");
 
 describe("a person's relay connection", () => {
 	test("is opened once and reused, not once per message", async () => {
@@ -39,20 +39,29 @@ describe("a person's relay connection", () => {
 		closeEveryPooledRelay();
 	});
 
-	// A connection that has just failed may be the reason it failed, and keeping
-	// it hands the same fault to whoever asks next.
-	test("is dropped after a failure so the next message gets a fresh one", async () => {
+	test("outlives a refused request, so the next one does not log in again", async () => {
 		opened = 0;
 		closed = 0;
 		await expect(
 			withRelayAs("wss://relay", "secret-1", undefined, async () => {
-				throw new Error("the socket went away");
+				throw new Error("rate-limited: quota exceeded");
 			}),
-		).rejects.toThrow("the socket went away");
-		expect(closed).toBe(1);
-
+		).rejects.toThrow("rate-limited");
 		await withRelayAs("wss://relay", "secret-1", undefined, async () => "after");
-		expect(opened).toBe(2);
+
+		expect(closed).toBe(0);
+		expect(opened).toBe(1);
+		closeEveryPooledRelay();
+	});
+
+	test("held by a subscription is the one every request of the same person borrows", async () => {
+		opened = 0;
+		const held = holdRelayAs("wss://relay", "secret-1", undefined);
+		await withRelayAs("wss://relay", "secret-1", undefined, async () => "a request while held");
+		held.release();
+		held.release();
+
+		expect(opened).toBe(1);
 		closeEveryPooledRelay();
 	});
 });

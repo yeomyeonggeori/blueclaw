@@ -13,7 +13,6 @@ const timing: RelayClientTiming = {
 	resubscribeDelayMilliseconds: 5,
 	loginRetryDelayMilliseconds: 5,
 	livenessProbeIntervalMilliseconds: 60_000,
-	livenessProbeTimeoutMilliseconds: 60_000,
 };
 const refusalReason = "restricted: not a relay member";
 
@@ -117,6 +116,8 @@ describe("relay connection login retry", () => {
 			close(): void {
 				this.readyState = 3;
 			}
+
+			addEventListener(): void {}
 
 			private receive(frame: unknown[]): void {
 				this.onmessage?.({ data: JSON.stringify(frame) });

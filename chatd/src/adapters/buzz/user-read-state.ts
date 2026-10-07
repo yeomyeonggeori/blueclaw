@@ -129,7 +129,7 @@ async function readStateOf(relay: QueryingRelay, secret: Uint8Array, pubkeyHex: 
 	return { readAtOfContext: mergeReadAt(blobs), own: own?.blob ?? null };
 }
 
-function decryptBlob(content: string, conversationKey: Uint8Array): ReadStateBlob | null {
+export function decryptBlob(content: string, conversationKey: Uint8Array): ReadStateBlob | null {
 	try {
 		return parseReadStateBlob(nip44.decrypt(content, conversationKey));
 	} catch {

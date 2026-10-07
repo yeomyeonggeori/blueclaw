@@ -84,7 +84,7 @@ export async function reactionsTo(
 	return new Map([...byMessage].map(([messageID, grouped]) => [messageID, [...grouped.values()]]));
 }
 
-function reactionOf(event: BuzzEvent): UserMessageReaction {
+export function reactionOf(event: BuzzEvent): UserMessageReaction {
 	const named = event.tags.find((tag) => tag[0] === "emoji" && typeof tag[1] === "string");
 	if (!named) return { emoji: event.content, byPubkeyHexes: [] };
 	return { emoji: named[1] as string, imageURL: named[2], byPubkeyHexes: [] };

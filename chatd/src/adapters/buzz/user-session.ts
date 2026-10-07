@@ -71,9 +71,9 @@ async function fetchProfileAsUser(
 export async function listUserConversations(
 	relayURL: string,
 	userSecretHex: string,
-	options: { withProfiles: boolean } = { withProfiles: true },
+	options: { withProfiles: boolean; authTagJSON?: string } = { withProfiles: true },
 ): Promise<UserConversation[]> {
-	return withRelayAs(relayURL, userSecretHex, undefined, async (relay) => {
+	return withRelayAs(relayURL, userSecretHex, options.authTagJSON, async (relay) => {
 			const userPubkeyHex = relay.pubkeyHex;
 			const memberships = await relay.query({ kinds: [GROUP_MEMBERS_KIND], "#p": [userPubkeyHex] });
 			const channelIDs = [
@@ -434,19 +434,7 @@ export async function listChannelMessagesAsUser(request: {
 			const events = await relay.query(filter);
 			const read = events
 				.sort((first, second) => first.created_at - second.created_at)
-				.map((event) => {
-					const thread = threadTagsOf(event);
-					return {
-						id: event.id,
-						conversationID: request.channelID,
-						parentID: thread.rootEventId,
-						authorPubkeyHex: event.pubkey,
-						body: event.content,
-						postedAt: new Date(event.created_at * 1000).toISOString(),
-						mentions: mentionsOf(event),
-						attachments: attachmentsOf(event),
-					};
-				});
+				.map((event) => userMessageOf(event, request.channelID));
 			const messageIDs = read.map((message) => message.id);
 			const [reacted, edited, deleted] = await Promise.all([
 				reactionsTo(relay, messageIDs),
@@ -461,6 +449,20 @@ export async function listChannelMessagesAsUser(request: {
 					reactions: reacted.get(message.id) ?? [],
 				}));
 	});
+}
+
+export function userMessageOf(event: BuzzEvent, channelID: string): UserMessage {
+	return {
+		id: event.id,
+		conversationID: channelID,
+		parentID: threadTagsOf(event).rootEventId,
+		authorPubkeyHex: event.pubkey,
+		body: event.content,
+		postedAt: new Date(event.created_at * 1000).toISOString(),
+		mentions: mentionsOf(event),
+		attachments: attachmentsOf(event),
+		reactions: [],
+	};
 }
 
 // A conversation the relay created names its participants on the metadata; one

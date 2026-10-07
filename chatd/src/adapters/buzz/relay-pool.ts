@@ -18,25 +18,44 @@ type PooledConnection = {
 
 const connections = new Map<string, PooledConnection>();
 
+export type HeldRelay = {
+	relay: BuzzRelayClient;
+	connecting: Promise<void>;
+	release: () => void;
+};
+
+// A refused or unanswered request is the relay answering, not the socket
+// failing: the connection reopens itself when it closes and closes itself when
+// a ping goes unanswered. So every request and every subscription a person has
+// shares one socket, and the relay counts one login against their quota.
 export async function withRelayAs<Result>(
 	relayURL: string,
 	userSecretHex: string,
 	authTagJSON: string | undefined,
 	work: (relay: BuzzRelayClient) => Promise<Result>,
 ): Promise<Result> {
+	const held = holdRelayAs(relayURL, userSecretHex, authTagJSON);
+	try {
+		await held.connecting;
+		return await work(held.relay);
+	} finally {
+		held.release();
+	}
+}
+
+export function holdRelayAs(relayURL: string, userSecretHex: string, authTagJSON: string | undefined): HeldRelay {
 	const key = `${relayURL}|${userSecretHex}|${authTagJSON ?? ""}`;
 	const connection = borrow(key, relayURL, userSecretHex, authTagJSON);
-	try {
-		await connection.connecting;
-		return await work(connection.client);
-	} catch (error) {
-		// A connection that has just failed may be the reason it failed, and a
-		// pool that keeps it hands the same fault to the next caller.
-		discard(key, connection);
-		throw error;
-	} finally {
-		release(key, connection);
-	}
+	let isReleased = false;
+	return {
+		relay: connection.client,
+		connecting: connection.connecting,
+		release: () => {
+			if (isReleased) return;
+			isReleased = true;
+			release(key, connection);
+		},
+	};
 }
 
 function borrow(
@@ -67,13 +86,6 @@ function release(key: string, connection: PooledConnection): void {
 		connection.client.disconnect();
 	}, idleMilliseconds);
 	connection.idleTimer.unref?.();
-}
-
-function discard(key: string, connection: PooledConnection): void {
-	if (connections.get(key) !== connection) return;
-	connections.delete(key);
-	if (connection.idleTimer) clearTimeout(connection.idleTimer);
-	connection.client.disconnect();
 }
 
 export function closeEveryPooledRelay(): void {

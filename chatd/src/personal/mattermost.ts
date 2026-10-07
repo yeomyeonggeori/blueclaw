@@ -364,8 +364,8 @@ class MattermostPersonalGateway implements PersonalGateway {
 		}
 	}
 
-	async watchArrivals(): Promise<void> {
-		throw new UnsupportedByPlatform(this.platform, "watch for arriving messages");
+	async watchEvents(): Promise<void> {
+		throw new UnsupportedByPlatform(this.platform, "watch a person's conversations");
 	}
 
 	async announceTyping(): Promise<void> {

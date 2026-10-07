@@ -56,7 +56,8 @@ import {
 	type PersonalPerson,
 	ReadRefused,
 } from "./gateway.ts";
-import { createBuzzArrivalWatch, type BuzzArrivalWatch } from "./buzz-arrival-watch.ts";
+import { personalMessageOf } from "./buzz-message.ts";
+import { createBuzzPersonFeed, type BuzzPersonFeed } from "./buzz-person-feed.ts";
 
 export type BuzzPersonalSettings = {
 	relayURL: string;
@@ -74,18 +75,18 @@ export function createBuzzPersonalGateway(
 class BuzzPersonalGateway implements PersonalGateway {
 	readonly platform = "buzz";
 	readonly credentialKind = "buzz-secret";
-	private readonly arrivals: BuzzArrivalWatch;
+	private readonly feeds: BuzzPersonFeed;
 
 	constructor(
 		private readonly adapter: BuzzAdapter,
 		private readonly settings: BuzzPersonalSettings,
 	) {
-		this.arrivals = createBuzzArrivalWatch(settings.relayURL, settings.authTagJSON);
+		this.feeds = createBuzzPersonFeed(settings.relayURL, settings.authTagJSON);
 	}
 
-	async watchArrivals(actor: ActorCredential, arrivalsURL: string, typingURL?: string): Promise<void> {
+	async watchEvents(actor: ActorCredential, eventsURL: string): Promise<void> {
 		this.require(actor);
-		await this.arrivals.watch(actor.secret, arrivalsURL, typingURL);
+		await this.feeds.watch(actor.secret, eventsURL);
 	}
 
 	async announceTyping(actor: ActorCredential, conversationID: string): Promise<void> {
@@ -122,7 +123,10 @@ class BuzzPersonalGateway implements PersonalGateway {
 
 	async listConversations(actor: ActorCredential): Promise<PersonalConversation[]> {
 		this.require(actor);
-		const conversations = await listUserConversations(this.settings.relayURL, actor.secret);
+		const conversations = await listUserConversations(this.settings.relayURL, actor.secret, {
+			withProfiles: true,
+			authTagJSON: this.settings.authTagJSON,
+		});
 		const unreadCounts = await unreadCountsAsUser({
 			relayURL: this.settings.relayURL,
 			userSecretHex: actor.secret,
@@ -306,30 +310,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 			before,
 			authTagJSON: this.settings.authTagJSON,
 		});
-		return {
-			messages: read.map((message) => ({
-				id: message.id,
-				conversationID: message.conversationID,
-				parentID: message.parentID,
-				authorExternalID: message.authorPubkeyHex,
-				body: message.body,
-				postedAt: message.postedAt,
-				mentions: { externalIDs: message.mentions.pubkeyHexes, isEveryone: message.mentions.isEveryone },
-				reactions: message.reactions.map((reaction) => ({
-					emoji: reaction.emoji,
-					imageURL: reaction.imageURL,
-					byExternalIDs: reaction.byPubkeyHexes,
-				})),
-				attachments: message.attachments.map((attachment) => ({
-					id: attachment.url,
-					filename: attachment.filename,
-					contentType: attachment.contentType,
-					sizeBytes: attachment.sizeBytes,
-					digest: attachment.digest,
-				})),
-			})),
-			hasMoreBefore: read.length >= wanted,
-		};
+		return { messages: read.map(personalMessageOf), hasMoreBefore: read.length >= wanted };
 	}
 
 	async sendMessage(
