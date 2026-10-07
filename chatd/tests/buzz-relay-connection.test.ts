@@ -13,6 +13,11 @@ const relayURL = "wss://relay.example.test";
 const timing: RelayClientTiming = {
 	resubscribeDelayMilliseconds: 5,
 	loginRetryDelayMilliseconds: 5,
+	livenessProbeIntervalMilliseconds: 60_000,
+	livenessProbeTimeoutMilliseconds: 60_000,
+};
+const probingTiming: RelayClientTiming = {
+	...timing,
 	livenessProbeIntervalMilliseconds: 10,
 	livenessProbeTimeoutMilliseconds: 10,
 };
@@ -78,6 +83,10 @@ afterEach(() => {
 
 function settle(milliseconds = 0): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function settleUntil(isDone: () => boolean): Promise<void> {
+	while (!isDone()) await settle(1);
 }
 
 describe("a subscription the relay closes", () => {
@@ -313,31 +322,30 @@ describe("a query for authors that are not public keys", () => {
 
 describe("a relay that stops answering", () => {
 	test("is reconnected, and every subscription requested again on the new socket", async () => {
-		const client = createRelayConnection(relayURL, signer, undefined, timing);
+		const client = createRelayConnection(relayURL, signer, undefined, probingTiming);
 		await client.connect();
 		const first = FakeSocket.opened[0]!;
 		client.subscribe([{ kinds: [9], "#h": ["room-1"] }], () => void 0);
 		FakeSocket.answersProbes = false;
 
-		await settle(timing.livenessProbeIntervalMilliseconds + timing.livenessProbeTimeoutMilliseconds + 5);
+		await settleUntil(() => first.readyState === 3);
 		FakeSocket.answersProbes = true;
-		await settle(1_100);
+		await settleUntil(() => FakeSocket.opened.length > 1);
 
-		expect(first.readyState).toBe(3);
-		expect(FakeSocket.opened.length).toBeGreaterThan(1);
 		const second = FakeSocket.opened[1]!;
 		expect(second.requests().some((frame) => JSON.stringify(frame).includes("room-1"))).toBe(true);
 		client.disconnect();
 	});
 
 	test("is left alone while it answers probes", async () => {
-		const client = createRelayConnection(relayURL, signer, undefined, timing);
+		const client = createRelayConnection(relayURL, signer, undefined, probingTiming);
 		await client.connect();
 		const socket = FakeSocket.opened[0]!;
 
-		await settle(timing.livenessProbeIntervalMilliseconds * 4);
+		const probes = () => socket.requests().filter((frame) => String(frame[1]).startsWith("probe-"));
+		await settleUntil(() => probes().length > 1);
 
-		expect(socket.requests().filter((frame) => String(frame[1]).startsWith("probe-")).length).toBeGreaterThan(1);
+		expect(probes().length).toBeGreaterThan(1);
 		expect(socket.readyState).toBe(1);
 		expect(FakeSocket.opened).toHaveLength(1);
 		client.disconnect();
