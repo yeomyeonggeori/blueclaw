@@ -217,6 +217,74 @@ describe("a subscription the relay closes", () => {
 	});
 });
 
+describe("reads asked for in the same moment", () => {
+	test("leave as one request, and each is answered with what its own filter matches", async () => {
+		const client = createRelayConnection(relayURL, signer, undefined, timing);
+		await client.connect();
+		const socket = FakeSocket.opened[0]!;
+		const asked = socket.requests().length;
+		const message = signer.signEvent(9, "hello", [["h", "room-1"]]);
+		const reaction = signer.signEvent(7, "+", [["e", message.id]]);
+
+		const answers = Promise.all([
+			client.query({ kinds: [9], "#h": ["room-1"] }),
+			client.query({ kinds: [7], "#e": [message.id] }),
+		]);
+		await settle();
+		const [request] = socket.requests().slice(asked);
+		socket.receive(["EVENT", request?.[1], message]);
+		socket.receive(["EVENT", request?.[1], reaction]);
+		socket.receive(["EOSE", request?.[1]]);
+		const [messages, reactions] = await answers;
+
+		expect(socket.requests().slice(asked)).toHaveLength(1);
+		expect(request?.slice(2)).toEqual([{ kinds: [9], "#h": ["room-1"] }, { kinds: [7], "#e": [message.id] }]);
+		expect(messages.map((event) => event.id)).toEqual([message.id]);
+		expect(reactions.map((event) => event.id)).toEqual([reaction.id]);
+		client.disconnect();
+	});
+
+	test("keep each filter's own limit", async () => {
+		const client = createRelayConnection(relayURL, signer, undefined, timing);
+		await client.connect();
+		const socket = FakeSocket.opened[0]!;
+		const asked = socket.requests().length;
+		const older = finalizeEvent({ kind: 9, content: "older", tags: [["h", "room-1"]], created_at: 1_000 }, secretKey) as BuzzEvent;
+		const newer = finalizeEvent({ kind: 9, content: "newer", tags: [["h", "room-1"]], created_at: 2_000 }, secretKey) as BuzzEvent;
+
+		const answers = Promise.all([
+			client.query({ kinds: [9], "#h": ["room-1"], limit: 1 }),
+			client.query({ kinds: [9], "#h": ["room-1"] }),
+		]);
+		await settle();
+		const requestID = socket.requests().slice(asked)[0]?.[1];
+		socket.receive(["EVENT", requestID, newer]);
+		socket.receive(["EVENT", requestID, older]);
+		socket.receive(["EOSE", requestID]);
+		const [latest, every] = await answers;
+
+		expect(latest.map((event) => event.content)).toEqual(["newer"]);
+		expect(every.map((event) => event.content)).toEqual(["newer", "older"]);
+		client.disconnect();
+	});
+
+	test("are split across requests past the relay's ten filters", async () => {
+		const client = createRelayConnection(relayURL, signer, undefined, timing);
+		await client.connect();
+		const socket = FakeSocket.opened[0]!;
+		const asked = socket.requests().length;
+
+		const answers = Promise.all(Array.from({ length: 11 }, (_, index) => client.query({ kinds: [9], "#h": [`room-${index}`] })));
+		await settle();
+		const requests = socket.requests().slice(asked);
+		for (const request of requests) socket.receive(["EOSE", request[1]]);
+		await answers;
+
+		expect(requests.map((request) => request.length - 2)).toEqual([10, 1]);
+		client.disconnect();
+	});
+});
+
 describe("a query the relay never finishes", () => {
 	test("is a refusal once its time is up", async () => {
 		const client = createRelayConnection(relayURL, signer, undefined, timing);

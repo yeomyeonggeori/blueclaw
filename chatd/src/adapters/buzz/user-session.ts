@@ -97,15 +97,26 @@ export async function listUserConversations(
 				const known = latestMetadata.get(channelID);
 				if (!known || event.created_at > known.created_at) latestMetadata.set(channelID, event);
 			}
+			const counterparts = new Map<string, string>();
+			for (const channelID of channelIDs) {
+				const metadata = latestMetadata.get(channelID);
+				if (!metadata || firstTagValue(metadata, "t") !== "dm") continue;
+				const participants = participantsOf(metadata, membershipsByChannel.get(channelID));
+				const counterpart = participants.find((pubkey) => pubkey !== userPubkeyHex);
+				if (counterpart) counterparts.set(channelID, counterpart);
+			}
+			const profiles = options.withProfiles
+				? new Map(await Promise.all([...new Set(counterparts.values())].map(async (pubkey) => [pubkey, await fetchProfileAsUser(relay, pubkey)] as const)))
+				: new Map<string, { name?: string; picture?: string }>();
 			const conversations: UserConversation[] = [];
 			for (const channelID of channelIDs) {
 				const metadata = latestMetadata.get(channelID);
 				const isDM = metadata ? firstTagValue(metadata, "t") === "dm" : false;
 				if (isDM) {
 					const participants = participantsOf(metadata, membershipsByChannel.get(channelID));
-					const counterpart = participants.find((pubkey) => pubkey !== userPubkeyHex);
+					const counterpart = counterparts.get(channelID);
 					if (!counterpart) continue;
-					const profile = options.withProfiles ? await fetchProfileAsUser(relay, counterpart) : {};
+					const profile = profiles.get(counterpart) ?? {};
 					conversations.push({
 						channelID,
 						name: profile.name ?? counterpart.slice(0, 8),
