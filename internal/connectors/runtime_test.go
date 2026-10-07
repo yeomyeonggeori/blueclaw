@@ -1267,7 +1267,7 @@ func TestLatestAskInteractionSkipsResolvedInteraction(t *testing.T) {
 	taskEvents := []task.TaskEvent{{
 		TaskEventID: "ask-1",
 		Name:        "ask.requested",
-		Body:        `{"kind":"choice_single","question":"공유할 문서를 선택해 주세요.","options":[{"key":"A","label":"첫 번째"},{"key":"B","label":"두 번째"}]}`,
+		Body:        `{"kind":"ask_input","question":"공유할 문서를 선택해 주세요.","options":[{"key":"A","label":"첫 번째"},{"key":"B","label":"두 번째"}]}`,
 	}, {
 		TaskEventID: "resolved-1",
 		Name:        "ask.resolved",
@@ -1281,25 +1281,11 @@ func TestLatestAskInteractionSkipsResolvedInteraction(t *testing.T) {
 	}
 }
 
-func TestLatestAskInteractionPreservesLegacyMultipleSelectionMode(t *testing.T) {
-	taskEvents := []task.TaskEvent{{
-		TaskEventID: "ask-1",
-		Name:        "ask.requested",
-		Body:        `{"kind":"choice_multiple","question":"필요한 형식을 선택해 주세요.","choices":["PDF","PPTX"]}`,
-	}}
-
-	interaction, isFound := latestAskInteraction("task-1", taskEvents)
-
-	if !isFound || interaction.Kind != "ask_input" || interaction.SelectionMode != "multiple" || len(interaction.Options) != 2 {
-		t.Fatalf("expected canonical multiple input interaction, got found=%v interaction=%+v", isFound, interaction)
-	}
-}
-
 func TestLatestAskInteractionReturnsNewAskAfterEarlierResolution(t *testing.T) {
 	taskEvents := []task.TaskEvent{{
 		TaskEventID: "ask-1",
 		Name:        "ask.requested",
-		Body:        `{"kind":"choice_single","question":"공유할 문서를 선택해 주세요.","options":[{"key":"A","label":"첫 번째"},{"key":"B","label":"두 번째"}]}`,
+		Body:        `{"kind":"ask_input","question":"공유할 문서를 선택해 주세요.","options":[{"key":"A","label":"첫 번째"},{"key":"B","label":"두 번째"}]}`,
 	}, {
 		TaskEventID: "resolved-1",
 		Name:        "ask.resolved",
@@ -1307,7 +1293,7 @@ func TestLatestAskInteractionReturnsNewAskAfterEarlierResolution(t *testing.T) {
 	}, {
 		TaskEventID: "ask-2",
 		Name:        "ask.requested",
-		Body:        `{"kind":"confirm","message":"복구를 진행할까요?"}`,
+		Body:        `{"kind":"ask_confirm","message":"복구를 진행할까요?","question":"복구를 진행할까요?"}`,
 	}}
 
 	interaction, isFound := latestAskInteraction("task-1", taskEvents)

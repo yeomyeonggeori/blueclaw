@@ -14,8 +14,8 @@ import (
 const oneWriterMigrationName = "041_one_writer_per_event_name.sql"
 
 var eventsStoredUnderTheOldNames = []storedEvent{
-	{"run-ask-input", "run-w", "ask.requested", `{"kind":"ask_input","question":"which one?"}`},
-	{"run-ask-confirm", "run-w", "ask.requested", `{"kind":"ask_confirm","message":"delete it?"}`},
+	{"run-ask-input", "run-w", "ask.requested", `{"kind":"ask_input","question":"which one?","message":"which one?"}`},
+	{"run-ask-confirm", "run-w", "ask.requested", `{"kind":"ask_confirm","message":"delete it?","question":"delete it?"}`},
 	{"run-delivery-report", "run-w", "agent.failure_report", `{"phase":"delivery","report":{},"generation":{}}`},
 	{"run-loop-report", "run-w", "agent.failure_report", `{"phase":"failure","report":{},"generation":{}}`},
 	{"run-launch-report", "run-w", "agent.failure_report", `{"phase":"launch","report":{},"generation":{}}`},
