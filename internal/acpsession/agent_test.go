@@ -626,10 +626,11 @@ func TestTheCallThatReadAReplyIsRecordedInTheWaitingRunsLedger(t *testing.T) {
 	taskRun := taskRunService.CreateTaskRun("person-sample", "conversation-1", "박예시한테 DM 보내줘")
 	client := &recordingClient{}
 	connection, permissionRelay := connectedPairWithCollaborators(t, client, Collaborators{
-		TaskLauncher: &recordingLauncher{},
-		Directory:    staticDirectory{},
-		ReplyReader:  scriptedReader{optionID: string(approveOnceOptionID)},
-		TaskRunStore: taskRunService,
+		TaskLauncher:  &recordingLauncher{},
+		Directory:     staticDirectory{},
+		ReplyReader:   scriptedReader{optionID: string(approveOnceOptionID)},
+		TaskRunStore:  taskRunService,
+		AnswerSettler: approvalgate.New(taskRunService),
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 	client.answerByAsking = answeringWithReply(t, connection, sessionID, ApprovalReplyRequest{Reply: "ㅇ", MessageID: "message-reply"})
@@ -700,10 +701,11 @@ func reconnectedPair(t *testing.T, launcher TaskLauncher, client *recordingClien
 func reconnectedPairWithReader(t *testing.T, launcher TaskLauncher, client *recordingClient, taskRunService *task.TaskRunService, replyReader approvalreply.Reader) *acp.ClientSideConnection {
 	t.Helper()
 	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
-		TaskLauncher: launcher,
-		Directory:    staticDirectory{},
-		ReplyReader:  replyReader,
-		TaskRunStore: taskRunService,
+		TaskLauncher:  launcher,
+		Directory:     staticDirectory{},
+		ReplyReader:   replyReader,
+		TaskRunStore:  taskRunService,
+		AnswerSettler: approvalgate.New(taskRunService),
 	})
 	return connection
 }

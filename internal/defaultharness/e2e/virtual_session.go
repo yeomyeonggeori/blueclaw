@@ -983,7 +983,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	if scenario.IsDeliveredOverACP {
 		var errorValue error
 		acpSession, errorValue = openVirtualACPSession(acpsession.Collaborators{
-			ApprovalDeferrer:   virtualApprovalGate,
+			AnswerSettler:      virtualApprovalGate,
 			TaskLauncher:       virtualTaskLauncher,
 			Directory:          identityService,
 			ReplyReader:        scenarioReader,

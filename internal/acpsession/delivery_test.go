@@ -61,10 +61,11 @@ func TestAReplyIsRecordedSentOnceWithTheMessageTheRelayPosted(t *testing.T) {
 	answered := taskRunService.CreateTaskRun("person-sample", "conversation-1", "박예시한테 DM 보내줘")
 	client := &recordingClient{}
 	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
-		TaskLauncher: &recordingLauncher{reply: "보냈습니다", taskRunID: answered.TaskRunID},
-		Directory:    staticDirectory{},
-		ReplyReader:  scriptedReader{},
-		TaskRunStore: taskRunService,
+		TaskLauncher:  &recordingLauncher{reply: "보냈습니다", taskRunID: answered.TaskRunID},
+		Directory:     staticDirectory{},
+		ReplyReader:   scriptedReader{},
+		TaskRunStore:  taskRunService,
+		AnswerSettler: approvalgate.New(taskRunService),
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 
@@ -94,9 +95,10 @@ func TestAReplyCarryingAFileNamesItsTypeAndIsRecordedSentOnceTheRelayPostsEach(t
 				SizeBytes:   2048,
 			}},
 		},
-		Directory:    staticDirectory{},
-		ReplyReader:  scriptedReader{},
-		TaskRunStore: taskRunService,
+		Directory:     staticDirectory{},
+		ReplyReader:   scriptedReader{},
+		TaskRunStore:  taskRunService,
+		AnswerSettler: approvalgate.New(taskRunService),
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 
@@ -130,9 +132,10 @@ func TestAReplyWhoseFileTheRelayCouldNotPostIsRecordedUndelivered(t *testing.T) 
 			taskRunID:   answered.TaskRunID,
 			attachments: []toolcontract.FileAttachment{{DevicePath: "/workspace/private/people/person-sample/report.pdf", Filename: "report.pdf", ContentType: "application/pdf"}},
 		},
-		Directory:    staticDirectory{},
-		ReplyReader:  scriptedReader{},
-		TaskRunStore: taskRunService,
+		Directory:     staticDirectory{},
+		ReplyReader:   scriptedReader{},
+		TaskRunStore:  taskRunService,
+		AnswerSettler: approvalgate.New(taskRunService),
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 
@@ -155,10 +158,11 @@ func TestAReplyTheRelayCouldNotPostIsRecordedUndeliveredNotSent(t *testing.T) {
 	answered := taskRunService.CreateTaskRun("person-sample", "conversation-1", "박예시한테 DM 보내줘")
 	client := &recordingClient{undeliveredBecause: "chatd refused the post with 503"}
 	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
-		TaskLauncher: &recordingLauncher{reply: "보냈습니다", taskRunID: answered.TaskRunID},
-		Directory:    staticDirectory{},
-		ReplyReader:  scriptedReader{},
-		TaskRunStore: taskRunService,
+		TaskLauncher:  &recordingLauncher{reply: "보냈습니다", taskRunID: answered.TaskRunID},
+		Directory:     staticDirectory{},
+		ReplyReader:   scriptedReader{},
+		TaskRunStore:  taskRunService,
+		AnswerSettler: approvalgate.New(taskRunService),
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 
@@ -212,10 +216,11 @@ func TestAnApprovalQuestionNamesItsThreadAndIsRecordedSentOnceTheRelayPostsIt(t 
 	waitingRun := taskRunService.CreateTaskRun("person-sample", "conversation-1", "박예시한테 DM 보내줘")
 	client := &recordingClient{permissionChoice: approveOnceOptionID}
 	connection, permissionRelay := connectedPairWithCollaborators(t, client, Collaborators{
-		TaskLauncher: &recordingLauncher{},
-		Directory:    staticDirectory{},
-		ReplyReader:  scriptedReader{},
-		TaskRunStore: taskRunService,
+		TaskLauncher:  &recordingLauncher{},
+		Directory:     staticDirectory{},
+		ReplyReader:   scriptedReader{},
+		TaskRunStore:  taskRunService,
+		AnswerSettler: approvalgate.New(taskRunService),
 	})
 	openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 	approvalRequest := approvalRequestForTest()
@@ -242,10 +247,11 @@ func TestAnApprovalQuestionTheRelayCouldNotPostIsRecordedUndelivered(t *testing.
 	waitingRun := taskRunService.CreateTaskRun("person-sample", "conversation-1", "박예시한테 DM 보내줘")
 	client := &recordingClient{permissionChoice: approveOnceOptionID, undeliveredBecause: "chatd refused the post with 503"}
 	connection, permissionRelay := connectedPairWithCollaborators(t, client, Collaborators{
-		TaskLauncher: &recordingLauncher{},
-		Directory:    staticDirectory{},
-		ReplyReader:  scriptedReader{},
-		TaskRunStore: taskRunService,
+		TaskLauncher:  &recordingLauncher{},
+		Directory:     staticDirectory{},
+		ReplyReader:   scriptedReader{},
+		TaskRunStore:  taskRunService,
+		AnswerSettler: approvalgate.New(taskRunService),
 	})
 	openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 	approvalRequest := approvalRequestForTest()
@@ -269,11 +275,12 @@ func TestAReplyTheRelayNeverReportsOnIsRecordedUndelivered(t *testing.T) {
 	answered := taskRunService.CreateTaskRun("person-sample", "conversation-1", "박예시한테 DM 보내줘")
 	client := &recordingClient{isSilent: true}
 	agent := NewAgent(Collaborators{
-		TaskLauncher: &recordingLauncher{reply: "보냈습니다", taskRunID: answered.TaskRunID},
-		Directory:    staticDirectory{},
-		ReplyReader:  scriptedReader{},
-		TaskRunStore: taskRunService,
-		SessionTurns: connectorRuntimeForTest(taskRunService),
+		TaskLauncher:  &recordingLauncher{reply: "보냈습니다", taskRunID: answered.TaskRunID},
+		Directory:     staticDirectory{},
+		ReplyReader:   scriptedReader{},
+		TaskRunStore:  taskRunService,
+		AnswerSettler: approvalgate.New(taskRunService),
+		SessionTurns:  connectorRuntimeForTest(taskRunService),
 	}, NewPermissionRelay(silentLogger()), silentLogger())
 	agent.deliveryReportWait = 50 * time.Millisecond
 	connection := connectAgentTo(t, agent, client)
@@ -360,10 +367,11 @@ func repliesOfKind(records []connectorReplyRecord, replyKind string) []connector
 func promptForFiles(t *testing.T, client *recordingClient, taskRunService *task.TaskRunService, taskRunID string, words string, attachments []toolcontract.FileAttachment) {
 	t.Helper()
 	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
-		TaskLauncher: &recordingLauncher{reply: words, taskRunID: taskRunID, attachments: attachments},
-		Directory:    staticDirectory{},
-		ReplyReader:  scriptedReader{},
-		TaskRunStore: taskRunService,
+		TaskLauncher:  &recordingLauncher{reply: words, taskRunID: taskRunID, attachments: attachments},
+		Directory:     staticDirectory{},
+		ReplyReader:   scriptedReader{},
+		TaskRunStore:  taskRunService,
+		AnswerSettler: approvalgate.New(taskRunService),
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 	promptInThread(t, connection, sessionID, "buzz:conversation-1:message-7")
