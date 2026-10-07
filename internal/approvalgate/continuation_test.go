@@ -34,7 +34,7 @@ func TestAnApprovedCallIsHandedBackWithTheInputItWasApprovedWith(t *testing.T) {
 func TestACallThatAlreadyRanIsNotHandedBackAgain(t *testing.T) {
 	taskRunService, taskRunID := taskRunWithHeldCall(t)
 	SettleLatest(taskRunService, taskRunID, "approve", "test")
-	RecordApprovalSpent(taskRunService, taskRunID, "event_delete", json.RawMessage(`{"eventHint":"내일 회의"}`))
+	holdrecord.SpendApprovedCall(taskRunService, taskRunID, "event_delete", json.RawMessage(`{"eventHint":"내일 회의"}`))
 
 	if _, isApproved := ApprovedPendingCall(taskRunService.ListTaskEvent(taskRunID)); isApproved {
 		t.Fatal("expected a call that already ran to stay carried out")
@@ -44,7 +44,7 @@ func TestACallThatAlreadyRanIsNotHandedBackAgain(t *testing.T) {
 func TestANewHeldCallDoesNotInheritTheDecisionMadeAboutTheLastOne(t *testing.T) {
 	taskRunService, taskRunID := taskRunWithHeldCall(t)
 	SettleLatest(taskRunService, taskRunID, "approve", "test")
-	RecordApprovalSpent(taskRunService, taskRunID, "event_delete", json.RawMessage(`{"eventHint":"내일 회의"}`))
+	holdrecord.SpendApprovedCall(taskRunService, taskRunID, "event_delete", json.RawMessage(`{"eventHint":"내일 회의"}`))
 	taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalHoldOpened, `{"toolName":"message_send","toolInput":{"message":"보냅니다"},"confirmation":"보낼까요?"}`)
 
 	if _, isApproved := ApprovedPendingCall(taskRunService.ListTaskEvent(taskRunID)); isApproved {

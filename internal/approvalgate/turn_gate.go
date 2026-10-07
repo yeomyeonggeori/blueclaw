@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
+	"github.com/yeomyeonggeori/blueprotocol/approvalcore"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
@@ -39,7 +40,7 @@ func (turnGate turnToolCallGate) ReviewToolCall(ctx context.Context, toolInvocat
 		return toolcontract.ToolCallReview{MayProceed: true}, nil
 	}
 	if toolcontract.IsDelegatedTurn(ctx) {
-		return toolcontract.ToolCallReview{Result: delegatedTurnDeniedResult()}, nil
+		return toolcontract.ToolCallReview{Result: approvalcore.DelegatedTurn()}, nil
 	}
 	if turnGate.gate == nil {
 		return toolcontract.ToolCallReview{Result: unanswerableCallResult()}, nil
@@ -149,21 +150,12 @@ func HeldCallResult(notice string) toolcontract.ToolResult {
 }
 
 func unanswerableCallResult() toolcontract.ToolResult {
-	return refusedCallResult("This call needs the requester's approval and there is no conversation they can answer on, so it can never run. Do not wait for an approval; take another route or tell them what you could not do.")
-}
-
-func delegatedTurnDeniedResult() toolcontract.ToolResult {
-	return refusedCallResult("This call needs the requester's approval, and a delegated turn has no one to ask: only the turn that was asked for the work can hold a call for approval. Do not wait for an approval; take another route, or report this back as the part you could not do.")
+	return approvalcore.Refusal("This call needs the requester's approval and there is no conversation they can answer on, so it can never run. Do not wait for an approval; take another route or tell them what you could not do.")
 }
 
 func rejectedCallResult(notice string) toolcontract.ToolResult {
-	rejectedNotice := strings.TrimSpace(notice)
-	if rejectedNotice == "" {
-		rejectedNotice = "The requester declined this call. Do not retry it; choose another way or stop."
+	if strings.TrimSpace(notice) == "" {
+		return approvalcore.Declined()
 	}
-	return refusedCallResult(rejectedNotice)
-}
-
-func refusedCallResult(notice string) toolcontract.ToolResult {
-	return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.PolicyBlocked, "approval", notice)
+	return approvalcore.Refusal(strings.TrimSpace(notice))
 }

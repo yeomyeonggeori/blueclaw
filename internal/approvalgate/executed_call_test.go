@@ -4,7 +4,6 @@ package approvalgate
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 
@@ -42,22 +41,5 @@ func TestTheSpentApprovalCarriesTheCallAndTheHoldItSpent(t *testing.T) {
 	}
 	if strings.Contains(bodies[0], "approvalToken") {
 		t.Fatalf("a hold has one id, got %s", bodies[0])
-	}
-}
-
-func TestAHoldIsSpentOnceSoASecondCallDoesNotClaimIt(t *testing.T) {
-	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
-	taskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "내일 회의 지워줘")
-	holdID := holdrecord.Open(taskRunService, taskRun.TaskRunID, agentcontract.HeldCall{ToolName: "event_delete", ToolInput: json.RawMessage(`{"eventID":"event-1"}`)}, nil).ID
-	holdrecord.Decide(taskRunService, taskRun.TaskRunID, holdID, holdrecord.DecisionApprove, "chat_reply")
-
-	firstHoldID := RecordApprovalSpent(taskRunService, taskRun.TaskRunID, "event_delete", json.RawMessage(`{"eventID":"event-1"}`))
-	secondHoldID := RecordApprovalSpent(taskRunService, taskRun.TaskRunID, "event_delete", json.RawMessage(`{"eventID":"event-2"}`))
-
-	if firstHoldID != holdID || secondHoldID != "" {
-		t.Fatalf("the first call spends the approved hold and the next claims none, got %q then %q", firstHoldID, secondHoldID)
-	}
-	if bodies := spentApprovalEventBodies(taskRunService, taskRun.TaskRunID); len(bodies) != 2 {
-		t.Fatalf("expected both calls to be recorded, got %v", bodies)
 	}
 }

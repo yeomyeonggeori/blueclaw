@@ -8,6 +8,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/approvalcore"
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
@@ -35,42 +36,42 @@ func (gate *Gate) UsePermissionAsker(permissionAsker PermissionAsker) {
 	gate.permissionAsker = permissionAsker
 }
 
-func (gate *Gate) askedOutcome(ctx context.Context, taskRunID string, approvalRequest mcpserver.ApprovalRequest, confirmation string, resolution ApprovalTargetResolution) mcpserver.ApprovalOutcome {
-	if gate.permissionAsker == nil || taskRunID == "" {
-		return gate.unreachableOutcome(taskRunID, approvalRequest, "no_asker")
-	}
-	profileName := gate.currentAgentProfileName(taskRunID)
-	hold, isHeld := gate.holdCall(taskRunID, approvalRequest, confirmation, resolution)
-	if !isHeld {
-		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionUnanswerable}
-	}
-	answer, status := gate.permissionAsker.AskPermission(ctx, approvalRequest, PermissionQuestion{HoldID: hold.ID, Confirmation: confirmation, Choices: resolution.Choices})
+func (host *toolCallHost) Ask(ctx context.Context, hold holdrecord.Hold) approvalcore.Verdict {
+	gate, request := host.gate, host.request
+	taskRunID := strings.TrimSpace(request.TaskRunID)
+	answer, status := gate.permissionAsker.AskPermission(ctx, request, PermissionQuestion{HoldID: hold.ID, Confirmation: hold.Call.Confirmation, Choices: hold.Choices})
 	switch status {
 	case AskAnswered:
-		return gate.answeredOutcome(ctx, taskRunID, approvalRequest, confirmation, answer)
+		return host.answered(ctx, answer, hold.Call.Confirmation)
 	case AskUnreachable:
-		gate.endUnansweredHold(taskRunID, profileName, status)
-		return gate.unreachableOutcome(taskRunID, approvalRequest, string(status))
+		gate.endUnansweredHold(taskRunID, host.profileName, status)
+		host.outcome = gate.unreachableOutcome(taskRunID, request, string(status))
+		return approvalcore.Unanswerable
 	case AskExpired:
-		gate.endUnansweredHold(taskRunID, profileName, status)
-		gate.taskRunService.AppendTaskEvent(taskRunID, TaskEventApprovalExpired, marshalEventBody(map[string]string{"toolName": strings.TrimSpace(approvalRequest.ToolName), "requesterPersonID": approvalRequest.RequesterPersonID}))
-		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionRejected, Notice: expiredCallNotice}
+		gate.endUnansweredHold(taskRunID, host.profileName, status)
+		gate.core.Record(taskRunID, TaskEventApprovalExpired, map[string]string{"toolName": strings.TrimSpace(request.ToolName), "requesterPersonID": request.RequesterPersonID})
+		host.outcome = mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionRejected, Notice: expiredCallNotice}
+		return approvalcore.Rejected
 	}
-	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionHeld, Notice: confirmation}
+	host.outcome = mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionHeld, Notice: hold.Call.Confirmation}
+	return approvalcore.Unanswered
 }
 
-func (gate *Gate) answeredOutcome(ctx context.Context, taskRunID string, approvalRequest mcpserver.ApprovalRequest, confirmation string, answer ApprovalAnswer) mcpserver.ApprovalOutcome {
-	settlement, errorValue := gate.SettleAnswer(ctx, approvalRequest, answer)
+func (host *toolCallHost) answered(ctx context.Context, answer ApprovalAnswer, confirmation string) approvalcore.Verdict {
+	settlement, errorValue := host.gate.SettleAnswer(ctx, host.request, answer)
 	switch {
 	case errorValue != nil:
-		slog.Warn("approvalgate.answered_run_will_not_advance", "taskRunID", taskRunID, "toolName", strings.TrimSpace(approvalRequest.ToolName), "reason", errorValue.Error())
-		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionHeld, Notice: confirmation}
+		slog.Warn("approvalgate.answered_run_will_not_advance", "taskRunID", strings.TrimSpace(host.request.TaskRunID), "toolName", strings.TrimSpace(host.request.ToolName), "reason", errorValue.Error())
+		host.outcome = mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionHeld, Notice: confirmation}
+		return approvalcore.Unanswered
 	case settlement.DeferredCall != nil:
-		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionDeferred, Deferral: settlement.DeferredCall.Result}
+		host.outcome = mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionDeferred, Deferral: settlement.DeferredCall.Result}
+		return approvalcore.Unanswered
 	case settlement.Signal == agentcontract.ApprovalSignalReject:
-		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionRejected}
+		host.outcome = mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionRejected}
+		return approvalcore.Rejected
 	}
-	return gate.approvedOutcome(taskRunID, approvalRequest)
+	return approvalcore.Approved
 }
 
 type AnswerSettlement struct {
@@ -121,11 +122,11 @@ func (gate *Gate) endUnansweredHold(taskRunID string, profileName string, status
 func (gate *Gate) unreachableOutcome(taskRunID string, approvalRequest mcpserver.ApprovalRequest, reason string) mcpserver.ApprovalOutcome {
 	slog.Warn("approvalgate.requester_cannot_be_asked", "taskRunID", taskRunID, "toolName", strings.TrimSpace(approvalRequest.ToolName), "requesterPersonID", approvalRequest.RequesterPersonID, "reason", reason)
 	if taskRunID != "" {
-		gate.taskRunService.AppendTaskEvent(taskRunID, TaskEventApprovalUnreachable, marshalEventBody(map[string]string{
+		gate.core.Record(taskRunID, TaskEventApprovalUnreachable, map[string]string{
 			"toolName":          strings.TrimSpace(approvalRequest.ToolName),
 			"requesterPersonID": approvalRequest.RequesterPersonID,
 			"reason":            reason,
-		}))
+		})
 	}
 	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionUnanswerable}
 }

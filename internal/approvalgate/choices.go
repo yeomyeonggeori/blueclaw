@@ -91,7 +91,7 @@ func (gate *Gate) DeferApprovedCall(ctx context.Context, request DeferralRequest
 		StartsAt:   startsAt.Format(time.RFC3339),
 	}
 	SettleLatest(gate.taskRunService, request.TaskRunID, holdrecord.DecisionDefer, "approval_choice")
-	gate.taskRunService.AppendTaskEvent(request.TaskRunID, TaskEventApprovalDeferred, marshalEventBody(record))
+	gate.core.Record(request.TaskRunID, TaskEventApprovalDeferred, record)
 	return deferredCallResult(record), nil
 }
 
