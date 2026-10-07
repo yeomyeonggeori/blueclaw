@@ -1,4 +1,14 @@
 import type { AttachmentAlreadyKept } from "../outgoing-attachment.ts";
+import type { PersonalMentions, PersonalMessage } from "@blueclaw/protocol";
+
+export type {
+	PersonalAttachment,
+	PersonalMentions,
+	PersonalMessage,
+	PersonalReaction,
+	PersonEvent,
+	PersonEventDelivery,
+} from "@blueclaw/protocol";
 
 export type ActorCredential = {
 	kind: string;
@@ -43,75 +53,9 @@ export type PersonalPerson = {
 	avatarURL?: string;
 };
 
-// A platform that keeps its custom emoji in a registry leaves the picture out
-// and answers for the name separately; one that puts it on the reaction says so
-// here.
-export type PersonalReaction = {
-	emoji: string;
-	imageURL?: string;
-	byExternalIDs: string[];
-};
-
-// A store that addresses a file by the hash of its contents says so here, so a
-// reader that keeps its own copy can tell it already has these bytes without
-// fetching them again. Empty when the platform names files some other way.
-export type PersonalAttachment = {
-	id: string;
-	filename: string;
-	contentType: string;
-	sizeBytes: number;
-	digest: string;
-	widthPixels?: number;
-	heightPixels?: number;
-};
-
-export type PersonalMentions = {
-	externalIDs: string[];
-	isEveryone: boolean;
-};
-
-export type PersonalMessage = {
-	id: string;
-	conversationID: string;
-	parentID?: string;
-	authorExternalID: string;
-	body: string;
-	postedAt: string;
-	editedAt?: string;
-	mentions?: PersonalMentions;
-	reactions: PersonalReaction[];
-	attachments: PersonalAttachment[];
-};
-
 export type PersonalMessagePage = {
 	messages: PersonalMessage[];
 	hasMoreBefore: boolean;
-};
-
-// What changed in a person's conversations, said the same way whichever
-// messenger it happened on. A screen that has read a conversation once keeps it
-// current from these alone; "conversation" is the one that says to read the
-// list again, because a name or a roster is too rare to describe piece by piece.
-export type PersonEvent =
-	| { kind: "message"; message: PersonalMessage }
-	| { kind: "message.edited"; conversationID: string; messageID: string; body: string; editedAt: string }
-	| { kind: "message.removed"; conversationID: string; messageID: string }
-	| {
-			kind: "reaction";
-			conversationID: string;
-			messageID: string;
-			emoji: string;
-			imageURL?: string;
-			externalID: string;
-			isAdded: boolean;
-	  }
-	| { kind: "read"; readAtOfConversation: Record<string, string> }
-	| { kind: "conversation"; conversationID: string }
-	| { kind: "typing"; conversationID: string; externalID: string };
-
-export type PersonEventDelivery = {
-	event: PersonEvent;
-	recipientExternalIDs: string[];
 };
 
 export type CredentialField = {
