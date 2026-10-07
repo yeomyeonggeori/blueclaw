@@ -90,11 +90,26 @@ func (database Database) Exec(ctx context.Context, query string, arguments ...an
 	return errorValue
 }
 
+const migrationAdvisoryLockKey int64 = 0x626c7565636c6177
+
 func (migrationRunner MigrationRunner) ApplyMigrations(ctx context.Context, database Database) error {
-	if errorValue := migrationRunner.applyHostMigrations(ctx, database); errorValue != nil {
-		return errorValue
+	if database.SQL == nil {
+		return errors.New("postgres database is not open")
 	}
-	return nil
+	lockConnection, errorValue := database.SQL.Conn(ctx)
+	if errorValue != nil {
+		return fmt.Errorf("hold a connection for the migration lock: %w", errorValue)
+	}
+	defer lockConnection.Close()
+	if _, errorValue := lockConnection.ExecContext(ctx, "SELECT pg_advisory_lock($1)", migrationAdvisoryLockKey); errorValue != nil {
+		return fmt.Errorf("wait for the migration lock: %w", errorValue)
+	}
+	defer releaseMigrationLock(lockConnection)
+	return migrationRunner.applyHostMigrations(ctx, database)
+}
+
+func releaseMigrationLock(lockConnection *sql.Conn) {
+	_, _ = lockConnection.ExecContext(context.Background(), "SELECT pg_advisory_unlock($1)", migrationAdvisoryLockKey)
 }
 
 func (migrationRunner MigrationRunner) applyHostMigrations(ctx context.Context, database Database) error {
