@@ -1,7 +1,6 @@
 package connectors
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
 	"time"
@@ -9,28 +8,6 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
-
-type HTTPWebhookTransport struct {
-	TransportName string
-	PlatformName  string
-}
-
-func NewHTTPWebhookTransport(transportName string, platformName string) HTTPWebhookTransport {
-	return HTTPWebhookTransport{
-		TransportName: transportName,
-		PlatformName:  platformName,
-	}
-}
-
-func (transport HTTPWebhookTransport) Name() string {
-	return transport.TransportName
-}
-
-func (transport HTTPWebhookTransport) Platform() string {
-	return transport.PlatformName
-}
-
-func (transport HTTPWebhookTransport) Start(context.Context) {}
 
 type capabilityIdentityRequest struct {
 	SenderID string `json:"senderID"`
@@ -56,19 +33,10 @@ type capabilityReplyRequest struct {
 	ReplyKind          string                        `json:"replyKind,omitempty"`
 	RawEventID         string                        `json:"rawEventID,omitempty"`
 	OutboxID           string                        `json:"outboxID,omitempty"`
-	Attachments        []capabilityReplyAttachment   `json:"attachments,omitempty"`
+	Attachments        []outboundReplyAttachment     `json:"attachments,omitempty"`
 	RecoveryActions    []toolcontract.RecoveryAction `json:"recoveryActions,omitempty"`
 	FailureNotice      agentcontract.FailureNotice   `json:"failureNotice,omitempty"`
 	Interaction        *AskInteraction               `json:"interaction,omitempty"`
-}
-
-type capabilityReplyAttachment struct {
-	DevicePath    string `json:"devicePath"`
-	Filename      string `json:"filename,omitempty"`
-	ContentType   string `json:"contentType,omitempty"`
-	SizeBytes     int64  `json:"sizeBytes,omitempty"`
-	Title         string `json:"title,omitempty"`
-	ContentBase64 string `json:"contentBase64,omitempty"`
 }
 
 type capabilityHistoryRequest struct {
@@ -94,21 +62,6 @@ type capabilityMessageDeleteRequest struct {
 
 type normalizedEventEnvelope struct {
 	Event PlatformInboundEvent `json:"event"`
-}
-
-func buildCapabilityReplyAttachments(attachments []toolcontract.FileAttachment) []capabilityReplyAttachment {
-	replyAttachments := []capabilityReplyAttachment{}
-	for _, attachment := range attachments {
-		replyAttachments = append(replyAttachments, capabilityReplyAttachment{
-			DevicePath:    attachment.DevicePath,
-			Filename:      attachment.Filename,
-			ContentType:   attachment.ContentType,
-			SizeBytes:     attachment.SizeBytes,
-			Title:         attachment.Title,
-			ContentBase64: attachment.ContentBase64,
-		})
-	}
-	return replyAttachments
 }
 
 func ParseNormalizedInboundEvent(payload []byte, platform string, source string) (PlatformInboundEvent, bool, error) {

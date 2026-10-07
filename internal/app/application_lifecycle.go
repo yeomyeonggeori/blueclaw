@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/scheduler"
@@ -41,8 +40,6 @@ func (application *Application) Start() error {
 	application.startMemoryMaintenance()
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "connector_runtime")
 	application.startConnectorRuntime()
-	application.runtimeLogger.Logger.Info("application.starting", "stage", "connector_transports")
-	application.startConnectorTransports()
 	application.runtimeLogger.Logger.Info("application.starting", "stage", "acp_session")
 	if errorValue := application.startACPSessionServer(); errorValue != nil {
 		return errorValue
@@ -62,8 +59,6 @@ func (application *Application) Start() error {
 		"application.started",
 		"listenAddress",
 		application.httpServer.Addr,
-		"connectorTransports",
-		strings.Join(application.connectorTransportNames(), ","),
 		"languageModelConfigured",
 		application.languageModelConfigured,
 		"logDirectoryPath",
@@ -100,9 +95,6 @@ func (application *Application) Handler() http.Handler {
 }
 
 func (application *Application) Shutdown(ctx context.Context) error {
-	if application.connectorTransportCancel != nil {
-		application.connectorTransportCancel()
-	}
 	if application.connectorRuntimeCancel != nil {
 		application.connectorRuntimeCancel()
 	}
@@ -212,38 +204,6 @@ func (application *Application) startACPSessionServer() error {
 	application.acpSessionCancel = cancel
 	go application.acpSessionServer.Serve(ctx)
 	return nil
-}
-
-func (application *Application) startConnectorTransports() {
-	if len(application.connectorTransports) == 0 || application.connectorTransportCancel != nil {
-		return
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	application.connectorTransportCancel = cancel
-	for _, connectorTransport := range application.connectorTransports {
-		transport := connectorTransport
-		application.runtimeLogger.Logger.Info(
-			"connector."+transport.Platform()+".transport.registered",
-			"name",
-			transport.Name(),
-			"platform",
-			transport.Platform(),
-		)
-		application.backgroundLoops.Add(1)
-		go func() {
-			defer application.backgroundLoops.Done()
-			transport.Start(ctx)
-		}()
-	}
-}
-
-func (application *Application) connectorTransportNames() []string {
-	transportNames := make([]string, 0, len(application.connectorTransports))
-	for _, connectorTransport := range application.connectorTransports {
-		transportNames = append(transportNames, connectorTransport.Platform()+":"+connectorTransport.Name())
-	}
-	return transportNames
 }
 
 func (application *Application) startLogRetentionLoop() {

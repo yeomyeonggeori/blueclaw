@@ -214,7 +214,7 @@ func (connectorRuntime *ConnectorRuntime) questionTurn(ctx context.Context, appr
 	if errorValue != nil {
 		return nil, false
 	}
-	replyTarget, _ := connectorRuntime.buildReplyTarget(ctx, adapter, event)
+	replyTarget := replyTargetOf(event)
 	return &inboundTurn{
 		adapter:     adapter,
 		platform:    event.Platform,

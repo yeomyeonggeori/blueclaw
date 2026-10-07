@@ -26,7 +26,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/protocolidentity"
 	"github.com/yeomyeonggeori/blueclaw/internal/runtimecontrol"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	capabilitycatalog "github.com/yeomyeonggeori/blueclaw/protocol/generated"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
@@ -311,24 +310,6 @@ func TestDeriveAllowedToolNamesByProfileKeepsDomainCapabilitiesOutOfBaseline(t *
 	}
 	if containsString(defaultProfileToolNames, "ask_input") {
 		t.Fatalf("expected typed user input to stay out of the baseline tools, got %+v", defaultProfileToolNames)
-	}
-}
-
-func TestNewApplicationRegistersSecretlessConnectorTransports(t *testing.T) {
-	runtimeConfiguration := config.RuntimeConfiguration{}
-	runtimeConfiguration.Logging.DirectoryPath = t.TempDir()
-
-	application := NewApplication(runtimeConfiguration, "", InboundOptions{}, WithBundledACPFactory(defaultharness.NewFactory))
-
-	transportNames := strings.Join(application.connectorTransportNames(), ",")
-	for _, platform := range capabilitycatalog.MessengerPlatformNames() {
-		expectedName := platform + ":" + platform + "-internal-ingress"
-		if !strings.Contains(transportNames, expectedName) {
-			t.Fatalf("expected transport %q in %q", expectedName, transportNames)
-		}
-	}
-	if strings.Contains(transportNames, "websocket") {
-		t.Fatalf("expected no platform-owned websocket transport, got %q", transportNames)
 	}
 }
 

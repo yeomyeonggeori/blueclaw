@@ -15,7 +15,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
-	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
@@ -55,7 +54,6 @@ type ConnectorOutboxRepository interface {
 type PlatformAdapter interface {
 	Name() string
 	ParseHTTPEvent(context.Context, *http.Request) (HTTPParseResult, error)
-	ParseRealtimeEvent(context.Context, []byte, string) (PlatformInboundEvent, bool, error)
 	ResolveIdentity(context.Context, string) (identity.PlatformAccountIdentity, error)
 	StartProgress(context.Context, ReplyTarget) error
 	StopProgress(context.Context, ReplyTarget) error
@@ -92,12 +90,6 @@ type MessageReactionAdapter interface {
 
 type MessageReactionRemovalAdapter interface {
 	RemoveReaction(context.Context, ReactionTarget) error
-}
-
-type ConnectorTransport interface {
-	Name() string
-	Platform() string
-	Start(context.Context)
 }
 
 const connectorInboxWorkerCount = 4
@@ -141,20 +133,19 @@ type ConnectorRuntime struct {
 	adminTaskLinkBaseURL   string
 	logger                 *slog.Logger
 
-	mutex                   sync.Mutex
-	retryMutex              sync.Mutex
-	adapterByPlatform       map[string]PlatformAdapter
-	processedResults        map[string]ConnectorRuntimeResult
-	eventRepository         ConnectorEventRepository
-	ingressGate             IngressGate
-	taskIntakeGate          TaskIntakeGate
-	taskWaitTokenRepository task.TaskWaitTokenRepository
-	conversationLocks       map[string]*sync.Mutex
-	pendingRequests         *pendingRequestStore
-	sentAttachmentSources   *sentAttachmentSourceStore
-	started                 bool
-	inboxHeartbeats         []time.Time
-	outboxHeartbeats        []time.Time
+	mutex                 sync.Mutex
+	retryMutex            sync.Mutex
+	adapterByPlatform     map[string]PlatformAdapter
+	processedResults      map[string]ConnectorRuntimeResult
+	eventRepository       ConnectorEventRepository
+	ingressGate           IngressGate
+	taskIntakeGate        TaskIntakeGate
+	conversationLocks     map[string]*sync.Mutex
+	pendingRequests       *pendingRequestStore
+	sentAttachmentSources *sentAttachmentSourceStore
+	started               bool
+	inboxHeartbeats       []time.Time
+	outboxHeartbeats      []time.Time
 }
 
 func NewConnectorRuntime(identityService *identity.IdentityService, harness agentcontract.Harness, taskRunService *taskstate.TaskRunService, taskEventService *taskstate.TaskEventService, logger *slog.Logger) *ConnectorRuntime {
@@ -231,48 +222,24 @@ func (connectorRuntime *ConnectorRuntime) Start(ctx context.Context) {
 	connectorRuntime.mutex.Unlock()
 }
 
-func (connectorRuntime *ConnectorRuntime) HandleHTTPEvent(ctx context.Context, platform string, request *http.Request) (ConnectorRuntimeResult, *HTTPResponse, error) {
+func (connectorRuntime *ConnectorRuntime) HandleHTTPEvent(ctx context.Context, platform string, request *http.Request) (ConnectorRuntimeResult, error) {
 	adapter, errorValue := connectorRuntime.findAdapter(platform)
 	if errorValue != nil {
-		return ConnectorRuntimeResult{}, nil, errorValue
+		return ConnectorRuntimeResult{}, errorValue
 	}
 
 	parseResult, errorValue := adapter.ParseHTTPEvent(ctx, request)
 	if errorValue != nil {
 		connectorRuntime.logger.Warn("connector."+platform+".ingress.malformed", slog.String("source", "http"), slog.String("error", errorValue.Error()))
-		return ConnectorRuntimeResult{}, nil, errorValue
-	}
-	if parseResult.ImmediateResponse != nil {
-		return ConnectorRuntimeResult{Handled: true, Platform: platform}, parseResult.ImmediateResponse, nil
+		return ConnectorRuntimeResult{}, errorValue
 	}
 	if !parseResult.HasEvent {
-		return ConnectorRuntimeResult{Handled: true, Platform: platform, Ignored: true, Reason: "no_event"}, nil, nil
+		return ConnectorRuntimeResult{Handled: true, Platform: platform, Ignored: true, Reason: "no_event"}, nil
 	}
 
 	parseResult.Event.Platform = platform
 	parseResult.Event.Source = "http"
-	result, errorValue := connectorRuntime.HandleInboundEvent(detachedConnectorContext(ctx), adapter, parseResult.Event)
-	return result, nil, errorValue
-}
-
-func (connectorRuntime *ConnectorRuntime) HandleRealtimeEvent(ctx context.Context, platform string, payload []byte, source string) (ConnectorRuntimeResult, error) {
-	adapter, errorValue := connectorRuntime.findAdapter(platform)
-	if errorValue != nil {
-		return ConnectorRuntimeResult{}, errorValue
-	}
-
-	event, hasEvent, errorValue := adapter.ParseRealtimeEvent(ctx, payload, source)
-	if errorValue != nil {
-		connectorRuntime.logger.Warn("connector."+platform+".realtime.malformed", slog.String("source", source), slog.String("error", errorValue.Error()))
-		return ConnectorRuntimeResult{}, errorValue
-	}
-	if !hasEvent {
-		return ConnectorRuntimeResult{Handled: true, Platform: platform, Ignored: true, Reason: "no_event"}, nil
-	}
-
-	event.Platform = platform
-	event.Source = source
-	return connectorRuntime.HandleInboundEvent(ctx, adapter, event)
+	return connectorRuntime.HandleInboundEvent(detachedConnectorContext(ctx), adapter, parseResult.Event)
 }
 
 func (connectorRuntime *ConnectorRuntime) HandleInboundEvent(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (ConnectorRuntimeResult, error) {
@@ -281,29 +248,9 @@ func (connectorRuntime *ConnectorRuntime) HandleInboundEvent(ctx context.Context
 		connectorRuntime.logger.Warn("connector."+adapter.Name()+".ingress.deferred", slog.String("messageID", event.MessageID), slog.String("reason", "backup_prepare_active"))
 		return ConnectorRuntimeResult{Handled: true, Platform: adapter.Name(), Ignored: true, Reason: "backup_prepare_active"}, nil
 	}
-	if strings.TrimSpace(event.MessageID) == "" {
-		connectorRuntime.logger.Warn("connector."+adapter.Name()+".ingress.malformed", slog.String("source", event.Source), slog.String("reason", "missing_message_id"))
-		return ConnectorRuntimeResult{Handled: true, Platform: adapter.Name(), Ignored: true, Reason: "missing_message_id"}, nil
-	}
-	if strings.TrimSpace(event.ConversationID) == "" {
-		connectorRuntime.logger.Warn("connector."+adapter.Name()+".ingress.malformed", slog.String("source", event.Source), slog.String("reason", "missing_conversation_id"))
-		return ConnectorRuntimeResult{Handled: true, Platform: adapter.Name(), Ignored: true, Reason: "missing_conversation_id"}, nil
-	}
-	if strings.TrimSpace(event.SenderID) == "" {
-		connectorRuntime.logger.Warn("connector."+adapter.Name()+".ingress.malformed", slog.String("source", event.Source), slog.String("reason", "missing_sender_id"))
-		return ConnectorRuntimeResult{Handled: true, Platform: adapter.Name(), Ignored: true, Reason: "missing_sender_id"}, nil
-	}
-	if strings.TrimSpace(event.ReplyTargetID) == "" {
-		connectorRuntime.logger.Warn("connector."+adapter.Name()+".ingress.malformed", slog.String("source", event.Source), slog.String("reason", "missing_reply_target_id"))
-		return ConnectorRuntimeResult{Handled: true, Platform: adapter.Name(), Ignored: true, Reason: "missing_reply_target_id"}, nil
-	}
-	if strings.TrimSpace(event.Prompt) == "" {
-		connectorRuntime.logger.Warn("connector."+adapter.Name()+".ingress.malformed", slog.String("source", event.Source), slog.String("reason", "missing_prompt"))
-		return ConnectorRuntimeResult{Handled: true, Platform: adapter.Name(), Ignored: true, Reason: "missing_prompt"}, nil
-	}
-	if event.Context.HasMoreBefore && strings.TrimSpace(event.Context.HistoryCursor) == "" {
-		connectorRuntime.logger.Warn("connector."+adapter.Name()+".ingress.malformed", slog.String("source", event.Source), slog.String("reason", "missing_history_cursor"))
-		return ConnectorRuntimeResult{Handled: true, Platform: adapter.Name(), Ignored: true, Reason: "missing_history_cursor"}, nil
+	if reason := malformedEventReason(event); reason != "" {
+		connectorRuntime.logger.Warn("connector."+adapter.Name()+".ingress.malformed", slog.String("source", event.Source), slog.String("reason", reason))
+		return ConnectorRuntimeResult{Handled: true, Platform: adapter.Name(), Ignored: true, Reason: reason}, nil
 	}
 
 	if queueRepository := connectorRuntime.queueRepository(); queueRepository != nil {
@@ -316,27 +263,26 @@ func (connectorRuntime *ConnectorRuntime) HandleInboundEvent(ctx context.Context
 	return connectorRuntime.handleInboundEventImmediately(ctx, adapter, event)
 }
 
+func malformedEventReason(event PlatformInboundEvent) string {
+	switch {
+	case strings.TrimSpace(event.MessageID) == "":
+		return "missing_message_id"
+	case strings.TrimSpace(event.ConversationID) == "":
+		return "missing_conversation_id"
+	case strings.TrimSpace(event.SenderID) == "":
+		return "missing_sender_id"
+	case strings.TrimSpace(event.ReplyTargetID) == "":
+		return "missing_reply_target_id"
+	case strings.TrimSpace(event.Prompt) == "":
+		return "missing_prompt"
+	case event.Context.HasMoreBefore && strings.TrimSpace(event.Context.HistoryCursor) == "":
+		return "missing_history_cursor"
+	}
+	return ""
+}
+
 func (connectorRuntime *ConnectorRuntime) handleInboundEventImmediately(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (ConnectorRuntimeResult, error) {
 	eventKey := event.DedupeKey()
-	if connectorRuntime.eventRepository != nil {
-		isDuplicate, result, errorValue := connectorRuntime.eventRepository.TryInsertConnectorEvent(event)
-		if errorValue != nil {
-			return ConnectorRuntimeResult{}, errorValue
-		}
-		if isDuplicate {
-			result.Handled = true
-			result.Platform = adapter.Name()
-			result.Duplicate = true
-			connectorRuntime.logger.Info("connector."+adapter.Name()+".event.suppressed", slog.String("source", event.Source), slog.String("reason", "duplicate"), slog.String("messageID", event.MessageID))
-			return result, nil
-		}
-		result, errorValue = connectorRuntime.processPendingInboundEvent(ctx, adapter, event, connectorRuntime.recordingDelivery(adapter.SendReply), false)
-		if errorValue != nil {
-			return ConnectorRuntimeResult{}, errorValue
-		}
-		_ = connectorRuntime.eventRepository.SaveConnectorResult(event, result)
-		return result, nil
-	}
 	if result, isFound := connectorRuntime.findProcessedResult(eventKey); isFound {
 		result.Duplicate = true
 		connectorRuntime.logger.Info("connector."+adapter.Name()+".event.suppressed", slog.String("source", event.Source), slog.String("reason", "duplicate"), slog.String("messageID", event.MessageID))
@@ -350,10 +296,6 @@ func (connectorRuntime *ConnectorRuntime) handleInboundEventImmediately(ctx cont
 
 	connectorRuntime.rememberProcessedResult(eventKey, result)
 	return result, nil
-}
-
-func (connectorRuntime *ConnectorRuntime) processInboundEvent(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (ConnectorRuntimeResult, error) {
-	return connectorRuntime.processInboundEventWithReplySender(ctx, adapter, event, connectorRuntime.recordingDelivery(adapter.SendReply))
 }
 
 func (connectorRuntime *ConnectorRuntime) processInboundEventWithReplySender(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent, sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error)) (ConnectorRuntimeResult, error) {
@@ -427,13 +369,6 @@ func (connectorRuntime *ConnectorRuntime) appendAskResolvedEvent(interaction Ask
 		"route":         string(agentcontract.TurnRouteContinueTask),
 		"reason":        askReplyReason,
 	}))
-}
-
-func connectorResponseLanguageInstruction(responseLanguage string) string {
-	if toolcontract.ResolveResponseLanguage(responseLanguage) == toolcontract.ResponseLanguageEnglish {
-		return "Write in English."
-	}
-	return "Write in Korean."
 }
 
 func connectorReplyEventBody(event PlatformInboundEvent, reply OutboundReply, outboxID string, dispatchID string, reason string) map[string]string {
@@ -611,30 +546,6 @@ func (connectorRuntime *ConnectorRuntime) withInitialVisibleContext(ctx context.
 	return event
 }
 
-func (connectorRuntime *ConnectorRuntime) buildTurnToolSet(adapter PlatformAdapter, event PlatformInboundEvent, personID string, personAccess policy.PersonAccess) *toolcontract.ToolSet {
-	requesterEmail := connectorRuntime.requesterEmailForEvent(personID, event)
-	return connectorRuntime.toolCatalogBuilder.BuildToolSet(agentruntime.ToolCatalogRequest{
-		ProfileName:                "default",
-		Prompt:                     event.Prompt,
-		RequesterPersonID:          personID,
-		RequesterName:              connectorRuntime.requesterNameForEvent(personID, event),
-		RequesterEmail:             requesterEmail,
-		RequesterPlatformUserID:    event.SenderID,
-		ConversationID:             event.ConversationID,
-		ConversationType:           event.Context.ConversationType,
-		ConversationChannelID:      event.Context.ChannelID,
-		ConversationChannelName:    event.Context.ChannelName,
-		ReplyTargetID:              event.ReplyTargetID,
-		Platform:                   adapter.Name(),
-		HistoryCursor:              event.Context.HistoryCursor,
-		HistoryProvider:            connectorHistoryProvider{adapter: adapter},
-		AttachmentMaterialResolver: connectorRuntime.attachmentMaterialResolverFor(adapter, personID, event),
-		PersonAccess:               personAccess,
-		AccessibleConversationIDs:  []string{event.ConversationID},
-		InputParts:                 append([]agentcontract.AgentPart{}, event.InputParts...),
-	})
-}
-
 func (connectorRuntime *ConnectorRuntime) requesterEmailForEvent(personID string, event PlatformInboundEvent) string {
 	email := strings.ToLower(strings.TrimSpace(connectorRuntime.identityService.ResolvePersonPrimaryEmail(personID)))
 	if email != "" {
@@ -702,10 +613,6 @@ func detachedConnectorContext(ctx context.Context) context.Context {
 	return context.WithoutCancel(ctx)
 }
 
-func isPrivateConversationID(conversationID string) bool {
-	return strings.HasPrefix(strings.TrimSpace(conversationID), "dm:")
-}
-
 func (connectorRuntime *ConnectorRuntime) authorizeSender(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (senderAuthorization, error) {
 	personID, isFound := connectorRuntime.identityService.ResolvePersonIDByPlatformAccount(adapter.Name(), event.SenderID)
 	if isFound {
@@ -766,20 +673,13 @@ func (connectorRuntime *ConnectorRuntime) askTheHostAboutUnknownAccount(ctx cont
 	return personID, isFound, false
 }
 
-func (connectorRuntime *ConnectorRuntime) buildReplyTarget(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (ReplyTarget, error) {
-	_ = ctx
-	_ = adapter
-
+func replyTargetOf(event PlatformInboundEvent) ReplyTarget {
 	return ReplyTarget{
 		ConversationID:     event.ConversationID,
 		ReplyTargetID:      event.ReplyTargetID,
 		AnsweringMessageID: event.MessageID,
 		DedupeKey:          event.DedupeKey(),
-	}, nil
-}
-
-func (connectorRuntime *ConnectorRuntime) startProgress(ctx context.Context, adapter PlatformAdapter, replyTarget ReplyTarget) func() {
-	return connectorRuntime.startProgressHeartbeat(ctx, adapter, replyTarget)
+	}
 }
 
 func shouldStartProgressBeforeAddressing(event PlatformInboundEvent) bool {

@@ -143,7 +143,6 @@ func (connectorRuntime *ConnectorRuntime) gatewayFactsForTurn(ctx context.Contex
 	if turn.adapter != nil {
 		turn.event = connectorRuntime.withInitialVisibleContext(ctx, turn.adapter, turn.event)
 	}
-	turn.taskWaitResolution = connectorRuntime.resolveInboundTaskWait(turn.personID, turn.platform, turn.event)
 	open := connectorRuntime.readOpenInteractions(turn)
 	facts := inboundengagement.Facts{
 		Messages:         []inboundengagement.Message{inboundDecisionMessage(turn.event)},
@@ -195,15 +194,6 @@ func inboundDecisionMessage(event PlatformInboundEvent) inboundengagement.Messag
 		Attachments:       agentcontract.AttachmentFactsFromParts(event.InputParts),
 		IsAttachmentsOnly: event.Context.AttachmentsOnly,
 	}
-}
-
-type judgmentAddressingDecider struct {
-	judge func(context.Context) (inboundengagement.Judgment, error)
-}
-
-func (decider judgmentAddressingDecider) DecideAddressing(ctx context.Context, _ inboundengagement.Request) (inboundengagement.AddressingDecision, error) {
-	judgment, errorValue := decider.judge(ctx)
-	return judgment.Addressing, errorValue
 }
 
 func (connectorRuntime *ConnectorRuntime) relatesToActiveTask(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) bool {

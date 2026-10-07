@@ -44,10 +44,6 @@ func (adapter ChatdPlatformAdapter) ParseHTTPEvent(_ context.Context, request *h
 	return HTTPParseResult{Event: event, HasEvent: true}, nil
 }
 
-func (adapter ChatdPlatformAdapter) ParseRealtimeEvent(_ context.Context, payload []byte, source string) (PlatformInboundEvent, bool, error) {
-	return ParseNormalizedInboundEvent(payload, adapter.Name(), source)
-}
-
 func (adapter ChatdPlatformAdapter) ResolveIdentity(ctx context.Context, senderUserID string) (identity.PlatformAccountIdentity, error) {
 	var response identity.PlatformAccountIdentity
 	errorValue := adapter.post(ctx, "identity.resolve", capabilityIdentityRequest{SenderID: senderUserID}, &response)
@@ -72,22 +68,21 @@ func progressRequestFor(replyTarget ReplyTarget) capabilityProgressRequest {
 	return capabilityProgressRequest{ReplyTargetID: replyTarget.ReplyTargetID, AnsweringMessageID: replyTarget.AnsweringMessageID}
 }
 
-func (adapter ChatdPlatformAdapter) AddReaction(ctx context.Context, target ReactionTarget) error {
-	return adapter.post(ctx, "reaction.add", capabilityReactionRequest{
+func reactionRequestFor(target ReactionTarget) capabilityReactionRequest {
+	return capabilityReactionRequest{
 		ConversationID: strings.TrimSpace(target.ConversationID),
 		MessageID:      strings.TrimSpace(target.MessageID),
 		EmojiName:      strings.TrimSpace(target.EmojiName),
 		Reason:         strings.TrimSpace(target.Reason),
-	}, nil)
+	}
+}
+
+func (adapter ChatdPlatformAdapter) AddReaction(ctx context.Context, target ReactionTarget) error {
+	return adapter.post(ctx, "reaction.add", reactionRequestFor(target), nil)
 }
 
 func (adapter ChatdPlatformAdapter) RemoveReaction(ctx context.Context, target ReactionTarget) error {
-	return adapter.post(ctx, "reaction.remove", capabilityReactionRequest{
-		ConversationID: strings.TrimSpace(target.ConversationID),
-		MessageID:      strings.TrimSpace(target.MessageID),
-		EmojiName:      strings.TrimSpace(target.EmojiName),
-		Reason:         strings.TrimSpace(target.Reason),
-	}, nil)
+	return adapter.post(ctx, "reaction.remove", reactionRequestFor(target), nil)
 }
 
 func (adapter ChatdPlatformAdapter) SendReply(ctx context.Context, replyTarget ReplyTarget, reply OutboundReply) (string, error) {
@@ -100,7 +95,7 @@ func (adapter ChatdPlatformAdapter) SendReply(ctx context.Context, replyTarget R
 		ReplyKind:          reply.ReplyKind,
 		RawEventID:         reply.RawEventID,
 		OutboxID:           reply.OutboxID,
-		Attachments:        buildCapabilityReplyAttachments(reply.Attachments),
+		Attachments:        outboundReplyAttachments(reply.Attachments),
 		RecoveryActions:    reply.RecoveryActions,
 		FailureNotice:      reply.FailureNotice,
 		Interaction:        reply.Interaction,

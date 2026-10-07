@@ -148,10 +148,6 @@ func (connectorRuntime *ConnectorRuntime) interruptInactiveRuntimeTaskIfNeeded(t
 	return isInterrupted
 }
 
-func (connectorRuntime *ConnectorRuntime) hasActiveTaskForPerson(personID string) bool {
-	return len(connectorRuntime.activeTaskRunsForPerson(personID)) > 0
-}
-
 func (connectorRuntime *ConnectorRuntime) taskRunWasCancelled(taskRunID string) bool {
 	taskRun, isFound := connectorRuntime.taskRunService.FindTaskRun(taskRunID)
 	return isFound && taskRun.Status == task.TaskStatusCancelled

@@ -162,10 +162,10 @@ func (connectorRuntime *ConnectorRuntime) cancelPendingRequestTask(event Platfor
 	if !isFound {
 		return
 	}
-	connectorRuntime.cancelPendingSourceTask(personID, event.Platform, event.ConversationID, event.DedupeKey())
+	connectorRuntime.cancelPendingSourceTask(personID, event.DedupeKey())
 }
 
-func (connectorRuntime *ConnectorRuntime) cancelPendingSourceTask(personID string, platform string, conversationID string, sourceReference string) {
+func (connectorRuntime *ConnectorRuntime) cancelPendingSourceTask(personID string, sourceReference string) {
 	taskRun, isFound := connectorRuntime.findTaskRunBySourceReference(personID, sourceReference)
 	if !isFound || taskRun.Status == task.TaskStatusCompleted {
 		return
@@ -173,8 +173,6 @@ func (connectorRuntime *ConnectorRuntime) cancelPendingSourceTask(personID strin
 	if isTaskControlActiveStatus(taskRun.Status) {
 		if _, errorValue := connectorRuntime.taskRunService.CancelTaskRunWithReason(taskRun.TaskRunID, personID, SupersededRequestReason); errorValue != nil {
 			connectorRuntime.logger.Warn("connector.request.cancel_failed", slog.String("taskRunID", taskRun.TaskRunID), slog.String("error", errorValue.Error()))
-		} else {
-			connectorRuntime.resolveOpenTaskWaitsForTaskRun(personID, platform, conversationID, taskRun.TaskRunID)
 		}
 	}
 	connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventTaskSupersededByMessage, agentruntime.MarshalBody(map[string]string{"sourceReference": sourceReference}))

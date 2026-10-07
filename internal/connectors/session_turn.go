@@ -22,7 +22,7 @@ func (connectorRuntime *ConnectorRuntime) OpenSessionTurn(ctx context.Context, e
 	if errorValue != nil {
 		connectorRuntime.logger.Warn("connector.session.adapter_missing", slog.String("platform", event.Platform), slog.String("messageID", event.MessageID), slog.String("error", errorValue.Error()))
 	}
-	replyTarget, _ := connectorRuntime.buildReplyTarget(ctx, adapter, event)
+	replyTarget := replyTargetOf(event)
 	return &SessionTurn{connectorRuntime: connectorRuntime, turn: &inboundTurn{
 		adapter:        adapter,
 		platform:       event.Platform,
@@ -47,10 +47,9 @@ func (sessionTurn *SessionTurn) AnswersAwaitedQuestion(ctx context.Context) (boo
 
 func (sessionTurn *SessionTurn) ResolveEngagement(ctx context.Context) inboundengagement.Decision {
 	connectorRuntime, turn := sessionTurn.connectorRuntime, sessionTurn.turn
-	judge := func(ctx context.Context) (inboundengagement.Judgment, error) {
+	return connectorRuntime.resolveEngagement(ctx, turn.platform, turn.event, func(ctx context.Context) (inboundengagement.Judgment, error) {
 		return connectorRuntime.judgeTurn(withConnectorEvent(ctx, turn.event), turn)
-	}
-	return inboundengagement.NewGate(judgmentAddressingDecider{judge: judge}, connectorRuntime.logger).Resolve(ctx, turn.platform, engagementRequestForEvent(turn.event))
+	})
 }
 
 func (sessionTurn *SessionTurn) ContinueOpenInteractions(ctx context.Context, launchRequest agentruntime.TaskLaunchRequest) (agentruntime.TaskLaunchRequest, bool, error) {

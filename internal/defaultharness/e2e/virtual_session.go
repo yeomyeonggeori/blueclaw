@@ -983,7 +983,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	if scenario.IsDeliveredOverACP {
 		var errorValue error
 		acpSession, errorValue = openVirtualACPSession(acpsession.Collaborators{
-			ApprovalDeferrer:   virtualApprovalGate,
+			AnswerSettler:      virtualApprovalGate,
 			TaskLauncher:       virtualTaskLauncher,
 			Directory:          identityService,
 			ReplyReader:        scenarioReader,
@@ -4013,10 +4013,6 @@ func (adapter *virtualAdapter) Name() string { return "virtual" }
 
 func (adapter *virtualAdapter) ParseHTTPEvent(context.Context, *http.Request) (connectors.HTTPParseResult, error) {
 	return connectors.HTTPParseResult{}, errors.New("virtual adapter does not parse http")
-}
-
-func (adapter *virtualAdapter) ParseRealtimeEvent(context.Context, []byte, string) (connectors.PlatformInboundEvent, bool, error) {
-	return connectors.PlatformInboundEvent{}, false, errors.New("virtual adapter does not parse realtime")
 }
 
 func (adapter *virtualAdapter) ResolveIdentity(context.Context, string) (identity.PlatformAccountIdentity, error) {

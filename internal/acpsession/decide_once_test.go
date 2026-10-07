@@ -9,6 +9,7 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement/gatewaytest"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
@@ -53,11 +54,12 @@ func aDecidingPlane(t *testing.T) decidingPlane {
 	taskLauncher := agentruntime.NewTaskLauncher(harness, taskRunService, nil)
 	client := &recordingClient{}
 	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
-		TaskLauncher: taskLauncher,
-		Directory:    staticDirectory{},
-		ReplyReader:  scriptedReader{},
-		SessionTurns: connectorRuntimeDeciding(taskRunService, inboundengagement.NewDecisionModelDecider(decisionModel, nil)),
-		TaskRunStore: taskRunService,
+		TaskLauncher:  taskLauncher,
+		Directory:     staticDirectory{},
+		ReplyReader:   scriptedReader{},
+		SessionTurns:  connectorRuntimeDeciding(taskRunService, inboundengagement.NewDecisionModelDecider(decisionModel, nil)),
+		TaskRunStore:  taskRunService,
+		AnswerSettler: approvalgate.New(taskRunService),
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-room"))
 	return decidingPlane{decisionModel: decisionModel, harness: harness, connection: connection, sessionID: sessionID}

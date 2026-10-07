@@ -362,3 +362,44 @@ func TestOnlyARequestOfGatewayQuestionsIsAGatewayRequest(t *testing.T) {
 		t.Fatal("a request with no questions is not a gateway request")
 	}
 }
+
+func TestAnEmojiOutsideTheAcceptedSetIsNoReaction(t *testing.T) {
+	if knownReactionEmoji("shrug") != "" {
+		t.Fatal("an emoji the runtime does not accept must be dropped")
+	}
+	if knownReactionEmoji("  EYES  ") != "eyes" {
+		t.Fatalf("an accepted emoji must be normalized, got %q", knownReactionEmoji("  EYES  "))
+	}
+	outsideTheSet := defaultAnswers()
+	outsideTheSet.choices[QuestionReactionEmoji] = "shrug"
+
+	judgments, errorValue := NewDecisionModelDecider(outsideTheSet, func() float64 { return 0.1 }).Decide(context.Background(), messageFacts("O", true, "감사합니다"), nil)
+
+	if errorValue != nil || judgments[0].Addressing.ReactionEmoji != "" {
+		t.Fatalf("a reaction outside the accepted set must not be added, got %q: %v", judgments[0].Addressing.ReactionEmoji, errorValue)
+	}
+}
+
+func TestTheEmojiAndDutyOptionsAreTheOnesTheRuntimeAccepts(t *testing.T) {
+	questions := newDecisionRequest(withDuties(messageFacts("O", false, "배포 끝났습니다"))).Questions
+
+	emojiOptions, _ := questions["m1."+QuestionReactionEmoji].Criteria.(map[string]string)
+	for _, emoji := range reactionEmojis {
+		if _, isOffered := emojiOptions[emoji.name]; !isOffered {
+			t.Fatalf("expected %s to be offered as a reaction", emoji.name)
+		}
+	}
+	if len(emojiOptions) != len(reactionEmojis) {
+		t.Fatalf("expected exactly the accepted emoji names, got %d options", len(emojiOptions))
+	}
+
+	dutyOptions, _ := questions["m1."+QuestionDuty].Criteria.(map[string]string)
+	if _, hasNone := dutyOptions[DutyOptionNone]; !hasNone {
+		t.Fatal("expected the duty question to offer none")
+	}
+	for _, duty := range StandingDuties() {
+		if _, isOffered := dutyOptions[duty.Name]; !isOffered {
+			t.Fatalf("expected the standing duty %s to be offered", duty.Name)
+		}
+	}
+}

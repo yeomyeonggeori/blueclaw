@@ -17,6 +17,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
+	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/taskstate"
@@ -69,7 +70,7 @@ type Agent struct {
 	taskLauncher       TaskLauncher
 	directory          PersonDirectory
 	permissionRelay    *PermissionRelay
-	approvalDeferrer   ApprovalDeferrer
+	answerSettler      AnswerSettler
 	replyReader        approvalreply.Reader
 	attachmentImporter AttachmentImporter
 	sessionTurns       SessionTurnOpener
@@ -88,7 +89,7 @@ func NewAgent(collaborators Collaborators, permissionRelay *PermissionRelay, log
 		taskLauncher:       collaborators.TaskLauncher,
 		directory:          collaborators.Directory,
 		permissionRelay:    permissionRelay,
-		approvalDeferrer:   collaborators.ApprovalDeferrer,
+		answerSettler:      collaborators.AnswerSettler,
 		replyReader:        collaborators.ReplyReader,
 		attachmentImporter: collaborators.AttachmentImporter,
 		sessionTurns:       collaborators.SessionTurns,
@@ -100,12 +101,12 @@ func NewAgent(collaborators Collaborators, permissionRelay *PermissionRelay, log
 	}
 }
 
-type ApprovalDeferrer interface {
-	DeferApprovedCall(context.Context, approvalgate.DeferralRequest) (toolcontract.ToolResult, error)
+type AnswerSettler interface {
+	SettleAnswer(context.Context, mcpserver.ApprovalRequest, approvalgate.ApprovalAnswer) (approvalgate.AnswerSettlement, error)
 }
 
 type Collaborators struct {
-	ApprovalDeferrer   ApprovalDeferrer
+	AnswerSettler      AnswerSettler
 	TaskLauncher       TaskLauncher
 	Directory          PersonDirectory
 	ReplyReader        approvalreply.Reader

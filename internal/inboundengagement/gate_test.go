@@ -2,30 +2,27 @@ package inboundengagement
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"testing"
 )
 
-type scriptedAddressingDecider struct {
-	decision AddressingDecision
-}
+type gateReturning AddressingDecision
 
-func (decider scriptedAddressingDecider) DecideAddressing(context.Context, Request) (AddressingDecision, error) {
-	return decider.decision, nil
-}
-
-func gateReturning(decision AddressingDecision) *Gate {
-	return NewGate(scriptedAddressingDecider{decision: decision}, nil)
+func (decision gateReturning) Resolve(ctx context.Context, platform string, request Request) Decision {
+	return Resolve(ctx, slog.Default(), platform, request, func(context.Context) (AddressingDecision, error) {
+		return AddressingDecision(decision), nil
+	})
 }
 
 func channelRequest() Request {
-	return Request{Prompt: "이거 정리해줘", ConversationType: "O"}
+	return Request{ConversationType: "O"}
 }
 
 func TestResolveIgnoresUninvitedAttachmentsOnly(t *testing.T) {
-	gate := gateReturning(AddressingDecision{Target: AddressingTargetBot, ShouldRespond: true})
+	gate := gateReturning{Target: AddressingTargetBot, ShouldRespond: true}
 
-	uninvitedRequest := Request{Prompt: "User attached file(s).", ConversationType: "O", AttachmentsOnly: true}
+	uninvitedRequest := Request{ConversationType: "O", AttachmentsOnly: true}
 	decision := gate.Resolve(context.Background(), "mattermost", uninvitedRequest)
 	if decision.ShouldLaunch {
 		t.Fatalf("uninvited attachments-only channel post must be ignored, got %+v", decision)
@@ -34,19 +31,19 @@ func TestResolveIgnoresUninvitedAttachmentsOnly(t *testing.T) {
 		t.Fatalf("expected attachments_only ignore reason, got %q", decision.IgnoreReason)
 	}
 
-	directRequest := Request{Prompt: "User attached file(s).", ConversationType: "D", AttachmentsOnly: true}
+	directRequest := Request{ConversationType: "D", AttachmentsOnly: true}
 	if !gate.Resolve(context.Background(), "mattermost", directRequest).ShouldLaunch {
 		t.Fatal("DM with only an attachment must still engage")
 	}
 
-	mentionRequest := Request{Prompt: "User attached file(s).", ConversationType: "O", AttachmentsOnly: true, BotMentioned: true}
+	mentionRequest := Request{ConversationType: "O", AttachmentsOnly: true, BotMentioned: true}
 	if !gate.Resolve(context.Background(), "mattermost", mentionRequest).ShouldLaunch {
 		t.Fatal("bot-mentioned attachment-only post must still engage")
 	}
 }
 
 func TestResolveReactOnly(t *testing.T) {
-	gate := gateReturning(AddressingDecision{Target: AddressingTargetAnyone, ShouldRespond: false, ReactionEmoji: "eyes"})
+	gate := gateReturning{Target: AddressingTargetAnyone, ShouldRespond: false, ReactionEmoji: "eyes"}
 
 	decision := gate.Resolve(context.Background(), "mattermost", channelRequest())
 
@@ -59,7 +56,7 @@ func TestResolveReactOnly(t *testing.T) {
 }
 
 func TestResolveReactAndRespond(t *testing.T) {
-	gate := gateReturning(AddressingDecision{Target: AddressingTargetBot, ShouldRespond: true, ReactionEmoji: "+1"})
+	gate := gateReturning{Target: AddressingTargetBot, ShouldRespond: true, ReactionEmoji: "+1"}
 
 	decision := gate.Resolve(context.Background(), "mattermost", channelRequest())
 

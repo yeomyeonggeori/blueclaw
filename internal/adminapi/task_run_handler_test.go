@@ -2,6 +2,7 @@ package adminapi
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -97,6 +98,39 @@ func TestTaskRunHandlerHandsTheModelPathPresetToTheAgentAsAFact(t *testing.T) {
 	turnRequest := harness.LastTurnRequest()
 	if turnRequest.TaskLevel != agentcontract.TaskLevelXLow {
 		t.Fatalf("expected the xlow diagnostic task level as a fact, got %q", turnRequest.TaskLevel)
+	}
+}
+
+func TestTaskRunHandlerRunsTheModelPathPresetWithoutSkillsOrTools(t *testing.T) {
+	handler, taskRunService := newStubbedPresetTaskRunHandler(true)
+	harness := harnesstest.New(taskRunService)
+	handler.TaskLauncher = agentruntime.NewTaskLauncher(harness, taskRunService, agentruntime.NewToolCatalogBuilder())
+	request := httptest.NewRequest(http.MethodPost, "/admin/api/run/start", strings.NewReader(`{"requesterPersonID":"person-1","prompt":"reply exactly","taskDecisionPreset":"model_path"}`))
+	responseRecorder := httptest.NewRecorder()
+
+	handler.HandleRunTask(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected ok response, got %d: %s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+	turnRequest := harness.LastTurnRequest()
+	if !turnRequest.SkipSkillSelection {
+		t.Fatal("expected the diagnostic preset to skip skill selection")
+	}
+	if turnRequest.ProfileName != modelPathDiagnosticProfileName {
+		t.Fatalf("expected the diagnostic profile, got %q", turnRequest.ProfileName)
+	}
+	if toolNames := turnRequest.ToolSet.ListToolNames(); len(toolNames) != 0 {
+		t.Fatalf("expected the diagnostic profile to offer no tools, got %v", toolNames)
+	}
+	var responseDocument struct {
+		TaskRun task.TaskRun `json:"taskRun"`
+	}
+	if errorValue := json.Unmarshal(responseRecorder.Body.Bytes(), &responseDocument); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if _, isFound := taskRunService.FindTaskRun(responseDocument.TaskRun.TaskRunID); !isFound {
+		t.Fatalf("expected a persisted task run, got %+v", responseDocument.TaskRun)
 	}
 }
 

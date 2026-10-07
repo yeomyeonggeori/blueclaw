@@ -15,23 +15,24 @@ func isMultiPersonConversation(event PlatformInboundEvent) bool {
 }
 
 func (connectorRuntime *ConnectorRuntime) resolveInboundEngagement(ctx context.Context, adapter PlatformAdapter, platform string, event PlatformInboundEvent) inboundengagement.Decision {
-	judge := func(ctx context.Context) (inboundengagement.Judgment, error) {
+	return connectorRuntime.resolveEngagement(ctx, platform, event, func(ctx context.Context) (inboundengagement.Judgment, error) {
 		return connectorRuntime.judgeInboundMessage(ctx, adapter, event)
-	}
-	return inboundengagement.NewGate(judgmentAddressingDecider{judge: judge}, connectorRuntime.logger).Resolve(ctx, platform, engagementRequestForEvent(event))
+	})
+}
+
+func (connectorRuntime *ConnectorRuntime) resolveEngagement(ctx context.Context, platform string, event PlatformInboundEvent, judge func(context.Context) (inboundengagement.Judgment, error)) inboundengagement.Decision {
+	return inboundengagement.Resolve(ctx, connectorRuntime.logger, platform, engagementRequestForEvent(event), func(ctx context.Context) (inboundengagement.AddressingDecision, error) {
+		judgment, errorValue := judge(ctx)
+		return judgment.Addressing, errorValue
+	})
 }
 
 func engagementRequestForEvent(event PlatformInboundEvent) inboundengagement.Request {
 	return inboundengagement.Request{
-		Prompt:           event.Prompt,
 		MessageID:        event.MessageID,
 		ConversationType: event.Context.ConversationType,
 		BotMentioned:     event.Context.Addressing.BotMentioned,
 		AttachmentsOnly:  event.Context.AttachmentsOnly,
-		MessageSentAt:    event.RawReceivedAt,
-		SenderName:       event.Context.Sender.Name,
-		SenderHandle:     event.Context.Sender.Handle,
-		VisibleContext:   event.Context.ToAgentVisibleContext(),
 	}
 }
 

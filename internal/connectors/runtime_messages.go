@@ -24,7 +24,6 @@ type PlatformInboundEvent struct {
 	ResponseLanguage string                    `json:"responseLanguage,omitempty"`
 	Context          VisibleContext            `json:"context"`
 	RawReceivedAt    time.Time                 `json:"-"`
-	LegacyFields     map[string]interface{}    `json:"legacyFields,omitempty"`
 	TaskRetry        *TaskRetryReference       `json:"taskRetry,omitempty"`
 
 	gatewayDecision *gatewayDecision
@@ -62,16 +61,11 @@ type OutboundReply struct {
 	Interaction     *AskInteraction               `json:"interaction,omitempty"`
 }
 
+type plainOutboundReply OutboundReply
+
 type outboundReplyDocument struct {
-	Message         string                        `json:"message"`
-	TaskRunID       string                        `json:"taskRunID,omitempty"`
-	ReplyKind       string                        `json:"replyKind,omitempty"`
-	RawEventID      string                        `json:"rawEventID,omitempty"`
-	OutboxID        string                        `json:"outboxID,omitempty"`
-	Attachments     []outboundReplyAttachment     `json:"attachments,omitempty"`
-	RecoveryActions []toolcontract.RecoveryAction `json:"recoveryActions,omitempty"`
-	FailureNotice   agentcontract.FailureNotice   `json:"failureNotice,omitempty"`
-	Interaction     *AskInteraction               `json:"interaction,omitempty"`
+	plainOutboundReply
+	Attachments []outboundReplyAttachment `json:"attachments,omitempty"`
 }
 
 type outboundReplyAttachment struct {
@@ -104,18 +98,7 @@ type AskChoiceOption struct {
 }
 
 func (reply OutboundReply) MarshalJSON() ([]byte, error) {
-	document := outboundReplyDocument{
-		Message:         reply.Message,
-		TaskRunID:       reply.TaskRunID,
-		ReplyKind:       reply.ReplyKind,
-		RawEventID:      reply.RawEventID,
-		OutboxID:        reply.OutboxID,
-		Attachments:     outboundReplyAttachments(reply.Attachments),
-		RecoveryActions: reply.RecoveryActions,
-		FailureNotice:   reply.FailureNotice,
-		Interaction:     reply.Interaction,
-	}
-	return json.Marshal(document)
+	return json.Marshal(outboundReplyDocument{plainOutboundReply: plainOutboundReply(reply), Attachments: outboundReplyAttachments(reply.Attachments)})
 }
 
 func (reply *OutboundReply) UnmarshalJSON(documentBytes []byte) error {
@@ -123,15 +106,9 @@ func (reply *OutboundReply) UnmarshalJSON(documentBytes []byte) error {
 	if errorValue := json.Unmarshal(documentBytes, &document); errorValue != nil {
 		return errorValue
 	}
-	reply.Message = document.Message
-	reply.TaskRunID = document.TaskRunID
-	reply.ReplyKind = document.ReplyKind
-	reply.RawEventID = document.RawEventID
-	reply.OutboxID = document.OutboxID
+	*reply = OutboundReply(document.plainOutboundReply)
 	reply.Attachments = fileAttachmentsFromOutboundReplyAttachments(document.Attachments)
 	reply.RecoveryActions = append([]toolcontract.RecoveryAction{}, document.RecoveryActions...)
-	reply.FailureNotice = document.FailureNotice
-	reply.Interaction = document.Interaction
 	return nil
 }
 
@@ -234,15 +211,8 @@ type VisibleContextMessage struct {
 }
 
 type HTTPParseResult struct {
-	Event             PlatformInboundEvent
-	HasEvent          bool
-	ImmediateResponse *HTTPResponse
-}
-
-type HTTPResponse struct {
-	StatusCode  int
-	ContentType string
-	Body        []byte
+	Event    PlatformInboundEvent
+	HasEvent bool
 }
 
 type ConnectorRuntimeResult struct {
@@ -262,31 +232,6 @@ func (event PlatformInboundEvent) DedupeKey() string {
 
 func (event PlatformInboundEvent) ExternalEventID() string {
 	return firstNonEmptyString(strings.TrimSpace(event.EventID), strings.TrimSpace(event.MessageID))
-}
-
-func (event *PlatformInboundEvent) UnmarshalJSON(document []byte) error {
-	type platformInboundEvent PlatformInboundEvent
-	var parsedEvent platformInboundEvent
-	if errorValue := json.Unmarshal(document, &parsedEvent); errorValue != nil {
-		return errorValue
-	}
-
-	var rawFields map[string]interface{}
-	if errorValue := json.Unmarshal(document, &rawFields); errorValue == nil {
-		if len(parsedEvent.LegacyFields) == 0 {
-			parsedEvent.LegacyFields = rawFields
-		}
-	}
-
-	if strings.TrimSpace(parsedEvent.Prompt) == "" {
-		parsedEvent.Prompt = stringField(rawFields, "text")
-	}
-	if strings.TrimSpace(parsedEvent.SenderID) == "" {
-		parsedEvent.SenderID = stringField(rawFields, "senderUserID")
-	}
-
-	*event = PlatformInboundEvent(parsedEvent)
-	return nil
 }
 
 func (visibleContext VisibleContext) ToAgentVisibleContext() agentcontract.VisibleContext {
@@ -367,19 +312,4 @@ func attachmentMaterialID(attachment InputAttachment) string {
 
 func responseLanguageForEvent(event PlatformInboundEvent) string {
 	return toolcontract.ResolveResponseLanguage(event.ResponseLanguage, event.Context.ResponseLanguage)
-}
-
-func stringField(fields map[string]interface{}, name string) string {
-	if fields == nil {
-		return ""
-	}
-	value, isFound := fields[name]
-	if !isFound {
-		return ""
-	}
-	stringValue, isString := value.(string)
-	if !isString {
-		return ""
-	}
-	return strings.TrimSpace(stringValue)
 }

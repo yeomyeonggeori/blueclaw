@@ -24,7 +24,7 @@ func (open openInteractions) isEmpty() bool {
 
 func (connectorRuntime *ConnectorRuntime) readOpenInteractions(turn *inboundTurn) openInteractions {
 	open := openInteractions{}
-	open.ask, open.hasAsk = connectorRuntime.findPendingAskInteraction(turn.personID, turn.platform, turn.event, turn.taskWaitResolution)
+	open.ask, open.hasAsk = connectorRuntime.findPendingAskInteraction(turn.personID, turn.event)
 	if open.hasAsk {
 		open.askTaskRun, _ = connectorRuntime.taskRunService.FindTaskRun(open.ask.TaskRunID)
 	}
@@ -82,7 +82,6 @@ func (connectorRuntime *ConnectorRuntime) settleOpenInteractions(ctx context.Con
 func (connectorRuntime *ConnectorRuntime) settleAsk(turn *inboundTurn, ask AskInteraction) {
 	connectorRuntime.recordAskReplyClassified(turn, ask)
 	connectorRuntime.appendAskResolvedEvent(ask, turn.event)
-	connectorRuntime.resolveTaskWaitToken(turn.taskWaitResolution)
 	turn.pendingAskInteraction = ask
 	turn.hasPendingAskInteraction = true
 }

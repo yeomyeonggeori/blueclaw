@@ -33,30 +33,13 @@ func (connectorEventHandler *ConnectorEventHandler) HandleConnectorEvent() http.
 		}
 
 		platform := request.PathValue("platform")
-		result, immediateResponse, errorValue := connectorEventHandler.ConnectorRuntime.HandleHTTPEvent(request.Context(), platform, request)
+		result, errorValue := connectorEventHandler.ConnectorRuntime.HandleHTTPEvent(request.Context(), platform, request)
 		if errorValue != nil {
 			http.Error(responseWriter, errorValue.Error(), http.StatusBadRequest)
 			return
 		}
-		if immediateResponse != nil {
-			writeRawResponse(responseWriter, immediateResponse)
-			return
-		}
-
 		writeJSONResponse(responseWriter, http.StatusOK, result)
 	}
-}
-
-func writeRawResponse(responseWriter http.ResponseWriter, response *connectors.HTTPResponse) {
-	statusCode := response.StatusCode
-	if statusCode == 0 {
-		statusCode = http.StatusOK
-	}
-	if response.ContentType != "" {
-		responseWriter.Header().Set("Content-Type", response.ContentType)
-	}
-	responseWriter.WriteHeader(statusCode)
-	_, _ = responseWriter.Write(response.Body)
 }
 
 func writeJSONResponse(responseWriter http.ResponseWriter, statusCode int, responseDocument interface{}) {

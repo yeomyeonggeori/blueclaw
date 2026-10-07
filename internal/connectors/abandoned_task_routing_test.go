@@ -51,7 +51,7 @@ func TestASupersededRunReclaimedBeforeTheCancelStillSaysItWasSuperseded(t *testi
 		t.Fatal("expected the unowned run to be reclaimed")
 	}
 
-	connectorRuntime.cancelPendingSourceTask("person-1", "test", "direct-1", "message-replaced")
+	connectorRuntime.cancelPendingSourceTask("person-1", "message-replaced")
 
 	if !connectorTaskEventsContain(connectorRuntime, reclaimedTaskRun.TaskRunID, agentcontract.TaskEventTaskSupersededByMessage, "message-replaced") {
 		t.Fatal("the ledger has to keep the fact that the requester replaced this run")
@@ -76,7 +76,7 @@ func TestASupersedeIsRecordedEvenWhenTheCancelTransitionFails(t *testing.T) {
 	taskEventService.AppendTaskEvent(runningTaskRun.TaskRunID, agentcontract.TaskEventAgentTaskSource, agentruntime.MarshalBody(map[string]string{"sourceReference": "message-replaced"}))
 	taskRunRepository.transitionError = errors.New("the store refused the write")
 
-	connectorRuntime.cancelPendingSourceTask("person-1", "test", "direct-1", "message-replaced")
+	connectorRuntime.cancelPendingSourceTask("person-1", "message-replaced")
 
 	if storedTaskRun := taskRunRepository.taskRuns[runningTaskRun.TaskRunID]; storedTaskRun.Status != task.TaskStatusRunning {
 		t.Fatalf("stored status = %s, want the cancel to have failed so the branch under test is reached", storedTaskRun.Status)

@@ -3,7 +3,6 @@ package acpsession
 import (
 	"context"
 	"strings"
-	"time"
 
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
@@ -11,7 +10,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
-	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 )
 
 func (agent *Agent) reissueHeldPermissions(ctx context.Context, sessionID acp.SessionId, sessionContext SessionContext) {
@@ -51,25 +49,21 @@ func (agent *Agent) reissueHeldPermission(ctx context.Context, sessionID acp.Ses
 	)
 	title := strings.TrimSpace(heldCall.Confirmation)
 	replyTargetID := firstNonEmpty(taskRun.OriginReplyTargetID, sessionContext.Addressing.ReplyTargetID)
-	choices := approvalgate.OfferedChoices(agent.taskRunStore.ListTaskEvent(taskRun.TaskRunID))
-	options := permissionOptions(choices)
+	options := permissionOptions(approvalgate.OfferedChoices(agent.taskRunStore.ListTaskEvent(taskRun.TaskRunID)))
 	// The client answers with the person's words, and the router that reads them
 	// is only offered an approval when the runtime can say which call is waiting.
-	agent.permissionRelay.holdWaitingCall(toolCallID, waitingCall{
-		approvalRequest: mcpserver.ApprovalRequest{
-			RequesterPersonID: sessionContext.Requester.PersonID,
-			TaskRunID:         taskRun.TaskRunID,
-			ToolName:          heldCall.ToolName,
-			ToolInput:         heldCall.ToolInput,
-			ApprovalScope:     heldCall.ApprovalScope,
-			Prompt:            taskRun.Prompt,
-			Platform:          sessionContext.Addressing.Platform,
-			ConversationID:    sessionContext.Addressing.ConversationID,
-			ReplyTargetID:     replyTargetID,
-		},
-		confirmation: title,
-		options:      options,
-	})
+	approvalRequest := mcpserver.ApprovalRequest{
+		RequesterPersonID: sessionContext.Requester.PersonID,
+		TaskRunID:         taskRun.TaskRunID,
+		ToolName:          heldCall.ToolName,
+		ToolInput:         heldCall.ToolInput,
+		ApprovalScope:     heldCall.ApprovalScope,
+		Prompt:            taskRun.Prompt,
+		Platform:          sessionContext.Addressing.Platform,
+		ConversationID:    sessionContext.Addressing.ConversationID,
+		ReplyTargetID:     replyTargetID,
+	}
+	agent.permissionRelay.holdWaitingCall(toolCallID, waitingCall{approvalRequest: approvalRequest, confirmation: title, options: options})
 	defer agent.permissionRelay.releaseWaitingCall(toolCallID)
 	response, errorValue := agent.connection.RequestPermission(ctx, acp.RequestPermissionRequest{
 		SessionId: sessionID,
@@ -85,28 +79,19 @@ func (agent *Agent) reissueHeldPermission(ctx context.Context, sessionID acp.Ses
 	if !isAnswered {
 		return
 	}
-	if choice, isChosen := answer.ChosenFrom(choices); isChosen && choice.DefersTheCall() {
-		agent.resumeAnsweredTaskRun(ctx, sessionID, sessionContext, taskRun, agent.deferHeldCall(ctx, sessionContext, taskRun, heldCall, choice))
+	settlement, errorValue := agent.answerSettler.SettleAnswer(ctx, approvalRequest, answer)
+	if errorValue != nil {
+		agent.logger.Warn("acpsession.permission.reissued_answer_not_settled", "taskRunID", taskRun.TaskRunID, "error", errorValue.Error())
 		return
 	}
-	if choice, isChosen := answer.ChosenFrom(choices); isChosen {
-		approvalgate.RecordChoiceAnswer(agent.taskRunStore, taskRun.TaskRunID, choice)
-	}
-	approvalgate.SettleSignal(agent.taskRunStore, taskRun.TaskRunID, &answer.Signal, "acp_permission_reload")
-	agent.resumeAnsweredTaskRun(ctx, sessionID, sessionContext, taskRun, nil)
+	agent.resumeAnsweredTaskRun(ctx, sessionID, sessionContext, taskRun, settledCallsOf(settlement))
 }
 
-func (agent *Agent) deferHeldCall(ctx context.Context, sessionContext SessionContext, taskRun agentcontract.TaskRun, heldCall agentcontract.HeldCall, choice holdrecord.Choice) []agentcontract.CarriedOutCall {
-	return []agentcontract.CarriedOutCall{approvalgate.DeferHeldCall(ctx, agent.approvalDeferrer, heldCall, approvalgate.DeferralRequest{
-		TaskRunID:         taskRun.TaskRunID,
-		RequesterPersonID: sessionContext.Requester.PersonID,
-		Platform:          sessionContext.Addressing.Platform,
-		ConversationID:    sessionContext.Addressing.ConversationID,
-		ReplyTargetID:     firstNonEmpty(taskRun.OriginReplyTargetID, sessionContext.Addressing.ReplyTargetID),
-		Prompt:            taskRun.Prompt,
-		Choice:            choice,
-		ReferenceTime:     time.Now().UTC(),
-	})}
+func settledCallsOf(settlement approvalgate.AnswerSettlement) []agentcontract.CarriedOutCall {
+	if settlement.DeferredCall == nil {
+		return nil
+	}
+	return []agentcontract.CarriedOutCall{*settlement.DeferredCall}
 }
 
 func (agent *Agent) resumeAnsweredTaskRun(ctx context.Context, sessionID acp.SessionId, sessionContext SessionContext, taskRun agentcontract.TaskRun, settledCalls []agentcontract.CarriedOutCall) {
