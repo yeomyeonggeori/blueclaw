@@ -8,29 +8,34 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
-var reactionEmojiDescriptions = map[string]string{
-	"white_check_mark":       "acknowledged, seen, done",
-	"eyes":                   "looking at it now",
-	"+1":                     "agreement or approval",
-	"ok_hand":                "understood, will do",
-	"pray":                   "thanks, or please, aimed at the assistant",
-	"heart":                  "warmth or appreciation",
-	"tada":                   "celebration of a result",
-	"clap":                   "praise for someone's work",
-	"raised_hands":           "shared celebration or gratitude",
-	"fire":                   "impressive results",
-	"rocket":                 "a launch or shipped work",
-	"sparkles":               "something new or polished",
-	"100":                    "strong agreement with an impressive result",
-	"muscle":                 "cheering effort on",
-	"wave":                   "a greeting or a farewell",
-	"thinking_face":          "an open question worth considering",
-	"memo":                   "noted, written down",
-	"hourglass_flowing_sand": "it will take a while",
-	"mag":                    "looking into it",
-	"bulb":                   "a good idea",
-	"sob":                    "sympathy for bad news",
-	"sweat_smile":            "an awkward or self-deprecating joke",
+type reactionEmoji struct {
+	name        string
+	description string
+}
+
+var reactionEmojis = []reactionEmoji{
+	{"white_check_mark", "acknowledged, seen, done"},
+	{"eyes", "looking at it now"},
+	{"+1", "agreement or approval"},
+	{"ok_hand", "understood, will do"},
+	{"pray", "thanks, or please, aimed at the assistant"},
+	{"heart", "warmth or appreciation"},
+	{"tada", "celebration of a result"},
+	{"clap", "praise for someone's work"},
+	{"raised_hands", "shared celebration or gratitude"},
+	{"fire", "impressive results"},
+	{"rocket", "a launch or shipped work"},
+	{"sparkles", "something new or polished"},
+	{"100", "strong agreement with an impressive result"},
+	{"muscle", "cheering effort on"},
+	{"wave", "a greeting or a farewell"},
+	{"thinking_face", "an open question worth considering"},
+	{"memo", "noted, written down"},
+	{"hourglass_flowing_sand", "it will take a while"},
+	{"mag", "looking into it"},
+	{"bulb", "a good idea"},
+	{"sob", "sympathy for bad news"},
+	{"sweat_smile", "an awkward or self-deprecating joke"},
 }
 
 var gatewayQuestionNames = []string{
@@ -157,12 +162,8 @@ func addressingQuestions(about string, agentName string) map[string]model.Decisi
 
 func reactionEmojiOptionDescriptions() map[string]string {
 	descriptions := map[string]string{}
-	for _, emojiName := range ReactionEmojiNames {
-		description := reactionEmojiDescriptions[emojiName]
-		if description == "" {
-			description = emojiName
-		}
-		descriptions[emojiName] = description
+	for _, emoji := range reactionEmojis {
+		descriptions[emoji.name] = emoji.description
 	}
 	return descriptions
 }

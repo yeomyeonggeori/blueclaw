@@ -37,10 +37,6 @@ func (adapter *reactingAdapter) ParseHTTPEvent(context.Context, *http.Request) (
 	return connectors.HTTPParseResult{}, errors.New("this adapter parses nothing")
 }
 
-func (adapter *reactingAdapter) ParseRealtimeEvent(context.Context, []byte, string) (connectors.PlatformInboundEvent, bool, error) {
-	return connectors.PlatformInboundEvent{}, false, errors.New("this adapter parses nothing")
-}
-
 func (adapter *reactingAdapter) ResolveIdentity(context.Context, string) (identity.PlatformAccountIdentity, error) {
 	return identity.PlatformAccountIdentity{}, errors.New("this adapter resolves nobody")
 }

@@ -4,18 +4,11 @@ import (
 	"context"
 	"log/slog"
 	"strings"
-	"time"
-
-	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 const ambientDutyLaunchConfidenceThreshold = 0.7
 
 const attachmentsOnlyUninvitedReason = "attachments_only_uninvited"
-
-type AddressingDecider interface {
-	DecideAddressing(context.Context, Request) (AddressingDecision, error)
-}
 
 type Decision struct {
 	ShouldLaunch  bool
@@ -26,39 +19,22 @@ type Decision struct {
 }
 
 type Request struct {
-	Prompt           string
 	MessageID        string
 	ConversationType string
 	BotMentioned     bool
 	AttachmentsOnly  bool
-	MessageSentAt    time.Time
-	SenderName       string
-	SenderHandle     string
-	VisibleContext   agentcontract.VisibleContext
 }
 
-type Gate struct {
-	addressingDecider AddressingDecider
-	logger            *slog.Logger
-}
-
-func NewGate(addressingDecider AddressingDecider, logger *slog.Logger) *Gate {
-	if logger == nil {
-		logger = slog.Default()
-	}
-	return &Gate{addressingDecider: addressingDecider, logger: logger}
-}
-
-func (gate *Gate) Resolve(ctx context.Context, platform string, request Request) Decision {
+func Resolve(ctx context.Context, logger *slog.Logger, platform string, request Request, decideAddressing func(context.Context) (AddressingDecision, error)) Decision {
 	if !IsMultiPersonConversation(request.ConversationType) {
 		return Decision{ShouldLaunch: true}
 	}
 	if IsIgnoredWithoutDeciding(request) {
 		return Decision{IgnoreReason: attachmentsOnlyUninvitedReason}
 	}
-	addressingDecision, errorValue := gate.addressingDecider.DecideAddressing(ctx, request)
+	addressingDecision, errorValue := decideAddressing(ctx)
 	if errorValue != nil {
-		gate.logger.Warn("connector."+platform+".addressing.decision_failed", slog.String("messageID", request.MessageID), slog.String("error", errorValue.Error()))
+		logger.Warn("connector."+platform+".addressing.decision_failed", slog.String("messageID", request.MessageID), slog.String("error", errorValue.Error()))
 		if request.BotMentioned {
 			return Decision{ShouldLaunch: true}
 		}

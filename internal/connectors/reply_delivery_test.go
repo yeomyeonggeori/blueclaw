@@ -53,7 +53,7 @@ func TestAQuestionTheOutboxSendsIsRecordedOnce(t *testing.T) {
 	connectorRuntime.UseEventRepository(repository)
 	waiting := seedWaitingQuestionAtRoot(t, connectorRuntime, "message-clock-out")
 	event := rootMessage("message-clock-out", "message-clock-out")
-	replyTarget, _ := connectorRuntime.buildReplyTarget(context.Background(), adapter, event)
+	replyTarget := replyTargetOf(event)
 
 	if _, isSent := connectorRuntime.sendUserNoticeReply(withConnectorEvent(context.Background(), event), adapter.Name(), event, waiting.TaskRunID, replyTarget, waitingQuestionResult(waiting), connectorRuntime.enqueueConnectorReply); !isSent {
 		t.Fatal("the question was not handed to the outbox")

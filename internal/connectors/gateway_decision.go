@@ -196,15 +196,6 @@ func inboundDecisionMessage(event PlatformInboundEvent) inboundengagement.Messag
 	}
 }
 
-type judgmentAddressingDecider struct {
-	judge func(context.Context) (inboundengagement.Judgment, error)
-}
-
-func (decider judgmentAddressingDecider) DecideAddressing(ctx context.Context, _ inboundengagement.Request) (inboundengagement.AddressingDecision, error) {
-	judgment, errorValue := decider.judge(ctx)
-	return judgment.Addressing, errorValue
-}
-
 func (connectorRuntime *ConnectorRuntime) relatesToActiveTask(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) bool {
 	judgment, errorValue := connectorRuntime.judgeInboundMessage(ctx, adapter, event)
 	if errorValue != nil {

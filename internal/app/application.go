@@ -33,7 +33,6 @@ const backgroundLoopStopGrace = 10 * time.Second
 type Application struct {
 	httpServer                  *http.Server
 	connectorRuntime            *connectors.ConnectorRuntime
-	connectorTransports         []connectors.ConnectorTransport
 	taskRunService              *task.TaskRunService
 	interruptedTaskResumer      interruptedTaskResumer
 	runtimeLogger               *runtimelogging.PersistentLogger
@@ -42,7 +41,6 @@ type Application struct {
 	database                    postgres.Database
 	startupError                error
 	connectorRuntimeCancel      context.CancelFunc
-	connectorTransportCancel    context.CancelFunc
 	interruptedTaskResumeCancel context.CancelFunc
 	scheduleCancel              context.CancelFunc
 	logRetentionCancel          context.CancelFunc
@@ -196,7 +194,6 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 }
 
 func newApplication(components applicationComponents) *Application {
-	connectorTransports := newConnectorTransports()
 	components.foundation.logger.Info("application.initializing", "stage", "ready")
 	return &Application{
 		httpServer: &http.Server{
@@ -204,7 +201,6 @@ func newApplication(components applicationComponents) *Application {
 			Handler: components.router,
 		},
 		connectorRuntime:       components.connectorRuntime,
-		connectorTransports:    connectorTransports,
 		taskRunService:         components.services.taskRunService,
 		interruptedTaskResumer: components.connectorRuntime,
 		runtimeLogger:          components.foundation.runtimeLogger,

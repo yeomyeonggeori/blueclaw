@@ -39,7 +39,7 @@ func (connectorRuntime *ConnectorRuntime) settleBusyDecision(
 	case inboundengagement.BusyRouteCancel:
 		return connectorRuntime.handleBusyCancelMessage(ctx, platform, event, replyTarget, activeTaskRun, sendReply)
 	case inboundengagement.BusyRouteNewTask:
-		connectorRuntime.supersedeBusyTask(event, platform, activeTaskRun)
+		connectorRuntime.supersedeBusyTask(event, activeTaskRun)
 		return busyMessageResult{clearActiveGoal: true}, nil
 	case inboundengagement.BusyRouteUnrelated:
 		return busyMessageResult{connectorResult: ConnectorRuntimeResult{Handled: true, Platform: platform, Ignored: true, Reason: "busy_unrelated"}, isHandled: true}, nil
@@ -61,15 +61,31 @@ func (connectorRuntime *ConnectorRuntime) handleBusyCancelMessage(
 		"messageID":       event.MessageID,
 		"latestUserInput": strings.TrimSpace(event.Prompt),
 	}))
-	reply, errorValue := connectorRuntime.generateBusyReply(ctx, event, activeTaskRun, "cancel")
+	busyResult, errorValue := connectorRuntime.sendBusyReply(ctx, busyReply{platform: platform, event: event, replyTarget: replyTarget, taskRun: activeTaskRun, route: "cancel", kind: connectorReplyKindUserNotice, reason: "busy_cancel"}, sendReply)
+	busyResult.clearActiveGoal = errorValue == nil
+	return busyResult, errorValue
+}
+
+type busyReply struct {
+	platform    string
+	event       PlatformInboundEvent
+	replyTarget ReplyTarget
+	taskRun     task.TaskRun
+	route       string
+	kind        string
+	reason      string
+}
+
+func (connectorRuntime *ConnectorRuntime) sendBusyReply(ctx context.Context, busy busyReply, sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error)) (busyMessageResult, error) {
+	reply, errorValue := connectorRuntime.generateBusyReply(ctx, busy.event, busy.taskRun, busy.route)
 	if errorValue != nil {
 		return busyMessageResult{}, errorValue
 	}
-	dispatchID, errorValue := sendReply(ctx, replyTarget, OutboundReply{Message: reply, TaskRunID: activeTaskRun.TaskRunID, ReplyKind: connectorReplyKindUserNotice})
+	dispatchID, errorValue := sendReply(ctx, busy.replyTarget, OutboundReply{Message: reply, TaskRunID: busy.taskRun.TaskRunID, ReplyKind: busy.kind})
 	if errorValue != nil {
 		return busyMessageResult{}, errorValue
 	}
-	return busyMessageResult{connectorResult: ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: activeTaskRun.TaskRunID, Reason: "busy_cancel", ReplyDispatchID: dispatchID}, isHandled: true, clearActiveGoal: true}, nil
+	return busyMessageResult{connectorResult: ConnectorRuntimeResult{Handled: true, Platform: busy.platform, TaskRunID: busy.taskRun.TaskRunID, Reason: busy.reason, ReplyDispatchID: dispatchID}, isHandled: true}, nil
 }
 
 func (connectorRuntime *ConnectorRuntime) handleBusyStatusMessage(
@@ -83,15 +99,7 @@ func (connectorRuntime *ConnectorRuntime) handleBusyStatusMessage(
 	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskStatusRequested, agentruntime.MarshalBody(map[string]string{
 		"messageID": event.MessageID,
 	}))
-	reply, errorValue := connectorRuntime.generateBusyReply(ctx, event, activeTaskRun, "status")
-	if errorValue != nil {
-		return busyMessageResult{}, errorValue
-	}
-	dispatchID, errorValue := sendReply(ctx, replyTarget, OutboundReply{Message: reply, TaskRunID: activeTaskRun.TaskRunID, ReplyKind: connectorReplyKindCheckpoint})
-	if errorValue != nil {
-		return busyMessageResult{}, errorValue
-	}
-	return busyMessageResult{connectorResult: ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: activeTaskRun.TaskRunID, Reason: "busy_status", ReplyDispatchID: dispatchID}, isHandled: true}, nil
+	return connectorRuntime.sendBusyReply(ctx, busyReply{platform: platform, event: event, replyTarget: replyTarget, taskRun: activeTaskRun, route: "status", kind: connectorReplyKindCheckpoint, reason: "busy_status"}, sendReply)
 }
 
 func (connectorRuntime *ConnectorRuntime) handleBusySteerMessage(
@@ -107,15 +115,7 @@ func (connectorRuntime *ConnectorRuntime) handleBusySteerMessage(
 		return connectorRuntime.resumePausedTaskForSteer(ctx, platform, event, replyTarget, activeTaskRun, instruction, sendReply)
 	}
 	connectorRuntime.appendSteerRequestedEvent(activeTaskRun.TaskRunID, event, instruction)
-	reply, errorValue := connectorRuntime.generateBusyReply(ctx, event, activeTaskRun, "steer")
-	if errorValue != nil {
-		return busyMessageResult{}, errorValue
-	}
-	dispatchID, errorValue := sendReply(ctx, replyTarget, OutboundReply{Message: reply, TaskRunID: activeTaskRun.TaskRunID, ReplyKind: connectorReplyKindCheckpoint})
-	if errorValue != nil {
-		return busyMessageResult{}, errorValue
-	}
-	return busyMessageResult{connectorResult: ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: activeTaskRun.TaskRunID, Reason: "busy_steer", ReplyDispatchID: dispatchID}, isHandled: true}, nil
+	return connectorRuntime.sendBusyReply(ctx, busyReply{platform: platform, event: event, replyTarget: replyTarget, taskRun: activeTaskRun, route: "steer", kind: connectorReplyKindCheckpoint, reason: "busy_steer"}, sendReply)
 }
 
 func (connectorRuntime *ConnectorRuntime) appendSteerRequestedEvent(taskRunID string, event PlatformInboundEvent, instruction string) {
@@ -191,15 +191,7 @@ func (connectorRuntime *ConnectorRuntime) replySteerResumeUnavailable(
 	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskSteerResumeUnavailable, agentruntime.MarshalBody(map[string]string{
 		"messageID": event.MessageID,
 	}))
-	reply, errorValue := connectorRuntime.generateBusyReply(ctx, event, activeTaskRun, "steer")
-	if errorValue != nil {
-		return busyMessageResult{}, errorValue
-	}
-	dispatchID, errorValue := sendReply(ctx, replyTarget, OutboundReply{Message: reply, TaskRunID: activeTaskRun.TaskRunID, ReplyKind: connectorReplyKindUserNotice})
-	if errorValue != nil {
-		return busyMessageResult{}, errorValue
-	}
-	return busyMessageResult{connectorResult: ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: activeTaskRun.TaskRunID, Reason: "busy_steer_resume_unavailable", ReplyDispatchID: dispatchID}, isHandled: true}, nil
+	return connectorRuntime.sendBusyReply(ctx, busyReply{platform: platform, event: event, replyTarget: replyTarget, taskRun: activeTaskRun, route: "steer", kind: connectorReplyKindUserNotice, reason: "busy_steer_resume_unavailable"}, sendReply)
 }
 
 func (connectorRuntime *ConnectorRuntime) replaceBusyTask(event PlatformInboundEvent, activeTaskRun task.TaskRun) {
@@ -210,7 +202,7 @@ func (connectorRuntime *ConnectorRuntime) replaceBusyTask(event PlatformInboundE
 	}))
 }
 
-func (connectorRuntime *ConnectorRuntime) supersedeBusyTask(event PlatformInboundEvent, platform string, activeTaskRun task.TaskRun) {
+func (connectorRuntime *ConnectorRuntime) supersedeBusyTask(event PlatformInboundEvent, activeTaskRun task.TaskRun) {
 	_, _ = connectorRuntime.taskRunService.CancelTaskRunWithReason(activeTaskRun.TaskRunID, activeTaskRun.RequesterPersonID, "superseded_by_new_message")
 	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskSupersededByMessage, agentruntime.MarshalBody(map[string]string{
 		"messageID":       event.MessageID,

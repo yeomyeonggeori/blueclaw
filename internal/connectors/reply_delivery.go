@@ -13,12 +13,12 @@ func (connectorRuntime *ConnectorRuntime) recordingDelivery(deliver ReplySender)
 			return dispatchID, errorValue
 		}
 		event, _ := connectorEventFromContext(ctx)
-		connectorRuntime.recordReplySent(event, replyTarget, reply, dispatchID)
+		connectorRuntime.recordReplySent(event, reply, dispatchID)
 		return dispatchID, nil
 	}
 }
 
-func (connectorRuntime *ConnectorRuntime) recordReplySent(event PlatformInboundEvent, replyTarget ReplyTarget, reply OutboundReply, dispatchID string) {
+func (connectorRuntime *ConnectorRuntime) recordReplySent(event PlatformInboundEvent, reply OutboundReply, dispatchID string) {
 	connectorRuntime.sentAttachmentSources.RecordReply(event.Platform, dispatchID, reply.Attachments)
 	connectorRuntime.appendConnectorReplyEvent(reply.TaskRunID, agentcontract.TaskEventConnectorReplySent, connectorReplyEventBody(event, reply, reply.OutboxID, dispatchID, ""))
 }

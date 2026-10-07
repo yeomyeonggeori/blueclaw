@@ -162,10 +162,10 @@ func (connectorRuntime *ConnectorRuntime) cancelPendingRequestTask(event Platfor
 	if !isFound {
 		return
 	}
-	connectorRuntime.cancelPendingSourceTask(personID, event.Platform, event.ConversationID, event.DedupeKey())
+	connectorRuntime.cancelPendingSourceTask(personID, event.DedupeKey())
 }
 
-func (connectorRuntime *ConnectorRuntime) cancelPendingSourceTask(personID string, platform string, conversationID string, sourceReference string) {
+func (connectorRuntime *ConnectorRuntime) cancelPendingSourceTask(personID string, sourceReference string) {
 	taskRun, isFound := connectorRuntime.findTaskRunBySourceReference(personID, sourceReference)
 	if !isFound || taskRun.Status == task.TaskStatusCompleted {
 		return

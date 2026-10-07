@@ -70,11 +70,11 @@ func (connectorRuntime *ConnectorRuntime) dispatchTaskReply(
 			connectorRuntime.clearEngagedAckReaction(ctx, platform, adapter, event, engagedAckEmojiName)
 		}
 		if reason != "consume_reacted" && !isMultiPersonConversation(event) && strings.TrimSpace(turnResult.FinishMessage) != "" {
-			result, errorValue := connectorRuntime.sendCompletedTaskReply(ctx, platform, event, taskRunID, replyTarget, turnResult, sendReply)
+			result := connectorRuntime.sendCompletedTaskReply(ctx, platform, event, taskRunID, replyTarget, turnResult, sendReply)
 			if result.ReplyDispatchID != "" {
 				result.Reason = "consume_fallback_sent"
 			}
-			return result, errorValue
+			return result, nil
 		}
 		return ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: taskRunID, Reason: reason}, nil
 	case taskReplyDecisionSuppressDelivered:
@@ -103,11 +103,11 @@ func (connectorRuntime *ConnectorRuntime) dispatchTaskReply(
 		}
 		return ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: taskRunID, Reason: decision.Reason}, nil
 	default:
-		result, errorValue := connectorRuntime.sendCompletedTaskReply(ctx, platform, event, taskRunID, replyTarget, turnResult, sendReply)
+		result := connectorRuntime.sendCompletedTaskReply(ctx, platform, event, taskRunID, replyTarget, turnResult, sendReply)
 		if result.ReplyDispatchID != "" {
 			connectorRuntime.clearEngagedAckReaction(ctx, platform, adapter, event, engagedAckEmojiName)
 		}
-		return result, errorValue
+		return result, nil
 	}
 }
 
@@ -119,7 +119,7 @@ func (connectorRuntime *ConnectorRuntime) sendCompletedTaskReply(
 	replyTarget ReplyTarget,
 	turnResult agentcontract.AgentTurnResult,
 	sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error),
-) (ConnectorRuntimeResult, error) {
+) ConnectorRuntimeResult {
 	dispatchID, errorValue := sendReply(ctx, replyTarget, OutboundReply{
 		Message:         turnResult.FinishMessage,
 		TaskRunID:       taskRunID,
@@ -130,10 +130,10 @@ func (connectorRuntime *ConnectorRuntime) sendCompletedTaskReply(
 	if errorValue != nil {
 		connectorRuntime.appendConnectorReplyEvent(taskRunID, agentcontract.TaskEventConnectorReplyFailed, connectorReplyEventBody(event, OutboundReply{TaskRunID: taskRunID, ReplyKind: connectorReplyKindSuccess}, "", "", errorValue.Error()))
 		connectorRuntime.logger.Error("connector."+platform+".outbound.failed", "messageID", event.MessageID, "taskRunID", taskRunID, "error", errorValue.Error())
-		return ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: taskRunID, Reason: "reply_failed"}, nil
+		return ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: taskRunID, Reason: "reply_failed"}
 	}
 	connectorRuntime.logger.Info("connector."+platform+".outbound.sent", "messageID", event.MessageID, "taskRunID", taskRunID, "replyDispatchID", dispatchID)
-	return ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: taskRunID, ReplyDispatchID: dispatchID}, nil
+	return ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: taskRunID, ReplyDispatchID: dispatchID}
 }
 
 func (connectorRuntime *ConnectorRuntime) agentAlreadyReplied(taskRunID string, deliveryTargets ...string) bool {

@@ -4015,10 +4015,6 @@ func (adapter *virtualAdapter) ParseHTTPEvent(context.Context, *http.Request) (c
 	return connectors.HTTPParseResult{}, errors.New("virtual adapter does not parse http")
 }
 
-func (adapter *virtualAdapter) ParseRealtimeEvent(context.Context, []byte, string) (connectors.PlatformInboundEvent, bool, error) {
-	return connectors.PlatformInboundEvent{}, false, errors.New("virtual adapter does not parse realtime")
-}
-
 func (adapter *virtualAdapter) ResolveIdentity(context.Context, string) (identity.PlatformAccountIdentity, error) {
 	return identity.PlatformAccountIdentity{
 		Platform:       "virtual",

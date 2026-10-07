@@ -81,14 +81,6 @@ func newAgentReplyStore(runtimeConfiguration config.RuntimeConfiguration) *apico
 	return apiconnector.NewPersistentReplyStore(filepath.Join(runtimeConfiguration.Terminal.WorkspaceRootPath, ".blueclaw", "state", "agent-replies.json"))
 }
 
-func newConnectorTransports() []connectors.ConnectorTransport {
-	connectorTransports := []connectors.ConnectorTransport{}
-	for _, platform := range capabilitycatalog.MessengerPlatformNames() {
-		connectorTransports = append(connectorTransports, connectors.NewHTTPWebhookTransport(platform+"-internal-ingress", platform))
-	}
-	return connectorTransports
-}
-
 func newChatdClient(runtimeConfiguration config.RuntimeConfiguration) capability.Client {
 	return capability.NewClient(capability.Configuration{
 		Endpoint: firstNonEmptyString(runtimeConfiguration.Connectors.Chatd.Endpoint, connectors.DefaultChatdEndpoint),

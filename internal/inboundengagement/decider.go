@@ -180,9 +180,9 @@ func withDuty(addressing AddressingDecision, dutyAnswer model.DecisionAnswer) Ad
 
 func knownReactionEmoji(name string) string {
 	normalizedName := strings.ToLower(strings.TrimSpace(name))
-	for _, allowedName := range ReactionEmojiNames {
-		if allowedName == normalizedName {
-			return allowedName
+	for _, emoji := range reactionEmojis {
+		if emoji.name == normalizedName {
+			return emoji.name
 		}
 	}
 	return ""

@@ -7,6 +7,8 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
+const DefaultReactionEmojiName = "white_check_mark"
+
 type Message struct {
 	MessageID         string
 	Prompt            string

@@ -233,15 +233,8 @@ type VisibleContextMessage struct {
 }
 
 type HTTPParseResult struct {
-	Event             PlatformInboundEvent
-	HasEvent          bool
-	ImmediateResponse *HTTPResponse
-}
-
-type HTTPResponse struct {
-	StatusCode  int
-	ContentType string
-	Body        []byte
+	Event    PlatformInboundEvent
+	HasEvent bool
 }
 
 type ConnectorRuntimeResult struct {

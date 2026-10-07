@@ -153,7 +153,7 @@ func TestConnectorRuntimeDefersNewTaskLaunchWhenQuiesced(t *testing.T) {
 		t.Fatalf("expected request: %v", errorValue)
 	}
 
-	result, _, errorValue := connectorRuntime.HandleHTTPEvent(context.Background(), adapter.Name(), request)
+	result, errorValue := connectorRuntime.HandleHTTPEvent(context.Background(), adapter.Name(), request)
 	if errorValue != nil {
 		t.Fatalf("expected http event to queue: %v", errorValue)
 	}
@@ -2673,7 +2673,7 @@ func TestConnectorRuntimeDetachesHTTPEventFromCanceledRequestContext(t *testing.
 		Event:    testInboundEvent("message-http"),
 	}
 
-	result, _, errorValue := connectorRuntime.HandleHTTPEvent(request.Context(), adapter.Name(), request)
+	result, errorValue := connectorRuntime.HandleHTTPEvent(request.Context(), adapter.Name(), request)
 	if errorValue != nil {
 		t.Fatalf("expected detached http event to process: %v", errorValue)
 	}
@@ -2694,7 +2694,7 @@ func TestConnectorRuntimeQueuesHTTPEventAndSendsReplyThroughOutbox(t *testing.T)
 		t.Fatalf("expected request: %v", errorValue)
 	}
 
-	result, _, errorValue := connectorRuntime.HandleHTTPEvent(context.Background(), adapter.Name(), request)
+	result, errorValue := connectorRuntime.HandleHTTPEvent(context.Background(), adapter.Name(), request)
 	if errorValue != nil {
 		t.Fatalf("expected http event to queue: %v", errorValue)
 	}
@@ -2752,7 +2752,7 @@ func TestConnectorRuntimeRecordsQueuedOutboxSendFailure(t *testing.T) {
 		t.Fatalf("expected request: %v", errorValue)
 	}
 
-	if _, _, errorValue := connectorRuntime.HandleHTTPEvent(context.Background(), adapter.Name(), request); errorValue != nil {
+	if _, errorValue := connectorRuntime.HandleHTTPEvent(context.Background(), adapter.Name(), request); errorValue != nil {
 		t.Fatalf("expected http event to queue: %v", errorValue)
 	}
 	if !connectorRuntime.processNextQueuedConnectorEvent(context.Background()) {
@@ -3092,10 +3092,6 @@ func (adapter *testAdapter) ParseHTTPEvent(context.Context, *http.Request) (HTTP
 	return adapter.httpParseResult, nil
 }
 
-func (adapter *testAdapter) ParseRealtimeEvent(context.Context, []byte, string) (PlatformInboundEvent, bool, error) {
-	return PlatformInboundEvent{}, false, nil
-}
-
 func (adapter *testAdapter) ResolveIdentity(context.Context, string) (identity.PlatformAccountIdentity, error) {
 	return identity.PlatformAccountIdentity{
 		Platform:       adapter.Name(),
@@ -3170,10 +3166,6 @@ func (adapter testAdapterWithoutReaction) Name() string {
 
 func (adapter testAdapterWithoutReaction) ParseHTTPEvent(ctx context.Context, request *http.Request) (HTTPParseResult, error) {
 	return adapter.adapter.ParseHTTPEvent(ctx, request)
-}
-
-func (adapter testAdapterWithoutReaction) ParseRealtimeEvent(ctx context.Context, payload []byte, source string) (PlatformInboundEvent, bool, error) {
-	return adapter.adapter.ParseRealtimeEvent(ctx, payload, source)
 }
 
 func (adapter testAdapterWithoutReaction) ResolveIdentity(ctx context.Context, senderID string) (identity.PlatformAccountIdentity, error) {

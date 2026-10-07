@@ -66,11 +66,7 @@ func (connectorRuntime *ConnectorRuntime) logInboundEventReceived(turn *inboundT
 }
 
 func (connectorRuntime *ConnectorRuntime) admitInboundTurn(ctx context.Context, turn *inboundTurn) (ConnectorRuntimeResult, bool, error) {
-	replyTarget, errorValue := connectorRuntime.buildReplyTarget(ctx, turn.adapter, turn.event)
-	if errorValue != nil {
-		return ConnectorRuntimeResult{}, true, errorValue
-	}
-	turn.replyTarget = replyTarget
+	turn.replyTarget = replyTargetOf(turn.event)
 	authorization, errorValue := connectorRuntime.authorizeSender(ctx, turn.adapter, turn.event)
 	if errorValue != nil {
 		connectorRuntime.logger.Error("connector."+turn.platform+".auth.failed", slog.String("messageID", turn.event.MessageID), slog.String("error", errorValue.Error()))
@@ -85,7 +81,7 @@ func (connectorRuntime *ConnectorRuntime) admitInboundTurn(ctx context.Context, 
 		return result, true, nil
 	}
 	for _, message := range turn.event.PreviousMessages {
-		connectorRuntime.cancelPendingSourceTask(turn.personID, turn.platform, turn.event.ConversationID, message.SourceReference)
+		connectorRuntime.cancelPendingSourceTask(turn.personID, message.SourceReference)
 	}
 	if result, isHandled := connectorRuntime.handleTaskControlIfRequested(ctx, turn.platform, turn.adapter, turn.event, turn.replyTarget, turn.personID, turn.sendReply); isHandled {
 		return result, true, nil

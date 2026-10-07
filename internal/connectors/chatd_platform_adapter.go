@@ -44,10 +44,6 @@ func (adapter ChatdPlatformAdapter) ParseHTTPEvent(_ context.Context, request *h
 	return HTTPParseResult{Event: event, HasEvent: true}, nil
 }
 
-func (adapter ChatdPlatformAdapter) ParseRealtimeEvent(_ context.Context, payload []byte, source string) (PlatformInboundEvent, bool, error) {
-	return ParseNormalizedInboundEvent(payload, adapter.Name(), source)
-}
-
 func (adapter ChatdPlatformAdapter) ResolveIdentity(ctx context.Context, senderUserID string) (identity.PlatformAccountIdentity, error) {
 	var response identity.PlatformAccountIdentity
 	errorValue := adapter.post(ctx, "identity.resolve", capabilityIdentityRequest{SenderID: senderUserID}, &response)

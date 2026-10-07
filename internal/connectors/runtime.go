@@ -54,7 +54,6 @@ type ConnectorOutboxRepository interface {
 type PlatformAdapter interface {
 	Name() string
 	ParseHTTPEvent(context.Context, *http.Request) (HTTPParseResult, error)
-	ParseRealtimeEvent(context.Context, []byte, string) (PlatformInboundEvent, bool, error)
 	ResolveIdentity(context.Context, string) (identity.PlatformAccountIdentity, error)
 	StartProgress(context.Context, ReplyTarget) error
 	StopProgress(context.Context, ReplyTarget) error
@@ -91,12 +90,6 @@ type MessageReactionAdapter interface {
 
 type MessageReactionRemovalAdapter interface {
 	RemoveReaction(context.Context, ReactionTarget) error
-}
-
-type ConnectorTransport interface {
-	Name() string
-	Platform() string
-	Start(context.Context)
 }
 
 const connectorInboxWorkerCount = 4
@@ -229,48 +222,24 @@ func (connectorRuntime *ConnectorRuntime) Start(ctx context.Context) {
 	connectorRuntime.mutex.Unlock()
 }
 
-func (connectorRuntime *ConnectorRuntime) HandleHTTPEvent(ctx context.Context, platform string, request *http.Request) (ConnectorRuntimeResult, *HTTPResponse, error) {
+func (connectorRuntime *ConnectorRuntime) HandleHTTPEvent(ctx context.Context, platform string, request *http.Request) (ConnectorRuntimeResult, error) {
 	adapter, errorValue := connectorRuntime.findAdapter(platform)
 	if errorValue != nil {
-		return ConnectorRuntimeResult{}, nil, errorValue
+		return ConnectorRuntimeResult{}, errorValue
 	}
 
 	parseResult, errorValue := adapter.ParseHTTPEvent(ctx, request)
 	if errorValue != nil {
 		connectorRuntime.logger.Warn("connector."+platform+".ingress.malformed", slog.String("source", "http"), slog.String("error", errorValue.Error()))
-		return ConnectorRuntimeResult{}, nil, errorValue
-	}
-	if parseResult.ImmediateResponse != nil {
-		return ConnectorRuntimeResult{Handled: true, Platform: platform}, parseResult.ImmediateResponse, nil
+		return ConnectorRuntimeResult{}, errorValue
 	}
 	if !parseResult.HasEvent {
-		return ConnectorRuntimeResult{Handled: true, Platform: platform, Ignored: true, Reason: "no_event"}, nil, nil
+		return ConnectorRuntimeResult{Handled: true, Platform: platform, Ignored: true, Reason: "no_event"}, nil
 	}
 
 	parseResult.Event.Platform = platform
 	parseResult.Event.Source = "http"
-	result, errorValue := connectorRuntime.HandleInboundEvent(detachedConnectorContext(ctx), adapter, parseResult.Event)
-	return result, nil, errorValue
-}
-
-func (connectorRuntime *ConnectorRuntime) HandleRealtimeEvent(ctx context.Context, platform string, payload []byte, source string) (ConnectorRuntimeResult, error) {
-	adapter, errorValue := connectorRuntime.findAdapter(platform)
-	if errorValue != nil {
-		return ConnectorRuntimeResult{}, errorValue
-	}
-
-	event, hasEvent, errorValue := adapter.ParseRealtimeEvent(ctx, payload, source)
-	if errorValue != nil {
-		connectorRuntime.logger.Warn("connector."+platform+".realtime.malformed", slog.String("source", source), slog.String("error", errorValue.Error()))
-		return ConnectorRuntimeResult{}, errorValue
-	}
-	if !hasEvent {
-		return ConnectorRuntimeResult{Handled: true, Platform: platform, Ignored: true, Reason: "no_event"}, nil
-	}
-
-	event.Platform = platform
-	event.Source = source
-	return connectorRuntime.HandleInboundEvent(ctx, adapter, event)
+	return connectorRuntime.HandleInboundEvent(detachedConnectorContext(ctx), adapter, parseResult.Event)
 }
 
 func (connectorRuntime *ConnectorRuntime) HandleInboundEvent(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (ConnectorRuntimeResult, error) {
@@ -316,25 +285,6 @@ func (connectorRuntime *ConnectorRuntime) HandleInboundEvent(ctx context.Context
 
 func (connectorRuntime *ConnectorRuntime) handleInboundEventImmediately(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (ConnectorRuntimeResult, error) {
 	eventKey := event.DedupeKey()
-	if connectorRuntime.eventRepository != nil {
-		isDuplicate, result, errorValue := connectorRuntime.eventRepository.TryInsertConnectorEvent(event)
-		if errorValue != nil {
-			return ConnectorRuntimeResult{}, errorValue
-		}
-		if isDuplicate {
-			result.Handled = true
-			result.Platform = adapter.Name()
-			result.Duplicate = true
-			connectorRuntime.logger.Info("connector."+adapter.Name()+".event.suppressed", slog.String("source", event.Source), slog.String("reason", "duplicate"), slog.String("messageID", event.MessageID))
-			return result, nil
-		}
-		result, errorValue = connectorRuntime.processPendingInboundEvent(ctx, adapter, event, connectorRuntime.recordingDelivery(adapter.SendReply), false)
-		if errorValue != nil {
-			return ConnectorRuntimeResult{}, errorValue
-		}
-		_ = connectorRuntime.eventRepository.SaveConnectorResult(event, result)
-		return result, nil
-	}
 	if result, isFound := connectorRuntime.findProcessedResult(eventKey); isFound {
 		result.Duplicate = true
 		connectorRuntime.logger.Info("connector."+adapter.Name()+".event.suppressed", slog.String("source", event.Source), slog.String("reason", "duplicate"), slog.String("messageID", event.MessageID))
@@ -725,16 +675,13 @@ func (connectorRuntime *ConnectorRuntime) askTheHostAboutUnknownAccount(ctx cont
 	return personID, isFound, false
 }
 
-func (connectorRuntime *ConnectorRuntime) buildReplyTarget(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (ReplyTarget, error) {
-	_ = ctx
-	_ = adapter
-
+func replyTargetOf(event PlatformInboundEvent) ReplyTarget {
 	return ReplyTarget{
 		ConversationID:     event.ConversationID,
 		ReplyTargetID:      event.ReplyTargetID,
 		AnsweringMessageID: event.MessageID,
 		DedupeKey:          event.DedupeKey(),
-	}, nil
+	}
 }
 
 func shouldStartProgressBeforeAddressing(event PlatformInboundEvent) bool {

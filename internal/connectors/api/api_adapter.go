@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -39,10 +38,6 @@ func (adapter Adapter) ParseHTTPEvent(_ context.Context, request *http.Request) 
 		return connectors.HTTPParseResult{}, errorValue
 	}
 	return connectors.HTTPParseResult{Event: event, HasEvent: true}, nil
-}
-
-func (adapter Adapter) ParseRealtimeEvent(context.Context, []byte, string) (connectors.PlatformInboundEvent, bool, error) {
-	return connectors.PlatformInboundEvent{}, false, errors.New("api realtime transport is not supported")
 }
 
 func (adapter Adapter) ResolveIdentity(_ context.Context, senderID string) (identity.PlatformAccountIdentity, error) {
