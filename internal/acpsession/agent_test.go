@@ -1077,8 +1077,8 @@ func TestTheReaderIsOfferedTheOptionsTheClientWasSentWithTheirMeanings(t *testin
 	if len(offered) != 2 || offered[0].ID != string(approveOnceOptionID) || offered[1].ID != string(rejectOnceOptionID) {
 		t.Fatalf("expected the ids the client was sent, got %+v", offered)
 	}
-	if offered[0].Meaning != approvalreply.AllowMeaning(sent[0].Name) || offered[1].Meaning != approvalreply.RejectMeaning {
-		t.Fatalf("expected an allowing option to mean going ahead with its name and a rejecting one to mean declining, got %+v", offered)
+	if offered[0].Meaning == approvalreply.RejectMeaning || offered[0].Meaning != approvalreply.OptionsOf([]approvalreply.Offer{{ID: "approve"}, {ID: "reject", IsDeclining: true}})[0].Meaning || offered[1].Meaning != approvalreply.RejectMeaning {
+		t.Fatalf("expected the only allowing option to mean going ahead as asked and a rejecting one to mean declining, got %+v", offered)
 	}
 }
 

@@ -7,17 +7,13 @@ import (
 )
 
 func ReplyOptionsOf(permissionOptions []acp.PermissionOption) []approvalreply.Option {
-	options := make([]approvalreply.Option, 0, len(permissionOptions))
+	offers := make([]approvalreply.Offer, 0, len(permissionOptions))
 	for _, permissionOption := range permissionOptions {
-		options = append(options, approvalreply.Option{ID: string(permissionOption.OptionId), Meaning: replyMeaningOf(permissionOption)})
+		offers = append(offers, approvalreply.Offer{ID: string(permissionOption.OptionId), Name: permissionOption.Name, IsDeclining: isDeclining(permissionOption)})
 	}
-	return options
+	return approvalreply.OptionsOf(offers)
 }
 
-func replyMeaningOf(permissionOption acp.PermissionOption) string {
-	switch permissionOption.Kind {
-	case acp.PermissionOptionKindRejectOnce, acp.PermissionOptionKindRejectAlways:
-		return approvalreply.RejectMeaning
-	}
-	return approvalreply.AllowMeaning(permissionOption.Name)
+func isDeclining(permissionOption acp.PermissionOption) bool {
+	return permissionOption.Kind == acp.PermissionOptionKindRejectOnce || permissionOption.Kind == acp.PermissionOptionKindRejectAlways
 }

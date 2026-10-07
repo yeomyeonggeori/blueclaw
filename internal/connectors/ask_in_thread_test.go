@@ -710,3 +710,23 @@ func TestAQuestionToARequesterTheMessengerRefusesIsUnreachable(t *testing.T) {
 		t.Fatalf("a refused question left the run %s without an unreachable verdict", taskRun.Status)
 	}
 }
+
+func TestAReplyInTheQuestionsThreadDecliningTheCallSettlesItWithoutRunningIt(t *testing.T) {
+	fixture := newThreadAskFixture(t, deleteApprovalScript(`{"answer":"reject"}`))
+
+	asking := fixture.send(context.Background(), threadReplyEvent("message-1", threadAskRequest))
+	taskRunID := fixture.awaitQuestionOnTheThread(t)
+	answer := fixture.await(t, fixture.send(context.Background(), threadReplyEvent("message-2", "아니, 이번에는 하지 마")))
+	result := fixture.await(t, asking)
+
+	if answer.Reason != ApprovalAnsweredInThreadReason || answer.TaskRunID != taskRunID || result.TaskRunID != taskRunID {
+		t.Fatalf("the reply settled %+v and the run ended as %+v, expected both on the run that asked", answer, result)
+	}
+	taskRun, _ := fixture.connectorRuntime.taskRunService.FindTaskRun(taskRunID)
+	if fixture.invokedToolCount() != 0 || fixture.taskRunCount() != 1 {
+		t.Fatalf("status %s with calls %v among %d runs, expected the declined call never to run", taskRun.Status, fixture.invokedTools, fixture.taskRunCount())
+	}
+	if fixture.connectorRuntime.isAwaitedInThread(taskRunID) {
+		t.Fatal("the question was still awaited after it was declined")
+	}
+}
