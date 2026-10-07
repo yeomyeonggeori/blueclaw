@@ -1,3 +1,4 @@
+import { matchFilter, type Filter } from "nostr-tools/filter";
 import { openRelaySocket } from "./relay-trust.ts";
 import type { BuzzEvent } from "./types.ts";
 import { verifiedEvent } from "./verified-event.ts";
@@ -16,7 +17,9 @@ export type RelayConnection = {
 };
 
 const authGraceMilliseconds = 3_000;
-const defaultRateLimitRetryMilliseconds = 1_000;
+// The Buzz relay refuses a REQ carrying more filters than this (MAX_FILTERS_PER_REQ
+// in crates/buzz-relay/src/protocol.rs, advertised as NIP-11 max_filters).
+const filtersPerRequest = 10;
 
 export class RelayQueryIncomplete extends Error {
 	constructor(readonly relayURL: string, readonly reason: string) {
@@ -43,18 +46,34 @@ function authorsThatAreNotPublicKeys(filter: object): unknown[] {
 	return authors.filter((author) => typeof author !== "string" || !/^[0-9a-f]{64}$/.test(author));
 }
 
-type PendingQuery = {
+type QueryAnswer = { events: BuzzEvent[]; complete: boolean; reason: string; isTimedOut: boolean };
+
+type PendingAsk = {
+	filter: object;
 	events: BuzzEvent[];
-	filter?: object;
-	isAskedAgain?: boolean;
-	resolve: (events: BuzzEvent[], complete: boolean, reason?: string) => void;
+	requestID: string;
+	timeoutHandle: ReturnType<typeof setTimeout>;
+	settle: (answer: QueryAnswer) => void;
 };
 
-type QueryAnswer = { events: BuzzEvent[]; complete: boolean; reason: string };
+type PendingRequest = { asks: PendingAsk[]; isAskedAgain: boolean };
 
-function retryDelayStatedIn(reason: string): number {
+function retryDelayStatedIn(reason: string, shortestMilliseconds: number): number {
 	const stated = /retry in (\d+)s/.exec(reason);
-	return stated ? Number(stated[1]) * 1_000 : defaultRateLimitRetryMilliseconds;
+	return Math.max(stated ? Number(stated[1]) * 1_000 : 0, shortestMilliseconds);
+}
+
+function answers(ask: PendingAsk, event: BuzzEvent): boolean {
+	return matchFilter(ask.filter as Filter, event) && !ask.events.some((held) => held.id === event.id);
+}
+
+function withinLimit(filter: object, events: BuzzEvent[]): BuzzEvent[] {
+	const limit = "limit" in filter && typeof filter.limit === "number" ? filter.limit : events.length;
+	if (events.length <= limit) return events;
+	const newest = new Set(
+		[...events].sort((first, second) => second.created_at - first.created_at).slice(0, limit).map((event) => event.id),
+	);
+	return events.filter((event) => newest.has(event.id));
 }
 
 export type RelayClientTiming = {
@@ -101,7 +120,8 @@ export function createRelayConnection(
 	let livenessProbeTimer: ReturnType<typeof setInterval> | null = null;
 	const liveSubscriptions = new Map<string, { filters: object[]; onEvent: EventListener }>();
 	const resubscribeDelays = new Map<string, number>();
-	const pendingQueries = new Map<string, PendingQuery>();
+	const pendingRequests = new Map<string, PendingRequest>();
+	let forming: PendingAsk[] = [];
 	const pendingPublishes = new Map<string, { resolve: (message: string) => void; reject: (error: Error) => void }>();
 	let openWaiters: Array<() => void> = [];
 	let authWaiters: Array<(reason?: Error) => void> = [];
@@ -192,17 +212,21 @@ export function createRelayConnection(
 				console.error(`[buzz-relay] dropped event ${describeEventID(rest[1])} from ${relayURL}: its id or signature does not verify`);
 				return;
 			}
-			pendingQueries.get(subscriptionID)?.events.push(event);
+			for (const ask of pendingRequests.get(subscriptionID)?.asks ?? []) {
+				if (answers(ask, event)) ask.events.push(event);
+			}
 			liveSubscriptions.get(subscriptionID)?.onEvent(event);
 			return;
 		}
 		if (frameType === "EOSE" && typeof rest[0] === "string") {
 			resubscribeDelays.delete(rest[0]);
-			const query = pendingQueries.get(rest[0]);
-			if (query) {
-				pendingQueries.delete(rest[0]);
+			const request = pendingRequests.get(rest[0]);
+			if (request) {
+				pendingRequests.delete(rest[0]);
 				send(["CLOSE", rest[0]]);
-				query.resolve(query.events, true);
+				for (const ask of request.asks) {
+					settleAsk(ask, { events: withinLimit(ask.filter, ask.events), complete: true, reason: "", isTimedOut: false });
+				}
 			}
 			return;
 		}
@@ -228,19 +252,19 @@ export function createRelayConnection(
 	// when its handler pool is full, so the next request waits a little longer
 	// each time it is refused.
 	function handleClosedSubscription(subscriptionID: string, reason: string): void {
-		const query = pendingQueries.get(subscriptionID);
-		if (query) {
-			if (query.filter && !query.isAskedAgain && reason.startsWith("auth-required")) {
-				void requestQueryAgainAfterLogin(subscriptionID, query);
+		const request = pendingRequests.get(subscriptionID);
+		if (request) {
+			if (!request.isAskedAgain && reason.startsWith("auth-required")) {
+				void requestAgainAfterLogin(subscriptionID, request);
 				return;
 			}
-			if (query.filter && !query.isAskedAgain && reason.startsWith("rate-limited:")) {
-				requestQueryAgainAfter(subscriptionID, query, retryDelayStatedIn(reason));
+			if (!request.isAskedAgain && reason.startsWith("rate-limited:")) {
+				requestAgainAfter(subscriptionID, request, retryDelayStatedIn(reason, timing.resubscribeDelayMilliseconds));
 				return;
 			}
-			pendingQueries.delete(subscriptionID);
+			pendingRequests.delete(subscriptionID);
 			console.error(`[buzz-relay] ${relayURL} closed query ${subscriptionID}: ${reason}`);
-			query.resolve(query.events, false, reason);
+			for (const ask of request.asks) settleAsk(ask, { events: ask.events, complete: false, reason, isTimedOut: false });
 			return;
 		}
 		if (!liveSubscriptions.has(subscriptionID)) return;
@@ -251,21 +275,67 @@ export function createRelayConnection(
 		retry.unref?.();
 	}
 
-	async function requestQueryAgainAfterLogin(subscriptionID: string, query: PendingQuery): Promise<void> {
-		query.isAskedAgain = true;
+	async function requestAgainAfterLogin(subscriptionID: string, request: PendingRequest): Promise<void> {
+		request.isAskedAgain = true;
 		await waitForAuth().catch(() => void 0);
-		if (pendingQueries.get(subscriptionID) !== query) return;
-		send(["REQ", subscriptionID, query.filter]);
+		sendRequestAgain(subscriptionID, request);
 	}
 
-	function requestQueryAgainAfter(subscriptionID: string, query: PendingQuery, delayMilliseconds: number): void {
-		query.isAskedAgain = true;
-		query.events = [];
-		const retry = setTimeout(() => {
-			if (pendingQueries.get(subscriptionID) !== query) return;
-			send(["REQ", subscriptionID, query.filter]);
-		}, delayMilliseconds);
+	function requestAgainAfter(subscriptionID: string, request: PendingRequest, delayMilliseconds: number): void {
+		request.isAskedAgain = true;
+		const retry = setTimeout(() => sendRequestAgain(subscriptionID, request), delayMilliseconds);
 		retry.unref?.();
+	}
+
+	function sendRequestAgain(subscriptionID: string, request: PendingRequest): void {
+		if (pendingRequests.get(subscriptionID) !== request) return;
+		for (const ask of request.asks) ask.events = [];
+		send(["REQ", subscriptionID, ...request.asks.map((ask) => ask.filter)]);
+	}
+
+	function settleAsk(ask: PendingAsk, answer: QueryAnswer): void {
+		clearTimeout(ask.timeoutHandle);
+		ask.settle(answer);
+	}
+
+	function giveUpOn(ask: PendingAsk, reason: string): void {
+		forming = forming.filter((formingAsk) => formingAsk !== ask);
+		const request = pendingRequests.get(ask.requestID);
+		if (request) {
+			request.asks = request.asks.filter((asked) => asked !== ask);
+			if (request.asks.length === 0) {
+				pendingRequests.delete(ask.requestID);
+				send(["CLOSE", ask.requestID]);
+			}
+		}
+		ask.settle({ events: ask.events, complete: false, reason, isTimedOut: true });
+	}
+
+	// Reads asked for in the same moment leave as one REQ, because the relay
+	// counts frames against a person's quota and a screen asks for many at once.
+	function sendWhatIsForming(): void {
+		const asks = forming;
+		forming = [];
+		for (let start = 0; start < asks.length; start += filtersPerRequest) {
+			sendRequest(`query-${subscriptionSerial++}`, asks.slice(start, start + filtersPerRequest));
+		}
+	}
+
+	function sendRequest(requestID: string, asks: PendingAsk[]): void {
+		for (const ask of asks) ask.requestID = requestID;
+		pendingRequests.set(requestID, { asks, isAskedAgain: false });
+		send(["REQ", requestID, ...asks.map((ask) => ask.filter)]);
+	}
+
+	function pendingAsk(filter: object, timeoutMs: number, settle: (answer: QueryAnswer) => void): PendingAsk {
+		const pending: PendingAsk = {
+			filter,
+			events: [],
+			requestID: "",
+			timeoutHandle: setTimeout(() => giveUpOn(pending, `no answer within ${timeoutMs}ms`), timeoutMs),
+			settle,
+		};
+		return pending;
 	}
 
 	async function requestSubscriptionAgain(subscriptionID: string, reason: string): Promise<void> {
@@ -280,23 +350,12 @@ export function createRelayConnection(
 	// closing the socket is what brings the reconnect, with every subscription.
 	async function probeLiveness(): Promise<void> {
 		if (websocket?.readyState !== WebSocket.OPEN) return;
-		const probeID = `probe-${subscriptionSerial++}`;
-		const isAnswered = await new Promise<boolean>((resolve) => {
-			const timeoutHandle = setTimeout(() => {
-				pendingQueries.delete(probeID);
-				resolve(false);
-			}, timing.livenessProbeTimeoutMilliseconds);
-			timeoutHandle.unref?.();
-			pendingQueries.set(probeID, {
-				events: [],
-				resolve: () => {
-					clearTimeout(timeoutHandle);
-					resolve(true);
-				},
-			});
-			send(["REQ", probeID, { kinds: [0], authors: [pubkeyHex], limit: 1 }]);
+		const answer = await new Promise<QueryAnswer>((resolve) => {
+			const probe = pendingAsk({ kinds: [0], authors: [pubkeyHex], limit: 1 }, timing.livenessProbeTimeoutMilliseconds, resolve);
+			probe.timeoutHandle.unref?.();
+			sendRequest(`probe-${subscriptionSerial++}`, [probe]);
 		});
-		if (isAnswered) return;
+		if (!answer.isTimedOut) return;
 		console.error(`[buzz-relay] ${relayURL} did not answer a probe in ${timing.livenessProbeTimeoutMilliseconds}ms; reconnecting`);
 		websocket?.close();
 	}
@@ -387,12 +446,13 @@ export function createRelayConnection(
 			}
 		},
 		async query(filter, timeoutMs = 8_000) {
-			const answer = await queryForCompleteness(filter, timeoutMs);
+			const answer = await ask(filter, timeoutMs);
 			if (!answer.complete) throw new RelayQueryIncomplete(relayURL, answer.reason);
 			return answer.events;
 		},
 		async queryComplete(filter, timeoutMs = 8_000) {
-			return queryForCompleteness(filter, timeoutMs);
+			const { events, complete } = await ask(filter, timeoutMs);
+			return { events, complete };
 		},
 		async publish(kind, content, tags) {
 			return (await publishAndAwaitAcknowledgement(kind, content, tags)).event;
@@ -402,32 +462,17 @@ export function createRelayConnection(
 		},
 	};
 
-	async function queryForCompleteness(filter: object, timeoutMs: number): Promise<QueryAnswer> {
+	async function ask(filter: object, timeoutMs: number): Promise<QueryAnswer> {
 		const notPublicKeys = authorsThatAreNotPublicKeys(filter);
 		if (notPublicKeys.length > 0) {
 			const reason = `authors holds what is not a public key: ${JSON.stringify(notPublicKeys)}`;
 			console.error(`[buzz-relay] not asking ${relayURL}: ${reason}`);
-			return { events: [], complete: false, reason };
+			return { events: [], complete: false, reason, isTimedOut: false };
 		}
 		await waitForOpen();
-		const subscriptionID = `query-${subscriptionSerial++}`;
 		return await new Promise<QueryAnswer>((resolve) => {
-			const timeoutHandle = setTimeout(() => {
-				const query = pendingQueries.get(subscriptionID);
-				pendingQueries.delete(subscriptionID);
-				send(["CLOSE", subscriptionID]);
-				resolve({ events: query?.events ?? [], complete: false, reason: `no answer within ${timeoutMs}ms` });
-			}, timeoutMs);
-			pendingQueries.set(subscriptionID, {
-				events: [],
-				filter,
-				isAskedAgain: false,
-				resolve: (events, complete, reason = "") => {
-					clearTimeout(timeoutHandle);
-					resolve({ events, complete, reason });
-				},
-			});
-			send(["REQ", subscriptionID, filter]);
+			if (forming.length === 0) queueMicrotask(sendWhatIsForming);
+			forming.push(pendingAsk(filter, timeoutMs, resolve));
 		});
 	}
 
