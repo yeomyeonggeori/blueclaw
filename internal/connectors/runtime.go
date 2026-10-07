@@ -248,29 +248,9 @@ func (connectorRuntime *ConnectorRuntime) HandleInboundEvent(ctx context.Context
 		connectorRuntime.logger.Warn("connector."+adapter.Name()+".ingress.deferred", slog.String("messageID", event.MessageID), slog.String("reason", "backup_prepare_active"))
 		return ConnectorRuntimeResult{Handled: true, Platform: adapter.Name(), Ignored: true, Reason: "backup_prepare_active"}, nil
 	}
-	if strings.TrimSpace(event.MessageID) == "" {
-		connectorRuntime.logger.Warn("connector."+adapter.Name()+".ingress.malformed", slog.String("source", event.Source), slog.String("reason", "missing_message_id"))
-		return ConnectorRuntimeResult{Handled: true, Platform: adapter.Name(), Ignored: true, Reason: "missing_message_id"}, nil
-	}
-	if strings.TrimSpace(event.ConversationID) == "" {
-		connectorRuntime.logger.Warn("connector."+adapter.Name()+".ingress.malformed", slog.String("source", event.Source), slog.String("reason", "missing_conversation_id"))
-		return ConnectorRuntimeResult{Handled: true, Platform: adapter.Name(), Ignored: true, Reason: "missing_conversation_id"}, nil
-	}
-	if strings.TrimSpace(event.SenderID) == "" {
-		connectorRuntime.logger.Warn("connector."+adapter.Name()+".ingress.malformed", slog.String("source", event.Source), slog.String("reason", "missing_sender_id"))
-		return ConnectorRuntimeResult{Handled: true, Platform: adapter.Name(), Ignored: true, Reason: "missing_sender_id"}, nil
-	}
-	if strings.TrimSpace(event.ReplyTargetID) == "" {
-		connectorRuntime.logger.Warn("connector."+adapter.Name()+".ingress.malformed", slog.String("source", event.Source), slog.String("reason", "missing_reply_target_id"))
-		return ConnectorRuntimeResult{Handled: true, Platform: adapter.Name(), Ignored: true, Reason: "missing_reply_target_id"}, nil
-	}
-	if strings.TrimSpace(event.Prompt) == "" {
-		connectorRuntime.logger.Warn("connector."+adapter.Name()+".ingress.malformed", slog.String("source", event.Source), slog.String("reason", "missing_prompt"))
-		return ConnectorRuntimeResult{Handled: true, Platform: adapter.Name(), Ignored: true, Reason: "missing_prompt"}, nil
-	}
-	if event.Context.HasMoreBefore && strings.TrimSpace(event.Context.HistoryCursor) == "" {
-		connectorRuntime.logger.Warn("connector."+adapter.Name()+".ingress.malformed", slog.String("source", event.Source), slog.String("reason", "missing_history_cursor"))
-		return ConnectorRuntimeResult{Handled: true, Platform: adapter.Name(), Ignored: true, Reason: "missing_history_cursor"}, nil
+	if reason := malformedEventReason(event); reason != "" {
+		connectorRuntime.logger.Warn("connector."+adapter.Name()+".ingress.malformed", slog.String("source", event.Source), slog.String("reason", reason))
+		return ConnectorRuntimeResult{Handled: true, Platform: adapter.Name(), Ignored: true, Reason: reason}, nil
 	}
 
 	if queueRepository := connectorRuntime.queueRepository(); queueRepository != nil {
@@ -281,6 +261,24 @@ func (connectorRuntime *ConnectorRuntime) HandleInboundEvent(ctx context.Context
 	}
 
 	return connectorRuntime.handleInboundEventImmediately(ctx, adapter, event)
+}
+
+func malformedEventReason(event PlatformInboundEvent) string {
+	switch {
+	case strings.TrimSpace(event.MessageID) == "":
+		return "missing_message_id"
+	case strings.TrimSpace(event.ConversationID) == "":
+		return "missing_conversation_id"
+	case strings.TrimSpace(event.SenderID) == "":
+		return "missing_sender_id"
+	case strings.TrimSpace(event.ReplyTargetID) == "":
+		return "missing_reply_target_id"
+	case strings.TrimSpace(event.Prompt) == "":
+		return "missing_prompt"
+	case event.Context.HasMoreBefore && strings.TrimSpace(event.Context.HistoryCursor) == "":
+		return "missing_history_cursor"
+	}
+	return ""
 }
 
 func (connectorRuntime *ConnectorRuntime) handleInboundEventImmediately(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (ConnectorRuntimeResult, error) {

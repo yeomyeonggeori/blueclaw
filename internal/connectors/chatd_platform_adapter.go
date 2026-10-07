@@ -68,22 +68,21 @@ func progressRequestFor(replyTarget ReplyTarget) capabilityProgressRequest {
 	return capabilityProgressRequest{ReplyTargetID: replyTarget.ReplyTargetID, AnsweringMessageID: replyTarget.AnsweringMessageID}
 }
 
-func (adapter ChatdPlatformAdapter) AddReaction(ctx context.Context, target ReactionTarget) error {
-	return adapter.post(ctx, "reaction.add", capabilityReactionRequest{
+func reactionRequestFor(target ReactionTarget) capabilityReactionRequest {
+	return capabilityReactionRequest{
 		ConversationID: strings.TrimSpace(target.ConversationID),
 		MessageID:      strings.TrimSpace(target.MessageID),
 		EmojiName:      strings.TrimSpace(target.EmojiName),
 		Reason:         strings.TrimSpace(target.Reason),
-	}, nil)
+	}
+}
+
+func (adapter ChatdPlatformAdapter) AddReaction(ctx context.Context, target ReactionTarget) error {
+	return adapter.post(ctx, "reaction.add", reactionRequestFor(target), nil)
 }
 
 func (adapter ChatdPlatformAdapter) RemoveReaction(ctx context.Context, target ReactionTarget) error {
-	return adapter.post(ctx, "reaction.remove", capabilityReactionRequest{
-		ConversationID: strings.TrimSpace(target.ConversationID),
-		MessageID:      strings.TrimSpace(target.MessageID),
-		EmojiName:      strings.TrimSpace(target.EmojiName),
-		Reason:         strings.TrimSpace(target.Reason),
-	}, nil)
+	return adapter.post(ctx, "reaction.remove", reactionRequestFor(target), nil)
 }
 
 func (adapter ChatdPlatformAdapter) SendReply(ctx context.Context, replyTarget ReplyTarget, reply OutboundReply) (string, error) {
