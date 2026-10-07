@@ -23,7 +23,7 @@ func ParseDocument(document string) (SkillBundle, error) {
 	if strings.TrimSpace(metadata.Description) == "" {
 		metadata.Description = firstMarkdownParagraph(instruction)
 	}
-	return SkillBundle{Name: metadata.Name, Description: metadata.Description, ToolReferences: metadata.ToolReferences, RequiredEnvironmentVariables: metadata.RequiredEnvironmentVariables, RequiredAnyFilePaths: metadata.RequiredAnyFilePaths, Instruction: strings.TrimSpace(instruction)}, nil
+	return SkillBundle{Name: metadata.Name, Description: metadata.Description, ToolReferences: metadata.ToolReferences, RequiredEnvironmentVariables: metadata.RequiredEnvironmentVariables, RequiredAnyFilePaths: metadata.RequiredAnyFilePaths, DeliveryCheck: metadata.DeliveryCheck, Instruction: strings.TrimSpace(instruction)}, nil
 }
 
 func (skillLoader SkillLoader) LoadSkillBundle(directoryPath string) (SkillBundle, error) {
@@ -47,6 +47,7 @@ func (skillLoader SkillLoader) LoadSkillBundle(directoryPath string) (SkillBundl
 		ToolReferences:               metadata.ToolReferences,
 		RequiredEnvironmentVariables: metadata.RequiredEnvironmentVariables,
 		RequiredAnyFilePaths:         metadata.RequiredAnyFilePaths,
+		DeliveryCheck:                metadata.DeliveryCheck,
 		Instruction:                  strings.TrimSpace(instruction),
 		DirectoryPath:                directoryPath,
 	}, nil
@@ -58,6 +59,7 @@ type skillMetadata struct {
 	ToolReferences               []ToolReference
 	RequiredEnvironmentVariables []string
 	RequiredAnyFilePaths         []string
+	DeliveryCheck                string
 }
 
 func parseSkillDocument(document string) (skillMetadata, string) {
@@ -118,6 +120,8 @@ const vendorRequiredEnvironmentKey = "kim.intern.requires-environment"
 // that would do, and one of them being there is enough.
 const vendorRequiredAnyFileKey = "kim.intern.requires-any-file"
 
+const vendorDeliveryCheckKey = "kim.intern.delivery-check"
+
 func setSkillMetadataValue(metadata skillMetadata, key string, value string) skillMetadata {
 	switch key {
 	case "name":
@@ -130,6 +134,8 @@ func setSkillMetadataValue(metadata skillMetadata, key string, value string) ski
 		metadata.RequiredEnvironmentVariables = append(metadata.RequiredEnvironmentVariables, parseSkillSpaceSeparatedList(value)...)
 	case vendorRequiredAnyFileKey:
 		metadata.RequiredAnyFilePaths = append(metadata.RequiredAnyFilePaths, parseSkillSpaceSeparatedList(value)...)
+	case vendorDeliveryCheckKey:
+		metadata.DeliveryCheck = cleanSkillScalar(value)
 	}
 	return metadata
 }

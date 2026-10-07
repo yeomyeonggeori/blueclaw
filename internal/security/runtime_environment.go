@@ -26,10 +26,9 @@ var workspaceManagedEnvironmentNames = map[string]bool{
 	"BUN_INSTALL":                  true,
 	"BUN_INSTALL_CACHE_DIR":        true,
 	"npm_config_cache":             true,
-	"OFFICE_RUNTIME_CONTEXT":       true,
-	"BLUECLAW_TASK_CONTEXT":        true,
-	"BLUECLAW_SCRIPT_HOST_URL":     true,
-	"BLUECLAW_SCRIPT_HOST_TOKEN":   true,
+	"SKILL_TASK_CONTEXT":           true,
+	"SKILL_HOST_URL":               true,
+	"SKILL_HOST_TOKEN":             true,
 }
 
 func IsWorkspaceManagedEnvironmentName(name string) bool {

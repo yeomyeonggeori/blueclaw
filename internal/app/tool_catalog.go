@@ -60,14 +60,8 @@ func newToolCatalogBuilder(runtimeConfiguration config.RuntimeConfiguration, ker
 	toolCatalogBuilder.UseTaskArtifactService(services.taskArtifactService)
 	toolCatalogBuilder.UseWorkspaceRootPath(runtimeConfiguration.Terminal.WorkspaceRootPath)
 	toolCatalogBuilder.UseSkillChangeHandler(kernel.refreshSkillIndex)
-	visualReviewModel := newConfiguredVisualReviewModel(runtimeConfiguration, logger)
-	toolCatalogBuilder.UseClaimDecisionModel(kernel.decisionModel)
-	toolCatalogBuilder.UseClaimRecompute(kernel.taskTierLanguageModels.Medium)
-	toolCatalogBuilder.UseClaimRewrite(kernel.taskTierLanguageModels.Medium)
-	toolCatalogBuilder.UseVisualReviewModels(visualReviewModel, kernel.taskTierLanguageModels.Medium)
-	toolCatalogBuilder.UseDeckDesignModel(kernel.decisionModel)
 	toolCatalogBuilder.UseScriptHost(kernel.toolCatalog.scriptHost, scriptHostURL(runtimeConfiguration))
-	toolCatalogBuilder.UseScriptModels(kernel.decisionModel, visualReviewModel, kernel.taskTierLanguageModels.Medium)
+	toolCatalogBuilder.UseScriptModels(kernel.decisionModel, newConfiguredVisualReviewModel(runtimeConfiguration, logger), kernel.taskTierLanguageModels.Medium)
 	if memoryComponents.stores != nil {
 		toolCatalogBuilder.UseMemoryStores(memoryComponents.stores, directory.identityService)
 	}

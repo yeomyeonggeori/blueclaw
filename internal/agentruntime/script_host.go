@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	ScriptHostURLEnvironmentName   = "BLUECLAW_SCRIPT_HOST_URL"
-	ScriptHostTokenEnvironmentName = "BLUECLAW_SCRIPT_HOST_TOKEN"
+	ScriptHostURLEnvironmentName   = "SKILL_HOST_URL"
+	ScriptHostTokenEnvironmentName = "SKILL_HOST_TOKEN"
 	ScriptHostPath                 = "/harness/script-host"
 	TaskEventScriptHostAnswered    = "script_host.answered"
 	scriptHostRequestLimit         = 32 << 20

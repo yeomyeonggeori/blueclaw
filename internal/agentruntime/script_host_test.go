@@ -79,7 +79,7 @@ func (fixture scriptHostFixture) askTheHost(t *testing.T, route string, body str
 	t.Helper()
 	requestPath := filepath.Join(fixture.homePath(), "request.json")
 	writeTestFile(t, requestPath, body)
-	return fixture.shellOutput(t, `curl -sS -X POST -H "Authorization: Bearer $BLUECLAW_SCRIPT_HOST_TOKEN" --data-binary @`+shellSingleQuoted(requestPath)+` "$BLUECLAW_SCRIPT_HOST_URL/`+route+`"`)
+	return fixture.shellOutput(t, `curl -sS -X POST -H "Authorization: Bearer $SKILL_HOST_TOKEN" --data-binary @`+shellSingleQuoted(requestPath)+` "$SKILL_HOST_URL/`+route+`"`)
 }
 
 const choiceQuestionBody = `{"state":{"request":"견적서"},"questions":{"claim0":{"type":"choice","instructions":"Which kind is claim0?","criteria":{"source":"says what the request says","claim":"the request lacks it"}}}}`
@@ -193,7 +193,7 @@ func TestEachAnswerIsRecordedInTheTaskLedger(t *testing.T) {
 func TestTheGrantEndsWithTheCommand(t *testing.T) {
 	fixture := newScriptHostFixture(t)
 	tokenPath := filepath.Join(fixture.homePath(), "token")
-	fixture.shellOutput(t, `printf '%s' "$BLUECLAW_SCRIPT_HOST_TOKEN" > `+shellSingleQuoted(tokenPath))
+	fixture.shellOutput(t, `printf '%s' "$SKILL_HOST_TOKEN" > `+shellSingleQuoted(tokenPath))
 	token, errorValue := os.ReadFile(tokenPath)
 	if errorValue != nil || len(token) == 0 {
 		t.Fatalf("the command was given no token: %v", errorValue)
@@ -223,7 +223,7 @@ func TestTheModelCannotPointACommandAtAnotherHost(t *testing.T) {
 func TestAHostWithoutAScriptHostGivesCommandsNoAddress(t *testing.T) {
 	fixture := newTaskFixture(t)
 
-	if output := fixture.shellOutput(t, `printf '%s' "$BLUECLAW_SCRIPT_HOST_URL"`); output != "" {
+	if output := fixture.shellOutput(t, `printf '%s' "$SKILL_HOST_URL"`); output != "" {
 		t.Fatalf("a host with no script host gave the command %q", output)
 	}
 }
