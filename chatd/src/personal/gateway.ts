@@ -88,6 +88,32 @@ export type PersonalMessagePage = {
 	hasMoreBefore: boolean;
 };
 
+// What changed in a person's conversations, said the same way whichever
+// messenger it happened on. A screen that has read a conversation once keeps it
+// current from these alone; "conversation" is the one that says to read the
+// list again, because a name or a roster is too rare to describe piece by piece.
+export type PersonEvent =
+	| { kind: "message"; message: PersonalMessage }
+	| { kind: "message.edited"; conversationID: string; messageID: string; body: string; editedAt: string }
+	| { kind: "message.removed"; conversationID: string; messageID: string }
+	| {
+			kind: "reaction";
+			conversationID: string;
+			messageID: string;
+			emoji: string;
+			imageURL?: string;
+			externalID: string;
+			isAdded: boolean;
+	  }
+	| { kind: "read"; readAtOfConversation: Record<string, string> }
+	| { kind: "conversation"; conversationID: string }
+	| { kind: "typing"; conversationID: string; externalID: string };
+
+export type PersonEventDelivery = {
+	event: PersonEvent;
+	recipientExternalIDs: string[];
+};
+
 export type CredentialField = {
 	name: string;
 	label: string;
@@ -229,7 +255,7 @@ export interface PersonalGateway {
 		externalID: string,
 		largestBytes: number,
 	): Promise<PersonalImage | null>;
-	watchArrivals(actor: ActorCredential, arrivalsURL: string, typingURL?: string): Promise<void>;
+	watchEvents(actor: ActorCredential, eventsURL: string): Promise<void>;
 	announceTyping(actor: ActorCredential, conversationID: string): Promise<void>;
 }
 

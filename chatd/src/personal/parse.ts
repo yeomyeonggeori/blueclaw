@@ -24,8 +24,7 @@ export type PersonRequest = {
 	name?: string;
 	externalID?: string;
 	largestBytes?: number;
-	arrivalsURL?: string;
-	typingURL?: string;
+	eventsURL?: string;
 	readAt?: string;
 	mediaURL?: string;
 	range?: string;
@@ -76,8 +75,7 @@ export function parsePersonRequest(value: unknown): PersonRequest {
 		name: optionalText(record, "name"),
 		externalID: optionalText(record, "externalID"),
 		largestBytes: optionalCount(record, "largestBytes"),
-		arrivalsURL: optionalText(record, "arrivalsURL"),
-		typingURL: optionalText(record, "typingURL"),
+		eventsURL: optionalText(record, "eventsURL"),
 		readAt: optionalText(record, "readAt"),
 		mediaURL: optionalText(record, "mediaURL"),
 		range: optionalText(record, "range"),
@@ -202,14 +200,9 @@ export function requireLargestBytes(request: PersonRequest): number {
 
 const loopbackHostnames = new Set(["127.0.0.1", "localhost"]);
 
-export function requireLoopbackArrivalsURL(request: PersonRequest): string {
-	if (!request.arrivalsURL) throw missing("arrivalsURL");
-	return loopbackURL("arrivalsURL", request.arrivalsURL);
-}
-
-export function optionalLoopbackTypingURL(request: PersonRequest): string | undefined {
-	if (!request.typingURL) return undefined;
-	return loopbackURL("typingURL", request.typingURL);
+export function requireLoopbackEventsURL(request: PersonRequest): string {
+	if (!request.eventsURL) throw missing("eventsURL");
+	return loopbackURL("eventsURL", request.eventsURL);
 }
 
 function loopbackURL(field: string, offered: string): string {

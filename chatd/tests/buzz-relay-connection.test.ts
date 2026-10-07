@@ -14,15 +14,16 @@ const timing: RelayClientTiming = {
 	resubscribeDelayMilliseconds: 5,
 	loginRetryDelayMilliseconds: 5,
 	livenessProbeIntervalMilliseconds: 10,
-	livenessProbeTimeoutMilliseconds: 10,
 };
 
 type Frame = unknown[];
 
 class FakeSocket {
 	static opened: FakeSocket[] = [];
-	static answersProbes = true;
+	static answersPings = true;
 	readonly sent: Frame[] = [];
+	readonly listeners = new Map<string, (() => void)[]>();
+	pings = 0;
 	readyState = 0;
 	onopen: (() => void) | null = null;
 	onmessage: ((message: { data: string }) => void) | null = null;
@@ -42,9 +43,18 @@ class FakeSocket {
 		const frame = JSON.parse(text) as Frame;
 		this.sent.push(frame);
 		if (frame[0] === "AUTH") this.receive(["OK", (frame[1] as { id: string }).id, true, ""]);
-		if (frame[0] === "REQ" && String(frame[1]).startsWith("probe-") && FakeSocket.answersProbes) {
-			this.receive(["EOSE", frame[1]]);
-		}
+	}
+
+	addEventListener(type: string, listener: () => void): void {
+		this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+	}
+
+	ping(): void {
+		this.pings += 1;
+		if (!FakeSocket.answersPings) return;
+		queueMicrotask(() => {
+			for (const listener of this.listeners.get("pong") ?? []) listener();
+		});
 	}
 
 	close(): void {
@@ -66,7 +76,7 @@ const realConsoleError = console.error;
 
 beforeEach(() => {
 	FakeSocket.opened = [];
-	FakeSocket.answersProbes = true;
+	FakeSocket.answersPings = true;
 	(globalThis as { WebSocket: unknown }).WebSocket = Object.assign(FakeSocket, { OPEN: 1 });
 	console.error = () => void 0;
 });
@@ -80,12 +90,46 @@ function settle(milliseconds = 0): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+describe("a subscription", () => {
+	test("is asked once per socket, after the relay has let the person in", async () => {
+		const client = createRelayConnection(relayURL, signer, undefined, timing);
+		client.subscribe(() => [{ kinds: [9], "#h": ["room-1"] }], () => void 0);
+		await client.connect();
+		await settle();
+		const socket = FakeSocket.opened[0]!;
+
+		const asked = socket.sent.filter((frame) => frame[0] === "REQ" || frame[0] === "AUTH").map((frame) => frame[0]);
+
+		expect(asked).toEqual(["AUTH", "REQ"]);
+		client.disconnect();
+	});
+
+	test("asked again replaces itself under the same name with what it wants now", async () => {
+		const client = createRelayConnection(relayURL, signer, undefined, timing);
+		await client.connect();
+		await settle();
+		const socket = FakeSocket.opened[0]!;
+		let rooms = ["room-1"];
+		const subscription = client.subscribe(() => [{ kinds: [9], "#h": rooms }], () => void 0);
+
+		rooms = ["room-1", "room-2"];
+		subscription.askAgain();
+		subscription.close();
+
+		const [first, second] = socket.requests();
+		expect(second?.[1]).toBe(first?.[1]);
+		expect(second?.[2]).toEqual({ kinds: [9], "#h": ["room-1", "room-2"] });
+		expect(socket.sent.at(-1)).toEqual(["CLOSE", first?.[1]]);
+		client.disconnect();
+	});
+});
+
 describe("a subscription the relay closes", () => {
 	test("is requested again rather than left dead", async () => {
 		const client = createRelayConnection(relayURL, signer, undefined, timing);
 		await client.connect();
 		const socket = FakeSocket.opened[0]!;
-		client.subscribe([{ kinds: [9], "#h": ["room-1"] }], () => void 0);
+		client.subscribe(() => [{ kinds: [9], "#h": ["room-1"] }], () => void 0);
 		const subscriptionID = socket.requests().at(-1)?.[1];
 
 		const before = socket.requests().filter((frame) => frame[1] === subscriptionID).length;
@@ -100,7 +144,7 @@ describe("a subscription the relay closes", () => {
 		const client = createRelayConnection(relayURL, signer, undefined, timing);
 		await client.connect();
 		const socket = FakeSocket.opened[0]!;
-		client.subscribe([{ kinds: [9] }], () => void 0);
+		client.subscribe(() => [{ kinds: [9] }], () => void 0);
 		const subscriptionID = socket.requests().at(-1)?.[1];
 
 		const before = socket.requests().filter((frame) => frame[1] === subscriptionID).length;
@@ -316,11 +360,11 @@ describe("a relay that stops answering", () => {
 		const client = createRelayConnection(relayURL, signer, undefined, timing);
 		await client.connect();
 		const first = FakeSocket.opened[0]!;
-		client.subscribe([{ kinds: [9], "#h": ["room-1"] }], () => void 0);
-		FakeSocket.answersProbes = false;
+		client.subscribe(() => [{ kinds: [9], "#h": ["room-1"] }], () => void 0);
+		FakeSocket.answersPings = false;
 
-		await settle(timing.livenessProbeIntervalMilliseconds + timing.livenessProbeTimeoutMilliseconds + 5);
-		FakeSocket.answersProbes = true;
+		await settle(timing.livenessProbeIntervalMilliseconds * 2 + 5);
+		FakeSocket.answersPings = true;
 		await settle(1_100);
 
 		expect(first.readyState).toBe(3);
@@ -330,14 +374,16 @@ describe("a relay that stops answering", () => {
 		client.disconnect();
 	});
 
-	test("is left alone while it answers probes", async () => {
+	test("is left alone while it answers pings, which cost it no request", async () => {
 		const client = createRelayConnection(relayURL, signer, undefined, timing);
 		await client.connect();
 		const socket = FakeSocket.opened[0]!;
+		const asked = socket.requests().length;
 
 		await settle(timing.livenessProbeIntervalMilliseconds * 4);
 
-		expect(socket.requests().filter((frame) => String(frame[1]).startsWith("probe-")).length).toBeGreaterThan(1);
+		expect(socket.pings).toBeGreaterThan(1);
+		expect(socket.requests()).toHaveLength(asked);
 		expect(socket.readyState).toBe(1);
 		expect(FakeSocket.opened).toHaveLength(1);
 		client.disconnect();
@@ -356,7 +402,7 @@ describe("an event the relay delivers", () => {
 		await client.connect();
 		const socket = FakeSocket.opened[0]!;
 		const heard: BuzzEvent[] = [];
-		client.subscribe([{ kinds: [9] }], (arrived) => heard.push(arrived));
+		client.subscribe(() => [{ kinds: [9] }], (arrived) => heard.push(arrived));
 		socket.receive(["EVENT", socket.requests().at(-1)?.[1], event]);
 		client.disconnect();
 		return { heard, logged };

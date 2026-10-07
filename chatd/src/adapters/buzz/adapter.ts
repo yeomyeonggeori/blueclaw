@@ -427,14 +427,15 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	}
 
 	private subscribeToMembershipChanges(): void {
+		const filters = [
+			{
+				kinds: [MEMBER_ADDED_NOTIFICATION_KIND, MEMBER_REMOVED_NOTIFICATION_KIND],
+				"#p": [this.relay.pubkeyHex],
+				since: Math.floor(Date.now() / 1000),
+			},
+		];
 		this.relay.subscribe(
-			[
-				{
-					kinds: [MEMBER_ADDED_NOTIFICATION_KIND, MEMBER_REMOVED_NOTIFICATION_KIND],
-					"#p": [this.relay.pubkeyHex],
-					since: Math.floor(Date.now() / 1000),
-				},
-			],
+			() => filters,
 			() => {
 				void this.refreshChannels()
 					.then(() => this.subscribeToChannels())
@@ -484,8 +485,10 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		for (const channelId of this.channelsById.keys()) {
 			if (this.subscribedChannelIds.has(channelId)) continue;
 			this.subscribedChannelIds.add(channelId);
+			const since = Math.floor(Date.now() / 1000);
+			const messages = [{ kinds: [STREAM_MESSAGE_KIND, EDIT_MESSAGE_KIND], "#h": [channelId], since }];
 			this.relay.subscribe(
-				[{ kinds: [STREAM_MESSAGE_KIND, EDIT_MESSAGE_KIND], "#h": [channelId], since: Math.floor(Date.now() / 1000) }],
+				() => messages,
 				(event) => {
 					void this.dispatchIncomingEvent(event).catch((reason) =>
 						reportBuzzFailure(`handling message ${event.id}`, reason),
@@ -493,14 +496,9 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 				},
 			);
 			if (this.config.mirror) {
+				const controls = [{ kinds: [REACTION_KIND, EDIT_MESSAGE_KIND, DELETE_MESSAGE_KIND], "#h": [channelId], since }];
 				this.relay.subscribe(
-					[
-						{
-							kinds: [REACTION_KIND, EDIT_MESSAGE_KIND, DELETE_MESSAGE_KIND],
-							"#h": [channelId],
-							since: Math.floor(Date.now() / 1000),
-						},
-					],
+					() => controls,
 					(event) => this.emitMirrorControlEvent(event, channelId),
 				);
 			}

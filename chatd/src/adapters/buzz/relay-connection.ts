@@ -5,11 +5,16 @@ import { verifiedEvent } from "./verified-event.ts";
 
 type EventListener = (event: BuzzEvent) => void;
 
+export type LiveSubscription = {
+	askAgain: () => void;
+	close: () => void;
+};
+
 export type RelayConnection = {
 	pubkeyHex: string;
 	connect: () => Promise<void>;
 	disconnect: () => void;
-	subscribe: (filters: object[], onEvent: EventListener) => void;
+	subscribe: (filtersNow: () => object[], onEvent: EventListener) => LiveSubscription;
 	query: (filter: object, timeoutMs?: number) => Promise<BuzzEvent[]>;
 	queryComplete: (filter: object, timeoutMs?: number) => Promise<{ events: BuzzEvent[]; complete: boolean }>;
 	publish: (kind: number, content: string, tags: string[][]) => Promise<BuzzEvent>;
@@ -63,6 +68,19 @@ function retryDelayStatedIn(reason: string, shortestMilliseconds: number): numbe
 	return Math.max(stated ? Number(stated[1]) * 1_000 : 0, shortestMilliseconds);
 }
 
+// Bun's WebSocket can ping; the DOM type it is declared with cannot say so.
+function pingFunctionOf(socket: WebSocket): (() => void) | undefined {
+	const ping: unknown = Reflect.get(socket, "ping");
+	if (typeof ping !== "function") return undefined;
+	return () => Reflect.apply(ping, socket, []);
+}
+
+// Subscriptions a relay refused together come back together unless each waits
+// a little more or less than the rest.
+function jitterMilliseconds(backoffMilliseconds: number): number {
+	return Math.floor(Math.random() * backoffMilliseconds * 0.5);
+}
+
 function answers(ask: PendingAsk, event: BuzzEvent): boolean {
 	return matchFilter(ask.filter as Filter, event) && !ask.events.some((held) => held.id === event.id);
 }
@@ -80,14 +98,12 @@ export type RelayClientTiming = {
 	resubscribeDelayMilliseconds: number;
 	loginRetryDelayMilliseconds: number;
 	livenessProbeIntervalMilliseconds: number;
-	livenessProbeTimeoutMilliseconds: number;
 };
 
 const defaultTiming: RelayClientTiming = {
 	resubscribeDelayMilliseconds: 1_000,
 	loginRetryDelayMilliseconds: 1_000,
 	livenessProbeIntervalMilliseconds: 30_000,
-	livenessProbeTimeoutMilliseconds: 10_000,
 };
 
 const maximumResubscribeDelayMilliseconds = 30_000;
@@ -118,7 +134,9 @@ export function createRelayConnection(
 	let shouldReconnect = true;
 	let subscriptionSerial = 0;
 	let livenessProbeTimer: ReturnType<typeof setInterval> | null = null;
-	const liveSubscriptions = new Map<string, { filters: object[]; onEvent: EventListener }>();
+	let isAwaitingPong = false;
+	let areLiveSubscriptionsAsked = false;
+	const liveSubscriptions = new Map<string, { filtersNow: () => object[]; onEvent: EventListener }>();
 	const resubscribeDelays = new Map<string, number>();
 	const pendingRequests = new Map<string, PendingRequest>();
 	let forming: PendingAsk[] = [];
@@ -134,14 +152,18 @@ export function createRelayConnection(
 	}
 
 	function openSocket(): void {
-		websocket = openRelaySocket(relayURL);
-		websocket.onopen = () => {
+		const socket = openRelaySocket(relayURL);
+		websocket = socket;
+		socket.addEventListener("pong", () => {
+			isAwaitingPong = false;
+		});
+		socket.onopen = () => {
 			reconnectDelayMs = 1_000;
 			isAuthed = false;
+			isAwaitingPong = false;
+			areLiveSubscriptionsAsked = false;
 			loginRefusal = null;
-			for (const [subscriptionID, subscription] of liveSubscriptions) {
-				send(["REQ", subscriptionID, ...subscription.filters]);
-			}
+			void askLiveSubscriptionsOnceAdmitted(socket);
 			for (const waiter of openWaiters) waiter();
 			openWaiters = [];
 		};
@@ -200,9 +222,6 @@ export function createRelayConnection(
 				},
 			});
 			send(["AUTH", authEvent]);
-			for (const [subscriptionID, subscription] of liveSubscriptions) {
-				send(["REQ", subscriptionID, ...subscription.filters]);
-			}
 			return;
 		}
 		if (frameType === "EVENT" && typeof rest[0] === "string") {
@@ -268,9 +287,10 @@ export function createRelayConnection(
 			return;
 		}
 		if (!liveSubscriptions.has(subscriptionID)) return;
-		const delay = resubscribeDelays.get(subscriptionID) ?? timing.resubscribeDelayMilliseconds;
+		const backoff = resubscribeDelays.get(subscriptionID) ?? timing.resubscribeDelayMilliseconds;
+		const delay = retryDelayStatedIn(reason, backoff) + jitterMilliseconds(backoff);
 		console.error(`[buzz-relay] ${relayURL} closed subscription ${subscriptionID}: ${reason}; requesting it again in ${delay}ms`);
-		resubscribeDelays.set(subscriptionID, Math.min(delay * 2, maximumResubscribeDelayMilliseconds));
+		resubscribeDelays.set(subscriptionID, Math.min(backoff * 2, maximumResubscribeDelayMilliseconds));
 		const retry = setTimeout(() => void requestSubscriptionAgain(subscriptionID, reason), delay);
 		retry.unref?.();
 	}
@@ -339,25 +359,43 @@ export function createRelayConnection(
 	}
 
 	async function requestSubscriptionAgain(subscriptionID: string, reason: string): Promise<void> {
-		const subscription = liveSubscriptions.get(subscriptionID);
-		if (!subscription || websocket?.readyState !== WebSocket.OPEN) return;
+		if (websocket?.readyState !== WebSocket.OPEN) return;
 		if (reason.startsWith("auth-required")) await waitForAuth().catch(() => void 0);
-		send(["REQ", subscriptionID, ...subscription.filters]);
+		askLive(subscriptionID);
+	}
+
+	// A subscription asked before the login is refused as auth-required, so a
+	// fresh socket asks for each one once, after the relay has let it in.
+	async function askLiveSubscriptionsOnceAdmitted(socket: WebSocket): Promise<void> {
+		const isAdmitted = await waitForAuth().then(
+			() => true,
+			() => false,
+		);
+		if (!isAdmitted || websocket !== socket || socket.readyState !== WebSocket.OPEN) return;
+		areLiveSubscriptionsAsked = true;
+		for (const subscriptionID of liveSubscriptions.keys()) askLive(subscriptionID);
+	}
+
+	function askLive(subscriptionID: string): void {
+		const subscription = liveSubscriptions.get(subscriptionID);
+		if (!subscription || !areLiveSubscriptionsAsked || websocket?.readyState !== WebSocket.OPEN) return;
+		send(["REQ", subscriptionID, ...subscription.filtersNow()]);
 	}
 
 	// Nothing in the protocol tells a client that a silent socket is a dead one.
-	// A request the relay does not answer within the timeout is that signal, and
+	// A ping the relay has not answered by the next one is that signal, and
 	// closing the socket is what brings the reconnect, with every subscription.
-	async function probeLiveness(): Promise<void> {
-		if (websocket?.readyState !== WebSocket.OPEN) return;
-		const answer = await new Promise<QueryAnswer>((resolve) => {
-			const probe = pendingAsk({ kinds: [0], authors: [pubkeyHex], limit: 1 }, timing.livenessProbeTimeoutMilliseconds, resolve);
-			probe.timeoutHandle.unref?.();
-			sendRequest(`probe-${subscriptionSerial++}`, [probe]);
-		});
-		if (!answer.isTimedOut) return;
-		console.error(`[buzz-relay] ${relayURL} did not answer a probe in ${timing.livenessProbeTimeoutMilliseconds}ms; reconnecting`);
-		websocket?.close();
+	// A ping is a control frame, so it costs nothing against the relay's quota.
+	function probeLiveness(): void {
+		const socket = websocket;
+		if (socket?.readyState !== WebSocket.OPEN) return;
+		if (isAwaitingPong) {
+			console.error(`[buzz-relay] ${relayURL} did not answer a ping in ${timing.livenessProbeIntervalMilliseconds}ms; reconnecting`);
+			socket.close();
+			return;
+		}
+		isAwaitingPong = true;
+		pingFunctionOf(socket)?.();
 	}
 
 	function startLivenessProbes(): void {
@@ -438,12 +476,18 @@ export function createRelayConnection(
 			stopLivenessProbes();
 			websocket?.close();
 		},
-		subscribe(filters, onEvent) {
+		subscribe(filtersNow, onEvent) {
 			const subscriptionID = `live-${subscriptionSerial++}`;
-			liveSubscriptions.set(subscriptionID, { filters, onEvent });
-			if (websocket?.readyState === WebSocket.OPEN) {
-				send(["REQ", subscriptionID, ...filters]);
-			}
+			liveSubscriptions.set(subscriptionID, { filtersNow, onEvent });
+			askLive(subscriptionID);
+			return {
+				askAgain: () => askLive(subscriptionID),
+				close: () => {
+					if (!liveSubscriptions.delete(subscriptionID)) return;
+					resubscribeDelays.delete(subscriptionID);
+					if (areLiveSubscriptionsAsked && websocket?.readyState === WebSocket.OPEN) send(["CLOSE", subscriptionID]);
+				},
+			};
 		},
 		async query(filter, timeoutMs = 8_000) {
 			const answer = await ask(filter, timeoutMs);

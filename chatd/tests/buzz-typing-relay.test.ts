@@ -6,7 +6,8 @@ import { closeEveryPooledRelay } from "../src/adapters/buzz/relay-pool.ts";
 import { createRelayConnection } from "../src/adapters/buzz/relay-connection.ts";
 import { announceTypingAsUser } from "../src/adapters/buzz/user-typing.ts";
 import { BuzzAdapter } from "../src/adapters/buzz/adapter.ts";
-import { BuzzArrivalWatch, type Typing } from "../src/personal/buzz-arrival-watch.ts";
+import { BuzzPersonFeed } from "../src/personal/buzz-person-feed.ts";
+import type { PersonEventDelivery } from "../src/personal/gateway.ts";
 import { normalizedInboundRoutingOf } from "../src/bridge.ts";
 import { createOutboundHandler } from "../src/outbound.ts";
 import type { ChatdConfiguration } from "../src/configuration.ts";
@@ -99,15 +100,17 @@ afterAll(() => {
 	server.stop(true);
 });
 
-function watchTellingInto(typed: Typing[], participants: string[], channelID: string): BuzzArrivalWatch {
-	return new BuzzArrivalWatch({
-		openRelay: (secret) => connectionAs(relayURL, secret),
+function feedTellingTypingInto(typed: PersonEventDelivery[], participants: string[], channelID: string): BuzzPersonFeed {
+	return new BuzzPersonFeed({
+		holdRelay: (secret) => {
+			const relay = connectionAs(relayURL, secret);
+			return { relay, connecting: relay.connect(), release: () => relay.disconnect() };
+		},
 		listConversations: async () => [
 			{ channelID, name: "", isDM: true, isPrivate: true, participantPubkeyHexes: participants },
 		],
-		tell: async () => {},
-		tellTyping: async (_url, typing) => {
-			typed.push(typing);
+		tell: async (_url, delivery) => {
+			if (delivery.event.kind === "typing") typed.push(delivery);
 		},
 		now: () => Date.now(),
 	});
@@ -173,26 +176,19 @@ describe("typing against a relay", () => {
 		const typist = generateSecretKey();
 		const reader = generateSecretKey();
 		const participants = [getPublicKey(typist), getPublicKey(reader)];
-		const typed: Typing[] = [];
-		const watch = new BuzzArrivalWatch({
-			openRelay: (secret) => connectionAs(relayURL, secret),
-			listConversations: async () => [
-				{ channelID: "channel-1", name: "", isDM: true, isPrivate: true, participantPubkeyHexes: participants },
-			],
-			tell: async () => {},
-			tellTyping: async (_url, typing) => {
-				typed.push(typing);
-			},
-			now: () => Date.now(),
-		});
-		await watch.watch(bytesToHex(reader), "http://127.0.0.1:1/arrived", "http://127.0.0.1:1/typing");
+		const typed: PersonEventDelivery[] = [];
+		const watch = feedTellingTypingInto(typed, participants, "channel-1");
+		await watch.watch(bytesToHex(reader), "http://127.0.0.1:1/events");
 		await until(() => subscriptions.some((subscription) => subscription.filters.some((filter) => filter["#h"])));
 
 		await announceTypingAsUser({ relayURL, userSecretHex: bytesToHex(typist), channelID: "channel-1" });
 		await until(() => typed.length > 0);
 
 		expect(typed).toEqual([
-			{ conversationID: "channel-1", authorExternalID: getPublicKey(typist), recipientExternalIDs: participants },
+			{
+				event: { kind: "typing", conversationID: "channel-1", externalID: getPublicKey(typist) },
+				recipientExternalIDs: [getPublicKey(reader)],
+			},
 		]);
 		expect(kept).toEqual([]);
 		watch.closeEvery();
@@ -202,9 +198,9 @@ describe("typing against a relay", () => {
 		const agent = generateSecretKey();
 		const person = generateSecretKey();
 		const participants = [getPublicKey(person), getPublicKey(agent)];
-		const typed: Typing[] = [];
-		const watch = watchTellingInto(typed, participants, "channel-2");
-		await watch.watch(bytesToHex(person), "http://127.0.0.1:1/arrived", "http://127.0.0.1:1/typing");
+		const typed: PersonEventDelivery[] = [];
+		const watch = feedTellingTypingInto(typed, participants, "channel-2");
+		await watch.watch(bytesToHex(person), "http://127.0.0.1:1/events");
 		await until(() => isSubscribedTo("channel-2"));
 		const chatd = chatdServingBuzzAs(bytesToHex(agent));
 		await connectionsMade.at(-1)?.connect();
@@ -219,7 +215,10 @@ describe("typing against a relay", () => {
 		await until(() => typed.length > 0);
 
 		expect(typed).toEqual([
-			{ conversationID: "channel-2", authorExternalID: getPublicKey(agent), recipientExternalIDs: participants },
+			{
+				event: { kind: "typing", conversationID: "channel-2", externalID: getPublicKey(agent) },
+				recipientExternalIDs: [getPublicKey(person)],
+			},
 		]);
 		watch.closeEvery();
 	});
