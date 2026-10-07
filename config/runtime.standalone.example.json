@@ -58,9 +58,8 @@
       ]
     },
     "embedding": {
-      "endpoint": "${BLUECLAW_MODEL_ENDPOINT}",
-      "model": "${BLUECLAW_EMBEDDING_MODEL}",
-      "apiKeyEnvironment": "OPENROUTER_API_KEY"
+      "endpoint": "${BLUECLAW_EMBEDDING_ENDPOINT}",
+      "model": "${BLUECLAW_EMBEDDING_MODEL}"
     },
     "decision": {
       "endpoint": "${BLUECLAW_DECISION_ENDPOINT}",

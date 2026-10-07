@@ -51,13 +51,21 @@ go build ./...
 OPENROUTER_API_KEY
 BLUECLAW_MODEL_ENDPOINT=https://openrouter.ai/api/v1
 BLUECLAW_MODEL=z-ai/glm-5.3-flash
-BLUECLAW_EMBEDDING_MODEL=baai/bge-m3
+BLUECLAW_EMBEDDING_ENDPOINT=http://127.0.0.1:18095/v1
+BLUECLAW_EMBEDDING_MODEL=google/embeddinggemma-2
 BLUECLAW_DECISION_ENDPOINT=https://openrouter.ai/api/alpha/decisions
 BLUECLAW_DECISION_MODEL=~typesafe/jev-latest
 BLUECLAW_DATABASE_URL=postgres://blueclaw:blueclaw@127.0.0.1:5432/blueclaw?sslmode=disable
 ```
 
-[monkeys](https://github.com/eastriverlee/monkeys) keeps `OPENROUTER_API_KEY` in the operating system's keychain (`monkeys remember @standalone OPENROUTER_API_KEY` stores it once) and sets all of them for one command. Without it, export the same variables. A model entry names the variable that holds its key with `apiKeyEnvironment`; `apiKeyPath` reads a key file instead, and an entry may name only one of the two.
+[monkeys](https://github.com/eastriverlee/monkeys) keeps `OPENROUTER_API_KEY` in the operating system's keychain (`monkeys remember @standalone OPENROUTER_API_KEY` stores it once) and sets all of them for one command. Without it, export the same variables. Embeddings are computed on the same machine and the key is never sent to the embedding server. Start it with llama.cpp b11476 or newer and the Q8_0 file of `ggml-org/embeddinggemma-2-GGUF`:
+
+```bash
+llama-server -m embeddinggemma-2-Q8_0.gguf --embeddings --pooling mean \
+  --host 127.0.0.1 --port 18095 -c 2048 -b 2048 -ub 2048 -ngl 0
+```
+
+The endpoint is the base URL, and blueclaw posts to `/v1/embeddings` under it. For `embeddinggemma` models it wraps each query and document in the model's prompt template; vectors are 768-wide. A model entry names the variable that holds its key with `apiKeyEnvironment`; `apiKeyPath` reads a key file instead, and an entry may name only one of the two.
 
 One OpenRouter key reaches all three models. The decision model answers the closed questions about each inbound message and each turn's plan. [Kev](https://github.com/jaredpalmer/kev) serves the same API on your own machine: point `BLUECLAW_DECISION_ENDPOINT` at its `/v1/systemone` and set `BLUECLAW_DECISION_MODEL` to `kev-latest`. A 4B chat model served locally is not enough, since intake asks the chat model for answers in a fixed schema that small models break.
 
