@@ -61,16 +61,11 @@ type OutboundReply struct {
 	Interaction     *AskInteraction               `json:"interaction,omitempty"`
 }
 
+type plainOutboundReply OutboundReply
+
 type outboundReplyDocument struct {
-	Message         string                        `json:"message"`
-	TaskRunID       string                        `json:"taskRunID,omitempty"`
-	ReplyKind       string                        `json:"replyKind,omitempty"`
-	RawEventID      string                        `json:"rawEventID,omitempty"`
-	OutboxID        string                        `json:"outboxID,omitempty"`
-	Attachments     []outboundReplyAttachment     `json:"attachments,omitempty"`
-	RecoveryActions []toolcontract.RecoveryAction `json:"recoveryActions,omitempty"`
-	FailureNotice   agentcontract.FailureNotice   `json:"failureNotice,omitempty"`
-	Interaction     *AskInteraction               `json:"interaction,omitempty"`
+	plainOutboundReply
+	Attachments []outboundReplyAttachment `json:"attachments,omitempty"`
 }
 
 type outboundReplyAttachment struct {
@@ -103,18 +98,7 @@ type AskChoiceOption struct {
 }
 
 func (reply OutboundReply) MarshalJSON() ([]byte, error) {
-	document := outboundReplyDocument{
-		Message:         reply.Message,
-		TaskRunID:       reply.TaskRunID,
-		ReplyKind:       reply.ReplyKind,
-		RawEventID:      reply.RawEventID,
-		OutboxID:        reply.OutboxID,
-		Attachments:     outboundReplyAttachments(reply.Attachments),
-		RecoveryActions: reply.RecoveryActions,
-		FailureNotice:   reply.FailureNotice,
-		Interaction:     reply.Interaction,
-	}
-	return json.Marshal(document)
+	return json.Marshal(outboundReplyDocument{plainOutboundReply: plainOutboundReply(reply), Attachments: outboundReplyAttachments(reply.Attachments)})
 }
 
 func (reply *OutboundReply) UnmarshalJSON(documentBytes []byte) error {
@@ -122,15 +106,9 @@ func (reply *OutboundReply) UnmarshalJSON(documentBytes []byte) error {
 	if errorValue := json.Unmarshal(documentBytes, &document); errorValue != nil {
 		return errorValue
 	}
-	reply.Message = document.Message
-	reply.TaskRunID = document.TaskRunID
-	reply.ReplyKind = document.ReplyKind
-	reply.RawEventID = document.RawEventID
-	reply.OutboxID = document.OutboxID
+	*reply = OutboundReply(document.plainOutboundReply)
 	reply.Attachments = fileAttachmentsFromOutboundReplyAttachments(document.Attachments)
 	reply.RecoveryActions = append([]toolcontract.RecoveryAction{}, document.RecoveryActions...)
-	reply.FailureNotice = document.FailureNotice
-	reply.Interaction = document.Interaction
 	return nil
 }
 

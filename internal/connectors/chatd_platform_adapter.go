@@ -96,7 +96,7 @@ func (adapter ChatdPlatformAdapter) SendReply(ctx context.Context, replyTarget R
 		ReplyKind:          reply.ReplyKind,
 		RawEventID:         reply.RawEventID,
 		OutboxID:           reply.OutboxID,
-		Attachments:        buildCapabilityReplyAttachments(reply.Attachments),
+		Attachments:        outboundReplyAttachments(reply.Attachments),
 		RecoveryActions:    reply.RecoveryActions,
 		FailureNotice:      reply.FailureNotice,
 		Interaction:        reply.Interaction,
