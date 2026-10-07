@@ -22,7 +22,7 @@ func TestMaintenanceReachesEveryMemoryFile(t *testing.T) {
 	reopened := memory.NewStores(root, bluememo.Configuration{Embedder: embedder, EmbeddingModel: "another-embed"}, memorytest.ReadsInThisProcess())
 	t.Cleanup(func() { _ = reopened.Close() })
 
-	if errorValue := reopened.Maintain(context.Background()); errorValue != nil {
+	if _, errorValue := reopened.Maintain(context.Background()); errorValue != nil {
 		t.Fatalf("maintain: %v", errorValue)
 	}
 

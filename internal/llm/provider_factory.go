@@ -173,6 +173,7 @@ func NewConfiguredEmbeddingProvider(runtimeConfiguration config.RuntimeConfigura
 			CapabilityClient: newCapabilityClient(runtimeConfiguration),
 			ModelName:        modelName,
 			ExecutionMode:    runtimeConfiguration.LanguageModel.Capability.ExecutionMode,
+			OutputDimensions: ConfiguredEmbeddingDimensions(runtimeConfiguration),
 		}, nil
 	}
 	apiKey, errorValue := endpointAPIKey(embeddingConfiguration)

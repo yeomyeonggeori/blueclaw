@@ -397,18 +397,36 @@ func (application *Application) startMemoryMaintenance() {
 }
 
 func (application *Application) maintainMemory(ctx context.Context) {
-	ticker := time.NewTicker(memoryMaintenanceInterval)
-	defer ticker.Stop()
 	for {
-		if errorValue := application.memoryStores.Maintain(ctx); errorValue != nil && ctx.Err() == nil {
-			application.runtimeLogger.Logger.Warn("application.memory.maintenance_failed", "error", errorValue.Error())
+		waitDuration := memoryMaintenanceInterval
+		if !application.runMemoryMaintenance(ctx) {
+			waitDuration = memoryMaintenanceRetryInterval
 		}
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-time.After(waitDuration):
 		}
 	}
+}
+
+func (application *Application) runMemoryMaintenance(ctx context.Context) bool {
+	report, errorValue := application.memoryStores.Maintain(ctx)
+	if ctx.Err() != nil {
+		return true
+	}
+	logger := application.runtimeLogger.Logger
+	if errorValue != nil {
+		logger.Warn("application.memory.maintenance_failed", "error", errorValue.Error(),
+			"scopes", report.Scopes, "reembeddedMemories", report.Reembedded.Memories)
+		return false
+	}
+	logger.Info("application.memory.maintenance_completed",
+		"scopes", report.Scopes,
+		"reembeddedMemories", report.Reembedded.Memories,
+		"reembeddedTriggers", report.Reembedded.Triggers,
+		"reembeddedFiles", report.Reembedded.Files)
+	return true
 }
 
 func (application *Application) schedulePollIntervalSecond() int {

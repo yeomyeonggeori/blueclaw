@@ -6,14 +6,22 @@ import (
 	"fmt"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
+	"github.com/yeomyeonggeori/blueclaw/internal/config"
 )
 
-const DefaultEmbeddingModelName = "baai/bge-m3"
+const DefaultEmbeddingModelName = "google/embeddinggemma-2"
 
 // DefaultEmbeddingDimensions is the width DefaultEmbeddingModelName answers
 // in. A store embedded at one width cannot be searched at another, so the
 // model and its width are declared together.
-const DefaultEmbeddingDimensions = 1024
+const DefaultEmbeddingDimensions = 768
+
+func ConfiguredEmbeddingDimensions(runtimeConfiguration config.RuntimeConfiguration) int {
+	if runtimeConfiguration.Memory.EmbeddingDimensions > 0 {
+		return runtimeConfiguration.Memory.EmbeddingDimensions
+	}
+	return DefaultEmbeddingDimensions
+}
 
 const (
 	EmbeddingInputTypeQuery    = "query"

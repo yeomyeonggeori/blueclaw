@@ -348,7 +348,7 @@ Around the store, `internal/memory` does the following:
 - Finished, failed and cancelled runs are remembered unless `memory.extractionDisabled` is set: into the circle the conversation belongs to, or the requester's own memory otherwise.
 - Launch recalls the prompt and records `memory.recall_injected`, or `memory.recall_failed` with the reason.
 - `memory_remember` stores one sentence and reports what it created, superseded or reinforced; `memory_forget` accepts only memory IDs that `memory_search` returned in the same task.
-- Embeddings go through the capability service at `memory.embeddingModel`.
+- Embeddings go through the capability service at `memory.embeddingModel`, `google/embeddinggemma-2` at 768 dimensions unless the configuration names another. A model or width change re-embeds existing memories in the background as soon as the daemon starts, retrying every minute while the embedding service is unreachable; recall skips a memory until its row is re-embedded.
 
 ## Capabilities
 
@@ -498,7 +498,7 @@ The runtime configuration is the JSON file passed as `--runtime`, and it holds e
 | `baseURL` | the address the daemon listens on and advertises |
 | `languageModel` | model tiers, embedding model, tier bounds, context window; see [Language models](#language-models) |
 | `database` | `driver`, `connectionString`, `migrationDirectoryPath`, `maxOpenConnections` |
-| `memory` | `embeddingModel`, `embeddingExecutionMode`, `extractionDisabled`, `adminAssertionKeyPath` |
+| `memory` | `embeddingModel`, `embeddingDimensions`, `embeddingExecutionMode`, `extractionDisabled`, `adminAssertionKeyPath` |
 | `agent` | `intake`, `failureRecovery`, `harness` |
 | `agentProfiles` | named profiles with `allowedToolNames` |
 | `capabilities` | the capability service; see [Capabilities](#capabilities) |

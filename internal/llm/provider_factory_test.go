@@ -207,6 +207,9 @@ func TestEmbeddingProviderTakesTheCapabilityRouteWhenOnlyAModelIsNamed(t *testin
 	if capabilityClient.ModelName != "example/embedding" {
 		t.Fatalf("the embedding model must be the one configured, got %q", capabilityClient.ModelName)
 	}
+	if capabilityClient.OutputDimensions != DefaultEmbeddingDimensions {
+		t.Fatalf("skill retrieval must ask for the same width as memory, got %d", capabilityClient.OutputDimensions)
+	}
 }
 
 func TestEmbeddingProviderIsRefusedWhenNoModelIsNamed(t *testing.T) {

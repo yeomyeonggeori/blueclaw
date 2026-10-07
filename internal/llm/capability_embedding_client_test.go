@@ -25,9 +25,9 @@ func TestCapabilityEmbeddingClientSendsInputTypeAndDimensions(t *testing.T) {
 
 	client := CapabilityEmbeddingClient{
 		CapabilityClient: capability.Client{Endpoint: server.URL, HTTPClient: server.Client()},
-		ModelName:        "baai/bge-m3",
+		ModelName:        "google/embeddinggemma-2",
 		ExecutionMode:    "remote",
-		OutputDimensions: 1024,
+		OutputDimensions: 768,
 	}
 	embedding, errorValue := client.EmbedQuery(context.Background(), "where is the Q3 review")
 	if errorValue != nil {
@@ -39,7 +39,7 @@ func TestCapabilityEmbeddingClientSendsInputTypeAndDimensions(t *testing.T) {
 	if receivedRequest["input"] != "where is the Q3 review" || receivedRequest["inputType"] != EmbeddingInputTypeQuery {
 		t.Fatalf("expected a query input, got %v", receivedRequest)
 	}
-	if receivedRequest["outputDimensions"] != float64(1024) || receivedRequest["executionMode"] != "remote" || receivedRequest["model"] != "baai/bge-m3" {
+	if receivedRequest["outputDimensions"] != float64(768) || receivedRequest["executionMode"] != "remote" || receivedRequest["model"] != "google/embeddinggemma-2" {
 		t.Fatalf("expected dimensions, mode and model to be sent, got %v", receivedRequest)
 	}
 }

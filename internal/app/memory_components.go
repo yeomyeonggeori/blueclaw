@@ -12,7 +12,10 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 )
 
-const memoryMaintenanceInterval = time.Hour
+const (
+	memoryMaintenanceInterval      = time.Hour
+	memoryMaintenanceRetryInterval = time.Minute
+)
 
 type memoryComponents struct {
 	stores *memory.Stores
@@ -21,7 +24,7 @@ type memoryComponents struct {
 func newMemoryComponents(runtimeConfiguration config.RuntimeConfiguration, kernel agentKernel, services taskServices, identityService *identity.IdentityService, logger *slog.Logger) memoryComponents {
 	logger.Info("application.initializing", "stage", "memory")
 	embeddingModelName := firstNonEmptyString(runtimeConfiguration.Memory.EmbeddingModel, llm.DefaultEmbeddingModelName)
-	embeddingDimensions := firstPositiveInteger(runtimeConfiguration.Memory.EmbeddingDimensions, llm.DefaultEmbeddingDimensions)
+	embeddingDimensions := llm.ConfiguredEmbeddingDimensions(runtimeConfiguration)
 	configuration := bluememo.Configuration{
 		Embedder: llm.CapabilityEmbeddingClient{
 			CapabilityClient: kernel.capabilityClient,
@@ -53,13 +56,4 @@ func newMemoryComponents(runtimeConfiguration config.RuntimeConfiguration, kerne
 		"embeddingDimensions", embeddingDimensions,
 		"extractionDisabled", runtimeConfiguration.Memory.ExtractionDisabled)
 	return memoryComponents{stores: stores}
-}
-
-func firstPositiveInteger(values ...int) int {
-	for _, value := range values {
-		if value > 0 {
-			return value
-		}
-	}
-	return 0
 }

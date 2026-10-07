@@ -89,7 +89,7 @@
   "languageModel": {
     "contextWindowTokens": 1048576,
     "embedding": {
-      "model": "your-embedding-model"
+      "model": "google/embeddinggemma-2"
     },
     "capability": {
       "executionMode": "auto",
@@ -108,8 +108,8 @@
     "maxOpenConnections": 30
   },
   "memory": {
-    "embeddingModel": "baai/bge-m3",
-    "embeddingDimensions": 1024,
+    "embeddingModel": "google/embeddinggemma-2",
+    "embeddingDimensions": 768,
     "embeddingExecutionMode": "auto",
     "extractionDisabled": false
   },
