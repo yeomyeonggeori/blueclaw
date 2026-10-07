@@ -356,7 +356,7 @@ Around the store, `internal/memory` does the following:
 - Finished, failed and cancelled runs are remembered unless `memory.extractionDisabled` is set: into the circle the conversation belongs to, or the requester's own memory otherwise.
 - Launch recalls the prompt and records `memory.recall_injected`, or `memory.recall_failed` with the reason.
 - `memory_remember` stores one sentence and reports what it created, superseded or reinforced; `memory_forget` accepts only memory IDs that `memory_search` returned in the same task.
-- Embeddings go through the capability service at `memory.embeddingModel`, `google/embeddinggemma-2` at 768 dimensions unless the configuration names another. A model or width change re-embeds existing memories in the background as soon as the daemon starts, retrying every minute while the embedding service is unreachable; recall skips a memory until its row is re-embedded.
+- Embeddings use `languageModel.embedding.model` (falling back to `memory.embeddingModel`), `google/embeddinggemma-2` at 768 dimensions unless the configuration names another. They go through the capability service, or straight to `languageModel.embedding.endpoint` when it is set; an endpoint that answers another width is refused. A model or width change re-embeds existing memories in the background as soon as the daemon starts, retrying every minute while the embedding service is unreachable; recall skips a memory until its row is re-embedded.
 
 ## Capabilities
 
@@ -364,7 +364,7 @@ A capability is an operation a separate service performs on the agent's behalf, 
 
 blueclaw stays provider-neutral. It asks for a capability and passes an `executionMode` (`device`, `remote` or `auto`, default `auto`); the capability service decides where it runs. Descriptors mark tools that need the requester present (`requiresUserPresence`), and those are not registered for scheduled runs.
 
-The `capabilities` block names the service: `endpoint` or `unixSocketPath`, plus `timeoutSecond`. The request and response shapes are Zod contracts in `protocol/` (`capability-descriptor`, `capability-registry-response`, `tool-invoke-request`, `tool-invoke-response`). A deployment without the block reports `capabilityd: not_configured` in health and runs without capability tools, capability-routed models, or memory embeddings.
+The `capabilities` block names the service: `endpoint` or `unixSocketPath`, plus `timeoutSecond`. The request and response shapes are Zod contracts in `protocol/` (`capability-descriptor`, `capability-registry-response`, `tool-invoke-request`, `tool-invoke-response`). A deployment without the block reports `capabilityd: not_configured` in health and runs without capability tools and capability-routed models. Embeddings do not need it: with `languageModel.embedding.endpoint` set, memory and skills both embed through that endpoint.
 
 ## Schedule
 

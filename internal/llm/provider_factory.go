@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"context"
 	"errors"
 	"os"
 	"strings"
@@ -162,29 +163,38 @@ func readAPIKey(apiKeyPath string) (string, error) {
 	return apiKey, nil
 }
 
-func NewConfiguredEmbeddingProvider(runtimeConfiguration config.RuntimeConfiguration) (EmbeddingProvider, error) {
+type ConfiguredEmbedder interface {
+	EmbeddingProvider
+	EmbedQuery(ctx context.Context, text string) ([]float32, error)
+	EmbedDocuments(ctx context.Context, texts []string) ([][]float32, error)
+	EmbeddingModelName() string
+}
+
+func NewConfiguredEmbeddingProvider(runtimeConfiguration config.RuntimeConfiguration) (ConfiguredEmbedder, error) {
 	embeddingConfiguration := runtimeConfiguration.LanguageModel.Embedding
-	modelName := strings.TrimSpace(embeddingConfiguration.Model)
-	if modelName == "" {
-		return nil, errors.New("the language model configuration names no embedding model")
-	}
+	modelName := ConfiguredEmbeddingModelName(runtimeConfiguration)
+	dimensions := ConfiguredEmbeddingDimensions(runtimeConfiguration)
 	if strings.TrimSpace(embeddingConfiguration.Endpoint) == "" {
 		return CapabilityEmbeddingClient{
 			CapabilityClient: newCapabilityClient(runtimeConfiguration),
 			ModelName:        modelName,
-			ExecutionMode:    runtimeConfiguration.LanguageModel.Capability.ExecutionMode,
-			OutputDimensions: ConfiguredEmbeddingDimensions(runtimeConfiguration),
+			ExecutionMode:    firstNonEmpty(runtimeConfiguration.Memory.EmbeddingExecutionMode, runtimeConfiguration.LanguageModel.Capability.ExecutionMode),
+			OutputDimensions: dimensions,
 		}, nil
 	}
 	apiKey, errorValue := endpointAPIKey(embeddingConfiguration)
 	if errorValue != nil {
 		return nil, errorValue
 	}
-	return openaicompatible.Endpoint{
+	provider, errorValue := openaicompatible.Endpoint{
 		URL:       embeddingConfiguration.Endpoint,
 		ModelName: modelName,
 		APIKey:    apiKey,
 	}.EmbeddingProvider()
+	if errorValue != nil {
+		return nil, errorValue
+	}
+	return fixedWidthEmbedder{provider: provider, dimensions: dimensions}, nil
 }
 
 func NewCapabilityLLMClientForTier(runtimeConfiguration config.RuntimeConfiguration, modelTier string, modelName string) CapabilityLLMClient {

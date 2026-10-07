@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
@@ -15,6 +16,14 @@ const DefaultEmbeddingModelName = "google/embeddinggemma-2"
 // in. A store embedded at one width cannot be searched at another, so the
 // model and its width are declared together.
 const DefaultEmbeddingDimensions = 768
+
+func ConfiguredEmbeddingModelName(runtimeConfiguration config.RuntimeConfiguration) string {
+	return firstNonEmpty(
+		strings.TrimSpace(runtimeConfiguration.LanguageModel.Embedding.Model),
+		strings.TrimSpace(runtimeConfiguration.Memory.EmbeddingModel),
+		DefaultEmbeddingModelName,
+	)
+}
 
 func ConfiguredEmbeddingDimensions(runtimeConfiguration config.RuntimeConfiguration) int {
 	if runtimeConfiguration.Memory.EmbeddingDimensions > 0 {

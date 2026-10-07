@@ -212,9 +212,54 @@ func TestEmbeddingProviderTakesTheCapabilityRouteWhenOnlyAModelIsNamed(t *testin
 	}
 }
 
-func TestEmbeddingProviderIsRefusedWhenNoModelIsNamed(t *testing.T) {
-	if _, errorValue := NewConfiguredEmbeddingProvider(config.RuntimeConfiguration{}); errorValue == nil {
-		t.Fatal("an embedding provider with no model named must be refused")
+func TestEmbeddingModelFallsBackToTheMemoryModelThenTheDefault(t *testing.T) {
+	if name := ConfiguredEmbeddingModelName(config.RuntimeConfiguration{}); name != DefaultEmbeddingModelName {
+		t.Fatalf("expected the default, got %q", name)
+	}
+	memoryOnly := config.RuntimeConfiguration{Memory: config.MemoryConfiguration{EmbeddingModel: "example/memory"}}
+	if name := ConfiguredEmbeddingModelName(memoryOnly); name != "example/memory" {
+		t.Fatalf("expected the memory model, got %q", name)
+	}
+	memoryOnly.LanguageModel.Embedding.Model = "example/language"
+	if name := ConfiguredEmbeddingModelName(memoryOnly); name != "example/language" {
+		t.Fatalf("expected the language model entry to win, got %q", name)
+	}
+}
+
+func TestStandaloneEmbedderAsksTheEndpointWithTemplatesAndFailsOnAnotherWidth(t *testing.T) {
+	inputs := []string{}
+	vectorWidth := 3
+	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		var received map[string]any
+		_ = json.NewDecoder(request.Body).Decode(&received)
+		inputs = append(inputs, received["input"].(string))
+		_ = json.NewEncoder(responseWriter).Encode(map[string]any{"data": []map[string]any{{"embedding": make([]float64, vectorWidth)}}})
+	}))
+	defer server.Close()
+	runtimeConfiguration := config.RuntimeConfiguration{
+		LanguageModel: config.LanguageModelConfiguration{Embedding: config.ModelEndpointConfiguration{Endpoint: server.URL + "/v1", Model: "google/embeddinggemma-2"}},
+		Memory:        config.MemoryConfiguration{EmbeddingDimensions: 3},
+	}
+	embedder, errorValue := NewConfiguredEmbeddingProvider(runtimeConfiguration)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	if _, errorValue := embedder.EmbedQuery(context.Background(), "slides"); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if _, errorValue := embedder.EmbedDocuments(context.Background(), []string{"notes"}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if embedder.EmbeddingModelName() != "google/embeddinggemma-2" {
+		t.Fatalf("rows must record the configured model, got %q", embedder.EmbeddingModelName())
+	}
+	if len(inputs) != 2 || inputs[0] != "task: search result | query: slides" || inputs[1] != "title: none | text: notes" {
+		t.Fatalf("expected the EmbeddingGemma templates, got %v", inputs)
+	}
+	vectorWidth = 4
+	if _, errorValue := embedder.EmbedDocuments(context.Background(), []string{"notes"}); errorValue == nil {
+		t.Fatal("a vector of another width than configured must be refused, not stored")
 	}
 }
 

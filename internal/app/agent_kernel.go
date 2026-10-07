@@ -28,7 +28,7 @@ type agentKernel struct {
 	taskTierLanguageModels            agentcontract.TaskTierLanguageModels
 	capabilityClient                  capability.Client
 	capabilityRegistry                *agentruntime.CapabilityRegistry
-	embeddingClient                   llm.EmbeddingProvider
+	embeddingClient                   llm.ConfiguredEmbedder
 	intakeLanguageModelProvider       llm.LanguageModelProvider
 	decisionModel                     model.DecisionModel
 	toolSelector                      agentcontract.ToolSelector

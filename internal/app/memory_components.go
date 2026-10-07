@@ -23,15 +23,10 @@ type memoryComponents struct {
 
 func newMemoryComponents(runtimeConfiguration config.RuntimeConfiguration, kernel agentKernel, services taskServices, identityService *identity.IdentityService, logger *slog.Logger) memoryComponents {
 	logger.Info("application.initializing", "stage", "memory")
-	embeddingModelName := firstNonEmptyString(runtimeConfiguration.Memory.EmbeddingModel, llm.DefaultEmbeddingModelName)
+	embeddingModelName := llm.ConfiguredEmbeddingModelName(runtimeConfiguration)
 	embeddingDimensions := llm.ConfiguredEmbeddingDimensions(runtimeConfiguration)
 	configuration := bluememo.Configuration{
-		Embedder: llm.CapabilityEmbeddingClient{
-			CapabilityClient: kernel.capabilityClient,
-			ModelName:        embeddingModelName,
-			ExecutionMode:    firstNonEmptyString(runtimeConfiguration.Memory.EmbeddingExecutionMode, "auto"),
-			OutputDimensions: embeddingDimensions,
-		},
+		Embedder:      kernel.embeddingClient,
 		Model:         memory.LanguageModel{Provider: kernel.taskTierLanguageModels.Low},
 		RecallSources: true,
 		Logger:        logger,
