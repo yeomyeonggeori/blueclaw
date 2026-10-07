@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export { personEventCompanyKind } from './person-event-kind.ts';
+
 // A person's conversations, said the same way whichever messenger they are on.
 // chatd speaks it, the host relays it, and the screen keeps itself current
 // from it, so each of them reads these shapes from here.
@@ -76,8 +78,6 @@ export const personEventDeliverySchema = z.object({
   event: personEventSchema,
   recipientExternalIDs: z.array(z.string())
 });
-
-export const personEventCompanyKind = 'messenger.changed';
 
 export type PersonalMentions = z.infer<typeof personalMentionsSchema>;
 export type PersonalReaction = z.infer<typeof personalReactionSchema>;
