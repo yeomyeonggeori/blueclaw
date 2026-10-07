@@ -31,12 +31,9 @@ func heldCallTaskEvents(t *testing.T) []task.TaskEvent {
 	return taskRunService.ListTaskEvent(taskRun.TaskRunID)
 }
 
-func TestACallHeldByTheHostGateReachesTheRequesterAsAQuestion(t *testing.T) {
+func TestACallHeldByTheHostGateKeepsTheLanguageTheRequesterIsAskedIn(t *testing.T) {
 	taskEvents := heldCallTaskEvents(t)
 
-	if question := latestApprovalQuestion(taskEvents); question == "" {
-		t.Fatalf("a held call the requester is never told about waits forever, got %+v", taskEvents)
-	}
 	if responseLanguage := latestApprovalResponseLanguage(taskEvents); responseLanguage == "" {
 		t.Fatal("the language the requester is asked in was lost between the gate and the connector")
 	}

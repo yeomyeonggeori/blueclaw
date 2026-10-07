@@ -15,7 +15,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
-	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
@@ -141,20 +140,19 @@ type ConnectorRuntime struct {
 	adminTaskLinkBaseURL   string
 	logger                 *slog.Logger
 
-	mutex                   sync.Mutex
-	retryMutex              sync.Mutex
-	adapterByPlatform       map[string]PlatformAdapter
-	processedResults        map[string]ConnectorRuntimeResult
-	eventRepository         ConnectorEventRepository
-	ingressGate             IngressGate
-	taskIntakeGate          TaskIntakeGate
-	taskWaitTokenRepository task.TaskWaitTokenRepository
-	conversationLocks       map[string]*sync.Mutex
-	pendingRequests         *pendingRequestStore
-	sentAttachmentSources   *sentAttachmentSourceStore
-	started                 bool
-	inboxHeartbeats         []time.Time
-	outboxHeartbeats        []time.Time
+	mutex                 sync.Mutex
+	retryMutex            sync.Mutex
+	adapterByPlatform     map[string]PlatformAdapter
+	processedResults      map[string]ConnectorRuntimeResult
+	eventRepository       ConnectorEventRepository
+	ingressGate           IngressGate
+	taskIntakeGate        TaskIntakeGate
+	conversationLocks     map[string]*sync.Mutex
+	pendingRequests       *pendingRequestStore
+	sentAttachmentSources *sentAttachmentSourceStore
+	started               bool
+	inboxHeartbeats       []time.Time
+	outboxHeartbeats      []time.Time
 }
 
 func NewConnectorRuntime(identityService *identity.IdentityService, harness agentcontract.Harness, taskRunService *taskstate.TaskRunService, taskEventService *taskstate.TaskEventService, logger *slog.Logger) *ConnectorRuntime {
@@ -352,10 +350,6 @@ func (connectorRuntime *ConnectorRuntime) handleInboundEventImmediately(ctx cont
 	return result, nil
 }
 
-func (connectorRuntime *ConnectorRuntime) processInboundEvent(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (ConnectorRuntimeResult, error) {
-	return connectorRuntime.processInboundEventWithReplySender(ctx, adapter, event, connectorRuntime.recordingDelivery(adapter.SendReply))
-}
-
 func (connectorRuntime *ConnectorRuntime) processInboundEventWithReplySender(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent, sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error)) (ConnectorRuntimeResult, error) {
 	event = withGatewayDecision(event)
 	ctx = withConnectorEvent(ctx, event)
@@ -427,13 +421,6 @@ func (connectorRuntime *ConnectorRuntime) appendAskResolvedEvent(interaction Ask
 		"route":         string(agentcontract.TurnRouteContinueTask),
 		"reason":        askReplyReason,
 	}))
-}
-
-func connectorResponseLanguageInstruction(responseLanguage string) string {
-	if toolcontract.ResolveResponseLanguage(responseLanguage) == toolcontract.ResponseLanguageEnglish {
-		return "Write in English."
-	}
-	return "Write in Korean."
 }
 
 func connectorReplyEventBody(event PlatformInboundEvent, reply OutboundReply, outboxID string, dispatchID string, reason string) map[string]string {
@@ -611,30 +598,6 @@ func (connectorRuntime *ConnectorRuntime) withInitialVisibleContext(ctx context.
 	return event
 }
 
-func (connectorRuntime *ConnectorRuntime) buildTurnToolSet(adapter PlatformAdapter, event PlatformInboundEvent, personID string, personAccess policy.PersonAccess) *toolcontract.ToolSet {
-	requesterEmail := connectorRuntime.requesterEmailForEvent(personID, event)
-	return connectorRuntime.toolCatalogBuilder.BuildToolSet(agentruntime.ToolCatalogRequest{
-		ProfileName:                "default",
-		Prompt:                     event.Prompt,
-		RequesterPersonID:          personID,
-		RequesterName:              connectorRuntime.requesterNameForEvent(personID, event),
-		RequesterEmail:             requesterEmail,
-		RequesterPlatformUserID:    event.SenderID,
-		ConversationID:             event.ConversationID,
-		ConversationType:           event.Context.ConversationType,
-		ConversationChannelID:      event.Context.ChannelID,
-		ConversationChannelName:    event.Context.ChannelName,
-		ReplyTargetID:              event.ReplyTargetID,
-		Platform:                   adapter.Name(),
-		HistoryCursor:              event.Context.HistoryCursor,
-		HistoryProvider:            connectorHistoryProvider{adapter: adapter},
-		AttachmentMaterialResolver: connectorRuntime.attachmentMaterialResolverFor(adapter, personID, event),
-		PersonAccess:               personAccess,
-		AccessibleConversationIDs:  []string{event.ConversationID},
-		InputParts:                 append([]agentcontract.AgentPart{}, event.InputParts...),
-	})
-}
-
 func (connectorRuntime *ConnectorRuntime) requesterEmailForEvent(personID string, event PlatformInboundEvent) string {
 	email := strings.ToLower(strings.TrimSpace(connectorRuntime.identityService.ResolvePersonPrimaryEmail(personID)))
 	if email != "" {
@@ -700,10 +663,6 @@ func detachedConnectorContext(ctx context.Context) context.Context {
 		return context.Background()
 	}
 	return context.WithoutCancel(ctx)
-}
-
-func isPrivateConversationID(conversationID string) bool {
-	return strings.HasPrefix(strings.TrimSpace(conversationID), "dm:")
 }
 
 func (connectorRuntime *ConnectorRuntime) authorizeSender(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (senderAuthorization, error) {
@@ -776,10 +735,6 @@ func (connectorRuntime *ConnectorRuntime) buildReplyTarget(ctx context.Context, 
 		AnsweringMessageID: event.MessageID,
 		DedupeKey:          event.DedupeKey(),
 	}, nil
-}
-
-func (connectorRuntime *ConnectorRuntime) startProgress(ctx context.Context, adapter PlatformAdapter, replyTarget ReplyTarget) func() {
-	return connectorRuntime.startProgressHeartbeat(ctx, adapter, replyTarget)
 }
 
 func shouldStartProgressBeforeAddressing(event PlatformInboundEvent) bool {

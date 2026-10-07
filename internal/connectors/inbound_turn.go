@@ -21,7 +21,6 @@ type inboundTurn struct {
 	personAccess   policy.PersonAccess
 	requesterEmail string
 
-	taskWaitResolution  inboundTaskWaitResolution
 	engagedAckEmojiName string
 
 	settledCalls             []agentcontract.CarriedOutCall
@@ -120,14 +119,13 @@ func (connectorRuntime *ConnectorRuntime) refuseUnauthorizedSender(ctx context.C
 func (connectorRuntime *ConnectorRuntime) resolveOpenInteractions(ctx context.Context, turn *inboundTurn) (ConnectorRuntimeResult, bool, error) {
 	turn.personAccess = connectorRuntime.identityService.ResolvePersonAccess(turn.personID)
 	turn.requesterEmail = connectorRuntime.requesterEmailForEvent(turn.personID, turn.event)
-	turn.taskWaitResolution = connectorRuntime.resolveInboundTaskWait(turn.personID, turn.platform, turn.event)
 	turn.engagedAckEmojiName = connectorRuntime.applyEngagedAckReaction(ctx, turn.platform, turn.adapter, turn.event,
-		turn.event.Context.Addressing.BotMentioned || turn.taskWaitResolution.HasTaskWaitToken)
+		turn.event.Context.Addressing.BotMentioned)
 	return connectorRuntime.settleOpenInteractions(ctx, turn)
 }
 
 func (connectorRuntime *ConnectorRuntime) resolveTurnActiveGoal(ctx context.Context, turn *inboundTurn) {
-	turn.activeGoal, turn.hasActiveGoal = connectorRuntime.findActiveGoal(turn.personID, turn.platform, turn.event, turn.taskWaitResolution)
+	turn.activeGoal, turn.hasActiveGoal = connectorRuntime.findActiveGoal(turn.personID, turn.event)
 	if turn.hasActiveGoal && (turn.clearsActiveGoal) {
 		turn.activeGoal = agentcontract.ActiveGoal{}
 		turn.hasActiveGoal = false

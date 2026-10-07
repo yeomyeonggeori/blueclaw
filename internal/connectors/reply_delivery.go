@@ -21,5 +21,4 @@ func (connectorRuntime *ConnectorRuntime) recordingDelivery(deliver ReplySender)
 func (connectorRuntime *ConnectorRuntime) recordReplySent(event PlatformInboundEvent, replyTarget ReplyTarget, reply OutboundReply, dispatchID string) {
 	connectorRuntime.sentAttachmentSources.RecordReply(event.Platform, dispatchID, reply.Attachments)
 	connectorRuntime.appendConnectorReplyEvent(reply.TaskRunID, agentcontract.TaskEventConnectorReplySent, connectorReplyEventBody(event, reply, reply.OutboxID, dispatchID, ""))
-	connectorRuntime.recordTaskWaitTokenForReply(event.Platform, event, replyTarget, reply, dispatchID)
 }

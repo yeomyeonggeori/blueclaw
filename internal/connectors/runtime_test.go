@@ -181,14 +181,13 @@ func TestConnectorRuntimeAllowsWaitingTaskContinuationWhenQuiesced(t *testing.T)
 		},
 		ActionResponses: []string{connectorFinishMessage("continued while quiesced")},
 	})
-	connectorRuntime, adapter, taskRunService, taskWaitRepository := newWaitRoutingTestConnectorRuntime(t, languageModel)
+	connectorRuntime, adapter, taskRunService := newRoutedTestConnectorRuntime(t, languageModel)
 	connectorRuntime.UseTaskIntakeGate(testTaskIntakeGate{isQuiesced: true})
 	waitingTaskRun := createWaitingInputTaskRun(t, taskRunService, "single prompt", "single-interaction")
-	if errorValue := taskWaitRepository.InsertTaskWaitToken(waitRoutingTaskWaitToken(waitingTaskRun, "single-dispatch", "single-interaction")); errorValue != nil {
-		t.Fatal(errorValue)
-	}
 	event := testInboundEvent("message-continuation")
-	event.ReplyTargetID = "single-dispatch"
+	event.ReplyTargetID = waitingTaskRun.OriginReplyTargetID
+	isThread := true
+	event.IsThread = &isThread
 	event.Prompt = "answer"
 
 	result, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, event)
@@ -272,55 +271,6 @@ func TestActiveTaskFollowUpClassificationErrorDoesNotBypassConversationLock(t *t
 	}
 }
 
-func TestConnectorRuntimeReplyTargetWaitResolvesOlderWaitingTask(t *testing.T) {
-	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
-		StructuredResponsesBySchema: map[string][]string{
-			"bluecollar_turn_router": {
-				`{"route":"continue_task","classification":"bounded_task","taskShape":"research_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"input reply","userFacingReply":""}`,
-				`{"route":"continue_task","classification":"bounded_task","taskShape":"research_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"input reply","userFacingReply":""}`,
-			},
-		},
-		ActionResponses: []string{connectorFinishMessage("older continued")},
-	})
-	connectorRuntime, adapter, taskRunService, taskWaitRepository := newWaitRoutingTestConnectorRuntime(t, languageModel)
-	olderTaskRun := createWaitingInputTaskRun(t, taskRunService, "older prompt", "old-interaction")
-	if errorValue := taskWaitRepository.InsertTaskWaitToken(waitRoutingTaskWaitToken(olderTaskRun, "old-dispatch", "old-interaction")); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	time.Sleep(time.Millisecond)
-	newerTaskRun := createWaitingInputTaskRun(t, taskRunService, "newer prompt", "new-interaction")
-	if errorValue := taskWaitRepository.InsertTaskWaitToken(waitRoutingTaskWaitToken(newerTaskRun, "new-dispatch", "new-interaction")); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	event := testInboundEvent("message-old-reply")
-	event.ReplyTargetID = "old-dispatch"
-	event.Prompt = "older answer"
-
-	result, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, event)
-	if errorValue != nil {
-		t.Fatalf("expected old wait reply to process: %v", errorValue)
-	}
-
-	if result.TaskRunID != olderTaskRun.TaskRunID {
-		t.Fatalf("expected older task run %s, got %+v", olderTaskRun.TaskRunID, result)
-	}
-	olderTaskRun, _ = connectorRuntime.taskRunService.FindTaskRun(olderTaskRun.TaskRunID)
-	newerTaskRun, _ = connectorRuntime.taskRunService.FindTaskRun(newerTaskRun.TaskRunID)
-	if olderTaskRun.Status != task.TaskStatusCompleted {
-		t.Fatalf("expected older task completed, got %+v", olderTaskRun)
-	}
-	if newerTaskRun.Status != task.TaskStatusWaitingUserInput {
-		t.Fatalf("expected newer task to remain waiting, got %+v", newerTaskRun)
-	}
-	openWaits, errorValue := taskWaitRepository.FindOpenByPersonAndConversation("person-1", "test", "direct-1")
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if len(openWaits) != 1 || openWaits[0].TaskRunID != newerTaskRun.TaskRunID {
-		t.Fatalf("expected only newer wait open, got %+v", openWaits)
-	}
-}
-
 func TestConnectorRuntimeRootMessageStartsANewTaskInsteadOfAnsweringTheOpenWait(t *testing.T) {
 	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
 		StructuredResponsesBySchema: map[string][]string{
@@ -331,11 +281,8 @@ func TestConnectorRuntimeRootMessageStartsANewTaskInsteadOfAnsweringTheOpenWait(
 		},
 		ActionResponses: []string{connectorFinishMessage("new task answered")},
 	})
-	connectorRuntime, adapter, taskRunService, taskWaitRepository := newWaitRoutingTestConnectorRuntime(t, languageModel)
+	connectorRuntime, adapter, taskRunService := newRoutedTestConnectorRuntime(t, languageModel)
 	waitingTaskRun := createWaitingInputTaskRun(t, taskRunService, "waiting prompt", "waiting-interaction")
-	if errorValue := taskWaitRepository.InsertTaskWaitToken(waitRoutingTaskWaitToken(waitingTaskRun, "waiting-dispatch", "waiting-interaction")); errorValue != nil {
-		t.Fatal(errorValue)
-	}
 	event := testInboundEvent("message-root")
 	event.ReplyTargetID = event.MessageID
 	event.Prompt = "오늘 퇴근 기록해줘"
@@ -352,13 +299,6 @@ func TestConnectorRuntimeRootMessageStartsANewTaskInsteadOfAnsweringTheOpenWait(
 	if waitingTaskRun.Status != task.TaskStatusWaitingUserInput {
 		t.Fatalf("expected the waiting task to keep waiting, got %+v", waitingTaskRun)
 	}
-	openWaits, errorValue := taskWaitRepository.FindOpenByPersonAndConversation("person-1", "test", "direct-1")
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if len(openWaits) != 1 || openWaits[0].TaskRunID != waitingTaskRun.TaskRunID {
-		t.Fatalf("expected the waiting task's wait to stay open, got %+v", openWaits)
-	}
 }
 
 func TestConnectorRuntimeReplyInTheWaitingTasksThreadContinuesIt(t *testing.T) {
@@ -371,11 +311,8 @@ func TestConnectorRuntimeReplyInTheWaitingTasksThreadContinuesIt(t *testing.T) {
 		},
 		ActionResponses: []string{connectorFinishMessage("thread reply continued")},
 	})
-	connectorRuntime, adapter, taskRunService, taskWaitRepository := newWaitRoutingTestConnectorRuntime(t, languageModel)
+	connectorRuntime, adapter, taskRunService := newRoutedTestConnectorRuntime(t, languageModel)
 	waitingTaskRun := createWaitingInputTaskRun(t, taskRunService, "waiting prompt", "waiting-interaction")
-	if errorValue := taskWaitRepository.InsertTaskWaitToken(waitRoutingTaskWaitToken(waitingTaskRun, "waiting-dispatch", "waiting-interaction")); errorValue != nil {
-		t.Fatal(errorValue)
-	}
 	event := testInboundEvent("message-thread-reply")
 	event.ReplyTargetID = waitingTaskRun.OriginReplyTargetID
 	isThread := true
@@ -401,16 +338,15 @@ func TestConnectorRuntimeDeliversAReplyToAWaitingQuestionAsTheNextPromptWithoutR
 		StructuredResponsesBySchema: map[string][]string{},
 		ActionResponses:             []string{connectorFinishMessage("발표자료로 진행했습니다.")},
 	})
-	connectorRuntime, adapter, taskRunService, taskWaitRepository := newWaitRoutingTestConnectorRuntime(t, languageModel)
+	connectorRuntime, adapter, taskRunService := newRoutedTestConnectorRuntime(t, languageModel)
 	gatewayDecider := &scriptedGatewayDecider{addressing: addressedToBot()}
 	connectorRuntime.UseGatewayDecider(gatewayDecider)
 	waitingTaskRun := createWaitingInputTaskRunWithOptions(t, taskRunService, "어떤 형식으로 만들까요?", "input-options")
-	if errorValue := taskWaitRepository.InsertTaskWaitToken(waitRoutingTaskWaitToken(waitingTaskRun, "input-dispatch", "input-options")); errorValue != nil {
-		t.Fatal(errorValue)
-	}
 	event := testInboundEvent("message-option")
 	event.Prompt = replyText
-	event.ReplyTargetID = "input-dispatch"
+	event.ReplyTargetID = waitingTaskRun.OriginReplyTargetID
+	isThread := true
+	event.IsThread = &isThread
 
 	result, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, event)
 	if errorValue != nil {
@@ -438,13 +374,8 @@ func TestConnectorRuntimeDeliversAReplyToAWaitingQuestionAsTheNextPromptWithoutR
 func TestConnectorRuntimePendingInputStartTaskLeavesTheWaitingTaskWaiting(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "휴게소 들러도 괜찮습니다."}
-	taskWaitRepository := task.NewInMemoryTaskWaitTokenRepository()
-	connectorRuntime.UseTaskWaitTokenRepository(taskWaitRepository)
 	taskRunService := connectorRuntime.taskRunService
 	waitingTaskRun := createWaitingInputTaskRun(t, taskRunService, "어느 채널에 보낼까요?", "single-interaction")
-	if errorValue := taskWaitRepository.InsertTaskWaitToken(waitRoutingTaskWaitToken(waitingTaskRun, "single-dispatch", "single-interaction")); errorValue != nil {
-		t.Fatal(errorValue)
-	}
 	event := testInboundEvent("message-new-question")
 	event.ReplyTargetID = "unmatched-reply-target"
 	event.Prompt = "휴게소 가야해?"
@@ -461,78 +392,10 @@ func TestConnectorRuntimePendingInputStartTaskLeavesTheWaitingTaskWaiting(t *tes
 	if waitingTaskRun.Status != task.TaskStatusWaitingUserInput {
 		t.Fatalf("an independent question leaves the ask waiting for its answer, got %+v", waitingTaskRun)
 	}
-	openWaits, errorValue := taskWaitRepository.FindOpenByPersonAndConversation("person-1", "test", "direct-1")
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if len(openWaits) != 1 {
-		t.Fatalf("the wait token stays open for the answer still to come, got %+v", openWaits)
-	}
 	if len(adapter.sentReplies) != 1 || adapter.sentReplies[0].message != "휴게소 들러도 괜찮습니다." {
 		t.Fatalf("expected latest-message reply only, got %+v", adapter.sentReplies)
 	}
 }
-func TestConnectorRuntimeWritesResolvesAndExpiresTaskWaitRecord(t *testing.T) {
-	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
-		StructuredResponsesBySchema: map[string][]string{
-			"bluecollar_turn_router": {
-				`{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"input needed","userFacingReply":"","initialToolNames":["ask_input"]}`,
-				`{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"input needed","userFacingReply":"","initialToolNames":["ask_input"]}`,
-			},
-		},
-		ActionResponses: []string{
-			`{"action":"reply","expectsAnswer":true,"message":"추가 정보가 필요합니다."}`,
-		},
-	})
-	connectorRuntime, adapter, taskRunService, taskWaitRepository := newWaitRoutingTestConnectorRuntime(t, languageModel)
-	event := testInboundEvent("message-send-wait")
-
-	result, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, event)
-	if errorValue != nil {
-		t.Fatalf("expected ask input send to process: %v", errorValue)
-	}
-	openWaits, errorValue := taskWaitRepository.FindOpenByPersonAndConversation("person-1", "test", "direct-1")
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if len(openWaits) != 1 {
-		t.Fatalf("expected one open wait, got %+v", openWaits)
-	}
-	if openWaits[0].TaskRunID != result.TaskRunID || openWaits[0].ReplyTargetID != "dispatch-1" || openWaits[0].DispatchID != "dispatch-1" || openWaits[0].Kind != "input" {
-		t.Fatalf("unexpected persisted wait: %+v result=%+v", openWaits[0], result)
-	}
-	if errorValue := taskWaitRepository.ResolveTaskWait(openWaits[0].WaitID, time.Now().UTC()); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	openWaits, errorValue = taskWaitRepository.FindOpenByPersonAndConversation("person-1", "test", "direct-1")
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if len(openWaits) != 0 {
-		t.Fatalf("expected resolved wait closed, got %+v", openWaits)
-	}
-	expiringTaskRun := createWaitingInputTaskRun(t, taskRunService, "expire prompt", "expire-interaction")
-	expiringWait := waitRoutingTaskWaitToken(expiringTaskRun, "expire-dispatch", "expire-interaction")
-	expiringWait.ExpiresAt = time.Now().Add(-time.Minute)
-	if errorValue := taskWaitRepository.InsertTaskWaitToken(expiringWait); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	expiredTaskRunIDs, errorValue := taskWaitRepository.ExpireOldTaskWaits(time.Now().UTC())
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if len(expiredTaskRunIDs) != 1 || expiredTaskRunIDs[0] != expiringTaskRun.TaskRunID {
-		t.Fatalf("expected expired task run id, got %+v", expiredTaskRunIDs)
-	}
-	openWaits, errorValue = taskWaitRepository.FindOpenByPersonAndConversation("person-1", "test", "direct-1")
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if len(openWaits) != 0 {
-		t.Fatalf("expected expired wait closed, got %+v", openWaits)
-	}
-}
-
 func TestConnectorRuntimeStopCommandCancelsCurrentConversationTask(t *testing.T) {
 	connectorRuntime, adapter, _ := newStubbedTestConnectorRuntime(t)
 	taskRun := seedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{ConversationID: "direct-1"}, "long task")
@@ -970,7 +833,7 @@ func TestConnectorRuntimeDoesNotContinueFailedRecoverableArtifactGoal(t *testing
 	event := testInboundEvent("message-deliver")
 	event.Prompt = "전달해줘야지 그럼"
 
-	activeGoal, isFound := connectorRuntime.findActiveGoal("person-1", "", event, inboundTaskWaitResolution{})
+	activeGoal, isFound := connectorRuntime.findActiveGoal("person-1", event)
 
 	if isFound {
 		t.Fatalf("expected failed artifact delivery task not to continue in the same task run, got %+v", activeGoal)
@@ -1083,7 +946,7 @@ func TestConnectorRuntimeDoesNotContinueFailedLinkOnlyGoal(t *testing.T) {
 	event := testInboundEvent("message-unrelated")
 	event.Prompt = "전달해줘야지 그럼"
 
-	_, isFound := connectorRuntime.findActiveGoal("person-1", "", event, inboundTaskWaitResolution{})
+	_, isFound := connectorRuntime.findActiveGoal("person-1", event)
 
 	if isFound {
 		t.Fatal("expected failed link-only task not to continue through artifact recovery path")
@@ -1178,7 +1041,7 @@ func TestOutboundReplyJSONPreservesFailureNotice(t *testing.T) {
 func TestConnectorRuntimeStopsProgressAfterRequestContextCancellation(t *testing.T) {
 	connectorRuntime, adapter, _ := newStubbedTestConnectorRuntime(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	stopProgress := connectorRuntime.startProgress(ctx, adapter, ReplyTarget{
+	stopProgress := connectorRuntime.startProgressHeartbeat(ctx, adapter, ReplyTarget{
 		ConversationID: "conversation-1",
 		ReplyTargetID:  "reply-target-1",
 	})
@@ -1397,35 +1260,6 @@ func TestConnectorRuntimeReactionFailureDoesNotSendFallbackReply(t *testing.T) {
 	}
 	if !connectorTaskEventsContain(connectorRuntime, result.TaskRunID, "connector.reaction.failed", "reaction failed") {
 		t.Fatal("expected reaction failure event")
-	}
-}
-
-func TestLatestApprovalQuestionUsesOnlyUserFacingMessage(t *testing.T) {
-	taskEvents := []task.TaskEvent{{
-		Name: "confirmation.requested",
-		Body: `{"reason":"Direct messages are external sends and require approval before immediate delivery.","reasonCode":"external_send"}`,
-	}, {
-		Name: "confirmation.requested",
-		Body: `{"userFacingMessage":"샘플 님에게 다음 DM을 보내도 될까요?\n\n테스트","reasonDetail":"internal only"}`,
-	}}
-
-	question := latestApprovalQuestion(taskEvents)
-
-	if question != "샘플 님에게 다음 DM을 보내도 될까요?\n\n테스트" {
-		t.Fatalf("expected user-facing approval question, got %q", question)
-	}
-}
-
-func TestLatestApprovalQuestionDoesNotFallBackToReason(t *testing.T) {
-	taskEvents := []task.TaskEvent{{
-		Name: "confirmation.requested",
-		Body: `{"reason":"Direct messages are external sends and require approval before immediate delivery.","reasonCode":"external_send"}`,
-	}}
-
-	question := latestApprovalQuestion(taskEvents)
-
-	if question != "" {
-		t.Fatalf("expected no question from internal reason, got %q", question)
 	}
 }
 
@@ -3701,15 +3535,12 @@ func seedAbandonedRunningTaskRun(t *testing.T, taskRunService *task.TaskRunServi
 	return runningTaskRun
 }
 
-func newWaitRoutingTestConnectorRuntime(t *testing.T, languageModel llm.LanguageModelProvider) (*ConnectorRuntime, *testAdapter, *task.TaskRunService, *task.InMemoryTaskWaitTokenRepository) {
+func newRoutedTestConnectorRuntime(t *testing.T, languageModel llm.LanguageModelProvider) (*ConnectorRuntime, *testAdapter, *task.TaskRunService) {
 	t.Helper()
 
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
-	taskWaitRepository := task.NewInMemoryTaskWaitTokenRepository()
-
 	connectorRuntime, adapter := connectorRuntimeForHarness(t, routedConnectorAgentKernel(taskRunService, languageModel, languageModel), &scriptedGatewayDecider{addressing: addressedToBot()}, reply.NewGenerator(languageModel, nil), taskRunService, languageModel)
-	connectorRuntime.UseTaskWaitTokenRepository(taskWaitRepository)
-	return connectorRuntime, adapter, taskRunService, taskWaitRepository
+	return connectorRuntime, adapter, taskRunService
 }
 
 func createWaitingInputTaskRun(t *testing.T, taskRunService *task.TaskRunService, prompt string, interactionID string) task.TaskRun {
@@ -3751,25 +3582,6 @@ func createWaitingInputTaskRunWithOptions(t *testing.T, taskRunService *task.Tas
 		"responseLanguage": "ko",
 	}))
 	return waitingTaskRun
-}
-
-func waitRoutingTaskWaitToken(taskRun task.TaskRun, dispatchID string, interactionID string) task.TaskWaitToken {
-	now := time.Now().UTC()
-	return task.TaskWaitToken{
-		WaitID:         "wait-" + dispatchID,
-		TaskRunID:      taskRun.TaskRunID,
-		PersonID:       taskRun.RequesterPersonID,
-		Platform:       "test",
-		ConversationID: taskRun.OriginConversationID,
-		ReplyTargetID:  dispatchID,
-		ThreadRootID:   taskRun.OriginReplyTargetID,
-		DispatchID:     dispatchID,
-		InteractionID:  interactionID,
-		Kind:           "input",
-		State:          "open",
-		ExpiresAt:      now.Add(time.Hour),
-		CreatedAt:      now,
-	}
 }
 
 func newStubbedRepositoryBackedTestConnectorRuntime(t *testing.T, taskRunRepository *testTaskRunRepository) (*ConnectorRuntime, *testAdapter, *task.TaskEventService, *scriptedHarness) {
@@ -4081,16 +3893,15 @@ func TestAReplyToAWaitingQuestionReachesTheAgentAsThePendingInputOfThatRun(t *te
 	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
 		ActionResponses: []string{connectorFinishMessage("진행했습니다.")},
 	})
-	connectorRuntime, adapter, taskRunService, taskWaitRepository := newWaitRoutingTestConnectorRuntime(t, languageModel)
+	connectorRuntime, adapter, taskRunService := newRoutedTestConnectorRuntime(t, languageModel)
 	recording := &pendingInputRecordingHarness{Harness: connectorRuntime.harness}
 	connectorRuntime.harness = recording
 	waitingTaskRun := createWaitingInputTaskRunWithOptions(t, taskRunService, "어떤 형식으로 만들까요?", "input-options")
-	if errorValue := taskWaitRepository.InsertTaskWaitToken(waitRoutingTaskWaitToken(waitingTaskRun, "input-dispatch", "input-options")); errorValue != nil {
-		t.Fatal(errorValue)
-	}
 	event := testInboundEvent("message-answer")
 	event.Prompt = "발표자료로 만들어 주세요"
-	event.ReplyTargetID = "input-dispatch"
+	event.ReplyTargetID = waitingTaskRun.OriginReplyTargetID
+	isThread := true
+	event.IsThread = &isThread
 
 	result, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, event)
 

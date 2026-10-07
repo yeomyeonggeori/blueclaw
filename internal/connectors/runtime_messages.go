@@ -24,7 +24,6 @@ type PlatformInboundEvent struct {
 	ResponseLanguage string                    `json:"responseLanguage,omitempty"`
 	Context          VisibleContext            `json:"context"`
 	RawReceivedAt    time.Time                 `json:"-"`
-	LegacyFields     map[string]interface{}    `json:"legacyFields,omitempty"`
 	TaskRetry        *TaskRetryReference       `json:"taskRetry,omitempty"`
 
 	gatewayDecision *gatewayDecision
@@ -272,11 +271,7 @@ func (event *PlatformInboundEvent) UnmarshalJSON(document []byte) error {
 	}
 
 	var rawFields map[string]interface{}
-	if errorValue := json.Unmarshal(document, &rawFields); errorValue == nil {
-		if len(parsedEvent.LegacyFields) == 0 {
-			parsedEvent.LegacyFields = rawFields
-		}
-	}
+	_ = json.Unmarshal(document, &rawFields)
 
 	if strings.TrimSpace(parsedEvent.Prompt) == "" {
 		parsedEvent.Prompt = stringField(rawFields, "text")

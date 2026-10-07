@@ -10,27 +10,6 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
-func latestApprovalQuestion(taskEvents []task.TaskEvent) string {
-	for index := len(taskEvents) - 1; index >= 0; index-- {
-		taskEvent := taskEvents[index]
-		if taskEvent.Name != agentcontract.TaskEventConfirmationRequested {
-			continue
-		}
-		var approvalRequest struct {
-			UserFacingMessage string `json:"userFacingMessage"`
-			Message           string `json:"message"`
-		}
-		if errorValue := json.Unmarshal([]byte(taskEvent.Body), &approvalRequest); errorValue != nil {
-			continue
-		}
-		question := firstNonEmptyString(approvalRequest.UserFacingMessage, approvalRequest.Message)
-		if strings.TrimSpace(question) != "" {
-			return strings.TrimSpace(question)
-		}
-	}
-	return ""
-}
-
 func latestApprovalResponseLanguage(taskEvents []task.TaskEvent) string {
 	for index := len(taskEvents) - 1; index >= 0; index-- {
 		taskEvent := taskEvents[index]
@@ -105,46 +84,6 @@ func askResolvedInteractionID(taskEvent task.TaskEvent) string {
 		return ""
 	}
 	return strings.TrimSpace(resolution.InteractionID)
-}
-
-func latestAskInteractionID(taskEvents []task.TaskEvent) string {
-	for index := len(taskEvents) - 1; index >= 0; index-- {
-		taskEvent := taskEvents[index]
-		if task.IsAskRequestedEvent(taskEvent.Name) {
-			return strings.TrimSpace(taskEvent.TaskEventID)
-		}
-	}
-	return ""
-}
-
-func latestAskPromptDispatchID(taskEvents []task.TaskEvent) string {
-	for index := len(taskEvents) - 1; index >= 0; index-- {
-		taskEvent := taskEvents[index]
-		if taskEvent.Name != agentcontract.TaskEventConnectorReplySent {
-			continue
-		}
-		var replyEvent struct {
-			ReplyKind  string `json:"replyKind"`
-			DispatchID string `json:"dispatchID"`
-		}
-		if errorValue := json.Unmarshal([]byte(taskEvent.Body), &replyEvent); errorValue != nil {
-			continue
-		}
-		if strings.TrimSpace(replyEvent.ReplyKind) == connectorReplyKindUserNotice && strings.TrimSpace(replyEvent.DispatchID) != "" {
-			return strings.TrimSpace(replyEvent.DispatchID)
-		}
-	}
-	return ""
-}
-
-func legacyString(fields map[string]interface{}, key string) string {
-	value, _ := fields[key].(string)
-	return strings.TrimSpace(value)
-}
-
-func legacyBool(fields map[string]interface{}, key string) bool {
-	value, _ := fields[key].(bool)
-	return value
 }
 
 func askOptionsFromLegacyChoices(choices []string) []AskChoiceOption {

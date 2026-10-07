@@ -10,10 +10,7 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
-func (connectorRuntime *ConnectorRuntime) findPendingAskInteraction(personID string, _ string, event PlatformInboundEvent, taskWaitResolution inboundTaskWaitResolution) (AskInteraction, bool) {
-	if taskWaitResolution.HasTaskWaitToken {
-		return connectorRuntime.findPendingAskInteractionByTaskRunID(taskWaitResolution.TaskWaitToken.TaskRunID)
-	}
+func (connectorRuntime *ConnectorRuntime) findPendingAskInteraction(personID string, event PlatformInboundEvent) (AskInteraction, bool) {
 	taskRuns := connectorRuntime.taskRunService.ListTaskRunByPersonID(personID)
 	var selectedInteraction AskInteraction
 	var selectedTaskRun task.TaskRun
@@ -39,24 +36,13 @@ func (connectorRuntime *ConnectorRuntime) findPendingAskInteraction(personID str
 	return selectedInteraction, isSelected
 }
 
-func (connectorRuntime *ConnectorRuntime) findPendingAskInteractionByTaskRunID(taskRunID string) (AskInteraction, bool) {
-	taskRun, isFound := connectorRuntime.taskRunService.FindTaskRun(taskRunID)
-	if !isFound || taskRun.Status != task.TaskStatusWaitingUserInput {
-		return AskInteraction{}, false
-	}
-	return latestAskInteraction(taskRun.TaskRunID, connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID))
-}
-
-func (connectorRuntime *ConnectorRuntime) findActiveGoal(personID string, _ string, event PlatformInboundEvent, taskWaitResolution inboundTaskWaitResolution) (agentcontract.ActiveGoal, bool) {
-	if taskWaitResolution.HasTaskWaitToken {
-		return connectorRuntime.findActiveGoalByTaskRunID(taskWaitResolution.TaskWaitToken.TaskRunID, event)
-	}
+func (connectorRuntime *ConnectorRuntime) findActiveGoal(personID string, event PlatformInboundEvent) (agentcontract.ActiveGoal, bool) {
 	taskRuns := connectorRuntime.taskRunService.ListTaskRunByPersonID(personID)
 	var selectedTaskRun task.TaskRun
 	isSelected := false
 	for _, taskRun := range taskRuns {
 		taskEvents := connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID)
-		if !eventCanContinueGoal(event, taskRun, taskEvents) || connectorRuntime.isAwaitedInThread(taskRun.TaskRunID) {
+		if !taskRunCanContinueGoal(taskRun, taskEvents) || connectorRuntime.isAwaitedInThread(taskRun.TaskRunID) {
 			continue
 		}
 		if !taskRunSharesMessageThread(taskRun, event) {
@@ -75,18 +61,6 @@ func (connectorRuntime *ConnectorRuntime) findActiveGoal(personID string, _ stri
 		return agentcontract.ActiveGoal{}, false
 	}
 	return connectorRuntime.activeGoalForTaskRun(selectedTaskRun), true
-}
-
-func (connectorRuntime *ConnectorRuntime) findActiveGoalByTaskRunID(taskRunID string, event PlatformInboundEvent) (agentcontract.ActiveGoal, bool) {
-	taskRun, isFound := connectorRuntime.taskRunService.FindTaskRun(taskRunID)
-	if !isFound {
-		return agentcontract.ActiveGoal{}, false
-	}
-	taskEvents := connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID)
-	if !eventCanContinueGoal(event, taskRun, taskEvents) || connectorRuntime.isAwaitedInThread(taskRun.TaskRunID) {
-		return agentcontract.ActiveGoal{}, false
-	}
-	return connectorRuntime.activeGoalForTaskRun(taskRun), true
 }
 
 func (connectorRuntime *ConnectorRuntime) findPriorTaskContext(personID string, event PlatformInboundEvent) (agentcontract.PriorTaskContext, bool) {
@@ -187,10 +161,6 @@ func latestIntakeDecision(taskEvents []task.TaskEvent) agentcontract.IntakeDecis
 		return decision
 	}
 	return agentcontract.IntakeDecision{}
-}
-
-func eventCanContinueGoal(event PlatformInboundEvent, taskRun task.TaskRun, taskEvents []task.TaskEvent) bool {
-	return taskRunCanContinueGoal(taskRun, taskEvents)
 }
 
 func taskRunCanContinueGoal(taskRun task.TaskRun, taskEvents []task.TaskEvent) bool {

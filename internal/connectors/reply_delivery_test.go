@@ -47,12 +47,10 @@ func TestAQuestionASessionTurnDeliversIsRecordedAsSentOnceWhereAnOutboxExists(t 
 	}
 }
 
-func TestAQuestionTheOutboxSendsIsRecordedOnceWithOneWait(t *testing.T) {
+func TestAQuestionTheOutboxSendsIsRecordedOnce(t *testing.T) {
 	connectorRuntime, adapter, _ := newStubbedTestConnectorRuntime(t)
 	repository := &testConnectorQueueRepository{}
 	connectorRuntime.UseEventRepository(repository)
-	taskWaitRepository := task.NewInMemoryTaskWaitTokenRepository()
-	connectorRuntime.UseTaskWaitTokenRepository(taskWaitRepository)
 	waiting := seedWaitingQuestionAtRoot(t, connectorRuntime, "message-clock-out")
 	event := rootMessage("message-clock-out", "message-clock-out")
 	replyTarget, _ := connectorRuntime.buildReplyTarget(context.Background(), adapter, event)
@@ -72,12 +70,5 @@ func TestAQuestionTheOutboxSendsIsRecordedOnceWithOneWait(t *testing.T) {
 	}
 	if sent := countConnectorTaskEvents(connectorRuntime, waiting.TaskRunID, agentcontract.TaskEventConnectorReplySent); sent != 1 {
 		t.Fatalf("the question the outbox sent is recorded as sent %d times, want once", sent)
-	}
-	waits, errorValue := taskWaitRepository.FindOpenByPersonAndConversation("person-1", event.Platform, event.ConversationID)
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if len(waits) != 1 || waits[0].DispatchID != "dispatch-1" {
-		t.Fatalf("expected one wait on the message the outbox sent, got %+v", waits)
 	}
 }

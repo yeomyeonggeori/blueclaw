@@ -143,7 +143,6 @@ func (connectorRuntime *ConnectorRuntime) gatewayFactsForTurn(ctx context.Contex
 	if turn.adapter != nil {
 		turn.event = connectorRuntime.withInitialVisibleContext(ctx, turn.adapter, turn.event)
 	}
-	turn.taskWaitResolution = connectorRuntime.resolveInboundTaskWait(turn.personID, turn.platform, turn.event)
 	open := connectorRuntime.readOpenInteractions(turn)
 	facts := inboundengagement.Facts{
 		Messages:         []inboundengagement.Message{inboundDecisionMessage(turn.event)},

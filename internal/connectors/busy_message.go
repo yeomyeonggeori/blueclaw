@@ -212,7 +212,6 @@ func (connectorRuntime *ConnectorRuntime) replaceBusyTask(event PlatformInboundE
 
 func (connectorRuntime *ConnectorRuntime) supersedeBusyTask(event PlatformInboundEvent, platform string, activeTaskRun task.TaskRun) {
 	_, _ = connectorRuntime.taskRunService.CancelTaskRunWithReason(activeTaskRun.TaskRunID, activeTaskRun.RequesterPersonID, "superseded_by_new_message")
-	connectorRuntime.resolveOpenTaskWaitsForTaskRun(activeTaskRun.RequesterPersonID, platform, activeTaskRun.OriginConversationID, activeTaskRun.TaskRunID)
 	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskSupersededByMessage, agentruntime.MarshalBody(map[string]string{
 		"messageID":       event.MessageID,
 		"latestUserInput": strings.TrimSpace(event.Prompt),
