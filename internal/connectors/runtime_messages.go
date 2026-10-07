@@ -234,27 +234,6 @@ func (event PlatformInboundEvent) ExternalEventID() string {
 	return firstNonEmptyString(strings.TrimSpace(event.EventID), strings.TrimSpace(event.MessageID))
 }
 
-func (event *PlatformInboundEvent) UnmarshalJSON(document []byte) error {
-	type platformInboundEvent PlatformInboundEvent
-	var parsedEvent platformInboundEvent
-	if errorValue := json.Unmarshal(document, &parsedEvent); errorValue != nil {
-		return errorValue
-	}
-
-	var rawFields map[string]interface{}
-	_ = json.Unmarshal(document, &rawFields)
-
-	if strings.TrimSpace(parsedEvent.Prompt) == "" {
-		parsedEvent.Prompt = stringField(rawFields, "text")
-	}
-	if strings.TrimSpace(parsedEvent.SenderID) == "" {
-		parsedEvent.SenderID = stringField(rawFields, "senderUserID")
-	}
-
-	*event = PlatformInboundEvent(parsedEvent)
-	return nil
-}
-
 func (visibleContext VisibleContext) ToAgentVisibleContext() agentcontract.VisibleContext {
 	messages := make([]agentcontract.VisibleContextMessage, 0, len(visibleContext.Messages))
 	for _, message := range visibleContext.Messages {
@@ -333,19 +312,4 @@ func attachmentMaterialID(attachment InputAttachment) string {
 
 func responseLanguageForEvent(event PlatformInboundEvent) string {
 	return toolcontract.ResolveResponseLanguage(event.ResponseLanguage, event.Context.ResponseLanguage)
-}
-
-func stringField(fields map[string]interface{}, name string) string {
-	if fields == nil {
-		return ""
-	}
-	value, isFound := fields[name]
-	if !isFound {
-		return ""
-	}
-	stringValue, isString := value.(string)
-	if !isString {
-		return ""
-	}
-	return strings.TrimSpace(stringValue)
 }

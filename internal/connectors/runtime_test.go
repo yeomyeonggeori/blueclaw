@@ -2912,31 +2912,6 @@ func TestConnectorRuntimeRejectsMissingHistoryCursorWhenMoreContextExists(t *tes
 	}
 }
 
-func TestPlatformInboundEventOnlyUsesTextAndSenderCompatibilityAliases(t *testing.T) {
-	var event PlatformInboundEvent
-	errorValue := json.Unmarshal([]byte(`{
-		"conversationID":"conversation-1",
-		"messageID":"message-1",
-		"senderUserID":"sender-1",
-		"text":"hello",
-		"rootMessageID":"root-1",
-		"replyParentID":"parent-1"
-	}`), &event)
-	if errorValue != nil {
-		t.Fatalf("expected compatibility event to decode: %v", errorValue)
-	}
-
-	if event.SenderID != "sender-1" {
-		t.Fatalf("expected sender compatibility alias, got %q", event.SenderID)
-	}
-	if event.Prompt != "hello" {
-		t.Fatalf("expected text compatibility alias, got %q", event.Prompt)
-	}
-	if event.ReplyTargetID != "" {
-		t.Fatalf("expected no reply target inference, got %q", event.ReplyTargetID)
-	}
-}
-
 type testAdapter struct {
 	senderEmail                   string
 	sendReplyError                error
