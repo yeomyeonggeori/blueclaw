@@ -2,6 +2,7 @@ import type { PersonalGateway } from "./gateway.ts";
 import {
 	MalformedRequest,
 	optionalLoopbackTypingURL,
+	optionalLoopbackWithdrawalsURL,
 	parseCredentialAnswers,
 	parseMemberExternalIDs,
 	parseNewChannel,
@@ -184,6 +185,7 @@ export const personCapabilities: Record<string, PersonCapability> = {
 			request.actor,
 			requireLoopbackArrivalsURL(request),
 			optionalLoopbackTypingURL(request),
+			optionalLoopbackWithdrawalsURL(request),
 		);
 		return {};
 	},

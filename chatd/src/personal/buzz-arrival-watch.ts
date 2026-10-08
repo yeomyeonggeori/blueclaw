@@ -2,6 +2,7 @@ import { createBuzzRelayClient, type BuzzRelayClient } from "../adapters/buzz/re
 import { listUserConversations, pubkeyFromSecret, type UserConversation } from "../adapters/buzz/user-session.ts";
 import { carriesTag, firstTagValue, type BuzzEvent } from "../adapters/buzz/types.ts";
 import { TYPING_INDICATOR_KIND } from "../adapters/buzz/user-typing.ts";
+import { DELETE_MESSAGE_KIND, REACTION_KIND, isAbout } from "../adapters/buzz/deletions.ts";
 
 const STREAM_MESSAGE_KIND = 9;
 const MEMBER_ADDED_NOTIFICATION_KIND = 44100;
@@ -24,11 +25,19 @@ export type Typing = {
 	recipientExternalIDs: string[];
 };
 
+export type Withdrawal = {
+	conversationID: string;
+	messageID: string;
+	authorExternalID: string;
+	recipientExternalIDs: string[];
+};
+
 export type ArrivalWatchDependencies = {
 	openRelay: (userSecretHex: string) => BuzzRelayClient;
 	listConversations: (userSecretHex: string) => Promise<UserConversation[]>;
 	tell: (arrivalsURL: string, arrival: Arrival) => Promise<void>;
 	tellTyping: (typingURL: string, typing: Typing) => Promise<void>;
+	tellWithdrawal: (withdrawalsURL: string, withdrawal: Withdrawal) => Promise<void>;
 	now: () => number;
 };
 
@@ -48,6 +57,7 @@ export function createBuzzArrivalWatch(relayURL: string, authTagJSON: string | u
 		listConversations: (userSecretHex) => listUserConversations(relayURL, userSecretHex, { withProfiles: false }),
 		tell: postToTheRelay,
 		tellTyping: postToTheRelay,
+		tellWithdrawal: postToTheRelay,
 		now: () => Date.now(),
 	});
 }
@@ -57,12 +67,14 @@ export class BuzzArrivalWatch {
 	private readonly toldEventIDs = new Set<string>();
 	private arrivalsURL = "";
 	private typingURL = "";
+	private withdrawalsURL = "";
 
 	constructor(private readonly dependencies: ArrivalWatchDependencies) {}
 
-	async watch(userSecretHex: string, arrivalsURL: string, typingURL = ""): Promise<void> {
+	async watch(userSecretHex: string, arrivalsURL: string, typingURL = "", withdrawalsURL = ""): Promise<void> {
 		this.arrivalsURL = arrivalsURL;
 		this.typingURL = typingURL;
+		this.withdrawalsURL = withdrawalsURL;
 		this.closeUnrenewed();
 		const pubkey = pubkeyFromSecret(userSecretHex);
 		const watcher = this.watchers.get(pubkey) ?? this.open(pubkey, userSecretHex);
@@ -133,7 +145,11 @@ export class BuzzArrivalWatch {
 	}
 
 	private watchedKinds(): number[] {
-		return this.typingURL ? [STREAM_MESSAGE_KIND, TYPING_INDICATOR_KIND] : [STREAM_MESSAGE_KIND];
+		return [
+			STREAM_MESSAGE_KIND,
+			...(this.typingURL ? [TYPING_INDICATOR_KIND] : []),
+			...(this.withdrawalsURL ? [DELETE_MESSAGE_KIND] : []),
+		];
 	}
 
 	private heard(watcher: Watcher, event: BuzzEvent): void {
@@ -142,6 +158,24 @@ export class BuzzArrivalWatch {
 		if (this.toldEventIDs.has(event.id)) return;
 		if (event.kind === STREAM_MESSAGE_KIND) this.arrived(watcher, channelID, event);
 		if (event.kind === TYPING_INDICATOR_KIND) this.typed(watcher, channelID, event);
+		if (event.kind === DELETE_MESSAGE_KIND) this.withdrawn(watcher, channelID, event);
+	}
+
+	private withdrawn(watcher: Watcher, channelID: string, event: BuzzEvent): void {
+		if (!this.withdrawalsURL || isAbout(event, REACTION_KIND)) return;
+		if (this.nowSeconds() - event.created_at > freshnessSeconds) return;
+		const messageID = firstTagValue(event, "e");
+		if (!messageID) return;
+		this.remember(event.id);
+		const withdrawal: Withdrawal = {
+			conversationID: channelID,
+			messageID,
+			authorExternalID: event.pubkey,
+			recipientExternalIDs: watcher.participantsByChannel.get(channelID) ?? [],
+		};
+		void this.dependencies
+			.tellWithdrawal(this.withdrawalsURL, withdrawal)
+			.catch((reason) => reportWatchFailure(`withdrawal of ${messageID} in ${channelID}`, reason));
 	}
 
 	private typed(watcher: Watcher, channelID: string, event: BuzzEvent): void {
@@ -192,7 +226,7 @@ export class BuzzArrivalWatch {
 	}
 }
 
-async function postToTheRelay(url: string, heard: Arrival | Typing): Promise<void> {
+async function postToTheRelay(url: string, heard: Arrival | Typing | Withdrawal): Promise<void> {
 	const response = await fetch(url, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },

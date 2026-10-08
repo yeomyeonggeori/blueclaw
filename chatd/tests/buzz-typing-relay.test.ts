@@ -106,6 +106,7 @@ function watchTellingInto(typed: Typing[], participants: string[], channelID: st
 			{ channelID, name: "", isDM: true, isPrivate: true, participantPubkeyHexes: participants },
 		],
 		tell: async () => {},
+		tellWithdrawal: async () => {},
 		tellTyping: async (_url, typing) => {
 			typed.push(typing);
 		},
@@ -180,6 +181,7 @@ describe("typing against a relay", () => {
 				{ channelID: "channel-1", name: "", isDM: true, isPrivate: true, participantPubkeyHexes: participants },
 			],
 			tell: async () => {},
+			tellWithdrawal: async () => {},
 			tellTyping: async (_url, typing) => {
 				typed.push(typing);
 			},
