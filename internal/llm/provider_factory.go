@@ -1,7 +1,6 @@
 package llm
 
 import (
-	"context"
 	"errors"
 	"os"
 	"strings"
@@ -165,8 +164,6 @@ func readAPIKey(apiKeyPath string) (string, error) {
 
 type ConfiguredEmbedder interface {
 	EmbeddingProvider
-	EmbedQuery(ctx context.Context, text string) ([]float32, error)
-	EmbedDocuments(ctx context.Context, texts []string) ([][]float32, error)
 	EmbeddingModelName() string
 }
 
