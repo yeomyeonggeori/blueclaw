@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { BuzzArrivalWatch, type Arrival, type Typing } from "../src/personal/buzz-arrival-watch.ts";
+import { BuzzArrivalWatch, type Arrival, type Typing, type Withdrawal } from "../src/personal/buzz-arrival-watch.ts";
 import {
 	MalformedRequest,
 	optionalLoopbackTypingURL,
+	optionalLoopbackWithdrawalsURL,
 	parsePersonRequest,
 	requireLoopbackArrivalsURL,
 } from "../src/personal/parse.ts";
@@ -14,6 +15,7 @@ const aliceSecret = "1".repeat(64);
 const bobSecret = "2".repeat(64);
 const arrivalsURL = "http://127.0.0.1:18091/arrived";
 const typingURL = "http://127.0.0.1:18091/typing";
+const withdrawalsURL = "http://127.0.0.1:18091/withdrawn";
 const startedAt = 1_800_000_000_000;
 
 type FakeRelay = BuzzRelayClient & {
@@ -69,6 +71,10 @@ function typing(id: string, channelID: string, author: string, createdAtMillisec
 	return { ...message(id, channelID, author, createdAtMilliseconds), kind: 20002, content: "" };
 }
 
+function deletion(id: string, channelID: string, author: string, messageID: string, createdAtMilliseconds: number): BuzzEvent {
+	return { ...message(id, channelID, author, createdAtMilliseconds), kind: 9005, content: "", tags: [["h", channelID], ["e", messageID]] };
+}
+
 function deliverTo(relay: FakeRelay, channelID: string, event: BuzzEvent): void {
 	for (const subscription of relay.subscriptions) {
 		const [filter] = subscription.filters as { "#h"?: string[] }[];
@@ -80,6 +86,7 @@ function harness(conversationsBySecret: Map<string, UserConversation[]>) {
 	const relays = new Map<string, FakeRelay>();
 	const told: Arrival[] = [];
 	const typed: Typing[] = [];
+	const withdrawn: Withdrawal[] = [];
 	let now = startedAt;
 	const watch = new BuzzArrivalWatch({
 		openRelay: (secret) => {
@@ -94,6 +101,9 @@ function harness(conversationsBySecret: Map<string, UserConversation[]>) {
 		tellTyping: async (_url, typing) => {
 			typed.push(typing);
 		},
+		tellWithdrawal: async (_url, withdrawal) => {
+			withdrawn.push(withdrawal);
+		},
 		now: () => now,
 	});
 	return {
@@ -101,6 +111,7 @@ function harness(conversationsBySecret: Map<string, UserConversation[]>) {
 		relays,
 		told,
 		typed,
+		withdrawn,
 		advance: (milliseconds: number) => {
 			now += milliseconds;
 		},
@@ -329,6 +340,75 @@ describe("where typing is told", () => {
 	test("is never an address off this machine", () => {
 		expect(() =>
 			optionalLoopbackTypingURL(parsePersonRequest({ actor, typingURL: "http://relay.example.com/typing" })),
+		).toThrow(MalformedRequest);
+	});
+});
+
+describe("watching a person's conversations for a message taken back", () => {
+	test("tells a deleted message once, to everyone in the conversation", async () => {
+		const dm = conversation("dm-1", ["alice", "bob"]);
+		const { watch, relays, withdrawn, told, now } = harness(
+			new Map([
+				[aliceSecret, [dm]],
+				[bobSecret, [dm]],
+			]),
+		);
+		await watch.watch(aliceSecret, arrivalsURL, typingURL, withdrawalsURL);
+		await watch.watch(bobSecret, arrivalsURL, typingURL, withdrawalsURL);
+
+		const heard = deletion("d-1", "dm-1", "alice", "m-1", now());
+		deliverTo(relays.get(aliceSecret)!, "dm-1", heard);
+		deliverTo(relays.get(bobSecret)!, "dm-1", heard);
+
+		expect(withdrawn).toEqual([
+			{ conversationID: "dm-1", messageID: "m-1", authorExternalID: "alice", recipientExternalIDs: ["alice", "bob"] },
+		]);
+		expect(told).toEqual([]);
+	});
+
+	test("a reaction taken back is not told as a message taken back", async () => {
+		const { watch, relays, withdrawn, now } = harness(new Map([[aliceSecret, [conversation("dm-1", ["alice", "bob"])]]]));
+		await watch.watch(aliceSecret, arrivalsURL, typingURL, withdrawalsURL);
+
+		const removal = deletion("d-1", "dm-1", "bob", "reaction-1", now());
+		deliverTo(relays.get(aliceSecret)!, "dm-1", { ...removal, tags: [...removal.tags, ["k", "7"]] });
+
+		expect(withdrawn).toEqual([]);
+	});
+
+	test("a deletion older than the watch keeps is not told", async () => {
+		const { watch, relays, withdrawn, now } = harness(new Map([[aliceSecret, [conversation("dm-1", ["alice", "bob"])]]]));
+		await watch.watch(aliceSecret, arrivalsURL, typingURL, withdrawalsURL);
+
+		deliverTo(relays.get(aliceSecret)!, "dm-1", deletion("d-1", "dm-1", "bob", "m-1", now() - 11 * 60_000));
+
+		expect(withdrawn).toEqual([]);
+	});
+
+	test("a relay that names nowhere to tell deletions is not asked to watch for them", async () => {
+		const { watch, relays, withdrawn, now } = harness(new Map([[aliceSecret, [conversation("dm-1", ["alice", "bob"])]]]));
+		await watch.watch(aliceSecret, arrivalsURL, typingURL);
+
+		const [subscription] = relays.get(aliceSecret)!.subscriptions.filter(({ filters }) =>
+			(filters as { "#h"?: string[] }[])[0]?.["#h"]?.includes("dm-1"),
+		);
+		expect((subscription!.filters as { kinds: number[] }[])[0]!.kinds).toEqual([9, 20002]);
+		deliverTo(relays.get(aliceSecret)!, "dm-1", deletion("d-1", "dm-1", "bob", "m-1", now()));
+		expect(withdrawn).toEqual([]);
+	});
+});
+
+describe("where a deletion is told", () => {
+	const actor = { kind: "buzz-secret", secret: aliceSecret };
+
+	test("is the relay on this machine, when the relay names a place", () => {
+		expect(optionalLoopbackWithdrawalsURL(parsePersonRequest({ actor, withdrawalsURL }))).toBe(withdrawalsURL);
+		expect(optionalLoopbackWithdrawalsURL(parsePersonRequest({ actor }))).toBeUndefined();
+	});
+
+	test("is never an address off this machine", () => {
+		expect(() =>
+			optionalLoopbackWithdrawalsURL(parsePersonRequest({ actor, withdrawalsURL: "http://relay.example.com/withdrawn" })),
 		).toThrow(MalformedRequest);
 	});
 });

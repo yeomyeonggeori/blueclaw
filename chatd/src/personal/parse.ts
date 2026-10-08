@@ -26,6 +26,7 @@ export type PersonRequest = {
 	largestBytes?: number;
 	arrivalsURL?: string;
 	typingURL?: string;
+	withdrawalsURL?: string;
 	readAt?: string;
 	mediaURL?: string;
 	range?: string;
@@ -78,6 +79,7 @@ export function parsePersonRequest(value: unknown): PersonRequest {
 		largestBytes: optionalCount(record, "largestBytes"),
 		arrivalsURL: optionalText(record, "arrivalsURL"),
 		typingURL: optionalText(record, "typingURL"),
+		withdrawalsURL: optionalText(record, "withdrawalsURL"),
 		readAt: optionalText(record, "readAt"),
 		mediaURL: optionalText(record, "mediaURL"),
 		range: optionalText(record, "range"),
@@ -210,6 +212,11 @@ export function requireLoopbackArrivalsURL(request: PersonRequest): string {
 export function optionalLoopbackTypingURL(request: PersonRequest): string | undefined {
 	if (!request.typingURL) return undefined;
 	return loopbackURL("typingURL", request.typingURL);
+}
+
+export function optionalLoopbackWithdrawalsURL(request: PersonRequest): string | undefined {
+	if (!request.withdrawalsURL) return undefined;
+	return loopbackURL("withdrawalsURL", request.withdrawalsURL);
 }
 
 function loopbackURL(field: string, offered: string): string {
