@@ -16,11 +16,6 @@ func (embedder fixedWidthEmbedder) EmbeddingModelName() string {
 	return embedder.provider.ModelName()
 }
 
-func (embedder fixedWidthEmbedder) GenerateEmbedding(ctx context.Context, input string) ([]float32, error) {
-	embedding, errorValue := embedder.provider.GenerateEmbedding(ctx, input)
-	return embedder.checked(embedding, errorValue)
-}
-
 func (embedder fixedWidthEmbedder) EmbedQuery(ctx context.Context, text string) ([]float32, error) {
 	embedding, errorValue := embedder.provider.EmbedQuery(ctx, text)
 	return embedder.checked(embedding, errorValue)

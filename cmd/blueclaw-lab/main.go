@@ -319,12 +319,20 @@ type observedEmbeddingProvider struct {
 	successfulCallCount atomic.Int64
 }
 
-func (provider *observedEmbeddingProvider) GenerateEmbedding(ctx context.Context, input string) ([]float32, error) {
-	embedding, errorValue := provider.provider.GenerateEmbedding(ctx, input)
+func (provider *observedEmbeddingProvider) EmbedQuery(ctx context.Context, text string) ([]float32, error) {
+	embedding, errorValue := provider.provider.EmbedQuery(ctx, text)
 	if errorValue == nil && len(embedding) > 0 {
 		provider.successfulCallCount.Add(1)
 	}
 	return embedding, errorValue
+}
+
+func (provider *observedEmbeddingProvider) EmbedDocuments(ctx context.Context, texts []string) ([][]float32, error) {
+	embeddings, errorValue := provider.provider.EmbedDocuments(ctx, texts)
+	if errorValue == nil && len(embeddings) > 0 {
+		provider.successfulCallCount.Add(1)
+	}
+	return embeddings, errorValue
 }
 
 func liveEmbeddingProvider(arguments virtualSessionArguments) (llm.EmbeddingProvider, error) {

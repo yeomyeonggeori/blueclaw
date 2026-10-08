@@ -69,10 +69,6 @@ type capabilityEmbeddingResponseDocument struct {
 	Embeddings      [][]float64 `json:"embeddings"`
 }
 
-func (client CapabilityEmbeddingClient) GenerateEmbedding(ctx context.Context, input string) ([]float32, error) {
-	return client.GenerateEmbeddingForInput(ctx, EmbeddingInput{Text: input})
-}
-
 func (client CapabilityEmbeddingClient) GenerateEmbeddingForInput(ctx context.Context, input EmbeddingInput) ([]float32, error) {
 	responseDocument, errorValue := client.post(ctx, input.Text, input.InputType)
 	if errorValue != nil {
