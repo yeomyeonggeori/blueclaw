@@ -786,14 +786,18 @@ func (connectorRuntime *ConnectorRuntime) suppressDuplicateSourceTaskIfNeeded(pl
 }
 
 func (connectorRuntime *ConnectorRuntime) findTaskRunBySourceReference(personID string, sourceReference string) (task.TaskRun, bool) {
+	return FindTaskRunBySourceReference(connectorRuntime.taskRunService, personID, sourceReference)
+}
+
+func FindTaskRunBySourceReference(taskRunStore taskstate.TaskRunStore, personID string, sourceReference string) (task.TaskRun, bool) {
 	trimmedSourceReference := strings.TrimSpace(sourceReference)
 	if trimmedSourceReference == "" {
 		return task.TaskRun{}, false
 	}
 	var selectedTaskRun task.TaskRun
 	isFound := false
-	for _, taskRun := range connectorRuntime.taskRunService.ListTaskRunByPersonID(personID) {
-		if !connectorRuntime.taskRunHasSourceReference(taskRun.TaskRunID, trimmedSourceReference) {
+	for _, taskRun := range taskRunStore.ListTaskRunByPersonID(personID) {
+		if !taskRunHasSourceReference(taskRunStore, taskRun.TaskRunID, trimmedSourceReference) {
 			continue
 		}
 		if isFound && !taskRun.UpdatedAt.After(selectedTaskRun.UpdatedAt) {
@@ -805,8 +809,8 @@ func (connectorRuntime *ConnectorRuntime) findTaskRunBySourceReference(personID 
 	return selectedTaskRun, isFound
 }
 
-func (connectorRuntime *ConnectorRuntime) taskRunHasSourceReference(taskRunID string, sourceReference string) bool {
-	for _, taskEvent := range connectorRuntime.taskRunService.ListTaskEvent(taskRunID) {
+func taskRunHasSourceReference(taskRunStore taskstate.TaskRunStore, taskRunID string, sourceReference string) bool {
+	for _, taskEvent := range taskRunStore.ListTaskEvent(taskRunID) {
 		if taskEvent.Name != agentcontract.TaskEventAgentTaskSource && taskEvent.Name != agentcontract.TaskEventAgentTaskLaunched {
 			continue
 		}

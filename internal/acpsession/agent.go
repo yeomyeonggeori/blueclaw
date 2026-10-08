@@ -78,6 +78,7 @@ type Agent struct {
 	logger             *slog.Logger
 	deliveries         *awaitedDeliveries
 	deliveryReportWait time.Duration
+	runPollInterval    time.Duration
 
 	connection *acp.AgentSideConnection
 	mutex      sync.RWMutex
@@ -97,6 +98,7 @@ func NewAgent(collaborators Collaborators, permissionRelay *PermissionRelay, log
 		logger:             logger,
 		deliveries:         newAwaitedDeliveries(),
 		deliveryReportWait: defaultDeliveryReportWait,
+		runPollInterval:    defaultRunPollInterval,
 		sessions:           map[acp.SessionId]openSession{},
 	}
 }
@@ -225,6 +227,9 @@ func (agent *Agent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.
 	}
 	messageContext := MessageContextFromMeta(request.Meta)
 	launchRequest := agent.taskLaunchRequestFor(session, request.SessionId, prompt, messageContext)
+	if taskRun, isLaunched := agent.runAlreadyLaunchedForMessage(launchRequest.RequesterPersonID, launchRequest.SourceReference, messageContext); isLaunched {
+		return agent.answerFromRunOfTheSameMessage(ctx, request.SessionId, taskRun)
+	}
 	delivery := Delivery{DeliveryID: newRandomIdentifier(), ReplyTargetID: launchRequest.ReplyTargetID}
 	sessionTurn := agent.sessionTurns.OpenSessionTurn(ctx, inboundEventOf(messageContext, launchRequest), launchRequest.RequesterPersonID, agent.replySenderForDelivery(request.SessionId, delivery.DeliveryID))
 	defer sessionTurn.EndProgress()
@@ -279,7 +284,7 @@ func (agent *Agent) taskLaunchRequestFor(session openSession, sessionID acp.Sess
 	replyTargetID := messageContext.replyTargetID(addressing)
 	return agentruntime.TaskLaunchRequest{
 		Source:                  agentruntime.TaskLaunchSourceConnector,
-		SourceReference:         "acp:" + string(sessionID),
+		SourceReference:         sourceReferenceFor(sessionID, addressing, messageContext),
 		RequesterPersonID:       requester.PersonID,
 		RequesterName:           agent.requesterName(requester),
 		RequesterCallingName:    requester.CallingName,
