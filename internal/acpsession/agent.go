@@ -78,7 +78,8 @@ type Agent struct {
 	logger             *slog.Logger
 	deliveries         *awaitedDeliveries
 	deliveryReportWait time.Duration
-	runPollInterval    time.Duration
+	taskRunTransitions TaskRunTransitionSource
+	messageFlights     *messageFlights
 
 	connection *acp.AgentSideConnection
 	mutex      sync.RWMutex
@@ -98,7 +99,8 @@ func NewAgent(collaborators Collaborators, permissionRelay *PermissionRelay, log
 		logger:             logger,
 		deliveries:         newAwaitedDeliveries(),
 		deliveryReportWait: defaultDeliveryReportWait,
-		runPollInterval:    defaultRunPollInterval,
+		taskRunTransitions: taskRunTransitionSourceOf(collaborators.TaskRunStore),
+		messageFlights:     newMessageFlights(),
 		sessions:           map[acp.SessionId]openSession{},
 	}
 }
@@ -227,6 +229,11 @@ func (agent *Agent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.
 	}
 	messageContext := MessageContextFromMeta(request.Meta)
 	launchRequest := agent.taskLaunchRequestFor(session, request.SessionId, prompt, messageContext)
+	releaseMessage, errorValue := agent.claimMessage(ctx, launchRequest, messageContext)
+	if errorValue != nil {
+		return acp.PromptResponse{}, errorValue
+	}
+	defer releaseMessage()
 	if taskRun, isLaunched := agent.runAlreadyLaunchedForMessage(launchRequest.RequesterPersonID, launchRequest.SourceReference, messageContext); isLaunched {
 		return agent.answerFromRunOfTheSameMessage(ctx, request.SessionId, taskRun)
 	}

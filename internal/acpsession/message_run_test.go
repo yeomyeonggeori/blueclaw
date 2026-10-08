@@ -74,6 +74,112 @@ func TestTheSameMessagePromptedTwiceRunsOnce(t *testing.T) {
 	}
 }
 
+type gatedLauncher struct {
+	ledgerLauncher
+	entered chan struct{}
+	gate    chan struct{}
+}
+
+func (launcher *gatedLauncher) Launch(ctx context.Context, request agentruntime.TaskLaunchRequest) (agentruntime.TaskLaunchResult, error) {
+	launcher.entered <- struct{}{}
+	<-launcher.gate
+	return launcher.ledgerLauncher.Launch(ctx, request)
+}
+
+func TestTheSameMessageArrivingTwiceAtOnceRunsOnce(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	launcher := &gatedLauncher{
+		ledgerLauncher: ledgerLauncher{taskRunService: taskRunService},
+		entered:        make(chan struct{}, 2),
+		gate:           make(chan struct{}),
+	}
+	connection := connectedPairOverLedger(t, launcher, taskRunService)
+	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
+
+	var group sync.WaitGroup
+	for range 2 {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			if _, errorValue := promptMessageForTest(connection, sessionID, "message-7"); errorValue != nil {
+				t.Errorf("prompt: %v", errorValue)
+			}
+		}()
+	}
+	<-launcher.entered
+	close(launcher.gate)
+	group.Wait()
+
+	if launches := launcher.launches(); launches != 1 {
+		t.Fatalf("one message arriving twice at once launched %d task runs", launches)
+	}
+}
+
+func TestAMessageFlightHoldsASecondClaimUntilTheFirstIsReleased(t *testing.T) {
+	flights := newMessageFlights()
+	key := messageFlightKey{personID: "person-sample", sourceReference: "buzz:conversation-1:message-7"}
+	release, errorValue := flights.claim(context.Background(), key)
+	if errorValue != nil {
+		t.Fatalf("first claim: %v", errorValue)
+	}
+	claimed := make(chan struct{})
+	go func() {
+		releaseSecond, _ := flights.claim(context.Background(), key)
+		releaseSecond()
+		close(claimed)
+	}()
+	select {
+	case <-claimed:
+		t.Fatal("a second claim succeeded while the first was held")
+	default:
+	}
+
+	release()
+
+	<-claimed
+}
+
+func TestAMessageFlightLetsDifferentMessagesFlyTogether(t *testing.T) {
+	flights := newMessageFlights()
+	releaseFirst, _ := flights.claim(context.Background(), messageFlightKey{personID: "person-sample", sourceReference: "buzz:conversation-1:message-7"})
+	defer releaseFirst()
+
+	releaseSecond, errorValue := flights.claim(context.Background(), messageFlightKey{personID: "person-sample", sourceReference: "buzz:conversation-1:message-8"})
+
+	if errorValue != nil {
+		t.Fatalf("second claim: %v", errorValue)
+	}
+	releaseSecond()
+}
+
+func TestAReaskedMessageIsReleasedByTheTransitionOfItsRun(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	launcher := &ledgerLauncher{taskRunService: taskRunService}
+	connection := connectedPairOverLedger(t, launcher, taskRunService)
+	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
+	running := launchedRunForTest(taskRunService, "conversation-1", "buzz:conversation-1:message-7")
+	if _, errorValue := taskRunService.AdvanceTaskRun(running.TaskRunID, "assistant"); errorValue != nil {
+		t.Fatalf("advance: %v", errorValue)
+	}
+	answered := make(chan acp.PromptResponse, 1)
+	go func() {
+		response, _ := promptMessageForTest(connection, sessionID, "message-7")
+		answered <- response
+	}()
+
+	if _, errorValue := taskRunService.CancelTaskRun(running.TaskRunID, "person-sample"); errorValue != nil {
+		t.Fatalf("cancel: %v", errorValue)
+	}
+
+	response := <-answered
+	if response.StopReason != acp.StopReasonCancelled {
+		t.Fatalf("the re-ask was answered %q", response.StopReason)
+	}
+	if launches := launcher.launches(); launches != 0 {
+		t.Fatalf("the re-ask launched %d task runs", launches)
+	}
+}
+
 func TestADifferentMessageInTheSameConversationRunsAgain(t *testing.T) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	launcher := &ledgerLauncher{taskRunService: taskRunService}
