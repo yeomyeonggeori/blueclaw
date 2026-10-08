@@ -6,7 +6,7 @@
     { "scopeType": "workspace" }
   ],
   "index": {
-    "embeddingModel": "baai/bge-m3",
+    "embeddingModel": "google/embeddinggemma-2",
     "current": 3,
     "stale": 0
   },

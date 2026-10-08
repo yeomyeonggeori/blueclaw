@@ -260,7 +260,7 @@ func runVirtualSession(ctx context.Context, arguments virtualSessionArguments) e
 		return evidenceError
 	}
 	if arguments.LiveLanguageModel && arguments.StrictAssertions && len(scenario.SkillDirectoryPaths) > 0 && embeddingObserver.successfulCallCount.Load() == 0 {
-		return errors.New("strict live scenario did not complete a local BGE-M3 embedding call")
+		return errors.New("strict live scenario did not complete a local embedding call")
 	}
 	if arguments.LiveLanguageModel && arguments.StrictAssertions && len(scenario.SkillDirectoryPaths) > 0 {
 		if errorValue := validateStrictEmbeddingRetrieval(result); errorValue != nil {
@@ -339,8 +339,9 @@ func liveEmbeddingProvider(arguments virtualSessionArguments) (llm.EmbeddingProv
 			Endpoint:       endpointForVirtualSession(arguments),
 			UnixSocketPath: arguments.LanguageModelSocket,
 		}),
-		ModelName:     arguments.EmbeddingModelName,
-		ExecutionMode: arguments.ExecutionMode,
+		ModelName:        firstNonEmptyString(arguments.EmbeddingModelName, llm.DefaultEmbeddingModelName),
+		ExecutionMode:    arguments.ExecutionMode,
+		OutputDimensions: llm.DefaultEmbeddingDimensions,
 	}, nil
 }
 

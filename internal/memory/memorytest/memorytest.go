@@ -16,6 +16,8 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 )
 
+const defaultEmbeddingModel = "test-embed"
+
 // Open gives a Stores under the test's own directory, embedding by hash and
 // settling through a model that keeps each note as one statement. Nothing a
 // test writes relates to what is already held.
@@ -30,7 +32,15 @@ func Open(t *testing.T) *memory.Stores {
 func OpenWithRoot(t *testing.T) (*memory.Stores, string) {
 	t.Helper()
 	root := t.TempDir()
-	return openUnder(t, root, chooserAnswering(relationUnrelatedAnswer)), root
+	return openUnder(t, root, chooserAnswering(relationUnrelatedAnswer), defaultEmbeddingModel), root
+}
+
+// OpenEmbeddedBy gives the same Stores as OpenWithRoot, recording every vector
+// it writes as made by the named embedding model.
+func OpenEmbeddedBy(t *testing.T, embeddingModel string) (*memory.Stores, string) {
+	t.Helper()
+	root := t.TempDir()
+	return openUnder(t, root, chooserAnswering(relationUnrelatedAnswer), embeddingModel), root
 }
 
 // OpenCorrecting gives a Stores whose judge reads every new statement as a
@@ -50,14 +60,14 @@ func OpenJudgingSame(t *testing.T) *memory.Stores {
 
 func open(t *testing.T, chooser bluememo.Chooser) *memory.Stores {
 	t.Helper()
-	return openUnder(t, t.TempDir(), chooser)
+	return openUnder(t, t.TempDir(), chooser, defaultEmbeddingModel)
 }
 
-func openUnder(t *testing.T, root string, chooser bluememo.Chooser) *memory.Stores {
+func openUnder(t *testing.T, root string, chooser bluememo.Chooser, embeddingModel string) *memory.Stores {
 	t.Helper()
 	stores := memory.NewStores(root, bluememo.Configuration{
 		Embedder:       &bluememotest.HashEmbedder{},
-		EmbeddingModel: "test-embed",
+		EmbeddingModel: embeddingModel,
 		Model:          EchoModel{},
 		Judge:          bluememo.DistributionJudge{Chooser: chooser},
 	}, currentProcessActor{})

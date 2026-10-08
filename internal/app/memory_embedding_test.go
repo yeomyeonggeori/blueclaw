@@ -30,10 +30,11 @@ func TestExampleConfigurationMatchesTheDefaultMemoryEmbedding(t *testing.T) {
 }
 
 func TestConfiguredEmbeddingDimensionsWinOverTheDefault(t *testing.T) {
-	if width := firstPositiveInteger(768, llm.DefaultEmbeddingDimensions); width != 768 {
+	configured := config.RuntimeConfiguration{Memory: config.MemoryConfiguration{EmbeddingDimensions: 512}}
+	if width := llm.ConfiguredEmbeddingDimensions(configured); width != 512 {
 		t.Fatalf("expected a configured width to be used, got %d", width)
 	}
-	if width := firstPositiveInteger(0, llm.DefaultEmbeddingDimensions); width != llm.DefaultEmbeddingDimensions {
+	if width := llm.ConfiguredEmbeddingDimensions(config.RuntimeConfiguration{}); width != llm.DefaultEmbeddingDimensions {
 		t.Fatalf("expected the default width when none is configured, got %d", width)
 	}
 }

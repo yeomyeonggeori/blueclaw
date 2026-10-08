@@ -369,27 +369,45 @@ func NewIdentifier() string {
 
 const reembedBatchSize = 64
 
+type MaintenanceReport struct {
+	Scopes     int
+	Reembedded bluememo.ReembedReport
+}
+
 // Maintain sweeps what has gone cold and re-embeds what a changed embedding
 // model left stale, across every memory file on disk rather than only the ones
-// this process has already opened.
-func (stores *Stores) Maintain(ctx context.Context) error {
+// this process has already opened. A scope that fails does not hold back the
+// others; their failures come back together.
+func (stores *Stores) Maintain(ctx context.Context) (MaintenanceReport, error) {
 	scopes, errorValue := stores.storedScopes()
 	if errorValue != nil {
-		return errorValue
+		return MaintenanceReport{}, errorValue
 	}
+	report := MaintenanceReport{}
+	failures := []error{}
 	for _, scope := range scopes {
-		store, errorValue := stores.Store(ctx, scope)
+		reembedded, errorValue := stores.maintainScope(ctx, scope)
 		if errorValue != nil {
-			return errorValue
+			failures = append(failures, fmt.Errorf("%s %s: %w", scope.Kind, scope.ID, errorValue))
+			continue
 		}
-		if _, errorValue := store.Sweep(ctx); errorValue != nil {
-			return errorValue
-		}
-		if _, errorValue := store.Reembed(ctx, reembedBatchSize); errorValue != nil {
-			return errorValue
-		}
+		report.Scopes++
+		report.Reembedded.Memories += reembedded.Memories
+		report.Reembedded.Triggers += reembedded.Triggers
+		report.Reembedded.Files += reembedded.Files
 	}
-	return nil
+	return report, errors.Join(failures...)
+}
+
+func (stores *Stores) maintainScope(ctx context.Context, scope Scope) (bluememo.ReembedReport, error) {
+	store, errorValue := stores.Store(ctx, scope)
+	if errorValue != nil {
+		return bluememo.ReembedReport{}, errorValue
+	}
+	if _, errorValue := store.Sweep(ctx); errorValue != nil {
+		return bluememo.ReembedReport{}, errorValue
+	}
+	return store.Reembed(ctx, reembedBatchSize)
 }
 
 // storedScopes lists the scopes that hold a file, by the directories their

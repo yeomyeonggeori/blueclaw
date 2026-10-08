@@ -50,6 +50,7 @@ func loadStandaloneRuntimeConfiguration(t *testing.T, connectionString string) c
 	t.Setenv("BLUECLAW_DATABASE_URL", connectionString)
 	t.Setenv("BLUECLAW_MODEL_ENDPOINT", "http://127.0.0.1:1/v1")
 	t.Setenv("BLUECLAW_MODEL", "example/model")
+	t.Setenv("BLUECLAW_EMBEDDING_ENDPOINT", "http://127.0.0.1:1/v1")
 	t.Setenv("BLUECLAW_EMBEDDING_MODEL", "example/embedding")
 	t.Setenv("BLUECLAW_DECISION_ENDPOINT", "http://127.0.0.1:1/v1")
 	t.Setenv("BLUECLAW_DECISION_MODEL", "example/decision")
