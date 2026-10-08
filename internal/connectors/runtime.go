@@ -811,12 +811,20 @@ func FindTaskRunBySourceReference(taskRunStore taskstate.TaskRunStore, personID 
 
 func taskRunHasSourceReference(taskRunStore taskstate.TaskRunStore, taskRunID string, sourceReference string) bool {
 	for _, taskEvent := range taskRunStore.ListTaskEvent(taskRunID) {
-		if taskEvent.Name != agentcontract.TaskEventAgentTaskSource && taskEvent.Name != agentcontract.TaskEventAgentTaskLaunched {
+		if !isSourceReferenceRecord(taskEvent.Name) {
 			continue
 		}
 		if taskEventSourceReference(taskEvent) == sourceReference {
 			return true
 		}
+	}
+	return false
+}
+
+func isSourceReferenceRecord(eventName string) bool {
+	switch eventName {
+	case agentcontract.TaskEventAgentTaskSource, agentcontract.TaskEventAgentTaskLaunched, task.TaskEventLaunchOrigin:
+		return true
 	}
 	return false
 }

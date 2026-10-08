@@ -14,6 +14,7 @@ const (
 	TaskEventLaunchLimitReply    = "blueclaw.launch.limit_reply"
 	TaskEventLaunchLimitStop     = "blueclaw.launch.limit_stop"
 	TaskEventLaunchGoalBlocked   = "blueclaw.launch.goal_blocked"
+	TaskEventLaunchOrigin        = "blueclaw.launch.origin"
 
 	TaskEventConnectorFilesUndelivered     = "blueclaw.connector.files_undelivered"
 	TaskEventConnectorStopOutboxSuppressed = "blueclaw.connector.stop_outbox_suppressed"

@@ -290,6 +290,7 @@ func (taskLauncher *TaskLauncher) launchTask(ctx context.Context, request TaskLa
 	}
 	openedTaskRun := taskLauncher.openTaskRunForLaunch(request)
 	request.ExistingTaskRunID = openedTaskRun.TaskRunID
+	taskLauncher.taskRunService.AppendTaskEvent(request.ExistingTaskRunID, task.TaskEventLaunchOrigin, marshalTaskLaunchOrigin(request, normalizedProfileName))
 	request.IsTaskRunOpenedForThisTurn = openedTaskRun.IsOpenedByHost
 	taskEvents := subscribeToTaskRun(taskLauncher.taskRunService, request.ToolCallObserver, request.ExistingTaskRunID)
 	defer taskEvents.stop()
