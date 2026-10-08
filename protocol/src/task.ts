@@ -247,6 +247,7 @@ export enum HostTaskEventName {
   BlueclawLaunchGoalBlocked = 'blueclaw.launch.goal_blocked',
   BlueclawLaunchLimitReply = 'blueclaw.launch.limit_reply',
   BlueclawLaunchLimitStop = 'blueclaw.launch.limit_stop',
+  BlueclawLaunchOrigin = 'blueclaw.launch.origin',
   BlueclawTaskExecutionDuration = 'blueclaw.task.execution_duration',
 }
 

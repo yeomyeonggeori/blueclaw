@@ -192,6 +192,7 @@
         "blueclaw.launch.goal_blocked",
         "blueclaw.launch.limit_reply",
         "blueclaw.launch.limit_stop",
+        "blueclaw.launch.origin",
         "blueclaw.task.execution_duration"
       ],
       "type": "string"

@@ -167,9 +167,16 @@ func (connectorRuntime *ConnectorRuntime) interruptedTaskLaunchRequest(taskRun t
 }
 
 func interruptedTaskLaunchContextFromEvents(taskRun task.TaskRun, taskEvents []task.TaskEvent) (interruptedTaskLaunchContext, bool) {
+	if launchContext, isFound := latestLaunchContextRecordedAs(agentcontract.TaskEventAgentTaskLaunched, taskRun, taskEvents); isFound {
+		return launchContext, true
+	}
+	return latestLaunchContextRecordedAs(task.TaskEventLaunchOrigin, taskRun, taskEvents)
+}
+
+func latestLaunchContextRecordedAs(eventName string, taskRun task.TaskRun, taskEvents []task.TaskEvent) (interruptedTaskLaunchContext, bool) {
 	for index := len(taskEvents) - 1; index >= 0; index-- {
 		taskEvent := taskEvents[index]
-		if taskEvent.Name != agentcontract.TaskEventAgentTaskLaunched {
+		if taskEvent.Name != eventName {
 			continue
 		}
 		var launchContext interruptedTaskLaunchContext

@@ -6,18 +6,22 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
+type taskLaunchOrigin struct {
+	Source            TaskLaunchSource `json:"source"`
+	SourceReference   string           `json:"sourceReference"`
+	Platform          string           `json:"platform,omitempty"`
+	ProfileName       string           `json:"profileName"`
+	RequesterPersonID string           `json:"requesterPersonID"`
+	ConversationID    string           `json:"conversationID"`
+	ReplyTargetID     string           `json:"replyTargetID,omitempty"`
+	IsThread          bool             `json:"isThread,omitempty"`
+	ConversationType  string           `json:"conversationType,omitempty"`
+	ChannelID         string           `json:"channelID,omitempty"`
+	ChannelName       string           `json:"channelName,omitempty"`
+}
+
 type taskLaunchEvent struct {
-	Source                            TaskLaunchSource                   `json:"source"`
-	SourceReference                   string                             `json:"sourceReference"`
-	Platform                          string                             `json:"platform,omitempty"`
-	ProfileName                       string                             `json:"profileName"`
-	RequesterPersonID                 string                             `json:"requesterPersonID"`
-	ConversationID                    string                             `json:"conversationID"`
-	ReplyTargetID                     string                             `json:"replyTargetID,omitempty"`
-	IsThread                          bool                               `json:"isThread,omitempty"`
-	ConversationType                  string                             `json:"conversationType,omitempty"`
-	ChannelID                         string                             `json:"channelID,omitempty"`
-	ChannelName                       string                             `json:"channelName,omitempty"`
+	taskLaunchOrigin
 	ToolNames                         []string                           `json:"toolNames"`
 	ToolRegistryVersion               string                             `json:"toolRegistryVersion,omitempty"`
 	CapabilityDescriptorHash          string                             `json:"capabilityDescriptorHash,omitempty"`
@@ -37,17 +41,7 @@ type taskLaunchEvent struct {
 
 func marshalTaskLaunchEvent(request TaskLaunchRequest, profileName string, toolNames []string, registryAudit ToolRegistryAudit, memoryFactCount int) string {
 	document, errorValue := json.Marshal(taskLaunchEvent{
-		Source:                            request.Source,
-		SourceReference:                   request.SourceReference,
-		Platform:                          request.Platform,
-		ProfileName:                       profileName,
-		RequesterPersonID:                 request.RequesterPersonID,
-		ConversationID:                    request.ConversationID,
-		ReplyTargetID:                     request.OriginReplyTargetID,
-		IsThread:                          request.OriginIsThread,
-		ConversationType:                  request.ConversationType,
-		ChannelID:                         request.ConversationChannelID,
-		ChannelName:                       request.ConversationChannelName,
+		taskLaunchOrigin:                  taskLaunchOriginOf(request, profileName),
 		ToolNames:                         append([]string{}, toolNames...),
 		ToolRegistryVersion:               registryAudit.ToolRegistryVersion,
 		CapabilityDescriptorHash:          registryAudit.CapabilityDescriptorHash,
@@ -68,6 +62,26 @@ func marshalTaskLaunchEvent(request TaskLaunchRequest, profileName string, toolN
 		return "{}"
 	}
 	return string(document)
+}
+
+func marshalTaskLaunchOrigin(request TaskLaunchRequest, profileName string) string {
+	return MarshalBody(taskLaunchOriginOf(request, profileName))
+}
+
+func taskLaunchOriginOf(request TaskLaunchRequest, profileName string) taskLaunchOrigin {
+	return taskLaunchOrigin{
+		Source:            request.Source,
+		SourceReference:   request.SourceReference,
+		Platform:          request.Platform,
+		ProfileName:       profileName,
+		RequesterPersonID: request.RequesterPersonID,
+		ConversationID:    request.ConversationID,
+		ReplyTargetID:     request.OriginReplyTargetID,
+		IsThread:          request.OriginIsThread,
+		ConversationType:  request.ConversationType,
+		ChannelID:         request.ConversationChannelID,
+		ChannelName:       request.ConversationChannelName,
+	}
 }
 
 func taskLaunchScheduledRunEvent(request TaskLaunchRequest) *agentcontract.ScheduledRunContext {
