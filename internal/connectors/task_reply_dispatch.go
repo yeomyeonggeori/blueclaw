@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
-	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
@@ -13,7 +12,6 @@ import (
 type taskReplyDecisionKind string
 
 const (
-	taskReplyDecisionConsume            taskReplyDecisionKind = "consume"
 	taskReplyDecisionSuppressCancelled  taskReplyDecisionKind = "suppress_cancelled"
 	taskReplyDecisionSuppressSuperseded taskReplyDecisionKind = "suppress_superseded"
 	taskReplyDecisionSuppressRequested  taskReplyDecisionKind = "suppress_requested"
@@ -28,9 +26,6 @@ type taskReplyDecision struct {
 }
 
 func decideTaskReply(turnResult agentcontract.AgentTurnResult, isCancelledBeforeSend bool, hasAgentDeliveredReply bool) taskReplyDecision {
-	if turnResult.TurnRoute == agentcontract.TurnRouteConsume {
-		return taskReplyDecision{Kind: taskReplyDecisionConsume}
-	}
 	if strings.TrimSpace(turnResult.ReplySuppressionReason) != "" &&
 		turnResult.TaskRun.Status != task.TaskStatusWaitingApproval &&
 		turnResult.TaskRun.Status != task.TaskStatusWaitingUserInput {
@@ -64,19 +59,6 @@ func (connectorRuntime *ConnectorRuntime) dispatchTaskReply(
 	taskRunID := turnResult.TaskRun.TaskRunID
 	decision := decideTaskReply(turnResult, connectorRuntime.taskRunWasCancelled(taskRunID), connectorRuntime.agentAlreadyReplied(taskRunID, event.ConversationID, replyTarget.ConversationID, replyTarget.ReplyTargetID))
 	switch decision.Kind {
-	case taskReplyDecisionConsume:
-		reason := connectorRuntime.addConsumeReaction(ctx, platform, adapter, event, taskRunID)
-		if reason == "consume_reacted" && engagedAckEmojiName != "" && engagedAckEmojiName != inboundengagement.DefaultReactionEmojiName {
-			connectorRuntime.clearEngagedAckReaction(ctx, platform, adapter, event, engagedAckEmojiName)
-		}
-		if reason != "consume_reacted" && !isMultiPersonConversation(event) && strings.TrimSpace(turnResult.FinishMessage) != "" {
-			result := connectorRuntime.sendCompletedTaskReply(ctx, platform, event, taskRunID, replyTarget, turnResult, sendReply)
-			if result.ReplyDispatchID != "" {
-				result.Reason = "consume_fallback_sent"
-			}
-			return result, nil
-		}
-		return ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: taskRunID, Reason: reason}, nil
 	case taskReplyDecisionSuppressDelivered:
 		connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventReplySuppressedDuplicate, agentruntime.MarshalBody(map[string]string{
 			"conversationID": event.ConversationID,

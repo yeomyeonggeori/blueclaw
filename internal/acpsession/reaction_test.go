@@ -9,22 +9,9 @@ import (
 	"time"
 
 	acp "github.com/coder/acp-go-sdk"
-	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
-	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
-
-type consumingLauncher struct{}
-
-func (consumingLauncher) Launch(context.Context, agentruntime.TaskLaunchRequest) (agentruntime.TaskLaunchResult, error) {
-	return agentruntime.TaskLaunchResult{TurnResult: agentcontract.AgentTurnResult{
-		TaskRun:         agentcontract.TaskRun{TaskRunID: "task-consumed", Status: agentcontract.TaskStatusCompleted, Result: "consumed"},
-		TurnRoute:       agentcontract.TurnRouteConsume,
-		FinishMessage:   "알겠습니다.",
-		ReplySuppressed: true,
-	}}, nil
-}
 
 type reactingAdapter struct {
 	mutex     sync.Mutex
@@ -62,45 +49,6 @@ func (adapter *reactingAdapter) AddReaction(_ context.Context, target connectors
 	defer adapter.mutex.Unlock()
 	adapter.reactions = append(adapter.reactions, target)
 	return nil
-}
-
-func TestAConsumedMessageIsAcknowledgedOnTheMessageItself(t *testing.T) {
-	adapter := &reactingAdapter{}
-	connectorRuntime := connectorRuntimeForTest(nil)
-	connectorRuntime.RegisterAdapter(adapter)
-	client := &recordingClient{}
-	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
-		TaskLauncher: consumingLauncher{},
-		Directory:    staticDirectory{},
-		ReplyReader:  scriptedReader{},
-		SessionTurns: connectorRuntime,
-	})
-	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
-
-	promptDirectMessage(t, connection, sessionID, "message-answer")
-
-	if len(adapter.reactions) != 1 || adapter.reactions[0].MessageID != "message-answer" {
-		t.Fatalf("the consumed message got reactions %+v, expected a reaction on message-answer", adapter.reactions)
-	}
-	if len(client.messages) != 0 {
-		t.Fatalf("a message acknowledged with a reaction was also answered with %q", client.messages)
-	}
-}
-
-func TestAConsumedDirectMessageNothingCanReactToIsAnsweredInWords(t *testing.T) {
-	client := &recordingClient{}
-	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
-		TaskLauncher: consumingLauncher{},
-		Directory:    staticDirectory{},
-		ReplyReader:  scriptedReader{},
-	})
-	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
-
-	promptDirectMessage(t, connection, sessionID, "message-answer")
-
-	if len(client.messages) != 1 || client.messages[0] != "알겠습니다." {
-		t.Fatalf("the requester was told %q, expected the reply the consuming turn wrote", client.messages)
-	}
 }
 
 func promptDirectMessage(t *testing.T, connection *acp.ClientSideConnection, sessionID acp.SessionId, messageID string) {
