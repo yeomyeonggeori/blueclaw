@@ -12,7 +12,6 @@ const attachmentsOnlyUninvitedReason = "attachments_only_uninvited"
 
 type Decision struct {
 	ShouldLaunch  bool
-	SuppressReply bool
 	ReactionEmoji string
 	IgnoreReason  string
 	AmbientDuty   AmbientDutyContext
@@ -25,32 +24,51 @@ type Request struct {
 	AttachmentsOnly  bool
 }
 
-func Resolve(ctx context.Context, logger *slog.Logger, platform string, request Request, decideAddressing func(context.Context) (AddressingDecision, error)) Decision {
-	if !IsMultiPersonConversation(request.ConversationType) {
-		return Decision{ShouldLaunch: true}
-	}
+const reactionOnlyReason = "reaction_only"
+
+func Resolve(ctx context.Context, logger *slog.Logger, platform string, request Request, judge func(context.Context) (Judgment, error)) Decision {
 	if IsIgnoredWithoutDeciding(request) {
 		return Decision{IgnoreReason: attachmentsOnlyUninvitedReason}
 	}
-	addressingDecision, errorValue := decideAddressing(ctx)
+	judgment, errorValue := judge(ctx)
 	if errorValue != nil {
 		logger.Warn("connector."+platform+".addressing.decision_failed", slog.String("messageID", request.MessageID), slog.String("error", errorValue.Error()))
-		if request.BotMentioned {
+		if request.BotMentioned || !IsMultiPersonConversation(request.ConversationType) {
 			return Decision{ShouldLaunch: true}
 		}
 		return Decision{IgnoreReason: "addressing_decision_failed dutyMatch=false"}
 	}
-	ambientDuty := ambientDutyContextFromAddressingDecision(addressingDecision)
-	shouldLaunch := addressingDecision.ShouldRespond || ambientDuty.IsMatch
-	if !shouldLaunch && addressingDecision.ReactionEmoji == "" {
-		return Decision{IgnoreReason: "addressing_" + string(addressingDecision.Target) + " dutyMatch=false"}
+	addressing := judgment.Addressing
+	ambientDuty := ambientDutyContextFromAddressingDecision(addressing)
+	if shouldLaunch(request, judgment, ambientDuty) {
+		return Decision{ShouldLaunch: true, ReactionEmoji: addressing.ReactionEmoji, AmbientDuty: ambientDuty}
 	}
-	return Decision{
-		ShouldLaunch:  shouldLaunch,
-		SuppressReply: AmbientDutyLaunchesWithoutReply(addressingDecision),
-		ReactionEmoji: addressingDecision.ReactionEmoji,
-		AmbientDuty:   ambientDuty,
+	if addressing.ReactionEmoji != "" {
+		return Decision{ReactionEmoji: addressing.ReactionEmoji, IgnoreReason: reactionOnlyReason}
 	}
+	return Decision{IgnoreReason: "addressing_" + string(addressing.Target) + " dutyMatch=false"}
+}
+
+func shouldLaunch(request Request, judgment Judgment, ambientDuty AmbientDutyContext) bool {
+	if judgment.Addressing.ShouldRespond || ambientDuty.IsMatch {
+		return true
+	}
+	return isAskedOfTheAgent(request, judgment.Addressing) && (judgment.Addressing.HasWork || continuesOpenWork(judgment))
+}
+
+func isAskedOfTheAgent(request Request, addressing AddressingDecision) bool {
+	return !IsMultiPersonConversation(request.ConversationType) || request.BotMentioned || addressing.Target == AddressingTargetBot
+}
+
+func continuesOpenWork(judgment Judgment) bool {
+	if judgment.HasRelatesToActiveTask && judgment.RelatesToActiveTask {
+		return true
+	}
+	switch judgment.BusyRoute {
+	case BusyRouteStatus, BusyRouteSteer, BusyRouteReplace, BusyRouteCancel:
+		return true
+	}
+	return false
 }
 
 func IsIgnoredWithoutDeciding(request Request) bool {
@@ -71,10 +89,6 @@ func IsMultiPersonConversation(conversationType string) bool {
 		return false
 	}
 	return true
-}
-
-func AmbientDutyLaunchesWithoutReply(decision AddressingDecision) bool {
-	return !decision.ShouldRespond && ambientDutyContextFromAddressingDecision(decision).IsMatch
 }
 
 func ambientDutyContextFromAddressingDecision(decision AddressingDecision) AmbientDutyContext {

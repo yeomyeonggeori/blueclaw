@@ -109,15 +109,11 @@ func (decider DecisionModelDecider) readJudgments(facts Facts, answers map[strin
 }
 
 func (decider DecisionModelDecider) readJudgment(facts Facts, reader answerReader, message Message) (Judgment, error) {
-	judgment := Judgment{MessageID: strings.TrimSpace(message.MessageID), Addressing: AddressingDecision{Target: AddressingTargetBot, ShouldRespond: true}}
-	if asksAddressing(facts) {
-		addressing, reactionProbability, errorValue := decider.readAddressing(reader, facts, message)
-		if errorValue != nil {
-			return Judgment{}, errorValue
-		}
-		judgment.Addressing = addressing
-		judgment.ReactionProbability = reactionProbability
+	addressing, reactionProbability, errorValue := decider.readAddressing(reader, facts, message)
+	if errorValue != nil {
+		return Judgment{}, errorValue
 	}
+	judgment := Judgment{MessageID: strings.TrimSpace(message.MessageID), Addressing: addressing, ReactionProbability: reactionProbability}
 	if relatesAnswer, isAnswered := reader.answers[reader.questionKey(QuestionRelatesToActiveTask)]; asksRelatesToActiveTask(facts) && isAnswered {
 		judgment.HasRelatesToActiveTask = true
 		judgment.RelatesToActiveTask = relatesAnswer.IsYes()
@@ -133,7 +129,7 @@ func (decider DecisionModelDecider) readJudgment(facts Facts, reader answerReade
 }
 
 func (decider DecisionModelDecider) readAddressing(reader answerReader, facts Facts, message Message) (AddressingDecision, float64, error) {
-	target, errorValue := reader.choice(QuestionTarget)
+	target, errorValue := readTarget(reader, facts)
 	if errorValue != nil {
 		return AddressingDecision{}, 0, errorValue
 	}
@@ -141,18 +137,22 @@ func (decider DecisionModelDecider) readAddressing(reader answerReader, facts Fa
 	if !isAnswered {
 		return AddressingDecision{}, 0, errors.New("the gateway decision is missing an answer for " + reader.questionKey(QuestionShouldRespond))
 	}
-	addressing := AddressingDecision{Target: AddressingTarget(target), ShouldRespond: shouldRespondAnswer.IsYes()}
+	workAnswer, errorValue := reader.choiceAnswer(QuestionWork)
+	if errorValue != nil {
+		return AddressingDecision{}, 0, errorValue
+	}
+	addressing := AddressingDecision{Target: target, ShouldRespond: shouldRespondAnswer.IsYes(), HasWork: asksForWork(workAnswer)}
 	reactionAnswer, errorValue := reader.choiceAnswer(QuestionReaction)
 	if errorValue != nil {
 		return AddressingDecision{}, 0, errorValue
 	}
 	reactionProbability := reactionAnswer.ChoiceProbability(ReactionOptionReact)
-	if decider.randomSource() < reactionProbability {
-		reactionEmoji, errorValue := reader.choice(QuestionReactionEmoji)
+	if reactionProbability > reactionAnswer.ChoiceProbability(ReactionOptionNone) {
+		emojiAnswer, errorValue := reader.choiceAnswer(QuestionReactionEmoji)
 		if errorValue != nil {
 			return AddressingDecision{}, 0, errorValue
 		}
-		addressing.ReactionEmoji = knownReactionEmoji(reactionEmoji)
+		addressing.ReactionEmoji = drawReactionEmoji(emojiAnswer, decider.randomSource())
 	}
 	if asksDuty(facts, message) {
 		dutyAnswer, errorValue := reader.choiceAnswer(QuestionDuty)
@@ -176,6 +176,64 @@ func withDuty(addressing AddressingDecision, dutyAnswer model.DecisionAnswer) Ad
 	addressing.DutyName = duty.Name
 	addressing.DutyConfidence = min(max(dutyAnswer.Confidence, 0), 1)
 	return addressing
+}
+
+func readTarget(reader answerReader, facts Facts) (AddressingTarget, error) {
+	if !asksTarget(facts) {
+		return AddressingTargetBot, nil
+	}
+	target, errorValue := reader.choice(QuestionTarget)
+	return AddressingTarget(target), errorValue
+}
+
+func asksForWork(workAnswer model.DecisionAnswer) bool {
+	workWeight := 0.0
+	for option, probability := range workAnswer.Probabilities {
+		if option != WorkOptionNone {
+			workWeight += probability
+		}
+	}
+	return workWeight > workAnswer.ChoiceProbability(WorkOptionNone)
+}
+
+const reactionCandidateShareOfTheLikeliest = 0.5
+
+func drawReactionEmoji(emojiAnswer model.DecisionAnswer, draw float64) string {
+	candidates, totalWeight := reactionCandidates(emojiAnswer)
+	if len(candidates) == 0 {
+		return knownReactionEmoji(emojiAnswer.Choice)
+	}
+	threshold := draw * totalWeight
+	for _, candidate := range candidates {
+		threshold -= candidate.weight
+		if threshold < 0 {
+			return candidate.name
+		}
+	}
+	return candidates[len(candidates)-1].name
+}
+
+type reactionCandidate struct {
+	name   string
+	weight float64
+}
+
+func reactionCandidates(emojiAnswer model.DecisionAnswer) ([]reactionCandidate, float64) {
+	likeliest := 0.0
+	for _, emoji := range reactionEmojis {
+		likeliest = max(likeliest, emojiAnswer.ChoiceProbability(emoji.name))
+	}
+	candidates := []reactionCandidate{}
+	totalWeight := 0.0
+	for _, emoji := range reactionEmojis {
+		weight := emojiAnswer.ChoiceProbability(emoji.name)
+		if weight <= 0 || weight < likeliest*reactionCandidateShareOfTheLikeliest {
+			continue
+		}
+		candidates = append(candidates, reactionCandidate{name: emoji.name, weight: weight})
+		totalWeight += weight
+	}
+	return candidates, totalWeight
 }
 
 func knownReactionEmoji(name string) string {

@@ -1136,7 +1136,27 @@ func TestConnectorRuntimeRequesterEmailPrefersPolicyPrimaryEmail(t *testing.T) {
 	}
 }
 
-func TestADirectMessageWithNothingOpenMakesNoGatewayCall(t *testing.T) {
+func TestASessionReplyToAnOpenQuestionLaunchesWithoutAskingTheGateway(t *testing.T) {
+	connectorRuntime, _, taskRunService := newRoutedTestConnectorRuntime(t, testLanguageModel{reply: "ok"})
+	gatewayDecider := &scriptedGatewayDecider{addressing: inboundengagement.AddressingDecision{Target: inboundengagement.AddressingTargetBot}}
+	connectorRuntime.UseGatewayDecider(gatewayDecider)
+	waitingTaskRun := createWaitingInputTaskRunWithOptions(t, taskRunService, "어떤 형식으로 만들까요?", "input-options")
+	event := testInboundEvent("message-answer")
+	event.Platform = "test"
+	event.Prompt = "표로요"
+	event.ReplyTargetID = waitingTaskRun.OriginReplyTargetID
+	isThread := true
+	event.IsThread = &isThread
+	sessionTurn := connectorRuntime.OpenSessionTurn(context.Background(), event, "person-1", func(context.Context, ReplyTarget, OutboundReply) (string, error) { return "", nil })
+
+	decision := sessionTurn.ResolveEngagement(context.Background())
+
+	if !decision.ShouldLaunch || gatewayDecider.calls() != 0 {
+		t.Fatalf("an answer to an open question was judged by the gateway (%d calls) and launch=%v; a gateway that wants no work would leave the question answered and the task stopped", gatewayDecider.calls(), decision.ShouldLaunch)
+	}
+}
+
+func TestADirectMessageWithNothingOpenIsJudgedOnceByTheGateway(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
 	gatewayDecider := &scriptedGatewayDecider{addressing: addressedToBot()}
 	connectorRuntime.UseGatewayDecider(gatewayDecider)
@@ -1152,8 +1172,8 @@ func TestADirectMessageWithNothingOpenMakesNoGatewayCall(t *testing.T) {
 	if result.TaskRunID == "" || len(adapter.sentReplies) != 1 {
 		t.Fatalf("expected direct message task and reply, got result=%+v replies=%d", result, len(adapter.sentReplies))
 	}
-	if gatewayDecider.calls() != 0 {
-		t.Fatalf("expected no gateway call for a direct message with nothing open, got %d", gatewayDecider.calls())
+	if gatewayDecider.calls() != 1 {
+		t.Fatalf("a direct message is judged by the gateway exactly once so a thanks is not taken for a request, got %d calls", gatewayDecider.calls())
 	}
 }
 

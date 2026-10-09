@@ -7,10 +7,9 @@ import { defaultEmojiResolver } from "chat";
 // same string or a reaction the mirror caused reads as a new one.
 const additionalReactionEmojiCharacters: Record<string, string> = {
 	clap: "\u{1F44F}",
-	mag: "\u{1F50D}",
+	saluting_face: "\u{1FAE1}",
 	sweat_smile: "\u{1F605}",
 	wave: "\u{1F44B}",
-	hourglass_flowing_sand: "\u{23F3}",
 };
 
 export function reactionContentOf(emojiName: string): string {

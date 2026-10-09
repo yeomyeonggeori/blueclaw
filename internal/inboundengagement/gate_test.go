@@ -2,6 +2,7 @@ package inboundengagement
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"testing"
@@ -10,9 +11,17 @@ import (
 type gateReturning AddressingDecision
 
 func (decision gateReturning) Resolve(ctx context.Context, platform string, request Request) Decision {
-	return Resolve(ctx, slog.Default(), platform, request, func(context.Context) (AddressingDecision, error) {
-		return AddressingDecision(decision), nil
+	return resolveJudgment(ctx, request, Judgment{Addressing: AddressingDecision(decision)})
+}
+
+func resolveJudgment(ctx context.Context, request Request, judgment Judgment) Decision {
+	return Resolve(ctx, slog.Default(), "buzz", request, func(context.Context) (Judgment, error) {
+		return judgment, nil
 	})
+}
+
+func directRequest() Request {
+	return Request{ConversationType: "dm"}
 }
 
 func channelRequest() Request {
@@ -62,5 +71,67 @@ func TestResolveReactAndRespond(t *testing.T) {
 
 	if !decision.ShouldLaunch || decision.ReactionEmoji != "+1" {
 		t.Fatalf("expected react-and-respond (launch + emoji), got %+v", decision)
+	}
+}
+
+func TestADirectMessageWithNothingToDoOrSayIsLeftAlone(t *testing.T) {
+	decision := gateReturning{Target: AddressingTargetBot}.Resolve(context.Background(), "buzz", directRequest())
+
+	if decision.ShouldLaunch || decision.ReactionEmoji != "" {
+		t.Fatalf("a direct message that asks for nothing launched or reacted: %+v", decision)
+	}
+}
+
+func TestADirectMessageThatOnlyDeservesAReactionGetsOneAndNoTurn(t *testing.T) {
+	decision := gateReturning{Target: AddressingTargetBot, ReactionEmoji: "pray"}.Resolve(context.Background(), "buzz", directRequest())
+
+	if decision.ShouldLaunch || decision.ReactionEmoji != "pray" || decision.IgnoreReason != reactionOnlyReason {
+		t.Fatalf("a thanks in a direct message decided %+v, expected a reaction and no turn", decision)
+	}
+}
+
+func TestADirectRequestForWorkLaunchesEvenWhenNoWordsAreWanted(t *testing.T) {
+	decision := gateReturning{Target: AddressingTargetBot, HasWork: true, ReactionEmoji: "saluting_face"}.Resolve(context.Background(), "buzz", directRequest())
+
+	if !decision.ShouldLaunch || decision.ReactionEmoji != "saluting_face" {
+		t.Fatalf("a direct request for work decided %+v, expected a turn and the reaction", decision)
+	}
+}
+
+func TestADirectMessageAboutTheOpenTaskReachesItEvenWithNothingNewToDo(t *testing.T) {
+	for _, judgment := range []Judgment{
+		{Addressing: AddressingDecision{Target: AddressingTargetBot}, HasRelatesToActiveTask: true, RelatesToActiveTask: true},
+		{Addressing: AddressingDecision{Target: AddressingTargetBot}, BusyRoute: BusyRouteSteer},
+	} {
+		if decision := resolveJudgment(context.Background(), directRequest(), judgment); !decision.ShouldLaunch {
+			t.Fatalf("a correction or answer for the open task was dropped at the gate: %+v from %+v", decision, judgment)
+		}
+	}
+}
+
+func TestADirectMessageIsLaunchedWhenTheGatewayCannotDecide(t *testing.T) {
+	decision := Resolve(context.Background(), slog.Default(), "buzz", directRequest(), func(context.Context) (Judgment, error) {
+		return Judgment{}, errors.New("decision model unreachable")
+	})
+
+	if !decision.ShouldLaunch {
+		t.Fatalf("a direct message was dropped because the gateway failed: %+v", decision)
+	}
+}
+
+func TestWorkOverheardInAChannelIsNotTakenOn(t *testing.T) {
+	overheard := Judgment{Addressing: AddressingDecision{Target: AddressingTargetHuman, HasWork: true}, HasRelatesToActiveTask: true, RelatesToActiveTask: true}
+
+	if decision := resolveJudgment(context.Background(), channelRequest(), overheard); decision.ShouldLaunch {
+		t.Fatalf("work one colleague asked of another launched a turn: %+v", decision)
+	}
+}
+
+func TestWorkAskedOfTheAgentInAChannelLaunches(t *testing.T) {
+	addressed := gateReturning{Target: AddressingTargetBot, HasWork: true}.Resolve(context.Background(), "buzz", channelRequest())
+	mentioned := gateReturning{Target: AddressingTargetAnyone, HasWork: true}.Resolve(context.Background(), "buzz", Request{ConversationType: "O", BotMentioned: true})
+
+	if !addressed.ShouldLaunch || !mentioned.ShouldLaunch {
+		t.Fatalf("work asked of the agent in a channel decided %+v and %+v, expected both to launch", addressed, mentioned)
 	}
 }

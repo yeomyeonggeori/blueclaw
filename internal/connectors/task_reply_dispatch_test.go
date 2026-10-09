@@ -80,24 +80,24 @@ func TestFailedTaskReplyPreservesModelWording(t *testing.T) {
 	}
 }
 
-func TestSuppressedReplyStillDeliversApprovalQuestion(t *testing.T) {
+func TestASuppressedReplyStillDeliversItsApprovalQuestion(t *testing.T) {
 	waitingApproval := agentcontract.AgentTurnResult{
 		TaskRun:                task.TaskRun{TaskRunID: "task-approval", Status: task.TaskStatusWaitingApproval},
-		ReplySuppressionReason: "ambient_duty_no_reply",
+		ReplySuppressionReason: "elapsed closing cancelled",
 	}
 	if decision := decideTaskReply(waitingApproval, false, false); decision.Kind != taskReplyDecisionSendUserNotice {
 		t.Fatalf("expected a waiting-approval task to deliver its question despite suppression, got %+v", decision)
 	}
 	waitingInput := agentcontract.AgentTurnResult{
 		TaskRun:                task.TaskRun{TaskRunID: "task-input", Status: task.TaskStatusWaitingUserInput},
-		ReplySuppressionReason: "ambient_duty_no_reply",
+		ReplySuppressionReason: "elapsed closing cancelled",
 	}
 	if decision := decideTaskReply(waitingInput, false, false); decision.Kind != taskReplyDecisionSendUserNotice {
 		t.Fatalf("expected a waiting-user-input task to deliver its question despite suppression, got %+v", decision)
 	}
 	completed := agentcontract.AgentTurnResult{
 		TaskRun:                task.TaskRun{TaskRunID: "task-done", Status: task.TaskStatusCompleted},
-		ReplySuppressionReason: "ambient_duty_no_reply",
+		ReplySuppressionReason: "elapsed closing cancelled",
 	}
 	if decision := decideTaskReply(completed, false, false); decision.Kind != taskReplyDecisionSuppressRequested {
 		t.Fatalf("expected a completed ambient task to stay suppressed, got %+v", decision)

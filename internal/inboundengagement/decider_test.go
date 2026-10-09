@@ -13,10 +13,11 @@ import (
 )
 
 type answeringModel struct {
-	choices  map[string]string
-	noul     map[string]float64
-	requests []model.DecisionRequest
-	failure  error
+	choices             map[string]string
+	noul                map[string]float64
+	reactionProbability float64
+	requests            []model.DecisionRequest
+	failure             error
 }
 
 func (decisionModel *answeringModel) Decide(_ context.Context, request model.DecisionRequest) (model.DecisionResponse, error) {
@@ -36,7 +37,11 @@ func (decisionModel *answeringModel) answerFor(questionKey string, question mode
 	if question.Type == model.DecisionQuestionTypeNoul {
 		return model.DecisionAnswer{Type: question.Type, Noul: decisionModel.noul[questionName]}
 	}
-	return model.DecisionAnswer{Type: question.Type, Choice: decisionModel.choices[questionName], Probabilities: map[string]float64{ReactionOptionReact: 0.9}}
+	if questionName == QuestionReaction {
+		return model.DecisionAnswer{Type: question.Type, Choice: decisionModel.choices[questionName], Probabilities: map[string]float64{ReactionOptionReact: decisionModel.reactionProbability, ReactionOptionNone: 1 - decisionModel.reactionProbability}}
+	}
+	choice := decisionModel.choices[questionName]
+	return model.DecisionAnswer{Type: question.Type, Choice: choice, Probabilities: map[string]float64{choice: 1}}
 }
 
 func (decisionModel *answeringModel) askedQuestionNames() []string {
@@ -54,12 +59,14 @@ func defaultAnswers() *answeringModel {
 	return &answeringModel{
 		choices: map[string]string{
 			QuestionTarget:        string(AddressingTargetBot),
+			QuestionWork:          WorkOptionNone,
 			QuestionReaction:      ReactionOptionNone,
 			QuestionReactionEmoji: "eyes",
 			QuestionDuty:          DutyOptionNone,
 			QuestionBusyRoute:     string(BusyRouteSteer),
 		},
-		noul: map[string]float64{QuestionShouldRespond: 1},
+		noul:                map[string]float64{QuestionShouldRespond: 1},
+		reactionProbability: 0.9,
 	}
 }
 
@@ -95,45 +102,44 @@ func decideWith(t *testing.T, decisionModel *answeringModel, facts Facts) []Judg
 	return judgments
 }
 
-func TestADirectMessageWithNothingOpenMakesNoCall(t *testing.T) {
+func TestADirectMessageIsAskedWhatItWantsButNotWhoItIsFor(t *testing.T) {
 	decisionModel := defaultAnswers()
 
 	judgments := decideWith(t, decisionModel, messageFacts("D", false, "내일 회의 잡아줘"))
 
-	if len(decisionModel.requests) != 0 {
-		t.Fatalf("expected no call, got %d", len(decisionModel.requests))
+	if asked := strings.Join(decisionModel.askedQuestionNames(), ","); asked != "m1.reaction,m1.reactionEmoji,m1.shouldRespond,m1.work" {
+		t.Fatalf("a direct message was asked %s, expected whether to react, which emoji, whether to reply and what work", asked)
 	}
-	if len(judgments) != 1 || judgments[0].Addressing.Target != AddressingTargetBot || !judgments[0].Addressing.ShouldRespond {
-		t.Fatalf("a direct message goes to the agent: %+v", judgments)
+	if len(judgments) != 1 || judgments[0].Addressing.Target != AddressingTargetBot {
+		t.Fatalf("a direct message is to the agent: %+v", judgments)
 	}
 }
 
-func TestADirectMessageWithNothingOpenNeedsNoDecisionModel(t *testing.T) {
-	judgments, errorValue := NewDecisionModelDecider(nil, nil).Decide(context.Background(), messageFacts("D", false, "안녕"), nil)
-
-	if errorValue != nil || len(judgments) != 1 {
-		t.Fatalf("expected one judgment and no error, got %+v: %v", judgments, errorValue)
+func TestADirectMessageWithoutADecisionModelIsAnError(t *testing.T) {
+	if _, errorValue := NewDecisionModelDecider(nil, nil).Decide(context.Background(), messageFacts("D", false, "안녕"), nil); errorValue == nil {
+		t.Fatal("a direct message was judged with no decision model, so the gate could not tell a thanks from a request")
 	}
 }
 
 func TestAMessageNeedsAnAnswerOnlyToTheQuestionsItsFactsMakeRelevant(t *testing.T) {
-	addressing := []string{"m1.reaction", "m1.reactionEmoji", "m1.shouldRespond", "m1.target"}
+	direct := []string{"m1.reaction", "m1.reactionEmoji", "m1.shouldRespond", "m1.work"}
+	addressing := append([]string{"m1.target"}, direct...)
 	openTask := []string{"m1.busyRoute", "m1.relatesToActiveTask"}
 	testCases := []struct {
 		name     string
 		facts    Facts
 		expected []string
 	}{
-		{"direct, a running task", withOpenTask(messageFacts("D", false, "a"), "running"), openTask},
-		{"direct, a task waiting for approval", withOpenTask(messageFacts("D", false, "a"), "waiting_approval"), openTask},
-		{"direct, a task waiting for an answer", withOpenTask(messageFacts("D", false, "a"), "waiting_user_input"), openTask},
-		{"direct, a finished task", withFinishedTask(messageFacts("D", false, "a")), []string{"m1.relatesToActiveTask"}},
+		{"direct, a running task", withOpenTask(messageFacts("D", false, "a"), "running"), append(append([]string{}, direct...), openTask...)},
+		{"direct, a task waiting for approval", withOpenTask(messageFacts("D", false, "a"), "waiting_approval"), append(append([]string{}, direct...), openTask...)},
+		{"direct, a task waiting for an answer", withOpenTask(messageFacts("D", false, "a"), "waiting_user_input"), append(append([]string{}, direct...), openTask...)},
+		{"direct, a finished task", withFinishedTask(messageFacts("D", false, "a")), append([]string{"m1.relatesToActiveTask"}, direct...)},
 		{"channel, mentioned, nothing open", withDuties(messageFacts("O", true, "a")), addressing},
 		{"channel, not mentioned, no duties", messageFacts("O", false, "a"), addressing},
 		{"channel, not mentioned, duties", withDuties(messageFacts("O", false, "a")), append([]string{"m1.duty"}, addressing...)},
 		{"channel, mentioned, a running task", withOpenTask(messageFacts("O", true, "a"), "running"), append(append([]string{}, addressing...), openTask...)},
 		{"channel, mentioned, a finished task", withFinishedTask(messageFacts("O", true, "a")), append([]string{"m1.relatesToActiveTask"}, addressing...)},
-		{"direct burst, a running task", withOpenTask(messageFacts("D", false, "a", "b"), "running"), []string{"m1.busyRoute", "m1.relatesToActiveTask", "m2.busyRoute", "m2.relatesToActiveTask"}},
+		{"direct burst, a running task", withOpenTask(messageFacts("D", false, "a", "b"), "running"), []string{"m1.busyRoute", "m1.reaction", "m1.reactionEmoji", "m1.relatesToActiveTask", "m1.shouldRespond", "m1.work", "m2.busyRoute", "m2.reaction", "m2.reactionEmoji", "m2.relatesToActiveTask", "m2.shouldRespond", "m2.work"}},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -243,17 +249,45 @@ func TestAHumanTargetNeverGetsAReply(t *testing.T) {
 	}
 }
 
-func TestAReactionEmojiIsReadOnlyWhenTheDrawFallsInsideTheProbability(t *testing.T) {
+func TestAReactionIsAddedWheneverReactingIsLikelierThanNot(t *testing.T) {
 	facts := messageFacts("O", true, "감사합니다")
+	likely := defaultAnswers()
+	unlikely := defaultAnswers()
+	unlikely.reactionProbability = 0.4
 
-	reacting, _ := NewDecisionModelDecider(defaultAnswers(), func() float64 { return 0.1 }).Decide(context.Background(), facts, nil)
-	silent, _ := NewDecisionModelDecider(defaultAnswers(), func() float64 { return 0.95 }).Decide(context.Background(), facts, nil)
+	reacting, _ := NewDecisionModelDecider(likely, func() float64 { return 0.99 }).Decide(context.Background(), facts, nil)
+	silent, _ := NewDecisionModelDecider(unlikely, func() float64 { return 0.01 }).Decide(context.Background(), facts, nil)
 
 	if reacting[0].Addressing.ReactionEmoji != "eyes" || silent[0].Addressing.ReactionEmoji != "" {
-		t.Fatalf("expected eyes then nothing, got %q and %q", reacting[0].Addressing.ReactionEmoji, silent[0].Addressing.ReactionEmoji)
+		t.Fatalf("expected eyes for a likely reaction and nothing for an unlikely one whatever the draw, got %q and %q", reacting[0].Addressing.ReactionEmoji, silent[0].Addressing.ReactionEmoji)
 	}
 	if reacting[0].ReactionProbability != 0.9 {
 		t.Fatalf("the probability is reported for the caller, got %v", reacting[0].ReactionProbability)
+	}
+}
+
+func TestTheEmojiIsDrawnOnlyAmongThoseNearTheLikeliest(t *testing.T) {
+	answer := model.DecisionAnswer{Choice: "+1", Probabilities: map[string]float64{"+1": 0.30, "pray": 0.20, "sob": 0.05, "fire": 0.05}}
+
+	drawn := map[string]bool{}
+	for _, draw := range []float64{0, 0.3, 0.59, 0.61, 0.99} {
+		drawn[drawReactionEmoji(answer, draw)] = true
+	}
+
+	if !drawn["+1"] || !drawn["pray"] || drawn["sob"] || drawn["fire"] || len(drawn) != 2 {
+		t.Fatalf("drew %v, expected only +1 and pray: an emoji under half the likeliest is the tail and never drawn", drawn)
+	}
+}
+
+func TestWorkIsReadFromAllItsOptionsTogetherAgainstNone(t *testing.T) {
+	split := model.DecisionAnswer{Choice: WorkOptionNone, Probabilities: map[string]float64{WorkOptionNone: 0.34, WorkOptionEasy: 0.31, WorkOptionNormal: 0.22, WorkOptionImpossible: 0.13}}
+	idle := model.DecisionAnswer{Choice: WorkOptionNone, Probabilities: map[string]float64{WorkOptionNone: 0.6, WorkOptionEasy: 0.4}}
+
+	if !asksForWork(split) {
+		t.Fatal("work that is 0.66 likely across its options lost to none at 0.34 because none was the single likeliest option")
+	}
+	if asksForWork(idle) {
+		t.Fatal("a message more likely to want nothing was read as work")
 	}
 }
 

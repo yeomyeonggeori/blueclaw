@@ -14,10 +14,10 @@ type reactionEmoji struct {
 }
 
 var reactionEmojis = []reactionEmoji{
-	{"white_check_mark", "acknowledged, seen, done"},
+	{"white_check_mark", "acknowledged, seen"},
 	{"eyes", "looking at it now"},
 	{"+1", "agreement or approval"},
-	{"ok_hand", "understood, will do"},
+	{"saluting_face", "on it, will do"},
 	{"pray", "thanks, or please, aimed at the assistant"},
 	{"heart", "warmth or appreciation"},
 	{"tada", "celebration of a result"},
@@ -30,17 +30,18 @@ var reactionEmojis = []reactionEmoji{
 	{"muscle", "cheering effort on"},
 	{"wave", "a greeting or a farewell"},
 	{"thinking_face", "an open question worth considering"},
-	{"memo", "noted, written down"},
-	{"hourglass_flowing_sand", "it will take a while"},
-	{"mag", "looking into it"},
+	{"memo", "noted"},
 	{"bulb", "a good idea"},
 	{"sob", "sympathy for bad news"},
+	{"joy", "laughing at a joke"},
+	{"slightly_smiling_face", "a friendly greeting or a kind word, lightly returned"},
 	{"sweat_smile", "an awkward or self-deprecating joke"},
 }
 
 var gatewayQuestionNames = []string{
 	QuestionTarget,
 	QuestionShouldRespond,
+	QuestionWork,
 	QuestionReaction,
 	QuestionReactionEmoji,
 	QuestionDuty,
@@ -70,7 +71,7 @@ func isChannel(facts Facts) bool {
 	return IsMultiPersonConversation(facts.ConversationType)
 }
 
-func asksAddressing(facts Facts) bool {
+func asksTarget(facts Facts) bool {
 	return isChannel(facts)
 }
 
@@ -109,11 +110,9 @@ func newDecisionRequest(facts Facts) model.DecisionRequest {
 func questionsForMessage(facts Facts, message Message, key string) map[string]model.DecisionQuestion {
 	agentName := facts.AgentIdentity.DisplayName()
 	about := "About message " + key + " in the state. "
-	questions := map[string]model.DecisionQuestion{}
-	if asksAddressing(facts) {
-		for name, question := range addressingQuestions(about, agentName) {
-			questions[name] = question
-		}
+	questions := addressingQuestions(about, agentName)
+	if asksTarget(facts) {
+		questions[QuestionTarget] = targetQuestion(about, agentName)
 	}
 	if asksDuty(facts, message) {
 		questions[QuestionDuty] = dutyQuestion(about, agentName, facts.Duties)
@@ -127,18 +126,35 @@ func questionsForMessage(facts Facts, message Message, key string) map[string]mo
 	return questions
 }
 
+func targetQuestion(about string, agentName string) model.DecisionQuestion {
+	return model.ChoiceQuestion{
+		Instructions: about + "Who is it directed at? " + agentName + " is the workplace assistant in this conversation.",
+		OptionDescriptions: map[string]string{
+			string(AddressingTargetBot):     "directed at " + agentName + ", by mention, by reply, or by an unmistakable request to it",
+			string(AddressingTargetHuman):   "directed at one specific person other than " + agentName,
+			string(AddressingTargetAnyone):  "directed at the room in general, a share or an announcement anyone may answer",
+			string(AddressingTargetNone):    "directed at nobody, a self-note, a reaction, or filler",
+			string(AddressingTargetUnclear): "genuinely impossible to tell who it is aimed at",
+		},
+	}.Question()
+}
+
+func workQuestion(about string, agentName string) model.DecisionQuestion {
+	return model.ChoiceQuestion{
+		Instructions: about + "Does it ask " + agentName + " to do work that takes tools and time, and how much? Work asked of somebody else is none.",
+		OptionDescriptions: map[string]string{
+			WorkOptionNone:       "nothing for " + agentName + " to do. Words alone answer it, from what is visible, common knowledge or judgment, including a translation, an explanation or a draft written in the reply; or nobody asked " + agentName + " for anything",
+			WorkOptionEasy:       "a short piece of work: a lookup, one record or one change",
+			WorkOptionNormal:     "work in several steps: research, several records, or a document or file to produce",
+			WorkOptionHard:       "long, wide or verification-heavy work",
+			WorkOptionImpossible: "work that cannot be done: physically impossible, nonsensical, or plainly improper on its face. Never for a permission concern, which the operating system decides when the work runs",
+		},
+	}.Question()
+}
+
 func addressingQuestions(about string, agentName string) map[string]model.DecisionQuestion {
 	return map[string]model.DecisionQuestion{
-		QuestionTarget: model.ChoiceQuestion{
-			Instructions: about + "Who is it directed at? " + agentName + " is the workplace assistant in this conversation.",
-			OptionDescriptions: map[string]string{
-				string(AddressingTargetBot):     "directed at " + agentName + ", by mention, by reply, or by an unmistakable request to it",
-				string(AddressingTargetHuman):   "directed at one specific person other than " + agentName,
-				string(AddressingTargetAnyone):  "directed at the room in general, a share or an announcement anyone may answer",
-				string(AddressingTargetNone):    "directed at nobody, a self-note, a reaction, or filler",
-				string(AddressingTargetUnclear): "genuinely impossible to tell who it is aimed at",
-			},
-		}.Question(),
+		QuestionWork: workQuestion(about, agentName),
 		QuestionShouldRespond: model.NoulQuestion{
 			Instructions:    about + "Should " + agentName + " write a text reply to it?",
 			TrueDescription: "it is a direct request, question, or instruction to " + agentName + "; it answers a question " + agentName + " asked; it makes " + agentName + " the intended responder; or it is social or playful and aimed at " + agentName + ", where a short in-kind reply keeps the conversation going",
