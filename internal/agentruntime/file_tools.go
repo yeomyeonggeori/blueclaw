@@ -1394,19 +1394,21 @@ func (toolCatalogBuilder *ToolCatalogBuilder) attachFileTool(toolContext context
 	if len(attachmentInputs) == 0 {
 		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "file_deliver", "files must contain at least one path"), nil
 	}
+	checked := toolCatalogBuilder.checkDeliveries(toolContext, handlerContext, attachmentInputs)
+	if refusals := deliveryRefusals(checked); len(refusals) > 0 {
+		return fileDeliverRefusal(refusals), nil
+	}
 	attachments := []toolcontract.FileAttachment{}
 	deliveredPaths := []string{}
 	replyNotes := []string{}
-	for _, attachmentInput := range attachmentInputs {
-		concretePath := toolCatalogBuilder.nativeRequesterPath(handlerContext.request, strings.TrimSpace(attachmentInput.Path))
-		replyNotes = append(replyNotes, toolCatalogBuilder.runDeliveryChecks(toolContext, handlerContext, concretePath)...)
+	for index, attachmentInput := range attachmentInputs {
 		attachment, failureResult := toolCatalogBuilder.fileAttachment(toolContext, attachmentInput, handlerContext)
 		if failureResult != nil {
 			return *failureResult, nil
 		}
-		metadata := toolCatalogBuilder.deliveredMetadata(toolContext, handlerContext.request, concretePath)
-		attachment.Holds = metadata.Holds
-		replyNotes = append(replyNotes, metadata.Notes...)
+		attachment.Holds = checked[index].metadata.Holds
+		replyNotes = append(replyNotes, checked[index].failures...)
+		replyNotes = append(replyNotes, checked[index].metadata.Notes...)
 		attachments = append(attachments, attachment)
 		deliveredPaths = append(deliveredPaths, attachment.DevicePath)
 	}

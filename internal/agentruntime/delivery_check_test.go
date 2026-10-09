@@ -60,6 +60,29 @@ printf '{"notes":["%s: context %s, host %s"]}' "$(basename "$2")" "$([ -f "$SKIL
 	}
 }
 
+func TestASkillsDeliveryCheckThatRefusesAFileStopsTheWholeDeliveryAndTellsTheModelWhy(t *testing.T) {
+	fixture := newTaskFixture(t)
+	fixture.installCheckingSkill(t, `case "$2" in
+*deck.pptx) printf '{"notes":[],"refusal":"deck.pptx was not delivered: rewrite slide 6 without its unsupported row"}' > "$2.meta.json" ;;
+*) printf '{"notes":["%s: fine"]}' "$(basename "$2")" > "$2.meta.json" ;;
+esac
+`)
+	fixture.writeDocument(t, "memo.docx")
+	fixture.writeDocument(t, "deck.pptx")
+
+	result := fixture.invoke(t, "file_deliver", map[string]any{"files": []map[string]string{{"path": "documents/memo.docx"}, {"path": "documents/deck.pptx"}}})
+
+	if !result.Failed() || len(result.Attachments) != 0 {
+		t.Fatalf("a refused file went out, or took the files beside it along: %s", result.ContentText())
+	}
+	if !strings.Contains(result.ContentText(), "rewrite slide 6 without its unsupported row") {
+		t.Fatalf("the model was not told why the delivery was refused: %s", result.ContentText())
+	}
+	if !result.Failure.Retryable {
+		t.Fatal("a refused delivery must be retryable once the file is rewritten")
+	}
+}
+
 func TestAFailedDeliveryCheckStillDeliversAndTellsTheReplyWhy(t *testing.T) {
 	fixture := newTaskFixture(t)
 	fixture.installCheckingSkill(t, "echo 'the judge did not answer' >&2\nexit 3\n")
