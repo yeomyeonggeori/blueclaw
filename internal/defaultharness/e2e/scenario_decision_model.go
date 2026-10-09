@@ -47,9 +47,10 @@ func (turnScript *scenarioTurnScript) pendingCount() int {
 }
 
 type scenarioDecisionModel struct {
-	turnScript        *scenarioTurnScript
-	languageModelTurn *intaketest.LanguageModelDecisionModel
-	addressing        inboundengagement.AddressingDecision
+	turnScript         *scenarioTurnScript
+	languageModelTurn  *intaketest.LanguageModelDecisionModel
+	addressing         inboundengagement.AddressingDecision
+	isAddressingScript bool
 
 	mutex          sync.Mutex
 	decidedOutcome intaketest.Outcome
@@ -64,7 +65,8 @@ func newScenarioDecisionModel(turnScript *scenarioTurnScript, languageModel mode
 			LanguageModel: languageModel,
 			ModelName:     scenarioDecisionModelName,
 		},
-		addressing: addressing,
+		addressing:         addressing,
+		isAddressingScript: strings.TrimSpace(addressingResponse) != "",
 	}
 }
 
@@ -73,7 +75,7 @@ func (decisionModel *scenarioDecisionModel) Decide(ctx context.Context, request 
 		return decisionModel.languageModelTurn.Decide(ctx, request)
 	}
 	if inboundengagement.AsksOnlyGatewayQuestions(request.Questions) {
-		return model.DecisionResponse{Answers: gatewaytest.Answers(request.Questions, decisionModel.gatewayOutcome()), ModelName: scenarioDecisionModelName}, nil
+		return model.DecisionResponse{Answers: gatewaytest.Answers(request.Questions, decisionModel.gatewayOutcome(request)), ModelName: scenarioDecisionModelName}, nil
 	}
 	if outcome, isDecided := decisionModel.decidedTurn(); isDecided && asksOnlyAboutTools(request.Questions) {
 		return decisionModel.answersFrom(request, outcome), nil
@@ -139,8 +141,24 @@ func asksOnlyAboutTools(questions map[string]model.DecisionQuestion) bool {
 	return len(questions) > 0
 }
 
-func (decisionModel *scenarioDecisionModel) gatewayOutcome() gatewaytest.Outcome {
+func (decisionModel *scenarioDecisionModel) gatewayOutcome(request model.DecisionRequest) gatewaytest.Outcome {
+	if !decisionModel.isAddressingScript && isDirectPlacement(request) {
+		return gatewaytest.Outcome{Addressing: scenarioDirectRequest, BusyRoute: inboundengagement.BusyRouteNewTask}
+	}
 	return gatewaytest.Outcome{Addressing: decisionModel.addressing, BusyRoute: inboundengagement.BusyRouteNewTask}
+}
+
+var scenarioDirectRequest = inboundengagement.AddressingDecision{Target: inboundengagement.AddressingTargetBot, ShouldRespond: true, HasWork: true}
+
+func isDirectPlacement(request model.DecisionRequest) bool {
+	document, errorValue := json.Marshal(request.State)
+	if errorValue != nil {
+		return false
+	}
+	var state struct {
+		Placement string `json:"placement"`
+	}
+	return json.Unmarshal(document, &state) == nil && state.Placement == "direct"
 }
 
 func scenarioAddressingDecision(addressingResponse string) inboundengagement.AddressingDecision {

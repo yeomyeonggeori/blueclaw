@@ -844,7 +844,7 @@ func AmbientDutyCalendarAcceptanceScenario(artifactDirectoryPath string) Virtual
 		InitialToolNames:       []string{"event_add"},
 		Turns: []VirtualTurn{{
 			Prompt:           "@박예시 님 오늘 오후 5시 정기회의에 최견본, 이샘플 님도 참석자로 추가해주세요",
-			ExpectedResponse: VirtualResponseBackgroundAction,
+			ExpectedResponse: VirtualResponseReply,
 			ConversationType: "channel",
 			ChannelID:        "town-square",
 			ChannelName:      "town-square",
@@ -883,7 +883,7 @@ func AmbientDutyAnnouncementNoEchoScenario(artifactDirectoryPath string) Virtual
 		InitialToolNames:       []string{"event_add"},
 		Turns: []VirtualTurn{{
 			Prompt:           announcement,
-			ExpectedResponse: VirtualResponseBackgroundAction,
+			ExpectedResponse: VirtualResponseReply,
 			ConversationType: "channel",
 			ChannelID:        "town-square",
 			ChannelName:      "town-square",
@@ -918,7 +918,7 @@ func AmbientDutyNothingToRecordScenario(artifactDirectoryPath string) VirtualSes
 		CapabilityToolNames:   []string{"event_add"},
 		Turns: []VirtualTurn{{
 			Prompt:           "라운지 커피머신 원두 바뀐 거 아세요? 훨씬 낫네요",
-			ExpectedResponse: VirtualResponseBackgroundAction,
+			ExpectedResponse: VirtualResponseReply,
 			ConversationType: "channel",
 			ChannelID:        "town-square",
 			ChannelName:      "town-square",
@@ -948,7 +948,7 @@ func AmbientTaskCaptureAcceptanceScenario(artifactDirectoryPath string) VirtualS
 		InitialToolNames:      []string{"task_add"},
 		Turns: []VirtualTurn{{
 			Prompt:                 "@박예시 님 월요일까지 신규 가입 플로우 점검 작업 해주세요",
-			ExpectedResponse:       VirtualResponseBackgroundAction,
+			ExpectedResponse:       VirtualResponseReply,
 			RouterRequiredEvidence: []string{"task_add"},
 			ConversationType:       "channel",
 			ChannelID:              "town-square",
@@ -978,7 +978,7 @@ func AmbientTaskCaptureAcceptanceScenario(artifactDirectoryPath string) VirtualS
 			ForbiddenEvents: []string{toolRequestedEventName("bash")},
 		}, {
 			Prompt:                 "@박예시 님 그 작업 마감은 수요일로 변경해주세요",
-			ExpectedResponse:       VirtualResponseBackgroundAction,
+			ExpectedResponse:       VirtualResponseReply,
 			RouterRequiredEvidence: []string{"task_update"},
 			ConversationType:       "channel",
 			ChannelID:              "town-square",
