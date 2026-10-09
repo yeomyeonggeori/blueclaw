@@ -138,6 +138,10 @@ func (connectorRuntime *ConnectorRuntime) resolveTurnActiveGoal(ctx context.Cont
 
 func (connectorRuntime *ConnectorRuntime) resolveTurnAddressing(ctx context.Context, turn *inboundTurn) (ConnectorRuntimeResult, bool) {
 	turn.event = connectorRuntime.withInitialVisibleContext(ctx, turn.adapter, turn.event)
+	if turn.hasPendingAskInteraction {
+		turn.addressingLaunch = inboundengagement.Decision{ShouldLaunch: true}
+		return ConnectorRuntimeResult{}, false
+	}
 	turn.addressingLaunch = connectorRuntime.resolveInboundEngagement(ctx, turn.adapter, turn.platform, turn.event)
 	if turn.addressingLaunch.ReactionEmoji != "" {
 		if turn.engagedAckEmojiName != "" && turn.engagedAckEmojiName != turn.addressingLaunch.ReactionEmoji {
@@ -192,9 +196,6 @@ func (connectorRuntime *ConnectorRuntime) launchTurn(ctx context.Context, turn *
 		return connectorRuntime.completeTurnLaunchFailure(ctx, turn, errorValue)
 	}
 	turnResult := launchResult.TurnResult
-	if turn.addressingLaunch.SuppressReply {
-		turnResult.ReplySuppressionReason = "ambient_duty_no_reply"
-	}
 	taskRunID := turnResult.TaskRun.TaskRunID
 	taskDuration := time.Since(taskStartedAt)
 	connectorRuntime.logger.Info("connector."+turn.platform+".agent.completed", slog.String("messageID", turn.event.MessageID), slog.String("taskRunID", taskRunID), slog.Int64("duration_ms", taskDuration.Milliseconds()))

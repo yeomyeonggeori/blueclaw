@@ -21,10 +21,7 @@ func (connectorRuntime *ConnectorRuntime) resolveInboundEngagement(ctx context.C
 }
 
 func (connectorRuntime *ConnectorRuntime) resolveEngagement(ctx context.Context, platform string, event PlatformInboundEvent, judge func(context.Context) (inboundengagement.Judgment, error)) inboundengagement.Decision {
-	return inboundengagement.Resolve(ctx, connectorRuntime.logger, platform, engagementRequestForEvent(event), func(ctx context.Context) (inboundengagement.AddressingDecision, error) {
-		judgment, errorValue := judge(ctx)
-		return judgment.Addressing, errorValue
-	})
+	return inboundengagement.Resolve(ctx, connectorRuntime.logger, platform, engagementRequestForEvent(event), judge)
 }
 
 func engagementRequestForEvent(event PlatformInboundEvent) inboundengagement.Request {

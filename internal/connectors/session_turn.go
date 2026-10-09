@@ -47,9 +47,17 @@ func (sessionTurn *SessionTurn) AnswersAwaitedQuestion(ctx context.Context) (boo
 
 func (sessionTurn *SessionTurn) ResolveEngagement(ctx context.Context) inboundengagement.Decision {
 	connectorRuntime, turn := sessionTurn.connectorRuntime, sessionTurn.turn
-	return connectorRuntime.resolveEngagement(ctx, turn.platform, turn.event, func(ctx context.Context) (inboundengagement.Judgment, error) {
+	if _, hasAsk := connectorRuntime.findPendingAskInteraction(turn.personID, turn.event); hasAsk {
+		turn.addressingLaunch = inboundengagement.Decision{ShouldLaunch: true}
+		return turn.addressingLaunch
+	}
+	turn.addressingLaunch = connectorRuntime.resolveEngagement(ctx, turn.platform, turn.event, func(ctx context.Context) (inboundengagement.Judgment, error) {
 		return connectorRuntime.judgeTurn(withConnectorEvent(ctx, turn.event), turn)
 	})
+	if turn.addressingLaunch.ReactionEmoji != "" {
+		connectorRuntime.addAddressingReaction(ctx, turn.platform, turn.adapter, turn.event, turn.addressingLaunch.ReactionEmoji)
+	}
+	return turn.addressingLaunch
 }
 
 func (sessionTurn *SessionTurn) ContinueOpenInteractions(ctx context.Context, launchRequest agentruntime.TaskLaunchRequest) (agentruntime.TaskLaunchRequest, bool, error) {

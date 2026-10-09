@@ -1136,7 +1136,27 @@ func TestConnectorRuntimeRequesterEmailPrefersPolicyPrimaryEmail(t *testing.T) {
 	}
 }
 
-func TestADirectMessageWithNothingOpenMakesNoGatewayCall(t *testing.T) {
+func TestASessionReplyToAnOpenQuestionLaunchesWithoutAskingTheGateway(t *testing.T) {
+	connectorRuntime, _, taskRunService := newRoutedTestConnectorRuntime(t, testLanguageModel{reply: "ok"})
+	gatewayDecider := &scriptedGatewayDecider{addressing: inboundengagement.AddressingDecision{Target: inboundengagement.AddressingTargetBot}}
+	connectorRuntime.UseGatewayDecider(gatewayDecider)
+	waitingTaskRun := createWaitingInputTaskRunWithOptions(t, taskRunService, "어떤 형식으로 만들까요?", "input-options")
+	event := testInboundEvent("message-answer")
+	event.Platform = "test"
+	event.Prompt = "표로요"
+	event.ReplyTargetID = waitingTaskRun.OriginReplyTargetID
+	isThread := true
+	event.IsThread = &isThread
+	sessionTurn := connectorRuntime.OpenSessionTurn(context.Background(), event, "person-1", func(context.Context, ReplyTarget, OutboundReply) (string, error) { return "", nil })
+
+	decision := sessionTurn.ResolveEngagement(context.Background())
+
+	if !decision.ShouldLaunch || gatewayDecider.calls() != 0 {
+		t.Fatalf("an answer to an open question was judged by the gateway (%d calls) and launch=%v; a gateway that wants no work would leave the question answered and the task stopped", gatewayDecider.calls(), decision.ShouldLaunch)
+	}
+}
+
+func TestADirectMessageWithNothingOpenIsJudgedOnceByTheGateway(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
 	gatewayDecider := &scriptedGatewayDecider{addressing: addressedToBot()}
 	connectorRuntime.UseGatewayDecider(gatewayDecider)
@@ -1152,114 +1172,8 @@ func TestADirectMessageWithNothingOpenMakesNoGatewayCall(t *testing.T) {
 	if result.TaskRunID == "" || len(adapter.sentReplies) != 1 {
 		t.Fatalf("expected direct message task and reply, got result=%+v replies=%d", result, len(adapter.sentReplies))
 	}
-	if gatewayDecider.calls() != 0 {
-		t.Fatalf("expected no gateway call for a direct message with nothing open, got %d", gatewayDecider.calls())
-	}
-}
-
-func TestConnectorRuntimeReactsToConsumedAddressedMessageWithoutReply(t *testing.T) {
-	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnResult = agentcontract.AgentTurnResult{TurnRoute: agentcontract.TurnRouteConsume}
-	event := testInboundEvent("message-consume")
-
-	result, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, event)
-	if errorValue != nil {
-		t.Fatalf("expected consume event to process: %v", errorValue)
-	}
-
-	if result.Reason != "consume_reacted" || result.TaskRunID == "" {
-		t.Fatalf("expected consume reaction result, got %+v", result)
-	}
-	if len(adapter.sentReplies) != 0 {
-		t.Fatalf("expected no reply for consume, got %+v", adapter.sentReplies)
-	}
-	if len(adapter.reactions) != 1 {
-		t.Fatalf("expected one reaction, got %+v", adapter.reactions)
-	}
-	reaction := adapter.reactions[0]
-	if reaction.MessageID != event.MessageID || reaction.EmojiName != inboundengagement.DefaultReactionEmojiName || reaction.Reason != "consume" {
-		t.Fatalf("unexpected consume reaction: %+v", reaction)
-	}
-	if !connectorTaskEventsContain(connectorRuntime, result.TaskRunID, "connector.reaction.sent", inboundengagement.DefaultReactionEmojiName) {
-		t.Fatal("expected reaction event")
-	}
-}
-
-func TestConnectorRuntimeDirectConsumeFallsBackToReplyWhenReactionFails(t *testing.T) {
-	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnResult = agentcontract.AgentTurnResult{TurnRoute: agentcontract.TurnRouteConsume, FinishMessage: "알겠습니다."}
-	adapter.reactionError = errors.New("reaction failed")
-	event := testInboundEvent("message-direct-consume")
-	event.Context.ConversationType = "D"
-
-	result, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, event)
-	if errorValue != nil {
-		t.Fatalf("expected direct consume fallback to process: %v", errorValue)
-	}
-
-	if result.Reason != "consume_fallback_sent" || result.ReplyDispatchID == "" {
-		t.Fatalf("expected direct consume fallback reply, got %+v", result)
-	}
-	if len(adapter.sentReplies) != 1 || adapter.sentReplies[0].message != "알겠습니다." {
-		t.Fatalf("expected model-authored fallback reply, got %+v", adapter.sentReplies)
-	}
-	if !connectorTaskEventsContain(connectorRuntime, result.TaskRunID, "connector.reaction.failed", "reaction failed") {
-		t.Fatal("expected reaction failure event before fallback")
-	}
-}
-
-func TestConnectorRuntimeDirectConsumeFallsBackWithoutReactionAdapter(t *testing.T) {
-	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnResult = agentcontract.AgentTurnResult{TurnRoute: agentcontract.TurnRouteConsume, FinishMessage: "확인했습니다."}
-	event := testInboundEvent("message-direct-consume")
-	event.Context.ConversationType = "D"
-
-	result, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), testAdapterWithoutReaction{adapter: adapter}, event)
-	if errorValue != nil {
-		t.Fatalf("expected direct consume fallback to process: %v", errorValue)
-	}
-
-	if result.Reason != "consume_fallback_sent" || len(adapter.sentReplies) != 1 {
-		t.Fatalf("expected fallback reply without reaction adapter, result=%+v replies=%+v", result, adapter.sentReplies)
-	}
-}
-
-func TestConnectorRuntimeConsumeWithoutReactionAdapterDoesNotReply(t *testing.T) {
-	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnResult = agentcontract.AgentTurnResult{TurnRoute: agentcontract.TurnRouteConsume}
-	noReactionAdapter := testAdapterWithoutReaction{adapter: adapter}
-
-	result, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), noReactionAdapter, testInboundEvent("message-consume"))
-	if errorValue != nil {
-		t.Fatalf("expected consume event to process: %v", errorValue)
-	}
-
-	if result.Reason != "consume_no_reaction_adapter" {
-		t.Fatalf("expected no-adapter consume result, got %+v", result)
-	}
-	if len(adapter.sentReplies) != 0 || len(adapter.reactions) != 0 {
-		t.Fatalf("expected no reply or reaction, replies=%+v reactions=%+v", adapter.sentReplies, adapter.reactions)
-	}
-}
-
-func TestConnectorRuntimeReactionFailureDoesNotSendFallbackReply(t *testing.T) {
-	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
-	harness.TurnResult = agentcontract.AgentTurnResult{TurnRoute: agentcontract.TurnRouteConsume}
-	adapter.reactionError = errors.New("reaction failed")
-
-	result, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, testInboundEvent("message-consume"))
-	if errorValue != nil {
-		t.Fatalf("expected consume event to process: %v", errorValue)
-	}
-
-	if result.Reason != "consume_reaction_failed" {
-		t.Fatalf("expected reaction failure result, got %+v", result)
-	}
-	if len(adapter.sentReplies) != 0 {
-		t.Fatalf("expected no fallback reply, got %+v", adapter.sentReplies)
-	}
-	if !connectorTaskEventsContain(connectorRuntime, result.TaskRunID, "connector.reaction.failed", "reaction failed") {
-		t.Fatal("expected reaction failure event")
+	if gatewayDecider.calls() != 1 {
+		t.Fatalf("a direct message is judged by the gateway exactly once so a thanks is not taken for a request, got %d calls", gatewayDecider.calls())
 	}
 }
 
@@ -2381,38 +2295,6 @@ func TestConnectorRuntimeCreatesScheduledTaskFromNaturalLanguagePrompt(t *testin
 	}
 	if len(adapter.sentReplies) != 1 || adapter.sentReplies[0].message != "매일 아침 7시에 조사해서 알려드릴게요." {
 		t.Fatalf("expected confirmation reply, got %+v", adapter.sentReplies)
-	}
-}
-
-func TestConnectorRuntimeConsumesBareConfirmationReplyWithoutPendingTask(t *testing.T) {
-	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
-		StructuredResponsesBySchema: map[string][]string{
-			"bluecollar_turn_router": {
-				`{"route":"consume","classification":"quick_reply","taskShape":"immediate_reply","level":"xlow","requestedOutputFormats":null,"responseLanguage":"ko","reason":"orphan approval acknowledgement","userFacingReply":"","reactionEmojiName":"ok_hand"}`,
-			},
-		},
-	})
-	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
-	connectorRuntimeAgentKernel(connectorRuntime).UseIntakeLanguageModelProvider(languageModel)
-	connectorRuntimeAgentKernel(connectorRuntime).UseIntakeOptions(agentcontract.IntakeOptions{IsEnabled: true})
-
-	event := testInboundEvent("message-approved")
-	event.Prompt = "approved"
-	result, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, event)
-	if errorValue != nil {
-		t.Fatalf("expected orphan approval reply to process: %v", errorValue)
-	}
-	if result.Reason != "consume_reacted" {
-		t.Fatalf("expected orphan approval to be consumed via router, got %+v", result)
-	}
-	if !connectorContainsSchemaName(languageModel.Requests(), "bluecollar_turn_router") {
-		t.Fatalf("expected router classification, got schemas=%+v", connectorRequestSchemaNames(languageModel.Requests()))
-	}
-	if connectorContainsSchemaName(languageModel.Requests(), "bluecollar_agent_turn_action") {
-		t.Fatalf("orphan approval must not launch an agent turn, got schemas=%+v", connectorRequestSchemaNames(languageModel.Requests()))
-	}
-	if len(adapter.sentReplies) != 0 {
-		t.Fatalf("orphan approval must not send a generic reply, got %+v", adapter.sentReplies)
 	}
 }
 

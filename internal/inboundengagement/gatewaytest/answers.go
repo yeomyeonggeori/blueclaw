@@ -32,7 +32,9 @@ func answerFor(shortName string, outcome Outcome) model.DecisionAnswer {
 	case inboundengagement.QuestionReaction:
 		return reactionAnswer(outcome)
 	case inboundengagement.QuestionReactionEmoji:
-		return choiceAnswer(orDefault(outcome.Addressing.ReactionEmoji, inboundengagement.DefaultReactionEmojiName))
+		return choiceAnswer(orDefault(outcome.Addressing.ReactionEmoji, "white_check_mark"))
+	case inboundengagement.QuestionWork:
+		return workAnswer(outcome.Addressing.HasWork)
 	case inboundengagement.QuestionDuty:
 		return dutyAnswer(outcome.Addressing)
 	case inboundengagement.QuestionRelatesToActiveTask:
@@ -61,6 +63,13 @@ func reactionAnswer(outcome Outcome) model.DecisionAnswer {
 		},
 		Confidence: 1,
 	}
+}
+
+func workAnswer(hasWork bool) model.DecisionAnswer {
+	if hasWork {
+		return choiceAnswer(inboundengagement.WorkOptionEasy)
+	}
+	return choiceAnswer(inboundengagement.WorkOptionNone)
 }
 
 func dutyAnswer(addressing inboundengagement.AddressingDecision) model.DecisionAnswer {

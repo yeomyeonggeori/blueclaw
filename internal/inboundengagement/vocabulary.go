@@ -7,8 +7,6 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
-const DefaultReactionEmojiName = "white_check_mark"
-
 type Message struct {
 	MessageID         string
 	Prompt            string
@@ -34,6 +32,7 @@ const (
 type AddressingDecision struct {
 	Target         AddressingTarget
 	ShouldRespond  bool
+	HasWork        bool
 	ReactionEmoji  string
 	DutyMatch      bool
 	DutyName       string
@@ -59,15 +58,21 @@ var BusyRouteNames = []string{
 const (
 	QuestionTarget              = "target"
 	QuestionShouldRespond       = "shouldRespond"
+	QuestionWork                = "work"
 	QuestionReaction            = "reaction"
 	QuestionReactionEmoji       = "reactionEmoji"
 	QuestionDuty                = "duty"
 	QuestionRelatesToActiveTask = "relatesToActiveTask"
 	QuestionBusyRoute           = "busyRoute"
 
-	ReactionOptionNone  = "none"
-	ReactionOptionReact = "react"
-	DutyOptionNone      = "none"
+	ReactionOptionNone   = "none"
+	ReactionOptionReact  = "react"
+	WorkOptionNone       = "none"
+	WorkOptionEasy       = "easy"
+	WorkOptionNormal     = "normal"
+	WorkOptionHard       = "hard"
+	WorkOptionImpossible = "impossible"
+	DutyOptionNone       = "none"
 )
 
 type StandingDuty struct {

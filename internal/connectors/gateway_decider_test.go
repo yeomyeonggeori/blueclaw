@@ -94,9 +94,16 @@ func harnessGateway(harness agentcontract.Harness) harnessGatewayDecider {
 func (decider harnessGatewayDecider) Decide(_ context.Context, facts inboundengagement.Facts, _ agentcontract.LLMCallObserver) ([]inboundengagement.Judgment, error) {
 	scripted, isScripted := decider.harness.(*scriptedHarness)
 	if !isScripted {
-		return judgmentsFor(facts, inboundengagement.AddressingDecision{}, "", false), nil
+		return judgmentsFor(facts, addressedToBot(), "", false), nil
 	}
-	return judgmentsFor(facts, scripted.AddressingDecision, scripted.BusyRoute, scripted.IsActiveTaskFollowUp), nil
+	return judgmentsFor(facts, scriptedAddressingOrAddressedToBot(scripted.AddressingDecision), scripted.BusyRoute, scripted.IsActiveTaskFollowUp), nil
+}
+
+func scriptedAddressingOrAddressedToBot(addressing inboundengagement.AddressingDecision) inboundengagement.AddressingDecision {
+	if addressing.Target == "" {
+		return addressedToBot()
+	}
+	return addressing
 }
 
 func (decider harnessGatewayDecider) FitsBurstBudget(inboundengagement.Facts) bool {
