@@ -14,13 +14,13 @@ catalog, so they appear here as one row with no description.
 | `EquipToolName` | 245 | `equip_tool.go` |
 | `FileDeliverToolName` | 150 | `file_tools.go` |
 | `PlanToolName` | 472 | `plan_tool.go` |
-| `ReadToolName` | 299 | `file_tools.go` |
+| `ReadToolName` | 294 | `file_tools.go` |
 | `SkillSearchToolName` | 208 | `skill_search_tool.go` |
 | `bash` | 47 | `shell_tools.go` |
 | `conversation_history` | 85 | `tool_catalog.go` |
 | `edit` | 331 | `file_tools.go` |
 | `file_delete` | 316 | `file_tools.go` |
-| `file_preview` | 229 | `file_tools.go` |
+| `file_preview` | 224 | `file_tools.go` |
 | `file_read` | 299 | `file_tools.go` |
 | `memory_forget` | 179 | `memory_store_tools.go` |
 | `memory_remember` | 505 | `memory_store_tools.go` |
@@ -31,4 +31,4 @@ catalog, so they appear here as one row with no description.
 | `skill_remove` | 67 | `skill_management.go` |
 | `write` | 239 | `file_tools.go` |
 
-21 tools, 5031 bytes of description in total.
+21 tools, 5021 bytes of description in total.
