@@ -93,8 +93,8 @@ func TestAmbientTaskCaptureAcceptance(t *testing.T) {
 	if countRequestedToolCalls(reviseResult.Events, "task_add") > 0 {
 		t.Fatalf("same-thread revision must update, not add a duplicate task; events: %s", summarizeEvents(reviseResult.Events))
 	}
-	if turnResult.DidReply || reviseResult.DidReply {
-		t.Fatalf("ambient task capture must stay silent, got first=%q second=%q", turnResult.FinishMessage, reviseResult.FinishMessage)
+	if !turnResult.DidReply || !reviseResult.DidReply {
+		t.Fatalf("ambient task capture must tell the room what it did, got first=%q second=%q", turnResult.FinishMessage, reviseResult.FinishMessage)
 	}
 }
 
@@ -185,8 +185,8 @@ func TestAmbientDutyCalendarAcceptance(t *testing.T) {
 	if !eventsContain(turnResult.Events, "agent.ambient_duty_launch", `"dutyName":"calendar_upkeep"`) {
 		t.Fatalf("expected ambient duty launch event; events: %s", summarizeEvents(turnResult.Events))
 	}
-	if turnResult.DidReply {
-		t.Fatalf("expected ambient calendar duty to stay silent, got %q", turnResult.FinishMessage)
+	if !turnResult.DidReply {
+		t.Fatal("an ambient calendar duty that added an event must say so")
 	}
 }
 
