@@ -15,8 +15,9 @@ const (
 )
 
 type deliveredFileMetadata struct {
-	Holds json.RawMessage `json:"holds"`
-	Notes []string        `json:"notes"`
+	Holds   json.RawMessage `json:"holds"`
+	Notes   []string        `json:"notes"`
+	Refusal string          `json:"refusal"`
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) deliveredMetadata(ctx context.Context, request ToolCatalogRequest, concretePath string) deliveredFileMetadata {
@@ -63,5 +64,5 @@ func (metadata deliveredFileMetadata) bounded() deliveredFileMetadata {
 			notes = append(notes, trimmed)
 		}
 	}
-	return deliveredFileMetadata{Holds: holds, Notes: notes}
+	return deliveredFileMetadata{Holds: holds, Notes: notes, Refusal: strings.TrimSpace(metadata.Refusal)}
 }

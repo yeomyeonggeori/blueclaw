@@ -8,6 +8,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/blueclaw/internal/skill"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 const (
@@ -31,6 +32,41 @@ func (toolCatalogBuilder *ToolCatalogBuilder) runDeliveryChecks(ctx context.Cont
 		}
 	}
 	return failures
+}
+
+type checkedDelivery struct {
+	failures []string
+	metadata deliveredFileMetadata
+}
+
+func (toolCatalogBuilder *ToolCatalogBuilder) checkDeliveries(ctx context.Context, handlerContext toolHandlerContext, attachmentInputs []fileAttachFileInput) []checkedDelivery {
+	checked := make([]checkedDelivery, 0, len(attachmentInputs))
+	for _, attachmentInput := range attachmentInputs {
+		concretePath := toolCatalogBuilder.nativeRequesterPath(handlerContext.request, strings.TrimSpace(attachmentInput.Path))
+		checked = append(checked, checkedDelivery{
+			failures: toolCatalogBuilder.runDeliveryChecks(ctx, handlerContext, concretePath),
+			metadata: toolCatalogBuilder.deliveredMetadata(ctx, handlerContext.request, concretePath),
+		})
+	}
+	return checked
+}
+
+func deliveryRefusals(checked []checkedDelivery) []string {
+	refusals := []string{}
+	for _, delivery := range checked {
+		if delivery.metadata.Refusal != "" {
+			refusals = append(refusals, delivery.metadata.Refusal)
+		}
+	}
+	return refusals
+}
+
+func fileDeliverRefusal(refusals []string) toolcontract.ToolResult {
+	result := toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "file_deliver", strings.Join(refusals, "\n"))
+	result.Failure.Retryable = true
+	result.Failure.SafeRetry = true
+	result.Failure.RetryPolicy = "different_input"
+	return result
 }
 
 func deliveryCheckCommand(bundle skill.SkillBundle, concretePath string) string {
