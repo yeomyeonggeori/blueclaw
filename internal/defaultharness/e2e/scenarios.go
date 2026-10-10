@@ -920,7 +920,7 @@ func AmbientDutyNothingToRecordScenario(artifactDirectoryPath string) VirtualSes
 		CapabilityToolNames:   []string{"event_add"},
 		Turns: []VirtualTurn{{
 			Prompt:           "라운지 커피머신 원두 바뀐 거 아세요? 훨씬 낫네요",
-			ExpectedResponse: VirtualResponseReply,
+			ExpectedResponse: VirtualResponseBackgroundAction,
 			ConversationType: "channel",
 			ChannelID:        "town-square",
 			ChannelName:      "town-square",
@@ -931,6 +931,9 @@ func AmbientDutyNothingToRecordScenario(artifactDirectoryPath string) VirtualSes
 			},
 			ExpectedToolCallCounts: map[string]int{"event_add": 0},
 			ExpectedTaskStatus:     task.TaskStatusCompleted,
+			ExpectedEventCounts: []VirtualEventCount{
+				{Name: agentcontract.TaskEventConnectorReplySuppressed, BodyFragment: "overheard_duty_run_changed_nothing", Count: 1},
+			},
 		}},
 	}
 }

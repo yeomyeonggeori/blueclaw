@@ -33,14 +33,6 @@ func ambientDutyForTurn(turn ConversationTurn) (inboundengagement.StandingDuty, 
 	return duty, turn.AmbientDuty.IsMatch && isKnownDuty
 }
 
-func promptForTurn(turn ConversationTurn) string {
-	duty, isAmbientDuty := ambientDutyForTurn(turn)
-	if !isAmbientDuty {
-		return turn.Event.Prompt
-	}
-	return inboundengagement.AmbientDutyInstructionPrompt(duty, turn.Event.Prompt, turn.Event.Context.Sender.Name)
-}
-
 const ambientDutyTaskLevel = agentcontract.TaskLevelLow
 
 func taskLevelForTurn(turn ConversationTurn) agentcontract.TaskLevel {
@@ -65,10 +57,6 @@ func pendingInputOf(turn *inboundTurn) agentcontract.PendingInputContext {
 
 func (connectorRuntime *ConnectorRuntime) buildTaskLaunchRequest(turn ConversationTurn) agentruntime.TaskLaunchRequest {
 	event := turn.Event
-	checkpointSender := turn.CheckpointSender
-	if turn.AmbientDuty.IsMatch {
-		checkpointSender = nil
-	}
 	return withTurnContinuation(agentruntime.TaskLaunchRequest{
 		Source:                     agentruntime.TaskLaunchSourceConnector,
 		SourceReference:            event.DedupeKey(),
@@ -87,16 +75,15 @@ func (connectorRuntime *ConnectorRuntime) buildTaskLaunchRequest(turn Conversati
 		ConversationChannelID:      event.Context.ChannelID,
 		ConversationChannelName:    event.Context.ChannelName,
 		ReplyTargetID:              event.ReplyTargetID,
-		Prompt:                     promptForTurn(turn),
+		Prompt:                     event.Prompt,
 		InputParts:                 append([]agentcontract.AgentPart{}, event.InputParts...),
 		ResponseLanguage:           responseLanguageForEvent(event),
 		VisibleContext:             event.Context.ToAgentVisibleContext(),
-		AmbientDuty:                turn.AmbientDuty,
 		HistoryProvider:            connectorHistoryProvider{adapter: turn.Adapter},
 		AttachmentMaterialResolver: connectorRuntime.attachmentMaterialResolverFor(turn.Adapter, turn.RequesterPersonID, event),
 		PersonAccess:               turn.PersonAccess,
 		AccessibleConversationIDs:  turn.AccessibleConversationIDs,
-		CheckpointSender:           checkpointSender,
+		CheckpointSender:           turn.CheckpointSender,
 	}, turn)
 }
 
@@ -108,6 +95,17 @@ func withTurnContinuation(request agentruntime.TaskLaunchRequest, turn Conversat
 	request.PriorTask = turn.PriorTask
 	request.PendingInput = turn.PendingInput
 	request.TaskLevel = taskLevelForTurn(turn)
+	return withAmbientDuty(request, turn)
+}
+
+func withAmbientDuty(request agentruntime.TaskLaunchRequest, turn ConversationTurn) agentruntime.TaskLaunchRequest {
+	request.AmbientDuty = turn.AmbientDuty
+	duty, isAmbientDuty := ambientDutyForTurn(turn)
+	if !isAmbientDuty {
+		return request
+	}
+	request.Prompt = inboundengagement.AmbientDutyInstructionPrompt(duty, turn.Event.Prompt, turn.Event.Context.Sender.Name)
+	request.CheckpointSender = nil
 	return request
 }
 

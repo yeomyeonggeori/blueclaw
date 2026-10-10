@@ -127,7 +127,7 @@ func servableTool(toolDescriptor toolcontract.ToolDescriptor) (*mcp.Tool, bool) 
 }
 
 func toolAnnotations(toolDescriptor toolcontract.ToolDescriptor) *mcp.ToolAnnotations {
-	isReadOnly := leavesEnvironmentUnchanged(toolDescriptor.SideEffectClass)
+	isReadOnly := LeavesEnvironmentUnchanged(toolDescriptor.SideEffectClass)
 	isDestructive := toolDescriptor.SideEffectClass == toolcontract.ToolSideEffectDestructive
 	return &mcp.ToolAnnotations{
 		ReadOnlyHint:    isReadOnly,
@@ -135,7 +135,7 @@ func toolAnnotations(toolDescriptor toolcontract.ToolDescriptor) *mcp.ToolAnnota
 	}
 }
 
-func leavesEnvironmentUnchanged(sideEffectClass string) bool {
+func LeavesEnvironmentUnchanged(sideEffectClass string) bool {
 	switch sideEffectClass {
 	case toolcontract.ToolSideEffectRead, toolcontract.ToolSideEffectNone, toolcontract.ToolSideEffectComputation:
 		return true
