@@ -15,6 +15,7 @@ type decisionState struct {
 	Now                  string                   `json:"now,omitempty"`
 	Context              []decisionContextMessage `json:"context,omitempty"`
 	Messages             []decisionMessage        `json:"messages"`
+	CallableTools        []string                 `json:"callableTools,omitempty"`
 	StandingDuties       []decisionDuty           `json:"standingDuties,omitempty"`
 	ActiveTask           *TaskFacts               `json:"activeTask,omitempty"`
 	RecentlyFinishedTask *TaskFacts               `json:"recentlyFinishedTask,omitempty"`
@@ -54,13 +55,14 @@ type decisionDuty struct {
 
 func newDecisionState(facts Facts) decisionState {
 	state := decisionState{
-		Agent:      decisionAgent{Name: facts.AgentIdentity.DisplayName(), Mention: facts.AgentIdentity.MentionExample()},
-		Company:    decisionCompany{Name: facts.Company.Name, TimeZone: facts.Company.TimeZone},
-		Placement:  placementOf(facts),
-		Now:        agentcontract.FormatContextTimestamp(facts.EnvironmentNow, facts.Company.TimeZone),
-		Context:    decisionContextMessages(facts),
-		Messages:   decisionMessages(facts),
-		ActiveTask: facts.OpenTask,
+		Agent:         decisionAgent{Name: facts.AgentIdentity.DisplayName(), Mention: facts.AgentIdentity.MentionExample()},
+		Company:       decisionCompany{Name: facts.Company.Name, TimeZone: facts.Company.TimeZone},
+		Placement:     placementOf(facts),
+		Now:           agentcontract.FormatContextTimestamp(facts.EnvironmentNow, facts.Company.TimeZone),
+		Context:       decisionContextMessages(facts),
+		Messages:      decisionMessages(facts),
+		CallableTools: facts.CallableTools,
+		ActiveTask:    facts.OpenTask,
 	}
 	if facts.OpenTask == nil {
 		state.RecentlyFinishedTask = facts.FinishedTask

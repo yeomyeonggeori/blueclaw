@@ -923,3 +923,13 @@ func TestAgentTurnRequestWithoutIdentityProviderStaysEmpty(t *testing.T) {
 		t.Fatalf("expected an empty agent identity without a provider, got %+v", turnRequest.AgentIdentity)
 	}
 }
+
+func TestTheJudgedWorkReachesTheHarness(t *testing.T) {
+	taskLauncher := NewTaskLauncher(nil, nil, nil)
+
+	turnRequest := taskLauncher.agentTurnRequestForLaunch(TaskLaunchRequest{DecidedWork: agentcontract.WorkImpossible}, "default", nil, nil, ConversationResourceScope{})
+
+	if turnRequest.DecidedWork != agentcontract.WorkImpossible || turnRequest.RoutingRequest().DecidedWork != agentcontract.WorkImpossible {
+		t.Fatalf("expected the judged work in the turn request and its routing request, got %q", turnRequest.DecidedWork)
+	}
+}

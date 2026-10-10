@@ -28,6 +28,7 @@ type Facts struct {
 	OpenTask         *TaskFacts
 	FinishedTask     *TaskFacts
 	Duties           []StandingDuty
+	CallableTools    []string
 	EnvironmentNow   time.Time
 }
 
@@ -141,7 +142,7 @@ func (decider DecisionModelDecider) readAddressing(reader answerReader, facts Fa
 	if errorValue != nil {
 		return AddressingDecision{}, 0, errorValue
 	}
-	addressing := AddressingDecision{Target: target, ShouldRespond: shouldRespondAnswer.IsYes(), HasWork: asksForWork(workAnswer)}
+	addressing := AddressingDecision{Target: target, ShouldRespond: shouldRespondAnswer.IsYes(), Work: agentcontract.ReadWork(workAnswer)}
 	reactionAnswer, errorValue := reader.choiceAnswer(QuestionReaction)
 	if errorValue != nil {
 		return AddressingDecision{}, 0, errorValue
@@ -184,16 +185,6 @@ func readTarget(reader answerReader, facts Facts) (AddressingTarget, error) {
 	}
 	target, errorValue := reader.choice(QuestionTarget)
 	return AddressingTarget(target), errorValue
-}
-
-func asksForWork(workAnswer model.DecisionAnswer) bool {
-	workWeight := 0.0
-	for option, probability := range workAnswer.Probabilities {
-		if option != WorkOptionNone {
-			workWeight += probability
-		}
-	}
-	return workWeight > workAnswer.ChoiceProbability(WorkOptionNone)
 }
 
 const reactionCandidateShareOfTheLikeliest = 0.5

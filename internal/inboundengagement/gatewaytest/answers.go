@@ -1,6 +1,7 @@
 package gatewaytest
 
 import (
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
@@ -34,7 +35,7 @@ func answerFor(shortName string, outcome Outcome) model.DecisionAnswer {
 	case inboundengagement.QuestionReactionEmoji:
 		return choiceAnswer(orDefault(outcome.Addressing.ReactionEmoji, "white_check_mark"))
 	case inboundengagement.QuestionWork:
-		return workAnswer(outcome.Addressing.HasWork)
+		return choiceAnswer(orDefault(string(outcome.Addressing.Work), string(agentcontract.WorkNone)))
 	case inboundengagement.QuestionDuty:
 		return dutyAnswer(outcome.Addressing)
 	case inboundengagement.QuestionRelatesToActiveTask:
@@ -63,13 +64,6 @@ func reactionAnswer(outcome Outcome) model.DecisionAnswer {
 		},
 		Confidence: 1,
 	}
-}
-
-func workAnswer(hasWork bool) model.DecisionAnswer {
-	if hasWork {
-		return choiceAnswer(inboundengagement.WorkOptionEasy)
-	}
-	return choiceAnswer(inboundengagement.WorkOptionNone)
 }
 
 func dutyAnswer(addressing inboundengagement.AddressingDecision) model.DecisionAnswer {

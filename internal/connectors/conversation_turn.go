@@ -23,6 +23,7 @@ type ConversationTurn struct {
 	PriorTask                 agentcontract.PriorTaskContext
 	PendingInput              agentcontract.PendingInputContext
 	AmbientDuty               inboundengagement.AmbientDutyContext
+	DecidedWork               agentcontract.Work
 	CheckpointSender          agentcontract.AgentCheckpointSender
 	AccessibleConversationIDs []string
 	IsBlockedContinuation     bool
@@ -40,6 +41,13 @@ func taskLevelForTurn(turn ConversationTurn) agentcontract.TaskLevel {
 		return ambientDutyTaskLevel
 	}
 	return ""
+}
+
+func decidedWorkForTurn(turn ConversationTurn) agentcontract.Work {
+	if turn.HasActiveGoal {
+		return ""
+	}
+	return turn.DecidedWork
 }
 
 func pendingInputOf(turn *inboundTurn) agentcontract.PendingInputContext {
@@ -95,6 +103,7 @@ func withTurnContinuation(request agentruntime.TaskLaunchRequest, turn Conversat
 	request.PriorTask = turn.PriorTask
 	request.PendingInput = turn.PendingInput
 	request.TaskLevel = taskLevelForTurn(turn)
+	request.DecidedWork = decidedWorkForTurn(turn)
 	return withAmbientDuty(request, turn)
 }
 

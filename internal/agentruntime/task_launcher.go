@@ -91,6 +91,7 @@ type TaskLaunchRequest struct {
 	ScheduledApprovedCall      *task.ScheduleApprovedCall
 	SettledCalls               []agentcontract.CarriedOutCall
 	TaskLevel                  agentcontract.TaskLevel
+	DecidedWork                agentcontract.Work
 	PendingInput               agentcontract.PendingInputContext
 	SkipSkillSelection         bool
 	UseEmptyToolCatalog        bool
@@ -634,6 +635,7 @@ func (taskLauncher *TaskLauncher) agentTurnRequestForLaunch(request TaskLaunchRe
 		PriorTask:                  request.PriorTask,
 		ScheduledRun:               request.ScheduledRun,
 		TaskLevel:                  request.TaskLevel,
+		DecidedWork:                request.DecidedWork,
 		PendingInput:               request.PendingInput,
 		SkipSkillSelection:         request.SkipSkillSelection,
 		MemoryFacts:                bluecollarMemoryFacts(memoryFacts),

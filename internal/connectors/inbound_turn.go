@@ -218,6 +218,7 @@ func (connectorRuntime *ConnectorRuntime) conversationTurnFor(turn *inboundTurn)
 		PriorTask:                 turn.priorTask,
 		PendingInput:              pendingInputOf(turn),
 		AmbientDuty:               turn.addressingLaunch.AmbientDuty,
+		DecidedWork:               turn.addressingLaunch.DecidedWork,
 		CheckpointSender:          connectorRuntime.checkpointSenderForTurn(turn.platform, turn.event, turn.replyTarget, turn.sendReply),
 		AccessibleConversationIDs: []string{turn.event.ConversationID},
 		IsBlockedContinuation:     turn.activeGoal.Status == agentcontract.ActiveGoalStatusBlocked && turn.hasActiveGoal,

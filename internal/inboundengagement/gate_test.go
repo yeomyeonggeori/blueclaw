@@ -3,6 +3,7 @@ package inboundengagement
 import (
 	"context"
 	"errors"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"log/slog"
 	"strings"
 	"testing"
@@ -91,7 +92,7 @@ func TestADirectMessageThatOnlyDeservesAReactionGetsOneAndNoTurn(t *testing.T) {
 }
 
 func TestADirectRequestForWorkLaunchesEvenWhenNoWordsAreWanted(t *testing.T) {
-	decision := gateReturning{Target: AddressingTargetBot, HasWork: true, ReactionEmoji: "saluting_face"}.Resolve(context.Background(), "buzz", directRequest())
+	decision := gateReturning{Target: AddressingTargetBot, Work: agentcontract.WorkEasy, ReactionEmoji: "saluting_face"}.Resolve(context.Background(), "buzz", directRequest())
 
 	if !decision.ShouldLaunch || decision.ReactionEmoji != "saluting_face" {
 		t.Fatalf("a direct request for work decided %+v, expected a turn and the reaction", decision)
@@ -120,7 +121,7 @@ func TestADirectMessageIsLaunchedWhenTheGatewayCannotDecide(t *testing.T) {
 }
 
 func TestWorkOverheardInAChannelIsNotTakenOn(t *testing.T) {
-	overheard := Judgment{Addressing: AddressingDecision{Target: AddressingTargetHuman, HasWork: true}, HasRelatesToActiveTask: true, RelatesToActiveTask: true}
+	overheard := Judgment{Addressing: AddressingDecision{Target: AddressingTargetHuman, Work: agentcontract.WorkEasy}, HasRelatesToActiveTask: true, RelatesToActiveTask: true}
 
 	if decision := resolveJudgment(context.Background(), channelRequest(), overheard); decision.ShouldLaunch {
 		t.Fatalf("work one colleague asked of another launched a turn: %+v", decision)
@@ -128,10 +129,30 @@ func TestWorkOverheardInAChannelIsNotTakenOn(t *testing.T) {
 }
 
 func TestWorkAskedOfTheAgentInAChannelLaunches(t *testing.T) {
-	addressed := gateReturning{Target: AddressingTargetBot, HasWork: true}.Resolve(context.Background(), "buzz", channelRequest())
-	mentioned := gateReturning{Target: AddressingTargetAnyone, HasWork: true}.Resolve(context.Background(), "buzz", Request{ConversationType: "O", BotMentioned: true})
+	addressed := gateReturning{Target: AddressingTargetBot, Work: agentcontract.WorkEasy}.Resolve(context.Background(), "buzz", channelRequest())
+	mentioned := gateReturning{Target: AddressingTargetAnyone, Work: agentcontract.WorkEasy}.Resolve(context.Background(), "buzz", Request{ConversationType: "O", BotMentioned: true})
 
 	if !addressed.ShouldLaunch || !mentioned.ShouldLaunch {
 		t.Fatalf("work asked of the agent in a channel decided %+v and %+v, expected both to launch", addressed, mentioned)
+	}
+}
+
+func TestALaunchHandsTheHarnessTheWorkTheGatewayJudged(t *testing.T) {
+	decision := gateReturning{Target: AddressingTargetBot, Work: agentcontract.WorkNormal}.Resolve(context.Background(), "buzz", directRequest())
+	if !decision.ShouldLaunch || decision.DecidedWork != agentcontract.WorkNormal {
+		t.Fatalf("a direct request for normal work decided %+v, expected a launch carrying the judged work", decision)
+	}
+
+	thanks := gateReturning{Target: AddressingTargetBot, ShouldRespond: true, Work: agentcontract.WorkNone}.Resolve(context.Background(), "buzz", directRequest())
+	if !thanks.ShouldLaunch || thanks.DecidedWork != agentcontract.WorkNone {
+		t.Fatalf("a message wanting only words decided %+v, expected the harness to be told there is no work", thanks)
+	}
+}
+
+func TestWorkOnAnOpenTaskIsLeftForThePlannerWhoSeesTheGoal(t *testing.T) {
+	steering := Judgment{Addressing: AddressingDecision{Target: AddressingTargetBot, Work: agentcontract.WorkNone}, BusyRoute: BusyRouteSteer}
+	decision := resolveJudgment(context.Background(), directRequest(), steering)
+	if !decision.ShouldLaunch || decision.DecidedWork != "" {
+		t.Fatalf("a message steering an open task decided %+v, expected a launch that leaves the work to the planner", decision)
 	}
 }
