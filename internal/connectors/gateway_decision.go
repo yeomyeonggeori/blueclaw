@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
@@ -152,12 +153,25 @@ func (connectorRuntime *ConnectorRuntime) gatewayFactsForTurn(ctx context.Contex
 		Company:          connectorRuntime.company(),
 		OpenTask:         connectorRuntime.openTaskFacts(open),
 		Duties:           inboundengagement.StandingDuties(),
+		CallableTools:    connectorRuntime.callableToolNames(turn),
 		EnvironmentNow:   time.Now(),
 	}
 	if facts.OpenTask == nil {
 		facts.FinishedTask = connectorRuntime.finishedTaskFacts(turn.personID, turn.event)
 	}
 	return facts
+}
+
+func (connectorRuntime *ConnectorRuntime) callableToolNames(turn *inboundTurn) []string {
+	if connectorRuntime.toolCatalogBuilder == nil {
+		return nil
+	}
+	toolSet := connectorRuntime.toolCatalogBuilder.BuildToolSet(agentruntime.ToolCatalogRequest{
+		ProfileName:       "default",
+		RequesterPersonID: turn.personID,
+		RequesterEmail:    connectorRuntime.requesterEmailForEvent(turn.personID, turn.event),
+	})
+	return toolSet.ListRegisteredToolNames()
 }
 
 func (connectorRuntime *ConnectorRuntime) openTaskFacts(open openInteractions) *inboundengagement.TaskFacts {

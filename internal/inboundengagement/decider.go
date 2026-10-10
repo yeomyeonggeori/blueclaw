@@ -28,6 +28,7 @@ type Facts struct {
 	OpenTask         *TaskFacts
 	FinishedTask     *TaskFacts
 	Duties           []StandingDuty
+	CallableTools    []string
 	EnvironmentNow   time.Time
 }
 

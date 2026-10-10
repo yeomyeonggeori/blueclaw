@@ -103,8 +103,8 @@ func planTheAddressedMessage(running standIn) (plannedAnswers, error) {
 	state := map[string]any{"messages": []map[string]string{{"text": "업무로 남겨줘"}}}
 	decisionModel := running.decisionModel()
 	workResponse, errorValue := decisionModel.Decide(context.Background(), model.DecisionRequest{State: state, Questions: map[string]model.DecisionQuestion{
-		"m1." + agentcontract.IntakeQuestionWork:    model.ChoiceQuestion{Instructions: "work"}.Question(),
-		"m1." + agentcontract.IntakeQuestionClarify: model.NoulQuestion{Instructions: "clarify"}.Question(),
+		"m1." + agentcontract.IntakeQuestionWork:      model.ChoiceQuestion{Instructions: "work"}.Question(),
+		"m1." + agentcontract.IntakeQuestionTaskShape: model.ChoiceQuestion{Instructions: "shape"}.Question(),
 	}})
 	if errorValue != nil {
 		return plannedAnswers{}, errorValue
