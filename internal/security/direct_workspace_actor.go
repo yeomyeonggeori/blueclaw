@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -130,22 +129,9 @@ func (actor DirectWorkspaceActor) WriteFileFrom(ctx context.Context, path string
 
 func (actor DirectWorkspaceActor) ListDirectory(ctx context.Context, path string) ([]WorkspaceActorDirectoryEntry, error) {
 	_ = ctx
-	directoryEntries, errorValue := os.ReadDir(path)
+	entries, errorValue := ReadWorkspaceDirectory(path)
 	if errorValue != nil {
 		return nil, actor.actorError("list_directory", "direct", path, errorValue)
-	}
-	entries := []WorkspaceActorDirectoryEntry{}
-	for _, directoryEntry := range directoryEntries {
-		fileInformation, errorValue := os.Stat(filepath.Join(path, directoryEntry.Name()))
-		if errorValue != nil {
-			continue
-		}
-		entries = append(entries, WorkspaceActorDirectoryEntry{
-			Name:           directoryEntry.Name(),
-			IsDirectory:    fileInformation.IsDir(),
-			SizeBytes:      fileInformation.Size(),
-			ModifiedAtUnix: fileInformation.ModTime().Unix(),
-		})
 	}
 	return entries, nil
 }

@@ -88,6 +88,7 @@ type WorkspaceActorDirectoryEntry struct {
 	IsDirectory    bool   `json:"isDirectory"`
 	SizeBytes      int64  `json:"sizeBytes"`
 	ModifiedAtUnix int64  `json:"modifiedAtUnix"`
+	EntryCount     *int   `json:"entryCount,omitempty"`
 }
 
 type POSIXWorkspaceActorFactory struct {

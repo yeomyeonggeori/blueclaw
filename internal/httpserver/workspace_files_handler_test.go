@@ -130,9 +130,10 @@ func TestWorkspaceFilesHandlerListsAPrivateHomeAsItsOwner(t *testing.T) {
 	}
 	makeUnreadableByTheServingProcess(t, privateHomePath)
 
+	tmpEntryCount := 3
 	factory := &stubWorkspaceActorFactory{entries: []security.WorkspaceActorDirectoryEntry{
 		{Name: "notes.md", SizeBytes: 12, ModifiedAtUnix: 1700000000},
-		{Name: "tmp", IsDirectory: true, ModifiedAtUnix: 1700000000},
+		{Name: "tmp", IsDirectory: true, ModifiedAtUnix: 1700000000, EntryCount: &tmpEntryCount},
 		{Name: ".blueclaw", IsDirectory: true, ModifiedAtUnix: 1700000000},
 	}}
 	handler := newWorkspaceFilesTestHandler(factory, rootPath)
@@ -149,6 +150,9 @@ func TestWorkspaceFilesHandlerListsAPrivateHomeAsItsOwner(t *testing.T) {
 	}
 	if entries[1].Size != 12 || entries[1].ModifiedAt != "2023-11-14T22:13:20Z" {
 		t.Fatalf("expected the actor's size and modification time to survive, got %+v", entries[1])
+	}
+	if entries[0].EntryCount == nil || *entries[0].EntryCount != 3 || entries[1].EntryCount != nil {
+		t.Fatalf("expected the directory's entry count to survive and a file to carry none, got %+v", entries)
 	}
 	if len(factory.recordedRequests) != 1 {
 		t.Fatalf("expected exactly one requester actor, got %+v", factory.recordedRequests)

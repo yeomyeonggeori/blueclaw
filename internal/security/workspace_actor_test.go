@@ -127,6 +127,51 @@ func TestDirectWorkspaceActorListsDirectoryEntries(t *testing.T) {
 	}
 }
 
+func TestAListedDirectoryCarriesHowManyEntriesItHolds(t *testing.T) {
+	rootPath := t.TempDir()
+	for _, directoryPath := range []string{"full/nested", "empty"} {
+		if errorValue := os.MkdirAll(filepath.Join(rootPath, directoryPath), 0o755); errorValue != nil {
+			t.Fatal(errorValue)
+		}
+	}
+	if errorValue := os.WriteFile(filepath.Join(rootPath, "full", "notes.md"), []byte("hello"), 0o644); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	entries, errorValue := ReadWorkspaceDirectory(rootPath)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	entryCountByName := map[string]*int{}
+	for _, entry := range entries {
+		entryCountByName[entry.Name] = entry.EntryCount
+	}
+	if count := entryCountByName["full"]; count == nil || *count != 2 {
+		t.Fatalf("expected full to hold a file and a folder, got %+v", entries)
+	}
+	if count := entryCountByName["empty"]; count == nil || *count != 0 {
+		t.Fatalf("expected empty to hold nothing, got %+v", entries)
+	}
+}
+
+func TestAnUnreadableDirectoryCarriesNoEntryCount(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a directory whatever its mode says")
+	}
+	rootPath := t.TempDir()
+	unreadablePath := filepath.Join(rootPath, "someone-else")
+	if errorValue := os.Mkdir(unreadablePath, 0o000); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	t.Cleanup(func() { _ = os.Chmod(unreadablePath, 0o755) })
+	entries, errorValue := ReadWorkspaceDirectory(rootPath)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(entries) != 1 || entries[0].EntryCount != nil {
+		t.Fatalf("expected an unreadable folder to leave its count unknown, got %+v", entries)
+	}
+}
+
 func TestDirectWorkspaceActorReportsPermissionDeniedForAnUnreadableDirectory(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root reads a directory whatever its mode says")
