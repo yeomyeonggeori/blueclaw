@@ -43,6 +43,13 @@ func taskLevelForTurn(turn ConversationTurn) agentcontract.TaskLevel {
 	return ""
 }
 
+func decidedWorkForTurn(turn ConversationTurn) agentcontract.Work {
+	if turn.HasActiveGoal {
+		return ""
+	}
+	return turn.DecidedWork
+}
+
 func pendingInputOf(turn *inboundTurn) agentcontract.PendingInputContext {
 	if !turn.hasPendingAskInteraction {
 		return agentcontract.PendingInputContext{}
@@ -96,7 +103,7 @@ func withTurnContinuation(request agentruntime.TaskLaunchRequest, turn Conversat
 	request.PriorTask = turn.PriorTask
 	request.PendingInput = turn.PendingInput
 	request.TaskLevel = taskLevelForTurn(turn)
-	request.DecidedWork = turn.DecidedWork
+	request.DecidedWork = decidedWorkForTurn(turn)
 	return withAmbientDuty(request, turn)
 }
 
