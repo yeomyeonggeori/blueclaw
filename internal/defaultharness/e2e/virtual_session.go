@@ -217,7 +217,7 @@ type VirtualTurn struct {
 	ContextMaterials             []connectors.InputAttachment
 	ActionResponses              []string
 	ExpectedChangesResponses     []string
-	ChangeCheckAnswers           []map[string]float64
+	ChangeCheckAnswers           []map[string]any
 	RouterRequiredEvidence       []string
 	RouterTaskShape              agentcontract.TaskShape
 	RouterApproval               string

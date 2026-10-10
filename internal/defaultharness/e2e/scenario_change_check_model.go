@@ -14,7 +14,7 @@ import (
 type scenarioChangeChecks struct {
 	mutex     sync.Mutex
 	turnIndex int
-	answers   []map[string]float64
+	answers   []map[string]any
 }
 
 func scenarioChangeCheckModel(scriptedModel *agenttest.ScriptedLanguageModel, changeChecks *scenarioChangeChecks) model.DecisionModel {
@@ -24,11 +24,11 @@ func scenarioChangeCheckModel(scriptedModel *agenttest.ScriptedLanguageModel, ch
 	return changeChecks
 }
 
-func (changeChecks *scenarioChangeChecks) beginTurn(turnIndex int, answers []map[string]float64) {
+func (changeChecks *scenarioChangeChecks) beginTurn(turnIndex int, answers []map[string]any) {
 	changeChecks.mutex.Lock()
 	defer changeChecks.mutex.Unlock()
 	changeChecks.turnIndex = turnIndex
-	changeChecks.answers = append([]map[string]float64{}, answers...)
+	changeChecks.answers = append([]map[string]any{}, answers...)
 }
 
 func (changeChecks *scenarioChangeChecks) pendingCount() int {
@@ -46,12 +46,45 @@ func (changeChecks *scenarioChangeChecks) Decide(_ context.Context, request mode
 	scripted := changeChecks.answers[0]
 	changeChecks.answers = changeChecks.answers[1:]
 	answers := map[string]model.DecisionAnswer{}
-	for questionName := range request.Questions {
-		noul, isScripted := scripted[questionName]
-		if !isScripted {
-			return model.DecisionResponse{}, fmt.Errorf("turn %d scripted no answer for change check question %s", changeChecks.turnIndex, questionName)
+	for questionName, question := range request.Questions {
+		answer, errorValue := scriptedChangeCheckAnswer(question, scripted[questionName])
+		if errorValue != nil {
+			return model.DecisionResponse{}, fmt.Errorf("turn %d change check question %s: %w", changeChecks.turnIndex, questionName, errorValue)
 		}
-		answers[questionName] = model.DecisionAnswer{Type: model.DecisionQuestionTypeNoul, Noul: noul}
+		answers[questionName] = answer
 	}
 	return model.DecisionResponse{Answers: answers, ModelName: scenarioDecisionModelName}, nil
+}
+
+func scriptedChangeCheckAnswer(question model.DecisionQuestion, scripted any) (model.DecisionAnswer, error) {
+	switch value := scripted.(type) {
+	case float64:
+		if question.Type != model.DecisionQuestionTypeNoul {
+			return model.DecisionAnswer{}, fmt.Errorf("scripted a probability for a %s question", question.Type)
+		}
+		return model.DecisionAnswer{Type: model.DecisionQuestionTypeNoul, Noul: value}, nil
+	case string:
+		if question.Type != model.DecisionQuestionTypeChoice {
+			return model.DecisionAnswer{}, fmt.Errorf("scripted the choice %q for a %s question", value, question.Type)
+		}
+		if !offersOption(question.Criteria, value) {
+			return model.DecisionAnswer{}, fmt.Errorf("scripted the choice %q, which the question does not offer", value)
+		}
+		return model.DecisionAnswer{Type: model.DecisionQuestionTypeChoice, Choice: value, Probabilities: map[string]float64{value: 1}}, nil
+	default:
+		return model.DecisionAnswer{}, fmt.Errorf("scripted no answer")
+	}
+}
+
+func offersOption(criteria any, option string) bool {
+	switch options := criteria.(type) {
+	case map[string]string:
+		_, isOffered := options[option]
+		return isOffered
+	case map[string]any:
+		_, isOffered := options[option]
+		return isOffered
+	default:
+		return false
+	}
 }
