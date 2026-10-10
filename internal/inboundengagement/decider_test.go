@@ -59,7 +59,7 @@ func defaultAnswers() *answeringModel {
 	return &answeringModel{
 		choices: map[string]string{
 			QuestionTarget:        string(AddressingTargetBot),
-			QuestionWork:          WorkOptionNone,
+			QuestionWork:          string(agentcontract.WorkNone),
 			QuestionReaction:      ReactionOptionNone,
 			QuestionReactionEmoji: "eyes",
 			QuestionDuty:          DutyOptionNone,
@@ -279,18 +279,6 @@ func TestTheEmojiIsDrawnOnlyAmongThoseNearTheLikeliest(t *testing.T) {
 	}
 }
 
-func TestWorkIsReadFromAllItsOptionsTogetherAgainstNone(t *testing.T) {
-	split := model.DecisionAnswer{Choice: WorkOptionNone, Probabilities: map[string]float64{WorkOptionNone: 0.34, WorkOptionEasy: 0.31, WorkOptionNormal: 0.22, WorkOptionImpossible: 0.13}}
-	idle := model.DecisionAnswer{Choice: WorkOptionNone, Probabilities: map[string]float64{WorkOptionNone: 0.6, WorkOptionEasy: 0.4}}
-
-	if !asksForWork(split) {
-		t.Fatal("work that is 0.66 likely across its options lost to none at 0.34 because none was the single likeliest option")
-	}
-	if asksForWork(idle) {
-		t.Fatal("a message more likely to want nothing was read as work")
-	}
-}
-
 func TestADutyMatchCarriesItsNameAndBoundedConfidence(t *testing.T) {
 	decisionModel := defaultAnswers()
 	decisionModel.choices[QuestionDuty] = "calendar_upkeep"
@@ -381,7 +369,7 @@ func TestABurstFitsTheBudgetUntilItsRequestOutgrowsIt(t *testing.T) {
 
 func TestOnlyARequestOfGatewayQuestionsIsAGatewayRequest(t *testing.T) {
 	gatewayRequest := newDecisionRequest(withOpenTask(messageFacts("O", true, "a"), "running"))
-	planningQuestions := map[string]model.DecisionQuestion{"m1." + agentcontract.IntakeQuestionRoute: model.ChoiceQuestion{}.Question()}
+	planningQuestions := map[string]model.DecisionQuestion{"m1." + agentcontract.IntakeQuestionClarify: model.NoulQuestion{}.Question()}
 	for questionName, question := range gatewayRequest.Questions {
 		planningQuestions[questionName] = question
 	}
@@ -390,7 +378,7 @@ func TestOnlyARequestOfGatewayQuestionsIsAGatewayRequest(t *testing.T) {
 		t.Fatalf("expected the decider's own questions to be gateway questions: %v", gatewayRequest.Questions)
 	}
 	if AsksOnlyGatewayQuestions(planningQuestions) {
-		t.Fatal("a request that also asks for the route is a planning request")
+		t.Fatal("a request that also asks whether to clarify is a planning request")
 	}
 	if AsksOnlyGatewayQuestions(nil) {
 		t.Fatal("a request with no questions is not a gateway request")

@@ -575,7 +575,7 @@ func (provider virtualTierTestProvider) GenerateResponse(context.Context, string
 func (provider virtualTierTestProvider) GenerateStructuredResponse(_ context.Context, request llm.StructuredResponseRequest) (llm.StructuredResponse, error) {
 	content := fakeModelContentForSchema(request.StructuredOutputSchema.Name)
 	if request.StructuredOutputSchema.Name == "bluecollar_turn_router" {
-		content = `{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"xhigh","requestedOutputFormats":null,"requiredEvidence":[],"initialToolNames":[],"responseLanguage":"ko","reason":"xhigh integration test","userFacingReply":"","priorTaskReference":"none"}`
+		content = `{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"high","requestedOutputFormats":null,"requiredEvidence":[],"initialToolNames":[],"responseLanguage":"ko","reason":"high integration test","userFacingReply":"","priorTaskReference":"none"}`
 	}
 	return llm.StructuredResponse{ModelName: provider.modelTier, Content: content}, nil
 }
@@ -600,7 +600,7 @@ func TestVirtualModelCeilingDoesNotReduceTaskWorkDuration(t *testing.T) {
 		return virtualTierTestProvider{modelTier: modelTier}
 	}
 	scenario := e2e.VirtualSessionScenario{
-		Name:                     "xhigh_task_with_low_model_ceiling",
+		Name:                     "high_task_with_low_model_ceiling",
 		ArtifactDirectoryPath:    t.TempDir(),
 		DisableScriptedModel:     true,
 		UseLooseAssertions:       true,
@@ -617,7 +617,7 @@ func TestVirtualModelCeilingDoesNotReduceTaskWorkDuration(t *testing.T) {
 
 	result, errorValue := e2e.RunVirtualSession(context.Background(), scenario)
 	if errorValue != nil {
-		t.Fatalf("expected capped xhigh virtual session to succeed: %v\n%+v", errorValue, result)
+		t.Fatalf("expected capped high virtual session to succeed: %v\n%+v", errorValue, result)
 	}
 	if len(result.TurnResults) != 1 {
 		t.Fatalf("expected one virtual turn, got %+v", result.TurnResults)
@@ -628,8 +628,8 @@ func TestVirtualModelCeilingDoesNotReduceTaskWorkDuration(t *testing.T) {
 	if actionModelTier != "low" {
 		t.Fatalf("expected authoritative action call to use the low ceiling, got %q", actionModelTier)
 	}
-	if intakeTaskLevel != agentcontract.TaskLevelXHigh {
-		t.Fatalf("expected authoritative intake task level xhigh, got %q", intakeTaskLevel)
+	if intakeTaskLevel != agentcontract.TaskLevelHigh {
+		t.Fatalf("expected authoritative intake task level high, got %q", intakeTaskLevel)
 	}
 }
 

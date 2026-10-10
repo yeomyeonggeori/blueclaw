@@ -2,6 +2,7 @@ package inboundengagement
 
 import (
 	"context"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"log/slog"
 	"strings"
 )
@@ -15,6 +16,7 @@ type Decision struct {
 	ReactionEmoji string
 	IgnoreReason  string
 	AmbientDuty   AmbientDutyContext
+	DecidedWork   agentcontract.Work
 }
 
 type Request struct {
@@ -41,7 +43,7 @@ func Resolve(ctx context.Context, logger *slog.Logger, platform string, request 
 	addressing := judgment.Addressing
 	ambientDuty := ambientDutyContextFromAddressingDecision(addressing)
 	if shouldLaunch(request, judgment, ambientDuty) {
-		return Decision{ShouldLaunch: true, ReactionEmoji: addressing.ReactionEmoji, AmbientDuty: ambientDuty}
+		return Decision{ShouldLaunch: true, ReactionEmoji: addressing.ReactionEmoji, AmbientDuty: ambientDuty, DecidedWork: decidedWork(judgment, ambientDuty)}
 	}
 	if addressing.ReactionEmoji != "" {
 		return Decision{ReactionEmoji: addressing.ReactionEmoji, IgnoreReason: reactionOnlyReason}
@@ -53,11 +55,22 @@ func shouldLaunch(request Request, judgment Judgment, ambientDuty AmbientDutyCon
 	if judgment.Addressing.ShouldRespond || ambientDuty.IsMatch {
 		return true
 	}
-	return isAskedOfTheAgent(request, judgment.Addressing) && (judgment.Addressing.HasWork || continuesOpenWork(judgment))
+	return isAskedOfTheAgent(request, judgment.Addressing) && (asksForWork(judgment.Addressing) || continuesOpenWork(judgment))
 }
 
 func isAskedOfTheAgent(request Request, addressing AddressingDecision) bool {
 	return !IsMultiPersonConversation(request.ConversationType) || request.BotMentioned || addressing.Target == AddressingTargetBot
+}
+
+func decidedWork(judgment Judgment, ambientDuty AmbientDutyContext) agentcontract.Work {
+	if ambientDuty.IsMatch || continuesOpenWork(judgment) {
+		return ""
+	}
+	return judgment.Addressing.Work
+}
+
+func asksForWork(addressing AddressingDecision) bool {
+	return addressing.Work != "" && addressing.Work != agentcontract.WorkNone
 }
 
 func continuesOpenWork(judgment Judgment) bool {

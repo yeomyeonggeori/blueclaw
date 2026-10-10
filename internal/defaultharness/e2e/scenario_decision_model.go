@@ -148,7 +148,7 @@ func (decisionModel *scenarioDecisionModel) gatewayOutcome(request model.Decisio
 	return gatewaytest.Outcome{Addressing: decisionModel.addressing, BusyRoute: inboundengagement.BusyRouteNewTask}
 }
 
-var scenarioDirectRequest = inboundengagement.AddressingDecision{Target: inboundengagement.AddressingTargetBot, ShouldRespond: true, HasWork: true}
+var scenarioDirectRequest = inboundengagement.AddressingDecision{Target: inboundengagement.AddressingTargetBot, ShouldRespond: true, Work: agentcontract.WorkEasy}
 
 func isDirectPlacement(request model.DecisionRequest) bool {
 	document, errorValue := json.Marshal(request.State)

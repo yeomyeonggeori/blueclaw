@@ -32,7 +32,7 @@ const (
 type AddressingDecision struct {
 	Target         AddressingTarget
 	ShouldRespond  bool
-	HasWork        bool
+	Work           agentcontract.Work
 	ReactionEmoji  string
 	DutyMatch      bool
 	DutyName       string
@@ -58,21 +58,16 @@ var BusyRouteNames = []string{
 const (
 	QuestionTarget              = "target"
 	QuestionShouldRespond       = "shouldRespond"
-	QuestionWork                = "work"
+	QuestionWork                = agentcontract.IntakeQuestionWork
 	QuestionReaction            = "reaction"
 	QuestionReactionEmoji       = "reactionEmoji"
 	QuestionDuty                = "duty"
 	QuestionRelatesToActiveTask = "relatesToActiveTask"
 	QuestionBusyRoute           = "busyRoute"
 
-	ReactionOptionNone   = "none"
-	ReactionOptionReact  = "react"
-	WorkOptionNone       = "none"
-	WorkOptionEasy       = "easy"
-	WorkOptionNormal     = "normal"
-	WorkOptionHard       = "hard"
-	WorkOptionImpossible = "impossible"
-	DutyOptionNone       = "none"
+	ReactionOptionNone  = "none"
+	ReactionOptionReact = "react"
+	DutyOptionNone      = "none"
 )
 
 type StandingDuty struct {

@@ -95,3 +95,13 @@ func TestAnOverheardMessageLaunchesWithTheAmbientTaskLevel(t *testing.T) {
 		t.Fatalf("expected the launch to hand the agent the ambient level, got %q", launchRequest.TaskLevel)
 	}
 }
+
+func TestTheJudgedWorkTravelsWithTheLaunch(t *testing.T) {
+	connectorRuntime, _, _ := newStubbedTestConnectorRuntime(t)
+	turn := overheardTurn(inboundengagement.AmbientDutyContext{})
+	turn.DecidedWork = agentcontract.WorkHard
+
+	if launchRequest := connectorRuntime.buildTaskLaunchRequest(turn); launchRequest.DecidedWork != agentcontract.WorkHard {
+		t.Fatalf("expected the launch to carry the judged work, got %q", launchRequest.DecidedWork)
+	}
+}

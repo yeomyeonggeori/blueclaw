@@ -95,15 +95,16 @@ func replyTool() model.ChatCompletionTool {
 }
 
 type plannedAnswers struct {
-	route     string
+	work      string
 	toolNames []string
 }
 
 func planTheAddressedMessage(running standIn) (plannedAnswers, error) {
 	state := map[string]any{"messages": []map[string]string{{"text": "업무로 남겨줘"}}}
 	decisionModel := running.decisionModel()
-	routeResponse, errorValue := decisionModel.Decide(context.Background(), model.DecisionRequest{State: state, Questions: map[string]model.DecisionQuestion{
-		"m1." + agentcontract.IntakeQuestionRoute: model.ChoiceQuestion{Instructions: "route"}.Question(),
+	workResponse, errorValue := decisionModel.Decide(context.Background(), model.DecisionRequest{State: state, Questions: map[string]model.DecisionQuestion{
+		"m1." + agentcontract.IntakeQuestionWork:    model.ChoiceQuestion{Instructions: "work"}.Question(),
+		"m1." + agentcontract.IntakeQuestionClarify: model.NoulQuestion{Instructions: "clarify"}.Question(),
 	}})
 	if errorValue != nil {
 		return plannedAnswers{}, errorValue
@@ -115,7 +116,7 @@ func planTheAddressedMessage(running standIn) (plannedAnswers, error) {
 	if errorValue != nil {
 		return plannedAnswers{}, errorValue
 	}
-	planned := plannedAnswers{route: routeResponse.Answers["m1."+agentcontract.IntakeQuestionRoute].Choice}
+	planned := plannedAnswers{work: workResponse.Answers["m1."+agentcontract.IntakeQuestionWork].Choice}
 	for _, toolName := range []string{"task_add", "message_send"} {
 		if toolResponse.Answers["m1.tool."+toolName].Noul >= 0.5 {
 			planned.toolNames = append(planned.toolNames, toolName)
@@ -210,8 +211,8 @@ func TestIntakeReadsTheScriptedTurnAndItsToolsThroughTheDecisionsEndpoint(t *tes
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if planned.route != string(agentcontract.TurnRouteStartTask) {
-		t.Fatalf("expected a start_task turn, got %+v", planned)
+	if planned.work != string(agentcontract.WorkEasy) {
+		t.Fatalf("expected the scripted work to read as easy, got %+v", planned)
 	}
 	if !slices.Equal(planned.toolNames, []string{"task_add"}) {
 		t.Fatalf("expected the scripted tool and no other, got %v", planned.toolNames)
