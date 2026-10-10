@@ -326,11 +326,12 @@ func FileAttachmentChangeCheckScenario(artifactDirectoryPath string) VirtualSess
 				actionFinalReplyWithAttachment("JSON 메모 파일을 첨부했습니다.", "work/customer-support/faq-revision.json"),
 			},
 			ExpectedChangesResponses: []string{`{"expectedChanges":[{"change":"file created","asked":"FAQ 개편 JSON 메모 파일을 만들어서"},{"change":"file attached","asked":"이 DM에 첨부해줘"}]}`},
-			ChangeCheckAnswers:       []map[string]float64{{"expected0": 0.9, "expected1": 0.1}, {"expected0": 0.9, "expected1": 0.9}},
+			ChangeCheckAnswers:       []map[string]any{{"expected0": 0.9, "expected1": 0.1}, {"gap1": "work_left"}, {"expected0": 0.9, "expected1": 0.9}},
 			ExpectedToolCallCounts:   map[string]int{"write": 1, "file_deliver": 1},
 			ExpectedAttachmentFiles:  []VirtualAttachmentFileExpectation{{Suffix: ".json", ContainsFragments: []string{"FAQ 개편"}}},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: agentcontract.TaskEventCompletionChangeCheck, BodyFragment: `"unmet":[{"change":"file attached"`, Count: 1},
+				{Name: agentcontract.TaskEventCompletionChangeCheck, BodyFragment: `"requesterOnly":{"gap1":0}`, Count: 1},
 				{Name: agentcontract.TaskEventAgentCompletionRequired, BodyFragment: "이 DM에 첨부해줘", Count: 1},
 			},
 		}},
@@ -737,7 +738,7 @@ func CalendarFalseFinishRecoveryAcceptanceScenario(artifactDirectoryPath string)
 				actionFinishMessage("7월 13일 미팅을 오전 10시~11시로 등록했습니다.", "obs-002"),
 			},
 			ExpectedChangesResponses: []string{expectedChangeResponse("calendar created", "샨보장 미팅을 오전 10시부터 11시까지 등록해줘")},
-			ChangeCheckAnswers:       []map[string]float64{{"expected0": 0.1}, {"expected0": 0.9}},
+			ChangeCheckAnswers:       []map[string]any{{"expected0": 0.1}, {"gap0": "work_left"}, {"expected0": 0.9}},
 			ExpectedSelectedSkills:   []string{"calendar"},
 			ExpectedToolCalls:        []string{"event_add"},
 			ExpectedToolCallCounts: map[string]int{
@@ -745,6 +746,7 @@ func CalendarFalseFinishRecoveryAcceptanceScenario(artifactDirectoryPath string)
 			},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: agentcontract.TaskEventCompletionChangeCheck, BodyFragment: `"carriedOut":{"expected0":0.1},"unrecorded":[{"change":"calendar created"`, Count: 1},
+				{Name: agentcontract.TaskEventCompletionChangeCheck, BodyFragment: `"requesterOnly":{"gap0":0}`, Count: 1},
 				{Name: agentcontract.TaskEventAgentEvidenceMissing, BodyFragment: "nothing recorded changed this kind of record", Count: 1},
 				{Name: agentcontract.TaskEventAgentCompletionRequired, BodyFragment: "nothing recorded changed this kind of record", Count: 1},
 				{Name: toolRequestedEventName("event_add"), BodyFragment: "2026-07-13T10:00:00+09:00", Count: 1},
@@ -782,7 +784,7 @@ func CalendarChangeAlreadyInPlaceScenario(artifactDirectoryPath string) VirtualS
 					actionFinishMessage("미국 출장 일정은 이미 10월 17일까지로 되어 있습니다.", "obs-001"),
 				},
 				ExpectedChangesResponses: []string{expectedChangeResponse("calendar updated", "한국 돌아오면 결국 17일이긴 하더라")},
-				ChangeCheckAnswers:       []map[string]float64{{"expected0": 0.9}},
+				ChangeCheckAnswers:       []map[string]any{{"expected0": 0.9}},
 				ExpectedToolCallCounts: map[string]int{
 					"event_list":   1,
 					"event_update": 0,
@@ -1017,7 +1019,7 @@ func ChangeCheckRecoveryAcceptanceScenario(artifactDirectoryPath string) Virtual
 				actionFinishMessage("마감일을 포함해 업무를 추가했습니다.", "obs-003"),
 			},
 			ExpectedChangesResponses: []string{expectedChangeResponse("task created", "분기 결산 누락 확인 업무를 7월 24일 마감으로 추가해줘")},
-			ChangeCheckAnswers:       []map[string]float64{{"expected0": 0.1}, {"expected0": 0.9}},
+			ChangeCheckAnswers:       []map[string]any{{"expected0": 0.1}, {"gap0": "work_left"}, {"expected0": 0.9}},
 			ExpectedToolCalls:        []string{"task_add", "task_update"},
 			ExpectedToolCallCounts: map[string]int{
 				"task_add":    1,
@@ -1025,6 +1027,7 @@ func ChangeCheckRecoveryAcceptanceScenario(artifactDirectoryPath string) Virtual
 			},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: agentcontract.TaskEventCompletionChangeCheck, BodyFragment: `"unmet":[{"change":"task created"`, Count: 1},
+				{Name: agentcontract.TaskEventCompletionChangeCheck, BodyFragment: `"requesterOnly":{"gap0":0}`, Count: 1},
 				{Name: agentcontract.TaskEventCompletionChangeCheck, BodyFragment: `"carriedOut":{"expected0":0.9}`, Count: 1},
 				{Name: agentcontract.TaskEventAgentEvidenceMissing, BodyFragment: "7월 24일 마감", Count: 1},
 				{Name: agentcontract.TaskEventAgentCompletionRequired, BodyFragment: "7월 24일 마감", Count: 1},
