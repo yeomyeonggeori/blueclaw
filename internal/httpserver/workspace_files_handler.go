@@ -41,6 +41,7 @@ type workspaceFileEntry struct {
 	Name        string `json:"name"`
 	IsDirectory bool   `json:"isDirectory"`
 	Size        int64  `json:"size"`
+	EntryCount  *int   `json:"entryCount,omitempty"`
 	ModifiedAt  string `json:"modifiedAt"`
 }
 
@@ -173,7 +174,7 @@ func (handler WorkspaceFilesHandler) listAsTheService(responseWriter http.Respon
 		http.Error(responseWriter, "invalid workspace path", http.StatusBadRequest)
 		return
 	}
-	directoryEntries, errorValue := os.ReadDir(hostPath)
+	entries, errorValue := security.ReadWorkspaceDirectory(hostPath)
 	if errorValue != nil {
 		if os.IsNotExist(errorValue) {
 			writeJSON(responseWriter, map[string]any{"entries": []workspaceFileEntry{}})
@@ -185,19 +186,6 @@ func (handler WorkspaceFilesHandler) listAsTheService(responseWriter http.Respon
 		}
 		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
 		return
-	}
-	entries := []security.WorkspaceActorDirectoryEntry{}
-	for _, directoryEntry := range directoryEntries {
-		information, errorValue := os.Stat(filepath.Join(hostPath, directoryEntry.Name()))
-		if errorValue != nil {
-			continue
-		}
-		entries = append(entries, security.WorkspaceActorDirectoryEntry{
-			Name:           directoryEntry.Name(),
-			IsDirectory:    information.IsDir(),
-			SizeBytes:      information.Size(),
-			ModifiedAtUnix: information.ModTime().Unix(),
-		})
 	}
 	writeJSON(responseWriter, map[string]any{"entries": visibleWorkspaceEntries(entries)})
 }
@@ -241,6 +229,7 @@ func visibleWorkspaceEntries(directoryEntries []security.WorkspaceActorDirectory
 			Name:        directoryEntry.Name,
 			IsDirectory: directoryEntry.IsDirectory,
 			Size:        directoryEntry.SizeBytes,
+			EntryCount:  directoryEntry.EntryCount,
 			ModifiedAt:  time.Unix(directoryEntry.ModifiedAtUnix, 0).UTC().Format(time.RFC3339),
 		})
 	}

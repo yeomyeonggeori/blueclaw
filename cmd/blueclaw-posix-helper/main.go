@@ -417,22 +417,9 @@ func listDirectory(path string) error {
 	if strings.TrimSpace(path) == "" {
 		return errors.New("path is required")
 	}
-	directoryEntries, errorValue := os.ReadDir(path)
+	entries, errorValue := security.ReadWorkspaceDirectory(path)
 	if errorValue != nil {
 		return errorValue
-	}
-	entries := []security.WorkspaceActorDirectoryEntry{}
-	for _, directoryEntry := range directoryEntries {
-		fileInformation, errorValue := os.Stat(filepath.Join(path, directoryEntry.Name()))
-		if errorValue != nil {
-			continue
-		}
-		entries = append(entries, security.WorkspaceActorDirectoryEntry{
-			Name:           directoryEntry.Name(),
-			IsDirectory:    fileInformation.IsDir(),
-			SizeBytes:      fileInformation.Size(),
-			ModifiedAtUnix: fileInformation.ModTime().Unix(),
-		})
 	}
 	return json.NewEncoder(os.Stdout).Encode(fsOperationResponse{Path: path, Entries: entries})
 }
