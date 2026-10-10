@@ -1279,7 +1279,7 @@ func skillInstructionFromBundle(skillBundle skill.SkillBundle) agentcontract.Ski
 	return agentcontract.SkillInstruction{
 		Name:           skillBundle.Name,
 		Description:    skillBundle.Description,
-		Prompt:         skillBundle.Instruction,
+		Prompt:         strings.TrimSpace((skill.SkillPromptBuilder{}).BuildSkillPrompt([]skill.SkillBundle{skillBundle})),
 		ToolReferences: skillBundle.ReferencedToolNames(),
 		Source: agentcontract.InstructionSource{
 			Path:      filepath.Join(skillBundle.DirectoryPath, "SKILL.md"),
