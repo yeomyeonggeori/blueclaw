@@ -3,10 +3,13 @@
 package connectors
 
 import (
+	"context"
 	"strings"
 	"testing"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func overheardTurn(ambientDuty inboundengagement.AmbientDutyContext) ConversationTurn {
@@ -15,10 +18,19 @@ func overheardTurn(ambientDuty inboundengagement.AmbientDutyContext) Conversatio
 	return ConversationTurn{Event: event, AmbientDuty: ambientDuty}
 }
 
+func sessionLaunchRequest(turn ConversationTurn) agentruntime.TaskLaunchRequest {
+	return agentruntime.TaskLaunchRequest{
+		Prompt: turn.Event.Prompt,
+		CheckpointSender: func(context.Context, agentcontract.AgentCheckpoint) error {
+			return nil
+		},
+	}
+}
+
 func TestOverheardMessageNeverBecomesTheInstruction(t *testing.T) {
 	turn := overheardTurn(inboundengagement.AmbientDutyContext{IsMatch: true, Name: "calendar_upkeep", Confidence: 0.92})
 
-	prompt := promptForTurn(turn)
+	prompt := withTurnContinuation(sessionLaunchRequest(turn), turn).Prompt
 
 	if strings.HasPrefix(strings.TrimSpace(prompt), turn.Event.Prompt) {
 		t.Fatalf("expected the overheard message to be quoted material, not the instruction: %q", prompt)
@@ -30,11 +42,30 @@ func TestOverheardMessageNeverBecomesTheInstruction(t *testing.T) {
 	}
 }
 
+func TestAnOverheardSessionTurnRunsAsTheDutyWithoutProgressMessages(t *testing.T) {
+	ambientDuty := inboundengagement.AmbientDutyContext{IsMatch: true, Name: "calendar_upkeep", Confidence: 0.92}
+	turn := overheardTurn(ambientDuty)
+
+	launchRequest := withTurnContinuation(sessionLaunchRequest(turn), turn)
+
+	if launchRequest.AmbientDuty != ambientDuty {
+		t.Fatalf("expected the launch to carry the duty that bounds its tools, got %+v", launchRequest.AmbientDuty)
+	}
+	if launchRequest.CheckpointSender != nil {
+		t.Fatal("expected an overheard run to post no progress messages into the room")
+	}
+}
+
 func TestAddressedMessageStaysTheInstruction(t *testing.T) {
 	turn := overheardTurn(inboundengagement.AmbientDutyContext{})
 
-	if prompt := promptForTurn(turn); prompt != turn.Event.Prompt {
-		t.Fatalf("expected an addressed message to reach the agent unchanged, got %q", prompt)
+	launchRequest := withTurnContinuation(sessionLaunchRequest(turn), turn)
+
+	if launchRequest.Prompt != turn.Event.Prompt {
+		t.Fatalf("expected an addressed message to reach the agent unchanged, got %q", launchRequest.Prompt)
+	}
+	if launchRequest.CheckpointSender == nil {
+		t.Fatal("expected an addressed run to keep its progress messages")
 	}
 }
 
