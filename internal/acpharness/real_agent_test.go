@@ -25,7 +25,9 @@ func TestARealACPAgentCallsADaemonTool(t *testing.T) {
 	turnContext, cancelTurn := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancelTurn()
 	turnResult, errorValue := harness.RunTurn(turnContext, agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		Prompt:            "Call the note_write tool with text \"acp-agent-ok\". Do not use any other tool. Then reply with only the word done.",
 		WorkspaceRootPath: t.TempDir(),
 		ToolSet:           requesterToolSet(t, "person-1", &executed),

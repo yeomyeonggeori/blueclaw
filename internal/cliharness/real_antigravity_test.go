@@ -25,7 +25,9 @@ func TestRealAntigravityCallsADaemonTool(t *testing.T) {
 	turnContext, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	turnResult, errorValue := harness.RunTurn(turnContext, agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		Prompt:            "Use the workspace_secret_word tool and reply with only the word it returns.",
 		WorkspaceRootPath: t.TempDir(),
 		ToolSet:           daemonToolSet(t, execution),

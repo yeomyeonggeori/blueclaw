@@ -84,7 +84,7 @@ func TestOneTaskRunKeepsOneHarnessConversation(t *testing.T) {
 		SessionArguments: func(sessionID string, isResuming bool) []string { return []string{sessionID} },
 	})
 
-	request := agentcontract.AgentTurnRequest{RequesterPersonID: "person-1", ExistingTaskRunID: "task-run-1", Prompt: "첫 턴"}
+	request := agentcontract.AgentTurnRequest{RequesterIdentity: agentcontract.RequesterIdentity{RequesterPersonID: "person-1"}, ExistingTaskRunID: "task-run-1", Prompt: "첫 턴"}
 	firstOutput := runEchoingTurn(t, harness, request)
 	secondOutput := runEchoingTurn(t, harness, request)
 
@@ -107,8 +107,8 @@ func TestADifferentTaskRunGetsADifferentConversation(t *testing.T) {
 		SessionArguments: func(sessionID string, isResuming bool) []string { return []string{sessionID} },
 	})
 
-	runEchoingTurn(t, harness, agentcontract.AgentTurnRequest{RequesterPersonID: "person-1", ExistingTaskRunID: "task-run-1", Prompt: "a"})
-	runEchoingTurn(t, harness, agentcontract.AgentTurnRequest{RequesterPersonID: "person-1", ExistingTaskRunID: "task-run-2", Prompt: "b"})
+	runEchoingTurn(t, harness, agentcontract.AgentTurnRequest{RequesterIdentity: agentcontract.RequesterIdentity{RequesterPersonID: "person-1"}, ExistingTaskRunID: "task-run-1", Prompt: "a"})
+	runEchoingTurn(t, harness, agentcontract.AgentTurnRequest{RequesterIdentity: agentcontract.RequesterIdentity{RequesterPersonID: "person-1"}, ExistingTaskRunID: "task-run-2", Prompt: "b"})
 
 	published := publisher.published()
 	if published[0].SessionID == published[1].SessionID {
@@ -128,7 +128,7 @@ func TestResumingAnApprovedCallReopensTheSameConversation(t *testing.T) {
 		},
 	})
 
-	request := agentcontract.AgentTurnRequest{RequesterPersonID: "person-1", ExistingTaskRunID: "task-run-1", Prompt: "첫 턴"}
+	request := agentcontract.AgentTurnRequest{RequesterIdentity: agentcontract.RequesterIdentity{RequesterPersonID: "person-1"}, ExistingTaskRunID: "task-run-1", Prompt: "첫 턴"}
 	firstOutput := runEchoingTurn(t, harness, request)
 	request.IsRuntimeRestartResume = true
 	resumedOutput := runEchoingTurn(t, harness, request)
@@ -146,7 +146,7 @@ func TestResumingAnApprovedCallReopensTheSameConversation(t *testing.T) {
 func TestAHarnessThatCannotResumeSaysSoRatherThanPretending(t *testing.T) {
 	harness, publisher := sessionTestHarness(t, AgentCommand{Path: "/bin/echo", HarnessName: "no-resume"})
 
-	runEchoingTurn(t, harness, agentcontract.AgentTurnRequest{RequesterPersonID: "person-1", ExistingTaskRunID: "task-run-1", Prompt: "a"})
+	runEchoingTurn(t, harness, agentcontract.AgentTurnRequest{RequesterIdentity: agentcontract.RequesterIdentity{RequesterPersonID: "person-1"}, ExistingTaskRunID: "task-run-1", Prompt: "a"})
 
 	published := publisher.published()
 	if len(published) != 1 || published[0].IsResumable {

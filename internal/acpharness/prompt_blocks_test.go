@@ -15,8 +15,10 @@ func runTurnWithImage(t *testing.T, agent *externalAgent) {
 	executed := []daemonExecutedTool{}
 	harness := New(&inProcessAgentProcess{agent: agent}, newPublishedToolCatalog(t), nil)
 	if _, errorValue := harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		Prompt:            "이 사진 봐줘",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		Prompt: "이 사진 봐줘",
 		InputParts: []agentcontract.AgentPart{
 			{Type: agentcontract.AgentPartTypeImage, Image: &agentcontract.AgentImagePart{MimeType: "image/png", DataBase64: "aGVsbG8="}},
 			{Type: agentcontract.AgentPartTypeImage, Image: &agentcontract.AgentImagePart{MimeType: "image/png", Path: "/workspace/only-a-path.png"}},
@@ -69,7 +71,9 @@ func TestTheHostInstructionLeadsTheRequestOnlyWhenTheHarnessIsToldToSendIt(t *te
 		}
 
 		harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-			RequesterPersonID: "person-1",
+			RequesterIdentity: agentcontract.RequesterIdentity{
+				RequesterPersonID: "person-1",
+			},
 			HostInstruction:   "Ask the user only when their choice is required.\n\nThe requester prefers terse answers.",
 			Prompt:            "회의록 정리해줘",
 			WorkspaceRootPath: t.TempDir(),
@@ -94,7 +98,9 @@ func TestAHarnessOfferedTheBareAudienceSaysSoToTheCatalog(t *testing.T) {
 	harness.UseToolAudience(mcpserver.ToolAudienceBare)
 
 	harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		Prompt:            "회의록 정리해줘",
 		WorkspaceRootPath: t.TempDir(),
 		ToolSet:           requesterToolSet(t, "person-1", &executed),
@@ -114,7 +120,9 @@ func TestAPromptMetaTheHostAddsReachesTheAgentBesideTheCarriedOutCalls(t *testin
 	})
 
 	harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		ExistingTaskRunID: "run-7",
 		Prompt:            "회의록 정리해줘",
 		WorkspaceRootPath: t.TempDir(),

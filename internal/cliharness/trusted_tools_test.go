@@ -28,7 +28,7 @@ func TestCodexIsLaunchedApprovingBlueclawsServerTools(t *testing.T) {
 func TestCodexIsLaunchedWithTheDeclaredServerTrust(t *testing.T) {
 	harness, _ := sessionTestHarness(t, CodexAgentCommand(writeFakeCodexScript(t)))
 
-	output := runEchoingTurn(t, harness, agentcontract.AgentTurnRequest{RequesterPersonID: "person-1", ExistingTaskRunID: "task-run-1", Prompt: "hello"})
+	output := runEchoingTurn(t, harness, agentcontract.AgentTurnRequest{RequesterIdentity: agentcontract.RequesterIdentity{RequesterPersonID: "person-1"}, ExistingTaskRunID: "task-run-1", Prompt: "hello"})
 
 	if !strings.Contains(output, `default_tools_approval_mode="approve"`) {
 		t.Fatalf("expected the launched codex to be handed the declared trust, got %q", output)

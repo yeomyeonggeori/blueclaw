@@ -110,7 +110,9 @@ func (connectorRuntime *ConnectorRuntime) failUnresumedTaskWithoutReplyChannel(c
 		"detail": detail,
 	}))
 	connectorRuntime.launchFailureCompleter.CompleteLaunchFailure(ctx, agentcontract.AgentTurnRequest{
-		RequesterPersonID: taskRun.RequesterPersonID,
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: taskRun.RequesterPersonID,
+		},
 		ExistingTaskRunID: taskRun.TaskRunID,
 		Prompt:            taskRun.Prompt,
 	}, "launch", "auto_resume_abandoned", errors.New(reason))
@@ -118,8 +120,10 @@ func (connectorRuntime *ConnectorRuntime) failUnresumedTaskWithoutReplyChannel(c
 
 func (connectorRuntime *ConnectorRuntime) completeInterruptedTaskResumeLaunchFailure(ctx context.Context, taskRun task.TaskRun, launchContext interruptedTaskLaunchContext, event PlatformInboundEvent, replyTarget ReplyTarget, adapter PlatformAdapter, sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error), errorValue error) (ConnectorRuntimeResult, error) {
 	turnResult := connectorRuntime.launchFailureCompleter.CompleteLaunchFailure(ctx, agentcontract.AgentTurnRequest{
-		RequesterPersonID:   taskRun.RequesterPersonID,
-		RequesterEmail:      connectorRuntime.identityService.ResolvePersonPrimaryEmail(taskRun.RequesterPersonID),
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: taskRun.RequesterPersonID,
+			RequesterEmail:    connectorRuntime.identityService.ResolvePersonPrimaryEmail(taskRun.RequesterPersonID),
+		},
 		ExistingTaskRunID:   taskRun.TaskRunID,
 		OriginReplyTargetID: replyTarget.ReplyTargetID,
 		OriginIsThread:      taskRun.OriginIsThread || launchContext.IsThread,

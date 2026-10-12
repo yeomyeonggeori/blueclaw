@@ -42,7 +42,9 @@ func runTurnWithLedgerUpdates(t *testing.T, skippedEventNames []string, updates 
 	executed := []daemonExecutedTool{}
 
 	if _, errorValue := harness.RunTurn(ctx, agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		ExistingTaskRunID: taskRunID,
 		Prompt:            "회의록 정리해줘",
 		WorkspaceRootPath: t.TempDir(),

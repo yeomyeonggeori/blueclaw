@@ -39,7 +39,9 @@ func runControlledTurn(t *testing.T, agent *externalAgent, taskRuns *taskstate.T
 	executed := []daemonExecutedTool{}
 	ctx := toolcallprogress.WithObserver(context.Background(), func(acp.SessionUpdate) {})
 	result, errorValue := harness.RunTurn(ctx, agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		ExistingTaskRunID: taskRunID,
 		Prompt:            "회의록 정리해줘",
 		WorkspaceRootPath: t.TempDir(),
@@ -215,7 +217,9 @@ func publishedTurnContext(t *testing.T, configure func(*Harness)) context.Contex
 	configure(harness)
 	executed := []daemonExecutedTool{}
 	_, errorValue := harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		ExistingTaskRunID: taskRunID,
 		Prompt:            "회의록 정리해줘",
 		WorkspaceRootPath: t.TempDir(),
