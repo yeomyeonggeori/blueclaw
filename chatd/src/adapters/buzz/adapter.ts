@@ -46,12 +46,11 @@ import { withRelayAs } from "./relay-pool.ts";
 import { DELETE_MESSAGE_KIND, REACTION_KIND, isAbout, takenBackIDs, takenBackReactionIDs } from "./deletions.ts";
 
 const mostDeletionsReadPerMessage = 4;
-import { rankBySearchScore } from "../../message-search.ts";
+import { messageSearchScanLimit, rankBySearchScore } from "../../message-search.ts";
 import { originOfTags } from "../../mirror/origin.ts";
 import { reactionContentOf } from "../../mirror/reaction-emoji.ts";
 
 const TYPING_INDICATOR_KIND = 20002;
-const buzzMessageSearchScanLimit = 500;
 
 export type BuzzMessageSearchRequest = {
 	channelId: string;
@@ -900,7 +899,7 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		if (request.messageIds && request.messageIds.length > 0) {
 			return this.searchMessagesById(request, request.messageIds);
 		}
-		const scanLimit = Math.max(request.limit * 3, buzzMessageSearchScanLimit);
+		const scanLimit = Math.max(request.limit * 3, messageSearchScanLimit);
 		const [events, edits] = await Promise.all([
 			this.relay.query({ kinds: [STREAM_MESSAGE_KIND], "#h": [request.channelId], limit: scanLimit }),
 			this.latestEditsIn(request.channelId, scanLimit),

@@ -21,6 +21,7 @@ export type PersonRequest = {
 	parentID?: string;
 	emoji?: string;
 	before?: string;
+	query?: string;
 	name?: string;
 	externalID?: string;
 	largestBytes?: number;
@@ -74,6 +75,7 @@ export function parsePersonRequest(value: unknown): PersonRequest {
 		parentID: optionalText(record, "parentID"),
 		emoji: optionalText(record, "emoji"),
 		before: optionalText(record, "before"),
+		query: optionalText(record, "query"),
 		name: optionalText(record, "name"),
 		externalID: optionalText(record, "externalID"),
 		largestBytes: optionalCount(record, "largestBytes"),
@@ -162,6 +164,11 @@ export function requireReadAt(request: PersonRequest): Date {
 	const readAt = new Date(request.readAt);
 	if (Number.isNaN(readAt.getTime())) throw new MalformedRequest("readAt must be an ISO 8601 time");
 	return readAt;
+}
+
+export function requireQuery(request: PersonRequest): string {
+	if (!request.query?.trim()) throw missing("query");
+	return request.query;
 }
 
 export function requireMessage(request: PersonRequest): string {

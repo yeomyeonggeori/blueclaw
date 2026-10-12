@@ -15,6 +15,7 @@ import {
 	type PersonalMessage,
 	type PersonalAttachment,
 	type KeptMedia,
+	type PersonalMessageMatch,
 	type PersonalMessagePage,
 	type PersonalPerson,
 	type PersonalReaction,
@@ -204,6 +205,10 @@ class MattermostPersonalGateway implements PersonalGateway {
 
 	async createChannel(): Promise<CreatedPersonalChannel> {
 		throw new UnsupportedByPlatform(this.platform, "create a channel");
+	}
+
+	async searchMessages(): Promise<PersonalMessageMatch[]> {
+		throw new UnsupportedByPlatform(this.platform, "search messages");
 	}
 
 	async listOpenChannels(): Promise<PersonalConversation[]> {

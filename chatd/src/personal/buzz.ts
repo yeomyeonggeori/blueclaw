@@ -12,6 +12,7 @@ import { addReactionAsUser, removeReactionAsUser } from "../adapters/buzz/user-r
 import { mentionTags } from "../adapters/buzz/user-mentions.ts";
 import { markConversationReadAsUser, unreadCountsAsUser } from "../adapters/buzz/user-read-state.ts";
 import { announceTypingAsUser } from "../adapters/buzz/user-typing.ts";
+import { searchChannelMessagesAsUser } from "../adapters/buzz/user-message-search.ts";
 import {
 	deleteChannelMessageAsUser,
 	editChannelMessageAsUser,
@@ -52,6 +53,7 @@ import {
 	type PersonalMentions,
 	type PersonalImage,
 	type PersonalMessage,
+	type PersonalMessageMatch,
 	type PersonalMessagePage,
 	type PersonalPerson,
 	ReadRefused,
@@ -335,6 +337,29 @@ class BuzzPersonalGateway implements PersonalGateway {
 			})),
 			hasMoreBefore: read.length >= wanted,
 		};
+	}
+
+	async searchMessages(
+		actor: ActorCredential,
+		conversationID: string,
+		query: string,
+	): Promise<PersonalMessageMatch[]> {
+		this.require(actor);
+		const matches = await searchChannelMessagesAsUser({
+			relayURL: this.settings.relayURL,
+			userSecretHex: actor.secret,
+			channelID: conversationID,
+			query,
+			authTagJSON: this.settings.authTagJSON,
+		});
+		return matches.map((match) => ({
+			id: match.id,
+			conversationID: match.conversationID,
+			parentID: match.parentID,
+			authorExternalID: match.authorPubkeyHex,
+			body: match.body,
+			postedAt: match.postedAt,
+		}));
 	}
 
 	async sendMessage(

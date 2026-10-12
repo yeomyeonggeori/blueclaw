@@ -36,6 +36,7 @@ import { MessageChangeRefused, isElevatedIn, signerForMessageChange, signingKeyr
 import { ThreadPartlyDeleted, deleteThread } from "./adapters/buzz/thread-deletion.ts";
 import { personCapabilities, type PersonCapability } from "./personal/capabilities.ts";
 import { MalformedRequest } from "./personal/parse.ts";
+import { messageSearchMostResults } from "./message-search.ts";
 import { CredentialRefused, MediaRefused, UnsupportedByPlatform, type PersonalGateway } from "./personal/gateway.ts";
 import {
 	LastOwnerCannotLeave,
@@ -618,7 +619,6 @@ async function historyThreadIdForChannel(
 }
 
 const messageSearchDefaultLimit = 25;
-const messageSearchMostResults = 50;
 
 async function handleMessageSearch(
 	adapter: PlatformChatAdapter,
