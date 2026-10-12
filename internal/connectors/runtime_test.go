@@ -3313,10 +3313,6 @@ func connectorRuntimeForHarness(t *testing.T, harness agentcontract.Harness, gat
 	return connectorRuntime, adapter
 }
 
-func addressedToBot() inboundengagement.AddressingDecision {
-	return inboundengagement.AddressingDecision{Target: inboundengagement.AddressingTargetBot, ShouldRespond: true}
-}
-
 func newAddressedTestConnectorRuntime(t *testing.T, addressingTarget inboundengagement.AddressingTarget) (*ConnectorRuntime, *testAdapter) {
 	t.Helper()
 	connectorRuntime, adapter := newTestConnectorRuntime(t, testLanguageModel{reply: "ok"})

@@ -106,6 +106,10 @@ func scriptedAddressingOrAddressedToBot(addressing inboundengagement.AddressingD
 	return addressing
 }
 
+func addressedToBot() inboundengagement.AddressingDecision {
+	return inboundengagement.AddressingDecision{Target: inboundengagement.AddressingTargetBot, ShouldRespond: true}
+}
+
 func (decider harnessGatewayDecider) FitsBurstBudget(inboundengagement.Facts) bool {
 	return true
 }
