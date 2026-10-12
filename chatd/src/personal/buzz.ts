@@ -305,7 +305,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 	): Promise<PersonalMessagePage> {
 		this.require(actor);
 		const wanted = 50;
-		const read = await listChannelMessagesAsUser({
+		const page = await listChannelMessagesAsUser({
 			relayURL: this.settings.relayURL,
 			userSecretHex: actor.secret,
 			channelID: conversationID,
@@ -314,7 +314,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 			authTagJSON: this.settings.authTagJSON,
 		});
 		return {
-			messages: read.map((message) => ({
+			messages: page.messages.map((message) => ({
 				id: message.id,
 				conversationID: message.conversationID,
 				parentID: message.parentID,
@@ -335,7 +335,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 					digest: attachment.digest,
 				})),
 			})),
-			hasMoreBefore: read.length >= wanted,
+			hasMoreBefore: page.hasMoreBefore,
 		};
 	}
 
