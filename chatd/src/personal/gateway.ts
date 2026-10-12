@@ -83,6 +83,11 @@ export type PersonalMessage = {
 	attachments: PersonalAttachment[];
 };
 
+export type PersonalMessageMatch = Pick<
+	PersonalMessage,
+	"id" | "conversationID" | "parentID" | "authorExternalID" | "body" | "postedAt"
+>;
+
 export type PersonalMessagePage = {
 	messages: PersonalMessage[];
 	hasMoreBefore: boolean;
@@ -189,6 +194,7 @@ export interface PersonalGateway {
 		conversationID: string,
 		before?: string,
 	): Promise<PersonalMessagePage>;
+	searchMessages(actor: ActorCredential, conversationID: string, query: string): Promise<PersonalMessageMatch[]>;
 	sendMessage(
 		actor: ActorCredential,
 		conversationID: string,

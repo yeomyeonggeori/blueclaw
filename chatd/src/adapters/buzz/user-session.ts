@@ -520,7 +520,7 @@ export function attachmentsOfTags(tags: string[][]): UserMessageAttachment[] {
 // A message that was edited still reads as the event that created it, so the
 // latest edit is what the author last meant to say. An agent narrating its work
 // edits one message many times before it holds the answer.
-async function editsTo(
+export async function editsTo(
 	relay: { query: (filter: object) => Promise<BuzzEvent[]> },
 	messageIDs: string[],
 ): Promise<Map<string, string>> {

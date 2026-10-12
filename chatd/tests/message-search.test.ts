@@ -1,6 +1,6 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
-import { searchScore, rankBySearchScore } from "../src/message-search";
+import { searchScore, rankBySearchScore, newestVerbatimMatches, messageSearchMostResults } from "../src/message-search";
 import { BuzzAdapter } from "../src/adapters/buzz/adapter";
 import { createOutboundHandler } from "../src/outbound";
 import type { ChatdConfiguration } from "../src/configuration";
@@ -165,4 +165,36 @@ test("reading by ID crosses channels and needs no channel named", async () => {
 	expect(body.candidates[0]?.messageID).toBe(targetID);
 	expect(body.candidates[0]?.channelID).toBe(otherChannel);
 	expect(body.candidates[0]?.text).toBe("잡담에 올라간 글");
+});
+
+describe("a person searching their own conversation", () => {
+	const textOf = (message: { text: string }) => message.text;
+	const createdAtOf = (message: { at: number }) => message.at;
+
+	test("is shown only messages that hold the words, newest first", () => {
+		const found = newestVerbatimMatches(
+			[
+				{ id: "old", text: "지난주 회의록 공유합니다", at: 1 },
+				{ id: "near-miss", text: "회의 끝나고 기록할게요", at: 2 },
+				{ id: "new", text: "회의록은 제가 쓸게요", at: 3 },
+			],
+			"회의록",
+			textOf,
+			createdAtOf,
+		);
+
+		expect(found.map((message) => message.id)).toEqual(["new", "old"]);
+	});
+
+	test("matches whatever case and spacing the words were typed in", () => {
+		const found = newestVerbatimMatches([{ id: "one", text: "Weekly  Report is up", at: 1 }], "weekly report", textOf, createdAtOf);
+
+		expect(found.map((message) => message.id)).toEqual(["one"]);
+	});
+
+	test("hands back no more than the most a search returns", () => {
+		const many = Array.from({ length: messageSearchMostResults + 5 }, (_, index) => ({ id: String(index), text: "회의록", at: index }));
+
+		expect(newestVerbatimMatches(many, "회의록", textOf, createdAtOf)).toHaveLength(messageSearchMostResults);
+	});
 });

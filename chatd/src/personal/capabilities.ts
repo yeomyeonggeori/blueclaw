@@ -16,6 +16,7 @@ import {
 	requireMessage,
 	requireLoopbackArrivalsURL,
 	requireName,
+	requireQuery,
 	requireReadAt,
 } from "./parse.ts";
 
@@ -109,6 +110,12 @@ export const personCapabilities: Record<string, PersonCapability> = {
 	"person.messages.list": async (gateway, body) => {
 		const request = parsePersonRequest(body);
 		return await gateway.listMessages(request.actor, requireConversation(request), request.before);
+	},
+	"person.messages.search": async (gateway, body) => {
+		const request = parsePersonRequest(body);
+		return {
+			matches: await gateway.searchMessages(request.actor, requireConversation(request), requireQuery(request)),
+		};
 	},
 	"person.message.send": async (gateway, body) => {
 		const request = parsePersonRequest(body);

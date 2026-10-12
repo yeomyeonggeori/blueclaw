@@ -8,6 +8,9 @@ const substringScore = 1;
 const tokenMatchCeiling = 0.9;
 const shortestPartialTokenLength = 2;
 
+export const messageSearchScanLimit = 500;
+export const messageSearchMostResults = 50;
+
 export type ScoredCandidate<Candidate> = { candidate: Candidate; score: number };
 
 export function searchScore(text: string, queries: string[]): number {
@@ -16,10 +19,8 @@ export function searchScore(text: string, queries: string[]): number {
 	const textTokens = tokensOf(normalizedText);
 	let best = 0;
 	for (const query of queries) {
-		const normalizedQuery = normalize(query);
-		if (normalizedQuery === "") continue;
-		if (normalizedText.includes(normalizedQuery)) return substringScore;
-		best = Math.max(best, tokenOverlapScore(textTokens, tokensOf(normalizedQuery)));
+		if (containsVerbatim(normalizedText, query)) return substringScore;
+		best = Math.max(best, tokenOverlapScore(textTokens, tokensOf(normalize(query))));
 	}
 	return best;
 }
@@ -42,6 +43,23 @@ export function rankBySearchScore<Candidate>(
 			second.score - first.score || createdAtOf(second.candidate) - createdAtOf(first.candidate),
 	);
 	return scored.slice(0, limit);
+}
+
+export function containsVerbatim(text: string, query: string): boolean {
+	const normalizedQuery = normalize(query);
+	return normalizedQuery !== "" && normalize(text).includes(normalizedQuery);
+}
+
+export function newestVerbatimMatches<Candidate>(
+	candidates: Candidate[],
+	query: string,
+	textOf: (candidate: Candidate) => string,
+	createdAtOf: (candidate: Candidate) => number,
+): Candidate[] {
+	return candidates
+		.filter((candidate) => containsVerbatim(textOf(candidate), query))
+		.sort((first, second) => createdAtOf(second) - createdAtOf(first))
+		.slice(0, messageSearchMostResults);
 }
 
 function normalize(value: string): string {

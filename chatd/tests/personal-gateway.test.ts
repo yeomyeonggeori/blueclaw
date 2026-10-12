@@ -458,3 +458,43 @@ describe("person.typing.send", () => {
 		expect(typed).toEqual([]);
 	});
 });
+
+describe("a person searches the conversation they have open", () => {
+	const actor = { kind: "mattermost-token", secret: "token" };
+
+	function searchingGateway(asked: unknown[]) {
+		return {
+			mattermost: {
+				platform: "mattermost",
+				credentialKind: "mattermost-token",
+				searchMessages: async (searcher: unknown, conversationID: string, query: string) => {
+					asked.push({ searcher, conversationID, query });
+					return [{ id: "post-1", conversationID, authorExternalID: "person-a", body: "회의록 올렸어요", postedAt: "2026-10-12T05:00:00.000Z" }];
+				},
+			},
+		} as never;
+	}
+
+	test("is searched as that person, in that conversation, for what they typed", async () => {
+		const asked: unknown[] = [];
+
+		const answer = await call(
+			"person.messages.search",
+			{ actor, conversationID: "channel-1", query: "회의록" },
+			searchingGateway(asked),
+		);
+
+		expect(answer.status).toBe(200);
+		expect(asked).toEqual([{ searcher: actor, conversationID: "channel-1", query: "회의록" }]);
+		expect((await answer.json()).matches.map((match: { id: string }) => match.id)).toEqual(["post-1"]);
+	});
+
+	test("is refused when nothing was typed", async () => {
+		const asked: unknown[] = [];
+
+		const answer = await call("person.messages.search", { actor, conversationID: "channel-1", query: "  " }, searchingGateway(asked));
+
+		expect(answer.status).toBe(400);
+		expect(asked).toEqual([]);
+	});
+});
