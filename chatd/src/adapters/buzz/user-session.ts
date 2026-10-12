@@ -423,44 +423,69 @@ export async function listChannelMessagesAsUser(request: {
 	limit: number;
 	before?: string;
 	authTagJSON?: string;
-}): Promise<UserMessage[]> {
-	return withRelayAs(request.relayURL, request.userSecretHex, request.authTagJSON, async (relay) => {
-			const filter: Record<string, unknown> = {
-				kinds: [STREAM_MESSAGE_KIND],
-				"#h": [request.channelID],
-				limit: request.limit,
+}): Promise<UserMessagePage> {
+	return withRelayAs(request.relayURL, request.userSecretHex, request.authTagJSON, (relay) =>
+		channelMessagePageOf(relay, request.channelID, request.limit, request.before),
+	);
+}
+
+export type UserMessagePage = { messages: UserMessage[]; hasMoreBefore: boolean };
+
+export async function channelMessagePageOf(
+	relay: { query: (filter: object) => Promise<BuzzEvent[]> },
+	channelID: string,
+	limit: number,
+	before?: string,
+): Promise<UserMessagePage> {
+	const filter: Record<string, unknown> = {
+		kinds: [STREAM_MESSAGE_KIND],
+		"#h": [channelID],
+		limit,
+	};
+	if (before) filter.until = await postedSecondOf(relay, channelID, before);
+	const page = await relay.query(filter);
+	const events = page.filter((event) => event.id !== before);
+	const read = events
+		.sort((first, second) => first.created_at - second.created_at)
+		.map((event) => {
+			const thread = threadTagsOf(event);
+			return {
+				id: event.id,
+				conversationID: channelID,
+				parentID: thread.rootEventId,
+				authorPubkeyHex: event.pubkey,
+				body: event.content,
+				postedAt: new Date(event.created_at * 1000).toISOString(),
+				mentions: mentionsOf(event),
+				attachments: attachmentsOf(event),
 			};
-			if (request.before) filter.until = Math.floor(Number(request.before) / 1000);
-			const events = await relay.query(filter);
-			const read = events
-				.sort((first, second) => first.created_at - second.created_at)
-				.map((event) => {
-					const thread = threadTagsOf(event);
-					return {
-						id: event.id,
-						conversationID: request.channelID,
-						parentID: thread.rootEventId,
-						authorPubkeyHex: event.pubkey,
-						body: event.content,
-						postedAt: new Date(event.created_at * 1000).toISOString(),
-						mentions: mentionsOf(event),
-						attachments: attachmentsOf(event),
-					};
-				});
-			const messageIDs = read.map((message) => message.id);
-			const [reacted, edited, deleted] = await Promise.all([
-				reactionsTo(relay, messageIDs),
-				editsTo(relay, messageIDs),
-				deletionsTo(relay, messageIDs),
-			]);
-			return read
-				.filter((message) => !deleted.has(message.id))
-				.map((message) => ({
-					...message,
-					body: edited.get(message.id) ?? message.body,
-					reactions: reacted.get(message.id) ?? [],
-				}));
-	});
+		});
+	const messageIDs = read.map((message) => message.id);
+	const [reacted, edited, deleted] = await Promise.all([
+		reactionsTo(relay, messageIDs),
+		editsTo(relay, messageIDs),
+		deletionsTo(relay, messageIDs),
+	]);
+	const messages = read
+		.filter((message) => !deleted.has(message.id))
+		.map((message) => ({
+			...message,
+			body: edited.get(message.id) ?? message.body,
+			reactions: reacted.get(message.id) ?? [],
+		}));
+	return { messages, hasMoreBefore: page.length >= limit };
+}
+
+async function postedSecondOf(
+	relay: { query: (filter: object) => Promise<BuzzEvent[]> },
+	channelID: string,
+	messageID: string,
+): Promise<number> {
+	const [message] = await relay.query({ ids: [messageID], kinds: [STREAM_MESSAGE_KIND], "#h": [channelID], limit: 1 });
+	if (!message) {
+		throw new Error(`message ${messageID} is not in conversation ${channelID}; page older history from a message id the conversation returned`);
+	}
+	return message.created_at;
 }
 
 // A conversation the relay created names its participants on the metadata; one
