@@ -129,5 +129,5 @@ func HostUpdateMemberRefusedScenario(artifactDirectoryPath string) VirtualSessio
 }
 
 func actionRefusedMessage(reply string) string {
-	return `{"action":"fail","message":` + quote(reply) + `,"reason":` + quote(reply) + `,"goalStatus":"blocked","goalSatisfied":false,"remainingWork":"Only an administrator can update the host.","failureResolution":"failure_report","usedFailureFacts":{"attempts":[{"toolName":"host_update","inputSummary":"{}","errorCode":"access_denied","failureStage":"authorization","message":"only an administrator of this company can update its host"}],"budgetState":"no_tool_fallback_available"},"executionStateUpdate":{}}`
+	return `{"action":"fail","message":` + quote(reply) + `,"reason":` + quote(reply) + `,"goalStatus":"blocked","goalSatisfied":false,"remainingWork":"Only an administrator can update the host.","executionStateUpdate":{}}`
 }

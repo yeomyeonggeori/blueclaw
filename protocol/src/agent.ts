@@ -72,19 +72,6 @@ export const qualityReviewItemSchema = z.looseObject({
   notes: z.string().optional(),
 });
 
-export const failureReportAttemptSchema = z.looseObject({
-  toolName: z.string().optional(),
-  inputSummary: z.string().optional(),
-  errorCode: z.string().optional(),
-  failureStage: z.string().optional(),
-  message: z.string().optional(),
-});
-
-export const failureReportFactsSchema = z.looseObject({
-  attempts: z.array(failureReportAttemptSchema).optional(),
-  budgetState: z.string().optional(),
-});
-
 export const replyAttachmentSchema = z.strictObject({
   path: z.string(),
   filename: z.string().optional(),
@@ -128,9 +115,7 @@ export const replyActionSchema = actionStateSchema.extend({
 export const failActionSchema = actionStateSchema.extend({
   action: z.literal('fail'),
   reason: z.string(),
-  failureResolution: z.string().optional(),
   goalStatus: z.literal('blocked'),
-  usedFailureFacts: failureReportFactsSchema.optional(),
 });
 
 export const agentActionSchema = z.discriminatedUnion('action', [

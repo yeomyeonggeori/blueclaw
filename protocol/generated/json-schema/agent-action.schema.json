@@ -350,9 +350,6 @@
           },
           "type": "object"
         },
-        "failureResolution": {
-          "type": "string"
-        },
         "goalSatisfied": {
           "type": "boolean"
         },
@@ -368,39 +365,6 @@
         },
         "reason": {
           "type": "string"
-        },
-        "usedFailureFacts": {
-          "additionalProperties": {},
-          "properties": {
-            "attempts": {
-              "items": {
-                "additionalProperties": {},
-                "properties": {
-                  "errorCode": {
-                    "type": "string"
-                  },
-                  "failureStage": {
-                    "type": "string"
-                  },
-                  "inputSummary": {
-                    "type": "string"
-                  },
-                  "message": {
-                    "type": "string"
-                  },
-                  "toolName": {
-                    "type": "string"
-                  }
-                },
-                "type": "object"
-              },
-              "type": "array"
-            },
-            "budgetState": {
-              "type": "string"
-            }
-          },
-          "type": "object"
         }
       },
       "required": [
