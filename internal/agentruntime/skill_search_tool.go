@@ -218,12 +218,14 @@ func mergeLearnedSkillInstructions(installed, learned []agentcontract.SkillInstr
 
 func (toolCatalogBuilder *ToolCatalogBuilder) searchSkillInstructions(toolContext context.Context, input skillSearchToolInput, handlerContext toolHandlerContext, availableToolSet *toolcontract.ToolSet, skillInstructions []agentcontract.SkillInstruction) agentcontract.SkillRetrievalResult {
 	request := agentcontract.AgentRequest{
-		ProfileName:       handlerContext.request.ProfileName,
-		Prompt:            handlerContext.request.Prompt,
-		VisibleContext:    handlerContext.request.VisibleContext,
-		RequesterPersonID: handlerContext.request.RequesterPersonID,
-		RequesterName:     handlerContext.request.RequesterName,
-		ToolSet:           availableToolSet,
+		ProfileName:    handlerContext.request.ProfileName,
+		Prompt:         handlerContext.request.Prompt,
+		VisibleContext: handlerContext.request.VisibleContext,
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: handlerContext.request.RequesterPersonID,
+			RequesterName:     handlerContext.request.RequesterName,
+		},
+		ToolSet: availableToolSet,
 	}
 	querySet := agentcontract.SkillSearchQuerySet{Queries: append([]agentcontract.SkillSearchQuery{}, input.Queries...)}
 	return toolCatalogBuilder.skillRetriever.Search(toolContext, request, skillInstructions, querySet, maximumSkillSearchResultCount)

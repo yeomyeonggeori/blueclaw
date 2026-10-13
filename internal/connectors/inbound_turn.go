@@ -228,12 +228,14 @@ func (connectorRuntime *ConnectorRuntime) conversationTurnFor(turn *inboundTurn)
 func (connectorRuntime *ConnectorRuntime) completeTurnLaunchFailure(ctx context.Context, turn *inboundTurn, errorValue error) (ConnectorRuntimeResult, error) {
 	connectorRuntime.logger.Error("connector."+turn.platform+".agent.failed", slog.String("messageID", turn.event.MessageID), slog.String("error", errorValue.Error()))
 	failureTurnResult := connectorRuntime.launchFailureCompleter.CompleteLaunchFailure(ctx, agentcontract.AgentTurnRequest{
-		RequesterPersonID: turn.personID,
-		RequesterEmail:    turn.requesterEmail,
-		Platform:          turn.platform,
-		ConversationID:    turn.event.ConversationID,
-		Prompt:            turn.event.Prompt,
-		ResponseLanguage:  turn.event.Context.ResponseLanguage,
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: turn.personID,
+			RequesterEmail:    turn.requesterEmail,
+		},
+		Platform:         turn.platform,
+		ConversationID:   turn.event.ConversationID,
+		Prompt:           turn.event.Prompt,
+		ResponseLanguage: turn.event.Context.ResponseLanguage,
 	}, "launch", "connector_launch", errorValue)
 	return connectorRuntime.dispatchTaskReply(ctx, turn.platform, turn.adapter, turn.event, turn.replyTarget, failureTurnResult, turn.engagedAckEmojiName, turn.sendReply)
 }

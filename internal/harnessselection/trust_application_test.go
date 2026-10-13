@@ -90,7 +90,9 @@ func TestTheExternalHarnessOpensItsSessionWithTheTrustLineItsDefinitionDeclares(
 	harness, _ := selectedFactory(harnessdriver.Dependencies{})
 
 	_, errorValue = harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		Prompt:            "hello",
 		WorkspaceRootPath: t.TempDir(),
 		ToolSet:           singleToolSet(t),

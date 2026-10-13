@@ -24,7 +24,7 @@ func writeFakeCodexScript(t *testing.T) string {
 func TestCodexNeverResumesASessionIDItNeverMinted(t *testing.T) {
 	harness, publisher := sessionTestHarness(t, CodexAgentCommand(writeFakeCodexScript(t)))
 
-	request := agentcontract.AgentTurnRequest{RequesterPersonID: "person-1", ExistingTaskRunID: "task-run-1", Prompt: "첫 턴"}
+	request := agentcontract.AgentTurnRequest{RequesterIdentity: agentcontract.RequesterIdentity{RequesterPersonID: "person-1"}, ExistingTaskRunID: "task-run-1", Prompt: "첫 턴"}
 	firstOutput := runEchoingTurn(t, harness, request)
 	secondOutput := runEchoingTurn(t, harness, request)
 
@@ -58,7 +58,7 @@ func TestASecondTurnOfTheSameTaskRunResumesRatherThanReclaimingTheSessionID(t *t
 		},
 	})
 
-	request := agentcontract.AgentTurnRequest{RequesterPersonID: "person-1", ExistingTaskRunID: "task-run-1", Prompt: "첫 턴"}
+	request := agentcontract.AgentTurnRequest{RequesterIdentity: agentcontract.RequesterIdentity{RequesterPersonID: "person-1"}, ExistingTaskRunID: "task-run-1", Prompt: "첫 턴"}
 	firstOutput := runEchoingTurn(t, harness, request)
 	secondOutput := runEchoingTurn(t, harness, request)
 
@@ -73,7 +73,7 @@ func TestASecondTurnOfTheSameTaskRunResumesRatherThanReclaimingTheSessionID(t *t
 func TestClaudeCodeHeadlessRunPreAllowsItsOwnMCPServer(t *testing.T) {
 	harness, _ := sessionTestHarness(t, ClaudeCodeAgentCommand("/bin/echo"))
 
-	output := runEchoingTurn(t, harness, agentcontract.AgentTurnRequest{RequesterPersonID: "person-1", ExistingTaskRunID: "task-run-1", Prompt: "hi"})
+	output := runEchoingTurn(t, harness, agentcontract.AgentTurnRequest{RequesterIdentity: agentcontract.RequesterIdentity{RequesterPersonID: "person-1"}, ExistingTaskRunID: "task-run-1", Prompt: "hi"})
 
 	if !strings.Contains(output, "--allowedTools mcp__"+toolCatalogServerName) {
 		t.Fatalf("expected the headless claude code run to pre-allow mcp__%s tools, got %q", toolCatalogServerName, output)

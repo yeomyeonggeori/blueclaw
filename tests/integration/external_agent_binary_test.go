@@ -107,7 +107,9 @@ func TestARealExternalAgentBinaryTakesTheRequesterToolCatalog(t *testing.T) {
 	}, publisher, nil)
 
 	_, errorValue := harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		Prompt:            "회의록 정리해줘",
 		WorkspaceRootPath: t.TempDir(),
 		ToolSet:           externalAgentToolSet(t),
@@ -136,7 +138,9 @@ func TestARealExternalAgentBinaryCannotStartASessionWithoutAValidCatalogToken(t 
 	}, forgedTokenPublisher{endpointURL: catalogServer.URL}, nil)
 
 	_, errorValue := harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		Prompt:            "회의록 정리해줘",
 		WorkspaceRootPath: t.TempDir(),
 		ToolSet:           externalAgentToolSet(t),

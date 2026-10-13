@@ -160,8 +160,10 @@ func (connectorRuntime *ConnectorRuntime) endUnansweredHold(ctx context.Context,
 	approvalgate.SettleSignal(connectorRuntime.taskRunService, taskRun.TaskRunID, &rejection, string(status))
 	connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, endedHoldEventName(status), marshalApprovalEnd(taskRun, status))
 	turnResult := connectorRuntime.launchFailureCompleter.CompleteLaunchFailure(ctx, agentcontract.AgentTurnRequest{
-		RequesterPersonID:   taskRun.RequesterPersonID,
-		RequesterEmail:      connectorRuntime.identityService.ResolvePersonPrimaryEmail(taskRun.RequesterPersonID),
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: taskRun.RequesterPersonID,
+			RequesterEmail:    connectorRuntime.identityService.ResolvePersonPrimaryEmail(taskRun.RequesterPersonID),
+		},
 		ExistingTaskRunID:   taskRun.TaskRunID,
 		OriginReplyTargetID: taskRun.OriginReplyTargetID,
 		OriginIsThread:      taskRun.OriginIsThread,

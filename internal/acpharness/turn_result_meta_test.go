@@ -21,7 +21,9 @@ func runTurnReturning(t *testing.T, carried agentcontract.AgentTurnResult) (agen
 	executed := []daemonExecutedTool{}
 
 	turnResult, errorValue := harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		ExistingTaskRunID: taskRunID,
 		ProfileName:       "default",
 		Prompt:            "회의록 정리해줘",
@@ -69,7 +71,9 @@ func TestATurnThatBeginsMovesTheHostsRunOutOfPlanned(t *testing.T) {
 	executed := []daemonExecutedTool{}
 
 	harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		ExistingTaskRunID: taskRunID,
 		Prompt:            "회의록 정리해줘",
 		WorkspaceRootPath: t.TempDir(),
@@ -93,7 +97,9 @@ func TestAFileTheAgentReadIsNotAttachedToItsReply(t *testing.T) {
 	harness.UseTurnResultMeta(turnResultMetaKey)
 
 	turnResult, errorValue := harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		ExistingTaskRunID: taskRunID,
 		Prompt:            "읽어줘",
 		WorkspaceRootPath: t.TempDir(),
@@ -119,7 +125,9 @@ func TestATurnTheStoreHoldsParkedReturnsParkedWhateverTheAgentReports(t *testing
 	executed := []daemonExecutedTool{}
 
 	turnResult, errorValue := harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		ExistingTaskRunID: taskRunID,
 		Prompt:            "회의록 정리해줘",
 		WorkspaceRootPath: t.TempDir(),

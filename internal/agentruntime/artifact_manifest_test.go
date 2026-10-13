@@ -35,7 +35,9 @@ func TestArtifactManifestBoundsNewestFirstAndFiltersConversation(t *testing.T) {
 		WorkspaceDefaultPath: workspaceDefaultPath,
 		ExistingTaskRunID:    "",
 		ArtifactManifest:     nil,
-		RequesterPersonID:    "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 	}, taskRunService, taskArtifactService)
 
 	if len(manifest) != 10 {

@@ -161,7 +161,9 @@ func (connectorRuntime *ConnectorRuntime) launchSteeredTask(ctx context.Context,
 
 func (connectorRuntime *ConnectorRuntime) completeSteerResumeLaunchFailure(ctx context.Context, platform string, event PlatformInboundEvent, activeTaskRun task.TaskRun, errorValue error) agentcontract.AgentTurnResult {
 	return connectorRuntime.launchFailureCompleter.CompleteLaunchFailure(ctx, agentcontract.AgentTurnRequest{
-		RequesterPersonID: activeTaskRun.RequesterPersonID,
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: activeTaskRun.RequesterPersonID,
+		},
 		ExistingTaskRunID: activeTaskRun.TaskRunID,
 		Platform:          platform,
 		ConversationID:    event.ConversationID,

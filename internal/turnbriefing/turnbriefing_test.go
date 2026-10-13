@@ -11,9 +11,11 @@ import (
 
 func briefedRequest() agentcontract.AgentTurnRequest {
 	return agentcontract.AgentTurnRequest{
-		AgentIdentity:    agentcontract.AgentIdentity{Name: "인턴킴", Handle: "@internkim"},
-		Company:          agentcontract.CompanyContext{Name: "여명거리"},
-		RequesterName:    "Ada",
+		AgentIdentity: agentcontract.AgentIdentity{Name: "인턴킴", Handle: "@internkim"},
+		Company:       agentcontract.CompanyContext{Name: "여명거리"},
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterName: "Ada",
+		},
 		ResponseLanguage: "ko",
 		MemoryFacts:      []agentcontract.MemoryFact{{Content: "Ada는 금요일 오후에 회의를 잡지 않는다"}},
 	}

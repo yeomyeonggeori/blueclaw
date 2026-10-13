@@ -64,7 +64,9 @@ func runTurnWithTrust(t *testing.T, agent *externalAgent, relay approvalgate.Har
 		harness.UsePermissionAsker(relay)
 	}
 	_, errorValue := harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID:   "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		ExistingTaskRunID:   taskRun.TaskRunID,
 		Platform:            "mattermost",
 		ConversationID:      "conversation-1",

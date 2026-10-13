@@ -268,7 +268,9 @@ func TestHarnessRunsAnOutOfProcessAgentWhoseToolCallsExecuteInsideTheDaemon(t *t
 	harness := New(&inProcessAgentProcess{agent: agent}, toolCatalog, nil)
 
 	turnResult, errorValue := harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		Prompt:            "회의록 정리해줘",
 		WorkspaceRootPath: t.TempDir(),
 		ToolSet:           requesterToolSet(t, "person-1", &executed),
@@ -303,7 +305,9 @@ func TestAnExternalAgentsToolCallsAreForwardedToTheTurnsToolCallObserver(t *test
 	ctx := toolcallprogress.WithObserver(context.Background(), func(update acp.SessionUpdate) { observed = append(observed, update) })
 
 	_, errorValue := harness.RunTurn(ctx, agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		Prompt:            "회의록 정리해줘",
 		WorkspaceRootPath: t.TempDir(),
 		ToolSet:           requesterToolSet(t, "person-1", &executed),
@@ -323,7 +327,9 @@ func TestAnAgentThatBringsItsOwnShellIsNotHandedOurs(t *testing.T) {
 	harness := New(&inProcessAgentProcess{agent: &externalAgent{}}, toolCatalog, nil)
 
 	harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		Prompt:            "회의록 정리해줘",
 		WorkspaceRootPath: t.TempDir(),
 		ToolSet:           requesterToolSet(t, "person-1", &executed),
@@ -353,7 +359,9 @@ func TestAnAgentThatTakesTheCatalogOverStdioIsGivenItThatWay(t *testing.T) {
 	harness.UseToolCatalogBridge("/usr/local/bin/blueclaw")
 
 	if _, errorValue := harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		Prompt:            "회의록 정리해줘",
 		WorkspaceRootPath: t.TempDir(),
 		ToolSet:           requesterToolSet(t, "person-1", &executed),
@@ -382,7 +390,9 @@ func TestAnAgentThatCannotReachTheToolCatalogIsRefusedRatherThanRunWithoutIt(t *
 	harness := New(&inProcessAgentProcess{agent: &externalAgent{acceptsNoHTTPToolCatalog: true}}, newPublishedToolCatalog(t), nil)
 
 	_, errorValue := harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		Prompt:            "회의록 정리해줘",
 		WorkspaceRootPath: t.TempDir(),
 		ToolSet:           requesterToolSet(t, "person-1", &executed),
@@ -401,8 +411,10 @@ func TestAnAgentIsToldWhoItIsBeforeItIsGivenTheRequest(t *testing.T) {
 	})
 
 	harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		RequesterName:     "Ada",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+			RequesterName:     "Ada",
+		},
 		AgentIdentity:     agentcontract.AgentIdentity{Name: "인턴킴", Handle: "@internkim"},
 		Prompt:            "회의록 정리해줘",
 		WorkspaceRootPath: t.TempDir(),
@@ -422,7 +434,9 @@ func TestAnExternalAgentIsHandedTheCallTheHostCarriedOutForIt(t *testing.T) {
 	harness := New(&inProcessAgentProcess{agent: agent}, newPublishedToolCatalog(t), nil)
 
 	harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		Prompt:            "회의록 정리해줘",
 		WorkspaceRootPath: t.TempDir(),
 		ToolSet:           requesterToolSet(t, "person-1", &executed),
@@ -452,7 +466,9 @@ func TestATurnWithNothingCarriedOutSendsNoHandback(t *testing.T) {
 	harness := New(&inProcessAgentProcess{agent: agent}, newPublishedToolCatalog(t), nil)
 
 	harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		Prompt:            "회의록 정리해줘",
 		WorkspaceRootPath: t.TempDir(),
 		ToolSet:           requesterToolSet(t, "person-1", &executed),
@@ -492,7 +508,9 @@ func TestAFileAnExternalAgentDeliversThroughTheCatalogReachesTheTurnsReply(t *te
 	harness := New(&inProcessAgentProcess{agent: agent}, newPublishedToolCatalog(t), nil)
 
 	turnResult, errorValue := harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		Prompt:            "send me the quarterly report",
 		WorkspaceRootPath: t.TempDir(),
 		ToolSet:           fileDeliverToolSet(t, []toolcontract.FileAttachment{stagedFile}),
@@ -510,7 +528,9 @@ func TestATurnThatStagedNothingCarriesNoAttachments(t *testing.T) {
 	harness := New(&inProcessAgentProcess{agent: agent}, newPublishedToolCatalog(t), nil)
 
 	turnResult, errorValue := harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		Prompt:            "send me nothing",
 		WorkspaceRootPath: t.TempDir(),
 		ToolSet:           fileDeliverToolSet(t, nil),

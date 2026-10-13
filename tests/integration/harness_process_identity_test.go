@@ -92,7 +92,9 @@ func TestTheHarnessProcessItselfRunsAsTheRequester(t *testing.T) {
 	harness.UseRequesterProcessRunner(terminalService.WorkspaceActorFactory(), workspaceRootPath)
 
 	turnResult, errorValue := harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID: requesterPersonID,
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: requesterPersonID,
+		},
 		Prompt:            "unused",
 		WorkspaceRootPath: workspaceRootPath,
 		ToolSet:           harnessIdentityToolSet(t),

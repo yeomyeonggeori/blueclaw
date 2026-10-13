@@ -31,7 +31,9 @@ func runTurnWithOutcomeClassifier(t *testing.T, classifierModel model.LanguageMo
 	harness.UseOutcomeClassifier(turnoutcome.NewClassifier(classifierModel))
 
 	turnResult, errorValue := harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		Prompt:            "회의록 정리해줘",
 		WorkspaceRootPath: t.TempDir(),
 		ToolSet:           requesterToolSet(t, "person-1", &executed),

@@ -22,7 +22,9 @@ func routedCheckpoints(t *testing.T, markerKey string, update acp.SessionUpdate)
 	checkpoints := []agentcontract.AgentCheckpoint{}
 
 	if _, errorValue := harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		ExistingTaskRunID: "run-7",
 		Prompt:            "회의록 정리해줘",
 		WorkspaceRootPath: t.TempDir(),

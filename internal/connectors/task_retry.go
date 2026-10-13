@@ -162,7 +162,7 @@ func (connectorRuntime *ConnectorRuntime) processTaskRetry(ctx context.Context, 
 	launchResult, errorValue := connectorRuntime.currentTaskLauncher().Launch(ctx, request)
 	if errorValue != nil {
 		replyTarget := ReplyTarget{ConversationID: event.ConversationID, ReplyTargetID: event.ReplyTargetID, DedupeKey: event.DedupeKey()}
-		turnResult := connectorRuntime.launchFailureCompleter.CompleteLaunchFailure(ctx, agentcontract.AgentTurnRequest{ExistingTaskRunID: childTaskRun.TaskRunID, RequesterPersonID: childTaskRun.RequesterPersonID, Prompt: childTaskRun.Prompt}, "launch", "task_retry", errorValue)
+		turnResult := connectorRuntime.launchFailureCompleter.CompleteLaunchFailure(ctx, agentcontract.AgentTurnRequest{ExistingTaskRunID: childTaskRun.TaskRunID, RequesterIdentity: agentcontract.RequesterIdentity{RequesterPersonID: childTaskRun.RequesterPersonID}, Prompt: childTaskRun.Prompt}, "launch", "task_retry", errorValue)
 		return connectorRuntime.dispatchTaskReply(ctx, adapter.Name(), adapter, event, replyTarget, turnResult, "", sendReply)
 	}
 	return connectorRuntime.dispatchTaskReply(ctx, adapter.Name(), adapter, event, ReplyTarget{ConversationID: event.ConversationID, ReplyTargetID: event.ReplyTargetID, DedupeKey: event.DedupeKey()}, launchResult.TurnResult, "", sendReply)
