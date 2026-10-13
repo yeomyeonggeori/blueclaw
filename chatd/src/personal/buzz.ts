@@ -14,6 +14,7 @@ import { markConversationReadAsUser, unreadCountsAsUser } from "../adapters/buzz
 import { announceTypingAsUser } from "../adapters/buzz/user-typing.ts";
 import { searchChannelMessagesAsUser } from "../adapters/buzz/user-message-search.ts";
 import { hideDirectMessageAsUser, revealDirectMessageAsUser } from "../adapters/buzz/user-dm-visibility.ts";
+import { listInboxAsUser } from "../adapters/buzz/user-inbox.ts";
 import {
 	deleteChannelMessageAsUser,
 	editChannelMessageAsUser,
@@ -53,6 +54,7 @@ import {
 	MediaRefused,
 	type PersonalMentions,
 	type PersonalImage,
+	type PersonalInboxItem,
 	type PersonalMessage,
 	type PersonalMessageMatch,
 	type PersonalMessagePage,
@@ -300,15 +302,45 @@ class BuzzPersonalGateway implements PersonalGateway {
 		await deleteChannelAsUser({ relayURL: this.settings.relayURL, userSecretHex: actor.secret, channelID: conversationID });
 	}
 
-	async markConversationRead(actor: ActorCredential, conversationID: string, readAt: Date): Promise<void> {
+	async markConversationRead(
+		actor: ActorCredential,
+		conversationID: string,
+		readAt: Date,
+		threadRootID?: string,
+	): Promise<void> {
 		this.require(actor);
 		await markConversationReadAsUser({
 			relayURL: this.settings.relayURL,
 			userSecretHex: actor.secret,
 			channelID: conversationID,
+			threadRootID,
 			readAtSeconds: Math.floor(readAt.getTime() / 1000),
 			authTagJSON: this.settings.authTagJSON,
 		});
+	}
+
+	async listInbox(actor: ActorCredential): Promise<PersonalInboxItem[]> {
+		this.require(actor);
+		const conversations = await listUserConversations(this.settings.relayURL, actor.secret, { withProfiles: false });
+		const items = await listInboxAsUser({
+			relayURL: this.settings.relayURL,
+			userSecretHex: actor.secret,
+			directChannelIDs: conversations.filter((conversation) => conversation.isDM).map((conversation) => conversation.channelID),
+			groupChannelIDs: conversations.filter((conversation) => !conversation.isDM).map((conversation) => conversation.channelID),
+			authTagJSON: this.settings.authTagJSON,
+		});
+		return items.map((item) => ({
+			reason: item.reason,
+			isUnread: item.isUnread,
+			message: {
+				id: item.message.id,
+				conversationID: item.message.conversationID,
+				parentID: item.message.parentID,
+				authorExternalID: item.message.authorPubkeyHex,
+				body: item.message.body,
+				postedAt: item.message.postedAt,
+			},
+		}));
 	}
 
 	async listMessages(

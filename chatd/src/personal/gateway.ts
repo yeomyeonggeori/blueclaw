@@ -89,6 +89,12 @@ export type PersonalMessageMatch = Pick<
 	"id" | "conversationID" | "parentID" | "authorExternalID" | "body" | "postedAt"
 >;
 
+export type PersonalInboxItem = {
+	reason: "mention" | "direct" | "thread_reply";
+	message: PersonalMessageMatch;
+	isUnread: boolean;
+};
+
 export type PersonalMessagePage = {
 	messages: PersonalMessage[];
 	hasMoreBefore: boolean;
@@ -191,7 +197,13 @@ export interface PersonalGateway {
 	handOverChannel(actor: ActorCredential, conversationID: string, newOwnerExternalID: string): Promise<void>;
 	addChannelOwner(actor: ActorCredential, conversationID: string, externalID: string): Promise<void>;
 	deleteChannel(actor: ActorCredential, conversationID: string): Promise<void>;
-	markConversationRead(actor: ActorCredential, conversationID: string, readAt: Date): Promise<void>;
+	markConversationRead(
+		actor: ActorCredential,
+		conversationID: string,
+		readAt: Date,
+		threadRootID?: string,
+	): Promise<void>;
+	listInbox(actor: ActorCredential): Promise<PersonalInboxItem[]>;
 	listMessages(
 		actor: ActorCredential,
 		conversationID: string,

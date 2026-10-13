@@ -15,6 +15,7 @@ import {
 	type PersonalMessage,
 	type PersonalAttachment,
 	type KeptMedia,
+	type PersonalInboxItem,
 	type PersonalMessageMatch,
 	type PersonalMessagePage,
 	type PersonalPerson,
@@ -253,6 +254,10 @@ class MattermostPersonalGateway implements PersonalGateway {
 
 	async markConversationRead(): Promise<void> {
 		throw new UnsupportedByPlatform(this.platform, "mark a conversation read");
+	}
+
+	async listInbox(): Promise<PersonalInboxItem[]> {
+		throw new UnsupportedByPlatform(this.platform, "list an inbox");
 	}
 
 	async listMessages(

@@ -380,14 +380,16 @@ describe("an operation the platform never does", () => {
 });
 
 describe("person.read_state.mark", () => {
-	function recordingMarks(): { marks: { conversationID: string; readAt: string }[]; gateways: never } {
-		const marks: { conversationID: string; readAt: string }[] = [];
+	type Mark = { conversationID: string; readAt: string; threadRootID?: string };
+
+	function recordingMarks(): { marks: Mark[]; gateways: never } {
+		const marks: Mark[] = [];
 		const gateways = {
 			mattermost: {
 				platform: "mattermost",
 				credentialKind: "mattermost-token",
-				markConversationRead: async (_actor: unknown, conversationID: string, readAt: Date) => {
-					marks.push({ conversationID, readAt: readAt.toISOString() });
+				markConversationRead: async (_actor: unknown, conversationID: string, readAt: Date, threadRootID?: string) => {
+					marks.push({ conversationID, readAt: readAt.toISOString(), ...(threadRootID ? { threadRootID } : {}) });
 				},
 			},
 		} as never;
@@ -407,6 +409,22 @@ describe("person.read_state.mark", () => {
 		);
 		expect(answer.status).toBe(200);
 		expect(marks).toEqual([{ conversationID: "channel-1", readAt: "2026-09-28T01:05:00.000Z" }]);
+	});
+
+	test("records a thread as read on its own when the mark names the thread's root", async () => {
+		const { marks, gateways: recording } = recordingMarks();
+		const answer = await call(
+			"person.read_state.mark",
+			{
+				actor: { kind: "mattermost-token", secret: "token" },
+				conversationID: "channel-1",
+				parentID: "root-1",
+				readAt: "2026-09-28T01:05:00Z",
+			},
+			recording,
+		);
+		expect(answer.status).toBe(200);
+		expect(marks).toEqual([{ conversationID: "channel-1", readAt: "2026-09-28T01:05:00.000Z", threadRootID: "root-1" }]);
 	});
 
 	test("refuses a mark with no time, or a time that is not one", async () => {
@@ -456,6 +474,34 @@ describe("person.typing.send", () => {
 		);
 		expect(answer.status).toBe(400);
 		expect(typed).toEqual([]);
+	});
+});
+
+describe("person.inbox.list", () => {
+	test("is read as the person asking, and answers with their inbox", async () => {
+		const actor = { kind: "mattermost-token", secret: "token" };
+		const askedBy: unknown[] = [];
+		const item = {
+			reason: "mention",
+			isUnread: true,
+			message: { id: "post-1", conversationID: "channel-1", authorExternalID: "person-a", body: "확인 부탁드려요", postedAt: "2026-10-12T05:00:00.000Z" },
+		};
+		const gateways = {
+			mattermost: {
+				platform: "mattermost",
+				credentialKind: "mattermost-token",
+				listInbox: async (reader: unknown) => {
+					askedBy.push(reader);
+					return [item];
+				},
+			},
+		} as never;
+
+		const answer = await call("person.inbox.list", { actor }, gateways);
+
+		expect(answer.status).toBe(200);
+		expect(askedBy).toEqual([actor]);
+		expect(await answer.json()).toEqual({ items: [item] });
 	});
 });
 
