@@ -98,6 +98,10 @@ export function withContextReadAt(
 	return { clientID: READ_STATE_CLIENT_ID, readAtOfContext };
 }
 
+export function readContextOf(channelID: string, threadRootID?: string): string {
+	return threadRootID ? `thread:${threadRootID}` : channelID;
+}
+
 export function unreadSince(readAt: number | undefined, nowSeconds: number): number {
 	return Math.max(readAt ?? 0, nowSeconds - READ_STATE_HORIZON_SECONDS);
 }

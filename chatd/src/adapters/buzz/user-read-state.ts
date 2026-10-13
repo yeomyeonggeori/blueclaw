@@ -12,6 +12,7 @@ import {
 	isReadStateEvent,
 	mergeReadAt,
 	parseReadStateBlob,
+	readContextOf,
 	readStateDTag,
 	readStateSlotID,
 	serializeReadStateBlob,
@@ -41,6 +42,7 @@ export async function markConversationReadAsUser(request: {
 	relayURL: string;
 	userSecretHex: string;
 	channelID: string;
+	threadRootID?: string;
 	readAtSeconds: number;
 	authTagJSON?: string;
 }): Promise<void> {
@@ -48,8 +50,9 @@ export async function markConversationReadAsUser(request: {
 		const secret = hexToBytes(request.userSecretHex);
 		const pubkeyHex = getPublicKey(secret);
 		const state = await readStateOf(relay, secret, pubkeyHex);
-		if ((state.readAtOfContext.get(request.channelID) ?? 0) >= request.readAtSeconds) return;
-		const updated = withContextReadAt(state.own, request.channelID, request.readAtSeconds, nowSeconds());
+		const contextID = readContextOf(request.channelID, request.threadRootID);
+		if ((state.readAtOfContext.get(contextID) ?? 0) >= request.readAtSeconds) return;
+		const updated = withContextReadAt(state.own, contextID, request.readAtSeconds, nowSeconds());
 		const conversationKey = nip44.utils.getConversationKey(secret, pubkeyHex);
 		await relay.publish(READ_STATE_KIND, nip44.encrypt(serializeReadStateBlob(updated), conversationKey), [
 			["d", readStateDTag(readStateSlotID(pubkeyHex))],
@@ -104,7 +107,7 @@ async function unreadIn(
 	);
 }
 
-async function readStateOf(relay: QueryingRelay, secret: Uint8Array, pubkeyHex: string): Promise<ReadState> {
+export async function readStateOf(relay: QueryingRelay, secret: Uint8Array, pubkeyHex: string): Promise<ReadState> {
 	const events = await relay.query({
 		kinds: [READ_STATE_KIND],
 		authors: [pubkeyHex],
@@ -137,6 +140,6 @@ function decryptBlob(content: string, conversationKey: Uint8Array): ReadStateBlo
 	}
 }
 
-function nowSeconds(): number {
+export function nowSeconds(): number {
 	return Math.floor(Date.now() / 1000);
 }
