@@ -18,6 +18,7 @@ export type PersonalConversation = {
 	name: string;
 	description?: string;
 	kind: "dm" | "group";
+	isHidden?: boolean;
 	roleOfExternalID?: Record<string, string>;
 	isPrivate: boolean;
 	avatarURL?: string;
@@ -175,6 +176,8 @@ export interface PersonalGateway {
 		actor: ActorCredential,
 		counterpartExternalIDs: string[],
 	): Promise<PersonalConversation>;
+	hideDirectConversation(actor: ActorCredential, conversationID: string): Promise<void>;
+	revealDirectConversation(actor: ActorCredential, conversationID: string): Promise<void>;
 	createChannel(actor: ActorCredential, channel: NewPersonalChannel): Promise<CreatedPersonalChannel>;
 	listOpenChannels(actor: ActorCredential): Promise<PersonalConversation[]>;
 	joinChannel(actor: ActorCredential, conversationID: string): Promise<void>;

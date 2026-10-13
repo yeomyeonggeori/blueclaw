@@ -13,6 +13,7 @@ import { mentionTags } from "../adapters/buzz/user-mentions.ts";
 import { markConversationReadAsUser, unreadCountsAsUser } from "../adapters/buzz/user-read-state.ts";
 import { announceTypingAsUser } from "../adapters/buzz/user-typing.ts";
 import { searchChannelMessagesAsUser } from "../adapters/buzz/user-message-search.ts";
+import { hideDirectMessageAsUser, revealDirectMessageAsUser } from "../adapters/buzz/user-dm-visibility.ts";
 import {
 	deleteChannelMessageAsUser,
 	editChannelMessageAsUser,
@@ -140,6 +141,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 			id: conversation.channelID,
 			name: conversation.name,
 			kind: conversation.isDM ? "dm" : "group",
+			isHidden: conversation.isHidden,
 			isPrivate: conversation.isPrivate,
 			avatarURL: conversation.avatarURL,
 			participantExternalIDs: conversation.participantPubkeyHexes,
@@ -173,7 +175,18 @@ class BuzzPersonalGateway implements PersonalGateway {
 			actor.secret,
 			counterpart,
 		);
+		await this.revealDirectConversation(actor, channel.channelID);
 		return { id: channel.channelID, name: "", kind: "dm", isPrivate: true };
+	}
+
+	async hideDirectConversation(actor: ActorCredential, conversationID: string): Promise<void> {
+		this.require(actor);
+		await hideDirectMessageAsUser({ relayURL: this.settings.relayURL, userSecretHex: actor.secret, channelID: conversationID });
+	}
+
+	async revealDirectConversation(actor: ActorCredential, conversationID: string): Promise<void> {
+		this.require(actor);
+		await revealDirectMessageAsUser({ relayURL: this.settings.relayURL, userSecretHex: actor.secret, channelID: conversationID });
 	}
 
 	async createChannel(actor: ActorCredential, channel: NewPersonalChannel): Promise<CreatedPersonalChannel> {

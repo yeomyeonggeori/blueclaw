@@ -180,7 +180,7 @@ async function asAnOwner(
 	});
 }
 
-async function latestRoster(
+export async function latestRoster(
 	relay: { query: (filter: object) => Promise<BuzzEvent[]> },
 	channelID: string,
 ): Promise<BuzzEvent | undefined> {
