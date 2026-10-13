@@ -11,6 +11,7 @@ import {
 	type BuzzEvent,
 } from "./types.ts";
 import { rolesOnRoster } from "./user-channels.ts";
+import { hiddenDirectMessageIDs } from "./user-dm-visibility.ts";
 import { DELETE_MESSAGE_KIND, takenBackIDs } from "./deletions.ts";
 import { reactionsTo, type UserMessageReaction } from "./user-reactions.ts";
 import { mentionsOf, type UserMentions } from "./user-mentions.ts";
@@ -30,6 +31,7 @@ export type UserConversation = {
 	channelID: string;
 	name: string;
 	isDM: boolean;
+	isHidden?: boolean;
 	isPrivate: boolean;
 	participantPubkeyHexes: string[];
 	avatarURL?: string;
@@ -82,7 +84,10 @@ export async function listUserConversations(
 				),
 			];
 			if (channelIDs.length === 0) return [];
-			const metadataEvents = await relay.query({ kinds: [GROUP_METADATA_KIND], "#d": channelIDs });
+			const [metadataEvents, hiddenChannelIDs] = await Promise.all([
+				relay.query({ kinds: [GROUP_METADATA_KIND], "#d": channelIDs }),
+				hiddenDirectMessageIDs(relay, userPubkeyHex),
+			]);
 			const membershipsByChannel = new Map<string, BuzzEvent>();
 			for (const event of memberships) {
 				const channelID = firstTagValue(event, "d");
@@ -121,6 +126,7 @@ export async function listUserConversations(
 						channelID,
 						name: profile.name ?? counterpart.slice(0, 8),
 						isDM: true,
+						isHidden: hiddenChannelIDs.has(channelID),
 						isPrivate: true,
 						participantPubkeyHexes: participants,
 						avatarURL: profile.picture,
@@ -379,7 +385,7 @@ function latestByChannelID(events: BuzzEvent[]): Map<string, BuzzEvent> {
 	return latest;
 }
 
-function channelIDFromAcknowledgement(acknowledgement: string): string | undefined {
+export function channelIDFromAcknowledgement(acknowledgement: string): string | undefined {
 	const payloadStart = acknowledgement.indexOf("{");
 	if (payloadStart < 0) return undefined;
 	try {

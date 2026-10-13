@@ -58,6 +58,16 @@ export const personCapabilities: Record<string, PersonCapability> = {
 		const request = parsePersonRequest(body);
 		return await gateway.ensureDirectConversation(request.actor, request.counterpartExternalIDs);
 	},
+	"person.dm.hide": async (gateway, body) => {
+		const request = parsePersonRequest(body);
+		await gateway.hideDirectConversation(request.actor, requireConversation(request));
+		return {};
+	},
+	"person.dm.reveal": async (gateway, body) => {
+		const request = parsePersonRequest(body);
+		await gateway.revealDirectConversation(request.actor, requireConversation(request));
+		return {};
+	},
 	"person.channel.create": async (gateway, body) => {
 		const request = parsePersonRequest(body);
 		return await gateway.createChannel(request.actor, parseNewChannel(body));

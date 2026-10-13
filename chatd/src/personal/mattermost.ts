@@ -228,6 +228,14 @@ class MattermostPersonalGateway implements PersonalGateway {
 		throw new UnsupportedByPlatform(this.platform, "remove a channel member");
 	}
 
+	async hideDirectConversation(): Promise<void> {
+		throw new UnsupportedByPlatform(this.platform, "hide a direct conversation");
+	}
+
+	async revealDirectConversation(): Promise<void> {
+		throw new UnsupportedByPlatform(this.platform, "reveal a hidden direct conversation");
+	}
+
 	async leaveChannel(): Promise<void> {
 		throw new UnsupportedByPlatform(this.platform, "leave a channel");
 	}
