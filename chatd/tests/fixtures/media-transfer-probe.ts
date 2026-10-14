@@ -29,12 +29,12 @@ async function digestOfRanges(chunks: AsyncIterable<Uint8Array>): Promise<{ dige
 	return { digest: hasher.digest("hex"), sizeBytes };
 }
 
-await (await ask("person.media.upload", { actor, sourceURL: warmURL, contentType: "video/mp4" })).arrayBuffer();
+await (await ask("person.media.upload", { actor, sourceURL: warmURL, contentType: "application/octet-stream" })).arrayBuffer();
 Bun.gc(true);
 const baselineResidentBytes = process.memoryUsage().rss;
 peakResidentBytes = baselineResidentBytes;
 
-const uploaded = await ask("person.media.upload", { actor, sourceURL, contentType: "video/mp4" });
+const uploaded = await ask("person.media.upload", { actor, sourceURL, contentType: "application/octet-stream" });
 const uploadAnswer = await uploaded.json();
 
 const firstRange = await ask("person.media.read", { actor, mediaURL, range: "bytes=0-1023" });
