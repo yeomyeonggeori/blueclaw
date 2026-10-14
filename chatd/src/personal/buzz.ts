@@ -6,6 +6,7 @@ import { BlobRefused, isServedByTheRelay, putBlob, readAuthorizationHeader } fro
 import { fetchFromRelay } from "../adapters/buzz/relay-trust.ts";
 import type { AttachmentAlreadyKept } from "../outgoing-attachment.ts";
 import { withSpooledMedia } from "./media-spool.ts";
+import { withCanonicalMedia } from "./media-canonical.ts";
 import { rangesOf } from "./ranged-read.ts";
 import { MalformedRequest } from "./parse.ts";
 import { addReactionAsUser, removeReactionAsUser } from "../adapters/buzz/user-reactions.ts";
@@ -629,16 +630,16 @@ class BuzzPersonalGateway implements PersonalGateway {
 	async uploadMedia(actor: ActorCredential, source: MediaSource): Promise<KeptMedia> {
 		this.require(actor);
 		const ranges = rangesOf((rangeHeader) => fetch(source.url, { headers: { Range: rangeHeader } }));
-		return withSpooledMedia(ranges, async (spooled) => {
-			const body = { body: Bun.file(spooled.path).stream(), digestHex: spooled.digestHex, sizeBytes: spooled.sizeBytes };
-			const blob = await putBlob(this.settings.relayURL, actor.secret, body, source.contentType).catch((error: unknown) => {
+		return withSpooledMedia(ranges, (spooled) => withCanonicalMedia(spooled, source.contentType, async (media) => {
+			const body = { body: Bun.file(media.path).stream(), digestHex: media.digestHex, sizeBytes: media.sizeBytes };
+			const blob = await putBlob(this.settings.relayURL, actor.secret, body, media.contentType).catch((error: unknown) => {
 				if (error instanceof BlobRefused && error.willRefuseAgain) {
-					throw new MediaRefused(error.status, error.reason, spooled.digestHex, spooled.sizeBytes);
+					throw new MediaRefused(error.status, error.reason, media.digestHex, media.sizeBytes);
 				}
 				throw error;
 			});
 			return { address: blob.url, digest: blob.sha256, sizeBytes: blob.size, contentType: blob.mimeType };
-		});
+		}));
 	}
 
 	private relayReadHeaders(actor: ActorCredential, url: string): Record<string, string> {
