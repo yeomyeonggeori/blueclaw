@@ -61,6 +61,7 @@ export type VisibleContextDocument = {
 	conversationType?: string;
 	channelID?: string;
 	channelName?: string;
+	roomMemberEmails?: string[];
 };
 
 type ContextMessage = {
@@ -83,6 +84,7 @@ export type ContextCapableAdapter = {
 	fetchReactions?(scopeThreadId: string): Promise<Map<string, ReactionSummary[]>>;
 	threadRootIdOf?(raw: unknown): string | undefined;
 	senderAvatarUrlOf?(senderId: string): string | undefined;
+	roomMemberEmailsOf?(threadId: string): Promise<string[] | undefined>;
 };
 
 export type NormalizedMessageEdit = {
@@ -135,14 +137,16 @@ export async function buildVisibleContext(
 		cursor?: string;
 		limit?: number;
 		onlyExchangeOpenings?: boolean;
+		withRoomMembers?: boolean;
 	} = {},
 ): Promise<VisibleContextDocument> {
 	const limit = options.limit && options.limit > 0 ? options.limit : DEFAULT_HISTORY_LIMIT;
-	const [fetchResult, threadInfo, senderInfo, reactionsById] = await Promise.all([
+	const [fetchResult, threadInfo, senderInfo, reactionsById, roomMemberEmails] = await Promise.all([
 		adapter.fetchMessages(scopeThreadId, { cursor: options.cursor, limit: limit + 1, direction: "backward" }),
 		adapter.fetchThread(scopeThreadId).catch(() => null),
 		options.senderId ? adapter.getUser(options.senderId).catch(() => null) : Promise.resolve(null),
 		adapter.fetchReactions?.(scopeThreadId).catch(() => null) ?? Promise.resolve(null),
+		roomMemberEmailsFor(adapter, scopeThreadId, options.withRoomMembers === true),
 	]);
 	let previousMessages = messagesBefore(fetchResult.messages, options.beforeMessageId).filter(
 		(candidate) => !isProgressMessage(candidate.raw)
@@ -177,7 +181,17 @@ export async function buildVisibleContext(
 		conversationType: threadInfo ? (threadInfo.isDM ? "direct" : "channel") : undefined,
 		channelID: threadInfo?.channelId,
 		channelName: threadInfo?.channelName,
+		roomMemberEmails,
 	};
+}
+
+async function roomMemberEmailsFor(
+	adapter: ContextCapableAdapter,
+	scopeThreadId: string,
+	isWanted: boolean,
+): Promise<string[] | undefined> {
+	if (!isWanted || !adapter.roomMemberEmailsOf) return undefined;
+	return adapter.roomMemberEmailsOf(scopeThreadId);
 }
 
 export function emptyVisibleContext(scopeThreadId: string): VisibleContextDocument {

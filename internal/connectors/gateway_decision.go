@@ -153,6 +153,7 @@ func (connectorRuntime *ConnectorRuntime) gatewayFactsForTurn(ctx context.Contex
 		Company:          connectorRuntime.company(),
 		OpenTask:         connectorRuntime.openTaskFacts(open),
 		Duties:           inboundengagement.StandingDuties(),
+		MemoryLayers:     memoryLayerOffers(connectorRuntime.memoryLayersHeardIn(turn.event)),
 		CallableTools:    connectorRuntime.callableToolNames(turn),
 		EnvironmentNow:   time.Now(),
 	}

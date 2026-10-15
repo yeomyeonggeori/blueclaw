@@ -78,7 +78,6 @@ func TestARunWaitingOnApprovalIsNotFailedWhenItsClientLeavesMidTurn(t *testing.T
 
 var timedLaunchStepNames = []string{
 	"resolve_requester_email",
-	"resolve_active_circle",
 	"conversation_artifact_manifest",
 	"provision_requester_workspace",
 	"build_tool_set",

@@ -154,6 +154,25 @@ func (identityService *IdentityService) FindPersonAccess(personID string) (polic
 	return policy.EnsureRequesterDefaults(personAccess), true
 }
 
+// EveryPersonAccess is what each person the directory names may reach, read
+// the way ResolvePersonAccess reads one of them.
+func (identityService *IdentityService) EveryPersonAccess() []policy.PersonAccess {
+	identityService.mutex.RLock()
+	personIDs := map[string]bool{}
+	for _, personID := range identityService.personIDByEmail {
+		personIDs[personID] = true
+	}
+	for personID := range identityService.personAccessByPersonID {
+		personIDs[personID] = true
+	}
+	identityService.mutex.RUnlock()
+	everyone := make([]policy.PersonAccess, 0, len(personIDs))
+	for personID := range personIDs {
+		everyone = append(everyone, identityService.ResolvePersonAccess(personID))
+	}
+	return everyone
+}
+
 // HeldCircles is every circle at least one person holds.
 func (identityService *IdentityService) HeldCircles() map[string]bool {
 	identityService.mutex.RLock()

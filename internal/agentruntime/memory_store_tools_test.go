@@ -36,7 +36,6 @@ func newStoreToolFixtureWithStores(t *testing.T, stores *memory.Stores, allowedT
 		RequesterName:     "이샘플",
 		Platform:          "mattermost",
 		ConversationID:    "channel-platform",
-		ActiveCircleID:    "circle-platform",
 		PersonAccess:      policy.PersonAccess{PersonID: "person-alice", Circles: []string{"circle-platform"}},
 	})
 	return storeToolFixture{stores: stores, toolSet: toolSet}
@@ -58,7 +57,7 @@ func decodeToolResult(t *testing.T, result toolcontract.ToolResult, target any) 
 	}
 }
 
-func TestMemoryRememberToolSettlesIntoTheActiveCircleFile(t *testing.T) {
+func TestMemoryRememberToolSettlesIntoTheRequestersOwnFile(t *testing.T) {
 	fixture := newStoreToolFixture(t, "memory_remember")
 	result := fixture.invoke(t, "memory_remember", map[string]string{"content": "The platform standup is at 10:00"})
 	if result.Failed() {
@@ -69,17 +68,17 @@ func TestMemoryRememberToolSettlesIntoTheActiveCircleFile(t *testing.T) {
 	if !output.Accepted || output.GroupID == "" || output.Inserted != 1 {
 		t.Fatalf("expected one memory settled under its own group, got %+v", output)
 	}
-	if held := memorytest.Count(t, fixture.stores, memory.CircleScope("circle-platform")); held != 1 {
-		t.Fatalf("expected the active circle's file to hold it, got %d", held)
+	if held := memorytest.Count(t, fixture.stores, memory.PersonScope("person-alice")); held != 1 {
+		t.Fatalf("expected the requester's own file to hold it, got %d", held)
 	}
-	if held := memorytest.Count(t, fixture.stores, memory.PersonScope("person-alice")); held != 0 {
-		t.Fatalf("expected the person's own file untouched, got %d", held)
+	if held := memorytest.Count(t, fixture.stores, memory.CircleScope("circle-platform")); held != 0 {
+		t.Fatalf("expected the circle's file untouched by a tool call, got %d", held)
 	}
 }
 
 func TestMemoryRememberToolReportsASupersededMemory(t *testing.T) {
 	stores := memorytest.OpenCorrecting(t)
-	scope := memory.CircleScope("circle-platform")
+	scope := memory.PersonScope("person-alice")
 	memorytest.Remember(t, stores, scope, "이샘플 works in the platform team")
 	fixture := newStoreToolFixtureWithStores(t, stores, "memory_remember")
 	var output memoryStoreRememberOutput
@@ -107,7 +106,7 @@ func TestMemoryRememberToolFailsLoudlyWhenTheModelIsDown(t *testing.T) {
 	if !result.Failed() || !strings.Contains(result.ContentText(), "the model is down") {
 		t.Fatalf("expected a loud failure naming the model, got %s", result.ContentText())
 	}
-	if held := memorytest.Count(t, stores, memory.CircleScope("circle-platform")); held != 0 {
+	if held := memorytest.Count(t, stores, memory.PersonScope("person-alice")); held != 0 {
 		t.Fatalf("expected nothing settled when the model fails, got %d", held)
 	}
 }

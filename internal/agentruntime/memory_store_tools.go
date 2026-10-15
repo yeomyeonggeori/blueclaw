@@ -199,13 +199,10 @@ func (toolCatalogBuilder *ToolCatalogBuilder) rememberStoreMemoryTool(ctx contex
 	if strings.TrimSpace(request.RequesterPersonID) == "" {
 		return toolcontract.ToolFailureResult(toolcontract.FailurePermissionDenied, toolcontract.FailureCodes.AccessDenied, "memory_remember", "memory_remember requires a requester")
 	}
-	if request.ActiveCircleConflict {
-		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.Conflict, "memory_remember", "memory_remember has multiple active circle candidates")
-	}
 	if toolCatalogBuilder.memoryStores == nil {
 		return memoryStoreRememberFailure("store_unavailable", "memory is not configured")
 	}
-	stack := memory.StackToRemember(memory.ScopeToRemember(request.RequesterPersonID, request.ActiveCircleID), toolCatalogBuilder.memoryScopes(request.PersonAccess))
+	stack := memory.StackToRemember(memory.PersonScope(request.RequesterPersonID), toolCatalogBuilder.memoryScopes(request.PersonAccess))
 	groupID := memory.NewIdentifier()
 	report, errorValue := toolCatalogBuilder.memoryStores.Remember(ctx, stack, bluememo.Note{
 		GroupID:     groupID,

@@ -48,6 +48,7 @@ var gatewayQuestionNames = []string{
 	QuestionDuty,
 	QuestionRelatesToActiveTask,
 	QuestionBusyRoute,
+	QuestionRemember,
 }
 
 func AsksOnlyGatewayQuestions(questions map[string]model.DecisionQuestion) bool {
@@ -123,6 +124,9 @@ func questionsForMessage(facts Facts, message Message, key string) map[string]mo
 	}
 	if asksBusyRoute(facts) {
 		questions[QuestionBusyRoute] = busyRouteQuestion(about)
+	}
+	if asksRemember(facts) {
+		questions[QuestionRemember] = rememberQuestion(about, agentName, facts.MemoryLayers)
 	}
 	return questions
 }

@@ -180,6 +180,9 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 	logger.Info("application.initializing", "stage", "connector_runtime")
 	components.taskRetentionSweeper = newTaskRetentionSweeper(runtimeConfiguration, components.services, logger)
 	components.connectorRuntime = newConnectorRuntime(runtimeConfiguration, components.foundation, components.directory, components.kernel, components.services, components.taskLauncher, components.backupCoordinator, components.taskIntakeController)
+	if !runtimeConfiguration.Memory.ExtractionDisabled {
+		components.connectorRuntime.UseHeardMemory(components.memory.stores)
+	}
 	installThreadAsker(components.connectorRuntime, runtimeConfiguration, inbound, components.kernel.toolCatalog.approvalGate, components.directory)
 	registerChatdAdapters(components.connectorRuntime, runtimeConfiguration, logger)
 	components.agentReplyStore = newAgentReplyStore(runtimeConfiguration)

@@ -131,16 +131,6 @@ func (stores *Stores) Close() error {
 	return firstFailure
 }
 
-// ScopeToRemember is where what a person says is written: the circle the
-// conversation belongs to when it belongs to one that has a directory, and the
-// person's own memory otherwise.
-func ScopeToRemember(personID string, activeCircleID string) Scope {
-	if policy.CircleHoldsADirectory(activeCircleID) {
-		return CircleScope(strings.ToLower(strings.TrimSpace(activeCircleID)))
-	}
-	return PersonScope(personID)
-}
-
 // ScopesToSearch says where to look for a reader's memory, nearest first. It grants nothing:
 // a recall runs as that reader, so a file this list names and their identity
 // cannot open is refused by the kernel. A list too generous costs a refusal,

@@ -15,6 +15,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
+	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
@@ -112,6 +113,8 @@ type ConnectorRuntime struct {
 	unknownAccountResolver UnknownAccountResolver
 	harness                agentcontract.Harness
 	gatewayDecider         inboundengagement.Decider
+	heardMemory            *memory.Stores
+	heardSettling          sync.WaitGroup
 	recordTasklessLLMCall  func(subjects []string, record agentcontract.LLMCallRecord)
 	replyGenerator         ReplyGenerator
 	launchFailureCompleter LaunchFailureCompleter

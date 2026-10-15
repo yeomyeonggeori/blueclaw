@@ -150,6 +150,9 @@ func (connectorRuntime *ConnectorRuntime) resolveTurnAddressing(ctx context.Cont
 		}
 		connectorRuntime.addAddressingReaction(ctx, turn.platform, turn.adapter, turn.event, turn.addressingLaunch.ReactionEmoji)
 	}
+	if turn.addressingLaunch.RememberLayer != "" {
+		connectorRuntime.rememberHeard(ctx, turn, turn.addressingLaunch.RememberLayer, !turn.addressingLaunch.ShouldLaunch)
+	}
 	if !turn.addressingLaunch.ShouldLaunch {
 		reason := firstNonEmptyString(turn.addressingLaunch.IgnoreReason, "addressing_react_only")
 		ignoredAttributes := append([]any{slog.String("messageID", turn.event.MessageID), slog.String("reason", reason)}, heldGatewayDecisionAttributes(turn.event)...)

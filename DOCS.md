@@ -184,7 +184,7 @@ Deciding whether an inbound message becomes a task at all is host policy. One ca
 1. Ingress: A connector persists the raw event, resolves the sender to a person in the policy, and refuses accounts the policy does not know.
 2. Decision: Addressing is one of four outcomes: ignore, react only, reply, or react and reply. A message that is only an image is described by a vision model first.
 3. Busy routing: If the person already has an active task, the decision's `busyRoute` is one of `status`, `steer`, `replace`, `cancel`, `new_task` or `unrelated`.
-4. Launch: `TaskLauncher.Launch` (`internal/agentruntime/task_launcher.go`) runs nine steps, each recorded as an event so a failure names its step: resolve the requester's email, resolve the active circle, build the conversation's artifact manifest, provision the requester's workspace, build the tool set, audit the tool registry, load memory, carry out an approved call, run the turn.
+4. Launch: `TaskLauncher.Launch` (`internal/agentruntime/task_launcher.go`) runs eight steps, each recorded as an event so a failure names its step: resolve the requester's email, build the conversation's artifact manifest, provision the requester's workspace, build the tool set, audit the tool registry, load memory, carry out an approved call, run the turn.
 5. Delivery: The result is enqueued in the connector outbox and delivered.
 
 ### Choosing a harness
@@ -353,7 +353,8 @@ Memories are layered. A person's memory stands on the circles they read and on t
 
 Around the store, `internal/memory` does the following:
 
-- Finished, failed and cancelled runs are remembered unless `memory.extractionDisabled` is set: into the circle the conversation belongs to, or the requester's own memory otherwise.
+- Finished, failed and cancelled runs are remembered unless `memory.extractionDisabled` is set, into the requester's own memory.
+- A message the gateway judges worth keeping is remembered in a layer whose readers are exactly the people in the conversation (`memory.LayersReadByExactly`): the company's for a room everyone is in, a circle's for a room of exactly its readers, the person's own for a conversation with them alone. A room holding anyone outside that set, or anyone the directory does not name, is offered no layer. A message kept for nothing else gets a 📝 reaction once it is kept. `memory.extractionDisabled` turns this off too.
 - Launch recalls the prompt and records `memory.recall_injected`, or `memory.recall_failed` with the reason.
 - `memory_remember` stores one sentence and reports what it created, superseded or reinforced; `memory_forget` accepts only memory IDs that `memory_search` returned in the same task.
 - Embeddings use `languageModel.embedding.model` (falling back to `memory.embeddingModel`), `google/embeddinggemma-2` at 768 dimensions unless the configuration names another. They go through the capability service, or straight to `languageModel.embedding.endpoint` when it is set; an endpoint that answers another width is refused. A model or width change re-embeds existing memories in the background as soon as the daemon starts, retrying every minute while the embedding service is unreachable; recall skips a memory until its row is re-embedded.

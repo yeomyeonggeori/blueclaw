@@ -28,6 +28,7 @@ type Facts struct {
 	OpenTask         *TaskFacts
 	FinishedTask     *TaskFacts
 	Duties           []StandingDuty
+	MemoryLayers     []MemoryLayer
 	CallableTools    []string
 	EnvironmentNow   time.Time
 }
@@ -39,6 +40,7 @@ type Judgment struct {
 	HasRelatesToActiveTask bool
 	RelatesToActiveTask    bool
 	BusyRoute              BusyRoute
+	RememberLayer          string
 }
 
 type Decider interface {
@@ -125,6 +127,13 @@ func (decider DecisionModelDecider) readJudgment(facts Facts, reader answerReade
 			return Judgment{}, errorValue
 		}
 		judgment.BusyRoute = BusyRoute(busyRoute)
+	}
+	if asksRemember(facts) {
+		rememberAnswer, errorValue := reader.choiceAnswer(QuestionRemember)
+		if errorValue != nil {
+			return Judgment{}, errorValue
+		}
+		judgment.RememberLayer = readRememberLayer(rememberAnswer, facts.MemoryLayers)
 	}
 	return judgment, nil
 }

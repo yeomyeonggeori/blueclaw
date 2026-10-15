@@ -53,6 +53,7 @@ export const visibleContextSchema = z.looseObject({
   conversationType: z.string().optional(),
   channelID: z.string().optional(),
   channelName: z.string().optional(),
+  roomMemberEmails: z.array(z.string()).optional(),
   addressing: z.looseObject({
     botMentioned: z.boolean().optional(),
     otherPersonMentioned: z.boolean().optional(),
