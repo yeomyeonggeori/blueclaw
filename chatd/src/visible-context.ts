@@ -191,7 +191,10 @@ async function roomMemberEmailsFor(
 	isWanted: boolean,
 ): Promise<string[] | undefined> {
 	if (!isWanted || !adapter.roomMemberEmailsOf) return undefined;
-	return adapter.roomMemberEmailsOf(scopeThreadId);
+	return adapter.roomMemberEmailsOf(scopeThreadId).catch((reason) => {
+		console.error("[context] reading who is in the room failed:", reason instanceof Error ? reason.message : reason);
+		return undefined;
+	});
 }
 
 export function emptyVisibleContext(scopeThreadId: string): VisibleContextDocument {
