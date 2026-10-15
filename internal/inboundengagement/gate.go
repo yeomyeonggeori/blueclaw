@@ -2,6 +2,7 @@ package inboundengagement
 
 import (
 	"context"
+	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"log/slog"
 	"strings"
@@ -17,6 +18,7 @@ type Decision struct {
 	IgnoreReason  string
 	AmbientDuty   AmbientDutyContext
 	DecidedWork   agentcontract.Work
+	RememberLayer memory.Scope
 }
 
 type Request struct {
@@ -26,7 +28,10 @@ type Request struct {
 	AttachmentsOnly  bool
 }
 
-const reactionOnlyReason = "reaction_only"
+const (
+	reactionOnlyReason = "reaction_only"
+	rememberOnlyReason = "remember_only"
+)
 
 func Resolve(ctx context.Context, logger *slog.Logger, platform string, request Request, judge func(context.Context) (Judgment, error)) Decision {
 	if IsIgnoredWithoutDeciding(request) {
@@ -43,7 +48,10 @@ func Resolve(ctx context.Context, logger *slog.Logger, platform string, request 
 	addressing := judgment.Addressing
 	ambientDuty := ambientDutyContextFromAddressingDecision(addressing)
 	if shouldLaunch(request, judgment, ambientDuty) {
-		return Decision{ShouldLaunch: true, ReactionEmoji: addressing.ReactionEmoji, AmbientDuty: ambientDuty, DecidedWork: decidedWork(judgment, ambientDuty)}
+		return Decision{ShouldLaunch: true, ReactionEmoji: addressing.ReactionEmoji, AmbientDuty: ambientDuty, DecidedWork: decidedWork(judgment, ambientDuty), RememberLayer: judgment.RememberLayer}
+	}
+	if judgment.RememberLayer != (memory.Scope{}) {
+		return Decision{RememberLayer: judgment.RememberLayer, IgnoreReason: rememberOnlyReason}
 	}
 	if addressing.ReactionEmoji != "" {
 		return Decision{ReactionEmoji: addressing.ReactionEmoji, IgnoreReason: reactionOnlyReason}

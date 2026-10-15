@@ -174,11 +174,7 @@ func TestEveryScopeAnAdministratorReachesSitsInADeclaredDirectory(t *testing.T) 
 	}
 	personAccess := policy.PolicyProjectionService{}.ReplacePolicyProjectionTransactionally(document).PersonAccessByPersonID["person-1"]
 
-	scopes := memory.ScopesToSearch(personAccess, nil)
-	for _, circleID := range personAccess.Circles {
-		scopes = append(scopes, memory.ScopeToRemember("person-1", circleID))
-	}
-	for _, scope := range scopes {
+	for _, scope := range memory.ScopesToSearch(personAccess, nil) {
 		path, errorValue := stores.Path(scope)
 		if errorValue != nil {
 			t.Fatalf("path for %+v: %v", scope, errorValue)
@@ -187,14 +183,5 @@ func TestEveryScopeAnAdministratorReachesSitsInADeclaredDirectory(t *testing.T) 
 		if !declared[directory] {
 			t.Fatalf("memory for %s %q sits in %s, which no POSIX declaration sets up, so the person cannot open it", scope.Kind, scope.ID, directory)
 		}
-	}
-}
-
-func TestWhatIsSaidUnderTheAdminCircleIsRememberedForThePerson(t *testing.T) {
-	if scope := memory.ScopeToRemember("person-1", "admin"); scope != memory.PersonScope("person-1") {
-		t.Fatalf("remembered under %+v; the admin circle has no memory of its own", scope)
-	}
-	if scope := memory.ScopeToRemember("person-1", "Sales"); scope != memory.CircleScope("sales") {
-		t.Fatalf("remembered under %+v; a circle with a directory keeps what is said in it", scope)
 	}
 }

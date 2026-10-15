@@ -39,7 +39,7 @@ import {
 } from "./types.ts";
 import type { NormalizedMessageEdit, ReactionSummary } from "../../visible-context.ts";
 import type { AttachmentAlreadyKept, OutgoingAttachment } from "../../outgoing-attachment.ts";
-import { buildMessageBody, ensureUserDirectMessageChannel } from "./user-session.ts";
+import { buildMessageBody, ensureUserDirectMessageChannel, participantsOf } from "./user-session.ts";
 import { catchUpIntervalMilliseconds, messagesSentSince } from "./catch-up.ts";
 import { deliveredMessagesInMemory, type DeliveredMessages } from "../../delivered-messages.ts";
 import { withRelayAs } from "./relay-pool.ts";
@@ -216,6 +216,15 @@ function latestEditContentByTarget(editEvents: BuzzEvent[]): Map<string, string>
 // A relay subscription hands each event to a callback that cannot await it, so a
 // failure here has nowhere to go but the process. One message the agent could
 // not take is not a reason to stop taking the rest.
+function linkedEmailIn(links: Record<string, unknown>, pubkey: string): string | undefined {
+	const email = links[pubkey.toLowerCase()];
+	return typeof email === "string" && email.trim() !== "" ? email.trim().toLowerCase() : undefined;
+}
+
+function latestEventOf(events: BuzzEvent[]): BuzzEvent | undefined {
+	return events.reduce<BuzzEvent | undefined>((latest, event) => (!latest || event.created_at > latest.created_at ? event : latest), undefined);
+}
+
 function reportBuzzFailure(doing: string, reason: unknown): void {
 	console.error(`[buzz] ${doing} failed:`, reason instanceof Error ? reason.message : reason);
 }
@@ -1071,17 +1080,41 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		};
 	}
 
-	private async linkedAccountEmail(pubkey: string): Promise<string | undefined> {
-		const linksPath = this.config.accountLinksPath;
-		if (!linksPath) return undefined;
-		const linksFile = Bun.file(linksPath);
-		if (!(await linksFile.exists())) return undefined;
-		try {
-			const links = (await linksFile.json()) as Record<string, unknown>;
-			const email = links[pubkey.toLowerCase()];
-			return typeof email === "string" && email.trim() !== "" ? email.trim().toLowerCase() : undefined;
-		} catch {
+	// Everyone in the room but the agent, by the address they sign in with, or
+	// nothing when somebody there has no linked account: a room that cannot be
+	// named in full cannot be matched to the people who read a memory.
+	async roomMemberEmailsOf(threadId: string): Promise<string[] | undefined> {
+		const { channelId } = this.decodeThreadId(threadId);
+		const [metadataEvents, rosterEvents] = await Promise.all([
+			this.relay.query({ kinds: [GROUP_METADATA_KIND], "#d": [channelId] }),
+			this.relay.query({ kinds: [GROUP_MEMBERS_KIND], "#d": [channelId] }),
+		]);
+		const pubkeys = participantsOf(latestEventOf(metadataEvents), latestEventOf(rosterEvents)).filter(
+			(pubkey) => pubkey !== this.relay.pubkeyHex,
+		);
+		if (pubkeys.length === 0) return undefined;
+		const links = await this.accountLinks();
+		const emails = pubkeys.map((pubkey) => linkedEmailIn(links, pubkey));
+		if (emails.some((email) => email === undefined)) {
+			console.log(`[buzz] room ${channelId} holds somebody with no linked account, so no shared memory is offered for it`);
 			return undefined;
+		}
+		return [...new Set(emails.filter((email): email is string => email !== undefined))];
+	}
+
+	private async linkedAccountEmail(pubkey: string): Promise<string | undefined> {
+		return linkedEmailIn(await this.accountLinks(), pubkey);
+	}
+
+	private async accountLinks(): Promise<Record<string, unknown>> {
+		const linksPath = this.config.accountLinksPath;
+		if (!linksPath) return {};
+		const linksFile = Bun.file(linksPath);
+		if (!(await linksFile.exists())) return {};
+		try {
+			return (await linksFile.json()) as Record<string, unknown>;
+		} catch {
+			return {};
 		}
 	}
 }

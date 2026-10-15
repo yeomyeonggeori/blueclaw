@@ -20,9 +20,8 @@ const (
 )
 
 type ExtractionContext struct {
-	RequesterName  string `json:"requesterName,omitempty"`
-	ActiveCircleID string `json:"activeCircleID,omitempty"`
-	Platform       string `json:"platform,omitempty"`
+	RequesterName string `json:"requesterName,omitempty"`
+	Platform      string `json:"platform,omitempty"`
 }
 
 type TaskRunReader interface {
@@ -118,7 +117,7 @@ func (observer TaskRunTransitionObserver) remember(taskRun agentcontract.TaskRun
 	defer cancel()
 	events := observer.TaskRuns.ListTaskEvent(taskRun.TaskRunID)
 	extractionContext, _ := findExtractionContext(events)
-	stack := observer.stackFor(taskRun.RequesterPersonID, extractionContext.ActiveCircleID)
+	stack := observer.stackFor(taskRun.RequesterPersonID)
 	scope := stack[0]
 	note := bluememo.Note{
 		GroupID:     taskRun.TaskRunID,
@@ -144,8 +143,8 @@ func (observer TaskRunTransitionObserver) remember(taskRun agentcontract.TaskRun
 	}))
 }
 
-func (observer TaskRunTransitionObserver) stackFor(personID string, activeCircleID string) []Scope {
-	target := ScopeToRemember(personID, activeCircleID)
+func (observer TaskRunTransitionObserver) stackFor(personID string) []Scope {
+	target := PersonScope(personID)
 	if observer.Access == nil {
 		return []Scope{target}
 	}

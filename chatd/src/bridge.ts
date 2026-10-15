@@ -117,6 +117,7 @@ async function forwardNormalizedEvent(
     beforeMessageId: message.id,
     senderId: message.author.userId,
     onlyExchangeOpenings: startsItsOwnExchange,
+    withRoomMembers: true,
   }).catch(() => emptyVisibleContext(scopeThreadId));
   const addressing = adapter.addressingOf(message.raw);
   const event: NormalizedInboundEvent & { eventID?: string } = {

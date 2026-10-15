@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { visibleContextSchema } from "@blueclaw/protocol";
 import {
 	buildVisibleContext,
 	decodeHistoryCursor,
@@ -150,5 +151,39 @@ describe("buildVisibleContext", () => {
 
 		expect(context.messages.map((message) => message.id)).toEqual(["root-b", "reply-b"]);
 		expect(context.messagesOpenOtherExchanges).toBe(false);
+	});
+});
+
+describe("buildVisibleContext room members", () => {
+	test("keeps the conversation when reading who is in the room fails", async () => {
+		const adapter: ContextCapableAdapter = {
+			...fakeAdapter([contextMessage("m1", "earlier", 1)]),
+			async roomMemberEmailsOf() {
+				throw new Error("relay refused the roster");
+			},
+		};
+		const context = await buildVisibleContext(adapter, "fake:channel-1", { withRoomMembers: true });
+		expect(context.messages.map((message) => message.text)).toEqual(["earlier"]);
+		expect(context.channelName).toBe("general");
+		expect(context.roomMemberEmails).toBeUndefined();
+	});
+});
+
+describe("buildVisibleContext against the protocol", () => {
+	test("sends only fields the protocol declares", async () => {
+		const adapter: ContextCapableAdapter = {
+			...fakeAdapter([contextMessage("m1", "earlier", 1)]),
+			async roomMemberEmailsOf() {
+				return ["member1@example.com"];
+			},
+		};
+		const context = await buildVisibleContext(adapter, "fake:channel-1", {
+			senderId: "user-m1",
+			withRoomMembers: true,
+			onlyExchangeOpenings: true,
+		});
+		const declaredFieldNames = Object.keys(visibleContextSchema.shape);
+		const undeclaredFieldNames = Object.keys(context).filter((fieldName) => !declaredFieldNames.includes(fieldName));
+		expect(undeclaredFieldNames).toEqual([]);
 	});
 });

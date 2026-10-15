@@ -57,6 +57,7 @@ func (sessionTurn *SessionTurn) ResolveEngagement(ctx context.Context) inbounden
 	if turn.addressingLaunch.ReactionEmoji != "" {
 		connectorRuntime.addAddressingReaction(ctx, turn.platform, turn.adapter, turn.event, turn.addressingLaunch.ReactionEmoji)
 	}
+	connectorRuntime.rememberHeard(ctx, turn)
 	return turn.addressingLaunch
 }
 

@@ -85,8 +85,6 @@ type ToolCatalogRequest struct {
 	ConversationType           string
 	ConversationChannelID      string
 	ConversationChannelName    string
-	ActiveCircleID             string
-	ActiveCircleConflict       bool
 	ReplyTargetID              string
 	Platform                   string
 	HistoryCursor              string
@@ -236,7 +234,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) AvailableToolNames() []string {
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) BuildToolSet(request ToolCatalogRequest) *toolcontract.ToolSet {
-	request = withResolvedDeliveryConversation(withResolvedActiveCircle(request))
+	request = withResolvedDeliveryConversation(request)
 	toolSet := toolcontract.NewToolSet(toolCatalogBuilder.allowedToolNames(request.ProfileName))
 	handlerContext := toolHandlerContext{
 		request:           request,

@@ -78,8 +78,6 @@ type TaskLaunchRequest struct {
 	ConversationType           string
 	ConversationChannelID      string
 	ConversationChannelName    string
-	ActiveCircleID             string
-	ActiveCircleConflict       bool
 	ReplyTargetID              string
 	Prompt                     string
 	InputParts                 []agentcontract.AgentPart
@@ -273,13 +271,6 @@ func (taskLauncher *TaskLauncher) launchTask(ctx context.Context, request TaskLa
 		return completeFailedLaunch(record, nil), nil
 	}
 	request.PersonAccess = requesterPersonAccessForTaskLaunch(request)
-	activeCircleRequest, record := runLaunchStep(ctx, &taskLaunchExecution{Launcher: taskLauncher, Request: request, NormalizedProfileName: normalizedProfileName}, resolveActiveCircleLaunchStep{})
-	launchRecords = append(launchRecords, record)
-	if record.Error != "" {
-		return completeFailedLaunch(record, nil), nil
-	}
-	request.ActiveCircleID = activeCircleRequest.ActiveCircleID
-	request.ActiveCircleConflict = activeCircleRequest.ActiveCircleConflict
 	artifactManifest, record := runLaunchStep(ctx, &taskLaunchExecution{Launcher: taskLauncher, Request: request, NormalizedProfileName: normalizedProfileName}, conversationArtifactManifestLaunchStep{})
 	launchRecords = append(launchRecords, record)
 	if record.Error != "" {
@@ -392,23 +383,6 @@ func (resolveRequesterEmailLaunchStep) Run(_ context.Context, execution *taskLau
 	return execution.Launcher.resolveRequesterEmail(execution.Request), nil
 }
 
-type resolveActiveCircleLaunchStep struct{}
-
-func (resolveActiveCircleLaunchStep) Name() string {
-	return "resolve_active_circle"
-}
-
-func (resolveActiveCircleLaunchStep) Run(_ context.Context, execution *taskLaunchExecution) (ToolCatalogRequest, error) {
-	request := execution.Request
-	return withResolvedActiveCircle(ToolCatalogRequest{
-		Prompt:                  request.Prompt,
-		ConversationChannelName: request.ConversationChannelName,
-		PersonAccess:            request.PersonAccess,
-		ActiveCircleID:          request.ActiveCircleID,
-		ActiveCircleConflict:    request.ActiveCircleConflict,
-	}), nil
-}
-
 type conversationArtifactManifestLaunchStep struct{}
 
 func (conversationArtifactManifestLaunchStep) Name() string {
@@ -510,9 +484,8 @@ func (taskLauncher *TaskLauncher) appendStoreMemoryLaunchEvents(taskRunID string
 		}))
 	}
 	taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "memory.extraction_context", MarshalBody(memory.ExtractionContext{
-		RequesterName:  request.RequesterName,
-		ActiveCircleID: request.ActiveCircleID,
-		Platform:       request.Platform,
+		RequesterName: request.RequesterName,
+		Platform:      request.Platform,
 	}))
 }
 
@@ -749,8 +722,6 @@ func (taskLauncher *TaskLauncher) toolCatalogRequestForLaunch(request TaskLaunch
 		ConversationType:           request.ConversationType,
 		ConversationChannelID:      request.ConversationChannelID,
 		ConversationChannelName:    request.ConversationChannelName,
-		ActiveCircleID:             request.ActiveCircleID,
-		ActiveCircleConflict:       request.ActiveCircleConflict,
 		ReplyTargetID:              request.ReplyTargetID,
 		Platform:                   request.Platform,
 		HistoryCursor:              request.VisibleContext.HistoryCursor,

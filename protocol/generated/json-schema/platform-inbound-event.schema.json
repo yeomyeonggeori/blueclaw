@@ -196,8 +196,17 @@
             }
           ]
         },
+        "messagesOpenOtherExchanges": {
+          "type": "boolean"
+        },
         "responseLanguage": {
           "type": "string"
+        },
+        "roomMemberEmails": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "sender": {
           "additionalProperties": {},

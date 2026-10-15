@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
+	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract/harnesstest"
 )
@@ -13,6 +14,7 @@ type scriptedGatewayDecider struct {
 	addressing          inboundengagement.AddressingDecision
 	busyRoute           inboundengagement.BusyRoute
 	relatesToActiveTask bool
+	rememberLayer       memory.Scope
 	errorValue          error
 
 	mutex     sync.Mutex
@@ -28,7 +30,11 @@ func (decider *scriptedGatewayDecider) Decide(_ context.Context, facts inbounden
 	if decider.errorValue != nil {
 		return nil, decider.errorValue
 	}
-	return judgmentsFor(facts, decider.addressing, decider.busyRoute, decider.relatesToActiveTask), nil
+	judgments := judgmentsFor(facts, decider.addressing, decider.busyRoute, decider.relatesToActiveTask)
+	for index := range judgments {
+		judgments[index].RememberLayer = decider.rememberLayer
+	}
+	return judgments, nil
 }
 
 func (decider *scriptedGatewayDecider) FitsBurstBudget(inboundengagement.Facts) bool {

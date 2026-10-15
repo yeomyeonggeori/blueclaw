@@ -48,11 +48,13 @@ export const visibleContextSchema = z.looseObject({
   messages: z.array(visibleContextMessageSchema).nullable(),
   hasMoreBefore: z.boolean(),
   historyCursor: z.string(),
+  messagesOpenOtherExchanges: z.boolean().optional(),
   responseLanguage: z.string().optional(),
   sender: visibleContextSenderSchema.optional(),
   conversationType: z.string().optional(),
   channelID: z.string().optional(),
   channelName: z.string().optional(),
+  roomMemberEmails: z.array(z.string()).optional(),
   addressing: z.looseObject({
     botMentioned: z.boolean().optional(),
     otherPersonMentioned: z.boolean().optional(),

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/model"
 )
@@ -28,6 +29,7 @@ type Facts struct {
 	OpenTask         *TaskFacts
 	FinishedTask     *TaskFacts
 	Duties           []StandingDuty
+	MemoryLayers     []memory.Scope
 	CallableTools    []string
 	EnvironmentNow   time.Time
 }
@@ -39,6 +41,7 @@ type Judgment struct {
 	HasRelatesToActiveTask bool
 	RelatesToActiveTask    bool
 	BusyRoute              BusyRoute
+	RememberLayer          memory.Scope
 }
 
 type Decider interface {
@@ -125,6 +128,13 @@ func (decider DecisionModelDecider) readJudgment(facts Facts, reader answerReade
 			return Judgment{}, errorValue
 		}
 		judgment.BusyRoute = BusyRoute(busyRoute)
+	}
+	if asksRemember(facts) {
+		rememberAnswer, errorValue := reader.choiceAnswer(QuestionRemember)
+		if errorValue != nil {
+			return Judgment{}, errorValue
+		}
+		judgment.RememberLayer = readRememberLayer(rememberAnswer, facts.MemoryLayers)
 	}
 	return judgment, nil
 }

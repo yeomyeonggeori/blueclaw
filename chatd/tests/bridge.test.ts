@@ -39,6 +39,10 @@ class EditObservingBuzzAdapter extends BuzzAdapter {
 		return new Map();
 	}
 
+	override async roomMemberEmailsOf(): Promise<string[]> {
+		return ["sender@example.com"];
+	}
+
 	override onMessageEdit(handler: Parameters<BuzzAdapter["onMessageEdit"]>[0]): void {
 		this.editHandler = handler;
 		super.onMessageEdit(handler);
@@ -165,7 +169,7 @@ describe("normalized edit forwarding", () => {
 });
 
 describe("normalized message forwarding", () => {
-	async function forwardedThreadFlag(rootID: string | undefined, messageID: string): Promise<unknown> {
+	async function forwardedDocument(rootID: string | undefined, messageID: string): Promise<Record<string, unknown>> {
 		const adapter = new EditObservingBuzzAdapter({
 			relayURL: "ws://localhost:3000",
 			privateKeyHex: "1".repeat(64),
@@ -205,12 +209,12 @@ describe("normalized message forwarding", () => {
 			attachments: [],
 		});
 		const originalFetch = globalThis.fetch;
-		let isThread: unknown;
+		let forwardedBody: Record<string, unknown> = {};
 		globalThis.fetch = Object.assign(
 			async (_input: RequestInfo | URL, init?: RequestInit) => {
 				const document: unknown = JSON.parse(String(init?.body));
 				if (typeof document !== "object" || document === null) throw new Error("expected object payload");
-				isThread = "isThread" in document ? document.isThread : undefined;
+				forwardedBody = document as Record<string, unknown>;
 				return new Response("ok", { status: 200 });
 			},
 			{ preconnect: originalFetch.preconnect },
@@ -220,14 +224,19 @@ describe("normalized message forwarding", () => {
 		} finally {
 			globalThis.fetch = originalFetch;
 		}
-		return isThread;
+		return forwardedBody;
 	}
 
 	test("says a message that opens its own exchange is not in a thread", async () => {
-		expect(await forwardedThreadFlag(undefined, rootTwoID)).toBe(false);
+		expect((await forwardedDocument(undefined, rootTwoID)).isThread).toBe(false);
 	});
 
 	test("says a message written under a root is in that root's thread", async () => {
-		expect(await forwardedThreadFlag(rootOneID, "d".repeat(64))).toBe(true);
+		expect((await forwardedDocument(rootOneID, "d".repeat(64))).isThread).toBe(true);
+	});
+
+	test("says who is in the room the message was written in", async () => {
+		const context = (await forwardedDocument(undefined, rootTwoID)).context as Record<string, unknown>;
+		expect(context.roomMemberEmails).toEqual(["sender@example.com"]);
 	});
 });

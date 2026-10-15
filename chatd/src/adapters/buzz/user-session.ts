@@ -497,7 +497,7 @@ async function postedSecondOf(
 // A conversation the relay created names its participants on the metadata; one
 // reconciled from an import names them only on the member roster. Either way
 // the other person is who a direct conversation is called after.
-function participantsOf(metadata: BuzzEvent | undefined, roster: BuzzEvent | undefined): string[] {
+export function participantsOf(metadata: BuzzEvent | undefined, roster: BuzzEvent | undefined): string[] {
 	const named = pubkeysNamedOn(metadata);
 	return named.length > 0 ? named : pubkeysNamedOn(roster);
 }

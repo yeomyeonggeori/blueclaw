@@ -165,6 +165,7 @@ type VisibleContext struct {
 	ConversationType           string                  `json:"conversationType,omitempty"`
 	ChannelID                  string                  `json:"channelID,omitempty"`
 	ChannelName                string                  `json:"channelName,omitempty"`
+	RoomMemberEmails           []string                `json:"roomMemberEmails,omitempty"`
 	Addressing                 AddressingMetadata      `json:"addressing,omitempty"`
 	AttachmentsOnly            bool                    `json:"attachmentsOnly,omitempty"`
 	MessagesOpenOtherExchanges bool                    `json:"messagesOpenOtherExchanges,omitempty"`
