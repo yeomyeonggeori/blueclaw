@@ -364,6 +364,7 @@
         "conversationType": "channel",
         "channelID": "channel-1",
         "channelName": "general",
+        "roomMemberEmails": ["member1@example.com", "member2@example.com"],
         "addressing": {
           "botMentioned": true
         }
