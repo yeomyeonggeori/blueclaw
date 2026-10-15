@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/model"
 )
@@ -28,7 +29,7 @@ type Facts struct {
 	OpenTask         *TaskFacts
 	FinishedTask     *TaskFacts
 	Duties           []StandingDuty
-	MemoryLayers     []MemoryLayer
+	MemoryLayers     []memory.Scope
 	CallableTools    []string
 	EnvironmentNow   time.Time
 }
@@ -40,7 +41,7 @@ type Judgment struct {
 	HasRelatesToActiveTask bool
 	RelatesToActiveTask    bool
 	BusyRoute              BusyRoute
-	RememberLayer          string
+	RememberLayer          memory.Scope
 }
 
 type Decider interface {

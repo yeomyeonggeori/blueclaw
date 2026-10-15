@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"maps"
 	"slices"
-	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 )
@@ -18,7 +17,10 @@ import (
 // The company's layer, when it qualifies, is the only one named: a circle that
 // everyone reads says nothing the company's layer does not.
 func LayersReadByExactly(roomPersonIDs []string, everyone []policy.PersonAccess, containedCircles map[string][]string) []Scope {
-	room := personSetOf(roomPersonIDs)
+	room := map[string]bool{}
+	for _, personID := range roomPersonIDs {
+		room[personID] = true
+	}
 	if len(room) == 0 {
 		return nil
 	}
@@ -40,9 +42,6 @@ func LayersReadByExactly(roomPersonIDs []string, everyone []policy.PersonAccess,
 func readersByScope(everyone []policy.PersonAccess, containedCircles map[string][]string) map[Scope]map[string]bool {
 	readers := map[Scope]map[string]bool{}
 	for _, personAccess := range everyone {
-		if strings.TrimSpace(personAccess.PersonID) == "" {
-			continue
-		}
 		for _, scope := range ScopesToSearch(personAccess, containedCircles) {
 			if readers[scope] == nil {
 				readers[scope] = map[string]bool{}
@@ -51,14 +50,4 @@ func readersByScope(everyone []policy.PersonAccess, containedCircles map[string]
 		}
 	}
 	return readers
-}
-
-func personSetOf(personIDs []string) map[string]bool {
-	set := map[string]bool{}
-	for _, personID := range personIDs {
-		if trimmed := strings.TrimSpace(personID); trimmed != "" {
-			set[trimmed] = true
-		}
-	}
-	return set
 }

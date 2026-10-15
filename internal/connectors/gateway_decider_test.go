@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
+	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract/harnesstest"
 )
@@ -13,7 +14,7 @@ type scriptedGatewayDecider struct {
 	addressing          inboundengagement.AddressingDecision
 	busyRoute           inboundengagement.BusyRoute
 	relatesToActiveTask bool
-	rememberLayer       string
+	rememberLayer       memory.Scope
 	errorValue          error
 
 	mutex     sync.Mutex

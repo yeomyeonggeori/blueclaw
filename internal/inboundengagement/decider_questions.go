@@ -126,7 +126,7 @@ func questionsForMessage(facts Facts, message Message, key string) map[string]mo
 		questions[QuestionBusyRoute] = busyRouteQuestion(about)
 	}
 	if asksRemember(facts) {
-		questions[QuestionRemember] = rememberQuestion(about, agentName, facts.MemoryLayers)
+		questions[QuestionRemember] = rememberQuestion(about, agentName, message.SenderName, facts.MemoryLayers)
 	}
 	return questions
 }

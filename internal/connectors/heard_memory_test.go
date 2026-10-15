@@ -29,7 +29,7 @@ func companyWithLeadership() *identity.IdentityService {
 	})
 }
 
-func heardMemoryRuntime(t *testing.T, rememberLayer string) (*ConnectorRuntime, *testAdapter, *memory.Stores, *scriptedGatewayDecider) {
+func heardMemoryRuntime(t *testing.T, rememberLayer memory.Scope) (*ConnectorRuntime, *testAdapter, *memory.Stores, *scriptedGatewayDecider) {
 	t.Helper()
 	connectorRuntime, adapter, _ := newStubbedTestConnectorRuntime(t)
 	connectorRuntime.identityService = companyWithLeadership()
@@ -48,40 +48,32 @@ func roomEvent(roomMemberEmails ...string) PlatformInboundEvent {
 	return event
 }
 
-func offeredKeys(facts inboundengagement.Facts) []string {
-	keys := []string{}
-	for _, layer := range facts.MemoryLayers {
-		keys = append(keys, layer.Key)
-	}
-	return keys
-}
-
 func TestARoomOfExactlyTheLeadershipIsOfferedItsMemory(t *testing.T) {
-	connectorRuntime, _, _, _ := heardMemoryRuntime(t, "")
+	connectorRuntime, _, _, _ := heardMemoryRuntime(t, memory.Scope{})
 	facts := connectorRuntime.gatewayFactsForTurn(context.Background(), connectorRuntime.OpenSessionTurn(context.Background(), roomEvent("chief@example.com", "director@example.com"), "person-chief", nil).turn)
-	if keys := offeredKeys(facts); !slices.Equal(keys, []string{"circle:leadership"}) {
-		t.Fatalf("expected the leadership layer alone, got %v", keys)
+	if !slices.Equal(facts.MemoryLayers, []memory.Scope{memory.CircleScope("leadership")}) {
+		t.Fatalf("expected the leadership layer alone, got %v", facts.MemoryLayers)
 	}
 }
 
 func TestAnEmployeeInTheRoomKeepsTheLeadershipMemoryClosed(t *testing.T) {
-	connectorRuntime, _, _, _ := heardMemoryRuntime(t, "")
+	connectorRuntime, _, _, _ := heardMemoryRuntime(t, memory.Scope{})
 	facts := connectorRuntime.gatewayFactsForTurn(context.Background(), connectorRuntime.OpenSessionTurn(context.Background(), roomEvent("chief@example.com", "director@example.com", "engineer@example.com"), "person-chief", nil).turn)
-	if keys := offeredKeys(facts); slices.Contains(keys, "circle:leadership") {
-		t.Fatalf("expected no leadership layer while an employee outside it is in the room, got %v", keys)
+	if slices.Contains(facts.MemoryLayers, memory.CircleScope("leadership")) {
+		t.Fatalf("expected no leadership layer while an employee outside it is in the room, got %v", facts.MemoryLayers)
 	}
 }
 
 func TestARoomWhoseMembersAreNotAllKnownIsOfferedNothing(t *testing.T) {
-	connectorRuntime, _, _, _ := heardMemoryRuntime(t, "")
+	connectorRuntime, _, _, _ := heardMemoryRuntime(t, memory.Scope{})
 	facts := connectorRuntime.gatewayFactsForTurn(context.Background(), connectorRuntime.OpenSessionTurn(context.Background(), roomEvent("chief@example.com", "director@example.com", "guest@example.com"), "person-chief", nil).turn)
 	if len(facts.MemoryLayers) != 0 {
-		t.Fatalf("expected no layer for a room holding somebody the directory does not name, got %v", offeredKeys(facts))
+		t.Fatalf("expected no layer for a room holding somebody the directory does not name, got %v", facts.MemoryLayers)
 	}
 }
 
 func TestAMessageWorthOnlyRememberingIsKeptAndMarkedWithAMemo(t *testing.T) {
-	connectorRuntime, adapter, stores, _ := heardMemoryRuntime(t, "circle:leadership")
+	connectorRuntime, adapter, stores, _ := heardMemoryRuntime(t, memory.CircleScope("leadership"))
 	sessionTurn := connectorRuntime.OpenSessionTurn(context.Background(), roomEvent("chief@example.com", "director@example.com"), "person-chief", nil)
 
 	decision := sessionTurn.ResolveEngagement(context.Background())
@@ -106,7 +98,7 @@ func TestAMessageWorthOnlyRememberingIsKeptAndMarkedWithAMemo(t *testing.T) {
 }
 
 func TestALayerTheRoomCannotWriteIsNeverWritten(t *testing.T) {
-	connectorRuntime, adapter, stores, _ := heardMemoryRuntime(t, "circle:leadership")
+	connectorRuntime, adapter, stores, _ := heardMemoryRuntime(t, memory.CircleScope("leadership"))
 	sessionTurn := connectorRuntime.OpenSessionTurn(context.Background(), roomEvent("chief@example.com", "director@example.com", "engineer@example.com"), "person-chief", nil)
 
 	sessionTurn.ResolveEngagement(context.Background())

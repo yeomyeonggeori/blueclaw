@@ -2,6 +2,7 @@ package inboundengagement
 
 import (
 	"context"
+	"github.com/yeomyeonggeori/blueclaw/internal/memory"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"log/slog"
 	"strings"
@@ -17,7 +18,7 @@ type Decision struct {
 	IgnoreReason  string
 	AmbientDuty   AmbientDutyContext
 	DecidedWork   agentcontract.Work
-	RememberLayer string
+	RememberLayer memory.Scope
 }
 
 type Request struct {
@@ -49,7 +50,7 @@ func Resolve(ctx context.Context, logger *slog.Logger, platform string, request 
 	if shouldLaunch(request, judgment, ambientDuty) {
 		return Decision{ShouldLaunch: true, ReactionEmoji: addressing.ReactionEmoji, AmbientDuty: ambientDuty, DecidedWork: decidedWork(judgment, ambientDuty), RememberLayer: judgment.RememberLayer}
 	}
-	if judgment.RememberLayer != "" {
+	if judgment.RememberLayer != (memory.Scope{}) {
 		return Decision{RememberLayer: judgment.RememberLayer, IgnoreReason: rememberOnlyReason}
 	}
 	if addressing.ReactionEmoji != "" {
