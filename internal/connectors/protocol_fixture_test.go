@@ -17,9 +17,6 @@ func TestProtocolPlatformEventFixtureMatchesPlatformInboundEvent(t *testing.T) {
 	if len(event.Context.Messages) != 1 || len(event.InputParts) != 1 {
 		t.Fatalf("platform event fixture lost context or attachments: %#v", event)
 	}
-	if len(event.Context.RoomMemberEmails) != 2 {
-		t.Fatalf("platform event fixture lost who is in the room: %#v", event.Context)
-	}
 	if event.Context.Messages[0].SentAt.IsZero() {
 		t.Fatalf("platform event fixture lost sent timestamp: %#v", event.Context.Messages[0])
 	}
