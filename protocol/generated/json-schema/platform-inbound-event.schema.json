@@ -196,6 +196,9 @@
             }
           ]
         },
+        "messagesOpenOtherExchanges": {
+          "type": "boolean"
+        },
         "responseLanguage": {
           "type": "string"
         },

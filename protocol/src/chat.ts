@@ -48,6 +48,7 @@ export const visibleContextSchema = z.looseObject({
   messages: z.array(visibleContextMessageSchema).nullable(),
   hasMoreBefore: z.boolean(),
   historyCursor: z.string(),
+  messagesOpenOtherExchanges: z.boolean().optional(),
   responseLanguage: z.string().optional(),
   sender: visibleContextSenderSchema.optional(),
   conversationType: z.string().optional(),

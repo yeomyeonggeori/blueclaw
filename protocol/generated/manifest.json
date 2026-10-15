@@ -1,5 +1,5 @@
 {
-  "aggregateHash": "442ab7be44670d384b361beaf92648f045f5a120fe63240a48edc035b04a0710",
+  "aggregateHash": "5090fbeeefbe5679ede4ec44402d85c8a7db215c7805fabf6a5c25516aabe7ff",
   "protocolVersion": "0.4.0",
   "schemas": [
     {
@@ -54,7 +54,7 @@
     },
     {
       "fileName": "platform-inbound-event.schema.json",
-      "hash": "fa3dce85cda65d000c0f26e7e1127c6d8c9a382e9c2e0f0d297e5c5d71c160a9",
+      "hash": "0265b9acf8beb7f537e07169d64f44cea07086cb56171680f3aba4b5189b4576",
       "name": "platform-inbound-event"
     },
     {
