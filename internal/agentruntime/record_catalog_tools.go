@@ -296,7 +296,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) callRecordToolAsRequester(ctx cont
 		return mcp.ToolResult{}, errRecordToolUnavailable
 	}
 	descriptor, isDiscovered := discoveredDescriptorNamed(toolCatalogBuilder.discoveredRecordTools(request), toolName)
-	if !isDiscovered || !access.CanAccess(access.Request{PersonAccess: request.PersonAccess, Action: access.ActionExecute, Resource: descriptor.PolicyResource}) {
+	if !isDiscovered || !requesterMayCall(request, descriptor) {
 		return mcp.ToolResult{}, errRecordToolUnavailable
 	}
 	result, errorValue := request.RecordCatalog.CallTool(ctx, request.RequesterEmail, toolName, input)

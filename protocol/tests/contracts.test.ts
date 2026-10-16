@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { z } from 'zod';
 
 import {
   askInteractionSchema,
@@ -14,6 +15,8 @@ import {
   chatCompletionRequestSchema,
   chatCompletionResponseSchema,
   capabilityDescriptorSchema,
+  recallSourceInputSchema,
+  recallSourceResultSchema,
   languageModelMessagePartSchema,
   languageModelMessageSchema,
   capabilityRegistryResponseSchema,
@@ -274,6 +277,26 @@ describe('closed protocol values', () => {
       effects: [{ objectType: 'task', effect: 'created', id: 'task-1', path: '/workspace/task-1' }],
       result: { taskID: 'task-1' },
     }).success).toBe(false);
+  });
+
+  test('holds a recall source to the recall contract', async () => {
+    const fixtures = await readFixtureBundle('valid');
+    const descriptor = capabilityDescriptorSchema.parse(fixtures['capability-descriptor']?.[0]);
+    const recallSource = {
+      ...descriptor,
+      recallSource: true,
+      sideEffectClass: 'read',
+      sideEffect: 'read',
+      inputIntentSchema: undefined,
+      inputSchema: z.toJSONSchema(recallSourceInputSchema),
+      outputSchema: z.toJSONSchema(recallSourceResultSchema),
+      resultContract: undefined,
+    };
+    expect(capabilityDescriptorSchema.safeParse(recallSource).success).toBe(true);
+    expect(capabilityDescriptorSchema.safeParse({ ...recallSource, outputSchema: descriptor.outputSchema }).success).toBe(false);
+    expect(capabilityDescriptorSchema.safeParse({ ...recallSource, inputSchema: descriptor.inputSchema }).success).toBe(false);
+    expect(capabilityDescriptorSchema.safeParse({ ...recallSource, sideEffectClass: 'workspace_write', sideEffect: 'workspace_write' }).success).toBe(false);
+    expect(capabilityDescriptorSchema.safeParse({ ...recallSource, recallSource: false }).success).toBe(true);
   });
 
   test('keeps capability schemas recursively strict', async () => {
