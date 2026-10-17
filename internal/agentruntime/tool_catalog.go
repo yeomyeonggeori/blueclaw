@@ -53,6 +53,7 @@ type ToolCatalogBuilder struct {
 	recordCatalogDivergenceReporter func(RecordCatalogDivergence)
 	recordCatalogMutex              sync.Mutex
 	recordCatalogByRequester        map[string]discoveredCatalog
+	recordIndexRefreshes            recordIndexRefreshes
 
 	taskContextMutex sync.Mutex
 

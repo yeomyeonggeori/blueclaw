@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
@@ -14,6 +15,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/memory/memorytest"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
+	"github.com/yeomyeonggeori/bluememo/bluememotest"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract/harnesstest"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
@@ -128,5 +130,125 @@ func TestMemorySearchAnswersRecordsThatMemoryForgetRefuses(t *testing.T) {
 	forgotten := fixture.invoke(t, "memory_forget", map[string]any{"factIDs": []string{"document-1"}, "reason": "outdated"})
 	if !forgotten.Failed() {
 		t.Fatalf("expected memory_forget to refuse a record, got %s", forgotten.ContentText())
+	}
+}
+
+const (
+	documentFrame   = `Data room document ""`
+	leaseDocument   = `Data room document "본사 사무실 임대차계약": 월세 800만원`
+	rentQuestion    = "사무실 월세 얼마 내?"
+	leaseChangedAt  = "2026-10-01T00:00:00Z"
+	listedLease     = `{"result":{"frame":"Data room document \"\"","facts":[{"id":"lease","content":"Data room document \"본사 사무실 임대차계약\": 월세 800만원","changedAt":"2026-10-01T00:00:00Z"}]}}`
+	recordRequester = "sample@example.test"
+)
+
+func recallingThroughAnIndex(t *testing.T, standIn *recordCatalogStandIn) (*ToolCatalogBuilder, ToolCatalogRequest) {
+	t.Helper()
+	stores := memorytest.OpenEmbeddingWith(t, bluememotest.TableEmbedder{Vectors: map[string][]float32{
+		documentFrame: bluememotest.Axes(map[int]float32{0: 1}),
+		leaseDocument: bluememotest.Axes(map[int]float32{0: 1, 1: 1}),
+		rentQuestion:  bluememotest.Axes(map[int]float32{0: 1, 1: 1}),
+	}})
+	toolCatalogBuilder := NewToolCatalogBuilder()
+	toolCatalogBuilder.UseCapabilityToolDescriptors(capability.Client{}, []capability.ToolDescriptor{aRecallSource("company_document_recall")})
+	toolCatalogBuilder.UseMemoryStores(stores, nil)
+	return toolCatalogBuilder, ToolCatalogRequest{
+		RecordCatalog:  standIn,
+		RequesterEmail: recordRequester,
+		PersonAccess:   policy.PersonAccess{PersonID: "person-1", Circles: []string{"member"}},
+	}
+}
+
+func waitForRecordIndexRefresh(t *testing.T, toolCatalogBuilder *ToolCatalogBuilder) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if !toolCatalogBuilder.recordIndexRefreshes.isAnyRunning() {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("expected the record index refresh to finish")
+}
+
+func (refreshes *recordIndexRefreshes) isAnyRunning() bool {
+	refreshes.mutex.Lock()
+	defer refreshes.mutex.Unlock()
+	for _, refresh := range refreshes.byRequester {
+		if refresh.isRunning {
+			return true
+		}
+	}
+	return false
+}
+
+func (refreshes *recordIndexRefreshes) makeDue() {
+	refreshes.mutex.Lock()
+	defer refreshes.mutex.Unlock()
+	for _, refresh := range refreshes.byRequester {
+		refresh.startedAt = time.Time{}
+	}
+}
+
+func TestRecallAsksTheSourceForWhatItsIndexRanksNear(t *testing.T) {
+	standIn := &recordCatalogStandIn{
+		answered: mcp.ToolResult{StructuredContent: json.RawMessage(recalledDocument)},
+		listed:   mcp.ToolResult{StructuredContent: json.RawMessage(listedLease)},
+	}
+	toolCatalogBuilder, request := recallingThroughAnIndex(t, standIn)
+	ctx := context.Background()
+
+	toolCatalogBuilder.recallFromTheRecord(ctx, request, rentQuestion, recallReachAtLaunch)
+	waitForRecordIndexRefresh(t, toolCatalogBuilder)
+	recall := toolCatalogBuilder.recallFromTheRecord(ctx, request, rentQuestion, recallReachAtLaunch)
+
+	var asked recallSourceInput
+	if errorValue := json.Unmarshal(standIn.calledWith, &asked); errorValue != nil || len(asked.Candidates) != 1 || asked.Candidates[0] != "lease" || asked.Query != rentQuestion {
+		t.Fatalf("expected the lease passed as a candidate beside the query, got %s", standIn.calledWith)
+	}
+	if len(recall.Failures) != 0 || standIn.calledFor != recordRequester {
+		t.Fatalf("expected a clean recall as the requester, got %v for %q", recall.Failures, standIn.calledFor)
+	}
+}
+
+func TestRecordIndexListsOnlyWhatChangedSinceItsLastListing(t *testing.T) {
+	standIn := &recordCatalogStandIn{
+		answered: mcp.ToolResult{StructuredContent: json.RawMessage(recalledDocument)},
+		listed:   mcp.ToolResult{StructuredContent: json.RawMessage(listedLease)},
+	}
+	toolCatalogBuilder, request := recallingThroughAnIndex(t, standIn)
+	ctx := context.Background()
+
+	toolCatalogBuilder.recallFromTheRecord(ctx, request, rentQuestion, recallReachAtLaunch)
+	waitForRecordIndexRefresh(t, toolCatalogBuilder)
+	toolCatalogBuilder.recallFromTheRecord(ctx, request, rentQuestion, recallReachAtLaunch)
+	toolCatalogBuilder.recordIndexRefreshes.makeDue()
+	toolCatalogBuilder.recallFromTheRecord(ctx, request, rentQuestion, recallReachAtLaunch)
+	waitForRecordIndexRefresh(t, toolCatalogBuilder)
+
+	listings := standIn.listings()
+	refreshedFrom := listings[len(listings)-1]
+	if len(listings) != 3 || listings[0].ChangedAfter != recordIndexEarliestChange || refreshedFrom.ChangedAfter != leaseChangedAt || refreshedFrom.ChangedAfterID != "lease" {
+		t.Fatalf("expected the first refresh to list from the start and the next from the lease on, got %+v", listings)
+	}
+}
+
+func TestRecallSaysSoWhenTheIndexCouldNotList(t *testing.T) {
+	standIn := &recordCatalogStandIn{
+		answered: mcp.ToolResult{StructuredContent: json.RawMessage(recalledDocument)},
+		listed:   mcp.ToolResult{IsError: true, StructuredContent: json.RawMessage(`{"error":"the plane is down"}`)},
+	}
+	toolCatalogBuilder, request := recallingThroughAnIndex(t, standIn)
+	ctx := context.Background()
+
+	toolCatalogBuilder.recallFromTheRecord(ctx, request, rentQuestion, recallReachAtLaunch)
+	waitForRecordIndexRefresh(t, toolCatalogBuilder)
+	recall := toolCatalogBuilder.recallFromTheRecord(ctx, request, rentQuestion, recallReachAtLaunch)
+
+	if len(recall.Failures) != 1 || !strings.Contains(recall.Failures[0], "company_document_recall index") || !strings.Contains(recall.Failures[0], "the plane is down") {
+		t.Fatalf("expected the failed listing reported on the next recall, got %v", recall.Failures)
+	}
+	if len(recall.Facts) != 1 {
+		t.Fatalf("expected the source still answered, got %+v", recall.Facts)
 	}
 }

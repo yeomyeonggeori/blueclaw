@@ -250,7 +250,14 @@ export const capabilityIdempotencySchema = z.strictObject({
 });
 
 export const recallSourceInputSchema = z.strictObject({
-  query: nonBlankStringSchema.describe('What the person asked, in their own words.'),
+  query: nonBlankStringSchema.optional().describe('What the person asked, in their own words. Absent when the runtime lists what changed.'),
+  candidates: z.array(nonBlankStringSchema).max(50).optional().describe(
+    'Identifiers the runtime\'s own index ranked nearest the query, nearest first. The source answers those the person may read, after its own matches.',
+  ),
+  changedAfter: z.iso.datetime({ offset: true }).optional().describe(
+    'Lists instead of matching: every fact the person may read whose changedAt is after this instant, or equal to it with an id after changedAfterID, oldest first.',
+  ),
+  changedAfterID: nonBlankStringSchema.optional().describe('The id of the last fact the previous listing answered, which breaks a tie at changedAfter.'),
   limit: z.int().min(1).optional().describe('The most facts to answer.'),
 });
 
@@ -259,7 +266,11 @@ export const recallSourceResultSchema = z.strictObject({
     id: nonBlankStringSchema.describe('What the fact came from, as an identifier the source answers to.'),
     content: nonBlankStringSchema.describe('The fact in one plain sentence the agent reads beside what it remembers.'),
     validAt: z.iso.date().optional().describe('The day the fact holds from.'),
+    changedAt: z.iso.datetime({ offset: true }).optional().describe('When the fact last changed. A listing answers it for every fact.'),
   })),
+  frame: nonBlankStringSchema.optional().describe(
+    'How a fact of this source reads when it says nothing of its own. The runtime ranks its index by how far a fact rises above it. A listing answers it.',
+  ),
 });
 
 function descriptorKeepsTheRecallContract(descriptor: {

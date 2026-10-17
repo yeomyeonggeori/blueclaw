@@ -165,7 +165,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) searchStoreMemoryTool(ctx context.
 	}
 	recordRecalled := make(chan recordRecall, 1)
 	go func() {
-		recordRecalled <- toolCatalogBuilder.recallFromTheRecord(ctx, request, query)
+		recordRecalled <- toolCatalogBuilder.recallFromTheRecord(ctx, request, query, recallReachOnSearch)
 	}()
 	recalled, errorValue := toolCatalogBuilder.memoryStores.RecallAcross(ctx, request.PersonAccess, toolCatalogBuilder.memoryScopes(request.PersonAccess), query, memory.DefaultRecallLimit)
 	fromTheRecord := <-recordRecalled
