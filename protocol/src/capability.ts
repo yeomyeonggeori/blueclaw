@@ -249,6 +249,36 @@ export const capabilityIdempotencySchema = z.strictObject({
   scope: z.string().trim().min(1),
 });
 
+export const recallSourceInputSchema = z.strictObject({
+  query: nonBlankStringSchema.describe('What the person asked, in their own words.'),
+  limit: z.int().min(1).optional().describe('The most facts to answer.'),
+});
+
+export const recallSourceResultSchema = z.strictObject({
+  facts: z.array(z.strictObject({
+    id: nonBlankStringSchema.describe('What the fact came from, as an identifier the source answers to.'),
+    content: nonBlankStringSchema.describe('The fact in one plain sentence the agent reads beside what it remembers.'),
+    validAt: z.iso.date().optional().describe('The day the fact holds from.'),
+  })),
+});
+
+function descriptorKeepsTheRecallContract(descriptor: {
+  sideEffectClass: CapabilitySideEffect;
+  inputSchema: unknown;
+  outputSchema: unknown;
+}): boolean {
+  return descriptor.sideEffectClass === CapabilitySideEffect.Read
+    && canonicalJSON(descriptor.inputSchema) === canonicalJSON(z.toJSONSchema(recallSourceInputSchema))
+    && canonicalJSON(descriptor.outputSchema) === canonicalJSON(z.toJSONSchema(recallSourceResultSchema));
+}
+
+function canonicalJSON(value: unknown): string {
+  return JSON.stringify(value, (_key, entry: unknown) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return entry;
+    return Object.fromEntries(Object.entries(entry).sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)));
+  });
+}
+
 export const capabilityDescriptorSchema = z.strictObject({
   name: unpaddedStringSchema,
   canonicalName: unpaddedStringSchema,
@@ -268,6 +298,9 @@ export const capabilityDescriptorSchema = z.strictObject({
   ),
   requiresUserPresence: z.boolean(),
   worksOffline: z.boolean(),
+  recallSource: z.boolean().optional().describe(
+    'The agent asks this tool alongside its own memory whenever it recalls, as the person it recalls for. It takes and answers the recall contract, and only reads.',
+  ),
   inputSchema: strictObjectJsonSchema,
   inputIntentSchema: strictObjectJsonSchema.optional(),
   outputSchema: strictObjectJsonSchema,
@@ -289,6 +322,9 @@ export const capabilityDescriptorSchema = z.strictObject({
 }).superRefine((descriptor, context) => {
   if (descriptorRequiresInputIntentSchema(descriptor) && descriptor.inputIntentSchema === undefined) {
     context.addIssue({ code: 'custom', path: ['inputIntentSchema'], message: 'model-visible state-changing capabilities require inputIntentSchema' });
+  }
+  if (descriptor.recallSource === true && !descriptorKeepsTheRecallContract(descriptor)) {
+    context.addIssue({ code: 'custom', path: ['recallSource'], message: 'a recall source only reads, and takes and answers exactly the recall contract' });
   }
   if (descriptor.inputIntentSchema !== undefined && !schemaAcceptsEmptyObject(descriptor.inputIntentSchema)) {
     context.addIssue({ code: 'custom', path: ['inputIntentSchema'], message: 'inputIntentSchema must accept an empty object' });

@@ -24,11 +24,11 @@ catalog, so they appear here as one row with no description.
 | `file_read` | 299 | `file_tools.go` |
 | `memory_forget` | 179 | `memory_store_tools.go` |
 | `memory_remember` | 505 | `memory_store_tools.go` |
-| `memory_search` | 270 | `memory_store_tools.go` |
+| `memory_search` | 450 | `memory_store_tools.go` |
 | `persona_read` | 280 | `persona_tools.go` |
 | `persona_update` | 451 | `persona_tools.go` |
 | `skill_add` | 80 | `skill_management.go` |
 | `skill_remove` | 67 | `skill_management.go` |
 | `write` | 239 | `file_tools.go` |
 
-21 tools, 5021 bytes of description in total.
+21 tools, 5201 bytes of description in total.

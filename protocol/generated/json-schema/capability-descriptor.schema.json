@@ -260,6 +260,10 @@
       "minLength": 1,
       "type": "string"
     },
+    "recallSource": {
+      "description": "The agent asks this tool alongside its own memory whenever it recalls, as the person it recalls for. It takes and answers the recall contract, and only reads.",
+      "type": "boolean"
+    },
     "requiresApproval": {
       "type": "boolean"
     },

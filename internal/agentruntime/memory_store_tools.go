@@ -37,14 +37,21 @@ type memorySearchFact struct {
 	Score      *float64  `json:"score,omitempty"`
 }
 
+type memorySearchRecord struct {
+	ID      string `json:"id"`
+	Content string `json:"content"`
+	ValidAt string `json:"validAt,omitempty"`
+}
+
 type memorySearchToolOutput struct {
-	Facts        []memorySearchFact `json:"facts"`
-	SearchStatus memorySearchStatus `json:"searchStatus"`
+	Facts        []memorySearchFact   `json:"facts"`
+	Records      []memorySearchRecord `json:"records"`
+	SearchStatus memorySearchStatus   `json:"searchStatus"`
 }
 
 var (
 	memorySearchInputSchema         = json.RawMessage(`{"type":"object","properties":{"query":{"type":"string","minLength":1,"pattern":"\\S"}},"required":["query"],"additionalProperties":false}`)
-	memorySearchOutputSchema        = json.RawMessage(`{"type":"object","properties":{"facts":{"type":"array","items":{"type":"object","properties":{"factID":{"type":"string"},"scopeType":{"type":"string","enum":["person","circle","workspace"]},"content":{"type":"string"},"sourceKind":{"type":"string","enum":["identity","fact"]},"validAt":{"type":"string","format":"date-time"},"score":{"type":"number"}},"required":["factID","scopeType","content","sourceKind","validAt"],"additionalProperties":false}},"searchStatus":{"type":"string","enum":["complete","degraded"]}},"required":["facts","searchStatus"],"additionalProperties":false}`)
+	memorySearchOutputSchema        = json.RawMessage(`{"type":"object","properties":{"facts":{"type":"array","items":{"type":"object","properties":{"factID":{"type":"string"},"scopeType":{"type":"string","enum":["person","circle","workspace"]},"content":{"type":"string"},"sourceKind":{"type":"string","enum":["identity","fact"]},"validAt":{"type":"string","format":"date-time"},"score":{"type":"number"}},"required":["factID","scopeType","content","sourceKind","validAt"],"additionalProperties":false}},"records":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},"content":{"type":"string"},"validAt":{"type":"string"}},"required":["id","content"],"additionalProperties":false}},"searchStatus":{"type":"string","enum":["complete","degraded"]}},"required":["facts","records","searchStatus"],"additionalProperties":false}`)
 	memoryRememberInputSchema       = json.RawMessage(`{"type":"object","properties":{"content":{"type":"string","minLength":1,"maxLength":600,"pattern":"\\S"}},"required":["content"],"additionalProperties":false}`)
 	memoryRememberInputIntentSchema = json.RawMessage(`{"type":"object","properties":{"content":{"type":"string","minLength":1,"maxLength":600,"pattern":"\\S"}},"additionalProperties":false}`)
 	memoryRememberOutputSchema      = json.RawMessage(`{"type":"object","properties":{"accepted":{"type":"boolean"},"groupID":{"type":"string","pattern":"\\S"},"inserted":{"type":"integer"},"superseded":{"type":"integer"},"reinforced":{"type":"integer"},"failureCode":{"type":"string"}},"required":["accepted","groupID","inserted","superseded","reinforced"],"additionalProperties":false}`)
@@ -119,7 +126,7 @@ func registerStoreMemoryTools(toolCatalogBuilder *ToolCatalogBuilder, toolRegist
 	toolcontract.RegisterToolFunction(toolRegistry, toolcontract.ToolFunction[memorySearchToolInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
 			Name:        "memory_search",
-			Description: "Search what the assistant remembers about people, their preferences, and their work, within what this requester may read: their own facts and those shared with their circles. Returns facts by meaning with their IDs; only IDs returned here can be passed to memory_forget.",
+			Description: "Search what the assistant remembers about people, their preferences, and their work, within what this requester may read: their own facts and those shared with their circles. Returns facts by meaning with their IDs; only IDs returned here can be passed to memory_forget. Also returns records: what the company keeps that this requester may read and that matches, such as data room documents. A record is not a memory and memory_forget cannot drop it.",
 			InputSchema: memorySearchInputSchema,
 		},
 		Handler: func(toolContext context.Context, input memorySearchToolInput) (toolcontract.ToolResult, error) {
@@ -156,7 +163,12 @@ func (toolCatalogBuilder *ToolCatalogBuilder) searchStoreMemoryTool(ctx context.
 	if query == "" {
 		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "memory_search", "memory_search query is required")
 	}
+	recordRecalled := make(chan recordRecall, 1)
+	go func() {
+		recordRecalled <- toolCatalogBuilder.recallFromTheRecord(ctx, request, query)
+	}()
 	recalled, errorValue := toolCatalogBuilder.memoryStores.RecallAcross(ctx, request.PersonAccess, toolCatalogBuilder.memoryScopes(request.PersonAccess), query, memory.DefaultRecallLimit)
+	fromTheRecord := <-recordRecalled
 	if errorValue != nil {
 		return toolcontract.ToolFailureResult(toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "memory_search", "memory search failed: "+errorValue.Error())
 	}
@@ -168,12 +180,24 @@ func (toolCatalogBuilder *ToolCatalogBuilder) searchStoreMemoryTool(ctx context.
 	}
 	surfaced.add(factIDs)
 	status := memorySearchComplete
-	if recalled.DegradedReason != "" {
+	if recalled.DegradedReason != "" || len(fromTheRecord.Failures) > 0 {
 		status = memorySearchDegraded
 	}
-	output := memorySearchToolOutput{Facts: facts, SearchStatus: status}
+	output := memorySearchToolOutput{Facts: facts, Records: projectRecalledRecords(fromTheRecord.Facts), SearchStatus: status}
 	document := json.RawMessage(MarshalBody(output))
 	return toolcontract.ToolSuccessData(string(document), document)
+}
+
+func projectRecalledRecords(facts []memory.MemoryFact) []memorySearchRecord {
+	records := make([]memorySearchRecord, 0, len(facts))
+	for _, fact := range facts {
+		record := memorySearchRecord{ID: fact.FactID, Content: fact.Content}
+		if !fact.ValidAt.IsZero() {
+			record.ValidAt = fact.ValidAt.Format(time.DateOnly)
+		}
+		records = append(records, record)
+	}
+	return records
 }
 
 func projectStoreMemoryFact(fact memory.MemoryFact) memorySearchFact {

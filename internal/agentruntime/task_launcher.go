@@ -148,6 +148,8 @@ type launchMemoryResult struct {
 	Mode           string
 	DegradedReason string
 	Error          string
+	RecordCount    int
+	RecordFailures []string
 }
 
 type LaunchFailureCompleter interface {
@@ -439,21 +441,42 @@ func (loadMemoryLaunchStep) Name() string {
 }
 
 func (loadMemoryLaunchStep) Run(ctx context.Context, execution *taskLaunchExecution) (launchMemoryResult, error) {
-	if execution.Launcher.toolCatalogBuilder.memoryStores == nil {
-		return launchMemoryResult{}, nil
-	}
-	return recallLaunchMemory(ctx, execution), nil
+	recallContext, cancelRecall := context.WithTimeout(ctx, launchGraphMemorySearchTimeout)
+	defer cancelRecall()
+	recordRecalled := make(chan recordRecall, 1)
+	go func() {
+		recordRecalled <- recallLaunchRecord(recallContext, execution)
+	}()
+	memoryResult := recallLaunchMemory(recallContext, execution)
+	return memoryResult.withRecord(<-recordRecalled), nil
 }
 
 const launchGraphMemorySearchTimeout = 8 * time.Second
 
+func recallLaunchRecord(ctx context.Context, execution *taskLaunchExecution) recordRecall {
+	request := execution.Request
+	return execution.Launcher.toolCatalogBuilder.recallFromTheRecord(ctx, ToolCatalogRequest{
+		RecordCatalog:  request.RecordCatalog,
+		RequesterEmail: request.RequesterEmail,
+		PersonAccess:   request.PersonAccess,
+	}, request.Prompt)
+}
+
+func (memoryResult launchMemoryResult) withRecord(recall recordRecall) launchMemoryResult {
+	memoryResult.Facts = append(memoryResult.Facts, recall.Facts...)
+	memoryResult.RecordCount = len(recall.Facts)
+	memoryResult.RecordFailures = recall.Failures
+	return memoryResult
+}
+
 func recallLaunchMemory(ctx context.Context, execution *taskLaunchExecution) launchMemoryResult {
 	request := execution.Request
-	recallContext, cancelRecall := context.WithTimeout(ctx, launchGraphMemorySearchTimeout)
-	defer cancelRecall()
 	builder := execution.Launcher.toolCatalogBuilder
+	if builder.memoryStores == nil {
+		return launchMemoryResult{}
+	}
 	recalled, errorValue := builder.memoryStores.RecallAcross(
-		recallContext,
+		ctx,
 		request.PersonAccess,
 		builder.memoryScopes(request.PersonAccess),
 		request.Prompt,
@@ -481,7 +504,11 @@ func (taskLauncher *TaskLauncher) appendStoreMemoryLaunchEvents(taskRunID string
 			"characters":     memoryFactCharacterCount(memoryResult.Facts),
 			"mode":           memoryResult.Mode,
 			"degradedReason": memoryResult.DegradedReason,
+			"recordCount":    memoryResult.RecordCount,
 		}))
+	}
+	if len(memoryResult.RecordFailures) > 0 {
+		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "memory.record_recall_failed", strings.Join(memoryResult.RecordFailures, "; "))
 	}
 	taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "memory.extraction_context", MarshalBody(memory.ExtractionContext{
 		RequesterName: request.RequesterName,
