@@ -459,7 +459,7 @@ func recallLaunchRecord(ctx context.Context, execution *taskLaunchExecution) rec
 		RecordCatalog:  request.RecordCatalog,
 		RequesterEmail: request.RequesterEmail,
 		PersonAccess:   request.PersonAccess,
-	}, request.Prompt)
+	}, request.Prompt, recallReachAtLaunch)
 }
 
 func (memoryResult launchMemoryResult) withRecord(recall recordRecall) launchMemoryResult {

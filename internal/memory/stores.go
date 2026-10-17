@@ -83,6 +83,7 @@ type Stores struct {
 	configuration     bluememo.Configuration
 	mutex             sync.Mutex
 	open              map[string]*bluememo.Store
+	recordIndex       *RecordIndex
 }
 
 func NewStores(workspaceRootPath string, configuration bluememo.Configuration, actor security.WorkspaceActorFactory) *Stores {
@@ -122,6 +123,9 @@ func (stores *Stores) Close() error {
 	stores.mutex.Lock()
 	defer stores.mutex.Unlock()
 	var firstFailure error
+	if stores.recordIndex != nil {
+		firstFailure = stores.recordIndex.Close()
+	}
 	for fileName, held := range stores.open {
 		if errorValue := held.Close(); errorValue != nil && firstFailure == nil {
 			firstFailure = errorValue

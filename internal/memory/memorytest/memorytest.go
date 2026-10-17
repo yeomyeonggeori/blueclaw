@@ -63,10 +63,22 @@ func open(t *testing.T, chooser bluememo.Chooser) *memory.Stores {
 	return openUnder(t, t.TempDir(), chooser, defaultEmbeddingModel)
 }
 
+// OpenEmbeddingWith gives the same Stores as Open, embedding through the given
+// embedder, for a test that decides how near two texts are.
+func OpenEmbeddingWith(t *testing.T, embedder bluememo.Embedder) *memory.Stores {
+	t.Helper()
+	return openEmbeddingUnder(t, t.TempDir(), chooserAnswering(relationUnrelatedAnswer), defaultEmbeddingModel, embedder)
+}
+
 func openUnder(t *testing.T, root string, chooser bluememo.Chooser, embeddingModel string) *memory.Stores {
 	t.Helper()
+	return openEmbeddingUnder(t, root, chooser, embeddingModel, &bluememotest.HashEmbedder{})
+}
+
+func openEmbeddingUnder(t *testing.T, root string, chooser bluememo.Chooser, embeddingModel string, embedder bluememo.Embedder) *memory.Stores {
+	t.Helper()
 	stores := memory.NewStores(root, bluememo.Configuration{
-		Embedder:       &bluememotest.HashEmbedder{},
+		Embedder:       embedder,
 		EmbeddingModel: embeddingModel,
 		Model:          EchoModel{},
 		Judge:          bluememo.DistributionJudge{Chooser: chooser},

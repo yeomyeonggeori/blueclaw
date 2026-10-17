@@ -8,6 +8,7 @@ import (
 	"errors"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
@@ -27,7 +28,13 @@ type recordCatalogStandIn struct {
 	calledFor          string
 	calledWith         json.RawMessage
 	answered           mcp.ToolResult
+
+	listed        mcp.ToolResult
+	listingMutex  sync.Mutex
+	listingsAsked []recallSourceInput
 }
+
+const emptyListing = `{"result":{"facts":[]}}`
 
 func (standIn *recordCatalogStandIn) DiscoverTools(_ context.Context, requesterEmail string) ([]capability.ToolDescriptor, error) {
 	standIn.askedToDiscoverFor = append(standIn.askedToDiscoverFor, requesterEmail)
@@ -43,10 +50,31 @@ func (standIn *recordCatalogStandIn) CallTool(
 	toolName string,
 	input json.RawMessage,
 ) (mcp.ToolResult, error) {
+	var asked recallSourceInput
+	if json.Unmarshal(input, &asked) == nil && asked.ChangedAfter != "" {
+		return standIn.answerListing(asked), nil
+	}
 	standIn.calledFor = requesterEmail
 	standIn.calledTool = toolName
 	standIn.calledWith = input
 	return standIn.answered, nil
+}
+
+func (standIn *recordCatalogStandIn) answerListing(asked recallSourceInput) mcp.ToolResult {
+	standIn.listingMutex.Lock()
+	defer standIn.listingMutex.Unlock()
+	standIn.listingsAsked = append(standIn.listingsAsked, asked)
+	isFromTheStart := asked.ChangedAfter == recordIndexEarliestChange
+	if (standIn.listed.StructuredContent == nil && !standIn.listed.IsError) || !isFromTheStart {
+		return mcp.ToolResult{StructuredContent: json.RawMessage(emptyListing)}
+	}
+	return standIn.listed
+}
+
+func (standIn *recordCatalogStandIn) listings() []recallSourceInput {
+	standIn.listingMutex.Lock()
+	defer standIn.listingMutex.Unlock()
+	return append([]recallSourceInput(nil), standIn.listingsAsked...)
 }
 
 func aDescriptor(name string, answeredBy string) capability.ToolDescriptor {
