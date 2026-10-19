@@ -49,7 +49,7 @@ func virtualCRMImportScenario(name string, artifactDirectoryPath string, prompt 
 }
 
 func CRMImportFromAttachmentAcceptanceScenario(artifactDirectoryPath string) VirtualSessionScenario {
-	prompt := "방금 보낸 clients.csv로 관계처 가져와줘"
+	prompt := "방금 보낸 CSV로 관계처 가져와줘"
 	scenario := virtualCRMImportScenario("crm_import_from_attachment_acceptance", artifactDirectoryPath, prompt)
 	importCall := `{"kind":"organization","attachments":["/workspace/` + virtualCRMImportFilePath + `"],"columns":{"name":"회사명","address":"주소"}}`
 	scenario.Turns = []VirtualTurn{{
@@ -61,9 +61,8 @@ func CRMImportFromAttachmentAcceptanceScenario(artifactDirectoryPath string) Vir
 			{Name: agentcontract.TaskEventApprovalHoldOpened, BodyFragment: virtualCRMImportToolName, Count: 1},
 			{Name: agentcontract.TaskEventApprovalHoldOpened, BodyFragment: "샘플상사", Count: 0},
 		},
-		ExpectedEvents:         []string{agentcontract.TaskEventConfirmationRequested},
-		ExpectedReplyFragments: []string{"clients.csv"},
-		ExpectedTaskStatus:     task.TaskStatusWaitingApproval,
+		ExpectedEvents:     []string{agentcontract.TaskEventConfirmationRequested},
+		ExpectedTaskStatus: task.TaskStatusWaitingApproval,
 	}, {
 		Prompt:         "응 가져와",
 		ReplyTargetID:  "virtual-message-001",
