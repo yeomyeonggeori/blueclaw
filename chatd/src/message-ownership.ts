@@ -9,7 +9,7 @@ export class MessageChangeRefused extends Error {
 }
 
 const signingSecretPath = "/admin/api/buzz/signing-secret";
-const secretHexPattern = /^[0-9a-f]{64}$/;
+export const secretHexPattern = /^[0-9a-f]{64}$/;
 
 export async function signerForMessageChange(
 	adapter: BuzzAdapter,
@@ -53,11 +53,21 @@ export async function signingSecretFor(
 			`message ${messageID} was written by somebody else and this device cannot sign as the person who wrote it`,
 		);
 	}
-	const secretHex = await askAdmindForSigningSecret(admindBaseURL, pubkeyHex, messageID);
+	return await heldSigningSecret(
+		pubkeyHex,
+		admindBaseURL,
+		(reason) => new MessageChangeRefused(`message ${messageID} cannot be changed: ${reason}`),
+	);
+}
+
+export async function heldSigningSecret(
+	pubkeyHex: string,
+	admindBaseURL: string,
+	refused: (reason: string) => Error,
+): Promise<string> {
+	const secretHex = await askAdmindForSigningSecret(admindBaseURL, pubkeyHex, refused);
 	if (pubkeyFromSecret(secretHex) !== pubkeyHex) {
-		throw new MessageChangeRefused(
-			`message ${messageID} cannot be changed: the signing key this device was handed is not the key ${pubkeyHex} signs with`,
-		);
+		throw refused(`the signing key this device was handed is not the key ${pubkeyHex} signs with`);
 	}
 	return secretHex;
 }
@@ -65,7 +75,7 @@ export async function signingSecretFor(
 async function askAdmindForSigningSecret(
 	admindBaseURL: string,
 	pubkeyHex: string,
-	messageID: string,
+	refused: (reason: string) => Error,
 ): Promise<string> {
 	let response: Response;
 	try {
@@ -75,21 +85,15 @@ async function askAdmindForSigningSecret(
 			body: JSON.stringify({ pubkeyHex }),
 		});
 	} catch (error) {
-		throw new MessageChangeRefused(
-			`message ${messageID} cannot be changed: this device cannot reach the service that holds ${pubkeyHex}'s signing key (${String(error)})`,
-		);
+		throw refused(`this device cannot reach the service that holds ${pubkeyHex}'s signing key (${String(error)})`);
 	}
 	if (!response.ok) {
-		throw new MessageChangeRefused(
-			`message ${messageID} cannot be changed: this device holds no signing key for ${pubkeyHex} (answered ${response.status})`,
-		);
+		throw refused(`this device holds no signing key for ${pubkeyHex} (answered ${response.status})`);
 	}
 	const document = (await response.json()) as { secretHex?: unknown };
 	const secretHex = typeof document.secretHex === "string" ? document.secretHex.trim().toLowerCase() : "";
 	if (!secretHexPattern.test(secretHex)) {
-		throw new MessageChangeRefused(
-			`message ${messageID} cannot be changed: the answer for ${pubkeyHex} carried no usable signing key`,
-		);
+		throw refused(`the answer for ${pubkeyHex} carried no usable signing key`);
 	}
 	return secretHex;
 }
