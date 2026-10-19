@@ -857,8 +857,8 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	if errorValue != nil {
 		return nil, errorValue
 	}
-	workspacePath := filepath.Join(artifactPath, "workspace")
-	if errorValue := os.MkdirAll(workspacePath, 0700); errorValue != nil {
+	workspacePath, errorValue := prepareNeutralWorkspace(artifactPath)
+	if errorValue != nil {
 		return nil, errorValue
 	}
 	if errorValue := materializeVirtualCapabilityCLI(workspacePath); errorValue != nil {
@@ -936,7 +936,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	runtime.UseTerminalService(terminalService)
 	runtime.UseWorkspaceActorFactory(security.NewDirectWorkspaceActorFactory(terminalService))
 	runtime.UseTaskRunService(taskRunService)
-	cleanup := func() {}
+	cleanup := func() { os.Remove(workspacePath) }
 	var capabilityClient capability.Client
 	capabilityToolNames := virtualCapabilityToolNames(scenario)
 	if len(capabilityToolNames) > 0 {
@@ -947,7 +947,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 			return nil, errorValue
 		}
 		runtime.UseCapabilityToolDescriptors(capabilityClient, virtualCapabilityToolDescriptors(scenario))
-		cleanup = capabilityCleanup
+		cleanup = closingBoth(capabilityCleanup, cleanup)
 	}
 
 	memoryStores := openVirtualMemory(workspacePath)
@@ -3938,6 +3938,21 @@ func prepareArtifactDirectory(scenario VirtualSessionScenario) (string, error) {
 	}
 	artifactPath := filepath.Join(absoluteRootPath, scenario.Name+"-"+time.Now().UTC().Format("20060102T150405.000000000"))
 	return artifactPath, os.MkdirAll(artifactPath, 0700)
+}
+
+func prepareNeutralWorkspace(artifactPath string) (string, error) {
+	recordedPath := filepath.Join(artifactPath, "workspace")
+	if errorValue := os.MkdirAll(recordedPath, 0700); errorValue != nil {
+		return "", errorValue
+	}
+	neutralPath, errorValue := os.MkdirTemp("", "workspace-")
+	if errorValue != nil {
+		return "", errorValue
+	}
+	if errorValue := os.Remove(neutralPath); errorValue != nil {
+		return "", errorValue
+	}
+	return neutralPath, os.Symlink(recordedPath, neutralPath)
 }
 
 func allowedToolsOrDefault(allowedTools []string) []string {
