@@ -115,7 +115,7 @@ func HostUpdateMemberRefusedScenario(artifactDirectoryPath string) VirtualSessio
 		Prompt: "업데이트해줘",
 		ActionResponses: []string{
 			actionCallTool(virtualHostUpdateToolName, `{}`),
-			actionRefusedMessage("호스트 업데이트는 관리자만 할 수 있어요."),
+			actionRefusedMessage("호스트 업데이트는 관리자만 할 수 있어요.", "Only an administrator can update the host."),
 		},
 		ExpectedEventCounts: []VirtualEventCount{
 			{Name: toolResultEventName(virtualHostUpdateToolName), BodyFragment: "administrator", Count: 1},
@@ -128,6 +128,6 @@ func HostUpdateMemberRefusedScenario(artifactDirectoryPath string) VirtualSessio
 	}})
 }
 
-func actionRefusedMessage(reply string) string {
-	return `{"action":"fail","message":` + quote(reply) + `,"reason":` + quote(reply) + `,"goalStatus":"blocked","goalSatisfied":false,"remainingWork":"Only an administrator can update the host.","executionStateUpdate":{}}`
+func actionRefusedMessage(reply string, remainingWork string) string {
+	return `{"action":"fail","message":` + quote(reply) + `,"reason":` + quote(reply) + `,"goalStatus":"blocked","goalSatisfied":false,"remainingWork":` + quote(remainingWork) + `,"executionStateUpdate":{}}`
 }
