@@ -1,11 +1,12 @@
 import { heldSigningSecret, secretHexPattern } from "../message-ownership.ts";
+import { reactionContentOf } from "../mirror/reaction-emoji.ts";
 import { CredentialRefused, UnsupportedByPlatform, type ActorCredential, type PersonalGateway } from "./gateway.ts";
-import type { PersonCapability } from "./capabilities.ts";
+import { personCapabilities, type PersonCapability } from "./capabilities.ts";
 import { MalformedRequest } from "./parse.ts";
 
 const buzzSecretKind = "buzz-secret";
 
-export const personCapabilityAskedAsTheRequester: Record<string, string> = {
+const personCapabilityAskedAsTheRequester: Record<string, string> = {
 	"requester.conversations.list": "person.conversations.list",
 	"requester.channels.open.list": "person.channels.open.list",
 	"requester.channel.create": "person.channel.create",
@@ -16,13 +17,31 @@ export const personCapabilityAskedAsTheRequester: Record<string, string> = {
 	"requester.channel.owner.set": "person.channel.owner.set",
 	"requester.channel.owner.add": "person.channel.owner.add",
 	"requester.channel.delete": "person.channel.delete",
+	"requester.reaction.add": "person.reaction.add",
+	"requester.reaction.remove": "person.reaction.remove",
+	"requester.dm.hide": "person.dm.hide",
+	"requester.dm.reveal": "person.dm.reveal",
 };
 
-export function askedAsTheRequester(capability: PersonCapability, admindBaseURL: string | undefined): PersonCapability {
+const capabilitiesNamingAnEmoji = new Set(["requester.reaction.add", "requester.reaction.remove"]);
+
+export function requesterCapabilityNamed(
+	capabilityName: string,
+	admindBaseURL: string | undefined,
+): PersonCapability | undefined {
+	const capability = personCapabilities[personCapabilityAskedAsTheRequester[capabilityName] ?? ""];
+	if (!capability) return undefined;
+	const namesAnEmoji = capabilitiesNamingAnEmoji.has(capabilityName);
 	return async (gateway, body, agentExternalID) => {
 		const actor = await requesterActor(gateway, body, admindBaseURL);
-		return await capability(gateway, { ...requestRecord(body), actor }, agentExternalID);
+		const request = { ...requestRecord(body), actor };
+		return await capability(gateway, namesAnEmoji ? withEmojiCharacter(request) : request, agentExternalID);
 	};
+}
+
+function withEmojiCharacter(request: Record<string, unknown>): Record<string, unknown> {
+	if (typeof request.emoji !== "string") return request;
+	return { ...request, emoji: reactionContentOf(request.emoji.trim()) };
 }
 
 async function requesterActor(
