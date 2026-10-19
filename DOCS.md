@@ -615,8 +615,10 @@ A virtual session drives the agent loop with no VM and writes every request, res
 
 ```bash
 go run ./cmd/blueclaw-lab virtual-session --scenario presentation \
-  --artifact-dir .artifacts/blueclaw-e2e --live-llm
+  --artifact-dir .artifacts/blueclaw-e2e --live-llm --decision-model '~typesafe/jev-latest'
 ```
+
+A live session asks the decision model the runtime asks, so intake and the completion check run as they do on a device. `--decision-model` (or `BLUECLAW_DECISION_MODEL`) is required with `--live-llm`; `--decision-endpoint` (or `BLUECLAW_DECISION_ENDPOINT`) defaults to OpenRouter's decisions API.
 
 Scenarios are defined in `internal/defaultharness/e2e/scenarios.go`; `--scenario-file` loads one from JSON.
 
