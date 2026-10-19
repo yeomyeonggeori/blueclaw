@@ -49,3 +49,9 @@ than it looks.
 - The tool catalog is assembled per request from exposure rules that live
   upstream, so the list above is what may be exposed rather than what any single
   turn carries.
+- A capability whose schema declares `attachments` has those files read as the
+  requester twice: once when its approval question is worked out and once when
+  the approved call runs. A harness that publishes the tool catalog with a gate
+  of its own (`external`, `claude-code`, `codex`, `antigravity`) replaces the
+  gate that does the first read, so its question is asked without whatever the
+  capability would have worked out from the file.

@@ -50,7 +50,7 @@ func (resolver capabilityApprovalTargetResolver) ResolveApprovalTarget(ctx conte
 }
 
 func capabilityTargetResolveRequest(operation string, request approvalgate.ApprovalTargetRequest) map[string]any {
-	return map[string]any{
+	document := map[string]any{
 		"toolName": operation,
 		"input":    request.ToolInput,
 		"context": map[string]any{
@@ -61,6 +61,10 @@ func capabilityTargetResolveRequest(operation string, request approvalgate.Appro
 			"replyTargetID":     request.ReplyTargetID,
 		},
 	}
+	if len(request.Transport) > 0 {
+		document["transport"] = request.Transport
+	}
+	return document
 }
 
 func (response capabilityTargetResolveResponse) approvalTargetResolution() approvalgate.ApprovalTargetResolution {

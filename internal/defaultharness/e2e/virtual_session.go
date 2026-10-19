@@ -123,6 +123,7 @@ var virtualGeneratedDescriptorToolNames = []string{
 
 var virtualGeneratedResultContractToolNames = []string{
 	"task_add",
+	virtualCRMImportToolName,
 	"task_list",
 	"task_update",
 	"task_delete",
@@ -785,6 +786,8 @@ var builtinScenarioFactories = map[string]func(string) VirtualSessionScenario{
 	"ask_root_message_starts_a_task":            AskRootMessageStartsATaskScenario,
 	"ask_root_message_starts_a_task_over_acp":   AskRootMessageStartsATaskOverACPScenario,
 	"dm_send_confirm_acceptance":                DirectMessageSendConfirmAcceptanceScenario,
+	"crm_import_from_attachment_acceptance":     CRMImportFromAttachmentAcceptanceScenario,
+	"crm_import_from_unreadable_file":           CRMImportFromUnreadableFileScenario,
 	"channel_post_acceptance":                   ChannelPostAcceptanceScenario,
 	"platform_message_edit_acceptance":          PlatformMessageEditAcceptanceScenario,
 	"attachment_material_read":                  AttachmentMaterialReadScenario,
@@ -1556,6 +1559,8 @@ func (service *virtualCapabilityService) targetResolveResponse(toolName string, 
 		return virtualCapabilityTargetResponse(toolName, service.events, input, "eventHint", "title", "calendar event")
 	case virtualHostUpdateToolName:
 		return service.hostUpdateTargetResponse(requestBody)
+	case virtualCRMImportToolName:
+		return virtualCRMImportTargetResponse(requestBody)
 	}
 	return virtualCapabilitySuccess(toolName, "no virtual target to resolve", map[string]any{})
 }
@@ -1606,6 +1611,8 @@ func (service *virtualCapabilityService) response(toolName string, requestBody [
 		return service.scheduleResponse(toolName, requestBody)
 	case virtualHostUpdateToolName:
 		return service.hostUpdateResponse(requestBody)
+	case virtualCRMImportToolName:
+		return virtualCRMImportResponse(requestBody)
 	case "image_read":
 		path := stringValue(virtualCapabilityInput(requestBody)["path"])
 		result := map[string]any{"attachments": []map[string]any{{
