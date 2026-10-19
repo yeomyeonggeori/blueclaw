@@ -27,8 +27,10 @@ func TestUserProfileUpdateLive(t *testing.T) {
 	scenario := VirtualSessionScenario{
 		Name: "user_profile_live", ArtifactDirectoryPath: directory,
 		LanguageModel: model, DisableScriptedModel: true, FailOnLanguageModelError: true,
-		AllowedTools:           []string{"persona_read", "persona_update", "memory_search", "memory_remember"},
-		WritableWorkspacePaths: []string{"private/people/person-1/.internkim/user.json", ".blueclaw/state/persona-backup/people/person-1/user.json"},
+		AllowedTools:           []string{virtualPersonaProfileGetToolName, virtualPersonaProfileUpdateToolName, "memory_search", "memory_remember"},
+		CapabilityToolNames:    []string{virtualPersonaProfileGetToolName, virtualPersonaProfileUpdateToolName},
+		InitialToolNames:       []string{virtualPersonaProfileGetToolName, virtualPersonaProfileUpdateToolName},
+		WritableWorkspacePaths: []string{"private/people/person-1/.internkim/user.json"},
 		Turns:                  []VirtualTurn{{Prompt: "From now on, please answer me in Korean.", RouterTaskShape: agentcontract.TaskShapeResearchTask, ExpectedResponse: VirtualResponseReply}},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
@@ -41,7 +43,7 @@ func TestUserProfileUpdateLive(t *testing.T) {
 	if len(result.TurnResults) != 1 || result.TurnResults[0].TaskStatus != "completed" {
 		t.Fatal("the profile evaluation did not complete")
 	}
-	if !eventsContain(result.TurnResults[0].Events, "tool.persona_update.requested", "") {
+	if !eventsContain(result.TurnResults[0].Events, "tool."+virtualPersonaProfileUpdateToolName+".requested", "") {
 		t.Fatal("the model did not choose the profile update tool")
 	}
 	document, errorValue := os.ReadFile(filepath.Join(result.ArtifactDirectoryPath, "workspace", "private", "people", "person-1", ".internkim", "user.json"))

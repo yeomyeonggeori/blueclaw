@@ -135,6 +135,8 @@ var virtualGeneratedResultContractToolNames = []string{
 	"schedule_create",
 	"schedule_update",
 	"schedule_cancel",
+	virtualPersonaProfileGetToolName,
+	virtualPersonaProfileUpdateToolName,
 }
 
 // ScenarioCapabilityCatalogVariable names the capability tool catalog a host
@@ -1225,7 +1227,7 @@ func overlayNonZeroFields(target reflect.Value, overlay reflect.Value) {
 
 func virtualCapabilitySideEffectClass(toolName string) string {
 	switch toolName {
-	case "web_search", "image_read", "document_read", "task_list", "event_list":
+	case "web_search", "image_read", "document_read", "task_list", "event_list", virtualPersonaProfileGetToolName:
 		return toolcontract.ToolSideEffectRead
 	case "task_delete", "event_delete", "message_delete":
 		return toolcontract.ToolSideEffectDestructive
@@ -1606,6 +1608,8 @@ func (service *virtualCapabilityService) response(toolName string, requestBody [
 		return service.scheduleResponse(toolName, requestBody)
 	case virtualHostUpdateToolName:
 		return service.hostUpdateResponse(requestBody)
+	case virtualPersonaProfileGetToolName, virtualPersonaProfileUpdateToolName:
+		return service.personaProfileResponse(toolName, requestBody)
 	case "image_read":
 		path := stringValue(virtualCapabilityInput(requestBody)["path"])
 		result := map[string]any{"attachments": []map[string]any{{

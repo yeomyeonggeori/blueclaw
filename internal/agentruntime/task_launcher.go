@@ -764,7 +764,7 @@ func (taskLauncher *TaskLauncher) toolCatalogRequestForLaunch(request TaskLaunch
 
 func registeredToolNameCeilingForLaunch(request TaskLaunchRequest) []string {
 	if request.Source == TaskLaunchSourceScheduled && request.ScheduledRun.ScheduleID == task.MorningBriefingScheduleID(request.RequesterPersonID) {
-		return []string{"task_list", "event_list", "conversation_history", "memory_search", "persona_read"}
+		return []string{"task_list", "event_list", "conversation_history", "memory_search", "persona_profile_get"}
 	}
 	duty, isKnownDuty := inboundengagement.StandingDutyByName(request.AmbientDuty.Name)
 	if !request.AmbientDuty.IsMatch || !isKnownDuty {

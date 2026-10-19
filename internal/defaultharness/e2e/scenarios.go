@@ -11,7 +11,6 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
-	"github.com/yeomyeonggeori/blueclaw/internal/persona"
 	"github.com/yeomyeonggeori/blueclaw/internal/skill"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/turnoptions"
@@ -1188,20 +1187,21 @@ func PersonaProfileUpdateAcceptanceScenario(artifactDirectoryPath string) Virtua
 	return VirtualSessionScenario{
 		Name:                   "persona_profile_update_acceptance",
 		ArtifactDirectoryPath:  artifactDirectoryPath,
-		AllowedTools:           []string{"persona_read", "persona_update"},
-		WritableWorkspacePaths: []string{"private/people/person-1/.internkim/user.json", ".blueclaw/state/persona-backup/people/person-1/user.json"},
-		InitialWorkspaceFiles:  map[string]string{persona.SoulFileName: `{"schemaVersion":1}`},
+		AllowedTools:           []string{virtualPersonaProfileGetToolName, virtualPersonaProfileUpdateToolName},
+		CapabilityToolNames:    []string{virtualPersonaProfileGetToolName, virtualPersonaProfileUpdateToolName},
+		InitialToolNames:       []string{virtualPersonaProfileGetToolName, virtualPersonaProfileUpdateToolName},
+		WritableWorkspacePaths: []string{"private/people/person-1/.internkim/user.json"},
 		Turns: []VirtualTurn{
 			{
 				Prompt:                 "내가 앞으로 한국어로 답변받기를 원한다는 설정을 저장해줘",
-				RouterRequiredEvidence: []string{"persona_update"},
+				RouterRequiredEvidence: []string{virtualPersonaProfileUpdateToolName},
 				ActionResponses: []string{
-					actionCallTool("persona_update", `{"target":"user","patch":{"language":{"default":"ko"}}}`),
+					actionCallTool(virtualPersonaProfileUpdateToolName, `{"language":{"default":"ko"}}`),
 					actionFinishMessage("한국어 답변 설정을 저장했습니다.", "obs-001"),
 				},
-				ExpectedToolCalls: []string{"persona_update"},
+				ExpectedToolCalls: []string{virtualPersonaProfileUpdateToolName},
 				ExpectedToolCallCounts: map[string]int{
-					"persona_update": 1,
+					virtualPersonaProfileUpdateToolName: 1,
 				},
 				ExpectedWorkspaceFiles: []VirtualWorkspaceFileExpectation{{
 					PathGlob:          "private/people/person-1/.internkim/user.json",
@@ -1212,36 +1212,18 @@ func PersonaProfileUpdateAcceptanceScenario(artifactDirectoryPath string) Virtua
 			{
 				Prompt:                 "저장된 내 언어 설정을 읽어줘",
 				RouterTaskShape:        agentcontract.TaskShapeResearchTask,
-				RouterRequiredEvidence: []string{"persona_read"},
+				RouterRequiredEvidence: []string{virtualPersonaProfileGetToolName},
 				ActionResponses: []string{
-					actionCallTool("persona_read", `{"target":"user"}`),
+					actionCallTool(virtualPersonaProfileGetToolName, `{}`),
 					actionFinishMessage("저장된 언어 설정은 한국어입니다.", "obs-001"),
 				},
-				ExpectedToolCalls: []string{"persona_read"},
+				ExpectedToolCalls: []string{virtualPersonaProfileGetToolName},
 				ExpectedEventCounts: []VirtualEventCount{{
-					Name:         toolResultEventName("persona_read"),
+					Name:         toolResultEventName(virtualPersonaProfileGetToolName),
 					BodyFragment: `"default":"ko"`,
 					Count:        1,
 				}},
 				ExpectedReplyFragments: []string{"한국어"},
-			},
-			{
-				Prompt:                 "공유 영혼 원칙도 한국어로 바꿔줘",
-				RouterTaskShape:        agentcontract.TaskShapeResearchTask,
-				RouterRequiredEvidence: []string{"persona_read"},
-				ActionResponses: []string{
-					actionCallTool("persona_update", `{"target":"soul","patch":{"language":{"default":"ko"}}}`),
-					actionCallTool("persona_read", `{"target":"soul"}`),
-					actionFinishMessage("공유 원칙은 foreground에서 변경할 수 없습니다. 현재 원칙을 다시 확인했습니다.", "obs-002"),
-				},
-				ExpectedToolCalls: []string{"persona_read"},
-				ForbiddenEvents:   []string{toolRequestedEventName("persona_update"), toolResultEventName("persona_update")},
-				ExpectedEventCounts: []VirtualEventCount{{
-					Name:         "agent.tool_input_malformed",
-					BodyFragment: `"tool":"persona_update"`,
-					Count:        1,
-				}},
-				ExpectedReplyFragments: []string{"변경할 수 없습니다"},
 			},
 		},
 	}

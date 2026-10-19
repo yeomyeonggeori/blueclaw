@@ -27,8 +27,10 @@ func TestMorningBriefingSettingsLive(t *testing.T) {
 	scenario := VirtualSessionScenario{
 		Name: "morning_briefing_settings_live", ArtifactDirectoryPath: directory,
 		LanguageModel: model, DisableScriptedModel: true, FailOnLanguageModelError: true,
-		AllowedTools:           []string{"persona_read", "persona_update"},
-		WritableWorkspacePaths: []string{"private/people/person-1/.internkim/user.json", ".blueclaw/state/persona-backup/people/person-1/user.json"},
+		AllowedTools:           []string{virtualPersonaProfileGetToolName, virtualPersonaProfileUpdateToolName},
+		CapabilityToolNames:    []string{virtualPersonaProfileGetToolName, virtualPersonaProfileUpdateToolName},
+		InitialToolNames:       []string{virtualPersonaProfileGetToolName, virtualPersonaProfileUpdateToolName},
+		WritableWorkspacePaths: []string{"private/people/person-1/.internkim/user.json"},
 		Turns: []VirtualTurn{
 			{Prompt: "아침 브리핑을 매일 오전 9시 15분으로 바꾸고 지금부터 비활성화해줘.", RouterTaskShape: agentcontract.TaskShapeResearchTask, ExpectedResponse: VirtualResponseReply},
 			{Prompt: "시간만 오전 10시로 바꿔줘. 비활성화 상태는 그대로 유지해.", RouterTaskShape: agentcontract.TaskShapeResearchTask, ExpectedResponse: VirtualResponseReply},
@@ -48,8 +50,8 @@ func TestMorningBriefingSettingsLive(t *testing.T) {
 		if turnResult.TaskStatus != "completed" {
 			t.Fatalf("turn %d did not complete: %s", turnIndex+1, turnResult.TaskStatus)
 		}
-		if !eventsContain(turnResult.Events, "tool.persona_update.requested", "") {
-			t.Fatalf("turn %d did not choose persona_update", turnIndex+1)
+		if !eventsContain(turnResult.Events, "tool."+virtualPersonaProfileUpdateToolName+".requested", "") {
+			t.Fatalf("turn %d did not choose %s", turnIndex+1, virtualPersonaProfileUpdateToolName)
 		}
 	}
 	document, errorValue := os.ReadFile(filepath.Join(result.ArtifactDirectoryPath, "workspace", "private", "people", "person-1", ".internkim", "user.json"))

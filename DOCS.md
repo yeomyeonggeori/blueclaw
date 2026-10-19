@@ -296,7 +296,7 @@ The persona is three JSON documents that say who the agent is, how it carries it
 
 Each is validated against a JSON Schema in `internal/persona/schema/` with `additionalProperties: false`, item and length ceilings, and a pinned `schemaVersion`. A document the schema refuses is restored from its backup in `.blueclaw/state/persona-backup`.
 
-The agent edits only the requester's `user.json`, through `persona_read` and `persona_update`. The admin endpoints `/admin/api/persona/user` and `/admin/api/persona/agent` require a signed assertion in `X-Blueclaw-Memory-Assertion`: an HMAC-SHA256, keyed by the file at `memory.adminAssertionKeyPath`, over the method, the full request URI and a payload holding the reader, an expiry at most 60 seconds ahead and the body's SHA-256. An unsigned or invalid request is denied. Seeding the agent documents never overwrites an existing file, and an agent update cannot change the soul.
+The agent reads and edits only the requester's `user.json`, through the capability tools `persona_profile_get` and `persona_profile_update`, which the host answers through these endpoints. The admin endpoints `/admin/api/persona/user` and `/admin/api/persona/agent` require a signed assertion in `X-Blueclaw-Memory-Assertion`: an HMAC-SHA256, keyed by the file at `memory.adminAssertionKeyPath`, over the method, the full request URI and a payload holding the reader, an expiry at most 60 seconds ahead and the body's SHA-256. An unsigned or invalid request is denied. Seeding the agent documents never overwrites an existing file, and an agent update cannot change the soul.
 
 ## Tool
 
@@ -308,7 +308,7 @@ The side effect classes are `none`, `read`, `computation`, `state_change`, `work
 
 ### The catalog
 
-The kernel tools are `read`, `write`, `edit`, `bash`, `file_read`, `file_preview`, `file_delete`, `file_deliver`, `plan`, `equip`, `skill_search`, `skill_add`, `skill_remove`, `ask_input`, `conversation_history`, `memory_search`, `memory_remember`, `memory_forget`, `persona_read` and `persona_update`. Capability tools are added from the capability service's catalog at runtime. `docs/tool-catalog.md` is generated from the registering code with what each description costs.
+The kernel tools are `read`, `write`, `edit`, `bash`, `file_read`, `file_preview`, `file_delete`, `file_deliver`, `plan`, `equip`, `skill_search`, `skill_add`, `skill_remove`, `ask_input`, `conversation_history`, `memory_search`, `memory_remember` and `memory_forget`. Capability tools are added from the capability service's catalog at runtime. `docs/tool-catalog.md` is generated from the registering code with what each description costs.
 
 At most 15 extension tools are offered to the model at once (`toolcontract.MaxExtensionCallableToolCount`); kernel tools come on top. What does not fit is reported as a dropped group in the exposure event.
 
@@ -378,7 +378,7 @@ A schedule that carries an approved call is marked run before its run starts, so
 
 ### Morning briefing
 
-The morning briefing is a managed daily schedule per person. `morningBriefing` in `user.json` defaults to `{"enabled": true, "time": "08:00"}`, in the company time zone, and changes only through `persona_update`. The generic schedule endpoints cannot edit it. A briefing run may call only `task_list`, `event_list`, `conversation_history`, `memory_search` and `persona_read`, is skipped when there is nothing on the task and event lists, and is delivered through the outbox under an occurrence key so it arrives once. After five failures the occurrence is retired and the next day's runs as usual.
+The morning briefing is a managed daily schedule per person. `morningBriefing` in `user.json` defaults to `{"enabled": true, "time": "08:00"}`, in the company time zone, and changes only through `persona_profile_update`. The generic schedule endpoints cannot edit it. A briefing run may call only `task_list`, `event_list`, `conversation_history`, `memory_search` and `persona_profile_get`, is skipped when there is nothing on the task and event lists, and is delivered through the outbox under an occurrence key so it arrives once. After five failures the occurrence is retired and the next day's runs as usual.
 
 ## Learning
 
