@@ -35,7 +35,7 @@ import {
 import { MessageChangeRefused, isElevatedIn, signerForMessageChange, signingKeyring } from "./message-ownership.ts";
 import { ThreadPartlyDeleted, deleteThread } from "./adapters/buzz/thread-deletion.ts";
 import { personCapabilities, type PersonCapability } from "./personal/capabilities.ts";
-import { askedAsTheRequester, personCapabilityAskedAsTheRequester } from "./personal/as-the-requester.ts";
+import { requesterCapabilityNamed } from "./personal/as-the-requester.ts";
 import { MalformedRequest } from "./personal/parse.ts";
 import { messageSearchMostResults } from "./message-search.ts";
 import { CredentialRefused, MediaRefused, UnsupportedByPlatform, type PersonalGateway } from "./personal/gateway.ts";
@@ -164,10 +164,7 @@ export function createOutboundHandler(
 }
 
 function personCapabilityNamed(capabilityName: string, configuration: ChatdConfiguration): PersonCapability | undefined {
-	const askedForTheRequester = personCapabilityAskedAsTheRequester[capabilityName];
-	if (!askedForTheRequester) return personCapabilities[capabilityName];
-	const capability = personCapabilities[askedForTheRequester];
-	return capability && askedAsTheRequester(capability, configuration.admindBaseURL);
+	return personCapabilities[capabilityName] ?? requesterCapabilityNamed(capabilityName, configuration.admindBaseURL);
 }
 
 function agentExternalIDOf(adapter: PlatformChatAdapter): string | undefined {

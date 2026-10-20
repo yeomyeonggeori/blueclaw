@@ -10,8 +10,10 @@ const COLLEAGUE = "e".repeat(64);
 const ADMIND_BASE_URL = "http://127.0.0.1:18080";
 const SIGNING_SECRET_URL = `${ADMIND_BASE_URL}/admin/api/buzz/signing-secret`;
 const REMOVE_USER_KIND = 9001;
+const REACTION_KIND = 7;
+const MESSAGE = "b".repeat(64);
 
-type PublishedByKey = { secretHex: string; kind: number; tags: string[][] };
+type PublishedByKey = { secretHex: string; kind: number; content?: string; tags: string[][] };
 
 const published: PublishedByKey[] = [];
 let roster: Array<[string, string]> = [];
@@ -37,10 +39,13 @@ mock.module("../src/adapters/buzz/relay-client.ts", () => ({
 		query: async () => [rosterEvent()],
 		queryComplete: async () => ({ events: [rosterEvent()], complete: true }),
 		publish: async (kind: number, content: string, tags: string[][]) => {
-			published.push({ secretHex, kind, tags });
+			published.push({ secretHex, kind, tags, ...(kind === REACTION_KIND ? { content } : {}) });
 			return { id: "published", pubkey: pubkeyFromSecret(secretHex), created_at: 300, kind, tags, content, sig: "" };
 		},
-		publishForAcknowledgement: async () => "",
+		publishForAcknowledgement: async (kind: number, _content: string, tags: string[][]) => {
+			published.push({ secretHex, kind, tags });
+			return "acknowledged";
+		},
 	}),
 }));
 
@@ -154,5 +159,41 @@ describe("a person capability asked for the requester", () => {
 
 		expect(response.status).toBe(401);
 		expect(published).toEqual([]);
+	});
+});
+
+describe("a reaction asked for the requester", () => {
+	test("reads an emoji name the way the agent's own reactions do, and reacts under the requester's key", async () => {
+		const response = await ask("requester.reaction.add", {
+			requesterPubkeyHex: REQUESTER,
+			conversationID: CHANNEL,
+			messageID: MESSAGE,
+			emoji: "+1",
+		});
+
+		expect(response.status).toBe(200);
+		expect(published.filter((event) => event.kind === REACTION_KIND)).toEqual([
+			{ secretHex: REQUESTER_SECRET, kind: REACTION_KIND, content: "\u{1F44D}", tags: [["e", MESSAGE], ["h", CHANNEL]] },
+		]);
+	});
+
+	test("takes the character itself unchanged", async () => {
+		await ask("requester.reaction.add", {
+			requesterPubkeyHex: REQUESTER,
+			conversationID: CHANNEL,
+			messageID: MESSAGE,
+			emoji: "\u{1F389}",
+		});
+
+		expect(published.find((event) => event.kind === REACTION_KIND)?.content).toBe("\u{1F389}");
+	});
+});
+
+describe("a direct conversation hidden for the requester", () => {
+	test("is hidden under the requester's own key", async () => {
+		const response = await ask("requester.dm.hide", { requesterPubkeyHex: REQUESTER, conversationID: CHANNEL });
+
+		expect(response.status).toBe(200);
+		expect(published.map((event) => event.secretHex)).toEqual([REQUESTER_SECRET]);
 	});
 });
