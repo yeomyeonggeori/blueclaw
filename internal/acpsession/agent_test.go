@@ -203,6 +203,7 @@ func (client *recordingClient) WaitForTerminalExit(context.Context, acp.WaitForT
 func approvalRequestForTest() mcpserver.ApprovalRequest {
 	return mcpserver.ApprovalRequest{
 		Platform:       "buzz",
+		RequesterEmail: "sample@example.test",
 		ConversationID: "conversation-1",
 		TaskRunID:      "task-1",
 		ToolName:       "message_send",
@@ -517,6 +518,7 @@ func TestDecliningTheCallReadsAsReject(t *testing.T) {
 	defer cancel()
 	answer, isAnswered := answered(permissionRelay.AskPermission(ctx, mcpserver.ApprovalRequest{
 		Platform:       "buzz",
+		RequesterEmail: "sample@example.test",
 		ConversationID: "conversation-1",
 		TaskRunID:      "task-1",
 		ToolName:       "message_send",
@@ -531,12 +533,12 @@ type scriptedReader struct {
 	asked    *[]approvalreply.Question
 }
 
-func (reader scriptedReader) Read(_ context.Context, question approvalreply.Question, reply string, observe agentcontract.LLMCallObserver) (string, bool, error) {
+func (reader scriptedReader) Read(_ context.Context, question approvalreply.Question, reply string, observe agentcontract.LLMCallObserver) (approvalreply.Reading, error) {
 	if reader.asked != nil {
 		*reader.asked = append(*reader.asked, question)
 	}
 	observe(agentcontract.LLMCallRecord{Kind: agentcontract.LLMCallKindDecision, DecidedMessageIDs: []string{reply}})
-	return reader.optionID, reader.optionID != "", nil
+	return approvalreply.Reading{ApprovedOptionID: reader.optionID}, nil
 }
 
 func approvalSignalPointer(approvalSignal agentcontract.ApprovalSignal) *agentcontract.ApprovalSignal {
@@ -545,7 +547,7 @@ func approvalSignalPointer(approvalSignal agentcontract.ApprovalSignal) *agentco
 
 func answeringWithWords(t *testing.T, connection *acp.ClientSideConnection, sessionID acp.SessionId, words string) func(acp.RequestPermissionRequest) acp.PermissionOptionId {
 	t.Helper()
-	return answeringWithReply(t, connection, sessionID, ApprovalReplyRequest{Reply: words})
+	return answeringWithReply(t, connection, sessionID, ApprovalReplyRequest{Reply: words, ReplierEmail: "sample@example.test"})
 }
 
 func answeringWithReply(t *testing.T, connection *acp.ClientSideConnection, sessionID acp.SessionId, reply ApprovalReplyRequest) func(acp.RequestPermissionRequest) acp.PermissionOptionId {
@@ -588,19 +590,65 @@ func TestThePersonsWordsAreReadByTheRouterAndNotByTheRelay(t *testing.T) {
 	}
 }
 
-func TestAnAnswerTheReaderCannotReadIsNotAnAnswer(t *testing.T) {
+func TestARequesterReplyThatIsNotAnApprovalRejectsTheCallAndGoesOnAsAnInstruction(t *testing.T) {
 	client := &recordingClient{}
 	connection, permissionRelay := connectedPairWithReader(t, &recordingLauncher{}, client, scriptedReader{})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
-	client.answerByAsking = answeringWithWords(t, connection, sessionID, "음")
+	replies := []ApprovalReplyResponse{}
+	client.answerByAsking = func(request acp.RequestPermissionRequest) acp.PermissionOptionId {
+		read := replyResponseFor(t, connection, request, ApprovalReplyRequest{SessionID: string(sessionID), Reply: "내용 바꿔서 보내", ReplierEmail: "sample@example.test"})
+		replies = append(replies, read)
+		return acp.PermissionOptionId(read.OptionID)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	answer, isAnswered := answered(permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "보낼까요?"}))
 
-	if isAnswered {
-		t.Fatalf("a reply the reader could not read decided the call as %q", answer.Signal)
+	if !isAnswered || answer.Signal != agentcontract.ApprovalSignalReject {
+		t.Fatalf("a reply that is not an approval left the call %q answered=%v; it must reject it once", answer.Signal, isAnswered)
 	}
+	if len(replies) != 1 || !replies[0].IsAnswer || !replies[0].IsInstruction {
+		t.Fatalf("the relay was told %+v, expected the reply to settle the hold and go on as the next instruction", replies)
+	}
+}
+
+func TestAnotherPersonsReplyNeitherApprovesNorRejects(t *testing.T) {
+	asked := []approvalreply.Question{}
+	client := &recordingClient{}
+	connection, permissionRelay := connectedPairWithReader(t, &recordingLauncher{}, client, scriptedReader{optionID: string(approveOnceOptionID), asked: &asked})
+	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
+	replies := []ApprovalReplyResponse{}
+	client.answerByAsking = func(request acp.RequestPermissionRequest) acp.PermissionOptionId {
+		read := replyResponseFor(t, connection, request, ApprovalReplyRequest{SessionID: string(sessionID), Reply: "ㅇ", ReplierEmail: "other@example.test"})
+		replies = append(replies, read)
+		return rejectOnceOptionID
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "보낼까요?"})
+
+	if len(replies) != 1 || replies[0].IsAnswer || len(asked) != 0 {
+		t.Fatalf("another person's reply was read %d times and answered %+v; only the requester answers their own hold", len(asked), replies)
+	}
+}
+
+func replyResponseFor(t *testing.T, connection *acp.ClientSideConnection, request acp.RequestPermissionRequest, reply ApprovalReplyRequest) ApprovalReplyResponse {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	reply.ToolCallID = string(request.ToolCall.ToolCallId)
+	answer, errorValue := connection.CallExtension(ctx, ApprovalReplyExtensionMethod, reply)
+	if errorValue != nil {
+		t.Errorf("approval reply: %v", errorValue)
+		return ApprovalReplyResponse{}
+	}
+	read := ApprovalReplyResponse{}
+	if errorValue := json.Unmarshal(answer, &read); errorValue != nil {
+		t.Errorf("approval reply answer: %v", errorValue)
+	}
+	return read
 }
 
 func TestAReplyOutsideTheQuestionsThreadIsNotAnAnswerAndIsNotRead(t *testing.T) {
@@ -608,7 +656,7 @@ func TestAReplyOutsideTheQuestionsThreadIsNotAnAnswerAndIsNotRead(t *testing.T) 
 	client := &recordingClient{}
 	connection, permissionRelay := connectedPairWithReader(t, &recordingLauncher{}, client, scriptedReader{optionID: string(approveOnceOptionID), asked: &asked})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
-	client.answerByAsking = answeringWithReply(t, connection, sessionID, ApprovalReplyRequest{Reply: "ㅇ", ReplyTargetID: "conversation-1:other-root", IsThread: true})
+	client.answerByAsking = answeringWithReply(t, connection, sessionID, ApprovalReplyRequest{Reply: "ㅇ", ReplyTargetID: "conversation-1:other-root", IsThread: true, ReplierEmail: "sample@example.test"})
 	approvalRequest := approvalRequestForTest()
 	approvalRequest.ReplyTargetID = "conversation-1:question-root"
 
@@ -633,7 +681,7 @@ func TestTheCallThatReadAReplyIsRecordedInTheWaitingRunsLedger(t *testing.T) {
 		AnswerSettler: approvalgate.New(taskRunService),
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
-	client.answerByAsking = answeringWithReply(t, connection, sessionID, ApprovalReplyRequest{Reply: "ㅇ", MessageID: "message-reply"})
+	client.answerByAsking = answeringWithReply(t, connection, sessionID, ApprovalReplyRequest{Reply: "ㅇ", MessageID: "message-reply", ReplierEmail: "sample@example.test"})
 	approvalRequest := approvalRequestForTest()
 	approvalRequest.TaskRunID = taskRun.TaskRunID
 
@@ -787,7 +835,7 @@ func TestAQuestionPostedBeforeTheDeployIsAnsweredAfterItUnderTheHoldsStoredId(t 
 	client := &recordingClient{permissionAskedSignal: make(chan acp.RequestPermissionRequest, 4)}
 	connection := reconnectedPairWithReader(t, launcher, client, taskRunService, scriptedReader{optionID: string(approveOnceOptionID)})
 	sessionID := acp.SessionId("session-the-relay-still-holds")
-	client.answerByAsking = answeringWithReply(t, connection, sessionID, ApprovalReplyRequest{Reply: "응 보내줘", ReplyTargetID: "question-message"})
+	client.answerByAsking = answeringWithReply(t, connection, sessionID, ApprovalReplyRequest{Reply: "응 보내줘", ReplyTargetID: "question-message", ReplierEmail: "sample@example.test"})
 
 	if errorValue := loadSessionForTest(t, connection, sessionID, sessionMeta("sample@example.test", "conversation-1")); errorValue != nil {
 		t.Fatalf("load session: %v", errorValue)
@@ -1116,7 +1164,7 @@ func TestARunResumedOnAnAnsweredReissuedQuestionOwesTheCallItWasHeldOn(t *testin
 	client := &recordingClient{permissionAskedSignal: make(chan acp.RequestPermissionRequest, 4)}
 	connection := reconnectedPairWithReader(t, launcher, client, taskRunService, scriptedReader{optionID: string(approveOnceOptionID)})
 	sessionID := acp.SessionId("session-the-relay-still-holds")
-	client.answerByAsking = answeringWithReply(t, connection, sessionID, ApprovalReplyRequest{Reply: "응 보내줘", ReplyTargetID: "question-message"})
+	client.answerByAsking = answeringWithReply(t, connection, sessionID, ApprovalReplyRequest{Reply: "응 보내줘", ReplyTargetID: "question-message", ReplierEmail: "sample@example.test"})
 
 	if errorValue := loadSessionForTest(t, connection, sessionID, sessionMeta("sample@example.test", "conversation-1")); errorValue != nil {
 		t.Fatalf("load session: %v", errorValue)

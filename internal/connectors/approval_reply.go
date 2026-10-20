@@ -21,9 +21,9 @@ func (connectorRuntime *ConnectorRuntime) UseApprovalReplyReader(approvalReplyRe
 	connectorRuntime.approvalReplyReader = approvalReplyReader
 }
 
-func (connectorRuntime *ConnectorRuntime) readReplyToQuestion(ctx context.Context, taskRunID string, question approvalreply.Question, reply string) (string, bool, error) {
+func (connectorRuntime *ConnectorRuntime) readReplyToQuestion(ctx context.Context, taskRunID string, question approvalreply.Question, reply string) (approvalreply.Reading, error) {
 	if connectorRuntime.approvalReplyReader == nil {
-		return "", false, errNoApprovalReplyReader
+		return approvalreply.Reading{}, errNoApprovalReplyReader
 	}
 	observe := func(callRecord agentcontract.LLMCallRecord) {
 		connectorRuntime.recordCallsOnTask(taskRunID, []agentcontract.LLMCallRecord{callRecord})

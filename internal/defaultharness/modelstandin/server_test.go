@@ -269,10 +269,10 @@ func TestAnApprovalReplyIsReadAsTheOptionTheScriptedApprovalPicks(t *testing.T) 
 		{ID: "reject", Meaning: approvalreply.RejectMeaning},
 	}}
 
-	optionID, isAnswer, errorValue := approvalreply.NewDecisionModelReader(running.decisionModel()).Read(context.Background(), question, "응 보내줘", nil)
+	reading, errorValue := approvalreply.NewDecisionModelReader(running.decisionModel()).Read(context.Background(), question, "응 보내줘", nil)
 
-	if errorValue != nil || !isAnswer || optionID != "approve" {
-		t.Fatalf("expected the reply to be read as approve, got %q %v %v", optionID, isAnswer, errorValue)
+	if errorValue != nil || reading.ApprovedOptionID != "approve" {
+		t.Fatalf("expected the reply to be read as approve, got %+v %v", reading, errorValue)
 	}
 	running.mustBeSettled(t)
 }
@@ -289,7 +289,7 @@ func TestAnApprovalReplyNoScriptDecidedIsRefused(t *testing.T) {
 	running := startStandIn(t)
 	question := approvalreply.Question{Text: "send it?", Options: []approvalreply.Option{{ID: "approve", Meaning: approvalreply.AllowMeaning("send it")}}}
 
-	_, _, errorValue := approvalreply.NewDecisionModelReader(running.decisionModel()).Read(context.Background(), question, "응 보내줘", nil)
+	_, errorValue := approvalreply.NewDecisionModelReader(running.decisionModel()).Read(context.Background(), question, "응 보내줘", nil)
 
 	if errorValue == nil {
 		t.Fatal("expected a reply nobody scripted to fail")

@@ -32,8 +32,9 @@ const allowAsAskedMeaning = "the person agrees to go ahead with what the questio
 var errReplyCarriesNoWords = errors.New("an approval reply with no words says nothing to read")
 
 type Option struct {
-	ID      string `json:"id"`
-	Meaning string `json:"meaning"`
+	ID          string `json:"id"`
+	Meaning     string `json:"meaning"`
+	IsDeclining bool   `json:"-"`
 }
 
 type Offer struct {
@@ -46,7 +47,7 @@ func OptionsOf(offers []Offer) []Option {
 	isOnlyWayToGoAhead := countAllowing(offers) == 1
 	options := make([]Option, 0, len(offers))
 	for _, offer := range offers {
-		options = append(options, Option{ID: offer.ID, Meaning: meaningOf(offer, isOnlyWayToGoAhead)})
+		options = append(options, Option{ID: offer.ID, Meaning: meaningOf(offer, isOnlyWayToGoAhead), IsDeclining: offer.IsDeclining})
 	}
 	return options
 }
@@ -76,8 +77,25 @@ type Question struct {
 	Options []Option `json:"options"`
 }
 
+func (question Question) DecliningOptionID() string {
+	for _, option := range question.Options {
+		if option.IsDeclining {
+			return option.ID
+		}
+	}
+	return ""
+}
+
+type Reading struct {
+	ApprovedOptionID string
+}
+
+func (reading Reading) IsApproval() bool {
+	return reading.ApprovedOptionID != ""
+}
+
 type Reader interface {
-	Read(ctx context.Context, question Question, reply string, observe agentcontract.LLMCallObserver) (string, bool, error)
+	Read(ctx context.Context, question Question, reply string, observe agentcontract.LLMCallObserver) (Reading, error)
 }
 
 type DecisionModelReader struct {
@@ -93,13 +111,13 @@ type readState struct {
 	Reply          string `json:"reply"`
 }
 
-func (reader DecisionModelReader) Read(ctx context.Context, question Question, reply string, observe agentcontract.LLMCallObserver) (string, bool, error) {
+func (reader DecisionModelReader) Read(ctx context.Context, question Question, reply string, observe agentcontract.LLMCallObserver) (Reading, error) {
 	if reader.decisionModel == nil {
-		return "", false, errors.New("reading an approval reply needs a decision model and none is configured")
+		return Reading{}, errors.New("reading an approval reply needs a decision model and none is configured")
 	}
 	trimmedReply := strings.TrimSpace(reply)
 	if trimmedReply == "" {
-		return "", false, errReplyCarriesNoWords
+		return Reading{}, errReplyCarriesNoWords
 	}
 	request := readRequest(question, trimmedReply)
 	startedAt := time.Now()
@@ -108,9 +126,9 @@ func (reader DecisionModelReader) Read(ctx context.Context, question Question, r
 		observe(agentcontract.DecisionCallRecord(request, response, time.Since(startedAt), errorValue))
 	}
 	if errorValue != nil {
-		return "", false, errorValue
+		return Reading{}, errorValue
 	}
-	return offeredOption(question, response)
+	return Reading{ApprovedOptionID: approvedOption(question, response.Answers[AnswerQuestionName])}, nil
 }
 
 func readRequest(question Question, reply string) model.DecisionRequest {
@@ -124,15 +142,16 @@ func readRequest(question Question, reply string) model.DecisionRequest {
 	}
 }
 
-func offeredOption(question Question, response model.DecisionResponse) (string, bool, error) {
-	answer, isAnswered := response.Answers[AnswerQuestionName]
-	if !isAnswered || strings.TrimSpace(answer.Choice) == "" {
-		return "", false, errors.New("the decision model answered no choice for the approval reply")
+func approvedOption(question Question, answer model.DecisionAnswer) string {
+	total := 0.0
+	for _, probability := range answer.Probabilities {
+		total += probability
 	}
 	for _, option := range question.Options {
-		if option.ID == strings.TrimSpace(answer.Choice) {
-			return option.ID, true, nil
+		probability := answer.Probabilities[option.ID]
+		if !option.IsDeclining && probability > total-probability {
+			return option.ID
 		}
 	}
-	return "", false, nil
+	return ""
 }

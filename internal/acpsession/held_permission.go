@@ -54,6 +54,7 @@ func (agent *Agent) reissueHeldPermission(ctx context.Context, sessionID acp.Ses
 	// is only offered an approval when the runtime can say which call is waiting.
 	approvalRequest := mcpserver.ApprovalRequest{
 		RequesterPersonID: sessionContext.Requester.PersonID,
+		RequesterEmail:    sessionContext.Requester.Email,
 		TaskRunID:         taskRun.TaskRunID,
 		ToolName:          heldCall.ToolName,
 		ToolInput:         heldCall.ToolInput,

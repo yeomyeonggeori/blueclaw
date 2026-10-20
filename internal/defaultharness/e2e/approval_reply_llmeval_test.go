@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"sync"
 	"testing"
 
 	acp "github.com/coder/acp-go-sdk"
@@ -15,17 +16,14 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 const approvalReplyCasesPath = "testdata/approval_reply_cases.jsonl"
 
-const (
-	readAsApprove = "approve"
-	readAsReject  = "reject"
-	readAsOther   = "other"
-)
+const readAsApprove = "approve"
 
-var minimumCorrectReadings = map[string]int{"chat": 98, "acp": 97, "acp-host-named": 97}
+var mostMissedApprovals = map[string]int{"chat": 4, "acp": 4, "acp-host-named": 4}
 
 type approvalReplyCase struct {
 	ID       string `json:"id"`
@@ -36,28 +34,51 @@ type approvalReplyCase struct {
 
 func TestApprovalReplyReadingLive(t *testing.T) {
 	decisionModel, _ := routingDecisionModel(t)
-	reader := approvalreply.NewDecisionModelReader(decisionModel)
+	recording := &answerRecordingDecisionModel{inner: decisionModel}
+	reader := approvalreply.NewDecisionModelReader(recording)
 	cases := approvalReplyCases(t)
 	for path, optionsOf := range approvalReplyPaths() {
 		for run := 1; run <= routingRunCount(t); run++ {
-			correct, wrongWay := 0, []string{}
+			falseApprovals, missedApprovals := []string{}, []string{}
 			for _, current := range cases {
-				reading := readApprovalReply(t, reader, optionsOf(), current)
-				if reading == current.Expected {
-					correct++
-				} else if reading != readAsOther && current.Expected != readAsOther {
-					wrongWay = append(wrongWay, current.ID)
+				isApproval := readsAsApproval(t, reader, optionsOf(), current)
+				t.Logf("%s run %d %s %q expected %s: approval=%v probabilities %v", path, run, current.ID, current.Reply, current.Expected, isApproval, recording.lastProbabilities())
+				switch {
+				case isApproval && current.Expected != readAsApprove:
+					falseApprovals = append(falseApprovals, current.ID)
+				case !isApproval && current.Expected == readAsApprove:
+					missedApprovals = append(missedApprovals, current.ID)
 				}
 			}
-			t.Logf("%s run %d: %d/%d correct, wrong-way %v", path, run, correct, len(cases), wrongWay)
-			if len(wrongWay) > 0 {
-				t.Errorf("%s run %d read an approval the wrong way round on %v", path, run, wrongWay)
+			t.Logf("%s run %d: false approvals %v, missed approvals %v of %d", path, run, falseApprovals, missedApprovals, len(cases))
+			if len(falseApprovals) > 0 {
+				t.Errorf("%s run %d approved replies that do not approve: %v", path, run, falseApprovals)
 			}
-			if correct < minimumCorrectReadings[path] {
-				t.Errorf("%s run %d read %d of %d, below the %d it must keep", path, run, correct, len(cases), minimumCorrectReadings[path])
+			if len(missedApprovals) > mostMissedApprovals[path] {
+				t.Errorf("%s run %d missed %d approvals, more than the %d it may", path, run, len(missedApprovals), mostMissedApprovals[path])
 			}
 		}
 	}
+}
+
+type answerRecordingDecisionModel struct {
+	inner    model.DecisionModel
+	mutex    sync.Mutex
+	response model.DecisionResponse
+}
+
+func (recording *answerRecordingDecisionModel) Decide(ctx context.Context, request model.DecisionRequest) (model.DecisionResponse, error) {
+	response, errorValue := recording.inner.Decide(ctx, request)
+	recording.mutex.Lock()
+	recording.response = response
+	recording.mutex.Unlock()
+	return response, errorValue
+}
+
+func (recording *answerRecordingDecisionModel) lastProbabilities() map[string]float64 {
+	recording.mutex.Lock()
+	defer recording.mutex.Unlock()
+	return recording.response.Answers[approvalreply.AnswerQuestionName].Probabilities
 }
 
 func approvalReplyPaths() map[string]func() []approvalreply.Option {
@@ -82,25 +103,13 @@ func acpApprovalOptions(allowName string, rejectName string) []approvalreply.Opt
 	})
 }
 
-func readApprovalReply(t *testing.T, reader approvalreply.Reader, options []approvalreply.Option, current approvalReplyCase) string {
+func readsAsApproval(t *testing.T, reader approvalreply.Reader, options []approvalreply.Option, current approvalReplyCase) bool {
 	t.Helper()
-	optionID, isAnswer, errorValue := reader.Read(context.Background(), approvalreply.Question{Text: current.Question, Options: options}, current.Reply, nil)
+	reading, errorValue := reader.Read(context.Background(), approvalreply.Question{Text: current.Question, Options: options}, current.Reply, nil)
 	if errorValue != nil {
 		t.Fatalf("%s: %v", current.ID, errorValue)
 	}
-	return meaningOfReading(options, optionID, isAnswer)
-}
-
-func meaningOfReading(options []approvalreply.Option, optionID string, isAnswer bool) string {
-	if !isAnswer {
-		return readAsOther
-	}
-	for _, option := range options {
-		if option.ID == optionID && option.Meaning == approvalreply.RejectMeaning {
-			return readAsReject
-		}
-	}
-	return readAsApprove
+	return reading.IsApproval()
 }
 
 func approvalReplyCases(t *testing.T) []approvalReplyCase {
