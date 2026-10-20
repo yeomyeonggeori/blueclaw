@@ -93,6 +93,9 @@ type VirtualSessionScenario struct {
 	InitialWorkspaceFiles     map[string]string
 	RequesterIsAdmin          bool
 	InitialTaskBusinesses     []string
+	InitialTaskTypes          []string
+	UnreachableToolNames      []string
+	AgentIdentity             agentcontract.AgentIdentity
 	IsDeliveredOverACP        bool
 	RecordCatalogURL          string
 	Turns                     []VirtualTurn
@@ -761,58 +764,61 @@ func virtualTruncatedCallContent(content string) string {
 const defaultBuiltinScenarioName = "presentation_local_multiturn_success"
 
 var builtinScenarioFactories = map[string]func(string) VirtualSessionScenario{
-	"presentation":                              PresentationLocalMultiturnSuccessScenario,
-	defaultBuiltinScenarioName:                  PresentationLocalMultiturnSuccessScenario,
-	"memory":                                    MemoryGuidedFollowupScenario,
-	"memory_guided_followup":                    MemoryGuidedFollowupScenario,
-	"steer_while_running_acceptance":            SteerWhileRunningAcceptanceScenario,
-	"request_revision_acceptance":               RequestRevisionAcceptanceScenario,
-	"plain_question_acceptance":                 PlainQuestionAcceptanceScenario,
-	"web_search_acceptance":                     WebSearchAcceptanceScenario,
-	"browser_form_acceptance":                   BrowserFormAcceptanceScenario,
-	"tool_permission_hides_skill":               ToolPermissionHidesSkillScenario,
-	"file_write_acceptance":                     FileWriteAcceptanceScenario,
-	"document_create_acceptance":                DocumentCreateAcceptanceScenario,
-	"schedule_create_acceptance":                ScheduleCreateAcceptanceScenario,
-	"schedule_lifecycle_acceptance":             ScheduleLifecycleAcceptanceScenario,
-	"calendar_event_lifecycle_acceptance":       CalendarEventLifecycleAcceptanceScenario,
-	"calendar_false_finish_recovery_acceptance": CalendarFalseFinishRecoveryAcceptanceScenario,
-	"calendar_change_already_in_place":          CalendarChangeAlreadyInPlaceScenario,
-	"calendar_read_question_with_write_hint":    CalendarReadQuestionWithWriteHintScenario,
-	"change_check_recovery_acceptance":          ChangeCheckRecoveryAcceptanceScenario,
-	"file_attachment_change_check":              FileAttachmentChangeCheckScenario,
-	"ambient_duty_calendar_acceptance":          AmbientDutyCalendarAcceptanceScenario,
-	"ambient_duty_nothing_to_record":            AmbientDutyNothingToRecordScenario,
-	"ambient_duty_announcement_no_echo":         AmbientDutyAnnouncementNoEchoScenario,
-	"ambient_task_capture_acceptance":           AmbientTaskCaptureAcceptanceScenario,
-	"skill_lifecycle_acceptance":                SkillLifecycleAcceptanceScenario,
-	"capability_question_acceptance":            CapabilityQuestionAcceptanceScenario,
-	"task_history_question_acceptance":          TaskHistoryQuestionAcceptanceScenario,
-	"memory_explicit_tool_acceptance":           MemoryExplicitToolAcceptanceScenario,
-	"persona_profile_update_acceptance":         PersonaProfileUpdateAcceptanceScenario,
-	"failure_explanation_acceptance":            FailureExplanationAcceptanceScenario,
-	"one_time_schedule_acceptance":              OneTimeScheduleAcceptanceScenario,
-	"ask_choice_reply_acceptance":               AskChoiceReplyAcceptanceScenario,
-	"ask_choice_reply_over_acp":                 AskChoiceReplyOverACPScenario,
-	"ask_choice_hold_acceptance":                AskChoiceHoldAcceptanceScenario,
-	"ask_root_message_starts_a_task":            AskRootMessageStartsATaskScenario,
-	"ask_root_message_starts_a_task_over_acp":   AskRootMessageStartsATaskOverACPScenario,
-	"dm_send_confirm_acceptance":                DirectMessageSendConfirmAcceptanceScenario,
-	"crm_import_from_attachment_acceptance":     CRMImportFromAttachmentAcceptanceScenario,
-	"crm_import_from_unreadable_file":           CRMImportFromUnreadableFileScenario,
-	"channel_post_acceptance":                   ChannelPostAcceptanceScenario,
-	"platform_message_edit_acceptance":          PlatformMessageEditAcceptanceScenario,
-	"attachment_material_read":                  AttachmentMaterialReadScenario,
-	"attachment_html_preview_recovery":          AttachmentHTMLPreviewRecoveryScenario,
-	"attachment_html_previous_preview_recovery": AttachmentHTMLPreviousPreviewRecoveryScenario,
-	"attachment_current_image_input":            AttachmentCurrentImageInputScenario,
-	"xlow_image_vision_fallback":                XLowImageVisionFallbackScenario,
-	"host_update_now_acceptance":                HostUpdateNowAcceptanceScenario,
-	"host_update_off_hours_acceptance":          HostUpdateOffHoursAcceptanceScenario,
-	"host_update_member_refused":                HostUpdateMemberRefusedScenario,
-	"scheduled_run_asks_in_direct_message":      ScheduledRunAsksInDirectMessageScenario,
-	"task_business_registration_admin":          TaskBusinessRegistrationAdminScenario,
-	"task_business_registration_member_refused": TaskBusinessRegistrationMemberRefusedScenario,
+	"presentation":                                   PresentationLocalMultiturnSuccessScenario,
+	defaultBuiltinScenarioName:                       PresentationLocalMultiturnSuccessScenario,
+	"memory":                                         MemoryGuidedFollowupScenario,
+	"memory_guided_followup":                         MemoryGuidedFollowupScenario,
+	"steer_while_running_acceptance":                 SteerWhileRunningAcceptanceScenario,
+	"request_revision_acceptance":                    RequestRevisionAcceptanceScenario,
+	"plain_question_acceptance":                      PlainQuestionAcceptanceScenario,
+	"web_search_acceptance":                          WebSearchAcceptanceScenario,
+	"browser_form_acceptance":                        BrowserFormAcceptanceScenario,
+	"tool_permission_hides_skill":                    ToolPermissionHidesSkillScenario,
+	"file_write_acceptance":                          FileWriteAcceptanceScenario,
+	"document_create_acceptance":                     DocumentCreateAcceptanceScenario,
+	"schedule_create_acceptance":                     ScheduleCreateAcceptanceScenario,
+	"schedule_lifecycle_acceptance":                  ScheduleLifecycleAcceptanceScenario,
+	"calendar_event_lifecycle_acceptance":            CalendarEventLifecycleAcceptanceScenario,
+	"calendar_false_finish_recovery_acceptance":      CalendarFalseFinishRecoveryAcceptanceScenario,
+	"calendar_change_already_in_place":               CalendarChangeAlreadyInPlaceScenario,
+	"calendar_read_question_with_write_hint":         CalendarReadQuestionWithWriteHintScenario,
+	"change_check_recovery_acceptance":               ChangeCheckRecoveryAcceptanceScenario,
+	"file_attachment_change_check":                   FileAttachmentChangeCheckScenario,
+	"ambient_duty_calendar_acceptance":               AmbientDutyCalendarAcceptanceScenario,
+	"ambient_duty_nothing_to_record":                 AmbientDutyNothingToRecordScenario,
+	"ambient_duty_announcement_no_echo":              AmbientDutyAnnouncementNoEchoScenario,
+	"ambient_task_capture_acceptance":                AmbientTaskCaptureAcceptanceScenario,
+	"skill_lifecycle_acceptance":                     SkillLifecycleAcceptanceScenario,
+	"capability_question_acceptance":                 CapabilityQuestionAcceptanceScenario,
+	"task_history_question_acceptance":               TaskHistoryQuestionAcceptanceScenario,
+	"memory_explicit_tool_acceptance":                MemoryExplicitToolAcceptanceScenario,
+	"persona_profile_update_acceptance":              PersonaProfileUpdateAcceptanceScenario,
+	"failure_explanation_acceptance":                 FailureExplanationAcceptanceScenario,
+	"one_time_schedule_acceptance":                   OneTimeScheduleAcceptanceScenario,
+	"ask_choice_reply_acceptance":                    AskChoiceReplyAcceptanceScenario,
+	"ask_choice_reply_over_acp":                      AskChoiceReplyOverACPScenario,
+	"ask_choice_hold_acceptance":                     AskChoiceHoldAcceptanceScenario,
+	"ask_root_message_starts_a_task":                 AskRootMessageStartsATaskScenario,
+	"ask_root_message_starts_a_task_over_acp":        AskRootMessageStartsATaskOverACPScenario,
+	"dm_send_confirm_acceptance":                     DirectMessageSendConfirmAcceptanceScenario,
+	"crm_import_from_attachment_acceptance":          CRMImportFromAttachmentAcceptanceScenario,
+	"crm_import_from_unreadable_file":                CRMImportFromUnreadableFileScenario,
+	"channel_post_acceptance":                        ChannelPostAcceptanceScenario,
+	"platform_message_edit_acceptance":               PlatformMessageEditAcceptanceScenario,
+	"attachment_material_read":                       AttachmentMaterialReadScenario,
+	"attachment_html_preview_recovery":               AttachmentHTMLPreviewRecoveryScenario,
+	"attachment_html_previous_preview_recovery":      AttachmentHTMLPreviousPreviewRecoveryScenario,
+	"attachment_current_image_input":                 AttachmentCurrentImageInputScenario,
+	"xlow_image_vision_fallback":                     XLowImageVisionFallbackScenario,
+	"host_update_now_acceptance":                     HostUpdateNowAcceptanceScenario,
+	"host_update_off_hours_acceptance":               HostUpdateOffHoursAcceptanceScenario,
+	"host_update_member_refused":                     HostUpdateMemberRefusedScenario,
+	"scheduled_run_asks_in_direct_message":           ScheduledRunAsksInDirectMessageScenario,
+	"task_business_registration_admin":               TaskBusinessRegistrationAdminScenario,
+	"task_business_registration_member_refused":      TaskBusinessRegistrationMemberRefusedScenario,
+	"completed_meeting_from_earlier_message":         CompletedMeetingFromEarlierMessageScenario,
+	"completed_meeting_record_unreachable":           CompletedMeetingRecordUnreachableScenario,
+	"completed_meeting_for_an_unregistered_business": CompletedMeetingForAnUnregisteredBusinessScenario,
 }
 
 func BuiltinScenario(name string, artifactDirectoryPath string) (VirtualSessionScenario, error) {
@@ -958,7 +964,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	if len(capabilityToolNames) > 0 {
 		var capabilityCleanup func()
 		var errorValue error
-		capabilityClient, capabilityCleanup, errorValue = startVirtualCapabilityServer(capabilityToolNames, workspacePath, virtualAdminPersonIDs(scenario), scenario.InitialTaskBusinesses)
+		capabilityClient, capabilityCleanup, errorValue = startVirtualCapabilityServer(capabilityToolNames, workspacePath, scenario)
 		if errorValue != nil {
 			return nil, errorValue
 		}
@@ -994,6 +1000,9 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	virtualTaskLauncher.UseApprovalGate(virtualApprovalGate)
 	virtualTaskLauncher.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, highLanguageModel))
 	virtualTaskLauncher.UseRequesterEmailResolver(identityService)
+	agentIdentity := func() agentcontract.AgentIdentity { return scenario.AgentIdentity }
+	virtualTaskLauncher.UseAgentIdentityProvider(agentIdentity)
+	runtime.UseAgentIdentityProvider(agentIdentity)
 	runtime.UseTaskLauncher(virtualTaskLauncher)
 	var acpSession *virtualACPSession
 	if scenario.IsDeliveredOverACP {
@@ -1526,17 +1535,27 @@ type virtualCapabilityService struct {
 	scheduleRevision int
 	adminPersonIDs   map[string]bool
 	taskVocabulary   virtualTaskVocabulary
+	unreachableTools map[string]bool
 }
 
-func startVirtualCapabilityServer(toolNames []string, workspacePath string, adminPersonIDs map[string]bool, taskBusinesses []string) (capability.Client, func(), error) {
-	toolNameByName := map[string]bool{}
-	for _, toolName := range toolNames {
-		trimmedToolName := strings.TrimSpace(toolName)
-		if trimmedToolName != "" {
-			toolNameByName[trimmedToolName] = true
+func setOfNames(names []string) map[string]bool {
+	set := map[string]bool{}
+	for _, name := range names {
+		if trimmedName := strings.TrimSpace(name); trimmedName != "" {
+			set[trimmedName] = true
 		}
 	}
-	service := &virtualCapabilityService{toolNameByName: toolNameByName, workspacePath: workspacePath, adminPersonIDs: adminPersonIDs, taskVocabulary: newVirtualTaskVocabulary(taskBusinesses)}
+	return set
+}
+
+func startVirtualCapabilityServer(toolNames []string, workspacePath string, scenario VirtualSessionScenario) (capability.Client, func(), error) {
+	service := &virtualCapabilityService{
+		toolNameByName:   setOfNames(toolNames),
+		workspacePath:    workspacePath,
+		adminPersonIDs:   virtualAdminPersonIDs(scenario),
+		taskVocabulary:   newVirtualTaskVocabulary(scenario.InitialTaskBusinesses, scenario.InitialTaskTypes),
+		unreachableTools: setOfNames(scenario.UnreachableToolNames),
+	}
 	server := httptest.NewServer(http.HandlerFunc(service.handleRequest))
 	return capability.Client{
 		Endpoint:   server.URL,
@@ -1628,6 +1647,9 @@ func virtualCapabilityCatalogResponse(toolNameByName map[string]bool) string {
 func (service *virtualCapabilityService) response(toolName string, requestBody []byte) string {
 	service.mutex.Lock()
 	defer service.mutex.Unlock()
+	if service.unreachableTools[toolName] {
+		return virtualCapabilityUnreachable(toolName)
+	}
 	switch toolName {
 	case "task_add", "task_list", "task_update", "task_delete":
 		return service.taskResponse(toolName, requestBody)
@@ -1918,6 +1940,9 @@ func (service *virtualCapabilityService) taskResponse(toolName string, requestBo
 	}
 	switch toolName {
 	case "task_add":
+		if refusal, isRefused := service.refusedWorkForOthers(requestBody, input); isRefused {
+			return refusal
+		}
 		taskID := fmt.Sprintf("task-%d", len(service.tasks)+1)
 		record := virtualCapabilityRecord{ID: taskID, Values: virtualTaskResultFromAddInput(taskID, input)}
 		service.tasks = append(service.tasks, record)
@@ -1935,13 +1960,7 @@ func (service *virtualCapabilityService) taskResponse(toolName string, requestBo
 		if index < 0 {
 			return virtualCapabilityNotFound(toolName, "task")
 		}
-		values := copyVirtualCapabilityValues(input)
-		if title := strings.TrimSpace(stringValue(values["title"])); title != "" {
-			values["content"] = title
-		}
-		delete(values, "title")
-		renameVirtualTaskDateFields(values)
-		mergeVirtualCapabilityRecord(service.tasks[index].Values, values, "taskHint")
+		mergeVirtualCapabilityRecord(service.tasks[index].Values, virtualTaskResultFields(input))
 		return virtualCapabilityChangeSuccess(toolName, "task", "updated", []string{service.tasks[index].ID}, service.tasks[index].Values)
 	default:
 		if virtualCapabilityRequestNeedsApproval(requestBody) {
@@ -1994,9 +2013,18 @@ func virtualTaskEnumValues(toolName string, fieldName string) []string {
 }
 
 func virtualTaskResultFromAddInput(taskID string, input map[string]any) map[string]any {
-	result := map[string]any{
-		"taskID":  taskID,
-		"content": strings.TrimSpace(stringValue(input["title"])),
+	result := virtualTaskResultFields(input)
+	result["taskID"] = taskID
+	result["content"] = strings.TrimSpace(stringValue(input["title"]))
+	return result
+}
+
+// A task is answered in the record's task shape, so the fields a caller writes
+// come back under the names the record answers with.
+func virtualTaskResultFields(input map[string]any) map[string]any {
+	result := map[string]any{}
+	if title := strings.TrimSpace(stringValue(input["title"])); title != "" {
+		result["content"] = title
 	}
 	for _, fieldName := range []string{"business", "size", "status", "type"} {
 		if value, isFound := input[fieldName]; isFound {
@@ -2401,14 +2429,6 @@ func stringSliceValue(value any) []string {
 	return result
 }
 
-func copyVirtualCapabilityValues(values map[string]any) map[string]any {
-	copiedValues := make(map[string]any, len(values)+1)
-	for fieldName, value := range values {
-		copiedValues[fieldName] = value
-	}
-	return copiedValues
-}
-
 func virtualCapabilityInput(requestBody []byte) map[string]any {
 	var requestDocument struct {
 		Input map[string]any `json:"input"`
@@ -2503,6 +2523,23 @@ func virtualCapabilityChangeSuccess(toolName string, objectType string, effect s
 func virtualCapabilityApprovalRequired(toolName string) string {
 	result := map[string]any{"errorCode": "approval_required", "failureStage": "authorization", "message": "requires approval"}
 	return virtualCapabilityJSON(map[string]any{"provider": "virtual", "selectedBackend": "device", "toolName": toolName, "outcome": "denied", "status": "denied", "content": "requires approval", "message": "requires approval", "errorCode": "approval_required", "failureStage": "authorization", "result": result})
+}
+
+func virtualCapabilityUnreachable(toolName string) string {
+	message := "the record could not be reached"
+	return virtualCapabilityJSON(map[string]any{
+		"provider":        "virtual",
+		"selectedBackend": "device",
+		"toolName":        toolName,
+		"outcome":         "failed",
+		"status":          "error",
+		"isError":         true,
+		"content":         message,
+		"message":         message,
+		"errorCode":       "record_unreachable",
+		"failureStage":    "execution",
+		"result":          map[string]any{"error": message, "retryable": false, "safeRetry": false},
+	})
 }
 
 func virtualCapabilityInvalidInput(toolName string, message string) string {

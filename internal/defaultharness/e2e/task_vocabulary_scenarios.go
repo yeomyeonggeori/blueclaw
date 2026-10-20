@@ -24,12 +24,16 @@ type virtualTaskVocabulary struct {
 	types      []map[string]any
 }
 
-func newVirtualTaskVocabulary(businessNames []string) virtualTaskVocabulary {
-	businesses := make([]map[string]any, 0, len(businessNames))
-	for _, name := range businessNames {
-		businesses = append(businesses, map[string]any{"name": name})
+func newVirtualTaskVocabulary(businessNames []string, typeNames []string) virtualTaskVocabulary {
+	return virtualTaskVocabulary{businesses: namedLabels(businessNames), types: namedLabels(typeNames)}
+}
+
+func namedLabels(names []string) []map[string]any {
+	labels := make([]map[string]any, 0, len(names))
+	for _, name := range names {
+		labels = append(labels, map[string]any{"name": name})
 	}
-	return virtualTaskVocabulary{businesses: businesses, types: []map[string]any{}}
+	return labels
 }
 
 func (vocabulary virtualTaskVocabulary) registeredLabels() map[string]any {
