@@ -91,6 +91,7 @@ type VirtualSessionScenario struct {
 	WritableWorkspacePaths    []string
 	InitialWorkspaceFiles     map[string]string
 	RequesterIsAdmin          bool
+	InitialTaskBusinesses     []string
 	IsDeliveredOverACP        bool
 	RecordCatalogURL          string
 	Turns                     []VirtualTurn
@@ -119,6 +120,7 @@ var virtualGeneratedDescriptorToolNames = []string{
 	"browser_select",
 	"browser_press",
 	"browser_wait",
+	"task_vocabulary_set",
 }
 
 var virtualGeneratedResultContractToolNames = []string{
@@ -262,16 +264,23 @@ type VirtualEventCount struct {
 	BodyFragment string
 	Count        int
 	MinCount     int
+	MaxCount     int
 }
 
 func (expectedEventCount VirtualEventCount) isSatisfiedBy(actualCount int) bool {
-	if expectedEventCount.MinCount > 0 {
+	if expectedEventCount.MaxCount > 0 && actualCount > expectedEventCount.MaxCount {
+		return false
+	}
+	if expectedEventCount.MinCount > 0 || expectedEventCount.MaxCount > 0 {
 		return actualCount >= expectedEventCount.MinCount
 	}
 	return actualCount == expectedEventCount.Count
 }
 
 func (expectedEventCount VirtualEventCount) describeAgainst(actualCount int) string {
+	if expectedEventCount.MaxCount > 0 {
+		return fmt.Sprintf("expected %d..%d actual=%d fragment=%q", expectedEventCount.MinCount, expectedEventCount.MaxCount, actualCount, expectedEventCount.BodyFragment)
+	}
 	if expectedEventCount.MinCount > 0 {
 		return fmt.Sprintf("expected>=%d actual=%d fragment=%q", expectedEventCount.MinCount, actualCount, expectedEventCount.BodyFragment)
 	}
@@ -798,6 +807,8 @@ var builtinScenarioFactories = map[string]func(string) VirtualSessionScenario{
 	"host_update_off_hours_acceptance":          HostUpdateOffHoursAcceptanceScenario,
 	"host_update_member_refused":                HostUpdateMemberRefusedScenario,
 	"scheduled_run_asks_in_direct_message":      ScheduledRunAsksInDirectMessageScenario,
+	"task_business_registration_admin":          TaskBusinessRegistrationAdminScenario,
+	"task_business_registration_member_refused": TaskBusinessRegistrationMemberRefusedScenario,
 }
 
 func BuiltinScenario(name string, artifactDirectoryPath string) (VirtualSessionScenario, error) {
@@ -944,7 +955,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	if len(capabilityToolNames) > 0 {
 		var capabilityCleanup func()
 		var errorValue error
-		capabilityClient, capabilityCleanup, errorValue = startVirtualCapabilityServer(capabilityToolNames, workspacePath, virtualAdminPersonIDs(scenario))
+		capabilityClient, capabilityCleanup, errorValue = startVirtualCapabilityServer(capabilityToolNames, workspacePath, virtualAdminPersonIDs(scenario), scenario.InitialTaskBusinesses)
 		if errorValue != nil {
 			return nil, errorValue
 		}
@@ -1503,9 +1514,10 @@ type virtualCapabilityService struct {
 	calendarRevision int
 	scheduleRevision int
 	adminPersonIDs   map[string]bool
+	taskVocabulary   virtualTaskVocabulary
 }
 
-func startVirtualCapabilityServer(toolNames []string, workspacePath string, adminPersonIDs map[string]bool) (capability.Client, func(), error) {
+func startVirtualCapabilityServer(toolNames []string, workspacePath string, adminPersonIDs map[string]bool, taskBusinesses []string) (capability.Client, func(), error) {
 	toolNameByName := map[string]bool{}
 	for _, toolName := range toolNames {
 		trimmedToolName := strings.TrimSpace(toolName)
@@ -1513,7 +1525,7 @@ func startVirtualCapabilityServer(toolNames []string, workspacePath string, admi
 			toolNameByName[trimmedToolName] = true
 		}
 	}
-	service := &virtualCapabilityService{toolNameByName: toolNameByName, workspacePath: workspacePath, adminPersonIDs: adminPersonIDs}
+	service := &virtualCapabilityService{toolNameByName: toolNameByName, workspacePath: workspacePath, adminPersonIDs: adminPersonIDs, taskVocabulary: newVirtualTaskVocabulary(taskBusinesses)}
 	server := httptest.NewServer(http.HandlerFunc(service.handleRequest))
 	return capability.Client{
 		Endpoint:   server.URL,
@@ -1602,6 +1614,8 @@ func (service *virtualCapabilityService) response(toolName string, requestBody [
 	switch toolName {
 	case "task_add", "task_list", "task_update", "task_delete":
 		return service.taskResponse(toolName, requestBody)
+	case virtualTaskVocabularyToolName:
+		return service.taskVocabularyResponse(requestBody)
 	case "event_add", "event_list", "event_update", "event_delete":
 		return service.calendarResponse(toolName, requestBody)
 	case "schedule_create", "schedule_list", "schedule_update", "schedule_cancel":
@@ -1880,6 +1894,9 @@ func extractDOCXText(content []byte) (string, error) {
 
 func (service *virtualCapabilityService) taskResponse(toolName string, requestBody []byte) string {
 	input := virtualCapabilityInput(requestBody)
+	if refusal, isRefused := service.refusedTaskLabel(toolName, input); isRefused {
+		return refusal
+	}
 	switch toolName {
 	case "task_add":
 		taskID := fmt.Sprintf("task-%d", len(service.tasks)+1)
@@ -1889,7 +1906,7 @@ func (service *virtualCapabilityService) taskResponse(toolName string, requestBo
 	case "task_list":
 		tasks := virtualCapabilityRecordValues(service.tasks)
 		return virtualCapabilitySuccess(toolName, "listed virtual tasks", map[string]any{
-			"tasks": tasks, "count": len(tasks), "scope": "virtual", "registeredLabels": virtualTaskRegisteredLabels(),
+			"tasks": tasks, "count": len(tasks), "unfinishedCount": virtualUnfinishedTaskCount(tasks), "scope": "virtual", "registeredLabels": service.taskVocabulary.registeredLabels(),
 		})
 	case "task_update":
 		if len(input) < 2 {
@@ -1919,6 +1936,16 @@ func (service *virtualCapabilityService) taskResponse(toolName string, requestBo
 		service.tasks = append(service.tasks[:index], service.tasks[index+1:]...)
 		return virtualCapabilityTaskSuccess(toolName, "deleted", deletedRecord.ID, "deleted virtual task", map[string]any{"taskID": deletedRecord.ID, "deleted": true})
 	}
+}
+
+func virtualUnfinishedTaskCount(tasks []map[string]any) int {
+	unfinishedCount := 0
+	for _, taskValues := range tasks {
+		if !slices.Contains([]string{"completed", "rejected", "stopped"}, stringValue(taskValues["status"])) {
+			unfinishedCount++
+		}
+	}
+	return unfinishedCount
 }
 
 func virtualTaskRegisteredLabels() map[string]any {
