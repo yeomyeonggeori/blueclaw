@@ -245,7 +245,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) BuildToolSet(request ToolCatalogRe
 	toolCatalogBuilder.registerKernelTools(toolSet, handlerContext)
 	toolCatalogBuilder.registerRecordCatalogTools(toolSet, request, toolCatalogBuilder.discoveredRecordTools(request))
 	toolCatalogBuilder.registerCapabilityTools(toolSet, request)
-	toolSet.UseToolCallGate(request.ToolCallGate)
+	toolSet.UseToolCallGate(toolCatalogBuilder.gateCarryingWorkspaceFiles(request))
 	return toolSetWithinRegisteredToolNameCeiling(toolSet, request.RegisteredToolNameCeiling)
 }
 

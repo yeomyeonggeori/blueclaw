@@ -101,3 +101,32 @@ func TestAResolvedListOfIdentitiesReachesTheHold(t *testing.T) {
 		t.Fatalf("every identity survives the wire, got %+v", resolution.Target)
 	}
 }
+
+func TestTheFilesACallCarriesAreSentToTheResolutionOfItsTarget(t *testing.T) {
+	resolver, httpClient := targetResolverFixture(`{"provider":"internkim","selectedBackend":"record","toolName":"crm_record_import","outcome":"succeeded","status":"resolved","result":{}}`)
+	request := approvalgate.ApprovalTargetRequest{
+		ToolName:  "crm_record_import",
+		ToolInput: json.RawMessage(`{"kind":"organization","attachments":["/workspace/clients.csv"]}`),
+		Transport: map[string]any{"workspaceFiles": []map[string]any{{"workspacePath": "/workspace/clients.csv", "contentBase64": "bmFtZQ=="}}},
+	}
+
+	if _, errorValue := resolver.ResolveApprovalTarget(context.Background(), request); errorValue != nil {
+		t.Fatalf("expected the resolution to answer: %v", errorValue)
+	}
+
+	if !strings.Contains(httpClient.requestBody, `"transport":{"workspaceFiles":[{"contentBase64":"bmFtZQ=="`) {
+		t.Fatalf("the record cannot read the workspace, so the file travels with the call, got %s", httpClient.requestBody)
+	}
+}
+
+func TestAResolutionCarriesNoTransportWhenTheCallNamesNoFile(t *testing.T) {
+	resolver, httpClient := targetResolverFixture(`{"provider":"internkim","selectedBackend":"device","toolName":"event_delete","outcome":"succeeded","status":"no_target","result":{}}`)
+
+	if _, errorValue := resolver.ResolveApprovalTarget(context.Background(), calendarDeleteTargetRequest()); errorValue != nil {
+		t.Fatalf("expected the resolution to answer: %v", errorValue)
+	}
+
+	if strings.Contains(httpClient.requestBody, "transport") {
+		t.Fatalf("got %s", httpClient.requestBody)
+	}
+}

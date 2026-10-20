@@ -28,6 +28,7 @@ type ApprovalTargetRequest struct {
 	Platform          string
 	ConversationID    string
 	ReplyTargetID     string
+	Transport         map[string]any
 }
 
 type ApprovalTargetResolver interface {
@@ -46,6 +47,10 @@ func (gate *Gate) resolveApprovalTarget(ctx context.Context, approvalRequest mcp
 	if gate.approvalTargetResolver == nil {
 		return ApprovalTargetResolution{}
 	}
+	transport, failure := CarriedWorkspaceFiles(ctx)
+	if failure != nil {
+		return ApprovalTargetResolution{Failure: *failure}
+	}
 	resolution, errorValue := gate.approvalTargetResolver.ResolveApprovalTarget(ctx, ApprovalTargetRequest{
 		ToolName:          strings.TrimSpace(approvalRequest.ToolName),
 		ToolInput:         approvalRequest.ToolInput,
@@ -54,6 +59,7 @@ func (gate *Gate) resolveApprovalTarget(ctx context.Context, approvalRequest mcp
 		Platform:          approvalRequest.Platform,
 		ConversationID:    approvalRequest.ConversationID,
 		ReplyTargetID:     approvalRequest.ReplyTargetID,
+		Transport:         transport,
 	})
 	if errorValue == nil {
 		return resolution
