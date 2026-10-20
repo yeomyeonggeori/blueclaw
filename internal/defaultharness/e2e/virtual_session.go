@@ -33,6 +33,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/acpsession"
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
@@ -915,8 +916,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	turnScript := scenarioTurnScriptFor(scriptedModel)
 	changeChecks := &scenarioChangeChecks{}
 	intakeDecisionModel := scenarioIntakeDecisionModel(scenario, turnScript, firstAvailableLanguageModel(intakeLanguageModel, highLanguageModel))
-	scriptedDecisionModel, _ := intakeDecisionModel.(*scenarioDecisionModel)
-	scenarioReader := scenarioReplyReader{decisionModel: scriptedDecisionModel}
+	scenarioReader := scenarioApprovalReplyReader(scenario, intakeDecisionModel)
 	agentHarness, skillRetriever := virtualSessionAgentHarnessFactory(harnessdriver.Dependencies{
 		TaskRunStore: taskRunService,
 		TaskTierLanguageModels: agentcontract.TaskTierLanguageModels{
@@ -1126,6 +1126,14 @@ func scenarioIntakeDecisionModel(scenario VirtualSessionScenario, turnScript *sc
 		return scenario.DecisionModel
 	}
 	return newScenarioDecisionModel(turnScript, intakeLanguageModel, scenario.AddressingResponse)
+}
+
+func scenarioApprovalReplyReader(scenario VirtualSessionScenario, intakeDecisionModel model.DecisionModel) approvalreply.Reader {
+	if scenario.DecisionModel != nil {
+		return approvalreply.NewDecisionModelReader(scenario.DecisionModel)
+	}
+	scriptedDecisionModel, _ := intakeDecisionModel.(*scenarioDecisionModel)
+	return scenarioReplyReader{decisionModel: scriptedDecisionModel}
 }
 
 func scenarioLoopDecisionModel(scenario VirtualSessionScenario, scriptedModel *agenttest.ScriptedLanguageModel, changeChecks *scenarioChangeChecks) model.DecisionModel {
