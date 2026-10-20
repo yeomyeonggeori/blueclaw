@@ -686,7 +686,7 @@ func CalendarEventLifecycleAcceptanceScenario(artifactDirectoryPath string) Virt
 				ExpectedEventCounts: []VirtualEventCount{
 					{Name: toolRequestedEventName("event_update"), BodyFragment: "event_update", Count: 1},
 					{Name: toolRequestedEventName("event_update"), BodyFragment: "2026-06-13T14:00:00+09:00", Count: 1},
-					{Name: toolResultEventName("event_update"), BodyFragment: "updated virtual calendar event", Count: 1},
+					{Name: toolResultEventName("event_update"), BodyFragment: `"effect":"updated"`, Count: 1},
 				},
 			},
 			{

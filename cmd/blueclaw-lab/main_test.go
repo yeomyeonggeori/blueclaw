@@ -18,10 +18,16 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/defaultharness"
 	"github.com/yeomyeonggeori/blueclaw/internal/defaultharness/e2e"
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement/gatewaytest"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
+	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
+
+const fakeDecisionsPath = "/decisions"
 
 func TestValidateStrictEmbeddingRetrievalRequiresReadyEmbeddingMode(t *testing.T) {
 	validResult := e2e.VirtualSessionResult{TurnResults: []e2e.VirtualTurnResult{{Events: []task.TaskEvent{
@@ -86,6 +92,7 @@ type fakeModelEndpointServer struct {
 	schemaNames          []string
 	authorizationHeaders []string
 	requestDocuments     []map[string]any
+	decidedModelNames    []string
 	statusCode           int
 }
 
@@ -127,7 +134,17 @@ func (fakeServer *fakeModelEndpointServer) RequestDocuments() []map[string]any {
 	return append([]map[string]any{}, fakeServer.requestDocuments...)
 }
 
+func (fakeServer *fakeModelEndpointServer) DecidedModelNames() []string {
+	fakeServer.mutex.Lock()
+	defer fakeServer.mutex.Unlock()
+	return append([]string{}, fakeServer.decidedModelNames...)
+}
+
 func (fakeServer *fakeModelEndpointServer) handleRequest(responseWriter http.ResponseWriter, request *http.Request) {
+	if request.URL.Path == fakeDecisionsPath {
+		fakeServer.answerDecision(responseWriter, request)
+		return
+	}
 	requestDocument := modelEndpointRequestDocument(request)
 	toolName := calledToolNameFromRequestDocument(requestDocument)
 	schemaName := schemaNameForToolName(toolName)
@@ -149,6 +166,26 @@ func (fakeServer *fakeModelEndpointServer) handleRequest(responseWriter http.Res
 	}
 	encodedContent, _ := json.Marshal(fakeModelContentForSchema(schemaName))
 	_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":` + string(encodedContent) + `}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`))
+}
+
+func (fakeServer *fakeModelEndpointServer) answerDecision(responseWriter http.ResponseWriter, request *http.Request) {
+	var document struct {
+		Model     string                            `json:"model"`
+		Questions map[string]model.DecisionQuestion `json:"questions"`
+	}
+	_ = json.NewDecoder(request.Body).Decode(&document)
+	fakeServer.mutex.Lock()
+	fakeServer.decidedModelNames = append(fakeServer.decidedModelNames, document.Model)
+	fakeServer.mutex.Unlock()
+	responseWriter.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(responseWriter).Encode(map[string]any{"answers": fakeDecisionAnswers(document.Questions), "model": document.Model})
+}
+
+func fakeDecisionAnswers(questions map[string]model.DecisionQuestion) map[string]model.DecisionAnswer {
+	if inboundengagement.AsksOnlyGatewayQuestions(questions) {
+		return gatewaytest.Answers(questions, gatewaytest.Outcome{Addressing: inboundengagement.AddressingDecision{Target: inboundengagement.AddressingTargetBot, ShouldRespond: true}})
+	}
+	return intaketest.Answers(questions, func(string) intaketest.Outcome { return intaketest.Outcome{} })
 }
 
 func calledToolNameFromRequestDocument(requestDocument map[string]any) string {
@@ -264,8 +301,28 @@ func TestRunVirtualSessionLiveLanguageModelUsesEndpointKeyAndFakeServer(t *testi
 	if !strings.Contains(output, "fake live reply from the model endpoint") {
 		t.Fatalf("expected fake model reply in output, got %s", output)
 	}
+	if decided := fakeServer.DecidedModelNames(); len(decided) == 0 || !allStringsEqual(decided, "test-decision-model") {
+		t.Fatalf("expected intake decided by the named decision model, got %+v", decided)
+	}
 	if strings.Contains(output, "요청 처리 중 오류") {
 		t.Fatalf("expected live reply instead of fallback, got %s", output)
+	}
+}
+
+func TestRunVirtualSessionLiveLanguageModelRefusesToRunWithoutADecisionModel(t *testing.T) {
+	skipWithoutOfferedCatalog(t)
+	fakeServer := newFakeModelEndpointServer(http.StatusOK)
+	defer fakeServer.Close()
+	arguments := parseLiveVirtualSessionTestArguments(t, fakeServer.URL())
+	arguments.DecisionModelName = ""
+
+	errorValue := runVirtualSession(context.Background(), arguments)
+
+	if errorValue == nil || !strings.Contains(errorValue.Error(), "--decision-model") {
+		t.Fatalf("expected the run to name the missing decision model, got %v", errorValue)
+	}
+	if fakeServer.RequestCount() != 0 {
+		t.Fatalf("expected no model call before the decision model is named, got %d", fakeServer.RequestCount())
 	}
 }
 
@@ -537,6 +594,8 @@ func parseLiveVirtualSessionTestArguments(t *testing.T, baseURL string) virtualS
 		"--artifact-dir", t.TempDir(),
 		"--live-llm",
 		"--llm-model", "test-model",
+		"--decision-endpoint", baseURL + fakeDecisionsPath,
+		"--decision-model", "test-decision-model",
 		"--seed", "123",
 		"--temperature", "0.25",
 	}, "presentation", t.TempDir())

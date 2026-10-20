@@ -16,11 +16,14 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
+	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/defaultharness"
 	"github.com/yeomyeonggeori/blueclaw/internal/defaultharness/e2e"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/model/decisions"
 	"github.com/yeomyeonggeori/blueprotocol/model/openaicompatible"
 )
 
@@ -71,6 +74,8 @@ func virtualSessionSkipReason() string {
 		" carries no descriptor for " + strings.Join(missingTools, ", ")
 }
 
+const liveLanguageModelAPIKeyVariable = "BLUECOLLAR_MODEL_API_KEY"
+
 type virtualSessionArguments struct {
 	ScenarioName          string
 	ScenarioFilePath      string
@@ -81,6 +86,8 @@ type virtualSessionArguments struct {
 	LanguageModelName     string
 	EmbeddingEndpoint     string
 	EmbeddingModelName    string
+	DecisionEndpoint      string
+	DecisionModelName     string
 	ExecutionMode         string
 	SkillDirectoryPath    string
 	Seed                  *int64
@@ -136,6 +143,8 @@ func parseVirtualSessionArguments(arguments []string, defaultScenarioName string
 	languageModelName := flagSet.String("llm-model", os.Getenv("BLUECLAW_E2E_LLM_MODEL"), "live LLM model override")
 	embeddingEndpoint := flagSet.String("embedding-endpoint", os.Getenv("BLUECLAW_E2E_EMBEDDING_ENDPOINT"), "local OpenAI-compatible embedding endpoint")
 	embeddingModelName := flagSet.String("embedding-model", os.Getenv("BLUECLAW_E2E_EMBEDDING_MODEL"), "name the embedding model answers to at its endpoint")
+	decisionEndpoint := flagSet.String("decision-endpoint", firstNonEmptyString(os.Getenv("BLUECLAW_DECISION_ENDPOINT"), decisions.DefaultEndpointURL), "live decision endpoint, which answers intake and the completion check")
+	decisionModelName := flagSet.String("decision-model", os.Getenv("BLUECLAW_DECISION_MODEL"), "name the decision model answers to at its endpoint")
 	executionMode := flagSet.String("llm-execution-mode", firstNonEmptyString(os.Getenv("BLUECLAW_E2E_LLM_EXECUTION_MODE"), "auto"), "live LLM execution mode")
 	seed := flagSet.Int64("seed", 0, "generation seed for live LLM calls")
 	temperature := flagSet.Float64("temperature", 0, "generation temperature for live LLM calls")
@@ -180,6 +189,8 @@ func parseVirtualSessionArguments(arguments []string, defaultScenarioName string
 		LanguageModelName:     *languageModelName,
 		EmbeddingEndpoint:     strings.TrimSpace(*embeddingEndpoint),
 		EmbeddingModelName:    strings.TrimSpace(*embeddingModelName),
+		DecisionEndpoint:      strings.TrimSpace(*decisionEndpoint),
+		DecisionModelName:     strings.TrimSpace(*decisionModelName),
 		ExecutionMode:         *executionMode,
 		SkillDirectoryPath:    *skillDirectoryPath,
 		Seed:                  virtualSessionInt64FlagPointer(arguments, "seed", *seed),
@@ -223,6 +234,11 @@ func runVirtualSession(ctx context.Context, arguments virtualSessionArguments) e
 			return modelProvider
 		}
 		scenario.LanguageModel = languageModel
+		decisionModel, errorValue := liveDecisionModel(arguments)
+		if errorValue != nil {
+			return errorValue
+		}
+		scenario.DecisionModel = decisionModel
 		embeddingProvider, errorValue := liveEmbeddingProvider(arguments)
 		if errorValue != nil {
 			return errorValue
@@ -658,11 +674,33 @@ func createLiveLanguageModel(arguments virtualSessionArguments) (llm.LanguageMod
 	}
 }
 
+func liveDecisionModel(arguments virtualSessionArguments) (model.DecisionModel, error) {
+	if arguments.DecisionModelName == "" {
+		return nil, errors.New("a live session judges intake and completion with a decision model, as the runtime does: pass --decision-model or set BLUECLAW_DECISION_MODEL")
+	}
+	return llm.NewConfiguredDecisionModel(liveDecisionConfiguration(arguments))
+}
+
+func liveDecisionConfiguration(arguments virtualSessionArguments) config.RuntimeConfiguration {
+	runtimeConfiguration := config.RuntimeConfiguration{}
+	if strings.TrimSpace(arguments.LanguageModelProvider) == "capability" {
+		runtimeConfiguration.LanguageModel.Capability = config.LanguageModelCapabilityConfiguration{DecisionModel: arguments.DecisionModelName, ExecutionMode: arguments.ExecutionMode}
+		runtimeConfiguration.Capabilities = config.CapabilityConfiguration{Endpoint: arguments.LanguageModelEndpoint, UnixSocketPath: arguments.LanguageModelSocket}
+		return runtimeConfiguration
+	}
+	runtimeConfiguration.LanguageModel.Decision = config.ModelEndpointConfiguration{
+		Endpoint:          arguments.DecisionEndpoint,
+		Model:             arguments.DecisionModelName,
+		APIKeyEnvironment: liveLanguageModelAPIKeyVariable,
+	}
+	return runtimeConfiguration
+}
+
 func liveLanguageModelEndpoint(arguments virtualSessionArguments) openaicompatible.Endpoint {
 	return openaicompatible.Endpoint{
 		URL:           firstNonEmptyString(arguments.LanguageModelEndpoint, os.Getenv("BLUECOLLAR_MODEL_ENDPOINT")),
 		ModelName:     strings.TrimSpace(arguments.LanguageModelName),
-		APIKey:        strings.TrimSpace(os.Getenv("BLUECOLLAR_MODEL_API_KEY")),
+		APIKey:        strings.TrimSpace(os.Getenv(liveLanguageModelAPIKeyVariable)),
 		ProviderOrder: providerOrder(os.Getenv("BLUECLAW_E2E_LLM_PROVIDER_ORDER")),
 	}
 }
