@@ -46,7 +46,7 @@ func virtualCRMImportTargetResponse(requestBody []byte) string {
 	if !isCarried {
 		return virtualCapabilityInvalidInput(virtualCRMImportToolName, "the file this import names was not carried with the call")
 	}
-	return virtualCapabilitySuccess(virtualCRMImportToolName, "resolved virtual import file", map[string]any{
+	return virtualCapabilityTargetResolved(virtualCRMImportToolName, map[string]any{
 		"inputField": "attachments",
 		"ids":        []string{file.path},
 		"title":      file.filename,
@@ -59,7 +59,7 @@ func virtualCRMImportResponse(requestBody []byte) string {
 	if !isCarried {
 		return virtualCapabilityInvalidInput(virtualCRMImportToolName, "the file this import names was not carried with the call")
 	}
-	return virtualCapabilitySuccess(virtualCRMImportToolName, fmt.Sprintf("imported %d records", file.records), map[string]any{
+	return virtualCapabilitySuccess(virtualCRMImportToolName, map[string]any{
 		"dryRun":  false,
 		"written": true,
 		"created": file.records,
