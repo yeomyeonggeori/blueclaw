@@ -294,7 +294,6 @@ func (toolCatalogBuilder *ToolCatalogBuilder) registerHistoryTool(toolRegistry *
 }
 
 func (toolCatalogBuilder *ToolCatalogBuilder) registerMemoryTool(toolRegistry *toolcontract.ToolSet, request ToolCatalogRequest) {
-	registerPersonaTools(toolCatalogBuilder, toolRegistry, request)
 	if toolCatalogBuilder.memoryStores == nil {
 		return
 	}
