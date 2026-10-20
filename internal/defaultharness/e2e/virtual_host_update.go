@@ -55,7 +55,7 @@ func (service *virtualCapabilityService) hostUpdateTargetResponse(requestBody []
 		return virtualHostUpdateRefusal("only an administrator of this company can update its host")
 	}
 	input := virtualCapabilityInput(requestBody)
-	return virtualCapabilitySuccess(virtualHostUpdateToolName, "resolved the host update", map[string]any{
+	return virtualCapabilityTargetResolved(virtualHostUpdateToolName, map[string]any{
 		"inputField": "targetVersion",
 		"id":         virtualHostLatestVersion,
 		"title":      virtualHostInstalledVersion + " → " + virtualHostLatestVersion,
@@ -85,7 +85,7 @@ func (service *virtualCapabilityService) hostUpdateResponse(requestBody []byte) 
 		return virtualCapabilityApprovalRequired(virtualHostUpdateToolName)
 	}
 	input := virtualCapabilityInput(requestBody)
-	return virtualCapabilitySuccess(virtualHostUpdateToolName, "the host update started", map[string]any{
+	return virtualCapabilitySuccess(virtualHostUpdateToolName, map[string]any{
 		"status":      "started",
 		"fromVersion": virtualHostInstalledVersion,
 		"toVersion":   stringValue(input["targetVersion"]),

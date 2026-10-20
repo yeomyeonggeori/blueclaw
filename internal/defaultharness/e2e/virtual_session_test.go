@@ -1621,3 +1621,30 @@ func eventBodies(events []task.TaskEvent, name string) []string {
 	}
 	return bodies
 }
+
+func TestVirtualCapabilitySuccessLeavesTheResultAsTheAnswer(t *testing.T) {
+	service := virtualCapabilityService{taskVocabulary: newVirtualTaskVocabulary(virtualRegisteredBusinesses)}
+	responses := map[string]string{
+		"task_add":       service.response("task_add", []byte(`{"input":{"title":"분기 보고서 정리"},"context":{}}`)),
+		"task_list":      service.response("task_list", []byte(`{"input":{},"context":{}}`)),
+		"task_update":    service.response("task_update", []byte(`{"input":{"taskHint":"task-1","title":"분기 보고서 정리"},"context":{}}`)),
+		"event_list":     service.response("event_list", []byte(`{"input":{},"context":{}}`)),
+		"schedule_list":  service.response("schedule_list", []byte(`{"input":{},"context":{}}`)),
+		"message_search": service.response("message_search", []byte(`{"input":{"query":"회의"},"context":{}}`)),
+	}
+	for toolName, response := range responses {
+		var document map[string]json.RawMessage
+		if errorValue := json.Unmarshal([]byte(response), &document); errorValue != nil {
+			t.Fatal(errorValue)
+		}
+		if string(document["outcome"]) != `"succeeded"` {
+			t.Fatalf("%s: expected a success, got %s", toolName, response)
+		}
+		if _, isFound := document["content"]; isFound {
+			t.Fatalf("%s: the record answers with its result alone, so the model reads the result; got %s", toolName, response)
+		}
+	}
+	if !strings.Contains(responses["task_list"], `"registeredLabels"`) {
+		t.Fatalf("expected task_list to answer the registered labels, got %s", responses["task_list"])
+	}
+}

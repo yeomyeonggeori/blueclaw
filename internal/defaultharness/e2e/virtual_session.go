@@ -1579,7 +1579,7 @@ func (service *virtualCapabilityService) targetResolveResponse(toolName string, 
 	case virtualHostUpdateToolName:
 		return service.hostUpdateTargetResponse(requestBody)
 	}
-	return virtualCapabilitySuccess(toolName, "no virtual target to resolve", map[string]any{})
+	return virtualCapabilityJSON(map[string]any{"provider": "virtual", "selectedBackend": "device", "toolName": toolName, "outcome": "succeeded", "status": "no_target", "result": map[string]any{}})
 }
 
 func virtualCapabilityTargetResponse(toolName string, records []virtualCapabilityRecord, input map[string]any, hintFieldName string, titleFieldName string, resourceName string) string {
@@ -1588,12 +1588,16 @@ func virtualCapabilityTargetResponse(toolName string, records []virtualCapabilit
 		return virtualCapabilityNotFound(toolName, resourceName)
 	}
 	record := records[index]
-	return virtualCapabilitySuccess(toolName, "resolved virtual "+resourceName, map[string]any{
+	return virtualCapabilityTargetResolved(toolName, map[string]any{
 		"inputField": hintFieldName,
 		"id":         record.ID,
 		"title":      stringValue(record.Values[titleFieldName]),
 		"startsAt":   stringValue(record.Values["startsAt"]),
 	})
+}
+
+func virtualCapabilityTargetResolved(toolName string, target map[string]any) string {
+	return virtualCapabilityJSON(map[string]any{"provider": "virtual", "selectedBackend": "device", "toolName": toolName, "outcome": "succeeded", "status": "resolved", "content": stringValue(target["title"]), "result": target})
 }
 
 func virtualCapabilityCatalogResponse(toolNameByName map[string]bool) string {
@@ -1641,7 +1645,7 @@ func (service *virtualCapabilityService) response(toolName string, requestBody [
 			"sizeBytes":     13,
 			"contentBase64": "dmlydHVhbC1pbWFnZQ==",
 		}}, "path": path, "status": "ok"}
-		return virtualCapabilitySuccess(toolName, "image loaded", result)
+		return virtualCapabilityReadSuccess(toolName, "image loaded", result)
 	case "document_read":
 		path := stringValue(virtualCapabilityInput(requestBody)["path"])
 		content, errorValue := virtualDocumentContent(service.workspacePath, path)
@@ -1656,7 +1660,7 @@ func (service *virtualCapabilityService) response(toolName string, requestBody [
 			"warnings":  []string{},
 			"truncated": false,
 		}
-		return virtualCapabilitySuccess(toolName, content, result)
+		return virtualCapabilityReadSuccess(toolName, content, result)
 	case "web_search":
 		query := stringValue(virtualCapabilityInput(requestBody)["query"])
 		answer := "BlueclawSearchStubToken virtual search result"
@@ -1672,13 +1676,13 @@ func (service *virtualCapabilityService) response(toolName string, requestBody [
 				"snippet": "Deterministic virtual search result for BlueclawSearchStubToken.",
 			}},
 		}
-		return virtualCapabilitySuccess(toolName, answer, result)
+		return virtualCapabilitySuccess(toolName, result)
 	case "browser_open", "browser_fill", "browser_select", "browser_press", "browser_wait":
-		return virtualCapabilitySuccess(toolName, toolName+" completed in the company browser", virtualBrowserResult(toolName, virtualCapabilityInput(requestBody)))
+		return virtualCapabilitySuccess(toolName, virtualBrowserResult(toolName, virtualCapabilityInput(requestBody)))
 	case "message_context":
-		return virtualCapabilitySuccess(toolName, "virtual Mattermost conversation context", virtualMessageContextResult())
+		return virtualCapabilitySuccess(toolName, virtualMessageContextResult())
 	case "message_search":
-		return virtualCapabilitySuccess(toolName, "found virtual Mattermost message", virtualMessageSearchResult(requestBody))
+		return virtualCapabilitySuccess(toolName, virtualMessageSearchResult(requestBody))
 	case "message_send":
 		messageInput := virtualCapabilityInput(requestBody)
 		if errorValue := validateVirtualMessageSendInput(messageInput); errorValue != nil {
@@ -1689,7 +1693,7 @@ func (service *virtualCapabilityService) response(toolName string, requestBody [
 		}
 		messageID := "virtual-platform-message-001"
 		result := map[string]any{"messageIDs": []string{messageID}, "deliveryStatus": "sent"}
-		return virtualCapabilityMessageSuccess(toolName, "sent", []string{messageID}, "sent virtual platform message "+messageID, result)
+		return virtualCapabilityChangeSuccess(toolName, "message", "sent", []string{messageID}, result)
 	case "message_update":
 		input := virtualCapabilityInput(requestBody)
 		messageID := stringValue(input["messageID"])
@@ -1701,16 +1705,16 @@ func (service *virtualCapabilityService) response(toolName string, requestBody [
 		if isPinned, isFound := input["isPinned"].(bool); isFound {
 			result["isPinned"] = isPinned
 		}
-		return virtualCapabilityMessageSuccess(toolName, "updated", []string{messageID}, "updated virtual platform message "+messageID, result)
+		return virtualCapabilityChangeSuccess(toolName, "message", "updated", []string{messageID}, result)
 	case "message_delete":
 		if virtualCapabilityRequestNeedsApproval(requestBody) {
 			return virtualCapabilityApprovalRequired(toolName)
 		}
 		messageIDs := stringSliceValue(virtualCapabilityInput(requestBody)["messageIDs"])
 		result := map[string]any{"messageIDs": messageIDs, "deliveryStatus": "deleted"}
-		return virtualCapabilityMessageSuccess(toolName, "deleted", messageIDs, "deleted virtual platform messages", result)
+		return virtualCapabilityChangeSuccess(toolName, "message", "deleted", messageIDs, result)
 	default:
-		return virtualCapabilitySuccess(toolName, toolName+" completed", map[string]any{"toolName": toolName, "ok": true, "request": virtualCapabilityInput(requestBody)})
+		return virtualCapabilitySuccess(toolName, map[string]any{"toolName": toolName, "ok": true, "request": virtualCapabilityInput(requestBody)})
 	}
 }
 
@@ -1910,10 +1914,10 @@ func (service *virtualCapabilityService) taskResponse(toolName string, requestBo
 		taskID := fmt.Sprintf("task-%d", len(service.tasks)+1)
 		record := virtualCapabilityRecord{ID: taskID, Values: virtualTaskResultFromAddInput(taskID, input)}
 		service.tasks = append(service.tasks, record)
-		return virtualCapabilityTaskSuccess(toolName, "created", record.ID, "created virtual task", record.Values)
+		return virtualCapabilityChangeSuccess(toolName, "task", "created", []string{record.ID}, record.Values)
 	case "task_list":
 		tasks := virtualCapabilityRecordValues(service.tasks)
-		return virtualCapabilitySuccess(toolName, "listed virtual tasks", map[string]any{
+		return virtualCapabilitySuccess(toolName, map[string]any{
 			"tasks": tasks, "count": len(tasks), "unfinishedCount": virtualUnfinishedTaskCount(tasks), "scope": "virtual", "registeredLabels": service.taskVocabulary.registeredLabels(),
 		})
 	case "task_update":
@@ -1931,7 +1935,7 @@ func (service *virtualCapabilityService) taskResponse(toolName string, requestBo
 		delete(values, "title")
 		renameVirtualTaskDateFields(values)
 		mergeVirtualCapabilityRecord(service.tasks[index].Values, values, "taskHint")
-		return virtualCapabilityTaskSuccess(toolName, "updated", service.tasks[index].ID, "updated virtual task", service.tasks[index].Values)
+		return virtualCapabilityChangeSuccess(toolName, "task", "updated", []string{service.tasks[index].ID}, service.tasks[index].Values)
 	default:
 		if virtualCapabilityRequestNeedsApproval(requestBody) {
 			return virtualCapabilityApprovalRequired(toolName)
@@ -1942,7 +1946,7 @@ func (service *virtualCapabilityService) taskResponse(toolName string, requestBo
 		}
 		deletedRecord := service.tasks[index]
 		service.tasks = append(service.tasks[:index], service.tasks[index+1:]...)
-		return virtualCapabilityTaskSuccess(toolName, "deleted", deletedRecord.ID, "deleted virtual task", map[string]any{"taskID": deletedRecord.ID, "deleted": true})
+		return virtualCapabilityChangeSuccess(toolName, "task", "deleted", []string{deletedRecord.ID}, map[string]any{"taskID": deletedRecord.ID, "deleted": true})
 	}
 }
 
@@ -2023,13 +2027,13 @@ func (service *virtualCapabilityService) calendarResponse(toolName string, reque
 		eventID := fmt.Sprintf("calendar-event-%03d", len(service.events)+1)
 		record := virtualCapabilityRecord{ID: eventID, Values: service.virtualCalendarEventValues(eventID, input, requester)}
 		service.events = append(service.events, record)
-		return virtualCapabilityCalendarSuccess(toolName, "created", record.ID, "created virtual calendar event", record.Values)
+		return virtualCapabilityChangeSuccess(toolName, "calendar", "created", []string{record.ID}, record.Values)
 	case "event_list":
 		events, errorValue := virtualCalendarEventList(service.events, input)
 		if errorValue != nil {
 			return virtualCapabilityInvalidInput(toolName, errorValue.Error())
 		}
-		return virtualCapabilitySuccess(toolName, "listed virtual calendar events", map[string]any{"events": events})
+		return virtualCapabilitySuccess(toolName, map[string]any{"events": events})
 	case "event_update":
 		if len(input) < 2 {
 			return virtualCapabilityInvalidInput(toolName, "at least one calendar event field must be updated")
@@ -2040,7 +2044,7 @@ func (service *virtualCapabilityService) calendarResponse(toolName string, reque
 		}
 		mergeVirtualCalendarEvent(service.events[index].Values, input, requester, false)
 		service.events[index].Values["updatedAt"] = service.nextVirtualCalendarUpdatedAt()
-		return virtualCapabilityCalendarSuccess(toolName, "updated", service.events[index].ID, "updated virtual calendar event", service.events[index].Values)
+		return virtualCapabilityChangeSuccess(toolName, "calendar", "updated", []string{service.events[index].ID}, service.events[index].Values)
 	default:
 		if virtualCapabilityRequestNeedsApproval(requestBody) {
 			return virtualCapabilityApprovalRequired(toolName)
@@ -2052,7 +2056,7 @@ func (service *virtualCapabilityService) calendarResponse(toolName string, reque
 		deletedRecord := service.events[index]
 		service.events = append(service.events[:index], service.events[index+1:]...)
 		result := map[string]any{"eventID": deletedRecord.ID, "deleted": true}
-		return virtualCapabilityCalendarSuccess(toolName, "deleted", deletedRecord.ID, "deleted virtual calendar event", result)
+		return virtualCapabilityChangeSuccess(toolName, "calendar", "deleted", []string{deletedRecord.ID}, result)
 	}
 }
 
@@ -2063,9 +2067,9 @@ func (service *virtualCapabilityService) scheduleResponse(toolName string, reque
 		scheduleID := fmt.Sprintf("virtual-schedule-%03d", len(service.schedules)+1)
 		record := virtualCapabilityRecord{ID: scheduleID, Values: service.virtualScheduleValues(scheduleID, input, requestBody)}
 		service.schedules = append(service.schedules, record)
-		return virtualCapabilityScheduleSuccess(toolName, "created", record.ID, "created virtual schedule", record.Values)
+		return virtualCapabilityChangeSuccess(toolName, "schedule", "created", []string{record.ID}, record.Values)
 	case "schedule_list":
-		return virtualCapabilitySuccess(toolName, "listed virtual schedules", map[string]any{"schedules": virtualScheduleListValues(service.schedules)})
+		return virtualCapabilitySuccess(toolName, map[string]any{"schedules": virtualScheduleListValues(service.schedules)})
 	case "schedule_update":
 		index := virtualCapabilityRecordIndexByHint(service.schedules, input, "scheduleHint", "description")
 		if index < 0 {
@@ -2073,7 +2077,7 @@ func (service *virtualCapabilityService) scheduleResponse(toolName string, reque
 		}
 		mergeVirtualSchedule(service.schedules[index].Values, input)
 		service.schedules[index].Values["nextRunAt"] = service.nextVirtualScheduleRunAt()
-		return virtualCapabilityScheduleSuccess(toolName, "updated", service.schedules[index].ID, "updated virtual schedule", service.schedules[index].Values)
+		return virtualCapabilityChangeSuccess(toolName, "schedule", "updated", []string{service.schedules[index].ID}, service.schedules[index].Values)
 	default:
 		cancelledSchedules := []map[string]any{}
 		cancelledScheduleIDs := []string{}
@@ -2098,7 +2102,6 @@ func (service *virtualCapabilityService) scheduleResponse(toolName string, reque
 			"toolName":        toolName,
 			"outcome":         "succeeded",
 			"status":          "ok",
-			"content":         "cancelled virtual schedules",
 			"result":          map[string]any{"scheduleIDs": cancelledScheduleIDs, "cancelled": cancelledSchedules},
 			"effects":         effects,
 		})
@@ -2463,53 +2466,21 @@ func virtualCapabilityRecordValues(records []virtualCapabilityRecord) []map[stri
 	return values
 }
 
-func virtualCapabilitySuccess(toolName string, content string, result any) string {
-	return virtualCapabilityJSON(map[string]any{"provider": "virtual", "selectedBackend": "device", "toolName": toolName, "outcome": "succeeded", "status": "ok", "content": content, "result": result})
+func virtualCapabilitySuccess(toolName string, result any) string {
+	return virtualCapabilityChangeSuccess(toolName, "", "", nil, result)
 }
 
-func virtualCapabilityTaskSuccess(toolName string, effect string, taskID string, content string, result any) string {
-	return virtualCapabilityJSON(map[string]any{
-		"provider":        "virtual",
-		"selectedBackend": "device",
-		"toolName":        toolName,
-		"outcome":         "succeeded",
-		"status":          "ok",
-		"content":         content,
-		"result":          result,
-		"effects":         []map[string]any{{"objectType": "task", "effect": effect, "id": taskID}},
-	})
+// internkim's capabilityd authors text beside the result for these two only
+// (internal/capabilityd/file_read_tool.go); every other tool answers with the
+// result alone, which the runtime then shows the model.
+func virtualCapabilityReadSuccess(toolName string, text string, result any) string {
+	return virtualCapabilityJSON(map[string]any{"provider": "virtual", "selectedBackend": "device", "toolName": toolName, "outcome": "succeeded", "status": "ok", "content": text, "result": result})
 }
 
-func virtualCapabilityScheduleSuccess(toolName string, effect string, scheduleID string, content string, result any) string {
-	return virtualCapabilityJSON(map[string]any{
-		"provider":        "virtual",
-		"selectedBackend": "device",
-		"toolName":        toolName,
-		"outcome":         "succeeded",
-		"status":          "ok",
-		"content":         content,
-		"result":          result,
-		"effects":         []map[string]any{{"objectType": "schedule", "effect": effect, "id": scheduleID}},
-	})
-}
-
-func virtualCapabilityCalendarSuccess(toolName string, effect string, eventID string, content string, result any) string {
-	return virtualCapabilityJSON(map[string]any{
-		"provider":        "virtual",
-		"selectedBackend": "device",
-		"toolName":        toolName,
-		"outcome":         "succeeded",
-		"status":          "ok",
-		"content":         content,
-		"result":          result,
-		"effects":         []map[string]any{{"objectType": "calendar", "effect": effect, "id": eventID}},
-	})
-}
-
-func virtualCapabilityMessageSuccess(toolName string, effect string, messageIDs []string, content string, result any) string {
-	effects := make([]map[string]any, 0, len(messageIDs))
-	for _, messageID := range messageIDs {
-		effects = append(effects, map[string]any{"objectType": "message", "effect": effect, "id": messageID})
+func virtualCapabilityChangeSuccess(toolName string, objectType string, effect string, ids []string, result any) string {
+	effects := make([]map[string]any, 0, len(ids))
+	for _, id := range ids {
+		effects = append(effects, map[string]any{"objectType": objectType, "effect": effect, "id": id})
 	}
 	return virtualCapabilityJSON(map[string]any{
 		"provider":        "virtual",
@@ -2517,7 +2488,6 @@ func virtualCapabilityMessageSuccess(toolName string, effect string, messageIDs 
 		"toolName":        toolName,
 		"outcome":         "succeeded",
 		"status":          "ok",
-		"content":         content,
 		"result":          result,
 		"effects":         effects,
 	})

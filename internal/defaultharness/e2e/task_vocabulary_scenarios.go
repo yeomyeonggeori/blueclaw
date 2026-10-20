@@ -114,7 +114,7 @@ func (service *virtualCapabilityService) taskVocabularyResponse(requestBody []by
 	}
 	return virtualCapabilityJSON(map[string]any{
 		"provider": "virtual", "selectedBackend": "device", "toolName": virtualTaskVocabularyToolName,
-		"outcome": "succeeded", "status": "ok", "content": "saved the task vocabulary",
+		"outcome": "succeeded", "status": "ok",
 		"result":  service.taskVocabulary.registeredLabels(),
 		"effects": []map[string]any{{"objectType": "task_vocabulary", "effect": "updated"}},
 	})
@@ -182,7 +182,7 @@ func TaskBusinessRegistrationAdminScenario(artifactDirectoryPath string) Virtual
 		ExpectedEventCounts: []VirtualEventCount{
 			{Name: toolRequestedEventName(virtualTaskVocabularyToolName), BodyFragment: virtualRegisteredBusinesses[0], MinCount: 1},
 			{Name: toolRequestedEventName(virtualTaskVocabularyToolName), BodyFragment: virtualRegisteredBusinesses[1], MinCount: 1},
-			{Name: toolResultEventName(virtualTaskVocabularyToolName), BodyFragment: `saved the task vocabulary`, Count: 1},
+			{Name: toolResultEventName(virtualTaskVocabularyToolName), BodyFragment: `"objectType":"task_vocabulary"`, Count: 1},
 			{Name: toolResultEventName("task_update"), BodyFragment: `"business":"` + virtualUnregisteredBusiness + `"`, MinCount: 1},
 		},
 		ExpectedReplyFragments: []string{virtualUnregisteredBusiness},
@@ -198,7 +198,7 @@ func TaskBusinessRegistrationMemberRefusedScenario(artifactDirectoryPath string)
 			actionRefusedMessage(virtualUnregisteredBusiness+"는 등록되지 않은 사업이라 관리자가 먼저 등록해야 해요.", "An administrator has to register the business label."),
 		},
 		ExpectedEventCounts: []VirtualEventCount{
-			{Name: toolResultEventName(virtualTaskVocabularyToolName), BodyFragment: `saved the task vocabulary`, Count: 0},
+			{Name: toolResultEventName(virtualTaskVocabularyToolName), BodyFragment: `"objectType":"task_vocabulary"`, Count: 0},
 			{Name: toolRequestedEventName("task_update"), MaxCount: 1},
 		},
 		ExpectedReplyFragments: []string{"관리자"},
