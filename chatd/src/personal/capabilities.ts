@@ -41,7 +41,6 @@ export const personCapabilities: Record<string, PersonCapability> = {
 		const request = parsePersonRequest(body);
 		const conversations = await gateway.listConversations(request.actor);
 		return {
-			agentExternalID,
 			conversations: conversations.map((conversation) => ({
 				...conversation,
 				isWithTheAgent: Boolean(
@@ -50,9 +49,9 @@ export const personCapabilities: Record<string, PersonCapability> = {
 			})),
 		};
 	},
-	"person.people.list": async (gateway, body) => {
+	"person.people.list": async (gateway, body, agentExternalID) => {
 		const request = parsePersonRequest(body);
-		return { people: await gateway.listPeople(request.actor) };
+		return { agentExternalID, people: await gateway.listPeople(request.actor) };
 	},
 	"person.dm.ensure": async (gateway, body) => {
 		const request = parsePersonRequest(body);
