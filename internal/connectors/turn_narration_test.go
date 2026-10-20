@@ -4,6 +4,7 @@ package connectors
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 
 	acp "github.com/coder/acp-go-sdk"
@@ -57,14 +58,14 @@ func (adapter *deletingNarrationAdapter) DeleteReply(_ context.Context, _ ReplyT
 // notice lived only in an edit it never applied.
 func TestTheAnswerArrivesWholeAndTheNarrationComesDown(t *testing.T) {
 	adapter := &deletingNarrationAdapter{recordingNarrationAdapter: recordingNarrationAdapter{sentID: "narration-1"}}
-	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"})
+	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"}, deliveredUnrecorded, slog.New(slog.DiscardHandler))
 	narrator.observe(context.Background(), acp.StartToolCall("call-a", "file_read(/a)"))
 
 	sent := 0
 	sendReply := narrator.takeOverSending(func(context.Context, ReplyTarget, OutboundReply) (string, error) {
 		sent++
 		return "answer-1", nil
-	}, deliveredUnrecorded)
+	})
 	messageID, errorValue := sendReply(context.Background(), ReplyTarget{}, OutboundReply{Message: "done"})
 
 	if errorValue != nil {
@@ -80,12 +81,12 @@ func TestTheAnswerArrivesWholeAndTheNarrationComesDown(t *testing.T) {
 
 func TestAFailedAnswerLeavesTheNarrationStanding(t *testing.T) {
 	adapter := &deletingNarrationAdapter{recordingNarrationAdapter: recordingNarrationAdapter{sentID: "narration-1"}}
-	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"})
+	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"}, deliveredUnrecorded, slog.New(slog.DiscardHandler))
 	narrator.observe(context.Background(), acp.StartToolCall("call-a", "file_read(/a)"))
 
 	sendReply := narrator.takeOverSending(func(context.Context, ReplyTarget, OutboundReply) (string, error) {
 		return "", context.Canceled
-	}, deliveredUnrecorded)
+	})
 	sendReply(context.Background(), ReplyTarget{}, OutboundReply{Message: "done"})
 
 	if len(adapter.deletedMessages) != 0 {
@@ -95,7 +96,8 @@ func TestAFailedAnswerLeavesTheNarrationStanding(t *testing.T) {
 
 func TestTheAnswerReplacesTheNarrationRatherThanFollowingIt(t *testing.T) {
 	adapter := &recordingNarrationAdapter{sentID: "message-1"}
-	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"})
+	recordedDeliveries := []string{}
+	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"}, recordingDeliveriesInto(&recordedDeliveries), slog.New(slog.DiscardHandler))
 	if narrator == nil {
 		t.Fatal("an adapter that can edit should be narrated for")
 	}
@@ -104,11 +106,10 @@ func TestTheAnswerReplacesTheNarrationRatherThanFollowingIt(t *testing.T) {
 	narrator.observe(context.Background(), acp.StartToolCall("call-b", "bash(ls)"))
 
 	sent := 0
-	recordedDeliveries := []string{}
 	sendReply := narrator.takeOverSending(func(context.Context, ReplyTarget, OutboundReply) (string, error) {
 		sent++
 		return "message-2", nil
-	}, recordingDeliveriesInto(&recordedDeliveries))
+	})
 	messageID, errorValue := sendReply(context.Background(), ReplyTarget{}, OutboundReply{Message: "done"})
 
 	if errorValue != nil {
@@ -149,14 +150,14 @@ func recordingDeliveriesInto(recordedDeliveries *[]string) func(ReplySender) Rep
 
 func TestAReplyCarryingMoreThanWordsIsSentWhole(t *testing.T) {
 	adapter := &recordingNarrationAdapter{sentID: "message-1"}
-	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"})
+	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"}, deliveredUnrecorded, slog.New(slog.DiscardHandler))
 	narrator.observe(context.Background(), acp.StartToolCall("call-a", "file_read(/a)"))
 
 	sent := 0
 	sendReply := narrator.takeOverSending(func(context.Context, ReplyTarget, OutboundReply) (string, error) {
 		sent++
 		return "message-2", nil
-	}, deliveredUnrecorded)
+	})
 	_, errorValue := sendReply(context.Background(), ReplyTarget{}, OutboundReply{
 		Message:     "here it is",
 		Attachments: []toolcontract.FileAttachment{{}},
@@ -172,11 +173,11 @@ func TestAReplyCarryingMoreThanWordsIsSentWhole(t *testing.T) {
 
 func TestNarrationStopsOnceTheAnswerHasTakenTheMessage(t *testing.T) {
 	adapter := &recordingNarrationAdapter{sentID: "message-1"}
-	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"})
+	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"}, deliveredUnrecorded, slog.New(slog.DiscardHandler))
 	narrator.observe(context.Background(), acp.StartToolCall("call-a", "file_read(/a)"))
 	sendReply := narrator.takeOverSending(func(context.Context, ReplyTarget, OutboundReply) (string, error) {
 		return "message-2", nil
-	}, deliveredUnrecorded)
+	})
 	sendReply(context.Background(), ReplyTarget{}, OutboundReply{Message: "done"})
 
 	editsBefore := len(adapter.editedMessages)
@@ -192,7 +193,7 @@ func TestNarrationStopsOnceTheAnswerHasTakenTheMessage(t *testing.T) {
 
 func TestALineSaysHowTheCallTurnedOut(t *testing.T) {
 	adapter := &recordingNarrationAdapter{sentID: "message-1"}
-	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"})
+	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"}, deliveredUnrecorded, slog.New(slog.DiscardHandler))
 
 	narrator.observe(context.Background(), acp.StartToolCall("call-1", "file_read(/a)"))
 	narrator.observe(context.Background(), acp.StartToolCall("call-2", "bash(ls)"))
@@ -207,7 +208,7 @@ func TestALineSaysHowTheCallTurnedOut(t *testing.T) {
 
 func TestAnUpdateThatSaysNothingOfTheOutcomeChangesNothing(t *testing.T) {
 	adapter := &recordingNarrationAdapter{sentID: "message-1"}
-	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"})
+	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"}, deliveredUnrecorded, slog.New(slog.DiscardHandler))
 	narrator.observe(context.Background(), acp.StartToolCall("call-1", "file_read(/a)"))
 	editsBefore := len(adapter.editedMessages)
 
@@ -221,7 +222,7 @@ func TestAnUpdateThatSaysNothingOfTheOutcomeChangesNothing(t *testing.T) {
 
 func TestAResultForACallNobodyNarratedChangesNothing(t *testing.T) {
 	adapter := &recordingNarrationAdapter{sentID: "message-1"}
-	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"})
+	narrator := newTurnNarrator(adapter, ReplyTarget{ReplyTargetID: "thread-1"}, deliveredUnrecorded, slog.New(slog.DiscardHandler))
 
 	narrator.observe(context.Background(), acp.UpdateToolCall("call-9", acp.WithUpdateStatus(acp.ToolCallStatusCompleted)))
 
