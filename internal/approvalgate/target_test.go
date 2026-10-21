@@ -12,7 +12,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/bluecollar/approval"
-	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
@@ -218,19 +217,6 @@ func TestTheResolverIsAskedAsTheRequesterWhoseCallItIs(t *testing.T) {
 	}
 	if resolver.receivedRequest.ToolName != "event_delete" || string(resolver.receivedRequest.ToolInput) != `{"eventHint":"NVIDIA·젯슨 공급 미팅"}` {
 		t.Fatalf("the resolver is asked about the call the model made, got %+v", resolver.receivedRequest)
-	}
-}
-
-func TestACallTheRequesterAlreadyApprovedForTheWholeTaskResolvesNothingAgain(t *testing.T) {
-	gate, taskRunService, taskRun := gateFixture(t)
-	resolver := resolvedTargetResolver()
-	gate.UseApprovalTargetResolver(resolver)
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalScopeGranted, `{"scope":"calendar"}`)
-
-	gate.AwaitApproval(context.Background(), hintApprovalRequest(taskRun.TaskRunID))
-
-	if resolver.callCount != 0 {
-		t.Fatalf("a call nobody will be asked about needs no question to word, got %d resolutions", resolver.callCount)
 	}
 }
 

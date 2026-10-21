@@ -17,7 +17,7 @@ func testToolSet(t *testing.T, invokedAs *string) *toolcontract.ToolSet {
 	t.Helper()
 	toolSet := toolcontract.NewToolSet([]string{"event_add", "file_read"})
 	toolSet.AllowTestReplacement()
-	register := func(name string, sideEffectClass string, approvalScope string) {
+	register := func(name string, sideEffectClass string) {
 		errorValue := toolSet.RegisterTool(toolcontract.ToolDefinition{
 			ID:              "test:" + name,
 			Name:            name,
@@ -25,7 +25,6 @@ func testToolSet(t *testing.T, invokedAs *string) *toolcontract.ToolSet {
 			Visibility:      toolcontract.ToolVisibilityModel,
 			InputSchema:     json.RawMessage(`{"type":"object","properties":{"note":{"type":"string"}}}`),
 			SideEffectClass: sideEffectClass,
-			ApprovalScope:   approvalScope,
 			ResultContract:  &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`)},
 		}, func(ctx context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 			*invokedAs = invocation.ToolName
@@ -35,8 +34,8 @@ func testToolSet(t *testing.T, invokedAs *string) *toolcontract.ToolSet {
 			t.Fatalf("expected %s to register: %v", name, errorValue)
 		}
 	}
-	register("event_add", toolcontract.ToolSideEffectStateChange, "calendar")
-	register("file_read", toolcontract.ToolSideEffectRead, "")
+	register("event_add", toolcontract.ToolSideEffectStateChange)
+	register("file_read", toolcontract.ToolSideEffectRead)
 	return toolSet
 }
 
@@ -86,9 +85,6 @@ func TestToolCatalogServerPublishesTheRequesterToolSetWithItsDescriptorAxes(t *t
 	}
 	if !publishedTools["file_read"].Annotations.ReadOnlyHint || publishedTools["event_add"].Annotations.ReadOnlyHint {
 		t.Fatalf("expected the side effect class to reach the harness as a read-only hint, got %+v", publishedTools)
-	}
-	if publishedTools["event_add"].Meta[toolcontract.MetaKeyApprovalScope] != "calendar" {
-		t.Fatalf("expected the approval scope to survive as metadata, got %+v", publishedTools["event_add"].Meta)
 	}
 }
 
@@ -159,19 +155,17 @@ func TestToolCatalogServerTellsTheGateWhichTaskRunTheCallBelongsTo(t *testing.T)
 	}
 }
 
-func TestAHarnessReadsBackTheApprovalFactsAGatedScopedToolPublished(t *testing.T) {
+func TestAHarnessReadsBackTheApprovalFactsAGatedToolPublished(t *testing.T) {
 	published := toolcontract.ToolDefinition{
-		ID:                   "test:event_delete",
-		Name:                 "event_delete",
-		Description:          "event_delete description",
-		Visibility:           toolcontract.ToolVisibilityModel,
-		InputSchema:          json.RawMessage(`{"type":"object","properties":{"eventHint":{"type":"string"}}}`),
-		SideEffectClass:      toolcontract.ToolSideEffectDestructive,
-		RequiresApproval:     true,
-		ApprovalScope:        "calendar",
-		ApprovalScopeSummary: "every change to the team calendar",
-		ApprovalInputFields:  []string{"eventHint", "reason"},
-		ResultContract:       &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)},
+		ID:                  "test:event_delete",
+		Name:                "event_delete",
+		Description:         "event_delete description",
+		Visibility:          toolcontract.ToolVisibilityModel,
+		InputSchema:         json.RawMessage(`{"type":"object","properties":{"eventHint":{"type":"string"}}}`),
+		SideEffectClass:     toolcontract.ToolSideEffectDestructive,
+		RequiresApproval:    true,
+		ApprovalInputFields: []string{"eventHint", "reason"},
+		ResultContract:      &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)},
 	}
 	toolSet := toolcontract.NewToolSet([]string{"event_delete"})
 	toolSet.AllowTestReplacement()
@@ -190,8 +184,7 @@ func TestAHarnessReadsBackTheApprovalFactsAGatedScopedToolPublished(t *testing.T
 	var read toolcontract.ToolDescriptor
 	toolcontract.ApplyDescriptorMeta(&read, toolList.Tools[0].Meta)
 
-	if read.SideEffectClass != published.SideEffectClass || !read.RequiresApproval || read.ApprovalScope != published.ApprovalScope ||
-		read.ApprovalScopeSummary != published.ApprovalScopeSummary || !reflect.DeepEqual(read.ApprovalInputFields, published.ApprovalInputFields) {
+	if read.SideEffectClass != published.SideEffectClass || !read.RequiresApproval || !reflect.DeepEqual(read.ApprovalInputFields, published.ApprovalInputFields) {
 		t.Fatalf("the harness did not read back what the tool published: %+v", read)
 	}
 }

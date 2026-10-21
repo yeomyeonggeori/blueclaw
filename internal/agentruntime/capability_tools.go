@@ -170,7 +170,6 @@ func (toolCatalogBuilder *ToolCatalogBuilder) settleApprovalRefusal(toolContext 
 	}, toolcontract.ToolDefinition{
 		Name:             toolDescriptor.Name,
 		RequiresApproval: true,
-		ApprovalScope:    toolDescriptor.ApprovalScope,
 		SideEffectClass:  toolDescriptor.SideEffectClass,
 	})
 	if errorValue != nil {

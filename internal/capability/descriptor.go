@@ -20,7 +20,6 @@ type ToolDescriptor struct {
 	PrivacyClass         string              `json:"privacyClass,omitempty"`
 	EstimatedLatency     string              `json:"estimatedLatency,omitempty"`
 	RequiresUserPresence bool                `json:"requiresUserPresence,omitempty"`
-	ApprovalScope        string              `json:"approvalScope,omitempty"`
 	WorksOffline         bool                `json:"worksOffline,omitempty"`
 	RecallSource         bool                `json:"recallSource,omitempty"`
 	InputSchema          json.RawMessage     `json:"inputSchema,omitempty"`

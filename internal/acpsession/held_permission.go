@@ -58,7 +58,6 @@ func (agent *Agent) reissueHeldPermission(ctx context.Context, sessionID acp.Ses
 		TaskRunID:         taskRun.TaskRunID,
 		ToolName:          heldCall.ToolName,
 		ToolInput:         heldCall.ToolInput,
-		ApprovalScope:     heldCall.ApprovalScope,
 		Prompt:            taskRun.Prompt,
 		Platform:          sessionContext.Addressing.Platform,
 		ConversationID:    sessionContext.Addressing.ConversationID,

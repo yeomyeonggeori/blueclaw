@@ -62,7 +62,6 @@ func TestADecodedDescriptorKeepsWhatItWasGiven(t *testing.T) {
 		"privacyClass": "workspace_document",
 		"estimatedLatency": "high",
 		"requiresUserPresence": true,
-		"approvalScope": "browser",
 		"worksOffline": true,
 		"inputSchema": {"type":"object"},
 		"inputIntentSchema": {"type":"object"},
@@ -98,7 +97,6 @@ func TestADecodedDescriptorKeepsWhatItWasGiven(t *testing.T) {
 		"inputSchemaStrict":    descriptor.InputSchemaStrict,
 		"outputSchemaStrict":   descriptor.OutputSchemaStrict,
 		"sideEffect":           descriptor.SideEffect == "external_publish",
-		"approvalScope":        descriptor.ApprovalScope == "browser",
 		"availability.reason":  descriptor.Availability.Reason == "ready",
 		"idempotency.required": descriptor.Idempotency.Required,
 	} {

@@ -322,7 +322,6 @@ export const capabilityDescriptorSchema = z.strictObject({
   sideEffectClass: z.enum(CapabilitySideEffect),
   sideEffect: z.enum(CapabilitySideEffect),
   requiresApproval: z.boolean().optional(),
-  approvalScope: z.string().optional(),
   completionEvidence: completionEvidenceDescriptorSchema.optional(),
   availability: capabilityAvailabilitySchema,
   idempotency: capabilityIdempotencySchema,

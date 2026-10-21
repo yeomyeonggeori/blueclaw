@@ -39,7 +39,6 @@ func approvalRequestFixture(taskRunID string) mcpserver.ApprovalRequest {
 		TaskRunID:         taskRunID,
 		ToolName:          "event_delete",
 		ToolInput:         json.RawMessage(`{"eventID":"event-1"}`),
-		ApprovalScope:     "calendar",
 		HarnessSession:    mcpserver.HarnessSession{HarnessName: "claude-code", SessionID: "session-uuid", IsResumable: true},
 	}
 }
@@ -67,7 +66,7 @@ func TestAHeldCallIsRecordedWithTheConversationItWasHeldIn(t *testing.T) {
 	}
 
 	body := heldCallEventBody(t, taskRunService, taskRun.TaskRunID)
-	for _, expectedFragment := range []string{"event_delete", "event-1", "calendar", "claude-code", "session-uuid"} {
+	for _, expectedFragment := range []string{"event_delete", "event-1", "claude-code", "session-uuid"} {
 		if !strings.Contains(body, expectedFragment) {
 			t.Fatalf("expected the held call to carry %q so it can be resumed, got %s", expectedFragment, body)
 		}
@@ -112,20 +111,14 @@ func TestTheSameCallRunsOnceTheRequesterHasApprovedIt(t *testing.T) {
 
 func TestAnApprovalIsSpentOnTheCallItAnsweredAndNotTheNextOne(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
-	gate.AwaitApproval(context.Background(), unscopedApprovalRequest(taskRun.TaskRunID, `{"eventID":"event-1"}`))
+	gate.AwaitApproval(context.Background(), approvalRequestForEvent(taskRun.TaskRunID, `{"eventID":"event-1"}`))
 	recordDecision(taskRunService, taskRun.TaskRunID, holdrecord.DecisionApprove)
-	gate.AwaitApproval(context.Background(), unscopedApprovalRequest(taskRun.TaskRunID, `{"eventID":"event-1"}`))
+	gate.AwaitApproval(context.Background(), approvalRequestForEvent(taskRun.TaskRunID, `{"eventID":"event-1"}`))
 
-	repeatedOutcome, _ := gate.AwaitApproval(context.Background(), unscopedApprovalRequest(taskRun.TaskRunID, `{"eventID":"event-1"}`))
+	repeatedOutcome, _ := gate.AwaitApproval(context.Background(), approvalRequestForEvent(taskRun.TaskRunID, `{"eventID":"event-1"}`))
 	if repeatedOutcome.Decision == mcpserver.ApprovalDecisionApproved {
 		t.Fatal("expected one approval to authorise one call, so a second identical call is asked about again")
 	}
-}
-
-func unscopedApprovalRequest(taskRunID string, toolInput string) mcpserver.ApprovalRequest {
-	approvalRequest := approvalRequestForEvent(taskRunID, toolInput)
-	approvalRequest.ApprovalScope = ""
-	return approvalRequest
 }
 
 func approvalRequestForEvent(taskRunID string, toolInput string) mcpserver.ApprovalRequest {
@@ -136,10 +129,10 @@ func approvalRequestForEvent(taskRunID string, toolInput string) mcpserver.Appro
 
 func TestAnApprovalDoesNotCarryOverToACallTheRequesterNeverSaw(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
-	gate.AwaitApproval(context.Background(), unscopedApprovalRequest(taskRun.TaskRunID, `{"eventID":"event-1"}`))
+	gate.AwaitApproval(context.Background(), approvalRequestForEvent(taskRun.TaskRunID, `{"eventID":"event-1"}`))
 	recordDecision(taskRunService, taskRun.TaskRunID, holdrecord.DecisionApprove)
 
-	substitutedOutcome, _ := gate.AwaitApproval(context.Background(), unscopedApprovalRequest(taskRun.TaskRunID, `{"eventID":"event-2"}`))
+	substitutedOutcome, _ := gate.AwaitApproval(context.Background(), approvalRequestForEvent(taskRun.TaskRunID, `{"eventID":"event-2"}`))
 	if substitutedOutcome.Decision == mcpserver.ApprovalDecisionApproved {
 		t.Fatalf("expected approving one call to authorise that call alone, so a substituted target is asked about again, got %+v", substitutedOutcome)
 	}
@@ -185,11 +178,11 @@ func TestAReloadCancellationDoesNotAnswerALaterIdenticalCall(t *testing.T) {
 
 func TestAnApprovalIsSpentByTheCallItAnswered(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
-	gate.AwaitApproval(context.Background(), unscopedApprovalRequest(taskRun.TaskRunID, `{"eventID":"event-1"}`))
+	gate.AwaitApproval(context.Background(), approvalRequestForEvent(taskRun.TaskRunID, `{"eventID":"event-1"}`))
 	recordDecision(taskRunService, taskRun.TaskRunID, holdrecord.DecisionApprove)
 
-	firstOutcome, _ := gate.AwaitApproval(context.Background(), unscopedApprovalRequest(taskRun.TaskRunID, `{"eventID":"event-1"}`))
-	secondOutcome, _ := gate.AwaitApproval(context.Background(), unscopedApprovalRequest(taskRun.TaskRunID, `{"eventID":"event-1"}`))
+	firstOutcome, _ := gate.AwaitApproval(context.Background(), approvalRequestForEvent(taskRun.TaskRunID, `{"eventID":"event-1"}`))
+	secondOutcome, _ := gate.AwaitApproval(context.Background(), approvalRequestForEvent(taskRun.TaskRunID, `{"eventID":"event-1"}`))
 
 	if firstOutcome.Decision != mcpserver.ApprovalDecisionApproved || secondOutcome.Decision != mcpserver.ApprovalDecisionHeld {
 		t.Fatalf("one approval covers one call, got %q then %q", firstOutcome.Decision, secondOutcome.Decision)
@@ -230,51 +223,6 @@ func TestAHeldCallTellsTheRequesterWhatTheyAreBeingAskedAbout(t *testing.T) {
 		if !strings.Contains(confirmationBody, expectedFragment) {
 			t.Fatalf("the connector reads this event to ask the requester, expected %q in %s", expectedFragment, confirmationBody)
 		}
-	}
-}
-
-func TestApprovingAScopedCallGrantsItsScope(t *testing.T) {
-	gate, taskRunService, taskRun := gateFixture(t)
-	gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
-
-	recordDecision(taskRunService, taskRun.TaskRunID, holdrecord.DecisionApprove)
-
-	if grantBody := heldCallEventBodyNamed(t, taskRunService, taskRun.TaskRunID, agentcontract.TaskEventApprovalScopeGranted); !strings.Contains(grantBody, `"scope":"calendar"`) {
-		t.Fatalf("approving the call approves its scope, got %s", grantBody)
-	}
-}
-
-func TestApprovingAnUnscopedCallGrantsNothing(t *testing.T) {
-	gate, taskRunService, taskRun := gateFixture(t)
-	approvalRequest := approvalRequestFixture(taskRun.TaskRunID)
-	approvalRequest.ApprovalScope = ""
-	gate.AwaitApproval(context.Background(), approvalRequest)
-
-	recordDecision(taskRunService, taskRun.TaskRunID, holdrecord.DecisionApprove)
-
-	if carriesEvent(recordedEventNames(taskRunService, taskRun.TaskRunID), agentcontract.TaskEventApprovalScopeGranted) {
-		t.Fatal("a call with no approval scope granted one")
-	}
-}
-
-func TestApprovingTheWholeTaskLetsTheNextCallInThatScopeRun(t *testing.T) {
-	gate, taskRunService, taskRun := gateFixture(t)
-	gate.AwaitApproval(context.Background(), approvalRequestForEvent(taskRun.TaskRunID, `{"eventID":"event-1"}`))
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalScopeGranted, `{"scope":"calendar"}`)
-
-	nextCallOutcome, _ := gate.AwaitApproval(context.Background(), approvalRequestForEvent(taskRun.TaskRunID, `{"eventID":"event-2"}`))
-	if nextCallOutcome.Decision != mcpserver.ApprovalDecisionApproved {
-		t.Fatalf("approving the whole task means the requester is not asked again inside that scope, got %+v", nextCallOutcome)
-	}
-}
-
-func TestApprovingOneScopeDoesNotApproveAnother(t *testing.T) {
-	gate, taskRunService, taskRun := gateFixture(t)
-	taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalScopeGranted, `{"scope":"messaging"}`)
-
-	heldOutcome, _ := gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
-	if heldOutcome.Decision != mcpserver.ApprovalDecisionHeld {
-		t.Fatalf("a grant covers the scope it was given for and no other, got %+v", heldOutcome)
 	}
 }
 
@@ -428,21 +376,5 @@ func TestARunThatCannotBeParkedIsNeverToldItWasAsked(t *testing.T) {
 	unparkedTaskRun, _ := taskRunService.FindTaskRun(taskRun.TaskRunID)
 	if unparkedTaskRun.Status == task.TaskStatusWaitingApproval {
 		t.Fatalf("expected a run that could not be parked never to report waiting, got %q", unparkedTaskRun.Status)
-	}
-}
-
-func TestTheQuestionIsToldWhatTheApprovalScopeCovers(t *testing.T) {
-	gate, _, taskRun := gateFixture(t)
-	languageModel := &wordingLanguageModel{question: "지울까요?"}
-	gate.UseQuestionWorder(approval.NewWorder(languageModel))
-
-	gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
-
-	messages := ""
-	for _, message := range languageModel.lastRequest.Messages {
-		messages += message.Content + "\n"
-	}
-	if !strings.Contains(messages, `"approvalScope":{"name":"calendar"`) || !strings.Contains(messages, "approves every action of that scope") {
-		t.Fatalf("the wording model was not told what approving this call also approves, got %s", messages)
 	}
 }

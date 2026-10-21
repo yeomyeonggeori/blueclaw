@@ -42,7 +42,7 @@ func TestTheTurnGateHandsTheToolsApprovalFactsToTheWording(t *testing.T) {
 	toolSet.Invoke(toolcontract.WithTaskRunID(context.Background(), taskRun.TaskRunID), toolcontract.ToolInvocation{ToolName: "file_delete", Input: json.RawMessage(`{"path":"~/a.md","note":"x"}`)})
 
 	wordingContext := marshalRequestMessages(languageModel.lastRequest)
-	for _, expectedFragment := range []string{`"covers":"every file in the workspace"`, `"path":"~/a.md"`} {
+	for _, expectedFragment := range []string{`"operation":"file_delete"`, `"path":"~/a.md"`} {
 		if !strings.Contains(wordingContext, expectedFragment) {
 			t.Fatalf("expected %q in %s", expectedFragment, wordingContext)
 		}
@@ -55,17 +55,15 @@ func TestTheTurnGateHandsTheToolsApprovalFactsToTheWording(t *testing.T) {
 func registerDeletingTool(t *testing.T, toolSet *toolcontract.ToolSet) {
 	t.Helper()
 	errorValue := toolSet.RegisterTool(toolcontract.ToolDefinition{
-		ID:                   "test:file_delete",
-		Name:                 "file_delete",
-		Description:          "file_delete",
-		Visibility:           toolcontract.ToolVisibilityModel,
-		InputSchema:          json.RawMessage(`{"type":"object"}`),
-		RequiresApproval:     true,
-		ApprovalScope:        "workspace_files",
-		ApprovalScopeSummary: "every file in the workspace",
-		ApprovalInputFields:  []string{"path"},
-		SideEffectClass:      toolcontract.ToolSideEffectStateChange,
-		ResultContract:       &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)},
+		ID:                  "test:file_delete",
+		Name:                "file_delete",
+		Description:         "file_delete",
+		Visibility:          toolcontract.ToolVisibilityModel,
+		InputSchema:         json.RawMessage(`{"type":"object"}`),
+		RequiresApproval:    true,
+		ApprovalInputFields: []string{"path"},
+		SideEffectClass:     toolcontract.ToolSideEffectStateChange,
+		ResultContract:      &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)},
 	}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return toolcontract.ToolSuccessData("done", json.RawMessage(`{}`)), nil
 	})

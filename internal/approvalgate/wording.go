@@ -55,8 +55,6 @@ func (gate *Gate) recordWordingFailure(approvalRequest mcpserver.ApprovalRequest
 func toolFacts(approvalRequest mcpserver.ApprovalRequest) toolcontract.ToolDefinition {
 	var tool toolcontract.ToolDefinition
 	tool.Name = approvalRequest.ToolName
-	tool.ApprovalScope = approvalRequest.ApprovalScope
-	tool.ApprovalScopeSummary = approvalRequest.ApprovalScopeSummary
 	tool.ApprovalInputFields = approvalRequest.ApprovalInputFields
 	tool.SideEffectClass = approvalRequest.SideEffectClass
 	return tool
