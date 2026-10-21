@@ -1623,7 +1623,7 @@ func eventBodies(events []task.TaskEvent, name string) []string {
 }
 
 func TestVirtualCapabilitySuccessLeavesTheResultAsTheAnswer(t *testing.T) {
-	service := virtualCapabilityService{taskVocabulary: newVirtualTaskVocabulary(virtualRegisteredBusinesses)}
+	service := virtualCapabilityService{taskVocabulary: newVirtualTaskVocabulary(virtualRegisteredBusinesses, nil)}
 	responses := map[string]string{
 		"task_add":       service.response("task_add", []byte(`{"input":{"title":"분기 보고서 정리"},"context":{}}`)),
 		"task_list":      service.response("task_list", []byte(`{"input":{},"context":{}}`)),

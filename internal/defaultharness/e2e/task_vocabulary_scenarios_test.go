@@ -10,7 +10,7 @@ import (
 const virtualRequesterContext = `"context":{"requesterPersonID":"` + virtualRequesterPersonID + `"}`
 
 func TestVirtualTaskVocabularyRefusesAMember(t *testing.T) {
-	service := virtualCapabilityService{taskVocabulary: newVirtualTaskVocabulary(virtualRegisteredBusinesses)}
+	service := virtualCapabilityService{taskVocabulary: newVirtualTaskVocabulary(virtualRegisteredBusinesses, nil)}
 	response := service.response(virtualTaskVocabularyToolName, []byte(`{"input":{"businesses":[{"name":"`+virtualUnregisteredBusiness+`"}]},`+virtualRequesterContext+`}`))
 	if !strings.Contains(response, virtualTaskVocabularyNotAdminError) || !strings.Contains(response, `"outcome":"denied"`) {
 		t.Fatalf("expected the record's refusal for a member, got %s", response)
@@ -23,7 +23,7 @@ func TestVirtualTaskVocabularyRefusesAMember(t *testing.T) {
 func TestVirtualTaskVocabularyTakesAnAdministratorsWholeList(t *testing.T) {
 	service := virtualCapabilityService{
 		adminPersonIDs: map[string]bool{virtualRequesterPersonID: true},
-		taskVocabulary: newVirtualTaskVocabulary(virtualRegisteredBusinesses),
+		taskVocabulary: newVirtualTaskVocabulary(virtualRegisteredBusinesses, nil),
 	}
 	service.response("task_add", []byte(`{"input":{"title":"report"},`+virtualRequesterContext+`}`))
 	refused := service.response("task_update", []byte(`{"input":{"taskHint":"task-1","business":"`+virtualUnregisteredBusiness+`"},`+virtualRequesterContext+`}`))
