@@ -1,3 +1,4 @@
+import { asAHostService } from './service-credential.ts';
 export type NormalizedInboundEvent = {
   platform: string;
   conversationID: string;
@@ -41,12 +42,12 @@ export async function deliverInboundEventToRelay(
 
 async function attemptDelivery(relayInboundURL: string, event: NormalizedInboundEvent): Promise<DeliveryAttempt> {
   try {
-    const response = await fetch(relayInboundURL, {
+    const response = await fetch(relayInboundURL, asAHostService({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(event),
       signal: AbortSignal.timeout(requestTimeoutMilliseconds),
-    });
+    }));
     if (response.status === acceptedStatusCode) return { accepted: true };
     return { accepted: false, failure: `status ${response.status}` };
   } catch (error) {

@@ -11,17 +11,18 @@ import (
 )
 
 type RuntimeConfiguration struct {
-	BaseURL       string                      `json:"baseURL"`
-	Capabilities  CapabilityConfiguration     `json:"capabilities"`
-	AgentProfiles []AgentProfileConfiguration `json:"agentProfiles"`
-	LanguageModel LanguageModelConfiguration  `json:"languageModel"`
-	Database      DatabaseConfiguration       `json:"database"`
-	Memory        MemoryConfiguration         `json:"memory"`
-	Agent         AgentConfiguration          `json:"agent"`
-	Connectors    ConnectorConfiguration      `json:"connectors"`
-	Logging       LoggingConfiguration        `json:"logging"`
-	Terminal      TerminalConfiguration       `json:"terminal"`
-	Scheduler     SchedulerConfiguration      `json:"scheduler"`
+	BaseURL          string                      `json:"baseURL"`
+	ServiceTokenPath string                      `json:"serviceTokenPath,omitempty"`
+	Capabilities     CapabilityConfiguration     `json:"capabilities"`
+	AgentProfiles    []AgentProfileConfiguration `json:"agentProfiles"`
+	LanguageModel    LanguageModelConfiguration  `json:"languageModel"`
+	Database         DatabaseConfiguration       `json:"database"`
+	Memory           MemoryConfiguration         `json:"memory"`
+	Agent            AgentConfiguration          `json:"agent"`
+	Connectors       ConnectorConfiguration      `json:"connectors"`
+	Logging          LoggingConfiguration        `json:"logging"`
+	Terminal         TerminalConfiguration       `json:"terminal"`
+	Scheduler        SchedulerConfiguration      `json:"scheduler"`
 }
 
 type CapabilityConfiguration struct {

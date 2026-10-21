@@ -1,3 +1,4 @@
+import { asAHostService } from "../service-credential.ts";
 import { createBuzzRelayClient, type BuzzRelayClient } from "../adapters/buzz/relay-client.ts";
 import { listUserConversations, pubkeyFromSecret, type UserConversation } from "../adapters/buzz/user-session.ts";
 import { carriesTag, firstTagValue, type BuzzEvent } from "../adapters/buzz/types.ts";
@@ -227,12 +228,12 @@ export class BuzzArrivalWatch {
 }
 
 async function postToTheRelay(url: string, heard: Arrival | Typing | Withdrawal): Promise<void> {
-	const response = await fetch(url, {
+	const response = await fetch(url, asAHostService({
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(heard),
 		signal: AbortSignal.timeout(10_000),
-	});
+	}));
 	if (response.ok) return;
 	throw new Error(`the relay answered ${response.status} at ${url}: ${await response.text()}`);
 }

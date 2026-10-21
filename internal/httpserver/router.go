@@ -11,6 +11,7 @@ import (
 )
 
 type RouterDependencies struct {
+	ServiceTokenPath      string
 	PolicyHandler         adminapi.PolicyHandler
 	IdentityResolve       adminapi.IdentityResolveHandler
 	HealthHandler         HealthHandler
@@ -137,5 +138,5 @@ func NewRouter(routerDependencies RouterDependencies) http.Handler {
 		multiplexer.Handle("/login/", TaskInboxHandler{RootDirectoryPath: "web/admin"})
 	}
 
-	return withRecovery(withOriginCheck(multiplexer))
+	return withRecovery(withOriginCheck(withServiceToken(routerDependencies.ServiceTokenPath, multiplexer)))
 }

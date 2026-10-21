@@ -232,6 +232,8 @@ The platforms the protocol knows are `api` and `buzz` (`protocol/generated/json-
 
 The `api` connector identifies the sender by email and serves replies at `GET /agent/api/replies?conversationID=`. Messenger platforms go through `chatd`, the TypeScript bridge in `chatd/`, which holds the platform credentials, normalizes inbound messages and renders outbound replies. It ships adapters for Buzz and Mattermost. `connectors.chatd` configures it (`endpoint`, default `http://127.0.0.1:18090`; `timeoutSecond`; `enabledPlatforms`), and a platform listed in `enabledPlatforms` beyond the protocol's own is registered with a warning.
 
+Loopback is open to every process on the machine, including commands run as a requester, so the host services tell each other apart from those commands by a token only their accounts can read. chatd will not start without `CHATD_SERVICE_TOKEN_PATH` and answers `401` to any `/v1/platform/*` call whose `Authorization: Bearer` is not that file's token; it sends the same token to blueclaw's connector door, to admind and to the relay. When the runtime document names `serviceTokenPath`, the daemon sends it to chatd and answers `401` on `/admin/api/*` (except `/admin/api/health`) and `/connectors/*` to a caller without it. The operator terminal reads it from the same runtime document.
+
 ### Durability
 
 Inbound events persist in `raw_event` with a `pending`, `running`, `succeeded` or `failed` status, and replies enqueue into `connector_outbox`. Background workers claim stale rows with retry and backoff, and a duplicate inbound event returns the stored result instead of running again.

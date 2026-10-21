@@ -22,6 +22,7 @@ func newRouterDependencies(components applicationComponents) httpserver.RouterDe
 	services := components.services
 	kernel := components.kernel
 	return httpserver.RouterDependencies{
+		ServiceTokenPath:      runtimeConfiguration.ServiceTokenPath,
 		HealthHandler:         newHealthHandler(components),
 		WorkspaceFilesHandler: newWorkspaceFilesHandler(runtimeConfiguration, kernel, directory),
 		PersonaHandler:        newPersonaHandler(runtimeConfiguration, kernel, directory),

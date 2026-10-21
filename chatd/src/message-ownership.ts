@@ -1,3 +1,4 @@
+import { asAHostService } from "./service-credential.ts";
 import type { BuzzAdapter } from "./adapters/buzz/adapter.ts";
 import { pubkeyFromSecret } from "./adapters/buzz/user-session.ts";
 
@@ -79,11 +80,11 @@ async function askAdmindForSigningSecret(
 ): Promise<string> {
 	let response: Response;
 	try {
-		response = await fetch(`${admindBaseURL}${signingSecretPath}`, {
+		response = await fetch(`${admindBaseURL}${signingSecretPath}`, asAHostService({
 			method: "POST",
 			headers: { "content-type": "application/json" },
 			body: JSON.stringify({ pubkeyHex }),
-		});
+		}));
 	} catch (error) {
 		throw refused(`this device cannot reach the service that holds ${pubkeyHex}'s signing key (${String(error)})`);
 	}

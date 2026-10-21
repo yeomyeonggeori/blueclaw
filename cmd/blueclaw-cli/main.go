@@ -3,11 +3,14 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/enrollment"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
@@ -35,7 +38,7 @@ func main() {
 	if configurationPath == "" {
 		configurationPath = home.RuntimeConfigurationPath()
 	}
-	client := tui.NewClient(resolveBaseURL(*baseURL, configurationPath), nil).DecidingAs(resolveApproverEmail(*approverEmail, home.PolicyPath()))
+	client := tui.NewClient(resolveBaseURL(*baseURL, configurationPath), adminAPIClient(configurationPath)).DecidingAs(resolveApproverEmail(*approverEmail, home.PolicyPath()))
 	program := tea.NewProgram(tui.NewModel(client, configurationPath))
 	if _, errorValue := program.Run(); errorValue != nil {
 		fmt.Fprintln(os.Stderr, "blueclaw:", errorValue)
@@ -63,6 +66,14 @@ func resolveApproverEmail(configuredApproverEmail string, policyPath string) str
 		return ""
 	}
 	return policyDocument.People[0].Emails[0]
+}
+
+func adminAPIClient(runtimeConfigurationPath string) *http.Client {
+	runtimeConfiguration, errorValue := config.LoadRuntimeConfiguration(runtimeConfigurationPath)
+	if errorValue != nil || strings.TrimSpace(runtimeConfiguration.ServiceTokenPath) == "" {
+		return nil
+	}
+	return &http.Client{Timeout: 15 * time.Second, Transport: capability.BearerTokenTransport(nil, runtimeConfiguration.ServiceTokenPath)}
 }
 
 func runSetup(home enrollment.Home) error {
