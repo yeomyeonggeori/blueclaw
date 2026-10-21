@@ -22,6 +22,7 @@ func newRouterDependencies(components applicationComponents) httpserver.RouterDe
 	services := components.services
 	kernel := components.kernel
 	return httpserver.RouterDependencies{
+		ServiceTokenPath:      runtimeConfiguration.ServiceTokenPath,
 		HealthHandler:         newHealthHandler(components),
 		WorkspaceFilesHandler: newWorkspaceFilesHandler(runtimeConfiguration, kernel, directory),
 		PersonaHandler:        newPersonaHandler(runtimeConfiguration, kernel, directory),
@@ -39,6 +40,7 @@ func newRouterDependencies(components applicationComponents) httpserver.RouterDe
 		LearningHandler:       newLearningHandler(components),
 		ToolInventoryHandler:  adminapi.ToolInventoryHandler{ToolCatalogBuilder: components.toolCatalogBuilder},
 		TaskApprovalHandler:   newTaskApprovalHandler(services, directory, components.taskLauncher, components.connectorRuntime),
+		HeldCallRedemption:    adminapi.HeldCallRedemptionHandler{TaskRunService: services.taskRunService},
 		QuiesceHandler: adminapi.QuiesceHandler{
 			Controller:     components.taskIntakeController,
 			TaskRunService: services.taskRunService,
