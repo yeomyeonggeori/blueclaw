@@ -2987,9 +2987,6 @@ func scenarioTurnRouterResponse(scenario VirtualSessionScenario, virtualTurn Vir
 		"priorTaskReference":     "none",
 		"busyRoute":              string(inboundengagement.BusyRouteNewTask),
 	}
-	if scenario.ScriptedExecutionPlan != nil && (scenario.ScriptedExecutionPlan.ExternalSend || scenario.ScriptedExecutionPlan.ThirdPartyExternalSend) {
-		routerDocument["isExternalSendRequested"] = true
-	}
 	if virtualTurnExpectsEvent(virtualTurn, agentcontract.TaskEventConfirmationReplyClassified) {
 		routerDocument["approval"] = "approve"
 	}

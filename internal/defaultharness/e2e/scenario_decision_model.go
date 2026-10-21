@@ -177,24 +177,24 @@ type scenarioReplyReader struct {
 	decisionModel *scenarioDecisionModel
 }
 
-func (reader scenarioReplyReader) Read(_ context.Context, question approvalreply.Question, _ string, _ agentcontract.LLMCallObserver) (string, bool, error) {
+func (reader scenarioReplyReader) Read(_ context.Context, question approvalreply.Question, _ string, _ agentcontract.LLMCallObserver) (approvalreply.Reading, error) {
 	if reader.decisionModel == nil {
-		return "", false, nil
+		return approvalreply.Reading{}, nil
 	}
 	outcome, isDecided := reader.decisionModel.decidedTurnReadingTheScript()
 	if !isDecided {
-		return "", false, nil
+		return approvalreply.Reading{}, nil
 	}
-	return scriptedOption(question.Options, outcome.TurnDecision)
+	return scriptedReading(question.Options, outcome.TurnDecision), nil
 }
 
-func scriptedOption(options []approvalreply.Option, turnDecision turnclassification.TurnDecision) (string, bool, error) {
+func scriptedReading(options []approvalreply.Option, turnDecision turnclassification.TurnDecision) approvalreply.Reading {
 	for _, option := range options {
-		if isScriptedOption(option, turnDecision) {
-			return option.ID, true, nil
+		if !option.IsDeclining && isScriptedOption(option, turnDecision) {
+			return approvalreply.Reading{ApprovedOptionID: option.ID}
 		}
 	}
-	return "", false, nil
+	return approvalreply.Reading{}
 }
 
 func isScriptedOption(option approvalreply.Option, turnDecision turnclassification.TurnDecision) bool {

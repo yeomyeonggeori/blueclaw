@@ -54,6 +54,7 @@ func (agent *Agent) reissueHeldPermission(ctx context.Context, sessionID acp.Ses
 	// is only offered an approval when the runtime can say which call is waiting.
 	approvalRequest := mcpserver.ApprovalRequest{
 		RequesterPersonID: sessionContext.Requester.PersonID,
+		RequesterEmail:    sessionContext.Requester.Email,
 		TaskRunID:         taskRun.TaskRunID,
 		ToolName:          heldCall.ToolName,
 		ToolInput:         heldCall.ToolInput,
@@ -119,7 +120,7 @@ func (agent *Agent) resumeAnsweredTaskRun(ctx context.Context, sessionID acp.Ses
 		Prompt:                 taskRun.Prompt,
 		ResponseLanguage:       addressing.ResponseLanguage,
 		PersonAccess:           agent.directory.ResolvePersonAccess(requester.PersonID),
-		CheckpointSender:       agent.checkpointSenderFor(sessionID),
+		CheckpointSender:       agent.checkpointSenderFor(sessionID, Delivery{}),
 	}
 	launchResult, errorValue := agent.taskLauncher.Launch(ctx, launchRequest)
 	if errorValue != nil {

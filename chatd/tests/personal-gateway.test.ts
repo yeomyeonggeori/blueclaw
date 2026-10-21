@@ -308,6 +308,28 @@ describe("the conversation with the agent", () => {
 	});
 });
 
+describe("the people list", () => {
+	test("names the agent's account, the one place a client learns which account that is", async () => {
+		recordFetches((url) => {
+			if (url.endsWith("/users/me")) return { id: "person-a", username: "lee", first_name: "", last_name: "" };
+			if (url.includes("/users?")) {
+				return [
+					{ id: "bot-1", username: "internkim", first_name: "Intern", last_name: "Kim" },
+					{ id: "person-b", username: "sample", first_name: "예시", last_name: "박" },
+				];
+			}
+			return [];
+		});
+
+		const answer = await (
+			await call("person.people.list", { actor: { kind: "mattermost-token", secret: "the-person-token" } })
+		).json();
+
+		expect(answer.agentExternalID).toBe("bot-1");
+		expect(answer.people.map((person: { externalID: string }) => person.externalID)).toEqual(["bot-1", "person-b"]);
+	});
+});
+
 describe("an attachment the messenger gave no media type", () => {
 	test("is still known by what its name says it is", async () => {
 		recordFetches((url) => {

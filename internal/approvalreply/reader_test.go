@@ -11,13 +11,18 @@ import (
 )
 
 type answeringModel struct {
-	choice   string
-	requests []model.DecisionRequest
+	choice        string
+	probabilities map[string]float64
+	requests      []model.DecisionRequest
 }
 
 func (decisionModel *answeringModel) Decide(_ context.Context, request model.DecisionRequest) (model.DecisionResponse, error) {
 	decisionModel.requests = append(decisionModel.requests, request)
-	return model.DecisionResponse{Answers: map[string]model.DecisionAnswer{AnswerQuestionName: {Type: model.DecisionQuestionTypeChoice, Choice: decisionModel.choice}}}, nil
+	probabilities := decisionModel.probabilities
+	if probabilities == nil {
+		probabilities = map[string]float64{decisionModel.choice: 1}
+	}
+	return model.DecisionResponse{Answers: map[string]model.DecisionAnswer{AnswerQuestionName: {Type: model.DecisionQuestionTypeChoice, Choice: decisionModel.choice, Probabilities: probabilities}}}, nil
 }
 
 const (
@@ -28,7 +33,7 @@ const (
 func approvalQuestion(text string) Question {
 	return Question{Text: text, Options: []Option{
 		{ID: approveOptionID, Meaning: AllowMeaning("approve this call")},
-		{ID: rejectOptionID, Meaning: RejectMeaning},
+		{ID: rejectOptionID, Meaning: RejectMeaning, IsDeclining: true},
 	}}
 }
 
@@ -38,20 +43,59 @@ func (failingModel) Decide(context.Context, model.DecisionRequest) (model.Decisi
 	return model.DecisionResponse{}, errors.New("decisions endpoint answered 502")
 }
 
-func TestAnOfferedOptionIsTheAnswer(t *testing.T) {
-	optionID, isAnswer, errorValue := NewDecisionModelReader(&answeringModel{choice: "approve"}).Read(context.Background(), approvalQuestion("보낼까요?"), "ㅇ", nil)
-
-	if errorValue != nil || !isAnswer || optionID != approveOptionID {
-		t.Fatalf("read %q answered=%v: %v", optionID, isAnswer, errorValue)
+func TestAnAllowingOptionIsAnApprovalOnlyWhenItOutweighsEverythingElseTogether(t *testing.T) {
+	for _, readingCase := range []struct {
+		name          string
+		probabilities map[string]float64
+		approved      string
+	}{
+		{name: "a plurality is not a majority", probabilities: map[string]float64{approveOptionID: 0.4, OtherOptionID: 0.35, rejectOptionID: 0.25}},
+		{name: "a majority approves", probabilities: map[string]float64{approveOptionID: 0.55, OtherOptionID: 0.3, rejectOptionID: 0.15}, approved: approveOptionID},
+		{name: "a tie is not a majority", probabilities: map[string]float64{approveOptionID: 0.5, OtherOptionID: 0.5}},
+		{name: "no probabilities are no approval", probabilities: map[string]float64{}},
+		{name: "a declining majority is no approval", probabilities: map[string]float64{rejectOptionID: 0.9, approveOptionID: 0.1}},
+	} {
+		decisionModel := &answeringModel{choice: approveOptionID, probabilities: readingCase.probabilities}
+		reading, errorValue := NewDecisionModelReader(decisionModel).Read(context.Background(), approvalQuestion("보낼까요?"), "ㅇ", nil)
+		if errorValue != nil || reading.ApprovedOptionID != readingCase.approved {
+			t.Fatalf("%s: read %+v, want approval of %q: %v", readingCase.name, reading, readingCase.approved, errorValue)
+		}
 	}
 }
 
-func TestOtherAndAnOptionNobodyOfferedAreNotAnAnswer(t *testing.T) {
-	for _, choice := range []string{"other", "tomorrowNoon"} {
-		_, isAnswer, errorValue := NewDecisionModelReader(&answeringModel{choice: choice}).Read(context.Background(), approvalQuestion("보낼까요?"), "음", nil)
-		if errorValue != nil || isAnswer {
-			t.Fatalf("%s read as an answer=%v: %v", choice, isAnswer, errorValue)
+func TestEachAllowingOptionIsWeighedAgainstAllTheRest(t *testing.T) {
+	question := Question{Text: "언제 할까요?", Options: []Option{
+		{ID: "now", Meaning: AllowMeaning("run it now")},
+		{ID: "offHours", Meaning: AllowMeaning("run it at 03:00")},
+		{ID: "cancel", Meaning: RejectMeaning, IsDeclining: true},
+	}}
+	for _, readingCase := range []struct {
+		probabilities map[string]float64
+		approved      string
+	}{
+		{probabilities: map[string]float64{"now": 0.45, "offHours": 0.45, "cancel": 0.1}},
+		{probabilities: map[string]float64{"now": 0.2, "offHours": 0.7, OtherOptionID: 0.1}, approved: "offHours"},
+	} {
+		decisionModel := &answeringModel{choice: "now", probabilities: readingCase.probabilities}
+		reading, _ := NewDecisionModelReader(decisionModel).Read(context.Background(), question, "새벽에", nil)
+		if reading.ApprovedOptionID != readingCase.approved {
+			t.Fatalf("%v: read %+v, want %q", readingCase.probabilities, reading, readingCase.approved)
 		}
+	}
+}
+
+func TestOtherAndAnOptionNobodyOfferedAreNotAnApproval(t *testing.T) {
+	for _, choice := range []string{"other", "tomorrowNoon"} {
+		reading, errorValue := NewDecisionModelReader(&answeringModel{choice: choice}).Read(context.Background(), approvalQuestion("보낼까요?"), "음", nil)
+		if errorValue != nil || reading.IsApproval() {
+			t.Fatalf("%s read as an approval %+v: %v", choice, reading, errorValue)
+		}
+	}
+}
+
+func TestTheDecliningOptionIsTheOneOfferedAsDeclining(t *testing.T) {
+	if approvalQuestion("보낼까요?").DecliningOptionID() != rejectOptionID {
+		t.Fatal("the question did not name its declining option")
 	}
 }
 
@@ -113,15 +157,15 @@ func TestTheStateCarriesOnlyThePostedQuestionAndTheReply(t *testing.T) {
 func TestAnEmptyReplyIsNotSentToTheModel(t *testing.T) {
 	decisionModel := &answeringModel{choice: "approve"}
 
-	_, isAnswer, errorValue := NewDecisionModelReader(decisionModel).Read(context.Background(), approvalQuestion("보낼까요?"), "  ", nil)
+	reading, errorValue := NewDecisionModelReader(decisionModel).Read(context.Background(), approvalQuestion("보낼까요?"), "  ", nil)
 
-	if errorValue == nil || isAnswer || len(decisionModel.requests) != 0 {
-		t.Fatalf("an empty reply reached the model: answered=%v error=%v", isAnswer, errorValue)
+	if errorValue == nil || reading.IsApproval() || len(decisionModel.requests) != 0 {
+		t.Fatalf("an empty reply reached the model: read=%+v error=%v", reading, errorValue)
 	}
 }
 
 func TestAMissingDecisionModelIsAnError(t *testing.T) {
-	_, _, errorValue := NewDecisionModelReader(nil).Read(context.Background(), approvalQuestion("보낼까요?"), "ㅇ", nil)
+	_, errorValue := NewDecisionModelReader(nil).Read(context.Background(), approvalQuestion("보낼까요?"), "ㅇ", nil)
 
 	if errorValue == nil {
 		t.Fatal("a reader with no decision model answered")
@@ -141,7 +185,7 @@ func TestTheCallIsHandedToTheObserver(t *testing.T) {
 
 func TestAFailedCallIsObservedAndReturned(t *testing.T) {
 	observed := []agentcontract.LLMCallRecord{}
-	_, _, errorValue := NewDecisionModelReader(failingModel{}).Read(context.Background(), approvalQuestion("보낼까요?"), "ㅇ", func(record agentcontract.LLMCallRecord) {
+	_, errorValue := NewDecisionModelReader(failingModel{}).Read(context.Background(), approvalQuestion("보낼까요?"), "ㅇ", func(record agentcontract.LLMCallRecord) {
 		observed = append(observed, record)
 	})
 

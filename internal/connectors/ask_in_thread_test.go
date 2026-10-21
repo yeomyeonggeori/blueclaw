@@ -18,6 +18,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
@@ -216,31 +217,30 @@ func TestARootReplyToAThreadQuestionIsNotAnAnswer(t *testing.T) {
 	fixture.await(t, asking)
 }
 
-func TestAReplyAfterAnotherExchangeStillContinuesTheRunThatAsked(t *testing.T) {
+func TestAReplyThatIsNotAnApprovalRejectsTheHoldOnceAndGoesOnAsTheNextMessage(t *testing.T) {
 	script := deleteApprovalScript(`{"answer":"other"}`, `{"answer":"approve"}`)
-	script.turnRouters = append(script.turnRouters, answerQuestionRoute("a question beside the waiting call"), answerQuestionRoute("a question beside the waiting call"))
-	script.actions = []string{
-		script.actions[0],
-		connectorFinishMessage("내일 휴가로 등록된 일정 하나입니다."),
-		script.actions[1],
+	for range 6 {
+		script.turnRouters = append(script.turnRouters, answerQuestionRoute("a reply beside the declined call"))
 	}
+	script.actions = []string{script.actions[0], connectorFinishMessage("일정 삭제를 멈췄습니다.")}
 	fixture := newThreadAskFixture(t, script)
+	fixture.connectorRuntime.UseGatewayDecider(&scriptedGatewayDecider{addressing: addressedToBot(), busyRoute: inboundengagement.BusyRouteNewTask})
 	asking := fixture.send(context.Background(), threadReplyEvent("message-1", threadAskRequest))
 	taskRunID := fixture.awaitQuestionOnTheThread(t)
 
-	between := fixture.await(t, fixture.send(context.Background(), threadReplyEvent("message-2", "그게 어떤 일정이었지?")))
-	if between.Reason == ApprovalAnsweredInThreadReason || between.TaskRunID == taskRunID {
-		t.Fatalf("a question about the call ran as %+v, expected its own turn", between)
-	}
-	answer := fixture.await(t, fixture.send(context.Background(), threadReplyEvent("message-3", "ㅇㅇ")))
-	result := fixture.await(t, asking)
+	reply := fixture.await(t, fixture.send(context.Background(), threadReplyEvent("message-2", "그게 어떤 일정이었지?")))
+	fixture.await(t, asking)
+	stray := fixture.await(t, fixture.send(context.Background(), threadReplyEvent("message-3", "ㅇㅇ")))
 
-	if answer.TaskRunID != taskRunID || result.TaskRunID != taskRunID {
-		t.Fatalf("ㅇㅇ settled %+v and the run ended as %+v, expected both on the run that asked", answer, result)
+	if reply.Reason == ApprovalAnsweredInThreadReason || stray.Reason == ApprovalAnsweredInThreadReason {
+		t.Fatalf("the reply settled %+v and the stray ㅇㅇ %+v; neither may be swallowed as an approval", reply, stray)
 	}
-	taskRun, _ := fixture.connectorRuntime.taskRunService.FindTaskRun(taskRunID)
-	if taskRun.Status != task.TaskStatusCompleted || fixture.invokedToolCount() != 1 {
-		t.Fatalf("status %s with calls %v, expected one call on a completed run", taskRun.Status, fixture.invokedTools)
+	holds := holdrecord.Holds(fixture.connectorRuntime.taskRunService.ListTaskEvent(taskRunID))
+	if len(holds) != 1 || holds[0].State != holdrecord.StateRejected {
+		t.Fatalf("holds %+v, expected the one hold rejected by the reply that was not an approval", holds)
+	}
+	if fixture.invokedToolCount() != 0 || fixture.connectorRuntime.isAwaitedInThread(taskRunID) {
+		t.Fatalf("calls %v awaited=%v: a later ㅇㅇ must find no stale question to approve", fixture.invokedTools, fixture.connectorRuntime.isAwaitedInThread(taskRunID))
 	}
 }
 
@@ -712,19 +712,25 @@ func TestAQuestionToARequesterTheMessengerRefusesIsUnreachable(t *testing.T) {
 }
 
 func TestAReplyInTheQuestionsThreadDecliningTheCallSettlesItWithoutRunningIt(t *testing.T) {
-	fixture := newThreadAskFixture(t, deleteApprovalScript(`{"answer":"reject"}`))
+	script := deleteApprovalScript(`{"answer":"reject"}`)
+	for range 4 {
+		script.turnRouters = append(script.turnRouters, answerQuestionRoute("the requester declined the call"))
+	}
+	script.actions = []string{script.actions[0], connectorFinishMessage("일정 삭제를 멈췄습니다.")}
+	fixture := newThreadAskFixture(t, script)
+	fixture.connectorRuntime.UseGatewayDecider(&scriptedGatewayDecider{addressing: addressedToBot(), busyRoute: inboundengagement.BusyRouteNewTask})
 
 	asking := fixture.send(context.Background(), threadReplyEvent("message-1", threadAskRequest))
 	taskRunID := fixture.awaitQuestionOnTheThread(t)
-	answer := fixture.await(t, fixture.send(context.Background(), threadReplyEvent("message-2", "아니, 이번에는 하지 마")))
+	fixture.await(t, fixture.send(context.Background(), threadReplyEvent("message-2", "아니, 이번에는 하지 마")))
 	result := fixture.await(t, asking)
 
-	if answer.Reason != ApprovalAnsweredInThreadReason || answer.TaskRunID != taskRunID || result.TaskRunID != taskRunID {
-		t.Fatalf("the reply settled %+v and the run ended as %+v, expected both on the run that asked", answer, result)
+	if result.TaskRunID != taskRunID {
+		t.Fatalf("the run that asked ended as %+v", result)
 	}
-	taskRun, _ := fixture.connectorRuntime.taskRunService.FindTaskRun(taskRunID)
-	if fixture.invokedToolCount() != 0 || fixture.taskRunCount() != 1 {
-		t.Fatalf("status %s with calls %v among %d runs, expected the declined call never to run", taskRun.Status, fixture.invokedTools, fixture.taskRunCount())
+	holds := holdrecord.Holds(fixture.connectorRuntime.taskRunService.ListTaskEvent(taskRunID))
+	if fixture.invokedToolCount() != 0 || len(holds) != 1 || holds[0].State != holdrecord.StateRejected {
+		t.Fatalf("calls %v holds %+v, expected the declined call rejected once and never run", fixture.invokedTools, holds)
 	}
 	if fixture.connectorRuntime.isAwaitedInThread(taskRunID) {
 		t.Fatal("the question was still awaited after it was declined")
