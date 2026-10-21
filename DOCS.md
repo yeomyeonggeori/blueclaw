@@ -230,7 +230,7 @@ The platforms the protocol knows are `api` and `buzz` (`protocol/generated/json-
 }
 ```
 
-The `api` connector identifies the sender by email and serves replies at `GET /agent/api/replies?conversationID=`. Messenger platforms go through `chatd`, the TypeScript bridge in `chatd/`, which holds the platform credentials, normalizes inbound messages and renders outbound replies. It ships adapters for Buzz and Mattermost. `connectors.chatd` configures it (`endpoint`, default `http://127.0.0.1:18090`; `timeoutSecond`; `enabledPlatforms`), and a platform listed in `enabledPlatforms` beyond the protocol's own is registered with a warning.
+The `api` connector identifies the sender by email and serves replies at `GET /agent/api/replies?conversationID=`. Messenger platforms go through `chatd`, the TypeScript bridge in `chatd/`, which holds the platform credentials, normalizes inbound messages and renders outbound replies. It ships adapters for Buzz and Mattermost. `connectors.chatd` configures it (`endpoint`, default `http://127.0.0.1:18090`; `serviceTokenPath`; `timeoutSecond`; `enabledPlatforms`), and a platform listed in `enabledPlatforms` beyond the protocol's own is registered with a warning. chatd will not start without `CHATD_SERVICE_TOKEN_PATH`, and it answers `401` to any `/v1/platform/*` call whose `Authorization: Bearer` is not that file's token. Loopback is open to every process on the machine, including commands run as a requester, so the token decides who may post as the agent: it is readable only by the accounts the host services run as, and `serviceTokenPath` names the same file for the daemon.
 
 ### Durability
 

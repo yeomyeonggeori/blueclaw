@@ -83,8 +83,9 @@ func newAgentReplyStore(runtimeConfiguration config.RuntimeConfiguration) *apico
 
 func newChatdClient(runtimeConfiguration config.RuntimeConfiguration) capability.Client {
 	return capability.NewClient(capability.Configuration{
-		Endpoint: firstNonEmptyString(runtimeConfiguration.Connectors.Chatd.Endpoint, connectors.DefaultChatdEndpoint),
-		Timeout:  time.Duration(runtimeConfiguration.Connectors.Chatd.TimeoutSecond) * time.Second,
+		Endpoint:        firstNonEmptyString(runtimeConfiguration.Connectors.Chatd.Endpoint, connectors.DefaultChatdEndpoint),
+		Timeout:         time.Duration(runtimeConfiguration.Connectors.Chatd.TimeoutSecond) * time.Second,
+		BearerTokenPath: runtimeConfiguration.Connectors.Chatd.ServiceTokenPath,
 	})
 }
 

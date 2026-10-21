@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -16,9 +18,10 @@ const DefaultEndpoint = "http://127.0.0.1:7781"
 const DefaultSocketEndpoint = "http://capability"
 
 type Configuration struct {
-	Endpoint       string
-	UnixSocketPath string
-	Timeout        time.Duration
+	Endpoint        string
+	UnixSocketPath  string
+	Timeout         time.Duration
+	BearerTokenPath string
 }
 
 type Client struct {
@@ -56,8 +59,30 @@ func Dial(configuration Configuration) (string, *http.Client) {
 			endpoint = DefaultSocketEndpoint
 		}
 	}
+	if bearerTokenPath := strings.TrimSpace(configuration.BearerTokenPath); bearerTokenPath != "" {
+		httpClient.Transport = bearerTokenTransport{base: httpClient.Transport, tokenPath: bearerTokenPath}
+	}
 
 	return endpoint, httpClient
+}
+
+type bearerTokenTransport struct {
+	base      http.RoundTripper
+	tokenPath string
+}
+
+func (transport bearerTokenTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	token, errorValue := os.ReadFile(transport.tokenPath)
+	if errorValue != nil {
+		return nil, fmt.Errorf("the service token at %s could not be read: %w", transport.tokenPath, errorValue)
+	}
+	authorized := request.Clone(request.Context())
+	authorized.Header.Set("Authorization", "Bearer "+strings.TrimSpace(string(token)))
+	base := transport.base
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	return base.RoundTrip(authorized)
 }
 
 func transportWithError(transport *http.Transport, errorValue error) http.RoundTripper {

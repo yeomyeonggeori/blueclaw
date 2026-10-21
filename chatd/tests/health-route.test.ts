@@ -4,6 +4,7 @@ import { createRequestHandler, healthPath } from '../src/server.ts';
 function handlerFor(isReady: () => boolean) {
   return createRequestHandler({
     isReady,
+    serviceToken: 'a'.repeat(64),
     outbound: async () => new Response('outbound', { status: 200 }),
   });
 }
@@ -26,7 +27,7 @@ describe('the health route', () => {
 
   test('routes platform calls to the outbound handler', async () => {
     const response = await handlerFor(() => true)(
-      new Request('http://chatd/v1/platform/buzz/dm.ensure', { method: 'POST' }),
+      new Request('http://chatd/v1/platform/buzz/dm.ensure', { method: 'POST', headers: { Authorization: 'Bearer ' + 'a'.repeat(64) } }),
     );
     expect(await response.text()).toBe('outbound');
   });

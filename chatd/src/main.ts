@@ -7,6 +7,7 @@ import { deliveredMessagesAt, deliveredMessagesInMemory } from './delivered-mess
 import { createBridge } from './bridge.ts';
 import { createOutboundHandler } from './outbound.ts';
 import { createRequestHandler } from './server.ts';
+import { serviceTokenFrom } from './service-credential.ts';
 import { createMirror, type MirrorWiring } from './mirror/wire.ts';
 import type { NormalizedPlatformAdapter } from './visible-context.ts';
 import { createMattermostPersonalGateway } from './personal/mattermost.ts';
@@ -14,6 +15,7 @@ import { createBuzzPersonalGateway } from './personal/buzz.ts';
 import type { PersonalGateway } from './personal/gateway.ts';
 
 const configuration = loadConfiguration(process.env);
+const serviceToken = serviceTokenFrom(process.env);
 
 // Peripheral platforms only; Buzz is the hub, not a fan-out target.
 const connectedPlatforms: string[] = [];
@@ -87,6 +89,7 @@ Bun.serve({
   hostname: configuration.listenHostname,
   fetch: createRequestHandler({
     isReady: () => connectedToTheRelay,
+    serviceToken,
     mattermostWebhook: adapters.mattermost
       ? (request) => chat.webhooks.mattermost?.(request) ?? new Response('Not Found', { status: 404 })
       : undefined,

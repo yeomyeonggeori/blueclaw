@@ -150,6 +150,7 @@ type ConnectorConfiguration struct {
 
 type ChatdConnectorConfiguration struct {
 	Endpoint         string   `json:"endpoint,omitempty"`
+	ServiceTokenPath string   `json:"serviceTokenPath,omitempty"`
 	TimeoutSecond    int      `json:"timeoutSecond,omitempty"`
 	EnabledPlatforms []string `json:"enabledPlatforms,omitempty"`
 }
