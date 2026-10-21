@@ -100,3 +100,7 @@
 {"id": "h40", "category": "condition_on_approval", "question": "받은편지함에서 광고 메일 20통을 보관함으로 옮길까요?", "reply": "응 근데 참조에 이샘플 넣어줘", "expected": "other"}
 {"id": "h41", "category": "condition_on_approval", "question": "내일 오전 9시 면접 일정을 다른 시간으로 옮기고 지원자에게 알릴까요?", "reply": "네 대신 다음 주로 해줘", "expected": "other"}
 {"id": "h42", "category": "condition_on_approval", "question": "팀 채널에 '점검 예정 안내' 공지를 올릴까요?", "reply": "좋아요 파일명은 바꿔서", "expected": "other"}
+{"id": "c103", "category": "affirmative_ko", "question": "이샘플 님에게 '내일 홍보 문의 건으로 가능한 시간 알려주실 수 있을까요?'라고 메시지를 보낼까요?", "reply": "네 보내줘", "expected": "approve"}
+{"id": "c104", "category": "hesitation_ko", "question": "이샘플 님에게 '내일 홍보 문의 건으로 가능한 시간 알려주실 수 있을까요?'라고 메시지를 보낼까요?", "reply": "음 잠깐", "expected": "other"}
+{"id": "c105", "category": "modification_ko", "question": "이샘플 님에게 '내일 홍보 문의 건으로 가능한 시간 알려주실 수 있을까요?'라고 메시지를 보낼까요?", "reply": "내용 바꿔서 보내", "expected": "other"}
+{"id": "c106", "category": "unrelated_ko", "question": "이샘플 님에게 '내일 홍보 문의 건으로 가능한 시간 알려주실 수 있을까요?'라고 메시지를 보낼까요?", "reply": "오늘 내 일정 알려줘", "expected": "other"}

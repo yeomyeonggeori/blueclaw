@@ -22,11 +22,13 @@ type ApprovalReplyRequest struct {
 	MessageID     string `json:"messageId"`
 	ReplyTargetID string `json:"replyTargetId"`
 	IsThread      bool   `json:"isThread"`
+	ReplierEmail  string `json:"replierEmail"`
 }
 
 type ApprovalReplyResponse struct {
-	IsAnswer bool   `json:"isAnswer"`
-	OptionID string `json:"optionId,omitempty"`
+	IsAnswer      bool   `json:"isAnswer"`
+	OptionID      string `json:"optionId,omitempty"`
+	IsInstruction bool   `json:"isInstruction,omitempty"`
 }
 
 var (
@@ -69,15 +71,23 @@ func (agent *Agent) readApprovalReply(ctx context.Context, request ApprovalReply
 	if !agent.postedQuestionOf(session.context, waiting).IsAnsweredBy(replyPlacementOf(session.context, request)) {
 		return ApprovalReplyResponse{}, nil
 	}
-	question := approvalreply.Question{Text: waiting.confirmation, Options: approvalgate.ReplyOptionsOf(waiting.options)}
-	optionID, isAnswer, errorValue := agent.replyReader.Read(ctx, question, request.Reply, agent.ledgerObserver(waiting.approvalRequest.TaskRunID))
-	if errorValue != nil {
-		return ApprovalReplyResponse{}, errorValue
-	}
-	if !isAnswer {
+	if !isTheRequester(waiting, request.ReplierEmail) {
 		return ApprovalReplyResponse{}, nil
 	}
-	return ApprovalReplyResponse{IsAnswer: true, OptionID: optionID}, nil
+	question := approvalreply.Question{Text: waiting.confirmation, Options: approvalgate.ReplyOptionsOf(waiting.options)}
+	reading, errorValue := agent.replyReader.Read(ctx, question, request.Reply, agent.ledgerObserver(waiting.approvalRequest.TaskRunID))
+	if errorValue == nil && reading.IsApproval() {
+		return ApprovalReplyResponse{IsAnswer: true, OptionID: reading.ApprovedOptionID}, nil
+	}
+	if errorValue != nil {
+		agent.logger.Warn("acpsession.approval_reply_unread", "toolCallID", request.ToolCallID, "error", errorValue.Error())
+	}
+	return ApprovalReplyResponse{IsAnswer: true, OptionID: question.DecliningOptionID(), IsInstruction: true}, nil
+}
+
+func isTheRequester(waiting waitingCall, replierEmail string) bool {
+	requesterEmail := strings.TrimSpace(waiting.approvalRequest.RequesterEmail)
+	return requesterEmail != "" && strings.EqualFold(requesterEmail, strings.TrimSpace(replierEmail))
 }
 
 func (agent *Agent) postedQuestionOf(sessionContext SessionContext, waiting waitingCall) connectors.PostedQuestion {

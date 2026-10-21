@@ -3,6 +3,7 @@ package connectors
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -250,24 +251,30 @@ func (connectorRuntime *ConnectorRuntime) answerAwaitingThreads(ctx context.Cont
 		return ConnectorRuntimeResult{}, false, nil
 	}
 	for _, thread := range connectorRuntime.askingThreads.awaiting(platform, event.ConversationID, personID) {
-		result, isAnswer, errorValue := connectorRuntime.offerReplyToThread(ctx, thread, event)
-		if isAnswer || errorValue != nil {
-			return result, isAnswer, errorValue
+		if connectorRuntime.postedQuestionOf(thread).IsAnsweredBy(placementOf(event)) {
+			return connectorRuntime.settleThreadWithReply(ctx, thread, event)
 		}
 	}
 	return ConnectorRuntimeResult{}, false, nil
 }
 
-func (connectorRuntime *ConnectorRuntime) offerReplyToThread(ctx context.Context, thread *askingThread, event PlatformInboundEvent) (ConnectorRuntimeResult, bool, error) {
-	if !connectorRuntime.postedQuestionOf(thread).IsAnsweredBy(placementOf(event)) {
+func (connectorRuntime *ConnectorRuntime) settleThreadWithReply(ctx context.Context, thread *askingThread, event PlatformInboundEvent) (ConnectorRuntimeResult, bool, error) {
+	reading, errorValue := connectorRuntime.readReplyToQuestion(ctx, thread.taskRunID, thread.question, event.Prompt)
+	if errorValue != nil {
+		slog.Warn("connectors.approval_reply_unread", "taskRunID", thread.taskRunID, "error", errorValue.Error())
+	}
+	if !connectorRuntime.askingThreads.claim(thread) {
 		return ConnectorRuntimeResult{}, false, nil
 	}
-	optionID, isAnswer, errorValue := connectorRuntime.readReplyToQuestion(ctx, thread.taskRunID, thread.question, event.Prompt)
-	if errorValue != nil || !isAnswer || !connectorRuntime.askingThreads.claim(thread) {
-		return ConnectorRuntimeResult{}, false, errorValue
+	optionID := reading.ApprovedOptionID
+	if !reading.IsApproval() {
+		optionID = thread.question.DecliningOptionID()
 	}
 	connectorRuntime.recordConfirmationReplyClassified(thread.taskRunID, event, answeredDecision(optionID))
 	thread.answers <- optionID
+	if !reading.IsApproval() {
+		return ConnectorRuntimeResult{}, false, nil
+	}
 	return ConnectorRuntimeResult{Handled: true, Platform: thread.platform, TaskRunID: thread.taskRunID, Reason: ApprovalAnsweredInThreadReason}, true, nil
 }
 

@@ -16,11 +16,13 @@
 			"reply",
 			"messageId",
 			"replyTargetId",
-			"isThread"
+			"isThread",
+			"replierEmail"
 		],
 		"approvalReplyAnswer": [
 			"isAnswer",
-			"optionId"
+			"optionId",
+			"isInstruction"
 		],
 		"delivered": [
 			"deliveryID",
