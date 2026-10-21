@@ -12,12 +12,18 @@ import (
 )
 
 type toolCallingLauncher struct {
-	updates []acp.SessionUpdate
-	reply   string
+	updates           []acp.SessionUpdate
+	checkpointsBefore map[int]string
+	reply             string
 }
 
-func (launcher *toolCallingLauncher) Launch(_ context.Context, request agentruntime.TaskLaunchRequest) (agentruntime.TaskLaunchResult, error) {
-	for _, update := range launcher.updates {
+func (launcher *toolCallingLauncher) Launch(ctx context.Context, request agentruntime.TaskLaunchRequest) (agentruntime.TaskLaunchResult, error) {
+	for index, update := range launcher.updates {
+		if message, isCheckpoint := launcher.checkpointsBefore[index]; isCheckpoint {
+			if errorValue := request.CheckpointSender(ctx, agentcontract.AgentCheckpoint{TaskRunID: "run-1", Message: message}); errorValue != nil {
+				return agentruntime.TaskLaunchResult{}, errorValue
+			}
+		}
 		request.ToolCallObserver(update)
 	}
 	return agentruntime.TaskLaunchResult{TurnResult: agentcontract.AgentTurnResult{
@@ -49,6 +55,8 @@ func describeNotification(notification acp.SessionNotification) string {
 		return fmt.Sprintf("tool_call_update %s %s", update.ToolCallUpdate.ToolCallId, *update.ToolCallUpdate.Status)
 	case update.AgentMessageChunk != nil:
 		return "message " + update.AgentMessageChunk.Content.Text.Text
+	case update.AgentThoughtChunk != nil:
+		return "thought " + update.AgentThoughtChunk.Content.Text.Text
 	}
 	return "other"
 }
@@ -108,6 +116,37 @@ func assertOneDeliveryClosedByTheLastNotification(t *testing.T, deliveries []Del
 			t.Fatalf("notification %d has isFinal=%t, only the last notification closes the delivery", index, delivery.IsFinal)
 		}
 	}
+}
+
+func TestACheckpointIsToldToTheClientInOrderUnderTheTurnsDelivery(t *testing.T) {
+	launcher := &toolCallingLauncher{
+		updates: []acp.SessionUpdate{
+			acp.StartToolCall("call-1", "Read notes.md", acp.WithStartStatus(acp.ToolCallStatusInProgress)),
+			acp.UpdateToolCall("call-1", acp.WithUpdateStatus(acp.ToolCallStatusCompleted)),
+			acp.StartToolCall("call-2", "Write out.md", acp.WithStartStatus(acp.ToolCallStatusInProgress)),
+		},
+		checkpointsBefore: map[int]string{2: "읽기를 마쳤습니다"},
+		reply:             "정리했습니다",
+	}
+	client, prompt := toolCallingSession(t, launcher)
+
+	prompt()
+
+	described := []string{}
+	for _, notification := range client.notifications {
+		described = append(described, describeNotification(notification))
+	}
+	expected := []string{
+		`tool_call call-1 "Read notes.md" in_progress`,
+		"tool_call_update call-1 completed",
+		"thought 읽기를 마쳤습니다",
+		`tool_call call-2 "Write out.md" in_progress`,
+		"message 정리했습니다",
+	}
+	if !slices.Equal(described, expected) {
+		t.Fatalf("the client was told\n%q\nexpected\n%q", described, expected)
+	}
+	assertOneDeliveryClosedByTheLastNotification(t, deliveriesOf(t, client.notifications))
 }
 
 func TestAToolThatFailsIsToldToTheClientAsFailed(t *testing.T) {

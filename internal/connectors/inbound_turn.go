@@ -187,9 +187,9 @@ func (connectorRuntime *ConnectorRuntime) resolveTurnPriorTask(turn *inboundTurn
 func (connectorRuntime *ConnectorRuntime) launchTurn(ctx context.Context, turn *inboundTurn) (ConnectorRuntimeResult, error) {
 	connectorRuntime.logger.Info("connector."+turn.platform+".agent.started", slog.String("messageID", turn.event.MessageID))
 	taskStartedAt := time.Now()
+	narrator := newTurnNarrator(turn.adapter, turn.replyTarget, connectorRuntime.recordingDelivery, connectorRuntime.logger)
+	turn.sendReply = narrator.takeOverSending(turn.sendReply)
 	conversationTurn := connectorRuntime.conversationTurnFor(turn)
-	narrator := newTurnNarrator(turn.adapter, turn.replyTarget)
-	turn.sendReply = narrator.takeOverSending(turn.sendReply, connectorRuntime.recordingDelivery)
 	launchRequest := connectorRuntime.buildTaskLaunchRequest(conversationTurn)
 	launchRequest.ToolCallObserver = narrator.toolCallObserver(ctx)
 	launchResult, errorValue := connectorRuntime.currentTaskLauncher().Launch(ctx, launchRequest)

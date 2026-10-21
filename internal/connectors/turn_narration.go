@@ -2,6 +2,7 @@ package connectors
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"sync"
 
@@ -41,24 +42,33 @@ func narrationMessage(calls []narratedCall) string {
 }
 
 type turnNarrator struct {
-	editor      ReplyEditingAdapter
-	deleter     ReplyDeletingAdapter
-	adapter     PlatformAdapter
-	replyTarget ReplyTarget
+	editor            ReplyEditingAdapter
+	deleter           ReplyDeletingAdapter
+	adapter           PlatformAdapter
+	replyTarget       ReplyTarget
+	recordingDelivery func(ReplySender) ReplySender
+	logger            *slog.Logger
 
-	mutex        sync.Mutex
-	calls        []narratedCall
-	messageID    string
-	isHandedOver bool
+	mutex      sync.Mutex
+	calls      []narratedCall
+	messageID  string
+	isFinished bool
 }
 
-func newTurnNarrator(adapter PlatformAdapter, replyTarget ReplyTarget) *turnNarrator {
+func newTurnNarrator(adapter PlatformAdapter, replyTarget ReplyTarget, recordingDelivery func(ReplySender) ReplySender, logger *slog.Logger) *turnNarrator {
 	editor, canEdit := adapter.(ReplyEditingAdapter)
 	if !canEdit {
 		return nil
 	}
 	deleter, _ := adapter.(ReplyDeletingAdapter)
-	return &turnNarrator{editor: editor, deleter: deleter, adapter: adapter, replyTarget: replyTarget}
+	return &turnNarrator{
+		editor:            editor,
+		deleter:           deleter,
+		adapter:           adapter,
+		replyTarget:       replyTarget,
+		recordingDelivery: recordingDelivery,
+		logger:            logger,
+	}
 }
 
 func (narrator *turnNarrator) toolCallObserver(ctx context.Context) toolcallprogress.Observer {
@@ -71,24 +81,17 @@ func (narrator *turnNarrator) toolCallObserver(ctx context.Context) toolcallprog
 }
 
 func (narrator *turnNarrator) observe(ctx context.Context, update acp.SessionUpdate) {
-	message, messageID, hasNews := narrator.record(update)
-	if !hasNews {
+	narrator.mutex.Lock()
+	defer narrator.mutex.Unlock()
+	if narrator.isFinished || !narrator.take(update) {
 		return
 	}
-	if messageID == "" {
+	message := narrationMessage(narrator.calls)
+	if narrator.messageID == "" {
 		narrator.startSaying(ctx, message)
 		return
 	}
-	narrator.editor.EditReply(ctx, narrator.replyTarget, messageID, message)
-}
-
-func (narrator *turnNarrator) record(update acp.SessionUpdate) (string, string, bool) {
-	narrator.mutex.Lock()
-	defer narrator.mutex.Unlock()
-	if narrator.isHandedOver || !narrator.take(update) {
-		return "", "", false
-	}
-	return narrationMessage(narrator.calls), narrator.messageID, true
+	narrator.editor.EditReply(ctx, narrator.replyTarget, narrator.messageID, message)
 }
 
 func (narrator *turnNarrator) take(update acp.SessionUpdate) bool {
@@ -126,41 +129,90 @@ func narrationOutcomeOf(status acp.ToolCallStatus) (string, bool) {
 
 func (narrator *turnNarrator) startSaying(ctx context.Context, message string) {
 	messageID, errorValue := narrator.adapter.SendReply(ctx, narrator.replyTarget, OutboundReply{Message: message, ReplyKind: ConnectorReplyKindProgress})
-	if errorValue != nil || strings.TrimSpace(messageID) == "" {
+	if errorValue != nil {
 		return
 	}
-	narrator.mutex.Lock()
-	if !narrator.isHandedOver {
-		narrator.messageID = messageID
-	}
-	narrator.mutex.Unlock()
+	narrator.messageID = strings.TrimSpace(messageID)
 }
 
-func (narrator *turnNarrator) takeOverSending(sendReply ReplySender, recordingDelivery func(ReplySender) ReplySender) ReplySender {
+func (narrator *turnNarrator) takeOverSending(sendReply ReplySender) ReplySender {
 	if narrator == nil {
 		return sendReply
 	}
 	return func(ctx context.Context, replyTarget ReplyTarget, reply OutboundReply) (string, error) {
-		messageID := narrator.claimNarratedMessage()
-		if messageID == "" {
+		narrator.mutex.Lock()
+		defer narrator.mutex.Unlock()
+		if narrator.isFinished {
 			return sendReply(ctx, replyTarget, reply)
 		}
-		if narrator.deleter == nil {
-			if !replyIsOnlyWords(reply) {
-				return sendReply(ctx, replyTarget, reply)
-			}
-			if dispatchID, errorValue := recordingDelivery(narrator.editingInto(messageID))(ctx, replyTarget, reply); errorValue == nil {
-				return dispatchID, nil
-			}
-			return sendReply(ctx, replyTarget, reply)
+		if reply.ReplyKind == connectorReplyKindCheckpoint {
+			return narrator.sayCheckpoint(ctx, replyTarget, reply)
 		}
-		dispatchID, errorValue := sendReply(ctx, replyTarget, reply)
-		if errorValue != nil {
-			return dispatchID, errorValue
-		}
-		narrator.deleter.DeleteReply(ctx, replyTarget, messageID)
+		return narrator.sayFinal(ctx, replyTarget, reply, sendReply)
+	}
+}
+
+func (narrator *turnNarrator) sayCheckpoint(ctx context.Context, replyTarget ReplyTarget, reply OutboundReply) (string, error) {
+	if dispatchID, isEdited := narrator.editIntoProgress(ctx, replyTarget, reply); isEdited {
+		narrator.beginNextProgress()
 		return dispatchID, nil
 	}
+	dispatchID, errorValue := narrator.recordingDelivery(narrator.adapter.SendReply)(ctx, replyTarget, reply)
+	if errorValue != nil {
+		return dispatchID, errorValue
+	}
+	narrator.takeDownProgress(ctx, replyTarget, reply)
+	return dispatchID, nil
+}
+
+func (narrator *turnNarrator) sayFinal(ctx context.Context, replyTarget ReplyTarget, reply OutboundReply, sendReply ReplySender) (string, error) {
+	if narrator.deleter == nil {
+		if dispatchID, isEdited := narrator.editIntoProgress(ctx, replyTarget, reply); isEdited {
+			narrator.logger.Warn("connector.narration.final_edited_in", "messageID", dispatchID, "taskRunID", reply.TaskRunID, "reason", "the platform cannot delete a message")
+			narrator.finish()
+			return dispatchID, nil
+		}
+	}
+	dispatchID, errorValue := sendReply(ctx, replyTarget, reply)
+	if errorValue != nil {
+		return dispatchID, errorValue
+	}
+	narrator.takeDownProgress(ctx, replyTarget, reply)
+	narrator.finish()
+	return dispatchID, nil
+}
+
+func (narrator *turnNarrator) editIntoProgress(ctx context.Context, replyTarget ReplyTarget, reply OutboundReply) (string, bool) {
+	if narrator.messageID == "" || !replyIsOnlyWords(reply) {
+		return "", false
+	}
+	dispatchID, errorValue := narrator.recordingDelivery(narrator.editingInto(narrator.messageID))(ctx, replyTarget, reply)
+	return dispatchID, errorValue == nil
+}
+
+func (narrator *turnNarrator) takeDownProgress(ctx context.Context, replyTarget ReplyTarget, reply OutboundReply) {
+	messageID := narrator.messageID
+	narrator.beginNextProgress()
+	if messageID == "" {
+		return
+	}
+	if narrator.deleter == nil {
+		narrator.logger.Warn("connector.narration.left_standing", "messageID", messageID, "taskRunID", reply.TaskRunID, "reason", "the reply could not be edited in and the platform cannot delete a message")
+		return
+	}
+	if errorValue := narrator.deleter.DeleteReply(ctx, replyTarget, messageID); errorValue != nil {
+		narrator.logger.Warn("connector.narration.left_standing", "messageID", messageID, "taskRunID", reply.TaskRunID, "error", errorValue.Error())
+	}
+}
+
+func (narrator *turnNarrator) beginNextProgress() {
+	narrator.messageID = ""
+	narrator.calls = nil
+}
+
+func (narrator *turnNarrator) finish() {
+	narrator.beginNextProgress()
+	narrator.isFinished = true
 }
 
 func (narrator *turnNarrator) editingInto(messageID string) ReplySender {
@@ -174,13 +226,4 @@ func replyIsOnlyWords(reply OutboundReply) bool {
 		len(reply.Attachments) == 0 &&
 		len(reply.RecoveryActions) == 0 &&
 		reply.Interaction == nil
-}
-
-func (narrator *turnNarrator) claimNarratedMessage() string {
-	narrator.mutex.Lock()
-	defer narrator.mutex.Unlock()
-	messageID := narrator.messageID
-	narrator.messageID = ""
-	narrator.isHandedOver = true
-	return messageID
 }
