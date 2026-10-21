@@ -208,7 +208,6 @@ func approvalRequestForTest() mcpserver.ApprovalRequest {
 		TaskRunID:      "task-1",
 		ToolName:       "message_send",
 		ToolInput:      json.RawMessage(`{"targetType":"directMessage"}`),
-		ApprovalScope:  "message_send",
 	}
 }
 
@@ -719,11 +718,10 @@ func TestAnAnswerToACallNobodyIsWaitingOnIsRefused(t *testing.T) {
 
 func heldCallForTest() agentcontract.HeldCall {
 	return agentcontract.HeldCall{
-		HoldID:        "hold-stored-before-the-deploy",
-		ToolName:      "message_send",
-		ToolInput:     json.RawMessage(`{"targetType":"directMessage"}`),
-		ApprovalScope: "message_send",
-		Confirmation:  "박예시에게 보낼까요?",
+		HoldID:       "hold-stored-before-the-deploy",
+		ToolName:     "message_send",
+		ToolInput:    json.RawMessage(`{"targetType":"directMessage"}`),
+		Confirmation: "박예시에게 보낼까요?",
 	}
 }
 

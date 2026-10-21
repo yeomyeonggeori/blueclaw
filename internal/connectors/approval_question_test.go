@@ -22,7 +22,6 @@ func heldCallTaskEvents(t *testing.T) []task.TaskEvent {
 		TaskRunID:         taskRun.TaskRunID,
 		ToolName:          "event_delete",
 		ToolInput:         json.RawMessage(`{"eventID":"event-1"}`),
-		ApprovalScope:     "calendar",
 		SideEffectClass:   "external_send",
 		ResponseLanguage:  "ko",
 	}); errorValue != nil {

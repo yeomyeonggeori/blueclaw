@@ -139,7 +139,6 @@ func boundToolFromDescriptor(
 			PolicyResource:       strings.TrimSpace(descriptor.PolicyResource),
 			SideEffectClass:      strings.TrimSpace(descriptor.SideEffectClass),
 			RequiresApproval:     descriptor.RequiresApproval,
-			ApprovalScope:        descriptor.ApprovalScope,
 			Completion:           capabilityToolCompletion(descriptor.CompletionEvidence),
 			Idempotency:          capabilityToolIdempotency(descriptor.Idempotency),
 			IdempotencyScope:     strings.TrimSpace(descriptor.Idempotency.Scope),

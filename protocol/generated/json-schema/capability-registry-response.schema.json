@@ -139,9 +139,6 @@
             ],
             "type": "string"
           },
-          "approvalScope": {
-            "type": "string"
-          },
           "availability": {
             "additionalProperties": false,
             "properties": {
@@ -438,9 +435,6 @@
               "company",
               "local"
             ],
-            "type": "string"
-          },
-          "approvalScope": {
             "type": "string"
           },
           "availability": {

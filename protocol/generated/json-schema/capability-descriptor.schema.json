@@ -131,9 +131,6 @@
       ],
       "type": "string"
     },
-    "approvalScope": {
-      "type": "string"
-    },
     "availability": {
       "additionalProperties": false,
       "properties": {

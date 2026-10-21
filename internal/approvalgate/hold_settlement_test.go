@@ -8,38 +8,16 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 )
 
-func scopedHold(t *testing.T) (*task.TaskRunService, string, string) {
+func heldMessage(t *testing.T) (*task.TaskRunService, string, string) {
 	t.Helper()
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	taskRunID := taskRunService.CreateTaskRun("person-1", "conversation-1", "send it").TaskRunID
-	hold := holdrecord.Open(taskRunService, taskRunID, agentcontract.HeldCall{ToolName: "message_send", ApprovalScope: "message_send:team"}, nil)
+	hold := holdrecord.Open(taskRunService, taskRunID, agentcontract.HeldCall{ToolName: "message_send"}, nil)
 	return taskRunService, taskRunID, hold.ID
 }
 
-func scopeGrantCount(taskRunService *task.TaskRunService, taskRunID string) int {
-	count := 0
-	for _, taskEvent := range taskRunService.ListTaskEvent(taskRunID) {
-		if taskEvent.Name == agentcontract.TaskEventApprovalScopeGranted {
-			count++
-		}
-	}
-	return count
-}
-
-func TestRejectingOrDeferringTheLatestHoldGrantsNoScope(t *testing.T) {
-	for _, decision := range []string{holdrecord.DecisionReject, holdrecord.DecisionDefer} {
-		taskRunService, taskRunID, _ := scopedHold(t)
-
-		SettleLatest(taskRunService, taskRunID, decision, "chat_reply")
-
-		if grants := scopeGrantCount(taskRunService, taskRunID); grants != 0 {
-			t.Fatalf("%s must not grant scope, got %d grants", decision, grants)
-		}
-	}
-}
-
 func TestSettlingTheLatestHoldLeavesAnAlreadyDecidedHoldAlone(t *testing.T) {
-	taskRunService, taskRunID, holdID := scopedHold(t)
+	taskRunService, taskRunID, holdID := heldMessage(t)
 	holdrecord.Decide(taskRunService, taskRunID, holdID, holdrecord.DecisionApprove, "chat_reply")
 	eventCount := len(taskRunService.ListTaskEvent(taskRunID))
 
@@ -51,7 +29,7 @@ func TestSettlingTheLatestHoldLeavesAnAlreadyDecidedHoldAlone(t *testing.T) {
 }
 
 func TestASignalSettlesTheLatestHoldAndAnUnknownOneSettlesNothing(t *testing.T) {
-	taskRunService, taskRunID, _ := scopedHold(t)
+	taskRunService, taskRunID, _ := heldMessage(t)
 	unknown := agentcontract.ApprovalSignal("maybe")
 	approve := agentcontract.ApprovalSignalApprove
 	eventCount := len(taskRunService.ListTaskEvent(taskRunID))

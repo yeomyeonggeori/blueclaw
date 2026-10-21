@@ -30,7 +30,6 @@ func (gate *recordingApprovalGate) ReviewToolCall(_ context.Context, toolInvocat
 		RequesterPersonID: "person-1",
 		ToolName:          toolDefinition.Name,
 		ToolInput:         toolInvocation.Input,
-		ApprovalScope:     toolDefinition.ApprovalScope,
 	})
 	switch gate.outcome.Decision {
 	case mcpserver.ApprovalDecisionApproved:
@@ -51,7 +50,7 @@ func approvalToolSet(t *testing.T, executed *[]string) *toolcontract.ToolSet {
 	t.Helper()
 	toolSet := toolcontract.NewToolSet([]string{"file_delete", "file_read"})
 	toolSet.AllowTestReplacement()
-	register := func(name string, requiresApproval bool, approvalScope string) {
+	register := func(name string, requiresApproval bool) {
 		errorValue := toolSet.RegisterTool(toolcontract.ToolDefinition{
 			ID:               "test:" + name,
 			Name:             name,
@@ -59,7 +58,6 @@ func approvalToolSet(t *testing.T, executed *[]string) *toolcontract.ToolSet {
 			Visibility:       toolcontract.ToolVisibilityModel,
 			InputSchema:      json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}}}`),
 			RequiresApproval: requiresApproval,
-			ApprovalScope:    approvalScope,
 			SideEffectClass:  toolcontract.ToolSideEffectStateChange,
 			ResultContract:   &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)},
 		}, func(_ context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
@@ -70,8 +68,8 @@ func approvalToolSet(t *testing.T, executed *[]string) *toolcontract.ToolSet {
 			t.Fatalf("expected %s to register: %v", name, errorValue)
 		}
 	}
-	register("file_delete", true, "workspace_files")
-	register("file_read", false, "")
+	register("file_delete", true)
+	register("file_read", false)
 	return toolSet
 }
 
@@ -120,8 +118,8 @@ func TestAToolNeedingApprovalRunsOnlyOnceApproved(t *testing.T) {
 		t.Fatalf("expected an approved call to succeed, got %+v", result)
 	}
 	received := gate.received()
-	if len(received) != 1 || received[0].ApprovalScope != "workspace_files" {
-		t.Fatalf("expected the gate to be asked about this scope, got %+v", received)
+	if len(received) != 1 || received[0].ToolName != "file_delete" {
+		t.Fatalf("expected the gate to be asked about this call, got %+v", received)
 	}
 	if !strings.Contains(string(received[0].ToolInput), "notes.md") {
 		t.Fatalf("expected the gate to see the exact call it is approving, got %s", received[0].ToolInput)

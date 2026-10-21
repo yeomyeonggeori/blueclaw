@@ -18,7 +18,6 @@ var eventNamesOwnedByTheHoldRecord = []string{
 	"approval.hold_opened",
 	"approval.decided",
 	"approval.hold_spent",
-	"approval.scope_granted",
 }
 
 const taskEventNameDeclarationPath = "../../.dependency/blueprotocol/agentcontract/task_event_name.go"

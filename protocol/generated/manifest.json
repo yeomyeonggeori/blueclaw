@@ -1,5 +1,5 @@
 {
-  "aggregateHash": "7021b2fbc8d6daaa3c853e8d1c4b6326e02aa2997f77baf38eb231e83e785a47",
+  "aggregateHash": "3ef03ab868ed1d9d961d6f7a12f6d097843b14cd733dc62479dcb982806b8bbf",
   "protocolVersion": "0.4.0",
   "schemas": [
     {
@@ -19,12 +19,12 @@
     },
     {
       "fileName": "capability-descriptor.schema.json",
-      "hash": "fb42c7117c1cb5b5947bebb93094a41e413e9c49cef3bf32c5ca8219ae21108d",
+      "hash": "8b4c5a92d637aa7f0c1bb43373bce535a9e74206c5fe10de6e0efe4c8ca05a09",
       "name": "capability-descriptor"
     },
     {
       "fileName": "capability-registry-response.schema.json",
-      "hash": "15335ef509790f60e920172ef446dceab0df2b93c4f95233163a2cfb78949d05",
+      "hash": "1cdc550a77e129765b35e8ed9324d474670f8c1cb582a6c6aef4feb822f38c5c",
       "name": "capability-registry-response"
     },
     {
@@ -84,7 +84,7 @@
     },
     {
       "fileName": "task-event-name.schema.json",
-      "hash": "d229e93a3b070b359639a4c05e655f9d19fc1426de7479c6430ac00d11c15a22",
+      "hash": "50402877d3c194b0cc11a0070189940e466bba7ee2c404d4987cc8310b10ac99",
       "name": "task-event-name"
     },
     {

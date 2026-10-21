@@ -26,9 +26,6 @@ func New(taskRunService taskstate.TaskRunStore) *Gate {
 
 func (gate *Gate) AwaitApproval(ctx context.Context, approvalRequest mcpserver.ApprovalRequest) (mcpserver.ApprovalOutcome, error) {
 	taskRunID := strings.TrimSpace(approvalRequest.TaskRunID)
-	if gate.taskHasApprovedScope(taskRunID, approvalRequest.ApprovalScope) {
-		return gate.approvedOutcome(taskRunID, approvalRequest), nil
-	}
 	if _, isApproved := gate.approvedHold(taskRunID, approvalRequest); isApproved {
 		return gate.approvedOutcome(taskRunID, approvalRequest), nil
 	}
@@ -56,13 +53,6 @@ func (gate *Gate) approvedOutcome(taskRunID string, approvalRequest mcpserver.Ap
 	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionApproved, HoldID: holdID}
 }
 
-func (gate *Gate) taskHasApprovedScope(taskRunID string, approvalScope string) bool {
-	if taskRunID == "" {
-		return false
-	}
-	return holdrecord.LedgerOf(gate.taskRunService.ListTaskEvent(taskRunID)).GrantsScope(approvalScope)
-}
-
 func (gate *Gate) approvedHold(taskRunID string, approvalRequest mcpserver.ApprovalRequest) (holdrecord.Hold, bool) {
 	if taskRunID == "" {
 		return holdrecord.Hold{}, false
@@ -75,7 +65,6 @@ func (gate *Gate) recordHeldCall(taskRunID string, approvalRequest mcpserver.App
 		ToolName:          approvalRequest.ToolName,
 		ToolInput:         approvalRequest.ToolInput,
 		ApprovedToolInput: narrowedToolInput(approvalRequest.ToolInput, resolution.Target),
-		ApprovalScope:     approvalRequest.ApprovalScope,
 		Confirmation:      confirmation,
 		HarnessSession:    approvalRequest.HarnessSession,
 	}, resolution.Choices)

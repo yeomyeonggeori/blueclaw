@@ -103,7 +103,6 @@
         "approval.decided",
         "approval.hold_opened",
         "approval.hold_spent",
-        "approval.scope_granted",
         "approval.unheld_call_carried_out",
         "ask.reply_classified",
         "ask.requested",

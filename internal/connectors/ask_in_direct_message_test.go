@@ -162,7 +162,6 @@ func connectedCatalogSessionGatedBy(t *testing.T, fixture *threadAskFixture, tas
 		InputSchema:      json.RawMessage(`{"type":"object","properties":{"eventHint":{"type":"string"}}}`),
 		SideEffectClass:  toolcontract.ToolSideEffectStateChange,
 		RequiresApproval: true,
-		ApprovalScope:    "calendar",
 		ResultContract:   &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`)},
 	}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		invokedCount.Add(1)
