@@ -64,8 +64,9 @@ type ApprovalResult struct {
 }
 
 type approvalRequestBody struct {
-	TaskRunID string `json:"taskRunID"`
-	Decision  string `json:"decision"`
+	TaskRunID     string `json:"taskRunID"`
+	Decision      string `json:"decision"`
+	ApproverEmail string `json:"approverEmail"`
 }
 
 type applicationErrorBody struct {
@@ -75,8 +76,14 @@ type applicationErrorBody struct {
 // Client is a typed HTTP client over blueclaw's admin task API. It performs
 // no terminal I/O and is safe to exercise against an httptest.Server.
 type Client struct {
-	baseURL    string
-	httpClient *http.Client
+	baseURL       string
+	httpClient    *http.Client
+	approverEmail string
+}
+
+func (client *Client) DecidingAs(approverEmail string) *Client {
+	client.approverEmail = strings.TrimSpace(approverEmail)
+	return client
 }
 
 func (client *Client) BaseURL() string {
@@ -109,7 +116,7 @@ func (client *Client) GetTaskRunDetail(ctx context.Context, taskRunID string) (T
 }
 
 func (client *Client) SubmitApproval(ctx context.Context, taskRunID string, decision string) (ApprovalResult, error) {
-	requestBody, errorValue := json.Marshal(approvalRequestBody{TaskRunID: taskRunID, Decision: decision})
+	requestBody, errorValue := json.Marshal(approvalRequestBody{TaskRunID: taskRunID, Decision: decision, ApproverEmail: client.approverEmail})
 	if errorValue != nil {
 		return ApprovalResult{}, fmt.Errorf("encode approval request: %w", errorValue)
 	}

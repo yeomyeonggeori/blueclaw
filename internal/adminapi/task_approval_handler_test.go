@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/identity"
+	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract/harnesstest"
@@ -21,11 +23,27 @@ func approvalTestTaskRunService(t *testing.T) (*task.TaskRunService, *task.TaskE
 	return task.NewTaskRunService(taskEventService), taskEventService
 }
 
+const (
+	requesterEmail = "requester@example.com"
+	adminEmail     = "admin@example.com"
+)
+
+func rosterOfARequesterAndAnAdmin() *identity.IdentityService {
+	return identity.NewIdentityService(policy.PolicyProjection{
+		PersonIDByEmail: map[string]string{requesterEmail: "person-1", adminEmail: "person-admin"},
+	})
+}
+
 func configuredApprovalHandler(taskRunService *task.TaskRunService) TaskApprovalHandler {
 	return TaskApprovalHandler{
-		TaskRunService: taskRunService,
-		TaskLauncher:   agentruntime.NewTaskLauncher(nil, taskRunService, agentruntime.NewToolCatalogBuilder()),
+		TaskRunService:  taskRunService,
+		TaskLauncher:    agentruntime.NewTaskLauncher(nil, taskRunService, agentruntime.NewToolCatalogBuilder()),
+		IdentityService: rosterOfARequesterAndAnAdmin(),
 	}
+}
+
+func decisionBy(approverEmail string, taskRunID string, decision string) string {
+	return `{"taskRunID":"` + taskRunID + `","decision":"` + decision + `","approverEmail":"` + approverEmail + `"}`
 }
 
 func postApproval(t *testing.T, handler TaskApprovalHandler, body string) *httptest.ResponseRecorder {
@@ -40,7 +58,7 @@ func TestApprovalRefusesATaskRunThatIsNotWaitingForApproval(t *testing.T) {
 	taskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "캘린더 정리")
 	handler := configuredApprovalHandler(taskRunService)
 
-	responseRecorder := postApproval(t, handler, `{"taskRunID":"`+taskRun.TaskRunID+`","decision":"approve"}`)
+	responseRecorder := postApproval(t, handler, decisionBy(requesterEmail, taskRun.TaskRunID, "approve"))
 	if responseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected a running task run to be unapprovable, got %d", responseRecorder.Code)
 	}
@@ -57,10 +75,10 @@ func TestApprovalRefusesAnUnknownTaskRunAndAnUnknownDecision(t *testing.T) {
 	}
 	handler := configuredApprovalHandler(taskRunService)
 
-	if responseRecorder := postApproval(t, handler, `{"taskRunID":"missing","decision":"approve"}`); responseRecorder.Code != http.StatusBadRequest {
+	if responseRecorder := postApproval(t, handler, decisionBy(requesterEmail, "missing", "approve")); responseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected an unknown task run to be refused, got %d", responseRecorder.Code)
 	}
-	responseRecorder := postApproval(t, handler, `{"taskRunID":"`+taskRun.TaskRunID+`","decision":"looks good"}`)
+	responseRecorder := postApproval(t, handler, decisionBy(requesterEmail, taskRun.TaskRunID, "looks good"))
 	if responseRecorder.Code != http.StatusBadRequest || !strings.Contains(responseRecorder.Body.String(), "reject") {
 		t.Fatalf("expected a free-text decision to be refused with the allowed set, got %d %s", responseRecorder.Code, responseRecorder.Body.String())
 	}
@@ -72,9 +90,9 @@ func TestApprovalRefusesWhenNoLauncherCanCarryTheDecision(t *testing.T) {
 	if _, errorValue := taskRunService.PauseTaskRun(taskRun.TaskRunID, task.TaskStatusWaitingApproval, "삭제할까요?"); errorValue != nil {
 		t.Fatalf("expected the run to pause: %v", errorValue)
 	}
-	handler := TaskApprovalHandler{TaskRunService: taskRunService}
+	handler := TaskApprovalHandler{TaskRunService: taskRunService, IdentityService: rosterOfARequesterAndAnAdmin()}
 
-	responseRecorder := postApproval(t, handler, `{"taskRunID":"`+taskRun.TaskRunID+`","decision":"approve"}`)
+	responseRecorder := postApproval(t, handler, decisionBy(requesterEmail, taskRun.TaskRunID, "approve"))
 	if responseRecorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected an unconfigured approval path to refuse rather than silently accept, got %d", responseRecorder.Code)
 	}
@@ -114,8 +132,9 @@ func TestApprovingAHeldCallDecidesTheHoldAndResumesTheRunWithoutCarryingTheCallO
 	taskRunService, _ := approvalTestTaskRunService(t)
 	harness := harnesstest.New(taskRunService)
 	handler := TaskApprovalHandler{
-		TaskRunService: taskRunService,
-		TaskLauncher:   agentruntime.NewTaskLauncher(harness, taskRunService, agentruntime.NewToolCatalogBuilder()),
+		TaskRunService:  taskRunService,
+		TaskLauncher:    agentruntime.NewTaskLauncher(harness, taskRunService, agentruntime.NewToolCatalogBuilder()),
+		IdentityService: rosterOfARequesterAndAnAdmin(),
 	}
 	taskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "일정 삭제")
 	holdrecord.Open(taskRunService, taskRun.TaskRunID, agentcontract.HeldCall{ToolName: "event_delete", ToolInput: json.RawMessage(`{"eventHint":"event-1"}`), Confirmation: "삭제할까요?"}, nil)
@@ -123,7 +142,7 @@ func TestApprovingAHeldCallDecidesTheHoldAndResumesTheRunWithoutCarryingTheCallO
 		t.Fatal(errorValue)
 	}
 
-	responseRecorder := postApproval(t, handler, `{"taskRunID":"`+taskRun.TaskRunID+`","decision":"approve"}`)
+	responseRecorder := postApproval(t, handler, decisionBy(requesterEmail, taskRun.TaskRunID, "approve"))
 
 	if responseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected the approval to resume the run, got %d %s", responseRecorder.Code, responseRecorder.Body.String())
@@ -153,9 +172,10 @@ func heldRunWithAdminHandler(t *testing.T, liveHolds LiveHolds) (TaskApprovalHan
 	taskRunService, _ := approvalTestTaskRunService(t)
 	harness := harnesstest.New(taskRunService)
 	handler := TaskApprovalHandler{
-		LiveHolds:      liveHolds,
-		TaskRunService: taskRunService,
-		TaskLauncher:   agentruntime.NewTaskLauncher(harness, taskRunService, agentruntime.NewToolCatalogBuilder()),
+		LiveHolds:       liveHolds,
+		TaskRunService:  taskRunService,
+		TaskLauncher:    agentruntime.NewTaskLauncher(harness, taskRunService, agentruntime.NewToolCatalogBuilder()),
+		IdentityService: rosterOfARequesterAndAnAdmin(),
 	}
 	taskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "일정 삭제")
 	holdrecord.Open(taskRunService, taskRun.TaskRunID, agentcontract.HeldCall{ToolName: "event_delete", ToolInput: json.RawMessage(`{"eventHint":"event-1"}`), Confirmation: "삭제할까요?"}, nil)
@@ -169,7 +189,7 @@ func TestAnApprovalWhileTheAskingTurnIsStillWaitingIsHandedToThatTurnAndNothingI
 	liveHolds := &recordedLiveHolds{isAwaited: true}
 	handler, harness, taskRun, taskRunService := heldRunWithAdminHandler(t, liveHolds)
 
-	responseRecorder := postApproval(t, handler, `{"taskRunID":"`+taskRun.TaskRunID+`","decision":"approve"}`)
+	responseRecorder := postApproval(t, handler, decisionBy(requesterEmail, taskRun.TaskRunID, "approve"))
 
 	if responseRecorder.Code != http.StatusOK || len(liveHolds.answers) != 1 || liveHolds.answers[0] != agentcontract.ApprovalSignalApprove {
 		t.Fatalf("expected the live waiter to be answered once, got %d %+v", responseRecorder.Code, liveHolds.answers)
@@ -186,9 +206,49 @@ func TestAnApprovalWithNoTurnWaitingOnTheHoldResumesTheRunAsARestartResume(t *te
 	liveHolds := &recordedLiveHolds{isAwaited: false}
 	handler, harness, taskRun, _ := heldRunWithAdminHandler(t, liveHolds)
 
-	responseRecorder := postApproval(t, handler, `{"taskRunID":"`+taskRun.TaskRunID+`","decision":"approve"}`)
+	responseRecorder := postApproval(t, handler, decisionBy(requesterEmail, taskRun.TaskRunID, "approve"))
 
 	if responseRecorder.Code != http.StatusOK || !harness.LastTurnRequest().IsRuntimeRestartResume {
 		t.Fatalf("expected the run resumed as a restart resume, got %d %+v", responseRecorder.Code, harness.LastTurnRequest())
+	}
+}
+
+func TestOnlyThePersonWhoAskedMayDecideTheirHeldCall(t *testing.T) {
+	for _, testCase := range []struct {
+		name          string
+		approverEmail string
+	}{
+		{"an admin who is not the requester", adminEmail},
+		{"nobody named", ""},
+		{"an address the roster does not know", "stranger@example.com"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			liveHolds := &recordedLiveHolds{isAwaited: true}
+			handler, harness, taskRun, taskRunService := heldRunWithAdminHandler(t, liveHolds)
+
+			for _, decision := range []string{"approve", "reject"} {
+				responseRecorder := postApproval(t, handler, decisionBy(testCase.approverEmail, taskRun.TaskRunID, decision))
+				if responseRecorder.Code != http.StatusForbidden {
+					t.Fatalf("expected %s to be refused, got %d %s", decision, responseRecorder.Code, responseRecorder.Body.String())
+				}
+			}
+			if len(liveHolds.answers) != 0 || harness.RunTurnCallCount() != 0 {
+				t.Fatalf("the refused decision reached the run: answers %+v, turns %d", liveHolds.answers, harness.RunTurnCallCount())
+			}
+			if holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID)); holds[0].State != holdrecord.StatePending {
+				t.Fatalf("the hold was decided by someone other than its requester: %+v", holds)
+			}
+		})
+	}
+}
+
+func TestTheRequesterDecidesTheirHeldCallWhateverCaseTheirAddressIsWrittenIn(t *testing.T) {
+	liveHolds := &recordedLiveHolds{isAwaited: true}
+	handler, _, taskRun, _ := heldRunWithAdminHandler(t, liveHolds)
+
+	responseRecorder := postApproval(t, handler, decisionBy(" Requester@Example.com ", taskRun.TaskRunID, "reject"))
+
+	if responseRecorder.Code != http.StatusOK || len(liveHolds.answers) != 1 || liveHolds.answers[0] != agentcontract.ApprovalSignalReject {
+		t.Fatalf("expected the requester's reject to reach the waiting turn, got %d %+v", responseRecorder.Code, liveHolds.answers)
 	}
 }
