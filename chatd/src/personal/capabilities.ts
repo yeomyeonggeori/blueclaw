@@ -121,9 +121,9 @@ export const personCapabilities: Record<string, PersonCapability> = {
 		);
 		return {};
 	},
-	"person.inbox.list": async (gateway, body) => {
+	"person.inbox.list": async (gateway, body, agentExternalID) => {
 		const request = parsePersonRequest(body);
-		return { items: await gateway.listInbox(request.actor) };
+		return { agentExternalID, items: await gateway.listInbox(request.actor) };
 	},
 	"person.messages.list": async (gateway, body) => {
 		const request = parsePersonRequest(body);
