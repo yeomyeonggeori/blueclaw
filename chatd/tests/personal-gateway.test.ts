@@ -500,7 +500,7 @@ describe("person.typing.send", () => {
 });
 
 describe("person.inbox.list", () => {
-	test("is read as the person asking, and answers with their inbox", async () => {
+	test("is read as the person asking, and answers with their inbox and which account is the agent", async () => {
 		const actor = { kind: "mattermost-token", secret: "token" };
 		const askedBy: unknown[] = [];
 		const item = {
@@ -523,7 +523,7 @@ describe("person.inbox.list", () => {
 
 		expect(answer.status).toBe(200);
 		expect(askedBy).toEqual([actor]);
-		expect(await answer.json()).toEqual({ items: [item] });
+		expect(await answer.json()).toEqual({ items: [item], agentExternalID: "bot-1" });
 	});
 });
 
