@@ -581,6 +581,7 @@ func capabilityToolRequest(toolContext context.Context, descriptor CapabilityToo
 	}
 	if holdID := toolcontract.HoldIDFromContext(toolContext); holdID != "" {
 		contextDocument["holdID"] = holdID
+		contextDocument["taskRunID"] = toolcontract.TaskRunIDFromContext(toolContext)
 	}
 	if scheduledCall, isCarried := scheduledApprovedCallFrom(toolContext); isCarried {
 		contextDocument["scheduledApprovedCall"] = map[string]any{

@@ -253,6 +253,18 @@ func TestCapabilityToolRequestIncludesTrustedExecutionContext(t *testing.T) {
 	}
 }
 
+func TestACapabilityCallCarriedOutOnAnApprovalNamesTheRunThatHoldsIt(t *testing.T) {
+	descriptor := completeTestCapabilityToolDescriptor(CapabilityToolDescriptor{Name: "message_send", CanonicalName: "message_send"})
+	toolContext := toolcontract.WithHoldID(toolcontract.WithTaskRunID(context.Background(), "run-1"), "held-1")
+
+	requestDocument := capabilityToolRequest(toolContext, descriptor, ToolCatalogRequest{RequesterPersonID: "person-1"}, preparedCapabilityToolPayload{Input: json.RawMessage(`{"message":"test"}`)})
+
+	contextDocument := requestDocument["context"].(map[string]any)
+	if contextDocument["holdID"] != "held-1" || contextDocument["taskRunID"] != "run-1" {
+		t.Fatalf("expected the hold and the run that holds it, got %+v", contextDocument)
+	}
+}
+
 func TestCapabilityToolRequestSeparatesModelInputFromTransport(t *testing.T) {
 	input := json.RawMessage(`{"documentID":"document-1"}`)
 	transport := map[string]any{"workspaceFile": map[string]any{"workspacePath": "/workspace/reports/q3.pdf"}}

@@ -39,6 +39,7 @@ func newRouterDependencies(components applicationComponents) httpserver.RouterDe
 		LearningHandler:       newLearningHandler(components),
 		ToolInventoryHandler:  adminapi.ToolInventoryHandler{ToolCatalogBuilder: components.toolCatalogBuilder},
 		TaskApprovalHandler:   newTaskApprovalHandler(services, directory, components.taskLauncher, components.connectorRuntime),
+		HeldCallRedemption:    adminapi.HeldCallRedemptionHandler{TaskRunService: services.taskRunService},
 		QuiesceHandler: adminapi.QuiesceHandler{
 			Controller:     components.taskIntakeController,
 			TaskRunService: services.taskRunService,

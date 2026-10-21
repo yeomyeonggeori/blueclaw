@@ -121,6 +121,9 @@
           ],
           "type": "object"
         },
+        "taskRunID": {
+          "type": "string"
+        },
         "taskSource": {
           "type": "string"
         }

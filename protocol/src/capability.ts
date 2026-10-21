@@ -360,6 +360,7 @@ export const toolInvokeContextSchema = z.looseObject({
   taskSource: z.string().optional(),
   isScheduledRun: z.boolean().optional(),
   holdID: z.string().optional(),
+  taskRunID: z.string().optional(),
   scheduledApprovedCall: z
     .looseObject({
       toolName: z.string(),

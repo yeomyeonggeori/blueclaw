@@ -20,6 +20,7 @@ type RouterDependencies struct {
 	TaskRunHandler        adminapi.TaskRunHandler
 	MemoryHandler         adminapi.MemoryHandler
 	TaskApprovalHandler   adminapi.TaskApprovalHandler
+	HeldCallRedemption    adminapi.HeldCallRedemptionHandler
 	HarnessStatusHandler  adminapi.HarnessStatusHandler
 	SkillInventoryHandler adminapi.SkillInventoryHandler
 	ToolInventoryHandler  adminapi.ToolInventoryHandler
@@ -76,6 +77,7 @@ func NewRouter(routerDependencies RouterDependencies) http.Handler {
 	multiplexer.HandleFunc("POST /admin/api/run/start", routerDependencies.TaskRunHandler.HandleRunTask)
 	multiplexer.HandleFunc("POST /admin/api/run/cancel", routerDependencies.TaskRunHandler.HandleCancelTaskRun)
 	multiplexer.HandleFunc("POST /admin/api/run/approve", routerDependencies.TaskApprovalHandler.HandleApproveTaskRun)
+	multiplexer.HandleFunc("POST /admin/api/held-call/redeem", routerDependencies.HeldCallRedemption.HandleRedeemHeldCall)
 	multiplexer.HandleFunc("GET /admin/api/harness", routerDependencies.HarnessStatusHandler.HandleGetHarnessStatus)
 	multiplexer.HandleFunc("GET /admin/api/skills", routerDependencies.SkillInventoryHandler.HandleListSkills)
 	multiplexer.HandleFunc("GET /admin/api/tools", routerDependencies.ToolInventoryHandler.HandleListTools)
