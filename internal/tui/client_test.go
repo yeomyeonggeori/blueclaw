@@ -107,12 +107,12 @@ func TestClientSubmitApprovalSendsDecisionAndDecodesStatus(testInstance *testing
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, nil)
+	client := NewClient(server.URL, nil).DecidingAs("operator@example.com")
 	approvalResult, errorValue := client.SubmitApproval(context.Background(), "task-1", ApprovalDecisionApprove)
 	if errorValue != nil {
 		testInstance.Fatalf("unexpected error: %v", errorValue)
 	}
-	if capturedRequestBody.TaskRunID != "task-1" || capturedRequestBody.Decision != ApprovalDecisionApprove {
+	if capturedRequestBody.TaskRunID != "task-1" || capturedRequestBody.Decision != ApprovalDecisionApprove || capturedRequestBody.ApproverEmail != "operator@example.com" {
 		testInstance.Fatalf("unexpected captured request: %+v", capturedRequestBody)
 	}
 	if approvalResult.Status != TaskStatusRunning {

@@ -27,9 +27,12 @@ type TaskApprovalHandler struct {
 }
 
 type taskApprovalRequest struct {
-	TaskRunID string `json:"taskRunID"`
-	Decision  string `json:"decision"`
+	TaskRunID     string `json:"taskRunID"`
+	Decision      string `json:"decision"`
+	ApproverEmail string `json:"approverEmail"`
 }
+
+var errApproverIsNotTheRequester = errors.New("only the person who asked for this call may approve or reject it")
 
 type taskApprovalResponse struct {
 	TaskRunID string `json:"taskRunID"`
@@ -37,7 +40,7 @@ type taskApprovalResponse struct {
 }
 
 func (handler TaskApprovalHandler) HandleApproveTaskRun(responseWriter http.ResponseWriter, request *http.Request) {
-	if handler.TaskRunService == nil || handler.TaskLauncher == nil {
+	if handler.TaskRunService == nil || handler.TaskLauncher == nil || handler.IdentityService == nil {
 		writeApprovalError(responseWriter, http.StatusServiceUnavailable, "task approval is not configured")
 		return
 	}
@@ -47,6 +50,10 @@ func (handler TaskApprovalHandler) HandleApproveTaskRun(responseWriter http.Resp
 		return
 	}
 	taskRun, approvalSignal, errorValue := handler.resolveApproval(approvalRequest)
+	if errors.Is(errorValue, errApproverIsNotTheRequester) {
+		writeApprovalError(responseWriter, http.StatusForbidden, errorValue.Error())
+		return
+	}
 	if errorValue != nil {
 		writeApprovalError(responseWriter, http.StatusBadRequest, errorValue.Error())
 		return
@@ -103,7 +110,15 @@ func (handler TaskApprovalHandler) resolveApproval(approvalRequest taskApprovalR
 	if errorValue != nil {
 		return task.TaskRun{}, "", errorValue
 	}
+	if !handler.isTheRequester(approvalRequest.ApproverEmail, taskRun) {
+		return task.TaskRun{}, "", errApproverIsNotTheRequester
+	}
 	return taskRun, approvalSignal, nil
+}
+
+func (handler TaskApprovalHandler) isTheRequester(approverEmail string, taskRun task.TaskRun) bool {
+	approverPersonID, isKnown := handler.IdentityService.ResolvePersonIDByEmail(approverEmail)
+	return isKnown && approverPersonID != "" && approverPersonID == taskRun.RequesterPersonID
 }
 
 func approvalSignalOf(decision string) (agentcontract.ApprovalSignal, error) {
