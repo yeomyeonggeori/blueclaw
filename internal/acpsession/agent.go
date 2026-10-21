@@ -259,6 +259,7 @@ func (agent *Agent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.
 	}
 	launchRequest = agent.withMessageAttachments(ctx, messageContext, launchRequest)
 	launchRequest.ToolCallObserver = agent.toolCallObserverFor(ctx, request.SessionId, delivery)
+	launchRequest.CheckpointSender = agent.checkpointSenderFor(request.SessionId, delivery)
 	return agent.launchTurn(ctx, request.SessionId, sessionTurn, launchRequest)
 }
 
@@ -311,7 +312,6 @@ func (agent *Agent) taskLaunchRequestFor(session openSession, sessionID acp.Sess
 		ResponseLanguage:        messageContext.responseLanguage(addressing),
 		VisibleContext:          messageContext.Context.ToAgentVisibleContext(),
 		PersonAccess:            agent.directory.ResolvePersonAccess(requester.PersonID),
-		CheckpointSender:        agent.checkpointSenderFor(sessionID),
 		TurnStartedAt:           time.Now(),
 	}
 }
@@ -385,10 +385,10 @@ func (agent *Agent) requesterName(requester Requester) string {
 
 // A client concatenates agent_message_chunk into the answer and renders
 // agent_thought_chunk as progress (agentclientprotocol.com/protocol/prompt-turn).
-func (agent *Agent) checkpointSenderFor(sessionID acp.SessionId) agentcontract.AgentCheckpointSender {
+func (agent *Agent) checkpointSenderFor(sessionID acp.SessionId, delivery Delivery) agentcontract.AgentCheckpointSender {
 	return func(checkpointContext context.Context, checkpoint agentcontract.AgentCheckpoint) error {
 		if message := strings.TrimSpace(checkpoint.Message); message != "" {
-			if errorValue := agent.notify(checkpointContext, sessionID, acp.UpdateAgentThoughtText(message)); errorValue != nil {
+			if errorValue := agent.notifyDelivery(checkpointContext, sessionID, delivery, acp.UpdateAgentThoughtText(message)); errorValue != nil {
 				return errorValue
 			}
 		}

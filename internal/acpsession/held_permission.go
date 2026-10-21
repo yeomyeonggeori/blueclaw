@@ -120,7 +120,7 @@ func (agent *Agent) resumeAnsweredTaskRun(ctx context.Context, sessionID acp.Ses
 		Prompt:                 taskRun.Prompt,
 		ResponseLanguage:       addressing.ResponseLanguage,
 		PersonAccess:           agent.directory.ResolvePersonAccess(requester.PersonID),
-		CheckpointSender:       agent.checkpointSenderFor(sessionID),
+		CheckpointSender:       agent.checkpointSenderFor(sessionID, Delivery{}),
 	}
 	launchResult, errorValue := agent.taskLauncher.Launch(ctx, launchRequest)
 	if errorValue != nil {
