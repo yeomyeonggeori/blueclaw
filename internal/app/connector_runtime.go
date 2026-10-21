@@ -85,7 +85,7 @@ func newChatdClient(runtimeConfiguration config.RuntimeConfiguration) capability
 	return capability.NewClient(capability.Configuration{
 		Endpoint:        firstNonEmptyString(runtimeConfiguration.Connectors.Chatd.Endpoint, connectors.DefaultChatdEndpoint),
 		Timeout:         time.Duration(runtimeConfiguration.Connectors.Chatd.TimeoutSecond) * time.Second,
-		BearerTokenPath: runtimeConfiguration.Connectors.Chatd.ServiceTokenPath,
+		BearerTokenPath: runtimeConfiguration.ServiceTokenPath,
 	})
 }
 

@@ -46,8 +46,8 @@ func TestTheChatdClientCarriesTheServiceTokenItIsPointedAt(t *testing.T) {
 		_, _ = responseWriter.Write([]byte(`{}`))
 	}))
 	defer chatd.Close()
-	client := newChatdClient(config.RuntimeConfiguration{Connectors: config.ConnectorConfiguration{
-		Chatd: config.ChatdConnectorConfiguration{Endpoint: chatd.URL, ServiceTokenPath: tokenPath},
+	client := newChatdClient(config.RuntimeConfiguration{ServiceTokenPath: tokenPath, Connectors: config.ConnectorConfiguration{
+		Chatd: config.ChatdConnectorConfiguration{Endpoint: chatd.URL},
 	}})
 
 	if errorValue := client.PostJSON(context.Background(), "/v1/platform/buzz/reply.send", map[string]string{}, nil); errorValue != nil {
@@ -63,8 +63,8 @@ func TestTheChatdClientSendsNothingWhenItsServiceTokenCannotBeRead(t *testing.T)
 	reached := false
 	chatd := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { reached = true }))
 	defer chatd.Close()
-	client := newChatdClient(config.RuntimeConfiguration{Connectors: config.ConnectorConfiguration{
-		Chatd: config.ChatdConnectorConfiguration{Endpoint: chatd.URL, ServiceTokenPath: filepath.Join(t.TempDir(), "missing")},
+	client := newChatdClient(config.RuntimeConfiguration{ServiceTokenPath: filepath.Join(t.TempDir(), "missing"), Connectors: config.ConnectorConfiguration{
+		Chatd: config.ChatdConnectorConfiguration{Endpoint: chatd.URL},
 	}})
 
 	errorValue := client.PostJSON(context.Background(), "/v1/platform/buzz/reply.send", map[string]string{}, nil)

@@ -1,6 +1,7 @@
 import type { Chat, Message, Thread } from 'chat';
 import type { ChatdConfiguration } from './configuration.ts';
 import { deliverInboundEventToRelay, type NormalizedInboundEvent } from './relay-inbound.ts';
+import { asAHostService } from './service-credential.ts';
 import {
   buildVisibleContext,
   emptyVisibleContext,
@@ -142,11 +143,11 @@ async function forwardNormalizedEvent(
     await deliverInboundEventToRelay(configuration.relayInboundURL, event);
     return;
   }
-  const response = await fetch(`${configuration.blueclawBaseURL}/connectors/${platform}/events`, {
+  const response = await fetch(`${configuration.blueclawBaseURL}/connectors/${platform}/events`, asAHostService({
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(event),
-  });
+  }));
   if (!response.ok) {
     throw new Error(`blueclaw ${platform} ingress returned ${response.status}`);
   }
@@ -170,11 +171,11 @@ export function normalizedInboundRoutingOf(
 
 async function forwardLegacyEvent(configuration: ChatdConfiguration, event: BridgeInboundEvent): Promise<void> {
   if (!configuration.blueclawIngressURL) return;
-  const response = await fetch(configuration.blueclawIngressURL, {
+  const response = await fetch(configuration.blueclawIngressURL, asAHostService({
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(event),
-  });
+  }));
   if (!response.ok) {
     throw new Error(`blueclaw ingress returned ${response.status}`);
   }

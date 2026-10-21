@@ -60,10 +60,14 @@ func Dial(configuration Configuration) (string, *http.Client) {
 		}
 	}
 	if bearerTokenPath := strings.TrimSpace(configuration.BearerTokenPath); bearerTokenPath != "" {
-		httpClient.Transport = bearerTokenTransport{base: httpClient.Transport, tokenPath: bearerTokenPath}
+		httpClient.Transport = BearerTokenTransport(httpClient.Transport, bearerTokenPath)
 	}
 
 	return endpoint, httpClient
+}
+
+func BearerTokenTransport(base http.RoundTripper, tokenPath string) http.RoundTripper {
+	return bearerTokenTransport{base: base, tokenPath: tokenPath}
 }
 
 type bearerTokenTransport struct {

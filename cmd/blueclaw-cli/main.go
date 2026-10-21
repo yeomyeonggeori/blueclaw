@@ -3,11 +3,14 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/enrollment"
 	"github.com/yeomyeonggeori/blueclaw/internal/tui"
@@ -33,7 +36,7 @@ func main() {
 	if configurationPath == "" {
 		configurationPath = home.RuntimeConfigurationPath()
 	}
-	client := tui.NewClient(resolveBaseURL(*baseURL, configurationPath), nil)
+	client := tui.NewClient(resolveBaseURL(*baseURL, configurationPath), adminAPIClient(configurationPath))
 	program := tea.NewProgram(tui.NewModel(client, configurationPath))
 	if _, errorValue := program.Run(); errorValue != nil {
 		fmt.Fprintln(os.Stderr, "blueclaw:", errorValue)
@@ -50,6 +53,14 @@ func resolveBaseURL(configuredBaseURL string, runtimeConfigurationPath string) s
 		return "http://127.0.0.1:8080"
 	}
 	return runtimeConfiguration.BaseURL
+}
+
+func adminAPIClient(runtimeConfigurationPath string) *http.Client {
+	runtimeConfiguration, errorValue := config.LoadRuntimeConfiguration(runtimeConfigurationPath)
+	if errorValue != nil || strings.TrimSpace(runtimeConfiguration.ServiceTokenPath) == "" {
+		return nil
+	}
+	return &http.Client{Timeout: 15 * time.Second, Transport: capability.BearerTokenTransport(nil, runtimeConfiguration.ServiceTokenPath)}
 }
 
 func runSetup(home enrollment.Home) error {

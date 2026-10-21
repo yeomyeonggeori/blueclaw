@@ -22,3 +22,11 @@ export function carriesServiceToken(request: Request, serviceToken: string): boo
   const expected = Buffer.from(serviceToken);
   return offered.length === expected.length && timingSafeEqual(offered, expected);
 }
+
+export function asAHostService(init: RequestInit, environment: Record<string, string | undefined> = process.env): RequestInit {
+  const path = environment['CHATD_SERVICE_TOKEN_PATH']?.trim();
+  if (!path) return init;
+  const headers = new Headers(init.headers);
+  headers.set('Authorization', `Bearer ${readFileSync(path, 'utf8').trim()}`);
+  return { ...init, headers };
+}

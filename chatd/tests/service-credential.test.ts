@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequestHandler } from '../src/server.ts';
-import { serviceTokenFrom } from '../src/service-credential.ts';
+import { asAHostService, serviceTokenFrom } from '../src/service-credential.ts';
 
 const directory = mkdtempSync(join(tmpdir(), 'chatd-service-token-'));
 afterAll(() => rmSync(directory, { recursive: true, force: true }));
@@ -79,5 +79,23 @@ describe('the token chatd checks against', () => {
     expect(() => serviceTokenFrom({ CHATD_SERVICE_TOKEN_PATH: emptyPath })).toThrow();
     expect(() => serviceTokenFrom({ CHATD_SERVICE_TOKEN_PATH: shortPath })).toThrow();
     expect(() => serviceTokenFrom({ CHATD_SERVICE_TOKEN_PATH: join(directory, 'missing') })).toThrow();
+  });
+});
+
+describe('what chatd sends to the other host services', () => {
+  test('carries the same token, read from the file it was pointed at', () => {
+    const path = join(directory, 'outgoing-service-token');
+    writeFileSync(path, serviceToken + '\n');
+
+    const init = asAHostService({ method: 'POST', headers: { 'Content-Type': 'application/json' } }, { CHATD_SERVICE_TOKEN_PATH: path });
+
+    const headers = new Headers(init.headers);
+    expect(headers.get('Authorization')).toBe('Bearer ' + serviceToken);
+    expect(headers.get('Content-Type')).toBe('application/json');
+  });
+
+  test('is left as it was where no token is named', () => {
+    const init = { method: 'POST' };
+    expect(asAHostService(init, {})).toBe(init);
   });
 });
