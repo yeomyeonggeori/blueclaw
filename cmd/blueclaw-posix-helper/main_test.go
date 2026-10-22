@@ -354,3 +354,30 @@ func TestWriteFileTakesWhatArrivesOnStandardInput(t *testing.T) {
 		t.Fatalf("expected %d bytes written, got %d", len(content), len(written))
 	}
 }
+
+func TestReconcilingAPrivateHomeClosesItToOthersAndKeepsTheOwnersModes(t *testing.T) {
+	homePath := t.TempDir()
+	modes := map[string]os.FileMode{"script.sh": 0755, "notes.md": 0640, "read-only.txt": 0400}
+	for name, mode := range modes {
+		path := filepath.Join(homePath, name)
+		if errorValue := os.WriteFile(path, []byte(name), 0600); errorValue != nil {
+			t.Fatal(errorValue)
+		}
+		if errorValue := os.Chmod(path, mode); errorValue != nil {
+			t.Fatal(errorValue)
+		}
+	}
+	if errorValue := reconcilePrivateHomeTree(homePath, uint32(os.Getuid()), uint32(os.Getgid())); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	expected := map[string]os.FileMode{"script.sh": 0700, "notes.md": 0600, "read-only.txt": 0400}
+	for name, mode := range expected {
+		information, errorValue := os.Stat(filepath.Join(homePath, name))
+		if errorValue != nil {
+			t.Fatal(errorValue)
+		}
+		if information.Mode().Perm() != mode {
+			t.Errorf("%s is %o after reconciling, want %o", name, information.Mode().Perm(), mode)
+		}
+	}
+}

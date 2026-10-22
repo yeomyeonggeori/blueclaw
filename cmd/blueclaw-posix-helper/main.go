@@ -613,7 +613,7 @@ func reconcilePrivateHomeTree(homePath string, userID uint32, groupID uint32) er
 			return errorValue
 		}
 		if fileInformation.Mode().IsRegular() {
-			return os.Chmod(path, 0600)
+			return os.Chmod(path, fileInformation.Mode().Perm()&^0077)
 		}
 		return nil
 	})
