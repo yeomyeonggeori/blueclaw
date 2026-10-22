@@ -41,6 +41,7 @@ export const personCapabilities: Record<string, PersonCapability> = {
 		const request = parsePersonRequest(body);
 		const conversations = await gateway.listConversations(request.actor);
 		return {
+			agentExternalID,
 			conversations: conversations.map((conversation) => ({
 				...conversation,
 				isWithTheAgent: Boolean(
