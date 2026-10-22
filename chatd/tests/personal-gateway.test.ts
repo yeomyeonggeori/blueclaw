@@ -306,6 +306,19 @@ describe("the conversation with the agent", () => {
 		expect(conversationOf("with-the-agent").isWithTheAgent).toBe(true);
 		expect(conversationOf("with-a-colleague").isWithTheAgent).toBe(false);
 	});
+
+	test("names the agent's account, so a channel's members can offer the agent to mention", async () => {
+		recordFetches((url) => {
+			if (url.endsWith("/users/me")) return { id: "person-a", username: "lee", first_name: "", last_name: "" };
+			if (url.endsWith("/users/me/teams")) return [{ id: "team-1" }];
+			if (url.includes("/channels")) return [{ id: "open-room", display_name: "영업", name: "sales", type: "O" }];
+			return [];
+		});
+
+		const answer = await (await listing()).json();
+
+		expect(answer.agentExternalID).toBe("bot-1");
+	});
 });
 
 describe("the people list", () => {
