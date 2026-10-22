@@ -120,6 +120,7 @@ var virtualGeneratedDescriptorToolNames = []string{
 	"document_read",
 	"image_read",
 	"browser_open",
+	"browser_click",
 	"browser_fill",
 	"browser_select",
 	"browser_press",
@@ -773,6 +774,7 @@ var builtinScenarioFactories = map[string]func(string) VirtualSessionScenario{
 	"plain_question_acceptance":                      PlainQuestionAcceptanceScenario,
 	"web_search_acceptance":                          WebSearchAcceptanceScenario,
 	"browser_form_acceptance":                        BrowserFormAcceptanceScenario,
+	"browser_write_approval":                         BrowserWriteApprovalScenario,
 	"tool_permission_hides_skill":                    ToolPermissionHidesSkillScenario,
 	"file_write_acceptance":                          FileWriteAcceptanceScenario,
 	"document_create_acceptance":                     DocumentCreateAcceptanceScenario,
@@ -1602,6 +1604,8 @@ func (service *virtualCapabilityService) targetResolveResponse(toolName string, 
 		return service.hostUpdateTargetResponse(requestBody)
 	case virtualCRMImportToolName:
 		return virtualCRMImportTargetResponse(requestBody)
+	case "browser_click":
+		return virtualBrowserClickTargetResponse()
 	}
 	return virtualCapabilityJSON(map[string]any{"provider": "virtual", "selectedBackend": "device", "toolName": toolName, "outcome": "succeeded", "status": "no_target", "result": map[string]any{}})
 }
@@ -1708,6 +1712,8 @@ func (service *virtualCapabilityService) response(toolName string, requestBody [
 		return virtualCapabilitySuccess(toolName, result)
 	case "browser_open", "browser_fill", "browser_select", "browser_press", "browser_wait":
 		return virtualCapabilitySuccess(toolName, virtualBrowserResult(toolName, virtualCapabilityInput(requestBody)))
+	case "browser_click":
+		return virtualBrowserClickResponse(requestBody)
 	case "message_context":
 		return virtualCapabilitySuccess(toolName, virtualMessageContextResult())
 	case "message_search":
