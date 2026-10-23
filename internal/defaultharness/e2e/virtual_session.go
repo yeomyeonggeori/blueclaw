@@ -1604,8 +1604,6 @@ func (service *virtualCapabilityService) targetResolveResponse(toolName string, 
 		return service.hostUpdateTargetResponse(requestBody)
 	case virtualCRMImportToolName:
 		return virtualCRMImportTargetResponse(requestBody)
-	case "browser_click":
-		return virtualBrowserClickTargetResponse()
 	}
 	return virtualCapabilityJSON(map[string]any{"provider": "virtual", "selectedBackend": "device", "toolName": toolName, "outcome": "succeeded", "status": "no_target", "result": map[string]any{}})
 }

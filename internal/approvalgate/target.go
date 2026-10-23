@@ -44,6 +44,9 @@ func (resolution ApprovalTargetResolution) namesNothingThatExists() bool {
 }
 
 func (gate *Gate) resolveApprovalTarget(ctx context.Context, approvalRequest mcpserver.ApprovalRequest) ApprovalTargetResolution {
+	if target, isNamed := refusalTarget(ctx); isNamed {
+		return ApprovalTargetResolution{Target: target}
+	}
 	if gate.approvalTargetResolver == nil {
 		return ApprovalTargetResolution{}
 	}

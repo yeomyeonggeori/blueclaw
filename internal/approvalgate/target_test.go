@@ -258,3 +258,31 @@ func TestAnApprovedCallIsCarriedOutAgainstEveryIdentityAListResolvedTo(t *testin
 		t.Fatalf("consent binds to every identity the requester saw, got %s", approvedCall.ToolInput)
 	}
 }
+
+func TestARefusalThatNamesItsTargetIsAskedAboutAsNamed(t *testing.T) {
+	gate, taskRunService, taskRun := gateFixture(t)
+	languageModel := &wordingLanguageModel{question: "이 요청을 보낼까요?"}
+	gate.UseQuestionWorder(approval.NewWorder(languageModel))
+	resolver := resolvedTargetResolver()
+	gate.UseApprovalTargetResolver(resolver)
+	named := ApprovalTarget{InputField: "withheldRequest", ID: `{"requests":[{"method":"POST"}]}`, Title: "POST https://bank.example", Preview: "POST https://bank.example/transfer\nto: 박예시"}
+	approvalRequest := approvalRequestFixture(taskRun.TaskRunID)
+	approvalRequest.ToolInput = json.RawMessage(`{"target":"@e1"}`)
+
+	outcome, errorValue := gate.AwaitApproval(WithRefusalTarget(context.Background(), named), approvalRequest)
+
+	if errorValue != nil || outcome.Decision != mcpserver.ApprovalDecisionHeld {
+		t.Fatalf("expected the named call to be held, got %+v %v", outcome, errorValue)
+	}
+	if resolver.callCount != 0 {
+		t.Fatal("a refusal that names what it would do is not resolved a second time")
+	}
+	if wordingContext := marshalRequestMessages(languageModel.lastRequest); !strings.Contains(wordingContext, "to: 박예시") {
+		t.Fatalf("the question is worded from the named target, got %s", wordingContext)
+	}
+	recordDecision(taskRunService, taskRun.TaskRunID, "approve")
+	approvedCall, _ := ApprovedPendingCall(taskRunService.ListTaskEvent(taskRun.TaskRunID))
+	if string(approvedCall.ToolInput) != `{"target":"@e1","withheldRequest":"{\"requests\":[{\"method\":\"POST\"}]}"}` {
+		t.Fatalf("the approval carries exactly what the refusal named, got %s", approvedCall.ToolInput)
+	}
+}
