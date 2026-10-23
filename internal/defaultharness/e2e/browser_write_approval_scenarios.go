@@ -53,22 +53,18 @@ func BrowserWriteApprovalScenario(artifactDirectoryPath string) VirtualSessionSc
 
 func virtualBrowserClickResponse(requestBody []byte) string {
 	if !virtualInvokeContextOf(requestBody).carriesAnApproval() {
-		message := "This action made the page send POST https://bank.example, which changes data. Nothing was sent: it goes out only if the requester approves exactly this."
+		message := "This call made the page send POST https://bank.example, which would carry this browser's cookies for that site or a password typed into the page. Nothing was sent: it goes out only if the requester approves exactly this."
 		return virtualCapabilityJSON(map[string]any{
 			"provider": "virtual", "selectedBackend": "device", "toolName": "browser_click",
 			"outcome": "denied", "status": "denied", "isError": true,
 			"content": message, "message": message, "errorCode": "approval_required", "failureStage": "authorization",
-			"result": map[string]any{"errorCode": "approval_required", "failureStage": "authorization", "message": message, "withheldRequestID": virtualWithheldRequestID},
+			"result": map[string]any{"errorCode": "approval_required", "failureStage": "authorization", "message": message, "approvalTarget": map[string]any{
+				"inputField": "withheldRequest",
+				"id":         virtualWithheldRequestID,
+				"title":      "POST https://bank.example",
+				"preview":    virtualWithheldRequestPreview,
+			}},
 		})
 	}
 	return virtualCapabilitySuccess("browser_click", virtualBrowserResult("browser_click", virtualCapabilityInput(requestBody)))
-}
-
-func virtualBrowserClickTargetResponse() string {
-	return virtualCapabilityTargetResolved("browser_click", map[string]any{
-		"inputField": "withheldRequest",
-		"id":         virtualWithheldRequestID,
-		"title":      "POST https://bank.example",
-		"preview":    virtualWithheldRequestPreview,
-	})
 }

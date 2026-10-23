@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/access"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
@@ -164,7 +165,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) settleApprovalRefusal(toolContext 
 	if result.Failure == nil || !result.Failure.RequiresApproval || request.ToolCallGate == nil || toolcontract.HoldIDFromContext(toolContext) != "" {
 		return result, nil
 	}
-	review, errorValue := request.ToolCallGate.ReviewToolCall(toolContext, toolcontract.ToolInvocation{
+	review, errorValue := request.ToolCallGate.ReviewToolCall(approvalgate.WithRefusalTarget(toolContext, refusalApprovalTarget(result)), toolcontract.ToolInvocation{
 		ToolName: toolDescriptor.Name,
 		Input:    toolInput,
 	}, toolcontract.ToolDefinition{
@@ -182,6 +183,14 @@ func (toolCatalogBuilder *ToolCatalogBuilder) settleApprovalRefusal(toolContext 
 		return result, nil
 	}
 	return toolCatalogBuilder.invokeCapabilityOperation(toolcontract.WithHoldID(toolContext, review.HoldID), operation, toolDescriptor, request, rawInput)
+}
+
+func refusalApprovalTarget(result toolcontract.ToolResult) approvalgate.ApprovalTarget {
+	var refusal struct {
+		ApprovalTarget approvalgate.ApprovalTarget `json:"approvalTarget"`
+	}
+	_ = json.Unmarshal(result.Output.Data, &refusal)
+	return refusal.ApprovalTarget
 }
 
 func validateCapabilityResultIdentity(operation string, provider string, selectedBackend string, toolName string, outcome string, isError bool) error {
