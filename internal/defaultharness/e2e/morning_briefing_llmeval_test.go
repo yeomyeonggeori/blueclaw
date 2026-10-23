@@ -14,7 +14,6 @@ import (
 )
 
 func TestMorningBriefingSettingsLive(t *testing.T) {
-	requireLiveEvaluationConsent(t)
 	model := liveMemoryModel(t, os.Getenv("BLUECLAW_E2E_LLM_ENDPOINT"), os.Getenv("BLUECLAW_E2E_LLM_UNIX_SOCKET"))
 	artifactRoot := filepath.Join("..", "..", ".artifacts", "morning-briefing-live")
 	if errorValue := os.MkdirAll(artifactRoot, 0700); errorValue != nil {

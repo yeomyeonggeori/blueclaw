@@ -1,8 +1,9 @@
+//go:build llmeval
+
 package integration
 
 import (
 	"context"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -42,19 +43,10 @@ func (embedder openRouterEmbedder) EmbedDocuments(ctx context.Context, texts []s
 // Proves, against a real low-tier model and a real embedding model, that a
 // finished task turns into memories, that a later task corrects an earlier one
 // through supersede, and that recall then returns the corrected one. It spends
-// a few cents, so it runs only when asked for.
+// a few cents, so it builds only with -tags llmeval.
 func TestMemoryLiveLLMExtractsCorrectsAndRecalls(t *testing.T) {
-	if os.Getenv("BLUECLAW_LIVE_LLM_TEST") != "1" {
-		t.Skip("set BLUECLAW_LIVE_LLM_TEST=1 to run the live memory extraction check")
-	}
-	apiKey := strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY"))
-	if apiKey == "" {
-		t.Skip("OPENROUTER_API_KEY is required for the live memory extraction check")
-	}
-	modelName := strings.TrimSpace(os.Getenv("BLUECLAW_LIVE_LLM_MODEL"))
-	if modelName == "" {
-		t.Skip("BLUECLAW_LIVE_LLM_MODEL names the low-tier model the live memory extraction check runs on")
-	}
+	apiKey := requireEvaluationInput(t, "OPENROUTER_API_KEY", "the key both the language model and the embedding model are called with")
+	modelName := requireEvaluationInput(t, "BLUECLAW_LIVE_LLM_MODEL", "the low-tier model memory extraction runs on")
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	defer cancel()
 

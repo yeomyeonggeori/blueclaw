@@ -49,7 +49,6 @@ type fileDeliveryRouteOutcome struct {
 }
 
 func TestFileDeliveryRouteLive(t *testing.T) {
-	requireLiveEvaluationConsent(t)
 	endpoint := strings.TrimSpace(os.Getenv("BLUECLAW_E2E_LLM_ENDPOINT"))
 	socketPath := strings.TrimSpace(os.Getenv("BLUECLAW_E2E_LLM_UNIX_SOCKET"))
 	requireLanguageModelInput(t)

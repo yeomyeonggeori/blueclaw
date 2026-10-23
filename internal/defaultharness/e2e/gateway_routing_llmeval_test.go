@@ -168,7 +168,6 @@ func routingRunCount(t *testing.T) int {
 
 func routingDecisionModel(t *testing.T) (model.DecisionModel, decisions.Endpoint) {
 	t.Helper()
-	requireLiveEvaluationConsent(t)
 	endpoint := decisions.Endpoint{
 		URL:        requireEvaluationInput(t, "BLUECLAW_DECISION_ENDPOINT", languageModelHint),
 		ModelName:  requireEvaluationInput(t, "BLUECLAW_DECISION_MODEL", languageModelHint),
