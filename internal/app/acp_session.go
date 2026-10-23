@@ -19,12 +19,11 @@ func newACPSessionServer(inbound InboundOptions, kernel agentKernel, directory i
 	permissionRelay := acpsession.NewPermissionRelay(logger)
 	kernel.toolCatalog.approvalGate.UsePermissionAsker(approvalgate.AskerRoutedBy(permissionRelay, threadPermissionAskerFor(inbound, connectorRuntime)))
 	return acpsession.NewServer(socketPath, acpsession.Collaborators{
-		AnswerSettler:      kernel.toolCatalog.approvalGate,
-		TaskLauncher:       taskLauncher,
-		Directory:          directory.identityService,
-		ReplyReader:        kernel.toolCatalog.replyReader,
-		AttachmentImporter: connectorRuntime,
-		SessionTurns:       connectorRuntime,
-		TaskRunStore:       taskRunService,
+		AnswerSettler: kernel.toolCatalog.approvalGate,
+		TaskLauncher:  taskLauncher,
+		Directory:     directory.identityService,
+		ReplyReader:   kernel.toolCatalog.replyReader,
+		SessionTurns:  connectorRuntime,
+		TaskRunStore:  taskRunService,
 	}, permissionRelay, logger)
 }

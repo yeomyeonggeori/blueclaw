@@ -30,7 +30,7 @@ func TestASessionTurnLeavesARunWaitingOnApprovalToTheSessionThatAsked(t *testing
 		return "", nil
 	})
 
-	launchRequest, isAnswered, errorValue := sessionTurn.ContinueOpenInteractions(context.Background(), agentruntime.TaskLaunchRequest{Prompt: event.Prompt})
+	launchRequest, isAnswered, errorValue := sessionTurn.PrepareLaunch(context.Background(), agentruntime.TaskLaunchRequest{Prompt: event.Prompt})
 
 	if errorValue != nil || isAnswered {
 		t.Fatalf("the turn ended in settlement: answered=%v error=%v", isAnswered, errorValue)

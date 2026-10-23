@@ -2,12 +2,12 @@ package acpsession
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	acp "github.com/coder/acp-go-sdk"
-	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
@@ -16,62 +16,71 @@ import (
 const pictureAddress = "http://127.0.0.1:3000/media/0f1e2d3c.png"
 const importedPicturePath = "~/inbox/buzz/dm/0f1e2d3c.png"
 
-type recordingAttachmentImporter struct {
-	mutex    sync.Mutex
-	asked    []connectors.PlatformInboundEvent
-	askedFor []string
+const importedPictureWorkspacePath = "/workspace/private/people/person-sample/inbox/buzz/dm/0f1e2d3c.png"
+
+type importingAdapter struct {
+	reactingAdapter
+	importMutex sync.Mutex
+	asked       []connectors.InputAttachmentImportRequest
 }
 
-func (importer *recordingAttachmentImporter) ImportMessageAttachments(_ context.Context, event connectors.PlatformInboundEvent, personID string) (connectors.PlatformInboundEvent, agentruntime.AttachmentMaterialResolver) {
-	importer.mutex.Lock()
-	importer.asked = append(importer.asked, event)
-	importer.askedFor = append(importer.askedFor, personID)
-	importer.mutex.Unlock()
-	imported := event
-	imported.Context.InputAttachments = []connectors.InputAttachment{{
-		Platform:    "buzz",
-		URL:         pictureAddress,
-		MessageID:   event.MessageID,
-		Filename:    "0f1e2d3c.png",
-		ContentType: "image/png",
-		Path:        importedPicturePath,
-		IsAvailable: true,
-	}}
-	imported.InputParts = []agentcontract.AgentPart{{
-		Type:   agentcontract.AgentPartTypeImage,
-		Image:  &agentcontract.AgentImagePart{Path: importedPicturePath, MimeType: "image/png", DataBase64: "cGljdHVyZQ=="},
-		Source: agentcontract.AgentPartSource{Platform: "buzz", MessageID: event.MessageID},
-	}}
-	return imported, importer
+func (adapter *importingAdapter) ImportInputAttachments(_ context.Context, request connectors.InputAttachmentImportRequest) (connectors.InputAttachmentImportResult, error) {
+	adapter.importMutex.Lock()
+	defer adapter.importMutex.Unlock()
+	adapter.asked = append(adapter.asked, request)
+	return connectors.InputAttachmentImportResult{
+		InputParts: []agentcontract.AgentPart{{
+			Type:   agentcontract.AgentPartTypeImage,
+			Image:  &agentcontract.AgentImagePart{Path: importedPictureWorkspacePath, MimeType: "image/png", DataBase64: "cGljdHVyZQ=="},
+			Source: agentcontract.AgentPartSource{Platform: "buzz", MessageID: request.MessageID},
+		}},
+		InputAttachments: []connectors.InputAttachment{{
+			Platform:    "buzz",
+			URL:         pictureAddress,
+			MessageID:   request.MessageID,
+			Filename:    "0f1e2d3c.png",
+			ContentType: "image/png",
+			Path:        importedPictureWorkspacePath,
+			IsAvailable: true,
+		}},
+	}, nil
 }
 
-func (importer *recordingAttachmentImporter) ResolveAttachmentMaterial(context.Context, string) (agentcontract.VisibleContextMaterial, error) {
-	return agentcontract.VisibleContextMaterial{Path: importedPicturePath}, nil
+func (adapter *importingAdapter) importRequests() []connectors.InputAttachmentImportRequest {
+	adapter.importMutex.Lock()
+	defer adapter.importMutex.Unlock()
+	return append([]connectors.InputAttachmentImportRequest{}, adapter.asked...)
+}
+
+func importingConnectorRuntime(gatewayDecider inboundengagement.Decider) (*connectors.ConnectorRuntime, *importingAdapter) {
+	adapter := &importingAdapter{}
+	connectorRuntime := connectorRuntimeDeciding(nil, gatewayDecider)
+	connectorRuntime.RegisterAdapter(adapter)
+	return connectorRuntime, adapter
 }
 
 func TestAPictureSentWithAMessageReachesTheTurnImported(t *testing.T) {
 	launcher := &recordingLauncher{reply: "SALT"}
-	importer := &recordingAttachmentImporter{}
-	client := &recordingClient{}
-	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
-		TaskLauncher:       launcher,
-		Directory:          staticDirectory{},
-		ReplyReader:        scriptedReader{},
-		AttachmentImporter: importer,
+	connectorRuntime, adapter := importingConnectorRuntime(addressedToTheAgent{})
+	connection, _ := connectedPairWithCollaborators(t, &recordingClient{}, Collaborators{
+		TaskLauncher: launcher,
+		Directory:    staticDirectory{},
+		ReplyReader:  scriptedReader{},
+		SessionTurns: connectorRuntime,
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 
 	promptWithPicture(t, connection, sessionID, "dm")
 
-	if len(importer.asked) != 1 {
-		t.Fatalf("the message's attachments were offered for import %d times, expected once", len(importer.asked))
+	asked := adapter.importRequests()
+	if len(asked) != 1 {
+		t.Fatalf("the message's attachments were offered for import %d times, expected once", len(asked))
 	}
-	asked := importer.asked[0]
-	if importer.askedFor[0] != "person-sample" || asked.Platform != "buzz" || asked.MessageID != "message-picture" {
-		t.Fatalf("the import was asked for %q on %q/%q, expected person-sample on buzz/message-picture", importer.askedFor[0], asked.Platform, asked.MessageID)
+	if asked[0].MessageID != "message-picture" || len(asked[0].InputAttachments) != 1 || asked[0].InputAttachments[0].URL != pictureAddress {
+		t.Fatalf("the import was asked for %+v, expected the attachment message-picture carried", asked[0])
 	}
-	if len(asked.Context.InputAttachments) != 1 || asked.Context.InputAttachments[0].URL != pictureAddress {
-		t.Fatalf("the import was handed %+v, expected the attachment the message carried", asked.Context.InputAttachments)
+	if !strings.Contains(asked[0].TargetDirectoryPath, "person-sample") {
+		t.Fatalf("the picture was imported into %q, expected person-sample's inbox", asked[0].TargetDirectoryPath)
 	}
 	launched := theOnlyLaunch(t, launcher)
 	if launched.AttachmentMaterialResolver == nil {
@@ -87,22 +96,19 @@ func TestAPictureSentWithAMessageReachesTheTurnImported(t *testing.T) {
 }
 
 func TestAMessageTheAgentIgnoresImportsNothing(t *testing.T) {
-	launcher := &recordingLauncher{}
-	importer := &recordingAttachmentImporter{}
-	client := &recordingClient{}
-	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
-		TaskLauncher:       launcher,
-		Directory:          staticDirectory{},
-		ReplyReader:        scriptedReader{},
-		SessionTurns:       connectorRuntimeDeciding(nil, addressedToSomebodyElse{}),
-		AttachmentImporter: importer,
+	connectorRuntime, adapter := importingConnectorRuntime(addressedToSomebodyElse{})
+	connection, _ := connectedPairWithCollaborators(t, &recordingClient{}, Collaborators{
+		TaskLauncher: &recordingLauncher{},
+		Directory:    staticDirectory{},
+		ReplyReader:  scriptedReader{},
+		SessionTurns: connectorRuntime,
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 
 	promptWithPicture(t, connection, sessionID, "channel")
 
-	if len(importer.asked) != 0 {
-		t.Fatalf("a message the agent does not answer was imported %d times", len(importer.asked))
+	if asked := adapter.importRequests(); len(asked) != 0 {
+		t.Fatalf("a message the agent does not answer was imported %d times", len(asked))
 	}
 }
 

@@ -36,10 +36,6 @@ type TaskLauncher interface {
 	Launch(context.Context, agentruntime.TaskLaunchRequest) (agentruntime.TaskLaunchResult, error)
 }
 
-type AttachmentImporter interface {
-	ImportMessageAttachments(context.Context, connectors.PlatformInboundEvent, string) (connectors.PlatformInboundEvent, agentruntime.AttachmentMaterialResolver)
-}
-
 type SessionTurnOpener interface {
 	OpenSessionTurn(context.Context, connectors.PlatformInboundEvent, string, connectors.ReplySender) *connectors.SessionTurn
 }
@@ -72,7 +68,6 @@ type Agent struct {
 	permissionRelay    *PermissionRelay
 	answerSettler      AnswerSettler
 	replyReader        approvalreply.Reader
-	attachmentImporter AttachmentImporter
 	sessionTurns       SessionTurnOpener
 	taskRunStore       taskstate.TaskRunStore
 	logger             *slog.Logger
@@ -93,7 +88,6 @@ func NewAgent(collaborators Collaborators, permissionRelay *PermissionRelay, log
 		permissionRelay:    permissionRelay,
 		answerSettler:      collaborators.AnswerSettler,
 		replyReader:        collaborators.ReplyReader,
-		attachmentImporter: collaborators.AttachmentImporter,
 		sessionTurns:       collaborators.SessionTurns,
 		taskRunStore:       collaborators.TaskRunStore,
 		logger:             logger,
@@ -110,13 +104,12 @@ type AnswerSettler interface {
 }
 
 type Collaborators struct {
-	AnswerSettler      AnswerSettler
-	TaskLauncher       TaskLauncher
-	Directory          PersonDirectory
-	ReplyReader        approvalreply.Reader
-	AttachmentImporter AttachmentImporter
-	SessionTurns       SessionTurnOpener
-	TaskRunStore       taskstate.TaskRunStore
+	AnswerSettler AnswerSettler
+	TaskLauncher  TaskLauncher
+	Directory     PersonDirectory
+	ReplyReader   approvalreply.Reader
+	SessionTurns  SessionTurnOpener
+	TaskRunStore  taskstate.TaskRunStore
 }
 
 func (agent *Agent) hasLostItsClient() bool {
@@ -252,12 +245,10 @@ func (agent *Agent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.
 		)
 		return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, nil
 	}
-	sessionTurn.ShowProgress(ctx)
-	launchRequest, isAnswered, errorValue := sessionTurn.ContinueOpenInteractions(ctx, launchRequest)
+	launchRequest, isAnswered, errorValue := sessionTurn.PrepareLaunch(ctx, launchRequest)
 	if errorValue != nil || isAnswered {
 		return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, errorValue
 	}
-	launchRequest = agent.withMessageAttachments(ctx, messageContext, launchRequest)
 	launchRequest.ToolCallObserver = agent.toolCallObserverFor(ctx, request.SessionId, delivery)
 	launchRequest.CheckpointSender = agent.checkpointSenderFor(request.SessionId, delivery)
 	return agent.launchTurn(ctx, request.SessionId, sessionTurn, launchRequest)
@@ -314,17 +305,6 @@ func (agent *Agent) taskLaunchRequestFor(session openSession, sessionID acp.Sess
 		PersonAccess:            agent.directory.ResolvePersonAccess(requester.PersonID),
 		TurnStartedAt:           time.Now(),
 	}
-}
-
-func (agent *Agent) withMessageAttachments(ctx context.Context, messageContext MessageContext, launchRequest agentruntime.TaskLaunchRequest) agentruntime.TaskLaunchRequest {
-	if agent.attachmentImporter == nil {
-		return launchRequest
-	}
-	imported, resolver := agent.attachmentImporter.ImportMessageAttachments(ctx, inboundEventOf(messageContext, launchRequest), launchRequest.RequesterPersonID)
-	launchRequest.InputParts = imported.InputParts
-	launchRequest.VisibleContext = imported.Context.ToAgentVisibleContext()
-	launchRequest.AttachmentMaterialResolver = resolver
-	return launchRequest
 }
 
 func inboundEventOf(messageContext MessageContext, launchRequest agentruntime.TaskLaunchRequest) connectors.PlatformInboundEvent {
