@@ -19,7 +19,6 @@ import (
 )
 
 func TestMemoryRecallWithoutConversationHistoryLive(t *testing.T) {
-	requireLiveEvaluationConsent(t)
 	endpoint := strings.TrimSpace(os.Getenv("BLUECLAW_E2E_LLM_ENDPOINT"))
 	socketPath := strings.TrimSpace(os.Getenv("BLUECLAW_E2E_LLM_UNIX_SOCKET"))
 	requireLanguageModelInput(t)
@@ -113,7 +112,6 @@ func preserveLiveSessionEvidence(t *testing.T, directory string, result VirtualS
 }
 
 func TestPresentationLocalMultiturnSuccessLive(t *testing.T) {
-	requireLiveEvaluationConsent(t)
 	endpoint := strings.TrimSpace(os.Getenv("BLUECLAW_E2E_LLM_ENDPOINT"))
 	socketPath := strings.TrimSpace(os.Getenv("BLUECLAW_E2E_LLM_UNIX_SOCKET"))
 	requireLanguageModelInput(t)

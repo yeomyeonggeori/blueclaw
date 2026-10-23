@@ -1582,15 +1582,6 @@ func firstNonEmptyTestString(values ...string) string {
 	return ""
 }
 
-func truthyEnvironmentValue(value string) bool {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "1", "true", "yes", "y", "on":
-		return true
-	default:
-		return false
-	}
-}
-
 func toolEventCount(events []task.TaskEvent) int {
 	count := 0
 	for _, event := range events {

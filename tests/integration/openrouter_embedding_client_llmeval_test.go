@@ -1,3 +1,5 @@
+//go:build llmeval
+
 package integration
 
 import (
@@ -6,9 +8,21 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
+	"strings"
+	"testing"
 )
 
 const openRouterBaseURL = "https://openrouter.ai/api/v1"
+
+func requireEvaluationInput(t *testing.T, name string, purpose string) string {
+	t.Helper()
+	value := strings.TrimSpace(os.Getenv(name))
+	if value == "" {
+		t.Fatalf("the evaluation was requested with -tags llmeval, but %s is not set; it is %s", name, purpose)
+	}
+	return value
+}
 
 type openRouterEmbeddingClient struct {
 	apiKey     string

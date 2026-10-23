@@ -1,12 +1,12 @@
+//go:build llmeval
+
 package integration
 
 import (
 	"context"
 	"fmt"
 	"math"
-	"os"
 	"sort"
-	"strings"
 	"testing"
 	"time"
 )
@@ -80,13 +80,7 @@ var benchmarkQueries = []struct {
 // keeps. It spends a few cents on OpenRouter and prints a table; it decides
 // nothing by itself.
 func TestMemoryEmbeddingBenchmark(t *testing.T) {
-	if os.Getenv("BLUECLAW_EMBEDDING_BENCHMARK") != "1" {
-		t.Skip("set BLUECLAW_EMBEDDING_BENCHMARK=1 to run the embedding benchmark")
-	}
-	apiKey := strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY"))
-	if apiKey == "" {
-		t.Skip("OPENROUTER_API_KEY is required for the embedding benchmark")
-	}
+	apiKey := requireEvaluationInput(t, "OPENROUTER_API_KEY", "the key every candidate embedding model is called with")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	candidates := []benchmarkCandidateModel{

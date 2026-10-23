@@ -608,7 +608,7 @@ bun run test
 |---|---|
 | Unit | none |
 | Postgres-backed | `BLUECLAW_TEST_POSTGRES_URL` |
-| Live model (costs money) | `BLUECLAW_LIVE_LLM_TEST=1` |
+| Live model (costs money) | `-tags llmeval` |
 | External agent | `BLUECLAW_TEST_CLAUDE_CODE_PATH`, `BLUECLAW_TEST_CODEX_PATH`, `BLUECLAW_TEST_ANTIGRAVITY_PATH`, `BLUECLAW_TEST_ACP_AGENT_PATH` |
 | POSIX separation | `BLUECLAW_TEST_POSIX_HELPER`, `BLUECLAW_TEST_POSIX_HELPER_PATH` (root and an installed helper) |
 | Virtual session | `--live-llm` or `BLUECLAW_E2E_LIVE=1` |
@@ -626,14 +626,13 @@ Scenarios are defined in `internal/defaultharness/e2e/scenarios.go`; `--scenario
 
 ### Live model evaluations
 
-The `*_llmeval_test.go` files in `internal/defaultharness/e2e` build only with `-tags "appliance llmeval"`. Building them is the request to run them, so a missing input fails the test and names the variable. Without the `llmeval` tag, `go test ./...` skips what it cannot offer, as before.
+Every test that calls a paid model is a `*_llmeval_test.go` file and builds only with the `llmeval` tag: the scenarios in `internal/defaultharness/e2e` with `-tags "appliance llmeval"`, and the memory extraction check and embedding benchmark in `tests/integration` with `-tags llmeval`. Building with the tag is the request to run them and accepts the cost, so no variable beside it switches them on, and a missing input fails the test and names the variable. Choose one with `-run`. Without the tag, `go test ./...` does not build them.
 
 The scenarios drive a product's tools and skills, which this checkout does not carry. From a checkout of internkim, with `.dependency/blueclaw` as the working directory, or from a standalone checkout with `INTERNKIM` pointing at one:
 
 ```bash
 export INTERNKIM=~/Developer/work/internkim
 monkeys run @standalone sh -c '
-  BLUECLAW_E2E_LIVE=1 \
   BLUECLAW_E2E_LLM_PROVIDER=endpoint \
   BLUECLAW_E2E_LLM_ENDPOINT=$BLUECLAW_MODEL_ENDPOINT \
   BLUECLAW_E2E_LLM_MODEL=$BLUECLAW_MODEL \
@@ -647,12 +646,16 @@ This checkout declares only `@standalone` in `.monkeys`; it holds the model endp
 
 | Variable | Needed for |
 |---|---|
-| `BLUECLAW_E2E_LIVE=1` | every evaluation; accepts the cost |
 | `BLUECLAW_E2E_LLM_ENDPOINT` or `BLUECLAW_E2E_LLM_UNIX_SOCKET` | the chat model |
 | `BLUECLAW_SCENARIO_CAPABILITY_CATALOG` | the product's tool catalog |
 | `BLUECLAW_SCENARIO_SKILL_ROOTS` | the product's skill directories |
 
-`requireEvaluationInput` and the other `require*` helpers in `internal/defaultharness/e2e/evaluation_inputs_test.go` are the one place that decides to fail; a new evaluation calls them instead of `t.Skip`.
+`requireEvaluationInput` and the other `require*` helpers in `internal/defaultharness/e2e/evaluation_inputs_test.go` are the one place there that decides to fail, and `tests/integration` has its own `requireEvaluationInput`; a new evaluation calls them instead of `t.Skip`.
+
+```bash
+monkeys run @standalone sh -c 'BLUECLAW_LIVE_LLM_MODEL=$BLUECLAW_MODEL \
+  go test -tags llmeval -run TestMemoryLiveLLMExtractsCorrectsAndRecalls -v ./tests/integration'
+```
 
 ### Screenshots
 
