@@ -61,18 +61,22 @@ func (sessionTurn *SessionTurn) ResolveEngagement(ctx context.Context) inbounden
 	return turn.addressingLaunch
 }
 
-func (sessionTurn *SessionTurn) ContinueOpenInteractions(ctx context.Context, launchRequest agentruntime.TaskLaunchRequest) (agentruntime.TaskLaunchRequest, bool, error) {
+func (sessionTurn *SessionTurn) PrepareLaunch(ctx context.Context, launchRequest agentruntime.TaskLaunchRequest) (agentruntime.TaskLaunchRequest, bool, error) {
 	connectorRuntime, turn := sessionTurn.connectorRuntime, sessionTurn.turn
 	if turn.adapter == nil {
-		return launchRequest, false, nil
+		return withTurnMessage(launchRequest, turn.event, nil), false, nil
 	}
 	ctx = withConnectorEvent(ctx, turn.event)
 	if _, isAnswered, errorValue := connectorRuntime.resolveOpenInteractions(ctx, turn); isAnswered {
 		return launchRequest, true, errorValue
 	}
 	connectorRuntime.resolveTurnActiveGoal(ctx, turn)
-	connectorRuntime.resolveTurnPriorTask(turn)
-	return withTurnContinuation(launchRequest, connectorRuntime.conversationTurnFor(turn)), false, nil
+	connectorRuntime.prepareTurnForLaunch(ctx, turn)
+	if errorValue := ctx.Err(); errorValue != nil {
+		return launchRequest, false, errorValue
+	}
+	resolver := connectorRuntime.attachmentMaterialResolverFor(turn.adapter, turn.personID, turn.event)
+	return withTurnContinuation(withTurnMessage(launchRequest, turn.event, resolver), connectorRuntime.conversationTurnFor(turn)), false, nil
 }
 
 func (sessionTurn *SessionTurn) DeliverReply(ctx context.Context, turnResult agentcontract.AgentTurnResult) error {
@@ -109,14 +113,7 @@ func (connectorRuntime *ConnectorRuntime) deliverApprovalQuestion(ctx context.Co
 }
 
 func (sessionTurn *SessionTurn) ShowProgressBeforeAddressing(ctx context.Context) {
-	if !shouldStartProgressBeforeAddressing(sessionTurn.turn.event) {
-		return
-	}
-	sessionTurn.ShowProgress(ctx)
-}
-
-func (sessionTurn *SessionTurn) ShowProgress(ctx context.Context) {
-	if sessionTurn.turn.adapter == nil {
+	if sessionTurn.turn.adapter == nil || !shouldStartProgressBeforeAddressing(sessionTurn.turn.event) {
 		return
 	}
 	sessionTurn.connectorRuntime.showTurnProgress(ctx, sessionTurn.turn)

@@ -65,34 +65,39 @@ func pendingInputOf(turn *inboundTurn) agentcontract.PendingInputContext {
 
 func (connectorRuntime *ConnectorRuntime) buildTaskLaunchRequest(turn ConversationTurn) agentruntime.TaskLaunchRequest {
 	event := turn.Event
-	return withTurnContinuation(agentruntime.TaskLaunchRequest{
-		Source:                     agentruntime.TaskLaunchSourceConnector,
-		SourceReference:            event.DedupeKey(),
-		RequesterPersonID:          turn.RequesterPersonID,
-		RequesterName:              connectorRuntime.requesterNameForEvent(turn.RequesterPersonID, event),
-		RequesterCallingName:       event.Context.Sender.CallingName,
-		RequesterHandle:            event.Context.Sender.Handle,
-		RequesterEmail:             turn.RequesterEmail,
-		RequesterPlatformUserID:    event.SenderID,
-		OriginReplyTargetID:        event.ReplyTargetID,
-		OriginIsThread:             eventIsThreadReply(event),
-		ProfileName:                "default",
-		Platform:                   turn.Platform,
-		ConversationID:             event.ConversationID,
-		ConversationType:           event.Context.ConversationType,
-		ConversationChannelID:      event.Context.ChannelID,
-		ConversationChannelName:    event.Context.ChannelName,
-		ReplyTargetID:              event.ReplyTargetID,
-		Prompt:                     event.Prompt,
-		InputParts:                 append([]agentcontract.AgentPart{}, event.InputParts...),
-		ResponseLanguage:           responseLanguageForEvent(event),
-		VisibleContext:             event.Context.ToAgentVisibleContext(),
-		HistoryProvider:            connectorHistoryProvider{adapter: turn.Adapter},
-		AttachmentMaterialResolver: connectorRuntime.attachmentMaterialResolverFor(turn.Adapter, turn.RequesterPersonID, event),
-		PersonAccess:               turn.PersonAccess,
-		AccessibleConversationIDs:  turn.AccessibleConversationIDs,
-		CheckpointSender:           turn.CheckpointSender,
-	}, turn)
+	resolver := connectorRuntime.attachmentMaterialResolverFor(turn.Adapter, turn.RequesterPersonID, event)
+	return withTurnContinuation(withTurnMessage(agentruntime.TaskLaunchRequest{
+		Source:                    agentruntime.TaskLaunchSourceConnector,
+		SourceReference:           event.DedupeKey(),
+		RequesterPersonID:         turn.RequesterPersonID,
+		RequesterName:             connectorRuntime.requesterNameForEvent(turn.RequesterPersonID, event),
+		RequesterCallingName:      event.Context.Sender.CallingName,
+		RequesterHandle:           event.Context.Sender.Handle,
+		RequesterEmail:            turn.RequesterEmail,
+		RequesterPlatformUserID:   event.SenderID,
+		OriginReplyTargetID:       event.ReplyTargetID,
+		OriginIsThread:            eventIsThreadReply(event),
+		ProfileName:               "default",
+		Platform:                  turn.Platform,
+		ConversationID:            event.ConversationID,
+		ConversationType:          event.Context.ConversationType,
+		ConversationChannelID:     event.Context.ChannelID,
+		ConversationChannelName:   event.Context.ChannelName,
+		ReplyTargetID:             event.ReplyTargetID,
+		Prompt:                    event.Prompt,
+		ResponseLanguage:          responseLanguageForEvent(event),
+		HistoryProvider:           connectorHistoryProvider{adapter: turn.Adapter},
+		PersonAccess:              turn.PersonAccess,
+		AccessibleConversationIDs: turn.AccessibleConversationIDs,
+		CheckpointSender:          turn.CheckpointSender,
+	}, event, resolver), turn)
+}
+
+func withTurnMessage(request agentruntime.TaskLaunchRequest, event PlatformInboundEvent, resolver agentruntime.AttachmentMaterialResolver) agentruntime.TaskLaunchRequest {
+	request.InputParts = append([]agentcontract.AgentPart{}, event.InputParts...)
+	request.VisibleContext = event.Context.ToAgentVisibleContext()
+	request.AttachmentMaterialResolver = resolver
+	return request
 }
 
 func withTurnContinuation(request agentruntime.TaskLaunchRequest, turn ConversationTurn) agentruntime.TaskLaunchRequest {
