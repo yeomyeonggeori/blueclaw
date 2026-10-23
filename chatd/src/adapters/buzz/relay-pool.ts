@@ -1,4 +1,5 @@
 import { type BuzzRelayClient, createBuzzRelayClient } from "./relay-client.ts";
+import { isConnectionFailure } from "./relay-connection.ts";
 
 // Every send, edit, reaction and lookup used to open a websocket, authenticate,
 // do one thing and close. On the device that is a TLS handshake and a NIP-42
@@ -30,9 +31,7 @@ export async function withRelayAs<Result>(
 		await connection.connecting;
 		return await work(connection.client);
 	} catch (error) {
-		// A connection that has just failed may be the reason it failed, and a
-		// pool that keeps it hands the same fault to the next caller.
-		discard(key, connection);
+		if (isConnectionFailure(error)) discard(key, connection);
 		throw error;
 	} finally {
 		release(key, connection);

@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { finalizeEvent, getPublicKey } from "nostr-tools/pure";
-import { createRelayConnection, RelayQueryIncomplete, type RelayClientTiming } from "../src/adapters/buzz/relay-connection.ts";
+import {
+	createRelayConnection,
+	isConnectionFailure,
+	RelayQueryIncomplete,
+	type RelayClientTiming,
+} from "../src/adapters/buzz/relay-connection.ts";
 import type { BuzzEvent } from "../src/adapters/buzz/types.ts";
 
 const secretKey = Uint8Array.from({ length: 32 }, () => 1);
@@ -302,6 +307,49 @@ describe("a query the relay never finishes", () => {
 
 		expect(await answer).toBeInstanceOf(RelayQueryIncomplete);
 		client.disconnect();
+	});
+});
+
+describe("a query the relay refuses", () => {
+	test("leaves the connection and the queries beside it alone", async () => {
+		const client = createRelayConnection(relayURL, signer, undefined, timing);
+		await client.connect();
+		const socket = FakeSocket.opened[0]!;
+		const refused = client.query({ kinds: [9], "#h": ["not-my-room"] }).catch((thrown: unknown) => thrown);
+		await settle();
+		const refusedID = socket.requests().at(-1)?.[1];
+		const beside = client.query({ kinds: [9], "#h": ["my-room"] });
+		await settle();
+		const besideID = socket.requests().at(-1)?.[1];
+
+		socket.receive(["CLOSED", refusedID, "restricted: not a channel member"]);
+		const refusal = await refused;
+		socket.receive(["EOSE", besideID]);
+
+		expect(refusal).toBeInstanceOf(RelayQueryIncomplete);
+		expect(isConnectionFailure(refusal)).toBe(false);
+		expect(await beside).toEqual([]);
+		expect(socket.readyState).toBe(1);
+		client.disconnect();
+	});
+});
+
+describe("a connection that is disconnected", () => {
+	test("refuses every query and publish still waiting, at once", async () => {
+		const client = createRelayConnection(relayURL, signer, undefined, timing);
+		await client.connect();
+		const query = client.query({ kinds: [9] }, 60_000).catch((thrown: unknown) => thrown);
+		const publish = client.publish(9, "hello", []).catch((thrown: unknown) => thrown);
+		await settle();
+
+		client.disconnect();
+		const outcomes = await Promise.race([Promise.all([query, publish]), settle(50).then(() => "still waiting")]);
+
+		expect(outcomes).not.toBe("still waiting");
+		const [queryFailure, publishFailure] = Array.isArray(outcomes) ? outcomes : [];
+		expect(queryFailure).toBeInstanceOf(RelayQueryIncomplete);
+		expect(isConnectionFailure(queryFailure)).toBe(true);
+		expect(isConnectionFailure(publishFailure)).toBe(true);
 	});
 });
 
