@@ -94,10 +94,15 @@ func TestTheSameMessageArrivingTwiceAtOnceRunsOnce(t *testing.T) {
 		gate:           make(chan struct{}),
 	}
 	connection := connectedPairOverLedger(t, launcher, taskRunService)
-	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
+	// acp-go-sdk v0.13.5 cancels a session's in-flight prompt when the next
+	// prompt for that session arrives (agent_gen.go, AgentMethodSessionPrompt).
+	sessionIDs := []acp.SessionId{
+		openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1")),
+		openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1")),
+	}
 
 	var group sync.WaitGroup
-	for range 2 {
+	for _, sessionID := range sessionIDs {
 		group.Add(1)
 		go func() {
 			defer group.Done()
