@@ -159,7 +159,7 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 		Prompt:                request.Prompt,
 		ToolAudience:          harness.toolAudience,
 		TurnContext:           harness.turnContextForToolCalls(ctx),
-		TakeCallRequest:       turnObserver.takeCallRequest,
+		TakeCallLedger:        turnObserver.takeCallLedger,
 	})
 	if errorValue != nil {
 		return agentcontract.AgentTurnResult{}, errorValue
@@ -319,7 +319,7 @@ func (harness *Harness) newSessionObserver(ctx context.Context, request agentcon
 		permissionAsker:     harness.permissionAsker,
 		approvalRequest:     approvalRequestOf(request),
 		isMirroring:         &mirroringFlag{},
-		ledgerMirror:        ledgerMirror{exchange: harness.ledgerExchange, taskRunStore: harness.taskRunStore, taskRunID: request.ExistingTaskRunID},
+		ledgerMirror:        newLedgerMirror(harness.ledgerExchange, harness.taskRunStore, request.ExistingTaskRunID),
 		checkpointMarkerKey: harness.checkpointMarkerKey,
 		checkpointSender:    request.CheckpointSender,
 	}
@@ -403,8 +403,8 @@ func (observer *sessionObserver) mirrorLedger(update acp.SessionUpdate) bool {
 	return true
 }
 
-func (observer *sessionObserver) takeCallRequest(callMeta map[string]any) {
-	if record, isRecorded := ledgerRecordOfMeta(callMeta); isRecorded {
+func (observer *sessionObserver) takeCallLedger(callMeta map[string]any) {
+	for _, record := range ledgerRecordsOfCallMeta(callMeta) {
 		observer.ledgerMirror.take(record)
 	}
 }

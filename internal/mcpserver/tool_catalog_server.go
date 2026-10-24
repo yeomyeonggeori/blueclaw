@@ -25,7 +25,7 @@ type RequesterToolSet struct {
 	TurnContext       context.Context
 
 	ObserveToolInvocation func(toolName string, toolResult toolcontract.ToolResult, isSucceeded bool)
-	TakeCallRequest       func(callMeta map[string]any)
+	TakeCallLedger        func(callMeta map[string]any)
 }
 
 func NewToolCatalogServer(requesterToolSet RequesterToolSet, version string) (*mcp.Server, error) {
@@ -147,8 +147,8 @@ func LeavesEnvironmentUnchanged(sideEffectClass string) bool {
 func invokeThroughToolSet(requesterToolSet RequesterToolSet, toolDescriptor toolcontract.ToolDescriptor, hasOutputSchema bool) mcp.ToolHandler {
 	return func(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		invocationContext := toolcontract.WithTaskRunID(contextCarryingValuesOf(requesterToolSet.TurnContext, ctx), strings.TrimSpace(requesterToolSet.TaskRunID))
-		if requesterToolSet.TakeCallRequest != nil {
-			requesterToolSet.TakeCallRequest(request.Params.Meta)
+		if requesterToolSet.TakeCallLedger != nil {
+			requesterToolSet.TakeCallLedger(request.Params.Meta)
 		}
 		toolResult, errorValue := requesterToolSet.ToolSet.Invoke(invocationContext, toolcontract.ToolInvocation{
 			ToolName: toolDescriptor.Name,

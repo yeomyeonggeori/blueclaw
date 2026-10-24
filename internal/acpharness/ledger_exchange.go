@@ -75,6 +75,22 @@ func updateMetas(update acp.SessionUpdate) []map[string]any {
 	return nil
 }
 
+func ledgerRecordsOfCallMeta(callMeta map[string]any) []agentcontract.LedgerRecord {
+	value, isPresent := callMeta[agentcontract.LedgerMetaKey]
+	if !isPresent {
+		return nil
+	}
+	encoded, errorValue := json.Marshal(value)
+	if errorValue != nil {
+		return nil
+	}
+	records := []agentcontract.LedgerRecord{}
+	if json.Unmarshal(encoded, &records) != nil {
+		return nil
+	}
+	return records
+}
+
 func ledgerRecordOfMeta(meta map[string]any) (agentcontract.LedgerRecord, bool) {
 	value, isPresent := meta[agentcontract.LedgerMetaKey]
 	if !isPresent {
@@ -92,9 +108,14 @@ func ledgerRecordOfMeta(meta map[string]any) (agentcontract.LedgerRecord, bool) 
 }
 
 type ledgerMirror struct {
-	exchange     *ledgerExchange
-	taskRunStore taskstate.TaskRunStore
-	taskRunID    string
+	exchange       *ledgerExchange
+	taskRunStore   taskstate.TaskRunStore
+	taskRunID      string
+	takenPositions map[int]bool
+}
+
+func newLedgerMirror(exchange *ledgerExchange, taskRunStore taskstate.TaskRunStore, taskRunID string) ledgerMirror {
+	return ledgerMirror{exchange: exchange, taskRunStore: taskRunStore, taskRunID: taskRunID, takenPositions: map[int]bool{}}
 }
 
 func (mirror ledgerMirror) isActive() bool {
@@ -107,7 +128,7 @@ func (mirror ledgerMirror) take(record agentcontract.LedgerRecord) {
 	}
 	mirror.exchange.mutex.Lock()
 	defer mirror.exchange.mutex.Unlock()
-	if mirror.hostRecordedTheCancellation(record) || mirror.tookTheRequestAlready(record) {
+	if mirror.tookThePositionAlready(record) || mirror.hostRecordedTheCancellation(record) {
 		return
 	}
 	mirror.taskRunStore.AppendTaskEvent(mirror.taskRunID, record.Name, record.EventBody())
@@ -126,16 +147,14 @@ func (mirror ledgerMirror) hostRecordedTheCancellation(record agentcontract.Ledg
 	return false
 }
 
-func (mirror ledgerMirror) tookTheRequestAlready(record agentcontract.LedgerRecord) bool {
-	if _, isRequest := agentcontract.ToolTaskEventToolName(record.Name, agentcontract.ToolTaskEventRequestedSuffix); !isRequest {
+func (mirror ledgerMirror) tookThePositionAlready(record agentcontract.LedgerRecord) bool {
+	if record.Position == 0 {
 		return false
 	}
-	eventBody := record.EventBody()
-	for _, taskEvent := range mirror.taskRunStore.ListTaskEvent(mirror.taskRunID) {
-		if taskEvent.Name == record.Name && taskEvent.Body == eventBody {
-			return true
-		}
+	if mirror.takenPositions[record.Position] {
+		return true
 	}
+	mirror.takenPositions[record.Position] = true
 	return false
 }
 
