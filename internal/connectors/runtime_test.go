@@ -100,7 +100,7 @@ func TestConnectorRuntimeSuppressesStaleRetryWhileOriginalTaskIsRunning(t *testi
 
 	select {
 	case <-languageModel.started:
-	case <-time.After(time.Second):
+	case <-agenttest.WhenTheTestRunsOut(t):
 		t.Fatal("expected original task to start")
 	}
 
@@ -129,7 +129,7 @@ func TestConnectorRuntimeSuppressesStaleRetryWhileOriginalTaskIsRunning(t *testi
 		if errorValue != nil {
 			t.Fatalf("expected original task to finish: %v", errorValue)
 		}
-	case <-time.After(time.Second):
+	case <-agenttest.WhenTheTestRunsOut(t):
 		t.Fatal("expected original task to finish")
 	}
 	firstResult := <-firstResultChannel

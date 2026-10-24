@@ -8,6 +8,7 @@ import (
 	"time"
 
 	acp "github.com/coder/acp-go-sdk"
+	"github.com/yeomyeonggeori/blueclaw/agenttest"
 	"github.com/yeomyeonggeori/blueclaw/internal/toolcallprogress"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/taskstate"
@@ -27,7 +28,7 @@ func awaitSignal(t *testing.T, signals chan struct{}) {
 	t.Helper()
 	select {
 	case <-signals:
-	case <-time.After(waitForTheAgent):
+	case <-agenttest.WhenTheTestRunsOut(t):
 		t.Fatal("the agent was never told")
 	}
 }

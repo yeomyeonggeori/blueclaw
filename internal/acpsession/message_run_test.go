@@ -7,6 +7,7 @@ import (
 	"time"
 
 	acp "github.com/coder/acp-go-sdk"
+	"github.com/yeomyeonggeori/blueclaw/agenttest"
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
@@ -234,7 +235,7 @@ func TestAReaskedMessageWaitsForTheRunTheRestartResumed(t *testing.T) {
 		if response.StopReason != acp.StopReasonEndTurn {
 			t.Fatalf("the re-ask was answered %q", response.StopReason)
 		}
-	case <-time.After(5 * time.Second):
+	case <-agenttest.WhenTheTestRunsOut(t):
 		t.Fatal("the re-ask never got the outcome of the resumed run")
 	}
 	if launches := launcher.launches(); launches != 0 {

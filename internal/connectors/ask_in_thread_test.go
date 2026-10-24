@@ -119,8 +119,8 @@ func (fixture *threadAskFixture) await(t *testing.T, handled <-chan handledEvent
 			t.Fatalf("the event failed: %v", outcome.err)
 		}
 		return outcome.result
-	case <-time.After(10 * time.Second):
-		t.Fatal("the event was still being handled after ten seconds")
+	case <-agenttest.WhenTheTestRunsOut(t):
+		t.Fatal("the event was still being handled when the test ran out of time")
 		return ConnectorRuntimeResult{}
 	}
 }
@@ -433,7 +433,7 @@ func awaitFinished(t *testing.T, finished <-chan struct{}) {
 	t.Helper()
 	select {
 	case <-finished:
-	case <-time.After(10 * time.Second):
+	case <-agenttest.WhenTheTestRunsOut(t):
 		t.Fatal("the worker that carried the waiting run never finished it")
 	}
 }
@@ -495,7 +495,7 @@ func TestAHarnessPermissionRequestIsAskedInTheThreadAndAnsweredWithTheOfferedOpt
 		if outcome.Selected == nil || outcome.Selected.OptionId != "allow-once" {
 			t.Fatalf("the harness was answered %+v, expected the option the person's reply selected", outcome)
 		}
-	case <-time.After(10 * time.Second):
+	case <-agenttest.WhenTheTestRunsOut(t):
 		t.Fatal("the harness was never answered")
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	acp "github.com/coder/acp-go-sdk"
+	"github.com/yeomyeonggeori/blueclaw/agenttest"
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
@@ -485,7 +486,7 @@ func TestAnAskWhoseClientWentAwayLeavesTheHoldPendingInsteadOfRefusingTheCall(t 
 		if status != approvalgate.AskInterrupted {
 			t.Fatalf("a question whose client left was %q, expected it to stay pending as interrupted", status)
 		}
-	case <-time.After(5 * time.Second):
+	case <-agenttest.WhenTheTestRunsOut(t):
 		t.Fatal("the ask never ended after its client left")
 	}
 }
@@ -779,7 +780,7 @@ func awaitPermissionRequest(t *testing.T, client *recordingClient) acp.RequestPe
 	select {
 	case request := <-client.permissionAskedSignal:
 		return request
-	case <-time.After(5 * time.Second):
+	case <-agenttest.WhenTheTestRunsOut(t):
 		t.Fatal("the reconnected client was never asked again, so the run waits for an answer nobody will give")
 	}
 	return acp.RequestPermissionRequest{}
@@ -916,7 +917,7 @@ func TestApprovingTheReissuedQuestionResumesTheRunItBelongsTo(t *testing.T) {
 	resumed := agentruntime.TaskLaunchRequest{}
 	select {
 	case resumed = <-launcher.launchedSignal:
-	case <-time.After(5 * time.Second):
+	case <-agenttest.WhenTheTestRunsOut(t):
 		t.Fatal("the answered call never resumed, so the approval was collected and thrown away")
 	}
 	if !resumed.IsRuntimeRestartResume {
