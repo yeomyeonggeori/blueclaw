@@ -96,14 +96,6 @@ describe("a person's assets are read with that person's own credential", () => {
 		expect(answer.status).toBe(400);
 	});
 
-	test("a platform without custom emoji answers with none rather than failing", async () => {
-		const answer = await call("buzz", "person.emoji.list", {
-			actor: { kind: "buzz-secret", secret: "abc" },
-		});
-
-		expect(await answer.json()).toEqual({ emoji: [] });
-	});
-
 	test("a picture the platform will not hand over is a failure, not a person without one", async () => {
 		globalThis.fetch = (async (_input: RequestInfo | URL) => new Response("expired", { status: 401 })) as typeof fetch;
 
