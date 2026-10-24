@@ -22,11 +22,29 @@ const authGraceMilliseconds = 3_000;
 const filtersPerRequest = 10;
 
 export class RelayQueryIncomplete extends Error {
-	constructor(readonly relayURL: string, readonly reason: string) {
+	constructor(
+		readonly relayURL: string,
+		readonly reason: string,
+		readonly isConnectionFailure = false,
+	) {
 		super(`${relayURL} did not answer a query in full: ${reason}`);
 		this.name = "RelayQueryIncomplete";
 	}
 }
+
+export class RelayConnectionFailure extends Error {
+	constructor(readonly relayURL: string, readonly reason: string) {
+		super(`${relayURL} connection failed: ${reason}`);
+		this.name = "RelayConnectionFailure";
+	}
+}
+
+export function isConnectionFailure(error: unknown): boolean {
+	if (error instanceof RelayConnectionFailure) return true;
+	return error instanceof RelayQueryIncomplete && error.isConnectionFailure;
+}
+
+const connectionClosedReason = "the connection was closed";
 
 export async function profileEventsOrNone(
 	relay: { query: (filter: object) => Promise<BuzzEvent[]> },
@@ -46,12 +64,19 @@ function authorsThatAreNotPublicKeys(filter: object): unknown[] {
 	return authors.filter((author) => typeof author !== "string" || !/^[0-9a-f]{64}$/.test(author));
 }
 
-type QueryAnswer = { events: BuzzEvent[]; complete: boolean; reason: string; isTimedOut: boolean };
+type QueryAnswer = {
+	events: BuzzEvent[];
+	complete: boolean;
+	reason: string;
+	isTimedOut: boolean;
+	isConnectionFailure: boolean;
+};
 
 type PendingAsk = {
 	filter: object;
 	events: BuzzEvent[];
 	requestID: string;
+	framesReceivedWhenAsked: number;
 	timeoutHandle: ReturnType<typeof setTimeout>;
 	settle: (answer: QueryAnswer) => void;
 };
@@ -117,6 +142,7 @@ export function createRelayConnection(
 	let reconnectDelayMs = 1_000;
 	let shouldReconnect = true;
 	let subscriptionSerial = 0;
+	let framesReceived = 0;
 	let livenessProbeTimer: ReturnType<typeof setInterval> | null = null;
 	const liveSubscriptions = new Map<string, { filters: object[]; onEvent: EventListener }>();
 	const resubscribeDelays = new Map<string, number>();
@@ -155,6 +181,7 @@ export function createRelayConnection(
 			handleFrame(frame);
 		};
 		websocket.onclose = () => {
+			failEverythingPending(connectionClosedReason);
 			if (!shouldReconnect) return;
 			const reopen = setTimeout(() => {
 				if (shouldReconnect) openSocket();
@@ -166,6 +193,7 @@ export function createRelayConnection(
 	}
 
 	function handleFrame(frame: unknown[]): void {
+		framesReceived += 1;
 		if (isDebugEnabled) console.error("[buzz-relay] recv", JSON.stringify(frame).slice(0, 160));
 		const [frameType, ...rest] = frame;
 		if (frameType === "AUTH" && typeof rest[0] === "string") {
@@ -225,7 +253,13 @@ export function createRelayConnection(
 				pendingRequests.delete(rest[0]);
 				send(["CLOSE", rest[0]]);
 				for (const ask of request.asks) {
-					settleAsk(ask, { events: withinLimit(ask.filter, ask.events), complete: true, reason: "", isTimedOut: false });
+					settleAsk(ask, {
+						events: withinLimit(ask.filter, ask.events),
+						complete: true,
+						reason: "",
+						isTimedOut: false,
+						isConnectionFailure: false,
+					});
 				}
 			}
 			return;
@@ -264,7 +298,9 @@ export function createRelayConnection(
 			}
 			pendingRequests.delete(subscriptionID);
 			console.error(`[buzz-relay] ${relayURL} closed query ${subscriptionID}: ${reason}`);
-			for (const ask of request.asks) settleAsk(ask, { events: ask.events, complete: false, reason, isTimedOut: false });
+			for (const ask of request.asks) {
+				settleAsk(ask, { events: ask.events, complete: false, reason, isTimedOut: false, isConnectionFailure: false });
+			}
 			return;
 		}
 		if (!liveSubscriptions.has(subscriptionID)) return;
@@ -308,7 +344,25 @@ export function createRelayConnection(
 				send(["CLOSE", ask.requestID]);
 			}
 		}
-		ask.settle({ events: ask.events, complete: false, reason, isTimedOut: true });
+		ask.settle({
+			events: ask.events,
+			complete: false,
+			reason,
+			isTimedOut: true,
+			isConnectionFailure: framesReceived === ask.framesReceivedWhenAsked,
+		});
+	}
+
+	function failEverythingPending(reason: string): void {
+		const asks = [...forming, ...[...pendingRequests.values()].flatMap((request) => request.asks)];
+		forming = [];
+		pendingRequests.clear();
+		for (const ask of asks) {
+			settleAsk(ask, { events: ask.events, complete: false, reason, isTimedOut: false, isConnectionFailure: true });
+		}
+		const publishes = [...pendingPublishes.values()];
+		pendingPublishes.clear();
+		for (const publish of publishes) publish.reject(new RelayConnectionFailure(relayURL, reason));
 	}
 
 	// Reads asked for in the same moment leave as one REQ, because the relay
@@ -332,6 +386,7 @@ export function createRelayConnection(
 			filter,
 			events: [],
 			requestID: "",
+			framesReceivedWhenAsked: framesReceived,
 			timeoutHandle: setTimeout(() => giveUpOn(pending, `no answer within ${timeoutMs}ms`), timeoutMs),
 			settle,
 		};
@@ -436,6 +491,7 @@ export function createRelayConnection(
 		disconnect() {
 			shouldReconnect = false;
 			stopLivenessProbes();
+			failEverythingPending(connectionClosedReason);
 			websocket?.close();
 		},
 		subscribe(filters, onEvent) {
@@ -447,7 +503,7 @@ export function createRelayConnection(
 		},
 		async query(filter, timeoutMs = 8_000) {
 			const answer = await ask(filter, timeoutMs);
-			if (!answer.complete) throw new RelayQueryIncomplete(relayURL, answer.reason);
+			if (!answer.complete) throw new RelayQueryIncomplete(relayURL, answer.reason, answer.isConnectionFailure);
 			return answer.events;
 		},
 		async queryComplete(filter, timeoutMs = 8_000) {
@@ -467,7 +523,7 @@ export function createRelayConnection(
 		if (notPublicKeys.length > 0) {
 			const reason = `authors holds what is not a public key: ${JSON.stringify(notPublicKeys)}`;
 			console.error(`[buzz-relay] not asking ${relayURL}: ${reason}`);
-			return { events: [], complete: false, reason, isTimedOut: false };
+			return { events: [], complete: false, reason, isTimedOut: false, isConnectionFailure: false };
 		}
 		await waitForOpen();
 		return await new Promise<QueryAnswer>((resolve) => {
@@ -483,10 +539,11 @@ export function createRelayConnection(
 	): Promise<{ event: BuzzEvent; acknowledgement: string }> {
 		await waitForOpen();
 		const event = signEvent(kind, content, tags);
+		const framesReceivedWhenSent = framesReceived;
 		const acknowledgement = await new Promise<string>((resolve, reject) => {
 			const timeoutHandle = setTimeout(() => {
 				pendingPublishes.delete(event.id);
-				reject(new Error("relay publish timed out"));
+				reject(publishTimeout(framesReceived === framesReceivedWhenSent));
 			}, 8_000);
 			pendingPublishes.set(event.id, {
 				resolve: (message) => {
@@ -501,5 +558,10 @@ export function createRelayConnection(
 			send(["EVENT", event]);
 		});
 		return { event, acknowledgement };
+	}
+
+	function publishTimeout(isSocketSilent: boolean): Error {
+		const reason = "relay publish timed out";
+		return isSocketSilent ? new RelayConnectionFailure(relayURL, reason) : new Error(reason);
 	}
 }
