@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	acp "github.com/coder/acp-go-sdk"
@@ -116,7 +117,7 @@ type externalAgent struct {
 	permissionRequest        *acp.RequestPermissionRequest
 	observedSessionMeta      map[string]any
 	permissionOutcome        acp.RequestPermissionOutcome
-	connection               *acp.AgentSideConnection
+	connection               servedConnection
 	declaresImages           bool
 	observedPromptBlocks     []acp.ContentBlock
 	promptResponseMeta       map[string]any
@@ -127,9 +128,39 @@ type externalAgent struct {
 	extensionParams          []json.RawMessage
 }
 
+type servedConnection struct {
+	mutex      sync.Mutex
+	ready      chan struct{}
+	connection *acp.AgentSideConnection
+}
+
+func (served *servedConnection) readiness() chan struct{} {
+	served.mutex.Lock()
+	defer served.mutex.Unlock()
+	if served.ready == nil {
+		served.ready = make(chan struct{})
+	}
+	return served.ready
+}
+
+func (served *servedConnection) connect(connection *acp.AgentSideConnection) {
+	served.mutex.Lock()
+	served.connection = connection
+	served.mutex.Unlock()
+	close(served.readiness())
+}
+
+func (served *servedConnection) get() *acp.AgentSideConnection {
+	<-served.readiness()
+	served.mutex.Lock()
+	defer served.mutex.Unlock()
+	return served.connection
+}
+
 func (agent *externalAgent) serve(ctx context.Context, output io.Writer, input io.Reader) {
-	agent.connection = acp.NewAgentSideConnection(agent, output, input)
-	<-agent.connection.Done()
+	connection := acp.NewAgentSideConnection(agent, output, input)
+	agent.connection.connect(connection)
+	<-connection.Done()
 	_ = ctx
 }
 
@@ -198,14 +229,14 @@ func (agent *externalAgent) Prompt(ctx context.Context, request acp.PromptReques
 	agent.observedPromptMeta = request.Meta
 	agent.observedPromptBlocks = request.Prompt
 	for _, update := range agent.toolCallUpdates {
-		if errorValue := agent.connection.SessionUpdate(ctx, acp.SessionNotification{SessionId: request.SessionId, Update: update}); errorValue != nil {
+		if errorValue := agent.connection.get().SessionUpdate(ctx, acp.SessionNotification{SessionId: request.SessionId, Update: update}); errorValue != nil {
 			return acp.PromptResponse{}, errorValue
 		}
 	}
 	if agent.permissionRequest != nil {
 		permissionRequest := *agent.permissionRequest
 		permissionRequest.SessionId = request.SessionId
-		response, errorValue := agent.connection.RequestPermission(ctx, permissionRequest)
+		response, errorValue := agent.connection.get().RequestPermission(ctx, permissionRequest)
 		if errorValue != nil {
 			return acp.PromptResponse{}, errorValue
 		}

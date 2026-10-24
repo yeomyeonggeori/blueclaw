@@ -10,6 +10,7 @@ import (
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/yeomyeonggeori/blueclaw/internal/toolcallprogress"
+	"github.com/yeomyeonggeori/blueprotocol/acpupdate"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
@@ -187,27 +188,35 @@ func TestACancellationOfAnotherCallIsMirroredBesideTheHostsOwn(t *testing.T) {
 	}
 }
 
-const noteWriteRequest = `{"observationID":"obs-001","toolName":"note_write","input":{}}`
+var recordsBeforeTheCall = []taskstate.RawTurnEvent{
+	{Name: "llm.call", Body: `{"model":"router"}`},
+	{Name: "llm.call", Body: `{"model":"router"}`},
+	{Name: "tool.note_write.requested", Body: `{"observationID":"obs-001","toolName":"note_write","input":{}}`},
+}
 
 func callingTheToolWhileTheHostIsBehindOnNotifications(agent *externalAgent) func(context.Context, acp.PromptRequest) acp.StopReason {
 	return func(ctx context.Context, request acp.PromptRequest) acp.StopReason {
 		holdTheQueue := thoughtChunk("노트를 남기는 중입니다", map[string]any{checkpointMarkerKey: map[string]any{"toolName": "note_write"}})
-		_ = agent.connection.SessionUpdate(ctx, acp.SessionNotification{SessionId: request.SessionId, Update: holdTheQueue})
-		_ = agent.connection.SessionUpdate(ctx, acp.SessionNotification{SessionId: request.SessionId, Update: ledgerToolCall("tool.note_write.requested", noteWriteRequest)})
+		_ = agent.connection.get().SessionUpdate(ctx, acp.SessionNotification{SessionId: request.SessionId, Update: holdTheQueue})
+		carried := []agentcontract.LedgerRecord{}
+		for index, rawTurnEvent := range recordsBeforeTheCall {
+			_ = agent.connection.get().SessionUpdate(ctx, acp.SessionNotification{SessionId: request.SessionId, Update: acpupdate.ForEvent(rawTurnEvent, index+1)})
+			carried = append(carried, acpupdate.LedgerRecordOf(rawTurnEvent, index+1))
+		}
 		clientSession, errorValue := connectToolCatalog(ctx, agent.observedToolCatalog)
 		if errorValue != nil {
 			agent.toolCallError = errorValue
 			return acp.StopReasonEndTurn
 		}
 		defer clientSession.Close()
-		if _, errorValue := clientSession.CallTool(ctx, &mcp.CallToolParams{Name: "note_write", Arguments: map[string]any{}, Meta: ledgerMetaOf("tool.note_write.requested", noteWriteRequest)}); errorValue != nil {
+		if _, errorValue := clientSession.CallTool(ctx, &mcp.CallToolParams{Name: "note_write", Arguments: map[string]any{}, Meta: mcp.Meta{agentcontract.LedgerMetaKey: carried}}); errorValue != nil {
 			agent.toolCallError = errorValue
 		}
 		return acp.StopReasonEndTurn
 	}
 }
 
-func TestTheHostHasACallsRequestOnTheLedgerBeforeTheCallRuns(t *testing.T) {
+func TestTheHostHasEveryRecordWrittenBeforeACallOnTheLedgerWhenTheCallRuns(t *testing.T) {
 	taskRuns, taskRunID := newTaskRunStore()
 	agent := &externalAgent{}
 	agent.promptScripts = []func(context.Context, acp.PromptRequest) acp.StopReason{callingTheToolWhileTheHostIsBehindOnNotifications(agent)}
@@ -238,16 +247,11 @@ func TestTheHostHasACallsRequestOnTheLedgerBeforeTheCallRuns(t *testing.T) {
 		t.Fatalf("expected the turn to run and call the tool: %v %v", errorValue, agent.toolCallError)
 	}
 
-	if !slices.Contains(ledgerWhenTheCallRan, "tool.note_write.requested") {
-		t.Fatalf("whatever the call does, such as holding it and asking about it, follows the request on the ledger, so the request has to be there when the call runs, got %v", ledgerWhenTheCallRan)
+	written := []string{"task.created", "llm.call", "llm.call", "tool.note_write.requested"}
+	if !slices.Equal(ledgerWhenTheCallRan, written) {
+		t.Fatalf("whatever the call does, such as holding it and asking about it, follows what the agent wrote before it, so all of that has to be on the ledger when the call runs, got %v", ledgerWhenTheCallRan)
 	}
-	requests := 0
-	for _, name := range eventNamesOf(taskRuns, taskRunID) {
-		if name == "tool.note_write.requested" {
-			requests++
-		}
-	}
-	if requests != 1 {
-		t.Fatalf("the request arrives with the call and as a notification, and is one request, got %d", requests)
+	if final := eventNamesOf(taskRuns, taskRunID); !slices.Equal(final[:len(written)], written) || slices.Index(final[len(written):], "llm.call") >= 0 || slices.Index(final[len(written):], "tool.note_write.requested") >= 0 {
+		t.Fatalf("each record arrives with the call and as a notification and is one record, while two records alike at two positions are two, got %v", final)
 	}
 }

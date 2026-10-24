@@ -21,7 +21,7 @@ func toolCallEnded() acp.SessionUpdate {
 }
 
 func sendUpdate(ctx context.Context, agent *externalAgent, request acp.PromptRequest, update acp.SessionUpdate) {
-	_ = agent.connection.SessionUpdate(ctx, acp.SessionNotification{SessionId: request.SessionId, Update: update})
+	_ = agent.connection.get().SessionUpdate(ctx, acp.SessionNotification{SessionId: request.SessionId, Update: update})
 }
 
 func awaitSignal(t *testing.T, signals chan struct{}) {
