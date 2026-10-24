@@ -67,6 +67,7 @@ func (gate *Gate) recordHeldCall(taskRunID string, approvalRequest mcpserver.App
 		ApprovedToolInput: narrowedToolInput(approvalRequest.ToolInput, resolution.Target),
 		Confirmation:      confirmation,
 		HarnessSession:    approvalRequest.HarnessSession,
+		HandoffID:         resolution.Target.HandoffID,
 	}, resolution.Choices)
 	gate.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventConfirmationRequested, marshalEventBody(map[string]string{
 		"userFacingMessage": confirmation,

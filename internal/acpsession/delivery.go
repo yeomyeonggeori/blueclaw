@@ -26,6 +26,7 @@ type Delivery struct {
 	ReplyTargetID   string `json:"replyTargetID,omitempty"`
 	IsAlreadyPosted bool   `json:"isAlreadyPosted,omitempty"`
 	IsFinal         bool   `json:"isFinal,omitempty"`
+	HandoffID       string `json:"handoffID,omitempty"`
 }
 
 type DeliveredReport struct {
@@ -211,10 +212,10 @@ type permissionAsking struct {
 	errorValue error
 }
 
-func (agent *Agent) askThePerson(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question string, request acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+func (agent *Agent) askThePerson(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question string, request acp.RequestPermissionRequest, handoffID string) (acp.RequestPermissionResponse, error) {
 	deliveryID, outcome := agent.deliveries.expect()
 	defer agent.deliveries.forget(deliveryID)
-	request.Meta = deliveryMeta(Delivery{DeliveryID: deliveryID, ReplyTargetID: approvalRequest.ReplyTargetID})
+	request.Meta = deliveryMeta(Delivery{DeliveryID: deliveryID, ReplyTargetID: approvalRequest.ReplyTargetID, HandoffID: handoffID})
 	asked := make(chan permissionAsking, 1)
 	askingEnded := make(chan struct{})
 	go func() {

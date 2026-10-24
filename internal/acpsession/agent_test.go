@@ -1189,3 +1189,39 @@ func waitForLaunch(t *testing.T, launcher *recordingLauncher) {
 	}
 	t.Fatal("the answered question never resumed its run")
 }
+
+func TestAHandoffQuestionTellsTheRelayWhichHandoffItIs(t *testing.T) {
+	client := &recordingClient{}
+	connection, permissionRelay := connectedPairWithReader(t, &recordingLauncher{}, client, scriptedReader{})
+	openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
+	var asked acp.RequestPermissionRequest
+	client.answerByAsking = func(request acp.RequestPermissionRequest) acp.PermissionOptionId {
+		asked = request
+		return approveOnceOptionID
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "아래 링크에서 직접 로그인해 주세요.", HandoffID: "handoff-1"})
+
+	if deliveryOf(t, asked).HandoffID != "handoff-1" {
+		t.Fatalf("the relay cannot open a live view it was not told about, got %+v", asked.Meta)
+	}
+}
+
+func TestAReissuedHandoffStillNamesItsHandoff(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	heldCall := heldCallForTest()
+	heldCall.HandoffID = "handoff-1"
+	runWaitingOnAHeldCall(t, taskRunService, "conversation-1", heldCall)
+	client := &recordingClient{permissionAskedSignal: make(chan acp.RequestPermissionRequest, 4)}
+	connection := reconnectedPair(t, &recordingLauncher{}, client, taskRunService)
+
+	if errorValue := loadSessionForTest(t, connection, "session-the-relay-still-holds", sessionMeta("sample@example.test", "conversation-1")); errorValue != nil {
+		t.Fatalf("load session: %v", errorValue)
+	}
+
+	if delivery := deliveryOf(t, awaitPermissionRequest(t, client)); delivery.HandoffID != "handoff-1" {
+		t.Fatalf("after a restart the relay must reopen the same handoff, got %+v", delivery)
+	}
+}

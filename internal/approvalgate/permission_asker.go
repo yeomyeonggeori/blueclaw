@@ -29,6 +29,7 @@ type PermissionQuestion struct {
 	HoldID       string
 	Confirmation string
 	Choices      []holdrecord.Choice
+	HandoffID    string
 }
 
 func (gate *Gate) UsePermissionAsker(permissionAsker PermissionAsker) {
@@ -44,7 +45,7 @@ func (gate *Gate) askedOutcome(ctx context.Context, taskRunID string, approvalRe
 	if !isHeld {
 		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionUnanswerable}
 	}
-	answer, status := gate.permissionAsker.AskPermission(ctx, approvalRequest, PermissionQuestion{HoldID: hold.ID, Confirmation: confirmation, Choices: resolution.Choices})
+	answer, status := gate.permissionAsker.AskPermission(ctx, approvalRequest, PermissionQuestion{HoldID: hold.ID, Confirmation: confirmation, Choices: resolution.Choices, HandoffID: hold.Call.HandoffID})
 	switch status {
 	case AskAnswered:
 		return gate.answeredOutcome(ctx, taskRunID, approvalRequest, confirmation, answer)

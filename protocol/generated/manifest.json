@@ -1,5 +1,5 @@
 {
-  "aggregateHash": "3ef03ab868ed1d9d961d6f7a12f6d097843b14cd733dc62479dcb982806b8bbf",
+  "aggregateHash": "22a33d11497c224ad448a315a27f7b27eb0300af250597908046024e24d5eda1",
   "protocolVersion": "0.4.0",
   "schemas": [
     {
@@ -14,7 +14,7 @@
     },
     {
       "fileName": "approval-target.schema.json",
-      "hash": "6644e0eff10cfd9be4682c47a8e207c44085fb3d8a85e61830cc4c867a4b04bb",
+      "hash": "69bcd64b6f90aeac4c2203ff0d37d76ef76694c92d924e4e1ba6889e3627385e",
       "name": "approval-target"
     },
     {
