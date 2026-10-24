@@ -149,6 +149,7 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 		return agentcontract.AgentTurnResult{}, errors.New("acp harness refuses a turn with no requester, because tools execute as the requester")
 	}
 	succeededToolRecorder := &turnoutcome.SucceededToolRecorder{}
+	turnObserver := harness.newSessionObserver(ctx, request)
 	endpointURL, bearerToken, revokeToolCatalog, errorValue := harness.toolCatalogPublisher.PublishToolCatalog(mcpserver.RequesterToolSet{
 		ObserveToolInvocation: succeededToolRecorder.Observe,
 		RequesterPersonID:     request.RequesterPersonID,
@@ -158,6 +159,7 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 		Prompt:                request.Prompt,
 		ToolAudience:          harness.toolAudience,
 		TurnContext:           harness.turnContextForToolCalls(ctx),
+		TakeCallRequest:       turnObserver.takeCallRequest,
 	})
 	if errorValue != nil {
 		return agentcontract.AgentTurnResult{}, errorValue
@@ -170,7 +172,6 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 	}
 	defer func() { _ = waitForAgent() }()
 
-	turnObserver := harness.newSessionObserver(ctx, request)
 	connection := acp.NewClientSideConnection(turnObserver, agentInput, agentOutput)
 	initializeResponse, errorValue := connection.Initialize(ctx, acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber})
 	if errorValue != nil {
@@ -400,6 +401,12 @@ func (observer *sessionObserver) mirrorLedger(update acp.SessionUpdate) bool {
 	defer observer.isMirroring.leave()
 	observer.ledgerMirror.take(record)
 	return true
+}
+
+func (observer *sessionObserver) takeCallRequest(callMeta map[string]any) {
+	if record, isRecorded := ledgerRecordOfMeta(callMeta); isRecorded {
+		observer.ledgerMirror.take(record)
+	}
 }
 
 func (observer *sessionObserver) routeCheckpoint(ctx context.Context, update acp.SessionUpdate) {

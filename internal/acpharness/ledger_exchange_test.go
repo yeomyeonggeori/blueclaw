@@ -3,12 +3,16 @@ package acpharness
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"testing"
+	"time"
 
 	acp "github.com/coder/acp-go-sdk"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/yeomyeonggeori/blueclaw/internal/toolcallprogress"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func newTaskRunStore() (*taskstate.TaskRunService, string) {
@@ -19,8 +23,12 @@ func newTaskRunStore() (*taskstate.TaskRunService, string) {
 
 func ledgerToolCall(eventName string, body string) acp.SessionUpdate {
 	update := acp.StartToolCall("call-1", "note_write", acp.WithStartStatus(acp.ToolCallStatusPending))
-	update.ToolCall.Meta = map[string]any{agentcontract.LedgerMetaKey: agentcontract.LedgerRecord{Name: eventName, Body: json.RawMessage(body), Text: body}}
+	update.ToolCall.Meta = ledgerMetaOf(eventName, body)
 	return update
+}
+
+func ledgerMetaOf(eventName string, body string) map[string]any {
+	return map[string]any{agentcontract.LedgerMetaKey: agentcontract.LedgerRecord{Name: eventName, Body: json.RawMessage(body), Text: body}}
 }
 
 func eventNamesOf(taskRuns taskstate.TaskRunStore, taskRunID string) []string {
@@ -176,5 +184,70 @@ func TestACancellationOfAnotherCallIsMirroredBesideTheHostsOwn(t *testing.T) {
 
 	if len(eventNamesOf(taskRuns, taskRunID)) != 3 {
 		t.Fatalf("each call's cancellation is its own record, got %v", eventNamesOf(taskRuns, taskRunID))
+	}
+}
+
+const noteWriteRequest = `{"observationID":"obs-001","toolName":"note_write","input":{}}`
+
+func callingTheToolWhileTheHostIsBehindOnNotifications(agent *externalAgent) func(context.Context, acp.PromptRequest) acp.StopReason {
+	return func(ctx context.Context, request acp.PromptRequest) acp.StopReason {
+		holdTheQueue := thoughtChunk("노트를 남기는 중입니다", map[string]any{checkpointMarkerKey: map[string]any{"toolName": "note_write"}})
+		_ = agent.connection.SessionUpdate(ctx, acp.SessionNotification{SessionId: request.SessionId, Update: holdTheQueue})
+		_ = agent.connection.SessionUpdate(ctx, acp.SessionNotification{SessionId: request.SessionId, Update: ledgerToolCall("tool.note_write.requested", noteWriteRequest)})
+		clientSession, errorValue := connectToolCatalog(ctx, agent.observedToolCatalog)
+		if errorValue != nil {
+			agent.toolCallError = errorValue
+			return acp.StopReasonEndTurn
+		}
+		defer clientSession.Close()
+		if _, errorValue := clientSession.CallTool(ctx, &mcp.CallToolParams{Name: "note_write", Arguments: map[string]any{}, Meta: ledgerMetaOf("tool.note_write.requested", noteWriteRequest)}); errorValue != nil {
+			agent.toolCallError = errorValue
+		}
+		return acp.StopReasonEndTurn
+	}
+}
+
+func TestTheHostHasACallsRequestOnTheLedgerBeforeTheCallRuns(t *testing.T) {
+	taskRuns, taskRunID := newTaskRunStore()
+	agent := &externalAgent{}
+	agent.promptScripts = []func(context.Context, acp.PromptRequest) acp.StopReason{callingTheToolWhileTheHostIsBehindOnNotifications(agent)}
+	ledgerWhenTheCallRan := []string{}
+	theCallRan := make(chan struct{})
+	toolSet := noteToolRunning(t, func(toolcontract.ToolInvocation) {
+		ledgerWhenTheCallRan = eventNamesOf(taskRuns, taskRunID)
+		close(theCallRan)
+	})
+	harness := New(&inProcessAgentProcess{agent: agent}, newPublishedToolCatalog(t), taskRuns)
+	harness.UseLedgerExchange(nil)
+	harness.UseCheckpointMarker(checkpointMarkerKey)
+
+	if _, errorValue := harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
+		RequesterIdentity: agentcontract.RequesterIdentity{RequesterPersonID: "person-1"},
+		ExistingTaskRunID: taskRunID,
+		Prompt:            "회의록 정리해줘",
+		WorkspaceRootPath: t.TempDir(),
+		ToolSet:           toolSet,
+		CheckpointSender: func(context.Context, agentcontract.AgentCheckpoint) error {
+			select {
+			case <-theCallRan:
+			case <-time.After(5 * time.Second):
+			}
+			return nil
+		},
+	}); errorValue != nil || agent.toolCallError != nil {
+		t.Fatalf("expected the turn to run and call the tool: %v %v", errorValue, agent.toolCallError)
+	}
+
+	if !slices.Contains(ledgerWhenTheCallRan, "tool.note_write.requested") {
+		t.Fatalf("whatever the call does, such as holding it and asking about it, follows the request on the ledger, so the request has to be there when the call runs, got %v", ledgerWhenTheCallRan)
+	}
+	requests := 0
+	for _, name := range eventNamesOf(taskRuns, taskRunID) {
+		if name == "tool.note_write.requested" {
+			requests++
+		}
+	}
+	if requests != 1 {
+		t.Fatalf("the request arrives with the call and as a notification, and is one request, got %d", requests)
 	}
 }
