@@ -197,10 +197,10 @@ var recordsBeforeTheCall = []taskstate.RawTurnEvent{
 func callingTheToolWhileTheHostIsBehindOnNotifications(agent *externalAgent) func(context.Context, acp.PromptRequest) acp.StopReason {
 	return func(ctx context.Context, request acp.PromptRequest) acp.StopReason {
 		holdTheQueue := thoughtChunk("노트를 남기는 중입니다", map[string]any{checkpointMarkerKey: map[string]any{"toolName": "note_write"}})
-		_ = agent.connection.SessionUpdate(ctx, acp.SessionNotification{SessionId: request.SessionId, Update: holdTheQueue})
+		_ = agent.connection.get().SessionUpdate(ctx, acp.SessionNotification{SessionId: request.SessionId, Update: holdTheQueue})
 		carried := []agentcontract.LedgerRecord{}
 		for index, rawTurnEvent := range recordsBeforeTheCall {
-			_ = agent.connection.SessionUpdate(ctx, acp.SessionNotification{SessionId: request.SessionId, Update: acpupdate.ForEvent(rawTurnEvent, index+1)})
+			_ = agent.connection.get().SessionUpdate(ctx, acp.SessionNotification{SessionId: request.SessionId, Update: acpupdate.ForEvent(rawTurnEvent, index+1)})
 			carried = append(carried, acpupdate.LedgerRecordOf(rawTurnEvent, index+1))
 		}
 		clientSession, errorValue := connectToolCatalog(ctx, agent.observedToolCatalog)
