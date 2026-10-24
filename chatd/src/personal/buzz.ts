@@ -11,6 +11,7 @@ import { rangesOf } from "./ranged-read.ts";
 import { MalformedRequest } from "./parse.ts";
 import { addReactionAsUser, removeReactionAsUser } from "../adapters/buzz/user-reactions.ts";
 import { mentionTags } from "../adapters/buzz/user-mentions.ts";
+import { emojiTagsFor, listCustomEmojiAsUser, normalizedShortcode, shortcodesIn, type CustomEmoji } from "../adapters/buzz/user-emoji.ts";
 import { markConversationReadAsUser, unreadCountsAsUser } from "../adapters/buzz/user-read-state.ts";
 import { announceTypingAsUser } from "../adapters/buzz/user-typing.ts";
 import { searchChannelMessagesAsUser } from "../adapters/buzz/user-message-search.ts";
@@ -424,7 +425,10 @@ class BuzzPersonalGateway implements PersonalGateway {
 			message: body,
 			attachments,
 			replyToRootId: parentID,
-			extraTags: mentionTags(mentions && { pubkeyHexes: mentions.externalIDs, isEveryone: mentions.isEveryone }),
+			extraTags: [
+				...mentionTags(mentions && { pubkeyHexes: mentions.externalIDs, isEveryone: mentions.isEveryone }),
+				...(await this.customEmojiTagsFor(actor, body)),
+			],
 			authTagJSON: this.settings.authTagJSON,
 		});
 		return {
@@ -467,6 +471,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 			channelID: conversationID,
 			targetEventId: messageID,
 			message: body,
+			extraTags: await this.customEmojiTagsFor(actor, body),
 			authTagJSON: this.settings.authTagJSON,
 		});
 		return {
@@ -556,12 +561,14 @@ class BuzzPersonalGateway implements PersonalGateway {
 		emoji: string,
 	): Promise<void> {
 		this.require(actor);
+		const custom = await this.customEmojiNamed(actor, emoji);
 		await addReactionAsUser({
 			relayURL: this.settings.relayURL,
 			userSecretHex: actor.secret,
 			channelID: conversationID,
 			targetEventId: messageID,
-			emoji,
+			emoji: custom ? `:${custom.shortcode}:` : emoji,
+			extraTags: custom && [["emoji", custom.shortcode, custom.url]],
 			authTagJSON: this.settings.authTagJSON,
 		});
 	}
@@ -585,12 +592,21 @@ class BuzzPersonalGateway implements PersonalGateway {
 
 	async listCustomEmoji(actor: ActorCredential): Promise<PersonalEmoji[]> {
 		this.require(actor);
-		return [];
+		const community = await this.communityEmoji(actor);
+		return community.map((emoji) => ({ name: emoji.shortcode }));
 	}
 
-	async readCustomEmojiImage(actor: ActorCredential): Promise<PersonalImage | null> {
+	async readCustomEmojiImage(
+		actor: ActorCredential,
+		name: string,
+		largestBytes: number,
+	): Promise<PersonalImage | null> {
 		this.require(actor);
-		return null;
+		const emoji = await this.customEmojiNamed(actor, name);
+		if (!emoji) return null;
+		const held = await readWithinLimit(emoji.url, largestBytes, "image/png", this.relayReadHeaders(actor, emoji.url));
+		if (!held) return null;
+		return { dataURL: `data:${held.contentType};base64,${held.contentBase64}` };
 	}
 
 	// A buzz profile names a picture by url rather than carrying it, and the
@@ -640,6 +656,22 @@ class BuzzPersonalGateway implements PersonalGateway {
 			});
 			return { address: blob.url, digest: blob.sha256, sizeBytes: blob.size, contentType: blob.mimeType };
 		}));
+	}
+
+	private communityEmoji(actor: ActorCredential): Promise<CustomEmoji[]> {
+		return listCustomEmojiAsUser(this.settings.relayURL, actor.secret, this.settings.authTagJSON);
+	}
+
+	private async customEmojiNamed(actor: ActorCredential, name: string): Promise<CustomEmoji | undefined> {
+		const shortcode = normalizedShortcode(name);
+		if (!shortcode) return undefined;
+		const community = await this.communityEmoji(actor);
+		return community.find((emoji) => emoji.shortcode === shortcode);
+	}
+
+	private async customEmojiTagsFor(actor: ActorCredential, text: string): Promise<string[][]> {
+		if (shortcodesIn(text).length === 0) return [];
+		return emojiTagsFor(text, await this.communityEmoji(actor));
 	}
 
 	private relayReadHeaders(actor: ActorCredential, url: string): Record<string, string> {
