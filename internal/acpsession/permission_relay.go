@@ -103,7 +103,7 @@ func (relay *PermissionRelay) conversationsHeld() []string {
 }
 
 func (relay *PermissionRelay) AskPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question approvalgate.PermissionQuestion) (approvalgate.ApprovalAnswer, approvalgate.AskStatus) {
-	outcome, status := relay.askOutcome(ctx, approvalRequest, question.Confirmation, permissionToolCall(approvalRequest, question), permissionOptions(question.Choices))
+	outcome, status := relay.askOutcome(ctx, approvalRequest, question.Confirmation, permissionToolCall(approvalRequest, question), permissionOptions(question.Choices), question.HandoffID)
 	if status != approvalgate.AskAnswered {
 		return approvalgate.ApprovalAnswer{}, status
 	}
@@ -115,7 +115,7 @@ func (relay *PermissionRelay) AskPermission(ctx context.Context, approvalRequest
 }
 
 func (relay *PermissionRelay) AskHarnessPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question approvalgate.HarnessPermissionQuestion) (acp.RequestPermissionOutcome, approvalgate.AskStatus) {
-	outcome, status := relay.askOutcome(ctx, approvalRequest, question.Text, question.ToolCall, question.Options)
+	outcome, status := relay.askOutcome(ctx, approvalRequest, question.Text, question.ToolCall, question.Options, "")
 	if status != approvalgate.AskAnswered {
 		return acp.RequestPermissionOutcome{}, status
 	}
@@ -137,7 +137,7 @@ func selectsOneOf(outcome acp.RequestPermissionOutcome, options []acp.Permission
 	return false
 }
 
-func (relay *PermissionRelay) askOutcome(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, confirmation string, toolCall acp.ToolCallUpdate, options []acp.PermissionOption) (acp.RequestPermissionOutcome, approvalgate.AskStatus) {
+func (relay *PermissionRelay) askOutcome(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, confirmation string, toolCall acp.ToolCallUpdate, options []acp.PermissionOption, handoffID string) (acp.RequestPermissionOutcome, approvalgate.AskStatus) {
 	route, isFound := relay.routeFor(approvalRequest.Platform, approvalRequest.ConversationID)
 	if !isFound {
 		relay.logger.Info("acpsession.permission.nobody_to_ask",
@@ -155,7 +155,7 @@ func (relay *PermissionRelay) askOutcome(ctx context.Context, approvalRequest mc
 		SessionId: route.sessionID,
 		ToolCall:  toolCall,
 		Options:   options,
-	})
+	}, handoffID)
 	if errorValue != nil {
 		relay.logger.Warn("acpsession.permission.unanswered", "toolName", approvalRequest.ToolName, "taskRunID", approvalRequest.TaskRunID, "error", errorValue.Error())
 		return acp.RequestPermissionOutcome{}, statusOfFailedAsk(ctx, route.agent)

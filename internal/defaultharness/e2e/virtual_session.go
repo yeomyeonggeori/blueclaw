@@ -125,6 +125,7 @@ var virtualGeneratedDescriptorToolNames = []string{
 	"browser_select",
 	"browser_press",
 	"browser_wait",
+	"browser_handoff",
 	"task_vocabulary_set",
 }
 
@@ -775,6 +776,7 @@ var builtinScenarioFactories = map[string]func(string) VirtualSessionScenario{
 	"web_search_acceptance":                          WebSearchAcceptanceScenario,
 	"browser_form_acceptance":                        BrowserFormAcceptanceScenario,
 	"browser_write_approval":                         BrowserWriteApprovalScenario,
+	"browser_handoff":                                BrowserHandoffScenario,
 	"tool_permission_hides_skill":                    ToolPermissionHidesSkillScenario,
 	"file_write_acceptance":                          FileWriteAcceptanceScenario,
 	"document_create_acceptance":                     DocumentCreateAcceptanceScenario,
@@ -1711,6 +1713,8 @@ func (service *virtualCapabilityService) response(toolName string, requestBody [
 		return virtualCapabilitySuccess(toolName, virtualBrowserResult(toolName, virtualCapabilityInput(requestBody)))
 	case "browser_click":
 		return virtualBrowserClickResponse(requestBody)
+	case "browser_handoff":
+		return virtualBrowserHandoffResponse(requestBody)
 	case "message_context":
 		return virtualCapabilitySuccess(toolName, virtualMessageContextResult())
 	case "message_search":

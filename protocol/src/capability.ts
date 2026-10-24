@@ -438,6 +438,7 @@ export const approvalTargetSchema = z.strictObject({
   title: z.string().optional(),
   startsAt: z.string().optional(),
   preview: z.string().optional(),
+  handoffID: z.string().optional(),
 });
 
 export type ApprovalTarget = z.infer<typeof approvalTargetSchema>;
