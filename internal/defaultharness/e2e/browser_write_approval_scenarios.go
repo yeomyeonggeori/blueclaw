@@ -53,7 +53,7 @@ func BrowserWriteApprovalScenario(artifactDirectoryPath string) VirtualSessionSc
 
 func virtualBrowserClickResponse(requestBody []byte) string {
 	if !virtualInvokeContextOf(requestBody).carriesAnApproval() {
-		message := "This call made the page send POST https://bank.example, which would carry this browser's cookies for that site or a password typed into the page. Nothing was sent: it goes out only if the requester approves exactly this."
+		message := "This call made the page send POST https://bank.example, which would carry this browser's cookies for that site. Nothing was sent: it goes out only if the requester approves exactly this."
 		return virtualCapabilityJSON(map[string]any{
 			"provider": "virtual", "selectedBackend": "device", "toolName": "browser_click",
 			"outcome": "denied", "status": "denied", "isError": true,
