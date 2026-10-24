@@ -6,6 +6,7 @@ import (
 	"time"
 
 	acp "github.com/coder/acp-go-sdk"
+	"github.com/yeomyeonggeori/blueclaw/agenttest"
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
@@ -177,7 +178,7 @@ func TestApprovingTheReissuedHarnessQuestionRecordsItAndResumesTheRun(t *testing
 		if resumed.ExistingTaskRunID != taskRunID {
 			t.Fatalf("resumed %q, expected %q", resumed.ExistingTaskRunID, taskRunID)
 		}
-	case <-time.After(5 * time.Second):
+	case <-agenttest.WhenTheTestRunsOut(t):
 		t.Fatal("the answered question never resumed its run")
 	}
 	holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRunID))

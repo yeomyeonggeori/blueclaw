@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/agenttest"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
@@ -125,7 +125,7 @@ func TestConnectorRevisionCancelsRunningTaskBeforeLaunchingReplacement(t *testin
 	}()
 	select {
 	case <-languageModel.started:
-	case <-time.After(5 * time.Second):
+	case <-agenttest.WhenTheTestRunsOut(t):
 		t.Fatal("initial task did not reach the model")
 	}
 	for _, event := range []PlatformInboundEvent{revisionInboundEvent("second", "as HTML"), revisionInboundEvent("third", "with a short introduction")} {
@@ -135,7 +135,7 @@ func TestConnectorRevisionCancelsRunningTaskBeforeLaunchingReplacement(t *testin
 	}
 	select {
 	case <-finished:
-	case <-time.After(5 * time.Second):
+	case <-agenttest.WhenTheTestRunsOut(t):
 		close(languageModel.release)
 		t.Fatal("superseded task did not stop after cancellation")
 	}
@@ -177,7 +177,7 @@ func TestConnectorRevisionReclaimedEventKeepsOriginalReplyOwner(t *testing.T) {
 	}()
 	select {
 	case <-languageModel.started:
-	case <-time.After(time.Second):
+	case <-agenttest.WhenTheTestRunsOut(t):
 		t.Fatal("expected original task to reach the model")
 	}
 	connectorRuntime.processQueuedConnectorEventWithAdapter(context.Background(), adapter, queuedEvents[0])
@@ -190,7 +190,7 @@ func TestConnectorRevisionReclaimedEventKeepsOriginalReplyOwner(t *testing.T) {
 	releaseOriginal()
 	select {
 	case <-firstFinished:
-	case <-time.After(time.Second):
+	case <-agenttest.WhenTheTestRunsOut(t):
 		t.Fatal("expected original task to finish")
 	}
 	if len(repository.pendingReplies) != 1 {

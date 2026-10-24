@@ -7,8 +7,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/agenttest"
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
@@ -54,7 +54,7 @@ func TestASlowGatewayCallDoesNotParkTheNextMessageOnTheConversationLock(t *testi
 	}()
 	select {
 	case <-decider.entered:
-	case <-time.After(5 * time.Second):
+	case <-agenttest.WhenTheTestRunsOut(t):
 		t.Fatal("expected the first message to reach the gateway model")
 	}
 
@@ -65,7 +65,7 @@ func TestASlowGatewayCallDoesNotParkTheNextMessageOnTheConversationLock(t *testi
 	}()
 	select {
 	case <-secondReturned:
-	case <-time.After(2 * time.Second):
+	case <-agenttest.WhenTheTestRunsOut(t):
 		t.Fatal("the second message parked its inbox worker on the conversation lock while the first message's gateway call was still in flight")
 	}
 
@@ -79,7 +79,7 @@ func TestASlowGatewayCallDoesNotParkTheNextMessageOnTheConversationLock(t *testi
 	releaseGateway()
 	select {
 	case <-firstFinished:
-	case <-time.After(5 * time.Second):
+	case <-agenttest.WhenTheTestRunsOut(t):
 		t.Fatal("expected the first message to finish once the gateway model answered")
 	}
 

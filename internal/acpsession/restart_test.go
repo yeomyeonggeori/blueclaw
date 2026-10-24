@@ -8,6 +8,7 @@ import (
 	"time"
 
 	acp "github.com/coder/acp-go-sdk"
+	"github.com/yeomyeonggeori/blueclaw/agenttest"
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
@@ -155,7 +156,7 @@ func startALaunchThatDies(t *testing.T, taskRunService *task.TaskRunService, lau
 	go promptWithReplyTarget(context.Background(), connection, sessionID)
 	select {
 	case <-died:
-	case <-time.After(5 * time.Second):
+	case <-agenttest.WhenTheTestRunsOut(t):
 		t.Fatal("the launch before the restart never reached the point it dies at")
 	}
 	taskRuns := taskRunService.ListTaskRunByPersonID("person-sample")
@@ -232,7 +233,7 @@ func awaitReask(t *testing.T, reasked <-chan error) {
 		if errorValue != nil {
 			t.Fatalf("the re-ask failed: %v", errorValue)
 		}
-	case <-time.After(10 * time.Second):
+	case <-agenttest.WhenTheTestRunsOut(t):
 		t.Fatal("the re-ask never got the outcome of the resumed run")
 	}
 }

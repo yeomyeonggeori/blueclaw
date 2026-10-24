@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/agenttest"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 )
 
@@ -138,7 +139,7 @@ func TestAwaitingAPersonReturnsOnceTheRosterNamesThem(t *testing.T) {
 		if personID != "person-late" {
 			t.Fatalf("the wait returned %q, want person-late", personID)
 		}
-	case <-time.After(5 * time.Second):
+	case <-agenttest.WhenTheTestRunsOut(t):
 		t.Fatal("the wait did not return after the roster named the person")
 	}
 }

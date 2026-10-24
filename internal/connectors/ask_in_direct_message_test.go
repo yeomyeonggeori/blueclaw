@@ -8,9 +8,9 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/yeomyeonggeori/blueclaw/agenttest"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
@@ -67,7 +67,7 @@ func (asking *askingWithoutAnEvent) awaitAnswer(t *testing.T) (approvalgate.Appr
 	select {
 	case answer, isAnswered := <-asking.answers:
 		return answer, isAnswered
-	case <-time.After(10 * time.Second):
+	case <-agenttest.WhenTheTestRunsOut(t):
 		t.Fatal("the asker was never answered")
 		return approvalgate.ApprovalAnswer{}, false
 	}
@@ -206,7 +206,7 @@ func TestAForeignHarnessCallThroughTheCatalogServerIsAskedInTheDirectMessageNotP
 		if result == nil || result.IsError || invokedCount.Load() != 1 {
 			t.Fatalf("the harness call ended %+v with %d runs, expected one run after the approval", result, invokedCount.Load())
 		}
-	case <-time.After(10 * time.Second):
+	case <-agenttest.WhenTheTestRunsOut(t):
 		t.Fatal("the harness call never returned")
 	}
 	finished, _ := fixture.connectorRuntime.taskRunService.FindTaskRun(taskRun.TaskRunID)
