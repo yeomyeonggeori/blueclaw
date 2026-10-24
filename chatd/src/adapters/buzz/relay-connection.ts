@@ -8,6 +8,7 @@ type EventListener = (event: BuzzEvent) => void;
 export type RelayConnection = {
 	pubkeyHex: string;
 	connect: () => Promise<void>;
+	connectUnlessRestricted: () => Promise<void>;
 	disconnect: () => void;
 	subscribe: (filters: object[], onEvent: EventListener) => void;
 	query: (filter: object, timeoutMs?: number) => Promise<BuzzEvent[]>;
@@ -37,6 +38,30 @@ export class RelayConnectionFailure extends Error {
 		super(`${relayURL} connection failed: ${reason}`);
 		this.name = "RelayConnectionFailure";
 	}
+}
+
+export class RelayRejectedEvent extends Error {
+	constructor(readonly answer: string) {
+		super(`relay rejected event: ${answer}`);
+		this.name = "RelayRejectedEvent";
+	}
+}
+
+export class RelayLoginRefused extends Error {
+	readonly reason = "login-refused";
+
+	constructor(
+		readonly relayURL: string,
+		readonly relayAnswer: string,
+	) {
+		super(`${relayURL} refused the login: ${relayAnswer}`);
+		this.name = "RelayLoginRefused";
+	}
+}
+
+// NIP-01: "restricted:" is the machine-readable prefix of an OK false for a key the relay does not permit.
+function isRestrictedLogin(refusal: unknown): refusal is RelayRejectedEvent {
+	return refusal instanceof RelayRejectedEvent && refusal.answer.startsWith("restricted:");
 }
 
 export function isConnectionFailure(error: unknown): boolean {
@@ -277,7 +302,7 @@ export function createRelayConnection(
 			if (!publishWaiter) return;
 			pendingPublishes.delete(rest[0]);
 			if (rest[1] === true) publishWaiter.resolve(typeof rest[2] === "string" ? rest[2] : "");
-			else publishWaiter.reject(new Error(`relay rejected event: ${String(rest[2] ?? "")}`));
+			else publishWaiter.reject(new RelayRejectedEvent(String(rest[2] ?? "")));
 		}
 	}
 
@@ -460,7 +485,7 @@ export function createRelayConnection(
 		return new Promise((resolve) => setTimeout(resolve, milliseconds));
 	}
 
-	async function connectUntilAdmitted(): Promise<void> {
+	async function connectUntilAdmitted(isRestrictionFinal: boolean): Promise<void> {
 		let delay = timing.loginRetryDelayMilliseconds;
 		while (shouldReconnect) {
 			try {
@@ -468,12 +493,22 @@ export function createRelayConnection(
 				return;
 			} catch (refusal) {
 				const reason = refusal instanceof Error ? refusal.message : String(refusal);
-				console.error(`[buzz-relay] ${relayURL} refused the login (${reason}); trying again in ${delay}ms`);
 				abandonSocket();
+				if (isRestrictionFinal && isRestrictedLogin(refusal)) {
+					console.error(`[buzz-relay] ${relayURL} refused the login (${reason}); not trying again with this key`);
+					throw new RelayLoginRefused(relayURL, refusal.answer);
+				}
+				console.error(`[buzz-relay] ${relayURL} refused the login (${reason}); trying again in ${delay}ms`);
 				await pause(delay);
 				delay = Math.min(delay * 2, maximumLoginRetryDelayMilliseconds);
 			}
 		}
+	}
+
+	async function admit(isRestrictionFinal: boolean): Promise<void> {
+		shouldReconnect = true;
+		await connectUntilAdmitted(isRestrictionFinal);
+		if (shouldReconnect) startLivenessProbes();
 	}
 
 	async function waitForOpen(): Promise<void> {
@@ -483,11 +518,8 @@ export function createRelayConnection(
 
 	return {
 		pubkeyHex,
-		async connect() {
-			shouldReconnect = true;
-			await connectUntilAdmitted();
-			if (shouldReconnect) startLivenessProbes();
-		},
+		connect: () => admit(false),
+		connectUnlessRestricted: () => admit(true),
 		disconnect() {
 			shouldReconnect = false;
 			stopLivenessProbes();

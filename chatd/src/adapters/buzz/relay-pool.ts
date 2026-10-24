@@ -1,5 +1,5 @@
 import { type BuzzRelayClient, createBuzzRelayClient } from "./relay-client.ts";
-import { isConnectionFailure } from "./relay-connection.ts";
+import { RelayLoginRefused, isConnectionFailure } from "./relay-connection.ts";
 
 // Every send, edit, reaction and lookup used to open a websocket, authenticate,
 // do one thing and close. On the device that is a TLS handshake and a NIP-42
@@ -31,7 +31,7 @@ export async function withRelayAs<Result>(
 		await connection.connecting;
 		return await work(connection.client);
 	} catch (error) {
-		if (isConnectionFailure(error)) discard(key, connection);
+		if (isConnectionFailure(error) || error instanceof RelayLoginRefused) discard(key, connection);
 		throw error;
 	} finally {
 		release(key, connection);
@@ -52,7 +52,7 @@ function borrow(
 		return existing;
 	}
 	const client = createBuzzRelayClient(relayURL, userSecretHex, authTagJSON);
-	const connection: PooledConnection = { client, connecting: client.connect(), borrowers: 1 };
+	const connection: PooledConnection = { client, connecting: client.connectUnlessRestricted(), borrowers: 1 };
 	connections.set(key, connection);
 	return connection;
 }

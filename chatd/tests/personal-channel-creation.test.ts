@@ -12,6 +12,7 @@ const publishedAsThePerson: Published[] = [];
 const personRelay = {
 	pubkeyHex: "person",
 	connect: async () => {},
+	connectUnlessRestricted: async () => {},
 	disconnect: () => {},
 	subscribe: () => {},
 	query: async () => [],

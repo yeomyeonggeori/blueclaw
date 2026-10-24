@@ -81,6 +81,7 @@ function replyEvent(id: string, pubkey: string, rootID: string): BuzzEvent {
 const personRelay = {
 	pubkeyHex: "person",
 	connect: async () => {},
+	connectUnlessRestricted: async () => {},
 	disconnect: () => {},
 	subscribe: () => {},
 	query: async (filter: Filter) => eventsNamed(filter),
