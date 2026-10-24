@@ -56,6 +56,13 @@ type daemonExecutedTool struct {
 
 func requesterToolSet(t *testing.T, requesterPersonID string, executed *[]daemonExecutedTool) *toolcontract.ToolSet {
 	t.Helper()
+	return noteToolRunning(t, func(invocation toolcontract.ToolInvocation) {
+		*executed = append(*executed, daemonExecutedTool{toolName: invocation.ToolName, requesterPersonID: requesterPersonID})
+	})
+}
+
+func noteToolRunning(t *testing.T, run func(toolcontract.ToolInvocation)) *toolcontract.ToolSet {
+	t.Helper()
 	toolSet := toolcontract.NewToolSet([]string{"note_write"})
 	toolSet.AllowTestReplacement()
 	errorValue := toolSet.RegisterTool(toolcontract.ToolDefinition{
@@ -67,7 +74,7 @@ func requesterToolSet(t *testing.T, requesterPersonID string, executed *[]daemon
 		SideEffectClass: toolcontract.ToolSideEffectStateChange,
 		ResultContract:  &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`)},
 	}, func(ctx context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		*executed = append(*executed, daemonExecutedTool{toolName: invocation.ToolName, requesterPersonID: requesterPersonID})
+		run(invocation)
 		return toolcontract.ToolSuccessData("note written", json.RawMessage(`{}`)), nil
 	})
 	if errorValue != nil {
@@ -145,17 +152,7 @@ func (agent *externalAgent) NewSession(ctx context.Context, request acp.NewSessi
 	if request.McpServers[0].Http == nil {
 		return acp.NewSessionResponse{SessionId: "session-1"}, nil
 	}
-	toolCatalog := request.McpServers[0].Http
-	bearerToken := ""
-	for _, header := range toolCatalog.Headers {
-		if strings.EqualFold(header.Name, "Authorization") {
-			bearerToken = strings.TrimPrefix(header.Value, "Bearer ")
-		}
-	}
-	clientSession, errorValue := mcp.NewClient(&mcp.Implementation{Name: "external-agent", Version: "test"}, nil).Connect(ctx, &mcp.StreamableClientTransport{
-		Endpoint:   toolCatalog.Url,
-		HTTPClient: &http.Client{Transport: bearerHeader{bearerToken: bearerToken}},
-	}, nil)
+	clientSession, errorValue := connectToolCatalog(ctx, request.McpServers[0])
 	if errorValue != nil {
 		agent.toolCallError = errorValue
 		return acp.NewSessionResponse{SessionId: "session-1"}, nil
@@ -169,10 +166,27 @@ func (agent *externalAgent) NewSession(ctx context.Context, request acp.NewSessi
 	for _, tool := range toolList.Tools {
 		agent.observedCatalog = append(agent.observedCatalog, tool.Name)
 	}
+	if agent.toolNameToCall == "" {
+		return acp.NewSessionResponse{SessionId: "session-1"}, nil
+	}
 	if _, errorValue := clientSession.CallTool(ctx, &mcp.CallToolParams{Name: agent.toolNameToCall, Arguments: agent.toolArguments}); errorValue != nil {
 		agent.toolCallError = errorValue
 	}
 	return acp.NewSessionResponse{SessionId: "session-1"}, nil
+}
+
+func connectToolCatalog(ctx context.Context, toolCatalogServer acp.McpServer) (*mcp.ClientSession, error) {
+	toolCatalog := toolCatalogServer.Http
+	bearerToken := ""
+	for _, header := range toolCatalog.Headers {
+		if strings.EqualFold(header.Name, "Authorization") {
+			bearerToken = strings.TrimPrefix(header.Value, "Bearer ")
+		}
+	}
+	return mcp.NewClient(&mcp.Implementation{Name: "external-agent", Version: "test"}, nil).Connect(ctx, &mcp.StreamableClientTransport{
+		Endpoint:   toolCatalog.Url,
+		HTTPClient: &http.Client{Transport: bearerHeader{bearerToken: bearerToken}},
+	}, nil)
 }
 
 func (agent *externalAgent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.PromptResponse, error) {

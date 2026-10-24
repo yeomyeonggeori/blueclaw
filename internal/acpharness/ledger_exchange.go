@@ -3,6 +3,7 @@ package acpharness
 import (
 	"encoding/json"
 	"strings"
+	"sync"
 
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
@@ -11,6 +12,7 @@ import (
 
 type ledgerExchange struct {
 	skippedEventNames map[string]bool
+	mutex             sync.Mutex
 }
 
 func newLedgerExchange(skippedEventNames []string) *ledgerExchange {
@@ -100,7 +102,12 @@ func (mirror ledgerMirror) isActive() bool {
 }
 
 func (mirror ledgerMirror) take(record agentcontract.LedgerRecord) {
-	if !mirror.isActive() || mirror.exchange.skippedEventNames[record.Name] || mirror.hostRecordedTheCancellation(record) {
+	if !mirror.isActive() || mirror.exchange.skippedEventNames[record.Name] {
+		return
+	}
+	mirror.exchange.mutex.Lock()
+	defer mirror.exchange.mutex.Unlock()
+	if mirror.hostRecordedTheCancellation(record) || mirror.tookTheRequestAlready(record) {
 		return
 	}
 	mirror.taskRunStore.AppendTaskEvent(mirror.taskRunID, record.Name, record.EventBody())
@@ -113,6 +120,19 @@ func (mirror ledgerMirror) hostRecordedTheCancellation(record agentcontract.Ledg
 	observationID := observationIDOf(record.EventBody())
 	for _, taskEvent := range mirror.taskRunStore.ListTaskEvent(mirror.taskRunID) {
 		if taskEvent.Name == record.Name && observationIDOf(taskEvent.Body) == observationID {
+			return true
+		}
+	}
+	return false
+}
+
+func (mirror ledgerMirror) tookTheRequestAlready(record agentcontract.LedgerRecord) bool {
+	if _, isRequest := agentcontract.ToolTaskEventToolName(record.Name, agentcontract.ToolTaskEventRequestedSuffix); !isRequest {
+		return false
+	}
+	eventBody := record.EventBody()
+	for _, taskEvent := range mirror.taskRunStore.ListTaskEvent(mirror.taskRunID) {
+		if taskEvent.Name == record.Name && taskEvent.Body == eventBody {
 			return true
 		}
 	}
