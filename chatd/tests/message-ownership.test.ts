@@ -23,6 +23,7 @@ mock.module("../src/adapters/buzz/relay-client.ts", () => ({
 	createBuzzRelayClient: (_relayURL: string, secretHex: string) => ({
 		pubkeyHex: publicKeyOf(secretHex),
 		connect: async () => {},
+		connectUnlessRestricted: async () => {},
 		disconnect: () => {},
 		subscribe: () => {},
 		query: async () => [],

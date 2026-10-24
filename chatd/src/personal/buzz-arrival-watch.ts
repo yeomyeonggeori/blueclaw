@@ -109,7 +109,7 @@ export class BuzzArrivalWatch {
 		const watcher: Watcher = {
 			userSecretHex,
 			relay,
-			connecting: relay.connect().then(() =>
+			connecting: relay.connectUnlessRestricted().then(() =>
 				relay.subscribe(
 					[{ kinds: [MEMBER_ADDED_NOTIFICATION_KIND], "#p": [pubkey], since: openedAtSeconds }],
 					() => {

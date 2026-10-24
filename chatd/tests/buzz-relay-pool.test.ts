@@ -2,10 +2,12 @@ import { describe, expect, mock, test } from "bun:test";
 
 let opened = 0;
 let closed = 0;
+let admission: () => Promise<void> = async () => {};
 const client = {
 	pubkeyHex: "a".repeat(64),
-	connect: async () => {
+	connectUnlessRestricted: async () => {
 		opened += 1;
+		await admission();
 	},
 	disconnect: () => {
 		closed += 1;
@@ -18,7 +20,9 @@ const client = {
 mock.module("../src/adapters/buzz/relay-client.ts", () => ({ createBuzzRelayClient: () => client }));
 
 const { withRelayAs, closeEveryPooledRelay } = await import("../src/adapters/buzz/relay-pool.ts");
-const { RelayConnectionFailure, RelayQueryIncomplete } = await import("../src/adapters/buzz/relay-connection.ts");
+const { RelayConnectionFailure, RelayLoginRefused, RelayQueryIncomplete } = await import(
+	"../src/adapters/buzz/relay-connection.ts"
+);
 
 describe("a person's relay connection", () => {
 	test("is opened once and reused, not once per message", async () => {
@@ -48,6 +52,28 @@ describe("a person's relay connection", () => {
 				throw new RelayConnectionFailure("wss://relay", "the socket went away");
 			}),
 		).rejects.toThrow("the socket went away");
+		expect(closed).toBe(1);
+
+		await withRelayAs("wss://relay", "secret-1", undefined, async () => "after");
+		expect(opened).toBe(2);
+		closeEveryPooledRelay();
+	});
+
+	test("is dropped when the relay refuses the person's login, and the call fails instead of waiting", async () => {
+		opened = 0;
+		closed = 0;
+		admission = async () => {
+			throw new RelayLoginRefused("wss://relay", "restricted: not a relay member");
+		};
+		let isWorkDone = false;
+
+		await expect(
+			withRelayAs("wss://relay", "secret-1", undefined, async () => {
+				isWorkDone = true;
+			}),
+		).rejects.toBeInstanceOf(RelayLoginRefused);
+		admission = async () => {};
+		expect(isWorkDone).toBe(false);
 		expect(closed).toBe(1);
 
 		await withRelayAs("wss://relay", "secret-1", undefined, async () => "after");

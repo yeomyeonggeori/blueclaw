@@ -40,6 +40,7 @@ function applyToRoster(kind: number, tags: string[][]): void {
 const relay = {
 	pubkeyHex: ACTOR_PUBKEY,
 	connect: async () => {},
+	connectUnlessRestricted: async () => {},
 	disconnect: () => {},
 	subscribe: () => {},
 	query: async () => [rosterEvent()],

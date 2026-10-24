@@ -8,6 +8,7 @@ import {
 	requireLoopbackArrivalsURL,
 } from "../src/personal/parse.ts";
 import type { BuzzRelayClient } from "../src/adapters/buzz/relay-client.ts";
+import { RelayLoginRefused } from "../src/adapters/buzz/relay-connection.ts";
 import type { BuzzEvent } from "../src/adapters/buzz/types.ts";
 import type { UserConversation } from "../src/adapters/buzz/user-session.ts";
 
@@ -31,6 +32,9 @@ function fakeRelay(): FakeRelay {
 		connections: 0,
 		disconnected: false,
 		connect: async () => {
+			relay.connections += 1;
+		},
+		connectUnlessRestricted: async () => {
 			relay.connections += 1;
 		},
 		disconnect: () => {
@@ -241,6 +245,26 @@ describe("watching a person's conversations for arriving messages", () => {
 
 		expect(relays.get(aliceSecret)!.disconnected).toBe(true);
 		expect(watch.watchedCount()).toBe(1);
+	});
+
+	test("a key the relay refuses is answered as refused and its watch is closed, so a fresh key gets a fresh one", async () => {
+		const refusing = fakeRelay();
+		refusing.connectUnlessRestricted = async () => {
+			throw new RelayLoginRefused("ws://relay", "restricted: not a relay member");
+		};
+		const watch = new BuzzArrivalWatch({
+			openRelay: () => refusing,
+			listConversations: async () => [],
+			tell: async () => {},
+			tellTyping: async () => {},
+			tellWithdrawal: async () => {},
+			now: () => startedAt,
+		});
+
+		await expect(watch.watch(aliceSecret, arrivalsURL)).rejects.toBeInstanceOf(RelayLoginRefused);
+
+		expect(refusing.disconnected).toBe(true);
+		expect(watch.watchedCount()).toBe(0);
 	});
 });
 

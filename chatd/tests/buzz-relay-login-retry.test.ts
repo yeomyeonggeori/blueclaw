@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { finalizeEvent, getPublicKey } from "nostr-tools/pure";
-import { createRelayConnection, type RelayClientTiming } from "../src/adapters/buzz/relay-connection.ts";
+import {
+	RelayLoginRefused,
+	createRelayConnection,
+	type RelayClientTiming,
+} from "../src/adapters/buzz/relay-connection.ts";
 import type { BuzzEvent } from "../src/adapters/buzz/types.ts";
 
 const secretKey = Uint8Array.from({ length: 32 }, () => 2);
@@ -19,7 +23,7 @@ const refusalReason = "restricted: not a relay member";
 
 type FakeRelay = { url: string; authAttempts: number; connections: number; stop: () => void };
 
-function startRelayAdmittingOnAttempt(admittedAttempt: number): FakeRelay {
+function startRelayAdmittingOnAttempt(admittedAttempt: number, refusal = refusalReason): FakeRelay {
 	const relay = { url: "", authAttempts: 0, connections: 0, stop: () => void 0 };
 	const server = Bun.serve({
 		port: 0,
@@ -38,7 +42,7 @@ function startRelayAdmittingOnAttempt(admittedAttempt: number): FakeRelay {
 				relay.authAttempts += 1;
 				const isAdmitted = relay.authAttempts >= admittedAttempt;
 				const eventID = (frame[1] as { id: string }).id;
-				socket.send(JSON.stringify(["OK", eventID, isAdmitted, isAdmitted ? "" : refusalReason]));
+				socket.send(JSON.stringify(["OK", eventID, isAdmitted, isAdmitted ? "" : refusal]));
 			},
 		},
 	});
@@ -136,5 +140,29 @@ describe("relay connection login retry", () => {
 
 		expect(openedSockets).toBe(2);
 		expect(performance.now() - started).toBeLessThan(2_500);
+	});
+});
+
+describe("a connection made for one person's call", () => {
+	test("fails at once when the relay restricts the key, instead of waiting to be let in", async () => {
+		relay = startRelayAdmittingOnAttempt(3);
+		const connection = createRelayConnection(relay.url, signer, undefined, timing);
+
+		const refusal = await connection.connectUnlessRestricted().catch((error: unknown) => error);
+		connection.disconnect();
+
+		expect(refusal).toBeInstanceOf(RelayLoginRefused);
+		expect(refusal).toMatchObject({ reason: "login-refused", relayAnswer: refusalReason });
+		expect(relay.authAttempts).toBe(1);
+	});
+
+	test("still tries again when the relay refuses for a reason that is not a restriction", async () => {
+		relay = startRelayAdmittingOnAttempt(2, "error: the relay is busy");
+		const connection = createRelayConnection(relay.url, signer, undefined, timing);
+
+		await connection.connectUnlessRestricted();
+		connection.disconnect();
+
+		expect(relay.authAttempts).toBe(2);
 	});
 });

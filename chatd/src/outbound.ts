@@ -34,6 +34,7 @@ import {
 } from "./outbound-parse.ts";
 import { MessageChangeRefused, isElevatedIn, signerForMessageChange, signingKeyring } from "./message-ownership.ts";
 import { ThreadPartlyDeleted, deleteThread } from "./adapters/buzz/thread-deletion.ts";
+import { RelayLoginRefused } from "./adapters/buzz/relay-connection.ts";
 import { personCapabilities, type PersonCapability } from "./personal/capabilities.ts";
 import { requesterCapabilityNamed } from "./personal/as-the-requester.ts";
 import { MalformedRequest } from "./personal/parse.ts";
@@ -192,6 +193,9 @@ async function answerAsPerson(
 		}
 		if (error instanceof CredentialRefused) {
 			return jsonResponse(401, { error: error.message });
+		}
+		if (error instanceof RelayLoginRefused) {
+			return jsonResponse(401, { error: error.message, reason: error.reason });
 		}
 		if (error instanceof MediaRefused) {
 			return jsonResponse(415, {
