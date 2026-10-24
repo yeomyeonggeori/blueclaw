@@ -2781,6 +2781,7 @@ func TestConnectorRuntimeRejectsMissingHistoryCursorWhenMoreContextExists(t *tes
 }
 
 type testAdapter struct {
+	mutex                         sync.Mutex
 	senderEmail                   string
 	sendReplyError                error
 	reactionError                 error
@@ -2945,6 +2946,8 @@ func (adapter *testAdapter) ResolveIdentity(context.Context, string) (identity.P
 }
 
 func (adapter *testAdapter) ImportInputAttachments(_ context.Context, request InputAttachmentImportRequest) (InputAttachmentImportResult, error) {
+	adapter.mutex.Lock()
+	defer adapter.mutex.Unlock()
 	adapter.inputAttachmentImportRequests = append(adapter.inputAttachmentImportRequests, request)
 	if adapter.inputAttachmentImportError != nil {
 		return InputAttachmentImportResult{}, adapter.inputAttachmentImportError
@@ -2953,18 +2956,24 @@ func (adapter *testAdapter) ImportInputAttachments(_ context.Context, request In
 }
 
 func (adapter *testAdapter) StartProgress(_ context.Context, target ReplyTarget) error {
+	adapter.mutex.Lock()
+	defer adapter.mutex.Unlock()
 	adapter.operationNames = append(adapter.operationNames, "progress.start")
 	adapter.progressStarts = append(adapter.progressStarts, target)
 	return nil
 }
 
 func (adapter *testAdapter) StopProgress(ctx context.Context, target ReplyTarget) error {
+	adapter.mutex.Lock()
+	defer adapter.mutex.Unlock()
 	adapter.progressStops = append(adapter.progressStops, target)
 	adapter.progressStopErrors = append(adapter.progressStopErrors, ctx.Err())
 	return nil
 }
 
 func (adapter *testAdapter) SendReply(_ context.Context, target ReplyTarget, reply OutboundReply) (string, error) {
+	adapter.mutex.Lock()
+	defer adapter.mutex.Unlock()
 	if adapter.sendReplyError != nil {
 		return "", adapter.sendReplyError
 	}
@@ -2973,6 +2982,8 @@ func (adapter *testAdapter) SendReply(_ context.Context, target ReplyTarget, rep
 }
 
 func (adapter *testAdapter) AddReaction(_ context.Context, target ReactionTarget) error {
+	adapter.mutex.Lock()
+	defer adapter.mutex.Unlock()
 	if adapter.reactionError != nil {
 		return adapter.reactionError
 	}
@@ -2981,11 +2992,15 @@ func (adapter *testAdapter) AddReaction(_ context.Context, target ReactionTarget
 }
 
 func (adapter *testAdapter) RemoveReaction(_ context.Context, target ReactionTarget) error {
+	adapter.mutex.Lock()
+	defer adapter.mutex.Unlock()
 	adapter.removedReactions = append(adapter.removedReactions, target)
 	return nil
 }
 
 func (adapter *testAdapter) FetchHistory(_ context.Context, historyCursor string, _ int) (VisibleContext, error) {
+	adapter.mutex.Lock()
+	defer adapter.mutex.Unlock()
 	adapter.operationNames = append(adapter.operationNames, "history.fetch")
 	adapter.historyCursors = append(adapter.historyCursors, historyCursor)
 	if page, isFound := adapter.historyPagesByCursor[historyCursor]; isFound {
