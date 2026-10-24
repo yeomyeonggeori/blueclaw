@@ -167,3 +167,31 @@ func TestTheRunWaitsAndTheCallIsHeldWhileTheQuestionIsStillOutstanding(t *testin
 		t.Fatalf("the ledger carried %v while the person was being asked, so a restart here cannot say which call was held", asker.eventsWhileAsking)
 	}
 }
+
+type questionKeepingAsker struct {
+	question PermissionQuestion
+}
+
+func (asker *questionKeepingAsker) AskPermission(_ context.Context, _ mcpserver.ApprovalRequest, question PermissionQuestion) (ApprovalAnswer, AskStatus) {
+	asker.question = question
+	return ApprovalAnswer{Signal: agentcontract.ApprovalSignalApprove}, AskAnswered
+}
+
+func TestAHandoffTheRefusalNamesIsAskedAndKeptAsThatHandoff(t *testing.T) {
+	gate, taskRunService, taskRun := gateFixture(t)
+	asker := &questionKeepingAsker{}
+	gate.UsePermissionAsker(asker)
+	named := ApprovalTarget{InputField: "handoff", ID: "handoff-1", Title: "https://portal.example.com", HandoffID: "handoff-1"}
+
+	if _, errorValue := gate.AwaitApproval(WithRefusalTarget(context.Background(), named), approvalRequestFixture(taskRun.TaskRunID)); errorValue != nil {
+		t.Fatalf("await approval: %v", errorValue)
+	}
+
+	if asker.question.HandoffID != "handoff-1" {
+		t.Fatalf("the asker must know the question is a handoff, got %+v", asker.question)
+	}
+	holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID))
+	if len(holds) != 1 || holds[0].Call.HandoffID != "handoff-1" {
+		t.Fatalf("the ledger must keep the handoff so a restart can reopen it, got %+v", holds)
+	}
+}

@@ -32,7 +32,8 @@
 			"deliveryID",
 			"replyTargetID",
 			"isAlreadyPosted",
-			"isFinal"
+			"isFinal",
+			"handoffID"
 		],
 		"undelivered": [
 			"deliveryID",
