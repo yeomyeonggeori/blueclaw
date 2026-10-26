@@ -1,24 +1,12 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { Server, ServerWebSocket } from "bun";
-import { finalizeEvent, generateSecretKey, getPublicKey } from "nostr-tools/pure";
-import { bytesToHex, hexToBytes } from "nostr-tools/utils";
+import { finalizeEvent, generateSecretKey } from "nostr-tools/pure";
+import { bytesToHex } from "nostr-tools/utils";
 import { closeEveryPooledRelay } from "../src/adapters/buzz/relay-pool.ts";
-import { createRelayConnection } from "../src/adapters/buzz/relay-connection.ts";
 import { unionOfEmojiSets } from "../src/adapters/buzz/user-emoji.ts";
 import { DELETE_MESSAGE_KIND } from "../src/adapters/buzz/deletions.ts";
 import { createBuzzPersonalGateway } from "../src/personal/buzz.ts";
 import type { BuzzEvent } from "../src/adapters/buzz/types.ts";
-
-mock.module("../src/adapters/buzz/relay-client.ts", () => ({
-	createBuzzRelayClient: (url: string, privateKeyHex: string) => {
-		const secretKey = hexToBytes(privateKeyHex);
-		return createRelayConnection(url, {
-			pubkeyHex: getPublicKey(secretKey),
-			signEvent: (kind: number, content: string, tags: string[][]) =>
-				finalizeEvent({ kind, content, tags, created_at: Math.floor(Date.now() / 1000) }, secretKey) as BuzzEvent,
-		});
-	},
-}));
 
 type Filter = { kinds?: number[]; "#d"?: string[]; "#e"?: string[]; ids?: string[] };
 

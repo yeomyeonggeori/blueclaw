@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
+import { replaceRelayClientInThisFile } from "./relay-client-replacement.ts";
 
 const BOT_PUBKEY = "9".repeat(64);
 const USER_SECRET = "2".repeat(64);
@@ -24,7 +25,7 @@ const personRelay = {
 	publishForAcknowledgement: async () => "",
 };
 
-mock.module("../src/adapters/buzz/relay-client.ts", () => ({ createBuzzRelayClient: () => personRelay }));
+replaceRelayClientInThisFile(() => personRelay);
 
 const { BuzzAdapter } = await import("../src/adapters/buzz/adapter.ts");
 const { createBuzzPersonalGateway } = await import("../src/personal/buzz.ts");

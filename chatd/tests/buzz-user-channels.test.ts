@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import type { BuzzEvent } from "../src/adapters/buzz/types.ts";
 import type { UserChannelRole } from "../src/adapters/buzz/user-channels.ts";
 import { MalformedRequest, parseMemberExternalIDs, parseNewChannel } from "../src/personal/parse.ts";
+import { replaceRelayClientInThisFile } from "./relay-client-replacement.ts";
 
 const CHANNEL = "channel-1";
 const ACTOR_PUBKEY = "a".repeat(64);
@@ -52,7 +53,7 @@ const relay = {
 	publishForAcknowledgement: async () => "",
 };
 
-mock.module("../src/adapters/buzz/relay-client.ts", () => ({ createBuzzRelayClient: () => relay }));
+replaceRelayClientInThisFile(() => relay);
 
 const {
 	addChannelOwnerAsUser,

@@ -1,6 +1,7 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { BuzzEvent } from "../src/adapters/buzz/types.ts";
 import type { ChatdConfiguration } from "../src/configuration.ts";
+import { replaceRelayClientInThisFile } from "./relay-client-replacement.ts";
 
 const CHANNEL = "6955ae67-a6d5-47c7-83b6-aea4902c20f0";
 const BOT_SECRET = "1".repeat(64);
@@ -30,24 +31,22 @@ function rosterEvent(): BuzzEvent {
 	};
 }
 
-mock.module("../src/adapters/buzz/relay-client.ts", () => ({
-	createBuzzRelayClient: (_relayURL: string, secretHex: string) => ({
-		pubkeyHex: pubkeyFromSecret(secretHex),
-		connect: async () => {},
-		connectUnlessRestricted: async () => {},
-		disconnect: () => {},
-		subscribe: () => {},
-		query: async () => [rosterEvent()],
-		queryComplete: async () => ({ events: [rosterEvent()], complete: true }),
-		publish: async (kind: number, content: string, tags: string[][]) => {
-			published.push({ secretHex, kind, tags, ...(kind === REACTION_KIND ? { content } : {}) });
-			return { id: "published", pubkey: pubkeyFromSecret(secretHex), created_at: 300, kind, tags, content, sig: "" };
-		},
-		publishForAcknowledgement: async (kind: number, _content: string, tags: string[][]) => {
-			published.push({ secretHex, kind, tags });
-			return "acknowledged";
-		},
-	}),
+replaceRelayClientInThisFile((_relayURL: string, secretHex: string) => ({
+	pubkeyHex: pubkeyFromSecret(secretHex),
+	connect: async () => {},
+	connectUnlessRestricted: async () => {},
+	disconnect: () => {},
+	subscribe: () => {},
+	query: async () => [rosterEvent()],
+	queryComplete: async () => ({ events: [rosterEvent()], complete: true }),
+	publish: async (kind: number, content: string, tags: string[][]) => {
+		published.push({ secretHex, kind, tags, ...(kind === REACTION_KIND ? { content } : {}) });
+		return { id: "published", pubkey: pubkeyFromSecret(secretHex), created_at: 300, kind, tags, content, sig: "" };
+	},
+	publishForAcknowledgement: async (kind: number, _content: string, tags: string[][]) => {
+		published.push({ secretHex, kind, tags });
+		return "acknowledged";
+	},
 }));
 
 const { BuzzAdapter } = await import("../src/adapters/buzz/adapter.ts");

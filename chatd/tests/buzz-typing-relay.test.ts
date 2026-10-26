@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { Server, ServerWebSocket } from "bun";
 import { finalizeEvent, generateSecretKey, getPublicKey } from "nostr-tools/pure";
 import { bytesToHex, hexToBytes } from "nostr-tools/utils";
@@ -11,6 +11,7 @@ import { normalizedInboundRoutingOf } from "../src/bridge.ts";
 import { createOutboundHandler } from "../src/outbound.ts";
 import type { ChatdConfiguration } from "../src/configuration.ts";
 import type { BuzzEvent } from "../src/adapters/buzz/types.ts";
+import { replaceRelayClientInThisFile } from "./relay-client-replacement.ts";
 
 function connectionAs(url: string, privateKeyHex: string) {
 	const secretKey = hexToBytes(privateKeyHex);
@@ -29,7 +30,7 @@ function recordedConnectionAs(url: string, privateKeyHex: string) {
 	return connection;
 }
 
-mock.module("../src/adapters/buzz/relay-client.ts", () => ({ createBuzzRelayClient: recordedConnectionAs }));
+replaceRelayClientInThisFile(recordedConnectionAs);
 
 type Filter = { kinds?: number[]; "#h"?: string[] };
 type Subscription = { socket: ServerWebSocket<unknown>; subscriptionID: string; filters: Filter[] };

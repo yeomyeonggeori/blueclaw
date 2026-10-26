@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { getPublicKey } from "nostr-tools/pure";
 import { hexToBytes } from "nostr-tools/utils";
 import type { BuzzEvent } from "../src/adapters/buzz/types.ts";
+import { replaceRelayClientInThisFile } from "./relay-client-replacement.ts";
 
 const CHANNEL = "6955ae67-a6d5-47c7-83b6-aea4902c20f0";
 const BOT_PUBKEY = "9".repeat(64);
@@ -93,7 +94,7 @@ const personRelay = {
 	publishForAcknowledgement: async () => "",
 };
 
-mock.module("../src/adapters/buzz/relay-client.ts", () => ({ createBuzzRelayClient: () => personRelay }));
+replaceRelayClientInThisFile(() => personRelay);
 
 const { BuzzAdapter } = await import("../src/adapters/buzz/adapter.ts");
 const { createBuzzPersonalGateway } = await import("../src/personal/buzz.ts");
