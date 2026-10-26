@@ -337,12 +337,15 @@ async function blobOf(
 }
 
 function linkToBlob(blob: BlossomBlob, attachment: OutgoingAttachment): string {
-	const label = attachment.filename.trim() || (isImageType(attachment.contentType) ? "image" : "file");
-	return isImageType(attachment.contentType) ? `![${label}](${blob.url})` : `[${label}](${blob.url})`;
+	const mediaKind = inlineMediaKindOf(attachment.contentType);
+	const label = attachment.filename.trim() || (mediaKind ?? "file");
+	return mediaKind ? `![${label}](${blob.url})` : `[${label}](${blob.url})`;
 }
 
-function isImageType(contentType: string): boolean {
-	return contentType.startsWith("image/");
+function inlineMediaKindOf(contentType: string): "image" | "video" | undefined {
+	if (contentType.startsWith("image/")) return "image";
+	if (contentType.startsWith("video/")) return "video";
+	return undefined;
 }
 
 // A room is found the way it is listed: from the membership the person holds in

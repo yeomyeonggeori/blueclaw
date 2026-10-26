@@ -63,6 +63,25 @@ describe("a file the store has already been given", () => {
 			],
 		]);
 	});
+
+	test("a video is written as media a Buzz app plays, never as a link it opens in a browser", async () => {
+		const built = await buildMessageBody({
+			relayURL,
+			userSecretHex,
+			message: "",
+			attachments: [
+				{
+					filename: "clip.mp4",
+					contentType: "video/mp4",
+					address: `${relayURL}/media/7d1e.mp4`,
+					sizeBytes: 4096,
+					digest: "7d1e",
+				},
+			],
+		});
+
+		expect(built.body).toBe(`![clip.mp4](${relayURL}/media/7d1e.mp4)`);
+	});
 });
 
 describe("a file the store will not take", () => {
