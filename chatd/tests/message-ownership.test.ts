@@ -1,6 +1,7 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { BuzzEvent } from "../src/adapters/buzz/types.ts";
 import type { ChatdConfiguration } from "../src/configuration.ts";
+import { replaceRelayClientInThisFile } from "./relay-client-replacement.ts";
 
 const CHANNEL = "6955ae67-a6d5-47c7-83b6-aea4902c20f0";
 const BOT_SECRET = "1".repeat(64);
@@ -19,21 +20,19 @@ type PublishedByKey = Published & { secretHex: string };
 const publishedByAnotherKey: PublishedByKey[] = [];
 let relayRefusal: string | undefined;
 
-mock.module("../src/adapters/buzz/relay-client.ts", () => ({
-	createBuzzRelayClient: (_relayURL: string, secretHex: string) => ({
-		pubkeyHex: publicKeyOf(secretHex),
-		connect: async () => {},
-		connectUnlessRestricted: async () => {},
-		disconnect: () => {},
-		subscribe: () => {},
-		query: async () => [],
-		publish: async (kind: number, content: string, tags: string[][]) => {
-			if (relayRefusal) throw new Error(relayRefusal);
-			publishedByAnotherKey.push({ secretHex, kind, content, tags });
-			return { id: "requester-event", pubkey: publicKeyOf(secretHex), created_at: 300, kind, tags, content, sig: "" };
-		},
-		publishForAcknowledgement: async () => "",
-	}),
+replaceRelayClientInThisFile((_relayURL: string, secretHex: string) => ({
+	pubkeyHex: publicKeyOf(secretHex),
+	connect: async () => {},
+	connectUnlessRestricted: async () => {},
+	disconnect: () => {},
+	subscribe: () => {},
+	query: async () => [],
+	publish: async (kind: number, content: string, tags: string[][]) => {
+		if (relayRefusal) throw new Error(relayRefusal);
+		publishedByAnotherKey.push({ secretHex, kind, content, tags });
+		return { id: "requester-event", pubkey: publicKeyOf(secretHex), created_at: 300, kind, tags, content, sig: "" };
+	},
+	publishForAcknowledgement: async () => "",
 }));
 
 const { BuzzAdapter } = await import("../src/adapters/buzz/adapter.ts");

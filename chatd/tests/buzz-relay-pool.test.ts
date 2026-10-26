@@ -1,4 +1,5 @@
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
+import { replaceRelayClientInThisFile } from "./relay-client-replacement.ts";
 
 let opened = 0;
 let closed = 0;
@@ -17,7 +18,7 @@ const client = {
 	subscribe: () => {},
 	publishForAcknowledgement: async () => ({ event: { id: "e1" }, acknowledgement: "" }),
 };
-mock.module("../src/adapters/buzz/relay-client.ts", () => ({ createBuzzRelayClient: () => client }));
+replaceRelayClientInThisFile(() => client);
 
 const { withRelayAs, closeEveryPooledRelay } = await import("../src/adapters/buzz/relay-pool.ts");
 const { RelayConnectionFailure, RelayLoginRefused, RelayQueryIncomplete } = await import(
