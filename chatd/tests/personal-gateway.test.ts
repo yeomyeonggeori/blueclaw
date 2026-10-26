@@ -525,9 +525,9 @@ describe("person.inbox.list", () => {
 			mattermost: {
 				platform: "mattermost",
 				credentialKind: "mattermost-token",
-				listInbox: async (reader: unknown) => {
-					askedBy.push(reader);
-					return [item];
+				listInbox: async (reader: unknown, window: unknown) => {
+					askedBy.push({ reader, window });
+					return { items: [item], held: [] };
 				},
 			},
 		} as never;
@@ -535,8 +535,43 @@ describe("person.inbox.list", () => {
 		const answer = await call("person.inbox.list", { actor }, gateways);
 
 		expect(answer.status).toBe(200);
-		expect(askedBy).toEqual([actor]);
-		expect(await answer.json()).toEqual({ items: [item], agentExternalID: "bot-1" });
+		expect(askedBy).toEqual([{ reader: actor, window: { heldIDs: [] } }]);
+		expect(await answer.json()).toEqual({ items: [item], held: [], agentExternalID: "bot-1" });
+	});
+
+	test("asked since a moment, passes that moment and the messages already held", async () => {
+		const actor = { kind: "mattermost-token", secret: "token" };
+		const windows: unknown[] = [];
+		const gateways = {
+			mattermost: {
+				platform: "mattermost",
+				credentialKind: "mattermost-token",
+				listInbox: async (_reader: unknown, window: unknown) => {
+					windows.push(window);
+					return { items: [], held: [{ id: "post-1", body: "고쳤어요", isUnread: false }] };
+				},
+			},
+		} as never;
+
+		const answer = await call(
+			"person.inbox.list",
+			{ actor, since: "2026-10-12T05:00:00.000Z", heldIDs: ["post-1"] },
+			gateways,
+		);
+
+		expect(answer.status).toBe(200);
+		expect(windows).toEqual([{ since: new Date("2026-10-12T05:00:00.000Z"), heldIDs: ["post-1"] }]);
+		expect((await answer.json()).held).toEqual([{ id: "post-1", body: "고쳤어요", isUnread: false }]);
+	});
+
+	test("refuses a since that is not a time", async () => {
+		const answer = await call(
+			"person.inbox.list",
+			{ actor: { kind: "mattermost-token", secret: "token" }, since: "yesterday" },
+			{ mattermost: { platform: "mattermost", credentialKind: "mattermost-token" } } as never,
+		);
+
+		expect(answer.status).toBe(400);
 	});
 });
 

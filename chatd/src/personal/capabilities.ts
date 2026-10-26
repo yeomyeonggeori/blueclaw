@@ -1,6 +1,7 @@
 import type { PersonalGateway } from "./gateway.ts";
 import {
 	MalformedRequest,
+	inboxWindowOf,
 	optionalLoopbackTypingURL,
 	optionalLoopbackWithdrawalsURL,
 	parseCredentialAnswers,
@@ -124,7 +125,7 @@ export const personCapabilities: Record<string, PersonCapability> = {
 	},
 	"person.inbox.list": async (gateway, body, agentExternalID) => {
 		const request = parsePersonRequest(body);
-		return { agentExternalID, items: await gateway.listInbox(request.actor) };
+		return { agentExternalID, ...(await gateway.listInbox(request.actor, inboxWindowOf(request))) };
 	},
 	"person.messages.list": async (gateway, body) => {
 		const request = parsePersonRequest(body);

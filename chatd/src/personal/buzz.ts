@@ -56,7 +56,8 @@ import {
 	MediaRefused,
 	type PersonalMentions,
 	type PersonalImage,
-	type PersonalInboxItem,
+	type PersonalInbox,
+	type PersonalInboxWindow,
 	type PersonalMessage,
 	type PersonalMessageMatch,
 	type PersonalMessagePage,
@@ -321,17 +322,19 @@ class BuzzPersonalGateway implements PersonalGateway {
 		});
 	}
 
-	async listInbox(actor: ActorCredential): Promise<PersonalInboxItem[]> {
+	async listInbox(actor: ActorCredential, window: PersonalInboxWindow): Promise<PersonalInbox> {
 		this.require(actor);
 		const conversations = await listUserConversations(this.settings.relayURL, actor.secret, { withProfiles: false });
-		const items = await listInboxAsUser({
+		const inbox = await listInboxAsUser({
 			relayURL: this.settings.relayURL,
 			userSecretHex: actor.secret,
 			directChannelIDs: conversations.filter((conversation) => conversation.isDM).map((conversation) => conversation.channelID),
 			groupChannelIDs: conversations.filter((conversation) => !conversation.isDM).map((conversation) => conversation.channelID),
+			sinceSeconds: window.since ? Math.floor(window.since.getTime() / 1000) : undefined,
+			heldIDs: window.heldIDs,
 			authTagJSON: this.settings.authTagJSON,
 		});
-		return items.map((item) => ({
+		const items = inbox.items.map((item) => ({
 			reason: item.reason,
 			isUnread: item.isUnread,
 			message: {
@@ -343,6 +346,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 				postedAt: item.message.postedAt,
 			},
 		}));
+		return { items, held: inbox.held };
 	}
 
 	async listMessages(

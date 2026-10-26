@@ -1,4 +1,4 @@
-import type { ActorCredential, NewPersonalChannel, PersonalMentions } from "./gateway.ts";
+import type { ActorCredential, NewPersonalChannel, PersonalInboxWindow, PersonalMentions } from "./gateway.ts";
 import { canonicalChannelName } from "../channels.ts";
 import type { AttachmentAlreadyKept } from "../outgoing-attachment.ts";
 
@@ -21,6 +21,8 @@ export type PersonRequest = {
 	parentID?: string;
 	emoji?: string;
 	before?: string;
+	since?: string;
+	heldIDs: string[];
 	query?: string;
 	name?: string;
 	externalID?: string;
@@ -75,6 +77,8 @@ export function parsePersonRequest(value: unknown): PersonRequest {
 		parentID: optionalText(record, "parentID"),
 		emoji: optionalText(record, "emoji"),
 		before: optionalText(record, "before"),
+		since: optionalText(record, "since"),
+		heldIDs: parseHeldIDs(record),
 		query: optionalText(record, "query"),
 		name: optionalText(record, "name"),
 		externalID: optionalText(record, "externalID"),
@@ -91,6 +95,14 @@ export function parsePersonRequest(value: unknown): PersonRequest {
 		attachments: parseAttachments(record),
 		mentions: parseMentions(record),
 	};
+}
+
+function parseHeldIDs(record: Record<string, unknown>): string[] {
+	const given = record.heldIDs ?? [];
+	if (!Array.isArray(given) || given.some((entry) => typeof entry !== "string")) {
+		throw new MalformedRequest("heldIDs must be a list of message ids");
+	}
+	return given as string[];
 }
 
 function parseMentions(record: Record<string, unknown>): PersonalMentions | undefined {
@@ -164,6 +176,13 @@ export function requireReadAt(request: PersonRequest): Date {
 	const readAt = new Date(request.readAt);
 	if (Number.isNaN(readAt.getTime())) throw new MalformedRequest("readAt must be an ISO 8601 time");
 	return readAt;
+}
+
+export function inboxWindowOf(request: PersonRequest): PersonalInboxWindow {
+	if (!request.since) return { heldIDs: request.heldIDs };
+	const since = new Date(request.since);
+	if (Number.isNaN(since.getTime())) throw new MalformedRequest("since must be an ISO 8601 time");
+	return { since, heldIDs: request.heldIDs };
 }
 
 export function requireQuery(request: PersonRequest): string {

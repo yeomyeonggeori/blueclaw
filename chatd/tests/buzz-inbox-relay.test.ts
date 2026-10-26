@@ -9,6 +9,7 @@ import { markConversationReadAsUser } from "../src/adapters/buzz/user-read-state
 import type { BuzzEvent } from "../src/adapters/buzz/types.ts";
 
 type Filter = {
+	ids?: string[];
 	kinds?: number[];
 	authors?: string[];
 	since?: number;
@@ -19,6 +20,7 @@ type Filter = {
 const stored: BuzzEvent[] = [];
 
 function matches(event: BuzzEvent, filter: Filter): boolean {
+	if (filter.ids && !filter.ids.includes(event.id)) return false;
 	if (filter.kinds && !filter.kinds.includes(event.kind)) return false;
 	if (filter.authors && !filter.authors.includes(event.pubkey)) return false;
 	if (filter.since !== undefined && event.created_at < filter.since) return false;
@@ -111,13 +113,19 @@ function replyTo(root: BuzzEvent): string[][] {
 	];
 }
 
-function inbox() {
+function inboxSince(sinceSeconds?: number, heldIDs: string[] = []) {
 	return listInboxAsUser({
 		relayURL,
 		userSecretHex: readerSecretHex,
 		directChannelIDs: ["dm-1"],
 		groupChannelIDs: ["channel-1"],
+		sinceSeconds,
+		heldIDs,
 	});
+}
+
+async function inbox() {
+	return (await inboxSince()).items;
 }
 
 describe("a person's inbox against a relay", () => {
@@ -173,5 +181,27 @@ describe("a person's inbox against a relay", () => {
 		stored.push(finalizeEvent({ kind: 9005, created_at: now - 5, tags: [["h", "dm-1"], ["e", taken.id]], content: "" }, writer) as BuzzEvent);
 
 		expect((await inbox()).map((item) => item.message.id)).not.toContain(taken.id);
+	});
+
+	test("asked since a moment, answers only what arrived from then, and brings what it already holds up to date", async () => {
+		const older = post(writer, "dm-1", 900, [], "before");
+		const kept = post(writer, "dm-1", 800, [], "first wording");
+		const taken = post(writer, "dm-1", 700, [], "taken back");
+		const arrived = post(writer, "dm-1", 30, [], "new");
+		stored.push(
+			finalizeEvent({ kind: 40003, created_at: now - 20, tags: [["h", "dm-1"], ["e", kept.id]], content: "second wording" }, writer) as BuzzEvent,
+			finalizeEvent({ kind: 9005, created_at: now - 20, tags: [["h", "dm-1"], ["e", taken.id]], content: "" }, writer) as BuzzEvent,
+		);
+
+		const answer = await inboxSince(now - 40, [older.id, kept.id, taken.id]);
+
+		expect(answer.items.map((item) => item.message.id)).toContain(arrived.id);
+		expect(answer.items.map((item) => item.message.id)).not.toContain(older.id);
+		expect(new Map(answer.held.map((item) => [item.id, item.body]))).toEqual(
+			new Map([
+				[older.id, "before"],
+				[kept.id, "second wording"],
+			]),
+		);
 	});
 });
