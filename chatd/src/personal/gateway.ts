@@ -95,6 +95,22 @@ export type PersonalInboxItem = {
 	isUnread: boolean;
 };
 
+export type PersonalHeldInboxItem = {
+	id: string;
+	body: string;
+	isUnread: boolean;
+};
+
+export type PersonalInbox = {
+	items: PersonalInboxItem[];
+	held: PersonalHeldInboxItem[];
+};
+
+export type PersonalInboxWindow = {
+	since?: Date;
+	heldIDs: string[];
+};
+
 export type PersonalMessagePage = {
 	messages: PersonalMessage[];
 	hasMoreBefore: boolean;
@@ -203,7 +219,7 @@ export interface PersonalGateway {
 		readAt: Date,
 		threadRootID?: string,
 	): Promise<void>;
-	listInbox(actor: ActorCredential): Promise<PersonalInboxItem[]>;
+	listInbox(actor: ActorCredential, window: PersonalInboxWindow): Promise<PersonalInbox>;
 	listMessages(
 		actor: ActorCredential,
 		conversationID: string,
