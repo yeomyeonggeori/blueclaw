@@ -43,6 +43,25 @@ func (resolution ApprovalTargetResolution) namesNothingThatExists() bool {
 	return !resolution.Target.IsResolved() && resolution.Failure.Failure != nil
 }
 
+func sendReachesOnlyTheRequester(approvalRequest mcpserver.ApprovalRequest, target ApprovalTarget) bool {
+	if strings.TrimSpace(approvalRequest.SideEffectClass) != toolcontract.ToolSideEffectExternalSend || !target.IsResolved() {
+		return false
+	}
+	for _, recipient := range append([]string{target.ID}, target.IDs...) {
+		if strings.TrimSpace(recipient) != "" && !namesTheRequester(approvalRequest, recipient) {
+			return false
+		}
+	}
+	return true
+}
+
+func namesTheRequester(approvalRequest mcpserver.ApprovalRequest, recipient string) bool {
+	trimmedRecipient := strings.TrimSpace(recipient)
+	requesterEmail := strings.TrimSpace(approvalRequest.RequesterEmail)
+	return trimmedRecipient == strings.TrimSpace(approvalRequest.RequesterPersonID) ||
+		(requesterEmail != "" && strings.EqualFold(trimmedRecipient, requesterEmail))
+}
+
 func (gate *Gate) resolveApprovalTarget(ctx context.Context, approvalRequest mcpserver.ApprovalRequest) ApprovalTargetResolution {
 	if target, isNamed := refusalTarget(ctx); isNamed {
 		return ApprovalTargetResolution{Target: target}
