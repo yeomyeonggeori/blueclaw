@@ -35,6 +35,9 @@ func (gate *Gate) AwaitApproval(ctx context.Context, approvalRequest mcpserver.A
 		if resolution.namesNothingThatExists() {
 			return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionUnresolvedTarget, Failure: resolution.Failure}, nil
 		}
+		if sendReachesOnlyTheRequester(approvalRequest, resolution.Target) {
+			return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionApproved}, nil
+		}
 		confirmation = gate.confirmationWording(ctx, approvalRequest, resolution)
 	}
 	return gate.askedOutcome(ctx, taskRunID, approvalRequest, confirmation, resolution), nil

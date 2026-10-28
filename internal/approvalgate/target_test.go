@@ -286,3 +286,67 @@ func TestARefusalThatNamesItsTargetIsAskedAboutAsNamed(t *testing.T) {
 		t.Fatalf("the approval carries exactly what the refusal named, got %s", approvedCall.ToolInput)
 	}
 }
+
+func messageSendApprovalRequest(taskRunID string) mcpserver.ApprovalRequest {
+	approvalRequest := approvalRequestFixture(taskRunID)
+	approvalRequest.ToolName = "message_send"
+	approvalRequest.ToolInput = json.RawMessage(`{"targetType":"directMessage","personHint":"이샘플","message":"요청하신 PDF입니다"}`)
+	approvalRequest.RequesterEmail = "sample@example.com"
+	approvalRequest.SideEffectClass = toolcontract.ToolSideEffectExternalSend
+	return approvalRequest
+}
+
+func recipientResolver(target ApprovalTarget) *recordingTargetResolver {
+	return &recordingTargetResolver{resolution: ApprovalTargetResolution{Target: target}}
+}
+
+func TestASendThatResolvesToTheRequesterAloneRunsWithoutAQuestion(t *testing.T) {
+	for _, target := range []ApprovalTarget{
+		{InputField: "personHint", ID: "person-1", Title: "이샘플 <sample@example.com>"},
+		{InputField: "personHint", ID: "Sample@Example.com", Title: "이샘플 <sample@example.com>"},
+		{InputField: "personHints", IDs: []string{"person-1"}, Title: "이샘플 <sample@example.com>"},
+	} {
+		gate, taskRunService, taskRun := gateFixture(t)
+		gate.UseApprovalTargetResolver(recipientResolver(target))
+
+		outcome, errorValue := gate.AwaitApproval(context.Background(), messageSendApprovalRequest(taskRun.TaskRunID))
+		if errorValue != nil || outcome.Decision != mcpserver.ApprovalDecisionApproved {
+			t.Fatalf("a message to the person who asked is no one else's to approve, got %+v %v for %+v", outcome, errorValue, target)
+		}
+		for _, taskEvent := range taskRunService.ListTaskEvent(taskRun.TaskRunID) {
+			if taskEvent.Name == "approval.hold_opened" {
+				t.Fatalf("nothing is held for a send to the requester, got %s", taskEvent.Body)
+			}
+		}
+	}
+}
+
+func TestASendThatReachesAnyoneElseIsStillAskedAbout(t *testing.T) {
+	for _, target := range []ApprovalTarget{
+		{InputField: "personHint", ID: "person-2", Title: "박예시 <example@example.com>"},
+		{InputField: "personHints", IDs: []string{"person-1", "person-2"}, Title: "이샘플; 박예시"},
+	} {
+		gate, _, taskRun := gateFixture(t)
+		gate.UseQuestionWorder(approval.NewWorder(&wordingLanguageModel{question: "박예시에게 보낼까요?"}))
+		gate.UseApprovalTargetResolver(recipientResolver(target))
+
+		outcome, _ := gate.AwaitApproval(context.Background(), messageSendApprovalRequest(taskRun.TaskRunID))
+		if outcome.Decision != mcpserver.ApprovalDecisionHeld {
+			t.Fatalf("a send that reaches someone besides the requester is theirs to approve, got %+v for %+v", outcome, target)
+		}
+	}
+}
+
+func TestOnlyASendIsLetThroughForTheRequester(t *testing.T) {
+	gate, _, taskRun := gateFixture(t)
+	gate.UseQuestionWorder(approval.NewWorder(&wordingLanguageModel{question: "계정을 바꿀까요?"}))
+	gate.UseApprovalTargetResolver(recipientResolver(ApprovalTarget{InputField: "personHint", ID: "person-1"}))
+	approvalRequest := messageSendApprovalRequest(taskRun.TaskRunID)
+	approvalRequest.ToolName = "person_update"
+	approvalRequest.SideEffectClass = toolcontract.ToolSideEffectStateChange
+
+	outcome, _ := gate.AwaitApproval(context.Background(), approvalRequest)
+	if outcome.Decision != mcpserver.ApprovalDecisionHeld {
+		t.Fatalf("a change to the requester's own record is still asked about, got %+v", outcome)
+	}
+}
