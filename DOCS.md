@@ -421,22 +421,21 @@ On macOS the helper creates identities through `dscl` and `dseditgroup` and read
 
 ## Workspace layout
 
-The workspace is the directory tree under `terminal.workspaceRootPath` where people, circles and the service keep their files.
+The workspace is the directory tree under `terminal.workspaceRootPath` where people and the service keep their files.
 
 | Path | Owner:group | Mode |
 |---|---|---|
 | `private/people/<personID>` and its `artifacts/` and task temporary directory | the person | `0700` |
-| `circles/<circleID>` | `blueclaw`:`bc_circle_<id>` | `2770` |
 | `shared` | `blueclaw`:`bc_shared` | `2755` |
-| `shared/public`, `shared/cache`, `shared/cache/dependencies/*` | `blueclaw`:`bc_shared` | `2775` |
-| `private/protected/<personID>`, `circles/<circleID>/.protected`, `shared/.protected` | `blueclaw`:the subject's group | `2750` |
+| `shared/cache`, `shared/cache/dependencies/*` | `blueclaw`:`bc_shared` | `2775` |
+| `circles/<circleID>`, `private/protected/<personID>`, `circles/<circleID>/.protected`, `shared/.protected` | `blueclaw`:the subject's group | `2750` |
 | `private`, `private/people`, `private/protected`, `circles` | `blueclaw`:`blueclaw` | `0711` |
 
 A protected directory holds what the service writes on a subject's behalf, such as their `memory.db`. The service writes it and the subject's group reads it. A person's sits outside their home because the service cannot pass through a `0700` directory it does not own.
 
 `.blueclaw/` holds the daemon's state, logs, configuration and identity map. It appears in no projected entry, so it is never handed to a task user.
 
-Use `shared/public` only for content that may be shown to anyone; share within the company through a circle directory. `shared/cache/dependencies` is for package caches alone: the `bun`, `go`, `pip`, `uv` and `cargo` caches point there, so it must never hold source or private files.
+A circle's directory exists to hold its protected directory, so its members read it and only the service writes it. A conversation works in the requester's home whether it is direct or a group, and anything shared beyond one person goes through the data room. `shared/cache/dependencies` is for package caches alone: the `bun`, `go`, `pip`, `uv` and `cargo` caches point there, so it must never hold source or private files.
 
 ## Command execution
 

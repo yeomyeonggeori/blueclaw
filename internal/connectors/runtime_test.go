@@ -2183,8 +2183,8 @@ func TestConnectorAttachmentMaterialResolverRefreshesStaleMaterialPath(t *testin
 	if errorValue != nil {
 		t.Fatalf("expected stale material to refresh: %v", errorValue)
 	}
-	if material.Path != "/workspace/private/people/person-1/inbox/mattermost/direct-1/message-1/report.html" {
-		t.Fatalf("expected refreshed material path, got %+v", material)
+	if material.Path != "~/inbox/mattermost/direct-1/message-1/report.html" {
+		t.Fatalf("expected refreshed material path in the requester home, got %+v", material)
 	}
 	if len(adapter.inputAttachmentImportRequests) != 1 {
 		t.Fatalf("expected one refresh import request, got %+v", adapter.inputAttachmentImportRequests)

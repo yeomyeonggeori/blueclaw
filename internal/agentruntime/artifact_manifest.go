@@ -163,11 +163,7 @@ func isArtifactManifestPath(path string) bool {
 		return false
 	}
 	return strings.HasPrefix(normalizedPath, "artifacts/") ||
-		strings.Contains(normalizedPath, "/artifacts/") ||
-		strings.HasPrefix(normalizedPath, "/workspace/circles/") ||
-		strings.HasPrefix(normalizedPath, "circles/") ||
-		strings.HasPrefix(normalizedPath, "/workspace/shared/public/") ||
-		strings.HasPrefix(normalizedPath, "shared/public/")
+		strings.Contains(normalizedPath, "/artifacts/")
 }
 
 func boundedArtifactManifestEntries(request agentcontract.AgentTurnRequest, candidates []artifactManifestCandidate) []agentcontract.ArtifactManifestEntry {

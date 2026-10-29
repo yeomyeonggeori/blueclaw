@@ -94,10 +94,10 @@ func TestPOSIXStateForPolicyProjectsWorkspaceDirectories(t *testing.T) {
 	if !hasPOSIXDirectory(state, "/workspace/circles", "blueclaw", "blueclaw", "0711") {
 		t.Fatalf("expected circles parent traversal directory, got %+v", state.Directories)
 	}
-	if !hasPOSIXDirectory(state, "/workspace/circles/member", "blueclaw", "bc_circle_member", "2770") {
+	if !hasPOSIXDirectory(state, "/workspace/circles/member", "blueclaw", "bc_circle_member", "2750") {
 		t.Fatalf("expected default member circle POSIX directory, got %+v", state.Directories)
 	}
-	if !hasPOSIXDirectory(state, "/workspace/circles/finance", "blueclaw", "bc_circle_finance", "2770") {
+	if !hasPOSIXDirectory(state, "/workspace/circles/finance", "blueclaw", "bc_circle_finance", "2750") {
 		t.Fatalf("expected circle POSIX directory, got %+v", state.Directories)
 	}
 	if !hasPOSIXGroup(state, "bc_circle_member") {
@@ -117,7 +117,7 @@ func TestPOSIXStateForPolicyGivesEveryPersonMemberAccess(t *testing.T) {
 		},
 	}, "/workspace")
 
-	if !hasPOSIXDirectory(state, "/workspace/circles/member", "blueclaw", "bc_circle_member", "2770") {
+	if !hasPOSIXDirectory(state, "/workspace/circles/member", "blueclaw", "bc_circle_member", "2750") {
 		t.Fatalf("expected default member circle directory, got %+v", state.Directories)
 	}
 	if !hasPOSIXGroup(state, "bc_circle_member") {
@@ -157,7 +157,7 @@ func TestPOSIXStateForPolicyNeverProjectsTheAdminCircle(t *testing.T) {
 	}
 }
 
-func TestPOSIXStateForPolicyKeepsSharedRootReadOnlyButPublicAndCacheWritable(t *testing.T) {
+func TestPOSIXStateForPolicyKeepsSharedRootReadOnlyButCacheWritable(t *testing.T) {
 	state := POSIXStateForPolicy(policy.PolicyDocument{
 		People: []policy.PersonPolicy{{PersonID: "person-1"}},
 	}, "/workspace")
@@ -165,8 +165,10 @@ func TestPOSIXStateForPolicyKeepsSharedRootReadOnlyButPublicAndCacheWritable(t *
 	if !hasPOSIXDirectory(state, "/workspace/shared", "blueclaw", "bc_shared", "2755") {
 		t.Fatalf("expected shared root to be group read-only (2755), got %+v", state.Directories)
 	}
-	if !hasPOSIXDirectory(state, "/workspace/shared/public", "blueclaw", "bc_shared", "2775") {
-		t.Fatalf("expected shared public to be group writable (2775), got %+v", state.Directories)
+	for _, directory := range state.Directories {
+		if directory.Path == "/workspace/shared/public" {
+			t.Fatalf("shared/public is declared again; the data room publishes, got %+v", directory)
+		}
 	}
 	if !hasPOSIXDirectory(state, "/workspace/shared/cache/dependencies", "blueclaw", "bc_shared", "2775") {
 		t.Fatalf("expected dependency cache to be group writable (2775), got %+v", state.Directories)
