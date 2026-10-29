@@ -39,3 +39,20 @@ func TestConversationScopeKeepsAPrivateConversationInThePersonHome(t *testing.T)
 		t.Fatalf("expected the person home as the default directory, got %q", scope.DefaultDirectoryPath)
 	}
 }
+
+func TestConversationScopeKeepsAGroupConversationInTheRequesterHome(t *testing.T) {
+	workspaceRootPath := t.TempDir()
+
+	scope := ConversationScopeForRequest(workspaceRootPath, ToolCatalogRequest{
+		Prompt:                  "summarize the attached report",
+		RequesterPersonID:       "person-1",
+		ConversationID:          "conversation-1",
+		ConversationType:        "O",
+		ConversationChannelName: "circle-finance",
+	})
+
+	expectedPath := filepath.Join(workspaceRootPath, "private", "people", "person-1")
+	if scope.Kind != "private" || scope.DefaultDirectoryPath != expectedPath {
+		t.Fatalf("expected a group conversation to work in the requester home, not a circle directory every member reads, got %+v", scope)
+	}
+}

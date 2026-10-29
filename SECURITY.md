@@ -19,7 +19,7 @@ filter, decides what the agent can reach on their behalf. Anything that breaks
 that is in scope:
 
 - Acting on the workspace as a UID, GID, or supplementary group the requester does not hold.
-- Reading or writing `/workspace/.blueclaw`, another person's private directory, or a circle directory the requester has no access to.
+- Reading or writing `/workspace/.blueclaw`, another person's private directory, or a protected directory the requester's groups do not reach.
 - Escaping the requester identity through `blueclaw-posix-helper`, the terminal, or any tool that routes through it.
 - Performing an approval-gated action without the approval, or replaying an approval outside its task.
 - Leaking platform credentials, provider keys, or memory contents across people, conversations, or tenants.

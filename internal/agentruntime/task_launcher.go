@@ -803,7 +803,6 @@ func bluecollarMemoryFacts(facts []memory.MemoryFact) []agentcontract.MemoryFact
 func workspaceGuidance(workspaceRootPath string) []string {
 	return []string{
 		"Do all document work — build, edit, and deliver — directly in ~/documents/; save finished documents (Word, PDF, Excel, slides) as ~/documents/<name>.<ext> so a later edit or delete task finds them with ls ~/documents.",
-		"Circle-shared files live under " + filepath.Join(workspaceRootPath, "circles") + "/<circleID> when the requester belongs to that circle.",
 		filepath.Join(workspaceRootPath, ".blueclaw") + " is service-owned runtime state and is normally not writable from terminal tools.",
 	}
 }

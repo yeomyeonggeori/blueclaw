@@ -165,7 +165,6 @@ func POSIXStateForPolicy(policyDocument policy.PolicyDocument, workspaceRootPath
 			{Path: workspaceRootPath + "/private/people", Owner: blueclawServiceUserName, Group: blueclawServiceUserName, ModeText: "0711"},
 			{Path: workspaceRootPath + "/private/protected", Owner: blueclawServiceUserName, Group: blueclawServiceUserName, ModeText: "0711"},
 			{Path: SharedDirectoryPath(workspaceRootPath), Owner: blueclawServiceUserName, Group: posixSharedGroupName, ModeText: "2755"},
-			{Path: workspaceRootPath + "/shared/public", Owner: blueclawServiceUserName, Group: posixSharedGroupName, ModeText: "2775"},
 			{Path: workspaceRootPath + "/shared/cache", Owner: blueclawServiceUserName, Group: posixSharedGroupName, ModeText: "2775"},
 			{Path: workspaceRootPath + "/shared/cache/dependencies", Owner: blueclawServiceUserName, Group: posixSharedGroupName, ModeText: "2775"},
 			{Path: workspaceRootPath + "/shared/cache/dependencies/bun", Owner: blueclawServiceUserName, Group: posixSharedGroupName, ModeText: "2775"},
@@ -188,7 +187,7 @@ func POSIXStateForPolicy(policyDocument policy.PolicyDocument, workspaceRootPath
 			Path:     circleWorkspacePath,
 			Owner:    blueclawServiceUserName,
 			Group:    groupName,
-			ModeText: "2770",
+			ModeText: "2750",
 		})
 		state.Directories = appendProtectedDirectory(state.Directories, ProtectedDirectoryPath(circleWorkspacePath), groupName)
 	}
