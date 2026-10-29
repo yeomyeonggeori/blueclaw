@@ -134,7 +134,7 @@ func TestScheduleToolListUsesOnlySignedPrincipalAndExactProjection(t *testing.T)
 	if responseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected ok response, got %d: %s", responseRecorder.Code, responseRecorder.Body.String())
 	}
-	if repository.request.CreatorPersonID != "person-signed" || !repository.request.IncludeExpired || repository.request.PageSize != 20 {
+	if repository.request.CreatorPersonID != "person-signed" || !repository.request.IncludeExpired || repository.request.PageSize != 200 {
 		t.Fatalf("repository query escaped signed principal: %+v", repository.request)
 	}
 	var output task.ScheduleListOutput
@@ -143,6 +143,20 @@ func TestScheduleToolListUsesOnlySignedPrincipalAndExactProjection(t *testing.T)
 	}
 	if len(output.Schedules) != 1 || output.Schedules[0].ScheduleID != "failed-schedule" || output.Schedules[0].TaskInstruction != fullInstruction {
 		t.Fatalf("unexpected tool projection: %+v", output)
+	}
+}
+
+func TestScheduleToolListRefusesACursorItNeverGave(t *testing.T) {
+	handler := ScheduleHandler{
+		ListRepository: &scheduleListRepositoryStub{},
+		ReaderPersonID: func(*http.Request) string { return "person-signed" },
+	}
+	responseRecorder := httptest.NewRecorder()
+
+	handler.HandleToolList(responseRecorder, httptest.NewRequest(http.MethodPost, "/admin/api/schedule/tool-list", strings.NewReader(`{"cursor":"invented"}`)))
+
+	if responseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("an invented cursor status = %d, want %d: %s", responseRecorder.Code, http.StatusBadRequest, responseRecorder.Body.String())
 	}
 }
 
