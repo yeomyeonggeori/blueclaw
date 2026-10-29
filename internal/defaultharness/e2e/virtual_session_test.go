@@ -1462,7 +1462,7 @@ func TestAttachedFileReachesTheAgentWithThePathItWasWrittenTo(t *testing.T) {
 				IsAvailable:   true,
 			}},
 			ActionResponses: []string{
-				actionCallTool("read", `{"path":"/workspace/circles/member/inbox/virtual/virtual-conversation-1/판매실적.csv"}`),
+				actionCallTool("read", `{"path":"/workspace/private/people/person-1/inbox/virtual/virtual-conversation-1/판매실적.csv"}`),
 				actionFinishMessage("요약했습니다.", "obs-001"),
 			},
 		}},
