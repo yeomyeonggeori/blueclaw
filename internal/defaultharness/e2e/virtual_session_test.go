@@ -1481,7 +1481,7 @@ func TestAttachedFileReachesTheAgentWithThePathItWasWrittenTo(t *testing.T) {
 		t.Fatalf("expected the agent's user message to name the attached file and its path; context: %s", modelContext)
 	}
 	attachedPath, _, _ := strings.Cut(modelContext[pathStart+len(attachedFile):], "\n")
-	hostPath := filepath.Join(result.ArtifactDirectoryPath, "workspace", strings.TrimPrefix(attachedPath, "/workspace/"))
+	hostPath := filepath.Join(result.ArtifactDirectoryPath, "workspace", "private", "people", "person-1", strings.TrimPrefix(attachedPath, "~/"))
 	written, errorValue := os.ReadFile(hostPath)
 	if errorValue != nil {
 		t.Fatalf("expected the attached file at %s: %v", attachedPath, errorValue)
