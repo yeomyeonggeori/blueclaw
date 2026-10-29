@@ -2135,7 +2135,7 @@ func (service *virtualCapabilityService) scheduleResponse(toolName string, reque
 		service.schedules = append(service.schedules, record)
 		return virtualCapabilityChangeSuccess(toolName, "schedule", "created", []string{record.ID}, record.Values)
 	case "schedule_list":
-		return virtualCapabilitySuccess(toolName, map[string]any{"schedules": virtualScheduleListValues(service.schedules)})
+		return virtualCapabilitySuccess(toolName, map[string]any{"schedules": virtualScheduleListValues(service.schedules), "totalCount": len(service.schedules)})
 	case "schedule_update":
 		index := virtualCapabilityRecordIndexByHint(service.schedules, input, "scheduleHint", "description")
 		if index < 0 {

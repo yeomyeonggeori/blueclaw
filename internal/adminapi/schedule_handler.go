@@ -2,6 +2,7 @@ package adminapi
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -75,6 +76,7 @@ type scheduleUpdateRequest struct {
 type scheduleToolListRequest struct {
 	Status string `json:"status"`
 	Limit  int    `json:"limit"`
+	Cursor string `json:"cursor"`
 }
 
 func (scheduleHandler ScheduleHandler) HandleSummary(responseWriter http.ResponseWriter, request *http.Request) {
@@ -132,15 +134,35 @@ func (scheduleHandler ScheduleHandler) HandleToolList(responseWriter http.Respon
 		return
 	}
 	referenceTime := time.Now().UTC()
-	result, errorValue := scheduleHandler.ListRepository.ListSchedules(task.ScheduleListQuery(creatorPersonID, referenceTime))
+	schedules, errorValue := scheduleHandler.everyScheduleCreatedBy(creatorPersonID, referenceTime)
 	if errorValue != nil {
 		http.Error(responseWriter, errorValue.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(responseWriter, http.StatusOK, task.ProjectScheduleList(result.Schedules, task.ScheduleListInput{
+	output, errorValue := task.ProjectScheduleList(schedules, task.ScheduleListInput{
 		Status: input.Status,
 		Limit:  input.Limit,
-	}, referenceTime))
+		Cursor: input.Cursor,
+	}, referenceTime)
+	if errors.Is(errorValue, task.ErrScheduleListCursor) {
+		http.Error(responseWriter, errorValue.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(responseWriter, http.StatusOK, output)
+}
+
+func (scheduleHandler ScheduleHandler) everyScheduleCreatedBy(creatorPersonID string, referenceTime time.Time) ([]task.Schedule, error) {
+	schedules := []task.Schedule{}
+	for page := 1; ; page++ {
+		result, errorValue := scheduleHandler.ListRepository.ListSchedules(task.ScheduleListQuery(creatorPersonID, referenceTime, page))
+		if errorValue != nil {
+			return nil, errorValue
+		}
+		schedules = append(schedules, result.Schedules...)
+		if len(result.Schedules) == 0 || page*result.PageSize >= result.TotalCount {
+			return schedules, nil
+		}
+	}
 }
 
 func (scheduleHandler ScheduleHandler) HandleCancel(responseWriter http.ResponseWriter, request *http.Request) {

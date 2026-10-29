@@ -1,20 +1,33 @@
 package task
 
 import (
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
 
-const scheduleListPageSize = 20
+const (
+	scheduleListReadPageSize = 200
+	scheduleListDefaultLimit = 50
+	scheduleListMaximumLimit = 100
+)
+
+var ErrScheduleListCursor = errors.New("cursor is not one a previous schedule_list result gave")
 
 type ScheduleListInput struct {
 	Status string `json:"status"`
 	Limit  int    `json:"limit"`
+	Cursor string `json:"cursor"`
 }
 
 type ScheduleListOutput struct {
-	Schedules []ScheduleListItem `json:"schedules"`
+	Schedules  []ScheduleListItem `json:"schedules"`
+	TotalCount int                `json:"totalCount"`
+	NextCursor string             `json:"nextCursor,omitempty"`
 }
 
 type ScheduleListItem struct {
@@ -29,41 +42,103 @@ type ScheduleListItem struct {
 	LastRunAt       *time.Time `json:"lastRunAt,omitempty"`
 }
 
-func ScheduleListQuery(creatorPersonID string, referenceTime time.Time) ScheduleListRequest {
+type scheduleListPosition struct {
+	CreatedAt  time.Time `json:"createdAt"`
+	ScheduleID string    `json:"scheduleID"`
+}
+
+func ScheduleListQuery(creatorPersonID string, referenceTime time.Time, page int) ScheduleListRequest {
 	return ScheduleListRequest{
 		CreatorPersonID: strings.TrimSpace(creatorPersonID),
 		IncludeExpired:  true,
-		Page:            1,
-		PageSize:        scheduleListPageSize,
+		Page:            page,
+		PageSize:        scheduleListReadPageSize,
 		ReferenceTime:   referenceTime,
 	}
 }
 
-func ProjectScheduleList(schedules []Schedule, input ScheduleListInput, referenceTime time.Time) ScheduleListOutput {
+func ProjectScheduleList(schedules []Schedule, input ScheduleListInput, referenceTime time.Time) (ScheduleListOutput, error) {
+	after, errorValue := decodedScheduleListPosition(input.Cursor)
+	if errorValue != nil {
+		return ScheduleListOutput{}, errorValue
+	}
+	matching := schedulesWithStatus(schedules, strings.TrimSpace(input.Status), referenceTime)
+	sortSchedulesNewestFirst(matching)
+	remaining := schedulesAfter(matching, after)
 	limit := normalizedScheduleListLimit(input.Limit)
-	status := strings.TrimSpace(input.Status)
-	items := []ScheduleListItem{}
+	page := remaining[:min(limit, len(remaining))]
+	output := ScheduleListOutput{Schedules: []ScheduleListItem{}, TotalCount: len(matching)}
+	for _, schedule := range page {
+		output.Schedules = append(output.Schedules, scheduleListItemFromSchedule(schedule, referenceTime))
+	}
+	if len(remaining) > len(page) {
+		output.NextCursor = encodedScheduleListPosition(page[len(page)-1])
+	}
+	return output, nil
+}
+
+func schedulesWithStatus(schedules []Schedule, status string, referenceTime time.Time) []Schedule {
+	matching := []Schedule{}
 	for _, schedule := range schedules {
-		item := scheduleListItemFromSchedule(schedule, referenceTime)
-		if status != "" && item.Status != status {
+		if status != "" && scheduleStatus(schedule, referenceTime) != status {
 			continue
 		}
-		items = append(items, item)
-		if len(items) == limit {
-			break
+		matching = append(matching, schedule)
+	}
+	return matching
+}
+
+func sortSchedulesNewestFirst(schedules []Schedule) {
+	sort.SliceStable(schedules, func(left, right int) bool {
+		return isScheduleListedBefore(schedules[left], scheduleListPosition{CreatedAt: schedules[right].CreatedAt, ScheduleID: schedules[right].ScheduleID})
+	})
+}
+
+func isScheduleListedBefore(schedule Schedule, position scheduleListPosition) bool {
+	if !schedule.CreatedAt.Equal(position.CreatedAt) {
+		return schedule.CreatedAt.After(position.CreatedAt)
+	}
+	return schedule.ScheduleID < position.ScheduleID
+}
+
+func schedulesAfter(schedules []Schedule, after *scheduleListPosition) []Schedule {
+	if after == nil {
+		return schedules
+	}
+	for index, schedule := range schedules {
+		if !isScheduleListedBefore(schedule, *after) && schedule.ScheduleID != after.ScheduleID {
+			return schedules[index:]
 		}
 	}
-	return ScheduleListOutput{Schedules: items}
+	return []Schedule{}
+}
+
+func encodedScheduleListPosition(schedule Schedule) string {
+	encoded, _ := json.Marshal(scheduleListPosition{CreatedAt: schedule.CreatedAt.UTC(), ScheduleID: schedule.ScheduleID})
+	return base64.RawURLEncoding.EncodeToString(encoded)
+}
+
+func decodedScheduleListPosition(cursor string) (*scheduleListPosition, error) {
+	trimmedCursor := strings.TrimSpace(cursor)
+	if trimmedCursor == "" {
+		return nil, nil
+	}
+	decoded, errorValue := base64.RawURLEncoding.DecodeString(trimmedCursor)
+	if errorValue != nil {
+		return nil, ErrScheduleListCursor
+	}
+	var position scheduleListPosition
+	if errorValue := json.Unmarshal(decoded, &position); errorValue != nil || position.ScheduleID == "" || position.CreatedAt.IsZero() {
+		return nil, ErrScheduleListCursor
+	}
+	return &position, nil
 }
 
 func normalizedScheduleListLimit(limit int) int {
 	if limit <= 0 {
-		return 10
+		return scheduleListDefaultLimit
 	}
-	if limit > scheduleListPageSize {
-		return scheduleListPageSize
-	}
-	return limit
+	return min(limit, scheduleListMaximumLimit)
 }
 
 func scheduleListItemFromSchedule(schedule Schedule, referenceTime time.Time) ScheduleListItem {
