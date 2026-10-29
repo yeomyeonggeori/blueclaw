@@ -1226,6 +1226,21 @@ func virtualCanonicalCapabilityToolDescriptor(toolName string) (agentruntime.Cap
 	return descriptor, isFound
 }
 
+func virtualCatalogResultDeclares(toolName string, field string) bool {
+	descriptor, isFound := virtualCanonicalCapabilityToolDescriptor(toolName)
+	if !isFound || descriptor.ResultContract == nil {
+		return false
+	}
+	var schema struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	if json.Unmarshal(descriptor.ResultContract.Schema, &schema) != nil {
+		return false
+	}
+	_, isDeclared := schema.Properties[field]
+	return isDeclared
+}
+
 func virtualGeneratedToolDescriptor(toolName string) (agentruntime.CapabilityToolDescriptor, bool) {
 	if !slices.Contains(virtualGeneratedDescriptorToolNames, toolName) {
 		return agentruntime.CapabilityToolDescriptor{}, false
@@ -1957,9 +1972,13 @@ func (service *virtualCapabilityService) taskResponse(toolName string, requestBo
 		return virtualCapabilityChangeSuccess(toolName, "task", "created", []string{record.ID}, record.Values)
 	case "task_list":
 		tasks := virtualCapabilityRecordValues(service.tasks)
-		return virtualCapabilitySuccess(toolName, map[string]any{
-			"tasks": tasks, "count": len(tasks), "totalCount": len(tasks), "unfinishedCount": virtualUnfinishedTaskCount(tasks), "scope": "virtual", "registeredLabels": service.taskVocabulary.registeredLabels(),
-		})
+		result := map[string]any{
+			"tasks": tasks, "count": len(tasks), "unfinishedCount": virtualUnfinishedTaskCount(tasks), "scope": "virtual", "registeredLabels": service.taskVocabulary.registeredLabels(),
+		}
+		if virtualCatalogResultDeclares(toolName, "totalCount") {
+			result["totalCount"] = len(tasks)
+		}
+		return virtualCapabilitySuccess(toolName, result)
 	case "task_update":
 		if len(input) < 2 {
 			return virtualCapabilityInvalidInput(toolName, "at least one task field must be updated")
