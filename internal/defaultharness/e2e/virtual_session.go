@@ -1958,7 +1958,7 @@ func (service *virtualCapabilityService) taskResponse(toolName string, requestBo
 	case "task_list":
 		tasks := virtualCapabilityRecordValues(service.tasks)
 		return virtualCapabilitySuccess(toolName, map[string]any{
-			"tasks": tasks, "count": len(tasks), "unfinishedCount": virtualUnfinishedTaskCount(tasks), "scope": "virtual", "registeredLabels": service.taskVocabulary.registeredLabels(),
+			"tasks": tasks, "count": len(tasks), "totalCount": len(tasks), "unfinishedCount": virtualUnfinishedTaskCount(tasks), "scope": "virtual", "registeredLabels": service.taskVocabulary.registeredLabels(),
 		})
 	case "task_update":
 		if len(input) < 2 {
