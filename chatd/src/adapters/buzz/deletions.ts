@@ -1,6 +1,7 @@
 import { firstTagValue, type BuzzEvent } from "./types.ts";
 
 export const DELETE_MESSAGE_KIND = 9005;
+export const EVENT_DELETION_KIND = 5;
 export const REACTION_KIND = 7;
 
 export type QueryingRelay = { query: (filter: object) => Promise<BuzzEvent[]> };

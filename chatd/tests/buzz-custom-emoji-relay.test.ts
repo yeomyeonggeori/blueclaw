@@ -4,7 +4,7 @@ import { finalizeEvent, generateSecretKey } from "nostr-tools/pure";
 import { bytesToHex } from "nostr-tools/utils";
 import { closeEveryPooledRelay } from "../src/adapters/buzz/relay-pool.ts";
 import { unionOfEmojiSets } from "../src/adapters/buzz/user-emoji.ts";
-import { DELETE_MESSAGE_KIND } from "../src/adapters/buzz/deletions.ts";
+import { EVENT_DELETION_KIND } from "../src/adapters/buzz/deletions.ts";
 import { createBuzzPersonalGateway } from "../src/personal/buzz.ts";
 import type { BuzzEvent } from "../src/adapters/buzz/types.ts";
 
@@ -125,6 +125,6 @@ describe("a community's custom emoji on Buzz", () => {
 		expect(reaction?.tags).toContainEqual(["emoji", "shake", pictureURL]);
 
 		await gateway.removeReaction(actor, "channel-1", messageID, "shake");
-		expect(kept.some((event) => event.kind === DELETE_MESSAGE_KIND && event.tags.some((tag) => tag[0] === "e" && tag[1] === reaction?.id))).toBe(true);
+		expect(kept.some((event) => event.kind === EVENT_DELETION_KIND && event.tags.some((tag) => tag[0] === "e" && tag[1] === reaction?.id))).toBe(true);
 	});
 });
