@@ -2076,7 +2076,7 @@ func (service *virtualCapabilityService) calendarResponse(toolName string, reque
 		if errorValue != nil {
 			return virtualCapabilityInvalidInput(toolName, errorValue.Error())
 		}
-		return virtualCapabilitySuccess(toolName, map[string]any{"events": events})
+		return virtualCapabilitySuccess(toolName, map[string]any{"events": events, "totalCount": len(events)})
 	case "event_update":
 		if len(input) < 2 {
 			return virtualCapabilityInvalidInput(toolName, "at least one calendar event field must be updated")
