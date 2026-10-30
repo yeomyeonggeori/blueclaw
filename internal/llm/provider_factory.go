@@ -80,7 +80,7 @@ func endpointProvider(endpointConfiguration config.ModelEndpointConfiguration) (
 	if errorValue != nil {
 		return nil, errorValue
 	}
-	return openaicompatible.Endpoint{
+	provider, errorValue := openaicompatible.Endpoint{
 		URL:             endpointConfiguration.Endpoint,
 		ModelName:       endpointConfiguration.Model,
 		APIKey:          apiKey,
@@ -88,6 +88,13 @@ func endpointProvider(endpointConfiguration config.ModelEndpointConfiguration) (
 		ProviderSort:    endpointConfiguration.ProviderSort,
 		ReasoningEffort: endpointConfiguration.ReasoningEffort,
 	}.Provider()
+	if errorValue != nil {
+		return nil, errorValue
+	}
+	if apiKeyPath := keyFilePath(endpointConfiguration); apiKeyPath != "" {
+		provider.UseHTTPClient(keyFileClient(apiKeyPath))
+	}
+	return provider, nil
 }
 
 func capabilityTierProviderFactory(runtimeConfiguration config.RuntimeConfiguration) TierProviderFactory {
@@ -191,6 +198,9 @@ func NewConfiguredEmbeddingProvider(runtimeConfiguration config.RuntimeConfigura
 	if errorValue != nil {
 		return nil, errorValue
 	}
+	if apiKeyPath := keyFilePath(embeddingConfiguration); apiKeyPath != "" {
+		provider.UseHTTPClient(keyFileClient(apiKeyPath))
+	}
 	return fixedWidthEmbedder{provider: provider, dimensions: dimensions}, nil
 }
 
@@ -243,6 +253,9 @@ func endpointDecisionModel(decisionConfiguration config.ModelEndpointConfigurati
 	apiKey, errorValue := endpointAPIKey(decisionConfiguration)
 	if errorValue != nil {
 		return nil, errorValue
+	}
+	if apiKeyPath := keyFilePath(decisionConfiguration); apiKeyPath != "" {
+		return keyFileDecisionModel{endpointURL: decisionConfiguration.Endpoint, modelName: modelName, apiKeyPath: apiKeyPath}, nil
 	}
 	return decisions.Endpoint{URL: decisionConfiguration.Endpoint, ModelName: modelName, APIKey: apiKey}.DecisionModel(), nil
 }

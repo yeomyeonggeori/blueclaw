@@ -115,6 +115,72 @@ func TestTierProviderFactoryRefusesAKeyFileItCannotRead(t *testing.T) {
 	}
 }
 
+func TestAnEndpointAsksWithWhateverKeyItsFileHoldsWhenTheRequestIsSent(t *testing.T) {
+	authorizations := []string{}
+	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		authorizations = append(authorizations, request.Header.Get("Authorization"))
+		writeCompletion(responseWriter, schemaAnswer(`{"question":"done"}`), "tool_calls")
+	}))
+	defer server.Close()
+	apiKeyPath := filepath.Join(t.TempDir(), "host-session")
+	writeKeyFile(t, apiKeyPath, "first-session")
+	provider, errorValue := endpointProvider(config.ModelEndpointConfiguration{Endpoint: server.URL + "/v1", Model: "example/model", APIKeyPath: apiKeyPath})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	askOnce(t, provider)
+	writeKeyFile(t, apiKeyPath, "renewed-session")
+	askOnce(t, provider)
+	if strings.Join(authorizations, ", ") != "Bearer first-session, Bearer renewed-session" {
+		t.Fatalf("a key file renewed after the provider was built must be the key the next request carries; got %v", authorizations)
+	}
+}
+
+func TestADecisionEndpointAsksWithWhateverKeyItsFileHoldsWhenTheRequestIsSent(t *testing.T) {
+	authorizations := []string{}
+	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		authorizations = append(authorizations, request.Header.Get("Authorization"))
+		_, _ = responseWriter.Write([]byte(`{"answers":{"route":{"choice":"start_task","probabilities":{"start_task":0.9,"answer_question":0.1}}}}`))
+	}))
+	defer server.Close()
+	apiKeyPath := filepath.Join(t.TempDir(), "host-session")
+	writeKeyFile(t, apiKeyPath, "first-session")
+	decisionModel, errorValue := NewConfiguredDecisionModel(config.RuntimeConfiguration{LanguageModel: config.LanguageModelConfiguration{
+		Decision: config.ModelEndpointConfiguration{Endpoint: server.URL + "/api/alpha/decisions", Model: "kev-latest", APIKeyPath: apiKeyPath},
+	}})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	request := model.DecisionRequest{
+		State:     "a message",
+		Questions: map[string]model.DecisionQuestion{"route": model.ChoiceQuestion{Instructions: "What now?", OptionDescriptions: map[string]string{"start_task": "work", "answer_question": "words"}}.Question()},
+	}
+	if _, errorValue := decisionModel.Decide(context.Background(), request); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	writeKeyFile(t, apiKeyPath, "renewed-session")
+	if _, errorValue := decisionModel.Decide(context.Background(), request); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if strings.Join(authorizations, ", ") != "Bearer first-session, Bearer renewed-session" {
+		t.Fatalf("a key file renewed after the decision model was built must be the key the next decision carries; got %v", authorizations)
+	}
+}
+
+func writeKeyFile(t *testing.T, path string, key string) {
+	t.Helper()
+	if errorValue := os.WriteFile(path, []byte(key+"\n"), 0o600); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+}
+
+func askOnce(t *testing.T, provider LanguageModelProvider) {
+	t.Helper()
+	if _, errorValue := provider.GenerateResponse(context.Background(), "hello"); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+}
+
 func capabilityLadderConfiguration(modelName string) config.RuntimeConfiguration {
 	return config.RuntimeConfiguration{LanguageModel: config.LanguageModelConfiguration{
 		Capability: config.LanguageModelCapabilityConfiguration{
