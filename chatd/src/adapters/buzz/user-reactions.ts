@@ -1,7 +1,7 @@
 import { getPublicKey } from "nostr-tools/pure";
 import { hexToBytes } from "nostr-tools/utils";
 import {
-	DELETE_MESSAGE_KIND,
+	EVENT_DELETION_KIND,
 	REACTION_KIND,
 	takenBackReactionIDs,
 	targetKindTag,
@@ -50,7 +50,7 @@ export async function removeReactionAsUser(request: {
 			request.emoji,
 		);
 		if (!own) return;
-		await relay.publish(DELETE_MESSAGE_KIND, "", [
+		await relay.publish(EVENT_DELETION_KIND, "", [
 			["h", firstTagValue(own, "h") ?? request.channelID],
 			["e", own.id],
 			targetKindTag(REACTION_KIND),

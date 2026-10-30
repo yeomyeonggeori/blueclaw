@@ -170,7 +170,7 @@ describe("a person taking a reaction back on buzz", () => {
 
 		await gatewayOverTheRelay().removeReaction(actor, CHANNEL, STRANGER_MESSAGE, "👀");
 
-		expect(publishedAsThePerson.map((event) => event.kind)).toEqual([9005]);
+		expect(publishedAsThePerson.map((event) => event.kind)).toEqual([5]);
 		expect(publishedAsThePerson[0]?.tags).toContainEqual(["e", OWN_REACTION]);
 		expect(publishedAsThePerson[0]?.tags).not.toContainEqual(["e", STRANGER_REACTION]);
 	});
