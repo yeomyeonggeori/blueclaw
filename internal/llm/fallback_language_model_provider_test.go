@@ -3,11 +3,15 @@ package llm
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/yeomyeonggeori/blueclaw/internal/capability"
 )
 
 type correctableStructuredOutputError struct {
@@ -520,5 +524,41 @@ func TestFallbackLanguageModelProviderStopsWhenCallerBudgetExpired(t *testing.T)
 	_, errorValue := provider.GenerateChatCompletion(expiredContext, ChatCompletionRequest{})
 	if errorValue == nil || fallbackCalls != 0 {
 		t.Fatalf("expected expired caller budget to stop without fallback, got error=%v fallbackCalls=%d", errorValue, fallbackCalls)
+	}
+}
+
+func TestAChatCapabilitydAnswersAsAProviderFailureFallsBackToTheNextModel(t *testing.T) {
+	requestedModels := []string{}
+	httpClient := fakeCapabilityHTTPClient{handler: func(request *http.Request) (*http.Response, error) {
+		var document struct {
+			Model string `json:"model"`
+		}
+		if errorValue := json.NewDecoder(request.Body).Decode(&document); errorValue != nil {
+			t.Fatalf("expected a chat request document: %v", errorValue)
+		}
+		requestedModels = append(requestedModels, document.Model)
+		if document.Model == "primary-model" {
+			return jsonCapabilityResponse(http.StatusBadGateway, "openrouter provider Wafer ended the primary-model completion with finish_reason=error"), nil
+		}
+		return jsonCapabilityResponse(http.StatusOK, `{"finishReason":"stop","provider":"capabilityLLM","model":"degraded-model","message":{"role":"assistant","content":"degraded answer"}}`), nil
+	}}
+	capabilityClient := capability.Client{Endpoint: "http://internkim-capability", HTTPClient: httpClient}
+	provider := FallbackLanguageModelProvider{
+		PrimaryProvider:  CapabilityLLMClient{CapabilityClient: capabilityClient, ModelName: "primary-model", ExecutionMode: "remote"},
+		FallbackProvider: CapabilityLLMClient{CapabilityClient: capabilityClient, ModelName: "degraded-model", ExecutionMode: "remote"},
+	}
+
+	response, errorValue := provider.GenerateChatCompletion(context.Background(), ChatCompletionRequest{
+		Messages: []ChatCompletionMessage{{Role: "user", Content: "check"}},
+	})
+
+	if errorValue != nil || response.Message.Content != "degraded answer" || !response.UsedFallback {
+		t.Fatalf("expected the degraded model to answer after the provider failed, got %+v %v", response, errorValue)
+	}
+	if len(requestedModels) != 2 || requestedModels[0] != "primary-model" || requestedModels[1] != "degraded-model" {
+		t.Fatalf("expected one primary ask and one degraded ask, got %v", requestedModels)
+	}
+	if !strings.Contains(response.FallbackReason, "Wafer") {
+		t.Fatalf("expected the provider's failure carried as the fallback reason, got %q", response.FallbackReason)
 	}
 }
