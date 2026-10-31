@@ -14,6 +14,7 @@ func newTaskLauncher(runtimeConfiguration config.RuntimeConfiguration, foundatio
 	taskLauncher.UseRequesterEmailResolver(directory.identityService)
 	taskLauncher.UseAgentIdentityProvider(kernel.agentIdentityProvider)
 	taskLauncher.UseCompanyProvider(directory.companyProvider)
+	taskLauncher.UseCompanyLocaleProvider(directory.companyLocaleProvider)
 	toolCatalogBuilder.UseCompanyProvider(directory.companyProvider)
 	taskLauncher.UseApprovalGate(kernel.toolCatalog.approvalGate)
 	kernel.toolCatalog.approvalGate.UseApprovedCallScheduler(approvedCallScheduler{repository: services.repositories.schedule, companyProvider: directory.companyProvider})

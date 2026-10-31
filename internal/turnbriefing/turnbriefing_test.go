@@ -30,7 +30,7 @@ func TestAnAgentIsToldWhoItIsAndWhoIsAsking(t *testing.T) {
 		"@internkim",
 		"여명거리",
 		"Ada",
-		"ko",
+		"Write every reply and question to them in Korean.",
 		"Ada는 금요일 오후에 회의를 잡지 않는다",
 	} {
 		if !strings.Contains(preamble, expectedFragment) {
