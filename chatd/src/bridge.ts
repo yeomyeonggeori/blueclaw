@@ -132,6 +132,7 @@ async function forwardNormalizedEvent(
     context: {
       ...context,
       inputAttachments: inputAttachmentsOfMessage(platform, message) ?? [],
+      requesterTimeZone: adapter.timeZoneOf?.(message.raw),
       addressing: {
         botMentioned: addressing.botMentioned || message.isMention === true,
         otherPersonMentioned: addressing.otherPersonMentioned,

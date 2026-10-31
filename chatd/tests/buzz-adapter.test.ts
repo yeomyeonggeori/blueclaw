@@ -188,6 +188,17 @@ describe("buzz addressing", () => {
 		expect(adapter.addressingOf(createEvent())).toEqual({ botMentioned: false, otherPersonMentioned: false });
 	});
 });
+
+describe("buzz time zone", () => {
+	test("is the zone the sender's device signed into the message", () => {
+		const adapter = createAdapter();
+		expect(adapter.timeZoneOf(createEvent({ tags: [["h", CHANNEL_UUID], ["tz", "America/Los_Angeles"]] }))).toBe("America/Los_Angeles");
+	});
+
+	test("is unknown for a message that names none", () => {
+		expect(createAdapter().timeZoneOf(createEvent())).toBeUndefined();
+	});
+});
 const OTHER_CHANNEL_UUID = "3b7e1a90-5c2d-4e8f-9a1b-6c5d4e3f2a1b";
 
 type RelayInjectable = {

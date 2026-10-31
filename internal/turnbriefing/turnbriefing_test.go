@@ -1,10 +1,12 @@
 package turnbriefing
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
@@ -85,5 +87,22 @@ func TestAnAgentIsToldWhatDayItIs(t *testing.T) {
 		if !strings.Contains(preamble, expectedFragment) {
 			t.Fatalf("an agent that is not told the date reads the newest message in the conversation as today, expected %q in:\n%s", expectedFragment, preamble)
 		}
+	}
+}
+
+func TestARequesterAbroadIsBriefedOnTheirOwnClock(t *testing.T) {
+	var event connectors.PlatformInboundEvent
+	if errorValue := json.Unmarshal([]byte(`{"context":{"messages":null,"hasMoreBefore":false,"historyCursor":"","requesterTimeZone":"America/Los_Angeles"}}`), &event); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	request := briefedRequest()
+	request.Company.TimeZone = "Asia/Seoul"
+	request.EnvironmentNow = time.Date(2026, time.October, 30, 1, 0, 0, 0, time.UTC)
+	request.VisibleContext = event.Context.ToAgentVisibleContext()
+
+	preamble := Preamble(request, "")
+
+	if !strings.Contains(preamble, "writing from America/Los_Angeles, where it is 2026-10-29 (Thu) 18:00 -07:00") {
+		t.Fatalf("the zone chatd read off the request reaches the clock the agent is briefed on:\n%s", preamble)
 	}
 }
