@@ -161,6 +161,7 @@ type VisibleContext struct {
 	HasMoreBefore              bool                    `json:"hasMoreBefore"`
 	HistoryCursor              string                  `json:"historyCursor"`
 	ResponseLanguage           string                  `json:"responseLanguage,omitempty"`
+	RequesterTimeZone          string                  `json:"requesterTimeZone,omitempty"`
 	Sender                     VisibleContextSender    `json:"sender,omitempty"`
 	ConversationType           string                  `json:"conversationType,omitempty"`
 	ChannelID                  string                  `json:"channelID,omitempty"`
@@ -257,6 +258,7 @@ func (visibleContext VisibleContext) ToAgentVisibleContext() agentcontract.Visib
 		HasMoreBefore:              visibleContext.HasMoreBefore,
 		HistoryCursor:              visibleContext.HistoryCursor,
 		ResponseLanguage:           visibleContext.ResponseLanguage,
+		RequesterTimeZone:          visibleContext.RequesterTimeZone,
 	}
 }
 

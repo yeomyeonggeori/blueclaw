@@ -38,6 +38,7 @@ export type PersonRequest = {
 	counterpartExternalIDs: string[];
 	attachments: AttachmentAlreadyKept[];
 	mentions?: PersonalMentions;
+	timeZone?: string;
 };
 
 export function parseNewChannel(value: unknown): NewPersonalChannel {
@@ -94,7 +95,18 @@ export function parsePersonRequest(value: unknown): PersonRequest {
 		counterpartExternalIDs: parseCounterparts(record),
 		attachments: parseAttachments(record),
 		mentions: parseMentions(record),
+		timeZone: parseTimeZone(record),
 	};
+}
+
+function parseTimeZone(record: Record<string, unknown>): string | undefined {
+	const timeZone = optionalText(record, "timeZone");
+	if (timeZone === undefined) return undefined;
+	try {
+		return new Intl.DateTimeFormat("en", { timeZone }).resolvedOptions().timeZone;
+	} catch {
+		throw new MalformedRequest(`timeZone ${JSON.stringify(timeZone)} is not an IANA time zone`);
+	}
 }
 
 function parseHeldIDs(record: Record<string, unknown>): string[] {

@@ -199,6 +199,9 @@
         "messagesOpenOtherExchanges": {
           "type": "boolean"
         },
+        "requesterTimeZone": {
+          "type": "string"
+        },
         "responseLanguage": {
           "type": "string"
         },
