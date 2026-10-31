@@ -240,7 +240,12 @@ func capabilityCatalogEntry(t *testing.T, toolName string) map[string]any {
 	return nil
 }
 
-func readCompanyProfiles(t *testing.T, profilePath string) map[string]map[string]any {
+type officeExampleCompany struct {
+	Language string
+	Profiles map[string]map[string]any
+}
+
+func readOfficeExampleCompany(t *testing.T, profilePath string, language string) officeExampleCompany {
 	t.Helper()
 	content, errorValue := os.ReadFile(profilePath)
 	if errorValue != nil {
@@ -250,19 +255,27 @@ func readCompanyProfiles(t *testing.T, profilePath string) map[string]map[string
 	if errorValue := json.Unmarshal(content, &profiles); errorValue != nil {
 		t.Fatalf("%s is not a profile per document language: %v", profilePath, errorValue)
 	}
-	return profiles
+	if _, isKnown := profiles[language]; !isKnown {
+		t.Fatalf("%s holds no profile in the company's own language %q", profilePath, language)
+	}
+	return officeExampleCompany{Language: language, Profiles: profiles}
 }
 
-func companyProfileAsked(profiles map[string]map[string]any, arguments any) map[string]any {
+func companyProfileAsked(company officeExampleCompany, arguments any) map[string]any {
 	encoded, _ := json.Marshal(arguments)
 	var asked struct {
 		Language string `json:"language"`
 	}
 	_ = json.Unmarshal(encoded, &asked)
-	if profile, isKnown := profiles[strings.ToLower(strings.TrimSpace(asked.Language))]; isKnown {
-		return profile
+	language := strings.ToLower(strings.TrimSpace(asked.Language))
+	if _, isKnown := company.Profiles[language]; !isKnown {
+		language = company.Language
 	}
-	return profiles["ko"]
+	profile := map[string]any{"language": language}
+	for key, value := range company.Profiles[language] {
+		profile[key] = value
+	}
+	return profile
 }
 
 func companyInfoAnswer(profile map[string]any, keepsAnsweredFiles bool) (*sdkmcp.CallToolResult, error) {
@@ -290,9 +303,8 @@ func companyInfoAnswer(profile map[string]any, keepsAnsweredFiles bool) (*sdkmcp
 	return &sdkmcp.CallToolResult{Content: content, StructuredContent: json.RawMessage(encodedBody)}, nil
 }
 
-func startCompanyRecordCatalog(t *testing.T, profilePath string) string {
+func startCompanyRecordCatalog(t *testing.T, company officeExampleCompany) string {
 	t.Helper()
-	profiles := readCompanyProfiles(t, profilePath)
 	descriptor := capabilityCatalogEntry(t, officeExampleCompanyInfoTool)
 	description, _ := descriptor["description"].(string)
 	server := sdkmcp.NewServer(&sdkmcp.Implementation{Name: "internkim", Version: "1"}, nil)
@@ -302,7 +314,7 @@ func startCompanyRecordCatalog(t *testing.T, profilePath string) string {
 		InputSchema: descriptor["inputSchema"],
 		Meta:        sdkmcp.Meta{mcp.DescriptorMetaKey: descriptor},
 	}, func(_ context.Context, request *sdkmcp.CallToolRequest) (*sdkmcp.CallToolResult, error) {
-		return companyInfoAnswer(companyProfileAsked(profiles, request.Params.Arguments), request.Params.Meta[mcp.AnsweredFilesMetaKey] == "kept")
+		return companyInfoAnswer(companyProfileAsked(company, request.Params.Arguments), request.Params.Meta[mcp.AnsweredFilesMetaKey] == "kept")
 	})
 	httpServer := httptest.NewServer(sdkmcp.NewStreamableHTTPHandler(
 		func(*http.Request) *sdkmcp.Server { return server },
@@ -329,6 +341,15 @@ func TestOfficeExampleLive(t *testing.T) {
 		t.Skip("OFFICE_EXAMPLE_REQUEST, OFFICE_EXAMPLE_OUTPUT, OFFICE_EXAMPLE_COMPANY_PROFILE and OPENROUTER_API_KEY are required")
 	}
 	request := readOfficeExampleRequest(t, requestPath)
+	company := readOfficeExampleCompany(t, profilePath, firstNonEmptyTestString(os.Getenv("OFFICE_EXAMPLE_COMPANY_LANGUAGE"), "ko"))
+	result := runOfficeExample(t, apiKey, request, filepath.Dir(requestPath), outputDirectory, company)
+	if shortfall := officeExampleShortfall(request, result); shortfall != "" {
+		t.Fatalf("office example %s: %s", request.Name, shortfall)
+	}
+}
+
+func runOfficeExample(t *testing.T, apiKey string, request officeExampleRequest, requestDirectory string, outputDirectory string, company officeExampleCompany) VirtualSessionResult {
+	t.Helper()
 	if errorValue := os.MkdirAll(filepath.Join(outputDirectory, "decision-images"), 0o755); errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -341,7 +362,7 @@ func TestOfficeExampleLive(t *testing.T) {
 		Prompt:           request.Text,
 		ConversationType: "direct",
 		RouterTaskShape:  agentcontract.TaskShapeMaintenanceTask,
-		InputAttachments: officeExampleAttachments(t, filepath.Dir(requestPath), request.Attachments),
+		InputAttachments: officeExampleAttachments(t, requestDirectory, request.Attachments),
 		AllowedTaskStatuses: []task.TaskStatus{
 			task.TaskStatusCompleted, task.TaskStatusWaitingApproval, task.TaskStatusWaitingUserInput, task.TaskStatusFailed, task.TaskStatusBlocked,
 		},
@@ -360,7 +381,7 @@ func TestOfficeExampleLive(t *testing.T) {
 		DisableScriptedModel:  true,
 		UseLooseAssertions:    true,
 		IsDeliveredOverACP:    true,
-		RecordCatalogURL:      startCompanyRecordCatalog(t, profilePath),
+		RecordCatalogURL:      startCompanyRecordCatalog(t, company),
 		SkillDirectoryPaths:   fileDeliveryRouteSkillDirectories(),
 		AllowedTools:          append(agentruntime.KernelToolNames(), officeExampleCompanyInfoTool),
 		DecisionModel:         &decisionRecorder{label: "decision", delegate: loopDecisions, directory: outputDirectory},
@@ -386,7 +407,5 @@ func TestOfficeExampleLive(t *testing.T) {
 	if runError != nil {
 		t.Fatal(runError)
 	}
-	if shortfall := officeExampleShortfall(request, result); shortfall != "" {
-		t.Fatalf("office example %s: %s", request.Name, shortfall)
-	}
+	return result
 }
