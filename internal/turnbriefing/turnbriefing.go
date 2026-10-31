@@ -68,7 +68,14 @@ func agentIntroduction(request agentcontract.AgentTurnRequest) string {
 		lines = append(lines, "The person asking is "+requesterName+".")
 	}
 	if responseLanguage := strings.TrimSpace(request.ResponseLanguage); responseLanguage != "" {
-		lines = append(lines, "Answer them in "+responseLanguage+".")
+		lines = append(lines, "Write every reply and question to them in "+languageName(responseLanguage)+".")
 	}
 	return strings.Join(lines, "\n")
+}
+
+func languageName(responseLanguage string) string {
+	if name := toolcontract.ResponseLanguageName(responseLanguage); name != "" {
+		return name
+	}
+	return responseLanguage
 }
