@@ -147,7 +147,31 @@ describe("watching a person's conversations for arriving messages", () => {
 				authorExternalID: "alice",
 				recipientExternalIDs: ["alice", "bob"],
 				preview: "hello from alice",
+				attachmentKinds: [],
 			},
+		]);
+	});
+
+	test("a message carrying files is told by its words and the kinds of file, never their addresses", async () => {
+		const { watch, relays, told, now } = harness(new Map([[aliceSecret, [conversation("dm-1", ["alice", "bob"])]]]));
+		await watch.watch(aliceSecret, arrivalsURL);
+		const photoURL = "https://relay.example.com/media/aaaa.jpg";
+		const clipURL = "https://relay.example.com/media/bbbb.mp4";
+		const reportURL = "https://relay.example.com/media/cccc.pdf";
+		const sent: BuzzEvent = {
+			...message("m-1", "dm-1", "alice", now()),
+			content: `the minutes, see https://example.com/agenda\n![IMG_0001.jpg](${photoURL})\n![clip.mp4](${clipURL})\n[minutes.pdf](${reportURL})`,
+			tags: [
+				["h", "dm-1"],
+				["imeta", `url ${photoURL}`, "m image/jpeg"],
+				["imeta", `url ${clipURL}`, "m video/mp4"],
+				["imeta", `url ${reportURL}`, "m application/pdf"],
+			],
+		};
+		deliverTo(relays.get(aliceSecret)!, "dm-1", sent);
+
+		expect(told.map(({ preview, attachmentKinds }) => ({ preview, attachmentKinds }))).toEqual([
+			{ preview: "the minutes, see https://example.com/agenda", attachmentKinds: ["image", "video", "file"] },
 		]);
 	});
 

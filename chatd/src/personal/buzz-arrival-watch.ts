@@ -4,6 +4,7 @@ import { listUserConversations, pubkeyFromSecret, type UserConversation } from "
 import { carriesTag, firstTagValue, type BuzzEvent } from "../adapters/buzz/types.ts";
 import { TYPING_INDICATOR_KIND } from "../adapters/buzz/user-typing.ts";
 import { DELETE_MESSAGE_KIND, REACTION_KIND, isAbout } from "../adapters/buzz/deletions.ts";
+import { arrivalPreviewOf, type AttachmentKind } from "./arrival-preview.ts";
 
 const STREAM_MESSAGE_KIND = 9;
 const MEMBER_ADDED_NOTIFICATION_KIND = 44100;
@@ -18,6 +19,7 @@ export type Arrival = {
 	authorExternalID: string;
 	recipientExternalIDs: string[];
 	preview: string;
+	attachmentKinds: AttachmentKind[];
 };
 
 export type Typing = {
@@ -201,7 +203,7 @@ export class BuzzArrivalWatch {
 			messageID: event.id,
 			authorExternalID: event.pubkey,
 			recipientExternalIDs: watcher.participantsByChannel.get(channelID) ?? [],
-			preview: event.content,
+			...arrivalPreviewOf(event),
 		};
 		void this.dependencies
 			.tell(this.arrivalsURL, arrival)
