@@ -145,13 +145,14 @@ export async function addChannelOwnerAsUser(request: {
 	userSecretHex: string;
 	channelID: string;
 	newOwnerPubkeyHex: string;
-}): Promise<void> {
-	await asAnOwner(request, async (relay) => {
+}): Promise<{ newToChannel: boolean }> {
+	return asAnOwner(request, async (relay, roles) => {
 		await relay.publish(PUT_USER_KIND, "", [
 			["h", request.channelID],
 			["p", request.newOwnerPubkeyHex],
 			["role", "owner"],
 		]);
+		return { newToChannel: !roles.has(request.newOwnerPubkeyHex) };
 	});
 }
 
@@ -165,18 +166,21 @@ export async function deleteChannelAsUser(request: {
 	});
 }
 
-async function asAnOwner(
+async function asAnOwner<Result>(
 	request: { relayURL: string; userSecretHex: string; channelID: string },
-	work: (relay: {
-		pubkeyHex: string;
-		query: (filter: object) => Promise<BuzzEvent[]>;
-		publish: (kind: number, content: string, tags: string[][]) => Promise<unknown>;
-	}) => Promise<void>,
-): Promise<void> {
-	await withRelayAs(request.relayURL, request.userSecretHex, undefined, async (relay) => {
+	work: (
+		relay: {
+			pubkeyHex: string;
+			query: (filter: object) => Promise<BuzzEvent[]>;
+			publish: (kind: number, content: string, tags: string[][]) => Promise<unknown>;
+		},
+		roles: Map<string, UserChannelRole>,
+	) => Promise<Result>,
+): Promise<Result> {
+	return withRelayAs(request.relayURL, request.userSecretHex, undefined, async (relay) => {
 		const roles = rolesOnRoster(await latestRoster(relay, request.channelID));
 		if (roles.get(relay.pubkeyHex) !== "owner") throw new NotChannelOwner(request.channelID);
-		await work(relay);
+		return work(relay, roles);
 	});
 }
 
