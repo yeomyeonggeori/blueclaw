@@ -290,9 +290,9 @@ class BuzzPersonalGateway implements PersonalGateway {
 		actor: ActorCredential,
 		conversationID: string,
 		externalID: string,
-	): Promise<void> {
+	): Promise<{ newToChannel: boolean }> {
 		this.require(actor);
-		await addChannelOwnerAsUser({
+		return addChannelOwnerAsUser({
 			relayURL: this.settings.relayURL,
 			userSecretHex: actor.secret,
 			channelID: conversationID,

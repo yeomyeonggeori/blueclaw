@@ -7,6 +7,7 @@ import { replaceRelayClientInThisFile } from "./relay-client-replacement.ts";
 const CHANNEL = "channel-1";
 const ACTOR_PUBKEY = "a".repeat(64);
 const OTHER_MEMBER = "b".repeat(64);
+const OUTSIDER = "c".repeat(64);
 const PUT_USER_KIND = 9000;
 const REMOVE_USER_KIND = 9001;
 
@@ -215,7 +216,7 @@ describe("addChannelOwnerAsUser", () => {
 	});
 
 	test("leaves the actor an owner and produces a roster with two owners", async () => {
-		await addChannelOwnerAsUser({
+		const added = await addChannelOwnerAsUser({
 			relayURL: "wss://relay",
 			userSecretHex: "irrelevant-secret",
 			channelID: CHANNEL,
@@ -229,6 +230,19 @@ describe("addChannelOwnerAsUser", () => {
 		expect(roles.get(ACTOR_PUBKEY)).toBe("owner");
 		expect(roles.get(OTHER_MEMBER)).toBe("owner");
 		expect([...roles.values()].filter((role) => role === "owner")).toHaveLength(2);
+		expect(added).toEqual({ newToChannel: false });
+	});
+
+	test("says an owner who was not on the roster is new to the channel", async () => {
+		const added = await addChannelOwnerAsUser({
+			relayURL: "wss://relay",
+			userSecretHex: "irrelevant-secret",
+			channelID: CHANNEL,
+			newOwnerPubkeyHex: OUTSIDER,
+		});
+
+		expect(added).toEqual({ newToChannel: true });
+		expect(rolesOnRoster(rosterEvent()).get(OUTSIDER)).toBe("owner");
 	});
 });
 

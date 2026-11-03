@@ -244,7 +244,7 @@ class MattermostPersonalGateway implements PersonalGateway {
 		throw new UnsupportedByPlatform(this.platform, "hand a channel over");
 	}
 
-	async addChannelOwner(): Promise<void> {
+	async addChannelOwner(): Promise<{ newToChannel: boolean }> {
 		throw new UnsupportedByPlatform(this.platform, "add a channel owner");
 	}
 

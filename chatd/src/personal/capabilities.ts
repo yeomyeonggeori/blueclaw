@@ -105,8 +105,7 @@ export const personCapabilities: Record<string, PersonCapability> = {
 	},
 	"person.channel.owner.add": async (gateway, body) => {
 		const request = parsePersonRequest(body);
-		await gateway.addChannelOwner(request.actor, requireConversation(request), requireExternalID(request));
-		return {};
+		return gateway.addChannelOwner(request.actor, requireConversation(request), requireExternalID(request));
 	},
 	"person.channel.delete": async (gateway, body) => {
 		const request = parsePersonRequest(body);
