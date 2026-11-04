@@ -56,10 +56,6 @@ func (scheduleRunner ScheduleRunner) RunIfDue(ctx context.Context, request Sched
 	if workspaceID == "" {
 		workspaceID = scheduleRunner.workspaceID
 	}
-	responseLanguage := request.ResponseLanguage
-	if strings.TrimSpace(responseLanguage) == "" {
-		responseLanguage = requesterPersonaLanguage(scheduleRunner.taskLauncher.toolCatalogBuilder.workspaceActorFactory, request.PersonAccess, scheduleRunner.taskLauncher.toolCatalogBuilder.WorkspaceRootPath())
-	}
 	launchResult, errorValue := scheduleRunner.taskLauncher.Launch(ctx, TaskLaunchRequest{
 		Source:                    TaskLaunchSourceScheduled,
 		SourceReference:           schedule.ScheduleID,
@@ -70,7 +66,7 @@ func (scheduleRunner ScheduleRunner) RunIfDue(ctx context.Context, request Sched
 		DeliveryConversationID:    schedule.ConversationID,
 		ReplyTargetID:             schedule.ReplyTargetID,
 		Prompt:                    schedule.Prompt,
-		ResponseLanguage:          responseLanguage,
+		ResponseLanguage:          request.ResponseLanguage,
 		ScheduledRun:              scheduledRunContext(schedule, referenceTime),
 		ScheduledApprovedCall:     schedule.ApprovedCall,
 		PersonAccess:              request.PersonAccess,
