@@ -26,6 +26,7 @@ import {
 	profilePictureURLAsUser,
 	pubkeyFromSecret,
 	sendChannelMessageAsUser,
+	timeZoneTags,
 } from "../adapters/buzz/user-session.ts";
 import {
 	addChannelMembersAsUser,
@@ -290,9 +291,9 @@ class BuzzPersonalGateway implements PersonalGateway {
 		actor: ActorCredential,
 		conversationID: string,
 		externalID: string,
-	): Promise<void> {
+	): Promise<{ newToChannel: boolean }> {
 		this.require(actor);
-		await addChannelOwnerAsUser({
+		return addChannelOwnerAsUser({
 			relayURL: this.settings.relayURL,
 			userSecretHex: actor.secret,
 			channelID: conversationID,
@@ -420,6 +421,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 		parentID?: string,
 		attachments: AttachmentAlreadyKept[] = [],
 		mentions?: PersonalMentions,
+		timeZone?: string,
 	): Promise<PersonalMessage> {
 		this.require(actor);
 		const sent = await sendChannelMessageAsUser({
@@ -432,6 +434,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 			extraTags: [
 				...mentionTags(mentions && { pubkeyHexes: mentions.externalIDs, isEveryone: mentions.isEveryone }),
 				...(await this.customEmojiTagsFor(actor, body)),
+				...timeZoneTags(timeZone),
 			],
 			authTagJSON: this.settings.authTagJSON,
 		});

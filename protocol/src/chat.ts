@@ -50,6 +50,7 @@ export const visibleContextSchema = z.looseObject({
   historyCursor: z.string(),
   messagesOpenOtherExchanges: z.boolean().optional(),
   responseLanguage: z.string().optional(),
+  requesterTimeZone: z.string().optional(),
   sender: visibleContextSenderSchema.optional(),
   conversationType: z.string().optional(),
   channelID: z.string().optional(),

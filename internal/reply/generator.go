@@ -99,7 +99,7 @@ func (generator *Generator) replyContext(visibleContext agentcontract.VisibleCon
 	if memoryContext := agentcontract.BuildMemoryContext(memoryFacts); memoryContext != "" {
 		sections = append(sections, "Memory:\n"+memoryContext)
 	}
-	sections = append(sections, runtimeContext(responseLanguage, generator.companyTimeZone()))
+	sections = append(sections, runtimeContext(responseLanguage, generator.companyTimeZone(), visibleContext.RequesterTimeZone))
 	return strings.Join(sections, "\n\n")
 }
 
@@ -110,10 +110,10 @@ func (generator *Generator) instructionPrompt() string {
 	return generator.instructionBundleLoader().Prompt
 }
 
-func runtimeContext(responseLanguage string, timeZone string) string {
+func runtimeContext(responseLanguage string, timeZone string, requesterTimeZone string) string {
 	return strings.Join([]string{
 		"Runtime:",
 		"Response language: " + toolcontract.ResolveResponseLanguage(responseLanguage),
-		strings.TrimPrefix(agentcontract.BuildTemporalContextDescription(time.Now(), timeZone), "Runtime temporal context:\n"),
+		strings.TrimPrefix(agentcontract.BuildTemporalContextDescription(time.Now(), timeZone, requesterTimeZone), "Runtime temporal context:\n"),
 	}, "\n")
 }

@@ -49,13 +49,13 @@ class EditObservingBuzzAdapter extends BuzzAdapter {
 	}
 }
 
-function message(id: string, rootID?: string): Pick<MessageType<BuzzEvent>, "id" | "raw"> {
+function message(id: string, rootID?: string, extraTags: string[][] = []): Pick<MessageType<BuzzEvent>, "id" | "raw"> {
 	const event: BuzzEvent = {
 		id,
 		pubkey: senderID,
 		created_at: 1784900000,
 		kind: 9,
-		tags: rootID ? [["h", channelID], ["e", rootID, "", "root"]] : [["h", channelID]],
+		tags: [...(rootID ? [["h", channelID], ["e", rootID, "", "root"]] : [["h", channelID]]), ...extraTags],
 		content: "hello",
 		sig: signature,
 	};
@@ -169,7 +169,7 @@ describe("normalized edit forwarding", () => {
 });
 
 describe("normalized message forwarding", () => {
-	async function forwardedDocument(rootID: string | undefined, messageID: string): Promise<Record<string, unknown>> {
+	async function forwardedDocument(rootID: string | undefined, messageID: string, extraTags: string[][] = []): Promise<Record<string, unknown>> {
 		const adapter = new EditObservingBuzzAdapter({
 			relayURL: "ws://localhost:3000",
 			privateKeyHex: "1".repeat(64),
@@ -203,7 +203,7 @@ describe("normalized message forwarding", () => {
 			threadId: threadID,
 			text: "hello",
 			formatted: { type: "root", children: [] },
-			raw: message(messageID, rootID).raw,
+			raw: message(messageID, rootID, extraTags).raw,
 			author: { userId: senderID, userName: "sender", fullName: "Sender", isBot: false, isMe: false },
 			metadata: { dateSent: new Date(), edited: false },
 			attachments: [],
@@ -238,5 +238,10 @@ describe("normalized message forwarding", () => {
 	test("says who is in the room the message was written in", async () => {
 		const context = (await forwardedDocument(undefined, rootTwoID)).context as Record<string, unknown>;
 		expect(context.roomMemberEmails).toEqual(["sender@example.com"]);
+	});
+
+	test("says which time zone the requester's device sent the message from", async () => {
+		const context = (await forwardedDocument(undefined, rootTwoID, [["tz", "America/Los_Angeles"]])).context as Record<string, unknown>;
+		expect(context.requesterTimeZone).toBe("America/Los_Angeles");
 	});
 });

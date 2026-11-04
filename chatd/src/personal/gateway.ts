@@ -211,7 +211,11 @@ export interface PersonalGateway {
 	removeChannelMember(actor: ActorCredential, conversationID: string, externalID: string): Promise<void>;
 	leaveChannel(actor: ActorCredential, conversationID: string): Promise<void>;
 	handOverChannel(actor: ActorCredential, conversationID: string, newOwnerExternalID: string): Promise<void>;
-	addChannelOwner(actor: ActorCredential, conversationID: string, externalID: string): Promise<void>;
+	addChannelOwner(
+		actor: ActorCredential,
+		conversationID: string,
+		externalID: string,
+	): Promise<{ newToChannel: boolean }>;
 	deleteChannel(actor: ActorCredential, conversationID: string): Promise<void>;
 	markConversationRead(
 		actor: ActorCredential,
@@ -233,6 +237,7 @@ export interface PersonalGateway {
 		parentID?: string,
 		attachments?: AttachmentAlreadyKept[],
 		mentions?: PersonalMentions,
+		timeZone?: string,
 	): Promise<PersonalMessage>;
 	readMedia(actor: ActorCredential, url: string, range: string): Promise<Response>;
 	uploadMedia(actor: ActorCredential, source: MediaSource): Promise<KeptMedia>;

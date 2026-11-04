@@ -39,7 +39,7 @@ import {
 } from "./types.ts";
 import type { NormalizedMessageEdit, ReactionSummary } from "../../visible-context.ts";
 import type { AttachmentAlreadyKept, OutgoingAttachment } from "../../outgoing-attachment.ts";
-import { buildMessageBody, ensureUserDirectMessageChannel, participantsOf } from "./user-session.ts";
+import { TIME_ZONE_TAG, buildMessageBody, ensureUserDirectMessageChannel, participantsOf } from "./user-session.ts";
 import { catchUpIntervalMilliseconds, messagesSentSince } from "./catch-up.ts";
 import { deliveredMessagesInMemory, type DeliveredMessages } from "../../delivered-messages.ts";
 import { withRelayAs } from "./relay-pool.ts";
@@ -304,6 +304,11 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 			botMentioned: mentionedPubkeys.includes(this.relay.pubkeyHex),
 			otherPersonMentioned: mentionedPubkeys.some((pubkey) => pubkey !== this.relay.pubkeyHex),
 		};
+	}
+
+	timeZoneOf(raw: unknown): string | undefined {
+		if (typeof raw !== "object" || raw === null || !("tags" in raw)) return undefined;
+		return firstTagValue(raw as BuzzEvent, TIME_ZONE_TAG);
 	}
 
 	encodeThreadId(data: BuzzThreadId): string {

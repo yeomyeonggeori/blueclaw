@@ -96,6 +96,7 @@ export type NormalizedMessageEdit = {
 export type NormalizedPlatformAdapter = ContextCapableAdapter & {
 	historyScopeThreadId(threadId: string, messageId: string): string;
 	addressingOf(raw: unknown): AddressingDocument;
+	timeZoneOf?(raw: unknown): string | undefined;
 	onMessageEdit?(handler: (edit: NormalizedMessageEdit) => Promise<void>): void;
 };
 
