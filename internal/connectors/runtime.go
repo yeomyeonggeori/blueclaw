@@ -133,7 +133,6 @@ type ConnectorRuntime struct {
 	companyProvider        func() agentcontract.CompanyContext
 	companyLocaleProvider  func() string
 	workspaceID            string
-	adminTaskLinkBaseURL   string
 	logger                 *slog.Logger
 
 	mutex                 sync.Mutex
@@ -422,9 +421,6 @@ func (connectorRuntime *ConnectorRuntime) sendUserNoticeReply(ctx context.Contex
 		connectorRuntime.logger.Info("connector."+platform+".outbound.skipped", slog.String("messageID", event.MessageID), slog.String("taskRunID", taskRunID), slog.String("reason", missingReason))
 		return "", false
 	}
-	if taskStatusRequiresFailureNotice(turnResult.TaskRun.Status) {
-		reply.Message += failureRunFooter(taskRunID, connectorRuntime.adminTaskLinkBaseURL)
-	}
 	reply.RecoveryActions = recoveryActionsForEvent(turnResult.RecoveryActions, event)
 	interaction, _ := latestAskInteraction(taskRunID, connectorRuntime.taskRunService.ListTaskEvent(taskRunID))
 	reply.Interaction = optionalAskInteraction(interaction, event.SenderID)
@@ -436,23 +432,6 @@ func (connectorRuntime *ConnectorRuntime) sendUserNoticeReply(ctx context.Contex
 	}
 	connectorRuntime.logger.Info("connector."+platform+".outbound.sent", slog.String("messageID", event.MessageID), slog.String("taskRunID", taskRunID), slog.String("replyDispatchID", dispatchID), slog.String("reason", "task_not_completed"))
 	return dispatchID, true
-}
-
-func failureRunFooter(taskRunID string, adminTaskLinkBaseURL string) string {
-	trimmedTaskRunID := strings.TrimSpace(taskRunID)
-	if trimmedTaskRunID == "" {
-		return ""
-	}
-	shortTaskRunID := trimmedTaskRunID
-	if len(shortTaskRunID) > 6 {
-		shortTaskRunID = shortTaskRunID[:6]
-	}
-	footer := "\n\n`" + shortTaskRunID + "`"
-	trimmedAdminTaskLinkBaseURL := strings.TrimRight(strings.TrimSpace(adminTaskLinkBaseURL), "/")
-	if trimmedAdminTaskLinkBaseURL != "" {
-		footer = "\n\n[`" + shortTaskRunID + "`](" + trimmedAdminTaskLinkBaseURL + "/tasks/" + trimmedTaskRunID + ")"
-	}
-	return footer
 }
 
 func UserNoticeReply(turnResult agentcontract.AgentTurnResult, taskRunID string) (OutboundReply, string) {

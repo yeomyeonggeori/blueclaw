@@ -36,6 +36,7 @@ type TaskLauncher struct {
 	requesterEmailResolver        RequesterEmailResolver
 	agentIdentityProvider         func() agentcontract.AgentIdentity
 	companyProvider               func() agentcontract.CompanyContext
+	companyLocaleProvider         func() string
 	approvalGate                  *approvalgate.Gate
 	observeTask                   func(TaskLaunchRequest) func(TaskLaunchResult, error)
 }
@@ -187,6 +188,27 @@ func (taskLauncher *TaskLauncher) UseCompanyProvider(companyProvider func() agen
 	taskLauncher.companyProvider = companyProvider
 }
 
+func (taskLauncher *TaskLauncher) UseCompanyLocaleProvider(companyLocaleProvider func() string) {
+	taskLauncher.companyLocaleProvider = companyLocaleProvider
+}
+
+func (taskLauncher *TaskLauncher) companyLocale() string {
+	if taskLauncher.companyLocaleProvider == nil {
+		return ""
+	}
+	return taskLauncher.companyLocaleProvider()
+}
+
+func (taskLauncher *TaskLauncher) requesterResponseLanguage(request TaskLaunchRequest) string {
+	if responseLanguage := strings.TrimSpace(request.ResponseLanguage); responseLanguage != "" {
+		return responseLanguage
+	}
+	if preferredLanguage := requesterPersonaLanguage(taskLauncher.toolCatalogBuilder.workspaceActorFactory, requesterPersonAccessForTaskLaunch(request), taskLauncher.toolCatalogBuilder.WorkspaceRootPath()); preferredLanguage != "" {
+		return preferredLanguage
+	}
+	return strings.TrimSpace(taskLauncher.companyLocale())
+}
+
 func (taskLauncher *TaskLauncher) company() agentcontract.CompanyContext {
 	if taskLauncher.companyProvider == nil {
 		return agentcontract.CompanyContext{}
@@ -263,6 +285,7 @@ func (taskLauncher *TaskLauncher) closeAbandonedLaunchTaskRun(openedTaskRun laun
 func (taskLauncher *TaskLauncher) launchTask(ctx context.Context, request TaskLaunchRequest) (TaskLaunchResult, error) {
 	launchRecords := []launchStepRecord{}
 	normalizedProfileName := normalizeProfileName(request.ProfileName)
+	request.ResponseLanguage = taskLauncher.requesterResponseLanguage(request)
 	completeFailedLaunch := func(record launchStepRecord, toolNames []string) TaskLaunchResult {
 		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, toolNames, record.StepName, launchRecords, errorFromStepRecord(record))
 	}
