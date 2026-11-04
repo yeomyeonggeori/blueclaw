@@ -17,10 +17,6 @@ func (connectorRuntime *ConnectorRuntime) UseUnknownAccountResolver(unknownAccou
 	connectorRuntime.unknownAccountResolver = unknownAccountResolver
 }
 
-func (connectorRuntime *ConnectorRuntime) UseAdminTaskLinkBaseURL(adminTaskLinkBaseURL string) {
-	connectorRuntime.adminTaskLinkBaseURL = strings.TrimRight(strings.TrimSpace(adminTaskLinkBaseURL), "/")
-}
-
 func (connectorRuntime *ConnectorRuntime) UseWorkspaceID(workspaceID string) {
 	connectorRuntime.workspaceID = strings.TrimSpace(workspaceID)
 }
