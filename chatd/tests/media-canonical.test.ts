@@ -44,6 +44,17 @@ function videoCodecOf(path: string): string {
 	return probe.stdout.toString().trim();
 }
 
+function pictureSizeOf(bytes: Buffer): string {
+	const probe = Bun.spawnSync(["ffprobe", "-v", "error", "-show_entries", "stream=width,height", "-of", "csv=p=0:s=x", "-"], { stdin: bytes });
+	return probe.stdout.toString().trim();
+}
+
+async function phonePhoto(): Promise<SpooledMedia> {
+	const path = join(import.meta.dir, "fixtures", "phone-photo.heic");
+	const bytes = await readFile(path);
+	return { path, digestHex: new Bun.CryptoHasher("sha256").update(bytes).digest("hex"), sizeBytes: bytes.length };
+}
+
 describe("a file the messenger keeps only in its canonical form", () => {
 	test("a phone video with a location becomes a fast-start H.264 MP4 that names no place", async () => {
 		const phoneVideo = await made("phone.mov", [
@@ -73,6 +84,28 @@ describe("a file the messenger keeps only in its canonical form", () => {
 		});
 
 		expect(videoCodecOf(keptPath)).toBe("h264");
+	});
+
+	test("a tiled HEIC photo with a location and a color profile becomes a whole JPEG that carries neither", async () => {
+		const kept = await withCanonicalMedia(await phonePhoto(), "image/heic", keptCopyOf);
+
+		expect(kept.media.contentType).toBe("image/jpeg");
+		expect(kept.media.sizeBytes).toBe(kept.bytes.length);
+		expect(kept.media.digestHex).toBe(new Bun.CryptoHasher("sha256").update(kept.bytes).digest("hex"));
+		expect(pictureSizeOf(kept.bytes)).toBe("1280x960");
+		expect(kept.bytes.includes(Buffer.from("Exif\0\0"))).toBe(false);
+		expect(kept.bytes.includes(Buffer.from("ICC_PROFILE"))).toBe(false);
+		expect(kept.bytes.includes(Buffer.from("Lavc"))).toBe(false);
+	});
+
+	test("bytes heif-convert cannot read fail with the reason, never as the original", async () => {
+		const path = join(directory, "broken.heic");
+		await Bun.write(path, "not a picture");
+		const broken = { path, digestHex: "0".repeat(64), sizeBytes: 13 };
+
+		const failure = await withCanonicalMedia(broken, "image/heic", async () => "uploaded").catch((caught: unknown) => caught);
+
+		expect(failure).toBeInstanceOf(MediaNotConverted);
 	});
 
 	test("a file that is not media is handed over as it was spooled", async () => {

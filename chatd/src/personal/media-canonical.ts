@@ -25,40 +25,76 @@ const canonicalVideoArguments = [
 	"-movflags", "+faststart", "-metadata", "encoder=",
 ];
 
+const canonicalPictureType = "image/jpeg";
+const heifPictureTypes = new Set(["image/heic", "image/heif"]);
+const canonicalPictureArguments = [
+	"-map_metadata", "-1", "-vf", "sidedata=mode=delete:type=ICC_PROFILE",
+	"-fflags", "+bitexact", "-flags:v", "+bitexact", "-q:v", "2",
+];
+
+type Conversion = {
+	contentType: string;
+	convert: (source: string, directory: string, contentType: string) => Promise<string>;
+};
+
 export async function withCanonicalMedia<Result>(
 	spooled: SpooledMedia,
 	contentType: string,
 	use: (media: CanonicalMedia) => Promise<Result>,
 ): Promise<Result> {
-	if (!contentType.startsWith("video/")) return use({ ...spooled, contentType });
+	const conversion = conversionOf(contentType);
+	if (!conversion) return use({ ...spooled, contentType });
 	const directory = await mkdtemp(join(tmpdir(), "chatd-canonical-"));
 	try {
-		const output = join(directory, "media.mp4");
-		await convert(spooled.path, output, contentType);
-		return await use({ ...(await described(output)), contentType: canonicalVideoType });
+		const output = await conversion.convert(spooled.path, directory, contentType);
+		return await use({ ...(await described(output)), contentType: conversion.contentType });
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}
 }
 
-async function convert(source: string, output: string, contentType: string): Promise<void> {
-	const ffmpeg = startFfmpeg(["-i", source, ...canonicalVideoArguments, output], contentType);
-	const [exitCode, errorOutput] = await Promise.all([ffmpeg.exited, new Response(ffmpeg.stderr).text()]);
-	if (exitCode === 0) return;
-	const lastLine = errorOutput.trim().split("\n").at(-1) ?? "";
-	throw new MediaNotConverted(contentType, lastLine || `ffmpeg exited with ${exitCode}`);
+function conversionOf(contentType: string): Conversion | undefined {
+	if (contentType.startsWith("video/")) return { contentType: canonicalVideoType, convert: convertVideo };
+	if (heifPictureTypes.has(contentType)) return { contentType: canonicalPictureType, convert: convertPicture };
+	return undefined;
 }
 
-function startFfmpeg(conversionArguments: string[], contentType: string) {
+async function convertVideo(source: string, directory: string, contentType: string): Promise<string> {
+	const output = join(directory, "media.mp4");
+	await runFfmpeg(["-i", source, ...canonicalVideoArguments, output], contentType);
+	return output;
+}
+
+async function convertPicture(source: string, directory: string, contentType: string): Promise<string> {
+	const decoded = join(directory, "decoded.png");
+	const output = join(directory, "media.jpg");
+	await run(["heif-convert", source, decoded], contentType);
+	await runFfmpeg(["-i", decoded, ...canonicalPictureArguments, output], contentType);
+	return output;
+}
+
+function runFfmpeg(conversionArguments: string[], contentType: string): Promise<void> {
+	return run(["ffmpeg", "-y", "-nostdin", "-loglevel", "error", "-protocol_whitelist", "file,pipe", ...conversionArguments], contentType);
+}
+
+async function run(command: string[], contentType: string): Promise<void> {
+	const child = start(command, contentType);
+	const [exitCode, errorOutput] = await Promise.all([child.exited, new Response(child.stderr).text()]);
+	if (exitCode === 0) return;
+	const lastLine = errorOutput.trim().split("\n").at(-1) ?? "";
+	throw new MediaNotConverted(contentType, lastLine || `${command[0]} exited with ${exitCode}`);
+}
+
+function start(command: string[], contentType: string) {
 	try {
-		return Bun.spawn(["ffmpeg", "-y", "-nostdin", "-loglevel", "error", "-protocol_whitelist", "file,pipe", ...conversionArguments], {
+		return Bun.spawn(command, {
 			stdin: "ignore",
 			stdout: "ignore",
 			stderr: "pipe",
 			timeout: conversionTimeoutMilliseconds,
 		});
 	} catch (error) {
-		throw new MediaNotConverted(contentType, `ffmpeg could not be started (${String(error)}); install ffmpeg on the company host`);
+		throw new MediaNotConverted(contentType, `${command[0]} could not be started (${String(error)}); install ${command[0]} on the company host`);
 	}
 }
 
