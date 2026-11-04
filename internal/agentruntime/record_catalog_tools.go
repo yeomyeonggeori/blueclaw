@@ -227,18 +227,18 @@ func recordCatalogToolResult(
 		return toolcontract.ToolResult{}, errorValue
 	}
 	if result.IsError {
-		return toolcontract.ToolFailureWithOutput(
-			toolcontract.FailureExternalService,
-			toolcontract.FailureCodes.OperationFailed,
-			"record_tool",
-			"the record refused this call",
-			json.RawMessage(encoded),
-		), nil
+		return recordRefusalResult(result.StructuredContent, string(encoded)), nil
 	}
 	answered := resultInsideTheEnvelope(result.StructuredContent)
 	toolResult := toolcontract.ToolSuccessData(string(encoded), answered)
 	toolResult.Effects = toolcontract.ProjectResourceEffects(resultContract, answered)
 	return toolResult, nil
+}
+
+func recordRefusalResult(refusal json.RawMessage, answered string) toolcontract.ToolResult {
+	reason := firstNonEmptyString(capabilityResultString(refusal, "error"), capabilityResultString(refusal, "message"), "the record refused this call")
+	stage := firstNonEmptyString(capabilityResultString(refusal, "failureStage"), "record_tool")
+	return capabilityToolResult(firstNonEmptyString(string(refusal), answered), refusal, nil, true, reason, "", stage, false, false)
 }
 
 func resultInsideTheEnvelope(structuredContent json.RawMessage) json.RawMessage {
