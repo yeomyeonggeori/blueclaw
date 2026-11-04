@@ -237,6 +237,7 @@ export interface PersonalGateway {
 		parentID?: string,
 		attachments?: AttachmentAlreadyKept[],
 		mentions?: PersonalMentions,
+		timeZone?: string,
 	): Promise<PersonalMessage>;
 	readMedia(actor: ActorCredential, url: string, range: string): Promise<Response>;
 	uploadMedia(actor: ActorCredential, source: MediaSource): Promise<KeptMedia>;

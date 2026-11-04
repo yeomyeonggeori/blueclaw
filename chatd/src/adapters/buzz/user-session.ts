@@ -147,6 +147,12 @@ export async function listUserConversations(
 	});
 }
 
+export const TIME_ZONE_TAG = "tz";
+
+export function timeZoneTags(timeZone: string | undefined): string[][] {
+	return timeZone ? [[TIME_ZONE_TAG, timeZone]] : [];
+}
+
 // A person replies only to a thread's root from here, and NIP-10 marks a direct
 // reply with the root it answers; the reply marker names the parent of a reply
 // to a reply, which this has no way to express.

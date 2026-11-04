@@ -115,6 +115,15 @@ describe("a community's custom emoji on Buzz", () => {
 		expect(sent?.tags.filter((tag) => tag[0] === "emoji")).toEqual([["emoji", "shake", pictureURL]]);
 	});
 
+	test("a message names the time zone it was sent from, so the agent reads its times there", async () => {
+		const { actor, gateway } = personWithEmoji();
+
+		await gateway.sendMessage(actor, "channel-1", "재택 출근 아홉시", undefined, [], undefined, "America/Los_Angeles");
+
+		const sent = kept.find((event) => event.kind === 9);
+		expect(sent?.tags).toContainEqual(["tz", "America/Los_Angeles"]);
+	});
+
 	test("a reaction with one is its shortcode carrying the picture, and is taken back by name", async () => {
 		const { actor, gateway } = personWithEmoji();
 		const messageID = "a".repeat(64);

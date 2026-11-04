@@ -145,6 +145,7 @@ export const personCapabilities: Record<string, PersonCapability> = {
 			request.parentID,
 			request.attachments,
 			request.mentions,
+			request.timeZone,
 		);
 	},
 	"person.message.edit": async (gateway, body) => {
