@@ -58,7 +58,6 @@ type AgentConfiguration struct {
 	Intake                   AgentIntakeConfiguration `json:"intake"`
 	FailureRecovery          AgentFailureRecovery     `json:"failureRecovery"`
 	GenerationOptions        AgentGenerationOptions   `json:"generationOptions,omitempty"`
-	AdminTaskLinkBaseURL     string                   `json:"adminTaskLinkBaseURL,omitempty"`
 	AllowAdminTaskDiagnostic bool                     `json:"allowAdminTaskDiagnostic"`
 	Harness                  HarnessConfiguration     `json:"harness,omitempty"`
 }
