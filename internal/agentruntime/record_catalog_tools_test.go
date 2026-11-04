@@ -376,3 +376,58 @@ func TestAPlatformMessageCapabilityRunsTheInputTheHoldApproved(t *testing.T) {
 		t.Fatalf("the capability was asked to run %s, expected the input the hold approved", sent.Input)
 	}
 }
+
+func TestTheRecordsOwnReasonForARefusalReachesTheModel(t *testing.T) {
+	refusal := `{"error":"meeting is not one of 디자인, 개발, 회의, 통화, 메일, 메모","errorCode":"task_label_unregistered","failureStage":"input_validation","retryable":true,"safeRetry":true,"registered":["디자인","개발","회의","통화","메일","메모"]}`
+	standIn := &recordCatalogStandIn{
+		discovered: []capability.ToolDescriptor{aDescriptor("task_add", capability.AnsweredByRecord)},
+		answered:   mcp.ToolResult{StructuredContent: json.RawMessage(refusal), IsError: true},
+	}
+	toolCatalogBuilder, _ := aBuilderWith(aDescriptor("task_add", capability.AnsweredByRecord))
+	toolSet := toolCatalogBuilder.BuildToolSet(aRequestFrom(standIn, "sample@example.test"))
+
+	result, errorValue := toolSet.InvokeInternal(context.Background(), toolcontract.ToolInvocation{
+		ToolName: "task_add",
+		Input:    json.RawMessage(`{"title":"미팅"}`),
+	})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	if !result.Failed() {
+		t.Fatalf("a refusal was read as a success: %+v", result)
+	}
+	if !strings.Contains(result.ContentText(), "meeting is not one of 디자인, 개발, 회의, 통화, 메일, 메모") || !strings.Contains(result.ContentText(), `"registered"`) {
+		t.Fatalf("the model reads %q, not the record's reason and the labels it offers", result.ContentText())
+	}
+	if result.Failure.UserSafeSummary != "meeting is not one of 디자인, 개발, 회의, 통화, 메일, 메모" {
+		t.Fatalf("the failure is summarised as %q", result.Failure.UserSafeSummary)
+	}
+	if result.Failure.Stage != "input_validation" || !result.Failure.Retryable || !result.Failure.SafeRetry {
+		t.Fatalf("the failure lost what the record said about it: %+v", result.Failure)
+	}
+}
+
+func TestARefusalThatGivesOnlyItsReasonReachesTheModelAsThatReason(t *testing.T) {
+	standIn := &recordCatalogStandIn{
+		discovered: []capability.ToolDescriptor{aDescriptor("company_metric_record", capability.AnsweredByRecord)},
+		answered:   mcp.ToolResult{StructuredContent: json.RawMessage(`{"error":"a USD equivalent is required when the amount is in KRW"}`), IsError: true},
+	}
+	toolCatalogBuilder, _ := aBuilderWith(aDescriptor("company_metric_record", capability.AnsweredByRecord))
+	toolSet := toolCatalogBuilder.BuildToolSet(aRequestFrom(standIn, "sample@example.test"))
+
+	result, errorValue := toolSet.InvokeInternal(context.Background(), toolcontract.ToolInvocation{
+		ToolName: "company_metric_record",
+		Input:    json.RawMessage(`{"title":"월매출"}`),
+	})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	if !result.Failed() || !strings.Contains(result.ContentText(), "a USD equivalent is required when the amount is in KRW") {
+		t.Fatalf("the model reads %q, not the record's reason", result.ContentText())
+	}
+	if result.Failure.Stage != "record_tool" {
+		t.Fatalf("a refusal that names no stage is the record tool's, got %q", result.Failure.Stage)
+	}
+}
