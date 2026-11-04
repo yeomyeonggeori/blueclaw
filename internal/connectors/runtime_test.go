@@ -1495,46 +1495,14 @@ func TestConnectorRuntimeSendsFailureNoticeForBlockedTask(t *testing.T) {
 	if !isSent || dispatchID != "dispatch-1" {
 		t.Fatalf("expected failure notice to send, got dispatchID=%q sent=%v", dispatchID, isSent)
 	}
-	if len(sentReplies) != 1 || sentReplies[0].Message != "작업을 완료하지 못했습니다. 접근 권한을 확인한 뒤 다시 시도해 주세요.\n\n`task-1`" {
-		t.Fatalf("expected failure notice reply with run footer, got %+v", sentReplies)
+	if len(sentReplies) != 1 || sentReplies[0].Message != "작업을 완료하지 못했습니다. 접근 권한을 확인한 뒤 다시 시도해 주세요." {
+		t.Fatalf("expected the failure notice as written, with no run id appended, got %+v", sentReplies)
+	}
+	if sentReplies[0].TaskRunID != "task-1" {
+		t.Fatalf("expected the run id carried beside the message, got %+v", sentReplies[0])
 	}
 	if sentReplies[0].FailureNotice.DiagnosticEventID != "task-1:limit" {
 		t.Fatalf("expected diagnostic reference to be preserved, got %+v", sentReplies[0].FailureNotice)
-	}
-}
-
-func TestConnectorRuntimeFailureFooterLinksAdminTaskWhenConfigured(t *testing.T) {
-	connectorRuntime, _, _ := newStubbedTestConnectorRuntime(t)
-	connectorRuntime.UseAdminTaskLinkBaseURL("https://demo.example.test/")
-	sentReplies := []OutboundReply{}
-	event := testInboundEvent("message-1")
-
-	_, isSent := connectorRuntime.sendUserNoticeReply(
-		context.Background(),
-		"test",
-		event,
-		"a1b2c3d4e5f6",
-		ReplyTarget{ConversationID: "direct-1", ReplyTargetID: "reply-target-1"},
-		agentcontract.AgentTurnResult{
-			TaskRun: task.TaskRun{Status: task.TaskStatusFailed},
-			FailureNotice: agentcontract.FailureNotice{
-				Message:    "작업을 완료하지 못했습니다.",
-				Source:     "generated",
-				Language:   "ko",
-				IsSendable: true,
-			},
-		},
-		func(_ context.Context, _ ReplyTarget, reply OutboundReply) (string, error) {
-			sentReplies = append(sentReplies, reply)
-			return "dispatch-1", nil
-		},
-	)
-
-	if !isSent || len(sentReplies) != 1 {
-		t.Fatalf("expected failure notice to send, got %+v", sentReplies)
-	}
-	if !strings.HasSuffix(sentReplies[0].Message, "[`a1b2c3`](https://demo.example.test/tasks/a1b2c3d4e5f6)") {
-		t.Fatalf("expected admin task link footer, got %q", sentReplies[0].Message)
 	}
 }
 
@@ -1591,8 +1559,8 @@ func TestConnectorRuntimeSendsSafeUserNoticeWhenFailureNoticeMissing(t *testing.
 	if !isSent || dispatchID != "dispatch-1" {
 		t.Fatalf("expected safe fallback notice to send, got dispatchID=%q sent=%v", dispatchID, isSent)
 	}
-	if len(sentReplies) != 1 || !strings.HasPrefix(sentReplies[0].Message, "메시지 삭제 작업을 완료하지 못했습니다.") || !strings.Contains(sentReplies[0].Message, "\n\n`") {
-		t.Fatalf("expected fallback user notice reply with run footer, got %+v", sentReplies)
+	if len(sentReplies) != 1 || sentReplies[0].Message != "메시지 삭제 작업을 완료하지 못했습니다." {
+		t.Fatalf("expected the fallback user notice as written, got %+v", sentReplies)
 	}
 }
 
