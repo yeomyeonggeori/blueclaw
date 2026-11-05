@@ -156,3 +156,18 @@ func TestIsScheduleDue(t *testing.T) {
 		t.Fatal("expected task schedule to be due at its next run time")
 	}
 }
+
+func TestScheduleOutlivesItsStartWindowOnlyPastTheWindow(t *testing.T) {
+	occurrenceAt := time.Date(2026, 11, 1, 23, 0, 0, 0, time.UTC)
+	schedule := Schedule{Kind: ScheduleKindCron, CronExpression: "0 8 * * *", NextRunAt: &occurrenceAt}
+
+	if (Scheduler{}).HasOutlivedItsStartWindow(schedule, occurrenceAt.Add(ScheduledRunStartWindow)) {
+		t.Fatal("a run at the edge of its start window is still on time")
+	}
+	if !(Scheduler{}).HasOutlivedItsStartWindow(schedule, occurrenceAt.Add(ScheduledRunStartWindow+time.Second)) {
+		t.Fatal("a run past its start window has outlived it")
+	}
+	if (Scheduler{}).HasOutlivedItsStartWindow(schedule, occurrenceAt.Add(-time.Hour)) {
+		t.Fatal("a run that is not due yet has not outlived anything")
+	}
+}

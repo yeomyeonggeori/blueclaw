@@ -248,6 +248,13 @@ func (taskLauncher *TaskLauncher) Launch(ctx context.Context, request TaskLaunch
 	return launchResult, errorValue
 }
 
+func (taskLauncher *TaskLauncher) FailWithoutRunning(ctx context.Context, request TaskLaunchRequest, stepName string, reason error) TaskLaunchResult {
+	if request.TurnStartedAt.IsZero() {
+		request.TurnStartedAt = time.Now()
+	}
+	return taskLauncher.completeLaunchFailure(ctx, request, normalizeProfileName(request.ProfileName), nil, stepName, nil, reason)
+}
+
 type launchTaskRun struct {
 	TaskRunID      string
 	IsOpenedByHost bool
