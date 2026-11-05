@@ -67,6 +67,8 @@ type Application struct {
 	refreshSkillIndex           func(context.Context)
 	acpSessionServer            *acpsession.Server
 	acpSessionCancel            context.CancelFunc
+	trustedClock                *runtimecontrol.TrustedClock
+	clockWatchCancel            context.CancelFunc
 }
 
 type InboundOptions struct {
@@ -98,6 +100,7 @@ type applicationComponents struct {
 	kernel                agentKernel
 	memory                memoryComponents
 	backupCoordinator     *backup.Coordinator
+	trustedClock          *runtimecontrol.TrustedClock
 	taskIntakeController  *runtimecontrol.TaskIntakeController
 	toolCatalogBuilder    *agentruntime.ToolCatalogBuilder
 	taskLauncher          *agentruntime.TaskLauncher
@@ -156,7 +159,8 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 	components.learningCoordinator = learningCoordinator
 	components.startupError = firstNonNilError(components.startupError, learningError)
 	components.backupCoordinator = backup.NewCoordinator(buildBackupManifest(runtimeConfiguration, components.foundation.database))
-	components.taskIntakeController = runtimecontrol.NewTaskIntakeController()
+	components.trustedClock = runtimecontrol.NewTrustedClock(languageModelEndpoints(runtimeConfiguration.LanguageModel), logger)
+	components.taskIntakeController = runtimecontrol.NewTaskIntakeController(components.trustedClock)
 	components.taskIntakeController.SetQuiesced(components.kernel.languageModelError != nil)
 	components.toolCatalogBuilder = newToolCatalogBuilder(runtimeConfiguration, components.kernel, components.services, components.directory, components.memory, logger)
 	if components.learningStore != nil {
@@ -188,7 +192,7 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 	components.agentReplyStore = newAgentReplyStore(runtimeConfiguration)
 	components.connectorRuntime.RegisterAdapter(apiconnector.NewAdapter(components.directory.identityService, components.agentReplyStore))
 	components.connectorEventHandler = httpserver.NewConnectorEventHandler(components.connectorRuntime, inbound.admitsConnectorHTTPEvent())
-	components.acpSessionServer = newACPSessionServer(inbound, components.kernel, components.directory, components.taskLauncher, components.connectorRuntime, components.services.taskRunService, logger)
+	components.acpSessionServer = newACPSessionServer(inbound, components.kernel, components.directory, components.taskLauncher, components.connectorRuntime, components.services.taskRunService, components.trustedClock, logger)
 	logger.Info("application.initializing", "stage", "router")
 	components.protocolIdentity = newProtocolIdentity(runtimeConfiguration, components.kernel.capabilityClient)
 	components.startupError = firstNonNilError(components.foundation.startupError, components.kernel.startupError, components.startupError)
@@ -229,6 +233,7 @@ func newApplication(components applicationComponents) *Application {
 		protocolIdentityStatus:      components.protocolIdentity.status,
 		refreshSkillIndex:           components.kernel.refreshSkillIndex,
 		acpSessionServer:            components.acpSessionServer,
+		trustedClock:                components.trustedClock,
 	}
 }
 

@@ -70,6 +70,7 @@ type Agent struct {
 	replyReader        approvalreply.Reader
 	sessionTurns       SessionTurnOpener
 	taskRunStore       taskstate.TaskRunStore
+	clock              TrustedClock
 	logger             *slog.Logger
 	deliveries         *awaitedDeliveries
 	deliveryReportWait time.Duration
@@ -90,6 +91,7 @@ func NewAgent(collaborators Collaborators, permissionRelay *PermissionRelay, log
 		replyReader:        collaborators.ReplyReader,
 		sessionTurns:       collaborators.SessionTurns,
 		taskRunStore:       collaborators.TaskRunStore,
+		clock:              collaborators.Clock,
 		logger:             logger,
 		deliveries:         newAwaitedDeliveries(),
 		deliveryReportWait: defaultDeliveryReportWait,
@@ -110,6 +112,23 @@ type Collaborators struct {
 	ReplyReader   approvalreply.Reader
 	SessionTurns  SessionTurnOpener
 	TaskRunStore  taskstate.TaskRunStore
+	Clock         TrustedClock
+}
+
+type TrustedClock interface {
+	Trusted() <-chan struct{}
+}
+
+func (agent *Agent) awaitTrustedClock(ctx context.Context) error {
+	if agent.clock == nil {
+		return nil
+	}
+	select {
+	case <-agent.clock.Trusted():
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (agent *Agent) hasLostItsClient() bool {
@@ -215,6 +234,9 @@ func (agent *Agent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.
 	session, isOpen := agent.session(request.SessionId)
 	if !isOpen {
 		return acp.PromptResponse{}, errSessionIsNotOpen
+	}
+	if errorValue := agent.awaitTrustedClock(ctx); errorValue != nil {
+		return acp.PromptResponse{}, errorValue
 	}
 	prompt := promptText(request.Prompt)
 	if prompt == "" {

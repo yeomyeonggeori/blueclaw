@@ -30,7 +30,7 @@ import (
 )
 
 func TestTaskIntakeControllerStartsUnquiesced(t *testing.T) {
-	controller := runtimecontrol.NewTaskIntakeController()
+	controller := runtimecontrol.NewTaskIntakeController(nil)
 
 	if controller.IsQuiesced() {
 		t.Fatal("fresh task intake controller must start unquiesced")

@@ -8,10 +8,11 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
+	"github.com/yeomyeonggeori/blueclaw/internal/runtimecontrol"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
 
-func newACPSessionServer(inbound InboundOptions, kernel agentKernel, directory identityDirectory, taskLauncher *agentruntime.TaskLauncher, connectorRuntime *connectors.ConnectorRuntime, taskRunService *task.TaskRunService, logger *slog.Logger) *acpsession.Server {
+func newACPSessionServer(inbound InboundOptions, kernel agentKernel, directory identityDirectory, taskLauncher *agentruntime.TaskLauncher, connectorRuntime *connectors.ConnectorRuntime, taskRunService *task.TaskRunService, trustedClock *runtimecontrol.TrustedClock, logger *slog.Logger) *acpsession.Server {
 	socketPath := strings.TrimSpace(inbound.ACPSocketPath)
 	if socketPath == "" {
 		return nil
@@ -25,5 +26,6 @@ func newACPSessionServer(inbound InboundOptions, kernel agentKernel, directory i
 		ReplyReader:   kernel.toolCatalog.replyReader,
 		SessionTurns:  connectorRuntime,
 		TaskRunStore:  taskRunService,
+		Clock:         trustedClock,
 	}, permissionRelay, logger)
 }

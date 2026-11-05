@@ -52,7 +52,7 @@ func TestRouterAllowsMutatingRequestWithoutOrigin(t *testing.T) {
 func newTestRouterForOriginChecks(t *testing.T) http.Handler {
 	t.Helper()
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
-	controller := runtimecontrol.NewTaskIntakeController()
+	controller := runtimecontrol.NewTaskIntakeController(nil)
 	return NewRouter(RouterDependencies{
 		QuiesceHandler: adminapi.QuiesceHandler{
 			Controller:     controller,
