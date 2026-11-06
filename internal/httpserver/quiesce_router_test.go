@@ -17,7 +17,7 @@ func TestRouterHandlesQuiesceEndpoint(t *testing.T) {
 	if _, errorValue := taskRunService.AdvanceTaskRun(taskRun.TaskRunID, "assistant"); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	controller := runtimecontrol.NewTaskIntakeController()
+	controller := runtimecontrol.NewTaskIntakeController(nil)
 	router := NewRouter(RouterDependencies{
 		QuiesceHandler: adminapi.QuiesceHandler{
 			Controller:     controller,

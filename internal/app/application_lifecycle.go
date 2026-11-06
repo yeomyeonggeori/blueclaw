@@ -26,6 +26,7 @@ func (application *Application) Start() error {
 		application.runtimeLogger.Logger.Error("application.protocol_identity_rejected", "error", errorValue.Error())
 		return application.serveWithoutStartingWork()
 	}
+	application.startClockWatch()
 	if application.refreshSkillIndex != nil {
 		go application.refreshSkillIndex(context.Background())
 	}
@@ -121,6 +122,9 @@ func (application *Application) Shutdown(ctx context.Context) error {
 	}
 	if application.learningCancel != nil {
 		application.learningCancel()
+	}
+	if application.clockWatchCancel != nil {
+		application.clockWatchCancel()
 	}
 	errorValue := application.httpServer.Shutdown(ctx)
 	backgroundError := application.awaitBackgroundLoops(ctx)
@@ -229,7 +233,7 @@ func (application *Application) startTaskRetentionSweeper() {
 		return
 	}
 	interval := time.Duration(application.taskRetentionIntervalMinuteOrDefault()) * time.Minute
-	application.taskRetentionCancel = application.startBackgroundLoop(func(ctx context.Context) {
+	application.taskRetentionCancel = application.startOnceTheClockIsTrusted(func(ctx context.Context) {
 		application.taskRetentionSweeper.Start(ctx, interval)
 	})
 }
@@ -243,7 +247,7 @@ func (application *Application) startStaleTaskSweeper() {
 		Notifier:       application.interruptedTaskResumer,
 		Logger:         application.runtimeLogger.Logger,
 	}
-	application.staleTaskCancel = application.startBackgroundLoop(func(ctx context.Context) {
+	application.staleTaskCancel = application.startOnceTheClockIsTrusted(func(ctx context.Context) {
 		sweeper.Start(ctx, 30*time.Minute)
 	})
 }
@@ -252,9 +256,8 @@ func (application *Application) startInterruptedTaskAutoResume() {
 	if application.taskRunService == nil || application.interruptedTaskResumer == nil || application.interruptedTaskResumeCancel != nil {
 		return
 	}
-	resumeStartedAt := time.Now()
-	application.interruptedTaskResumeCancel = application.startBackgroundLoop(func(ctx context.Context) {
-		application.resumeInterruptedTaskRuns(ctx, resumeStartedAt)
+	application.interruptedTaskResumeCancel = application.startOnceTheClockIsTrusted(func(ctx context.Context) {
+		application.resumeInterruptedTaskRuns(ctx, time.Now())
 	})
 }
 
