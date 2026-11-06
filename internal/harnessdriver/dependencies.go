@@ -12,7 +12,6 @@ type Dependencies struct {
 	RuntimeConfiguration        config.RuntimeConfiguration
 	TaskRunStore                taskstate.TaskRunStore
 	InstructionBundleLoader     func() agentcontract.InstructionBundle
-	CompanyProvider             func() agentcontract.CompanyContext
 	EmbeddingProvider           model.EmbeddingProvider
 	EmbeddingModelName          string
 	SkillIndexPath              string

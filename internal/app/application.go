@@ -151,7 +151,7 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 	logger := components.foundation.logger
 	components.directory = newIdentityDirectory(components.foundation.database, components.foundation.policyDocument, logger)
 	components.services = newTaskServices(runtimeConfiguration, components.foundation.database, components.directory.companyProvider, logger)
-	components.kernel = newAgentKernel(runtimeConfiguration, options.bundledACPFactory, options.bundledToolSelectorMake, options.questionWorderMake, components.services, components.directory.companyProvider, logger)
+	components.kernel = newAgentKernel(runtimeConfiguration, options.bundledACPFactory, options.bundledToolSelectorMake, options.questionWorderMake, components.services, logger)
 	components.memory = newMemoryComponents(runtimeConfiguration, components.kernel, components.services, components.directory.identityService, logger)
 	useMemoryMergingPersonRepository(&components)
 	components.learningStore, components.startupError = openLearningStore(runtimeConfiguration.Terminal.WorkspaceRootPath)
