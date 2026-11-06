@@ -564,6 +564,30 @@ describe("person.inbox.list", () => {
 		expect((await answer.json()).held).toEqual([{ id: "post-1", body: "고쳤어요", isUnread: false }]);
 	});
 
+	test("asked until a moment, passes that moment to read the page before it", async () => {
+		const windows: unknown[] = [];
+		const gateways = {
+			mattermost: {
+				platform: "mattermost",
+				credentialKind: "mattermost-token",
+				listInbox: async (_reader: unknown, window: unknown) => {
+					windows.push(window);
+					return { items: [], held: [], hasMoreBefore: false };
+				},
+			},
+		} as never;
+
+		const answer = await call(
+			"person.inbox.list",
+			{ actor: { kind: "mattermost-token", secret: "token" }, until: "2026-10-12T05:00:00.000Z" },
+			gateways,
+		);
+
+		expect(answer.status).toBe(200);
+		expect(windows).toEqual([{ until: new Date("2026-10-12T05:00:00.000Z"), heldIDs: [] }]);
+		expect((await answer.json()).hasMoreBefore).toBe(false);
+	});
+
 	test("refuses a since that is not a time", async () => {
 		const answer = await call(
 			"person.inbox.list",

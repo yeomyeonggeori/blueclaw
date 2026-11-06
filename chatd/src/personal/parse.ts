@@ -22,6 +22,7 @@ export type PersonRequest = {
 	emoji?: string;
 	before?: string;
 	since?: string;
+	until?: string;
 	heldIDs: string[];
 	query?: string;
 	name?: string;
@@ -79,6 +80,7 @@ export function parsePersonRequest(value: unknown): PersonRequest {
 		emoji: optionalText(record, "emoji"),
 		before: optionalText(record, "before"),
 		since: optionalText(record, "since"),
+		until: optionalText(record, "until"),
 		heldIDs: parseHeldIDs(record),
 		query: optionalText(record, "query"),
 		name: optionalText(record, "name"),
@@ -191,10 +193,16 @@ export function requireReadAt(request: PersonRequest): Date {
 }
 
 export function inboxWindowOf(request: PersonRequest): PersonalInboxWindow {
-	if (!request.since) return { heldIDs: request.heldIDs };
-	const since = new Date(request.since);
-	if (Number.isNaN(since.getTime())) throw new MalformedRequest("since must be an ISO 8601 time");
-	return { since, heldIDs: request.heldIDs };
+	const since = optionalTime(request.since, "since");
+	const until = optionalTime(request.until, "until");
+	return { ...(since && { since }), ...(until && { until }), heldIDs: request.heldIDs };
+}
+
+function optionalTime(value: string | undefined, field: string): Date | undefined {
+	if (!value) return undefined;
+	const time = new Date(value);
+	if (Number.isNaN(time.getTime())) throw new MalformedRequest(`${field} must be an ISO 8601 time`);
+	return time;
 }
 
 export function requireQuery(request: PersonRequest): string {
