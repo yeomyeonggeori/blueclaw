@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func languageModelEndpoints(configuration config.LanguageModelConfiguration) []string {
@@ -14,6 +15,12 @@ func languageModelEndpoints(configuration config.LanguageModelConfiguration) []s
 		}
 	}
 	return append(endpoints, configuration.Decision.Endpoint, configuration.Embedding.Endpoint, configuration.VisualReview.Endpoint)
+}
+
+func companyZoneOf(companyProvider func() agentcontract.CompanyContext) func() string {
+	return func() string {
+		return companyProvider().TimeZone
+	}
 }
 
 func (application *Application) startClockWatch() {

@@ -159,7 +159,7 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 	components.learningCoordinator = learningCoordinator
 	components.startupError = firstNonNilError(components.startupError, learningError)
 	components.backupCoordinator = backup.NewCoordinator(buildBackupManifest(runtimeConfiguration, components.foundation.database))
-	components.trustedClock = runtimecontrol.NewTrustedClock(languageModelEndpoints(runtimeConfiguration.LanguageModel), logger)
+	components.trustedClock = runtimecontrol.NewTrustedClock(languageModelEndpoints(runtimeConfiguration.LanguageModel), companyZoneOf(components.directory.companyProvider), logger)
 	components.taskIntakeController = runtimecontrol.NewTaskIntakeController(components.trustedClock)
 	components.taskIntakeController.SetQuiesced(components.kernel.languageModelError != nil)
 	components.toolCatalogBuilder = newToolCatalogBuilder(runtimeConfiguration, components.kernel, components.services, components.directory, components.memory, logger)
