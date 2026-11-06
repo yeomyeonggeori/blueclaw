@@ -113,13 +113,14 @@ function replyTo(root: BuzzEvent): string[][] {
 	];
 }
 
-function inboxSince(sinceSeconds?: number, heldIDs: string[] = []) {
+function inboxSince(sinceSeconds?: number, heldIDs: string[] = [], untilSeconds?: number) {
 	return listInboxAsUser({
 		relayURL,
 		userSecretHex: readerSecretHex,
 		directChannelIDs: ["dm-1"],
 		groupChannelIDs: ["channel-1"],
 		sinceSeconds,
+		untilSeconds,
 		heldIDs,
 	});
 }
@@ -129,18 +130,19 @@ async function inbox() {
 }
 
 describe("a person's inbox against a relay", () => {
-	test("holds what was written to them, what names them, and replies in threads they joined, newest first", async () => {
+	test("holds everything others wrote in the conversations they are in, saying why, newest first", async () => {
 		const direct = post(writer, "dm-1", 500);
 		const mention = post(writer, "channel-1", 400, [["p", readerPubkey]]);
 		const ownRoot = post(reader, "channel-1", 300);
 		const reply = post(writer, "channel-1", 200, replyTo(ownRoot));
-		post(writer, "channel-1", 150);
+		const channel = post(writer, "channel-1", 150);
 		post(writer, "channel-elsewhere", 100, [["p", readerPubkey]]);
 		post(reader, "dm-1", 50);
 
 		const items = await inbox();
 
 		expect(items.map((item) => [item.message.id, item.reason])).toEqual([
+			[channel.id, "channel"],
 			[reply.id, "thread_reply"],
 			[mention.id, "mention"],
 			[direct.id, "direct"],
@@ -169,6 +171,7 @@ describe("a person's inbox against a relay", () => {
 
 		expect(unreadOf).toEqual(
 			new Map([
+				["channel", true],
 				["thread_reply", false],
 				["mention", true],
 				["direct", false],
@@ -203,5 +206,21 @@ describe("a person's inbox against a relay", () => {
 				[kept.id, "second wording"],
 			]),
 		);
+	});
+
+	test("asked until a moment, answers the page before it and says whether older ones remain", async () => {
+		const pageStart = now - 10_000;
+		const older = Array.from({ length: 55 }, (_, index) => post(writer, "channel-1", 10_000 + index));
+
+		const page = await inboxSince(undefined, [], pageStart);
+
+		expect(page.items).toHaveLength(50);
+		expect(page.items[0]?.message.id).toBe(older[0]?.id);
+		expect(page.hasMoreBefore).toBe(true);
+
+		const last = await inboxSince(undefined, [], pageStart - 50);
+
+		expect(last.items.map((item) => item.message.id)).toEqual(older.slice(50).map((event) => event.id));
+		expect(last.hasMoreBefore).toBe(false);
 	});
 });

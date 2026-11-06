@@ -332,6 +332,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 			directChannelIDs: conversations.filter((conversation) => conversation.isDM).map((conversation) => conversation.channelID),
 			groupChannelIDs: conversations.filter((conversation) => !conversation.isDM).map((conversation) => conversation.channelID),
 			sinceSeconds: window.since ? Math.floor(window.since.getTime() / 1000) : undefined,
+			untilSeconds: window.until ? Math.floor(window.until.getTime() / 1000) : undefined,
 			heldIDs: window.heldIDs,
 			authTagJSON: this.settings.authTagJSON,
 		});
@@ -347,7 +348,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 				postedAt: item.message.postedAt,
 			},
 		}));
-		return { items, held: inbox.held };
+		return { items, held: inbox.held, hasMoreBefore: inbox.hasMoreBefore };
 	}
 
 	async listMessages(

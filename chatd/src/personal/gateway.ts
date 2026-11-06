@@ -90,7 +90,7 @@ export type PersonalMessageMatch = Pick<
 >;
 
 export type PersonalInboxItem = {
-	reason: "mention" | "direct" | "thread_reply";
+	reason: "mention" | "direct" | "thread_reply" | "channel";
 	message: PersonalMessageMatch;
 	isUnread: boolean;
 };
@@ -104,10 +104,12 @@ export type PersonalHeldInboxItem = {
 export type PersonalInbox = {
 	items: PersonalInboxItem[];
 	held: PersonalHeldInboxItem[];
+	hasMoreBefore: boolean;
 };
 
 export type PersonalInboxWindow = {
 	since?: Date;
+	until?: Date;
 	heldIDs: string[];
 };
 

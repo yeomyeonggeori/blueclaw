@@ -7,7 +7,7 @@ import { nowSeconds, readStateOf } from "./user-read-state.ts";
 import type { UserMessageMatch } from "./user-message-search.ts";
 import { deletionsTo, editsTo } from "./user-session.ts";
 
-export type InboxReason = "mention" | "direct" | "thread_reply";
+export type InboxReason = "mention" | "direct" | "thread_reply" | "channel";
 
 export type UserInboxItem = {
 	reason: InboxReason;
@@ -24,7 +24,10 @@ export type UserHeldInboxItem = {
 export type UserInbox = {
 	items: UserInboxItem[];
 	held: UserHeldInboxItem[];
+	hasMoreBefore: boolean;
 };
+
+type TimeWindow = { since?: number; until?: number };
 
 export const MOST_INBOX_ITEMS = 50;
 const mostEventsScannedPerQuery = 200;
@@ -35,23 +38,26 @@ export async function listInboxAsUser(request: {
 	directChannelIDs: string[];
 	groupChannelIDs: string[];
 	sinceSeconds?: number;
+	untilSeconds?: number;
 	heldIDs?: string[];
 	authTagJSON?: string;
 }): Promise<UserInbox> {
 	return withRelayAs(request.relayURL, request.userSecretHex, request.authTagJSON, async (relay) => {
 		const readerPubkeyHex = relay.pubkeyHex;
 		const memberOf = new Set([...request.directChannelIDs, ...request.groupChannelIDs]);
-		const since = request.sinceSeconds;
-		const [mentioning, direct, threadReplies, heldEvents] = await Promise.all([
-			mentionsOf(relay, readerPubkeyHex, since),
-			messagesIn(relay, request.directChannelIDs, since),
-			repliesToThreadsJoined(relay, readerPubkeyHex, [...memberOf], since),
+		const window = { since: request.sinceSeconds, until: request.untilSeconds };
+		const [mentioning, direct, threadReplies, channel, heldEvents] = await Promise.all([
+			mentionsOf(relay, readerPubkeyHex, window),
+			messagesIn(relay, request.directChannelIDs, window),
+			repliesToThreadsJoined(relay, readerPubkeyHex, [...memberOf], window),
+			messagesIn(relay, request.groupChannelIDs, window),
 			messagesWithIDs(relay, request.heldIDs ?? []),
 		]);
-		const newest = newestReasoned(readerPubkeyHex, memberOf, [
+		const { newest, hasMoreBefore } = newestReasoned(readerPubkeyHex, memberOf, [
 			[mentioning, "mention"],
 			[direct, "direct"],
 			[threadReplies, "thread_reply"],
+			[channel, "channel"],
 		]);
 		const held = heldEvents.filter((event) => memberOf.has(firstTagValue(event, "h") ?? ""));
 		const messageIDs = [...newest.map(({ event }) => event.id), ...held.map((event) => event.id)];
@@ -84,6 +90,7 @@ export async function listInboxAsUser(request: {
 			held: held
 				.filter((event) => !deleted.has(event.id))
 				.map((event) => ({ id: event.id, body: bodyOf(event), isUnread: isUnread(event) })),
+			hasMoreBefore,
 		};
 	});
 }
@@ -92,7 +99,7 @@ function newestReasoned(
 	readerPubkeyHex: string,
 	memberOf: Set<string>,
 	candidates: [BuzzEvent[], InboxReason][],
-): { event: BuzzEvent; reason: InboxReason }[] {
+): { newest: { event: BuzzEvent; reason: InboxReason }[]; hasMoreBefore: boolean } {
 	const reasonOf = new Map<string, { event: BuzzEvent; reason: InboxReason }>();
 	for (const [events, reason] of candidates) {
 		for (const event of events) {
@@ -101,18 +108,21 @@ function newestReasoned(
 			reasonOf.set(event.id, { event, reason });
 		}
 	}
-	return [...reasonOf.values()]
-		.sort((first, second) => second.event.created_at - first.event.created_at)
-		.slice(0, MOST_INBOX_ITEMS);
+	const reasoned = [...reasonOf.values()].sort((first, second) => second.event.created_at - first.event.created_at);
+	const anyScanFilled = candidates.some(([events]) => events.length >= mostEventsScannedPerQuery);
+	return {
+		newest: reasoned.slice(0, MOST_INBOX_ITEMS),
+		hasMoreBefore: reasoned.length > MOST_INBOX_ITEMS || anyScanFilled,
+	};
 }
 
-function mentionsOf(relay: QueryingRelay, readerPubkeyHex: string, since?: number): Promise<BuzzEvent[]> {
-	return relay.query({ kinds: [STREAM_MESSAGE_KIND], "#p": [readerPubkeyHex], since, limit: mostEventsScannedPerQuery });
+function mentionsOf(relay: QueryingRelay, readerPubkeyHex: string, window: TimeWindow): Promise<BuzzEvent[]> {
+	return relay.query({ kinds: [STREAM_MESSAGE_KIND], "#p": [readerPubkeyHex], ...window, limit: mostEventsScannedPerQuery });
 }
 
-async function messagesIn(relay: QueryingRelay, channelIDs: string[], since?: number): Promise<BuzzEvent[]> {
+async function messagesIn(relay: QueryingRelay, channelIDs: string[], window: TimeWindow): Promise<BuzzEvent[]> {
 	if (channelIDs.length === 0) return [];
-	return relay.query({ kinds: [STREAM_MESSAGE_KIND], "#h": channelIDs, since, limit: mostEventsScannedPerQuery });
+	return relay.query({ kinds: [STREAM_MESSAGE_KIND], "#h": channelIDs, ...window, limit: mostEventsScannedPerQuery });
 }
 
 async function messagesWithIDs(relay: QueryingRelay, messageIDs: string[]): Promise<BuzzEvent[]> {
@@ -124,7 +134,7 @@ async function repliesToThreadsJoined(
 	relay: QueryingRelay,
 	readerPubkeyHex: string,
 	channelIDs: string[],
-	since?: number,
+	window: TimeWindow,
 ): Promise<BuzzEvent[]> {
 	if (channelIDs.length === 0) return [];
 	const own = await relay.query({
@@ -138,7 +148,7 @@ async function repliesToThreadsJoined(
 	const replies = await relay.query({
 		kinds: [STREAM_MESSAGE_KIND],
 		"#e": [...rootIDs],
-		since,
+		...window,
 		limit: mostEventsScannedPerQuery,
 	});
 	return replies.filter((event) => rootIDs.has(threadTagsOf(event).rootEventId ?? ""));
