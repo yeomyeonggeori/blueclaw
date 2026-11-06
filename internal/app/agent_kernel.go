@@ -46,7 +46,7 @@ type BundledToolSelectorFactory func(model.DecisionModel) agentcontract.ToolSele
 
 type QuestionWorderFactory func(model.LanguageModelProvider) holdrecord.QuestionWorder
 
-func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, bundledACPFactory harnessdriver.ACPFactory, newBundledToolSelector BundledToolSelectorFactory, newQuestionWorder QuestionWorderFactory, services taskServices, companyProvider func() agentcontract.CompanyContext, logger *slog.Logger) agentKernel {
+func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, bundledACPFactory harnessdriver.ACPFactory, newBundledToolSelector BundledToolSelectorFactory, newQuestionWorder QuestionWorderFactory, services taskServices, logger *slog.Logger) agentKernel {
 	logger.Info("application.initializing", "stage", "agent_kernel")
 	capabilityClient := newCapabilityClient(runtimeConfiguration)
 	capabilityRegistry := agentruntime.NewCapabilityRegistry(capabilityClient, capabilityToolDescriptors(runtimeConfiguration.Capabilities.ToolDescriptors))
@@ -86,7 +86,7 @@ func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, bundledACP
 	harnessFactory, harnessName, selectionError := selectAgentHarness(runtimeConfiguration, bundledACPFactory, kernel, logger)
 	kernel.harnessName = harnessName
 	kernel.startupError = selectionError
-	kernel.harness, kernel.skillRetriever = startAgentHarness(runtimeConfiguration, harnessFactory, kernel, services, companyProvider)
+	kernel.harness, kernel.skillRetriever = startAgentHarness(runtimeConfiguration, harnessFactory, kernel, services)
 	kernel.refreshSkillIndex = newSkillIndexRefresher(kernel.skillRetriever, kernel.instructionBundleLoader)
 	return kernel
 }
@@ -127,12 +127,11 @@ func selectAgentHarness(runtimeConfiguration config.RuntimeConfiguration, bundle
 	return selectedHarnessFactory, selectedHarnessName, harnessSelectionError
 }
 
-func startAgentHarness(runtimeConfiguration config.RuntimeConfiguration, harnessFactory harnessdriver.Factory, kernel agentKernel, services taskServices, companyProvider func() agentcontract.CompanyContext) (agentcontract.Harness, agentcontract.SkillRetriever) {
+func startAgentHarness(runtimeConfiguration config.RuntimeConfiguration, harnessFactory harnessdriver.Factory, kernel agentKernel, services taskServices) (agentcontract.Harness, agentcontract.SkillRetriever) {
 	return harnessFactory(harnessdriver.Dependencies{
 		RuntimeConfiguration:        runtimeConfiguration,
 		TaskRunStore:                services.taskRunService,
 		InstructionBundleLoader:     kernel.instructionBundleLoader,
-		CompanyProvider:             companyProvider,
 		EmbeddingProvider:           kernel.embeddingClient,
 		EmbeddingModelName:          runtimeConfiguration.LanguageModel.Embedding.Model,
 		SkillIndexPath:              skillIndexPath(runtimeConfiguration),

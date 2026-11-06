@@ -45,7 +45,6 @@ func (process agentProcess) optionsFor(request agentcontract.AgentTurnRequest) a
 		LLMCallRepository:   process.dependencies.LLMCallRepository,
 		Skills:              acpagent.Skills{Retriever: process.skillRetriever},
 		TurnOptions:         turnOptionsOf(process.dependencies.RuntimeConfiguration),
-		CompanyProvider:     process.dependencies.CompanyProvider,
 		RouterLanguageModel: process.dependencies.IntakeLanguageModelProvider,
 	}
 }
