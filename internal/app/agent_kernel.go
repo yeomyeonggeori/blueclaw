@@ -132,6 +132,7 @@ func startAgentHarness(runtimeConfiguration config.RuntimeConfiguration, harness
 		RuntimeConfiguration:        runtimeConfiguration,
 		TaskRunStore:                services.taskRunService,
 		InstructionBundleLoader:     kernel.instructionBundleLoader,
+		CompanyProvider:             companyProvider,
 		EmbeddingProvider:           kernel.embeddingClient,
 		EmbeddingModelName:          runtimeConfiguration.LanguageModel.Embedding.Model,
 		SkillIndexPath:              skillIndexPath(runtimeConfiguration),
