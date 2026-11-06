@@ -11,6 +11,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
+	"github.com/yeomyeonggeori/blueclaw/internal/launchfailure"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
@@ -82,6 +83,52 @@ func TestSchedulePollerRunsDueScheduleAndEnqueuesReply(t *testing.T) {
 	}
 	if repository.succeeded.NextRunAt == nil || !repository.succeeded.NextRunAt.After(runAt) {
 		t.Fatalf("expected schedule to advance, got %+v", repository.succeeded.NextRunAt)
+	}
+}
+
+func TestSchedulePollerReportsAnOccurrenceInsteadOfRunningItLate(t *testing.T) {
+	occurrenceAt := time.Date(2026, 11, 1, 23, 0, 0, 0, time.UTC)
+	startedAt := occurrenceAt.Add(9 * time.Hour)
+	repository := &pollerScheduleRepository{schedules: []task.Schedule{{
+		ScheduleID:       "schedule-briefing",
+		CreatorPersonID:  "person-1",
+		Name:             "Morning briefing",
+		Prompt:           "오늘 내 일정과 업무를 정리해줘.",
+		AgentProfileName: "default",
+		Platform:         "mattermost",
+		ConversationID:   "channel-1",
+		ReplyTargetID:    "reply-target-1",
+		TimeZone:         "Asia/Seoul",
+		Kind:             task.ScheduleKindCron,
+		CronExpression:   "0 8 * * *",
+		NextRunAt:        &occurrenceAt,
+	}}}
+	deliveryRepository := &pollerDeliveryRepository{}
+	scheduleRunner, harness, taskRunService := scheduleRunnerWithHarness(task.TaskStatusCompleted, "오늘의 브리핑입니다.")
+	poller := SchedulePoller{
+		ScheduleRepository:   repository,
+		DeliveryRepository:   deliveryRepository,
+		ScheduleRunner:       scheduleRunner,
+		PersonAccessResolver: staticPersonAccessResolver{},
+	}
+
+	_, errorValue := poller.RunDue(context.Background(), startedAt, 1)
+
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if harness.RunTurnCallCount() != 0 {
+		t.Fatalf("an occurrence past its start window must not run, got %d turns", harness.RunTurnCallCount())
+	}
+	if len(deliveryRepository.replies) != 1 || deliveryRepository.replies[0].ReplyKind != "user_notice" {
+		t.Fatalf("expected one failure notice to the requester, got %+v", deliveryRepository.replies)
+	}
+	reportedRun, isFound := taskRunService.FindTaskRun(deliveryRepository.replies[0].TaskRunID)
+	if !isFound || reportedRun.Status != task.TaskStatusFailed || !strings.Contains(reportedRun.FailureReason, "2026-11-02T08:00:00+09:00") {
+		t.Fatalf("expected a failed run naming the missed occurrence, got %+v", reportedRun)
+	}
+	if repository.succeeded == nil || repository.succeeded.NextRunAt == nil || !repository.succeeded.NextRunAt.After(startedAt) {
+		t.Fatalf("expected the schedule to move on to its next occurrence, got %+v", repository.succeeded)
 	}
 }
 
@@ -737,7 +784,9 @@ func scheduleRunnerWithHarness(turnStatus task.TaskStatus, finishMessage string)
 	toolCatalogBuilder := agentruntime.NewToolCatalogBuilder()
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"ask_confirm"})
 	toolCatalogBuilder.UseTaskRunService(taskRunService)
-	return agentruntime.NewScheduleRunner(agentruntime.NewTaskLauncher(harness, taskRunService, toolCatalogBuilder)), harness, taskRunService
+	taskLauncher := agentruntime.NewTaskLauncher(harness, taskRunService, toolCatalogBuilder)
+	taskLauncher.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, nil))
+	return agentruntime.NewScheduleRunner(taskLauncher), harness, taskRunService
 }
 
 func waitingSchedule(runAt time.Time) task.Schedule {

@@ -244,23 +244,44 @@ func (schedulePoller SchedulePoller) canRunMorningBriefing(ctx context.Context, 
 }
 
 func (schedulePoller SchedulePoller) executeSchedule(ctx context.Context, schedule task.Schedule, referenceTime time.Time) (scheduleExecutionResult, error) {
+	if (task.Scheduler{}).HasOutlivedItsStartWindow(schedule, referenceTime) {
+		return schedulePoller.reportOutlivedStartWindow(ctx, schedule, referenceTime)
+	}
 	if schedule.ExecutionMode == task.ScheduleExecutionModeMessage {
 		return schedulePoller.executeMessageSchedule(schedule, referenceTime)
 	}
 	return schedulePoller.executeAgentSchedule(ctx, schedule, referenceTime)
 }
 
-func (schedulePoller SchedulePoller) executeAgentSchedule(ctx context.Context, schedule task.Schedule, referenceTime time.Time) (scheduleExecutionResult, error) {
+func (schedulePoller SchedulePoller) reportOutlivedStartWindow(ctx context.Context, schedule task.Schedule, referenceTime time.Time) (scheduleExecutionResult, error) {
+	result, errorValue := schedulePoller.ScheduleRunner.ReportOutlivedStartWindow(ctx, schedulePoller.scheduleRunRequestFor(schedule, referenceTime))
+	if errorValue != nil {
+		return scheduleExecutionResult{}, errorValue
+	}
+	taskRunID := result.LaunchResult.TurnResult.TaskRun.TaskRunID
+	notice, missingNoticeReason := connectors.UserNoticeReply(result.LaunchResult.TurnResult, taskRunID)
+	if missingNoticeReason != "" {
+		schedulePoller.logger().Warn("task_schedule.start_window_notice.missing", "taskScheduleID", schedule.ScheduleID, "taskRunID", taskRunID, "reason", missingNoticeReason)
+		return scheduleExecutionResult{Schedule: result.Schedule}, nil
+	}
+	return scheduleExecutionResult{Schedule: result.Schedule, TaskRunID: taskRunID, Reply: notice, DidRun: true}, nil
+}
+
+func (schedulePoller SchedulePoller) scheduleRunRequestFor(schedule task.Schedule, referenceTime time.Time) agentruntime.ScheduleRunRequest {
 	personAccess := policy.PersonAccess{PersonID: schedule.CreatorPersonID}
 	if schedulePoller.PersonAccessResolver != nil {
 		personAccess = schedulePoller.PersonAccessResolver.ResolvePersonAccess(schedule.CreatorPersonID)
 	}
-	result, errorValue := schedulePoller.ScheduleRunner.RunIfDue(ctx, agentruntime.ScheduleRunRequest{
+	return agentruntime.ScheduleRunRequest{
 		Schedule:      schedule,
 		ReferenceTime: referenceTime,
 		PersonAccess:  personAccess,
 		WorkspaceID:   schedulePoller.WorkspaceID,
-	})
+	}
+}
+
+func (schedulePoller SchedulePoller) executeAgentSchedule(ctx context.Context, schedule task.Schedule, referenceTime time.Time) (scheduleExecutionResult, error) {
+	result, errorValue := schedulePoller.ScheduleRunner.RunIfDue(ctx, schedulePoller.scheduleRunRequestFor(schedule, referenceTime))
 	if errorValue != nil {
 		return scheduleExecutionResult{}, errorValue
 	}

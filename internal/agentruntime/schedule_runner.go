@@ -2,6 +2,7 @@ package agentruntime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -52,11 +53,35 @@ func (scheduleRunner ScheduleRunner) RunIfDue(ctx context.Context, request Sched
 		advancedSchedule, errorValue := scheduleRunner.scheduler.AdvanceSchedule(schedule, referenceTime)
 		return ScheduleRunResult{Schedule: advancedSchedule}, errorValue
 	}
-	workspaceID := request.WorkspaceID
-	if workspaceID == "" {
-		workspaceID = scheduleRunner.workspaceID
+	launchResult, errorValue := scheduleRunner.taskLauncher.Launch(ctx, scheduleRunner.launchRequestFor(request, referenceTime))
+	if errorValue != nil {
+		return ScheduleRunResult{}, errorValue
 	}
-	launchResult, errorValue := scheduleRunner.taskLauncher.Launch(ctx, TaskLaunchRequest{
+	return scheduleRunner.advancedPast(schedule, referenceTime, launchResult)
+}
+
+func (scheduleRunner ScheduleRunner) ReportOutlivedStartWindow(ctx context.Context, request ScheduleRunRequest) (ScheduleRunResult, error) {
+	launchResult := scheduleRunner.taskLauncher.FailWithoutRunning(
+		ctx,
+		scheduleRunner.launchRequestFor(request, request.ReferenceTime),
+		"scheduled_start_window",
+		outlivedStartWindowReason(request.Schedule, request.ReferenceTime),
+	)
+	return scheduleRunner.advancedPast(request.Schedule, request.ReferenceTime, launchResult)
+}
+
+func (scheduleRunner ScheduleRunner) advancedPast(schedule task.Schedule, referenceTime time.Time, launchResult TaskLaunchResult) (ScheduleRunResult, error) {
+	advancedSchedule, errorValue := scheduleRunner.scheduler.AdvanceSchedule(schedule, referenceTime)
+	if errorValue != nil {
+		return ScheduleRunResult{}, errorValue
+	}
+	advancedSchedule.LastTaskRunID = launchResult.TurnResult.TaskRun.TaskRunID
+	return ScheduleRunResult{Schedule: advancedSchedule, LaunchResult: launchResult, DidRun: true}, nil
+}
+
+func (scheduleRunner ScheduleRunner) launchRequestFor(request ScheduleRunRequest, referenceTime time.Time) TaskLaunchRequest {
+	schedule := request.Schedule
+	return TaskLaunchRequest{
 		Source:                    TaskLaunchSourceScheduled,
 		SourceReference:           schedule.ScheduleID,
 		RequesterPersonID:         schedule.CreatorPersonID,
@@ -71,16 +96,21 @@ func (scheduleRunner ScheduleRunner) RunIfDue(ctx context.Context, request Sched
 		ScheduledApprovedCall:     schedule.ApprovedCall,
 		PersonAccess:              request.PersonAccess,
 		AccessibleConversationIDs: []string{task.ScheduleSessionID(schedule.ScheduleID)},
-	})
-	if errorValue != nil {
-		return ScheduleRunResult{}, errorValue
 	}
-	advancedSchedule, errorValue := scheduleRunner.scheduler.AdvanceSchedule(schedule, referenceTime)
-	if errorValue != nil {
-		return ScheduleRunResult{}, errorValue
+}
+
+func outlivedStartWindowReason(schedule task.Schedule, referenceTime time.Time) error {
+	timeZone := scheduleTimeZone(schedule)
+	reason := fmt.Sprintf(
+		"the run scheduled for %s was not done by %s, and a scheduled run not done within %s of its time is reported instead of run late",
+		formatOptionalScheduledRunTime(schedule.NextRunAt, timeZone),
+		formatScheduledRunTime(referenceTime, timeZone),
+		task.ScheduledRunStartWindow,
+	)
+	if lastError := strings.TrimSpace(schedule.LastError); lastError != "" {
+		return errors.New(reason + "; its last attempt failed: " + lastError)
 	}
-	advancedSchedule.LastTaskRunID = launchResult.TurnResult.TaskRun.TaskRunID
-	return ScheduleRunResult{Schedule: advancedSchedule, LaunchResult: launchResult, DidRun: true}, nil
+	return errors.New(reason + "; no attempt started in time")
 }
 
 func scheduledRunContext(schedule task.Schedule, referenceTime time.Time) agentcontract.ScheduledRunContext {

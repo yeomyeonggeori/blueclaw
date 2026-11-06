@@ -13,6 +13,8 @@ var (
 	errorUnableToFindNextTaskRun = errors.New("unable to find next task run")
 )
 
+const ScheduledRunStartWindow = 15 * time.Minute
+
 type Scheduler struct{}
 
 type cronExpressionMatcher struct {
@@ -99,6 +101,10 @@ func (scheduler Scheduler) IsScheduleDue(schedule Schedule, referenceTime time.T
 	}
 
 	return !schedule.NextRunAt.After(referenceTime)
+}
+
+func (scheduler Scheduler) HasOutlivedItsStartWindow(schedule Schedule, referenceTime time.Time) bool {
+	return scheduler.IsScheduleDue(schedule, referenceTime) && referenceTime.Sub(*schedule.NextRunAt) > ScheduledRunStartWindow
 }
 
 func (scheduler Scheduler) calculateNextRunAt(schedule Schedule, referenceTime time.Time) (time.Time, bool, error) {

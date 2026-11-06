@@ -378,11 +378,13 @@ A schedule is a task that runs on its own at a set time.
 
 Schedules live in the `schedule` table and are polled every `scheduler.taskSchedulePollIntervalSecond`. The admin API lists, creates, updates, cancels and deletes them (`/admin/api/schedule/*`).
 
+A run happens within 15 minutes of its time or not at all. A failed run is retried with backoff while that window is open. When the window closes without a run that succeeded, because the daemon was down, the clock was untrusted or every attempt failed, nothing runs late. A failed run records why (the last attempt's error, or that none started), the model words a notice to the requester, and the schedule moves on to its next time.
+
 A schedule that carries an approved call is marked run before its run starts, so a daemon that stops halfway never runs it twice. The run carries out exactly that call before the model takes a step, without asking again, and tells the capability so in `context.scheduledApprovedCall`. Such a schedule is always a once schedule, which the database enforces, and `schedule_update` refuses to change it; cancelling it cancels the call.
 
 ### Morning briefing
 
-The morning briefing is a managed daily schedule per person. `morningBriefing` in `user.json` defaults to `{"enabled": true, "time": "08:00"}`, in the company time zone, and changes only through `persona_profile_update`. The generic schedule endpoints cannot edit it. A briefing run may call only `task_list`, `event_list`, `conversation_history`, `memory_search` and `persona_profile_get`, is skipped when there is nothing on the task and event lists, and is delivered through the outbox under an occurrence key so it arrives once. After five failures the occurrence is retired and the next day's runs as usual.
+The morning briefing is a managed daily schedule per person. `morningBriefing` in `user.json` defaults to `{"enabled": true, "time": "08:00"}`, in the company time zone, and changes only through `persona_profile_update`. The generic schedule endpoints cannot edit it. A briefing run may call only `task_list`, `event_list`, `conversation_history`, `memory_search` and `persona_profile_get`, is skipped when there is nothing on the task and event lists, and is delivered through the outbox under an occurrence key so it arrives once. A briefing that misses its window is reported like any other run, and the next day's runs as usual.
 
 ## Learning
 
