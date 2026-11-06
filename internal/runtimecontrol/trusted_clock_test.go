@@ -40,7 +40,7 @@ func TestWitnessDisagreementHoldsTaskIntake(t *testing.T) {
 }
 
 func TestNoWitnessStartsWorkRatherThanWaitingForever(t *testing.T) {
-	clock := NewTrustedClock([]string{"http://127.0.0.1:8080/v1"}, slog.New(slog.DiscardHandler))
+	clock := NewTrustedClock([]string{"http://127.0.0.1:8080/v1"}, companyIn("Asia/Seoul"), slog.New(slog.DiscardHandler))
 	clock.kernelDoubtsTheClock = func() bool { return true }
 	controller := NewTaskIntakeController(clock)
 
@@ -52,7 +52,7 @@ func TestNoWitnessStartsWorkRatherThanWaitingForever(t *testing.T) {
 }
 
 func TestUnreachableWitnessHoldsTaskIntake(t *testing.T) {
-	clock := NewTrustedClock([]string{"https://127.0.0.1:1/v1"}, slog.New(slog.DiscardHandler))
+	clock := NewTrustedClock([]string{"https://127.0.0.1:1/v1"}, companyIn("Asia/Seoul"), slog.New(slog.DiscardHandler))
 	clock.kernelDoubtsTheClock = func() bool { return true }
 	controller := NewTaskIntakeController(clock)
 
@@ -77,6 +77,33 @@ func TestTaskIntakeOpensOnceTheClockIsTrusted(t *testing.T) {
 	}
 }
 
+func TestAnUnknownCompanyZoneHoldsTaskIntakeUnderATrustedInstant(t *testing.T) {
+	clock := clockWithWitness(t, false, time.Now())
+	clock.companyZone = companyIn("")
+	controller := NewTaskIntakeController(clock)
+
+	clock.check(context.Background())
+
+	if !controller.IsQuiesced() {
+		t.Fatal("a right instant read in an unknown zone is still the wrong day, so task intake must wait")
+	}
+}
+
+func TestTaskIntakeOpensOnceTheCompanyZoneArrives(t *testing.T) {
+	clock := clockWithWitness(t, false, time.Now())
+	companyZone := ""
+	clock.companyZone = func() string { return companyZone }
+	controller := NewTaskIntakeController(clock)
+	clock.check(context.Background())
+
+	companyZone = "Asia/Seoul"
+	clock.check(context.Background())
+
+	if controller.IsQuiesced() {
+		t.Fatal("task intake must open once the policy names the company's zone")
+	}
+}
+
 func TestOnlyTLSOriginsWitnessTheClock(t *testing.T) {
 	origins := witnessOriginsOf([]string{
 		"https://models.example.com/api/v1/chat/completions",
@@ -97,8 +124,12 @@ func clockWithWitness(t *testing.T, kernelDoubts bool, witnessTime time.Time) *T
 		responseWriter.WriteHeader(http.StatusNotFound)
 	}))
 	t.Cleanup(witness.Close)
-	clock := NewTrustedClock([]string{witness.URL + "/api/v1"}, slog.New(slog.DiscardHandler))
+	clock := NewTrustedClock([]string{witness.URL + "/api/v1"}, companyIn("Asia/Seoul"), slog.New(slog.DiscardHandler))
 	clock.httpClient = witness.Client()
 	clock.kernelDoubtsTheClock = func() bool { return kernelDoubts }
 	return clock
+}
+
+func companyIn(timeZone string) func() string {
+	return func() string { return timeZone }
 }

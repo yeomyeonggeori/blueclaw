@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 const (
@@ -21,13 +23,16 @@ const (
 // On a machine without a battery-backed clock, systemd-timesyncd starts the
 // clock from the last time it recorded (systemd-timesyncd.service(8)).
 type TrustedClock struct {
-	witnessOrigins       []string
-	httpClient           *http.Client
-	kernelDoubtsTheClock func() bool
-	now                  func() time.Time
-	logger               *slog.Logger
-	trusted              chan struct{}
-	trustOnce            sync.Once
+	witnessOrigins         []string
+	companyZone            func() string
+	httpClient             *http.Client
+	kernelDoubtsTheClock   func() bool
+	now                    func() time.Time
+	logger                 *slog.Logger
+	isInstantSettled       bool
+	hasReportedMissingZone bool
+	trusted                chan struct{}
+	trustOnce              sync.Once
 }
 
 type witnessReading struct {
@@ -36,9 +41,10 @@ type witnessReading struct {
 	failed error
 }
 
-func NewTrustedClock(witnessEndpoints []string, logger *slog.Logger) *TrustedClock {
+func NewTrustedClock(witnessEndpoints []string, companyZone func() string, logger *slog.Logger) *TrustedClock {
 	return &TrustedClock{
 		witnessOrigins:       witnessOriginsOf(witnessEndpoints),
+		companyZone:          companyZone,
 		httpClient:           &http.Client{Timeout: witnessRequestTimeout},
 		kernelDoubtsTheClock: kernelDoubtsTheClock,
 		now:                  time.Now,
@@ -80,6 +86,34 @@ func (clock *TrustedClock) Watch(ctx context.Context) {
 }
 
 func (clock *TrustedClock) check(ctx context.Context) ([]witnessReading, bool) {
+	if !clock.isInstantSettled {
+		readings, isSettled := clock.settleInstant(ctx)
+		if !isSettled {
+			return readings, false
+		}
+		clock.isInstantSettled = true
+	}
+	if !clock.knowsTheCompanyZone() {
+		return nil, false
+	}
+	clock.trustOnce.Do(func() { close(clock.trusted) })
+	return nil, true
+}
+
+func (clock *TrustedClock) knowsTheCompanyZone() bool {
+	companyZone := clock.companyZone()
+	fallbackReason := agentcontract.CompanyZoneFallbackReason(companyZone)
+	if fallbackReason == "" {
+		return true
+	}
+	if !clock.hasReportedMissingZone {
+		clock.hasReportedMissingZone = true
+		clock.logger.Warn("clock.company_zone_unknown_holding_work", "reason", fallbackReason, "companyTimeZone", companyZone)
+	}
+	return false
+}
+
+func (clock *TrustedClock) settleInstant(ctx context.Context) ([]witnessReading, bool) {
 	if !clock.kernelDoubtsTheClock() {
 		clock.trust("kernel_synchronized", 0)
 		return nil, true
@@ -118,17 +152,11 @@ func (clock *TrustedClock) read(ctx context.Context, origin string) witnessReadi
 }
 
 func (clock *TrustedClock) trust(source string, offset time.Duration) {
-	clock.trustOnce.Do(func() {
-		clock.logger.Info("clock.trusted", "source", source, "offsetSecond", int(offset.Seconds()))
-		close(clock.trusted)
-	})
+	clock.logger.Info("clock.trusted", "source", source, "offsetSecond", int(offset.Seconds()))
 }
 
 func (clock *TrustedClock) startUnverified() {
-	clock.trustOnce.Do(func() {
-		clock.logger.Warn("clock.unverifiable_starting_work", "reason", "the kernel reports the clock unsynchronized and no https model endpoint can witness it")
-		close(clock.trusted)
-	})
+	clock.logger.Warn("clock.unverifiable_starting_work", "reason", "the kernel reports the clock unsynchronized and no https model endpoint can witness it")
 }
 
 func (clock *TrustedClock) logUntrusted(readings []witnessReading) {
