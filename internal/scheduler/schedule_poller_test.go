@@ -690,6 +690,15 @@ func (repository *pollerScheduleRepository) ClaimDueSchedules(limit int, _ time.
 	return append([]task.Schedule{}, dueSchedules[:limit]...), nil
 }
 
+func (repository *pollerScheduleRepository) ScheduleByID(scheduleID string) (task.Schedule, bool, error) {
+	for _, schedule := range repository.schedules {
+		if schedule.ScheduleID == scheduleID {
+			return schedule, true, nil
+		}
+	}
+	return task.Schedule{}, false, nil
+}
+
 func (repository *pollerScheduleRepository) ListSchedules(request task.ScheduleListRequest) (task.ScheduleListResult, error) {
 	schedules := []task.Schedule{}
 	for _, schedule := range repository.schedules {

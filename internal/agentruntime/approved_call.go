@@ -33,8 +33,9 @@ func (step carryOutApprovedCallLaunchStep) Run(ctx context.Context, execution *t
 
 func (step carryOutApprovedCallLaunchStep) carryOutScheduledCall(ctx context.Context, execution *taskLaunchExecution, scheduledCall task.ScheduleApprovedCall) agentcontract.CarriedOutCall {
 	approvedCall := approvalgate.ApprovedCall{ToolName: strings.TrimSpace(scheduledCall.ToolName), ToolInput: scheduledCall.ToolInput}
-	result := invokeApprovedCall(withScheduledApprovedCall(ctx, scheduledCall), step.ToolSet, approvedCall)
-	if taskRunID := strings.TrimSpace(execution.Request.ExistingTaskRunID); taskRunID != "" && execution.Launcher.taskRunService != nil {
+	taskRunID := strings.TrimSpace(execution.Request.ExistingTaskRunID)
+	result := invokeApprovedCall(toolcontract.WithTaskRunID(ctx, taskRunID), step.ToolSet, approvedCall)
+	if taskRunID != "" && execution.Launcher.taskRunService != nil {
 		execution.Launcher.taskRunService.AppendTaskEvent(taskRunID, TaskEventScheduledApprovedCallCarriedOut, MarshalBody(map[string]any{
 			"scheduleID": execution.Request.ScheduledRun.ScheduleID,
 			"toolName":   approvedCall.ToolName,
@@ -46,9 +47,7 @@ func (step carryOutApprovedCallLaunchStep) carryOutScheduledCall(ctx context.Con
 }
 
 func invokeApprovedCall(ctx context.Context, toolSet *toolcontract.ToolSet, approvedCall approvalgate.ApprovedCall) toolcontract.ToolResult {
-	carryOutToolSet := toolSet.WithAdditionalAllowedToolNames([]string{approvedCall.ToolName})
-	carryOutToolSet.UseToolCallGate(nil)
-	result, errorValue := carryOutToolSet.Invoke(ctx, toolcontract.ToolInvocation{
+	result, errorValue := toolSet.WithAdditionalAllowedToolNames([]string{approvedCall.ToolName}).Invoke(ctx, toolcontract.ToolInvocation{
 		ToolName: approvedCall.ToolName,
 		Input:    approvedCall.ToolInput,
 	})
@@ -56,15 +55,4 @@ func invokeApprovedCall(ctx context.Context, toolSet *toolcontract.ToolSet, appr
 		return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, "approval", errorValue.Error())
 	}
 	return result
-}
-
-type scheduledApprovedCallKey struct{}
-
-func withScheduledApprovedCall(ctx context.Context, scheduledCall task.ScheduleApprovedCall) context.Context {
-	return context.WithValue(ctx, scheduledApprovedCallKey{}, scheduledCall)
-}
-
-func scheduledApprovedCallFrom(ctx context.Context) (task.ScheduleApprovedCall, bool) {
-	scheduledCall, isCarried := ctx.Value(scheduledApprovedCallKey{}).(task.ScheduleApprovedCall)
-	return scheduledCall, isCarried
 }

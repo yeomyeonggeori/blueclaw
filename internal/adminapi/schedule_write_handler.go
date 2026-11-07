@@ -35,6 +35,7 @@ type scheduleToolCreateRequest struct {
 	Platform        string `json:"platform"`
 	ConversationID  string `json:"conversationID"`
 	ReplyTargetID   string `json:"replyTargetID"`
+	IsApproved      bool   `json:"isApproved"`
 }
 
 type scheduleToolUpdateRequest struct {
@@ -101,6 +102,7 @@ func (scheduleHandler ScheduleHandler) HandleToolCreate(responseWriter http.Resp
 			ReplyTargetID:  input.ReplyTargetID,
 		},
 		CompanyTimeZone: scheduleHandler.companyTimeZone(),
+		IsApproved:      input.IsApproved,
 		ReferenceTime:   referenceTime,
 	})
 	if errorValue != nil {

@@ -5,8 +5,19 @@ import (
 	"time"
 )
 
+const scheduleSessionPrefix = "schedule:"
+
 func ScheduleSessionID(scheduleID string) string {
-	return "schedule:" + strings.TrimSpace(scheduleID)
+	return scheduleSessionPrefix + strings.TrimSpace(scheduleID)
+}
+
+func ScheduleIDOfSession(conversationID string) (string, bool) {
+	scheduleID, isScheduleSession := strings.CutPrefix(strings.TrimSpace(conversationID), scheduleSessionPrefix)
+	return scheduleID, isScheduleSession && scheduleID != ""
+}
+
+func (schedule Schedule) IsApproved() bool {
+	return schedule.ApprovedAt != nil
 }
 
 type ScheduleKind string
@@ -51,6 +62,7 @@ type Schedule struct {
 	LastError         string                `json:"lastError"`
 	NextAttemptAt     *time.Time            `json:"nextAttemptAt"`
 	ApprovedCall      *ScheduleApprovedCall `json:"approvedCall,omitempty"`
+	ApprovedAt        *time.Time            `json:"approvedAt,omitempty"`
 	CreatedAt         time.Time             `json:"createdAt"`
 	UpdatedAt         time.Time             `json:"updatedAt"`
 }

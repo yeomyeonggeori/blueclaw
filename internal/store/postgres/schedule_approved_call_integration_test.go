@@ -17,16 +17,15 @@ func TestAnApprovedCallIsStoredWithItsScheduleAndOnlyOnAOnceSchedule(t *testing.
 	referenceTime := time.Now().UTC()
 	schedule, errorValue := task.BuildApprovedCallSchedule(task.ApprovedCallScheduleRequest{
 		Call: task.ScheduleApprovedCall{
-			ToolName:         "host_update",
-			ToolInput:        json.RawMessage(`{"targetVersion":"v2026.10.02.090000"}`),
-			ApproverPersonID: "approved-call-test-admin",
-			ApprovedAt:       referenceTime,
+			ToolName:  "host_update",
+			ToolInput: json.RawMessage(`{"targetVersion":"v2026.10.02.090000"}`),
 		},
-		StartsAt:      referenceTime.Add(6 * time.Hour),
-		Prompt:        "update yourself tonight",
-		Delivery:      task.ScheduleDeliveryBinding{Platform: "buzz", ConversationID: "conversation-1", ReplyTargetID: "message-1"},
-		TimeZone:      "Asia/Seoul",
-		ReferenceTime: referenceTime,
+		ApproverPersonID: "approved-call-test-admin",
+		StartsAt:         referenceTime.Add(6 * time.Hour),
+		Prompt:           "update yourself tonight",
+		Delivery:         task.ScheduleDeliveryBinding{Platform: "buzz", ConversationID: "conversation-1", ReplyTargetID: "message-1"},
+		TimeZone:         "Asia/Seoul",
+		ReferenceTime:    referenceTime,
 	})
 	if errorValue != nil {
 		t.Fatal(errorValue)
@@ -49,6 +48,13 @@ VALUES ($1, '이샘플', $2, $2)`, schedule.CreatorPersonID, referenceTime); err
 	}
 	if len(listed.Schedules) != 1 || !listed.Schedules[0].CarriesAnApprovedCall() || string(listed.Schedules[0].ApprovedCall.ToolInput) != `{"targetVersion": "v2026.10.02.090000"}` {
 		t.Fatalf("the stored schedule reads back as %+v", listed.Schedules)
+	}
+	found, isFound, errorValue := repository.ScheduleByID(schedule.ScheduleID)
+	if errorValue != nil || !isFound || found.ApprovedAt == nil || !found.ApprovedAt.Equal(referenceTime.Truncate(time.Microsecond)) {
+		t.Fatalf("the schedule found by its ID reads back approved at %v (found %v, %v)", found.ApprovedAt, isFound, errorValue)
+	}
+	if _, isFound, errorValue := repository.ScheduleByID("no-such-schedule"); errorValue != nil || isFound {
+		t.Fatalf("an unknown schedule ID was found %v with %v", isFound, errorValue)
 	}
 	_, errorValue = database.SQL.ExecContext(ctx, "UPDATE schedule SET schedule_kind = 'cron', run_at = NULL, cron_expression = '0 3 * * *' WHERE schedule_id = $1", schedule.ScheduleID)
 	if errorValue == nil {

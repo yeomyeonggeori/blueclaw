@@ -47,8 +47,8 @@ INSERT INTO schedule (
   last_run_at, last_task_run_id, expires_at, created_at, updated_at,
   platform, delivery_conversation_id, reply_target_id, time_zone,
   lease_owner, leased_until, failure_count, last_error, next_attempt_at,
-  max_run_count, completed_run_count, approved_call
-) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
+  max_run_count, completed_run_count, approved_call, approved_at
+) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
 ON CONFLICT (schedule_id) DO UPDATE SET
   name = EXCLUDED.name,
   prompt = EXCLUDED.prompt,
@@ -106,8 +106,23 @@ WHERE NOT EXISTS (
 		zeroAsNil(schedule.MaxRunCount),
 		schedule.CompletedRunCount,
 		approvedCallDocument(schedule.ApprovedCall),
+		schedule.ApprovedAt,
 	)
 	return errorValue
+}
+
+func (scheduleRepository ScheduleRepository) ScheduleByID(scheduleID string) (task.Schedule, bool, error) {
+	row := scheduleRepository.database.SQL.QueryRowContext(context.Background(), `SELECT `+scheduleReturningColumns()+`
+FROM schedule
+WHERE schedule_id = $1`, strings.TrimSpace(scheduleID))
+	schedule, errorValue := scanSchedule(row)
+	if errors.Is(errorValue, sql.ErrNoRows) {
+		return task.Schedule{}, false, nil
+	}
+	if errorValue != nil {
+		return task.Schedule{}, false, errorValue
+	}
+	return schedule, true, nil
 }
 
 func (scheduleRepository ScheduleRepository) UpdateSchedule(request task.ScheduleUpdateRequest) (task.ScheduleUpdateResult, error) {
@@ -796,6 +811,7 @@ func scanSchedule(scanner scheduleScanner) (task.Schedule, error) {
 	var nextAttemptAt sql.NullTime
 	var expiresAt sql.NullTime
 	var approvedCall []byte
+	var approvedAt sql.NullTime
 	errorValue := scanner.Scan(
 		&schedule.ScheduleID,
 		&schedule.CreatorPersonID,
@@ -825,8 +841,10 @@ func scanSchedule(scanner scheduleScanner) (task.Schedule, error) {
 		&maxRunCount,
 		&schedule.CompletedRunCount,
 		&approvedCall,
+		&approvedAt,
 	)
 	schedule.ApprovedCall = scannedApprovedCall(approvedCall)
+	schedule.ApprovedAt = nullableScheduleTime(approvedAt)
 	schedule.ExecutionMode = task.ScheduleExecutionMode(normalizedScheduleExecutionMode(task.ScheduleExecutionMode(executionMode)))
 	schedule.Kind = task.ScheduleKind(kind)
 	if intervalSecond.Valid {
@@ -876,7 +894,7 @@ func scheduleReturningColumns() string {
   last_run_at, COALESCE(last_task_run_id, ''), expires_at, created_at, updated_at,
   platform, delivery_conversation_id, reply_target_id, time_zone,
   lease_owner, leased_until, failure_count, last_error, next_attempt_at,
-  max_run_count, completed_run_count, approved_call`
+  max_run_count, completed_run_count, approved_call, approved_at`
 }
 
 func approvedCallDocument(approvedCall *task.ScheduleApprovedCall) any {

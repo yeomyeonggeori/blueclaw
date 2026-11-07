@@ -25,17 +25,17 @@ type HarnessPermissionAsker interface {
 }
 
 func (gate *Gate) AskHarnessPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question HarnessPermissionQuestion) (acp.RequestPermissionOutcome, AskStatus) {
+	taskRunID := strings.TrimSpace(approvalRequest.TaskRunID)
+	heldCall := heldCallOfHarnessQuestion(question)
+	if outcome, isAnswered := gate.knownHarnessAnswer(taskRunID, approvalRequest, heldCall, question.Options); isAnswered {
+		return outcome, AskAnswered
+	}
 	harnessAsker, canAskHarnessPermission := gate.permissionAsker.(HarnessPermissionAsker)
 	if !canAskHarnessPermission {
 		return acp.RequestPermissionOutcome{}, AskUnreachable
 	}
-	taskRunID := strings.TrimSpace(approvalRequest.TaskRunID)
 	if taskRunID == "" {
 		return harnessAsker.AskHarnessPermission(ctx, approvalRequest, question)
-	}
-	heldCall := heldCallOfHarnessQuestion(question)
-	if outcome, isApproved := gate.spendApprovedHarnessCall(taskRunID, heldCall, question.Options); isApproved {
-		return outcome, AskAnswered
 	}
 	profileName := gate.currentAgentProfileName(taskRunID)
 	if _, errorValue := gate.taskRunService.PauseTaskRun(taskRunID, agentcontract.TaskStatusWaitingApproval, question.Text); errorValue != nil {
@@ -57,6 +57,19 @@ func (gate *Gate) AskHarnessPermission(ctx context.Context, approvalRequest mcps
 		slog.Warn("approvalgate.answered_run_will_not_advance", "taskRunID", taskRunID, "reason", errorValue.Error())
 	}
 	return outcome, AskAnswered
+}
+
+func (gate *Gate) knownHarnessAnswer(taskRunID string, approvalRequest mcpserver.ApprovalRequest, heldCall agentcontract.HeldCall, options []acp.PermissionOption) (acp.RequestPermissionOutcome, bool) {
+	if taskRunID == "" {
+		return acp.RequestPermissionOutcome{}, false
+	}
+	if outcome, isApproved := gate.spendApprovedHarnessCall(taskRunID, heldCall, options); isApproved {
+		return outcome, true
+	}
+	if !gate.isAnsweredByItsSchedule(approvalRequest) {
+		return acp.RequestPermissionOutcome{}, false
+	}
+	return gate.harnessAllowedByItsSchedule(taskRunID, heldCall, options)
 }
 
 func heldCallOfHarnessQuestion(question HarnessPermissionQuestion) agentcontract.HeldCall {

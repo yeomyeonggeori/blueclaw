@@ -59,6 +59,7 @@ type ScheduleCreateContext struct {
 	AgentProfileName string
 	Delivery         ScheduleDeliveryBinding
 	CompanyTimeZone  string
+	IsApproved       bool
 	ReferenceTime    time.Time
 }
 
@@ -126,6 +127,9 @@ func BuildScheduleCreate(input ScheduleCreateInput, createContext ScheduleCreate
 	}
 	if errorValue := validateScheduleRepeatPolicy(schedule, input.RepeatPolicy); errorValue != nil {
 		return Schedule{}, errorValue
+	}
+	if createContext.IsApproved {
+		schedule.ApprovedAt = &createContext.ReferenceTime
 	}
 	return schedule, nil
 }

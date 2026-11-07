@@ -32,14 +32,6 @@ func (answer ApprovalAnswer) ChosenFrom(choices []holdrecord.Choice) (holdrecord
 	return ChoiceByKey(choices, answer.ChoiceKey)
 }
 
-type ApprovedCallScheduler interface {
-	ScheduleApprovedCall(context.Context, task.ApprovedCallScheduleRequest) (task.Schedule, error)
-}
-
-func (gate *Gate) UseApprovedCallScheduler(scheduler ApprovedCallScheduler) {
-	gate.approvedCallScheduler = scheduler
-}
-
 type DeferralRequest struct {
 	TaskRunID         string
 	ToolName          string
@@ -61,25 +53,24 @@ type deferredCallRecord struct {
 }
 
 func (gate *Gate) DeferApprovedCall(ctx context.Context, request DeferralRequest) (toolcontract.ToolResult, error) {
-	if gate.approvedCallScheduler == nil {
+	if gate.schedules == nil {
 		return toolcontract.ToolResult{}, errors.New("this agent has no scheduler to hold an approved call for later")
 	}
 	startsAt, errorValue := time.Parse(time.RFC3339, strings.TrimSpace(request.Choice.StartsAt))
 	if errorValue != nil {
 		return toolcontract.ToolResult{}, errChoiceStartsAtUnreadable
 	}
-	schedule, errorValue := gate.approvedCallScheduler.ScheduleApprovedCall(ctx, task.ApprovedCallScheduleRequest{
+	schedule, errorValue := gate.schedules.ScheduleApprovedCall(ctx, task.ApprovedCallScheduleRequest{
 		Call: task.ScheduleApprovedCall{
-			ToolName:         request.ToolName,
-			ToolInput:        request.ToolInput,
-			ApproverPersonID: request.RequesterPersonID,
-			ApprovedAt:       request.ReferenceTime,
-			OriginTaskRunID:  request.TaskRunID,
+			ToolName:        request.ToolName,
+			ToolInput:       request.ToolInput,
+			OriginTaskRunID: request.TaskRunID,
 		},
-		StartsAt:      startsAt,
-		Prompt:        cmp.Or(strings.TrimSpace(request.Prompt), strings.TrimSpace(request.ToolName)),
-		Delivery:      task.ScheduleDeliveryBinding{Platform: request.Platform, ConversationID: request.ConversationID, ReplyTargetID: request.ReplyTargetID},
-		ReferenceTime: request.ReferenceTime,
+		ApproverPersonID: request.RequesterPersonID,
+		StartsAt:         startsAt,
+		Prompt:           cmp.Or(strings.TrimSpace(request.Prompt), strings.TrimSpace(request.ToolName)),
+		Delivery:         task.ScheduleDeliveryBinding{Platform: request.Platform, ConversationID: request.ConversationID, ReplyTargetID: request.ReplyTargetID},
+		ReferenceTime:    request.ReferenceTime,
 	})
 	if errorValue != nil {
 		return toolcontract.ToolResult{}, errorValue

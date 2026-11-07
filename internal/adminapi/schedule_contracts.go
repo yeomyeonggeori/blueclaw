@@ -17,7 +17,8 @@ var scheduleToolCreateInputSchema = json.RawMessage(`{
 		"repeatPolicy": {"type": "string", "enum": ["finite", "unbounded"]},
 		"platform": {"type": "string"},
 		"conversationID": {"type": "string"},
-		"replyTargetID": {"type": "string"}
+		"replyTargetID": {"type": "string"},
+		"isApproved": {"type": "boolean"}
 	},
 	"required": ["taskInstruction", "kind"],
 	"additionalProperties": false

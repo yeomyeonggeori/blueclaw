@@ -103,7 +103,8 @@ func HostUpdateOffHoursAcceptanceScenario(artifactDirectoryPath string) VirtualS
 		ExpectedEventCounts: []VirtualEventCount{
 			{Name: agentruntime.TaskEventScheduledApprovedCallCarriedOut, BodyFragment: `"targetVersion":"` + virtualHostLatestVersion + `"`, Count: 1},
 			{Name: toolResultEventName(virtualHostUpdateToolName), BodyFragment: `"isScheduled":true`, Count: 1},
-			{Name: agentcontract.TaskEventApprovalHoldOpened, Count: 0},
+			{Name: agentcontract.TaskEventApprovalHoldOpened, Count: 1},
+			{Name: agentcontract.TaskEventApprovalDecided, BodyFragment: `"decision":"approve","source":"schedule"`, Count: 1},
 			{Name: agentcontract.TaskEventConfirmationRequested, Count: 0},
 		},
 		ExpectedReplyFragments: []string{"업데이트"},

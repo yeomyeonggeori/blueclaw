@@ -17,7 +17,7 @@ type Gate struct {
 	questionWorder         holdrecord.QuestionWorder
 	approvalTargetResolver ApprovalTargetResolver
 	permissionAsker        PermissionAsker
-	approvedCallScheduler  ApprovedCallScheduler
+	schedules              Schedules
 }
 
 func New(taskRunService taskstate.TaskRunStore) *Gate {
@@ -37,6 +37,9 @@ func (gate *Gate) AwaitApproval(ctx context.Context, approvalRequest mcpserver.A
 		}
 		if sendReachesOnlyTheRequester(approvalRequest, resolution.Target) {
 			return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionApproved}, nil
+		}
+		if gate.isAnsweredByItsSchedule(approvalRequest) {
+			return gate.approvedByItsSchedule(taskRunID, approvalRequest, resolution), nil
 		}
 		confirmation = gate.confirmationWording(ctx, approvalRequest, resolution)
 	}
