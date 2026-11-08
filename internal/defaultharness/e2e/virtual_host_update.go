@@ -28,10 +28,9 @@ const (
 )
 
 type virtualInvokeContext struct {
-	RequesterPersonID     string          `json:"requesterPersonID"`
-	HoldID                string          `json:"holdID"`
-	IsScheduledRun        bool            `json:"isScheduledRun"`
-	ScheduledApprovedCall json.RawMessage `json:"scheduledApprovedCall"`
+	RequesterPersonID string `json:"requesterPersonID"`
+	HoldID            string `json:"holdID"`
+	IsScheduledRun    bool   `json:"isScheduledRun"`
 }
 
 func virtualInvokeContextOf(requestBody []byte) virtualInvokeContext {
@@ -43,7 +42,7 @@ func virtualInvokeContextOf(requestBody []byte) virtualInvokeContext {
 }
 
 func (invokeContext virtualInvokeContext) carriesAnApproval() bool {
-	return strings.TrimSpace(invokeContext.HoldID) != "" || len(invokeContext.ScheduledApprovedCall) > 0 && string(invokeContext.ScheduledApprovedCall) != "null"
+	return strings.TrimSpace(invokeContext.HoldID) != ""
 }
 
 func (service *virtualCapabilityService) isAdmin(personID string) bool {
@@ -89,7 +88,7 @@ func (service *virtualCapabilityService) hostUpdateResponse(requestBody []byte) 
 		"status":      "started",
 		"fromVersion": virtualHostInstalledVersion,
 		"toVersion":   stringValue(input["targetVersion"]),
-		"isScheduled": len(invokeContext.ScheduledApprovedCall) > 0,
+		"isScheduled": invokeContext.IsScheduledRun,
 	})
 }
 
@@ -115,12 +114,13 @@ func virtualAdminPersonIDs(scenario VirtualSessionScenario) map[string]bool {
 	return map[string]bool{virtualRequesterPersonID: true}
 }
 
-type virtualApprovedCallSchedules struct {
-	mutex     sync.Mutex
-	schedules []task.Schedule
+type virtualSchedules struct {
+	mutex      sync.Mutex
+	schedules  []task.Schedule
+	firedCount int
 }
 
-func (store *virtualApprovedCallSchedules) ScheduleApprovedCall(_ context.Context, request task.ApprovedCallScheduleRequest) (task.Schedule, error) {
+func (store *virtualSchedules) ScheduleApprovedCall(_ context.Context, request task.ApprovedCallScheduleRequest) (task.Schedule, error) {
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
 	if request.TimeZone == "" {
@@ -129,23 +129,34 @@ func (store *virtualApprovedCallSchedules) ScheduleApprovedCall(_ context.Contex
 	return task.CreateApprovedCallSchedule(store, request)
 }
 
-func (store *virtualApprovedCallSchedules) UpsertSchedule(schedule task.Schedule) error {
+func (store *virtualSchedules) UpsertSchedule(schedule task.Schedule) error {
 	store.schedules = append(store.schedules, schedule)
 	return nil
 }
 
-func (store *virtualApprovedCallSchedules) due() []task.Schedule {
+func (store *virtualSchedules) ScheduleByID(scheduleID string) (task.Schedule, bool, error) {
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
-	due := append([]task.Schedule{}, store.schedules...)
-	store.schedules = nil
+	for _, schedule := range store.schedules {
+		if schedule.ScheduleID == scheduleID {
+			return schedule, true, nil
+		}
+	}
+	return task.Schedule{}, false, nil
+}
+
+func (store *virtualSchedules) due() []task.Schedule {
+	store.mutex.Lock()
+	defer store.mutex.Unlock()
+	due := append([]task.Schedule{}, store.schedules[store.firedCount:]...)
+	store.firedCount = len(store.schedules)
 	sort.Slice(due, func(left int, right int) bool { return due[left].NextRunAt.Before(*due[right].NextRunAt) })
 	return due
 }
 
 func (harness *VirtualSessionHarness) fireDueApprovedSchedules(ctx context.Context) (VirtualTurnResult, error) {
 	turnResult := VirtualTurnResult{Handled: true}
-	for _, schedule := range harness.approvedCallSchedules.due() {
+	for _, schedule := range harness.schedules.due() {
 		runResult, errorValue := harness.scheduleRunner.RunIfDue(ctx, agentruntime.ScheduleRunRequest{
 			Schedule:      schedule,
 			ReferenceTime: schedule.NextRunAt.Add(time.Second),

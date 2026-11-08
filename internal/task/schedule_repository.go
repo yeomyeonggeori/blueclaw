@@ -94,6 +94,7 @@ type ScheduleRepository interface {
 	ExpireSchedule(Schedule, string, time.Time) error
 	CancelSchedules(ScheduleCancelRequest) (ScheduleCancelResult, error)
 	ListSchedules(ScheduleListRequest) (ScheduleListResult, error)
+	ScheduleByID(string) (Schedule, bool, error)
 }
 
 type TaskWaitTokenRepository interface {

@@ -142,6 +142,15 @@ func (repository *memoryScheduleRepository) CancelSchedules(request task.Schedul
 	return task.ScheduleCancelResult{Schedules: cancelledSchedules}, nil
 }
 
+func (repository *memoryScheduleRepository) ScheduleByID(scheduleID string) (task.Schedule, bool, error) {
+	for _, schedule := range repository.schedules {
+		if schedule.ScheduleID == scheduleID {
+			return schedule, true, nil
+		}
+	}
+	return task.Schedule{}, false, nil
+}
+
 func (repository *memoryScheduleRepository) ListSchedules(request task.ScheduleListRequest) (task.ScheduleListResult, error) {
 	schedules := []task.Schedule{}
 	for _, schedule := range repository.schedules {

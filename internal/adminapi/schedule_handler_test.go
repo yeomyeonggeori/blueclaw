@@ -580,6 +580,24 @@ func TestScheduleToolCreateStoresTheSignedPrincipalsSchedule(t *testing.T) {
 	if repository.upsertedSchedule.CreatorPersonID != "person-이샘플" {
 		t.Fatalf("the stored creator escaped the signed principal: %+v", repository.upsertedSchedule)
 	}
+	if repository.upsertedSchedule.IsApproved() {
+		t.Fatalf("a schedule whose creation nobody said was approved is stored approved: %+v", repository.upsertedSchedule)
+	}
+}
+
+func TestScheduleToolCreateRecordsTheApprovalItsCallCarries(t *testing.T) {
+	repository := &scheduleListRepositoryStub{}
+	handler := scheduleWriteHandler(repository, "person-이샘플")
+
+	responseRecorder := postScheduleTool(handler, "/admin/api/schedule/tool-create",
+		`{"taskInstruction":"주간 보고를 팀 채널에 올린다","kind":"cron","cronExpression":"0 17 * * 5","repeatPolicy":"unbounded","platform":"buzz","conversationID":"channel-1","replyTargetID":"post-1","isApproved":true}`)
+
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", responseRecorder.Code, http.StatusOK, responseRecorder.Body.String())
+	}
+	if !repository.upsertedSchedule.IsApproved() {
+		t.Fatalf("an approved creation stored a schedule without its approval: %+v", repository.upsertedSchedule)
+	}
 }
 
 func TestScheduleToolUpdateResolvesDescriptionHintAndRewritesTaskInstruction(t *testing.T) {

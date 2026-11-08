@@ -13,9 +13,8 @@ func TestAnApprovedCallIsSpentBeforeItsRunSoARestartNeverRunsItTwice(t *testing.
 	runAt := time.Date(2026, 10, 2, 18, 0, 0, 0, time.UTC)
 	schedule := waitingSchedule(runAt)
 	schedule.ApprovedCall = &task.ScheduleApprovedCall{
-		ToolName:         "host_update",
-		ToolInput:        json.RawMessage(`{"targetVersion":"v2026.10.02.090000"}`),
-		ApproverPersonID: "person-1",
+		ToolName:  "host_update",
+		ToolInput: json.RawMessage(`{"targetVersion":"v2026.10.02.090000"}`),
 	}
 	repository := &pollerScheduleRepository{schedules: []task.Schedule{schedule}}
 	poller := SchedulePoller{

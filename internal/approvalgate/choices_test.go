@@ -40,6 +40,10 @@ func (scheduler *recordingScheduler) ScheduleApprovedCall(_ context.Context, req
 	return schedule, errorValue
 }
 
+func (scheduler *recordingScheduler) ScheduleByID(string) (task.Schedule, bool, error) {
+	return task.Schedule{}, false, nil
+}
+
 func hostUpdateRequest(taskRunID string) mcpserver.ApprovalRequest {
 	return mcpserver.ApprovalRequest{
 		RequesterPersonID: "person-admin",
@@ -70,7 +74,7 @@ func choiceGate(t *testing.T, answer ApprovalAnswer) (*Gate, *task.TaskRunServic
 	asker := &choosingAsker{answer: answer}
 	gate.UsePermissionAsker(asker)
 	scheduler := &recordingScheduler{}
-	gate.UseApprovedCallScheduler(scheduler)
+	gate.UseSchedules(scheduler)
 	return gate, taskRunService, taskRun, asker, scheduler
 }
 
@@ -118,7 +122,7 @@ func TestChoosingALaterTimeBindsTheApprovalToThatCallAndThatRequester(t *testing
 		t.Fatalf("choosing a later time scheduled %d calls, expected one", len(scheduler.requests))
 	}
 	scheduled := scheduler.requests[0]
-	if scheduled.Call.ToolName != "host_update" || scheduled.Call.ApproverPersonID != "person-admin" {
+	if scheduled.Call.ToolName != "host_update" || scheduled.ApproverPersonID != "person-admin" {
 		t.Fatalf("the schedule carries %+v, expected host_update approved by person-admin", scheduled.Call)
 	}
 	if string(scheduled.Call.ToolInput) != `{"targetVersion":"v2026.10.02.090000"}` {

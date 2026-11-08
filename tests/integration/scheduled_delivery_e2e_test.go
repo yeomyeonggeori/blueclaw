@@ -144,6 +144,15 @@ func (repository *scheduledDeliveryRepository) UpsertSchedule(schedule task.Sche
 	return nil
 }
 
+func (repository *scheduledDeliveryRepository) ScheduleByID(scheduleID string) (task.Schedule, bool, error) {
+	for _, schedule := range repository.schedules {
+		if schedule.ScheduleID == scheduleID {
+			return schedule, true, nil
+		}
+	}
+	return task.Schedule{}, false, nil
+}
+
 func (repository *scheduledDeliveryRepository) ListSchedules(task.ScheduleListRequest) (task.ScheduleListResult, error) {
 	return task.ScheduleListResult{}, nil
 }

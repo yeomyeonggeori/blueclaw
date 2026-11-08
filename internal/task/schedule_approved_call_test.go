@@ -10,16 +10,15 @@ import (
 func approvedCallScheduleRequest(referenceTime time.Time) ApprovedCallScheduleRequest {
 	return ApprovedCallScheduleRequest{
 		Call: ScheduleApprovedCall{
-			ToolName:         "host_update",
-			ToolInput:        json.RawMessage(`{"targetVersion":"v2026.10.02.090000"}`),
-			ApproverPersonID: "person-admin",
-			ApprovedAt:       referenceTime,
+			ToolName:  "host_update",
+			ToolInput: json.RawMessage(`{"targetVersion":"v2026.10.02.090000"}`),
 		},
-		StartsAt:      referenceTime.Add(6 * time.Hour),
-		Prompt:        "update yourself tonight",
-		Delivery:      ScheduleDeliveryBinding{Platform: "buzz", ConversationID: "conversation-1", ReplyTargetID: "message-1"},
-		TimeZone:      "Asia/Seoul",
-		ReferenceTime: referenceTime,
+		ApproverPersonID: "person-admin",
+		StartsAt:         referenceTime.Add(6 * time.Hour),
+		Prompt:           "update yourself tonight",
+		Delivery:         ScheduleDeliveryBinding{Platform: "buzz", ConversationID: "conversation-1", ReplyTargetID: "message-1"},
+		TimeZone:         "Asia/Seoul",
+		ReferenceTime:    referenceTime,
 	}
 }
 

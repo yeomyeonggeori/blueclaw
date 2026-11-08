@@ -13,15 +13,14 @@ var (
 )
 
 type ScheduleApprovedCall struct {
-	ToolName         string          `json:"toolName"`
-	ToolInput        json.RawMessage `json:"toolInput"`
-	ApproverPersonID string          `json:"approverPersonID"`
-	ApprovedAt       time.Time       `json:"approvedAt"`
-	OriginTaskRunID  string          `json:"originTaskRunID,omitempty"`
+	ToolName        string          `json:"toolName"`
+	ToolInput       json.RawMessage `json:"toolInput"`
+	OriginTaskRunID string          `json:"originTaskRunID,omitempty"`
 }
 
 type ApprovedCallScheduleRequest struct {
 	Call             ScheduleApprovedCall
+	ApproverPersonID string
 	StartsAt         time.Time
 	Prompt           string
 	AgentProfileName string
@@ -48,10 +47,11 @@ func BuildApprovedCallSchedule(request ApprovedCallScheduleRequest) (Schedule, e
 		RunAt:           startsAt.Format(time.RFC3339),
 		TimeZone:        request.TimeZone,
 	}, ScheduleCreateContext{
-		CreatorPersonID:  call.ApproverPersonID,
+		CreatorPersonID:  request.ApproverPersonID,
 		AgentProfileName: request.AgentProfileName,
 		Delivery:         request.Delivery,
 		CompanyTimeZone:  request.TimeZone,
+		IsApproved:       true,
 		ReferenceTime:    request.ReferenceTime,
 	})
 	if errorValue != nil {

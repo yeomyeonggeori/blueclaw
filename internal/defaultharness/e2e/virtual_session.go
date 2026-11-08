@@ -378,8 +378,8 @@ type VirtualSessionHarness struct {
 	askingTurn       *askingTurn
 	cleanup          func()
 
-	approvedCallSchedules *virtualApprovedCallSchedules
-	scheduleRunner        agentruntime.ScheduleRunner
+	schedules      *virtualSchedules
+	scheduleRunner agentruntime.ScheduleRunner
 }
 
 type virtualLanguageModelRequestRecorder interface {
@@ -997,8 +997,8 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	virtualApprovalGate := approvalgate.New(taskRunService)
 	virtualApprovalGate.UseQuestionWorder(approval.NewWorder(highLanguageModel))
 	virtualApprovalGate.UseApprovalTargetResolver(agentruntime.NewCapabilityApprovalTargetResolver(capabilityClient))
-	approvedCallSchedules := &virtualApprovedCallSchedules{}
-	virtualApprovalGate.UseApprovedCallScheduler(approvedCallSchedules)
+	schedules := &virtualSchedules{}
+	virtualApprovalGate.UseSchedules(schedules)
 	runtime.UseApprovalGate(virtualApprovalGate)
 	useVirtualDirectMessages(runtime, identityService)
 	virtualApprovalGate.UsePermissionAsker(runtime.ThreadPermissionAsker())
@@ -1043,8 +1043,8 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 		acpSession:       acpSession,
 		cleanup:          cleanup,
 
-		approvedCallSchedules: approvedCallSchedules,
-		scheduleRunner:        agentruntime.NewScheduleRunner(virtualTaskLauncher),
+		schedules:      schedules,
+		scheduleRunner: agentruntime.NewScheduleRunner(virtualTaskLauncher),
 	}, nil
 }
 

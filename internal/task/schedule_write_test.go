@@ -33,6 +33,26 @@ func TestBuildScheduleCreateRefusesAnIncompleteDeliveryBinding(t *testing.T) {
 	}
 }
 
+func TestAScheduleCarriesAnApprovalOnlyWhenItsCreationWasApproved(t *testing.T) {
+	referenceTime := time.Date(2026, 11, 3, 9, 0, 0, 0, time.UTC)
+	for _, isApproved := range []bool{true, false} {
+		createContext := scheduleCreateContextFixture(referenceTime)
+		createContext.IsApproved = isApproved
+		schedule, errorValue := BuildScheduleCreate(ScheduleCreateInput{
+			TaskInstruction: "send the weekly report to the team channel",
+			Kind:            "cron",
+			CronExpression:  "0 17 * * 5",
+			RepeatPolicy:    "unbounded",
+		}, createContext)
+		if errorValue != nil {
+			t.Fatal(errorValue)
+		}
+		if schedule.IsApproved() != isApproved || isApproved && !schedule.ApprovedAt.Equal(referenceTime) {
+			t.Fatalf("a schedule created with approval %v carries %v", isApproved, schedule.ApprovedAt)
+		}
+	}
+}
+
 func TestBuildScheduleCreateRequiresARepeatPolicyBound(t *testing.T) {
 	referenceTime := time.Now().UTC()
 	createContext := scheduleCreateContextFixture(referenceTime)
