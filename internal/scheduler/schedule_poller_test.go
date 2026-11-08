@@ -507,39 +507,12 @@ func TestSchedulePollerSkipsActiveRunForSameSchedule(t *testing.T) {
 	}
 }
 
-func TestSchedulePollerDoesNotDeliverFailedTaskReply(t *testing.T) {
-	repository := &pollerScheduleRepository{schedules: []task.Schedule{waitingSchedule(time.Now().UTC())}}
-	deliveryRepository := &pollerDeliveryRepository{}
-	poller := SchedulePoller{
-		ScheduleRepository:   repository,
-		DeliveryRepository:   deliveryRepository,
-		ScheduleRunner:       testScheduleRunner(task.TaskStatusFailed, "calendar unavailable"),
-		PersonAccessResolver: staticPersonAccessResolver{},
-	}
-
-	_, errorValue := poller.RunDue(context.Background(), *repository.schedules[0].NextRunAt, 1)
-
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if len(deliveryRepository.replies) != 0 {
-		t.Fatalf("expected no failed task reply, got %+v", deliveryRepository.replies)
-	}
-	if len(repository.failed) != 1 || !strings.Contains(repository.failed[0], "failed") {
-		t.Fatalf("expected failed task status to retry with backoff, got expired=%+v failed=%+v", repository.expired, repository.failed)
-	}
-	if len(repository.expired) != 0 {
-		t.Fatalf("expected transient task failure not to expire the schedule, got %+v", repository.expired)
-	}
-}
-
-func TestSchedulePollerTellsTheRequesterWhenAFailingScheduleGivesUp(t *testing.T) {
+func TestSchedulePollerTellsTheRequesterARunThatConcludedAndNeverRunsItAgain(t *testing.T) {
 	schedule := waitingSchedule(time.Now().UTC())
-	schedule.FailureCount = maxScheduleFailureCount - 1
 	repository := &pollerScheduleRepository{schedules: []task.Schedule{schedule}}
 	deliveryRepository := &pollerDeliveryRepository{}
 	scheduleRunner, harness, _ := scheduleRunnerWithHarness(task.TaskStatusFailed, "")
-	harness.TurnResult.FailureNotice = agentcontract.FailureNotice{Message: "The model provider refused the request, so I could not report the result.", IsSendable: true}
+	harness.TurnResult.FailureNotice = agentcontract.FailureNotice{Message: "승인할 사람이 없는 실행이라 메시지를 보내지 못했습니다.", IsSendable: true}
 	poller := SchedulePoller{
 		ScheduleRepository:   repository,
 		DeliveryRepository:   deliveryRepository,
@@ -553,14 +526,55 @@ func TestSchedulePollerTellsTheRequesterWhenAFailingScheduleGivesUp(t *testing.T
 		t.Fatal(errorValue)
 	}
 	if len(deliveryRepository.replies) != 1 {
-		t.Fatalf("expected the failure notice once the schedule gives up, got %+v", deliveryRepository.replies)
+		t.Fatalf("expected the run's failure notice once, got %+v", deliveryRepository.replies)
 	}
 	reply := deliveryRepository.replies[0]
 	if reply.Message != harness.TurnResult.FailureNotice.Message || reply.ReplyKind != "user_notice" || reply.TaskRunID == "" {
 		t.Fatalf("expected the run's own failure notice as a user notice, got %+v", reply)
 	}
-	if len(repository.expired) != 1 {
-		t.Fatalf("expected the schedule to expire after its last failure, got expired=%+v failed=%+v", repository.expired, repository.failed)
+	if len(repository.failed) != 0 || len(repository.expired) != 0 {
+		t.Fatalf("a run that concluded is the occurrence's outcome, not a fault to retry, got failed=%+v expired=%+v", repository.failed, repository.expired)
+	}
+	if repository.succeeded == nil || repository.succeeded.NextRunAt != nil {
+		t.Fatalf("expected the one-time schedule to be spent, got %+v", repository.succeeded)
+	}
+}
+
+func TestSchedulePollerMovesARecurringScheduleOnPastARunThatConcluded(t *testing.T) {
+	occurrenceAt := time.Date(2026, 11, 1, 23, 0, 0, 0, time.UTC)
+	repository := &pollerScheduleRepository{schedules: []task.Schedule{{
+		ScheduleID:       "schedule-briefing",
+		CreatorPersonID:  "person-1",
+		Name:             "Morning briefing",
+		Prompt:           "오늘 내 일정과 업무를 정리해줘.",
+		AgentProfileName: "default",
+		Platform:         "mattermost",
+		ConversationID:   "channel-1",
+		ReplyTargetID:    "reply-target-1",
+		TimeZone:         "Asia/Seoul",
+		Kind:             task.ScheduleKindCron,
+		CronExpression:   "0 8 * * *",
+		NextRunAt:        &occurrenceAt,
+	}}}
+	scheduleRunner, harness, _ := scheduleRunnerWithHarness(task.TaskStatusFailed, "")
+	harness.TurnResult.FailureNotice = agentcontract.FailureNotice{Message: "일정을 읽지 못해 브리핑을 만들지 못했습니다.", IsSendable: true}
+	poller := SchedulePoller{
+		ScheduleRepository:   repository,
+		DeliveryRepository:   &pollerDeliveryRepository{},
+		ScheduleRunner:       scheduleRunner,
+		PersonAccessResolver: staticPersonAccessResolver{},
+	}
+
+	_, errorValue := poller.RunDue(context.Background(), occurrenceAt, 1)
+
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(repository.failed) != 0 || len(repository.expired) != 0 {
+		t.Fatalf("a failed occurrence must neither retry nor end the schedule, got failed=%+v expired=%+v", repository.failed, repository.expired)
+	}
+	if repository.succeeded == nil || repository.succeeded.NextRunAt == nil || !repository.succeeded.NextRunAt.After(occurrenceAt) {
+		t.Fatalf("expected the schedule to move on to its next occurrence, got %+v", repository.succeeded)
 	}
 }
 

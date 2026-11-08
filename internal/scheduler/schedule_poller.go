@@ -68,16 +68,6 @@ func (errorValue scheduleTerminalError) Error() string {
 	return errorValue.message
 }
 
-type scheduledRunFailedError struct {
-	message             string
-	notice              connectors.OutboundReply
-	missingNoticeReason string
-}
-
-func (errorValue scheduledRunFailedError) Error() string {
-	return errorValue.message
-}
-
 func (schedulePoller SchedulePoller) Start(ctx context.Context, interval time.Duration) {
 	if interval <= 0 {
 		interval = 30 * time.Second
@@ -148,7 +138,6 @@ const maxScheduleFailureCount = 5
 
 func (schedulePoller SchedulePoller) recordScheduleFailure(schedule task.Schedule, errorValue error, referenceTime time.Time) error {
 	if scheduleFailureIsTerminal(schedule, errorValue, referenceTime) {
-		schedulePoller.tellTheRequesterTheScheduleGaveUp(schedule, errorValue)
 		if task.IsMorningBriefing(schedule) {
 			if repository, isSupported := schedulePoller.ScheduleRepository.(MorningBriefingOccurrenceRepository); isSupported {
 				return repository.RetireMorningBriefingOccurrence(schedule, errorValue.Error(), referenceTime)
@@ -157,21 +146,6 @@ func (schedulePoller SchedulePoller) recordScheduleFailure(schedule task.Schedul
 		return schedulePoller.ScheduleRepository.ExpireSchedule(schedule, errorValue.Error(), referenceTime)
 	}
 	return schedulePoller.ScheduleRepository.MarkScheduleFailed(schedule, errorValue.Error(), referenceTime)
-}
-
-func (schedulePoller SchedulePoller) tellTheRequesterTheScheduleGaveUp(schedule task.Schedule, errorValue error) {
-	var failed scheduledRunFailedError
-	if !errors.As(errorValue, &failed) {
-		return
-	}
-	if failed.missingNoticeReason != "" {
-		schedulePoller.logger().Warn("task_schedule.failure_notice.skipped", "taskScheduleID", schedule.ScheduleID, "reason", failed.missingNoticeReason)
-		return
-	}
-	result := scheduleExecutionResult{Schedule: schedule, TaskRunID: failed.notice.TaskRunID}
-	if _, enqueueError := schedulePoller.enqueuePreparedScheduleReply(result, failed.notice); enqueueError != nil {
-		schedulePoller.logger().Error("task_schedule.failure_notice.enqueue_failed", "taskScheduleID", schedule.ScheduleID, "error", enqueueError.Error())
-	}
 }
 
 func scheduleFailureIsTerminal(schedule task.Schedule, errorValue error, _ time.Time) bool {
@@ -258,13 +232,22 @@ func (schedulePoller SchedulePoller) reportOutlivedStartWindow(ctx context.Conte
 	if errorValue != nil {
 		return scheduleExecutionResult{}, errorValue
 	}
+	return schedulePoller.occurrenceToldByItsNotice(schedule, result), nil
+}
+
+func (schedulePoller SchedulePoller) occurrenceToldByItsNotice(schedule task.Schedule, result agentruntime.ScheduleRunResult) scheduleExecutionResult {
 	taskRunID := result.LaunchResult.TurnResult.TaskRun.TaskRunID
 	notice, missingNoticeReason := connectors.UserNoticeReply(result.LaunchResult.TurnResult, taskRunID)
 	if missingNoticeReason != "" {
-		schedulePoller.logger().Warn("task_schedule.start_window_notice.missing", "taskScheduleID", schedule.ScheduleID, "taskRunID", taskRunID, "reason", missingNoticeReason)
-		return scheduleExecutionResult{Schedule: result.Schedule}, nil
+		schedulePoller.logger().Warn("task_schedule.notice.missing", "taskScheduleID", schedule.ScheduleID, "taskRunID", taskRunID, "reason", missingNoticeReason)
+		return scheduleExecutionResult{Schedule: result.Schedule}
 	}
-	return scheduleExecutionResult{Schedule: result.Schedule, TaskRunID: taskRunID, Reply: notice, DidRun: true}, nil
+	return scheduleExecutionResult{Schedule: result.Schedule, TaskRunID: taskRunID, Reply: notice, DidRun: true}
+}
+
+func hasConcludedWithoutCompleting(result agentruntime.ScheduleRunResult) bool {
+	status := result.LaunchResult.TurnResult.TaskRun.Status
+	return status != task.TaskStatusCompleted && !taskStatusRequiresInteraction(status)
 }
 
 func (schedulePoller SchedulePoller) scheduleRunRequestFor(schedule task.Schedule, referenceTime time.Time) agentruntime.ScheduleRunRequest {
@@ -287,6 +270,9 @@ func (schedulePoller SchedulePoller) executeAgentSchedule(ctx context.Context, s
 	}
 	if !result.DidRun {
 		return scheduleExecutionResult{Schedule: result.Schedule}, nil
+	}
+	if hasConcludedWithoutCompleting(result) {
+		return schedulePoller.occurrenceToldByItsNotice(schedule, result), nil
 	}
 	reply, errorValue := scheduledTaskReply(result)
 	if errorValue != nil {
@@ -432,11 +418,7 @@ func scheduledRunNotCompleted(turnResult agentcontract.AgentTurnResult) error {
 		reason = " reason=" + reason
 	}
 	message := "scheduled task did not complete: taskRunID=" + turnResult.TaskRun.TaskRunID + " status=" + string(turnResult.TaskRun.Status) + reason
-	if taskStatusRequiresInteraction(turnResult.TaskRun.Status) {
-		return scheduleTerminalError{message: message}
-	}
-	notice, missingNoticeReason := connectors.UserNoticeReply(turnResult, turnResult.TaskRun.TaskRunID)
-	return scheduledRunFailedError{message: message, notice: notice, missingNoticeReason: missingNoticeReason}
+	return scheduleTerminalError{message: message}
 }
 
 func (schedulePoller SchedulePoller) hasActiveScheduleRun(schedule task.Schedule) bool {
