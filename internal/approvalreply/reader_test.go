@@ -210,3 +210,15 @@ func TestSeveralAllowingOptionsAreToldApartByTheirOwnWords(t *testing.T) {
 		t.Fatalf("expected each allowing option to keep its name and declining to mean declining, got %+v", options)
 	}
 }
+
+func TestAnAnswerInOwnWordsIsAnOptionOfItsOwnAndAnApproval(t *testing.T) {
+	question := Question{Options: OptionsOf([]Offer{{ID: "1", Name: "회의실 A"}, {ID: OwnWordsOptionID}, {ID: "cancel", IsDeclining: true}})}
+
+	if question.Options[1].Meaning != ownWordsMeaning || question.Options[1].Meaning == otherMeaning {
+		t.Fatalf("expected answering in other words to be told apart from picking nothing, got %+v", question.Options)
+	}
+	reading := Reading{ApprovedOptionID: approvedOption(question, model.DecisionAnswer{Probabilities: map[string]float64{OwnWordsOptionID: 0.8, OtherOptionID: 0.2}})}
+	if !reading.IsApproval() || !reading.IsOwnWords() {
+		t.Fatalf("an answer in the requester's own words answers the question, read as %+v", reading)
+	}
+}

@@ -46,6 +46,9 @@ func offersOf(choices []holdrecord.Choice) []approvalreply.Offer {
 	for _, replyOption := range approvalgate.ChoiceReplyOptions(choices) {
 		offers = append(offers, approvalreply.Offer{ID: replyOption.Key, Name: replyOption.Label, IsDeclining: replyOption.Key == approvalgate.CancelChoiceKey})
 	}
+	if approvalgate.TakesOwnWords(choices) {
+		offers = append(offers, approvalreply.Offer{ID: approvalreply.OwnWordsOptionID})
+	}
 	return offers
 }
 

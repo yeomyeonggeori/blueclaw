@@ -168,8 +168,11 @@ func approvalAnswerOfOption(optionID string) approvalgate.ApprovalAnswer {
 	if decision.Approval != nil {
 		return approvalgate.ApprovalAnswer{Signal: *decision.Approval}
 	}
-	if optionID == approvalgate.CancelChoiceKey {
+	switch optionID {
+	case approvalgate.CancelChoiceKey:
 		return approvalgate.ApprovalAnswer{Signal: agentcontract.ApprovalSignalReject}
+	case approvalreply.OwnWordsOptionID:
+		return approvalgate.ApprovalAnswer{Signal: agentcontract.ApprovalSignalApprove}
 	}
 	return approvalgate.ApprovalAnswer{Signal: agentcontract.ApprovalSignalApprove, ChoiceKey: optionID}
 }
@@ -269,6 +272,9 @@ func (connectorRuntime *ConnectorRuntime) settleThreadWithReply(ctx context.Cont
 	optionID := reading.ApprovedOptionID
 	if !reading.IsApproval() {
 		optionID = thread.question.DecliningOptionID()
+	}
+	if reading.IsOwnWords() {
+		approvalgate.RecordOwnWordsAnswer(connectorRuntime.taskRunService, thread.taskRunID, event.Prompt)
 	}
 	connectorRuntime.recordConfirmationReplyClassified(thread.taskRunID, event, answeredDecision(optionID))
 	thread.answers <- optionID

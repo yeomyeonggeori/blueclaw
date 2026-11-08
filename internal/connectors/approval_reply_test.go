@@ -5,6 +5,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 )
 
@@ -34,7 +35,15 @@ func TestAnAnswerOptionIsOfferedToTheReaderUnderItsOwnWords(t *testing.T) {
 
 	question := approvalQuestionFor("어느 방으로 할까요?", choices)
 
-	if len(question.Options) != 3 || question.Options[1].ID != "2" || question.Options[1].Meaning != approvalreply.AllowMeaning("회의실 B") {
-		t.Fatalf("the reader reads the person's words against the options' own words, got %+v", question.Options)
+	if len(question.Options) != 4 || question.Options[1].ID != "2" || question.Options[1].Meaning != approvalreply.AllowMeaning("회의실 B") || question.Options[3].ID != approvalreply.OwnWordsOptionID {
+		t.Fatalf("the reader reads the person's words against the options' own words and can read an answer in other words, got %+v", question.Options)
+	}
+}
+
+func TestAnAnswerInOwnWordsAnswersTheQuestionWithoutPickingAnOption(t *testing.T) {
+	answer := approvalAnswerOfOption(approvalreply.OwnWordsOptionID)
+
+	if answer.Signal != agentcontract.ApprovalSignalApprove || answer.ChoiceKey != "" {
+		t.Fatalf("an answer in the requester's own words read as %+v", answer)
 	}
 }

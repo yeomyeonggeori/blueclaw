@@ -11,7 +11,8 @@ import (
 )
 
 const (
-	OtherOptionID = "other"
+	OtherOptionID    = "other"
+	OwnWordsOptionID = "own_words"
 
 	AnswerQuestionName = "answer"
 )
@@ -19,8 +20,9 @@ const (
 const instructions = `The state holds a question a person was asked (postedQuestion) and their reply (reply). Which option does the reply pick? Read the reply as an answer to that question, by what the person means, in any language and any script. A reply to a question is usually brief: a word, a bit of shorthand or a single character is a full answer, and polite or friendly words around it do not change it. Choose other only when the reply does not pick any of the options.`
 
 const (
-	RejectMeaning = "the person declines, cancels or halts the action, with or without a reason"
-	otherMeaning  = "the reply picks none of the options: it asks something, leaves the decision open, adds to or changes what would be done (target, recipients, content, scope, time or conditions), or is an unrelated request"
+	RejectMeaning   = "the person declines, cancels or halts the action, with or without a reason"
+	otherMeaning    = "the reply picks none of the options: it asks something, leaves the decision open, adds to or changes what would be done (target, recipients, content, scope, time or conditions), or is an unrelated request"
+	ownWordsMeaning = "the reply answers the question in the person's own words instead of picking one of the listed answers: a different answer, the details the question asks for, or one of the answers with changes or conditions"
 )
 
 func AllowMeaning(optionName string) string {
@@ -66,6 +68,9 @@ func meaningOf(offer Offer, isOnlyWayToGoAhead bool) string {
 	if offer.IsDeclining {
 		return RejectMeaning
 	}
+	if offer.ID == OwnWordsOptionID {
+		return ownWordsMeaning
+	}
 	if isOnlyWayToGoAhead {
 		return allowAsAskedMeaning
 	}
@@ -92,6 +97,10 @@ type Reading struct {
 
 func (reading Reading) IsApproval() bool {
 	return reading.ApprovedOptionID != ""
+}
+
+func (reading Reading) IsOwnWords() bool {
+	return reading.ApprovedOptionID == OwnWordsOptionID
 }
 
 type Reader interface {
