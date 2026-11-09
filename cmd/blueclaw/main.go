@@ -31,6 +31,7 @@ func main() {
 	policyPath := flag.String("policy", home.PolicyPath(), "policy document path")
 	acpSocketPath := flag.String("acp-socket", "", "unix socket to serve the acp agent on; unset serves none")
 	inboundPath := flag.String("inbound", app.InboundPathConnectors, "which path admits an inbound message: connectors or acp")
+	fileJournalSocketPath := flag.String("file-journal-socket", "", "unix socket of the host's file journal; when set, a task reply waits until the files written before it are kept off the box")
 	shouldPrintRevision := flag.Bool("version", false, "print the revision this binary was built from and exit")
 	flag.Parse()
 
@@ -48,7 +49,7 @@ func main() {
 		log.Fatal(errorValue)
 	}
 
-	application := app.NewApplication(runtimeConfiguration, *policyPath, app.InboundOptions{ACPSocketPath: *acpSocketPath, InboundPath: *inboundPath}, app.WithBundledACPFactory(bundledACPFactory()), app.WithBundledToolSelector(bundledToolSelector()), app.WithQuestionWorder(bundledQuestionWorder()))
+	application := app.NewApplication(runtimeConfiguration, *policyPath, app.InboundOptions{ACPSocketPath: *acpSocketPath, InboundPath: *inboundPath}, app.WithBundledACPFactory(bundledACPFactory()), app.WithBundledToolSelector(bundledToolSelector()), app.WithQuestionWorder(bundledQuestionWorder()), app.WithFileJournalSocket(*fileJournalSocketPath))
 	log.Fatal(application.Start())
 }
 

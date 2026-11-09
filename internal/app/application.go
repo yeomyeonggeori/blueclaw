@@ -13,6 +13,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/config"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	apiconnector "github.com/yeomyeonggeori/blueclaw/internal/connectors/api"
+	"github.com/yeomyeonggeori/blueclaw/internal/filejournal"
 	"github.com/yeomyeonggeori/blueclaw/internal/harnessdriver"
 	"github.com/yeomyeonggeori/blueclaw/internal/httpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/learning"
@@ -123,6 +124,11 @@ type applicationOptions struct {
 	bundledACPFactory       harnessdriver.ACPFactory
 	bundledToolSelectorMake BundledToolSelectorFactory
 	questionWorderMake      QuestionWorderFactory
+	fileJournalSocketPath   string
+}
+
+func WithFileJournalSocket(socketPath string) ApplicationOption {
+	return func(options *applicationOptions) { options.fileJournalSocketPath = socketPath }
 }
 
 func WithQuestionWorder(newQuestionWorder QuestionWorderFactory) ApplicationOption {
@@ -184,6 +190,9 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 	logger.Info("application.initializing", "stage", "connector_runtime")
 	components.taskRetentionSweeper = newTaskRetentionSweeper(runtimeConfiguration, components.services, logger)
 	components.connectorRuntime = newConnectorRuntime(runtimeConfiguration, components.foundation, components.directory, components.kernel, components.services, components.taskLauncher, components.backupCoordinator, components.taskIntakeController)
+	if options.fileJournalSocketPath != "" {
+		components.connectorRuntime.UseFileKeeper(filejournal.Keeper(options.fileJournalSocketPath))
+	}
 	if !runtimeConfiguration.Memory.ExtractionDisabled {
 		components.connectorRuntime.UseHeardMemory(components.memory.stores)
 	}

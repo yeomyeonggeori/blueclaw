@@ -148,6 +148,7 @@ type ConnectorRuntime struct {
 	started               bool
 	inboxHeartbeats       []time.Time
 	outboxHeartbeats      []time.Time
+	keepFiles             func(context.Context) error
 }
 
 func NewConnectorRuntime(identityService *identity.IdentityService, harness agentcontract.Harness, taskRunService *taskstate.TaskRunService, taskEventService *taskstate.TaskEventService, logger *slog.Logger) *ConnectorRuntime {
