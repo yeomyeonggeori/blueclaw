@@ -8,10 +8,6 @@ import (
 
 const fileKeepWaitLimit = 30 * time.Second
 
-// UseFileKeeper makes every task reply wait until the files the task wrote are
-// kept off the box, so a person never reads that something was saved on a box
-// that then goes dark before it was. A reply that waited the limit is sent
-// anyway: the work is done and recorded, and delivery does not hang on it.
 func (connectorRuntime *ConnectorRuntime) UseFileKeeper(keepFiles func(context.Context) error) {
 	connectorRuntime.keepFiles = keepFiles
 }

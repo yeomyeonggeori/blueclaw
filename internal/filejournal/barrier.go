@@ -14,10 +14,6 @@ const (
 	barrierUnjournaled = "unjournaled"
 )
 
-// Keeper asks the company host's file journal, on the unix socket at
-// socketPath, to keep every file written before the call off the box, and
-// returns once it has. The host answers "kept", "unjournaled" when it is not
-// one of a company's boxes and so keeps nothing off it, or names why it could not.
 func Keeper(socketPath string) func(context.Context) error {
 	return func(ctx context.Context) error {
 		var dialer net.Dialer
