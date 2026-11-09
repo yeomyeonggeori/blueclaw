@@ -81,6 +81,7 @@ func (sessionTurn *SessionTurn) PrepareLaunch(ctx context.Context, launchRequest
 
 func (sessionTurn *SessionTurn) DeliverReply(ctx context.Context, turnResult agentcontract.AgentTurnResult) error {
 	connectorRuntime, turn := sessionTurn.connectorRuntime, sessionTurn.turn
+	connectorRuntime.keepFilesBeforeReplying(ctx, turnResult.TaskRun.TaskRunID)
 	notDelivered := []*FilesNotDelivered{}
 	sendNoting := func(ctx context.Context, replyTarget ReplyTarget, reply OutboundReply) (string, error) {
 		dispatchID, errorValue := turn.sendReply(ctx, replyTarget, reply)
