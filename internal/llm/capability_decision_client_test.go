@@ -59,3 +59,25 @@ func TestADecisionRequestWithoutImagesPostsTheStateAsItIs(t *testing.T) {
 		t.Fatalf("expected the state object, got %v", state)
 	}
 }
+
+func TestADecisionThroughCapabilitydCarriesWhoAskedForIt(t *testing.T) {
+	var posted struct {
+		Context *RequestContext `json:"context"`
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		if errorValue := json.NewDecoder(httpRequest.Body).Decode(&posted); errorValue != nil {
+			t.Fatal(errorValue)
+		}
+		_ = json.NewEncoder(responseWriter).Encode(map[string]any{"answers": map[string]any{"visual_defect": map[string]any{"choice": "none"}}})
+	}))
+	defer server.Close()
+	client := CapabilityDecisionClient{CapabilityLLMClient: CapabilityLLMClient{CapabilityClient: capability.Client{Endpoint: server.URL, HTTPClient: server.Client()}}}
+
+	if _, errorValue := client.Decide(contextAskedBy("park.sample@example.com"), model.DecisionRequest{State: "a message", Questions: sampleDecisionQuestions()}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	if posted.Context == nil || posted.Context.RequesterEmail != "park.sample@example.com" {
+		t.Fatalf("a decision sent to capabilityd must carry its requester, got %+v", posted.Context)
+	}
+}

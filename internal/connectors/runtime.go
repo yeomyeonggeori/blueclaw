@@ -313,6 +313,7 @@ func (connectorRuntime *ConnectorRuntime) processInboundEventWithReplySender(ctx
 	if result, isHandled, errorValue := connectorRuntime.admitInboundTurn(ctx, turn); isHandled {
 		return result, errorValue
 	}
+	ctx = connectorRuntime.withInboundRequester(ctx, turn)
 	defer turn.endProgress()
 	if shouldStartProgressBeforeAddressing(turn.event) {
 		connectorRuntime.showTurnProgress(ctx, turn)

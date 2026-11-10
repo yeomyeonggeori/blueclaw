@@ -17,12 +17,13 @@ func keyFilePath(endpointConfiguration config.ModelEndpointConfiguration) string
 	return strings.TrimSpace(endpointConfiguration.APIKeyPath)
 }
 
-func keyFileClient(apiKeyPath string) *http.Client {
-	return &http.Client{Transport: keyFileAuthorization{apiKeyPath: apiKeyPath}}
+func keyFileClient(apiKeyPath string, requesterEmailHeader string) *http.Client {
+	return &http.Client{Transport: keyFileAuthorization{apiKeyPath: apiKeyPath, requesterEmailHeader: strings.TrimSpace(requesterEmailHeader)}}
 }
 
 type keyFileAuthorization struct {
-	apiKeyPath string
+	apiKeyPath           string
+	requesterEmailHeader string
 }
 
 func (authorization keyFileAuthorization) RoundTrip(request *http.Request) (*http.Response, error) {
@@ -35,13 +36,15 @@ func (authorization keyFileAuthorization) RoundTrip(request *http.Request) (*htt
 	}
 	authorized := request.Clone(request.Context())
 	authorized.Header.Set("Authorization", "Bearer "+apiKey)
+	nameRequester(authorized, authorization.requesterEmailHeader)
 	return http.DefaultTransport.RoundTrip(authorized)
 }
 
 type keyFileDecisionModel struct {
-	endpointURL string
-	modelName   string
-	apiKeyPath  string
+	endpointURL          string
+	modelName            string
+	apiKeyPath           string
+	requesterEmailHeader string
 }
 
 func (decisionModel keyFileDecisionModel) Decide(ctx context.Context, request model.DecisionRequest) (model.DecisionResponse, error) {
@@ -49,6 +52,6 @@ func (decisionModel keyFileDecisionModel) Decide(ctx context.Context, request mo
 	if errorValue != nil {
 		return model.DecisionResponse{}, errorValue
 	}
-	endpoint := decisions.Endpoint{URL: decisionModel.endpointURL, ModelName: decisionModel.modelName, APIKey: apiKey}
+	endpoint := decisions.Endpoint{URL: decisionModel.endpointURL, ModelName: decisionModel.modelName, APIKey: apiKey, HTTPClient: requesterNamingDecisionClient(decisionModel.requesterEmailHeader)}
 	return endpoint.DecisionModel().Decide(ctx, request)
 }

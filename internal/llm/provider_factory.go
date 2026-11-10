@@ -92,7 +92,7 @@ func endpointProvider(endpointConfiguration config.ModelEndpointConfiguration) (
 		return nil, errorValue
 	}
 	if apiKeyPath := keyFilePath(endpointConfiguration); apiKeyPath != "" {
-		provider.UseHTTPClient(keyFileClient(apiKeyPath))
+		provider.UseHTTPClient(keyFileClient(apiKeyPath, endpointConfiguration.RequesterEmailHeader))
 	}
 	return provider, nil
 }
@@ -199,7 +199,7 @@ func NewConfiguredEmbeddingProvider(runtimeConfiguration config.RuntimeConfigura
 		return nil, errorValue
 	}
 	if apiKeyPath := keyFilePath(embeddingConfiguration); apiKeyPath != "" {
-		provider.UseHTTPClient(keyFileClient(apiKeyPath))
+		provider.UseHTTPClient(keyFileClient(apiKeyPath, embeddingConfiguration.RequesterEmailHeader))
 	}
 	return fixedWidthEmbedder{provider: provider, dimensions: dimensions}, nil
 }
@@ -255,7 +255,7 @@ func endpointDecisionModel(decisionConfiguration config.ModelEndpointConfigurati
 		return nil, errorValue
 	}
 	if apiKeyPath := keyFilePath(decisionConfiguration); apiKeyPath != "" {
-		return keyFileDecisionModel{endpointURL: decisionConfiguration.Endpoint, modelName: modelName, apiKeyPath: apiKeyPath}, nil
+		return keyFileDecisionModel{endpointURL: decisionConfiguration.Endpoint, modelName: modelName, apiKeyPath: apiKeyPath, requesterEmailHeader: decisionConfiguration.RequesterEmailHeader}, nil
 	}
-	return decisions.Endpoint{URL: decisionConfiguration.Endpoint, ModelName: modelName, APIKey: apiKey}.DecisionModel(), nil
+	return decisions.Endpoint{URL: decisionConfiguration.Endpoint, ModelName: modelName, APIKey: apiKey, HTTPClient: requesterNamingDecisionClient(decisionConfiguration.RequesterEmailHeader)}.DecisionModel(), nil
 }
