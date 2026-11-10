@@ -175,6 +175,46 @@ describe("watching a person's conversations for arriving messages", () => {
 		]);
 	});
 
+	test("an edit tells the people it calls on again, under the message it changed", async () => {
+		const room = conversation("channel-1", ["alice", "bob", "carol"]);
+		const { watch, relays, told, now } = harness(new Map([[aliceSecret, [room]]]));
+		await watch.watch(aliceSecret, arrivalsURL);
+		const edit: BuzzEvent = {
+			...message("edit-1", "channel-1", "alice", now()),
+			kind: 40003,
+			content: "@bob 확인 부탁드립니다",
+			tags: [["h", "channel-1"], ["e", "m-1"], ["p", "bob"]],
+		};
+		deliverTo(relays.get(aliceSecret)!, "channel-1", edit);
+		deliverTo(relays.get(aliceSecret)!, "channel-1", edit);
+
+		expect(told).toEqual([
+			{
+				conversationID: "channel-1",
+				messageID: "m-1",
+				authorExternalID: "alice",
+				recipientExternalIDs: ["bob"],
+				preview: "@bob 확인 부탁드립니다",
+				attachmentKinds: [],
+			},
+		]);
+	});
+
+	test("an edit calling on everyone tells everyone in the conversation, and an edit calling on nobody tells no one", async () => {
+		const room = conversation("channel-1", ["alice", "bob", "carol"]);
+		const { watch, relays, told, now } = harness(new Map([[aliceSecret, [room]]]));
+		await watch.watch(aliceSecret, arrivalsURL);
+		const edit = (id: string, tags: string[][]): BuzzEvent => ({
+			...message(id, "channel-1", "alice", now()),
+			kind: 40003,
+			tags: [["h", "channel-1"], ["e", "m-1"], ...tags],
+		});
+		deliverTo(relays.get(aliceSecret)!, "channel-1", edit("edit-1", []));
+		deliverTo(relays.get(aliceSecret)!, "channel-1", edit("edit-2", [["mention", "everyone"]]));
+
+		expect(told.map((arrival) => arrival.recipientExternalIDs)).toEqual([["alice", "bob", "carol"]]);
+	});
+
 	test("renewing a watch keeps one connection and does not subscribe a channel twice", async () => {
 		const { watch, relays } = harness(new Map([[aliceSecret, [conversation("dm-1", ["alice", "bob"])]]]));
 		await watch.watch(aliceSecret, arrivalsURL);
@@ -371,7 +411,7 @@ describe("watching a person's conversations for someone typing", () => {
 		const [subscription] = relays.get(aliceSecret)!.subscriptions.filter(({ filters }) =>
 			(filters as { "#h"?: string[] }[])[0]?.["#h"]?.includes("dm-1"),
 		);
-		expect((subscription!.filters as { kinds: number[] }[])[0]!.kinds).toEqual([9]);
+		expect((subscription!.filters as { kinds: number[] }[])[0]!.kinds).toEqual([9, 40003]);
 		deliverTo(relays.get(aliceSecret)!, "dm-1", typing("t-1", "dm-1", "bob", now()));
 		expect(typed).toEqual([]);
 	});
@@ -440,7 +480,7 @@ describe("watching a person's conversations for a message taken back", () => {
 		const [subscription] = relays.get(aliceSecret)!.subscriptions.filter(({ filters }) =>
 			(filters as { "#h"?: string[] }[])[0]?.["#h"]?.includes("dm-1"),
 		);
-		expect((subscription!.filters as { kinds: number[] }[])[0]!.kinds).toEqual([9, 20002]);
+		expect((subscription!.filters as { kinds: number[] }[])[0]!.kinds).toEqual([9, 40003, 20002]);
 		deliverTo(relays.get(aliceSecret)!, "dm-1", deletion("d-1", "dm-1", "bob", "m-1", now()));
 		expect(withdrawn).toEqual([]);
 	});

@@ -478,16 +478,20 @@ export async function channelMessagePageOf(
 	const messageIDs = read.map((message) => message.id);
 	const [reacted, edited, deleted] = await Promise.all([
 		reactionsTo(relay, messageIDs),
-		editsTo(relay, messageIDs),
+		latestEditsTo(relay, messageIDs),
 		deletionsTo(relay, messageIDs),
 	]);
 	const messages = read
 		.filter((message) => !deleted.has(message.id))
-		.map((message) => ({
-			...message,
-			body: edited.get(message.id) ?? message.body,
-			reactions: reacted.get(message.id) ?? [],
-		}));
+		.map((message) => {
+			const edit = edited.get(message.id);
+			return {
+				...message,
+				body: edit?.content ?? message.body,
+				mentions: edit ? mentionsOf(edit) : message.mentions,
+				reactions: reacted.get(message.id) ?? [],
+			};
+		});
 	return { messages, hasMoreBefore: page.length >= limit };
 }
 
@@ -564,6 +568,14 @@ export async function editsTo(
 	relay: { query: (filter: object) => Promise<BuzzEvent[]> },
 	messageIDs: string[],
 ): Promise<Map<string, string>> {
+	const latest = await latestEditsTo(relay, messageIDs);
+	return new Map([...latest].map(([messageID, event]) => [messageID, event.content]));
+}
+
+export async function latestEditsTo(
+	relay: { query: (filter: object) => Promise<BuzzEvent[]> },
+	messageIDs: string[],
+): Promise<Map<string, BuzzEvent>> {
 	if (messageIDs.length === 0) return new Map();
 	const events = await relay.query({ kinds: [EDIT_MESSAGE_KIND], "#e": messageIDs, limit: messageIDs.length * mostEditsReadPerMessage });
 	const latest = new Map<string, BuzzEvent>();
@@ -573,7 +585,7 @@ export async function editsTo(
 		const known = latest.get(messageID);
 		if (!known || known.created_at < event.created_at) latest.set(messageID, event);
 	}
-	return new Map([...latest].map(([messageID, event]) => [messageID, event.content]));
+	return latest;
 }
 
 const mostEditsReadPerMessage = 32;

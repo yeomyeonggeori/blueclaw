@@ -2,10 +2,11 @@ import { hexToBytes } from "nostr-tools/utils";
 import type { QueryingRelay } from "./deletions.ts";
 import { readContextOf, unreadSince } from "./read-state.ts";
 import { withRelayAs } from "./relay-pool.ts";
-import { STREAM_MESSAGE_KIND, firstTagValue, threadTagsOf, type BuzzEvent } from "./types.ts";
+import { EDIT_MESSAGE_KIND, STREAM_MESSAGE_KIND, firstTagValue, threadTagsOf, type BuzzEvent } from "./types.ts";
+import { mentionsOf as mentionedIn } from "./user-mentions.ts";
 import { nowSeconds, readStateOf } from "./user-read-state.ts";
 import type { UserMessageMatch } from "./user-message-search.ts";
-import { deletionsTo, editsTo } from "./user-session.ts";
+import { deletionsTo, editsTo, latestEditsTo } from "./user-session.ts";
 
 export type InboxReason = "mention" | "direct" | "thread_reply" | "channel";
 
@@ -46,7 +47,8 @@ export async function listInboxAsUser(request: {
 		const readerPubkeyHex = relay.pubkeyHex;
 		const memberOf = new Set([...request.directChannelIDs, ...request.groupChannelIDs]);
 		const window = { since: request.sinceSeconds, until: request.untilSeconds };
-		const [mentioning, direct, threadReplies, channel, heldEvents] = await Promise.all([
+		const [mentioningByEdit, mentioning, direct, threadReplies, channel, heldEvents] = await Promise.all([
+			mentionsByEditOf(relay, readerPubkeyHex, window),
 			mentionsOf(relay, readerPubkeyHex, window),
 			messagesIn(relay, request.directChannelIDs, window),
 			repliesToThreadsJoined(relay, readerPubkeyHex, [...memberOf], window),
@@ -54,6 +56,7 @@ export async function listInboxAsUser(request: {
 			messagesWithIDs(relay, request.heldIDs ?? []),
 		]);
 		const { newest, hasMoreBefore } = newestReasoned(readerPubkeyHex, memberOf, [
+			[mentioningByEdit, "mention"],
 			[mentioning, "mention"],
 			[direct, "direct"],
 			[threadReplies, "thread_reply"],
@@ -118,6 +121,14 @@ function newestReasoned(
 
 function mentionsOf(relay: QueryingRelay, readerPubkeyHex: string, window: TimeWindow): Promise<BuzzEvent[]> {
 	return relay.query({ kinds: [STREAM_MESSAGE_KIND], "#p": [readerPubkeyHex], ...window, limit: mostEventsScannedPerQuery });
+}
+
+async function mentionsByEditOf(relay: QueryingRelay, readerPubkeyHex: string, window: TimeWindow): Promise<BuzzEvent[]> {
+	const edits = await relay.query({ kinds: [EDIT_MESSAGE_KIND], "#p": [readerPubkeyHex], ...window, limit: mostEventsScannedPerQuery });
+	const editedIDs = [...new Set(edits.map((edit) => firstTagValue(edit, "e") ?? "").filter((messageID) => messageID !== ""))];
+	const latest = await latestEditsTo(relay, editedIDs);
+	const stillMentioning = [...latest].filter(([, edit]) => mentionedIn(edit).pubkeyHexes.includes(readerPubkeyHex));
+	return messagesWithIDs(relay, stillMentioning.map(([messageID]) => messageID));
 }
 
 async function messagesIn(relay: QueryingRelay, channelIDs: string[], window: TimeWindow): Promise<BuzzEvent[]> {

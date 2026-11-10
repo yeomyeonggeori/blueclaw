@@ -248,6 +248,7 @@ export interface PersonalGateway {
 		conversationID: string,
 		messageID: string,
 		body: string,
+		mentions?: PersonalMentions,
 	): Promise<PersonalMessage>;
 	deleteMessage(actor: ActorCredential, conversationID: string, messageID: string): Promise<void>;
 	addReaction(

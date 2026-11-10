@@ -463,6 +463,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 		conversationID: string,
 		messageID: string,
 		body: string,
+		mentions?: PersonalMentions,
 	): Promise<PersonalMessage> {
 		this.require(actor);
 		if (await this.isWrittenByTheAgent(messageID)) {
@@ -479,7 +480,10 @@ class BuzzPersonalGateway implements PersonalGateway {
 			channelID: conversationID,
 			targetEventId: messageID,
 			message: body,
-			extraTags: await this.customEmojiTagsFor(actor, body),
+			extraTags: [
+				...mentionTags(mentions && { pubkeyHexes: mentions.externalIDs, isEveryone: mentions.isEveryone }),
+				...(await this.customEmojiTagsFor(actor, body)),
+			],
 			authTagJSON: this.settings.authTagJSON,
 		});
 		return {
@@ -489,6 +493,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 			body,
 			postedAt: new Date().toISOString(),
 			editedAt: new Date().toISOString(),
+			mentions,
 			reactions: [],
 			attachments: [],
 		};
