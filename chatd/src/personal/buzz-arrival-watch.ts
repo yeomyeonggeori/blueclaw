@@ -1,7 +1,8 @@
 import { asAHostService } from "../service-credential.ts";
 import { createBuzzRelayClient, type BuzzRelayClient } from "../adapters/buzz/relay-client.ts";
 import { listUserConversations, pubkeyFromSecret, type UserConversation } from "../adapters/buzz/user-session.ts";
-import { carriesTag, firstTagValue, type BuzzEvent } from "../adapters/buzz/types.ts";
+import { EDIT_MESSAGE_KIND, carriesTag, firstTagValue, type BuzzEvent } from "../adapters/buzz/types.ts";
+import { mentionsOf } from "../adapters/buzz/user-mentions.ts";
 import { TYPING_INDICATOR_KIND } from "../adapters/buzz/user-typing.ts";
 import { DELETE_MESSAGE_KIND, REACTION_KIND, isAbout } from "../adapters/buzz/deletions.ts";
 import { arrivalPreviewOf, type AttachmentKind } from "./arrival-preview.ts";
@@ -150,6 +151,7 @@ export class BuzzArrivalWatch {
 	private watchedKinds(): number[] {
 		return [
 			STREAM_MESSAGE_KIND,
+			EDIT_MESSAGE_KIND,
 			...(this.typingURL ? [TYPING_INDICATOR_KIND] : []),
 			...(this.withdrawalsURL ? [DELETE_MESSAGE_KIND] : []),
 		];
@@ -160,6 +162,7 @@ export class BuzzArrivalWatch {
 		if (!channelID || !watcher.participantsByChannel.has(channelID)) return;
 		if (this.toldEventIDs.has(event.id)) return;
 		if (event.kind === STREAM_MESSAGE_KIND) this.arrived(watcher, channelID, event);
+		if (event.kind === EDIT_MESSAGE_KIND) this.edited(watcher, channelID, event);
 		if (event.kind === TYPING_INDICATOR_KIND) this.typed(watcher, channelID, event);
 		if (event.kind === DELETE_MESSAGE_KIND) this.withdrawn(watcher, channelID, event);
 	}
@@ -208,6 +211,29 @@ export class BuzzArrivalWatch {
 		void this.dependencies
 			.tell(this.arrivalsURL, arrival)
 			.catch((reason) => reportWatchFailure(`message ${event.id} in ${channelID}`, reason));
+	}
+
+	private edited(watcher: Watcher, channelID: string, event: BuzzEvent): void {
+		if (this.nowSeconds() - event.created_at > freshnessSeconds) return;
+		const messageID = firstTagValue(event, "e");
+		if (!messageID) return;
+		const mentioned = mentionsOf(event);
+		const participants = watcher.participantsByChannel.get(channelID) ?? [];
+		const recipientExternalIDs = mentioned.isEveryone
+			? participants
+			: participants.filter((participant) => mentioned.pubkeyHexes.includes(participant));
+		if (recipientExternalIDs.length === 0) return;
+		this.remember(event.id);
+		const arrival: Arrival = {
+			conversationID: channelID,
+			messageID,
+			authorExternalID: event.pubkey,
+			recipientExternalIDs,
+			...arrivalPreviewOf(event),
+		};
+		void this.dependencies
+			.tell(this.arrivalsURL, arrival)
+			.catch((reason) => reportWatchFailure(`edit of ${messageID} in ${channelID}`, reason));
 	}
 
 	private remember(eventID: string): void {

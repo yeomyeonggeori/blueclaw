@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { channelMessagePageOf } from "../src/adapters/buzz/user-session.ts";
 import { DELETE_MESSAGE_KIND } from "../src/adapters/buzz/deletions.ts";
-import { STREAM_MESSAGE_KIND, type BuzzEvent } from "../src/adapters/buzz/types.ts";
+import { EDIT_MESSAGE_KIND, STREAM_MESSAGE_KIND, type BuzzEvent } from "../src/adapters/buzz/types.ts";
 
 const CHANNEL = "channel";
 
@@ -19,13 +19,16 @@ function messageAt(index: number): BuzzEvent {
 
 type Filter = { ids?: string[]; kinds?: number[]; until?: number; limit?: number; "#e"?: string[] };
 
-function relayHolding(messages: BuzzEvent[], deletions: BuzzEvent[] = []) {
+function relayHolding(messages: BuzzEvent[], deletions: BuzzEvent[] = [], edits: BuzzEvent[] = []) {
 	return {
 		query: async (filter: object) => {
 			const wanted = filter as Filter;
 			if (wanted.ids) return messages.filter((message) => wanted.ids?.includes(message.id));
 			if (wanted.kinds?.includes(DELETE_MESSAGE_KIND)) {
 				return deletions.filter((deletion) => wanted["#e"]?.includes(deletion.tags[0]?.[1] ?? ""));
+			}
+			if (wanted.kinds?.includes(EDIT_MESSAGE_KIND)) {
+				return edits.filter((edit) => edit.tags.some((tag) => tag[0] === "e" && wanted["#e"]?.includes(tag[1] ?? "")));
 			}
 			if (!wanted.kinds?.includes(STREAM_MESSAGE_KIND)) return [];
 			const until = wanted.until ?? Number.POSITIVE_INFINITY;
@@ -68,4 +71,18 @@ test("a cursor the conversation never returned is refused", async () => {
 	await expect(channelMessagePageOf(relayHolding([messageAt(0)]), CHANNEL, 2, "f".repeat(64))).rejects.toThrow(
 		"is not in conversation",
 	);
+});
+
+test("an edited message calls on the people its latest edit names", async () => {
+	const original: BuzzEvent = { ...messageAt(0), tags: [["h", CHANNEL], ["p", "a".repeat(64)]] };
+	const edit: BuzzEvent = {
+		...messageAt(1),
+		kind: EDIT_MESSAGE_KIND,
+		tags: [["h", CHANNEL], ["e", original.id], ["p", "b".repeat(64)]],
+		content: "edited",
+	};
+	const page = await channelMessagePageOf(relayHolding([original], [], [edit]), CHANNEL, 2);
+
+	expect(page.messages[0]?.body).toBe("edited");
+	expect(page.messages[0]?.mentions).toEqual({ pubkeyHexes: ["b".repeat(64)], isEveryone: false });
 });

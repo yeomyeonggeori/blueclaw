@@ -223,4 +223,40 @@ describe("a person's inbox against a relay", () => {
 		expect(last.items.map((item) => item.message.id)).toEqual(older.slice(50).map((event) => event.id));
 		expect(last.hasMoreBefore).toBe(false);
 	});
+
+	test("a message edited to call on the reader is listed as a mention, at the time it was posted", async () => {
+		const edited = post(writer, "channel-1", 3_000, [], "회의 시작합니다");
+		const editedAt = now - 2;
+		stored.push(
+			finalizeEvent(
+				{ kind: 40003, created_at: editedAt, tags: [["h", "channel-1"], ["e", edited.id], ["p", readerPubkey]], content: "회의 시작합니다 @이샘플" },
+				writer,
+			) as BuzzEvent,
+		);
+
+		const item = (await inbox()).find((candidate) => candidate.message.id === edited.id);
+
+		expect(item?.reason).toBe("mention");
+		expect(item?.message.body).toBe("회의 시작합니다 @이샘플");
+		expect(item?.message.postedAt).toBe(new Date(edited.created_at * 1000).toISOString());
+		expect(item?.isUnread).toBe(true);
+	});
+
+	test("a later edit that no longer calls on the reader takes the mention back", async () => {
+		const edited = post(writer, "channel-1", 2_900, [], "자료 확인 부탁드립니다");
+		stored.push(
+			finalizeEvent(
+				{ kind: 40003, created_at: now - 4, tags: [["h", "channel-1"], ["e", edited.id], ["p", readerPubkey]], content: "@이샘플 자료 확인 부탁드립니다" },
+				writer,
+			) as BuzzEvent,
+			finalizeEvent(
+				{ kind: 40003, created_at: now - 3, tags: [["h", "channel-1"], ["e", edited.id]], content: "자료 확인 부탁드립니다" },
+				writer,
+			) as BuzzEvent,
+		);
+
+		const item = (await inbox()).find((candidate) => candidate.message.id === edited.id);
+
+		expect(item?.reason).not.toBe("mention");
+	});
 });

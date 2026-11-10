@@ -155,6 +155,7 @@ export const personCapabilities: Record<string, PersonCapability> = {
 			requireConversation(request),
 			requireMessage(request),
 			request.body ?? "",
+			request.mentions,
 		);
 	},
 	"person.message.delete": async (gateway, body) => {
