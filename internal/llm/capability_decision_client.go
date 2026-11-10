@@ -18,6 +18,7 @@ type capabilityDecisionRequestDocument struct {
 	State     any                               `json:"state"`
 	Questions map[string]model.DecisionQuestion `json:"questions"`
 	SessionID string                            `json:"sessionID,omitempty"`
+	Context   *RequestContext                   `json:"context,omitempty"`
 }
 
 type capabilityDecisionResponseDocument struct {
@@ -46,6 +47,7 @@ func (decisionClient CapabilityDecisionClient) Decide(responseContext context.Co
 		State:     wireState,
 		Questions: request.Questions,
 		SessionID: request.SessionID,
+		Context:   requestContextPointer(responseContext),
 	}
 	startedAt := time.Now()
 	var responseDocument capabilityDecisionResponseDocument
