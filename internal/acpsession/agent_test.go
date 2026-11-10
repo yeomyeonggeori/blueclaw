@@ -1146,8 +1146,50 @@ func TestAQuestionsOptionsReachTheClientUnderTheirOwnWordsAndTheAnswerNamesTheKe
 		t.Fatalf("the pick read as %+v answered=%v", answer, isAnswered)
 	}
 	offered := client.permissionAsked[0].Options
-	if len(offered) != 3 || offered[0].Name != "회의실 A" || offered[1].OptionId != "choose:2" || offered[1].Name != "회의실 B" {
-		t.Fatalf("the client was offered %+v, expected each option under its own words", offered)
+	if len(offered) != 4 || offered[0].Name != "회의실 A" || offered[1].OptionId != "choose:2" || offered[1].Name != "회의실 B" || offered[2].OptionId != ownWordsOptionID || offered[3].OptionId != rejectOnceOptionID {
+		t.Fatalf("the client was offered %+v, expected each option under its own words, then answering in other words, then declining", offered)
+	}
+}
+
+func TestAnAnswerInTheRequestersOwnWordsAnswersTheQuestionAndIsWhatItReturns(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	taskRun := taskRunService.CreateTaskRun("person-sample", "conversation-1", "견적서 만들어줘")
+	client := &recordingClient{}
+	asked := []approvalreply.Question{}
+	connection, permissionRelay := connectedPairWithCollaborators(t, client, Collaborators{
+		TaskLauncher: &recordingLauncher{},
+		Directory:    staticDirectory{},
+		ReplyReader:  scriptedReader{optionID: approvalreply.OwnWordsOptionID, asked: &asked},
+		TaskRunStore: taskRunService,
+	})
+	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
+	words := "품목은 신제품 공급 한 줄, 수량 1개로 해줘"
+	replies := []ApprovalReplyResponse{}
+	client.answerByAsking = func(request acp.RequestPermissionRequest) acp.PermissionOptionId {
+		read := replyResponseFor(t, connection, request, ApprovalReplyRequest{SessionID: string(sessionID), Reply: words, ReplierEmail: "sample@example.test"})
+		replies = append(replies, read)
+		return acp.PermissionOptionId(read.OptionID)
+	}
+	approvalRequest := approvalRequestForTest()
+	approvalRequest.TaskRunID = taskRun.TaskRunID
+	choices := []holdrecord.Choice{{Key: "1", Label: "품목 내역 직접 입력하겠습니다"}, {Key: "2", Label: "총액만 표시해 주세요"}}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	answer, isAnswered := answered(permissionRelay.AskPermission(ctx, approvalRequest, approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "품목을 어떻게 할까요?", Choices: choices}))
+
+	if !isAnswered || answer.Signal != agentcontract.ApprovalSignalApprove || answer.ChoiceKey != "" {
+		t.Fatalf("an answer in the requester's own words read as %+v answered=%v; it answers the question without picking a listed option", answer, isAnswered)
+	}
+	if len(replies) != 1 || replies[0].IsInstruction {
+		t.Fatalf("the relay was told %+v, expected the reply to answer the question and not go on as a new instruction", replies)
+	}
+	if len(asked) != 1 || len(asked[0].Options) != 4 {
+		t.Fatalf("the reader was asked %+v, expected the two answers, answering in other words, and cancelling", asked)
+	}
+	chosen, isChosen := approvalgate.AnswerChosen(taskRunService.ListTaskEvent(taskRun.TaskRunID), choices)
+	if !isChosen || chosen.Text != words || chosen.ChoiceKey != "" {
+		t.Fatalf("the run's ledger answers the question with %+v %v, expected the requester's own words", chosen, isChosen)
 	}
 }
 

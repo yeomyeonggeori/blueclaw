@@ -803,6 +803,7 @@ var builtinScenarioFactories = map[string]func(string) VirtualSessionScenario{
 	"ask_choice_reply_acceptance":                    AskChoiceReplyAcceptanceScenario,
 	"ask_choice_reply_over_acp":                      AskChoiceReplyOverACPScenario,
 	"ask_choice_hold_acceptance":                     AskChoiceHoldAcceptanceScenario,
+	"ask_choice_own_words_acceptance":                AskChoiceOwnWordsAcceptanceScenario,
 	"ask_root_message_starts_a_task":                 AskRootMessageStartsATaskScenario,
 	"ask_root_message_starts_a_task_over_acp":        AskRootMessageStartsATaskOverACPScenario,
 	"dm_send_confirm_acceptance":                     DirectMessageSendConfirmAcceptanceScenario,

@@ -9,6 +9,7 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
@@ -17,6 +18,7 @@ import (
 const (
 	approveOnceOptionID  = acp.PermissionOptionId("approve_once")
 	rejectOnceOptionID   = acp.PermissionOptionId("reject_once")
+	ownWordsOptionID     = acp.PermissionOptionId(approvalreply.OwnWordsOptionID)
 	chooseOptionIDPrefix = "choose:"
 )
 
@@ -203,7 +205,18 @@ func choicePermissionOptions(choices []holdrecord.Choice) []acp.PermissionOption
 			Name:     choiceOptionName(choice),
 		})
 	}
+	if approvalgate.TakesOwnWords(choices) {
+		options = append(options, ownWordsOption())
+	}
 	return append(options, rejectOption())
+}
+
+func ownWordsOption() acp.PermissionOption {
+	return acp.PermissionOption{
+		OptionId: ownWordsOptionID,
+		Kind:     acp.PermissionOptionKindAllowOnce,
+		Name:     "answer in the requester's own words",
+	}
 }
 
 func choiceOptionID(choiceKey string) acp.PermissionOptionId {
@@ -237,7 +250,7 @@ func approvalAnswerForOutcome(outcome acp.RequestPermissionOutcome) (approvalgat
 		return approvalgate.ApprovalAnswer{Signal: agentcontract.ApprovalSignalApprove, ChoiceKey: choiceKey}, true
 	}
 	switch outcome.Selected.OptionId {
-	case approveOnceOptionID:
+	case approveOnceOptionID, ownWordsOptionID:
 		return approvalgate.ApprovalAnswer{Signal: agentcontract.ApprovalSignalApprove}, true
 	case rejectOnceOptionID:
 		return approvalgate.ApprovalAnswer{Signal: agentcontract.ApprovalSignalReject}, true

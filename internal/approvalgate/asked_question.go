@@ -41,38 +41,84 @@ func AskedQuestion(toolInput json.RawMessage) string {
 	return strings.TrimSpace(asked.Question)
 }
 
+func TakesOwnWords(choices []holdrecord.Choice) bool {
+	for _, choice := range choices {
+		if choice.IsAnAnswer() {
+			return true
+		}
+	}
+	return false
+}
+
+type choiceAnswered struct {
+	Key      string `json:"key,omitempty"`
+	OwnWords string `json:"ownWords,omitempty"`
+}
+
 func RecordChoiceAnswer(taskRunStore taskstate.TaskRunStore, taskRunID string, choice holdrecord.Choice) {
-	if strings.TrimSpace(taskRunID) == "" || !choice.IsAnAnswer() {
+	if !choice.IsAnAnswer() {
 		return
 	}
-	body, _ := json.Marshal(map[string]string{"key": strings.TrimSpace(choice.Key)})
+	recordChoiceAnswered(taskRunStore, taskRunID, choiceAnswered{Key: strings.TrimSpace(choice.Key)})
+}
+
+func RecordOwnWordsAnswer(taskRunStore taskstate.TaskRunStore, taskRunID string, ownWords string) {
+	if strings.TrimSpace(ownWords) == "" {
+		return
+	}
+	recordChoiceAnswered(taskRunStore, taskRunID, choiceAnswered{OwnWords: strings.TrimSpace(ownWords)})
+}
+
+func recordChoiceAnswered(taskRunStore taskstate.TaskRunStore, taskRunID string, answered choiceAnswered) {
+	if strings.TrimSpace(taskRunID) == "" {
+		return
+	}
+	body, _ := json.Marshal(answered)
 	taskRunStore.AppendTaskEvent(taskRunID, TaskEventChoiceAnswered, string(body))
 }
 
-func AnswerChosen(taskEvents []agentcontract.TaskEvent, choices []holdrecord.Choice) (holdrecord.Choice, bool) {
+type RequesterAnswer struct {
+	ChoiceKey string
+	Text      string
+}
+
+func AnswerChosen(taskEvents []agentcontract.TaskEvent, choices []holdrecord.Choice) (RequesterAnswer, bool) {
+	answered, isAnswered := latestChoiceAnswered(taskEvents)
+	if !isAnswered {
+		return RequesterAnswer{}, false
+	}
+	if answered.OwnWords != "" {
+		return RequesterAnswer{Text: answered.OwnWords}, true
+	}
+	choice, isChosen := ChoiceByKey(choices, answered.Key)
+	return RequesterAnswer{ChoiceKey: choice.Key, Text: choice.Label}, isChosen
+}
+
+func latestChoiceAnswered(taskEvents []agentcontract.TaskEvent) (choiceAnswered, bool) {
 	for index := len(taskEvents) - 1; index >= 0; index-- {
 		if taskEvents[index].Name == agentcontract.TaskEventApprovalHoldOpened {
-			return holdrecord.Choice{}, false
+			return choiceAnswered{}, false
 		}
 		if taskEvents[index].Name != TaskEventChoiceAnswered {
 			continue
 		}
-		answered := struct {
-			Key string `json:"key"`
-		}{}
-		if json.Unmarshal([]byte(taskEvents[index].Body), &answered) != nil {
-			return holdrecord.Choice{}, false
-		}
-		return ChoiceByKey(choices, answered.Key)
+		answered := choiceAnswered{}
+		return answered, json.Unmarshal([]byte(taskEvents[index].Body), &answered) == nil
 	}
-	return holdrecord.Choice{}, false
+	return choiceAnswered{}, false
 }
 
 func ChosenAnswerResult(taskEvents []agentcontract.TaskEvent, toolInput json.RawMessage) toolcontract.ToolResult {
-	chosen, isChosen := AnswerChosen(taskEvents, AskedChoices(toolcontract.AskInputToolName, toolInput))
-	if !isChosen {
-		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, toolcontract.AskInputToolName, "a question with choices is answered by the requester picking one, and none was picked")
+	answer, isAnswered := AnswerChosen(taskEvents, AskedChoices(toolcontract.AskInputToolName, toolInput))
+	if !isAnswered {
+		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, toolcontract.AskInputToolName, "a question with choices is answered by the requester picking one or answering in their own words, and neither happened")
 	}
-	answer, _ := json.Marshal(map[string]string{"status": "answered", "question": AskedQuestion(toolInput), "choiceKey": chosen.Key, "answer": chosen.Label})
-	return toolcontract.ToolSuccessData("The requester chose: "+chosen.Label, answer)
+	data := map[string]string{"status": "answered", "question": AskedQuestion(toolInput), "answer": answer.Text}
+	if answer.ChoiceKey == "" {
+		document, _ := json.Marshal(data)
+		return toolcontract.ToolSuccessData("The requester answered in their own words: "+answer.Text, document)
+	}
+	data["choiceKey"] = answer.ChoiceKey
+	document, _ := json.Marshal(data)
+	return toolcontract.ToolSuccessData("The requester chose: "+answer.Text, document)
 }

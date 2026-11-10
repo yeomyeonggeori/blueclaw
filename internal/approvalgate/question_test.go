@@ -9,7 +9,9 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
+	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
@@ -49,8 +51,43 @@ func TestAQuestionAskedInTheThreadIsAnsweredByThePickedOption(t *testing.T) {
 		t.Fatalf("a picked option answers the question, got %+v %v", outcome, errorValue)
 	}
 	chosen, isChosen := AnswerChosen(taskRunService.ListTaskEvent(taskRun.TaskRunID), AskedChoices("ask_input", roomQuestion("").ToolInput))
-	if !isChosen || chosen.Label != "회의실 B" {
+	if !isChosen || chosen.Text != "회의실 B" || chosen.ChoiceKey != "2" {
 		t.Fatalf("the pick is recorded for the tool that returns it, got %+v %v", chosen, isChosen)
+	}
+}
+
+func TestAnAnswerInTheRequestersOwnWordsIsWhatTheQuestionReturns(t *testing.T) {
+	gate, taskRunService, taskRun := gateFixture(t)
+	words := "회의실 C로 잡아줘, 열 명이야"
+	gate.UsePermissionAsker(&ownWordsAsker{taskRunService: taskRunService, words: words})
+
+	outcome, errorValue := gate.AwaitApproval(context.Background(), roomQuestion(taskRun.TaskRunID))
+
+	if errorValue != nil || outcome.Decision != mcpserver.ApprovalDecisionApproved {
+		t.Fatalf("an answer in the requester's own words answers the question, got %+v %v", outcome, errorValue)
+	}
+	result := ChosenAnswerResult(taskRunService.ListTaskEvent(taskRun.TaskRunID), roomQuestion("").ToolInput)
+	if result.Failure != nil || result.Output.Content != "The requester answered in their own words: "+words || strings.Contains(string(result.Output.Data), "choiceKey") {
+		t.Fatalf("the question returns the requester's own words and no picked option, got %+v", result)
+	}
+}
+
+type ownWordsAsker struct {
+	taskRunService *task.TaskRunService
+	words          string
+}
+
+func (asker *ownWordsAsker) AskPermission(_ context.Context, approvalRequest mcpserver.ApprovalRequest, _ PermissionQuestion) (ApprovalAnswer, AskStatus) {
+	RecordOwnWordsAnswer(asker.taskRunService, approvalRequest.TaskRunID, asker.words)
+	return ApprovalAnswer{Signal: agentcontract.ApprovalSignalApprove}, AskAnswered
+}
+
+func TestOnlyAQuestionWhoseOptionsAreAnswersTakesOwnWords(t *testing.T) {
+	if !TakesOwnWords(AskedChoices("ask_input", roomQuestion("").ToolInput)) {
+		t.Fatal("a question whose options are answers takes an answer in the requester's own words")
+	}
+	if TakesOwnWords([]holdrecord.Choice{{Key: "now"}, {Key: "later", StartsAt: "2099-10-03T03:00:00+09:00"}}) {
+		t.Fatal("approving a call now or later is not a question with an answer of its own")
 	}
 }
 

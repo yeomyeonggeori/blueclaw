@@ -76,6 +76,9 @@ func (agent *Agent) readApprovalReply(ctx context.Context, request ApprovalReply
 	}
 	question := approvalreply.Question{Text: waiting.confirmation, Options: approvalgate.ReplyOptionsOf(waiting.options)}
 	reading, errorValue := agent.replyReader.Read(ctx, question, request.Reply, agent.ledgerObserver(waiting.approvalRequest.TaskRunID))
+	if errorValue == nil && reading.IsOwnWords() && agent.taskRunStore != nil {
+		approvalgate.RecordOwnWordsAnswer(agent.taskRunStore, waiting.approvalRequest.TaskRunID, request.Reply)
+	}
 	if errorValue == nil && reading.IsApproval() {
 		return ApprovalReplyResponse{IsAnswer: true, OptionID: reading.ApprovedOptionID}, nil
 	}

@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
@@ -46,4 +47,25 @@ func AskChoiceHoldAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 			ExpectedTaskStatus:     task.TaskStatusCompleted,
 		}},
 	}
+}
+
+func AskChoiceOwnWordsAcceptanceScenario(artifactDirectoryPath string) VirtualSessionScenario {
+	scenario := AskChoiceHoldAcceptanceScenario(artifactDirectoryPath)
+	scenario.Name = "ask_choice_own_words_acceptance"
+	scenario.Turns[1] = VirtualTurn{
+		Prompt:              "둘 다 말고 회의실 C로 잡아줘, 열 명이야",
+		ReplyTargetID:       "virtual-message-001",
+		IsThread:            threadReply(),
+		AnswersApprovalHold: true,
+		RouterChoice:        approvalreply.OwnWordsOptionID,
+		ActionResponses: []string{
+			actionFinishMessage("회의실 C로 잡았습니다.", "obs-002"),
+		},
+		ExpectedEvents:         []string{approvalgate.TaskEventChoiceAnswered},
+		ForbiddenEvents:        []string{agentcontract.TaskEventTaskFailed},
+		ExpectedModelContexts:  []string{"The requester answered in their own words: 둘 다 말고 회의실 C로 잡아줘, 열 명이야"},
+		ExpectedReplyFragments: []string{"회의실 C"},
+		ExpectedTaskStatus:     task.TaskStatusCompleted,
+	}
+	return scenario
 }
