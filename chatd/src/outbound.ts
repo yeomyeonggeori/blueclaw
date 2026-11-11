@@ -24,6 +24,7 @@ import {
 	parseDirectMessageSendRequest,
 	parseHistoryFetchRequest,
 	parseIdentityResolveRequest,
+	parseInteractionResolveRequest,
 	parseMessageDeleteRequest,
 	parseMessageEditRequest,
 	parseMessagePostRequest,
@@ -46,8 +47,11 @@ import {
 	OwnershipPartlyHandedOver,
 	TargetIsChannelOwner,
 } from "./adapters/buzz/user-channels.ts";
+import { askKindOf, askTags } from "./adapters/buzz/ask-tags.ts";
+import { replyKindTag } from "./event-tags.ts";
 import type {
 	AgentPartDocument,
+	AskInteractionDocument,
 	AttachmentImportResponse,
 	ChannelEnsureResponse,
 	DirectMessageEnsureResponse,
@@ -103,6 +107,7 @@ const capabilityHandlers: Record<string, CapabilityHandler> = {
 	"message.post": handleMessagePost,
 	"message.search": handleMessageSearch,
 	"message_delete": handleMessageDelete,
+	"interaction.resolve": handleInteractionResolve,
 };
 
 export function createOutboundHandler(
@@ -243,17 +248,49 @@ async function handleReplySend(
 	// The thread says where the reply belongs and the answered message says what it
 	// is a reply to. Without the second, somebody who wrote deep in a thread finds
 	// the answer at the top of it.
-	const answeringTags = answeringTagsFor(adapter, requestDocument.answeringMessageID);
-	if (requestDocument.replyKind === "progress" && adapter instanceof BuzzAdapter) {
-		return {
-			dispatchID: (await adapter.postMessage(requestDocument.replyTargetID, message, [["reply-kind", "progress"], ...answeringTags])).id
-		};
-	}
-	const result =
-		requestDocument.isError && adapter instanceof BuzzAdapter
-			? await adapter.postMessage(requestDocument.replyTargetID, message, [["reply-kind", "error"], ...answeringTags])
-			: await adapter.postMessage(requestDocument.replyTargetID, message, answeringTags);
+	const tags = [
+		...replyKindTagsFor(adapter, requestDocument),
+		...questionTagsFor(adapter, requestDocument.interaction),
+		...answeringTagsFor(adapter, requestDocument.answeringMessageID),
+	];
+	const result = await adapter.postMessage(requestDocument.replyTargetID, message, tags);
 	return { dispatchID: result.id };
+}
+
+function replyKindTagsFor(adapter: PlatformChatAdapter, requestDocument: ReplySendRequest): string[][] {
+	if (!(adapter instanceof BuzzAdapter)) return [];
+	if (requestDocument.replyKind === "progress") return [replyKindTag("progress")];
+	if (requestDocument.isError) return [replyKindTag("error")];
+	return [];
+}
+
+function questionTagsFor(adapter: PlatformChatAdapter, interaction: AskInteractionDocument | undefined): string[][] {
+	if (!(adapter instanceof BuzzAdapter) || !interaction?.interactionID) return [];
+	const options = interaction.options ?? [];
+	if (options.length === 0) return [];
+	return askTags({
+		interactionID: interaction.interactionID,
+		kind: askKindOf(interaction.kind),
+		targetExternalID: interaction.targetPlatformUserID ?? "",
+		options,
+		recommendedOptionKey: interaction.recommendedOptionKey,
+	});
+}
+
+async function handleInteractionResolve(
+	adapter: PlatformChatAdapter,
+	_configuration: ChatdConfiguration,
+	requestBody: unknown,
+): Promise<Record<string, never>> {
+	const requestDocument = parseInteractionResolveRequest(requestBody);
+	if (!(adapter instanceof BuzzAdapter)) return {};
+	await adapter.recordInteractionResolution(
+		requestDocument.replyTargetID,
+		requestDocument.messageID,
+		requestDocument.interactionID,
+		requestDocument.choiceKey,
+	);
+	return {};
 }
 
 function buildPostableMessage(
@@ -268,7 +305,7 @@ function buildPostableMessage(
 }
 
 function messageCarryingItsOptions(requestDocument: ReplySendRequest): string {
-	const options = requestDocument.interaction?.options ?? [];
+	const options = (requestDocument.interaction?.options ?? []).filter((option) => option.label.trim() !== "");
 	if (options.length === 0) {
 		return requestDocument.message;
 	}

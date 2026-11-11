@@ -1,6 +1,7 @@
 import type { Chat, Message, Thread } from 'chat';
 import type { ChatdConfiguration } from './configuration.ts';
 import { deliverInboundEventToRelay, type NormalizedInboundEvent } from './relay-inbound.ts';
+import type { AnsweredChoice } from './choice.ts';
 import { asAHostService } from './service-credential.ts';
 import {
   buildVisibleContext,
@@ -139,6 +140,7 @@ async function forwardNormalizedEvent(
       },
     },
     ...(eventID ? { eventID } : {}),
+    ...answeredChoiceFieldOf(adapter, message, eventID),
   };
   if (configuration.relayInboundURL) {
     await deliverInboundEventToRelay(configuration.relayInboundURL, event);
@@ -152,6 +154,16 @@ async function forwardNormalizedEvent(
   if (!response.ok) {
     throw new Error(`blueclaw ${platform} ingress returned ${response.status}`);
   }
+}
+
+function answeredChoiceFieldOf(
+  adapter: NormalizedPlatformAdapter,
+  message: Message,
+  editEventID: string | undefined,
+): { answeredChoice?: AnsweredChoice } {
+  if (editEventID) return {};
+  const answeredChoice = adapter.answeredChoiceOf?.(message.raw);
+  return answeredChoice ? { answeredChoice } : {};
 }
 
 export function normalizedInboundRoutingOf(

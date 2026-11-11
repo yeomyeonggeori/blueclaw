@@ -50,6 +50,13 @@ export interface ReplySendResponse {
 	dispatchID: string;
 }
 
+export interface InteractionResolveRequest {
+	replyTargetID: string;
+	messageID: string;
+	interactionID: string;
+	choiceKey?: string;
+}
+
 export interface ProgressRequest {
 	replyTargetID: string;
 	answeringMessageID?: string;

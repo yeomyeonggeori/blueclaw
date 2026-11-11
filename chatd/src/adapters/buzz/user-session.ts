@@ -15,6 +15,9 @@ import { hiddenDirectMessageIDs } from "./user-dm-visibility.ts";
 import { DELETE_MESSAGE_KIND, takenBackIDs } from "./deletions.ts";
 import { reactionsTo, type UserMessageReaction } from "./user-reactions.ts";
 import { mentionsOf, type UserMentions } from "./user-mentions.ts";
+import { askOf, recordsAResolution, resolutionOf } from "./ask-tags.ts";
+import type { PersonalAsk, PersonalAskResolution } from "../../choice.ts";
+import { carriesReplyKind } from "../../event-tags.ts";
 import {
 	AttachmentRefused,
 	isAlreadyKept,
@@ -419,6 +422,8 @@ export type UserMessage = {
 	mentions: UserMentions;
 	attachments: UserMessageAttachment[];
 	reactions: UserMessageReaction[];
+	ask?: PersonalAsk;
+	isFailure?: boolean;
 };
 
 export type UserMessageAttachment = {
@@ -473,14 +478,17 @@ export async function channelMessagePageOf(
 				postedAt: new Date(event.created_at * 1000).toISOString(),
 				mentions: mentionsOf(event),
 				attachments: attachmentsOf(event),
+				...(carriesReplyKind(event.tags, "error") && { isFailure: true }),
+				...askOfEvent(event),
 			};
 		});
 	const messageIDs = read.map((message) => message.id);
-	const [reacted, edited, deleted] = await Promise.all([
+	const [reacted, editEvents, deleted] = await Promise.all([
 		reactionsTo(relay, messageIDs),
-		latestEditsTo(relay, messageIDs),
+		editEventsTo(relay, messageIDs),
 		deletionsTo(relay, messageIDs),
 	]);
+	const edited = latestEditByTarget(editEvents);
 	const messages = read
 		.filter((message) => !deleted.has(message.id))
 		.map((message) => {
@@ -490,9 +498,36 @@ export async function channelMessagePageOf(
 				body: edit?.content ?? message.body,
 				mentions: edit ? mentionsOf(edit) : message.mentions,
 				reactions: reacted.get(message.id) ?? [],
+				...askFieldOf(message, editEvents),
 			};
 		});
 	return { messages, hasMoreBefore: page.length >= limit };
+}
+
+function askOfEvent(event: BuzzEvent): { ask?: PersonalAsk } {
+	const ask = askOf(event.tags);
+	return ask ? { ask } : {};
+}
+
+function askFieldOf(message: { id: string; authorPubkeyHex: string; ask?: PersonalAsk }, editEvents: BuzzEvent[]): { ask?: PersonalAsk } {
+	if (!message.ask) return {};
+	const resolution = resolutionByAuthor(message, message.ask.interactionID, editEvents);
+	return { ask: resolution ? { ...message.ask, resolution } : message.ask };
+}
+
+function resolutionByAuthor(
+	message: { id: string; authorPubkeyHex: string },
+	interactionID: string,
+	editEvents: BuzzEvent[],
+): PersonalAskResolution | undefined {
+	let latest: { createdAt: number; resolution: PersonalAskResolution } | undefined;
+	for (const edit of editEvents) {
+		if (edit.pubkey !== message.authorPubkeyHex || firstTagValue(edit, "e") !== message.id) continue;
+		const resolution = resolutionOf(edit.tags, interactionID);
+		if (!resolution) continue;
+		if (!latest || edit.created_at > latest.createdAt) latest = { createdAt: edit.created_at, resolution };
+	}
+	return latest?.resolution;
 }
 
 async function postedSecondOf(
@@ -576,10 +611,21 @@ export async function latestEditsTo(
 	relay: { query: (filter: object) => Promise<BuzzEvent[]> },
 	messageIDs: string[],
 ): Promise<Map<string, BuzzEvent>> {
-	if (messageIDs.length === 0) return new Map();
-	const events = await relay.query({ kinds: [EDIT_MESSAGE_KIND], "#e": messageIDs, limit: messageIDs.length * mostEditsReadPerMessage });
+	return latestEditByTarget(await editEventsTo(relay, messageIDs));
+}
+
+async function editEventsTo(
+	relay: { query: (filter: object) => Promise<BuzzEvent[]> },
+	messageIDs: string[],
+): Promise<BuzzEvent[]> {
+	if (messageIDs.length === 0) return [];
+	return relay.query({ kinds: [EDIT_MESSAGE_KIND], "#e": messageIDs, limit: messageIDs.length * mostEditsReadPerMessage });
+}
+
+function latestEditByTarget(events: BuzzEvent[]): Map<string, BuzzEvent> {
 	const latest = new Map<string, BuzzEvent>();
 	for (const event of events) {
+		if (recordsAResolution(event.tags)) continue;
 		const messageID = firstTagValue(event, "e");
 		if (!messageID) continue;
 		const known = latest.get(messageID);

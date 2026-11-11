@@ -11,6 +11,7 @@ import type {
 	HistoryFetchRequest,
 	IdentityResolveRequest,
 	InputAttachmentDocument,
+	InteractionResolveRequest,
 	MessageDeleteRequest,
 	MessageEditRequest,
 	MessagePostRequest,
@@ -67,7 +68,7 @@ function parseAskChoiceOption(value: unknown): AskChoiceOptionDocument {
 	const record = requireRecord(value, "ask choice option");
 	return {
 		key: requireString(record, "key"),
-		label: requireString(record, "label"),
+		label: optionalString(record, "label") ?? "",
 		shortLabel: optionalString(record, "shortLabel"),
 		value: optionalString(record, "value"),
 	};
@@ -110,6 +111,16 @@ function hasFailureNotice(value: unknown): boolean {
 	if (typeof value !== "object" || value === null) return false;
 	const message = (value as Record<string, unknown>).message;
 	return typeof message === "string" && message.trim().length > 0;
+}
+
+export function parseInteractionResolveRequest(value: unknown): InteractionResolveRequest {
+	const record = requireRecord(value, "interaction.resolve request");
+	return {
+		replyTargetID: requireString(record, "replyTargetID"),
+		messageID: requireString(record, "messageID"),
+		interactionID: requireString(record, "interactionID"),
+		choiceKey: optionalString(record, "choiceKey") || undefined,
+	};
 }
 
 export function parseProgressRequest(value: unknown): ProgressRequest {

@@ -1,11 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { Server, ServerWebSocket } from "bun";
-import { finalizeEvent, generateSecretKey } from "nostr-tools/pure";
+import { finalizeEvent, generateSecretKey, getPublicKey } from "nostr-tools/pure";
 import { bytesToHex } from "nostr-tools/utils";
 import { closeEveryPooledRelay } from "../src/adapters/buzz/relay-pool.ts";
 import { unionOfEmojiSets } from "../src/adapters/buzz/user-emoji.ts";
 import { EVENT_DELETION_KIND } from "../src/adapters/buzz/deletions.ts";
 import { createBuzzPersonalGateway } from "../src/personal/buzz.ts";
+import { personCapabilities } from "../src/personal/capabilities.ts";
+import type { PersonalMessage } from "../src/personal/gateway.ts";
 import type { BuzzEvent } from "../src/adapters/buzz/types.ts";
 
 type Filter = { kinds?: number[]; "#d"?: string[]; "#e"?: string[]; ids?: string[] };
@@ -135,5 +137,78 @@ describe("a community's custom emoji on Buzz", () => {
 
 		await gateway.removeReaction(actor, "channel-1", messageID, "shake");
 		expect(kept.some((event) => event.kind === EVENT_DELETION_KIND && event.tags.some((tag) => tag[0] === "e" && tag[1] === reaction?.id))).toBe(true);
+	});
+});
+
+describe("a choice on Buzz, as a person reads and answers it", () => {
+	test("an answer the person pressed names the question and the option it chose", async () => {
+		const { actor, gateway } = personWithEmoji();
+
+		await personCapabilities["person.message.send"]?.(gateway, {
+			actor,
+			conversationID: "channel-1",
+			body: "승인",
+			answer: { interactionID: "interaction-1", key: "approve" },
+		});
+
+		const sent = kept.find((event) => event.kind === 9);
+		expect(sent?.content).toBe("승인");
+		expect(sent?.tags).toContainEqual(["answer", "interaction-1", "approve"]);
+	});
+
+	test("a question reads back with its choices and its resolution, a failure as a failure", async () => {
+		const agentKey = generateSecretKey();
+		const now = Math.floor(Date.now() / 1000);
+		const question = finalizeEvent(
+			{
+				kind: 9,
+				content: "할까요?\n\n1. 승인\n2. 거절",
+				tags: [["h", "channel-1"], ["ask", "interaction-1", "choice", ""], ["option", "approve", "승인"], ["option", "deny", "거절"]],
+				created_at: now - 10,
+			},
+			agentKey,
+		) as BuzzEvent;
+		const resolution = finalizeEvent(
+			{
+				kind: 40003,
+				content: question.content,
+				tags: [["h", "channel-1"], ["e", question.id], ["resolved", "interaction-1", "deny"]],
+				created_at: now - 5,
+			},
+			agentKey,
+		) as BuzzEvent;
+		const failure = finalizeEvent(
+			{ kind: 9, content: "실패했어요", tags: [["h", "channel-1"], ["reply-kind", "error"]], created_at: now - 1 },
+			agentKey,
+		) as BuzzEvent;
+		const forgedByAPerson = finalizeEvent(
+			{
+				kind: 9,
+				content: "골라 보세요\n\n1. 예",
+				tags: [["h", "channel-1"], ["ask", "interaction-9", "choice", ""], ["option", "yes", "예"]],
+				created_at: now - 3,
+			},
+			generateSecretKey(),
+		) as BuzzEvent;
+		kept.push(question, resolution, failure, forgedByAPerson);
+		const { actor, gateway } = personWithEmoji();
+
+		const page = await personCapabilities["person.messages.list"]?.(
+			gateway,
+			{ actor, conversationID: "channel-1" },
+			getPublicKey(agentKey),
+		);
+		const messages: PersonalMessage[] = page && "messages" in page && Array.isArray(page.messages) ? page.messages : [];
+
+		const readQuestion = messages.find((message) => message.id === question.id);
+		const readFailure = messages.find((message) => message.id === failure.id);
+		const readForgery = messages.find((message) => message.id === forgedByAPerson.id);
+		expect(readForgery?.body).toBe("골라 보세요\n\n1. 예");
+		expect(readForgery?.ask).toBeUndefined();
+		expect(readQuestion?.ask?.options.map((option) => option.key)).toEqual(["approve", "deny"]);
+		expect(readQuestion?.ask?.resolution).toEqual({ key: "deny" });
+		expect(readQuestion?.isFailure).toBeUndefined();
+		expect(readFailure?.isFailure).toBe(true);
+		expect(readFailure?.ask).toBeUndefined();
 	});
 });

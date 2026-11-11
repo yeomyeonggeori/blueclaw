@@ -126,9 +126,9 @@ export const personCapabilities: Record<string, PersonCapability> = {
 		const request = parsePersonRequest(body);
 		return { agentExternalID, ...(await gateway.listInbox(request.actor, inboxWindowOf(request))) };
 	},
-	"person.messages.list": async (gateway, body) => {
+	"person.messages.list": async (gateway, body, agentExternalID) => {
 		const request = parsePersonRequest(body);
-		return await gateway.listMessages(request.actor, requireConversation(request), request.before);
+		return await gateway.listMessages(request.actor, requireConversation(request), request.before, agentExternalID);
 	},
 	"person.messages.search": async (gateway, body) => {
 		const request = parsePersonRequest(body);
@@ -146,6 +146,7 @@ export const personCapabilities: Record<string, PersonCapability> = {
 			request.attachments,
 			request.mentions,
 			request.timeZone,
+			request.answer,
 		);
 	},
 	"person.message.edit": async (gateway, body) => {

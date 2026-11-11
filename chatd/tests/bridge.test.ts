@@ -244,4 +244,83 @@ describe("normalized message forwarding", () => {
 		const context = (await forwardedDocument(undefined, rootTwoID, [["tz", "America/Los_Angeles"]])).context as Record<string, unknown>;
 		expect(context.requesterTimeZone).toBe("America/Los_Angeles");
 	});
+
+	test("does not carry a choice again on an edit, whose words may no longer be that option", async () => {
+		const document = await forwardedDocument(undefined, rootTwoID, [["answer", "interaction-1", "approve"]]);
+		expect("answeredChoice" in document).toBe(false);
+	});
+});
+
+describe("a person's answer to a choice", () => {
+	const answerTag = ["answer", "interaction-1", "approve"];
+
+	async function documentForNewMessage(extraTags: string[][]): Promise<Record<string, unknown>> {
+		const adapter = new EditObservingBuzzAdapter({
+			relayURL: "ws://localhost:3000",
+			privateKeyHex: "1".repeat(64),
+			botDisplayName: "internkim",
+		});
+		let subscribedMessageHandler: Parameters<Parameters<typeof createBridge>[0]["onSubscribedMessage"]>[0] | undefined;
+		createBridge(
+			{
+				onDirectMessage: () => undefined,
+				onNewMention: () => undefined,
+				onSubscribedMessage: (handler) => {
+					subscribedMessageHandler = handler;
+				},
+				onAction: () => undefined,
+			},
+			{
+				botUserName: "internkim",
+				blueclawBaseURL: "http://blueclaw.test",
+				relayInboundURL: undefined,
+				listenHostname: "127.0.0.1",
+				blueclawIngressURL: undefined,
+				admindBaseURL: undefined,
+				listenPort: 18090,
+				mattermost: undefined,
+				buzz: undefined,
+			},
+			{ buzz: adapter },
+		);
+		if (!subscribedMessageHandler) throw new Error("expected subscribed message handler registration");
+		const threadID = adapter.encodeThreadId({ channelId: channelID, rootEventId: rootTwoID });
+		const arrived = new Message({
+			id: rootTwoID,
+			threadId: threadID,
+			text: "승인",
+			formatted: { type: "root", children: [] },
+			raw: message(rootTwoID, undefined, extraTags).raw,
+			author: { userId: senderID, userName: "sender", fullName: "Sender", isBot: false, isMe: false },
+			metadata: { dateSent: new Date(), edited: false },
+			attachments: [],
+		});
+		const originalFetch = globalThis.fetch;
+		let forwardedBody: Record<string, unknown> = {};
+		globalThis.fetch = Object.assign(
+			async (_input: RequestInfo | URL, init?: RequestInit) => {
+				const document: unknown = JSON.parse(String(init?.body));
+				if (typeof document !== "object" || document === null) throw new Error("expected object payload");
+				forwardedBody = { ...document };
+				return new Response("ok", { status: 200 });
+			},
+			{ preconnect: originalFetch.preconnect },
+		);
+		try {
+			await subscribedMessageHandler(Object.assign(Object.create(null), { id: threadID }), arrived);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+		return forwardedBody;
+	}
+
+	test("reaches the agent naming the question and the option", async () => {
+		const document = await documentForNewMessage([answerTag]);
+		expect(document.answeredChoice).toEqual({ interactionID: "interaction-1", key: "approve" });
+		expect(document.prompt).toBe("승인");
+	});
+
+	test("is absent from a message that answers no choice", async () => {
+		expect("answeredChoice" in (await documentForNewMessage([]))).toBe(false);
+	});
 });
