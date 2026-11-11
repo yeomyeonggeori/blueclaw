@@ -5,6 +5,9 @@ package connectors
 import (
 	"context"
 	"testing"
+	"time"
+
+	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
@@ -48,5 +51,37 @@ func TestTheJudgmentOfAnInboundMessageKnowsWhoSentIt(t *testing.T) {
 		if email != expected {
 			t.Fatalf("a judgment made for a message must carry its sender %q, got %v", expected, decider.requesterEmails)
 		}
+	}
+}
+
+func TestAMessageJudgedBeforeItIsAdmittedStillNamesItsSender(t *testing.T) {
+	connectorRuntime, _, adapter := recordingGatewayDecisionRuntime(t)
+	decider := &requesterRecordingDecider{scriptedGatewayDecider: scriptedGatewayDecider{addressing: addressedToBot()}}
+	connectorRuntime.UseGatewayDecider(decider)
+	connectorRuntime.identityService.RememberPlatformAccount(identity.PlatformAccountIdentity{Platform: "test", ExternalUserID: "sender-user", Email: "invited@example.com"})
+
+	if _, errorValue := connectorRuntime.judgeInboundMessage(context.Background(), adapter, testChannelInboundEvent("message-1")); errorValue != nil {
+		t.Fatalf("expected the message to be judged: %v", errorValue)
+	}
+
+	if len(decider.requesterEmails) != 1 || decider.requesterEmails[0] != "invited@example.com" {
+		t.Fatalf("a judgment made before admission must carry the sender, got %v", decider.requesterEmails)
+	}
+}
+
+func TestABurstJudgedInOneCallNamesTheSenderOfItsNewestMessage(t *testing.T) {
+	connectorRuntime, _, _ := recordingGatewayDecisionRuntime(t)
+	decider := &requesterRecordingDecider{scriptedGatewayDecider: scriptedGatewayDecider{addressing: addressedToBot()}}
+	connectorRuntime.UseGatewayDecider(decider)
+	connectorRuntime.identityService.RememberPlatformAccount(identity.PlatformAccountIdentity{Platform: "test", ExternalUserID: "sender-user", Email: "invited@example.com"})
+	receivedAt := time.Unix(1756800000, 0)
+
+	connectorRuntime.decideClaimedBurst(context.Background(), []QueuedConnectorEvent{
+		burstChannelQueuedEvent("message-1", receivedAt, true, "이거 정리해줘"),
+		burstChannelQueuedEvent("message-2", receivedAt.Add(time.Second), true, "이어서 부탁해"),
+	})
+
+	if len(decider.requesterEmails) != 1 || decider.requesterEmails[0] != "invited@example.com" {
+		t.Fatalf("a burst's one judgment must carry the sender of its newest message, got %v", decider.requesterEmails)
 	}
 }

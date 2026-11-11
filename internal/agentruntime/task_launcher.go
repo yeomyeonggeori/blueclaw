@@ -299,6 +299,7 @@ func (taskLauncher *TaskLauncher) launchTask(ctx context.Context, request TaskLa
 	resolvedEmail, record := runLaunchStep(ctx, &taskLaunchExecution{Launcher: taskLauncher, Request: request}, resolveRequesterEmailLaunchStep{})
 	launchRecords = append(launchRecords, record)
 	request.RequesterEmail = resolvedEmail
+	ctx = contextAskedByTheRequester(ctx, request)
 	if record.Error != "" {
 		return completeFailedLaunch(record, nil), nil
 	}

@@ -76,7 +76,7 @@ func TestSessionTurnGatewayFactsMatchConnectorFactsAndScopeOpenTasks(t *testing.
 	}}
 
 	sessionFacts := connectorRuntime.gatewayFactsForTurn(context.Background(), connectorRuntime.OpenSessionTurn(context.Background(), event, "person-1", nil).turn)
-	connectorFacts := connectorRuntime.inboundGatewayFacts(context.Background(), adapter, event)
+	connectorFacts := connectorRuntime.gatewayFactsForTurn(context.Background(), connectorRuntime.inboundTurnFor(adapter, event))
 
 	if !reflect.DeepEqual(sessionFacts.AgentIdentity, connectorFacts.AgentIdentity) || sessionFacts.AgentIdentity.Name != "김인턴" || sessionFacts.AgentIdentity.Handle != "internkim" {
 		t.Fatalf("the session facts lost the configured agent identity: %+v", sessionFacts.AgentIdentity)
