@@ -43,10 +43,12 @@ func (connectorRuntime *ConnectorRuntime) decideInboundBurst(ctx context.Context
 	if errorValue != nil {
 		return
 	}
-	facts := connectorRuntime.inboundGatewayFacts(ctx, adapter, events[len(events)-1])
+	newest := connectorRuntime.inboundTurnFor(adapter, events[len(events)-1])
+	facts := connectorRuntime.gatewayFactsForTurn(ctx, newest)
 	if isDirectMessageWithNothingOpen(facts) {
 		return
 	}
+	ctx = connectorRuntime.withInboundRequester(ctx, newest)
 	for _, fittingEvents := range connectorRuntime.burstsWithinTheRequestBudget(facts, events) {
 		if len(fittingEvents) < 2 {
 			continue

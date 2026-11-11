@@ -54,6 +54,7 @@ func (connectorRuntime *ConnectorRuntime) judgeEvent(ctx context.Context, event 
 }
 
 func (connectorRuntime *ConnectorRuntime) judgeNow(ctx context.Context, turn *inboundTurn) (inboundengagement.Judgment, error) {
+	ctx = connectorRuntime.withInboundRequester(ctx, turn)
 	facts := connectorRuntime.gatewayFactsForTurn(ctx, turn)
 	judgments, errorValue := connectorRuntime.judgeFacts(ctx, facts)
 	if errorValue != nil {
@@ -134,10 +135,6 @@ func (connectorRuntime *ConnectorRuntime) inboundTurnFor(adapter PlatformAdapter
 		personAccess:   connectorRuntime.identityService.ResolvePersonAccess(personID),
 		requesterEmail: connectorRuntime.requesterEmailForEvent(personID, event),
 	}
-}
-
-func (connectorRuntime *ConnectorRuntime) inboundGatewayFacts(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) inboundengagement.Facts {
-	return connectorRuntime.gatewayFactsForTurn(ctx, connectorRuntime.inboundTurnFor(adapter, event))
 }
 
 func (connectorRuntime *ConnectorRuntime) gatewayFactsForTurn(ctx context.Context, turn *inboundTurn) inboundengagement.Facts {
