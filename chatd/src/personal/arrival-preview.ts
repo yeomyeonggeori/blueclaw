@@ -1,11 +1,13 @@
 import type { BuzzEvent } from "../adapters/buzz/types.ts";
-import { attachmentsOf } from "../adapters/buzz/user-session.ts";
+import { attachmentsOf, type UserMessageAttachment } from "../adapters/buzz/user-session.ts";
 
 export type AttachmentKind = "image" | "video" | "file";
 
 export type ArrivalPreview = {
 	preview: string;
 	attachmentKinds: AttachmentKind[];
+	pictureDigest: string;
+	pictureContentType: string;
 };
 
 const markdownLinkPattern = /!?\[[^\]]*\]\((\S+?)\)/g;
@@ -16,7 +18,14 @@ export function arrivalPreviewOf(event: BuzzEvent): ArrivalPreview {
 	return {
 		preview: textWithoutLinksTo(event.content, attachedURLs),
 		attachmentKinds: attachments.map((attachment) => attachmentKindOf(attachment.contentType)),
+		...firstPictureOf(attachments),
 	};
+}
+
+function firstPictureOf(attachments: UserMessageAttachment[]): Pick<ArrivalPreview, "pictureDigest" | "pictureContentType"> {
+	const picture = attachments.find((attachment) => attachmentKindOf(attachment.contentType) === "image" && attachment.digest !== "");
+	if (!picture) return { pictureDigest: "", pictureContentType: "" };
+	return { pictureDigest: picture.digest, pictureContentType: picture.contentType };
 }
 
 function textWithoutLinksTo(content: string, attachedURLs: Set<string>): string {
