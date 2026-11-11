@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,6 +30,7 @@ type askingThread struct {
 	conversationID    string
 	replyTargetID     string
 	question          approvalreply.Question
+	interaction       *AskInteraction
 	operatorOptions   operatorOptions
 	answers           chan string
 	isClaimed         bool
@@ -147,7 +149,8 @@ type threadPermissionAsker struct {
 }
 
 func (asker threadPermissionAsker) AskPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question approvalgate.PermissionQuestion) (approvalgate.ApprovalAnswer, approvalgate.AskStatus) {
-	optionID, status := asker.connectorRuntime.askWhereTheyAre(ctx, approvalRequest, question.Confirmation, approvalQuestionFor(question.Confirmation, question.Choices), operatorOptionsOfApproval(question.Choices))
+	interaction := heldCallInteraction(question.HoldID, question.Choices, approvalRequest.ToolInput)
+	optionID, status := asker.connectorRuntime.askWhereTheyAre(ctx, approvalRequest, question.Confirmation, interaction, approvalQuestionFor(question.Confirmation, question.Choices), operatorOptionsOfApproval(question.Choices))
 	if status != approvalgate.AskAnswered {
 		return approvalgate.ApprovalAnswer{}, status
 	}
@@ -156,7 +159,7 @@ func (asker threadPermissionAsker) AskPermission(ctx context.Context, approvalRe
 
 func (asker threadPermissionAsker) AskHarnessPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question approvalgate.HarnessPermissionQuestion) (acp.RequestPermissionOutcome, approvalgate.AskStatus) {
 	readerQuestion := approvalreply.Question{Text: question.Text, Options: approvalgate.ReplyOptionsOf(question.Options)}
-	optionID, status := asker.connectorRuntime.askWhereTheyAre(ctx, approvalRequest, question.Text, readerQuestion, operatorOptionsOfHarness(question.Options))
+	optionID, status := asker.connectorRuntime.askWhereTheyAre(ctx, approvalRequest, question.Text, nil, readerQuestion, operatorOptionsOfHarness(question.Options))
 	if status != approvalgate.AskAnswered {
 		return acp.RequestPermissionOutcome{}, status
 	}
@@ -177,11 +180,12 @@ func approvalAnswerOfOption(optionID string) approvalgate.ApprovalAnswer {
 	return approvalgate.ApprovalAnswer{Signal: agentcontract.ApprovalSignalApprove, ChoiceKey: optionID}
 }
 
-func (connectorRuntime *ConnectorRuntime) askWhereTheyAre(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, confirmation string, question approvalreply.Question, operator operatorOptions) (string, approvalgate.AskStatus) {
+func (connectorRuntime *ConnectorRuntime) askWhereTheyAre(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, confirmation string, interaction *AskInteraction, question approvalreply.Question, operator operatorOptions) (string, approvalgate.AskStatus) {
 	turn, isReady := connectorRuntime.questionTurn(ctx, approvalRequest)
 	if !isReady {
 		return "", approvalgate.AskUnreachable
 	}
+	interaction = connectorRuntime.addressedInteraction(interaction, approvalRequest.TaskRunID, approvalRequest.RequesterPersonID, turn)
 	thread := &askingThread{
 		taskRunID:         approvalRequest.TaskRunID,
 		requesterPersonID: approvalRequest.RequesterPersonID,
@@ -189,16 +193,17 @@ func (connectorRuntime *ConnectorRuntime) askWhereTheyAre(ctx context.Context, a
 		conversationID:    turn.event.ConversationID,
 		replyTargetID:     turn.event.ReplyTargetID,
 		question:          question,
+		interaction:       interaction,
 		operatorOptions:   operator,
 		answers:           make(chan string, 1),
 	}
 	defer connectorRuntime.askingThreads.join(thread)()
-	if errorValue := connectorRuntime.deliverApprovalQuestion(ctx, turn, approvalRequest.TaskRunID, confirmation); errorValue != nil {
+	if errorValue := connectorRuntime.deliverApprovalQuestion(ctx, turn, approvalRequest.TaskRunID, confirmation, interaction); errorValue != nil {
 		return "", statusOfFailedQuestionDelivery(errorValue)
 	}
 	connectorRuntime.askingThreads.markPosted(thread)
 	defer waitHandoffFrom(ctx).begin()()
-	return connectorRuntime.awaitAnswer(ctx, thread, connectorRuntime.askingThreads.expiry)
+	return connectorRuntime.awaitAndCloseQuestion(ctx, thread, connectorRuntime.askingThreads.expiry)
 }
 
 func statusOfFailedQuestionDelivery(deliveryError error) approvalgate.AskStatus {
@@ -228,6 +233,12 @@ func (connectorRuntime *ConnectorRuntime) questionTurn(ctx context.Context, appr
 	}, true
 }
 
+func (connectorRuntime *ConnectorRuntime) awaitAndCloseQuestion(ctx context.Context, thread *askingThread, patience time.Duration) (string, approvalgate.AskStatus) {
+	optionID, status := connectorRuntime.awaitAnswer(ctx, thread, patience)
+	connectorRuntime.publishThreadResolution(ctx, thread, optionID)
+	return optionID, status
+}
+
 func (connectorRuntime *ConnectorRuntime) awaitAnswer(ctx context.Context, thread *askingThread, patience time.Duration) (string, approvalgate.AskStatus) {
 	expiry := time.NewTimer(patience)
 	defer expiry.Stop()
@@ -253,7 +264,11 @@ func (connectorRuntime *ConnectorRuntime) answerAwaitingThreads(ctx context.Cont
 	if event.TaskRetry != nil || exactTaskControlIntent(event.Prompt) != agentcontract.TaskControlIntentNone {
 		return ConnectorRuntimeResult{}, false, nil
 	}
-	for _, thread := range connectorRuntime.askingThreads.awaiting(platform, event.ConversationID, personID) {
+	awaiting := connectorRuntime.askingThreads.awaiting(platform, event.ConversationID, personID)
+	if thread, isPressed := threadAskingThePressedQuestion(awaiting, event.AnsweredChoice); isPressed {
+		return connectorRuntime.settleThreadWithReply(ctx, thread, event)
+	}
+	for _, thread := range awaiting {
 		if connectorRuntime.postedQuestionOf(thread).IsAnsweredBy(placementOf(event)) {
 			return connectorRuntime.settleThreadWithReply(ctx, thread, event)
 		}
@@ -261,27 +276,53 @@ func (connectorRuntime *ConnectorRuntime) answerAwaitingThreads(ctx context.Cont
 	return ConnectorRuntimeResult{}, false, nil
 }
 
-func (connectorRuntime *ConnectorRuntime) settleThreadWithReply(ctx context.Context, thread *askingThread, event PlatformInboundEvent) (ConnectorRuntimeResult, bool, error) {
-	reading, errorValue := connectorRuntime.readReplyToQuestion(ctx, thread.taskRunID, thread.question, event.Prompt)
-	if errorValue != nil {
-		slog.Warn("connectors.approval_reply_unread", "taskRunID", thread.taskRunID, "error", errorValue.Error())
+func threadAskingThePressedQuestion(awaiting []*askingThread, answered *AnsweredChoice) (*askingThread, bool) {
+	if answered == nil {
+		return nil, false
 	}
+	for _, thread := range awaiting {
+		if thread.interaction != nil && thread.interaction.InteractionID == strings.TrimSpace(answered.InteractionID) {
+			return thread, true
+		}
+	}
+	return nil, false
+}
+
+func (connectorRuntime *ConnectorRuntime) settleThreadWithReply(ctx context.Context, thread *askingThread, event PlatformInboundEvent) (ConnectorRuntimeResult, bool, error) {
+	optionID := connectorRuntime.answeredThreadOption(ctx, thread, event)
 	if !connectorRuntime.askingThreads.claim(thread) {
 		return ConnectorRuntimeResult{}, false, nil
 	}
-	optionID := reading.ApprovedOptionID
-	if !reading.IsApproval() {
-		optionID = thread.question.DecliningOptionID()
-	}
-	if reading.IsOwnWords() {
+	if optionID == approvalreply.OwnWordsOptionID {
 		approvalgate.RecordOwnWordsAnswer(connectorRuntime.taskRunService, thread.taskRunID, event.Prompt)
 	}
 	connectorRuntime.recordConfirmationReplyClassified(thread.taskRunID, event, answeredDecision(optionID))
 	thread.answers <- optionID
-	if !reading.IsApproval() {
+	if optionID == "" || optionID == thread.question.DecliningOptionID() {
 		return ConnectorRuntimeResult{}, false, nil
 	}
 	return ConnectorRuntimeResult{Handled: true, Platform: thread.platform, TaskRunID: thread.taskRunID, Reason: ApprovalAnsweredInThreadReason}, true, nil
+}
+
+func (connectorRuntime *ConnectorRuntime) answeredThreadOption(ctx context.Context, thread *askingThread, event PlatformInboundEvent) string {
+	if optionID, isClicked := clickedOptionID(event.AnsweredChoice, thread.interaction); isClicked {
+		return optionID
+	}
+	reading, errorValue := connectorRuntime.readReplyToQuestion(ctx, thread.taskRunID, thread.question, event.Prompt)
+	if errorValue != nil {
+		slog.Warn("connectors.approval_reply_unread", "taskRunID", thread.taskRunID, "error", errorValue.Error())
+	}
+	if !reading.IsApproval() {
+		return thread.question.DecliningOptionID()
+	}
+	return reading.ApprovedOptionID
+}
+
+func clickedOptionID(answered *AnsweredChoice, interaction *AskInteraction) (string, bool) {
+	if answered == nil || interaction == nil || strings.TrimSpace(answered.InteractionID) != interaction.InteractionID {
+		return "", false
+	}
+	return offeredChoiceKey(interaction, answered.Key)
 }
 
 func (connectorRuntime *ConnectorRuntime) postedQuestionOf(thread *askingThread) PostedQuestion {

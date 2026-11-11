@@ -37,7 +37,7 @@ func TestAskInputUsesTypedQuestionAndResultData(t *testing.T) {
 	if errorValue := json.Unmarshal(result.Output.Data, &resultDocument); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if resultDocument.Question != "Which report should I use?" || resultDocument.Status != string(task.TaskStatusWaitingUserInput) || len(resultDocument.Options) != 0 {
+	if resultDocument.Question != "Which report should I use?" || resultDocument.Status != string(task.TaskStatusWaitingUserInput) {
 		t.Fatalf("expected typed ask_input result, got %+v", resultDocument)
 	}
 }

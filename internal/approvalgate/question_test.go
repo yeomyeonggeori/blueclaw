@@ -32,8 +32,8 @@ func TestAQuestionWithChoicesIsHeldWithItsOptionsAsLabelledChoices(t *testing.T)
 	if errorValue != nil || outcome.Decision != mcpserver.ApprovalDecisionHeld {
 		t.Fatalf("a question nobody answers yet is held, got %+v %v", outcome, errorValue)
 	}
-	if !strings.Contains(outcome.Notice, "어느 방으로 할까요?") || !strings.Contains(outcome.Notice, "2. 회의실 B") {
-		t.Fatalf("the person reads the question and every option, got %q", outcome.Notice)
+	if outcome.Notice != "어느 방으로 할까요?" {
+		t.Fatalf("the question is held as asked, without its options numbered into it, got %q", outcome.Notice)
 	}
 	offered := OfferedChoices(taskRunService.ListTaskEvent(taskRun.TaskRunID))
 	if len(offered) != 2 || offered[0].Label != "회의실 A" || offered[1].Key != "2" {

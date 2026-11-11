@@ -2767,6 +2767,15 @@ type testAdapter struct {
 	progressStopErrors            []error
 	historyCursors                []string
 	operationNames                []string
+	resolvedInteractions          []resolvedInteraction
+	resolveInteractionError       error
+}
+
+type resolvedInteraction struct {
+	replyTarget   ReplyTarget
+	messageID     string
+	interactionID string
+	choiceKey     string
 }
 
 type testReply struct {
@@ -2777,6 +2786,7 @@ type testReply struct {
 	attachments     []toolcontract.FileAttachment
 	recoveryActions []toolcontract.RecoveryAction
 	failureNotice   agentcontract.FailureNotice
+	interaction     *AskInteraction
 }
 
 type testConnectorQueueRepository struct {
@@ -2945,8 +2955,21 @@ func (adapter *testAdapter) SendReply(_ context.Context, target ReplyTarget, rep
 	if adapter.sendReplyError != nil {
 		return "", adapter.sendReplyError
 	}
-	adapter.sentReplies = append(adapter.sentReplies, testReply{target: target, message: reply.Message, taskRunID: reply.TaskRunID, replyKind: reply.ReplyKind, attachments: reply.Attachments, recoveryActions: reply.RecoveryActions, failureNotice: reply.FailureNotice})
+	adapter.sentReplies = append(adapter.sentReplies, testReply{target: target, message: reply.Message, taskRunID: reply.TaskRunID, replyKind: reply.ReplyKind, attachments: reply.Attachments, recoveryActions: reply.RecoveryActions, failureNotice: reply.FailureNotice, interaction: reply.Interaction})
 	return "dispatch-" + strconv.Itoa(len(adapter.sentReplies)), nil
+}
+
+func (adapter *testAdapter) ResolveInteraction(_ context.Context, replyTarget ReplyTarget, messageID string, interactionID string, choiceKey string) error {
+	adapter.mutex.Lock()
+	defer adapter.mutex.Unlock()
+	adapter.resolvedInteractions = append(adapter.resolvedInteractions, resolvedInteraction{replyTarget: replyTarget, messageID: messageID, interactionID: interactionID, choiceKey: choiceKey})
+	return adapter.resolveInteractionError
+}
+
+func (adapter *testAdapter) interactionsResolved() []resolvedInteraction {
+	adapter.mutex.Lock()
+	defer adapter.mutex.Unlock()
+	return append([]resolvedInteraction{}, adapter.resolvedInteractions...)
 }
 
 func (adapter *testAdapter) AddReaction(_ context.Context, target ReactionTarget) error {

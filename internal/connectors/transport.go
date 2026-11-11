@@ -55,6 +55,13 @@ type capabilityMessageEditRequest struct {
 	Message       string `json:"message"`
 }
 
+type capabilityInteractionResolveRequest struct {
+	ReplyTargetID string `json:"replyTargetID"`
+	MessageID     string `json:"messageID"`
+	InteractionID string `json:"interactionID"`
+	ChoiceKey     string `json:"choiceKey"`
+}
+
 type capabilityMessageDeleteRequest struct {
 	ReplyTargetID string `json:"replyTargetID"`
 	MessageID     string `json:"messageID"`

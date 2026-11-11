@@ -98,11 +98,11 @@ func (sessionTurn *SessionTurn) DeliverReply(ctx context.Context, turnResult age
 }
 
 func (sessionTurn *SessionTurn) DeliverApprovalQuestion(ctx context.Context, taskRunID string, question string) error {
-	return sessionTurn.connectorRuntime.deliverApprovalQuestion(ctx, sessionTurn.turn, taskRunID, question)
+	return sessionTurn.connectorRuntime.deliverApprovalQuestion(ctx, sessionTurn.turn, taskRunID, question, nil)
 }
 
-func (connectorRuntime *ConnectorRuntime) deliverApprovalQuestion(ctx context.Context, turn *inboundTurn, taskRunID string, question string) error {
-	reply := OutboundReply{Message: question, TaskRunID: taskRunID, ReplyKind: connectorReplyKindApprovalQuestion}
+func (connectorRuntime *ConnectorRuntime) deliverApprovalQuestion(ctx context.Context, turn *inboundTurn, taskRunID string, question string, interaction *AskInteraction) error {
+	reply := OutboundReply{Message: question, TaskRunID: taskRunID, ReplyKind: connectorReplyKindApprovalQuestion, Interaction: interaction}
 	dispatchID, errorValue := turn.sendReply(withConnectorEvent(ctx, turn.event), turn.replyTarget, reply)
 	if errorValue != nil {
 		connectorRuntime.appendConnectorReplyEvent(taskRunID, agentcontract.TaskEventConnectorReplyFailed, connectorReplyEventBody(turn.event, reply, "", "", errorValue.Error()))

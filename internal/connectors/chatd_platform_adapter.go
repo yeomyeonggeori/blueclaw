@@ -114,6 +114,15 @@ func (adapter ChatdPlatformAdapter) EditReply(ctx context.Context, replyTarget R
 	}, nil)
 }
 
+func (adapter ChatdPlatformAdapter) ResolveInteraction(ctx context.Context, replyTarget ReplyTarget, messageID string, interactionID string, choiceKey string) error {
+	return adapter.post(ctx, "interaction.resolve", capabilityInteractionResolveRequest{
+		ReplyTargetID: replyTarget.ReplyTargetID,
+		MessageID:     messageID,
+		InteractionID: interactionID,
+		ChoiceKey:     choiceKey,
+	}, nil)
+}
+
 func (adapter ChatdPlatformAdapter) DeleteReply(ctx context.Context, replyTarget ReplyTarget, messageID string) error {
 	return adapter.post(ctx, "message_delete", capabilityMessageDeleteRequest{
 		ReplyTargetID: replyTarget.ReplyTargetID,
