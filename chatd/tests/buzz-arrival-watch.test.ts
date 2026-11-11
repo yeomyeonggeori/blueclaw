@@ -148,6 +148,8 @@ describe("watching a person's conversations for arriving messages", () => {
 				recipientExternalIDs: ["alice", "bob"],
 				preview: "hello from alice",
 				attachmentKinds: [],
+				pictureDigest: "",
+				pictureContentType: "",
 			},
 		]);
 	});
@@ -196,6 +198,8 @@ describe("watching a person's conversations for arriving messages", () => {
 				recipientExternalIDs: ["bob"],
 				preview: "@bob 확인 부탁드립니다",
 				attachmentKinds: [],
+				pictureDigest: "",
+				pictureContentType: "",
 			},
 		]);
 	});

@@ -21,6 +21,8 @@ export type Arrival = {
 	recipientExternalIDs: string[];
 	preview: string;
 	attachmentKinds: AttachmentKind[];
+	pictureDigest: string;
+	pictureContentType: string;
 };
 
 export type Typing = {
