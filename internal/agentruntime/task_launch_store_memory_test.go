@@ -35,6 +35,7 @@ func TestTaskLauncherInjectsRecallFromTheFilesAndRemembersTheFinishedRun(t *test
 		SourceReference:           "mattermost:post-1",
 		RequesterPersonID:         "person-1",
 		RequesterName:             "이샘플",
+		RequesterEmail:            "sample@example.com",
 		ProfileName:               "default",
 		ConversationID:            "channel-1",
 		Platform:                  "mattermost",
@@ -64,7 +65,7 @@ func TestTaskLauncherInjectsRecallFromTheFilesAndRemembersTheFinishedRun(t *test
 	if errorValue := json.Unmarshal([]byte(bodiesByName["memory.extraction_context"]), &extractionContext); errorValue != nil {
 		t.Fatalf("expected an extraction context event, got %v", bodiesByName)
 	}
-	if extractionContext.RequesterName != "이샘플" || extractionContext.Platform != "mattermost" {
+	if extractionContext.RequesterName != "이샘플" || extractionContext.RequesterEmail != "sample@example.com" || extractionContext.Platform != "mattermost" {
 		t.Fatalf("expected the requester and platform in the extraction context, got %+v", extractionContext)
 	}
 

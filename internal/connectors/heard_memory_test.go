@@ -111,3 +111,23 @@ func TestALayerTheRoomCannotWriteIsNeverWritten(t *testing.T) {
 		t.Fatalf("expected no mark for what was not kept, got %+v", adapter.reactions)
 	}
 }
+
+func TestRememberingWhatARoomSaidNamesWhoSaidIt(t *testing.T) {
+	connectorRuntime, _, _, _ := heardMemoryRuntime(t, memory.CircleScope("leadership"))
+	embedder := &memorytest.RequesterRecordingEmbedder{}
+	connectorRuntime.UseHeardMemory(memorytest.OpenEmbeddingWith(t, embedder))
+	sessionTurn := connectorRuntime.OpenSessionTurn(context.Background(), roomEvent("chief@example.com", "director@example.com"), "person-chief", nil)
+
+	sessionTurn.ResolveEngagement(context.Background())
+	connectorRuntime.heardSettling.Wait()
+
+	requesters := embedder.Requesters()
+	if len(requesters) == 0 {
+		t.Fatal("remembering what the room said reached no model, so nothing shows who it was charged to")
+	}
+	for _, requester := range requesters {
+		if requester.RequesterPersonID != "person-chief" {
+			t.Fatalf("a call made to remember what the room said did not name who said it: %+v", requester)
+		}
+	}
+}

@@ -11,6 +11,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/bluememo"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 )
 
@@ -20,8 +21,9 @@ const (
 )
 
 type ExtractionContext struct {
-	RequesterName string `json:"requesterName,omitempty"`
-	Platform      string `json:"platform,omitempty"`
+	RequesterName  string `json:"requesterName,omitempty"`
+	RequesterEmail string `json:"requesterEmail,omitempty"`
+	Platform       string `json:"platform,omitempty"`
 }
 
 type TaskRunReader interface {
@@ -117,6 +119,13 @@ func (observer TaskRunTransitionObserver) remember(taskRun agentcontract.TaskRun
 	defer cancel()
 	events := observer.TaskRuns.ListTaskEvent(taskRun.TaskRunID)
 	extractionContext, _ := findExtractionContext(events)
+	ctx = model.ContextWithRequestContext(ctx, model.RequestContext{
+		RequesterPersonID: taskRun.RequesterPersonID,
+		RequesterEmail:    extractionContext.RequesterEmail,
+		RequesterName:     extractionContext.RequesterName,
+		ConversationID:    taskRun.OriginConversationID,
+		Platform:          extractionContext.Platform,
+	})
 	stack := observer.stackFor(taskRun.RequesterPersonID)
 	scope := stack[0]
 	note := bluememo.Note{

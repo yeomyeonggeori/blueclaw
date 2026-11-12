@@ -37,6 +37,7 @@ func (connectorRuntime *ConnectorRuntime) OpenSessionTurn(ctx context.Context, e
 
 func (sessionTurn *SessionTurn) AnswersAwaitedQuestion(ctx context.Context) (bool, error) {
 	connectorRuntime, turn := sessionTurn.connectorRuntime, sessionTurn.turn
+	ctx = connectorRuntime.withInboundRequester(ctx, turn)
 	if turn.adapter == nil {
 		return false, nil
 	}
@@ -47,6 +48,7 @@ func (sessionTurn *SessionTurn) AnswersAwaitedQuestion(ctx context.Context) (boo
 
 func (sessionTurn *SessionTurn) ResolveEngagement(ctx context.Context) inboundengagement.Decision {
 	connectorRuntime, turn := sessionTurn.connectorRuntime, sessionTurn.turn
+	ctx = connectorRuntime.withInboundRequester(ctx, turn)
 	if _, hasAsk := connectorRuntime.findPendingAskInteraction(turn.personID, turn.event); hasAsk {
 		turn.addressingLaunch = inboundengagement.Decision{ShouldLaunch: true}
 		return turn.addressingLaunch
@@ -63,6 +65,7 @@ func (sessionTurn *SessionTurn) ResolveEngagement(ctx context.Context) inbounden
 
 func (sessionTurn *SessionTurn) PrepareLaunch(ctx context.Context, launchRequest agentruntime.TaskLaunchRequest) (agentruntime.TaskLaunchRequest, bool, error) {
 	connectorRuntime, turn := sessionTurn.connectorRuntime, sessionTurn.turn
+	ctx = connectorRuntime.withInboundRequester(ctx, turn)
 	if turn.adapter == nil {
 		return withTurnMessage(launchRequest, turn.event, nil), false, nil
 	}
@@ -81,6 +84,7 @@ func (sessionTurn *SessionTurn) PrepareLaunch(ctx context.Context, launchRequest
 
 func (sessionTurn *SessionTurn) DeliverReply(ctx context.Context, turnResult agentcontract.AgentTurnResult) error {
 	connectorRuntime, turn := sessionTurn.connectorRuntime, sessionTurn.turn
+	ctx = connectorRuntime.withInboundRequester(ctx, turn)
 	connectorRuntime.keepFilesBeforeReplying(ctx, turnResult.TaskRun.TaskRunID)
 	notDelivered := []*FilesNotDelivered{}
 	sendNoting := func(ctx context.Context, replyTarget ReplyTarget, reply OutboundReply) (string, error) {
@@ -98,7 +102,7 @@ func (sessionTurn *SessionTurn) DeliverReply(ctx context.Context, turnResult age
 }
 
 func (sessionTurn *SessionTurn) DeliverApprovalQuestion(ctx context.Context, taskRunID string, question string) error {
-	return sessionTurn.connectorRuntime.deliverApprovalQuestion(ctx, sessionTurn.turn, taskRunID, question, nil)
+	return sessionTurn.connectorRuntime.deliverApprovalQuestion(sessionTurn.connectorRuntime.withInboundRequester(ctx, sessionTurn.turn), sessionTurn.turn, taskRunID, question, nil)
 }
 
 func (connectorRuntime *ConnectorRuntime) deliverApprovalQuestion(ctx context.Context, turn *inboundTurn, taskRunID string, question string, interaction *AskInteraction) error {
