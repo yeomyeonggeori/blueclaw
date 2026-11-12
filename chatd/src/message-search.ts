@@ -88,3 +88,61 @@ function tokensOverlap(textToken: string, queryToken: string): boolean {
 	const longer = textToken.length < queryToken.length ? queryToken : textToken;
 	return shorter.length >= shortestPartialTokenLength && longer.includes(shorter);
 }
+
+// A search reads the conversation one window at a time, newest first. A page
+// names the window by the newest second it holds, how many ranked matches of
+// it were already answered, and which messages of that second an earlier
+// window already read.
+export type MessageSearchPage = { until?: number; skip: number; seen: string[] };
+
+export const firstMessageSearchPage: MessageSearchPage = { skip: 0, seen: [] };
+
+type ScannedMessage = { id: string; created_at: number };
+
+export function messageSearchPageAfter(
+	page: MessageSearchPage,
+	scanned: ScannedMessage[],
+	matchedCount: number,
+	limit: number,
+	scanLimit: number,
+): MessageSearchPage | undefined {
+	if (scanned.length === 0) return undefined;
+	const answeredCount = page.skip + limit;
+	if (matchedCount > answeredCount) {
+		const newest = Math.max(...scanned.map((message) => message.created_at));
+		return { ...page, until: page.until ?? newest, skip: answeredCount };
+	}
+	if (scanned.length < scanLimit) return undefined;
+	const oldest = Math.min(...scanned.map((message) => message.created_at));
+	return {
+		until: oldest,
+		skip: 0,
+		seen: scanned.filter((message) => message.created_at === oldest).map((message) => message.id),
+	};
+}
+
+export function encodeMessageSearchCursor(page: MessageSearchPage): string {
+	return Buffer.from(JSON.stringify(page)).toString("base64url");
+}
+
+export function decodeMessageSearchCursor(cursor: string): MessageSearchPage | undefined {
+	const page = parsedJSON(Buffer.from(cursor, "base64url").toString("utf8"));
+	if (typeof page !== "object" || page === null) return undefined;
+	const { until, skip, seen } = page as Record<string, unknown>;
+	if (until !== undefined && !isCount(until)) return undefined;
+	if (!isCount(skip)) return undefined;
+	if (!Array.isArray(seen) || !seen.every((id): id is string => typeof id === "string")) return undefined;
+	return { until, skip, seen };
+}
+
+function isCount(value: unknown): value is number {
+	return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function parsedJSON(document: string): unknown {
+	try {
+		return JSON.parse(document);
+	} catch {
+		return undefined;
+	}
+}
