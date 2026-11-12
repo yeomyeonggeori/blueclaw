@@ -19,6 +19,7 @@ type PublishedByKey = Published & { secretHex: string };
 
 const publishedByAnotherKey: PublishedByKey[] = [];
 let relayRefusal: string | undefined;
+let shownToAnotherKey: (filter: { ids?: string[]; kinds?: number[] }) => BuzzEvent[] = () => [];
 
 replaceRelayClientInThisFile((_relayURL: string, secretHex: string) => ({
 	pubkeyHex: publicKeyOf(secretHex),
@@ -26,7 +27,7 @@ replaceRelayClientInThisFile((_relayURL: string, secretHex: string) => ({
 	connectUnlessRestricted: async () => {},
 	disconnect: () => {},
 	subscribe: () => {},
-	query: async () => [],
+	query: async (filter: { ids?: string[]; kinds?: number[] }) => shownToAnotherKey(filter),
 	publish: async (kind: number, content: string, tags: string[][]) => {
 		if (relayRefusal) throw new Error(relayRefusal);
 		publishedByAnotherKey.push({ secretHex, kind, content, tags });
@@ -98,6 +99,7 @@ function withMessages(admins: BuzzEvent[] = []) {
 		if (filter.kinds?.includes(9)) return messages;
 		return [];
 	}
+	shownToAnotherKey = held;
 	(adapter as unknown as { relay: unknown }).relay = {
 		pubkeyHex: botPubkey,
 		query: async (filter: { ids?: string[]; kinds?: number[] }) => held(filter),
@@ -159,6 +161,7 @@ beforeEach(() => {
 	publishedByAnotherKey.length = 0;
 	signingSecretAsks.length = 0;
 	relayRefusal = undefined;
+	shownToAnotherKey = () => [];
 	admindAnswer = { status: 200, secretHex: REQUESTER_SECRET };
 	admindIsReachable = true;
 	stubAdmind();

@@ -182,7 +182,6 @@ export function parseMessageSearchRequest(value: unknown): MessageSearchRequest 
 	const request: MessageSearchRequest = {
 		replyTargetID: optionalString(record, "replyTargetID"),
 		channelID: optionalString(record, "channelID"),
-		channelName: optionalString(record, "channelName"),
 		rootMessageID: optionalString(record, "rootMessageID"),
 		messageIDs: optionalArray(record, "messageIDs").filter(
 			(entry): entry is string => typeof entry === "string" && entry.trim() !== "",
