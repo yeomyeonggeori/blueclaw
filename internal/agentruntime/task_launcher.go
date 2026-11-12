@@ -542,8 +542,9 @@ func (taskLauncher *TaskLauncher) appendStoreMemoryLaunchEvents(taskRunID string
 		taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "memory.record_recall_failed", strings.Join(memoryResult.RecordFailures, "; "))
 	}
 	taskLauncher.taskRunService.AppendTaskEvent(taskRunID, "memory.extraction_context", MarshalBody(memory.ExtractionContext{
-		RequesterName: request.RequesterName,
-		Platform:      request.Platform,
+		RequesterName:  request.RequesterName,
+		RequesterEmail: request.RequesterEmail,
+		Platform:       request.Platform,
 	}))
 }
 
