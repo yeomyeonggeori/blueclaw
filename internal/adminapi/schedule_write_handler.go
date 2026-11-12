@@ -67,9 +67,13 @@ type scheduleToolCancelResult struct {
 }
 
 type scheduleHintConflict struct {
-	Error      string                   `json:"error"`
-	Hint       string                   `json:"hint"`
-	Candidates []task.ScheduleCandidate `json:"candidates"`
+	Error        string                   `json:"error"`
+	ErrorCode    string                   `json:"errorCode"`
+	FailureStage string                   `json:"failureStage"`
+	Retryable    bool                     `json:"retryable"`
+	SafeRetry    bool                     `json:"safeRetry"`
+	Hint         string                   `json:"hint"`
+	Candidates   []task.ScheduleCandidate `json:"candidates"`
 }
 
 func (scheduleHandler ScheduleHandler) HandleToolCreate(responseWriter http.ResponseWriter, request *http.Request) {
@@ -287,10 +291,21 @@ func writeScheduleHintConflict(responseWriter http.ResponseWriter, hintField str
 		candidates = []task.ScheduleCandidate{}
 	}
 	writeJSON(responseWriter, http.StatusConflict, scheduleHintConflict{
-		Error:      unresolvedScheduleHintReason(hintField, resolution.Outcome),
-		Hint:       hint,
-		Candidates: candidates,
+		Error:        unresolvedScheduleHintReason(hintField, resolution.Outcome),
+		ErrorCode:    unresolvedScheduleHintCode(resolution.Outcome),
+		FailureStage: "target_resolution",
+		Retryable:    true,
+		SafeRetry:    true,
+		Hint:         hint,
+		Candidates:   candidates,
 	})
+}
+
+func unresolvedScheduleHintCode(outcome task.ScheduleHintOutcome) string {
+	if outcome == task.ScheduleHintNotFound {
+		return "not_found"
+	}
+	return "interaction_required"
 }
 
 func unresolvedScheduleHintReason(hintField string, outcome task.ScheduleHintOutcome) string {

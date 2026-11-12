@@ -646,6 +646,9 @@ func TestScheduleToolUpdateAnswersAmbiguousHintWithCandidatesAndMutatesNothing(t
 	if conflict.Hint != "주간 보고" || len(conflict.Candidates) != 2 || conflict.Error == "" {
 		t.Fatalf("unexpected conflict body: %+v", conflict)
 	}
+	if conflict.ErrorCode != "interaction_required" || conflict.FailureStage != "target_resolution" || !conflict.Retryable || !conflict.SafeRetry {
+		t.Fatalf("the conflict did not state whether to retry and whom to ask: %+v", conflict)
+	}
 	if repository.updateRequest.RequesterPersonID != "" {
 		t.Fatalf("an ambiguous hint reached the repository: %+v", repository.updateRequest)
 	}
