@@ -178,6 +178,7 @@ export function parseMessageSearchRequest(value: unknown): MessageSearchRequest 
 		),
 		authoredBy: optionalString(record, "authoredBy"),
 		requesterPubkeyHex: optionalString(record, "requesterPubkeyHex"),
+		readAsRequester: record.readAsRequester === true,
 		queries: optionalArray(record, "queries").filter(
 			(entry): entry is string => typeof entry === "string" && entry.trim() !== "",
 		),
