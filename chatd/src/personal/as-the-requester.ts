@@ -1,4 +1,4 @@
-import { heldSigningSecret, secretHexPattern } from "../message-ownership.ts";
+import { requesterSigningSecret } from "../message-ownership.ts";
 import { reactionContentOf } from "../mirror/reaction-emoji.ts";
 import { CredentialRefused, UnsupportedByPlatform, type ActorCredential, type PersonalGateway } from "./gateway.ts";
 import { personCapabilities, type PersonCapability } from "./capabilities.ts";
@@ -52,25 +52,12 @@ async function requesterActor(
 	if (gateway.credentialKind !== buzzSecretKind) {
 		throw new UnsupportedByPlatform(gateway.platform, "act for the person who asked the agent");
 	}
-	const pubkeyHex = requesterPubkeyOf(body);
-	if (!admindBaseURL) {
-		throw new CredentialRefused(`this device cannot sign as ${pubkeyHex}: no service holding signing keys is configured`);
-	}
-	const secret = await heldSigningSecret(
-		pubkeyHex,
+	const secret = await requesterSigningSecret(
+		requestRecord(body).requesterPubkeyHex,
 		admindBaseURL,
-		(reason) => new CredentialRefused(`this device cannot act as ${pubkeyHex}: ${reason}`),
+		(reason) => new CredentialRefused(reason),
 	);
 	return { kind: gateway.credentialKind, secret };
-}
-
-function requesterPubkeyOf(body: unknown): string {
-	const given = requestRecord(body).requesterPubkeyHex;
-	const pubkeyHex = typeof given === "string" ? given.trim().toLowerCase() : "";
-	if (!secretHexPattern.test(pubkeyHex)) {
-		throw new MalformedRequest("requesterPubkeyHex must name the person who asked, as 64 hexadecimal characters");
-	}
-	return pubkeyHex;
 }
 
 function requestRecord(body: unknown): Record<string, unknown> {

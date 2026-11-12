@@ -1,6 +1,7 @@
 import { asAHostService } from "./service-credential.ts";
 import type { BuzzAdapter } from "./adapters/buzz/adapter.ts";
 import { pubkeyFromSecret } from "./adapters/buzz/user-session.ts";
+import { MalformedRequest } from "./personal/parse.ts";
 
 export class MessageChangeRefused extends Error {
 	constructor(message: string) {
@@ -66,6 +67,20 @@ export async function signingSecretFor(
 		admindBaseURL,
 		(reason) => new MessageChangeRefused(`message ${messageID} cannot be changed: ${reason}`),
 	);
+}
+
+export async function requesterSigningSecret(
+	requesterPubkeyHex: unknown,
+	admindBaseURL: string | undefined,
+	refused: (reason: string) => Error,
+): Promise<string> {
+	const pubkeyHex = typeof requesterPubkeyHex === "string" ? requesterPubkeyHex.trim().toLowerCase() : "";
+	if (!secretHexPattern.test(pubkeyHex)) {
+		throw new MalformedRequest("requesterPubkeyHex must name the person who asked, as 64 hexadecimal characters");
+	}
+	const refusedAs = (reason: string) => refused(`this device cannot act as ${pubkeyHex}: ${reason}`);
+	if (!admindBaseURL) throw refusedAs("no service holding signing keys is configured");
+	return heldSigningSecret(pubkeyHex, admindBaseURL, refusedAs);
 }
 
 export async function heldSigningSecret(

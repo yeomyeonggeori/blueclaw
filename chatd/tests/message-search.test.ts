@@ -1,13 +1,69 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { searchScore, rankBySearchScore, newestVerbatimMatches, messageSearchMostResults } from "../src/message-search";
-import { BuzzAdapter } from "../src/adapters/buzz/adapter";
-import { createOutboundHandler } from "../src/outbound";
 import type { ChatdConfiguration } from "../src/configuration";
+import type { BuzzEvent } from "../src/adapters/buzz/types";
+import { replaceRelayClientInThisFile } from "./relay-client-replacement.ts";
 
 const CHANNEL = "6955ae67-a6d5-47c7-83b6-aea4902c20f0";
 const BOT_SECRET = "1".repeat(64);
-const REQUESTER = "f".repeat(64);
+const REQUESTER_SECRET = "2".repeat(64);
+const ADMIND_BASE_URL = "http://127.0.0.1:18080";
+
+type Shown = (filter: { kinds?: number[]; ids?: string[] }) => Promise<unknown[]>;
+type AgentRelay = { relay: { query: Shown; pubkeyHex: string } };
+
+let shownToTheRequester: Shown = async () => [];
+
+replaceRelayClientInThisFile((_relayURL: string, secretHex: string) => ({
+	pubkeyHex: pubkeyFromSecret(secretHex),
+	connect: async () => {},
+	connectUnlessRestricted: async () => {},
+	disconnect: () => {},
+	subscribe: () => {},
+	query: (filter: { kinds?: number[]; ids?: string[] }) => shownToTheRequester(filter),
+}));
+
+const { BuzzAdapter } = await import("../src/adapters/buzz/adapter");
+const { pubkeyFromSecret } = await import("../src/adapters/buzz/user-session");
+const { RelayQueryIncomplete } = await import("../src/adapters/buzz/relay-connection");
+const { createOutboundHandler, readerOfASearch } = await import("../src/outbound");
+
+const REQUESTER = pubkeyFromSecret(REQUESTER_SECRET);
+const configuration = {
+	admindBaseURL: ADMIND_BASE_URL,
+	buzz: { relayURL: "ws://localhost:3000", privateKeyHex: BOT_SECRET },
+} as ChatdConfiguration;
+
+const realFetch = globalThis.fetch;
+
+beforeEach(() => {
+	shownToTheRequester = async () => [];
+	globalThis.fetch = (async (input: Request | string | URL, init?: RequestInit) => {
+		const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+		if (!url.startsWith(ADMIND_BASE_URL)) return await realFetch(input as Request, init);
+		return Response.json({ secretHex: REQUESTER_SECRET });
+	}) as typeof fetch;
+});
+
+afterEach(() => {
+	globalThis.fetch = realFetch;
+});
+
+function shownToBoth(adapter: InstanceType<typeof BuzzAdapter>, shown: Shown): void {
+	(adapter as unknown as AgentRelay).relay = { pubkeyHex: adapter.botPubkey ?? "", query: shown };
+	shownToTheRequester = shown;
+}
+
+function searched(adapter: InstanceType<typeof BuzzAdapter>, search: object): Promise<Response> {
+	const handler = createOutboundHandler({ buzz: adapter }, configuration);
+	return handler(
+		new Request("http://chatd/v1/platform/buzz/message.search", {
+			method: "POST",
+			body: JSON.stringify({ requesterPubkeyHex: REQUESTER, ...search }),
+		}),
+	);
+}
 
 test("a verbatim substring outranks a token overlap", () => {
 	expect(searchScore("내일 회식 장소는 강남입니다", ["회식 장소"])).toBe(1);
@@ -35,7 +91,7 @@ test("no queries means everything matches in recency order", () => {
 	expect(ranked.map((entry) => entry.candidate.id)).toEqual(["new", "old"]);
 });
 
-function adapterAnswering(events: Record<number, unknown[]>): BuzzAdapter {
+function adapterAnswering(events: Record<number, unknown[]>): InstanceType<typeof BuzzAdapter> {
 	const adapter = new BuzzAdapter({
 		relayURL: "ws://localhost:3000",
 		privateKeyHex: BOT_SECRET,
@@ -54,32 +110,17 @@ function messageEvent(id: string, pubkey: string, text: string, createdAt: numbe
 
 test("message.search finds the assistant's own post by fuzzy keywords", async () => {
 	const adapter = adapterAnswering({ 9: [], 40003: [], 9005: [] });
-	const botPubkey = adapter.botPubkey;
-	const events = {
+	const botPubkey = adapter.botPubkey ?? "";
+	const events: Record<number, unknown[]> = {
 		9: [
 			messageEvent("a".repeat(64), botPubkey, "오늘 점심 공지: 상하이 미팅 결과를 공유합니다", 100),
 			messageEvent("b".repeat(64), REQUESTER, "상하이 미팅은 어땠나요?", 101),
 			messageEvent("c".repeat(64), botPubkey, "날씨가 좋네요", 102),
 		],
-		40003: [],
-		9005: [],
 	};
-	(adapter as unknown as { relay: { query: unknown; pubkeyHex: string } }).relay = {
-		pubkeyHex: botPubkey,
-		query: async (filter: { kinds?: number[] }) => events[(filter.kinds?.[0] ?? 0) as 9] ?? [],
-	};
+	shownToBoth(adapter, async (filter) => events[filter.kinds?.[0] ?? 0] ?? []);
 
-	const handler = createOutboundHandler({ buzz: adapter }, {} as ChatdConfiguration);
-	const response = await handler(
-		new Request("http://chatd/v1/platform/buzz/message.search", {
-			method: "POST",
-			body: JSON.stringify({
-				channelID: CHANNEL,
-				authoredBy: "assistant",
-				queries: ["상하이 미팅"],
-			}),
-		}),
-	);
+	const response = await searched(adapter, { channelID: CHANNEL, authoredBy: "assistant", queries: ["상하이 미팅"] });
 
 	expect(response.status).toBe(200);
 	const body = (await response.json()) as {
@@ -93,7 +134,7 @@ test("message.search finds the assistant's own post by fuzzy keywords", async ()
 
 test("message.search applies edits before matching", async () => {
 	const adapter = adapterAnswering({ 9: [], 40003: [], 9005: [] });
-	const botPubkey = adapter.botPubkey;
+	const botPubkey = adapter.botPubkey ?? "";
 	const events: Record<number, unknown[]> = {
 		9: [messageEvent("a".repeat(64), botPubkey, "message_context", 100)],
 		40003: [
@@ -107,58 +148,30 @@ test("message.search applies edits before matching", async () => {
 				sig: "",
 			},
 		],
-		9005: [],
 	};
-	(adapter as unknown as { relay: { query: unknown; pubkeyHex: string } }).relay = {
-		pubkeyHex: botPubkey,
-		query: async (filter: { kinds?: number[] }) => events[filter.kinds?.[0] ?? 0] ?? [],
-	};
+	shownToBoth(adapter, async (filter) => events[filter.kinds?.[0] ?? 0] ?? []);
 
-	const found = await adapter.searchMessages({
-		channelId: CHANNEL,
-		queries: ["삭제"],
-		limit: 10,
-	});
+	const found = await adapter.searchMessages({ channelId: CHANNEL, queries: ["삭제"], limit: 10 }, adapter.reader);
 
 	expect(found.map((candidate) => candidate.messageID)).toEqual(["a".repeat(64)]);
 	expect(found[0]?.text).toBe("삭제하지 못했습니다");
 });
 
-test("message.search without a resolvable channel is refused", async () => {
+test("message.search without a conversation or without a person asking is refused", async () => {
 	const adapter = adapterAnswering({ 9: [], 40003: [], 9005: [] });
-	const handler = createOutboundHandler({ buzz: adapter }, {} as ChatdConfiguration);
-	const response = await handler(
-		new Request("http://chatd/v1/platform/buzz/message.search", {
-			method: "POST",
-			body: JSON.stringify({ queries: ["아무거나"] }),
-		}),
-	);
-	expect(response.status).toBe(400);
+
+	expect((await searched(adapter, { queries: ["아무거나"] })).status).toBe(400);
+	expect((await searched(adapter, { channelID: CHANNEL, requesterPubkeyHex: undefined })).status).toBe(400);
 });
 
 test("reading by ID crosses channels and needs no channel named", async () => {
 	const adapter = adapterAnswering({ 9: [], 40003: [], 9005: [] });
-	const botPubkey = adapter.botPubkey;
 	const otherChannel = "71031c16-5569-8595-06ea-1e3caf3dd83f";
 	const targetID = "a".repeat(64);
-	const events: Record<number, unknown[]> = {
-		9: [{ id: targetID, pubkey: botPubkey, created_at: 100, kind: 9, tags: [["h", otherChannel]], content: "잡담에 올라간 글", sig: "" }],
-		40003: [],
-		9005: [],
-	};
-	(adapter as unknown as { relay: { query: unknown; pubkeyHex: string } }).relay = {
-		pubkeyHex: botPubkey,
-		query: async (filter: { kinds?: number[]; ids?: string[] }) =>
-			filter.ids ? events[9]! : events[filter.kinds?.[0] ?? 0] ?? [],
-	};
+	const target = { id: targetID, pubkey: adapter.botPubkey, created_at: 100, kind: 9, tags: [["h", otherChannel]], content: "잡담에 올라간 글", sig: "" };
+	shownToBoth(adapter, async (filter) => (filter.ids ? [target] : []));
 
-	const handler = createOutboundHandler({ buzz: adapter }, {} as ChatdConfiguration);
-	const response = await handler(
-		new Request("http://chatd/v1/platform/buzz/message.search", {
-			method: "POST",
-			body: JSON.stringify({ messageIDs: [targetID] }),
-		}),
-	);
+	const response = await searched(adapter, { messageIDs: [targetID] });
 
 	expect(response.status).toBe(200);
 	const body = (await response.json()) as { channelID: string; candidates: { messageID: string; channelID: string; text: string }[] };
@@ -167,36 +180,41 @@ test("reading by ID crosses channels and needs no channel named", async () => {
 	expect(body.candidates[0]?.text).toBe("잡담에 올라간 글");
 });
 
-describe("a search read as the person who asked", () => {
-	test("reads the record their relay shows, which the agent's own may not hold", async () => {
-		const adapter = adapterAnswering({ 9: [], 40003: [], 9005: [] });
-		const shownToTheRequester = {
-			query: async (filter: { kinds?: number[] }) =>
-				filter.kinds?.[0] === 9 ? [messageEvent("a".repeat(64), REQUESTER, "둘만 나눈 이야기", 100)] : [],
-		};
+describe("a search is answered with what everyone who sees the answer may read", () => {
+	const saidInPrivate = messageEvent("a".repeat(64), "e".repeat(64), "둘만 나눈 이야기", 100) as BuzzEvent;
+	const saidInTheOpen = messageEvent("b".repeat(64), "e".repeat(64), "모두에게 한 이야기", 101) as BuzzEvent;
+	const showing = (...events: BuzzEvent[]) => ({ query: async () => events });
+	const refusing = { query: async () => Promise.reject(new RelayQueryIncomplete("ws://relay", "restricted: not a channel member")) };
+	const idsRead = async (reader: { query: (filter: object) => Promise<BuzzEvent[]> }) =>
+		(await reader.query({ kinds: [9] })).map((event) => event.id);
 
-		const asTheAgent = await adapter.searchMessages({ channelId: CHANNEL, queries: [], limit: 10 });
-		const asTheRequester = await adapter.searchMessages(
-			{ channelId: CHANNEL, queries: [], limit: 10 },
-			shownToTheRequester,
-		);
+	test("through the agent, a message only one of the two is shown is left out", async () => {
+		const onlyTheRequesterSeesMore = readerOfASearch(showing(saidInTheOpen), showing(saidInPrivate, saidInTheOpen), false);
+		const onlyTheAgentSeesMore = readerOfASearch(showing(saidInPrivate, saidInTheOpen), showing(saidInTheOpen), false);
 
-		expect(asTheAgent).toEqual([]);
-		expect(asTheRequester.map((candidate) => candidate.text)).toEqual(["둘만 나눈 이야기"]);
+		expect(await idsRead(onlyTheRequesterSeesMore)).toEqual([saidInTheOpen.id]);
+		expect(await idsRead(onlyTheAgentSeesMore)).toEqual([saidInTheOpen.id]);
 	});
 
-	test("is refused when nobody is named or no service holds their key", async () => {
-		const handler = createOutboundHandler({ buzz: adapterAnswering({ 9: [], 40003: [], 9005: [] }) }, {} as ChatdConfiguration);
-		const searchedAs = (requesterPubkeyHex: string | undefined) =>
-			handler(
-				new Request("http://chatd/v1/platform/buzz/message.search", {
-					method: "POST",
-					body: JSON.stringify({ channelID: CHANNEL, readAsRequester: true, requesterPubkeyHex }),
-				}),
-			);
+	test("on the person's own call, what the agent is shown does not matter", async () => {
+		const reader = readerOfASearch(refusing, showing(saidInPrivate), true);
 
-		expect((await searchedAs(undefined)).status).toBe(400);
-		expect((await searchedAs(REQUESTER)).status).toBe(403);
+		expect(await idsRead(reader)).toEqual([saidInPrivate.id]);
+	});
+
+	test("a conversation the relay refuses either of them is refused, naming who", async () => {
+		const agentRefused = readerOfASearch(refusing, showing(saidInPrivate), false);
+		const requesterRefused = readerOfASearch(showing(saidInPrivate), refusing, false);
+
+		expect(idsRead(agentRefused)).rejects.toThrow("the agent may not read this conversation");
+		expect(idsRead(requesterRefused)).rejects.toThrow("the person who asked may not read this conversation");
+	});
+
+	test("the refusal reaches the caller as a 403", async () => {
+		const adapter = adapterAnswering({ 9: [], 40003: [], 9005: [] });
+		shownToTheRequester = refusing.query;
+
+		expect((await searched(adapter, { channelID: CHANNEL })).status).toBe(403);
 	});
 });
 

@@ -180,7 +180,6 @@ export interface MessageDeleteRequest {
 export interface MessageSearchRequest {
 	replyTargetID?: string;
 	channelID?: string;
-	channelName?: string;
 	rootMessageID?: string;
 	messageIDs?: string[];
 	authoredBy?: string;

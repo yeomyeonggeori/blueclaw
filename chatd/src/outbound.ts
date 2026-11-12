@@ -35,16 +35,15 @@ import {
 import {
 	MessageChangeRefused,
 	MessageReadRefused,
-	heldSigningSecret,
 	isElevatedIn,
-	secretHexPattern,
+	requesterSigningSecret,
 	signerForMessageChange,
 	signingKeyring,
 } from "./message-ownership.ts";
 import { withRelayAs } from "./adapters/buzz/relay-pool.ts";
-import type { QueryingRelay } from "./adapters/buzz/deletions.ts";
+import { seenByBoth, type QueryingRelay } from "./adapters/buzz/deletions.ts";
 import { ThreadPartlyDeleted, deleteThread } from "./adapters/buzz/thread-deletion.ts";
-import { RelayLoginRefused } from "./adapters/buzz/relay-connection.ts";
+import { RelayLoginRefused, RelayQueryIncomplete } from "./adapters/buzz/relay-connection.ts";
 import { personCapabilities, type PersonCapability } from "./personal/capabilities.ts";
 import { requesterCapabilityNamed } from "./personal/as-the-requester.ts";
 import { MalformedRequest } from "./personal/parse.ts";
@@ -652,40 +651,57 @@ async function handleMessageSearch(
 	// An ID names one exact message wherever it lives, so reading by ID needs no
 	// channel; every other search reads a channel's record and must name one.
 	const channelId = hasMessageIDs ? "" : await resolveMessageSearchChannelId(adapter, requestDocument);
-	const search = (reader?: QueryingRelay) =>
-		adapter.searchMessages(
-			{
-				channelId,
-				rootEventId: requestDocument.rootMessageID?.trim() || undefined,
-				messageIds: hasMessageIDs ? requestDocument.messageIDs : undefined,
-				authorPubkeyHex: messageSearchAuthorPubkey(adapter, requestDocument),
-				queries: requestDocument.queries ?? [],
-				limit: messageSearchLimit(requestDocument.limit),
-			},
-			reader,
-		);
-	const candidates = requestDocument.readAsRequester
-		? await throughTheRequesterRelay(configuration, requestDocument.requesterPubkeyHex, search)
-		: await search();
+	const requesterSecretHex = await requesterSigningSecret(
+		requestDocument.requesterPubkeyHex,
+		configuration.admindBaseURL,
+		(reason) => new MessageReadRefused(reason),
+	);
+	const candidates = await withRelayAs(
+		requireBuzzRelayURL(configuration),
+		requesterSecretHex,
+		configuration.buzz?.authTagJSON,
+		(requesterRelay) =>
+			adapter.searchMessages(
+				{
+					channelId,
+					rootEventId: requestDocument.rootMessageID?.trim() || undefined,
+					messageIds: hasMessageIDs ? requestDocument.messageIDs : undefined,
+					authorPubkeyHex: messageSearchAuthorPubkey(adapter, requestDocument),
+					queries: requestDocument.queries ?? [],
+					limit: messageSearchLimit(requestDocument.limit),
+				},
+				readerOfASearch(adapter.reader, requesterRelay, requestDocument.readAsRequester === true),
+			),
+	);
 	return {
 		channelID: channelId || candidates[0]?.channelID || "",
 		candidates: await messageSearchCandidateDocuments(adapter, candidates, requestDocument.requesterPubkeyHex),
 	};
 }
 
-async function throughTheRequesterRelay<Result>(
-	configuration: ChatdConfiguration,
-	requesterPubkeyHex: string | undefined,
-	read: (reader: QueryingRelay) => Promise<Result>,
-): Promise<Result> {
-	const pubkeyHex = (requesterPubkeyHex ?? "").trim().toLowerCase();
-	if (!secretHexPattern.test(pubkeyHex)) {
-		throw new MalformedRequest("readAsRequester needs requesterPubkeyHex, the person who asked, as 64 hexadecimal characters");
-	}
-	const refused = (reason: string) => new MessageReadRefused(`this device cannot read as ${pubkeyHex}: ${reason}`);
-	if (!configuration.admindBaseURL) throw refused("no service holding signing keys is configured");
-	const secretHex = await heldSigningSecret(pubkeyHex, configuration.admindBaseURL, refused);
-	return withRelayAs(requireBuzzRelayURL(configuration), secretHex, configuration.buzz?.authTagJSON, read);
+export function readerOfASearch(
+	agentRelay: QueryingRelay,
+	requesterRelay: QueryingRelay,
+	isAnsweredToTheRequesterAlone: boolean,
+): QueryingRelay {
+	const asTheRequester = namingWhoIsRefused(requesterRelay, "the person who asked");
+	if (isAnsweredToTheRequesterAlone) return asTheRequester;
+	return seenByBoth(namingWhoIsRefused(agentRelay, "the agent"), asTheRequester);
+}
+
+function namingWhoIsRefused(reader: QueryingRelay, party: string): QueryingRelay {
+	return {
+		query: (filter) =>
+			reader.query(filter).catch((failure: unknown) => {
+				if (!isRefusedByTheRelay(failure)) throw failure;
+				throw new MessageReadRefused(`${party} may not read this conversation (${failure.reason})`);
+			}),
+	};
+}
+
+// NIP-01: "restricted:" is the machine-readable prefix of a CLOSED for a subscription the relay does not permit.
+function isRefusedByTheRelay(failure: unknown): failure is RelayQueryIncomplete {
+	return failure instanceof RelayQueryIncomplete && failure.reason.startsWith("restricted:");
 }
 
 // These flags are a hint the caller can plan with, not a permission: the relay
@@ -739,18 +755,9 @@ async function resolveMessageSearchChannelId(
 	if (requestDocument.channelID?.trim()) {
 		return requestDocument.channelID.trim();
 	}
-	if (requestDocument.channelName?.trim()) {
-		const channelId = await adapter.channelIdByName(requestDocument.channelName);
-		if (!channelId) {
-			throw new MalformedRequest(
-				`no channel named ${JSON.stringify(requestDocument.channelName)} exists on ${adapter.name}`,
-			);
-		}
-		return channelId;
-	}
 	const replyTargetID = requestDocument.replyTargetID?.trim();
 	if (!replyTargetID) {
-		throw new MalformedRequest("message.search requires replyTargetID, channelID, or channelName");
+		throw new MalformedRequest("message.search requires replyTargetID or channelID");
 	}
 	return adapter.decodeThreadId(replyTargetID).channelId;
 }

@@ -916,9 +916,13 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	// Search reads what a person would see: deletions removed, edits applied,
 	// newest of the best matches first. The score only orders candidates; picking
 	// the message that was meant stays with the caller.
+	get reader(): QueryingRelay {
+		return this.relay;
+	}
+
 	async searchMessages(
 		request: BuzzMessageSearchRequest,
-		reader: QueryingRelay = this.relay,
+		reader: QueryingRelay,
 	): Promise<BuzzMessageSearchCandidate[]> {
 		if (request.messageIds && request.messageIds.length > 0) {
 			return this.searchMessagesById(request, request.messageIds, reader);

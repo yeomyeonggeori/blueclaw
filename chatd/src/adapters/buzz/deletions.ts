@@ -6,6 +6,16 @@ export const REACTION_KIND = 7;
 
 export type QueryingRelay = { query: (filter: object) => Promise<BuzzEvent[]> };
 
+export function seenByBoth(first: QueryingRelay, second: QueryingRelay): QueryingRelay {
+	return {
+		query: async (filter) => {
+			const [shownToFirst, shownToSecond] = await Promise.all([first.query(filter), second.query(filter)]);
+			const shownToBoth = new Set(shownToSecond.map((event) => event.id));
+			return shownToFirst.filter((event) => shownToBoth.has(event.id));
+		},
+	};
+}
+
 export function targetKindTag(kind: number): string[] {
 	return ["k", String(kind)];
 }
