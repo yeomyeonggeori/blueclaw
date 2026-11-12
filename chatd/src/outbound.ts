@@ -32,7 +32,17 @@ import {
 	parseReactionRequest,
 	parseReplySendRequest,
 } from "./outbound-parse.ts";
-import { MessageChangeRefused, isElevatedIn, signerForMessageChange, signingKeyring } from "./message-ownership.ts";
+import {
+	MessageChangeRefused,
+	MessageReadRefused,
+	heldSigningSecret,
+	isElevatedIn,
+	secretHexPattern,
+	signerForMessageChange,
+	signingKeyring,
+} from "./message-ownership.ts";
+import { withRelayAs } from "./adapters/buzz/relay-pool.ts";
+import type { QueryingRelay } from "./adapters/buzz/deletions.ts";
 import { ThreadPartlyDeleted, deleteThread } from "./adapters/buzz/thread-deletion.ts";
 import { RelayLoginRefused } from "./adapters/buzz/relay-connection.ts";
 import { personCapabilities, type PersonCapability } from "./personal/capabilities.ts";
@@ -156,7 +166,7 @@ export function createOutboundHandler(
 			if (error instanceof ThreadPartlyDeleted) {
 			return jsonResponse(409, { error: error.message, reason: error.reason, remaining: error.remaining });
 		}
-		if (error instanceof MessageChangeRefused) {
+		if (error instanceof MessageChangeRefused || error instanceof MessageReadRefused) {
 				return jsonResponse(403, { error: error.message });
 			}
 			return jsonResponse(502, { error: error instanceof Error ? error.message : String(error) });
@@ -631,7 +641,7 @@ const messageSearchDefaultLimit = 25;
 
 async function handleMessageSearch(
 	adapter: PlatformChatAdapter,
-	_configuration: ChatdConfiguration,
+	configuration: ChatdConfiguration,
 	requestBody: unknown,
 ): Promise<MessageSearchResponse> {
 	const requestDocument = parseMessageSearchRequest(requestBody);
@@ -642,18 +652,40 @@ async function handleMessageSearch(
 	// An ID names one exact message wherever it lives, so reading by ID needs no
 	// channel; every other search reads a channel's record and must name one.
 	const channelId = hasMessageIDs ? "" : await resolveMessageSearchChannelId(adapter, requestDocument);
-	const candidates = await adapter.searchMessages({
-		channelId,
-		rootEventId: requestDocument.rootMessageID?.trim() || undefined,
-		messageIds: hasMessageIDs ? requestDocument.messageIDs : undefined,
-		authorPubkeyHex: messageSearchAuthorPubkey(adapter, requestDocument),
-		queries: requestDocument.queries ?? [],
-		limit: messageSearchLimit(requestDocument.limit),
-	});
+	const search = (reader?: QueryingRelay) =>
+		adapter.searchMessages(
+			{
+				channelId,
+				rootEventId: requestDocument.rootMessageID?.trim() || undefined,
+				messageIds: hasMessageIDs ? requestDocument.messageIDs : undefined,
+				authorPubkeyHex: messageSearchAuthorPubkey(adapter, requestDocument),
+				queries: requestDocument.queries ?? [],
+				limit: messageSearchLimit(requestDocument.limit),
+			},
+			reader,
+		);
+	const candidates = requestDocument.readAsRequester
+		? await throughTheRequesterRelay(configuration, requestDocument.requesterPubkeyHex, search)
+		: await search();
 	return {
 		channelID: channelId || candidates[0]?.channelID || "",
 		candidates: await messageSearchCandidateDocuments(adapter, candidates, requestDocument.requesterPubkeyHex),
 	};
+}
+
+async function throughTheRequesterRelay<Result>(
+	configuration: ChatdConfiguration,
+	requesterPubkeyHex: string | undefined,
+	read: (reader: QueryingRelay) => Promise<Result>,
+): Promise<Result> {
+	const pubkeyHex = (requesterPubkeyHex ?? "").trim().toLowerCase();
+	if (!secretHexPattern.test(pubkeyHex)) {
+		throw new MalformedRequest("readAsRequester needs requesterPubkeyHex, the person who asked, as 64 hexadecimal characters");
+	}
+	const refused = (reason: string) => new MessageReadRefused(`this device cannot read as ${pubkeyHex}: ${reason}`);
+	if (!configuration.admindBaseURL) throw refused("no service holding signing keys is configured");
+	const secretHex = await heldSigningSecret(pubkeyHex, configuration.admindBaseURL, refused);
+	return withRelayAs(requireBuzzRelayURL(configuration), secretHex, configuration.buzz?.authTagJSON, read);
 }
 
 // These flags are a hint the caller can plan with, not a permission: the relay

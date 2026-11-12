@@ -167,6 +167,39 @@ test("reading by ID crosses channels and needs no channel named", async () => {
 	expect(body.candidates[0]?.text).toBe("잡담에 올라간 글");
 });
 
+describe("a search read as the person who asked", () => {
+	test("reads the record their relay shows, which the agent's own may not hold", async () => {
+		const adapter = adapterAnswering({ 9: [], 40003: [], 9005: [] });
+		const shownToTheRequester = {
+			query: async (filter: { kinds?: number[] }) =>
+				filter.kinds?.[0] === 9 ? [messageEvent("a".repeat(64), REQUESTER, "둘만 나눈 이야기", 100)] : [],
+		};
+
+		const asTheAgent = await adapter.searchMessages({ channelId: CHANNEL, queries: [], limit: 10 });
+		const asTheRequester = await adapter.searchMessages(
+			{ channelId: CHANNEL, queries: [], limit: 10 },
+			shownToTheRequester,
+		);
+
+		expect(asTheAgent).toEqual([]);
+		expect(asTheRequester.map((candidate) => candidate.text)).toEqual(["둘만 나눈 이야기"]);
+	});
+
+	test("is refused when nobody is named or no service holds their key", async () => {
+		const handler = createOutboundHandler({ buzz: adapterAnswering({ 9: [], 40003: [], 9005: [] }) }, {} as ChatdConfiguration);
+		const searchedAs = (requesterPubkeyHex: string | undefined) =>
+			handler(
+				new Request("http://chatd/v1/platform/buzz/message.search", {
+					method: "POST",
+					body: JSON.stringify({ channelID: CHANNEL, readAsRequester: true, requesterPubkeyHex }),
+				}),
+			);
+
+		expect((await searchedAs(undefined)).status).toBe(400);
+		expect((await searchedAs(REQUESTER)).status).toBe(403);
+	});
+});
+
 describe("a person searching their own conversation", () => {
 	const textOf = (message: { text: string }) => message.text;
 	const createdAtOf = (message: { at: number }) => message.at;

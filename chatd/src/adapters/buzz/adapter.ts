@@ -43,7 +43,14 @@ import { TIME_ZONE_TAG, buildMessageBody, ensureUserDirectMessageChannel, partic
 import { catchUpIntervalMilliseconds, messagesSentSince } from "./catch-up.ts";
 import { deliveredMessagesInMemory, type DeliveredMessages } from "../../delivered-messages.ts";
 import { withRelayAs } from "./relay-pool.ts";
-import { DELETE_MESSAGE_KIND, REACTION_KIND, isAbout, takenBackIDs, takenBackReactionIDs } from "./deletions.ts";
+import {
+	DELETE_MESSAGE_KIND,
+	REACTION_KIND,
+	isAbout,
+	takenBackIDs,
+	takenBackReactionIDs,
+	type QueryingRelay,
+} from "./deletions.ts";
 
 const mostDeletionsReadPerMessage = 4;
 import { messageSearchScanLimit, rankBySearchScore } from "../../message-search.ts";
@@ -909,16 +916,19 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	// Search reads what a person would see: deletions removed, edits applied,
 	// newest of the best matches first. The score only orders candidates; picking
 	// the message that was meant stays with the caller.
-	async searchMessages(request: BuzzMessageSearchRequest): Promise<BuzzMessageSearchCandidate[]> {
+	async searchMessages(
+		request: BuzzMessageSearchRequest,
+		reader: QueryingRelay = this.relay,
+	): Promise<BuzzMessageSearchCandidate[]> {
 		if (request.messageIds && request.messageIds.length > 0) {
-			return this.searchMessagesById(request, request.messageIds);
+			return this.searchMessagesById(request, request.messageIds, reader);
 		}
 		const scanLimit = Math.max(request.limit * 3, messageSearchScanLimit);
 		const [events, edits] = await Promise.all([
-			this.relay.query({ kinds: [STREAM_MESSAGE_KIND], "#h": [request.channelId], limit: scanLimit }),
-			this.latestEditsIn(request.channelId, scanLimit),
+			reader.query({ kinds: [STREAM_MESSAGE_KIND], "#h": [request.channelId], limit: scanLimit }),
+			this.latestEditsIn(request.channelId, scanLimit, reader),
 		]);
-		const deleted = await this.deletedAmong(events);
+		const deleted = await this.deletedAmong(events, reader);
 		const visible = events.filter((event) => {
 			if (deleted.has(event.id)) return false;
 			if (firstTagValue(event, "h") !== request.channelId) return false;
@@ -939,11 +949,12 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	private async searchMessagesById(
 		request: BuzzMessageSearchRequest,
 		messageIds: string[],
+		reader: QueryingRelay,
 	): Promise<BuzzMessageSearchCandidate[]> {
 		const [events, deletions, editEvents] = await Promise.all([
-			this.relay.query({ kinds: [STREAM_MESSAGE_KIND], ids: messageIds }),
-			this.relay.query({ kinds: [DELETE_MESSAGE_KIND], "#e": messageIds, limit: messageIds.length * 4 }).catch(() => []),
-			this.relay.query({ kinds: [EDIT_MESSAGE_KIND], "#e": messageIds, limit: messageIds.length * 32 }).catch(() => []),
+			reader.query({ kinds: [STREAM_MESSAGE_KIND], ids: messageIds }),
+			reader.query({ kinds: [DELETE_MESSAGE_KIND], "#e": messageIds, limit: messageIds.length * 4 }).catch(() => []),
+			reader.query({ kinds: [EDIT_MESSAGE_KIND], "#e": messageIds, limit: messageIds.length * 32 }).catch(() => []),
 		]);
 		const deleted = new Set(deletions.map((event) => firstTagValue(event, "e")).filter(Boolean));
 		const edits = latestEditContentByTarget(editEvents);
@@ -983,8 +994,12 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	// of its own carrying what the author now means. The agent narrates its work
 	// by editing one message many times before it holds the answer, so a reader
 	// that ignores edits shows the first draft forever.
-	private async latestEditsIn(channelId: string, limit: number): Promise<Map<string, string>> {
-		const events = await this.relay
+	private async latestEditsIn(
+		channelId: string,
+		limit: number,
+		reader: QueryingRelay = this.relay,
+	): Promise<Map<string, string>> {
+		const events = await reader
 			.query({ kinds: [EDIT_MESSAGE_KIND], "#h": [channelId], limit: Math.max(limit * 3, limit) })
 			.catch(() => []);
 		return latestEditContentByTarget(events);
@@ -993,9 +1008,9 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	// Somebody deletes a message to unsay it. The relay keeps what was said and
 	// records that it was taken back, so a reader that asks only for messages is
 	// handed words their author withdrew.
-	private async deletedAmong(events: BuzzEvent[]): Promise<Set<string>> {
+	private async deletedAmong(events: BuzzEvent[], reader: QueryingRelay = this.relay): Promise<Set<string>> {
 		return takenBackIDs(
-			this.relay,
+			reader,
 			events.map((event) => event.id),
 			mostDeletionsReadPerMessage,
 		).catch(() => new Set<string>());

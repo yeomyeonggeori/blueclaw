@@ -9,6 +9,13 @@ export class MessageChangeRefused extends Error {
 	}
 }
 
+export class MessageReadRefused extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "MessageReadRefused";
+	}
+}
+
 const signingSecretPath = "/admin/api/buzz/signing-secret";
 export const secretHexPattern = /^[0-9a-f]{64}$/;
 

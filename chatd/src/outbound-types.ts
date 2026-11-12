@@ -185,6 +185,7 @@ export interface MessageSearchRequest {
 	messageIDs?: string[];
 	authoredBy?: string;
 	requesterPubkeyHex?: string;
+	readAsRequester?: boolean;
 	queries?: string[];
 	limit?: number;
 }
