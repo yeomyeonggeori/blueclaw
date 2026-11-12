@@ -897,3 +897,35 @@ func TestWithoutToolNamesAlreadyRegisteredReportsEveryCapabilityToolANativeTwinS
 		t.Fatalf("the diagnostic does not name the dropped tool: %+v", shadowedTools[0])
 	}
 }
+
+func TestACaptureThatWasNeverAFileIsStillAnAttachment(t *testing.T) {
+	capture := json.RawMessage(`{"ok":true,"action":"screenshot","attachments":[{"filename":"page.png","contentType":"image/png","sizeBytes":5,"contentBase64":"aW1hZ2U="}],"capturedAt":"2026-11-12T00:00:00Z"}`)
+
+	attachments := capabilityAttachments(capture)
+
+	if len(attachments) != 1 || attachments[0].ContentBase64 != "aW1hZ2U=" || attachments[0].DevicePath != "" {
+		t.Fatalf("a capture with bytes and no path became %+v", attachments)
+	}
+}
+
+func TestAnAttachmentWithNeitherAPathNorBytesIsNotOne(t *testing.T) {
+	described := json.RawMessage(`{"attachments":[{"filename":"page.png","contentType":"image/png"}]}`)
+
+	if attachments := capabilityAttachments(described); len(attachments) != 0 {
+		t.Fatalf("a description of a file became %+v", attachments)
+	}
+}
+
+func TestTheTextOfAResultNamesItsAttachmentsWithoutTheirBytes(t *testing.T) {
+	capture := json.RawMessage(`{"ok":true,"attachments":[{"filename":"page.png","contentType":"image/png","sizeBytes":5,"contentBase64":"aW1hZ2U="}]}`)
+
+	readable := string(capabilityResultWithoutAttachmentBytes(capture))
+
+	if strings.Contains(readable, "aW1hZ2U=") || !strings.Contains(readable, `"filename":"page.png"`) || !strings.Contains(readable, `"ok":true`) {
+		t.Fatalf("the readable result is %s", readable)
+	}
+	plain := json.RawMessage(`{"ok":true,"action":"click"}`)
+	if string(capabilityResultWithoutAttachmentBytes(plain)) != string(plain) {
+		t.Fatal("a result with no attachments was rewritten")
+	}
+}

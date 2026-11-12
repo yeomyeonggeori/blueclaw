@@ -141,7 +141,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) invokeCapabilityOperation(toolCont
 	}
 	content := strings.TrimSpace(response.Content)
 	if content == "" && len(response.Result) > 0 {
-		content = string(response.Result)
+		content = string(capabilityResultWithoutAttachmentBytes(response.Result))
 	}
 	result := capabilityToolResult(content, response.Result, response.Effects, isError, response.Message, response.ErrorCode, response.FailureStage, response.Retryable, response.SafeRetry)
 	return toolCatalogBuilder.settleApprovalRefusal(toolContext, operation, toolDescriptor, request, rawInput, toolInput, result)
@@ -832,7 +832,7 @@ func capabilityAttachments(result json.RawMessage) []toolcontract.FileAttachment
 		return nil
 	}
 	var attachment capabilityFileAttachment
-	if errorValue := json.Unmarshal(result, &attachment); errorValue == nil && strings.TrimSpace(attachment.DevicePath) != "" {
+	if errorValue := json.Unmarshal(result, &attachment); errorValue == nil && attachment.carriesAFile() {
 		return []toolcontract.FileAttachment{attachment.agentFileAttachment()}
 	}
 	var document struct {
@@ -843,11 +843,35 @@ func capabilityAttachments(result json.RawMessage) []toolcontract.FileAttachment
 	}
 	attachments := []toolcontract.FileAttachment{}
 	for _, candidate := range document.Attachments {
-		if strings.TrimSpace(candidate.DevicePath) != "" {
+		if candidate.carriesAFile() {
 			attachments = append(attachments, candidate.agentFileAttachment())
 		}
 	}
 	return attachments
+}
+
+func capabilityResultWithoutAttachmentBytes(result json.RawMessage) json.RawMessage {
+	var document map[string]json.RawMessage
+	if json.Unmarshal(result, &document) != nil {
+		return result
+	}
+	var attachments []map[string]json.RawMessage
+	if json.Unmarshal(document["attachments"], &attachments) != nil || len(attachments) == 0 {
+		return result
+	}
+	for _, attachment := range attachments {
+		delete(attachment, "contentBase64")
+	}
+	described, errorValue := json.Marshal(attachments)
+	if errorValue != nil {
+		return result
+	}
+	document["attachments"] = described
+	readable, errorValue := json.Marshal(document)
+	if errorValue != nil {
+		return result
+	}
+	return readable
 }
 
 type capabilityFileAttachment struct {
@@ -857,6 +881,10 @@ type capabilityFileAttachment struct {
 	SizeBytes     int64  `json:"sizeBytes,omitempty"`
 	Title         string `json:"title,omitempty"`
 	ContentBase64 string `json:"contentBase64,omitempty"`
+}
+
+func (attachment capabilityFileAttachment) carriesAFile() bool {
+	return strings.TrimSpace(attachment.DevicePath) != "" || strings.TrimSpace(attachment.ContentBase64) != ""
 }
 
 func (attachment capabilityFileAttachment) agentFileAttachment() toolcontract.FileAttachment {
