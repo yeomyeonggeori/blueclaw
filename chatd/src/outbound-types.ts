@@ -175,6 +175,7 @@ export interface MessageEditRequest {
 	messageID: string;
 	message: string;
 	requesterPubkeyHex?: string;
+	readAsRequester?: boolean;
 	attachments?: ReplyAttachmentDocument[];
 }
 
@@ -182,6 +183,7 @@ export interface MessageDeleteRequest {
 	replyTargetID: string;
 	messageID: string;
 	requesterPubkeyHex?: string;
+	readAsRequester?: boolean;
 }
 
 export interface MessageSearchRequest {
@@ -194,6 +196,7 @@ export interface MessageSearchRequest {
 	readAsRequester?: boolean;
 	queries?: string[];
 	limit?: number;
+	cursor?: string;
 }
 
 export interface MessageSearchCandidateDocument {
@@ -212,6 +215,7 @@ export interface MessageSearchCandidateDocument {
 export interface MessageSearchResponse {
 	channelID: string;
 	candidates: MessageSearchCandidateDocument[];
+	nextCursor?: string;
 }
 
 export interface InputAttachmentDocument {

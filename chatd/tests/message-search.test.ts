@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { searchScore, rankBySearchScore, newestVerbatimMatches, messageSearchMostResults } from "../src/message-search";
+import {
+	searchScore,
+	rankBySearchScore,
+	newestVerbatimMatches,
+	messageSearchMostResults,
+	messageSearchScanLimit,
+} from "../src/message-search";
 import type { ChatdConfiguration } from "../src/configuration";
 import type { BuzzEvent } from "../src/adapters/buzz/types";
 import { replaceRelayClientInThisFile } from "./relay-client-replacement.ts";
@@ -153,8 +159,99 @@ test("message.search applies edits before matching", async () => {
 
 	const found = await adapter.searchMessages({ channelId: CHANNEL, queries: ["삭제"], limit: 10 }, adapter.reader);
 
-	expect(found.map((candidate) => candidate.messageID)).toEqual(["a".repeat(64)]);
-	expect(found[0]?.text).toBe("삭제하지 못했습니다");
+	expect(found.candidates.map((candidate) => candidate.messageID)).toEqual(["a".repeat(64)]);
+	expect(found.candidates[0]?.text).toBe("삭제하지 못했습니다");
+});
+
+type RelayFilter = { kinds?: number[]; ids?: string[]; limit?: number; until?: number };
+type SearchPage = { candidates: { messageID: string }[]; nextCursor?: string };
+
+function relayHolding(messages: ReturnType<typeof messageEvent>[]): Shown {
+	return async (filter: RelayFilter) => {
+		if (filter.kinds?.[0] !== 9) return [];
+		return messages
+			.filter((message) => filter.until === undefined || message.created_at <= filter.until)
+			.sort((first, second) => second.created_at - first.created_at)
+			.slice(0, filter.limit);
+	};
+}
+
+async function everyPage(adapter: InstanceType<typeof BuzzAdapter>, search: object): Promise<string[][]> {
+	const pages: string[][] = [];
+	let cursor: string | undefined;
+	do {
+		const response = await searched(adapter, { channelID: CHANNEL, ...search, cursor });
+		expect(response.status).toBe(200);
+		const page = (await response.json()) as SearchPage;
+		pages.push(page.candidates.map((candidate) => candidate.messageID));
+		cursor = page.nextCursor;
+	} while (cursor && pages.length < 100);
+	return pages;
+}
+
+function numbered(count: number, textOf: (index: number) => string, secondOf: (index: number) => number) {
+	return Array.from({ length: count }, (_, index) =>
+		messageEvent(index.toString(16).padStart(64, "0"), REQUESTER, textOf(index), secondOf(index)),
+	);
+}
+
+test("message.search pages through more matches than one answer holds", async () => {
+	const adapter = adapterAnswering({});
+	const messages = numbered(7, (index) => `회의록 ${index}`, (index) => 100 + index);
+	shownToBoth(adapter, relayHolding(messages));
+
+	const pages = await everyPage(adapter, { limit: 3 });
+
+	expect(pages.map((page) => page.length)).toEqual([3, 3, 1]);
+	expect(pages.flat()).toEqual(messages.map((message) => message.id).reverse());
+});
+
+test("message.search pages keep their place when somebody writes meanwhile", async () => {
+	const adapter = adapterAnswering({});
+	const messages = numbered(4, (index) => `회의록 ${index}`, (index) => 100 + index);
+	shownToBoth(adapter, relayHolding(messages));
+
+	const first = (await (await searched(adapter, { channelID: CHANNEL, limit: 2 })).json()) as SearchPage;
+	messages.push(messageEvent("f".repeat(64), REQUESTER, "방금 쓴 글", 200));
+	const second = (await (
+		await searched(adapter, { channelID: CHANNEL, limit: 2, cursor: first.nextCursor })
+	).json()) as SearchPage;
+
+	const answered = [...first.candidates, ...second.candidates].map((candidate) => candidate.messageID);
+	expect(answered).toEqual(messages.slice(0, 4).map((message) => message.id).reverse());
+	expect(second.nextCursor).toBeUndefined();
+});
+
+test("message.search reads past the window it scans, losing nothing written in the same second", async () => {
+	const adapter = adapterAnswering({});
+	const messages = numbered(messageSearchScanLimit + 40, (index) => `글 ${index}`, (index) => 1000 + Math.floor(index / 3));
+	shownToBoth(adapter, relayHolding(messages));
+
+	const pages = await everyPage(adapter, { limit: 50 });
+
+	const answered = pages.flat();
+	expect(new Set(answered).size).toBe(answered.length);
+	expect(new Set(answered)).toEqual(new Set(messages.map((message) => message.id)));
+});
+
+test("message.search finds a match older than the first window", async () => {
+	const adapter = adapterAnswering({});
+	const messages = numbered(messageSearchScanLimit + 10, (index) => (index === 2 ? "상하이 미팅 결과" : `글 ${index}`), (index) => 1000 + index);
+	shownToBoth(adapter, relayHolding(messages));
+
+	const pages = await everyPage(adapter, { queries: ["상하이 미팅"], limit: 5 });
+
+	expect(pages[0]).toEqual([]);
+	expect(pages.flat()).toEqual([messages[2]?.id ?? ""]);
+});
+
+test("message.search refuses a cursor it never answered with", async () => {
+	const adapter = adapterAnswering({});
+	shownToBoth(adapter, relayHolding([]));
+
+	const response = await searched(adapter, { channelID: CHANNEL, cursor: "page-two" });
+
+	expect(response.status).toBe(400);
 });
 
 test("message.search without a conversation or without a person asking is refused", async () => {

@@ -28,6 +28,10 @@ replaceRelayClientInThisFile((_relayURL: string, secretHex: string) => ({
 	disconnect: () => {},
 	subscribe: () => {},
 	query: async (filter: { ids?: string[]; kinds?: number[] }) => shownToAnotherKey(filter),
+	queryComplete: async (filter: { ids?: string[]; kinds?: number[] }) => ({
+		events: shownToAnotherKey(filter),
+		complete: true,
+	}),
 	publish: async (kind: number, content: string, tags: string[][]) => {
 		if (relayRefusal) throw new Error(relayRefusal);
 		publishedByAnotherKey.push({ secretHex, kind, content, tags });
@@ -384,5 +388,65 @@ describe("message.search flags", () => {
 		const stranger = body.candidates.find((candidate) => candidate.authorPubkeyHex === STRANGER);
 		expect(stranger?.editable).toBe(false);
 		expect(stranger?.deletable).toBe(true);
+	});
+});
+
+describe("a change to a message only the person who asked can read", () => {
+	const PRIVATE_CONVERSATION = "0b6f4b1e-52a1-4f0e-9d53-3f3c1f6f2a10";
+	const PRIVATE_MESSAGE = "9".repeat(64);
+
+	function inAConversationTheAgentIsNotIn() {
+		const { adapter, publishedAsTheBot } = withMessages();
+		const privateMessage: BuzzEvent = {
+			...messageEvent(PRIVATE_MESSAGE, REQUESTER),
+			tags: [["h", PRIVATE_CONVERSATION]],
+		};
+		shownToAnotherKey = (filter) => (filter.ids?.includes(PRIVATE_MESSAGE) ? [privateMessage] : []);
+		const handler = createOutboundHandler({ buzz: adapter }, configurationNaming(ADMIND_BASE_URL));
+		return { handler, publishedAsTheBot };
+	}
+
+	function changeRequest(route: string, change: object): Request {
+		return new Request(`http://chatd/v1/platform/buzz/${route}`, {
+			method: "POST",
+			body: JSON.stringify({ messageID: PRIVATE_MESSAGE, requesterPubkeyHex: REQUESTER, ...change }),
+		});
+	}
+
+	test("their own call edits it, in the conversation that holds it", async () => {
+		const { handler, publishedAsTheBot } = inAConversationTheAgentIsNotIn();
+
+		const response = await handler(changeRequest("message.edit", { message: "고친 글", readAsRequester: true }));
+
+		expect(response.status).toBe(200);
+		expect(publishedAsTheBot).toEqual([]);
+		expect(publishedByAnotherKey.map((event) => [event.kind, event.tags])).toEqual([
+			[40003, [["h", PRIVATE_CONVERSATION], ["e", PRIVATE_MESSAGE]]],
+		]);
+		expect(pubkeyFromSecret(publishedByAnotherKey[0]?.secretHex ?? "")).toBe(REQUESTER);
+	});
+
+	test("their own call deletes it", async () => {
+		const { handler, publishedAsTheBot } = inAConversationTheAgentIsNotIn();
+
+		const response = await handler(changeRequest("message_delete", { readAsRequester: true }));
+
+		expect(response.status).toBe(200);
+		expect(publishedAsTheBot).toEqual([]);
+		expect(publishedByAnotherKey.map((event) => event.tags)).toEqual([
+			[["h", PRIVATE_CONVERSATION], ["e", PRIVATE_MESSAGE]],
+		]);
+	});
+
+	test("the agent, asked on their behalf, changes nothing it cannot read", async () => {
+		const { handler, publishedAsTheBot } = inAConversationTheAgentIsNotIn();
+
+		const edited = await handler(changeRequest("message.edit", { message: "고친 글", replyTargetID: `buzz:${CHANNEL}` }));
+		const deleted = await handler(changeRequest("message_delete", { replyTargetID: `buzz:${CHANNEL}` }));
+
+		expect(edited.status).toBe(403);
+		expect(deleted.status).toBe(403);
+		expect(publishedAsTheBot).toEqual([]);
+		expect(publishedByAnotherKey).toEqual([]);
 	});
 });

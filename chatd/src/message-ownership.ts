@@ -1,5 +1,6 @@
 import { asAHostService } from "./service-credential.ts";
 import type { BuzzAdapter } from "./adapters/buzz/adapter.ts";
+import type { BuzzEvent } from "./adapters/buzz/types.ts";
 import { pubkeyFromSecret } from "./adapters/buzz/user-session.ts";
 import { MalformedRequest } from "./personal/parse.ts";
 
@@ -22,14 +23,11 @@ export const secretHexPattern = /^[0-9a-f]{64}$/;
 
 export async function signerForMessageChange(
 	adapter: BuzzAdapter,
-	messageID: string,
+	target: BuzzEvent,
 	requesterPubkeyHex: string | undefined,
 	admindBaseURL: string | undefined,
 ): Promise<string | undefined> {
-	const target = await adapter.readMessageEvent(messageID);
-	if (!target) {
-		throw new MessageChangeRefused(`message ${messageID} cannot be read from this relay, so it cannot be changed`);
-	}
+	const messageID = target.id;
 	if (target.pubkey === adapter.botPubkey) return undefined;
 	const pubkeyHex = (requesterPubkeyHex ?? "").trim().toLowerCase();
 	if (!admindBaseURL || !secretHexPattern.test(pubkeyHex)) {

@@ -62,7 +62,13 @@ import {
 } from "./deletions.ts";
 
 const mostDeletionsReadPerMessage = 4;
-import { messageSearchScanLimit, rankBySearchScore } from "../../message-search.ts";
+import {
+	firstMessageSearchPage,
+	type MessageSearchPage,
+	messageSearchPageAfter,
+	messageSearchScanLimit,
+	rankBySearchScore,
+} from "../../message-search.ts";
 import { originOfTags } from "../../mirror/origin.ts";
 import { reactionContentOf } from "../../mirror/reaction-emoji.ts";
 
@@ -75,6 +81,12 @@ export type BuzzMessageSearchRequest = {
 	authorPubkeyHex?: string;
 	queries: string[];
 	limit: number;
+	page?: MessageSearchPage;
+};
+
+export type BuzzMessageSearchResult = {
+	candidates: BuzzMessageSearchCandidate[];
+	nextPage?: MessageSearchPage;
 };
 
 export type BuzzMessageSearchCandidate = {
@@ -951,20 +963,20 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		return this.relay;
 	}
 
-	async searchMessages(
-		request: BuzzMessageSearchRequest,
-		reader: QueryingRelay,
-	): Promise<BuzzMessageSearchCandidate[]> {
+	async searchMessages(request: BuzzMessageSearchRequest, reader: QueryingRelay): Promise<BuzzMessageSearchResult> {
 		if (request.messageIds && request.messageIds.length > 0) {
-			return this.searchMessagesById(request, request.messageIds, reader);
+			return { candidates: await this.searchMessagesById(request, request.messageIds, reader) };
 		}
+		const page = request.page ?? firstMessageSearchPage;
 		const scanLimit = Math.max(request.limit * 3, messageSearchScanLimit);
+		const window = page.until === undefined ? {} : { until: page.until };
 		const [events, edits] = await Promise.all([
-			reader.query({ kinds: [STREAM_MESSAGE_KIND], "#h": [request.channelId], limit: scanLimit }),
+			reader.query({ kinds: [STREAM_MESSAGE_KIND], "#h": [request.channelId], limit: scanLimit, ...window }),
 			this.latestEditsIn(request.channelId, scanLimit, reader),
 		]);
 		const deleted = await this.deletedAmong(events, reader);
 		const visible = events.filter((event) => {
+			if (page.seen.includes(event.id)) return false;
 			if (deleted.has(event.id)) return false;
 			if (firstTagValue(event, "h") !== request.channelId) return false;
 			if (request.authorPubkeyHex && event.pubkey !== request.authorPubkeyHex) return false;
@@ -975,7 +987,11 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 			}
 			return true;
 		});
-		return this.rankedSearchCandidates(visible, request, edits);
+		const matched = this.rankedSearchCandidates(visible, { ...request, limit: visible.length }, edits);
+		return {
+			candidates: matched.slice(page.skip, page.skip + request.limit),
+			nextPage: messageSearchPageAfter(page, events, matched.length, request.limit, scanLimit),
+		};
 	}
 
 	// A message ID names one exact message wherever it lives, so reading by ID

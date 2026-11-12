@@ -42,13 +42,19 @@ import {
 	signingKeyring,
 } from "./message-ownership.ts";
 import { withRelayAs } from "./adapters/buzz/relay-pool.ts";
+import { firstTagValue, type BuzzEvent } from "./adapters/buzz/types.ts";
 import { seenByBoth, type QueryingRelay } from "./adapters/buzz/deletions.ts";
 import { ThreadPartlyDeleted, deleteThread } from "./adapters/buzz/thread-deletion.ts";
 import { RelayLoginRefused, RelayQueryIncomplete } from "./adapters/buzz/relay-connection.ts";
 import { personCapabilities, type PersonCapability } from "./personal/capabilities.ts";
 import { requesterCapabilityNamed } from "./personal/as-the-requester.ts";
 import { MalformedRequest } from "./personal/parse.ts";
-import { messageSearchMostResults } from "./message-search.ts";
+import {
+	decodeMessageSearchCursor,
+	encodeMessageSearchCursor,
+	type MessageSearchPage,
+	messageSearchMostResults,
+} from "./message-search.ts";
 import { CredentialRefused, MediaRefused, UnsupportedByPlatform, type PersonalGateway } from "./personal/gateway.ts";
 import {
 	LastOwnerCannotLeave,
@@ -604,22 +610,14 @@ async function handleMessageEdit(
 	}
 	const message: AdapterPostableMessage =
 		fileUploads.length > 0 ? { markdown: requestDocument.message, files: fileUploads } : requestDocument.message;
-	const signerSecretHex =
-		adapter instanceof BuzzAdapter
-			? await signerForMessageChange(
-					adapter,
-					requestDocument.messageID,
-					requestDocument.requesterPubkeyHex,
-					configuration.admindBaseURL,
-				)
-			: undefined;
-	const result = await adapter.editMessage(
-		requestDocument.replyTargetID,
-		requestDocument.messageID,
-		message,
-		signerSecretHex,
-	);
-	return { dispatchID: result.id };
+	if (!(adapter instanceof BuzzAdapter)) {
+		const result = await adapter.editMessage(requestDocument.replyTargetID, requestDocument.messageID, message);
+		return { dispatchID: result.id };
+	}
+	return await withTheMessageToChange(adapter, configuration, requestDocument, async (target) => {
+		const result = await adapter.editMessage(target.threadID, target.event.id, message, target.signerSecretHex);
+		return { dispatchID: result.id };
+	});
 }
 
 async function handleMessageDelete(
@@ -632,34 +630,96 @@ async function handleMessageDelete(
 		await adapter.deleteMessage(requestDocument.replyTargetID, requestDocument.messageID);
 		return {};
 	}
-	const signerSecretHex = await signerForMessageChange(
-		adapter,
-		requestDocument.messageID,
-		requestDocument.requesterPubkeyHex,
-		configuration.admindBaseURL,
-	);
-	const root = await adapter.readMessageEvent(requestDocument.messageID);
-	const channelID = await adapter.channelOwningMessage(requestDocument.replyTargetID, requestDocument.messageID);
 	const keyring = signingKeyring(configuration.admindBaseURL);
-	await deleteThread({
-		relay: adapter,
-		channelID,
-		rootEventId: requestDocument.messageID,
-		mayClearReplies: async () => {
-			if (!root) return false;
-			if (root.pubkey !== adapter.botPubkey) return true;
-			return isElevatedIn(adapter, channelID, (requestDocument.requesterPubkeyHex ?? "").trim().toLowerCase(), true);
-		},
-		deleteRoot: () =>
-			adapter.deleteMessage(requestDocument.replyTargetID, requestDocument.messageID, signerSecretHex),
-		deleteReply: async (reply) =>
-			adapter.deleteMessage(
-				adapter.encodeThreadId({ channelId: channelID }),
-				reply.id,
-				reply.pubkey === adapter.botPubkey ? undefined : await keyring(reply.pubkey, reply.id),
-			),
+	return await withTheMessageToChange(adapter, configuration, requestDocument, async (target) => {
+		await deleteThread({
+			relay: target.relay,
+			channelID: target.channelID,
+			rootEventId: target.event.id,
+			mayClearReplies: async () => {
+				if (target.event.pubkey !== adapter.botPubkey) return true;
+				const requesterPubkeyHex = (requestDocument.requesterPubkeyHex ?? "").trim().toLowerCase();
+				return isElevatedIn(adapter, target.channelID, requesterPubkeyHex, true);
+			},
+			deleteRoot: () => adapter.deleteMessage(target.threadID, target.event.id, target.signerSecretHex),
+			deleteReply: async (reply) =>
+				adapter.deleteMessage(
+					target.threadID,
+					reply.id,
+					reply.pubkey === adapter.botPubkey ? undefined : await keyring(reply.pubkey, reply.id),
+				),
+		});
+		return {};
 	});
-	return {};
+}
+
+type ChangingRelay = QueryingRelay & {
+	queryComplete: (filter: object) => Promise<{ events: BuzzEvent[]; complete: boolean }>;
+};
+
+type MessageToChange = {
+	event: BuzzEvent;
+	channelID: string;
+	threadID: string;
+	relay: ChangingRelay;
+	signerSecretHex: string | undefined;
+};
+
+type MessageChangeRequest = {
+	replyTargetID: string;
+	messageID: string;
+	requesterPubkeyHex?: string;
+	readAsRequester?: boolean;
+};
+
+// A change is made to the message its reader can read: the agent's own relay
+// shows the agent's rooms, and a person's own call reads with their key, which
+// is the only one that opens a conversation the agent is not in.
+async function withTheMessageToChange<Result>(
+	adapter: BuzzAdapter,
+	configuration: ChatdConfiguration,
+	request: MessageChangeRequest,
+	change: (target: MessageToChange) => Promise<Result>,
+): Promise<Result> {
+	const changingThrough = async (relay: ChangingRelay): Promise<Result> => {
+		const [event] = await relay.query({ ids: [request.messageID], limit: 1 });
+		if (!event) {
+			throw new MessageChangeRefused(
+				`message ${request.messageID} cannot be read from this relay, so it cannot be changed`,
+			);
+		}
+		const channelID =
+			firstTagValue(event, "h") ?? (await adapter.channelOwningMessage(request.replyTargetID, event.id));
+		return await change({
+			event,
+			channelID,
+			threadID: adapter.encodeThreadId({ channelId: channelID }),
+			relay,
+			signerSecretHex: await signerForMessageChange(
+				adapter,
+				event,
+				request.requesterPubkeyHex,
+				configuration.admindBaseURL,
+			),
+		});
+	};
+	if (!request.readAsRequester) {
+		return await changingThrough({
+			query: (filter) => adapter.reader.query(filter),
+			queryComplete: (filter) => adapter.queryComplete(filter),
+		});
+	}
+	const requesterSecretHex = await requesterSigningSecret(
+		request.requesterPubkeyHex,
+		configuration.admindBaseURL,
+		(reason) => new MessageChangeRefused(reason),
+	);
+	return await withRelayAs(
+		requireBuzzRelayURL(configuration),
+		requesterSecretHex,
+		configuration.buzz?.authTagJSON,
+		changingThrough,
+	);
 }
 
 // A caller that was never spoken to in a channel holds no cursor for it, so the
@@ -693,7 +753,7 @@ async function handleMessageSearch(
 		configuration.admindBaseURL,
 		(reason) => new MessageReadRefused(reason),
 	);
-	const candidates = await withRelayAs(
+	const found = await withRelayAs(
 		requireBuzzRelayURL(configuration),
 		requesterSecretHex,
 		configuration.buzz?.authTagJSON,
@@ -706,14 +766,23 @@ async function handleMessageSearch(
 					authorPubkeyHex: messageSearchAuthorPubkey(adapter, requestDocument),
 					queries: requestDocument.queries ?? [],
 					limit: messageSearchLimit(requestDocument.limit),
+					page: messageSearchPageNamedBy(requestDocument.cursor),
 				},
 				readerOfASearch(adapter.reader, requesterRelay, requestDocument.readAsRequester === true),
 			),
 	);
 	return {
-		channelID: channelId || candidates[0]?.channelID || "",
-		candidates: await messageSearchCandidateDocuments(adapter, candidates, requestDocument.requesterPubkeyHex),
+		channelID: channelId || found.candidates[0]?.channelID || "",
+		candidates: await messageSearchCandidateDocuments(adapter, found.candidates, requestDocument.requesterPubkeyHex),
+		nextCursor: found.nextPage && encodeMessageSearchCursor(found.nextPage),
 	};
+}
+
+function messageSearchPageNamedBy(cursor: string | undefined): MessageSearchPage | undefined {
+	if (!cursor?.trim()) return undefined;
+	const page = decodeMessageSearchCursor(cursor.trim());
+	if (!page) throw new MalformedRequest("cursor is not one a message.search answered with");
+	return page;
 }
 
 export function readerOfASearch(

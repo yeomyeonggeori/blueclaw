@@ -160,10 +160,11 @@ export function parseHistoryFetchRequest(value: unknown): HistoryFetchRequest {
 export function parseMessageEditRequest(value: unknown): MessageEditRequest {
 	const record = requireRecord(value, "message.edit request");
 	return {
-		replyTargetID: requireString(record, "replyTargetID"),
+		replyTargetID: optionalString(record, "replyTargetID") ?? "",
 		messageID: requireString(record, "messageID"),
 		message: requireString(record, "message"),
 		requesterPubkeyHex: optionalString(record, "requesterPubkeyHex"),
+		readAsRequester: record.readAsRequester === true,
 		attachments: optionalArray(record, "attachments").map(parseReplyAttachment),
 	};
 }
@@ -171,9 +172,10 @@ export function parseMessageEditRequest(value: unknown): MessageEditRequest {
 export function parseMessageDeleteRequest(value: unknown): MessageDeleteRequest {
 	const record = requireRecord(value, "message_delete request");
 	return {
-		replyTargetID: requireString(record, "replyTargetID"),
+		replyTargetID: optionalString(record, "replyTargetID") ?? "",
 		messageID: requireString(record, "messageID"),
 		requesterPubkeyHex: optionalString(record, "requesterPubkeyHex"),
+		readAsRequester: record.readAsRequester === true,
 	};
 }
 
@@ -193,6 +195,7 @@ export function parseMessageSearchRequest(value: unknown): MessageSearchRequest 
 			(entry): entry is string => typeof entry === "string" && entry.trim() !== "",
 		),
 		limit: optionalNumber(record, "limit"),
+		cursor: optionalString(record, "cursor"),
 	};
 	return request;
 }
