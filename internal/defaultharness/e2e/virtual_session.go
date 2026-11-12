@@ -1757,9 +1757,6 @@ func (service *virtualCapabilityService) response(toolName string, requestBody [
 			"deliveryStatus": "updated",
 			"messageUpdated": strings.TrimSpace(stringValue(input["oldText"])) != "",
 		}
-		if isPinned, isFound := input["isPinned"].(bool); isFound {
-			result["isPinned"] = isPinned
-		}
 		return virtualCapabilityChangeSuccess(toolName, "message", "updated", []string{messageID}, result)
 	case "message_delete":
 		if virtualCapabilityRequestNeedsApproval(requestBody) {
