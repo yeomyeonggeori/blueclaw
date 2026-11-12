@@ -1,4 +1,5 @@
 import type { AttachmentAlreadyKept } from "../outgoing-attachment.ts";
+import type { AnsweredChoice, PersonalAsk } from "../choice.ts";
 
 export type ActorCredential = {
 	kind: string;
@@ -82,6 +83,8 @@ export type PersonalMessage = {
 	mentions?: PersonalMentions;
 	reactions: PersonalReaction[];
 	attachments: PersonalAttachment[];
+	ask?: PersonalAsk;
+	isFailure?: boolean;
 };
 
 export type PersonalMessageMatch = Pick<
@@ -230,6 +233,7 @@ export interface PersonalGateway {
 		actor: ActorCredential,
 		conversationID: string,
 		before?: string,
+		agentExternalID?: string,
 	): Promise<PersonalMessagePage>;
 	searchMessages(actor: ActorCredential, conversationID: string, query: string): Promise<PersonalMessageMatch[]>;
 	sendMessage(
@@ -240,6 +244,7 @@ export interface PersonalGateway {
 		attachments?: AttachmentAlreadyKept[],
 		mentions?: PersonalMentions,
 		timeZone?: string,
+		answer?: AnsweredChoice,
 	): Promise<PersonalMessage>;
 	readMedia(actor: ActorCredential, url: string, range: string): Promise<Response>;
 	uploadMedia(actor: ActorCredential, source: MediaSource): Promise<KeptMedia>;

@@ -39,7 +39,16 @@ import {
 } from "./types.ts";
 import type { NormalizedMessageEdit, ReactionSummary } from "../../visible-context.ts";
 import type { AttachmentAlreadyKept, OutgoingAttachment } from "../../outgoing-attachment.ts";
-import { TIME_ZONE_TAG, buildMessageBody, ensureUserDirectMessageChannel, participantsOf } from "./user-session.ts";
+import {
+	TIME_ZONE_TAG,
+	buildMessageBody,
+	ensureUserDirectMessageChannel,
+	latestEditsTo,
+	participantsOf,
+} from "./user-session.ts";
+import { answeredChoiceOf, resolvedTag } from "./ask-tags.ts";
+import type { AnsweredChoice } from "../../choice.ts";
+import { tagsOf } from "../../event-tags.ts";
 import { catchUpIntervalMilliseconds, messagesSentSince } from "./catch-up.ts";
 import { deliveredMessagesInMemory, type DeliveredMessages } from "../../delivered-messages.ts";
 import { withRelayAs } from "./relay-pool.ts";
@@ -316,6 +325,10 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	timeZoneOf(raw: unknown): string | undefined {
 		if (typeof raw !== "object" || raw === null || !("tags" in raw)) return undefined;
 		return firstTagValue(raw as BuzzEvent, TIME_ZONE_TAG);
+	}
+
+	answeredChoiceOf(raw: unknown): AnsweredChoice | undefined {
+		return answeredChoiceOf(tagsOf(raw));
 	}
 
 	encodeThreadId(data: BuzzThreadId): string {
@@ -782,6 +795,24 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 			...mediaTags,
 		]);
 		return { id: messageId, threadId, raw: event };
+	}
+
+	async recordInteractionResolution(
+		threadId: string,
+		questionId: string,
+		interactionID: string,
+		choiceKey: string | undefined,
+	): Promise<void> {
+		const [question, latestEdits] = await Promise.all([
+			this.readMessageEvent(questionId),
+			latestEditsTo(this.relay, [questionId]),
+		]);
+		if (!question) throw new Error(`the relay has no question message ${questionId} to record a resolution on`);
+		await this.relay.publish(EDIT_MESSAGE_KIND, latestEdits.get(questionId)?.content ?? question.content, [
+			["h", firstTagValue(question, "h") ?? this.decodeThreadId(threadId).channelId],
+			["e", questionId],
+			resolvedTag(interactionID, choiceKey),
+		]);
 	}
 
 	async deleteMessage(threadId: string, messageId: string, signerSecretHex?: string): Promise<void> {

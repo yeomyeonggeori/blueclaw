@@ -59,7 +59,7 @@ func (connectorRuntime *ConnectorRuntime) beginReawaiting(ctx context.Context, t
 		connectorRuntime.endUnansweredHold(ctx, taskRun, turn, approvalgate.AskExpired)
 		return nil, false
 	}
-	thread := connectorRuntime.restartedThread(taskRun, turn, heldCall.Confirmation, taskEvents)
+	thread := connectorRuntime.restartedThread(taskRun, turn, heldCall, taskEvents)
 	leave := connectorRuntime.askingThreads.join(thread)
 	return func() {
 		defer leave()
@@ -68,13 +68,13 @@ func (connectorRuntime *ConnectorRuntime) beginReawaiting(ctx context.Context, t
 }
 
 func (connectorRuntime *ConnectorRuntime) awaitReawakenedThread(ctx context.Context, taskRun task.TaskRun, taskEvents []task.TaskEvent, turn *inboundTurn, thread *askingThread, heldCall agentcontract.HeldCall) {
-	if !approvalQuestionIsPosted(taskEvents) && connectorRuntime.deliverApprovalQuestion(ctx, turn, taskRun.TaskRunID, heldCall.Confirmation) != nil {
+	if !approvalQuestionIsPosted(taskEvents) && connectorRuntime.deliverApprovalQuestion(ctx, turn, taskRun.TaskRunID, heldCall.Confirmation, thread.interaction) != nil {
 		connectorRuntime.endUnansweredHold(ctx, taskRun, turn, approvalgate.AskUnreachable)
 		return
 	}
 	connectorRuntime.logger.Info("connector."+turn.platform+".approval.question_awaited_after_restart", "taskRunID", taskRun.TaskRunID)
 	connectorRuntime.askingThreads.markPosted(thread)
-	optionID, status := connectorRuntime.awaitAnswer(ctx, thread, connectorRuntime.askingThreads.expiry-time.Since(taskRun.UpdatedAt))
+	optionID, status := connectorRuntime.awaitAndCloseQuestion(ctx, thread, connectorRuntime.askingThreads.expiry-time.Since(taskRun.UpdatedAt))
 	switch status {
 	case approvalgate.AskAnswered:
 		connectorRuntime.resumeAnsweredHold(ctx, taskRun, taskEvents, turn, optionID)
@@ -83,15 +83,18 @@ func (connectorRuntime *ConnectorRuntime) awaitReawakenedThread(ctx context.Cont
 	}
 }
 
-func (connectorRuntime *ConnectorRuntime) restartedThread(taskRun task.TaskRun, turn *inboundTurn, confirmation string, taskEvents []task.TaskEvent) *askingThread {
+func (connectorRuntime *ConnectorRuntime) restartedThread(taskRun task.TaskRun, turn *inboundTurn, heldCall agentcontract.HeldCall, taskEvents []task.TaskEvent) *askingThread {
+	choices := approvalgate.OfferedChoices(taskEvents)
+	interaction := heldCallInteraction(heldCall.HoldID, choices, heldCall.ToolInput)
 	return &askingThread{
 		taskRunID:         taskRun.TaskRunID,
 		requesterPersonID: taskRun.RequesterPersonID,
 		platform:          turn.platform,
 		conversationID:    turn.event.ConversationID,
 		replyTargetID:     turn.event.ReplyTargetID,
-		question:          approvalQuestionFor(confirmation, approvalgate.OfferedChoices(taskEvents)),
-		operatorOptions:   operatorOptionsOfApproval(approvalgate.OfferedChoices(taskEvents)),
+		question:          approvalQuestionFor(heldCall.Confirmation, choices),
+		interaction:       connectorRuntime.addressedInteraction(interaction, taskRun.TaskRunID, taskRun.RequesterPersonID, turn),
+		operatorOptions:   operatorOptionsOfApproval(choices),
 		answers:           make(chan string, 1),
 	}
 }

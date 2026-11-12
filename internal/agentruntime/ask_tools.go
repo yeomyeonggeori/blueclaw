@@ -3,7 +3,6 @@ package agentruntime
 import (
 	"context"
 	"encoding/json"
-	"strconv"
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
@@ -18,24 +17,23 @@ type askInputToolInput struct {
 }
 
 type askInputResult struct {
-	TaskRunID string                              `json:"taskRunID"`
-	Status    string                              `json:"status"`
-	Question  string                              `json:"question"`
-	Kind      string                              `json:"kind"`
-	Options   []agentcontract.ClarificationOption `json:"options"`
+	TaskRunID string `json:"taskRunID"`
+	Status    string `json:"status"`
+	Question  string `json:"question"`
+	Kind      string `json:"kind"`
 }
 
 var (
 	askInputSchema       = json.RawMessage(`{"type":"object","properties":{"question":{"type":"string","minLength":1,"pattern":"\\S"},"choices":{"type":"array","items":{"type":"string","minLength":1,"pattern":"\\S"},"uniqueItems":true}},"required":["question"],"additionalProperties":false}`)
 	askInputIntentSchema = json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`)
-	askInputResultSchema = json.RawMessage(`{"type":"object","properties":{"taskRunID":{"type":"string","minLength":1,"pattern":"\\S"},"status":{"type":"string","enum":["waiting_user_input","answered"]},"question":{"type":"string","minLength":1,"pattern":"\\S"},"kind":{"const":"ask_input"},"choiceKey":{"type":"string","minLength":1},"answer":{"type":"string","minLength":1},"options":{"type":"array","items":{"type":"object","properties":{"key":{"type":"string","minLength":1,"pattern":"\\S"},"label":{"type":"string","minLength":1,"pattern":"\\S"},"value":{"type":"string","minLength":1,"pattern":"\\S"}},"required":["key","label","value"],"additionalProperties":false}}},"required":["status","question"],"additionalProperties":false}`)
+	askInputResultSchema = json.RawMessage(`{"type":"object","properties":{"taskRunID":{"type":"string","minLength":1,"pattern":"\\S"},"status":{"type":"string","enum":["waiting_user_input","answered"]},"question":{"type":"string","minLength":1,"pattern":"\\S"},"kind":{"const":"ask_input"},"choiceKey":{"type":"string","minLength":1},"answer":{"type":"string","minLength":1}},"required":["status","question"],"additionalProperties":false}`)
 )
 
 func (toolCatalogBuilder *ToolCatalogBuilder) registerAskInputTool(toolRegistry *toolcontract.ToolSet) {
 	toolcontract.RegisterToolFunction(toolRegistry, toolcontract.ToolFunction[askInputToolInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
 			Name:        toolcontract.AskInputToolName,
-			Description: "Pause the current task only when the typed outcome contract or a structured tool failure says user input is required. The nonblank question field is authoritative. Use choices=[] for free-form input, or provide choices to let the user pick one of them or type a different answer.",
+			Description: "Ask the person a question and pause until they answer. Use it when the outcome contract or a structured tool failure requires their input, and whenever you would offer options: pass them as choices, which the conversation shows as a numbered pressable list, so never repeat them in reply text. choices=[] asks for a free-form answer; the person may always answer in their own words.",
 			InputSchema: askInputSchema,
 		},
 		Handler: toolCatalogBuilder.askInputTool,
@@ -59,27 +57,13 @@ func (toolCatalogBuilder *ToolCatalogBuilder) askInputTool(toolContext context.C
 	if errorValue != nil {
 		return toolcontract.ToolFailureResult(toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, toolcontract.AskInputToolName, errorValue.Error()), nil
 	}
-	options := numberedClarificationOptions(trimNonEmptyStrings(input.Choices))
-	askRequest := agentcontract.NewAskInputRequest(question, options, toolcontract.ResponseLanguageFromContext(toolContext))
+	askRequest := agentcontract.NewAskInputRequest(question, nil, toolcontract.ResponseLanguageFromContext(toolContext))
 	toolCatalogBuilder.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventAskRequested, MarshalBody(askRequest))
 	resultDocument := json.RawMessage(MarshalBody(askInputResult{
 		TaskRunID: taskRunID,
 		Status:    string(task.TaskStatusWaitingUserInput),
 		Question:  question,
 		Kind:      askRequest.Kind,
-		Options:   options,
 	}))
 	return toolcontract.ToolSuccessData(string(resultDocument), resultDocument), nil
-}
-
-func numberedClarificationOptions(choices []string) []agentcontract.ClarificationOption {
-	options := make([]agentcontract.ClarificationOption, 0, len(choices))
-	for index, choice := range choices {
-		options = append(options, agentcontract.ClarificationOption{
-			Key:   strconv.Itoa(index + 1),
-			Label: choice,
-			Value: choice,
-		})
-	}
-	return options
 }

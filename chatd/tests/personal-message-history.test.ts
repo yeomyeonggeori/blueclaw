@@ -86,3 +86,106 @@ test("an edited message calls on the people its latest edit names", async () => 
 	expect(page.messages[0]?.body).toBe("edited");
 	expect(page.messages[0]?.mentions).toEqual({ pubkeyHexes: ["b".repeat(64)], isEveryone: false });
 });
+
+const AGENT = "d".repeat(64);
+
+function questionFromTheAgent(): BuzzEvent {
+	return {
+		...messageAt(0),
+		pubkey: AGENT,
+		tags: [
+			["h", CHANNEL],
+			["ask", "interaction-1", "approval", "c".repeat(64)],
+			["option", "approve", "승인", "recommended"],
+			["option", "deny", "거절"],
+		],
+		content: "할까요?\n\n1. 승인\n2. 거절",
+	};
+}
+
+function resolutionBy(author: string, index: number, resolvedTag: string[]): BuzzEvent {
+	return {
+		...messageAt(index),
+		pubkey: author,
+		kind: EDIT_MESSAGE_KIND,
+		tags: [["h", CHANNEL], ["e", questionFromTheAgent().id], resolvedTag],
+		content: questionFromTheAgent().content,
+	};
+}
+
+test("a question reads back with the choices its tags carry", async () => {
+	const page = await channelMessagePageOf(relayHolding([questionFromTheAgent()]), CHANNEL, 2);
+
+	expect(page.messages[0]?.ask).toEqual({
+		interactionID: "interaction-1",
+		kind: "approval",
+		targetExternalID: "c".repeat(64),
+		options: [
+			{ key: "approve", label: "승인", isRecommended: true },
+			{ key: "deny", label: "거절", isRecommended: false },
+		],
+	});
+	expect(page.messages[0]?.isFailure).toBeUndefined();
+});
+
+test("a question its author recorded as answered reads back resolved", async () => {
+	const chosen = resolutionBy(AGENT, 1, ["resolved", "interaction-1", "deny"]);
+	const ownWords = resolutionBy(AGENT, 2, ["resolved", "interaction-1"]);
+
+	const toOption = await channelMessagePageOf(relayHolding([questionFromTheAgent()], [], [chosen]), CHANNEL, 2);
+	const inOwnWords = await channelMessagePageOf(relayHolding([questionFromTheAgent()], [], [chosen, ownWords]), CHANNEL, 2);
+
+	expect(toOption.messages[0]?.ask?.resolution).toEqual({ key: "deny" });
+	expect(inOwnWords.messages[0]?.ask?.resolution).toEqual({});
+});
+
+test("a resolution written by anyone but the question's author is ignored", async () => {
+	const forged = resolutionBy("c".repeat(64), 1, ["resolved", "interaction-1", "approve"]);
+
+	const page = await channelMessagePageOf(relayHolding([questionFromTheAgent()], [], [forged]), CHANNEL, 2);
+
+	expect(page.messages[0]?.ask).toBeDefined();
+	expect(page.messages[0]?.ask?.resolution).toBeUndefined();
+});
+
+test("a failure notice reads back as one", async () => {
+	const failure: BuzzEvent = { ...messageAt(0), tags: [["h", CHANNEL], ["reply-kind", "error"]] };
+
+	const page = await channelMessagePageOf(relayHolding([failure, messageAt(1)]), CHANNEL, 2);
+
+	expect(page.messages.map((message) => message.isFailure)).toEqual([true, undefined]);
+});
+
+test("recording a resolution leaves the question's words and mentions as they were", async () => {
+	const named = "e".repeat(64);
+	const question: BuzzEvent = { ...questionFromTheAgent(), tags: [...questionFromTheAgent().tags, ["p", named]] };
+	const correction: BuzzEvent = {
+		...messageAt(1),
+		pubkey: AGENT,
+		kind: EDIT_MESSAGE_KIND,
+		tags: [["h", CHANNEL], ["e", question.id], ["p", named]],
+		content: "고쳐 쓴 질문",
+	};
+	const resolution = resolutionBy(AGENT, 2, ["resolved", "interaction-1", "approve"]);
+
+	const page = await channelMessagePageOf(relayHolding([question], [], [correction, resolution]), CHANNEL, 2);
+
+	expect(page.messages[0]?.body).toBe("고쳐 쓴 질문");
+	expect(page.messages[0]?.mentions).toEqual({ pubkeyHexes: [named], isEveryone: false });
+	expect(page.messages[0]?.ask?.resolution).toEqual({ key: "approve" });
+});
+
+test("an approval's options read back by key even though they carry no label", async () => {
+	const approval: BuzzEvent = {
+		...messageAt(0),
+		pubkey: AGENT,
+		tags: [["h", CHANNEL], ["ask", "interaction-1", "approval", ""], ["option", "approve", ""], ["option", "reject", ""]],
+	};
+
+	const page = await channelMessagePageOf(relayHolding([approval]), CHANNEL, 2);
+
+	expect(page.messages[0]?.ask?.options).toEqual([
+		{ key: "approve", label: "", isRecommended: false },
+		{ key: "reject", label: "", isRecommended: false },
+	]);
+});

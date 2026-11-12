@@ -25,8 +25,14 @@ type PlatformInboundEvent struct {
 	Context          VisibleContext            `json:"context"`
 	RawReceivedAt    time.Time                 `json:"-"`
 	TaskRetry        *TaskRetryReference       `json:"taskRetry,omitempty"`
+	AnsweredChoice   *AnsweredChoice           `json:"answeredChoice,omitempty"`
 
 	gatewayDecision *gatewayDecision
+}
+
+type AnsweredChoice struct {
+	InteractionID string `json:"interactionID"`
+	Key           string `json:"key"`
 }
 
 type TaskRetryReference struct {

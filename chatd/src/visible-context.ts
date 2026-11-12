@@ -1,5 +1,7 @@
 import { convertEmojiPlaceholders } from "chat";
 import type { FetchOptions, Message, ThreadInfo, UserInfo } from "chat";
+import type { AnsweredChoice } from "./choice.ts";
+import { carriesReplyKind, tagsOf } from "./event-tags.ts";
 
 export type AddressingDocument = {
 	botMentioned: boolean;
@@ -97,6 +99,7 @@ export type NormalizedPlatformAdapter = ContextCapableAdapter & {
 	historyScopeThreadId(threadId: string, messageId: string): string;
 	addressingOf(raw: unknown): AddressingDocument;
 	timeZoneOf?(raw: unknown): string | undefined;
+	answeredChoiceOf?(raw: unknown): AnsweredChoice | undefined;
 	onMessageEdit?(handler: (edit: NormalizedMessageEdit) => Promise<void>): void;
 };
 
@@ -258,10 +261,7 @@ function customEmojiOf(raw: unknown): CustomEmojiDocument[] | undefined {
 }
 
 function isErrorMessage(raw: unknown): boolean {
-	if (typeof raw !== "object" || raw === null || !("tags" in raw)) return false;
-	const { tags } = raw as { tags?: unknown };
-	if (!Array.isArray(tags)) return false;
-	return tags.some((tag) => Array.isArray(tag) && tag[0] === "reply-kind" && tag[1] === "error");
+	return carriesReplyKind(tagsOf(raw), "error");
 }
 
 export function inputAttachmentsOfMessage(
@@ -298,7 +298,5 @@ function toContextSender(platform: string, user: UserInfo): VisibleContextSender
 // something anyone said, so reading it back turns the agent's own working notes
 // into conversation.
 function isProgressMessage(raw: unknown): boolean {
-	const tags = (raw as { tags?: unknown[] })?.tags;
-	if (!Array.isArray(tags)) return false;
-	return tags.some((tag) => Array.isArray(tag) && tag[0] === "reply-kind" && tag[1] === "progress");
+	return carriesReplyKind(tagsOf(raw), "progress");
 }

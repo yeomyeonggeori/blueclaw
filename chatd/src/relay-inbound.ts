@@ -1,4 +1,5 @@
 import { asAHostService } from './service-credential.ts';
+import type { AnsweredChoice } from './choice.ts';
 export type NormalizedInboundEvent = {
   platform: string;
   conversationID: string;
@@ -8,6 +9,7 @@ export type NormalizedInboundEvent = {
   isThread: boolean;
   prompt: string;
   context: unknown;
+  answeredChoice?: AnsweredChoice;
 };
 
 export type SleepFunction = (milliseconds: number) => Promise<void>;

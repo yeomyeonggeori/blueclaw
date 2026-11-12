@@ -11,6 +11,8 @@ import { rangesOf } from "./ranged-read.ts";
 import { MalformedRequest } from "./parse.ts";
 import { addReactionAsUser, removeReactionAsUser } from "../adapters/buzz/user-reactions.ts";
 import { mentionTags } from "../adapters/buzz/user-mentions.ts";
+import { answerTags } from "../adapters/buzz/ask-tags.ts";
+import type { AnsweredChoice } from "../choice.ts";
 import { emojiTagsFor, listCustomEmojiAsUser, normalizedShortcode, shortcodesIn, type CustomEmoji } from "../adapters/buzz/user-emoji.ts";
 import { markConversationReadAsUser, unreadCountsAsUser } from "../adapters/buzz/user-read-state.ts";
 import { announceTypingAsUser } from "../adapters/buzz/user-typing.ts";
@@ -355,6 +357,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 		actor: ActorCredential,
 		conversationID: string,
 		before?: string,
+		agentExternalID?: string,
 	): Promise<PersonalMessagePage> {
 		this.require(actor);
 		const wanted = 50;
@@ -387,6 +390,8 @@ class BuzzPersonalGateway implements PersonalGateway {
 					sizeBytes: attachment.sizeBytes,
 					digest: attachment.digest,
 				})),
+				...(message.ask && message.authorPubkeyHex === agentExternalID && { ask: message.ask }),
+				...(message.isFailure && { isFailure: true }),
 			})),
 			hasMoreBefore: page.hasMoreBefore,
 		};
@@ -423,6 +428,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 		attachments: AttachmentAlreadyKept[] = [],
 		mentions?: PersonalMentions,
 		timeZone?: string,
+		answer?: AnsweredChoice,
 	): Promise<PersonalMessage> {
 		this.require(actor);
 		const sent = await sendChannelMessageAsUser({
@@ -436,6 +442,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 				...mentionTags(mentions && { pubkeyHexes: mentions.externalIDs, isEveryone: mentions.isEveryone }),
 				...(await this.customEmojiTagsFor(actor, body)),
 				...timeZoneTags(timeZone),
+				...answerTags(answer),
 			],
 			authTagJSON: this.settings.authTagJSON,
 		});

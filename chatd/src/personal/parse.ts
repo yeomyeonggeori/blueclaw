@@ -1,4 +1,10 @@
-import type { ActorCredential, NewPersonalChannel, PersonalInboxWindow, PersonalMentions } from "./gateway.ts";
+import type { AnsweredChoice } from "../choice.ts";
+import type {
+	ActorCredential,
+	NewPersonalChannel,
+	PersonalInboxWindow,
+	PersonalMentions,
+} from "./gateway.ts";
 import { canonicalChannelName } from "../channels.ts";
 import type { AttachmentAlreadyKept } from "../outgoing-attachment.ts";
 
@@ -40,6 +46,7 @@ export type PersonRequest = {
 	attachments: AttachmentAlreadyKept[];
 	mentions?: PersonalMentions;
 	timeZone?: string;
+	answer?: AnsweredChoice;
 };
 
 export function parseNewChannel(value: unknown): NewPersonalChannel {
@@ -98,7 +105,20 @@ export function parsePersonRequest(value: unknown): PersonRequest {
 		attachments: parseAttachments(record),
 		mentions: parseMentions(record),
 		timeZone: parseTimeZone(record),
+		answer: parseAnswer(record),
 	};
+}
+
+function parseAnswer(record: Record<string, unknown>): AnsweredChoice | undefined {
+	const given = record.answer;
+	if (given === undefined) return undefined;
+	const answer = asRecord(given);
+	const interactionID = answer.interactionID;
+	const key = answer.key;
+	if (typeof interactionID !== "string" || interactionID.trim() === "" || typeof key !== "string" || key.trim() === "") {
+		throw new MalformedRequest("answer must name a non-empty interactionID and key");
+	}
+	return { interactionID, key };
 }
 
 function parseTimeZone(record: Record<string, unknown>): string | undefined {

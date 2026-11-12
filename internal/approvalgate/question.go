@@ -2,8 +2,6 @@ package approvalgate
 
 import (
 	"encoding/json"
-	"strconv"
-	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
@@ -18,9 +16,5 @@ func (gate *Gate) questionToAsk(approvalRequest mcpserver.ApprovalRequest) (Appr
 	if len(choices) == 0 {
 		return ApprovalTargetResolution{}, "", false
 	}
-	lines := []string{AskedQuestion(approvalRequest.ToolInput)}
-	for index, choice := range choices {
-		lines = append(lines, strconv.Itoa(index+1)+". "+choice.Label)
-	}
-	return ApprovalTargetResolution{Choices: choices}, strings.Join(lines, "\n"), true
+	return ApprovalTargetResolution{Choices: choices}, AskedQuestion(approvalRequest.ToolInput), true
 }

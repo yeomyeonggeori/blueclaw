@@ -66,6 +66,10 @@ type ReplyEditingAdapter interface {
 	EditReply(context.Context, ReplyTarget, string, string) error
 }
 
+type InteractionResolvingAdapter interface {
+	ResolveInteraction(ctx context.Context, replyTarget ReplyTarget, messageID string, interactionID string, choiceKey string) error
+}
+
 type ReplyDeletingAdapter interface {
 	DeleteReply(context.Context, ReplyTarget, string) error
 }

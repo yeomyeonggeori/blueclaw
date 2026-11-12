@@ -256,6 +256,7 @@ type VirtualTurn struct {
 	ForbiddenModelContexts       []string
 	ExpectedReplyTargetID        string
 	ExpectedReplyFragments       []string
+	ExpectedChoiceLabels         []string
 	ForbiddenReplyFragments      []string
 	MinimumReplyLength           int
 	ExpectedSequence             []string
@@ -322,6 +323,7 @@ type VirtualTurnResult struct {
 	TaskStatus              task.TaskStatus
 	FailureReason           string
 	FinishMessage           string
+	ChoiceLabels            []string
 	ReplyTargetID           string
 	Attachments             []toolcontract.FileAttachment
 	Events                  []task.TaskEvent
@@ -3149,6 +3151,7 @@ func (harness *VirtualSessionHarness) runTurn(ctx context.Context, index int, vi
 	}
 	turnResult.DidReply = true
 	turnResult.FinishMessage = outboundReply.Message
+	turnResult.ChoiceLabels = choiceLabelsOf(outboundReply.Interaction)
 	turnResult.ReplyTargetID = outboundReplyTarget.ReplyTargetID
 	turnResult.Attachments = outboundReply.Attachments
 	return turnResult, nil
@@ -3442,10 +3445,26 @@ func assertTurnResult(workspacePath string, virtualTurn VirtualTurn, turnResult 
 	return assertStructuralTurnExpectations(virtualTurn, turnResult)
 }
 
+func choiceLabelsOf(interaction *connectors.AskInteraction) []string {
+	if interaction == nil {
+		return nil
+	}
+	labels := []string{}
+	for _, option := range interaction.Options {
+		labels = append(labels, option.Label)
+	}
+	return labels
+}
+
 func assertReplyContentExpectations(virtualTurn VirtualTurn, turnResult VirtualTurnResult) error {
 	for _, fragment := range virtualTurn.ExpectedReplyFragments {
 		if !strings.Contains(turnResult.FinishMessage, fragment) {
 			return fmt.Errorf("expected reply fragment %q in %q", fragment, turnResult.FinishMessage)
+		}
+	}
+	for _, label := range virtualTurn.ExpectedChoiceLabels {
+		if !slices.Contains(turnResult.ChoiceLabels, label) {
+			return fmt.Errorf("expected the reply to offer the choice %q, it offered %q", label, turnResult.ChoiceLabels)
 		}
 	}
 	for _, fragment := range virtualTurn.ForbiddenReplyFragments {
