@@ -2,7 +2,6 @@ import type { AnsweredChoice } from "../choice.ts";
 import type {
 	ActorCredential,
 	NewPersonalChannel,
-	PersonalInboxWindow,
 	PersonalMentions,
 } from "./gateway.ts";
 import { canonicalChannelName } from "../channels.ts";
@@ -27,9 +26,7 @@ export type PersonRequest = {
 	parentID?: string;
 	emoji?: string;
 	before?: string;
-	since?: string;
 	until?: string;
-	heldIDs: string[];
 	query?: string;
 	name?: string;
 	externalID?: string;
@@ -37,7 +34,6 @@ export type PersonRequest = {
 	arrivalsURL?: string;
 	typingURL?: string;
 	withdrawalsURL?: string;
-	readAt?: string;
 	mediaURL?: string;
 	range?: string;
 	sourceURL?: string;
@@ -86,9 +82,7 @@ export function parsePersonRequest(value: unknown): PersonRequest {
 		parentID: optionalText(record, "parentID"),
 		emoji: optionalText(record, "emoji"),
 		before: optionalText(record, "before"),
-		since: optionalText(record, "since"),
 		until: optionalText(record, "until"),
-		heldIDs: parseHeldIDs(record),
 		query: optionalText(record, "query"),
 		name: optionalText(record, "name"),
 		externalID: optionalText(record, "externalID"),
@@ -96,7 +90,6 @@ export function parsePersonRequest(value: unknown): PersonRequest {
 		arrivalsURL: optionalText(record, "arrivalsURL"),
 		typingURL: optionalText(record, "typingURL"),
 		withdrawalsURL: optionalText(record, "withdrawalsURL"),
-		readAt: optionalText(record, "readAt"),
 		mediaURL: optionalText(record, "mediaURL"),
 		range: optionalText(record, "range"),
 		sourceURL: optionalText(record, "sourceURL"),
@@ -129,14 +122,6 @@ function parseTimeZone(record: Record<string, unknown>): string | undefined {
 	} catch {
 		throw new MalformedRequest(`timeZone ${JSON.stringify(timeZone)} is not an IANA time zone`);
 	}
-}
-
-function parseHeldIDs(record: Record<string, unknown>): string[] {
-	const given = record.heldIDs ?? [];
-	if (!Array.isArray(given) || given.some((entry) => typeof entry !== "string")) {
-		throw new MalformedRequest("heldIDs must be a list of message ids");
-	}
-	return given as string[];
 }
 
 function parseMentions(record: Record<string, unknown>): PersonalMentions | undefined {
@@ -205,20 +190,7 @@ export function requireConversation(request: PersonRequest): string {
 	return request.conversationID;
 }
 
-export function requireReadAt(request: PersonRequest): Date {
-	if (!request.readAt) throw missing("readAt");
-	const readAt = new Date(request.readAt);
-	if (Number.isNaN(readAt.getTime())) throw new MalformedRequest("readAt must be an ISO 8601 time");
-	return readAt;
-}
-
-export function inboxWindowOf(request: PersonRequest): PersonalInboxWindow {
-	const since = optionalTime(request.since, "since");
-	const until = optionalTime(request.until, "until");
-	return { ...(since && { since }), ...(until && { until }), heldIDs: request.heldIDs };
-}
-
-function optionalTime(value: string | undefined, field: string): Date | undefined {
+export function optionalTime(value: string | undefined, field: string): Date | undefined {
 	if (!value) return undefined;
 	const time = new Date(value);
 	if (Number.isNaN(time.getTime())) throw new MalformedRequest(`${field} must be an ISO 8601 time`);

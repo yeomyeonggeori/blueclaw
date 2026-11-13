@@ -415,7 +415,7 @@ describe("an operation the platform never does", () => {
 });
 
 describe("person.read_state.mark", () => {
-	type Mark = { conversationID: string; readAt: string; threadRootID?: string };
+	type Mark = { conversationID: string; messageID: string; threadRootID?: string };
 
 	function recordingMarks(): { marks: Mark[]; gateways: never } {
 		const marks: Mark[] = [];
@@ -423,53 +423,40 @@ describe("person.read_state.mark", () => {
 			mattermost: {
 				platform: "mattermost",
 				credentialKind: "mattermost-token",
-				markConversationRead: async (_actor: unknown, conversationID: string, readAt: Date, threadRootID?: string) => {
-					marks.push({ conversationID, readAt: readAt.toISOString(), ...(threadRootID ? { threadRootID } : {}) });
+				markReadThrough: async (_actor: unknown, conversationID: string, messageID: string, threadRootID?: string) => {
+					marks.push({ conversationID, messageID, ...(threadRootID ? { threadRootID } : {}) });
 				},
 			},
 		} as never;
 		return { marks, gateways };
 	}
 
-	test("records the conversation as read up to the time it names", async () => {
+	test("records the conversation as read through the message it names", async () => {
 		const { marks, gateways: recording } = recordingMarks();
 		const answer = await call(
 			"person.read_state.mark",
-			{
-				actor: { kind: "mattermost-token", secret: "token" },
-				conversationID: "channel-1",
-				readAt: "2026-09-28T01:05:00Z",
-			},
+			{ actor: { kind: "mattermost-token", secret: "token" }, conversationID: "channel-1", messageID: "post-9" },
 			recording,
 		);
 		expect(answer.status).toBe(200);
-		expect(marks).toEqual([{ conversationID: "channel-1", readAt: "2026-09-28T01:05:00.000Z" }]);
+		expect(marks).toEqual([{ conversationID: "channel-1", messageID: "post-9" }]);
 	});
 
 	test("records a thread as read on its own when the mark names the thread's root", async () => {
 		const { marks, gateways: recording } = recordingMarks();
 		const answer = await call(
 			"person.read_state.mark",
-			{
-				actor: { kind: "mattermost-token", secret: "token" },
-				conversationID: "channel-1",
-				parentID: "root-1",
-				readAt: "2026-09-28T01:05:00Z",
-			},
+			{ actor: { kind: "mattermost-token", secret: "token" }, conversationID: "channel-1", parentID: "root-1", messageID: "reply-3" },
 			recording,
 		);
 		expect(answer.status).toBe(200);
-		expect(marks).toEqual([{ conversationID: "channel-1", readAt: "2026-09-28T01:05:00.000Z", threadRootID: "root-1" }]);
+		expect(marks).toEqual([{ conversationID: "channel-1", messageID: "reply-3", threadRootID: "root-1" }]);
 	});
 
-	test("refuses a mark with no time, or a time that is not one", async () => {
+	test("refuses a mark that names no message", async () => {
 		const { marks, gateways: recording } = recordingMarks();
 		const actor = { kind: "mattermost-token", secret: "token" };
 		expect((await call("person.read_state.mark", { actor, conversationID: "channel-1" }, recording)).status).toBe(400);
-		expect(
-			(await call("person.read_state.mark", { actor, conversationID: "channel-1", readAt: "yesterday" }, recording))
-				.status,
-		).toBe(400);
 		expect(marks).toEqual([]);
 	});
 });
@@ -513,87 +500,45 @@ describe("person.typing.send", () => {
 });
 
 describe("person.inbox.list", () => {
-	test("is read as the person asking, and answers with their inbox and which account is the agent", async () => {
-		const actor = { kind: "mattermost-token", secret: "token" };
-		const askedBy: unknown[] = [];
-		const item = {
-			reason: "mention",
-			isUnread: true,
-			message: { id: "post-1", conversationID: "channel-1", authorExternalID: "person-a", body: "확인 부탁드려요", postedAt: "2026-10-12T05:00:00.000Z" },
-		};
+	function recordingInbox(): { pages: unknown[]; gateways: never } {
+		const pages: unknown[] = [];
 		const gateways = {
 			mattermost: {
 				platform: "mattermost",
 				credentialKind: "mattermost-token",
-				listInbox: async (reader: unknown, window: unknown) => {
-					askedBy.push({ reader, window });
-					return { items: [item], held: [] };
+				listInbox: async (reader: unknown, until?: Date) => {
+					pages.push({ reader, until });
+					return { items: [], hasMoreBefore: false };
 				},
 			},
 		} as never;
+		return { pages, gateways };
+	}
+
+	test("is read as the person asking, and answers with their inbox and which account is the agent", async () => {
+		const actor = { kind: "mattermost-token", secret: "token" };
+		const { pages, gateways } = recordingInbox();
 
 		const answer = await call("person.inbox.list", { actor }, gateways);
 
 		expect(answer.status).toBe(200);
-		expect(askedBy).toEqual([{ reader: actor, window: { heldIDs: [] } }]);
-		expect(await answer.json()).toEqual({ items: [item], held: [], agentExternalID: "bot-1" });
-	});
-
-	test("asked since a moment, passes that moment and the messages already held", async () => {
-		const actor = { kind: "mattermost-token", secret: "token" };
-		const windows: unknown[] = [];
-		const gateways = {
-			mattermost: {
-				platform: "mattermost",
-				credentialKind: "mattermost-token",
-				listInbox: async (_reader: unknown, window: unknown) => {
-					windows.push(window);
-					return { items: [], held: [{ id: "post-1", body: "고쳤어요", isUnread: false }] };
-				},
-			},
-		} as never;
-
-		const answer = await call(
-			"person.inbox.list",
-			{ actor, since: "2026-10-12T05:00:00.000Z", heldIDs: ["post-1"] },
-			gateways,
-		);
-
-		expect(answer.status).toBe(200);
-		expect(windows).toEqual([{ since: new Date("2026-10-12T05:00:00.000Z"), heldIDs: ["post-1"] }]);
-		expect((await answer.json()).held).toEqual([{ id: "post-1", body: "고쳤어요", isUnread: false }]);
+		expect(pages).toEqual([{ reader: actor, until: undefined }]);
+		expect(await answer.json()).toEqual({ items: [], hasMoreBefore: false, agentExternalID: "bot-1" });
 	});
 
 	test("asked until a moment, passes that moment to read the page before it", async () => {
-		const windows: unknown[] = [];
-		const gateways = {
-			mattermost: {
-				platform: "mattermost",
-				credentialKind: "mattermost-token",
-				listInbox: async (_reader: unknown, window: unknown) => {
-					windows.push(window);
-					return { items: [], held: [], hasMoreBefore: false };
-				},
-			},
-		} as never;
+		const actor = { kind: "mattermost-token", secret: "token" };
+		const { pages, gateways } = recordingInbox();
 
-		const answer = await call(
-			"person.inbox.list",
-			{ actor: { kind: "mattermost-token", secret: "token" }, until: "2026-10-12T05:00:00.000Z" },
-			gateways,
-		);
+		const answer = await call("person.inbox.list", { actor, until: "2026-10-12T05:00:00.000Z" }, gateways);
 
 		expect(answer.status).toBe(200);
-		expect(windows).toEqual([{ until: new Date("2026-10-12T05:00:00.000Z"), heldIDs: [] }]);
-		expect((await answer.json()).hasMoreBefore).toBe(false);
+		expect(pages).toEqual([{ reader: actor, until: new Date("2026-10-12T05:00:00.000Z") }]);
 	});
 
-	test("refuses a since that is not a time", async () => {
-		const answer = await call(
-			"person.inbox.list",
-			{ actor: { kind: "mattermost-token", secret: "token" }, since: "yesterday" },
-			{ mattermost: { platform: "mattermost", credentialKind: "mattermost-token" } } as never,
-		);
+	test("refuses an until that is not a time", async () => {
+		const { gateways } = recordingInbox();
+		const answer = await call("person.inbox.list", { actor: { kind: "mattermost-token", secret: "token" }, until: "yesterday" }, gateways);
 
 		expect(answer.status).toBe(400);
 	});
