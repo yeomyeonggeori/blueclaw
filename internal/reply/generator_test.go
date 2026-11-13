@@ -333,3 +333,17 @@ func joinChatMessageContent(messages []model.ChatCompletionMessage) string {
 	}
 	return strings.Join(content, "\n")
 }
+
+func TestEveryReplyTheConnectorsWriteIsToldToNameThingsTheWayThePersonKnowsThem(t *testing.T) {
+	replyProvider := &chatReplyProvider{
+		response: model.ChatCompletionResponse{Message: model.ChatCompletionMessage{Role: "assistant", Content: "아직 진행 중이에요."}},
+	}
+	generator := NewGenerator(replyProvider, nil)
+
+	if _, errorValue := generator.GenerateReplyWithContext(context.Background(), "Task status: running", agentcontract.VisibleContext{}, nil); errorValue != nil {
+		t.Fatalf("expected a reply: %v", errorValue)
+	}
+	if !strings.Contains(replyProvider.request.Messages[0].Content, agentcontract.PeopleReadWhatTheyRecognize) {
+		t.Fatalf("the reply is not told to name things the way the person knows them: %q", replyProvider.request.Messages[0].Content)
+	}
+}

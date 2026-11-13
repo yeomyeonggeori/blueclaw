@@ -221,7 +221,6 @@ func (connectorRuntime *ConnectorRuntime) generateBusyReply(ctx context.Context,
 		"Task status: " + string(activeTaskRun.Status),
 		"Current progress: " + connectorRuntime.activeTaskEventSummary(activeTaskRun.TaskRunID),
 		"Latest user message: " + strings.TrimSpace(event.Prompt),
-		"Do not expose internal event names or task IDs.",
 		"Status and steer replies must not claim the task is complete. Cancel replies may say the active task has been stopped.",
 	}, "\n")
 	return connectorRuntime.replyGenerator.GenerateReplyWithContext(ctx, prompt, event.Context.ToAgentVisibleContext(), nil)
