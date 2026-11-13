@@ -13,6 +13,7 @@ const SIGNING_SECRET_URL = `${ADMIND_BASE_URL}/admin/api/buzz/signing-secret`;
 const REMOVE_USER_KIND = 9001;
 const REACTION_KIND = 7;
 const MESSAGE = "b".repeat(64);
+const STREAM_MESSAGE_KIND = 9;
 
 type PublishedByKey = { secretHex: string; kind: number; content?: string; tags: string[][] };
 
@@ -195,5 +196,20 @@ describe("a direct conversation hidden for the requester", () => {
 
 		expect(response.status).toBe(200);
 		expect(published.map((event) => event.secretHex)).toEqual([REQUESTER_SECRET]);
+	});
+});
+
+describe("a message posted for the requester", () => {
+	test("goes into the channel under the requester's own key", async () => {
+		const response = await ask("requester.message.send", {
+			requesterPubkeyHex: REQUESTER,
+			conversationID: CHANNEL,
+			body: "확인 부탁드려요",
+		});
+
+		expect(response.status).toBe(200);
+		const posted = published.find((event) => event.kind === STREAM_MESSAGE_KIND);
+		expect(posted?.secretHex).toBe(REQUESTER_SECRET);
+		expect(posted?.tags).toContainEqual(["h", CHANNEL]);
 	});
 });
