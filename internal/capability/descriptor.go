@@ -32,6 +32,7 @@ type ToolDescriptor struct {
 	SideEffectClass      string              `json:"sideEffectClass,omitempty"`
 	SideEffect           string              `json:"sideEffect,omitempty"`
 	RequiresApproval     bool                `json:"requiresApproval,omitempty"`
+	ApprovalQuotedFields []string            `json:"approvalQuotedFields,omitempty"`
 	CompletionEvidence   *CompletionEvidence `json:"completionEvidence,omitempty"`
 	Availability         Availability        `json:"availability"`
 	Idempotency          Idempotency         `json:"idempotency"`

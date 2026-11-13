@@ -1,5 +1,5 @@
 {
-  "aggregateHash": "06b06bdf54c24c751c4f0e0a07620392d5e9cb5ee95d9fbf3e1447233d1746e6",
+  "aggregateHash": "b6f2fbd23cf2f3deef9ecbd3816b345c2ad0c595ffb96b1c4e537b5012b316cd",
   "protocolVersion": "0.4.0",
   "schemas": [
     {
@@ -14,17 +14,17 @@
     },
     {
       "fileName": "approval-target.schema.json",
-      "hash": "69bcd64b6f90aeac4c2203ff0d37d76ef76694c92d924e4e1ba6889e3627385e",
+      "hash": "f0006b3b890de11d1f55a84a2e35d42becf043ef9aec9807684c85666e9ebeb2",
       "name": "approval-target"
     },
     {
       "fileName": "capability-descriptor.schema.json",
-      "hash": "8b4c5a92d637aa7f0c1bb43373bce535a9e74206c5fe10de6e0efe4c8ca05a09",
+      "hash": "fc780a32dcd9955230d27619117b300ad63a7ca054e3ecbaa0502e94ba35ec4d",
       "name": "capability-descriptor"
     },
     {
       "fileName": "capability-registry-response.schema.json",
-      "hash": "1cdc550a77e129765b35e8ed9324d474670f8c1cb582a6c6aef4feb822f38c5c",
+      "hash": "6b4cca3f6372cf8d51d523ba4e354f2f18d3e89137c7b1a866fec327a090c4d1",
       "name": "capability-registry-response"
     },
     {

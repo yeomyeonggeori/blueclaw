@@ -130,3 +130,21 @@ func TestAResolutionCarriesNoTransportWhenTheCallNamesNoFile(t *testing.T) {
 		t.Fatalf("got %s", httpClient.requestBody)
 	}
 }
+
+func TestATargetResolutionCarriesTheRequestersLanguageAndAnswersTheAddress(t *testing.T) {
+	resolver, httpClient := targetResolverFixture(`{"provider":"internkim","selectedBackend":"device","toolName":"event_delete","outcome":"succeeded","status":"resolved","result":{"inputField":"personHint","id":"person-2","title":"박예시","address":"sample2@example.com"}}`)
+	request := calendarDeleteTargetRequest()
+	request.ResponseLanguage = "ko"
+
+	resolution, errorValue := resolver.ResolveApprovalTarget(context.Background(), request)
+	if errorValue != nil {
+		t.Fatalf("expected the resolution to answer: %v", errorValue)
+	}
+
+	if !strings.Contains(httpClient.requestBody, `"responseLanguage":"ko"`) {
+		t.Fatalf("a name the question prints is rendered for the language it is read in, got %s", httpClient.requestBody)
+	}
+	if resolution.Target.Address != "sample2@example.com" {
+		t.Fatalf("the address that tells two same-named people apart survives the wire, got %+v", resolution.Target)
+	}
+}

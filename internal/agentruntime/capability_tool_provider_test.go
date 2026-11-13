@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -82,11 +83,12 @@ func TestCapabilityToolProviderRegistersCanonicalDescriptor(t *testing.T) {
 					Equals:      json.RawMessage(`"task-1"`),
 				},
 			},
-			PolicyResource:     "tool:task_add",
-			SideEffectClass:    toolcontract.ToolSideEffectWorkspaceWrite,
-			CompletionEvidence: &CapabilityCompletionEvidence{Mode: "success", Action: "write_task", TargetKind: "task"},
-			Availability:       CapabilityAvailability{State: "ok"},
-			Idempotency:        CapabilityIdempotency{Scope: "operation"},
+			PolicyResource:       "tool:task_add",
+			SideEffectClass:      toolcontract.ToolSideEffectWorkspaceWrite,
+			ApprovalQuotedFields: []string{"title"},
+			CompletionEvidence:   &CapabilityCompletionEvidence{Mode: "success", Action: "write_task", TargetKind: "task"},
+			Availability:         CapabilityAvailability{State: "ok"},
+			Idempotency:          CapabilityIdempotency{Scope: "operation"},
 		}},
 	}
 	toolSet := toolcontract.NewToolSet([]string{"task_add"})
@@ -107,6 +109,9 @@ func TestCapabilityToolProviderRegistersCanonicalDescriptor(t *testing.T) {
 	}
 	if descriptor.NamespaceSummary != "The team's work items." {
 		t.Fatalf("the namespace summary is what tells the model what it can do; binding dropped it: %q", descriptor.NamespaceSummary)
+	}
+	if !slices.Equal(descriptor.ApprovalQuotedFields, []string{"title"}) {
+		t.Fatalf("the inputs a tool quotes beneath its approval question were dropped by binding: %+v", descriptor.ApprovalQuotedFields)
 	}
 	expectedInputIntentSchema := `{"additionalProperties":false,"properties":{"title":{"type":"string"}},"type":"object"}`
 	if string(descriptor.InputIntentSchema) != expectedInputIntentSchema {
