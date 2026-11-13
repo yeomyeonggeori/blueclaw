@@ -3,6 +3,7 @@
 package approvalgate
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -228,6 +229,7 @@ func TestAHeldCallTellsTheRequesterWhatTheyAreBeingAskedAbout(t *testing.T) {
 
 type wordingLanguageModel struct {
 	question    string
+	labels      map[string]string
 	failure     error
 	lastRequest model.StructuredResponseRequest
 }
@@ -241,7 +243,30 @@ func (languageModel *wordingLanguageModel) GenerateStructuredResponse(_ context.
 	if languageModel.failure != nil {
 		return model.StructuredResponse{}, languageModel.failure
 	}
-	return model.StructuredResponse{Content: `{"question":"` + languageModel.question + `"}`}, nil
+	answer := map[string]any{"question": languageModel.question}
+	if askedFor := labelsAskedFor(request); len(askedFor) > 0 {
+		labels := map[string]string{}
+		for _, name := range askedFor {
+			labels[name] = cmp.Or(languageModel.labels[name], "shown value")
+		}
+		answer["labels"] = labels
+	}
+	encoded, errorValue := json.Marshal(answer)
+	return model.StructuredResponse{Content: string(encoded)}, errorValue
+}
+
+func labelsAskedFor(request model.StructuredResponseRequest) []string {
+	var schema struct {
+		Properties struct {
+			Labels struct {
+				Required []string `json:"required"`
+			} `json:"labels"`
+		} `json:"properties"`
+	}
+	if json.Unmarshal([]byte(request.StructuredOutputSchema.Document), &schema) != nil {
+		return nil
+	}
+	return schema.Properties.Labels.Required
 }
 
 func TestTheRequesterIsAskedInWordsTheModelChose(t *testing.T) {

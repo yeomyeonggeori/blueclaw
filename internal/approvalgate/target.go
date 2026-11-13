@@ -28,6 +28,7 @@ type ApprovalTargetRequest struct {
 	Platform          string
 	ConversationID    string
 	ReplyTargetID     string
+	ResponseLanguage  string
 	Transport         map[string]any
 }
 
@@ -81,6 +82,7 @@ func (gate *Gate) resolveApprovalTarget(ctx context.Context, approvalRequest mcp
 		Platform:          approvalRequest.Platform,
 		ConversationID:    approvalRequest.ConversationID,
 		ReplyTargetID:     approvalRequest.ReplyTargetID,
+		ResponseLanguage:  approvalRequest.ResponseLanguage,
 		Transport:         transport,
 	})
 	if errorValue == nil {

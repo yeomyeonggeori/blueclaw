@@ -322,6 +322,9 @@ export const capabilityDescriptorSchema = z.strictObject({
   sideEffectClass: z.enum(CapabilitySideEffect),
   sideEffect: z.enum(CapabilitySideEffect),
   requiresApproval: z.boolean().optional(),
+  approvalQuotedFields: z.array(unpaddedStringSchema).optional().describe(
+    'The inputs the action delivers exactly as written, such as a message body or a recipient address. The runtime prints each one beneath the approval question, under a label the wording model writes; every other input is stated in the question in plain words.',
+  ),
   completionEvidence: completionEvidenceDescriptorSchema.optional(),
   availability: capabilityAvailabilitySchema,
   idempotency: capabilityIdempotencySchema,
@@ -436,6 +439,9 @@ export const approvalTargetSchema = z.strictObject({
   id: z.string().optional(),
   ids: z.array(z.string()).optional(),
   title: z.string().optional(),
+  address: z.string().optional().describe(
+    'An address that tells the target apart from another directory member rendered to the same name, printed on a line of its own beneath the approval question.',
+  ),
   startsAt: z.string().optional(),
   preview: z.string().optional(),
   handoffID: z.string().optional(),

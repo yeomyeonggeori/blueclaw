@@ -350,3 +350,18 @@ func TestOnlyASendIsLetThroughForTheRequester(t *testing.T) {
 		t.Fatalf("a change to the requester's own record is still asked about, got %+v", outcome)
 	}
 }
+
+func TestATargetIsResolvedInTheLanguageTheRequesterIsAskedIn(t *testing.T) {
+	gate, _, taskRun := gateFixture(t)
+	gate.UseQuestionWorder(approval.NewWorder(&wordingLanguageModel{question: "삭제할까요?"}))
+	resolver := resolvedTargetResolver()
+	gate.UseApprovalTargetResolver(resolver)
+	request := hintApprovalRequest(taskRun.TaskRunID)
+	request.ResponseLanguage = "ko"
+
+	gate.AwaitApproval(context.Background(), request)
+
+	if resolver.receivedRequest.ResponseLanguage != "ko" {
+		t.Fatalf("a resolved name is printed under a question in the requester's language, so it is resolved in that language, got %+v", resolver.receivedRequest)
+	}
+}

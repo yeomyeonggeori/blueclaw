@@ -59,6 +59,7 @@ func capabilityTargetResolveRequest(operation string, request approvalgate.Appro
 			"platform":          request.Platform,
 			"conversationID":    request.ConversationID,
 			"replyTargetID":     request.ReplyTargetID,
+			"responseLanguage":  request.ResponseLanguage,
 		},
 	}
 	if len(request.Transport) > 0 {

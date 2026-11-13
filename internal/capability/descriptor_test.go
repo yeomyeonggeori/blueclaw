@@ -77,6 +77,7 @@ func TestADecodedDescriptorKeepsWhatItWasGiven(t *testing.T) {
 		"sideEffectClass": "external_publish",
 		"sideEffect": "external_publish",
 		"requiresApproval": true,
+		"approvalQuotedFields": ["message"],
 		"completionEvidence": {"mode":"success","action":"share_document","targetKind":"document"},
 		"availability": {"state":"ok","reason":"ready"},
 		"idempotency": {"supported":true,"required":true,"scope":"operation"}
@@ -99,6 +100,7 @@ func TestADecodedDescriptorKeepsWhatItWasGiven(t *testing.T) {
 		"sideEffect":           descriptor.SideEffect == "external_publish",
 		"availability.reason":  descriptor.Availability.Reason == "ready",
 		"idempotency.required": descriptor.Idempotency.Required,
+		"approvalQuotedFields": len(descriptor.ApprovalQuotedFields) == 1 && descriptor.ApprovalQuotedFields[0] == "message",
 	} {
 		if !isKept {
 			t.Errorf("%s was given and did not survive the decode", fieldName)

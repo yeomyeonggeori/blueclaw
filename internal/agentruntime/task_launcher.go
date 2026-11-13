@@ -762,6 +762,7 @@ func (taskLauncher *TaskLauncher) toolCatalogRequestForLaunch(request TaskLaunch
 			RequesterPersonID: request.RequesterPersonID,
 			RequesterEmail:    request.RequesterEmail,
 			ResponseLanguage:  request.ResponseLanguage,
+			RequesterTimeZone: request.VisibleContext.RequesterTimeZone,
 			Prompt:            request.Prompt,
 			Platform:          request.Platform,
 			ConversationID:    request.ConversationID,

@@ -3,6 +3,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
+    "address": {
+      "description": "An address that tells the target apart from another directory member rendered to the same name, printed on a line of its own beneath the approval question.",
+      "type": "string"
+    },
     "handoffID": {
       "type": "string"
     },

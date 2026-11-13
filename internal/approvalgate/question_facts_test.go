@@ -42,7 +42,7 @@ func TestTheTurnGateHandsTheToolsApprovalFactsToTheWording(t *testing.T) {
 	toolSet.Invoke(toolcontract.WithTaskRunID(context.Background(), taskRun.TaskRunID), toolcontract.ToolInvocation{ToolName: "file_delete", Input: json.RawMessage(`{"path":"~/a.md","note":"x"}`)})
 
 	wordingContext := marshalRequestMessages(languageModel.lastRequest)
-	for _, expectedFragment := range []string{`"operation":"file_delete"`, `"path":"~/a.md"`} {
+	for _, expectedFragment := range []string{`"operation":"file_delete"`, `"path":"~/a.md"`, `"printedBelow":["path"]`} {
 		if !strings.Contains(wordingContext, expectedFragment) {
 			t.Fatalf("expected %q in %s", expectedFragment, wordingContext)
 		}
@@ -55,15 +55,16 @@ func TestTheTurnGateHandsTheToolsApprovalFactsToTheWording(t *testing.T) {
 func registerDeletingTool(t *testing.T, toolSet *toolcontract.ToolSet) {
 	t.Helper()
 	errorValue := toolSet.RegisterTool(toolcontract.ToolDefinition{
-		ID:                  "test:file_delete",
-		Name:                "file_delete",
-		Description:         "file_delete",
-		Visibility:          toolcontract.ToolVisibilityModel,
-		InputSchema:         json.RawMessage(`{"type":"object"}`),
-		RequiresApproval:    true,
-		ApprovalInputFields: []string{"path"},
-		SideEffectClass:     toolcontract.ToolSideEffectStateChange,
-		ResultContract:      &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)},
+		ID:                   "test:file_delete",
+		Name:                 "file_delete",
+		Description:          "file_delete",
+		Visibility:           toolcontract.ToolVisibilityModel,
+		InputSchema:          json.RawMessage(`{"type":"object"}`),
+		RequiresApproval:     true,
+		ApprovalInputFields:  []string{"path"},
+		ApprovalQuotedFields: []string{"path"},
+		SideEffectClass:      toolcontract.ToolSideEffectStateChange,
+		ResultContract:       &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)},
 	}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return toolcontract.ToolSuccessData("done", json.RawMessage(`{}`)), nil
 	})
@@ -82,5 +83,22 @@ func TestTheChoicesATargetCarriesAreHandedToTheWording(t *testing.T) {
 	wordingContext := marshalRequestMessages(languageModel.lastRequest)
 	if !strings.Contains(wordingContext, `"key":"offHours"`) || !strings.Contains(wordingContext, laterStartsAt) {
 		t.Fatalf("the question offers exactly the choices the host computed, got %s", wordingContext)
+	}
+}
+
+func TestATargetsStartIsPrintedOnTheRequestersClock(t *testing.T) {
+	gate, taskRunService, taskRun := gateFixture(t)
+	gate.UseQuestionWorder(approval.NewWorder(&wordingLanguageModel{question: "삭제할까요?"}))
+	gate.UseApprovalTargetResolver(resolvedTargetResolver())
+	toolSet := toolcontract.NewToolSet([]string{"file_delete"})
+	toolSet.AllowTestReplacement()
+	registerDeletingTool(t, toolSet)
+	toolSet.UseToolCallGate(gate.TurnGate(TurnContext{RequesterPersonID: "person-1", ResponseLanguage: "ko", RequesterTimeZone: "America/Los_Angeles"}))
+
+	toolSet.Invoke(toolcontract.WithTaskRunID(context.Background(), taskRun.TaskRunID), toolcontract.ToolInvocation{ToolName: "file_delete", Input: json.RawMessage(`{"path":"~/a.md"}`)})
+
+	question := heldCallEventBodyNamed(t, taskRunService, taskRun.TaskRunID, "confirmation.requested")
+	if !strings.Contains(question, "2026년 8월 17일 (월) 오후 10:00") || strings.Contains(question, "2026-08-18T14:00:00+09:00") {
+		t.Fatalf("a requester in Los Angeles reads the start on their own clock, got %s", question)
 	}
 }

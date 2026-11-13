@@ -25,13 +25,14 @@ func (gate *Gate) confirmationWording(ctx context.Context, approvalRequest mcpse
 		return strings.TrimSpace(approvalRequest.ToolName)
 	}
 	wording := gate.questionWorder.WordQuestion(ctx, holdrecord.QuestionFacts{
-		ResponseLanguage: approvalRequest.ResponseLanguage,
-		OriginalRequest:  approvalRequest.Prompt,
-		ModelDraft:       approvalRequest.ModelDraft,
-		Tool:             toolFacts(approvalRequest),
-		Input:            approvalRequest.ToolInput,
-		Target:           resolution.Target,
-		Choices:          resolution.Choices,
+		ResponseLanguage:  approvalRequest.ResponseLanguage,
+		RequesterTimeZone: approvalRequest.RequesterTimeZone,
+		OriginalRequest:   approvalRequest.Prompt,
+		ModelDraft:        approvalRequest.ModelDraft,
+		Tool:              toolFacts(approvalRequest),
+		Input:             approvalRequest.ToolInput,
+		Target:            resolution.Target,
+		Choices:           resolution.Choices,
 	})
 	if wording.Failure != nil {
 		gate.recordWordingFailure(approvalRequest, wording.Failure)
@@ -56,6 +57,7 @@ func toolFacts(approvalRequest mcpserver.ApprovalRequest) toolcontract.ToolDefin
 	var tool toolcontract.ToolDefinition
 	tool.Name = approvalRequest.ToolName
 	tool.ApprovalInputFields = approvalRequest.ApprovalInputFields
+	tool.ApprovalQuotedFields = approvalRequest.ApprovalQuotedFields
 	tool.SideEffectClass = approvalRequest.SideEffectClass
 	return tool
 }

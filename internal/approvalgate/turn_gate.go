@@ -13,6 +13,7 @@ type TurnContext struct {
 	RequesterPersonID string
 	RequesterEmail    string
 	ResponseLanguage  string
+	RequesterTimeZone string
 	Prompt            string
 	Platform          string
 	ConversationID    string
@@ -45,20 +46,22 @@ func (turnGate turnToolCallGate) ReviewToolCall(ctx context.Context, toolInvocat
 		return toolcontract.ToolCallReview{Result: unanswerableCallResult()}, nil
 	}
 	outcome, errorValue := turnGate.gate.AwaitApproval(ctx, mcpserver.ApprovalRequest{
-		RequesterPersonID:   turnGate.turnContext.RequesterPersonID,
-		RequesterEmail:      turnGate.turnContext.RequesterEmail,
-		TaskRunID:           taskRunIDForCall(ctx),
-		ResponseLanguage:    turnGate.turnContext.ResponseLanguage,
-		Prompt:              turnGate.turnContext.Prompt,
-		Platform:            turnGate.turnContext.Platform,
-		ConversationID:      turnGate.turnContext.ConversationID,
-		ReplyTargetID:       turnGate.turnContext.ReplyTargetID,
-		ModelDraft:          toolcontract.UserFacingMessageFromContext(ctx),
-		HarnessSession:      turnGate.turnContext.HarnessSession,
-		ToolName:            toolDefinition.Name,
-		ToolInput:           toolInvocation.Input,
-		ApprovalInputFields: toolDefinition.ApprovalInputFields,
-		SideEffectClass:     strings.TrimSpace(toolDefinition.SideEffectClass),
+		RequesterPersonID:    turnGate.turnContext.RequesterPersonID,
+		RequesterEmail:       turnGate.turnContext.RequesterEmail,
+		TaskRunID:            taskRunIDForCall(ctx),
+		ResponseLanguage:     turnGate.turnContext.ResponseLanguage,
+		RequesterTimeZone:    turnGate.turnContext.RequesterTimeZone,
+		Prompt:               turnGate.turnContext.Prompt,
+		Platform:             turnGate.turnContext.Platform,
+		ConversationID:       turnGate.turnContext.ConversationID,
+		ReplyTargetID:        turnGate.turnContext.ReplyTargetID,
+		ModelDraft:           toolcontract.UserFacingMessageFromContext(ctx),
+		HarnessSession:       turnGate.turnContext.HarnessSession,
+		ToolName:             toolDefinition.Name,
+		ToolInput:            toolInvocation.Input,
+		ApprovalInputFields:  toolDefinition.ApprovalInputFields,
+		ApprovalQuotedFields: toolDefinition.ApprovalQuotedFields,
+		SideEffectClass:      strings.TrimSpace(toolDefinition.SideEffectClass),
 	})
 	if errorValue != nil {
 		return toolcontract.ToolCallReview{Result: HeldCallResult(errorValue.Error())}, nil

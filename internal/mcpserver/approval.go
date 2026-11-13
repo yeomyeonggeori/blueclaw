@@ -20,20 +20,22 @@ const (
 )
 
 type ApprovalRequest struct {
-	RequesterPersonID   string
-	RequesterEmail      string
-	TaskRunID           string
-	ToolName            string
-	ToolInput           json.RawMessage
-	ApprovalInputFields []string
-	SideEffectClass     string
-	ResponseLanguage    string
-	Prompt              string
-	Platform            string
-	ConversationID      string
-	ReplyTargetID       string
-	ModelDraft          string
-	HarnessSession      HarnessSession
+	RequesterPersonID    string
+	RequesterEmail       string
+	TaskRunID            string
+	ToolName             string
+	ToolInput            json.RawMessage
+	ApprovalInputFields  []string
+	ApprovalQuotedFields []string
+	SideEffectClass      string
+	ResponseLanguage     string
+	RequesterTimeZone    string
+	Prompt               string
+	Platform             string
+	ConversationID       string
+	ReplyTargetID        string
+	ModelDraft           string
+	HarnessSession       HarnessSession
 }
 
 type HarnessSession = agentcontract.HarnessSession
