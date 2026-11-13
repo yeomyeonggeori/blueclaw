@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import type { Message } from "chat";
 import { BuzzAdapter } from "../src/adapters/buzz/adapter.ts";
 import { messagesSentSince } from "../src/adapters/buzz/catch-up.ts";
@@ -139,6 +139,37 @@ describe("catching up on missed Buzz messages", () => {
 		await adapter.catchUpOnMissedMessages();
 
 		expect(handling.handedOver).toEqual([]);
+	});
+});
+
+describe("a restart whose clock has not been set yet", () => {
+	afterEach(() => setSystemTime());
+
+	test("hands over nothing older than what chatd still remembers, though the relay sends its whole history", async () => {
+		const answeredYesterday = messageSent("8", 24 * 60 * 60);
+		const answeredMonthsAgo = messageSent("9", 120 * 24 * 60 * 60);
+		const delivered = deliveredSoFar();
+		delivered.record(answeredYesterday.id, answeredYesterday.created_at);
+		const { adapter, injectable, handling } = adapterOver([answeredMonthsAgo, answeredYesterday], delivered, 0);
+		setSystemTime(new Date(0));
+
+		await adapter.catchUpOnMissedMessages();
+		await injectable.dispatchIncomingEvent(answeredMonthsAgo);
+
+		expect(handling.handedOver).toEqual([]);
+	});
+
+	test("still hands over a message sent after the last one it remembers", async () => {
+		const answered = messageSent("a", 600);
+		const missed = messageSent("b", 60);
+		const delivered = deliveredSoFar();
+		delivered.record(answered.id, answered.created_at);
+		const { adapter, handling } = adapterOver([answered, missed], delivered, 0);
+		setSystemTime(new Date(0));
+
+		await adapter.catchUpOnMissedMessages();
+
+		expect(handling.handedOver).toEqual([missed.id]);
 	});
 });
 

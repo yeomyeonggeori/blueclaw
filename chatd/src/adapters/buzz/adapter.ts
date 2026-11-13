@@ -50,7 +50,7 @@ import { answeredChoiceOf, resolvedTag } from "./ask-tags.ts";
 import type { AnsweredChoice } from "../../choice.ts";
 import { tagsOf } from "../../event-tags.ts";
 import { catchUpIntervalMilliseconds, messagesSentSince } from "./catch-up.ts";
-import { deliveredMessagesInMemory, type DeliveredMessages } from "../../delivered-messages.ts";
+import { clockSeconds, deliveredMessagesInMemory, type DeliveredMessages } from "../../delivered-messages.ts";
 import { withRelayAs } from "./relay-pool.ts";
 import {
 	DELETE_MESSAGE_KIND,
@@ -361,7 +361,7 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		this.chat = chat;
 		await this.relay.connect();
 		await this.refreshChannels();
-		this.listeningSinceSeconds = Math.floor(Date.now() / 1000);
+		this.listeningSinceSeconds = this.deliveredMessages.currentSeconds(clockSeconds());
 		this.subscribeToChannels();
 		this.subscribeToMembershipChanges();
 		this.keepCatchingUp();
@@ -375,11 +375,10 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	}
 
 	async catchUpOnMissedMessages(): Promise<void> {
-		const nowSeconds = Math.floor(Date.now() / 1000);
 		const sent = await messagesSentSince(
 			this.relay,
 			[...this.channelsById.keys()],
-			this.deliveredMessages.oldestRememberedSeconds(nowSeconds),
+			this.deliveredMessages.oldestRememberedSeconds(clockSeconds()),
 		);
 		const missed = sent.filter((event) => event.pubkey !== this.relay.pubkeyHex && !this.isHandledOrHandling(event));
 		if (this.isTakingABaseline) {
@@ -477,7 +476,7 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 				{
 					kinds: [MEMBER_ADDED_NOTIFICATION_KIND, MEMBER_REMOVED_NOTIFICATION_KIND],
 					"#p": [this.relay.pubkeyHex],
-					since: Math.floor(Date.now() / 1000),
+					since: this.deliveredMessages.currentSeconds(clockSeconds()),
 				},
 			],
 			() => {
@@ -530,7 +529,7 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 			if (this.subscribedChannelIds.has(channelId)) continue;
 			this.subscribedChannelIds.add(channelId);
 			this.relay.subscribe(
-				[{ kinds: [STREAM_MESSAGE_KIND, EDIT_MESSAGE_KIND], "#h": [channelId], since: Math.floor(Date.now() / 1000) }],
+				[{ kinds: [STREAM_MESSAGE_KIND, EDIT_MESSAGE_KIND], "#h": [channelId], since: this.deliveredMessages.currentSeconds(clockSeconds()) }],
 				(event) => {
 					void this.dispatchIncomingEvent(event).catch((reason) =>
 						reportBuzzFailure(`handling message ${event.id}`, reason),
@@ -543,7 +542,7 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 						{
 							kinds: [REACTION_KIND, EDIT_MESSAGE_KIND, DELETE_MESSAGE_KIND],
 							"#h": [channelId],
-							since: Math.floor(Date.now() / 1000),
+							since: this.deliveredMessages.currentSeconds(clockSeconds()),
 						},
 					],
 					(event) => this.emitMirrorControlEvent(event, channelId),
@@ -574,6 +573,7 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 	private async dispatchIncomingEvent(event: BuzzEvent): Promise<void> {
 		if (!this.chat || event.pubkey === this.relay.pubkeyHex) return;
 		if (this.isHandledOrHandling(event)) return;
+		if (event.created_at < this.deliveredMessages.oldestRememberedSeconds(clockSeconds())) return;
 		this.messagesInFlight.add(event.id);
 		try {
 			await this.handOver(event);

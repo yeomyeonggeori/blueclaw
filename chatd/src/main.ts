@@ -3,7 +3,7 @@ import { createMemoryState } from '@chat-adapter/state-memory';
 import { createBuzzAdapter } from './adapters/buzz/index.ts';
 import { createMattermostAdapter } from './adapters/mattermost/index.ts';
 import { loadConfiguration } from './configuration.ts';
-import { deliveredMessagesAt, deliveredMessagesInMemory } from './delivered-messages.ts';
+import { clockSeconds, deliveredMessagesAt, deliveredMessagesInMemory } from './delivered-messages.ts';
 import { createBridge } from './bridge.ts';
 import { createOutboundHandler } from './outbound.ts';
 import { createRequestHandler } from './server.ts';
@@ -101,7 +101,7 @@ await chat.initialize();
 connectedToTheRelay = true;
 
 function deliveredMessagesOf(stateDirectory: string | undefined) {
-  if (stateDirectory) return deliveredMessagesAt(stateDirectory, Math.floor(Date.now() / 1000));
+  if (stateDirectory) return deliveredMessagesAt(stateDirectory, clockSeconds());
   console.warn('[chatd] CHATD_STATE_DIRECTORY is unset; messages missed while chatd was down are not caught up');
   return deliveredMessagesInMemory();
 }

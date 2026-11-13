@@ -19,11 +19,13 @@ function createAdapter(): BuzzAdapter {
 	});
 }
 
+const SENT_AT_SECONDS = Math.floor(Date.now() / 1000) - 60;
+
 function createEvent(overrides: Partial<BuzzEvent> = {}): BuzzEvent {
 	return {
 		id: "e".repeat(64),
 		pubkey: SENDER_HEX,
-		created_at: 1784900000,
+		created_at: SENT_AT_SECONDS,
 		kind: 9,
 		tags: [["h", CHANNEL_UUID]],
 		content: "@internkim hello",
@@ -95,7 +97,7 @@ describe("buzz event mapping", () => {
 		expect(message.text).toBe("@internkim hello");
 		expect(message.author.userId).toBe(SENDER_HEX);
 		expect(message.threadId).toBe(`buzz:${CHANNEL_UUID}:${"e".repeat(64)}`);
-		expect(message.metadata.dateSent.toISOString()).toBe(new Date(1784900000 * 1000).toISOString());
+		expect(message.metadata.dateSent.toISOString()).toBe(new Date(SENT_AT_SECONDS * 1000).toISOString());
 	});
 
 	test("reply events thread under their root", () => {
@@ -266,7 +268,7 @@ describe("buzz inbound edits", () => {
 			kind: 40003,
 			content: "edited",
 			tags: [["h", CHANNEL_UUID], ["e", ROOT_EVENT_ID]],
-			created_at: 1784900001,
+			created_at: SENT_AT_SECONDS + 1,
 		});
 		const adapter = createAdapter();
 		const received: Array<{ eventID: string; threadID: string; message: Message }> = [];
