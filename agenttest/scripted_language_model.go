@@ -399,18 +399,30 @@ type approvalQuestionContextDocument struct {
 	OriginalRequest string                     `json:"originalRequest"`
 	ModelDraft      string                     `json:"modelDraft"`
 	ActionDetails   map[string]json.RawMessage `json:"actionDetails"`
+	PrintedBelow    []string                   `json:"printedBelow"`
 }
 
 func defaultApprovalQuestionResponse(request model.StructuredResponseRequest) string {
 	contextDocument := approvalQuestionContextFromRequest(request)
 	target := firstNonEmpty(actionDetail(contextDocument, "resolvedTarget"), actionDetail(contextDocument, "personHint"), actionDetail(contextDocument, "channelName"))
 	content := firstNonEmpty(actionDetail(contextDocument, "message"), actionDetail(contextDocument, "subject"), actionDetail(contextDocument, "body"), actionDetail(contextDocument, "title"), actionDetail(contextDocument, "summary"), actionDetail(contextDocument, "reason"), actionDetail(contextDocument, "approvalReason"))
-	question := defaultApprovalQuestionFromContext(contextDocument, target, content)
-	document, errorValue := json.Marshal(map[string]string{"question": question})
+	answer := map[string]any{"question": defaultApprovalQuestionFromContext(contextDocument, target, content)}
+	if len(contextDocument.PrintedBelow) > 0 {
+		answer["labels"] = scriptedLabelsFor(contextDocument.PrintedBelow)
+	}
+	document, errorValue := json.Marshal(answer)
 	if errorValue != nil {
 		return `{"question":"should this be approved?"}`
 	}
 	return string(document)
+}
+
+func scriptedLabelsFor(printedBelow []string) map[string]string {
+	labels := map[string]string{}
+	for _, name := range printedBelow {
+		labels[name] = "scripted label for " + name
+	}
+	return labels
 }
 
 func actionDetail(contextDocument approvalQuestionContextDocument, name string) string {
@@ -423,7 +435,7 @@ func actionDetail(contextDocument approvalQuestionContextDocument, name string) 
 
 func defaultApprovalQuestionFromContext(contextDocument approvalQuestionContextDocument, target string, content string) string {
 	if target != "" && content != "" {
-		return target + "should this be sent to?\n\n" + content
+		return "should this be sent to " + target + "?"
 	}
 	if draftQuestion := approvalQuestionFromDraft(contextDocument.ModelDraft); draftQuestion != "" {
 		return draftQuestion
@@ -432,7 +444,7 @@ func defaultApprovalQuestionFromContext(contextDocument approvalQuestionContextD
 		return requestQuestion
 	}
 	if content != "" {
-		return content + "\n\nshould we proceed?"
+		return "should we proceed with " + strings.Join(strings.Fields(content), " ") + "?"
 	}
 	return "should this be approved?"
 }
