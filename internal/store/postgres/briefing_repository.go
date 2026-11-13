@@ -10,10 +10,10 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
 
-var errMorningBriefingScheduleIDConflict = errors.New("morning briefing schedule ID belongs to another schedule")
-var errStaleMorningBriefingLease = errors.New("morning briefing schedule lease is no longer owned")
+var errBriefingScheduleIDConflict = errors.New("briefing schedule ID belongs to another schedule")
+var errStaleBriefingLease = errors.New("briefing schedule lease is no longer owned")
 
-type managedMorningBriefingSchedule struct {
+type managedBriefingSchedule struct {
 	scheduleID       string
 	creatorPersonID  string
 	name             string
@@ -31,7 +31,7 @@ type managedMorningBriefingSchedule struct {
 	leasedUntil      *time.Time
 }
 
-func (repository ScheduleRepository) ReconcileMorningBriefings(ctx context.Context, desired []task.Schedule, unsettledPeople []string, referenceTime time.Time) error {
+func (repository ScheduleRepository) ReconcileBriefings(ctx context.Context, kind task.BriefingKind, desired []task.Schedule, unsettledPeople []string, referenceTime time.Time) error {
 	if referenceTime.IsZero() {
 		referenceTime = time.Now().UTC()
 	}
@@ -47,38 +47,38 @@ func (repository ScheduleRepository) ReconcileMorningBriefings(ctx context.Conte
 	desiredPeople := make(map[string]struct{}, len(desired))
 	for _, schedule := range desired {
 		if schedule.CreatorPersonID == "" {
-			return errors.New("morning briefing schedule has no person")
+			return errors.New("briefing schedule has no person")
 		}
 		if _, exists := desiredPeople[schedule.CreatorPersonID]; exists {
-			return fmt.Errorf("duplicate morning briefing schedule for person %s", schedule.CreatorPersonID)
+			return fmt.Errorf("duplicate %s briefing schedule for person %s", kind, schedule.CreatorPersonID)
 		}
 		desiredPeople[schedule.CreatorPersonID] = struct{}{}
 		keptPeople[schedule.CreatorPersonID] = struct{}{}
-		if errorValue := reconcileMorningBriefingSchedule(ctx, transaction, schedule, referenceTime); errorValue != nil {
+		if errorValue := reconcileBriefingSchedule(ctx, transaction, kind, schedule, referenceTime); errorValue != nil {
 			return errorValue
 		}
 	}
-	if errorValue := deactivateMissingMorningBriefings(ctx, transaction, keptPeople, referenceTime); errorValue != nil {
+	if errorValue := deactivateMissingBriefings(ctx, transaction, kind, keptPeople, referenceTime); errorValue != nil {
 		return errorValue
 	}
 	return transaction.Commit()
 }
 
-func reconcileMorningBriefingSchedule(ctx context.Context, transaction *sql.Tx, desired task.Schedule, referenceTime time.Time) error {
-	existing, isFound, errorValue := findManagedMorningBriefingSchedule(ctx, transaction, desired.CreatorPersonID)
+func reconcileBriefingSchedule(ctx context.Context, transaction *sql.Tx, kind task.BriefingKind, desired task.Schedule, referenceTime time.Time) error {
+	existing, isFound, errorValue := findManagedBriefingSchedule(ctx, transaction, kind, desired.CreatorPersonID)
 	if errorValue != nil {
 		return errorValue
 	}
 	if !isFound {
-		return insertManagedMorningBriefingSchedule(ctx, transaction, desired)
+		return insertManagedBriefingSchedule(ctx, transaction, kind, desired)
 	}
 	if existing.scheduleID != desired.ScheduleID {
-		return errors.New("morning briefing person mapping has a different schedule ID")
+		return errors.New("briefing person mapping has a different schedule ID")
 	}
 	if existing.leasedUntil != nil && existing.leasedUntil.After(referenceTime) {
 		return nil
 	}
-	configurationChanged, cadenceChanged := morningBriefingConfigurationChanged(existing, desired)
+	configurationChanged, cadenceChanged := briefingConfigurationChanged(existing, desired)
 	if !configurationChanged {
 		return nil
 	}
@@ -100,7 +100,7 @@ WHERE schedule_id = $13`,
 	return errorValue
 }
 
-func (repository ScheduleRepository) RetireMorningBriefingOccurrence(schedule task.Schedule, errorMessage string, referenceTime time.Time) error {
+func (repository ScheduleRepository) RetireBriefingOccurrence(schedule task.Schedule, errorMessage string, referenceTime time.Time) error {
 	if referenceTime.IsZero() {
 		referenceTime = time.Now().UTC()
 	}
@@ -109,7 +109,7 @@ func (repository ScheduleRepository) RetireMorningBriefingOccurrence(schedule ta
 		return errorValue
 	}
 	defer transaction.Rollback()
-	if errorValue := verifyMorningBriefingLease(transaction, schedule, referenceTime); errorValue != nil {
+	if errorValue := verifyBriefingLease(transaction, schedule, referenceTime); errorValue != nil {
 		return errorValue
 	}
 	schedule.ExpiresAt = nil
@@ -122,7 +122,7 @@ UPDATE schedule
 SET expires_at = NULL, next_run_at = $1, lease_owner = '', leased_until = NULL,
     failure_count = 0, last_error = $2, next_attempt_at = $3, updated_at = $3
 WHERE schedule_id = $4
-  AND EXISTS (SELECT 1 FROM morning_briefing_schedule WHERE schedule_id = $4)`,
+  AND EXISTS (SELECT 1 FROM briefing_schedule WHERE schedule_id = $4)`,
 		schedule.NextRunAt, errorMessage, referenceTime, schedule.ScheduleID)
 	if errorValue != nil {
 		return errorValue
@@ -130,52 +130,52 @@ WHERE schedule_id = $4
 	return transaction.Commit()
 }
 
-func verifyMorningBriefingLease(transaction *sql.Tx, schedule task.Schedule, referenceTime time.Time) error {
+func verifyBriefingLease(transaction *sql.Tx, schedule task.Schedule, referenceTime time.Time) error {
 	var leaseOwner string
 	var leasedUntil sql.NullTime
 	errorValue := transaction.QueryRowContext(context.Background(), `
 SELECT lease_owner, leased_until
 FROM schedule
 WHERE schedule_id = $1
-  AND EXISTS (SELECT 1 FROM morning_briefing_schedule WHERE schedule_id = $1)
+  AND EXISTS (SELECT 1 FROM briefing_schedule WHERE schedule_id = $1)
 FOR UPDATE`, schedule.ScheduleID).Scan(&leaseOwner, &leasedUntil)
 	if errorValue != nil {
 		return errorValue
 	}
 	if schedule.LeaseOwner == "" || schedule.LeasedUntil == nil || leaseOwner != schedule.LeaseOwner || !leasedUntil.Valid || !leasedUntil.Time.Equal(*schedule.LeasedUntil) || !leasedUntil.Time.After(referenceTime) {
-		return errStaleMorningBriefingLease
+		return errStaleBriefingLease
 	}
 	return nil
 }
 
-func findManagedMorningBriefingSchedule(ctx context.Context, transaction *sql.Tx, personID string) (managedMorningBriefingSchedule, bool, error) {
-	var schedule managedMorningBriefingSchedule
+func findManagedBriefingSchedule(ctx context.Context, transaction *sql.Tx, kind task.BriefingKind, personID string) (managedBriefingSchedule, bool, error) {
+	var schedule managedBriefingSchedule
 	var nextRunAt, leasedUntil sql.NullTime
 	errorValue := transaction.QueryRowContext(ctx, `
 SELECT s.schedule_id, s.creator_person_id, s.name, s.prompt, s.execution_mode,
        s.agent_profile_name, s.platform, s.delivery_conversation_id, s.reply_target_id,
        s.time_zone, s.schedule_kind, COALESCE(s.cron_expression, ''), s.next_run_at,
        s.lease_owner, s.leased_until
-FROM morning_briefing_schedule m
+FROM briefing_schedule m
 JOIN schedule s ON s.schedule_id = m.schedule_id
-WHERE m.person_id = $1
-FOR UPDATE`, personID).Scan(
+WHERE m.person_id = $1 AND m.briefing_kind = $2
+FOR UPDATE`, personID, string(kind)).Scan(
 		&schedule.scheduleID, &schedule.creatorPersonID, &schedule.name, &schedule.prompt,
 		&schedule.executionMode, &schedule.agentProfileName, &schedule.platform, &schedule.conversationID,
 		&schedule.replyTargetID, &schedule.timeZone, &schedule.kind, &schedule.cronExpression,
 		&nextRunAt, &schedule.leaseOwner, &leasedUntil)
 	if errors.Is(errorValue, sql.ErrNoRows) {
-		return managedMorningBriefingSchedule{}, false, nil
+		return managedBriefingSchedule{}, false, nil
 	}
 	if errorValue != nil {
-		return managedMorningBriefingSchedule{}, false, errorValue
+		return managedBriefingSchedule{}, false, errorValue
 	}
 	schedule.nextRunAt = nullableScheduleTime(nextRunAt)
 	schedule.leasedUntil = nullableScheduleTime(leasedUntil)
 	return schedule, true, nil
 }
 
-func insertManagedMorningBriefingSchedule(ctx context.Context, transaction *sql.Tx, schedule task.Schedule) error {
+func insertManagedBriefingSchedule(ctx context.Context, transaction *sql.Tx, kind task.BriefingKind, schedule task.Schedule) error {
 	result, errorValue := transaction.ExecContext(ctx, `
 INSERT INTO schedule (
   schedule_id, creator_person_id, name, prompt, execution_mode, agent_profile_name,
@@ -195,18 +195,18 @@ ON CONFLICT (schedule_id) DO NOTHING`,
 		return errorValue
 	}
 	if rowsAffected == 0 {
-		return errMorningBriefingScheduleIDConflict
+		return errBriefingScheduleIDConflict
 	}
 	_, errorValue = transaction.ExecContext(ctx, `
-INSERT INTO morning_briefing_schedule (person_id, schedule_id)
-	VALUES ($1, $2)`, schedule.CreatorPersonID, schedule.ScheduleID)
+INSERT INTO briefing_schedule (person_id, briefing_kind, schedule_id)
+	VALUES ($1, $2, $3)`, schedule.CreatorPersonID, string(kind), schedule.ScheduleID)
 	if errorValue != nil {
 		return errorValue
 	}
 	return nil
 }
 
-func morningBriefingConfigurationChanged(existing managedMorningBriefingSchedule, desired task.Schedule) (bool, bool) {
+func briefingConfigurationChanged(existing managedBriefingSchedule, desired task.Schedule) (bool, bool) {
 	cadenceChanged := existing.timeZone != desired.TimeZone || existing.kind != string(desired.Kind) ||
 		existing.cronExpression != desired.CronExpression || (existing.nextRunAt == nil) != (desired.NextRunAt == nil)
 	return existing.name != desired.Name || existing.prompt != desired.Prompt ||
@@ -216,8 +216,8 @@ func morningBriefingConfigurationChanged(existing managedMorningBriefingSchedule
 		cadenceChanged, cadenceChanged
 }
 
-func deactivateMissingMorningBriefings(ctx context.Context, transaction *sql.Tx, keptPeople map[string]struct{}, referenceTime time.Time) error {
-	rows, errorValue := transaction.QueryContext(ctx, `SELECT person_id FROM morning_briefing_schedule FOR UPDATE`)
+func deactivateMissingBriefings(ctx context.Context, transaction *sql.Tx, kind task.BriefingKind, keptPeople map[string]struct{}, referenceTime time.Time) error {
+	rows, errorValue := transaction.QueryContext(ctx, `SELECT person_id FROM briefing_schedule WHERE briefing_kind = $1 FOR UPDATE`, string(kind))
 	if errorValue != nil {
 		return errorValue
 	}
@@ -239,19 +239,30 @@ func deactivateMissingMorningBriefings(ctx context.Context, transaction *sql.Tx,
 		return errorValue
 	}
 	for _, personID := range missingPeople {
-		if errorValue := deactivateMorningBriefing(ctx, transaction, personID, referenceTime); errorValue != nil {
+		if errorValue := deactivateBriefings(ctx, transaction, personID, referenceTime, kind); errorValue != nil {
 			return errorValue
 		}
 	}
 	return rows.Err()
 }
 
-func deactivateMorningBriefing(ctx context.Context, transaction *sql.Tx, personID string, referenceTime time.Time) error {
+func deactivateBriefings(ctx context.Context, transaction *sql.Tx, personID string, referenceTime time.Time, kinds ...task.BriefingKind) error {
+	if len(kinds) == 0 {
+		kinds = task.BriefingKinds
+	}
 	_, errorValue := transaction.ExecContext(ctx, `
 UPDATE schedule s
 SET next_run_at = NULL, updated_at = $1
-FROM morning_briefing_schedule m
-WHERE m.person_id = $2 AND s.schedule_id = m.schedule_id
-  AND (s.leased_until IS NULL OR s.leased_until <= $1)`, referenceTime, personID)
+FROM briefing_schedule m
+WHERE m.person_id = $2 AND m.briefing_kind = ANY($3::text[]) AND s.schedule_id = m.schedule_id
+  AND (s.leased_until IS NULL OR s.leased_until <= $1)`, referenceTime, personID, briefingKindNames(kinds))
 	return errorValue
+}
+
+func briefingKindNames(kinds []task.BriefingKind) []string {
+	names := make([]string, 0, len(kinds))
+	for _, kind := range kinds {
+		names = append(names, string(kind))
+	}
+	return names
 }

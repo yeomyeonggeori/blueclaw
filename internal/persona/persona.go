@@ -54,6 +54,7 @@ type User struct {
 	Tone            *Tone            `json:"tone,omitempty"`
 	Language        *UserLanguage    `json:"language,omitempty"`
 	MorningBriefing *MorningBriefing `json:"morningBriefing"`
+	WeeklyReport    *WeeklyReport    `json:"weeklyReport"`
 }
 
 type MorningBriefing struct {
@@ -61,42 +62,57 @@ type MorningBriefing struct {
 	Time    string `json:"time"`
 }
 
+type WeeklyReport struct {
+	Enabled bool   `json:"enabled"`
+	Day     string `json:"day"`
+	Time    string `json:"time"`
+}
+
 func DefaultMorningBriefing() MorningBriefing {
 	return defaultMorningBriefing
 }
 
-var defaultMorningBriefing = morningBriefingSchemaDefault()
+func DefaultWeeklyReport() WeeklyReport {
+	return defaultWeeklyReport
+}
 
-func morningBriefingSchemaDefault() MorningBriefing {
-	type settings MorningBriefing
+var defaultMorningBriefing = userSchemaDefault[MorningBriefing]("morningBriefing")
+
+var defaultWeeklyReport = userSchemaDefault[WeeklyReport]("weeklyReport")
+
+func userSchemaDefault[Settings any](propertyName string) Settings {
 	var schema struct {
 		Properties map[string]struct {
-			Default settings `json:"default"`
+			Default json.RawMessage `json:"default"`
 		} `json:"properties"`
 	}
 	if errorValue := json.Unmarshal(UserSchemaDocument, &schema); errorValue != nil {
 		panic(errorValue)
 	}
-	return MorningBriefing(schema.Properties["morningBriefing"].Default)
+	var settings Settings
+	if errorValue := json.Unmarshal(schema.Properties[propertyName].Default, &settings); errorValue != nil {
+		panic(errorValue)
+	}
+	return settings
 }
 
 func (briefing *MorningBriefing) UnmarshalJSON(document []byte) error {
-	var fields struct {
-		Enabled *bool   `json:"enabled"`
-		Time    *string `json:"time"`
-	}
-	if errorValue := json.Unmarshal(document, &fields); errorValue != nil {
+	type fields MorningBriefing
+	settings := fields(DefaultMorningBriefing())
+	if errorValue := json.Unmarshal(document, &settings); errorValue != nil {
 		return errorValue
 	}
-	defaults := DefaultMorningBriefing()
-	briefing.Enabled = defaults.Enabled
-	briefing.Time = defaults.Time
-	if fields.Enabled != nil {
-		briefing.Enabled = *fields.Enabled
+	*briefing = MorningBriefing(settings)
+	return nil
+}
+
+func (report *WeeklyReport) UnmarshalJSON(document []byte) error {
+	type fields WeeklyReport
+	settings := fields(DefaultWeeklyReport())
+	if errorValue := json.Unmarshal(document, &settings); errorValue != nil {
+		return errorValue
 	}
-	if fields.Time != nil {
-		briefing.Time = *fields.Time
-	}
+	*report = WeeklyReport(settings)
 	return nil
 }
 
@@ -181,16 +197,8 @@ func NormalizeUser(user User) User {
 	user.About = strings.TrimSpace(user.About)
 	user.Preferences = normalizeLines(user.Preferences)
 	user.Tone = normalizeTone(user.Tone)
-	if user.MorningBriefing == nil {
-		defaultMorningBriefing := DefaultMorningBriefing()
-		user.MorningBriefing = &defaultMorningBriefing
-	} else {
-		if strings.TrimSpace(user.MorningBriefing.Time) == "" {
-			user.MorningBriefing.Time = DefaultMorningBriefing().Time
-		} else {
-			user.MorningBriefing.Time = strings.TrimSpace(user.MorningBriefing.Time)
-		}
-	}
+	user.MorningBriefing = normalizeMorningBriefing(user.MorningBriefing)
+	user.WeeklyReport = normalizeWeeklyReport(user.WeeklyReport)
 	if user.Language != nil {
 		language := UserLanguage{Default: strings.TrimSpace(user.Language.Default)}
 		if language.Default == "" {
@@ -200,6 +208,35 @@ func NormalizeUser(user User) User {
 		}
 	}
 	return user
+}
+
+func normalizeMorningBriefing(briefing *MorningBriefing) *MorningBriefing {
+	defaults := DefaultMorningBriefing()
+	if briefing == nil {
+		return &defaults
+	}
+	normalized := MorningBriefing{Enabled: briefing.Enabled, Time: valueOrDefault(briefing.Time, defaults.Time)}
+	return &normalized
+}
+
+func normalizeWeeklyReport(report *WeeklyReport) *WeeklyReport {
+	defaults := DefaultWeeklyReport()
+	if report == nil {
+		return &defaults
+	}
+	normalized := WeeklyReport{
+		Enabled: report.Enabled,
+		Day:     strings.ToLower(valueOrDefault(report.Day, defaults.Day)),
+		Time:    valueOrDefault(report.Time, defaults.Time),
+	}
+	return &normalized
+}
+
+func valueOrDefault(value string, defaultValue string) string {
+	if trimmed := strings.TrimSpace(value); trimmed != "" {
+		return trimmed
+	}
+	return defaultValue
 }
 
 func normalizeTone(tone *Tone) *Tone {

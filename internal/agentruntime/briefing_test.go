@@ -8,12 +8,19 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
-func TestMorningBriefingScheduledLaunchHasReadOnlyToolCeiling(t *testing.T) {
+func TestBriefingScheduledLaunchHasReadOnlyToolCeiling(t *testing.T) {
+	for _, kind := range task.BriefingKinds {
+		assertReadOnlyBriefingCeiling(t, kind)
+	}
+}
+
+func assertReadOnlyBriefingCeiling(t *testing.T, kind task.BriefingKind) {
+	t.Helper()
 	personID := "person-1"
 	ceiling := registeredToolNameCeilingForLaunch(TaskLaunchRequest{
 		Source:            TaskLaunchSourceScheduled,
 		RequesterPersonID: personID,
-		ScheduledRun:      agentcontract.ScheduledRunContext{ScheduleID: task.MorningBriefingScheduleID(personID)},
+		ScheduledRun:      agentcontract.ScheduledRunContext{ScheduleID: task.BriefingScheduleID(kind, personID)},
 	})
 	for _, requiredTool := range []string{"task_list", "event_list", "conversation_history", "memory_search", "persona_profile_get"} {
 		if !slices.Contains(ceiling, requiredTool) {
@@ -32,7 +39,7 @@ func TestMorningBriefingCeilingOnlyAppliesToScheduledMatchingID(t *testing.T) {
 	if ceiling := registeredToolNameCeilingForLaunch(TaskLaunchRequest{
 		Source:            TaskLaunchSourceConnector,
 		RequesterPersonID: personID,
-		ScheduledRun:      agentcontract.ScheduledRunContext{ScheduleID: task.MorningBriefingScheduleID(personID)},
+		ScheduledRun:      agentcontract.ScheduledRunContext{ScheduleID: task.BriefingScheduleID(task.BriefingKindMorning, personID)},
 	}); ceiling != nil {
 		t.Fatalf("foreground launch unexpectedly received briefing ceiling %v", ceiling)
 	}

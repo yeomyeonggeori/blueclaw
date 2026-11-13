@@ -272,7 +272,7 @@ A held call pauses the run in `waiting_approval` and records `approval.hold_open
 
 A chat turn asks in its thread. A reply in that thread is read by the reader against the offered options. A reply that is not an answer leaves the call open and is routed as a new message, and a reply outside the thread is never read. The waiting run holds neither an inbox worker nor the conversation, and its typing indicator stops. A call with no connector event in its context, a scheduled run or a foreign harness reaching the tool catalog over MCP, asks in the requester's direct conversation on their first messenger account, the one a scheduled briefing is delivered to; a reply in that conversation, or in the question's thread, answers it.
 
-A run of a schedule its requester approved asks nobody: the schedule answers. A schedule is approved when the call that created it was: `schedule_create` asks the requester, reading the instruction and cadence back, and its creation carries `isApproved`, which the schedule keeps as `approved_at`. A call its runs make that needs approval, once a run or many times and for whatever tools the instruction needs, is then answered before any question is worded: its target is resolved, its hold is opened and decided by the schedule (`approval.decided` with `"source":"schedule"`), and capabilityd redeems that hold as it would the requester's own answer. The run is the requester's (`RequesterPersonID` is the schedule's creator, with their access), so nothing it does reaches past what that person may do. A schedule with no approval asks its requester as above: the morning briefing, one the host writes itself such as the report after a host update, and one created before the column existed.
+A run of a schedule its requester approved asks nobody: the schedule answers. A schedule is approved when the call that created it was: `schedule_create` asks the requester, reading the instruction and cadence back, and its creation carries `isApproved`, which the schedule keeps as `approved_at`. A call its runs make that needs approval, once a run or many times and for whatever tools the instruction needs, is then answered before any question is worded: its target is resolved, its hold is opened and decided by the schedule (`approval.decided` with `"source":"schedule"`), and capabilityd redeems that hold as it would the requester's own answer. The run is the requester's (`RequesterPersonID` is the schedule's creator, with their access), so nothing it does reaches past what that person may do. A schedule with no approval asks its requester as above: a briefing, one the host writes itself such as the report after a host update, and one created before the column existed.
 
 A requester with no such account, or a conversation that cannot be opened, cannot be asked. The hold is rejected, the call is refused with a result the model reads, and `approval.unreachable` records why. Nothing waits for an answer nobody can give. The wait ends after 24 hours: the hold is rejected, the model is told the question went unanswered, and `approval.expired` records it.
 
@@ -298,7 +298,7 @@ The persona is three JSON documents that say who the agent is, how it carries it
 |---|---|---|---|
 | `identity.json` | workspace root | the names the agent answers to (the first is how it introduces itself), an optional handle, a role, an emoji, an introduction | once, into the standing instructions and the turn briefing |
 | `soul.json` | workspace root | what it holds to, what it never does, how it works, a tone, a language policy | once, into the standing instructions |
-| `private/people/<personID>/.internkim/user.json` | the person's home, owned by their POSIX user | what they want to be called, what they want known, preferences, tone, language, `morningBriefing` | at every launch, read as that person through the helper |
+| `private/people/<personID>/.internkim/user.json` | the person's home, owned by their POSIX user | what they want to be called, what they want known, preferences, tone, language, `morningBriefing`, `weeklyReport` | at every launch, read as that person through the helper |
 
 Each is validated against a JSON Schema in `internal/persona/schema/` with `additionalProperties: false`, item and length ceilings, and a pinned `schemaVersion`. A document the schema refuses is restored from its backup in `.blueclaw/state/persona-backup`.
 
@@ -384,9 +384,16 @@ A run happens within 15 minutes of its time or not at all. A run that reached it
 
 A schedule that carries an approved call is marked run before its run starts, so a daemon that stops halfway never runs it twice. The run carries out exactly that call before the model takes a step, and the schedule's own approval answers it, the way it answers any call a schedule's runs make. Such a schedule is always a once schedule, which the database enforces, and `schedule_update` refuses to change it; cancelling it cancels the call.
 
-### Morning briefing
+### Briefings
 
-The morning briefing is a managed daily schedule per person. `morningBriefing` in `user.json` defaults to `{"enabled": true, "time": "08:00"}`, in the company time zone, and changes only through `persona_profile_update`. The generic schedule endpoints cannot edit it. A briefing run may call only `task_list`, `event_list`, `conversation_history`, `memory_search` and `persona_profile_get`, is skipped when there is nothing on the task and event lists, and is delivered through the outbox under an occurrence key so it arrives once. A briefing that misses its window is reported like any other run, and the next day's runs as usual.
+A briefing is a managed schedule per person, one of each kind, kept in `briefing_schedule` beside the `schedule` row it owns. Each kind is configured in `user.json`, in the company time zone, and changes only through `persona_profile_update`; the generic schedule endpoints cannot edit it.
+
+| kind | setting | default | skipped when |
+| --- | --- | --- | --- |
+| morning | `morningBriefing` | `{"enabled": true, "time": "08:00"}`, daily | the task and event lists hold nothing |
+| weekly | `weeklyReport` | `{"enabled": true, "day": "friday", "time": "12:00"}` | the person has no task this week |
+
+A briefing run may call only `task_list`, `event_list`, `conversation_history`, `memory_search` and `persona_profile_get`, and is delivered through the outbox under an occurrence key so it arrives once. A briefing that misses its window is reported like any other run, and the next one runs as usual.
 
 ## Learning
 

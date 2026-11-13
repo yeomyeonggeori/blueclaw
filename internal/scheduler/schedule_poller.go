@@ -27,8 +27,8 @@ type ScheduleTransactionalDeliveryRepository interface {
 	MarkScheduleSucceededAndEnqueueDelivery(task.Schedule, string, string, connectors.OutboundReply) (string, error)
 }
 
-type MorningBriefingOccurrenceRepository interface {
-	RetireMorningBriefingOccurrence(task.Schedule, string, time.Time) error
+type BriefingOccurrenceRepository interface {
+	RetireBriefingOccurrence(task.Schedule, string, time.Time) error
 }
 
 type PersonAccessResolver interface {
@@ -50,7 +50,7 @@ type SchedulePoller struct {
 	WorkerID             string
 	Logger               *slog.Logger
 	StaleTaskRunTimeout  time.Duration
-	MorningBriefing      *MorningBriefing
+	Briefings            *Briefings
 }
 
 type scheduleExecutionResult struct {
@@ -97,9 +97,9 @@ func (schedulePoller SchedulePoller) RunDue(ctx context.Context, referenceTime t
 		return 0, nil
 	}
 	schedulePoller.cancelStaleScheduledTaskRuns(referenceTime)
-	if schedulePoller.MorningBriefing != nil {
-		if errorValue := schedulePoller.MorningBriefing.Reconcile(ctx, referenceTime); errorValue != nil {
-			schedulePoller.logger().Error("morning_briefing.reconcile_failed", "error", errorValue)
+	if schedulePoller.Briefings != nil {
+		if errorValue := schedulePoller.Briefings.Reconcile(ctx, referenceTime); errorValue != nil {
+			schedulePoller.logger().Error("briefing.reconcile_failed", "error", errorValue)
 		}
 	}
 	schedules, errorValue := schedulePoller.ScheduleRepository.ClaimDueSchedules(limit, scheduleLeaseDuration, referenceTime, schedulePoller.workerID())
@@ -138,9 +138,9 @@ const maxScheduleFailureCount = 5
 
 func (schedulePoller SchedulePoller) recordScheduleFailure(schedule task.Schedule, errorValue error, referenceTime time.Time) error {
 	if scheduleFailureIsTerminal(schedule, errorValue, referenceTime) {
-		if task.IsMorningBriefing(schedule) {
-			if repository, isSupported := schedulePoller.ScheduleRepository.(MorningBriefingOccurrenceRepository); isSupported {
-				return repository.RetireMorningBriefingOccurrence(schedule, errorValue.Error(), referenceTime)
+		if task.IsBriefing(schedule) {
+			if repository, isSupported := schedulePoller.ScheduleRepository.(BriefingOccurrenceRepository); isSupported {
+				return repository.RetireBriefingOccurrence(schedule, errorValue.Error(), referenceTime)
 			}
 		}
 		return schedulePoller.ScheduleRepository.ExpireSchedule(schedule, errorValue.Error(), referenceTime)
@@ -157,8 +157,8 @@ func scheduleFailureIsTerminal(schedule task.Schedule, errorValue error, _ time.
 }
 
 func (schedulePoller SchedulePoller) runSchedule(ctx context.Context, schedule task.Schedule, referenceTime time.Time) error {
-	if canRun, errorValue := schedulePoller.canRunMorningBriefing(ctx, schedule); errorValue != nil || !canRun {
-		return schedulePoller.pauseMorningBriefing(schedule, errorValue)
+	if canRun, errorValue := schedulePoller.canRunBriefing(ctx, schedule); errorValue != nil || !canRun {
+		return schedulePoller.pauseBriefing(schedule, errorValue)
 	}
 	if errorValue := validateScheduleDeliveryTarget(schedule); errorValue != nil {
 		return errorValue
@@ -173,8 +173,8 @@ func (schedulePoller SchedulePoller) runSchedule(ctx context.Context, schedule t
 	if !result.DidRun {
 		return schedulePoller.ScheduleRepository.MarkScheduleSucceeded(result.Schedule)
 	}
-	if canRun, errorValue := schedulePoller.canRunMorningBriefing(ctx, schedule); errorValue != nil || !canRun {
-		return schedulePoller.pauseMorningBriefing(result.Schedule, errorValue)
+	if canRun, errorValue := schedulePoller.canRunBriefing(ctx, schedule); errorValue != nil || !canRun {
+		return schedulePoller.pauseBriefing(result.Schedule, errorValue)
 	}
 	if errorValue := schedulePoller.markScheduleSucceededAndEnqueueReply(schedule, result); errorValue != nil {
 		schedulePoller.logger().Error(
@@ -202,7 +202,7 @@ func (schedulePoller SchedulePoller) spendAnApprovedCallBeforeItRuns(schedule ta
 	return schedulePoller.ScheduleRepository.MarkScheduleSucceeded(spentSchedule)
 }
 
-func (schedulePoller SchedulePoller) pauseMorningBriefing(schedule task.Schedule, errorValue error) error {
+func (schedulePoller SchedulePoller) pauseBriefing(schedule task.Schedule, errorValue error) error {
 	if errorValue != nil {
 		return errorValue
 	}
@@ -210,11 +210,11 @@ func (schedulePoller SchedulePoller) pauseMorningBriefing(schedule task.Schedule
 	return schedulePoller.ScheduleRepository.MarkScheduleSucceeded(schedule)
 }
 
-func (schedulePoller SchedulePoller) canRunMorningBriefing(ctx context.Context, schedule task.Schedule) (bool, error) {
-	if schedulePoller.MorningBriefing == nil {
+func (schedulePoller SchedulePoller) canRunBriefing(ctx context.Context, schedule task.Schedule) (bool, error) {
+	if schedulePoller.Briefings == nil {
 		return true, nil
 	}
-	return schedulePoller.MorningBriefing.CanRun(ctx, schedule)
+	return schedulePoller.Briefings.CanRun(ctx, schedule)
 }
 
 func (schedulePoller SchedulePoller) executeSchedule(ctx context.Context, schedule task.Schedule, referenceTime time.Time) (scheduleExecutionResult, error) {
