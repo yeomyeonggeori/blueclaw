@@ -2183,7 +2183,7 @@ func TestConnectorRuntimeDeniesTheHiddenHistoryToolAndSendsOneFinishMessage(t *t
 	languageModel := agenttest.NewScriptedLanguageModel(agenttest.ScriptedLanguageModelOptions{
 		ActionResponses: []string{
 			`{"action":"continue","toolName":"conversation_history","toolInput":{"limit":20}}`,
-			connectorFinishMessage("이전 대화를 확인했습니다"),
+			connectorNoToolFallbackFinishMessage("이전 대화를 확인했습니다"),
 		},
 		DefaultResponsesBySchema: map[string]string{
 			"bluecollar_turn_router": `{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"scripted test default","userFacingReply":""}`,
@@ -3254,6 +3254,10 @@ func findAgentToolDefinition(toolDefinitions []toolcontract.ToolDefinition, tool
 
 func connectorFinishMessage(reply string) string {
 	return `{"action":"reply","final":true,"message":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[]}`
+}
+
+func connectorNoToolFallbackFinishMessage(reply string) string {
+	return `{"action":"reply","final":true,"message":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[],"failureResolution":"no_tool_fallback"}`
 }
 
 func connectorDefaultTurnRouterResponse() string {
