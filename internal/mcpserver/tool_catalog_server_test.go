@@ -323,3 +323,27 @@ func TestAFileAToolDeliveredReachesTheHarnessWithItsBytesAndPath(t *testing.T) {
 		t.Fatalf("the file lost the path the loop matches it by: %+v", file.Resource.Meta)
 	}
 }
+
+func TestAFailureCarriesWhatTheToolAnsweredRatherThanOnlyItsSummary(t *testing.T) {
+	answered := `{"message":"\"lee\" matches more than one person, listed in candidates.","candidates":[{"personID":"person-one","name":"Lee One"}]}`
+	failed := toolcontract.ToolResult{
+		Output:  toolcontract.ToolOutput{Content: answered},
+		Failure: &toolcontract.ToolFailure{Code: "interaction_required", UserSafeSummary: "\"lee\" matches more than one person, listed in candidates."},
+	}
+
+	text := callToolResult(failed, false, "message_send").Content[0].(*mcp.TextContent).Text
+
+	if text != "interaction_required: "+answered {
+		t.Fatalf("the candidates the failure names have to reach the caller, got %q", text)
+	}
+}
+
+func TestAFailureWithNothingAnsweredFallsBackToItsSummary(t *testing.T) {
+	failed := toolcontract.ToolResult{Failure: &toolcontract.ToolFailure{Code: "unavailable", UserSafeSummary: "the directory did not answer"}}
+
+	text := callToolResult(failed, false, "message_send").Content[0].(*mcp.TextContent).Text
+
+	if text != "unavailable: the directory did not answer" {
+		t.Fatalf("got %q", text)
+	}
+}
