@@ -51,6 +51,17 @@ describe('deliveredMessagesAt', () => {
     expect(afterRestart.has('torn')).toBe(false);
   });
 
+  test('a clock that boots behind the record keeps what was handed over before it', () => {
+    const directory = freshDirectory();
+    deliveredMessagesAt(directory, now).record('handed-over', now - 60);
+
+    const afterRestart = deliveredMessagesAt(directory, 0);
+
+    expect(afterRestart.has('handed-over')).toBe(true);
+    expect(afterRestart.currentSeconds(0)).toBe(now - 60);
+    expect(afterRestart.oldestRememberedSeconds(0)).toBe(now - 60 - deliveryMemorySeconds);
+  });
+
   test('the oldest message worth catching up is one memory back', () => {
     expect(deliveredMessagesAt(freshDirectory(), now).oldestRememberedSeconds(now)).toBe(now - deliveryMemorySeconds);
   });

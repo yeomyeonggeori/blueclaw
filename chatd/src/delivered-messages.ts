@@ -7,10 +7,15 @@ export type DeliveredMessages = {
   readonly startedEmpty: boolean;
   has(messageID: string): boolean;
   record(messageID: string, sentAtSeconds: number): void;
-  oldestRememberedSeconds(nowSeconds: number): number;
+  currentSeconds(clockSeconds: number): number;
+  oldestRememberedSeconds(clockSeconds: number): number;
 };
 
 type Entry = { id: string; at: number };
+
+export function clockSeconds(): number {
+  return Math.floor(Date.now() / 1000);
+}
 
 export function deliveredMessagesInMemory(): DeliveredMessages {
   return ledgerOver(new Map(), true, () => undefined);
@@ -29,26 +34,36 @@ function ledgerOver(
   startedEmpty: boolean,
   persist: (entry: Entry) => void,
 ): DeliveredMessages {
+  let newestSeconds = newestOf(remembered.values(), 0);
+  const currentSeconds = (clockSeconds: number) => Math.max(clockSeconds, newestSeconds);
   return {
     startedEmpty,
     has: (messageID) => remembered.has(messageID),
     record(messageID, sentAtSeconds) {
       if (remembered.has(messageID)) return;
       remembered.set(messageID, sentAtSeconds);
+      newestSeconds = Math.max(newestSeconds, sentAtSeconds);
       persist({ id: messageID, at: sentAtSeconds });
     },
-    oldestRememberedSeconds: (nowSeconds) => nowSeconds - deliveryMemorySeconds,
+    currentSeconds,
+    oldestRememberedSeconds: (clockSeconds) => currentSeconds(clockSeconds) - deliveryMemorySeconds,
   };
 }
 
-function entriesStillRemembered(path: string, nowSeconds: number): Map<string, number> {
-  const horizon = nowSeconds - deliveryMemorySeconds;
-  const remembered = new Map<string, number>();
-  for (const line of readFileSync(path, 'utf8').split('\n')) {
-    const entry = entryOf(line);
-    if (entry && entry.at >= horizon) remembered.set(entry.id, entry.at);
-  }
-  return remembered;
+function entriesStillRemembered(path: string, clockSeconds: number): Map<string, number> {
+  const entries = readFileSync(path, 'utf8')
+    .split('\n')
+    .map(entryOf)
+    .filter((entry): entry is Entry => entry !== undefined);
+  const newestSeconds = newestOf(entries.map((entry) => entry.at), clockSeconds);
+  const horizon = newestSeconds - deliveryMemorySeconds;
+  return new Map(entries.filter((entry) => entry.at >= horizon).map((entry) => [entry.id, entry.at]));
+}
+
+function newestOf(secondsList: Iterable<number>, floorSeconds: number): number {
+  let newest = floorSeconds;
+  for (const seconds of secondsList) newest = Math.max(newest, seconds);
+  return newest;
 }
 
 function entryOf(line: string): Entry | undefined {
