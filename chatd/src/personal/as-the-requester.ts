@@ -17,6 +17,7 @@ const personCapabilityAskedAsTheRequester: Record<string, string> = {
 	"requester.channel.owner.set": "person.channel.owner.set",
 	"requester.channel.owner.add": "person.channel.owner.add",
 	"requester.channel.delete": "person.channel.delete",
+	"requester.message.send": "person.message.send",
 	"requester.reaction.add": "person.reaction.add",
 	"requester.reaction.remove": "person.reaction.remove",
 	"requester.dm.hide": "person.dm.hide",
