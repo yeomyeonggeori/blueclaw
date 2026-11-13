@@ -88,7 +88,7 @@ func CRMImportFromUnreadableFileScenario(artifactDirectoryPath string) VirtualSe
 		Prompt: prompt,
 		ActionResponses: []string{
 			actionCallTool(virtualCRMImportToolName, `{"kind":"organization","attachments":["/workspace/shared/inbox/missing.csv"],"columns":{"name":"회사명"}}`),
-			actionFinishMessage("missing.csv 파일을 읽을 수 없어 가져오지 못했습니다."),
+			actionFailMessage("missing.csv 파일을 읽을 수 없어 가져오지 못했습니다."),
 		},
 		ExpectedEventCounts: []VirtualEventCount{
 			{Name: toolResultEventName(virtualCRMImportToolName), BodyFragment: "missing.csv", Count: 1},
@@ -96,7 +96,7 @@ func CRMImportFromUnreadableFileScenario(artifactDirectoryPath string) VirtualSe
 		},
 		ForbiddenEvents:        []string{agentcontract.TaskEventConfirmationRequested},
 		ExpectedReplyFragments: []string{"missing.csv", "읽을 수 없어"},
-		ExpectedTaskStatus:     task.TaskStatusCompleted,
+		ExpectedTaskStatus:     task.TaskStatusFailed,
 	}}
 	return scenario
 }
