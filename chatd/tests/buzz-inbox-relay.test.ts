@@ -1,11 +1,9 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { Server, ServerWebSocket } from "bun";
 import { finalizeEvent, generateSecretKey, getPublicKey } from "nostr-tools/pure";
 import { bytesToHex } from "nostr-tools/utils";
 import { closeEveryPooledRelay } from "../src/adapters/buzz/relay-pool.ts";
-import { READ_STATE_KIND } from "../src/adapters/buzz/read-state.ts";
 import { listInboxAsUser } from "../src/adapters/buzz/user-inbox.ts";
-import { markConversationReadAsUser } from "../src/adapters/buzz/user-read-state.ts";
 import type { BuzzEvent } from "../src/adapters/buzz/types.ts";
 
 type Filter = {
@@ -33,22 +31,12 @@ function matches(event: BuzzEvent, filter: Filter): boolean {
 	return true;
 }
 
-function keep(event: BuzzEvent): void {
-	if (event.kind === READ_STATE_KIND) {
-		const dOf = (candidate: BuzzEvent) => candidate.tags.find((tag) => tag[0] === "d")?.[1];
-		const replaced = stored.findIndex(
-			(candidate) => candidate.kind === event.kind && candidate.pubkey === event.pubkey && dOf(candidate) === dOf(event),
-		);
-		if (replaced >= 0) stored.splice(replaced, 1);
-	}
-	stored.push(event);
-}
 
 function answer(socket: ServerWebSocket<unknown>, raw: string): void {
 	const [frameType, ...rest] = JSON.parse(raw) as [string, ...unknown[]];
 	if (frameType === "AUTH" || frameType === "EVENT") {
 		const event = rest[0] as BuzzEvent;
-		if (frameType === "EVENT") keep(event);
+		if (frameType === "EVENT") stored.push(event);
 		socket.send(JSON.stringify(["OK", event.id, true, ""]));
 		return;
 	}
@@ -64,6 +52,37 @@ function answer(socket: ServerWebSocket<unknown>, raw: string): void {
 	socket.send(JSON.stringify(["EOSE", subscriptionID]));
 }
 
+type UnreadThread = { channelID: string; rootID: string; latestReplyID: string };
+
+const joinedChannelIDs = ["channel-1", "dm-1"];
+let unreadThreads: UnreadThread[] = [];
+const unreadMessageIDs = new Set<string>();
+
+function sidebar(): Response {
+	const channels = joinedChannelIDs.map((channelID) => ({
+		channel_id: channelID,
+		unread: { status: "exact", value: 0 },
+		attention: { status: "exact", value: 0 },
+		latest_message_id: null,
+		threads: {
+			complete: true,
+			items: unreadThreads
+				.filter((thread) => thread.channelID === channelID)
+				.map((thread) => ({ root_id: thread.rootID, unread: { status: "exact", value: 1 }, latest_reply_id: thread.latestReplyID, latest_reply_at: now })),
+		},
+	}));
+	return Response.json({ account: {}, channels, next_cursor: null });
+}
+
+function readStatuses(url: URL): Response {
+	const targets: { message_ids: string[] }[] = JSON.parse(url.searchParams.get("targets") ?? "[]");
+	const contexts = targets.map((target) => ({
+		status: "available",
+		messages: target.message_ids.map((messageID) => ({ message_id: messageID, status: unreadMessageIDs.has(messageID) ? "unread" : "read" })),
+	}));
+	return Response.json({ account: {}, contexts });
+}
+
 let server: Server<unknown>;
 let relayURL = "";
 
@@ -71,6 +90,9 @@ beforeAll(() => {
 	server = Bun.serve({
 		port: 0,
 		fetch(request, serving) {
+			const url = new URL(request.url);
+			if (url.pathname === "/buzz/v1/me/sidebar") return sidebar();
+			if (url.pathname === "/buzz/v1/me/read-state") return readStatuses(url);
 			if (serving.upgrade(request, { data: undefined })) return undefined;
 			return new Response("a relay speaks websocket", { status: 400 });
 		},
@@ -89,6 +111,12 @@ beforeAll(() => {
 afterAll(() => {
 	closeEveryPooledRelay();
 	server.stop(true);
+});
+
+beforeEach(() => {
+	stored.length = 0;
+	unreadThreads = [];
+	unreadMessageIDs.clear();
 });
 
 const reader = generateSecretKey();
@@ -113,150 +141,68 @@ function replyTo(root: BuzzEvent): string[][] {
 	];
 }
 
-function inboxSince(sinceSeconds?: number, heldIDs: string[] = [], untilSeconds?: number) {
-	return listInboxAsUser({
-		relayURL,
-		userSecretHex: readerSecretHex,
-		directChannelIDs: ["dm-1"],
-		groupChannelIDs: ["channel-1"],
-		sinceSeconds,
-		untilSeconds,
-		heldIDs,
-	});
-}
-
-async function inbox() {
-	return (await inboxSince()).items;
+function inboxUntil(untilSeconds?: number) {
+	return listInboxAsUser({ relayURL, userSecretHex: readerSecretHex, untilSeconds });
 }
 
 describe("a person's inbox against a relay", () => {
-	test("holds everything others wrote in the conversations they are in, saying why, newest first", async () => {
-		const direct = post(writer, "dm-1", 500);
-		const mention = post(writer, "channel-1", 400, [["p", readerPubkey]]);
-		const ownRoot = post(reader, "channel-1", 300);
-		const reply = post(writer, "channel-1", 200, replyTo(ownRoot));
-		const channel = post(writer, "channel-1", 150);
+	test("holds the messages that call on the reader and the latest reply of each thread the relay counts unread, newest first", async () => {
+		const ownRoot = post(reader, "channel-1", 600);
+		post(writer, "channel-1", 500, replyTo(ownRoot));
+		const latestReply = post(writer, "channel-1", 300, replyTo(ownRoot));
+		const mention = post(writer, "dm-1", 400, [["p", readerPubkey]]);
 		post(writer, "channel-elsewhere", 100, [["p", readerPubkey]]);
-		post(reader, "dm-1", 50);
+		post(reader, "channel-1", 50, [["p", readerPubkey]]);
+		post(writer, "channel-1", 40);
+		unreadThreads = [{ channelID: "channel-1", rootID: ownRoot.id, latestReplyID: latestReply.id }];
 
-		const items = await inbox();
+		const { items } = await inboxUntil();
 
 		expect(items.map((item) => [item.message.id, item.reason])).toEqual([
-			[channel.id, "channel"],
-			[reply.id, "thread_reply"],
+			[latestReply.id, "thread_reply"],
 			[mention.id, "mention"],
-			[direct.id, "direct"],
 		]);
-		expect(items.find((item) => item.reason === "thread_reply")?.message.parentID).toBe(ownRoot.id);
-		expect(items.every((item) => item.isUnread)).toBe(true);
+		expect(items[0]?.message.parentID).toBe(ownRoot.id);
 	});
 
-	test("a reply read in its thread and a message read in its conversation are no longer unread", async () => {
-		const reply = (await inbox()).find((item) => item.reason === "thread_reply");
-		await markConversationReadAsUser({
-			relayURL,
-			userSecretHex: readerSecretHex,
-			channelID: "channel-1",
-			threadRootID: reply?.message.parentID,
-			readAtSeconds: now - 200,
-		});
-		await markConversationReadAsUser({
-			relayURL,
-			userSecretHex: readerSecretHex,
-			channelID: "dm-1",
-			readAtSeconds: now - 500,
-		});
+	test("a mention is unread exactly when the relay says so", async () => {
+		const unread = post(writer, "channel-1", 200, [["p", readerPubkey]]);
+		const read = post(writer, "channel-1", 100, [["p", readerPubkey]]);
+		unreadMessageIDs.add(unread.id);
 
-		const unreadOf = new Map((await inbox()).map((item) => [item.reason, item.isUnread]));
+		const unreadOf = new Map((await inboxUntil()).items.map((item) => [item.message.id, item.isUnread]));
 
-		expect(unreadOf).toEqual(
-			new Map([
-				["channel", true],
-				["thread_reply", false],
-				["mention", true],
-				["direct", false],
-			]),
-		);
+		expect(unreadOf).toEqual(new Map([[read.id, false], [unread.id, true]]));
 	});
 
-	test("a message taken back leaves the inbox", async () => {
-		const taken = post(writer, "dm-1", 10, [], "oops");
-		stored.push(finalizeEvent({ kind: 9005, created_at: now - 5, tags: [["h", "dm-1"], ["e", taken.id]], content: "" }, writer) as BuzzEvent);
-
-		expect((await inbox()).map((item) => item.message.id)).not.toContain(taken.id);
-	});
-
-	test("asked since a moment, answers only what arrived from then, and brings what it already holds up to date", async () => {
-		const older = post(writer, "dm-1", 900, [], "before");
-		const kept = post(writer, "dm-1", 800, [], "first wording");
-		const taken = post(writer, "dm-1", 700, [], "taken back");
-		const arrived = post(writer, "dm-1", 30, [], "new");
+	test("a mention taken back leaves the inbox and an edited one shows its latest wording", async () => {
+		const taken = post(writer, "channel-1", 20, [["p", readerPubkey]], "oops");
+		const edited = post(writer, "channel-1", 10, [["p", readerPubkey]], "first wording");
 		stored.push(
-			finalizeEvent({ kind: 40003, created_at: now - 20, tags: [["h", "dm-1"], ["e", kept.id]], content: "second wording" }, writer) as BuzzEvent,
-			finalizeEvent({ kind: 9005, created_at: now - 20, tags: [["h", "dm-1"], ["e", taken.id]], content: "" }, writer) as BuzzEvent,
+			finalizeEvent({ kind: 9005, created_at: now - 5, tags: [["h", "channel-1"], ["e", taken.id]], content: "" }, writer) as BuzzEvent,
+			finalizeEvent({ kind: 40003, created_at: now - 5, tags: [["h", "channel-1"], ["e", edited.id]], content: "second wording" }, writer) as BuzzEvent,
 		);
 
-		const answer = await inboxSince(now - 40, [older.id, kept.id, taken.id]);
+		const { items } = await inboxUntil();
 
-		expect(answer.items.map((item) => item.message.id)).toContain(arrived.id);
-		expect(answer.items.map((item) => item.message.id)).not.toContain(older.id);
-		expect(new Map(answer.held.map((item) => [item.id, item.body]))).toEqual(
-			new Map([
-				[older.id, "before"],
-				[kept.id, "second wording"],
-			]),
-		);
+		expect(items.map((item) => [item.message.id, item.message.body])).toEqual([[edited.id, "second wording"]]);
 	});
 
-	test("asked until a moment, answers the page before it and says whether older ones remain", async () => {
-		const pageStart = now - 10_000;
-		const older = Array.from({ length: 55 }, (_, index) => post(writer, "channel-1", 10_000 + index));
+	test("asked until a moment, answers the page of mentions before it and leaves unread threads to the first page", async () => {
+		const root = post(reader, "channel-1", 20_000);
+		const reply = post(writer, "channel-1", 5, replyTo(root));
+		unreadThreads = [{ channelID: "channel-1", rootID: root.id, latestReplyID: reply.id }];
+		const older = Array.from({ length: 55 }, (_, index) => post(writer, "channel-1", 10_000 + index, [["p", readerPubkey]]));
 
-		const page = await inboxSince(undefined, [], pageStart);
+		const page = await inboxUntil(now - 10_000);
 
 		expect(page.items).toHaveLength(50);
 		expect(page.items[0]?.message.id).toBe(older[0]?.id);
 		expect(page.hasMoreBefore).toBe(true);
 
-		const last = await inboxSince(undefined, [], pageStart - 50);
+		const last = await inboxUntil(now - 10_050);
 
 		expect(last.items.map((item) => item.message.id)).toEqual(older.slice(50).map((event) => event.id));
 		expect(last.hasMoreBefore).toBe(false);
-	});
-
-	test("a message edited to call on the reader is listed as a mention, at the time it was posted", async () => {
-		const edited = post(writer, "channel-1", 3_000, [], "회의 시작합니다");
-		const editedAt = now - 2;
-		stored.push(
-			finalizeEvent(
-				{ kind: 40003, created_at: editedAt, tags: [["h", "channel-1"], ["e", edited.id], ["p", readerPubkey]], content: "회의 시작합니다 @이샘플" },
-				writer,
-			) as BuzzEvent,
-		);
-
-		const item = (await inbox()).find((candidate) => candidate.message.id === edited.id);
-
-		expect(item?.reason).toBe("mention");
-		expect(item?.message.body).toBe("회의 시작합니다 @이샘플");
-		expect(item?.message.postedAt).toBe(new Date(edited.created_at * 1000).toISOString());
-		expect(item?.isUnread).toBe(true);
-	});
-
-	test("a later edit that no longer calls on the reader takes the mention back", async () => {
-		const edited = post(writer, "channel-1", 2_900, [], "자료 확인 부탁드립니다");
-		stored.push(
-			finalizeEvent(
-				{ kind: 40003, created_at: now - 4, tags: [["h", "channel-1"], ["e", edited.id], ["p", readerPubkey]], content: "@이샘플 자료 확인 부탁드립니다" },
-				writer,
-			) as BuzzEvent,
-			finalizeEvent(
-				{ kind: 40003, created_at: now - 3, tags: [["h", "channel-1"], ["e", edited.id]], content: "자료 확인 부탁드립니다" },
-				writer,
-			) as BuzzEvent,
-		);
-
-		const item = (await inbox()).find((candidate) => candidate.message.id === edited.id);
-
-		expect(item?.reason).not.toBe("mention");
 	});
 });

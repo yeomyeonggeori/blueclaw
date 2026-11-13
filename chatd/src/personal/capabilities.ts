@@ -1,7 +1,6 @@
 import type { PersonalGateway } from "./gateway.ts";
 import {
 	MalformedRequest,
-	inboxWindowOf,
 	optionalLoopbackTypingURL,
 	optionalLoopbackWithdrawalsURL,
 	parseCredentialAnswers,
@@ -18,7 +17,7 @@ import {
 	requireLoopbackArrivalsURL,
 	requireName,
 	requireQuery,
-	requireReadAt,
+	optionalTime,
 } from "./parse.ts";
 
 // The agent's own account on the messenger, when the platform knows it. A
@@ -114,17 +113,12 @@ export const personCapabilities: Record<string, PersonCapability> = {
 	},
 	"person.read_state.mark": async (gateway, body) => {
 		const request = parsePersonRequest(body);
-		await gateway.markConversationRead(
-			request.actor,
-			requireConversation(request),
-			requireReadAt(request),
-			request.parentID,
-		);
+		await gateway.markReadThrough(request.actor, requireConversation(request), requireMessage(request), request.parentID);
 		return {};
 	},
 	"person.inbox.list": async (gateway, body, agentExternalID) => {
 		const request = parsePersonRequest(body);
-		return { agentExternalID, ...(await gateway.listInbox(request.actor, inboxWindowOf(request))) };
+		return { agentExternalID, ...(await gateway.listInbox(request.actor, optionalTime(request.until, "until"))) };
 	},
 	"person.messages.list": async (gateway, body, agentExternalID) => {
 		const request = parsePersonRequest(body);

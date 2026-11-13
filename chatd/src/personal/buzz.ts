@@ -14,7 +14,7 @@ import { mentionTags } from "../adapters/buzz/user-mentions.ts";
 import { answerTags } from "../adapters/buzz/ask-tags.ts";
 import type { AnsweredChoice } from "../choice.ts";
 import { emojiTagsFor, listCustomEmojiAsUser, normalizedShortcode, shortcodesIn, type CustomEmoji } from "../adapters/buzz/user-emoji.ts";
-import { markConversationReadAsUser, unreadCountsAsUser } from "../adapters/buzz/user-read-state.ts";
+import { markReadThroughAsUser, readSummariesAsUser, ReadStateRefused, type ReadCount } from "../adapters/buzz/personal-read.ts";
 import { announceTypingAsUser } from "../adapters/buzz/user-typing.ts";
 import { searchChannelMessagesAsUser } from "../adapters/buzz/user-message-search.ts";
 import { hideDirectMessageAsUser, revealDirectMessageAsUser } from "../adapters/buzz/user-dm-visibility.ts";
@@ -60,7 +60,6 @@ import {
 	type PersonalMentions,
 	type PersonalImage,
 	type PersonalInbox,
-	type PersonalInboxWindow,
 	type PersonalMessage,
 	type PersonalMessageMatch,
 	type PersonalMessagePage,
@@ -138,13 +137,10 @@ class BuzzPersonalGateway implements PersonalGateway {
 
 	async listConversations(actor: ActorCredential): Promise<PersonalConversation[]> {
 		this.require(actor);
-		const conversations = await listUserConversations(this.settings.relayURL, actor.secret);
-		const unreadCounts = await unreadCountsAsUser({
-			relayURL: this.settings.relayURL,
-			userSecretHex: actor.secret,
-			channelIDs: conversations.map((conversation) => conversation.channelID),
-			authTagJSON: this.settings.authTagJSON,
-		});
+		const [conversations, unreadOfChannel] = await Promise.all([
+			listUserConversations(this.settings.relayURL, actor.secret),
+			this.unreadOfChannels(actor),
+		]);
 		return conversations.map((conversation) => ({
 			id: conversation.channelID,
 			name: conversation.name,
@@ -155,8 +151,18 @@ class BuzzPersonalGateway implements PersonalGateway {
 			participantExternalIDs: conversation.participantPubkeyHexes,
 			description: conversation.description,
 			roleOfExternalID: conversation.roleOfPubkeyHex,
-			unreadCount: unreadCounts.get(conversation.channelID) ?? 0,
+			unread: unreadOfChannel.get(conversation.channelID),
 		}));
+	}
+
+	private async unreadOfChannels(actor: ActorCredential): Promise<Map<string, ReadCount>> {
+		try {
+			const summaries = await readSummariesAsUser(this.settings.relayURL, actor.secret);
+			return new Map(summaries.map((summary) => [summary.channelID, summary.unread]));
+		} catch (error) {
+			if (error instanceof ReadStateRefused && error.isUnavailable) return new Map();
+			throw error;
+		}
 	}
 
 	async listPeople(actor: ActorCredential): Promise<PersonalPerson[]> {
@@ -308,34 +314,22 @@ class BuzzPersonalGateway implements PersonalGateway {
 		await deleteChannelAsUser({ relayURL: this.settings.relayURL, userSecretHex: actor.secret, channelID: conversationID });
 	}
 
-	async markConversationRead(
+	async markReadThrough(
 		actor: ActorCredential,
 		conversationID: string,
-		readAt: Date,
+		messageID: string,
 		threadRootID?: string,
 	): Promise<void> {
 		this.require(actor);
-		await markConversationReadAsUser({
-			relayURL: this.settings.relayURL,
-			userSecretHex: actor.secret,
-			channelID: conversationID,
-			threadRootID,
-			readAtSeconds: Math.floor(readAt.getTime() / 1000),
-			authTagJSON: this.settings.authTagJSON,
-		});
+		await markReadThroughAsUser(this.settings.relayURL, actor.secret, { channelID: conversationID, threadRootID }, messageID);
 	}
 
-	async listInbox(actor: ActorCredential, window: PersonalInboxWindow): Promise<PersonalInbox> {
+	async listInbox(actor: ActorCredential, until?: Date): Promise<PersonalInbox> {
 		this.require(actor);
-		const conversations = await listUserConversations(this.settings.relayURL, actor.secret, { withProfiles: false });
 		const inbox = await listInboxAsUser({
 			relayURL: this.settings.relayURL,
 			userSecretHex: actor.secret,
-			directChannelIDs: conversations.filter((conversation) => conversation.isDM).map((conversation) => conversation.channelID),
-			groupChannelIDs: conversations.filter((conversation) => !conversation.isDM).map((conversation) => conversation.channelID),
-			sinceSeconds: window.since ? Math.floor(window.since.getTime() / 1000) : undefined,
-			untilSeconds: window.until ? Math.floor(window.until.getTime() / 1000) : undefined,
-			heldIDs: window.heldIDs,
+			untilSeconds: until ? Math.floor(until.getTime() / 1000) : undefined,
 			authTagJSON: this.settings.authTagJSON,
 		});
 		const items = inbox.items.map((item) => ({
@@ -350,7 +344,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 				postedAt: item.message.postedAt,
 			},
 		}));
-		return { items, held: inbox.held, hasMoreBefore: inbox.hasMoreBefore };
+		return { items, hasMoreBefore: inbox.hasMoreBefore };
 	}
 
 	async listMessages(

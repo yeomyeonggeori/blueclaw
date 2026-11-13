@@ -25,8 +25,10 @@ export type PersonalConversation = {
 	avatarURL?: string;
 	participantExternalIDs?: string[];
 	webURL?: string;
-	unreadCount?: number;
+	unread?: PersonalReadCount;
 };
+
+export type PersonalReadCount = { status: "exact" | "at_least"; value: number } | { status: "unknown" };
 
 export type NewPersonalChannel = {
 	name: string;
@@ -93,27 +95,14 @@ export type PersonalMessageMatch = Pick<
 >;
 
 export type PersonalInboxItem = {
-	reason: "mention" | "direct" | "thread_reply" | "channel";
+	reason: "mention" | "thread_reply";
 	message: PersonalMessageMatch;
-	isUnread: boolean;
-};
-
-export type PersonalHeldInboxItem = {
-	id: string;
-	body: string;
 	isUnread: boolean;
 };
 
 export type PersonalInbox = {
 	items: PersonalInboxItem[];
-	held: PersonalHeldInboxItem[];
 	hasMoreBefore: boolean;
-};
-
-export type PersonalInboxWindow = {
-	since?: Date;
-	until?: Date;
-	heldIDs: string[];
 };
 
 export type PersonalMessagePage = {
@@ -222,13 +211,8 @@ export interface PersonalGateway {
 		externalID: string,
 	): Promise<{ newToChannel: boolean }>;
 	deleteChannel(actor: ActorCredential, conversationID: string): Promise<void>;
-	markConversationRead(
-		actor: ActorCredential,
-		conversationID: string,
-		readAt: Date,
-		threadRootID?: string,
-	): Promise<void>;
-	listInbox(actor: ActorCredential, window: PersonalInboxWindow): Promise<PersonalInbox>;
+	markReadThrough(actor: ActorCredential, conversationID: string, messageID: string, threadRootID?: string): Promise<void>;
+	listInbox(actor: ActorCredential, until?: Date): Promise<PersonalInbox>;
 	listMessages(
 		actor: ActorCredential,
 		conversationID: string,
