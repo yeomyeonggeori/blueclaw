@@ -911,12 +911,11 @@ func (toolCatalogBuilder *ToolCatalogBuilder) convertFilePreviewWithCapability(t
 		Result       json.RawMessage `json:"result"`
 	}
 	input := toolcontract.MarshalToolInput(map[string]any{"path": bridgePath, "maxOutputBytes": maximumFilePreviewBytes})
-	descriptor, isFound := toolCatalogBuilder.capabilityToolDescriptorByName("document_read")
-	if !isFound {
+	requestDocument, errorValue := toolCatalogBuilder.capabilityRequestForOperation(toolContext, "document_read", request, input)
+	if errorValue != nil {
 		return toolcontract.ToolResult{}, false
 	}
-	requestDocument := capabilityToolRequest(toolContext, descriptor, request, preparedCapabilityToolPayload{Input: input})
-	errorValue := toolCatalogBuilder.postCapabilityInvocation(toolContext, "document_read", toolCatalogBuilder.capabilityCallBudget(descriptor), requestDocument, &response)
+	errorValue = toolCatalogBuilder.capabilityClient.PostJSON(toolContext, "/v1/tools/document_read/invoke", requestDocument, &response)
 	if errorValue != nil || response.IsError || response.Status == "error" || response.Status == "denied" {
 		return toolcontract.ToolResult{}, false
 	}

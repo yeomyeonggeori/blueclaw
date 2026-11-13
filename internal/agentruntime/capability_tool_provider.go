@@ -96,7 +96,7 @@ func validCapabilityObjectSchema(schema json.RawMessage) bool {
 
 func (provider capabilityToolProvider) boundTool(descriptor CapabilityToolDescriptor) toolcontract.BoundTool {
 	operation := strings.TrimSpace(descriptor.CanonicalName)
-	return boundToolFromDescriptor(
+	boundTool := boundToolFromDescriptor(
 		descriptor,
 		"capabilityd/"+strings.TrimSpace(descriptor.CanonicalName),
 		provider.ProviderID(),
@@ -111,6 +111,8 @@ func (provider capabilityToolProvider) boundTool(descriptor CapabilityToolDescri
 			)
 		},
 	)
+	boundTool.Definition.TimeoutMS = capabilityToolTimeoutMS(descriptor)
+	return boundTool
 }
 
 func boundToolFromDescriptor(
