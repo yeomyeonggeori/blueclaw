@@ -222,8 +222,15 @@ func missingStructuredContentResult(toolName string) *mcp.CallToolResult {
 }
 
 func resultText(toolResult toolcontract.ToolResult) string {
-	if toolResult.Failure != nil {
-		return fmt.Sprintf("%s: %s", toolResult.Failure.Code, toolResult.Failure.UserSafeSummary)
+	if toolResult.Failure == nil {
+		return toolResult.Output.Content
 	}
-	return toolResult.Output.Content
+	return fmt.Sprintf("%s: %s", toolResult.Failure.Code, failureText(toolResult))
+}
+
+func failureText(toolResult toolcontract.ToolResult) string {
+	if content := strings.TrimSpace(toolResult.Output.Content); content != "" {
+		return content
+	}
+	return toolResult.Failure.UserSafeSummary
 }
