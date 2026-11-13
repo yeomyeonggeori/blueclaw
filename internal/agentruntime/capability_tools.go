@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"net/url"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -131,7 +130,11 @@ func (toolCatalogBuilder *ToolCatalogBuilder) invokeCapabilityOperation(toolCont
 	if missing := missingRequiredCapabilityInputFields(toolDescriptor.InputSchema, toolInput); len(missing) > 0 {
 		return capabilityMissingInputFailure(operation, toolDescriptor, missing), nil
 	}
-	errorValue = toolCatalogBuilder.capabilityClient.PostJSON(toolContext, "/v1/tools/"+url.PathEscape(operation)+"/invoke", capabilityToolRequest(toolContext, toolDescriptor, request, preparedPayload), &response)
+	budget := toolCatalogBuilder.capabilityCallBudget(toolDescriptor)
+	errorValue = toolCatalogBuilder.postCapabilityInvocation(toolContext, operation, budget, capabilityToolRequest(toolContext, toolDescriptor, request, preparedPayload), &response)
+	if capabilityCallOutlivedItsLimit(toolContext, errorValue) {
+		return capabilityCallExpiredFailure(operation, capabilityCallLimit(budget)), nil
+	}
 	if errorValue != nil {
 		return toolcontract.ToolResult{}, errorValue
 	}
@@ -442,14 +445,6 @@ func (toolCatalogBuilder *ToolCatalogBuilder) capabilityToolDescriptorByName(ope
 		}
 	}
 	return CapabilityToolDescriptor{}, false
-}
-
-func (toolCatalogBuilder *ToolCatalogBuilder) capabilityRequestForOperation(toolContext context.Context, operation string, request ToolCatalogRequest, input json.RawMessage) (map[string]any, error) {
-	descriptor, isFound := toolCatalogBuilder.capabilityToolDescriptorByName(operation)
-	if !isFound {
-		return nil, errors.New("capability descriptor is not registered: " + operation)
-	}
-	return capabilityToolRequest(toolContext, descriptor, request, preparedCapabilityToolPayload{Input: input}), nil
 }
 
 func capabilityRequiredInputDescription(inputSchema json.RawMessage, requiredFields []string) string {

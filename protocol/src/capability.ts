@@ -304,6 +304,9 @@ export const capabilityDescriptorSchema = z.strictObject({
   version: nonBlankStringSchema,
   privacyClass: nonBlankStringSchema,
   estimatedLatency: z.enum(CapabilityEstimatedLatency),
+  timeoutSecond: z.number().int().positive().optional().describe(
+    'How many seconds one call may run. The caller sends it as the invoke request timeoutSecond and stops waiting shortly after; a tool that names none runs under the caller\'s own limit.',
+  ),
   answeredBy: z.enum(CapabilityAnsweredBy).describe(
     'Which of three things holds the answer: the record, a service on the company machine, or a runtime beside the agent. A caller with no runtime of its own, a public API among them, refuses local rather than forwarding it.',
   ),

@@ -19,6 +19,7 @@ type ToolDescriptor struct {
 	Version              string              `json:"version,omitempty"`
 	PrivacyClass         string              `json:"privacyClass,omitempty"`
 	EstimatedLatency     string              `json:"estimatedLatency,omitempty"`
+	TimeoutSecond        int                 `json:"timeoutSecond,omitempty"`
 	RequiresUserPresence bool                `json:"requiresUserPresence,omitempty"`
 	WorksOffline         bool                `json:"worksOffline,omitempty"`
 	RecallSource         bool                `json:"recallSource,omitempty"`
