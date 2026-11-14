@@ -296,26 +296,11 @@ func (connectorRuntime *ConnectorRuntime) latestRecentlyFinishedConversationTask
 	return latestTaskRun, isFound
 }
 
-func (connectorRuntime *ConnectorRuntime) latestCurrentConversationActiveTask(personID string, event PlatformInboundEvent) (task.TaskRun, bool) {
-	var latestTaskRun task.TaskRun
-	isFound := false
-	for _, taskRun := range connectorRuntime.activeTaskRunsForPerson(personID) {
-		if !taskRunSharesMessageThread(taskRun, event) {
-			continue
-		}
-		if !isFound || taskRun.UpdatedAt.After(latestTaskRun.UpdatedAt) {
-			latestTaskRun = taskRun
-			isFound = true
-		}
-	}
-	return latestTaskRun, isFound
-}
-
 func (connectorRuntime *ConnectorRuntime) latestRunningConversationTask(personID string, event PlatformInboundEvent) (task.TaskRun, bool) {
 	var latestTaskRun task.TaskRun
 	isFound := false
 	for _, taskRun := range connectorRuntime.activeTaskRunsForPerson(personID) {
-		if !taskRunSharesMessageThread(taskRun, event) || taskRun.Status == task.TaskStatusWaitingApproval || taskRun.Status == task.TaskStatusWaitingUserInput {
+		if !taskRunMatchesStopScope(taskRun, event) || taskRun.Status == task.TaskStatusWaitingApproval || taskRun.Status == task.TaskStatusWaitingUserInput {
 			continue
 		}
 		if !isFound || taskRun.UpdatedAt.After(latestTaskRun.UpdatedAt) {
@@ -332,7 +317,7 @@ func (connectorRuntime *ConnectorRuntime) hasRunningConversationTask(event Platf
 		return false
 	}
 	return slices.ContainsFunc(connectorRuntime.taskRunService.ListTaskRunByPersonID(personID), func(taskRun task.TaskRun) bool {
-		return taskRunSharesMessageThread(taskRun, event) && connectorRuntime.taskRunService.IsTaskRunActuallyRunning(taskRun)
+		return taskRunMatchesStopScope(taskRun, event) && connectorRuntime.taskRunService.IsTaskRunActuallyRunning(taskRun)
 	})
 }
 

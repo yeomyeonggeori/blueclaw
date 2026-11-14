@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/agenttest"
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
@@ -108,44 +109,56 @@ func TestConnectorRevisionSuppressesCompletedButUndeliveredReply(t *testing.T) {
 	}
 }
 
-func TestConnectorRevisionCancelsRunningTaskBeforeLaunchingReplacement(t *testing.T) {
+func TestConnectorRevisionWhileTheTaskRunsIsDecidedAndNotReadTogether(t *testing.T) {
 	languageModel := &blockingTestLanguageModel{reply: "final result", started: make(chan struct{}), release: make(chan struct{})}
+	releaseTheModel := sync.OnceFunc(func() { close(languageModel.release) })
+	t.Cleanup(releaseTheModel)
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
 	connectorRuntimeAgentKernel(connectorRuntime).UseIntakeLanguageModelProvider(testLanguageModel{reply: "classified"})
+	connectorRuntime.UseGatewayDecider(&scriptedGatewayDecider{addressing: addressedToBot(), busyRoute: inboundengagement.BusyRouteReplace, relatesToActiveTask: true})
 	repository := &revisionTestRepository{}
 	connectorRuntime.UseEventRepository(repository)
 	first := revisionInboundEvent("first", "Write a report")
 	if _, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, first); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	finished := make(chan struct{})
+	firstFinished := make(chan struct{})
 	go func() {
 		connectorRuntime.processNextQueuedConnectorEvent(context.Background())
-		close(finished)
+		close(firstFinished)
 	}()
 	select {
 	case <-languageModel.started:
 	case <-agenttest.WhenTheTestRunsOut(t):
 		t.Fatal("initial task did not reach the model")
 	}
-	for _, event := range []PlatformInboundEvent{revisionInboundEvent("second", "as HTML"), revisionInboundEvent("third", "with a short introduction")} {
-		if _, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, event); errorValue != nil {
-			t.Fatal(errorValue)
-		}
+	second := revisionInboundEvent("second", "Write it as HTML instead")
+	if _, errorValue := connectorRuntime.HandleInboundEvent(context.Background(), adapter, second); errorValue != nil {
+		t.Fatal(errorValue)
 	}
-	select {
-	case <-finished:
-	case <-agenttest.WhenTheTestRunsOut(t):
-		close(languageModel.release)
-		t.Fatal("superseded task did not stop after cancellation")
-	}
-	close(languageModel.release)
-	previousTask, isFound := connectorRuntime.findTaskRunBySourceReference("person-1", first.DedupeKey())
-	if !isFound || previousTask.Status != task.TaskStatusCancelled {
-		t.Fatalf("expected initial task cancelled, found=%v task=%+v", isFound, previousTask)
-	}
-	for range 2 {
+	secondFinished := make(chan struct{})
+	go func() {
 		connectorRuntime.processNextQueuedConnectorEvent(context.Background())
+		close(secondFinished)
+	}()
+	select {
+	case <-firstFinished:
+	case <-agenttest.WhenTheTestRunsOut(t):
+		t.Fatal("the replaced task did not stop")
+	}
+	releaseTheModel()
+	select {
+	case <-secondFinished:
+	case <-agenttest.WhenTheTestRunsOut(t):
+		t.Fatal("the replacing request never finished")
+	}
+	previousTask, isFound := connectorRuntime.findTaskRunBySourceReference("person-1", first.DedupeKey())
+	if !isFound || previousTask.Status != task.TaskStatusCancelled || !connectorTaskEventsContain(connectorRuntime, previousTask.TaskRunID, agentcontract.TaskEventTaskReplaced, "") {
+		t.Fatalf("expected the running task replaced by the decision, found=%v task=%+v ledger: %s", isFound, previousTask, ledgerNames(connectorRuntime, previousTask.TaskRunID))
+	}
+	replacingTask, isFound := connectorRuntime.findTaskRunBySourceReference("person-1", second.DedupeKey())
+	if !isFound || replacingTask.Prompt != second.Prompt {
+		t.Fatalf("expected the replacement to run as its own request, found=%v task=%+v", isFound, replacingTask)
 	}
 	for connectorRuntime.processNextQueuedConnectorReply(context.Background()) {
 	}

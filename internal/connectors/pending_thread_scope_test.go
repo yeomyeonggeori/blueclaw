@@ -102,18 +102,32 @@ func TestARootMessageDoesNotContinueAWaitingRunStartedAtRoot(t *testing.T) {
 	}
 }
 
-func TestARootMessageDoesNotSteerARunStartedAtRoot(t *testing.T) {
+func TestARootMessageMeetsTheRunningTaskARootMessageStarted(t *testing.T) {
 	connectorRuntime, _, _ := newStubbedTestConnectorRuntime(t)
-	running := seedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{
+	runningAtRoot := seedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{
 		ConversationID: "direct-1",
 		ReplyTargetID:  "message-report",
 	}, "write the weekly report")
 
-	if _, isFound := connectorRuntime.latestRunningConversationTask("person-1", rootMessage("message-lunch", "message-lunch")); isFound {
-		t.Fatal("a root message was routed to the run another root message started")
+	found, isFound := connectorRuntime.latestRunningConversationTask("person-1", rootMessage("message-stop", "message-stop"))
+	if !isFound || found.TaskRunID != runningAtRoot.TaskRunID {
+		t.Fatalf("a root message did not meet the run another root message started, the run /stop would stop: found=%v %+v", isFound, found)
 	}
-	found, isFound := connectorRuntime.latestRunningConversationTask("person-1", threadReply("message-shorter", "message-report"))
-	if !isFound || found.TaskRunID != running.TaskRunID {
+	found, isFound = connectorRuntime.latestRunningConversationTask("person-1", threadReply("message-shorter", "message-report"))
+	if !isFound || found.TaskRunID != runningAtRoot.TaskRunID {
 		t.Fatalf("a reply in the run's thread did not reach it: found=%v %+v", isFound, found)
+	}
+}
+
+func TestARootMessageDoesNotMeetARunStartedInAThread(t *testing.T) {
+	connectorRuntime, _, _ := newStubbedTestConnectorRuntime(t)
+	seedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{
+		ConversationID: "direct-1",
+		ReplyTargetID:  "message-report",
+		IsThread:       true,
+	}, "write the weekly report")
+
+	if _, isFound := connectorRuntime.latestRunningConversationTask("person-1", rootMessage("message-lunch", "message-lunch")); isFound {
+		t.Fatal("a root message was routed to a run started in a thread")
 	}
 }

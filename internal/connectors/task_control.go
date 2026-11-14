@@ -161,19 +161,18 @@ func (connectorRuntime *ConnectorRuntime) shouldProcessBeforeConversationLock(ct
 }
 
 func (connectorRuntime *ConnectorRuntime) looksLikeActiveTaskFollowUp(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) bool {
-	personID, isFound := connectorRuntime.identityService.ResolvePersonIDByPlatformAccount(adapter.Name(), event.SenderID)
-	if !isFound {
+	if _, isFound := connectorRuntime.identityService.ResolvePersonIDByPlatformAccount(adapter.Name(), event.SenderID); !isFound {
 		return false
 	}
-	activeTaskRun, isFound := connectorRuntime.latestCurrentConversationActiveTask(personID, event)
-	if !isFound {
+	open := connectorRuntime.readOpenInteractions(connectorRuntime.inboundTurnFor(adapter, event))
+	if open.isEmpty() {
 		return false
 	}
 	relates, errorValue := connectorRuntime.judgeRelatesToActiveTask(ctx, adapter, event)
 	if errorValue != nil {
 		connectorRuntime.logger.Warn("connector."+adapter.Name()+".busy_message.held_undecided",
 			slog.String("messageID", event.MessageID),
-			slog.String("taskRunID", activeTaskRun.TaskRunID),
+			slog.String("taskRunID", open.taskRunID()),
 			slog.String("error", errorValue.Error()))
 	}
 	return relates

@@ -441,6 +441,26 @@ func TestAStopSentWhileTheTaskRunsCancelsItAtOnce(t *testing.T) {
 	})
 }
 
+func TestARootStopInADirectMessageCancelsTheTaskARootMessageStarted(t *testing.T) {
+	fixture := newStopWhileRunningFixture(t, toolBlockedScript())
+	requestFinished := fixture.startTheRequestInTheBackground(t, atRoot(longRequestEvent()))
+	runningTask := fixture.runningTask(t)
+	actionCallsAtStop, toolCallsAtStop := fixture.callCounts()
+
+	fixture.send(t, atRoot(stopRequestEvent()))
+
+	fixture.assertTheStopReachedTheRunningTask(t, runningTask, fixture.processTheNextMessage())
+	fixture.assertNothingStartedAfterTheStop(t, requestFinished, actionCallsAtStop, toolCallsAtStop)
+	fixture.assertNothingWasReadTogether(t, runningTask)
+}
+
+func atRoot(event PlatformInboundEvent) PlatformInboundEvent {
+	isThread := false
+	event.ReplyTargetID = event.MessageID
+	event.IsThread = &isThread
+	return event
+}
+
 func TestTheCancelReplyDoesNotWaitForTheInterruptedCallToUnwind(t *testing.T) {
 	eachRequestShape(t, func(t *testing.T, start startRequest) {
 		script := toolBlockedScript()
