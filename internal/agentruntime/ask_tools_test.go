@@ -20,7 +20,7 @@ func TestAskInputUsesTypedQuestionAndResultData(t *testing.T) {
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, []string{"ask_input"})
 	toolRegistry := toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{ProfileName: "default"})
 
-	toolContext := toolcontract.WithUserFacingMessage(toolcontract.WithTaskRunID(context.Background(), taskRun.TaskRunID), "Context question must not replace input")
+	toolContext := toolcontract.WithTaskRunID(context.Background(), taskRun.TaskRunID)
 	result, errorValue := toolRegistry.Invoke(toolContext, toolcontract.ToolInvocation{
 		ToolName: "ask_input",
 		Input: toolcontract.MarshalToolInput(map[string]any{

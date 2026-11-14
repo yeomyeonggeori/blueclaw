@@ -13,6 +13,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/harnessdriver"
 	"github.com/yeomyeonggeori/blueclaw/internal/harnessselection"
 	"github.com/yeomyeonggeori/blueclaw/internal/llm"
+	"github.com/yeomyeonggeori/blueclaw/internal/persona"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
@@ -24,7 +25,7 @@ import (
 type agentKernel struct {
 	instructionBundleLoader           func() agentcontract.InstructionBundle
 	agentIdentityProvider             func() agentcontract.AgentIdentity
-	agentVoiceProvider                func() string
+	agentPersonaProvider              func() persona.Agent
 	languageModelRuntimeConfiguration config.RuntimeConfiguration
 	taskTierLanguageModels            agentcontract.TaskTierLanguageModels
 	capabilityClient                  capability.Client
@@ -66,8 +67,8 @@ func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, bundledACP
 		agentIdentityProvider: func() agentcontract.AgentIdentity {
 			return loadAgentIdentity(runtimeConfiguration)
 		},
-		agentVoiceProvider: func() string {
-			return loadAgentVoice(runtimeConfiguration)
+		agentPersonaProvider: func() persona.Agent {
+			return loadAgentPersona(runtimeConfiguration)
 		},
 		languageModelRuntimeConfiguration: runtimeConfiguration,
 		taskTierLanguageModels:            taskTierLanguageModels,

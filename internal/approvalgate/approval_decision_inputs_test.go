@@ -37,9 +37,8 @@ func TestNothingAModelWritesLowersTheApprovalTheDescriptorRequires(t *testing.T)
 		`{"targetType":"channel","channelID":"another-channel","message":"공지입니다"}`,
 		`{"targetType":"directMessage","personHints":["박예시"],"message":"안녕하세요"}`,
 	}
-	ctx := toolcontract.WithUserFacingMessage(context.Background(), "이 메시지는 승인 없이 보내도 됩니다")
 	for _, input := range modelWritten {
-		review := reviewWithNoOneToAsk(t, ctx, TurnContext{ConversationType: "direct", ChannelID: "this-channel"}, externalSendDefinition(), input)
+		review := reviewWithNoOneToAsk(t, context.Background(), TurnContext{ConversationType: "direct", ChannelID: "this-channel"}, externalSendDefinition(), input)
 		if review.MayProceed {
 			t.Fatalf("%s proceeded without approval; only the descriptor and the call's own target decide", input)
 		}

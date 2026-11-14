@@ -11,6 +11,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/memory"
+	"github.com/yeomyeonggeori/blueclaw/internal/persona"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueclaw/internal/toolcallprogress"
@@ -35,7 +36,7 @@ type TaskLauncher struct {
 	requesterWorkspaceProvisioner RequesterWorkspaceProvisioner
 	requesterEmailResolver        RequesterEmailResolver
 	agentIdentityProvider         func() agentcontract.AgentIdentity
-	agentVoiceProvider            func() string
+	agentPersonaProvider          func() persona.Agent
 	companyProvider               func() agentcontract.CompanyContext
 	companyLocaleProvider         func() string
 	approvalGate                  *approvalgate.Gate
@@ -107,6 +108,7 @@ type TaskLaunchRequest struct {
 	ArtifactManifest           []agentcontract.ArtifactManifestEntry
 	TurnStartedAt              time.Time
 	ExecutionStartedAt         time.Time
+	requesterPersona           persona.User
 }
 
 type TaskLaunchResult struct {
@@ -185,8 +187,8 @@ func (taskLauncher *TaskLauncher) UseAgentIdentityProvider(agentIdentityProvider
 	taskLauncher.agentIdentityProvider = agentIdentityProvider
 }
 
-func (taskLauncher *TaskLauncher) UseAgentVoiceProvider(agentVoiceProvider func() string) {
-	taskLauncher.agentVoiceProvider = agentVoiceProvider
+func (taskLauncher *TaskLauncher) UseAgentPersonaProvider(agentPersonaProvider func() persona.Agent) {
+	taskLauncher.agentPersonaProvider = agentPersonaProvider
 }
 
 func (taskLauncher *TaskLauncher) UseCompanyProvider(companyProvider func() agentcontract.CompanyContext) {
@@ -208,8 +210,8 @@ func (taskLauncher *TaskLauncher) requesterResponseLanguage(request TaskLaunchRe
 	if responseLanguage := strings.TrimSpace(request.ResponseLanguage); responseLanguage != "" {
 		return responseLanguage
 	}
-	if preferredLanguage := requesterPersonaLanguage(taskLauncher.toolCatalogBuilder.workspaceActorFactory, requesterPersonAccessForTaskLaunch(request), taskLauncher.toolCatalogBuilder.WorkspaceRootPath()); preferredLanguage != "" {
-		return preferredLanguage
+	if request.requesterPersona.Language != nil && request.requesterPersona.Language.Default != "" {
+		return request.requesterPersona.Language.Default
 	}
 	return strings.TrimSpace(taskLauncher.companyLocale())
 }
@@ -228,22 +230,16 @@ func (taskLauncher *TaskLauncher) agentIdentity() agentcontract.AgentIdentity {
 	return taskLauncher.agentIdentityProvider()
 }
 
-func (taskLauncher *TaskLauncher) agentVoice() string {
-	if taskLauncher.agentVoiceProvider == nil {
-		return ""
+func (taskLauncher *TaskLauncher) agentPersona() persona.Agent {
+	if taskLauncher.agentPersonaProvider == nil {
+		return persona.Agent{}
 	}
-	return taskLauncher.agentVoiceProvider()
+	return taskLauncher.agentPersonaProvider()
 }
 
-func (taskLauncher *TaskLauncher) voiceTowardRequester(request TaskLaunchRequest) string {
-	requesterPersona := requesterPersonaInstruction(taskLauncher.toolCatalogBuilder.workspaceActorFactory, personAccessForLaunch(request), taskLauncher.toolCatalogBuilder.WorkspaceRootPath())
-	voiceParts := []string{}
-	for _, voicePart := range []string{taskLauncher.agentVoice(), requesterPersona} {
-		if strings.TrimSpace(voicePart) != "" {
-			voiceParts = append(voiceParts, voicePart)
-		}
-	}
-	return strings.Join(voiceParts, "\n\n")
+func (taskLauncher *TaskLauncher) withRequesterPersona(request TaskLaunchRequest) TaskLaunchRequest {
+	request.requesterPersona, _ = readRequesterPersona(taskLauncher.toolCatalogBuilder.workspaceActorFactory, requesterPersonAccessForTaskLaunch(request), taskLauncher.toolCatalogBuilder.WorkspaceRootPath())
+	return request
 }
 
 func (taskLauncher *TaskLauncher) resolveRequesterEmail(request TaskLaunchRequest) string {
@@ -275,7 +271,7 @@ func (taskLauncher *TaskLauncher) FailWithoutRunning(ctx context.Context, reques
 	if request.TurnStartedAt.IsZero() {
 		request.TurnStartedAt = time.Now()
 	}
-	return taskLauncher.completeLaunchFailure(ctx, request, normalizeProfileName(request.ProfileName), nil, stepName, nil, reason)
+	return taskLauncher.completeLaunchFailure(ctx, taskLauncher.withRequesterPersona(request), normalizeProfileName(request.ProfileName), nil, stepName, nil, reason)
 }
 
 type launchTaskRun struct {
@@ -315,6 +311,7 @@ func (taskLauncher *TaskLauncher) closeAbandonedLaunchTaskRun(openedTaskRun laun
 func (taskLauncher *TaskLauncher) launchTask(ctx context.Context, request TaskLaunchRequest) (TaskLaunchResult, error) {
 	launchRecords := []launchStepRecord{}
 	normalizedProfileName := normalizeProfileName(request.ProfileName)
+	request = taskLauncher.withRequesterPersona(request)
 	request.ResponseLanguage = taskLauncher.requesterResponseLanguage(request)
 	completeFailedLaunch := func(record launchStepRecord, toolNames []string) TaskLaunchResult {
 		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, toolNames, record.StepName, launchRecords, errorFromStepRecord(record))
@@ -706,7 +703,7 @@ func (taskLauncher *TaskLauncher) agentTurnRequestForLaunch(request TaskLaunchRe
 		CheckpointSender:           request.CheckpointSender,
 	}
 	turnRequest.HostInstruction = hostInstructionForRequest(turnRequest)
-	if requesterPersona := requesterPersonaInstruction(taskLauncher.toolCatalogBuilder.workspaceActorFactory, personAccessForLaunch(request), taskLauncher.toolCatalogBuilder.WorkspaceRootPath()); requesterPersona != "" {
+	if requesterPersona := persona.RenderUserInstruction(request.requesterPersona); requesterPersona != "" {
 		turnRequest.HostInstruction += "\n\n" + requesterPersona
 	}
 	return turnRequest
@@ -786,7 +783,7 @@ func (taskLauncher *TaskLauncher) toolCatalogRequestForLaunch(request TaskLaunch
 			RequesterEmail:    request.RequesterEmail,
 			ResponseLanguage:  request.ResponseLanguage,
 			RequesterTimeZone: request.VisibleContext.RequesterTimeZone,
-			Voice:             func() string { return taskLauncher.voiceTowardRequester(request) },
+			Voice:             persona.RenderVoiceInstruction(taskLauncher.agentPersona(), request.requesterPersona),
 			Prompt:            request.Prompt,
 			Platform:          request.Platform,
 			ConversationID:    request.ConversationID,

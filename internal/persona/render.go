@@ -42,9 +42,15 @@ func RenderIdentityInstruction(identity Identity) string {
 	return strings.Join(lines, "\n")
 }
 
-func RenderVoiceInstruction(identity Identity, soul Soul) string {
-	identity = NormalizeIdentity(identity)
-	soul = NormalizeSoul(soul)
+type Agent struct {
+	Identity Identity
+	Soul     Soul
+}
+
+func RenderVoiceInstruction(agent Agent, user User) string {
+	identity := NormalizeIdentity(agent.Identity)
+	soul := NormalizeSoul(agent.Soul)
+	user = NormalizeUser(user)
 	lines := []string{}
 	if len(identity.Names) > 0 {
 		lines = append(lines, nameLine(identity))
@@ -53,6 +59,12 @@ func RenderVoiceInstruction(identity Identity, soul Soul) string {
 		lines = append(lines, roleLine(identity))
 	}
 	if toneLine := renderTone("Tone", soul.Tone); toneLine != "" {
+		lines = append(lines, "- "+toneLine)
+	}
+	if user.CallMe != "" {
+		lines = append(lines, callMeLine(user))
+	}
+	if toneLine := renderTone("Tone with them", user.Tone); toneLine != "" {
 		lines = append(lines, "- "+toneLine)
 	}
 	return strings.Join(lines, "\n")
@@ -64,6 +76,10 @@ func nameLine(identity Identity) string {
 
 func roleLine(identity Identity) string {
 	return "- Your role: " + identity.Role
+}
+
+func callMeLine(user User) string {
+	return "- Call them " + user.CallMe + "."
 }
 
 func RenderSoulInstruction(soul Soul) string {
@@ -100,7 +116,7 @@ func RenderUserInstruction(user User) string {
 	user = NormalizeUser(user)
 	lines := []string{}
 	if user.CallMe != "" {
-		lines = append(lines, "- Call them "+user.CallMe+".")
+		lines = append(lines, callMeLine(user))
 	}
 	if user.About != "" {
 		lines = append(lines, "- About them: "+user.About)
