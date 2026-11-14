@@ -2861,6 +2861,7 @@ func (repository *testConnectorQueueRepository) ReleaseConnectorEventClaim(queue
 	repository.mutex.Lock()
 	defer repository.mutex.Unlock()
 	repository.releasedEvents = append(repository.releasedEvents, queuedEvent)
+	queuedEvent.Event.gatewayDecision = nil
 	repository.pendingEvents = append(repository.pendingEvents, queuedEvent)
 	return nil
 }

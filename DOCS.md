@@ -105,7 +105,7 @@ curl -s -X POST localhost:8081/connectors/api/events -H 'content-type: applicati
 curl -s 'localhost:8081/agent/api/replies?conversationID=dm:api:sample@example.com'
 ```
 
-A reply arrives within seconds. Messages that arrive before the previous one is answered are read together as one turn.
+A reply arrives within seconds. Messages that arrive before the previous one's task starts running are read together as one turn; one that arrives while it runs is decided against it (see [The path of one message](#the-path-of-one-message)).
 
 ### Turn on per-person isolation
 
@@ -183,7 +183,7 @@ Deciding whether an inbound message becomes a task at all is host policy. One ca
 
 1. Ingress: A connector persists the raw event, resolves the sender to a person in the policy, and refuses accounts the policy does not know.
 2. Decision: Addressing is one of four outcomes: ignore, react only, reply, or react and reply. A message that is only an image is described by a vision model first.
-3. Busy routing: If the person already has an active task, the decision's `busyRoute` is one of `status`, `steer`, `replace`, `cancel`, `new_task` or `unrelated`.
+3. Busy routing: If a task of the person's is running in the thread the message arrives in, the decision's `busyRoute` is one of `status`, `steer`, `replace`, `cancel`, `new_task` or `unrelated`, whether or not the task has replied yet. A message the decision cannot place waits behind the run and is decided again each time the inbox picks it up, and the log records `connector.<platform>.busy_message.held_undecided` with the run it waits behind.
 4. Launch: `TaskLauncher.Launch` (`internal/agentruntime/task_launcher.go`) runs eight steps, each recorded as an event so a failure names its step: resolve the requester's email, build the conversation's artifact manifest, provision the requester's workspace, build the tool set, audit the tool registry, load memory, carry out an approved call, run the turn.
 5. Delivery: The result is enqueued in the connector outbox and delivered.
 

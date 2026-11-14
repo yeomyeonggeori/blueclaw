@@ -151,7 +151,7 @@ func TestPendingRequestStoreDeliveredReplyClosesWindow(t *testing.T) {
 		t.Fatal("expected request to begin")
 	}
 	store.mutex.Lock()
-	request.hasReply = true
+	request.isClosed = true
 	store.mutex.Unlock()
 	store.finish(request)
 
