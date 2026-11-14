@@ -385,6 +385,12 @@
       ],
       "type": "string"
     },
+    "timeoutSecond": {
+      "description": "How many seconds one call may run. The caller sends it as the invoke request timeoutSecond and stops waiting shortly after; a tool that names none runs under the caller's own limit.",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+    },
     "version": {
       "minLength": 1,
       "type": "string"

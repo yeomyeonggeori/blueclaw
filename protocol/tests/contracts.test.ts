@@ -306,6 +306,9 @@ describe('closed protocol values', () => {
     expect(capabilityDescriptorSchema.safeParse({ ...descriptor, canonicalName: ` ${descriptor.canonicalName}` }).success).toBe(false);
     expect(capabilityDescriptorSchema.safeParse({ ...descriptor, availability: { state: 'not_ready', reason: 'connection pending' } }).success).toBe(true);
     expect(capabilityDescriptorSchema.safeParse({ ...descriptor, inputSchemaStrict: false }).success).toBe(false);
+    expect(capabilityDescriptorSchema.safeParse({ ...descriptor, timeoutSecond: 120 }).success).toBe(true);
+    expect(capabilityDescriptorSchema.safeParse({ ...descriptor, timeoutSecond: 0 }).success).toBe(false);
+    expect(capabilityDescriptorSchema.safeParse({ ...descriptor, timeoutSecond: 1.5 }).success).toBe(false);
     expect(capabilityDescriptorSchema.safeParse({
       ...descriptor,
       inputSchema: {

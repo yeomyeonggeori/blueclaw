@@ -25,8 +25,9 @@ type Configuration struct {
 }
 
 type Client struct {
-	Endpoint   string
-	HTTPClient HTTPDoer
+	Endpoint    string
+	HTTPClient  HTTPDoer
+	CallTimeout time.Duration
 }
 
 type HTTPDoer interface {
@@ -36,8 +37,9 @@ type HTTPDoer interface {
 func NewClient(configuration Configuration) Client {
 	endpoint, httpClient := Dial(configuration)
 	return Client{
-		Endpoint:   endpoint,
-		HTTPClient: httpClient,
+		Endpoint:    endpoint,
+		HTTPClient:  httpClient,
+		CallTimeout: configuration.Timeout,
 	}
 }
 
@@ -48,9 +50,6 @@ func Dial(configuration Configuration) (string, *http.Client) {
 	}
 
 	httpClient := &http.Client{}
-	if configuration.Timeout > 0 {
-		httpClient.Timeout = configuration.Timeout
-	}
 
 	unixSocketPath := strings.TrimSpace(configuration.UnixSocketPath)
 	if unixSocketPath != "" {
@@ -117,9 +116,15 @@ func (transportError TransportError) Unwrap() error {
 }
 
 func (client Client) PostJSON(ctx context.Context, path string, requestDocument any, responseDocument any) error {
+	return client.PostJSONWithin(ctx, client.CallTimeout, path, requestDocument, responseDocument)
+}
+
+func (client Client) PostJSONWithin(ctx context.Context, limit time.Duration, path string, requestDocument any, responseDocument any) error {
 	if client.HTTPClient == nil {
 		return errors.New("capability http client is not configured")
 	}
+	ctx, release := withinLimit(ctx, limit)
+	defer release()
 
 	requestBody, errorValue := json.Marshal(requestDocument)
 	if errorValue != nil {
@@ -164,6 +169,8 @@ func (client Client) GetJSON(ctx context.Context, path string, responseDocument 
 	if client.HTTPClient == nil {
 		return errors.New("capability http client is not configured")
 	}
+	ctx, release := withinLimit(ctx, client.CallTimeout)
+	defer release()
 
 	httpRequest, errorValue := http.NewRequestWithContext(ctx, http.MethodGet, client.endpointURL(path), nil)
 	if errorValue != nil {
@@ -190,6 +197,13 @@ func (client Client) GetJSON(ctx context.Context, path string, responseDocument 
 	}
 
 	return json.Unmarshal(responseBody, responseDocument)
+}
+
+func withinLimit(ctx context.Context, limit time.Duration) (context.Context, context.CancelFunc) {
+	if limit <= 0 {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, limit)
 }
 
 func (client Client) endpointURL(path string) string {

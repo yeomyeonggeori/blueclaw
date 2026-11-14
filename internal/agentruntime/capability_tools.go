@@ -131,7 +131,7 @@ func (toolCatalogBuilder *ToolCatalogBuilder) invokeCapabilityOperation(toolCont
 	if missing := missingRequiredCapabilityInputFields(toolDescriptor.InputSchema, toolInput); len(missing) > 0 {
 		return capabilityMissingInputFailure(operation, toolDescriptor, missing), nil
 	}
-	errorValue = toolCatalogBuilder.capabilityClient.PostJSON(toolContext, "/v1/tools/"+url.PathEscape(operation)+"/invoke", capabilityToolRequest(toolContext, toolDescriptor, request, preparedPayload), &response)
+	errorValue = toolCatalogBuilder.capabilityClient.PostJSONWithin(toolContext, toolCatalogBuilder.capabilityInvocationLimit(toolDescriptor), "/v1/tools/"+url.PathEscape(operation)+"/invoke", capabilityToolRequest(toolContext, toolDescriptor, request, preparedPayload), &response)
 	if errorValue != nil {
 		return toolcontract.ToolResult{}, errorValue
 	}
@@ -606,6 +606,9 @@ func capabilityToolRequest(toolContext context.Context, descriptor CapabilityToo
 	}
 	if descriptor.RequiresUserPresence {
 		requestDocument["requiresUserPresence"] = true
+	}
+	if descriptor.TimeoutSecond > 0 {
+		requestDocument["timeoutSecond"] = descriptor.TimeoutSecond
 	}
 	return requestDocument
 }
