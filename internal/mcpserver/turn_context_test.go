@@ -58,3 +58,26 @@ func TestAToolCallOfATurnNobodyNamedCarriesNothingExtra(t *testing.T) {
 		t.Fatalf("a turn that handed over no context hands over no values, got %v", seenValue)
 	}
 }
+
+func TestAToolCallCarriesTheHarnessSessionItsCatalogWasPublishedFor(t *testing.T) {
+	var seenSession HarnessSession
+	toolSet := toolcontract.NewToolSet([]string{"file_read"})
+	toolSet.AllowTestReplacement()
+	if errorValue := toolSet.RegisterTool(toolcontract.ToolDefinition{
+		ID: "test:file_read", Name: "file_read", Description: "read", Visibility: toolcontract.ToolVisibilityModel,
+		InputSchema:    json.RawMessage(`{"type":"object"}`),
+		ResultContract: &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)},
+	}, func(ctx context.Context, _ toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		seenSession = HarnessSessionFromContext(ctx)
+		return toolcontract.ToolSuccessData("read", json.RawMessage(`{}`)), nil
+	}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	published := HarnessSession{HarnessName: "claude-code", SessionID: "session-uuid", IsResumable: true}
+
+	callFileRead(t, RequesterToolSet{RequesterPersonID: "person-1", ToolSet: toolSet, HarnessSession: published})
+
+	if seenSession != published {
+		t.Fatalf("a call over the wire belongs to the harness session its catalog was published for, got %+v", seenSession)
+	}
+}

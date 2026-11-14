@@ -94,7 +94,7 @@ func externalHarnessFactory(harnessConfiguration config.HarnessConfiguration, to
 		Path:      harnessConfiguration.AgentCommandPath,
 		Arguments: append([]string{}, harnessConfiguration.AgentArguments...),
 	}
-	publisher := sessionTokenPublisher{endpointURL: toolCatalogEndpoint.URL, resolver: toolCatalogEndpoint.Resolver, approvalGate: toolCatalogEndpoint.ApprovalGate}
+	publisher := grantingPublisher{endpointURL: toolCatalogEndpoint.URL, resolver: toolCatalogEndpoint.Resolver}
 	return func(dependencies harnessdriver.Dependencies) (agentcontract.Harness, agentcontract.SkillRetriever) {
 		harness := acpharness.New(agentCommand, publisher, dependencies.TaskRunStore)
 		harness.UseToolCatalogBridge(toolCatalogEndpoint.BridgeCommandPath)
@@ -109,26 +109,6 @@ func externalHarnessFactory(harnessConfiguration config.HarnessConfiguration, to
 	}, nil
 }
 
-type sessionTokenPublisher struct {
-	endpointURL  string
-	resolver     *mcpserver.SessionTokenRequesterResolver
-	approvalGate *approvalgate.Gate
-}
-
-func (publisher sessionTokenPublisher) PublishToolCatalog(requesterToolSet mcpserver.RequesterToolSet) (string, string, func(), error) {
-	requesterToolSet.ToolSet.UseToolCallGate(publisher.approvalGate.TurnGate(approvalgate.TurnContext{
-		RequesterPersonID: requesterToolSet.RequesterPersonID,
-		ResponseLanguage:  requesterToolSet.ResponseLanguage,
-		Prompt:            requesterToolSet.Prompt,
-		HarnessSession:    requesterToolSet.HarnessSession,
-	}))
-	sessionToken, errorValue := publisher.resolver.GrantSessionToken(requesterToolSet)
-	if errorValue != nil {
-		return "", "", func() {}, errorValue
-	}
-	return publisher.endpointURL, sessionToken, func() { publisher.resolver.RevokeSessionToken(sessionToken) }, nil
-}
-
 func commandHarnessFactory(harnessName string, agentCommand cliharness.AgentCommand, harnessConfiguration config.HarnessConfiguration, toolCatalogEndpoint ToolCatalogEndpoint, processBoundary SandboxProcessBoundary) (harnessdriver.Factory, error) {
 	if strings.TrimSpace(harnessConfiguration.AgentCommandPath) == "" {
 		return nil, fmt.Errorf("harness %q needs agent.harness.agentCommandPath, the executable to run", harnessName)
@@ -139,7 +119,7 @@ func commandHarnessFactory(harnessName string, agentCommand cliharness.AgentComm
 	if processBoundary.Runner == nil {
 		return nil, fmt.Errorf("harness %q may only run inside the requester's POSIX identity, because it brings tools of its own that the kernel rather than a deny list has to confine; configure the terminal boundary first", harnessName)
 	}
-	publisher := sessionTokenPublisher{endpointURL: toolCatalogEndpoint.URL, resolver: toolCatalogEndpoint.Resolver, approvalGate: toolCatalogEndpoint.ApprovalGate}
+	publisher := grantingPublisher{endpointURL: toolCatalogEndpoint.URL, resolver: toolCatalogEndpoint.Resolver}
 	return func(dependencies harnessdriver.Dependencies) (agentcontract.Harness, agentcontract.SkillRetriever) {
 		harness := cliharness.New(agentCommand, publisher, dependencies.TaskRunStore)
 		harness.UseInstructionBundleLoader(dependencies.InstructionBundleLoader)

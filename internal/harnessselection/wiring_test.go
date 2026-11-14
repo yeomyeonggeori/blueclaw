@@ -39,7 +39,7 @@ func TestSelectedExternalHarnessPublishesTheRequesterCatalogAtTheRoutedEndpoint(
 		t.Fatal("expected a harness")
 	}
 
-	publisher := sessionTokenPublisher{endpointURL: catalogServer.URL, resolver: resolver}
+	publisher := grantingPublisher{endpointURL: catalogServer.URL, resolver: resolver}
 	endpointURL, sessionToken, revoke, errorValue := publisher.PublishToolCatalog(mcpserver.RequesterToolSet{
 		RequesterPersonID: "person-1",
 		ToolSet:           singleToolSet(t),
