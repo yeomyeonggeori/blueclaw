@@ -167,11 +167,6 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 func (harness *Harness) turnResult(ctx context.Context, request agentcontract.AgentTurnRequest, finishMessage string, succeededToolRecorder *turnoutcome.SucceededToolRecorder) agentcontract.AgentTurnResult {
 	taskStatus, failureReason := harness.outcomeForEndedTurn(ctx, request, finishMessage, succeededToolRecorder.SucceededToolNames())
 	taskRun := agentcontract.TaskRun{Status: taskStatus, FailureReason: failureReason}
-	if harness.taskRunStore != nil && strings.TrimSpace(request.ExistingTaskRunID) != "" {
-		if existingTaskRun, isFound := harness.taskRunStore.FindTaskRun(request.ExistingTaskRunID); isFound {
-			taskRun = existingTaskRun
-		}
-	}
 	return agentcontract.AgentTurnResult{TaskRun: taskRun, FinishMessage: finishMessage, UserNotice: finishMessage, Attachments: succeededToolRecorder.StagedAttachments()}
 }
 

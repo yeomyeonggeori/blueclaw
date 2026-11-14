@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	acp "github.com/coder/acp-go-sdk"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
@@ -36,7 +35,7 @@ func runTurnReturning(t *testing.T, carried agentcontract.AgentTurnResult) (agen
 	return turnResult, taskRuns, taskRunID
 }
 
-func TestACompletedTurnTheAgentReportsCompletesTheHostsRunWithItsReply(t *testing.T) {
+func TestTheVerdictTheAgentReportsComesBackWithItsReplyAndLeavesTheStoreToTheHost(t *testing.T) {
 	turnResult, taskRuns, taskRunID := runTurnReturning(t, agentcontract.AgentTurnResult{
 		TaskRun:       agentcontract.TaskRun{Status: agentcontract.TaskStatusCompleted, Result: "노트를 남겼습니다"},
 		FinishMessage: "노트를 남겼습니다",
@@ -44,45 +43,21 @@ func TestACompletedTurnTheAgentReportsCompletesTheHostsRunWithItsReply(t *testin
 	})
 
 	storedTaskRun, _ := taskRuns.FindTaskRun(taskRunID)
-	if storedTaskRun.Status != agentcontract.TaskStatusCompleted || turnResult.TaskRun.Status != agentcontract.TaskStatusCompleted {
-		t.Fatalf("the host owns the run, so the agent's verdict has to land on it, got stored %q and returned %q", storedTaskRun.Status, turnResult.TaskRun.Status)
+	if turnResult.TaskRun.Status != agentcontract.TaskStatusCompleted || storedTaskRun.Status != agentcontract.TaskStatusPlanned {
+		t.Fatalf("the adapter reports the agent's verdict and the host settles its run, got returned %q and stored %q", turnResult.TaskRun.Status, storedTaskRun.Status)
 	}
 	if turnResult.FinishMessage != "노트를 남겼습니다" || len(turnResult.ToolNames) != 1 {
 		t.Fatalf("the reply and the tools the agent used come back as the loop would have returned them, got %+v", turnResult)
 	}
 }
 
-func TestAFailedTurnTheAgentReportsFailsTheHostsRunWithItsReason(t *testing.T) {
-	_, taskRuns, taskRunID := runTurnReturning(t, agentcontract.AgentTurnResult{
+func TestAFailedTurnTheAgentReportsComesBackWithItsReason(t *testing.T) {
+	turnResult, _, _ := runTurnReturning(t, agentcontract.AgentTurnResult{
 		TaskRun: agentcontract.TaskRun{Status: agentcontract.TaskStatusFailed, FailureReason: "the model gave up"},
 	})
 
-	storedTaskRun, _ := taskRuns.FindTaskRun(taskRunID)
-	if storedTaskRun.Status != agentcontract.TaskStatusFailed || storedTaskRun.FailureReason != "the model gave up" {
-		t.Fatalf("expected the run failed with the agent's reason, got %+v", storedTaskRun)
-	}
-}
-
-func TestATurnThatBeginsMovesTheHostsRunOutOfPlanned(t *testing.T) {
-	taskRuns, taskRunID := newTaskRunStore()
-	agent := &externalAgent{}
-	harness := New(&inProcessAgentProcess{agent: agent}, newPublishedToolCatalog(t), taskRuns)
-	harness.UseTurnResultMeta(turnResultMetaKey)
-	executed := []daemonExecutedTool{}
-
-	harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterIdentity: agentcontract.RequesterIdentity{
-			RequesterPersonID: "person-1",
-		},
-		ExistingTaskRunID: taskRunID,
-		Prompt:            "회의록 정리해줘",
-		WorkspaceRootPath: t.TempDir(),
-		ToolSet:           requesterToolSet(t, "person-1", &executed),
-	})
-
-	storedTaskRun, _ := taskRuns.FindTaskRun(taskRunID)
-	if storedTaskRun.Status != agentcontract.TaskStatusRunning {
-		t.Fatalf("an agent that reports no verdict leaves the run running, got %q", storedTaskRun.Status)
+	if turnResult.TaskRun.Status != agentcontract.TaskStatusFailed || turnResult.TaskRun.FailureReason != "the model gave up" {
+		t.Fatalf("expected the agent's failure and its reason, got %+v", turnResult.TaskRun)
 	}
 }
 
@@ -108,36 +83,5 @@ func TestAFileTheAgentReadIsNotAttachedToItsReply(t *testing.T) {
 
 	if errorValue != nil || len(turnResult.Attachments) != 0 {
 		t.Fatalf("what the loop attaches is what it delivered, and a file a tool read is not delivered, got %+v, %v", turnResult.Attachments, errorValue)
-	}
-}
-
-func TestATurnTheStoreHoldsParkedReturnsParkedWhateverTheAgentReports(t *testing.T) {
-	taskRuns, taskRunID := newTaskRunStore()
-	agent := &externalAgent{cancelled: make(chan struct{}, 4), promptResponseMeta: map[string]any{turnResultMetaKey: agentcontract.AgentTurnResult{
-		TaskRun: agentcontract.TaskRun{Status: agentcontract.TaskStatusCompleted, Result: "done"},
-	}}}
-	agent.promptScripts = []func(context.Context, acp.PromptRequest) acp.StopReason{func(context.Context, acp.PromptRequest) acp.StopReason {
-		taskRuns.PauseTaskRun(taskRunID, agentcontract.TaskStatusWaitingApproval, "approve the send?")
-		return acp.StopReasonEndTurn
-	}}
-	harness := New(&inProcessAgentProcess{agent: agent}, newPublishedToolCatalog(t), taskRuns)
-	harness.UseTurnResultMeta(turnResultMetaKey)
-	executed := []daemonExecutedTool{}
-
-	turnResult, errorValue := harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterIdentity: agentcontract.RequesterIdentity{
-			RequesterPersonID: "person-1",
-		},
-		ExistingTaskRunID: taskRunID,
-		Prompt:            "회의록 정리해줘",
-		WorkspaceRootPath: t.TempDir(),
-		ToolSet:           requesterToolSet(t, "person-1", &executed),
-	})
-	if errorValue != nil {
-		t.Fatalf("expected the turn to run: %v", errorValue)
-	}
-
-	if turnResult.TaskRun.Status != agentcontract.TaskStatusWaitingApproval || turnResult.UserNotice != "approve the send?" {
-		t.Fatalf("the store says the run waits, so the agent's own verdict does not stand, got %q and %q", turnResult.TaskRun.Status, turnResult.UserNotice)
 	}
 }
