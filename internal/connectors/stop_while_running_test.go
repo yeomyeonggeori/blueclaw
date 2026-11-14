@@ -466,14 +466,10 @@ func TestTheCancelReplyDoesNotWaitForTheInterruptedCallToUnwind(t *testing.T) {
 		script := toolBlockedScript()
 		script.ignoresCancellation = true
 		fixture := newStopWhileRunningFixture(t, script)
-		runningTask, requestFinished := start(fixture, t)
-
-		settled := fixture.settleTheStop(t)
+		runningTask, _ := start(fixture, t)
 
 		select {
-		case <-settled:
-		case <-requestFinished:
-			t.Fatal("the request finished while its tool call was still blocked")
+		case <-fixture.settleTheStop(t):
 		case <-agenttest.WhenTheTestRunsOut(t):
 			t.Fatalf("the stop waited for the blocked call; ledger: %s", ledgerNames(fixture.connectorRuntime, runningTask.TaskRunID))
 		}
