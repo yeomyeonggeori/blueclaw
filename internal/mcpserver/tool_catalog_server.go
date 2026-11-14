@@ -146,7 +146,9 @@ func LeavesEnvironmentUnchanged(sideEffectClass string) bool {
 
 func invokeThroughToolSet(requesterToolSet RequesterToolSet, toolDescriptor toolcontract.ToolDescriptor, hasOutputSchema bool) mcp.ToolHandler {
 	return func(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		invocationContext := WithHarnessSession(toolcontract.WithTaskRunID(contextCarryingValuesOf(requesterToolSet.TurnContext, ctx), strings.TrimSpace(requesterToolSet.TaskRunID)), requesterToolSet.HarnessSession)
+		callContext, endCall := callContextWithinTheTurn(requesterToolSet.TurnContext, ctx)
+		defer endCall()
+		invocationContext := WithHarnessSession(toolcontract.WithTaskRunID(callContext, strings.TrimSpace(requesterToolSet.TaskRunID)), requesterToolSet.HarnessSession)
 		if requesterToolSet.TakeCallLedger != nil {
 			requesterToolSet.TakeCallLedger(request.Params.Meta)
 		}

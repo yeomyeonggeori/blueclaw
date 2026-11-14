@@ -599,8 +599,9 @@ func (step runTurnLaunchStep) Run(ctx context.Context, execution *taskLaunchExec
 	)
 	turnRequest.CarriedOutCalls = step.CarriedOutCalls
 	turnRequest.TaskRunChosen = execution.TaskEvents.follow
-	execution.Launcher.startTurnOnTaskRun(turnRequest)
-	turnResult, errorValue := execution.Launcher.harness.RunTurn(toolcallprogress.WithObserver(ctx, execution.Request.ToolCallObserver), turnRequest)
+	turnContext, endTurn := execution.Launcher.startTurnOnTaskRun(ctx, turnRequest)
+	defer endTurn()
+	turnResult, errorValue := execution.Launcher.harness.RunTurn(toolcallprogress.WithObserver(turnContext, execution.Request.ToolCallObserver), turnRequest)
 	if errorValue == nil {
 		turnResult = execution.Launcher.settledTurnResult(turnRequest, turnResult)
 	}

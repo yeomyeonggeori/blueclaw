@@ -131,6 +131,7 @@ func TestAMessageInterruptedByARestartBeforeItsTurnBeganIsAnsweredOnce(t *testin
 
 func expectTheRestartToAnswerOnce(t *testing.T, taskRunService *task.TaskRunService, interruptedTaskRunID string) {
 	t.Helper()
+	forgetTheTurnTheStoppedProcessHeld(taskRunService, interruptedTaskRunID)
 	taskRunService.InterruptOrphanedRuntimeTaskRuns(agentcontract.TaskInterruptReasonRuntimeRestart)
 	host := restartHost(t, taskRunService)
 	reasked := host.reaskTheMessageTheRelayStillHolds(t)
@@ -147,6 +148,10 @@ func expectTheRestartToAnswerOnce(t *testing.T, taskRunService *task.TaskRunServ
 	if len(replies) != 1 {
 		t.Fatalf("the member was answered %d times: %q", len(replies), replies)
 	}
+}
+
+func forgetTheTurnTheStoppedProcessHeld(taskRunService *task.TaskRunService, taskRunID string) {
+	taskRunService.RegisterTaskRunCancel(taskRunID, func() {})()
 }
 
 func startALaunchThatDies(t *testing.T, taskRunService *task.TaskRunService, launcher *agentruntime.TaskLauncher, died <-chan struct{}) string {
