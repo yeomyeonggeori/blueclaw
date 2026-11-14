@@ -56,7 +56,7 @@ func toolFacts(approvalRequest mcpserver.ApprovalRequest) toolcontract.ToolDefin
 	var tool toolcontract.ToolDefinition
 	tool.Name = approvalRequest.ToolName
 	tool.ApprovalInputFields = approvalRequest.ApprovalInputFields
-	tool.ApprovalQuotedFields = approvalRequest.ApprovalQuotedFields
+	tool.ApprovalQuotedField = approvalRequest.ApprovalQuotedField
 	tool.SideEffectClass = approvalRequest.SideEffectClass
 	return tool
 }

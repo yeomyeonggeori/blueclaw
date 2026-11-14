@@ -94,16 +94,16 @@ func TestAnApprovalDoesNotReachIntoAnotherTaskRun(t *testing.T) {
 
 func TestTheQuestionShowsTheCallItApprovesAndPromisesNothingAfterIt(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
-	languageModel := &wordingLanguageModel{question: "투자자 자료를 이 주소와 공유할까요?", labels: map[string]string{"email": "받는 주소"}}
+	languageModel := &wordingLanguageModel{question: "최견본님께 이렇게 보낼까요?"}
 	gate.UseQuestionWorder(approval.NewWorder(languageModel))
-	call := gatedCall(taskRun.TaskRunID, "dataroom_share_add", `{"circleID":"investors","email":"first@example.com"}`)
-	call.ApprovalQuotedFields = []string{"email"}
+	call := gatedCall(taskRun.TaskRunID, "message_send", `{"targetType":"directMessage","personHint":"최견본","message":"투자자 자료 보내드립니다"}`)
+	call.ApprovalQuotedField = "message"
 
 	gate.AwaitApproval(context.Background(), call)
 
 	question := heldCallEventBodyNamed(t, taskRunService, taskRun.TaskRunID, "confirmation.requested")
-	if !strings.Contains(question, "받는 주소: first@example.com") || strings.Contains(question, "circleID") {
-		t.Fatalf("the requester reads the value the tool quotes under the wording model's label, and no field name, got %s", question)
+	if !strings.Contains(question, "최견본님께 이렇게 보낼까요?") || !strings.Contains(question, "투자자 자료 보내드립니다") || strings.Contains(question, "targetType") {
+		t.Fatalf("the requester reads the content the tool quotes beneath the question, and no field name, got %s", question)
 	}
 	if wordingContext := marshalRequestMessages(languageModel.lastRequest); strings.Contains(wordingContext, `"approvalScope"`) {
 		t.Fatalf("the model must not be handed a grant wider than this call to describe, got %s", wordingContext)

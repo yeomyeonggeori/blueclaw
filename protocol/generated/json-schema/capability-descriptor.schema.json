@@ -131,13 +131,10 @@
       ],
       "type": "string"
     },
-    "approvalQuotedFields": {
-      "description": "The inputs the action delivers exactly as written, such as a message body or a recipient address. The runtime prints each one beneath the approval question, under a label the wording model writes; every other input is stated in the question in plain words.",
-      "items": {
-        "minLength": 1,
-        "type": "string"
-      },
-      "type": "array"
+    "approvalQuotedField": {
+      "description": "The one input the action delivers exactly as written, such as a message body or a command. The runtime quotes it beneath the approval question; every other input, the recipient included, is stated in the question in plain words.",
+      "minLength": 1,
+      "type": "string"
     },
     "availability": {
       "additionalProperties": false,

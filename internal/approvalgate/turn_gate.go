@@ -46,22 +46,22 @@ func (turnGate turnToolCallGate) ReviewToolCall(ctx context.Context, toolInvocat
 		return toolcontract.ToolCallReview{Result: unanswerableCallResult()}, nil
 	}
 	outcome, errorValue := turnGate.gate.AwaitApproval(ctx, mcpserver.ApprovalRequest{
-		RequesterPersonID:    turnGate.turnContext.RequesterPersonID,
-		RequesterEmail:       turnGate.turnContext.RequesterEmail,
-		TaskRunID:            taskRunIDForCall(ctx),
-		ResponseLanguage:     turnGate.turnContext.ResponseLanguage,
-		RequesterTimeZone:    turnGate.turnContext.RequesterTimeZone,
-		Voice:                turnGate.turnContext.Voice,
-		Prompt:               turnGate.turnContext.Prompt,
-		Platform:             turnGate.turnContext.Platform,
-		ConversationID:       turnGate.turnContext.ConversationID,
-		ReplyTargetID:        turnGate.turnContext.ReplyTargetID,
-		HarnessSession:       mcpserver.HarnessSessionFromContext(ctx),
-		ToolName:             toolDefinition.Name,
-		ToolInput:            toolInvocation.Input,
-		ApprovalInputFields:  toolDefinition.ApprovalInputFields,
-		ApprovalQuotedFields: toolDefinition.ApprovalQuotedFields,
-		SideEffectClass:      strings.TrimSpace(toolDefinition.SideEffectClass),
+		RequesterPersonID:   turnGate.turnContext.RequesterPersonID,
+		RequesterEmail:      turnGate.turnContext.RequesterEmail,
+		TaskRunID:           taskRunIDForCall(ctx),
+		ResponseLanguage:    turnGate.turnContext.ResponseLanguage,
+		RequesterTimeZone:   turnGate.turnContext.RequesterTimeZone,
+		Voice:               turnGate.turnContext.Voice,
+		Prompt:              turnGate.turnContext.Prompt,
+		Platform:            turnGate.turnContext.Platform,
+		ConversationID:      turnGate.turnContext.ConversationID,
+		ReplyTargetID:       turnGate.turnContext.ReplyTargetID,
+		HarnessSession:      mcpserver.HarnessSessionFromContext(ctx),
+		ToolName:            toolDefinition.Name,
+		ToolInput:           toolInvocation.Input,
+		ApprovalInputFields: toolDefinition.ApprovalInputFields,
+		ApprovalQuotedField: toolDefinition.ApprovalQuotedField,
+		SideEffectClass:     strings.TrimSpace(toolDefinition.SideEffectClass),
 	})
 	if errorValue != nil {
 		return toolcontract.ToolCallReview{Result: HeldCallResult(errorValue.Error())}, nil

@@ -43,13 +43,13 @@ func TestTheTurnGateHandsTheToolsApprovalFactsToTheWording(t *testing.T) {
 	toolSet.Invoke(toolcontract.WithTaskRunID(context.Background(), taskRun.TaskRunID), toolcontract.ToolInvocation{ToolName: "file_delete", Input: json.RawMessage(`{"path":"~/a.md","note":"x"}`)})
 
 	wordingContext := marshalRequestMessages(languageModel.lastRequest)
-	for _, expectedFragment := range []string{`"operation":"file_delete"`, `"printedBelow":["path"]`} {
+	for _, expectedFragment := range []string{`"operation":"file_delete"`, `"quotedBelow":"path"`} {
 		if !strings.Contains(wordingContext, expectedFragment) {
 			t.Fatalf("expected %q in %s", expectedFragment, wordingContext)
 		}
 	}
 	if strings.Contains(wordingContext, `"note"`) || strings.Contains(wordingContext, "~/a.md") {
-		t.Fatalf("an undeclared input is not what the action does, and a printed one is the runtime's to show, got %s", wordingContext)
+		t.Fatalf("an undeclared input is not what the action does, and a quoted one is the runtime's to show, got %s", wordingContext)
 	}
 }
 
@@ -90,16 +90,16 @@ func TestAHeldCallRemembersTheHarnessSessionTheCallCameFrom(t *testing.T) {
 func registerDeletingTool(t *testing.T, toolSet *toolcontract.ToolSet) {
 	t.Helper()
 	errorValue := toolSet.RegisterTool(toolcontract.ToolDefinition{
-		ID:                   "test:file_delete",
-		Name:                 "file_delete",
-		Description:          "file_delete",
-		Visibility:           toolcontract.ToolVisibilityModel,
-		InputSchema:          json.RawMessage(`{"type":"object"}`),
-		RequiresApproval:     true,
-		ApprovalInputFields:  []string{"path"},
-		ApprovalQuotedFields: []string{"path"},
-		SideEffectClass:      toolcontract.ToolSideEffectStateChange,
-		ResultContract:       &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)},
+		ID:                  "test:file_delete",
+		Name:                "file_delete",
+		Description:         "file_delete",
+		Visibility:          toolcontract.ToolVisibilityModel,
+		InputSchema:         json.RawMessage(`{"type":"object"}`),
+		RequiresApproval:    true,
+		ApprovalInputFields: []string{"path"},
+		ApprovalQuotedField: "path",
+		SideEffectClass:     toolcontract.ToolSideEffectStateChange,
+		ResultContract:      &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)},
 	}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return toolcontract.ToolSuccessData("done", json.RawMessage(`{}`)), nil
 	})
@@ -121,9 +121,10 @@ func TestTheChoicesATargetCarriesAreHandedToTheWording(t *testing.T) {
 	}
 }
 
-func TestATargetsStartIsPrintedOnTheRequestersClock(t *testing.T) {
-	gate, taskRunService, taskRun := gateFixture(t)
-	gate.UseQuestionWorder(approval.NewWorder(&wordingLanguageModel{question: "삭제할까요?"}))
+func TestATargetsStartReachesTheSentenceOnTheRequestersClock(t *testing.T) {
+	gate, _, taskRun := gateFixture(t)
+	languageModel := &wordingLanguageModel{question: "삭제할까요?"}
+	gate.UseQuestionWorder(approval.NewWorder(languageModel))
 	gate.UseApprovalTargetResolver(resolvedTargetResolver())
 	toolSet := toolcontract.NewToolSet([]string{"file_delete"})
 	toolSet.AllowTestReplacement()
@@ -132,8 +133,8 @@ func TestATargetsStartIsPrintedOnTheRequestersClock(t *testing.T) {
 
 	toolSet.Invoke(toolcontract.WithTaskRunID(context.Background(), taskRun.TaskRunID), toolcontract.ToolInvocation{ToolName: "file_delete", Input: json.RawMessage(`{"path":"~/a.md"}`)})
 
-	question := heldCallEventBodyNamed(t, taskRunService, taskRun.TaskRunID, "confirmation.requested")
-	if !strings.Contains(question, "2026년 8월 17일 (월) 오후 10:00") || strings.Contains(question, "2026-08-18T14:00:00+09:00") {
-		t.Fatalf("a requester in Los Angeles reads the start on their own clock, got %s", question)
+	wordingContext := marshalRequestMessages(languageModel.lastRequest)
+	if !strings.Contains(wordingContext, "2026년 8월 17일 (월) 오후 10:00") || strings.Contains(wordingContext, "2026-08-18T14:00:00+09:00") {
+		t.Fatalf("the sentence is handed the start on a Los Angeles requester's own clock, got %s", wordingContext)
 	}
 }
