@@ -3,28 +3,84 @@ package turnbriefing
 import (
 	"strings"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
+type TaskEventReader interface {
+	ListTaskEvent(taskRunID string) []agentcontract.TaskEvent
+}
+
+type Briefing struct {
+	InstructionPrompt         string
+	TurnContextBriefedByAgent bool
+	TaskEvents                TaskEventReader
+}
+
+func Prompt(request agentcontract.AgentTurnRequest, briefing Briefing) string {
+	sections := []string{Preamble(request, briefing.InstructionPrompt), strings.TrimSpace(request.HostInstruction)}
+	if !briefing.TurnContextBriefedByAgent {
+		sections = append(sections, TurnContext(request))
+	}
+	sections = append(sections, request.Prompt, declinedCallNote(request, briefing.TaskEvents))
+	return joinPresent(sections)
+}
+
 func Preamble(request agentcontract.AgentTurnRequest, instructionPrompt string) string {
-	sections := []string{}
-	if standingInstructions := strings.TrimSpace(instructionPrompt); standingInstructions != "" {
-		sections = append(sections, standingInstructions)
+	return joinPresent([]string{
+		strings.TrimSpace(instructionPrompt),
+		agentIntroduction(request),
+		agentcontract.BuildTemporalContextDescription(request.EnvironmentNow, request.Company.TimeZone, request.VisibleContext.RequesterTimeZone),
+		agentcontract.BuildMemoryContext(request.MemoryFacts),
+		callsAlreadyCarriedOut(request.CarriedOutCalls),
+	})
+}
+
+func TurnContext(request agentcontract.AgentTurnRequest) string {
+	return joinPresent([]string{
+		agentcontract.BuildVisibleContextDescription(request.VisibleContext, request.Company.TimeZone),
+		agentcontract.ScheduledRunDescriptionForPrompt(request.ScheduledRun),
+		agentcontract.ActiveGoalDescription(request.ActiveGoal, request.Prompt),
+		agentcontract.PriorTaskDescription(request.PriorTask),
+		agentcontract.PendingInputDescription(request.PendingInput),
+		workspaceDescription(request.WorkspaceGuidance),
+	})
+}
+
+func workspaceDescription(workspaceGuidance []string) string {
+	lines := joinPresentLines(workspaceGuidance)
+	if lines == "" {
+		return ""
 	}
-	if introduction := agentIntroduction(request); introduction != "" {
-		sections = append(sections, introduction)
+	return "Workspace:\n" + lines
+}
+
+func declinedCallNote(request agentcontract.AgentTurnRequest, taskEvents TaskEventReader) string {
+	if taskEvents == nil || strings.TrimSpace(request.ExistingTaskRunID) == "" {
+		return ""
 	}
-	if temporalContext := agentcontract.BuildTemporalContextDescription(request.EnvironmentNow, request.Company.TimeZone, request.VisibleContext.RequesterTimeZone); temporalContext != "" {
-		sections = append(sections, temporalContext)
+	return approvalgate.DeclinedCallNote(taskEvents.ListTaskEvent(request.ExistingTaskRunID))
+}
+
+func joinPresent(sections []string) string {
+	present := []string{}
+	for _, section := range sections {
+		if trimmed := strings.TrimSpace(section); trimmed != "" {
+			present = append(present, trimmed)
+		}
 	}
-	if facts := agentcontract.BuildMemoryContext(request.MemoryFacts); facts != "" {
-		sections = append(sections, facts)
+	return strings.Join(present, "\n\n")
+}
+
+func joinPresentLines(lines []string) string {
+	present := []string{}
+	for _, line := range lines {
+		if trimmed := strings.TrimSpace(line); trimmed != "" {
+			present = append(present, trimmed)
+		}
 	}
-	if carriedOut := callsAlreadyCarriedOut(request.CarriedOutCalls); carriedOut != "" {
-		sections = append(sections, carriedOut)
-	}
-	return strings.Join(sections, "\n\n")
+	return strings.Join(present, "\n")
 }
 
 func callsAlreadyCarriedOut(carriedOutCalls []agentcontract.CarriedOutCall) string {

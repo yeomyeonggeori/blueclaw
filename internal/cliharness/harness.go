@@ -17,7 +17,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/callrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
@@ -483,17 +482,10 @@ func formatDigestAsUUID(digest [32]byte) string {
 }
 
 func (harness *Harness) promptForTurn(request agentcontract.AgentTurnRequest) string {
-	sections := []string{}
-	if preamble := turnbriefing.Preamble(request, harness.instructionPrompt()); preamble != "" {
-		sections = append(sections, preamble)
-	}
-	sections = append(sections, request.Prompt)
-	if harness.taskRunStore != nil && strings.TrimSpace(request.ExistingTaskRunID) != "" {
-		if declinedCallNote := approvalgate.DeclinedCallNote(harness.taskRunStore.ListTaskEvent(request.ExistingTaskRunID)); declinedCallNote != "" {
-			sections = append(sections, declinedCallNote)
-		}
-	}
-	return strings.Join(sections, "\n\n")
+	return turnbriefing.Prompt(request, turnbriefing.Briefing{
+		InstructionPrompt: harness.instructionPrompt(),
+		TaskEvents:        harness.taskRunStore,
+	})
 }
 
 func (harness *Harness) instructionPrompt() string {

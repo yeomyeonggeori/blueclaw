@@ -106,3 +106,24 @@ func TestARequesterAbroadIsBriefedOnTheirOwnClock(t *testing.T) {
 		t.Fatalf("the zone chatd read off the request reaches the clock the agent is briefed on:\n%s", preamble)
 	}
 }
+
+func TestAnAgentThatDoesNotBriefItselfIsToldWhatTheTurnIsAbout(t *testing.T) {
+	request := briefedRequest()
+	request.VisibleContext = agentcontract.VisibleContext{Messages: []agentcontract.VisibleContextMessage{{Speaker: "Ada", Text: "QA 채널 공지 초안 봐줄래?"}}}
+	request.PendingInput = agentcontract.PendingInputContext{TaskRunID: "run-1", Question: "어느 채널에 올릴까요?"}
+	request.WorkspaceGuidance = []string{"Save finished documents in ~/documents/."}
+	request.Prompt = "QA로"
+
+	for _, briefing := range []Briefing{{}, {TurnContextBriefedByAgent: true}} {
+		prompt := Prompt(request, briefing)
+		for _, fact := range []string{"QA 채널 공지 초안 봐줄래?", "어느 채널에 올릴까요?", "~/documents/"} {
+			carries := strings.Contains(prompt, fact)
+			if !briefing.TurnContextBriefedByAgent && !carries {
+				t.Fatalf("\"QA로\" answers a question the agent can only see if it is told, missing %q in:\n%s", fact, prompt)
+			}
+			if briefing.TurnContextBriefedByAgent && carries {
+				t.Fatalf("an agent that briefs itself would read %q twice:\n%s", fact, prompt)
+			}
+		}
+	}
+}

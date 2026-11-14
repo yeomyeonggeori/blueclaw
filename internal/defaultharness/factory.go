@@ -34,7 +34,7 @@ func factoryOver(processFor ProcessFor, toolCatalogPublisher acpharness.ToolCata
 		harness := acpharness.New(processFor(dependencies, skillRetriever), toolCatalogPublisher, dependencies.TaskRunStore)
 		harness.UseToolAudience(mcpserver.ToolAudienceBare)
 		harness.UseInstructionBundleLoader(dependencies.InstructionBundleLoader)
-		harness.UseHostInstruction()
+		harness.UseAgentBriefingItsOwnTurnContext()
 		harness.UsePromptMeta(promptMetaFor(dependencies))
 		harness.UseCheckpointMarker(acpagent.CheckpointMetaKey)
 		harness.UseTurnResultMeta(acpagent.TurnResultMetaKey)

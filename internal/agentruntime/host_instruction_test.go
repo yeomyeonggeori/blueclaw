@@ -20,4 +20,9 @@ func TestTheHostDescribesItsOwnToolsAndNothingElse(t *testing.T) {
 			t.Fatalf("%q is how one product decided to behave, and a host that hardcodes it stops being usable by another", notMine)
 		}
 	}
+	for _, oneHarnessesWord := range []string{"expectsAnswer", "ask.confirm", "approvalRequired", "message field"} {
+		if strings.Contains(instruction, oneHarnessesWord) {
+			t.Fatalf("every harness reads this instruction, and %q names a field or tool only one of them has", oneHarnessesWord)
+		}
+	}
 }

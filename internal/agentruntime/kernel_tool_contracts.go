@@ -11,8 +11,8 @@ const terminalRunModeCommand = "command"
 var terminalRunInputSchema = json.RawMessage(`{
 	"type":"object",
 	"properties":{
-		"approvalRequired":{"type":"boolean"},
-		"approvalReason":{"type":"string","minLength":1},
+		"approvalRequired":{"type":"boolean","description":"true only when this exact command needs the requester's confirmation before it runs, such as removing a file they named; otherwise omit it."},
+		"approvalReason":{"type":"string","minLength":1,"description":"Why the command needs confirmation, in the requester's language. Required when approvalRequired is true."},
 		"command":{"type":"string","minLength":1},
 		"workingDirectoryPath":{"type":"string"},
 		"timeoutSecond":{"type":"integer","minimum":1}

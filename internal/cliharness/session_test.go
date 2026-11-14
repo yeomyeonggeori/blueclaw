@@ -209,3 +209,20 @@ func TestAHarnessKeepsTheSettingsItsOwnerGaveIt(t *testing.T) {
 		})
 	}
 }
+
+func TestACLIHarnessIsBriefedLikeEveryOtherHarness(t *testing.T) {
+	harness, _ := sessionTestHarness(t, AgentCommand{Path: "/bin/cat", HarnessName: "test-harness"})
+
+	prompt := runEchoingTurn(t, harness, agentcontract.AgentTurnRequest{
+		RequesterIdentity: agentcontract.RequesterIdentity{RequesterPersonID: "person-1"},
+		HostInstruction:   "The requester prefers terse answers.",
+		PriorTask:         agentcontract.PriorTaskContext{TaskRunID: "run-earlier", Prompt: "회의록 정리해줘"},
+		Prompt:            "그거 고쳐줘",
+	})
+
+	for _, briefed := range []string{"The requester prefers terse answers.", "회의록 정리해줘", "그거 고쳐줘"} {
+		if !strings.Contains(prompt, briefed) {
+			t.Fatalf("a command-line agent is told what every other harness is told, missing %q in:\n%s", briefed, prompt)
+		}
+	}
+}
