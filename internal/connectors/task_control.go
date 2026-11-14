@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
@@ -166,16 +167,44 @@ func (connectorRuntime *ConnectorRuntime) looksLikeActiveTaskFollowUp(ctx contex
 	}
 	open := connectorRuntime.readOpenInteractions(connectorRuntime.inboundTurnFor(adapter, event))
 	if open.isEmpty() {
+		connectorRuntime.reuseTheDecisionAboutTheRunThatEnded(event)
 		return false
 	}
-	relates, errorValue := connectorRuntime.judgeRelatesToActiveTask(ctx, adapter, event)
-	if errorValue != nil {
-		connectorRuntime.logger.Warn("connector."+adapter.Name()+".busy_message.held_undecided",
-			slog.String("messageID", event.MessageID),
-			slog.String("taskRunID", open.taskRunID()),
-			slog.String("error", errorValue.Error()))
+	judgment, isDecided := connectorRuntime.decideOnceAboutTheOpenTask(ctx, adapter, event, open.taskRunID())
+	return isDecided && isAboutTheTask(judgment)
+}
+
+func (connectorRuntime *ConnectorRuntime) reuseTheDecisionAboutTheRunThatEnded(event PlatformInboundEvent) {
+	if judgment, isDecided := connectorRuntime.heldDecisions.decidedJudgment(event); isDecided {
+		seedInboundDecision(event, []inboundengagement.Judgment{judgment}, nil)
 	}
-	return relates
+}
+
+func (connectorRuntime *ConnectorRuntime) decideOnceAboutTheOpenTask(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent, taskRunID string) (inboundengagement.Judgment, bool) {
+	held := connectorRuntime.heldDecisions.about(event, taskRunID)
+	if held.isDecided {
+		seedInboundDecision(event, []inboundengagement.Judgment{held.judgment}, nil)
+		return held.judgment, true
+	}
+	if held.hasStoppedDeciding() {
+		return inboundengagement.Judgment{}, false
+	}
+	judgment, errorValue := connectorRuntime.judgeInboundMessage(ctx, adapter, event)
+	held = held.settledBy(judgment, errorValue)
+	connectorRuntime.heldDecisions.keep(event, held)
+	if errorValue != nil {
+		connectorRuntime.logHeldUndecided(adapter, event, held, errorValue)
+	}
+	return judgment, errorValue == nil
+}
+
+func (connectorRuntime *ConnectorRuntime) logHeldUndecided(adapter PlatformAdapter, event PlatformInboundEvent, held heldMessageDecision, errorValue error) {
+	connectorRuntime.logger.Warn("connector."+adapter.Name()+".busy_message.held_undecided",
+		slog.String("messageID", event.MessageID),
+		slog.String("taskRunID", held.taskRunID),
+		slog.Int("attempt", held.failureCount),
+		slog.Bool("waitsForTheRunUndecided", held.hasStoppedDeciding()),
+		slog.String("error", errorValue.Error()))
 }
 
 func exactTaskControlIntent(prompt string) agentcontract.TaskControlIntent {

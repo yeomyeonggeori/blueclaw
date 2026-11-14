@@ -209,17 +209,14 @@ func inboundDecisionMessage(event PlatformInboundEvent) inboundengagement.Messag
 }
 
 func (connectorRuntime *ConnectorRuntime) relatesToActiveTask(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) bool {
-	relates, errorValue := connectorRuntime.judgeRelatesToActiveTask(ctx, adapter, event)
-	if errorValue != nil {
-		connectorRuntime.logger.Warn("connector."+adapter.Name()+".gateway.decision_failed", slog.String("messageID", event.MessageID), slog.String("error", errorValue.Error()))
-	}
-	return relates
-}
-
-func (connectorRuntime *ConnectorRuntime) judgeRelatesToActiveTask(ctx context.Context, adapter PlatformAdapter, event PlatformInboundEvent) (bool, error) {
 	judgment, errorValue := connectorRuntime.judgeInboundMessage(ctx, adapter, event)
 	if errorValue != nil {
-		return false, errorValue
+		connectorRuntime.logger.Warn("connector."+adapter.Name()+".gateway.decision_failed", slog.String("messageID", event.MessageID), slog.String("error", errorValue.Error()))
+		return false
 	}
-	return judgment.HasRelatesToActiveTask && judgment.RelatesToActiveTask, nil
+	return isAboutTheTask(judgment)
+}
+
+func isAboutTheTask(judgment inboundengagement.Judgment) bool {
+	return judgment.HasRelatesToActiveTask && judgment.RelatesToActiveTask
 }

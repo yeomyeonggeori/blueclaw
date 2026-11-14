@@ -2793,6 +2793,7 @@ type testConnectorQueueRepository struct {
 	mutex           sync.Mutex
 	pendingEvents   []QueuedConnectorEvent
 	releasedEvents  []QueuedConnectorEvent
+	releaseDelays   []time.Duration
 	succeededEvents []ConnectorRuntimeResult
 	pendingReplies  []QueuedConnectorReply
 	sentReplies     []string
@@ -2857,10 +2858,11 @@ func (repository *testConnectorQueueRepository) MarkConnectorEventFailed(QueuedC
 	return nil
 }
 
-func (repository *testConnectorQueueRepository) ReleaseConnectorEventClaim(queuedEvent QueuedConnectorEvent, _ time.Time) error {
+func (repository *testConnectorQueueRepository) ReleaseConnectorEventClaim(queuedEvent QueuedConnectorEvent, nextAttemptAt time.Time) error {
 	repository.mutex.Lock()
 	defer repository.mutex.Unlock()
 	repository.releasedEvents = append(repository.releasedEvents, queuedEvent)
+	repository.releaseDelays = append(repository.releaseDelays, time.Until(nextAttemptAt))
 	queuedEvent.Event.gatewayDecision = nil
 	repository.pendingEvents = append(repository.pendingEvents, queuedEvent)
 	return nil

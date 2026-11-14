@@ -148,6 +148,7 @@ type ConnectorRuntime struct {
 	taskIntakeGate        TaskIntakeGate
 	conversationLocks     map[string]*sync.Mutex
 	pendingRequests       *pendingRequestStore
+	heldDecisions         *heldMessageDecisions
 	sentAttachmentSources *sentAttachmentSourceStore
 	started               bool
 	inboxHeartbeats       []time.Time
@@ -173,6 +174,7 @@ func NewConnectorRuntime(identityService *identity.IdentityService, harness agen
 		processedResults:      map[string]ConnectorRuntimeResult{},
 		conversationLocks:     map[string]*sync.Mutex{},
 		pendingRequests:       newPendingRequestStore(),
+		heldDecisions:         newHeldMessageDecisions(),
 		sentAttachmentSources: newSentAttachmentSourceStore(),
 		askingThreads:         &askingThreads{expiry: approvalExpiry},
 	}
