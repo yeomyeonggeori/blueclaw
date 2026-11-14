@@ -2,12 +2,19 @@ package agentruntime
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
-	"strings"
 	"testing"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
+	"github.com/yeomyeonggeori/blueclaw/internal/persona"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
+	"github.com/yeomyeonggeori/blueclaw/internal/task"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract/harnesstest"
+	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type personaActorFactory struct {
@@ -52,79 +59,115 @@ func (actor personaActor) Stat(context.Context, string) (security.WorkspaceActor
 	return security.WorkspaceActorStat{}, nil
 }
 
-func TestRequesterPersonaInstructionReadsTheRequestersOwnHomeAsThatPerson(t *testing.T) {
+func TestTheRequestersPersonaIsReadFromTheirOwnHomeAsThatPerson(t *testing.T) {
 	workspacePath := t.TempDir()
 	documentPath := filepath.Join(security.PersonHomeDirectoryPath(workspacePath, "person-1"), ".internkim", "user.json")
 	factory := &personaActorFactory{documents: map[string][]byte{
-		documentPath: []byte(`{"schemaVersion": 1, "callMe": "샘플님", "preferences": ["Give me the command first."]}`),
+		documentPath: []byte(`{"schemaVersion": 1, "callMe": "샘플님", "language": {"default": "ja-JP"}}`),
 	}}
 
-	instruction := requesterPersonaInstruction(factory, policy.PersonAccess{PersonID: "person-1"}, workspacePath)
+	user, isAvailable := readRequesterPersona(factory, policy.PersonAccess{PersonID: "person-1"}, workspacePath)
 
-	if !strings.Contains(instruction, "Call them 샘플님.") || !strings.Contains(instruction, "Give me the command first.") {
-		t.Fatalf("expected the requester's document in the instruction, got %q", instruction)
+	if !isAvailable || user.CallMe != "샘플님" || user.Language == nil || user.Language.Default != "ja-JP" {
+		t.Fatalf("expected the requester's document, got %+v", user)
 	}
 	if len(factory.requested) != 1 || factory.requested[0] != "person-1" {
 		t.Fatalf("expected the read to run as the requester, got %v", factory.requested)
 	}
-	if requesterPersonaInstruction(factory, policy.PersonAccess{PersonID: "person-2"}, workspacePath) != "" {
+	if _, isAvailable := readRequesterPersona(factory, policy.PersonAccess{PersonID: "person-2"}, workspacePath); isAvailable {
 		t.Fatal("expected nothing for a person without a document")
 	}
-	if requesterPersonaInstruction(nil, policy.PersonAccess{PersonID: "person-1"}, workspacePath) != "" {
+	if _, isAvailable := readRequesterPersona(nil, policy.PersonAccess{PersonID: "person-1"}, workspacePath); isAvailable {
 		t.Fatal("expected nothing without an actor factory")
 	}
 }
 
-func TestRequesterPersonaInstructionLeavesOutADocumentTheSchemaRefuses(t *testing.T) {
+func TestARequesterPersonaTheSchemaRefusesIsLeftOut(t *testing.T) {
 	workspacePath := t.TempDir()
 	documentPath := filepath.Join(security.PersonHomeDirectoryPath(workspacePath, "person-1"), ".internkim", "user.json")
 	factory := &personaActorFactory{documents: map[string][]byte{
 		documentPath: []byte(`{"schemaVersion": 1, "callMe": "샘플님", "nickname": "kim"}`),
 	}}
 
-	if instruction := requesterPersonaInstruction(factory, policy.PersonAccess{PersonID: "person-1"}, workspacePath); instruction != "" {
-		t.Fatalf("expected a refused document to render nothing, got %q", instruction)
+	if user, isAvailable := readRequesterPersona(factory, policy.PersonAccess{PersonID: "person-1"}, workspacePath); isAvailable {
+		t.Fatalf("expected a refused document to be left out, got %+v", user)
 	}
 }
 
-func TestRequesterPersonaLanguageReadsTheRequestersPreference(t *testing.T) {
-	for _, testCase := range []struct {
-		name     string
-		document string
-		expected string
-	}{
-		{name: "korean", document: `{"schemaVersion": 1, "language": {"default": "ko"}}`, expected: "ko"},
-		{name: "english", document: `{"schemaVersion": 1, "language": {"default": "en"}}`, expected: "en"},
-		{name: "custom", document: `{"schemaVersion": 1, "language": {"default": "ja-JP"}}`, expected: "ja-JP"},
-		{name: "missing", document: `{"schemaVersion": 1}`, expected: ""},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			workspacePath := t.TempDir()
-			documentPath := filepath.Join(security.PersonHomeDirectoryPath(workspacePath, "person-1"), ".internkim", "user.json")
-			factory := &personaActorFactory{documents: map[string][]byte{documentPath: []byte(testCase.document)}}
-
-			if language := requesterPersonaLanguage(factory, policy.PersonAccess{PersonID: "person-1"}, workspacePath); language != testCase.expected {
-				t.Fatalf("expected %q, got %q", testCase.expected, language)
-			}
-		})
-	}
-}
-
-func TestAnApprovalIsAskedInTheAgentsVoiceTowardThisRequester(t *testing.T) {
+func TestAHeldCallIsWordedInTheAgentsVoiceTowardThisRequester(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	harness := harnesstest.New(taskRunService)
 	workspacePath := t.TempDir()
 	toolCatalogBuilder := NewToolCatalogBuilder()
 	toolCatalogBuilder.UseWorkspaceRootPath(workspacePath)
-	toolCatalogBuilder.UseWorkspaceActorFactory(&personaActorFactory{documents: map[string][]byte{
-		filepath.Join(security.PersonHomeDirectoryPath(workspacePath, "person-1"), ".internkim", "user.json"): []byte(`{"schemaVersion": 1, "callMe": "샘플님", "tone": {"register": "formal"}}`),
-	}})
-	taskLauncher := NewTaskLauncher(nil, nil, toolCatalogBuilder)
-	taskLauncher.UseAgentVoiceProvider(func() string { return "- Your name is 샘플봇." })
+	factory := &personaActorFactory{documents: map[string][]byte{
+		filepath.Join(security.PersonHomeDirectoryPath(workspacePath, "person-1"), ".internkim", "user.json"): []byte(`{"schemaVersion": 1, "callMe": "샘플님", "about": "결제 서버 담당", "tone": {"register": "formal"}}`),
+	}}
+	toolCatalogBuilder.UseWorkspaceActorFactory(factory)
+	taskLauncher := NewTaskLauncher(harness, taskRunService, toolCatalogBuilder)
+	taskLauncher.UseAgentPersonaProvider(func() persona.Agent {
+		return persona.Agent{Identity: persona.Identity{Names: []string{"샘플봇"}}}
+	})
+	questionWorder := &recordingQuestionWorder{}
+	gate := approvalgate.New(taskRunService)
+	gate.UseQuestionWorder(questionWorder)
+	gate.UsePermissionAsker(interruptedPermissionAsker{})
+	taskLauncher.UseApprovalGate(gate)
 
-	voice := taskLauncher.voiceTowardRequester(TaskLaunchRequest{RequesterPersonID: "person-1"})
-
-	for _, fragment := range []string{"- Your name is 샘플봇.", "Call them 샘플님.", "Tone with them: keep a formal register."} {
-		if !strings.Contains(voice, fragment) {
-			t.Fatalf("expected %q in the voice an approval is asked in, got %q", fragment, voice)
-		}
+	if _, errorValue := taskLauncher.Launch(context.Background(), TaskLaunchRequest{
+		Source:                    TaskLaunchSourceConnector,
+		RequesterPersonID:         "person-1",
+		ConversationID:            "channel-1",
+		Prompt:                    "Delete the draft.",
+		PersonAccess:              policy.PersonAccess{PersonID: "person-1"},
+		AccessibleConversationIDs: []string{"channel-1"},
+	}); errorValue != nil {
+		t.Fatal(errorValue)
 	}
+	holdACallOn(t, harness.LastTurnRequest().ToolSet, taskRunService.CreateTaskRun("person-1", "channel-1", "Delete the draft.").TaskRunID)
+
+	if questionWorder.facts.Voice != "- Your name is 샘플봇.\n- Call them 샘플님.\n- Tone with them: keep a formal register." {
+		t.Fatalf("expected the question to be worded in the agent's voice toward this requester, got %q", questionWorder.facts.Voice)
+	}
+	if len(factory.requested) != 1 {
+		t.Fatalf("expected the requester's persona to be read once for the launch, got %d reads", len(factory.requested))
+	}
+}
+
+type recordingQuestionWorder struct {
+	facts holdrecord.QuestionFacts
+}
+
+func (questionWorder *recordingQuestionWorder) WordQuestion(_ context.Context, facts holdrecord.QuestionFacts) holdrecord.QuestionWording {
+	questionWorder.facts = facts
+	return holdrecord.QuestionWording{Text: "지울까요?"}
+}
+
+type interruptedPermissionAsker struct{}
+
+func (interruptedPermissionAsker) AskPermission(context.Context, mcpserver.ApprovalRequest, approvalgate.PermissionQuestion) (approvalgate.ApprovalAnswer, approvalgate.AskStatus) {
+	return approvalgate.ApprovalAnswer{}, approvalgate.AskInterrupted
+}
+
+func holdACallOn(t *testing.T, toolSet *toolcontract.ToolSet, taskRunID string) {
+	t.Helper()
+	if toolSet == nil {
+		t.Fatal("expected the launch to hand the turn a tool set")
+	}
+	toolSet.AllowTestReplacement()
+	if errorValue := toolSet.RegisterTool(toolcontract.ToolDefinition{
+		ID:               "test:draft_delete",
+		Name:             "draft_delete",
+		Description:      "draft_delete",
+		Visibility:       toolcontract.ToolVisibilityModel,
+		InputSchema:      json.RawMessage(`{"type":"object"}`),
+		RequiresApproval: true,
+		SideEffectClass:  toolcontract.ToolSideEffectStateChange,
+		ResultContract:   &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)},
+	}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		return toolcontract.ToolSuccessData("done", json.RawMessage(`{}`)), nil
+	}); errorValue != nil {
+		t.Fatalf("expected the tool to register: %v", errorValue)
+	}
+	toolSet.WithAllowedToolNames(toolcontract.AppendUniqueStrings(toolSet.ListToolNames(), "draft_delete")).Invoke(toolcontract.WithTaskRunID(context.Background(), taskRunID), toolcontract.ToolInvocation{ToolName: "draft_delete", Input: json.RawMessage(`{}`)})
 }

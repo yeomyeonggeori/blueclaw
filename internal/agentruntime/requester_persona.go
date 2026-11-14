@@ -17,22 +17,6 @@ const (
 	requesterPersonaMaximumBytes = 64 * 1024
 )
 
-func requesterPersonaInstruction(factory security.WorkspaceActorFactory, personAccess policy.PersonAccess, workspaceRootPath string) string {
-	user, isAvailable := readRequesterPersona(factory, personAccess, workspaceRootPath)
-	if !isAvailable {
-		return ""
-	}
-	return persona.RenderUserInstruction(user)
-}
-
-func requesterPersonaLanguage(factory security.WorkspaceActorFactory, personAccess policy.PersonAccess, workspaceRootPath string) string {
-	user, isAvailable := readRequesterPersona(factory, personAccess, workspaceRootPath)
-	if !isAvailable || user.Language == nil {
-		return ""
-	}
-	return strings.TrimSpace(user.Language.Default)
-}
-
 func readRequesterPersona(factory security.WorkspaceActorFactory, personAccess policy.PersonAccess, workspaceRootPath string) (persona.User, bool) {
 	personID := strings.TrimSpace(personAccess.PersonID)
 	if factory == nil || personID == "" {

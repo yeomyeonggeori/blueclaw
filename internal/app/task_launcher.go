@@ -13,7 +13,7 @@ func newTaskLauncher(runtimeConfiguration config.RuntimeConfiguration, foundatio
 	taskLauncher.UseRequesterWorkspaceProvisioner(security.NewPOSIXRequesterWorkspaceProvisioner(foundation.posixSynchronizer))
 	taskLauncher.UseRequesterEmailResolver(directory.identityService)
 	taskLauncher.UseAgentIdentityProvider(kernel.agentIdentityProvider)
-	taskLauncher.UseAgentVoiceProvider(kernel.agentVoiceProvider)
+	taskLauncher.UseAgentPersonaProvider(kernel.agentPersonaProvider)
 	taskLauncher.UseCompanyProvider(directory.companyProvider)
 	taskLauncher.UseCompanyLocaleProvider(directory.companyLocaleProvider)
 	toolCatalogBuilder.UseCompanyProvider(directory.companyProvider)

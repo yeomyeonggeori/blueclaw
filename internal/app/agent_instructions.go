@@ -279,15 +279,15 @@ func loadAgentIdentity(runtimeConfiguration config.RuntimeConfiguration) agentco
 	return agentcontract.AgentIdentity{}
 }
 
-func loadAgentVoice(runtimeConfiguration config.RuntimeConfiguration) string {
+func loadAgentPersona(runtimeConfiguration config.RuntimeConfiguration) persona.Agent {
 	for _, rootPath := range instructionRootPaths(runtimeConfiguration) {
-		_, _, identity, _ := readIdentityDocument(rootPath)
-		_, _, soul, _ := readSoulDocument(rootPath)
-		if voice := persona.RenderVoiceInstruction(identity, soul); voice != "" {
-			return voice
+		_, identityDocument, identity, _ := readIdentityDocument(rootPath)
+		_, soulDocument, soul, _ := readSoulDocument(rootPath)
+		if identityDocument != nil || soulDocument != nil {
+			return persona.Agent{Identity: identity, Soul: soul}
 		}
 	}
-	return ""
+	return persona.Agent{}
 }
 
 func instructionSource(path string, skillName string, document []byte) agentcontract.InstructionSource {

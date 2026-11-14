@@ -79,19 +79,20 @@ func TestParseSoulNormalizesAndRenders(t *testing.T) {
 	}
 }
 
-func TestTheVoiceCarriesWhoTheAgentIsAndHowItSoundsAndNothingElse(t *testing.T) {
+func TestTheVoiceCarriesWhoSpeaksToWhomInWhatToneAndNothingElse(t *testing.T) {
 	identity, _ := ParseIdentity([]byte(identityDocument))
 	soul, _ := ParseSoul([]byte(soulDocument))
+	user, _ := ParseUser([]byte(userDocument))
 
-	voice := RenderVoiceInstruction(identity, soul)
+	voice := RenderVoiceInstruction(Agent{Identity: identity, Soul: soul}, user)
 
-	if voice != "- Your name is 김인턴.\n- Your role: 회사의 AI 인턴\n- Tone: keep a polite register; sound warm, brief." {
-		t.Fatalf("expected the voice to be the name, the role and the tone, got %q", voice)
+	if voice != "- Your name is 김인턴.\n- Your role: 회사의 AI 인턴\n- Tone: keep a polite register; sound warm, brief.\n- Call them 샘플님.\n- Tone with them: keep a casual register." {
+		t.Fatalf("expected the voice to be the agent's name, role and tone and how this requester is addressed, got %q", voice)
 	}
 }
 
 func TestAPersonaWithoutVoiceRendersNone(t *testing.T) {
-	if voice := RenderVoiceInstruction(Identity{}, Soul{}); voice != "" {
+	if voice := RenderVoiceInstruction(Agent{}, User{}); voice != "" {
 		t.Fatalf("expected no voice from an empty persona, got %q", voice)
 	}
 }

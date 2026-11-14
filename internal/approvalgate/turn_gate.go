@@ -14,7 +14,7 @@ type TurnContext struct {
 	RequesterEmail    string
 	ResponseLanguage  string
 	RequesterTimeZone string
-	Voice             func() string
+	Voice             string
 	Prompt            string
 	Platform          string
 	ConversationID    string
@@ -22,13 +22,6 @@ type TurnContext struct {
 	ChannelID         string
 	ReplyTargetID     string
 	HarnessSession    mcpserver.HarnessSession
-}
-
-func (turnContext TurnContext) voice() string {
-	if turnContext.Voice == nil {
-		return ""
-	}
-	return turnContext.Voice()
 }
 
 type turnToolCallGate struct {
@@ -59,7 +52,7 @@ func (turnGate turnToolCallGate) ReviewToolCall(ctx context.Context, toolInvocat
 		TaskRunID:            taskRunIDForCall(ctx),
 		ResponseLanguage:     turnGate.turnContext.ResponseLanguage,
 		RequesterTimeZone:    turnGate.turnContext.RequesterTimeZone,
-		Voice:                turnGate.turnContext.voice(),
+		Voice:                turnGate.turnContext.Voice,
 		Prompt:               turnGate.turnContext.Prompt,
 		Platform:             turnGate.turnContext.Platform,
 		ConversationID:       turnGate.turnContext.ConversationID,

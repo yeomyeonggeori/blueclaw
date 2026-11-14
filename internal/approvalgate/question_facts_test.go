@@ -59,7 +59,7 @@ func TestTheTurnGateAsksInTheVoiceTheLauncherGives(t *testing.T) {
 	toolSet.AllowTestReplacement()
 	registerDeletingTool(t, toolSet)
 	voice := "- Your name is 샘플봇.\n- Call them 박예시 님."
-	toolSet.UseToolCallGate(gate.TurnGate(TurnContext{RequesterPersonID: "person-1", Voice: func() string { return voice }}))
+	toolSet.UseToolCallGate(gate.TurnGate(TurnContext{RequesterPersonID: "person-1", Voice: voice}))
 
 	toolSet.Invoke(toolcontract.WithTaskRunID(context.Background(), taskRun.TaskRunID), toolcontract.ToolInvocation{ToolName: "file_delete", Input: json.RawMessage(`{"path":"~/a.md"}`)})
 
