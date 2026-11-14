@@ -1,72 +1,23 @@
 package connectors
 
 import (
-	"encoding/json"
-	"strings"
-
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
-const messageSendToolName = "message_send"
-
-type toolRequestedEventBody struct {
-	ToolName string          `json:"toolName"`
-	Input    json.RawMessage `json:"input"`
-}
-
-func agentAlreadyDeliveredTo(taskEvents []agentcontract.TaskEvent, deliveryTargets []string) bool {
-	knownTargets := []string{}
-	for _, deliveryTarget := range deliveryTargets {
-		if trimmedTarget := strings.TrimSpace(deliveryTarget); trimmedTarget != "" {
-			knownTargets = append(knownTargets, trimmedTarget)
-		}
-	}
-	if len(knownTargets) == 0 {
-		return false
-	}
-	if !messageSendSucceeded(taskEvents) {
-		return false
-	}
+func agentAnsweredTheConversation(taskEvents []agentcontract.TaskEvent, conversation VisibleContext) bool {
+	requestedCalls := map[string]agentcontract.ToolCallRequested{}
 	for _, taskEvent := range taskEvents {
-		if taskEvent.Name != agentcontract.ToolTaskEventName(messageSendToolName, agentcontract.ToolTaskEventRequestedSuffix) {
+		if _, isRequest := agentcontract.ToolTaskEventToolName(taskEvent.Name, agentcontract.ToolTaskEventRequestedSuffix); isRequest {
+			requested := agentcontract.ToolCallRecordOf[agentcontract.ToolCallRequested](taskEvent.Body)
+			requestedCalls[requested.ObservationID] = requested
 			continue
 		}
-		requested := toolRequestedEventBody{}
-		if json.Unmarshal([]byte(taskEvent.Body), &requested) != nil {
+		if _, isResult := agentcontract.ToolTaskEventToolName(taskEvent.Name, agentcontract.ToolTaskEventResultSuffix); !isResult {
 			continue
 		}
-		if messageSendTargets(requested.Input, knownTargets) {
-			return true
-		}
-	}
-	return false
-}
-
-func messageSendTargets(toolInput json.RawMessage, knownTargets []string) bool {
-	decodedInput := map[string]any{}
-	if json.Unmarshal(toolInput, &decodedInput) != nil {
-		return false
-	}
-	for _, fieldName := range []string{"conversationID", "targetID", "channelID", "threadID", "replyTargetID"} {
-		value, isText := decodedInput[fieldName].(string)
-		if !isText {
-			continue
-		}
-		for _, knownTarget := range knownTargets {
-			if strings.TrimSpace(value) == knownTarget {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func messageSendSucceeded(taskEvents []agentcontract.TaskEvent) bool {
-	for _, taskEvent := range taskEvents {
-		if taskEvent.Name != agentcontract.ToolTaskEventName(messageSendToolName, agentcontract.ToolTaskEventResultSuffix) {
-			continue
-		}
-		if !strings.Contains(taskEvent.Body, "\"failure\"") {
+		result := agentcontract.ToolCallRecordOf[agentcontract.ToolCallResult](taskEvent.Body)
+		if result.Succeeded() && approvalgate.CallLandsInTheConversationBeingAnswered(conversation.ConversationType, conversation.ChannelID, requestedCalls[result.ObservationID]) {
 			return true
 		}
 	}

@@ -1,7 +1,6 @@
 package connectors
 
 import (
-	"encoding/json"
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
@@ -19,11 +18,11 @@ func priorTaskRecordedAttempts(events []task.TaskEvent) ([]agentcontract.PriorTa
 		if event.Name != agentcontract.ToolTaskEventName(toolName, agentcontract.ToolTaskEventResultSuffix) {
 			continue
 		}
-		var attempt agentcontract.PriorTaskAttempt
-		if json.Unmarshal([]byte(event.Body), &attempt) != nil || attempt.ObservationID == "" {
+		result := agentcontract.ToolCallRecordOf[agentcontract.ToolCallResult](event.Body)
+		if result.ObservationID == "" || result.Held() {
 			continue
 		}
-		attempt.Tool = toolcontract.CanonicalToolName(toolName)
+		attempt := agentcontract.PriorTaskAttemptOf(toolcontract.CanonicalToolName(toolName), result)
 		if len(attempt.ToolInput) > priorTaskInputByteLimit {
 			attempt.ToolInput = nil
 			attempt.ToolInputOmitted = true

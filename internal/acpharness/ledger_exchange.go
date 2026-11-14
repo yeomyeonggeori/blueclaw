@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	acp "github.com/coder/acp-go-sdk"
+	"github.com/yeomyeonggeori/blueclaw/internal/callrecord"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 )
@@ -25,6 +26,17 @@ func newLedgerExchange(skippedEventNames []string) *ledgerExchange {
 
 func (harness *Harness) UseLedgerExchange(skippedEventNames []string) {
 	harness.ledgerExchange = newLedgerExchange(skippedEventNames)
+}
+
+func (harness *Harness) hostCallLedger() callrecord.Ledger {
+	if harness.agentAuthorsItsLedger() {
+		return nil
+	}
+	return harness.taskRunStore
+}
+
+func (harness *Harness) agentAuthorsItsLedger() bool {
+	return harness.ledgerExchange != nil
 }
 
 func (exchange *ledgerExchange) replayMeta(taskRunStore taskstate.TaskRunStore, request agentcontract.AgentTurnRequest) map[string]any {
@@ -138,9 +150,9 @@ func (mirror ledgerMirror) hostRecordedTheCancellation(record agentcontract.Ledg
 	if !strings.HasPrefix(record.Name, agentcontract.ToolTaskEventPrefix) || !strings.HasSuffix(record.Name, agentcontract.ToolTaskEventCancelledSuffix) {
 		return false
 	}
-	observationID := observationIDOf(record.EventBody())
+	observationID := agentcontract.ToolCallRecordOf[agentcontract.ToolCallCancelled](record.EventBody()).ObservationID
 	for _, taskEvent := range mirror.taskRunStore.ListTaskEvent(mirror.taskRunID) {
-		if taskEvent.Name == record.Name && observationIDOf(taskEvent.Body) == observationID {
+		if taskEvent.Name == record.Name && agentcontract.ToolCallRecordOf[agentcontract.ToolCallCancelled](taskEvent.Body).ObservationID == observationID {
 			return true
 		}
 	}
@@ -156,12 +168,4 @@ func (mirror ledgerMirror) tookThePositionAlready(record agentcontract.LedgerRec
 	}
 	mirror.takenPositions[record.Position] = true
 	return false
-}
-
-func observationIDOf(eventBody string) string {
-	document := struct {
-		ObservationID string `json:"observationID"`
-	}{}
-	_ = json.Unmarshal([]byte(eventBody), &document)
-	return document.ObservationID
 }

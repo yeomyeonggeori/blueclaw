@@ -41,3 +41,14 @@ func TestPriorTaskEvidenceIsBoundedAndSaysWhatWasOmitted(t *testing.T) {
 		}
 	}
 }
+
+func TestACallHeldForApprovalIsNotAFailedAttempt(t *testing.T) {
+	attempts, _ := priorTaskRecordedAttempts([]task.TaskEvent{
+		{Name: "tool.message_send.result", Body: `{"observationID":"host-1","toolInput":{"targetType":"channel"},"failure":{"kind":"policy","code":"approval_required","requiresApproval":true}}`},
+		{Name: "tool.message_send.result", Body: `{"observationID":"host-2","toolInput":{"targetType":"channel"},"failure":{"kind":"unknown","code":"operation_failed"}}`},
+	})
+
+	if len(attempts) != 1 || attempts[0].ObservationID != "host-2" {
+		t.Fatalf("expected only the call that ran and failed to count as an attempt, not the one waiting for the requester, got %+v", attempts)
+	}
+}

@@ -35,24 +35,6 @@ type TimelineEntry struct {
 	Message         string
 }
 
-type toolRequestedEventBody struct {
-	ObservationID string          `json:"observationID"`
-	ToolName      string          `json:"toolName"`
-	Input         json.RawMessage `json:"input"`
-}
-
-type toolResultEventBody struct {
-	ObservationID string `json:"observationID"`
-	Summary       string `json:"summary"`
-	Failure       *struct {
-		UserSafeSummary string `json:"userSafeSummary"`
-		Code            string `json:"code"`
-	} `json:"failure"`
-	Output struct {
-		Content string `json:"content"`
-	} `json:"output"`
-}
-
 type approvalExecutedEventBody struct {
 	ToolName string `json:"toolName"`
 }
@@ -78,7 +60,7 @@ func BuildTimeline(taskEvents []TaskEvent) []TimelineEntry {
 		toolName, phase, isToolEvent := parseToolEventName(taskEvent.Name)
 		switch {
 		case isToolEvent && phase == "requested":
-			requestedBody := decodeEventBody[toolRequestedEventBody](taskEvent.Body)
+			requestedBody := agentcontract.ToolCallRecordOf[agentcontract.ToolCallRequested](taskEvent.Body)
 			timelineEntries = append(timelineEntries, TimelineEntry{
 				Kind:           TimelineEntryToolCall,
 				Time:           taskEvent.CreatedAt,
@@ -89,7 +71,7 @@ func BuildTimeline(taskEvents []TaskEvent) []TimelineEntry {
 			pendingCallIndexByToolName[toolName] = append(pendingCallIndexByToolName[toolName], len(timelineEntries)-1)
 
 		case isToolEvent && phase == "result":
-			resultBody := decodeEventBody[toolResultEventBody](taskEvent.Body)
+			resultBody := agentcontract.ToolCallRecordOf[agentcontract.ToolCallResult](taskEvent.Body)
 			entryIndex, hasPendingCall := popPendingCallIndex(pendingCallIndexByToolName, toolName)
 			if !hasPendingCall {
 				timelineEntries = append(timelineEntries, TimelineEntry{Kind: TimelineEntryToolCall, Time: taskEvent.CreatedAt, RawEventName: taskEvent.Name, ToolName: toolName})
@@ -182,14 +164,11 @@ func popPendingCallIndex(pendingCallIndexByToolName map[string][]int, toolName s
 	return entryIndex, true
 }
 
-func toolResultSummary(resultBody toolResultEventBody) string {
-	if resultBody.Failure != nil && resultBody.Failure.UserSafeSummary != "" {
-		return resultBody.Failure.UserSafeSummary
+func toolResultSummary(result agentcontract.ToolCallResult) string {
+	if result.Failure != nil && result.Failure.UserSafeSummary != "" {
+		return result.Failure.UserSafeSummary
 	}
-	if resultBody.Summary != "" {
-		return resultBody.Summary
-	}
-	return resultBody.Output.Content
+	return result.Summary
 }
 
 func decodeEventBody[bodyType any](rawBody string) bodyType {

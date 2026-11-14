@@ -2,7 +2,6 @@ package memory
 
 import (
 	"context"
-	"encoding/json"
 	"sort"
 	"strings"
 
@@ -23,24 +22,15 @@ func answersOf(events []agentcontract.TaskEvent) runAnswers {
 		if _, isResult := agentcontract.ToolTaskEventToolName(event.Name, agentcontract.ToolTaskEventResultSuffix); !isResult {
 			continue
 		}
-		var observation struct {
-			ObservationID string          `json:"observationID"`
-			Summary       string          `json:"summary"`
-			Failure       json.RawMessage `json:"failure"`
-		}
-		if json.Unmarshal([]byte(event.Body), &observation) != nil || hasFailure(observation.Failure) {
+		result := agentcontract.ToolCallRecordOf[agentcontract.ToolCallResult](event.Body)
+		if !result.Succeeded() {
 			continue
 		}
-		if summary := strings.TrimSpace(observation.Summary); summary != "" {
-			answers = append(answers, bluememo.Memory{MemoryID: "answer-" + observation.ObservationID, Content: summary})
+		if summary := strings.TrimSpace(result.Summary); summary != "" {
+			answers = append(answers, bluememo.Memory{MemoryID: "answer-" + result.ObservationID, Content: summary})
 		}
 	}
 	return answers
-}
-
-func hasFailure(failure json.RawMessage) bool {
-	trimmed := strings.TrimSpace(string(failure))
-	return trimmed != "" && trimmed != "null"
 }
 
 func (answers runAnswers) Search(_ context.Context, query string, limit int) ([]bluememo.RecalledMemory, error) {

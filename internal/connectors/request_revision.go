@@ -105,7 +105,7 @@ func (connectorRuntime *ConnectorRuntime) refreshPendingRequestDelivery(event Pl
 			continue
 		}
 		taskRun, isFound := connectorRuntime.findTaskRunBySourceReference(personID, sourceReference)
-		if isFound && connectorRuntime.agentAlreadyReplied(taskRun.TaskRunID, request.event.ConversationID, request.event.ReplyTargetID) {
+		if isFound && connectorRuntime.agentAlreadyReplied(taskRun.TaskRunID, request.event) {
 			request.hasReply = true
 			if request.isFinished {
 				delete(store.requests, sourceReference)
