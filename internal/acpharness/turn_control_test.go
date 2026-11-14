@@ -228,11 +228,8 @@ func publishedTurnContext(t *testing.T, configure func(*Harness)) context.Contex
 	return catalog.publishedToolSet.TurnContext
 }
 
-func TestAHarnessThatAsksForItHandsItsTurnToTheToolCatalog(t *testing.T) {
-	if publishedTurnContext(t, func(harness *Harness) { harness.UseTurnContextOnToolCalls() }) == nil {
-		t.Fatal("the tool calls of this harness run inside its turn")
-	}
-	if publishedTurnContext(t, func(*Harness) {}) != nil {
-		t.Fatal("every other harness keeps the tool calls out of its turn")
+func TestEveryHarnessHandsItsTurnToTheToolCatalog(t *testing.T) {
+	if publishedTurnContext(t, func(*Harness) {}) == nil {
+		t.Fatal("the tool calls of every harness run inside its turn, so a held call is asked where the turn was asked")
 	}
 }

@@ -15,15 +15,17 @@ import (
 )
 
 type recordingSessionPublisher struct {
-	mutex    sync.Mutex
-	sessions []mcpserver.HarnessSession
-	endpoint string
-	resolver *mcpserver.SessionTokenRequesterResolver
+	mutex        sync.Mutex
+	sessions     []mcpserver.HarnessSession
+	turnContexts []context.Context
+	endpoint     string
+	resolver     *mcpserver.SessionTokenRequesterResolver
 }
 
 func (publisher *recordingSessionPublisher) PublishToolCatalog(requesterToolSet mcpserver.RequesterToolSet) (string, string, func(), error) {
 	publisher.mutex.Lock()
 	publisher.sessions = append(publisher.sessions, requesterToolSet.HarnessSession)
+	publisher.turnContexts = append(publisher.turnContexts, requesterToolSet.TurnContext)
 	publisher.mutex.Unlock()
 	sessionToken, errorValue := publisher.resolver.GrantSessionToken(requesterToolSet)
 	if errorValue != nil {
@@ -156,4 +158,19 @@ func TestAHarnessThatCannotResumeSaysSoRatherThanPretending(t *testing.T) {
 		t.Fatalf("expected the harness to still be named, got %+v", published[0])
 	}
 	_ = time.Now
+}
+
+type turnValueKey struct{}
+
+func TestACLIHarnessHandsItsTurnToTheToolCatalog(t *testing.T) {
+	harness, publisher := sessionTestHarness(t, AgentCommand{Path: "/bin/echo", HarnessName: "test-harness"})
+	request := agentcontract.AgentTurnRequest{RequesterIdentity: agentcontract.RequesterIdentity{RequesterPersonID: "person-1"}, Prompt: "턴", ToolSet: emptyToolSet(t), WorkspaceRootPath: t.TempDir()}
+
+	if _, errorValue := harness.RunTurn(context.WithValue(context.Background(), turnValueKey{}, "the connector's event"), request); errorValue != nil {
+		t.Fatalf("expected the turn to run: %v", errorValue)
+	}
+
+	if len(publisher.turnContexts) != 1 || publisher.turnContexts[0] == nil || publisher.turnContexts[0].Value(turnValueKey{}) != "the connector's event" {
+		t.Fatal("a CLI harness's tool calls run inside its turn, so a held call is asked where the turn was asked")
+	}
 }

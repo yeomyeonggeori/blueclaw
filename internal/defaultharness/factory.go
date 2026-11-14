@@ -39,7 +39,6 @@ func factoryOver(processFor ProcessFor, toolCatalogPublisher acpharness.ToolCata
 		harness.UseCheckpointMarker(acpagent.CheckpointMetaKey)
 		harness.UseTurnResultMeta(acpagent.TurnResultMetaKey)
 		harness.UseLedgerExchange(skippedLedgerEventNames(dependencies))
-		harness.UseTurnContextOnToolCalls()
 		harness.UseSteerExtension(acpagent.SteerMethod, steerNotification)
 		return harness, skillRetriever
 	}

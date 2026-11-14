@@ -112,6 +112,7 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 		Prompt:                request.Prompt,
 		HarnessSession:        harnessSession,
 		ToolAudience:          mcpserver.ToolAudienceSelfEquipped,
+		TurnContext:           ctx,
 	})
 	if errorValue != nil {
 		return agentcontract.AgentTurnResult{}, errorValue
