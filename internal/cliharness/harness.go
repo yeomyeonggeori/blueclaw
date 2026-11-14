@@ -68,7 +68,6 @@ type Harness struct {
 	requesterProcessRunner         RequesterProcessRunner
 	workspaceRootPath              string
 	outcomeClassifier              turnoutcome.Classifier
-	agentTimeoutSecond             int
 	conversationStateMutex         sync.Mutex
 	conversationStateByIdentityKey map[string]*conversationState
 	instructionBundleLoader        func() agentcontract.InstructionBundle
@@ -79,7 +78,6 @@ func New(agentCommand AgentCommand, toolCatalogPublisher ToolCatalogPublisher, t
 		agentCommand:                   agentCommand,
 		toolCatalogPublisher:           toolCatalogPublisher,
 		taskRunStore:                   taskRunStore,
-		agentTimeoutSecond:             600,
 		conversationStateByIdentityKey: map[string]*conversationState{},
 	}
 }
@@ -267,7 +265,7 @@ func (harness *Harness) runAsRequester(ctx context.Context, request agentcontrac
 		Arguments:            arguments,
 		Stdin:                agentStandardInput,
 		WorkingDirectoryPath: request.WorkingDirectoryPath(),
-		TimeoutSecond:        harness.agentTimeoutSecond,
+		IsHarnessAgent:       true,
 		OutputMaximumBytes:   1 << 20,
 	})
 	if errorValue != nil {

@@ -10,8 +10,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
 )
 
-const requesterAgentTimeoutSecond = 3600
-
 type AgentCommand struct {
 	Path             string
 	Arguments        []string
@@ -56,7 +54,7 @@ func (agentCommand AgentCommand) StartAsRequester(ctx context.Context, processSt
 		Arguments:            agentCommand.Arguments,
 		WorkingDirectoryPath: workingDirectoryPath,
 		EnvironmentVariables: environmentVariableMap(agentCommand.Environment),
-		TimeoutSecond:        requesterAgentTimeoutSecond,
+		IsHarnessAgent:       true,
 		IsInteractive:        true,
 	})
 	if errorValue != nil {

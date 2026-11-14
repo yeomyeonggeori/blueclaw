@@ -53,7 +53,7 @@ func (commandGuardrailService CommandGuardrailService) BuildCommandPlan(commandR
 		Arguments:            append([]string{}, commandRequest.Arguments...),
 		WorkingDirectoryPath: workingDirectoryPath,
 		EnvironmentVariables: sanitizeEnvironmentVariables(commandRequest.EnvironmentVariables, workspaceRootPath),
-		Timeout:              time.Duration(commandGuardrailService.timeoutSecond(commandRequest.TimeoutSecond)) * time.Second,
+		Timeout:              time.Duration(commandGuardrailService.timeoutSecond(commandRequest)) * time.Second,
 		OutputMaximumBytes:   commandRequest.OutputMaximumBytes,
 		ExecutionIdentity:    commandRequest.ExecutionIdentity,
 	}
@@ -90,7 +90,7 @@ func (commandGuardrailService CommandGuardrailService) buildBashCommandPlan(comm
 		Stdin:                joinCommandInput(commandRequest.Command, commandRequest.Stdin),
 		WorkingDirectoryPath: workingDirectoryPath,
 		EnvironmentVariables: sanitizeEnvironmentVariables(commandRequest.EnvironmentVariables, workspaceRootPath),
-		Timeout:              time.Duration(commandGuardrailService.timeoutSecond(commandRequest.TimeoutSecond)) * time.Second,
+		Timeout:              time.Duration(commandGuardrailService.timeoutSecond(commandRequest)) * time.Second,
 		OutputMaximumBytes:   commandRequest.OutputMaximumBytes,
 		IsPTY:                commandRequest.IsPTY,
 		ExecutionIdentity:    commandRequest.ExecutionIdentity,
@@ -137,7 +137,13 @@ func (commandGuardrailService CommandGuardrailService) sandboxProvider() string 
 	return commandGuardrailService.terminalConfiguration.SandboxProvider
 }
 
-func (commandGuardrailService CommandGuardrailService) timeoutSecond(requestedTimeoutSecond int) int {
+const HarnessAgentTimeoutSecond = 3600
+
+func (commandGuardrailService CommandGuardrailService) timeoutSecond(commandRequest CommandRequest) int {
+	if commandRequest.IsHarnessAgent {
+		return HarnessAgentTimeoutSecond
+	}
+	requestedTimeoutSecond := commandRequest.TimeoutSecond
 	if requestedTimeoutSecond > 0 && requestedTimeoutSecond < commandGuardrailService.maxTimeoutSecond() {
 		return requestedTimeoutSecond
 	}

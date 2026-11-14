@@ -11,5 +11,6 @@ type CommandRequest struct {
 	OutputMaximumBytes   int               `json:"outputMaximumBytes"`
 	IsInteractive        bool              `json:"isInteractive"`
 	IsPTY                bool              `json:"isPTY"`
+	IsHarnessAgent       bool              `json:"isHarnessAgent"`
 	ExecutionIdentity    ExecutionIdentity `json:"-"`
 }
