@@ -10,7 +10,7 @@ import (
 )
 
 func (connectorRuntime *ConnectorRuntime) enqueueInboundEvent(event PlatformInboundEvent, queueRepository ConnectorQueueRepository) (ConnectorRuntimeResult, error) {
-	connectorRuntime.refreshPendingRequestDelivery(event)
+	connectorRuntime.closeSettledPendingRequests(event)
 	store := connectorRuntime.pendingRequests
 	store.mutex.Lock()
 	defer store.mutex.Unlock()

@@ -165,10 +165,18 @@ func (connectorRuntime *ConnectorRuntime) looksLikeActiveTaskFollowUp(ctx contex
 	if !isFound {
 		return false
 	}
-	if _, isFound := connectorRuntime.latestCurrentConversationActiveTask(personID, event); !isFound {
+	activeTaskRun, isFound := connectorRuntime.latestCurrentConversationActiveTask(personID, event)
+	if !isFound {
 		return false
 	}
-	return connectorRuntime.relatesToActiveTask(ctx, adapter, event)
+	relates, errorValue := connectorRuntime.judgeRelatesToActiveTask(ctx, adapter, event)
+	if errorValue != nil {
+		connectorRuntime.logger.Warn("connector."+adapter.Name()+".busy_message.held_undecided",
+			slog.String("messageID", event.MessageID),
+			slog.String("taskRunID", activeTaskRun.TaskRunID),
+			slog.String("error", errorValue.Error()))
+	}
+	return relates
 }
 
 func exactTaskControlIntent(prompt string) agentcontract.TaskControlIntent {

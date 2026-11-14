@@ -177,6 +177,7 @@ func NewConnectorRuntime(identityService *identity.IdentityService, harness agen
 		askingThreads:         &askingThreads{expiry: approvalExpiry},
 	}
 	connectorRuntime.pendingRequests.cancelSupersededTask = connectorRuntime.cancelPendingRequestTask
+	connectorRuntime.pendingRequests.hasRunningTask = connectorRuntime.hasRunningConversationTask
 	return connectorRuntime
 }
 

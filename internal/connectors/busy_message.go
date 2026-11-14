@@ -326,6 +326,16 @@ func (connectorRuntime *ConnectorRuntime) latestRunningConversationTask(personID
 	return latestTaskRun, isFound
 }
 
+func (connectorRuntime *ConnectorRuntime) hasRunningConversationTask(event PlatformInboundEvent) bool {
+	personID, isFound := connectorRuntime.identityService.ResolvePersonIDByPlatformAccount(event.Platform, event.SenderID)
+	if !isFound {
+		return false
+	}
+	return slices.ContainsFunc(connectorRuntime.taskRunService.ListTaskRunByPersonID(personID), func(taskRun task.TaskRun) bool {
+		return taskRunSharesMessageThread(taskRun, event) && connectorRuntime.taskRunService.IsTaskRunActuallyRunning(taskRun)
+	})
+}
+
 func (connectorRuntime *ConnectorRuntime) taskFactsOf(taskRun task.TaskRun) inboundengagement.TaskFacts {
 	return inboundengagement.TaskFacts{
 		Prompt:  taskRun.Prompt,

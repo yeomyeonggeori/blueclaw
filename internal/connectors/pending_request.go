@@ -24,7 +24,7 @@ type pendingRequest struct {
 	isRunning    bool
 	isFinished   bool
 	isSuperseded bool
-	hasReply     bool
+	isClosed     bool
 }
 
 type pendingRequestStore struct {
@@ -32,6 +32,7 @@ type pendingRequestStore struct {
 	requests             map[string]*pendingRequest
 	supersededReferences map[string]bool
 	cancelSupersededTask func(PlatformInboundEvent)
+	hasRunningTask       func(PlatformInboundEvent) bool
 }
 
 type pendingRequestStartReason string
@@ -63,8 +64,11 @@ func (store *pendingRequestStore) prepare(event PlatformInboundEvent) (PlatformI
 	if request := store.requests[event.DedupeKey()]; request != nil {
 		return request.event, nil
 	}
+	if store.hasRunningTask != nil && store.hasRunningTask(event) {
+		return event, nil
+	}
 	for _, request := range store.requests {
-		if request.hasReply || request.isSuperseded || !pendingRequestsShareScope(request.event, event) {
+		if request.isClosed || request.isSuperseded || !pendingRequestsShareScope(request.event, event) {
 			continue
 		}
 		if len(event.PreviousMessages) == 0 {
@@ -149,7 +153,7 @@ func (store *pendingRequestStore) begin(ctx context.Context, event PlatformInbou
 	return requestContext, request, pendingRequestStarted
 }
 
-func (store *pendingRequestStore) finish(request *pendingRequest) bool {
+func (store *pendingRequestStore) finish(request *pendingRequest) {
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
 	request.isRunning = false
@@ -157,13 +161,12 @@ func (store *pendingRequestStore) finish(request *pendingRequest) bool {
 		request.isFinished = true
 		close(request.done)
 	}
-	if request.isSuperseded || request.hasReply {
+	if request.isSuperseded || request.isClosed {
 		delete(store.requests, request.event.DedupeKey())
 	}
 	if request.cancel != nil {
 		request.cancel()
 	}
-	return request.isSuperseded
 }
 
 func (store *pendingRequestStore) isSuperseded(sourceReference string) bool {
