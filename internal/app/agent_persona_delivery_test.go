@@ -33,4 +33,7 @@ func TestDeliveredPersonaReachesIdentityAndInstructionReaders(t *testing.T) {
 	if !strings.Contains(bundle.Prompt, "샘플봇") || !strings.Contains(bundle.Prompt, "Verify outcomes.") {
 		t.Fatalf("delivered persona did not reach instructions: %s", bundle.Prompt)
 	}
+	if voice := loadAgentVoice(runtimeConfiguration); voice != "- Your name is 샘플봇." {
+		t.Fatalf("delivered persona did not reach the voice approvals are asked in: %q", voice)
+	}
 }

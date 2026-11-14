@@ -79,6 +79,23 @@ func TestParseSoulNormalizesAndRenders(t *testing.T) {
 	}
 }
 
+func TestTheVoiceCarriesWhoTheAgentIsAndHowItSoundsAndNothingElse(t *testing.T) {
+	identity, _ := ParseIdentity([]byte(identityDocument))
+	soul, _ := ParseSoul([]byte(soulDocument))
+
+	voice := RenderVoiceInstruction(identity, soul)
+
+	if voice != "- Your name is 김인턴.\n- Your role: 회사의 AI 인턴\n- Tone: keep a polite register; sound warm, brief." {
+		t.Fatalf("expected the voice to be the name, the role and the tone, got %q", voice)
+	}
+}
+
+func TestAPersonaWithoutVoiceRendersNone(t *testing.T) {
+	if voice := RenderVoiceInstruction(Identity{}, Soul{}); voice != "" {
+		t.Fatalf("expected no voice from an empty persona, got %q", voice)
+	}
+}
+
 func TestParseUserNormalizesAndRenders(t *testing.T) {
 	user, errorValue := ParseUser([]byte(userDocument))
 	if errorValue != nil {

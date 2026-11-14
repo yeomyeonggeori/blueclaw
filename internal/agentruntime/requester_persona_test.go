@@ -109,3 +109,22 @@ func TestRequesterPersonaLanguageReadsTheRequestersPreference(t *testing.T) {
 		})
 	}
 }
+
+func TestAnApprovalIsAskedInTheAgentsVoiceTowardThisRequester(t *testing.T) {
+	workspacePath := t.TempDir()
+	toolCatalogBuilder := NewToolCatalogBuilder()
+	toolCatalogBuilder.UseWorkspaceRootPath(workspacePath)
+	toolCatalogBuilder.UseWorkspaceActorFactory(&personaActorFactory{documents: map[string][]byte{
+		filepath.Join(security.PersonHomeDirectoryPath(workspacePath, "person-1"), ".internkim", "user.json"): []byte(`{"schemaVersion": 1, "callMe": "샘플님", "tone": {"register": "formal"}}`),
+	}})
+	taskLauncher := NewTaskLauncher(nil, nil, toolCatalogBuilder)
+	taskLauncher.UseAgentVoiceProvider(func() string { return "- Your name is 샘플봇." })
+
+	voice := taskLauncher.voiceTowardRequester(TaskLaunchRequest{RequesterPersonID: "person-1"})
+
+	for _, fragment := range []string{"- Your name is 샘플봇.", "Call them 샘플님.", "Tone with them: keep a formal register."} {
+		if !strings.Contains(voice, fragment) {
+			t.Fatalf("expected %q in the voice an approval is asked in, got %q", fragment, voice)
+		}
+	}
+}
