@@ -187,19 +187,20 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 	if errorValue != nil {
 		return agentcontract.AgentTurnResult{}, errorValue
 	}
-	newSession, errorValue := connection.NewSession(ctx, acp.NewSessionRequest{
-		Cwd:        request.WorkingDirectoryPath(),
-		McpServers: []acp.McpServer{toolCatalogServer},
-		Meta:       harness.toolCatalogTrust.SessionMeta,
-	})
+	sessionID, errorValue := harness.openSession(ctx, sessionOpening{
+		connection:        connection,
+		agentInitialized:  initializeResponse,
+		toolCatalogServer: toolCatalogServer,
+		sessionMeta:       harness.toolCatalogTrust.SessionMeta,
+	}, request, &turnObserver.replay)
 	if errorValue != nil {
 		return agentcontract.AgentTurnResult{}, errorValue
 	}
-	turnControl := harness.newTurnControl(ctx, connection, newSession.SessionId, request, turnObserver.isMirroring)
+	turnControl := harness.newTurnControl(ctx, connection, sessionID, request, turnObserver.isMirroring)
 	defer turnControl.stop()
 	turnObserver.onToolCallEnded = turnControl.toolCallEnded
 	promptResponse, errorValue := turnControl.converse(ctx, acp.PromptRequest{
-		SessionId: newSession.SessionId,
+		SessionId: sessionID,
 		Prompt:    harness.promptBlocksForTurn(request, initializeResponse.AgentCapabilities.PromptCapabilities.Image),
 		Meta:      harness.promptMetaForTurn(request),
 	})
@@ -278,6 +279,7 @@ func taskStatusForStopReason(stopReason acp.StopReason) agentcontract.TaskStatus
 
 type sessionObserver struct {
 	mutex               sync.Mutex
+	replay              replayGate
 	messageSegments     []string
 	toolNames           []string
 	taskRunStore        taskstate.TaskRunStore
@@ -350,6 +352,9 @@ func (observer *sessionObserver) calledToolNames() []string {
 }
 
 func (observer *sessionObserver) SessionUpdate(ctx context.Context, notification acp.SessionNotification) error {
+	if observer.replay.isReplaying.Load() {
+		return nil
+	}
 	update := notification.Update
 	if !observer.mirrorLedger(update) {
 		observer.forwardToolCall(update)

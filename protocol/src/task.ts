@@ -183,6 +183,7 @@ export enum TaskEventName {
   ConnectorReplySuppressed = 'connector.reply.suppressed',
   DelegateFinished = 'delegate.finished',
   DelegateLaunched = 'delegate.launched',
+  HarnessSessionOpened = 'harness.session_opened',
   HarnessToolPermitted = 'harness.tool_permitted',
   HarnessToolRefused = 'harness.tool_refused',
   LLMCall = 'llm.call',

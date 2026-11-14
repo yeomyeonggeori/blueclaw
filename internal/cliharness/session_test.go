@@ -13,6 +13,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/callrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
@@ -50,7 +51,7 @@ func sessionTestHarness(t *testing.T, agentCommand AgentCommand) (*Harness, *rec
 	catalogServer := httptest.NewServer(mcpserver.NewToolCatalogHandler(resolver, "test"))
 	t.Cleanup(catalogServer.Close)
 	publisher := &recordingSessionPublisher{endpoint: catalogServer.URL, resolver: resolver}
-	return New(agentCommand, publisher, nil), publisher
+	return New(agentCommand, publisher, taskstate.NewTaskRunService(taskstate.NewTaskEventService())), publisher
 }
 
 func emptyToolSet(t *testing.T) *toolcontract.ToolSet {

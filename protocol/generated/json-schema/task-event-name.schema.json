@@ -128,6 +128,7 @@
         "connector.reply.suppressed",
         "delegate.finished",
         "delegate.launched",
+        "harness.session_opened",
         "harness.tool_permitted",
         "harness.tool_refused",
         "llm.call",

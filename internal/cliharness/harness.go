@@ -14,7 +14,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/callrecord"
@@ -56,29 +55,30 @@ type RequesterProcessRunner interface {
 	Requester(context.Context, security.WorkspaceActorRequest) (security.WorkspaceActor, error)
 }
 
-type conversationState struct {
-	hasStartedTurn    bool
-	capturedSessionID string
+type turnSession struct {
+	published         mcpserver.HarnessSession
+	recordedSessionID string
+}
+
+func (session turnSession) isResuming() bool {
+	return session.recordedSessionID != "" && session.recordedSessionID == session.published.SessionID
 }
 
 type Harness struct {
-	agentCommand                   AgentCommand
-	toolCatalogPublisher           ToolCatalogPublisher
-	taskRunStore                   taskstate.TaskRunStore
-	requesterProcessRunner         RequesterProcessRunner
-	workspaceRootPath              string
-	outcomeClassifier              turnoutcome.Classifier
-	conversationStateMutex         sync.Mutex
-	conversationStateByIdentityKey map[string]*conversationState
-	instructionBundleLoader        func() agentcontract.InstructionBundle
+	agentCommand            AgentCommand
+	toolCatalogPublisher    ToolCatalogPublisher
+	taskRunStore            taskstate.TaskRunStore
+	requesterProcessRunner  RequesterProcessRunner
+	workspaceRootPath       string
+	outcomeClassifier       turnoutcome.Classifier
+	instructionBundleLoader func() agentcontract.InstructionBundle
 }
 
 func New(agentCommand AgentCommand, toolCatalogPublisher ToolCatalogPublisher, taskRunStore taskstate.TaskRunStore) *Harness {
 	return &Harness{
-		agentCommand:                   agentCommand,
-		toolCatalogPublisher:           toolCatalogPublisher,
-		taskRunStore:                   taskRunStore,
-		conversationStateByIdentityKey: map[string]*conversationState{},
+		agentCommand:         agentCommand,
+		toolCatalogPublisher: toolCatalogPublisher,
+		taskRunStore:         taskRunStore,
 	}
 }
 
@@ -98,8 +98,8 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 	if strings.TrimSpace(request.RequesterPersonID) == "" {
 		return agentcontract.AgentTurnResult{}, errors.New("cli harness refuses a turn with no requester, because tools execute as the requester")
 	}
-	identityKey := conversationIdentityKey(request)
-	harnessSession := harness.harnessSessionForTurn(request, identityKey)
+	session := harness.turnSessionFor(request)
+	harnessSession := session.published
 	succeededToolRecorder := &turnoutcome.SucceededToolRecorder{}
 	callrecord.RecordCarriedOut(harness.taskRunStore, request.ExistingTaskRunID, request.ToolSet, request.CarriedOutCalls)
 	endpointURL, bearerToken, revokeToolCatalog, errorValue := harness.toolCatalogPublisher.PublishToolCatalog(mcpserver.RequesterToolSet{
@@ -131,7 +131,7 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 	arguments := append([]string{}, harness.agentCommand.PromptArguments...)
 	arguments = append(arguments, harness.agentCommand.ToolCatalogTrust.Arguments...)
 	if harness.agentCommand.SessionArguments != nil && harnessSession.IsResumable {
-		arguments = append(arguments, harness.agentCommand.SessionArguments(harnessSession.SessionID, harness.isResumingTurn(request, identityKey))...)
+		arguments = append(arguments, harness.agentCommand.SessionArguments(harnessSession.SessionID, session.isResuming())...)
 	}
 	if harness.agentCommand.ToolCatalogArguments != nil && configurationPath != "" {
 		arguments = append(arguments, harness.agentCommand.ToolCatalogArguments(configurationPath)...)
@@ -146,7 +146,7 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 		agentStandardInput = ""
 	}
 	if harness.requesterProcessRunner != nil {
-		return harness.runAsRequester(ctx, request, identityKey, arguments, agentStandardInput, endpointURL, bearerToken, succeededToolRecorder)
+		return harness.runAsRequester(ctx, request, session, arguments, agentStandardInput, endpointURL, bearerToken, succeededToolRecorder)
 	}
 	if errorValue := harness.writeToolCatalogWorkspaceFile(request.WorkingDirectoryPath(), endpointURL, bearerToken, nil); errorValue != nil {
 		return agentcontract.AgentTurnResult{}, errorValue
@@ -162,7 +162,7 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 	if errorValue := command.Run(); errorValue != nil {
 		return agentcontract.AgentTurnResult{}, errors.New(strings.TrimSpace(standardError.String()) + " (" + errorValue.Error() + ")")
 	}
-	return harness.turnResult(ctx, request, harness.completeTurn(identityKey, standardOutput.String()), succeededToolRecorder), nil
+	return harness.turnResult(ctx, request, harness.completeTurn(request, session, standardOutput.String()), succeededToolRecorder), nil
 }
 
 func (harness *Harness) turnResult(ctx context.Context, request agentcontract.AgentTurnRequest, finishMessage string, succeededToolRecorder *turnoutcome.SucceededToolRecorder) agentcontract.AgentTurnResult {
@@ -245,7 +245,7 @@ func (harness *Harness) writeToolCatalogWorkspaceFile(workingDirectoryPath strin
 	return requesterActor.WriteFile(context.Background(), configurationPath, encodedDocument)
 }
 
-func (harness *Harness) runAsRequester(ctx context.Context, request agentcontract.AgentTurnRequest, identityKey string, arguments []string, agentStandardInput string, endpointURL string, bearerToken string, succeededToolRecorder *turnoutcome.SucceededToolRecorder) (agentcontract.AgentTurnResult, error) {
+func (harness *Harness) runAsRequester(ctx context.Context, request agentcontract.AgentTurnRequest, session turnSession, arguments []string, agentStandardInput string, endpointURL string, bearerToken string, succeededToolRecorder *turnoutcome.SucceededToolRecorder) (agentcontract.AgentTurnResult, error) {
 	workspaceRootPath := harness.workspaceRootPath
 	if strings.TrimSpace(workspaceRootPath) == "" {
 		workspaceRootPath = request.WorkspaceRootPath
@@ -274,7 +274,7 @@ func (harness *Harness) runAsRequester(ctx context.Context, request agentcontrac
 	if commandResult.ExitCode != 0 {
 		return agentcontract.AgentTurnResult{}, errors.New(strings.TrimSpace(commandResult.Stderr))
 	}
-	return harness.turnResult(ctx, request, harness.completeTurn(identityKey, commandResult.Stdout), succeededToolRecorder), nil
+	return harness.turnResult(ctx, request, harness.completeTurn(request, session, commandResult.Stdout), succeededToolRecorder), nil
 }
 
 // Antigravity has no way to allow only the catalog's tools the way claude-code
@@ -389,70 +389,51 @@ func (harness *Harness) commandEnvironment() []string {
 	return append([]string{}, harness.agentCommand.Environment...)
 }
 
-func (harness *Harness) harnessSessionForTurn(request agentcontract.AgentTurnRequest, identityKey string) mcpserver.HarnessSession {
+func (harness *Harness) turnSessionFor(request agentcontract.AgentTurnRequest) turnSession {
+	harnessName := harness.agentCommand.HarnessName
+	recordedSessionID := harness.recordedSessionID(request)
 	if harness.agentCommand.SessionArguments == nil {
-		return mcpserver.HarnessSession{HarnessName: harness.agentCommand.HarnessName}
+		return turnSession{published: mcpserver.HarnessSession{HarnessName: harnessName}}
 	}
 	if harness.agentCommand.RequiresCapturedSessionIdentity {
-		capturedSessionID := harness.capturedSessionIdentity(identityKey)
-		if capturedSessionID == "" {
-			return mcpserver.HarnessSession{HarnessName: harness.agentCommand.HarnessName}
+		if recordedSessionID == "" {
+			return turnSession{published: mcpserver.HarnessSession{HarnessName: harnessName}}
 		}
-		return mcpserver.HarnessSession{
-			HarnessName: harness.agentCommand.HarnessName,
-			SessionID:   capturedSessionID,
-			IsResumable: true,
-		}
+		return turnSession{published: mcpserver.HarnessSession{HarnessName: harnessName, SessionID: recordedSessionID, IsResumable: true}, recordedSessionID: recordedSessionID}
 	}
-	return mcpserver.HarnessSession{
-		HarnessName: harness.agentCommand.HarnessName,
-		SessionID:   harnessSessionIdentity(identityKey),
-		IsResumable: true,
-	}
+	derivedSessionID := harnessSessionIdentity(conversationIdentityKey(request))
+	return turnSession{published: mcpserver.HarnessSession{HarnessName: harnessName, SessionID: derivedSessionID, IsResumable: true}, recordedSessionID: recordedSessionID}
 }
 
-func (harness *Harness) isResumingTurn(request agentcontract.AgentTurnRequest, identityKey string) bool {
-	if request.IsRuntimeRestartResume {
-		return true
-	}
-	return harness.hasConversationStarted(identityKey)
-}
-
-func (harness *Harness) hasConversationStarted(identityKey string) bool {
-	harness.conversationStateMutex.Lock()
-	defer harness.conversationStateMutex.Unlock()
-	state := harness.conversationStateByIdentityKey[identityKey]
-	return state != nil && state.hasStartedTurn
-}
-
-func (harness *Harness) capturedSessionIdentity(identityKey string) string {
-	harness.conversationStateMutex.Lock()
-	defer harness.conversationStateMutex.Unlock()
-	state := harness.conversationStateByIdentityKey[identityKey]
-	if state == nil {
+func (harness *Harness) recordedSessionID(request agentcontract.AgentTurnRequest) string {
+	if harness.taskRunStore == nil || strings.TrimSpace(request.ExistingTaskRunID) == "" {
 		return ""
 	}
-	return state.capturedSessionID
+	return agentcontract.LatestHarnessSessionID(harness.taskRunStore.ListTaskEvent(request.ExistingTaskRunID), harness.agentCommand.HarnessName)
 }
 
-func (harness *Harness) completeTurn(identityKey string, rawOutput string) string {
+func (harness *Harness) completeTurn(request agentcontract.AgentTurnRequest, session turnSession, rawOutput string) string {
 	finishMessage := strings.TrimSpace(rawOutput)
-	capturedSessionIdentity := ""
+	openedSessionID := ""
 	if harness.agentCommand.ParseAgentOutput != nil {
-		finishMessage, capturedSessionIdentity = harness.agentCommand.ParseAgentOutput(rawOutput)
+		finishMessage, openedSessionID = harness.agentCommand.ParseAgentOutput(rawOutput)
 	}
-	harness.conversationStateMutex.Lock()
-	defer harness.conversationStateMutex.Unlock()
-	state := harness.conversationStateByIdentityKey[identityKey]
-	if state == nil {
-		state = &conversationState{}
-		harness.conversationStateByIdentityKey[identityKey] = state
+	if openedSessionID == "" && session.published.IsResumable {
+		openedSessionID = session.published.SessionID
 	}
-	state.hasStartedTurn = true
-	if capturedSessionIdentity != "" {
-		state.capturedSessionID = capturedSessionIdentity
-	}
+	harness.recordOpenedSession(request, session, openedSessionID)
 	return finishMessage
+}
+
+func (harness *Harness) recordOpenedSession(request agentcontract.AgentTurnRequest, session turnSession, openedSessionID string) {
+	if harness.taskRunStore == nil || strings.TrimSpace(request.ExistingTaskRunID) == "" {
+		return
+	}
+	if openedSessionID == "" || openedSessionID == session.recordedSessionID {
+		return
+	}
+	opened := agentcontract.HarnessSessionOpened{HarnessName: harness.agentCommand.HarnessName, SessionID: openedSessionID}
+	harness.taskRunStore.AppendTaskEvent(request.ExistingTaskRunID, agentcontract.TaskEventHarnessSessionOpened, opened.Body())
 }
 
 func conversationIdentityKey(request agentcontract.AgentTurnRequest) string {
