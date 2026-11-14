@@ -256,7 +256,7 @@ func TestAnApprovedCallIsCarriedOutAgainstEveryIdentityAListResolvedTo(t *testin
 	}
 }
 
-func TestARefusalThatNamesItsTargetIsAskedAboutAsNamed(t *testing.T) {
+func TestARefusalThatNamesItsTargetQuotesItBeneathTheQuestion(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
 	languageModel := &wordingLanguageModel{question: "이 요청을 보낼까요?"}
 	gate.UseQuestionWorder(approval.NewWorder(languageModel))
@@ -274,8 +274,11 @@ func TestARefusalThatNamesItsTargetIsAskedAboutAsNamed(t *testing.T) {
 	if resolver.callCount != 0 {
 		t.Fatal("a refusal that names what it would do is not resolved a second time")
 	}
-	if wordingContext := marshalRequestMessages(languageModel.lastRequest); !strings.Contains(wordingContext, "to: 박예시") {
-		t.Fatalf("the question is worded from the named target, got %s", wordingContext)
+	if wordingContext := marshalRequestMessages(languageModel.lastRequest); strings.Contains(wordingContext, "to: 박예시") {
+		t.Fatalf("the named request is quoted beneath the question, so the wording model is never shown it, got %s", wordingContext)
+	}
+	if !strings.Contains(heldCallEventBodyNamed(t, taskRunService, taskRun.TaskRunID, "confirmation.requested"), `POST https://bank.example/transfer\n\u003e to: 박예시`) {
+		t.Fatal("the requester approves the withheld request exactly as it would be sent")
 	}
 	recordDecision(taskRunService, taskRun.TaskRunID, "approve")
 	approvedCall, _ := ApprovedPendingCall(taskRunService.ListTaskEvent(taskRun.TaskRunID))

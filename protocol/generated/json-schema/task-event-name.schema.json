@@ -182,6 +182,7 @@
       "enum": [
         "agent.ambient_duty_launch",
         "approval.expired",
+        "approval.superseded",
         "approval.unreachable",
         "approval.wording_failed",
         "blueclaw.connector.files_undelivered",
