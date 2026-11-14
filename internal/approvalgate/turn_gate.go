@@ -21,7 +21,6 @@ type TurnContext struct {
 	ConversationType  string
 	ChannelID         string
 	ReplyTargetID     string
-	HarnessSession    mcpserver.HarnessSession
 }
 
 type turnToolCallGate struct {
@@ -57,7 +56,7 @@ func (turnGate turnToolCallGate) ReviewToolCall(ctx context.Context, toolInvocat
 		Platform:             turnGate.turnContext.Platform,
 		ConversationID:       turnGate.turnContext.ConversationID,
 		ReplyTargetID:        turnGate.turnContext.ReplyTargetID,
-		HarnessSession:       turnGate.turnContext.HarnessSession,
+		HarnessSession:       mcpserver.HarnessSessionFromContext(ctx),
 		ToolName:             toolDefinition.Name,
 		ToolInput:            toolInvocation.Input,
 		ApprovalInputFields:  toolDefinition.ApprovalInputFields,

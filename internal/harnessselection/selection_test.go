@@ -75,7 +75,7 @@ func TestSelectBuildsTheExternalHarnessWhenBothAreConfigured(t *testing.T) {
 
 func TestPublishedCatalogGrantsAndRevokesPerTurn(t *testing.T) {
 	resolver := mcpserver.NewSessionTokenRequesterResolver(func() string { return "session-token" })
-	publisher := sessionTokenPublisher{endpointURL: "http://127.0.0.1:0/tools", resolver: resolver}
+	publisher := grantingPublisher{endpointURL: "http://127.0.0.1:0/tools", resolver: resolver}
 
 	_, sessionToken, revoke, errorValue := publisher.PublishToolCatalog(mcpserver.RequesterToolSet{RequesterPersonID: "person-1", ToolSet: emptyToolSet()})
 	if errorValue != nil {

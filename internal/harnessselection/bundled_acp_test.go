@@ -51,7 +51,7 @@ func (refusingGate) ReviewToolCall(context.Context, toolcontract.ToolInvocation,
 	return toolcontract.ToolCallReview{Result: toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.PolicyBlocked, "approval", "held")}, nil
 }
 
-func TestTheBundledACPHarnessKeepsTheGateTheLauncherPutOnTheToolSet(t *testing.T) {
+func TestPublishingACatalogKeepsTheGateTheLauncherPutOnTheToolSet(t *testing.T) {
 	resolver := mcpserver.NewSessionTokenRequesterResolver(func() string { return "session-token" })
 	publisher := grantingPublisher{endpointURL: "http://127.0.0.1:0/tools", resolver: resolver}
 	toolSet := singleToolSet(t)

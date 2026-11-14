@@ -8,7 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/bluecollar/approval"
+	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
@@ -65,6 +67,23 @@ func TestTheTurnGateAsksInTheVoiceTheLauncherGives(t *testing.T) {
 
 	if wordingContext := marshalRequestMessages(languageModel.lastRequest); !strings.Contains(wordingContext, "Call them 박예시 님.") {
 		t.Fatalf("the question is asked in the voice the agent speaks to this requester in, got %s", wordingContext)
+	}
+}
+
+func TestAHeldCallRemembersTheHarnessSessionTheCallCameFrom(t *testing.T) {
+	gate, taskRunService, taskRun := gateFixture(t)
+	gate.UseQuestionWorder(approval.NewWorder(&wordingLanguageModel{question: "삭제할까요?"}))
+	toolSet := toolcontract.NewToolSet([]string{"file_delete"})
+	toolSet.AllowTestReplacement()
+	registerDeletingTool(t, toolSet)
+	toolSet.UseToolCallGate(gate.TurnGate(TurnContext{RequesterPersonID: "person-1"}))
+	session := mcpserver.HarnessSession{HarnessName: "claude-code", SessionID: "session-uuid", IsResumable: true}
+
+	toolSet.Invoke(mcpserver.WithHarnessSession(toolcontract.WithTaskRunID(context.Background(), taskRun.TaskRunID), session), toolcontract.ToolInvocation{ToolName: "file_delete", Input: json.RawMessage(`{"path":"~/a.md"}`)})
+
+	holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID))
+	if len(holds) != 1 || holds[0].Call.HarnessSession != session {
+		t.Fatalf("a held call resumes the harness session it came from, got %+v", holds)
 	}
 }
 
