@@ -109,6 +109,7 @@ type TaskLaunchRequest struct {
 	TurnStartedAt              time.Time
 	ExecutionStartedAt         time.Time
 	requesterPersona           persona.User
+	voice                      string
 }
 
 type TaskLaunchResult struct {
@@ -237,8 +238,9 @@ func (taskLauncher *TaskLauncher) agentPersona() persona.Agent {
 	return taskLauncher.agentPersonaProvider()
 }
 
-func (taskLauncher *TaskLauncher) withRequesterPersona(request TaskLaunchRequest) TaskLaunchRequest {
+func (taskLauncher *TaskLauncher) withPersona(request TaskLaunchRequest) TaskLaunchRequest {
 	request.requesterPersona, _ = readRequesterPersona(taskLauncher.toolCatalogBuilder.workspaceActorFactory, requesterPersonAccessForTaskLaunch(request), taskLauncher.toolCatalogBuilder.WorkspaceRootPath())
+	request.voice = persona.RenderVoiceInstruction(taskLauncher.agentPersona(), request.requesterPersona)
 	return request
 }
 
@@ -271,7 +273,7 @@ func (taskLauncher *TaskLauncher) FailWithoutRunning(ctx context.Context, reques
 	if request.TurnStartedAt.IsZero() {
 		request.TurnStartedAt = time.Now()
 	}
-	return taskLauncher.completeLaunchFailure(ctx, taskLauncher.withRequesterPersona(request), normalizeProfileName(request.ProfileName), nil, stepName, nil, reason)
+	return taskLauncher.completeLaunchFailure(ctx, taskLauncher.withPersona(request), normalizeProfileName(request.ProfileName), nil, stepName, nil, reason)
 }
 
 type launchTaskRun struct {
@@ -311,7 +313,7 @@ func (taskLauncher *TaskLauncher) closeAbandonedLaunchTaskRun(openedTaskRun laun
 func (taskLauncher *TaskLauncher) launchTask(ctx context.Context, request TaskLaunchRequest) (TaskLaunchResult, error) {
 	launchRecords := []launchStepRecord{}
 	normalizedProfileName := normalizeProfileName(request.ProfileName)
-	request = taskLauncher.withRequesterPersona(request)
+	request = taskLauncher.withPersona(request)
 	request.ResponseLanguage = taskLauncher.requesterResponseLanguage(request)
 	completeFailedLaunch := func(record launchStepRecord, toolNames []string) TaskLaunchResult {
 		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, toolNames, record.StepName, launchRecords, errorFromStepRecord(record))
@@ -704,6 +706,7 @@ func (taskLauncher *TaskLauncher) agentTurnRequestForLaunch(request TaskLaunchRe
 		WorkspaceDefaultPath:       conversationScope.DefaultDirectoryPath,
 		WorkspaceGuidance:          workspaceGuidance(taskLauncher.toolCatalogBuilder.WorkspaceRootPath()),
 		AgentIdentity:              taskLauncher.agentIdentity(),
+		Voice:                      request.voice,
 		CheckpointSender:           request.CheckpointSender,
 	}
 	turnRequest.HostInstruction = hostInstructionForRequest(turnRequest)
@@ -787,7 +790,7 @@ func (taskLauncher *TaskLauncher) toolCatalogRequestForLaunch(request TaskLaunch
 			RequesterEmail:    request.RequesterEmail,
 			ResponseLanguage:  request.ResponseLanguage,
 			RequesterTimeZone: request.VisibleContext.RequesterTimeZone,
-			Voice:             persona.RenderVoiceInstruction(taskLauncher.agentPersona(), request.requesterPersona),
+			Voice:             request.voice,
 			Prompt:            request.Prompt,
 			Platform:          request.Platform,
 			ConversationID:    request.ConversationID,

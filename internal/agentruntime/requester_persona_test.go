@@ -129,6 +129,9 @@ func TestAHeldCallIsWordedInTheAgentsVoiceTowardThisRequester(t *testing.T) {
 	if questionWorder.facts.Voice != "- Your name is 샘플봇.\n- Call them 샘플님.\n- Tone with them: keep a formal register." {
 		t.Fatalf("expected the question to be worded in the agent's voice toward this requester, got %q", questionWorder.facts.Voice)
 	}
+	if harness.LastTurnRequest().Voice != questionWorder.facts.Voice {
+		t.Fatalf("the harness is handed the voice the gate asks in, got %q", harness.LastTurnRequest().Voice)
+	}
 	if len(factory.requested) != 1 {
 		t.Fatalf("expected the requester's persona to be read once for the launch, got %d reads", len(factory.requested))
 	}
