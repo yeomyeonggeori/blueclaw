@@ -69,15 +69,51 @@ func Select(harnessConfiguration config.HarnessConfiguration, toolCatalogEndpoin
 		return bundledACPHarnessFactory(configuration.bundledACPFactory, toolCatalogEndpoint)
 	case ExternalHarnessName:
 		return externalHarnessFactory(harnessConfiguration, toolCatalogEndpoint, processBoundary)
-	case ClaudeCodeHarnessName:
-		return commandHarnessFactory(ClaudeCodeHarnessName, cliharness.ClaudeCodeAgentCommand(strings.TrimSpace(harnessConfiguration.AgentCommandPath)), harnessConfiguration, toolCatalogEndpoint, processBoundary)
-	case CodexHarnessName:
-		return commandHarnessFactory(CodexHarnessName, cliharness.CodexAgentCommand(strings.TrimSpace(harnessConfiguration.AgentCommandPath)), harnessConfiguration, toolCatalogEndpoint, processBoundary)
-	case AntigravityHarnessName:
-		return commandHarnessFactory(AntigravityHarnessName, cliharness.AntigravityAgentCommand(strings.TrimSpace(harnessConfiguration.AgentCommandPath)), harnessConfiguration, toolCatalogEndpoint, processBoundary)
-	default:
-		return nil, fmt.Errorf("unknown harness %q; known harnesses are %q, %q, %q, %q and %q", harnessName, BundledACPHarnessName, ExternalHarnessName, ClaudeCodeHarnessName, CodexHarnessName, AntigravityHarnessName)
 	}
+	commandHarness, isKnown := commandHarnessNamed(harnessName)
+	if !isKnown {
+		return nil, fmt.Errorf("unknown harness %q; known harnesses are %s", harnessName, strings.Join(knownHarnessNames(), ", "))
+	}
+	return commandHarnessFactory(commandHarness, harnessConfiguration, toolCatalogEndpoint, processBoundary)
+}
+
+type CommandHarness struct {
+	Name           string
+	ExecutableName string
+	agentCommand   func(commandPath string) cliharness.AgentCommand
+}
+
+var commandHarnesses = []CommandHarness{
+	{Name: ClaudeCodeHarnessName, ExecutableName: "claude", agentCommand: cliharness.ClaudeCodeAgentCommand},
+	{Name: CodexHarnessName, ExecutableName: "codex", agentCommand: cliharness.CodexAgentCommand},
+	{Name: AntigravityHarnessName, ExecutableName: "agy", agentCommand: cliharness.AntigravityAgentCommand},
+}
+
+func CommandHarnesses() []CommandHarness {
+	return append([]CommandHarness{}, commandHarnesses...)
+}
+
+func commandHarnessNamed(harnessName string) (CommandHarness, bool) {
+	for _, commandHarness := range commandHarnesses {
+		if commandHarness.Name == harnessName {
+			return commandHarness, true
+		}
+	}
+	return CommandHarness{}, false
+}
+
+func (commandHarness CommandHarness) agentCommandAt(commandPath string) cliharness.AgentCommand {
+	agentCommand := commandHarness.agentCommand(commandPath)
+	agentCommand.HarnessName = commandHarness.Name
+	return agentCommand
+}
+
+func knownHarnessNames() []string {
+	names := []string{BundledACPHarnessName, ExternalHarnessName}
+	for _, commandHarness := range commandHarnesses {
+		names = append(names, commandHarness.Name)
+	}
+	return names
 }
 
 func externalHarnessFactory(harnessConfiguration config.HarnessConfiguration, toolCatalogEndpoint ToolCatalogEndpoint, processBoundary SandboxProcessBoundary) (harnessdriver.Factory, error) {
@@ -109,7 +145,8 @@ func externalHarnessFactory(harnessConfiguration config.HarnessConfiguration, to
 	}, nil
 }
 
-func commandHarnessFactory(harnessName string, agentCommand cliharness.AgentCommand, harnessConfiguration config.HarnessConfiguration, toolCatalogEndpoint ToolCatalogEndpoint, processBoundary SandboxProcessBoundary) (harnessdriver.Factory, error) {
+func commandHarnessFactory(commandHarness CommandHarness, harnessConfiguration config.HarnessConfiguration, toolCatalogEndpoint ToolCatalogEndpoint, processBoundary SandboxProcessBoundary) (harnessdriver.Factory, error) {
+	harnessName := commandHarness.Name
 	if strings.TrimSpace(harnessConfiguration.AgentCommandPath) == "" {
 		return nil, fmt.Errorf("harness %q needs agent.harness.agentCommandPath, the executable to run", harnessName)
 	}
@@ -119,14 +156,13 @@ func commandHarnessFactory(harnessName string, agentCommand cliharness.AgentComm
 	if processBoundary.Runner == nil {
 		return nil, fmt.Errorf("harness %q may only run inside the requester's POSIX identity, because it brings tools of its own that the kernel rather than a deny list has to confine; configure the terminal boundary first", harnessName)
 	}
+	agentCommand := commandHarness.agentCommandAt(strings.TrimSpace(harnessConfiguration.AgentCommandPath))
 	publisher := grantingPublisher{endpointURL: toolCatalogEndpoint.URL, resolver: toolCatalogEndpoint.Resolver}
 	return func(dependencies harnessdriver.Dependencies) (agentcontract.Harness, agentcontract.SkillRetriever) {
 		harness := cliharness.New(agentCommand, publisher, dependencies.TaskRunStore)
 		harness.UseInstructionBundleLoader(dependencies.InstructionBundleLoader)
 		harness.UseOutcomeClassifier(turnoutcome.NewClassifier(dependencies.IntakeLanguageModelProvider))
-		if processBoundary.Runner != nil {
-			harness.UseRequesterProcessRunner(processBoundary.Runner, processBoundary.WorkspaceRootPath)
-		}
+		harness.UseRequesterProcessRunner(processBoundary.Runner, processBoundary.WorkspaceRootPath)
 		return harness, nil
 	}, nil
 }

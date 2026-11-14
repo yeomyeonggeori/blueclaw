@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/harnessselection"
 	"github.com/yeomyeonggeori/blueclaw/internal/store/postgres"
 )
 
@@ -70,7 +71,7 @@ func checkLanguageModel(access LanguageModelAccess) CheckResult {
 }
 
 func checkHarness(harness HarnessChoice) CheckResult {
-	if strings.TrimSpace(harness.Name) == "" || harness.Name == "bluecollar-acp" {
+	if strings.TrimSpace(harness.Name) == "" || harness.Name == harnessselection.BundledACPHarnessName {
 		return CheckResult{Name: CheckHarness, IsReady: true, Detail: "bluecollar (built in)"}
 	}
 	commandPath := strings.TrimSpace(harness.AgentCommandPath)

@@ -210,8 +210,7 @@ func writeToolCatalogConfiguration(endpointURL string, bearerToken string) (stri
 
 func ClaudeCodeAgentCommand(commandPath string) AgentCommand {
 	return AgentCommand{
-		Path:        commandPath,
-		HarnessName: "claude-code",
+		Path: commandPath,
 		SessionArguments: func(sessionID string, isResuming bool) []string {
 			if isResuming {
 				return []string{"--resume", sessionID}
@@ -288,7 +287,6 @@ const antigravityHeadlessPermissionFlag = "--dangerously-skip-permissions"
 func AntigravityAgentCommand(commandPath string) AgentCommand {
 	return AgentCommand{
 		Path:                            commandPath,
-		HarnessName:                     "antigravity",
 		RequiresCapturedSessionIdentity: true,
 		SessionArguments: func(sessionID string, isResuming bool) []string {
 			if isResuming {
@@ -332,7 +330,6 @@ func parseAntigravityAgentOutput(standardOutput string) (string, string) {
 func CodexAgentCommand(commandPath string) AgentCommand {
 	return AgentCommand{
 		Path:                            commandPath,
-		HarnessName:                     "codex",
 		RequiresCapturedSessionIdentity: true,
 		SessionArguments: func(sessionID string, isResuming bool) []string {
 			if isResuming {

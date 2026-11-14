@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"os/user"
 	"strings"
+
+	"github.com/yeomyeonggeori/blueclaw/internal/harnessselection"
 )
 
 type Answers struct {
@@ -59,14 +61,6 @@ func SuggestedAnswers(home Home) Answers {
 	}
 }
 
-var harnessCommandNames = []struct {
-	harnessName string
-	commandName string
-}{
-	{harnessName: "claude-code", commandName: "claude"},
-	{harnessName: "codex", commandName: "codex"},
-}
-
 func detectedLanguageModelAccess() LanguageModelAccess {
 	return LanguageModelAccess{
 		EndpointURL:        strings.TrimSpace(os.Getenv("BLUECLAW_MODEL_ENDPOINT")),
@@ -77,23 +71,25 @@ func detectedLanguageModelAccess() LanguageModelAccess {
 }
 
 func detectedHarness() HarnessChoice {
-	for _, candidate := range harnessCommandNames {
-		commandPath, errorValue := exec.LookPath(candidate.commandName)
-		if errorValue == nil {
-			return HarnessChoice{Name: candidate.harnessName, AgentCommandPath: commandPath}
-		}
+	installed := installedCommandHarnesses()
+	if len(installed) == 0 {
+		return HarnessChoice{}
 	}
-	return HarnessChoice{}
+	return installed[0]
 }
 
 func AvailableHarnesses() []HarnessChoice {
-	available := []HarnessChoice{{Name: "bluecollar-acp"}}
-	for _, candidate := range harnessCommandNames {
-		if commandPath, errorValue := exec.LookPath(candidate.commandName); errorValue == nil {
-			available = append(available, HarnessChoice{Name: candidate.harnessName, AgentCommandPath: commandPath})
+	return append([]HarnessChoice{{Name: harnessselection.BundledACPHarnessName}}, installedCommandHarnesses()...)
+}
+
+func installedCommandHarnesses() []HarnessChoice {
+	installed := []HarnessChoice{}
+	for _, commandHarness := range harnessselection.CommandHarnesses() {
+		if commandPath, errorValue := exec.LookPath(commandHarness.ExecutableName); errorValue == nil {
+			installed = append(installed, HarnessChoice{Name: commandHarness.Name, AgentCommandPath: commandPath})
 		}
 	}
-	return available
+	return installed
 }
 
 func detectedDatabaseConnectionString(home Home) string {

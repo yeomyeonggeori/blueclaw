@@ -699,7 +699,7 @@ func (taskLauncher *TaskLauncher) agentTurnRequestForLaunch(request TaskLaunchRe
 		DecidedWork:                request.DecidedWork,
 		PendingInput:               request.PendingInput,
 		SkipSkillSelection:         request.SkipSkillSelection,
-		MemoryFacts:                bluecollarMemoryFacts(memoryFacts),
+		MemoryFacts:                contractMemoryFacts(memoryFacts),
 		ToolSet:                    toolSet,
 		PinnedToolNames:            pinnedToolNames,
 		PinnedSkillNames:           append([]string{}, request.PinnedSkillNames...),
@@ -846,7 +846,7 @@ func requesterPersonAccess(requesterPersonID string, personAccess policy.PersonA
 	return policy.EnsureRequesterDefaults(personAccess)
 }
 
-func bluecollarMemoryFacts(facts []memory.MemoryFact) []agentcontract.MemoryFact {
+func contractMemoryFacts(facts []memory.MemoryFact) []agentcontract.MemoryFact {
 	converted := make([]agentcontract.MemoryFact, 0, len(facts))
 	for _, fact := range facts {
 		converted = append(converted, agentcontract.MemoryFact{
