@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
@@ -110,10 +111,17 @@ func inputSchemaAcceptsApprovalRequired(inputSchema json.RawMessage) bool {
 }
 
 func landsInTheConversationBeingAnswered(turnContext TurnContext, toolDefinition toolcontract.ToolDefinition, toolInput json.RawMessage) bool {
-	if toolcontract.ToolDefinitionSideEffectClass(toolDefinition) != toolcontract.ToolSideEffectExternalSend {
+	return CallLandsInTheConversationBeingAnswered(turnContext.ConversationType, turnContext.ChannelID, agentcontract.ToolCallRequested{
+		Input:           toolInput,
+		SideEffectClass: toolcontract.ToolDefinitionSideEffectClass(toolDefinition),
+	})
+}
+
+func CallLandsInTheConversationBeingAnswered(conversationType string, conversationChannelID string, requested agentcontract.ToolCallRequested) bool {
+	if requested.SideEffectClass != toolcontract.ToolSideEffectExternalSend {
 		return false
 	}
-	return SendLandsInTheConversationBeingAnswered(turnContext.ConversationType, turnContext.ChannelID, toolInput)
+	return SendLandsInTheConversationBeingAnswered(conversationType, conversationChannelID, requested.Input)
 }
 
 func SendLandsInTheConversationBeingAnswered(conversationType string, conversationChannelID string, toolInput json.RawMessage) bool {

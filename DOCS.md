@@ -260,6 +260,8 @@ The event ledger is the append-only list of events that belong to one task run.
 
 Every model call, tool call, approval, tool exposure decision and launch step lands in it, which makes it the place to reconstruct what happened. Event names follow a fixed grammar declared in bluecollar's `agentcontract/task_event_name.go` and generated into `protocol/` as `task-event-name`: for example `tool.<name>.requested`, `tool.<name>.result`, `approval.hold_opened`, `approval.hold_spent`, `agent.instructions_loaded` and `llm.call`.
 
+A tool call is recorded by whoever executed it, in the one shape `agentcontract.ToolCallRequested` and `ToolCallResult` define. A harness that exchanges its ledger with the host, as bluecollar does, is that ledger's author: the host mirrors what it sends and replays it on resume, so its tool records are its own. For any other harness the host records each catalog call it executes for the requester, and each call it carried out after an approval. A harness's own tools, such as an external agent's shell, run where the host cannot see them and leave no tool record. Readers of the ledger, such as the check that stays quiet when the agent already answered the conversation, read that shape and nothing harness-specific.
+
 `GET /admin/api/run/detail?taskRunID=<id>` returns a run with its ledger, and `GET /tasks/api/events` streams one person's events over SSE.
 
 ## Approval

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/callrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
@@ -19,6 +20,7 @@ type recordingSessionPublisher struct {
 	mutex        sync.Mutex
 	sessions     []mcpserver.HarnessSession
 	turnContexts []context.Context
+	callLedgers  []callrecord.Ledger
 	endpoint     string
 	resolver     *mcpserver.SessionTokenRequesterResolver
 }
@@ -27,6 +29,7 @@ func (publisher *recordingSessionPublisher) PublishToolCatalog(requesterToolSet 
 	publisher.mutex.Lock()
 	publisher.sessions = append(publisher.sessions, requesterToolSet.HarnessSession)
 	publisher.turnContexts = append(publisher.turnContexts, requesterToolSet.TurnContext)
+	publisher.callLedgers = append(publisher.callLedgers, requesterToolSet.CallLedger)
 	publisher.mutex.Unlock()
 	sessionToken, errorValue := publisher.resolver.GrantSessionToken(requesterToolSet)
 	if errorValue != nil {

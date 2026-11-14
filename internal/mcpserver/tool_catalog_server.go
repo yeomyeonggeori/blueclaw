@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/yeomyeonggeori/blueclaw/internal/callrecord"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
@@ -24,6 +25,7 @@ type RequesterToolSet struct {
 	Prompt            string
 	TurnContext       context.Context
 
+	CallLedger            callrecord.Ledger
 	ObserveToolInvocation func(toolName string, toolResult toolcontract.ToolResult, isSucceeded bool)
 	TakeCallLedger        func(callMeta map[string]any)
 }
@@ -150,10 +152,12 @@ func invokeThroughToolSet(requesterToolSet RequesterToolSet, toolDescriptor tool
 		if requesterToolSet.TakeCallLedger != nil {
 			requesterToolSet.TakeCallLedger(request.Params.Meta)
 		}
+		call := callrecord.Start(requesterToolSet.CallLedger, requesterToolSet.TaskRunID, toolDescriptor, request.Params.Arguments)
 		toolResult, errorValue := requesterToolSet.ToolSet.Invoke(invocationContext, toolcontract.ToolInvocation{
 			ToolName: toolDescriptor.Name,
 			Input:    request.Params.Arguments,
 		})
+		call.Finish(toolResult, errorValue)
 		if requesterToolSet.ObserveToolInvocation != nil {
 			requesterToolSet.ObserveToolInvocation(toolDescriptor.Name, toolResult, errorValue == nil && toolResult.Failure == nil)
 		}

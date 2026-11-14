@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/callrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
@@ -103,7 +104,9 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 	identityKey := conversationIdentityKey(request)
 	harnessSession := harness.harnessSessionForTurn(request, identityKey)
 	succeededToolRecorder := &turnoutcome.SucceededToolRecorder{}
+	callrecord.RecordCarriedOut(harness.taskRunStore, request.ExistingTaskRunID, request.ToolSet, request.CarriedOutCalls)
 	endpointURL, bearerToken, revokeToolCatalog, errorValue := harness.toolCatalogPublisher.PublishToolCatalog(mcpserver.RequesterToolSet{
+		CallLedger:            harness.taskRunStore,
 		ObserveToolInvocation: succeededToolRecorder.Observe,
 		RequesterPersonID:     request.RequesterPersonID,
 		TaskRunID:             request.ExistingTaskRunID,

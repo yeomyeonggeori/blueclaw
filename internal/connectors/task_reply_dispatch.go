@@ -57,7 +57,7 @@ func (connectorRuntime *ConnectorRuntime) dispatchTaskReply(
 	sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error),
 ) (ConnectorRuntimeResult, error) {
 	taskRunID := turnResult.TaskRun.TaskRunID
-	decision := decideTaskReply(turnResult, connectorRuntime.taskRunWasCancelled(taskRunID), connectorRuntime.agentAlreadyReplied(taskRunID, event.ConversationID, replyTarget.ConversationID, replyTarget.ReplyTargetID))
+	decision := decideTaskReply(turnResult, connectorRuntime.taskRunWasCancelled(taskRunID), connectorRuntime.agentAlreadyReplied(taskRunID, event))
 	switch decision.Kind {
 	case taskReplyDecisionSuppressDelivered:
 		connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventReplySuppressedDuplicate, agentruntime.MarshalBody(map[string]string{
@@ -118,9 +118,9 @@ func (connectorRuntime *ConnectorRuntime) sendCompletedTaskReply(
 	return ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: taskRunID, ReplyDispatchID: dispatchID}
 }
 
-func (connectorRuntime *ConnectorRuntime) agentAlreadyReplied(taskRunID string, deliveryTargets ...string) bool {
+func (connectorRuntime *ConnectorRuntime) agentAlreadyReplied(taskRunID string, event PlatformInboundEvent) bool {
 	if connectorRuntime.taskRunService == nil || strings.TrimSpace(taskRunID) == "" {
 		return false
 	}
-	return agentAlreadyDeliveredTo(connectorRuntime.taskRunService.ListTaskEvent(taskRunID), deliveryTargets)
+	return agentAnsweredTheConversation(connectorRuntime.taskRunService.ListTaskEvent(taskRunID), event.Context)
 }

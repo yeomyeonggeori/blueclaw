@@ -11,6 +11,7 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/callrecord"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/security"
@@ -152,7 +153,10 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 	}
 	succeededToolRecorder := &turnoutcome.SucceededToolRecorder{}
 	turnObserver := harness.newSessionObserver(ctx, request)
+	hostCallLedger := harness.hostCallLedger()
+	callrecord.RecordCarriedOut(hostCallLedger, request.ExistingTaskRunID, request.ToolSet, request.CarriedOutCalls)
 	endpointURL, bearerToken, revokeToolCatalog, errorValue := harness.toolCatalogPublisher.PublishToolCatalog(mcpserver.RequesterToolSet{
+		CallLedger:            hostCallLedger,
 		ObserveToolInvocation: succeededToolRecorder.Observe,
 		RequesterPersonID:     request.RequesterPersonID,
 		TaskRunID:             request.ExistingTaskRunID,
