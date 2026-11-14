@@ -229,3 +229,28 @@ func TestCommandGuardrailAllowsWorkspaceCapabilityCLIExecutable(t *testing.T) {
 		t.Fatalf("expected capability executable path, got %+v", commandPlan)
 	}
 }
+
+func TestAnAgentTurnIsNotCutToTheLengthOfOneShellCommand(t *testing.T) {
+	commandGuardrailService := NewCommandGuardrailService(config.TerminalConfiguration{
+		Mode:              "native",
+		WorkspaceRootPath: t.TempDir(),
+		AllowNetwork:      true,
+		TimeoutSecond:     120,
+	})
+
+	agentPlan, errorValue := commandGuardrailService.BuildCommandPlan(CommandRequest{ExecutableName: "sh", IsHarnessAgent: true})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	commandPlan, errorValue := commandGuardrailService.BuildCommandPlan(CommandRequest{ExecutableName: "sh", TimeoutSecond: 3600})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	if agentPlan.Timeout != HarnessAgentTimeoutSecond*time.Second {
+		t.Fatalf("a harness agent runs a whole turn, many commands long, and was cut at %s", agentPlan.Timeout)
+	}
+	if commandPlan.Timeout != 120*time.Second {
+		t.Fatalf("a command the model asks for still stops at the terminal's limit, got %s", commandPlan.Timeout)
+	}
+}
