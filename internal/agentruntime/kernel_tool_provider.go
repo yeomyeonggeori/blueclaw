@@ -13,18 +13,19 @@ import (
 const kernelToolProviderID = "kernel"
 
 type kernelToolDescriptorSpec struct {
-	Name              string
-	Namespace         string
-	PrivacyClass      string
-	Visibility        string
-	PolicyResource    string
-	SideEffectClass   string
-	RequiresApproval  bool
-	CompletionMode    string
-	Idempotency       string
-	InputIntentSchema json.RawMessage
-	OutputSchema      json.RawMessage
-	ResultContract    *toolcontract.ToolResultContract
+	Name                    string
+	Namespace               string
+	PrivacyClass            string
+	Visibility              string
+	PolicyResource          string
+	SideEffectClass         string
+	RequiresApproval        bool
+	IsBroughtByEveryHarness bool
+	CompletionMode          string
+	Idempotency             string
+	InputIntentSchema       json.RawMessage
+	OutputSchema            json.RawMessage
+	ResultContract          *toolcontract.ToolResultContract
 }
 
 var (
@@ -272,16 +273,17 @@ var (
 
 var kernelToolDescriptorSpecs = []kernelToolDescriptorSpec{
 	{
-		Name:              toolcontract.BashToolName,
-		Namespace:         "terminal",
-		PrivacyClass:      "workspace",
-		Visibility:        toolcontract.ToolVisibilityModel,
-		PolicyResource:    "tool:bash",
-		SideEffectClass:   toolcontract.ToolSideEffectWorkspaceWrite,
-		CompletionMode:    toolcontract.ToolCompletionObservation,
-		Idempotency:       toolcontract.ToolIdempotencyNone,
-		InputIntentSchema: terminalRunInputIntentSchema,
-		OutputSchema:      terminalRunResultSchema,
+		Name:                    toolcontract.BashToolName,
+		IsBroughtByEveryHarness: true,
+		Namespace:               "terminal",
+		PrivacyClass:            "workspace",
+		Visibility:              toolcontract.ToolVisibilityModel,
+		PolicyResource:          "tool:bash",
+		SideEffectClass:         toolcontract.ToolSideEffectWorkspaceWrite,
+		CompletionMode:          toolcontract.ToolCompletionObservation,
+		Idempotency:             toolcontract.ToolIdempotencyNone,
+		InputIntentSchema:       terminalRunInputIntentSchema,
+		OutputSchema:            terminalRunResultSchema,
 		ResultContract: &toolcontract.ToolResultContract{
 			Schema: terminalRunResultSchema,
 			EvidenceCondition: &toolcontract.EvidenceCondition{
@@ -312,15 +314,16 @@ var kernelToolDescriptorSpecs = []kernelToolDescriptorSpec{
 		},
 	},
 	{
-		Name:            toolcontract.SkillSearchToolName,
-		Namespace:       "skill",
-		PrivacyClass:    "workspace",
-		Visibility:      toolcontract.ToolVisibilityInternal,
-		PolicyResource:  "tool:skill_search",
-		SideEffectClass: toolcontract.ToolSideEffectRead,
-		CompletionMode:  toolcontract.ToolCompletionNone,
-		Idempotency:     toolcontract.ToolIdempotencyNone,
-		OutputSchema:    skillSearchResultSchema,
+		Name:                    toolcontract.SkillSearchToolName,
+		IsBroughtByEveryHarness: true,
+		Namespace:               "skill",
+		PrivacyClass:            "workspace",
+		Visibility:              toolcontract.ToolVisibilityInternal,
+		PolicyResource:          "tool:skill_search",
+		SideEffectClass:         toolcontract.ToolSideEffectRead,
+		CompletionMode:          toolcontract.ToolCompletionNone,
+		Idempotency:             toolcontract.ToolIdempotencyNone,
+		OutputSchema:            skillSearchResultSchema,
 		ResultContract: &toolcontract.ToolResultContract{
 			Schema: skillSearchResultSchema,
 		},
@@ -340,30 +343,32 @@ var kernelToolDescriptorSpecs = []kernelToolDescriptorSpec{
 		},
 	},
 	{
-		Name:            toolcontract.FileReadToolName,
-		Namespace:       "file",
-		PrivacyClass:    "workspace",
-		Visibility:      toolcontract.ToolVisibilityInternal,
-		PolicyResource:  "tool:file_read",
-		SideEffectClass: toolcontract.ToolSideEffectRead,
-		CompletionMode:  toolcontract.ToolCompletionNone,
-		Idempotency:     toolcontract.ToolIdempotencyNone,
-		OutputSchema:    fileReadResultSchema,
+		Name:                    toolcontract.FileReadToolName,
+		IsBroughtByEveryHarness: true,
+		Namespace:               "file",
+		PrivacyClass:            "workspace",
+		Visibility:              toolcontract.ToolVisibilityInternal,
+		PolicyResource:          "tool:file_read",
+		SideEffectClass:         toolcontract.ToolSideEffectRead,
+		CompletionMode:          toolcontract.ToolCompletionNone,
+		Idempotency:             toolcontract.ToolIdempotencyNone,
+		OutputSchema:            fileReadResultSchema,
 		ResultContract: &toolcontract.ToolResultContract{
 			Schema: fileReadResultSchema,
 		},
 	},
 	{
-		Name:              toolcontract.WriteToolName,
-		Namespace:         "file",
-		PrivacyClass:      "workspace",
-		Visibility:        toolcontract.ToolVisibilityModel,
-		PolicyResource:    "tool:write",
-		SideEffectClass:   toolcontract.ToolSideEffectWorkspaceWrite,
-		CompletionMode:    toolcontract.ToolCompletionObservation,
-		Idempotency:       toolcontract.ToolIdempotencyNone,
-		InputIntentSchema: fileWriteInputIntentSchema,
-		OutputSchema:      fileWriteResultSchema,
+		Name:                    toolcontract.WriteToolName,
+		IsBroughtByEveryHarness: true,
+		Namespace:               "file",
+		PrivacyClass:            "workspace",
+		Visibility:              toolcontract.ToolVisibilityModel,
+		PolicyResource:          "tool:write",
+		SideEffectClass:         toolcontract.ToolSideEffectWorkspaceWrite,
+		CompletionMode:          toolcontract.ToolCompletionObservation,
+		Idempotency:             toolcontract.ToolIdempotencyNone,
+		InputIntentSchema:       fileWriteInputIntentSchema,
+		OutputSchema:            fileWriteResultSchema,
 		ResultContract: &toolcontract.ToolResultContract{
 			Schema: fileWriteResultSchema,
 			Effects: []toolcontract.ResourceEffectContract{
@@ -405,16 +410,17 @@ var kernelToolDescriptorSpecs = []kernelToolDescriptorSpec{
 		},
 	},
 	{
-		Name:              toolcontract.EditToolName,
-		Namespace:         "file",
-		PrivacyClass:      "workspace",
-		Visibility:        toolcontract.ToolVisibilityModel,
-		PolicyResource:    "tool:edit",
-		SideEffectClass:   toolcontract.ToolSideEffectWorkspaceWrite,
-		CompletionMode:    toolcontract.ToolCompletionObservation,
-		Idempotency:       toolcontract.ToolIdempotencyNone,
-		InputIntentSchema: fileEditInputIntentSchema,
-		OutputSchema:      fileEditResultSchema,
+		Name:                    toolcontract.EditToolName,
+		IsBroughtByEveryHarness: true,
+		Namespace:               "file",
+		PrivacyClass:            "workspace",
+		Visibility:              toolcontract.ToolVisibilityModel,
+		PolicyResource:          "tool:edit",
+		SideEffectClass:         toolcontract.ToolSideEffectWorkspaceWrite,
+		CompletionMode:          toolcontract.ToolCompletionObservation,
+		Idempotency:             toolcontract.ToolIdempotencyNone,
+		InputIntentSchema:       fileEditInputIntentSchema,
+		OutputSchema:            fileEditResultSchema,
 		ResultContract: &toolcontract.ToolResultContract{
 			Schema: fileEditResultSchema,
 			Effects: []toolcontract.ResourceEffectContract{
@@ -434,43 +440,46 @@ var kernelToolDescriptorSpecs = []kernelToolDescriptorSpec{
 		},
 	},
 	{
-		Name:            toolcontract.FilePreviewToolName,
-		Namespace:       "file",
-		PrivacyClass:    "workspace",
-		Visibility:      toolcontract.ToolVisibilityInternal,
-		PolicyResource:  "tool:file_preview",
-		SideEffectClass: toolcontract.ToolSideEffectRead,
-		CompletionMode:  toolcontract.ToolCompletionNone,
-		Idempotency:     toolcontract.ToolIdempotencyNone,
-		OutputSchema:    filePreviewResultSchema,
+		Name:                    toolcontract.FilePreviewToolName,
+		IsBroughtByEveryHarness: true,
+		Namespace:               "file",
+		PrivacyClass:            "workspace",
+		Visibility:              toolcontract.ToolVisibilityInternal,
+		PolicyResource:          "tool:file_preview",
+		SideEffectClass:         toolcontract.ToolSideEffectRead,
+		CompletionMode:          toolcontract.ToolCompletionNone,
+		Idempotency:             toolcontract.ToolIdempotencyNone,
+		OutputSchema:            filePreviewResultSchema,
 		ResultContract: &toolcontract.ToolResultContract{
 			Schema: filePreviewResultSchema,
 		},
 	},
 	{
-		Name:            toolcontract.PlanToolName,
-		Namespace:       "plan",
-		PrivacyClass:    "workspace",
-		Visibility:      toolcontract.ToolVisibilityModel,
-		PolicyResource:  "tool:plan",
-		SideEffectClass: toolcontract.ToolSideEffectNone,
-		CompletionMode:  toolcontract.ToolCompletionNone,
-		Idempotency:     toolcontract.ToolIdempotencyNone,
-		OutputSchema:    planResultSchema,
+		Name:                    toolcontract.PlanToolName,
+		IsBroughtByEveryHarness: true,
+		Namespace:               "plan",
+		PrivacyClass:            "workspace",
+		Visibility:              toolcontract.ToolVisibilityModel,
+		PolicyResource:          "tool:plan",
+		SideEffectClass:         toolcontract.ToolSideEffectNone,
+		CompletionMode:          toolcontract.ToolCompletionNone,
+		Idempotency:             toolcontract.ToolIdempotencyNone,
+		OutputSchema:            planResultSchema,
 		ResultContract: &toolcontract.ToolResultContract{
 			Schema: planResultSchema,
 		},
 	},
 	{
-		Name:            toolcontract.EquipToolName,
-		Namespace:       "tools",
-		PrivacyClass:    "workspace",
-		Visibility:      toolcontract.ToolVisibilityModel,
-		PolicyResource:  "tool:equip",
-		SideEffectClass: toolcontract.ToolSideEffectRead,
-		CompletionMode:  toolcontract.ToolCompletionNone,
-		Idempotency:     toolcontract.ToolIdempotencyNone,
-		OutputSchema:    equipResultSchema,
+		Name:                    toolcontract.EquipToolName,
+		IsBroughtByEveryHarness: true,
+		Namespace:               "tools",
+		PrivacyClass:            "workspace",
+		Visibility:              toolcontract.ToolVisibilityModel,
+		PolicyResource:          "tool:equip",
+		SideEffectClass:         toolcontract.ToolSideEffectRead,
+		CompletionMode:          toolcontract.ToolCompletionNone,
+		Idempotency:             toolcontract.ToolIdempotencyNone,
+		OutputSchema:            equipResultSchema,
 		ResultContract: &toolcontract.ToolResultContract{
 			Schema: equipResultSchema,
 		},
@@ -588,6 +597,7 @@ func canonicalKernelToolDescriptor(toolDefinition toolcontract.ToolDefinition) (
 	toolDefinition.PolicyResource = descriptorSpec.PolicyResource
 	toolDefinition.SideEffectClass = descriptorSpec.SideEffectClass
 	toolDefinition.RequiresApproval = descriptorSpec.RequiresApproval
+	toolDefinition.IsBroughtByEveryHarness = descriptorSpec.IsBroughtByEveryHarness
 	toolDefinition.Completion = toolcontract.ToolCompletion{Mode: descriptorSpec.CompletionMode}
 	toolDefinition.Idempotency = descriptorSpec.Idempotency
 	toolDefinition.InputIntentSchema = append(json.RawMessage{}, descriptorSpec.InputIntentSchema...)

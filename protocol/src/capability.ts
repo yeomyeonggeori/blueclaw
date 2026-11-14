@@ -328,6 +328,9 @@ export const capabilityDescriptorSchema = z.strictObject({
   approvalQuotedField: unpaddedStringSchema.optional().describe(
     'The one input the action delivers exactly as written, such as a message body or a command. The runtime quotes it beneath the approval question; every other input, the recipient included, is stated in the question in plain words.',
   ),
+  isBroughtByEveryHarness: z.boolean().optional().describe(
+    'Every agent harness brings its own version of this job, such as reading a file. A harness with tools of its own is not offered this one as well.',
+  ),
   completionEvidence: completionEvidenceDescriptorSchema.optional(),
   availability: capabilityAvailabilitySchema,
   idempotency: capabilityIdempotencySchema,

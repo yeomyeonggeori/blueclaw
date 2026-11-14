@@ -13,14 +13,16 @@ func mixedToolSet(t *testing.T) *toolcontract.ToolSet {
 	toolNames := []string{toolcontract.BashToolName, toolcontract.FileReadToolName, toolcontract.EquipToolName, "event_add", toolcontract.AskConfirmToolName}
 	toolSet := toolcontract.NewToolSet(toolNames)
 	toolSet.AllowTestReplacement()
+	broughtByEveryHarness := map[string]bool{toolcontract.BashToolName: true, toolcontract.FileReadToolName: true, toolcontract.EquipToolName: true}
 	for _, toolName := range toolNames {
 		errorValue := toolSet.RegisterTool(toolcontract.ToolDefinition{
-			ID:             "test:" + toolName,
-			Name:           toolName,
-			Description:    toolName,
-			Visibility:     toolcontract.ToolVisibilityModel,
-			InputSchema:    json.RawMessage(`{"type":"object","properties":{}}`),
-			ResultContract: &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)},
+			ID:                      "test:" + toolName,
+			Name:                    toolName,
+			Description:             toolName,
+			IsBroughtByEveryHarness: broughtByEveryHarness[toolName],
+			Visibility:              toolcontract.ToolVisibilityModel,
+			InputSchema:             json.RawMessage(`{"type":"object","properties":{}}`),
+			ResultContract:          &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)},
 		}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 			return toolcontract.ToolSuccessData("ok", json.RawMessage(`{}`)), nil
 		})

@@ -220,6 +220,10 @@
       "const": true,
       "type": "boolean"
     },
+    "isBroughtByEveryHarness": {
+      "description": "Every agent harness brings its own version of this job, such as reading a file. A harness with tools of its own is not offered this one as well.",
+      "type": "boolean"
+    },
     "modelName": {
       "minLength": 1,
       "type": "string"
