@@ -204,14 +204,10 @@ func (taskMonitorHandler TaskMonitorHandler) decorateTaskRunWithCost(taskRun tas
 }
 
 func (taskMonitorHandler TaskMonitorHandler) hasUndeliveredQuestion(taskRun task.TaskRun) bool {
-	if taskMonitorHandler.TaskEventService == nil || !isTaskRunWaitingForTheRequester(taskRun.Status) {
+	if taskMonitorHandler.TaskEventService == nil || !taskRun.Status.IsAwaitingAnAnswer() {
 		return false
 	}
 	return taskRunHasUndeliveredQuestion(taskMonitorHandler.TaskEventService.ListTaskEvent(taskRun.TaskRunID))
-}
-
-func isTaskRunWaitingForTheRequester(status task.TaskStatus) bool {
-	return status == task.TaskStatusWaitingApproval || status == task.TaskStatusWaitingUserInput
 }
 
 func taskRunHasUndeliveredQuestion(taskEvents []task.TaskEvent) bool {

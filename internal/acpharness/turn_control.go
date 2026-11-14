@@ -111,12 +111,8 @@ func (control *turnControl) isRunParked() bool {
 	if control.harness.taskRunStore == nil || strings.TrimSpace(control.request.ExistingTaskRunID) == "" {
 		return false
 	}
-	return isParked(control.harness.taskRunStore, control.request.ExistingTaskRunID)
-}
-
-func isParked(taskRunStore taskstate.TaskRunStore, taskRunID string) bool {
-	taskRun, isFound := taskRunStore.FindTaskRun(taskRunID)
-	return isFound && (taskRun.Status == agentcontract.TaskStatusWaitingApproval || taskRun.Status == agentcontract.TaskStatusWaitingUserInput)
+	taskRun, isFound := control.harness.taskRunStore.FindTaskRun(control.request.ExistingTaskRunID)
+	return isFound && taskRun.Status.IsAwaitingAnAnswer()
 }
 
 func (control *turnControl) steer(ctx context.Context, eventBody string) {

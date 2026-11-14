@@ -80,12 +80,8 @@ func TestAPauseInTheMiddleOfAToolCallEndsThePromptWithTheStatusTheStoreHolds(t *
 	if !wasCancelled {
 		t.Fatal("the agent was never told to stop")
 	}
-	if result.UserNotice != "approve the send?" {
-		t.Fatalf("a parked turn carries the question the store holds, got %q", result.UserNotice)
-	}
-
-	if result.TaskRun.Status != agentcontract.TaskStatusWaitingApproval {
-		t.Fatalf("a run parked in the middle of the agent's turn has to end the turn parked, got %q", result.TaskRun.Status)
+	if result.TaskRun.Status != agentcontract.TaskStatusCancelled {
+		t.Fatalf("the turn ends because the parked run stopped the agent, got %q", result.TaskRun.Status)
 	}
 	if len(agent.promptTexts) != 1 {
 		t.Fatalf("a parked run is not prompted again, got %v", agent.promptTexts)
@@ -205,7 +201,7 @@ func TestASteerThatArrivesAfterTheRunParkedIsNotPromptedIn(t *testing.T) {
 
 	result := runControlledTurn(t, agent, taskRuns, taskRunID, func(*Harness) {})
 
-	if len(agent.promptTexts) != 1 || result.TaskRun.Status != agentcontract.TaskStatusWaitingApproval {
+	if len(agent.promptTexts) != 1 {
 		t.Fatalf("a parked run waits for its answer, not for a steer, got %v and %q", agent.promptTexts, result.TaskRun.Status)
 	}
 }

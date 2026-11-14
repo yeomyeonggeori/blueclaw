@@ -597,7 +597,11 @@ func (step runTurnLaunchStep) Run(ctx context.Context, execution *taskLaunchExec
 	)
 	turnRequest.CarriedOutCalls = step.CarriedOutCalls
 	turnRequest.TaskRunChosen = execution.TaskEvents.follow
+	execution.Launcher.startTurnOnTaskRun(turnRequest)
 	turnResult, errorValue := execution.Launcher.harness.RunTurn(toolcallprogress.WithObserver(ctx, execution.Request.ToolCallObserver), turnRequest)
+	if errorValue == nil {
+		turnResult = execution.Launcher.settledTurnResult(turnRequest, turnResult)
+	}
 	execution.Launcher.recordTurnInput(turnResult.TaskRun.TaskRunID, turnRequest)
 	return execution.Launcher.withOverheardRunQuietWhenNothingChanged(execution.Request, step.ToolSet, turnResult), errorValue
 }

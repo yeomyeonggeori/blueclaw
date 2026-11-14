@@ -189,7 +189,6 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 	if errorValue != nil {
 		return agentcontract.AgentTurnResult{}, errorValue
 	}
-	harness.advanceTaskRun(request)
 	turnControl := harness.newTurnControl(ctx, connection, newSession.SessionId, request, turnObserver.isMirroring)
 	defer turnControl.stop()
 	turnObserver.onToolCallEnded = turnControl.toolCallEnded
@@ -202,16 +201,9 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 		return agentcontract.AgentTurnResult{}, errorValue
 	}
 	if carriedTurnResult, isCarried := harness.carriedTurnResult(promptResponse); isCarried {
-		return harness.settledTurnResult(request, carriedTurnResult), nil
+		return carriedTurnResult, nil
 	}
 	return harness.turnResult(ctx, request, turnObserver, succeededToolRecorder, promptResponse.StopReason), nil
-}
-
-func (harness *Harness) advanceTaskRun(request agentcontract.AgentTurnRequest) {
-	if harness.turnResultMetaKey == "" || harness.taskRunStore == nil || strings.TrimSpace(request.ExistingTaskRunID) == "" {
-		return
-	}
-	harness.taskRunStore.AdvanceTaskRun(request.ExistingTaskRunID, request.ProfileName)
 }
 
 func (harness *Harness) toolCatalogServer(agentCapabilities acp.McpCapabilities, endpointURL string, bearerToken string) (acp.McpServer, error) {
@@ -242,33 +234,16 @@ func (harness *Harness) turnResult(ctx context.Context, request agentcontract.Ag
 	finishMessage := turnObserver.agentMessage()
 	calledToolNames := turnObserver.calledToolNames()
 	taskRun := agentcontract.TaskRun{Status: taskStatusForStopReason(stopReason)}
-	failureReason := ""
 	if stopReason == acp.StopReasonEndTurn {
-		taskRun.Status, failureReason = harness.outcomeForEndedTurn(ctx, request, finishMessage, succeededToolRecorder.SucceededToolNames())
-	}
-	if harness.taskRunStore != nil && strings.TrimSpace(request.ExistingTaskRunID) != "" {
-		if existingTaskRun, isFound := harness.taskRunStore.FindTaskRun(request.ExistingTaskRunID); isFound {
-			taskRun = existingTaskRun
-		}
-	}
-	if taskRun.Status != agentcontract.TaskStatusCompleted && strings.TrimSpace(taskRun.FailureReason) == "" {
-		taskRun.FailureReason = failureReason
+		taskRun.Status, taskRun.FailureReason = harness.outcomeForEndedTurn(ctx, request, finishMessage, succeededToolRecorder.SucceededToolNames())
 	}
 	return agentcontract.AgentTurnResult{
 		TaskRun:       taskRun,
 		FinishMessage: finishMessage,
-		UserNotice:    userNoticeOf(taskRun, finishMessage),
+		UserNotice:    finishMessage,
 		ToolNames:     calledToolNames,
 		Attachments:   succeededToolRecorder.StagedAttachments(),
 	}
-}
-
-func userNoticeOf(taskRun agentcontract.TaskRun, finishMessage string) string {
-	isWaiting := taskRun.Status == agentcontract.TaskStatusWaitingApproval || taskRun.Status == agentcontract.TaskStatusWaitingUserInput
-	if isWaiting && strings.TrimSpace(finishMessage) == "" {
-		return taskRun.FailureReason
-	}
-	return finishMessage
 }
 
 func (harness *Harness) outcomeForEndedTurn(ctx context.Context, request agentcontract.AgentTurnRequest, finishMessage string, calledToolNames []string) (agentcontract.TaskStatus, string) {
