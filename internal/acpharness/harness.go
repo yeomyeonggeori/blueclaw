@@ -58,7 +58,6 @@ type Harness struct {
 	ledgerExchange               *ledgerExchange
 	turnResultMetaKey            string
 	steerExtension               *steerExtension
-	carriesTurnContextToTools    bool
 	includesHostInstruction      bool
 }
 
@@ -158,7 +157,7 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 		ResponseLanguage:      request.ResponseLanguage,
 		Prompt:                request.Prompt,
 		ToolAudience:          harness.toolAudience,
-		TurnContext:           harness.turnContextForToolCalls(ctx),
+		TurnContext:           ctx,
 		TakeCallLedger:        turnObserver.takeCallLedger,
 	})
 	if errorValue != nil {
@@ -576,15 +575,4 @@ func (harness *Harness) instructionPrompt() string {
 
 func (harness *Harness) UseInstructionBundleLoader(instructionBundleLoader func() agentcontract.InstructionBundle) {
 	harness.instructionBundleLoader = instructionBundleLoader
-}
-
-func (harness *Harness) UseTurnContextOnToolCalls() {
-	harness.carriesTurnContextToTools = true
-}
-
-func (harness *Harness) turnContextForToolCalls(ctx context.Context) context.Context {
-	if !harness.carriesTurnContextToTools {
-		return nil
-	}
-	return ctx
 }
