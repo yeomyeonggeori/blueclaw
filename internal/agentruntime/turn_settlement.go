@@ -1,17 +1,24 @@
 package agentruntime
 
 import (
+	"context"
 	"strings"
 
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
-func (taskLauncher *TaskLauncher) startTurnOnTaskRun(turnRequest agentcontract.AgentTurnRequest) {
+func (taskLauncher *TaskLauncher) startTurnOnTaskRun(ctx context.Context, turnRequest agentcontract.AgentTurnRequest) (context.Context, func()) {
+	turnContext, cancelTurn := context.WithCancel(ctx)
 	taskRunID := strings.TrimSpace(turnRequest.ExistingTaskRunID)
 	if taskRunID == "" {
-		return
+		return turnContext, cancelTurn
 	}
 	taskLauncher.taskRunService.AdvanceTaskRun(taskRunID, turnRequest.ProfileName)
+	forgetTurn := taskLauncher.taskRunService.RegisterTaskRunCancel(taskRunID, cancelTurn)
+	return turnContext, func() {
+		forgetTurn()
+		cancelTurn()
+	}
 }
 
 func (taskLauncher *TaskLauncher) settledTurnResult(turnRequest agentcontract.AgentTurnRequest, turnResult agentcontract.AgentTurnResult) agentcontract.AgentTurnResult {

@@ -31,6 +31,7 @@ type pendingRequestStore struct {
 	mutex                sync.Mutex
 	requests             map[string]*pendingRequest
 	supersededReferences map[string]bool
+	cancelSupersededTask func(PlatformInboundEvent)
 }
 
 type pendingRequestStartReason string
@@ -99,9 +100,7 @@ func (store *pendingRequestStore) register(event PlatformInboundEvent, previous 
 		return
 	}
 	previous.isSuperseded = true
-	if previous.cancel != nil {
-		previous.cancel()
-	}
+	store.stopSupersededRequest(previous)
 	if !previous.isRunning && !previous.isFinished {
 		previous.isFinished = true
 		close(previous.done)
@@ -110,6 +109,16 @@ func (store *pendingRequestStore) register(event PlatformInboundEvent, previous 
 		delete(store.requests, previous.event.DedupeKey())
 		store.requests[event.DedupeKey()].previous = previous.previous
 	}
+}
+
+func (store *pendingRequestStore) stopSupersededRequest(request *pendingRequest) {
+	if request.cancel == nil {
+		return
+	}
+	if request.isRunning && store.cancelSupersededTask != nil {
+		store.cancelSupersededTask(request.event)
+	}
+	request.cancel()
 }
 
 func (store *pendingRequestStore) begin(ctx context.Context, event PlatformInboundEvent) (context.Context, *pendingRequest, pendingRequestStartReason) {

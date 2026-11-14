@@ -162,7 +162,7 @@ func NewConnectorRuntime(identityService *identity.IdentityService, harness agen
 	toolCatalogBuilder := agentruntime.NewToolCatalogBuilder()
 	toolCatalogBuilder.UseAllowedToolNamesByProfile(nil, agentruntime.DefaultAllowedToolNames())
 
-	return &ConnectorRuntime{
+	connectorRuntime := &ConnectorRuntime{
 		identityService:       identityService,
 		harness:               harness,
 		taskRunService:        taskRunService,
@@ -176,6 +176,8 @@ func NewConnectorRuntime(identityService *identity.IdentityService, harness agen
 		sentAttachmentSources: newSentAttachmentSourceStore(),
 		askingThreads:         &askingThreads{expiry: approvalExpiry},
 	}
+	connectorRuntime.pendingRequests.cancelSupersededTask = connectorRuntime.cancelPendingRequestTask
+	return connectorRuntime
 }
 
 func (connectorRuntime *ConnectorRuntime) RegisterAdapter(adapter PlatformAdapter) {

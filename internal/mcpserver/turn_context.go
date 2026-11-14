@@ -14,9 +14,14 @@ func (carrying valuesFromTurnContext) Value(key any) any {
 	return carrying.turnContext.Value(key)
 }
 
-func contextCarryingValuesOf(turnContext context.Context, callContext context.Context) context.Context {
+func callContextWithinTheTurn(turnContext context.Context, callContext context.Context) (context.Context, context.CancelFunc) {
 	if turnContext == nil {
-		return callContext
+		return context.WithCancel(callContext)
 	}
-	return valuesFromTurnContext{Context: callContext, turnContext: turnContext}
+	callWithinTheTurn, cancelCall := context.WithCancel(valuesFromTurnContext{Context: callContext, turnContext: turnContext})
+	stopFollowingTheTurn := context.AfterFunc(turnContext, cancelCall)
+	return callWithinTheTurn, func() {
+		stopFollowingTheTurn()
+		cancelCall()
+	}
 }
