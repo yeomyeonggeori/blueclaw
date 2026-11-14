@@ -322,8 +322,8 @@ export const capabilityDescriptorSchema = z.strictObject({
   sideEffectClass: z.enum(CapabilitySideEffect),
   sideEffect: z.enum(CapabilitySideEffect),
   requiresApproval: z.boolean().optional(),
-  approvalQuotedFields: z.array(unpaddedStringSchema).optional().describe(
-    'The inputs the action delivers exactly as written, such as a message body or a recipient address. The runtime prints each one beneath the approval question, under a label the wording model writes; every other input is stated in the question in plain words.',
+  approvalQuotedField: unpaddedStringSchema.optional().describe(
+    'The one input the action delivers exactly as written, such as a message body or a command. The runtime quotes it beneath the approval question; every other input, the recipient included, is stated in the question in plain words.',
   ),
   completionEvidence: completionEvidenceDescriptorSchema.optional(),
   availability: capabilityAvailabilitySchema,

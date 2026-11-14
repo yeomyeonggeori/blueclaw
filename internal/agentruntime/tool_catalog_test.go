@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -357,7 +356,7 @@ func TestBashApprovalIsAskedAboutTheCommandAndNotTheReasonForRunningIt(t *testin
 	if !isFound || len(toolDefinition.ApprovalInputFields) != 1 || toolDefinition.ApprovalInputFields[0] != "command" {
 		t.Fatalf("a reason states where the agent is heading, so the approval question must describe the command alone, got %+v", toolDefinition.ApprovalInputFields)
 	}
-	if !slices.Equal(toolDefinition.ApprovalQuotedFields, []string{"command"}) {
-		t.Fatalf("a command runs exactly as written, so the requester reads it beneath the question, got %+v", toolDefinition.ApprovalQuotedFields)
+	if toolDefinition.ApprovalQuotedField != "command" {
+		t.Fatalf("a command runs exactly as written, so the requester reads it beneath the question, got %+v", toolDefinition.ApprovalQuotedField)
 	}
 }

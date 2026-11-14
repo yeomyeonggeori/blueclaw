@@ -398,28 +398,15 @@ func mergeDefaultResponses(defaultResponses map[string]string) map[string]string
 type approvalQuestionContextDocument struct {
 	Operation     string                     `json:"operation"`
 	ActionDetails map[string]json.RawMessage `json:"actionDetails"`
-	PrintedBelow  []string                   `json:"printedBelow"`
 }
 
 func defaultApprovalQuestionResponse(request model.StructuredResponseRequest) string {
 	contextDocument := approvalQuestionContextFromRequest(request)
-	answer := map[string]any{"question": scriptedApprovalQuestion(contextDocument)}
-	if len(contextDocument.PrintedBelow) > 0 {
-		answer["labels"] = scriptedLabelsFor(contextDocument.PrintedBelow)
-	}
-	document, errorValue := json.Marshal(answer)
+	document, errorValue := json.Marshal(map[string]string{"question": scriptedApprovalQuestion(contextDocument)})
 	if errorValue != nil {
 		return `{"question":"should this be approved?"}`
 	}
 	return string(document)
-}
-
-func scriptedLabelsFor(printedBelow []string) map[string]string {
-	labels := map[string]string{}
-	for _, name := range printedBelow {
-		labels[name] = "scripted label for " + name
-	}
-	return labels
 }
 
 func actionDetail(contextDocument approvalQuestionContextDocument, name string) string {

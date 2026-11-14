@@ -169,10 +169,10 @@ func (toolCatalogBuilder *ToolCatalogBuilder) settleApprovalRefusal(toolContext 
 		ToolName: toolDescriptor.Name,
 		Input:    toolInput,
 	}, toolcontract.ToolDefinition{
-		Name:                 toolDescriptor.Name,
-		RequiresApproval:     true,
-		SideEffectClass:      toolDescriptor.SideEffectClass,
-		ApprovalQuotedFields: toolDescriptor.ApprovalQuotedFields,
+		Name:                toolDescriptor.Name,
+		RequiresApproval:    true,
+		SideEffectClass:     toolDescriptor.SideEffectClass,
+		ApprovalQuotedField: toolDescriptor.ApprovalQuotedField,
 	})
 	if errorValue != nil {
 		return result, nil
