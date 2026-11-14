@@ -13,16 +13,16 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/scheduler"
 )
 
-func configureMorningBriefing(poller *scheduler.SchedulePoller, configuration config.RuntimeConfiguration, directory identityDirectory, kernel agentKernel, logger *slog.Logger) {
+func configureBriefings(poller *scheduler.SchedulePoller, configuration config.RuntimeConfiguration, directory identityDirectory, kernel agentKernel, logger *slog.Logger) {
 	if poller == nil || directory.platformAccountLister == nil {
 		return
 	}
-	repository, isSupported := poller.ScheduleRepository.(scheduler.MorningBriefingRepository)
+	repository, isSupported := poller.ScheduleRepository.(scheduler.BriefingRepository)
 	if !isSupported {
 		return
 	}
 	client := newChatdClient(configuration)
-	poller.MorningBriefing = &scheduler.MorningBriefing{
+	poller.Briefings = &scheduler.Briefings{
 		Repository: repository, Accounts: directory.platformAccountLister,
 		PolicyDocument:       directory.policyWatcher.CurrentPolicyDocument,
 		PersonAccessResolver: directory.identityService,

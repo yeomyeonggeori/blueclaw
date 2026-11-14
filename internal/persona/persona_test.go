@@ -127,6 +127,20 @@ func TestUserMorningBriefingPreservesExplicitValues(t *testing.T) {
 	}
 }
 
+func TestUserWeeklyReportDefaultsAndPartialValues(t *testing.T) {
+	user, errorValue := ParseUser([]byte(`{"schemaVersion": 1}`))
+	if errorValue != nil || *user.WeeklyReport != DefaultWeeklyReport() {
+		t.Fatalf("expected weekly report defaults, got %+v (%v)", user.WeeklyReport, errorValue)
+	}
+	if defaults := DefaultWeeklyReport(); !defaults.Enabled || defaults.Day != "friday" || defaults.Time != "12:00" {
+		t.Fatalf("expected the weekly report on by default on Friday at noon, got %+v", defaults)
+	}
+	partial, errorValue := ParseUser([]byte(`{"schemaVersion": 1, "weeklyReport": {"day": "thursday"}}`))
+	if errorValue != nil || !partial.WeeklyReport.Enabled || partial.WeeklyReport.Day != "thursday" || partial.WeeklyReport.Time != "12:00" {
+		t.Fatalf("expected a partial weekly report to keep the other defaults, got %+v (%v)", partial.WeeklyReport, errorValue)
+	}
+}
+
 func TestParseRefusesWhatTheSchemaDoesNotName(t *testing.T) {
 	for name, document := range map[string]string{
 		"an unknown identity field":    `{"schemaVersion": 1, "names": ["김인턴"], "nickname": "kim"}`,
@@ -157,6 +171,7 @@ func TestParseRefusesWhatTheSchemaDoesNotName(t *testing.T) {
 		"too many preferences":             `{"schemaVersion": 1, "preferences": ["a","b","c","d","e","f","g","h","i"]}`,
 		"an invalid morning briefing time": `{"schemaVersion": 1, "morningBriefing": {"time": "9:00"}}`,
 		"a null morning briefing":          `{"schemaVersion": 1, "morningBriefing": null}`,
+		"an unknown weekly report day":     `{"schemaVersion": 1, "weeklyReport": {"day": "someday"}}`,
 	} {
 		if _, errorValue := ParseUser([]byte(document)); errorValue == nil {
 			t.Fatalf("expected %s to be refused", name)

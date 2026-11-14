@@ -141,7 +141,7 @@ func stopSchedulesOf(ctx context.Context, transaction *sql.Tx, personID string) 
 	}); errorValue != nil {
 		return errorValue
 	}
-	return deactivateMorningBriefing(ctx, transaction, personID, stoppedAt)
+	return deactivateBriefings(ctx, transaction, personID, stoppedAt)
 }
 
 // PostgreSQL 18 reports an ON DELETE RESTRICT key as restrict_violation (23001)

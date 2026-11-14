@@ -14,7 +14,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 )
 
-var errManagedScheduleMutation = errors.New("managed morning briefing schedules cannot be changed by generic schedule operations")
+var errManagedScheduleMutation = errors.New("managed briefing schedules cannot be changed by generic schedule operations")
 
 type ScheduleRepository struct {
 	database Database
@@ -27,7 +27,7 @@ func NewScheduleRepository(database Database) ScheduleRepository {
 func (scheduleRepository ScheduleRepository) UpsertSchedule(schedule task.Schedule) error {
 	var isManaged bool
 	if errorValue := scheduleRepository.database.SQL.QueryRowContext(context.Background(), `
-SELECT EXISTS (SELECT 1 FROM morning_briefing_schedule WHERE schedule_id = $1)`, schedule.ScheduleID).Scan(&isManaged); errorValue != nil {
+SELECT EXISTS (SELECT 1 FROM briefing_schedule WHERE schedule_id = $1)`, schedule.ScheduleID).Scan(&isManaged); errorValue != nil {
 		return errorValue
 	}
 	if isManaged {
@@ -75,7 +75,7 @@ ON CONFLICT (schedule_id) DO UPDATE SET
   max_run_count = EXCLUDED.max_run_count,
   completed_run_count = EXCLUDED.completed_run_count
 WHERE NOT EXISTS (
-  SELECT 1 FROM morning_briefing_schedule
+  SELECT 1 FROM briefing_schedule
   WHERE schedule_id = schedule.schedule_id
 )`,
 		schedule.ScheduleID,
@@ -138,7 +138,7 @@ func (scheduleRepository ScheduleRepository) UpdateSchedule(request task.Schedul
 	row := transaction.QueryRowContext(context.Background(), `SELECT `+scheduleReturningColumns()+`
 FROM schedule
 WHERE schedule_id = $1
-  AND NOT EXISTS (SELECT 1 FROM morning_briefing_schedule WHERE schedule_id = schedule.schedule_id)
+  AND NOT EXISTS (SELECT 1 FROM briefing_schedule WHERE schedule_id = schedule.schedule_id)
   AND creator_person_id = $2
   AND next_run_at IS NOT NULL
   AND (expires_at IS NULL OR expires_at > now())
@@ -178,7 +178,7 @@ func (scheduleRepository ScheduleRepository) DeleteSchedule(request task.Schedul
 	row := scheduleRepository.database.SQL.QueryRowContext(context.Background(), `
 DELETE FROM schedule
 WHERE schedule_id = $1
-  AND NOT EXISTS (SELECT 1 FROM morning_briefing_schedule WHERE schedule_id = schedule.schedule_id)
+  AND NOT EXISTS (SELECT 1 FROM briefing_schedule WHERE schedule_id = schedule.schedule_id)
   AND creator_person_id = $2
 RETURNING `+scheduleReturningColumns(), scheduleID, requesterPersonID)
 	schedule, errorValue := scanSchedule(row)
@@ -256,8 +256,8 @@ WHERE schedule_id = $5`
 		schedule.ScheduleID,
 		schedule.CompletedRunCount,
 	}
-	if task.IsMorningBriefing(schedule) {
-		query += " AND EXISTS (SELECT 1 FROM morning_briefing_schedule WHERE schedule_id = $5) AND lease_owner = $7 AND leased_until = $8"
+	if task.IsBriefing(schedule) {
+		query += " AND EXISTS (SELECT 1 FROM briefing_schedule WHERE schedule_id = $5) AND lease_owner = $7 AND leased_until = $8"
 		arguments = append(arguments, schedule.LeaseOwner, schedule.LeasedUntil)
 	}
 	result, errorValue := scheduleRepository.database.SQL.ExecContext(context.Background(), query, arguments...)
@@ -268,8 +268,8 @@ WHERE schedule_id = $5`
 	if errorValue != nil {
 		return errorValue
 	}
-	if task.IsMorningBriefing(schedule) && rowsAffected == 0 {
-		return errStaleMorningBriefingLease
+	if task.IsBriefing(schedule) && rowsAffected == 0 {
+		return errStaleBriefingLease
 	}
 	return nil
 }
@@ -285,8 +285,8 @@ func (scheduleRepository ScheduleRepository) MarkScheduleSucceededAndEnqueueDeli
 		return "", errorValue
 	}
 	defer transaction.Rollback()
-	if task.IsMorningBriefing(schedule) {
-		if errorValue := verifyMorningBriefingLease(transaction, schedule, now); errorValue != nil {
+	if task.IsBriefing(schedule) {
+		if errorValue := verifyBriefingLease(transaction, schedule, now); errorValue != nil {
 			return "", errorValue
 		}
 	}
@@ -485,8 +485,8 @@ WHERE schedule_id = $4`
 		referenceTime,
 		schedule.ScheduleID,
 	}
-	if task.IsMorningBriefing(schedule) {
-		query += " AND EXISTS (SELECT 1 FROM morning_briefing_schedule WHERE schedule_id = $4) AND lease_owner = $5 AND leased_until = $6"
+	if task.IsBriefing(schedule) {
+		query += " AND EXISTS (SELECT 1 FROM briefing_schedule WHERE schedule_id = $4) AND lease_owner = $5 AND leased_until = $6"
 		arguments = append(arguments, schedule.LeaseOwner, schedule.LeasedUntil)
 	}
 	result, errorValue := scheduleRepository.database.SQL.ExecContext(context.Background(), query, arguments...)
@@ -497,8 +497,8 @@ WHERE schedule_id = $4`
 	if errorValue != nil {
 		return errorValue
 	}
-	if task.IsMorningBriefing(schedule) && rowsAffected == 0 {
-		return errStaleMorningBriefingLease
+	if task.IsBriefing(schedule) && rowsAffected == 0 {
+		return errStaleBriefingLease
 	}
 	return nil
 }
@@ -545,7 +545,7 @@ func cancelSchedules(ctx context.Context, executor scheduleQueryExecutor, reques
 	conditions := []string{
 		"next_run_at IS NOT NULL",
 		"(expires_at IS NULL OR expires_at > $1)",
-		"NOT EXISTS (SELECT 1 FROM morning_briefing_schedule WHERE schedule_id = schedule.schedule_id)",
+		"NOT EXISTS (SELECT 1 FROM briefing_schedule WHERE schedule_id = schedule.schedule_id)",
 	}
 	arguments := []any{cancelledAt}
 	switch request.Scope {

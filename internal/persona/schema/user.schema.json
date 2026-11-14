@@ -34,6 +34,16 @@
         "enabled": { "type": "boolean", "description": "Whether the morning briefing is enabled." },
         "time": { "type": "string", "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$", "description": "The local company time for the briefing, in HH:MM format." }
       }
+    },
+    "weeklyReport": {
+      "type": "object",
+      "default": { "enabled": true, "day": "friday", "time": "12:00" },
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "description": "Whether the weekly report of the person's own work is enabled." },
+        "day": { "type": "string", "enum": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"], "description": "The day of the week the report arrives on." },
+        "time": { "type": "string", "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$", "description": "The local company time for the report, in HH:MM format." }
+      }
     }
   }
 }

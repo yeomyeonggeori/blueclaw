@@ -274,9 +274,9 @@ func upsertDueSchedule(t *testing.T, database Database, scheduleID string, perso
 func reconcileDueMorningBriefing(t *testing.T, database Database, personID string) {
 	t.Helper()
 	dueAt := time.Now().UTC().Add(-time.Minute)
-	briefing := morningBriefingTestSchedule(personID, task.MorningBriefingScheduleID(personID), &dueAt)
+	briefing := morningBriefingTestSchedule(personID, task.BriefingScheduleID(task.BriefingKindMorning, personID), &dueAt)
 	briefing.CreatedAt = dueAt
-	if errorValue := NewScheduleRepository(database).ReconcileMorningBriefings(context.Background(), []task.Schedule{briefing}, nil, dueAt); errorValue != nil {
+	if errorValue := NewScheduleRepository(database).ReconcileBriefings(context.Background(), task.BriefingKindMorning, []task.Schedule{briefing}, nil, dueAt); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 }
@@ -313,7 +313,7 @@ func TestARosterNotYetHandedOverRetiresNobody(t *testing.T) {
 		t.Fatalf("a roster that names no people must leave the projected ones resolvable, got %v", personIDs)
 	}
 	claimedScheduleIDs := claimDueScheduleIDs(t, database)
-	if strings.Join(claimedScheduleIDs, ",") != "schedule-of-kept,"+task.MorningBriefingScheduleID("person-kept") {
+	if strings.Join(claimedScheduleIDs, ",") != "schedule-of-kept,"+task.BriefingScheduleID(task.BriefingKindMorning, "person-kept") {
 		t.Fatalf("a roster that names no people must stop nobody's schedules, got %v", claimedScheduleIDs)
 	}
 }
@@ -340,7 +340,7 @@ func TestADepartedPersonsBriefingKeepsThemOnRecordWhicheverKeyRefusesFirst(t *te
 
 // PostgreSQL fires a table's referential triggers in name order, and each name
 // carries its constraint's OID; pg_restore creates foreign keys table by table
-// in name order, so a restored database checks morning_briefing_schedule's key
+// in name order, so a restored database checks briefing_schedule's key
 // before schedule's.
 func checkTheBriefingKeyFirst(t *testing.T, database Database) {
 	t.Helper()

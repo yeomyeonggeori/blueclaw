@@ -186,7 +186,7 @@ func newApplicationComponents(runtimeConfiguration config.RuntimeConfiguration, 
 	components.taskLauncher = newTaskLauncher(runtimeConfiguration, components.foundation, components.directory, components.kernel, components.services, components.toolCatalogBuilder)
 	components.taskLauncher.UseTaskObserver(learningTaskObserver(components.learningCoordinator, components.services.taskRunService))
 	components.schedulePoller = newSchedulePoller(runtimeConfiguration, components.services, components.directory.identityService, components.taskLauncher, components.taskIntakeController, logger)
-	configureMorningBriefing(components.schedulePoller, runtimeConfiguration, components.directory, components.kernel, logger)
+	configureBriefings(components.schedulePoller, runtimeConfiguration, components.directory, components.kernel, logger)
 	logger.Info("application.initializing", "stage", "connector_runtime")
 	components.taskRetentionSweeper = newTaskRetentionSweeper(runtimeConfiguration, components.services, logger)
 	components.connectorRuntime = newConnectorRuntime(runtimeConfiguration, components.foundation, components.directory, components.kernel, components.services, components.taskLauncher, components.backupCoordinator, components.taskIntakeController)

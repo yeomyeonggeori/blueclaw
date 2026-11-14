@@ -13,24 +13,32 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
-func (runner ScheduleRunner) skipEmptyMorningBriefing(ctx context.Context, request ScheduleRunRequest, referenceTime time.Time) bool {
-	if !task.IsMorningBriefing(request.Schedule) {
+func (runner ScheduleRunner) skipEmptyBriefing(ctx context.Context, request ScheduleRunRequest, referenceTime time.Time) bool {
+	kind, isBriefing := task.BriefingKindOf(request.Schedule)
+	if !isBriefing {
 		return false
 	}
 	requesterEmail := runner.taskLauncher.resolveRequesterEmail(TaskLaunchRequest{RequesterPersonID: request.Schedule.CreatorPersonID})
-	toolSet := runner.morningBriefingToolSet(request, requesterEmail)
-	isEmpty, errorValue := morningBriefingIsEmpty(ctx, toolSet, requesterEmail, request.Schedule.TimeZone, referenceTime)
+	toolSet := runner.briefingPreflightToolSet(request, requesterEmail)
+	isEmpty, errorValue := briefingIsEmpty(ctx, kind, toolSet, requesterEmail, request.Schedule.TimeZone, referenceTime)
 	if errorValue != nil {
-		slog.Warn("morning_briefing.preflight_failed", "taskScheduleID", request.Schedule.ScheduleID, "error", errorValue)
+		slog.Warn("briefing.preflight_failed", "kind", kind, "taskScheduleID", request.Schedule.ScheduleID, "error", errorValue)
 		return false
 	}
 	if isEmpty {
-		slog.Info("morning_briefing.skipped_empty", "taskScheduleID", request.Schedule.ScheduleID, "referenceTime", referenceTime)
+		slog.Info("briefing.skipped_empty", "kind", kind, "taskScheduleID", request.Schedule.ScheduleID, "referenceTime", referenceTime)
 	}
 	return isEmpty
 }
 
-func (runner ScheduleRunner) morningBriefingToolSet(request ScheduleRunRequest, requesterEmail string) *toolcontract.ToolSet {
+func briefingIsEmpty(ctx context.Context, kind task.BriefingKind, toolSet *toolcontract.ToolSet, requesterEmail string, timeZone string, referenceTime time.Time) (bool, error) {
+	if kind == task.BriefingKindWeekly {
+		return weeklyReportIsEmpty(ctx, toolSet, requesterEmail)
+	}
+	return morningBriefingIsEmpty(ctx, toolSet, requesterEmail, timeZone, referenceTime)
+}
+
+func (runner ScheduleRunner) briefingPreflightToolSet(request ScheduleRunRequest, requesterEmail string) *toolcontract.ToolSet {
 	return runner.taskLauncher.toolCatalogBuilder.BuildToolSet(ToolCatalogRequest{
 		ProfileName:               request.Schedule.AgentProfileName,
 		RequesterPersonID:         request.Schedule.CreatorPersonID,
@@ -46,7 +54,7 @@ func (runner ScheduleRunner) morningBriefingToolSet(request ScheduleRunRequest, 
 
 func morningBriefingIsEmpty(ctx context.Context, toolSet *toolcontract.ToolSet, requesterEmail string, timeZone string, referenceTime time.Time) (bool, error) {
 	if strings.TrimSpace(requesterEmail) == "" {
-		return false, errors.New("morning briefing requester email is required")
+		return false, errors.New("briefing requester email is required")
 	}
 	input, errorValue := json.Marshal(struct {
 		PersonHints []string `json:"personHints"`
@@ -61,7 +69,7 @@ func morningBriefingIsEmpty(ctx context.Context, toolSet *toolcontract.ToolSet, 
 		Count           *int              `json:"count"`
 		UnfinishedCount *int              `json:"unfinishedCount"`
 	}
-	if errorValue := readMorningBriefingRecords(ctx, toolSet, "task_list", input, &tasks); errorValue != nil {
+	if errorValue := readBriefingRecords(ctx, toolSet, "task_list", input, &tasks); errorValue != nil {
 		return false, errorValue
 	}
 	if tasks.Tasks == nil || tasks.Count == nil || *tasks.Count != len(tasks.Tasks) || tasks.UnfinishedCount == nil || *tasks.UnfinishedCount < 0 {
@@ -73,6 +81,30 @@ func morningBriefingIsEmpty(ctx context.Context, toolSet *toolcontract.ToolSet, 
 	return morningBriefingCalendarIsEmpty(ctx, toolSet, requesterEmail, timeZone, referenceTime)
 }
 
+func weeklyReportIsEmpty(ctx context.Context, toolSet *toolcontract.ToolSet, requesterEmail string) (bool, error) {
+	if strings.TrimSpace(requesterEmail) == "" {
+		return false, errors.New("briefing requester email is required")
+	}
+	input, errorValue := json.Marshal(struct {
+		PersonHints []string `json:"personHints"`
+		Limit       int      `json:"limit"`
+	}{[]string{requesterEmail}, 1})
+	if errorValue != nil {
+		return false, errorValue
+	}
+	var tasks struct {
+		Tasks []json.RawMessage `json:"tasks"`
+		Count *int              `json:"count"`
+	}
+	if errorValue := readBriefingRecords(ctx, toolSet, "task_list", input, &tasks); errorValue != nil {
+		return false, errorValue
+	}
+	if tasks.Tasks == nil || tasks.Count == nil || *tasks.Count != len(tasks.Tasks) {
+		return false, errors.New("task_list did not return a complete count of this week's tasks")
+	}
+	return *tasks.Count == 0, nil
+}
+
 func morningBriefingCalendarIsEmpty(ctx context.Context, toolSet *toolcontract.ToolSet, requesterEmail string, timeZone string, referenceTime time.Time) (bool, error) {
 	input, errorValue := morningBriefingCalendarInput(requesterEmail, timeZone, referenceTime)
 	if errorValue != nil {
@@ -81,7 +113,7 @@ func morningBriefingCalendarIsEmpty(ctx context.Context, toolSet *toolcontract.T
 	var calendar struct {
 		Events []json.RawMessage `json:"events"`
 	}
-	if errorValue := readMorningBriefingRecords(ctx, toolSet, "event_list", input, &calendar); errorValue != nil {
+	if errorValue := readBriefingRecords(ctx, toolSet, "event_list", input, &calendar); errorValue != nil {
 		return false, errorValue
 	}
 	if calendar.Events == nil {
@@ -108,20 +140,20 @@ func morningBriefingCalendarInput(requesterEmail string, timeZone string, refere
 	}{[]string{requesterEmail}, start.Format(time.RFC3339), start.AddDate(0, 0, 1).Format(time.RFC3339), 1})
 }
 
-func readMorningBriefingRecords(ctx context.Context, toolSet *toolcontract.ToolSet, toolName string, input json.RawMessage, result any) error {
+func readBriefingRecords(ctx context.Context, toolSet *toolcontract.ToolSet, toolName string, input json.RawMessage, result any) error {
 	definition, isAvailable := toolSet.ToolDefinition(toolName)
 	if !isAvailable || definition.SideEffectClass != toolcontract.ToolSideEffectRead {
-		return fmt.Errorf("morning briefing read tool %s is unavailable", toolName)
+		return fmt.Errorf("briefing read tool %s is unavailable", toolName)
 	}
 	response, errorValue := toolSet.Invoke(ctx, toolcontract.ToolInvocation{ToolName: toolName, Input: input})
 	if errorValue != nil {
-		return fmt.Errorf("morning briefing %s: %w", toolName, errorValue)
+		return fmt.Errorf("briefing %s: %w", toolName, errorValue)
 	}
 	if response.Failure != nil {
-		return fmt.Errorf("morning briefing %s failed: %s", toolName, response.Failure.Code)
+		return fmt.Errorf("briefing %s failed: %s", toolName, response.Failure.Code)
 	}
 	if errorValue := json.Unmarshal(response.Output.Data, result); errorValue != nil {
-		return fmt.Errorf("morning briefing %s response: %w", toolName, errorValue)
+		return fmt.Errorf("briefing %s response: %w", toolName, errorValue)
 	}
 	return nil
 }

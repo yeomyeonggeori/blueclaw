@@ -282,12 +282,12 @@ func morningBriefingTestToolSet(tasks string, events string, replacement func(st
 }
 
 func TestMorningBriefingScheduleIdentificationRemainsNarrow(t *testing.T) {
-	schedule := task.Schedule{CreatorPersonID: "person-1", ScheduleID: task.MorningBriefingScheduleID("person-1")}
-	if !task.IsMorningBriefing(schedule) {
+	schedule := task.Schedule{CreatorPersonID: "person-1", ScheduleID: task.BriefingScheduleID(task.BriefingKindMorning, "person-1")}
+	if !task.IsBriefing(schedule) {
 		t.Fatal("expected the managed morning briefing schedule to be identified")
 	}
 	schedule.ScheduleID = "schedule-other"
-	if task.IsMorningBriefing(schedule) {
+	if task.IsBriefing(schedule) {
 		t.Fatal("expected an ordinary schedule to bypass the managed preflight")
 	}
 }
@@ -309,7 +309,7 @@ func TestScheduleRunnerSkipsEmptyManagedBriefingWithoutLaunching(t *testing.T) {
 	taskLauncher.UseRequesterEmailResolver(briefingRequesterEmailResolver{})
 	runAt := time.Date(2026, 6, 15, 23, 0, 0, 0, time.UTC)
 	schedule := task.Schedule{
-		ScheduleID:      task.MorningBriefingScheduleID("person-1"),
+		ScheduleID:      task.BriefingScheduleID(task.BriefingKindMorning, "person-1"),
 		CreatorPersonID: "person-1",
 		Kind:            task.ScheduleKindCron,
 		CronExpression:  "0 8 * * *",
@@ -350,4 +350,33 @@ type briefingRequesterEmailResolver struct{}
 
 func (briefingRequesterEmailResolver) ResolvePersonPrimaryEmail(string) string {
 	return "sample@example.test"
+}
+
+func TestWeeklyReportIsEmptyOnlyWithoutThisWeeksWork(t *testing.T) {
+	for _, testCase := range []struct {
+		tasks   string
+		isEmpty bool
+	}{
+		{tasks: `{"tasks":[],"count":0}`, isEmpty: true},
+		{tasks: `{"tasks":[{"title":"출시 준비"}],"count":1}`, isEmpty: false},
+	} {
+		toolSet := morningBriefingTestToolSet(testCase.tasks, `{"events":[]}`, nil)
+		isEmpty, errorValue := briefingIsEmpty(context.Background(), task.BriefingKindWeekly, toolSet, "sample@example.test", "Asia/Seoul", time.Now())
+		if errorValue != nil || isEmpty != testCase.isEmpty {
+			t.Fatalf("%s: expected empty=%v, got %v (%v)", testCase.tasks, testCase.isEmpty, isEmpty, errorValue)
+		}
+	}
+	if _, errorValue := briefingIsEmpty(context.Background(), task.BriefingKindWeekly, morningBriefingTestToolSet(`{"tasks":[]}`, `{"events":[]}`, nil), "sample@example.test", "Asia/Seoul", time.Now()); errorValue == nil {
+		t.Fatal("expected an incomplete count to keep the report rather than skip it")
+	}
+}
+
+func TestWeeklyReportScheduleIsABriefing(t *testing.T) {
+	schedule := task.Schedule{CreatorPersonID: "person-1", ScheduleID: task.BriefingScheduleID(task.BriefingKindWeekly, "person-1")}
+	if kind, isBriefing := task.BriefingKindOf(schedule); !isBriefing || kind != task.BriefingKindWeekly {
+		t.Fatalf("expected the weekly report schedule to be identified, got %q %v", kind, isBriefing)
+	}
+	if task.BriefingScheduleID(task.BriefingKindWeekly, "person-1") == task.BriefingScheduleID(task.BriefingKindMorning, "person-1") {
+		t.Fatal("expected each briefing kind to own a distinct schedule ID")
+	}
 }

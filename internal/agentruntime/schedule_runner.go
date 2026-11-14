@@ -49,7 +49,7 @@ func (scheduleRunner ScheduleRunner) RunIfDue(ctx context.Context, request Sched
 	if !scheduleRunner.scheduler.IsScheduleDue(schedule, referenceTime) {
 		return ScheduleRunResult{Schedule: schedule}, nil
 	}
-	if scheduleRunner.skipEmptyMorningBriefing(ctx, request, referenceTime) {
+	if scheduleRunner.skipEmptyBriefing(ctx, request, referenceTime) {
 		advancedSchedule, errorValue := scheduleRunner.scheduler.AdvanceSchedule(schedule, referenceTime)
 		return ScheduleRunResult{Schedule: advancedSchedule}, errorValue
 	}

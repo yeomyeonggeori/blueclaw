@@ -11,7 +11,7 @@ import (
 )
 
 func TestMorningBriefingConfigurationChangeTracksCadenceSeparately(t *testing.T) {
-	existing := managedMorningBriefingSchedule{
+	existing := managedBriefingSchedule{
 		name: "Morning briefing", prompt: "brief", executionMode: "agent", agentProfileName: "default",
 		platform: "mattermost", conversationID: "channel", replyTargetID: "reply", timeZone: "Asia/Seoul",
 		kind: "cron", cronExpression: "0 8 * * *", nextRunAt: timePointer(time.Date(2026, 9, 7, 8, 0, 0, 0, time.UTC)),
@@ -21,18 +21,18 @@ func TestMorningBriefingConfigurationChangeTracksCadenceSeparately(t *testing.T)
 		Platform: "mattermost", ConversationID: "channel", ReplyTargetID: "reply", TimeZone: "Asia/Seoul",
 		Kind: task.ScheduleKindCron, CronExpression: "0 8 * * *", NextRunAt: timePointer(time.Date(2026, 9, 8, 8, 0, 0, 0, time.UTC)),
 	}
-	changed, cadenceChanged := morningBriefingConfigurationChanged(existing, desired)
+	changed, cadenceChanged := briefingConfigurationChanged(existing, desired)
 	if changed || cadenceChanged {
 		t.Fatalf("expected an unchanged configuration, got changed=%v cadenceChanged=%v", changed, cadenceChanged)
 	}
 	desired.CronExpression = "30 8 * * *"
-	changed, cadenceChanged = morningBriefingConfigurationChanged(existing, desired)
+	changed, cadenceChanged = briefingConfigurationChanged(existing, desired)
 	if !changed || !cadenceChanged {
 		t.Fatalf("expected cadence change, got changed=%v cadenceChanged=%v", changed, cadenceChanged)
 	}
 	desired.CronExpression = existing.cronExpression
 	desired.Prompt = "updated brief"
-	changed, cadenceChanged = morningBriefingConfigurationChanged(existing, desired)
+	changed, cadenceChanged = briefingConfigurationChanged(existing, desired)
 	if !changed || cadenceChanged {
 		t.Fatalf("expected prompt-only change, got changed=%v cadenceChanged=%v", changed, cadenceChanged)
 	}
