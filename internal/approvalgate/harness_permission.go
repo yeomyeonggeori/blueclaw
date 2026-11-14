@@ -47,7 +47,7 @@ func (gate *Gate) AskHarnessPermission(ctx context.Context, approvalRequest mcps
 	switch status {
 	case AskAnswered:
 		gate.settleHarnessHold(taskRunID, hold.ID, question.Options, outcome)
-	case AskUnreachable, AskExpired:
+	case AskUnreachable, AskExpired, AskSuperseded:
 		gate.endUnansweredHold(taskRunID, profileName, status)
 		return acp.RequestPermissionOutcome{}, status
 	default:

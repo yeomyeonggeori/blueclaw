@@ -241,24 +241,23 @@ func (fixture *threadAskFixture) awaitQuestionsPosted(t *testing.T, count int) {
 	t.Fatalf("fewer than %d questions were posted", count)
 }
 
-func TestAPressAnswersTheQuestionItNamesWhenTwoWaitInOneConversation(t *testing.T) {
+func TestANewQuestionInTheSamePlaceEndsTheOneBeforeIt(t *testing.T) {
 	first := directMessageQuestion(t, &countingReplyReader{})
 	first.ask(`{}`, nil)
 	first.fixture.awaitQuestionsPosted(t, 1)
 	second := questionOnTheFixture(first.fixture, first.reader, "hold-2").ask(`{}`, nil)
 	first.fixture.awaitQuestionsPosted(t, 2)
 
-	second.reply(t, "승인", &AnsweredChoice{InteractionID: "hold-2", Key: ApproveOptionID})
-
-	if _, isStillWaiting := first.fixture.connectorRuntime.askingThreads.awaitingRun(first.taskRun.TaskRunID); !isStillWaiting {
-		t.Fatal("the press settled the first question instead of the one it named")
+	if _, status := first.awaitEnd(t); status != approvalgate.AskSuperseded {
+		t.Fatalf("the earlier question in the same place ended %s, expected superseded", status)
 	}
+	second.reply(t, "승인", &AnsweredChoice{InteractionID: "hold-2", Key: ApproveOptionID})
 	answer, status := second.awaitEnd(t)
 	if status != approvalgate.AskAnswered || answer.Signal != agentcontract.ApprovalSignalApprove {
-		t.Fatalf("the named question ended %s with %+v, expected the pressed approval", status, answer)
+		t.Fatalf("the open question ended %s with %+v, expected the pressed approval", status, answer)
 	}
 	resolved := first.fixture.adapter.interactionsResolved()
-	if len(resolved) != 1 || resolved[0].interactionID != "hold-2" || resolved[0].choiceKey != ApproveOptionID {
-		t.Fatalf("published %+v, expected only hold-2 closed on approve", resolved)
+	if len(resolved) != 2 || resolved[0].choiceKey != "" || resolved[1].interactionID != "hold-2" || resolved[1].choiceKey != ApproveOptionID {
+		t.Fatalf("published %+v, expected the earlier card closed with no choice and hold-2 closed on approve", resolved)
 	}
 }
