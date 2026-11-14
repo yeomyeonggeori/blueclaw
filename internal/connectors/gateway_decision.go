@@ -214,5 +214,9 @@ func (connectorRuntime *ConnectorRuntime) relatesToActiveTask(ctx context.Contex
 		connectorRuntime.logger.Warn("connector."+adapter.Name()+".gateway.decision_failed", slog.String("messageID", event.MessageID), slog.String("error", errorValue.Error()))
 		return false
 	}
-	return judgment.HasRelatesToActiveTask && judgment.RelatesToActiveTask
+	return isAboutTheTask(judgment)
+}
+
+func isAboutTheTask(judgment inboundengagement.Judgment) bool {
+	return judgment.HasRelatesToActiveTask && judgment.RelatesToActiveTask && !judgment.BusyRoute.WaitsForTheRunningTask()
 }

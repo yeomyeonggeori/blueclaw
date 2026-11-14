@@ -24,7 +24,7 @@ func (connectorRuntime *ConnectorRuntime) decideClaimedBurst(ctx context.Context
 func (connectorRuntime *ConnectorRuntime) eventsNeedingTheGateway(queuedEvents []QueuedConnectorEvent) []QueuedConnectorEvent {
 	needing := []QueuedConnectorEvent{}
 	for _, queuedEvent := range queuedEvents {
-		if !connectorRuntime.isDecidedBeforeTheGateway(queuedEvent.Event) {
+		if !connectorRuntime.isDecidedBeforeTheGateway(queuedEvent.Event) && !connectorRuntime.heldDecisions.isHeld(queuedEvent.Event) {
 			needing = append(needing, queuedEvent)
 		}
 	}

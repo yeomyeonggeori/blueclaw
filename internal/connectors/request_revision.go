@@ -58,7 +58,7 @@ func (connectorRuntime *ConnectorRuntime) processPendingInboundEvent(ctx context
 		}
 		return result, errorValue
 	}
-	connectorRuntime.refreshPendingRequestDelivery(event)
+	connectorRuntime.closeSettledPendingRequests(event)
 	requestContext, request, startReason := connectorRuntime.pendingRequests.begin(ctx, event)
 	if startReason == pendingRequestAlreadyRunning {
 		return ConnectorRuntimeResult{Handled: true, Platform: event.Platform, Reason: requestAlreadyRunningReason}, nil
@@ -66,15 +66,8 @@ func (connectorRuntime *ConnectorRuntime) processPendingInboundEvent(ctx context
 	if startReason == pendingRequestSuperseded {
 		return ConnectorRuntimeResult{Handled: true, Platform: event.Platform, Reason: SupersededRequestReason}, nil
 	}
-	defer connectorRuntime.finishPendingRequest(request)
-	stopCancellation := context.AfterFunc(requestContext, func() {
-		if connectorRuntime.pendingRequests.isSuperseded(event.DedupeKey()) {
-			connectorRuntime.cancelPendingRequestTask(event)
-		}
-	})
-	defer stopCancellation()
+	defer connectorRuntime.pendingRequests.finish(request)
 	for previous := request.previous; previous != nil; previous = previous.previous {
-		connectorRuntime.cancelPendingRequestTask(previous.event)
 		select {
 		case <-previous.done:
 		case <-requestContext.Done():
@@ -92,7 +85,7 @@ func (connectorRuntime *ConnectorRuntime) processPendingInboundEvent(ctx context
 	return result, errorValue
 }
 
-func (connectorRuntime *ConnectorRuntime) refreshPendingRequestDelivery(event PlatformInboundEvent) {
+func (connectorRuntime *ConnectorRuntime) closeSettledPendingRequests(event PlatformInboundEvent) {
 	personID, isFound := connectorRuntime.identityService.ResolvePersonIDByPlatformAccount(event.Platform, event.SenderID)
 	if !isFound {
 		return
@@ -101,17 +94,24 @@ func (connectorRuntime *ConnectorRuntime) refreshPendingRequestDelivery(event Pl
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
 	for sourceReference, request := range store.requests {
-		if request.hasReply || request.isSuperseded || !pendingRequestsShareScope(request.event, event) {
+		if request.isClosed || request.isSuperseded || !pendingRequestsShareScope(request.event, event) {
 			continue
 		}
 		taskRun, isFound := connectorRuntime.findTaskRunBySourceReference(personID, sourceReference)
-		if isFound && connectorRuntime.agentAlreadyReplied(taskRun.TaskRunID, request.event) {
-			request.hasReply = true
+		if isFound && connectorRuntime.isSettledPendingRequestTask(taskRun, request.event) {
+			request.isClosed = true
 			if request.isFinished {
 				delete(store.requests, sourceReference)
 			}
 		}
 	}
+}
+
+func (connectorRuntime *ConnectorRuntime) isSettledPendingRequestTask(taskRun task.TaskRun, event PlatformInboundEvent) bool {
+	if taskRun.Status == task.TaskStatusCancelled {
+		return true
+	}
+	return connectorRuntime.agentAlreadyReplied(taskRun.TaskRunID, event)
 }
 
 func (connectorRuntime *ConnectorRuntime) interruptedPendingRequestResult(event PlatformInboundEvent, ctx context.Context) (ConnectorRuntimeResult, error) {
@@ -128,7 +128,7 @@ func (connectorRuntime *ConnectorRuntime) closeControlledPendingRequests(event P
 	for _, request := range store.requests {
 		isSameSender := request.event.Platform == event.Platform && request.event.SenderID == event.SenderID
 		if isSameSender && (exactTaskControlIntent(event.Prompt) == agentcontract.TaskControlIntentStopAll || pendingRequestsShareScope(request.event, event)) {
-			request.hasReply = true
+			request.isClosed = true
 		}
 	}
 }
@@ -150,13 +150,6 @@ func (connectorRuntime *ConnectorRuntime) suppressSupersededQueuedReply(reply Qu
 	return true
 }
 
-func (connectorRuntime *ConnectorRuntime) finishPendingRequest(request *pendingRequest) {
-	if connectorRuntime.pendingRequests.isSuperseded(request.event.DedupeKey()) {
-		connectorRuntime.cancelPendingRequestTask(request.event)
-	}
-	connectorRuntime.pendingRequests.finish(request)
-}
-
 func (connectorRuntime *ConnectorRuntime) cancelPendingRequestTask(event PlatformInboundEvent) {
 	personID, isFound := connectorRuntime.identityService.ResolvePersonIDByPlatformAccount(event.Platform, event.SenderID)
 	if !isFound {
@@ -167,7 +160,7 @@ func (connectorRuntime *ConnectorRuntime) cancelPendingRequestTask(event Platfor
 
 func (connectorRuntime *ConnectorRuntime) cancelPendingSourceTask(personID string, sourceReference string) {
 	taskRun, isFound := connectorRuntime.findTaskRunBySourceReference(personID, sourceReference)
-	if !isFound || taskRun.Status == task.TaskStatusCompleted {
+	if !isFound || taskRun.Status == task.TaskStatusCompleted || taskRun.Status == task.TaskStatusCancelled {
 		return
 	}
 	if isTaskControlActiveStatus(taskRun.Status) {
@@ -189,7 +182,7 @@ func (connectorRuntime *ConnectorRuntime) pendingRequestReplySender(sourceRefere
 		}
 		dispatchID, errorValue := sendReply(ctx, target, reply)
 		if request != nil && isDelivery && errorValue == nil && dispatchID != "" {
-			request.hasReply = true
+			request.isClosed = true
 			if request.isFinished {
 				delete(store.requests, sourceReference)
 			}

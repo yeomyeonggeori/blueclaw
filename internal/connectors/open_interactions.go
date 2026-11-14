@@ -22,6 +22,13 @@ func (open openInteractions) isEmpty() bool {
 	return !open.hasAsk && !open.hasRunningTask
 }
 
+func (open openInteractions) taskRunID() string {
+	if open.hasRunningTask {
+		return open.runningTask.TaskRunID
+	}
+	return open.ask.TaskRunID
+}
+
 func (connectorRuntime *ConnectorRuntime) readOpenInteractions(turn *inboundTurn) openInteractions {
 	open := openInteractions{}
 	open.ask, open.hasAsk = connectorRuntime.findPendingAskInteraction(turn.personID, turn.event)

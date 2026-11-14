@@ -10,7 +10,7 @@ import (
 )
 
 func (connectorRuntime *ConnectorRuntime) enqueueInboundEvent(event PlatformInboundEvent, queueRepository ConnectorQueueRepository) (ConnectorRuntimeResult, error) {
-	connectorRuntime.refreshPendingRequestDelivery(event)
+	connectorRuntime.closeSettledPendingRequests(event)
 	store := connectorRuntime.pendingRequests
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
@@ -106,7 +106,7 @@ func (connectorRuntime *ConnectorRuntime) releaseQueuedConnectorEventToTheConver
 		slog.String("messageID", event.MessageID),
 		slog.String("conversationID", event.ConversationID),
 	)
-	if errorValue := connectorRuntime.queueRepository().ReleaseConnectorEventClaim(queuedEvent, time.Now().UTC().Add(connectorWorkerIdleDelay)); errorValue != nil {
+	if errorValue := connectorRuntime.queueRepository().ReleaseConnectorEventClaim(queuedEvent, connectorRuntime.heldDecisions.nextAttemptAt(event)); errorValue != nil {
 		connectorRuntime.logger.Warn(
 			"connector."+event.Platform+".inbox.release_claim_failed",
 			slog.String("messageID", event.MessageID),
@@ -153,6 +153,7 @@ func (connectorRuntime *ConnectorRuntime) processQueuedConnectorEventWithAdapter
 }
 
 func (connectorRuntime *ConnectorRuntime) markQueuedConnectorEventSucceeded(event PlatformInboundEvent, result ConnectorRuntimeResult) {
+	connectorRuntime.heldDecisions.forget(event)
 	if errorValue := connectorRuntime.queueRepository().MarkConnectorEventSucceeded(event, result); errorValue != nil {
 		connectorRuntime.logger.Warn("connector."+event.Platform+".inbox.mark_succeeded_failed", slog.String("messageID", event.MessageID), slog.String("error", errorValue.Error()))
 	}
@@ -264,6 +265,7 @@ func (connectorRuntime *ConnectorRuntime) outboxRepository() ConnectorOutboxRepo
 }
 
 func (connectorRuntime *ConnectorRuntime) markQueuedConnectorEventFailed(queuedEvent QueuedConnectorEvent, errorValue error) {
+	connectorRuntime.heldDecisions.forget(queuedEvent.Event)
 	nextAttemptAt := nextConnectorAttemptAt(queuedEvent.AttemptCount)
 	if markError := connectorRuntime.queueRepository().MarkConnectorEventFailed(queuedEvent, errorValue, nextAttemptAt); markError != nil {
 		connectorRuntime.logger.Warn("connector."+queuedEvent.Event.Platform+".inbox.mark_failed_failed", slog.String("messageID", queuedEvent.Event.MessageID), slog.String("error", markError.Error()))

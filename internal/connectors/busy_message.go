@@ -39,7 +39,6 @@ func (connectorRuntime *ConnectorRuntime) settleBusyDecision(
 	case inboundengagement.BusyRouteCancel:
 		return connectorRuntime.handleBusyCancelMessage(ctx, platform, event, replyTarget, activeTaskRun, sendReply)
 	case inboundengagement.BusyRouteNewTask:
-		connectorRuntime.supersedeBusyTask(event, activeTaskRun)
 		return busyMessageResult{clearActiveGoal: true}, nil
 	case inboundengagement.BusyRouteUnrelated:
 		return busyMessageResult{connectorResult: ConnectorRuntimeResult{Handled: true, Platform: platform, Ignored: true, Reason: "busy_unrelated"}, isHandled: true}, nil
@@ -204,14 +203,6 @@ func (connectorRuntime *ConnectorRuntime) replaceBusyTask(event PlatformInboundE
 	}))
 }
 
-func (connectorRuntime *ConnectorRuntime) supersedeBusyTask(event PlatformInboundEvent, activeTaskRun task.TaskRun) {
-	_, _ = connectorRuntime.taskRunService.CancelTaskRunWithReason(activeTaskRun.TaskRunID, activeTaskRun.RequesterPersonID, "superseded_by_new_message")
-	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskSupersededByMessage, agentruntime.MarshalBody(map[string]string{
-		"messageID":       event.MessageID,
-		"latestUserInput": strings.TrimSpace(event.Prompt),
-	}))
-}
-
 func (connectorRuntime *ConnectorRuntime) generateBusyReply(ctx context.Context, event PlatformInboundEvent, activeTaskRun task.TaskRun, route string) (string, error) {
 	prompt := strings.Join([]string{
 		"Write a short user-facing reply for an in-progress task.",
@@ -296,11 +287,11 @@ func (connectorRuntime *ConnectorRuntime) latestRecentlyFinishedConversationTask
 	return latestTaskRun, isFound
 }
 
-func (connectorRuntime *ConnectorRuntime) latestCurrentConversationActiveTask(personID string, event PlatformInboundEvent) (task.TaskRun, bool) {
+func (connectorRuntime *ConnectorRuntime) latestRunningConversationTask(personID string, event PlatformInboundEvent) (task.TaskRun, bool) {
 	var latestTaskRun task.TaskRun
 	isFound := false
 	for _, taskRun := range connectorRuntime.activeTaskRunsForPerson(personID) {
-		if !taskRunSharesMessageThread(taskRun, event) {
+		if !taskRunMatchesStopScope(taskRun, event) || taskRun.Status == task.TaskStatusWaitingApproval || taskRun.Status == task.TaskStatusWaitingUserInput {
 			continue
 		}
 		if !isFound || taskRun.UpdatedAt.After(latestTaskRun.UpdatedAt) {
@@ -311,19 +302,14 @@ func (connectorRuntime *ConnectorRuntime) latestCurrentConversationActiveTask(pe
 	return latestTaskRun, isFound
 }
 
-func (connectorRuntime *ConnectorRuntime) latestRunningConversationTask(personID string, event PlatformInboundEvent) (task.TaskRun, bool) {
-	var latestTaskRun task.TaskRun
-	isFound := false
-	for _, taskRun := range connectorRuntime.activeTaskRunsForPerson(personID) {
-		if !taskRunSharesMessageThread(taskRun, event) || taskRun.Status == task.TaskStatusWaitingApproval || taskRun.Status == task.TaskStatusWaitingUserInput {
-			continue
-		}
-		if !isFound || taskRun.UpdatedAt.After(latestTaskRun.UpdatedAt) {
-			latestTaskRun = taskRun
-			isFound = true
-		}
+func (connectorRuntime *ConnectorRuntime) hasRunningConversationTask(event PlatformInboundEvent) bool {
+	personID, isFound := connectorRuntime.identityService.ResolvePersonIDByPlatformAccount(event.Platform, event.SenderID)
+	if !isFound {
+		return false
 	}
-	return latestTaskRun, isFound
+	return slices.ContainsFunc(connectorRuntime.taskRunService.ListTaskRunByPersonID(personID), func(taskRun task.TaskRun) bool {
+		return taskRunMatchesStopScope(taskRun, event) && connectorRuntime.taskRunService.IsTaskRunActuallyRunning(taskRun)
+	})
 }
 
 func (connectorRuntime *ConnectorRuntime) taskFactsOf(taskRun task.TaskRun) inboundengagement.TaskFacts {

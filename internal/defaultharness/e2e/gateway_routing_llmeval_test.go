@@ -415,11 +415,7 @@ func isGentleBusyRoute(route string) bool {
 }
 
 func isDestructiveBusyRoute(route string) bool {
-	switch route {
-	case string(inboundengagement.BusyRouteCancel), string(inboundengagement.BusyRouteReplace), string(inboundengagement.BusyRouteNewTask):
-		return true
-	}
-	return false
+	return inboundengagement.BusyRoute(route).EndsTheRunningTask()
 }
 
 func isPrimaryRoutingField(field string) bool {

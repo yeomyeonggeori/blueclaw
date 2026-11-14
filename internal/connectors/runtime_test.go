@@ -509,7 +509,7 @@ func TestConnectorRuntimeBusyStatusDoesNotCreateNewTask(t *testing.T) {
 	harness.BusyRoute = inboundengagement.BusyRouteStatus
 	harness.Reply = "지금 처리 중입니다."
 	activeTaskRun := seedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{ConversationID: "direct-1", ReplyTargetID: "reply-target-1"}, "보고서 작성")
-	if _, isFound := connectorRuntime.latestCurrentConversationActiveTask("person-1", testInboundEvent("scope")); !isFound {
+	if _, isFound := connectorRuntime.latestRunningConversationTask("person-1", testInboundEvent("scope")); !isFound {
 		t.Fatal("expected active task before busy status event")
 	}
 	event := testInboundEvent("message-busy-status")
@@ -630,7 +630,7 @@ func TestConnectorRuntimeBusySteerAppendsInstructionWithoutNewTask(t *testing.T)
 	harness.BusyRoute = inboundengagement.BusyRouteSteer
 	harness.Reply = "방향 수정 내용을 현재 작업에 반영하겠습니다."
 	activeTaskRun := seedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{ConversationID: "direct-1", ReplyTargetID: "reply-target-1"}, "PDF 보고서 작성")
-	if _, isFound := connectorRuntime.latestCurrentConversationActiveTask("person-1", testInboundEvent("scope")); !isFound {
+	if _, isFound := connectorRuntime.latestRunningConversationTask("person-1", testInboundEvent("scope")); !isFound {
 		t.Fatal("expected active task before busy steer event")
 	}
 	event := testInboundEvent("message-busy-steer")
@@ -780,7 +780,7 @@ func TestConnectorRuntimeBusyReplaceCancelsActiveTaskAndStartsNewTask(t *testing
 	}
 }
 
-func TestConnectorRuntimeBusyNewTaskSupersedesActiveTaskAndStartsNewTask(t *testing.T) {
+func TestConnectorRuntimeBusyNewTaskLeavesTheActiveTaskRunningAndStartsItsOwn(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
 	harness.BusyRoute = inboundengagement.BusyRouteNewTask
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "휴게소 들러도 괜찮습니다."}
@@ -793,18 +793,19 @@ func TestConnectorRuntimeBusyNewTaskSupersedesActiveTaskAndStartsNewTask(t *test
 		t.Fatalf("expected independent question to process: %v", errorValue)
 	}
 
-	cancelledTaskRun, isFound := connectorRuntime.taskRunService.FindTaskRun(activeTaskRun.TaskRunID)
-	if !isFound || cancelledTaskRun.Status != task.TaskStatusCancelled || cancelledTaskRun.FailureReason != "superseded_by_new_message" {
-		t.Fatalf("expected active task superseded, got found=%v task=%+v", isFound, cancelledTaskRun)
+	untouchedTaskRun, _ := connectorRuntime.taskRunService.FindTaskRun(activeTaskRun.TaskRunID)
+	if untouchedTaskRun.Status != task.TaskStatusRunning {
+		t.Fatalf("an independent request disturbed the running task: %+v", untouchedTaskRun)
 	}
-	if result.TaskRunID == "" || result.TaskRunID == activeTaskRun.TaskRunID {
-		t.Fatalf("expected new task result, got %+v", result)
+	newTaskRun, isFound := connectorRuntime.taskRunService.FindTaskRun(result.TaskRunID)
+	if !isFound || result.TaskRunID == activeTaskRun.TaskRunID || newTaskRun.Prompt != "휴게소 가야해?" {
+		t.Fatalf("expected the independent request to run as its own task, got %+v", result)
 	}
 	if len(adapter.sentReplies) != 1 || adapter.sentReplies[0].message != "휴게소 들러도 괜찮습니다." {
-		t.Fatalf("expected latest task reply only, got %+v", adapter.sentReplies)
+		t.Fatalf("expected the independent request's reply, got %+v", adapter.sentReplies)
 	}
-	if !connectorTaskEventsContain(connectorRuntime, activeTaskRun.TaskRunID, "task.superseded_by_message", "message-independent-question") {
-		t.Fatal("expected superseded event")
+	if connectorTaskEventsContain(connectorRuntime, activeTaskRun.TaskRunID, agentcontract.TaskEventTaskSupersededByMessage, "") {
+		t.Fatal("an independent request superseded the running task")
 	}
 }
 
@@ -2793,6 +2794,7 @@ type testConnectorQueueRepository struct {
 	mutex           sync.Mutex
 	pendingEvents   []QueuedConnectorEvent
 	releasedEvents  []QueuedConnectorEvent
+	releaseDelays   []time.Duration
 	succeededEvents []ConnectorRuntimeResult
 	pendingReplies  []QueuedConnectorReply
 	sentReplies     []string
@@ -2857,10 +2859,12 @@ func (repository *testConnectorQueueRepository) MarkConnectorEventFailed(QueuedC
 	return nil
 }
 
-func (repository *testConnectorQueueRepository) ReleaseConnectorEventClaim(queuedEvent QueuedConnectorEvent, _ time.Time) error {
+func (repository *testConnectorQueueRepository) ReleaseConnectorEventClaim(queuedEvent QueuedConnectorEvent, nextAttemptAt time.Time) error {
 	repository.mutex.Lock()
 	defer repository.mutex.Unlock()
 	repository.releasedEvents = append(repository.releasedEvents, queuedEvent)
+	repository.releaseDelays = append(repository.releaseDelays, time.Until(nextAttemptAt))
+	queuedEvent.Event.gatewayDecision = nil
 	repository.pendingEvents = append(repository.pendingEvents, queuedEvent)
 	return nil
 }

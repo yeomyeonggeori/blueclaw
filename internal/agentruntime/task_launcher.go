@@ -389,6 +389,10 @@ func (taskLauncher *TaskLauncher) launchTask(ctx context.Context, request TaskLa
 	if heldRun, isLeftHeld := taskLauncher.runLeftHeldByItsClient(ctx, record, request.ExistingTaskRunID); isLeftHeld {
 		return TaskLaunchResult{TurnResult: agentcontract.AgentTurnResult{TaskRun: heldRun}, ToolNames: toolNames, NormalizedProfileName: normalizedProfileName}, nil
 	}
+	if cancelledRun, isCancelled := taskLauncher.runCancelledDuringItsTurn(record, request.ExistingTaskRunID); isCancelled {
+		taskLauncher.appendLaunchStepRecords(cancelledRun.TaskRunID, launchRecords)
+		return TaskLaunchResult{TurnResult: agentcontract.AgentTurnResult{TaskRun: cancelledRun}, ToolNames: toolNames, NormalizedProfileName: normalizedProfileName}, nil
+	}
 	if record.Error != "" {
 		if taskRunID := strings.TrimSpace(turnResult.TaskRun.TaskRunID); taskRunID != "" {
 			request.ExistingTaskRunID = taskRunID
@@ -424,6 +428,14 @@ func (taskLauncher *TaskLauncher) runLeftHeldByItsClient(ctx context.Context, re
 	}
 	taskRun, isFound := taskLauncher.taskRunService.FindTaskRun(taskRunID)
 	return taskRun, isFound && taskRun.Status == agentcontract.TaskStatusWaitingApproval
+}
+
+func (taskLauncher *TaskLauncher) runCancelledDuringItsTurn(record launchStepRecord, taskRunID string) (agentcontract.TaskRun, bool) {
+	if record.Error == "" || strings.TrimSpace(taskRunID) == "" {
+		return agentcontract.TaskRun{}, false
+	}
+	taskRun, isFound := taskLauncher.taskRunService.FindTaskRun(taskRunID)
+	return taskRun, isFound && taskRun.Status == agentcontract.TaskStatusCancelled
 }
 
 type provisionRequesterWorkspaceLaunchStep struct{}
