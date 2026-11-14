@@ -61,13 +61,13 @@ func TestAnImageIsNotSentToAnAgentThatDoesNotDeclareImages(t *testing.T) {
 	}
 }
 
-func TestTheHostInstructionLeadsTheRequestOnlyWhenTheHarnessIsToldToSendIt(t *testing.T) {
-	for _, includesHostInstruction := range []bool{true, false} {
+func TestEveryAgentIsHandedTheHostInstructionAndOnlyOneThatBriefsItselfSkipsTheTurnContext(t *testing.T) {
+	for _, briefsItself := range []bool{true, false} {
 		agent := &externalAgent{}
 		executed := []daemonExecutedTool{}
 		harness := New(&inProcessAgentProcess{agent: agent}, newPublishedToolCatalog(t), nil)
-		if includesHostInstruction {
-			harness.UseHostInstruction()
+		if briefsItself {
+			harness.UseAgentBriefingItsOwnTurnContext()
 		}
 
 		harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
@@ -75,18 +75,23 @@ func TestTheHostInstructionLeadsTheRequestOnlyWhenTheHarnessIsToldToSendIt(t *te
 				RequesterPersonID: "person-1",
 			},
 			HostInstruction:   "Ask the user only when their choice is required.\n\nThe requester prefers terse answers.",
-			Prompt:            "회의록 정리해줘",
+			Prompt:            "그거 고쳐줘",
+			PriorTask:         agentcontract.PriorTaskContext{TaskRunID: "run-earlier", Prompt: "회의록 정리해줘"},
 			WorkspaceRootPath: t.TempDir(),
 			ToolSet:           requesterToolSet(t, "person-1", &executed),
 		})
 
 		hostInstructionIndex := strings.Index(agent.observedPrompt, "The requester prefers terse answers.")
-		promptIndex := strings.Index(agent.observedPrompt, "회의록 정리해줘")
-		if includesHostInstruction && (hostInstructionIndex < 0 || hostInstructionIndex > promptIndex) {
-			t.Fatalf("the host instruction and the requester persona it carries come before the request, got:\n%s", agent.observedPrompt)
+		promptIndex := strings.Index(agent.observedPrompt, "그거 고쳐줘")
+		if hostInstructionIndex < 0 || hostInstructionIndex > promptIndex {
+			t.Fatalf("the host instruction and the requester persona it carries come before the request in every harness, got:\n%s", agent.observedPrompt)
 		}
-		if !includesHostInstruction && hostInstructionIndex >= 0 {
-			t.Fatalf("an agent that has its own instructions is not handed the in-process loop's, got:\n%s", agent.observedPrompt)
+		carriesPriorTask := strings.Contains(agent.observedPrompt, "회의록 정리해줘")
+		if !briefsItself && !carriesPriorTask {
+			t.Fatalf("\"그거\" means the earlier task, and an agent that is not told about it cannot tell what to fix, got:\n%s", agent.observedPrompt)
+		}
+		if briefsItself && carriesPriorTask {
+			t.Fatalf("an agent that reads the structured request describes the prior task itself, and a second copy in the prompt says it twice, got:\n%s", agent.observedPrompt)
 		}
 	}
 }

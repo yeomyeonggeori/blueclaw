@@ -201,6 +201,8 @@ Deciding whether an inbound message becomes a task at all is host policy. One ca
 
 An external harness changes where the agent runs, how it reaches tools, and how the outcome is known. It starts inside the requester's POSIX identity. It reaches the catalog over MCP at `/harness/tool-catalog` with a session token revoked when the turn ends; agents that advertise MCP over HTTP get the endpoint directly, and the rest get a stdio server (the daemon binary in `mcp-tool-catalog` mode) that proxies to it. Because an ACP turn ending or a CLI exiting says nothing about whether the work was done, `internal/turnoutcome` decides the status from the agent's final message and the catalog tools that actually succeeded.
 
+Every harness is briefed by `internal/turnbriefing.Prompt`: the standing instructions, who the agent is and who is asking, the time, memory, the host instruction carrying the requester's persona, and the facts of the turn (the visible conversation and its attachments, a scheduled run, the active goal, the prior task, a pending question, the workspace). The facts are described by `agentcontract`. A harness that reads the structured request and describes them itself, as bluecollar does, is not handed them a second time.
+
 `internal/acpharness` also refuses ACP's own filesystem and terminal methods, which pushes file and shell work onto the catalog. Tools an agent runs inside its own process are answered yes and recorded as `harness.tool_permitted` or `harness.tool_refused`; the POSIX identity is the limit on those.
 
 ### Serving ACP

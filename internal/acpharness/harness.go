@@ -59,7 +59,7 @@ type Harness struct {
 	ledgerExchange               *ledgerExchange
 	turnResultMetaKey            string
 	steerExtension               *steerExtension
-	includesHostInstruction      bool
+	briefsTurnContextItself      bool
 }
 
 func New(agentProcess AgentProcess, toolCatalogPublisher ToolCatalogPublisher, taskRunStore taskstate.TaskRunStore) *Harness {
@@ -78,8 +78,8 @@ func (harness *Harness) UseCheckpointMarker(metaKey string) {
 	harness.checkpointMarkerKey = metaKey
 }
 
-func (harness *Harness) UseHostInstruction() {
-	harness.includesHostInstruction = true
+func (harness *Harness) UseAgentBriefingItsOwnTurnContext() {
+	harness.briefsTurnContextItself = true
 }
 
 func (harness *Harness) UseOutcomeClassifier(outcomeClassifier turnoutcome.Classifier) {
@@ -550,27 +550,11 @@ func (harness *Harness) promptMetaForTurn(request agentcontract.AgentTurnRequest
 }
 
 func (harness *Harness) promptForTurn(request agentcontract.AgentTurnRequest) string {
-	sections := []string{}
-	if preamble := turnbriefing.Preamble(request, harness.instructionPrompt()); preamble != "" {
-		sections = append(sections, preamble)
-	}
-	if hostInstruction := harness.hostInstruction(request); hostInstruction != "" {
-		sections = append(sections, hostInstruction)
-	}
-	sections = append(sections, request.Prompt)
-	if harness.taskRunStore != nil && strings.TrimSpace(request.ExistingTaskRunID) != "" {
-		if declinedCallNote := approvalgate.DeclinedCallNote(harness.taskRunStore.ListTaskEvent(request.ExistingTaskRunID)); declinedCallNote != "" {
-			sections = append(sections, declinedCallNote)
-		}
-	}
-	return strings.Join(sections, "\n\n")
-}
-
-func (harness *Harness) hostInstruction(request agentcontract.AgentTurnRequest) string {
-	if !harness.includesHostInstruction {
-		return ""
-	}
-	return strings.TrimSpace(request.HostInstruction)
+	return turnbriefing.Prompt(request, turnbriefing.Briefing{
+		InstructionPrompt:         harness.instructionPrompt(),
+		TurnContextBriefedByAgent: harness.briefsTurnContextItself,
+		TaskEvents:                harness.taskRunStore,
+	})
 }
 
 func (harness *Harness) instructionPrompt() string {
