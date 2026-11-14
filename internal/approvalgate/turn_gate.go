@@ -55,7 +55,6 @@ func (turnGate turnToolCallGate) ReviewToolCall(ctx context.Context, toolInvocat
 		Platform:             turnGate.turnContext.Platform,
 		ConversationID:       turnGate.turnContext.ConversationID,
 		ReplyTargetID:        turnGate.turnContext.ReplyTargetID,
-		ModelDraft:           toolcontract.UserFacingMessageFromContext(ctx),
 		HarnessSession:       turnGate.turnContext.HarnessSession,
 		ToolName:             toolDefinition.Name,
 		ToolInput:            toolInvocation.Input,

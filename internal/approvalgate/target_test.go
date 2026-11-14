@@ -59,7 +59,7 @@ func hintApprovalRequest(taskRunID string) mcpserver.ApprovalRequest {
 	return approvalRequest
 }
 
-func TestAnApprovalQuestionNamesTheTargetTheHintResolvedTo(t *testing.T) {
+func TestTheTargetTheHintResolvedToIsPrintedBeneathTheQuestion(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
 	languageModel := &wordingLanguageModel{question: "부산 공급사 미팅 일정을 삭제할까요?"}
 	gate.UseQuestionWorder(approval.NewWorder(languageModel))
@@ -73,11 +73,11 @@ func TestAnApprovalQuestionNamesTheTargetTheHintResolvedTo(t *testing.T) {
 		t.Fatalf("a resolved target is still a destructive call the requester decides on, got %+v", outcome)
 	}
 
-	wordingContext := marshalRequestMessages(languageModel.lastRequest)
-	for _, expectedFragment := range []string{"부산 공급사 미팅", "2026-08-18T14:00:00+09:00"} {
-		if !strings.Contains(wordingContext, expectedFragment) {
-			t.Fatalf("the question is worded from the resolved target, expected %q in %s", expectedFragment, wordingContext)
-		}
+	if wordingContext := marshalRequestMessages(languageModel.lastRequest); strings.Contains(wordingContext, "부산 공급사 미팅") || strings.Contains(wordingContext, "2026-08-18") {
+		t.Fatalf("the resolved event is printed beneath the question, so the wording model is never shown it, got %s", wordingContext)
+	}
+	if !strings.Contains(heldCallEventBodyNamed(t, taskRunService, taskRun.TaskRunID, "confirmation.requested"), ": 부산 공급사 미팅") {
+		t.Fatal("the requester reads the resolved event beneath the question")
 	}
 	if !strings.Contains(heldCallEventBodyNamed(t, taskRunService, taskRun.TaskRunID, "confirmation.requested"), "부산 공급사 미팅 일정을 삭제할까요?") {
 		t.Fatal("the requester is asked about the entity the hint resolved to")
@@ -259,7 +259,7 @@ func TestAnApprovedCallIsCarriedOutAgainstEveryIdentityAListResolvedTo(t *testin
 	}
 }
 
-func TestARefusalThatNamesItsTargetIsAskedAboutAsNamed(t *testing.T) {
+func TestARefusalThatNamesItsTargetShowsItAsNamed(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
 	languageModel := &wordingLanguageModel{question: "이 요청을 보낼까요?"}
 	gate.UseQuestionWorder(approval.NewWorder(languageModel))
@@ -277,8 +277,11 @@ func TestARefusalThatNamesItsTargetIsAskedAboutAsNamed(t *testing.T) {
 	if resolver.callCount != 0 {
 		t.Fatal("a refusal that names what it would do is not resolved a second time")
 	}
-	if wordingContext := marshalRequestMessages(languageModel.lastRequest); !strings.Contains(wordingContext, "to: 박예시") {
-		t.Fatalf("the question is worded from the named target, got %s", wordingContext)
+	if wordingContext := marshalRequestMessages(languageModel.lastRequest); strings.Contains(wordingContext, "박예시") {
+		t.Fatalf("the named target is printed beneath the question, so the wording model is never shown it, got %s", wordingContext)
+	}
+	if !strings.Contains(heldCallEventBodyNamed(t, taskRunService, taskRun.TaskRunID, "confirmation.requested"), "to: 박예시") {
+		t.Fatal("the requester reads the named target beneath the question")
 	}
 	recordDecision(taskRunService, taskRun.TaskRunID, "approve")
 	approvedCall, _ := ApprovedPendingCall(taskRunService.ListTaskEvent(taskRun.TaskRunID))
