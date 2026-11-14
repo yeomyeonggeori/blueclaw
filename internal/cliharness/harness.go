@@ -148,11 +148,11 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 	if harness.requesterProcessRunner != nil {
 		return harness.runAsRequester(ctx, request, identityKey, arguments, agentStandardInput, endpointURL, bearerToken, succeededToolRecorder)
 	}
-	if errorValue := harness.writeToolCatalogWorkspaceFile(request.WorkspaceRootPath, endpointURL, bearerToken, nil); errorValue != nil {
+	if errorValue := harness.writeToolCatalogWorkspaceFile(request.WorkingDirectoryPath(), endpointURL, bearerToken, nil); errorValue != nil {
 		return agentcontract.AgentTurnResult{}, errorValue
 	}
 	command := exec.CommandContext(ctx, harness.agentCommand.Path, arguments...)
-	command.Dir = request.WorkspaceRootPath
+	command.Dir = request.WorkingDirectoryPath()
 	command.Stdin = strings.NewReader(agentStandardInput)
 	command.Env = append(harness.commandEnvironment(), toolCatalogTokenEnvironmentName+"="+bearerToken)
 	standardOutput := &bytes.Buffer{}
@@ -216,7 +216,7 @@ func ClaudeCodeAgentCommand(commandPath string) AgentCommand {
 			}
 			return []string{"--session-id", sessionID}
 		},
-		PromptArguments:  []string{"--print", "--strict-mcp-config"},
+		PromptArguments:  []string{"--print"},
 		ToolCatalogTrust: toolcatalogtrust.Trust{Arguments: []string{"--allowedTools", "mcp__" + toolCatalogServerName}},
 		ToolCatalogArguments: func(toolCatalogConfigurationPath string) []string {
 			return []string{"--mcp-config", toolCatalogConfigurationPath}
@@ -224,7 +224,7 @@ func ClaudeCodeAgentCommand(commandPath string) AgentCommand {
 	}
 }
 
-func (harness *Harness) writeToolCatalogWorkspaceFile(workspaceRootPath string, endpointURL string, bearerToken string, requesterActor security.WorkspaceActor) error {
+func (harness *Harness) writeToolCatalogWorkspaceFile(workingDirectoryPath string, endpointURL string, bearerToken string, requesterActor security.WorkspaceActor) error {
 	if harness.agentCommand.ToolCatalogWorkspaceFile == nil {
 		return nil
 	}
@@ -233,7 +233,7 @@ func (harness *Harness) writeToolCatalogWorkspaceFile(workspaceRootPath string, 
 	if errorValue != nil {
 		return errorValue
 	}
-	configurationPath := filepath.Join(workspaceRootPath, relativePath)
+	configurationPath := filepath.Join(workingDirectoryPath, relativePath)
 	if requesterActor == nil {
 		if errorValue := os.MkdirAll(filepath.Dir(configurationPath), 0o755); errorValue != nil {
 			return errorValue
@@ -258,14 +258,14 @@ func (harness *Harness) runAsRequester(ctx context.Context, request agentcontrac
 	if errorValue != nil {
 		return agentcontract.AgentTurnResult{}, errorValue
 	}
-	if errorValue := harness.writeToolCatalogWorkspaceFile(request.WorkspaceRootPath, endpointURL, bearerToken, requesterActor); errorValue != nil {
+	if errorValue := harness.writeToolCatalogWorkspaceFile(request.WorkingDirectoryPath(), endpointURL, bearerToken, requesterActor); errorValue != nil {
 		return agentcontract.AgentTurnResult{}, errorValue
 	}
 	commandResult, errorValue := requesterActor.Run(ctx, security.CommandRequest{
 		ExecutableName:       harness.agentCommand.Path,
 		Arguments:            arguments,
 		Stdin:                agentStandardInput,
-		WorkingDirectoryPath: request.WorkspaceRootPath,
+		WorkingDirectoryPath: request.WorkingDirectoryPath(),
 		TimeoutSecond:        harness.agentTimeoutSecond,
 		OutputMaximumBytes:   1 << 20,
 	})
@@ -339,7 +339,7 @@ func CodexAgentCommand(commandPath string) AgentCommand {
 			return nil
 		},
 		ParseAgentOutput: parseCodexAgentOutput,
-		PromptArguments:  []string{"exec", "--json", "--sandbox", "read-only", "--skip-git-repo-check"},
+		PromptArguments:  []string{"exec", "--json", "--skip-git-repo-check"},
 		ToolCatalogArguments: func(toolCatalogConfigurationPath string) []string {
 			return nil
 		},

@@ -33,7 +33,7 @@ type AgentProcess interface {
 }
 
 type RequesterAgentProcess interface {
-	StartAsRequester(ctx context.Context, processStarter security.WorkspaceProcessStarter, workspaceRootPath string) (input io.Writer, output io.Reader, wait func() error, errorValue error)
+	StartAsRequester(ctx context.Context, processStarter security.WorkspaceProcessStarter, workingDirectoryPath string) (input io.Writer, output io.Reader, wait func() error, errorValue error)
 }
 
 type RequesterProcessRunner interface {
@@ -140,7 +140,7 @@ func (harness *Harness) startAgent(ctx context.Context, request agentcontract.Ag
 	if !canStartProcess {
 		return nil, nil, nil, errors.New("this workspace actor cannot start a long-lived process, so the agent has no requester identity to run inside")
 	}
-	return requesterAgentProcess.StartAsRequester(ctx, processStarter, request.WorkspaceRootPath)
+	return requesterAgentProcess.StartAsRequester(ctx, processStarter, request.WorkingDirectoryPath())
 }
 
 func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.AgentTurnRequest) (agentcontract.AgentTurnResult, error) {
@@ -184,7 +184,7 @@ func (harness *Harness) RunTurn(ctx context.Context, request agentcontract.Agent
 		return agentcontract.AgentTurnResult{}, errorValue
 	}
 	newSession, errorValue := connection.NewSession(ctx, acp.NewSessionRequest{
-		Cwd:        request.WorkspaceRootPath,
+		Cwd:        request.WorkingDirectoryPath(),
 		McpServers: []acp.McpServer{toolCatalogServer},
 		Meta:       harness.toolCatalogTrust.SessionMeta,
 	})

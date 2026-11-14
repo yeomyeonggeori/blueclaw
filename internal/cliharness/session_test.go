@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -172,5 +173,36 @@ func TestACLIHarnessHandsItsTurnToTheToolCatalog(t *testing.T) {
 
 	if len(publisher.turnContexts) != 1 || publisher.turnContexts[0] == nil || publisher.turnContexts[0].Value(turnValueKey{}) != "the connector's event" {
 		t.Fatal("a CLI harness's tool calls run inside its turn, so a held call is asked where the turn was asked")
+	}
+}
+
+func TestACLIHarnessWorksInTheConversationsDirectory(t *testing.T) {
+	harness, _ := sessionTestHarness(t, AgentCommand{Path: "/bin/pwd", HarnessName: "test-harness"})
+	conversationDirectory, _ := filepath.EvalSymlinks(t.TempDir())
+
+	output := runEchoingTurn(t, harness, agentcontract.AgentTurnRequest{RequesterIdentity: agentcontract.RequesterIdentity{RequesterPersonID: "person-1"}, Prompt: "턴", WorkspaceRootPath: t.TempDir(), WorkspaceDefaultPath: conversationDirectory})
+
+	if strings.TrimSpace(output) != conversationDirectory {
+		t.Fatalf("a CLI harness works where the conversation lives, got %q", output)
+	}
+}
+
+func TestAHarnessKeepsTheSettingsItsOwnerGaveIt(t *testing.T) {
+	for _, testCase := range []struct {
+		agentCommand AgentCommand
+		overriding   string
+	}{
+		{agentCommand: ClaudeCodeAgentCommand("/bin/echo"), overriding: "--strict-mcp-config"},
+		{agentCommand: CodexAgentCommand("/bin/echo"), overriding: "--sandbox"},
+	} {
+		t.Run(testCase.agentCommand.HarnessName, func(t *testing.T) {
+			harness, _ := sessionTestHarness(t, testCase.agentCommand)
+
+			arguments := runEchoingTurn(t, harness, agentcontract.AgentTurnRequest{RequesterIdentity: agentcontract.RequesterIdentity{RequesterPersonID: "person-1"}, Prompt: "턴"})
+
+			if strings.Contains(arguments, testCase.overriding) {
+				t.Fatalf("the host adds its catalog and overrides none of the owner's settings, got %q", arguments)
+			}
+		})
 	}
 }

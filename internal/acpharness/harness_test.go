@@ -116,6 +116,7 @@ type externalAgent struct {
 	toolCallUpdates          []acp.SessionUpdate
 	permissionRequest        *acp.RequestPermissionRequest
 	observedSessionMeta      map[string]any
+	observedWorkingDirectory string
 	permissionOutcome        acp.RequestPermissionOutcome
 	connection               servedConnection
 	declaresImages           bool
@@ -180,6 +181,7 @@ func (agent *externalAgent) NewSession(ctx context.Context, request acp.NewSessi
 	}
 	agent.observedToolCatalog = request.McpServers[0]
 	agent.observedSessionMeta = request.Meta
+	agent.observedWorkingDirectory = request.Cwd
 	if request.McpServers[0].Http == nil {
 		return acp.NewSessionResponse{SessionId: "session-1"}, nil
 	}
@@ -585,5 +587,24 @@ func TestATurnThatStagedNothingCarriesNoAttachments(t *testing.T) {
 	}
 	if len(turnResult.Attachments) != 0 {
 		t.Fatalf("expected no attachments, got %+v", turnResult.Attachments)
+	}
+}
+
+func TestAnACPAgentWorksInTheConversationsDirectory(t *testing.T) {
+	taskRuns, taskRunID := newTaskRunStore()
+	agent := &externalAgent{}
+	conversationDirectory := t.TempDir()
+
+	New(&inProcessAgentProcess{agent: agent}, newPublishedToolCatalog(t), taskRuns).RunTurn(context.Background(), agentcontract.AgentTurnRequest{
+		RequesterIdentity:    agentcontract.RequesterIdentity{RequesterPersonID: "person-1"},
+		ExistingTaskRunID:    taskRunID,
+		Prompt:               "회의록 정리해줘",
+		WorkspaceRootPath:    t.TempDir(),
+		WorkspaceDefaultPath: conversationDirectory,
+		ToolSet:              requesterToolSet(t, "person-1", &[]daemonExecutedTool{}),
+	})
+
+	if agent.observedWorkingDirectory != conversationDirectory {
+		t.Fatalf("an agent works where the conversation lives, the requester's own directory, got %q", agent.observedWorkingDirectory)
 	}
 }

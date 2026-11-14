@@ -43,13 +43,13 @@ func (agentCommand AgentCommand) Start(ctx context.Context) (io.Writer, io.Reade
 	}, nil
 }
 
-func (agentCommand AgentCommand) StartAsRequester(ctx context.Context, processStarter security.WorkspaceProcessStarter, workspaceRootPath string) (io.Writer, io.Reader, func() error, error) {
+func (agentCommand AgentCommand) StartAsRequester(ctx context.Context, processStarter security.WorkspaceProcessStarter, turnWorkingDirectoryPath string) (io.Writer, io.Reader, func() error, error) {
 	if strings.TrimSpace(agentCommand.Path) == "" {
 		return nil, nil, nil, errors.New("acp harness needs an agent command to run")
 	}
 	workingDirectoryPath := agentCommand.WorkingDirectory
 	if strings.TrimSpace(workingDirectoryPath) == "" {
-		workingDirectoryPath = workspaceRootPath
+		workingDirectoryPath = turnWorkingDirectoryPath
 	}
 	streamingProcess, errorValue := processStarter.StartProcess(ctx, security.CommandRequest{
 		ExecutableName:       agentCommand.Path,
