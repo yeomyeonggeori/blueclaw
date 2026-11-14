@@ -218,5 +218,5 @@ func (connectorRuntime *ConnectorRuntime) relatesToActiveTask(ctx context.Contex
 }
 
 func isAboutTheTask(judgment inboundengagement.Judgment) bool {
-	return judgment.HasRelatesToActiveTask && judgment.RelatesToActiveTask
+	return judgment.HasRelatesToActiveTask && judgment.RelatesToActiveTask && !judgment.BusyRoute.WaitsForTheRunningTask()
 }

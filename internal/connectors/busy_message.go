@@ -39,7 +39,6 @@ func (connectorRuntime *ConnectorRuntime) settleBusyDecision(
 	case inboundengagement.BusyRouteCancel:
 		return connectorRuntime.handleBusyCancelMessage(ctx, platform, event, replyTarget, activeTaskRun, sendReply)
 	case inboundengagement.BusyRouteNewTask:
-		connectorRuntime.supersedeBusyTask(event, activeTaskRun)
 		return busyMessageResult{clearActiveGoal: true}, nil
 	case inboundengagement.BusyRouteUnrelated:
 		return busyMessageResult{connectorResult: ConnectorRuntimeResult{Handled: true, Platform: platform, Ignored: true, Reason: "busy_unrelated"}, isHandled: true}, nil
@@ -199,14 +198,6 @@ func (connectorRuntime *ConnectorRuntime) replySteerResumeUnavailable(
 func (connectorRuntime *ConnectorRuntime) replaceBusyTask(event PlatformInboundEvent, activeTaskRun task.TaskRun) {
 	_, _ = connectorRuntime.taskRunService.CancelTaskRunWithReason(activeTaskRun.TaskRunID, activeTaskRun.RequesterPersonID, "task replaced by newer user instruction")
 	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskReplaced, agentruntime.MarshalBody(map[string]string{
-		"messageID":       event.MessageID,
-		"latestUserInput": strings.TrimSpace(event.Prompt),
-	}))
-}
-
-func (connectorRuntime *ConnectorRuntime) supersedeBusyTask(event PlatformInboundEvent, activeTaskRun task.TaskRun) {
-	_, _ = connectorRuntime.taskRunService.CancelTaskRunWithReason(activeTaskRun.TaskRunID, activeTaskRun.RequesterPersonID, "superseded_by_new_message")
-	connectorRuntime.taskRunService.AppendTaskEvent(activeTaskRun.TaskRunID, agentcontract.TaskEventTaskSupersededByMessage, agentruntime.MarshalBody(map[string]string{
 		"messageID":       event.MessageID,
 		"latestUserInput": strings.TrimSpace(event.Prompt),
 	}))

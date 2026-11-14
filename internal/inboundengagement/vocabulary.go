@@ -50,6 +50,14 @@ const (
 	BusyRouteUnrelated BusyRoute = "unrelated"
 )
 
+func (route BusyRoute) EndsTheRunningTask() bool {
+	return route == BusyRouteReplace || route == BusyRouteCancel
+}
+
+func (route BusyRoute) WaitsForTheRunningTask() bool {
+	return route == BusyRouteNewTask
+}
+
 var BusyRouteNames = []string{
 	string(BusyRouteStatus), string(BusyRouteSteer), string(BusyRouteReplace),
 	string(BusyRouteCancel), string(BusyRouteNewTask), string(BusyRouteUnrelated),

@@ -780,7 +780,7 @@ func TestConnectorRuntimeBusyReplaceCancelsActiveTaskAndStartsNewTask(t *testing
 	}
 }
 
-func TestConnectorRuntimeBusyNewTaskSupersedesActiveTaskAndStartsNewTask(t *testing.T) {
+func TestConnectorRuntimeBusyNewTaskLeavesTheActiveTaskRunningAndStartsItsOwn(t *testing.T) {
 	connectorRuntime, adapter, harness := newStubbedTestConnectorRuntime(t)
 	harness.BusyRoute = inboundengagement.BusyRouteNewTask
 	harness.TurnResult = agentcontract.AgentTurnResult{FinishMessage: "휴게소 들러도 괜찮습니다."}
@@ -793,18 +793,19 @@ func TestConnectorRuntimeBusyNewTaskSupersedesActiveTaskAndStartsNewTask(t *test
 		t.Fatalf("expected independent question to process: %v", errorValue)
 	}
 
-	cancelledTaskRun, isFound := connectorRuntime.taskRunService.FindTaskRun(activeTaskRun.TaskRunID)
-	if !isFound || cancelledTaskRun.Status != task.TaskStatusCancelled || cancelledTaskRun.FailureReason != "superseded_by_new_message" {
-		t.Fatalf("expected active task superseded, got found=%v task=%+v", isFound, cancelledTaskRun)
+	untouchedTaskRun, _ := connectorRuntime.taskRunService.FindTaskRun(activeTaskRun.TaskRunID)
+	if untouchedTaskRun.Status != task.TaskStatusRunning {
+		t.Fatalf("an independent request disturbed the running task: %+v", untouchedTaskRun)
 	}
-	if result.TaskRunID == "" || result.TaskRunID == activeTaskRun.TaskRunID {
-		t.Fatalf("expected new task result, got %+v", result)
+	newTaskRun, isFound := connectorRuntime.taskRunService.FindTaskRun(result.TaskRunID)
+	if !isFound || result.TaskRunID == activeTaskRun.TaskRunID || newTaskRun.Prompt != "휴게소 가야해?" {
+		t.Fatalf("expected the independent request to run as its own task, got %+v", result)
 	}
 	if len(adapter.sentReplies) != 1 || adapter.sentReplies[0].message != "휴게소 들러도 괜찮습니다." {
-		t.Fatalf("expected latest task reply only, got %+v", adapter.sentReplies)
+		t.Fatalf("expected the independent request's reply, got %+v", adapter.sentReplies)
 	}
-	if !connectorTaskEventsContain(connectorRuntime, activeTaskRun.TaskRunID, "task.superseded_by_message", "message-independent-question") {
-		t.Fatal("expected superseded event")
+	if connectorTaskEventsContain(connectorRuntime, activeTaskRun.TaskRunID, agentcontract.TaskEventTaskSupersededByMessage, "") {
+		t.Fatal("an independent request superseded the running task")
 	}
 }
 
