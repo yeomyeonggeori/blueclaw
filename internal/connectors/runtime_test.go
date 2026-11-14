@@ -509,7 +509,7 @@ func TestConnectorRuntimeBusyStatusDoesNotCreateNewTask(t *testing.T) {
 	harness.BusyRoute = inboundengagement.BusyRouteStatus
 	harness.Reply = "지금 처리 중입니다."
 	activeTaskRun := seedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{ConversationID: "direct-1", ReplyTargetID: "reply-target-1"}, "보고서 작성")
-	if _, isFound := connectorRuntime.latestCurrentConversationActiveTask("person-1", testInboundEvent("scope")); !isFound {
+	if _, isFound := connectorRuntime.latestRunningConversationTask("person-1", testInboundEvent("scope")); !isFound {
 		t.Fatal("expected active task before busy status event")
 	}
 	event := testInboundEvent("message-busy-status")
@@ -630,7 +630,7 @@ func TestConnectorRuntimeBusySteerAppendsInstructionWithoutNewTask(t *testing.T)
 	harness.BusyRoute = inboundengagement.BusyRouteSteer
 	harness.Reply = "방향 수정 내용을 현재 작업에 반영하겠습니다."
 	activeTaskRun := seedRunningTaskRun(t, connectorRuntime.taskRunService, task.TaskRunOrigin{ConversationID: "direct-1", ReplyTargetID: "reply-target-1"}, "PDF 보고서 작성")
-	if _, isFound := connectorRuntime.latestCurrentConversationActiveTask("person-1", testInboundEvent("scope")); !isFound {
+	if _, isFound := connectorRuntime.latestRunningConversationTask("person-1", testInboundEvent("scope")); !isFound {
 		t.Fatal("expected active task before busy steer event")
 	}
 	event := testInboundEvent("message-busy-steer")
