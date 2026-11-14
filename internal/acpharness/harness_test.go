@@ -127,6 +127,9 @@ type externalAgent struct {
 	cancelled                chan struct{}
 	extensionMethods         []string
 	extensionParams          []json.RawMessage
+	reopensSessionsWith      string
+	newSessionCount          int
+	reopenedSessionIDs       []acp.SessionId
 }
 
 type servedConnection struct {
@@ -145,10 +148,15 @@ func (served *servedConnection) readiness() chan struct{} {
 }
 
 func (served *servedConnection) connect(connection *acp.AgentSideConnection) {
+	ready := served.readiness()
 	served.mutex.Lock()
 	served.connection = connection
 	served.mutex.Unlock()
-	close(served.readiness())
+	select {
+	case <-ready:
+	default:
+		close(ready)
+	}
 }
 
 func (served *servedConnection) get() *acp.AgentSideConnection {
@@ -169,13 +177,32 @@ func (agent *externalAgent) Initialize(_ context.Context, request acp.Initialize
 	return acp.InitializeResponse{
 		ProtocolVersion: request.ProtocolVersion,
 		AgentCapabilities: acp.AgentCapabilities{
-			McpCapabilities:    acp.McpCapabilities{Http: !agent.acceptsNoHTTPToolCatalog},
-			PromptCapabilities: acp.PromptCapabilities{Image: agent.declaresImages},
+			McpCapabilities:     acp.McpCapabilities{Http: !agent.acceptsNoHTTPToolCatalog},
+			PromptCapabilities:  acp.PromptCapabilities{Image: agent.declaresImages},
+			LoadSession:         agent.reopensSessionsWith == "load",
+			SessionCapabilities: agent.sessionCapabilities(),
 		},
 	}, nil
 }
 
+func (agent *externalAgent) sessionCapabilities() acp.SessionCapabilities {
+	if agent.reopensSessionsWith != "resume" {
+		return acp.SessionCapabilities{}
+	}
+	return acp.SessionCapabilities{Resume: &acp.SessionResumeCapabilities{}}
+}
+
+func (agent *externalAgent) LoadSession(ctx context.Context, request acp.LoadSessionRequest) (acp.LoadSessionResponse, error) {
+	agent.reopenedSessionIDs = append(agent.reopenedSessionIDs, request.SessionId)
+	replayed := acp.SessionUpdate{AgentMessageChunk: &acp.SessionUpdateAgentMessageChunk{Content: acp.TextBlock("지난 턴에 이미 한 답")}}
+	if errorValue := agent.connection.get().SessionUpdate(ctx, acp.SessionNotification{SessionId: request.SessionId, Update: replayed}); errorValue != nil {
+		return acp.LoadSessionResponse{}, errorValue
+	}
+	return acp.LoadSessionResponse{}, nil
+}
+
 func (agent *externalAgent) NewSession(ctx context.Context, request acp.NewSessionRequest) (acp.NewSessionResponse, error) {
+	agent.newSessionCount++
 	if len(request.McpServers) != 1 {
 		return acp.NewSessionResponse{}, io.ErrUnexpectedEOF
 	}
@@ -295,7 +322,8 @@ func (agent *externalAgent) CloseSession(context.Context, acp.CloseSessionReques
 func (agent *externalAgent) ListSessions(context.Context, acp.ListSessionsRequest) (acp.ListSessionsResponse, error) {
 	return acp.ListSessionsResponse{}, nil
 }
-func (agent *externalAgent) ResumeSession(context.Context, acp.ResumeSessionRequest) (acp.ResumeSessionResponse, error) {
+func (agent *externalAgent) ResumeSession(_ context.Context, request acp.ResumeSessionRequest) (acp.ResumeSessionResponse, error) {
+	agent.reopenedSessionIDs = append(agent.reopenedSessionIDs, request.SessionId)
 	return acp.ResumeSessionResponse{}, nil
 }
 

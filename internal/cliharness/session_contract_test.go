@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 )
 
 func writeFakeCodexScript(t *testing.T) string {
@@ -77,5 +78,23 @@ func TestClaudeCodeHeadlessRunPreAllowsItsOwnMCPServer(t *testing.T) {
 
 	if !strings.Contains(output, "--allowedTools mcp__"+toolCatalogServerName) {
 		t.Fatalf("expected the headless claude code run to pre-allow mcp__%s tools, got %q", toolCatalogServerName, output)
+	}
+}
+
+func TestARestartedDaemonResumesTheThreadCodexMinted(t *testing.T) {
+	taskRuns := taskstate.NewTaskRunService(taskstate.NewTaskEventService())
+	codexCommand := CodexAgentCommand(writeFakeCodexScript(t))
+	request := agentcontract.AgentTurnRequest{RequesterIdentity: agentcontract.RequesterIdentity{RequesterPersonID: "person-1"}, ExistingTaskRunID: "task-run-1", Prompt: "첫 턴"}
+
+	beforeRestart, _ := sessionTestHarness(t, codexCommand)
+	beforeRestart.taskRunStore = taskRuns
+	runEchoingTurn(t, beforeRestart, request)
+	afterRestart, _ := sessionTestHarness(t, codexCommand)
+	afterRestart.taskRunStore = taskRuns
+	request.IsRuntimeRestartResume = true
+	resumedOutput := runEchoingTurn(t, afterRestart, request)
+
+	if !strings.Contains(resumedOutput, "resume codex-real-thread-id") {
+		t.Fatalf("an approval answered after a restart continues the conversation codex already had, got %q", resumedOutput)
 	}
 }
