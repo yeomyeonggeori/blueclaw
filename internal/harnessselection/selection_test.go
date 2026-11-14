@@ -122,3 +122,11 @@ type refusingProcessRunner struct{}
 func (refusingProcessRunner) Requester(context.Context, security.WorkspaceActorRequest) (security.WorkspaceActor, error) {
 	return nil, errors.New("not used in selection tests")
 }
+
+func TestACommandHarnessIsKnownByTheNameItIsSelectedWith(t *testing.T) {
+	for _, commandHarness := range CommandHarnesses() {
+		if published := commandHarness.agentCommandAt("/usr/local/bin/" + commandHarness.ExecutableName).HarnessName; published != commandHarness.Name {
+			t.Fatalf("a harness selected as %q publishes its sessions as %q", commandHarness.Name, published)
+		}
+	}
+}
