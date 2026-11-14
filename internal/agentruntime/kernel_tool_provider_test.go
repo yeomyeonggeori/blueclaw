@@ -53,6 +53,9 @@ func TestKernelToolProviderUsesCanonicalDescriptors(t *testing.T) {
 		if descriptor.Namespace != descriptorSpec.Namespace || descriptor.PrivacyClass != descriptorSpec.PrivacyClass || descriptor.Visibility != descriptorSpec.Visibility || descriptor.PolicyResource != descriptorSpec.PolicyResource {
 			t.Fatalf("expected model-visible policy metadata, got %+v", descriptor)
 		}
+		if descriptor.IsBroughtByEveryHarness != descriptorSpec.IsBroughtByEveryHarness {
+			t.Fatalf("whether a harness brings its own %q is the descriptor's to say, got %+v", descriptor.Name, descriptor)
+		}
 		if descriptor.SideEffectClass != descriptorSpec.SideEffectClass || descriptor.RequiresApproval != descriptorSpec.RequiresApproval {
 			t.Fatalf("expected explicit side-effect metadata, got %+v", descriptor)
 		}
@@ -327,4 +330,26 @@ func equalJSONSchema(firstSchema json.RawMessage, secondSchema json.RawMessage) 
 		return false
 	}
 	return reflect.DeepEqual(firstDocument, secondDocument)
+}
+
+func TestTheHostsGenericToolsSayEveryHarnessBringsItsOwn(t *testing.T) {
+	for _, toolName := range []string{
+		toolcontract.BashToolName,
+		toolcontract.FileReadToolName,
+		toolcontract.WriteToolName,
+		toolcontract.EditToolName,
+		toolcontract.FilePreviewToolName,
+		toolcontract.PlanToolName,
+		toolcontract.EquipToolName,
+		toolcontract.SkillSearchToolName,
+	} {
+		descriptorSpec, isFound := kernelToolDescriptorSpecForName(toolName)
+		if !isFound || !descriptorSpec.IsBroughtByEveryHarness {
+			t.Fatalf("an external agent has its own %q, and offering ours as well gives it the same job twice", toolName)
+		}
+	}
+	descriptorSpec, _ := kernelToolDescriptorSpecForName(toolcontract.FileDeliverToolName)
+	if descriptorSpec.IsBroughtByEveryHarness {
+		t.Fatal("no harness can deliver a file to the requester's messenger on its own")
+	}
 }

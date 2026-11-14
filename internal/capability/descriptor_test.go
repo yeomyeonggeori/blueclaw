@@ -78,6 +78,7 @@ func TestADecodedDescriptorKeepsWhatItWasGiven(t *testing.T) {
 		"sideEffect": "external_publish",
 		"requiresApproval": true,
 		"approvalQuotedField": "message",
+		"isBroughtByEveryHarness": true,
 		"completionEvidence": {"mode":"success","action":"share_document","targetKind":"document"},
 		"availability": {"state":"ok","reason":"ready"},
 		"idempotency": {"supported":true,"required":true,"scope":"operation"}
@@ -91,16 +92,17 @@ func TestADecodedDescriptorKeepsWhatItWasGiven(t *testing.T) {
 	}
 
 	for fieldName, isKept := range map[string]bool{
-		"answeredBy":           descriptor.AnsweredBy == "company",
-		"modelVisible":         descriptor.ModelVisible,
-		"version":              descriptor.Version == "1",
-		"estimatedLatency":     descriptor.EstimatedLatency == "high",
-		"inputSchemaStrict":    descriptor.InputSchemaStrict,
-		"outputSchemaStrict":   descriptor.OutputSchemaStrict,
-		"sideEffect":           descriptor.SideEffect == "external_publish",
-		"availability.reason":  descriptor.Availability.Reason == "ready",
-		"idempotency.required": descriptor.Idempotency.Required,
-		"approvalQuotedField":  descriptor.ApprovalQuotedField == "message",
+		"answeredBy":              descriptor.AnsweredBy == "company",
+		"modelVisible":            descriptor.ModelVisible,
+		"version":                 descriptor.Version == "1",
+		"estimatedLatency":        descriptor.EstimatedLatency == "high",
+		"inputSchemaStrict":       descriptor.InputSchemaStrict,
+		"outputSchemaStrict":      descriptor.OutputSchemaStrict,
+		"sideEffect":              descriptor.SideEffect == "external_publish",
+		"availability.reason":     descriptor.Availability.Reason == "ready",
+		"idempotency.required":    descriptor.Idempotency.Required,
+		"approvalQuotedField":     descriptor.ApprovalQuotedField == "message",
+		"isBroughtByEveryHarness": descriptor.IsBroughtByEveryHarness,
 	} {
 		if !isKept {
 			t.Errorf("%s was given and did not survive the decode", fieldName)

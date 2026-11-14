@@ -4,23 +4,6 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
-// harnessOwnedToolNames are the tools every agent harness already brings: a
-// shell and a way to read, write and edit files. Publishing our versions
-// alongside theirs offers the same job twice, and the harness is better at
-// its own. The kernel, not this list, is what keeps either version inside the
-// requester's identity.
-var harnessOwnedToolNames = map[string]bool{
-	toolcontract.BashToolName:        true,
-	toolcontract.FileReadToolName:    true,
-	toolcontract.WriteToolName:       true,
-	toolcontract.EditToolName:        true,
-	toolcontract.FilePreviewToolName: true,
-	toolcontract.ImageReadToolName:   true,
-	toolcontract.PlanToolName:        true,
-	toolcontract.EquipToolName:       true,
-	toolcontract.SkillSearchToolName: true,
-}
-
 // ToolAudience says which tools a catalog publishes. A harness that brings its
 // own generic tools should not be handed ours as well; one that brings none
 // needs them.
@@ -39,5 +22,5 @@ func isPublishedToAudience(toolDescriptor toolcontract.ToolDescriptor, audience 
 	if audience != ToolAudienceSelfEquipped {
 		return true
 	}
-	return !harnessOwnedToolNames[toolDescriptor.Name]
+	return !toolDescriptor.IsBroughtByEveryHarness
 }
