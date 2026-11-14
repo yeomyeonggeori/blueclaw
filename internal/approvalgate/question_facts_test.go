@@ -51,6 +51,23 @@ func TestTheTurnGateHandsTheToolsApprovalFactsToTheWording(t *testing.T) {
 	}
 }
 
+func TestTheTurnGateAsksInTheVoiceTheLauncherGives(t *testing.T) {
+	gate, _, taskRun := gateFixture(t)
+	languageModel := &wordingLanguageModel{question: "삭제할까요?"}
+	gate.UseQuestionWorder(approval.NewWorder(languageModel))
+	toolSet := toolcontract.NewToolSet([]string{"file_delete"})
+	toolSet.AllowTestReplacement()
+	registerDeletingTool(t, toolSet)
+	voice := "- Your name is 샘플봇.\n- Call them 박예시 님."
+	toolSet.UseToolCallGate(gate.TurnGate(TurnContext{RequesterPersonID: "person-1", Voice: func() string { return voice }}))
+
+	toolSet.Invoke(toolcontract.WithTaskRunID(context.Background(), taskRun.TaskRunID), toolcontract.ToolInvocation{ToolName: "file_delete", Input: json.RawMessage(`{"path":"~/a.md"}`)})
+
+	if wordingContext := marshalRequestMessages(languageModel.lastRequest); !strings.Contains(wordingContext, "Call them 박예시 님.") {
+		t.Fatalf("the question is asked in the voice the agent speaks to this requester in, got %s", wordingContext)
+	}
+}
+
 func registerDeletingTool(t *testing.T, toolSet *toolcontract.ToolSet) {
 	t.Helper()
 	errorValue := toolSet.RegisterTool(toolcontract.ToolDefinition{

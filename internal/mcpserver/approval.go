@@ -30,6 +30,7 @@ type ApprovalRequest struct {
 	SideEffectClass      string
 	ResponseLanguage     string
 	RequesterTimeZone    string
+	Voice                string
 	Prompt               string
 	Platform             string
 	ConversationID       string

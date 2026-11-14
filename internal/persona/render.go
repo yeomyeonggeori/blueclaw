@@ -19,7 +19,7 @@ func RenderIdentityInstruction(identity Identity) string {
 	identity = NormalizeIdentity(identity)
 	lines := []string{"Identity:"}
 	if len(identity.Names) > 0 {
-		lines = append(lines, "- Your name is "+identity.Names[0]+".")
+		lines = append(lines, nameLine(identity))
 	}
 	if len(identity.Names) > 1 {
 		lines = append(lines, "- These are all your name too, and you answer to any of them: "+joinQuoted(identity.Names[1:])+".")
@@ -28,7 +28,7 @@ func RenderIdentityInstruction(identity Identity) string {
 		lines = append(lines, "- People mention you as @"+identity.Handle+".")
 	}
 	if identity.Role != "" {
-		lines = append(lines, "- Your role: "+identity.Role)
+		lines = append(lines, roleLine(identity))
 	}
 	if identity.Creature != "" {
 		lines = append(lines, "- What you are: "+identity.Creature)
@@ -40,6 +40,30 @@ func RenderIdentityInstruction(identity Identity) string {
 		lines = append(lines, "- When asked who you are, introduce yourself like this: "+identity.Introduction)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func RenderVoiceInstruction(identity Identity, soul Soul) string {
+	identity = NormalizeIdentity(identity)
+	soul = NormalizeSoul(soul)
+	lines := []string{}
+	if len(identity.Names) > 0 {
+		lines = append(lines, nameLine(identity))
+	}
+	if identity.Role != "" {
+		lines = append(lines, roleLine(identity))
+	}
+	if toneLine := renderTone("Tone", soul.Tone); toneLine != "" {
+		lines = append(lines, "- "+toneLine)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func nameLine(identity Identity) string {
+	return "- Your name is " + identity.Names[0] + "."
+}
+
+func roleLine(identity Identity) string {
+	return "- Your role: " + identity.Role
 }
 
 func RenderSoulInstruction(soul Soul) string {

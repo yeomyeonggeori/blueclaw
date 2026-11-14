@@ -35,6 +35,7 @@ type TaskLauncher struct {
 	requesterWorkspaceProvisioner RequesterWorkspaceProvisioner
 	requesterEmailResolver        RequesterEmailResolver
 	agentIdentityProvider         func() agentcontract.AgentIdentity
+	agentVoiceProvider            func() string
 	companyProvider               func() agentcontract.CompanyContext
 	companyLocaleProvider         func() string
 	approvalGate                  *approvalgate.Gate
@@ -184,6 +185,10 @@ func (taskLauncher *TaskLauncher) UseAgentIdentityProvider(agentIdentityProvider
 	taskLauncher.agentIdentityProvider = agentIdentityProvider
 }
 
+func (taskLauncher *TaskLauncher) UseAgentVoiceProvider(agentVoiceProvider func() string) {
+	taskLauncher.agentVoiceProvider = agentVoiceProvider
+}
+
 func (taskLauncher *TaskLauncher) UseCompanyProvider(companyProvider func() agentcontract.CompanyContext) {
 	taskLauncher.companyProvider = companyProvider
 }
@@ -221,6 +226,24 @@ func (taskLauncher *TaskLauncher) agentIdentity() agentcontract.AgentIdentity {
 		return agentcontract.AgentIdentity{}
 	}
 	return taskLauncher.agentIdentityProvider()
+}
+
+func (taskLauncher *TaskLauncher) agentVoice() string {
+	if taskLauncher.agentVoiceProvider == nil {
+		return ""
+	}
+	return taskLauncher.agentVoiceProvider()
+}
+
+func (taskLauncher *TaskLauncher) voiceTowardRequester(request TaskLaunchRequest) string {
+	requesterPersona := requesterPersonaInstruction(taskLauncher.toolCatalogBuilder.workspaceActorFactory, personAccessForLaunch(request), taskLauncher.toolCatalogBuilder.WorkspaceRootPath())
+	voiceParts := []string{}
+	for _, voicePart := range []string{taskLauncher.agentVoice(), requesterPersona} {
+		if strings.TrimSpace(voicePart) != "" {
+			voiceParts = append(voiceParts, voicePart)
+		}
+	}
+	return strings.Join(voiceParts, "\n\n")
 }
 
 func (taskLauncher *TaskLauncher) resolveRequesterEmail(request TaskLaunchRequest) string {
@@ -763,6 +786,7 @@ func (taskLauncher *TaskLauncher) toolCatalogRequestForLaunch(request TaskLaunch
 			RequesterEmail:    request.RequesterEmail,
 			ResponseLanguage:  request.ResponseLanguage,
 			RequesterTimeZone: request.VisibleContext.RequesterTimeZone,
+			Voice:             func() string { return taskLauncher.voiceTowardRequester(request) },
 			Prompt:            request.Prompt,
 			Platform:          request.Platform,
 			ConversationID:    request.ConversationID,

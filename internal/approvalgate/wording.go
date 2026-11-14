@@ -27,6 +27,7 @@ func (gate *Gate) confirmationWording(ctx context.Context, approvalRequest mcpse
 	wording := gate.questionWorder.WordQuestion(ctx, holdrecord.QuestionFacts{
 		ResponseLanguage:  approvalRequest.ResponseLanguage,
 		RequesterTimeZone: approvalRequest.RequesterTimeZone,
+		Voice:             approvalRequest.Voice,
 		Tool:              toolFacts(approvalRequest),
 		Input:             approvalRequest.ToolInput,
 		Target:            resolution.Target,

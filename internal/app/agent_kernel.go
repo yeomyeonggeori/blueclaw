@@ -24,6 +24,7 @@ import (
 type agentKernel struct {
 	instructionBundleLoader           func() agentcontract.InstructionBundle
 	agentIdentityProvider             func() agentcontract.AgentIdentity
+	agentVoiceProvider                func() string
 	languageModelRuntimeConfiguration config.RuntimeConfiguration
 	taskTierLanguageModels            agentcontract.TaskTierLanguageModels
 	capabilityClient                  capability.Client
@@ -64,6 +65,9 @@ func newAgentKernel(runtimeConfiguration config.RuntimeConfiguration, bundledACP
 		},
 		agentIdentityProvider: func() agentcontract.AgentIdentity {
 			return loadAgentIdentity(runtimeConfiguration)
+		},
+		agentVoiceProvider: func() string {
+			return loadAgentVoice(runtimeConfiguration)
 		},
 		languageModelRuntimeConfiguration: runtimeConfiguration,
 		taskTierLanguageModels:            taskTierLanguageModels,

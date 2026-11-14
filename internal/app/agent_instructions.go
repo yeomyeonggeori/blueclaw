@@ -168,19 +168,27 @@ func readInstructionDocuments(rootPath string) []instructionDocument {
 			documents = append(documents, instructionDocument{Prompt: persona.RenderIdentityInstruction(identity), Source: instructionSource(identityPath, "", document)})
 		}
 	}
-	soulPath := filepath.Join(rootPath, persona.SoulFileName)
-	if document, errorValue := persona.ReadSoulDocument(rootPath); errorValue == nil {
-		soul, document, isRestored, parseError := persona.ParseWithBackup(persona.ParseSoul, document, persona.BackupPath(rootPath, persona.SoulFileName))
-		if isRestored {
-			restorePersonaDocument(soulPath, document)
-		}
-		if parseError != nil {
-			documents = append(documents, instructionDocument{Source: instructionSource(soulPath, "", document), Error: parseError})
+	if soulPath, document, soul, errorValue := readSoulDocument(rootPath); document != nil {
+		if errorValue != nil {
+			documents = append(documents, instructionDocument{Source: instructionSource(soulPath, "", document), Error: errorValue})
 		} else {
 			documents = append(documents, instructionDocument{Prompt: persona.RenderSoulInstruction(soul), Source: instructionSource(soulPath, "", document)})
 		}
 	}
 	return documents
+}
+
+func readSoulDocument(rootPath string) (string, []byte, persona.Soul, error) {
+	soulPath := filepath.Join(rootPath, persona.SoulFileName)
+	document, errorValue := persona.ReadSoulDocument(rootPath)
+	if errorValue != nil {
+		return soulPath, nil, persona.Soul{}, errorValue
+	}
+	soul, document, isRestored, errorValue := persona.ParseWithBackup(persona.ParseSoul, document, persona.BackupPath(rootPath, persona.SoulFileName))
+	if isRestored {
+		restorePersonaDocument(soulPath, document)
+	}
+	return soulPath, document, soul, errorValue
 }
 
 func readIdentityDocument(rootPath string) (string, []byte, persona.Identity, error) {
@@ -269,6 +277,17 @@ func loadAgentIdentity(runtimeConfiguration config.RuntimeConfiguration) agentco
 		return persona.AgentIdentityOf(identity)
 	}
 	return agentcontract.AgentIdentity{}
+}
+
+func loadAgentVoice(runtimeConfiguration config.RuntimeConfiguration) string {
+	for _, rootPath := range instructionRootPaths(runtimeConfiguration) {
+		_, _, identity, _ := readIdentityDocument(rootPath)
+		_, _, soul, _ := readSoulDocument(rootPath)
+		if voice := persona.RenderVoiceInstruction(identity, soul); voice != "" {
+			return voice
+		}
+	}
+	return ""
 }
 
 func instructionSource(path string, skillName string, document []byte) agentcontract.InstructionSource {
