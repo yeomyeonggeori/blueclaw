@@ -33,6 +33,7 @@ type askingThread struct {
 	interaction       *AskInteraction
 	operatorOptions   operatorOptions
 	answers           chan string
+	superseded        chan struct{}
 	isClaimed         bool
 	isPosted          bool
 }
@@ -51,6 +52,7 @@ type askingThreads struct {
 func (threads *askingThreads) join(thread *askingThread) func() {
 	threads.mutex.Lock()
 	defer threads.mutex.Unlock()
+	thread.superseded = make(chan struct{})
 	threads.threads = append(threads.threads, thread)
 	return func() { threads.leave(thread) }
 }
@@ -77,6 +79,18 @@ func (threads *askingThreads) awaiting(platform string, conversationID string, p
 		}
 	}
 	return matching
+}
+
+func (threads *askingThreads) postedAwaiting(asking *askingThread) []*askingThread {
+	threads.mutex.Lock()
+	defer threads.mutex.Unlock()
+	posted := []*askingThread{}
+	for _, thread := range threads.threads {
+		if thread != asking && thread.isPosted && !thread.isClaimed && thread.platform == asking.platform && thread.conversationID == asking.conversationID && thread.requesterPersonID == asking.requesterPersonID {
+			posted = append(posted, thread)
+		}
+	}
+	return posted
 }
 
 func (threads *askingThreads) isAwaiting(taskRunID string) bool {
@@ -201,7 +215,7 @@ func (connectorRuntime *ConnectorRuntime) askWhereTheyAre(ctx context.Context, a
 	if errorValue := connectorRuntime.deliverApprovalQuestion(ctx, turn, approvalRequest.TaskRunID, confirmation, interaction); errorValue != nil {
 		return "", statusOfFailedQuestionDelivery(errorValue)
 	}
-	connectorRuntime.askingThreads.markPosted(thread)
+	connectorRuntime.markQuestionPosted(thread, placementOf(turn.event))
 	defer waitHandoffFrom(ctx).begin()()
 	return connectorRuntime.awaitAndCloseQuestion(ctx, thread, connectorRuntime.askingThreads.expiry)
 }
@@ -249,6 +263,17 @@ func (connectorRuntime *ConnectorRuntime) awaitAnswer(ctx context.Context, threa
 		return "", approvalgate.AskInterrupted
 	case <-expiry.C:
 		return "", approvalgate.AskExpired
+	case <-thread.superseded:
+		return "", approvalgate.AskSuperseded
+	}
+}
+
+func (connectorRuntime *ConnectorRuntime) markQuestionPosted(asking *askingThread, placement MessagePlacement) {
+	connectorRuntime.askingThreads.markPosted(asking)
+	for _, thread := range connectorRuntime.askingThreads.postedAwaiting(asking) {
+		if connectorRuntime.postedQuestionOf(thread).IsAnsweredBy(placement) && connectorRuntime.askingThreads.claim(thread) {
+			close(thread.superseded)
+		}
 	}
 }
 
@@ -264,28 +289,12 @@ func (connectorRuntime *ConnectorRuntime) answerAwaitingThreads(ctx context.Cont
 	if event.TaskRetry != nil || exactTaskControlIntent(event.Prompt) != agentcontract.TaskControlIntentNone {
 		return ConnectorRuntimeResult{}, false, nil
 	}
-	awaiting := connectorRuntime.askingThreads.awaiting(platform, event.ConversationID, personID)
-	if thread, isPressed := threadAskingThePressedQuestion(awaiting, event.AnsweredChoice); isPressed {
-		return connectorRuntime.settleThreadWithReply(ctx, thread, event)
-	}
-	for _, thread := range awaiting {
+	for _, thread := range connectorRuntime.askingThreads.awaiting(platform, event.ConversationID, personID) {
 		if connectorRuntime.postedQuestionOf(thread).IsAnsweredBy(placementOf(event)) {
 			return connectorRuntime.settleThreadWithReply(ctx, thread, event)
 		}
 	}
 	return ConnectorRuntimeResult{}, false, nil
-}
-
-func threadAskingThePressedQuestion(awaiting []*askingThread, answered *AnsweredChoice) (*askingThread, bool) {
-	if answered == nil {
-		return nil, false
-	}
-	for _, thread := range awaiting {
-		if thread.interaction != nil && thread.interaction.InteractionID == strings.TrimSpace(answered.InteractionID) {
-			return thread, true
-		}
-	}
-	return nil, false
 }
 
 func (connectorRuntime *ConnectorRuntime) settleThreadWithReply(ctx context.Context, thread *askingThread, event PlatformInboundEvent) (ConnectorRuntimeResult, bool, error) {

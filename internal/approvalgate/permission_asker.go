@@ -19,6 +19,7 @@ const (
 	AskUnreachable AskStatus = "unreachable"
 	AskExpired     AskStatus = "expired"
 	AskInterrupted AskStatus = "interrupted"
+	AskSuperseded  AskStatus = "superseded"
 )
 
 type PermissionAsker interface {
@@ -52,10 +53,10 @@ func (gate *Gate) askedOutcome(ctx context.Context, taskRunID string, approvalRe
 	case AskUnreachable:
 		gate.endUnansweredHold(taskRunID, profileName, status)
 		return gate.unreachableOutcome(taskRunID, approvalRequest, string(status))
-	case AskExpired:
+	case AskExpired, AskSuperseded:
 		gate.endUnansweredHold(taskRunID, profileName, status)
-		gate.taskRunService.AppendTaskEvent(taskRunID, TaskEventApprovalExpired, marshalEventBody(map[string]string{"toolName": strings.TrimSpace(approvalRequest.ToolName), "requesterPersonID": approvalRequest.RequesterPersonID}))
-		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionRejected, Notice: expiredCallNotice}
+		gate.taskRunService.AppendTaskEvent(taskRunID, UnansweredHoldEventName(status), marshalEventBody(map[string]string{"toolName": strings.TrimSpace(approvalRequest.ToolName), "requesterPersonID": approvalRequest.RequesterPersonID}))
+		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionRejected, Notice: unansweredCallNotices[status]}
 	}
 	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionHeld, Notice: confirmation}
 }
@@ -150,5 +151,20 @@ const (
 	defaultAgentProfileName      = "default"
 	TaskEventApprovalUnreachable = "approval.unreachable"
 	TaskEventApprovalExpired     = "approval.expired"
-	expiredCallNotice            = "Nobody answered the requester's approval question within 24 hours, so this call was not approved and will not run. Do not retry it; tell the requester it did not run because the question went unanswered, and what they can ask for instead."
+	TaskEventApprovalSuperseded  = "approval.superseded"
 )
+
+var unansweredCallNotices = map[AskStatus]string{
+	AskExpired:    "Nobody answered the requester's approval question within 24 hours, so this call was not approved and will not run. Do not retry it; tell the requester it did not run because the question went unanswered, and what they can ask for instead.",
+	AskSuperseded: "A newer question was put to the requester in the same conversation before they answered this one, so this call was not approved and will not run. Do not retry it; tell the requester in one sentence that it did not run, and that they can ask again.",
+}
+
+func UnansweredHoldEventName(status AskStatus) string {
+	switch status {
+	case AskExpired:
+		return TaskEventApprovalExpired
+	case AskSuperseded:
+		return TaskEventApprovalSuperseded
+	}
+	return TaskEventApprovalUnreachable
+}

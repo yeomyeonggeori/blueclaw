@@ -73,13 +73,13 @@ func (connectorRuntime *ConnectorRuntime) awaitReawakenedThread(ctx context.Cont
 		return
 	}
 	connectorRuntime.logger.Info("connector."+turn.platform+".approval.question_awaited_after_restart", "taskRunID", taskRun.TaskRunID)
-	connectorRuntime.askingThreads.markPosted(thread)
+	connectorRuntime.markQuestionPosted(thread, placementOf(turn.event))
 	optionID, status := connectorRuntime.awaitAndCloseQuestion(ctx, thread, connectorRuntime.askingThreads.expiry-time.Since(taskRun.UpdatedAt))
 	switch status {
 	case approvalgate.AskAnswered:
 		connectorRuntime.resumeAnsweredHold(ctx, taskRun, taskEvents, turn, optionID)
-	case approvalgate.AskExpired:
-		connectorRuntime.endUnansweredHold(ctx, taskRun, turn, approvalgate.AskExpired)
+	case approvalgate.AskExpired, approvalgate.AskSuperseded:
+		connectorRuntime.endUnansweredHold(ctx, taskRun, turn, status)
 	}
 }
 
@@ -161,7 +161,7 @@ func (connectorRuntime *ConnectorRuntime) restartedApprovalRequest(taskRun task.
 func (connectorRuntime *ConnectorRuntime) endUnansweredHold(ctx context.Context, taskRun task.TaskRun, turn *inboundTurn, status approvalgate.AskStatus) {
 	rejection := agentcontract.ApprovalSignalReject
 	approvalgate.SettleSignal(connectorRuntime.taskRunService, taskRun.TaskRunID, &rejection, string(status))
-	connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, endedHoldEventName(status), marshalApprovalEnd(taskRun, status))
+	connectorRuntime.taskRunService.AppendTaskEvent(taskRun.TaskRunID, approvalgate.UnansweredHoldEventName(status), marshalApprovalEnd(taskRun, status))
 	turnResult := connectorRuntime.launchFailureCompleter.CompleteLaunchFailure(ctx, agentcontract.AgentTurnRequest{
 		RequesterIdentity: agentcontract.RequesterIdentity{
 			RequesterPersonID: taskRun.RequesterPersonID,
@@ -185,13 +185,7 @@ func (connectorRuntime *ConnectorRuntime) endUnansweredHold(ctx context.Context,
 var unansweredHoldReasons = map[approvalgate.AskStatus]string{
 	approvalgate.AskExpired:     "nobody answered the approval question within 24 hours, so the call was not approved and did not run",
 	approvalgate.AskUnreachable: "the approval question could not be put to the requester, so the call was not approved and did not run",
-}
-
-func endedHoldEventName(status approvalgate.AskStatus) string {
-	if status == approvalgate.AskExpired {
-		return approvalgate.TaskEventApprovalExpired
-	}
-	return approvalgate.TaskEventApprovalUnreachable
+	approvalgate.AskSuperseded:  "a newer question was put to the requester in the same conversation before they answered this one, so the call was not approved and did not run",
 }
 
 func marshalApprovalEnd(taskRun task.TaskRun, status approvalgate.AskStatus) string {
