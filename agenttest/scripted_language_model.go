@@ -396,17 +396,14 @@ func mergeDefaultResponses(defaultResponses map[string]string) map[string]string
 }
 
 type approvalQuestionContextDocument struct {
-	OriginalRequest string                     `json:"originalRequest"`
-	ModelDraft      string                     `json:"modelDraft"`
-	ActionDetails   map[string]json.RawMessage `json:"actionDetails"`
-	PrintedBelow    []string                   `json:"printedBelow"`
+	Operation     string                     `json:"operation"`
+	ActionDetails map[string]json.RawMessage `json:"actionDetails"`
+	PrintedBelow  []string                   `json:"printedBelow"`
 }
 
 func defaultApprovalQuestionResponse(request model.StructuredResponseRequest) string {
 	contextDocument := approvalQuestionContextFromRequest(request)
-	target := firstNonEmpty(actionDetail(contextDocument, "resolvedTarget"), actionDetail(contextDocument, "personHint"), actionDetail(contextDocument, "channelName"))
-	content := firstNonEmpty(actionDetail(contextDocument, "message"), actionDetail(contextDocument, "subject"), actionDetail(contextDocument, "body"), actionDetail(contextDocument, "title"), actionDetail(contextDocument, "summary"), actionDetail(contextDocument, "reason"), actionDetail(contextDocument, "approvalReason"))
-	answer := map[string]any{"question": defaultApprovalQuestionFromContext(contextDocument, target, content)}
+	answer := map[string]any{"question": scriptedApprovalQuestion(contextDocument)}
 	if len(contextDocument.PrintedBelow) > 0 {
 		answer["labels"] = scriptedLabelsFor(contextDocument.PrintedBelow)
 	}
@@ -433,18 +430,16 @@ func actionDetail(contextDocument approvalQuestionContextDocument, name string) 
 	return strings.TrimSpace(value)
 }
 
-func defaultApprovalQuestionFromContext(contextDocument approvalQuestionContextDocument, target string, content string) string {
-	if target != "" && content != "" {
+func scriptedApprovalQuestion(contextDocument approvalQuestionContextDocument) string {
+	if target := firstNonEmpty(actionDetail(contextDocument, "personHint"), actionDetail(contextDocument, "channelName")); target != "" {
 		return "should this be sent to " + target + "?"
 	}
-	if draftQuestion := approvalQuestionFromDraft(contextDocument.ModelDraft); draftQuestion != "" {
-		return draftQuestion
-	}
-	if requestQuestion := approvalQuestionFromDraft(contextDocument.OriginalRequest); requestQuestion != "" {
-		return requestQuestion
-	}
+	content := firstNonEmpty(actionDetail(contextDocument, "title"), actionDetail(contextDocument, "summary"), actionDetail(contextDocument, "reason"), actionDetail(contextDocument, "approvalReason"))
 	if content != "" {
 		return "should we proceed with " + strings.Join(strings.Fields(content), " ") + "?"
+	}
+	if operation := strings.TrimSpace(contextDocument.Operation); operation != "" {
+		return "should we go ahead with " + operation + "?"
 	}
 	return "should this be approved?"
 }
@@ -457,23 +452,6 @@ func approvalQuestionContextFromRequest(request model.StructuredResponseRequest)
 		}
 	}
 	return approvalQuestionContextDocument{}
-}
-
-func approvalQuestionFromDraft(value string) string {
-	trimmedValue := strings.Trim(strings.TrimSpace(value), ".。")
-	if trimmedValue == "" {
-		return ""
-	}
-	if strings.HasSuffix(trimmedValue, "?") || strings.HasSuffix(trimmedValue, "？") {
-		return trimmedValue
-	}
-	if strings.HasSuffix(trimmedValue, "doing it") {
-		return strings.TrimSuffix(trimmedValue, "doing it") + "shall we?"
-	}
-	if strings.HasSuffix(trimmedValue, "please do it") {
-		return strings.TrimSuffix(trimmedValue, "please do it") + "shall we?"
-	}
-	return trimmedValue + "?"
 }
 
 func stringMapValue(document map[string]any, key string) string {

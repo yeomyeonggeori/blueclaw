@@ -34,7 +34,6 @@ type ApprovalRequest struct {
 	Platform             string
 	ConversationID       string
 	ReplyTargetID        string
-	ModelDraft           string
 	HarnessSession       HarnessSession
 }
 
