@@ -4,10 +4,12 @@ package approvalgate
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
+	"github.com/yeomyeonggeori/bluecollar/approval"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 )
@@ -180,5 +182,29 @@ func TestAGatedCallNoHarnessAskedAboutIsAskedOnce(t *testing.T) {
 	holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID))
 	if asker.gateQuestionCount != 1 || len(holds) != 1 || holds[0].Call.ToolName != "event_delete" {
 		t.Fatalf("expected one question held under the tool's name, got %d questions and %+v", asker.gateQuestionCount, holds)
+	}
+}
+
+func TestAHarnessQuestionIsWordedLikeEveryApprovalInTheRequestersVoice(t *testing.T) {
+	gate, taskRunService, taskRun := gateFixture(t)
+	languageModel := &wordingLanguageModel{question: "브랜치를 강제로 올릴까요?"}
+	gate.UseQuestionWorder(approval.NewWorder(languageModel))
+	asker := &harnessAskerDouble{}
+	gate.UsePermissionAsker(asker)
+	request := approvalRequestFixture(taskRun.TaskRunID)
+	request.ToolName = "Force-push the branch to origin"
+	request.ToolInput = []byte(`{"command":"git push --force"}`)
+	request.Voice = "- Call them 박예시 님."
+
+	gate.AskHarnessPermission(context.Background(), request, harnessQuestion(map[string]any{"command": "git push --force"}))
+
+	if len(asker.questions) != 1 || asker.questions[0].Text != "브랜치를 강제로 올릴까요?" {
+		t.Fatalf("the person reads the worded question, not the harness's own title, got %+v", asker.questions)
+	}
+	if wordingContext := marshalRequestMessages(languageModel.lastRequest); !strings.Contains(wordingContext, "Call them 박예시 님.") || !strings.Contains(wordingContext, "git push --force") {
+		t.Fatalf("the wording is told the call and the voice, got %s", wordingContext)
+	}
+	if holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID)); len(holds) != 1 || holds[0].Call.Confirmation != "브랜치를 강제로 올릴까요?" {
+		t.Fatalf("a reissued question repeats what the person was asked, got %+v", holds)
 	}
 }

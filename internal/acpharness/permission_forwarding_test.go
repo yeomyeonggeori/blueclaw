@@ -66,7 +66,10 @@ func runTurnWithTrust(t *testing.T, agent *externalAgent, relay approvalgate.Har
 	_, errorValue := harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
 		RequesterIdentity: agentcontract.RequesterIdentity{
 			RequesterPersonID: "person-1",
+			RequesterEmail:    "member1@example.com",
 		},
+		VisibleContext:      agentcontract.VisibleContext{RequesterTimeZone: "America/Los_Angeles"},
+		Voice:               "- Call them 박예시 님.",
 		ExistingTaskRunID:   taskRun.TaskRunID,
 		Platform:            "mattermost",
 		ConversationID:      "conversation-1",
@@ -106,6 +109,9 @@ func TestAHarnessQuestionReachesTheRelayInTheConversationItWasAskedIn(t *testing
 	}
 	if !strings.Contains(string(approvalRequest.ToolInput), "git push --force") {
 		t.Fatalf("the relay is told what the call would do, got %s", approvalRequest.ToolInput)
+	}
+	if approvalRequest.RequesterEmail != "member1@example.com" || approvalRequest.RequesterTimeZone != "America/Los_Angeles" || approvalRequest.Voice != "- Call them 박예시 님." {
+		t.Fatalf("a harness's own question is asked with everything the turn knows about its requester, got %+v", approvalRequest)
 	}
 }
 

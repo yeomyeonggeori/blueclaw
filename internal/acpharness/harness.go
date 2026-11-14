@@ -96,9 +96,12 @@ func (harness *Harness) UsePermissionAsker(permissionAsker approvalgate.HarnessP
 func approvalRequestOf(request agentcontract.AgentTurnRequest) mcpserver.ApprovalRequest {
 	return mcpserver.ApprovalRequest{
 		RequesterPersonID: request.RequesterPersonID,
+		RequesterEmail:    request.RequesterEmail,
 		TaskRunID:         request.ExistingTaskRunID,
 		Prompt:            request.Prompt,
 		ResponseLanguage:  request.ResponseLanguage,
+		RequesterTimeZone: request.VisibleContext.RequesterTimeZone,
+		Voice:             request.Voice,
 		Platform:          request.Platform,
 		ConversationID:    request.ConversationID,
 		ReplyTargetID:     request.OriginReplyTargetID,

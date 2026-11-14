@@ -34,6 +34,7 @@ func (gate *Gate) AskHarnessPermission(ctx context.Context, approvalRequest mcps
 	if !canAskHarnessPermission {
 		return acp.RequestPermissionOutcome{}, AskUnreachable
 	}
+	question = gate.wordedHarnessQuestion(ctx, approvalRequest, question)
 	if taskRunID == "" {
 		return harnessAsker.AskHarnessPermission(ctx, approvalRequest, question)
 	}
@@ -42,7 +43,7 @@ func (gate *Gate) AskHarnessPermission(ctx context.Context, approvalRequest mcps
 		slog.Warn("approvalgate.harness_permission_is_unanswerable", "taskRunID", taskRunID, "reason", errorValue.Error())
 		return acp.RequestPermissionOutcome{}, AskUnreachable
 	}
-	hold := holdrecord.Open(gate.taskRunService, taskRunID, heldCall, nil)
+	hold := holdrecord.Open(gate.taskRunService, taskRunID, heldCallOfHarnessQuestion(question), nil)
 	outcome, status := harnessAsker.AskHarnessPermission(ctx, approvalRequest, question)
 	switch status {
 	case AskAnswered:
@@ -57,6 +58,14 @@ func (gate *Gate) AskHarnessPermission(ctx context.Context, approvalRequest mcps
 		slog.Warn("approvalgate.answered_run_will_not_advance", "taskRunID", taskRunID, "reason", errorValue.Error())
 	}
 	return outcome, AskAnswered
+}
+
+func (gate *Gate) wordedHarnessQuestion(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question HarnessPermissionQuestion) HarnessPermissionQuestion {
+	if gate.questionWorder == nil {
+		return question
+	}
+	question.Text = gate.confirmationWording(ctx, approvalRequest, ApprovalTargetResolution{})
+	return question
 }
 
 func (gate *Gate) knownHarnessAnswer(taskRunID string, approvalRequest mcpserver.ApprovalRequest, heldCall agentcontract.HeldCall, options []acp.PermissionOption) (acp.RequestPermissionOutcome, bool) {
