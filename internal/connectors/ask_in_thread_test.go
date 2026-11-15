@@ -790,7 +790,7 @@ func TestAReplyToARunAnotherListenerAwaitsIsLeftToThatListener(t *testing.T) {
 	fixture := newThreadAskFixture(t, script)
 	taskRun := restartedRunHoldingTheCall(t, fixture)
 	fixture.connectorRuntime.appendConnectorReplyEvent(taskRun.TaskRunID, agentcontract.TaskEventConnectorReplySent, map[string]string{"replyKind": connectorReplyKindApprovalQuestion, "dispatchID": "dispatch-before-the-restart"})
-	stopAwaiting, isTheWaiter := fixture.connectorRuntime.approvalGate.AwaitAnswer(taskRun.TaskRunID)
+	stopAwaiting, isTheWaiter := fixture.connectorRuntime.approvalGate.AwaitAnswer(taskRun.TaskRunID, func() {})
 	if !isTheWaiter {
 		t.Fatal("the ACP session's reissued permission is the run's waiter in this test")
 	}
@@ -802,5 +802,35 @@ func TestAReplyToARunAnotherListenerAwaitsIsLeftToThatListener(t *testing.T) {
 	resumed, _ := fixture.connectorRuntime.taskRunService.FindTaskRun(taskRun.TaskRunID)
 	if errorValue != nil || isAnswer || resumed.Status != task.TaskStatusWaitingApproval {
 		t.Fatalf("answered=%v error=%v status=%s: one reply read by two listeners resumed the run twice on our host", isAnswer, errorValue, resumed.Status)
+	}
+}
+
+func TestAfterARestartTheOlderOfTwoQuestionsInAThreadEndsInsteadOfWaiting(t *testing.T) {
+	fixture := newThreadAskFixture(t, deleteApprovalScript())
+	older := restartedRunHoldingTheCall(t, fixture)
+	newer := restartedRunHoldingTheCall(t, fixture)
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+
+	finished := make(chan struct{})
+	go func() {
+		fixture.connectorRuntime.reawaitHold(ctx, older)
+		close(finished)
+	}()
+	select {
+	case <-finished:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the older question was waited on instead of ended: a thread waits for one answer, the newest")
+	}
+
+	ended, _ := fixture.connectorRuntime.taskRunService.FindTaskRun(older.TaskRunID)
+	if ended.Status == task.TaskStatusWaitingApproval || fixture.connectorRuntime.approvalGate.IsAwaitingAnswer(older.TaskRunID) {
+		t.Fatalf("the older question is %s and awaited=%v: a thread waits for one answer, the newest", ended.Status, fixture.connectorRuntime.approvalGate.IsAwaitingAnswer(older.TaskRunID))
+	}
+	if !anyTaskEventContains(fixture.connectorRuntime.taskRunService.ListTaskEvent(older.TaskRunID), approvalgate.TaskEventApprovalSuperseded, "") {
+		t.Fatal("the older run records that a newer question replaced it")
+	}
+	if current, _ := fixture.connectorRuntime.taskRunService.FindTaskRun(newer.TaskRunID); current.Status != task.TaskStatusWaitingApproval {
+		t.Fatalf("the newer question is %s, expected it still waiting", current.Status)
 	}
 }

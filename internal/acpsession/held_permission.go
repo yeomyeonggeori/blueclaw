@@ -40,7 +40,12 @@ func (agent *Agent) taskRunsWaitingForAnAnswer(sessionContext SessionContext) []
 }
 
 func (agent *Agent) reissueHeldPermission(ctx context.Context, sessionID acp.SessionId, sessionContext SessionContext, taskRun agentcontract.TaskRun, heldCall agentcontract.HeldCall) {
-	stopAwaiting, isTheWaiter := agent.answerSettler.AwaitAnswer(taskRun.TaskRunID)
+	if agent.answerSettler.HasNewerQuestionInItsThread(taskRun.TaskRunID) {
+		return
+	}
+	ctx, stopAsking := context.WithCancel(ctx)
+	defer stopAsking()
+	stopAwaiting, isTheWaiter := agent.answerSettler.AwaitAnswer(taskRun.TaskRunID, stopAsking)
 	if !isTheWaiter {
 		return
 	}
