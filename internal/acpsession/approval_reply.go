@@ -79,8 +79,8 @@ func (agent *Agent) readApprovalReply(ctx context.Context, request ApprovalReply
 	if errorValue == nil && reading.IsOwnWords() && agent.taskRunStore != nil {
 		approvalgate.RecordOwnWordsAnswer(agent.taskRunStore, waiting.approvalRequest.TaskRunID, request.Reply)
 	}
-	if errorValue == nil && reading.IsApproval() {
-		return ApprovalReplyResponse{IsAnswer: true, OptionID: reading.ApprovedOptionID}, nil
+	if errorValue == nil && reading.IsChoice() {
+		return ApprovalReplyResponse{IsAnswer: true, OptionID: reading.OptionID}, nil
 	}
 	if errorValue != nil {
 		agent.logger.Warn("acpsession.approval_reply_unread", "toolCallID", request.ToolCallID, "error", errorValue.Error())

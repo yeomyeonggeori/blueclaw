@@ -167,7 +167,7 @@ func (server *Server) readApprovalReply(document decisionRequestDocument) (map[s
 	options := approvalOptions(document.Questions[approvalreply.AnswerQuestionName])
 	chosenOptionID, isScripted := ScriptedOptionID(options, scriptedTurn.TurnDecision.Choices, scriptedTurn.TurnDecision.Approval)
 	if !isScripted {
-		chosenOptionID = approvalreply.OtherOptionID
+		chosenOptionID = approvalreply.NoneOptionID
 	}
 	return map[string]model.DecisionAnswer{approvalreply.AnswerQuestionName: {
 		Type:          model.DecisionQuestionTypeChoice,
@@ -181,7 +181,7 @@ func approvalOptions(question model.DecisionQuestion) []approvalreply.Option {
 	meaningByOptionID, _ := question.Criteria.(map[string]any)
 	options := []approvalreply.Option{}
 	for optionID, meaning := range meaningByOptionID {
-		if optionID == approvalreply.OtherOptionID {
+		if optionID == approvalreply.NoneOptionID {
 			continue
 		}
 		meaningText, _ := meaning.(string)

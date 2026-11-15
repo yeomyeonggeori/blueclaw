@@ -538,7 +538,7 @@ func (reader scriptedReader) Read(_ context.Context, question approvalreply.Ques
 		*reader.asked = append(*reader.asked, question)
 	}
 	observe(agentcontract.LLMCallRecord{Kind: agentcontract.LLMCallKindDecision, DecidedMessageIDs: []string{reply}})
-	return approvalreply.Reading{ApprovedOptionID: reader.optionID}, nil
+	return approvalreply.Reading{OptionID: reader.optionID}, nil
 }
 
 func approvalSignalPointer(approvalSignal agentcontract.ApprovalSignal) *agentcontract.ApprovalSignal {
@@ -1266,5 +1266,28 @@ func TestAReissuedHandoffStillNamesItsHandoff(t *testing.T) {
 
 	if delivery := deliveryOf(t, awaitPermissionRequest(t, client)); delivery.HandoffID != "handoff-1" {
 		t.Fatalf("after a restart the relay must reopen the same handoff, got %+v", delivery)
+	}
+}
+
+func TestAPlainDeclineSettlesTheHoldAndIsNotSentOnAsAnInstruction(t *testing.T) {
+	client := &recordingClient{}
+	connection, permissionRelay := connectedPairWithReader(t, &recordingLauncher{}, client, scriptedReader{optionID: string(rejectOnceOptionID)})
+	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
+	replies := []ApprovalReplyResponse{}
+	client.answerByAsking = func(request acp.RequestPermissionRequest) acp.PermissionOptionId {
+		read := replyResponseFor(t, connection, request, ApprovalReplyRequest{SessionID: string(sessionID), Reply: "ㄴ", ReplierEmail: "sample@example.test"})
+		replies = append(replies, read)
+		return acp.PermissionOptionId(read.OptionID)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	answer, isAnswered := answered(permissionRelay.AskPermission(ctx, approvalRequestForTest(), approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "보낼까요?"}))
+
+	if !isAnswered || answer.Signal != agentcontract.ApprovalSignalReject {
+		t.Fatalf("a plain decline left the call %q answered=%v", answer.Signal, isAnswered)
+	}
+	if len(replies) != 1 || replies[0].IsInstruction {
+		t.Fatalf("the relay was told %+v: a decline sent on as an instruction reached the run twice on our host", replies)
 	}
 }

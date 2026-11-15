@@ -191,7 +191,7 @@ func (reader scenarioReplyReader) Read(_ context.Context, question approvalreply
 func scriptedReading(options []approvalreply.Option, turnDecision turnclassification.TurnDecision) approvalreply.Reading {
 	for _, option := range options {
 		if !option.IsDeclining && isScriptedOption(option, turnDecision) {
-			return approvalreply.Reading{ApprovedOptionID: option.ID}
+			return approvalreply.Reading{OptionID: option.ID}
 		}
 	}
 	return approvalreply.Reading{}
