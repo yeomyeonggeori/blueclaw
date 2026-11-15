@@ -197,15 +197,20 @@ func (allowingGate) ReviewToolCall(context.Context, toolcontract.ToolInvocation,
 
 func publishedHostGatedFacts(t *testing.T, gate toolcontract.ToolCallGate) map[string]bool {
 	t.Helper()
-	toolSet := toolcontract.NewToolSet([]string{"event_delete", "file_read"})
+	toolSet := toolcontract.NewToolSet([]string{"event_delete", "file_read", toolcontract.AskInputToolName, "bash"})
 	toolSet.AllowTestReplacement()
-	for name, requiresApproval := range map[string]bool{"event_delete": true, "file_read": false} {
-		errorValue := toolSet.RegisterTool(toolcontract.ToolDefinition{
-			ID: "test:" + name, Name: name, Description: name, Visibility: toolcontract.ToolVisibilityModel,
-			InputSchema:      json.RawMessage(`{"type":"object"}`),
-			RequiresApproval: requiresApproval,
-			ResultContract:   &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)},
-		}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	for _, definition := range []toolcontract.ToolDefinition{
+		{Name: "event_delete", RequiresApproval: true},
+		{Name: "file_read"},
+		{Name: toolcontract.AskInputToolName},
+		{Name: "bash", InputSchema: json.RawMessage(`{"type":"object","properties":{"approvalRequired":{"type":"boolean"}}}`)},
+	} {
+		definition.ID, definition.Description, definition.Visibility = "test:"+definition.Name, definition.Name, toolcontract.ToolVisibilityModel
+		if len(definition.InputSchema) == 0 {
+			definition.InputSchema = json.RawMessage(`{"type":"object"}`)
+		}
+		definition.ResultContract = &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)}
+		errorValue := toolSet.RegisterTool(definition, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 			return toolcontract.ToolSuccess("ok"), nil
 		})
 		if errorValue != nil {
@@ -228,9 +233,10 @@ func publishedHostGatedFacts(t *testing.T, gate toolcontract.ToolCallGate) map[s
 	return facts
 }
 
-func TestOnlyAToolTheHostGatesIsPublishedAsHostGated(t *testing.T) {
-	if gated := publishedHostGatedFacts(t, allowingGate{}); !gated["event_delete"] || gated["file_read"] {
-		t.Fatalf("the approval-requiring tool is the one the host gates, got %v", gated)
+func TestEveryToolTheGateCanHoldIsPublishedAsHostGated(t *testing.T) {
+	gated := publishedHostGatedFacts(t, allowingGate{})
+	if !gated["event_delete"] || !gated[toolcontract.AskInputToolName] || !gated["bash"] || gated["file_read"] {
+		t.Fatalf("every tool whose call the gate can hold for a person is published as host gated, and only those, got %v", gated)
 	}
 	if ungated := publishedHostGatedFacts(t, nil); ungated["event_delete"] || ungated["file_read"] {
 		t.Fatalf("with no gate on the tool set nothing is held for the host, got %v", ungated)

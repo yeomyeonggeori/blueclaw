@@ -125,8 +125,8 @@ func (connectorRuntime *ConnectorRuntime) resumeAnsweredHold(ctx context.Context
 		return
 	}
 	settledCalls := []agentcontract.CarriedOutCall{}
-	if settlement.DeferredCall != nil {
-		settledCalls = append(settledCalls, *settlement.DeferredCall)
+	if settlement.SettledCall != nil {
+		settledCalls = append(settledCalls, *settlement.SettledCall)
 	}
 	launchContext := resumeLaunchContextOf(taskRun, taskEvents, turn)
 	if _, errorValue := connectorRuntime.resumeTaskRun(ctx, taskRun, taskEvents, launchContext, turn.adapter, settledCalls); errorValue != nil {
