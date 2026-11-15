@@ -445,15 +445,6 @@ func loadSessionForTest(t *testing.T, connection *acp.ClientSideConnection, sess
 	return errorValue
 }
 
-func hasTaskEvent(taskRunService *task.TaskRunService, taskRunID string, name string) bool {
-	for _, taskEvent := range taskRunService.ListTaskEvent(taskRunID) {
-		if taskEvent.Name == name {
-			return true
-		}
-	}
-	return false
-}
-
 func TestLoadingASessionThatNamesNobodyIsRefused(t *testing.T) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	runWaitingOnAHeldCall(t, taskRunService, "conversation-1", heldCallForTest())
@@ -587,19 +578,4 @@ func (client *recordingClient) waitForResourceLink() string {
 		time.Sleep(10 * time.Millisecond)
 	}
 	return ""
-}
-
-func waitForLaunch(t *testing.T, launcher *recordingLauncher) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		launcher.mutex.Lock()
-		launchCount := len(launcher.launched)
-		launcher.mutex.Unlock()
-		if launchCount > 0 {
-			return
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	t.Fatal("the answered question never resumed its run")
 }

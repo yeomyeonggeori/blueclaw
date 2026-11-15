@@ -11,7 +11,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
-	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 const HandoffEndedExtensionMethod = "_kim.intern/handoffEnded"
@@ -132,12 +131,4 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
-}
-
-func (agent *Agent) ledgerObserver(taskRunID string) agentcontract.LLMCallObserver {
-	return func(callRecord agentcontract.LLMCallRecord) {
-		if agent.taskRunStore != nil {
-			agent.taskRunStore.AppendLLMCall(taskRunID, callRecord)
-		}
-	}
 }
