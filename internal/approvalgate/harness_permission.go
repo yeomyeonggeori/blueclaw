@@ -3,7 +3,6 @@ package approvalgate
 import (
 	"context"
 	"encoding/json"
-	"log/slog"
 	"strings"
 
 	acp "github.com/coder/acp-go-sdk"
@@ -12,8 +11,6 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 )
 
-const harnessPermissionSource = "harness_permission"
-
 type HarnessPermissionQuestion struct {
 	Text     string
 	ToolCall acp.ToolCallUpdate
@@ -21,45 +18,17 @@ type HarnessPermissionQuestion struct {
 }
 
 type HarnessPermissionAsker interface {
-	AskHarnessPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question HarnessPermissionQuestion) (acp.RequestPermissionOutcome, AskStatus)
+	AskHarnessPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question HarnessPermissionQuestion) (outcome acp.RequestPermissionOutcome, isAnswered bool)
 }
 
-func (gate *Gate) AskHarnessPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question HarnessPermissionQuestion) (acp.RequestPermissionOutcome, AskStatus) {
+func (gate *Gate) AskHarnessPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question HarnessPermissionQuestion) (acp.RequestPermissionOutcome, bool) {
 	taskRunID := strings.TrimSpace(approvalRequest.TaskRunID)
-	heldCall := heldCallOfHarnessQuestion(question)
-	if outcome, isAnswered := gate.knownHarnessAnswer(taskRunID, approvalRequest, heldCall, question.Options); isAnswered {
-		return outcome, AskAnswered
-	}
-	harnessAsker, canAskHarnessPermission := gate.permissionAsker.(HarnessPermissionAsker)
-	if !canAskHarnessPermission {
-		return acp.RequestPermissionOutcome{}, AskUnreachable
+	if outcome, isAnswered := gate.knownHarnessAnswer(taskRunID, approvalRequest, heldCallOfHarnessQuestion(question), question.Options); isAnswered {
+		return outcome, true
 	}
 	question = gate.wordedHarnessQuestion(ctx, approvalRequest, question)
-	if taskRunID == "" {
-		return harnessAsker.AskHarnessPermission(ctx, approvalRequest, question)
-	}
-	profileName := gate.currentAgentProfileName(taskRunID)
-	if _, errorValue := gate.taskRunService.PauseTaskRun(taskRunID, agentcontract.TaskStatusWaitingApproval, question.Text); errorValue != nil {
-		slog.Warn("approvalgate.harness_permission_is_unanswerable", "taskRunID", taskRunID, "reason", errorValue.Error())
-		return acp.RequestPermissionOutcome{}, AskUnreachable
-	}
-	hold := holdrecord.Open(gate.taskRunService, taskRunID, heldCallOfHarnessQuestion(question), nil)
-	stopAwaiting, _ := gate.AwaitAnswer(taskRunID)
-	defer stopAwaiting()
-	outcome, status := harnessAsker.AskHarnessPermission(ctx, approvalRequest, question)
-	switch status {
-	case AskAnswered:
-		gate.settleHarnessHold(taskRunID, hold.ID, question.Options, outcome)
-	case AskUnreachable, AskExpired, AskSuperseded:
-		gate.endUnansweredHold(taskRunID, profileName, status)
-		return acp.RequestPermissionOutcome{}, status
-	default:
-		return acp.RequestPermissionOutcome{}, status
-	}
-	if _, errorValue := gate.taskRunService.AdvanceAnsweredTaskRun(taskRunID, profileName); errorValue != nil {
-		slog.Warn("approvalgate.answered_run_will_not_advance", "taskRunID", taskRunID, "reason", errorValue.Error())
-	}
-	return outcome, AskAnswered
+	gate.parkedOutcome(ctx, taskRunID, approvalRequest, heldCallOfHarnessQuestion(question), nil)
+	return acp.RequestPermissionOutcome{}, false
 }
 
 func (gate *Gate) wordedHarnessQuestion(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question HarnessPermissionQuestion) HarnessPermissionQuestion {
@@ -102,14 +71,6 @@ func (gate *Gate) spendApprovedHarnessCall(taskRunID string, heldCall agentcontr
 	return acp.RequestPermissionOutcome{Selected: &acp.RequestPermissionOutcomeSelected{Outcome: "selected", OptionId: allowOnce.OptionId}}, true
 }
 
-func (gate *Gate) settleHarnessHold(taskRunID string, holdID string, options []acp.PermissionOption, outcome acp.RequestPermissionOutcome) {
-	if outcome.Selected == nil || !isAllowOption(options, outcome.Selected.OptionId) {
-		holdrecord.Decide(gate.taskRunService, taskRunID, holdID, holdrecord.DecisionReject, harnessPermissionSource)
-		return
-	}
-	holdrecord.Decide(gate.taskRunService, taskRunID, holdID, holdrecord.DecisionApprove, harnessPermissionSource)
-}
-
 func optionOfKind(options []acp.PermissionOption, kind acp.PermissionOptionKind) (acp.PermissionOption, bool) {
 	for _, permissionOption := range options {
 		if permissionOption.Kind == kind {
@@ -117,13 +78,4 @@ func optionOfKind(options []acp.PermissionOption, kind acp.PermissionOptionKind)
 		}
 	}
 	return acp.PermissionOption{}, false
-}
-
-func isAllowOption(options []acp.PermissionOption, optionID acp.PermissionOptionId) bool {
-	for _, permissionOption := range options {
-		if permissionOption.OptionId == optionID {
-			return permissionOption.Kind == acp.PermissionOptionKindAllowOnce || permissionOption.Kind == acp.PermissionOptionKindAllowAlways
-		}
-	}
-	return false
 }

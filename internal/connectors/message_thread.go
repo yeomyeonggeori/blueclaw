@@ -1,12 +1,6 @@
 package connectors
 
-import (
-	"encoding/json"
-	"strings"
-
-	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
-)
+import "strings"
 
 type MessagePlacement struct {
 	ConversationID string
@@ -49,28 +43,4 @@ func (question PostedQuestion) isInThread() bool {
 
 func (question PostedQuestion) threadRootedAtQuestion() string {
 	return question.ConversationID + ":" + question.MessageID
-}
-
-func PostedApprovalQuestionMessageID(taskEvents []task.TaskEvent) string {
-	messageID := ""
-	for _, taskEvent := range taskEvents {
-		switch taskEvent.Name {
-		case agentcontract.TaskEventApprovalHoldOpened:
-			messageID = ""
-		case agentcontract.TaskEventConnectorReplySent:
-			messageID = firstNonEmptyString(approvalQuestionDispatchID(taskEvent.Body), messageID)
-		}
-	}
-	return messageID
-}
-
-func approvalQuestionDispatchID(body string) string {
-	sent := struct {
-		ReplyKind  string `json:"replyKind"`
-		DispatchID string `json:"dispatchID"`
-	}{}
-	if json.Unmarshal([]byte(body), &sent) != nil || sent.ReplyKind != connectorReplyKindApprovalQuestion {
-		return ""
-	}
-	return strings.TrimSpace(sent.DispatchID)
 }

@@ -39,16 +39,15 @@ func clientContractDeclared() clientContract {
 			"delivery": DeliveryMetaKey,
 		},
 		ExtensionMethods: map[string]string{
-			"approvalReply": ApprovalReplyExtensionMethod,
-			"delivered":     DeliveredExtensionMethod,
-			"undelivered":   UndeliveredExtensionMethod,
+			"delivered":    DeliveredExtensionMethod,
+			"undelivered":  UndeliveredExtensionMethod,
+			"handoffEnded": HandoffEndedExtensionMethod,
 		},
 		Fields: map[string][]string{
-			"delivery":            jsonFieldNamesOf(Delivery{}),
-			"delivered":           jsonFieldNamesOf(DeliveredReport{}),
-			"undelivered":         jsonFieldNamesOf(UndeliveredReport{}),
-			"approvalReply":       jsonFieldNamesOf(ApprovalReplyRequest{}),
-			"approvalReplyAnswer": jsonFieldNamesOf(ApprovalReplyResponse{}),
+			"delivery":     jsonFieldNamesOf(Delivery{}),
+			"delivered":    jsonFieldNamesOf(DeliveredReport{}),
+			"undelivered":  jsonFieldNamesOf(UndeliveredReport{}),
+			"handoffEnded": jsonFieldNamesOf(HandoffEndedReport{}),
 		},
 		ToolCalls: toolCallContract{
 			StartKind:    wireKindOf(startedToolCallForContract()),

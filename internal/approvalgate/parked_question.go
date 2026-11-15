@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
@@ -15,69 +16,74 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
-type AskStatus string
-
 const (
-	AskAnswered    AskStatus = "answered"
-	AskUnreachable AskStatus = "unreachable"
-	AskExpired     AskStatus = "expired"
-	AskInterrupted AskStatus = "interrupted"
-	AskSuperseded  AskStatus = "superseded"
+	ApproveOptionKey = "approve"
+	RejectOptionKey  = "reject"
 )
 
-type PermissionAsker interface {
-	AskPermission(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question PermissionQuestion) (ApprovalAnswer, AskStatus)
+var ErrQuestionWillBePostedLater = errors.New("the question could not be carried to the requester right now and stays recorded to be posted")
+
+type QuestionPoster interface {
+	PostQuestion(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question ParkedQuestion) error
 }
 
-type PermissionQuestion struct {
+type ParkedQuestion struct {
 	HoldID       string
 	Confirmation string
 	Choices      []holdrecord.Choice
 	HandoffID    string
 }
 
-func (gate *Gate) UsePermissionAsker(permissionAsker PermissionAsker) {
-	gate.permissionAsker = permissionAsker
+func (gate *Gate) UseQuestionPoster(questionPoster QuestionPoster) {
+	gate.questionPoster = questionPoster
 }
 
-func (gate *Gate) askedOutcome(ctx context.Context, taskRunID string, approvalRequest mcpserver.ApprovalRequest, confirmation string, resolution ApprovalTargetResolution) mcpserver.ApprovalOutcome {
-	if gate.permissionAsker == nil || taskRunID == "" {
-		return gate.unreachableOutcome(taskRunID, approvalRequest, "no_asker")
+func (gate *Gate) parkedOutcome(ctx context.Context, taskRunID string, approvalRequest mcpserver.ApprovalRequest, heldCall agentcontract.HeldCall, choices []holdrecord.Choice) mcpserver.ApprovalOutcome {
+	if gate.questionPoster == nil || taskRunID == "" {
+		return gate.unreachableOutcome(taskRunID, approvalRequest, "no_question_poster")
 	}
 	profileName := gate.currentAgentProfileName(taskRunID)
-	hold, isHeld := gate.holdCall(taskRunID, approvalRequest, confirmation, resolution)
+	hold, isHeld := gate.holdCall(taskRunID, approvalRequest, heldCall, choices)
 	if !isHeld {
 		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionUnanswerable}
 	}
-	stopAwaiting, _ := gate.AwaitAnswer(taskRunID)
-	defer stopAwaiting()
-	answer, status := gate.permissionAsker.AskPermission(ctx, approvalRequest, PermissionQuestion{HoldID: hold.ID, Confirmation: confirmation, Choices: resolution.Choices, HandoffID: hold.Call.HandoffID})
-	switch status {
-	case AskAnswered:
-		return gate.answeredOutcome(ctx, taskRunID, approvalRequest, confirmation, answer)
-	case AskUnreachable:
-		gate.endUnansweredHold(taskRunID, profileName, status)
-		return gate.unreachableOutcome(taskRunID, approvalRequest, string(status))
-	case AskExpired, AskSuperseded:
-		gate.endUnansweredHold(taskRunID, profileName, status)
-		gate.taskRunService.AppendTaskEvent(taskRunID, UnansweredHoldEventName(status), marshalEventBody(map[string]string{"toolName": strings.TrimSpace(approvalRequest.ToolName), "requesterPersonID": approvalRequest.RequesterPersonID}))
-		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionRejected, Notice: unansweredCallNotices[status]}
+	errorValue := gate.questionPoster.PostQuestion(ctx, approvalRequest, ParkedQuestion{HoldID: hold.ID, Confirmation: heldCall.Confirmation, Choices: choices, HandoffID: heldCall.HandoffID})
+	if errorValue != nil && !errors.Is(errorValue, ErrQuestionWillBePostedLater) {
+		gate.endUnreachableHold(taskRunID, profileName)
+		return gate.unreachableOutcome(taskRunID, approvalRequest, errorValue.Error())
 	}
-	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionHeld, Notice: confirmation}
+	return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionHeld, Notice: heldCall.Confirmation}
 }
 
-func (gate *Gate) answeredOutcome(ctx context.Context, taskRunID string, approvalRequest mcpserver.ApprovalRequest, confirmation string, answer ApprovalAnswer) mcpserver.ApprovalOutcome {
-	settlement, errorValue := gate.SettleAnswer(ctx, approvalRequest, answer)
-	switch {
-	case errorValue != nil:
-		slog.Warn("approvalgate.answered_run_will_not_advance", "taskRunID", taskRunID, "toolName", strings.TrimSpace(approvalRequest.ToolName), "reason", errorValue.Error())
-		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionHeld, Notice: confirmation}
-	case settlement.Signal == agentcontract.ApprovalSignalReject:
-		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionRejected, Notice: gate.declinedNotice(taskRunID)}
-	case settlement.SettledCall != nil:
-		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionDeferred, Deferral: settlement.SettledCall.Result}
+func QuestionOffers(choices []holdrecord.Choice) []approvalreply.Offer {
+	if len(choices) == 0 {
+		return []approvalreply.Offer{
+			{ID: ApproveOptionKey},
+			{ID: RejectOptionKey, IsDeclining: true},
+		}
 	}
-	return gate.approvedOutcome(taskRunID, approvalRequest)
+	offers := []approvalreply.Offer{}
+	for _, replyOption := range ChoiceReplyOptions(choices) {
+		offers = append(offers, approvalreply.Offer{ID: replyOption.Key, Name: replyOption.Label, IsDeclining: replyOption.Key == CancelChoiceKey})
+	}
+	if TakesOwnWords(choices) {
+		offers = append(offers, approvalreply.Offer{ID: approvalreply.OwnWordsOptionID})
+	}
+	return offers
+}
+
+func IsDecliningOption(optionKey string) bool {
+	return optionKey == RejectOptionKey || optionKey == CancelChoiceKey
+}
+
+func answerOfOption(optionKey string) ApprovalAnswer {
+	switch optionKey {
+	case RejectOptionKey, CancelChoiceKey:
+		return ApprovalAnswer{Signal: agentcontract.ApprovalSignalReject}
+	case ApproveOptionKey, approvalreply.OwnWordsOptionID:
+		return ApprovalAnswer{Signal: agentcontract.ApprovalSignalApprove}
+	}
+	return ApprovalAnswer{Signal: agentcontract.ApprovalSignalApprove, ChoiceKey: optionKey}
 }
 
 func (gate *Gate) declinedCall(taskRunID string, heldCall agentcontract.HeldCall) *agentcontract.CarriedOutCall {
@@ -112,12 +118,20 @@ type AnswerSettlement struct {
 	SettledCall *agentcontract.CarriedOutCall
 }
 
-func (gate *Gate) SettleAnswer(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, answer ApprovalAnswer) (AnswerSettlement, error) {
+func (settlement AnswerSettlement) SettledCalls() []agentcontract.CarriedOutCall {
+	if settlement.SettledCall == nil {
+		return nil
+	}
+	return []agentcontract.CarriedOutCall{*settlement.SettledCall}
+}
+
+func (gate *Gate) SettleAnswer(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, optionKey string, source string) (AnswerSettlement, error) {
 	taskRunID := strings.TrimSpace(approvalRequest.TaskRunID)
 	taskEvents := gate.taskRunService.ListTaskEvent(taskRunID)
 	if _, errorValue := gate.taskRunService.AdvanceAnsweredTaskRun(taskRunID, gate.currentAgentProfileName(taskRunID)); errorValue != nil {
 		return AnswerSettlement{}, answerTakenElsewhere(errorValue)
 	}
+	answer := answerOfOption(strings.TrimSpace(optionKey))
 	heldCall, _ := PendingHeldCall(taskEvents)
 	choice, isChosen := answer.ChosenFrom(OfferedChoices(taskEvents))
 	if isChosen && choice.DefersTheCall() {
@@ -126,7 +140,7 @@ func (gate *Gate) SettleAnswer(ctx context.Context, approvalRequest mcpserver.Ap
 	if isChosen {
 		RecordChoiceAnswer(gate.taskRunService, taskRunID, choice)
 	}
-	SettleSignal(gate.taskRunService, taskRunID, &answer.Signal, "acp_permission")
+	SettleSignal(gate.taskRunService, taskRunID, &answer.Signal, source)
 	if answer.Signal == agentcontract.ApprovalSignalReject {
 		return AnswerSettlement{Signal: answer.Signal, SettledCall: gate.declinedCall(taskRunID, heldCall)}, nil
 	}
@@ -147,11 +161,31 @@ func (gate *Gate) deferHeldCall(ctx context.Context, approvalRequest mcpserver.A
 	return &carriedOutCall
 }
 
-func (gate *Gate) endUnansweredHold(taskRunID string, profileName string, status AskStatus) {
+const (
+	movedOnSource     = "moved_on"
+	unreachableSource = "unreachable"
+	movedOnNotice     = "The requester replied to the question about this call without choosing any of its options, so the call was not run. Their reply is the message this turn answers. Do not run the call unless that reply asks for it; if it does, call it again and they are asked again."
+)
+
+func MoveOnFromPendingHold(taskRunStore taskstate.TaskRunStore, taskRunID string) (agentcontract.CarriedOutCall, bool) {
+	pendingHold, isPending := holdrecord.LatestHold(holdrecord.Holds(taskRunStore.ListTaskEvent(taskRunID)), holdrecord.StatePending)
+	if !isPending {
+		return agentcontract.CarriedOutCall{}, false
+	}
+	holdrecord.Decide(taskRunStore, taskRunID, pendingHold.ID, holdrecord.DecisionReject, movedOnSource)
+	return agentcontract.CarriedOutCall{
+		ToolName:  pendingHold.Call.ToolName,
+		ToolInput: pendingHold.Call.ToolInput,
+		HoldID:    pendingHold.ID,
+		Result:    refusedCallResult(movedOnNotice),
+	}, true
+}
+
+func (gate *Gate) endUnreachableHold(taskRunID string, profileName string) {
 	rejection := agentcontract.ApprovalSignalReject
-	SettleSignal(gate.taskRunService, taskRunID, &rejection, string(status))
+	SettleSignal(gate.taskRunService, taskRunID, &rejection, unreachableSource)
 	if _, errorValue := gate.taskRunService.AdvanceTaskRun(taskRunID, profileName); errorValue != nil {
-		slog.Warn("approvalgate.unanswered_run_will_not_advance", "taskRunID", taskRunID, "status", string(status), "reason", errorValue.Error())
+		slog.Warn("approvalgate.unreachable_run_will_not_advance", "taskRunID", taskRunID, "reason", errorValue.Error())
 	}
 }
 
@@ -185,21 +219,4 @@ func (gate *Gate) currentAgentProfileName(taskRunID string) string {
 const (
 	defaultAgentProfileName      = "default"
 	TaskEventApprovalUnreachable = "approval.unreachable"
-	TaskEventApprovalExpired     = "approval.expired"
-	TaskEventApprovalSuperseded  = "approval.superseded"
 )
-
-var unansweredCallNotices = map[AskStatus]string{
-	AskExpired:    "Nobody answered the requester's approval question within 24 hours, so this call was not approved and will not run. Do not retry it; tell the requester it did not run because the question went unanswered, and what they can ask for instead.",
-	AskSuperseded: "A newer question was put to the requester in the same conversation before they answered this one, so this call was not approved and will not run. Do not retry it; tell the requester in one sentence that it did not run, and that they can ask again.",
-}
-
-func UnansweredHoldEventName(status AskStatus) string {
-	switch status {
-	case AskExpired:
-		return TaskEventApprovalExpired
-	case AskSuperseded:
-		return TaskEventApprovalSuperseded
-	}
-	return TaskEventApprovalUnreachable
-}

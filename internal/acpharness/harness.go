@@ -488,17 +488,24 @@ func (observer *sessionObserver) askThePerson(ctx context.Context, request acp.R
 		observer.recordPermissionDecision(agentcontract.TaskEventHarnessToolRefused, request.ToolCall, "")
 		return cancelledResponse()
 	}
-	outcome, status := observer.permissionAsker.AskHarnessPermission(ctx, observer.approvalRequestFor(request.ToolCall, question), approvalgate.HarnessPermissionQuestion{
+	outcome, isAnswered := observer.permissionAsker.AskHarnessPermission(ctx, observer.approvalRequestFor(request.ToolCall, question), approvalgate.HarnessPermissionQuestion{
 		Text:     question,
 		ToolCall: request.ToolCall,
 		Options:  request.Options,
 	})
-	if status != approvalgate.AskAnswered || outcome.Selected == nil {
+	if !isAnswered || outcome.Selected == nil {
 		observer.recordPermissionDecision(agentcontract.TaskEventHarnessToolRefused, request.ToolCall, "")
+		observer.endTurnIfTheQuestionParkedTheRun()
 		return cancelledResponse()
 	}
 	observer.recordSelectedOption(request, outcome.Selected.OptionId)
 	return selectedResponse(outcome.Selected.OptionId)
+}
+
+func (observer *sessionObserver) endTurnIfTheQuestionParkedTheRun() {
+	if observer.onToolCallEnded != nil {
+		observer.onToolCallEnded()
+	}
 }
 
 func (observer *sessionObserver) recordSelectedOption(request acp.RequestPermissionRequest, optionID acp.PermissionOptionId) {

@@ -109,7 +109,7 @@ func registerDeletingTool(t *testing.T, toolSet *toolcontract.ToolSet) {
 }
 
 func TestTheChoicesATargetCarriesAreHandedToTheWording(t *testing.T) {
-	gate, _, taskRun, _, _ := choiceGate(t, ApprovalAnswer{})
+	gate, _, taskRun, _, _ := choiceGate(t)
 	languageModel := &wordingLanguageModel{question: "지금 업데이트할까요?"}
 	gate.UseQuestionWorder(approval.NewWorder(languageModel))
 

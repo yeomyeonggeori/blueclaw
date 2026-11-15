@@ -34,11 +34,9 @@ func scheduleOf(creatorPersonID string, isApproved bool) task.Schedule {
 	return schedule
 }
 
-func scheduledRunGate(t *testing.T, schedule task.Schedule) (*Gate, *task.TaskRunService, *choosingAsker, mcpserver.ApprovalRequest) {
+func scheduledRunGate(t *testing.T, schedule task.Schedule) (*Gate, *task.TaskRunService, *recordingPoster, mcpserver.ApprovalRequest) {
 	t.Helper()
-	gate, taskRunService, taskRun := gateFixture(t)
-	personAsker := &choosingAsker{}
-	gate.UsePermissionAsker(personAsker)
+	gate, taskRunService, taskRun, personAsker := gateWithPoster(t)
 	gate.UseSchedules(knownSchedules{recordingScheduler: &recordingScheduler{}, schedules: map[string]task.Schedule{schedule.ScheduleID: schedule}})
 	approvalRequest := approvalRequestFixture(taskRun.TaskRunID)
 	approvalRequest.ConversationID = task.ScheduleSessionID(schedule.ScheduleID)
@@ -64,8 +62,8 @@ func TestAnApprovedScheduleAnswersTheQuestionsItsRunsRaise(t *testing.T) {
 	if outcome.Decision != mcpserver.ApprovalDecisionApproved || outcome.HoldID == "" {
 		t.Fatalf("a run of an approved schedule came back %+v, expected an approved hold", outcome)
 	}
-	if personAsker.offeredQuestion != "" {
-		t.Fatalf("the schedule's run asked a person %q", personAsker.offeredQuestion)
+	if len(personAsker.questions) != 0 {
+		t.Fatalf("the schedule's run asked a person %+v", personAsker.questions)
 	}
 	ledger := ledgerOf(taskRunService, approvalRequest.TaskRunID)
 	if !strings.Contains(ledger, `"decision":"approve","source":"schedule"`) || strings.Contains(ledger, agentcontract.TaskEventConfirmationRequested) {
@@ -81,13 +79,12 @@ func TestARunOfAScheduleItsRequesterNeverApprovedStillAsksThem(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gate, _, personAsker, approvalRequest := scheduledRunGate(t, schedule)
-			personAsker.answer = ApprovalAnswer{Signal: agentcontract.ApprovalSignalReject}
 			approvalRequest.ConversationID = task.ScheduleSessionID("schedule-weekly")
 
 			outcome, _ := gate.AwaitApproval(context.Background(), approvalRequest)
 
-			if personAsker.offeredQuestion == "" || outcome.Decision != mcpserver.ApprovalDecisionRejected {
-				t.Fatalf("the run came back %+v without the requester deciding it", outcome)
+			if len(personAsker.questions) != 1 || outcome.Decision != mcpserver.ApprovalDecisionHeld {
+				t.Fatalf("the run came back %+v without the requester being asked", outcome)
 			}
 		})
 	}
@@ -101,9 +98,9 @@ func TestAnApprovedScheduleAllowsTheHarnessOnceForItsRun(t *testing.T) {
 		{OptionId: "reject", Kind: acp.PermissionOptionKindRejectOnce},
 	}
 
-	outcome, status := gate.AskHarnessPermission(context.Background(), approvalRequest, HarnessPermissionQuestion{Text: "run the report script", Options: options})
+	outcome, isAnswered := gate.AskHarnessPermission(context.Background(), approvalRequest, HarnessPermissionQuestion{Text: "run the report script", Options: options})
 
-	if status != AskAnswered || outcome.Selected == nil || outcome.Selected.OptionId != "allow-once" {
-		t.Fatalf("the harness was answered %+v (%s), expected allow-once", outcome, status)
+	if !isAnswered || outcome.Selected == nil || outcome.Selected.OptionId != "allow-once" {
+		t.Fatalf("the harness was answered %+v (%v), expected allow-once", outcome, isAnswered)
 	}
 }

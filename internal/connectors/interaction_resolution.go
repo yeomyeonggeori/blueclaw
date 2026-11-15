@@ -19,11 +19,12 @@ func offeredChoiceKey(interaction *AskInteraction, key string) (string, bool) {
 	return "", false
 }
 
-func (connectorRuntime *ConnectorRuntime) publishThreadResolution(ctx context.Context, thread *askingThread, optionID string) {
-	if thread.interaction == nil {
+func (connectorRuntime *ConnectorRuntime) publishQuestionResolution(ctx context.Context, parked parkedRun, optionKey string) {
+	interaction := parked.interaction()
+	if interaction == nil || parked.posted.HoldID == "" {
 		return
 	}
-	adapter, errorValue := connectorRuntime.findAdapter(thread.platform)
+	adapter, errorValue := connectorRuntime.findAdapter(parked.posted.Platform)
 	if errorValue != nil {
 		return
 	}
@@ -31,15 +32,13 @@ func (connectorRuntime *ConnectorRuntime) publishThreadResolution(ctx context.Co
 	if !canResolve {
 		return
 	}
-	interactionID := thread.interaction.InteractionID
-	messageID := PostedApprovalQuestionMessageID(connectorRuntime.taskRunService.ListTaskEvent(thread.taskRunID))
-	if messageID == "" {
-		connectorRuntime.logger.Warn("connector."+thread.platform+".interaction.question_message_unknown", slog.String("interactionID", interactionID))
+	if parked.posted.MessageID == "" {
+		connectorRuntime.logger.Warn("connector."+parked.posted.Platform+".interaction.question_message_unknown", slog.String("interactionID", interaction.InteractionID))
 		return
 	}
-	choiceKey, _ := offeredChoiceKey(thread.interaction, optionID)
-	replyTarget := ReplyTarget{ConversationID: thread.conversationID, ReplyTargetID: thread.replyTargetID}
-	if errorValue := resolver.ResolveInteraction(context.WithoutCancel(ctx), replyTarget, messageID, interactionID, choiceKey); errorValue != nil {
-		connectorRuntime.logger.Warn("connector."+thread.platform+".interaction.resolution_unpublished", slog.String("interactionID", interactionID), slog.String("messageID", messageID), slog.String("error", errorValue.Error()))
+	choiceKey, _ := offeredChoiceKey(interaction, optionKey)
+	replyTarget := ReplyTarget{ConversationID: parked.posted.ConversationID, ReplyTargetID: parked.posted.ReplyTargetID}
+	if errorValue := resolver.ResolveInteraction(context.WithoutCancel(ctx), replyTarget, parked.posted.MessageID, interaction.InteractionID, choiceKey); errorValue != nil {
+		connectorRuntime.logger.Warn("connector."+parked.posted.Platform+".interaction.resolution_unpublished", slog.String("interactionID", interaction.InteractionID), slog.String("messageID", parked.posted.MessageID), slog.String("error", errorValue.Error()))
 	}
 }

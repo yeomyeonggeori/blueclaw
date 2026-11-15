@@ -14,23 +14,6 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 )
 
-type harnessAskerDouble struct {
-	questions         []HarnessPermissionQuestion
-	gateQuestionCount int
-	outcome           acp.RequestPermissionOutcome
-	isAnswered        bool
-}
-
-func (asker *harnessAskerDouble) AskPermission(context.Context, mcpserver.ApprovalRequest, PermissionQuestion) (ApprovalAnswer, AskStatus) {
-	asker.gateQuestionCount++
-	return ApprovalAnswer{}, AskInterrupted
-}
-
-func (asker *harnessAskerDouble) AskHarnessPermission(_ context.Context, _ mcpserver.ApprovalRequest, question HarnessPermissionQuestion) (acp.RequestPermissionOutcome, AskStatus) {
-	asker.questions = append(asker.questions, question)
-	return asker.outcome, statusOfAnswered(asker.isAnswered)
-}
-
 func harnessQuestion(rawInput map[string]any) HarnessPermissionQuestion {
 	title := "git_push"
 	return HarnessPermissionQuestion{
@@ -43,154 +26,141 @@ func harnessQuestion(rawInput map[string]any) HarnessPermissionQuestion {
 	}
 }
 
-func chosen(optionID acp.PermissionOptionId) acp.RequestPermissionOutcome {
-	return acp.RequestPermissionOutcome{Selected: &acp.RequestPermissionOutcomeSelected{Outcome: "selected", OptionId: optionID}}
-}
+func TestAHarnessQuestionParksTheRunLikeAnyHeldCall(t *testing.T) {
+	gate, taskRunService, taskRun, poster := gateWithPoster(t)
 
-func TestAHarnessQuestionIsRecordedAsAHoldBeforeAnyoneIsAsked(t *testing.T) {
-	gate, taskRunService, taskRun := gateFixture(t)
-	asker := &harnessAskerDouble{}
-	gate.UsePermissionAsker(asker)
-
-	_, status := gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(map[string]any{"branch": "main"}))
+	_, isAnswered := gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(map[string]any{"branch": "main"}))
 
 	holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID))
-	if (status == AskAnswered) || len(holds) != 1 || holds[0].State != holdrecord.StatePending || holds[0].Call.Confirmation != "Force-push the branch?" || holds[0].Call.ToolName != "" {
-		t.Fatalf("an unanswered harness question must stay a pending hold a restart can reissue, got %+v answered=%v", holds, (status == AskAnswered))
+	if isAnswered || len(holds) != 1 || holds[0].State != holdrecord.StatePending || holds[0].Call.Confirmation != "Force-push the branch?" || holds[0].Call.ToolName != "" {
+		t.Fatalf("a harness question nobody has answered is a pending hold, got %+v answered=%v", holds, isAnswered)
+	}
+	if len(poster.questions) != 1 || poster.questions[0].HoldID != holds[0].ID || poster.questions[0].Confirmation != "Force-push the branch?" {
+		t.Fatalf("the harness's question is posted once as that hold's question, got %+v", poster.questions)
 	}
 	if taskRunStatus(t, taskRunService, taskRun.TaskRunID) != agentcontract.TaskStatusWaitingApproval {
-		t.Fatal("the run must wait for the answer the reissue will collect")
+		t.Fatal("the run must be parked until the answer arrives as a message")
+	}
+	if !carriesEvent(recordedEventNames(taskRunService, taskRun.TaskRunID), agentcontract.TaskEventAskRequested) {
+		t.Fatal("the harness turn ends on the ask the ledger records, and none was recorded")
 	}
 }
 
-func TestAnAnsweredHarnessQuestionSettlesItsHoldAndTheRunContinues(t *testing.T) {
-	gate, taskRunService, taskRun := gateFixture(t)
-	gate.UsePermissionAsker(&harnessAskerDouble{outcome: chosen("allow-once"), isAnswered: true})
-
-	outcome, status := gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(map[string]any{"branch": "main"}))
-
-	if status != AskAnswered || outcome.Selected == nil || outcome.Selected.OptionId != "allow-once" {
-		t.Fatalf("expected the answer to pass through, got %+v", outcome)
+func TestAnApprovedHarnessQuestionAllowsTheSameCallOnceWhenTheHarnessAsksAgain(t *testing.T) {
+	gate, taskRunService, taskRun, poster := gateWithPoster(t)
+	request := approvalRequestFixture(taskRun.TaskRunID)
+	input := map[string]any{"branch": "main"}
+	gate.AskHarnessPermission(context.Background(), request, harnessQuestion(input))
+	if _, errorValue := gate.SettleAnswer(context.Background(), request, ApproveOptionKey, "test"); errorValue != nil {
+		t.Fatalf("settle answer: %v", errorValue)
 	}
-	holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID))
-	if len(holds) != 1 || holds[0].State != holdrecord.StateApproved {
-		t.Fatalf("an approval stays unspent until exactly one call spends it, got %+v", holds)
+
+	outcome, isAnswered := gate.AskHarnessPermission(context.Background(), request, harnessQuestion(input))
+
+	if !isAnswered || outcome.Selected == nil || outcome.Selected.OptionId != "allow-once" || len(poster.questions) != 1 {
+		t.Fatalf("the approved call must be allowed without a second question, got %+v asked %d", outcome, len(poster.questions))
 	}
 	if taskRunStatus(t, taskRunService, taskRun.TaskRunID) == agentcontract.TaskStatusWaitingApproval {
-		t.Fatal("an answered run must not stay paused")
+		t.Fatal("an answered run must not stay parked")
+	}
+	gate.AskHarnessPermission(context.Background(), request, harnessQuestion(input))
+	if len(poster.questions) != 2 {
+		t.Fatalf("the approval is spent once, so the third ask reaches the person, asked %d", len(poster.questions))
 	}
 }
 
 func TestARejectedHarnessQuestionIsARejectedHold(t *testing.T) {
-	gate, taskRunService, taskRun := gateFixture(t)
-	gate.UsePermissionAsker(&harnessAskerDouble{outcome: chosen("reject-once"), isAnswered: true})
+	gate, taskRunService, taskRun, poster := gateWithPoster(t)
+	request := approvalRequestFixture(taskRun.TaskRunID)
+	gate.AskHarnessPermission(context.Background(), request, harnessQuestion(nil))
 
-	gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(nil))
+	if _, errorValue := gate.SettleAnswer(context.Background(), request, RejectOptionKey, "test"); errorValue != nil {
+		t.Fatalf("settle answer: %v", errorValue)
+	}
 
 	if holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID)); len(holds) != 1 || holds[0].State != holdrecord.StateRejected {
 		t.Fatalf("expected a rejected hold, got %+v", holds)
 	}
-}
-
-func TestARetryOfAnApprovedHarnessCallIsNotAskedAgainAndSpendsTheApprovalOnce(t *testing.T) {
-	gate, taskRunService, taskRun := gateFixture(t)
-	asker := &harnessAskerDouble{}
-	gate.UsePermissionAsker(asker)
-	input := map[string]any{"branch": "main"}
-	gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(input))
-	recordDecision(taskRunService, taskRun.TaskRunID, "approve")
-	asker.questions = nil
-
-	outcome, status := gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(input))
-
-	if status != AskAnswered || outcome.Selected == nil || outcome.Selected.OptionId != "allow-once" || len(asker.questions) != 0 {
-		t.Fatalf("the approved call must run without a second question, got %+v asked %d", outcome, len(asker.questions))
-	}
-	gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(input))
-	if len(asker.questions) != 1 {
-		t.Fatalf("the approval is spent once, so the third ask reaches the person, asked %d", len(asker.questions))
+	if _, isAnswered := gate.AskHarnessPermission(context.Background(), request, harnessQuestion(nil)); isAnswered || len(poster.questions) != 2 {
+		t.Fatalf("a declined call is not allowed when the harness asks again, answered=%v asked %d", isAnswered, len(poster.questions))
 	}
 }
 
 func TestADifferentHarnessCallIsNotCoveredByAnApproval(t *testing.T) {
-	gate, taskRunService, taskRun := gateFixture(t)
-	asker := &harnessAskerDouble{}
-	gate.UsePermissionAsker(asker)
-	gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(map[string]any{"branch": "main"}))
-	recordDecision(taskRunService, taskRun.TaskRunID, "approve")
-	asker.questions = nil
+	gate, _, taskRun, poster := gateWithPoster(t)
+	request := approvalRequestFixture(taskRun.TaskRunID)
+	gate.AskHarnessPermission(context.Background(), request, harnessQuestion(map[string]any{"branch": "main"}))
+	gate.SettleAnswer(context.Background(), request, ApproveOptionKey, "test")
 
-	gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(map[string]any{"branch": "release"}))
+	_, isAnswered := gate.AskHarnessPermission(context.Background(), request, harnessQuestion(map[string]any{"branch": "release"}))
 
-	if len(asker.questions) != 1 {
-		t.Fatalf("a call that differs in any way is asked again, asked %d", len(asker.questions))
+	if isAnswered || len(poster.questions) != 2 {
+		t.Fatalf("a call that differs in any way is asked again, answered=%v asked %d", isAnswered, len(poster.questions))
 	}
 }
 
-func approvedHarnessQuestionAboutTheDeleteInput(t *testing.T) (*Gate, *harnessAskerDouble, string) {
+func approvedHarnessQuestionAboutTheDeleteInput(t *testing.T) (*Gate, *recordingPoster, string) {
 	t.Helper()
-	gate, _, taskRun := gateFixture(t)
-	asker := &harnessAskerDouble{outcome: chosen("allow-once"), isAnswered: true}
-	gate.UsePermissionAsker(asker)
-	gate.AskHarnessPermission(context.Background(), approvalRequestFixture(taskRun.TaskRunID), harnessQuestion(map[string]any{"eventID": "event-1"}))
-	return gate, asker, taskRun.TaskRunID
+	gate, _, taskRun, poster := gateWithPoster(t)
+	request := approvalRequestFixture(taskRun.TaskRunID)
+	gate.AskHarnessPermission(context.Background(), request, harnessQuestion(map[string]any{"eventID": "event-1"}))
+	if _, errorValue := gate.SettleAnswer(context.Background(), request, ApproveOptionKey, "test"); errorValue != nil {
+		t.Fatalf("settle answer: %v", errorValue)
+	}
+	return gate, poster, taskRun.TaskRunID
 }
 
 func TestAHarnessThatAskedFirstLeavesTheMatchingToolCallRunningWithNoSecondQuestion(t *testing.T) {
-	gate, asker, taskRunID := approvedHarnessQuestionAboutTheDeleteInput(t)
+	gate, poster, taskRunID := approvedHarnessQuestionAboutTheDeleteInput(t)
 
 	outcome, errorValue := gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRunID))
 
 	if errorValue != nil || outcome.Decision != mcpserver.ApprovalDecisionApproved {
 		t.Fatalf("expected the call to run on the harness's approved hold, got %+v %v", outcome, errorValue)
 	}
-	if asker.gateQuestionCount != 0 || len(asker.questions) != 1 {
-		t.Fatalf("the person was asked %d gate questions and %d harness questions, expected only the harness's", asker.gateQuestionCount, len(asker.questions))
+	if len(poster.questions) != 1 {
+		t.Fatalf("the person was asked %d questions, expected only the harness's", len(poster.questions))
 	}
 }
 
 func TestAnApprovedHoldIsSpentByOneToolCall(t *testing.T) {
-	gate, asker, taskRunID := approvedHarnessQuestionAboutTheDeleteInput(t)
+	gate, poster, taskRunID := approvedHarnessQuestionAboutTheDeleteInput(t)
 	gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRunID))
 
 	outcome, _ := gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRunID))
 
-	if outcome.Decision == mcpserver.ApprovalDecisionApproved || asker.gateQuestionCount != 1 {
-		t.Fatalf("a second identical call needs its own approval, got %+v after %d questions", outcome, asker.gateQuestionCount)
+	if outcome.Decision == mcpserver.ApprovalDecisionApproved || len(poster.questions) != 2 {
+		t.Fatalf("a second identical call needs its own approval, got %+v after %d questions", outcome, len(poster.questions))
 	}
 }
 
 func TestAToolCallWithADifferentInputIsAskedAbout(t *testing.T) {
-	gate, asker, taskRunID := approvedHarnessQuestionAboutTheDeleteInput(t)
+	gate, poster, taskRunID := approvedHarnessQuestionAboutTheDeleteInput(t)
 	request := approvalRequestFixture(taskRunID)
 	request.ToolInput = []byte(`{"eventID":"event-2"}`)
 
 	outcome, _ := gate.AwaitApproval(context.Background(), request)
 
-	if outcome.Decision == mcpserver.ApprovalDecisionApproved || asker.gateQuestionCount != 1 {
-		t.Fatalf("a call that differs in any way is asked again, got %+v after %d questions", outcome, asker.gateQuestionCount)
+	if outcome.Decision == mcpserver.ApprovalDecisionApproved || len(poster.questions) != 2 {
+		t.Fatalf("a call that differs in any way is asked again, got %+v after %d questions", outcome, len(poster.questions))
 	}
 }
 
 func TestAGatedCallNoHarnessAskedAboutIsAskedOnce(t *testing.T) {
-	gate, taskRunService, taskRun := gateFixture(t)
-	asker := &harnessAskerDouble{}
-	gate.UsePermissionAsker(asker)
+	gate, taskRunService, taskRun, poster := gateWithPoster(t)
 
 	gate.AwaitApproval(context.Background(), approvalRequestFixture(taskRun.TaskRunID))
 
 	holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID))
-	if asker.gateQuestionCount != 1 || len(holds) != 1 || holds[0].Call.ToolName != "event_delete" {
-		t.Fatalf("expected one question held under the tool's name, got %d questions and %+v", asker.gateQuestionCount, holds)
+	if len(poster.questions) != 1 || len(holds) != 1 || holds[0].Call.ToolName != "event_delete" {
+		t.Fatalf("expected one question held under the tool's name, got %d questions and %+v", len(poster.questions), holds)
 	}
 }
 
 func TestAHarnessQuestionIsWordedLikeEveryApprovalInTheRequestersVoice(t *testing.T) {
-	gate, taskRunService, taskRun := gateFixture(t)
+	gate, taskRunService, taskRun, poster := gateWithPoster(t)
 	languageModel := &wordingLanguageModel{question: "브랜치를 강제로 올릴까요?"}
 	gate.UseQuestionWorder(approval.NewWorder(languageModel))
-	asker := &harnessAskerDouble{}
-	gate.UsePermissionAsker(asker)
 	request := approvalRequestFixture(taskRun.TaskRunID)
 	request.ToolName = "Force-push the branch to origin"
 	request.ToolInput = []byte(`{"command":"git push --force"}`)
@@ -198,13 +168,13 @@ func TestAHarnessQuestionIsWordedLikeEveryApprovalInTheRequestersVoice(t *testin
 
 	gate.AskHarnessPermission(context.Background(), request, harnessQuestion(map[string]any{"command": "git push --force"}))
 
-	if len(asker.questions) != 1 || asker.questions[0].Text != "브랜치를 강제로 올릴까요?" {
-		t.Fatalf("the person reads the worded question, not the harness's own title, got %+v", asker.questions)
+	if len(poster.questions) != 1 || poster.questions[0].Confirmation != "브랜치를 강제로 올릴까요?" {
+		t.Fatalf("the person reads the worded question, not the harness's own title, got %+v", poster.questions)
 	}
 	if wordingContext := marshalRequestMessages(languageModel.lastRequest); !strings.Contains(wordingContext, "Call them 박예시 님.") || !strings.Contains(wordingContext, "git push --force") {
 		t.Fatalf("the wording is told the call and the voice, got %s", wordingContext)
 	}
 	if holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID)); len(holds) != 1 || holds[0].Call.Confirmation != "브랜치를 강제로 올릴까요?" {
-		t.Fatalf("a reissued question repeats what the person was asked, got %+v", holds)
+		t.Fatalf("the ledger keeps what the person was asked, got %+v", holds)
 	}
 }

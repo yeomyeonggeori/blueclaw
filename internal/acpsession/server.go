@@ -13,21 +13,21 @@ import (
 )
 
 type Server struct {
-	socketPath      string
-	collaborators   Collaborators
-	permissionRelay *PermissionRelay
-	logger          *slog.Logger
-	listener        net.Listener
+	socketPath    string
+	collaborators Collaborators
+	sessionRoutes *SessionRoutes
+	logger        *slog.Logger
+	listener      net.Listener
 }
 
 const socketMode = 0o660
 
-func NewServer(socketPath string, collaborators Collaborators, permissionRelay *PermissionRelay, logger *slog.Logger) *Server {
+func NewServer(socketPath string, collaborators Collaborators, sessionRoutes *SessionRoutes, logger *slog.Logger) *Server {
 	return &Server{
-		socketPath:      socketPath,
-		collaborators:   collaborators,
-		permissionRelay: permissionRelay,
-		logger:          logger,
+		socketPath:    socketPath,
+		collaborators: collaborators,
+		sessionRoutes: sessionRoutes,
+		logger:        logger,
 	}
 }
 
@@ -70,7 +70,7 @@ func (server *Server) Serve(ctx context.Context) {
 
 func (server *Server) serveConnection(connection net.Conn) {
 	defer connection.Close()
-	agent := NewAgent(server.collaborators, server.permissionRelay, server.logger)
+	agent := NewAgent(server.collaborators, server.sessionRoutes, server.logger)
 	agentConnection := acp.NewAgentSideConnection(agent, connection, connection)
 	agentConnection.SetLogger(server.logger)
 	agent.UseConnection(agentConnection)

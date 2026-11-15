@@ -21,7 +21,7 @@ func heldCallInteraction(holdID string, choices []holdrecord.Choice, heldToolInp
 	if len(choices) > 0 {
 		return nil
 	}
-	return &AskInteraction{InteractionID: strings.TrimSpace(holdID), Kind: approvalInteractionKind, Options: []AskChoiceOption{{Key: ApproveOptionID}, {Key: RejectOptionID}}}
+	return &AskInteraction{InteractionID: strings.TrimSpace(holdID), Kind: approvalInteractionKind, Options: []AskChoiceOption{{Key: approvalgate.ApproveOptionKey}, {Key: approvalgate.RejectOptionKey}}}
 }
 
 func answerOptionsOf(choices []holdrecord.Choice) []AskChoiceOption {

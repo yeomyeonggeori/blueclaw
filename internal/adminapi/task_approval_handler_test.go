@@ -2,6 +2,7 @@ package adminapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,7 +10,9 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
+	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
@@ -34,8 +37,27 @@ func rosterOfARequesterAndAnAdmin() *identity.IdentityService {
 	})
 }
 
+type gateSettledQuestions struct {
+	gate    *approvalgate.Gate
+	answers []agentcontract.ApprovalSignal
+}
+
+func questionsSettledByTheGate(taskRunService *task.TaskRunService) *gateSettledQuestions {
+	return &gateSettledQuestions{gate: approvalgate.New(taskRunService)}
+}
+
+func (questions *gateSettledQuestions) AnswerParkedQuestionAsOperator(ctx context.Context, taskRunID string, signal agentcontract.ApprovalSignal) (approvalgate.AnswerSettlement, error) {
+	questions.answers = append(questions.answers, signal)
+	optionKey := approvalgate.RejectOptionKey
+	if signal == agentcontract.ApprovalSignalApprove {
+		optionKey = approvalgate.ApproveOptionKey
+	}
+	return questions.gate.SettleAnswer(ctx, mcpserver.ApprovalRequest{TaskRunID: taskRunID}, optionKey, "terminal")
+}
+
 func configuredApprovalHandler(taskRunService *task.TaskRunService) TaskApprovalHandler {
 	return TaskApprovalHandler{
+		ParkedQuestions: questionsSettledByTheGate(taskRunService),
 		TaskRunService:  taskRunService,
 		TaskLauncher:    agentruntime.NewTaskLauncher(nil, taskRunService, agentruntime.NewToolCatalogBuilder()),
 		IdentityService: rosterOfARequesterAndAnAdmin(),
@@ -132,6 +154,7 @@ func TestApprovingAHeldCallDecidesTheHoldAndResumesTheRunWithoutCarryingTheCallO
 	taskRunService, _ := approvalTestTaskRunService(t)
 	harness := harnesstest.New(taskRunService)
 	handler := TaskApprovalHandler{
+		ParkedQuestions: questionsSettledByTheGate(taskRunService),
 		TaskRunService:  taskRunService,
 		TaskLauncher:    agentruntime.NewTaskLauncher(harness, taskRunService, agentruntime.NewToolCatalogBuilder()),
 		IdentityService: rosterOfARequesterAndAnAdmin(),
@@ -157,22 +180,13 @@ func TestApprovingAHeldCallDecidesTheHoldAndResumesTheRunWithoutCarryingTheCallO
 	}
 }
 
-type recordedLiveHolds struct {
-	isAwaited bool
-	answers   []agentcontract.ApprovalSignal
-}
-
-func (holds *recordedLiveHolds) AnswerAwaitedHold(_ string, signal agentcontract.ApprovalSignal) (bool, error) {
-	holds.answers = append(holds.answers, signal)
-	return holds.isAwaited, nil
-}
-
-func heldRunWithAdminHandler(t *testing.T, liveHolds LiveHolds) (TaskApprovalHandler, *harnesstest.Harness, task.TaskRun, *task.TaskRunService) {
+func heldRunWithAdminHandler(t *testing.T) (TaskApprovalHandler, *gateSettledQuestions, *harnesstest.Harness, task.TaskRun, *task.TaskRunService) {
 	t.Helper()
 	taskRunService, _ := approvalTestTaskRunService(t)
 	harness := harnesstest.New(taskRunService)
+	questions := questionsSettledByTheGate(taskRunService)
 	handler := TaskApprovalHandler{
-		LiveHolds:       liveHolds,
+		ParkedQuestions: questions,
 		TaskRunService:  taskRunService,
 		TaskLauncher:    agentruntime.NewTaskLauncher(harness, taskRunService, agentruntime.NewToolCatalogBuilder()),
 		IdentityService: rosterOfARequesterAndAnAdmin(),
@@ -182,34 +196,19 @@ func heldRunWithAdminHandler(t *testing.T, liveHolds LiveHolds) (TaskApprovalHan
 	if _, errorValue := taskRunService.PauseTaskRun(taskRun.TaskRunID, agentcontract.TaskStatusWaitingApproval, "삭제할까요?"); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	return handler, harness, taskRun, taskRunService
+	return handler, questions, harness, taskRun, taskRunService
 }
 
-func TestAnApprovalWhileTheAskingTurnIsStillWaitingIsHandedToThatTurnAndNothingIsResumed(t *testing.T) {
-	liveHolds := &recordedLiveHolds{isAwaited: true}
-	handler, harness, taskRun, taskRunService := heldRunWithAdminHandler(t, liveHolds)
+func TestAnOperatorApprovalSettlesTheParkedQuestionAndResumesTheRunOnce(t *testing.T) {
+	handler, questions, harness, taskRun, _ := heldRunWithAdminHandler(t)
 
 	responseRecorder := postApproval(t, handler, decisionBy(requesterEmail, taskRun.TaskRunID, "approve"))
 
-	if responseRecorder.Code != http.StatusOK || len(liveHolds.answers) != 1 || liveHolds.answers[0] != agentcontract.ApprovalSignalApprove {
-		t.Fatalf("expected the live waiter to be answered once, got %d %+v", responseRecorder.Code, liveHolds.answers)
+	if responseRecorder.Code != http.StatusOK || len(questions.answers) != 1 || questions.answers[0] != agentcontract.ApprovalSignalApprove {
+		t.Fatalf("expected the parked question to be answered once, got %d %+v", responseRecorder.Code, questions.answers)
 	}
-	if harness.RunTurnCallCount() != 0 {
-		t.Fatal("a second turn was launched beside the one still waiting on the hold")
-	}
-	if holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID)); len(holds) != 1 || holds[0].State != holdrecord.StatePending {
-		t.Fatalf("the waiting turn settles the hold itself, got %+v", holds)
-	}
-}
-
-func TestAnApprovalWithNoTurnWaitingOnTheHoldResumesTheRunAsARestartResume(t *testing.T) {
-	liveHolds := &recordedLiveHolds{isAwaited: false}
-	handler, harness, taskRun, _ := heldRunWithAdminHandler(t, liveHolds)
-
-	responseRecorder := postApproval(t, handler, decisionBy(requesterEmail, taskRun.TaskRunID, "approve"))
-
-	if responseRecorder.Code != http.StatusOK || !harness.LastTurnRequest().IsRuntimeRestartResume {
-		t.Fatalf("expected the run resumed as a restart resume, got %d %+v", responseRecorder.Code, harness.LastTurnRequest())
+	if harness.RunTurnCallCount() != 1 || !harness.LastTurnRequest().IsRuntimeRestartResume {
+		t.Fatalf("expected the parked run resumed once, got %d turns %+v", harness.RunTurnCallCount(), harness.LastTurnRequest())
 	}
 }
 
@@ -223,8 +222,7 @@ func TestOnlyThePersonWhoAskedMayDecideTheirHeldCall(t *testing.T) {
 		{"an address the roster does not know", "stranger@example.com"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			liveHolds := &recordedLiveHolds{isAwaited: true}
-			handler, harness, taskRun, taskRunService := heldRunWithAdminHandler(t, liveHolds)
+			handler, questions, harness, taskRun, taskRunService := heldRunWithAdminHandler(t)
 
 			for _, decision := range []string{"approve", "reject"} {
 				responseRecorder := postApproval(t, handler, decisionBy(testCase.approverEmail, taskRun.TaskRunID, decision))
@@ -232,8 +230,8 @@ func TestOnlyThePersonWhoAskedMayDecideTheirHeldCall(t *testing.T) {
 					t.Fatalf("expected %s to be refused, got %d %s", decision, responseRecorder.Code, responseRecorder.Body.String())
 				}
 			}
-			if len(liveHolds.answers) != 0 || harness.RunTurnCallCount() != 0 {
-				t.Fatalf("the refused decision reached the run: answers %+v, turns %d", liveHolds.answers, harness.RunTurnCallCount())
+			if len(questions.answers) != 0 || harness.RunTurnCallCount() != 0 {
+				t.Fatalf("the refused decision reached the run: answers %+v, turns %d", questions.answers, harness.RunTurnCallCount())
 			}
 			if holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID)); holds[0].State != holdrecord.StatePending {
 				t.Fatalf("the hold was decided by someone other than its requester: %+v", holds)
@@ -243,12 +241,14 @@ func TestOnlyThePersonWhoAskedMayDecideTheirHeldCall(t *testing.T) {
 }
 
 func TestTheRequesterDecidesTheirHeldCallWhateverCaseTheirAddressIsWrittenIn(t *testing.T) {
-	liveHolds := &recordedLiveHolds{isAwaited: true}
-	handler, _, taskRun, _ := heldRunWithAdminHandler(t, liveHolds)
+	handler, questions, _, taskRun, taskRunService := heldRunWithAdminHandler(t)
 
 	responseRecorder := postApproval(t, handler, decisionBy(" Requester@Example.com ", taskRun.TaskRunID, "reject"))
 
-	if responseRecorder.Code != http.StatusOK || len(liveHolds.answers) != 1 || liveHolds.answers[0] != agentcontract.ApprovalSignalReject {
-		t.Fatalf("expected the requester's reject to reach the waiting turn, got %d %+v", responseRecorder.Code, liveHolds.answers)
+	if responseRecorder.Code != http.StatusOK || len(questions.answers) != 1 || questions.answers[0] != agentcontract.ApprovalSignalReject {
+		t.Fatalf("expected the requester's reject to settle the question, got %d %+v", responseRecorder.Code, questions.answers)
+	}
+	if holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID)); holds[0].State != holdrecord.StateRejected {
+		t.Fatalf("expected the hold rejected, got %+v", holds)
 	}
 }

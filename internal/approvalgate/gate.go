@@ -16,9 +16,8 @@ type Gate struct {
 	taskRunService         taskstate.TaskRunStore
 	questionWorder         holdrecord.QuestionWorder
 	approvalTargetResolver ApprovalTargetResolver
-	permissionAsker        PermissionAsker
+	questionPoster         QuestionPoster
 	schedules              Schedules
-	waiters                answerWaiters
 }
 
 func New(taskRunService taskstate.TaskRunStore) *Gate {
@@ -44,15 +43,15 @@ func (gate *Gate) AwaitApproval(ctx context.Context, approvalRequest mcpserver.A
 		}
 		confirmation = gate.confirmationWording(ctx, approvalRequest, resolution)
 	}
-	return gate.askedOutcome(ctx, taskRunID, approvalRequest, confirmation, resolution), nil
+	return gate.parkedOutcome(ctx, taskRunID, approvalRequest, heldCallOf(approvalRequest, confirmation, resolution), resolution.Choices), nil
 }
 
-func (gate *Gate) holdCall(taskRunID string, approvalRequest mcpserver.ApprovalRequest, confirmation string, resolution ApprovalTargetResolution) (holdrecord.Hold, bool) {
-	if _, errorValue := gate.taskRunService.PauseTaskRun(taskRunID, agentcontract.TaskStatusWaitingApproval, confirmation); errorValue != nil {
+func (gate *Gate) holdCall(taskRunID string, approvalRequest mcpserver.ApprovalRequest, heldCall agentcontract.HeldCall, choices []holdrecord.Choice) (holdrecord.Hold, bool) {
+	if _, errorValue := gate.taskRunService.PauseTaskRun(taskRunID, agentcontract.TaskStatusWaitingApproval, heldCall.Confirmation); errorValue != nil {
 		slog.Warn("approvalgate.call_is_unanswerable", "taskRunID", taskRunID, "toolName", strings.TrimSpace(approvalRequest.ToolName), "reason", errorValue.Error())
 		return holdrecord.Hold{}, false
 	}
-	return gate.recordHeldCall(taskRunID, approvalRequest, confirmation, resolution), true
+	return gate.recordHeldCall(taskRunID, approvalRequest, heldCall, choices), true
 }
 
 func (gate *Gate) approvedOutcome(taskRunID string, approvalRequest mcpserver.ApprovalRequest) mcpserver.ApprovalOutcome {
@@ -67,24 +66,28 @@ func (gate *Gate) approvedHold(taskRunID string, approvalRequest mcpserver.Appro
 	return holdrecord.ApprovedHoldForCall(holdrecord.Holds(gate.taskRunService.ListTaskEvent(taskRunID)), approvalRequest.ToolName, approvalRequest.ToolInput)
 }
 
-func (gate *Gate) recordHeldCall(taskRunID string, approvalRequest mcpserver.ApprovalRequest, confirmation string, resolution ApprovalTargetResolution) holdrecord.Hold {
-	hold := holdrecord.Open(gate.taskRunService, taskRunID, agentcontract.HeldCall{
+func heldCallOf(approvalRequest mcpserver.ApprovalRequest, confirmation string, resolution ApprovalTargetResolution) agentcontract.HeldCall {
+	return agentcontract.HeldCall{
 		ToolName:          approvalRequest.ToolName,
 		ToolInput:         approvalRequest.ToolInput,
 		ApprovedToolInput: narrowedToolInput(approvalRequest.ToolInput, resolution.Target),
 		Confirmation:      confirmation,
 		HarnessSession:    approvalRequest.HarnessSession,
 		HandoffID:         resolution.Target.HandoffID,
-	}, resolution.Choices)
+	}
+}
+
+func (gate *Gate) recordHeldCall(taskRunID string, approvalRequest mcpserver.ApprovalRequest, heldCall agentcontract.HeldCall, choices []holdrecord.Choice) holdrecord.Hold {
+	hold := holdrecord.Open(gate.taskRunService, taskRunID, heldCall, choices)
 	gate.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventConfirmationRequested, marshalEventBody(map[string]string{
-		"userFacingMessage": confirmation,
-		"message":           confirmation,
+		"userFacingMessage": heldCall.Confirmation,
+		"message":           heldCall.Confirmation,
 		"reasonCode":        approvalReasonCode(approvalRequest),
 		"reasonDetail":      "approval gate for " + approvalRequest.ToolName,
 		"responseLanguage":  approvalRequest.ResponseLanguage,
 		"source":            "tool_catalog",
 	}))
-	gate.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventAskRequested, marshalEventBody(askRecord(approvalRequest, confirmation)))
+	gate.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventAskRequested, marshalEventBody(askRecord(approvalRequest, heldCall.Confirmation)))
 	return hold
 }
 

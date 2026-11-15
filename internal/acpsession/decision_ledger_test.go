@@ -35,7 +35,6 @@ func TestADecisionNoTaskFollowedIsRecordedAgainstItsMessage(t *testing.T) {
 	connection, _ := connectedPairWithCollaborators(t, &recordingClient{}, Collaborators{
 		TaskLauncher: launcher,
 		Directory:    staticDirectory{},
-		ReplyReader:  scriptedReader{},
 		SessionTurns: connectorRuntime,
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))

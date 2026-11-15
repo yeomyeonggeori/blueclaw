@@ -15,7 +15,7 @@ func heldCallTaskEvents(t *testing.T) []task.TaskEvent {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	taskRun := taskRunService.CreateTaskRun("person-1", "channel-1", "내일 회의 지워줘")
 	gate := approvalgate.New(taskRunService)
-	gate.UsePermissionAsker(restartedAsker{})
+	gate.UseQuestionPoster(silentPoster{})
 
 	if _, errorValue := gate.AwaitApproval(context.Background(), mcpserver.ApprovalRequest{
 		RequesterPersonID: "person-1",
@@ -38,8 +38,8 @@ func TestACallHeldByTheHostGateKeepsTheLanguageTheRequesterIsAskedIn(t *testing.
 	}
 }
 
-type restartedAsker struct{}
+type silentPoster struct{}
 
-func (restartedAsker) AskPermission(context.Context, mcpserver.ApprovalRequest, approvalgate.PermissionQuestion) (approvalgate.ApprovalAnswer, approvalgate.AskStatus) {
-	return approvalgate.ApprovalAnswer{}, approvalgate.AskInterrupted
+func (silentPoster) PostQuestion(context.Context, mcpserver.ApprovalRequest, approvalgate.ParkedQuestion) error {
+	return nil
 }

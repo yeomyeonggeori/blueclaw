@@ -15,12 +15,12 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
-type LiveHolds interface {
-	AnswerAwaitedHold(taskRunID string, signal agentcontract.ApprovalSignal) (bool, error)
+type ParkedQuestions interface {
+	AnswerParkedQuestionAsOperator(ctx context.Context, taskRunID string, signal agentcontract.ApprovalSignal) (approvalgate.AnswerSettlement, error)
 }
 
 type TaskApprovalHandler struct {
-	LiveHolds       LiveHolds
+	ParkedQuestions ParkedQuestions
 	TaskLauncher    *agentruntime.TaskLauncher
 	TaskRunService  *task.TaskRunService
 	IdentityService *identity.IdentityService
@@ -40,7 +40,7 @@ type taskApprovalResponse struct {
 }
 
 func (handler TaskApprovalHandler) HandleApproveTaskRun(responseWriter http.ResponseWriter, request *http.Request) {
-	if handler.TaskRunService == nil || handler.TaskLauncher == nil || handler.IdentityService == nil {
+	if handler.TaskRunService == nil || handler.TaskLauncher == nil || handler.IdentityService == nil || handler.ParkedQuestions == nil {
 		writeApprovalError(responseWriter, http.StatusServiceUnavailable, "task approval is not configured")
 		return
 	}
@@ -58,14 +58,11 @@ func (handler TaskApprovalHandler) HandleApproveTaskRun(responseWriter http.Resp
 		writeApprovalError(responseWriter, http.StatusBadRequest, errorValue.Error())
 		return
 	}
-	if isAnswered, errorValue := handler.answerLiveWaiter(taskRun, approvalSignal); errorValue != nil {
+	settlement, errorValue := handler.ParkedQuestions.AnswerParkedQuestionAsOperator(request.Context(), taskRun.TaskRunID, approvalSignal)
+	if errorValue != nil {
 		writeApprovalError(responseWriter, http.StatusConflict, errorValue.Error())
 		return
-	} else if isAnswered {
-		writeApprovalResponse(responseWriter, taskApprovalResponse{TaskRunID: taskRun.TaskRunID, Status: "answered_in_place"})
-		return
 	}
-	approvalgate.SettleSignal(handler.TaskRunService, taskRun.TaskRunID, &approvalSignal, "operator_terminal")
 	launchResult, errorValue := handler.TaskLauncher.Launch(context.Background(), agentruntime.TaskLaunchRequest{
 		Source:                 agentruntime.TaskLaunchSourceAdmin,
 		SourceReference:        "terminal:" + taskRun.TaskRunID,
@@ -73,6 +70,7 @@ func (handler TaskApprovalHandler) HandleApproveTaskRun(responseWriter http.Resp
 		RequesterEmail:         handler.requesterEmail(taskRun.RequesterPersonID),
 		IsRuntimeRestartResume: true,
 		ExistingTaskRunID:      taskRun.TaskRunID,
+		SettledCalls:           settlement.SettledCalls(),
 		ConversationID:         taskRun.OriginConversationID,
 		Prompt:                 taskRun.Prompt,
 		PersonAccess:           handler.personAccess(taskRun.RequesterPersonID),
@@ -85,13 +83,6 @@ func (handler TaskApprovalHandler) HandleApproveTaskRun(responseWriter http.Resp
 		TaskRunID: taskRun.TaskRunID,
 		Status:    string(launchResult.TurnResult.TaskRun.Status),
 	})
-}
-
-func (handler TaskApprovalHandler) answerLiveWaiter(taskRun task.TaskRun, approvalSignal agentcontract.ApprovalSignal) (bool, error) {
-	if handler.LiveHolds == nil {
-		return false, nil
-	}
-	return handler.LiveHolds.AnswerAwaitedHold(taskRun.TaskRunID, approvalSignal)
 }
 
 func (handler TaskApprovalHandler) resolveApproval(approvalRequest taskApprovalRequest) (task.TaskRun, agentcontract.ApprovalSignal, error) {

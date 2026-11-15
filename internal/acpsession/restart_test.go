@@ -10,7 +10,6 @@ import (
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/yeomyeonggeori/blueclaw/agenttest"
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
@@ -181,12 +180,10 @@ func restartHost(t *testing.T, taskRunService *task.TaskRunService) *restartedHo
 	connectorRuntime.RegisterAdapter(messenger)
 	relay := &recordingClient{}
 	connection, _ := connectedPairWithCollaborators(t, relay, Collaborators{
-		TaskLauncher:  agentruntime.NewTaskLauncher(harness, taskRunService, nil),
-		Directory:     staticDirectory{},
-		ReplyReader:   scriptedReader{},
-		TaskRunStore:  taskRunService,
-		AnswerSettler: approvalgate.New(taskRunService),
-		SessionTurns:  connectorRuntime,
+		TaskLauncher: agentruntime.NewTaskLauncher(harness, taskRunService, nil),
+		Directory:    staticDirectory{},
+		TaskRunStore: taskRunService,
+		SessionTurns: connectorRuntime,
 	})
 	return &restartedHost{
 		taskRunService:   taskRunService,

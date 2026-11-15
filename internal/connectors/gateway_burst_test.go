@@ -11,10 +11,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
@@ -373,7 +375,9 @@ func TestAThreadAnswerIsLeftOutOfTheBurst(t *testing.T) {
 	recorder := &scriptedGatewayDecider{addressing: addressedToBot()}
 	connectorRuntime.UseGatewayDecider(recorder)
 	connectorRuntime.identityService.RememberPlatformAccount(identity.PlatformAccountIdentity{Platform: "test", ExternalUserID: "sender-user", Email: "invited@example.com"})
-	connectorRuntime.askingThreads.join(&askingThread{taskRunID: "run-1", requesterPersonID: "person-1", platform: "test", conversationID: "direct-1", replyTargetID: "thread-root"})
+	parked := connectorRuntime.taskRunService.CreateTaskRunWithOrigin("person-1", task.TaskRunOrigin{ConversationID: "direct-1", ReplyTargetID: "thread-root", IsThread: true}, "삭제해줘")
+	holdPendingCall(t, connectorRuntime, parked.TaskRunID)
+	connectorRuntime.taskRunService.AppendTaskEvent(parked.TaskRunID, TaskEventQuestionPosted, agentruntime.MarshalBody(postedQuestionRecord{HoldID: holdrecord.Holds(connectorRuntime.taskRunService.ListTaskEvent(parked.TaskRunID))[0].ID, Platform: "test", ConversationID: "direct-1", ReplyTargetID: "thread-root", MessageID: "dispatch-1"}))
 	receivedAt := time.Unix(1756800000, 0)
 	answer := burstQueuedEvent("message-answer", "direct-1", "sender-user", receivedAt)
 	answer.Event.ReplyTargetID = "thread-root"

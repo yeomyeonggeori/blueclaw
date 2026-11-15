@@ -12,22 +12,9 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
-	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 const laterStartsAt = "2099-10-03T03:00:00+09:00"
-
-type choosingAsker struct {
-	answer          ApprovalAnswer
-	offeredChoices  []holdrecord.Choice
-	offeredQuestion string
-}
-
-func (asker *choosingAsker) AskPermission(_ context.Context, _ mcpserver.ApprovalRequest, question PermissionQuestion) (ApprovalAnswer, AskStatus) {
-	asker.offeredChoices = question.Choices
-	asker.offeredQuestion = question.Confirmation
-	return asker.answer, AskAnswered
-}
 
 type recordingScheduler struct {
 	requests []task.ApprovedCallScheduleRequest
@@ -67,25 +54,23 @@ func choiceResolver() *recordingTargetResolver {
 	}}
 }
 
-func choiceGate(t *testing.T, answer ApprovalAnswer) (*Gate, *task.TaskRunService, task.TaskRun, *choosingAsker, *recordingScheduler) {
+func choiceGate(t *testing.T) (*Gate, *task.TaskRunService, task.TaskRun, *recordingPoster, *recordingScheduler) {
 	t.Helper()
-	gate, taskRunService, taskRun := gateFixture(t)
+	gate, taskRunService, taskRun, poster := gateWithPoster(t)
 	gate.UseApprovalTargetResolver(choiceResolver())
-	asker := &choosingAsker{answer: answer}
-	gate.UsePermissionAsker(asker)
 	scheduler := &recordingScheduler{}
 	gate.UseSchedules(scheduler)
-	return gate, taskRunService, taskRun, asker, scheduler
+	return gate, taskRunService, taskRun, poster, scheduler
 }
 
 func TestTheRequesterIsOfferedEveryChoiceTheTargetCarriesInItsOrder(t *testing.T) {
-	gate, taskRunService, taskRun, asker, _ := choiceGate(t, ApprovalAnswer{Signal: agentcontract.ApprovalSignalApprove, ChoiceKey: "now"})
+	gate, taskRunService, taskRun, poster, _ := choiceGate(t)
 
 	if _, errorValue := gate.AwaitApproval(context.Background(), hostUpdateRequest(taskRun.TaskRunID)); errorValue != nil {
 		t.Fatalf("await approval: %v", errorValue)
 	}
-	if len(asker.offeredChoices) != 2 || asker.offeredChoices[0].Key != "offHours" || asker.offeredChoices[1].Key != "now" {
-		t.Fatalf("the requester was offered %+v, expected the later time first and now second", asker.offeredChoices)
+	if len(poster.questions) != 1 || len(poster.questions[0].Choices) != 2 || poster.questions[0].Choices[0].Key != "offHours" || poster.questions[0].Choices[1].Key != "now" {
+		t.Fatalf("the requester was offered %+v, expected the later time first and now second", poster.questions)
 	}
 	recorded := OfferedChoices(taskRunService.ListTaskEvent(taskRun.TaskRunID))
 	if len(recorded) != 2 || recorded[0].StartsAt != laterStartsAt {
@@ -93,15 +78,12 @@ func TestTheRequesterIsOfferedEveryChoiceTheTargetCarriesInItsOrder(t *testing.T
 	}
 }
 
-func TestChoosingNowRunsTheCallInsideTheTurn(t *testing.T) {
-	gate, _, taskRun, _, scheduler := choiceGate(t, ApprovalAnswer{Signal: agentcontract.ApprovalSignalApprove, ChoiceKey: "now"})
+func TestChoosingNowRunsTheCallWhenTheResumedRunCallsAgain(t *testing.T) {
+	gate, _, taskRun, _, scheduler := choiceGate(t)
 
-	outcome, errorValue := gate.AwaitApproval(context.Background(), hostUpdateRequest(taskRun.TaskRunID))
-	if errorValue != nil {
-		t.Fatalf("await approval: %v", errorValue)
-	}
-	if outcome.Decision != mcpserver.ApprovalDecisionApproved {
-		t.Fatalf("choosing now decided %q, expected approved", outcome.Decision)
+	_, resumed := parkAndAnswer(t, gate, hostUpdateRequest(taskRun.TaskRunID), "now")
+	if resumed.Decision != mcpserver.ApprovalDecisionApproved {
+		t.Fatalf("choosing now decided %q when the resumed run called again, expected approved", resumed.Decision)
 	}
 	if len(scheduler.requests) != 0 {
 		t.Fatalf("choosing now also scheduled %d calls", len(scheduler.requests))
@@ -109,14 +91,11 @@ func TestChoosingNowRunsTheCallInsideTheTurn(t *testing.T) {
 }
 
 func TestChoosingALaterTimeBindsTheApprovalToThatCallAndThatRequester(t *testing.T) {
-	gate, taskRunService, taskRun, _, scheduler := choiceGate(t, ApprovalAnswer{Signal: agentcontract.ApprovalSignalApprove, ChoiceKey: "offHours"})
+	gate, taskRunService, taskRun, _, scheduler := choiceGate(t)
 
-	outcome, errorValue := gate.AwaitApproval(context.Background(), hostUpdateRequest(taskRun.TaskRunID))
-	if errorValue != nil {
-		t.Fatalf("await approval: %v", errorValue)
-	}
-	if outcome.Decision != mcpserver.ApprovalDecisionDeferred {
-		t.Fatalf("choosing a later time decided %q, expected deferred", outcome.Decision)
+	settlement, _ := parkAndAnswer(t, gate, hostUpdateRequest(taskRun.TaskRunID), "offHours")
+	if settlement.SettledCall == nil || settlement.SettledCall.Result.Failure != nil {
+		t.Fatalf("choosing a later time settles the call as scheduled, got %+v", settlement)
 	}
 	if len(scheduler.requests) != 1 {
 		t.Fatalf("choosing a later time scheduled %d calls, expected one", len(scheduler.requests))
@@ -143,31 +122,24 @@ func TestChoosingALaterTimeBindsTheApprovalToThatCallAndThatRequester(t *testing
 }
 
 func TestCancellingRunsNothingAndSchedulesNothing(t *testing.T) {
-	gate, _, taskRun, _, scheduler := choiceGate(t, ApprovalAnswer{Signal: agentcontract.ApprovalSignalReject})
+	gate, _, taskRun, _, scheduler := choiceGate(t)
 
-	outcome, errorValue := gate.AwaitApproval(context.Background(), hostUpdateRequest(taskRun.TaskRunID))
-	if errorValue != nil {
-		t.Fatalf("await approval: %v", errorValue)
-	}
-	if outcome.Decision != mcpserver.ApprovalDecisionRejected || len(scheduler.requests) != 0 {
-		t.Fatalf("cancelling decided %q and scheduled %d calls", outcome.Decision, len(scheduler.requests))
+	settlement, _ := parkAndAnswer(t, gate, hostUpdateRequest(taskRun.TaskRunID), CancelChoiceKey)
+	if settlement.Signal != agentcontract.ApprovalSignalReject || settlement.SettledCall == nil || len(scheduler.requests) != 0 {
+		t.Fatalf("cancelling settled %+v and scheduled %d calls", settlement, len(scheduler.requests))
 	}
 }
 
 func TestTheDeferredCallReachesTheModelAsAScheduleWithNothingRunYet(t *testing.T) {
-	gate, _, taskRun, _, _ := choiceGate(t, ApprovalAnswer{Signal: agentcontract.ApprovalSignalApprove, ChoiceKey: "offHours"})
-	review, errorValue := gate.TurnGate(TurnContext{RequesterPersonID: "person-admin", Platform: "buzz", ConversationID: "conversation-1", ReplyTargetID: "message-1"}).ReviewToolCall(
-		toolcontract.WithTaskRunID(context.Background(), taskRun.TaskRunID),
-		toolcontract.ToolInvocation{ToolName: "host_update", Input: json.RawMessage(`{}`)},
-		toolcontract.ToolDefinition{Name: "host_update", RequiresApproval: true},
-	)
-	if errorValue != nil {
-		t.Fatalf("review: %v", errorValue)
+	gate, _, taskRun, _, _ := choiceGate(t)
+
+	settlement, _ := parkAndAnswer(t, gate, hostUpdateRequest(taskRun.TaskRunID), "offHours")
+
+	if settlement.SettledCall == nil || settlement.SettledCall.ToolName != "host_update" {
+		t.Fatalf("the held call's result is what the resumed run is told, got %+v", settlement)
 	}
-	if review.MayProceed {
-		t.Fatal("a call deferred to a later time went ahead now")
-	}
-	if review.Result.Failure != nil || len(review.Result.Effects) != 1 || review.Result.Effects[0].ObjectType != "schedule" {
-		t.Fatalf("the model was told %+v, expected one created schedule", review.Result)
+	result := settlement.SettledCall.Result
+	if result.Failure != nil || len(result.Effects) != 1 || result.Effects[0].ObjectType != "schedule" {
+		t.Fatalf("the model was told %+v, expected one created schedule", result)
 	}
 }

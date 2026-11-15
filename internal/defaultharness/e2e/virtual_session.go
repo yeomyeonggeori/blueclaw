@@ -377,7 +377,6 @@ type VirtualSessionHarness struct {
 	runtime          *connectors.ConnectorRuntime
 	adapter          *virtualAdapter
 	acpSession       *virtualACPSession
-	askingTurn       *askingTurn
 	cleanup          func()
 
 	schedules      *virtualSchedules
@@ -1004,7 +1003,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	virtualApprovalGate.UseSchedules(schedules)
 	runtime.UseApprovalGate(virtualApprovalGate)
 	useVirtualDirectMessages(runtime, identityService)
-	virtualApprovalGate.UsePermissionAsker(runtime.ThreadPermissionAsker())
+	virtualApprovalGate.UseQuestionPoster(runtime.ThreadQuestionPoster())
 	virtualTaskLauncher.UseApprovalGate(virtualApprovalGate)
 	virtualTaskLauncher.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, highLanguageModel))
 	virtualTaskLauncher.UseRequesterEmailResolver(identityService)
@@ -1016,12 +1015,10 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	if scenario.IsDeliveredOverACP {
 		var errorValue error
 		acpSession, errorValue = openVirtualACPSession(acpsession.Collaborators{
-			AnswerSettler: virtualApprovalGate,
-			TaskLauncher:  virtualTaskLauncher,
-			Directory:     identityService,
-			ReplyReader:   scenarioReader,
-			SessionTurns:  runtime,
-			TaskRunStore:  taskRunService,
+			TaskLauncher: virtualTaskLauncher,
+			Directory:    identityService,
+			SessionTurns: runtime,
+			TaskRunStore: taskRunService,
 		}, virtualConversationID, scenario.RecordCatalogURL)
 		if errorValue != nil {
 			cleanup()
@@ -2658,7 +2655,6 @@ func (harness *VirtualSessionHarness) Run(ctx context.Context) (VirtualSessionRe
 	if harness.cleanup != nil {
 		defer harness.cleanup()
 	}
-	defer harness.stopAskingTurn()
 	if harness.scenario.ProgressWriter != nil {
 		unregisterProgress := harness.taskEventService.RegisterTurnObserver(streamProgressObserver(harness.scenario.ProgressWriter))
 		defer unregisterProgress()
