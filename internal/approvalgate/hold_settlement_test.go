@@ -98,52 +98,15 @@ func TestTheSecondReaderOfOneAnswerLeavesTheRunToTheFirst(t *testing.T) {
 func TestARunWaitsForItsAnswerThroughOneWaiterAtATime(t *testing.T) {
 	gate := New(task.NewTaskRunService(task.NewTaskEventService()))
 
-	stopAwaiting, isTheWaiter := gate.AwaitAnswer("run-1", func() {})
+	stopAwaiting, isTheWaiter := gate.AwaitAnswer("run-1")
 	if !isTheWaiter {
 		t.Fatal("the first to wait for a run's answer is its waiter")
 	}
-	if _, isAlsoAWaiter := gate.AwaitAnswer("run-1", func() {}); isAlsoAWaiter {
+	if _, isAlsoAWaiter := gate.AwaitAnswer("run-1"); isAlsoAWaiter {
 		t.Fatal("a second listener on the same thread would read the same reply and resume the run again")
 	}
 	stopAwaiting()
-	if _, isTheWaiterNow := gate.AwaitAnswer("run-1", func() {}); !isTheWaiterNow {
+	if _, isTheWaiterNow := gate.AwaitAnswer("run-1"); !isTheWaiterNow {
 		t.Fatal("once the waiter stops, the run can be waited for again")
-	}
-}
-
-func runWaitingInThread(t *testing.T, taskRunService *task.TaskRunService, replyTargetID string) string {
-	t.Helper()
-	taskRunID := taskRunService.CreateTaskRunWithOrigin("person-1", task.TaskRunOrigin{ConversationID: "direct-1", ReplyTargetID: replyTargetID, IsThread: true}, "post to QA").TaskRunID
-	if _, errorValue := taskRunService.AdvanceTaskRun(taskRunID, "default"); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if _, errorValue := taskRunService.PauseTaskRun(taskRunID, agentcontract.TaskStatusWaitingApproval, "post it?"); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	holdrecord.Open(taskRunService, taskRunID, agentcontract.HeldCall{ToolName: "message_send"}, nil)
-	return taskRunID
-}
-
-func TestANewQuestionInAThreadEndsTheWaitForTheOlderOneThere(t *testing.T) {
-	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
-	gate := New(taskRunService)
-	older := runWaitingInThread(t, taskRunService, "thread-1")
-	elsewhere := runWaitingInThread(t, taskRunService, "thread-2")
-	olderWasSuperseded, elsewhereWasSuperseded := false, false
-	gate.AwaitAnswer(older, func() { olderWasSuperseded = true })
-	gate.AwaitAnswer(elsewhere, func() { elsewhereWasSuperseded = true })
-	newer := runWaitingInThread(t, taskRunService, "thread-1")
-
-	_, _, leave := gate.askAsTheThreadsQuestion(context.Background(), newer)
-	defer leave()
-
-	if !olderWasSuperseded || gate.IsAwaitingAnswer(older) {
-		t.Fatal("a thread waits for one answer: the older question there must stop waiting when a newer one is asked")
-	}
-	if elsewhereWasSuperseded || !gate.IsAwaitingAnswer(elsewhere) {
-		t.Fatal("a question in another thread is not the same question and keeps waiting")
-	}
-	if !gate.HasNewerQuestionInItsThread(older) || gate.HasNewerQuestionInItsThread(newer) {
-		t.Fatal("after a restart the record alone must say which question in a thread is the current one")
 	}
 }

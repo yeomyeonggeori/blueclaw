@@ -44,12 +44,9 @@ func (gate *Gate) AskHarnessPermission(ctx context.Context, approvalRequest mcps
 		return acp.RequestPermissionOutcome{}, AskUnreachable
 	}
 	hold := holdrecord.Open(gate.taskRunService, taskRunID, heldCallOfHarnessQuestion(question), nil)
-	askContext, wasSuperseded, stopAwaiting := gate.askAsTheThreadsQuestion(ctx, taskRunID)
+	stopAwaiting, _ := gate.AwaitAnswer(taskRunID)
 	defer stopAwaiting()
-	outcome, status := harnessAsker.AskHarnessPermission(askContext, approvalRequest, question)
-	if wasSuperseded() {
-		status = AskSuperseded
-	}
+	outcome, status := harnessAsker.AskHarnessPermission(ctx, approvalRequest, question)
 	switch status {
 	case AskAnswered:
 		gate.settleHarnessHold(taskRunID, hold.ID, question.Options, outcome)
