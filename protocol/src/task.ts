@@ -237,8 +237,6 @@ export const taskEventNameSchema = z.enum(TaskEventName);
 
 export enum HostTaskEventName {
   AgentAmbientDutyLaunch = 'agent.ambient_duty_launch',
-  ApprovalExpired = 'approval.expired',
-  ApprovalSuperseded = 'approval.superseded',
   ApprovalUnreachable = 'approval.unreachable',
   ApprovalWordingFailed = 'approval.wording_failed',
   BlueclawConnectorFilesUndelivered = 'blueclaw.connector.files_undelivered',
