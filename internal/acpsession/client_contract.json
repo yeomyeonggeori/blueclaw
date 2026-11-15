@@ -30,6 +30,10 @@
 			"reason"
 		]
 	},
+	"handoffOptions": {
+		"abandoned": "reject",
+		"handedBack": "approve"
+	},
 	"toolCalls": {
 		"startKind": "tool_call",
 		"startFields": [
