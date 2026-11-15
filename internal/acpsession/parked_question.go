@@ -38,7 +38,7 @@ func (agent *Agent) HandleExtensionMethod(ctx context.Context, method string, pa
 
 func (agent *Agent) postParkedQuestion(ctx context.Context, sessionID acp.SessionId, approvalRequest mcpserver.ApprovalRequest, question approvalgate.ParkedQuestion) error {
 	sessionTurn := agent.sessionTurns.OpenSessionTurn(ctx, questionEventOf(approvalRequest), approvalRequest.RequesterPersonID, func(ctx context.Context, replyTarget connectors.ReplyTarget, reply connectors.OutboundReply) (string, error) {
-		return agent.deliverReply(ctx, sessionID, Delivery{DeliveryID: newRandomIdentifier(), ReplyTargetID: replyTarget.ReplyTargetID, HandoffID: question.HandoffID}, reply)
+		return agent.deliverReply(ctx, sessionID, Delivery{DeliveryID: newRandomIdentifier(), ReplyTargetID: replyTarget.ReplyTargetID, HandoffID: question.HandoffID, IsFinal: true}, reply)
 	})
 	errorValue := sessionTurn.PostParkedQuestion(ctx, approvalRequest.TaskRunID, question.HoldID)
 	if errorValue != nil && (ctx.Err() != nil || agent.hasLostItsClient()) {

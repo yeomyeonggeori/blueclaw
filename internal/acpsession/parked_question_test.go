@@ -148,8 +148,8 @@ func TestAHeldCallReachesTheSessionAsAnOrdinaryMessageAndNeverAsAPermissionReque
 		t.Fatalf("the session was sent %v and %d permission requests for the hold %+v, expected its question once as a message", messages, plane.client.permissionRequests(), holds)
 	}
 	deliveries := plane.deliveries()
-	if len(deliveries) != 1 || deliveries[0].ReplyTargetID != "thread-root" || deliveries[0].DeliveryID == "" {
-		t.Fatalf("the question's delivery was %+v, expected it addressed to the thread the run answers in", deliveries)
+	if len(deliveries) != 1 || deliveries[0].ReplyTargetID != "thread-root" || deliveries[0].DeliveryID == "" || !deliveries[0].IsFinal {
+		t.Fatalf("the question's delivery was %+v, expected the last message of a delivery addressed to the thread the run answers in", deliveries)
 	}
 	if messageID := connectors.PostedApprovalQuestionMessageID(plane.taskRunService.ListTaskEvent(taskRun.TaskRunID)); messageID != "posted-1" {
 		t.Fatalf("the ledger says the question was posted as %q, expected the message the relay reported", messageID)
