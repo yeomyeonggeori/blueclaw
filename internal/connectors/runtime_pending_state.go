@@ -10,8 +10,6 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
-const approvalExpiry = 24 * time.Hour
-
 func (connectorRuntime *ConnectorRuntime) findPendingAskInteraction(personID string, event PlatformInboundEvent) (AskInteraction, bool) {
 	taskRuns := connectorRuntime.taskRunService.ListTaskRunByPersonID(personID)
 	var selectedInteraction AskInteraction
@@ -50,7 +48,7 @@ func (connectorRuntime *ConnectorRuntime) findActiveGoal(personID string, event 
 		if !taskRunSharesMessageThread(taskRun, event) {
 			continue
 		}
-		if time.Since(taskRun.UpdatedAt) > approvalExpiry {
+		if task.StaleUnattendedTaskRunReason(taskRun, time.Now()) != "" {
 			continue
 		}
 		if isSelected && !taskRun.UpdatedAt.After(selectedTaskRun.UpdatedAt) {
