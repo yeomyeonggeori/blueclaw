@@ -96,6 +96,27 @@ type recordingClient struct {
 	posted             []string
 	isSilent           bool
 	permissionAsked    []acp.RequestPermissionRequest
+	closedHandoffs     []string
+}
+
+func (client *recordingClient) HandleExtensionMethod(_ context.Context, method string, params json.RawMessage) (any, error) {
+	if method != HandoffClosedExtensionMethod {
+		return nil, acp.NewMethodNotFound(method)
+	}
+	notice := HandoffClosedNotice{}
+	if errorValue := json.Unmarshal(params, &notice); errorValue != nil {
+		return nil, errorValue
+	}
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	client.closedHandoffs = append(client.closedHandoffs, notice.HandoffID)
+	return nil, nil
+}
+
+func (client *recordingClient) handoffsClosed() []string {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	return append([]string{}, client.closedHandoffs...)
 }
 
 func (client *recordingClient) SessionUpdate(ctx context.Context, notification acp.SessionNotification) error {

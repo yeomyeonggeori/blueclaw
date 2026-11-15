@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"strings"
+
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 )
 
 func offeredChoiceKey(interaction *AskInteraction, key string) (string, bool) {
@@ -19,7 +21,28 @@ func offeredChoiceKey(interaction *AskInteraction, key string) (string, bool) {
 	return "", false
 }
 
+type HandoffCloser interface {
+	CloseHandoff(ctx context.Context, platform string, conversationID string, handoffID string)
+}
+
+func (connectorRuntime *ConnectorRuntime) UseHandoffCloser(handoffCloser HandoffCloser) {
+	connectorRuntime.handoffCloser = handoffCloser
+}
+
+func leavesTheHandoffUnfinished(optionKey string) bool {
+	return optionKey == "" || approvalgate.IsDecliningOption(optionKey)
+}
+
+func (connectorRuntime *ConnectorRuntime) closeHandoffLeftUnfinished(ctx context.Context, parked parkedRun, optionKey string) {
+	handoffID := strings.TrimSpace(parked.hold.Call.HandoffID)
+	if handoffID == "" || connectorRuntime.handoffCloser == nil || !leavesTheHandoffUnfinished(optionKey) {
+		return
+	}
+	connectorRuntime.handoffCloser.CloseHandoff(context.WithoutCancel(ctx), parked.posted.Platform, parked.posted.ConversationID, handoffID)
+}
+
 func (connectorRuntime *ConnectorRuntime) publishQuestionResolution(ctx context.Context, parked parkedRun, optionKey string) {
+	connectorRuntime.closeHandoffLeftUnfinished(ctx, parked, optionKey)
 	interaction := parked.interaction()
 	if interaction == nil || parked.posted.HoldID == "" {
 		return

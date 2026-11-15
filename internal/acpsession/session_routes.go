@@ -66,6 +66,17 @@ func (routes *SessionRoutes) conversationsHeld() []string {
 	return held
 }
 
+func (routes *SessionRoutes) CloseHandoff(ctx context.Context, platform string, conversationID string, handoffID string) {
+	route, isFound := routes.routeFor(platform, conversationID)
+	if !isFound {
+		routes.logger.Info("acpsession.handoff.nobody_to_close_it", "handoffID", handoffID, "platform", platform, "conversationID", conversationID)
+		return
+	}
+	if errorValue := route.agent.connection.NotifyExtension(ctx, HandoffClosedExtensionMethod, HandoffClosedNotice{HandoffID: handoffID}); errorValue != nil {
+		routes.logger.Warn("acpsession.handoff.close_not_sent", "handoffID", handoffID, "error", errorValue.Error())
+	}
+}
+
 func (routes *SessionRoutes) PostQuestion(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question approvalgate.ParkedQuestion) error {
 	route, isFound := routes.routeFor(approvalRequest.Platform, approvalRequest.ConversationID)
 	if !isFound {

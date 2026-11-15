@@ -70,6 +70,7 @@ func aParkingPlane(t *testing.T, readOptionID string) *parkingPlane {
 		TaskRunStore: taskRunService,
 	})
 	plane.gate.UseQuestionPoster(sessionRoutes)
+	connectorRuntime.UseHandoffCloser(sessionRoutes)
 	plane.connection = connection
 	return plane
 }
@@ -398,5 +399,70 @@ func TestAReplyThatPicksNoOptionLeavesTheParkedRunToTheTurnThatContinuesIt(t *te
 	}
 	if messages := plane.messagesPosted(); len(messages) != 2 {
 		t.Fatalf("the session was sent %v, expected the question and one reply", messages)
+	}
+}
+
+func (plane *parkingPlane) parkARunOnAHandoff(t *testing.T) agentcontract.TaskRun {
+	t.Helper()
+	taskRun := plane.taskRunService.CreateTaskRunWithOrigin("person-sample", task.TaskRunOrigin{ConversationID: parkedConversationID, ReplyTargetID: "thread-root", IsThread: true}, "로그인해줘")
+	named := approvalgate.ApprovalTarget{InputField: "handoff", ID: "handoff-1", Title: "https://portal.example.com", HandoffID: "handoff-1"}
+	outcome, errorValue := plane.gate.AwaitApproval(approvalgate.WithRefusalTarget(context.Background(), named), plane.heldCallRequest(taskRun.TaskRunID))
+	if errorValue != nil || outcome.Decision != mcpserver.ApprovalDecisionHeld {
+		t.Fatalf("the hand-over came back %+v %v, expected the run parked on it", outcome, errorValue)
+	}
+	return taskRun
+}
+
+func (plane *parkingPlane) handoffsClosedOnceSettled(t *testing.T, expectedCount int) []string {
+	t.Helper()
+	deadline := time.After(2 * time.Second)
+	for {
+		if closed := plane.client.handoffsClosed(); len(closed) >= expectedCount {
+			return closed
+		}
+		select {
+		case <-deadline:
+			return plane.client.handoffsClosed()
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+}
+
+func TestAHandoffTheRequesterDeclinesOrLeavesInWordsIsClosedAtTheRelay(t *testing.T) {
+	for name, readOptionID := range map[string]string{"declined": approvalgate.RejectOptionKey, "moved on": ""} {
+		t.Run(name, func(t *testing.T) {
+			plane := aParkingPlane(t, readOptionID)
+			plane.launcher.startsANewRun = true
+			sessionID := openSessionForTest(t, plane.connection, sessionMeta("sample@example.test", parkedConversationID))
+			taskRun := plane.parkARunOnAHandoff(t)
+
+			plane.replyInTheThread(t, sessionID, "message-2", "안 할래, 오늘 날씨나 알려줘")
+
+			if closed := plane.handoffsClosedOnceSettled(t, 1); len(closed) != 1 || closed[0] != "handoff-1" {
+				t.Fatalf("the relay was told to close %v, so the hand-over page stays open until it expires", closed)
+			}
+			if holds := plane.holds(taskRun.TaskRunID); len(holds) != 1 || holds[0].State != holdrecord.StateRejected {
+				t.Fatalf("holds %+v: expected the hand-over question closed", holds)
+			}
+		})
+	}
+}
+
+func TestAHandoffHandedBackOrAnOrdinaryQuestionDeclinedClosesNothingAtTheRelay(t *testing.T) {
+	handedBack := aParkingPlane(t, "")
+	handedBackSession := openSessionForTest(t, handedBack.connection, sessionMeta("sample@example.test", parkedConversationID))
+	handedBack.parkARunOnAHandoff(t)
+	if errorValue := handedBack.reportHandoffEnded(handedBackSession, "handoff-1", approvalgate.ApproveOptionKey); errorValue != nil {
+		t.Fatalf("the relay's report was refused: %v", errorValue)
+	}
+
+	declined := aParkingPlane(t, approvalgate.RejectOptionKey)
+	declinedSession := openSessionForTest(t, declined.connection, sessionMeta("sample@example.test", parkedConversationID))
+	declined.parkARun(t)
+	declined.replyInTheThread(t, declinedSession, "message-2", "아니 지우지 마")
+
+	time.Sleep(50 * time.Millisecond)
+	if closed := append(handedBack.client.handoffsClosed(), declined.client.handoffsClosed()...); len(closed) != 0 {
+		t.Fatalf("the relay was told to close %v, and none of these left a hand-over unfinished", closed)
 	}
 }

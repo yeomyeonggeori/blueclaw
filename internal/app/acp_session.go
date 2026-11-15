@@ -19,6 +19,7 @@ func newACPSessionServer(inbound InboundOptions, kernel agentKernel, directory i
 	}
 	sessionRoutes := acpsession.NewSessionRoutes(logger)
 	kernel.toolCatalog.approvalGate.UseQuestionPoster(approvalgate.PosterRoutedBy(sessionRoutes, threadQuestionPosterFor(inbound, connectorRuntime)))
+	connectorRuntime.UseHandoffCloser(sessionRoutes)
 	return acpsession.NewServer(socketPath, acpsession.Collaborators{
 		TaskLauncher: taskLauncher,
 		Directory:    directory.identityService,

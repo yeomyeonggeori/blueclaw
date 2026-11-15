@@ -13,7 +13,14 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 )
 
-const HandoffEndedExtensionMethod = "_kim.intern/handoffEnded"
+const (
+	HandoffEndedExtensionMethod  = "_kim.intern/handoffEnded"
+	HandoffClosedExtensionMethod = "_kim.intern/handoffClosed"
+)
+
+type HandoffClosedNotice struct {
+	HandoffID string `json:"handoffID"`
+}
 
 type HandoffEndedReport struct {
 	SessionID string `json:"sessionId"`

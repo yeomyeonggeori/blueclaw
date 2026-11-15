@@ -6,6 +6,7 @@
 	},
 	"extensionMethods": {
 		"delivered": "_kim.intern/delivered",
+		"handoffClosed": "_kim.intern/handoffClosed",
 		"handoffEnded": "_kim.intern/handoffEnded",
 		"undelivered": "_kim.intern/undelivered"
 	},
@@ -18,6 +19,9 @@
 			"deliveryID",
 			"replyTargetID",
 			"isFinal",
+			"handoffID"
+		],
+		"handoffClosed": [
 			"handoffID"
 		],
 		"handoffEnded": [

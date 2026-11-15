@@ -128,6 +128,7 @@ type ConnectorRuntime struct {
 	taskLauncher           *agentruntime.TaskLauncher
 	approvalGate           *approvalgate.Gate
 	approvalReplyReader    approvalreply.Reader
+	handoffCloser          HandoffCloser
 	questionPosting        questionPosting
 	directMessageOpener    DirectMessageOpener
 	directMessageAccounts  DirectMessageAccounts
