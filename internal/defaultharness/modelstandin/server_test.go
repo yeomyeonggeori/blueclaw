@@ -271,7 +271,7 @@ func TestAnApprovalReplyIsReadAsTheOptionTheScriptedApprovalPicks(t *testing.T) 
 
 	reading, errorValue := approvalreply.NewDecisionModelReader(running.decisionModel()).Read(context.Background(), question, "응 보내줘", nil)
 
-	if errorValue != nil || reading.ApprovedOptionID != "approve" {
+	if errorValue != nil || reading.OptionID != "approve" {
 		t.Fatalf("expected the reply to be read as approve, got %+v %v", reading, errorValue)
 	}
 	running.mustBeSettled(t)

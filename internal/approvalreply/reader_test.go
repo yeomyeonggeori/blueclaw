@@ -43,22 +43,22 @@ func (failingModel) Decide(context.Context, model.DecisionRequest) (model.Decisi
 	return model.DecisionResponse{}, errors.New("decisions endpoint answered 502")
 }
 
-func TestAnAllowingOptionIsAnApprovalOnlyWhenItOutweighsEverythingElseTogether(t *testing.T) {
+func TestAnOptionIsChosenOnlyWhenItOutweighsEverythingElseTogether(t *testing.T) {
 	for _, readingCase := range []struct {
 		name          string
 		probabilities map[string]float64
 		approved      string
 	}{
-		{name: "a plurality is not a majority", probabilities: map[string]float64{approveOptionID: 0.4, OtherOptionID: 0.35, rejectOptionID: 0.25}},
-		{name: "a majority approves", probabilities: map[string]float64{approveOptionID: 0.55, OtherOptionID: 0.3, rejectOptionID: 0.15}, approved: approveOptionID},
-		{name: "a tie is not a majority", probabilities: map[string]float64{approveOptionID: 0.5, OtherOptionID: 0.5}},
+		{name: "a plurality is not a majority", probabilities: map[string]float64{approveOptionID: 0.4, NoneOptionID: 0.35, rejectOptionID: 0.25}},
+		{name: "a majority approves", probabilities: map[string]float64{approveOptionID: 0.55, NoneOptionID: 0.3, rejectOptionID: 0.15}, approved: approveOptionID},
+		{name: "a tie is not a majority", probabilities: map[string]float64{approveOptionID: 0.5, NoneOptionID: 0.5}},
 		{name: "no probabilities are no approval", probabilities: map[string]float64{}},
-		{name: "a declining majority is no approval", probabilities: map[string]float64{rejectOptionID: 0.9, approveOptionID: 0.1}},
+		{name: "a declining majority chooses the decline", probabilities: map[string]float64{rejectOptionID: 0.9, approveOptionID: 0.1}, approved: rejectOptionID},
 	} {
 		decisionModel := &answeringModel{choice: approveOptionID, probabilities: readingCase.probabilities}
 		reading, errorValue := NewDecisionModelReader(decisionModel).Read(context.Background(), approvalQuestion("보낼까요?"), "ㅇ", nil)
-		if errorValue != nil || reading.ApprovedOptionID != readingCase.approved {
-			t.Fatalf("%s: read %+v, want approval of %q: %v", readingCase.name, reading, readingCase.approved, errorValue)
+		if errorValue != nil || reading.OptionID != readingCase.approved {
+			t.Fatalf("%s: read %+v, want the choice %q: %v", readingCase.name, reading, readingCase.approved, errorValue)
 		}
 	}
 }
@@ -74,11 +74,11 @@ func TestEachAllowingOptionIsWeighedAgainstAllTheRest(t *testing.T) {
 		approved      string
 	}{
 		{probabilities: map[string]float64{"now": 0.45, "offHours": 0.45, "cancel": 0.1}},
-		{probabilities: map[string]float64{"now": 0.2, "offHours": 0.7, OtherOptionID: 0.1}, approved: "offHours"},
+		{probabilities: map[string]float64{"now": 0.2, "offHours": 0.7, NoneOptionID: 0.1}, approved: "offHours"},
 	} {
 		decisionModel := &answeringModel{choice: "now", probabilities: readingCase.probabilities}
 		reading, _ := NewDecisionModelReader(decisionModel).Read(context.Background(), question, "새벽에", nil)
-		if reading.ApprovedOptionID != readingCase.approved {
+		if reading.OptionID != readingCase.approved {
 			t.Fatalf("%v: read %+v, want %q", readingCase.probabilities, reading, readingCase.approved)
 		}
 	}
@@ -87,7 +87,7 @@ func TestEachAllowingOptionIsWeighedAgainstAllTheRest(t *testing.T) {
 func TestOtherAndAnOptionNobodyOfferedAreNotAnApproval(t *testing.T) {
 	for _, choice := range []string{"other", "tomorrowNoon"} {
 		reading, errorValue := NewDecisionModelReader(&answeringModel{choice: choice}).Read(context.Background(), approvalQuestion("보낼까요?"), "음", nil)
-		if errorValue != nil || reading.IsApproval() {
+		if errorValue != nil || reading.IsChoice() {
 			t.Fatalf("%s read as an approval %+v: %v", choice, reading, errorValue)
 		}
 	}
@@ -99,7 +99,7 @@ func TestTheDecliningOptionIsTheOneOfferedAsDeclining(t *testing.T) {
 	}
 }
 
-func TestTheQuestionOffersExactlyTheOptionsAndOtherAndNothingElse(t *testing.T) {
+func TestTheQuestionOffersExactlyTheOptionsAndNoneAndNothingElse(t *testing.T) {
 	decisionModel := &answeringModel{choice: "other"}
 	question := Question{Text: "언제 할까요?", Options: []Option{
 		{ID: "now", Meaning: AllowMeaning("run it now")},
@@ -121,7 +121,7 @@ func TestTheQuestionOffersExactlyTheOptionsAndOtherAndNothingElse(t *testing.T) 
 		offered = append(offered, optionID)
 	}
 	sort.Strings(offered)
-	expected := []string{"cancel", "now", "offHours", "other"}
+	expected := []string{"cancel", "none", "now", "offHours"}
 	if len(offered) != len(expected) {
 		t.Fatalf("expected the options %v, got %v", expected, offered)
 	}
@@ -138,7 +138,7 @@ func TestAPlainApprovalQuestionOffersApproveRejectAndOther(t *testing.T) {
 	NewDecisionModelReader(decisionModel).Read(context.Background(), approvalQuestion("보낼까요?"), "ㅇ", nil)
 
 	criteria, _ := decisionModel.requests[0].Questions[AnswerQuestionName].Criteria.(map[string]string)
-	if len(criteria) != 3 || criteria[approveOptionID] == "" || criteria[rejectOptionID] == "" || criteria[OtherOptionID] == "" {
+	if len(criteria) != 3 || criteria[approveOptionID] == "" || criteria[rejectOptionID] == "" || criteria[NoneOptionID] == "" {
 		t.Fatalf("expected approve, reject and other, got %+v", criteria)
 	}
 }
@@ -159,7 +159,7 @@ func TestAnEmptyReplyIsNotSentToTheModel(t *testing.T) {
 
 	reading, errorValue := NewDecisionModelReader(decisionModel).Read(context.Background(), approvalQuestion("보낼까요?"), "  ", nil)
 
-	if errorValue == nil || reading.IsApproval() || len(decisionModel.requests) != 0 {
+	if errorValue == nil || reading.IsChoice() || len(decisionModel.requests) != 0 {
 		t.Fatalf("an empty reply reached the model: read=%+v error=%v", reading, errorValue)
 	}
 }
@@ -214,11 +214,11 @@ func TestSeveralAllowingOptionsAreToldApartByTheirOwnWords(t *testing.T) {
 func TestAnAnswerInOwnWordsIsAnOptionOfItsOwnAndAnApproval(t *testing.T) {
 	question := Question{Options: OptionsOf([]Offer{{ID: "1", Name: "회의실 A"}, {ID: OwnWordsOptionID}, {ID: "cancel", IsDeclining: true}})}
 
-	if question.Options[1].Meaning != ownWordsMeaning || question.Options[1].Meaning == otherMeaning {
+	if question.Options[1].Meaning != ownWordsMeaning || question.Options[1].Meaning == noneMeaning {
 		t.Fatalf("expected answering in other words to be told apart from picking nothing, got %+v", question.Options)
 	}
-	reading := Reading{ApprovedOptionID: approvedOption(question, model.DecisionAnswer{Probabilities: map[string]float64{OwnWordsOptionID: 0.8, OtherOptionID: 0.2}})}
-	if !reading.IsApproval() || !reading.IsOwnWords() {
+	reading := Reading{OptionID: chosenOption(question, model.DecisionAnswer{Probabilities: map[string]float64{OwnWordsOptionID: 0.8, NoneOptionID: 0.2}})}
+	if !reading.IsChoice() || !reading.IsOwnWords() {
 		t.Fatalf("an answer in the requester's own words answers the question, read as %+v", reading)
 	}
 }

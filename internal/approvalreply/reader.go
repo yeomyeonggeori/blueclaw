@@ -11,17 +11,17 @@ import (
 )
 
 const (
-	OtherOptionID    = "other"
+	NoneOptionID     = "none"
 	OwnWordsOptionID = "own_words"
 
 	AnswerQuestionName = "answer"
 )
 
-const instructions = `The state holds a question a person was asked (postedQuestion) and their reply (reply). Which option does the reply pick? Read the reply as an answer to that question, by what the person means, in any language and any script. A reply to a question is usually brief: a word, a bit of shorthand or a single character is a full answer, and polite or friendly words around it do not change it. Choose other only when the reply does not pick any of the options.`
+const instructions = `The state holds a question a person was asked (postedQuestion) and their reply (reply). Which option does the reply pick? Read the reply as an answer to that question, by what the person means, in any language and any script. A reply to a question is usually brief: a word, a bit of shorthand or a single character is a full answer, and polite or friendly words around it do not change it. Choose none when the reply does not pick any of the options. Do not read a choice into a reply that asks, adds or changes something, or talks about something else; that reply picks none.`
 
 const (
-	RejectMeaning   = "the person declines, cancels or halts the action, with or without a reason"
-	otherMeaning    = "the reply picks none of the options: it asks something, leaves the decision open, adds to or changes what would be done (target, recipients, content, scope, time or conditions), or is an unrelated request"
+	RejectMeaning   = "the person answers that they do not want this done, with or without a reason"
+	noneMeaning     = "the reply picks none of the options: it asks something, leaves the decision open, adds to or changes what would be done (target, recipients, content, scope, time or conditions), or is an unrelated request"
 	ownWordsMeaning = "the reply answers the question in the person's own words instead of picking one of the listed answers: a different answer, the details the question asks for, or one of the answers with changes or conditions"
 )
 
@@ -92,15 +92,15 @@ func (question Question) DecliningOptionID() string {
 }
 
 type Reading struct {
-	ApprovedOptionID string
+	OptionID string
 }
 
-func (reading Reading) IsApproval() bool {
-	return reading.ApprovedOptionID != ""
+func (reading Reading) IsChoice() bool {
+	return reading.OptionID != ""
 }
 
 func (reading Reading) IsOwnWords() bool {
-	return reading.ApprovedOptionID == OwnWordsOptionID
+	return reading.OptionID == OwnWordsOptionID
 }
 
 type Reader interface {
@@ -137,11 +137,11 @@ func (reader DecisionModelReader) Read(ctx context.Context, question Question, r
 	if errorValue != nil {
 		return Reading{}, errorValue
 	}
-	return Reading{ApprovedOptionID: approvedOption(question, response.Answers[AnswerQuestionName])}, nil
+	return Reading{OptionID: chosenOption(question, response.Answers[AnswerQuestionName])}, nil
 }
 
 func readRequest(question Question, reply string) model.DecisionRequest {
-	descriptions := map[string]string{OtherOptionID: otherMeaning}
+	descriptions := map[string]string{NoneOptionID: noneMeaning}
 	for _, option := range question.Options {
 		descriptions[option.ID] = option.Meaning
 	}
@@ -151,14 +151,14 @@ func readRequest(question Question, reply string) model.DecisionRequest {
 	}
 }
 
-func approvedOption(question Question, answer model.DecisionAnswer) string {
+func chosenOption(question Question, answer model.DecisionAnswer) string {
 	total := 0.0
 	for _, probability := range answer.Probabilities {
 		total += probability
 	}
 	for _, option := range question.Options {
 		probability := answer.Probabilities[option.ID]
-		if !option.IsDeclining && probability > total-probability {
+		if probability > total-probability {
 			return option.ID
 		}
 	}

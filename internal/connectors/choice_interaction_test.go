@@ -143,7 +143,7 @@ func TestAPressedOptionAnswersWithoutReadingTheReplyAndClosesTheCardOnIt(t *test
 
 func TestAPressNamingAnotherQuestionOrAnUnofferedKeyIsReadLikeTypedWords(t *testing.T) {
 	for _, answered := range []AnsweredChoice{{InteractionID: "hold-other", Key: ApproveOptionID}, {InteractionID: "hold-1", Key: "approve-twice"}} {
-		asked := askInTheDirectMessage(t, &countingReplyReader{reading: approvalreply.Reading{ApprovedOptionID: ApproveOptionID}}, `{}`, nil)
+		asked := askInTheDirectMessage(t, &countingReplyReader{reading: approvalreply.Reading{OptionID: ApproveOptionID}}, `{}`, nil)
 		asked.awaitPosted(t)
 
 		asked.reply(t, "네", &answered)
@@ -157,7 +157,7 @@ func TestAPressNamingAnotherQuestionOrAnUnofferedKeyIsReadLikeTypedWords(t *test
 }
 
 func TestATypedReplyReadAsAnOptionClosesTheCardOnThatOption(t *testing.T) {
-	asked := askInTheDirectMessage(t, &countingReplyReader{reading: approvalreply.Reading{ApprovedOptionID: "2"}}, roomQuestionInput, roomChoices())
+	asked := askInTheDirectMessage(t, &countingReplyReader{reading: approvalreply.Reading{OptionID: "2"}}, roomQuestionInput, roomChoices())
 	asked.awaitPosted(t)
 
 	asked.reply(t, "두 번째", nil)
@@ -167,7 +167,7 @@ func TestATypedReplyReadAsAnOptionClosesTheCardOnThatOption(t *testing.T) {
 }
 
 func TestAnAnswerInOwnWordsClosesTheCardWithNoOption(t *testing.T) {
-	asked := askInTheDirectMessage(t, &countingReplyReader{reading: approvalreply.Reading{ApprovedOptionID: approvalreply.OwnWordsOptionID}}, roomQuestionInput, roomChoices())
+	asked := askInTheDirectMessage(t, &countingReplyReader{reading: approvalreply.Reading{OptionID: approvalreply.OwnWordsOptionID}}, roomQuestionInput, roomChoices())
 	asked.awaitPosted(t)
 
 	asked.reply(t, "둘 다 말고 회의실 C", nil)

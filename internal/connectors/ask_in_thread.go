@@ -314,10 +314,10 @@ func (connectorRuntime *ConnectorRuntime) answeredThreadOption(ctx context.Conte
 	if errorValue != nil {
 		slog.Warn("connectors.approval_reply_unread", "taskRunID", thread.taskRunID, "error", errorValue.Error())
 	}
-	if !reading.IsApproval() {
+	if !reading.IsChoice() {
 		return thread.question.DecliningOptionID(), false
 	}
-	return reading.ApprovedOptionID, false
+	return reading.OptionID, false
 }
 
 func clickedOptionID(answered *AnsweredChoice, interaction *AskInteraction) (string, bool) {
