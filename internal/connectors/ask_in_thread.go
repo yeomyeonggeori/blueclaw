@@ -93,17 +93,6 @@ func (threads *askingThreads) postedAwaiting(asking *askingThread) []*askingThre
 	return posted
 }
 
-func (threads *askingThreads) isAwaiting(taskRunID string) bool {
-	threads.mutex.Lock()
-	defer threads.mutex.Unlock()
-	for _, thread := range threads.threads {
-		if thread.taskRunID == taskRunID {
-			return true
-		}
-	}
-	return false
-}
-
 func (threads *askingThreads) awaitingRun(taskRunID string) (*askingThread, bool) {
 	threads.mutex.Lock()
 	defer threads.mutex.Unlock()
@@ -155,7 +144,7 @@ func (connectorRuntime *ConnectorRuntime) AwaitedQuestion() (taskRunID string, d
 }
 
 func (connectorRuntime *ConnectorRuntime) isAwaitedInThread(taskRunID string) bool {
-	return connectorRuntime.askingThreads.isAwaiting(taskRunID)
+	return connectorRuntime.approvalGate.IsAwaitingAnswer(taskRunID)
 }
 
 type threadPermissionAsker struct {

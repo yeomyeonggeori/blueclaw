@@ -2,6 +2,7 @@ package approvalgate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
@@ -47,6 +49,8 @@ func (gate *Gate) askedOutcome(ctx context.Context, taskRunID string, approvalRe
 	if !isHeld {
 		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionUnanswerable}
 	}
+	stopAwaiting, _ := gate.AwaitAnswer(taskRunID)
+	defer stopAwaiting()
 	answer, status := gate.permissionAsker.AskPermission(ctx, approvalRequest, PermissionQuestion{HoldID: hold.ID, Confirmation: confirmation, Choices: resolution.Choices, HandoffID: hold.Call.HandoffID})
 	switch status {
 	case AskAnswered:
@@ -93,6 +97,16 @@ func (gate *Gate) declinedNotice(taskRunID string) string {
 	return fmt.Sprintf("The requester declined this call, replying: %q. Declining is their decision, not a failure. Do not retry the call; do what their reply asks, or end the task saying it was not done.", reply.Text)
 }
 
+var ErrAnswerSettledElsewhere = errors.New("another reader of this answer already resumed the run")
+
+func answerTakenElsewhere(errorValue error) error {
+	var illegalTransition taskstate.ErrIllegalTransition
+	if errors.As(errorValue, &illegalTransition) {
+		return ErrAnswerSettledElsewhere
+	}
+	return errorValue
+}
+
 type AnswerSettlement struct {
 	Signal      agentcontract.ApprovalSignal
 	SettledCall *agentcontract.CarriedOutCall
@@ -101,8 +115,8 @@ type AnswerSettlement struct {
 func (gate *Gate) SettleAnswer(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, answer ApprovalAnswer) (AnswerSettlement, error) {
 	taskRunID := strings.TrimSpace(approvalRequest.TaskRunID)
 	taskEvents := gate.taskRunService.ListTaskEvent(taskRunID)
-	if _, errorValue := gate.taskRunService.AdvanceTaskRun(taskRunID, gate.currentAgentProfileName(taskRunID)); errorValue != nil {
-		return AnswerSettlement{}, errorValue
+	if _, errorValue := gate.taskRunService.AdvanceAnsweredTaskRun(taskRunID, gate.currentAgentProfileName(taskRunID)); errorValue != nil {
+		return AnswerSettlement{}, answerTakenElsewhere(errorValue)
 	}
 	heldCall, _ := PendingHeldCall(taskEvents)
 	choice, isChosen := answer.ChosenFrom(OfferedChoices(taskEvents))

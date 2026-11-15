@@ -47,21 +47,28 @@ func (connectorRuntime *ConnectorRuntime) reawaitHeldQuestionsIn(ctx context.Con
 func (connectorRuntime *ConnectorRuntime) beginReawaiting(ctx context.Context, taskRun task.TaskRun) (func(), bool) {
 	taskEvents := connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID)
 	heldCall, isHeld := approvalgate.PendingHeldCall(taskEvents)
-	if !isHeld || connectorRuntime.isAwaitedInThread(taskRun.TaskRunID) {
+	if !isHeld {
+		return nil, false
+	}
+	stopAwaiting, isTheWaiter := connectorRuntime.approvalGate.AwaitAnswer(taskRun.TaskRunID)
+	if !isTheWaiter {
 		return nil, false
 	}
 	turn, isReady := connectorRuntime.restartedQuestionTurn(ctx, taskRun, taskEvents)
 	if !isReady {
+		stopAwaiting()
 		connectorRuntime.endUnansweredHold(ctx, taskRun, nil, approvalgate.AskUnreachable)
 		return nil, false
 	}
 	if time.Since(taskRun.UpdatedAt) > connectorRuntime.askingThreads.expiry {
+		stopAwaiting()
 		connectorRuntime.endUnansweredHold(ctx, taskRun, turn, approvalgate.AskExpired)
 		return nil, false
 	}
 	thread := connectorRuntime.restartedThread(taskRun, turn, heldCall, taskEvents)
 	leave := connectorRuntime.askingThreads.join(thread)
 	return func() {
+		defer stopAwaiting()
 		defer leave()
 		connectorRuntime.awaitReawakenedThread(ctx, taskRun, taskEvents, turn, thread, heldCall)
 	}, true
@@ -129,7 +136,7 @@ func (connectorRuntime *ConnectorRuntime) resumeAnsweredHold(ctx context.Context
 		settledCalls = append(settledCalls, *settlement.SettledCall)
 	}
 	launchContext := resumeLaunchContextOf(taskRun, taskEvents, turn)
-	if _, errorValue := connectorRuntime.resumeTaskRun(ctx, taskRun, taskEvents, launchContext, turn.adapter, settledCalls); errorValue != nil {
+	if _, errorValue := connectorRuntime.resumeTaskRun(ctx, taskRun, taskEvents, launchContext, turn.adapter, answeredHoldTaskProfile(taskRun.TaskRunID), settledCalls); errorValue != nil {
 		connectorRuntime.logger.Warn("connector."+turn.platform+".approval.answered_run_failed_to_resume", slog.String("taskRunID", taskRun.TaskRunID), slog.String("error", errorValue.Error()))
 	}
 }

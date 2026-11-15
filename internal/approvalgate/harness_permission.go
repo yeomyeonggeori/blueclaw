@@ -44,6 +44,8 @@ func (gate *Gate) AskHarnessPermission(ctx context.Context, approvalRequest mcps
 		return acp.RequestPermissionOutcome{}, AskUnreachable
 	}
 	hold := holdrecord.Open(gate.taskRunService, taskRunID, heldCallOfHarnessQuestion(question), nil)
+	stopAwaiting, _ := gate.AwaitAnswer(taskRunID)
+	defer stopAwaiting()
 	outcome, status := harnessAsker.AskHarnessPermission(ctx, approvalRequest, question)
 	switch status {
 	case AskAnswered:
@@ -54,7 +56,7 @@ func (gate *Gate) AskHarnessPermission(ctx context.Context, approvalRequest mcps
 	default:
 		return acp.RequestPermissionOutcome{}, status
 	}
-	if _, errorValue := gate.taskRunService.AdvanceTaskRun(taskRunID, profileName); errorValue != nil {
+	if _, errorValue := gate.taskRunService.AdvanceAnsweredTaskRun(taskRunID, profileName); errorValue != nil {
 		slog.Warn("approvalgate.answered_run_will_not_advance", "taskRunID", taskRunID, "reason", errorValue.Error())
 	}
 	return outcome, AskAnswered

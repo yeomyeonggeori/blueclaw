@@ -18,6 +18,7 @@ type Gate struct {
 	approvalTargetResolver ApprovalTargetResolver
 	permissionAsker        PermissionAsker
 	schedules              Schedules
+	waiters                answerWaiters
 }
 
 func New(taskRunService taskstate.TaskRunStore) *Gate {
