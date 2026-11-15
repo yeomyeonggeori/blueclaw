@@ -69,7 +69,6 @@ func CRMImportFromAttachmentAcceptanceScenario(artifactDirectoryPath string) Vir
 		IsThread:       threadReply(),
 		RouterApproval: "approve",
 		ActionResponses: []string{
-			actionCallTool(virtualCRMImportToolName, importCall),
 			actionFinishMessage("관계처 2곳을 가져왔습니다.", "obs-002"),
 		},
 		ExpectedToolCalls: []string{virtualCRMImportToolName},

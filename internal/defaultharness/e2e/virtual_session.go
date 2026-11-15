@@ -3451,7 +3451,7 @@ func choiceLabelsOf(interaction *connectors.AskInteraction) []string {
 func assertReplyContentExpectations(virtualTurn VirtualTurn, turnResult VirtualTurnResult) error {
 	for _, fragment := range virtualTurn.ExpectedReplyFragments {
 		if !strings.Contains(turnResult.FinishMessage, fragment) {
-			return fmt.Errorf("expected reply fragment %q in %q", fragment, turnResult.FinishMessage)
+			return fmt.Errorf("expected reply fragment %q in %q; events: %s", fragment, turnResult.FinishMessage, summarizeEvents(turnResult.Events))
 		}
 	}
 	for _, label := range virtualTurn.ExpectedChoiceLabels {

@@ -41,7 +41,6 @@ func AskChoiceHoldAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 			AnswersApprovalHold: true,
 			RouterChoice:        "2",
 			ActionResponses: []string{
-				actionReplyExpectingAChoice("어느 회의실로 할까요?", `["회의실 A","회의실 B"]`),
 				actionFinishMessage("회의실 B로 잡았습니다.", "obs-002"),
 			},
 			ExpectedEvents:         []string{agentcontract.TaskEventConfirmationReplyClassified, approvalgate.TaskEventChoiceAnswered},
@@ -62,7 +61,6 @@ func AskChoiceOwnWordsAcceptanceScenario(artifactDirectoryPath string) VirtualSe
 		AnswersApprovalHold: true,
 		RouterChoice:        approvalreply.OwnWordsOptionID,
 		ActionResponses: []string{
-			actionReplyExpectingAChoice("어느 회의실로 할까요?", `["회의실 A","회의실 B"]`),
 			actionFinishMessage("회의실 C로 잡았습니다.", "obs-002"),
 		},
 		ExpectedEvents:         []string{approvalgate.TaskEventChoiceAnswered},

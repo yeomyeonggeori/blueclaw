@@ -55,7 +55,6 @@ func HostUpdateNowAcceptanceScenario(artifactDirectoryPath string) VirtualSessio
 		AnswersApprovalHold: true,
 		RouterChoice:        virtualHostNowChoiceKey,
 		ActionResponses: []string{
-			actionCallTool(virtualHostUpdateToolName, `{"isRequestedNow":true}`),
 			actionFinishMessage("업데이트를 시작했어요.", "obs-002"),
 		},
 		ExpectedToolCalls: []string{virtualHostUpdateToolName},

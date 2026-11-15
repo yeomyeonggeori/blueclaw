@@ -150,7 +150,7 @@ func TestApprovalRequestRejectsAMalformedBody(t *testing.T) {
 	}
 }
 
-func TestApprovingAHeldCallDecidesTheHoldAndResumesTheRunWithoutCarryingTheCallOut(t *testing.T) {
+func TestApprovingAHeldCallResumesTheRunHandedThatCallCarriedOut(t *testing.T) {
 	taskRunService, _ := approvalTestTaskRunService(t)
 	harness := harnesstest.New(taskRunService)
 	handler := TaskApprovalHandler{
@@ -170,13 +170,13 @@ func TestApprovingAHeldCallDecidesTheHoldAndResumesTheRunWithoutCarryingTheCallO
 	if responseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected the approval to resume the run, got %d %s", responseRecorder.Code, responseRecorder.Body.String())
 	}
-	holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID))
-	if len(holds) != 1 || holds[0].State != holdrecord.StateApproved {
-		t.Fatalf("expected the hold approved and left for the harness's repeated call to spend, got %+v", holds)
-	}
 	request := harness.LastTurnRequest()
-	if !request.IsRuntimeRestartResume || request.ExistingTaskRunID != taskRun.TaskRunID || len(request.CarriedOutCalls) != 0 {
-		t.Fatalf("expected a restart resume of the held run that carries nothing out, got %+v", request)
+	if !request.IsRuntimeRestartResume || request.ExistingTaskRunID != taskRun.TaskRunID {
+		t.Fatalf("expected a restart resume of the held run, got %+v", request)
+	}
+	holds := holdrecord.Holds(taskRunService.ListTaskEvent(taskRun.TaskRunID))
+	if len(request.CarriedOutCalls) != 1 || request.CarriedOutCalls[0].ToolName != "event_delete" || request.CarriedOutCalls[0].HoldID != holds[0].ID {
+		t.Fatalf("expected the approved call carried out before the turn and handed to it, got %+v", request.CarriedOutCalls)
 	}
 }
 

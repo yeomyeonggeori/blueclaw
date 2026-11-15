@@ -27,7 +27,6 @@ func ScheduledRunAsksInDirectMessageScenario(artifactDirectoryPath string) Virtu
 		AnswersApprovalHold:    true,
 		RouterChoice:           virtualHostNowChoiceKey,
 		ActionResponses: []string{
-			actionCallTool(virtualHostUpdateToolName, `{"isRequestedNow":true}`),
 			actionFinishMessage("업데이트를 시작했어요.", "obs-002"),
 		},
 		ExpectedEventCounts: []VirtualEventCount{

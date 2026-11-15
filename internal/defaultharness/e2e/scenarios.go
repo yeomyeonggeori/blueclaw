@@ -708,7 +708,6 @@ func CalendarEventLifecycleAcceptanceScenario(artifactDirectoryPath string) Virt
 				IsThread:       threadReply(),
 				RouterApproval: "approve",
 				ActionResponses: []string{
-					actionInvokeCapabilityTool("event_delete", `{"eventHint":"calendar-event-001"}`),
 					actionFinishMessage("제품 회고 일정을 삭제했습니다.", "obs-002"),
 				},
 				ExpectedEventCounts: []VirtualEventCount{
@@ -1486,7 +1485,6 @@ func DirectMessageSendConfirmAcceptanceScenario(artifactDirectoryPath string) Vi
 			IsThread:       threadReply(),
 			RouterApproval: "approve",
 			ActionResponses: []string{
-				actionCallTool("message_send", `{"targetType":"directMessage","personHint":"테스트","message":"오늘 오후 3시에 확인하자"}`),
 				actionFinishMessage("테스트이에게 DM을 보냈습니다.", "obs-002"),
 			},
 			ExpectedToolCalls: []string{"message_send"},
@@ -1538,7 +1536,6 @@ func ChannelPostAcceptanceScenario(artifactDirectoryPath string) VirtualSessionS
 			IsThread:       threadReply(),
 			RouterApproval: "approve",
 			ActionResponses: []string{
-				actionCallTool("message_send", `{"targetType":"channel","channelName":"announcements","message":"오늘 5시에 전체 공지 회의가 있습니다."}`),
 				actionFinishMessage("announcements 채널에 공지를 올렸습니다.", "obs-002"),
 			},
 			ExpectedToolCalls: []string{"message_send"},

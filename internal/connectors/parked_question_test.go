@@ -4,6 +4,7 @@ package connectors
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -28,6 +29,7 @@ type threadAskFixture struct {
 	connectorRuntime *ConnectorRuntime
 	adapter          *testAdapter
 	through          PlatformAdapter
+	languageModel    *agenttest.ScriptedLanguageModel
 	mutex            sync.Mutex
 	invokedTools     []string
 }
@@ -75,7 +77,7 @@ func newThreadAskFixture(t *testing.T, script threadAskScript) *threadAskFixture
 		ActionResponses: script.actions,
 	})
 	connectorRuntime, adapter := newTestConnectorRuntime(t, languageModel)
-	fixture := &threadAskFixture{connectorRuntime: connectorRuntime, adapter: adapter, through: adapter}
+	fixture := &threadAskFixture{connectorRuntime: connectorRuntime, adapter: adapter, through: adapter, languageModel: languageModel}
 	connectorRuntimeAgentKernel(connectorRuntime).UseIntakeLanguageModelProvider(languageModel)
 	connectorRuntimeAgentKernel(connectorRuntime).UseIntakeOptions(agentcontract.IntakeOptions{IsEnabled: true})
 	useTestConnectorSkill(connectorRuntime, connectorCalendarSkill())
@@ -161,8 +163,7 @@ func deleteApprovalScript(approvalReplies ...string) threadAskScript {
 		turnRouters:     []string{startTaskRoute("calendar delete needs approval first"), startTaskRoute("calendar delete needs approval first")},
 		actions: []string{
 			`{"action":"continue","toolName":"event_delete","toolInput":{"eventHint":"event-1"}}`,
-			`{"action":"continue","toolName":"event_delete","toolInput":{"eventHint":"event-1"}}`,
-			connectorFinishMessageCiting("내일 휴가 일정을 캘린더에서 삭제했습니다.", "obs-001"),
+			connectorFinishMessageCiting("내일 휴가 일정을 캘린더에서 삭제했습니다.", "obs-002"),
 		},
 	}
 }
@@ -211,6 +212,33 @@ func TestAReplyInTheQuestionsThreadApprovesTheCallAndResumesTheRunOnce(t *testin
 	if taskRun.Status != task.TaskStatusCompleted || fixture.invokedToolCount() != 1 || fixture.questionsPosted() != 1 || len(holds) != 1 || holds[0].State != holdrecord.StateSpent {
 		t.Fatalf("status %s, calls %v, questions %d, holds %+v: expected a completed run that called once on its spent approval after one question", taskRun.Status, fixture.invokedTools, fixture.questionsPosted(), holds)
 	}
+}
+
+func TestTheResumedRunIsHandedTheApprovedCallsResultBeforeItsModelIsAsked(t *testing.T) {
+	fixture := newThreadAskFixture(t, deleteApprovalScript(`{"answer":"approve"}`))
+	fixture.parkOnTheDeleteQuestion(t)
+	requestsBeforeTheAnswer := fixture.languageModel.RequestCount()
+
+	fixture.handle(t, threadReplyEvent("message-2", "ㅇ"))
+
+	firstActionRequest, isAsked := firstActionRequestSince(fixture.languageModel, requestsBeforeTheAnswer)
+	if !isAsked || !strings.Contains(firstActionRequest, "calendar event deleted") {
+		t.Fatalf("the resumed run's model was first asked without the approved call's result, so it would call again: %s", firstActionRequest)
+	}
+	if fixture.invokedToolCount() != 1 {
+		t.Fatalf("the approved call ran %d times, expected once: %v", fixture.invokedToolCount(), fixture.invokedTools)
+	}
+}
+
+func firstActionRequestSince(languageModel *agenttest.ScriptedLanguageModel, startIndex int) (string, bool) {
+	for _, request := range languageModel.RequestsSince(startIndex) {
+		if request.StructuredOutputSchema.Name != "bluecollar_agent_turn_action" {
+			continue
+		}
+		document, _ := json.Marshal(request.Messages)
+		return string(document), true
+	}
+	return "", false
 }
 
 func TestAReplyOutsideTheQuestionsThreadIsNotAnAnswer(t *testing.T) {
@@ -406,7 +434,7 @@ func TestAQuestionAlreadyPostedBeforeARestartIsNotPostedAgain(t *testing.T) {
 
 func TestAnAnswerAfterARestartResumesTheRunFromTheLedgerAlone(t *testing.T) {
 	script := deleteApprovalScript(`{"answer":"approve"}`)
-	script.actions = script.actions[1:]
+	script.actions = []string{connectorFinishMessageCiting("내일 휴가 일정을 캘린더에서 삭제했습니다.", "obs-001")}
 	fixture := newThreadAskFixture(t, script)
 	taskRun := parkedRunWithItsQuestionPosted(t, fixture)
 
@@ -414,7 +442,7 @@ func TestAnAnswerAfterARestartResumesTheRunFromTheLedgerAlone(t *testing.T) {
 
 	holds := fixture.holds(taskRun.TaskRunID)
 	if len(holds) != 1 || holds[0].State != holdrecord.StateSpent || fixture.invokedToolCount() != 1 || fixture.taskRun(t, taskRun.TaskRunID).Status != task.TaskStatusCompleted {
-		t.Fatalf("holds %+v, calls %v, status %s: expected the harness's repeated call to spend the approved hold once on a completed run", holds, fixture.invokedTools, fixture.taskRun(t, taskRun.TaskRunID).Status)
+		t.Fatalf("holds %+v, calls %v, status %s: expected the approved call carried out once from the ledger on a completed run", holds, fixture.invokedTools, fixture.taskRun(t, taskRun.TaskRunID).Status)
 	}
 }
 

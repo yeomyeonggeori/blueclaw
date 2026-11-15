@@ -38,9 +38,8 @@ func BrowserHandoffScenario(artifactDirectoryPath string) VirtualSessionScenario
 			IsThread:       threadReply(),
 			RouterApproval: "approve",
 			ActionResponses: []string{
-				actionCallTool("browser_handoff", `{"step":"sign in to the vendor portal"}`),
 				actionCallTool("browser_open", `{"url":"https://portal.example.com/invoices"}`),
-				actionFinishMessage("로그인된 상태로 청구서 목록을 열었습니다.", "obs-004"),
+				actionFinishMessage("로그인된 상태로 청구서 목록을 열었습니다.", "obs-003"),
 			},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: agentcontract.TaskEventApprovalHoldSpent, BodyFragment: `"handoff":"` + virtualHandoffID + `"`, Count: 1},

@@ -40,7 +40,6 @@ func BrowserWriteApprovalScenario(artifactDirectoryPath string) VirtualSessionSc
 			IsThread:       threadReply(),
 			RouterApproval: "approve",
 			ActionResponses: []string{
-				actionCallTool("browser_click", `{"target":"@e1"}`),
 				actionFinishMessage("승인하신 요청을 보냈습니다.", "obs-003"),
 			},
 			ExpectedEventCounts: []VirtualEventCount{
