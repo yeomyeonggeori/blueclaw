@@ -47,29 +47,26 @@ func (connectorRuntime *ConnectorRuntime) reawaitHeldQuestionsIn(ctx context.Con
 func (connectorRuntime *ConnectorRuntime) beginReawaiting(ctx context.Context, taskRun task.TaskRun) (func(), bool) {
 	taskEvents := connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID)
 	heldCall, isHeld := approvalgate.PendingHeldCall(taskEvents)
-	if !isHeld || connectorRuntime.approvalGate.IsAwaitingAnswer(taskRun.TaskRunID) {
+	if !isHeld {
+		return nil, false
+	}
+	stopAwaiting, isTheWaiter := connectorRuntime.approvalGate.AwaitAnswer(taskRun.TaskRunID)
+	if !isTheWaiter {
 		return nil, false
 	}
 	turn, isReady := connectorRuntime.restartedQuestionTurn(ctx, taskRun, taskEvents)
 	if !isReady {
+		stopAwaiting()
 		connectorRuntime.endUnansweredHold(ctx, taskRun, nil, approvalgate.AskUnreachable)
 		return nil, false
 	}
 	if time.Since(taskRun.UpdatedAt) > connectorRuntime.askingThreads.expiry {
+		stopAwaiting()
 		connectorRuntime.endUnansweredHold(ctx, taskRun, turn, approvalgate.AskExpired)
-		return nil, false
-	}
-	if connectorRuntime.approvalGate.HasNewerQuestionInItsThread(taskRun.TaskRunID) {
-		connectorRuntime.endUnansweredHold(ctx, taskRun, turn, approvalgate.AskSuperseded)
 		return nil, false
 	}
 	thread := connectorRuntime.restartedThread(taskRun, turn, heldCall, taskEvents)
 	leave := connectorRuntime.askingThreads.join(thread)
-	stopAwaiting, isTheWaiter := connectorRuntime.approvalGate.AwaitAnswer(taskRun.TaskRunID, func() { connectorRuntime.supersede(thread) })
-	if !isTheWaiter {
-		leave()
-		return nil, false
-	}
 	return func() {
 		defer stopAwaiting()
 		defer leave()

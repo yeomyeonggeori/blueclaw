@@ -49,12 +49,9 @@ func (gate *Gate) askedOutcome(ctx context.Context, taskRunID string, approvalRe
 	if !isHeld {
 		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionUnanswerable}
 	}
-	askContext, wasSuperseded, stopAwaiting := gate.askAsTheThreadsQuestion(ctx, taskRunID)
+	stopAwaiting, _ := gate.AwaitAnswer(taskRunID)
 	defer stopAwaiting()
-	answer, status := gate.permissionAsker.AskPermission(askContext, approvalRequest, PermissionQuestion{HoldID: hold.ID, Confirmation: confirmation, Choices: resolution.Choices, HandoffID: hold.Call.HandoffID})
-	if wasSuperseded() {
-		status = AskSuperseded
-	}
+	answer, status := gate.permissionAsker.AskPermission(ctx, approvalRequest, PermissionQuestion{HoldID: hold.ID, Confirmation: confirmation, Choices: resolution.Choices, HandoffID: hold.Call.HandoffID})
 	switch status {
 	case AskAnswered:
 		return gate.answeredOutcome(ctx, taskRunID, approvalRequest, confirmation, answer)
