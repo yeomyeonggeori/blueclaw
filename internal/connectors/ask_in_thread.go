@@ -260,9 +260,15 @@ func (connectorRuntime *ConnectorRuntime) awaitAnswer(ctx context.Context, threa
 func (connectorRuntime *ConnectorRuntime) markQuestionPosted(asking *askingThread, placement MessagePlacement) {
 	connectorRuntime.askingThreads.markPosted(asking)
 	for _, thread := range connectorRuntime.askingThreads.postedAwaiting(asking) {
-		if connectorRuntime.postedQuestionOf(thread).IsAnsweredBy(placement) && connectorRuntime.askingThreads.claim(thread) {
-			close(thread.superseded)
+		if connectorRuntime.postedQuestionOf(thread).IsAnsweredBy(placement) {
+			connectorRuntime.supersede(thread)
 		}
+	}
+}
+
+func (connectorRuntime *ConnectorRuntime) supersede(thread *askingThread) {
+	if connectorRuntime.askingThreads.claim(thread) {
+		close(thread.superseded)
 	}
 }
 

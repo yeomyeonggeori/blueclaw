@@ -102,7 +102,8 @@ func NewAgent(collaborators Collaborators, permissionRelay *PermissionRelay, log
 }
 
 type AnswerSettler interface {
-	AwaitAnswer(taskRunID string) (leave func(), isTheWaiter bool)
+	AwaitAnswer(taskRunID string, supersede func()) (leave func(), isTheWaiter bool)
+	HasNewerQuestionInItsThread(taskRunID string) bool
 	SettleAnswer(context.Context, mcpserver.ApprovalRequest, approvalgate.ApprovalAnswer) (approvalgate.AnswerSettlement, error)
 }
 
