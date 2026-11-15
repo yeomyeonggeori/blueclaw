@@ -35,21 +35,16 @@ func (connectorRuntime *ConnectorRuntime) OpenSessionTurn(ctx context.Context, e
 	}}
 }
 
-func (sessionTurn *SessionTurn) AnswersAwaitedQuestion(ctx context.Context) (bool, error) {
+func (sessionTurn *SessionTurn) AnswerParkedQuestion(ctx context.Context) ParkedAnswer {
 	connectorRuntime, turn := sessionTurn.connectorRuntime, sessionTurn.turn
 	ctx = connectorRuntime.withInboundRequester(ctx, turn)
-	if turn.adapter == nil {
-		return false, nil
-	}
-	connectorRuntime.reawaitHeldQuestionsIn(ctx, turn.personID, turn.event.ConversationID)
-	_, isAnswer, errorValue := connectorRuntime.answerAwaitingThreads(withConnectorEvent(ctx, turn.event), turn.platform, turn.personID, turn.event)
-	return isAnswer, errorValue
+	return connectorRuntime.answerParkedQuestion(withConnectorEvent(ctx, turn.event), turn)
 }
 
 func (sessionTurn *SessionTurn) ResolveEngagement(ctx context.Context) inboundengagement.Decision {
 	connectorRuntime, turn := sessionTurn.connectorRuntime, sessionTurn.turn
 	ctx = connectorRuntime.withInboundRequester(ctx, turn)
-	if _, hasAsk := connectorRuntime.findPendingAskInteraction(turn.personID, turn.event); hasAsk {
+	if _, hasAsk := connectorRuntime.findPendingAskInteraction(turn.personID, turn.event); hasAsk || turn.movedOnRun != nil {
 		turn.addressingLaunch = inboundengagement.Decision{ShouldLaunch: true}
 		return turn.addressingLaunch
 	}
@@ -94,6 +89,7 @@ func (sessionTurn *SessionTurn) DeliverReply(ctx context.Context, turnResult age
 		}
 		return dispatchID, errorValue
 	}
+	connectorRuntime.closeMovedOnRunLeftBehind(turn, turnResult.TaskRun.TaskRunID)
 	_, errorValue := connectorRuntime.dispatchTaskReply(withConnectorEvent(ctx, turn.event), turn.platform, turn.adapter, turn.event, turn.replyTarget, turnResult, turn.engagedAckEmojiName, sendNoting)
 	for _, undelivered := range notDelivered {
 		connectorRuntime.tellOfFilesNotDelivered(ctx, turn, turnResult.TaskRun.TaskRunID, undelivered)
@@ -101,20 +97,21 @@ func (sessionTurn *SessionTurn) DeliverReply(ctx context.Context, turnResult age
 	return errorValue
 }
 
-func (sessionTurn *SessionTurn) DeliverApprovalQuestion(ctx context.Context, taskRunID string, question string) error {
-	return sessionTurn.connectorRuntime.deliverApprovalQuestion(sessionTurn.connectorRuntime.withInboundRequester(ctx, sessionTurn.turn), sessionTurn.turn, taskRunID, question, nil)
+func (sessionTurn *SessionTurn) PostParkedQuestion(ctx context.Context, taskRunID string, holdID string) error {
+	connectorRuntime, turn := sessionTurn.connectorRuntime, sessionTurn.turn
+	return connectorRuntime.postParkedQuestion(withConnectorEvent(connectorRuntime.withInboundRequester(ctx, turn), turn.event), turn, taskRunID, holdID)
 }
 
-func (connectorRuntime *ConnectorRuntime) deliverApprovalQuestion(ctx context.Context, turn *inboundTurn, taskRunID string, question string, interaction *AskInteraction) error {
+func (connectorRuntime *ConnectorRuntime) deliverApprovalQuestion(ctx context.Context, turn *inboundTurn, taskRunID string, question string, interaction *AskInteraction) (string, error) {
 	reply := OutboundReply{Message: question, TaskRunID: taskRunID, ReplyKind: connectorReplyKindApprovalQuestion, Interaction: interaction}
 	dispatchID, errorValue := turn.sendReply(withConnectorEvent(ctx, turn.event), turn.replyTarget, reply)
 	if errorValue != nil {
 		connectorRuntime.appendConnectorReplyEvent(taskRunID, agentcontract.TaskEventConnectorReplyFailed, connectorReplyEventBody(turn.event, reply, "", "", errorValue.Error()))
 		connectorRuntime.logger.Error("connector."+turn.platform+".outbound.failed", slog.String("taskRunID", taskRunID), slog.String("replyKind", reply.ReplyKind), slog.String("error", errorValue.Error()))
-		return errorValue
+		return "", errorValue
 	}
 	connectorRuntime.logger.Info("connector."+turn.platform+".outbound.sent", slog.String("taskRunID", taskRunID), slog.String("replyKind", reply.ReplyKind), slog.String("replyDispatchID", dispatchID))
-	return nil
+	return dispatchID, nil
 }
 
 func (sessionTurn *SessionTurn) ShowProgressBeforeAddressing(ctx context.Context) {

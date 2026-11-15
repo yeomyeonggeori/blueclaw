@@ -8,7 +8,10 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 )
+
+const expiredAnswerSource = "expired"
 
 type StaleTaskNotifier interface {
 	FailUnresumedInterruptedTaskRun(context.Context, task.TaskRun, string) bool
@@ -44,6 +47,7 @@ func (sweeper StaleTaskSweeper) SweepOnce(ctx context.Context, now time.Time) in
 		}
 		reason := task.StaleUnattendedTaskRunReason(taskRun, now)
 		sweeper.TaskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventTaskStaleExpired, reason)
+		sweeper.closeUnansweredQuestion(taskRun)
 		if sweeper.expireStaleTaskRun(ctx, taskRun, reason) {
 			sweptCount++
 		}
@@ -62,6 +66,14 @@ func (sweeper StaleTaskSweeper) expireStaleTaskRun(ctx context.Context, taskRun 
 	return errorValue == nil
 }
 
+func (sweeper StaleTaskSweeper) closeUnansweredQuestion(taskRun task.TaskRun) {
+	pendingHold, isPending := holdrecord.LatestHold(holdrecord.Holds(sweeper.TaskRunService.ListTaskEvent(taskRun.TaskRunID)), holdrecord.StatePending)
+	if !isPending {
+		return
+	}
+	holdrecord.Decide(sweeper.TaskRunService, taskRun.TaskRunID, pendingHold.ID, holdrecord.DecisionReject, expiredAnswerSource)
+}
+
 func (sweeper StaleTaskSweeper) shouldNotifyUser(taskRun task.TaskRun) bool {
 	if sweeper.Notifier == nil {
 		return false
@@ -74,7 +86,7 @@ func (sweeper StaleTaskSweeper) shouldNotifyUser(taskRun task.TaskRun) bool {
 
 func staleTaskUserFacingReason(reason string) string {
 	if reason == "waiting_expired" {
-		return "the task waited for a user response or approval for several days and has now expired without an answer"
+		return "the task asked the requester a question, waited a day for the answer, and has now been closed without one; what it asked about was not done"
 	}
 	return "the task stalled with no way to continue on its own and has now been closed after a day without progress"
 }

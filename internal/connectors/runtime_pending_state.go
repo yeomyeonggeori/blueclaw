@@ -42,13 +42,13 @@ func (connectorRuntime *ConnectorRuntime) findActiveGoal(personID string, event 
 	isSelected := false
 	for _, taskRun := range taskRuns {
 		taskEvents := connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID)
-		if !taskRunCanContinueGoal(taskRun, taskEvents) || connectorRuntime.isAwaitedInThread(taskRun.TaskRunID) {
+		if !taskRunCanContinueGoal(taskRun, taskEvents) {
 			continue
 		}
 		if !taskRunSharesMessageThread(taskRun, event) {
 			continue
 		}
-		if time.Since(taskRun.UpdatedAt) > approvalExpiry {
+		if task.StaleUnattendedTaskRunReason(taskRun, time.Now()) != "" {
 			continue
 		}
 		if isSelected && !taskRun.UpdatedAt.After(selectedTaskRun.UpdatedAt) {

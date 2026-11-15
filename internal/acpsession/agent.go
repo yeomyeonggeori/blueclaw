@@ -13,11 +13,8 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
-	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcp"
-	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/taskstate"
@@ -38,6 +35,8 @@ type TaskLauncher interface {
 
 type SessionTurnOpener interface {
 	OpenSessionTurn(context.Context, connectors.PlatformInboundEvent, string, connectors.ReplySender) *connectors.SessionTurn
+	QuestionsNeverPosted(personID string, conversationID string) []connectors.UnpostedQuestion
+	AnswerParkedHandoff(ctx context.Context, personID string, handoffID string, optionKey string) connectors.ParkedAnswer
 }
 
 type PersonDirectory interface {
@@ -65,9 +64,7 @@ func (session openSession) catalog() agentruntime.RecordCatalogClient {
 type Agent struct {
 	taskLauncher       TaskLauncher
 	directory          PersonDirectory
-	permissionRelay    *PermissionRelay
-	answerSettler      AnswerSettler
-	replyReader        approvalreply.Reader
+	sessionRoutes      *SessionRoutes
 	sessionTurns       SessionTurnOpener
 	taskRunStore       taskstate.TaskRunStore
 	clock              TrustedClock
@@ -82,13 +79,11 @@ type Agent struct {
 	sessions   map[acp.SessionId]openSession
 }
 
-func NewAgent(collaborators Collaborators, permissionRelay *PermissionRelay, logger *slog.Logger) *Agent {
+func NewAgent(collaborators Collaborators, sessionRoutes *SessionRoutes, logger *slog.Logger) *Agent {
 	return &Agent{
 		taskLauncher:       collaborators.TaskLauncher,
 		directory:          collaborators.Directory,
-		permissionRelay:    permissionRelay,
-		answerSettler:      collaborators.AnswerSettler,
-		replyReader:        collaborators.ReplyReader,
+		sessionRoutes:      sessionRoutes,
 		sessionTurns:       collaborators.SessionTurns,
 		taskRunStore:       collaborators.TaskRunStore,
 		clock:              collaborators.Clock,
@@ -101,19 +96,12 @@ func NewAgent(collaborators Collaborators, permissionRelay *PermissionRelay, log
 	}
 }
 
-type AnswerSettler interface {
-	AwaitAnswer(taskRunID string) (leave func(), isTheWaiter bool)
-	SettleAnswer(context.Context, mcpserver.ApprovalRequest, approvalgate.ApprovalAnswer) (approvalgate.AnswerSettlement, error)
-}
-
 type Collaborators struct {
-	AnswerSettler AnswerSettler
-	TaskLauncher  TaskLauncher
-	Directory     PersonDirectory
-	ReplyReader   approvalreply.Reader
-	SessionTurns  SessionTurnOpener
-	TaskRunStore  taskstate.TaskRunStore
-	Clock         TrustedClock
+	TaskLauncher TaskLauncher
+	Directory    PersonDirectory
+	SessionTurns SessionTurnOpener
+	TaskRunStore taskstate.TaskRunStore
+	Clock        TrustedClock
 }
 
 type TrustedClock interface {
@@ -182,7 +170,7 @@ func (agent *Agent) LoadSession(ctx context.Context, request acp.LoadSessionRequ
 	}
 	agent.openSession(request.SessionId, sessionContext, request.Cwd, request.McpServers)
 	// A caller is blocked until this returns (agentclientprotocol.com/protocol/session-setup).
-	go agent.reissueHeldPermissions(context.WithoutCancel(ctx), request.SessionId, sessionContext)
+	go agent.postQuestionsNeverPosted(context.WithoutCancel(ctx), request.SessionId, sessionContext)
 	return acp.LoadSessionResponse{}, nil
 }
 
@@ -197,7 +185,7 @@ func (agent *Agent) openSession(sessionID acp.SessionId, sessionContext SessionC
 	}
 	agent.mutex.Unlock()
 	closeRecordCatalog(replaced.recordCatalog)
-	agent.permissionRelay.hold(sessionContext, sessionID, agent)
+	agent.sessionRoutes.hold(sessionContext, sessionID, agent)
 	agent.logger.Info("acpsession.opened",
 		"sessionID", string(sessionID),
 		"personID", sessionContext.Requester.PersonID,
@@ -256,8 +244,8 @@ func (agent *Agent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.
 	delivery := Delivery{DeliveryID: newRandomIdentifier(), ReplyTargetID: launchRequest.ReplyTargetID}
 	sessionTurn := agent.sessionTurns.OpenSessionTurn(ctx, inboundEventOf(messageContext, launchRequest), launchRequest.RequesterPersonID, agent.replySenderForDelivery(request.SessionId, delivery.DeliveryID))
 	defer sessionTurn.EndProgress()
-	if isAnswer, errorValue := sessionTurn.AnswersAwaitedQuestion(ctx); errorValue != nil || isAnswer {
-		return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, errorValue
+	if answer := sessionTurn.AnswerParkedQuestion(ctx); answer.IsAnswer {
+		return agent.promptAnsweredAParkedQuestion(ctx, request.SessionId, session.context, answer, delivery), nil
 	}
 	sessionTurn.ShowProgressBeforeAddressing(ctx)
 	if engagement := sessionTurn.ResolveEngagement(ctx); !engagement.ShouldLaunch {
@@ -275,6 +263,13 @@ func (agent *Agent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.
 	launchRequest.ToolCallObserver = agent.toolCallObserverFor(ctx, request.SessionId, delivery)
 	launchRequest.CheckpointSender = agent.checkpointSenderFor(request.SessionId, delivery)
 	return agent.launchTurn(ctx, request.SessionId, sessionTurn, launchRequest)
+}
+
+func (agent *Agent) promptAnsweredAParkedQuestion(ctx context.Context, sessionID acp.SessionId, sessionContext SessionContext, answer connectors.ParkedAnswer, delivery Delivery) acp.PromptResponse {
+	if answer.ShouldResume {
+		agent.resumeParkedRun(ctx, sessionID, sessionContext, answer, delivery)
+	}
+	return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}
 }
 
 func (agent *Agent) launchTurn(ctx context.Context, sessionID acp.SessionId, sessionTurn *connectors.SessionTurn, launchRequest agentruntime.TaskLaunchRequest) (acp.PromptResponse, error) {
@@ -408,10 +403,6 @@ func (agent *Agent) checkpointSenderFor(sessionID acp.SessionId, delivery Delive
 	}
 }
 
-func (agent *Agent) replySenderFor(sessionID acp.SessionId) connectors.ReplySender {
-	return agent.replySenderForDelivery(sessionID, newRandomIdentifier())
-}
-
 func (agent *Agent) replySenderForDelivery(sessionID acp.SessionId, deliveryID string) connectors.ReplySender {
 	return func(ctx context.Context, replyTarget connectors.ReplyTarget, reply connectors.OutboundReply) (string, error) {
 		return agent.deliverReply(ctx, sessionID, Delivery{DeliveryID: deliveryID, ReplyTargetID: replyTarget.ReplyTargetID, IsFinal: true}, reply)
@@ -476,7 +467,7 @@ func (agent *Agent) CloseSession(_ context.Context, request acp.CloseSessionRequ
 	delete(agent.sessions, request.SessionId)
 	agent.mutex.Unlock()
 	if isOpen {
-		agent.permissionRelay.release(session.context)
+		agent.sessionRoutes.release(session.context)
 	}
 	return acp.CloseSessionResponse{}, nil
 }
@@ -487,7 +478,7 @@ func (agent *Agent) closeEverySession() {
 	agent.sessions = map[acp.SessionId]openSession{}
 	agent.mutex.Unlock()
 	for _, session := range sessions {
-		agent.permissionRelay.release(session.context)
+		agent.sessionRoutes.release(session.context)
 	}
 }
 

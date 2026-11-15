@@ -36,20 +36,10 @@ func (harness *VirtualSessionHarness) handleTurn(ctx context.Context, virtualTur
 	if virtualTurn.RunsScheduledRun {
 		return harness.startScheduledRun(ctx, virtualTurn)
 	}
-	return harness.handleInboundEvent(ctx, event)
+	return harness.runtime.HandleInboundEvent(ctx, harness.adapter, event)
 }
 
 func (harness *VirtualSessionHarness) startScheduledRun(ctx context.Context, virtualTurn VirtualTurn) (connectors.ConnectorRuntimeResult, error) {
-	turnContext, stop := context.WithCancel(ctx)
-	turn := &askingTurn{finished: make(chan handledInboundEvent, 1), stop: stop}
-	go func() {
-		result, errorValue := harness.runScheduledRun(turnContext, virtualTurn)
-		turn.finished <- handledInboundEvent{result: result, errorValue: errorValue}
-	}()
-	return harness.untilFinishedOrAsking(ctx, turn)
-}
-
-func (harness *VirtualSessionHarness) runScheduledRun(ctx context.Context, virtualTurn VirtualTurn) (connectors.ConnectorRuntimeResult, error) {
 	dueAt := time.Now().UTC().Add(-time.Minute)
 	runResult, errorValue := harness.scheduleRunner.RunIfDue(ctx, agentruntime.ScheduleRunRequest{
 		Schedule:      virtualScheduledRun(virtualTurn.Prompt, dueAt),
@@ -60,7 +50,9 @@ func (harness *VirtualSessionHarness) runScheduledRun(ctx context.Context, virtu
 	if errorValue != nil {
 		return connectors.ConnectorRuntimeResult{}, errorValue
 	}
-	return connectors.ConnectorRuntimeResult{Handled: true, Platform: "virtual", TaskRunID: runResult.LaunchResult.TurnResult.TaskRun.TaskRunID}, nil
+	taskRunID := runResult.LaunchResult.TurnResult.TaskRun.TaskRunID
+	questionMessageID := connectors.PostedApprovalQuestionMessageID(harness.taskEventService.ListTaskEvent(taskRunID))
+	return connectors.ConnectorRuntimeResult{Handled: true, Platform: "virtual", TaskRunID: taskRunID, ReplyDispatchID: questionMessageID}, nil
 }
 
 func virtualScheduledRun(prompt string, dueAt time.Time) task.Schedule {

@@ -111,7 +111,7 @@ func TestAHeldCallIsWordedInTheAgentsVoiceTowardThisRequester(t *testing.T) {
 	questionWorder := &recordingQuestionWorder{}
 	gate := approvalgate.New(taskRunService)
 	gate.UseQuestionWorder(questionWorder)
-	gate.UsePermissionAsker(interruptedPermissionAsker{})
+	gate.UseQuestionPoster(discardingQuestionPoster{})
 	taskLauncher.UseApprovalGate(gate)
 
 	if _, errorValue := taskLauncher.Launch(context.Background(), TaskLaunchRequest{
@@ -146,10 +146,10 @@ func (questionWorder *recordingQuestionWorder) WordQuestion(_ context.Context, f
 	return holdrecord.QuestionWording{Text: "지울까요?"}
 }
 
-type interruptedPermissionAsker struct{}
+type discardingQuestionPoster struct{}
 
-func (interruptedPermissionAsker) AskPermission(context.Context, mcpserver.ApprovalRequest, approvalgate.PermissionQuestion) (approvalgate.ApprovalAnswer, approvalgate.AskStatus) {
-	return approvalgate.ApprovalAnswer{}, approvalgate.AskInterrupted
+func (discardingQuestionPoster) PostQuestion(context.Context, mcpserver.ApprovalRequest, approvalgate.ParkedQuestion) error {
+	return nil
 }
 
 func holdACallOn(t *testing.T, toolSet *toolcontract.ToolSet, taskRunID string) {

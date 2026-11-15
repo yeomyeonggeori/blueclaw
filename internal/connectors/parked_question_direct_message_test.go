@@ -10,11 +10,11 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/yeomyeonggeori/blueclaw/agenttest"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/identity"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
+	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
@@ -34,43 +34,54 @@ func openRequesterDirectMessage(context.Context, string, string) (string, string
 	return requesterDirectConversationID, requesterDirectConversationID, nil
 }
 
-type askingWithoutAnEvent struct {
-	fixture  *threadAskFixture
-	answers  chan approvalgate.ApprovalAnswer
-	statuses chan approvalgate.AskStatus
-	taskRun  task.TaskRun
+type runWithoutAnEvent struct {
+	fixture *threadAskFixture
+	taskRun task.TaskRun
+	outcome mcpserver.ApprovalOutcome
 }
 
-func askWithoutAnEvent(t *testing.T, fixture *threadAskFixture) *askingWithoutAnEvent {
-	t.Helper()
+func scheduledRunOn(fixture *threadAskFixture) *runWithoutAnEvent {
 	fixture.connectorRuntime.identityService.RememberPlatformAccount(identity.PlatformAccountIdentity{Platform: "test", ExternalUserID: "sender-user", Email: "invited@example.com"})
-	asking := &askingWithoutAnEvent{
-		fixture:  fixture,
-		answers:  make(chan approvalgate.ApprovalAnswer, 1),
-		statuses: make(chan approvalgate.AskStatus, 1),
-		taskRun:  fixture.connectorRuntime.taskRunService.CreateTaskRunWithOrigin("person-1", task.TaskRunOrigin{ConversationID: "schedule:morning"}, "scheduled run"),
+	return &runWithoutAnEvent{
+		fixture: fixture,
+		taskRun: fixture.connectorRuntime.taskRunService.CreateTaskRunWithOrigin("person-1", task.TaskRunOrigin{ConversationID: "schedule:morning"}, "scheduled run"),
 	}
-	approvalRequest := mcpserver.ApprovalRequest{RequesterPersonID: "person-1", TaskRunID: asking.taskRun.TaskRunID, Platform: "test", ConversationID: "schedule:morning"}
-	go func() {
-		answer, status := fixture.connectorRuntime.ThreadPermissionAsker().AskPermission(context.Background(), approvalRequest, approvalgate.PermissionQuestion{HoldID: "hold-1", Confirmation: "내일 휴가 일정을 삭제할까요?"})
-		asking.statuses <- status
-		if status == approvalgate.AskAnswered {
-			asking.answers <- answer
-		}
-		close(asking.answers)
-	}()
-	return asking
 }
 
-func (asking *askingWithoutAnEvent) awaitAnswer(t *testing.T) (approvalgate.ApprovalAnswer, bool) {
+func (run *runWithoutAnEvent) callHeldTool(t *testing.T, toolName string, toolInput string) *runWithoutAnEvent {
 	t.Helper()
-	select {
-	case answer, isAnswered := <-asking.answers:
-		return answer, isAnswered
-	case <-agenttest.WhenTheTestRunsOut(t):
-		t.Fatal("the asker was never answered")
-		return approvalgate.ApprovalAnswer{}, false
+	outcome, errorValue := run.fixture.connectorRuntime.approvalGate.AwaitApproval(context.Background(), mcpserver.ApprovalRequest{
+		RequesterPersonID: "person-1",
+		TaskRunID:         run.taskRun.TaskRunID,
+		Platform:          "test",
+		ConversationID:    "schedule:morning",
+		ToolName:          toolName,
+		ToolInput:         json.RawMessage(toolInput),
+	})
+	if errorValue != nil {
+		t.Fatalf("await approval: %v", errorValue)
 	}
+	run.outcome = outcome
+	return run
+}
+
+func (run *runWithoutAnEvent) hold(t *testing.T) holdrecord.Hold {
+	t.Helper()
+	holds := run.fixture.holds(run.taskRun.TaskRunID)
+	if len(holds) == 0 {
+		t.Fatal("the run holds no call")
+	}
+	return holds[len(holds)-1]
+}
+
+func (run *runWithoutAnEvent) answer(event PlatformInboundEvent) ParkedAnswer {
+	sessionTurn := run.fixture.connectorRuntime.OpenSessionTurn(context.Background(), event, "person-1", run.fixture.adapter.SendReply)
+	return sessionTurn.AnswerParkedQuestion(context.Background())
+}
+
+func askWithoutAnEvent(t *testing.T, fixture *threadAskFixture) *runWithoutAnEvent {
+	t.Helper()
+	return scheduledRunOn(fixture).callHeldTool(t, "event_delete", `{"eventHint":"event-1"}`)
 }
 
 func directMessageReply(messageID string, prompt string) PlatformInboundEvent {
@@ -84,26 +95,23 @@ func directMessageReply(messageID string, prompt string) PlatformInboundEvent {
 func replyInTheQuestionsThread(messageID string, prompt string) PlatformInboundEvent {
 	event := directMessageReply(messageID, prompt)
 	event.ReplyTargetID = requesterDirectConversationID + ":dispatch-1"
+	isThread := true
+	event.IsThread = &isThread
 	return event
 }
 
-func TestARunWithoutAnEventAsksInTheRequestersDirectMessageAndIsAnsweredThere(t *testing.T) {
+func TestARunWithoutAnEventParksOnAQuestionInTheRequestersDirectMessageAndIsAnsweredThere(t *testing.T) {
 	fixture := newThreadAskFixture(t, threadAskScript{approvalReplies: []string{`{"answer":"approve"}`}})
 	fixture.connectorRuntime.UseRequesterDirectMessages(openRequesterDirectMessage, requesterAccountsOnThePlatform())
 	asking := askWithoutAnEvent(t, fixture)
-	fixture.awaitQuestionOnTheThread(t)
 
-	answered := fixture.await(t, fixture.send(context.Background(), directMessageReply("message-2", "ㅇ")))
-	answer, isAnswered := asking.awaitAnswer(t)
+	answer := asking.answer(directMessageReply("message-2", "ㅇ"))
 
-	if answered.Reason != ApprovalAnsweredInThreadReason || answered.TaskRunID != asking.taskRun.TaskRunID {
-		t.Fatalf("the reply settled %+v, expected the waiting run's question", answered)
+	if asking.outcome.Decision != mcpserver.ApprovalDecisionHeld || fixture.questionsPosted() != 1 || fixture.adapter.sentReplies[0].target.ConversationID != requesterDirectConversationID {
+		t.Fatalf("outcome %q with %d questions posted to %+v, expected the run parked on one question in %s", asking.outcome.Decision, fixture.questionsPosted(), fixture.adapter.sentReplies, requesterDirectConversationID)
 	}
-	if !isAnswered || answer.Signal != "approve" {
-		t.Fatalf("the asker heard %+v answered=%v, expected an approval", answer, isAnswered)
-	}
-	if fixture.questionsPosted() != 1 || fixture.adapter.sentReplies[0].target.ConversationID != requesterDirectConversationID {
-		t.Fatalf("questions %d posted to %+v, expected one in %s", fixture.questionsPosted(), fixture.adapter.sentReplies, requesterDirectConversationID)
+	if !answer.ShouldResume || answer.TaskRun.TaskRunID != asking.taskRun.TaskRunID || asking.hold(t).State != holdrecord.StateApproved {
+		t.Fatalf("the reply settled %+v with the hold %s, expected the parked run approved", answer, asking.hold(t).State)
 	}
 }
 
@@ -111,27 +119,27 @@ func TestAReplyInTheQuestionsThreadInTheDirectMessageAnswersToo(t *testing.T) {
 	fixture := newThreadAskFixture(t, threadAskScript{approvalReplies: []string{`{"answer":"approve"}`}})
 	fixture.connectorRuntime.UseRequesterDirectMessages(openRequesterDirectMessage, requesterAccountsOnThePlatform())
 	asking := askWithoutAnEvent(t, fixture)
-	fixture.awaitQuestionOnTheThread(t)
 
-	fixture.await(t, fixture.send(context.Background(), replyInTheQuestionsThread("message-2", "ㅇ")))
+	answer := asking.answer(replyInTheQuestionsThread("message-2", "ㅇ"))
 
-	if answer, isAnswered := asking.awaitAnswer(t); !isAnswered || answer.Signal != "approve" {
-		t.Fatalf("the asker heard %+v answered=%v, expected an approval", answer, isAnswered)
+	if !answer.ShouldResume || asking.hold(t).State != holdrecord.StateApproved {
+		t.Fatalf("a reply in the thread under the question settled %+v, expected an approval", answer)
 	}
 }
 
 func TestAReplyInAnotherConversationIsNotOfferedTheDirectMessageQuestion(t *testing.T) {
 	fixture := newThreadAskFixture(t, threadAskScript{approvalReplies: []string{`{"answer":"approve"}`}})
 	fixture.connectorRuntime.UseRequesterDirectMessages(openRequesterDirectMessage, requesterAccountsOnThePlatform())
-	askWithoutAnEvent(t, fixture)
-	fixture.awaitQuestionOnTheThread(t)
+	asking := askWithoutAnEvent(t, fixture)
 
-	if offered := fixture.connectorRuntime.askingThreads.awaiting("test", "channel-1", "person-1"); len(offered) != 0 {
-		t.Fatalf("a reply in another conversation was offered %d questions", len(offered))
+	answer := asking.answer(threadReplyEvent("message-2", "ㅇ"))
+
+	if answer.IsAnswer || asking.hold(t).State != holdrecord.StatePending {
+		t.Fatalf("a reply in another conversation settled %+v", answer)
 	}
 }
 
-func TestARunWithoutAnEventAndWithoutADirectMessageAsksNothing(t *testing.T) {
+func TestARunWithoutAnEventAndWithoutADirectMessageIsRefusedAndNeverParked(t *testing.T) {
 	for label, opener := range map[string]DirectMessageOpener{
 		"no direct message opener": nil,
 		"a direct message that cannot be opened": func(context.Context, string, string) (string, string, error) {
@@ -141,10 +149,11 @@ func TestARunWithoutAnEventAndWithoutADirectMessageAsksNothing(t *testing.T) {
 		t.Run(label, func(t *testing.T) {
 			fixture := newThreadAskFixture(t, threadAskScript{})
 			fixture.connectorRuntime.UseRequesterDirectMessages(opener, requesterAccountsOnThePlatform())
+
 			asking := askWithoutAnEvent(t, fixture)
 
-			if status := <-asking.statuses; status != approvalgate.AskUnreachable || fixture.questionsPosted() != 0 {
-				t.Fatalf("status %q with %d questions posted, expected a requester who cannot be asked to be reported unreachable", status, fixture.questionsPosted())
+			if asking.outcome.Decision != mcpserver.ApprovalDecisionUnanswerable || fixture.questionsPosted() != 0 || fixture.taskRun(t, asking.taskRun.TaskRunID).Status == task.TaskStatusWaitingApproval {
+				t.Fatalf("outcome %q with %d questions posted, expected a requester who cannot be asked to be reported unreachable", asking.outcome.Decision, fixture.questionsPosted())
 			}
 		})
 	}
@@ -185,32 +194,31 @@ func connectedCatalogSessionGatedBy(t *testing.T, fixture *threadAskFixture, tas
 	return session
 }
 
-func TestAForeignHarnessCallThroughTheCatalogServerIsAskedInTheDirectMessageNotParked(t *testing.T) {
+func TestAForeignHarnessCallThroughTheCatalogServerParksAndRunsOnceWhenCalledAgainAfterTheApproval(t *testing.T) {
 	fixture := newThreadAskFixture(t, threadAskScript{approvalReplies: []string{`{"answer":"approve"}`}, turnRouters: nil})
 	fixture.connectorRuntime.UseRequesterDirectMessages(openRequesterDirectMessage, requesterAccountsOnThePlatform())
 	fixture.connectorRuntime.identityService.RememberPlatformAccount(identity.PlatformAccountIdentity{Platform: "test", ExternalUserID: "sender-user", Email: "invited@example.com"})
 	taskRun := fixture.connectorRuntime.taskRunService.CreateTaskRunWithOrigin("person-1", task.TaskRunOrigin{ConversationID: "direct-1"}, threadAskRequest)
 	invokedCount := &atomic.Int32{}
 	session := connectedCatalogSessionGatedBy(t, fixture, taskRun.TaskRunID, invokedCount)
-	called := make(chan *mcp.CallToolResult, 1)
-	go func() {
-		result, _ := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "calendar_event_delete", Arguments: map[string]any{"eventHint": "event-1"}})
-		called <- result
-	}()
-	fixture.awaitQuestionOnTheThread(t)
+	call := &mcp.CallToolParams{Name: "calendar_event_delete", Arguments: map[string]any{"eventHint": "event-1"}}
 
-	fixture.await(t, fixture.send(context.Background(), directMessageReply("message-2", "ㅇ")))
+	held, errorValue := session.CallTool(context.Background(), call)
 
-	select {
-	case result := <-called:
-		if result == nil || result.IsError || invokedCount.Load() != 1 {
-			t.Fatalf("the harness call ended %+v with %d runs, expected one run after the approval", result, invokedCount.Load())
-		}
-	case <-agenttest.WhenTheTestRunsOut(t):
-		t.Fatal("the harness call never returned")
+	if errorValue != nil || held == nil || !held.IsError || invokedCount.Load() != 0 {
+		t.Fatalf("the first call ended %+v %v with %d runs, expected it held without running", held, errorValue, invokedCount.Load())
 	}
-	finished, _ := fixture.connectorRuntime.taskRunService.FindTaskRun(taskRun.TaskRunID)
-	if finished.Status == task.TaskStatusWaitingApproval {
-		t.Fatalf("the run was left %s, expected the call to carry on in place", finished.Status)
+	if fixture.taskRun(t, taskRun.TaskRunID).Status != task.TaskStatusWaitingApproval || fixture.questionsPosted() != 1 {
+		t.Fatalf("the held call left the run %s with %d questions, expected it parked on one", fixture.taskRun(t, taskRun.TaskRunID).Status, fixture.questionsPosted())
+	}
+	answer := fixture.connectorRuntime.OpenSessionTurn(context.Background(), directMessageReply("message-2", "ㅇ"), "person-1", fixture.adapter.SendReply).AnswerParkedQuestion(context.Background())
+	if !answer.ShouldResume {
+		t.Fatalf("the approval settled %+v, expected the parked run to be resumed", answer)
+	}
+
+	approved, errorValue := session.CallTool(context.Background(), call)
+
+	if errorValue != nil || approved == nil || approved.IsError || invokedCount.Load() != 1 {
+		t.Fatalf("the call after the approval ended %+v %v with %d runs, expected one run", approved, errorValue, invokedCount.Load())
 	}
 }

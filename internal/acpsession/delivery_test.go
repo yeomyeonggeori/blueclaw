@@ -3,16 +3,18 @@ package acpsession
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
 
 	acp "github.com/coder/acp-go-sdk"
-	"github.com/yeomyeonggeori/blueclaw/internal/agentruntime"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
+	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
@@ -61,11 +63,9 @@ func TestAReplyIsRecordedSentOnceWithTheMessageTheRelayPosted(t *testing.T) {
 	answered := taskRunService.CreateTaskRun("person-sample", "conversation-1", "박예시한테 DM 보내줘")
 	client := &recordingClient{}
 	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
-		TaskLauncher:  &recordingLauncher{reply: "보냈습니다", taskRunID: answered.TaskRunID},
-		Directory:     staticDirectory{},
-		ReplyReader:   scriptedReader{},
-		TaskRunStore:  taskRunService,
-		AnswerSettler: approvalgate.New(taskRunService),
+		TaskLauncher: &recordingLauncher{reply: "보냈습니다", taskRunID: answered.TaskRunID},
+		Directory:    staticDirectory{},
+		TaskRunStore: taskRunService,
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 
@@ -95,10 +95,8 @@ func TestAReplyCarryingAFileNamesItsTypeAndIsRecordedSentOnceTheRelayPostsEach(t
 				SizeBytes:   2048,
 			}},
 		},
-		Directory:     staticDirectory{},
-		ReplyReader:   scriptedReader{},
-		TaskRunStore:  taskRunService,
-		AnswerSettler: approvalgate.New(taskRunService),
+		Directory:    staticDirectory{},
+		TaskRunStore: taskRunService,
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 
@@ -132,10 +130,8 @@ func TestAReplyWhoseFileTheRelayCouldNotPostIsRecordedUndelivered(t *testing.T) 
 			taskRunID:   answered.TaskRunID,
 			attachments: []toolcontract.FileAttachment{{DevicePath: "/workspace/private/people/person-sample/report.pdf", Filename: "report.pdf", ContentType: "application/pdf"}},
 		},
-		Directory:     staticDirectory{},
-		ReplyReader:   scriptedReader{},
-		TaskRunStore:  taskRunService,
-		AnswerSettler: approvalgate.New(taskRunService),
+		Directory:    staticDirectory{},
+		TaskRunStore: taskRunService,
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 
@@ -158,11 +154,9 @@ func TestAReplyTheRelayCouldNotPostIsRecordedUndeliveredNotSent(t *testing.T) {
 	answered := taskRunService.CreateTaskRun("person-sample", "conversation-1", "박예시한테 DM 보내줘")
 	client := &recordingClient{undeliveredBecause: "chatd refused the post with 503"}
 	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
-		TaskLauncher:  &recordingLauncher{reply: "보냈습니다", taskRunID: answered.TaskRunID},
-		Directory:     staticDirectory{},
-		ReplyReader:   scriptedReader{},
-		TaskRunStore:  taskRunService,
-		AnswerSettler: approvalgate.New(taskRunService),
+		TaskLauncher: &recordingLauncher{reply: "보냈습니다", taskRunID: answered.TaskRunID},
+		Directory:    staticDirectory{},
+		TaskRunStore: taskRunService,
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 
@@ -177,111 +171,16 @@ func TestAReplyTheRelayCouldNotPostIsRecordedUndeliveredNotSent(t *testing.T) {
 	}
 }
 
-func TestAReplyFromARunResumedWithNoTurnOpenNamesItsOwnThreadAndIsRecordedSent(t *testing.T) {
-	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
-	heldCall := heldCallForTest()
-	waitingRun := taskRunService.CreateTaskRunWithOrigin("person-sample", taskstate.TaskRunOrigin{ConversationID: "conversation-1", ReplyTargetID: "buzz:conversation-1:message-7"}, "박예시한테 DM 보내줘")
-	if _, errorValue := taskRunService.PauseTaskRun(waitingRun.TaskRunID, agentcontract.TaskStatusWaitingApproval, heldCall.Confirmation); errorValue != nil {
-		t.Fatalf("pause task run: %v", errorValue)
-	}
-	heldBody, _ := json.Marshal(heldCall)
-	taskRunService.AppendTaskEvent(waitingRun.TaskRunID, agentcontract.TaskEventApprovalHoldOpened, string(heldBody))
-	launcher := &recordingLauncher{reply: "보냈습니다", launchedSignal: make(chan agentruntime.TaskLaunchRequest, 4)}
-	client := &recordingClient{permissionChoice: approveOnceOptionID}
-	connection := reconnectedPair(t, launcher, client, taskRunService)
-
-	if errorValue := loadSessionForTest(t, connection, "session-the-relay-still-holds", sessionMeta("sample@example.test", "conversation-1")); errorValue != nil {
-		t.Fatalf("load session: %v", errorValue)
-	}
-
-	sent := awaitConnectorReplies(t, taskRunService, waitingRun.TaskRunID, agentcontract.TaskEventConnectorReplySent)
-	if len(sent) != 1 || sent[0].DispatchID == "" {
-		t.Fatalf("the resumed run's reply is recorded as sent %+v, expected once, as the message the relay posted", sent)
-	}
-	client.mutex.Lock()
-	defer client.mutex.Unlock()
-	replyDeliveries := []Delivery{}
-	for _, delivery := range client.deliveries {
-		if delivery.DeliveryID != "" {
-			replyDeliveries = append(replyDeliveries, delivery)
-		}
-	}
-	if len(replyDeliveries) != 1 || replyDeliveries[0].ReplyTargetID != "buzz:conversation-1:message-7" {
-		t.Fatalf("the resumed run's reply named %+v, expected the thread the run was asked in", replyDeliveries)
-	}
-}
-
-func TestAnApprovalQuestionNamesItsThreadAndIsRecordedSentOnceTheRelayPostsIt(t *testing.T) {
-	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
-	waitingRun := taskRunService.CreateTaskRun("person-sample", "conversation-1", "박예시한테 DM 보내줘")
-	client := &recordingClient{permissionChoice: approveOnceOptionID}
-	connection, permissionRelay := connectedPairWithCollaborators(t, client, Collaborators{
-		TaskLauncher:  &recordingLauncher{},
-		Directory:     staticDirectory{},
-		ReplyReader:   scriptedReader{},
-		TaskRunStore:  taskRunService,
-		AnswerSettler: approvalgate.New(taskRunService),
-	})
-	openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
-	approvalRequest := approvalRequestForTest()
-	approvalRequest.TaskRunID = waitingRun.TaskRunID
-	approvalRequest.ReplyTargetID = "buzz:conversation-1:message-9"
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if _, isAnswered := answered(permissionRelay.AskPermission(ctx, approvalRequest, approvalgate.PermissionQuestion{Confirmation: "박예시에게 보낼까요?"})); !isAnswered {
-		t.Fatal("nobody was asked")
-	}
-
-	if len(client.deliveries) != 1 || client.deliveries[0].ReplyTargetID != "buzz:conversation-1:message-9" {
-		t.Fatalf("the question named %+v, expected the thread of the turn that asked it", client.deliveries)
-	}
-	sent := connectorRepliesRecorded(t, taskRunService, waitingRun.TaskRunID, agentcontract.TaskEventConnectorReplySent)
-	if len(sent) != 1 || sent[0].DispatchID != "posted-1" || sent[0].ReplyKind != "approval_question" {
-		t.Fatalf("the question is recorded as sent %+v, expected once, as the approval question the relay posted (posted-1)", sent)
-	}
-}
-
-func TestAnApprovalQuestionTheRelayCouldNotPostIsRecordedUndelivered(t *testing.T) {
-	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
-	waitingRun := taskRunService.CreateTaskRun("person-sample", "conversation-1", "박예시한테 DM 보내줘")
-	client := &recordingClient{permissionChoice: approveOnceOptionID, undeliveredBecause: "chatd refused the post with 503"}
-	connection, permissionRelay := connectedPairWithCollaborators(t, client, Collaborators{
-		TaskLauncher:  &recordingLauncher{},
-		Directory:     staticDirectory{},
-		ReplyReader:   scriptedReader{},
-		TaskRunStore:  taskRunService,
-		AnswerSettler: approvalgate.New(taskRunService),
-	})
-	openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
-	approvalRequest := approvalRequestForTest()
-	approvalRequest.TaskRunID = waitingRun.TaskRunID
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	permissionRelay.AskPermission(ctx, approvalRequest, approvalgate.PermissionQuestion{Confirmation: "박예시에게 보낼까요?"})
-
-	if sent := connectorRepliesRecorded(t, taskRunService, waitingRun.TaskRunID, agentcontract.TaskEventConnectorReplySent); len(sent) != 0 {
-		t.Fatalf("a question the relay could not post is recorded as sent: %+v", sent)
-	}
-	failed := connectorRepliesRecorded(t, taskRunService, waitingRun.TaskRunID, agentcontract.TaskEventConnectorReplyFailed)
-	if len(failed) != 1 || !strings.Contains(failed[0].Reason, "chatd refused the post with 503") {
-		t.Fatalf("the question is recorded as failed %+v, expected once, with the reason the relay gave", failed)
-	}
-}
-
 func TestAReplyTheRelayNeverReportsOnIsRecordedUndelivered(t *testing.T) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	answered := taskRunService.CreateTaskRun("person-sample", "conversation-1", "박예시한테 DM 보내줘")
 	client := &recordingClient{isSilent: true}
 	agent := NewAgent(Collaborators{
-		TaskLauncher:  &recordingLauncher{reply: "보냈습니다", taskRunID: answered.TaskRunID},
-		Directory:     staticDirectory{},
-		ReplyReader:   scriptedReader{},
-		TaskRunStore:  taskRunService,
-		AnswerSettler: approvalgate.New(taskRunService),
-		SessionTurns:  connectorRuntimeForTest(taskRunService),
-	}, NewPermissionRelay(silentLogger()), silentLogger())
+		TaskLauncher: &recordingLauncher{reply: "보냈습니다", taskRunID: answered.TaskRunID},
+		Directory:    staticDirectory{},
+		TaskRunStore: taskRunService,
+		SessionTurns: connectorRuntimeForTest(taskRunService),
+	}, NewSessionRoutes(silentLogger()), silentLogger())
 	agent.deliveryReportWait = 50 * time.Millisecond
 	connection := connectAgentTo(t, agent, client)
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
@@ -306,29 +205,6 @@ func awaitConnectorReplies(t *testing.T, taskRunService *task.TaskRunService, ta
 		time.Sleep(10 * time.Millisecond)
 	}
 	return nil
-}
-
-func TestAReissuedQuestionNamesTheThreadItsRunWasAskedIn(t *testing.T) {
-	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
-	heldCall := heldCallForTest()
-	waitingRun := taskRunService.CreateTaskRunWithOrigin("person-sample", taskstate.TaskRunOrigin{ConversationID: "conversation-1", ReplyTargetID: "buzz:conversation-1:message-7"}, "박예시한테 DM 보내줘")
-	if _, errorValue := taskRunService.PauseTaskRun(waitingRun.TaskRunID, agentcontract.TaskStatusWaitingApproval, heldCall.Confirmation); errorValue != nil {
-		t.Fatalf("pause task run: %v", errorValue)
-	}
-	heldBody, _ := json.Marshal(heldCall)
-	taskRunService.AppendTaskEvent(waitingRun.TaskRunID, agentcontract.TaskEventApprovalHoldOpened, string(heldBody))
-	client := &recordingClient{permissionAskedSignal: make(chan acp.RequestPermissionRequest, 4)}
-	connection := reconnectedPair(t, &recordingLauncher{}, client, taskRunService)
-
-	if errorValue := loadSessionForTest(t, connection, "session-the-relay-still-holds", sessionMeta("sample@example.test", "conversation-1")); errorValue != nil {
-		t.Fatalf("load session: %v", errorValue)
-	}
-
-	asked := awaitPermissionRequest(t, client)
-	delivery, isNamed := deliveryNamedIn(asked.Meta)
-	if !isNamed || delivery.ReplyTargetID != "buzz:conversation-1:message-7" {
-		t.Fatalf("the reissued question named %+v, expected the thread its run was asked in", delivery)
-	}
 }
 
 type deliveryFailureReportRecord struct {
@@ -367,11 +243,9 @@ func repliesOfKind(records []connectorReplyRecord, replyKind string) []connector
 func promptForFiles(t *testing.T, client *recordingClient, taskRunService *task.TaskRunService, taskRunID string, words string, attachments []toolcontract.FileAttachment) {
 	t.Helper()
 	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
-		TaskLauncher:  &recordingLauncher{reply: words, taskRunID: taskRunID, attachments: attachments},
-		Directory:     staticDirectory{},
-		ReplyReader:   scriptedReader{},
-		TaskRunStore:  taskRunService,
-		AnswerSettler: approvalgate.New(taskRunService),
+		TaskLauncher: &recordingLauncher{reply: words, taskRunID: taskRunID, attachments: attachments},
+		Directory:    staticDirectory{},
+		TaskRunStore: taskRunService,
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
 	promptInThread(t, connection, sessionID, "buzz:conversation-1:message-7")
@@ -441,5 +315,130 @@ func TestAReplyWhoseSecondFileDidNotArriveNamesTheFirstAsDelivered(t *testing.T)
 	report := reports[0]
 	if strings.Join(report.AttachmentFilenames, ",") != "contract.pdf" || !strings.Contains(report.SafeFailureSummary, "annex.pdf") || strings.Contains(report.SafeFailureSummary, "contract.pdf") {
 		t.Fatalf("the notice was handed %+v, expected contract.pdf as delivered and annex.pdf as not", report)
+	}
+}
+
+func runParkedInTheThread(t *testing.T, taskRunService *task.TaskRunService, heldCall agentcontract.HeldCall) (agentcontract.TaskRun, holdrecord.Hold) {
+	t.Helper()
+	waitingRun := taskRunService.CreateTaskRunWithOrigin("person-sample", taskstate.TaskRunOrigin{ConversationID: "conversation-1", ReplyTargetID: "buzz:conversation-1:message-7"}, "박예시한테 DM 보내줘")
+	if _, errorValue := taskRunService.PauseTaskRun(waitingRun.TaskRunID, agentcontract.TaskStatusWaitingApproval, heldCall.Confirmation); errorValue != nil {
+		t.Fatalf("pause task run: %v", errorValue)
+	}
+	return waitingRun, holdrecord.Open(taskRunService, waitingRun.TaskRunID, heldCall, nil)
+}
+
+func parkedQuestionRequest(waitingRun agentcontract.TaskRun) mcpserver.ApprovalRequest {
+	approvalRequest := approvalRequestForTest()
+	approvalRequest.RequesterPersonID = "person-sample"
+	approvalRequest.TaskRunID = waitingRun.TaskRunID
+	approvalRequest.ReplyTargetID = "buzz:conversation-1:message-9"
+	return approvalRequest
+}
+
+func TestAReplyFromARunResumedWithNoTurnOpenNamesItsOwnThreadAndIsRecordedSent(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	waitingRun, _ := runParkedInTheThread(t, taskRunService, handoffHeldCall())
+	connectorRuntime := connectorRuntimeForTest(taskRunService)
+	connectorRuntime.UseApprovalGate(approvalgate.New(taskRunService))
+	client := &recordingClient{}
+	connection, _ := connectedPairWithCollaborators(t, client, Collaborators{
+		TaskLauncher: &recordingLauncher{reply: "보냈습니다"},
+		Directory:    staticDirectory{},
+		TaskRunStore: taskRunService,
+		SessionTurns: connectorRuntime,
+	})
+	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if _, errorValue := connection.CallExtension(ctx, HandoffEndedExtensionMethod, HandoffEndedReport{SessionID: string(sessionID), HandoffID: "handoff-1", OptionKey: approvalgate.ApproveOptionKey}); errorValue != nil {
+		t.Fatalf("the hand-back was refused: %v", errorValue)
+	}
+
+	sent := awaitConnectorReplies(t, taskRunService, waitingRun.TaskRunID, agentcontract.TaskEventConnectorReplySent)
+	if len(sent) != 1 || sent[0].DispatchID == "" {
+		t.Fatalf("the resumed run's reply is recorded as sent %+v, expected once, as the message the relay posted", sent)
+	}
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	replyDeliveries := []Delivery{}
+	for _, delivery := range client.deliveries {
+		if delivery.DeliveryID != "" {
+			replyDeliveries = append(replyDeliveries, delivery)
+		}
+	}
+	if len(replyDeliveries) != 1 || replyDeliveries[0].ReplyTargetID != "buzz:conversation-1:message-7" {
+		t.Fatalf("the resumed run's reply named %+v, expected the thread the run was asked in", replyDeliveries)
+	}
+}
+
+func TestAParkedQuestionNamesItsThreadAndIsRecordedSentOnceTheRelayPostsIt(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	waitingRun, hold := runParkedInTheThread(t, taskRunService, heldCallForTest())
+	client := &recordingClient{}
+	connection, sessionRoutes := connectedPairWithCollaborators(t, client, Collaborators{
+		TaskLauncher: &recordingLauncher{},
+		Directory:    staticDirectory{},
+		TaskRunStore: taskRunService,
+	})
+	openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if errorValue := sessionRoutes.PostQuestion(ctx, parkedQuestionRequest(waitingRun), approvalgate.ParkedQuestion{HoldID: hold.ID, Confirmation: hold.Call.Confirmation}); errorValue != nil {
+		t.Fatalf("the question was not posted: %v", errorValue)
+	}
+
+	if len(client.deliveries) != 1 || client.deliveries[0].ReplyTargetID != "buzz:conversation-1:message-9" {
+		t.Fatalf("the question named %+v, expected the thread of the turn that asked it", client.deliveries)
+	}
+	sent := connectorRepliesRecorded(t, taskRunService, waitingRun.TaskRunID, agentcontract.TaskEventConnectorReplySent)
+	if len(sent) != 1 || sent[0].DispatchID != "posted-1" || sent[0].ReplyKind != "approval_question" {
+		t.Fatalf("the question is recorded as sent %+v, expected once, as the approval question the relay posted (posted-1)", sent)
+	}
+}
+
+func TestAParkedQuestionTheRelayCouldNotPostIsRecordedUndelivered(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	waitingRun, hold := runParkedInTheThread(t, taskRunService, heldCallForTest())
+	client := &recordingClient{undeliveredBecause: "chatd refused the post with 503"}
+	connection, sessionRoutes := connectedPairWithCollaborators(t, client, Collaborators{
+		TaskLauncher: &recordingLauncher{},
+		Directory:    staticDirectory{},
+		TaskRunStore: taskRunService,
+	})
+	openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	errorValue := sessionRoutes.PostQuestion(ctx, parkedQuestionRequest(waitingRun), approvalgate.ParkedQuestion{HoldID: hold.ID, Confirmation: hold.Call.Confirmation})
+
+	if errorValue == nil || errors.Is(errorValue, approvalgate.ErrQuestionWillBePostedLater) {
+		t.Fatalf("a question the relay refused to post came back %v, expected the requester reported unreachable", errorValue)
+	}
+	if sent := connectorRepliesRecorded(t, taskRunService, waitingRun.TaskRunID, agentcontract.TaskEventConnectorReplySent); len(sent) != 0 {
+		t.Fatalf("a question the relay could not post is recorded as sent: %+v", sent)
+	}
+	failed := connectorRepliesRecorded(t, taskRunService, waitingRun.TaskRunID, agentcontract.TaskEventConnectorReplyFailed)
+	if len(failed) != 1 || !strings.Contains(failed[0].Reason, "chatd refused the post with 503") {
+		t.Fatalf("the question is recorded as failed %+v, expected once, with the reason the relay gave", failed)
+	}
+}
+
+func TestAQuestionPostedOnAReloadNamesTheThreadItsRunWasAskedIn(t *testing.T) {
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	waitingRun, _ := runParkedInTheThread(t, taskRunService, heldCallForTest())
+	client := &recordingClient{}
+	connection := reconnectedPair(t, &recordingLauncher{}, client, taskRunService)
+
+	if errorValue := loadSessionForTest(t, connection, "session-the-relay-still-holds", sessionMeta("sample@example.test", "conversation-1")); errorValue != nil {
+		t.Fatalf("load session: %v", errorValue)
+	}
+
+	awaitConnectorReplies(t, taskRunService, waitingRun.TaskRunID, agentcontract.TaskEventConnectorReplySent)
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	if len(client.deliveries) != 1 || client.deliveries[0].ReplyTargetID != "buzz:conversation-1:message-7" {
+		t.Fatalf("the question posted on the reload named %+v, expected the thread its run was asked in", client.deliveries)
 	}
 }

@@ -58,7 +58,8 @@ func (connectorRuntime *ConnectorRuntime) recordBusyRoute(turn *inboundTurn, run
 	}))
 }
 
-func (connectorRuntime *ConnectorRuntime) recordConfirmationReplyClassified(taskRunID string, event PlatformInboundEvent, decision answeredOption) {
+func (connectorRuntime *ConnectorRuntime) recordConfirmationReplyClassified(taskRunID string, event PlatformInboundEvent, optionKey string) {
+	decision := answeredDecision(optionKey)
 	connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventConfirmationReplyClassified, agentruntime.MarshalBody(map[string]any{
 		"messageID":   event.MessageID,
 		"route":       agentcontract.TurnRouteContinueTask,

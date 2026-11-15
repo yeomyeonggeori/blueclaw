@@ -16,6 +16,7 @@ const (
 	taskReplyDecisionSuppressSuperseded taskReplyDecisionKind = "suppress_superseded"
 	taskReplyDecisionSuppressRequested  taskReplyDecisionKind = "suppress_requested"
 	taskReplyDecisionSuppressDelivered  taskReplyDecisionKind = "suppress_already_delivered"
+	taskReplyDecisionSuppressParked     taskReplyDecisionKind = "suppress_parked_on_a_question"
 	taskReplyDecisionSendUserNotice     taskReplyDecisionKind = "send_user_notice"
 	taskReplyDecisionSendFinal          taskReplyDecisionKind = "send_final"
 )
@@ -25,7 +26,10 @@ type taskReplyDecision struct {
 	Reason string
 }
 
-func decideTaskReply(turnResult agentcontract.AgentTurnResult, isCancelledBeforeSend bool, hasAgentDeliveredReply bool) taskReplyDecision {
+func decideTaskReply(turnResult agentcontract.AgentTurnResult, isCancelledBeforeSend bool, hasAgentDeliveredReply bool, isParkedOnAQuestion bool) taskReplyDecision {
+	if isParkedOnAQuestion && turnResult.TaskRun.Status == task.TaskStatusWaitingApproval {
+		return taskReplyDecision{Kind: taskReplyDecisionSuppressParked, Reason: "the_question_this_run_is_parked_on_is_its_reply"}
+	}
 	if strings.TrimSpace(turnResult.ReplySuppressionReason) != "" &&
 		turnResult.TaskRun.Status != task.TaskStatusWaitingApproval &&
 		turnResult.TaskRun.Status != task.TaskStatusWaitingUserInput {
@@ -57,7 +61,7 @@ func (connectorRuntime *ConnectorRuntime) dispatchTaskReply(
 	sendReply func(context.Context, ReplyTarget, OutboundReply) (string, error),
 ) (ConnectorRuntimeResult, error) {
 	taskRunID := turnResult.TaskRun.TaskRunID
-	decision := decideTaskReply(turnResult, connectorRuntime.taskRunWasCancelled(taskRunID), connectorRuntime.agentAlreadyReplied(taskRunID, event))
+	decision := decideTaskReply(turnResult, connectorRuntime.taskRunWasCancelled(taskRunID), connectorRuntime.agentAlreadyReplied(taskRunID, event), connectorRuntime.hasPendingHold(taskRunID))
 	switch decision.Kind {
 	case taskReplyDecisionSuppressDelivered:
 		connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventReplySuppressedDuplicate, agentruntime.MarshalBody(map[string]string{
@@ -71,6 +75,9 @@ func (connectorRuntime *ConnectorRuntime) dispatchTaskReply(
 			"reason":    "task was cancelled before final reply send",
 		}))
 		return ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: taskRunID, Reason: decision.Reason}, nil
+	case taskReplyDecisionSuppressParked:
+		questionMessageID := PostedApprovalQuestionMessageID(connectorRuntime.taskRunService.ListTaskEvent(taskRunID))
+		return ConnectorRuntimeResult{Handled: true, Platform: platform, TaskRunID: taskRunID, Reason: decision.Reason, ReplyDispatchID: questionMessageID}, nil
 	case taskReplyDecisionSuppressSuperseded, taskReplyDecisionSuppressRequested:
 		connectorRuntime.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventConnectorReplySuppressed, agentruntime.MarshalBody(map[string]string{
 			"messageID": event.MessageID,

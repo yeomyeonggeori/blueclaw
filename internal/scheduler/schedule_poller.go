@@ -250,6 +250,11 @@ func hasConcludedWithoutCompleting(result agentruntime.ScheduleRunResult) bool {
 	return status != task.TaskStatusCompleted && !taskStatusRequiresInteraction(status)
 }
 
+func isParkedOnItsQuestion(result agentruntime.ScheduleRunResult) bool {
+	status := result.LaunchResult.TurnResult.TaskRun.Status
+	return status == task.TaskStatusWaitingApproval || status == task.TaskStatusWaitingUserInput
+}
+
 func (schedulePoller SchedulePoller) scheduleRunRequestFor(schedule task.Schedule, referenceTime time.Time) agentruntime.ScheduleRunRequest {
 	personAccess := policy.PersonAccess{PersonID: schedule.CreatorPersonID}
 	if schedulePoller.PersonAccessResolver != nil {
@@ -273,6 +278,9 @@ func (schedulePoller SchedulePoller) executeAgentSchedule(ctx context.Context, s
 	}
 	if hasConcludedWithoutCompleting(result) {
 		return schedulePoller.occurrenceToldByItsNotice(schedule, result), nil
+	}
+	if isParkedOnItsQuestion(result) {
+		return scheduleExecutionResult{Schedule: result.Schedule}, nil
 	}
 	reply, errorValue := scheduledTaskReply(result)
 	if errorValue != nil {

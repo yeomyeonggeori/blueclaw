@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	acp "github.com/coder/acp-go-sdk"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 )
 
 const clientContractPath = "client_contract.json"
@@ -20,6 +21,7 @@ type clientContract struct {
 	MetaKeys         map[string]string   `json:"metaKeys"`
 	ExtensionMethods map[string]string   `json:"extensionMethods"`
 	Fields           map[string][]string `json:"fields"`
+	HandoffOptions   map[string]string   `json:"handoffOptions"`
 	ToolCalls        toolCallContract    `json:"toolCalls"`
 }
 
@@ -39,16 +41,21 @@ func clientContractDeclared() clientContract {
 			"delivery": DeliveryMetaKey,
 		},
 		ExtensionMethods: map[string]string{
-			"approvalReply": ApprovalReplyExtensionMethod,
 			"delivered":     DeliveredExtensionMethod,
 			"undelivered":   UndeliveredExtensionMethod,
+			"handoffEnded":  HandoffEndedExtensionMethod,
+			"handoffClosed": HandoffClosedExtensionMethod,
 		},
 		Fields: map[string][]string{
-			"delivery":            jsonFieldNamesOf(Delivery{}),
-			"delivered":           jsonFieldNamesOf(DeliveredReport{}),
-			"undelivered":         jsonFieldNamesOf(UndeliveredReport{}),
-			"approvalReply":       jsonFieldNamesOf(ApprovalReplyRequest{}),
-			"approvalReplyAnswer": jsonFieldNamesOf(ApprovalReplyResponse{}),
+			"delivery":      jsonFieldNamesOf(Delivery{}),
+			"delivered":     jsonFieldNamesOf(DeliveredReport{}),
+			"undelivered":   jsonFieldNamesOf(UndeliveredReport{}),
+			"handoffEnded":  jsonFieldNamesOf(HandoffEndedReport{}),
+			"handoffClosed": jsonFieldNamesOf(HandoffClosedNotice{}),
+		},
+		HandoffOptions: map[string]string{
+			"handedBack": approvalgate.ApproveOptionKey,
+			"abandoned":  approvalgate.RejectOptionKey,
 		},
 		ToolCalls: toolCallContract{
 			StartKind:    wireKindOf(startedToolCallForContract()),

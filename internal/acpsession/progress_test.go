@@ -67,7 +67,6 @@ func TestATurnShowsItsConversationThatTheAgentIsWorkingUntilItAnswers(t *testing
 			connection, _ := connectedPairWithCollaborators(t, &recordingClient{}, Collaborators{
 				TaskLauncher: launcher,
 				Directory:    staticDirectory{},
-				ReplyReader:  scriptedReader{},
 				SessionTurns: connectorRuntime,
 			})
 			sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
@@ -97,7 +96,6 @@ func TestAMessageTheAgentIgnoresShowsNoProgress(t *testing.T) {
 	connection, _ := connectedPairWithCollaborators(t, &recordingClient{}, Collaborators{
 		TaskLauncher: &recordingLauncher{},
 		Directory:    staticDirectory{},
-		ReplyReader:  scriptedReader{},
 		SessionTurns: connectorRuntime,
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
@@ -129,7 +127,6 @@ func TestAMentionInARoomShowsProgressWhileTheAgentDecidesWhetherToAnswer(t *test
 	connection, _ := connectedPairWithCollaborators(t, &recordingClient{}, Collaborators{
 		TaskLauncher: &recordingLauncher{},
 		Directory:    staticDirectory{},
-		ReplyReader:  scriptedReader{},
 		SessionTurns: connectorRuntime,
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))

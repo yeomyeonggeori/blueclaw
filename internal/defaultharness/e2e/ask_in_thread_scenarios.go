@@ -3,57 +3,9 @@
 package e2e
 
 import (
-	"strings"
-
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
-
-const (
-	observationOfTheCarriedOutCall = "obs-002"
-	observationOfTheCallInPlace    = "obs-001"
-)
-
-func askedInThread(scenario VirtualSessionScenario) VirtualSessionScenario {
-	turns := make([]VirtualTurn, len(scenario.Turns))
-	for index, virtualTurn := range scenario.Turns {
-		turns[index] = virtualTurn
-		if answersAnApproval(virtualTurn) {
-			turns[index] = runningTheCallInPlace(virtualTurn)
-		}
-	}
-	scenario.Turns = turns
-	return scenario
-}
-
-func answersAnApproval(virtualTurn VirtualTurn) bool {
-	return strings.TrimSpace(virtualTurn.RouterApproval) != "" || virtualTurn.AnswersApprovalHold
-}
-
-func runningTheCallInPlace(virtualTurn VirtualTurn) VirtualTurn {
-	actionResponses := make([]string, len(virtualTurn.ActionResponses))
-	for index, actionResponse := range virtualTurn.ActionResponses {
-		actionResponses[index] = strings.ReplaceAll(actionResponse, observationOfTheCarriedOutCall, observationOfTheCallInPlace)
-	}
-	virtualTurn.ActionResponses = actionResponses
-	virtualTurn.ExpectedEventCounts = askedOnceEventCounts(virtualTurn.ExpectedEventCounts)
-	return virtualTurn
-}
-
-func askedOnceEventCounts(expectedEventCounts []VirtualEventCount) []VirtualEventCount {
-	adjusted := make([]VirtualEventCount, len(expectedEventCounts))
-	for index, expectedEventCount := range expectedEventCounts {
-		adjusted[index] = expectedEventCount
-		if isToolRequestedEvent(expectedEventCount.Name) && expectedEventCount.Count == 2 {
-			adjusted[index].Count = 1
-		}
-	}
-	return adjusted
-}
-
-func isToolRequestedEvent(eventName string) bool {
-	return strings.HasPrefix(eventName, agentcontract.ToolTaskEventPrefix) && strings.HasSuffix(eventName, agentcontract.ToolTaskEventRequestedSuffix)
-}
 
 func ScheduledRunAsksInDirectMessageScenario(artifactDirectoryPath string) VirtualSessionScenario {
 	return hostUpdateScenario("scheduled_run_asks_in_direct_message", artifactDirectoryPath, true, []VirtualTurn{{
@@ -74,17 +26,17 @@ func ScheduledRunAsksInDirectMessageScenario(artifactDirectoryPath string) Virtu
 		RepliesInDirectMessage: true,
 		AnswersApprovalHold:    true,
 		RouterChoice:           virtualHostNowChoiceKey,
-		ExpectedResponse:       VirtualResponseBackgroundAction,
 		ActionResponses: []string{
-			actionFinishMessage("업데이트를 시작했어요.", observationOfTheCallInPlace),
+			actionFinishMessage("업데이트를 시작했어요.", "obs-002"),
 		},
 		ExpectedEventCounts: []VirtualEventCount{
-			{Name: toolRequestedEventName(virtualHostUpdateToolName), Count: 1},
+			{Name: toolRequestedEventName(virtualHostUpdateToolName), Count: 2},
 			{Name: toolResultEventName(virtualHostUpdateToolName), BodyFragment: `"status":"started"`, Count: 1},
 			{Name: agentcontract.TaskEventApprovalHoldSpent, BodyFragment: virtualHostLatestVersion, Count: 1},
 			{Name: agentcontract.TaskEventApprovalHoldOpened, Count: 1},
 		},
-		ExpectedEvents:     []string{agentcontract.TaskEventConfirmationReplyClassified},
-		ExpectedTaskStatus: task.TaskStatusCompleted,
+		ExpectedEvents:         []string{agentcontract.TaskEventConfirmationReplyClassified},
+		ExpectedReplyFragments: []string{"업데이트"},
+		ExpectedTaskStatus:     task.TaskStatusCompleted,
 	}})
 }

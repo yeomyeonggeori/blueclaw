@@ -5,6 +5,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 )
 
 func TestAReplyAnswersAQuestionOnlyInItsPlace(t *testing.T) {
@@ -35,17 +36,16 @@ func TestAReplyAnswersAQuestionOnlyInItsPlace(t *testing.T) {
 }
 
 func TestAQuestionPostedForAnEarlierCallIsNotThePostedQuestionOfTheCurrentOne(t *testing.T) {
-	posted := task.TaskEvent{Name: agentcontract.TaskEventConnectorReplySent, Body: `{"replyKind":"approval_question","dispatchID":"question-1"}`}
-	pending := task.TaskEvent{Name: agentcontract.TaskEventApprovalHoldOpened}
-	notAQuestion := task.TaskEvent{Name: agentcontract.TaskEventConnectorReplySent, Body: `{"replyKind":"user_notice","dispatchID":"notice-1"}`}
+	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
+	taskRunID := taskRunService.CreateTaskRun("person-1", "conversation-1", "지워줘").TaskRunID
+	earlier := holdrecord.Open(taskRunService, taskRunID, agentcontract.HeldCall{ToolName: "event_delete"}, nil)
+	taskRunService.AppendTaskEvent(taskRunID, TaskEventQuestionPosted, `{"holdID":"`+earlier.ID+`","messageID":"question-1"}`)
 
-	if messageID := PostedApprovalQuestionMessageID([]task.TaskEvent{pending, posted}); messageID != "question-1" {
+	if messageID := PostedApprovalQuestionMessageID(taskRunService.ListTaskEvent(taskRunID)); messageID != "question-1" {
 		t.Fatalf("the posted question read as %q", messageID)
 	}
-	if messageID := PostedApprovalQuestionMessageID([]task.TaskEvent{posted, pending}); messageID != "" {
+	holdrecord.Open(taskRunService, taskRunID, agentcontract.HeldCall{ToolName: "event_delete"}, nil)
+	if messageID := PostedApprovalQuestionMessageID(taskRunService.ListTaskEvent(taskRunID)); messageID != "" {
 		t.Fatalf("the earlier call's question read as %q", messageID)
-	}
-	if messageID := PostedApprovalQuestionMessageID([]task.TaskEvent{pending, notAQuestion}); messageID != "" {
-		t.Fatalf("a notice read as the question %q", messageID)
 	}
 }

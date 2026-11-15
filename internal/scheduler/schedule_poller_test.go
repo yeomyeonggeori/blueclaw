@@ -839,3 +839,31 @@ func TestRecordScheduleFailureExpiresAfterRepeatedFailures(t *testing.T) {
 		t.Fatal("expected a first transient failure to stay retryable")
 	}
 }
+
+func TestSchedulePollerLeavesARunParkedOnItsQuestionWaitingAndMovesTheScheduleOn(t *testing.T) {
+	for _, status := range []task.TaskStatus{task.TaskStatusWaitingApproval, task.TaskStatusWaitingUserInput} {
+		repository := &pollerScheduleRepository{schedules: []task.Schedule{waitingSchedule(time.Now().UTC())}}
+		deliveryRepository := &pollerDeliveryRepository{}
+		scheduleRunner, _, taskRunService := scheduleRunnerWithHarness(status, "")
+		poller := SchedulePoller{
+			ScheduleRepository:   repository,
+			DeliveryRepository:   deliveryRepository,
+			ScheduleRunner:       scheduleRunner,
+			TaskRunService:       taskRunService,
+			PersonAccessResolver: staticPersonAccessResolver{},
+		}
+
+		_, errorValue := poller.RunDue(context.Background(), *repository.schedules[0].NextRunAt, 1)
+
+		if errorValue != nil {
+			t.Fatal(errorValue)
+		}
+		taskRuns := taskRunService.ListTaskRun()
+		if len(taskRuns) != 1 || taskRuns[0].Status == task.TaskStatusFailed {
+			t.Fatalf("%s: the run asked its requester and waits for their answer; it must not be failed, got %+v", status, taskRuns)
+		}
+		if len(deliveryRepository.replies) != 0 || repository.succeeded == nil || len(repository.expired) != 0 {
+			t.Fatalf("%s: the question is the occurrence's message; got replies=%+v succeeded=%+v expired=%+v", status, deliveryRepository.replies, repository.succeeded, repository.expired)
+		}
+	}
+}

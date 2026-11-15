@@ -5,25 +5,12 @@
 		"session": "kim.intern/session"
 	},
 	"extensionMethods": {
-		"approvalReply": "_kim.intern/approvalReply",
 		"delivered": "_kim.intern/delivered",
+		"handoffClosed": "_kim.intern/handoffClosed",
+		"handoffEnded": "_kim.intern/handoffEnded",
 		"undelivered": "_kim.intern/undelivered"
 	},
 	"fields": {
-		"approvalReply": [
-			"sessionId",
-			"toolCallId",
-			"reply",
-			"messageId",
-			"replyTargetId",
-			"isThread",
-			"replierEmail"
-		],
-		"approvalReplyAnswer": [
-			"isAnswer",
-			"optionId",
-			"isInstruction"
-		],
 		"delivered": [
 			"deliveryID",
 			"messageID"
@@ -31,14 +18,25 @@
 		"delivery": [
 			"deliveryID",
 			"replyTargetID",
-			"isAlreadyPosted",
 			"isFinal",
 			"handoffID"
+		],
+		"handoffClosed": [
+			"handoffID"
+		],
+		"handoffEnded": [
+			"sessionId",
+			"handoffID",
+			"optionKey"
 		],
 		"undelivered": [
 			"deliveryID",
 			"reason"
 		]
+	},
+	"handoffOptions": {
+		"abandoned": "reject",
+		"handedBack": "approve"
 	},
 	"toolCalls": {
 		"startKind": "tool_call",

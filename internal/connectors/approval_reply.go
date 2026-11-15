@@ -7,12 +7,6 @@ import (
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate"
 	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
-	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
-)
-
-const (
-	ApproveOptionID = "approve"
-	RejectOptionID  = "reject"
 )
 
 var errNoApprovalReplyReader = errors.New("connector runtime has no approval reply reader configured")
@@ -31,41 +25,20 @@ func (connectorRuntime *ConnectorRuntime) readReplyToQuestion(ctx context.Contex
 	return connectorRuntime.approvalReplyReader.Read(ctx, question, reply, observe)
 }
 
-func approvalQuestionFor(text string, choices []holdrecord.Choice) approvalreply.Question {
-	return approvalreply.Question{Text: text, Options: approvalreply.OptionsOf(offersOf(choices))}
-}
-
-func offersOf(choices []holdrecord.Choice) []approvalreply.Offer {
-	if len(choices) == 0 {
-		return []approvalreply.Offer{
-			{ID: ApproveOptionID},
-			{ID: RejectOptionID, IsDeclining: true},
-		}
-	}
-	offers := []approvalreply.Offer{}
-	for _, replyOption := range approvalgate.ChoiceReplyOptions(choices) {
-		offers = append(offers, approvalreply.Offer{ID: replyOption.Key, Name: replyOption.Label, IsDeclining: replyOption.Key == approvalgate.CancelChoiceKey})
-	}
-	if approvalgate.TakesOwnWords(choices) {
-		offers = append(offers, approvalreply.Offer{ID: approvalreply.OwnWordsOptionID})
-	}
-	return offers
-}
-
 type answeredOption struct {
 	Approval *agentcontract.ApprovalSignal
 	Choices  []string
 }
 
-func answeredDecision(optionID string) answeredOption {
-	switch optionID {
-	case ApproveOptionID:
+func answeredDecision(optionKey string) answeredOption {
+	switch optionKey {
+	case approvalgate.ApproveOptionKey:
 		approval := agentcontract.ApprovalSignalApprove
 		return answeredOption{Approval: &approval}
-	case RejectOptionID:
+	case approvalgate.RejectOptionKey:
 		rejection := agentcontract.ApprovalSignalReject
 		return answeredOption{Approval: &rejection}
 	default:
-		return answeredOption{Choices: []string{optionID}}
+		return answeredOption{Choices: []string{optionKey}}
 	}
 }

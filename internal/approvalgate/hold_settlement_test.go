@@ -83,30 +83,13 @@ func TestTheSecondReaderOfOneAnswerLeavesTheRunToTheFirst(t *testing.T) {
 	}
 	gate := New(taskRunService)
 	approvalRequest := mcpserver.ApprovalRequest{TaskRunID: taskRunID, ToolName: "message_send"}
-	decline := ApprovalAnswer{Signal: agentcontract.ApprovalSignalReject}
 
-	if _, errorValue := gate.SettleAnswer(context.Background(), approvalRequest, decline); errorValue != nil {
+	if _, errorValue := gate.SettleAnswer(context.Background(), approvalRequest, RejectOptionKey, "test"); errorValue != nil {
 		t.Fatalf("the first reader of the answer settles it: %v", errorValue)
 	}
-	_, errorValue := gate.SettleAnswer(context.Background(), approvalRequest, decline)
+	_, errorValue := gate.SettleAnswer(context.Background(), approvalRequest, RejectOptionKey, "test")
 
 	if !errors.Is(errorValue, ErrAnswerSettledElsewhere) {
 		t.Fatalf("the ACP session and the messenger thread both read one reply; only the first may resume the run, got %v", errorValue)
-	}
-}
-
-func TestARunWaitsForItsAnswerThroughOneWaiterAtATime(t *testing.T) {
-	gate := New(task.NewTaskRunService(task.NewTaskEventService()))
-
-	stopAwaiting, isTheWaiter := gate.AwaitAnswer("run-1")
-	if !isTheWaiter {
-		t.Fatal("the first to wait for a run's answer is its waiter")
-	}
-	if _, isAlsoAWaiter := gate.AwaitAnswer("run-1"); isAlsoAWaiter {
-		t.Fatal("a second listener on the same thread would read the same reply and resume the run again")
-	}
-	stopAwaiting()
-	if _, isTheWaiterNow := gate.AwaitAnswer("run-1"); !isTheWaiterNow {
-		t.Fatal("once the waiter stops, the run can be waited for again")
 	}
 }

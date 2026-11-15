@@ -65,7 +65,6 @@ func TestAPictureSentWithAMessageReachesTheTurnImported(t *testing.T) {
 	connection, _ := connectedPairWithCollaborators(t, &recordingClient{}, Collaborators{
 		TaskLauncher: launcher,
 		Directory:    staticDirectory{},
-		ReplyReader:  scriptedReader{},
 		SessionTurns: connectorRuntime,
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))
@@ -100,7 +99,6 @@ func TestAMessageTheAgentIgnoresImportsNothing(t *testing.T) {
 	connection, _ := connectedPairWithCollaborators(t, &recordingClient{}, Collaborators{
 		TaskLauncher: &recordingLauncher{},
 		Directory:    staticDirectory{},
-		ReplyReader:  scriptedReader{},
 		SessionTurns: connectorRuntime,
 	})
 	sessionID := openSessionForTest(t, connection, sessionMeta("sample@example.test", "conversation-1"))

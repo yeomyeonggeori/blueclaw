@@ -128,7 +128,8 @@ type ConnectorRuntime struct {
 	taskLauncher           *agentruntime.TaskLauncher
 	approvalGate           *approvalgate.Gate
 	approvalReplyReader    approvalreply.Reader
-	askingThreads          *askingThreads
+	handoffCloser          HandoffCloser
+	questionPosting        questionPosting
 	directMessageOpener    DirectMessageOpener
 	directMessageAccounts  DirectMessageAccounts
 	toolCatalogBuilder     *agentruntime.ToolCatalogBuilder
@@ -176,7 +177,6 @@ func NewConnectorRuntime(identityService *identity.IdentityService, harness agen
 		pendingRequests:       newPendingRequestStore(),
 		heldDecisions:         newHeldMessageDecisions(),
 		sentAttachmentSources: newSentAttachmentSourceStore(),
-		askingThreads:         &askingThreads{expiry: approvalExpiry},
 	}
 	connectorRuntime.pendingRequests.cancelSupersededTask = connectorRuntime.cancelPendingRequestTask
 	connectorRuntime.pendingRequests.hasRunningTask = connectorRuntime.hasRunningConversationTask
@@ -216,7 +216,7 @@ func (connectorRuntime *ConnectorRuntime) Start(ctx context.Context) {
 		connectorRuntime.logger.Error("connector.requests.restore_failed", slog.String("error", errorValue.Error()))
 		return
 	}
-	connectorRuntime.reawaitPendingHolds(ctx)
+	connectorRuntime.postUnpostedQuestions(ctx)
 	if connectorRuntime.queueRepository() != nil {
 		connectorRuntime.prepareConnectorWorkers("inbox", connectorInboxWorkerCount)
 		for index := 0; index < connectorInboxWorkerCount; index++ {
@@ -317,12 +317,14 @@ func (connectorRuntime *ConnectorRuntime) processInboundEventWithReplySender(ctx
 		return connectorRuntime.processTaskRetry(ctx, adapter, event, sendReply)
 	}
 	turn := &inboundTurn{adapter: adapter, platform: adapter.Name(), event: event, sendReply: sendReply}
-	ctx = withWaitHandoff(ctx, waitHandoffFrom(ctx).pausingProgressOf(connectorRuntime, ctx, turn))
 	connectorRuntime.logInboundEventReceived(turn)
 	if result, isHandled, errorValue := connectorRuntime.admitInboundTurn(ctx, turn); isHandled {
 		return result, errorValue
 	}
 	ctx = connectorRuntime.withInboundRequester(ctx, turn)
+	if answer := connectorRuntime.answerParkedQuestion(ctx, turn); answer.IsAnswer {
+		return connectorRuntime.resultOfParkedAnswer(ctx, turn, answer)
+	}
 	defer turn.endProgress()
 	if shouldStartProgressBeforeAddressing(turn.event) {
 		connectorRuntime.showTurnProgress(ctx, turn)
@@ -342,6 +344,13 @@ func (connectorRuntime *ConnectorRuntime) processInboundEventWithReplySender(ctx
 		return ConnectorRuntimeResult{}, errorValue
 	}
 	return connectorRuntime.launchTurn(ctx, turn)
+}
+
+func (connectorRuntime *ConnectorRuntime) resultOfParkedAnswer(ctx context.Context, turn *inboundTurn, answer ParkedAnswer) (ConnectorRuntimeResult, error) {
+	if !answer.ShouldResume {
+		return ConnectorRuntimeResult{Handled: true, Platform: turn.platform, TaskRunID: answer.TaskRun.TaskRunID, Reason: ParkedQuestionAnsweredReason}, nil
+	}
+	return connectorRuntime.resumeParkedRun(ctx, turn, answer)
 }
 
 func (connectorRuntime *ConnectorRuntime) shouldDeferNewTaskLaunch(hasPendingAskInteraction bool, hasActiveGoal bool) bool {

@@ -35,7 +35,7 @@ func (connectorRuntime *ConnectorRuntime) isDecidedBeforeTheGateway(event Platfo
 	if exactTaskControlIntent(event.Prompt) != agentcontract.TaskControlIntentNone {
 		return true
 	}
-	return connectorRuntime.isReplyToAskingThread(event)
+	return connectorRuntime.isReplyToParkedQuestion(event)
 }
 
 func (connectorRuntime *ConnectorRuntime) decideInboundBurst(ctx context.Context, events []PlatformInboundEvent) {
@@ -173,19 +173,6 @@ func burstsOfSeveralMessages(bursts [][]PlatformInboundEvent) [][]PlatformInboun
 		}
 	}
 	return burstsWorthBatching
-}
-
-func (connectorRuntime *ConnectorRuntime) isReplyToAskingThread(event PlatformInboundEvent) bool {
-	personID, isFound := connectorRuntime.identityService.ResolvePersonIDByPlatformAccount(event.Platform, event.SenderID)
-	if !isFound {
-		return false
-	}
-	for _, thread := range connectorRuntime.askingThreads.awaiting(event.Platform, event.ConversationID, personID) {
-		if connectorRuntime.postedQuestionOf(thread).IsAnsweredBy(placementOf(event)) {
-			return true
-		}
-	}
-	return false
 }
 
 func isDirectMessageWithNothingOpen(facts inboundengagement.Facts) bool {

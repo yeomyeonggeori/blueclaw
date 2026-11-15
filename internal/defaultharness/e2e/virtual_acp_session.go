@@ -34,7 +34,7 @@ type virtualACPSession struct {
 func openVirtualACPSession(collaborators acpsession.Collaborators, conversationID string, recordCatalogURL string) (*virtualACPSession, error) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	agentSide, clientSide := net.Pipe()
-	agent := acpsession.NewAgent(collaborators, acpsession.NewPermissionRelay(logger), logger)
+	agent := acpsession.NewAgent(collaborators, acpsession.NewSessionRoutes(logger), logger)
 	agentConnection := acp.NewAgentSideConnection(agent, agentSide, agentSide)
 	agent.UseConnection(agentConnection)
 	client := &virtualACPClient{}
@@ -214,10 +214,7 @@ func (client *virtualACPClient) reportPosted(ctx context.Context, meta map[strin
 	_, _ = client.connection.CallExtension(ctx, acpsession.DeliveredExtensionMethod, acpsession.DeliveredReport{DeliveryID: deliveryID, MessageID: messageID})
 }
 
-func (client *virtualACPClient) RequestPermission(ctx context.Context, request acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
-	if deliveryID := deliveryIDNamedIn(request.Meta); deliveryID != "" {
-		_, _ = client.connection.CallExtension(ctx, acpsession.UndeliveredExtensionMethod, acpsession.UndeliveredReport{DeliveryID: deliveryID, Reason: "the virtual session puts no question to anybody"})
-	}
+func (client *virtualACPClient) RequestPermission(context.Context, acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
 	return acp.RequestPermissionResponse{Outcome: acp.NewRequestPermissionOutcomeCancelled()}, nil
 }
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueclaw/internal/inboundengagement"
 	"github.com/yeomyeonggeori/blueclaw/internal/policy"
+	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
@@ -27,6 +28,7 @@ type inboundTurn struct {
 	pendingAskInteraction    AskInteraction
 	hasPendingAskInteraction bool
 	clearsActiveGoal         bool
+	movedOnRun               *task.TaskRun
 
 	activeGoal    agentcontract.ActiveGoal
 	hasActiveGoal bool
@@ -130,6 +132,9 @@ func (connectorRuntime *ConnectorRuntime) resolveTurnActiveGoal(ctx context.Cont
 		turn.activeGoal = agentcontract.ActiveGoal{}
 		turn.hasActiveGoal = false
 	}
+	if turn.movedOnRun != nil {
+		turn.activeGoal, turn.hasActiveGoal = connectorRuntime.activeGoalForTaskRun(*turn.movedOnRun), true
+	}
 	if turn.engagedAckEmojiName == "" {
 		turn.engagedAckEmojiName = connectorRuntime.applyEngagedAckReaction(ctx, turn.platform, turn.adapter, turn.event,
 			turn.hasPendingAskInteraction || turn.hasActiveGoal)
@@ -138,7 +143,7 @@ func (connectorRuntime *ConnectorRuntime) resolveTurnActiveGoal(ctx context.Cont
 
 func (connectorRuntime *ConnectorRuntime) resolveTurnAddressing(ctx context.Context, turn *inboundTurn) (ConnectorRuntimeResult, bool) {
 	turn.event = connectorRuntime.withInitialVisibleContext(ctx, turn.adapter, turn.event)
-	if turn.hasPendingAskInteraction {
+	if turn.hasPendingAskInteraction || turn.movedOnRun != nil {
 		turn.addressingLaunch = inboundengagement.Decision{ShouldLaunch: true}
 		return ConnectorRuntimeResult{}, false
 	}
@@ -198,6 +203,7 @@ func (connectorRuntime *ConnectorRuntime) launchTurn(ctx context.Context, turn *
 	}
 	turnResult := launchResult.TurnResult
 	taskRunID := turnResult.TaskRun.TaskRunID
+	connectorRuntime.closeMovedOnRunLeftBehind(turn, taskRunID)
 	taskDuration := time.Since(taskStartedAt)
 	connectorRuntime.logger.Info("connector."+turn.platform+".agent.completed", slog.String("messageID", turn.event.MessageID), slog.String("taskRunID", taskRunID), slog.Int64("duration_ms", taskDuration.Milliseconds()))
 	connectorRuntime.appendTaskExecutionDuration(taskRunID, taskDuration)
@@ -239,4 +245,12 @@ func (connectorRuntime *ConnectorRuntime) completeTurnLaunchFailure(ctx context.
 		ResponseLanguage: turn.event.Context.ResponseLanguage,
 	}, "launch", "connector_launch", errorValue)
 	return connectorRuntime.dispatchTaskReply(ctx, turn.platform, turn.adapter, turn.event, turn.replyTarget, failureTurnResult, turn.engagedAckEmojiName, turn.sendReply)
+}
+
+func (connectorRuntime *ConnectorRuntime) closeMovedOnRunLeftBehind(turn *inboundTurn, launchedTaskRunID string) {
+	if turn.movedOnRun == nil || turn.movedOnRun.TaskRunID == launchedTaskRunID {
+		return
+	}
+	connectorRuntime.closeRunLeftBehind(*turn.movedOnRun)
+	turn.movedOnRun = nil
 }

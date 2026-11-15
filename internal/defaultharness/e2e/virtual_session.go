@@ -377,7 +377,6 @@ type VirtualSessionHarness struct {
 	runtime          *connectors.ConnectorRuntime
 	adapter          *virtualAdapter
 	acpSession       *virtualACPSession
-	askingTurn       *askingTurn
 	cleanup          func()
 
 	schedules      *virtualSchedules
@@ -877,7 +876,6 @@ func RunVirtualSession(ctx context.Context, scenario VirtualSessionScenario) (Vi
 }
 
 func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionHarness, error) {
-	scenario = askedInThread(scenario)
 	if virtualSessionAgentHarnessFactory == nil {
 		return nil, errors.New("virtual session requires a registered agent harness factory")
 	}
@@ -1004,7 +1002,7 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	virtualApprovalGate.UseSchedules(schedules)
 	runtime.UseApprovalGate(virtualApprovalGate)
 	useVirtualDirectMessages(runtime, identityService)
-	virtualApprovalGate.UsePermissionAsker(runtime.ThreadPermissionAsker())
+	virtualApprovalGate.UseQuestionPoster(runtime.ThreadQuestionPoster())
 	virtualTaskLauncher.UseApprovalGate(virtualApprovalGate)
 	virtualTaskLauncher.UseLaunchFailureCompleter(launchfailure.NewCompleter(taskRunService, highLanguageModel))
 	virtualTaskLauncher.UseRequesterEmailResolver(identityService)
@@ -1016,12 +1014,10 @@ func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionH
 	if scenario.IsDeliveredOverACP {
 		var errorValue error
 		acpSession, errorValue = openVirtualACPSession(acpsession.Collaborators{
-			AnswerSettler: virtualApprovalGate,
-			TaskLauncher:  virtualTaskLauncher,
-			Directory:     identityService,
-			ReplyReader:   scenarioReader,
-			SessionTurns:  runtime,
-			TaskRunStore:  taskRunService,
+			TaskLauncher: virtualTaskLauncher,
+			Directory:    identityService,
+			SessionTurns: runtime,
+			TaskRunStore: taskRunService,
 		}, virtualConversationID, scenario.RecordCatalogURL)
 		if errorValue != nil {
 			cleanup()
@@ -2658,7 +2654,6 @@ func (harness *VirtualSessionHarness) Run(ctx context.Context) (VirtualSessionRe
 	if harness.cleanup != nil {
 		defer harness.cleanup()
 	}
-	defer harness.stopAskingTurn()
 	if harness.scenario.ProgressWriter != nil {
 		unregisterProgress := harness.taskEventService.RegisterTurnObserver(streamProgressObserver(harness.scenario.ProgressWriter))
 		defer unregisterProgress()
@@ -3425,7 +3420,7 @@ func assertTurnResult(workspacePath string, virtualTurn VirtualTurn, turnResult 
 	}
 	for _, fragment := range virtualTurn.ExpectedModelContexts {
 		if !strings.Contains(turnResult.ModelContext, fragment) {
-			return fmt.Errorf("expected model context fragment %q", fragment)
+			return fmt.Errorf("expected model context fragment %q; events: %s", fragment, summarizeEvents(turnResult.Events))
 		}
 	}
 	for _, fragment := range virtualTurn.ForbiddenModelContexts {
@@ -3456,7 +3451,7 @@ func choiceLabelsOf(interaction *connectors.AskInteraction) []string {
 func assertReplyContentExpectations(virtualTurn VirtualTurn, turnResult VirtualTurnResult) error {
 	for _, fragment := range virtualTurn.ExpectedReplyFragments {
 		if !strings.Contains(turnResult.FinishMessage, fragment) {
-			return fmt.Errorf("expected reply fragment %q in %q", fragment, turnResult.FinishMessage)
+			return fmt.Errorf("expected reply fragment %q in %q; events: %s", fragment, turnResult.FinishMessage, summarizeEvents(turnResult.Events))
 		}
 	}
 	for _, label := range virtualTurn.ExpectedChoiceLabels {

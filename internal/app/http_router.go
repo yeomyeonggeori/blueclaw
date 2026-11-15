@@ -187,9 +187,9 @@ func newSkillInventoryHandler(runtimeConfiguration config.RuntimeConfiguration, 
 	}}
 }
 
-func newTaskApprovalHandler(services taskServices, directory identityDirectory, taskLauncher *agentruntime.TaskLauncher, liveHolds adminapi.LiveHolds) adminapi.TaskApprovalHandler {
+func newTaskApprovalHandler(services taskServices, directory identityDirectory, taskLauncher *agentruntime.TaskLauncher, parkedQuestions adminapi.ParkedQuestions) adminapi.TaskApprovalHandler {
 	return adminapi.TaskApprovalHandler{
-		LiveHolds:       liveHolds,
+		ParkedQuestions: parkedQuestions,
 		TaskLauncher:    taskLauncher,
 		TaskRunService:  services.taskRunService,
 		IdentityService: directory.identityService,

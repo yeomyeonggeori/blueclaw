@@ -11,7 +11,6 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/yeomyeonggeori/blueclaw/internal/connectors"
-	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
@@ -22,11 +21,10 @@ const (
 )
 
 type Delivery struct {
-	DeliveryID      string `json:"deliveryID,omitempty"`
-	ReplyTargetID   string `json:"replyTargetID,omitempty"`
-	IsAlreadyPosted bool   `json:"isAlreadyPosted,omitempty"`
-	IsFinal         bool   `json:"isFinal,omitempty"`
-	HandoffID       string `json:"handoffID,omitempty"`
+	DeliveryID    string `json:"deliveryID,omitempty"`
+	ReplyTargetID string `json:"replyTargetID,omitempty"`
+	IsFinal       bool   `json:"isFinal,omitempty"`
+	HandoffID     string `json:"handoffID,omitempty"`
 }
 
 type DeliveredReport struct {
@@ -45,7 +43,6 @@ var (
 	errNobodyAwaitsThatDelivery = errors.New("nothing is waiting to hear about a delivery by that id")
 	errReportNamesNoDelivery    = errors.New("a delivery report names no delivery")
 	errRelayLeftBeforeReporting = errors.New("the relay went away before it said whether the person was reached")
-	errAnsweredWithoutReporting = errors.New("the relay answered the question without saying whether it reached the person")
 	errFileHasNoPath            = errors.New("the file names no path on this machine, and the relay posts a file only by its path")
 )
 
@@ -61,11 +58,6 @@ type awaitedDeliveries struct {
 
 func newAwaitedDeliveries() *awaitedDeliveries {
 	return &awaitedDeliveries{waiting: map[string]chan deliveryOutcome{}}
-}
-
-func (deliveries *awaitedDeliveries) expect() (string, <-chan deliveryOutcome) {
-	deliveryID := newRandomIdentifier()
-	return deliveryID, deliveries.expectDelivery(deliveryID)
 }
 
 func (deliveries *awaitedDeliveries) expectDelivery(deliveryID string) <-chan deliveryOutcome {
@@ -166,7 +158,7 @@ func (agent *Agent) deliver(ctx context.Context, sessionID acp.SessionId, delive
 	if errorValue := agent.notifyDelivery(ctx, sessionID, delivery, update); errorValue != nil {
 		return "", errorValue
 	}
-	return agent.awaitDelivery(ctx, outcome, nil)
+	return agent.awaitDelivery(ctx, outcome)
 }
 
 func (agent *Agent) notifyDelivery(ctx context.Context, sessionID acp.SessionId, delivery Delivery, update acp.SessionUpdate) error {
@@ -177,14 +169,12 @@ func (agent *Agent) notifyDelivery(ctx context.Context, sessionID acp.SessionId,
 	})
 }
 
-func (agent *Agent) awaitDelivery(ctx context.Context, outcome <-chan deliveryOutcome, askingEnded <-chan struct{}) (string, error) {
+func (agent *Agent) awaitDelivery(ctx context.Context, outcome <-chan deliveryOutcome) (string, error) {
 	timer := time.NewTimer(agent.deliveryReportWait)
 	defer timer.Stop()
 	select {
 	case settled := <-outcome:
 		return settled.messageID, settled.failure
-	case <-askingEnded:
-		return settledOrUnreported(outcome)
 	case <-agent.connection.Done():
 		return "", errRelayLeftBeforeReporting
 	case <-ctx.Done():
@@ -194,47 +184,6 @@ func (agent *Agent) awaitDelivery(ctx context.Context, outcome <-chan deliveryOu
 	}
 }
 
-func settledOrUnreported(outcome <-chan deliveryOutcome) (string, error) {
-	select {
-	case settled := <-outcome:
-		return settled.messageID, settled.failure
-	default:
-		return "", errAnsweredWithoutReporting
-	}
-}
-
 func deliveryMeta(delivery Delivery) map[string]any {
 	return map[string]any{DeliveryMetaKey: delivery}
-}
-
-type permissionAsking struct {
-	response   acp.RequestPermissionResponse
-	errorValue error
-}
-
-func (agent *Agent) askThePerson(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, question string, request acp.RequestPermissionRequest, handoffID string) (acp.RequestPermissionResponse, error) {
-	deliveryID, outcome := agent.deliveries.expect()
-	defer agent.deliveries.forget(deliveryID)
-	request.Meta = deliveryMeta(Delivery{DeliveryID: deliveryID, ReplyTargetID: approvalRequest.ReplyTargetID, HandoffID: handoffID})
-	asked := make(chan permissionAsking, 1)
-	askingEnded := make(chan struct{})
-	go func() {
-		response, errorValue := agent.connection.RequestPermission(ctx, request)
-		asked <- permissionAsking{response: response, errorValue: errorValue}
-		close(askingEnded)
-	}()
-	sessionTurn := agent.sessionTurns.OpenSessionTurn(ctx, questionEventOf(approvalRequest), approvalRequest.RequesterPersonID, func(ctx context.Context, _ connectors.ReplyTarget, _ connectors.OutboundReply) (string, error) {
-		return agent.awaitDelivery(ctx, outcome, askingEnded)
-	})
-	sessionTurn.DeliverApprovalQuestion(ctx, approvalRequest.TaskRunID, question)
-	answered := <-asked
-	return answered.response, answered.errorValue
-}
-
-func questionEventOf(approvalRequest mcpserver.ApprovalRequest) connectors.PlatformInboundEvent {
-	return connectors.PlatformInboundEvent{
-		Platform:       approvalRequest.Platform,
-		ConversationID: approvalRequest.ConversationID,
-		ReplyTargetID:  approvalRequest.ReplyTargetID,
-	}
 }

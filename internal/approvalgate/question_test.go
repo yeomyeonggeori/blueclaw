@@ -8,9 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalreply"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
-	"github.com/yeomyeonggeori/blueclaw/internal/task"
-	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
@@ -43,12 +42,11 @@ func TestAQuestionWithChoicesIsHeldWithItsOptionsAsLabelledChoices(t *testing.T)
 
 func TestAQuestionAskedInTheThreadIsAnsweredByThePickedOption(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
-	gate.UsePermissionAsker(&choosingAsker{answer: ApprovalAnswer{Signal: agentcontract.ApprovalSignalApprove, ChoiceKey: "2"}})
 
-	outcome, errorValue := gate.AwaitApproval(context.Background(), roomQuestion(taskRun.TaskRunID))
+	_, resumed := parkAndAnswer(t, gate, roomQuestion(taskRun.TaskRunID), "2")
 
-	if errorValue != nil || outcome.Decision != mcpserver.ApprovalDecisionApproved {
-		t.Fatalf("a picked option answers the question, got %+v %v", outcome, errorValue)
+	if resumed.Decision != mcpserver.ApprovalDecisionApproved {
+		t.Fatalf("a picked option answers the question when the resumed run asks again, got %+v", resumed)
 	}
 	chosen, isChosen := AnswerChosen(taskRunService.ListTaskEvent(taskRun.TaskRunID), AskedChoices("ask_input", roomQuestion("").ToolInput))
 	if !isChosen || chosen.Text != "회의실 B" || chosen.ChoiceKey != "2" {
@@ -59,7 +57,11 @@ func TestAQuestionAskedInTheThreadIsAnsweredByThePickedOption(t *testing.T) {
 func TestAnAnswerInTheRequestersOwnWordsIsWhatTheQuestionReturns(t *testing.T) {
 	gate, taskRunService, taskRun := gateFixture(t)
 	words := "회의실 C로 잡아줘, 열 명이야"
-	gate.UsePermissionAsker(&ownWordsAsker{taskRunService: taskRunService, words: words})
+	gate.AwaitApproval(context.Background(), roomQuestion(taskRun.TaskRunID))
+	RecordOwnWordsAnswer(taskRunService, taskRun.TaskRunID, words)
+	if _, errorValue := gate.SettleAnswer(context.Background(), roomQuestion(taskRun.TaskRunID), approvalreply.OwnWordsOptionID, "test"); errorValue != nil {
+		t.Fatalf("settle answer: %v", errorValue)
+	}
 
 	outcome, errorValue := gate.AwaitApproval(context.Background(), roomQuestion(taskRun.TaskRunID))
 
@@ -70,16 +72,6 @@ func TestAnAnswerInTheRequestersOwnWordsIsWhatTheQuestionReturns(t *testing.T) {
 	if result.Failure != nil || result.Output.Content != "The requester answered in their own words: "+words || strings.Contains(string(result.Output.Data), "choiceKey") {
 		t.Fatalf("the question returns the requester's own words and no picked option, got %+v", result)
 	}
-}
-
-type ownWordsAsker struct {
-	taskRunService *task.TaskRunService
-	words          string
-}
-
-func (asker *ownWordsAsker) AskPermission(_ context.Context, approvalRequest mcpserver.ApprovalRequest, _ PermissionQuestion) (ApprovalAnswer, AskStatus) {
-	RecordOwnWordsAnswer(asker.taskRunService, approvalRequest.TaskRunID, asker.words)
-	return ApprovalAnswer{Signal: agentcontract.ApprovalSignalApprove}, AskAnswered
 }
 
 func TestOnlyAQuestionWhoseOptionsAreAnswersTakesOwnWords(t *testing.T) {

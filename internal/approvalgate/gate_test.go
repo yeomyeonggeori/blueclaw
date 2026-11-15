@@ -23,14 +23,50 @@ func gateFixture(t *testing.T) (*Gate, *task.TaskRunService, task.TaskRun) {
 	taskRunService := task.NewTaskRunService(task.NewTaskEventService())
 	taskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "내일 회의 지워줘")
 	gate := New(taskRunService)
-	gate.UsePermissionAsker(interruptedAsker{})
+	gate.UseQuestionPoster(&recordingPoster{})
 	return gate, taskRunService, taskRun
 }
 
-type interruptedAsker struct{}
+type recordingPoster struct {
+	questions    []ParkedQuestion
+	failure      error
+	whilePosting func()
+}
 
-func (interruptedAsker) AskPermission(context.Context, mcpserver.ApprovalRequest, PermissionQuestion) (ApprovalAnswer, AskStatus) {
-	return ApprovalAnswer{}, AskInterrupted
+func (poster *recordingPoster) PostQuestion(_ context.Context, _ mcpserver.ApprovalRequest, question ParkedQuestion) error {
+	if poster.whilePosting != nil {
+		poster.whilePosting()
+	}
+	poster.questions = append(poster.questions, question)
+	return poster.failure
+}
+
+func gateWithPoster(t *testing.T) (*Gate, *task.TaskRunService, task.TaskRun, *recordingPoster) {
+	t.Helper()
+	gate, taskRunService, taskRun := gateFixture(t)
+	poster := &recordingPoster{}
+	gate.UseQuestionPoster(poster)
+	return gate, taskRunService, taskRun, poster
+}
+
+func parkAndAnswer(t *testing.T, gate *Gate, approvalRequest mcpserver.ApprovalRequest, optionKey string) (AnswerSettlement, mcpserver.ApprovalOutcome) {
+	t.Helper()
+	parked, errorValue := gate.AwaitApproval(context.Background(), approvalRequest)
+	if errorValue != nil || parked.Decision != mcpserver.ApprovalDecisionHeld {
+		t.Fatalf("a call that needs an answer parks the run, got %+v %v", parked, errorValue)
+	}
+	settlement, errorValue := gate.SettleAnswer(context.Background(), approvalRequest, optionKey, "test")
+	if errorValue != nil {
+		t.Fatalf("settle answer: %v", errorValue)
+	}
+	if settlement.SettledCall != nil {
+		return settlement, mcpserver.ApprovalOutcome{}
+	}
+	resumed, errorValue := gate.AwaitApproval(context.Background(), approvalRequest)
+	if errorValue != nil {
+		t.Fatalf("the resumed run calls again: %v", errorValue)
+	}
+	return settlement, resumed
 }
 
 func approvalRequestFixture(taskRunID string) mcpserver.ApprovalRequest {
