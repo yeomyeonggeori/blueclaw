@@ -876,7 +876,6 @@ func RunVirtualSession(ctx context.Context, scenario VirtualSessionScenario) (Vi
 }
 
 func NewVirtualSessionHarness(scenario VirtualSessionScenario) (*VirtualSessionHarness, error) {
-	scenario = askedInThread(scenario)
 	if virtualSessionAgentHarnessFactory == nil {
 		return nil, errors.New("virtual session requires a registered agent harness factory")
 	}
@@ -3421,7 +3420,7 @@ func assertTurnResult(workspacePath string, virtualTurn VirtualTurn, turnResult 
 	}
 	for _, fragment := range virtualTurn.ExpectedModelContexts {
 		if !strings.Contains(turnResult.ModelContext, fragment) {
-			return fmt.Errorf("expected model context fragment %q", fragment)
+			return fmt.Errorf("expected model context fragment %q; events: %s", fragment, summarizeEvents(turnResult.Events))
 		}
 	}
 	for _, fragment := range virtualTurn.ForbiddenModelContexts {

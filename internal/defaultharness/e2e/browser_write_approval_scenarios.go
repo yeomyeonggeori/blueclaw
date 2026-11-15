@@ -40,7 +40,8 @@ func BrowserWriteApprovalScenario(artifactDirectoryPath string) VirtualSessionSc
 			IsThread:       threadReply(),
 			RouterApproval: "approve",
 			ActionResponses: []string{
-				actionFinishMessage("승인하신 요청을 보냈습니다.", "obs-002"),
+				actionCallTool("browser_click", `{"target":"@e1"}`),
+				actionFinishMessage("승인하신 요청을 보냈습니다.", "obs-003"),
 			},
 			ExpectedEventCounts: []VirtualEventCount{
 				{Name: agentcontract.TaskEventApprovalHoldSpent, BodyFragment: `"withheldRequest":"` + virtualWithheldRequestID + `"`, Count: 1},
