@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate/holdrule"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
@@ -87,27 +88,19 @@ func taskRunIDForCall(ctx context.Context) string {
 }
 
 func callNeedsApproval(toolDefinition toolcontract.ToolDefinition, toolInput json.RawMessage) bool {
+	if !holdrule.MayHold(toolDefinition) {
+		return false
+	}
 	if toolDefinition.RequiresApproval || OffersChoices(toolDefinition, toolInput) {
 		return true
 	}
-	if !inputSchemaAcceptsApprovalRequired(toolDefinition.InputSchema) {
+	if !holdrule.AcceptsApprovalRequired(toolDefinition.InputSchema) {
 		return false
 	}
 	var document struct {
 		ApprovalRequired bool `json:"approvalRequired"`
 	}
 	return json.Unmarshal(toolInput, &document) == nil && document.ApprovalRequired
-}
-
-func inputSchemaAcceptsApprovalRequired(inputSchema json.RawMessage) bool {
-	var schema struct {
-		Properties map[string]json.RawMessage `json:"properties"`
-	}
-	if json.Unmarshal(inputSchema, &schema) != nil {
-		return false
-	}
-	_, isDeclared := schema.Properties["approvalRequired"]
-	return isDeclared
 }
 
 func landsInTheConversationBeingAnswered(turnContext TurnContext, toolDefinition toolcontract.ToolDefinition, toolInput json.RawMessage) bool {
@@ -168,7 +161,7 @@ func delegatedTurnDeniedResult() toolcontract.ToolResult {
 func rejectedCallResult(notice string) toolcontract.ToolResult {
 	rejectedNotice := strings.TrimSpace(notice)
 	if rejectedNotice == "" {
-		rejectedNotice = "The requester declined this call. Do not retry it; choose another way or stop."
+		rejectedNotice = "The requester declined this call. Declining is their decision, not a failure. Do not retry it; choose another way, or end the task saying it was not done."
 	}
 	return refusedCallResult(rejectedNotice)
 }

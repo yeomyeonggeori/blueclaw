@@ -88,10 +88,10 @@ func (agent *Agent) reissueHeldPermission(ctx context.Context, sessionID acp.Ses
 }
 
 func settledCallsOf(settlement approvalgate.AnswerSettlement) []agentcontract.CarriedOutCall {
-	if settlement.DeferredCall == nil {
+	if settlement.SettledCall == nil {
 		return nil
 	}
-	return []agentcontract.CarriedOutCall{*settlement.DeferredCall}
+	return []agentcontract.CarriedOutCall{*settlement.SettledCall}
 }
 
 func (agent *Agent) resumeAnsweredTaskRun(ctx context.Context, sessionID acp.SessionId, sessionContext SessionContext, taskRun agentcontract.TaskRun, settledCalls []agentcontract.CarriedOutCall) {

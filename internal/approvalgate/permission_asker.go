@@ -2,6 +2,7 @@ package approvalgate
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -67,17 +68,34 @@ func (gate *Gate) answeredOutcome(ctx context.Context, taskRunID string, approva
 	case errorValue != nil:
 		slog.Warn("approvalgate.answered_run_will_not_advance", "taskRunID", taskRunID, "toolName", strings.TrimSpace(approvalRequest.ToolName), "reason", errorValue.Error())
 		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionHeld, Notice: confirmation}
-	case settlement.DeferredCall != nil:
-		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionDeferred, Deferral: settlement.DeferredCall.Result}
 	case settlement.Signal == agentcontract.ApprovalSignalReject:
-		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionRejected}
+		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionRejected, Notice: gate.declinedNotice(taskRunID)}
+	case settlement.SettledCall != nil:
+		return mcpserver.ApprovalOutcome{Decision: mcpserver.ApprovalDecisionDeferred, Deferral: settlement.SettledCall.Result}
 	}
 	return gate.approvedOutcome(taskRunID, approvalRequest)
 }
 
+func (gate *Gate) declinedCall(taskRunID string, heldCall agentcontract.HeldCall) *agentcontract.CarriedOutCall {
+	return &agentcontract.CarriedOutCall{
+		ToolName:  heldCall.ToolName,
+		ToolInput: heldCall.ToolInput,
+		HoldID:    heldCall.HoldID,
+		Result:    rejectedCallResult(gate.declinedNotice(taskRunID)),
+	}
+}
+
+func (gate *Gate) declinedNotice(taskRunID string) string {
+	reply, isReplied := AnswerChosen(gate.taskRunService.ListTaskEvent(taskRunID), nil)
+	if !isReplied || strings.TrimSpace(reply.Text) == "" {
+		return ""
+	}
+	return fmt.Sprintf("The requester declined this call, replying: %q. Declining is their decision, not a failure. Do not retry the call; do what their reply asks, or end the task saying it was not done.", reply.Text)
+}
+
 type AnswerSettlement struct {
-	Signal       agentcontract.ApprovalSignal
-	DeferredCall *agentcontract.CarriedOutCall
+	Signal      agentcontract.ApprovalSignal
+	SettledCall *agentcontract.CarriedOutCall
 }
 
 func (gate *Gate) SettleAnswer(ctx context.Context, approvalRequest mcpserver.ApprovalRequest, answer ApprovalAnswer) (AnswerSettlement, error) {
@@ -89,12 +107,15 @@ func (gate *Gate) SettleAnswer(ctx context.Context, approvalRequest mcpserver.Ap
 	heldCall, _ := PendingHeldCall(taskEvents)
 	choice, isChosen := answer.ChosenFrom(OfferedChoices(taskEvents))
 	if isChosen && choice.DefersTheCall() {
-		return AnswerSettlement{Signal: answer.Signal, DeferredCall: gate.deferHeldCall(ctx, approvalRequest, heldCall, choice)}, nil
+		return AnswerSettlement{Signal: answer.Signal, SettledCall: gate.deferHeldCall(ctx, approvalRequest, heldCall, choice)}, nil
 	}
 	if isChosen {
 		RecordChoiceAnswer(gate.taskRunService, taskRunID, choice)
 	}
 	SettleSignal(gate.taskRunService, taskRunID, &answer.Signal, "acp_permission")
+	if answer.Signal == agentcontract.ApprovalSignalReject {
+		return AnswerSettlement{Signal: answer.Signal, SettledCall: gate.declinedCall(taskRunID, heldCall)}, nil
+	}
 	return AnswerSettlement{Signal: answer.Signal}, nil
 }
 

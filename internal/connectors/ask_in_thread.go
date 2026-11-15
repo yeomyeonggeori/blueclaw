@@ -298,33 +298,37 @@ func (connectorRuntime *ConnectorRuntime) answerAwaitingThreads(ctx context.Cont
 }
 
 func (connectorRuntime *ConnectorRuntime) settleThreadWithReply(ctx context.Context, thread *askingThread, event PlatformInboundEvent) (ConnectorRuntimeResult, bool, error) {
-	optionID := connectorRuntime.answeredThreadOption(ctx, thread, event)
-	if !connectorRuntime.askingThreads.claim(thread) {
+	optionID, isClicked := connectorRuntime.answeredThreadOption(ctx, thread, event)
+	if optionID == "" || !connectorRuntime.askingThreads.claim(thread) {
 		return ConnectorRuntimeResult{}, false, nil
 	}
-	if optionID == approvalreply.OwnWordsOptionID {
+	if carriesOwnWords(thread, optionID, isClicked) {
 		approvalgate.RecordOwnWordsAnswer(connectorRuntime.taskRunService, thread.taskRunID, event.Prompt)
 	}
 	connectorRuntime.recordConfirmationReplyClassified(thread.taskRunID, event, answeredDecision(optionID))
 	thread.answers <- optionID
-	if optionID == "" || optionID == thread.question.DecliningOptionID() {
-		return ConnectorRuntimeResult{}, false, nil
-	}
 	return ConnectorRuntimeResult{Handled: true, Platform: thread.platform, TaskRunID: thread.taskRunID, Reason: ApprovalAnsweredInThreadReason}, true, nil
 }
 
-func (connectorRuntime *ConnectorRuntime) answeredThreadOption(ctx context.Context, thread *askingThread, event PlatformInboundEvent) string {
+func carriesOwnWords(thread *askingThread, optionID string, isClicked bool) bool {
+	if isClicked {
+		return false
+	}
+	return optionID == approvalreply.OwnWordsOptionID || optionID == thread.question.DecliningOptionID()
+}
+
+func (connectorRuntime *ConnectorRuntime) answeredThreadOption(ctx context.Context, thread *askingThread, event PlatformInboundEvent) (string, bool) {
 	if optionID, isClicked := clickedOptionID(event.AnsweredChoice, thread.interaction); isClicked {
-		return optionID
+		return optionID, true
 	}
 	reading, errorValue := connectorRuntime.readReplyToQuestion(ctx, thread.taskRunID, thread.question, event.Prompt)
 	if errorValue != nil {
 		slog.Warn("connectors.approval_reply_unread", "taskRunID", thread.taskRunID, "error", errorValue.Error())
 	}
 	if !reading.IsApproval() {
-		return thread.question.DecliningOptionID()
+		return thread.question.DecliningOptionID(), false
 	}
-	return reading.ApprovedOptionID
+	return reading.ApprovedOptionID, false
 }
 
 func clickedOptionID(answered *AnsweredChoice, interaction *AskInteraction) (string, bool) {

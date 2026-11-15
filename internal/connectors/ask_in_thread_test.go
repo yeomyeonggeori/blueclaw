@@ -217,7 +217,7 @@ func TestARootReplyToAThreadQuestionIsNotAnAnswer(t *testing.T) {
 	fixture.await(t, asking)
 }
 
-func TestAReplyThatIsNotAnApprovalRejectsTheHoldOnceAndGoesOnAsTheNextMessage(t *testing.T) {
+func TestAReplyThatIsNotAnApprovalRejectsTheHoldOnceAndReachesTheRunThatAsked(t *testing.T) {
 	script := deleteApprovalScript(`{"answer":"other"}`, `{"answer":"approve"}`)
 	for range 6 {
 		script.turnRouters = append(script.turnRouters, answerQuestionRoute("a reply beside the declined call"))
@@ -227,21 +227,37 @@ func TestAReplyThatIsNotAnApprovalRejectsTheHoldOnceAndGoesOnAsTheNextMessage(t 
 	fixture.connectorRuntime.UseGatewayDecider(&scriptedGatewayDecider{addressing: addressedToBot(), busyRoute: inboundengagement.BusyRouteNewTask})
 	asking := fixture.send(context.Background(), threadReplyEvent("message-1", threadAskRequest))
 	taskRunID := fixture.awaitQuestionOnTheThread(t)
+	runsBeforeTheReply := len(fixture.connectorRuntime.taskRunService.ListTaskRun())
 
 	reply := fixture.await(t, fixture.send(context.Background(), threadReplyEvent("message-2", "그게 어떤 일정이었지?")))
 	fixture.await(t, asking)
 	stray := fixture.await(t, fixture.send(context.Background(), threadReplyEvent("message-3", "ㅇㅇ")))
 
-	if reply.Reason == ApprovalAnsweredInThreadReason || stray.Reason == ApprovalAnsweredInThreadReason {
-		t.Fatalf("the reply settled %+v and the stray ㅇㅇ %+v; neither may be swallowed as an approval", reply, stray)
+	if reply.TaskRunID != taskRunID || len(fixture.connectorRuntime.taskRunService.ListTaskRun()) != runsBeforeTheReply+1 {
+		t.Fatalf("the reply %+v belongs to the run that asked %s; it started a run of its own", reply, taskRunID)
+	}
+	if stray.Reason == ApprovalAnsweredInThreadReason {
+		t.Fatalf("the stray ㅇㅇ %+v found a question to approve", stray)
 	}
 	holds := holdrecord.Holds(fixture.connectorRuntime.taskRunService.ListTaskEvent(taskRunID))
 	if len(holds) != 1 || holds[0].State != holdrecord.StateRejected {
 		t.Fatalf("holds %+v, expected the one hold rejected by the reply that was not an approval", holds)
 	}
+	if !anyTaskEventContains(fixture.connectorRuntime.taskRunService.ListTaskEvent(taskRunID), ".result", "그게 어떤 일정이었지?") {
+		t.Fatal("the agent that asked never read what the person replied when the call came back declined")
+	}
 	if fixture.invokedToolCount() != 0 || fixture.connectorRuntime.isAwaitedInThread(taskRunID) {
 		t.Fatalf("calls %v awaited=%v: a later ㅇㅇ must find no stale question to approve", fixture.invokedTools, fixture.connectorRuntime.isAwaitedInThread(taskRunID))
 	}
+}
+
+func anyTaskEventContains(taskEvents []task.TaskEvent, nameSuffix string, fragment string) bool {
+	for _, taskEvent := range taskEvents {
+		if strings.HasSuffix(taskEvent.Name, nameSuffix) && strings.Contains(taskEvent.Body, fragment) {
+			return true
+		}
+	}
+	return false
 }
 
 func restartedRunHoldingTheCall(t *testing.T, fixture *threadAskFixture) task.TaskRun {
@@ -306,6 +322,38 @@ func TestAnAnswerAfterARestartApprovesTheHoldAndResumesTheRunWhichSpendsIt(t *te
 	holds := holdrecord.Holds(fixture.connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID))
 	if len(holds) != 1 || holds[0].State != holdrecord.StateSpent || fixture.invokedToolCount() != 1 || resumed.Status != task.TaskStatusCompleted {
 		t.Fatalf("holds %+v, calls %v, status %s: expected the harness's repeated call to spend the approved hold once on a completed run", holds, fixture.invokedTools, resumed.Status)
+	}
+}
+
+func TestADeclineAfterARestartReachesTheResumedRunAsTheCallsResult(t *testing.T) {
+	script := deleteApprovalScript(`{"answer":"reject"}`)
+	script.actions = []string{connectorFinishMessage("일정을 지우지 않았습니다.")}
+	fixture := newThreadAskFixture(t, script)
+	fixture.connectorRuntime.identityService.RememberPlatformAccount(identity.PlatformAccountIdentity{Platform: "test", ExternalUserID: "sender-user", Email: "invited@example.com"})
+	taskRun := restartedRunHoldingTheCall(t, fixture)
+	fixture.connectorRuntime.appendConnectorReplyEvent(taskRun.TaskRunID, agentcontract.TaskEventConnectorReplySent, map[string]string{"replyKind": connectorReplyKindApprovalQuestion, "dispatchID": "dispatch-before-restart"})
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	finished := make(chan struct{})
+	go func() {
+		fixture.connectorRuntime.reawaitHold(ctx, taskRun)
+		close(finished)
+	}()
+	fixture.awaitQuestionOnTheThread(t)
+	runsBeforeTheReply := fixture.taskRunCount()
+
+	reply := fixture.await(t, fixture.send(context.Background(), threadReplyEvent("message-2", "아니, 그건 지우지 마")))
+	awaitFinished(t, finished)
+
+	if reply.TaskRunID != taskRun.TaskRunID || fixture.taskRunCount() != runsBeforeTheReply {
+		t.Fatalf("the reply %+v belongs to the run that asked %s; it started a run of its own", reply, taskRun.TaskRunID)
+	}
+	holds := holdrecord.Holds(fixture.connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID))
+	if len(holds) != 1 || holds[0].State != holdrecord.StateRejected || fixture.invokedToolCount() != 0 {
+		t.Fatalf("holds %+v, calls %v: expected the declined call rejected once and never run", holds, fixture.invokedTools)
+	}
+	if !anyTaskEventContains(fixture.connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID), ".result", "아니, 그건 지우지 마") {
+		t.Fatal("the run resumed after the restart never learned its call was declined, or what the person said, so it would ask again")
 	}
 }
 

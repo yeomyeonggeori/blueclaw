@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/yeomyeonggeori/blueclaw/internal/approvalgate/holdrule"
 	"github.com/yeomyeonggeori/blueclaw/internal/callrecord"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
@@ -102,7 +103,7 @@ func toolSetAllowingEveryPublishedTool(requesterToolSet RequesterToolSet, publis
 }
 
 func markedHostGated(toolDescriptor toolcontract.ToolDescriptor, toolSet *toolcontract.ToolSet) toolcontract.ToolDescriptor {
-	toolDescriptor.IsHostGated = toolDescriptor.RequiresApproval && toolSet.HasToolCallGate()
+	toolDescriptor.IsHostGated = toolSet.HasToolCallGate() && holdrule.MayHold(toolDescriptor)
 	return toolDescriptor
 }
 
