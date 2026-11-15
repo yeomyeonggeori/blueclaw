@@ -40,6 +40,11 @@ func (agent *Agent) taskRunsWaitingForAnAnswer(sessionContext SessionContext) []
 }
 
 func (agent *Agent) reissueHeldPermission(ctx context.Context, sessionID acp.SessionId, sessionContext SessionContext, taskRun agentcontract.TaskRun, heldCall agentcontract.HeldCall) {
+	stopAwaiting, isTheWaiter := agent.answerSettler.AwaitAnswer(taskRun.TaskRunID)
+	if !isTheWaiter {
+		return
+	}
+	defer stopAwaiting()
 	toolCallID := acp.ToolCallId(heldCall.HoldID)
 	agent.logger.Info("acpsession.permission.reissued",
 		"sessionID", string(sessionID),

@@ -57,10 +57,10 @@ func (connectorRuntime *ConnectorRuntime) ResumeInterruptedTaskRun(ctx context.C
 	if errorValue != nil {
 		return ConnectorRuntimeResult{}, errorValue
 	}
-	return connectorRuntime.resumeTaskRun(ctx, taskRun, taskEvents, launchContext, adapter, nil)
+	return connectorRuntime.resumeTaskRun(ctx, taskRun, taskEvents, launchContext, adapter, autoResumeTaskProfile(taskRun.TaskRunID), nil)
 }
 
-func (connectorRuntime *ConnectorRuntime) resumeTaskRun(ctx context.Context, taskRun task.TaskRun, taskEvents []task.TaskEvent, launchContext interruptedTaskLaunchContext, adapter PlatformAdapter, settledCalls []agentcontract.CarriedOutCall) (ConnectorRuntimeResult, error) {
+func (connectorRuntime *ConnectorRuntime) resumeTaskRun(ctx context.Context, taskRun task.TaskRun, taskEvents []task.TaskEvent, launchContext interruptedTaskLaunchContext, adapter PlatformAdapter, profile taskResumeProfile, settledCalls []agentcontract.CarriedOutCall) (ConnectorRuntimeResult, error) {
 	event := interruptedTaskResumeEvent(taskRun, launchContext)
 	replyTarget := ReplyTarget{
 		ConversationID: event.ConversationID,
@@ -70,7 +70,7 @@ func (connectorRuntime *ConnectorRuntime) resumeTaskRun(ctx context.Context, tas
 	sendReply := func(replyContext context.Context, target ReplyTarget, reply OutboundReply) (string, error) {
 		return connectorRuntime.enqueueConnectorReply(withConnectorEvent(replyContext, event), target, reply)
 	}
-	launchRequest := connectorRuntime.interruptedTaskLaunchRequest(taskRun, taskEvents, launchContext, event, adapter, autoResumeTaskProfile(taskRun.TaskRunID), sendReply)
+	launchRequest := connectorRuntime.interruptedTaskLaunchRequest(taskRun, taskEvents, launchContext, event, adapter, profile, sendReply)
 	launchRequest.SettledCalls = settledCalls
 	launchResult, errorValue := connectorRuntime.currentTaskLauncher().Launch(ctx, launchRequest)
 	if errorValue != nil {
@@ -220,7 +220,7 @@ func interruptedTaskResumeEvent(taskRun task.TaskRun, launchContext interruptedT
 }
 
 func ActiveGoalOfARunResumedOnItsHeldCall(taskRun task.TaskRun, taskEvents []task.TaskEvent) agentcontract.ActiveGoal {
-	return interruptedTaskActiveGoal(taskRun, taskEvents, autoResumeTaskProfile(taskRun.TaskRunID).guidanceNote)
+	return interruptedTaskActiveGoal(taskRun, taskEvents, answeredHoldTaskProfile(taskRun.TaskRunID).guidanceNote)
 }
 
 func interruptedTaskActiveGoal(taskRun task.TaskRun, taskEvents []task.TaskEvent, guidanceNote string) agentcontract.ActiveGoal {
@@ -253,6 +253,13 @@ func autoResumeTaskProfile(taskRunID string) taskResumeProfile {
 	return taskResumeProfile{
 		sourceReference: "auto_resume:" + taskRunID,
 		guidanceNote:    "Runtime restarted mid-task before the prior attempt completed. Assess prior progress from the task event ledger and restored observations, then continue or redo only the work that is still missing.",
+	}
+}
+
+func answeredHoldTaskProfile(taskRunID string) taskResumeProfile {
+	return taskResumeProfile{
+		sourceReference: autoResumeTaskProfile(taskRunID).sourceReference,
+		guidanceNote:    "The task paused on a call that needed the requester's answer, and they have now answered. That call did not run before the answer; its result in the restored observations is their answer. Continue from that answer.",
 	}
 }
 

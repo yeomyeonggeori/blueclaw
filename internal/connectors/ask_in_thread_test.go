@@ -130,7 +130,7 @@ func (fixture *threadAskFixture) awaitQuestionOnTheThread(t *testing.T) string {
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		for _, taskRun := range fixture.connectorRuntime.taskRunService.ListTaskRun() {
-			if fixture.connectorRuntime.isAwaitedInThread(taskRun.TaskRunID) && PostedApprovalQuestionMessageID(fixture.connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID)) != "" {
+			if _, isAsking := fixture.connectorRuntime.askingThreads.awaitingRun(taskRun.TaskRunID); isAsking && PostedApprovalQuestionMessageID(fixture.connectorRuntime.taskRunService.ListTaskEvent(taskRun.TaskRunID)) != "" {
 				return taskRun.TaskRunID
 			}
 		}
@@ -782,5 +782,25 @@ func TestAReplyInTheQuestionsThreadDecliningTheCallSettlesItWithoutRunningIt(t *
 	}
 	if fixture.connectorRuntime.isAwaitedInThread(taskRunID) {
 		t.Fatal("the question was still awaited after it was declined")
+	}
+}
+
+func TestAReplyToARunAnotherListenerAwaitsIsLeftToThatListener(t *testing.T) {
+	script := deleteApprovalScript(`{"answer":"reject"}`)
+	fixture := newThreadAskFixture(t, script)
+	taskRun := restartedRunHoldingTheCall(t, fixture)
+	fixture.connectorRuntime.appendConnectorReplyEvent(taskRun.TaskRunID, agentcontract.TaskEventConnectorReplySent, map[string]string{"replyKind": connectorReplyKindApprovalQuestion, "dispatchID": "dispatch-before-the-restart"})
+	stopAwaiting, isTheWaiter := fixture.connectorRuntime.approvalGate.AwaitAnswer(taskRun.TaskRunID)
+	if !isTheWaiter {
+		t.Fatal("the ACP session's reissued permission is the run's waiter in this test")
+	}
+	defer stopAwaiting()
+	sessionTurn := fixture.connectorRuntime.OpenSessionTurn(context.Background(), threadReplyEvent("message-2", "ㄴ"), "person-1", fixture.adapter.SendReply)
+
+	isAnswer, errorValue := sessionTurn.AnswersAwaitedQuestion(context.Background())
+
+	resumed, _ := fixture.connectorRuntime.taskRunService.FindTaskRun(taskRun.TaskRunID)
+	if errorValue != nil || isAnswer || resumed.Status != task.TaskStatusWaitingApproval {
+		t.Fatalf("answered=%v error=%v status=%s: one reply read by two listeners resumed the run twice on our host", isAnswer, errorValue, resumed.Status)
 	}
 }

@@ -1,8 +1,11 @@
 package approvalgate
 
 import (
+	"context"
+	"errors"
 	"testing"
 
+	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/task"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
@@ -67,5 +70,43 @@ func TestALaterHoldDoesNotInheritTheChoicesOfAnEarlierOne(t *testing.T) {
 
 	if recorded := OfferedChoices(taskRunService.ListTaskEvent(taskRunID)); len(recorded) != 0 {
 		t.Fatalf("expected no choices for a hold that offered none, got %+v", recorded)
+	}
+}
+
+func TestTheSecondReaderOfOneAnswerLeavesTheRunToTheFirst(t *testing.T) {
+	taskRunService, taskRunID, _ := heldMessage(t)
+	if _, errorValue := taskRunService.AdvanceTaskRun(taskRunID, "default"); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if _, errorValue := taskRunService.PauseTaskRun(taskRunID, agentcontract.TaskStatusWaitingApproval, "post it?"); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	gate := New(taskRunService)
+	approvalRequest := mcpserver.ApprovalRequest{TaskRunID: taskRunID, ToolName: "message_send"}
+	decline := ApprovalAnswer{Signal: agentcontract.ApprovalSignalReject}
+
+	if _, errorValue := gate.SettleAnswer(context.Background(), approvalRequest, decline); errorValue != nil {
+		t.Fatalf("the first reader of the answer settles it: %v", errorValue)
+	}
+	_, errorValue := gate.SettleAnswer(context.Background(), approvalRequest, decline)
+
+	if !errors.Is(errorValue, ErrAnswerSettledElsewhere) {
+		t.Fatalf("the ACP session and the messenger thread both read one reply; only the first may resume the run, got %v", errorValue)
+	}
+}
+
+func TestARunWaitsForItsAnswerThroughOneWaiterAtATime(t *testing.T) {
+	gate := New(task.NewTaskRunService(task.NewTaskEventService()))
+
+	stopAwaiting, isTheWaiter := gate.AwaitAnswer("run-1")
+	if !isTheWaiter {
+		t.Fatal("the first to wait for a run's answer is its waiter")
+	}
+	if _, isAlsoAWaiter := gate.AwaitAnswer("run-1"); isAlsoAWaiter {
+		t.Fatal("a second listener on the same thread would read the same reply and resume the run again")
+	}
+	stopAwaiting()
+	if _, isTheWaiterNow := gate.AwaitAnswer("run-1"); !isTheWaiterNow {
+		t.Fatal("once the waiter stops, the run can be waited for again")
 	}
 }
