@@ -72,7 +72,7 @@ func TestParseSoulNormalizesAndRenders(t *testing.T) {
 		t.Fatalf("expected the soul to parse: %v", errorValue)
 	}
 	instruction := RenderSoulInstruction(soul)
-	for _, fragment := range []string{"What you hold to:\n- Lead with the result.\n- Say what you did not do.", "What you never do:\n- Never read", "How you work:\n- Ask once", "Tone: keep a polite register; sound warm, brief.", "Language: write in ko unless something else decides it; answer in the language the requester wrote in."} {
+	for _, fragment := range []string{"What you hold to:\n- Lead with the result.\n- Say what you did not do.", "What you never do:\n- Never read", "How you work:\n- Ask once", "Tone: in Korean use 해요체 (\"확인했어요. 내일 다시 알려 드릴게요.\"); in English write warm, professional sentences with contractions (\"I've checked this. I'll get back to you tomorrow.\"); sound warm, brief.", "Language: write in ko unless something else decides it; answer in the language the requester wrote in."} {
 		if !strings.Contains(instruction, fragment) {
 			t.Fatalf("expected the soul instruction to contain %q, got %q", fragment, instruction)
 		}
@@ -86,7 +86,7 @@ func TestTheVoiceCarriesWhoSpeaksToWhomInWhatToneAndNothingElse(t *testing.T) {
 
 	voice := RenderVoiceInstruction(Agent{Identity: identity, Soul: soul}, user)
 
-	if voice != "- Your name is 김인턴.\n- Your role: 회사의 AI 인턴\n- Tone: keep a polite register; sound warm, brief.\n- Call them 샘플님.\n- Tone with them: keep a casual register." {
+	if voice != "- Your name is 김인턴.\n- Your role: 회사의 AI 인턴\n- Tone: in Korean use 해요체 (\"확인했어요. 내일 다시 알려 드릴게요.\"); in English write warm, professional sentences with contractions (\"I've checked this. I'll get back to you tomorrow.\"); sound warm, brief.\n- Call them 샘플님.\n- Tone with them: in Korean use 해체 (\"확인했어. 내일 다시 알려 줄게.\"); in English write the way a close colleague talks (\"Got it. I'll let you know tomorrow.\")." {
 		t.Fatalf("expected the voice to be the agent's name, role and tone and how this requester is addressed, got %q", voice)
 	}
 }
@@ -106,7 +106,7 @@ func TestParseUserNormalizesAndRenders(t *testing.T) {
 		t.Fatalf("expected trimmed preferences, got %v", user.Preferences)
 	}
 	instruction := RenderUserInstruction(user)
-	for _, fragment := range []string{"The person asking has told you how they want to work with you:", "- Call them 샘플님.", "- About them: 플랫폼 팀에서", "  - Give me the command before the explanation.", "- Tone with them: keep a casual register.", "- Answer them in en."} {
+	for _, fragment := range []string{"The person asking has told you how they want to work with you:", "- Call them 샘플님.", "- About them: 플랫폼 팀에서", "  - Give me the command before the explanation.", "- Tone with them: in Korean use 해체 (\"확인했어. 내일 다시 알려 줄게.\"); in English write the way a close colleague talks (\"Got it. I'll let you know tomorrow.\").", "- Answer them in en."} {
 		if !strings.Contains(instruction, fragment) {
 			t.Fatalf("expected the user instruction to contain %q, got %q", fragment, instruction)
 		}

@@ -126,7 +126,7 @@ func TestAHeldCallIsWordedInTheAgentsVoiceTowardThisRequester(t *testing.T) {
 	}
 	holdACallOn(t, harness.LastTurnRequest().ToolSet, taskRunService.CreateTaskRun("person-1", "channel-1", "Delete the draft.").TaskRunID)
 
-	if questionWorder.facts.Voice != "- Your name is 샘플봇.\n- Call them 샘플님.\n- Tone with them: keep a formal register." {
+	if questionWorder.facts.Voice != "- Your name is 샘플봇.\n- Call them 샘플님.\n- Tone with them: in Korean use 합쇼체 (\"확인했습니다. 내일 다시 알려 드리겠습니다.\"); in English write full sentences without contractions (\"I have confirmed this. I will follow up with you tomorrow.\")." {
 		t.Fatalf("expected the question to be worded in the agent's voice toward this requester, got %q", questionWorder.facts.Voice)
 	}
 	if harness.LastTurnRequest().Voice != questionWorder.facts.Voice {
