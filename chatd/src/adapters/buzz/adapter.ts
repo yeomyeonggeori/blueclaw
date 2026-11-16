@@ -691,6 +691,10 @@ export class BuzzAdapter implements Adapter<BuzzThreadId, BuzzEvent> {
 		return this.profileByPubkey.get(senderId)?.picture;
 	}
 
+	forgetProfile(pubkey: string): void {
+		this.profileByPubkey.delete(pubkey);
+	}
+
 	private async fetchProfile(pubkey: string): Promise<{ name?: string; nip05?: string; picture?: string }> {
 		const cached = this.profileByPubkey.get(pubkey);
 		if (cached) return cached;

@@ -225,6 +225,10 @@ export const personCapabilities: Record<string, PersonCapability> = {
 		const request = parsePersonRequest(body);
 		return { media: await gateway.uploadMedia(request.actor, requireMediaSource(request)) };
 	},
+	"person.profile.picture.set": async (gateway, body) => {
+		const request = parsePersonRequest(body);
+		return await gateway.setProfilePicture(request.actor, requireMediaURL(request));
+	},
 };
 
 function requireEmoji(emoji: string | undefined): string {

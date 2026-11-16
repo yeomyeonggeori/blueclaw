@@ -161,6 +161,11 @@ export type KeptMedia = {
 	contentType: string;
 };
 
+export type KnownPicture = {
+	externalID: string;
+	avatarURL: string;
+};
+
 export type MediaSource = {
 	url: string;
 	contentType: string;
@@ -232,6 +237,7 @@ export interface PersonalGateway {
 	): Promise<PersonalMessage>;
 	readMedia(actor: ActorCredential, url: string, range: string): Promise<Response>;
 	uploadMedia(actor: ActorCredential, source: MediaSource): Promise<KeptMedia>;
+	setProfilePicture(actor: ActorCredential, pictureURL: string): Promise<KnownPicture>;
 	editMessage(
 		actor: ActorCredential,
 		conversationID: string,

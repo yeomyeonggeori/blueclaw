@@ -10,6 +10,7 @@ import {
 	type PersonalEmoji,
 	type IssuedCredential,
 	type PersonalGateway,
+	type KnownPicture,
 	type PersonalIdentity,
 	type PersonalImage,
 	type PersonalMessage,
@@ -306,6 +307,11 @@ class MattermostPersonalGateway implements PersonalGateway {
 	async uploadMedia(actor: ActorCredential): Promise<KeptMedia> {
 		requireMatchingCredential(this, actor);
 		throw new UnsupportedByPlatform(this.platform, "take a file from the company's transfer store");
+	}
+
+	async setProfilePicture(actor: ActorCredential): Promise<KnownPicture> {
+		requireMatchingCredential(this, actor);
+		throw new UnsupportedByPlatform(this.platform, "change the picture a person is known by");
 	}
 
 	async editMessage(

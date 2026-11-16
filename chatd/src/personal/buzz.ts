@@ -28,6 +28,7 @@ import {
 	profilePictureURLAsUser,
 	pubkeyFromSecret,
 	sendChannelMessageAsUser,
+	setProfilePictureAsUser,
 	timeZoneTags,
 } from "../adapters/buzz/user-session.ts";
 import {
@@ -55,6 +56,7 @@ import {
 	type NewPersonalChannel,
 	type PersonalIdentity,
 	type KeptMedia,
+	type KnownPicture,
 	type MediaSource,
 	MediaRefused,
 	type PersonalMentions,
@@ -670,6 +672,22 @@ class BuzzPersonalGateway implements PersonalGateway {
 			});
 			return { address: blob.url, digest: blob.sha256, sizeBytes: blob.size, contentType: blob.mimeType };
 		}));
+	}
+
+	async setProfilePicture(actor: ActorCredential, pictureURL: string): Promise<KnownPicture> {
+		this.require(actor);
+		if (!isServedByTheRelay(pictureURL, this.settings.relayURL)) {
+			throw new MalformedRequest(`${pictureURL} is not held by this messenger's file store`);
+		}
+		await setProfilePictureAsUser({
+			relayURL: this.settings.relayURL,
+			userSecretHex: actor.secret,
+			pictureURL,
+			authTagJSON: this.settings.authTagJSON,
+		});
+		const externalID = pubkeyFromSecret(actor.secret);
+		this.adapter.forgetProfile(externalID);
+		return { externalID, avatarURL: pictureURL };
 	}
 
 	private communityEmoji(actor: ActorCredential): Promise<CustomEmoji[]> {

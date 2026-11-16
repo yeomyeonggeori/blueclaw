@@ -54,23 +54,45 @@ export function pubkeyFromSecret(userSecretHex: string): string {
 	return getPublicKey(hexToBytes(userSecretHex));
 }
 
-async function fetchProfileAsUser(
-	relay: { query: (filter: object) => Promise<BuzzEvent[]> },
-	pubkey: string,
-): Promise<{ name?: string; picture?: string }> {
-	const events = (await profileEventsOrNone(relay, { kinds: [PROFILE_KIND], authors: [pubkey], limit: 5 })) ?? [];
+type ProfileReader = { query: (filter: object) => Promise<BuzzEvent[]> };
+
+async function latestProfileContent(relay: ProfileReader, pubkey: string): Promise<Record<string, unknown> | null> {
+	const events = await profileEventsOrNone(relay, { kinds: [PROFILE_KIND], authors: [pubkey], limit: 5 });
+	if (events === null) return null;
 	const latest = events.sort((first, second) => second.created_at - first.created_at)[0];
 	if (!latest?.content) return {};
 	try {
-		const parsed = JSON.parse(latest.content) as {
-			name?: string;
-			display_name?: string;
-			picture?: string;
-		};
-		return { name: parsed.name ?? parsed.display_name, picture: parsed.picture };
+		const parsed: unknown = JSON.parse(latest.content);
+		return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+			? (parsed as Record<string, unknown>)
+			: {};
 	} catch {
 		return {};
 	}
+}
+
+function profileText(value: unknown): string | undefined {
+	return typeof value === "string" ? value : undefined;
+}
+
+async function fetchProfileAsUser(relay: ProfileReader, pubkey: string): Promise<{ name?: string; picture?: string }> {
+	const held = (await latestProfileContent(relay, pubkey)) ?? {};
+	return { name: profileText(held.name) ?? profileText(held.display_name), picture: profileText(held.picture) };
+}
+
+export async function setProfilePictureAsUser(request: {
+	relayURL: string;
+	userSecretHex: string;
+	pictureURL: string;
+	authTagJSON?: string;
+}): Promise<void> {
+	return withRelayAs(request.relayURL, request.userSecretHex, request.authTagJSON, async (relay) => {
+		const held = await latestProfileContent(relay, pubkeyFromSecret(request.userSecretHex));
+		if (held === null) {
+			throw new Error("the profile this picture belongs on could not be read, so the picture was not set; try again");
+		}
+		await relay.publish(PROFILE_KIND, JSON.stringify({ ...held, picture: request.pictureURL }), []);
+	});
 }
 
 export async function listUserConversations(
