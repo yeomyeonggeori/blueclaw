@@ -46,9 +46,14 @@ func TestParseIdentityNormalizesAndRenders(t *testing.T) {
 		t.Fatalf("expected the first name and the handle, got %+v", agentIdentity)
 	}
 	instruction := RenderIdentityInstruction(identity)
-	for _, fragment := range []string{"Your name is 김인턴.", "all your name too, and you answer to any of them: \"Intern Kim\", \"인턴킴\".", "@internkim", "Your role: 회사의 AI 인턴", "Your emoji: 🐱", "introduce yourself like this: 안녕하세요, 김인턴입니다."} {
+	for _, fragment := range []string{"Your name is 김인턴.", "all your name too, and you answer to any of them: \"Intern Kim\", \"인턴킴\".", "@internkim", "Your role: 회사의 AI 인턴", "introduce yourself like this: 안녕하세요, 김인턴입니다."} {
 		if !strings.Contains(instruction, fragment) {
 			t.Fatalf("expected the identity instruction to contain %q, got %q", fragment, instruction)
+		}
+	}
+	for _, retired := range []string{"고양이", "🐱"} {
+		if strings.Contains(instruction, retired) {
+			t.Fatalf("a retired creature or emoji must not reach the instruction, got %q", instruction)
 		}
 	}
 }

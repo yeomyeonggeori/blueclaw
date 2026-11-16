@@ -304,7 +304,7 @@ func (coordinator *Coordinator) applySoulLocked(decision Decision, expected json
 	if string(current.Document) != string(expected) {
 		return errors.New("soul changed during reflection")
 	}
-	_, errorValue = persona.AppendSoulRevision(coordinator.root, current.Version, canonical, decision.Reason, decision.EvidenceIDs, "reflection")
+	_, errorValue = persona.AppendSoulRevision(coordinator.root, current.Version, canonical, decision.Reason, decision.EvidenceIDs, "reflection", "")
 	return errorValue
 }
 

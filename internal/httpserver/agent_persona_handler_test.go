@@ -79,3 +79,32 @@ func TestAgentIdentityUpdateCannotChangeAuthoritativeSoul(t *testing.T) {
 		t.Fatalf("soul changed after rejected update: %s %v", soul, errorValue)
 	}
 }
+
+func TestAnAdministratorRevisionIsRecordedWithItsAuthor(t *testing.T) {
+	root := t.TempDir()
+	handler := PersonaHandler{WorkspaceRootPath: root}
+	seed := httptest.NewRecorder()
+	handler.HandleSeedAgent(seed, httptest.NewRequest(http.MethodPost, "/admin/api/persona/agent", strings.NewReader(`{"identity":{"schemaVersion":1,"names":["샘플봇"]},"soul":{"schemaVersion":1,"values":["Verify outcomes."]}}`)))
+	if seed.Code != http.StatusOK {
+		t.Fatalf("seed status=%d body=%s", seed.Code, seed.Body.String())
+	}
+	revise := func(body string) *httptest.ResponseRecorder {
+		response := httptest.NewRecorder()
+		handler.HandleReviseSoul(response, httptest.NewRequest(http.MethodPost, "/admin/api/persona/agent/soul", strings.NewReader(body)))
+		return response
+	}
+	written := revise(`{"expectedVersion":1,"document":{"schemaVersion":1,"values":["Say what you could not check."]},"reason":"sample","origin":"administrator","author":"person-sample"}`)
+	if written.Code != http.StatusOK || !strings.Contains(written.Body.String(), `"author":"person-sample"`) || !strings.Contains(written.Body.String(), `"version":2`) {
+		t.Fatalf("status=%d body=%s", written.Code, written.Body.String())
+	}
+	soul, errorValue := os.ReadFile(filepath.Join(root, "soul.json"))
+	if errorValue != nil || !strings.Contains(string(soul), "Say what you could not check.") {
+		t.Fatalf("the runtime reads the revised soul: %s %v", soul, errorValue)
+	}
+	if stale := revise(`{"expectedVersion":1,"document":{"schemaVersion":1},"origin":"administrator"}`); stale.Code != http.StatusConflict {
+		t.Fatalf("a revision of an older version must conflict, status=%d", stale.Code)
+	}
+	if unnamed := revise(`{"expectedVersion":2,"document":{"schemaVersion":1},"origin":"reflection"}`); unnamed.Code != http.StatusBadRequest {
+		t.Fatalf("only an administrator or a default revises through this route, status=%d", unnamed.Code)
+	}
+}
