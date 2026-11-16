@@ -398,14 +398,19 @@ describe("watching a person's conversations for someone typing", () => {
 		expect(typed).toEqual([]);
 	});
 
-	test("typing inside a thread is not told as typing in the conversation", async () => {
+	test("typing inside a thread is told with the thread it is in", async () => {
 		const { watch, relays, typed, now } = harness(new Map([[aliceSecret, [conversation("dm-1", ["alice", "bob"])]]]));
 		await watch.watch(aliceSecret, arrivalsURL, typingURL);
 
 		const inThread = typing("t-1", "dm-1", "bob", now());
-		deliverTo(relays.get(aliceSecret)!, "dm-1", { ...inThread, tags: [...inThread.tags, ["e", "root-1", "", "reply"]] });
+		deliverTo(relays.get(aliceSecret)!, "dm-1", {
+			...inThread,
+			tags: [...inThread.tags, ["e", "root-1", "", "root"], ["e", "root-1", "", "reply"]],
+		});
 
-		expect(typed).toEqual([]);
+		expect(typed).toEqual([
+			{ conversationID: "dm-1", threadRootID: "root-1", authorExternalID: "bob", recipientExternalIDs: ["alice", "bob"] },
+		]);
 	});
 
 	test("a relay that names nowhere to tell typing is not asked to watch for it", async () => {

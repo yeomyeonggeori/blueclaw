@@ -277,7 +277,7 @@ export interface PersonalGateway {
 		typingURL?: string,
 		withdrawalsURL?: string,
 	): Promise<void>;
-	announceTyping(actor: ActorCredential, conversationID: string): Promise<void>;
+	announceTyping(actor: ActorCredential, conversationID: string, threadRootID?: string): Promise<void>;
 }
 
 export class UnsupportedByPlatform extends Error {

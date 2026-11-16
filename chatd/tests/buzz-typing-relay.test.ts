@@ -201,6 +201,25 @@ describe("typing against a relay", () => {
 		watch.closeEvery();
 	});
 
+	test("one person's typing inside a thread reaches the other's watcher with that thread", async () => {
+		const typist = generateSecretKey();
+		const reader = generateSecretKey();
+		const participants = [getPublicKey(typist), getPublicKey(reader)];
+		const typed: Typing[] = [];
+		const watch = watchTellingInto(typed, participants, "channel-4");
+		await watch.watch(bytesToHex(reader), "http://127.0.0.1:1/arrived", "http://127.0.0.1:1/typing");
+		await until(() => isSubscribedTo("channel-4"));
+		const rootID = "b".repeat(64);
+
+		await announceTypingAsUser({ relayURL, userSecretHex: bytesToHex(typist), channelID: "channel-4", threadRootID: rootID });
+		await until(() => typed.length > 0);
+
+		expect(typed).toEqual([
+			{ conversationID: "channel-4", threadRootID: rootID, authorExternalID: getPublicKey(typist), recipientExternalIDs: participants },
+		]);
+		watch.closeEvery();
+	});
+
 	test("the agent answering a person's message is seen typing by that person, in the conversation they wrote in", async () => {
 		const agent = generateSecretKey();
 		const person = generateSecretKey();

@@ -468,8 +468,8 @@ describe("person.typing.send", () => {
 			mattermost: {
 				platform: "mattermost",
 				credentialKind: "mattermost-token",
-				announceTyping: async (_actor: unknown, conversationID: string) => {
-					typed.push(conversationID);
+				announceTyping: async (_actor: unknown, conversationID: string, threadRootID?: string) => {
+					typed.push(threadRootID ? `${conversationID}/${threadRootID}` : conversationID);
 				},
 			},
 		} as never;
@@ -485,6 +485,17 @@ describe("person.typing.send", () => {
 		);
 		expect(answer.status).toBe(200);
 		expect(typed).toEqual(["channel-1"]);
+	});
+
+	test("announces typing in the thread it names", async () => {
+		const { typed, gateways: recording } = recordingTyping();
+		const answer = await call(
+			"person.typing.send",
+			{ actor: { kind: "mattermost-token", secret: "token" }, conversationID: "channel-1", parentID: "root-1" },
+			recording,
+		);
+		expect(answer.status).toBe(200);
+		expect(typed).toEqual(["channel-1/root-1"]);
 	});
 
 	test("refuses typing that names no conversation", async () => {

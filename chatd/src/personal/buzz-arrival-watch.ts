@@ -1,7 +1,7 @@
 import { asAHostService } from "../service-credential.ts";
 import { createBuzzRelayClient, type BuzzRelayClient } from "../adapters/buzz/relay-client.ts";
 import { listUserConversations, pubkeyFromSecret, type UserConversation } from "../adapters/buzz/user-session.ts";
-import { EDIT_MESSAGE_KIND, carriesTag, firstTagValue, type BuzzEvent } from "../adapters/buzz/types.ts";
+import { EDIT_MESSAGE_KIND, firstTagValue, threadTagsOf, type BuzzEvent } from "../adapters/buzz/types.ts";
 import { mentionsOf } from "../adapters/buzz/user-mentions.ts";
 import { TYPING_INDICATOR_KIND } from "../adapters/buzz/user-typing.ts";
 import { DELETE_MESSAGE_KIND, REACTION_KIND, isAbout } from "../adapters/buzz/deletions.ts";
@@ -27,6 +27,7 @@ export type Arrival = {
 
 export type Typing = {
 	conversationID: string;
+	threadRootID?: string;
 	authorExternalID: string;
 	recipientExternalIDs: string[];
 };
@@ -187,11 +188,13 @@ export class BuzzArrivalWatch {
 	}
 
 	private typed(watcher: Watcher, channelID: string, event: BuzzEvent): void {
-		if (!this.typingURL || carriesTag(event, "e")) return;
+		if (!this.typingURL) return;
 		if (this.nowSeconds() - event.created_at > typingFreshnessSeconds) return;
 		this.remember(event.id);
+		const { rootEventId } = threadTagsOf(event);
 		const typing: Typing = {
 			conversationID: channelID,
+			...(rootEventId ? { threadRootID: rootEventId } : {}),
 			authorExternalID: event.pubkey,
 			recipientExternalIDs: watcher.participantsByChannel.get(channelID) ?? [],
 		};
