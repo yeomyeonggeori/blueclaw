@@ -26,6 +26,8 @@ export type PersonalConversation = {
 	participantExternalIDs?: string[];
 	webURL?: string;
 	unread?: PersonalReadCount;
+	lastMessageAt?: string;
+	hasNoMessages?: boolean;
 };
 
 export type PersonalReadCount = { status: "exact" | "at_least"; value: number } | { status: "unknown" };

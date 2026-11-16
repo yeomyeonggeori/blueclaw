@@ -25,6 +25,8 @@ export type ChannelReadSummary = {
 	unread: ReadCount;
 	attention: ReadCount;
 	latestMessageID?: string;
+	latestMessageAt?: number;
+	isLatestMessageComplete: boolean;
 	unreadThreads: UnreadThread[];
 };
 
@@ -146,6 +148,8 @@ function channelSummaryOf(value: unknown): ChannelReadSummary {
 		unread: readCountOf(channel.unread),
 		attention: readCountOf(channel.attention),
 		latestMessageID: optionalString(channel.latest_message_id),
+		latestMessageAt: optionalNumber(channel.latest_message_at),
+		isLatestMessageComplete: channel.latest_message_complete === true,
 		unreadThreads: asArray(threads.items, "sidebar thread items").map(unreadThreadOf),
 	};
 }
@@ -208,6 +212,10 @@ function asRecord(value: unknown, what: string): Record<string, unknown> {
 function asArray(value: unknown, what: string): unknown[] {
 	if (!Array.isArray(value)) throw new ReadStateRefused(502, `malformed ${what}`);
 	return value;
+}
+
+function optionalNumber(value: unknown): number | undefined {
+	return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function optionalString(value: unknown): string | undefined {

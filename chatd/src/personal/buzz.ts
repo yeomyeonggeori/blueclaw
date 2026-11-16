@@ -14,7 +14,7 @@ import { mentionTags } from "../adapters/buzz/user-mentions.ts";
 import { answerTags } from "../adapters/buzz/ask-tags.ts";
 import type { AnsweredChoice } from "../choice.ts";
 import { emojiTagsFor, listCustomEmojiAsUser, normalizedShortcode, shortcodesIn, type CustomEmoji } from "../adapters/buzz/user-emoji.ts";
-import { markReadThroughAsUser, readSummariesAsUser, ReadStateRefused, type ReadCount } from "../adapters/buzz/personal-read.ts";
+import { markReadThroughAsUser, readSummariesAsUser, ReadStateRefused, type ChannelReadSummary } from "../adapters/buzz/personal-read.ts";
 import { announceTypingAsUser } from "../adapters/buzz/user-typing.ts";
 import { searchChannelMessagesAsUser } from "../adapters/buzz/user-message-search.ts";
 import { hideDirectMessageAsUser, revealDirectMessageAsUser } from "../adapters/buzz/user-dm-visibility.ts";
@@ -139,28 +139,33 @@ class BuzzPersonalGateway implements PersonalGateway {
 
 	async listConversations(actor: ActorCredential): Promise<PersonalConversation[]> {
 		this.require(actor);
-		const [conversations, unreadOfChannel] = await Promise.all([
+		const [conversations, summaryOfChannel] = await Promise.all([
 			listUserConversations(this.settings.relayURL, actor.secret),
-			this.unreadOfChannels(actor),
+			this.readSummariesOfChannels(actor),
 		]);
-		return conversations.map((conversation) => ({
-			id: conversation.channelID,
-			name: conversation.name,
-			kind: conversation.isDM ? "dm" : "group",
-			isHidden: conversation.isHidden,
-			isPrivate: conversation.isPrivate,
-			avatarURL: conversation.avatarURL,
-			participantExternalIDs: conversation.participantPubkeyHexes,
-			description: conversation.description,
-			roleOfExternalID: conversation.roleOfPubkeyHex,
-			unread: unreadOfChannel.get(conversation.channelID),
-		}));
+		return conversations.map((conversation) => {
+			const summary = summaryOfChannel.get(conversation.channelID);
+			return {
+				id: conversation.channelID,
+				name: conversation.name,
+				kind: conversation.isDM ? "dm" : "group",
+				isHidden: conversation.isHidden,
+				isPrivate: conversation.isPrivate,
+				avatarURL: conversation.avatarURL,
+				participantExternalIDs: conversation.participantPubkeyHexes,
+				description: conversation.description,
+				roleOfExternalID: conversation.roleOfPubkeyHex,
+				unread: summary?.unread,
+				lastMessageAt: summary?.latestMessageAt === undefined ? undefined : new Date(summary.latestMessageAt * 1000).toISOString(),
+				hasNoMessages: summary ? summary.latestMessageAt === undefined && summary.isLatestMessageComplete : undefined,
+			};
+		});
 	}
 
-	private async unreadOfChannels(actor: ActorCredential): Promise<Map<string, ReadCount>> {
+	private async readSummariesOfChannels(actor: ActorCredential): Promise<Map<string, ChannelReadSummary>> {
 		try {
 			const summaries = await readSummariesAsUser(this.settings.relayURL, actor.secret);
-			return new Map(summaries.map((summary) => [summary.channelID, summary.unread]));
+			return new Map(summaries.map((summary) => [summary.channelID, summary]));
 		} catch (error) {
 			if (error instanceof ReadStateRefused && error.isUnavailable) return new Map();
 			throw error;
