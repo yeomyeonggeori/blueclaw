@@ -116,6 +116,7 @@ func NewRouter(routerDependencies RouterDependencies) http.Handler {
 	multiplexer.HandleFunc("GET /admin/api/persona/agent", routerDependencies.PersonaHandler.authorized(routerDependencies.PersonaHandler.HandleReadAgent))
 	multiplexer.HandleFunc("POST /admin/api/persona/agent", routerDependencies.PersonaHandler.authorized(routerDependencies.PersonaHandler.HandleSeedAgent))
 	multiplexer.HandleFunc("PUT /admin/api/persona/agent", routerDependencies.PersonaHandler.authorized(routerDependencies.PersonaHandler.HandleWriteAgent))
+	multiplexer.HandleFunc("POST /admin/api/persona/agent/soul", routerDependencies.PersonaHandler.authorized(routerDependencies.PersonaHandler.HandleReviseSoul))
 	multiplexer.HandleFunc("PUT /admin/api/persona/user", routerDependencies.PersonaHandler.authorized(routerDependencies.PersonaHandler.HandleWriteUser))
 	multiplexer.HandleFunc("POST /admin/api/persona/user", routerDependencies.PersonaHandler.authorized(routerDependencies.PersonaHandler.HandleSeedUser))
 	multiplexer.HandleFunc("GET /admin/api/backup/manifest", routerDependencies.BackupHandler.HandleManifest)

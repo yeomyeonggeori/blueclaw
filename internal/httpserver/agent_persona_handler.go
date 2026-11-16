@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/yeomyeonggeori/blueclaw/internal/persona"
 )
@@ -43,8 +44,49 @@ func (handler PersonaHandler) HandleWriteAgent(responseWriter http.ResponseWrite
 	writeJSON(responseWriter, documents)
 }
 
+type soulRevisionRequest struct {
+	ExpectedVersion int             `json:"expectedVersion"`
+	Document        json.RawMessage `json:"document"`
+	Reason          string          `json:"reason"`
+	Origin          string          `json:"origin"`
+	Author          string          `json:"author"`
+}
+
+var soulRevisionOrigins = map[string]bool{"administrator": true, "default": true}
+
+func (handler PersonaHandler) HandleReviseSoul(responseWriter http.ResponseWriter, request *http.Request) {
+	var revision soulRevisionRequest
+	decoder := json.NewDecoder(http.MaxBytesReader(responseWriter, request.Body, personaDocumentMaximumBytes))
+	decoder.DisallowUnknownFields()
+	if errorValue := decoder.Decode(&revision); errorValue != nil {
+		http.Error(responseWriter, errorValue.Error(), http.StatusBadRequest)
+		return
+	}
+	if !soulRevisionOrigins[revision.Origin] {
+		http.Error(responseWriter, "a soul revision comes from an administrator or a default", http.StatusBadRequest)
+		return
+	}
+	root := firstNonEmptyWorkspaceRoot(handler.WorkspaceRootPath)
+	written, errorValue := persona.AppendSoulRevision(root, revision.ExpectedVersion, revision.Document, strings.TrimSpace(revision.Reason), nil, revision.Origin, strings.TrimSpace(revision.Author))
+	if errors.Is(errorValue, persona.ErrStaleSoulRevision) {
+		http.Error(responseWriter, errorValue.Error(), http.StatusConflict)
+		return
+	}
+	if errorValue != nil {
+		http.Error(responseWriter, errorValue.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(responseWriter, written)
+}
+
+type installedAgentPersona struct {
+	agentPersonaDocuments
+	SoulVersion int `json:"soulVersion"`
+}
+
 func (handler PersonaHandler) HandleReadAgent(responseWriter http.ResponseWriter, request *http.Request) {
-	documents, errorValue := readInstalledAgentPersona(firstNonEmptyWorkspaceRoot(handler.WorkspaceRootPath))
+	root := firstNonEmptyWorkspaceRoot(handler.WorkspaceRootPath)
+	documents, errorValue := readInstalledAgentPersona(root)
 	if errorValue != nil {
 		status := http.StatusUnprocessableEntity
 		if errors.Is(errorValue, os.ErrNotExist) {
@@ -53,7 +95,12 @@ func (handler PersonaHandler) HandleReadAgent(responseWriter http.ResponseWriter
 		http.Error(responseWriter, errorValue.Error(), status)
 		return
 	}
-	writeJSON(responseWriter, documents)
+	history, errorValue := persona.ReadSoulHistory(root)
+	if errorValue != nil {
+		http.Error(responseWriter, errorValue.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+	writeJSON(responseWriter, installedAgentPersona{agentPersonaDocuments: documents, SoulVersion: history[len(history)-1].Version})
 }
 
 func (handler PersonaHandler) HandleSeedAgent(responseWriter http.ResponseWriter, request *http.Request) {

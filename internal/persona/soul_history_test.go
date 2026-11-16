@@ -10,11 +10,11 @@ import (
 
 func TestSoulHistoryAppendsWithExpectedVersionAndSurvivesRestart(t *testing.T) {
 	root := t.TempDir()
-	first, errorValue := AppendSoulRevision(root, 1, []byte(`{"schemaVersion":1,"workingStyle":["steady"]}`), "sample improvement", []string{"task-1"}, "reflection")
+	first, errorValue := AppendSoulRevision(root, 1, []byte(`{"schemaVersion":1,"workingStyle":["steady"]}`), "sample improvement", []string{"task-1"}, "reflection", "")
 	if errorValue != nil || first.Version != 2 {
 		t.Fatalf("append failed: %+v %v", first, errorValue)
 	}
-	if _, errorValue := AppendSoulRevision(root, 1, []byte(`{"schemaVersion":1}`), "stale", nil, "reflection"); errorValue == nil {
+	if _, errorValue := AppendSoulRevision(root, 1, []byte(`{"schemaVersion":1}`), "stale", nil, "reflection", ""); errorValue == nil {
 		t.Fatal("expected stale revision rejection")
 	}
 	history, errorValue := ReadSoulHistory(root)
@@ -65,7 +65,7 @@ func jsonEqual(left, right any) bool {
 func TestSoulHistoryBoundsRevisions(t *testing.T) {
 	root := t.TempDir()
 	for version := 1; version <= maximumSoulHistory; version++ {
-		if _, errorValue := AppendSoulRevision(root, version, []byte(`{"schemaVersion":1}`), "sample", nil, "reflection"); errorValue != nil {
+		if _, errorValue := AppendSoulRevision(root, version, []byte(`{"schemaVersion":1}`), "sample", nil, "reflection", ""); errorValue != nil {
 			t.Fatal(errorValue)
 		}
 	}
@@ -124,7 +124,7 @@ func TestReadSoulDocumentReadsBaselineWithoutHistory(t *testing.T) {
 
 func TestReadSoulDocumentReadsHistoryWithoutProjection(t *testing.T) {
 	root := t.TempDir()
-	if _, errorValue := AppendSoulRevision(root, 1, []byte(`{"schemaVersion":1,"values":["steady"]}`), "sample", nil, "reflection"); errorValue != nil {
+	if _, errorValue := AppendSoulRevision(root, 1, []byte(`{"schemaVersion":1,"values":["steady"]}`), "sample", nil, "reflection", ""); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	if errorValue := os.Remove(filepath.Join(root, SoulFileName)); errorValue != nil {

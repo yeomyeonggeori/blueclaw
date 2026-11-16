@@ -30,12 +30,6 @@ func RenderIdentityInstruction(identity Identity) string {
 	if identity.Role != "" {
 		lines = append(lines, roleLine(identity))
 	}
-	if identity.Creature != "" {
-		lines = append(lines, "- What you are: "+identity.Creature)
-	}
-	if identity.Emoji != "" {
-		lines = append(lines, "- Your emoji: "+identity.Emoji)
-	}
 	if identity.Introduction != "" {
 		lines = append(lines, "- When asked who you are, introduce yourself like this: "+identity.Introduction)
 	}

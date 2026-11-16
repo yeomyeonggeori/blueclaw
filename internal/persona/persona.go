@@ -32,8 +32,6 @@ type Identity struct {
 	Names         []string `json:"names"`
 	Handle        string   `json:"handle,omitempty"`
 	Role          string   `json:"role,omitempty"`
-	Creature      string   `json:"creature,omitempty"`
-	Emoji         string   `json:"emoji,omitempty"`
 	Introduction  string   `json:"introduction,omitempty"`
 }
 
@@ -130,7 +128,13 @@ type UserLanguage struct {
 	Default string `json:"default,omitempty"`
 }
 
+var retiredIdentityFields = []string{"creature", "emoji"}
+
 func ParseIdentity(document []byte) (Identity, error) {
+	document, errorValue := withoutRetiredIdentityFields(document)
+	if errorValue != nil {
+		return Identity{}, fmt.Errorf("%s: %w", IdentityFileName, errorValue)
+	}
 	if errorValue := validateAgainstSchema(IdentitySchemaDocument, IdentityFileName, document); errorValue != nil {
 		return Identity{}, errorValue
 	}
@@ -139,6 +143,24 @@ func ParseIdentity(document []byte) (Identity, error) {
 		return Identity{}, fmt.Errorf("%s: %w", IdentityFileName, errorValue)
 	}
 	return NormalizeIdentity(identity), nil
+}
+
+func withoutRetiredIdentityFields(document []byte) ([]byte, error) {
+	var fields map[string]json.RawMessage
+	if errorValue := json.Unmarshal(document, &fields); errorValue != nil {
+		return nil, errorValue
+	}
+	retired := false
+	for _, name := range retiredIdentityFields {
+		if _, present := fields[name]; present {
+			delete(fields, name)
+			retired = true
+		}
+	}
+	if !retired {
+		return document, nil
+	}
+	return json.Marshal(fields)
 }
 
 func ParseSoul(document []byte) (Soul, error) {
@@ -168,8 +190,6 @@ func NormalizeIdentity(identity Identity) Identity {
 	identity.Names = normalizeLines(identity.Names)
 	identity.Handle = strings.ToLower(strings.TrimSpace(identity.Handle))
 	identity.Role = strings.TrimSpace(identity.Role)
-	identity.Creature = strings.TrimSpace(identity.Creature)
-	identity.Emoji = strings.TrimSpace(identity.Emoji)
 	identity.Introduction = strings.TrimSpace(identity.Introduction)
 	return identity
 }

@@ -113,6 +113,8 @@ func personaRequestAuthorizer(keyPath string) func(*http.Request) bool {
 			return principal == "internkim-persona-service"
 		case request.Method == http.MethodPut && request.URL.Path == "/admin/api/persona/agent":
 			return principal == "internkim-persona-service"
+		case request.Method == http.MethodPost && request.URL.Path == "/admin/api/persona/agent/soul":
+			return principal == "internkim-persona-service"
 		default:
 			return false
 		}

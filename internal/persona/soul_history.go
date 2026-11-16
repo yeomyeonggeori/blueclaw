@@ -18,7 +18,10 @@ type SoulRevision struct {
 	EvidenceIDs []string        `json:"evidenceIDs,omitempty"`
 	CreatedAt   time.Time       `json:"createdAt"`
 	Origin      string          `json:"origin"`
+	Author      string          `json:"author,omitempty"`
 }
+
+var ErrStaleSoulRevision = errors.New("soul revision is stale")
 
 var soulHistoryMutex sync.Mutex
 
@@ -67,7 +70,7 @@ func readSoulHistory(root string, allowMissingBaseline bool) ([]SoulRevision, er
 	return []SoulRevision{{Version: 1, Document: canonical, CreatedAt: time.Now().UTC(), Origin: "initial"}}, nil
 }
 
-func AppendSoulRevision(root string, expectedVersion int, document []byte, reason string, evidenceIDs []string, origin string) (SoulRevision, error) {
+func AppendSoulRevision(root string, expectedVersion int, document []byte, reason string, evidenceIDs []string, origin string, author string) (SoulRevision, error) {
 	soulHistoryMutex.Lock()
 	defer soulHistoryMutex.Unlock()
 	if expectedVersion <= 0 {
@@ -87,12 +90,12 @@ func AppendSoulRevision(root string, expectedVersion int, document []byte, reaso
 	}
 	latest := history[len(history)-1]
 	if latest.Version != expectedVersion {
-		return SoulRevision{}, errors.New("soul revision is stale")
+		return SoulRevision{}, ErrStaleSoulRevision
 	}
 	if len(history) >= maximumSoulHistory {
 		history = history[len(history)-maximumSoulHistory+1:]
 	}
-	revision := SoulRevision{Version: latest.Version + 1, Document: canonical, Reason: reason, EvidenceIDs: append([]string{}, evidenceIDs...), CreatedAt: time.Now().UTC(), Origin: origin}
+	revision := SoulRevision{Version: latest.Version + 1, Document: canonical, Reason: reason, EvidenceIDs: append([]string{}, evidenceIDs...), CreatedAt: time.Now().UTC(), Origin: origin, Author: author}
 	history = append(history, revision)
 	if errorValue := writeSoulHistory(root, history); errorValue != nil {
 		return SoulRevision{}, errorValue
