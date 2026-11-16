@@ -16,8 +16,9 @@ type Register struct {
 }
 
 type KoreanRegister struct {
-	Name    string `json:"name"`
-	Example string `json:"example"`
+	Name      string `json:"name"`
+	Romanized string `json:"romanized"`
+	Example   string `json:"example"`
 }
 
 type EnglishRegister struct {

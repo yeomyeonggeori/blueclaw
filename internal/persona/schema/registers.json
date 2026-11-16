@@ -2,22 +2,22 @@
   "registers": [
     {
       "value": "formal",
-      "korean": { "name": "합쇼체", "example": "확인했습니다. 내일 다시 알려 드리겠습니다." },
+      "korean": { "name": "합쇼체", "romanized": "hapsyo-che", "example": "확인했습니다. 내일 다시 알려 드리겠습니다." },
       "english": { "name": "Formal", "style": "write full sentences without contractions", "example": "I have confirmed this. I will follow up with you tomorrow." }
     },
     {
       "value": "polite",
-      "korean": { "name": "해요체", "example": "확인했어요. 내일 다시 알려 드릴게요." },
+      "korean": { "name": "해요체", "romanized": "haeyo-che", "example": "확인했어요. 내일 다시 알려 드릴게요." },
       "english": { "name": "Polite", "style": "write warm, professional sentences with contractions", "example": "I've checked this. I'll get back to you tomorrow." }
     },
     {
       "value": "casual",
-      "korean": { "name": "해체", "example": "확인했어. 내일 다시 알려 줄게." },
+      "korean": { "name": "해체", "romanized": "hae-che", "example": "확인했어. 내일 다시 알려 줄게." },
       "english": { "name": "Casual", "style": "write the way a close colleague talks", "example": "Got it. I'll let you know tomorrow." }
     },
     {
       "value": "plain",
-      "korean": { "name": "해라체", "example": "확인했다. 내일 다시 알린다." },
+      "korean": { "name": "해라체", "romanized": "haera-che", "example": "확인했다. 내일 다시 알린다." },
       "english": { "name": "Plain", "style": "write terse notes and drop the subject where it reads naturally", "example": "Confirmed. Will update tomorrow." }
     }
   ]

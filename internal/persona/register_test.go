@@ -44,13 +44,13 @@ func TestEveryRegisterTheSchemasAcceptHasBothLanguagesWritten(t *testing.T) {
 			t.Fatalf("expected the %s schema to accept exactly the registers in registers.json %v, got %v", name, registerValues(), field.Enum)
 		}
 		for _, register := range Registers {
-			if !strings.Contains(field.Description, register.Value+" is "+register.Korean.Name) {
-				t.Fatalf("expected the %s schema's register description to say %s is %s, got %q", name, register.Value, register.Korean.Name, field.Description)
+			if !strings.Contains(field.Description, register.Value+" is "+register.Korean.Romanized) {
+				t.Fatalf("expected the %s schema's register description to say %s is %s, got %q", name, register.Value, register.Korean.Romanized, field.Description)
 			}
 		}
 	}
 	for _, register := range Registers {
-		for _, text := range []string{register.Korean.Name, register.Korean.Example, register.English.Name, register.English.Style, register.English.Example} {
+		for _, text := range []string{register.Korean.Name, register.Korean.Romanized, register.Korean.Example, register.English.Name, register.English.Style, register.English.Example} {
 			if strings.TrimSpace(text) == "" {
 				t.Fatalf("expected %s to have every name, style and example written, got %+v", register.Value, register)
 			}
