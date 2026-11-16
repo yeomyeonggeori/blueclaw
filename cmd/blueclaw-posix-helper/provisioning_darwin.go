@@ -23,6 +23,10 @@ func createUser(name string, homePath string, userID uint32, groupID uint32) err
 	return runDirectoryServiceCommands(createUserCommands(name, homePath, userID, groupID))
 }
 
+func deleteUser(name string) error {
+	return runCommand("dscl", ".", "-delete", userRecordPath(name))
+}
+
 func setUserID(name string, userID uint32) error {
 	return runCommand("dscl", ".", "-create", userRecordPath(name), "UniqueID", formatID(userID))
 }
