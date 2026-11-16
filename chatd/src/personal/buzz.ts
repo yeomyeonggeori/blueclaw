@@ -105,12 +105,13 @@ class BuzzPersonalGateway implements PersonalGateway {
 		await this.arrivals.watch(actor.secret, arrivalsURL, typingURL, withdrawalsURL);
 	}
 
-	async announceTyping(actor: ActorCredential, conversationID: string): Promise<void> {
+	async announceTyping(actor: ActorCredential, conversationID: string, threadRootID?: string): Promise<void> {
 		this.require(actor);
 		await announceTypingAsUser({
 			relayURL: this.settings.relayURL,
 			userSecretHex: actor.secret,
 			channelID: conversationID,
+			threadRootID,
 			authTagJSON: this.settings.authTagJSON,
 		});
 	}

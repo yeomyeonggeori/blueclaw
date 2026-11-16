@@ -214,7 +214,7 @@ export const personCapabilities: Record<string, PersonCapability> = {
 	},
 	"person.typing.send": async (gateway, body) => {
 		const request = parsePersonRequest(body);
-		await gateway.announceTyping(request.actor, requireConversation(request));
+		await gateway.announceTyping(request.actor, requireConversation(request), request.parentID);
 		return {};
 	},
 	"person.media.read": async (gateway, body) => {
