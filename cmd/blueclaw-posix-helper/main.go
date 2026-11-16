@@ -21,7 +21,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		exitWithError(errors.New("blueclaw-posix-helper requires sync, reconcile-home, exec, fs, or capabilities"))
+		exitWithError(errors.New("blueclaw-posix-helper requires sync, reconcile-home, forget-projected-identities, exec, fs, or capabilities"))
 	}
 
 	var errorValue error
@@ -32,6 +32,8 @@ func main() {
 		errorValue = runAuthorized(runSync, os.Args[2:])
 	case "reconcile-home":
 		errorValue = runAuthorized(runReconcileHome, os.Args[2:])
+	case "forget-projected-identities":
+		errorValue = runForgetProjectedIdentities(os.Getuid(), os.Args[2:])
 	case "exec":
 		errorValue = runAuthorized(runExec, os.Args[2:])
 	case "fs":
@@ -54,7 +56,7 @@ func runAuthorized(run func([]string) error, arguments []string) error {
 func runCapabilities() error {
 	return json.NewEncoder(os.Stdout).Encode(map[string]any{
 		"version":      3,
-		"capabilities": []string{"exec", "fs", "fs.list_directory", "fs.stream_file", "reconcile-home", "state-sync"},
+		"capabilities": []string{"exec", "fs", "fs.list_directory", "fs.stream_file", "forget-projected-identities", "reconcile-home", "state-sync"},
 	})
 }
 

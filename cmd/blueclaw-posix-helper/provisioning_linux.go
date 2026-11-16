@@ -35,6 +35,10 @@ func createUser(name string, homePath string, userID uint32, groupID uint32) err
 	)
 }
 
+func deleteUser(name string) error {
+	return runCommand("userdel", name)
+}
+
 func setUserID(name string, userID uint32) error {
 	return runCommand("usermod", "--uid", formatID(userID), name)
 }

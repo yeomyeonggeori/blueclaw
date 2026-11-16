@@ -466,7 +466,7 @@ Command execution is how a tool call becomes a process running as the requester.
 blueclaw-posix-helper exec --uid <uid> --gid <gid> --groups <gids> --cwd <dir> -- <argv>
 ```
 
-The helper is installed `root:root 4755` and accepts only a real UID of `root` or `blueclaw`. It calls `setgroups`, `setgid` and `setuid` in that order, then `exec`s with the environment it was handed, after which the process is the requester and cannot regain privilege. Its other commands are `capabilities`, `sync` (apply the projected users, groups and modes), `reconcile-home` and `fs` (one filesystem operation, after the same drop).
+The helper is installed `root:root 4755` and accepts only a real UID of `root` or `blueclaw`. It calls `setgroups`, `setgid` and `setuid` in that order, then `exec`s with the environment it was handed, after which the process is the requester and cannot regain privilege. Its other commands are `capabilities`, `sync` (apply the projected users, groups and modes), `reconcile-home`, `fs` (one filesystem operation, after the same drop) and `forget-projected-identities`, which only root may run and which removes every `bc_person_*` user and every `bc_person_*`, `bc_circle_*` and `bc_shared` group before a computer is given to another company.
 
 File tools are the same path. `read`, `write`, `edit`, `file_delete` and the rest build a shell command and run it through the requester's shell (`internal/agentruntime/requester_shell.go`), starting in the requester's `$HOME`, so tilde expansion, globs and relative paths behave as they would at that person's prompt.
 

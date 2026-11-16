@@ -248,8 +248,16 @@ func appendProtectedDirectory(directories []POSIXDirectory, protectedPath string
 	})
 }
 
+const LinuxPersonUserPrefix = "bc_person_"
+
 func LinuxPersonUserName(personID string) string {
-	return shortenedLinuxName("bc_person_", personID)
+	return shortenedLinuxName(LinuxPersonUserPrefix, personID)
+}
+
+func IsProjectedLinuxName(name string) bool {
+	return name == posixSharedGroupName ||
+		strings.HasPrefix(name, LinuxPersonUserPrefix) ||
+		strings.HasPrefix(name, LinuxCircleGroupPrefix)
 }
 
 const LinuxCircleGroupPrefix = "bc_circle_"
