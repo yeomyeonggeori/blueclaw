@@ -79,8 +79,14 @@ func (handler PersonaHandler) HandleReviseSoul(responseWriter http.ResponseWrite
 	writeJSON(responseWriter, written)
 }
 
+type installedAgentPersona struct {
+	agentPersonaDocuments
+	SoulVersion int `json:"soulVersion"`
+}
+
 func (handler PersonaHandler) HandleReadAgent(responseWriter http.ResponseWriter, request *http.Request) {
-	documents, errorValue := readInstalledAgentPersona(firstNonEmptyWorkspaceRoot(handler.WorkspaceRootPath))
+	root := firstNonEmptyWorkspaceRoot(handler.WorkspaceRootPath)
+	documents, errorValue := readInstalledAgentPersona(root)
 	if errorValue != nil {
 		status := http.StatusUnprocessableEntity
 		if errors.Is(errorValue, os.ErrNotExist) {
@@ -89,7 +95,12 @@ func (handler PersonaHandler) HandleReadAgent(responseWriter http.ResponseWriter
 		http.Error(responseWriter, errorValue.Error(), status)
 		return
 	}
-	writeJSON(responseWriter, documents)
+	history, errorValue := persona.ReadSoulHistory(root)
+	if errorValue != nil {
+		http.Error(responseWriter, errorValue.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+	writeJSON(responseWriter, installedAgentPersona{agentPersonaDocuments: documents, SoulVersion: history[len(history)-1].Version})
 }
 
 func (handler PersonaHandler) HandleSeedAgent(responseWriter http.ResponseWriter, request *http.Request) {

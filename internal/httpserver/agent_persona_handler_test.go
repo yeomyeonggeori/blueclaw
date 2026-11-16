@@ -101,6 +101,11 @@ func TestAnAdministratorRevisionIsRecordedWithItsAuthor(t *testing.T) {
 	if errorValue != nil || !strings.Contains(string(soul), "Say what you could not check.") {
 		t.Fatalf("the runtime reads the revised soul: %s %v", soul, errorValue)
 	}
+	installed := httptest.NewRecorder()
+	handler.HandleReadAgent(installed, httptest.NewRequest(http.MethodGet, "/admin/api/persona/agent", nil))
+	if !strings.Contains(installed.Body.String(), `"soulVersion":2`) {
+		t.Fatalf("the installed persona names the soul version the next revision expects: %s", installed.Body.String())
+	}
 	if stale := revise(`{"expectedVersion":1,"document":{"schemaVersion":1},"origin":"administrator"}`); stale.Code != http.StatusConflict {
 		t.Fatalf("a revision of an older version must conflict, status=%d", stale.Code)
 	}
