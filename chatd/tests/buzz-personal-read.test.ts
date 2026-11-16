@@ -96,6 +96,29 @@ describe("the relay's read state, asked as the reader", () => {
 		]);
 	});
 
+	test("each conversation keeps the time of its latest message, and says whether a missing one was looked for to the end", async () => {
+		const emptyChannelID = "33333333-3333-4333-8333-333333333333";
+		const unsearchedChannelID = "44444444-4444-4444-8444-444444444444";
+		answerOf = () =>
+			Response.json({
+				account: {},
+				channels: [
+					{ ...sidebarChannel(channelID, { status: "exact", value: 0 }), latest_message_id: rootID, latest_message_at: 1_763_270_000, latest_message_complete: true },
+					{ ...sidebarChannel(emptyChannelID, { status: "exact", value: 0 }), latest_message_complete: true },
+					{ ...sidebarChannel(unsearchedChannelID, { status: "exact", value: 0 }), latest_message_complete: false },
+				],
+				next_cursor: null,
+			});
+
+		const summaries = await readSummariesAsUser(relayURL, readerSecretHex);
+
+		expect(summaries.map((summary) => [summary.channelID, summary.latestMessageAt, summary.isLatestMessageComplete])).toEqual([
+			[channelID, 1_763_270_000, true],
+			[emptyChannelID, undefined, true],
+			[unsearchedChannelID, undefined, false],
+		]);
+	});
+
 	test("a mark the relay could not settle is a failure, a mark at a message that is gone is not", async () => {
 		answerOf = () => Response.json({ outcomes: [{ status: "blocked" }] });
 		await markReadThroughAsUser(relayURL, readerSecretHex, { channelID }, replyID);
