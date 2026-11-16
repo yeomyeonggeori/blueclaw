@@ -15,9 +15,44 @@ ADDOMAIN\dave hopper    100003
 `
 
 func reservationTableFromListing(listing string) *identityAllocationTable {
-	table := &identityAllocationTable{allocations: map[string]uint32{}, reserved: map[uint32]bool{}}
-	table.reserve(parseDirectoryServiceList(listing))
+	return restoredTableOnCard(map[string]uint32{}, parseDirectoryServiceList(listing))
+}
+
+func restoredTableOnCard(restored map[string]uint32, onTheCard []systemIdentity) *identityAllocationTable {
+	table := &identityAllocationTable{allocations: restored, reserved: map[uint32]bool{}}
+	table.reserve(onTheCard)
 	return table
+}
+
+func TestANumberTheRestoredMapGivesIsNotReusedWhenAnEarlierCompanysAccountHoldsIt(testInstance *testing.T) {
+	restored := map[string]uint32{"bc_person_sample_8545e20f": 100003}
+	onTheCard := []systemIdentity{
+		{name: "bc_person_earlier_company_77aa", identityID: 100003},
+		{name: "bc_person_earlier_company_88bb", identityID: 100004},
+	}
+	table := restoredTableOnCard(restored, onTheCard)
+
+	identityID := table.idFor("bc_person_sample_8545e20f")
+
+	if identityID == 100003 || identityID == 100004 {
+		testInstance.Fatalf("the restored person was given %d, which an account the card already holds owns, so groupadd refuses it", identityID)
+	}
+	if again := table.idFor("bc_person_sample_8545e20f"); again != identityID {
+		testInstance.Fatalf("the same person was given %d and then %d", identityID, again)
+	}
+	if !table.dirty {
+		testInstance.Fatal("the new number is not written back, so the next sync would try the taken one again")
+	}
+}
+
+func TestARestoredNumberThatTheSameAccountHoldsIsKept(testInstance *testing.T) {
+	restored := map[string]uint32{"bc_person_sample_8545e20f": 100003}
+	onTheCard := []systemIdentity{{name: "bc_person_sample_8545e20f", identityID: 100003}}
+	table := restoredTableOnCard(restored, onTheCard)
+
+	if identityID := table.idFor("bc_person_sample_8545e20f"); identityID != 100003 {
+		testInstance.Fatalf("an account that already holds its restored number was moved to %d", identityID)
+	}
 }
 
 func TestTheAllocatorNeverHandsOutAnIdentityDirectoryServiceAlreadyReports(testInstance *testing.T) {
