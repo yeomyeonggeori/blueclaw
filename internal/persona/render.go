@@ -141,8 +141,8 @@ func renderTone(label string, tone *Tone) string {
 		return ""
 	}
 	parts := []string{}
-	if tone.Register != "" {
-		parts = append(parts, "keep a "+tone.Register+" register")
+	if instruction := registerInstruction(tone.Register); instruction != "" {
+		parts = append(parts, instruction)
 	}
 	if len(tone.Traits) > 0 {
 		parts = append(parts, "sound "+strings.Join(tone.Traits, ", "))

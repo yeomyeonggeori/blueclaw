@@ -15,7 +15,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "register": { "type": "string", "enum": ["formal", "polite", "casual"], "description": "The level of formality the person wants." },
+        "register": { "type": "string", "enum": ["formal", "polite", "casual", "plain"], "description": "How formally the person wants the agent to speak to them: formal is 합쇼체, polite is 해요체, casual is 해체, plain is 해라체, each with an English counterpart." },
         "traits": { "type": "array", "maxItems": 6, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 40 }, "description": "Adjectives for how the person wants the agent to sound." }
       }
     },
