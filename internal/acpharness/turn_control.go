@@ -152,7 +152,7 @@ func (control *turnControl) converse(ctx context.Context, promptRequest acp.Prom
 	for {
 		promptResponse, errorValue := control.connection.Prompt(ctx, promptRequest)
 		if errorValue != nil {
-			return promptResponse, errorValue
+			return promptResponse, agentFailureOf(errorValue)
 		}
 		steer, isSteered := control.nextSteer()
 		if !isSteered {
