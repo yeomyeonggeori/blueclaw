@@ -168,6 +168,14 @@ test("a failure no model could word reads back as the raw reason it is", async (
 	]);
 });
 
+test("a raw reason reads back with why the model failed", async () => {
+	const raw: BuzzEvent = { ...messageAt(0), tags: [["h", CHANNEL], ["reply-kind", "error"], ["failure-text", "raw", "administrator"]] };
+
+	const page = await channelMessagePageOf(relayHolding([raw]), CHANNEL, 1);
+
+	expect(page.messages[0]).toMatchObject({ isFailure: true, isRawFailure: true, failureCause: "administrator" });
+});
+
 test("recording a resolution leaves the question's words and mentions as they were", async () => {
 	const named = "e".repeat(64);
 	const question: BuzzEvent = { ...questionFromTheAgent(), tags: [...questionFromTheAgent().tags, ["p", named]] };

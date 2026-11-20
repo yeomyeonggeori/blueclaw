@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	acp "github.com/coder/acp-go-sdk"
+	"github.com/yeomyeonggeori/blueprotocol/acpfailure"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 type agentFailure struct {
@@ -18,6 +20,10 @@ func (failure agentFailure) Error() string {
 
 func (failure agentFailure) Unwrap() error {
 	return failure.requestError
+}
+
+func (failure agentFailure) FailureCause() agentcontract.FailureCause {
+	return acpfailure.CauseOf(failure.requestError)
 }
 
 func agentFailureOf(errorValue error) error {

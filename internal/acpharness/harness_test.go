@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,7 +17,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/yeomyeonggeori/blueclaw/internal/mcpserver"
 	"github.com/yeomyeonggeori/blueclaw/internal/toolcallprogress"
+	"github.com/yeomyeonggeori/blueprotocol/acpfailure"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
@@ -438,6 +441,24 @@ func TestAnAgentsFailureReachesTheHostAsItsOwnReasonOutsideTheRPCEnvelope(t *tes
 	var requestError *acp.RequestError
 	if !errors.As(errorValue, &requestError) || requestError.Code != -32603 {
 		t.Fatalf("the wire error must stay reachable underneath the reason, got %#v", errorValue)
+	}
+}
+
+func TestAnAgentsFailureCarriesTheCauseItsModelReported(t *testing.T) {
+	executed := []daemonExecutedTool{}
+	modelFailure := fmt.Errorf("turn router: %w", model.EndpointError{StatusCode: http.StatusBadGateway, Reason: errors.New("decisions endpoint answered 502 Bad Gateway")})
+	agent := &externalAgent{promptFailure: acpfailure.PromptError(modelFailure)}
+	harness := New(&inProcessAgentProcess{agent: agent}, newPublishedToolCatalog(t), nil)
+
+	_, errorValue := harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
+		RequesterIdentity: agentcontract.RequesterIdentity{RequesterPersonID: "person-1"},
+		Prompt:            "회의록 정리해줘",
+		WorkspaceRootPath: t.TempDir(),
+		ToolSet:           requesterToolSet(t, "person-1", &executed),
+	})
+
+	if cause := agentcontract.FailureCauseOf(errorValue); cause != agentcontract.FailureCauseTransient {
+		t.Fatalf("expected the cause the agent sent, got %q from %v", cause, errorValue)
 	}
 }
 
