@@ -98,6 +98,7 @@ func (adapter ChatdPlatformAdapter) SendReply(ctx context.Context, replyTarget R
 		Attachments:        outboundReplyAttachments(reply.Attachments),
 		RecoveryActions:    reply.RecoveryActions,
 		FailureNotice:      reply.FailureNotice,
+		IsRawFailure:       isRawFailureNotice(reply.FailureNotice),
 		Interaction:        reply.Interaction,
 	}, &response)
 	if errorValue != nil {

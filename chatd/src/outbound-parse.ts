@@ -104,6 +104,7 @@ export function parseReplySendRequest(value: unknown): ReplySendRequest {
 		attachments: optionalArray(record, "attachments").map(parseReplyAttachment),
 		interaction: interactionValue === undefined ? undefined : parseAskInteraction(interactionValue),
 		isError: hasFailureNotice(record.failureNotice),
+		isRawFailure: record.isRawFailure === true,
 	};
 }
 

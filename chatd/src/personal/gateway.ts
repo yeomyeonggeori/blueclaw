@@ -89,6 +89,7 @@ export type PersonalMessage = {
 	attachments: PersonalAttachment[];
 	ask?: PersonalAsk;
 	isFailure?: boolean;
+	isRawFailure?: boolean;
 };
 
 export type PersonalMessageMatch = Pick<

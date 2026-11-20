@@ -394,6 +394,7 @@ class BuzzPersonalGateway implements PersonalGateway {
 				})),
 				...(message.ask && message.authorPubkeyHex === agentExternalID && { ask: message.ask }),
 				...(message.isFailure && { isFailure: true }),
+				...(message.isRawFailure && { isRawFailure: true }),
 			})),
 			hasMoreBefore: page.hasMoreBefore,
 		};

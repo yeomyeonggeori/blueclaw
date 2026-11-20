@@ -36,6 +36,7 @@ type capabilityReplyRequest struct {
 	Attachments        []outboundReplyAttachment     `json:"attachments,omitempty"`
 	RecoveryActions    []toolcontract.RecoveryAction `json:"recoveryActions,omitempty"`
 	FailureNotice      agentcontract.FailureNotice   `json:"failureNotice,omitempty"`
+	IsRawFailure       bool                          `json:"isRawFailure,omitempty"`
 	Interaction        *AskInteraction               `json:"interaction,omitempty"`
 }
 
@@ -105,4 +106,10 @@ func ParseNormalizedInboundEvent(payload []byte, platform string, source string)
 	}
 
 	return event, true, nil
+}
+
+var rawFailureNoticeSource = agentcontract.BuildRawErrorFailureNotice(agentcontract.FailureReport{}).Source
+
+func isRawFailureNotice(failureNotice agentcontract.FailureNotice) bool {
+	return failureNotice.IsSendable && failureNotice.Source == rawFailureNoticeSource
 }

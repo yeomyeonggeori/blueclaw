@@ -1,4 +1,5 @@
 const REPLY_KIND_TAG = "reply-kind";
+const RAW_FAILURE_TAG = ["failure-text", "raw"];
 
 export type ReplyKind = "progress" | "error";
 
@@ -17,4 +18,12 @@ export function replyKindTag(kind: ReplyKind): string[] {
 
 export function carriesReplyKind(tags: string[][], kind: ReplyKind): boolean {
 	return tags.some((tag) => tag[0] === REPLY_KIND_TAG && tag[1] === kind);
+}
+
+export function rawFailureTag(): string[] {
+	return [...RAW_FAILURE_TAG];
+}
+
+export function carriesRawFailure(tags: string[][]): boolean {
+	return tags.some((tag) => tag[0] === RAW_FAILURE_TAG[0] && tag[1] === RAW_FAILURE_TAG[1]);
 }

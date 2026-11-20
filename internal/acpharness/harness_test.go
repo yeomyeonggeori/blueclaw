@@ -3,6 +3,7 @@ package acpharness
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -123,6 +124,7 @@ type externalAgent struct {
 	observedPromptBlocks     []acp.ContentBlock
 	promptResponseMeta       map[string]any
 	promptScripts            []func(ctx context.Context, request acp.PromptRequest) acp.StopReason
+	promptFailure            error
 	promptTexts              []string
 	cancelled                chan struct{}
 	extensionMethods         []string
@@ -250,6 +252,9 @@ func connectToolCatalog(ctx context.Context, toolCatalogServer acp.McpServer) (*
 }
 
 func (agent *externalAgent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.PromptResponse, error) {
+	if agent.promptFailure != nil {
+		return acp.PromptResponse{}, agent.promptFailure
+	}
 	promptNumber := len(agent.promptTexts)
 	agent.promptTexts = append(agent.promptTexts, textOfPromptBlocks(request.Prompt))
 	if promptNumber < len(agent.promptScripts) {
@@ -412,6 +417,27 @@ func TestAnAgentThatBringsItsOwnShellIsNotHandedOurs(t *testing.T) {
 
 	if toolCatalog.publishedToolSet.ToolAudience != mcpserver.ToolAudienceSelfEquipped {
 		t.Fatalf("an ACP agent runs inside the requester's identity because it brings tools of its own, so the catalog must not offer the same job twice, got audience %q", toolCatalog.publishedToolSet.ToolAudience)
+	}
+}
+
+func TestAnAgentsFailureReachesTheHostAsItsOwnReasonOutsideTheRPCEnvelope(t *testing.T) {
+	executed := []daemonExecutedTool{}
+	agent := &externalAgent{promptFailure: errors.New("turn router: decisions endpoint answered 502 Bad Gateway")}
+	harness := New(&inProcessAgentProcess{agent: agent}, newPublishedToolCatalog(t), nil)
+
+	_, errorValue := harness.RunTurn(context.Background(), agentcontract.AgentTurnRequest{
+		RequesterIdentity: agentcontract.RequesterIdentity{RequesterPersonID: "person-1"},
+		Prompt:            "회의록 정리해줘",
+		WorkspaceRootPath: t.TempDir(),
+		ToolSet:           requesterToolSet(t, "person-1", &executed),
+	})
+
+	if errorValue == nil || errorValue.Error() != "turn router: decisions endpoint answered 502 Bad Gateway" {
+		t.Fatalf("expected the agent's own reason, got %v", errorValue)
+	}
+	var requestError *acp.RequestError
+	if !errors.As(errorValue, &requestError) || requestError.Code != -32603 {
+		t.Fatalf("the wire error must stay reachable underneath the reason, got %#v", errorValue)
 	}
 }
 
