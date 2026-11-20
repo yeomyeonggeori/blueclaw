@@ -13,12 +13,24 @@ import (
 )
 
 type Completer struct {
-	taskRunService taskstate.TaskRunStore
-	languageModel  model.LanguageModelProvider
+	taskRunService        taskstate.TaskRunStore
+	languageModel         model.LanguageModelProvider
+	companyLocaleProvider func() string
 }
 
 func NewCompleter(taskRunService taskstate.TaskRunStore, languageModel model.LanguageModelProvider) *Completer {
 	return &Completer{taskRunService: taskRunService, languageModel: languageModel}
+}
+
+func (completer *Completer) UseCompanyLocaleProvider(companyLocaleProvider func() string) {
+	completer.companyLocaleProvider = companyLocaleProvider
+}
+
+func (completer *Completer) responseLanguage(request agentcontract.AgentTurnRequest) string {
+	if completer.companyLocaleProvider == nil {
+		return request.ResponseLanguage
+	}
+	return toolcontract.ResolveResponseLanguage(request.ResponseLanguage, completer.companyLocaleProvider())
 }
 
 func (completer *Completer) CompleteLaunchFailure(responseContext context.Context, request agentcontract.AgentTurnRequest, phase string, stepName string, errorValue error) agentcontract.AgentTurnResult {
@@ -40,7 +52,7 @@ func (completer *Completer) CompleteLaunchFailure(responseContext context.Contex
 		SafeFailureSummary: reason,
 		RawError:           reason,
 		OriginalRequest:    request.Prompt,
-		ResponseLanguage:   request.ResponseLanguage,
+		ResponseLanguage:   completer.responseLanguage(request),
 		DiagnosticEventID:  agentcontract.DiagnosticEventID(request, taskRun.TaskRunID, phase),
 	}
 	failureNotice, noticeStatus := (agentcontract.FailureNoticeGenerator{LanguageModel: completer.languageModel}).Generate(responseContext, launchFailureReport)

@@ -241,6 +241,7 @@ func (taskLauncher *TaskLauncher) agentPersona() persona.Agent {
 func (taskLauncher *TaskLauncher) withPersona(request TaskLaunchRequest) TaskLaunchRequest {
 	request.requesterPersona, _ = readRequesterPersona(taskLauncher.toolCatalogBuilder.workspaceActorFactory, requesterPersonAccessForTaskLaunch(request), taskLauncher.toolCatalogBuilder.WorkspaceRootPath())
 	request.voice = persona.RenderVoiceInstruction(taskLauncher.agentPersona(), request.requesterPersona)
+	request.ResponseLanguage = taskLauncher.requesterResponseLanguage(request)
 	return request
 }
 
@@ -314,7 +315,6 @@ func (taskLauncher *TaskLauncher) launchTask(ctx context.Context, request TaskLa
 	launchRecords := []launchStepRecord{}
 	normalizedProfileName := normalizeProfileName(request.ProfileName)
 	request = taskLauncher.withPersona(request)
-	request.ResponseLanguage = taskLauncher.requesterResponseLanguage(request)
 	completeFailedLaunch := func(record launchStepRecord, toolNames []string) TaskLaunchResult {
 		return taskLauncher.completeLaunchFailure(ctx, request, normalizedProfileName, toolNames, record.StepName, launchRecords, errorFromStepRecord(record))
 	}

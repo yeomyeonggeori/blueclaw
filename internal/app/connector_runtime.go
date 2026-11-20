@@ -33,6 +33,7 @@ func newConnectorRuntime(runtimeConfiguration config.RuntimeConfiguration, found
 		logger,
 	)
 	launchFailureCompleter := launchfailure.NewCompleter(services.taskRunService, languageModelProvider)
+	launchFailureCompleter.UseCompanyLocaleProvider(directory.companyLocaleProvider)
 	connectorRuntime.UseUnknownAccountResolver(connectors.NewCapabilityUnknownAccountResolver(kernel.capabilityClient))
 	connectorRuntime.UseLaunchFailureCompleter(launchFailureCompleter)
 	connectorRuntime.UseNoticeLanguageModel(languageModelProvider)

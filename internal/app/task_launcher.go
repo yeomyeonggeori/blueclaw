@@ -9,7 +9,9 @@ import (
 
 func newTaskLauncher(runtimeConfiguration config.RuntimeConfiguration, foundation runtimeFoundation, directory identityDirectory, kernel agentKernel, services taskServices, toolCatalogBuilder *agentruntime.ToolCatalogBuilder) *agentruntime.TaskLauncher {
 	taskLauncher := agentruntime.NewTaskLauncher(kernel.harness, services.taskRunService, toolCatalogBuilder)
-	taskLauncher.UseLaunchFailureCompleter(launchfailure.NewCompleter(services.taskRunService, kernel.taskTierLanguageModels.High))
+	launchFailureCompleter := launchfailure.NewCompleter(services.taskRunService, kernel.taskTierLanguageModels.High)
+	launchFailureCompleter.UseCompanyLocaleProvider(directory.companyLocaleProvider)
+	taskLauncher.UseLaunchFailureCompleter(launchFailureCompleter)
 	taskLauncher.UseRequesterWorkspaceProvisioner(security.NewPOSIXRequesterWorkspaceProvisioner(foundation.posixSynchronizer))
 	taskLauncher.UseRequesterEmailResolver(directory.identityService)
 	taskLauncher.UseAgentIdentityProvider(kernel.agentIdentityProvider)
