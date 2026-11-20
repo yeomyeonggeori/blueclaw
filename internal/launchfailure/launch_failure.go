@@ -54,6 +54,7 @@ func (completer *Completer) CompleteLaunchFailure(responseContext context.Contex
 		OriginalRequest:    request.Prompt,
 		ResponseLanguage:   completer.responseLanguage(request),
 		DiagnosticEventID:  agentcontract.DiagnosticEventID(request, taskRun.TaskRunID, phase),
+		Cause:              agentcontract.FailureCauseOf(errorValue),
 	}
 	failureNotice, noticeStatus := (agentcontract.FailureNoticeGenerator{LanguageModel: completer.languageModel}).Generate(responseContext, launchFailureReport)
 	completer.taskRunService.AppendTaskEvent(taskRun.TaskRunID, task.TaskEventLaunchFailureReply, marshalEventBody(noticeStatus))

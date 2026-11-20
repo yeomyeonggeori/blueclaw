@@ -17,7 +17,7 @@ import { reactionsTo, type UserMessageReaction } from "./user-reactions.ts";
 import { mentionsOf, type UserMentions } from "./user-mentions.ts";
 import { askOf, recordsAResolution, resolutionOf } from "./ask-tags.ts";
 import type { PersonalAsk, PersonalAskResolution } from "../../choice.ts";
-import { carriesRawFailure, carriesReplyKind } from "../../event-tags.ts";
+import { carriesReplyKind, rawFailureOf } from "../../event-tags.ts";
 import {
 	AttachmentRefused,
 	isAlreadyKept,
@@ -447,6 +447,7 @@ export type UserMessage = {
 	ask?: PersonalAsk;
 	isFailure?: boolean;
 	isRawFailure?: boolean;
+	failureCause?: string;
 };
 
 export type UserMessageAttachment = {
@@ -502,7 +503,7 @@ export async function channelMessagePageOf(
 				mentions: mentionsOf(event),
 				attachments: attachmentsOf(event),
 				...(carriesReplyKind(event.tags, "error") && { isFailure: true }),
-				...(carriesRawFailure(event.tags) && { isRawFailure: true }),
+				...rawFailureOf(event.tags),
 				...askOfEvent(event),
 			};
 		});

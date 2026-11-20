@@ -20,10 +20,14 @@ export function carriesReplyKind(tags: string[][], kind: ReplyKind): boolean {
 	return tags.some((tag) => tag[0] === REPLY_KIND_TAG && tag[1] === kind);
 }
 
-export function rawFailureTag(): string[] {
-	return [...RAW_FAILURE_TAG];
+export type RawFailure = { isRawFailure?: true; failureCause?: string };
+
+export function rawFailureTag(cause: string | undefined): string[] {
+	return cause ? [...RAW_FAILURE_TAG, cause] : [...RAW_FAILURE_TAG];
 }
 
-export function carriesRawFailure(tags: string[][]): boolean {
-	return tags.some((tag) => tag[0] === RAW_FAILURE_TAG[0] && tag[1] === RAW_FAILURE_TAG[1]);
+export function rawFailureOf(tags: string[][]): RawFailure {
+	const tag = tags.find((candidate) => candidate[0] === RAW_FAILURE_TAG[0] && candidate[1] === RAW_FAILURE_TAG[1]);
+	if (!tag) return {};
+	return tag[2] ? { isRawFailure: true, failureCause: tag[2] } : { isRawFailure: true };
 }

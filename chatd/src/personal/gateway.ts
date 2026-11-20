@@ -90,6 +90,7 @@ export type PersonalMessage = {
 	ask?: PersonalAsk;
 	isFailure?: boolean;
 	isRawFailure?: boolean;
+	failureCause?: string;
 };
 
 export type PersonalMessageMatch = Pick<

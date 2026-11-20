@@ -275,7 +275,7 @@ async function handleReplySend(
 function replyKindTagsFor(adapter: PlatformChatAdapter, requestDocument: ReplySendRequest): string[][] {
 	if (!(adapter instanceof BuzzAdapter)) return [];
 	if (requestDocument.replyKind === "progress") return [replyKindTag("progress")];
-	if (requestDocument.isRawFailure) return [replyKindTag("error"), rawFailureTag()];
+	if (requestDocument.isRawFailure) return [replyKindTag("error"), rawFailureTag(requestDocument.failureCause)];
 	if (requestDocument.isError) return [replyKindTag("error")];
 	return [];
 }

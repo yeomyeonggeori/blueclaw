@@ -105,7 +105,13 @@ export function parseReplySendRequest(value: unknown): ReplySendRequest {
 		interaction: interactionValue === undefined ? undefined : parseAskInteraction(interactionValue),
 		isError: hasFailureNotice(record.failureNotice),
 		isRawFailure: record.isRawFailure === true,
+		failureCause: failureCauseOf(record.failureNotice),
 	};
+}
+
+function failureCauseOf(value: unknown): string | undefined {
+	if (typeof value !== "object" || value === null || !("cause" in value)) return undefined;
+	return typeof value.cause === "string" && value.cause !== "" ? value.cause : undefined;
 }
 
 function hasFailureNotice(value: unknown): boolean {

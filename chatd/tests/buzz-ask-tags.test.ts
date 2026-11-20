@@ -165,6 +165,16 @@ describe("a failure notice the agent sends on Buzz", () => {
 		expect(published[1]?.tags).toContainEqual(["reply-kind", "error"]);
 		expect(published[1]?.tags).toContainEqual(["failure-text", "raw"]);
 	});
+
+	test("carries why the model failed beside the raw reason", async () => {
+		const { adapter, published } = buzzAdapterOverFakeRelay();
+		const target = adapter.encodeThreadId({ channelId: CHANNEL });
+		const reason = "turn router: decisions endpoint answered 502";
+
+		await callBuzz(adapter, "reply.send", { replyTargetID: target, message: reason, failureNotice: { message: reason, cause: "transient" }, isRawFailure: true });
+
+		expect(published[0]?.tags).toContainEqual(["failure-text", "raw", "transient"]);
+	});
 });
 
 describe("interaction.resolve", () => {

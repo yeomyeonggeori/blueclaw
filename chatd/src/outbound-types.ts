@@ -45,6 +45,7 @@ export interface ReplySendRequest {
 	interaction?: AskInteractionDocument;
 	isError?: boolean;
 	isRawFailure?: boolean;
+	failureCause?: string;
 }
 
 export interface ReplySendResponse {
