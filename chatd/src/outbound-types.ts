@@ -44,6 +44,7 @@ export interface ReplySendRequest {
 	attachments?: ReplyAttachmentDocument[];
 	interaction?: AskInteractionDocument;
 	isError?: boolean;
+	isRawFailure?: boolean;
 }
 
 export interface ReplySendResponse {

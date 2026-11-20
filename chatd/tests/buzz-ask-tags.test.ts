@@ -152,6 +152,21 @@ describe("a question the agent asks on Buzz", () => {
 	});
 });
 
+describe("a failure notice the agent sends on Buzz", () => {
+	test("is marked as a failure, and as the raw reason when no model worded it", async () => {
+		const { adapter, published } = buzzAdapterOverFakeRelay();
+		const target = adapter.encodeThreadId({ channelId: CHANNEL });
+
+		await callBuzz(adapter, "reply.send", { replyTargetID: target, message: "일정을 옮기지 못했어요.", failureNotice: { message: "일정을 옮기지 못했어요." } });
+		await callBuzz(adapter, "reply.send", { replyTargetID: target, message: "turn router: decisions endpoint answered 502", failureNotice: { message: "turn router: decisions endpoint answered 502" }, isRawFailure: true });
+
+		expect(published[0]?.tags).toContainEqual(["reply-kind", "error"]);
+		expect(published[0]?.tags).not.toContainEqual(["failure-text", "raw"]);
+		expect(published[1]?.tags).toContainEqual(["reply-kind", "error"]);
+		expect(published[1]?.tags).toContainEqual(["failure-text", "raw"]);
+	});
+});
+
 describe("interaction.resolve", () => {
 	test("records the chosen option on the question with its current words unchanged", async () => {
 		const question = event({ content: "처음 쓴 말" });

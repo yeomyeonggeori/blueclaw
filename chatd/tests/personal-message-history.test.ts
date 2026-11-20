@@ -156,6 +156,18 @@ test("a failure notice reads back as one", async () => {
 	expect(page.messages.map((message) => message.isFailure)).toEqual([true, undefined]);
 });
 
+test("a failure no model could word reads back as the raw reason it is", async () => {
+	const worded: BuzzEvent = { ...messageAt(0), tags: [["h", CHANNEL], ["reply-kind", "error"]] };
+	const raw: BuzzEvent = { ...messageAt(1), tags: [["h", CHANNEL], ["reply-kind", "error"], ["failure-text", "raw"]] };
+
+	const page = await channelMessagePageOf(relayHolding([worded, raw]), CHANNEL, 2);
+
+	expect(page.messages.map((message) => [message.isFailure, message.isRawFailure])).toEqual([
+		[true, undefined],
+		[true, true],
+	]);
+});
+
 test("recording a resolution leaves the question's words and mentions as they were", async () => {
 	const named = "e".repeat(64);
 	const question: BuzzEvent = { ...questionFromTheAgent(), tags: [...questionFromTheAgent().tags, ["p", named]] };

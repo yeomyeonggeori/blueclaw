@@ -63,7 +63,7 @@ import {
 	TargetIsChannelOwner,
 } from "./adapters/buzz/user-channels.ts";
 import { askKindOf, askTags } from "./adapters/buzz/ask-tags.ts";
-import { replyKindTag } from "./event-tags.ts";
+import { rawFailureTag, replyKindTag } from "./event-tags.ts";
 import type {
 	AgentPartDocument,
 	AskInteractionDocument,
@@ -275,6 +275,7 @@ async function handleReplySend(
 function replyKindTagsFor(adapter: PlatformChatAdapter, requestDocument: ReplySendRequest): string[][] {
 	if (!(adapter instanceof BuzzAdapter)) return [];
 	if (requestDocument.replyKind === "progress") return [replyKindTag("progress")];
+	if (requestDocument.isRawFailure) return [replyKindTag("error"), rawFailureTag()];
 	if (requestDocument.isError) return [replyKindTag("error")];
 	return [];
 }
