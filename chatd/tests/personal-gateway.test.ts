@@ -461,6 +461,28 @@ describe("person.read_state.mark", () => {
 	});
 });
 
+describe("person.read_state.mark_all", () => {
+	test("marks every conversation of the requester read", async () => {
+		const readers: string[] = [];
+		const recording = {
+			mattermost: {
+				platform: "mattermost",
+				credentialKind: "mattermost-token",
+				markEveryConversationRead: async (actor: { secret: string }) => {
+					readers.push(actor.secret);
+					return ["channel-1", "channel-2"];
+				},
+			},
+		} as never;
+
+		const answer = await call("person.read_state.mark_all", { actor: { kind: "mattermost-token", secret: "token" } }, recording);
+
+		expect(answer.status).toBe(200);
+		expect(await answer.json()).toEqual({ conversationIDs: ["channel-1", "channel-2"] });
+		expect(readers).toEqual(["token"]);
+	});
+});
+
 describe("person.typing.send", () => {
 	function recordingTyping(): { typed: string[]; gateways: never } {
 		const typed: string[] = [];

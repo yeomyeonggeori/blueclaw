@@ -257,6 +257,10 @@ class MattermostPersonalGateway implements PersonalGateway {
 		throw new UnsupportedByPlatform(this.platform, "mark a conversation read");
 	}
 
+	async markEveryConversationRead(): Promise<string[]> {
+		throw new UnsupportedByPlatform(this.platform, "mark every conversation read");
+	}
+
 	async listInbox(): Promise<PersonalInbox> {
 		throw new UnsupportedByPlatform(this.platform, "list an inbox");
 	}

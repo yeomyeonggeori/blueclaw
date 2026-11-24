@@ -221,6 +221,7 @@ export interface PersonalGateway {
 	): Promise<{ newToChannel: boolean }>;
 	deleteChannel(actor: ActorCredential, conversationID: string): Promise<void>;
 	markReadThrough(actor: ActorCredential, conversationID: string, messageID: string, threadRootID?: string): Promise<void>;
+	markEveryConversationRead(actor: ActorCredential): Promise<string[]>;
 	listInbox(actor: ActorCredential, until?: Date): Promise<PersonalInbox>;
 	listMessages(
 		actor: ActorCredential,

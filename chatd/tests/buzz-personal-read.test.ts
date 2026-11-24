@@ -5,6 +5,7 @@ import { bytesToHex } from "nostr-tools/utils";
 import { createHash } from "node:crypto";
 import {
 	ReadStateRefused,
+	markEveryChannelReadAsUser,
 	markReadThroughAsUser,
 	messageReadStatusesAsUser,
 	readSummariesAsUser,
@@ -155,6 +156,82 @@ describe("the relay's read state, asked as the reader", () => {
 		const refusal = await readSummariesAsUser(relayURL, readerSecretHex).catch((error: unknown) => error);
 
 		expect(refusal).toBeInstanceOf(ReadStateRefused);
+		expect(refusal instanceof ReadStateRefused && refusal.isUnavailable).toBe(true);
+	});
+});
+
+describe("marking every conversation read", () => {
+	function writesOf(requests: Asked[]): unknown[][] {
+		return requests.filter((request) => request.method === "POST").map((request) => JSON.parse(request.body).intents);
+	}
+
+	test("reads each row with anything unread through its latest message, threads included, and leaves read rows alone", async () => {
+		const readChannelID = "22222222-2222-4222-8222-222222222222";
+		const threadOnlyChannelID = "33333333-3333-4333-8333-333333333333";
+		const uncountedChannelID = "44444444-4444-4444-8444-444444444444";
+		const latestOf = (index: number) => String(index).repeat(64);
+		answerOf = (request) =>
+			request.method === "POST"
+				? Response.json({ outcomes: JSON.parse(request.body).intents.map(() => ({ status: "applied" })) })
+				: Response.json({
+						account: {},
+						channels: [
+							{ ...sidebarChannel(channelID, { status: "exact", value: 3 }), latest_message_id: latestOf(1) },
+							{ ...sidebarChannel(readChannelID, { status: "exact", value: 0 }), latest_message_id: latestOf(2) },
+							{
+								...sidebarChannel(threadOnlyChannelID, { status: "exact", value: 0 }),
+								latest_message_id: latestOf(3),
+								threads: { items: [{ root_id: rootID, unread: { status: "exact", value: 1 }, latest_reply_id: replyID }], complete: true },
+							},
+							{ ...sidebarChannel(uncountedChannelID, { status: "unknown" }), latest_message_id: latestOf(4) },
+						],
+						next_cursor: null,
+					});
+
+		const marked = await markEveryChannelReadAsUser(relayURL, readerSecretHex);
+
+		expect(marked).toEqual([channelID, threadOnlyChannelID, uncountedChannelID]);
+		expect(writesOf(asked)).toEqual([
+			[
+				{ type: "mark_channel_read", channel_id: channelID, message_id: latestOf(1) },
+				{ type: "mark_channel_read", channel_id: threadOnlyChannelID, message_id: latestOf(3) },
+				{ type: "mark_channel_read", channel_id: uncountedChannelID, message_id: latestOf(4) },
+			],
+		]);
+	});
+
+	test("asks nothing of the relay's writes when nothing is unread", async () => {
+		answerOf = () => Response.json({ account: {}, channels: [sidebarChannel(channelID, { status: "exact", value: 0 })], next_cursor: null });
+
+		const marked = await markEveryChannelReadAsUser(relayURL, readerSecretHex);
+
+		expect(marked).toEqual([]);
+		expect(writesOf(asked)).toEqual([]);
+	});
+
+	test("splits more unread rows than one write holds across several writes", async () => {
+		const rows = Array.from({ length: 101 }, (_, index) => ({
+			...sidebarChannel(`00000000-0000-4000-8000-${String(index).padStart(12, "0")}`, { status: "exact", value: 1 }),
+			latest_message_id: "c".repeat(64),
+		}));
+		answerOf = (request) =>
+			request.method === "POST"
+				? Response.json({ outcomes: JSON.parse(request.body).intents.map(() => ({ status: "applied" })) })
+				: Response.json({ account: {}, channels: rows, next_cursor: null });
+
+		await markEveryChannelReadAsUser(relayURL, readerSecretHex);
+
+		expect(writesOf(asked).map((intents) => intents.length)).toEqual([100, 1]);
+	});
+
+	test("fails when the relay could not say whether a row was read", async () => {
+		answerOf = (request) =>
+			request.method === "POST"
+				? Response.json({ outcomes: [{ status: "unknown", retryable: true }] })
+				: Response.json({ account: {}, channels: [{ ...sidebarChannel(channelID, { status: "exact", value: 2 }), latest_message_id: rootID }], next_cursor: null });
+
+		const refusal = await markEveryChannelReadAsUser(relayURL, readerSecretHex).catch((failure: unknown) => failure);
+
 		expect(refusal instanceof ReadStateRefused && refusal.isUnavailable).toBe(true);
 	});
 });
