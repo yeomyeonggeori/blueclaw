@@ -10,6 +10,7 @@ const basePath = "/buzz/v1/me";
 const mostChannelsPerPage = 20;
 const mostContextsPerQuery = 20;
 const mostMessagesPerQuery = 100;
+const mostIntentsPerWrite = 100;
 const unavailableStatuses = new Set([404, 429, 503]);
 
 export type ReadCount = { status: "exact" | "at_least"; value: number } | { status: "unknown" };
@@ -66,12 +67,32 @@ export async function markReadThroughAsUser(
 	context: ReadContext,
 	messageID: string,
 ): Promise<void> {
-	const intent = { type: "mark_through", target: targetOf(context), message_id: messageID };
-	const answer = asRecord(await askRelay(relayURL, userSecretHex, "POST", `${basePath}/read-state`, { intents: [intent] }), "read-state write");
-	const [outcome] = asArray(answer.outcomes, "read-state outcomes").map((entry) => asRecord(entry, "read-state outcome"));
-	const status = outcome?.status;
-	if (status === "applied" || status === "blocked") return;
-	throw new ReadStateRefused(status === "unknown" ? 503 : 400, String(status));
+	await writeIntents(relayURL, userSecretHex, [{ type: "mark_through", target: targetOf(context), message_id: messageID }]);
+}
+
+export async function markEveryChannelReadAsUser(relayURL: string, userSecretHex: string): Promise<string[]> {
+	const intents = (await readSummariesAsUser(relayURL, userSecretHex)).filter(hasAnythingUnread).flatMap((summary) =>
+		summary.latestMessageID ? [{ type: "mark_channel_read", channel_id: summary.channelID, message_id: summary.latestMessageID }] : [],
+	);
+	for (let start = 0; start < intents.length; start += mostIntentsPerWrite) {
+		await writeIntents(relayURL, userSecretHex, intents.slice(start, start + mostIntentsPerWrite));
+	}
+	return intents.map((intent) => intent.channel_id);
+}
+
+function hasAnythingUnread(summary: ChannelReadSummary): boolean {
+	if (summary.unreadThreads.length > 0) return true;
+	return summary.unread.status !== "exact" || summary.unread.value > 0;
+}
+
+async function writeIntents(relayURL: string, userSecretHex: string, intents: Record<string, unknown>[]): Promise<void> {
+	const answer = asRecord(await askRelay(relayURL, userSecretHex, "POST", `${basePath}/read-state`, { intents }), "read-state write");
+	const outcomes = asArray(answer.outcomes, "read-state outcomes").map((entry) => asRecord(entry, "read-state outcome"));
+	if (outcomes.length !== intents.length) throw new ReadStateRefused(502, "malformed read-state outcomes");
+	for (const { status } of outcomes) {
+		if (status === "applied" || status === "blocked") continue;
+		throw new ReadStateRefused(status === "unknown" ? 503 : 400, String(status));
+	}
 }
 
 export async function messageReadStatusesAsUser(

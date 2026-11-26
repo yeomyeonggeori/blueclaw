@@ -14,7 +14,7 @@ import { mentionTags } from "../adapters/buzz/user-mentions.ts";
 import { answerTags } from "../adapters/buzz/ask-tags.ts";
 import type { AnsweredChoice } from "../choice.ts";
 import { emojiTagsFor, listCustomEmojiAsUser, normalizedShortcode, shortcodesIn, type CustomEmoji } from "../adapters/buzz/user-emoji.ts";
-import { markReadThroughAsUser, readSummariesAsUser, ReadStateRefused, type ChannelReadSummary } from "../adapters/buzz/personal-read.ts";
+import { markEveryChannelReadAsUser, markReadThroughAsUser, readSummariesAsUser, ReadStateRefused, type ChannelReadSummary } from "../adapters/buzz/personal-read.ts";
 import { announceTypingAsUser } from "../adapters/buzz/user-typing.ts";
 import { searchChannelMessagesAsUser } from "../adapters/buzz/user-message-search.ts";
 import { hideDirectMessageAsUser, revealDirectMessageAsUser } from "../adapters/buzz/user-dm-visibility.ts";
@@ -330,6 +330,11 @@ class BuzzPersonalGateway implements PersonalGateway {
 	): Promise<void> {
 		this.require(actor);
 		await markReadThroughAsUser(this.settings.relayURL, actor.secret, { channelID: conversationID, threadRootID }, messageID);
+	}
+
+	async markEveryConversationRead(actor: ActorCredential): Promise<string[]> {
+		this.require(actor);
+		return await markEveryChannelReadAsUser(this.settings.relayURL, actor.secret);
 	}
 
 	async listInbox(actor: ActorCredential, until?: Date): Promise<PersonalInbox> {

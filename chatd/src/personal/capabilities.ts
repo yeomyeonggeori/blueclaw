@@ -116,6 +116,10 @@ export const personCapabilities: Record<string, PersonCapability> = {
 		await gateway.markReadThrough(request.actor, requireConversation(request), requireMessage(request), request.parentID);
 		return {};
 	},
+	"person.read_state.mark_all": async (gateway, body) => {
+		const request = parsePersonRequest(body);
+		return { conversationIDs: await gateway.markEveryConversationRead(request.actor) };
+	},
 	"person.inbox.list": async (gateway, body, agentExternalID) => {
 		const request = parsePersonRequest(body);
 		return { agentExternalID, ...(await gateway.listInbox(request.actor, optionalTime(request.until, "until"))) };
