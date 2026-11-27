@@ -97,14 +97,14 @@ describe("buildVisibleContext", () => {
 		expect(context.messages.map((message) => message.text)).toEqual(["first"]);
 	});
 
-	test("keeps recent replies in direct conversation history", async () => {
+	test("reads a direct conversation's top level the way the messenger shows it, oldest first", async () => {
 		const adapter = fakeAdapter(
 			[
-				contextMessage("root-a", "old root", 100),
-				contextMessage("reply-a", "old reply", 200, "root-a"),
-				contextMessage("root-b", "recent root", 300),
-				contextMessage("reply-b", "recent reply", 400, "root-b"),
-				contextMessage("trigger", "new question", 500, "root-b"),
+				contextMessage("clock-out", "퇴근시간 지금으로 바꿔줘", 100),
+				contextMessage("briefing", "오늘 일정: 김천 출장 (11/23~11/27)", 200),
+				contextMessage("approval", "04:30으로 정정할까요?", 300, "clock-out"),
+				contextMessage("answer", "해", 400, "clock-out"),
+				contextMessage("trigger", "26일까지야", 500),
 			],
 			true,
 		);
@@ -113,7 +113,7 @@ describe("buildVisibleContext", () => {
 			onlyExchangeOpenings: true,
 		});
 
-		expect(context.messages.map((message) => message.id)).toEqual(["root-a", "reply-a", "root-b", "reply-b"]);
+		expect(context.messages.map((message) => message.id)).toEqual(["clock-out", "briefing"]);
 		expect(context.messagesOpenOtherExchanges).toBe(false);
 		expect(context.conversationType).toBe("direct");
 	});
@@ -146,7 +146,7 @@ describe("buildVisibleContext", () => {
 		);
 		const context = await buildVisibleContext(adapter, "fake:dm-thread-b", {
 			beforeMessageId: "trigger",
-			onlyExchangeOpenings: true,
+			onlyExchangeOpenings: false,
 		});
 
 		expect(context.messages.map((message) => message.id)).toEqual(["root-b", "reply-b"]);
