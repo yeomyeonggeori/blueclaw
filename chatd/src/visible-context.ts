@@ -155,8 +155,9 @@ export async function buildVisibleContext(
 	let previousMessages = messagesBefore(fetchResult.messages, options.beforeMessageId).filter(
 		(candidate) => !isProgressMessage(candidate.raw)
 	);
-	const hasExchangeOpeningScope = options.onlyExchangeOpenings === true && threadInfo?.isDM !== true;
-	if (hasExchangeOpeningScope) {
+	const readsOnlyExchangeOpenings = options.onlyExchangeOpenings === true;
+	const hasExchangeOpeningScope = readsOnlyExchangeOpenings && threadInfo?.isDM !== true;
+	if (readsOnlyExchangeOpenings) {
 		// What another exchange opened with says what it is about. What was said
 		// inside it belongs to whoever is in it, and read here it turns one
 		// conversation into several that look like one.
